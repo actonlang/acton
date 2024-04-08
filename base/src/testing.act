@@ -256,6 +256,9 @@ class Test(object):
         self.name = name
         self.desc = desc
 
+    def run(self, report_result: action(?bool, ?Exception) -> None, env: Env, log_handler: logging.Handler):
+        raise NotImplementedError("Test: run() not implemented")
+
     def to_json(self):
         return {
             "name": self.name,
@@ -276,11 +279,41 @@ class UnitTest(Test):
         self.name = name
         self.desc = desc
 
+    def run(self, report_result: action(?bool, ?Exception) -> None, env: Env, log_handler: logging.Handler):
+        success = None
+        exception = None
+        try:
+            self.fn()
+            success = True
+            exception = None
+        except AssertionError as e:
+            success = False
+            exception = e
+        except Exception as e:
+            success = None
+            exception = e
+        report_result(success, exception)
+
 class SyncActorTest(Test):
     def __init__(self, fn: proc(logging.Handler) -> None, name: str, desc: str):
         self.fn = fn
         self.name = name
         self.desc = desc
+
+    def run(self, report_result: action(?bool, ?Exception) -> None, env: Env, log_handler: logging.Handler):
+        success = None
+        exception = None
+        try:
+            self.fn(log_handler)
+            success = True
+            exception = None
+        except AssertionError as e:
+            success = False
+            exception = e
+        except Exception as e:
+            success = None
+            exception = e
+        report_result(success, exception)
 
 class AsyncActorTest(Test):
     def __init__(self, fn: proc(action(?bool, ?Exception) -> None, logging.Handler) -> None, name: str, desc: str):
@@ -288,11 +321,17 @@ class AsyncActorTest(Test):
         self.name = name
         self.desc = desc
 
+    def run(self, report_result: action(?bool, ?Exception) -> None, env: Env, log_handler: logging.Handler):
+        self.fn(report_result, log_handler)
+
 class EnvTest(Test):
     def __init__(self, fn: proc(action(?bool, ?Exception) -> None, Env, logging.Handler) -> None, name: str, desc: str):
         self.fn = fn
         self.name = name
         self.desc = desc
+
+    def run(self, report_result: action(?bool, ?Exception) -> None, env: Env, log_handler: logging.Handler):
+        self.fn(report_result, env, log_handler)
 
 
 class TestResult(object):
@@ -559,11 +598,41 @@ class TestRunnerConfig(object):
         self.output_enabled = False if args.get_bool("no_output") else True
         self.min_test_duration = mtd
 
-actor unit_test_runner(syscap, config, get_test, report_complete):
-    """Test runner for unit tests
+
+# TODO: add a timeout to this
+actor test_executor(syscap, config, get_test: () -> Test, report_complete, env):
+    """The actual executor of tests
     """
-    def _run_fn(t):
-        f = t.fn
+    log_handler = logging.Handler("TestRunner")
+    var test_sw = time.Stopwatch()
+    var last_report = time.Stopwatch()
+    var test_info = None
+
+    action def _report_result(test: Test, sw, rss_before, gc_total_bytes_start, gc_time_start, success: ?bool, exception: ?Exception):
+        full_dur = sw.elapsed().to_float() * 1000.0
+        gc_time_end = acton.rts.get_gc_time(syscap).total
+        gc_dur = float(gc_time_end - gc_time_start)
+        testiter_dur = full_dur - gc_dur
+        gc_total_bytes_end = int(acton.rts.get_gc_total_bytes(syscap))
+        mem_usage_delta = gc_total_bytes_end - gc_total_bytes_start
+        rss_after = int(acton.rts.get_rss(syscap))
+        rss_delta = rss_after - rss_before
+        test_dur = test_sw.elapsed().to_float()
+        complete = True if test_dur > config.min_test_duration else False
+        if test_info is not None:
+            exc = str(exception) if exception is not None else None
+            test_info.update(complete, TestResult(success, exc, testiter_dur, mem_usage_delta, rss_delta), test_dur*1000.0)
+        if last_report.elapsed().to_float() > 0.05 or complete:
+            if test_info is not None and config.output_enabled:
+                print(json.encode({"test_info": test_info.to_json()}), stderr=True)
+            last_report.reset()
+        if not complete:
+            _run_fn(test)
+        else:
+            report_complete(test.name)
+            _run_next()
+
+    def _run_fn(t: Test):
         # Run GC to get accurate memory usage
         acton.rts.gc(syscap)
         rss_before = int(acton.rts.get_rss(syscap))
@@ -571,157 +640,16 @@ actor unit_test_runner(syscap, config, get_test, report_complete):
         gc_time_start = acton.rts.get_gc_time(syscap).total
         sw = time.Stopwatch()
         try:
-            f()
-            success = True
-            exception = None
-        except AssertionError as e:
-            success = False
-            exception = str(e)
-        except Exception as e:
-            success = None
-            exception = str(e)
-        full_dur = sw.elapsed().to_float() * 1000.0
-        gc_time_end = acton.rts.get_gc_time(syscap).total
-        gc_dur = float(gc_time_end - gc_time_start)
-        testiter_dur = full_dur - gc_dur
-        gc_total_bytes_end = int(acton.rts.get_gc_total_bytes(syscap))
-        mem_usage_delta = gc_total_bytes_end - gc_total_bytes_start
-        rss_after = int(acton.rts.get_rss(syscap))
-        rss_delta = rss_after - rss_before
-        return TestResult(success, exception, testiter_dur, mem_usage_delta, rss_delta)
-
-    def _run():
-        while True:
-            try:
-                t = get_test()
-                test_info = TestInfo(t)
-                f = t.fn
-                test_sw = time.Stopwatch()
-                last_report = time.Stopwatch()
-                complete = False
-                gctotb_before = acton.rts.get_gc_total_bytes(syscap)
-                while True:
-                    test_result = _run_fn(t)
-                    if test_sw.elapsed().to_float() > config.min_test_duration:
-                        complete = True
-                    test_info.update(complete, test_result, test_sw.elapsed().to_float() * 1000.0)
-                    if (last_report.elapsed().to_float() > 0.05 or complete) and config.output_enabled:
-                        gctotb_after = acton.rts.get_gc_total_bytes(syscap)
-                        print(json.encode({"test_info": test_info.to_json()}), stderr=True)
-                        last_report.reset()
-                    if complete:
-                        report_complete(t.name)
-                        break
-            except Exception as e:
-                return None
-
-    after 0: _run()
-
-
-# TODO: collapse this and the above unit_test_runner, since both are sync tests
-# and the only difference is the type of test, so I think this should be
-# possible
-# TODO: investigate if we can turn this into async style, which would open up
-# for collapsing this with the async_actor_test_runner and env_test_runner
-actor sync_actor_test_runner(syscap, config, get_test, report_complete):
-    """Test runner for sync actor tests
-    """
-    log_handler = logging.Handler("TestRunner")
-
-    def _run_fn(f):
-        rss_before = int(acton.rts.get_rss(syscap))
-        gc_total_bytes_start = int(acton.rts.get_gc_total_bytes(syscap))
-        gc_time_start = acton.rts.get_gc_time(syscap).total
-        sw = time.Stopwatch()
-        success = None   # TODO: remove, but compiler complains
-        exception = None # TODO: remove, but compiler complains
-        try:
-            f(log_handler)
-            success = True
-            exception = None
-        except AssertionError as e:
-            success = False
-            exception = str(e)
-        except Exception as e:
-            success = None
-            exception = str(e)
-        full_dur = sw.elapsed().to_float() * 1000.0
-        gc_time_end = acton.rts.get_gc_time(syscap).total
-        gc_dur = float(gc_time_end - gc_time_start)
-        testiter_dur = full_dur - gc_dur
-        gc_total_bytes_end = int(acton.rts.get_gc_total_bytes(syscap))
-        mem_usage_delta = gc_total_bytes_end - gc_total_bytes_start
-        rss_after = int(acton.rts.get_rss(syscap))
-        rss_delta = rss_after - rss_before
-        return TestResult(success, exception, testiter_dur, mem_usage_delta, rss_delta)
-
-    def _run():
-        while True:
-            try:
-                t = get_test()
-                test_info = TestInfo(t)
-                f = t.fn
-                test_sw = time.Stopwatch()
-                last_report = time.Stopwatch()
-                complete = False
-                for i in range(999999):
-                    test_result = _run_fn(f)
-                    if test_sw.elapsed().to_float() > config.min_test_duration:
-                        complete = True
-                    test_info.update(complete, test_result, test_sw.elapsed().to_float() * 1000.0)
-                    if (last_report.elapsed().to_float() > 0.05 or complete) and config.output_enabled:
-                        print(json.encode({"test_info": test_info.to_json()}), stderr=True)
-                        last_report.reset()
-                    if complete:
-                        report_complete(t.name)
-                        break
-            except Exception as e:
-                return None
-
-    after 0: _run()
-
-
-# TODO: add a timeout to this
-actor async_actor_test_runner(syscap, config, get_test, report_complete):
-    """Test runner for async actor tests
-    """
-    log_handler = logging.Handler("TestRunner")
-    var test_sw = time.Stopwatch()
-    var last_report = time.Stopwatch()
-    var test_info = None
-
-    action def _report_result(test: AsyncActorTest, sw, rss_before, gc_total_bytes_start, gc_time_start, success: ?bool, exception: ?Exception):
-        full_dur = sw.elapsed().to_float() * 1000.0
-        gc_time_end = acton.rts.get_gc_time(syscap).total
-        gc_dur = float(gc_time_end - gc_time_start)
-        testiter_dur = full_dur - gc_dur
-        gc_total_bytes_end = int(acton.rts.get_gc_total_bytes(syscap))
-        mem_usage_delta = gc_total_bytes_end - gc_total_bytes_start
-        rss_after = int(acton.rts.get_rss(syscap))
-        rss_delta = rss_after - rss_before
-        test_dur = test_sw.elapsed().to_float()
-        complete = True if test_dur > config.min_test_duration else False
-        if test_info is not None:
-            exc = str(exception) if exception is not None else None
-            test_info.update(complete, TestResult(success, exc, testiter_dur, mem_usage_delta, rss_delta), test_dur*1000.0)
-        if last_report.elapsed().to_float() > 0.05 or complete:
-            if test_info is not None and config.output_enabled:
-                print(json.encode({"test_info": test_info.to_json()}), stderr=True)
-            last_report.reset()
-        if not complete:
-            _run_fn(test)
-        else:
-            report_complete(test.name)
-            _run_next()
-
-    def _run_fn(t):
-        f = t.fn
-        rss_before = int(acton.rts.get_rss(syscap))
-        gc_total_bytes_start = int(acton.rts.get_gc_total_bytes(syscap))
-        gc_time_start = acton.rts.get_gc_time(syscap).total
-        sw = time.Stopwatch()
-        try:
-            f(lambda s, e: _report_result(t, sw, rss_before, gc_total_bytes_start, gc_time_start, s, e), log_handler)
+            if isinstance(t, UnitTest):
+                t.run(lambda s, e: _report_result(t, sw, rss_before, gc_total_bytes_start, gc_time_start, s, e), env, log_handler)
+            elif isinstance(t, SyncActorTest):
+                t.run(lambda s, e: _report_result(t, sw, rss_before, gc_total_bytes_start, gc_time_start, s, e), env, log_handler)
+            elif isinstance(t, AsyncActorTest):
+                t.run(lambda s, e: _report_result(t, sw, rss_before, gc_total_bytes_start, gc_time_start, s, e), env, log_handler)
+            elif isinstance(t, EnvTest):
+                t.run(lambda s, e: _report_result(t, sw, rss_before, gc_total_bytes_start, gc_time_start, s, e), env, log_handler)
+            else:
+                raise ValueError("Invalid test type")
         except AssertionError as e:
             _report_result(t, sw, rss_before, gc_total_bytes_start, gc_time_start, False, e)
         except Exception as e:
@@ -739,63 +667,6 @@ actor async_actor_test_runner(syscap, config, get_test, report_complete):
 
     after 0: _run_next()
 
-
-actor env_test_runner(syscap, config, get_test, report_complete, env):
-    """Test runner for async actor tests
-    """
-    log_handler = logging.Handler("TestRunner")
-    var test_sw = time.Stopwatch()
-    var last_report = time.Stopwatch()
-    var test_info = None
-
-    action def _report_result(test: EnvTest, sw, rss_before, gc_total_bytes_start, gc_time_start, success: ?bool, exception: ?Exception):
-        full_dur = sw.elapsed().to_float() * 1000.0
-        gc_time_end = acton.rts.get_gc_time(syscap).total
-        gc_dur = float(gc_time_end - gc_time_start)
-        testiter_dur = full_dur - gc_dur
-        gc_total_bytes_end = int(acton.rts.get_gc_total_bytes(syscap))
-        mem_usage_delta = gc_total_bytes_end - gc_total_bytes_start
-        rss_after = int(acton.rts.get_rss(syscap))
-        rss_delta = rss_after - rss_before
-        test_dur = test_sw.elapsed().to_float()
-        complete = True if test_dur > config.min_test_duration else False
-        if test_info is not None:
-            exc = str(exception) if exception is not None else None
-            test_info.update(complete, TestResult(success, exc, testiter_dur, mem_usage_delta, rss_delta), test_dur*1000.0)
-        if last_report.elapsed().to_float() > 0.05 or complete:
-            if test_info is not None and config.output_enabled:
-                print(json.encode({"test_info": test_info.to_json()}), stderr=True)
-            last_report.reset()
-        if not complete:
-            _run_fn(test)
-        else:
-            report_complete(test.name)
-            _run_next()
-
-    def _run_fn(t):
-        f = t.fn
-        rss_before = int(acton.rts.get_rss(syscap))
-        gc_total_bytes_start = int(acton.rts.get_gc_total_bytes(syscap))
-        gc_time_start = acton.rts.get_gc_time(syscap).total
-        sw = time.Stopwatch()
-        try:
-            f(lambda s, e: _report_result(t, sw, rss_before, gc_total_bytes_start, gc_time_start, s, e), env, log_handler)
-        except AssertionError as e:
-            _report_result(t, sw, rss_before, gc_total_bytes_start, gc_time_start, False, e)
-        except Exception as e:
-            _report_result(t, sw, rss_before, gc_total_bytes_start, gc_time_start, None, e)
-
-    def _run_next():
-        """Get the next available test and run it"""
-        test_sw = time.Stopwatch()
-        try:
-            t = get_test()
-            test_info = TestInfo(t)
-            _run_fn(t)
-        except Exception as e:
-            return None
-
-    after 0: _run_next()
 
 class ModuleError(object):
     exit_code: int
@@ -1084,13 +955,17 @@ class ModuleTestResults(object):
 
 
 
-actor test_runner(env: Env, unit_tests: dict[str, UnitTest], sync_actor_tests: dict[str, SyncActorTest], async_actor_tests: dict[str, AsyncActorTest], env_tests: dict[str, EnvTest]):
+actor test_runner(env: Env,
+                  unit_tests: dict[str, UnitTest],
+                  sync_actor_tests: dict[str, SyncActorTest],
+                  async_actor_tests: dict[str, AsyncActorTest],
+                  env_tests: dict[str, EnvTest]):
     sw = time.Stopwatch()
     var results = ModuleTestResults()
+    var all_tests = {}
 
     def _init_results(args):
 
-        all_tests = {}
         for name, t in unit_tests.items():
             all_tests[name] = t
         for name, t in sync_actor_tests.items():
@@ -1133,97 +1008,19 @@ actor test_runner(env: Env, unit_tests: dict[str, UnitTest], sync_actor_tests: d
         env.exit(0)
 
     proc def _run_tests(args, perf_mode: bool=False):
-        trconfig = TestRunnerConfig(perf_mode, args)
-        if trconfig.perf_mode:
+        config = TestRunnerConfig(perf_mode, args)
+        if config.perf_mode:
             acton.rts.start_gc_performance_measurement(env.syscap)
         _init_results(args)
-        if trconfig.output_enabled:
+        if config.output_enabled:
             results.show()
-        # start with unit tests, proceed with next test category after unit tests
-        _run_unit_tests(args, trconfig)
 
-    proc def _run_unit_tests(args, config: TestRunnerConfig):
         test_concurrency = 1 if config.perf_mode else env.nr_wthreads
-        my_tests = _filter_tests(unit_tests, args)
+        my_tests = _filter_tests(all_tests, args)
         to_hand_out = list(my_tests.keys())
         tests_complete = set()
 
-        def get_test() -> UnitTest:
-            test_id = to_hand_out.pop()
-            test = my_tests[test_id]
-            return test
-
-        def check_complete():
-            if tests_complete == set(my_tests.keys()):
-                _run_sync_actor_tests(args, config)
-                return True
-            return False
-
-        def report_complete(t):
-            tests_complete.add("_test_" + t)
-            check_complete()
-
-        if not check_complete():
-            for i in range(test_concurrency):
-                unit_test_runner(env.syscap, config, get_test, report_complete)
-
-    proc def _run_sync_actor_tests(args, config: TestRunnerConfig):
-        test_concurrency = 1 if config.perf_mode else min([1, env.nr_wthreads // 4])
-        my_tests = _filter_tests(sync_actor_tests, args)
-        to_hand_out = list(my_tests.keys())
-        tests_complete = set()
-
-        def get_test() -> SyncActorTest:
-            test_id = to_hand_out.pop()
-            test = my_tests[test_id]
-            return test
-
-        def check_complete():
-            if tests_complete == set(my_tests.keys()):
-                _run_async_actor_tests(args, config)
-                return True
-            return False
-
-        def report_complete(t):
-            tests_complete.add("_test_" + t)
-            check_complete()
-
-        if not check_complete():
-            for i in range(test_concurrency):
-                sync_actor_test_runner(env.syscap, config, get_test, report_complete)
-
-    proc def _run_async_actor_tests(args, config: TestRunnerConfig):
-        test_concurrency = 1 if config.perf_mode else min([1, env.nr_wthreads // 4])
-        my_tests = _filter_tests(async_actor_tests, args)
-        to_hand_out = list(my_tests.keys())
-        tests_complete = set()
-
-        def get_test() -> AsyncActorTest:
-            test_id = to_hand_out.pop()
-            test = my_tests[test_id]
-            return test
-
-        def check_complete():
-            if tests_complete == set(my_tests.keys()):
-                _run_env_tests(args, config)
-                return True
-            return False
-
-        def report_complete(t):
-            tests_complete.add("_test_" + t)
-            check_complete()
-
-        if not check_complete():
-            for i in range(test_concurrency):
-                async_actor_test_runner(env.syscap, config, get_test, report_complete)
-
-    proc def _run_env_tests(args, config: TestRunnerConfig):
-        test_concurrency = 1 if config.perf_mode else min([1, env.nr_wthreads // 4])
-        my_tests = _filter_tests(env_tests, args)
-        to_hand_out = list(my_tests.keys())
-        tests_complete = set()
-
-        def get_test() -> EnvTest:
+        def get_test():
             test_id = to_hand_out.pop()
             test = my_tests[test_id]
             return test
@@ -1240,8 +1037,7 @@ actor test_runner(env: Env, unit_tests: dict[str, UnitTest], sync_actor_tests: d
 
         if not check_complete():
             for i in range(test_concurrency):
-                env_test_runner(env.syscap, config, get_test, report_complete, env)
-
+                test_executor(env.syscap, config, get_test, report_complete, env)
 
     proc def _run_perf_tests(args):
         _run_tests(args, perf_mode=True)
