@@ -1,7 +1,11 @@
 #include <stdlib.h>
 
 void randomQ___ext_init__() {
-    srand(time(NULL));
+    // seed the random number generator with nanoseconds since the epoch and our
+    // PID
+    uv_timespec64_t ts;
+    uv_clock_gettime(UV_CLOCK_MONOTONIC, &ts);
+    srand(ts.tv_nsec ^ pid);
 }
 
 // NOTE: the standard srand / rand functions are not thread safe, but what does
