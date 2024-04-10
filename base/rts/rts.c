@@ -81,6 +81,7 @@ uv_loop_t *uv_loops[MAX_WTHREADS];
 uv_async_t stop_ev[MAX_WTHREADS];
 uv_async_t wake_ev[MAX_WTHREADS];
 uv_check_t work_ev[MAX_WTHREADS];
+WorkerCtx wctxs[MAX_WTHREADS];
 uv_timer_t *timer_ev;
 
 char *mon_log_path = NULL;
@@ -1501,7 +1502,7 @@ void wt_wake_cb(uv_async_t *ev) {
 }
 
 void wt_work_cb(uv_check_t *ev) {
-    WorkerCtx wctx = (WorkerCtx)pthread_getspecific(pkey_wctx);
+    WorkerCtx wctx = (WorkerCtx)ev->data;
     assert(wctx->id >= 0 && wctx->id < 256);
 
     struct timespec ts_start, ts1, ts2, ts3;
@@ -1703,6 +1704,7 @@ void wt_work_cb(uv_check_t *ev) {
 
 void *main_loop(void *idx) {
     WorkerCtx wctx = (WorkerCtx)GC_malloc(sizeof(struct WorkerCtx));
+    wctxs[(long)idx] = wctx;
     wctx->id = (long)idx;
     wctx->uv_loop = uv_loops[wctx->id];
     wctx->jump_top = NULL;
@@ -1718,6 +1720,7 @@ void *main_loop(void *idx) {
 #endif
 
     uv_check_init(wctx->uv_loop, &work_ev[wctx->id]);
+    work_ev[wctx->id].data = wctx;
     uv_check_start(&work_ev[wctx->id], (uv_check_cb)wt_work_cb);
 
     wt_stats[wctx->id].state = WT_Idle;
@@ -2719,11 +2722,13 @@ int main(int argc, char **argv) {
     }
 
     WorkerCtx wctx = (WorkerCtx)GC_malloc(sizeof(struct WorkerCtx));
+    wctxs[0] = wctx;
     wctx->id = 0;
     wctx->uv_loop = uv_loops[wctx->id];
     pthread_setspecific(pkey_wctx, (void *)wctx);
 
     uv_check_init(aux_uv_loop, &work_ev[wctx->id]);
+    work_ev[wctx->id].data = wctx;
     uv_check_start(&work_ev[wctx->id], (uv_check_cb)wt_work_cb);
 
     // Run the timer queue and keep track of other periodic tasks
