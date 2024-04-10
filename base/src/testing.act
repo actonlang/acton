@@ -351,14 +351,14 @@ class TestResult(object):
     exception: ?str
     duration: float
     mem_usage_delta: int
-    rss_delta: int
+    non_gc_mem_usage_delta: int
 
-    def __init__(self, success: ?bool, exception: ?str, duration: float, mem_usage_delta: int, rss_delta: int):
+    def __init__(self, success: ?bool, exception: ?str, duration: float, mem_usage_delta: int, non_gc_mem_usage_delta: int):
         self.success = success
         self.exception = exception
         self.duration = duration
         self.mem_usage_delta = mem_usage_delta
-        self.rss_delta = rss_delta
+        self.non_gc_mem_usage_delta = non_gc_mem_usage_delta
 
     def to_json(self):
         return {
@@ -366,7 +366,7 @@ class TestResult(object):
             "exception": self.exception,
             "duration": self.duration,
             "mem_usage_delta": self.mem_usage_delta,
-            "rss_delta": self.rss_delta,
+            "non_gc_mem_usage_delta": self.non_gc_mem_usage_delta,
         }
 
     @staticmethod
@@ -375,14 +375,14 @@ class TestResult(object):
         exception = data["exception"]
         duration = data["duration"]
         mem_usage_delta = data["mem_usage_delta"]
-        rss_delta = data["rss_delta"]
+        non_gc_mem_usage_delta = data["non_gc_mem_usage_delta"]
         if (isinstance(success, bool)
             and isinstance(exception, str)
             and isinstance(duration, float)
             and isinstance(mem_usage_delta, int)
-            and isinstance(rss_delta, int)
+            and isinstance(non_gc_mem_usage_delta, int)
             ):
-            return TestResult(success, exception, duration, mem_usage_delta, rss_delta)
+            return TestResult(success, exception, duration, mem_usage_delta, non_gc_mem_usage_delta)
         raise ValueError("Invalid TestResult JSON")
 
 
@@ -402,8 +402,8 @@ class TestInfo(object):
     num_failures: int
     num_errors: int
     mem_usage_delta_avg: int
-    rss_delta_avg: int
-    rss_delta_positive_count: int
+    non_gc_mem_usage_delta_avg: int
+    non_gc_mem_inc_count: int
     results: list[TestResult]
 
     def __init__(self,
@@ -420,6 +420,9 @@ class TestInfo(object):
                  num_iterations: int=0,
                  num_failures: int=0,
                  num_errors: int=0,
+                 mem_usage_delta_avg: int=0,
+                 non_gc_mem_usage_delta_avg: int=0,
+                 non_gc_mem_inc_count: int=0,
                  results: list[TestResult]=[]):
         self.definition = definition
         self.complete = complete
@@ -435,9 +438,9 @@ class TestInfo(object):
         self.num_iterations = num_iterations
         self.num_failures = num_failures
         self.num_errors = num_errors
-        self.mem_usage_delta_avg = 0
-        self.rss_delta_avg = 0
-        self.rss_delta_positive_count = 0
+        self.mem_usage_delta_avg = mem_usage_delta_avg
+        self.non_gc_mem_usage_delta_avg = non_gc_mem_usage_delta_avg
+        self.non_gc_mem_inc_count = non_gc_mem_inc_count
         self.results = results
 
     def update(self, complete, result: TestResult, test_duration: float=-1.0):
@@ -446,6 +449,8 @@ class TestInfo(object):
         exc = result.exception
         if exc is not None:
             self.exception = exc
+        if test_duration > 0.0:
+            self.test_duration = test_duration
 
         self.flaky = False
         self.leaky = False
@@ -453,14 +458,12 @@ class TestInfo(object):
         self.max_duration = -1.0
         self.avg_duration = -1.0
         self.total_duration = 0.0
-        if test_duration > 0.0:
-            self.test_duration = test_duration
         self.num_iterations = len(self.results)
         self.num_failures = 0
         self.num_errors = 0
         self.mem_usage_delta_avg = 0
-        self.rss_delta_avg = 0
-        self.rss_delta_positive_count = 0
+        self.non_gc_mem_usage_delta_avg = 0
+        self.non_gc_mem_inc_count = 0
         for result in self.results:
             res_success = result.success
             if res_success == False:
@@ -468,6 +471,7 @@ class TestInfo(object):
             elif res_success is None:
                 self.num_errors += 1
 
+        for result in self.results[1:]:
             if result.duration < self.min_duration or self.min_duration < 0.0:
                 self.min_duration = result.duration
             if result.duration > self.max_duration or self.max_duration < 0.0:
@@ -475,13 +479,17 @@ class TestInfo(object):
             self.total_duration += result.duration
 
             self.mem_usage_delta_avg += result.mem_usage_delta
-            self.rss_delta_avg += result.rss_delta
-            if result.rss_delta > 0:
-                self.rss_delta_positive_count += 1
+            self.non_gc_mem_usage_delta_avg += result.non_gc_mem_usage_delta
+            if result.non_gc_mem_usage_delta > 0:
+                self.non_gc_mem_inc_count += 1
 
-        self.mem_usage_delta_avg = self.mem_usage_delta_avg // self.num_iterations
-        self.rss_delta_avg = self.rss_delta_avg // self.num_iterations
-        self.avg_duration = self.total_duration / float(self.num_iterations)
+        if self.num_iterations > 0:
+            self.mem_usage_delta_avg = self.mem_usage_delta_avg // self.num_iterations-1
+            self.non_gc_mem_usage_delta_avg = self.non_gc_mem_usage_delta_avg // self.num_iterations-1
+            self.avg_duration = self.total_duration / float(self.num_iterations)
+
+        if self.non_gc_mem_inc_count > min([1, self.num_iterations // 2]) and self.non_gc_mem_usage_delta_avg > 0:
+            self.leaky = True
 
         if self.num_failures > 0:
             self.success = False
@@ -495,9 +503,32 @@ class TestInfo(object):
         else:
             self.flaky = True
 
-        #
-        if self.rss_delta_positive_count > min([1, self.num_iterations // 2]) and self.rss_delta_avg > 0:
-            self.leaky = True
+    def diff(self, old: ?TestInfo) -> (min_duration: str,
+                                       max_duration: str,
+                                       avg_duration: str,
+                                       mem_usage_delta_avg: str,
+                                       non_gc_mem_usage_delta_avg: str,
+                                       non_gc_mem_inc_count: str):
+        def fmt_diff(new, old, unit="") -> str:
+            if old is not None:
+                diff = float(new) - float(old)
+                pct_diff = diff / float(old) * 100
+                sign = "+" if diff > 0 else ""
+                color = term.green if diff < 0 else term.red
+                diff_str = "%s%.2f%%" % (sign, pct_diff)
+                return color + "%-10s" % diff_str + term.normal
+            else:
+                return "%10s" % ""
+
+        #return (min_duration=fmt_diff(self.min_duration, old.min_duration if old is not None else None, "ms"))
+        return (
+            fmt_diff(self.min_duration, old.min_duration if old is not None else None, "ms"),
+            fmt_diff(self.max_duration, old.max_duration if old is not None else None, "ms"),
+            fmt_diff(self.avg_duration, old.avg_duration if old is not None else None, "ms"),
+            fmt_diff(self.mem_usage_delta_avg, old.mem_usage_delta_avg if old is not None else None, "B"),
+            fmt_diff(self.non_gc_mem_usage_delta_avg, old.non_gc_mem_usage_delta_avg if old is not None else None, "B"),
+            fmt_diff(self.non_gc_mem_inc_count, old.non_gc_mem_inc_count if old is not None else None)
+        )
 
     def to_json(self, include_results: bool=False):
         test_results = []
@@ -519,6 +550,9 @@ class TestInfo(object):
             "num_iterations": self.num_iterations,
             "num_failures": self.num_failures,
             "num_errors": self.num_errors,
+            "mem_usage_delta_avg": self.mem_usage_delta_avg,
+            "non_gc_mem_usage_delta_avg": self.non_gc_mem_usage_delta_avg,
+            "non_gc_mem_inc_count": self.non_gc_mem_inc_count,
             "results": test_results
         }
 
@@ -549,25 +583,13 @@ class TestInfo(object):
         num_iterations = json_data["num_iterations"]
         num_failures = json_data["num_failures"]
         num_errors = json_data["num_errors"]
+        mem_usage_delta_avg = json_data["mem_usage_delta_avg"]
+        non_gc_mem_usage_delta_avg = json_data["non_gc_mem_usage_delta_avg"]
+        non_gc_mem_inc_count = json_data["non_gc_mem_inc_count"]
         results: list[TestResult] = []
-        json_data_results = json_data["results"]
-        if isinstance(json_data_results, list):
-            # TODO: Use TestResult.from_json() instead
-            for r in json_data_results:
-                r_success = r["success"]
-                r_exception = r["exception"]
-                r_duration = r["duration"]
-                r_mem_usage_delta = r["mem_usage_delta"]
-                r_rss_delta = r["rss_delta"]
-                if (isinstance(r_success, bool)
-                    and isinstance(r_exception, str)
-                    and isinstance(r_duration, float)
-                    and isinstance(r_mem_usage_delta, int)
-                    and isinstance(r_rss_delta, int)
-                    ):
-                    results.append(TestResult(r_success, r_exception, r_duration, r_mem_usage_delta, r_rss_delta))
-                else:
-                    raise ValueError("Invalid TestResult JSON")
+        # We don't support results in the JSON, since we don't want it for
+        # performance reasons but for very generic JSON serialization support it
+        # would be correct to support it.
         if (isinstance(complete, bool)
             and isinstance(flaky, bool)
             and isinstance(min_duration, float)
@@ -578,8 +600,27 @@ class TestInfo(object):
             and isinstance(num_iterations, int)
             and isinstance(num_failures, int)
             and isinstance(num_errors, int)
+            and isinstance(mem_usage_delta_avg, int)
+            and isinstance(non_gc_mem_usage_delta_avg, int)
+            and isinstance(non_gc_mem_inc_count, int)
             ):
-            return TestInfo(definition, complete, success, exception, flaky, min_duration, max_duration, avg_duration, total_duration, test_duration, num_iterations, num_failures, num_errors, results)
+            return TestInfo(definition,
+                            complete,
+                            success,
+                            exception,
+                            flaky,
+                            min_duration,
+                            max_duration,
+                            avg_duration,
+                            total_duration,
+                            test_duration,
+                            num_iterations,
+                            num_failures,
+                            num_errors,
+                            mem_usage_delta_avg,
+                            non_gc_mem_usage_delta_avg,
+                            non_gc_mem_inc_count,
+                            results)
         else:
             raise ValueError("Invalid TestInfo JSON")
 
@@ -608,20 +649,24 @@ actor test_executor(syscap, config, get_test: () -> Test, report_complete, env):
     var last_report = time.Stopwatch()
     var test_info = None
 
-    action def _report_result(test: Test, sw, rss_before, gc_total_bytes_start, gc_time_start, success: ?bool, exception: ?Exception):
+    action def _report_result(test: Test, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, success: ?bool, exception: ?Exception):
         full_dur = sw.elapsed().to_float() * 1000.0
         gc_time_end = acton.rts.get_gc_time(syscap).total
         gc_dur = float(gc_time_end - gc_time_start)
         testiter_dur = full_dur - gc_dur
         gc_total_bytes_end = int(acton.rts.get_gc_total_bytes(syscap))
         mem_usage_delta = gc_total_bytes_end - gc_total_bytes_start
-        rss_after = int(acton.rts.get_rss(syscap))
-        rss_delta = rss_after - rss_before
         test_dur = test_sw.elapsed().to_float()
+        if config.perf_mode:
+            acton.rts.gc(syscap)
+            acton.rts.gc(syscap)
+        non_gc_mem_usage_after = int(acton.rts.get_rss(syscap) - acton.rts.get_mem_usage(syscap))
+        non_gc_mem_usage_delta = non_gc_mem_usage_after - non_gc_mem_usage_before
+        #print("non-GC memory before: %d  after: %d  delta: %d" % (non_gc_mem_usage_before, non_gc_mem_usage_after, non_gc_mem_usage_delta))
         complete = True if test_dur > config.min_test_duration else False
         if test_info is not None:
             exc = str(exception) if exception is not None else None
-            test_info.update(complete, TestResult(success, exc, testiter_dur, mem_usage_delta, rss_delta), test_dur*1000.0)
+            test_info.update(complete, TestResult(success, exc, testiter_dur, mem_usage_delta, non_gc_mem_usage_delta), test_dur*1000.0)
         if last_report.elapsed().to_float() > 0.05 or complete:
             if test_info is not None and config.output_enabled:
                 print(json.encode({"test_info": test_info.to_json()}), stderr=True)
@@ -634,26 +679,28 @@ actor test_executor(syscap, config, get_test: () -> Test, report_complete, env):
 
     def _run_fn(t: Test):
         # Run GC to get accurate memory usage
-        acton.rts.gc(syscap)
-        rss_before = int(acton.rts.get_rss(syscap))
+        if config.perf_mode:
+            acton.rts.gc(syscap)
+            acton.rts.gc(syscap)
+        non_gc_mem_usage_before = int(acton.rts.get_rss(syscap) - acton.rts.get_mem_usage(syscap))
         gc_total_bytes_start = int(acton.rts.get_gc_total_bytes(syscap))
         gc_time_start = acton.rts.get_gc_time(syscap).total
         sw = time.Stopwatch()
         try:
             if isinstance(t, UnitTest):
-                t.run(lambda s, e: _report_result(t, sw, rss_before, gc_total_bytes_start, gc_time_start, s, e), env, log_handler)
+                t.run(lambda s, e: _report_result(t, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, s, e), env, log_handler)
             elif isinstance(t, SyncActorTest):
-                t.run(lambda s, e: _report_result(t, sw, rss_before, gc_total_bytes_start, gc_time_start, s, e), env, log_handler)
+                t.run(lambda s, e: _report_result(t, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, s, e), env, log_handler)
             elif isinstance(t, AsyncActorTest):
-                t.run(lambda s, e: _report_result(t, sw, rss_before, gc_total_bytes_start, gc_time_start, s, e), env, log_handler)
+                t.run(lambda s, e: _report_result(t, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, s, e), env, log_handler)
             elif isinstance(t, EnvTest):
-                t.run(lambda s, e: _report_result(t, sw, rss_before, gc_total_bytes_start, gc_time_start, s, e), env, log_handler)
+                t.run(lambda s, e: _report_result(t, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, s, e), env, log_handler)
             else:
                 raise ValueError("Invalid test type")
         except AssertionError as e:
-            _report_result(t, sw, rss_before, gc_total_bytes_start, gc_time_start, False, e)
+            _report_result(t, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, False, e)
         except Exception as e:
-            _report_result(t, sw, rss_before, gc_total_bytes_start, gc_time_start, None, e)
+            _report_result(t, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, None, e)
 
     def _run_next():
         """Get the next available test and run it"""
@@ -780,15 +827,16 @@ class ProjectTestResults(object):
         return json.encode(res)
 
     def show(self, only_show_complete=False):
-        def format_timing(module_name, test_name):
-            def format_diff(new, old):
-                diff = new - old
-                pct_diff = diff / old * 100
-                sign = "+" if diff > 0 else ""
-                color = term.green if diff < 0 else term.red
-                diff_str = "%s%.2f%%" % (sign, pct_diff)
-                return color + "%-10s" % diff_str + term.normal
 
+        def format_diff(new, old, unit=""):
+            diff = float(new) - float(old)
+            pct_diff = diff / float(old) * 100
+            sign = "+" if diff > 0 else ""
+            color = term.green if diff < 0 else term.red
+            diff_str = "%s%.2f%%" % (sign, pct_diff)
+            return color + "%-10s" % diff_str + term.normal
+
+        def format_timing(module_name, test_name):
             tinfo = self.results[module_name][test_name]
 
             min_dur = "--"
@@ -798,9 +846,9 @@ class ProjectTestResults(object):
             avg_dur_diff = "--"
             max_dur_diff = "--"
             if tinfo.num_iterations > 0:
-                min_dur = "%5.2f" % tinfo.min_duration + term.grey13 + "ms" + term.normal
-                avg_dur = "%5.2f" % tinfo.avg_duration + term.grey13 + "ms" + term.normal
-                max_dur = "%5.2f" % tinfo.max_duration + term.grey13 + "ms" + term.normal
+                min_dur = "%6.2f" % tinfo.min_duration + term.grey13 + "ms" + term.normal
+                avg_dur = "%6.2f" % tinfo.avg_duration + term.grey13 + "ms" + term.normal
+                max_dur = "%6.2f" % tinfo.max_duration + term.grey13 + "ms" + term.normal
                 min_dur_diff = ""
                 avg_dur_diff = ""
                 max_dur_diff = ""
@@ -813,7 +861,7 @@ class ProjectTestResults(object):
                 except:
                     pass
 
-            return "%7s %10s %sAvg:%s %7s %10s %7s %10s" % (min_dur, min_dur_diff, term.grey18, term.normal, avg_dur, avg_dur_diff, max_dur, max_dur_diff)
+            return "%8s %10s %sAvg:%s %8s %10s %8s %10s" % (min_dur, min_dur_diff, term.grey18, term.normal, avg_dur, avg_dur_diff, max_dur, max_dur_diff)
 
         if self.skip_show() or self.up_to_date:
             return
@@ -841,19 +889,22 @@ class ProjectTestResults(object):
                 tname_width = max([tname_width, len(tinfo.definition.name)])
         tname_width += 5
 
-        for modname in self.results:
-            if modname == "":
+        for module_name in self.results:
+            if module_name == "":
                 print("\nTests")
                 self.printed_lines += 2
-            elif len(self.results[modname]) > 0:
-                print("\nTests - module %s:" % modname)
+            elif len(self.results[module_name]) > 0:
+                print("\nTests - module %s:" % module_name)
                 self.printed_lines += 2
-            if modname in self.module_error:
-                moderr = self.module_error[modname]
+            if module_name in self.module_error:
+                moderr = self.module_error[module_name]
                 print("Exit code: %d  term signal: %d" % (moderr.exit_code, moderr.term_signal))
                 print(moderr.err)
                 continue
-            for tname, tinfo in self.results[modname].items():
+            for test_name, tinfo in self.results[module_name].items():
+                last_tinfo = None
+                if module_name in self.last_results and test_name in self.last_results[module_name]:
+                    last_tinfo = self.last_results[module_name][test_name]
                 prefix = "  " + tinfo.definition.name + ": "
                 prefix += " " * (tname_width - len(prefix))
                 success = tinfo.success
@@ -888,16 +939,25 @@ class ProjectTestResults(object):
 
                 l = prefix + msg + ": "
                 if self.perf_mode:
-                    l += format_timing(modname, tname) + " "
+                    l += format_timing(module_name, test_name) + " "
                 l += run_info + term.normal
                 print(l)
                 self.printed_lines += 1
+                if self.perf_mode:
+                    indent = " " * 10
+                    diffs = tinfo.diff(last_tinfo)
+                    print(indent + "Memory usag      : %6dKB %s" % (tinfo.mem_usage_delta_avg // 1024, diffs.mem_usage_delta_avg))
+                    print(indent + "non-GC usage     : %6dKB %s" % (tinfo.non_gc_mem_usage_delta_avg // 1024, diffs.non_gc_mem_usage_delta_avg))
+                    print(indent + "non-GC usage > 0 : %d%% (%d out of %d)" % ((tinfo.non_gc_mem_inc_count * 100 // tinfo.num_iterations) if tinfo.num_iterations > 0 else 0,
+                                                                        tinfo.non_gc_mem_inc_count,
+                                                                        tinfo.num_iterations))
+                    self.printed_lines += 3
                 if tinfo.complete and exc is not None:
                     for line in str(exc).splitlines(None):
                         print(term.red + "    %s" % (line) + term.normal)
                         self.printed_lines += 1
+        print("")
         if complete:
-            print("")
             if errors > 0 and failures > 0:
                 print(term.bold + term.red + "%d error and %d failure out of %d tests (%ss)" % (errors, failures, self.num_tests(), self.sw.elapsed().str_ms()) + term.normal)
                 print()
@@ -914,6 +974,10 @@ class ProjectTestResults(object):
                 print(term.green + "All %d tests passed (%ss)" % (self.num_tests(), self.sw.elapsed().str_ms()) + term.normal)
                 print()
                 return 0
+        else:
+            print("Running tests...")
+            print()
+        self.printed_lines += 3
 
 class ModuleTestResults(object):
     tests: dict[str, TestInfo]
