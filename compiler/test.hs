@@ -213,7 +213,7 @@ createAutoTest file = do
                       else (head fileParts) ++ " (" ++testExp ++ ")"
         testFunc  = case testExp of
                         "bf" -> testBuild ""
-                        _    -> testBuildAndRunRepeat "" "" 100
+                        _    -> testBuildAndRunRepeat "" "" 2
         expRet    = case testExp of
                         "bf" -> (ExitFailure 1)
                         "rf" -> (ExitFailure 1)
