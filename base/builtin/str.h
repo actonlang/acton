@@ -13,6 +13,8 @@ B_str to$str(char *str);  //Dare not remove this
 
 B_str toB_str(char *str);
 
+B_str to_str_noc(char *str);
+
 // Destructor; recover the internal string.
 unsigned char *fromB_str(B_str str);
 

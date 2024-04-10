@@ -100,6 +100,39 @@ B_str to$str(char *str) {
     }
 }
 
+// No-copy version
+B_str to_str_noc(char *str) {
+    B_str res = acton_malloc(sizeof(struct B_str));
+    res->$class = &B_strG_methods;
+    res->nbytes = strlen(str);
+    res->nchars = res->nbytes;
+    res->str = str;
+
+    bool isascii = true;
+    unsigned char *p = (unsigned char*)str;
+    while (*p++ != 0)
+        if (*p >= 0x80) {
+            isascii = false;
+            break;
+        }
+    int cp, cpnbytes;
+    if (!isascii) {
+        res->nchars = 0;
+        while (1) {
+            if (*p == '\0')
+                break;
+            cpnbytes = utf8proc_iterate(p, -1, &cp);
+            if (cpnbytes < 0) {
+                $RAISE((B_BaseException)$NEW(B_ValueError,to$str("to$str: Unicode decode error")));
+                return NULL;
+            }
+            p += cpnbytes;
+            res->nchars++;
+        }
+    }
+    return res;
+}
+
 unsigned char *fromB_str(B_str str) {
     return str->str;
 }
