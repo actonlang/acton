@@ -74,15 +74,11 @@ B_bool B_floatD___bool__(B_float x) {
 }
 
 B_str B_floatD___str__(B_float x) {
-    char *s;
-    asprintf(&s,"%g",x->val);
-    return to$str(s);
+    return $FORMAT("%g", x->val);
 }
 
 B_str B_floatD___repr__(B_float x) {
-    char *s;
-    asprintf(&s,"%g",x->val);
-    return to$str(s);
+    return $FORMAT("%g", x->val);
 }
 
 B_float to$float(double x) {

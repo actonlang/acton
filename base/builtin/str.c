@@ -100,6 +100,39 @@ B_str to$str(char *str) {
     }
 }
 
+// No-copy version
+B_str to_str_noc(char *str) {
+    B_str res = acton_malloc(sizeof(struct B_str));
+    res->$class = &B_strG_methods;
+    res->nbytes = strlen(str);
+    res->nchars = res->nbytes;
+    res->str = str;
+
+    bool isascii = true;
+    unsigned char *p = (unsigned char*)str;
+    while (*p++ != 0)
+        if (*p >= 0x80) {
+            isascii = false;
+            break;
+        }
+    int cp, cpnbytes;
+    if (!isascii) {
+        res->nchars = 0;
+        while (1) {
+            if (*p == '\0')
+                break;
+            cpnbytes = utf8proc_iterate(p, -1, &cp);
+            if (cpnbytes < 0) {
+                $RAISE((B_BaseException)$NEW(B_ValueError,to$str("to$str: Unicode decode error")));
+                return NULL;
+            }
+            p += cpnbytes;
+            res->nchars++;
+        }
+    }
+    return res;
+}
+
 unsigned char *fromB_str(B_str str) {
     return str->str;
 }
@@ -1271,9 +1304,7 @@ B_bool B_IteratorB_strD_bool(B_IteratorB_str self) {
 }
 
 B_str B_IteratorB_strD_str(B_IteratorB_str self) {
-    char *s;
-    asprintf(&s,"<str iterator object at %p>",self);
-    return to$str(s);
+    return $FORMAT("<str iterator object at %p>", self);
 }
 
 // this is next function for forward iteration
@@ -2100,9 +2131,7 @@ B_bool B_IteratorB_bytearrayD_bool(B_IteratorB_bytearray self) {
 }
 
 B_str B_IteratorB_bytearrayD_str(B_IteratorB_bytearray self) {
-    char *s;
-    asprintf(&s,"<bytearray iterator object at %p>",self);
-    return to$str(s);
+    return $FORMAT("<bytearray iterator object at %p>", self);
 }
 
 void B_IteratorB_bytearrayD_serialize(B_IteratorB_bytearray self,$Serial$state state) {
@@ -3125,9 +3154,7 @@ B_bool B_IteratorB_bytesD_bool(B_IteratorB_bytes self) {
 }
 
 B_str B_IteratorB_bytesD_str(B_IteratorB_bytes self) {
-    char *s;
-    asprintf(&s,"<bytes iterator object at %p>",self);
-    return to$str(s);
+    return $FORMAT("<bytes iterator object at %p>", self);
 }
 
 // this is next function for forward iteration
@@ -3405,9 +3432,7 @@ B_str B_strD_join_par(char lpar, B_list elems, char rpar) {
 }
 
 B_str $default__str__(B_value self) {
-    char *s;
-    asprintf(&s,"<%s object at %p>",self->$class->$GCINFO,self);
-    return to$str(s);
+    return $FORMAT("<%s object at %p>", self->$class->$GCINFO, self);
 }
 
  

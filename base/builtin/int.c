@@ -155,11 +155,11 @@ B_bool B_intD___bool__(B_int n) {
 }
 
 B_str B_intD___str__(B_int n) {
-    return to$str(get_str(&n->val));
+    return to_str_noc(get_str(&n->val));
 }
 
 B_str B_intD___repr__(B_int n) {
-    return to$str(get_str(&n->val));
+    return to_str_noc(get_str(&n->val));
 }
   
 B_int zz$to$int(zz_ptr n) {
@@ -568,8 +568,8 @@ int get_str0(bool ishead, zz_ptr n, zz_ptr dens[], int d, char *res, int pos) {
             return get_str0(false, lo, dens, d-1, res, newpos);
         }
     } else {
-        char *buf = acton_malloc_atomic(POW10INWORD);
-        asprintf(&buf,"%lu",(unsigned long)n->n[0]);
+        char buf[POW10INWORD + 1];
+        sprintf(&buf, "%lu", (unsigned long)n->n[0]);
         int len = strlen(buf);
         if (ishead) {
             memcpy(&res[pos], buf, len);

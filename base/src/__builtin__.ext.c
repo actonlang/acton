@@ -47,9 +47,7 @@ $R B_EnvD_getenvbG_local (B_Env self, $Cont C_cont, B_bytes name) {
         r = uv_os_getenv(env_var, value, &len);
     }
     if (r < 0) {
-        char *s;
-        asprintf(&s, "Failed to read the environment variable %s: %s", env_var, uv_strerror(r));
-        $RAISE((B_BaseException)B_RuntimeErrorG_new(to$str(s)));
+        $RAISE((B_BaseException)B_RuntimeErrorG_new($FORMAT("Failed to read the environment variable %s: %s", env_var, uv_strerror(r))));
     }
     return $R_CONT(C_cont, to$bytes(value));
 }
@@ -59,9 +57,7 @@ $R B_EnvD_setenvbG_local (B_Env self, $Cont C_cont, B_bytes name, B_bytes value)
     const char* env_val = fromB_bytes(value);
     int r = uv_os_setenv(env_var, env_val);
     if (r < 0) {
-        char *s;
-        asprintf(&s, "Failed to set the environment variable %s: %s", env_var, uv_strerror(r));
-        $RAISE((B_BaseException)B_RuntimeErrorG_new(to$str(s)));
+        $RAISE((B_BaseException)B_RuntimeErrorG_new($FORMAT("Failed to set the environment variable %s: %s", env_var, uv_strerror(r))));
     }
     return $R_CONT(C_cont, B_None);
 }
@@ -70,9 +66,7 @@ $R B_EnvD_unsetenvbG_local (B_Env self, $Cont C_cont, B_bytes name) {
     const char* env_var = fromB_bytes(name);
     int r = uv_os_unsetenv(env_var);
     if (r < 0) {
-        char *s;
-        asprintf(&s, "Failed to unset the environment variable %s: %s", env_var, uv_strerror(r));
-        $RAISE((B_BaseException)B_RuntimeErrorG_new(to$str(s)));
+        $RAISE((B_BaseException)B_RuntimeErrorG_new($FORMAT("Failed to unset the environment variable %s: %s", env_var, uv_strerror(r))));
     }
     return $R_CONT(C_cont, B_None);
 }

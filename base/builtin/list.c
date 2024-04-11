@@ -284,9 +284,7 @@ B_bool B_IteratorD_listD_bool(B_IteratorD_list self) {
 }
 
 B_str B_IteratorD_listD_str(B_IteratorD_list self) {
-    char *s;
-    asprintf(&s,"<list iterator object at %p>",self);
-    return to$str(s);
+    return $FORMAT("<list iterator object at %p>", self);
 }
 
 void B_IteratorD_listD_serialize(B_IteratorD_list self,$Serial$state state) {

@@ -13,6 +13,9 @@
     for tests with very short test durations
 - `acton test perf` is now expanded and support all kinds of tests (previously
   only unit tests were supported)
+  - some memory usage is printed alongside timing information
+  - GC is run explicitly during perf test to get better memory usage stats but
+    it also slows things down a bit, in particular for very short duration tests
 - `acton test perf --record` can save a performance snapshot to disk
   - Subsequent invocations of `acton test perf` will back the data from disk and
     display a comparison with percentage diff
@@ -25,10 +28,13 @@
 - Link time redirection of malloc & friends is now removed. All malloc calls are
   instead explicit, either directly to `GC_MALLOC` or via `acton_malloc` which
   is our own malloc function which is runtime reconfigurable. While there is no
-  usage of malloc directly from our code, that is now possible to do manual
+  usage of malloc directly from our code, it is now possible to do manual
   memory management mixed with GC managed memory.
   - As before, module constants are placed in the regular heap, so that the GC
     does not have to scan it.
+  - Many string formatting functions have been reshaped since `asprintf` does an
+    implicit malloc, which we must either free or avoid. As a result, we now
+    copy less data around, which speeds things up.
 - `process.Process` now takes an optional timeout argument to stop the process
 - New `process.RunProcess` that waits for a process to exit and then reports to
   a callback with the buffered output from stdout / stderr
@@ -87,6 +93,7 @@
     the top test runner now captures this and reflects it in the output
 - Correct dependency path computation in builder
 - Makefile now more idempotent to avoid building when nothing has changed
+- 
 
 ### Testing / CI
 - Test on MacOS 14 on Apple M1 / arm64 / aarch64

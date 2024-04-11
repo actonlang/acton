@@ -15,10 +15,7 @@ xmlQ_Node $NodePtr2Node(xmlNodePtr node) {
     B_SequenceD_list wit = B_SequenceD_listG_witness;
     if (node->type != XML_ELEMENT_NODE) {
         char *errmsg = NULL;
-        int ret = asprintf(&errmsg, "Unexpected nodetype %d, content is %s", node->type, node->content);
-        if (ret == -1)
-          $RAISE(((B_BaseException)B_RuntimeErrorG_new(to$str("Unable to format error message"))));
-        $RAISE(((B_BaseException)B_RuntimeErrorG_new(to$str(errmsg))));
+        $RAISE(((B_BaseException)B_RuntimeErrorG_new($FORMAT("Unexpected nodetype %d, content is %s", node->type, node->content))));
     }
 
     B_list nsdefs = B_listG_new(NULL, NULL);

@@ -835,9 +835,7 @@ B_bool numpyQ_IteratorB_bool(numpyQ_IteratorD_ndarray self) {
 }
 
 B_str numpyQ_IteratorB_str(numpyQ_IteratorD_ndarray self) {
-    char *s;
-    asprintf(&s,"<ndarray iterator object at %p>",self);
-    return to$str(s);
+    return $FORMAT("<ndarray iterator object at %p>", self);
 }
 
 $WORD numpyQ_IteratorD_ndarrayD___next__(numpyQ_IteratorD_ndarray self) {

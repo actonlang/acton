@@ -44,15 +44,11 @@ B_bool B_rangeD___bool__(B_range self) {
 }
 
 B_str B_rangeD___str__(B_range self) {
-    char *s;
-    asprintf(&s,"range(%ld,%ld,%ld)",self->start,self->stop,self->step);
-    return to$str(s);
+    return $FORMAT("range(%ld,%ld,%ld)", self->start, self->stop, self->step);
 }
 
 B_str B_rangeD___repr__(B_range self) {
-    char *s;
-    asprintf(&s,"range(%ld,%ld,%ld)",self->start,self->stop,self->step);
-    return to$str(s);
+    return $FORMAT("range(%ld,%ld,%ld)", self->start, self->stop, self->step);
 }
 
 void B_rangeD___serialize__(B_range self, $Serial$state state) {
@@ -92,9 +88,7 @@ B_bool B_IteratorB_rangeD_bool(B_IteratorB_range self) {
 }
 
 B_str B_IteratorB_rangeD_str(B_IteratorB_range self) {
-    char *s;
-    asprintf(&s,"<range iterator object at %p>",self);
-    return to$str(s);
+    return $FORMAT("<range iterator object at %p>", self);
 }
 
 void B_IteratorB_rangeD_serialize(B_IteratorB_range self, $Serial$state state) {

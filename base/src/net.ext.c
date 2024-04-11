@@ -436,11 +436,10 @@ $R netQ_TCPListenerD__initG_local (netQ_TCPListener self, $Cont c$cont) {
     } else if (inet_pton(AF_INET6, (const char *)fromB_str(self->address), &(addr6.sin6_addr)) == 1) {
         r = uv_ip6_addr((const char *)fromB_str(self->address), from$int(self->port), &addr6);
     } else {
-        char errmsg[1024] = "Address is not an IPv4 or IPv6 address: ";
-        asprintf(errmsg + strlen(errmsg), "%s", fromB_str(self->address));
-        log_warn(errmsg);
+        B_str errmsg = $FORMAT("Address is not an IPv4 or IPv6 address: %s", fromB_str(self->address));
+        log_warn(fromB_str(errmsg));
         $action2 f = ($action2)self->on_error;
-        f->$class->__asyn__(f, self, to$str(errmsg));
+        f->$class->__asyn__(f, self, errmsg);
         // NOTE: free() here if do manual memory management in I/O one day
         return $R_CONT(c$cont, B_None);
     }

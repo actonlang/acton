@@ -51,15 +51,11 @@ B_bool B_complexD___bool__(B_complex n) {
 }
 
 B_str B_complexD___str__(B_complex c) {
-    char *s;
-    asprintf(&s,"%f + %f*I",creal(c->val),cimag(c->val));
-    return to$str(s);
+    return $FORMAT("%f + %f*I", creal(c->val), cimag(c->val));
 }
   
 B_str B_complexD___repr__(B_complex c) {
-    char *s;
-    asprintf(&s,"%f + %f*I",creal(c->val),cimag(c->val));
-    return to$str(s);
+    return $FORMAT("%f + %f*I", creal(c->val), cimag(c->val));
 }
   
 // B_NumberD_complex  ////////////////////////////////////////////////////////////////////////////////////////

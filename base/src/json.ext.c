@@ -3,8 +3,25 @@
 #include "../rts/log.h"
 #include "yyjson.h"
 
+static void *my_malloc(void *ctx, size_t size) {
+    return acton_malloc(size);
+}
+
+static void *my_realloc(void *ctx, void *ptr, size_t size) {
+    return acton_realloc(ptr, size);
+}
+
+static void my_free(void *ctx, void *ptr) {
+    acton_free(ptr);
+}
+
+
+yyjson_alc acton_alc;
+
 void jsonQ___ext_init__() {
-    // NOP
+    acton_alc.malloc = my_malloc;
+    acton_alc.realloc = my_realloc;
+    acton_alc.free = my_free;
 }
 
 void jsonQ_encode_list(yyjson_mut_doc *doc, yyjson_mut_val *node, B_list data);
@@ -45,9 +62,7 @@ void jsonQ_encode_dict(yyjson_mut_doc *doc, yyjson_mut_val *node, B_dict data) {
                     // maybe? like we really shouldn't accept user-defined types
                     // here, just throw an exception? or when we have unions, just
                     // accept union of the types we support
-                    char *s;
-                    asprintf(&s, "jsonQ_encode_dict: for key %s unknown type: %s", key, v->$class->$GCINFO);
-                    $RAISE(((B_BaseException)B_ValueErrorG_new(to$str(s))));
+                    $RAISE(((B_BaseException)B_ValueErrorG_new($FORMAT("jsonQ_encode_dict: for key %s unknown type: %s", key, v->$class->$GCINFO))));
             }
         } else {
             yyjson_mut_obj_add_null(doc, node, key);
@@ -93,9 +108,7 @@ void jsonQ_encode_list(yyjson_mut_doc *doc, yyjson_mut_val *node, B_list data) {
                     // maybe? like we really shouldn't accept user-defined types
                     // here, just throw an exception? or when we have unions, just
                     // accept union of the types we support
-                    char *s;
-                    asprintf(&s, "jsonQ_encode_list: unknown type: %s", v->$class->$GCINFO);
-                    $RAISE(((B_BaseException)B_ValueErrorG_new(to$str(s))));
+                    $RAISE(((B_BaseException)B_ValueErrorG_new($FORMAT("jsonQ_encode_list: unknown type: %s", v->$class->$GCINFO))));
             }
         } else {
             yyjson_mut_arr_add_null(doc, node);
@@ -150,9 +163,7 @@ B_dict jsonQ_decode_obj(yyjson_val *obj) {
                 break;
             default:;
                 // unreachable
-                char *s;
-                asprintf(&s, "jsonQ_encode_list: unknown type: %d", yyjson_get_type(val));
-                $RAISE(((B_BaseException)B_ValueErrorG_new(to$str(s))));
+                $RAISE(((B_BaseException)B_ValueErrorG_new($FORMAT("jsonQ_encode_list: unknown type: %d", yyjson_get_type(val)))));
         }
     }
     return res;
@@ -200,9 +211,7 @@ B_list jsonQ_decode_arr(yyjson_val *arr) {
                 break;
             default:;
                 // TODO: just handle all types?
-                char *s;
-                asprintf(&s, "jsonQ_decode_arr: unknown type: %d", yyjson_get_type(val));
-                $RAISE(((B_BaseException)B_ValueErrorG_new(to$str(s))));
+                $RAISE(((B_BaseException)B_ValueErrorG_new($FORMAT("jsonQ_decode_arr: unknown type: %d", yyjson_get_type(val)))));
         }
     }
     return res;
@@ -211,7 +220,7 @@ B_list jsonQ_decode_arr(yyjson_val *arr) {
 B_dict jsonQ_decode (B_str data) {
     // Read JSON and get root
     yyjson_read_err err;
-    yyjson_doc *doc = yyjson_read_opts(fromB_str(data), strlen(fromB_str(data)), 0, NULL, &err);
+    yyjson_doc *doc = yyjson_read_opts(fromB_str(data), strlen(fromB_str(data)), 0, &acton_alc, &err);
     yyjson_val *root = yyjson_doc_get_root(doc);
 
     B_dict res = $NEW(B_dict,(B_Hashable)B_HashableD_strG_witness,NULL,NULL);
@@ -231,13 +240,14 @@ B_dict jsonQ_decode (B_str data) {
 
 B_str jsonQ_encode (B_dict data) {
     // Create JSON document
-    yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
+    yyjson_mut_doc *doc = yyjson_mut_doc_new(&acton_alc);
     yyjson_mut_val *root = yyjson_mut_obj(doc);
     yyjson_mut_doc_set_root(doc, root);
 
     jsonQ_encode_dict(doc, root, data);
 
-    char *json = yyjson_mut_write(doc, 0, NULL);
+    yyjson_write_err err;
+    char *json = yyjson_mut_write_opts(doc, 0, &acton_alc, NULL, &err);
     //yyjson_doc_free(doc);
     return to$str(json);
 }

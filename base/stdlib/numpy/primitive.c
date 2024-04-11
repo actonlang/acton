@@ -118,15 +118,11 @@ DBLUNARY(dB_abs,fabs)
 DBLUNARY(B_d_neg,-)
 
 B_str B_l_prim_str(union $Bytes8 n) {
-    char *s;
-    asprintf(&s,"%ld",n.l);
-    return to$str(s);
+    return $FORMAT("%ld", n.l);
 }
 
 B_str B_d_prim_str(union $Bytes8 x) {
-    char *s;
-    asprintf(&s,"%g",x.d);
-    return to$str(s);
+    return $FORMAT("%g", x.d);
 }
 
 union $Bytes8 lB_pow(union $Bytes8 a, union $Bytes8 b) {

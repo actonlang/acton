@@ -49,6 +49,13 @@ void $default__init__($WORD);
 
 #define $SKIPRES(cont)      (cont)
 
-#define $FORMAT($s, ...)    ({ char * $b; asprintf(&$b, $s, ##__VA_ARGS__); to$str($b); })
+#define $FORMAT($s, ...) ({                              \
+    int sz = snprintf(NULL, 0, $s, ##__VA_ARGS__);       \
+    char *$b = (char *)acton_malloc_atomic(sz + 1);      \
+    if ($b != NULL) {                                    \
+        snprintf($b, sz + 1, $s, ##__VA_ARGS__);         \
+    }                                                    \
+    to_str_noc($b);                                      \
+})
 
 char *unmangle_name(char *input);

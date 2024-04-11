@@ -54,15 +54,11 @@ B_bool B_u16D___bool__(B_u16 n) {
 }
 
 B_str B_u16D___str__(B_u16 n) {
-    char *s;
-    asprintf(&s,"%hu",n->val);
-    return to$str(s);
+    return $FORMAT("%hu", n->val);
 }
 
 B_str B_u16D___repr__(B_u16 n) {
-    char *s;
-    asprintf(&s,"%hu",n->val);
-    return to$str(s);
+    return $FORMAT("%hu", n->val);
 }
 
 B_u16 toB_u16(unsigned short i) {
