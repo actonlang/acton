@@ -23,26 +23,54 @@ on:
       - main
     tags:
       - v*
+  schedule:
+    # Schedule to run daily
+    - cron: '4 0 * * *'
 
 # NOTE: Jobs for version tagged releases just pattern match on any tag starting
 # with 'v'. That's probably a version tag, but could be something else. Is there
 # a better way to match?
 
 jobs:
+  matrix_maker_macos:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.setmatrix.outputs.matrix }}
+    steps:
+      - name: "Set Matrix for PR or push"
+        if: github.event_name != 'schedule'
+        id: setmatrix_pr
+        run: |
+          MATRIX_JSON='{\"include\":[{\"os\":\"macos\",\"version\":\"12\",\"arch\":\"x86_64\",\"cache\":true},{\"os\":\"macos\",\"version\":\"14\",\"arch\":\"aarch64\",\"cache\":true}]}'
+          echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
+
+      - name: "Set Matrix for nightly run"
+        if: github.event_name == 'schedule'
+        id: setmatrix_cron
+        run: |
+          MATRIX_JSON='{\"include\":[{\"os\":\"macos\",\"version\":\"12\",\"arch\":\"x86_64\",\"cache\":true},{\"os\":\"macos\",\"version\":\"13\",\"arch\":\"x86_64\",\"cache\":true},{\"os\":\"macos\",\"version\":\"14\",\"arch\":\"aarch64\",\"cache\":true}]}'
+          echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
+
+      - name: "Set final matrix output"
+        id: setmatrix
+        run: |
+          if [ "${{ github.event_name }}" == "schedule" ]; then
+            echo "matrix=${{ steps.setmatrix_cron.outputs.matrix }}" >> $GITHUB_OUTPUT
+          else
+            echo "matrix=${{ steps.setmatrix_pr.outputs.matrix }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: "Debug: Print matrix JSON"
+        run: |
+          echo "Matrix JSON:"
+          echo '${{ toJson(fromJson(steps.setmatrix.outputs.matrix)) }}'
+          echo "Event name: ${{ github.event_name }}"
+
   test-macos:
+    needs: matrix_maker_macos
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - os: "macos"
-            version: "12"
-            arch: "x86_64"
-          - os: "macos"
-            version: "13"
-            arch: "x86_64"
-          - os: "macos"
-            version: "14"
-            arch: "aarch64"
+      matrix: ${{ fromJson(needs.matrix_maker_macos.outputs.matrix) }}
     runs-on: ${{ matrix.os }}-${{ matrix.version }}
     steps:
       - name: "Show env"
@@ -58,6 +86,7 @@ jobs:
       - name: "Check out repository code"
         uses: actions/checkout@v4
       - name: "Cache stuff"
+        if: matrix.cache == true
         uses: actions/cache@v4
         with:
           path: |
@@ -90,19 +119,45 @@ jobs:
             ${{ github.workspace }}/test
 
 
+  matrix_maker_linux:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.setmatrix.outputs.matrix }}
+    steps:
+      - name: "Set Matrix for PR or push"
+        if: github.event_name != 'schedule'
+        id: setmatrix_pr
+        run: |
+          MATRIX_JSON='{\"include\":[{\"os\":\"debian\",\"version\":\"12\",\"cache\":true}]}'
+          echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
+
+      - name: "Set Matrix for nightly run"
+        if: github.event_name == 'schedule'
+        id: setmatrix_cron
+        run: |
+          MATRIX_JSON='{\"include\":[{\"os\":\"debian\",\"version\":\"11\",\"cache\":false},{\"os\":\"debian\",\"version\":\"12\",\"cache\":true},{\"os\":\"ubuntu\",\"version\":\"22.04\",\"cache\":false},{\"os\":\"ubuntu\",\"version\":\"24.04\",\"cache\":false}]}'
+          echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
+
+      - name: "Set final matrix output"
+        id: setmatrix
+        run: |
+          if [ "${{ github.event_name }}" == "schedule" ]; then
+            echo "matrix=${{ steps.setmatrix_cron.outputs.matrix }}" >> $GITHUB_OUTPUT
+          else
+            echo "matrix=${{ steps.setmatrix_pr.outputs.matrix }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: "Debug: Print matrix JSON"
+        run: |
+          echo "Matrix JSON:"
+          echo '${{ toJson(fromJson(steps.setmatrix.outputs.matrix)) }}'
+          echo "Event name: ${{ github.event_name }}"
+
   test-linux:
+    needs: matrix_maker_linux
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - os: "debian"
-            version: "11"
-          - os: "debian"
-            version: "12"
-          - os: "ubuntu"
-            version: "22.04"
-          - os: "ubuntu"
-            version: "24.04"
+      matrix: ${{ fromJson(needs.matrix_maker_linux.outputs.matrix) }}
     runs-on: ubuntu-latest
     container:
       image: ${{ matrix.os }}:${{ matrix.version }}
@@ -118,6 +173,7 @@ jobs:
       - name: "Check out repository code"
         uses: actions/checkout@v4
       - name: "Cache stuff"
+        if: matrix.cache == true
         uses: actions/cache@v4
         with:
           path: |
