@@ -105,7 +105,6 @@ for more flexible memory management.
     the top test runner now captures this and reflects it in the output
 - Correct dependency path computation in builder
 - Makefile now more idempotent to avoid building when nothing has changed
-- 
 
 ### Testing / CI
 - Test on MacOS 14 on Apple M1 / arm64 / aarch64
