@@ -54,15 +54,11 @@ B_bool B_u64D___bool__(B_u64 n) {
 }
 
 B_str B_u64D___str__(B_u64 n) {
-    char *s;
-    asprintf(&s,"%lu",n->val);
-    return to$str(s);
+    return $FORMAT("%lu", n->val);
 }
 
 B_str B_u64D___repr__(B_u64 n) {
-    char *s;
-    asprintf(&s,"%lu",n->val);
-    return to$str(s);
+    return $FORMAT("%lu", n->val);
 }
 
 B_u64 toB_u64(unsigned long i) {

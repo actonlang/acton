@@ -103,9 +103,7 @@ B_bool B_sliceD___bool__(B_slice s) {
 }
 
 B_str B_sliceD___str__(B_slice s) {
-    char *c;
-    asprintf(&c,"Slice [%ld:%ld:%ld]",*s->start, *s->stop,*s->step);
-    return to$str(c);
+    return $FORMAT("Slice [%ld:%ld:%ld]", *s->start, *s->stop, *s->step);
 }
 
 B_str B_sliceD___repr__(B_slice s) {

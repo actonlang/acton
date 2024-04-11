@@ -54,15 +54,11 @@ B_bool B_u32D___bool__(B_u32 n) {
 }
 
 B_str B_u32D___str__(B_u32 n) {
-    char *s;
-    asprintf(&s,"%u",n->val);
-    return to$str(s);
+    return $FORMAT("%u", n->val);
 }
 
 B_str B_u32D___repr__(B_u32 n) {
-    char *s;
-    asprintf(&s,"%u",n->val);
-    return to$str(s);
+    return $FORMAT("%u", n->val);
 }
 
 B_u32 toB_u32(unsigned int i) {

@@ -339,9 +339,7 @@ B_bool B_IteratorD_set_bool(B_IteratorD_set self) {
 }
 
 B_str B_IteratorD_set_str(B_IteratorD_set self) {
-    char *s;
-    asprintf(&s,"<set keys iterator object at %p>",self);
-    return to$str(s);
+    return $FORMAT("<set keys iterator object at %p>", self);
 }
 
 void B_IteratorD_set_serialize(B_IteratorD_set self, $Serial$state state) {

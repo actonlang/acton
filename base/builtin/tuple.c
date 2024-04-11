@@ -101,9 +101,7 @@ B_bool B_IteratorD_tupleD_bool(B_IteratorD_tuple self) {
 }
 
 B_str B_IteratorD_tupleD_str(B_IteratorD_tuple self) {
-    char *s;
-    asprintf(&s,"<tuple iterator object at %p>",self);
-    return to$str(s);
+    return $FORMAT("<tuple iterator object at %p>", self);
 }
 void B_IteratorD_tupleD_serialize(B_IteratorD_tuple self,$Serial$state state) {
     $step_serialize(self->src,state);

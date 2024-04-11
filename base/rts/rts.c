@@ -305,9 +305,7 @@ B_bool B_MsgD___bool__(B_Msg self) {
 }
 
 B_str B_MsgD___str__(B_Msg self) {
-  char *s;
-  asprintf(&s,"<B_Msg object at %p>",self);
-  return to$str(s);
+  return $FORMAT("<B_Msg object at %p>", self);
 }
 
 B_str B_MsgD___repr__(B_Msg self) {
@@ -361,9 +359,7 @@ B_bool $ActorD___bool__($Actor self) {
 }
 
 B_str $ActorD___str__($Actor self) {
-  char *s;
-  asprintf(&s,"<$Actor %ld %s at %p>", self->$globkey, self->$class->$GCINFO, self);
-  return to$str(s);
+  return $FORMAT("<$Actor %ld %s at %p>", self->$globkey, self->$class->$GCINFO, self);
 }
 
 B_NoneType $ActorD___resume__($Actor self) {
@@ -414,9 +410,7 @@ B_bool $CatcherD___bool__($Catcher self) {
 }
 
 B_str $CatcherD___str__($Catcher self) {
-  char *s;
-  asprintf(&s,"<$Catcher object at %p>",self);
-  return to$str(s);
+  return $FORMAT("<$Catcher object at %p>", self);
 }
 
 void $CatcherD___serialize__($Catcher self, $Serial$state state) {
@@ -444,9 +438,7 @@ B_bool $ConstContD___bool__($ConstCont self) {
 }
 
 B_str $ConstContD___str__($ConstCont self) {
-  char *s;
-  asprintf(&s,"<$ConstCont object at %p>",self);
-  return to$str(s);
+  return $FORMAT("<$ConstCont object at %p>", self);
 }
 
 void $ConstContD___serialize__($ConstCont self, $Serial$state state) {
@@ -624,9 +616,7 @@ B_bool $DoneD___bool__($Cont self) {
 }
 
 B_str $DoneD___str__($Cont self) {
-  char *s;
-  asprintf(&s,"<$Done object at %p>",self);
-  return to$str(s);
+  return $FORMAT("<$Done object at %p>", self);
 }
 
 void $Done__serialize__($Cont self, $Serial$state state) {
@@ -664,9 +654,7 @@ B_bool $FailD___bool__($Cont self) {
 }
 
 B_str $FailD___str__($Cont self) {
-  char *s;
-  asprintf(&s,"<$Fail object at %p>",self);
-  return to$str(s);
+  return $FORMAT("<$Fail object at %p>", self);
 }
 
 void $Fail__serialize__($Cont self, $Serial$state state) {

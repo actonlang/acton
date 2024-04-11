@@ -1304,9 +1304,7 @@ B_bool B_IteratorB_strD_bool(B_IteratorB_str self) {
 }
 
 B_str B_IteratorB_strD_str(B_IteratorB_str self) {
-    char *s;
-    asprintf(&s,"<str iterator object at %p>",self);
-    return to$str(s);
+    return $FORMAT("<str iterator object at %p>", self);
 }
 
 // this is next function for forward iteration
@@ -2133,9 +2131,7 @@ B_bool B_IteratorB_bytearrayD_bool(B_IteratorB_bytearray self) {
 }
 
 B_str B_IteratorB_bytearrayD_str(B_IteratorB_bytearray self) {
-    char *s;
-    asprintf(&s,"<bytearray iterator object at %p>",self);
-    return to$str(s);
+    return $FORMAT("<bytearray iterator object at %p>", self);
 }
 
 void B_IteratorB_bytearrayD_serialize(B_IteratorB_bytearray self,$Serial$state state) {
@@ -3158,9 +3154,7 @@ B_bool B_IteratorB_bytesD_bool(B_IteratorB_bytes self) {
 }
 
 B_str B_IteratorB_bytesD_str(B_IteratorB_bytes self) {
-    char *s;
-    asprintf(&s,"<bytes iterator object at %p>",self);
-    return to$str(s);
+    return $FORMAT("<bytes iterator object at %p>", self);
 }
 
 // this is next function for forward iteration
@@ -3438,9 +3432,7 @@ B_str B_strD_join_par(char lpar, B_list elems, char rpar) {
 }
 
 B_str $default__str__(B_value self) {
-    char *s;
-    asprintf(&s,"<%s object at %p>",self->$class->$GCINFO,self);
-    return to$str(s);
+    return $FORMAT("<%s object at %p>", self->$class->$GCINFO, self);
 }
 
  

@@ -408,9 +408,7 @@ B_bool B_IteratorD_dictD_bool(B_IteratorD_dict self) {
 }
 
 B_str B_IteratorD_dictD_str(B_IteratorD_dict self) {
-    char *s;
-    asprintf(&s,"<dict keys iterator object at %p>",self);
-    return to$str(s);
+    return $FORMAT("<dict keys iterator object at %p>", self);
 }
 
 void B_IteratorD_dictD_serialize(B_IteratorD_dict self, $Serial$state state) {
@@ -521,9 +519,7 @@ B_bool B_IteratorD_dict_values_bool(B_IteratorD_dict_values self) {
 }
 
 B_str B_IteratorD_dict_values_str(B_IteratorD_dict_values self) {
-    char *s;
-    asprintf(&s,"<dict values iterator object at %p>",self);
-    return to$str(s);
+    return $FORMAT("<dict values iterator object at %p>", self);
 }
 
 void B_IteratorD_dict_values_serialize(B_IteratorD_dict_values self, $Serial$state state) {
@@ -577,9 +573,7 @@ B_bool B_IteratorD_dict_items_bool(B_IteratorD_dict_items self) {
 }
 
 B_str B_IteratorD_dict_items_str(B_IteratorD_dict_items self) {
-    char *s;
-    asprintf(&s,"<dict items iterator object at %p>",self);
-    return to$str(s);
+    return $FORMAT("<dict items iterator object at %p>", self);
 }
 
 void B_IteratorD_dict_items_serialize(B_IteratorD_dict_items self, $Serial$state state) {

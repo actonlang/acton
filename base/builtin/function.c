@@ -18,36 +18,28 @@ B_bool $procD___bool__($proc self) {
   return B_True;
 }
 B_str $procD___str__($proc self) {
-  char *s;
-  asprintf(&s,"<proc closure at %p>",self);
-  return to$str(s);
+  return $FORMAT("<proc closure at %p>", self);
 }
 
 B_bool $actionD___bool__($action self) {
   return B_True;
 }
 B_str $actionD___str__($action self) {
-  char *s;
-  asprintf(&s,"<action closure at %p>",self);
-  return to$str(s);
+  return $FORMAT("<action closure at %p>", self);
 }
 
 B_bool $mutD___bool__($mut self) {
   return B_True;
 }
 B_str $mutD___str__($mut self) {
-  char *s;
-  asprintf(&s,"<mut closure at %p>",self);
-  return to$str(s);
+  return $FORMAT("<mut closure at %p>", self);
 }
 
 B_bool $pureD___bool__($pure self) {
   return B_True;
 }
 B_str $pureD___str__($pure self) {
-  char *s;
-  asprintf(&s,"<pure closure at %p>",self);
-  return to$str(s);
+  return $FORMAT("<pure closure at %p>", self);
 }
 
 void $ContD___init__($Cont $this) {
@@ -57,9 +49,7 @@ B_bool $ContD___bool__($Cont self) {
   return B_True;
 }
 B_str $ContD___str__($Cont self) {
-  char *s;
-  asprintf(&s,"<$Cont closure at %p>",self);
-  return to$str(s);
+  return $FORMAT("<$Cont closure at %p>", self);
 }
 void $ContD___serialize__($Cont self, $Serial$state state) {
     // Empty

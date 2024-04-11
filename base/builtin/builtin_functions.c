@@ -100,9 +100,7 @@ B_bool B_IteratorD_enumerate_bool(B_IteratorD_enumerate self) {
 }
 
 B_str B_IteratorD_enumerate_str(B_IteratorD_enumerate self) {
-    char *s;
-    asprintf(&s,"<enumerate iterator object at %p>",self);
-    return to$str(s);
+    return $FORMAT("<enumerate iterator object at %p>", self);
 }
 
 void B_IteratorD_enumerate_serialize(B_IteratorD_enumerate self,$Serial$state state) {
@@ -154,9 +152,7 @@ B_bool B_IteratorD_filter_bool(B_IteratorD_filter self) {
 }
 
 B_str B_IteratorD_filter_str(B_IteratorD_filter self) {
-    char *s;
-    asprintf(&s,"<filter iterator object at %p>",self);
-    return to$str(s);
+    return $FORMAT("<filter iterator object at %p>", self);
 }
 
 void B_IteratorD_filter_serialize(B_IteratorD_filter self,$Serial$state state) {
@@ -203,9 +199,7 @@ B_bool B_IteratorD_map_bool(B_IteratorD_map self) {
 }
 
 B_str B_IteratorD_map_str(B_IteratorD_map self) {
-    char *s;
-    asprintf(&s,"<map iterator object at %p>",self);
-    return to$str(s);
+    return $FORMAT("<map iterator object at %p>", self);
 }
 
 void B_IteratorD_map_serialize(B_IteratorD_map self,$Serial$state state) {
@@ -301,9 +295,7 @@ B_bool B_IteratorD_zip_bool(B_IteratorD_zip self) {
 }
 
 B_str B_IteratorD_zip_str(B_IteratorD_zip self) {
-    char *s;
-    asprintf(&s,"<zip iterator object at %p>",self);
-    return to$str(s);
+    return $FORMAT("<zip iterator object at %p>", self);
 }
 
 void B_IteratorD_zip_serialize(B_IteratorD_zip self,$Serial$state state) {
@@ -355,9 +347,7 @@ B_bool $EqOptD_bool($EqOpt self) {
 }
 
 B_str $EqOptD_str($EqOpt self) {
-    char *s;
-    asprintf(&s,"<EqOpt witness at %p>",self);
-    return to$str(s);
+    return $FORMAT("<EqOpt witness at %p>", self);
 }
 
 void $EqOptD_serialize($EqOpt self,$Serial$state state) {
