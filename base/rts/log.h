@@ -14,7 +14,6 @@
 #endif
 #endif
 
-#include <pthread.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdbool.h>
@@ -23,8 +22,6 @@
 #include "../rts/rts.h"
 
 #define LOG_VERSION "0.1.0"
-
-extern pthread_key_t self_key;
 
 typedef struct {
   va_list ap;

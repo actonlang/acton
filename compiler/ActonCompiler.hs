@@ -84,6 +84,7 @@ main = do
           C.db = C.dbB opts,
           C.only_build = C.only_buildB opts,
           C.skip_build = C.skip_buildB opts,
+          C.no_threads = C.no_threadsB opts,
           C.root = C.rootB opts,
           C.ccmd = C.ccmdB opts,
           C.quiet = C.quietB opts,
@@ -101,7 +102,7 @@ main = do
 
 defaultOpts   = C.CompileOptions False False False False False False False False False False False False
                                  False False False False False False False False False False False False
-                                 "" "" "" "" C.defTarget "" False
+                                 False "" "" "" "" C.defTarget "" False
 
 
 -- Auxiliary functions ---------------------------------------------------------------------------------------
@@ -844,6 +845,7 @@ zigBuild env opts paths tasks binTasks = do
                  " -Ddeps_path=" ++ (C.deppath opts) ++
                  " -Doptimize=" ++ (if (C.dev opts) then "Debug" else "ReleaseFast") ++
                  (if (C.db opts) then " -Ddb " else " ") ++
+                 (if (C.no_threads opts) then " -Dno_threads " else " ") ++
                  (if (C.cpedantic opts) then " -Dcpedantic " else " ") ++
                  " -Dsyspath=" ++ sysPath paths
 
