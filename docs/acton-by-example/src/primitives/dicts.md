@@ -26,6 +26,9 @@ actor main(env):
     print("Pop last item:", d.popitem())
     print("Dict after .popitem():", d)
 
+    # Get a shallow copy of a dict. Note the use of .items() to get keys and values
+    new_d = dict(d.items())
+
     env.exit(0)
 ```
 
