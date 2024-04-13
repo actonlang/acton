@@ -5,6 +5,7 @@ const ArrayList = std.ArrayList;
 pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
+    const no_threads = b.option(bool, "no_threads", "") orelse false;
     const syspath_include = b.option([]const u8, "syspath_include", "") orelse "";
 
     const dep_libargp = b.anonymousDependency("deps/libargp", @import("deps/libargp/build.zig"), .{
@@ -63,6 +64,18 @@ pub fn build(b: *std.Build) void {
     file_prefix_map.appendSlice(file_prefix_path_path) catch unreachable;
     file_prefix_map.appendSlice("/=") catch unreachable;
     flags.append(file_prefix_map.items) catch unreachable;
+
+    if (no_threads) {
+        print("No threads\n", .{});
+    } else {
+        print("Threads enabled\n", .{});
+        flags.appendSlice(&.{
+            "-DACTON_THREADS",
+        }) catch |err| {
+            std.log.err("Error appending flags: {}", .{err});
+            std.os.exit(1);
+        };
+    }
 
     const libactondb = b.addStaticLibrary(.{
         .name = "ActonDB",

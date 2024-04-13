@@ -57,6 +57,7 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const db = b.option(bool, "db", "") orelse false;
     const only_lib = b.option(bool, "only_lib", "") orelse false;
+    const no_threads = b.option(bool, "no_threads", "") orelse false;
     const syspath = b.option([]const u8, "syspath", "") orelse "";
     const arg_deps_path = b.option([]const u8, "deps_path", "") orelse "";
 
@@ -179,6 +180,18 @@ pub fn build(b: *std.Build) void {
     if (db)
         flags.appendSlice(&.{"-DACTON_DB",}) catch unreachable;
 
+    if (no_threads) {
+        print("No threads\n", .{});
+    } else {
+        print("Threads enabled\n", .{});
+        flags.appendSlice(&.{
+            "-DACTON_THREADS",
+        }) catch |err| {
+            std.log.err("Error appending flags: {}", .{err});
+            std.os.exit(1);
+        };
+    }
+
     for (c_files.items) |entry| {
         libActonProject.addCSourceFile(.{ .file = .{ .path = entry }, .flags = flags.items });
     }
@@ -218,6 +231,7 @@ pub fn build(b: *std.Build) void {
         const actonbase_dep = b.anonymousDependency(syspath_base, @import("basebuild.zig"), .{
             .target = target,
             .optimize = optimize,
+            .no_threads = no_threads,
             .db = db,
             .syspath = syspath,
         });
@@ -380,7 +394,6 @@ pub fn build(b: *std.Build) void {
             executable.linkLibrary(dep_libuv.artifact("uv"));
             executable.linkLibrary(dep_libxml2.artifact("xml2"));
             executable.linkLibrary(dep_libyyjson.artifact("yyjson"));
-
             executable.linkLibrary(dep_libgc.artifact("gc"));
 
             executable.linkLibC();

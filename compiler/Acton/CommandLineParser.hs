@@ -62,6 +62,7 @@ data CompileOptions   = CompileOptions {
                          dev         :: Bool,
                          only_build  :: Bool,
                          skip_build  :: Bool,
+                         no_threads  :: Bool,
                          root        :: String,
                          tempdir     :: String,
                          syspath     :: String,
@@ -75,6 +76,7 @@ data BuildOptions = BuildOptions {
                          alwaysB     :: Bool,
                          cpedanticB  :: Bool,
                          dbB         :: Bool,
+                         no_threadsB :: Bool,
                          debugB      :: Bool,
                          devB        :: Bool,
                          only_buildB :: Bool,
@@ -156,6 +158,7 @@ compileOptions = CompileOptions
         <*> switch (long "dev"          <> help "Development mode; include debug symbols etc")
         <*> switch (long "only-build"   <> help "Only perform final build of .c files, do not compile .act files")
         <*> switch (long "skip-build"   <> help "Skip final bulid of .c files")
+        <*> switch (long "no-threads"   <> help "Don't use threads")
         <*> strOption (long "root"      <> metavar "ROOTACTOR" <> value "" <> help "Set root actor")
         <*> strOption (long "tempdir"   <> metavar "TEMPDIR" <> value "" <> help "Set directory for build files")
         <*> strOption (long "syspath"   <> metavar "TARGETDIR" <> value "" <> help "Set syspath")
@@ -169,6 +172,7 @@ buildCommand          = Build <$> (
         <$> switch (long "always-build" <> help "Development mode; include debug symbols etc")
         <*> switch (long "cpedantic"    <> help "Pedantic C compilation with -Werror")
         <*> switch (long "db"           <> help "Enable DB backend")
+        <*> switch (long "no-threads"   <> help "Don't use threads")
         <*> switch (long "debug"        <> help "Print debug stuff")
         <*> switch (long "dev"          <> help "Development mode; include debug symbols etc")
         <*> switch (long "only-build"   <> help "Only perform final build of .c files, do not compile .act files")

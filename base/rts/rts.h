@@ -5,7 +5,9 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <time.h>
+#ifdef ACTON_THREADS
 #include <pthread.h>
+#endif
 #include <setjmp.h>
 
 #include <uv.h>
@@ -20,10 +22,16 @@
 #include "../builtin/builtin.h"
 
 #define MSGQ 2
+#ifdef ACTON_THREADS
 #define MAX_WTHREADS 256
 #define NUM_RQS (MAX_WTHREADS+1)
 // The shared RQ is the top-most readyQ
 #define SHARED_RQ (NUM_RQS-1)
+#else
+#define MAX_WTHREADS 1
+#define NUM_RQS 1
+#define SHARED_RQ 0
+#endif
 
 #include "q.h"
 
@@ -71,14 +79,23 @@ struct wt_stat {
 };
 extern struct wt_stat wt_stats[MAX_WTHREADS];
 
-extern pthread_key_t pkey_wctx;
-extern pthread_key_t pkey_uv_loop;
 struct B_Msg;
 struct $ConstCont;
+
+#ifdef ACTON_THREADS
+extern pthread_key_t pkey_wctx;
+extern pthread_key_t pkey_uv_loop;
 
 extern pthread_key_t self_key;
 extern pthread_mutex_t sleep_lock;
 extern pthread_cond_t work_to_do;
+
+#define GET_WCTX() (WorkerCtx)pthread_getspecific(pkey_wctx)
+#else
+#define GET_WCTX() wctxs[0]
+#endif
+
+extern $Actor self_actor;
 
 typedef struct B_Msg *B_Msg;
 typedef struct $ConstCont *$ConstCont;
@@ -211,6 +228,16 @@ void serialize_state_shortcut($Actor);
 
 #define $GCfinalizer(act, fn) GC_register_finalizer(act, fn, NULL, NULL, NULL)
 
+#ifdef ACTON_THREADS
+#define GET_SELF() ($Actor)pthread_getspecific(self_key)
+#define SET_SELF(a) pthread_setspecific(self_key, (void *)a)
+#define GET_WTID() (int)pthread_getspecific(pkey_wtid);
+#else
+#define GET_SELF() self_actor
+#define SET_SELF(a) self_actor = a
+#define GET_WTID() 0
+#endif
+
 $R $PUSH_C($Cont);
 B_BaseException $POP_C();
 void $DROP_C();
@@ -233,6 +260,7 @@ struct WorkerCtx {
     volatile JumpBuf jump_top;
     volatile JumpBuf jump0;
 };
+extern WorkerCtx wctxs[MAX_WTHREADS];
 
 JumpBuf $PUSH_BUF();
 B_BaseException $POP();

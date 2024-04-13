@@ -181,7 +181,11 @@ remote_db_t * get_remote_db(int replication_factor, int rack_id, int dc_id, char
     db->stop_comm = 0;
     int r = pipe(db->wakeup_pipe);
 
+#ifdef ACTON_THREADS
     assert(pthread_create(&(db->comm_thread), NULL, comm_thread_loop, db) == 0);
+#else
+    assert(1==0 && "DB client API not supported in single-threaded mode!");
+#endif
 
     db->my_lc = init_empty_vc();
     db->current_view_id = NULL;
@@ -1089,7 +1093,9 @@ int update_lc_protected(remote_db_t * db, vector_clock * vc_in)
 int close_remote_db(remote_db_t * db)
 {
     db->stop_comm = 1;
+#ifdef ACTON_THREADS
     pthread_join(db->comm_thread, NULL);
+#endif
 
     for(snode_t * crt = HEAD(db->servers); crt!=NULL; crt = NEXT(crt))
     {

@@ -29,7 +29,7 @@ int ENQ_ready($Actor a) {
     rqs[i].count++;
     spinlock_unlock(&rqs[i].lock);
     // If we enqueue to someone who is not us, immediately wake them up...
-    WorkerCtx wctx = (WorkerCtx)pthread_getspecific(pkey_wctx);
+    WorkerCtx wctx = GET_WCTX();
     if (wctx != NULL) {
         long our_wtid = wctx->id;
         if (our_wtid != i)
@@ -52,7 +52,7 @@ int ENQ_ready($Actor a) {
     a->$next = NULL;
     spinlock_unlock(&rqs[i].lock);
     // If we enqueue to someone who is not us, immediately wake them up...
-    WorkerCtx wctx = (WorkerCtx)pthread_getspecific(pkey_wctx);
+    WorkerCtx wctx = GET_WCTX();
     if (wctx != NULL) {
         long our_wtid = wctx->id;
         if (our_wtid != i)

@@ -18,12 +18,16 @@
 #endif
 #endif
 
+#ifdef ACTON_THREADS
 #define GC_THREADS 1
+#endif
 #include <gc.h>
 
 #include <termios.h>
 #include <unistd.h>
+#ifdef ACTON_THREADS
 #include <pthread.h>
+#endif
 #include <stdio.h>
 #include <stdarg.h>
 #ifdef ACTON_DB
@@ -107,7 +111,6 @@ static const char *WT_State_name[] = {"poof", "work", "idle", "sleep"};
 
 
 #if defined(IS_MACOS)
-///////////////////////////////////////////////////////////////////////////////////////////////
 #include <sys/types.h>
 #include <sys/sysctl.h>
 #include <mach/mach_init.h>
@@ -188,11 +191,14 @@ time_t current_time() {
     return now.tv_sec * 1000000 + now.tv_usec;
 }
 
+#ifdef ACTON_THREADS
 pthread_key_t self_key;
 pthread_key_t pkey_wctx;
 
 pthread_mutex_t rts_exit_lock = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t rts_exit_signal = PTHREAD_COND_INITIALIZER;
+
+#define NUM_THREADS num_wthreads+1
 
 void pin_actor_affinity() {
     $Actor a = ($Actor)pthread_getspecific(self_key);
@@ -207,6 +213,14 @@ void set_actor_affinity(int wthread_id) {
     log_debug("Setting affinity for %s actor %ld to WT %d", a->$class->$GCINFO, a->$globkey, wthread_id);
     a->$affinity = wthread_id;
 }
+#else // ACTON_THREADS
+$Actor self_actor;
+
+#define NUM_THREADS 1
+
+void pin_actor_affinity() { }
+void set_actor_affinity(int wthread_id) { }
+#endif // ACTON_THREADS
 
 void wake_wt(int wtid) {
     // We are sometimes optimistically called, i.e. the caller sometimes does
@@ -215,6 +229,7 @@ void wake_wt(int wtid) {
     if (!rqs[wtid].head)
         return;
 
+#ifdef ACTON_THREADS
     // wake up corresponding worker threads....
     if (wtid == SHARED_RQ) {
         for (int i = 1; i <= num_wthreads; i++) {
@@ -227,6 +242,9 @@ void wake_wt(int wtid) {
         // thread specific queue
         uv_async_send(&wake_ev[wtid]);
     }
+#else
+    uv_async_send(&wake_ev[wtid]);
+#endif
 
 }
 
@@ -758,7 +776,7 @@ $Catcher POP_catcher($Actor a) {
 }
 
 B_Msg $ASYNC($Actor to, $Cont cont) {
-    $Actor self = ($Actor)pthread_getspecific(self_key);
+    $Actor self = GET_SELF();
     time_t baseline = 0;
     B_Msg m = B_MsgG_newXX(to, cont, baseline, &$Done$instance);
     if (self) {                                         // $ASYNC called by actor code
@@ -775,7 +793,7 @@ B_Msg $ASYNC($Actor to, $Cont cont) {
 }
 
 B_Msg $AFTER(B_float sec, $Cont cont) {
-    $Actor self = ($Actor)pthread_getspecific(self_key);
+    $Actor self = GET_SELF();
     rtsd_printf("# AFTER by %ld", self->$globkey);
     time_t baseline = self->B_Msg->$baseline + sec->val * 1000000;
     B_Msg m = B_MsgG_newXX(self, cont, baseline, &$Done$instance);
@@ -788,26 +806,26 @@ $R $AWAIT($Cont cont, B_Msg m) {
 }
 
 $R $PUSH_C($Cont cont) {
-    $Actor self = ($Actor)pthread_getspecific(self_key);
+    $Actor self = GET_SELF();
     $Catcher c = $NEW($Catcher, cont);
     PUSH_catcher(self, c);
     return $R_CONT(cont, B_True);                   // True indicates the "try" branch
 }
 
 B_BaseException $POP_C() {
-    $Actor self = ($Actor)pthread_getspecific(self_key);
+    $Actor self = GET_SELF();
     $Catcher c = POP_catcher(self);
     B_BaseException ex = c->xval;
     return ex;
 }
 
 void $DROP_C() {
-    $Actor self = ($Actor)pthread_getspecific(self_key);
+    $Actor self = GET_SELF();
     POP_catcher(self);
 }
 
 JumpBuf $PUSH_BUF() {
-    WorkerCtx wctx = (WorkerCtx)pthread_getspecific(pkey_wctx);
+    WorkerCtx wctx = GET_WCTX();
     assert(wctx != NULL);
     JumpBuf current = wctx->jump_top;
     JumpBuf new = (JumpBuf)GC_malloc(sizeof(struct JumpBuf));
@@ -817,7 +835,7 @@ JumpBuf $PUSH_BUF() {
 }
 
 B_BaseException $POP() {
-    WorkerCtx wctx = (WorkerCtx)pthread_getspecific(pkey_wctx);
+    WorkerCtx wctx = GET_WCTX();
     assert(wctx != NULL);
     JumpBuf current = wctx->jump_top;
     assert(current != NULL);
@@ -827,7 +845,7 @@ B_BaseException $POP() {
 }
 
 void $DROP() {
-    WorkerCtx wctx = (WorkerCtx)pthread_getspecific(pkey_wctx);
+    WorkerCtx wctx = GET_WCTX();
     assert(wctx != NULL);
     JumpBuf current = wctx->jump_top;
     assert(current != NULL);
@@ -836,7 +854,7 @@ void $DROP() {
 }
 
 void $RAISE(B_BaseException e) {
-    WorkerCtx wctx = (WorkerCtx)pthread_getspecific(pkey_wctx);
+    WorkerCtx wctx = GET_WCTX();
     JumpBuf jump = wctx->jump_top;
     jump->xval = e;
     longjmp(jump->buf, 1);
@@ -1479,9 +1497,8 @@ void arm_timer_ev() {
 }
 
 void wt_stop_cb(uv_async_t *ev) {
-    WorkerCtx wctx = (WorkerCtx)pthread_getspecific(pkey_wctx);
-    uv_check_stop(&work_ev[wctx->id]);
-    uv_stop(get_uv_loop());
+    WorkerCtx wctx = GET_WCTX();
+    uv_stop((uv_loop_t *)wctx->uv_loop);
 }
 
 void wt_wake_cb(uv_async_t *ev) {
@@ -1507,7 +1524,7 @@ void wt_work_cb(uv_check_t *ev) {
 
         wake_wt(SHARED_RQ);
 
-        pthread_setspecific(self_key, current);
+        SET_SELF(current);
         volatile B_Msg m = current->B_Msg;
         $Cont cont = m->$cont;
         $WORD val = m->value;
@@ -1656,7 +1673,7 @@ void wt_work_cb(uv_check_t *ev) {
             break;
         }
         }
-        pthread_setspecific(self_key, NULL);
+        SET_SELF(NULL);
 
         clock_gettime(CLOCK_MONOTONIC, &ts3);
         long long int diff = (ts3.tv_sec * 1000000000 + ts3.tv_nsec) - (ts2.tv_sec * 1000000000 + ts2.tv_nsec);
@@ -1697,7 +1714,9 @@ void *main_loop(void *idx) {
     wctx->uv_loop = uv_loops[wctx->id];
     wctx->jump_top = NULL;
     wctx->jump0 = NULL;
+#ifdef ACTON_THREADS
     pthread_setspecific(pkey_wctx, (void *)wctx);
+#endif
 
     char tname[11]; // Enough for "Worker XXX\0"
     snprintf(tname, sizeof(tname), "Worker %ld", wctx->id);
@@ -1787,7 +1806,7 @@ const char* stats_to_json () {
     // Worker threads
     yyjson_mut_val *j_stat = yyjson_mut_obj(doc);
     yyjson_mut_obj_add_val(doc, root, "wt", j_stat);
-    for (unsigned int i = 1; i < num_wthreads+1; i++) {
+    for (unsigned int i = 1; i < NUM_THREADS; i++) {
         yyjson_mut_val *j_wt = yyjson_mut_obj(doc);
         yyjson_mut_obj_add_val(doc, j_stat, wt_stats[i].key, j_wt);
         yyjson_mut_obj_add_str(doc, j_wt, "state",       WT_State_name[wt_stats[i].state]);
@@ -1933,7 +1952,7 @@ const char* actors_to_json () {
     return json;
 }
 
-
+#ifdef ACTON_THREADS
 void *$mon_log_loop(void *period) {
     log_info("Starting monitor log, with %ld second(s) period, to: %s", (long)period, mon_log_path);
 
@@ -2080,13 +2099,14 @@ void *$mon_socket_loop() {
     }
     return NULL;
 }
+#endif
 
 void rts_shutdown() {
     tcsetattr(STDIN_FILENO, TCSANOW, &old_stdin_attr);
 
     rts_exit = 1;
     // 0 = main thread, rest is wthreads, thus +1
-    for (int i = 0; i < num_wthreads+1; i++) {
+    for (int i = 0; i < NUM_THREADS; i++) {
         uv_async_send(&stop_ev[i]);
     }
 }
@@ -2297,10 +2317,13 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
-
+#ifdef ACTON_THREADS
     pthread_key_create(&self_key, NULL);
     pthread_setspecific(self_key, NULL);
     pthread_key_create(&pkey_wctx, NULL);
+#else
+    self_actor = NULL;
+#endif
 
     log_set_quiet(true);
     /*
@@ -2506,6 +2529,7 @@ int main(int argc, char **argv) {
         log_add_fp(logf, LOG_TRACE);
     }
 
+#ifdef ACTON_THREADS
     if (num_wthreads > MAX_WTHREADS) {
         fprintf(stderr, "ERROR: Maximum of %d worker threads supported.\n", MAX_WTHREADS);
         fprintf(stderr, "HINT: Run this program with fewer worker threads: %s --rts-wthreads %d\n", argv[0], MAX_WTHREADS);
@@ -2525,7 +2549,15 @@ int main(int argc, char **argv) {
         cpu_pin = 0;
         log_info("Detected %ld CPUs: Using %ld worker threads (manually set). No CPU affinity used.", num_cores, num_wthreads);
     }
-
+#else
+    log_info("Running without threads, main thread will perform all work");
+    if (num_wthreads != -1) {
+        fprintf(stderr, "ERROR: Threads disabled, provided --rts-wthreads argument has no effect.\n");
+        fprintf(stderr, "HINT: You cannot compile with --no-threads and use --rts-wthreads at run time.\n");
+        exit(1);
+    }
+    num_wthreads = 0;
+#endif
     // Zeroize statistics
     for (int i=0; i < MAX_WTHREADS; i++) {
         wt_stats[i].idx = i;
@@ -2564,6 +2596,7 @@ int main(int argc, char **argv) {
 #ifdef ACTON_DB
     init_dbc_stats();
 #endif
+    wctxs[0] = NULL;
 
     for (int i=0; i <= num_wthreads; i++) {
         uv_loop_t *loop = acton_malloc(sizeof(uv_loop_t));
@@ -2669,6 +2702,7 @@ int main(int argc, char **argv) {
     }
 #endif
 
+#ifdef ACTON_THREADS
     cpu_set_t cpu_set;
 
     // RTS Monitor Log
@@ -2694,7 +2728,7 @@ int main(int argc, char **argv) {
     }
 
     // Start worker threads
-    pthread_t threads[num_wthreads];
+    pthread_t threads[MAX_WTHREADS];
     // Worker threads run through 0..num_wthreads where 0 is the main thread,
     // thus we need to start 1..num_wthreads. Only need to keep track of
     // branches we start.
@@ -2708,12 +2742,17 @@ int main(int argc, char **argv) {
             pthread_setaffinity_np(threads[idx-1], sizeof(cpu_set), &cpu_set);
         }
     }
+#endif
 
     WorkerCtx wctx = (WorkerCtx)GC_malloc(sizeof(struct WorkerCtx));
     wctxs[0] = wctx;
     wctx->id = 0;
     wctx->uv_loop = uv_loops[wctx->id];
+    wctx->jump_top = NULL;
+    wctx->jump0 = NULL;
+#ifdef ACTON_THREADS
     pthread_setspecific(pkey_wctx, (void *)wctx);
+#endif
 
     uv_check_init(aux_uv_loop, &work_ev[wctx->id]);
     work_ev[wctx->id].data = wctx;
@@ -2724,19 +2763,23 @@ int main(int argc, char **argv) {
     uv_timer_init(aux_uv_loop, timer_ev);
     uv_timer_start(timer_ev, main_timer_cb, 0, 0);
 
+#ifdef ACTON_THREADS
     // Set affinity for main thread
     if (cpu_pin) {
         CPU_ZERO(&cpu_set);
         CPU_SET(0, &cpu_set);
         pthread_setaffinity_np(pthread_self(), sizeof(cpu_set), &cpu_set);
     }
+#endif
 
+    // Run the uv loop for the main thread
     wt_stats[0].state = WT_Idle;
     int r = uv_run(aux_uv_loop, UV_RUN_DEFAULT);
     wt_stats[0].state = WT_NoExist;
 
     // -- SHUTDOWN --
 
+#ifdef ACTON_THREADS
     // Join threads
     for (int idx = 1; idx <= num_wthreads; idx++) {
         pthread_join(threads[idx-1], NULL);
@@ -2754,6 +2797,7 @@ int main(int argc, char **argv) {
         const char *stats_json = stats_to_json();
         printf("%s\n", stats_json);
     }
+#endif
 
     if (logf) {
         fclose(logf);

@@ -1,4 +1,6 @@
+#ifdef ACTON_THREADS
 #define GC_THREADS 1
+#endif
 #include <gc.h>
 
 #include "io.h"
@@ -12,7 +14,7 @@
 extern char rts_exit;
 
 uv_loop_t *get_uv_loop() {
-    WorkerCtx wctx = (WorkerCtx)pthread_getspecific(pkey_wctx);
+    WorkerCtx wctx = GET_WCTX();
     return (uv_loop_t *)wctx->uv_loop;
 }
 
