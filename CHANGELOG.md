@@ -1,6 +1,9 @@
 # Changelog
 
-## Unreleased
+## [0.22.0] (2024-04-14)
+Support for Windows and continued improvements for `acton test`! Internally the
+biggest change is the removal of link time redirection of malloc, which opens up
+for more flexible memory management.
 
 ### Added
 - Acton programs now run on Windows!
