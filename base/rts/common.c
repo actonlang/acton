@@ -1,11 +1,30 @@
 #include <stdlib.h>
 #include <errno.h>
 
+#ifdef __linux__
+#include <dlfcn.h>
+#endif
+
 #include <mbedtls/platform.h>
+#define LIBXML_STATIC
 #include <libxml/xmlmemory.h>
 #include <tlsuv/tlsuv.h>
 
 #include "rts/common.h"
+
+#if defined(_WIN32) || defined(_WIN64)
+
+#include <math.h>
+
+// strndup() is not available on Windows
+char *strndup( const char *s1, size_t n)
+{
+    char *copy= (char*)malloc( n+1 );
+    memcpy( copy, s1, n );
+    copy[n] = 0;
+    return copy;
+};
+#endif
 
 typedef struct {
     acton_malloc_func malloc;
@@ -43,7 +62,6 @@ void acton_init_alloc() {
                             GC_realloc,
                             GC_calloc,
                             GC_free);
-
 }
 
 int acton_replace_allocator(acton_malloc_func malloc_func,

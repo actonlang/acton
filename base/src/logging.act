@@ -89,7 +89,8 @@ OFF       = -1
 EMERGENCY = 0
 ALERT     = 1
 CRITICAL  = 2
-ERROR     = 3
+# TODO: 'ERROR' name conflicts on Windows as it is some macro on C-level
+ERR       = 3
 WARNING   = 4
 INFO      = 5
 NOTICE    = 6
@@ -102,7 +103,7 @@ lvl_names = {
     EMERGENCY : 'EMERG',
     ALERT     : 'ALERT',
     CRITICAL  : 'CRIT',
-    ERROR     : 'ERROR',
+    ERR       : 'ERROR',
     WARNING   : 'WARN',
     INFO      : 'INFO',
     NOTICE    : 'NOTICE',
@@ -280,7 +281,7 @@ class Logger(object):
         self.log(CRITICAL, msg, data)
 
     def error(self, msg: ?str, data: ?dict[str, value]):
-        self.log(ERROR, msg, data)
+        self.log(ERR, msg, data)
 
     def warning(self, msg: ?str, data: ?dict[str, value]):
         self.log(WARNING, msg, data)

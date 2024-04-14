@@ -147,6 +147,7 @@ pub fn build(b: *std.Build) void {
 
     var flags = std.ArrayList([]const u8).init(b.allocator);
     defer flags.deinit();
+    flags.append("-DUTF8PROC_STATIC") catch unreachable;
 
     var file_prefix_map = std.ArrayList(u8).init(b.allocator);
     defer file_prefix_map.deinit();

@@ -21,7 +21,10 @@
 #define GC_THREADS 1
 #include <gc.h>
 
+#if defined(_WIN32) || defined(_WIN64)
+#else
 #include <termios.h>
+#endif
 #include <unistd.h>
 #include <uv.h>
 
@@ -42,6 +45,8 @@ $R B_EnvD_stdout_writeG_local (B_Env self, $Cont c$cont, B_str s) {
 }
 
 $R B_EnvD_set_stdinG_local (B_Env self, $Cont c$cont, B_bool canonical, B_bool echo) {
+#if defined(_WIN32) || defined(_WIN64)
+#else
     struct termios attr;
     tcgetattr(STDIN_FILENO, &attr);
 
@@ -62,6 +67,7 @@ $R B_EnvD_set_stdinG_local (B_Env self, $Cont c$cont, B_bool canonical, B_bool e
     }
 
     tcsetattr(STDIN_FILENO, TCSANOW, &attr);
+#endif
     return $R_CONT(c$cont, B_None);
 }
 

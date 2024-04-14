@@ -74,7 +74,7 @@ actor LogTester(report_result: action(?bool, ?Exception) -> None, log_handler: l
         logging.Message(logging.EMERGENCY, ["MyApp", "deepfun", "deepy"], "deepy", "deep emergency", None),
         logging.Message(logging.ALERT, ["MyApp", "deepfun", "deepy"], "deepy", "deep alert", None),
         logging.Message(logging.CRITICAL, ["MyApp", "deepfun", "deepy"], "deepy", "deep critical", None),
-        logging.Message(logging.ERROR, ["MyApp", "deepfun", "deepy"], "deepy", "deep error", None),
+        logging.Message(logging.ERR, ["MyApp", "deepfun", "deepy"], "deepy", "deep error", None),
         logging.Message(logging.WARNING, ["MyApp", "deepfun", "deepy"], "deepy", "deep warning", None),
         logging.Message(logging.INFO, ["MyApp", "deepfun", "deepy"], "deepy", "deep info", None),
         logging.Message(logging.NOTICE, ["MyApp", "deepfun", "deepy"], "deepy", "deep notice", None),

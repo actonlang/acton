@@ -669,7 +669,7 @@ actor test_executor(syscap, config, get_test: () -> Test, report_complete, env):
             test_info.update(complete, TestResult(success, exc, testiter_dur, mem_usage_delta, non_gc_mem_usage_delta), test_dur*1000.0)
         if last_report.elapsed().to_float() > 0.05 or complete:
             if test_info is not None and config.output_enabled:
-                print(json.encode({"test_info": test_info.to_json()}), stderr=True)
+                print(json.encode({"test_info": test_info.to_json()}), err=True)
             last_report.reset()
         if not complete:
             _run_fn(test)
@@ -1009,13 +1009,13 @@ class ModuleTestResults(object):
         if tinfo.complete == False and now.since(self.last_show).to_float() < 0.05:
             return
         self.last_show = now
-        print(json.encode({"test_info": tinfo.to_json()}), stderr=True)
+        print(json.encode({"test_info": tinfo.to_json()}), err=True)
 
     def show(self):
         res = {}
         for test in self.tests.values():
             res[test.definition.name] = test.definition.to_json()
-        print(json.encode({"tests": res}), stderr=True)
+        print(json.encode({"tests": res}), err=True)
 
 
 
@@ -1068,7 +1068,7 @@ actor test_runner(env: Env,
         tests = []
         for test in results.tests.values():
             tests.append(test.definition.to_json())
-        print(json.encode({"tests": tests}), stderr=True)
+        print(json.encode({"tests": tests}), err=True)
         env.exit(0)
 
     proc def _run_tests(args, perf_mode: bool=False):

@@ -878,11 +878,11 @@ def ord(c: str) -> int:
 def pow [A(Number)] (a : A, b : A) -> A:
     return Number.__pow__(a,b)
 
-def print(*args, sep: str=" ", end: str="\n", stderr: bool=False, flush: bool=False) -> None:
+def print(*args, sep: str=" ", end: str="\n", err: bool=False, flush: bool=False) -> None:
     """Prints values
 
     Values are printed per default to stdout, but can be printed to stderr by
-    setting stderr=True. Multiple values are separated by the sep argument, a
+    setting err=True. Multiple values are separated by the sep argument, a
     space per default. Each invocation will per default add a new line character
     at the end, which can be overridden through the end argument. Output can be
     flushed by setting flush=True.

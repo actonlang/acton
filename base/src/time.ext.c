@@ -1,7 +1,10 @@
 #define GC_THREADS 1
 #include <gc.h>
 
+#ifdef _WIN32
+#else
 #include <sys/timex.h>
+#endif
 #include <uv.h>
 
 #include "../rts/io.h"
@@ -10,7 +13,10 @@
 unsigned long time__incarnation = 0;
 // Clock data
 int time__realclock_status = 0;
+#ifdef _WIN32
+#else
 struct timex time__realclock_tx = {0};
+#endif
 
 // Reduce UUID to 64 bits. Good enough for our purposes.
 unsigned long time__uuid_to_ulong(const char* uuid) {
@@ -36,6 +42,9 @@ unsigned long time__uuid_to_ulong(const char* uuid) {
 void time__get_clock_data_cb(uv_timer_t *ev) {
 #ifdef __linux__
     time__realclock_status = adjtimex(&time__realclock_tx);
+#elif defined(_WIN32) // Windows
+    // TODO: implement Windows support?
+    time__realclock_status = 0;
 #else
     time__realclock_status = ntp_adjtime(&time__realclock_tx);
 #endif
@@ -99,10 +108,10 @@ B_int timeQ__get_incarnation () {
 
 
 B_tuple timeQ_get_monotonic () {
-    struct timespec ts;
-    if (clock_gettime(CLOCK_MONOTONIC, &ts) == -1) {
+    uv_timespec64_t ts;
+    if (uv_clock_gettime(UV_CLOCK_MONOTONIC, &ts) == -1) {
         char errmsg[1024] = "Error getting time: ";
-        strerror_r(errno, errmsg + strlen(errmsg), sizeof(errmsg) - strlen(errmsg));
+        uv_strerror_r(errno, errmsg + strlen(errmsg), sizeof(errmsg) - strlen(errmsg));
         log_warn("%s", errmsg);
         $RAISE(((B_BaseException)B_RuntimeErrorG_new(to$str(errmsg))));
     }
@@ -112,10 +121,10 @@ B_tuple timeQ_get_monotonic () {
 }
 
 B_tuple timeQ_get_realtime () {
-    struct timespec ts;
-    if (clock_gettime(CLOCK_REALTIME, &ts) == -1) {
+    uv_timespec64_t ts;
+    if (uv_clock_gettime(UV_CLOCK_REALTIME, &ts) == -1) {
         char errmsg[1024] = "Error getting time: ";
-        strerror_r(errno, errmsg + strlen(errmsg), sizeof(errmsg) - strlen(errmsg));
+        uv_strerror_r(errno, errmsg + strlen(errmsg), sizeof(errmsg) - strlen(errmsg));
         log_warn("%s", errmsg);
         $RAISE(((B_BaseException)B_RuntimeErrorG_new(to$str(errmsg))));
     }
@@ -126,15 +135,43 @@ B_tuple timeQ_get_realtime () {
 
 
 B_tuple timeQ_get_clock_data () {
+#ifdef _WIN32
+    return $NEWTUPLE(3,
+                     to$int(time__realclock_status),
+                     to$int(0),
+                     to$int(0));
+#else
     return $NEWTUPLE(3,
                      to$int(time__realclock_status),
                      to$int(time__realclock_tx.offset),
                      to$int(time__realclock_tx.esterror));
+#endif
 }
 
 B_tuple timeQ_localtime (B_int seconds) {
     time_t t = from$int(seconds);
     struct tm tm;
+#ifdef _WIN32
+    errno_t result = localtime_s(&tm, &t);
+    if (result != 0) {
+        char errmsg[1024] = "Error getting time: ";
+        uv_strerror_r(errno, errmsg + strlen(errmsg), sizeof(errmsg) - strlen(errmsg));
+        log_warn("%s", errmsg);
+        $RAISE(((B_BaseException)B_RuntimeErrorG_new(to$str(errmsg))));
+    }
+    return $NEWTUPLE(11,
+                     to$int(tm.tm_year + 1900),
+                     to$int(tm.tm_mon + 1),
+                     to$int(tm.tm_mday),
+                     to$int(tm.tm_hour),
+                     to$int(tm.tm_min),
+                     to$int(tm.tm_sec),
+                     to$int(tm.tm_wday),
+                     to$int(tm.tm_yday),
+                     to$int(tm.tm_isdst),
+                     to$str(""),
+                     to$int(0));
+#else
     localtime_r(&t, &tm);
     return $NEWTUPLE(11,
                      to$int(tm.tm_year + 1900),
@@ -148,11 +185,25 @@ B_tuple timeQ_localtime (B_int seconds) {
                      to$int(tm.tm_isdst),
                      to$str(tm.tm_zone),
                      to$int(tm.tm_gmtoff));
+#endif
 }
 
 B_tuple timeQ_gmtime (B_int seconds) {
     time_t t = from$int(seconds);
     struct tm tm;
+#ifdef _WIN32
+    // TODO: implement this!
+    return $NEWTUPLE(9,
+                     to$int(0),
+                     to$int(0),
+                     to$int(0),
+                     to$int(0),
+                     to$int(0),
+                     to$int(0),
+                     to$int(0),
+                     to$int(0),
+                     to$int(0));
+#else
     gmtime_r(&t, &tm);
     return $NEWTUPLE(9,
                      to$int(tm.tm_year + 1900),
@@ -164,4 +215,5 @@ B_tuple timeQ_gmtime (B_int seconds) {
                      to$int(tm.tm_wday),
                      to$int(tm.tm_yday),
                      to$int(tm.tm_isdst));
+#endif
 }
