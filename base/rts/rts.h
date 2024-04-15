@@ -42,6 +42,8 @@ extern remote_db_t *db;
 
 #include "q.h"
 
+extern const char *WT_State_name[];
+
 extern long num_wthreads;
 struct wt_stat {
     unsigned int idx;          // worker thread index

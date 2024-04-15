@@ -73,6 +73,7 @@
 #include <backend/client_api.h>
 #include <backend/fastrand.h>
 extern struct dbc_stat dbc_stats;
+remote_db_t *db = NULL;
 #endif
 
 #ifndef _WIN32
@@ -97,16 +98,11 @@ uv_check_t work_ev[MAX_WTHREADS];
 WorkerCtx wctxs[MAX_WTHREADS];
 uv_timer_t *timer_ev;
 
-char *mon_log_path = NULL;
-int mon_log_period = 30;
-char *mon_socket_path = NULL;
-
-
 struct wt_stat wt_stats[MAX_WTHREADS];
 
 // Conveys current thread status, like what is it doing?
 enum WT_State {WT_NoExist = 0, WT_Working = 1, WT_Idle = 2, WT_Sleeping = 3};
-static const char *WT_State_name[] = {"poof", "work", "idle", "sleep"};
+const char *WT_State_name[] = {"poof", "work", "idle", "sleep"};
 
 /*
  * Custom printf macros for printing verbose and debug information
@@ -207,9 +203,6 @@ time_t current_time() {
 pthread_key_t self_key;
 pthread_key_t pkey_wctx;
 
-pthread_mutex_t rts_exit_lock = PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t rts_exit_signal = PTHREAD_COND_INITIALIZER;
-
 #define NUM_THREADS num_wthreads+1
 
 void pin_actor_affinity() {
@@ -276,11 +269,6 @@ int64_t get_next_key() {
 #define MSG_QUEUE       ($WORD)2
 
 #define TIMER_QUEUE     0           // Special key in table MSG_QUEUE
-
-#ifdef ACTON_DB
-remote_db_t * db = NULL;
-#endif
-
 
 #if defined(_WIN32) || defined(_WIN64)
 // TODO: termios support in windows?
@@ -2000,159 +1988,6 @@ const char* actors_to_json () {
     return json;
 }
 
-#ifdef ACTON_THREADS
-void *$mon_log_loop(void *period) {
-    log_info("Starting monitor log, with %ld second(s) period, to: %s", (long)period, mon_log_path);
-
-#if defined(IS_MACOS)
-    pthread_setname_np("Monitor Log");
-#else
-    pthread_setname_np(pthread_self(), "Monitor Log");
-#endif
-
-    FILE *f;
-    f = fopen(mon_log_path, "w");
-    if (!f) {
-        fprintf(stderr, "ERROR: Unable to open RTS monitor log file (%s) for writing\n", mon_log_path);
-        exit(1);
-    }
-
-    while (1) {
-        const char *json = stats_to_json();
-        fputs(json, f);
-        fputs("\n", f);
-        if (rts_exit > 0) {
-            log_info("Shutting down RTS Monitor log thread.");
-            break;
-        }
-
-        pthread_mutex_lock(&rts_exit_lock);
-        struct timespec ts;
-        clock_gettime(CLOCK_REALTIME, &ts);
-        ts.tv_sec += (long)period;
-        pthread_cond_timedwait(&rts_exit_signal, &rts_exit_lock, &ts);
-        pthread_mutex_unlock(&rts_exit_lock);
-    }
-    fclose(f);
-    return NULL;
-}
-
-
-void *$mon_socket_loop() {
-    log_info("Starting monitor socket listen on %s", mon_socket_path);
-
-#if defined(IS_MACOS)
-    pthread_setname_np("Monitor Socket");
-#else
-    pthread_setname_np(pthread_self(), "Monitor Socket");
-#endif
-
-#ifdef _WIN32
-    // TODO: implement on windows!?
-#else
-    int s, client_sock, len;
-    struct sockaddr_un local, remote;
-    char q[100];
-
-    if ((s = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
-        fprintf(stderr, "ERROR: Unable to create Monitor Socket\n");
-        exit(1);
-    }
-
-    local.sun_family = AF_UNIX;
-    strcpy(local.sun_path, mon_socket_path);
-    unlink(local.sun_path);
-    len = sizeof(local.sun_path) + sizeof(local.sun_family);
-    if (bind(s, (struct sockaddr *)&local, len) == -1) {
-        fprintf(stderr, "ERROR: Unable to bind to Monitor Socket\n");
-        exit(1);
-    }
-
-    if (listen(s, 5) == -1) {
-        fprintf(stderr, "ERROR: Unable to listen on Monitor Socket\n");
-        exit(1);
-    }
-
-    while (1) {
-        socklen_t t = sizeof(remote);
-        if ((client_sock = accept(s, (struct sockaddr *)&remote, &t)) == -1) {
-            perror("accept");
-            exit(1);
-        }
-
-        int n;
-        char rbuf[64], *buf_base, *str;
-        ssize_t bytes_read;
-        size_t buf_used = 0, len;
-        while (1) {
-            bytes_read = recv(client_sock, &rbuf[buf_used], sizeof(rbuf) - buf_used, 0);
-            if (bytes_read <= 0)
-                break;
-            buf_used += bytes_read;
-
-            buf_base = rbuf;
-            while (1) {
-                if (buf_used == 0)
-                    break;
-                int r = netstring_read(&buf_base, &buf_used, &str, &len);
-                if (r != 0) {
-                    log_info("Mon socket: Error reading netstring: %d", r);
-                    break;
-                }
-
-                if (memcmp(str, "actors", len) == 0) {
-                    const char *json = actors_to_json();
-                    char *send_buf = GC_malloc(strlen(json)+14); // 14 = maximum digits for length is 9 (999999999) + : + ; + \0
-                    sprintf(send_buf, "%lu:%s,", strlen(json), json);
-                    int send_res = send(client_sock, send_buf, strlen(send_buf), 0);
-                    //free((void *)json);
-                    //free((void *)send_buf);
-                    if (send_res < 0) {
-                        log_info("Mon socket: Error sending");
-                        break;
-                    }
-                }
-
-#ifdef ACTON_DB
-                if (memcmp(str, "membership", len) == 0) {
-                    const char *json = db_membership_to_json();
-                    char *send_buf = GC_malloc(strlen(json)+14); // 14 = maximum digits for length is 9 (999999999) + : + ; + \0
-                    sprintf(send_buf, "%lu:%s,", strlen(json), json);
-                    int send_res = send(client_sock, send_buf, strlen(send_buf), 0);
-                    //free((void *)json);
-                    //free((void *)send_buf);
-                    if (send_res < 0) {
-                        log_info("Mon socket: Error sending");
-                        break;
-                    }
-                }
-#endif
-
-                if (memcmp(str, "WTS", len) == 0) {
-                    const char *json = stats_to_json();
-                    char *send_buf = GC_malloc(strlen(json)+14); // 14 = maximum digits for length is 9 (999999999) + : + ; + \0
-                    sprintf(send_buf, "%lu:%s,", strlen(json), json);
-                    int send_res = send(client_sock, send_buf, strlen(send_buf), 0);
-                    //free((void *)json);
-                    //free((void *)send_buf);
-                    if (send_res < 0) {
-                        log_info("Mon socket: Error sending");
-                        break;
-                    }
-                }
-            }
-
-            if (buf_base > rbuf && buf_used > 0)
-                memmove(rbuf, buf_base, buf_used);
-        }
-
-        close(client_sock);
-    }
-    return NULL;
-#endif
-}
-#endif
-
 void rts_shutdown() {
 #if defined(_WIN32) || defined(_WIN64)
 #else
@@ -2337,7 +2172,6 @@ int main(int argc, char **argv) {
         log_fatal("Unable to get CPU info");
         exit(1);
     }
-    bool mon_on_exit = false;
     bool auto_backtrace = true;
     bool interactive_backtrace = false;
     char *log_path = NULL;
@@ -2427,10 +2261,6 @@ int main(int argc, char **argv) {
         {"rts-dc-id", "DATACENTER", 'D', "RTS datacenter ID"},
         {"rts-host", "RTSHOST", 'N', "RTS hostname"},
         {"rts-help", NULL, 'H', "Show this help"},
-        {"rts-mon-log-path", "PATH", 'l', "Path to RTS mon stats log"},
-        {"rts-mon-log-period", "PERIOD", 'k', "Periodicity of writing RTS mon stats log entry"},
-        {"rts-mon-on-exit", NULL, 'E', "Print RTS mon stats to stdout on exit"},
-        {"rts-mon-socket-path", "PATH", 'm', "Path to unix socket to expose RTS mon stats"},
         {"rts-no-bt", NULL, 'B', "Disable automatic backtrace"},
         {"rts-log-path", "PATH", 'L', "Path to RTS log"},
         {"rts-log-stderr", NULL, 's', "Log to stderr in addition to log file"},
@@ -2501,9 +2331,6 @@ int main(int argc, char **argv) {
                 // Enabling rts debug implies verbose RTS output too
                 rts_verbose = 10;
                 break;
-            case 'E':
-                mon_on_exit = true;
-                break;
             case 'H':
                 print_help(long_options);
                 break;
@@ -2511,17 +2338,8 @@ int main(int argc, char **argv) {
                 ddb_host = acton_realloc(ddb_host, ++ddb_no_host * sizeof *ddb_host);
                 ddb_host[ddb_no_host-1] = optarg;
                 break;
-            case 'k':
-                mon_log_period = atoi(optarg);
-                break;
             case 'L':
                 log_path = optarg;
-                break;
-            case 'l':
-                mon_log_path = optarg;
-                break;
-            case 'm':
-                mon_socket_path = optarg;
                 break;
             case 'p':
                 ddb_port = atoi(optarg);
@@ -2819,28 +2637,6 @@ int main(int argc, char **argv) {
             log_error("pthread_attr_setstacksize failed: %s", strerror(err));
     }
 
-    // RTS Monitor Log
-    pthread_t mon_log_thread;
-    if (mon_log_path) {
-        pthread_create(&mon_log_thread, &ss_attr, $mon_log_loop, (void *)(intptr_t)mon_log_period);
-        if (cpu_pin) {
-            CPU_ZERO(&cpu_set);
-            CPU_SET(0, &cpu_set);
-            pthread_setaffinity_np(mon_log_thread, sizeof(cpu_set), &cpu_set);
-        }
-    }
-
-    // RTS Monitor Socket
-    pthread_t mon_socket_thread;
-    if (mon_socket_path) {
-        pthread_create(&mon_socket_thread, &ss_attr, $mon_socket_loop, NULL);
-        if (cpu_pin) {
-            CPU_ZERO(&cpu_set);
-            CPU_SET(0, &cpu_set);
-            pthread_setaffinity_np(mon_socket_thread, sizeof(cpu_set), &cpu_set);
-        }
-    }
-
     // Start worker threads
     pthread_t threads[MAX_WTHREADS];
     // Worker threads run through 0..num_wthreads where 0 is the main thread,
@@ -2849,7 +2645,7 @@ int main(int argc, char **argv) {
     for (int idx = 1; idx <= num_wthreads; idx++) {
         pthread_create(&threads[idx-1], &ss_attr, main_loop, (void*)(intptr_t)idx);
         // Index start at 1 and we pin wthreads to CPU 1...n
-        // We use CPU 0 for misc threads, like IO / mon etc
+        // We use CPU 0 for misc threads, like IO / special actors etc
         if (cpu_pin) {
             CPU_ZERO(&cpu_set);
             CPU_SET(idx, &cpu_set);
@@ -2890,19 +2686,6 @@ int main(int argc, char **argv) {
     // Join threads
     for (int idx = 1; idx <= num_wthreads; idx++) {
         pthread_join(threads[idx-1], NULL);
-    }
-
-    pthread_mutex_lock(&rts_exit_lock);
-    pthread_cond_broadcast(&rts_exit_signal);
-    pthread_mutex_unlock(&rts_exit_lock);
-
-    if (mon_log_path) {
-        pthread_join(mon_log_thread, NULL);
-    }
-
-    if (mon_on_exit) {
-        const char *stats_json = stats_to_json();
-        printf("%s\n", stats_json);
     }
 #endif
 

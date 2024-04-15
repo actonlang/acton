@@ -7,6 +7,10 @@
 #include "rts/io.h"
 #include "rts/log.h"
 
+#ifdef ACTON_DB
+#include <backend/client_api.h>
+#endif
+
 void actonQ_rtsQ___ext_init__() {
     // NOP
 }
@@ -140,12 +144,74 @@ B_dict actonQ_rtsQ__io_handles (B_SysCap cap) {
     return d;
 }
 
+B_dict actonQ_rtsQ_db_actors (B_SysCap cap) {
+#ifdef ACTON_DB
+    B_Hashable wit = (B_Hashable)B_HashableD_u64G_witness;
+    B_dict d = $NEW(B_dict, wit, NULL, NULL);
+    for (snode_t *crt = HEAD(db->actors); crt!=NULL; crt = NEXT(crt)) {
+        actor_descriptor *a = (actor_descriptor *)crt->value;
+
+        B_tuple actor_info = $NEWTUPLE(2,
+                                       to$str(a->host_rts->id),
+                                       a->is_local?B_True:B_False,
+                                       to_str_noc(Actor_status_name[a->status])
+                                       );
+        B_dictD_setitem(d, wit, toB_i64(a->actor_id), actor_info);
+    }
+    return d;
+#else
+    $RAISE(((B_BaseException)B_RuntimeErrorG_new($FORMAT("Not possible to list Actors in DB. Recompile with --db"))));
+#endif
+}
+
+B_dict actonQ_rtsQ_db_servers (B_SysCap cap) {
+#ifdef ACTON_DB
+    B_Hashable wit = (B_Hashable)B_HashableD_u64G_witness;
+    B_dict d = $NEW(B_dict, wit, NULL, NULL);
+    for (snode_t *crt = HEAD(db->servers); crt!=NULL; crt = NEXT(crt)) {
+        remote_server *rs = (remote_server *)crt->value;
+
+        B_tuple member_info = $NEWTUPLE(3,
+                                        to$str("DDB"),
+                                        to$str(rs->hostname),
+                                        to_str_noc(RS_status_name[rs->status])
+                                        );
+        B_dictD_setitem(d, wit, to$str(rs->id), member_info);
+    }
+    return d;
+#else
+    $RAISE(((B_BaseException)B_RuntimeErrorG_new($FORMAT("Not possible to list DB servers. Recompile with --db"))));
+#endif
+}
+
+B_dict actonQ_rtsQ_db_rtses (B_SysCap cap) {
+#ifdef ACTON_DB
+    B_Hashable wit = (B_Hashable)B_HashableD_u64G_witness;
+    B_dict d = $NEW(B_dict, wit, NULL, NULL);
+    for (snode_t *crt = HEAD(db->rtses); crt!=NULL; crt = NEXT(crt)) {
+        rts_descriptor *nd = (rts_descriptor *)crt->value;
+        B_tuple member_info = $NEWTUPLE(6,
+                                        to$str("RTS"),
+                                        to$str(nd->hostname),
+                                        to_str_noc(RS_status_name[nd->status]),
+                                        toB_u64(nd->local_rts_id),
+                                        toB_u64(nd->dc_id),
+                                        toB_u64(nd->rack_id)
+                                        );
+        B_dictD_setitem(d, wit, to$str(nd->id), member_info);
+    }
+    return d;
+#else
+    $RAISE(((B_BaseException)B_RuntimeErrorG_new($FORMAT("Not possible to list DB RTSes. Recompile with --db"))));
+#endif
+}
+
 B_dict actonQ_rtsQ_rts_stats (B_SysCap cap) {
     B_Hashable wit = (B_Hashable)B_HashableD_u64G_witness;
     B_dict d = $NEW(B_dict, wit, NULL, NULL);
     for (int i; i <= num_wthreads; i++) {
         B_tuple stats = $NEWTUPLE(28,
-                            to$str("TODO"), // state
+                            to_str_noc(WT_State_name[wt_stats[i].state]),
                             toB_u64(wt_stats[i].sleeps),
                             toB_u64(wt_stats[i].conts_count),
                             toB_u64(wt_stats[i].conts_sum),
