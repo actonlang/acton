@@ -327,6 +327,37 @@ jobs:
           path: |
             ${{ github.workspace }}/core*
 
+  perf-vs-main:
+    needs: build-debs
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Check out repository code"
+        uses: actions/checkout@v4
+      - name: "Install Acton from APT tip repo"
+        run: |
+          wget -q -O - https://apt.acton-lang.io/acton.gpg | sudo apt-key add -
+          echo "deb [arch=amd64] http://aptip.acton-lang.io/ tip main" | sudo tee /etc/apt/sources.list.d/acton.list
+          sudo apt-get update
+          sudo apt-get install -qy acton
+          acton --version
+      - name: "Run perf tests and record"
+        run: |
+          acton --version
+          cd test/stdlib_tests
+          acton test perf --record
+      - name: "Download .deb files"
+        uses: actions/download-artifact@v3
+        with:
+          name: acton-debs
+      - name: "Install acton from .deb"
+        run: |
+          sudo dpkg -i ./deb/acton_*.deb
+          acton --version
+      - name: "Run perf tests to compare"
+        run: |
+          cd test/stdlib_tests
+          acton test perf
+
   test-external-projects:
     needs: build-debs
     runs-on: ubuntu-latest
