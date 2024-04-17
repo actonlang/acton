@@ -356,6 +356,7 @@ jobs:
       - name: "Run perf tests to compare"
         run: |
           cd test/stdlib_tests
+          rm -rf out ~/.cache/acton
           acton test perf
 
   test-external-projects:
