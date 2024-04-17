@@ -412,13 +412,13 @@ test-stdlib: dist/bin/acton
 clean: clean-cli clean-distribution clean-base
 
 clean-cli:
-	rm -rf cli/out cli/build-cache
+	rm -rf cli/out
 
 clean-all: clean clean-compiler
-	rm -rf lib/* $(ZIG_LOCAL_CACHE_DIR)
+	rm -rf $(ZIG_LOCAL_CACHE_DIR)
 
 clean-base:
-	rm -rf base/build-cache base/out builder/build_runner* builder/builder* builder/zig-cache builder/zig-out
+	rm -rf base/out builder/build_runner* builder/builder* builder/zig-cache builder/zig-out
 
 bin/acton: cli/out/bin/acton
 	cp -a $< $@
