@@ -275,8 +275,15 @@ actor RunTestList(env, args):
 
 actor RunTestTest(env: Env, args, perf_mode: bool=False):
     process_cap = process.ProcessCap(env.cap)
+    var expected_modules_list: set[str] = set()
     var _module_tests = {}
+    var modules_to_test = set()
     var perf_data = "{}"
+
+    test_cmd_args = []
+    for name_filter in args.get_strlist("name"):
+        test_cmd_args.extend(["--name", name_filter])
+
     try:
         perf_file = file.ReadFile(file.ReadFileCap(file.FileCap(env.cap)), "perf_data")
         perf_data = perf_file.read().decode()
@@ -297,12 +304,28 @@ actor RunTestTest(env: Env, args, perf_mode: bool=False):
     def _on_json_output(module_name, data):
         if isinstance(data, dict):
             if "tests" in data:
-                tests = parse_json_tests(data)
+                data_tests = data["tests"]
+                tests = {}
+                for test_name, json_test_info in data_tests.items():
+                    if isinstance(json_test_info, dict):
+                        tests[test_name] = TestInfo.from_json(json_test_info)
+
                 ptr.update_module(module_name, tests)
-                _periodic_show()
+                expected_modules_list.discard(module_name)
+                if len(expected_modules_list) == 0:
+                    _periodic_show()
+                    if perf_mode:
+                        _run_module_tests()
+                    else:
+                        # Run all tests in parallel
+                        for module_name in modules_to_test:
+                            t = RunModuleTest(process_cap, module_name, ["test"] + test_cmd_args, lambda x: _on_json_output(module_name, x), lambda x, y, z: _on_test_error(module_name, x, y, z))
+
             elif "test_info" in data:
                 test_info = TestInfo.from_json(data["test_info"])
                 ptr.update(module_name, test_info.definition.name, test_info)
+                if ptr.is_module_done(module_name) and perf_mode:
+                    _run_module_tests()
         else:
             raise ValueError("Unexpected JSON data from module test: " + module_name)
 
@@ -315,19 +338,30 @@ actor RunTestTest(env: Env, args, perf_mode: bool=False):
         if module_name in ptr.results:
             moderr = testing.ModuleError(exit_code, term_signal, errout)
             ptr.update_module_error(module_name, moderr)
+        _run_module_tests()
 
     def _run_tests(module_names: list[str]):
+        expected_modules_list = set(module_names)
+        modules_to_test = set(module_names)
         ptr.expected_modules = set(module_names)
-        test_cmd = ["test"]
-        if perf_mode:
-            test_cmd.append("perf")
-        for name_filter in args.get_strlist("name"):
-            test_cmd.extend(["--name", name_filter])
         if len(module_names) == 0:
             print("No tests found")
             env.exit(0)
+
+        # List all tests first, which we can run in parallel. Once we have the
+        # list of all tests we can start running them one at a time in sequence.
         for module_name in module_names:
-            t = RunModuleTest(process_cap, module_name, test_cmd, lambda x: _on_json_output(module_name, x), lambda x, y, z: _on_test_error(module_name, x, y, z))
+            t = RunModuleTest(process_cap, module_name, ["list"] + test_cmd_args, lambda x: _on_json_output(module_name, x), lambda x, y, z: _on_test_error(module_name, x, y, z))
+
+    def _run_module_tests():
+        try:
+            module_name = modules_to_test.pop()
+            if module_name is not None:
+                t = RunModuleTest(process_cap, module_name, ["test", "perf"] + test_cmd_args, lambda x: _on_json_output(module_name, x), lambda x, y, z: _on_test_error(module_name, x, y, z))
+            else:
+                _periodic_show()
+        except:
+            pass
 
     def _on_build_failure(exit_code, term_signal, stderr_buf):
         print("Failed to build project tests")

@@ -563,7 +563,7 @@ class TestInfo(object):
                 test_definition = jd["definition"]
                 if isinstance(test_definition, dict):
                     return Test.from_json(test_definition)
-            raise ValueError("Invalid Test JSON")
+            raise ValueError("Invalid Test JSON: " + str(jd))
         definition: Test = take_definition(json_data)
         complete = json_data["complete"]
         suc = json_data["success"]
@@ -814,6 +814,13 @@ class ProjectTestResults(object):
             return test_info.complete
         return False
 
+    def is_module_done(self, modname):
+        if modname in self.results:
+            for tname, test_info in self.results[modname].items():
+                if not test_info.complete:
+                    return False
+        return True
+
     def to_json(self):
         """Return JSON encoded results that can be saved to a file
         """
@@ -826,7 +833,7 @@ class ProjectTestResults(object):
             res[modname] = modres
         return json.encode(res)
 
-    def show(self, only_show_complete=False):
+    def show(self, only_show_complete=False, perf_mem=True):
 
         def format_diff(new, old, unit=""):
             diff = float(new) - float(old)
@@ -943,7 +950,7 @@ class ProjectTestResults(object):
                 l += run_info + term.normal
                 print(l)
                 self.printed_lines += 1
-                if self.perf_mode:
+                if self.perf_mode and perf_mem:
                     indent = " " * 10
                     diffs = tinfo.diff(last_tinfo)
                     print(indent + "Memory usag      : %6dKB %s" % (tinfo.mem_usage_delta_avg // 1024, diffs.mem_usage_delta_avg))
@@ -1013,8 +1020,8 @@ class ModuleTestResults(object):
 
     def show(self):
         res = {}
-        for test in self.tests.values():
-            res[test.definition.name] = test.definition.to_json()
+        for test_name, test_info in self.tests.items():
+            res[test_name] = test_info.to_json()
         print(json.encode({"tests": res}), err=True)
 
 
@@ -1065,10 +1072,7 @@ actor test_runner(env: Env,
 
     proc def _list_tests(args):
         _init_results(args)
-        tests = []
-        for test in results.tests.values():
-            tests.append(test.definition.to_json())
-        print(json.encode({"tests": tests}), err=True)
+        results.show()
         env.exit(0)
 
     proc def _run_tests(args, perf_mode: bool=False):
@@ -1076,8 +1080,6 @@ actor test_runner(env: Env,
         if config.perf_mode:
             acton.rts.start_gc_performance_measurement(env.syscap)
         _init_results(args)
-        if config.output_enabled:
-            results.show()
 
         test_concurrency = 1 if config.perf_mode else env.nr_wthreads
         my_tests = _filter_tests(all_tests, args)
@@ -1110,9 +1112,9 @@ actor test_runner(env: Env,
         p = argparse.Parser()
         p.add_bool("json", "Output results as JSON")
         p.add_bool("no_output", "No result output")
+        p.add_option("name", "strlist", nargs="+", default=[], help="Filter tests by name")
         lp = p.add_cmd("list", "list tests", _list_tests)
         tp = p.add_cmd("test", "Run tests", _run_tests)
-        tp.add_option("name", "strlist", nargs="+", default=[], help="Filter tests by name")
         pp = tp.add_cmd("perf", "Performance benchmark tests", _run_perf_tests)
         pp.add_option("iterations", "int", "?", 1, "Number of iterations to run")
         pp.add_option("min_time", "int", "?", 1000, "Minimum time to run a test in milliseconds")
