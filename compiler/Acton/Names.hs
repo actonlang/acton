@@ -212,9 +212,10 @@ instance Vars Stmt where
 
     bound (Assign _ ps _)           = bound ps
 --    bound (VarAssign _ ps e)        = bound ps
-    bound (MutAssign _ tg _)        = boundTarget tg
-    bound (AugAssign _ tg _ _)      = boundTarget tg
-    bound (Delete _ tg)             = boundTarget tg
+    bound (MutAssign _ (Var _ (NoQ n)) _)
+                                    = [n]
+    bound (AugAssign _ (Var _ (NoQ n)) _ _)
+                                    = [n]
     bound (Data _ p b)              = bound p ++ (filter isHidden $ bound b)
     bound (While _ e b els)         = bound b ++ bound els
     bound (For _ p e b els)         = bound b ++ bound els ++ bound p
@@ -224,9 +225,6 @@ instance Vars Stmt where
     bound (Decl _ ds)               = bound ds
     bound (Signature _ ns t d)      = ns
     bound _                         = []
-
-boundTarget (Var _ (NoQ n))         = [n]
-boundTarget _                       = []
 
 instance Vars Decl where
     free (Def _ n q ps ks t b d fx) = (free ps ++ free ks ++ free b ++ free fx) \\ (n : bound q ++ bound ps ++ bound ks ++ bound b)
