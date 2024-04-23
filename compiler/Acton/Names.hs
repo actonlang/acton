@@ -229,11 +229,11 @@ assigned stmts                      = concatMap assig stmts
 
 
 instance Vars Decl where
-    free (Def _ n q ps ks t b d fx) = (free ps ++ free ks ++ free b ++ free fx) \\ (n : bound q ++ bound ps ++ bound ks ++ bound b)
-    free (Actor _ n q ps ks b)      = (free ps ++ free ks ++ free b) \\ (n : self : bound q ++ bound ps ++ bound ks ++ bound b)
-    free (Class _ n q cs b)         = (free cs ++ free b) \\ (n : bound q ++ bound b)
-    free (Protocol _ n q ps b)      = (free ps ++ free b) \\ (n : bound q ++ bound b)
-    free (Extension _ q c ps b)     = (free c ++ free ps ++ free b) \\ (bound q ++ bound b)
+    free (Def _ n q ps ks t b d fx) = (free ps ++ free ks ++ free b ++ free fx) \\ (n : bound q ++ bound ps ++ bound ks ++ assigned b)
+    free (Actor _ n q ps ks b)      = (free ps ++ free ks ++ free b) \\ (n : self : bound q ++ bound ps ++ bound ks ++ assigned b)
+    free (Class _ n q cs b)         = (free cs ++ free b) \\ (n : bound q ++ assigned b)
+    free (Protocol _ n q ps b)      = (free ps ++ free b) \\ (n : bound q ++ assigned b)
+    free (Extension _ q c ps b)     = (free c ++ free ps ++ free b) \\ (bound q ++ assigned b)
 
     bound (Def _ n _ _ _ _ _ _ _)   = [n]
     bound (Actor _ n _ _ _ _)       = [n]

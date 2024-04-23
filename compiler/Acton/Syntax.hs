@@ -344,6 +344,7 @@ tTuple p k      = TTuple NoLoc p k
 tTupleP p       = TTuple NoLoc p kwdNil
 tTupleK k       = TTuple NoLoc posNil k
 tUnit           = tTuple posNil kwdNil
+tOpt t@TOpt{}   = t
 tOpt t          = TOpt NoLoc t
 tNone           = TNone NoLoc
 tWild           = TWild NoLoc
