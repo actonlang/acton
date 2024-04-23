@@ -958,7 +958,9 @@ defaultsP (PosPar n (Just t) (Just e) p)
 defaultsP (PosPar n _ _ p)              = defaultsP p
 defaultsP _                             = []
 
-noDefaultsP (PosPar n t e p)            = PosPar n t Nothing (noDefaultsP p)
+noDefaultsP (PosPar n (Just t) (Just e) p)
+                                        = PosPar n (Just $ tOpt t) Nothing (noDefaultsP p)
+noDefaultsP (PosPar n t e p)            = PosPar n t e (noDefaultsP p)
 noDefaultsP k                           = k
 
 defaultsK (KwdPar n (Just t) (Just e) k)
@@ -969,7 +971,9 @@ defaultsK (KwdPar n (Just t) (Just e) k)
 defaultsK (KwdPar n _ _ k)              = defaultsK k
 defaultsK _                             = []
 
-noDefaultsK (KwdPar n t _ k)            = KwdPar n t Nothing (noDefaultsK k)
+noDefaultsK (KwdPar n (Just t) (Just e) k)
+                                        = KwdPar n (Just $ tOpt t) Nothing (noDefaultsK k)
+noDefaultsK (KwdPar n t e k)            = KwdPar n t e (noDefaultsK k)
 noDefaultsK k                           = k
 
 
