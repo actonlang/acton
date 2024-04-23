@@ -951,10 +951,9 @@ genEnv env cs te ds
 
 
 defaultsP (PosPar n (Just t) (Just e) p)
-  | e /= eNone                          = s : defaultsP p
-  where s                               = sIf1 test [set] []
-        test                            = eCall (tApp (eQVar primISNONE) [t]) [eVar n]
-        set                             = sAssign (pVar' n) e
+  | e /= eNone                          = set : defaultsP p
+  where test                            = eCall (tApp (eQVar primISNONE) [t]) [eVar n]
+        set                             = sAssign (pVar n t) (eCond e test (eVar n))
 defaultsP (PosPar n _ _ p)              = defaultsP p
 defaultsP _                             = []
 
@@ -964,10 +963,9 @@ noDefaultsP (PosPar n t e p)            = PosPar n t e (noDefaultsP p)
 noDefaultsP k                           = k
 
 defaultsK (KwdPar n (Just t) (Just e) k)
-  | e /= eNone                          = s : defaultsK k
-  where s                               = sIf1 test [set] []
-        test                            = eCall (tApp (eQVar primISNONE) [t]) [eVar n]
-        set                             = sAssign (pVar' n) e
+  | e /= eNone                          = set : defaultsK k
+  where test                            = eCall (tApp (eQVar primISNONE) [t]) [eVar n]
+        set                             = sAssign (pVar n t) (eCond e test (eVar n))
 defaultsK (KwdPar n _ _ k)              = defaultsK k
 defaultsK _                             = []
 
