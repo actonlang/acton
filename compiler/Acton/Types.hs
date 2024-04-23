@@ -42,7 +42,7 @@ reconstruct fname env0 (Module m i ss)  = do --traceM ("#################### ori
                                              
   where ssT                             = if hasTesting i then ss ++ testStmts (emptyDict,emptyDict,emptyDict,emptyDict) else ss
         ss1T                            = if hasTesting i then rmTests ss1 ++ finalStmts env2 ss1 else ss1
-        env1                            = reserve (bound ssT) (typeX env0)
+        env1                            = reserve (assigned ssT) (typeX env0)
         (te,ss1)                        = runTypeM $ infTop env1 ssT
         env2                            = define te (setMod m env0)
         iface                           = unalias env2 te
@@ -506,7 +506,7 @@ instance InfEnv Decl where
                                                      b2 = addImpl te1 b1
                                                  return (cs1, [(n, NClass q as' (te0++te2))], Class l n q us (bindWits eq1 ++ props te0 ++ b2))
                                              _ -> illegalRedef n
-      where env1                        = define (exclude (toSigs te') [initKW]) $ reserve (bound b) $ defineSelfOpaque $ defineTVars (stripQual q) $ setInClass env
+      where env1                        = define (exclude (toSigs te') [initKW]) $ reserve (assigned b) $ defineSelfOpaque $ defineTVars (stripQual q) $ setInClass env
             (as,ps)                     = mro2 env us
             as'                         = if null as && not (inBuiltin env && n == nValue) then leftpath [cValue] else as
             te'                         = parentTEnv env as'
@@ -528,7 +528,7 @@ instance InfEnv Decl where
                                                  when (not $ null noself) $ err2 noself "A static protocol signature must mention Self"
                                                  return (cs1, [(n, NProto q ps te)], Protocol l n q us (bindWits eq1 ++ b'))
                                              _ -> illegalRedef n
-      where env1                        = define (toSigs te') $ reserve (bound b) $ defineSelfOpaque $ defineTVars (stripQual q) $ setInClass env
+      where env1                        = define (toSigs te') $ reserve (assigned b) $ defineSelfOpaque $ defineTVars (stripQual q) $ setInClass env
             ps                          = mro1 env us
             te'                         = parentTEnv env ps
 
@@ -553,7 +553,7 @@ instance InfEnv Decl where
                                                  b2 = addImpl te1 b1
                                              return (cs1, [(extensionName us c, NExt q c ps te2)], Extension l q c us (bindWits eq1 ++ b2))
       where TC n ts                     = c
-            env1                        = define (toSigs te') $ reserve (bound b) $ defineSelfOpaque $ defineTVars (stripQual q) $ setInClass env
+            env1                        = define (toSigs te') $ reserve (assigned b) $ defineSelfOpaque $ defineTVars (stripQual q) $ setInClass env
             witsearch                   = [ w | w <- witsByPName env (tcname u), matchExactly (tCon c) u w, matching [wtype w] (qbound q) [tCon c] ]
             u                           = head us
             ps                          = mro1 env us     -- TODO: check that ps doesn't contradict any previous extension mro for c
@@ -652,7 +652,7 @@ infActorEnv env ss                      = do dsigs <- mapM mkNDef dvars         
         svars                           = statevars ss
         pvars                           = pvarsF ss \\ dom (sigs) \\ dvars
         pvarsF ss                       = nub $ concat $ map pvs ss
-          where pvs (Assign _ pats _)   = notHidden $ bound pats \\ svars
+          where pvs (Assign _ pats _)   = notHidden $ bound pats \\ svars   -- svars only excluded until we move stateful actor cmds to __init__
                 pvs (If _ bs els)       = foldr intersect (pvarsF els) [ pvarsF ss | Branch _ ss <- bs ]
                 pvs _                   = []
         mkNVar n                        = do t <- newTVar
@@ -763,7 +763,7 @@ instance Check Decl where
                                              let body = bindWits eq1 ++ defaultsP p' ++ defaultsK k' ++ b'
                                              (cs,def) <- matchDefAssumption env cs1 (Def l n q p' k' (Just t) body dec fx')
                                              return (cs, def{ pos = noDefaultsP (pos def), kwd = noDefaultsK (kwd def) })
-      where env1                        = reserve (bound (p,k) ++ bound b \\ stateScope env) $ defineTVars q env
+      where env1                        = reserve (bound (p,k) ++ assigned b \\ stateScope env) $ defineTVars q env
             tvs                         = qbound q
             fx'                         = unwrap fx
 
@@ -781,8 +781,8 @@ instance Check Decl where
                                              let body = bindWits (eq1++eq0) ++ defaultsP p' ++ defaultsK k' ++ b'
                                                  act = Actor l n (noqual env q) (qualWPar env q p') k' body
                                              return (cs1, act{ pos = noDefaultsP (pos act), kwd = noDefaultsK (kwd act) })
-      where env1                        = reserve (bound (p,k) ++ bound b) $ defineTVars q $
-                                          define [(selfKW, NVar t0)] $ reserve (statevars b) $ setInAct env
+      where env1                        = reserve (bound (p,k) ++ assigned b) $ defineTVars q $
+                                          define [(selfKW, NVar t0)] $ setInAct env
             t0                          = tCon $ TC (NoQ n) (map tVar tvs)
             tvs                         = qbound q
             NAct _ _ _ te0              = findName n env
