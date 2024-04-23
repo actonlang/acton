@@ -211,22 +211,22 @@ instance Vars Stmt where
     free (Signature _ ns t d)       = free t
 
     bound (Assign _ ps _)           = bound ps
---    bound (VarAssign _ ps e)        = bound ps
-    bound (MutAssign _ tg _)        = boundTarget tg
-    bound (AugAssign _ tg _ _)      = boundTarget tg
-    bound (Delete _ tg)             = boundTarget tg
-    bound (Data _ p b)              = bound p ++ (filter isHidden $ bound b)
-    bound (While _ e b els)         = bound b ++ bound els
-    bound (For _ p e b els)         = bound b ++ bound els ++ bound p
-    bound (With _ items b)          = bound b ++ bound items
-    bound (Try _ b hs els fin)      = bound b ++ concatMap bound hs ++ bound els ++ bound fin
-    bound (If _ bs els)             = concatMap bound bs ++ bound els
+    bound (VarAssign _ ps e)        = bound ps
     bound (Decl _ ds)               = bound ds
     bound (Signature _ ns t d)      = ns
+    bound (If _ bs els)             = bound bs ++ bound els
+    bound (With _ items b)          = bound b
     bound _                         = []
 
-boundTarget (Var _ (NoQ n))         = [n]
-boundTarget _                       = []
+
+assigned stmts                      = concatMap assig stmts
+  where assig (While _ e b els)     = assigned b ++ assigned els
+        assig (For _ p e b els)     = assigned b ++ assigned els ++ bound p
+        assig (With _ items b)      = assigned b ++ bound items
+        assig (Try _ b hs els fin)  = assigned b ++ concat [ bound ex ++ assigned b | Handler ex b <- hs ] ++ assigned els ++ assigned fin
+        assig (If _ bs els)         = concat [ assigned b | Branch _ b <- bs ] ++ assigned els
+        assig s                     = bound s
+
 
 instance Vars Decl where
     free (Def _ n q ps ks t b d fx) = (free ps ++ free ks ++ free b ++ free fx) \\ (n : bound q ++ bound ps ++ bound ks ++ bound b)

@@ -306,6 +306,7 @@ eVar n          = Var NoLoc (NoQ n)
 eDot e n        = Dot NoLoc e n
 eDotI e i       = DotI NoLoc e i
 eNone           = None NoLoc
+eCond e b e'    = Cond NoLoc e b e'
 eInt n          = Int NoLoc n (show n)
 eBool b         = Bool NoLoc b
 eBinOp e o e'   = BinOp NoLoc e o e'
