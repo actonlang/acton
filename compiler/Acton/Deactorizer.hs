@@ -148,7 +148,7 @@ instance Deact Decl where
 
             props (VarAssign _ p _) = [ (n, t) | PVar _ n (Just t) <- p ]
             props (Assign _ p _)    = [ (n, t) | PVar _ n (Just t) <- p, n `elem` locals ]
-            props (If _ bs els)     = restrict (concat $ map props els) (foldr1 intersect $ map bound bs)
+            props (If _ bs els)     = restrict (concat $ map props els) (foldr1 intersect [ assigned b | Branch _ b <- bs ])
             props _                 = []
 
             props' (PosPar n a _ p)

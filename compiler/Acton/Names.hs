@@ -212,18 +212,10 @@ instance Vars Stmt where
 
     bound (Assign _ ps _)           = bound ps
     bound (VarAssign _ ps e)        = bound ps
---    bound (MutAssign _ (Var _ (NoQ n)) _)
---                                    = [n]
---    bound (AugAssign _ (Var _ (NoQ n)) _ _)
---                                    = [n]
---    bound (Data _ p b)              = bound p ++ (filter isHidden $ bound b)
---    bound (While _ e b els)         = bound b ++ bound els
---    bound (For _ p e b els)         = bound b ++ bound els ++ bound p
---    bound (With _ items b)          = bound b ++ bound items
---    bound (Try _ b hs els fin)      = bound b ++ concatMap bound hs ++ bound els ++ bound fin
-    bound (If _ bs els)             = concatMap bound bs ++ bound els
     bound (Decl _ ds)               = bound ds
     bound (Signature _ ns t d)      = ns
+    bound (If _ bs els)             = bound bs ++ bound els
+    bound (With _ items b)          = bound b
     bound _                         = []
 
 
