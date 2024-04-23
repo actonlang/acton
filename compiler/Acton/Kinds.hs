@@ -176,6 +176,9 @@ instance ConvTWild (Maybe Type) where
     convTWild Nothing               = Just <$> convTWild tWild
     convTWild (Just t)              = Just <$> convTWild t
 
+maybeConvTWild Nothing              = return Nothing
+maybeConvTWild x                    = convTWild x
+
 instance ConvTWild PosPar where
     convTWild (PosPar n t e p)      = PosPar n <$> convTWild t <*> return e <*> convTWild p
     convTWild (PosSTAR n Nothing)   = PosSTAR n <$> Just <$> (TTuple NoLoc <$> convTWild tWild <*> pure kwdNil)
@@ -371,8 +374,8 @@ instance KCheck Expr where
     kchk env (Paren l e)            = Paren l <$> kchk env e
 
 instance KCheck Pattern where
-    kchk env (PWild l t)            = PWild l <$> (kexp KType env =<< convTWild t)
-    kchk env (PVar l n t)           = PVar l n <$> (kexp KType env =<< convTWild t)
+    kchk env (PWild l t)            = PWild l <$> (kexp KType env =<< maybeConvTWild t)
+    kchk env (PVar l n t)           = PVar l n <$> (kexp KType env =<< maybeConvTWild t)
     kchk env (PTuple l ps ks)       = PTuple l <$> kchk env ps <*> kchk env ks
     kchk env (PList l ps p)         = PList l <$> kchk env ps <*> kchk env p
     kchk env (PParen l p)           = PParen l <$> kchk env p

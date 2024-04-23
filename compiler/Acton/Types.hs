@@ -1627,8 +1627,11 @@ instance InfEnvT Pattern where
                                                    | otherwise -> do
                                                      --traceM ("## infEnvT (sig) " ++ prstr n ++ " : " ++ prstr t ++ " < " ++ prstr t')
                                                      return ([Cast (DfltInfo l 104 Nothing []) t t'], [(n, NVar t')], t, PVar l n (Just t))
-                                                 NVar t' ->
-                                                     return ([Cast (DfltInfo l 105 Nothing []) t t'], [], t, PVar l n Nothing)
+                                                 NVar t'
+                                                   | isJust a -> do
+                                                     return ([], [], t, PVar l n (Just t))
+                                                   | otherwise ->
+                                                     return ([], [], t', PVar l n Nothing)
                                                  NSVar t' -> do
                                                      fx <- currFX
                                                      return (Cast (DfltInfo l 106 Nothing []) fxProc fx :
