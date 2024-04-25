@@ -345,6 +345,8 @@ jobs:
           acton --version
           cd test/stdlib_tests
           acton test perf --record
+          cd ../perf
+          acton test perf --record
       - name: "Download .deb files"
         uses: actions/download-artifact@v3
         with:
@@ -355,8 +357,10 @@ jobs:
           acton --version
       - name: "Run perf tests to compare"
         run: |
-          cd test/stdlib_tests
           rm -rf out ~/.cache/acton
+          cd test/stdlib_tests
+          acton test perf
+          cd ../perf
           acton test perf
 
   test-external-projects:
