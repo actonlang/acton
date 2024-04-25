@@ -328,8 +328,8 @@ jobs:
             ${{ github.workspace }}/core*
 
   perf-vs-main:
-    needs: build-debs
-    runs-on: ubuntu-latest
+    # Use our own runner to get more deterministic results
+    runs-on: [self-hosted, linux, X64]
     steps:
       - name: "Check out repository code"
         uses: actions/checkout@v4
