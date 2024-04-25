@@ -17,4 +17,4 @@ def dct_sum(l):
 
 
 def _test_dct():
-    r = dct_sum(300)
+    r = dct_sum(500)
