@@ -512,7 +512,22 @@ endif
 distribution1: dist/base $(DIST_BACKEND_FILES) $(DEPSA) dist/builder $(DIST_INC) $(DIST_BINS) $(DIST_HFILES) $(DIST_ZIG)
 	$(MAKE) $(DIST_DEPS)
 
+#
+# Touch the acton(c) binary to ensure it has a timestamp that reflects the last
+# updated file in the distribution. The actonc compiler itself has an up-to-date
+# check which it uses to determine when an .act file should be recompiled. Since
+# we naturally want to recompile programs if the compiler has been changed, the
+# up-to-date check includes the actonc program itself as a "source file", so if
+# it is newer than the compiled output, a recompilation will be performed. Thus,
+# it is important that the actonc mtime reflects when it was actually modified
+# and it also acts as a sentinel of sort for the modification of the acton
+# distribution as a whole, which is why we copy over the timestamp of the last
+# modified file in the distribution to the acton binary. This way, when a file
+# in stdlib or builtins is modified, it updates the acton binary as well and in
+# turn will lead to recompilation of acton programs.
 distribution: dist/bin/acton
+    @latest_file=$$(find dist -type f -printf '%T@ %p\n' | sort -n | tail -1 | cut -d' ' -f2); \
+    touch -r "$$latest_file" dist/bin/acton
 
 clean-distribution:
 	rm -rf dist

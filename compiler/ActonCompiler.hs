@@ -616,6 +616,11 @@ doTask opts paths env t@(ActonTask mn src m stubMode) = do
 checkUptoDate :: C.CompileOptions -> Paths -> FilePath -> [FilePath] -> [A.ModName] -> IO Bool
 checkUptoDate opts paths actFile outFiles imps = do
     iff (C.debug opts) (putStrLn ("    Checking " ++ makeRelative (srcDir paths) actFile ++ " is up to date..."))
+    -- get the path to the actonc binary, i.e. ourself
+    actoncBin <- System.Environment.getExecutablePath
+    -- get path to `acton` which is the actonc binary without the `c` at the end
+    let actonBin = take (length actoncBin - 1) actoncBin
+    let potSrcFiles     = [actonBin, actoncBin, actFile, extCFile, srcCFile, srcHFile]
     srcFiles  <- filterM System.Directory.doesFileExist potSrcFiles
     outExists <- mapM System.Directory.doesFileExist outFiles
 
@@ -636,7 +641,6 @@ checkUptoDate opts paths actFile outFiles imps = do
         extCFile        = srcBase ++ ".ext.c"
         -- except for actFile, these are *potential* source files which might
         -- not actually exist...
-        potSrcFiles     = [actFile, extCFile, srcCFile, srcHFile]
         impOK iTime mn  = do
                              impFile <- findTyFile (searchPath paths) mn
                              case impFile of
