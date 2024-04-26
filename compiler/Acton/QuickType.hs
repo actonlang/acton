@@ -183,8 +183,8 @@ instance QType Expr where
       where (ts, es')               = unzip $ map (qType env f) es
     qType env f (Paren l e)         = (t, Paren l e')
       where (t, e')                 = qType env f e
-    qType env f (Box tn e)          = (tCon (TC tn []), Box tn e)   
-    qType env f (UnBox tn e)        = (tCon (TC tn []), UnBox tn e)   
+    qType env f (Box t e)          = (t, Box t e)   
+    qType env f (UnBox t e)        = (t, UnBox t e)   
     qType env f e                   = error ("qType, e = " ++ show e)
    
     qMatch f t t' e                 = f t t' e

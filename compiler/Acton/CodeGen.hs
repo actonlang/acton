@@ -134,7 +134,7 @@ hStmt env (Decl _ ds)               = vmap (declstub env1) ds $+$
                                       vmap (decl env1) ds $+$
                                       vmap (methstub env1) ds
   where env1                        = gdefine (envOf ds) env
-hStmt env s                         = vcat [ text "extern" <+> gen env t <+> genTopName env n <> semi | (n,NVar t) <- envOf s]
+hStmt env s                         = vcat [ text "extern" <+> genTypeDecl env n t <+> genTopName env n <> semi | (n,NVar t) <- envOf s]
 
 declstub env (Class _ n q a b)      = text "struct" <+> genTopName env n <> semi
 declstub env Def{}                  = empty
@@ -154,8 +154,9 @@ decl env (Class _ n q a b)          = (text "struct" <+> classname env n <+> cha
                                       nest 4 (classlink env n $+$ vcat properties) $+$
                                       char '}' <> semi
         initNotImpl                 = any hasNotImpl [ b' | Decl _ ds <- b, Def{dname=n',dbody=b'} <- ds, n' == initKW ]
-decl env (Def _ n q p _ a _ _ fx)   = gen env (exposeMsg fx $ fromJust a) <+> genTopName env n <+> parens (params env $ prowOf p) <> semi
-
+decl env (Def _ n q p _ (Just t) _ _ fx)
+                                    = genTypeDecl env n (exposeMsg fx t) <+> genTopName env n <+> parens (par env $ prowOf p) <> semi
+  where par                         = if isUnboxed n then uparams else params
 methstub env (Class _ n q a b)      = text "extern" <+> text "struct" <+> classname env n <+> methodtable env n <> semi $+$
                                       constub env t n r b
   where TFun _ _ r _ t              = sctype $ fst $ schemaOf env (eVar n)
@@ -187,6 +188,16 @@ params env (TRow _ _ _ t TNil{})    = gen env t
 params env (TRow _ _ _ t TVar{})    = gen env t                                         -- Ignore param tails for now...
 params env t                        = error ("codegen unexpected row: " ++ prstr t)
 
+uparams env (TNil _ _)               = empty
+uparams env (TRow _ _ _ t r@TRow{})  = utype env t <> comma <+> uparams env r
+uparams env (TRow _ _ _ t TNil{})    = utype env t
+uparams env (TRow _ _ _ t TVar{})    = utype env t                                         -- Ignore param tails for now...
+uparams env t                        = error ("codegen unexpected row: " ++ prstr t)
+
+utype env t
+ | B.isUnboxable t                  = text (unboxed_c_type t)
+ | otherwise                        = gen env t
+ 
 exposeMsg fx t                      = if fx == fxAction then tMsg t else t
 
 exposeMsg' t@TFun{}                 = t{ restype = exposeMsg (effect t) (restype t) }
@@ -294,7 +305,7 @@ declModule env (Decl _ ds : ss)     = vcat [ declDecl env1 d | d <- ds ] $+$
   where env1                        = gdefine (envOf ds) env
         te                          = envOf ds
 declModule env (Signature{} : ss)   = declModule env ss
-declModule env (s : ss)             = vcat [ gen env t <+> genTopName env n <> semi | (n,NVar t) <- te ] $+$
+declModule env (s : ss)             = vcat [ genTypeDecl env n t <+> genTopName env n <> semi | (n,NVar t) <- te ] $+$
                                       declModule env1 ss
   where te                          = envOf s `exclude` defined env
         env1                        = gdefine te env
@@ -306,7 +317,7 @@ declDecl env (Def _ n q p KwdNIL (Just t) b d fx)
                                       decl $+$
                                       text "*/"
   | otherwise                       = decl
-  where decl                        = (gen env t1 <+> genTopName env n <+> parens (gen env p) <+> char '{') $+$
+  where decl                        = (genTypeDecl env n t1 <+> genTopName env n <+> parens (gen env p) <+> char '{') $+$
                                       nest 4 (genSuite env1 b) $+$
                                       char '}'
         env1                        = setRet t1 $ ldefine (envOf p) $ defineTVars q env
@@ -421,8 +432,6 @@ initFlag                            = name "done$"
 
 methodname c n                      = Derived c n
 
-
-
 class Gen a where
     gen                             :: GenEnv -> a -> Doc
 
@@ -494,18 +503,23 @@ genSuite env (s:ss)                 = genStmt env s $+$ genSuite (ldefine (envOf
   where te                          = envOf s `exclude` defined env
         env1                        = ldefine te env
 
+
+isUnboxed (Internal BoxPass _ _)    = True
+isUnboxed _                         = False
+
+genTypeDecl env n t
+   | isUnboxed n && B.isUnboxable t = text (unboxed_c_type t)
+   | otherwise                      = gen env t
+   
 genStmt env (Decl _ ds)             = empty
 genStmt env (Assign _ [PVar _ n (Just t)] e)
-  | n `notElem` defined env         = gen env t <+> gen env n <+> equals <+> rhs <> semi
-  where isWitness (Internal Witness _ _)
-                                    = True
-        isWitness _                 = False
-        rhs                         = if isWitness n 
+  | n `notElem` defined env         =  genTypeDecl env n t <+> gen env n <+> equals <+> rhs <> semi
+  where rhs                         = if B.isWitness n 
                                       then case staticWitnessName e of
                                            (Just (nm),as) -> foldr (\x y -> y <>text "->" <> myPretty (x)) (parens(myPretty (tcname(tcon t))) <> myPretty (witName nm)) as 
                                            _  ->  genExp env t e
                                       else genExp env t e
-genStmt env s                       = vcat [ gen env t <+> gen env n <> semi | (n,NVar t) <- te ] $+$
+genStmt env s                       = vcat [ genTypeDecl env n t <+> gen env n <> semi | (n,NVar t) <- te ] $+$
                                       gen env1 s
   where te                          = envOf s `exclude` defined env
         env1                        = ldefine te env
@@ -514,8 +528,13 @@ instance Gen Stmt where
     gen env s | isNotImpl s         = text "//" <+> text "NotImplemented"
     gen env (Expr _ Strings{})      = semi
     gen env (Expr _ e)              = genExp' env e <> semi
-    gen env (Assign _ [p] e)        = gen env p <+> equals <+> genExp env t e <> semi
+    gen env (Assign _ [p] e)
+        | B.isUnboxable t           = gen env p <+> equals <+> gen env e <> semi
+        | otherwise                 = gen env p <+> equals <+> genExp env t e <> semi
+       
       where t                       = typeOf env p
+    gen env (AugAssign _ tg op e)   = genTarget env tg <+> pretty op <+> genExp env t e <> semi
+      where t                       = targetType env tg
     gen env (MutAssign _ tg e)      = genTarget env tg <+> equals <+> genExp env t e <> semi
       where t                       = targetType env tg
     gen env (Pass _)                = empty
@@ -527,24 +546,15 @@ instance Gen Stmt where
     gen env (While _ e b [])        = genBranch env "while" (Branch e b) 
     gen env _                       = empty
 
-genBranch env kw (Branch e b)       = (text kw <+> parens (gen env (B.unbox qnBool e)) <+> char '{') $+$ nest 4 (genSuite env b) $+$ char '}'
-
-{-
-genBranchExp env (IsInstance _ x y) = gen env primISINSTANCE0 <> parens(gen env x <>comma <+> genQName env y)
-genBranchExp env (Call _ (Var _ f) PosNil KwdNil)
-  | f `elem` [primPUSH,primPUSHF]   = gen env f <> parens(empty)
-genBranchExp env (CompOp NoLoc e1 [OpArg op e2])
-                                    = gen env e1 <+> pretty op <+> gen env e2
-genBranchExp env (Box _ e)          = gen env e
-genBranchExp env e                  = genBool env e <> text "->val"
--}
+genBranch env kw (Branch e b)       = (text kw <+> parens (gen env (B.unbox tBool e)) <+> char '{') $+$ nest 4 (genSuite env b) $+$ char '}'
 
 genElse env []                      = empty
 genElse env b                       = (text "else" <+> char '{') $+$ nest 4 (genSuite env b) $+$ char '}'
 
 instance Gen PosPar where
-    gen env (PosPar n t _ PosNIL)   = gen env t <+> gen env n
-    gen env (PosPar n t _ p)        = gen env t <+> gen env n <> comma <+> gen env p
+    gen env (PosPar n (Just t) _ PosNIL)
+                                    = genTypeDecl env n t <+> gen env n
+    gen env (PosPar n (Just t) _ p) = genTypeDecl env n t <+> gen env n <> comma <+> gen env p
     gen env PosNIL                  = empty
 
 instance Gen PosArg where
@@ -613,7 +623,7 @@ castLit env (Strings l ss) p        = format (concat ss) p
 
 genCall env [] (TApp _ e ts) p      = genCall env ts e p
 genCall env [_,t] (Var _ n) (PosArg e PosNil)
-  | n == primCAST                   = parens (parens (gen env t) <> gen env e)
+  | n == primCAST                   = parens (parens (genTypeDecl env (noq n) t) <> gen env e)
 genCall env [row] (Var _ n) (PosArg s@Strings{} (PosArg tup PosNil))
   | n == primFORMAT                 = gen env n <> parens (genStr env (formatLit s) <> castLit env s (flatten tup))
   where unbox (TNil _ _) p          = empty
@@ -698,7 +708,7 @@ declCon env n q b
         env1                        = ldefine ((tmpV, NVar tObj) : envOf pars) env
         abstr                       = abstractAttrs env (NoQ n)
 
-acton_malloc env n                        = text "acton_malloc" <> parens (text "sizeof" <> parens (text "struct" <+> gen env n))
+acton_malloc env n                  = text "acton_malloc" <> parens (text "sizeof" <> parens (text "struct" <+> gen env n))
 
 comma' x                            = if isEmpty x then empty else comma <+> x
 
@@ -746,7 +756,7 @@ adjust t t' e                       = typecast t t' e
 
 genExp env t' e                     = gen env (adjust t t' e')
   where (t, e')                     = qType env adjust e
- 
+
 genExp' env e                       = gen env e'
   where (t, e')                     = qType env adjust e
 
@@ -794,16 +804,16 @@ instance Gen Expr where
     gen env (CompOp _ e [a])        = gen env e <+> gen env a
     gen env (UnOp _ Not e)          = gen env primNOT <> parens (gen env t <> comma <+> genBool env e)
       where t                       = typeOf env e
-    gen env (Cond _ e1 e e2)        = parens (parens (gen env (B.unbox qnBool e)) <+> text "?" <+> gen env e1 <+> text ":" <+> gen env e2)
+    gen env (Cond _ e1 e e2)        = parens (parens (gen env (B.unbox tBool e)) <+> text "?" <+> gen env e1 <+> text ":" <+> gen env e2)
     gen env (Paren _ e)             = parens (gen env e)
-    gen env (Box tn e)              = text ("toB_"++nstr(noq tn)) <> parens (gen env e)
+    gen env (Box t e)               = text ("toB_"++render(pretty (noq (tcname(tcon t))))) <> parens (gen env e)
     gen env (UnBox _ e@(Call _ (Var _ f) p KwdNil))
         | f == primISNOTNONE        = genCall env [] (Var NoLoc primISNOTNONE0) p
         | f == primISNONE           = genCall env [] (Var NoLoc primISNONE0) p
         | f `elem` [primPUSH,primPUSHF]
                                     = gen env f <> parens(empty)
         | f `elem` B.mathfuns       = genCall env [] e p
-        | gBuiltin (noq f) `elem` B.integralTypes   -- f is the constructor for an integer type, so check if argument e is a literal
+        | tCon (TC (gBuiltin (noq f)) []) `elem` B.integralTypes   -- f is the constructor for an integer type, so check if argument e is a literal
                                     = genUnboxedInt env (posargs p) e
     gen env (UnBox _ e@(Call _ (Dot _ (Var _ w) op) (PosArg x (PosArg y PosNil)) KwdNil))  -- use macro for int (in)equality tests
                                     = case findQName w env of
@@ -816,8 +826,10 @@ instance Gen Expr where
                                     = gen env primISINSTANCE0 <> parens(gen env e <>comma <+> genQName env c)
     gen env (UnBox _ (Int _ n s))   = text s
     gen env (UnBox _ (Float _ x s)) = text s
+    gen env (UnBox _ v@(Var _ (NoQ n)))
+       | isUnboxed n                = gen env v
     gen env (UnBox _ e@Var{})       = gen env e <> text "->val"
-    gen env (UnBox _ e)             = parens (genExp' env e) <> text "->val"
+    gen env (UnBox _ e)             = parens (gen env e) <> text "->val"
     gen env e                       = error ("CodeGen.gen for Expr: e = " ++ show e)
 
 gencFunCall env nm []               = text nm <> parens empty
@@ -878,3 +890,13 @@ instance Gen Type where
     gen env (TRow _ _ _ t r)        = gen env t <> comma <+> gen env r
     gen env (TNil _ _)              = empty
 
+unboxed_c_type t
+    | t == tI64 = "int64_t"
+    | t == tU64 = "uint64_t"
+    | t == tI32 = "int32_t"
+    | t == tU32 = "uint32_t"
+    | t == tI16 = "int16_t"
+    | t == tU16 = "uint16_t"
+    | t == tFloat = "double"
+    | otherwise = error ("Internal error: trying to find unboxed type for " ++ show t)
+    

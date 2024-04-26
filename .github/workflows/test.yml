@@ -358,10 +358,11 @@ jobs:
           acton --version
       - name: "Run perf tests to compare"
         run: |
-          rm -rf out ~/.cache/acton
           cd test/stdlib_tests
+          rm -rf out
           acton test perf
           cd ../perf
+          rm -rf out
           acton test perf
 
   test-external-projects:
