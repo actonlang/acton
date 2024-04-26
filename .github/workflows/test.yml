@@ -294,7 +294,7 @@ jobs:
         run: |
           apt update
           apt install -y ./deb/acton_*.deb
-          actonc --version
+          acton --version
       - name: "Enable dumping core files to /tmp/core..."
         run: |
           apt install -qy procps
@@ -380,7 +380,7 @@ jobs:
           apt update
           apt install -qy make netcat-openbsd
           apt install -y ./deb/acton_*.deb
-          actonc --version
+          acton --version
       - name: "Clone Telemetrify and check out acton-next branch"
         uses: actions/checkout@v4
         with:
@@ -390,7 +390,7 @@ jobs:
       - name: "Compile acton program"
         run: |
           cd telemetrify
-          actonc build
+          acton build
           cd tests/nso-replay
           make start
           make test
