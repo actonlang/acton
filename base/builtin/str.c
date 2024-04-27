@@ -855,6 +855,7 @@ B_str B_strD_lower(B_str s) {
 
 
 B_str B_strD_lstrip(B_str s, B_str cs) {
+    if (s->nchars == 0) return s;
     if (cs==NULL) cs = whitespace_str;
     unsigned char *p = s->str;
     int i, k;
@@ -1107,6 +1108,7 @@ B_list B_strD_splitlines(B_str s, B_bool keepends) {
 } 
 
 B_str B_strD_rstrip(B_str s, B_str cs) {
+    if (s->nchars == 0) return s;
     if (cs==NULL) cs = whitespace_str;
     unsigned char *p = s->str + s->nbytes;
     int i, k;

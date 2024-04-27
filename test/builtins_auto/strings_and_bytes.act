@@ -19,6 +19,12 @@ actor main(env):
         # library in Acton :/
         assertEqual("encoded & decoded == original", uniesc, ulim)
 
+    def test_strip():
+        s = ""
+        a = [s.strip()]
+        assertEqual("empty string", "['']", str(a))
+
     test_helloworld()
     test_limdef()
+    test_strip()
     env.exit(0)
