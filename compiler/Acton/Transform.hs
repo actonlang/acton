@@ -17,6 +17,7 @@ module Acton.Transform where
 import Utils
 import Acton.Syntax
 import Acton.Names
+import Acton.Builtin
 import Acton.Prim
 import Acton.Printer
 
@@ -139,6 +140,7 @@ instance Transform Expr where
     trans env (CompOp l e ops)          = CompOp l (trans env e) (trans env ops)
     trans env (UnOp l op e)             = UnOp l op (trans env e)
     trans env (Dot l e n)
+      | n `elem` valueKWs               = Dot l e' n
       | Tuple{} <- e'                   = kwditem n $ kargs e'                              -- TODO: outrule side-effects in e
       | otherwise                       = Dot l e' n
       where e'                          = trans env e
@@ -190,19 +192,25 @@ eta (Lambda _ p k (Call _ e p' k') fx)
     eq2 (KwdSTAR n _) (KwdStar e)       = eVar n == e
     eq2 KwdNIL KwdNil                   = True
     eq2 _ _                             = False
-eta (Lambda _ (PosPar n (Just t) Nothing PosNIL) KwdNIL (Tuple _ p k) (TFX _ FXPure))
+eta ee@(Lambda _ (PosPar n (Just t) Nothing PosNIL) KwdNIL (Tuple _ p k) (TFX _ FXPure))
   | idtup t p k                         = eLambda [(n,t)] (eVar n)
-  where idtup (TTuple _ prow krow) p k  = ptup 0 prow p && ktup krow k
-        ptup i TNil{} PosNil            = True
-        ptup i r@TRow{} (PosArg e p)    = idot i e && ptup (i+1) (rtail r) p
-        ptup i _ _                      = False
-        idot i (DotI _ (Var _ n') i')   = n' == NoQ n && i' == i
-        idot i _                        = False
-        ktup TNil{} KwdNil              = True
-        ktup r@TRow{} (KwdArg x e k)    = x == label r && xdot x e && ktup (rtail r) k
-        ktup _ _                        = False
-        xdot x (Dot _ (Var _ n') x')    = n' == NoQ n && x' == x
-        xdot x _                        = False
+  where idtup (TTuple _ prow krow) p k  = ptup (eVar n) 0 prow p && ktup (eVar n) krow k
+        ptup e0 i TNil{} PosNil         = True
+        ptup e0 i r@TRow{} (PosArg e p) = idot e0 i e && ptup e0 (i+1) (rtail r) p
+        ptup e0 i r@TStar{} (PosStar e)
+          | Tuple _ p KwdNil <- e       = ptup (eDotI e0 i) 0 (rtail r) p
+          | otherwise                   = idot e0 i e
+        ptup e0 i _ _                   = False
+        idot e0 i (DotI _ e i')         = e == e0 && i' == i
+        idot e0 i _                     = False
+        ktup e0 TNil{} KwdNil           = True
+        ktup e0 r@TRow{} (KwdArg x e k) = x == label r && xdot e0 x e && ktup e0 (rtail r) k
+        ktup e0 r@TStar{} (KwdStar e)
+          | Tuple _ PosNil k <- e       = ktup (eDot e0 attrKW) (rtail r) k
+          | otherwise                   = xdot e0 attrKW e
+        ktup e0 _ _                     = False
+        xdot e0 x (Dot _ e x')          = e == e0 && x' == x
+        xdot e0 x _                     = False
 eta e                                   = e
 
 pzip (PosPar n _ _ p) (PosArg e a)      = do p' <- pzip p a; return $ (n, e) : p'
@@ -221,6 +229,7 @@ positem i (PosArg _ p)                  = positem (i-1) p
 kwditem n (KwdArg n' e _) | n == n'     = e
 kwditem n (KwdArg _ _ k)                = kwditem n k
 kwditem n (KwdStar e) | n == attrKW     = e
+kwditem n arg                           = error ("#### Bad kwditem " ++ prstr n ++ " in " ++ prstr arg)
 
 posrest 0 (PosArg _ p)                  = p
 posrest i (PosArg e p)                  = PosArg e (posrest (i-1) p)
