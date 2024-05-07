@@ -238,6 +238,12 @@ negself te                          = concat $ map nself te
         nself (_, _)                = []
 
 
+instance Tailvars (Name, NameInfo) where
+    tailvars (n, NVar t)            = tailvars t
+    tailvars (n, NSVar t)           = tailvars t
+    tailvars (n, NDef sc _)         = tailvars sc
+    tailvars _                      = []
+
 -------------------------------------------------------------------------------------------------------------------
 
 class Unalias a where
