@@ -100,7 +100,6 @@ instance Transform Decl where
     trans env (Protocol l n q us b)     = Protocol l n q us (wtrans env b)
     trans env (Extension l n q us b)    = Extension l n q us (wtrans env b)
 
-
 transCall (Dot _ (Var _ n) m) ts [e1,e2]
   | n == primWrapProc,  m == attrWrap   = Just e2
   | n == primWrapAction,m == attrWrap   = Just $ eCall (tApp (eQVar primWRAP) ts) [e1,e2]
@@ -117,10 +116,10 @@ instance Transform Expr where
     trans env (Var l (NoQ n))
       | Just e <- trfind n env          = trans (blockscope [n] env) e
 
-    trans env (Call l e p k)
+    trans env ee@(Call l e p k)
       | Lambda{} <- e',
         Just s1 <- pzip (ppar e') p',
-        Just s2 <- kzip (kpar e') k'    = termsubst (s1++s2) (exp1 e')      -- TODO: check that e' is linear in all its parameters!
+        Just s2 <- kzip (kpar e') k'    = termsubst (s1++s2) (exp1 e')     -- TODO: check that e' is linear in all its parameters!
       | TApp _ e0 ts <- e',
         Just e1 <- transCall e0 ts es   = e1
       | otherwise                       = Call l e' p' k'
@@ -191,13 +190,19 @@ eta (Lambda _ p k (Call _ e p' k') fx)
     eq2 (KwdSTAR n _) (KwdStar e)       = eVar n == e
     eq2 KwdNIL KwdNil                   = True
     eq2 _ _                             = False
-eta (Lambda _ (PosPar n (Just t) Nothing PosNIL) KwdNIL (Tuple _ p KwdNil) (TFX _ FXPure))
-  | TTuple _ r TNil{} <- t, tup 0 r p   = eLambda [(n,t)] (eVar n)
-  where tup i TNil{} PosNil             = True
-        tup i r@TRow{} (PosArg e p)     = dot i e && tup (i+1) (rtail r) p
-        tup i _ _                       = False
-        dot i (DotI _ (Var _ n') i')    = n' == NoQ n && i' == i
-        dot i _                         = False
+eta (Lambda _ (PosPar n (Just t) Nothing PosNIL) KwdNIL (Tuple _ p k) (TFX _ FXPure))
+  | idtup t p k                         = eLambda [(n,t)] (eVar n)
+  where idtup (TTuple _ prow krow) p k  = ptup 0 prow p && ktup krow k
+        ptup i TNil{} PosNil            = True
+        ptup i r@TRow{} (PosArg e p)    = idot i e && ptup (i+1) (rtail r) p
+        ptup i _ _                      = False
+        idot i (DotI _ (Var _ n') i')   = n' == NoQ n && i' == i
+        idot i _                        = False
+        ktup TNil{} KwdNil              = True
+        ktup r@TRow{} (KwdArg x e k)    = x == label r && xdot x e && ktup (rtail r) k
+        ktup _ _                        = False
+        xdot x (Dot _ (Var _ n') x')    = n' == NoQ n && x' == x
+        xdot x _                        = False
 eta e                                   = e
 
 pzip (PosPar n _ _ p) (PosArg e a)      = do p' <- pzip p a; return $ (n, e) : p'
@@ -219,7 +224,6 @@ kwditem n (KwdStar e) | n == attrKW     = e
 
 posrest 0 (PosArg _ p)                  = p
 posrest i (PosArg e p)                  = PosArg e (posrest (i-1) p)
---posrest i p                             = PosStar $ RestI l0 (Tuple l0 p KwdNil) i
 
 kwdrest n (KwdArg n' e k) | n == n'     = k
 kwdrest n (KwdArg n' e k)               = KwdArg n' e (kwdrest n k)
