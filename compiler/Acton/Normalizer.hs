@@ -75,12 +75,12 @@ normEnv env0                        = setX env0 NormX{ contextX = [], rtypeX = N
 
 normPat                             :: NormEnv -> Pattern -> NormM (Pattern,Suite)
 normPat _ (PWild l a)               = do n <- newName "ignore"
-                                         return (PVar l n a,[])
-normPat _ p@PVar{}                  = return (p,[])
+                                         return (PVar l n $ conv a,[])
+normPat _ (PVar l n a)              = return (PVar l n $ conv a,[])
 normPat env (PParen _ p)            = normPat env p
 normPat env p@(PTuple _ pp kp)      = do v <- newName "tup"
-                                         ss <- norm (define (envOf (pVar v t)) env) $ normPP v 0 pp ++ normKP v [] kp
-                                         return (pVar v t, ss)
+                                         ss <- norm (define [(v, NVar t)] env) $ normPP v 0 pp ++ normKP v [] kp
+                                         return (pVar v $ conv t, ss)
   where normPP v n (PosPat p pp)    = Assign NoLoc [p] (DotI NoLoc (eVar v) n) : normPP v (n+1) pp
         normPP v n (PosPatStar p)   = [Assign NoLoc [p] (foldl (RestI NoLoc) (eVar v) [0..n-1])]
         normPP _ _ PosPatNil        = []
@@ -90,7 +90,7 @@ normPat env p@(PTuple _ pp kp)      = do v <- newName "tup"
         t                           = typeOf env p
 normPat env p@(PList _ ps pt)       = do v <- newName "lst"
                                          ss <- norm env $ normList v 0 ps pt
-                                         return (pVar v t, ss)
+                                         return (pVar v $ conv t, ss)
   where normList v n (p:ps) pt      = s : normList v (n+1) ps pt
           where s                   = Assign NoLoc [p] (eCall (eDot (eQVar qnIndexed) getitemKW)
                                         [eVar v, Int NoLoc n (show n)])
@@ -126,7 +126,7 @@ handle env x hs                     = do bs <- sequence [ branch e b | Handler e
         branch (Except _ y) b       = Branch (eIsInstance x y) <$> norm env b
         branch (ExceptAs _ y z) b   = Branch (eIsInstance x y) <$> (bind:) <$> norm env' b
           where env'                = define [(z,NVar t)] env
-                bind                = sAssign (pVar z t) (eVar x)
+                bind                = sAssign (pVar z $ conv t) (eVar x)
                 t                   = tCon $ TC y []
 
 exitContext env s
@@ -217,7 +217,7 @@ instance Norm Stmt where
                                              True -> return $ retContext e
                                              False -> do
                                                  n <- newName "tmp"
-                                                 return $ sAssign (pVar n t) e : retContext (eVar n)
+                                                 return $ sAssign (pVar n $ conv t) e : retContext (eVar n)
       where retContext e            = exitContext env $ Return l $ Just e
             t                       = typeOf env e
 
@@ -232,12 +232,12 @@ instance Norm Stmt where
 --                                         norm env [sAssign (pVar i t) e,
 --                                                   sAssign (pVar v $ tOpt $ head ts) (next i),
 --                                                   While l (test v) (sAssign p (eVar v) : b ++ [sAssign (pVar' v) (next i)]) els]
-                                         norm env [sAssign (pVar i t) e,
+                                         norm env [sAssign (pVar i $ conv t) e,
                                                    While l (eBool True) (body v i) []]
       where t@(TCon _ (TC c [t']))  = typeOf env e
             test v                  = eCall (tApp (eQVar primISNOTNONE) [t']) [eVar v]
             next i                  = eCall (eDot (eVar i) nextKW) []
-            body v i                = [ sAssign (pVar v $ tOpt t') (next i),
+            body v i                = [ sAssign (pVar v $ conv $ tOpt t') (next i),
                                         sIf1 (test v) (sAssign p (eCAST (tOpt t') t' $ eVar v) : b) (els ++ [sBreak]) ]
     {-
     with EXPRESSION as PATTERN:
@@ -278,7 +278,7 @@ normItem env (WithItem e (Just p))  = do e' <- norm env e
 instance Norm Decl where
     norm env (Def l n q p k t b d x)= do p' <- joinPar <$> norm env0 p <*> norm (define (envOf p) env0) k
                                          b' <- norm env1 b
-                                         return $ Def l n q p' KwdNIL t (ret b') d x
+                                         return $ Def l n q p' KwdNIL (conv t) (ret b') d x
       where env1                    = setContext [] $ setRet t $ define (envOf p ++ envOf k) env0
             env0                    = defineTVars q env
             ret b | fallsthru b     = b ++ [sReturn eNone]
