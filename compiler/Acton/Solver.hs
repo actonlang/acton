@@ -248,7 +248,7 @@ rank env c@(Impl _ _ t p)
   | not $ null $ tyfree t                   = RTry t ts False
   where ts                                  = allExtProto env t p
 
-rank env (Sel _ _ t@TVar{} n _)             = RTry t (allConAttr env n ++ allProtoAttr env n ++ allExtProtoAttr env n) False
+rank env (Sel _ _ t@TVar{} n _)             = RTry t (allConAttr env n ++ allProtoAttr env n ++ allExtProtoAttr env n ++ [tTuple tWild tWild]) False
 rank env (Mut _ t@TVar{} n _)               = RTry t (allConAttr env n) False
 
 rank env (Seal _ t@TVar{})
@@ -435,7 +435,6 @@ reduce' env eq c@(Sel _ w (TCon _ tc) n _)
 
 
 reduce' env eq c@(Sel info w t1@(TTuple _ _ r) n t2)
-  | TVar _ tv <- r                          = do defer [c]; return eq
   | n `elem` valueKWs                       = do let e = eLambda [(px0,t1)] (eDot (eVar px0) n)
                                                  return (Eqn w (wFun t1 t2) e : eq)
   | otherwise                               = do --traceM ("### Sel " ++ prstr c)
@@ -449,6 +448,12 @@ reduce' env eq c@(Sel info w t1@(TTuple _ _ r) n t2)
                                                  let e = eLambda [(px0,t1)] (eCallVar w' [eDot (eVar px0) attrKW])
                                                  reduce env (Eqn w (wFun t1 t2) e : eq) [Sel info w' (tTupleK r) n t2]
         select (TNil _ _)                   = kwdNotFound0 env info n
+        select (TVar _ tv)                  = do t <- newTVar
+                                                 r <- tRow KRow n t <$> newTVarOfKind KRow
+                                                 unify info (tVar tv) r
+                                                 w' <- newWitness
+                                                 let e = eLambda [(px0,t1)] (eDot (eCallVar w' [eVar px0]) n)
+                                                 reduce env (Eqn w (wFun t1 t2) e : eq) [Sub info w' t t2]
 
 --  lambda (x:(a:int,b:int,**(c:int))): x.b  ==>  lambda x: (b=x.b, a=x.a, KW=x.KW).b            ==>  lambda x: x.b
 --  lambda (x:(a:int,b:int,**(c:int))): x.c  ==>  lambda x: (c=x.KW.x, a=x.a, b=x.b, KW=x.KW).c  ==>  lambda x: x.KW.c
@@ -799,7 +804,7 @@ sub' env info eq w (TVar _ tv) t2@TFun{}
   | univar tv                               = do t1 <- instwild env KType $ tFun tWild tWild tWild tWild
                                                  substitute tv t1
                                                  sub env info eq w t1 t2
-sub' env info eq w t1@TFun{} (TVar _ tv)                                                                             -- Should remove this, rejects tv = TOpt...
+sub' env info eq w t1@TFun{} (TVar _ tv)                                                                            -- Should remove this, rejects tv = TOpt...
   | univar tv                               = do t2 <- instwild env KType $ tFun tWild tWild tWild tWild
                                                  substitute tv t2
                                                  sub env info eq w t1 t2
@@ -807,6 +812,11 @@ sub' env info eq w t1@TFun{} (TVar _ tv)                                        
 sub' env info eq w (TVar _ tv) t2@TTuple{}
   | univar tv                               = do t1 <- instwild env KType $ tTuple tWild tWild
                                                  substitute tv t1
+                                                 sub env info eq w t1 t2
+
+sub' env info eq w t1@TTuple{} (TVar _ tv)                                                                          -- Should remove this, rejects tv = TOpt...
+  | univar tv                               = do t2 <- instwild env KType $ tTuple tWild tWild
+                                                 substitute tv t2
                                                  sub env info eq w t1 t2
 
 sub' env info eq w t1@(TVar _ tv1) t2@(TVar _ tv2)
@@ -970,7 +980,7 @@ subkwd env info f seen r1 TNil{}                = term f seen r1
 
 x.          c,a             a,c                     a = x.a                                 Row!            Row
 x.          c,a             c           a           c = x.a                                 Row!            Row
-x.          c,a             .           ac                                                  (Row)           Row
+x.          c,a             .           ac                                                  (Row)           Nil
 x.          .               .                       .                                       Nil             Nil
 
 ---- OK:
