@@ -609,7 +609,10 @@ cast' env _ (TWild _) t2                    = return ()
 cast' env _ t1 (TWild _)                    = return ()
 
 cast' env info (TCon _ c1) (TCon _ c2)
-  | Just (wf,c') <- search                  = unifyM info (tcargs c') (tcargs c2)        -- TODO: cast/unify based on polarities
+  | Just (wf,c') <- search                  = if tcname c1 == qnDict && tcname c2 == qnDict then
+                                                  castM env info (tcargs c') (tcargs c2)
+                                              else
+                                                  unifyM info (tcargs c') (tcargs c2)        -- TODO: cast/unify based on polarities
   where search                              = findAncestor env c1 (tcname c2)
 
 cast' env info f1@(TFun _ fx1 p1 k1 t1) f2@(TFun _ fx2 p2 k2 t2)
