@@ -763,12 +763,12 @@ sub' env info eq w t1@(TFun _ fx1 p1 k1 t1') t2@(TFun _ fx2 p2 k2 t2')
   | all isTVar [p1,p2] || all isTVar [k1,k2]= do --traceM ("## Unifying funs: " ++ prstr w ++ ": " ++ prstr t1 ++ " ~ " ++ prstr t2)
                                                  unify info t1 t2
                                                  return (idwit env w t1 t2 : eq)
-  | any isTVar [p1,p2]                      = do --traceM ("## Unifying fun pos " ++ prstr w ++ ": " ++ prstr t1 ++ " < " ++ prstr t2)
-                                                 unify info p1 p2
-                                                 sub env info eq w t1 t2
-  | any isTVar [k1,k2]                      = do --traceM ("## Unifying fun kwd " ++ prstr w ++ ": " ++ prstr t1 ++ " < " ++ prstr t2)
-                                                 unify info k1 k2
-                                                 sub env info eq w t1 t2
+--  | any isTVar [p1,p2]                      = do --traceM ("## Unifying fun pos " ++ prstr w ++ ": " ++ prstr t1 ++ " < " ++ prstr t2)
+--                                                 unify info p1 p2
+--                                                 sub env info eq w t1 t2
+--  | any isTVar [k1,k2]                      = do --traceM ("## Unifying fun kwd " ++ prstr w ++ ": " ++ prstr t1 ++ " < " ++ prstr t2)
+--                                                 unify info k1 k2
+--                                                 sub env info eq w t1 t2
   | otherwise                               = do --traceM ("### Aligning fun " ++ prstr t1 ++ " < " ++ prstr t2)
                                                  (cs1,ap,es) <- subpos env info ((map eVar pNames)!!) 0 p2 p1
                                                  (cs2,ak) <- subkwd0 env info eVar es k2 k1
@@ -785,12 +785,12 @@ sub' env info eq w t1@(TTuple _ p1 k1) t2@(TTuple _ p2 k2)
   | all isTVar [p1,p2] || all isTVar [k1,k2]= do --traceM ("### Unifying tuples: " ++ prstr w ++ ": " ++ prstr t1 ++ " ~ " ++ prstr t2)
                                                  unify info t1 t2
                                                  return (idwit env w t1 t2 : eq)
-  | any isTVar [p1,p2]                      = do --traceM ("### Unifying tuple pos: " ++ prstr w ++ ": " ++ prstr t1 ++ " < " ++ prstr t2)
-                                                 unify info p1 p2
-                                                 sub env info eq w t1 t2
-  | any isTVar [k1,k2]                      = do --traceM ("### Unifying tuple kwd: " ++ prstr w ++ ": " ++ prstr t1 ++ " < " ++ prstr t2)
-                                                 unify info k1 k2
-                                                 sub env info eq w t1 t2
+--  | any isTVar [p1,p2]                      = do traceM ("### Unifying tuple pos: " ++ prstr w ++ ": " ++ prstr t1 ++ " < " ++ prstr t2)
+--                                                 unify info p1 p2
+--                                                 sub env info eq w t1 t2
+--  | any isTVar [k1,k2]                      = do traceM ("### Unifying tuple kwd: " ++ prstr w ++ ": " ++ prstr t1 ++ " < " ++ prstr t2)
+--                                                 unify info k1 k2
+--                                                 sub env info eq w t1 t2
   | otherwise                               = do --traceM ("### Aligning tuple " ++ prstr t1 ++ " < " ++ prstr t2)
                                                  (cs1,ap,es) <- subpos env info (eDotI (eVar px0) . toInteger) 0 p1 p2
                                                  (cs2,ak) <- subkwd0 env info (eDot (eVar px0)) es k1 k2
