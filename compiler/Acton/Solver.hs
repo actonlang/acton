@@ -894,7 +894,8 @@ subkwd env info f seen r1 (TVar _ tv)       = do unif f seen r1
                                                  unif f (seen\\[n]) r
           | tv `elem` tyfree r              = conflictingRow tv                     -- use rowTail?
           | otherwise                       = do --traceM ("## subkwd Row - Var: " ++ prstr (tRow KRow n t r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr tv)
-                                                 r2 <- tRow KRow n t <$> newTVarOfKind KRow
+                                                 t2 <- newTVar
+                                                 r2 <- tRow KRow n t2 <$> newTVarOfKind KRow
                                                  unify info (tVar tv) r2
         unif f seen (TStar _ _ r)
           | tv `elem` tyfree r              = conflictingRow tv                     -- use rowTail?
