@@ -604,7 +604,10 @@ cast' env _ (TWild _) t2                    = return ()
 cast' env _ t1 (TWild _)                    = return ()
 
 cast' env info (TCon _ c1) (TCon _ c2)
-  | Just (wf,c') <- search                  = unifyM info (tcargs c') (tcargs c2)        -- TODO: cast/unify based on polarities
+  | Just (wf,c') <- search                  = if tcname c1 == qnDict && tcname c2 == qnDict then
+                                                  castM env info (tcargs c') (tcargs c2)
+                                              else
+                                                  unifyM info (tcargs c') (tcargs c2)        -- TODO: cast/unify based on polarities
   where search                              = findAncestor env c1 (tcname c2)
 
 cast' env info f1@(TFun _ fx1 p1 k1 t1) f2@(TFun _ fx2 p2 k2 t2)
@@ -758,12 +761,12 @@ sub' env info eq w t1@(TFun _ fx1 p1 k1 t1') t2@(TFun _ fx2 p2 k2 t2')
   | all isTVar [p1,p2] || all isTVar [k1,k2]= do --traceM ("## Unifying funs: " ++ prstr w ++ ": " ++ prstr t1 ++ " ~ " ++ prstr t2)
                                                  unify info t1 t2
                                                  return (idwit env w t1 t2 : eq)
-  | any isTVar [p1,p2]                      = do --traceM ("## Unifying fun pos " ++ prstr w ++ ": " ++ prstr t1 ++ " < " ++ prstr t2)
-                                                 unify info p1 p2
-                                                 sub env info eq w t1 t2
-  | any isTVar [k1,k2]                      = do --traceM ("## Unifying fun kwd " ++ prstr w ++ ": " ++ prstr t1 ++ " < " ++ prstr t2)
-                                                 unify info k1 k2
-                                                 sub env info eq w t1 t2
+--  | any isTVar [p1,p2]                      = do --traceM ("## Unifying fun pos " ++ prstr w ++ ": " ++ prstr t1 ++ " < " ++ prstr t2)
+--                                                 unify info p1 p2
+--                                                 sub env info eq w t1 t2
+--  | any isTVar [k1,k2]                      = do --traceM ("## Unifying fun kwd " ++ prstr w ++ ": " ++ prstr t1 ++ " < " ++ prstr t2)
+--                                                 unify info k1 k2
+--                                                 sub env info eq w t1 t2
   | otherwise                               = do --traceM ("### Aligning fun " ++ prstr t1 ++ " < " ++ prstr t2)
                                                  (cs1,ap,es) <- subpos env info ((map eVar pNames)!!) 0 p2 p1
                                                  (cs2,ak) <- subkwd0 env info eVar es k2 k1
@@ -780,12 +783,12 @@ sub' env info eq w t1@(TTuple _ p1 k1) t2@(TTuple _ p2 k2)
   | all isTVar [p1,p2] || all isTVar [k1,k2]= do --traceM ("### Unifying tuples: " ++ prstr w ++ ": " ++ prstr t1 ++ " ~ " ++ prstr t2)
                                                  unify info t1 t2
                                                  return (idwit env w t1 t2 : eq)
-  | any isTVar [p1,p2]                      = do --traceM ("### Unifying tuple pos: " ++ prstr w ++ ": " ++ prstr t1 ++ " < " ++ prstr t2)
-                                                 unify info p1 p2
-                                                 sub env info eq w t1 t2
-  | any isTVar [k1,k2]                      = do --traceM ("### Unifying tuple kwd: " ++ prstr w ++ ": " ++ prstr t1 ++ " < " ++ prstr t2)
-                                                 unify info k1 k2
-                                                 sub env info eq w t1 t2
+--  | any isTVar [p1,p2]                      = do traceM ("### Unifying tuple pos: " ++ prstr w ++ ": " ++ prstr t1 ++ " < " ++ prstr t2)
+--                                                 unify info p1 p2
+--                                                 sub env info eq w t1 t2
+--  | any isTVar [k1,k2]                      = do traceM ("### Unifying tuple kwd: " ++ prstr w ++ ": " ++ prstr t1 ++ " < " ++ prstr t2)
+--                                                 unify info k1 k2
+--                                                 sub env info eq w t1 t2
   | otherwise                               = do --traceM ("### Aligning tuple " ++ prstr t1 ++ " < " ++ prstr t2)
                                                  (cs1,ap,es) <- subpos env info (eDotI (eVar px0) . toInteger) 0 p1 p2
                                                  (cs2,ak) <- subkwd0 env info (eDot (eVar px0)) es k1 k2
@@ -884,7 +887,8 @@ subkwd env info f seen r1 (TVar _ tv)       = do unif f seen r1
                                                  unif f (seen\\[n]) r
           | tv `elem` tyfree r              = conflictingRow tv                     -- use rowTail?
           | otherwise                       = do --traceM ("## subkwd Row - Var: " ++ prstr (tRow KRow n t r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr tv)
-                                                 r2 <- tRow KRow n t <$> newTVarOfKind KRow
+                                                 t2 <- newTVar
+                                                 r2 <- tRow KRow n t2 <$> newTVarOfKind KRow
                                                  unify info (tVar tv) r2
         unif f seen (TStar _ _ r)
           | tv `elem` tyfree r              = conflictingRow tv                     -- use rowTail?
@@ -970,7 +974,7 @@ subkwd env info f seen r1 TNil{}                = term f seen r1
 
 x.          c,a             a,c                     a = x.a                                 Row!            Row
 x.          c,a             c           a           c = x.a                                 Row!            Row
-x.          c,a             .           ac                                                  (Row)           Row
+x.          c,a             .           ac                                                  (Row)           Nil
 x.          .               .                       .                                       Nil             Nil
 
 ---- OK:
@@ -1383,9 +1387,10 @@ improve env te tt eq cs
         dots                            = dom mutC ++ dom selC ++ dom selP
         fixedvars                       = tyfree env
         pvars                           = Map.keys (pbounds vi) ++ tyfree (Map.elems (pbounds vi))
+        dotvars                         = Map.keys (selattrs vi) ++ Map.keys (mutattrs vi)
         (posvars0,negvars0)             = polvars te `polcat` polvars tt
         (posvars,negvars)               = (posvars0++fixedvars++vvsL, negvars0++fixedvars++vvsU)
-        obsvars                         = posvars0 ++ negvars0 ++ fixedvars ++ pvars ++ embedded vi ++ sealed vi
+        obsvars                         = posvars0 ++ negvars0 ++ fixedvars ++ pvars ++ dotvars ++ embedded vi ++ sealed vi
         boundvars                       = Map.keys (ubounds vi) ++ Map.keys (lbounds vi)
         boundprot                       = tyfree (Map.elems $ ubounds vi) ++ tyfree (Map.elems $ lbounds vi)
         cyclic                          = if null (boundvars\\boundprot) then [ c | c <- cs, headvar c `elem` boundvars ] else []
