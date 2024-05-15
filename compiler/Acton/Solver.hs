@@ -974,7 +974,7 @@ subkwd env info f seen r1 TNil{}                = term f seen r1
 
 x.          c,a             a,c                     a = x.a                                 Row!            Row
 x.          c,a             c           a           c = x.a                                 Row!            Row
-x.          c,a             .           ac                                                  (Row)           Row
+x.          c,a             .           ac                                                  (Row)           Nil
 x.          .               .                       .                                       Nil             Nil
 
 ---- OK:
