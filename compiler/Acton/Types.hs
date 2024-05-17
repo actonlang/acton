@@ -867,12 +867,16 @@ refine env cs0 te eq
   | not $ null ambig_vs                 = do --traceM ("  #defaulting: " ++ prstrs ambig_vs)
                                              (cs',eq') <- solve env isAmbig te tNone eq cs
                                              refineAgain cs' eq'
+  | not $ null tail_vs                  = do sequence [ unify (Simple NoLoc "internal") (tVar v) (tNil $ tvkind v) | v <- tail_vs ]
+                                             refineAgain cs eq
   | otherwise                           = do eq <- msubst eq
                                              return (fix_cs, gen_vs, cs, te, eq)
   where fix_vs                          = closeDepVars (tyfree env ++ fxfree te ++ fxfree cs0) cs0
         (fix_cs, cs)                    = partition (all (`elem` fix_vs) . tyfree) cs0
         solve_cs                        = [ c | c <- cs, not (canQual c) ]
         ambig_vs                        = tyfree cs \\ closeDepVars (fix_vs++safe_vs) cs
+
+        tail_vs                         = gen_vs `intersect` (tailvars te ++ tailvars cs)
 
         safe_vs                         = if null def_vss then [] else nub $ foldr1 intersect def_vss
         def_vss                         = [ nub $ filter canGen $ tyfree sc | (_, NDef sc _) <- te, null $ scbind sc ]

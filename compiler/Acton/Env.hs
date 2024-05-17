@@ -238,6 +238,12 @@ negself te                          = concat $ map nself te
         nself (_, _)                = []
 
 
+instance Tailvars (Name, NameInfo) where
+    tailvars (n, NVar t)            = tailvars t
+    tailvars (n, NSVar t)           = tailvars t
+    tailvars (n, NDef sc _)         = tailvars sc
+    tailvars _                      = []
+
 -------------------------------------------------------------------------------------------------------------------
 
 class Unalias a where
@@ -913,9 +919,15 @@ glb env (TCon _ c1) (TCon _ c2)
   | hasAncestor env c2 c1               = pure $ tCon c2
 
 glb env (TFun _ e1 p1 k1 t1) (TFun _ e2 p2 k2 t2)
-                                        = tFun <$> glb env e1 e2 <*> lub env p1 p2 <*> lub env k1 k2 <*> glb env t1 t2
-glb env (TTuple _ p1 k1) (TTuple _ p2 k2)
-                                        = tTuple <$> glb env p1 p2 <*> glb env k1 k2
+                                        = do e <- glb env e1 e2
+                                             (p, k) <- lub2 env p1 k1 p2 k2
+                                             t <- glb env t1 t2
+                                             return (tFun e p k t)
+glb env t1@(TTuple _ p1 k1) t2@(TTuple _ p2 k2)
+                                        = do --traceM ("## GLB " ++ prstr t1 ++ " \\/ " ++ prstr t2)
+                                             (p, k) <- glb2 env p1 k1 p2 k2
+                                             --traceM ("## GLB " ++ prstr t1 ++ " \\/ " ++ prstr t2 ++ "  =  " ++ prstr (tTuple p k))
+                                             return (tTuple p k)
 
 glb env (TOpt _ t1) (TOpt _ t2)         = tOpt <$> glb env t1 t2
 glb env (TNone _) t2                    = pure tNone
@@ -950,7 +962,21 @@ glb env (TStar _ k1 r1) (TStar _ k2 r2)
   | k1 == k2                            = tStar k1 <$> glb env r1 r2
 
 glb env t1 t2                           = Nothing
-    
+
+
+glb2 env (TRow _ _ _ t1 p1) k1 (TRow _ _ _ t2 p2) k2
+                                        = do t <- glb env t1 t2
+                                             (p,k) <- glb2 env p1 k1 p2 k2
+                                             return (posRow t p, k)
+glb2 env p1@TRow{} k1 p2@TNil{} (TRow _ _ _ t2 k2)
+                                        = glb2 env p1 k1 (posRow t2 p2) k2
+glb2 env p1@TNil{} (TRow _ _ _ t1 k1) p2@TRow{} k2
+                                        = glb2 env (posRow t1 p1) k1 p2 k2
+glb2 env p1 k1 p2 k2                    = do p <- glb env p1 p2
+                                             k <- glb env k1 k2
+                                             return (p, k)
+
+
 glbfold env []                          = pure tWild
 glbfold env (t:ts)                      = foldM (glb env) t ts
 
@@ -974,10 +1000,16 @@ lub env (TCon _ c1) (TCon _ c2)
   | not $ null common                   = pure $ tCon $ head common
   where common                          = commonAncestors env c1 c2
 
-lub env (TFun _ e1 p1 k1 t1) (TFun _ e2 p2 k2 t2)
-                                        = tFun <$> lub env e1 e2 <*> glb env p1 p2 <*> glb env k1 k2 <*> lub env t1 t2
-lub env (TTuple _ p1 k1) (TTuple _ p2 k2)
-                                        = tTuple <$> lub env p1 p2 <*> lub env k1 k2
+lub env f1@(TFun _ e1 p1 k1 t1) f2@(TFun _ e2 p2 k2 t2)
+                                        = do e <- lub env e1 e2
+                                             (p,k) <- glb2 env p1 k1 p2 k2
+                                             t <- lub env t1 t2
+                                             --traceM ("## LUB " ++ prstr f1 ++ " /\\ " ++ prstr f2 ++ "  =  " ++ prstr (tFun e p k t))
+                                             return $ tFun e p k t
+lub env t1@(TTuple _ p1 k1) t2@(TTuple _ p2 k2)
+                                        = do (p,k) <- lub2 env p1 k1 p2 k2
+                                             --traceM ("## LUB " ++ prstr t1 ++ " /\\ " ++ prstr t2 ++ "  =  " ++ prstr (tTuple p k))
+                                             return $ tTuple p k
 
 lub env (TOpt _ t1) (TOpt _ t2)         = tOpt <$> lub env t1 t2
 lub env (TNone _) (TNone _)             = pure tNone
@@ -1014,6 +1046,20 @@ lub env (TStar _ k1 r1) (TStar _ k2 r2)
   | k1 == k2                            = tStar k1 <$> lub env r1 r2
 
 lub env t1 t2                           = Nothing
+
+
+lub2 env (TRow _ _ _ t1 p1) k1 (TRow _ _ _ t2 p2) k2
+                                        = do t <- lub env t1 t2
+                                             (p,k) <- lub2 env p1 k1 p2 k2
+                                             return (posRow t p, k)
+lub2 env (TRow _ _ _ t1 p1) k1 p2@TNil{} k2@TRow{}
+                                        = lub2 env p1 (kwdRow (label k2) t1 k1) p2 k2
+lub2 env p1@TNil{} k1@TRow{} (TRow _ _ _ t2 p2) k2
+                                        = lub2 env p1 k1 p2 (kwdRow (label k1) t2 k2)
+lub2 env p1 k1 p2 k2                    = do p <- lub env p1 p2
+                                             k <- lub env k1 k2
+                                             return (p, k)
+
 
 lubfold env []                          = pure tWild
 lubfold env (t:ts)                      = foldM (lub env) t ts

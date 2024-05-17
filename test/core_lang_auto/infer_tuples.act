@@ -1,0 +1,15 @@
+def fun1(nt: (a:str, b:int, **)):
+    print(nt.a)
+    print(nt.b)
+
+def fun2(nt):
+    print(nt.a)
+    print(nt.b)
+    print(nt.c)
+
+actor main(env):
+    x = (a="bar", b=1337, c=True)
+    print(x)
+    fun1(x)
+    fun2(x)
+    env.exit(0)

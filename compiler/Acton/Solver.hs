@@ -115,7 +115,6 @@ solve env select te tt eq cs                = do css <- groupCs env cs
 
 solveGroups env select te tt []             = return ([], [])
 solveGroups env select te tt (cs:css)       = do --traceM ("\n\n######### solveGroup\n" ++ render (nest 4 $ vcat $ map pretty cs))
-
                                                  (cs1,eq1) <- solve' env select [] te tt [] cs `catchError` \err -> Control.Exception.throw err
                                                  env <- msubst env
                                                  (cs2,eq2) <- solveGroups env select te tt css
@@ -179,6 +178,12 @@ solve' env select hist te tt eq cs
                                                  w <- newWitness
                                                  --traceM ("  # trying " ++ prstr t0 ++ " (" ++ prstr p ++ ")")
                                                  proceed hist (Impl (DfltInfo NoLoc 4 Nothing []) w t0 p : cs)
+        tryAlt t0 (TTuple _ _ _)
+          | not $ null attrs                = do t <- instwild env KType (tTupleK $ foldr (\n -> kwdRow n tWild) tWild attrs)
+                                                 --traceM ("  # trying tuple " ++ prstr t0 ++ " = " ++ prstr t)
+                                                 unify (DfltInfo NoLoc 5 Nothing []) t0 t
+                                                 proceed (t:hist) cs
+          where attrs                       = sortBy (\a b -> compare (nstr a) (nstr b)) $ nub [ n | Sel _ _ t n _ <- solve_cs, t == t0 ]
         tryAlt t0 t                         = do t <- instwild env (kindOf env t0) t
                                                  --traceM ("  # trying " ++ prstr t0 ++ " = " ++ prstr t)
                                                  unify (DfltInfo NoLoc 5 Nothing []) t0 t
@@ -248,7 +253,7 @@ rank env c@(Impl _ _ t p)
   | not $ null $ tyfree t                   = RTry t ts False
   where ts                                  = allExtProto env t p
 
-rank env (Sel _ _ t@TVar{} n _)             = RTry t (allConAttr env n ++ allProtoAttr env n ++ allExtProtoAttr env n) False
+rank env (Sel _ _ t@TVar{} n _)             = RTry t (allConAttr env n ++ allProtoAttr env n ++ allExtProtoAttr env n ++ [tTuple tWild tWild]) False
 rank env (Mut _ t@TVar{} n _)               = RTry t (allConAttr env n) False
 
 rank env (Seal _ t@TVar{})
@@ -604,10 +609,10 @@ cast' env _ (TWild _) t2                    = return ()
 cast' env _ t1 (TWild _)                    = return ()
 
 cast' env info (TCon _ c1) (TCon _ c2)
-  | Just (wf,c') <- search                  = if tcname c1 == qnDict && tcname c2 == qnDict then
+  | Just (wf,c') <- search                  = if tcname c1 == tcname c2 && tcname c1 `elem` [qnDict] then
                                                   castM env info (tcargs c') (tcargs c2)
-                                              else
-                                                  unifyM info (tcargs c') (tcargs c2)        -- TODO: cast/unify based on polarities
+                                              else                                              -- TODO: infer polarities in general!
+                                                  unifyM info (tcargs c') (tcargs c2)
   where search                              = findAncestor env c1 (tcname c2)
 
 cast' env info f1@(TFun _ fx1 p1 k1 t1) f2@(TFun _ fx2 p2 k2 t2)
@@ -758,7 +763,7 @@ sub' env _ eq w t1 t2@TWild{}               = return (idwit env w t1 t2 : eq)
 --                     as declared               as called
 --                     existing                  expected
 sub' env info eq w t1@(TFun _ fx1 p1 k1 t1') t2@(TFun _ fx2 p2 k2 t2')
-  | all isTVar [p1,p2] || all isTVar [k1,k2]= do --traceM ("## Unifying funs: " ++ prstr w ++ ": " ++ prstr t1 ++ " ~ " ++ prstr t2)
+  | varTails [p1,p2] || varTails [k1,k2]    = do --traceM ("## Unifying funs: " ++ prstr w ++ ": " ++ prstr t1 ++ " ~ " ++ prstr t2)
                                                  unify info t1 t2
                                                  return (idwit env w t1 t2 : eq)
 --  | any isTVar [p1,p2]                      = do --traceM ("## Unifying fun pos " ++ prstr w ++ ": " ++ prstr t1 ++ " < " ++ prstr t2)
@@ -780,7 +785,7 @@ sub' env info eq w t1@(TFun _ fx1 p1 k1 t1') t2@(TFun _ fx2 p2 k2 t2')
 
 --                     existing            expected
 sub' env info eq w t1@(TTuple _ p1 k1) t2@(TTuple _ p2 k2)
-  | all isTVar [p1,p2] || all isTVar [k1,k2]= do --traceM ("### Unifying tuples: " ++ prstr w ++ ": " ++ prstr t1 ++ " ~ " ++ prstr t2)
+  | varTails [p1,p2] || varTails [k1,k2]    = do --traceM ("### Unifying tuples: " ++ prstr w ++ ": " ++ prstr t1 ++ " ~ " ++ prstr t2)
                                                  unify info t1 t2
                                                  return (idwit env w t1 t2 : eq)
 --  | any isTVar [p1,p2]                      = do traceM ("### Unifying tuple pos: " ++ prstr w ++ ": " ++ prstr t1 ++ " < " ++ prstr t2)
@@ -819,6 +824,11 @@ sub' env info eq w t1@(TVar _ tv1) t2@(TVar _ tv2)
 sub' env info eq w t1 t2                    = do cast env info t1 t2
                                                  return (idwit env w t1 t2 : eq)
 
+
+rowTail (TRow _ _ _ _ r)                    = rowTail r
+rowTail r                                   = r
+
+varTails                                    = all (isTVar . rowTail)
 
 subpos                                      :: Env -> ErrInfo -> (Int -> Expr) -> Int -> PosRow -> PosRow -> TypeM (Constraints, PosArg, [(Expr,Type)])
 subpos env info f i TVar{}         TVar{}   = error "INTERNAL ERROR: subpos"
