@@ -609,9 +609,9 @@ cast' env _ (TWild _) t2                    = return ()
 cast' env _ t1 (TWild _)                    = return ()
 
 cast' env info (TCon _ c1) (TCon _ c2)
-  | Just (wf,c') <- search                  = if tcname c1 == tcname c2 && tcname c1 `elem` [qnList,qnDict] then
+  | Just (wf,c') <- search                  = if tcname c1 == tcname c2 && tcname c1 `elem` [qnDict] then
                                                   castM env info (tcargs c') (tcargs c2)
-                                              else                                      -- TODO: utilize inferred polarities in general!
+                                              else                                              -- TODO: infer polarities in general!
                                                   unifyM info (tcargs c') (tcargs c2)
   where search                              = findAncestor env c1 (tcname c2)
 
