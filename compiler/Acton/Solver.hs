@@ -334,9 +334,9 @@ univars cs                              = concat $ map uni cs
           | univar v && univar v'       = [v,v']
         uni _                           = []
 
-allAbove env (TCon _ tc)                = tOpt tWild : map tCon tcons1
-  where tcons1                          = [ TC c1 [] | tc0 <- tcons0, (c,c1,_) <- coercions, c == tcname tc0 ] ++ tcons0
-        tcons0                          = allAncestors env tc ++ [schematic' tc]
+allAbove env (TCon _ tc)                = tOpt tWild : map tCon tcons
+  where n                               = tcname tc
+        tcons                           = allAncestors env tc ++ [schematic' tc]
 allAbove env (TVar _ tv)
   | not $ univar tv                     = tOpt tWild : allAbove env (tCon tc) ++ [tVar tv]
   where tc                              = schematic' $ findTVBound env tv
@@ -349,9 +349,7 @@ allAbove env (TFX _ FXMut)              = [fxProc, fxMut]
 allAbove env (TFX _ FXPure)             = [fxProc, fxMut, fxPure]
 allAbove env (TFX _ FXAction)           = [fxProc, fxAction]
 
-allBelow env (TCon _ tc)                = map tCon tcons1
-  where tcons1                          = concat [ schematic' c : allDescendants env c | c <- tcons0 ]
-        tcons0                          = tc : [ TC c [] | (c,c',_) <- coercions, c' == tcname tc ]
+allBelow env (TCon _ tc)                = map tCon $ schematic' tc : allDescendants env tc
 allBelow env (TVar _ tv)                = [tVar tv]
 allBelow env (TOpt _ t)                 = tOpt tWild : allBelow env t ++ [tNone]
 allBelow env (TNone _)                  = [tNone]
@@ -624,7 +622,7 @@ cast' env _ (TWild _) t2                    = return ()
 cast' env _ t1 (TWild _)                    = return ()
 
 cast' env info (TCon _ c1) (TCon _ c2)
-  | Just (wf,c') <- search                  = if tcname c1 == tcname c2 && tcname c1 `elem` [qnDict] then
+  | Just (_,c') <- search                   = if tcname c1 == tcname c2 && tcname c1 `elem` [qnDict] then
                                                   castM env info (tcargs c') (tcargs c2)
                                               else                                              -- TODO: infer polarities in general!
                                                   unifyM info (tcargs c') (tcargs c2)
@@ -836,9 +834,9 @@ sub' env info eq w t1@(TVar _ tv1) t2@(TVar _ tv2)
   | tv1 == tv2                              = return (idwit env w t1 t2 : eq)
   | univar tv1 && univar tv2                = do defer [Sub info w t1 t2]; return eq
 
-sub' env info eq w t1@(TCon _ tc1) t2@(TCon _ tc2)
-  | Just e <- coercible env tc1 tc2         = do let lambda = eLambda [(px0,t1)] (eCall e [eVar px0])
-                                                 return (Eqn w (wFun t1 t2) lambda : eq)
+--sub' env info eq w t1@(TCon _ tc1) t2@(TCon _ tc2)
+--  | Just e <- coercible env tc1 tc2         = do let lambda = eLambda [(px0,t1)] (eCall e [eVar px0])
+--                                                 return (Eqn w (wFun t1 t2) lambda : eq)
 
 sub' env info eq w t1 t2                    = do cast env info t1 t2
                                                  return (idwit env w t1 t2 : eq)
