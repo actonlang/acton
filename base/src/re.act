@@ -29,7 +29,7 @@
 
 
 class Match:
-    def __init__(self, pattern: str, string: str, start_pos: int, end_pos: int, group: list[str], named_group: dict[str, str]) -> None:
+    def __init__(self, pattern: str, string: str, start_pos: int, end_pos: int, group: list[?str], named_group: dict[str, ?str]) -> None:
         self.pattern = pattern
         self.string = string
         self.start_pos = start_pos

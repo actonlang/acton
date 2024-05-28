@@ -11,15 +11,45 @@ def _test_basic():
 def _test_group():
     """Regexp matching with groups
     """
-    m = re.match("foo[a-z]+", "åbc123 foobar åbc123")
-    testing.assertIsNotNone(m, "basic regexp matching failed")
+    m = re.match("foo([a-z]+)", "åbc123 foobar åbc123")
+    testing.assertIsNotNone(m, "group matching failed")
     if m is not None:
-        testing.assertEqual(m.group[0], "foobar", "match failed")
+        testing.assertEqual(m.group[0], "foobar", "whole group match failed")
+        testing.assertEqual(m.group[1], "bar", "first group match failed")
+
+def _test_nested_group():
+    """Regexp matching with groups
+    """
+    m = re.match("foo((B)[A-Z]+)", "åbc123 fooBAR åbc123")
+    testing.assertIsNotNone(m, "group matching failed")
+    if m is not None:
+        testing.assertEqual(m.group[0], "fooBAR", "whole group match failed")
+        testing.assertEqual(m.group[1], "BAR", "first group match failed")
+        testing.assertEqual(m.group[2], "B", "second group match failed")
+
+def _test_nested_group_without_match():
+    """Regexp matching with groups
+    """
+    m = re.match("foo((Z?)[A-Z]+)", "åbc123 fooBAR åbc123")
+    testing.assertIsNotNone(m, "group matching failed")
+    if m is not None:
+        testing.assertEqual(m.group[0], "fooBAR", "whole group match failed")
+        testing.assertEqual(m.group[1], "BAR", "first group match failed")
+        testing.assertEqual(m.group[2], "", "second group match failed")
 
 def _test_named_groups():
     """Regexp matching with named groups
     """
     m = re.match("(?P<mypattern>foo[a-z]+)", "åbc123 foobar åbc123")
+    testing.assertIsNotNone(m, "regexp matching with named groups failed")
+    if m is not None:
+        testing.assertEqual(m.named["mypattern"], "foobar", "named group ('foobar') match failed")
+
+
+def _test_named_groups_without_match():
+    """Regexp matching with named groups but without a match on an inner group
+    """
+    m = re.match("(?P<mypattern>foo((?P<inner>AAA)|[a-z]+))", "åbc123 foobar åbc123")
     testing.assertIsNotNone(m, "regexp matching with named groups failed")
     if m is not None:
         testing.assertEqual(m.named["mypattern"], "foobar", "named group ('foobar') match failed")
