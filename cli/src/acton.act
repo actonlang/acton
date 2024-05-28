@@ -341,16 +341,22 @@ actor RunTestTest(env: Env, args, perf_mode: bool=False):
         _run_module_tests()
 
     def _run_tests(module_names: list[str]):
-        expected_modules_list = set(module_names)
-        modules_to_test = set(module_names)
-        ptr.expected_modules = set(module_names)
-        if len(module_names) == 0:
+        select_modules = set(args.get_strlist("module"))
+        if len(select_modules) > 0:
+            for module_name in module_names:
+                if module_name in select_modules:
+                    modules_to_test.add(module_name)
+        else:
+            modules_to_test = set(module_names)
+        expected_modules_list = set(modules_to_test)
+        ptr.expected_modules = set(modules_to_test)
+        if len(modules_to_test) == 0:
             print("No tests found")
             env.exit(0)
 
         # List all tests first, which we can run in parallel. Once we have the
         # list of all tests we can start running them one at a time in sequence.
-        for module_name in module_names:
+        for module_name in modules_to_test:
             t = RunModuleTest(process_cap, module_name, ["list"] + test_cmd_args, lambda x: _on_json_output(module_name, x), lambda x, y, z: _on_test_error(module_name, x, y, z))
 
     def _run_module_tests():
@@ -465,6 +471,7 @@ actor main(env):
         newp.add_arg("projectdir", "Project directory", True, "?")
         testp = p.add_cmd("test", "Test", _cmd_test)
         testp.add_bool("record", "Record test performance results")
+        testp.add_option("module", "strlist", "+", [], "Filter on test module name")
         testp.add_option("name", "strlist", "+", [], "Filter on test name")
         testlistp = testp.add_cmd("list", "List tests", _cmd_list_test)
         testperfp = testp.add_cmd("perf", "Perf", _cmd_test_perf)
