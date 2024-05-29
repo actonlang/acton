@@ -40,7 +40,7 @@ reQ_Match reQ__match (B_str arg_pattern, B_str arg_text, B_int arg_start_pos) {
     int i;
     int rc;
     PCRE2_SIZE *ovector = NULL;
-    PCRE2_SPTR name_table;
+    PCRE2_SPTR name_table = NULL;
     int name_entry_size;
 
     PCRE2_SPTR pattern = (PCRE2_SPTR)fromB_str(arg_pattern);
@@ -112,13 +112,19 @@ reQ_Match reQ__match (B_str arg_pattern, B_str arg_text, B_int arg_start_pos) {
     int end_pos = from$int(arg_start_pos);
     // Get groupings and add to groups list
     for (i = 0; i < rc; i++) {
-        PCRE2_SPTR substring_start = text + ovector[2*i];
-        size_t substring_length = ovector[2*i+1] - ovector[2*i];
-        // TODO: get rid of extra copy, need to$str that takes a length
-        char *substring = acton_malloc(substring_length + 1);
-        memcpy(substring, substring_start, substring_length);
-        swit->$class->append(swit, groups, to$str(substring));
-        end_pos = ovector[2*i+1];
+        size_t ss_start = ovector[2*i];
+        size_t ss_end = ovector[2*i+1];
+        if (ss_start == PCRE2_UNSET || ss_end == PCRE2_UNSET) {
+            swit->$class->append(swit, groups, B_None);
+        } else {
+            size_t substring_length = ss_end - ss_start;
+            // TODO: get rid of extra copy, need to$str that takes a length
+            char *substring = acton_malloc(substring_length + 1);
+            PCRE2_SPTR substring_start = text + ss_start;
+            memcpy(substring, substring_start, substring_length);
+            swit->$class->append(swit, groups, to$str(substring));
+        }
+        end_pos = ss_end;
     }
 
     /* Get named groupings */
@@ -133,13 +139,11 @@ reQ_Match reQ__match (B_str arg_pattern, B_str arg_text, B_int arg_start_pos) {
         /* Before we can access the substrings, we must extract the table for
            translating names to numbers, and the size of each entry in the table. */
 
-        (void)pcre2_pattern_info(
-                                 re,                       /* the compiled pattern */
+        (void)pcre2_pattern_info(re,                       /* the compiled pattern */
                                  PCRE2_INFO_NAMETABLE,     /* address of the table */
                                  &name_table);             /* where to put the answer */
 
-        (void)pcre2_pattern_info(
-                                 re,                       /* the compiled pattern */
+        (void)pcre2_pattern_info(re,                       /* the compiled pattern */
                                  PCRE2_INFO_NAMEENTRYSIZE, /* size of each entry in the table */
                                  &name_entry_size);        /* where to put the answer */
 
@@ -150,22 +154,27 @@ reQ_Match reQ__match (B_str arg_pattern, B_str arg_text, B_int arg_start_pos) {
         tabptr = name_table;
         for (i = 0; i < namecount; i++) {
             int n = (tabptr[0] << 8) | tabptr[1];
-            // Substring start and length of named match
-            PCRE2_SPTR substring_start = text + ovector[2*n];
-            //PCRE2_SPTR substring_start = name_table + name_entry_size * namecount + ovector[2*n];
-            size_t substring_length = ovector[2*n+1] - ovector[2*n];
 
             // Offset of name in name table is 2 bytes after the number of the substring it refers to (n) and 2 bytes after the length of the name string (which is held in the first two bytes of the entry). The name string is not necessarily zero-terminated, so we have to use memcpy() to copy it to a buffer and add a terminating zero.
-            // TODO: get rid of extra copy, need to$str that takes a length
             char *group_name = acton_malloc(name_entry_size - (2 + 1));
             memcpy(group_name, tabptr + 2, name_entry_size - (2 + 1));
             group_name[name_entry_size - (2 + 1)] = '\0';
 
-            char *substring = acton_malloc(substring_length + 1);
-            memcpy(substring, substring_start, substring_length);
-            substring[substring_length] = '\0';
+            // Substring start and length of named match
+            size_t ss_start = ovector[2*i];
+            size_t ss_end = ovector[2*i+1];
+            if (ss_start == PCRE2_UNSET || ss_end == PCRE2_UNSET) {
+                B_dictD_setitem(named_groups, hwit, to_str_noc(group_name), B_None);
+            } else {
+                PCRE2_SPTR substring_start = text + ss_start;
+                size_t substring_length = ss_end - ss_start;
 
-            B_dictD_setitem(named_groups, hwit, to$str(group_name), to$str(substring));
+                char *substring = acton_malloc(substring_length + 1);
+                memcpy(substring, substring_start, substring_length);
+                substring[substring_length] = '\0';
+
+                B_dictD_setitem(named_groups, hwit, to_str_noc(group_name), to_str_noc(substring));
+            }
 
             tabptr += name_entry_size;
         }
