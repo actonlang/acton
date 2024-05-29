@@ -874,18 +874,21 @@ class ProjectTestResults(object):
             return
         self.up_to_date = True
 
+        errors = 0
+        failures = 0
         complete = True
         if set(self.results.keys()) != self.expected_modules:
             complete = False
         for module_name in self.results:
+            if module_name in self.module_error:
+                for test_name, test_info in self.results[module_name].items():
+                    errors += 1
+                continue
             for test_name, test_info in self.results[module_name].items():
                 if not test_info.complete:
                     complete = False
         if only_show_complete and not complete:
             return
-
-        errors = 0
-        failures = 0
 
         for i in range(self.printed_lines):
             print(term.clearline + term.up() + term.clearline, end="")
@@ -896,18 +899,14 @@ class ProjectTestResults(object):
                 tname_width = max([tname_width, len(tinfo.definition.name)])
         tname_width += 5
 
-        for module_name in self.results:
+        for module_name in sorted(self.results):
             if module_name == "":
                 print("\nTests")
                 self.printed_lines += 2
             elif len(self.results[module_name]) > 0:
                 print("\nTests - module %s:" % module_name)
                 self.printed_lines += 2
-            if module_name in self.module_error:
-                moderr = self.module_error[module_name]
-                print("Exit code: %d  term signal: %d" % (moderr.exit_code, moderr.term_signal))
-                print(moderr.err)
-                continue
+
             for test_name, tinfo in self.results[module_name].items():
                 last_tinfo = None
                 if module_name in self.last_results and test_name in self.last_results[module_name]:
@@ -939,15 +938,17 @@ class ProjectTestResults(object):
                             run_info += " out of "
                     else:
                         msg += term.green + "OK" + term.normal
+                    msg += ": "
+                    if self.perf_mode:
+                        msg += format_timing(module_name, test_name) + " "
+                    msg += "%4d runs in %3.3fms" % (tinfo.num_iterations, tinfo.test_duration) + term.normal
+                elif module_name in self.module_error:
+                    moderr = self.module_error[module_name]
+                    msg = term.red + "##: Test crash? Exit code: %d  term signal: %d" % (moderr.exit_code, moderr.term_signal) + term.normal
                 else:
                     msg = term.yellow + "**" + term.normal
 
-                run_info += "%4d runs in %3.3fms" % (tinfo.num_iterations, tinfo.test_duration)
-
-                l = prefix + msg + ": "
-                if self.perf_mode:
-                    l += format_timing(module_name, test_name) + " "
-                l += run_info + term.normal
+                l = prefix + msg
                 print(l)
                 self.printed_lines += 1
                 if self.perf_mode and perf_mem:
@@ -963,6 +964,15 @@ class ProjectTestResults(object):
                     for line in str(exc).splitlines(None):
                         print(term.red + "    %s" % (line) + term.normal)
                         self.printed_lines += 1
+
+            if module_name in self.module_error:
+                moderr = self.module_error[module_name]
+                if moderr.err != "":
+                    msg = term.red + "Error:\n" + term.normal
+                    msg += moderr.err
+                    print(msg)
+                    self.printed_lines += len(msg.splitlines())
+
         print("")
         if complete:
             if errors > 0 and failures > 0:
