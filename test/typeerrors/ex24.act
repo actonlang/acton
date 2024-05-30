@@ -1,0 +1,6 @@
+# TODO: error should print line numbers
+
+def foo():
+    a : ?str = ""
+    b: dict[str, str] = {}
+    b[a] = "hej"
