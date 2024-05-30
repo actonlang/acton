@@ -1360,6 +1360,9 @@ B_str B_SliceableD_strD___getslice__ (B_SliceableD_str wit, B_str s, B_slice slc
     int nbytes = 0;
     long start, stop, step, slen;
     normalize_slice(slc, nchars, &slen, &start, &stop, &step);
+    if (slen == 0) {
+        return to$str("");
+    }
     //slice notation have been eliminated and default values applied.
     unsigned char buffer[4*slen]; // very conservative buffer size.
     unsigned char *p = buffer;
