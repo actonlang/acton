@@ -1,5 +1,75 @@
 # Changelog
 
+## Unreleased
+
+## Added
+- More unboxing of fixed size integers
+  - Function local variables are unboxed
+  - Passing fixed size integers as arguments between functions is also unboxed
+  - This adds an extra pass to the compiler to handle boxing and unboxing
+  - For some programs, the code is now pretty much optimal
+    - For example, the C code generated from `test/perf/src/dct.act` looks
+      pretty much as one would write it by hand. It does 0 mallocs and runs
+      about 20x faster than before unboxing (depending a bit on computer)
+  - class and actor attributes are still boxed
+    - This is likely the most important future work around unboxing since
+      individual mallocs for class & actor attributes typically account for a
+      the lion's share of GC pressure
+    - It is challenging around generics though
+- Added `--module` argument to `acton test` to select module to test
+  - For example, `acton test --module foo` to only run tests in module foo
+- Improved printing of test results for test modules that crashed
+  - The error is now printed for each individual test in the test module
+
+## Changed
+- `re.match()` now returns `Match` object where the group is `list[?str]`. It
+  used to be `list[str]` but it is possible to have groups that do not match on
+  anything and so `?str` is the correct type. This applies both for named groups
+  and normal numbered groups.
+  - For example, consider `foo((123)|bar)` which matches either `foo123` or
+    `foobar`. The inner `(123)` group is ORed and so it will have no match for
+    `foobar`, thus we get the result `m.group = ["foobar", "bar", None]`
+
+## Fixed
+- Fixed tuple type inference
+  - Tuples with named fields can now be properly type infered and won't require
+- `acton test perf` now limits concurrency to 1 to get better results
+- Fix `str.strip()` on empty strings, it would previously return `\n` but now
+  returns an empty string as it should
+- Fixes crash in `re.match()` for groups with no matches, which previously
+  resulted in `SEGFAULT`
+  - For example, consider `foo((123)|bar)` which matches either `foo123` or
+    `foobar`. The inner `(123)` group is ORed and so it will have no match for
+    `foobar`, thus we get the result `m.group = ["foobar", "bar", None]`
+    - This would previously crash but we now properly check the result values
+- Fix str slicing when range is 0 length which would previously `SIGILL`
+  - For example, for `a = "foobar"` if we would try to access `a[23:]`, there is
+    no character 23 and so the length of the slice is 0 which would trigger a
+    `SIGILL` when compiled in `--dev` mode (which comes with lots of extra
+    UBsan)
+
+### Testing / CI
+- Added performance test to CI
+  - This runs on a dedicated computer, a laptop in Kristian's rack at home
+  - Runs `acton test perf` in `test/perf` which currently only includes the
+    `dct` program
+    - Simply add more test programs to the `test/perf` project to have them run
+  - The testing procedure is as follow:
+    - The CI test checks out the tests from the feature branch, so it will
+      always be the latest version of the test itself
+    - The latest tip release from acton main branch is installed and used to
+      compile the `test/perf` project
+    - `acton test perf --record` is used to run the test and record the result,
+      which will act as the baseline
+    - The acton release from the local feature branch is then installed (fetched
+      as artifact from the `build-debs` job)
+    - `acton test perf` is now run, which will run with the latest version and
+      compare the results against the baseline
+    - We do not currently inspect the results to give a pass / fail score,
+      they're just printed in the CI output for a human to look at
+    - Natural variance seems to hover around +-5%, which feels OK
+
+
 ## [0.22.0] (2024-04-14)
 Support for Windows and continued improvements for `acton test`! Internally the
 biggest change is the removal of link time redirection of malloc, which opens up
