@@ -503,7 +503,8 @@ dist/zig: deps-download/zig-$(OS)-$(ARCH)-$(ZIG_VERSION).tar.xz
 deps-download/zig-$(OS)-$(ARCH)-$(ZIG_VERSION).tar.xz:
 	mkdir -p deps-download
 ifeq ($(findstring -dev,$(ZIG_VERSION)),-dev)
-	curl -o $@ https://ziglang.org/builds/zig-$(OS)-$(ARCH)-$(ZIG_VERSION).tar.xz
+	curl -L -o $@ https://github.com/actonlang/zigballs/raw/main/zig-$(OS)-$(ARCH)-$(ZIG_VERSION).tar.xz
+#	curl -o $@ https://ziglang.org/builds/zig-$(OS)-$(ARCH)-$(ZIG_VERSION).tar.xz
 else
 	curl -o $@ https://ziglang.org/download/$(ZIG_VERSION)/zig-$(OS)-$(ARCH)-$(ZIG_VERSION).tar.xz
 endif
