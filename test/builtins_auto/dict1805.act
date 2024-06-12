@@ -1,0 +1,11 @@
+actor main(env):
+    d: dict[int, str] = {}
+    d[1] = "one"
+    d[2] = "two"
+    del d[2]
+    d[3] = "three"
+    del d[1]
+    print(str(d))
+    print(str(d[3]))
+    env.exit(0)
+    

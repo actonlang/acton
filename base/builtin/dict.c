@@ -138,7 +138,7 @@ int $lookdict(B_dict dict, B_Hashable hashwit, long hash, $WORD key, $WORD *res)
     }
     if (table->tb_size == INIT_SIZE) {
         // Ignore hash and do linear search
-        for (int ix = 0; ix < table->tb_nentries; ix++) {
+        for (int ix = 0; ix < (int)table->tb_nentries; ix++) {
             $entry_t entry = &TB_ENTRIES(table)[ix];
             if (entry->value != DELETED && (entry->key == key || (hashwit->$class->__eq__(hashwit,key,entry->key)->val))) {
                 // found an entry with the same or equal key
