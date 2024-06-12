@@ -23,6 +23,9 @@ on:
       - main
     tags:
       - v*
+  schedule:
+    # Schedule to run daily
+    - cron: '4 0 * * *'
 
 # NOTE: Jobs for version tagged releases just pattern match on any tag starting
 # with 'v'. That's probably a version tag, but could be something else. Is there
@@ -37,13 +40,17 @@ jobs:
           - os: "macos"
             version: "12"
             arch: "x86_64"
+            prun: false
           - os: "macos"
             version: "13"
             arch: "x86_64"
+            prun: true
           - os: "macos"
             version: "14"
             arch: "aarch64"
+            prun: true
     runs-on: ${{ matrix.os }}-${{ matrix.version }}
+    if: ${{ matrix.prun }}
     steps:
       - name: "Show env"
         run: env
@@ -58,6 +65,7 @@ jobs:
       - name: "Check out repository code"
         uses: actions/checkout@v4
       - name: "Cache stuff"
+        if: matrix.pr-run == true
         uses: actions/cache@v4
         with:
           path: |
@@ -97,15 +105,21 @@ jobs:
         include:
           - os: "debian"
             version: "11"
+            pr-run: false
           - os: "debian"
             version: "12"
+            pr-run: true
           - os: "ubuntu"
             version: "22.04"
+            pr-run: false
           - os: "ubuntu"
             version: "23.04"
+            pr-run: false
           - os: "ubuntu"
             version: "23.10"
+            pr-run: false
     runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || (github.event_name == 'pull_request' && matrix.pr-run == true)
     container:
       image: ${{ matrix.os }}:${{ matrix.version }}
     steps:
@@ -120,6 +134,7 @@ jobs:
       - name: "Check out repository code"
         uses: actions/checkout@v4
       - name: "Cache stuff"
+        if: matrix.pr-run == true
         uses: actions/cache@v4
         with:
           path: |
