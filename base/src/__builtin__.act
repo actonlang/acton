@@ -79,6 +79,20 @@ class list[A] (object):
         NotImplemented
     def pop(self, n :?int) -> A:
         NotImplemented
+    # TODO: improve this, to like A(Eq) or something
+    # generic type B should really just be A(Eq), but I don't think we can say
+    # that A is a generic type without constraints in one place and then adds
+    # constraints in another, so using B is a bit of a workaround.
+    def index[B(Eq)](self, val: B, start: int=0, stop: ?int) -> int:
+        """Return the index of the first occurrence of val in the list
+
+        The optional arguments start and stop are interpreted as in slice
+        notation and will limit the search to the slice of the list from start
+        to stop.
+
+        Raises KeyError if val is not in the searched list / slice.
+        """
+        NotImplemented
 
 class range (value):
     """Return an object that produces a sequence of integers from start

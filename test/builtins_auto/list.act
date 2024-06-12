@@ -1,7 +1,52 @@
+import testing
+
 """Test lists
 """
 
+def test_list_index():
+    l = [1, 2, 3, 1, 2, 5, 1]
+    if l.index(1) != 0:
+        raise testing.NotEqualError(0, l.index(1))
+
+    if l.index(2) != 1:
+        raise testing.NotEqualError(1, l.index(2))
+
+    if l.index(1, 1) != 3:
+        raise testing.NotEqualError(0, l.index(1, 1))
+
+    try:
+        l.index(3, 3)
+    except KeyError:
+        pass
+
+def test_list_index_errs():
+    l = [1, 2, 3]
+    try:
+        l.index(1, -1)
+    except ValueError:
+        try:
+            l.index(1, 4)
+        except ValueError:
+            try:
+                l.index(1, 1, -1)
+            except ValueError:
+                try:
+                    l.index(1, 1, 0)
+                except ValueError:
+                    try:
+                        l.index(1, 1, 1)
+                    except ValueError:
+                        return
+    raise testing.NotRaisesError("expected ValueError for l.index(...)")
+
+
 actor main(env):
+    try:
+        test_list_index()
+        test_list_index_errs()
+    except Exception as e:
+        print("Unexpected exception", e)
+        await async env.exit(1)
     l: list[int] = [1, 2]
 
     l.append(3)
@@ -19,9 +64,9 @@ actor main(env):
         print("Unexpected result of list.insert(2, 37):", l)
         await async env.exit(1)
 
-#    if l.index(37) != 2:
-#        print("Unexpected result of list.index(37):", l)
-#        await async env.exit(1)
+    if l.index(37) != 2:
+        print("Unexpected result of list.index(37):", l)
+        await async env.exit(1)
 
     l2 = l.copy()
     if l2 != [0, 1, 37, 2, 3]:
