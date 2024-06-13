@@ -425,14 +425,14 @@ B_NoneType B_SetD_setD_discard (B_SetD_set wit, B_set set, $WORD elem) {
 }
 
 $WORD B_SetD_setD_pop (B_SetD_set wit, B_set set) {
+    if (set->numelements == 0)
+        $RAISE((B_BaseException)$NEW(B_ValueError, to$str("pop from an empty set")));
+
     $WORD res;
     // Make sure the search finger is in bounds 
     B_setentry *entry = set->table + (set->finger & set->mask);
     B_setentry *limit = set->table + set->mask;
 
-    if (set->numelements == 0) {
-        return NULL;
-    }
     while (entry->key == NULL || entry->key==dummy) {
         entry++;
         if (entry > limit)

@@ -1,4 +1,26 @@
+
+def test_set_pop():
+    s = {1, 2, 3}
+    if s.pop() not in {1, 2, 3}:
+        raise ValueError("pop() returned an invalid value")
+    if len(s) != 2:
+        raise ValueError("pop() did not remove an element")
+    s.pop()
+    s.pop()
+    try:
+        s.pop()
+    except ValueError:
+        pass
+    else:
+        raise ValueError("pop() did not raise an exception when called on an empty set")
+
 actor main(env):
+    try:
+        test_set_pop()
+    except Exception as e:
+        print("Unexpected exception during testing:", e)
+        await async env.exit(1)
+
     s = {400}
     for i in range(13, 1000):
         s.add(i*i)
