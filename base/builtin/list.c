@@ -182,6 +182,31 @@ $WORD B_listD_pop(B_list lst, B_int i) {
     shrink(lst);
     return res;
 }
+
+B_int B_listD_index(B_list self, B_Eq W_EqD_B, $WORD val, B_int start, B_int stop) {
+    int strt = 0;
+    if (start)
+        strt = from$int(start);
+    if (strt < 0)
+        $RAISE((B_BaseException)$NEW(B_ValueError, to$str("start position must be >= 0")));
+    if (strt > self->length)
+        $RAISE((B_BaseException)$NEW(B_ValueError, to$str("start position must not exceed list length")));
+    int stp = self->length;
+    if (stop)
+        stp = from$int(stop);
+    if (stp <= strt)
+        $RAISE((B_BaseException)$NEW(B_ValueError, to$str("stop position must be higher than start position")));
+    if (stp > self->length)
+        stp = self->length;
+    for (int i=strt; i < stp; i++) {
+        B_value elem = (B_value)self->data[i];
+        B_bool eq = W_EqD_B->$class->__eq__(W_EqD_B, val, elem);
+        if (eq->val)
+            return to$int(i);
+    }
+    $RAISE((B_BaseException)$NEW(B_KeyError, val, to$str("element is not in list")));
+}
+
     
 
 // B_OrdD_list ////////////////////////////////////////////////////////
