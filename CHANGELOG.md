@@ -20,6 +20,9 @@
   - For example, `acton test --module foo` to only run tests in module foo
 - Improved printing of test results for test modules that crashed
   - The error is now printed for each individual test in the test module
+- Added `list.index(val, start=0, stop: ?int)` to get the first index of an
+  element in a list. It can be constrained through the start and stop
+  parameters.
 
 ## Changed
 - `re.match()` now returns `Match` object where the group is `list[?str]`. It
@@ -29,6 +32,7 @@
   - For example, consider `foo((123)|bar)` which matches either `foo123` or
     `foobar`. The inner `(123)` group is ORed and so it will have no match for
     `foobar`, thus we get the result `m.group = ["foobar", "bar", None]`
+- `set.pop()` now throws `ValueError` for an empty set
 
 ## Fixed
 - Fixed tuple type inference
@@ -47,6 +51,8 @@
     no character 23 and so the length of the slice is 0 which would trigger a
     `SIGILL` when compiled in `--dev` mode (which comes with lots of extra
     UBsan)
+- Fix dict corruption issue #1805
+- `set.pop()` now does not crash for an empty list (it threw NULL before)
 
 ### Testing / CI
 - Added performance test to CI
@@ -68,6 +74,10 @@
     - We do not currently inspect the results to give a pass / fail score,
       they're just printed in the CI output for a human to look at
     - Natural variance seems to hover around +-5%, which feels OK
+- Temporary fix of building Acton by using our own mirror for the Zig tar ball.
+  We are using a particular nightly v0.12.0 build that is no longer available
+  for download from ziglang.org and so we now mirror it ourselves. This affects
+  both builds in CI and local builds.
 
 
 ## [0.22.0] (2024-04-14)
