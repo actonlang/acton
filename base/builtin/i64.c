@@ -50,26 +50,23 @@ B_i64 B_i64D___deserialize__(B_i64 n, $Serial$state state) {
 }
 
 B_bool B_i64D___bool__(B_i64 n) {
-    return toB_bool(n->val != 0);
+    return toB_bool(n != 0);
 }
 
 B_str B_i64D___str__(B_i64 n) {
-    return $FORMAT("%ld", n->val);
+    return $FORMAT("%ld", (long)n);
 }
 
 B_str B_i64D___repr__(B_i64 n) {
-    return $FORMAT("%ld", n->val);
+    return $FORMAT("%ld", (long)n);
 }
 
 B_i64 toB_i64(long i) {
-    B_i64 res = acton_malloc(sizeof(struct B_i64));
-    res->$class = &B_i64G_methods;
-    res->val = i;
-    return res;
+    return (B_i64)i;
 }
 
 long fromB_i64(B_i64 w) {
-    return w->val;
+    return (long)w;
 }
 
                   
@@ -78,11 +75,11 @@ long fromB_i64(B_i64 w) {
 
  
 B_i64 B_IntegralD_i64D___add__(B_IntegralD_i64 wit,  B_i64 a, B_i64 b) {
-    return toB_i64(a->val + b->val);
+    return toB_i64((long)a + (long)b);
 }  
 
 B_complex B_IntegralD_i64D___complex__(B_IntegralD_i64 wit, B_i64 a) {
-    return toB_complex((double)a->val);
+    return toB_complex((double)((long)a));
 }
 
 B_i64 B_IntegralD_i64D___fromatom__(B_IntegralD_i64 wit, B_atom a) {
@@ -90,19 +87,19 @@ B_i64 B_IntegralD_i64D___fromatom__(B_IntegralD_i64 wit, B_atom a) {
 }
 
 B_i64 B_IntegralD_i64D___mul__(B_IntegralD_i64 wit,  B_i64 a, B_i64 b) {
-    return toB_i64(a->val * b->val);
+    return toB_i64((long)a * (long)b);
 }  
   
 B_i64 B_IntegralD_i64D___pow__(B_IntegralD_i64 wit,  B_i64 a, B_i64 b) {
-    if ( b->val < 0) {
+    if ((long)b< 0) {
         // raise VALUEERROR;
         return NULL;
     }
-    return toB_i64(i64_pow(a->val,b->val));
+    return toB_i64(i64_pow((long)a,(long)b));
 }
 
 B_i64 B_IntegralD_i64D___neg__(B_IntegralD_i64 wit,  B_i64 a) {
-    return toB_i64(-a->val);
+    return toB_i64(-(long)a);
 }
 
 B_i64 B_IntegralD_i64D___pos__(B_IntegralD_i64 wit,  B_i64 a) {
@@ -118,7 +115,7 @@ $WORD B_IntegralD_i64D_imag(B_IntegralD_i64 wit, B_i64 a, B_Real wit2) {
 }
 
 $WORD B_IntegralD_i64D___abs__(B_IntegralD_i64 wit, B_i64 a, B_Real wit2) {
-    return wit2->$class->__fromatom__(wit2,(B_atom)toB_i64(labs(a->val)));
+    return wit2->$class->__fromatom__(wit2,(B_atom)toB_i64(labs((long)a)));
 }
 
 B_i64 B_IntegralD_i64D_conjugate(B_IntegralD_i64 wit,  B_i64 a) {
@@ -126,7 +123,7 @@ B_i64 B_IntegralD_i64D_conjugate(B_IntegralD_i64 wit,  B_i64 a) {
 }
 
 B_float B_IntegralD_i64D___float__ (B_IntegralD_i64 wit, B_i64 n) {
-    return to$float((double)n->val);
+    return toB_float((double)((long)n));
 }
 
 $WORD B_IntegralD_i64D___trunc__ (B_IntegralD_i64 wit, B_i64 n, B_Integral wit2) {
@@ -142,7 +139,7 @@ $WORD B_IntegralD_i64D___ceil__ (B_IntegralD_i64 wit, B_i64 n, B_Integral wit2) 
 }
   
 B_i64 B_IntegralD_i64D___round__ (B_IntegralD_i64 wit, B_i64 n, B_int p) {
-    long nval = n->val;
+    long nval = (long)n;
     if (nval<0)
         return toB_i64(-B_IntegralD_i64D___round__(wit,toB_i64(-nval),p)->val);
     long pval = p==NULL ? 0 : from$int(p);
@@ -172,53 +169,55 @@ B_int B_IntegralD_i64D___index__(B_IntegralD_i64 wit, B_i64 n) {
 }
 
 B_tuple B_IntegralD_i64D___divmod__(B_IntegralD_i64 wit, B_i64 a, B_i64 b) {
-    long n = a->val;
-    long d = b->val;
+    long n = (long)a;
+    long d = (long)b;
     return $NEWTUPLE(2, toB_i64(n/d), toB_i64(n%d));
 }
 
 B_i64 B_IntegralD_i64D___floordiv__(B_IntegralD_i64 wit, B_i64 a, B_i64 b) {
-    if (b->val == 0)
+    if (b == 0)
         $RAISE((B_BaseException)$NEW(B_ZeroDivisionError, to$str("division by zero")));
-    return toB_i64(a->val / b->val);
+    return toB_i64((long)a / (long)b);
 }
 
 B_i64 B_IntegralD_i64D___mod__(B_IntegralD_i64 wit, B_i64 a, B_i64 b) {
-    return toB_i64(a->val % b->val);
+    if (b == 0)
+        $RAISE((B_BaseException)$NEW(B_ZeroDivisionError, to$str("modulo zero")));
+    return toB_i64((long)a%(long)b);
 }
 
 B_i64 B_IntegralD_i64D___lshift__(B_IntegralD_i64 wit,  B_i64 a, B_int b) {
-    return toB_i64(a->val << from$int(b));
+    return toB_i64((long)a << from$int(b));
 }
 
 B_i64 B_IntegralD_i64D___rshift__(B_IntegralD_i64 wit,  B_i64 a, B_int b) {
-    return toB_i64(a->val >> from$int(b));
+    return toB_i64((long)a >> from$int(b));
 }
  
 B_i64 B_IntegralD_i64D___invert__(B_IntegralD_i64 wit,  B_i64 a) {
-    return toB_i64(~a->val);
+    return toB_i64(~(long)a);
 }
 
 
 // B_LogicalD_IntegralD_i64  ////////////////////////////////////////////////////////////////////////////////////////
 
 B_i64 B_LogicalD_IntegralD_i64D___and__(B_LogicalD_IntegralD_i64 wit,  B_i64 a, B_i64 b) {
-    return toB_i64(a->val & b->val);
+    return toB_i64((long)a & (long)b);
 }
                                                  
 B_i64 B_LogicalD_IntegralD_i64D___or__(B_LogicalD_IntegralD_i64 wit,  B_i64 a, B_i64 b) {
-    return toB_i64(a->val | b->val);
+    return toB_i64((long)a | (long)b);
 }
                                                  
 B_i64 B_LogicalD_IntegralD_i64D___xor__(B_LogicalD_IntegralD_i64 wit,  B_i64 a, B_i64 b) {
-    return toB_i64(a->val ^ b->val);
+    return toB_i64((long)a ^ (long)b);
 }  
  
 // B_MinusD_IntegralD_i64  ////////////////////////////////////////////////////////////////////////////////////////
 
  
 B_i64 B_MinusD_IntegralD_i64D___sub__(B_MinusD_IntegralD_i64 wit,  B_i64 a, B_i64 b) {
-    return toB_i64(a->val - b->val);
+    return toB_i64((long)a - (long)b);
 }  
 
 // B_DivD_i64  ////////////////////////////////////////////////////////////////////////////////////////
@@ -227,45 +226,50 @@ B_i64 B_MinusD_IntegralD_i64D___sub__(B_MinusD_IntegralD_i64 wit,  B_i64 a, B_i6
 B_float B_DivD_i64D___truediv__ (B_DivD_i64 wit, B_i64 a, B_i64 b) {
     if (b->val == 0)
         $RAISE((B_BaseException)$NEW(B_ZeroDivisionError, to$str("division by zero")));
-    return to$float((double)a->val/(double)b->val);
+    return to$float((double)(long)a/(double)(long)b);
 }
 
 // B_OrdD_i64  ////////////////////////////////////////////////////////////////////////////////////////
 
 B_bool B_OrdD_i64D___eq__ (B_OrdD_i64 wit, B_i64 a, B_i64 b) {
-    return toB_bool(a->val == b->val);
+    return toB_bool(a==b);
 }
 
 B_bool B_OrdD_i64D___ne__ (B_OrdD_i64 wit, B_i64 a, B_i64 b) {
-    return toB_bool(a->val != b->val);
+    return toB_bool(a != b);
 }
 
 B_bool B_OrdD_i64D___lt__ (B_OrdD_i64 wit, B_i64 a, B_i64 b) {
-    return toB_bool(a->val < b->val);
+    return toB_bool((long)a < (long)b);
 }
 
 B_bool B_OrdD_i64D___le__ (B_OrdD_i64 wit, B_i64 a, B_i64 b) {
-    return toB_bool(a->val <= b->val);
+    return toB_bool((long)a <= (long)b);
 }
 
 B_bool B_OrdD_i64D___gt__ (B_OrdD_i64 wit, B_i64 a, B_i64 b) {
-    return toB_bool(a->val > b->val);
+    return toB_bool((long)a > (long)b);
 }
 
 B_bool B_OrdD_i64D___ge__ (B_OrdD_i64 wit, B_i64 a, B_i64 b) {
-    return toB_bool(a->val >= b->val);
+    return toB_bool((long)a >= (long)b);
 }
 
 // B_HashableD_i64 ///////////////////////////////////////////////////////////////////////////////////////////////////////
 
 B_bool B_HashableD_i64D___eq__(B_HashableD_i64 wit, B_i64 a, B_i64 b) {
-    return toB_bool(a->val == b->val);
+    return toB_bool(a == b);
 }
 
 B_bool B_HashableD_i64D___ne__(B_HashableD_i64 wit, B_i64 a, B_i64 b) {
-    return toB_bool(a->val != b->val);
+    return toB_bool(a != b);
 }
 
 B_int B_HashableD_i64D___hash__(B_HashableD_i64 wit, B_i64 a) {
-    return to$int(B_i64D_hash(a));
+    return to$int(long_hash((long)a));
+}
+
+B_NoneType B_prI64(B_i64 n) {
+    printf("%ld\n",(long)n);
+    return B_None;
 }

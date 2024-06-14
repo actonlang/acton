@@ -24,3 +24,5 @@ long i64_pow(long a, long e); // used also for ndarrays
 #define ORD_B_i64__gt__(a,b)  (a->val > b->val)
 #define ORD_B_i64__ge__(a,b)  (a->val >= b->val)
 */
+
+B_NoneType B_prI64(B_i64 n);

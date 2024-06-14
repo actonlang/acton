@@ -56,7 +56,7 @@
 #define PY_BIG_ENDIAN 0
 #define PY_LITTLE_ENDIAN 1
 
-static long long_hash (long u) {
+long long_hash (long u) {
     long sign=1;
     if (u<0)  {
 

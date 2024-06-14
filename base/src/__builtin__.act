@@ -892,6 +892,9 @@ def print(*args, sep: str=" ", end: str="\n", err: bool=False, flush: bool=False
     """
     NotImplemented
 
+def prI64(n : i64) -> None:
+    NotImplemented
+
 def repr(x : value):
     return x.__repr__()
 

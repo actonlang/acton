@@ -10,3 +10,5 @@ long B_bytesD_hash(B_bytes s);
 
 long $pointer_hash($WORD w);
 long B_tupleD_hash(B_HashableD_tuple wit,B_tuple tup);
+
+long long_hash (long u);
