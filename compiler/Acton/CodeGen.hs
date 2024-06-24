@@ -815,12 +815,12 @@ instance Gen Expr where
         | f `elem` B.mathfuns       = genCall env [] e p
         | tCon (TC (gBuiltin (noq f)) []) `elem` B.integralTypes   -- f is the constructor for an integer type, so check if argument e is a literal
                                     = genUnboxedInt env (posargs p) e
-    gen env (UnBox _ e@(Call _ (Dot _ (Var _ w) op) (PosArg x (PosArg y PosNil)) KwdNil))  -- use macro for int (in)equality tests
-                                    = case findQName w env of
-                                        NVar (TCon _ (TC p [TCon _ (TC t [])]))
-                                          | (p==qnOrd || p==qnEq) && elem t [qnInt, qnI64] ->
-                                             text "ORD_" <> genQName env t <> text (nstr op) <> parens(gen env x <>comma <+> gen env y) 
-                                        _ -> genBool env e <> text "->val" 
+    -- gen env (UnBox _ e@(Call _ (Dot _ (Var _ w) op) (PosArg x (PosArg y PosNil)) KwdNil))  -- use macro for int (in)equality tests
+    --                                 = case findQName w env of
+    --                                     NVar (TCon _ (TC p [TCon _ (TC t [])]))
+    --                                       | (p==qnOrd || p==qnEq) && elem t [qnInt, qnI64] ->
+    --                                          text "ORD_" <> genQName env t <> text (nstr op) <> parens(gen env x <>comma <+> gen env y) 
+    --                                     _ -> genBool env e <> text "->val" 
 
     gen env (UnBox _ (IsInstance _ e c))
                                     = gen env primISINSTANCE0 <> parens(gen env e <>comma <+> genQName env c)
