@@ -26,14 +26,14 @@ B_bool B_boolD___bool__(B_bool self) {
 }
 
 B_str B_boolD___str__(B_bool self) {
-    if (self->val)
+    if (self)
         return to$str("True");
     else
         return to$str("False");
 }
 
 B_str B_boolD___repr__(B_bool self) {
-    if (self->val)
+    if (self)
         return to$str("True");
     else
         return to$str("False");
@@ -51,6 +51,7 @@ B_bool B_boolG_new(B_value s) {
     return $NEW(B_bool, s);
 }
 
+/*
 B_bool toB_bool(long b) {
     B_bool res = acton_malloc(sizeof(struct B_bool));
     res->$class = &B_boolG_methods;
@@ -61,12 +62,21 @@ B_bool toB_bool(long b) {
 long fromB_bool(B_bool b) {
     return b->val;
 }
+*/
+
+B_bool toB_bool(long b){
+    return (B_bool)b;
+}
+
+long fromB_bool(B_bool b) {
+    return (long)b;
+}
 
 struct B_bool $t = {&B_boolG_methods,1L};
 struct B_bool $f = {&B_boolG_methods,0L};
 
-B_bool B_True = &$t;
-B_bool B_False = &$f;
+B_bool B_True = (B_bool)1L;
+B_bool B_False = (B_bool)0L;
 
 
 B_bool $default__bool__(B_value self) {
@@ -76,14 +86,14 @@ B_bool $default__bool__(B_value self) {
 // B_HashableD_bool ///////////////////////////////////////////////////////////////////////////////////////////////////////
 
 B_bool B_HashableD_boolD___eq__(B_HashableD_bool wit, B_bool a, B_bool b) {
-    return toB_bool(a->val == b->val);
+    return toB_bool(a == b);
 }
 
 B_bool B_HashableD_boolD___ne__(B_HashableD_bool wit, B_bool a, B_bool b) {
-    return toB_bool(a->val != b->val);
+    return toB_bool(a != b);
 }
 
 B_int B_HashableD_boolD___hash__(B_HashableD_bool wit, B_bool a) {
-    return to$int(B_i64D_hash((B_i64)a));
+    return  to$int(long_hash((long)a));
 }
  
