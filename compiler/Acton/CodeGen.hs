@@ -828,11 +828,11 @@ instance Gen Expr where
     gen env (UnBox _ (Float _ x s)) = text s
     gen env (UnBox _ v@(Var _ (NoQ n)))
        | isUnboxed n                = gen env v
-    gen env (UnBox _ e@Var{})       = if t == tI64
+    gen env (UnBox _ e@Var{})       = if t == tI64 || t == tBool
                                       then text "(long)" <> gen env e
                                       else gen env e <> text "->val"
       where t                       = typeOf env e
-    gen env (UnBox _ e)             = if t == tI64
+    gen env (UnBox _ e)             = if t == tI64 || t == tBool
                                       then text "(long)" <> parens (gen env e)
                                       else parens (gen env e) <> text "->val"
       where t                       = typeOf env e
