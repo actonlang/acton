@@ -246,8 +246,10 @@ actor RunTestList(env, args):
             raise ValueError("Duplicate list of tests from module: " + module_name)
         if isinstance(update, dict):
             _module_tests[module_name] = []
-            for test in update["tests"]:
-                _module_tests[module_name].append(test["name"])
+            update_tests = update["tests"]
+            if isinstance(update_tests, dict):
+                for test in update_tests.values():
+                    _module_tests[module_name].append(test["definition"]["name"])
         else:
             raise ValueError("Unexpected JSON data from module test: " + module_name)
 
