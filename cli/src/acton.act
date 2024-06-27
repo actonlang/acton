@@ -185,12 +185,15 @@ actor RunModuleTest(process_cap, modname, test_cmd, on_json_output, on_test_erro
     var stdout_buf = b""
     var stderr_buf = b""
     var errout = ""
-    var likely_json = True
+    var likely_json = False
 
     def on_stdout(p, data: bytes):
         stdout_buf += data
 
     def on_stderr(p, data):
+        if not likely_json:
+            if data.startswith(b"{"):
+                likely_json = True
         stderr_buf += data
         lines = stderr_buf.splitlines(True)
         stderr_buf = b""
@@ -201,13 +204,12 @@ actor RunModuleTest(process_cap, modname, test_cmd, on_json_output, on_test_erro
                     try:
                         upd = json.decode(line.decode())
                     except ValueError:
-                        #print("Invalid json:", line)
-                        likely_json = False
+                        pass
                     else:
                         on_json_output(upd)
                 else:
                     # incomplete line
-                    _stderr_buf = line
+                    stderr_buf = line
                     break
             if not likely_json:
                 errout += line.decode()
@@ -246,8 +248,10 @@ actor RunTestList(env, args):
             raise ValueError("Duplicate list of tests from module: " + module_name)
         if isinstance(update, dict):
             _module_tests[module_name] = []
-            for test in update["tests"]:
-                _module_tests[module_name].append(test["name"])
+            update_tests = update["tests"]
+            if isinstance(update_tests, dict):
+                for test in update_tests.values():
+                    _module_tests[module_name].append(test["definition"]["name"])
         else:
             raise ValueError("Unexpected JSON data from module test: " + module_name)
 
