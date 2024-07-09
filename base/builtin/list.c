@@ -15,7 +15,7 @@
 // Auxiliary functions /////////////////////////////////////////////////////////////////////////////////////////////////////
  
 // For now, expansion doubles capacity. 
-static void expand(B_list lst,int n) {
+static void expand(B_list lst, int n) {
     if (lst->capacity >= lst->length + n)
         return;
     int newcapacity = lst->capacity==0 ? 1 : lst->capacity;
