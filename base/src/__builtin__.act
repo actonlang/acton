@@ -772,7 +772,8 @@ protocol Set[A (Eq)] (Container[A], Ord, Logical, Minus):
     isdisjoint  : (Self,Self) -> bool
     add         : mut(A) -> None
     discard     : mut(A) -> None
-    pop         : () -> A
+    pop         : mut() -> A
+    update      : mut(Iterable[A]) -> None
 
 
 ## Collection protocol extensions ########################################

@@ -14,9 +14,29 @@ def test_set_pop():
     else:
         raise ValueError("pop() did not raise an exception when called on an empty set")
 
+def test_set_update_int():
+    s1 = {1, 2, 3}
+    s2 = {3, 4, 5}
+    sexp = {1, 2, 3, 4, 5}
+
+    s1.update(s2)
+    if s1 != sexp:
+        raise ValueError("update() did not work correctly, result is " + str(s1))
+
+def test_set_update_str():
+    s1 = {"a", "b", "c"}
+    s2 = {"c", "d", "e"}
+    sexp = {"a", "b", "c", "d", "e"}
+
+    s1.update(s2)
+    if s1 != sexp:
+        raise ValueError("update() did not work correctly, result is " + str(s1))
+
 actor main(env):
     try:
         test_set_pop()
+        test_set_update_int()
+        test_set_update_str()
     except Exception as e:
         print("Unexpected exception during testing:", e)
         await async env.exit(1)

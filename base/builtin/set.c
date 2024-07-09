@@ -172,6 +172,7 @@ void B_set_add_entry(B_set set, B_Hashable hashwit, $WORD key, long hash) {
         return;
     B_set_table_resize(set, set->numelements>50000 ? set->numelements*2 : set->numelements*4);
     return;
+
  found_active:
     return;
 }
@@ -417,6 +418,21 @@ B_bool B_SetD_setD_isdisjoint (B_SetD_set wit, B_set set, B_set other) {
     return toB_bool(res);
 }
 
+// TODO: ideally this could be defined in .act file instead of C since we just
+// need to call the .add() method, but that doesn't currently seem to work
+B_NoneType B_SetD_setD_update (B_SetD_set wit, B_set set, B_Iterable otherwit, $WORD other) {
+    B_Hashable hashwit = wit->W_HashableD_AD_SetD_set;
+    if (set == other)
+        return B_None;
+
+    B_Iterator it = otherwit->$class->__iter__(otherwit, other);
+    $WORD nxt;
+    while((nxt = it->$class->__next__(it))) {
+        B_set_add_entry(set, hashwit, nxt, from$int(hashwit->$class->__hash__(hashwit,nxt)));
+    }
+
+    return B_None;
+}
 
 B_NoneType B_SetD_setD_discard (B_SetD_set wit, B_set set, $WORD elem) {
     B_Hashable hashwit = wit->W_HashableD_AD_SetD_set;
