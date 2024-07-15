@@ -80,6 +80,15 @@
   We are using a particular nightly v0.12.0 build that is no longer available
   for download from ziglang.org and so we now mirror it ourselves. This affects
   both builds in CI and local builds.
+- Fix GitHub Actions to run on Ubuntu 18.04
+  - The artifact download action uses Node.JS to run and as GitHub has imposed
+    constraints and new defaults, this has been magically updated to use a newer
+    version of Node.JS than before. The newer Node version is compiled using
+    glibc 2.28 and that's too new for Ubuntu 18.04, so the end result is that
+    you basically can't use the common GitHub Actions with Ubuntu 18.04 or
+    similar older distros. What a weird way to treat your CI users by GitHub!?
+    Anyhow, we work around this by explicitly enabling the use of the old Node
+    again.
 
 
 ## [0.22.0] (2024-04-14)
