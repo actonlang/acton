@@ -277,6 +277,12 @@ jobs:
             version: "23.04"
           - os: "ubuntu"
             version: "23.10"
+    env:
+      # This makes it possible for the GitHub Action itself to run using an
+      # older version of node, which is the only possibility to get it running
+      # on Ubuntu 18.04 (in the matrix above)
+      ACTIONS_RUNNER_FORCE_ACTIONS_NODE_VERSION: node16
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
     runs-on: ubuntu-latest
     container:
       image: ${{ matrix.os }}:${{ matrix.version }}
