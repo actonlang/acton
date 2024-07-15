@@ -9,8 +9,9 @@
   - This adds an extra pass to the compiler to handle boxing and unboxing
   - For some programs, the code is now pretty much optimal
     - For example, the C code generated from `test/perf/src/dct.act` looks
-      pretty much as one would write it by hand. It does 0 mallocs and runs
-      about 20x faster than before unboxing (depending a bit on computer)
+      pretty much as one would write it by hand and thus runs at about the
+      "speed of C". It does 0 mallocs and runs about 20x faster than before
+      unboxing (depending a bit on computer).
   - class and actor attributes are still boxed
     - This is likely the most important future work around unboxing since
       individual mallocs for class & actor attributes typically account for a
@@ -36,7 +37,7 @@
 
 ## Fixed
 - Fixed tuple type inference
-  - Tuples with named fields can now be properly type infered and won't require
+  - Tuples with named fields can now be properly type inferred
 - `acton test perf` now limits concurrency to 1 to get better results
 - Fix `str.strip()` on empty strings, it would previously return `\n` but now
   returns an empty string as it should
@@ -53,6 +54,7 @@
     UBsan)
 - Fix dict corruption issue #1805
 - `set.pop()` now does not crash for an empty list (it threw NULL before)
+- Fix decoding of buffered test output
 
 ### Testing / CI
 - Added performance test to CI
