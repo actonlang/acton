@@ -76,6 +76,9 @@
     - We do not currently inspect the results to give a pass / fail score,
       they're just printed in the CI output for a human to look at
     - Natural variance seems to hover around +-5%, which feels OK
+- Stop CI testing on MacOS 11 as it has been deprecated by Github
+- Start CI testing on Ubuntu 24.04
+- Stop CI testing on Ubuntu 23.04 and 23.10 as they are EoL
 - Temporary fix of building Acton by using our own mirror for the Zig tar ball.
   We are using a particular nightly v0.12.0 build that is no longer available
   for download from ziglang.org and so we now mirror it ourselves. This affects

@@ -102,9 +102,7 @@ jobs:
           - os: "ubuntu"
             version: "22.04"
           - os: "ubuntu"
-            version: "23.04"
-          - os: "ubuntu"
-            version: "23.10"
+            version: "24.04"
     runs-on: ubuntu-latest
     container:
       image: ${{ matrix.os }}:${{ matrix.version }}
@@ -222,7 +220,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-11, macos-12, macos-13, macos-14]
+        os: [macos-12, macos-13, macos-14]
     runs-on: ${{ matrix.os }}
     steps:
       - name: "Machine info"
@@ -274,9 +272,7 @@ jobs:
           - os: "ubuntu"
             version: "22.04"
           - os: "ubuntu"
-            version: "23.04"
-          - os: "ubuntu"
-            version: "23.10"
+            version: "24.04"
     env:
       # This makes it possible for the GitHub Action itself to run using an
       # older version of node, which is the only possibility to get it running
