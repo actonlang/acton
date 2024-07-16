@@ -438,9 +438,9 @@ dist/backend%: backend/%
 # We depend on __builtin__.ty because the base/out directory will be populated
 # as a result of building it, and we want to copy those files!
 .PHONY: dist/base
-dist/base: base dist/base/out/types/__builtin__.ty
+dist/base: base base/build.zig dist/base/out/types/__builtin__.ty
 	@mkdir -p $@ $@/out
-	cp -a base/Acton.toml base/builtin base/rts base/src base/stdlib dist/base/
+	cp -a base/Acton.toml base/build.zig base/builtin base/rts base/src base/stdlib dist/base/
 	cp -a base/out/types dist/base/out/
 
 dist/bin/acton: bin/acton
