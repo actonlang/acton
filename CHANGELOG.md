@@ -9,8 +9,9 @@
   - This adds an extra pass to the compiler to handle boxing and unboxing
   - For some programs, the code is now pretty much optimal
     - For example, the C code generated from `test/perf/src/dct.act` looks
-      pretty much as one would write it by hand. It does 0 mallocs and runs
-      about 20x faster than before unboxing (depending a bit on computer)
+      pretty much as one would write it by hand and thus runs at about the
+      "speed of C". It does 0 mallocs and runs about 20x faster than before
+      unboxing (depending a bit on computer).
   - class and actor attributes are still boxed
     - This is likely the most important future work around unboxing since
       individual mallocs for class & actor attributes typically account for a
@@ -36,7 +37,7 @@
 
 ## Fixed
 - Fixed tuple type inference
-  - Tuples with named fields can now be properly type infered and won't require
+  - Tuples with named fields can now be properly type inferred
 - `acton test perf` now limits concurrency to 1 to get better results
 - Fix `str.strip()` on empty strings, it would previously return `\n` but now
   returns an empty string as it should
@@ -53,6 +54,7 @@
     UBsan)
 - Fix dict corruption issue #1805
 - `set.pop()` now does not crash for an empty list (it threw NULL before)
+- Fix decoding of buffered test output
 
 ### Testing / CI
 - Added performance test to CI
@@ -74,10 +76,22 @@
     - We do not currently inspect the results to give a pass / fail score,
       they're just printed in the CI output for a human to look at
     - Natural variance seems to hover around +-5%, which feels OK
+- Stop CI testing on MacOS 11 as it has been deprecated by Github
+- Start CI testing on Ubuntu 24.04
+- Stop CI testing on Ubuntu 23.04 and 23.10 as they are EoL
 - Temporary fix of building Acton by using our own mirror for the Zig tar ball.
   We are using a particular nightly v0.12.0 build that is no longer available
   for download from ziglang.org and so we now mirror it ourselves. This affects
   both builds in CI and local builds.
+- Fix GitHub Actions to run on Ubuntu 18.04
+  - The artifact download action uses Node.JS to run and as GitHub has imposed
+    constraints and new defaults, this has been magically updated to use a newer
+    version of Node.JS than before. The newer Node version is compiled using
+    glibc 2.28 and that's too new for Ubuntu 18.04, so the end result is that
+    you basically can't use the common GitHub Actions with Ubuntu 18.04 or
+    similar older distros. What a weird way to treat your CI users by GitHub!?
+    Anyhow, we work around this by explicitly enabling the use of the old Node
+    again.
 
 
 ## [0.22.0] (2024-04-14)
