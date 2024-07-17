@@ -60,6 +60,11 @@ simplify' env te tt eq cs                   = do eq1 <- reduce env eq cs
                                                  tt1 <- msubst tt
                                                  improve env1 te1 tt1 eq1 cs1
 
+quicksimp env eq []                         = return ([], eq)
+quicksimp env eq cs                         = do eq1 <- reduce env eq cs
+                                                 cs1 <- msubst =<< collectDeferred
+                                                 return (cs1, eq1)
+
 groupCs env cs                              = do st <- currentState
                                                  mapM mark ([1..] `zip` cs)
                                                  m <- foldM group Map.empty cs
@@ -184,6 +189,13 @@ solve' env select hist te tt eq cs
                                                  unify (DfltInfo NoLoc 5 Nothing []) t0 t
                                                  proceed (t:hist) cs
           where attrs                       = sortBy (\a b -> compare (nstr a) (nstr b)) $ nub [ n | Sel _ _ t n _ <- solve_cs, t == t0 ]
+        tryAlt t0@(TVar _ tv) t
+          | tvkind tv == KFX                = do t <- instwild env (kindOf env t0) t
+                                                 --traceM ("  # trying " ++ prstr t0 ++ " = " ++ prstr t)
+                                                 unify (DfltInfo NoLoc 5 Nothing []) t0 t
+                                                 (cs,eq) <- quicksimp env eq cs
+                                                 hist <- msubst hist
+                                                 solve' env select hist te tt eq cs
         tryAlt t0 t                         = do t <- instwild env (kindOf env t0) t
                                                  --traceM ("  # trying " ++ prstr t0 ++ " = " ++ prstr t)
                                                  unify (DfltInfo NoLoc 5 Nothing []) t0 t
