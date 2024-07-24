@@ -34,6 +34,9 @@ def run(source, cmd=None):
         print(f"Got a temp dir: {tmpdirname}")
         try:
             run_cmd(tmpdirname, "acton new example")
+            # stupid hack to get around some bug on macos where the newly
+            # created directory (by acton) is not visible to us, how?
+            time.sleep(0.1)
             source_file = open(tmpdirname + "/example/src/example.act", "w")
             source_file.write(source)
             source_file.close()

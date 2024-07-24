@@ -17,6 +17,8 @@
       individual mallocs for class & actor attributes typically account for a
       the lion's share of GC pressure
     - It is challenging around generics though
+- New `Set.update()` method to add items to a set from an iterable, such as a
+  list or another set
 - Added `--module` argument to `acton test` to select module to test
   - For example, `acton test --module foo` to only run tests in module foo
 - Improved printing of test results for test modules that crashed
