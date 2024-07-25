@@ -78,6 +78,13 @@
     - We do not currently inspect the results to give a pass / fail score,
       they're just printed in the CI output for a human to look at
     - Natural variance seems to hover around +-5%, which feels OK
+- Revamp PR testing to run on small set of platforms and run a nightly scheduled
+  test job that includes all platforms that were previously in the PR jobs
+  - This was triggered by the number of platforms reaching a higher number which
+    in turn has led to more cached data and as the GitHub Actions runner cache
+    is limited to 10GB, we hit the limit and got churn which meant that there
+    were always slow jobs. By reducing the number of PR jobs, they can continue
+    to run cached whereas the nightly jobs can run without a cache.
 - Stop CI testing on MacOS 11 as it has been deprecated by Github
 - Start CI testing on Ubuntu 24.04
 - Stop CI testing on Ubuntu 23.04 and 23.10 as they are EoL
