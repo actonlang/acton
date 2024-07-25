@@ -179,7 +179,7 @@ jobs:
           path: |
             ~/.cache/acton/
             ~/.stack
-          key: test-linux
+          key: test-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}
       - name: "chown our home dir to avoid stack complaining"
         run: chown -R root:root /github/home
       - name: "Install build prerequisites"
@@ -237,7 +237,7 @@ jobs:
           path: |
             ~/.cache/acton/
             ~/.stack
-          key: test-linux
+          key: build-debs
       - name: "Install build prerequisites"
         run: |
           apt-get update
