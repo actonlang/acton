@@ -101,6 +101,7 @@
     similar older distros. What a weird way to treat your CI users by GitHub!?
     Anyhow, we work around this by explicitly enabling the use of the old Node
     again.
+- Add caching for test-external-projects of C object files & archives
 
 
 ## [0.22.0] (2024-04-14)
