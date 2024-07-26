@@ -235,7 +235,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            ./debian/.debhelper/
+            ~/.cache/
           key: build-debs
       - name: "Show cache content"
         run: |
