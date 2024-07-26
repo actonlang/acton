@@ -128,14 +128,14 @@ jobs:
         if: github.event_name != 'schedule'
         id: setmatrix_pr
         run: |
-          MATRIX_JSON='{\"include\":[{\"os\":\"debian\",\"version\":\"12\",\"cache\":true}]}'
+          MATRIX_JSON='{\"include\":[{\"os\":\"debian\",\"version\":\"12\",\"arch\":\"x86_64\",\"cache\":true}]}'
           echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
 
       - name: "Set Matrix for nightly run"
         if: github.event_name == 'schedule'
         id: setmatrix_cron
         run: |
-          MATRIX_JSON='{\"include\":[{\"os\":\"debian\",\"version\":\"11\",\"cache\":false},{\"os\":\"debian\",\"version\":\"12\",\"cache\":true},{\"os\":\"ubuntu\",\"version\":\"22.04\",\"cache\":false},{\"os\":\"ubuntu\",\"version\":\"24.04\",\"cache\":false}]}'
+          MATRIX_JSON='{\"include\":[{\"os\":\"debian\",\"version\":\"11\",\"arch\":\"x86_64\",\"cache\":false},{\"os\":\"debian\",\"version\":\"12\",\"arch\":\"x86_64\",\"cache\":true},{\"os\":\"ubuntu\",\"version\":\"22.04\",\"arch\":\"x86_64\",\"cache\":false},{\"os\":\"ubuntu\",\"version\":\"24.04\",\"arch\":\"x86_64\",\"cache\":false}]}'
           echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
 
       - name: "Set final matrix output"
