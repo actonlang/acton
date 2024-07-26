@@ -235,8 +235,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            ~/.cache/acton/
-            ~/.stack
+            ./debian/.debhelper/
           key: build-debs
       - name: "Install build prerequisites"
         run: |
