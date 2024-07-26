@@ -237,6 +237,12 @@ jobs:
           path: |
             ./debian/.debhelper/
           key: build-debs
+      - name: "Show cache content"
+        run: |
+          pwd
+          ls
+          find .
+          ls ..
       - name: "Install build prerequisites"
         run: |
           apt-get update
