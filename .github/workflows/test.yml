@@ -428,6 +428,12 @@ jobs:
     container:
       image: debian:experimental
     steps:
+      - name: "Cache stuff"
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/acton/
+          key: test-external-projects
       - name: "Download .deb files"
         uses: actions/download-artifact@v3
         with:
