@@ -32,188 +32,188 @@ on:
 # a better way to match?
 
 jobs:
-  matrix_maker_macos:
-    runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.setmatrix.outputs.matrix }}
-    steps:
-      - name: "Set Matrix for PR or push"
-        if: github.event_name != 'schedule'
-        id: setmatrix_pr
-        run: |
-          MATRIX_JSON='{\"include\":[{\"os\":\"macos\",\"version\":\"12\",\"arch\":\"x86_64\",\"cache\":true},{\"os\":\"macos\",\"version\":\"14\",\"arch\":\"aarch64\",\"cache\":true}]}'
-          echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
-
-      - name: "Set Matrix for nightly run"
-        if: github.event_name == 'schedule'
-        id: setmatrix_cron
-        run: |
-          MATRIX_JSON='{\"include\":[{\"os\":\"macos\",\"version\":\"12\",\"arch\":\"x86_64\",\"cache\":true},{\"os\":\"macos\",\"version\":\"13\",\"arch\":\"x86_64\",\"cache\":true},{\"os\":\"macos\",\"version\":\"14\",\"arch\":\"aarch64\",\"cache\":true}]}'
-          echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
-
-      - name: "Set final matrix output"
-        id: setmatrix
-        run: |
-          if [ "${{ github.event_name }}" == "schedule" ]; then
-            echo "matrix=${{ steps.setmatrix_cron.outputs.matrix }}" >> $GITHUB_OUTPUT
-          else
-            echo "matrix=${{ steps.setmatrix_pr.outputs.matrix }}" >> $GITHUB_OUTPUT
-          fi
-
-      - name: "Debug: Print matrix JSON"
-        run: |
-          echo "Matrix JSON:"
-          echo '${{ toJson(fromJson(steps.setmatrix.outputs.matrix)) }}'
-          echo "Event name: ${{ github.event_name }}"
-
-  test-macos:
-    needs: matrix_maker_macos
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJson(needs.matrix_maker_macos.outputs.matrix) }}
-    runs-on: ${{ matrix.os }}-${{ matrix.version }}
-    steps:
-      - name: "Show env"
-        run: env
-      - name: "Set BUILD_RELEASE when we are building for a version tag"
-        run: |
-          echo "BUILD_RELEASE=1" >> $GITHUB_ENV
-        if: startsWith(github.ref, 'refs/tags/v')
-      - name: "Enable dumping core files"
-        run: |
-          sudo sysctl kern.corefile=core.%P
-          ulimit -c unlimited
-      - name: "Check out repository code"
-        uses: actions/checkout@v4
-      - name: "Cache stuff"
-        if: matrix.cache == true
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/acton/
-            ~/.stack
-          key: test-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}
-      - name: "Install build prerequisites"
-        run: brew install haskell-stack
-      - name: "Build Acton"
-        run: |
-          make -j2 -C ${{ github.workspace }} BUILD_RELEASE=${{ env.BUILD_RELEASE }}
-      - name: "Build a release"
-        run: make -C ${{ github.workspace }} release
-      - name: "Upload artifact"
-        uses: actions/upload-artifact@v3
-        with:
-          name: acton-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}
-          path: ${{ github.workspace }}/acton-*
-          if-no-files-found: error
-      - name: "Run tests"
-        run: |
-          ulimit -c unlimited
-          make -C ${{ github.workspace }} test
-      - name: "Upload whole test dir as artifact on test failure"
-        if: failure()
-        uses: actions/upload-artifact@v3
-        with:
-          name: test-debug-${{ matrix.os }}-${{ github.run_id }}.zip
-          path: |
-            ${{ github.workspace }}/test
-
-
-  matrix_maker_linux:
-    runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.setmatrix.outputs.matrix }}
-    steps:
-      - name: "Set Matrix for PR or push"
-        if: github.event_name != 'schedule'
-        id: setmatrix_pr
-        run: |
-          MATRIX_JSON='{\"include\":[{\"os\":\"debian\",\"version\":\"12\",\"arch\":\"x86_64\",\"cache\":true}]}'
-          echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
-
-      - name: "Set Matrix for nightly run"
-        if: github.event_name == 'schedule'
-        id: setmatrix_cron
-        run: |
-          MATRIX_JSON='{\"include\":[{\"os\":\"debian\",\"version\":\"11\",\"arch\":\"x86_64\",\"cache\":false},{\"os\":\"debian\",\"version\":\"12\",\"arch\":\"x86_64\",\"cache\":true},{\"os\":\"ubuntu\",\"version\":\"22.04\",\"arch\":\"x86_64\",\"cache\":false},{\"os\":\"ubuntu\",\"version\":\"24.04\",\"arch\":\"x86_64\",\"cache\":false}]}'
-          echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
-
-      - name: "Set final matrix output"
-        id: setmatrix
-        run: |
-          if [ "${{ github.event_name }}" == "schedule" ]; then
-            echo "matrix=${{ steps.setmatrix_cron.outputs.matrix }}" >> $GITHUB_OUTPUT
-          else
-            echo "matrix=${{ steps.setmatrix_pr.outputs.matrix }}" >> $GITHUB_OUTPUT
-          fi
-
-      - name: "Debug: Print matrix JSON"
-        run: |
-          echo "Matrix JSON:"
-          echo '${{ toJson(fromJson(steps.setmatrix.outputs.matrix)) }}'
-          echo "Event name: ${{ github.event_name }}"
-
-  test-linux:
-    needs: matrix_maker_linux
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJson(needs.matrix_maker_linux.outputs.matrix) }}
-    runs-on: ubuntu-latest
-    container:
-      image: ${{ matrix.os }}:${{ matrix.version }}
-    steps:
-      - name: "Show platform and environment"
-        run: |
-          env
-          cat /proc/cpuinfo
-      - name: "Set BUILD_RELEASE when we are building for a version tag"
-        if: startsWith(github.ref, 'refs/tags/v')
-        run: |
-          echo "BUILD_RELEASE=1" >> $GITHUB_ENV
-      - name: "Check out repository code"
-        uses: actions/checkout@v4
-      - name: "Cache stuff"
-        if: matrix.cache == true
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/acton/
-            ~/.stack
-          key: test-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}
-      - name: "chown our home dir to avoid stack complaining"
-        run: chown -R root:root /github/home
-      - name: "Install build prerequisites"
-        run: |
-          export DEBIAN_FRONTEND=noninteractive
-          apt-get update
-          apt-get install -qy bzip2 curl g++ gdb haskell-stack make procps zlib1g-dev
-      - name: "Upgrade stack on old distributions"
-        if: ${{ (matrix.os == 'ubuntu' && (matrix.version == '20.04' || matrix.version == '22.04')) || (matrix.os == 'debian' && matrix.version == '11') }}
-        run: |
-          stack upgrade
-          echo "PATH=~/.local/bin:$PATH" >> $GITHUB_ENV
-      - name: "Build Acton"
-        run: |
-          make -j2 -C ${GITHUB_WORKSPACE} BUILD_RELEASE=${{ env.BUILD_RELEASE }}
-      - name: "Build a release"
-        run: make -C ${GITHUB_WORKSPACE} release
-      - name: "Upload artifact"
-        uses: actions/upload-artifact@v3
-        with:
-          name: acton-${{ matrix.os }}-${{ matrix.version }}
-          path: ${{ github.workspace }}/acton-*
-          if-no-files-found: error
-      - name: "Run tests"
-        run: |
-          ulimit -c unlimited
-          make -C ${GITHUB_WORKSPACE} test
-      - name: "Upload whole test dir as artifact on test failure"
-        if: failure()
-        uses: actions/upload-artifact@v3
-        with:
-          name: test-debug-${{ matrix.os }}-${{ github.run_id }}.zip
-          path: |
-            ${{ github.workspace }}/test
+#  matrix_maker_macos:
+#    runs-on: ubuntu-latest
+#    outputs:
+#      matrix: ${{ steps.setmatrix.outputs.matrix }}
+#    steps:
+#      - name: "Set Matrix for PR or push"
+#        if: github.event_name != 'schedule'
+#        id: setmatrix_pr
+#        run: |
+#          MATRIX_JSON='{\"include\":[{\"os\":\"macos\",\"version\":\"12\",\"arch\":\"x86_64\",\"cache\":true},{\"os\":\"macos\",\"version\":\"14\",\"arch\":\"aarch64\",\"cache\":true}]}'
+#          echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
+#
+#      - name: "Set Matrix for nightly run"
+#        if: github.event_name == 'schedule'
+#        id: setmatrix_cron
+#        run: |
+#          MATRIX_JSON='{\"include\":[{\"os\":\"macos\",\"version\":\"12\",\"arch\":\"x86_64\",\"cache\":true},{\"os\":\"macos\",\"version\":\"13\",\"arch\":\"x86_64\",\"cache\":true},{\"os\":\"macos\",\"version\":\"14\",\"arch\":\"aarch64\",\"cache\":true}]}'
+#          echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
+#
+#      - name: "Set final matrix output"
+#        id: setmatrix
+#        run: |
+#          if [ "${{ github.event_name }}" == "schedule" ]; then
+#            echo "matrix=${{ steps.setmatrix_cron.outputs.matrix }}" >> $GITHUB_OUTPUT
+#          else
+#            echo "matrix=${{ steps.setmatrix_pr.outputs.matrix }}" >> $GITHUB_OUTPUT
+#          fi
+#
+#      - name: "Debug: Print matrix JSON"
+#        run: |
+#          echo "Matrix JSON:"
+#          echo '${{ toJson(fromJson(steps.setmatrix.outputs.matrix)) }}'
+#          echo "Event name: ${{ github.event_name }}"
+#
+#  test-macos:
+#    needs: matrix_maker_macos
+#    strategy:
+#      fail-fast: false
+#      matrix: ${{ fromJson(needs.matrix_maker_macos.outputs.matrix) }}
+#    runs-on: ${{ matrix.os }}-${{ matrix.version }}
+#    steps:
+#      - name: "Show env"
+#        run: env
+#      - name: "Set BUILD_RELEASE when we are building for a version tag"
+#        run: |
+#          echo "BUILD_RELEASE=1" >> $GITHUB_ENV
+#        if: startsWith(github.ref, 'refs/tags/v')
+#      - name: "Enable dumping core files"
+#        run: |
+#          sudo sysctl kern.corefile=core.%P
+#          ulimit -c unlimited
+#      - name: "Check out repository code"
+#        uses: actions/checkout@v4
+#      - name: "Cache stuff"
+#        if: matrix.cache == true
+#        uses: actions/cache@v4
+#        with:
+#          path: |
+#            ~/.cache/acton/
+#            ~/.stack
+#          key: test-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}
+#      - name: "Install build prerequisites"
+#        run: brew install haskell-stack
+#      - name: "Build Acton"
+#        run: |
+#          make -j2 -C ${{ github.workspace }} BUILD_RELEASE=${{ env.BUILD_RELEASE }}
+#      - name: "Build a release"
+#        run: make -C ${{ github.workspace }} release
+#      - name: "Upload artifact"
+#        uses: actions/upload-artifact@v3
+#        with:
+#          name: acton-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}
+#          path: ${{ github.workspace }}/acton-*
+#          if-no-files-found: error
+#      - name: "Run tests"
+#        run: |
+#          ulimit -c unlimited
+#          make -C ${{ github.workspace }} test
+#      - name: "Upload whole test dir as artifact on test failure"
+#        if: failure()
+#        uses: actions/upload-artifact@v3
+#        with:
+#          name: test-debug-${{ matrix.os }}-${{ github.run_id }}.zip
+#          path: |
+#            ${{ github.workspace }}/test
+#
+#
+#  matrix_maker_linux:
+#    runs-on: ubuntu-latest
+#    outputs:
+#      matrix: ${{ steps.setmatrix.outputs.matrix }}
+#    steps:
+#      - name: "Set Matrix for PR or push"
+#        if: github.event_name != 'schedule'
+#        id: setmatrix_pr
+#        run: |
+#          MATRIX_JSON='{\"include\":[{\"os\":\"debian\",\"version\":\"12\",\"arch\":\"x86_64\",\"cache\":true}]}'
+#          echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
+#
+#      - name: "Set Matrix for nightly run"
+#        if: github.event_name == 'schedule'
+#        id: setmatrix_cron
+#        run: |
+#          MATRIX_JSON='{\"include\":[{\"os\":\"debian\",\"version\":\"11\",\"arch\":\"x86_64\",\"cache\":false},{\"os\":\"debian\",\"version\":\"12\",\"arch\":\"x86_64\",\"cache\":true},{\"os\":\"ubuntu\",\"version\":\"22.04\",\"arch\":\"x86_64\",\"cache\":false},{\"os\":\"ubuntu\",\"version\":\"24.04\",\"arch\":\"x86_64\",\"cache\":false}]}'
+#          echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
+#
+#      - name: "Set final matrix output"
+#        id: setmatrix
+#        run: |
+#          if [ "${{ github.event_name }}" == "schedule" ]; then
+#            echo "matrix=${{ steps.setmatrix_cron.outputs.matrix }}" >> $GITHUB_OUTPUT
+#          else
+#            echo "matrix=${{ steps.setmatrix_pr.outputs.matrix }}" >> $GITHUB_OUTPUT
+#          fi
+#
+#      - name: "Debug: Print matrix JSON"
+#        run: |
+#          echo "Matrix JSON:"
+#          echo '${{ toJson(fromJson(steps.setmatrix.outputs.matrix)) }}'
+#          echo "Event name: ${{ github.event_name }}"
+#
+#  test-linux:
+#    needs: matrix_maker_linux
+#    strategy:
+#      fail-fast: false
+#      matrix: ${{ fromJson(needs.matrix_maker_linux.outputs.matrix) }}
+#    runs-on: ubuntu-latest
+#    container:
+#      image: ${{ matrix.os }}:${{ matrix.version }}
+#    steps:
+#      - name: "Show platform and environment"
+#        run: |
+#          env
+#          cat /proc/cpuinfo
+#      - name: "Set BUILD_RELEASE when we are building for a version tag"
+#        if: startsWith(github.ref, 'refs/tags/v')
+#        run: |
+#          echo "BUILD_RELEASE=1" >> $GITHUB_ENV
+#      - name: "Check out repository code"
+#        uses: actions/checkout@v4
+#      - name: "Cache stuff"
+#        if: matrix.cache == true
+#        uses: actions/cache@v4
+#        with:
+#          path: |
+#            ~/.cache/acton/
+#            ~/.stack
+#          key: test-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}
+#      - name: "chown our home dir to avoid stack complaining"
+#        run: chown -R root:root /github/home
+#      - name: "Install build prerequisites"
+#        run: |
+#          export DEBIAN_FRONTEND=noninteractive
+#          apt-get update
+#          apt-get install -qy bzip2 curl g++ gdb haskell-stack make procps zlib1g-dev
+#      - name: "Upgrade stack on old distributions"
+#        if: ${{ (matrix.os == 'ubuntu' && (matrix.version == '20.04' || matrix.version == '22.04')) || (matrix.os == 'debian' && matrix.version == '11') }}
+#        run: |
+#          stack upgrade
+#          echo "PATH=~/.local/bin:$PATH" >> $GITHUB_ENV
+#      - name: "Build Acton"
+#        run: |
+#          make -j2 -C ${GITHUB_WORKSPACE} BUILD_RELEASE=${{ env.BUILD_RELEASE }}
+#      - name: "Build a release"
+#        run: make -C ${GITHUB_WORKSPACE} release
+#      - name: "Upload artifact"
+#        uses: actions/upload-artifact@v3
+#        with:
+#          name: acton-${{ matrix.os }}-${{ matrix.version }}
+#          path: ${{ github.workspace }}/acton-*
+#          if-no-files-found: error
+#      - name: "Run tests"
+#        run: |
+#          ulimit -c unlimited
+#          make -C ${GITHUB_WORKSPACE} test
+#      - name: "Upload whole test dir as artifact on test failure"
+#        if: failure()
+#        uses: actions/upload-artifact@v3
+#        with:
+#          name: test-debug-${{ matrix.os }}-${{ github.run_id }}.zip
+#          path: |
+#            ${{ github.workspace }}/test
 
 
   build-debs:
@@ -276,439 +276,439 @@ jobs:
           if-no-files-found: error
 
 
-  run-macos:
-    needs: test-macos
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-12, macos-13, macos-14]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - name: "Machine info"
-        run: |
-          uname -a
-          system_profiler SPHardwareDataType
-      - name: "Download artifacts for Macos x86_64, built on macos-12"
-        if: ${{ matrix.os != 'macos-14' }}
-        uses: actions/download-artifact@v3
-        with:
-          name: acton-macos-12-x86_64
-      - name: "Download artifacts for Macos arm64, built on macos-14"
-        if: ${{ matrix.os == 'macos-14' }}
-        uses: actions/download-artifact@v3
-        with:
-          name: acton-macos-14-aarch64
-      - name: "Extract acton"
-        run: |
-          tar Jxf $(ls acton-macos-*.tar.xz | tail -n1)
-      - name: "Compile acton program"
-        run: |
-          export PATH=$(pwd)/acton/bin:$PATH
-          acton version --full
-          echo '#!/usr/bin/env runacton'   > test-runtime.act
-          echo 'actor main(env):'          >> test-runtime.act
-          echo '    print("Hello, world")' >> test-runtime.act
-          echo '    env.exit(0)'           >> test-runtime.act
-          chmod a+x test-runtime.act
-          ./test-runtime.act
-          ./test-runtime.act | grep "Hello, world"
-
-
-  run-linux:
-    needs: build-debs
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: "debian"
-            version: "10"
-          - os: "debian"
-            version: "11"
-          - os: "debian"
-            version: "12"
-          - os: "ubuntu"
-            version: "18.04"
-          - os: "ubuntu"
-            version: "20.04"
-          - os: "ubuntu"
-            version: "22.04"
-          - os: "ubuntu"
-            version: "24.04"
-    env:
-      # This makes it possible for the GitHub Action itself to run using an
-      # older version of node, which is the only possibility to get it running
-      # on Ubuntu 18.04 (in the matrix above)
-      ACTIONS_RUNNER_FORCE_ACTIONS_NODE_VERSION: node16
-      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
-    runs-on: ubuntu-latest
-    container:
-      image: ${{ matrix.os }}:${{ matrix.version }}
-      options: --privileged --ulimit core=-1 --security-opt seccomp=unconfined
-    steps:
-      - name: "Show platform and environment"
-        run: |
-          env
-          cat /proc/cpuinfo
-      - name: "Download .deb files"
-        uses: actions/download-artifact@v3 # Ubuntu 18.04 doesn't support v4 which uses Node 20 which depends on glibc 2.28
-        with:
-          name: acton-debs
-      - name: "Install acton from .deb"
-        run: |
-          apt update
-          apt install -y ./deb/acton_*.deb
-          acton --version
-      - name: "Enable dumping core files to /tmp/core..."
-        run: |
-          apt install -qy procps
-          cat /proc/sys/kernel/core_pattern
-          sysctl kernel.core_pattern='/tmp/core.%h.%e.%t' || true
-          cat /proc/sys/kernel/core_pattern
-          ulimit -c unlimited
-      - name: "Compile acton program"
-        run: |
-          echo '#!/usr/bin/env runacton'   > test-runtime.act
-          echo 'actor main(env):'          >> test-runtime.act
-          echo '    print("Hello, world")' >> test-runtime.act
-          echo '    env.exit(0)'           >> test-runtime.act
-          chmod a+x test-runtime.act
-          ./test-runtime.act
-          ./test-runtime.act | grep "Hello, world"
-          for I in $(seq 50); do ./test-runtime.act || break; done
-      - name: "ls core"
-        if: failure()
-        run: |
-          pwd
-          ls
-          find /tmp
-          mv /tmp/core* .
-      - name: "Upload core file & binaries as artifacts on test failure"
-        if: failure()
-        uses: actions/upload-artifact@v3
-        with:
-          name: coredumps-${{ matrix.os }}-${{ matrix.version }}-${{ github.run_id }}.zip
-          path: |
-            ${{ github.workspace }}/core*
-
-  perf-vs-main:
-    needs: build-debs
-    # Use our own runner to get more deterministic results
-    runs-on: [self-hosted, linux, X64]
-    steps:
-      - name: "Check out repository code"
-        uses: actions/checkout@v4
-      - name: "Install Acton from APT tip repo"
-        run: |
-          wget -q -O - https://apt.acton-lang.io/acton.gpg | sudo apt-key add -
-          echo "deb [arch=amd64] http://aptip.acton-lang.io/ tip main" | sudo tee /etc/apt/sources.list.d/acton.list
-          sudo apt-get update
-          sudo apt-get install -qy acton
-          acton --version
-      - name: "Run perf tests and record"
-        run: |
-          acton --version
-          cd test/stdlib_tests
-          acton test perf --record
-          cd ../perf
-          acton test perf --record
-      - name: "Download .deb files"
-        uses: actions/download-artifact@v3
-        with:
-          name: acton-debs
-      - name: "Install acton from .deb"
-        run: |
-          sudo dpkg -i ./deb/acton_*.deb
-          acton --version
-      - name: "Run perf tests to compare"
-        run: |
-          cd test/stdlib_tests
-          rm -rf out
-          acton test perf
-          cd ../perf
-          rm -rf out
-          acton test perf
-
-  test-external-projects:
-    needs: build-debs
-    runs-on: ubuntu-latest
-    container:
-      image: debian:experimental
-    steps:
-      - name: "Cache stuff"
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/acton/
-          key: test-external-projects
-      - name: "Download .deb files"
-        uses: actions/download-artifact@v3
-        with:
-          name: acton-debs
-      - name: "Install acton from .deb"
-        run: |
-          apt update
-          apt install -qy make netcat-openbsd
-          apt install -y ./deb/acton_*.deb
-          acton --version
-      - name: "Clone Telemetrify and check out acton-next branch"
-        uses: actions/checkout@v4
-        with:
-          repository: telemetrify-collector/telemetrify
-          path: telemetrify
-          ref: 'acton-next'
-      - name: "Compile acton program"
-        run: |
-          cd telemetrify
-          acton build
-          cd tests/nso-replay
-          make start
-          make test
-
-
-  # If we are on the main branch, we'll create or update a pre-release called
-  # 'tip' which holds the latest build output from the main branch!  We upload
-  # artifacts twice, first with the version number held in the filename and a
-  # second time after being renamed to remove the version number in the
-  # filename, thus providing a stable URL for downloading the tip tar balls.
-  pre-release-tip:
-    # Only run on the main branch
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    needs: [test-macos, test-linux, build-debs]
-    steps:
-      - name: "Delete current tip release & tag"
-        uses: dev-drprasad/delete-tag-and-release@v0.2.1
-        with:
-          delete_release: true
-          tag_name: tip
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: "Check out repository code"
-        uses: actions/checkout@v4
-      - name: "Download artifacts for Macos x86_64, built on macos-12"
-        uses: actions/download-artifact@v3
-        with:
-          name: acton-macos-12-x86_64
-      - name: "Download artifacts for Linux x86_64, built on Debian:12"
-        uses: actions/download-artifact@v3
-        with:
-          name: acton-debian-12
-      - name: "Download artifacts for Debian Linux x86_64"
-        uses: actions/download-artifact@v3
-        with:
-          name: acton-debs
-      - name: "List downloaded artifacts"
-        run: |
-          ls
-          ls deb
-      - name: "Workaround for changelog extractor that looks for number versions in headlines, which won't work for 'Unreleased'"
-        run: sed -i -e 's/^## Unreleased/## [999.9] Unreleased\nThis is an unreleased snapshot built from the main branch. Like a nightly but more up to date./' CHANGELOG.md
-      - name: "Extract release notes"
-        id: extract-release-notes
-        uses: ffurrer2/extract-release-notes@v1
-      - name: "(re-)create 'tip' release notes and upload artifacts as assets"
-        uses: ncipollo/release-action@v1
-        with:
-          allowUpdates: true
-          artifacts: "acton*.tar*,deb/*deb"
-          body: ${{ steps.extract-release-notes.outputs.release_notes }}
-          draft: false
-          prerelease: true
-          name: "tip"
-          tag: "tip"
-          token: ${{ secrets.GITHUB_TOKEN }}
-          replacesArtifacts: true
-      - name: "Remove version number from macos tar ball"
-        run: mv $(ls acton-macos-x86_64*.tar.xz | tail -n1) acton-macos-x86_64-tip.tar.xz
-      - name: "Remove version number from linux tar ball"
-        run: mv $(ls acton-linux-x86_64*.tar.xz | tail -n1) acton-linux-x86_64-tip.tar.xz
-      - name: "Remove version number from debian package"
-        run: mv $(ls deb/acton_*.deb | tail -n1) deb/acton_tip_amd64.deb
-      - name: "List files for debug"
-        run: |
-          ls
-          ls deb
-      - name: "Upload artifacts without version number for stable links"
-        uses: ncipollo/release-action@v1
-        with:
-          allowUpdates: true
-          artifacts: "acton*.tar*,deb/acton_*.deb"
-          body: ${{ steps.extract-release-notes.outputs.release_notes }}
-          draft: false
-          prerelease: true
-          name: "tip"
-          tag: "tip"
-          token: ${{ secrets.GITHUB_TOKEN }}
-          replacesArtifacts: true
-
-
-  # Release job, only run for version tagged releases.
-  release:
-    if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
-    needs: [test-macos, test-linux, build-debs]
-    steps:
-      - name: "Check out repository code"
-        uses: actions/checkout@v4
-      - name: "Download artifacts for Macos, built on macos-12"
-        uses: actions/download-artifact@v3
-        with:
-          name: acton-macos-12-x86_64
-      - name: "Download artifacts for Linux, built on Debian:12"
-        uses: actions/download-artifact@v3
-        with:
-          name: acton-debian-12
-      - name: "Download artifacts for Debian Linux"
-        uses: actions/download-artifact@v3
-        with:
-          name: acton-debs
-      - name: "List downloaded artifacts"
-        run: ls
-      - name: "Extract release notes"
-        id: extract-release-notes
-        uses: ffurrer2/extract-release-notes@v1
-      - name: "Create release"
-        uses: ncipollo/release-action@v1
-        with:
-          allowUpdates: true
-          artifacts: "acton*.tar*,deb/*deb"
-          body: ${{ steps.extract-release-notes.outputs.release_notes }}
-          draft: false
-          token: ${{ secrets.GITHUB_TOKEN }}
-          replacesArtifacts: true
-
-
-  # Update apt repo
-  update-apt-repo:
-    if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
-    container:
-      image: debian:experimental
-    needs: [test-macos, test-linux, build-debs]
-    steps:
-      - name: Install build prerequisites
-        run: |
-          apt-get update
-          apt-get install -qy -t experimental reprepro
-          apt-get install -qy git gnupg
-      - name: Import GPG key
-        id: import_gpg
-        uses: crazy-max/ghaction-import-gpg@v4
-        with:
-          gpg_private_key: ${{ secrets.APT_GPG_PRIVATE_KEY }}
-      - name: Check out code of apt.acton-lang.io repo
-        uses: actions/checkout@v4
-        with:
-          repository: actonlang/apt.acton-lang.io
-          path: apt
-          ssh-key: ${{ secrets.APT_DEPLOY_KEY }}
-      - name: "Download artifacts for Debian Linux"
-        uses: actions/download-artifact@v3
-        with:
-          name: acton-debs
-      - name: "Get the version"
-        id: get_version
-        run: |
-          echo ::set-output name=version::$(ls ../deb/*.changes | sed -e 's/.*acton_//' -e 's/_amd64.*//')
-      - name: "Include new deb in Apt repository"
-        run: |
-          cd apt
-          reprepro include stable ../deb/*.changes
-      - name: "Push updates to git repository for apt.acton-lang.io"
-        run: |
-          cd apt
-          git config user.name "Apt Bot"
-          git config user.email apt@acton-lang.org
-          git add .
-          git status
-          git diff
-          git commit -a -m "Add Acton v${{steps.get_version.outputs.version}}"
-          git push
-
-  # Update apt tip repo
-  update-apt-tip-repo:
-    # Only run on the main branch
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    container:
-      image: debian:experimental
-    permissions:
-      contents: write
-    needs: [test-macos, test-linux, build-debs]
-    steps:
-      - name: Install build prerequisites
-        run: |
-          apt-get update
-          apt-get install -qy -t experimental reprepro
-          apt-get install -qy git gnupg
-      - name: Check out code of aptip.acton-lang.io repo
-        uses: actions/checkout@v4
-        with:
-          repository: actonlang/aptip.acton-lang.io
-          path: apt
-          ssh-key: ${{ secrets.APT_TIP_DEPLOY_KEY }}
-      - name: "Download artifacts for Debian Linux"
-        uses: actions/download-artifact@v3
-        with:
-          name: acton-debs
-      - name: "Get the version"
-        id: get_version
-        run: |
-          echo "VERSION=$(ls deb/*.changes | sed -e 's/.*acton_//' -e 's/_amd64.*//')" >> $GITHUB_ENV
-          echo ::set-output name=version::$(ls deb/*.changes | sed -e 's/.*acton_//' -e 's/_amd64.*//')
-      - name: "Move .deb files in place"
-        run: |
-          cd apt
-          mv -v ../deb/* deb/
-      - name: "Configure git"
-        run: |
-          cd apt
-          git config user.name "Apt Bot"
-          git config user.email apt@acton-lang.org
-      - name: "Push updates to git repository for aptip.acton-lang.io"
-        run: |
-          cd apt
-          git add deb/*
-          git status
-          git commit -a -m "Add Acton tip v${VERSION}"
-          git push
-
-  # Update our homebrew tap
-  update-homebrew:
-    if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
-    # Depend on all test jobs so we don't update brew repo in case anything fails
-    needs: [test-macos, test-linux, build-debs]
-    steps:
-      - name: "Check out code of main acton repo"
-        uses: actions/checkout@v4
-      - name: "Get the version from common.mk"
-        id: get_version
-        run: echo "version=$(grep VERSION= common.mk | cut -d = -f 2)" >> $GITHUB_OUTPUT
-      - run: wget https://github.com/actonlang/acton/archive/refs/tags/v${{ steps.get_version.outputs.version }}.tar.gz
-      - run: sha256sum v${{ steps.get_version.outputs.version }}.tar.gz
-      - id: shasum
-        run: echo "sum=$(sha256sum v${{ steps.get_version.outputs.version }}.tar.gz | cut -d' ' -f1)" >> $GITHUB_OUTPUT
-      - name: "Check out code of our brew repo"
-        uses: actions/checkout@v4
-        with:
-          repository: actonlang/homebrew-acton
-          path: homebrew-acton
-      - name: "Update formula in homebrew-acton from acton repo"
-        run: |
-          cp homebrew/Formula/acton.rb homebrew-acton/Formula/acton.rb
-      - name: "Update brew formula for acton with new version"
-        run: |
-          sed -i -e 's,^  url.*,  url "https://github.com/actonlang/acton/archive/refs/tags/v${{ steps.get_version.outputs.version }}.tar.gz",' -e 's/^  sha256.*/  sha256 "${{ steps.shasum.outputs.sum }}"/' homebrew-acton/Formula/acton.rb
-      - name: "Create Pull Request"
-        uses: peter-evans/create-pull-request@v4
-        with:
-          path: homebrew-acton
-          token: ${{ secrets.ACTBOT_PAT }}
-          branch: acton-v${{ steps.get_version.outputs.version }}
-          title: "acton v${{ steps.get_version.outputs.version }}"
-          body: |
-            Automatic update triggered by release on actonlang/acton.
-          committer: Acton Bot <actbot@acton-lang.org>
-          commit-message: "acton v${{ steps.get_version.outputs.version }}"
-          signoff: false
+#  run-macos:
+#    needs: test-macos
+#    strategy:
+#      fail-fast: false
+#      matrix:
+#        os: [macos-12, macos-13, macos-14]
+#    runs-on: ${{ matrix.os }}
+#    steps:
+#      - name: "Machine info"
+#        run: |
+#          uname -a
+#          system_profiler SPHardwareDataType
+#      - name: "Download artifacts for Macos x86_64, built on macos-12"
+#        if: ${{ matrix.os != 'macos-14' }}
+#        uses: actions/download-artifact@v3
+#        with:
+#          name: acton-macos-12-x86_64
+#      - name: "Download artifacts for Macos arm64, built on macos-14"
+#        if: ${{ matrix.os == 'macos-14' }}
+#        uses: actions/download-artifact@v3
+#        with:
+#          name: acton-macos-14-aarch64
+#      - name: "Extract acton"
+#        run: |
+#          tar Jxf $(ls acton-macos-*.tar.xz | tail -n1)
+#      - name: "Compile acton program"
+#        run: |
+#          export PATH=$(pwd)/acton/bin:$PATH
+#          acton version --full
+#          echo '#!/usr/bin/env runacton'   > test-runtime.act
+#          echo 'actor main(env):'          >> test-runtime.act
+#          echo '    print("Hello, world")' >> test-runtime.act
+#          echo '    env.exit(0)'           >> test-runtime.act
+#          chmod a+x test-runtime.act
+#          ./test-runtime.act
+#          ./test-runtime.act | grep "Hello, world"
+#
+#
+#  run-linux:
+#    needs: build-debs
+#    strategy:
+#      fail-fast: false
+#      matrix:
+#        include:
+#          - os: "debian"
+#            version: "10"
+#          - os: "debian"
+#            version: "11"
+#          - os: "debian"
+#            version: "12"
+#          - os: "ubuntu"
+#            version: "18.04"
+#          - os: "ubuntu"
+#            version: "20.04"
+#          - os: "ubuntu"
+#            version: "22.04"
+#          - os: "ubuntu"
+#            version: "24.04"
+#    env:
+#      # This makes it possible for the GitHub Action itself to run using an
+#      # older version of node, which is the only possibility to get it running
+#      # on Ubuntu 18.04 (in the matrix above)
+#      ACTIONS_RUNNER_FORCE_ACTIONS_NODE_VERSION: node16
+#      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
+#    runs-on: ubuntu-latest
+#    container:
+#      image: ${{ matrix.os }}:${{ matrix.version }}
+#      options: --privileged --ulimit core=-1 --security-opt seccomp=unconfined
+#    steps:
+#      - name: "Show platform and environment"
+#        run: |
+#          env
+#          cat /proc/cpuinfo
+#      - name: "Download .deb files"
+#        uses: actions/download-artifact@v3 # Ubuntu 18.04 doesn't support v4 which uses Node 20 which depends on glibc 2.28
+#        with:
+#          name: acton-debs
+#      - name: "Install acton from .deb"
+#        run: |
+#          apt update
+#          apt install -y ./deb/acton_*.deb
+#          acton --version
+#      - name: "Enable dumping core files to /tmp/core..."
+#        run: |
+#          apt install -qy procps
+#          cat /proc/sys/kernel/core_pattern
+#          sysctl kernel.core_pattern='/tmp/core.%h.%e.%t' || true
+#          cat /proc/sys/kernel/core_pattern
+#          ulimit -c unlimited
+#      - name: "Compile acton program"
+#        run: |
+#          echo '#!/usr/bin/env runacton'   > test-runtime.act
+#          echo 'actor main(env):'          >> test-runtime.act
+#          echo '    print("Hello, world")' >> test-runtime.act
+#          echo '    env.exit(0)'           >> test-runtime.act
+#          chmod a+x test-runtime.act
+#          ./test-runtime.act
+#          ./test-runtime.act | grep "Hello, world"
+#          for I in $(seq 50); do ./test-runtime.act || break; done
+#      - name: "ls core"
+#        if: failure()
+#        run: |
+#          pwd
+#          ls
+#          find /tmp
+#          mv /tmp/core* .
+#      - name: "Upload core file & binaries as artifacts on test failure"
+#        if: failure()
+#        uses: actions/upload-artifact@v3
+#        with:
+#          name: coredumps-${{ matrix.os }}-${{ matrix.version }}-${{ github.run_id }}.zip
+#          path: |
+#            ${{ github.workspace }}/core*
+#
+#  perf-vs-main:
+#    needs: build-debs
+#    # Use our own runner to get more deterministic results
+#    runs-on: [self-hosted, linux, X64]
+#    steps:
+#      - name: "Check out repository code"
+#        uses: actions/checkout@v4
+#      - name: "Install Acton from APT tip repo"
+#        run: |
+#          wget -q -O - https://apt.acton-lang.io/acton.gpg | sudo apt-key add -
+#          echo "deb [arch=amd64] http://aptip.acton-lang.io/ tip main" | sudo tee /etc/apt/sources.list.d/acton.list
+#          sudo apt-get update
+#          sudo apt-get install -qy acton
+#          acton --version
+#      - name: "Run perf tests and record"
+#        run: |
+#          acton --version
+#          cd test/stdlib_tests
+#          acton test perf --record
+#          cd ../perf
+#          acton test perf --record
+#      - name: "Download .deb files"
+#        uses: actions/download-artifact@v3
+#        with:
+#          name: acton-debs
+#      - name: "Install acton from .deb"
+#        run: |
+#          sudo dpkg -i ./deb/acton_*.deb
+#          acton --version
+#      - name: "Run perf tests to compare"
+#        run: |
+#          cd test/stdlib_tests
+#          rm -rf out
+#          acton test perf
+#          cd ../perf
+#          rm -rf out
+#          acton test perf
+#
+#  test-external-projects:
+#    needs: build-debs
+#    runs-on: ubuntu-latest
+#    container:
+#      image: debian:experimental
+#    steps:
+#      - name: "Cache stuff"
+#        uses: actions/cache@v4
+#        with:
+#          path: |
+#            ~/.cache/acton/
+#          key: test-external-projects
+#      - name: "Download .deb files"
+#        uses: actions/download-artifact@v3
+#        with:
+#          name: acton-debs
+#      - name: "Install acton from .deb"
+#        run: |
+#          apt update
+#          apt install -qy make netcat-openbsd
+#          apt install -y ./deb/acton_*.deb
+#          acton --version
+#      - name: "Clone Telemetrify and check out acton-next branch"
+#        uses: actions/checkout@v4
+#        with:
+#          repository: telemetrify-collector/telemetrify
+#          path: telemetrify
+#          ref: 'acton-next'
+#      - name: "Compile acton program"
+#        run: |
+#          cd telemetrify
+#          acton build
+#          cd tests/nso-replay
+#          make start
+#          make test
+#
+#
+#  # If we are on the main branch, we'll create or update a pre-release called
+#  # 'tip' which holds the latest build output from the main branch!  We upload
+#  # artifacts twice, first with the version number held in the filename and a
+#  # second time after being renamed to remove the version number in the
+#  # filename, thus providing a stable URL for downloading the tip tar balls.
+#  pre-release-tip:
+#    # Only run on the main branch
+#    if: github.ref == 'refs/heads/main'
+#    runs-on: ubuntu-latest
+#    needs: [test-macos, test-linux, build-debs]
+#    steps:
+#      - name: "Delete current tip release & tag"
+#        uses: dev-drprasad/delete-tag-and-release@v0.2.1
+#        with:
+#          delete_release: true
+#          tag_name: tip
+#        env:
+#          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#      - name: "Check out repository code"
+#        uses: actions/checkout@v4
+#      - name: "Download artifacts for Macos x86_64, built on macos-12"
+#        uses: actions/download-artifact@v3
+#        with:
+#          name: acton-macos-12-x86_64
+#      - name: "Download artifacts for Linux x86_64, built on Debian:12"
+#        uses: actions/download-artifact@v3
+#        with:
+#          name: acton-debian-12
+#      - name: "Download artifacts for Debian Linux x86_64"
+#        uses: actions/download-artifact@v3
+#        with:
+#          name: acton-debs
+#      - name: "List downloaded artifacts"
+#        run: |
+#          ls
+#          ls deb
+#      - name: "Workaround for changelog extractor that looks for number versions in headlines, which won't work for 'Unreleased'"
+#        run: sed -i -e 's/^## Unreleased/## [999.9] Unreleased\nThis is an unreleased snapshot built from the main branch. Like a nightly but more up to date./' CHANGELOG.md
+#      - name: "Extract release notes"
+#        id: extract-release-notes
+#        uses: ffurrer2/extract-release-notes@v1
+#      - name: "(re-)create 'tip' release notes and upload artifacts as assets"
+#        uses: ncipollo/release-action@v1
+#        with:
+#          allowUpdates: true
+#          artifacts: "acton*.tar*,deb/*deb"
+#          body: ${{ steps.extract-release-notes.outputs.release_notes }}
+#          draft: false
+#          prerelease: true
+#          name: "tip"
+#          tag: "tip"
+#          token: ${{ secrets.GITHUB_TOKEN }}
+#          replacesArtifacts: true
+#      - name: "Remove version number from macos tar ball"
+#        run: mv $(ls acton-macos-x86_64*.tar.xz | tail -n1) acton-macos-x86_64-tip.tar.xz
+#      - name: "Remove version number from linux tar ball"
+#        run: mv $(ls acton-linux-x86_64*.tar.xz | tail -n1) acton-linux-x86_64-tip.tar.xz
+#      - name: "Remove version number from debian package"
+#        run: mv $(ls deb/acton_*.deb | tail -n1) deb/acton_tip_amd64.deb
+#      - name: "List files for debug"
+#        run: |
+#          ls
+#          ls deb
+#      - name: "Upload artifacts without version number for stable links"
+#        uses: ncipollo/release-action@v1
+#        with:
+#          allowUpdates: true
+#          artifacts: "acton*.tar*,deb/acton_*.deb"
+#          body: ${{ steps.extract-release-notes.outputs.release_notes }}
+#          draft: false
+#          prerelease: true
+#          name: "tip"
+#          tag: "tip"
+#          token: ${{ secrets.GITHUB_TOKEN }}
+#          replacesArtifacts: true
+#
+#
+#  # Release job, only run for version tagged releases.
+#  release:
+#    if: startsWith(github.ref, 'refs/tags/v')
+#    runs-on: ubuntu-latest
+#    needs: [test-macos, test-linux, build-debs]
+#    steps:
+#      - name: "Check out repository code"
+#        uses: actions/checkout@v4
+#      - name: "Download artifacts for Macos, built on macos-12"
+#        uses: actions/download-artifact@v3
+#        with:
+#          name: acton-macos-12-x86_64
+#      - name: "Download artifacts for Linux, built on Debian:12"
+#        uses: actions/download-artifact@v3
+#        with:
+#          name: acton-debian-12
+#      - name: "Download artifacts for Debian Linux"
+#        uses: actions/download-artifact@v3
+#        with:
+#          name: acton-debs
+#      - name: "List downloaded artifacts"
+#        run: ls
+#      - name: "Extract release notes"
+#        id: extract-release-notes
+#        uses: ffurrer2/extract-release-notes@v1
+#      - name: "Create release"
+#        uses: ncipollo/release-action@v1
+#        with:
+#          allowUpdates: true
+#          artifacts: "acton*.tar*,deb/*deb"
+#          body: ${{ steps.extract-release-notes.outputs.release_notes }}
+#          draft: false
+#          token: ${{ secrets.GITHUB_TOKEN }}
+#          replacesArtifacts: true
+#
+#
+#  # Update apt repo
+#  update-apt-repo:
+#    if: startsWith(github.ref, 'refs/tags/v')
+#    runs-on: ubuntu-latest
+#    container:
+#      image: debian:experimental
+#    needs: [test-macos, test-linux, build-debs]
+#    steps:
+#      - name: Install build prerequisites
+#        run: |
+#          apt-get update
+#          apt-get install -qy -t experimental reprepro
+#          apt-get install -qy git gnupg
+#      - name: Import GPG key
+#        id: import_gpg
+#        uses: crazy-max/ghaction-import-gpg@v4
+#        with:
+#          gpg_private_key: ${{ secrets.APT_GPG_PRIVATE_KEY }}
+#      - name: Check out code of apt.acton-lang.io repo
+#        uses: actions/checkout@v4
+#        with:
+#          repository: actonlang/apt.acton-lang.io
+#          path: apt
+#          ssh-key: ${{ secrets.APT_DEPLOY_KEY }}
+#      - name: "Download artifacts for Debian Linux"
+#        uses: actions/download-artifact@v3
+#        with:
+#          name: acton-debs
+#      - name: "Get the version"
+#        id: get_version
+#        run: |
+#          echo ::set-output name=version::$(ls ../deb/*.changes | sed -e 's/.*acton_//' -e 's/_amd64.*//')
+#      - name: "Include new deb in Apt repository"
+#        run: |
+#          cd apt
+#          reprepro include stable ../deb/*.changes
+#      - name: "Push updates to git repository for apt.acton-lang.io"
+#        run: |
+#          cd apt
+#          git config user.name "Apt Bot"
+#          git config user.email apt@acton-lang.org
+#          git add .
+#          git status
+#          git diff
+#          git commit -a -m "Add Acton v${{steps.get_version.outputs.version}}"
+#          git push
+#
+#  # Update apt tip repo
+#  update-apt-tip-repo:
+#    # Only run on the main branch
+#    if: github.ref == 'refs/heads/main'
+#    runs-on: ubuntu-latest
+#    container:
+#      image: debian:experimental
+#    permissions:
+#      contents: write
+#    needs: [test-macos, test-linux, build-debs]
+#    steps:
+#      - name: Install build prerequisites
+#        run: |
+#          apt-get update
+#          apt-get install -qy -t experimental reprepro
+#          apt-get install -qy git gnupg
+#      - name: Check out code of aptip.acton-lang.io repo
+#        uses: actions/checkout@v4
+#        with:
+#          repository: actonlang/aptip.acton-lang.io
+#          path: apt
+#          ssh-key: ${{ secrets.APT_TIP_DEPLOY_KEY }}
+#      - name: "Download artifacts for Debian Linux"
+#        uses: actions/download-artifact@v3
+#        with:
+#          name: acton-debs
+#      - name: "Get the version"
+#        id: get_version
+#        run: |
+#          echo "VERSION=$(ls deb/*.changes | sed -e 's/.*acton_//' -e 's/_amd64.*//')" >> $GITHUB_ENV
+#          echo ::set-output name=version::$(ls deb/*.changes | sed -e 's/.*acton_//' -e 's/_amd64.*//')
+#      - name: "Move .deb files in place"
+#        run: |
+#          cd apt
+#          mv -v ../deb/* deb/
+#      - name: "Configure git"
+#        run: |
+#          cd apt
+#          git config user.name "Apt Bot"
+#          git config user.email apt@acton-lang.org
+#      - name: "Push updates to git repository for aptip.acton-lang.io"
+#        run: |
+#          cd apt
+#          git add deb/*
+#          git status
+#          git commit -a -m "Add Acton tip v${VERSION}"
+#          git push
+#
+#  # Update our homebrew tap
+#  update-homebrew:
+#    if: startsWith(github.ref, 'refs/tags/v')
+#    runs-on: ubuntu-latest
+#    # Depend on all test jobs so we don't update brew repo in case anything fails
+#    needs: [test-macos, test-linux, build-debs]
+#    steps:
+#      - name: "Check out code of main acton repo"
+#        uses: actions/checkout@v4
+#      - name: "Get the version from common.mk"
+#        id: get_version
+#        run: echo "version=$(grep VERSION= common.mk | cut -d = -f 2)" >> $GITHUB_OUTPUT
+#      - run: wget https://github.com/actonlang/acton/archive/refs/tags/v${{ steps.get_version.outputs.version }}.tar.gz
+#      - run: sha256sum v${{ steps.get_version.outputs.version }}.tar.gz
+#      - id: shasum
+#        run: echo "sum=$(sha256sum v${{ steps.get_version.outputs.version }}.tar.gz | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+#      - name: "Check out code of our brew repo"
+#        uses: actions/checkout@v4
+#        with:
+#          repository: actonlang/homebrew-acton
+#          path: homebrew-acton
+#      - name: "Update formula in homebrew-acton from acton repo"
+#        run: |
+#          cp homebrew/Formula/acton.rb homebrew-acton/Formula/acton.rb
+#      - name: "Update brew formula for acton with new version"
+#        run: |
+#          sed -i -e 's,^  url.*,  url "https://github.com/actonlang/acton/archive/refs/tags/v${{ steps.get_version.outputs.version }}.tar.gz",' -e 's/^  sha256.*/  sha256 "${{ steps.shasum.outputs.sum }}"/' homebrew-acton/Formula/acton.rb
+#      - name: "Create Pull Request"
+#        uses: peter-evans/create-pull-request@v4
+#        with:
+#          path: homebrew-acton
+#          token: ${{ secrets.ACTBOT_PAT }}
+#          branch: acton-v${{ steps.get_version.outputs.version }}
+#          title: "acton v${{ steps.get_version.outputs.version }}"
+#          body: |
+#            Automatic update triggered by release on actonlang/acton.
+#          committer: Acton Bot <actbot@acton-lang.org>
+#          commit-message: "acton v${{ steps.get_version.outputs.version }}"
+#          signoff: false
