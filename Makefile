@@ -9,7 +9,7 @@ export ZIG_LOCAL_CACHE_DIR
 ACTON=$(TD)/dist/bin/acton
 ACTONC=dist/bin/actonc
 ACTC=$(TD)/dist/bin/actonc
-ZIG_VERSION:=0.12.0-dev.2236+32e88251e
+ZIG_VERSION:=0.13.0
 ZIG=$(TD)/dist/zig/zig
 AR=$(ZIG) ar
 CC=$(ZIG) cc
@@ -130,8 +130,8 @@ compiler/Acton/Builder.hs: builder/build.zig builder/build.zig.zon
 # We need to generate a Haskell file from the zig file, so we can include it in the compiler
 # Make sure to escape the double quotes in the zig file and replace them with \" in the Haskell file. We also need to handle newlines since Haskell strings what newlines to be escaped.
 	(echo 'module Acton.Builder where'; \
-		echo '\nbuildzig :: String'; echo -n 'buildzig = "'; cat builder/build.zig | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/$$/\\n/' | tr -d '\n'; echo '"'; \
-		echo '\nbuildzigzon :: String'; echo -n 'buildzigzon = "'; cat builder/build.zig.zon | sed -e 's/"/\\"/g' -e 's/$$/\\n/' | tr -d '\n'; echo '"') > compiler/Acton/Builder.hs
+		echo '\nbuildzig :: String'; /bin/echo -n 'buildzig = "'; cat builder/build.zig | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/$$/\\n/' | tr -d '\n'; echo '"'; \
+		echo '\nbuildzigzon :: String'; /bin/echo -n 'buildzigzon = "'; cat builder/build.zig.zon | sed -e 's/"/\\"/g' -e 's/$$/\\n/' | tr -d '\n'; echo '"') > compiler/Acton/Builder.hs
 
 .PHONY: clean-compiler
 clean-compiler:
@@ -177,7 +177,7 @@ clean-downloads:
 	rm -rf deps-download
 
 # /deps/libargp --------------------------------------------
-LIBARGP_REF=a0e41ac937fe5d5d573fdeb16353c87e4d1e3998
+LIBARGP_REF=060587652d82866ff3c68a5cea90711804242389
 deps-download/$(LIBARGP_REF).tar.gz:
 	mkdir -p deps-download
 	curl -f -L -o $@ https://github.com/actonlang/argp-standalone/archive/$(LIBARGP_REF).tar.gz
@@ -192,7 +192,7 @@ dist/depsout/lib/libargp.a: dist/deps/libargp $(DIST_ZIG)
 	cd $< && $(ZIG) build $(ZIG_TARGET) $(ZIG_CPU) --prefix $(TD)/dist/depsout
 
 # /deps/libbsdnt --------------------------------------------
-LIBBSDNT_REF=1f31f6903378022fec8f09a3b3f3446e961eacbc
+LIBBSDNT_REF=282f774e1e664ea7c23cc0bb9f313c1054874a97
 deps-download/$(LIBBSDNT_REF).tar.gz:
 	mkdir -p deps-download
 	curl -f -L -o $@ https://github.com/actonlang/bsdnt/archive/$(LIBBSDNT_REF).tar.gz
@@ -206,7 +206,7 @@ dist/depsout/lib/libbsdnt.a: dist/deps/libbsdnt $(DIST_ZIG)
 	cd $< && $(ZIG) build $(ZIG_TARGET) $(ZIG_CPU) --prefix $(TD)/dist/depsout
 
 # /deps/libgc --------------------------------------------
-LIBGC_REF=16ad56e4ba1cc71b6683aca5558405612bf7c259
+LIBGC_REF=0a23b211b558137de7ee654c5527a54113142517
 deps-download/$(LIBGC_REF).tar.gz:
 	mkdir -p deps-download
 	curl -f -L -o $@ https://github.com/actonlang/bdwgc/archive/$(LIBGC_REF).tar.gz
@@ -214,7 +214,7 @@ deps-download/$(LIBGC_REF).tar.gz:
 dist/deps/libgc: deps-download/$(LIBGC_REF).tar.gz
 	mkdir -p $@
 	cd $@ && tar zx --strip-components=1 -f $(TD)/$<
-	rm -rf $@/cord $@/tests $@/tools
+	rm -rf $@/tests $@/tools
 	touch $(TD)/$@
 
 dist/depsout/lib/libactongc.a: dist/deps/libgc $(DIST_ZIG)
@@ -222,7 +222,7 @@ dist/depsout/lib/libactongc.a: dist/deps/libgc $(DIST_ZIG)
 	mv dist/depsout/lib/libgc.a $@
 
 # /deps/libmbedtls --------------------------------------------
-LIBMBEDTLS_REF=9009ebc3d89f4acc43267280b7db637c4a4c7c51
+LIBMBEDTLS_REF=e72756f2312f04b659fdeaba2fbba7b1f5fd3927
 deps-download/$(LIBMBEDTLS_REF).tar.gz:
 	mkdir -p deps-download
 	curl -f -L -o $@ https://github.com/actonlang/mbedtls/archive/$(LIBMBEDTLS_REF).tar.gz
@@ -240,7 +240,7 @@ dist/depsout/lib/libmbedcrypto.a: dist/depsout/lib/libmbedtls.a
 dist/depsout/lib/libmbedx509.a: dist/depsout/lib/libmbedtls.a
 
 # /deps/libprotobuf_c --------------------------------------------
-LIBPROTOBUF_C_REF=054ad7def7a9d6132a85747a746dde122c98b78d
+LIBPROTOBUF_C_REF=4e4bfc7ec44e6ac746b05f3251f59610822bc95c
 deps-download/$(LIBPROTOBUF_C_REF).tar.gz:
 	mkdir -p deps-download
 	curl -f -L -o $@ https://github.com/actonlang/protobuf-c/archive/$(LIBPROTOBUF_C_REF).tar.gz
@@ -254,7 +254,7 @@ dist/depsout/lib/libprotobuf-c.a: dist/deps/libprotobuf_c $(DIST_ZIG)
 	cd $< && $(ZIG) build $(ZIG_TARGET) $(ZIG_CPU) --prefix $(TD)/dist/depsout
 
 # /deps/tlsuv ---------------------------------------------
-TLSUV_REF=1196b237c3802fe882c541dab93676657410be05
+TLSUV_REF=f9baa8f5792dec90ba0fb60ecd3e89243d24e381
 deps-download/$(TLSUV_REF).tar.gz:
 	mkdir -p deps-download
 	curl -f -L -o $@ https://github.com/actonlang/tlsuv/archive/$(TLSUV_REF).tar.gz
@@ -290,7 +290,7 @@ dist/depsout/lib/libuuid.a: dist/deps/libuuid $(DIST_ZIG)
 	cd $< && $(ZIG) build $(ZIG_TARGET) $(ZIG_CPU) --prefix $(TD)/dist/depsout
 
 # /deps/libuv --------------------------------------------
-LIBUV_REF=5cd49cfde1ecb19d564b7cc7752ea3b98c86ffe7
+LIBUV_REF=7368cd576c8c06766761abfcfade55352d2e7828
 deps-download/$(LIBUV_REF).tar.gz:
 	mkdir -p deps-download
 	curl -f -L -o $@ https://github.com/actonlang/libuv/archive/$(LIBUV_REF).tar.gz
@@ -304,7 +304,7 @@ dist/depsout/lib/libuv.a: dist/deps/libuv $(DIST_ZIG)
 	cd $< && $(ZIG) build $(ZIG_TARGET) $(ZIG_CPU) --prefix $(TD)/dist/depsout
 
 # /deps/libxml2 ------------------------------------------
-LIBXML2_REF=eec12d6781f9cebf08666bcd43c0f30c47fb03a8
+LIBXML2_REF=56e4e62c077b2c5285b0eec4d6d4497f9b2e6e8f
 deps-download/$(LIBXML2_REF).tar.gz:
 	mkdir -p deps-download
 	curl -f -L -o $@ https://github.com/actonlang/libxml2/archive/$(LIBXML2_REF).tar.gz
@@ -321,7 +321,7 @@ dist/depsout/lib/libxml2.a: dist/deps/libxml2 $(DIST_ZIG)
 	cd $< && $(ZIG) build $(ZIG_TARGET) $(ZIG_CPU) --prefix $(TD)/dist/depsout
 
 # /deps/pcre2 --------------------------------------------
-LIBPCRE2_REF=369f485229f211d596d742b69d3c742a65436b41
+LIBPCRE2_REF=2afc8e2c87e53204e08e5e1333a8e14ecbf5e3a2
 deps-download/$(LIBPCRE2_REF).tar.gz:
 	mkdir -p deps-download
 	curl -f -L -o $@ https://github.com/actonlang/pcre2/archive/$(LIBPCRE2_REF).tar.gz
@@ -335,7 +335,7 @@ dist/depsout/lib/libpcre2.a: dist/deps/pcre2 $(DIST_ZIG)
 	cd $< && $(ZIG) build $(ZIG_TARGET) $(ZIG_CPU) --prefix $(TD)/dist/depsout
 
 # /deps/libsnappy_c --------------------------------------------
-LIBSNAPPY_C_REF=9446721cb7ee790dfe2db39701075b00513b5129
+LIBSNAPPY_C_REF=3f5b95957558a35c2becbe6b628c8219477dd5a4
 deps-download/$(LIBSNAPPY_C_REF).tar.gz:
 	mkdir -p deps-download
 	curl -f -L -o $@ https://github.com/actonlang/snappy/archive/$(LIBSNAPPY_C_REF).tar.gz
@@ -368,7 +368,7 @@ ZIG_ARCH_ARG=-mcpu=x86_64
 endif
 builder/builder: builder/build.zig backend/build.zig base/build.zig $(ZIG_DEP) $(DEPS_DIRS) $(DIST_ZIG)
 	rm -rf builder/zig-cache builder/zig-out
-	cd builder && $(ZIG) build-exe -femit-bin=builder $(ZIG_ARCH_ARG) --dep @build --dep @dependencies --mod root ../dist/zig/lib/build_runner.zig --mod @build ./build.zig --mod @dependencies ./dependencies.zig
+	cd builder && $(ZIG) build-exe -femit-bin=builder $(ZIG_ARCH_ARG) --dep @build --dep @dependencies --mod root ../dist/zig/lib/compiler/build_runner.zig --mod @build ./build.zig --mod @dependencies ./dependencies.zig
 
 .PHONY: base/out/types/__builtin__.ty
 base/out/types/__builtin__.ty: $(ACTONC) $(DEPS)

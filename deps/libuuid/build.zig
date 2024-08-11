@@ -37,7 +37,7 @@ pub fn build(b: *std.Build) void {
             "-DUSLEEP",
         }
     });
-    lib.addIncludePath(.{ .path = "include" });
+    lib.addIncludePath(b.path("include"));
     lib.linkLibC();
     b.installFile("src/uuid.h", "include/uuid/uuid.h");
     b.installArtifact(lib);
