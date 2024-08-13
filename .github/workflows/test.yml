@@ -499,7 +499,7 @@ jobs:
         run: sed -i -e 's/^## Unreleased/## [999.9] Unreleased\nThis is an unreleased snapshot built from the main branch. Like a nightly but more up to date./' CHANGELOG.md
       - name: "Extract release notes"
         id: extract-release-notes
-        uses: ffurrer2/extract-release-notes@v1
+        uses: ffurrer2/extract-release-notes@v2
       - name: "(re-)create 'tip' release notes and upload artifacts as assets"
         uses: ncipollo/release-action@v1
         with:
@@ -560,7 +560,7 @@ jobs:
         run: ls
       - name: "Extract release notes"
         id: extract-release-notes
-        uses: ffurrer2/extract-release-notes@v1
+        uses: ffurrer2/extract-release-notes@v2
       - name: "Create release"
         uses: ncipollo/release-action@v1
         with:
