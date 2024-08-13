@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Testing / CI
+- Add dependabot config for updating GitHub Actions workflows
+
+
 ## [0.23.0] (2024-08-13)
 
 ## Added
