@@ -695,7 +695,7 @@ jobs:
         run: |
           sed -i -e 's,^  url.*,  url "https://github.com/actonlang/acton/archive/refs/tags/v${{ steps.get_version.outputs.version }}.tar.gz",' -e 's/^  sha256.*/  sha256 "${{ steps.shasum.outputs.sum }}"/' homebrew-acton/Formula/acton.rb
       - name: "Create Pull Request"
-        uses: peter-evans/create-pull-request@v4
+        uses: peter-evans/create-pull-request@v6
         with:
           path: homebrew-acton
           token: ${{ secrets.ACTBOT_PAT }}
