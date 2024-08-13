@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## [0.23.0] (2024-08-13)
 
 ## Added
 - More unboxing of fixed size integers
@@ -54,7 +54,7 @@
     no character 23 and so the length of the slice is 0 which would trigger a
     `SIGILL` when compiled in `--dev` mode (which comes with lots of extra
     UBsan)
-- Fix dict corruption issue #1805
+- Fix dict corruption issue when deleting items #1805
 - `set.pop()` now does not crash for an empty list (it threw NULL before)
 - Fix decoding of buffered test output
 
