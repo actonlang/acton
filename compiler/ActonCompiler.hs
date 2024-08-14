@@ -869,8 +869,6 @@ zigBuild env opts paths tasks binTasks = do
             then zig paths ++ " build " ++
                  " --cache-dir " ++ global_cache_dir ++
                  " --global-cache-dir " ++ global_cache_dir ++
-                 " --prefix " ++ projOut paths ++
-                 " --prefix-exe-dir 'bin'" ++
                  if (C.debug opts) then " --verbose " else ""
             else (joinPath [ sysPath paths, "builder", "builder" ]) ++ " " ++
                  (joinPath [ sysPath paths, "zig/zig" ]) ++ " " ++
@@ -884,13 +882,13 @@ zigBuild env opts paths tasks binTasks = do
                  target_cpu ++
                  " -Ddeps_path=" ++ (C.deppath opts) ++
                  " -Doptimize=" ++ (if (C.dev opts) then "Debug" else "ReleaseFast") ++
-                 (if (C.db opts) then " -Ddb " else " ") ++
-                 (if no_threads then " -Dno_threads " else " ") ++
-                 (if (C.cpedantic opts) then " -Dcpedantic " else " ") ++
+                 (if (C.db opts) then " -Ddb " else "") ++
+                 (if no_threads then " -Dno_threads " else "") ++
+                 (if (C.cpedantic opts) then " -Dcpedantic " else "") ++
                  " -Dsyspath=" ++ sysPath paths
 
     iff (C.debug opts) $ putStrLn ("zigCmd: " ++ zigCmd)
-    runZig opts zigCmd (Just (projPath paths))
+    runZig opts zigCmd paths (Just (projPath paths))
     -- if we are in a temp acton project, copy the outputted binary next to the source file
     if (isTmp paths && not (null binTasks))
       then do
