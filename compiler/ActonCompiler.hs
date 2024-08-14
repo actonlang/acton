@@ -32,6 +32,7 @@ import qualified Acton.LambdaLifter
 import qualified Acton.Boxing
 import qualified Acton.CodeGen
 import qualified Acton.Builtin
+import qualified Acton.Builder
 import Utils
 import qualified Pretty
 import qualified InterfaceFiles
@@ -849,6 +850,15 @@ zigBuild env opts paths tasks binTasks = do
       `catch` handleNotExists
     createDirectoryLink (sysPath paths) (joinPath [projPath paths, ".build", "sys"])
 
+    -- Write our build.zig and build.zig.zon files
+    let buildZigPath = projPath paths ++ "/build.zig"
+        buildZigZonPath = projPath paths ++ "/build.zig.zon"
+
+    iff (not (isTmp paths)) (do
+      writeFile buildZigPath Acton.Builder.buildzig
+      writeFile buildZigZonPath Acton.Builder.buildzigzon
+      )
+
     -- custom build.zig ?
     buildZigExists <- doesFileExist $ projPath paths ++ "/build.zig"
     homeDir <- getHomeDirectory
@@ -898,6 +908,10 @@ zigBuild env opts paths tasks binTasks = do
             dstBinFile = joinPath [ binDir paths, exeName ]
         copyFile srcBinFile dstBinFile
       else return ()
+    cleanup paths
     timeEnd <- getTime Monotonic
     iff (not (quiet opts)) $ putStrLn("   Finished final compilation step in  " ++ fmtTime(timeEnd - timeStart))
     return ()
+  where
+    handleNotExists :: IOException -> IO ()
+    handleNotExists _ = return ()
