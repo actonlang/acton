@@ -64,7 +64,6 @@ pub fn build(b: *std.Build) void {
     const deps_path = if (arg_deps_path.len > 0) arg_deps_path else joinPath(b.allocator, buildroot_path, "deps");
 
     const projpath_outtypes = joinPath(b.allocator, buildroot_path, "out/types");
-    const syspath_backend = relJoinPath(b.allocator, dots_to_root, syspath, "backend");
     const syspath_base = relJoinPath(b.allocator, dots_to_root, syspath, "base");
     const syspath_include = joinPath(b.allocator, syspath, "depsout/include");
     const syspath_lib = joinPath(b.allocator, syspath, "depsout/lib");
@@ -199,6 +198,7 @@ pub fn build(b: *std.Build) void {
     libActonProject.addIncludePath(.{ .path = buildroot_path });
 
     // project dependencies
+    print("Checking for dependencies in: {s}\n", .{deps_path});
     const deps_dir = std.fs.cwd().openDir(deps_path, .{ .iterate = true });
     if (deps_dir) |dir| {
         //defer dir.close();
@@ -222,13 +222,13 @@ pub fn build(b: *std.Build) void {
     b.installArtifact(libActonProject);
 
     if (!only_lib) {
-        const libactondb_dep = b.anonymousDependency(syspath_backend, @import("backendbuild.zig"), .{
+        const libactondb_dep = b.dependency("actondb", .{
             .target = target,
             .optimize = optimize,
             .syspath_include = syspath_include,
         });
 
-        const actonbase_dep = b.anonymousDependency(syspath_base, @import("basebuild.zig"), .{
+        const actonbase_dep = b.dependency("base", .{
             .target = target,
             .optimize = optimize,
             .no_threads = no_threads,
@@ -236,7 +236,7 @@ pub fn build(b: *std.Build) void {
             .syspath = syspath,
         });
 
-        const dep_libgc = b.anonymousDependency(relJoinPath(b.allocator, dots_to_root, syspath, "deps/libgc"), @import("deps/libgc/build.zig"), .{
+        const dep_libgc = b.dependency("libgc", .{
             .target = target,
             .optimize = optimize,
             .BUILD_SHARED_LIBS = false,
@@ -245,67 +245,67 @@ pub fn build(b: *std.Build) void {
         });
 
         // -- ActonDeps ------------------------------------------------------------
-        const dep_libargp = b.anonymousDependency(relJoinPath(b.allocator, dots_to_root, syspath, "deps/libargp"), @import("deps/libargp/build.zig"), .{
+        const dep_libargp = b.dependency("libargp", .{
             .target = target,
             .optimize = optimize,
         });
 
-        const dep_libbsdnt = b.anonymousDependency(relJoinPath(b.allocator, dots_to_root, syspath, "deps/libbsdnt"), @import("deps/libbsdnt/build.zig"), .{
+        const dep_libbsdnt = b.dependency("libbsdnt", .{
             .target = target,
             .optimize = optimize,
         });
 
-        const dep_libmbedtls = b.anonymousDependency(relJoinPath(b.allocator, dots_to_root, syspath, "deps/mbedtls"), @import("deps/mbedtls/build.zig"), .{
+        const dep_libmbedtls = b.dependency("libmbedtls", .{
             .target = target,
             .optimize = optimize,
         });
 
-        const dep_libnetstring = b.anonymousDependency(relJoinPath(b.allocator, dots_to_root, syspath, "deps/libnetstring"), @import("deps/libnetstring/build.zig"), .{
+        const dep_libnetstring = b.dependency("libnetstring", .{
             .target = target,
             .optimize = optimize,
         });
 
-        const dep_libpcre2 = b.anonymousDependency(relJoinPath(b.allocator, dots_to_root, syspath, "deps/pcre2"), @import("deps/pcre2/build.zig"), .{
+        const dep_libpcre2 = b.dependency("libpcre2", .{
             .target = target,
             .optimize = optimize,
         });
 
-        const dep_libprotobuf_c = b.anonymousDependency(relJoinPath(b.allocator, dots_to_root, syspath, "deps/libprotobuf_c"), @import("deps/libprotobuf_c/build.zig"), .{
+        const dep_libprotobuf_c = b.dependency("libprotobuf_c", .{
             .target = target,
             .optimize = optimize,
         });
 
-        const dep_libtlsuv = b.anonymousDependency(relJoinPath(b.allocator, dots_to_root, syspath, "deps/tlsuv"), @import("deps/tlsuv/build.zig"), .{
+        const dep_libtlsuv = b.dependency("libtlsuv", .{
             .target = target,
             .optimize = optimize,
         });
 
-        const dep_libutf8proc = b.anonymousDependency(relJoinPath(b.allocator, dots_to_root, syspath, "deps/libutf8proc"), @import("deps/libutf8proc/build.zig"), .{
+        const dep_libutf8proc = b.dependency("libutf8proc", .{
             .target = target,
             .optimize = optimize,
         });
 
-        const dep_libuuid = b.anonymousDependency(relJoinPath(b.allocator, dots_to_root, syspath, "deps/libuuid"), @import("deps/libuuid/build.zig"), .{
+        const dep_libuuid = b.dependency("libuuid", .{
             .target = target,
             .optimize = optimize,
         });
 
-        const dep_libuv = b.anonymousDependency(relJoinPath(b.allocator, dots_to_root, syspath, "deps/libuv"), @import("deps/libuv/build.zig"), .{
+        const dep_libuv = b.dependency("libuv", .{
             .target = target,
             .optimize = optimize,
         });
 
-        const dep_libxml2 = b.anonymousDependency(relJoinPath(b.allocator, dots_to_root, syspath, "deps/libxml2"), @import("deps/libxml2/build.zig"), .{
+        const dep_libxml2 = b.dependency("libxml2", .{
             .target = target,
             .optimize = optimize,
         });
 
-        const dep_libyyjson = b.anonymousDependency(relJoinPath(b.allocator, dots_to_root, syspath, "deps/libyyjson"), @import("deps/libyyjson/build.zig"), .{
+        const dep_libyyjson = b.dependency("libyyjson", .{
             .target = target,
             .optimize = optimize,
         });
 
-        const dep_libsnappy_c = b.anonymousDependency(relJoinPath(b.allocator, dots_to_root, syspath, "deps/libsnappy_c"), @import("deps/libsnappy_c/build.zig"), .{
+        const dep_libsnappy_c = b.dependency("libsnappy", .{
             .target = target,
             .optimize = optimize,
         });
@@ -361,7 +361,7 @@ pub fn build(b: *std.Build) void {
                         const dep_path = joinPath(b.allocator, deps_path, dep_entry.name);
                         executable.addIncludePath(.{ .path = dep_path });
                         const dep_path_rel = joinPath(b.allocator, "deps", dep_entry.name);
-                        const dep_dep = b.anonymousDependency(dep_path_rel, @import("build.zig"), .{
+                        const dep_dep = b.dependency(dep_path_rel, .{
                             .target = target,
                             .optimize = optimize,
                             .only_lib = true,

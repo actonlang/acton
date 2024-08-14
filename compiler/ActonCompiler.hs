@@ -124,7 +124,25 @@ getModPath path mn =
 printErrorAndExit msg = do
                   errorWithoutStackTrace msg
                   System.Exit.exitFailure
- 
+
+printErrorAndCleanAndExit msg paths = do
+                  errorWithoutStackTrace msg
+                  cleanup paths
+                  System.Exit.exitFailure
+
+
+cleanup paths = do
+    -- Need platform free path separators
+    removeFile (joinPath [projPath paths, ".actonc.lock"])
+      `catch` handleNotExists
+    removeFile (joinPath [projPath paths, "build.zig"])
+      `catch` handleNotExists
+    removeFile (joinPath [projPath paths, "build.zig.zon"])
+      `catch` handleNotExists
+  where
+    handleNotExists :: IOException -> IO ()
+    handleNotExists _ = return ()
+
 -- our own readFile & writeFile with hard-coded utf-8 encoding
 readFile f = do
     h <- openFile f ReadMode
@@ -228,7 +246,7 @@ buildProject opts = do
                 paths <- findPaths (joinPath [ curDir, "Acton.toml" ]) opts
                 srcDirExists <- doesDirectoryExist (srcDir paths)
                 if not srcDirExists
-                  then printErrorAndExit"Missing src/ directory"
+                  then printErrorAndExit "Missing src/ directory"
                   else do
                     -- grab project lock
                     lockFile (joinPath [projPath paths, ".actonc.lock"]) Exclusive
@@ -521,7 +539,7 @@ compileTasks opts paths tasks
                              then do env0 <- Acton.Env.initEnv builtinPath False
                                      env1 <- foldM (doTask opts paths) env0 [t | AcyclicSCC t <- as]
                                      return env1
-                              else printErrorAndExit ("Cyclic imports: "++concatMap showTaskGraph cs)
+                              else printErrorAndCleanAndExit ("Cyclic imports: "++concatMap showTaskGraph cs) paths
   where isAcyclic (AcyclicSCC _) = True
         isAcyclic _              = False
         showTaskGraph ts         = "\n"++concatMap (\t-> concat (intersperse "." (A.modPath (name t)))++" ") ts
@@ -767,9 +785,9 @@ handle errKind f src paths mn ex = do putStrLn ("\nERROR: Error when compiling "
                                       when (rmTmp paths) $ removeDirectoryRecursive (projPath paths)
                                       System.Exit.exitFailure
   where outbase        = outBase paths mn
-        removeIfExists f = removeFile f `catch` handleExists
-        handleExists :: IOException -> IO ()
-        handleExists _ = return ()
+        removeIfExists f = removeFile f `catch` handleNotExists
+        handleNotExists :: IOException -> IO ()
+        handleNotExists _ = return ()
 
 writeRootC :: Acton.Env.Env0 -> C.CompileOptions -> Paths -> BinTask -> IO (Maybe BinTask)
 writeRootC env opts paths binTask
@@ -803,23 +821,33 @@ isWindowsOS targetTriple = case splitOn "-" targetTriple of
     (_:os:_) -> os == "windows"
     _        -> False
 
-runZig opts zigCmd wd = do
+runZig opts zigCmd paths wd = do
     iff (C.ccmd opts) $ putStrLn zigCmd
     (returnCode, zigStdout, zigStderr) <- readCreateProcessWithExitCode (shell $ zigCmd){ cwd = wd } ""
     case returnCode of
         ExitSuccess -> do
           iff (C.debug opts) $ putStrLn zigStderr
           return ()
-        ExitFailure _ -> do printIce "compilation of generated Zig code failed"
-                            putStrLn $ "zig stdout:\n" ++ zigStdout
-                            putStrLn $ "zig stderr:\n" ++ zigStderr
-                            System.Exit.exitFailure
+        ExitFailure ret -> do
+          printIce ("compilation of generated Zig code failed, returned error code" ++ show ret)
+          putStrLn $ "zig stdout:\n" ++ zigStdout
+          putStrLn $ "zig stderr:\n" ++ zigStderr
+          cleanup paths
+          System.Exit.exitFailure
 
 zigBuild :: Acton.Env.Env0 -> C.CompileOptions -> Paths -> [CompileTask] -> [BinTask] -> IO ()
 zigBuild env opts paths tasks binTasks = do
     mapM (writeRootC env opts paths) binTasks
     iff (not (quiet opts)) $ putStrLn("  Final compilation step")
     timeStart <- getTime Monotonic
+
+
+    -- Create .build directory if it doesn't exist
+    createDirectoryIfMissing True (joinPath [projPath paths, ".build"])
+    -- symlink .build/sys to the syspath directory, always recreating it to make sure it's up to date
+    removeDirectoryLink (joinPath [projPath paths, ".build", "sys"])
+      `catch` handleNotExists
+    createDirectoryLink (sysPath paths) (joinPath [projPath paths, ".build", "sys"])
 
     -- custom build.zig ?
     buildZigExists <- doesFileExist $ projPath paths ++ "/build.zig"

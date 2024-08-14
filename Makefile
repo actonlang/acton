@@ -224,6 +224,8 @@ dist/deps/mbedtls: deps-download/$(LIBMBEDTLS_REF).tar.gz
 	mkdir -p $@
 	cd $@ && tar zx --strip-components=1 -f $(TD)/$<
 	touch $(TD)/$@
+	mkdir -p $@/.build
+	ln -s ../../../ $@/.build/sys # horrible hack to make zig build hack work
 
 dist/depsout/lib/libmbedtls.a: dist/deps/mbedtls $(DIST_ZIG)
 	cd $< && $(ZIG) build $(ZIG_TARGET) $(ZIG_CPU) --prefix $(TD)/dist/depsout
@@ -305,6 +307,8 @@ dist/deps/libxml2: deps-download/$(LIBXML2_REF).tar.gz
 	cd $@ && tar zx --strip-components=1 -f $(TD)/$<
 	rm -rf $@/doc $@/example $@/fuzz $@/os400 $@/python $@/test*
 	touch $(TD)/$@
+	mkdir -p $@/.build
+	ln -s ../../../ $@/.build/sys # horrible hack to make zig build hack work
 
 dist/depsout/lib/libxml2.a: dist/deps/libxml2 $(DIST_ZIG)
 	cd $< && $(ZIG) build $(ZIG_TARGET) $(ZIG_CPU) --prefix $(TD)/dist/depsout
@@ -429,7 +433,7 @@ cli/out/bin/acton: distribution1
 # == DIST ==
 #
 
-BACKEND_FILES = backend/build.zig $(wildcard backend/*.c backend/*.h backend/failure_detector/*.c backend/failure_detector/*.h)
+BACKEND_FILES = backend/build.zig backend/build.zig.zon $(wildcard backend/*.c backend/*.h backend/failure_detector/*.c backend/failure_detector/*.h)
 DIST_BACKEND_FILES = $(addprefix dist/,$(BACKEND_FILES)) dist/backend/deps dist/bin/actondb
 dist/backend%: backend/%
 	mkdir -p $(dir $@)

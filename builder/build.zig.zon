@@ -1,0 +1,55 @@
+.{
+    .name = "actonproject",
+    .version = "0.0.0",
+    .dependencies = .{
+        .actondb = .{
+            .path = ".build/sys/backend/",
+        },
+        .base = .{
+            .path = ".build/sys/base/",
+        },
+        .libargp = .{
+            .path = ".build/sys/deps/libargp/",
+        },
+        .libbsdnt = .{
+            .path = ".build/sys/deps/libbsdnt/",
+        },
+        .libgc = .{
+            .path = ".build/sys/deps/libgc/",
+        },
+        .libmbedtls = .{
+            .path = ".build/sys/deps/mbedtls/",
+        },
+        .libnetstring = .{
+            .path = ".build/sys/deps/libnetstring/",
+        },
+        .libpcre2 = .{
+            .path = ".build/sys/deps/pcre2/",
+        },
+        .libprotobuf_c = .{
+            .path = ".build/sys/deps/libprotobuf_c/",
+        },
+        .libsnappy = .{
+            .path = ".build/sys/deps/libsnappy_c/",
+        },
+        .libtlsuv = .{
+            .path = ".build/sys/deps/tlsuv/",
+        },
+        .libutf8proc = .{
+            .path = ".build/sys/deps/libutf8proc/",
+        },
+        .libuuid = .{
+            .path = ".build/sys/deps/libuuid/",
+        },
+        .libuv = .{
+            .path = ".build/sys/deps/libuv/",
+        },
+        .libxml2 = .{
+            .path = ".build/sys/deps/libxml2/",
+        },
+        .libyyjson = .{
+            .path = ".build/sys/deps/libyyjson/",
+        },
+    },
+    .paths = .{""},
+}
