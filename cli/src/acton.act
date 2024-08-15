@@ -114,7 +114,7 @@ actor BuildProject(process_cap, env, args):
         for dep in deps:
             print(" -", dep)
             remaining_deps[dep] = True
-            cr = CompilerBuildRunner(process_cap, env, cmdargs, file.join_path(["deps", dep]), lambda: on_dep_build(dep) , lambda x: on_dep_build_error(dep, x))
+            cr = CompilerBuildRunner(process_cap, env, cmdargs + ["--keepbuild"], file.join_path(["deps", dep]), lambda: on_dep_build(dep) , lambda x: on_dep_build_error(dep, x))
 
 
 actor BuildProjectTests(process_cap, env, on_build_success, on_build_failure, dev: bool=True):

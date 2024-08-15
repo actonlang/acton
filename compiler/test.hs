@@ -91,6 +91,12 @@ compilerTests =
         (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../test/compiler/subdash/out") ""
         testBuild "" ExitSuccess False "../test/compiler/subdash/"
         testBuild "" ExitSuccess False "../test/compiler/subdash/"
+  , testCase "deps" $ do
+        (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../test/compiler/test_deps/build*") ""
+        (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../test/compiler/test_deps/out") ""
+        (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../test/compiler/test_deps/deps/a/build*") ""
+        (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../test/compiler/test_deps/deps/a/out") ""
+        runActon "build" ExitSuccess False "../test/compiler/test_deps/"
   ]
 
 actoncProjTests =
@@ -339,6 +345,17 @@ buildThing opts thing = do
     let actCmd    = (id actonc) ++ " " ++ (if proj then "build " else thing) ++ " --dev --always-build " ++ opts
     (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ actCmd){ cwd = Just wd } ""
     return (returnCode, cmdOut, cmdErr)
+
+
+runActon opts expRet expFail proj = do
+    actonExe <- canonicalizePath "../dist/bin/acton"
+    projPath <- canonicalizePath proj
+    let actCmd    = (id actonExe) ++ " " ++ opts
+    (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ actCmd){ cwd = Just projPath } ""
+    iff (expFail == False && returnCode /= expRet) (
+        putStrLn("\nERROR: when running acton " ++ opts ++ ", acton returned code (" ++ (show returnCode) ++ ") not as expected (" ++ (show expRet) ++ ")\nSTDOUT:\n" ++ cmdOut ++ "STDERR:\n" ++ cmdErr)
+        )
+    assertEqual ("acton should return " ++ (show expRet)) expRet returnCode
 
 
 iff True m                      = m >> return ()

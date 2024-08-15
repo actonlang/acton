@@ -48,6 +48,7 @@ import Data.List.Split
 import Data.Monoid ((<>))
 import Data.Ord
 import Data.Graph
+import Data.String.Utils (replace)
 import Data.Version (showVersion)
 import qualified Data.List
 import qualified Filesystem.Path.CurrentOS as Fsco
@@ -93,7 +94,8 @@ main = do
           C.deppath = C.deppathB opts,
           C.target = C.targetB opts,
           C.cpu = C.cpuB opts,
-          C.test = C.testB opts
+          C.test = C.testB opts,
+          C.keepbuild = C.keepbuildB opts
           }
         C.CmdOpt (C.Cloud opts) -> undefined
         C.CmdOpt (C.Doc opts)   -> printDocs opts
@@ -103,7 +105,7 @@ main = do
 
 defaultOpts   = C.CompileOptions False False False False False False False False False False False False
                                  False False False False False False False False False False False False
-                                 False "" "" "" "" C.defTarget "" False
+                                 False "" "" "" "" C.defTarget "" False False
 
 
 -- Auxiliary functions ---------------------------------------------------------------------------------------
@@ -126,20 +128,21 @@ printErrorAndExit msg = do
                   errorWithoutStackTrace msg
                   System.Exit.exitFailure
 
-printErrorAndCleanAndExit msg paths = do
+printErrorAndCleanAndExit msg opts paths = do
                   errorWithoutStackTrace msg
-                  cleanup paths
+                  cleanup opts paths
                   System.Exit.exitFailure
 
 
-cleanup paths = do
+cleanup opts paths = do
     -- Need platform free path separators
     removeFile (joinPath [projPath paths, ".actonc.lock"])
       `catch` handleNotExists
-    removeFile (joinPath [projPath paths, "build.zig"])
-      `catch` handleNotExists
-    removeFile (joinPath [projPath paths, "build.zig.zon"])
-      `catch` handleNotExists
+    iff (not (C.keepbuild opts)) $ do
+      removeFile (joinPath [projPath paths, "build.zig"])
+        `catch` handleNotExists
+      removeFile (joinPath [projPath paths, "build.zig.zon"])
+        `catch` handleNotExists
   where
     handleNotExists :: IOException -> IO ()
     handleNotExists _ = return ()
@@ -372,7 +375,8 @@ data Paths      = Paths {
                     isTmp       :: Bool,
                     rmTmp       :: Bool,
                     fileExt     :: String,
-                    modName     :: A.ModName
+                    modName     :: A.ModName,
+                    projDeps    :: [String]
                   }
 
 -- Given a FILE and optionally --syspath PATH:
@@ -426,14 +430,16 @@ findPaths actFile opts  = do execDir <- takeDirectory <$> System.Environment.get
                                  projTypes = joinPath [projOut, "types"]
                                  binDir  = if isTmp then srcDir else joinPath [projOut, "bin"]
                                  modName = A.modName $ dirInSrc ++ [fileBody]
-                             deps <- findDeps projPath (C.deppath opts)
-                             sPaths <- searchPaths opts projTypes sysTypes deps
+                                 projDepsDir = joinPath [projPath, "deps"]
+                             dep_dirs <- findDeps projPath (C.deppath opts)
+                             sPaths <- searchPaths opts projTypes sysTypes dep_dirs
+                             let deps = map takeBaseName dep_dirs
                              createDirectoryIfMissing True binDir
                              createDirectoryIfMissing True projOut
                              createDirectoryIfMissing True projTypes
                              createDirectoryIfMissing True projLib
                              createDirectoryIfMissing True (getModPath projTypes modName)
-                             return $ Paths sPaths sysPath sysTypes sysLib projPath projOut projTypes projLib binDir srcDir isTmp rmTmp fileExt modName
+                             return $ Paths sPaths sysPath sysTypes sysLib projPath projOut projTypes projLib binDir srcDir isTmp rmTmp fileExt modName deps
   where (fileBody,fileExt) = splitExtension $ takeFileName actFile
 
         analyze "/" ds  = do let rmTmp = if (null $ C.tempdir opts) then True else False
@@ -540,7 +546,7 @@ compileTasks opts paths tasks
                              then do env0 <- Acton.Env.initEnv builtinPath False
                                      env1 <- foldM (doTask opts paths) env0 [t | AcyclicSCC t <- as]
                                      return env1
-                              else printErrorAndCleanAndExit ("Cyclic imports: "++concatMap showTaskGraph cs) paths
+                              else printErrorAndCleanAndExit ("Cyclic imports: "++concatMap showTaskGraph cs) opts paths
   where isAcyclic (AcyclicSCC _) = True
         isAcyclic _              = False
         showTaskGraph ts         = "\n"++concatMap (\t-> concat (intersperse "." (A.modPath (name t)))++" ") ts
@@ -833,8 +839,43 @@ runZig opts zigCmd paths wd = do
           printIce ("compilation of generated Zig code failed, returned error code" ++ show ret)
           putStrLn $ "zig stdout:\n" ++ zigStdout
           putStrLn $ "zig stderr:\n" ++ zigStderr
-          cleanup paths
+          cleanup opts paths
           System.Exit.exitFailure
+
+-- We need to generate a build.zig.zon file for this project. The starting point
+-- is the generic one, stored in Acton.Builder.buildzigzon that includes all the
+-- dependencies of Acton base. We need to inject the dependencies of the project
+-- we are compiling into the .dependencies section. We get the dependencies by
+-- listing the 'deps/' directory of the project we are compiling. Since we can't
+-- parse and modify .zon files, we treat it as text and inject the dependencies
+-- manually.
+
+-- Shortened example of the input build.zig.zon that we have in
+-- Acton.Builder.buildzigzon:
+--
+-- .{
+--     .name = "actonproject",
+--     .version = "0.0.0",
+--     .dependencies = .{
+--         .actondb = .{
+--             .path = ".build/sys/backend/",
+--         },
+--         .base = .{
+--             .path = ".build/sys/base/",
+--         },
+--     },
+--     .paths = .{""},
+-- }
+--
+-- We need to inject the project dependencies in to the .dependencies section.
+-- The dependencies are in the paths record in the field projDeps
+genBuildZigZon :: Paths -> String
+genBuildZigZon paths =
+    newBuildZigZon
+  where deps = map (\d -> "        ." ++ d ++ " = .{\n            .path = \"deps/" ++ d ++ "/\",\n        },") (projDeps paths)
+        depsStr = intercalate "\n" deps
+        buildZigZon = Acton.Builder.buildzigzon
+        newBuildZigZon = replace ".dependencies = .{" (".dependencies = .{\n" ++ depsStr) buildZigZon
 
 zigBuild :: Acton.Env.Env0 -> C.CompileOptions -> Paths -> [CompileTask] -> [BinTask] -> IO ()
 zigBuild env opts paths tasks binTasks = do
@@ -856,7 +897,7 @@ zigBuild env opts paths tasks binTasks = do
 
     iff (not (isTmp paths)) (do
       writeFile buildZigPath Acton.Builder.buildzig
-      writeFile buildZigZonPath Acton.Builder.buildzigzon
+      writeFile buildZigZonPath (genBuildZigZon paths)
       )
 
     -- custom build.zig ?
@@ -908,7 +949,7 @@ zigBuild env opts paths tasks binTasks = do
             dstBinFile = joinPath [ binDir paths, exeName ]
         copyFile srcBinFile dstBinFile
       else return ()
-    cleanup paths
+    cleanup opts paths
     timeEnd <- getTime Monotonic
     iff (not (quiet opts)) $ putStrLn("   Finished final compilation step in  " ++ fmtTime(timeEnd - timeStart))
     return ()

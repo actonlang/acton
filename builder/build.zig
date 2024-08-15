@@ -208,7 +208,7 @@ pub fn build(b: *std.Build) void {
             if (dep_entry.kind == .directory) {
                 std.debug.print("Found sub-directory: {s}\n", .{dep_entry.name});
                 const dep_path = joinPath(b.allocator, deps_path, dep_entry.name);
-                libActonProject.addIncludePath(b.path(dep_path));
+                libActonProject.addIncludePath(.{ .cwd_relative = dep_path });
             }
         }
     } else |err| {
@@ -360,9 +360,10 @@ pub fn build(b: *std.Build) void {
                     if (dep_entry.kind == .directory) {
                         std.debug.print("Found sub-directory: {s}\n", .{dep_entry.name});
                         const dep_path = joinPath(b.allocator, deps_path, dep_entry.name);
-                        executable.addIncludePath(b.path(dep_path));
+                        executable.addIncludePath(.{ .cwd_relative = dep_path });
                         const dep_path_rel = joinPath(b.allocator, "deps", dep_entry.name);
-                        const dep_dep = b.dependency(dep_path_rel, .{
+                        _ = dep_path_rel;
+                        const dep_dep = b.dependency(dep_entry.name, .{
                             .target = target,
                             .optimize = optimize,
                             .only_lib = true,
