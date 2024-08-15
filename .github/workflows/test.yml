@@ -391,6 +391,9 @@ jobs:
     steps:
       - name: "Check out repository code"
         uses: actions/checkout@v4
+      - name: "Remove any currently install Acton to ensure clean slate"
+        run: |
+          sudo apt-get purge -qy acton
       - name: "Install Acton from APT tip repo"
         run: |
           wget -q -O - https://apt.acton-lang.io/acton.gpg | sudo apt-key add -
