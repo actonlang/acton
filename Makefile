@@ -366,10 +366,9 @@ dist/depsout/lib/libyyjson.a: dist/deps/libyyjson $(DIST_ZIG)
 ifeq ($(ARCH),x86_64)
 ZIG_ARCH_ARG=-mcpu=x86_64
 endif
-builder/builder: builder/build.zig backend/build.zig base/build.zig $(ZIG_DEP) $(DEPS_DIRS)
+builder/builder: builder/build.zig backend/build.zig base/build.zig $(ZIG_DEP) $(DEPS_DIRS) $(DIST_ZIG)
 	rm -rf builder/zig-cache builder/zig-out
-	(echo 'const root = @import("build.zig");'; tail -n +2 dist/zig/lib/build_runner.zig | sed -e 's/@dependencies/dependencies.zig/') > builder/build_runner.zig
-	cd builder && $(ZIG) build-exe build_runner.zig -femit-bin=builder $(ZIG_ARCH_ARG)
+	cd builder && $(ZIG) build-exe -femit-bin=builder $(ZIG_ARCH_ARG) --dep @build --dep @dependencies --mod root ../dist/zig/lib/build_runner.zig --mod @build ./build.zig --mod @dependencies ./dependencies.zig
 
 .PHONY: base/out/types/__builtin__.ty
 base/out/types/__builtin__.ty: $(ACTONC) $(DEPS)
@@ -429,7 +428,7 @@ clean-all: clean clean-compiler
 	rm -rf $(ZIG_LOCAL_CACHE_DIR)
 
 clean-base:
-	rm -rf base/out builder/build_runner* builder/builder* builder/zig-cache builder/zig-out
+	rm -rf base/out builder/builder* builder/zig-cache builder/zig-out
 
 bin/acton: cli/out/bin/acton
 	cp -a $< $@
