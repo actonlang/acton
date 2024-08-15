@@ -120,11 +120,18 @@ ACTONC_TEST_HS=$(wildcard compiler/tests/*.hs)
 ACTONC_HS=$(filter-out $(ACTONC_TEST_HS),$(ACTONC_ALL_HS))
 # NOTE: we're unsetting CC & CXX to avoid using zig cc & zig c++ for stack /
 # ghc, which doesn't seem to work properly
-compiler/actonc: compiler/package.yaml.in compiler/stack.yaml dist/builder $(ACTONC_HS)
+compiler/actonc: compiler/package.yaml.in compiler/stack.yaml dist/builder $(ACTONC_HS) compiler/Acton/Builder.hs
 	cd compiler && unset CC && unset CXX && unset CFLAGS && stack build --dry-run 2>&1 | grep "Nothing to build" || \
 		(sed 's,^version:.*,version:      "$(VERSION_INFO)",' < package.yaml.in > package.yaml \
 		&& stack build $(STACK_OPTS) --ghc-options='-j4 $(ACTC_GHC_OPTS)' \
 		&& stack --local-bin-path=. install 2>/dev/null)
+
+compiler/Acton/Builder.hs: builder/build.zig builder/build.zig.zon
+# We need to generate a Haskell file from the zig file, so we can include it in the compiler
+# Make sure to escape the double quotes in the zig file and replace them with \" in the Haskell file. We also need to handle newlines since Haskell strings what newlines to be escaped.
+	(echo 'module Acton.Builder where'; \
+		echo '\nbuildzig :: String'; echo -n 'buildzig = "'; cat builder/build.zig | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/$$/\\n/' | tr -d '\n'; echo '"'; \
+		echo '\nbuildzigzon :: String'; echo -n 'buildzigzon = "'; cat builder/build.zig.zon | sed -e 's/"/\\"/g' -e 's/$$/\\n/' | tr -d '\n'; echo '"') > compiler/Acton/Builder.hs
 
 .PHONY: clean-compiler
 clean-compiler:
@@ -224,6 +231,8 @@ dist/deps/mbedtls: deps-download/$(LIBMBEDTLS_REF).tar.gz
 	mkdir -p $@
 	cd $@ && tar zx --strip-components=1 -f $(TD)/$<
 	touch $(TD)/$@
+	mkdir -p $@/.build
+	ln -s ../../../ $@/.build/sys # horrible hack to make zig build hack work
 
 dist/depsout/lib/libmbedtls.a: dist/deps/mbedtls $(DIST_ZIG)
 	cd $< && $(ZIG) build $(ZIG_TARGET) $(ZIG_CPU) --prefix $(TD)/dist/depsout
@@ -305,6 +314,8 @@ dist/deps/libxml2: deps-download/$(LIBXML2_REF).tar.gz
 	cd $@ && tar zx --strip-components=1 -f $(TD)/$<
 	rm -rf $@/doc $@/example $@/fuzz $@/os400 $@/python $@/test*
 	touch $(TD)/$@
+	mkdir -p $@/.build
+	ln -s ../../../ $@/.build/sys # horrible hack to make zig build hack work
 
 dist/depsout/lib/libxml2.a: dist/deps/libxml2 $(DIST_ZIG)
 	cd $< && $(ZIG) build $(ZIG_TARGET) $(ZIG_CPU) --prefix $(TD)/dist/depsout
@@ -355,10 +366,9 @@ dist/depsout/lib/libyyjson.a: dist/deps/libyyjson $(DIST_ZIG)
 ifeq ($(ARCH),x86_64)
 ZIG_ARCH_ARG=-mcpu=x86_64
 endif
-builder/builder: builder/build.zig backend/build.zig base/build.zig $(ZIG_DEP) $(DEPS_DIRS)
+builder/builder: builder/build.zig backend/build.zig base/build.zig $(ZIG_DEP) $(DEPS_DIRS) $(DIST_ZIG)
 	rm -rf builder/zig-cache builder/zig-out
-	(echo 'const root = @import("build.zig");'; tail -n +2 dist/zig/lib/build_runner.zig | sed -e 's/@dependencies/dependencies.zig/') > builder/build_runner.zig
-	cd builder && $(ZIG) build-exe build_runner.zig -femit-bin=builder $(ZIG_ARCH_ARG)
+	cd builder && $(ZIG) build-exe -femit-bin=builder $(ZIG_ARCH_ARG) --dep @build --dep @dependencies --mod root ../dist/zig/lib/build_runner.zig --mod @build ./build.zig --mod @dependencies ./dependencies.zig
 
 .PHONY: base/out/types/__builtin__.ty
 base/out/types/__builtin__.ty: $(ACTONC) $(DEPS)
@@ -418,7 +428,7 @@ clean-all: clean clean-compiler
 	rm -rf $(ZIG_LOCAL_CACHE_DIR)
 
 clean-base:
-	rm -rf base/out builder/build_runner* builder/builder* builder/zig-cache builder/zig-out
+	rm -rf base/out builder/builder* builder/zig-cache builder/zig-out
 
 bin/acton: cli/out/bin/acton
 	cp -a $< $@
@@ -429,7 +439,7 @@ cli/out/bin/acton: distribution1
 # == DIST ==
 #
 
-BACKEND_FILES = backend/build.zig $(wildcard backend/*.c backend/*.h backend/failure_detector/*.c backend/failure_detector/*.h)
+BACKEND_FILES = backend/build.zig backend/build.zig.zon $(wildcard backend/*.c backend/*.h backend/failure_detector/*.c backend/failure_detector/*.h)
 DIST_BACKEND_FILES = $(addprefix dist/,$(BACKEND_FILES)) dist/backend/deps dist/bin/actondb
 dist/backend%: backend/%
 	mkdir -p $(dir $@)

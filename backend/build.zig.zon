@@ -1,0 +1,22 @@
+.{
+    .name = "backend",
+    .version = "0.0.0",
+    .dependencies = .{
+        .libargp = .{
+            .path = "deps/libargp/",
+        },
+        .libnetstring = .{
+            .path = "deps/libnetstring/",
+        },
+        .libprotobuf_c = .{
+            .path = "deps/libprotobuf_c/",
+        },
+        .libuuid = .{
+            .path = "deps/libuuid/",
+        },
+        .libyyjson = .{
+            .path = "deps/libyyjson/",
+        },
+    },
+    .paths = .{""},
+}

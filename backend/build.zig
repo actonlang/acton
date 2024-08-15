@@ -8,27 +8,27 @@ pub fn build(b: *std.Build) void {
     const no_threads = b.option(bool, "no_threads", "") orelse false;
     const syspath_include = b.option([]const u8, "syspath_include", "") orelse "";
 
-    const dep_libargp = b.anonymousDependency("deps/libargp", @import("deps/libargp/build.zig"), .{
+    const dep_libargp = b.dependency("libargp", .{
         .target = target,
         .optimize = optimize,
     });
 
-    const dep_libnetstring = b.anonymousDependency("deps/libnetstring", @import("deps/libnetstring/build.zig"), .{
+    const dep_libnetstring = b.dependency("libnetstring", .{
         .target = target,
         .optimize = optimize,
     });
 
-    const dep_libprotobuf_c = b.anonymousDependency("deps/libprotobuf_c", @import("deps/libprotobuf_c/build.zig"), .{
+    const dep_libprotobuf_c = b.dependency("libprotobuf_c", .{
         .target = target,
         .optimize = optimize,
     });
 
-    const dep_libuuid = b.anonymousDependency("deps/libuuid", @import("deps/libuuid/build.zig"), .{
+    const dep_libuuid = b.dependency("libuuid", .{
         .target = target,
         .optimize = optimize,
     });
 
-    const dep_libyyjson = b.anonymousDependency("deps/libyyjson", @import("deps/libyyjson/build.zig"), .{
+    const dep_libyyjson = b.dependency("libyyjson", .{
         .target = target,
         .optimize = optimize,
     });
