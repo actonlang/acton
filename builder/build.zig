@@ -74,14 +74,14 @@ pub fn build(b: *std.Build) void {
         "out/types/", .{ .iterate = true },
     ) catch |err| {
         std.log.err("Error opening iterable dir: {}", .{err});
-        std.os.exit(1);
+        std.posix.exit(1);
     };
 
     var c_files = ArrayList([]const u8).init(b.allocator);
     var root_c_files = ArrayList(*FilePath).init(b.allocator);
     var walker = iter_dir.walk(b.allocator) catch |err| {
         std.log.err("Error walking dir: {}", .{err});
-        std.os.exit(1);
+        std.posix.exit(1);
     };
     defer walker.deinit();
 
@@ -89,32 +89,32 @@ pub fn build(b: *std.Build) void {
     while (true) {
         const next_result = walker.next() catch |err| {
             std.log.err("Error getting next: {}", .{err});
-            std.os.exit(1);
+            std.posix.exit(1);
         };
         if (next_result) |entry| {
             if (entry.kind == .file) {
                 if (std.mem.endsWith(u8, entry.basename, ".c")) {
                     const fPath = b.allocator.create(FilePath) catch |err| {
                         std.log.err("Error allocating FilePath entry: {}", .{err});
-                        std.os.exit(1);
+                        std.posix.exit(1);
                     };
                     const full_path = entry.dir.realpathAlloc(b.allocator, entry.basename) catch |err| {
                         std.log.err("Error getting dir name: {}", .{err});
-                        std.os.exit(1);
+                        std.posix.exit(1);
                     };
                     const dir = entry.dir.realpathAlloc(b.allocator, ".") catch |err| {
                         std.log.err("Error getting dir name: {}", .{err});
-                        std.os.exit(1);
+                        std.posix.exit(1);
                     };
                     fPath.full_path = full_path;
                     fPath.dir = dir;
                     fPath.filename = b.allocator.dupe(u8, entry.basename) catch |err| {
                         std.log.err("Error allocating filename entry: {}", .{err});
-                        std.os.exit(1);
+                        std.posix.exit(1);
                     };
                     const file_path = b.allocator.alloc(u8, full_path.len - projpath_outtypes.len) catch |err| {
                         std.log.err("Error allocating file_path entry: {}", .{err});
-                        std.os.exit(1);
+                        std.posix.exit(1);
                     };
                     @memcpy(file_path, full_path[projpath_outtypes.len..]);
                     fPath.file_path = file_path;
@@ -128,18 +128,18 @@ pub fn build(b: *std.Build) void {
                         fPath.test_root = false;
                         root_c_files.append(fPath) catch |err| {
                             std.log.err("Error appending to root .c files: {}", .{err});
-                            std.os.exit(1);
+                            std.posix.exit(1);
                         };
                     } else if (std.mem.endsWith(u8, entry.basename, ".test_root.c")) {
                         fPath.test_root = true;
                         root_c_files.append(fPath) catch |err| {
                             std.log.err("Error appending to test_root .c files: {}", .{err});
-                            std.os.exit(1);
+                            std.posix.exit(1);
                         };
                     } else {
                         c_files.append(fPath.full_path) catch |err| {
                             std.log.err("Error appending to .c files: {}", .{err});
-                            std.os.exit(1);
+                            std.posix.exit(1);
                         };
                     }
                 }
@@ -172,7 +172,7 @@ pub fn build(b: *std.Build) void {
             "-DDEV",
         }) catch |err| {
             std.log.err("Error appending flags: {}", .{err});
-            std.os.exit(1);
+            std.posix.exit(1);
         };
     }
 
@@ -187,15 +187,15 @@ pub fn build(b: *std.Build) void {
             "-DACTON_THREADS",
         }) catch |err| {
             std.log.err("Error appending flags: {}", .{err});
-            std.os.exit(1);
+            std.posix.exit(1);
         };
     }
 
     for (c_files.items) |entry| {
-        libActonProject.addCSourceFile(.{ .file = .{ .path = entry }, .flags = flags.items });
+        libActonProject.addCSourceFile(.{ .file = .{ .cwd_relative = entry }, .flags = flags.items });
     }
 
-    libActonProject.addIncludePath(.{ .path = buildroot_path });
+    libActonProject.addIncludePath(.{ .cwd_relative = buildroot_path });
 
     // project dependencies
     print("Checking for dependencies in: {s}\n", .{deps_path});
@@ -208,15 +208,15 @@ pub fn build(b: *std.Build) void {
             if (dep_entry.kind == .directory) {
                 std.debug.print("Found sub-directory: {s}\n", .{dep_entry.name});
                 const dep_path = joinPath(b.allocator, deps_path, dep_entry.name);
-                libActonProject.addIncludePath(.{ .path = dep_path });
+                libActonProject.addIncludePath(b.path(dep_path));
             }
         }
     } else |err| {
         std.debug.print("Failed to open directory: {}\n", .{err});
     }
 
-    libActonProject.addIncludePath(.{ .path = syspath_base });
-    libActonProject.addIncludePath(.{ .path = syspath_include });
+    libActonProject.addIncludePath(.{ .cwd_relative = syspath_base });
+    libActonProject.addIncludePath(.{ .cwd_relative = syspath_include });
     libActonProject.linkLibC();
     libActonProject.linkLibCpp();
     b.installArtifact(libActonProject);
@@ -268,6 +268,7 @@ pub fn build(b: *std.Build) void {
         const dep_libpcre2 = b.dependency("libpcre2", .{
             .target = target,
             .optimize = optimize,
+            .linkage = .static,
         });
 
         const dep_libprotobuf_c = b.dependency("libprotobuf_c", .{
@@ -318,13 +319,13 @@ pub fn build(b: *std.Build) void {
             nlen += 1; // for the null terminator
             const binname = b.allocator.alloc(u8, entry.file_path.len-nlen) catch |err| {
                 std.log.info("Error allocating binname: {}", .{err});
-                std.os.exit(1);
+                std.posix.exit(1);
             };
             if (entry.test_root) {
                 // Write '.test_' to start of binname
                 const buf = std.fmt.allocPrint(b.allocator, ".test_{s}", .{entry.file_path[1..entry.file_path.len - ".test_root.c".len]}) catch |err| {
                     std.log.err("Error allocating binname: {}", .{err});
-                    std.os.exit(1);
+                    std.posix.exit(1);
                 };
                 @memcpy(binname, buf);
             } else {
@@ -343,11 +344,11 @@ pub fn build(b: *std.Build) void {
                 .optimize = optimize,
             });
             //_ = syspath;
-            executable.addCSourceFile(.{ .file = .{ .path = entry.full_path }, .flags = flags.items });
-            executable.addIncludePath(.{ .path = buildroot_path });
-            executable.addIncludePath(.{ .path = syspath_base });
-            executable.addIncludePath(.{ .path = syspath_include });
-            executable.addLibraryPath(.{ .path = syspath_lib });
+            executable.addCSourceFile(.{ .file = .{ .cwd_relative = entry.full_path }, .flags = flags.items });
+            executable.addIncludePath(.{ .cwd_relative = buildroot_path });
+            executable.addIncludePath(.{ .cwd_relative = syspath_base });
+            executable.addIncludePath(.{ .cwd_relative = syspath_include });
+            executable.addIncludePath(.{ .cwd_relative = syspath_lib });
             executable.linkLibrary(libActonProject);
 
             // project dependencies
@@ -359,7 +360,7 @@ pub fn build(b: *std.Build) void {
                     if (dep_entry.kind == .directory) {
                         std.debug.print("Found sub-directory: {s}\n", .{dep_entry.name});
                         const dep_path = joinPath(b.allocator, deps_path, dep_entry.name);
-                        executable.addIncludePath(.{ .path = dep_path });
+                        executable.addIncludePath(b.path(dep_path));
                         const dep_path_rel = joinPath(b.allocator, "deps", dep_entry.name);
                         const dep_dep = b.dependency(dep_path_rel, .{
                             .target = target,
@@ -386,7 +387,7 @@ pub fn build(b: *std.Build) void {
             executable.linkLibrary(dep_libmbedtls.artifact("mbedtls"));
             executable.linkLibrary(dep_libmbedtls.artifact("mbedx509"));
             executable.linkLibrary(dep_libnetstring.artifact("netstring"));
-            executable.linkLibrary(dep_libpcre2.artifact("pcre2"));
+            executable.linkLibrary(dep_libpcre2.artifact("pcre2-8"));
             executable.linkLibrary(dep_libprotobuf_c.artifact("protobuf-c"));
             executable.linkLibrary(dep_libsnappy_c.artifact("snappy-c"));
             executable.linkLibrary(dep_libtlsuv.artifact("tlsuv"));

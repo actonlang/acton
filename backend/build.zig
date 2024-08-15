@@ -73,7 +73,7 @@ pub fn build(b: *std.Build) void {
             "-DACTON_THREADS",
         }) catch |err| {
             std.log.err("Error appending flags: {}", .{err});
-            std.os.exit(1);
+            std.posix.exit(1);
         };
     }
 
@@ -87,7 +87,7 @@ pub fn build(b: *std.Build) void {
         .flags = flags.items
     });
     libactondb.defineCMacro("LOG_USER_COLOR", "");
-    libactondb.addIncludePath(.{ .path = syspath_include });
+    libactondb.addIncludePath(.{ .cwd_relative= syspath_include });
     libactondb.linkLibC();
     libactondb.linkLibCpp();
     b.installArtifact(libactondb);
@@ -97,12 +97,12 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    actondb.addCSourceFile(.{ .file = .{ .path = "actondb.c" }, .flags = &[_][]const u8{
+    actondb.addCSourceFile(.{ .file = b.path("actondb.c"), .flags = &[_][]const u8{
         "-fno-sanitize=undefined",
     }});
-    actondb.addCSourceFile(.{ .file = .{ .path = "log.c" }, .flags = flags.items });
-    actondb.addIncludePath(.{ .path = syspath_include });
-    actondb.addLibraryPath(.{ .path = "../lib" });
+    actondb.addCSourceFile(.{ .file = b.path("log.c"), .flags = flags.items });
+    actondb.addIncludePath(.{ .cwd_relative= syspath_include });
+    actondb.addLibraryPath(b.path("../lib"));
     actondb.linkLibrary(libactondb);
     actondb.linkLibrary(dep_libargp.artifact("argp"));
     actondb.linkLibrary(dep_libnetstring.artifact("netstring"));
