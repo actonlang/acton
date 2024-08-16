@@ -384,6 +384,13 @@ class MemoryError (Exception):
 class OSError (Exception):
     pass
 
+class FileNotFoundError (OSError):
+    def __init__(self, filename: str):
+        self.filename = filename
+
+    def __str__(self):
+        return "%s: No such file or directory: '%s'" % (self._name(), self.filename)
+
 class RuntimeError (Exception):
     pass
 

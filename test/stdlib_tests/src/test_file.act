@@ -42,3 +42,52 @@ def _test_fs_write_read_file(report_result: action(?bool, ?Exception) -> None, e
         report_result(False, exc)
     except Exception as exc:
         report_result(None, exc)
+
+def _test_fs_copyfile(report_result: action(?bool, ?Exception) -> None, env: Env, log_handler: logging.Handler) -> None:
+    try:
+        fc = file.FileCap(env.cap)
+        fs = file.FS(fc)
+        tmpdir = fs.mktmpdir()
+        filename = file.join_path([tmpdir, "test-file"])
+        test_data = b"test-data\n"
+        wf = file.WriteFile(file.WriteFileCap(fc), filename)
+        await async wf.write(test_data)
+        await async wf.close()
+
+        await async fs.copyfile(file.join_path([tmpdir, "test-file"]), file.join_path([tmpdir, "test-file2"]))
+        rf = file.ReadFile(file.ReadFileCap(fc), file.join_path([tmpdir, "test-file2"]))
+        rd = rf.read()
+        rf.close()
+        testing.assertEqual(test_data, rd)
+        await async fs.rmtree(tmpdir)
+        report_result(True, None)
+    except AssertionError as exc:
+        report_result(False, exc)
+    except Exception as exc:
+        report_result(None, exc)
+
+
+def _test_fs_copytree(report_result: action(?bool, ?Exception) -> None, env: Env, log_handler: logging.Handler) -> None:
+    try:
+        fc = file.FileCap(env.cap)
+        fs = file.FS(fc)
+        tmpdir = fs.mktmpdir()
+        await async fs.mkdir(file.join_path([tmpdir, "src"]))
+        await async fs.mkdir(file.join_path([tmpdir, "src", "foo"]))
+        # write a file in src/foo
+        wf = file.WriteFile(file.WriteFileCap(fc), file.join_path([tmpdir, "src", "foo", "test-file"]))
+        await async wf.write(b"test-data\n")
+        await async fs.mkdir(file.join_path([tmpdir, "src", "foo", "bar"]))
+        await async fs.mkdir(file.join_path([tmpdir, "src", "foo", "bar", "baz"]))
+        # write a file in src/foo/bar/baz
+        wf = file.WriteFile(file.WriteFileCap(fc), file.join_path([tmpdir, "src", "foo", "bar", "baz", "test-file"]))
+        await async wf.write(b"test-data\n")
+        await async fs.mkdir(file.join_path([tmpdir, "dst"]))
+        await async fs.copytree(file.join_path([tmpdir, "src"]), file.join_path([tmpdir, "dst"]))
+        testing.assertTrue(fs.stat(tmpdir + "/dst/foo/bar").is_dir())
+        await async fs.rmtree(tmpdir)
+        report_result(True, None)
+    except AssertionError as exc:
+        report_result(False, exc)
+    except Exception as exc:
+        report_result(None, exc)

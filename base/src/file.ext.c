@@ -66,6 +66,19 @@ B_bool fileQ_FileStatD_is_socket (fileQ_FileStat self) {
 #endif
 }
 
+// action def copyfile(src: str, dst: str) -> None:
+$R fileQ_FSD_copyfileG_local (fileQ_FS self, $Cont C_cont, B_str src, B_str dst) {
+    uv_fs_t *req = (uv_fs_t *)acton_malloc(sizeof(uv_fs_t));
+    int r = uv_fs_copyfile(get_uv_loop(), req, (char *)fromB_str(src), (char *)fromB_str(dst), 0, NULL);
+    if (r < 0) {
+        char errmsg[1024] = "Error copying file: ";
+        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        log_warn(errmsg);
+        $RAISE(((B_BaseException)B_OSErrorG_new(to$str(errmsg))));
+    }
+    return $R_CONT(C_cont, B_None);
+}
+
 // action def cwd() -> str:
 $R fileQ_FSD_cwdG_local (fileQ_FS self, $Cont C_cont) {
     char cwd[1024];
@@ -203,7 +216,9 @@ $R fileQ_FSD_removeG_local (fileQ_FS self, $Cont C_cont, B_str filename) {
 $R fileQ_FSD_statG_local (fileQ_FS self, $Cont C_cont, B_str filename) {
     uv_fs_t *req = (uv_fs_t *)acton_malloc(sizeof(uv_fs_t));
     int r = uv_fs_stat(get_uv_loop(), req, (char *)fromB_str(filename), NULL);
-    if (r < 0) {
+    if (r == UV_ENOENT) {
+        $RAISE(((B_BaseException)B_FileNotFoundErrorG_new(filename)));
+    } else if (r < 0) {
         char errmsg[1024] = "Error getting file stat: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
@@ -248,7 +263,9 @@ $R fileQ_ReadFileD__open_fileG_local (fileQ_ReadFile self, $Cont c$cont) {
     pin_actor_affinity();
     uv_fs_t *req = (uv_fs_t *)acton_malloc(sizeof(uv_fs_t));
     int r = uv_fs_open(get_uv_loop(), req, (char *)fromB_str(self->filename), UV_FS_O_RDONLY, 0, NULL);
-    if (r < 0) {
+    if (r == UV_ENOENT) {
+        $RAISE(((B_BaseException)B_FileNotFoundErrorG_new(self->filename)));
+    } else if (r < 0) {
         char errmsg[1024] = "Error opening file for reading: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
