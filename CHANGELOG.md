@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## Changed
+- Use `OSError` instead of `RuntimeError` for general exceptions in the `file`
+  module functions and classes
+
 ### Testing / CI
 - Add dependabot config for updating GitHub Actions workflows
 

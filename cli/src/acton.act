@@ -74,7 +74,7 @@ actor BuildProject(process_cap, env, args):
     deps = []
     try:
         deps = fs.listdir("deps")
-    except RuntimeError:
+    except OSError:
         pass
 
     cmdargs = ["--deppath", file.join_path([fs.cwd(), "deps"])] + build_cmd_args(args)

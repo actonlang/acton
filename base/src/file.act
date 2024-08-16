@@ -153,10 +153,10 @@ actor FS(cap: FileCap):
                         rmdir(d + "/" + entry)
                     else:
                         remove(d + "/" + entry)
-                except RuntimeError:
+                except OSError:
                     # probably a symlink or permission denied
                     pass
-        except RuntimeError:
+        except OSError:
             # dir doesn't exist
             pass
 
@@ -182,10 +182,10 @@ actor FS(cap: FileCap):
                     res.append(s)
                     if s.is_dir():
                         res.extend(walk(d + "/" + entry))
-                except RuntimeError:
+                except OSError:
                     # probably a symlink or permission denied
                     pass
-        except RuntimeError:
+        except OSError:
             # dir doesn't exist
             pass
         return res
