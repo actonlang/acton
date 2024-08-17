@@ -1,0 +1,8 @@
+#
+#
+import a
+
+actor main(env):
+    print("Hello World!")
+    print("Content of foo_a from imported module a: %s" % a.foo_a)
+    env.exit(0)

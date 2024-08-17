@@ -23,6 +23,7 @@ executables:
       - alex
       - happy
     dependencies:
+      - MissingH
       - array
       - async
       - base
