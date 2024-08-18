@@ -98,6 +98,20 @@ actor FS(cap: FileCap):
         NotImplemented
     _pin_affinity()
 
+    action def copyfile(src: str, dst: str) -> None:
+        """Copy a file"""
+        NotImplemented
+
+    action def copytree(src: str, dst: str) -> None:
+        """Copy a directory tree"""
+        for entry in listdir(src):
+            s = lstat(join_path([src, entry]))
+            if s.is_dir():
+                mkdir(join_path([dst, entry]))
+                copytree(join_path([src, entry]), join_path([dst, entry]))
+            else:
+                copyfile(join_path([src, entry]), join_path([dst, entry]))
+
     action def cwd() -> str:
         """Get the current working directory"""
         NotImplemented
@@ -153,10 +167,10 @@ actor FS(cap: FileCap):
                         rmdir(d + "/" + entry)
                     else:
                         remove(d + "/" + entry)
-                except RuntimeError:
+                except OSError:
                     # probably a symlink or permission denied
                     pass
-        except RuntimeError:
+        except OSError:
             # dir doesn't exist
             pass
 
@@ -182,10 +196,10 @@ actor FS(cap: FileCap):
                     res.append(s)
                     if s.is_dir():
                         res.extend(walk(d + "/" + entry))
-                except RuntimeError:
+                except OSError:
                     # probably a symlink or permission denied
                     pass
-        except RuntimeError:
+        except OSError:
             # dir doesn't exist
             pass
         return res

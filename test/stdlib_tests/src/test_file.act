@@ -3,37 +3,91 @@ import file
 import logging
 import testing
 
-def test_fs(env):
-    fc = file.FileCap(env.cap)
-    fs = file.FS(fc)
-    tmpdir = fs.mktmpdir()
-    fs.mkdir(tmpdir + "/foo")
-    fs.mkdir(tmpdir + "/foo2")
-    rel_things = []
-    for e in fs.walk(tmpdir):
-        rel_things.append(e.name.split("/")[-1])
-    testing.assertEqual(set(["foo", "foo2"]), set(rel_things))
-    fs.rmtree(tmpdir)
+def _test_file_walk(report_result: action(?bool, ?Exception) -> None, env: Env, log_handler: logging.Handler) -> None:
+    try:
+        fc = file.FileCap(env.cap)
+        fs = file.FS(fc)
+        tmpdir = fs.mktmpdir()
+        fs.mkdir(tmpdir + "/foo")
+        fs.mkdir(tmpdir + "/foo2")
+        rel_things = []
+        for e in fs.walk(tmpdir):
+            rel_things.append(e.name.split("/")[-1])
+        testing.assertEqual(set(["foo", "foo2"]), set(rel_things))
+        fs.rmtree(tmpdir)
+        report_result(True, None)
+    except AssertionError as exc:
+        report_result(False, exc)
+    except Exception as exc:
+        report_result(None, exc)
 
-actor FsTester(report_result, env, log_handler):
-    log = logging.Logger(log_handler)
+def _test_fs_write_read_file(report_result: action(?bool, ?Exception) -> None, env: Env, log_handler: logging.Handler) -> None:
+    try:
+        fc = file.FileCap(env.cap)
+        fs = file.FS(fc)
+        tmpdir = fs.mktmpdir()
+        filename = file.join_path([tmpdir, "test-file"])
+        test_data = b"test-data\n"
+        wf = file.WriteFile(file.WriteFileCap(fc), filename)
+        await async wf.write(test_data)
+        await async wf.close()
+
+        rf = file.ReadFile(file.ReadFileCap(fc), filename)
+        rd = rf.read()
+        rf.close()
+        testing.assertEqual(test_data, rd)
+        await async fs.rmtree(tmpdir)
+        report_result(True, None)
+    except AssertionError as exc:
+        report_result(False, exc)
+    except Exception as exc:
+        report_result(None, exc)
+
+def _test_fs_copyfile(report_result: action(?bool, ?Exception) -> None, env: Env, log_handler: logging.Handler) -> None:
+    try:
+        fc = file.FileCap(env.cap)
+        fs = file.FS(fc)
+        tmpdir = fs.mktmpdir()
+        filename = file.join_path([tmpdir, "test-file"])
+        test_data = b"test-data\n"
+        wf = file.WriteFile(file.WriteFileCap(fc), filename)
+        await async wf.write(test_data)
+        await async wf.close()
+
+        await async fs.copyfile(file.join_path([tmpdir, "test-file"]), file.join_path([tmpdir, "test-file2"]))
+        rf = file.ReadFile(file.ReadFileCap(fc), file.join_path([tmpdir, "test-file2"]))
+        rd = rf.read()
+        rf.close()
+        testing.assertEqual(test_data, rd)
+        await async fs.rmtree(tmpdir)
+        report_result(True, None)
+    except AssertionError as exc:
+        report_result(False, exc)
+    except Exception as exc:
+        report_result(None, exc)
 
 
-    def test():
-        log.info("EnvTester.test()", None)
-        try:
-            test_fs(env)
-            report_result(True, None)
-        except AssertionError as exc:
-            report_result(False, exc)
-        except Exception as exc:
-            report_result(None, exc)
-
-def _test_file_fs(report_result: action(?bool, ?Exception) -> None, env: Env, log_handler: logging.Handler) -> None:
-    s = FsTester(report_result, env, log_handler)
-    s.test()
-
-actor main(env):
-    test_fs(env)
-    env.exit(0)
-
+def _test_fs_copytree(report_result: action(?bool, ?Exception) -> None, env: Env, log_handler: logging.Handler) -> None:
+    try:
+        fc = file.FileCap(env.cap)
+        fs = file.FS(fc)
+        tmpdir = fs.mktmpdir()
+        await async fs.mkdir(file.join_path([tmpdir, "src"]))
+        await async fs.mkdir(file.join_path([tmpdir, "src", "foo"]))
+        # write a file in src/foo
+        wf = file.WriteFile(file.WriteFileCap(fc), file.join_path([tmpdir, "src", "foo", "test-file"]))
+        await async wf.write(b"test-data\n")
+        await async fs.mkdir(file.join_path([tmpdir, "src", "foo", "bar"]))
+        await async fs.mkdir(file.join_path([tmpdir, "src", "foo", "bar", "baz"]))
+        # write a file in src/foo/bar/baz
+        wf = file.WriteFile(file.WriteFileCap(fc), file.join_path([tmpdir, "src", "foo", "bar", "baz", "test-file"]))
+        await async wf.write(b"test-data\n")
+        await async fs.mkdir(file.join_path([tmpdir, "dst"]))
+        await async fs.copytree(file.join_path([tmpdir, "src"]), file.join_path([tmpdir, "dst"]))
+        testing.assertTrue(fs.stat(tmpdir + "/dst/foo/bar").is_dir())
+        await async fs.rmtree(tmpdir)
+        report_result(True, None)
+    except AssertionError as exc:
+        report_result(False, exc)
+    except Exception as exc:
+        report_result(None, exc)

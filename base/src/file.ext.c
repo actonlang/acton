@@ -66,6 +66,19 @@ B_bool fileQ_FileStatD_is_socket (fileQ_FileStat self) {
 #endif
 }
 
+// action def copyfile(src: str, dst: str) -> None:
+$R fileQ_FSD_copyfileG_local (fileQ_FS self, $Cont C_cont, B_str src, B_str dst) {
+    uv_fs_t *req = (uv_fs_t *)acton_malloc(sizeof(uv_fs_t));
+    int r = uv_fs_copyfile(get_uv_loop(), req, (char *)fromB_str(src), (char *)fromB_str(dst), 0, NULL);
+    if (r < 0) {
+        char errmsg[1024] = "Error copying file: ";
+        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        log_warn(errmsg);
+        $RAISE(((B_BaseException)B_OSErrorG_new(to$str(errmsg))));
+    }
+    return $R_CONT(C_cont, B_None);
+}
+
 // action def cwd() -> str:
 $R fileQ_FSD_cwdG_local (fileQ_FS self, $Cont C_cont) {
     char cwd[1024];
@@ -75,7 +88,7 @@ $R fileQ_FSD_cwdG_local (fileQ_FS self, $Cont C_cont) {
         char errmsg[1024] = "Error getting cwd: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        $RAISE(((B_BaseException)B_RuntimeErrorG_new(to$str(errmsg))));
+        $RAISE(((B_BaseException)B_OSErrorG_new(to$str(errmsg))));
     }
     return $R_CONT(C_cont, to$str(cwd));
 }
@@ -89,7 +102,7 @@ $R fileQ_FSD_exepathG_local (fileQ_FS self, $Cont C_cont) {
         char errmsg[1024] = "Error getting exepath: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        $RAISE(((B_BaseException)B_RuntimeErrorG_new(to$str(errmsg))));
+        $RAISE(((B_BaseException)B_OSErrorG_new(to$str(errmsg))));
     }
     return $R_CONT(C_cont, to$str(exepath));
 }
@@ -103,7 +116,7 @@ $R fileQ_FSD_homedirG_local (fileQ_FS self, $Cont C_cont) {
         char errmsg[1024] = "Error getting homedir: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        $RAISE(((B_BaseException)B_RuntimeErrorG_new(to$str(errmsg))));
+        $RAISE(((B_BaseException)B_OSErrorG_new(to$str(errmsg))));
     }
     return $R_CONT(C_cont, to$str(homedir));
 }
@@ -116,7 +129,7 @@ $R fileQ_FSD_mkdirG_local (fileQ_FS self, $Cont C_cont, B_str filename) {
         char errmsg[1024] = "Error creating directory: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        $RAISE(((B_BaseException)B_RuntimeErrorG_new(to$str(errmsg))));
+        $RAISE(((B_BaseException)B_OSErrorG_new(to$str(errmsg))));
     }
     return $R_CONT(C_cont, B_None);
 }
@@ -132,7 +145,7 @@ $R fileQ_FSD_listdirG_local (fileQ_FS self, $Cont C_cont, B_str path) {
         char errmsg[1024] = "Error listing directory: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        $RAISE(((B_BaseException)B_RuntimeErrorG_new(to$str(errmsg))));
+        $RAISE(((B_BaseException)B_OSErrorG_new(to$str(errmsg))));
     }
     uv_dirent_t ent;
     while (uv_fs_scandir_next(req, &ent) != UV_EOF) {
@@ -149,7 +162,7 @@ $R fileQ_FSD_lstatG_local (fileQ_FS self, $Cont C_cont, B_str filename) {
         char errmsg[1024] = "Error getting file stat: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        $RAISE((B_BaseException)B_RuntimeErrorG_new(to$str(errmsg)));
+        $RAISE((B_BaseException)B_OSErrorG_new(to$str(errmsg)));
     }
     uv_stat_t *stat = (uv_stat_t *)req->ptr;
     fileQ_FileStat res = fileQ_FileStatG_new(filename,
@@ -181,7 +194,7 @@ $R fileQ_FSD_rmdirG_local (fileQ_FS self, $Cont C_cont, B_str dirname) {
         char errmsg[1024] = "Error removing directory: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        $RAISE(((B_BaseException)B_RuntimeErrorG_new(to$str(errmsg))));
+        $RAISE(((B_BaseException)B_OSErrorG_new(to$str(errmsg))));
     }
     return $R_CONT(C_cont, B_None);
 }
@@ -194,7 +207,7 @@ $R fileQ_FSD_removeG_local (fileQ_FS self, $Cont C_cont, B_str filename) {
         char errmsg[1024] = "Error removing file: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        $RAISE(((B_BaseException)B_RuntimeErrorG_new(to$str(errmsg))));
+        $RAISE(((B_BaseException)B_OSErrorG_new(to$str(errmsg))));
     }
     return $R_CONT(C_cont, B_None);
 }
@@ -203,11 +216,13 @@ $R fileQ_FSD_removeG_local (fileQ_FS self, $Cont C_cont, B_str filename) {
 $R fileQ_FSD_statG_local (fileQ_FS self, $Cont C_cont, B_str filename) {
     uv_fs_t *req = (uv_fs_t *)acton_malloc(sizeof(uv_fs_t));
     int r = uv_fs_stat(get_uv_loop(), req, (char *)fromB_str(filename), NULL);
-    if (r < 0) {
+    if (r == UV_ENOENT) {
+        $RAISE(((B_BaseException)B_FileNotFoundErrorG_new(filename)));
+    } else if (r < 0) {
         char errmsg[1024] = "Error getting file stat: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        $RAISE((B_BaseException)B_RuntimeErrorG_new(to$str(errmsg)));
+        $RAISE(((B_BaseException)B_OSErrorG_new(to$str(errmsg))));
     }
     uv_stat_t *stat = (uv_stat_t *)req->ptr;
     fileQ_FileStat res = fileQ_FileStatG_new(filename,
@@ -239,7 +254,7 @@ $R fileQ_FSD_tmpdirG_local (fileQ_FS self, $Cont C_cont) {
         char errmsg[1024] = "Error getting temporary directory: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        $RAISE(((B_BaseException)B_RuntimeErrorG_new(to$str(errmsg))));
+        $RAISE(((B_BaseException)B_OSErrorG_new(to$str(errmsg))));
     }
     return $R_CONT(C_cont, to$str(buffer));
 }
@@ -248,11 +263,13 @@ $R fileQ_ReadFileD__open_fileG_local (fileQ_ReadFile self, $Cont c$cont) {
     pin_actor_affinity();
     uv_fs_t *req = (uv_fs_t *)acton_malloc(sizeof(uv_fs_t));
     int r = uv_fs_open(get_uv_loop(), req, (char *)fromB_str(self->filename), UV_FS_O_RDONLY, 0, NULL);
-    if (r < 0) {
+    if (r == UV_ENOENT) {
+        $RAISE(((B_BaseException)B_FileNotFoundErrorG_new(self->filename)));
+    } else if (r < 0) {
         char errmsg[1024] = "Error opening file for reading: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        $RAISE(((B_BaseException)B_RuntimeErrorG_new(to$str(errmsg))));
+        $RAISE(((B_BaseException)B_OSErrorG_new(to$str(errmsg))));
 
     }
     self->_fd = to$int(r);
@@ -267,7 +284,7 @@ $R fileQ_ReadFileD_closeG_local (fileQ_ReadFile self, $Cont c$cont) {
         char errmsg[1024] = "Error closing file: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        $RAISE(((B_BaseException)B_RuntimeErrorG_new(to$str(errmsg))));
+        $RAISE(((B_BaseException)B_OSErrorG_new(to$str(errmsg))));
     }
     return $R_CONT(c$cont, B_None);
 }
@@ -289,7 +306,7 @@ $R fileQ_ReadFileD_readG_local (fileQ_ReadFile self, $Cont c$cont) {
         char errmsg[1024] = "Error reading from file: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        $RAISE(((B_BaseException)B_RuntimeErrorG_new(to$str(errmsg))));
+        $RAISE(((B_BaseException)B_OSErrorG_new(to$str(errmsg))));
     }
     B_bytes nullb = to$bytes("");
     B_Iterable wit2 = ((B_Iterable)((B_Collection)B_SequenceD_listG_new()->W_Collection));
@@ -305,7 +322,7 @@ $R fileQ_WriteFileD__open_fileG_local (fileQ_WriteFile self, $Cont c$cont) {
         char errmsg[1024] = "Error opening file for writing: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        $RAISE(((B_BaseException)B_RuntimeErrorG_new(to$str(errmsg))));
+        $RAISE(((B_BaseException)B_OSErrorG_new(to$str(errmsg))));
 
     }
     self->_fd = to$int(r);
@@ -319,7 +336,7 @@ $R fileQ_WriteFileD_closeG_local (fileQ_WriteFile self, $Cont c$cont) {
         char errmsg[1024] = "Error closing file: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        $RAISE(((B_BaseException)B_RuntimeErrorG_new(to$str(errmsg))));
+        $RAISE(((B_BaseException)B_OSErrorG_new(to$str(errmsg))));
     }
     return $R_CONT(c$cont, B_None);
 }
@@ -333,7 +350,7 @@ $R fileQ_WriteFileD_writeG_local (fileQ_WriteFile self, $Cont c$cont, B_bytes da
         char errmsg[1024] = "Error writing to file: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        $RAISE(((B_BaseException)B_RuntimeErrorG_new(to$str(errmsg))));
+        $RAISE(((B_BaseException)B_OSErrorG_new(to$str(errmsg))));
 
     }
     return $R_CONT(c$cont, B_None);
