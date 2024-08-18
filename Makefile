@@ -420,6 +420,7 @@ test-stdlib: dist/bin/acton
 
 .PHONY: clean clean-all clean-base
 clean: clean-cli clean-distribution clean-base
+	rm -rf compiler/Acton/Builder.hs
 
 clean-cli:
 	rm -rf cli/out
