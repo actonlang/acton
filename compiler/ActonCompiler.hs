@@ -883,7 +883,6 @@ zigBuild env opts paths tasks binTasks = do
     iff (not (quiet opts)) $ putStrLn("  Final compilation step")
     timeStart <- getTime Monotonic
 
-
     -- Create .build directory if it doesn't exist
     createDirectoryIfMissing True (joinPath [projPath paths, ".build"])
     -- symlink .build/sys to the syspath directory, always recreating it to make sure it's up to date
@@ -896,8 +895,11 @@ zigBuild env opts paths tasks binTasks = do
         buildZigZonPath = projPath paths ++ "/build.zig.zon"
 
     iff (not (isTmp paths)) (do
-      writeFile buildZigPath Acton.Builder.buildzig
-      writeFile buildZigZonPath (genBuildZigZon paths)
+      buildZigExists <- doesFileExist buildZigPath
+      iff (not buildZigExists) (writeFile buildZigPath (Acton.Builder.buildzig))
+      -- We need to generate a build.zig.zon file for this project unless it already exists
+      buildZigZonExists <- doesFileExist buildZigZonPath
+      iff (not buildZigZonExists) (writeFile buildZigZonPath (genBuildZigZon paths))
       )
 
     -- custom build.zig ?

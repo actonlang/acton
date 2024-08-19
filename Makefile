@@ -483,7 +483,7 @@ dist/bin/runacton: bin/runacton
 
 dist/builder: builder/builder
 	@mkdir -p $@
-	cp -a builder/builder builder/*.zig $@/
+	cp -a builder/builder builder/*.zig builder/build.zig.zon $@/
 
 DIST_DEPS=$(addprefix dist/deps/,libargp libbsdnt libgc libnetstring libprotobuf_c libutf8proc libuuid libuv libxml2 libyyjson pcre2 libsnappy_c)
 dist/deps/%: deps/% $(DEPS)

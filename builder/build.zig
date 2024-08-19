@@ -70,6 +70,8 @@ pub fn build(b: *std.Build) void {
 
     print("Acton Project Builder - building {s}\nDeps path: {s}\n", .{buildroot_path, deps_path});
 
+    // Dependencies from build.act.json
+
     var iter_dir = b.build_root.handle.openDir(
         "out/types/", .{ .iterate = true },
     ) catch |err| {
@@ -217,6 +219,8 @@ pub fn build(b: *std.Build) void {
 
     libActonProject.addIncludePath(.{ .cwd_relative = syspath_base });
     libActonProject.addIncludePath(.{ .cwd_relative = syspath_include });
+    // lib: link with dependencies / get headers from build.act.json
+
     libActonProject.linkLibC();
     libActonProject.linkLibCpp();
     b.installArtifact(libActonProject);
@@ -397,6 +401,8 @@ pub fn build(b: *std.Build) void {
             executable.linkLibrary(dep_libxml2.artifact("xml2"));
             executable.linkLibrary(dep_libyyjson.artifact("yyjson"));
             executable.linkLibrary(dep_libgc.artifact("gc"));
+
+            // exe: link with dependencies / get headers from build.act.json
 
             executable.linkLibC();
             executable.linkLibCpp();
