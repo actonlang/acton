@@ -22,3 +22,6 @@ background_color = "transparent" # also useful `var(--bg)`
 
 [output.html]
 additional-css = ["svgbob.css"]
+
+[output.html.fold]
+enable = true
