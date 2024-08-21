@@ -3,7 +3,10 @@ import file
 import json
 import process
 import testing
+
+from buildy import *
 from testing import TestInfo
+
 
 def clean_buildcache(cap: file.FileCap):
     fs = file.FS(cap)
@@ -19,167 +22,180 @@ def clean_buildcache(cap: file.FileCap):
     if total_size == 0:
         print("Acton build cache is empty: rebuilding Acton base from source, which might take a while...")
 
-actor CompilerRunner(process_cap, env, args, wdir=None):
-    def on_stderr(p, data):
-        print(data.decode(), err=True, end="")
+actor CompilerRunner(process_cap, env, args, wdir=None, on_exit: ?action(int, int, bytes, bytes) -> None=None, on_error: ?action(str) -> None=None, print_output: bool=True, exe="actonc"):
+    """Run the actonc compiler
 
-    def on_stdout(p, data):
-        print(data.decode(), end="")
-
-    def on_exit(p, exit_code, term_signal):
-        if exit_code != 0:
-            print("actonc exited with code: ", exit_code, " terminated with signal:", term_signal)
-        await async env.exit(exit_code)
-
-    def on_error(p, error):
-        print("Error from process:", error)
-        await async env.exit(1)
-
-    clean_buildcache(file.FileCap(env.cap))
-    fs = file.FS(file.FileCap(env.cap))
-    # We find the path to actonc by looking at the executable path of the
-    # current process. Since we are called 'acton', we just add a 'c'.
-    cmd = [fs.exepath() + "c"] + args
-    p = process.Process(process_cap, cmd, on_stdout, on_stderr, on_exit, on_error, wdir)
-
-
-actor CompilerBuildRunner(process_cap, env, args, wdir=None, on_success: action() -> None, on_error: action(str) -> None):
+    Will run actonc with the provided command and arguments. It is possible to
+    inject callbacks when actonc exits or encounters an error. If no callbacks
+    are provided, the default behavior is to exit when actonc does, possibly
+    with an error message. Similarly, if actonc encounters an error, it will
+    print the error message and exit.
+    """
     var stdout_buf = b""
     var stderr_buf = b""
 
     def on_actonc_stderr(p, data):
         stderr_buf += data
+        if print_output:
+            print(data.decode(), end="")
 
     def on_actonc_stdout(p, data):
         stdout_buf += data
+        if print_output:
+            print(data.decode(), end="")
 
     def on_actonc_exit(p, exit_code, term_signal):
-        on_success()
+        if on_exit is not None:
+            on_exit(exit_code, term_signal, stdout_buf, stderr_buf)
+        else:
+            if exit_code != 0:
+                print("actonc exited with code: ", exit_code, " terminated with signal:", term_signal)
+            env.exit(exit_code)
 
     def on_actonc_error(p, error: str):
-        on_error(error)
+        if on_error is not None:
+            on_error(error)
+        else:
+            print("Error from process:", error)
+            env.exit(1)
 
+    clean_buildcache(file.FileCap(env.cap))
     fs = file.FS(file.FileCap(env.cap))
     # We find the path to actonc by looking at the executable path of the
     # current process. Since we are called 'acton', we just add a 'c'.
-    cmd = [fs.exepath() + "c", "build"] + args
+    cmd = [fs.exepath() + ("c" if exe == "actonc" else "")] + args
     p = process.Process(process_cap, cmd, on_actonc_stdout, on_actonc_stderr, on_actonc_exit, on_actonc_error, wdir)
 
 
-actor BuildProject(process_cap, env, args):
+actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None, on_build_failure: action(int, int, str) -> None, build_tests: bool=False):
     """Build the project including dependencies
+
+    - check for dependencies.json, if found, download dependencies
+    - build dependencies
+    - build
     """
-    # Find dependencies and compile them first
-    fs = file.FS(file.FileCap(env.cap))
-    deps = []
-    try:
-        deps = fs.listdir("deps")
-    except OSError:
-        pass
-
-    cmdargs = ["--deppath", file.join_path([fs.cwd(), "deps"])] + build_cmd_args(args)
+    fcap = file.FileCap(env.cap)
+    rfcap = file.ReadFileCap(fcap)
+    fs = file.FS(fcap)
     remaining_deps = {}
+    cmdargs = ["build"] + build_cmd_args(args)
+    if build_tests:
+        cmdargs.append("--dev")
+        cmdargs.append("--test")
+    # --
 
-    def on_build():
-        print("Project built successfully")
-        env.exit(0)
+    def _on_actonc_exit(exit_code, term_signal, stdout_buf, stderr_buf):
+        if exit_code == 0:
+            on_build_success(stdout_buf.decode())
+        else:
+            on_build_failure(exit_code, term_signal, stderr_buf.decode())
 
-    def on_build_error(error):
-        print("Error building project", error)
-        env.exit(1)
-
-    def on_dep_build(name):
-        print("Dependency", name, "built successfully")
-        try:
-            del remaining_deps[name]
-        except KeyError:
-            pass
-
-        if len(remaining_deps) == 0:
-            print("All dependencies built, building project")
-            build_project()
+    def _on_actonc_failure(error: str):
+        on_build_failure(-999, -999, error)
 
     def build_project():
-        #cr = CompilerBuildRunner(process_cap, env, cmdargs, None, on_build, on_build_error)
-        #CompilerRunner(process_cap, env, cmdargs)
-        cr = CompilerRunner(process_cap, env, ["build"] + cmdargs)
+        cr = CompilerRunner(process_cap,
+            env,
+            cmdargs + ["--deppath", file.join_path([fs.cwd(), "deps"])],
+            None,
+            _on_actonc_exit,
+            _on_actonc_failure,
+            print_output=not build_tests
+        )
+
+    def _on_dep_actonc_exit(dep_name, exit_code, term_signal, stdout_buf, stderr_buf):
+        if exit_code == 0:
+            print("Dependency", dep_name, "built successfully")
+            try:
+                del remaining_deps[dep_name]
+            except KeyError:
+                pass
+
+            if len(remaining_deps) == 0:
+                print("All dependencies built, building main project KLL")
+                build_project()
+        else:
+            # TODO: do better
+            raise ValueError("Error building dependency")
+
 
     def on_dep_build_error(name, error):
         print("Error building dependency", name, error)
 
-    if len(deps) == 0:
-        build_project()
-    else:
-        print("Building dependencies:")
-        for dep in deps:
-            print(" -", dep)
-            remaining_deps[dep] = True
-            cr = CompilerBuildRunner(process_cap, env, cmdargs + ["--keepbuild"], file.join_path(["deps", dep]), lambda: on_dep_build(dep) , lambda x: on_dep_build_error(dep, x))
+    def build_deps():
+        # Find dependencies and compile them first
+        deps = []
+        try:
+            deps = fs.listdir("deps")
+        except OSError:
+            pass
 
-
-actor BuildProjectTests(process_cap, env, on_build_success, on_build_failure, dev: bool=True):
-    """Build the project test
-
-    This actor builds the project tests using `actonc build --test`. It calls
-    on_build_success with a list of the test modules if the build was
-    successful, and on_build_failure with the exit code, term signal if the
-    build failed.
-    """
-    _test_modules: list[str] = []
-    modtests = {}
-    var stdout_buf = b""
-    var stderr_buf = b""
-    var stdout_tests = False
-
-    fs = file.FS(file.FileCap(env.cap))
-    # We find the path to actonc by looking at the executable path of the
-    # current process. Since we are called 'acton', we just add a 'c'.
-    cmd = [fs.exepath() + "c"] + ["build", "--test"]
-    if dev:
-        cmd.append("--dev")
-
-    def on_actbuild_stdout(p, data):
-        for line in data.decode().splitlines(False):
-            if line == "Test executables:":
-                stdout_tests = True
-            else:
-                if stdout_tests:
-                    _test_modules.append(line)
-                else:
-                    print(line)
-
-    def on_actbuild_stderr(p, data):
-        stderr_buf += data
-
-    def on_actbuild_exit(p, exit_code, term_signal):
-        if exit_code == 0:
-            on_build_success(_test_modules)
+        if len(deps) == 0:
+            build_project()
         else:
-            on_build_failure(exit_code, term_signal, stderr_buf)
+            print("Building dependencies:")
+            for dep_name in deps:
+                print(" -", dep_name)
+                remaining_deps[dep_name] = True
+                cr = CompilerRunner(
+                    process_cap,
+                    env,
+                    cmdargs + ["--keepbuild"],
+                    file.join_path(["deps", dep_name]),
+                    lambda exit_code, term_signal, stdout_buf, stderr_buf: _on_dep_actonc_exit(dep_name, exit_code, term_signal, stdout_buf, stderr_buf),
+                    lambda error_msg: on_dep_build_error(dep_name, error_msg),
+                    exe="acton"
+                )
 
-    def on_actbuild_error(p, error):
-        on_build_failure(-999, -999, error)
+    def write_build_config(build_config: BuildConfig):
+        def get_build_zig_templates():
+            bin_acton_len = len("/bin/acton")
+            # Read the build.zig template
+            fs = file.FS(file.FileCap(env.cap))
+            base_path = fs.exepath()[0:-bin_acton_len]
+            build_zig_template = file.ReadFile(
+                file.ReadFileCap(file.FileCap(env.cap)),
+                file.join_path([base_path, "builder", "build.zig"])).read().decode()
+            build_zig_zon_template = file.ReadFile(
+                file.ReadFileCap(file.FileCap(env.cap)),
+                file.join_path([base_path, "builder", "build.zig.zon"])).read().decode()
+            return build_zig_template, build_zig_zon_template
 
-    clean_buildcache(file.FileCap(env.cap))
+        build_zig_tpl, build_zig_zon_tpl = get_build_zig_templates()
+        # Write build.zig
+        b_file = file.WriteFile(file.WriteFileCap(file.FileCap(env.cap)), "build.zig")
+        await async b_file.write(gen_buildzig(build_zig_tpl, build_config).encode())
+        await async b_file.close()
+        # Write build.zig.zon
+        bzz_file = file.WriteFile(file.WriteFileCap(file.FileCap(env.cap)), "build.zig.zon")
+        await async bzz_file.write(gen_buildzigzon(build_zig_zon_tpl, build_config).encode())
+        await async bzz_file.close()
 
-    p = process.Process(process_cap, cmd, on_actbuild_stdout, on_actbuild_stderr, on_actbuild_exit, on_actbuild_error)
+    def check_for_buildconfig():
+        """Check if dependencies.json exists
 
-def parse_json_tests(data):
-    tests: dict[str, testing.TestInfo] = {}
-    jdata_tests = data["tests"]
-    if isinstance(jdata_tests, dict):
-        for jdata_test in jdata_tests.values():
-            if isinstance(jdata_test, dict):
-                name = jdata_test["name"]
-                desc = jdata_test["desc"]
-                if isinstance(name, str) and isinstance(desc, str):
-                    test_def = testing.Test(name, desc)
-                    tests[name] = testing.TestInfo(test_def)
-                else:
-                    raise ValueError("Invalid test list JSON")
-    else:
-        raise ValueError("Invalid test list JSON")
-    return tests
+        If there is a dependencies.json file, we will read it and check if the
+        dependencies also exist locally. If not, we will download them and
+        proceed to build the dependencies and then build the project.
+
+        If there is no dependencies.json file, we will build the project.
+        """
+        def read_buildconfig():
+            f = file.ReadFile(rfcap, "build.act.json")
+            conf = f.read()
+            return BuildConfig.from_json(conf.decode())
+
+        try:
+            build_config = read_buildconfig()
+            write_build_config(build_config)
+        except FileNotFoundError:
+            write_build_config(BuildConfig())
+
+        build_deps()
+
+    # and off we go!
+    check_for_buildconfig()
+
 
 actor RunModuleTest(process_cap, modname, test_cmd, on_json_output, on_test_error):
     var stdout_buf = b""
@@ -222,6 +238,7 @@ actor RunModuleTest(process_cap, modname, test_cmd, on_json_output, on_test_erro
     def on_error(p, error):
         on_test_error(-1, -1, error)
 
+    # TODO: fs.join()
     cmd = ["out/bin/.test_" + modname, "--json"] + test_cmd
     p = process.Process(process_cap, cmd, on_stdout, on_stderr, on_exit, on_error)
 
@@ -268,13 +285,31 @@ actor RunTestList(env, args):
         for module_name in module_names:
             t = RunModuleTest(process_cap, module_name, ["list"], lambda x: _on_json_output(module_name, x), _on_test_error)
 
-    def _on_build_failure(exit_code, term_signal, stderr_buf):
+    def _on_build_success(stdout_buf: str):
+        test_modules = []
+        stdout_tests = False
+        for line in stdout_buf.splitlines(False):
+            if line.startswith("Test executables:"):
+                stdout_tests = True
+            else:
+                if stdout_tests:
+                    test_modules.append(line)
+        _run_tests(test_modules)
+
+    def _on_build_failure(exit_code, term_signal, stderr_buf: str):
         print("Failed to build project tests")
-        print("actonc exited with code %d / %d" %(exit_code, term_signal))
+        print("actonc exited with code %d / %d" % (exit_code, term_signal))
         print("stderr:", stderr_buf)
         env.exit(1)
 
-    project_builder = BuildProjectTests(process_cap, env, _run_tests, _on_build_failure)
+    project_builder = BuildProject(
+        process_cap,
+        env,
+        args,
+        _on_build_success,
+        _on_build_failure,
+        build_tests=True
+    )
 
 
 actor RunTestTest(env: Env, args, perf_mode: bool=False):
@@ -373,9 +408,20 @@ actor RunTestTest(env: Env, args, perf_mode: bool=False):
         except:
             pass
 
-    def _on_build_failure(exit_code, term_signal, stderr_buf):
+    def _on_build_success(stdout_buf: str):
+        test_modules = []
+        stdout_tests = False
+        for line in stdout_buf.splitlines(False):
+            if line.startswith("Test executables:"):
+                stdout_tests = True
+            else:
+                if stdout_tests:
+                    test_modules.append(line)
+        _run_tests(test_modules)
+
+    def _on_build_failure(exit_code, term_signal, stderr_buf: str):
         print("Failed to build project tests")
-        print("actonc exited with code %d / %d" %(exit_code, term_signal))
+        print("actonc exited with code %d / %d" % (exit_code, term_signal))
         print("stderr:", stderr_buf)
         env.exit(1)
 
@@ -385,7 +431,7 @@ actor RunTestTest(env: Env, args, perf_mode: bool=False):
     # actually working code.
     #dev = not perf_mode
     dev = True
-    project_builder = BuildProjectTests(process_cap, env, _run_tests, _on_build_failure, dev=dev)
+    project_builder = BuildProject(process_cap, env, args, _on_build_success, _on_build_failure, build_tests=True)
 
 def build_cmd_args(args):
     cmdargs = []
@@ -415,9 +461,14 @@ actor main(env):
         cr = CompilerRunner(process_cap, env, [_file] + cmdargs)
 
     def _cmd_build(args):
-        BuildProject(process_cap, env, args)
-        #cmdargs = build_cmd_args(args)
-        #cr = CompilerRunner(process_cap, env, ["build"] + cmdargs)
+        def on_build_success(stdout_buf):
+            env.exit(0)
+
+        def on_build_failure(exit_code: int,  term_signal: int, stderr_buf: str):
+            print("Error building project", stderr_buf)
+            env.exit(1)
+
+        BuildProject(process_cap, env, args, on_build_success, on_build_failure, build_tests=False)
 
     def _cmd_doc(args):
         env.exit(0)
@@ -464,6 +515,7 @@ actor main(env):
         p.add_bool("dev", "Development mode")
         p.add_bool("only-build", "Only perform final build of .c files, do not compile .act files")
         p.add_bool("skip-build", "Skip final build of .c files")
+        p.add_bool("keepbuild", "Keep build.zig")
         p.add_option("root", "str", "?", "", "Set root actor")
         p.add_option("tempdir", "str", "?", "", "Directory for temporary build files")
         p.add_option("syspath", "str", "?", "", "syspath")

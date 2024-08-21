@@ -92,9 +92,9 @@ compilerTests =
         testBuild "" ExitSuccess False "../test/compiler/subdash/"
         testBuild "" ExitSuccess False "../test/compiler/subdash/"
   , testCase "deps" $ do
-        (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../test/compiler/test_deps/build*") ""
+        (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../test/compiler/test_deps/build.zig*") ""
         (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../test/compiler/test_deps/out") ""
-        (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../test/compiler/test_deps/deps/a/build*") ""
+        (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../test/compiler/test_deps/deps/a/build.zig*") ""
         (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../test/compiler/test_deps/deps/a/out") ""
         runActon "build" ExitSuccess False "../test/compiler/test_deps/"
   ]
