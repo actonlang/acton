@@ -57,6 +57,17 @@ class BuildConfig(object):
             return BuildConfig(new_dependencies, new_zig_dependencies)
         raise ValueError("Invalid build.act.json, top level should be a dict")
 
+    def to_json(self) -> str:
+        res = {
+            "dependencies": {},
+            "zig_dependencies": {},
+        }
+        for dep_name, dep in self.dependencies.items():
+            res["dependencies"][dep_name] = dep.to_json()
+        for dep_name, dep in self.zig_dependencies.items():
+            res["zig_dependencies"][dep_name] = dep.to_json()
+        return json.encode(res, pretty=True)
+
 class Dependency(object):
     name: str
     url: ?str
@@ -83,6 +94,16 @@ class Dependency(object):
             else:
                 raise ValueError("Invalid build.act.json, unknown key '%s' in dependency '%s'" % (key, dep_name))
         return Dependency(dep_name, dep_url, dep_hash)
+
+    def to_json(self) -> dict[str, str]:
+        res = {}
+        url = self.url
+        if url is not None:
+            res["url"] = url
+        hash = self.hash
+        if hash is not None:
+            res["hash"] = hash
+        return res
 
     def to_zon(self) -> str:
         return """        .%s = .{
@@ -135,6 +156,22 @@ class ZigDependency(object):
             else:
                 raise ValueError("Invalid build.act.json, unknown key '%s' in dependency '%s'" % (key, dep_name))
         return ZigDependency(dep_name, dep_url, dep_hash, dep_options, dep_artifacts)
+
+    def to_json(self) -> dict[str, str]:
+        res = {}
+        url = self.url
+        if url is not None:
+            res["url"] = url
+        hash = self.hash
+        if hash is not None:
+            res["hash"] = hash
+        options = self.options
+        if len(options) > 0:
+            res["options"] = options
+        artifacts = self.artifacts
+        if len(artifacts) > 0:
+            res["artifacts"] = artifacts
+        return res
 
     def to_zon(self) -> str:
         url = self.url

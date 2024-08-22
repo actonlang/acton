@@ -7,6 +7,9 @@ import testing
 from buildy import *
 from testing import TestInfo
 
+def base_path(env):
+    fs = file.FS(file.FileCap(env.cap))
+    return fs.exepath()[0:-len("/bin/acton")]
 
 def clean_buildcache(cap: file.FileCap):
     fs = file.FS(cap)
@@ -149,16 +152,14 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
 
     def write_build_config(build_config: BuildConfig):
         def get_build_zig_templates():
-            bin_acton_len = len("/bin/acton")
             # Read the build.zig template
             fs = file.FS(file.FileCap(env.cap))
-            base_path = fs.exepath()[0:-bin_acton_len]
             build_zig_template = file.ReadFile(
                 file.ReadFileCap(file.FileCap(env.cap)),
-                file.join_path([base_path, "builder", "build.zig"])).read().decode()
+                file.join_path([base_path(env), "builder", "build.zig"])).read().decode()
             build_zig_zon_template = file.ReadFile(
                 file.ReadFileCap(file.FileCap(env.cap)),
-                file.join_path([base_path, "builder", "build.zig.zon"])).read().decode()
+                file.join_path([base_path(env), "builder", "build.zig.zon"])).read().decode()
             return build_zig_template, build_zig_zon_template
 
         build_zig_tpl, build_zig_zon_tpl = get_build_zig_templates()
@@ -452,6 +453,102 @@ def build_cmd_args(args):
 
     return cmdargs
 
+actor CmdPkgAdd(env, args):
+    """Add a package dependency to the project
+    """
+    pcap = process.ProcessCap(env.cap)
+    fs = file.FS(file.FileCap(env.cap))
+
+    zig = file.join_path([base_path(env), "zig", "zig"])
+
+    # What arguments do we need?
+    # - the name of the dependency (e.g. "foo", used in the build.act.json config file)
+    # - the URL to fetch it from
+
+    # We need to fetch the dependency and get the (content) hash of the fetched
+    # dependency and store it in the build.act.json file. If the dependency is
+    # already in the build.act.json file, we need to check if the hash is the
+    # same as the one we just fetched. If it is, we do nothing. If it is not,
+
+    dep_name = args.get_str("name")
+    dep_url = args.get_str("url")
+
+    def get_build_config():
+        try:
+            return BuildConfig.from_json(file.ReadFile(file.ReadFileCap(file.FileCap(env.cap)), "build.act.json").read().decode())
+        except:
+            pass
+        return BuildConfig()
+
+    build_config = get_build_config()
+
+    def on_exit(p, exit_code, term_signal, stdout_buf, stderr_buf):
+        if exit_code == 0:
+            dep_hash = stdout_buf.decode().strip()
+
+            if dep_name in build_config.dependencies:
+                if build_config.dependencies[dep_name].hash == dep_hash:
+                    print("Dependency", dep_name, "is already up to date")
+                else:
+                    print("Updated existing dependency", dep_name, "with new hash", dep_hash, " (old", build_config.dependencies[dep_name].hash, ")")
+                    build_config.dependencies[dep_name].hash = dep_hash
+            else:
+                # Add the hash
+                build_config.dependencies[dep_name] = Dependency(dep_name, dep_url, dep_hash)
+                print("Added new package dependency", dep_name, "with hash", dep_hash)
+
+            baj_file = file.WriteFile(file.WriteFileCap(file.FileCap(env.cap)), "build.act.json")
+            baj_file.write(build_config.to_json().encode()+b"\n")
+            await async baj_file.close()
+
+            env.exit(0)
+        else:
+            print("Error fetching", stderr_buf.decode())
+            env.exit(1)
+
+    def on_error(p, error):
+        print("Error fetching", error)
+        env.exit(1)
+
+    process.RunProcess(
+        pcap,
+        [zig, "fetch", args.get_str("url")],
+        on_exit,
+        on_error)
+
+
+actor CmdPkgRemove(env, args):
+    """Remove a package dependency from the project
+    """
+    pcap = process.ProcessCap(env.cap)
+    fs = file.FS(file.FileCap(env.cap))
+
+    zig = file.join_path([base_path(env), "zig", "zig"])
+
+    dep_name = args.get_str("name")
+
+    def get_build_config():
+        try:
+            return BuildConfig.from_json(file.ReadFile(file.ReadFileCap(file.FileCap(env.cap)), "build.act.json").read().decode())
+        except:
+            print("No build.act.json file found, nothing to do.")
+            await async env.exit(0)
+        return BuildConfig() # unreachable
+
+    build_config = get_build_config()
+
+    if dep_name in build_config.dependencies:
+        print("Removed package dependency", dep_name)
+        del build_config.dependencies[dep_name]
+    else:
+        print("Dependency", dep_name, "not found in build.act.json. Nothing to do.")
+
+    baj_file = file.WriteFile(file.WriteFileCap(file.FileCap(env.cap)), "build.act.json")
+    baj_file.write(build_config.to_json().encode()+b"\n")
+    await async baj_file.close()
+
+    env.exit(0)
+
 
 actor main(env):
     process_cap = process.ProcessCap(env.cap)
@@ -472,6 +569,15 @@ actor main(env):
 
     def _cmd_doc(args):
         env.exit(0)
+
+    def _cmd_pkg(args):
+        env.exit(0)
+
+    def _cmd_pkg_add(args):
+        c = CmdPkgAdd(env, args)
+
+    def _cmd_pkg_rm(args):
+        c = CmdPkgRemove(env, args)
 
     def _cmd_new(args):
         cr = CompilerRunner(process_cap, env, ["new", args.get_str("projectdir")])
@@ -521,18 +627,36 @@ actor main(env):
         p.add_option("syspath", "str", "?", "", "syspath")
         p.add_option("target", "str", "?", "", "Target, e.g. x86_64-linux-gnu.2.28")
         p.add_arg("file", ".act file to compile, or .ty to show", False, "?")
+
+        p_pkg = p.add_cmd("pkg", "Manage package dependencies", _cmd_pkg)
+
+        p_pkg_add = p_pkg.add_cmd("add", "Add package dependency", _cmd_pkg_add)
+        p_pkg_add.add_arg("url", "URL of dependency", True, "?")
+        p_pkg_add.add_arg("name", "Name of dependency", True, "?")
+        p_pkg_add.add_option("hash", "str", "?", "", "Hash of dependency")
+
+        p_pkg_rm = p_pkg.add_cmd("remove", "Remove package dependency", _cmd_pkg_rm)
+        p_pkg_rm.add_arg("name", "Name of dependency", True, "?")
+
         buildp = p.add_cmd("build", "Build", _cmd_build)
+
         docp = p.add_cmd("doc", "Show documentation", _cmd_doc)
+
         newp = p.add_cmd("new", "New project", _cmd_new)
         newp.add_arg("projectdir", "Project directory", True, "?")
+
         testp = p.add_cmd("test", "Test", _cmd_test)
         testp.add_bool("record", "Record test performance results")
         testp.add_option("module", "strlist", "+", [], "Filter on test module name")
         testp.add_option("name", "strlist", "+", [], "Filter on test name")
+
         testlistp = testp.add_cmd("list", "List tests", _cmd_list_test)
+
         testperfp = testp.add_cmd("perf", "Perf", _cmd_test_perf)
+
         version_p = p.add_cmd("version", "Show version", _cmd_version)
         version_p.add_bool("full", "Show full version info")
+
         return p.parse(env.argv)
 
     try:
