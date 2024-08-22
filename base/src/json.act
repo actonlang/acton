@@ -22,7 +22,7 @@ def decode(data: str) -> dict[str, ?value]:
     """
     NotImplemented
 
-def encode(data: dict[str, ?value]) -> str:
+def encode(data: dict[str, ?value], pretty=False) -> str:
     """Encode a dictionary into a JSON string
     """
     NotImplemented
