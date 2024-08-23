@@ -72,16 +72,19 @@ class Dependency(object):
     name: str
     url: ?str
     hash: ?str
+    path: ?str
 
-    def __init__(self, name: str, url: ?str, hash: ?str):
+    def __init__(self, name: str, url: ?str, hash: ?str, path: ?str):
         self.name = name
         self.url = url
         self.hash = hash
+        self.path = path
 
     @staticmethod
     def from_json(dep_name, data: dict[str, str]):
         dep_url = None
         dep_hash = None
+        dep_path = None
         for key, value in data.items():
             if key == "url":
                 data_url = data["url"]
@@ -91,9 +94,13 @@ class Dependency(object):
                 data_hash = data["hash"]
                 if isinstance(data_hash, str):
                     dep_hash = data_hash
+            elif "path" in data:
+                data_path = data["path"]
+                if isinstance(data_path, str):
+                    dep_path = data_path
             else:
                 raise ValueError("Invalid build.act.json, unknown key '%s' in dependency '%s'" % (key, dep_name))
-        return Dependency(dep_name, dep_url, dep_hash)
+        return Dependency(dep_name, dep_url, dep_hash, dep_path)
 
     def to_json(self) -> dict[str, str]:
         res = {}

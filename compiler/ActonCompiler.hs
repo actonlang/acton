@@ -95,7 +95,8 @@ main = do
           C.target = C.targetB opts,
           C.cpu = C.cpuB opts,
           C.test = C.testB opts,
-          C.keepbuild = C.keepbuildB opts
+          C.keepbuild = C.keepbuildB opts,
+          C.searchpath = C.searchpathB opts
           }
         C.CmdOpt (C.Cloud opts) -> undefined
         C.CmdOpt (C.Doc opts)   -> printDocs opts
@@ -105,7 +106,7 @@ main = do
 
 defaultOpts   = C.CompileOptions False False False False False False False False False False False False
                                  False False False False False False False False False False False False
-                                 False "" "" "" "" C.defTarget "" False False
+                                 False "" "" "" "" C.defTarget "" False False []
 
 
 -- Auxiliary functions ---------------------------------------------------------------------------------------
@@ -432,7 +433,9 @@ findPaths actFile opts  = do execDir <- takeDirectory <$> System.Environment.get
                                  modName = A.modName $ dirInSrc ++ [fileBody]
                                  projDepsDir = joinPath [projPath, "deps"]
                              dep_dirs <- findDeps projPath (C.deppath opts)
-                             sPaths <- searchPaths opts projTypes sysTypes dep_dirs
+                             deps_sPaths <- searchPaths opts projTypes sysTypes dep_dirs
+                             -- join the search paths from command line options with the ones found in the deps directory
+                             let sPaths = deps_sPaths ++ (C.searchpath opts)
                              let deps = map takeBaseName dep_dirs
                              createDirectoryIfMissing True binDir
                              createDirectoryIfMissing True projOut
@@ -883,27 +886,7 @@ zigBuild env opts paths tasks binTasks = do
     iff (not (quiet opts)) $ putStrLn("  Final compilation step")
     timeStart <- getTime Monotonic
 
-    -- Create .build directory if it doesn't exist
-    createDirectoryIfMissing True (joinPath [projPath paths, ".build"])
-    -- symlink .build/sys to the syspath directory, always recreating it to make sure it's up to date
-    removeDirectoryLink (joinPath [projPath paths, ".build", "sys"])
-      `catch` handleNotExists
-    createDirectoryLink (sysPath paths) (joinPath [projPath paths, ".build", "sys"])
-
-    -- Write our build.zig and build.zig.zon files
-    let buildZigPath = projPath paths ++ "/build.zig"
-        buildZigZonPath = projPath paths ++ "/build.zig.zon"
-
-    iff (not (isTmp paths)) (do
-      buildZigExists <- doesFileExist buildZigPath
-      iff (not buildZigExists) (writeFile buildZigPath (Acton.Builder.buildzig))
-      -- We need to generate a build.zig.zon file for this project unless it already exists
-      buildZigZonExists <- doesFileExist buildZigZonPath
-      iff (not buildZigZonExists) (writeFile buildZigZonPath (genBuildZigZon paths))
-      )
-
     -- custom build.zig ?
-    buildZigExists <- doesFileExist $ projPath paths ++ "/build.zig"
     homeDir <- getHomeDirectory
     let global_cache_dir = joinPath [ homeDir, ".cache", "acton", "build-cache" ]
         no_threads = if isWindowsOS (C.target opts) then True else C.no_threads opts
@@ -917,6 +900,32 @@ zigBuild env opts paths tasks binTasks = do
                            ("aarch64":"windows":_) -> " -Dcpu=apple_a15 "
                            ("x86_64":_:_)        -> " -Dcpu=westmere "
                            (_:_:_)               -> ""
+        buildZigPath = joinPath [projPath paths, "build.zig"]
+        buildZigZonPath = joinPath [projPath paths, "build.zig.zon"]
+
+    -- Create .build directory if it doesn't exist
+    createDirectoryIfMissing True (joinPath [projPath paths, ".build"])
+    -- symlink .build/sys to the syspath directory, always recreating it to make sure it's up to date
+    removeDirectoryLink (joinPath [projPath paths, ".build", "sys"])
+      `catch` handleNotExists
+    createDirectoryLink (sysPath paths) (joinPath [projPath paths, ".build", "sys"])
+    -- symlink .build/cache to the global cache directory ~/.cache/acton
+    removeDirectoryLink (joinPath [projPath paths, ".build", "cache"])
+      `catch` handleNotExists
+    createDirectoryLink global_cache_dir (joinPath [projPath paths, ".build", "cache"])
+
+
+    -- Write our build.zig and build.zig.zon files
+    buildZigExists <- doesFileExist $ projPath paths ++ "/build.zig"
+    iff (not (isTmp paths)) (do
+      buildZigExists <- doesFileExist buildZigPath
+      iff (not buildZigExists) (writeFile buildZigPath (Acton.Builder.buildzig))
+      -- We need to generate a build.zig.zon file for this project unless it already exists
+      buildZigZonExists <- doesFileExist buildZigZonPath
+      iff (not buildZigZonExists) (writeFile buildZigZonPath (genBuildZigZon paths))
+      )
+
+
     let zigCmdBase =
           if buildZigExists
             then zig paths ++ " build " ++
