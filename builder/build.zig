@@ -199,24 +199,6 @@ pub fn build(b: *std.Build) void {
 
     libActonProject.addIncludePath(.{ .cwd_relative = buildroot_path });
 
-    // project dependencies
-    print("Checking for dependencies in: {s}\n", .{deps_path});
-    const deps_dir = std.fs.cwd().openDir(deps_path, .{ .iterate = true });
-    if (deps_dir) |dir| {
-        //defer dir.close();
-        var deps_walker = dir.iterate();
-        while (deps_walker.next() catch unreachable) |dep_entry| {
-
-            if (dep_entry.kind == .directory) {
-                std.debug.print("Found sub-directory: {s}\n", .{dep_entry.name});
-                const dep_path = joinPath(b.allocator, deps_path, dep_entry.name);
-                libActonProject.addIncludePath(.{ .cwd_relative = dep_path });
-            }
-        }
-    } else |err| {
-        std.debug.print("Failed to open directory: {}\n", .{err});
-    }
-
     libActonProject.addIncludePath(.{ .cwd_relative = syspath_base });
     libActonProject.addIncludePath(.{ .cwd_relative = syspath_include });
     // lib: link with dependencies / get headers from build.act.json
@@ -224,6 +206,10 @@ pub fn build(b: *std.Build) void {
     libActonProject.linkLibC();
     libActonProject.linkLibCpp();
     b.installArtifact(libActonProject);
+
+    // Register the produced header files in out/types using
+    // libActonProject.installHeader / .installHeaderDirectory
+    libActonProject.installHeadersDirectory(b.path("out/types"), "out/types", .{});
 
     if (!only_lib) {
         const libactondb_dep = b.dependency("actondb", .{
@@ -354,32 +340,6 @@ pub fn build(b: *std.Build) void {
             executable.addIncludePath(.{ .cwd_relative = syspath_include });
             executable.addIncludePath(.{ .cwd_relative = syspath_lib });
             executable.linkLibrary(libActonProject);
-
-            // project dependencies
-            if (deps_dir) |dir| {
-                //defer dir.close();
-                var deps_walker = dir.iterate();
-                while (deps_walker.next() catch unreachable) |dep_entry| {
-
-                    if (dep_entry.kind == .directory) {
-                        std.debug.print("Found sub-directory: {s}\n", .{dep_entry.name});
-                        const dep_path = joinPath(b.allocator, deps_path, dep_entry.name);
-                        executable.addIncludePath(.{ .cwd_relative = dep_path });
-                        const dep_path_rel = joinPath(b.allocator, "deps", dep_entry.name);
-                        _ = dep_path_rel;
-                        const dep_dep = b.dependency(dep_entry.name, .{
-                            .target = target,
-                            .optimize = optimize,
-                            .only_lib = true,
-                            .syspath = syspath,
-                            .deps_path = deps_path,
-                        });
-                        executable.linkLibrary(dep_dep.artifact("ActonProject"));
-                    }
-                }
-            } else |err| {
-                std.debug.print("Failed to open directory: {}\n", .{err});
-            }
 
             executable.linkLibrary(actonbase_dep.artifact("Acton"));
             if (db) {

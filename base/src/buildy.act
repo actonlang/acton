@@ -107,8 +107,8 @@ class Dependency(object):
 
     def to_zon(self) -> str:
         return """        .%s = .{
-            .path = "deps/%s",
-        },
+        .path = "deps/%s"
+    },
 """ % (
             self.name,
             self.name,
@@ -191,13 +191,14 @@ def gen_buildzig(template: str, build_config: BuildConfig) -> str:
     liblink_lines = ""
     exelink_lines = ""
 
-#    for dep_name, dep in build_config.dependencies.items():
-#        deps_defs += "    const actdep_%s = b.dependency(\"%s\", .{\n" % (dep_name, dep_name)
-#        deps_defs += "        .target = target,\n"
-#        deps_defs += "        .optimize = optimize,\n"
-#        deps_defs += "    });\n"
-#        liblink_lines += " "*4  + "libActonProject.linkLibrary(actdep_%s.artifact(\"ActonProject\"));\n" % (dep_name)
-#        exelink_lines += " "*12 + "executable.linkLibrary(actdep_%s.artifact(\"ActonProject\"));\n" % (dep_name)
+    for dep_name, dep in build_config.dependencies.items():
+        deps_defs += "    const actdep_%s = b.dependency(\"%s\", .{\n" % (dep_name, dep_name)
+        deps_defs += "        .target = target,\n"
+        deps_defs += "        .optimize = optimize,\n"
+        deps_defs += "        .syspath = syspath,\n"
+        deps_defs += "    });\n"
+        liblink_lines += " "*4  + "libActonProject.linkLibrary(actdep_%s.artifact(\"ActonProject\"));\n" % (dep_name)
+        exelink_lines += " "*12 + "executable.linkLibrary(actdep_%s.artifact(\"ActonProject\"));\n" % (dep_name)
 
     for dep_name, dep in build_config.zig_dependencies.items():
         if len(dep.artifacts) > 0:
