@@ -2,7 +2,7 @@
 
 Testing your code is a really good idea! While Acton's type system allows interfaces to be precisely defined, it is imperative that the behavior of a function or actor is tested!
 
-Test functions are automatically discovered by the compiler. Run tests with `acton test` or `acton test perf` (for more accurately measuring performance). Tests will be automatically from the project source. Import the testing module and name your functions starting with `_test`. The type signature should match the test intended test category. Use the assertion functions available in the testing module. Here is a simple unit test:
+Test functions are automatically discovered by the compiler. Run tests with `acton test`. Import the testing module and name your test functions starting with `_test`. The type signature should match the test intended test category. Use the assertion functions available in the testing module. Here is a simple unit test:
 
 Source:
 ```python src/ut.act
