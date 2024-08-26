@@ -4,6 +4,7 @@ pub const packages = struct {
         pub const build_zig = @import("backendbuild.zig");
         pub const deps: []const struct { []const u8, []const u8 } = &.{
             .{ "libargp", "libargp" },
+            .{ "libgc", "libgc" },
             .{ "libnetstring", "libnetstring" },
             .{ "libprotobuf_c", "libprotobuf_c" },
             .{ "libuuid", "libuuid" },
@@ -14,6 +15,9 @@ pub const packages = struct {
         pub const build_root = ".build/sys/base";
         pub const build_zig = @import("basebuild.zig");
         pub const deps: []const struct { []const u8, []const u8 } = &.{
+            .{ "libargp", "libargp" },
+            .{ "libbsdnt", "libbsdnt" },
+            .{ "libgc", "libgc" },
             .{ "libutf8proc", "libutf8proc" },
         };
     };

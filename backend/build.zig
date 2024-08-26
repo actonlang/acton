@@ -13,6 +13,14 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    const dep_libgc = b.dependency("libgc", .{
+        .target = target,
+        .optimize = optimize,
+        .BUILD_SHARED_LIBS = false,
+        .enable_large_config = true,
+        .enable_mmap = true,
+    });
+
     const dep_libnetstring = b.dependency("libnetstring", .{
         .target = target,
         .optimize = optimize,
@@ -88,6 +96,7 @@ pub fn build(b: *std.Build) void {
     });
     libactondb.defineCMacro("LOG_USER_COLOR", "");
     libactondb.addIncludePath(.{ .cwd_relative= syspath_include });
+    libactondb.linkLibrary(dep_libgc.artifact("gc"));
     libactondb.linkLibC();
     libactondb.linkLibCpp();
     b.installArtifact(libactondb);

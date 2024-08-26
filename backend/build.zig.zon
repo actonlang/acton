@@ -5,6 +5,9 @@
         .libargp = .{
             .path = "deps/libargp/",
         },
+        .libgc = .{
+            .path = "deps/libgc/",
+        },
         .libnetstring = .{
             .path = "deps/libnetstring/",
         },
