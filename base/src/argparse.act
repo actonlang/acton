@@ -88,12 +88,14 @@ class Args(object):
 
 
 class Parser(object):
+    cmd: str
     opts: dict[str, (name: str, type: str, nargs: str, default: ?value, help: str)]
     args: list[(name: str, help: str, required: bool, nargs: str, left: int)]
     cmds: dict[str, (help: str, parser: Parser, fn: proc(Args) -> None)]
     prog: str
 
-    def __init__(self):
+    def __init__(self, cmd=""):
+        self.cmd = cmd
         self.opts = {}
         self.args = []
         self.cmds = {}
@@ -117,7 +119,7 @@ class Parser(object):
         self.args.append((name=name, help=help, required=required, nargs=nargs, left=1))
 
     def add_cmd(self, name: str, help: str="", fn: proc(Args) -> None):
-        p = Parser()
+        p = Parser(name)
         self.cmds[name] = (help=help, parser=p, fn=fn)
         return p
 
@@ -145,7 +147,7 @@ class Parser(object):
                     short_opts += " %s [%s ...]" % (n.upper(), n.upper())
         if len(self.cmds) > 0:
             short_opts += " COMMAND"
-        usage_text += "Usage: %s %s\n" % (self.prog, short_opts)
+        usage_text += "Usage: %s%s\n" % (self.prog, short_opts)
 
         if len(self.cmds) > 0:
             usage_text += "\nCommands:\n"
@@ -171,7 +173,9 @@ class Parser(object):
         return self._parse(argv)
 
     def _parse(self, argin: list[str], res_args: ?Args=None) -> Args:
+        injected_help = False
         if "help" not in self.opts:
+            injected_help = True
             self.add_bool("help", "show this help message")
 
         if res_args is None: # top level call
@@ -179,27 +183,27 @@ class Parser(object):
             args_to_parse = argin[1:]
         else: # recursively called
             args_to_parse = argin
-        args, rest = self._parse_and_consume(args_to_parse, res_args)
+        args, rest = self._parse_and_consume(args_to_parse, res_args, prog=self.prog)
         cmd_parser = args.cmd_parser
-        if args.get_bool("help"):
+
+        if injected_help and args.get_bool("help"):
+            if cmd_parser is not None:
+                raise PrintUsage(cmd_parser.get_usage())
             raise PrintUsage(self.get_usage())
+
         for arg in self.args:
             if arg.required and arg.name not in args.options:
                 raise ArgumentError("Missing positional argument: %s" % arg.name)
-        if cmd_parser is not None:
-            args = cmd_parser._parse(rest, args)
-        else:
-            if len(rest) > 0:
-                raise ArgumentError("Unexpected argument '%s'" % rest[0])
 
         return args
 
-    def _parse_and_consume(self, argv: list[str], res_args: ?Args) -> (Args, list[str]):
-        #print("parsing, parser", self, "argv:", argv)
+    def _parse_and_consume(self, argv: list[str], res_args: ?Args, prog="") -> (Args, list[str]):
+        self.prog = prog
+        #print(self, "_parse_and_consume, argv:", argv, "res_args:", res_args)
         rest: list[str] = []
+        cmd_parser = None
         if res_args is not None:
             res = res_args
-            res.cmd_parser = None
         else:
             res = Args()
         # Insert default values
@@ -265,11 +269,11 @@ class Parser(object):
                     # We found a sub-command, store which one but continue
                     # parsing the rest of the options. Make sure not to set
                     # pass rest of args to subparser for command
-                    cmd_parser = res.cmd_parser
                     if cmd_parser is None:
                         cmd = self.cmds[arg]
                         res.cmd = cmd.fn
                         res.cmd_parser = cmd.parser
+                        cmd_parser = cmd.parser
                     else:
                         rest.append(arg)
 
@@ -277,10 +281,10 @@ class Parser(object):
                     rest.append(arg)
 
         # Run sub-command parser
-        cmd_parser = res.cmd_parser
         if cmd_parser is not None:
-            #print(self, arg, ": cmd found, invoking cmd parser with", cmd_args)
-            res, posargs = cmd_parser._parse_and_consume(rest, res)
+            #print(self, ": cmd found, invoking cmd parser with", rest)
+            res, posargs = cmd_parser._parse_and_consume(rest, res, prog=self.prog + " " + cmd_parser.cmd)
+            #print(self, ": cmd parser done, res:", res, "posargs:", posargs, "res.cmd:", res.cmd)
         else:
             posargs = rest
         rest = []

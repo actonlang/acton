@@ -273,6 +273,28 @@ def test_help():
         return
     raise ValueError("Expected PrintUsage")
 
+actor test_help_subcmd():
+    def _cmd_build(args):
+        pass
+
+    def test():
+        p = argparse.Parser()
+        p.add_bool("verbose", "Enable verbose output")
+        pb = p.add_cmd("build", "Build stuff", _cmd_build)
+        pb.add_bool("dev", "Enable dev mode")
+        pb.add_option("haxx", "str", help="HAXX")
+
+        try:
+            args = p.parse(["./app", "build", "--help"])
+        except argparse.PrintUsage as e:
+            # We want to see the help for the build command
+            if "HAXX" not in e.error_message:
+                raise ValueError("Expected help for build command, got:\n" + e.error_message)
+            return
+        raise ValueError("Expected PrintUsage")
+    test()
+
+
 actor main(env):
     try:
         test_opts()
@@ -292,6 +314,7 @@ actor main(env):
         test_cmd_nested2()
         test_cmd_optional_argument()
         test_help()
+        test_help_subcmd()
         env.exit(0)
     except Exception as exc:
         env.exit(1)
