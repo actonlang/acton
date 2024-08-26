@@ -205,7 +205,7 @@ actor FS(cap: FileCap):
         return res
 
 
-actor ReadFile(cap: ReadFileCap, filename: str):
+actor ReadFile(cap: ReadFileCap, filename: str, lock=False):
     """Read a file
     """
     var _fd = -1
@@ -213,7 +213,13 @@ actor ReadFile(cap: ReadFileCap, filename: str):
     proc def _open_file():
         """C magic"""
         NotImplemented
+
+    proc def _lock_file():
+        NotImplemented
+
     _open_file()
+    if lock:
+        _lock_file()
 
     action def read() -> bytes:
         """Read content of file"""
@@ -224,14 +230,21 @@ actor ReadFile(cap: ReadFileCap, filename: str):
         NotImplemented
 
 
-actor WriteFile(cap: WriteFileCap, filename: str):
+actor WriteFile(cap: WriteFileCap, filename: str, lock=False):
     """Write a file
     """
     var _fd = -1
+
     proc def _open_file():
         """C magic"""
         NotImplemented
+
+    proc def _lock_file():
+        NotImplemented
+
     _open_file()
+    if lock:
+        _lock_file()
 
     action def write(data: bytes) -> None:
         """Write data to file"""

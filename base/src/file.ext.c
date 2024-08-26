@@ -1,6 +1,8 @@
 #define GC_THREADS 1
 #include "gc.h"
 
+#include <sys/file.h>
+
 #include <uv.h>
 #include "../rts/io.h"
 #include "../rts/log.h"
@@ -276,6 +278,20 @@ $R fileQ_ReadFileD__open_fileG_local (fileQ_ReadFile self, $Cont c$cont) {
     return $R_CONT(c$cont, B_None);
 }
 
+$R fileQ_ReadFileD__lock_fileG_local (fileQ_ReadFile self, $Cont c$cont) {
+#if defined(_WIN32) || defined(_WIN64)
+    assert(0 && "fileQ_ReadFileD__lock_fileG_local not implemented on Windows");
+#else
+    int r = flock(from$int(self->_fd), LOCK_EX + LOCK_NB);
+    if (r < 0) {
+        char errmsg[1024] = "Error locking file: ";
+        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        log_warn(errmsg);
+        $RAISE(((B_BaseException)B_OSErrorG_new(to$str(errmsg))));
+    }
+#endif
+    return $R_CONT(c$cont, B_None);
+}
 
 $R fileQ_ReadFileD_closeG_local (fileQ_ReadFile self, $Cont c$cont) {
     uv_fs_t *req = (uv_fs_t *)acton_malloc(sizeof(uv_fs_t));
@@ -328,6 +344,22 @@ $R fileQ_WriteFileD__open_fileG_local (fileQ_WriteFile self, $Cont c$cont) {
     self->_fd = to$int(r);
     return $R_CONT(c$cont, B_None);
 }
+
+$R fileQ_WriteFileD__lock_fileG_local (fileQ_WriteFile self, $Cont c$cont) {
+#if defined(_WIN32) || defined(_WIN64)
+    assert(0 && "fileQ_ReadFileD__lock_fileG_local not implemented on Windows");
+#else
+    int r = flock(from$int(self->_fd), LOCK_EX + LOCK_NB);
+    if (r < 0) {
+        char errmsg[1024] = "Error locking file: ";
+        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        log_warn(errmsg);
+        $RAISE(((B_BaseException)B_OSErrorG_new(to$str(errmsg))));
+    }
+#endif
+    return $R_CONT(c$cont, B_None);
+}
+
 
 $R fileQ_WriteFileD_closeG_local (fileQ_WriteFile self, $Cont c$cont) {
     uv_fs_t *req = (uv_fs_t *)acton_malloc(sizeof(uv_fs_t));

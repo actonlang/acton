@@ -104,6 +104,7 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
     fcap = file.FileCap(env.cap)
     rfcap = file.ReadFileCap(fcap)
     fs = file.FS(fcap)
+    lock_file = None
     remaining_deps = {}
     cmdargs = ["build"] + build_cmd_args(args)
     if build_tests:
@@ -116,7 +117,7 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
         if exit_code == 0:
             on_build_success(stdout_buf.decode())
         else:
-            on_build_failure(exit_code, term_signal, stderr_buf.decode())
+            on_build_failure(exit_code, term_signal, stdout_buf.decode() + stderr_buf.decode())
 
     def _on_actonc_failure(error: str):
         on_build_failure(-999, -999, error)
@@ -245,8 +246,18 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
         write_buildzig(file.FileCap(env.cap), build_config)
         ZigFetchDeps(env, build_config, check_deps, on_zig_fetch_error)
 
-    # and off we go!
-    check_for_buildconfig()
+    def get_lock():
+        """Try to get the build lock for the project
+        """
+        try:
+            lock_file = file.WriteFile(file.WriteFileCap(fcap), ".acton.lock", lock=True)
+            check_for_buildconfig()
+        except OSError:
+            print("Build lock exists, trying again soon...")
+            after 1: get_lock()
+
+    # and off we go! Start by grabbing the project build lock
+    get_lock()
 
 
 actor RunModuleTest(process_cap, modname, test_cmd, on_json_output, on_test_error):
