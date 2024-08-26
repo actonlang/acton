@@ -488,7 +488,7 @@ actor RunTestTest(env: Env, args, perf_mode: bool=False):
 def build_cmd_args(args):
     cmdargs = []
     for argname, arg in args.options.items():
-        if argname == "file":
+        if argname in {"file", "record"}:
             continue
         if arg.type == "bool":
             if args.get_bool(argname):
