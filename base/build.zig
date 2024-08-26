@@ -70,6 +70,12 @@ pub fn build(b: *std.Build) void {
 
     print("Acton Base Builder\nBuilding in {s}\n", .{buildroot_path});
 
+    const dep_libutf8proc = b.dependency("libutf8proc", .{
+        .target = target,
+        .optimize = optimize,
+        .BUILD_SHARED_LIBS = false,
+    });
+
     var iter_dir = b.build_root.handle.openDir(
         "out/types/",
         .{
@@ -202,6 +208,9 @@ pub fn build(b: *std.Build) void {
     libActon.addIncludePath(.{ .cwd_relative = syspath_include });
     libActon.addIncludePath(b.path("../inc")); // hack hack for stdlib TODO: sort out
     libActon.addIncludePath(b.path("../deps/instdir/include")); // hack hack for stdlib TODO: sort out
+
+    libActon.linkLibrary(dep_libutf8proc.artifact("utf8proc"));
+
     libActon.linkLibC();
     libActon.linkLibCpp();
     b.installArtifact(libActon);
