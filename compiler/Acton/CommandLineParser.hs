@@ -70,7 +70,8 @@ data CompileOptions   = CompileOptions {
                          target      :: String,
                          cpu         :: String,
                          test        :: Bool,
-                         keepbuild   :: Bool
+                         keepbuild   :: Bool,
+                         searchpath  :: [String]
                      } deriving Show
 
 data BuildOptions = BuildOptions {
@@ -91,7 +92,8 @@ data BuildOptions = BuildOptions {
                          cpuB        :: String,
                          deppathB    :: String,
                          testB       :: Bool,
-                         keepbuildB  :: Bool
+                         keepbuildB  :: Bool,
+                         searchpathB :: [String]
                      } deriving Show
                          
 
@@ -169,6 +171,7 @@ compileOptions = CompileOptions
         <*> strOption (long "cpu"       <> metavar "CPU" <> value "" <> help "CPU, e.g. skylake")
         <*> switch (long "test"         <> help "Build tests")
         <*> switch (long "keepbuild"    <> help "Keep build.zig")
+        <*> many (strOption (long "searchpath" <> metavar "DIR" <> help "Add search path"))
 
 buildCommand          = Build <$> (
     BuildOptions
@@ -190,6 +193,7 @@ buildCommand          = Build <$> (
         <*> strOption (long "deppath"   <> metavar "DIR" <> value "" <> help "Set deppath")
         <*> switch (long "test"         <> help "Build tests")
         <*> switch (long "keepbuild"    <> help "Keep build.zig")
+        <*> many (strOption (long "searchpath" <> metavar "DIR" <> help "Add search path"))
     )
                  
 cloudCommand        = Cloud <$> (

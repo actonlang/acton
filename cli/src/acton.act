@@ -7,6 +7,9 @@ import testing
 from buildy import *
 from testing import TestInfo
 
+def base_path(file_cap: file.FileCap):
+    fs = file.FS(file_cap)
+    return fs.exepath()[0:-len("/bin/acton")]
 
 def clean_buildcache(cap: file.FileCap):
     fs = file.FS(cap)
@@ -21,6 +24,30 @@ def clean_buildcache(cap: file.FileCap):
         total_size = 0
     if total_size == 0:
         print("Acton build cache is empty: rebuilding Acton base from source, which might take a while...")
+
+def write_buildzig(file_cap, build_config: BuildConfig):
+    fs = file.FS(file_cap)
+
+    def get_build_zig_templates():
+        # Read the build.zig template
+        build_zig_template = file.ReadFile(
+            file.ReadFileCap(file_cap),
+            file.join_path([base_path(file_cap), "builder", "build.zig"])).read().decode()
+        build_zig_zon_template = file.ReadFile(
+            file.ReadFileCap(file_cap),
+            file.join_path([base_path(file_cap), "builder", "build.zig.zon"])).read().decode()
+        return build_zig_template, build_zig_zon_template
+
+    build_zig_tpl, build_zig_zon_tpl = get_build_zig_templates()
+    # Write build.zig
+    b_file = file.WriteFile(file.WriteFileCap(file_cap), "build.zig")
+    await async b_file.write(gen_buildzig(build_zig_tpl, build_config).encode())
+    await async b_file.close()
+    # Write build.zig.zon
+    bzz_file = file.WriteFile(file.WriteFileCap(file_cap), "build.zig.zon")
+    await async bzz_file.write(gen_buildzigzon(build_zig_zon_tpl, build_config).encode())
+    await async bzz_file.close()
+
 
 actor CompilerRunner(process_cap, env, args, wdir=None, on_exit: ?action(int, int, bytes, bytes) -> None=None, on_error: ?action(str) -> None=None, print_output: bool=True, exe="actonc"):
     """Run the actonc compiler
@@ -82,7 +109,8 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
     if build_tests:
         cmdargs.append("--dev")
         cmdargs.append("--test")
-    # --
+    var build_config = BuildConfig()
+    #
 
     def _on_actonc_exit(exit_code, term_signal, stdout_buf, stderr_buf):
         if exit_code == 0:
@@ -94,9 +122,24 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
         on_build_failure(-999, -999, error)
 
     def build_project():
+        search_paths = []
+        for dep_name, dep in build_config.dependencies.items():
+            hash = dep.hash
+            path = dep.path
+            if hash is not None:
+                search_paths.append(file.join_path([fs.homedir(), ".cache", "acton", "build-cache", "p", hash, "out", "types"]))
+            elif path is not None:
+                # deconstruct and put together to get OS independent path? i.e. flip / to \ on windows
+                # TODO: force relative path?
+                search_paths.append(path)
+            else:
+                raise ValueError("Dependency %s has no hash" % dep_name)
+        search_path_arg = []
+        for sp in search_paths:
+            search_path_arg.extend(["--searchpath", sp])
         cr = CompilerRunner(process_cap,
             env,
-            cmdargs + ["--deppath", file.join_path([fs.cwd(), "deps"])],
+            cmdargs + ["--deppath", file.join_path([fs.cwd(), "deps"])] + search_path_arg,
             None,
             _on_actonc_exit,
             _on_actonc_failure,
@@ -112,7 +155,7 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
                 pass
 
             if len(remaining_deps) == 0:
-                print("All dependencies built, building main project KLL")
+                print("All dependencies built, building main project")
                 build_project()
         else:
             # TODO: do better
@@ -147,29 +190,38 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
                     exe="acton"
                 )
 
-    def write_build_config(build_config: BuildConfig):
-        def get_build_zig_templates():
-            bin_acton_len = len("/bin/acton")
-            # Read the build.zig template
-            fs = file.FS(file.FileCap(env.cap))
-            base_path = fs.exepath()[0:-bin_acton_len]
-            build_zig_template = file.ReadFile(
-                file.ReadFileCap(file.FileCap(env.cap)),
-                file.join_path([base_path, "builder", "build.zig"])).read().decode()
-            build_zig_zon_template = file.ReadFile(
-                file.ReadFileCap(file.FileCap(env.cap)),
-                file.join_path([base_path, "builder", "build.zig.zon"])).read().decode()
-            return build_zig_template, build_zig_zon_template
+    def check_deps():
+        # 1. fetch dependencies (into zig global cache)
+        # 2. copy dependencies from zig global cache to deps/
+        # 3. build dependencies
+        # 4. build project
+        deps_dir = set()
+        try:
+            deps_dir = set(fs.listdir("deps"))
+        except OSError:
+            fs.mkdir("deps")
 
-        build_zig_tpl, build_zig_zon_tpl = get_build_zig_templates()
-        # Write build.zig
-        b_file = file.WriteFile(file.WriteFileCap(file.FileCap(env.cap)), "build.zig")
-        await async b_file.write(gen_buildzig(build_zig_tpl, build_config).encode())
-        await async b_file.close()
-        # Write build.zig.zon
-        bzz_file = file.WriteFile(file.WriteFileCap(file.FileCap(env.cap)), "build.zig.zon")
-        await async bzz_file.write(gen_buildzigzon(build_zig_zon_tpl, build_config).encode())
-        await async bzz_file.close()
+        for dep_name, dep in build_config.dependencies.items():
+            # Does deps/X exist?
+            hash = dep.hash
+            path = dep.path
+            if hash is not None:
+                if dep_name not in deps_dir:
+                    print("Copying", dep_name, "from zig global cache")
+                    fs.mkdir(file.join_path(["deps", dep_name]))
+                    src = file.join_path([fs.homedir(), ".cache", "acton", "build-cache", "p", hash])
+                    dst = file.join_path([fs.cwd(), "deps", dep_name])
+                    print("Copying", src, "to", dst)
+                    await async fs.copytree(src, dst)
+            elif path is not None:
+                pass
+            else:
+                raise ValueError("Dependency %s has no hash" % dep_name)
+        build_deps()
+
+    def on_zig_fetch_error(error):
+        print("Error fetching dependencies", error)
+        env.exit(1)
 
     def check_for_buildconfig():
         """Check if dependencies.json exists
@@ -187,11 +239,11 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
 
         try:
             build_config = read_buildconfig()
-            write_build_config(build_config)
         except FileNotFoundError:
-            write_build_config(BuildConfig())
+            pass
 
-        build_deps()
+        write_buildzig(file.FileCap(env.cap), build_config)
+        ZigFetchDeps(env, build_config, check_deps, on_zig_fetch_error)
 
     # and off we go!
     check_for_buildconfig()
@@ -453,6 +505,332 @@ def build_cmd_args(args):
     return cmdargs
 
 
+actor ZigFetchDeps(env, build_config: BuildConfig, on_done: action() -> None, on_fetch_error: action(str) -> None, print_output: bool=False):
+    """Fetch dependencies and Zig dependencies
+    """
+    pcap = process.ProcessCap(env.cap)
+    fs = file.FS(file.FileCap(env.cap))
+    zig = file.join_path([base_path(file.FileCap(env.cap)), "zig", "zig"])
+
+    remaining_deps = {}
+
+    dep_processes = {}
+    zig_processes = {}
+
+    def on_exit(dep, p, exit_code, term_signal, stdout_buf, stderr_buf):
+        if exit_code == 0:
+            if print_output:
+                print("Fetched", stdout_buf.decode())
+
+            if isinstance(dep, Dependency):
+                del dep_processes[dep.name]
+            elif isinstance(dep, ZigDependency):
+                del zig_processes[dep.name]
+
+            if len(dep_processes) == 0 and len(zig_processes) == 0:
+                on_done()
+        else:
+            # TODO: do better
+            print("Error fetching", stderr_buf.decode())
+            on_fetch_error(stderr_buf.decode())
+
+    def on_error(dep, p, error):
+        # TODO: collect all errors before calling on_fetch_error?
+        on_fetch_error(error)
+
+    for dep_name, dep in build_config.dependencies.items():
+        dep_url = dep.url
+        if dep_url is not None:
+            cmd = [zig, "fetch", "--global-cache-dir", file.join_path([fs.homedir(), ".cache", "acton", "build-cache"]), dep_url]
+            p = process.RunProcess(
+                pcap,
+                cmd,
+                lambda p, exit_code, term_signal, stdout_buf, stderr_buf: on_exit(dep, p, exit_code, term_signal, stdout_buf, stderr_buf),
+                lambda p, error: on_error(dep, p, error))
+            dep_processes[dep.name] = p
+
+    for dep_name, dep in build_config.zig_dependencies.items():
+        dep_url = dep.url
+        if dep_url is not None:
+
+            cmd = [zig, "fetch", "--global-cache-dir", file.join_path([fs.homedir(), ".cache", "acton", "build-cache"]), dep_url]
+            p = process.RunProcess(
+                pcap,
+                cmd,
+                lambda p, exit_code, term_signal, stdout_buf, stderr_buf: on_exit(dep, p, exit_code, term_signal, stdout_buf, stderr_buf),
+                lambda p, error: on_error(dep, p, error))
+            zig_processes[dep.name] = p
+
+    if len(dep_processes) == 0 and len(zig_processes) == 0:
+        on_done()
+
+
+actor CmdFetch(env, args):
+    pcap = process.ProcessCap(env.cap)
+    fs = file.FS(file.FileCap(env.cap))
+    zig = file.join_path([base_path(file.FileCap(env.cap)), "zig", "zig"])
+
+    remaining_deps = {}
+
+    def get_build_config():
+        try:
+            return BuildConfig.from_json(file.ReadFile(file.ReadFileCap(file.FileCap(env.cap)), "build.act.json").read().decode())
+        except:
+            print("No build.act.json file found, nothing to do.")
+            await async env.exit(0)
+        return BuildConfig()
+
+    build_config = get_build_config()
+    write_buildzig(file.FileCap(env.cap), build_config)
+
+    dep_processes = {}
+    zig_processes = {}
+
+    def on_exit(dep, p, exit_code, term_signal, stdout_buf, stderr_buf):
+        print("Fetched", stdout_buf.decode())
+        if isinstance(dep, Dependency):
+            del dep_processes[dep.name]
+        elif isinstance(dep, ZigDependency):
+            del zig_processes[dep.name]
+
+        if len(dep_processes) == 0 and len(zig_processes) == 0:
+            print("All dependencies fetched")
+            env.exit(0)
+
+    def on_error(dep, p, error):
+        print("Error fetching", error)
+        env.exit(1)
+
+    # TODO: call FetchDeps instead!?
+    if len(build_config.dependencies) == 0 and len(build_config.zig_dependencies) == 0:
+        print("No dependencies to fetch")
+        env.exit(0)
+    else:
+        for dep_name, dep in build_config.dependencies.items():
+            print("Checking", dep_name)
+            dep_url = dep.url
+            if dep_url is not None:
+                print("Fetching", dep_name, "from", dep_url)
+
+                cmd = [zig, "fetch", "--global-cache-dir", file.join_path([fs.homedir(), ".cache", "acton", "build-cache"]), dep_url]
+                p = process.RunProcess(
+                    pcap,
+                    cmd,
+                    lambda p, exit_code, term_signal, stdout_buf, stderr_buf: on_exit(dep, p, exit_code, term_signal, stdout_buf, stderr_buf),
+                    lambda p, error: on_error(dep, p, error))
+                dep_processes[dep.name] = p
+
+        for dep_name, dep in build_config.zig_dependencies.items():
+            print("Checking", dep_name)
+            dep_url = dep.url
+            if dep_url is not None:
+                print("Fetching", dep_name, "from", dep_url)
+
+                cmd = [zig, "fetch", "--global-cache-dir", file.join_path([fs.homedir(), ".cache", "acton", "build-cache"]), dep_url]
+                p = process.RunProcess(
+                    pcap,
+                    cmd,
+                    lambda p, exit_code, term_signal, stdout_buf, stderr_buf: on_exit(dep, p, exit_code, term_signal, stdout_buf, stderr_buf),
+                    lambda p, error: on_error(dep, p, error))
+                zig_processes[dep.name] = p
+
+
+actor CmdPkgAdd(env, args):
+    """Add a package dependency to the project
+    """
+    pcap = process.ProcessCap(env.cap)
+    fs = file.FS(file.FileCap(env.cap))
+
+    zig = file.join_path([base_path(file.FileCap(env.cap)), "zig", "zig"])
+
+    # What arguments do we need?
+    # - the name of the dependency (e.g. "foo", used in the build.act.json config file)
+    # - the URL to fetch it from
+
+    # We need to fetch the dependency and get the (content) hash of the fetched
+    # dependency and store it in the build.act.json file. If the dependency is
+    # already in the build.act.json file, we need to check if the hash is the
+    # same as the one we just fetched. If it is, we do nothing. If it is not,
+
+    dep_name = args.get_str("name")
+    dep_url = args.get_str("url")
+
+    def get_build_config():
+        try:
+            return BuildConfig.from_json(file.ReadFile(file.ReadFileCap(file.FileCap(env.cap)), "build.act.json").read().decode())
+        except:
+            pass
+        return BuildConfig()
+
+    build_config = get_build_config()
+
+    def on_exit(p, exit_code, term_signal, stdout_buf, stderr_buf):
+        if exit_code == 0:
+            dep_hash = stdout_buf.decode().strip()
+
+            if dep_name in build_config.dependencies:
+                if build_config.dependencies[dep_name].hash == dep_hash:
+                    print("Dependency", dep_name, "is already up to date")
+                else:
+                    print("Updated existing dependency", dep_name, "with new hash", dep_hash, " (old", build_config.dependencies[dep_name].hash, ")")
+                    build_config.dependencies[dep_name].hash = dep_hash
+            else:
+                # Add the hash
+                build_config.dependencies[dep_name] = Dependency(dep_name, dep_url, dep_hash)
+                print("Added new package dependency", dep_name, "with hash", dep_hash)
+
+            baj_file = file.WriteFile(file.WriteFileCap(file.FileCap(env.cap)), "build.act.json")
+            baj_file.write(build_config.to_json().encode()+b"\n")
+            await async baj_file.close()
+
+            env.exit(0)
+        else:
+            print("Error fetching", stderr_buf.decode())
+            env.exit(1)
+
+    def on_error(p, error):
+        print("Error fetching", error)
+        env.exit(1)
+
+    cmd = [zig, "fetch", "--global-cache-dir", file.join_path([fs.homedir(), ".cache", "acton", "build-cache"]), args.get_str("url")]
+    process.RunProcess(
+        pcap,
+        cmd,
+        on_exit,
+        on_error)
+
+
+actor CmdPkgRemove(env, args):
+    """Remove a package dependency from the project
+    """
+    pcap = process.ProcessCap(env.cap)
+    fs = file.FS(file.FileCap(env.cap))
+
+    zig = file.join_path([base_path(file.FileCap(env.cap)), "zig", "zig"])
+
+    dep_name = args.get_str("name")
+
+    def get_build_config():
+        try:
+            return BuildConfig.from_json(file.ReadFile(file.ReadFileCap(file.FileCap(env.cap)), "build.act.json").read().decode())
+        except:
+            print("No build.act.json file found, nothing to do.")
+            await async env.exit(0)
+        return BuildConfig() # unreachable
+
+    build_config = get_build_config()
+
+    if dep_name in build_config.dependencies:
+        print("Removed package dependency", dep_name)
+        del build_config.dependencies[dep_name]
+    else:
+        print("Dependency", dep_name, "not found in build.act.json. Nothing to do.")
+
+    baj_file = file.WriteFile(file.WriteFileCap(file.FileCap(env.cap)), "build.act.json")
+    baj_file.write(build_config.to_json().encode()+b"\n")
+    await async baj_file.close()
+
+    env.exit(0)
+
+
+actor CmdZigPkgAdd(env, args):
+    """Add a zig package dependency to the project
+    """
+    pcap = process.ProcessCap(env.cap)
+    fs = file.FS(file.FileCap(env.cap))
+
+    zig = file.join_path([base_path(file.FileCap(env.cap)), "zig", "zig"])
+
+    # What arguments do we need?
+    # - the name of the dependency (e.g. "foo", used in the build.act.json config file)
+    # - the URL to fetch it from
+
+    # We need to fetch the dependency and get the (content) hash of the fetched
+    # dependency and store it in the build.act.json file. If the dependency is
+    # already in the build.act.json file, we need to check if the hash is the
+    # same as the one we just fetched. If it is, we do nothing. If it is not,
+
+    dep_name = args.get_str("name")
+    dep_url = args.get_str("url")
+
+    def get_build_config():
+        try:
+            return BuildConfig.from_json(file.ReadFile(file.ReadFileCap(file.FileCap(env.cap)), "build.act.json").read().decode())
+        except:
+            pass
+        return BuildConfig()
+
+    build_config = get_build_config()
+
+    def on_exit(p, exit_code, term_signal, stdout_buf, stderr_buf):
+        if exit_code == 0:
+            dep_hash = stdout_buf.decode().strip()
+
+            if dep_name in build_config.zig_dependencies:
+                if build_config.zig_dependencies[dep_name].hash == dep_hash:
+                    print("Dependency", dep_name, "is already up to date")
+                else:
+                    print("Updated existing dependency", dep_name, "with new hash", dep_hash, " (old", build_config.zig_dependencies[dep_name].hash, ")")
+                    build_config.zig_dependencies[dep_name].hash = dep_hash
+            else:
+                # Add the hash
+                build_config.zig_dependencies[dep_name] = Dependency(dep_name, dep_url, dep_hash)
+                print("Added new Zig package dependency", dep_name, "with hash", dep_hash)
+
+            baj_file = file.WriteFile(file.WriteFileCap(file.FileCap(env.cap)), "build.act.json")
+            baj_file.write(build_config.to_json().encode()+b"\n")
+            await async baj_file.close()
+
+            env.exit(0)
+        else:
+            print("Error fetching", stderr_buf.decode())
+            env.exit(1)
+
+    def on_error(p, error):
+        print("Error fetching", error)
+        env.exit(1)
+
+    cmd = [zig, "fetch", "--global-cache-dir", file.join_path([fs.homedir(), ".cache", "acton", "build-cache"]), args.get_str("url")]
+    process.RunProcess(
+        pcap,
+        cmd,
+        on_exit,
+        on_error)
+
+
+actor CmdZigPkgRemove(env, args):
+    """Remove a package dependency from the project
+    """
+    pcap = process.ProcessCap(env.cap)
+    fs = file.FS(file.FileCap(env.cap))
+
+    zig = file.join_path([base_path(file.FileCap(env.cap)), "zig", "zig"])
+
+    dep_name = args.get_str("name")
+
+    def get_build_config():
+        try:
+            return BuildConfig.from_json(file.ReadFile(file.ReadFileCap(file.FileCap(env.cap)), "build.act.json").read().decode())
+        except:
+            print("No build.act.json file found, nothing to do.")
+            await async env.exit(0)
+        return BuildConfig() # unreachable
+
+    build_config = get_build_config()
+
+    if dep_name in build_config.zig_dependencies:
+        print("Removed Zig package dependency", dep_name)
+        del build_config.zig_dependencies[dep_name]
+    else:
+        print("Zig dependency", dep_name, "not found in build.act.json. Nothing to do.")
+
+    baj_file = file.WriteFile(file.WriteFileCap(file.FileCap(env.cap)), "build.act.json")
+    baj_file.write(build_config.to_json().encode()+b"\n")
+    await async baj_file.close()
+
+    env.exit(0)
+
+
 actor main(env):
     process_cap = process.ProcessCap(env.cap)
 
@@ -473,6 +851,18 @@ actor main(env):
     def _cmd_doc(args):
         env.exit(0)
 
+    def _cmd_fetch(args):
+        c = CmdFetch(env, args)
+
+    def _cmd_pkg(args):
+        env.exit(0)
+
+    def _cmd_pkg_add(args):
+        c = CmdPkgAdd(env, args)
+
+    def _cmd_pkg_rm(args):
+        c = CmdPkgRemove(env, args)
+
     def _cmd_new(args):
         cr = CompilerRunner(process_cap, env, ["new", args.get_str("projectdir")])
         env.exit(0)
@@ -491,6 +881,15 @@ actor main(env):
             CompilerRunner(process_cap, env, ["--version"])
         else:
             CompilerRunner(process_cap, env, ["--numeric-version"])
+
+    def _cmd_zigpkg(args):
+        env.exit(0)
+
+    def _cmd_zigpkg_add(args):
+        c = CmdZigPkgAdd(env, args)
+
+    def _cmd_zigpkg_rm(args):
+        c = CmdZigPkgRemove(env, args)
 
     def _parse_args():
         p = argparse.Parser()
@@ -521,18 +920,48 @@ actor main(env):
         p.add_option("syspath", "str", "?", "", "syspath")
         p.add_option("target", "str", "?", "", "Target, e.g. x86_64-linux-gnu.2.28")
         p.add_arg("file", ".act file to compile, or .ty to show", False, "?")
-        buildp = p.add_cmd("build", "Build", _cmd_build)
+
+        p_build = p.add_cmd("build", "Build", _cmd_build)
+
+        p_fetch = p.add_cmd("fetch", "Fetch all the things for offline work", _cmd_fetch)
+
+        p_pkg = p.add_cmd("pkg", "Manage package dependencies", _cmd_pkg)
+
+        p_pkg_add = p_pkg.add_cmd("add", "Add package dependency", _cmd_pkg_add)
+        p_pkg_add.add_arg("url", "URL of dependency", True, "?")
+        p_pkg_add.add_arg("name", "Name of dependency", True, "?")
+        p_pkg_add.add_option("hash", "str", "?", "", "Hash of dependency")
+
+        p_pkg_rm = p_pkg.add_cmd("remove", "Remove package dependency", _cmd_pkg_rm)
+        p_pkg_rm.add_arg("name", "Name of dependency", True, "?")
+
         docp = p.add_cmd("doc", "Show documentation", _cmd_doc)
+
         newp = p.add_cmd("new", "New project", _cmd_new)
         newp.add_arg("projectdir", "Project directory", True, "?")
+
         testp = p.add_cmd("test", "Test", _cmd_test)
         testp.add_bool("record", "Record test performance results")
         testp.add_option("module", "strlist", "+", [], "Filter on test module name")
         testp.add_option("name", "strlist", "+", [], "Filter on test name")
+
         testlistp = testp.add_cmd("list", "List tests", _cmd_list_test)
+
         testperfp = testp.add_cmd("perf", "Perf", _cmd_test_perf)
+
         version_p = p.add_cmd("version", "Show version", _cmd_version)
         version_p.add_bool("full", "Show full version info")
+
+        p_zigpkg = p.add_cmd("zig-pkg", "Manage Zig package dependencies", _cmd_zigpkg)
+
+        p_zigpkg_add = p_pkg.add_cmd("add", "Add Zig package dependency", _cmd_zigpkg_add)
+        p_zigpkg_add.add_arg("url", "URL of dependency", True, "?")
+        p_zigpkg_add.add_arg("name", "Name of dependency", True, "?")
+        p_zigpkg_add.add_option("hash", "str", "?", "", "Hash of dependency")
+
+        p_zigpkg_rm = p_pkg.add_cmd("remove", "Remove Zig package dependency", _cmd_zigpkg_rm)
+        p_zigpkg_rm.add_arg("name", "Name of dependency", True, "?")
+
         return p.parse(env.argv)
 
     try:

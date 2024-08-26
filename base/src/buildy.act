@@ -57,20 +57,34 @@ class BuildConfig(object):
             return BuildConfig(new_dependencies, new_zig_dependencies)
         raise ValueError("Invalid build.act.json, top level should be a dict")
 
+    def to_json(self) -> str:
+        res = {
+            "dependencies": {},
+            "zig_dependencies": {},
+        }
+        for dep_name, dep in self.dependencies.items():
+            res["dependencies"][dep_name] = dep.to_json()
+        for dep_name, dep in self.zig_dependencies.items():
+            res["zig_dependencies"][dep_name] = dep.to_json()
+        return json.encode(res, pretty=True)
+
 class Dependency(object):
     name: str
     url: ?str
     hash: ?str
+    path: ?str
 
-    def __init__(self, name: str, url: ?str, hash: ?str):
+    def __init__(self, name: str, url: ?str, hash: ?str, path: ?str):
         self.name = name
         self.url = url
         self.hash = hash
+        self.path = path
 
     @staticmethod
     def from_json(dep_name, data: dict[str, str]):
         dep_url = None
         dep_hash = None
+        dep_path = None
         for key, value in data.items():
             if key == "url":
                 data_url = data["url"]
@@ -80,14 +94,28 @@ class Dependency(object):
                 data_hash = data["hash"]
                 if isinstance(data_hash, str):
                     dep_hash = data_hash
+            elif "path" in data:
+                data_path = data["path"]
+                if isinstance(data_path, str):
+                    dep_path = data_path
             else:
                 raise ValueError("Invalid build.act.json, unknown key '%s' in dependency '%s'" % (key, dep_name))
-        return Dependency(dep_name, dep_url, dep_hash)
+        return Dependency(dep_name, dep_url, dep_hash, dep_path)
+
+    def to_json(self) -> dict[str, str]:
+        res = {}
+        url = self.url
+        if url is not None:
+            res["url"] = url
+        hash = self.hash
+        if hash is not None:
+            res["hash"] = hash
+        return res
 
     def to_zon(self) -> str:
         return """        .%s = .{
-            .path = "deps/%s",
-        },
+        .path = "deps/%s"
+    },
 """ % (
             self.name,
             self.name,
@@ -136,6 +164,22 @@ class ZigDependency(object):
                 raise ValueError("Invalid build.act.json, unknown key '%s' in dependency '%s'" % (key, dep_name))
         return ZigDependency(dep_name, dep_url, dep_hash, dep_options, dep_artifacts)
 
+    def to_json(self) -> dict[str, str]:
+        res = {}
+        url = self.url
+        if url is not None:
+            res["url"] = url
+        hash = self.hash
+        if hash is not None:
+            res["hash"] = hash
+        options = self.options
+        if len(options) > 0:
+            res["options"] = options
+        artifacts = self.artifacts
+        if len(artifacts) > 0:
+            res["artifacts"] = artifacts
+        return res
+
     def to_zon(self) -> str:
         url = self.url
         hash = self.hash
@@ -154,13 +198,14 @@ def gen_buildzig(template: str, build_config: BuildConfig) -> str:
     liblink_lines = ""
     exelink_lines = ""
 
-#    for dep_name, dep in build_config.dependencies.items():
-#        deps_defs += "    const actdep_%s = b.dependency(\"%s\", .{\n" % (dep_name, dep_name)
-#        deps_defs += "        .target = target,\n"
-#        deps_defs += "        .optimize = optimize,\n"
-#        deps_defs += "    });\n"
-#        liblink_lines += " "*4  + "libActonProject.linkLibrary(actdep_%s.artifact(\"ActonProject\"));\n" % (dep_name)
-#        exelink_lines += " "*12 + "executable.linkLibrary(actdep_%s.artifact(\"ActonProject\"));\n" % (dep_name)
+    for dep_name, dep in build_config.dependencies.items():
+        deps_defs += "    const actdep_%s = b.dependency(\"%s\", .{\n" % (dep_name, dep_name)
+        deps_defs += "        .target = target,\n"
+        deps_defs += "        .optimize = optimize,\n"
+        deps_defs += "        .syspath = syspath,\n"
+        deps_defs += "    });\n"
+        liblink_lines += " "*4  + "libActonProject.linkLibrary(actdep_%s.artifact(\"ActonProject\"));\n" % (dep_name)
+        exelink_lines += " "*12 + "executable.linkLibrary(actdep_%s.artifact(\"ActonProject\"));\n" % (dep_name)
 
     for dep_name, dep in build_config.zig_dependencies.items():
         if len(dep.artifacts) > 0:

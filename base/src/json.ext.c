@@ -238,7 +238,10 @@ B_dict jsonQ_decode (B_str data) {
     return res;
 }
 
-B_str jsonQ_encode (B_dict data) {
+B_str jsonQ_encode (B_dict data, B_bool pretty) {
+    if (pretty == NULL)
+        pretty = B_False;
+
     // Create JSON document
     yyjson_mut_doc *doc = yyjson_mut_doc_new(&acton_alc);
     yyjson_mut_val *root = yyjson_mut_obj(doc);
@@ -247,7 +250,11 @@ B_str jsonQ_encode (B_dict data) {
     jsonQ_encode_dict(doc, root, data);
 
     yyjson_write_err err;
-    char *json = yyjson_mut_write_opts(doc, 0, &acton_alc, NULL, &err);
+    int flags = 0;
+    if (pretty == B_True)
+        flags += YYJSON_WRITE_PRETTY;
+
+    char *json = yyjson_mut_write_opts(doc, flags, &acton_alc, NULL, &err);
     //yyjson_doc_free(doc);
     return to$str(json);
 }

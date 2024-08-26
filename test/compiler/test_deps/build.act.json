@@ -1,5 +1,7 @@
 {
     "dependencies": {
-        "a": {}
+        "a": {
+            "path": "deps/a"
+        }
     }
 }
