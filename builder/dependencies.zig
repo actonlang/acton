@@ -23,6 +23,7 @@ pub const packages = struct {
             .{ "libpcre2", "libpcre2" },
             .{ "libsnappy", "libsnappy_c" },
             .{ "libtlsuv", "libtlsuv" },
+            .{ "libprotobuf_c", "libprotobuf_c" },
             .{ "libutf8proc", "libutf8proc" },
             .{ "libuuid", "libuuid" },
             .{ "libuv", "libuv" },

@@ -109,6 +109,11 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    const dep_libprotobuf_c = b.dependency("libprotobuf_c", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
     const dep_libutf8proc = b.dependency("libutf8proc", .{
         .target = target,
         .optimize = optimize,
@@ -279,6 +284,7 @@ pub fn build(b: *std.Build) void {
     libActon.linkLibrary(dep_libmbedtls.artifact("mbedx509"));
     libActon.linkLibrary(dep_libnetstring.artifact("netstring"));
     libActon.linkLibrary(dep_libpcre2.artifact("pcre2-8"));
+    libActon.linkLibrary(dep_libprotobuf_c.artifact("protobuf-c")); // TODO: remove, once telemetrify/prw is fixed
     libActon.linkLibrary(dep_libsnappy_c.artifact("snappy-c"));
     libActon.linkLibrary(dep_libtlsuv.artifact("tlsuv"));
     libActon.linkLibrary(dep_libutf8proc.artifact("utf8proc"));
