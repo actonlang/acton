@@ -95,6 +95,11 @@ pub fn build(b: *std.Build) void {
         .BUILD_SHARED_LIBS = false,
     });
 
+    const dep_libxml2 = b.dependency("libxml2", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
     const dep_libyyjson = b.dependency("libyyjson", .{
         .target = target,
         .optimize = optimize,
@@ -237,6 +242,7 @@ pub fn build(b: *std.Build) void {
     libActon.linkLibrary(dep_libgc.artifact("gc"));
     libActon.linkLibrary(dep_libpcre2.artifact("pcre2-8"));
     libActon.linkLibrary(dep_libutf8proc.artifact("utf8proc"));
+    libActon.linkLibrary(dep_libxml2.artifact("xml2"));
     libActon.linkLibrary(dep_libyyjson.artifact("yyjson"));
 
     libActon.installLibraryHeaders(dep_libbsdnt.artifact("bsdnt"));

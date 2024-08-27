@@ -28,9 +28,6 @@
         .libuv = .{
             .path = ".build/sys/deps/libuv/",
         },
-        .libxml2 = .{
-            .path = ".build/sys/deps/libxml2/",
-        },
     },
     .paths = .{""},
 }

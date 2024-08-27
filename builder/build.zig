@@ -253,11 +253,6 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         });
 
-        const dep_libxml2 = b.dependency("libxml2", .{
-            .target = target,
-            .optimize = optimize,
-        });
-
         const dep_libsnappy_c = b.dependency("libsnappy", .{
             .target = target,
             .optimize = optimize,
@@ -315,7 +310,6 @@ pub fn build(b: *std.Build) void {
             executable.linkLibrary(dep_libsnappy_c.artifact("snappy-c"));
             executable.linkLibrary(dep_libtlsuv.artifact("tlsuv"));
             executable.linkLibrary(dep_libuv.artifact("uv"));
-            executable.linkLibrary(dep_libxml2.artifact("xml2"));
 
             // exe: link with dependencies / get headers from build.act.json
 

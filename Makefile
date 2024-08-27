@@ -161,7 +161,6 @@ DEPS += dist/depsout/lib/libmbedx509.a
 DEPS += dist/depsout/lib/libprotobuf-c.a
 DEPS += dist/depsout/lib/libtlsuv.a
 DEPS += dist/depsout/lib/libuv.a
-DEPS += dist/depsout/lib/libxml2.a
 DEPS += dist/depsout/lib/libnetstring.a
 DEPS += dist/depsout/lib/libsnappy-c.a
 
@@ -296,9 +295,6 @@ dist/deps/libxml2: deps-download/$(LIBXML2_REF).tar.gz
 	touch $(TD)/$@
 	mkdir -p $@/.build
 	ln -s ../../../ $@/.build/sys # horrible hack to make zig build hack work
-
-dist/depsout/lib/libxml2.a: dist/deps/libxml2 $(DIST_ZIG)
-	cd $< && $(ZIG) build $(ZIG_TARGET) $(ZIG_CPU) --prefix $(TD)/dist/depsout
 
 # /deps/pcre2 --------------------------------------------
 LIBPCRE2_REF=2afc8e2c87e53204e08e5e1333a8e14ecbf5e3a2
