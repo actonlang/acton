@@ -100,6 +100,11 @@ pub fn build(b: *std.Build) void {
         .BUILD_SHARED_LIBS = false,
     });
 
+    const dep_libuuid = b.dependency("libuuid", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
     const dep_libxml2 = b.dependency("libxml2", .{
         .target = target,
         .optimize = optimize,
@@ -242,6 +247,10 @@ pub fn build(b: *std.Build) void {
     libActon.addIncludePath(.{ .cwd_relative = syspath_include });
     libActon.addIncludePath(b.path("../inc")); // hack hack for stdlib TODO: sort out
     libActon.addIncludePath(b.path("../deps/instdir/include")); // hack hack for stdlib TODO: sort out
+
+    if (use_db) {
+        libActon.linkLibrary(dep_libuuid.artifact("uuid"));
+    }
 
     libActon.linkLibrary(dep_libbsdnt.artifact("bsdnt"));
     libActon.linkLibrary(dep_libgc.artifact("gc"));
