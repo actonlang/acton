@@ -329,7 +329,7 @@ dist/deps/libyyjson: deps/libyyjson $(DIST_ZIG)
 ifeq ($(ARCH),x86_64)
 ZIG_ARCH_ARG=-mcpu=x86_64
 endif
-builder/builder: builder/build.zig backend/build.zig base/build.zig $(ZIG_DEP) $(DEPS_DIRS) $(DIST_ZIG)
+builder/builder: builder/build.zig builder/build.zig.zon builder/dependencies.zig backend/build.zig base/build.zig $(ZIG_DEP) $(DEPS_DIRS) $(DIST_ZIG)
 	rm -rf builder/zig-cache builder/zig-out
 	cd builder && $(ZIG) build-exe -femit-bin=builder $(ZIG_ARCH_ARG) --dep @build --dep @dependencies --mod root ../dist/zig/lib/compiler/build_runner.zig --mod @build ./build.zig --mod @dependencies ./dependencies.zig
 
