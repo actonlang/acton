@@ -421,6 +421,8 @@ DIST_BACKEND_FILES = $(addprefix dist/,$(BACKEND_FILES)) dist/backend/deps dist/
 dist/backend%: backend/%
 	mkdir -p $(dir $@)
 	cp -a $< $@
+	mkdir -p dist/backend/.build
+	ln -sf ../../ dist/backend/.build/sys || true
 
 # We depend on __builtin__.ty because the base/out directory will be populated
 # as a result of building it, and we want to copy those files!

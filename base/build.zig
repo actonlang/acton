@@ -115,11 +115,6 @@ pub fn build(b: *std.Build) void {
         .BUILD_SHARED_LIBS = false,
     });
 
-    const dep_libuuid = b.dependency("libuuid", .{
-        .target = target,
-        .optimize = optimize,
-    });
-
     const dep_libuv = b.dependency("libuv", .{
         .target = target,
         .optimize = optimize,
@@ -269,7 +264,12 @@ pub fn build(b: *std.Build) void {
     libActon.addIncludePath(b.path("../deps/instdir/include")); // hack hack for stdlib TODO: sort out
 
     if (use_db) {
-        libActon.linkLibrary(dep_libuuid.artifact("uuid"));
+        const libactondb_dep = b.dependency("actondb", .{
+            .target = target,
+            .optimize = optimize,
+            .syspath_include = syspath_include,
+        });
+        libActon.linkLibrary(libactondb_dep.artifact("ActonDB"));
     }
 
     libActon.linkLibrary(dep_libbsdnt.artifact("bsdnt"));

@@ -101,6 +101,8 @@ pub fn build(b: *std.Build) void {
     libactondb.linkLibrary(dep_libuuid.artifact("uuid"));
     libactondb.linkLibC();
     libactondb.linkLibCpp();
+    libactondb.installLibraryHeaders(dep_libprotobuf_c.artifact("protobuf-c"));
+    libactondb.installLibraryHeaders(dep_libuuid.artifact("uuid"));
     b.installArtifact(libactondb);
 
     const actondb = b.addExecutable(.{
