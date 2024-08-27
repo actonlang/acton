@@ -190,9 +190,6 @@ dist/deps/libbsdnt: deps-download/$(LIBBSDNT_REF).tar.gz
 	cd $@ && tar zx --strip-components=1 -f $(TD)/$<
 	touch $(TD)/$@
 
-dist/depsout/lib/libbsdnt.a: dist/deps/libbsdnt $(DIST_ZIG)
-	cd $< && $(ZIG) build $(ZIG_TARGET) $(ZIG_CPU) --prefix $(TD)/dist/depsout
-
 # /deps/libgc --------------------------------------------
 LIBGC_REF=0a23b211b558137de7ee654c5527a54113142517
 deps-download/$(LIBGC_REF).tar.gz:
