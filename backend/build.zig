@@ -97,6 +97,8 @@ pub fn build(b: *std.Build) void {
     libactondb.defineCMacro("LOG_USER_COLOR", "");
     libactondb.addIncludePath(.{ .cwd_relative= syspath_include });
     libactondb.linkLibrary(dep_libgc.artifact("gc"));
+    libactondb.linkLibrary(dep_libprotobuf_c.artifact("protobuf-c"));
+    libactondb.linkLibrary(dep_libuuid.artifact("uuid"));
     libactondb.linkLibrary(dep_libuuid.artifact("uuid"));
     libactondb.linkLibC();
     libactondb.linkLibCpp();
@@ -116,8 +118,6 @@ pub fn build(b: *std.Build) void {
     actondb.linkLibrary(libactondb);
     actondb.linkLibrary(dep_libargp.artifact("argp"));
     actondb.linkLibrary(dep_libnetstring.artifact("netstring"));
-    actondb.linkLibrary(dep_libprotobuf_c.artifact("protobuf-c"));
-    actondb.linkLibrary(dep_libuuid.artifact("uuid"));
     actondb.linkLibrary(dep_libyyjson.artifact("yyjson"));
     actondb.linkLibC();
     actondb.linkLibCpp();
