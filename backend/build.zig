@@ -6,6 +6,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
     const no_threads = b.option(bool, "no_threads", "") orelse false;
+    const only_actondb = b.option(bool, "only_actondb", "") orelse false;
 
     const dep_libargp = b.dependency("libargp", .{
         .target = target,
@@ -101,7 +102,9 @@ pub fn build(b: *std.Build) void {
     libactondb.linkLibCpp();
     libactondb.installLibraryHeaders(dep_libprotobuf_c.artifact("protobuf-c"));
     libactondb.installLibraryHeaders(dep_libuuid.artifact("uuid"));
-    b.installArtifact(libactondb);
+    if (!only_actondb) {
+        b.installArtifact(libactondb);
+    }
 
     const actondb = b.addExecutable(.{
         .name = "actondb",

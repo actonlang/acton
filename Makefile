@@ -108,9 +108,6 @@ endif
 BUILTIN_HFILES=$(wildcard base/builtin/*.h)
 
 DIST_BINS=$(ACTONC) dist/bin/actondb dist/bin/runacton
-DIST_HFILES=\
-	dist/rts/io.h \
-	dist/rts/rts.h
 DIST_ZIG=dist/zig
 
 .PHONY: test-backend
@@ -454,11 +451,9 @@ dist/bin/actonc: compiler/actonc $(DIST_ZIG)
 	mv $@.tmp $@
 
 #
-dist/bin/actondb: $(DIST_ZIG) $(DEPS) $(DIST_INC)
+dist/bin/actondb: $(DIST_ZIG) $(DEPS)
 	@mkdir -p $(dir $@)
-	$(ZIG) build --build-file $(TD)/dist/backend/build.zig $(ZIG_TARGET) --prefix $(TD)/dist/depsout
-	mv $(TD)/dist/depsout/bin/actondb $@
-	rmdir $(TD)/dist/depsout/bin
+	cd dist/backend && $(ZIG) build -Donly_actondb --prefix $(TD)/dist
 
 dist/bin/runacton: bin/runacton
 	@mkdir -p $(dir $@)
@@ -473,10 +468,6 @@ DIST_DEPS=$(addprefix dist/deps/,libargp libbsdnt libgc libnetstring libprotobuf
 dist/deps/%: deps/% $(DEPS)
 	@mkdir -p $(dir $@)
 	cp -a $< $@
-
-dist/rts/%: base/rts/%
-	@mkdir -p $(dir $@)
-	cp $< $@
 
 dist/base/out/types/__builtin__.ty: base/out/types/__builtin__.ty
 	@mkdir -p $(dir $@)
@@ -505,7 +496,7 @@ else
 endif
 
 .PHONY: distribution1 distribution clean-distribution
-distribution1: dist/base $(DIST_BACKEND_FILES) $(DEPSA) dist/builder $(DIST_INC) $(DIST_BINS) $(DIST_HFILES) $(DIST_ZIG)
+distribution1: dist/base $(DIST_BACKEND_FILES) dist/builder $(DIST_BINS) $(DIST_ZIG)
 	$(MAKE) $(DIST_DEPS)
 
 distribution: dist/bin/acton
