@@ -1,14 +1,11 @@
 .{
-    .name = "actonproject",
+    .name = "actonbase",
     .version = "0.0.0",
     .dependencies = .{
         // Dependencies from build.act.json
         // base dependencies
         .actondb = .{
             .path = ".build/sys/backend/",
-        },
-        .base = .{
-            .path = ".build/sys/base/",
         },
         .libargp = .{
             .path = ".build/sys/deps/libargp/",
@@ -36,6 +33,9 @@
         },
         .libtlsuv = .{
             .path = ".build/sys/deps/tlsuv/",
+        },
+        .libutf8proc = .{
+            .path = ".build/sys/deps/libutf8proc/",
         },
         .libuuid = .{
             .path = ".build/sys/deps/libuuid/",

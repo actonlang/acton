@@ -70,6 +70,14 @@ pub fn build(b: *std.Build) void {
 
     print("Acton Project Builder - building {s}\nDeps path: {s}\n", .{buildroot_path, deps_path});
 
+    const actonbase_dep = b.dependency("base", .{
+        .target = target,
+        .optimize = optimize,
+        .no_threads = no_threads,
+        .db = db,
+        .syspath = syspath,
+    });
+
     // Dependencies from build.act.json
 
     var iter_dir = b.build_root.handle.openDir(
@@ -203,6 +211,7 @@ pub fn build(b: *std.Build) void {
     libActonProject.addIncludePath(.{ .cwd_relative = syspath_include });
     // lib: link with dependencies / get headers from build.act.json
 
+    libActonProject.linkLibrary(actonbase_dep.artifact("Acton"));
     libActonProject.linkLibC();
     libActonProject.linkLibCpp();
     b.installArtifact(libActonProject);
@@ -216,14 +225,6 @@ pub fn build(b: *std.Build) void {
             .target = target,
             .optimize = optimize,
             .syspath_include = syspath_include,
-        });
-
-        const actonbase_dep = b.dependency("base", .{
-            .target = target,
-            .optimize = optimize,
-            .no_threads = no_threads,
-            .db = db,
-            .syspath = syspath,
         });
 
         const dep_libgc = b.dependency("libgc", .{
@@ -267,11 +268,6 @@ pub fn build(b: *std.Build) void {
         });
 
         const dep_libtlsuv = b.dependency("libtlsuv", .{
-            .target = target,
-            .optimize = optimize,
-        });
-
-        const dep_libutf8proc = b.dependency("libutf8proc", .{
             .target = target,
             .optimize = optimize,
         });
@@ -356,7 +352,6 @@ pub fn build(b: *std.Build) void {
             executable.linkLibrary(dep_libprotobuf_c.artifact("protobuf-c"));
             executable.linkLibrary(dep_libsnappy_c.artifact("snappy-c"));
             executable.linkLibrary(dep_libtlsuv.artifact("tlsuv"));
-            executable.linkLibrary(dep_libutf8proc.artifact("utf8proc"));
             executable.linkLibrary(dep_libuv.artifact("uv"));
             executable.linkLibrary(dep_libxml2.artifact("xml2"));
             executable.linkLibrary(dep_libyyjson.artifact("yyjson"));

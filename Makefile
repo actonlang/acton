@@ -164,7 +164,6 @@ DEPS += dist/depsout/lib/libmbedx509.a
 DEPS += dist/depsout/lib/libpcre2.a
 DEPS += dist/depsout/lib/libprotobuf-c.a
 DEPS += dist/depsout/lib/libtlsuv.a
-DEPS += dist/depsout/lib/libutf8proc.a
 DEPS += dist/depsout/lib/libuuid.a
 DEPS += dist/depsout/lib/libuv.a
 DEPS += dist/depsout/lib/libxml2.a
@@ -268,7 +267,7 @@ dist/depsout/lib/libtlsuv.a: dist/deps/tlsuv $(DIST_ZIG) dist/depsout/lib/libmbe
 	cd $< && $(ZIG) build $(ZIG_TARGET) $(ZIG_CPU) --prefix $(TD)/dist/depsout --search-prefix $(TD)/dist/depsout
 
 # /deps/libutf8proc --------------------------------------
-LIBUTF8PROC_REF=947e6459f8922525bc4c4f888b4aa94fb4520633
+LIBUTF8PROC_REF=e914c63b43d5f283090a63a307fccd25acbe37f0
 deps-download/$(LIBUTF8PROC_REF).tar.gz:
 	mkdir -p deps-download
 	curl -f -L -o $@ https://github.com/actonlang/utf8proc/archive/$(LIBUTF8PROC_REF).tar.gz
@@ -277,9 +276,6 @@ dist/deps/libutf8proc: deps-download/$(LIBUTF8PROC_REF).tar.gz
 	mkdir -p $@
 	cd $@ && tar zx --strip-components=1 -f $(TD)/$<
 	touch $(TD)/$@
-
-dist/depsout/lib/libutf8proc.a: dist/deps/libutf8proc $(DIST_ZIG)
-	cd $< && $(ZIG) build $(ZIG_TARGET) $(ZIG_CPU) --prefix $(TD)/dist/depsout
 
 # /deps/libuuid ------------------------------------------
 dist/deps/libuuid: deps/libuuid
@@ -449,9 +445,10 @@ dist/backend%: backend/%
 # We depend on __builtin__.ty because the base/out directory will be populated
 # as a result of building it, and we want to copy those files!
 .PHONY: dist/base
-dist/base: base base/build.zig dist/base/out/types/__builtin__.ty
-	@mkdir -p $@ $@/out
-	cp -a base/Acton.toml base/build.zig base/builtin base/rts base/src base/stdlib dist/base/
+dist/base: base base/.build base/build.zig base/build.zig.zon dist/base/out/types/__builtin__.ty
+	mkdir -p $@ $@/.build $@/out
+	ln -sf ../../ dist/base/.build/sys || true
+	cp -a base/Acton.toml base/build.zig base/build.zig.zon base/builtin base/rts base/src base/stdlib dist/base/
 	cp -a base/out/types dist/base/out/
 
 dist/bin/acton: bin/acton
