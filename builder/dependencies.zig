@@ -17,6 +17,7 @@ pub const packages = struct {
         pub const deps: []const struct { []const u8, []const u8 } = &.{
             .{ "libbsdnt", "libbsdnt" },
             .{ "libgc", "libgc" },
+            .{ "libnetstring", "libnetstring" },
             .{ "libpcre2", "libpcre2" },
             .{ "libutf8proc", "libutf8proc" },
             .{ "libxml2", "libxml2" },

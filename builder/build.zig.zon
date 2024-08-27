@@ -13,9 +13,6 @@
         .libmbedtls = .{
             .path = ".build/sys/deps/mbedtls/",
         },
-        .libnetstring = .{
-            .path = ".build/sys/deps/libnetstring/",
-        },
         .libprotobuf_c = .{
             .path = ".build/sys/deps/libprotobuf_c/",
         },

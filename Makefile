@@ -161,7 +161,6 @@ DEPS += dist/depsout/lib/libmbedx509.a
 DEPS += dist/depsout/lib/libprotobuf-c.a
 DEPS += dist/depsout/lib/libtlsuv.a
 DEPS += dist/depsout/lib/libuv.a
-DEPS += dist/depsout/lib/libnetstring.a
 DEPS += dist/depsout/lib/libsnappy-c.a
 
 .PHONE: clean-downloads
@@ -324,9 +323,6 @@ dist/depsout/lib/libsnappy-c.a: dist/deps/libsnappy_c $(DIST_ZIG)
 dist/deps/libnetstring: deps/libnetstring $(DIST_ZIG)
 	mkdir -p $(TD)/$@
 	cp -a $</* $(TD)/$@
-
-dist/depsout/lib/libnetstring.a: dist/deps/libnetstring $(DIST_ZIG)
-	cd $< && $(ZIG) build $(ZIG_TARGET) $(ZIG_CPU) --prefix $(TD)/dist/depsout
 
 dist/deps/libyyjson: deps/libyyjson $(DIST_ZIG)
 	mkdir -p $(TD)/$@
