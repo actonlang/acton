@@ -55,6 +55,9 @@ ifeq ($(shell uname -s),Darwin)
 OS:=macos
 ifeq ($(shell uname -m),arm64)
 ZIG_CPU := -Dcpu=apple_a15
+ZIG_TARGET := -Dtarget=aarch64-macos
+else
+ZIG_TARGET := -Dtarget=x86_64-macos
 endif
 endif
 
@@ -158,14 +161,9 @@ DEPS_DIRS += dist/deps/libsnappy_c
 DEPS += dist/depsout/lib/libmbedcrypto.a
 DEPS += dist/depsout/lib/libmbedtls.a
 DEPS += dist/depsout/lib/libmbedx509.a
-DEPS += dist/depsout/lib/libpcre2.a
 DEPS += dist/depsout/lib/libprotobuf-c.a
 DEPS += dist/depsout/lib/libtlsuv.a
-DEPS += dist/depsout/lib/libuuid.a
 DEPS += dist/depsout/lib/libuv.a
-DEPS += dist/depsout/lib/libxml2.a
-DEPS += dist/depsout/lib/libnetstring.a
-DEPS += dist/depsout/lib/libyyjson.a
 DEPS += dist/depsout/lib/libsnappy-c.a
 
 .PHONE: clean-downloads
@@ -194,9 +192,6 @@ dist/deps/libbsdnt: deps-download/$(LIBBSDNT_REF).tar.gz
 	mkdir -p $@
 	cd $@ && tar zx --strip-components=1 -f $(TD)/$<
 	touch $(TD)/$@
-
-dist/depsout/lib/libbsdnt.a: dist/deps/libbsdnt $(DIST_ZIG)
-	cd $< && $(ZIG) build $(ZIG_TARGET) $(ZIG_CPU) --prefix $(TD)/dist/depsout
 
 # /deps/libgc --------------------------------------------
 LIBGC_REF=0a23b211b558137de7ee654c5527a54113142517
@@ -272,9 +267,6 @@ dist/deps/libuuid: deps/libuuid
 	mkdir -p $(TD)/$@
 	cp -a $</* $(TD)/$@
 
-dist/depsout/lib/libuuid.a: dist/deps/libuuid $(DIST_ZIG)
-	cd $< && $(ZIG) build $(ZIG_TARGET) $(ZIG_CPU) --prefix $(TD)/dist/depsout
-
 # /deps/libuv --------------------------------------------
 LIBUV_REF=7368cd576c8c06766761abfcfade55352d2e7828
 deps-download/$(LIBUV_REF).tar.gz:
@@ -303,9 +295,6 @@ dist/deps/libxml2: deps-download/$(LIBXML2_REF).tar.gz
 	mkdir -p $@/.build
 	ln -s ../../../ $@/.build/sys # horrible hack to make zig build hack work
 
-dist/depsout/lib/libxml2.a: dist/deps/libxml2 $(DIST_ZIG)
-	cd $< && $(ZIG) build $(ZIG_TARGET) $(ZIG_CPU) --prefix $(TD)/dist/depsout
-
 # /deps/pcre2 --------------------------------------------
 LIBPCRE2_REF=2afc8e2c87e53204e08e5e1333a8e14ecbf5e3a2
 deps-download/$(LIBPCRE2_REF).tar.gz:
@@ -316,9 +305,6 @@ dist/deps/pcre2: deps-download/$(LIBPCRE2_REF).tar.gz
 	mkdir -p $@
 	cd $@ && tar zx --strip-components=1 -f $(TD)/$<
 	touch $(TD)/$@
-
-dist/depsout/lib/libpcre2.a: dist/deps/pcre2 $(DIST_ZIG)
-	cd $< && $(ZIG) build $(ZIG_TARGET) $(ZIG_CPU) --prefix $(TD)/dist/depsout
 
 # /deps/libsnappy_c --------------------------------------------
 LIBSNAPPY_C_REF=3f5b95957558a35c2becbe6b628c8219477dd5a4
@@ -338,21 +324,15 @@ dist/deps/libnetstring: deps/libnetstring $(DIST_ZIG)
 	mkdir -p $(TD)/$@
 	cp -a $</* $(TD)/$@
 
-dist/depsout/lib/libnetstring.a: dist/deps/libnetstring $(DIST_ZIG)
-	cd $< && $(ZIG) build $(ZIG_TARGET) $(ZIG_CPU) --prefix $(TD)/dist/depsout
-
 dist/deps/libyyjson: deps/libyyjson $(DIST_ZIG)
 	mkdir -p $(TD)/$@
 	cp -a $</* $(TD)/$@
-
-dist/depsout/lib/libyyjson.a: dist/deps/libyyjson $(DIST_ZIG)
-	cd $< && $(ZIG) build $(ZIG_TARGET) $(ZIG_CPU) --prefix $(TD)/dist/depsout
 
 
 ifeq ($(ARCH),x86_64)
 ZIG_ARCH_ARG=-mcpu=x86_64
 endif
-builder/builder: builder/build.zig backend/build.zig base/build.zig $(ZIG_DEP) $(DEPS_DIRS) $(DIST_ZIG)
+builder/builder: builder/build.zig builder/build.zig.zon builder/dependencies.zig backend/build.zig base/build.zig $(ZIG_DEP) $(DEPS_DIRS) $(DIST_ZIG)
 	rm -rf builder/zig-cache builder/zig-out
 	cd builder && $(ZIG) build-exe -femit-bin=builder $(ZIG_ARCH_ARG) --dep @build --dep @dependencies --mod root ../dist/zig/lib/compiler/build_runner.zig --mod @build ./build.zig --mod @dependencies ./dependencies.zig
 
@@ -374,6 +354,9 @@ test-builtins:
 
 test-compiler:
 	cd compiler && stack test --ta '-p "compiler"'
+
+test-cross-compile:
+	cd compiler && stack test --ta '-p "cross-compilation"'
 
 test-typeerrors:
 	cd compiler && stack test --ta '-p "type errors"'

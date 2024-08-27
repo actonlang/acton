@@ -15,10 +15,14 @@ pub const packages = struct {
         pub const build_root = ".build/sys/base";
         pub const build_zig = @import("basebuild.zig");
         pub const deps: []const struct { []const u8, []const u8 } = &.{
-            .{ "libargp", "libargp" },
             .{ "libbsdnt", "libbsdnt" },
             .{ "libgc", "libgc" },
+            .{ "libnetstring", "libnetstring" },
+            .{ "libpcre2", "libpcre2" },
+            .{ "libuuid", "libuuid" },
             .{ "libutf8proc", "libutf8proc" },
+            .{ "libxml2", "libxml2" },
+            .{ "libyyjson", "libyyjson" },
         };
     };
     pub const @"libnetstring" = struct {

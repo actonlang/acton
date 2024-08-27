@@ -20,6 +20,6 @@ pub fn build(b: *std.Build) void {
         .flags = &[_][]const u8{}
     });
     lib.linkLibC();
-    b.installFile("netstring.h", "include/netstring.h");
+    lib.installHeader(b.path("netstring.h"), "netstring.h");
     b.installArtifact(lib);
 }

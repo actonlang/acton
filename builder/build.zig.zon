@@ -13,12 +13,6 @@
         .libmbedtls = .{
             .path = ".build/sys/deps/mbedtls/",
         },
-        .libnetstring = .{
-            .path = ".build/sys/deps/libnetstring/",
-        },
-        .libpcre2 = .{
-            .path = ".build/sys/deps/pcre2/",
-        },
         .libprotobuf_c = .{
             .path = ".build/sys/deps/libprotobuf_c/",
         },
@@ -28,17 +22,8 @@
         .libtlsuv = .{
             .path = ".build/sys/deps/tlsuv/",
         },
-        .libuuid = .{
-            .path = ".build/sys/deps/libuuid/",
-        },
         .libuv = .{
             .path = ".build/sys/deps/libuv/",
-        },
-        .libxml2 = .{
-            .path = ".build/sys/deps/libxml2/",
-        },
-        .libyyjson = .{
-            .path = ".build/sys/deps/libyyjson/",
         },
     },
     .paths = .{""},

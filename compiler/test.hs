@@ -61,7 +61,7 @@ main = do
       , crossCompileTests
       ]
   where timeout :: Timeout
-        timeout = mkTimeout (10*60*1000000)
+        timeout = mkTimeout (30*60*1000000)
         -- this normally doesn't take long on a local machine but in GitHub
         -- Actions CI, in particular the MacOS workers can be really slow so it
         -- has taken longer than 3 minutes, thus the rather lengthy timeout
@@ -177,18 +177,18 @@ stdlibTests =
 crossCompileTests =
   testGroup "cross-compilation tests"
   [
-    testCase "build hello --target aarch64-macos-none" $ do
-        testBuild "--target aarch64-macos-none" ExitSuccess False "../test/compiler/hello/"
+    testCase "build hello --target aarch64-macos-none --db" $ do
+        runActon "build --target aarch64-macos-none --db" ExitSuccess False "../test/compiler/hello/"
   , testCase "build hello --target aarch64-windows-gnu" $ do
-        testBuild "--target aarch64-windows-gnu" ExitSuccess False "../test/compiler/hello/"
-  , testCase "build hello --target x86_64-macos-none" $ do
-        testBuild "--target x86_64-macos-none" ExitSuccess False "../test/compiler/hello/"
-  , testCase "build hello --target x86_64-linux-gnu.2.27" $ do
-        testBuild "--target x86_64-linux-gnu.2.27" ExitSuccess False "../test/compiler/hello/"
-  , testCase "build hello --target x86_64-linux-musl" $ do
-        testBuild "--target x86_64-linux-musl" ExitSuccess False "../test/compiler/hello/"
+        runActon "build --target aarch64-windows-gnu" ExitSuccess False "../test/compiler/hello/"
+  , testCase "build hello --target x86_64-macos-none --db" $ do
+        runActon "build --target x86_64-macos-none --db" ExitSuccess False "../test/compiler/hello/"
+  , testCase "build hello --target x86_64-linux-gnu.2.27 --db" $ do
+        runActon "build --target x86_64-linux-gnu.2.27 --db" ExitSuccess False "../test/compiler/hello/"
+  , testCase "build hello --target x86_64-linux-musl --db" $ do
+        runActon "build --target x86_64-linux-musl --db" ExitSuccess False "../test/compiler/hello/"
   , testCase "build hello --target x86_64-windows-gnu" $ do
-        testBuild "--target x86_64-windows-gnu" ExitSuccess False "../test/compiler/hello/"
+        runActon "build --target x86_64-windows-gnu" ExitSuccess False "../test/compiler/hello/"
   ]
 
 -- Creates testgroup from .act files found in specified directory

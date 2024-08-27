@@ -70,11 +70,6 @@ pub fn build(b: *std.Build) void {
 
     print("Acton Base Builder\nBuilding in {s}\n", .{buildroot_path});
 
-    const dep_libargp = b.dependency("libargp", .{
-        .target = target,
-        .optimize = optimize,
-    });
-
     const dep_libbsdnt = b.dependency("libbsdnt", .{
         .target = target,
         .optimize = optimize,
@@ -88,10 +83,36 @@ pub fn build(b: *std.Build) void {
         .enable_mmap = true,
     });
 
+    const dep_libnetstring = b.dependency("libnetstring", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const dep_libpcre2 = b.dependency("libpcre2", .{
+        .target = target,
+        .optimize = optimize,
+        .linkage = .static,
+    });
+
     const dep_libutf8proc = b.dependency("libutf8proc", .{
         .target = target,
         .optimize = optimize,
         .BUILD_SHARED_LIBS = false,
+    });
+
+    const dep_libuuid = b.dependency("libuuid", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const dep_libxml2 = b.dependency("libxml2", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const dep_libyyjson = b.dependency("libyyjson", .{
+        .target = target,
+        .optimize = optimize,
     });
 
     var iter_dir = b.build_root.handle.openDir(
@@ -228,12 +249,16 @@ pub fn build(b: *std.Build) void {
     libActon.addIncludePath(b.path("../deps/instdir/include")); // hack hack for stdlib TODO: sort out
 
     if (use_db) {
-        libActon.linkLibrary(dep_libargp.artifact("argp"));
+        libActon.linkLibrary(dep_libuuid.artifact("uuid"));
     }
 
     libActon.linkLibrary(dep_libbsdnt.artifact("bsdnt"));
     libActon.linkLibrary(dep_libgc.artifact("gc"));
+    libActon.linkLibrary(dep_libnetstring.artifact("netstring"));
+    libActon.linkLibrary(dep_libpcre2.artifact("pcre2-8"));
     libActon.linkLibrary(dep_libutf8proc.artifact("utf8proc"));
+    libActon.linkLibrary(dep_libxml2.artifact("xml2"));
+    libActon.linkLibrary(dep_libyyjson.artifact("yyjson"));
 
     libActon.installLibraryHeaders(dep_libbsdnt.artifact("bsdnt"));
     libActon.installLibraryHeaders(dep_libgc.artifact("gc"));

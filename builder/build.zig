@@ -233,17 +233,6 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         });
 
-        const dep_libnetstring = b.dependency("libnetstring", .{
-            .target = target,
-            .optimize = optimize,
-        });
-
-        const dep_libpcre2 = b.dependency("libpcre2", .{
-            .target = target,
-            .optimize = optimize,
-            .linkage = .static,
-        });
-
         const dep_libprotobuf_c = b.dependency("libprotobuf_c", .{
             .target = target,
             .optimize = optimize,
@@ -254,22 +243,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         });
 
-        const dep_libuuid = b.dependency("libuuid", .{
-            .target = target,
-            .optimize = optimize,
-        });
-
         const dep_libuv = b.dependency("libuv", .{
-            .target = target,
-            .optimize = optimize,
-        });
-
-        const dep_libxml2 = b.dependency("libxml2", .{
-            .target = target,
-            .optimize = optimize,
-        });
-
-        const dep_libyyjson = b.dependency("libyyjson", .{
             .target = target,
             .optimize = optimize,
         });
@@ -322,19 +296,14 @@ pub fn build(b: *std.Build) void {
             executable.linkLibrary(actonbase_dep.artifact("Acton"));
             if (db) {
                 executable.linkLibrary(libactondb_dep.artifact("ActonDB"));
-                executable.linkLibrary(dep_libuuid.artifact("uuid"));
             }
             executable.linkLibrary(dep_libmbedtls.artifact("mbedcrypto"));
             executable.linkLibrary(dep_libmbedtls.artifact("mbedtls"));
             executable.linkLibrary(dep_libmbedtls.artifact("mbedx509"));
-            executable.linkLibrary(dep_libnetstring.artifact("netstring"));
-            executable.linkLibrary(dep_libpcre2.artifact("pcre2-8"));
             executable.linkLibrary(dep_libprotobuf_c.artifact("protobuf-c"));
             executable.linkLibrary(dep_libsnappy_c.artifact("snappy-c"));
             executable.linkLibrary(dep_libtlsuv.artifact("tlsuv"));
             executable.linkLibrary(dep_libuv.artifact("uv"));
-            executable.linkLibrary(dep_libxml2.artifact("xml2"));
-            executable.linkLibrary(dep_libyyjson.artifact("yyjson"));
 
             // exe: link with dependencies / get headers from build.act.json
 
