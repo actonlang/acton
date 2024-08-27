@@ -18,11 +18,6 @@ pub const FilePath = struct {
 // relative to the root and can be used. It would be more elegant to figure out
 // if there are actual commonalities between the paths and only traverse
 // upwards as far as necessary.
-fn relJoinPath(allocator: std.mem.Allocator, dots: []const u8, base: []const u8, relative: []const u8) []const u8 {
-    const path = allocator.alloc(u8, dots.len + base.len + relative.len + 1) catch @panic("OOM");
-    _ = std.fmt.bufPrint(path, "{s}{s}/{s}", .{dots, base, relative}) catch @panic("Error joining paths");
-    return path;
-}
 
 fn joinPath(allocator: std.mem.Allocator, base: []const u8, relative: []const u8) []const u8 {
     const path = allocator.alloc(u8, base.len + relative.len + 1) catch @panic("OOM");
@@ -30,43 +25,15 @@ fn joinPath(allocator: std.mem.Allocator, base: []const u8, relative: []const u8
     return path;
 }
 
-fn dotsToRoot(allocator: std.mem.Allocator, cwd: []const u8) []const u8 {
-    // Split up the path into its components, separated by std.fs.path.sep
-    var parts = std.mem.splitScalar(u8, cwd, std.fs.path.sep);
-    var num_parts: u16 = 0;
-    while (parts.next()) |_| {
-        num_parts += 1;
-    }
-    num_parts -= 1;
-    var dotpath = allocator.alloc(u8, 3*num_parts) catch @panic("OOM");
-    var i: u16 = 0;
-    while (i < num_parts) : (i += 1) {
-        dotpath[i*3+0] = '.';
-        dotpath[i*3+1] = '.';
-        dotpath[i*3+2] = std.fs.path.sep;
-    }
-    return dotpath;
-}
-
-
 pub fn build(b: *std.Build) void {
     const buildroot_path = b.build_root.handle.realpathAlloc(b.allocator, ".") catch unreachable;
-    const dots_to_root = dotsToRoot(b.allocator, buildroot_path);
-    defer b.allocator.free(dots_to_root);
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
     const cpedantic = b.option(bool, "cpedantic", "") orelse false;
     const use_db = b.option(bool, "db", "") orelse false;
     const no_threads = b.option(bool, "no_threads", "") orelse false;
-    const syspath = b.option([]const u8, "syspath", "") orelse "";
-    const libactondeps = b.option([]const u8, "libactondeps", "") orelse "";
-    const libactongc = b.option([]const u8, "libactongc", "") orelse "";
-    _ = libactongc;
-    _ = libactondeps;
 
     const projpath_outtypes = joinPath(b.allocator, buildroot_path, "out/types");
-    const syspath_base = relJoinPath(b.allocator, dots_to_root, syspath, "base");
-    const syspath_include = joinPath(b.allocator, syspath, "depsout/include");
 
     print("Acton Base Builder\nBuilding in {s}\n", .{buildroot_path});
 
@@ -261,18 +228,18 @@ pub fn build(b: *std.Build) void {
     for (c_files.items) |entry| {
         libActon.addCSourceFile(.{ .file = .{ .cwd_relative = entry }, .flags = flags.items });
     }
+    libActon.installHeadersDirectory(b.path("builtin"), "builtin", .{});
+    libActon.installHeadersDirectory(b.path("out/types"), "out/types", .{});
+    libActon.installHeader(b.path("rts/common.h"), "rts/common.h");
+    libActon.installHeader(b.path("rts/q.h"), "rts/q.h");
+    libActon.installHeader(b.path("rts/rts.h"), "rts/rts.h");
 
     libActon.addIncludePath(.{ .cwd_relative = buildroot_path });
-    libActon.addIncludePath(.{ .cwd_relative = syspath_base });
-    libActon.addIncludePath(.{ .cwd_relative = syspath_include });
-    libActon.addIncludePath(b.path("../inc")); // hack hack for stdlib TODO: sort out
-    libActon.addIncludePath(b.path("../deps/instdir/include")); // hack hack for stdlib TODO: sort out
 
     if (use_db) {
         const libactondb_dep = b.dependency("actondb", .{
             .target = target,
             .optimize = optimize,
-            .syspath_include = syspath_include,
         });
         libActon.linkLibrary(libactondb_dep.artifact("ActonDB"));
     }
@@ -294,6 +261,7 @@ pub fn build(b: *std.Build) void {
 
     libActon.installLibraryHeaders(dep_libbsdnt.artifact("bsdnt"));
     libActon.installLibraryHeaders(dep_libgc.artifact("gc"));
+    libActon.installLibraryHeaders(dep_libprotobuf_c.artifact("protobuf-c")); // TODO: remove, once telemetrify/prw is fixed
     libActon.installLibraryHeaders(dep_libuv.artifact("uv"));
 
     libActon.linkLibC();

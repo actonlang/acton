@@ -31,42 +31,18 @@ fn joinPath(allocator: std.mem.Allocator, base: []const u8, relative: []const u8
     return path;
 }
 
-fn dotsToRoot(allocator: std.mem.Allocator, cwd: []const u8) []const u8 {
-    // Split up the path into its components, separated by std.fs.path.sep
-    var parts = std.mem.splitScalar(u8, cwd, std.fs.path.sep);
-    var num_parts: u16 = 0;
-    while (parts.next()) |_| {
-        num_parts += 1;
-    }
-    num_parts -= 1;
-    var dotpath = allocator.alloc(u8, 3*num_parts) catch @panic("OOM");
-    var i: u16 = 0;
-    while (i < num_parts) : (i += 1) {
-        dotpath[i*3+0] = '.';
-        dotpath[i*3+1] = '.';
-        dotpath[i*3+2] = std.fs.path.sep;
-    }
-    return dotpath;
-}
-
 pub fn build(b: *std.Build) void {
     const buildroot_path = b.build_root.handle.realpathAlloc(b.allocator, ".") catch @panic("ASD");
-    const dots_to_root = dotsToRoot(b.allocator, buildroot_path);
-    defer b.allocator.free(dots_to_root);
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
     const db = b.option(bool, "db", "") orelse false;
     const only_lib = b.option(bool, "only_lib", "") orelse false;
     const no_threads = b.option(bool, "no_threads", "") orelse false;
-    const syspath = b.option([]const u8, "syspath", "") orelse "";
     const arg_deps_path = b.option([]const u8, "deps_path", "") orelse "";
 
     const deps_path = if (arg_deps_path.len > 0) arg_deps_path else joinPath(b.allocator, buildroot_path, "deps");
 
     const projpath_outtypes = joinPath(b.allocator, buildroot_path, "out/types");
-    const syspath_base = relJoinPath(b.allocator, dots_to_root, syspath, "base");
-    const syspath_include = joinPath(b.allocator, syspath, "depsout/include");
-    const syspath_lib = joinPath(b.allocator, syspath, "depsout/lib");
 
     print("Acton Project Builder - building {s}\nDeps path: {s}\n", .{buildroot_path, deps_path});
 
@@ -75,7 +51,6 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .no_threads = no_threads,
         .db = db,
-        .syspath = syspath,
     });
 
     // Dependencies from build.act.json
@@ -207,8 +182,6 @@ pub fn build(b: *std.Build) void {
 
     libActonProject.addIncludePath(.{ .cwd_relative = buildroot_path });
 
-    libActonProject.addIncludePath(.{ .cwd_relative = syspath_base });
-    libActonProject.addIncludePath(.{ .cwd_relative = syspath_include });
     // lib: link with dependencies / get headers from build.act.json
 
     libActonProject.linkLibrary(actonbase_dep.artifact("Acton"));
@@ -224,7 +197,6 @@ pub fn build(b: *std.Build) void {
         const libactondb_dep = b.dependency("actondb", .{
             .target = target,
             .optimize = optimize,
-            .syspath_include = syspath_include,
         });
 
         for (root_c_files.items) |entry| {
@@ -259,12 +231,8 @@ pub fn build(b: *std.Build) void {
                 .target = target,
                 .optimize = optimize,
             });
-            //_ = syspath;
             executable.addCSourceFile(.{ .file = .{ .cwd_relative = entry.full_path }, .flags = flags.items });
             executable.addIncludePath(.{ .cwd_relative = buildroot_path });
-            executable.addIncludePath(.{ .cwd_relative = syspath_base });
-            executable.addIncludePath(.{ .cwd_relative = syspath_include });
-            executable.addIncludePath(.{ .cwd_relative = syspath_lib });
             executable.linkLibrary(libActonProject);
 
             executable.linkLibrary(actonbase_dep.artifact("Acton"));

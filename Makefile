@@ -451,7 +451,7 @@ dist/bin/actonc: compiler/actonc $(DIST_ZIG)
 #
 dist/bin/actondb: $(DIST_ZIG) $(DEPS) $(DIST_INC)
 	@mkdir -p $(dir $@)
-	$(ZIG) build --build-file $(TD)/dist/backend/build.zig $(ZIG_TARGET) --prefix $(TD)/dist/depsout -Dsyspath_include=$(TD)/dist/depsout/include
+	$(ZIG) build --build-file $(TD)/dist/backend/build.zig $(ZIG_TARGET) --prefix $(TD)/dist/depsout
 	mv $(TD)/dist/depsout/bin/actondb $@
 	rmdir $(TD)/dist/depsout/bin
 
