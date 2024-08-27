@@ -70,11 +70,6 @@ pub fn build(b: *std.Build) void {
 
     print("Acton Base Builder\nBuilding in {s}\n", .{buildroot_path});
 
-    const dep_libargp = b.dependency("libargp", .{
-        .target = target,
-        .optimize = optimize,
-    });
-
     const dep_libbsdnt = b.dependency("libbsdnt", .{
         .target = target,
         .optimize = optimize,
@@ -237,10 +232,6 @@ pub fn build(b: *std.Build) void {
     libActon.addIncludePath(.{ .cwd_relative = syspath_include });
     libActon.addIncludePath(b.path("../inc")); // hack hack for stdlib TODO: sort out
     libActon.addIncludePath(b.path("../deps/instdir/include")); // hack hack for stdlib TODO: sort out
-
-    if (use_db) {
-        libActon.linkLibrary(dep_libargp.artifact("argp"));
-    }
 
     libActon.linkLibrary(dep_libbsdnt.artifact("bsdnt"));
     libActon.linkLibrary(dep_libgc.artifact("gc"));

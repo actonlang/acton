@@ -7,9 +7,6 @@
         .actondb = .{
             .path = ".build/sys/backend/",
         },
-        .libargp = .{
-            .path = ".build/sys/deps/libargp/",
-        },
         .libbsdnt = .{
             .path = ".build/sys/deps/libbsdnt/",
         },
