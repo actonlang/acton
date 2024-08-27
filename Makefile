@@ -158,7 +158,6 @@ DEPS_DIRS += dist/deps/libsnappy_c
 DEPS += dist/depsout/lib/libmbedcrypto.a
 DEPS += dist/depsout/lib/libmbedtls.a
 DEPS += dist/depsout/lib/libmbedx509.a
-DEPS += dist/depsout/lib/libpcre2.a
 DEPS += dist/depsout/lib/libprotobuf-c.a
 DEPS += dist/depsout/lib/libtlsuv.a
 DEPS += dist/depsout/lib/libuv.a
@@ -311,9 +310,6 @@ dist/deps/pcre2: deps-download/$(LIBPCRE2_REF).tar.gz
 	mkdir -p $@
 	cd $@ && tar zx --strip-components=1 -f $(TD)/$<
 	touch $(TD)/$@
-
-dist/depsout/lib/libpcre2.a: dist/deps/pcre2 $(DIST_ZIG)
-	cd $< && $(ZIG) build $(ZIG_TARGET) $(ZIG_CPU) --prefix $(TD)/dist/depsout
 
 # /deps/libsnappy_c --------------------------------------------
 LIBSNAPPY_C_REF=3f5b95957558a35c2becbe6b628c8219477dd5a4

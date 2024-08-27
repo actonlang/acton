@@ -238,12 +238,6 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         });
 
-        const dep_libpcre2 = b.dependency("libpcre2", .{
-            .target = target,
-            .optimize = optimize,
-            .linkage = .static,
-        });
-
         const dep_libprotobuf_c = b.dependency("libprotobuf_c", .{
             .target = target,
             .optimize = optimize,
@@ -317,7 +311,6 @@ pub fn build(b: *std.Build) void {
             executable.linkLibrary(dep_libmbedtls.artifact("mbedtls"));
             executable.linkLibrary(dep_libmbedtls.artifact("mbedx509"));
             executable.linkLibrary(dep_libnetstring.artifact("netstring"));
-            executable.linkLibrary(dep_libpcre2.artifact("pcre2-8"));
             executable.linkLibrary(dep_libprotobuf_c.artifact("protobuf-c"));
             executable.linkLibrary(dep_libsnappy_c.artifact("snappy-c"));
             executable.linkLibrary(dep_libtlsuv.artifact("tlsuv"));

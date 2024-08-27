@@ -88,6 +88,12 @@ pub fn build(b: *std.Build) void {
         .enable_mmap = true,
     });
 
+    const dep_libpcre2 = b.dependency("libpcre2", .{
+        .target = target,
+        .optimize = optimize,
+        .linkage = .static,
+    });
+
     const dep_libutf8proc = b.dependency("libutf8proc", .{
         .target = target,
         .optimize = optimize,
@@ -238,6 +244,7 @@ pub fn build(b: *std.Build) void {
 
     libActon.linkLibrary(dep_libbsdnt.artifact("bsdnt"));
     libActon.linkLibrary(dep_libgc.artifact("gc"));
+    libActon.linkLibrary(dep_libpcre2.artifact("pcre2-8"));
     libActon.linkLibrary(dep_libutf8proc.artifact("utf8proc"));
     libActon.linkLibrary(dep_libyyjson.artifact("yyjson"));
 

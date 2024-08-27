@@ -18,6 +18,7 @@ pub const packages = struct {
             .{ "libargp", "libargp" },
             .{ "libbsdnt", "libbsdnt" },
             .{ "libgc", "libgc" },
+            .{ "libpcre2", "libpcre2" },
             .{ "libutf8proc", "libutf8proc" },
             .{ "libyyjson", "libyyjson" },
         };

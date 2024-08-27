@@ -16,9 +16,6 @@
         .libnetstring = .{
             .path = ".build/sys/deps/libnetstring/",
         },
-        .libpcre2 = .{
-            .path = ".build/sys/deps/pcre2/",
-        },
         .libprotobuf_c = .{
             .path = ".build/sys/deps/libprotobuf_c/",
         },
