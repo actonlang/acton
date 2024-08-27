@@ -55,6 +55,9 @@ ifeq ($(shell uname -s),Darwin)
 OS:=macos
 ifeq ($(shell uname -m),arm64)
 ZIG_CPU := -Dcpu=apple_a15
+ZIG_TARGET := -Dtarget=aarch64-macos
+else
+ZIG_TARGET := -Dtarget=x86_64-macos
 endif
 endif
 
