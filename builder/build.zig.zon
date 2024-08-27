@@ -10,18 +10,6 @@
         .base = .{
             .path = ".build/sys/base/",
         },
-        .libmbedtls = .{
-            .path = ".build/sys/deps/mbedtls/",
-        },
-        .libprotobuf_c = .{
-            .path = ".build/sys/deps/libprotobuf_c/",
-        },
-        .libtlsuv = .{
-            .path = ".build/sys/deps/tlsuv/",
-        },
-        .libuv = .{
-            .path = ".build/sys/deps/libuv/",
-        },
     },
     .paths = .{""},
 }

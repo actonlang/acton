@@ -157,18 +157,19 @@ DEPS_DIRS += dist/deps/libxml2
 DEPS_DIRS += dist/deps/libyyjson
 DEPS_DIRS += dist/deps/libsnappy_c
 
-# TODO: depend on include file rather than lib directory and remove lib files from distribution?
-DEPS += dist/depsout/lib/libmbedcrypto.a
-DEPS += dist/depsout/lib/libmbedtls.a
-DEPS += dist/depsout/lib/libmbedx509.a
-DEPS += dist/depsout/lib/libprotobuf-c.a
-DEPS += dist/depsout/lib/libtlsuv.a
-DEPS += dist/depsout/lib/libuv.a
-
 .PHONE: clean-downloads
 clean-downloads:
 	rm -rf deps-download
 
+
+# Explanation of the horrible hack found below:
+# The symlink .build/sys that we create in each deps directory is to make zig
+# build work. It normally uses absolute paths and so when it is in say deps/a
+# and wants to go to deps/b, it'll just cd into the b dir, but since we use a
+# relative dir (that is really meant to be relative to the build root, not each
+# individual dependency), this breaks. We work around it by making all deps
+# directory look like the build root in this sense, i.e. .build/sys points to
+# syspath, the root of the system distribution.
 # /deps/libargp --------------------------------------------
 LIBARGP_REF=a30e99cda3fabc591727a8df3aee5524c2392e15
 deps-download/$(LIBARGP_REF).tar.gz:
@@ -180,6 +181,8 @@ dist/deps/libargp: deps-download/$(LIBARGP_REF).tar.gz
 	cd $@ && tar zx --strip-components=1 -f $(TD)/$<
 	rm -rf $@/testsuite
 	touch $(TD)/$@
+	mkdir -p $@/.build
+	ln -s ../../../ $@/.build/sys # horrible hack to make zig build hack work
 
 # /deps/libbsdnt --------------------------------------------
 LIBBSDNT_REF=282f774e1e664ea7c23cc0bb9f313c1054874a97
@@ -191,6 +194,8 @@ dist/deps/libbsdnt: deps-download/$(LIBBSDNT_REF).tar.gz
 	mkdir -p $@
 	cd $@ && tar zx --strip-components=1 -f $(TD)/$<
 	touch $(TD)/$@
+	mkdir -p $@/.build
+	ln -s ../../../ $@/.build/sys # horrible hack to make zig build hack work
 
 # /deps/libgc --------------------------------------------
 LIBGC_REF=0a23b211b558137de7ee654c5527a54113142517
@@ -203,6 +208,8 @@ dist/deps/libgc: deps-download/$(LIBGC_REF).tar.gz
 	cd $@ && tar zx --strip-components=1 -f $(TD)/$<
 	rm -rf $@/tests $@/tools
 	touch $(TD)/$@
+	mkdir -p $@/.build
+	ln -s ../../../ $@/.build/sys # horrible hack to make zig build hack work
 
 # /deps/libmbedtls --------------------------------------------
 LIBMBEDTLS_REF=e72756f2312f04b659fdeaba2fbba7b1f5fd3927
@@ -217,11 +224,6 @@ dist/deps/mbedtls: deps-download/$(LIBMBEDTLS_REF).tar.gz
 	mkdir -p $@/.build
 	ln -s ../../../ $@/.build/sys # horrible hack to make zig build hack work
 
-dist/depsout/lib/libmbedtls.a: dist/deps/mbedtls $(DIST_ZIG)
-	cd $< && $(ZIG) build $(ZIG_TARGET) $(ZIG_CPU) --prefix $(TD)/dist/depsout
-dist/depsout/lib/libmbedcrypto.a: dist/depsout/lib/libmbedtls.a
-dist/depsout/lib/libmbedx509.a: dist/depsout/lib/libmbedtls.a
-
 # /deps/libprotobuf_c --------------------------------------------
 LIBPROTOBUF_C_REF=4e4bfc7ec44e6ac746b05f3251f59610822bc95c
 deps-download/$(LIBPROTOBUF_C_REF).tar.gz:
@@ -232,23 +234,21 @@ dist/deps/libprotobuf_c: deps-download/$(LIBPROTOBUF_C_REF).tar.gz
 	mkdir -p $@
 	cd $@ && tar zx --strip-components=1 -f $(TD)/$<
 	touch $(TD)/$@
-
-dist/depsout/lib/libprotobuf-c.a: dist/deps/libprotobuf_c $(DIST_ZIG)
-	cd $< && $(ZIG) build $(ZIG_TARGET) $(ZIG_CPU) --prefix $(TD)/dist/depsout
+	mkdir -p $@/.build
+	ln -s ../../../ $@/.build/sys # horrible hack to make zig build hack work
 
 # /deps/tlsuv ---------------------------------------------
-TLSUV_REF=f9baa8f5792dec90ba0fb60ecd3e89243d24e381
+TLSUV_REF=5a811cce1efc360a2bd4fe11ada581ceb2a1c764
 deps-download/$(TLSUV_REF).tar.gz:
 	mkdir -p deps-download
 	curl -f -L -o $@ https://github.com/actonlang/tlsuv/archive/$(TLSUV_REF).tar.gz
 
-dist/deps/tlsuv: deps-download/$(TLSUV_REF).tar.gz
+dist/deps/tlsuv: deps-download/$(TLSUV_REF).tar.gz dist/deps/libuv dist/deps/mbedtls
 	mkdir -p $@
 	cd $@ && tar zx --strip-components=1 -f $(TD)/$<
 	touch $(TD)/$@
-
-dist/depsout/lib/libtlsuv.a: dist/deps/tlsuv $(DIST_ZIG) dist/depsout/lib/libmbedtls.a dist/depsout/lib/libuv.a
-	cd $< && $(ZIG) build $(ZIG_TARGET) $(ZIG_CPU) --prefix $(TD)/dist/depsout --search-prefix $(TD)/dist/depsout
+	mkdir -p $@/.build
+	ln -s ../../../ $@/.build/sys # horrible hack to make zig build hack work
 
 # /deps/libutf8proc --------------------------------------
 LIBUTF8PROC_REF=e914c63b43d5f283090a63a307fccd25acbe37f0
@@ -260,14 +260,18 @@ dist/deps/libutf8proc: deps-download/$(LIBUTF8PROC_REF).tar.gz
 	mkdir -p $@
 	cd $@ && tar zx --strip-components=1 -f $(TD)/$<
 	touch $(TD)/$@
+	mkdir -p $@/.build
+	ln -s ../../../ $@/.build/sys # horrible hack to make zig build hack work
 
 # /deps/libuuid ------------------------------------------
 dist/deps/libuuid: deps/libuuid
 	mkdir -p $(TD)/$@
 	cp -a $</* $(TD)/$@
+	mkdir -p $@/.build
+	ln -s ../../../ $@/.build/sys # horrible hack to make zig build hack work
 
 # /deps/libuv --------------------------------------------
-LIBUV_REF=7368cd576c8c06766761abfcfade55352d2e7828
+LIBUV_REF=f20620733fb8fb5fb261699bbb858887ac6ec0bb
 deps-download/$(LIBUV_REF).tar.gz:
 	mkdir -p deps-download
 	curl -f -L -o $@ https://github.com/actonlang/libuv/archive/$(LIBUV_REF).tar.gz
@@ -276,9 +280,8 @@ dist/deps/libuv: deps-download/$(LIBUV_REF).tar.gz
 	mkdir -p $@
 	cd $@ && tar zx --strip-components=1 -f $(TD)/$< libuv-$(LIBUV_REF)/build.zig libuv-$(LIBUV_REF)/include libuv-$(LIBUV_REF)/src
 	touch $(TD)/$@
-
-dist/depsout/lib/libuv.a: dist/deps/libuv $(DIST_ZIG)
-	cd $< && $(ZIG) build $(ZIG_TARGET) $(ZIG_CPU) --prefix $(TD)/dist/depsout
+	mkdir -p $@/.build
+	ln -s ../../../ $@/.build/sys # horrible hack to make zig build hack work
 
 # /deps/libxml2 ------------------------------------------
 LIBXML2_REF=56e4e62c077b2c5285b0eec4d6d4497f9b2e6e8f
@@ -304,6 +307,8 @@ dist/deps/pcre2: deps-download/$(LIBPCRE2_REF).tar.gz
 	mkdir -p $@
 	cd $@ && tar zx --strip-components=1 -f $(TD)/$<
 	touch $(TD)/$@
+	mkdir -p $@/.build
+	ln -s ../../../ $@/.build/sys # horrible hack to make zig build hack work
 
 # /deps/libsnappy_c --------------------------------------------
 LIBSNAPPY_C_REF=3f5b95957558a35c2becbe6b628c8219477dd5a4
@@ -315,14 +320,20 @@ dist/deps/libsnappy_c: deps-download/$(LIBSNAPPY_C_REF).tar.gz
 	mkdir -p $@
 	cd $@ && tar zx --strip-components=1 -f $(TD)/$<
 	touch $(TD)/$@
+	mkdir -p $@/.build
+	ln -s ../../../ $@/.build/sys # horrible hack to make zig build hack work
 
 dist/deps/libnetstring: deps/libnetstring $(DIST_ZIG)
 	mkdir -p $(TD)/$@
 	cp -a $</* $(TD)/$@
+	mkdir -p $@/.build
+	ln -s ../../../ $@/.build/sys # horrible hack to make zig build hack work
 
 dist/deps/libyyjson: deps/libyyjson $(DIST_ZIG)
 	mkdir -p $(TD)/$@
 	cp -a $</* $(TD)/$@
+	mkdir -p $@/.build
+	ln -s ../../../ $@/.build/sys # horrible hack to make zig build hack work
 
 
 ifeq ($(ARCH),x86_64)

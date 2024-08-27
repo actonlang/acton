@@ -17,11 +17,14 @@ pub const packages = struct {
         pub const deps: []const struct { []const u8, []const u8 } = &.{
             .{ "libbsdnt", "libbsdnt" },
             .{ "libgc", "libgc" },
+            .{ "libmbedtls", "libmbedtls" },
             .{ "libnetstring", "libnetstring" },
             .{ "libpcre2", "libpcre2" },
             .{ "libsnappy", "libsnappy_c" },
+            .{ "libtlsuv", "libtlsuv" },
             .{ "libutf8proc", "libutf8proc" },
             .{ "libuuid", "libuuid" },
+            .{ "libuv", "libuv" },
             .{ "libxml2", "libxml2" },
             .{ "libyyjson", "libyyjson" },
         };
@@ -94,7 +97,10 @@ pub const packages = struct {
     pub const @"libtlsuv" = struct {
         pub const build_root = ".build/sys/deps/tlsuv";
         pub const build_zig = @import("deps/tlsuv/build.zig");
-        pub const deps: []const struct { []const u8, []const u8 } = &.{};
+        pub const deps: []const struct { []const u8, []const u8 } = &.{
+            .{ "libmbedtls", "libmbedtls" },
+            .{ "libuv", "libuv" },
+        };
     };
 };
 
