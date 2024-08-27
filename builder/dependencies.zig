@@ -19,6 +19,7 @@ pub const packages = struct {
             .{ "libbsdnt", "libbsdnt" },
             .{ "libgc", "libgc" },
             .{ "libutf8proc", "libutf8proc" },
+            .{ "libyyjson", "libyyjson" },
         };
     };
     pub const @"libnetstring" = struct {

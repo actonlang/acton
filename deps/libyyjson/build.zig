@@ -20,6 +20,6 @@ pub fn build(b: *std.Build) void {
         .flags = &[_][]const u8{}
     });
     lib.linkLibC();
-    b.installFile("yyjson.h", "include/yyjson.h");
+    lib.installHeader(b.path("yyjson.h"), "yyjson.h");
     b.installArtifact(lib);
 }

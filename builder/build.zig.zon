@@ -34,9 +34,6 @@
         .libxml2 = .{
             .path = ".build/sys/deps/libxml2/",
         },
-        .libyyjson = .{
-            .path = ".build/sys/deps/libyyjson/",
-        },
     },
     .paths = .{""},
 }

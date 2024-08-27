@@ -94,6 +94,11 @@ pub fn build(b: *std.Build) void {
         .BUILD_SHARED_LIBS = false,
     });
 
+    const dep_libyyjson = b.dependency("libyyjson", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
     var iter_dir = b.build_root.handle.openDir(
         "out/types/",
         .{
@@ -234,6 +239,7 @@ pub fn build(b: *std.Build) void {
     libActon.linkLibrary(dep_libbsdnt.artifact("bsdnt"));
     libActon.linkLibrary(dep_libgc.artifact("gc"));
     libActon.linkLibrary(dep_libutf8proc.artifact("utf8proc"));
+    libActon.linkLibrary(dep_libyyjson.artifact("yyjson"));
 
     libActon.installLibraryHeaders(dep_libbsdnt.artifact("bsdnt"));
     libActon.installLibraryHeaders(dep_libgc.artifact("gc"));
