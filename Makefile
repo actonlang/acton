@@ -352,6 +352,9 @@ test-builtins:
 test-compiler:
 	cd compiler && stack test --ta '-p "compiler"'
 
+test-cross-compile:
+	cd compiler && stack test --ta '-p "cross-compilation"'
+
 test-typeerrors:
 	cd compiler && stack test --ta '-p "type errors"'
 
