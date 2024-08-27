@@ -37,9 +37,6 @@
         .libutf8proc = .{
             .path = ".build/sys/deps/libutf8proc/",
         },
-        .libuuid = .{
-            .path = ".build/sys/deps/libuuid/",
-        },
         .libuv = .{
             .path = ".build/sys/deps/libuv/",
         },

@@ -254,11 +254,6 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         });
 
-        const dep_libuuid = b.dependency("libuuid", .{
-            .target = target,
-            .optimize = optimize,
-        });
-
         const dep_libuv = b.dependency("libuv", .{
             .target = target,
             .optimize = optimize,
@@ -322,7 +317,6 @@ pub fn build(b: *std.Build) void {
             executable.linkLibrary(actonbase_dep.artifact("Acton"));
             if (db) {
                 executable.linkLibrary(libactondb_dep.artifact("ActonDB"));
-                executable.linkLibrary(dep_libuuid.artifact("uuid"));
             }
             executable.linkLibrary(dep_libmbedtls.artifact("mbedcrypto"));
             executable.linkLibrary(dep_libmbedtls.artifact("mbedtls"));

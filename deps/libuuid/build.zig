@@ -39,6 +39,6 @@ pub fn build(b: *std.Build) void {
     });
     lib.addIncludePath(b.path("include"));
     lib.linkLibC();
-    b.installFile("src/uuid.h", "include/uuid/uuid.h");
+    lib.installHeader(b.path("src/uuid.h"), "uuid/uuid.h");
     b.installArtifact(lib);
 }

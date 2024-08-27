@@ -28,9 +28,6 @@
         .libtlsuv = .{
             .path = ".build/sys/deps/tlsuv/",
         },
-        .libuuid = .{
-            .path = ".build/sys/deps/libuuid/",
-        },
         .libuv = .{
             .path = ".build/sys/deps/libuv/",
         },

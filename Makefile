@@ -161,7 +161,6 @@ DEPS += dist/depsout/lib/libmbedx509.a
 DEPS += dist/depsout/lib/libpcre2.a
 DEPS += dist/depsout/lib/libprotobuf-c.a
 DEPS += dist/depsout/lib/libtlsuv.a
-DEPS += dist/depsout/lib/libuuid.a
 DEPS += dist/depsout/lib/libuv.a
 DEPS += dist/depsout/lib/libxml2.a
 DEPS += dist/depsout/lib/libnetstring.a
@@ -271,9 +270,6 @@ dist/deps/libutf8proc: deps-download/$(LIBUTF8PROC_REF).tar.gz
 dist/deps/libuuid: deps/libuuid
 	mkdir -p $(TD)/$@
 	cp -a $</* $(TD)/$@
-
-dist/depsout/lib/libuuid.a: dist/deps/libuuid $(DIST_ZIG)
-	cd $< && $(ZIG) build $(ZIG_TARGET) $(ZIG_CPU) --prefix $(TD)/dist/depsout
 
 # /deps/libuv --------------------------------------------
 LIBUV_REF=7368cd576c8c06766761abfcfade55352d2e7828

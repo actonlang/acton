@@ -97,6 +97,7 @@ pub fn build(b: *std.Build) void {
     libactondb.defineCMacro("LOG_USER_COLOR", "");
     libactondb.addIncludePath(.{ .cwd_relative= syspath_include });
     libactondb.linkLibrary(dep_libgc.artifact("gc"));
+    libactondb.linkLibrary(dep_libuuid.artifact("uuid"));
     libactondb.linkLibC();
     libactondb.linkLibCpp();
     b.installArtifact(libactondb);
