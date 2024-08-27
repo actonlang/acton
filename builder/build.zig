@@ -227,32 +227,6 @@ pub fn build(b: *std.Build) void {
             .syspath_include = syspath_include,
         });
 
-        // -- ActonDeps ------------------------------------------------------------
-        const dep_libmbedtls = b.dependency("libmbedtls", .{
-            .target = target,
-            .optimize = optimize,
-        });
-
-        const dep_libprotobuf_c = b.dependency("libprotobuf_c", .{
-            .target = target,
-            .optimize = optimize,
-        });
-
-        const dep_libtlsuv = b.dependency("libtlsuv", .{
-            .target = target,
-            .optimize = optimize,
-        });
-
-        const dep_libuv = b.dependency("libuv", .{
-            .target = target,
-            .optimize = optimize,
-        });
-
-        const dep_libsnappy_c = b.dependency("libsnappy", .{
-            .target = target,
-            .optimize = optimize,
-        });
-
         for (root_c_files.items) |entry| {
             // Get the binary name, by removing .root.c from end and having it relative to the projpath_outtypes
             var nlen = ".root.c".len;
@@ -297,13 +271,6 @@ pub fn build(b: *std.Build) void {
             if (db) {
                 executable.linkLibrary(libactondb_dep.artifact("ActonDB"));
             }
-            executable.linkLibrary(dep_libmbedtls.artifact("mbedcrypto"));
-            executable.linkLibrary(dep_libmbedtls.artifact("mbedtls"));
-            executable.linkLibrary(dep_libmbedtls.artifact("mbedx509"));
-            executable.linkLibrary(dep_libprotobuf_c.artifact("protobuf-c"));
-            executable.linkLibrary(dep_libsnappy_c.artifact("snappy-c"));
-            executable.linkLibrary(dep_libtlsuv.artifact("tlsuv"));
-            executable.linkLibrary(dep_libuv.artifact("uv"));
 
             // exe: link with dependencies / get headers from build.act.json
 

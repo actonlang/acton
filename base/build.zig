@@ -83,6 +83,11 @@ pub fn build(b: *std.Build) void {
         .enable_mmap = true,
     });
 
+    const dep_libmbedtls = b.dependency("libmbedtls", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
     const dep_libnetstring = b.dependency("libnetstring", .{
         .target = target,
         .optimize = optimize,
@@ -94,13 +99,28 @@ pub fn build(b: *std.Build) void {
         .linkage = .static,
     });
 
+    const dep_libsnappy_c = b.dependency("libsnappy", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const dep_libtlsuv = b.dependency("libtlsuv", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const dep_libprotobuf_c = b.dependency("libprotobuf_c", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
     const dep_libutf8proc = b.dependency("libutf8proc", .{
         .target = target,
         .optimize = optimize,
         .BUILD_SHARED_LIBS = false,
     });
 
-    const dep_libuuid = b.dependency("libuuid", .{
+    const dep_libuv = b.dependency("libuv", .{
         .target = target,
         .optimize = optimize,
     });
@@ -249,19 +269,32 @@ pub fn build(b: *std.Build) void {
     libActon.addIncludePath(b.path("../deps/instdir/include")); // hack hack for stdlib TODO: sort out
 
     if (use_db) {
-        libActon.linkLibrary(dep_libuuid.artifact("uuid"));
+        const libactondb_dep = b.dependency("actondb", .{
+            .target = target,
+            .optimize = optimize,
+            .syspath_include = syspath_include,
+        });
+        libActon.linkLibrary(libactondb_dep.artifact("ActonDB"));
     }
 
     libActon.linkLibrary(dep_libbsdnt.artifact("bsdnt"));
     libActon.linkLibrary(dep_libgc.artifact("gc"));
+    libActon.linkLibrary(dep_libmbedtls.artifact("mbedcrypto"));
+    libActon.linkLibrary(dep_libmbedtls.artifact("mbedtls"));
+    libActon.linkLibrary(dep_libmbedtls.artifact("mbedx509"));
     libActon.linkLibrary(dep_libnetstring.artifact("netstring"));
     libActon.linkLibrary(dep_libpcre2.artifact("pcre2-8"));
+    libActon.linkLibrary(dep_libprotobuf_c.artifact("protobuf-c")); // TODO: remove, once telemetrify/prw is fixed
+    libActon.linkLibrary(dep_libsnappy_c.artifact("snappy-c"));
+    libActon.linkLibrary(dep_libtlsuv.artifact("tlsuv"));
     libActon.linkLibrary(dep_libutf8proc.artifact("utf8proc"));
+    libActon.linkLibrary(dep_libuv.artifact("uv"));
     libActon.linkLibrary(dep_libxml2.artifact("xml2"));
     libActon.linkLibrary(dep_libyyjson.artifact("yyjson"));
 
     libActon.installLibraryHeaders(dep_libbsdnt.artifact("bsdnt"));
     libActon.installLibraryHeaders(dep_libgc.artifact("gc"));
+    libActon.installLibraryHeaders(dep_libuv.artifact("uv"));
 
     libActon.linkLibC();
     libActon.linkLibCpp();
