@@ -19,8 +19,9 @@ pub const packages = struct {
             .{ "libgc", "libgc" },
             .{ "libnetstring", "libnetstring" },
             .{ "libpcre2", "libpcre2" },
-            .{ "libuuid", "libuuid" },
+            .{ "libsnappy", "libsnappy_c" },
             .{ "libutf8proc", "libutf8proc" },
+            .{ "libuuid", "libuuid" },
             .{ "libxml2", "libxml2" },
             .{ "libyyjson", "libyyjson" },
         };

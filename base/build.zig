@@ -94,6 +94,11 @@ pub fn build(b: *std.Build) void {
         .linkage = .static,
     });
 
+    const dep_libsnappy_c = b.dependency("libsnappy", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
     const dep_libutf8proc = b.dependency("libutf8proc", .{
         .target = target,
         .optimize = optimize,
@@ -256,6 +261,7 @@ pub fn build(b: *std.Build) void {
     libActon.linkLibrary(dep_libgc.artifact("gc"));
     libActon.linkLibrary(dep_libnetstring.artifact("netstring"));
     libActon.linkLibrary(dep_libpcre2.artifact("pcre2-8"));
+    libActon.linkLibrary(dep_libsnappy_c.artifact("snappy-c"));
     libActon.linkLibrary(dep_libutf8proc.artifact("utf8proc"));
     libActon.linkLibrary(dep_libxml2.artifact("xml2"));
     libActon.linkLibrary(dep_libyyjson.artifact("yyjson"));

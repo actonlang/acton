@@ -16,9 +16,6 @@
         .libprotobuf_c = .{
             .path = ".build/sys/deps/libprotobuf_c/",
         },
-        .libsnappy = .{
-            .path = ".build/sys/deps/libsnappy_c/",
-        },
         .libtlsuv = .{
             .path = ".build/sys/deps/tlsuv/",
         },

@@ -243,11 +243,6 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         });
 
-        const dep_libsnappy_c = b.dependency("libsnappy", .{
-            .target = target,
-            .optimize = optimize,
-        });
-
         for (root_c_files.items) |entry| {
             // Get the binary name, by removing .root.c from end and having it relative to the projpath_outtypes
             var nlen = ".root.c".len;
@@ -295,7 +290,6 @@ pub fn build(b: *std.Build) void {
             executable.linkLibrary(dep_libmbedtls.artifact("mbedcrypto"));
             executable.linkLibrary(dep_libmbedtls.artifact("mbedtls"));
             executable.linkLibrary(dep_libmbedtls.artifact("mbedx509"));
-            executable.linkLibrary(dep_libsnappy_c.artifact("snappy-c"));
             executable.linkLibrary(dep_libtlsuv.artifact("tlsuv"));
             executable.linkLibrary(dep_libuv.artifact("uv"));
 
