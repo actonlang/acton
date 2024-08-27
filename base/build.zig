@@ -70,6 +70,24 @@ pub fn build(b: *std.Build) void {
 
     print("Acton Base Builder\nBuilding in {s}\n", .{buildroot_path});
 
+    const dep_libargp = b.dependency("libargp", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const dep_libbsdnt = b.dependency("libbsdnt", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const dep_libgc = b.dependency("libgc", .{
+        .target = target,
+        .optimize = optimize,
+        .BUILD_SHARED_LIBS = false,
+        .enable_large_config = true,
+        .enable_mmap = true,
+    });
+
     const dep_libutf8proc = b.dependency("libutf8proc", .{
         .target = target,
         .optimize = optimize,
@@ -209,7 +227,16 @@ pub fn build(b: *std.Build) void {
     libActon.addIncludePath(b.path("../inc")); // hack hack for stdlib TODO: sort out
     libActon.addIncludePath(b.path("../deps/instdir/include")); // hack hack for stdlib TODO: sort out
 
+    if (use_db) {
+        libActon.linkLibrary(dep_libargp.artifact("argp"));
+    }
+
+    libActon.linkLibrary(dep_libbsdnt.artifact("bsdnt"));
+    libActon.linkLibrary(dep_libgc.artifact("gc"));
     libActon.linkLibrary(dep_libutf8proc.artifact("utf8proc"));
+
+    libActon.installLibraryHeaders(dep_libbsdnt.artifact("bsdnt"));
+    libActon.installLibraryHeaders(dep_libgc.artifact("gc"));
 
     libActon.linkLibC();
     libActon.linkLibCpp();

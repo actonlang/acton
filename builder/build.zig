@@ -227,25 +227,7 @@ pub fn build(b: *std.Build) void {
             .syspath_include = syspath_include,
         });
 
-        const dep_libgc = b.dependency("libgc", .{
-            .target = target,
-            .optimize = optimize,
-            .BUILD_SHARED_LIBS = false,
-            .enable_large_config = true,
-            .enable_mmap = true,
-        });
-
         // -- ActonDeps ------------------------------------------------------------
-        const dep_libargp = b.dependency("libargp", .{
-            .target = target,
-            .optimize = optimize,
-        });
-
-        const dep_libbsdnt = b.dependency("libbsdnt", .{
-            .target = target,
-            .optimize = optimize,
-        });
-
         const dep_libmbedtls = b.dependency("libmbedtls", .{
             .target = target,
             .optimize = optimize,
@@ -340,10 +322,8 @@ pub fn build(b: *std.Build) void {
             executable.linkLibrary(actonbase_dep.artifact("Acton"));
             if (db) {
                 executable.linkLibrary(libactondb_dep.artifact("ActonDB"));
-                executable.linkLibrary(dep_libargp.artifact("argp"));
                 executable.linkLibrary(dep_libuuid.artifact("uuid"));
             }
-            executable.linkLibrary(dep_libbsdnt.artifact("bsdnt"));
             executable.linkLibrary(dep_libmbedtls.artifact("mbedcrypto"));
             executable.linkLibrary(dep_libmbedtls.artifact("mbedtls"));
             executable.linkLibrary(dep_libmbedtls.artifact("mbedx509"));
@@ -355,7 +335,6 @@ pub fn build(b: *std.Build) void {
             executable.linkLibrary(dep_libuv.artifact("uv"));
             executable.linkLibrary(dep_libxml2.artifact("xml2"));
             executable.linkLibrary(dep_libyyjson.artifact("yyjson"));
-            executable.linkLibrary(dep_libgc.artifact("gc"));
 
             // exe: link with dependencies / get headers from build.act.json
 

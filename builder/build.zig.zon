@@ -10,15 +10,6 @@
         .base = .{
             .path = ".build/sys/base/",
         },
-        .libargp = .{
-            .path = ".build/sys/deps/libargp/",
-        },
-        .libbsdnt = .{
-            .path = ".build/sys/deps/libbsdnt/",
-        },
-        .libgc = .{
-            .path = ".build/sys/deps/libgc/",
-        },
         .libmbedtls = .{
             .path = ".build/sys/deps/mbedtls/",
         },

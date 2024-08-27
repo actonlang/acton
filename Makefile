@@ -155,9 +155,6 @@ DEPS_DIRS += dist/deps/libyyjson
 DEPS_DIRS += dist/deps/libsnappy_c
 
 # TODO: depend on include file rather than lib directory and remove lib files from distribution?
-DEPS += dist/depsout/lib/libactongc.a
-DEPS += dist/depsout/lib/libargp.a
-DEPS += dist/depsout/lib/libbsdnt.a
 DEPS += dist/depsout/lib/libmbedcrypto.a
 DEPS += dist/depsout/lib/libmbedtls.a
 DEPS += dist/depsout/lib/libmbedx509.a
@@ -176,7 +173,7 @@ clean-downloads:
 	rm -rf deps-download
 
 # /deps/libargp --------------------------------------------
-LIBARGP_REF=060587652d82866ff3c68a5cea90711804242389
+LIBARGP_REF=a30e99cda3fabc591727a8df3aee5524c2392e15
 deps-download/$(LIBARGP_REF).tar.gz:
 	mkdir -p deps-download
 	curl -f -L -o $@ https://github.com/actonlang/argp-standalone/archive/$(LIBARGP_REF).tar.gz
@@ -186,9 +183,6 @@ dist/deps/libargp: deps-download/$(LIBARGP_REF).tar.gz
 	cd $@ && tar zx --strip-components=1 -f $(TD)/$<
 	rm -rf $@/testsuite
 	touch $(TD)/$@
-
-dist/depsout/lib/libargp.a: dist/deps/libargp $(DIST_ZIG)
-	cd $< && $(ZIG) build $(ZIG_TARGET) $(ZIG_CPU) --prefix $(TD)/dist/depsout
 
 # /deps/libbsdnt --------------------------------------------
 LIBBSDNT_REF=282f774e1e664ea7c23cc0bb9f313c1054874a97
@@ -215,10 +209,6 @@ dist/deps/libgc: deps-download/$(LIBGC_REF).tar.gz
 	cd $@ && tar zx --strip-components=1 -f $(TD)/$<
 	rm -rf $@/tests $@/tools
 	touch $(TD)/$@
-
-dist/depsout/lib/libactongc.a: dist/deps/libgc $(DIST_ZIG)
-	cd $< && $(ZIG) build $(ZIG_TARGET) $(ZIG_CPU) --prefix $(TD)/dist/depsout -DBUILD_SHARED_LIBS=false -Denable_large_config -Denable_mmap
-	mv dist/depsout/lib/libgc.a $@
 
 # /deps/libmbedtls --------------------------------------------
 LIBMBEDTLS_REF=e72756f2312f04b659fdeaba2fbba7b1f5fd3927
