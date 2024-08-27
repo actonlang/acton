@@ -142,20 +142,20 @@ clean-compiler:
 	rm -f compiler/actonc compiler/package.yaml compiler/acton.cabal
 
 # /deps --------------------------------------------------
-DEPS_DIRS += dist/deps/mbedtls
-DEPS_DIRS += dist/deps/libargp
-DEPS_DIRS += dist/deps/libbsdnt
-DEPS_DIRS += dist/deps/libgc
-DEPS_DIRS += dist/deps/libnetstring
-DEPS_DIRS += dist/deps/pcre2
-DEPS_DIRS += dist/deps/libprotobuf_c
-DEPS_DIRS += dist/deps/tlsuv
-DEPS_DIRS += dist/deps/libutf8proc
-DEPS_DIRS += dist/deps/libuuid
-DEPS_DIRS += dist/deps/libuv
-DEPS_DIRS += dist/deps/libxml2
-DEPS_DIRS += dist/deps/libyyjson
-DEPS_DIRS += dist/deps/libsnappy_c
+DEPS += dist/deps/mbedtls
+DEPS += dist/deps/libargp
+DEPS += dist/deps/libbsdnt
+DEPS += dist/deps/libgc
+DEPS += dist/deps/libnetstring
+DEPS += dist/deps/pcre2
+DEPS += dist/deps/libprotobuf_c
+DEPS += dist/deps/tlsuv
+DEPS += dist/deps/libutf8proc
+DEPS += dist/deps/libuuid
+DEPS += dist/deps/libuv
+DEPS += dist/deps/libxml2
+DEPS += dist/deps/libyyjson
+DEPS += dist/deps/libsnappy_c
 
 .PHONE: clean-downloads
 clean-downloads:
@@ -339,7 +339,7 @@ dist/deps/libyyjson: deps/libyyjson $(DIST_ZIG)
 ifeq ($(ARCH),x86_64)
 ZIG_ARCH_ARG=-mcpu=x86_64
 endif
-builder/builder: builder/build.zig builder/build.zig.zon builder/dependencies.zig backend/build.zig base/build.zig $(ZIG_DEP) $(DEPS_DIRS) $(DIST_ZIG)
+builder/builder: builder/build.zig builder/build.zig.zon builder/dependencies.zig backend/build.zig base/build.zig $(ZIG_DEP) $(DEPS) dist/base $(DIST_ZIG)
 	rm -rf builder/zig-cache builder/zig-out
 	cd builder && $(ZIG) build-exe -femit-bin=builder $(ZIG_ARCH_ARG) --dep @build --dep @dependencies --mod root ../dist/zig/lib/compiler/build_runner.zig --mod @build ./build.zig --mod @dependencies ./dependencies.zig
 
