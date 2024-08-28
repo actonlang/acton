@@ -4,7 +4,7 @@ CHANGELOG_VERSION=$(shell grep '^\#\# \[[0-9]' CHANGELOG.md | sed 's/\#\# \[\([^
 GIT_VERSION_TAG=$(shell git tag --points-at HEAD 2>/dev/null | grep "v[0-9]" | sed -e 's/^v//')
 
 ifdef HOME
-ZIG_LOCAL_CACHE_DIR ?= $(HOME)/.cache/acton/zig-cache
+ZIG_LOCAL_CACHE_DIR ?= $(HOME)/.cache/acton/zig-local-cache
 else
 # TODO: Windows?
 ZIG_LOCAL_CACHE_DIR ?= $(TD)/zig-cache
