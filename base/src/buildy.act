@@ -202,7 +202,6 @@ def gen_buildzig(template: str, build_config: BuildConfig) -> str:
         deps_defs += "    const actdep_%s = b.dependency(\"%s\", .{\n" % (dep_name, dep_name)
         deps_defs += "        .target = target,\n"
         deps_defs += "        .optimize = optimize,\n"
-        deps_defs += "        .syspath = syspath,\n"
         deps_defs += "    });\n"
         liblink_lines += " "*4  + "libActonProject.linkLibrary(actdep_%s.artifact(\"ActonProject\"));\n" % (dep_name)
         exelink_lines += " "*12 + "executable.linkLibrary(actdep_%s.artifact(\"ActonProject\"));\n" % (dep_name)

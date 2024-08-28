@@ -946,8 +946,7 @@ zigBuild env opts paths tasks binTasks = do
                  " -Doptimize=" ++ (if (C.dev opts) then "Debug" else "ReleaseFast") ++
                  (if (C.db opts) then " -Ddb " else "") ++
                  (if no_threads then " -Dno_threads " else "") ++
-                 (if (C.cpedantic opts) then " -Dcpedantic " else "") ++
-                 " -Dsyspath=" ++ sysPath paths
+                 (if (C.cpedantic opts) then " -Dcpedantic " else "")
 
     iff (C.debug opts) $ putStrLn ("zigCmd: " ++ zigCmd)
     runZig opts zigCmd paths (Just (projPath paths))

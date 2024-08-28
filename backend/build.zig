@@ -6,7 +6,6 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
     const no_threads = b.option(bool, "no_threads", "") orelse false;
-    const syspath_include = b.option([]const u8, "syspath_include", "") orelse "";
 
     const dep_libargp = b.dependency("libargp", .{
         .target = target,
@@ -95,7 +94,6 @@ pub fn build(b: *std.Build) void {
         .flags = flags.items
     });
     libactondb.defineCMacro("LOG_USER_COLOR", "");
-    libactondb.addIncludePath(.{ .cwd_relative= syspath_include });
     libactondb.linkLibrary(dep_libgc.artifact("gc"));
     libactondb.linkLibrary(dep_libprotobuf_c.artifact("protobuf-c"));
     libactondb.linkLibrary(dep_libuuid.artifact("uuid"));
@@ -114,7 +112,6 @@ pub fn build(b: *std.Build) void {
         "-fno-sanitize=undefined",
     }});
     actondb.addCSourceFile(.{ .file = b.path("log.c"), .flags = flags.items });
-    actondb.addIncludePath(.{ .cwd_relative= syspath_include });
     actondb.addLibraryPath(b.path("../lib"));
     actondb.linkLibrary(libactondb);
     actondb.linkLibrary(dep_libargp.artifact("argp"));
