@@ -410,7 +410,7 @@ searchPaths opts projtypes systypes deps = do
 
 findDeps :: FilePath -> FilePath -> IO [FilePath]
 findDeps projPath deps_path = do
-    let dpath = if null deps_path then joinPath [projPath, "deps"] else deps_path
+    let dpath = if null deps_path then joinPath [projPath, ".build", "deps"] else deps_path
     dirContents <- listDirectory dpath `catch` handleNoDepsDir
     depPaths <- filterM doesDirectoryExist $ map (dpath </>) dirContents
     return depPaths
@@ -431,7 +431,6 @@ findPaths actFile opts  = do execDir <- takeDirectory <$> System.Environment.get
                                  projTypes = joinPath [projOut, "types"]
                                  binDir  = if isTmp then srcDir else joinPath [projOut, "bin"]
                                  modName = A.modName $ dirInSrc ++ [fileBody]
-                                 projDepsDir = joinPath [projPath, "deps"]
                              dep_dirs <- findDeps projPath (C.deppath opts)
                              deps_sPaths <- searchPaths opts projTypes sysTypes dep_dirs
                              -- join the search paths from command line options with the ones found in the deps directory
@@ -875,7 +874,7 @@ runZig opts zigCmd paths wd = do
 genBuildZigZon :: Paths -> String
 genBuildZigZon paths =
     newBuildZigZon
-  where deps = map (\d -> "        ." ++ d ++ " = .{\n            .path = \"deps/" ++ d ++ "/\",\n        },") (projDeps paths)
+  where deps = map (\d -> "        ." ++ d ++ " = .{\n            .path = \".build/deps/" ++ d ++ "/\",\n        },") (projDeps paths)
         depsStr = intercalate "\n" deps
         buildZigZon = Acton.Builder.buildzigzon
         newBuildZigZon = replace ".dependencies = .{" (".dependencies = .{\n" ++ depsStr) buildZigZon

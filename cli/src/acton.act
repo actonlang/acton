@@ -9,7 +9,7 @@ from testing import TestInfo
 
 def get_zig_local_cache_dir(file_cap: file.FileCap):
     fs = file.FS(file_cap)
-    return file.join_path([fs.homedir(), ".cache", "acton", "zig-cache"])
+    return file.join_path([fs.homedir(), ".cache", "acton", "zig-local-cache"])
 
 def get_zig_global_cache_dir(file_cap: file.FileCap):
     fs = file.FS(file_cap)
@@ -41,7 +41,7 @@ def warn_on_large_zig_global_cache(cap: file.FileCap):
         total_size += int(f.size)
     gb = 1024 * 1024 * 1024
     if total_size > warn_level * gb:
-        print("WARN: The Zig global cache has grown to %dMB" % (total_size // (1024*1024)))
+        print("WARN: The global cache has grown to %dMB" % (total_size // (1024*1024)))
         print("HINT: You can clear the cache with with: rm -rf %s" % cache_dir)
         print("INFO: Do NOT clear the cache if you are offline or have a slow connection.")
         print("INFO: The global cache stores downloaded package dependencies as well as")
@@ -56,6 +56,8 @@ def warn_on_large_zig_global_cache(cap: file.FileCap):
         except Exception as e:
             print("WARN: Could not write new warn level to", last_warn_file)
             print(e)
+    if total_size == 0:
+        print("INFO: Acton global cache is empty: rebuilding common libraries (e.g. libc) which will take some time...")
 
 def clean_zig_local_cache(cap: file.FileCap):
     fs = file.FS(cap)
@@ -70,7 +72,7 @@ def clean_zig_local_cache(cap: file.FileCap):
         fs.rmtree(cache_dir)
         total_size = 0
     if total_size == 0:
-        print("Acton build cache is empty: rebuilding Acton base from source, which might take a while...")
+        print("INFO: Acton local cache is empty: rebuilding Acton base which will take some time...")
 
 def write_buildzig(file_cap, build_config: BuildConfig):
     fs = file.FS(file_cap)
@@ -177,9 +179,13 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
             if hash is not None:
                 search_paths.append(file.join_path([zig_global_cache_dir, "p", hash, "out", "types"]))
             elif path is not None:
-                # deconstruct and put together to get OS independent path? i.e. flip / to \ on windows
-                # TODO: force relative path?
-                search_paths.append(path)
+                # TODO: deconstruct and put together to get OS independent path? i.e. flip / to \ on windows
+                if len(path) == 0:
+                    pass
+                elif path[0] == "/":
+                    search_paths.append(file.join_path([path, "out", "types"]))
+                else:
+                    search_paths.append(file.join_path([fs.cwd(), path, "out", "types"]))
             else:
                 raise ValueError("Dependency %s has no hash" % dep_name)
         search_path_arg = []
@@ -187,7 +193,7 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
             search_path_arg.extend(["--searchpath", sp])
         cr = CompilerRunner(process_cap,
             env,
-            cmdargs + ["--deppath", file.join_path([fs.cwd(), "deps"])] + search_path_arg,
+            cmdargs + ["--deppath", file.join_path([fs.cwd(), ".build", "deps"])] + search_path_arg,
             None,
             _on_actonc_exit,
             _on_actonc_failure,
@@ -212,27 +218,24 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
 
     def on_dep_build_error(name, error):
         print("Error building dependency", name, error)
+        env.exit(1)
 
     def build_deps():
         # Find dependencies and compile them first
-        deps = []
-        try:
-            deps = fs.listdir("deps")
-        except OSError:
-            pass
-
-        if len(deps) == 0:
+        if len(build_config.dependencies) == 0:
             build_project()
         else:
             print("Building dependencies:")
-            for dep_name in deps:
+            for dep_name, dep in build_config.dependencies.items():
+                dep_path = dep.path
+                path = dep_path if dep_path is not None else file.join_path([".build", "deps", dep_name])
                 print(" -", dep_name)
                 remaining_deps[dep_name] = True
                 cr = CompilerRunner(
                     process_cap,
                     env,
                     cmdargs + ["--keepbuild"],
-                    file.join_path(["deps", dep_name]),
+                    path,
                     lambda exit_code, term_signal, stdout_buf, stderr_buf: _on_dep_actonc_exit(dep_name, exit_code, term_signal, stdout_buf, stderr_buf),
                     lambda error_msg: on_dep_build_error(dep_name, error_msg),
                     exe="acton"
@@ -245,9 +248,19 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
         # 4. build project
         deps_dir = set()
         try:
-            deps_dir = set(fs.listdir("deps"))
+            await async fs.mkdir(".build")
+        except:
+            pass
+
+        try:
+            await async fs.mkdir(file.join_path([".build", "deps"]))
+        except:
+            pass
+
+        try:
+            deps_dir = set(fs.listdir(file.join_path([".build", "deps"])))
         except OSError:
-            fs.mkdir("deps")
+            pass
 
         for dep_name, dep in build_config.dependencies.items():
             # Does deps/X exist?
@@ -256,9 +269,12 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
             if hash is not None:
                 if dep_name not in deps_dir:
                     print("Copying", dep_name, "from zig global cache")
-                    fs.mkdir(file.join_path(["deps", dep_name]))
+                    try:
+                        await async fs.mkdir(file.join_path([".build", "deps", dep_name]))
+                    except:
+                        pass
                     src = file.join_path([zig_global_cache_dir, "p", hash])
-                    dst = file.join_path([fs.cwd(), "deps", dep_name])
+                    dst = file.join_path([fs.cwd(), ".build", "deps", dep_name])
                     print("Copying", src, "to", dst)
                     await async fs.copytree(src, dst)
             elif path is not None:

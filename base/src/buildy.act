@@ -113,12 +113,18 @@ class Dependency(object):
         return res
 
     def to_zon(self) -> str:
+        path = ""
+        self_path = self.path
+        if self_path is not None:
+            path = self_path
+        else:
+            path = ".build/deps/%s" % self.name
         return """        .%s = .{
-        .path = "deps/%s"
+        .path = "%s"
     },
 """ % (
             self.name,
-            self.name,
+            path
         )
 
 
