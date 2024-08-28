@@ -7,19 +7,66 @@ import testing
 from buildy import *
 from testing import TestInfo
 
+def get_zig_local_cache_dir(file_cap: file.FileCap):
+    fs = file.FS(file_cap)
+    return file.join_path([fs.homedir(), ".cache", "acton", "zig-cache"])
+
+def get_zig_global_cache_dir(file_cap: file.FileCap):
+    fs = file.FS(file_cap)
+    return file.join_path([fs.homedir(), ".cache", "acton", "zig-global-cache"])
+
 def base_path(file_cap: file.FileCap):
     fs = file.FS(file_cap)
     return fs.exepath()[0:-len("/bin/acton")]
 
-def clean_buildcache(cap: file.FileCap):
+def warn_on_large_zig_global_cache(cap: file.FileCap):
     fs = file.FS(cap)
-    cache_dir = fs.homedir() + "/.cache/acton"
-    #cache_dir = fs.join(fs.homedir(), ".cache", "acton")
+    last_warn_file = file.join_path([get_zig_global_cache_dir(cap), "last_warn"])
+    warn_level: int = 10 # start to warn at 10GB
+    try:
+        last_warn = int(file.ReadFile(file.ReadFileCap(cap), last_warn_file).read().decode())
+        warn_level = last_warn + 1 # warn in 1GB increments
+    except:
+        try:
+            f = file.WriteFile(file.WriteFileCap(cap), last_warn_file)
+            f.write(str(warn_level).encode())
+            f.close()
+        except:
+            # The cache dir probably doesn't exist, just ignore
+            pass
+
+    cache_dir = get_zig_global_cache_dir(cap)
+    total_size: int = 0
+    for f in fs.walk(cache_dir):
+        total_size += int(f.size)
+    gb = 1024 * 1024 * 1024
+    if total_size > warn_level * gb:
+        print("WARN: The Zig global cache has grown to %dMB" % (total_size // (1024*1024)))
+        print("HINT: You can clear the cache with with: rm -rf %s" % cache_dir)
+        print("INFO: Do NOT clear the cache if you are offline or have a slow connection.")
+        print("INFO: The global cache stores downloaded package dependencies as well as")
+        print("INFO: compiled artifacts for common libraries, like libc.")
+        print("INFO: Another warning will be issued when the cache grows by another 1GB.")
+        print("")
+        # write new warn level
+        try:
+            f = file.WriteFile(file.WriteFileCap(cap), last_warn_file)
+            f.write(str(total_size // gb).encode())
+            f.close()
+        except Exception as e:
+            print("WARN: Could not write new warn level to", last_warn_file)
+            print(e)
+
+def clean_zig_local_cache(cap: file.FileCap):
+    fs = file.FS(cap)
+    cache_dir = get_zig_local_cache_dir(cap)
     total_size = 0
     for f in fs.walk(cache_dir):
         total_size += f.size
-    if total_size > 15 * 1024 * 1024 * 1024: # 5GB
-        print("Build cache (", total_size // (1024*1024), "MB) over 5GB, cleaning it up.")
+    gb = 1024 * 1024 * 1024
+    limit = 5 * gb
+    if total_size > limit:
+        print("Build cache (", total_size // (1024*1024), "MB) over %dGB, cleaning it up." % (int(limit // gb)))
         fs.rmtree(cache_dir)
         total_size = 0
     if total_size == 0:
@@ -86,7 +133,6 @@ actor CompilerRunner(process_cap, env, args, wdir=None, on_exit: ?action(int, in
             print("Error from process:", error)
             env.exit(1)
 
-    clean_buildcache(file.FileCap(env.cap))
     fs = file.FS(file.FileCap(env.cap))
     # We find the path to actonc by looking at the executable path of the
     # current process. Since we are called 'acton', we just add a 'c'.
@@ -106,6 +152,7 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
     fs = file.FS(fcap)
     lock_file = None
     remaining_deps = {}
+    zig_global_cache_dir = get_zig_global_cache_dir(file.FileCap(env.cap))
     cmdargs = ["build"] + build_cmd_args(args)
     if build_tests:
         cmdargs.append("--dev")
@@ -128,7 +175,7 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
             hash = dep.hash
             path = dep.path
             if hash is not None:
-                search_paths.append(file.join_path([fs.homedir(), ".cache", "acton", "build-cache", "p", hash, "out", "types"]))
+                search_paths.append(file.join_path([zig_global_cache_dir, "p", hash, "out", "types"]))
             elif path is not None:
                 # deconstruct and put together to get OS independent path? i.e. flip / to \ on windows
                 # TODO: force relative path?
@@ -210,7 +257,7 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
                 if dep_name not in deps_dir:
                     print("Copying", dep_name, "from zig global cache")
                     fs.mkdir(file.join_path(["deps", dep_name]))
-                    src = file.join_path([fs.homedir(), ".cache", "acton", "build-cache", "p", hash])
+                    src = file.join_path([zig_global_cache_dir, "p", hash])
                     dst = file.join_path([fs.cwd(), "deps", dep_name])
                     print("Copying", src, "to", dst)
                     await async fs.copytree(src, dst)
@@ -256,6 +303,9 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
             print("Build lock exists, trying again soon...")
             after 1: get_lock()
 
+    # check cache size and warn or clean if necessary...
+    warn_on_large_zig_global_cache(file.FileCap(env.cap))
+    clean_zig_local_cache(file.FileCap(env.cap))
     # and off we go! Start by grabbing the project build lock
     get_lock()
 
@@ -549,10 +599,11 @@ actor ZigFetchDeps(env, build_config: BuildConfig, on_done: action() -> None, on
         # TODO: collect all errors before calling on_fetch_error?
         on_fetch_error(error)
 
+    zig_global_cache_dir = get_zig_global_cache_dir(file.FileCap(env.cap))
     for dep_name, dep in build_config.dependencies.items():
         dep_url = dep.url
         if dep_url is not None:
-            cmd = [zig, "fetch", "--global-cache-dir", file.join_path([fs.homedir(), ".cache", "acton", "build-cache"]), dep_url]
+            cmd = [zig, "fetch", "--global-cache-dir", zig_global_cache_dir, dep_url]
             p = process.RunProcess(
                 pcap,
                 cmd,
@@ -564,7 +615,7 @@ actor ZigFetchDeps(env, build_config: BuildConfig, on_done: action() -> None, on
         dep_url = dep.url
         if dep_url is not None:
 
-            cmd = [zig, "fetch", "--global-cache-dir", file.join_path([fs.homedir(), ".cache", "acton", "build-cache"]), dep_url]
+            cmd = [zig, "fetch", "--global-cache-dir", zig_global_cache_dir, dep_url]
             p = process.RunProcess(
                 pcap,
                 cmd,
@@ -617,13 +668,14 @@ actor CmdFetch(env, args):
         print("No dependencies to fetch")
         env.exit(0)
     else:
+        zig_global_cache_dir = get_zig_global_cache_dir(file.FileCap(env.cap))
         for dep_name, dep in build_config.dependencies.items():
             print("Checking", dep_name)
             dep_url = dep.url
             if dep_url is not None:
                 print("Fetching", dep_name, "from", dep_url)
 
-                cmd = [zig, "fetch", "--global-cache-dir", file.join_path([fs.homedir(), ".cache", "acton", "build-cache"]), dep_url]
+                cmd = [zig, "fetch", "--global-cache-dir", zig_global_cache_dir, dep_url]
                 p = process.RunProcess(
                     pcap,
                     cmd,
@@ -637,7 +689,7 @@ actor CmdFetch(env, args):
             if dep_url is not None:
                 print("Fetching", dep_name, "from", dep_url)
 
-                cmd = [zig, "fetch", "--global-cache-dir", file.join_path([fs.homedir(), ".cache", "acton", "build-cache"]), dep_url]
+                cmd = [zig, "fetch", "--global-cache-dir", zig_global_cache_dir, dep_url]
                 p = process.RunProcess(
                     pcap,
                     cmd,
@@ -703,7 +755,7 @@ actor CmdPkgAdd(env, args):
         print("Error fetching", error)
         env.exit(1)
 
-    cmd = [zig, "fetch", "--global-cache-dir", file.join_path([fs.homedir(), ".cache", "acton", "build-cache"]), args.get_str("url")]
+    cmd = [zig, "fetch", "--global-cache-dir", get_zig_global_cache_dir(file.FileCap(env.cap)), args.get_str("url")]
     process.RunProcess(
         pcap,
         cmd,
@@ -801,7 +853,7 @@ actor CmdZigPkgAdd(env, args):
         print("Error fetching", error)
         env.exit(1)
 
-    cmd = [zig, "fetch", "--global-cache-dir", file.join_path([fs.homedir(), ".cache", "acton", "build-cache"]), args.get_str("url")]
+    cmd = [zig, "fetch", "--global-cache-dir", get_zig_global_cache_dir(file.FileCap(env.cap)), args.get_str("url")]
     process.RunProcess(
         pcap,
         cmd,
