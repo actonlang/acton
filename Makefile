@@ -3,7 +3,12 @@ TD:=$(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 CHANGELOG_VERSION=$(shell grep '^\#\# \[[0-9]' CHANGELOG.md | sed 's/\#\# \[\([^]]\{1,\}\)].*/\1/' | head -n1)
 GIT_VERSION_TAG=$(shell git tag --points-at HEAD 2>/dev/null | grep "v[0-9]" | sed -e 's/^v//')
 
+ifdef HOME
+ZIG_LOCAL_CACHE_DIR ?= $(HOME)/.cache/acton/zig-cache
+else
+# TODO: Windows?
 ZIG_LOCAL_CACHE_DIR ?= $(TD)/zig-cache
+endif
 export ZIG_LOCAL_CACHE_DIR
 
 ACTON=$(TD)/dist/bin/acton

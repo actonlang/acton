@@ -888,7 +888,8 @@ zigBuild env opts paths tasks binTasks = do
 
     -- custom build.zig ?
     homeDir <- getHomeDirectory
-    let global_cache_dir = joinPath [ homeDir, ".cache", "acton", "build-cache" ]
+    let local_cache_dir = joinPath [ homeDir, ".cache", "acton", "zig-local-cache" ]
+        global_cache_dir = joinPath [ homeDir, ".cache", "acton", "zig-global-cache" ]
         no_threads = if isWindowsOS (C.target opts) then True else C.no_threads opts
         target_cpu = if (C.cpu opts /= "")
                        then C.cpu opts
@@ -909,11 +910,6 @@ zigBuild env opts paths tasks binTasks = do
     removeDirectoryLink (joinPath [projPath paths, ".build", "sys"])
       `catch` handleNotExists
     createDirectoryLink (sysPath paths) (joinPath [projPath paths, ".build", "sys"])
-    -- symlink .build/cache to the global cache directory ~/.cache/acton
-    removeDirectoryLink (joinPath [projPath paths, ".build", "cache"])
-      `catch` handleNotExists
-    createDirectoryLink global_cache_dir (joinPath [projPath paths, ".build", "cache"])
-
 
     -- Write our build.zig and build.zig.zon files
     buildZigExists <- doesFileExist $ projPath paths ++ "/build.zig"
@@ -929,13 +925,13 @@ zigBuild env opts paths tasks binTasks = do
     let zigCmdBase =
           if buildZigExists
             then zig paths ++ " build " ++
-                 " --cache-dir " ++ global_cache_dir ++
+                 " --cache-dir " ++ local_cache_dir ++
                  " --global-cache-dir " ++ global_cache_dir ++
                  if (C.debug opts) then " --verbose " else ""
             else (joinPath [ sysPath paths, "builder", "builder" ]) ++ " " ++
                  (joinPath [ sysPath paths, "zig/zig" ]) ++ " " ++
                  projPath paths ++ " " ++
-                 global_cache_dir ++ " " ++
+                 local_cache_dir ++ " " ++
                  global_cache_dir
     let zigCmd = zigCmdBase ++
                  " --prefix " ++ projOut paths ++ " --prefix-exe-dir 'bin'" ++
