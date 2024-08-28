@@ -14,10 +14,17 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Trigger build of www.acton-lang.org
+      - name: "Trigger build of www.acton-lang.org"
         uses: benc-uk/workflow-dispatch@v1
         with:
           repo: actonlang/www.acton-lang.org
+          token: ${{ secrets.ACTBOT_PAT }}
+          workflow: main.yml
+          ref: main
+      - name: "Trigger build of acton.guide"
+        uses: benc-uk/workflow-dispatch@v1
+        with:
+          repo: actonlang/acton.guide
           token: ${{ secrets.ACTBOT_PAT }}
           workflow: main.yml
           ref: main
