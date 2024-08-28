@@ -831,6 +831,7 @@ actor CmdZigPkgAdd(env, args):
 
     dep_name = args.get_str("name")
     dep_url = args.get_str("url")
+    dep_artifacts = args.get_strlist("artifact")
 
     def get_build_config():
         try:
@@ -853,7 +854,7 @@ actor CmdZigPkgAdd(env, args):
                     build_config.zig_dependencies[dep_name].hash = dep_hash
             else:
                 # Add the hash
-                build_config.zig_dependencies[dep_name] = Dependency(dep_name, dep_url, dep_hash)
+                build_config.zig_dependencies[dep_name] = ZigDependency(dep_name, dep_url, dep_hash, {}, dep_artifacts)
                 print("Added new Zig package dependency", dep_name, "with hash", dep_hash)
 
             baj_file = file.WriteFile(file.WriteFileCap(file.FileCap(env.cap)), "build.act.json")
@@ -1033,12 +1034,13 @@ actor main(env):
 
         p_zigpkg = p.add_cmd("zig-pkg", "Manage Zig package dependencies", _cmd_zigpkg)
 
-        p_zigpkg_add = p_pkg.add_cmd("add", "Add Zig package dependency", _cmd_zigpkg_add)
+        p_zigpkg_add = p_zigpkg.add_cmd("add", "Add Zig package dependency", _cmd_zigpkg_add)
         p_zigpkg_add.add_arg("url", "URL of dependency", True, "?")
         p_zigpkg_add.add_arg("name", "Name of dependency", True, "?")
         p_zigpkg_add.add_option("hash", "str", "?", "", "Hash of dependency")
+        p_zigpkg_add.add_option("artifact", "strlist", "+", [], "Library artifact to link with")
 
-        p_zigpkg_rm = p_pkg.add_cmd("remove", "Remove Zig package dependency", _cmd_zigpkg_rm)
+        p_zigpkg_rm = p_zigpkg.add_cmd("remove", "Remove Zig package dependency", _cmd_zigpkg_rm)
         p_zigpkg_rm.add_arg("name", "Name of dependency", True, "?")
 
         return p.parse(env.argv)
