@@ -2810,7 +2810,7 @@ int main(int argc, char **argv) {
         if (cpu_pin) {
             CPU_ZERO(&cpu_set);
             CPU_SET(idx, &cpu_set);
-            pthread_setaffinity_np(threads[idx-1], sizeof(cpu_set), &cpu_set);
+            //pthread_setaffinity_np(threads[idx-1], sizeof(cpu_set), &cpu_set);
         }
     }
 #endif
