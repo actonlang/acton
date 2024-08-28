@@ -120,8 +120,8 @@ class Dependency(object):
         else:
             path = ".build/deps/%s" % self.name
         return """        .%s = .{
-        .path = "%s"
-    },
+            .path = "%s"
+        },
 """ % (
             self.name,
             path

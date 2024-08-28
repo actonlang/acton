@@ -2,11 +2,29 @@
 
 ## Unreleased
 
+Acton now supports package dependencies and has a package manager to work with
+these, fetching and building them. There are new docs at https://acton.guide
+
+## Added
+- Package management!
+  - Acton now supports adding dependencies on other packages, either in a local
+    path or to be downloaded from the Internet.
+  - This largely relies on the Zig package manager and the Zig build system
+  - It is also possible to add a Zig package dependency in an Acton project in
+    order to enable the integration with Zig / C / C++ libraries
+- `json.encode()` now has a `pretty` option to enable pretty printing
+- `file.ReadFile()` & `file.WriteFile()` now support taking an advisory lock on
+  Linux and MacOS
+- `acton` now takes a project lock before compiling to avoid races
+
 ## Changed
 - Use `OSError` instead of `RuntimeError` for general exceptions in the `file`
   module functions and classes
 
-### Testing / CI
+### Testing / CI / Build
+- Stopped building the vendored libraries we ship, they are now shipped as
+  source and compiled on demand
+- Simplify actondb build
 - Add dependabot config for updating GitHub Actions workflows
 
 
