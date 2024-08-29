@@ -1,4 +1,8 @@
 ```bob
+
+                                        A Guide to
+
+
                   .---.                        .-.
                  /     \                       | |
                 /   _   \          .----.   .--' '--.      .----.     .-..-----.
@@ -9,16 +13,12 @@
            /   /         \   \    \ '--' /     \ '-' /    \ '--' /    | |     | |
           '---'           `---'    '----'       '---'      '----'     '-'     '-'
      
+
+
        -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-     
-                                       by Example
+
 ```
 
-[Acton][acton] is a general purpose programming language designed to be useful for a wide range of applications. It provides a persistent programming environment, alleviating the need for manually persisting program state and can run in a distributed mode for fault tolerance and scaling.
+Acton is a **advanced** general purpose programming language offering **functional** and **object-oriented** style of programming based on the **actor**-model and async I/O. **Type safe** and with **capabilities based** security, Acton is **statically compiled** for **high performance** and **portability**. In other words, pretty much *perfect* ;) We hope you enjoy it as much as we do. It's readily available to build anything from advanced "shell scripts" to low level databases.
 
-Acton by Example is a collection of runnable examples that illustrate various Acton concepts. Follow along by [installing Acton locally][install].
-
-Some previous experience with programming languages is probably helpful.
-
-[acton]: https://www.acton-lang.org/
-[install]: https://www.acton-lang.org/install
+Unique among programming languages, Acton offers **orthogonal persistence**, which means you don't have to think about how to persist data, or rather the state of your program, for durability. Acton will do it for you, using its fault-tolerant distribute database. Pretty damn cool!

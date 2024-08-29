@@ -1,3 +1,5 @@
+**/.build/sys/*
+
 *~
 *.o
 *.a
@@ -44,7 +46,9 @@ debian/files
 deps/*
 deps-download
 
-dist
+dist/*
+
+builder/deps/*
 
 examples/*
 !examples/*.*
@@ -66,3 +70,6 @@ test/**/*.log
 # tests organized as acton projects; ignore all but source
 test/*/*/out/**
 test/*/*/build.sh
+
+
+**/.build/sys/*
