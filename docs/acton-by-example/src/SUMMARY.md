@@ -2,6 +2,7 @@
 
 - [Getting started](index.md)
   - [Hello World](hello.md)
+  - [Installation](installation.md)
   - [Acton scripts](hello/shebang.md)
     <!-- - [Program Arguments](hello/args.md) -->
   - [Acton Projects](projects.md)
