@@ -58,7 +58,7 @@ def lookup_aaaa(cap: DNSCap, name: str, on_resolve: action(list[str]) -> None, o
     _lookup_aaaa(name, on_resolve, on_error)
 
 
-actor TCPConnection(cap: TCPConnectCap, address: str, port: int, on_connect: action(TCPConnection) -> None, on_receive: action(TCPConnection, bytes) -> None, on_error: action(TCPConnection, str) -> None, connect_timeout: float=10.0):
+actor TCPConnection(cap: TCPConnectCap, address: str, port: int, on_connect: action(TCPConnection) -> None, on_receive: action(TCPConnection, bytes) -> None, on_error: action(TCPConnection, str) -> None, on_remote_close: ?action(TCPListenConnection) -> None, connect_timeout: float=10.0):
     """TCP IP Connection"""
     var _a_res: list[str] = []
     var _aaaa_res: list[str] = []
@@ -244,16 +244,18 @@ actor TCPListenConnection(cap: _TCPListenConnectCap, server_client: int):
     var client: int = -1
     var on_receive: ?action(TCPListenConnection, bytes) -> None = None
     var on_error: ?action(TCPListenConnection, str) -> None = None
+    var on_remote_close: ?action(TCPListenConnection) -> None = None
     var _initialized = False
 
     proc def _read_start():
         """Implementation internal"""
         NotImplemented
 
-    action def cb_install(new_on_receive: action(TCPListenConnection, bytes) -> None, new_on_error: action(TCPListenConnection, str) -> None) -> None:
+    action def cb_install(new_on_receive: action(TCPListenConnection, bytes) -> None, new_on_error: action(TCPListenConnection, str) -> None, new_on_remote_close: ?action(TCPListenConnection) -> None) -> None:
         """Install callback handlers"""
         on_receive = new_on_receive
         on_error = new_on_error
+        on_remote_close = new_on_remote_close
         if not _initialized:
             _read_start()
             _initialized = True
@@ -290,7 +292,7 @@ actor TCPListener(cap: TCPListenCap, address: str, port: int, on_error: action(T
         NotImplemented
     _init()
 
-actor TLSConnection(cap: TCPConnectCap, address: str, port: int, on_connect: action(TLSConnection) -> None, on_receive: action(TLSConnection, bytes) -> None, on_error: action(TLSConnection, str) -> None, verify_tls: bool=True):
+actor TLSConnection(cap: TCPConnectCap, address: str, port: int, on_connect: action(TLSConnection) -> None, on_receive: action(TLSConnection, bytes) -> None, on_error: action(TLSConnection, str) -> None, on_remote_close: ?action(TCPListenConnection) -> None, verify_tls: bool=True):
     # TODO: support hostname/CN mismatch, good when connecting with IP address?
     # TODO: do DNS lookup in Acton
     # TODO: support ALPN

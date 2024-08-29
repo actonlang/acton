@@ -456,11 +456,11 @@ actor Client(cap: net.TCPConnectCap, address: str, on_connect: action(Client) ->
         if scheme == "http":
             _log.verbose("Using http scheme and port 80", None)
             tcp_port = port if port is not None else 80
-            tcp_conn = net.TCPConnection(cap, address, tcp_port, _on_tcp_connect, _on_tcp_receive, _on_tcp_error, connect_timeout=10.0)
+            tcp_conn = net.TCPConnection(cap, address, tcp_port, _on_tcp_connect, _on_tcp_receive, _on_tcp_error, None, connect_timeout=10.0)
         elif scheme == "https":
             _log.verbose("Using https scheme and port 443", None)
             tls_port = port if port is not None else 443
-            tls_conn = net.TLSConnection(cap, address, tls_port, _on_tls_connect, _on_tls_receive, _on_tls_error, tls_verify)
+            tls_conn = net.TLSConnection(cap, address, tls_port, _on_tls_connect, _on_tls_receive, _on_tls_error, None, tls_verify)
         else:
             raise ValueError("Only http and https schemes are supported. Unsupported scheme: %s" % scheme)
 
