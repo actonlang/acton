@@ -425,7 +425,9 @@ jobs:
           rm -rf out
           acton test perf
 
-  test-external-projects:
+  # Telemetrify is the largest application written in Acton, we want to make
+  # sure we don't break it..
+  test-telemetrify:
     needs: build-debs
     runs-on: ubuntu-latest
     container:
@@ -436,7 +438,7 @@ jobs:
         with:
           path: |
             ~/.cache/acton/
-          key: test-external-projects
+          key: test-telemetrify
       - name: "Download .deb files"
         uses: actions/download-artifact@v3
         with:
@@ -456,7 +458,7 @@ jobs:
       - name: "Compile acton program"
         run: |
           cd telemetrify
-          acton build
+          make build
           cd tests/nso-replay
           make start
           make test
