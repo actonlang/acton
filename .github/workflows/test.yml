@@ -459,6 +459,7 @@ jobs:
         run: |
           cd telemetrify
           make build
+          make test
           cd tests/nso-replay
           make start
           make test
