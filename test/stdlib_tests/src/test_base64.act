@@ -1,0 +1,11 @@
+import base64
+
+import testing
+
+def _test_base64():
+    i = "foobar"
+    for a in range(1000):
+        e = base64.encode(i)
+        #testing.assertEqual(e, "Zm9vYmFy")
+        d = base64.decode(e)
+        testing.assertEqual(i, d)

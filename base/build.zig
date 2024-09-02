@@ -223,6 +223,7 @@ pub fn build(b: *std.Build) void {
     const libActon = b.addStaticLibrary(.{
         .name = "Acton",
         .target = target,
+        .root_source_file = b.path("__root.zig"),
         .optimize = optimize,
     });
     for (c_files.items) |entry| {
@@ -268,4 +269,16 @@ pub fn build(b: *std.Build) void {
     libActon.linkLibC();
     libActon.linkLibCpp();
     b.installArtifact(libActon);
+
+    const base_tests = b.addTest(.{
+        .root_source_file = b.path("acton.zig"),
+        .optimize = optimize,
+    });
+    base_tests.addIncludePath(.{ .cwd_relative = buildroot_path });
+    base_tests.linkLibrary(dep_libbsdnt.artifact("bsdnt"));
+    base_tests.linkLibrary(dep_libgc.artifact("gc"));
+    base_tests.linkLibC();
+    const run_base_tests = b.addRunArtifact(base_tests);
+    const test_step = b.step("test", "Run tests");
+    test_step.dependOn(&run_base_tests.step);
 }
