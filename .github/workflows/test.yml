@@ -284,12 +284,12 @@ jobs:
           system_profiler SPHardwareDataType
       - name: "Download artifacts for Macos x86_64, built on macos-12"
         if: ${{ matrix.os != 'macos-14' }}
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4.1.7
         with:
           name: acton-macos-12-x86_64
       - name: "Download artifacts for Macos arm64, built on macos-14"
         if: ${{ matrix.os == 'macos-14' }}
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4.1.7
         with:
           name: acton-macos-14-aarch64
       - name: "Extract acton"
@@ -344,7 +344,7 @@ jobs:
           env
           cat /proc/cpuinfo
       - name: "Download .deb files"
-        uses: actions/download-artifact@v3 # Ubuntu 18.04 doesn't support v4 which uses Node 20 which depends on glibc 2.28
+        uses: actions/download-artifact@v4.1.7 # Ubuntu 18.04 doesn't support v4 which uses Node 20 which depends on glibc 2.28
         with:
           name: acton-debs
       - name: "Install acton from .deb"
@@ -409,7 +409,7 @@ jobs:
           cd ../perf
           acton test perf --record
       - name: "Download .deb files"
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4.1.7
         with:
           name: acton-debs
       - name: "Install acton from .deb"
@@ -440,7 +440,7 @@ jobs:
             ~/.cache/acton/
           key: test-telemetrify
       - name: "Download .deb files"
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4.1.7
         with:
           name: acton-debs
       - name: "Install acton from .deb"
@@ -486,15 +486,15 @@ jobs:
       - name: "Check out repository code"
         uses: actions/checkout@v4
       - name: "Download artifacts for Macos x86_64, built on macos-12"
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4.1.7
         with:
           name: acton-macos-12-x86_64
       - name: "Download artifacts for Linux x86_64, built on Debian:12"
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4.1.7
         with:
           name: acton-debian-12
       - name: "Download artifacts for Debian Linux x86_64"
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4.1.7
         with:
           name: acton-debs
       - name: "List downloaded artifacts"
@@ -551,15 +551,15 @@ jobs:
       - name: "Check out repository code"
         uses: actions/checkout@v4
       - name: "Download artifacts for Macos, built on macos-12"
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4.1.7
         with:
           name: acton-macos-12-x86_64
       - name: "Download artifacts for Linux, built on Debian:12"
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4.1.7
         with:
           name: acton-debian-12
       - name: "Download artifacts for Debian Linux"
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4.1.7
         with:
           name: acton-debs
       - name: "List downloaded artifacts"
@@ -603,7 +603,7 @@ jobs:
           path: apt
           ssh-key: ${{ secrets.APT_DEPLOY_KEY }}
       - name: "Download artifacts for Debian Linux"
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4.1.7
         with:
           name: acton-debs
       - name: "Get the version"
@@ -648,7 +648,7 @@ jobs:
           path: apt
           ssh-key: ${{ secrets.APT_TIP_DEPLOY_KEY }}
       - name: "Download artifacts for Debian Linux"
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4.1.7
         with:
           name: acton-debs
       - name: "Get the version"
