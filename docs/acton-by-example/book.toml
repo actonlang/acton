@@ -22,8 +22,12 @@ stroke_width = 2.0
 stroke_color = "var(--fg)" # see default theme / variables.css
 background_color = "transparent" # also useful `var(--bg)`
 
+[preprocessor.admonish]
+command = "mdbook-admonish"
+assets_version = "3.0.2" # do not edit: managed by `mdbook-admonish install`
+
 [output.html]
-additional-css = ["svgbob.css", "theme/tabs.css"]
+additional-css = ["svgbob.css", "theme/tabs.css", "./mdbook-admonish.css"]
 additional-js = ["theme/tabs.js"]
 
 [output.html.fold]
