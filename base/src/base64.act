@@ -1,0 +1,5 @@
+def encode(data: str) -> str:
+    NotImplemented
+
+def decode(data: str) -> str:
+    NotImplemented
