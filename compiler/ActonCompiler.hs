@@ -139,6 +139,8 @@ cleanup opts paths = do
     -- Need platform free path separators
     removeFile (joinPath [projPath paths, ".actonc.lock"])
       `catch` handleNotExists
+    removeFile (joinPath [projPath paths, ".build", "sys"])
+      `catch` handleNotExists
     iff (not (C.keepbuild opts)) $ do
       removeFile (joinPath [projPath paths, "build.zig"])
         `catch` handleNotExists
