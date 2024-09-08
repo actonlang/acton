@@ -409,9 +409,6 @@ clean-all: clean clean-compiler
 clean-base:
 	rm -rf base/out builder/builder* builder/zig-cache builder/zig-out
 
-bin/acton: cli/out/bin/acton
-	cp -a $< $@
-
 cli/out/bin/acton: distribution1
 	cd cli && $(ACTC) build $(ACTONC_TARGET)
 
@@ -435,7 +432,7 @@ dist/base: base base/.build base/__root.zig base/acton.zig base/build.zig base/b
 	cp -a base/__root.zig base/Acton.toml base/acton.zig base/build.zig base/build.zig.zon base/builtin base/rts base/src base/stdlib dist/base/
 	cp -a base/out/types dist/base/out/
 
-dist/bin/acton: bin/acton
+dist/bin/acton: cli/out/bin/acton
 	@mkdir -p $(dir $@)
 	cp -a $< $@.tmp
 	mv $@.tmp $@
