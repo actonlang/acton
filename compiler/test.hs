@@ -178,17 +178,17 @@ crossCompileTests =
   testGroup "cross-compilation tests"
   [
     testCase "build hello --target aarch64-macos-none --db" $ do
-        runActon "build --target aarch64-macos-none --db" ExitSuccess False "../test/compiler/hello/"
+        runActon "build --target aarch64-macos-none --db" ExitSuccess False "../test/compiler/hello_aarch64-macos-none/"
   , testCase "build hello --target aarch64-windows-gnu" $ do
-        runActon "build --target aarch64-windows-gnu" ExitSuccess False "../test/compiler/hello/"
+        runActon "build --target aarch64-windows-gnu" ExitSuccess False "../test/compiler/hello_aarch64-windows-gnu/"
   , testCase "build hello --target x86_64-macos-none --db" $ do
-        runActon "build --target x86_64-macos-none --db" ExitSuccess False "../test/compiler/hello/"
+        runActon "build --target x86_64-macos-none --db" ExitSuccess False "../test/compiler/hello_x86_64-macos-none/"
   , testCase "build hello --target x86_64-linux-gnu.2.27 --db" $ do
-        runActon "build --target x86_64-linux-gnu.2.27 --db" ExitSuccess False "../test/compiler/hello/"
+        runActon "build --target x86_64-linux-gnu.2.27 --db" ExitSuccess False "../test/compiler/hello_x86_64-linux-gnu.2.27/"
   , testCase "build hello --target x86_64-linux-musl --db" $ do
-        runActon "build --target x86_64-linux-musl --db" ExitSuccess False "../test/compiler/hello/"
+        runActon "build --target x86_64-linux-musl --db" ExitSuccess False "../test/compiler/hello_x86_64-linux-musl/"
   , testCase "build hello --target x86_64-windows-gnu" $ do
-        runActon "build --target x86_64-windows-gnu" ExitSuccess False "../test/compiler/hello/"
+        runActon "build --target x86_64-windows-gnu" ExitSuccess False "../test/compiler/hello_x86_64-windows-gnu/"
   ]
 
 -- Creates testgroup from .act files found in specified directory
