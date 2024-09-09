@@ -170,6 +170,11 @@ void netQ_TCPConnection__on_receive(uv_stream_t *stream, ssize_t nread, const uv
     if (nread < 0){
         if (nread == UV_EOF) {
             uv_close((uv_handle_t *)stream, NULL);
+            netQ_TCPConnection self = stream->data;
+            if (self->on_remote_close) {
+                $action f = ($action)self->on_remote_close;
+                f->$class->__asyn__(f, self);
+            }
         }
     } else if (nread > 0) {
         if (stream->data) {
@@ -507,6 +512,11 @@ void netQ_TCPListenConnection__on_receive(uv_stream_t *stream, ssize_t nread, co
     if (nread < 0){
         if (nread == UV_EOF) {
             uv_close((uv_handle_t *)stream, NULL);
+            netQ_TCPListenConnection self = stream->data;
+            if (self->on_remote_close) {
+                $action f = ($action)self->on_remote_close;
+                f->$class->__asyn__(f, self);
+            }
         }
     } else if (nread > 0) {
         if (stream->data) {
@@ -604,6 +614,10 @@ void tls_on_receive(uv_stream_t *stream, ssize_t nread, const uv_buf_t* buf) {
     } else if (nread == UV_EOF) {
         log_debug("TLS connection closed %p", stream);
         tls_close((tlsuv_stream_t *)stream);
+        if (self->on_remote_close) {
+            $action f = ($action)self->on_remote_close;
+            f->$class->__asyn__(f, self);
+        }
     }
     else if (nread < 0) {
         log_debug("TLS read error %ld: %s", nread, uv_strerror((int) nread));

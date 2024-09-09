@@ -1,0 +1,115 @@
+import logging
+import net
+import random
+import testing
+
+actor test_tcp_client_side_close(report_result, env, log_handler: logging.Handler):
+    log = logging.Logger(log_handler)
+    test_payload = b"Stay a while and listen."
+    address = "127.0.0.1"
+    port = random.randint(10000, 40000)
+    tcp_cap = net.TCPCap(net.NetCap(env.cap))
+
+    recv_buf: list[bytes] = []
+
+    var client = None
+
+    def on_server_receive(s, payload):
+        recv_buf.append(payload)
+
+    def on_server_error(s, errmsg):
+        log.error(errmsg)
+        report_result(False, AssertionError("server error: " + errmsg))
+
+    def on_server_remote_close(s):
+        try:
+            testing.assertEqual(test_payload, bytes([]).join(recv_buf), "Did not receive expected data before remote close event")
+        except AssertionError as ex:
+            report_result(False, ex)
+        except Exception as ex:
+            report_result(None, ex)
+        else:
+            report_result(True, None)
+
+    def on_listen_error(l, errmsg):
+        log.error(errmsg)
+        report_result(False, AssertionError("listen error: " + errmsg))
+
+    def on_listen_accept(s):
+        s.cb_install(on_server_receive, on_server_error, on_server_remote_close)
+
+    def _connect_client():
+        client = net.TCPConnection(net.TCPConnectCap(tcp_cap), address, port, on_connect, on_receive, on_error)
+
+    def on_connect(c):
+        c.write(test_payload)
+        c.close(lambda c: None)
+
+    def on_receive(c, payload):
+        pass
+
+    def on_error(c, errmsg):
+        # Retry since server might not be up yet
+        after 0.1: _connect_client()
+
+    server = net.TCPListener(net.TCPListenCap(tcp_cap), address, port, on_listen_error, on_listen_accept)
+    _connect_client()
+
+def _test_tcp_client_side_close(report_result: action(?bool, ?Exception) -> None , env: Env, log_handler: logging.Handler):
+    test_tcp_client_side_close(report_result, env, log_handler)
+
+actor test_tcp_server_side_close(report_result, env, log_handler: logging.Handler):
+    log = logging.Logger(log_handler)
+    test_payload = b"Stay a while and listen."
+    address = "127.0.0.1"
+    port = random.randint(10000, 40000)
+    tcp_cap = net.TCPCap(net.NetCap(env.cap))
+
+    recv_buf: list[bytes] = []
+
+    var client = None
+
+    def on_server_receive(s, payload):
+        pass
+
+    def on_server_error(s, errmsg):
+        log.error(errmsg)
+        report_result(False, AssertionError("server error: " + errmsg))
+
+    def on_listen_error(l, errmsg):
+        log.error(errmsg)
+        report_result(False, AssertionError("listen error: " + errmsg))
+
+    def on_listen_accept(s):
+        s.cb_install(on_server_receive, on_server_error, None)
+        s.write(test_payload)
+        s.close()
+
+    def _connect_client():
+        client = net.TCPConnection(net.TCPConnectCap(tcp_cap), address, port, on_connect, on_receive, on_error, on_remote_close)
+
+    def on_connect(c):
+        pass
+
+    def on_receive(c, payload):
+        recv_buf.append(payload)
+
+    def on_error(c, errmsg):
+        # Retry since server might not be up yet
+        after 0.1: _connect_client()
+
+    def on_remote_close(c):
+        try:
+            testing.assertEqual(test_payload, bytes([]).join(recv_buf), "Did not receive expected data before remote close event")
+        except AssertionError as ex:
+            report_result(False, ex)
+        except Exception as ex:
+            report_result(None, ex)
+        else:
+            report_result(True, None)
+
+    server = net.TCPListener(net.TCPListenCap(tcp_cap), address, port, on_listen_error, on_listen_accept)
+    _connect_client()
+
+def _test_tcp_server_side_close(report_result: action(?bool, ?Exception) -> None , env: Env, log_handler: logging.Handler):
+    test_tcp_server_side_close(report_result, env, log_handler)
