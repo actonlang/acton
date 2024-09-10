@@ -266,7 +266,9 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
             # Does deps/X exist?
             hash = dep.hash
             path = dep.path
-            if hash is not None:
+            if path is not None:
+                pass
+            elif hash is not None:
                 if dep_name not in deps_dir:
                     print("Copying", dep_name, "from zig global cache")
                     try:
@@ -277,10 +279,8 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
                     dst = file.join_path([fs.cwd(), ".build", "deps", dep_name])
                     print("Copying", src, "to", dst)
                     await async fs.copytree(src, dst)
-            elif path is not None:
-                pass
             else:
-                raise ValueError("Dependency %s has no hash" % dep_name)
+                raise ValueError("Dependency %s has no hash or path set" % dep_name)
         build_deps()
 
     def on_zig_fetch_error(error):
