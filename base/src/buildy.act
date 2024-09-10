@@ -121,6 +121,9 @@ class Dependency(object):
         hash = self.hash
         if hash is not None:
             res["hash"] = hash
+        path = self.path
+        if path is not None:
+            res["path"] = path
         return res
 
     def to_zon(self) -> str:
