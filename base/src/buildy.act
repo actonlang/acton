@@ -1,10 +1,21 @@
 import json
+import re
 
 """Buildy stuff
 
 Our projects have a built.act and it collides with this module if it would be
 called just 'build', so it's buildy for buildy stuff.
 """
+
+class BuildConfigError(ValueError):
+    pass
+
+def zig_safe_name(name: str) -> str:
+    m = re.match(r"^[a-zA-Z][a-zA-Z0-9_]*$", name)
+    if m is None:
+        raise BuildConfigError("Invalid dependency name '%s', must start with a letter and only contain letters, numbers and underscores" % name)
+    return name
+
 
 class BuildConfig(object):
     """Build configuration, the content of build.act.json
@@ -75,7 +86,7 @@ class Dependency(object):
     path: ?str
 
     def __init__(self, name: str, url: ?str, hash: ?str, path: ?str):
-        self.name = name
+        self.name = zig_safe_name(name)
         self.url = url
         self.hash = hash
         self.path = path
@@ -136,7 +147,7 @@ class ZigDependency(object):
     artifacts: list[str]
 
     def __init__(self, name: str, url: ?str, hash: ?str, options: dict[str, str], artifacts: list[str]):
-        self.name = name
+        self.name = zig_safe_name(name)
         self.url = url
         self.hash = hash
         self.options = options
@@ -204,25 +215,25 @@ def gen_buildzig(template: str, build_config: BuildConfig) -> str:
     liblink_lines = ""
     exelink_lines = ""
 
-    for dep_name, dep in build_config.dependencies.items():
-        deps_defs += "    const actdep_%s = b.dependency(\"%s\", .{\n" % (dep_name, dep_name)
+    for dep in build_config.dependencies.values():
+        deps_defs += "    const actdep_%s = b.dependency(\"%s\", .{\n" % (dep.name, dep.name)
         deps_defs += "        .target = target,\n"
         deps_defs += "        .optimize = optimize,\n"
         deps_defs += "    });\n"
-        liblink_lines += " "*4  + "libActonProject.linkLibrary(actdep_%s.artifact(\"ActonProject\"));\n" % (dep_name)
-        exelink_lines += " "*12 + "executable.linkLibrary(actdep_%s.artifact(\"ActonProject\"));\n" % (dep_name)
+        liblink_lines += " "*4  + "libActonProject.linkLibrary(actdep_%s.artifact(\"ActonProject\"));\n" % (dep.name)
+        exelink_lines += " "*12 + "executable.linkLibrary(actdep_%s.artifact(\"ActonProject\"));\n" % (dep.name)
 
     for dep_name, dep in build_config.zig_dependencies.items():
         if len(dep.artifacts) > 0:
-            deps_defs += "    const dep_%s = b.dependency(\"%s\", .{\n" % (dep_name, dep_name)
+            deps_defs += "    const dep_%s = b.dependency(\"%s\", .{\n" % (dep.name, dep.name)
             deps_defs += "        .target = target,\n"
             deps_defs += "        .optimize = optimize,\n"
             for key, value in dep.options.items():
                 deps_defs += "        .%s = %s,\n" % (key, value)
             deps_defs += "    });\n"
             for artifact in dep.artifacts:
-                liblink_lines += " "*4  + "libActonProject.linkLibrary(dep_%s.artifact(\"%s\"));\n" % (dep_name, artifact)
-                exelink_lines += " "*12 + "executable.linkLibrary(dep_%s.artifact(\"%s\"));\n" % (dep_name, artifact)
+                liblink_lines += " "*4  + "libActonProject.linkLibrary(dep_%s.artifact(\"%s\"));\n" % (dep.name, artifact)
+                exelink_lines += " "*12 + "executable.linkLibrary(dep_%s.artifact(\"%s\"));\n" % (dep.name, artifact)
 
     res = []
     for line in template.split("\n"):

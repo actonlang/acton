@@ -305,6 +305,9 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
             build_config = read_buildconfig()
         except FileNotFoundError:
             pass
+        except ValueError as e:
+            print("ERROR:", e.error_message)
+            await async env.exit(1)
 
         write_buildzig(file.FileCap(env.cap), build_config)
         ZigFetchDeps(env, build_config, check_deps, on_zig_fetch_error)
@@ -732,6 +735,11 @@ actor CmdPkgAdd(env, args):
     # same as the one we just fetched. If it is, we do nothing. If it is not,
 
     dep_name = args.get_str("name")
+    try:
+        zig_safe_name(dep_name)
+    except ValueError as e:
+        print("ERROR:", e)
+        env.exit(1)
     dep_url = args.get_str("url")
 
     def get_build_config():
@@ -788,6 +796,11 @@ actor CmdPkgRemove(env, args):
     zig = file.join_path([base_path(file.FileCap(env.cap)), "zig", "zig"])
 
     dep_name = args.get_str("name")
+    try:
+        zig_safe_name(dep_name)
+    except ValueError as e:
+        print("ERROR:", e)
+        env.exit(1)
 
     def get_build_config():
         try:
@@ -830,6 +843,11 @@ actor CmdZigPkgAdd(env, args):
     # same as the one we just fetched. If it is, we do nothing. If it is not,
 
     dep_name = args.get_str("name")
+    try:
+        zig_safe_name(dep_name)
+    except ValueError as e:
+        print("ERROR:", e)
+        env.exit(1)
     dep_url = args.get_str("url")
     dep_artifacts = args.get_strlist("artifact")
 
@@ -887,6 +905,11 @@ actor CmdZigPkgRemove(env, args):
     zig = file.join_path([base_path(file.FileCap(env.cap)), "zig", "zig"])
 
     dep_name = args.get_str("name")
+    try:
+        zig_safe_name(dep_name)
+    except ValueError as e:
+        print("ERROR:", e)
+        env.exit(1)
 
     def get_build_config():
         try:
