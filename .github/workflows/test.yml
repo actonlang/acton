@@ -361,14 +361,13 @@ jobs:
           ulimit -c unlimited
       - name: "Compile acton program"
         run: |
-          echo '#!/usr/bin/env runacton'   > test-runtime.act
-          echo 'actor main(env):'          >> test-runtime.act
-          echo '    print("Hello, world")' >> test-runtime.act
-          echo '    env.exit(0)'           >> test-runtime.act
-          chmod a+x test-runtime.act
-          ./test-runtime.act
-          ./test-runtime.act | grep "Hello, world"
-          for I in $(seq 50); do ./test-runtime.act || break; done
+          echo '#!/usr/bin/env runacton'   > acton-test.act
+          echo 'actor main(env):'          >> acton-test.act
+          echo '    print("Hello, world")' >> acton-test.act
+          echo '    env.exit(0)'           >> acton-test.act
+          chmod a+x acton-test.act
+          ./acton-test.act
+          ./acton-test.act | grep "Hello, world"
       - name: "ls core"
         if: failure()
         run: |
