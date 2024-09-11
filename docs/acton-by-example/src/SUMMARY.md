@@ -67,5 +67,7 @@
     - [Local Dependencies](pkg/local_dependencies.md)
     - [Remove Dependency](pkg/remove_dependency.md)
     - [Fetch Deps / Airplane mode](pkg/fetch_dependencies.md)
-  - [C / C++ / Zig dependencies](zig_dependencies.md)
+  - [Zig / C / C++ dependencies](zig_dependencies.md)
+- [Working with Zig / C / C++](working_with_zig.md)
+  - [Integrating a C library (zlib)](ext/integrating_c_library.md)
 - [Run Time System](rts.md)
