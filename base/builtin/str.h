@@ -96,6 +96,9 @@ struct B_bytes {
 
 B_bytes to$bytes(char *str);
 B_bytes to$bytesD_len(char *str, int len);
+B_bytes actBytesFromCString(char *str);
+B_bytes actBytesFromCStringNoCopy(char *str);
+B_bytes actBytesFromCStringLength(char *str, int len);
 unsigned char *fromB_bytes(B_bytes b);
 
 

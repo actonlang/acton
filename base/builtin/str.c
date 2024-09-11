@@ -2399,6 +2399,29 @@ B_bytes to$bytesD_len(char *str, int len) {
     return res;
 }
 
+B_bytes actBytesFromCString(char *str) {
+    B_bytes res;
+    int len = strlen(str);
+    NEW_UNFILLED_BYTES(res,len);
+    memcpy(res->str,str,len);
+    return res;
+}
+
+B_bytes actBytesFromCStringNoCopy(char *str) {
+    B_bytes res = acton_malloc(sizeof(struct B_bytes));
+    res->$class = &B_bytesG_methods;
+    res->nbytes = strlen(str);
+    res->str = str;
+    return res;
+}
+
+B_bytes actBytesFromCStringLength(char *str, int len) {
+    B_bytes res;
+    NEW_UNFILLED_BYTES(res, len);
+    memcpy(res->str, str, len);
+    return res;
+}
+
 unsigned char *fromB_bytes(B_bytes b) {
     return b->str;
 }
