@@ -32,7 +32,6 @@ import qualified Acton.LambdaLifter
 import qualified Acton.Boxing
 import qualified Acton.CodeGen
 import qualified Acton.Builtin
-import qualified Acton.Builder
 import Utils
 import qualified Pretty
 import qualified InterfaceFiles
@@ -844,41 +843,6 @@ runZig opts zigCmd paths wd = do
           cleanup opts paths
           System.Exit.exitFailure
 
--- We need to generate a build.zig.zon file for this project. The starting point
--- is the generic one, stored in Acton.Builder.buildzigzon that includes all the
--- dependencies of Acton base. We need to inject the dependencies of the project
--- we are compiling into the .dependencies section. We get the dependencies by
--- listing the 'deps/' directory of the project we are compiling. Since we can't
--- parse and modify .zon files, we treat it as text and inject the dependencies
--- manually.
-
--- Shortened example of the input build.zig.zon that we have in
--- Acton.Builder.buildzigzon:
---
--- .{
---     .name = "actonproject",
---     .version = "0.0.0",
---     .dependencies = .{
---         .actondb = .{
---             .path = ".build/sys/backend/",
---         },
---         .base = .{
---             .path = ".build/sys/base/",
---         },
---     },
---     .paths = .{""},
--- }
---
--- We need to inject the project dependencies in to the .dependencies section.
--- The dependencies are in the paths record in the field projDeps
-genBuildZigZon :: Paths -> String
-genBuildZigZon paths =
-    newBuildZigZon
-  where deps = map (\d -> "        ." ++ d ++ " = .{\n            .path = \".build/deps/" ++ d ++ "/\",\n        },") (projDeps paths)
-        depsStr = intercalate "\n" deps
-        buildZigZon = Acton.Builder.buildzigzon
-        newBuildZigZon = replace ".dependencies = .{" (".dependencies = .{\n" ++ depsStr) buildZigZon
-
 zigBuild :: Acton.Env.Env0 -> C.CompileOptions -> Paths -> [CompileTask] -> [BinTask] -> IO ()
 zigBuild env opts paths tasks binTasks = do
     mapM (writeRootC env opts paths) binTasks
@@ -901,7 +865,6 @@ zigBuild env opts paths tasks binTasks = do
                            ("x86_64":_:_)        -> " -Dcpu=westmere "
                            (_:_:_)               -> ""
         buildZigPath = joinPath [projPath paths, "build.zig"]
-        buildZigZonPath = joinPath [projPath paths, "build.zig.zon"]
 
     -- Create .build directory if it doesn't exist
     createDirectoryIfMissing True (joinPath [projPath paths, ".build"])
@@ -910,17 +873,7 @@ zigBuild env opts paths tasks binTasks = do
       `catch` handleNotExists
     createDirectoryLink (sysPath paths) (joinPath [projPath paths, ".build", "sys"])
 
-    -- Write our build.zig and build.zig.zon files
-    buildZigExists <- doesFileExist $ projPath paths ++ "/build.zig"
-    iff (not (isTmp paths)) (do
-      buildZigExists <- doesFileExist buildZigPath
-      iff (not buildZigExists) (writeFile buildZigPath (Acton.Builder.buildzig))
-      -- We need to generate a build.zig.zon file for this project unless it already exists
-      buildZigZonExists <- doesFileExist buildZigZonPath
-      iff (not buildZigZonExists) (writeFile buildZigZonPath (genBuildZigZon paths))
-      )
-
-
+    buildZigExists <- doesFileExist buildZigPath
     let zigCmdBase =
           if buildZigExists
             then zig paths ++ " build " ++

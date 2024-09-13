@@ -33,7 +33,6 @@ builder/builder
 builder/build_runner.zig
 builder/zig-cache
 
-compiler/Acton/Builder.hs
 compiler/actonc
 compiler/package.yaml
 compiler/tests/*.ty
