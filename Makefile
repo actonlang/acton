@@ -125,18 +125,11 @@ ACTONC_TEST_HS=$(wildcard compiler/tests/*.hs)
 ACTONC_HS=$(filter-out $(ACTONC_TEST_HS),$(ACTONC_ALL_HS))
 # NOTE: we're unsetting CC & CXX to avoid using zig cc & zig c++ for stack /
 # ghc, which doesn't seem to work properly
-compiler/actonc: compiler/package.yaml.in compiler/stack.yaml dist/builder $(ACTONC_HS) compiler/Acton/Builder.hs
+compiler/actonc: compiler/package.yaml.in compiler/stack.yaml dist/builder $(ACTONC_HS)
 	cd compiler && unset CC && unset CXX && unset CFLAGS && stack build --dry-run 2>&1 | grep "Nothing to build" || \
 		(sed 's,^version:.*,version:      "$(VERSION_INFO)",' < package.yaml.in > package.yaml \
 		&& stack build $(STACK_OPTS) --ghc-options='-j4 $(ACTC_GHC_OPTS)' \
 		&& stack --local-bin-path=. install 2>/dev/null)
-
-compiler/Acton/Builder.hs: builder/build.zig builder/build.zig.zon
-# We need to generate a Haskell file from the zig file, so we can include it in the compiler
-# Make sure to escape the double quotes in the zig file and replace them with \" in the Haskell file. We also need to handle newlines since Haskell strings what newlines to be escaped.
-	(echo 'module Acton.Builder where'; \
-		echo '\nbuildzig :: String'; /bin/echo -n 'buildzig = "'; cat builder/build.zig | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/$$/\\n/' | tr -d '\n'; echo '"'; \
-		echo '\nbuildzigzon :: String'; /bin/echo -n 'buildzigzon = "'; cat builder/build.zig.zon | sed -e 's/"/\\"/g' -e 's/$$/\\n/' | tr -d '\n'; echo '"') > compiler/Acton/Builder.hs
 
 .PHONY: clean-compiler
 clean-compiler:
@@ -398,7 +391,6 @@ test-stdlib: dist/bin/acton
 
 .PHONY: clean clean-all clean-base
 clean: clean-cli clean-distribution clean-base
-	rm -rf compiler/Acton/Builder.hs
 
 clean-cli:
 	rm -rf cli/out
