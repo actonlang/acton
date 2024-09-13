@@ -190,6 +190,14 @@ jobs:
           export DEBIAN_FRONTEND=noninteractive
           apt-get update
           apt-get install -qy bzip2 curl g++ gdb haskell-stack make procps zlib1g-dev
+      - name: "locale en_US.UTF-8"
+        run: |
+          apt-get install -qy locales
+          locale-gen en_US.UTF-8
+          echo "locales locales/default_environment_locale select en_US.UTF-8" | debconf-set-selections
+          echo "locales locales/locales_to_be_generated multiselect en_US.UTF-8 UTF-8" | debconf-set-selections
+          rm "/etc/locale.gen"
+          dpkg-reconfigure --frontend noninteractive locales
       - name: "Upgrade stack on old distributions"
         if: ${{ (matrix.os == 'ubuntu' && (matrix.version == '20.04' || matrix.version == '22.04')) || (matrix.os == 'debian' && matrix.version == '11') }}
         run: |
@@ -248,6 +256,14 @@ jobs:
           apt-get update
           apt-get install -qy bzip2 curl g++ haskell-stack make procps zlib1g-dev
           apt-get install -qy bash-completion build-essential debhelper devscripts
+      - name: "locale en_US.UTF-8"
+        run: |
+          apt-get install -qy locales
+          locale-gen en_US.UTF-8
+          echo "locales locales/default_environment_locale select en_US.UTF-8" | debconf-set-selections
+          echo "locales locales/locales_to_be_generated multiselect en_US.UTF-8 UTF-8" | debconf-set-selections
+          rm "/etc/locale.gen"
+          dpkg-reconfigure --frontend noninteractive locales
       - name: "Upgrade stack on old distributions"
         if: ${{ (matrix.os == 'ubuntu' && (matrix.version == '20.04' || matrix.version == '22.04')) || (matrix.os == 'debian' && matrix.version == '11') }}
         run: |
