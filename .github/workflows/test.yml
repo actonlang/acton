@@ -161,6 +161,9 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: ${{ matrix.os }}:${{ matrix.version }}
+    env:
+      LANG: en_US.UTF-8
+      LC_ALL: en_US.UTF-8
     steps:
       - name: "Show platform and environment"
         run: |
@@ -220,6 +223,9 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: debian:12
+    env:
+      LANG: en_US.UTF-8
+      LC_ALL: en_US.UTF-8
     steps:
       - name: "Show platform and environment"
         run: |
