@@ -183,7 +183,7 @@ instance Norm Stmt where
 
     norm' env (Try l b [] els [])   = norm env (b ++ els)
     norm' env (Try l b hs els [])   = do b <- norm (pushMark DROP env) b
-                                         els <- norm env els
+                                         els <- norm (define (envOf b) env) els
                                          x <- newName "x"
                                          hdl <- handle env x hs
                                          return [sIf [Branch ePUSH (b ++ sDROP : els)] (sPOP x : hdl)]
