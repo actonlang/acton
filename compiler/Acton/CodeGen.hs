@@ -700,11 +700,10 @@ declCon env n q b
         tRes                        = if t == tR then tR else tObj
         pars                        = pPar paramNames r
         args                        = pArg pars
-        initcall env | t == tR      = text "return" <+> methodtable env n <> dot <> gen env initKW <> parens (gen env tmpV <> comma <+> gen env args) <> semi
+        initcall env | t == tR      = text "return" <+> methodtable env n <> dot <> gen env initKW <> parens (gen env tmpV <> comma <+> gen env (retobj args)) <> semi
                      | otherwise    = methodtable env n <> dot <> gen env initKW <> parens (gen env tmpV <> comma' (gen env args)) <> semi $+$
                                       text "return" <+> gen env tmpV <> semi
-        retobj (PosArg e PosNil)    = PosArg (eCall (tApp (eQVar primCONSTCONT) [tObj]) [e, eVar tmpV]) PosNil
-        retobj (PosArg e p)         = PosArg e (retobj p) 
+        retobj (PosArg e p)         = PosArg (eCall (tApp (eQVar primCONSTCONT) [tObj]) [eVar tmpV, e]) p
         env1                        = ldefine ((tmpV, NVar tObj) : envOf pars) env
         abstr                       = abstractAttrs env (NoQ n)
 
