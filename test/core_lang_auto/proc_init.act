@@ -1,0 +1,23 @@
+actor FooActor():
+    pass
+
+class FooClass(object):
+    def __init__(self):
+        pass
+
+class Foo(object):
+    def __init__(self):
+        self._f = FooActor()
+        #self._f = FooClass()
+
+class Bar(object):
+    def __init__(self, thing):
+        for k, v in thing.items():
+            print("K:", k, "V:", v)
+            if v is None:
+                print("BUG FOUND, v should not be None!")
+
+actor main(env):
+    a = {"a": Foo()}
+    b = Bar(a)
+    env.exit(0)
