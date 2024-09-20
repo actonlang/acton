@@ -1,0 +1,13 @@
+class Foo(object):
+    a: str
+    def __init__(self):
+        self.a = "hello"
+
+actor main(env):
+    try:
+        f = Foo()
+    except Exception as ex:
+        pass
+    else:
+        print(f.a)
+    env.exit(0)
