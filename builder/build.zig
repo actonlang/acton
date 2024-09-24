@@ -104,11 +104,6 @@ pub fn build(b: *std.Build) void {
                     @memcpy(file_path, full_path[projpath_outtypes.len..]);
                     fPath.file_path = file_path;
 
-                    print("-- filename : {s}\n", .{fPath.filename});
-                    print("   full_path: {s}\n", .{fPath.full_path});
-                    print("   dir      : {s}\n", .{fPath.dir});
-                    print("   file_path: {s}\n", .{fPath.file_path});
-
                     if (std.mem.endsWith(u8, entry.basename, ".root.c")) {
                         fPath.test_root = false;
                         root_c_files.append(fPath) catch |err| {
