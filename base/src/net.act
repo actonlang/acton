@@ -292,7 +292,7 @@ actor TCPListener(cap: TCPListenCap, address: str, port: int, on_error: action(T
         NotImplemented
     _init()
 
-actor TLSConnection(cap: TCPConnectCap, address: str, port: int, on_connect: action(TLSConnection) -> None, on_receive: action(TLSConnection, bytes) -> None, on_error: action(TLSConnection, str) -> None, on_remote_close: ?action(TCPListenConnection) -> None, verify_tls: bool=True):
+actor TLSConnection(cap: TCPConnectCap, address: str, port: int, on_connect: action(TLSConnection) -> None, on_receive: action(TLSConnection, bytes) -> None, on_error: action(TLSConnection, str) -> None, on_remote_close: ?action(TLSConnection) -> None, verify_tls: bool=True):
     # TODO: support hostname/CN mismatch, good when connecting with IP address?
     # TODO: do DNS lookup in Acton
     # TODO: support ALPN
