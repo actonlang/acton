@@ -298,6 +298,17 @@ removeOrphanFiles dir = do
         -- Remove the file ending.
         let fileNoExt = dropExtension (dropExtension file)
             srcFile = ("src" </> fileNoExt <.> "act")
+
+        -- If the file is a .root.c file, always remove it and generate a new
+        -- one later, if necessary. Only an .act file with a root actor should
+        -- have a .root.c file but we cannot judge from here if the .act file
+        -- actually has a root actor, so the only safe choice is to remove the
+        -- file and let it be recreated if necessary. Should be very cheap
+        -- anyway since the file is so small. So check if filename ends with
+        -- ".root.c" and remove it!
+        iff (takeExtension file == ".c" && takeExtension (takeBaseName file) == ".root") $ do
+            removeFile (dir </> file)
+
         -- Check if there is a corresponding .act file in the "src" directory.
         srcExists <- doesFileExist srcFile
         -- If the .act file doesn't exist, remove the file in the "out" directory.
