@@ -761,7 +761,7 @@ actor CmdPkgAdd(env, args):
                     print("Updated existing dependency", dep_name, "with new URL", dep_url, " (old", bc_dep.url, ")")
                     bc_dep.url = dep_url
                 if bc_dep.hash == dep_hash:
-                    print("Dependency", dep_name, "is already up to date")
+                    print("Dependency", dep_name, "is already up to date, hash:", dep_hash)
                 else:
                     print("Updated existing dependency", dep_name, "with new hash", dep_hash, " (old", bc_dep.hash, ")")
                     bc_dep.hash = dep_hash
@@ -869,8 +869,12 @@ actor CmdZigPkgAdd(env, args):
             dep_hash = stdout_buf.decode().strip()
 
             if dep_name in build_config.zig_dependencies:
+                if build_config.zig_dependencies[dep_name].url != dep_url:
+                    print("Updated existing dependency", dep_name, "with new URL", dep_url, " (old", build_config.zig_dependencies[dep_name].url, ")")
+                    build_config.zig_dependencies[dep_name].url = dep_url
+
                 if build_config.zig_dependencies[dep_name].hash == dep_hash:
-                    print("Dependency", dep_name, "is already up to date")
+                    print("Dependency", dep_name, "is already up to date, hash:", dep_hash)
                 else:
                     print("Updated existing dependency", dep_name, "with new hash", dep_hash, " (old", build_config.zig_dependencies[dep_name].hash, ")")
                     build_config.zig_dependencies[dep_name].hash = dep_hash
