@@ -146,13 +146,15 @@ class ZigDependency(object):
     name: str
     url: ?str
     hash: ?str
+    path: ?str
     options: dict[str, str]
     artifacts: list[str]
 
-    def __init__(self, name: str, url: ?str, hash: ?str, options: dict[str, str], artifacts: list[str]):
+    def __init__(self, name: str, url: ?str, hash: ?str, path: ?str, options: dict[str, str], artifacts: list[str]):
         self.name = zig_safe_name(name)
         self.url = url
         self.hash = hash
+        self.path = path
         self.options = options
         self.artifacts = artifacts
 
@@ -160,6 +162,7 @@ class ZigDependency(object):
     def from_json(dep_name, data: dict[str, str]):
         dep_url: ?str = None
         dep_hash: ?str = None
+        dep_path: ?str = None
         dep_options: dict[str, str] = {}
         dep_artifacts: list[str] = []
 
@@ -172,6 +175,10 @@ class ZigDependency(object):
                 data_hash = value
                 if isinstance(data_hash, str):
                     dep_hash = data_hash
+            elif key == "path":
+                data_path = value
+                if isinstance(data_path, str):
+                    dep_path = data_path
             elif key == "options":
                 data_options = value
                 if isinstance(data_options, dict):
@@ -182,27 +189,43 @@ class ZigDependency(object):
                     dep_artifacts = data_artifacts
             else:
                 raise ValueError("Invalid build.act.json, unknown key '%s' in dependency '%s'" % (key, dep_name))
-        return ZigDependency(dep_name, dep_url, dep_hash, dep_options, dep_artifacts)
+        return ZigDependency(dep_name, dep_url, dep_hash, dep_path, dep_options, dep_artifacts)
 
     def to_json(self) -> dict[str, str]:
         res = {}
+
         url = self.url
         if url is not None:
             res["url"] = url
+
         hash = self.hash
         if hash is not None:
             res["hash"] = hash
+
+        path = self.path
+        if path is not None:
+            res["path"] = path
+
         options = self.options
         if len(options) > 0:
             res["options"] = options
+
         artifacts = self.artifacts
         if len(artifacts) > 0:
             res["artifacts"] = artifacts
+
         return res
 
     def to_zon(self) -> str:
         url = self.url
         hash = self.hash
+        self_path = self.path
+        if self_path is not None:
+            return """        .%s = .{
+                .path = "%s",
+            },
+    """ % (self.name, self_path)
+
         return """        .%s = .{
             .url = "%s",
             .hash = "%s",

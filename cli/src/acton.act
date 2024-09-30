@@ -876,7 +876,7 @@ actor CmdZigPkgAdd(env, args):
                     build_config.zig_dependencies[dep_name].hash = dep_hash
             else:
                 # Add the hash
-                build_config.zig_dependencies[dep_name] = ZigDependency(dep_name, dep_url, dep_hash, {}, dep_artifacts)
+                build_config.zig_dependencies[dep_name] = ZigDependency(dep_name, dep_url, dep_hash, None, {}, dep_artifacts)
                 print("Added new Zig package dependency", dep_name, "with hash", dep_hash)
 
             baj_file = file.WriteFile(file.WriteFileCap(file.FileCap(env.cap)), "build.act.json")
