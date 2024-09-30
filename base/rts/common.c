@@ -46,6 +46,9 @@ static acton__allocator_t acton__allocator = {
     strndup
 };
 
+void acton_noop_free(void *ptr) {
+}
+
 void *GC_calloc(size_t count, size_t size) {
     return GC_malloc(count*size);
 }
@@ -97,7 +100,7 @@ int acton_replace_allocator(acton_malloc_func malloc_func,
                 acton__allocator.strdup);
 
     mbedtls_platform_set_calloc_free(acton__allocator.calloc,
-                                     acton__allocator.free);
+                                     acton_noop_free);
 
     return 0;
 }
@@ -136,4 +139,33 @@ char *acton_strdup(const char *s) {
 
 char *acton_strndup(const char *s, size_t n) {
     return acton__allocator.strndup(s, n);
+}
+
+
+void* acton_gc_malloc(size_t size) {
+    return GC_malloc(size);
+}
+
+void* acton_gc_malloc_atomic(size_t size) {
+    return GC_malloc_atomic(size);
+}
+
+void* acton_gc_realloc(void* ptr, size_t size) {
+    return GC_realloc(ptr, size);
+}
+
+void* acton_gc_calloc(size_t count, size_t size) {
+    return GC_calloc(count, size);
+}
+
+void acton_gc_free(void* ptr) {
+    return GC_free(ptr);
+}
+
+char *acton_gc_strdup(const char *s) {
+    return GC_strdup(s);
+}
+
+char *acton_gc_strndup(const char *s, size_t n) {
+    return GC_strndup(s, n);
 }
