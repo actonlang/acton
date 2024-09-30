@@ -31,3 +31,11 @@ void *acton_calloc(size_t count, size_t size);
 void acton_free(void* ptr);
 char *acton_strdup(const char *s);
 char *acton_strndup(const char *s, size_t n);
+
+void *acton_gc_malloc(size_t size);
+void *acton_gc_malloc_atomic(size_t size);
+void *acton_gc_realloc(void* ptr, size_t size);
+void *acton_gc_calloc(size_t count, size_t size);
+void acton_gc_free(void* ptr);
+char *acton_gc_strdup(const char *s);
+char *acton_gc_strndup(const char *s, size_t n);
