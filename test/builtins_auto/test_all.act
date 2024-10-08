@@ -1,0 +1,23 @@
+
+
+
+
+def test_all1():
+    stuff = [True, True, True]
+    if all(stuff):
+        return
+    raise ValueError("all stuff is True but all() returned False")
+
+def test_all2():
+    stuff = [True, False, True]
+    if all(stuff):
+        raise ValueError("not all stuff is True but all() returned True")
+
+actor main(env):
+    try:
+        test_all1()
+        test_all2()
+        env.exit(0)
+    except Exception as e:
+        print(e)
+        env.exit(1)

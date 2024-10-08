@@ -840,17 +840,17 @@ extension bytes (Hashable):
 def abs(x : Number) -> Real:
     return x.__abs__()
 
-#def all [A(value)] (it : Iterable[A]) -> bool:
-#    for x in it:
-#        if not x:
-#            return False
-#    return True
+def all[A(value)](it: Iterable[A]) -> bool:
+    for x in it:
+        if bool(x) == False:
+            return False
+    return True
 
-#def any [A(value)] (it : Iterable[A]) -> bool:
-#    for x in it:
-#        if x:
-#            return True
-#    return False
+def any[A(value)](it: Iterable[A]) -> bool:
+    for x in it:
+        if bool(x) == True:
+            return True
+    return False
 
 def ascii(x : value) -> str:
     NotImplemented
