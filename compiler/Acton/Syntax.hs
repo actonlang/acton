@@ -587,7 +587,12 @@ instance HasLoc Type where
     loc                 = tloc
 
 instance HasLoc Constraint where
-      loc c = loc (info c)
+      loc  (Cast info t1 t2) = getLoc [loc info, loc t1, loc t2]
+      loc (Sub info _ t1 t2) = getLoc [loc info, loc t1, loc t2]
+      loc (Impl info _ t1 _) = getLoc [loc info, loc t1]
+      loc (Sel info _ t1  n1 t2) = getLoc [loc info, loc t1, loc n1, loc t2]
+      loc (Mut info t1  n1 t2) = getLoc [loc info, loc t1, loc n1, loc t2]
+      loc (Seal info  t1) =  getLoc [loc info, loc t1]
 
 instance HasLoc ErrInfo where 
       loc (Simple l _)   = l

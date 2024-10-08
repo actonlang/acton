@@ -146,7 +146,7 @@ instQuals env q ts          = do let s = qbound q `zip` ts
                                  sequence [ constr (subst s (tVar v)) (subst s u) | Quant v us <- q, u <- us ]
   where constr t u@(TC n _)
           | isProto env n   = do w <- newWitness; return $ Impl (DfltInfo NoLoc 24 Nothing []) w t u
-          | otherwise       = return $ Cast (DfltInfo (loc t) 25 Nothing []) t (tCon u)
+          | otherwise       = return $ Cast (DfltInfo NoLoc 25 Nothing []) t (tCon u)
 
 wvars                       :: Constraints -> [Expr]
 wvars cs                    = [ eVar v | Impl _ v _ _ <- cs ]
