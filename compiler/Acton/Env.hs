@@ -435,7 +435,7 @@ addMod                     :: ModName -> TEnv -> EnvF x -> EnvF x
 addMod m newte env          = env{ modules = addM ns (modules env) }
   where
     ModName ns              = m
-    addM [] te              = newte
+    addM [] te              = newte ++ te
     addM (n:ns) te          = update n ns te
     update n ns ((x,i):te)
       | n == x,
