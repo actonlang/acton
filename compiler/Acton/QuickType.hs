@@ -69,7 +69,7 @@ qSchema env f e@(Var _ n)           = case findQName n env of
                                         NSig sc dec ->
                                             (sc, Just dec, e)
                                         NClass q _ _ ->
-                                            let tc = TC n (map tVar $ qbound q)
+                                            let tc = TC (unalias env n) (map tVar $ qbound q)
                                                 (TSchema _ q' t, _) = findAttr' env tc initKW
                                                 t' = if restype t == tR then t else t{ restype = tSelf }
                                             in (tSchema (q++q') $ subst [(tvSelf,tCon tc)] t', Just NoDec, e)
