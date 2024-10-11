@@ -65,12 +65,12 @@ actor MyApp(log_handler):
 actor LogTester(report_result: action(?bool, ?Exception) -> None, log_handler: logging.Handler):
 
     expected_logs = [
-        logging.Message(logging.INFO, [], "", "hej", None),
-        logging.Message(logging.INFO, [], "", "hello", None),
-        logging.Message(logging.DEBUG, [], "", "dello", None),
-        logging.Message(logging.INFO, ["MyApp"], "", "Starting up", None),
-        logging.Message(logging.INFO, ["MyApp"], "", "Doing some work", None),
-        logging.Message(logging.INFO, ["MyApp"], "", "Bidabopp", {"actor": "MyApp", "thing": "bopp", "number": 42}),
+        logging.Message(logging.INFO, [], None, "hej", None),
+        logging.Message(logging.INFO, [], None, "hello", None),
+        logging.Message(logging.DEBUG, [], None, "dello", None),
+        logging.Message(logging.INFO, ["MyApp"], None, "Starting up", None),
+        logging.Message(logging.INFO, ["MyApp"], None, "Doing some work", None),
+        logging.Message(logging.INFO, ["MyApp"], None, "Bidabopp", {"actor": "MyApp", "thing": "bopp", "number": 42}),
         logging.Message(logging.EMERGENCY, ["MyApp", "deepfun", "deepy"], "deepy", "deep emergency", None),
         logging.Message(logging.ALERT, ["MyApp", "deepfun", "deepy"], "deepy", "deep alert", None),
         logging.Message(logging.CRITICAL, ["MyApp", "deepfun", "deepy"], "deepy", "deep critical", None),

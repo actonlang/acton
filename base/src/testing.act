@@ -181,11 +181,14 @@ class NotIsInstanceError(AssertionError):
 
 
 def assertEqual[T(Eq)](a: ?T, b: ?T, msg: ?str):
-    if a is not None and b is not None and not (a == b):
+    if ((a is None and b is not None)
+        or (a is not None and b is None)
+        or (a is not None and b is not None and not (a == b))):
         raise NotEqualError(a, b, msg)
 
-def assertNotEqual(a, b, msg: ?str):
-    if not (a != b):
+def assertNotEqual[T(Eq)](a: ?T, b: ?T, msg: ?str):
+    if ((a is None and b is None)
+        or (a is not None and b is not None and a == b)):
         raise EqualError(a, b, msg)
 
 def assertTrue(a, msg: ?str):
