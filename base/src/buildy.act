@@ -101,11 +101,11 @@ class Dependency(object):
                 data_url = data["url"]
                 if isinstance(data_url, str):
                     dep_url = data_url
-            elif "hash" in data:
+            elif key == "hash":
                 data_hash = data["hash"]
                 if isinstance(data_hash, str):
                     dep_hash = data_hash
-            elif "path" in data:
+            elif key == "path":
                 data_path = data["path"]
                 if isinstance(data_path, str):
                     dep_path = data_path
