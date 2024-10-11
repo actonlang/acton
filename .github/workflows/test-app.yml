@@ -1,0 +1,33 @@
+
+on:
+  workflow_call:
+    inputs:
+      repo_url:
+        required: true
+        type: string
+jobs:
+  test-app:
+    runs-on: ubuntu-latest
+    container:
+      image: debian:experimental
+    steps:
+      - name: "Download .deb files"
+        uses: actions/download-artifact@v3
+        with:
+          name: acton-debs
+      - name: "Install acton from .deb"
+        run: |
+          apt update
+          apt install -y ./deb/acton_*.deb
+          acton --version
+      - name: "Clone app repo"
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.repo_url }}
+          path: app
+      - name: "Compile acton program"
+        run: |
+          cd app
+          acton build
+          acton test
+          acton test perf
