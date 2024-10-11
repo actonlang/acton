@@ -1,0 +1,50 @@
+import logging
+import testing
+
+actor MathTester():
+    def add(a, b):
+        return a + b
+
+
+actor SyncTester(log_handler):
+    log = logging.Logger(log_handler)
+    def test():
+        m = MathTester()
+        log.info("SyncTester.test()", None)
+        testing.assertEqual(m.add(1, 2), 3, "1 + 2 = 3")
+
+actor AsyncTester(report_result, log_handler):
+    log = logging.Logger(log_handler)
+    def test():
+        log.info("AsyncTester.test()", None)
+        report_result(True, None)
+
+actor EnvTester(report_result, env, log_handler):
+    log = logging.Logger(log_handler)
+    def test():
+        log.info("EnvTester.test()", None)
+        report_result(True, None)
+
+def _test_foo() -> None:
+    pass
+
+def _test_syncact(log_handler: logging.Handler) -> None:
+    s = SyncTester(log_handler)
+    return s.test()
+
+# Make sure test discovery works with the proper type signature
+def _test_asyncact1(report_result: action(?bool, ?Exception) -> None, log_handler: logging.Handler) -> None:
+    s = AsyncTester(report_result, log_handler)
+    s.test()
+
+def _test_asyncact2(report_result: action(?bool, ?Exception) -> None, log_handler: logging.Handler) -> None:
+    s = AsyncTester(report_result, log_handler)
+    s.test()
+
+def _test_envtest1(report_result: action(?bool, ?Exception) -> None, env: Env, log_handler: logging.Handler) -> None:
+    s = EnvTester(report_result, env, log_handler)
+    s.test()
+
+def _test_envtest2(report_result: action(?bool, ?Exception) -> None, env: Env, log_handler: logging.Handler) -> None:
+    s = EnvTester(report_result, env, log_handler)
+    s.test()
