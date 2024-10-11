@@ -485,6 +485,18 @@ jobs:
           make start
           make test
 
+  test-app-orchestron:
+    needs: build-debs
+    uses: "./.github/workflows/test-app.yml"
+    with:
+      repo_url: "orchestron-orchestrator/orchestron"
+
+  test-app-snappy:
+    needs: build-debs
+    uses: "./.github/workflows/test-app.yml"
+    with:
+      repo_url: "actonlang/acton-snappy"
+
   test-app-yang:
     needs: build-debs
     uses: "./.github/workflows/test-app.yml"
