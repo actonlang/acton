@@ -176,9 +176,7 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
         for dep_name, dep in build_config.dependencies.items():
             hash = dep.hash
             path = dep.path
-            if hash is not None:
-                search_paths.append(file.join_path([zig_global_cache_dir, "p", hash, "out", "types"]))
-            elif path is not None:
+            if path is not None:
                 # TODO: deconstruct and put together to get OS independent path? i.e. flip / to \ on windows
                 if len(path) == 0:
                     pass
@@ -186,12 +184,15 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
                     search_paths.append(file.join_path([path, "out", "types"]))
                 else:
                     search_paths.append(file.join_path([fs.cwd(), path, "out", "types"]))
+            elif hash is not None:
+                search_paths.append(file.join_path([zig_global_cache_dir, "p", hash, "out", "types"]))
             else:
                 raise ValueError("Dependency %s has no hash" % dep_name)
         search_path_arg = []
         for sp in search_paths:
             search_path_arg.extend(["--searchpath", sp])
-        cr = CompilerRunner(process_cap,
+        cr = CompilerRunner(
+            process_cap,
             env,
             cmdargs + ["--deppath", file.join_path([fs.cwd(), ".build", "deps"])] + search_path_arg,
             None,
