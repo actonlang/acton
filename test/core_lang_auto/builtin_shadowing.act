@@ -1,0 +1,13 @@
+
+class Container(object):
+    def __init__(self, bla):
+        self.bla = bla + "\n"
+
+class Identity(object):
+    def __init__(self, bla):
+        if isinstance(bla, Container):
+            pass
+
+
+actor main(env):
+    env.exit(0)

@@ -533,8 +533,6 @@ instance InfEnv Decl where
             te'                         = parentTEnv env ps
 
     infEnv env (Extension l q c us b)
-      | isActor env n                   = notYet (loc n) "Extension of an actor"
-      | isProto env n                   = notYet (loc n) "Extension of a protocol"
       | length us == 0                  = err (loc n) "Extension lacks a protocol"
 --      | length us > 1                   = notYet (loc n) "Extensions with multiple protocols"
       | not $ null witsearch            = err (loc n) ("Extension already exists: " ++ prstr (head witsearch))
@@ -816,7 +814,9 @@ instance Check Decl where
             NProto _ ps te              = findName n env
 
     checkEnv' env (Extension l q c us b)
-                                        = do --traceM ("## checkEnv extension " ++ prstr n ++ "(" ++ prstrs us ++ ")")
+      | isActor env n                   = notYet (loc n) "Extension of an actor"
+      | isProto env n                   = notYet (loc n) "Extension of a protocol"
+      | otherwise                       = do --traceM ("## checkEnv extension " ++ prstr n ++ "(" ++ prstrs us ++ ")")
                                              pushFX fxPure tNone
                                              wellformed env1 q
                                              (csu,wmap) <- wellformedProtos env1 us

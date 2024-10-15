@@ -68,28 +68,22 @@ newKVar                             = KVar <$> (Internal Kindvar "" <$> newUniqu
 
 newXVar                             = TV KType <$> (Internal Xistvar "" <$> newUnique)
 
-type KindEnv                        = EnvF KindEnvX
+type KindEnv                        = EnvF ()
 
-data KindEnvX                       = KindEnvX { tconsX :: [(Name,Kind)], tvarsX :: [TVar] }
+kindEnv env0                        = env0
 
-kindEnv env0                        = setX env0 $ KindEnvX{ tconsX = [], tvarsX = [] }
+tvars env                           = [ TV k n | (n, NTVar k _) <- names env ]
 
-tcons env                           = tconsX $ envX env
-
-tvars env                           = tvarsX $ envX env
-
-extcons ke env                      = modX env $ \x -> x{ tconsX = ke ++ tcons env }
+extcons ke env                      = define ke env
 
 extvars vs env
   | not $ null clash                = err1 (head clash) "Type variable already in scope:"    -- No type variable shadowing
   | not $ null dups                 = err1 (head dups) "Duplicate type variable in binding:"
-  | otherwise                       = return $ modX env $ \x -> x{ tvarsX = vs ++ tvars env }
+  | otherwise                       = return $ define (map mkTVar vs) env
   where clash                       = vs `intersect` tvars env
         dups                        = duplicates vs
+        mkTVar tv                   = (tvname tv, NTVar (tvkind tv) cValue)
 
-tcKind (NoQ n) env                  = case lookup n (tcons env) of
-                                        Just k  -> k
-                                        Nothing -> tconKind (NoQ n) env
 tcKind qn env                       = tconKind qn env
 
 tvKind v env                        = case filter (==v) (tvars env) of
@@ -266,9 +260,9 @@ kchkSuite env (Decl l ds : ss)      = do ds <- instKWild (map (autoQuantD env) d
                                          ds <- kchk env1 ds
                                          ss <- kchkSuite env1 ss
                                          return (Decl l ds : ss)
-  where kinds (Actor _ n q _ _ _)   = [(n,kind KType q)]
-        kinds (Class _ n q _ _)     = [(n,kind KType q)]
-        kinds (Protocol _ n q _ _)  = [(n,kind KProto q)]
+  where kinds (Actor _ n q _ _ _)   = [(n, NAct q posNil kwdNil [])]
+        kinds (Class _ n q _ _)     = [(n, NClass q [] [])]
+        kinds (Protocol _ n q _ _)  = [(n, NProto q [] [])]
         kinds _                     = []
         kind k []                   = k
         kind k q                    = KFun [ tvkind v | Quant v _ <- q ] k
