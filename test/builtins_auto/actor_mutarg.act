@@ -1,0 +1,5 @@
+actor Foo(cb: mut() -> None):
+    pass
+
+actor main(env):
+    env.exit(0)
