@@ -307,12 +307,16 @@ removeOrphanFiles dir = do
         -- anyway since the file is so small. So check if filename ends with
         -- ".root.c" and remove it!
         iff (takeExtension file == ".c" && takeExtension (takeBaseName file) == ".root") $ do
-            removeFile (dir </> file)
+            removeIfExists (dir </> file)
 
         -- Check if there is a corresponding .act file in the "src" directory.
         srcExists <- doesFileExist srcFile
         -- If the .act file doesn't exist, remove the file in the "out" directory.
         when (not srcExists) $ removeFile (dir </> file)
+  where
+        removeIfExists f = removeFile f `catch` handleNotExists
+        handleNotExists :: IOException -> IO ()
+        handleNotExists _ = return ()
 
 compileFiles :: C.CompileOptions -> [String] -> IO ()
 compileFiles opts srcFiles = do
