@@ -490,7 +490,8 @@ reduce' env eq (Seal info t@(TCon _ tc))
 --  | castable env t tObject                  = tyerr t "Leaking actor seal:"                       -- when we start prohibit sharing of mutable data
   | otherwise                               = reduce env eq (map (Seal info) $ tcargs tc)
 reduce' env eq (Seal _ t@(TFX _ fx))
-  | fx `elem` [FXMut,FXProc]                = tyerr t "Leaking actor seal:"
+--  | fx `elem` [FXMut,FXProc]                = tyerr t "Leaking actor seal:"
+  | fx `elem` [FXProc]                      = tyerr t "Leaking actor seal:"
   | otherwise                               = return eq
 reduce' env eq (Seal info t)                = reduce env eq (map (Seal info) ts)
   where ts                                  = leaves t
