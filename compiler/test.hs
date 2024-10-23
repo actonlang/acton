@@ -97,6 +97,9 @@ compilerTests =
         (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../test/compiler/test_deps/deps/a/build.zig*") ""
         (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../test/compiler/test_deps/deps/a/out") ""
         runActon "build" ExitSuccess False "../test/compiler/test_deps/"
+  , testCase "call imported staticmethod" $ do
+        (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../test/compiler/import_staticmethod/out") ""
+        testBuild "" ExitSuccess False "../test/compiler/import_staticmethod/"
   ]
 
 actoncProjTests =
