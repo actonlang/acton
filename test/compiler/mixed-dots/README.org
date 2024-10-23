@@ -1,0 +1,12 @@
+* rebuild
+rebuild is a cool Acton project!
+
+** Compile
+#+BEGIN_SRC shell
+actonc build
+#+END_SRC
+
+** Run
+#+BEGIN_SRC shell
+out/bin/rebuild
+#+END_SRC

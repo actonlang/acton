@@ -87,6 +87,10 @@ compilerTests =
         (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../test/compiler/rebuild-import/out") ""
         testBuild "" ExitSuccess False "../test/compiler/rebuild-import/"
         testBuild "" ExitSuccess False "../test/compiler/rebuild-import/"
+  , testCase "mixed dots in qualified name" $ do
+        (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../test/compiler/mixed-dots/out") ""
+        testBuild "" ExitSuccess False "../test/compiler/mixed-dots/"
+        testBuild "" ExitSuccess False "../test/compiler/mixed-dots/"
   , testCase "sub-modules and dashes" $ do
         (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../test/compiler/subdash/out") ""
         testBuild "" ExitSuccess False "../test/compiler/subdash/"

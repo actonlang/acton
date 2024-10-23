@@ -229,11 +229,13 @@ methodtable env n                   = gen env (tableName $ gname env n)
 staticwitness env n                 = gen env (witName n)
 
 methodtable' env (NoQ n)            = methodtable env n
-methodtable' env n                  = gen env $ tableName n
+methodtable' env n                  = gen env $ tableName (unalias env n)
 
 tableName (GName m n)               = GName m (Derived n suffixMethods)
+tableName n                         = error ("#### tableName " ++ show n)
+
 witName (GName m n)                 = GName m (Derived n suffixWitness)
-witName n                           = error ("witName " ++ show n)
+witName n                           = error ("#### witName " ++ show n)
 
 newcon env n                        = gen env (conName $ gname env n)
 
