@@ -1232,9 +1232,6 @@ instance Infer Expr where
             method NotIn                = containsnotKW
     infer env (CompOp l e1 ops)         = notYet l "Comparison chaining"
 
-    infer env d@(Dot l e n)
-      | Just m <- isModule env e        = infer env (Var l (QName m n))
-
     infer env (Dot l x@(Var _ c) n)
       | NClass q us te <- cinfo         = do (cs0,ts) <- instQBinds env q
                                              let tc = TC c' ts
@@ -1412,11 +1409,6 @@ tupleTemplate i                         = do ts <- mapM (const newTVar) [0..i]  
                                              let p0 = foldl (flip posRow) p ts
                                                  p1 = foldl (flip posRow) p (tail ts)
                                              return (TTuple NoLoc p0 k, head ts, TTuple NoLoc p1 k)
-
-isModule env e                          = fmap ModName $ mfilter (isMod env) $ fmap reverse $ dotChain e
-  where dotChain (Var _ (NoQ n))        = Just [n]
-        dotChain (Dot _ e n)            = fmap (n:) (dotChain e)
-        dotChain _                      = Nothing
 
 
 infElems env [] t0                      = return ([], [])
