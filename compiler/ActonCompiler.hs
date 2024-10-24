@@ -523,7 +523,8 @@ data BinTask            = BinTask { isDefaultRoot :: Bool, binName :: String, ro
 
 -- return task where the specified root actor exists
 filterMainActor env opts paths binTask
-                         = case lookup n (fromJust (Acton.Env.lookupMod m env)) of
+                         = case Acton.Env.lookupMod m env of
+                             Just te -> case lookup n te of
                                Just (A.NAct [] A.TNil{} (A.TRow _ _ _ t A.TNil{}) _)
                                    | prstr t == "Env" || prstr t == "None"
                                       || prstr t == "__builtin__.Env"|| prstr t == "__builtin__.None"-> do   -- TODO: proper check of parameter type
@@ -531,6 +532,7 @@ filterMainActor env opts paths binTask
                                    | otherwise -> return Nothing
                                Just t -> return Nothing
                                Nothing -> return Nothing
+                             Nothing -> return Nothing
   where mn                  = A.mname qn
         qn@(A.GName m n)    = rootActor binTask
         (sc,_)              = Acton.QuickType.schemaOf env (A.eQVar qn)

@@ -518,11 +518,16 @@ lookupMod                   :: ModName -> EnvF x -> Maybe TEnv
 lookupMod m env | inBuiltin env, m==mBuiltin
                             = Just (names env)
 lookupMod (ModName ns) env  = f ns (modules env)
-  where f [] te             = Just te
+  where f [] te
+          | not (all isNModule te) = Just te
+          | otherwise              = Nothing
         f (n:ns) te         = case lookup n te of
                                 Just (NModule te') -> f ns te'
                                 Just (NMAlias (ModName m)) -> lookupMod (ModName $ m++ns) env
                                 _ -> Nothing
+        isNModule (_, NModule{}) = True
+        isNModule _         = False
+
 
 isMod                       :: EnvF x -> [Name] -> Bool
 isMod env ns                = maybe False (const True) (findMod (ModName ns) env)
