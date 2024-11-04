@@ -142,7 +142,7 @@ actor CompilerRunner(process_cap, env, args, wdir=None, on_exit: ?action(int, in
     p = process.Process(process_cap, cmd, on_actonc_stdout, on_actonc_stderr, on_actonc_exit, on_actonc_error, wdir)
 
 
-actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None, on_build_failure: action(int, int, str) -> None, build_tests: bool=False):
+actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None, on_build_failure: action(int, int, str) -> None, build_tests: bool=False, files: list[str]=[]):
     """Build the project including dependencies
 
     - check for dependencies.json, if found, download dependencies
@@ -155,10 +155,8 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
     lock_file = None
     remaining_deps = {}
     zig_global_cache_dir = get_zig_global_cache_dir(file.FileCap(env.cap))
-    cmdargs = ["build"] + build_cmd_args(args)
-    if build_tests:
-        cmdargs.append("--dev")
-        cmdargs.append("--test")
+    if len(files) > 1:
+        raise NotImplementedError("Multiple files not supported yet")
     var build_config = BuildConfig()
     #
 
@@ -191,10 +189,20 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
         search_path_arg = []
         for sp in search_paths:
             search_path_arg.extend(["--searchpath", sp])
+        cmdargs = []
+        if files == []:
+            cmdargs.extend(["build"])
+        else:
+            cmdargs.extend([files[0]])
+        cmdargs.extend(build_cmd_args(args))
+        if build_tests:
+            cmdargs.append("--dev")
+            cmdargs.append("--test")
+        cmd = cmdargs + ["--deppath", file.join_path([fs.cwd(), ".build", "deps"])] + search_path_arg
         cr = CompilerRunner(
             process_cap,
             env,
-            cmdargs + ["--deppath", file.join_path([fs.cwd(), ".build", "deps"])] + search_path_arg,
+            cmd,
             None,
             _on_actonc_exit,
             _on_actonc_failure,
@@ -232,10 +240,11 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
                 path = dep_path if dep_path is not None else file.join_path([".build", "deps", dep_name])
                 print(" -", dep_name)
                 remaining_deps[dep_name] = True
+                cmd = ["build"] + build_cmd_args(args) + ["--keepbuild"]
                 cr = CompilerRunner(
                     process_cap,
                     env,
-                    cmdargs + ["--keepbuild"],
+                    cmd,
                     path,
                     lambda exit_code, term_signal, stdout_buf, stderr_buf: _on_dep_actonc_exit(dep_name, exit_code, term_signal, stdout_buf, stderr_buf),
                     lambda error_msg: on_dep_build_error(dep_name, error_msg),
@@ -944,11 +953,32 @@ actor CmdZigPkgRemove(env, args):
 
 
 actor main(env):
+    file_cap = file.FileCap(env.cap)
     process_cap = process.ProcessCap(env.cap)
 
+    def in_project(filename: str):
+        """Are we in a project?
+        """
+        fs = file.FS(file_cap)
+        try:
+            s = fs.stat("Acton.toml")
+        except:
+            return False
+        return True
+
     def _compilefile(_file, args):
-        cmdargs = build_cmd_args(args)
-        cr = CompilerRunner(process_cap, env, [_file] + cmdargs)
+        if in_project(_file):
+            def on_build_success(stdout_buf):
+                env.exit(0)
+
+            def on_build_failure(exit_code: int,  term_signal: int, stderr_buf: str):
+                print("Error building project", stderr_buf)
+                env.exit(1)
+
+            BuildProject(process_cap, env, args, on_build_success, on_build_failure, build_tests=False, files=[_file])
+        else:
+            cmdargs = build_cmd_args(args)
+            cr = CompilerRunner(process_cap, env, [_file] + cmdargs)
 
     def _cmd_build(args):
         def on_build_success(stdout_buf):
