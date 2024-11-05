@@ -1,31 +1,92 @@
 # Changelog
 
-## Unreleased
+## [0.24.0] (2024-11-05)
 
 Acton now supports package dependencies and has a package manager to work with
 these, fetching and building them. There are new docs at https://acton.guide
+It's now possible to write Acton low level code in Zig, in addition to C.
 
 ## Added
+- New docs: https://acton.guide
+  - Starting point was the Acton-by-Example and it's been improved from there
+    with new content and updates of existing pages
+  - New top level structure making it easier to navigate
+  - Includes a guide on how to integrate a C library
 - Package management!
   - Acton now supports adding dependencies on other packages, either in a local
     path or to be downloaded from the Internet.
+  - New commands, `acton pkg add` etc to manage dependencies, see
+    https://acton.guide for more
   - This largely relies on the Zig package manager and the Zig build system
   - It is also possible to add a Zig package dependency in an Acton project in
     order to enable the integration with Zig / C / C++ libraries
+- Lots of improvements around the build system
+  - Upgrade to Zig v0.13
+  - Avoid anonymousDependency which is deprecated in newer Zig versions
+  - Materialize build.zig on disk, to allow customization, like adding
+    dependencies
+  - Send deps as zig CLI arguments instead of hacking builder imports
+  - Remove old extra headers, now included in Zig 0.13
+- Add `any()` and `all()` - does what it sounds like
+  - These were previously removed due to a bug but are now brought back
 - `json.encode()` now has a `pretty` option to enable pretty printing
 - `file.ReadFile()` & `file.WriteFile()` now support taking an advisory lock on
   Linux and MacOS
 - `acton` now takes a project lock before compiling to avoid races
+- Revamped zig build caching, separating the local and global cache
+  - Only the local one is automatically periodically cleaned
+- Add support for writing Acton modules in Zig
+  - It is now possible to write functions in Zig, thus making the entire Zig
+    ecosystem potentially reachable with ease
+- Add new `base64` module to stdlib
+  - It is built on the Zig stdlib `base64` functions
+- Allow naming overlap in hierarchical modules
+  - It is now possible to have a module `foo` (src/foo.act) and a `foo.bar`
+    (src/foo/bar.act), which would previously conflict and yield a compilation
+    error.
+- Fixed scope extension to handle accessing variables in else defined in try
+- Fixed CPS'ed __init__ so we can correctly instantiate actors in class init
+- Fixed passing function with mut effect to actor
+  - The actor seal leak detection would incorrectly trigger. We need a better
+    detector, until then the check is removed.
+- Fix returning fixed size integer
+  - The recent unboxing code misbehaved in some situations when trying to return
+    a fixed size integer from a function
+- Fix assert(Not)Equal
+  - Now actually works for None values, would previously only compare the values
+    if they were not-None
+- Fix qualified name checking, so we can properly detect method invocation via
+  class name even for imported classes
+  - This was an issue when importing a module and trying to call a @staticmethod
+    on a class
+- Improved source location error messages
+- Upgraded to Haskell GHC 9.6.6
 
 ## Changed
+- Add `remote_close` callback to TCPConnection / TCPListenConnection &
+  TLSconnection
 - Use `OSError` instead of `RuntimeError` for general exceptions in the `file`
   module functions and classes
+- `argparse` `--help` now shows help for the most specific cmd
+- Remove worked thread CPU affinity to get compile speedup
+  - This is primarily as a workaround for slow Zig builds. For `acton build` we
+    run the acton compiler `actonc` and eventually `zig build`. Zig gets the
+    number of parallel worker threads to run by inspecting its affinity. When
+    started by Acton, it inherits the affinity of the worker thread that started
+    it.
+  - CPU affinity is probably a win for server workloads, so this is a
+    regression, but for desktop apps, it likely workb setter not pinning to CPU
+    cores
 
 ### Testing / CI / Build
 - Stopped building the vendored libraries we ship, they are now shipped as
   source and compiled on demand
+- Force hermetic build on MacOS
+  - Avoids pulling in system libraries
 - Simplify actondb build
 - Add dependabot config for updating GitHub Actions workflows
+- Add test on macos-15
+- Test other Acton apps in main Acton repo CI
 
 
 ## [0.23.0] (2024-08-13)
