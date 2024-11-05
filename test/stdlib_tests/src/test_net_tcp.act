@@ -7,7 +7,7 @@ actor test_tcp_client_side_close(report_result, env, log_handler: logging.Handle
     log = logging.Logger(log_handler)
     test_payload = b"Stay a while and listen."
     address = "127.0.0.1"
-    port = random.randint(10000, 40000)
+    port = random.randint(10000, 40000) + 4
     tcp_cap = net.TCPCap(net.NetCap(env.cap))
 
     recv_buf: list[bytes] = []
