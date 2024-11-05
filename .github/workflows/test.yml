@@ -41,14 +41,14 @@ jobs:
         if: github.event_name != 'schedule'
         id: setmatrix_pr
         run: |
-          MATRIX_JSON='{\"include\":[{\"os\":\"macos\",\"version\":\"12\",\"arch\":\"x86_64\",\"cache\":true},{\"os\":\"macos\",\"version\":\"14\",\"arch\":\"aarch64\",\"cache\":true}]}'
+          MATRIX_JSON='{\"include\":[{\"os\":\"macos\",\"version\":\"13\",\"arch\":\"x86_64\",\"cache\":true},{\"os\":\"macos\",\"version\":\"14\",\"arch\":\"aarch64\",\"cache\":true}]}'
           echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
 
       - name: "Set Matrix for nightly run"
         if: github.event_name == 'schedule'
         id: setmatrix_cron
         run: |
-          MATRIX_JSON='{\"include\":[{\"os\":\"macos\",\"version\":\"12\",\"arch\":\"x86_64\",\"cache\":true},{\"os\":\"macos\",\"version\":\"13\",\"arch\":\"x86_64\",\"cache\":true},{\"os\":\"macos\",\"version\":\"14\",\"arch\":\"aarch64\",\"cache\":true},{\"os\":\"macos\",\"version\":\"15\",\"arch\":\"aarch64\",\"cache\":false}]}'
+          MATRIX_JSON='{\"include\":[{\"os\":\"macos\",\"version\":\"13\",\"arch\":\"x86_64\",\"cache\":true},{\"os\":\"macos\",\"version\":\"14\",\"arch\":\"aarch64\",\"cache\":true},{\"os\":\"macos\",\"version\":\"15\",\"arch\":\"aarch64\",\"cache\":false}]}'
           echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
 
       - name: "Set final matrix output"
@@ -297,18 +297,18 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-12, macos-13, macos-14, macos-15]
+        os: [macos-13, macos-14, macos-15]
     runs-on: ${{ matrix.os }}
     steps:
       - name: "Machine info"
         run: |
           uname -a
           system_profiler SPHardwareDataType
-      - name: "Download artifacts for Macos x86_64, built on macos-12"
-        if: ${{ matrix.os == 'macos-12' || matrix.os == 'macos-13' }}
+      - name: "Download artifacts for Macos x86_64, built on macos-13"
+        if: ${{ matrix.os == 'macos-13' }}
         uses: actions/download-artifact@v3
         with:
-          name: acton-macos-12-x86_64
+          name: acton-macos-13-x86_64
       - name: "Download artifacts for Macos arm64, built on macos-14"
         if: ${{ matrix.os == 'macos-14' || matrix.os == 'macos-15' }}
         uses: actions/download-artifact@v3
@@ -523,10 +523,10 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: "Check out repository code"
         uses: actions/checkout@v4
-      - name: "Download artifacts for Macos x86_64, built on macos-12"
+      - name: "Download artifacts for Macos x86_64, built on macos-13"
         uses: actions/download-artifact@v3
         with:
-          name: acton-macos-12-x86_64
+          name: acton-macos-13-x86_64
       - name: "Download artifacts for Linux x86_64, built on Debian:12"
         uses: actions/download-artifact@v3
         with:
@@ -588,10 +588,10 @@ jobs:
     steps:
       - name: "Check out repository code"
         uses: actions/checkout@v4
-      - name: "Download artifacts for Macos, built on macos-12"
+      - name: "Download artifacts for Macos, built on macos-13"
         uses: actions/download-artifact@v3
         with:
-          name: acton-macos-12-x86_64
+          name: acton-macos-13-x86_64
       - name: "Download artifacts for Linux, built on Debian:12"
         uses: actions/download-artifact@v3
         with:
