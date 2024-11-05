@@ -1,13 +1,15 @@
 import logging
 import net
 import random
+import re
 import testing
 
 actor test_tcp_client_side_close(report_result, env, log_handler: logging.Handler):
     log = logging.Logger(log_handler)
     test_payload = b"Stay a while and listen."
     address = "127.0.0.1"
-    port = random.randint(10000, 40000)
+    var retries = 10
+    var port = random.randint(10000, 40000)
     tcp_cap = net.TCPCap(net.NetCap(env.cap))
 
     recv_buf: list[bytes] = []
@@ -32,6 +34,12 @@ actor test_tcp_client_side_close(report_result, env, log_handler: logging.Handle
             report_result(True, None)
 
     def on_listen_error(l, errmsg):
+        m = re.match(r"address already in use", errmsg)
+        if m is not None:
+            if retries > 0:
+                _start()
+                log.info("Retrying...")
+                return
         log.error(errmsg)
         report_result(False, AssertionError("listen error: " + errmsg))
 
@@ -52,8 +60,12 @@ actor test_tcp_client_side_close(report_result, env, log_handler: logging.Handle
         # Retry since server might not be up yet
         after 0.1: _connect_client()
 
-    server = net.TCPListener(net.TCPListenCap(tcp_cap), address, port, on_listen_error, on_listen_accept)
-    _connect_client()
+    def _start():
+        retries -= 1
+        port = random.randint(10000, 40000)
+        server = net.TCPListener(net.TCPListenCap(tcp_cap), address, port, on_listen_error, on_listen_accept)
+        _connect_client()
+    _start()
 
 def _test_tcp_client_side_close(report_result: action(?bool, ?Exception) -> None , env: Env, log_handler: logging.Handler):
     test_tcp_client_side_close(report_result, env, log_handler)
@@ -62,7 +74,8 @@ actor test_tcp_server_side_close(report_result, env, log_handler: logging.Handle
     log = logging.Logger(log_handler)
     test_payload = b"Stay a while and listen."
     address = "127.0.0.1"
-    port = random.randint(10000, 40000)
+    var retries = 10
+    var port = random.randint(10000, 40000)
     tcp_cap = net.TCPCap(net.NetCap(env.cap))
 
     recv_buf: list[bytes] = []
@@ -77,6 +90,12 @@ actor test_tcp_server_side_close(report_result, env, log_handler: logging.Handle
         report_result(False, AssertionError("server error: " + errmsg))
 
     def on_listen_error(l, errmsg):
+        m = re.match(r"address already in use", errmsg)
+        if m is not None:
+            if retries > 0:
+                _start()
+                log.info("Retrying...")
+                return
         log.error(errmsg)
         report_result(False, AssertionError("listen error: " + errmsg))
 
@@ -108,8 +127,12 @@ actor test_tcp_server_side_close(report_result, env, log_handler: logging.Handle
         else:
             report_result(True, None)
 
-    server = net.TCPListener(net.TCPListenCap(tcp_cap), address, port, on_listen_error, on_listen_accept)
-    _connect_client()
+    def _start():
+        retries -= 1
+        port = random.randint(10000, 40000)
+        server = net.TCPListener(net.TCPListenCap(tcp_cap), address, port, on_listen_error, on_listen_accept)
+        _connect_client()
+    _start()
 
 def _test_tcp_server_side_close(report_result: action(?bool, ?Exception) -> None , env: Env, log_handler: logging.Handler):
     test_tcp_server_side_close(report_result, env, log_handler)
