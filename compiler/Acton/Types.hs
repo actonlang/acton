@@ -447,7 +447,7 @@ matchDefAssumption env cs def
         (pos0,kwd0)                     = qual env dec (pos def) (kwd def) (qualWPar env q0)
 
         match env cs eq0 def            = do (cs2,eq1) <- solveScoped env0 (qbound q0) [] t1 (Cast info t1 t2 : cs)
-                                             checkNoEscape env (qbound q0)
+                                             checkNoEscape (loc def) env (qbound q0)
                                              cs2 <- msubst cs2
                                              return (cs2, def{ qbinds = noqual env q0, pos = pos0, kwd = kwd0, dbody = bindWits (eq0++eq1) ++ dbody def })
            where t1                     = tFun (dfx def) (prowOf $ pos def) (krowOf $ kwd def) (fromJust $ ann def)
@@ -499,7 +499,7 @@ instance InfEnv Decl where
                                                  (cs,te,b1) <- infEnv env1 b
                                                  popFX
                                                  (cs1,eq1) <- solveScoped env1 (qbound q) te tNone cs
-                                                 checkNoEscape env (qbound q)
+                                                 checkNoEscape l env (qbound q)
                                                  (nterms,asigs,_) <- checkAttributes [] te' te
                                                  let te1 = if notImplBody b then unSig asigs else []
                                                      te2 = te ++ te1
@@ -519,7 +519,7 @@ instance InfEnv Decl where
                                                  (cs,te,b') <- infEnv env1 b
                                                  popFX
                                                  (cs1,eq1) <- solveScoped env1 (qbound q) te tNone cs
-                                                 checkNoEscape env (qbound q)
+                                                 checkNoEscape l env (qbound q)
                                                  (nterms,_,sigs) <- checkAttributes [] te' te
                                                  let noself = [ n | (n, NSig sc Static) <- te, tvSelf `notElem` tyfree sc ]
                                                  when (notImplBody b) $ err0 (notImpls b) "A protocol body cannot be NotImplemented"
@@ -541,7 +541,7 @@ instance InfEnv Decl where
                                              (cs,te,b1) <- infEnv env1 b
                                              popFX
                                              (cs1,eq1) <- solveScoped env1 (qbound q) te tNone cs
-                                             checkNoEscape env (qbound q)
+                                             checkNoEscape l env (qbound q)
                                              (nterms,asigs,sigs) <- checkAttributes final te' te
                                              when (not $ null nterms) $ err2 (dom nterms) "Method/attribute not in listed protocols:"
                                              when (not $ null sigs) $ err2 sigs "Extension with new methods/attributes not supported"
@@ -602,13 +602,13 @@ solveScoped env vs te tt cs             = do --traceM ("\n\n### solveScoped: " +
                                              (cs,eq) <- simplify env te tt cs
                                              solve env (any (`elem` vs) . tyfree) te tt eq cs
 
-checkNoEscape env []                    = return ()
-checkNoEscape env vs                    = do fvs <- tyfree <$> msubst env
+checkNoEscape _ env []                  = return ()
+checkNoEscape l env vs                  = do fvs <- tyfree <$> msubst env
                                              let escaped = vs `intersect` fvs
                                              when (not $ null escaped) $ do
                                                  env1 <- msubst env
                                                  --traceM ("####### env:\n" ++ prstr env1)
-                                                 err2 escaped "Escaping type variable"
+                                                 err l "Escaping type variable"
 
 
 wellformed                              :: (WellFormed a) => Env -> a -> TypeM ()
@@ -677,7 +677,7 @@ matchActorAssumption env n0 p k te      = do --traceM ("## matchActorAssumption 
                                                  q = scbind sc
                                              --traceM ("## matchActorAssumption for method " ++ prstr n ++ ": " ++ prstr c1)
                                              (cs2,eq) <- solveScoped (defineTVars q env) (qbound q) obs tNone (c0:c1:cs0++cs1)
-                                             checkNoEscape env (qbound q)
+                                             checkNoEscape (loc n) env (qbound q)
                                              return (cs2, eq)
           where Just (NDef sc _)        = lookup n te1
         check1 (n, i)                   = return ([], [])
@@ -755,7 +755,7 @@ instance Check Decl where
                                              let cst = if fallsthru b then [Cast (DfltInfo l 65 Nothing []) tNone t] else []
                                                  t1 = tFun fx' (prowOf p') (krowOf k') t
                                              (cs1,eq1) <- solveScoped env1 tvs [] t1 (csp++csk++csb++cst)
-                                             checkNoEscape env tvs
+                                             checkNoEscape l env tvs
                                              -- At this point, n has the type given by its def annotations.
                                              -- Now check that this type is no less general than its recursion assumption in env.
                                              let body = bindWits eq1 ++ defaultsP p' ++ defaultsK k' ++ b'
@@ -774,7 +774,7 @@ instance Check Decl where
                                              (cs0,eq0) <- matchActorAssumption env1 n p' k' te
                                              popFX
                                              (cs1,eq1) <- solveScoped env1 (tvSelf:tvs) te tNone (csp++csk++csb++cs0)
-                                             checkNoEscape env (tvSelf:tvs)
+                                             checkNoEscape l env (tvSelf:tvs)
                                              fvs <- tyfree <$> msubst env
                                              let body = bindWits (eq1++eq0) ++ defaultsP p' ++ defaultsK k' ++ b'
                                                  act = Actor l n (noqual env q) (qualWPar env q p') k' body
@@ -792,7 +792,7 @@ instance Check Decl where
                                              (csb,b') <- checkEnv (define (subst s te) env1) b
                                              popFX
                                              (cs1,eq1) <- solveScoped env1 (tvSelf:tvs) te tNone csb
-                                             checkNoEscape env (tvSelf:tvs)
+                                             checkNoEscape l env (tvSelf:tvs)
                                              return (cs1, [Class l n (noqual env q) (map snd as) (abstractDefs env q eq1 b')])
       where env1                        = defineSelf (NoQ n) q $ defineTVars q $ setInClass env
             tvs                         = tvSelf : qbound q
@@ -806,7 +806,7 @@ instance Check Decl where
                                              (csb,b') <- checkEnv (define te env1) b
                                              popFX
                                              (cs1,eq1) <- solveScoped env1 (tvSelf:tvs) te tNone (csu++csb)
-                                             checkNoEscape env (tvSelf:tvs)
+                                             checkNoEscape l env (tvSelf:tvs)
                                              b' <- msubst b'
                                              return (cs1, convProtocol env n q ps eq1 wmap b')
       where env1                        = defineSelf (NoQ n) q $ defineTVars q $ setInClass env
@@ -823,7 +823,7 @@ instance Check Decl where
                                              (csb,b') <- checkEnv (define (subst s te) env1) b
                                              popFX
                                              (cs1,eq1) <- solveScoped env1 (tvSelf:tvs) te tNone (csu++csb)
-                                             checkNoEscape env (tvSelf:tvs)
+                                             checkNoEscape l env (tvSelf:tvs)
                                              b' <- msubst b'
                                              return (cs1, convExtension env n' c q ps eq1 wmap b')
       where env1                        = defineInst c ps thisKW' $ defineSelf n q $ defineTVars q $ setInClass env
