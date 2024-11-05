@@ -8,8 +8,6 @@ on:
 jobs:
   test-app:
     runs-on: ubuntu-latest
-    container:
-      image: debian:experimental
     steps:
       - name: "Download .deb files"
         uses: actions/download-artifact@v3
@@ -17,8 +15,8 @@ jobs:
           name: acton-debs
       - name: "Install acton from .deb"
         run: |
-          apt update
-          apt install -y ./deb/acton_*.deb
+          sudo apt update
+          sudo apt install -y ./deb/acton_*.deb
           acton --version
       - name: "Clone app repo"
         uses: actions/checkout@v4
