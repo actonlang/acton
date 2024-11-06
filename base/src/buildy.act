@@ -142,11 +142,7 @@ class Dependency(object):
         )
 
 
-class ZigDependency(object):
-    name: str
-    url: ?str
-    hash: ?str
-    path: ?str
+class ZigDependency(Dependency):
     options: dict[str, str]
     artifacts: list[str]
 

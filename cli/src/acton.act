@@ -293,8 +293,8 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
                 raise ValueError("Dependency %s has no hash or path set" % dep_name)
         build_deps()
 
-    def on_zig_fetch_error(error):
-        print("Error fetching dependencies", error)
+    def on_zig_fetch_error(errmsg):
+        print(errmsg, err=True)
         env.exit(1)
 
     def check_for_buildconfig():
@@ -320,7 +320,7 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
             await async env.exit(1)
 
         write_buildzig(file.FileCap(env.cap), build_config)
-        ZigFetchDeps(env, build_config, check_deps, on_zig_fetch_error)
+        zfd = ZigFetchDeps(env, build_config, check_deps, on_zig_fetch_error)
 
     def get_lock():
         """Try to get the build lock for the project
@@ -607,10 +607,20 @@ actor ZigFetchDeps(env, build_config: BuildConfig, on_done: action() -> None, on
     dep_processes = {}
     zig_processes = {}
 
-    def on_exit(dep, p, exit_code, term_signal, stdout_buf, stderr_buf):
+    def on_exit(dep: Dependency, p, exit_code, term_signal, stdout_buf, stderr_buf):
         if exit_code == 0:
+            fetched_hash: str = stdout_buf.decode().strip()
             if print_output:
-                print("Fetched", stdout_buf.decode())
+                print("Fetched", fetched_hash, err=True)
+
+            dep_hash = dep.hash
+            if dep_hash is not None:
+                if dep_hash != fetched_hash:
+                    errmsg = "ERROR: hash mismatch for dependency %s" % dep.name
+                    errmsg += "\nDETAIL: fetched hash (%s) differs from configured hash (%s)" % (fetched_hash, dep_hash)
+                    errmsg += "\nHINT: Update build.act.json with the correct hash. Prefer immutable URLs, like a ref to an immutable git tag over a mutable git branch."
+                    on_fetch_error(errmsg)
+                    return
 
             if isinstance(dep, Dependency):
                 del dep_processes[dep.name]
@@ -620,8 +630,6 @@ actor ZigFetchDeps(env, build_config: BuildConfig, on_done: action() -> None, on
             if len(dep_processes) == 0 and len(zig_processes) == 0:
                 on_done()
         else:
-            # TODO: do better
-            print("Error fetching", stderr_buf.decode())
             on_fetch_error(stderr_buf.decode())
 
     def on_error(dep, p, error):
@@ -677,54 +685,20 @@ actor CmdFetch(env, args):
     dep_processes = {}
     zig_processes = {}
 
-    def on_exit(dep, p, exit_code, term_signal, stdout_buf, stderr_buf):
-        print("Fetched", stdout_buf.decode())
-        if isinstance(dep, Dependency):
-            del dep_processes[dep.name]
-        elif isinstance(dep, ZigDependency):
-            del zig_processes[dep.name]
+    def all_done():
+        print("All dependencies fetched", err=True)
+        env.exit(0)
 
-        if len(dep_processes) == 0 and len(zig_processes) == 0:
-            print("All dependencies fetched")
-            env.exit(0)
-
-    def on_error(dep, p, error):
-        print("Error fetching", error)
+    def on_zig_fetch_error(errmsg):
+        print(errmsg, err=True)
         env.exit(1)
 
-    # TODO: call FetchDeps instead!?
+    # TODO: call ZigFetchDeps instead!?
     if len(build_config.dependencies) == 0 and len(build_config.zig_dependencies) == 0:
         print("No dependencies to fetch")
         env.exit(0)
     else:
-        zig_global_cache_dir = get_zig_global_cache_dir(file.FileCap(env.cap))
-        for dep_name, dep in build_config.dependencies.items():
-            print("Checking", dep_name)
-            dep_url = dep.url
-            if dep_url is not None:
-                print("Fetching", dep_name, "from", dep_url)
-
-                cmd = [zig, "fetch", "--global-cache-dir", zig_global_cache_dir, dep_url]
-                p = process.RunProcess(
-                    pcap,
-                    cmd,
-                    lambda p, exit_code, term_signal, stdout_buf, stderr_buf: on_exit(dep, p, exit_code, term_signal, stdout_buf, stderr_buf),
-                    lambda p, error: on_error(dep, p, error))
-                dep_processes[dep.name] = p
-
-        for dep_name, dep in build_config.zig_dependencies.items():
-            print("Checking", dep_name)
-            dep_url = dep.url
-            if dep_url is not None:
-                print("Fetching", dep_name, "from", dep_url)
-
-                cmd = [zig, "fetch", "--global-cache-dir", zig_global_cache_dir, dep_url]
-                p = process.RunProcess(
-                    pcap,
-                    cmd,
-                    lambda p, exit_code, term_signal, stdout_buf, stderr_buf: on_exit(dep, p, exit_code, term_signal, stdout_buf, stderr_buf),
-                    lambda p, error: on_error(dep, p, error))
-                zig_processes[dep.name] = p
+        zfd = ZigFetchDeps(env, build_config, all_done, on_zig_fetch_error)
 
 
 actor CmdPkgAdd(env, args):
