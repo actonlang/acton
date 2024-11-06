@@ -24,10 +24,10 @@ class BuildConfig(object):
     - zig_dependencies are dependencies on Zig projects, which could in turn be
       Zig, C or C++ libraries that get linked in with the project
     """
-    dependencies: dict[str, Dependency]
+    dependencies: dict[str, PkgDependency]
     zig_dependencies: dict[str, ZigDependency]
 
-    def __init__(self, dependencies: dict[str, Dependency]={}, zig_dependencies: dict[str, ZigDependency]={}):
+    def __init__(self, dependencies: dict[str, PkgDependency]={}, zig_dependencies: dict[str, ZigDependency]={}):
         self.dependencies = dependencies
         self.zig_dependencies = zig_dependencies
 
@@ -43,7 +43,7 @@ class BuildConfig(object):
                         if isinstance(value, dict):
                             for dep_name, dep_attrs in value.items():
                                 if isinstance(dep_name, str) and isinstance(dep_attrs, dict):
-                                    dep = Dependency.from_json(dep_name, dep_attrs)
+                                    dep = PkgDependency.from_json(dep_name, dep_attrs)
                                     new_dependencies[dep_name] = dep
                                 else:
                                     raise ValueError("Invalid build.act.json, dependencies should be a dict")
@@ -85,6 +85,8 @@ class Dependency(object):
     hash: ?str
     path: ?str
 
+class PkgDependency(Dependency):
+
     def __init__(self, name: str, url: ?str, hash: ?str, path: ?str):
         self.name = zig_safe_name(name)
         self.url = url
@@ -111,7 +113,7 @@ class Dependency(object):
                     dep_path = data_path
             else:
                 raise ValueError("Invalid build.act.json, unknown key '%s' in dependency '%s'" % (key, dep_name))
-        return Dependency(dep_name, dep_url, dep_hash, dep_path)
+        return PkgDependency(dep_name, dep_url, dep_hash, dep_path)
 
     def to_json(self) -> dict[str, str]:
         res = {}
