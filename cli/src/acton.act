@@ -622,7 +622,7 @@ actor ZigFetchDeps(env, build_config: BuildConfig, on_done: action() -> None, on
                     on_fetch_error(errmsg)
                     return
 
-            if isinstance(dep, Dependency):
+            if isinstance(dep, PkgDependency):
                 del dep_processes[dep.name]
             elif isinstance(dep, ZigDependency):
                 del zig_processes[dep.name]
@@ -751,7 +751,7 @@ actor CmdPkgAdd(env, args):
                     bc_dep.hash = dep_hash
             else:
                 # Add the hash
-                build_config.dependencies[dep_name] = Dependency(dep_name, dep_url, dep_hash)
+                build_config.dependencies[dep_name] = PkgDependency(dep_name, dep_url, dep_hash)
                 print("Added new package dependency", dep_name, "with hash", dep_hash)
 
             baj_file = file.WriteFile(file.WriteFileCap(file.FileCap(env.cap)), "build.act.json")
