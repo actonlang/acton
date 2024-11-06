@@ -1627,7 +1627,7 @@ void wt_work_cb(uv_check_t *ev) {
                 // the waiting actor. Thus we only print Unhandled exception in
                 // the originating actor when there is no one waiting for us.
                 if (!b)
-                    fprintf(stderr, "Unhandled exception in actor: %s[%ld]]:\n  %s\n", unmangle_name(current->$class->$GCINFO), current->$globkey, fromB_str(ex->$class->__str__(ex)));
+                    fprintf(stderr, "Unhandled exception in actor: %s[%ld]:\n  %s\n", unmangle_name(current->$class->$GCINFO), current->$globkey, fromB_str(ex->$class->__str__(ex)));
                 while (b) {
                     b->B_Msg->$cont = &$Fail$instance;
                     b->B_Msg->value = r.value;
