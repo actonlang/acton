@@ -409,6 +409,9 @@ reduce' env eq c@(Impl _ w t@(TVar _ tv) p)
         witSearch'                          = findWitness env (tCon tc) p
   
 reduce' env eq c@(Impl _ w t@(TCon _ tc) p)
+  | tcname p == qnIdentity,
+    isActor env (tcname tc)                 = do let e = eCall (eQVar primIdentityActor) []
+                                                 return (Eqn w (impl2type t p) e : eq)
   | [wit] <- witSearch                      = do (eq',cs) <- solveImpl env wit w t p
                                                  reduce env (eq'++eq) cs
   | not $ null witSearch                    = do defer [c]; return eq
@@ -572,6 +575,9 @@ findProtoByAttr env cn n    = case filter hasAttr $ witsByTName env cn of
   where hasAttr w           = n `elem` conAttrs env (tcname $ proto w)
 
 hasWitness                  :: Env -> Type -> PCon -> Bool
+hasWitness env (TCon _ c) p
+  | isActor env (tcname c),
+    tcname p == qnIdentity  = True
 hasWitness env t p          =  not $ null $ findWitness env t p
 
 allExtProto                 :: Env -> Type -> PCon -> [Type]

@@ -100,6 +100,8 @@ primRFail           = gPrim "R_FAIL"
 primEqOpt           = gPrim "EqOpt"
 primIdentityOpt     = gPrim "IdentityOpt"
 
+primIdentityActor   = gPrim "IdentityActor"
+
 primWEqNone         = gPrim "wEqNone"
 primWIdentityNone   = gPrim "wIdentityNone"
 
@@ -197,6 +199,7 @@ primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec),
 
                             (noq primEqOpt,         clEqOpt),
                             (noq primIdentityOpt,   clIdentityOpt),
+                            (noq primIdentityActor, clIdentityActor),
 
                             (noq primWEqNone,       NVar tEqNone),
                             (noq primWIdentityNone, NVar tIdentityNone),
@@ -477,9 +480,12 @@ clEqOpt             = NClass [quant a] (leftpath [TC qnEq [tOpt $ tVar a]]) clTE
         scInit      = tSchema [] $ tFun fxPure (posRow (tCon $ TC qnEq [tVar a]) posNil) kwdNil tNone
         a           = TV KType (name "A")
 
---  class $EqOpt[A] (Eq[?A]): pass
-clIdentityOpt       = NClass [quant a] (leftpath [TC qnIdentity [tOpt $ tVar a]]) []
+--  class $IdentityOpt[A] (Identity[?A]): pass
+clIdentityOpt       = NClass [quant a] (leftpath [TC qnIdentity [tOpt $ tVar a]]) []    -- methods not modelled
   where a           = TV KType (name "A")
+
+--  class $IdentityActor (Identity[$Actor]): pass
+clIdentityActor     = NClass [] (leftpath [TC qnIdentity [tActor]]) []                  -- methods not modelled
 
 --  w$EqNone        : Eq[None]
 tEqNone             = tCon $ TC qnEq [tNone]

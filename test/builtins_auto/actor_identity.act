@@ -1,0 +1,10 @@
+def same(a: main, b: main):
+    return a is b
+
+actor main(env):
+    if same(self, self):
+        print("Same!")
+        env.exit(0)
+    else:
+        print("Different...")
+        env.exit(1)
