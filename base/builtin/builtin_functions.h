@@ -145,6 +145,32 @@ struct $EqOpt {
 $EqOpt $EqOptG_new(B_Eq);
 
 
+// IdentityActor //////////////////////////////////////////////////////
+
+struct $IdentityActor;
+typedef struct $IdentityActor *$IdentityActor;
+
+struct $IdentityActorG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    void (*__init__)($IdentityActor);
+    void (*__serialize__)($IdentityActor,$Serial$state);
+    $IdentityActor (*__deserialize__)($IdentityActor,$Serial$state);
+    B_bool (*__bool__)($IdentityActor);
+    B_str (*__str__)($IdentityActor);
+    B_str (*__repr__)($IdentityActor);
+    B_bool (*__is__)($IdentityActor, $WORD, $WORD);
+    B_bool (*__isnot__)($IdentityActor, $WORD, $WORD);
+};
+
+struct $IdentityActor {
+    struct $IdentityActorG_class *$class;
+};
+
+$IdentityActor $IdentityActorG_new();
+
+
 // Various small functions //////////////////////////////////////////////////////////
 
 $WORD B_min(B_Ord wit, B_Iterable wit2, $WORD iter, $WORD deflt);
