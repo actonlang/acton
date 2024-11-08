@@ -276,7 +276,7 @@ actor TCPListenConnection(cap: _TCPListenConnectCap, server_client: int):
         NotImplemented
     _init()
 
-actor TCPListener(cap: TCPListenCap, address: str, port: int, on_error: action(TCPListener, str) -> None, on_accept: action(TCPListenConnection) -> None):
+actor TCPListener(cap: TCPListenCap, address: str, port: int, on_listen: action(TCPListener, ?str) -> None, on_accept: action(TCPListenConnection) -> None):
     """TCP Listener"""
     _stream = -1
     def create_tcp_listen_connection(cap: _TCPListenConnectCap, client: int):

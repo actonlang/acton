@@ -1,22 +1,23 @@
 import net
 
 actor Tester(env, port):
-    var lsock = None
+    var _lsock = None
     var i = 0
 
-    def on_listen_error(l, error):
-        print("Error with our listening socket on port" + str(port) + ": " + error)
-        if error == "resume":
-            pass
-        else:
-            print("Unhandled error:", error)
-        print("Attempting to re-establish listening socket")
-        lsock = init_listen()
+    def _on_listen(l, error):
+        if error is not None:
+            print("Error with our listening socket on port" + str(port) + ": " + error)
+            if error == "resume":
+                pass
+            else:
+                print("Unhandled error:", error)
+            print("Attempting to re-establish listening socket")
+            _lsock = _init_listen()
 
-    def on_server_accept(c):
-        c.cb_install(on_server_receive, on_server_error)
+    def _on_server_accept(c):
+        c.cb_install(_on_server_receive, _on_server_error)
 
-    def on_server_receive(c, data):
+    def _on_server_receive(c, data):
         print("RECV", c, data.decode())
         if data == b"GET":
             response = str(i).encode()
@@ -27,18 +28,18 @@ actor Tester(env, port):
             print("RECV", c, data.decode(), "RESPONSE:", b"OK")
             c.write(b"OK")
 
-    def on_server_error(c, error):
+    def _on_server_error(c, error):
         print("There was an error:", error, " from:", c)
 
-    def init_listen():
+    def _init_listen():
         listen_cap = net.TCPListenCap(net.TCPCap(net.NetCap(env.cap)))
         print("Starting to listen...")
-        s = net.TCPListener(listen_cap, "0.0.0.0", port, on_listen_error, on_server_accept)
+        s = net.TCPListener(listen_cap, "0.0.0.0", port, _on_listen, _on_server_accept)
         print("NOW LISTENING ON", str(port))
 
         return s
 
-    lsock = init_listen()
+    _lsock = _init_listen()
 
 
 actor main(env):
