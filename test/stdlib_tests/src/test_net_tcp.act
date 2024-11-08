@@ -110,22 +110,25 @@ actor test_tcp_server_side_close(report_result, env, log_handler: logging.Handle
     def on_connect(c):
         pass
 
-    def on_receive(c, payload):
-        recv_buf.append(payload)
+    def on_receive(c: net.TCPConnection, payload):
+        if client is not None and client is c:
+            recv_buf.append(payload)
 
     def on_error(c, errmsg):
         # Retry since server might not be up yet
         after 0.1: _connect_client()
 
-    def on_remote_close(c):
-        try:
-            testing.assertEqual(test_payload, bytes([]).join(recv_buf), "Did not receive expected data before remote close event")
-        except AssertionError as ex:
-            report_result(False, ex)
-        except Exception as ex:
-            report_result(None, ex)
-        else:
-            report_result(True, None)
+    def on_remote_close(c: net.TCPConnection):
+        if client is not None and client is c:
+            try:
+                recv = bytes([]).join(recv_buf)
+                testing.assertEqual(test_payload, recv, "Did not receive expected data '%s' before remote close event, got '%s', retry: %d" % (str(test_payload), str(recv), retries))
+            except AssertionError as ex:
+                report_result(False, ex)
+            except Exception as ex:
+                report_result(None, ex)
+            else:
+                report_result(True, None)
 
     def _start():
         retries -= 1

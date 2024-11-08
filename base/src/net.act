@@ -58,7 +58,7 @@ def lookup_aaaa(cap: DNSCap, name: str, on_resolve: action(list[str]) -> None, o
     _lookup_aaaa(name, on_resolve, on_error)
 
 
-actor TCPConnection(cap: TCPConnectCap, address: str, port: int, on_connect: action(TCPConnection) -> None, on_receive: action(TCPConnection, bytes) -> None, on_error: action(TCPConnection, str) -> None, on_remote_close: ?action(TCPListenConnection) -> None, connect_timeout: float=10.0):
+actor TCPConnection(cap: TCPConnectCap, address: str, port: int, on_connect: action(TCPConnection) -> None, on_receive: action(TCPConnection, bytes) -> None, on_error: action(TCPConnection, str) -> None, on_remote_close: ?action(TCPConnection) -> None, connect_timeout: float=10.0):
     """TCP IP Connection"""
     var _a_res: list[str] = []
     var _aaaa_res: list[str] = []
