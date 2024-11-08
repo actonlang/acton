@@ -426,15 +426,16 @@ actor Listener(cap: net.TCPListenCap, address: str, port: int, on_accept: action
     _log = logging.Logger(log_handler)
     var bufs = []
 
-    def on_tcp_listener_error(listener, error):
-        _log.notice("There was an error with the TCPListener socket", {"error": error})
+    def on_tcp_listen(listener, error):
+        if error is not None:
+            _log.notice("There was an error with the TCPListener socket", {"error": error})
 
     def on_tcp_listener_accept(conn):
         s = Server(conn, on_accept, log_handler)
         await async on_accept(s)
         await async conn.cb_install(s.on_tcp_receive, s.on_tcp_error)
 
-    l = net.TCPListener(cap, address, port, on_tcp_listener_error, on_tcp_listener_accept)
+    l = net.TCPListener(cap, address, port, on_tcp_listen, on_tcp_listener_accept)
 
 
 # TODO: change port to u16, when u16 has a sub-type relationship to int
