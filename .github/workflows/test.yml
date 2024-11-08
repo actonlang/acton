@@ -243,6 +243,11 @@ jobs:
         run: |
           echo "BUILD_RELEASE=1" >> $GITHUB_ENV
         if: startsWith(github.ref, 'refs/tags/v')
+      - name: "Install build prerequisites"
+        run: |
+          apt-get update
+          apt-get install -qy bzip2 curl g++ haskell-stack make procps zlib1g-dev
+          apt-get install -qy bash-completion build-essential debhelper devscripts
       - name: "Check out repository code"
         uses: actions/checkout@v4
       - name: "Cache stuff"
@@ -250,12 +255,8 @@ jobs:
         with:
           path: |
             ./debian/.debhelper/
+            ~/.stack
           key: build-debs
-      - name: "Install build prerequisites"
-        run: |
-          apt-get update
-          apt-get install -qy bzip2 curl g++ haskell-stack make procps zlib1g-dev
-          apt-get install -qy bash-completion build-essential debhelper devscripts
       - name: "locale en_US.UTF-8"
         run: |
           apt-get install -qy locales
