@@ -255,6 +255,7 @@ jobs:
         with:
           path: |
             ./debian/.debhelper/
+            ~/.stack
           key: build-debs
       - name: "locale en_US.UTF-8"
         run: |
