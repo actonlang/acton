@@ -529,4 +529,4 @@ debian/changelog: debian/changelog.in CHANGELOG.md
 
 .PHONY: debs
 debs: debian/changelog
-	debuild --preserve-envvar VERSION_INFO -i -us -uc -b
+	debuild --preserve-envvar VERSION_INFO -i -us -uc -nc -b
