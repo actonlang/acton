@@ -1,5 +1,38 @@
 # Changelog
 
+## [0.24.1] (2024-11-09)
+
+## Added
+- It is now possible to compare actors with `if a is b`
+  - This is a stop gap measure.
+  - Equality comparison requires the `Eq` protocol and this awaits the planned
+    actor / class unification work
+
+## Changed
+- Change `TCPListenConnection` callback `on_error(c, error: str)` to
+  `on_listen(c, error: ?str)`. Previously, the `on_error()` callback was called
+  if there was an error establishing the listening connection. It is now also
+  called in the positive case, when we have successfully established the
+  listening connection. If the `error` argument is `None`, all went well whereas
+  if it is set, there was an error.
+
+## Fixed
+- Dependencies are now idempotently fetched, i.e. if we first look if we already
+  have the configured hash locally and use that. We only fetch it if we don't
+  have a dependency locally.
+  - Previously, `acton build` would effectively require an Internet connection,
+    which is now fixed. Like now, you can do `acton fetch` in a repo to fetch
+    all dependencies locally and from there on you can work in "airplane mode".
+- Dependency hash mismatch is now correctly checked and treated as an error.
+
+### Testing / CI / Build
+- TCP tests have been rewritten to use the new `TCPListenConnection` `on_listen`
+  callback to properly sequence the test so we first establish the server and
+  then start the client. This removes a racy condition which lead to flaky test
+  failures.
+- Stopped testing on MacOS 12, which is EoL.
+
+
 ## [0.24.0] (2024-11-05)
 
 Acton now supports package dependencies and has a package manager to work with
@@ -44,21 +77,6 @@ It's now possible to write Acton low level code in Zig, in addition to C.
   - It is now possible to have a module `foo` (src/foo.act) and a `foo.bar`
     (src/foo/bar.act), which would previously conflict and yield a compilation
     error.
-- Fixed scope extension to handle accessing variables in else defined in try
-- Fixed CPS'ed __init__ so we can correctly instantiate actors in class init
-- Fixed passing function with mut effect to actor
-  - The actor seal leak detection would incorrectly trigger. We need a better
-    detector, until then the check is removed.
-- Fix returning fixed size integer
-  - The recent unboxing code misbehaved in some situations when trying to return
-    a fixed size integer from a function
-- Fix assert(Not)Equal
-  - Now actually works for None values, would previously only compare the values
-    if they were not-None
-- Fix qualified name checking, so we can properly detect method invocation via
-  class name even for imported classes
-  - This was an issue when importing a module and trying to call a @staticmethod
-    on a class
 - Improved source location error messages
 - Upgraded to Haskell GHC 9.6.6
 
@@ -77,8 +95,25 @@ It's now possible to write Acton low level code in Zig, in addition to C.
   - CPU affinity is probably a win for server workloads, so this is a
     regression, but for desktop apps, it likely workb setter not pinning to CPU
     cores
+    
+## Fixed
+- Fixed scope extension to handle accessing variables in else defined in try
+- Fixed CPS'ed __init__ so we can correctly instantiate actors in class init
+- Fixed passing function with mut effect to actor
+  - The actor seal leak detection would incorrectly trigger. We need a better
+    detector, until then the check is removed.
+- Fix returning fixed size integer
+  - The recent unboxing code misbehaved in some situations when trying to return
+    a fixed size integer from a function
+- Fix assert(Not)Equal
+  - Now actually works for None values, would previously only compare the values
+    if they were not-None
+- Fix qualified name checking, so we can properly detect method invocation via
+  class name even for imported classes
+  - This was an issue when importing a module and trying to call a @staticmethod
+    on a class
 
-### Testing / CI / Build
+## Testing / CI / Build
 - Stopped building the vendored libraries we ship, they are now shipped as
   source and compiled on demand
 - Force hermetic build on MacOS
