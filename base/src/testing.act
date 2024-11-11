@@ -8,8 +8,6 @@ import time
 
 # -- assert ---------------------------------------------------------------------
 
-# TODO: add actual values as args to assert functions
-# TODO: add __str__ to assert exceptions
 class NotEqualError[T](AssertionError):
     a: ?T
     b: ?T
@@ -199,12 +197,6 @@ def assertFalse(a, msg: ?str):
     if bool(a):
         raise NotFalseError(a, msg)
 
-# We cannot test raises right now because we need better support for taking a
-# function and its arguments as parameters or run as a context manager
-# TODO: assertRaises
-# TODO: assertRaisesWithMessage
-# TODO: assertRaisesWithMessageRegex
-
 # TODO: fix this
 #def assertIs[T(Identity)](a: ?T, b: ?T, msg: ?str):
 #    if not (a is b):
@@ -230,23 +222,9 @@ def assertNotIn(a, b, msg: ?str):
     if a in b:
         raise InError(a, b, msg)
 
-# TODO: fix this?
-#def assertIsInstance(a, b, msg: str):
-#    if not isinstance(a, b):
-#        assert_msg = "Expected instance of " + b + " but got non-instance"
-#        if msg != "":
-#            assert_msg += ": " + msg
-#        raise NotIsInstanceError(assert_msg)
-#
-#def assertNotIsInstance(a, b, msg: str):
-#    if isinstance(a, b):
-#        assert_msg = "Expected not instance of " + b + " but got instance"
-#        if msg != "":
-#            assert_msg += ": " + msg
-#        raise IsInstanceError(assert_msg)
-
 
 def error(msg: ?str):
+    """Raise a generic test error"""
     raise AssertionError(msg if msg is not None else "Test error")
 
 # -------------------------------------------------------------------------------
