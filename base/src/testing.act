@@ -981,7 +981,11 @@ class ProjectTestResults(object):
 
         print("")
         if complete:
-            if errors > 0 and failures > 0:
+            if self.num_tests() == 0:
+                print("Nothing to test")
+                print()
+                return 0
+            elif errors > 0 and failures > 0:
                 print(term.bold + term.red + "%d error and %d failure out of %d tests (%ss)" % (errors, failures, self.num_tests(), self.sw.elapsed().str_ms()) + term.normal)
                 print()
                 return 2
