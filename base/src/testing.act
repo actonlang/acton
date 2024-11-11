@@ -1,6 +1,7 @@
 
 import acton.rts
 import argparse
+import file
 import json
 import logging
 import term
@@ -229,18 +230,29 @@ def error(msg: ?str):
 
 # -------------------------------------------------------------------------------
 
+def eq_opt[T(Eq)](a: ?T, b: ?T) -> bool:
+    return a is not None and b is not None and a == b or a is None and b is None
+
 class TestLogger(logging.Logger):
     pass
 
 class Test(object):
+    module: ?str
     name: str
     desc: str
 
     def __init__(self, name: str, desc: str):
         self.name = name
         self.desc = desc
+        self.module = None
 
-    def run(self, report_result: action(?bool, ?Exception) -> None, env: Env, log_handler: logging.Handler):
+    def get_module(self) -> str:
+        mod = self.module
+        if mod is not None:
+            return mod
+        raise ValueError("Test: Module not set")
+
+    def run(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler):
         if isinstance(self, UnitTest):
             self.run_test(report_result, env, log_handler)
         elif isinstance(self, SyncActorTest):
@@ -271,12 +283,14 @@ class UnitTest(Test):
         self.fn = fn
         self.name = name
         self.desc = desc
+        self.module = None
 
-    def run_test(self, report_result: action(?bool, ?Exception) -> None, env: Env, log_handler: logging.Handler):
+    def run_test(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler):
+        output = None
         success = None
         exception = None
         try:
-            self.fn()
+            output = self.fn()
             success = True
             exception = None
         except AssertionError as e:
@@ -285,19 +299,21 @@ class UnitTest(Test):
         except Exception as e:
             success = None
             exception = e
-        report_result(success, exception)
+        report_result(success, exception, output)
 
 class SyncActorTest(Test):
     def __init__(self, fn: proc(logging.Handler) -> None, name: str, desc: str):
         self.fn = fn
         self.name = name
         self.desc = desc
+        self.module = None
 
-    def run_test(self, report_result: action(?bool, ?Exception) -> None, env: Env, log_handler: logging.Handler):
+    def run_test(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler):
+        output = None
         success = None
         exception = None
         try:
-            self.fn(log_handler)
+            output = self.fn(log_handler)
             success = True
             exception = None
         except AssertionError as e:
@@ -306,32 +322,38 @@ class SyncActorTest(Test):
         except Exception as e:
             success = None
             exception = e
-        report_result(success, exception)
+        report_result(success, exception, output)
 
 class AsyncActorTest(Test):
     def __init__(self, fn: proc(action(?bool, ?Exception) -> None, logging.Handler) -> None, name: str, desc: str):
         self.fn = fn
         self.name = name
         self.desc = desc
+        self.module = None
 
-    def run_test(self, report_result: action(?bool, ?Exception) -> None, env: Env, log_handler: logging.Handler):
-        self.fn(report_result, log_handler)
+    def run_test(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler):
+        def repres(success: ?bool, exception: ?Exception):
+            report_result(success, exception, None)
+        self.fn(repres, log_handler)
 
 class EnvTest(Test):
     def __init__(self, fn: proc(action(?bool, ?Exception) -> None, Env, logging.Handler) -> None, name: str, desc: str):
         self.fn = fn
         self.name = name
         self.desc = desc
+        self.module = None
 
-    def run_test(self, report_result: action(?bool, ?Exception) -> None, env: Env, log_handler: logging.Handler):
-        self.fn(report_result, env, log_handler)
+    def run_test(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler):
+        def repres(success: ?bool, exception: ?Exception):
+            report_result(success, exception, None)
+        self.fn(repres, env, log_handler)
 
 
 class TestResult(object):
     """
     There are three possible outcomes for a test:
     - success: the test ran to completion with the expected results
-      - for unit tests & synchronous actor tests, it means it returned `None`
+      - for unit tests & synchronous actor tests, it means the function returned
       - for asynchronous actor & env tests, the report_result callback was called with TestResult(success=True, exception=None)
     - failure: the test encountered an unexpected value
       - for unit tests & synchronous actor tests, an AssertionError (or child thereof) was raiesd
@@ -342,13 +364,15 @@ class TestResult(object):
     """
     success: ?bool
     exception: ?str
+    output: ?str
     duration: float
     mem_usage_delta: int
     non_gc_mem_usage_delta: int
 
-    def __init__(self, success: ?bool, exception: ?str, duration: float, mem_usage_delta: int, non_gc_mem_usage_delta: int):
+    def __init__(self, success: ?bool, exception: ?str, output: ?str, duration: float, mem_usage_delta: int, non_gc_mem_usage_delta: int):
         self.success = success
         self.exception = exception
+        self.output = output
         self.duration = duration
         self.mem_usage_delta = mem_usage_delta
         self.non_gc_mem_usage_delta = non_gc_mem_usage_delta
@@ -357,6 +381,7 @@ class TestResult(object):
         return {
             "success": self.success,
             "exception": self.exception,
+            "output": self.output,
             "duration": self.duration,
             "mem_usage_delta": self.mem_usage_delta,
             "non_gc_mem_usage_delta": self.non_gc_mem_usage_delta,
@@ -366,16 +391,18 @@ class TestResult(object):
     def from_json(data: dict[str, str]) -> TestResult:
         success = data["success"]
         exception = data["exception"]
+        output = data["output"]
         duration = data["duration"]
         mem_usage_delta = data["mem_usage_delta"]
         non_gc_mem_usage_delta = data["non_gc_mem_usage_delta"]
         if (isinstance(success, bool)
             and isinstance(exception, str)
+            and isinstance(output, str)
             and isinstance(duration, float)
             and isinstance(mem_usage_delta, int)
             and isinstance(non_gc_mem_usage_delta, int)
             ):
-            return TestResult(success, exception, duration, mem_usage_delta, non_gc_mem_usage_delta)
+            return TestResult(success, exception, output, duration, mem_usage_delta, non_gc_mem_usage_delta)
         raise ValueError("Invalid TestResult JSON")
 
 
@@ -384,6 +411,8 @@ class TestInfo(object):
     complete: bool
     success: ?bool
     exception: ?str
+    output: ?str
+    flaky_output: bool
     flaky: bool
     leaky: bool
     min_duration: float
@@ -404,6 +433,7 @@ class TestInfo(object):
                  complete: bool=False,
                  success: ?bool=None,
                  exception: ?str=None,
+                 output: ?str=None,
                  flaky: bool=False,
                  min_duration: float=-1.0,
                  max_duration: float=-1.0,
@@ -421,6 +451,8 @@ class TestInfo(object):
         self.complete = complete
         self.success = success
         self.exception = exception
+        self.output = output
+        self.flaky_output = False
         self.flaky = flaky
         self.leaky = False
         self.min_duration = min_duration
@@ -438,10 +470,17 @@ class TestInfo(object):
 
     def update(self, complete, result: TestResult, test_duration: float=-1.0):
         self.complete = complete
+
+        if len(self.results) == 0:
+            # First result
+            self.output = result.output
+            self.exception = result.exception
+
         self.results.append(result)
-        exc = result.exception
-        if exc is not None:
-            self.exception = exc
+
+        if not eq_opt(self.output, result.output):
+            self.flaky_output = True
+
         if test_duration > 0.0:
             self.test_duration = test_duration
 
@@ -534,6 +573,7 @@ class TestInfo(object):
             "complete": self.complete,
             "success": self.success,
             "exception": self.exception,
+            "output": self.output,
             "flaky": self.flaky,
             "min_duration": self.min_duration,
             "max_duration": self.max_duration,
@@ -567,6 +607,10 @@ class TestInfo(object):
         exception: ?str = None
         if exc is not None and isinstance(exc, str):
             exception = exc
+        out = json_data["output"]
+        output: ?str = None
+        if out is not None and isinstance(out, str):
+            output = out
         flaky = json_data["flaky"]
         min_duration = json_data["min_duration"]
         max_duration = json_data["max_duration"]
@@ -601,6 +645,7 @@ class TestInfo(object):
                             complete,
                             success,
                             exception,
+                            output,
                             flaky,
                             min_duration,
                             max_duration,
@@ -634,15 +679,27 @@ class TestRunnerConfig(object):
 
 
 # TODO: add a timeout to this
-actor test_executor(syscap, config, get_test: () -> Test, report_complete, env):
+actor TestExecutor(syscap, config, get_test: () -> Test, report_complete, env):
     """The actual executor of tests
     """
     log_handler = logging.Handler("TestRunner")
+    fcap = file.FileCap(env.cap)
+    rfcap = file.ReadFileCap(fcap)
+    fs = file.FS(fcap)
     var test_sw = time.Stopwatch()
     var last_report = time.Stopwatch()
     var test_info = None
 
-    action def _report_result(test: Test, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, success: ?bool, exception: ?Exception):
+    def get_expected(module: str, test: str) -> ?str:
+        filename = file.join_path([fs.cwd(), "test", "golden", module, test])
+        try:
+            exp_file = file.ReadFile(rfcap, filename)
+            exp_data = exp_file.read().decode()
+            return exp_data
+        except:
+            return None
+
+    action def _report_result(test: Test, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, success: ?bool, exception: ?Exception, val: ?str):
         full_dur = sw.elapsed().to_float() * 1000.0
         gc_time_end = acton.rts.get_gc_time(syscap).total
         gc_dur = float(gc_time_end - gc_time_start)
@@ -659,7 +716,7 @@ actor test_executor(syscap, config, get_test: () -> Test, report_complete, env):
         complete = True if test_dur > config.min_test_duration else False
         if test_info is not None:
             exc = str(exception) if exception is not None else None
-            test_info.update(complete, TestResult(success, exc, testiter_dur, mem_usage_delta, non_gc_mem_usage_delta), test_dur*1000.0)
+            test_info.update(complete, TestResult(success, exc, val, testiter_dur, mem_usage_delta, non_gc_mem_usage_delta), test_dur*1000.0)
         if last_report.elapsed().to_float() > 0.05 or complete:
             if test_info is not None and config.output_enabled:
                 print(json.encode({"test_info": test_info.to_json()}), err=True)
@@ -679,12 +736,23 @@ actor test_executor(syscap, config, get_test: () -> Test, report_complete, env):
         gc_total_bytes_start = int(acton.rts.get_gc_total_bytes(syscap))
         gc_time_start = acton.rts.get_gc_time(syscap).total
         sw = time.Stopwatch()
+
+        def repres(s: ?bool, e: ?Exception, val: ?str) -> None:
+            # Compare expected golden value
+            if val is not None:
+                exp_val = get_expected(t.get_module(), t.name)
+                if exp_val is None or exp_val is not None and val != exp_val:
+                    exc = NotEqualError(val, exp_val, "Test output does not match expected golden value.\nActual  : %s\nExpected: %s" % (val, exp_val if exp_val is not None else "None"))
+                    _report_result(t, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, False, exc, val)
+                    return
+            _report_result(t, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, s, e, val)
+
         try:
-            t.run(lambda s, e: _report_result(t, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, s, e), env, log_handler)
+            t.run(repres, env, log_handler)
         except AssertionError as e:
-            _report_result(t, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, False, e)
+            _report_result(t, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, False, e, None)
         except Exception as e:
-            _report_result(t, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, None, e)
+            _report_result(t, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, None, e, None)
 
     def _run_next():
         """Get the next available test and run it"""
@@ -1036,12 +1104,16 @@ actor test_runner(env: Env,
     def _init_results(args):
 
         for name, t in unit_tests.items():
+            t.module = args.get_str("modname")
             all_tests[name] = t
         for name, t in sync_actor_tests.items():
+            t.module = args.get_str("modname")
             all_tests[name] = t
         for name, t in async_actor_tests.items():
+            t.module = args.get_str("modname")
             all_tests[name] = t
         for name, t in env_tests.items():
+            t.module = args.get_str("modname")
             all_tests[name] = t
 
         tests = _filter_tests(all_tests, args)
@@ -1112,6 +1184,8 @@ actor test_runner(env: Env,
         p = argparse.Parser()
         p.add_bool("json", "Output results as JSON")
         p.add_bool("no_output", "No result output")
+        # TODO: remove modname arg and get it from __modname__ that compiler should provide
+        p.add_option("modname", "str", help="Name of module")
         p.add_option("name", "strlist", nargs="+", default=[], help="Filter tests by name")
         lp = p.add_cmd("list", "list tests", _list_tests)
         tp = p.add_cmd("test", "Run tests", _run_tests)
