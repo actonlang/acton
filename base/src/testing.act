@@ -263,7 +263,16 @@ class Test(object):
         self.desc = desc
 
     def run(self, report_result: action(?bool, ?Exception) -> None, env: Env, log_handler: logging.Handler):
-        raise NotImplementedError("Test: run() not implemented")
+        if isinstance(self, UnitTest):
+            self.run_test(report_result, env, log_handler)
+        elif isinstance(self, SyncActorTest):
+            self.run_test(report_result, env, log_handler)
+        elif isinstance(self, AsyncActorTest):
+            self.run_test(report_result, env, log_handler)
+        elif isinstance(self, EnvTest):
+            self.run_test(report_result, env, log_handler)
+        else:
+            raise ValueError("Test: Invalid test type")
 
     def to_json(self):
         return {
@@ -285,7 +294,7 @@ class UnitTest(Test):
         self.name = name
         self.desc = desc
 
-    def run(self, report_result: action(?bool, ?Exception) -> None, env: Env, log_handler: logging.Handler):
+    def run_test(self, report_result: action(?bool, ?Exception) -> None, env: Env, log_handler: logging.Handler):
         success = None
         exception = None
         try:
@@ -306,7 +315,7 @@ class SyncActorTest(Test):
         self.name = name
         self.desc = desc
 
-    def run(self, report_result: action(?bool, ?Exception) -> None, env: Env, log_handler: logging.Handler):
+    def run_test(self, report_result: action(?bool, ?Exception) -> None, env: Env, log_handler: logging.Handler):
         success = None
         exception = None
         try:
@@ -327,7 +336,7 @@ class AsyncActorTest(Test):
         self.name = name
         self.desc = desc
 
-    def run(self, report_result: action(?bool, ?Exception) -> None, env: Env, log_handler: logging.Handler):
+    def run_test(self, report_result: action(?bool, ?Exception) -> None, env: Env, log_handler: logging.Handler):
         self.fn(report_result, log_handler)
 
 class EnvTest(Test):
@@ -336,7 +345,7 @@ class EnvTest(Test):
         self.name = name
         self.desc = desc
 
-    def run(self, report_result: action(?bool, ?Exception) -> None, env: Env, log_handler: logging.Handler):
+    def run_test(self, report_result: action(?bool, ?Exception) -> None, env: Env, log_handler: logging.Handler):
         self.fn(report_result, env, log_handler)
 
 
@@ -693,16 +702,7 @@ actor test_executor(syscap, config, get_test: () -> Test, report_complete, env):
         gc_time_start = acton.rts.get_gc_time(syscap).total
         sw = time.Stopwatch()
         try:
-            if isinstance(t, UnitTest):
-                t.run(lambda s, e: _report_result(t, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, s, e), env, log_handler)
-            elif isinstance(t, SyncActorTest):
-                t.run(lambda s, e: _report_result(t, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, s, e), env, log_handler)
-            elif isinstance(t, AsyncActorTest):
-                t.run(lambda s, e: _report_result(t, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, s, e), env, log_handler)
-            elif isinstance(t, EnvTest):
-                t.run(lambda s, e: _report_result(t, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, s, e), env, log_handler)
-            else:
-                raise ValueError("Invalid test type")
+            t.run(lambda s, e: _report_result(t, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, s, e), env, log_handler)
         except AssertionError as e:
             _report_result(t, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, False, e)
         except Exception as e:
