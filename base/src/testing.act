@@ -1099,9 +1099,11 @@ actor test_runner(env: Env,
             tests_complete.add("_test_" + t)
             check_complete()
 
+        test_executors = []
         if not check_complete():
             for i in range(test_concurrency):
-                test_executor(env.syscap, config, get_test, report_complete, env)
+                te = TestExecutor(env.syscap, config, get_test, report_complete, env)
+                test_executors.append(te)
 
     proc def _run_perf_tests(args):
         _run_tests(args, perf_mode=True)
