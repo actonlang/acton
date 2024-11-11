@@ -551,6 +551,7 @@ actor RunTestTest(env: Env, args, perf_mode: bool=False):
             pass
 
     def _on_build_success(stdout_buf: str):
+        print(term.clearline + term.up() + term.clearline, end="")
         test_modules = []
         stdout_tests = False
         for line in stdout_buf.splitlines(False):
@@ -573,6 +574,7 @@ actor RunTestTest(env: Env, args, perf_mode: bool=False):
     # actually working code.
     #dev = not perf_mode
     dev = True
+    print("Building project tests...")
     project_builder = BuildProject(process_cap, env, args, _on_build_success, _on_build_failure, build_tests=True)
 
 def build_cmd_args(args):
