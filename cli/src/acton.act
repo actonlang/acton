@@ -2,6 +2,7 @@ import argparse
 import file
 import json
 import process
+import term
 import testing
 
 from buildy import *
@@ -425,7 +426,7 @@ actor RunTestList(env, args):
         _expected_modules = set(module_names)
 
         for module_name in module_names:
-            t = RunModuleTest(process_cap, module_name, ["list"], lambda x: _on_json_output(module_name, x), _on_test_error)
+            t = RunModuleTest(process_cap, module_name, ["list", "--modname", module_name], lambda x: _on_json_output(module_name, x), _on_test_error)
 
     def _on_build_success(stdout_buf: str):
         test_modules = []
@@ -460,6 +461,7 @@ actor RunTestTest(env: Env, args, perf_mode: bool=False):
     var _module_tests = {}
     var modules_to_test = set()
     var perf_data = "{}"
+    fs = file.FS(file.FileCap(env.cap))
 
     test_cmd_args = []
     for name_filter in args.get_strlist("name"):
@@ -479,7 +481,26 @@ actor RunTestTest(env: Env, args, perf_mode: bool=False):
                 perf_wfile = file.WriteFile(file.WriteFileCap(file.FileCap(env.cap)), "perf_data")
                 perf_wfile.write(ptr.to_json().encode())
                 perf_wfile.close()
+            if args.get_bool("golden-update"):
+                for module_name, tests in ptr.results.items():
+                    for test_name, test_info in tests.items():
+                        exc = test_info.exception
+                        output = test_info.output
+                        if exc is not None and output is not None and exc.startswith("testing.NotEqualError: Test output does not match expected golden value"):
+                            rpath = ["test", "golden", module_name]
+                            filename = file.join_path([fs.cwd()] + rpath + [test_name])
+                            for idx in range(1, len(rpath)+1):
+                                mkdir_path = file.join_path([fs.cwd()] + rpath[0:idx])
+                                try:
+                                    a = fs.mkdir(mkdir_path)
+                                except:
+                                    pass
+                            golden_file = file.WriteFile(file.WriteFileCap(file.FileCap(env.cap)), filename)
+                            golden_file.write(output.encode())
+                            await async golden_file.close()
+
             env.exit(r)
+            return
         after 0.05: _periodic_show()
 
     def _on_json_output(module_name, data):
@@ -494,13 +515,12 @@ actor RunTestTest(env: Env, args, perf_mode: bool=False):
                 ptr.update_module(module_name, tests)
                 expected_modules_list.discard(module_name)
                 if len(expected_modules_list) == 0:
+                    # We have received the test list from all modules, show
+                    # results to get empty skeleton and then run tests.
+                    # NOTE: in perf mode we run a single module at a time and
+                    # that module in turn limits concurrency to 1
                     _periodic_show()
-                    if perf_mode:
-                        _run_module_tests()
-                    else:
-                        # Run all tests in parallel
-                        for module_name in modules_to_test:
-                            t = RunModuleTest(process_cap, module_name, ["test"] + test_cmd_args, lambda x: _on_json_output(module_name, x), lambda x, y, z: _on_test_error(module_name, x, y, z))
+                    _run_module_tests(run_all=not perf_mode)
 
             elif "test_info" in data:
                 test_info = TestInfo.from_json(data["test_info"])
@@ -534,23 +554,30 @@ actor RunTestTest(env: Env, args, perf_mode: bool=False):
         if len(modules_to_test) == 0:
             print("No tests found")
             env.exit(0)
+            return
 
         # List all tests first, which we can run in parallel. Once we have the
         # list of all tests we can start running them one at a time in sequence.
         for module_name in modules_to_test:
-            t = RunModuleTest(process_cap, module_name, ["list"] + test_cmd_args, lambda x: _on_json_output(module_name, x), lambda x, y, z: _on_test_error(module_name, x, y, z))
+            t = RunModuleTest(process_cap, module_name, ["list", "--modname", module_name] + test_cmd_args, lambda x: _on_json_output(module_name, x), lambda x, y, z: _on_test_error(module_name, x, y, z))
 
-    def _run_module_tests():
+    def _run_module_tests(run_all=False):
         try:
             module_name = modules_to_test.pop()
-            if module_name is not None:
-                t = RunModuleTest(process_cap, module_name, ["test", "perf"] + test_cmd_args, lambda x: _on_json_output(module_name, x), lambda x, y, z: _on_test_error(module_name, x, y, z))
-            else:
-                _periodic_show()
-        except:
-            pass
+            cmd = ["test"]
+            if perf_mode:
+                cmd += ["perf"]
+            cmd += ["--modname", module_name]
+            cmd += test_cmd_args
+            t = RunModuleTest(process_cap, module_name, cmd, lambda x: _on_json_output(module_name, x), lambda x, y, z: _on_test_error(module_name, x, y, z))
+        except ValueError:
+            _periodic_show()
+            return
+        if run_all:
+            _run_module_tests(run_all)
 
     def _on_build_success(stdout_buf: str):
+        print(term.clearline + term.up() + term.clearline, end="")
         test_modules = []
         stdout_tests = False
         for line in stdout_buf.splitlines(False):
@@ -573,12 +600,14 @@ actor RunTestTest(env: Env, args, perf_mode: bool=False):
     # actually working code.
     #dev = not perf_mode
     dev = True
+    print("Building project tests...")
     project_builder = BuildProject(process_cap, env, args, _on_build_success, _on_build_failure, build_tests=True)
 
 def build_cmd_args(args):
     cmdargs = []
     for argname, arg in args.options.items():
-        if argname in {"file", "record"}:
+        # TODO: reverse this logic, we should only pass in a small set of options, not all
+        if argname in {"file", "record", "golden-update"}:
             continue
         if arg.type == "bool":
             if args.get_bool(argname):
@@ -1094,6 +1123,7 @@ actor main(env):
 
         testp = p.add_cmd("test", "Test", _cmd_test)
         testp.add_bool("record", "Record test performance results")
+        testp.add_bool("golden-update", "Update expected golden values based on current values")
         testp.add_option("module", "strlist", "+", [], "Filter on test module name")
         testp.add_option("name", "strlist", "+", [], "Filter on test name")
 

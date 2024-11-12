@@ -1725,7 +1725,7 @@ data TestType = UnitType | SyncType | AsyncType | EnvType
                 deriving (Eq,Show,Read)
 
 testType (NDef (TSchema _ []  (TFun _ fx (TNil _ PRow) k res)) _)
-              | res /= tNone = Nothing
+              | res /= tNone && res /= tStr = Nothing
               | otherwise    = case row2list k of
                                 []         -> if fx == fxPure || fx == fxMut then Just UnitType else Nothing
                                 [t]        -> if t == logging_handler then Just SyncType else Nothing
