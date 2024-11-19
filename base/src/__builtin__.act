@@ -753,8 +753,10 @@ protocol Sequence[A] (Sliceable[A], Collection[A], Times[int]):
 #   Mapping <---------
 
 protocol Mapping[A(Eq),B] (Container[A], Indexed[A,B]):
-    get         : (A,?B) -> ?B
-    pop         : mut(A,?B) -> ?B
+    get         : (A) -> ?B
+    getdef      : (A,B) -> B
+    pop         : mut(A) -> ?B
+    popdef      : mut(A,B) -> B
     keys        : () -> Iterator[A]
     values      : () -> Iterator[B]
     items       : () -> Iterator[(A,B)]

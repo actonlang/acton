@@ -23,8 +23,8 @@ actor main(env):
     if t != 49500:
         env.exit(1)
     deflt = '666'
-    w = dict.get('100',deflt)
-    w2 = dict.get('37',deflt)
+    w = dict.getdef('100',deflt)
+    w2 = dict.getdef('37',deflt)
     if w != '101' or w2 != '666':
         env.exit(1)
     for j in range(11,200,20):

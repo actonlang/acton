@@ -464,7 +464,22 @@ B_bool B_MappingD_dictD___containsnot__ (B_MappingD_dict wit, B_dict dict, $WORD
     return toB_bool(!B_MappingD_dictD___contains__(wit, dict, key)->val);
 }
 
-$WORD B_MappingD_dictD_get (B_MappingD_dict wit, B_dict dict, $WORD key, $WORD deflt) {
+$WORD B_MappingD_dictD_get (B_MappingD_dict wit, B_dict dict, $WORD key) {
+    if (!dict->table)
+        return B_None;
+    long hash = 0;
+    B_Hashable hashwit = wit->W_HashableD_AD_MappingD_dict;
+    if (dict->table->tb_size > INIT_SIZE) 
+        hash = from$int(hashwit->$class->__hash__(hashwit,key));
+    $WORD res;
+    int ix = $lookdict(dict,hashwit,hash,key,&res);
+    if (ix < 0) 
+        return B_None;
+    else
+        return res;
+}
+
+$WORD B_MappingD_dictD_getdef (B_MappingD_dict wit, B_dict dict, $WORD key, $WORD deflt) {
     if (!dict->table)
         return deflt;
     long hash = 0;
@@ -479,7 +494,33 @@ $WORD B_MappingD_dictD_get (B_MappingD_dict wit, B_dict dict, $WORD key, $WORD d
         return res;
 }
 
-$WORD B_MappingD_dictD_pop(B_MappingD_dict wit, B_dict dict, $WORD key, $WORD deflt) {
+$WORD B_MappingD_dictD_pop(B_MappingD_dict wit, B_dict dict, $WORD key) {
+    if (dict->numelements == 0)
+        return B_None;
+    $table table = dict->table;
+    long hash = 0;
+    B_Hashable hashwit = wit->W_HashableD_AD_MappingD_dict;
+    if (table->tb_size > INIT_SIZE) {
+        hash = from$int(hashwit->$class->__hash__(hashwit,key));
+    }
+    $WORD res;
+    int ix = $lookdict(dict,hashwit,hash,key,&res);
+    if (ix < 0) 
+        return B_None;
+    else {
+        $entry_t entry = &TB_ENTRIES(table)[ix];
+        int i = $lookdict_index(table,hash,ix);
+        table->tb_indices[i] = DKIX_DUMMY;
+        res = entry->value;
+        entry->value = DELETED;
+        dict->numelements--;
+        if (10*dict->numelements < dict->table->tb_size) 
+        dictresize(hashwit,dict);
+        return res;
+    }
+}
+
+$WORD B_MappingD_dictD_popdef(B_MappingD_dict wit, B_dict dict, $WORD key, $WORD deflt) {
     if (dict->numelements == 0)
         return deflt;
     $table table = dict->table;
