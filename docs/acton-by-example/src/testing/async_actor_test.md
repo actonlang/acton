@@ -45,3 +45,5 @@ All 1 tests passed (0.695s)
 ```
 
 If a particular module is written to be called asynchronously, you will need to use asynchronous tests to test it.
+
+The test discovery finds asynchronous actor tests based on the name starting with `_test_` and has a function signature of `proc(action(?bool, ?Exception) -> None, logging.Handler) -> None`.

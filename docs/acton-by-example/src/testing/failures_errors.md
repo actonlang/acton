@@ -2,11 +2,11 @@
 
 Tests can have tree different outcomes; success, failure and error.
 
-**Success** and **failure** are the two common cases where success is when the test meets the expected assertions and a failure is when it fails to meet a test assertiong like `testing.assertEqual(1, 2)`. We also distinguish a third case for test **errors** which is when a test does not run as expected, hitting an unexpected exception. This could indicate a design issue or that the test environment is not as expected.
+**Success** and **failure** are the two common cases where success is when the test meets the expected assertions and a failure is when it fails to meet a test assertion like `testing.assertEqual(1, 2)`. We also distinguish a third case for test **errors** which is when a test does not run as expected, hitting an unexpected exception. This could indicate a design issue or that the test environment is not as expected.
 
-All test assertions raise exceptions inheriting from `AssertionError` which are considered test failures. Any other exception will be considered a test error.
+All test assertions raise exceptions inheriting from `AssertionError` which are considered **test failures**. Any other exception will be considered a **test error**.
 
-For example, if a test attempts to retrieve `https://dummyjson.com/products/1` and check that the returned JSON looks a certain way, it would be a test failure if the returned JSON does not mach the expected value and it would be a test error if we don't have an Internet connection and are thus unable to retrieve the JSON. It's probably a bad idea to try to connect to something on the Internet in a test, so avoid that and other sources of non-determinism when possible.
+For example, if a test attempts to retrieve `https://dummyjson.com/products/1` and check that the returned JSON looks a certain way, it would be a test failure if the returned JSON does not match the expected value. If we try to connect with an invalid URL, like `htp://` we would get a different exception and that would be considered a **test error**. It's probably a bad idea to try to connect to something on the Internet in a test, so avoid that and other sources of non-determinism when possible.
 
 # Unit tests
 

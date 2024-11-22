@@ -2,7 +2,7 @@
 
 It is also possible to run tests in a *performance mode*, which uses the same basic test definitions (so you can run your tests both as logic test and for performance purposes) but alters the way in which the tests are run. In performance mode, only a single test will be run at a time unlike the normal mode in which many tests are typically run concurrently.
 
-To get good numbers in performance mode, it's good if test functions run for at least a couple of milliseconds. With very short tess, very small differences lead to very large percentage difference.
+To get good numbers in performance mode, it's good if test functions run for at least a couple of milliseconds. With very short tests, very small differences lead to very large percentage differences.
 
 Source:
 ```python
