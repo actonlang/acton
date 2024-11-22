@@ -10,8 +10,8 @@ Text is represented in the attributes text and tail: in node n,
 So, to get the text at top level of node n, one must concatenate
 n.text and c.tail for all children of n.
 """
-    def __init__(self, tag : str, nsdefs : list[(?str,str)], prefix : ?str,
-                 attributes : list[(str, str)], children : list[Node], text: ?str, tail: ?str):
+    def __init__(self, tag: str, nsdefs: list[(?str,str)]=[], prefix: ?str=None,
+                 attributes: list[(str, str)]=[], children: list[Node]=[], text: ?str=None, tail: ?str=None):
         self.tag = tag
         self.nsdefs = nsdefs
         self.prefix = prefix
@@ -19,6 +19,7 @@ n.text and c.tail for all children of n.
         self.children = children
         self.text = text
         self.tail = tail
+
     def encode(self) -> str:
         NotImplemented
 

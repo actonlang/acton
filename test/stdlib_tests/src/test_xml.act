@@ -2,7 +2,14 @@ import testing
 
 import xml
 
-def _test_xml():
+def _test_xml1():
+    a = xml.Node("a", children=[
+        xml.Node("b", text="hello"),
+        xml.Node("c", text="world")
+    ])
+    return a.encode()
+
+def _test_xml_roundtrip():
     """XML str -> data -> XML str
     """
     # TODO: remove indent after adding argument to xml.encode() to not pretty print
@@ -32,3 +39,5 @@ def _test_xml():
 
     # Test text=None and tail=None
     e = xml.encode(xml.Node("tag", [(None, "http://example.com")], None, [], [], None, None))
+
+
