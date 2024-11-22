@@ -41,3 +41,5 @@ Tests - module example:
 All 1 tests passed (0.689s)
 
 ```
+
+The test discovery finds env actor tests based on the name starting with `_test_` and has a function signature of `proc(action(?bool, ?Exception) -> None, Env, logging.Handler) -> None`.

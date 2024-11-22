@@ -37,3 +37,7 @@ Tests - module example:
 1 out of 1 tests failed (0.625s)
 
 ```
+
+```admonish
+Note how this test case is only made possible because the random module has incorrect effects. The type says it is pure while in reality, it is not. There is an issue to improve this by applying a proper effect to the random module, see https://github.com/actonlang/acton/issues/1729, after which this example needs to be rewritten.
+```
