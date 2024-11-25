@@ -66,7 +66,6 @@ data CompileOptions   = CompileOptions {
                          root        :: String,
                          tempdir     :: String,
                          syspath     :: String,
-                         deppath     :: String,
                          target      :: String,
                          cpu         :: String,
                          test        :: Bool,
@@ -90,7 +89,6 @@ data BuildOptions = BuildOptions {
                          timingB     :: Bool,
                          targetB     :: String,
                          cpuB        :: String,
-                         deppathB    :: String,
                          testB       :: Bool,
                          keepbuildB  :: Bool,
                          searchpathB :: [String]
@@ -166,7 +164,6 @@ compileOptions = CompileOptions
         <*> strOption (long "root"      <> metavar "ROOTACTOR" <> value "" <> help "Set root actor")
         <*> strOption (long "tempdir"   <> metavar "TEMPDIR" <> value "" <> help "Set directory for build files")
         <*> strOption (long "syspath"   <> metavar "TARGETDIR" <> value "" <> help "Set syspath")
-        <*> strOption (long "deppath"   <> metavar "DIR" <> value "" <> help "Set deppath")
         <*> strOption (long "target"    <> metavar "TARGET" <> value defTarget <> help "Target, e.g. x86_64-linux-gnu.2.28")
         <*> strOption (long "cpu"       <> metavar "CPU" <> value "" <> help "CPU, e.g. skylake")
         <*> switch (long "test"         <> help "Build tests")
@@ -190,7 +187,6 @@ buildCommand          = Build <$> (
         <*> switch (long "timing"       <> help "Print timing information")
         <*> strOption (long "target"    <> metavar "TARGET" <> value defTarget <> help "Target, e.g. x86_64-linux-gnu.2.28")
         <*> strOption (long "cpu"       <> metavar "CPU" <> value "" <> help "CPU, e.g. skylake")
-        <*> strOption (long "deppath"   <> metavar "DIR" <> value "" <> help "Set deppath")
         <*> switch (long "test"         <> help "Build tests")
         <*> switch (long "keepbuild"    <> help "Keep build.zig")
         <*> many (strOption (long "searchpath" <> metavar "DIR" <> help "Add search path"))
