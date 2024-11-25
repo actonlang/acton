@@ -522,6 +522,10 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: "Check out repository code"
         uses: actions/checkout@v4
+      - name: "Download artifacts for Macos aarch64, built on macos-14"
+        uses: actions/download-artifact@v3
+        with:
+          name: acton-macos-14-aarch64
       - name: "Download artifacts for Macos x86_64, built on macos-13"
         uses: actions/download-artifact@v3
         with:
@@ -555,9 +559,11 @@ jobs:
           tag: "tip"
           token: ${{ secrets.GITHUB_TOKEN }}
           replacesArtifacts: true
-      - name: "Remove version number from macos tar ball"
+      - name: "Remove version number from macos aarch64 tar ball"
+        run: mv $(ls acton-macos-aarch64*.tar.xz | tail -n1) acton-macos-aarch64-tip.tar.xz
+      - name: "Remove version number from macos x86_64 tar ball"
         run: mv $(ls acton-macos-x86_64*.tar.xz | tail -n1) acton-macos-x86_64-tip.tar.xz
-      - name: "Remove version number from linux tar ball"
+      - name: "Remove version number from linux x86_64 tar ball"
         run: mv $(ls acton-linux-x86_64*.tar.xz | tail -n1) acton-linux-x86_64-tip.tar.xz
       - name: "Remove version number from debian package"
         run: mv $(ls deb/acton_*.deb | tail -n1) deb/acton_tip_amd64.deb
