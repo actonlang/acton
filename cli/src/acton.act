@@ -184,7 +184,9 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
                 else:
                     search_paths.append(file.join_path([fs.cwd(), path, "out", "types"]))
             elif hash is not None:
-                search_paths.append(file.join_path([zig_global_cache_dir, "p", hash, "out", "types"]))
+                # For dependencies with hashes, we have previously copied them
+                # from the Zig global cache to .build/deps/
+                search_paths.append(file.join_path([fs.cwd(), ".build", "deps", dep_name, "out", "types"]))
             else:
                 raise ValueError("Dependency %s has no hash" % dep_name)
         search_path_arg = []
@@ -199,7 +201,7 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
         if build_tests:
             cmdargs.append("--dev")
             cmdargs.append("--test")
-        cmd = cmdargs + ["--deppath", file.join_path([fs.cwd(), ".build", "deps"])] + search_path_arg
+        cmd = cmdargs + search_path_arg
         cr = CompilerRunner(
             process_cap,
             env,

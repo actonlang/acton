@@ -90,7 +90,6 @@ main = do
           C.ccmd = C.ccmdB opts,
           C.quiet = C.quietB opts,
           C.timing = C.timingB opts,
-          C.deppath = C.deppathB opts,
           C.target = C.targetB opts,
           C.cpu = C.cpuB opts,
           C.test = C.testB opts,
@@ -105,7 +104,7 @@ main = do
 
 defaultOpts   = C.CompileOptions False False False False False False False False False False False False
                                  False False False False False False False False False False False False
-                                 False "" "" "" "" C.defTarget "" False False []
+                                 False "" "" "" C.defTarget "" False False []
 
 
 -- Auxiliary functions ---------------------------------------------------------------------------------------
@@ -390,8 +389,7 @@ data Paths      = Paths {
                     isTmp       :: Bool,
                     rmTmp       :: Bool,
                     fileExt     :: String,
-                    modName     :: A.ModName,
-                    projDeps    :: [String]
+                    modName     :: A.ModName
                   }
 
 -- Given a FILE and optionally --syspath PATH:
@@ -416,21 +414,11 @@ outBase paths mn        = joinPath (projTypes paths : A.modPath mn)
 srcBase                 :: Paths -> A.ModName -> FilePath
 srcBase paths mn        = joinPath (srcDir paths : A.modPath mn)
 
-searchPaths :: C.CompileOptions -> FilePath -> FilePath -> [FilePath] -> IO [FilePath]
-searchPaths opts projtypes systypes deps = do
+searchPaths :: C.CompileOptions -> [FilePath] -> IO [FilePath]
+searchPaths opts deps = do
   -- append /out/types to each dep
   let deps_paths = map (\d -> joinPath [d, "out", "types"]) deps
-  return $ (projtypes : deps_paths) ++ [systypes]
-
-findDeps :: FilePath -> FilePath -> IO [FilePath]
-findDeps projPath deps_path = do
-    let dpath = if null deps_path then joinPath [projPath, ".build", "deps"] else deps_path
-    dirContents <- listDirectory dpath `catch` handleNoDepsDir
-    depPaths <- filterM doesDirectoryExist $ map (dpath </>) dirContents
-    return depPaths
-  where
-    handleNoDepsDir :: IOException -> IO [FilePath]
-    handleNoDepsDir _ = return []
+  return $ deps_paths
 
 findPaths               :: FilePath -> C.CompileOptions -> IO Paths
 findPaths actFile opts  = do execDir <- takeDirectory <$> System.Environment.getExecutablePath
@@ -445,17 +433,15 @@ findPaths actFile opts  = do execDir <- takeDirectory <$> System.Environment.get
                                  projTypes = joinPath [projOut, "types"]
                                  binDir  = if isTmp then srcDir else joinPath [projOut, "bin"]
                                  modName = A.modName $ dirInSrc ++ [fileBody]
-                             dep_dirs <- findDeps projPath (C.deppath opts)
-                             deps_sPaths <- searchPaths opts projTypes sysTypes dep_dirs
                              -- join the search paths from command line options with the ones found in the deps directory
-                             let sPaths = deps_sPaths ++ (C.searchpath opts)
-                             let deps = map takeBaseName dep_dirs
+                             let sPaths = [projTypes] ++ (C.searchpath opts) ++ [sysTypes]
+                             --putStrLn ("Search paths: " ++ show sPaths)
                              createDirectoryIfMissing True binDir
                              createDirectoryIfMissing True projOut
                              createDirectoryIfMissing True projTypes
                              createDirectoryIfMissing True projLib
                              createDirectoryIfMissing True (getModPath projTypes modName)
-                             return $ Paths sPaths sysPath sysTypes sysLib projPath projOut projTypes projLib binDir srcDir isTmp rmTmp fileExt modName deps
+                             return $ Paths sPaths sysPath sysTypes sysLib projPath projOut projTypes projLib binDir srcDir isTmp rmTmp fileExt modName
   where (fileBody,fileExt) = splitExtension $ takeFileName actFile
 
         analyze "/" ds  = do let rmTmp = if (null $ C.tempdir opts) then True else False
@@ -907,7 +893,6 @@ zigBuild env opts paths tasks binTasks = do
                  (if (C.debug opts) then " --verbose " else "") ++
                  " -Dtarget=" ++ (C.target opts) ++
                  target_cpu ++
-                 " -Ddeps_path=" ++ (C.deppath opts) ++
                  " -Doptimize=" ++ (if (C.dev opts) then "Debug" else "ReleaseFast") ++
                  (if (C.db opts) then " -Ddb " else "") ++
                  (if no_threads then " -Dno_threads " else "") ++

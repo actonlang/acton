@@ -38,13 +38,10 @@ pub fn build(b: *std.Build) void {
     const db = b.option(bool, "db", "") orelse false;
     const only_lib = b.option(bool, "only_lib", "") orelse false;
     const no_threads = b.option(bool, "no_threads", "") orelse false;
-    const arg_deps_path = b.option([]const u8, "deps_path", "") orelse "";
-
-    const deps_path = if (arg_deps_path.len > 0) arg_deps_path else joinPath(b.allocator, buildroot_path, "deps");
 
     const projpath_outtypes = joinPath(b.allocator, buildroot_path, "out/types");
 
-    print("Acton Project Builder - building {s}\nDeps path: {s}\n", .{buildroot_path, deps_path});
+    print("Acton Project Builder - building {s}\n", .{buildroot_path});
 
     const actonbase_dep = b.dependency("base", .{
         .target = target,

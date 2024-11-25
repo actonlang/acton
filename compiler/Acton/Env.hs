@@ -1109,6 +1109,7 @@ findTyFile spaths mn = go spaths
     go (p:ps) = do
       let fullPath = joinPath (p : modPath mn) ++ ".ty"
       exists <- doesFileExist fullPath
+      --traceM ("findTyFile: " ++ fullPath ++ " " ++ show exists)
       if exists
         then return (Just fullPath)
         else go ps
