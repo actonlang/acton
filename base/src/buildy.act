@@ -134,7 +134,11 @@ class PkgDependency(Dependency):
         if self_path is not None:
             path = self_path
         else:
-            path = ".build/deps/%s" % self.name
+            dep_hash = self.hash
+            if dep_hash is not None:
+                path = ".build/deps/%s-%s" % (self.name, dep_hash)
+            else:
+                raise ValueError("Invalid build.act.json, dependency '%s' has no path or hash" % self.name)
         return """        .%s = .{
             .path = "%s"
         },

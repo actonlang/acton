@@ -173,22 +173,23 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
     def build_project():
         search_paths = []
         for dep_name, dep in build_config.dependencies.items():
-            hash = dep.hash
-            path = dep.path
-            if path is not None:
+            dep_hash = dep.hash
+            dep_path = dep.path
+            if dep_path is not None:
                 # TODO: deconstruct and put together to get OS independent path? i.e. flip / to \ on windows
-                if len(path) == 0:
+                if len(dep_path) == 0:
                     pass
-                elif path[0] == "/":
-                    search_paths.append(file.join_path([path, "out", "types"]))
+                elif dep_path[0] == "/":
+                    search_paths.append(file.join_path([dep_path, "out", "types"]))
                 else:
-                    search_paths.append(file.join_path([fs.cwd(), path, "out", "types"]))
-            elif hash is not None:
+                    search_paths.append(file.join_path([fs.cwd(), dep_path, "out", "types"]))
+            elif dep_hash is not None:
                 # For dependencies with hashes, we have previously copied them
                 # from the Zig global cache to .build/deps/
-                search_paths.append(file.join_path([fs.cwd(), ".build", "deps", dep_name, "out", "types"]))
+                dep_dirname = dep_name + "-" + dep_hash
+                search_paths.append(file.join_path([fs.cwd(), ".build", "deps", dep_dirname, "out", "types"]))
             else:
-                raise ValueError("Dependency %s has no hash" % dep_name)
+                raise ValueError("Dependency %s has no path or hash" % dep_name)
         search_path_arg = []
         for sp in search_paths:
             search_path_arg.extend(["--searchpath", sp])
@@ -239,8 +240,15 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
         else:
             print("Building dependencies:")
             for dep_name, dep in build_config.dependencies.items():
+                dep_hash = dep.hash
                 dep_path = dep.path
-                path = dep_path if dep_path is not None else file.join_path([".build", "deps", dep_name])
+                path = ""
+                if dep_path is not None:
+                    path = dep_path
+                elif dep_hash is not None:
+                    path = file.join_path([".build", "deps", dep_name + "-" + dep_hash])
+                else:
+                    raise ValueError("Dependency %s has no path or hash" % dep_name)
                 print(" -", dep_name)
                 remaining_deps[dep_name] = True
                 cmd = ["build"] + build_cmd_args(args) + ["--keepbuild"]
@@ -277,20 +285,20 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
 
         for dep_name, dep in build_config.dependencies.items():
             # Does deps/X exist?
-            hash = dep.hash
-            path = dep.path
-            if path is not None:
+            dep_hash = dep.hash
+            dep_path = dep.path
+            if dep_path is not None:
                 pass
-            elif hash is not None:
-                if dep_name not in deps_dir:
-                    print("Copying", dep_name, "from zig global cache")
+            elif dep_hash is not None:
+                dep_dirname = dep_name + "-" + dep_hash
+                if dep_dirname not in deps_dir:
+                    src = file.join_path([zig_global_cache_dir, "p", dep_hash])
+                    dst = file.join_path([fs.cwd(), ".build", "deps", dep_dirname])
                     try:
-                        await async fs.mkdir(file.join_path([".build", "deps", dep_name]))
+                        await async fs.mkdir(dst)
                     except:
                         pass
-                    src = file.join_path([zig_global_cache_dir, "p", hash])
-                    dst = file.join_path([fs.cwd(), ".build", "deps", dep_name])
-                    print("Copying", src, "to", dst)
+                    print("Copying %s dependency from zig global cache to project local build deps, hash: %s" % (dep_name, dep_hash))
                     await async fs.copytree(src, dst)
             else:
                 raise ValueError("Dependency %s has no hash or path set" % dep_name)
