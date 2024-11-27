@@ -118,10 +118,7 @@ B_IteratorD_enumerate B_IteratorD_enumerate$_deserialize(B_IteratorD_enumerate r
 
 $WORD B_IteratorD_enumerate_next(B_IteratorD_enumerate it) {
     $WORD w = it->it->$class->__next__(it->it);
-    if (w)
-        return $NEWTUPLE(2,to$int(it->nxt++),w);
-    else
-        return NULL;
+    return $NEWTUPLE(2,to$int(it->nxt++),w);
 }
 
 struct B_IteratorD_enumerateG_class B_IteratorD_enumerateG_methods = {"B_IteratorD_enumerate",UNASSIGNED,($SuperG_class)&B_IteratorG_methods,B_IteratorD_enumerate_init,
@@ -170,7 +167,7 @@ $WORD B_IteratorD_filter_next(B_IteratorD_filter it) {
     $WORD w;
     do
         w = it->it->$class->__next__(it->it);
-    while (w && !fromB_bool(it->f->$class->__eval__(it->f, w)));
+    while (!fromB_bool(it->f->$class->__eval__(it->f, w)));
     return w;
 }
 
@@ -215,10 +212,7 @@ B_IteratorD_map B_IteratorD_map$_deserialize(B_IteratorD_map res, $Serial$state 
 
 $WORD B_IteratorD_map_next(B_IteratorD_map it) {
     $WORD w = it->it->$class->__next__(it->it);
-    if (w)
-        return it->f->$class->__eval__(it->f, w);
-    else
-        return NULL;
+    return it->f->$class->__eval__(it->f, w);
 }
 
 struct B_IteratorD_mapG_class B_IteratorD_mapG_methods = {"B_IteratorD_map",UNASSIGNED,($SuperG_class)&B_IteratorG_methods,B_IteratorD_map_init,
@@ -278,8 +272,19 @@ $WORD B_sum(B_Plus wit, B_Iterable wit2, $WORD iter, $WORD start) {
     B_Iterator it = wit2->$class->__iter__(wit2,iter);  
     $WORD res = start;
     $WORD nxt;
-    while ((nxt = it->$class->__next__(it))) 
-        res = wit->$class->__add__(wit,res,nxt);
+    while(1) {
+        if ($PUSH()) {
+            nxt = it->$class->__next__(it);
+            res = wit->$class->__add__(wit,res,nxt);
+            $DROP();
+        } else {
+            B_BaseException ex = $POP();
+            if ($ISINSTANCE0(ex, B_StopIteration))
+                break;
+           else
+               $RAISE(ex);
+        }
+    }
     return res;
 }
 

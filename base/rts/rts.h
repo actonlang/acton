@@ -244,6 +244,7 @@ void $DROP_C();
 #define $PUSHF_C $PUSH_C
 #define $RAISE_C $RAISE
 
+/*
 struct JumpBuf;
 typedef struct JumpBuf *JumpBuf;
 struct JumpBuf {
@@ -251,6 +252,7 @@ struct JumpBuf {
     B_BaseException xval;
     JumpBuf prev;
 };
+*/
 
 struct WorkerCtx;
 typedef struct WorkerCtx *WorkerCtx;
