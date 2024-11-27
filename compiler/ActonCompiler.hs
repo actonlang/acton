@@ -212,6 +212,7 @@ createProject name = do
     paths <- findPaths (joinPath [ curDir, name, "Acton.toml" ]) defaultOpts
     writeFile (joinPath [ curDir, name, ".gitignore" ]) (
       ".actonc.lock\n" ++
+      ".build\n" ++
       "build.sh\n" ++
       "out\n" ++
       "zig-cache\n" ++
