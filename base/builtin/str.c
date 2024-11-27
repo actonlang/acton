@@ -1323,7 +1323,8 @@ static B_str B_IteratorB_strD_next(B_IteratorB_str self) {
         self->nxt +=byte_length2(*p);
         return mk_char(p);
     }
-    return NULL;
+    $RAISE ((B_BaseException)$NEW(B_StopIteration, to$str("str iterator terminated")));
+;
 }
 
 
@@ -2194,7 +2195,10 @@ B_bool B_OrdD_bytearrayD___ge__ (B_OrdD_bytearray wit, B_bytearray a, B_bytearra
 // Iterable
 
 static B_int B_IteratorB_bytearrayD_next(B_IteratorB_bytearray self) {
-    return self->nxt >= self->src->nbytes ? NULL : to$int(self->src->str[self->nxt++]);
+    if (self->nxt >= self->src->nbytes)
+        $RAISE ((B_BaseException)$NEW(B_StopIteration, to$str("bytearray iterator terminated")));
+    else
+        return to$int(self->src->str[self->nxt++]);
 }
 
 B_NoneType B_IteratorB_bytearrayD_init(B_IteratorB_bytearray self, B_bytearray b) {
@@ -3335,7 +3339,10 @@ B_str B_IteratorB_bytesD_str(B_IteratorB_bytes self) {
 
 // this is next function for forward iteration
 static B_int B_IteratorB_bytesD_next(B_IteratorB_bytes self) {
-    return self->nxt >= self->src->nbytes ? NULL : to$int(self->src->str[self->nxt++]);
+    if (self->nxt >= self->src->nbytes)
+        $RAISE ((B_BaseException)$NEW(B_StopIteration, to$str("bytes iterator terminated")));
+    else
+        return to$int(self->src->str[self->nxt++]);
 }
 
 struct B_IteratorB_bytesG_class B_IteratorB_bytesG_methods = {"B_IteratorB_bytes",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, B_IteratorB_bytesD_init,
