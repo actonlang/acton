@@ -82,8 +82,19 @@ B_NoneType B_listD___init__(B_list lst, B_Iterable wit, $WORD iterable) {
     $WORD w;
     B_Iterator it = wit->$class->__iter__(wit,iterable);
     B_SequenceD_list wit2 = B_SequenceD_listG_new();
-    while((w = it->$class->__next__(it)))
-        wit2->$class->append(wit2, lst, w);
+    while(1) {
+        if ($PUSH()) {
+            $WORD e = it->$class->__next__(it);
+            wit2->$class->append(wit2, lst, e);
+            $DROP();
+        } else {
+            B_BaseException ex = $POP();
+            if ($ISINSTANCE0(ex, B_StopIteration))
+                break;
+           else
+               $RAISE(ex);
+        }
+    }
     return B_None;
 }
   
@@ -296,7 +307,9 @@ B_list B_TimesD_SequenceD_listD___mul__ (B_TimesD_SequenceD_list wit, B_list lst
 
 
 static $WORD B_IteratorD_listD_next(B_IteratorD_list self) {
-    return self->nxt >= self->src->length ? NULL : self->src->data[self->nxt++];
+    if (self->nxt >= self->src->length)
+        $RAISE ((B_BaseException)$NEW(B_StopIteration, to$str("list iterator terminated")));
+    return self->src->data[self->nxt++];
 }
 
 B_IteratorD_list B_IteratorD_listG_new(B_list lst) {
@@ -339,6 +352,8 @@ B_Iterator B_CollectionD_SequenceD_listD___iter__(B_CollectionD_SequenceD_list w
 }
 
 B_list B_CollectionD_SequenceD_listD___fromiter__ (B_CollectionD_SequenceD_list wit, B_Iterable wit2, $WORD iter) {
+    return B_listG_new(wit2, iter);
+    /*
     B_list res = B_listD_new(4);
     B_SequenceD_list wit3 = B_SequenceD_listG_new();
     B_Iterator it = wit2->$class->__iter__(wit2,iter);
@@ -347,6 +362,7 @@ B_list B_CollectionD_SequenceD_listD___fromiter__ (B_CollectionD_SequenceD_list 
         wit3->$class->append(wit3, res, nxt);
     }
     return res;
+    */
 }
 
 B_int B_CollectionD_SequenceD_listD___len__(B_CollectionD_SequenceD_list wit, B_list self) {
@@ -412,12 +428,22 @@ B_list B_SequenceD_listD___getslice__(B_SequenceD_list wit, B_list lst, B_slice 
  
 B_NoneType B_SequenceD_listD___setslice__(B_SequenceD_list wit, B_list lst, B_Iterable wit2, B_slice slc, $WORD iter) {
     int len = lst->length;
-    B_list other = B_listD_new(0);
-    B_Iterator it = wit2->$class->__iter__(wit2,iter);
-    $WORD w;
+    B_list other = B_listD_new(0);    
     B_SequenceD_list wit3 = B_SequenceD_listG_new();
-    while((w=it->$class->__next__(it)))
-        wit3->$class->append(wit3, other, w);
+    B_Iterator it = wit2->$class->__iter__(wit2,iter);
+    while(1) {
+        if ($PUSH()) {
+            $WORD w = it->$class->__next__(it);
+            wit3->$class->append(wit3, other, w);
+            $DROP();
+        } else {
+            B_BaseException ex = $POP();
+            if ($ISINSTANCE0(ex, B_StopIteration))
+                break;
+           else
+               $RAISE(ex);
+        }
+    }
     int olen = other->length; 
     long start, stop, step, slen;
     normalize_slice(slc, len, &slen, &start, &stop, &step);

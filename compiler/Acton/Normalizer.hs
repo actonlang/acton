@@ -140,6 +140,7 @@ exitContext env s
 
 sDROP                               = sExpr (eCall (eQVar primDROP) [])
 sPOP x                              = sAssign (pVar x tBaseException) (eCall (eQVar primPOP) [])
+ePUSH                               = eCall (eQVar primPUSH) []
 ePUSHF                              = eCall (eQVar primPUSHF) []
 sSEQ                                = sExpr (eCall (eQVar primRAISE) [eCall (eQVar primSEQ) []])
 sRAISE e                            = sExpr (eCall (eQVar primRAISE) [e])
@@ -229,16 +230,19 @@ instance Norm Stmt where
       where t                       = typeOf env e
     norm' env (For l p e b els)     = do i <- newName "iter"
                                          v <- newName "val"
---                                         norm env [sAssign (pVar i t) e,
---                                                   sAssign (pVar v $ tOpt $ head ts) (next i),
---                                                   While l (test v) (sAssign p (eVar v) : b ++ [sAssign (pVar' v) (next i)]) els]
+                                         x <- newName "x"
                                          norm env [sAssign (pVar i $ conv t) e,
-                                                   While l (eBool True) (body v i) []]
+                                                   While l (eBool True) (body i v x) []]
       where t@(TCon _ (TC c [t']))  = typeOf env e
-            test v                  = eCall (tApp (eQVar primISNOTNONE) [t']) [eVar v]
             next i                  = eCall (eDot (eVar i) nextKW) []
-            body v i                = [ sAssign (pVar v $ conv $ tOpt t') (next i),
-                                        sIf1 (test v) (sAssign p (eCAST (tOpt t') t' $ eVar v) : b) (els ++ [sBreak]) ]
+            body i v x              = [ sIf1 ePUSH
+                                             (sAssign (pVar v $ conv $ t') (next i) : sAssign p (eVar v) : b ++ [sDROP])
+                                             (els ++ [sPOP x, sIf1 (IsInstance NoLoc (eVar x) qnStopIteration)
+                                                                   [sBreak]
+                                                                   [sRAISE (eVar x)]
+                                                     ]
+                                             )
+                                      ]
     {-
     with EXPRESSION as PATTERN:
         SUITE

@@ -25,8 +25,9 @@ struct B_IteratorB_rangeG_class {
 
 struct B_IteratorB_range {
     struct B_IteratorB_rangeG_class *$class;
-    B_range src;
-    int nxt;
+    long nxt;
+    long step;
+    long remaining;
 };
 
 extern struct B_IteratorB_rangeG_class  B_IteratorB_rangeG_methods;
