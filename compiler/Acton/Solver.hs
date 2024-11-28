@@ -229,11 +229,12 @@ solve' env select hist te tt eq cs
 
         deco (RRed cs)                      = (0, 0, 0, 0)
         deco (RSealed t)                    = (2, 0, 0, 0)
+        deco (RTry (TVar _ v) [TTuple{}] r) = (4, length $ filter (==v) embvs, 1, length $ filter (==v) univs)
         deco (RTry (TVar _ v) as r)         = (3, length $ filter (==v) embvs, length as, length $ filter (==v) univs)
-        deco (RTry t as r)                  = (4, 0, length as, 0)
-        deco (RVar t as)                    = (5, 0, length as, 0)
-        deco (ROvl t)                       = (6, 0, 0, 0)
-        deco (RSkip)                        = (7, 0, 0, 0)
+        deco (RTry t as r)                  = (5, 0, length as, 0)
+        deco (RVar t as)                    = (6, 0, length as, 0)
+        deco (ROvl t)                       = (7, 0, 0, 0)
+        deco (RSkip)                        = (8, 0, 0, 0)
 
         subrev []                           = []
         subrev (t:ts)                       = subrev ts1 ++ t : subrev ts2
@@ -835,6 +836,9 @@ sub' env info eq w (TVar _ tv) t2@TTuple{}
   | univar tv                               = do t1 <- instwild env KType $ tTuple tWild tWild
                                                  substitute tv t1
                                                  sub env info eq w t1 t2
+
+sub' env info eq w t1@TTuple{} t2@(TVar _ tv)
+  | univar tv                               = do defer [Sub info w t1 t2]; return eq        -- Don't let cast solve this by idwit!
 
 sub' env info eq w t1@(TVar _ tv1) t2@(TVar _ tv2)
   | tv1 == tv2                              = return (idwit env w t1 t2 : eq)
@@ -1456,7 +1460,6 @@ implAll env ps t@TOpt{}                 = all ((`elem` [qnIdentity,qnEq]) . tcna
 implAll env ps t                        = False
 
 noDots env vi v                         = null (lookup' v $ selattrs vi) && null (lookup' v $ mutattrs vi)
-
 
 replace ub lb c@(Cast _ TVar{} TVar{})  = c
 replace ub lb (Cast info (TVar _ v) t)
