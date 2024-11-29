@@ -1,8 +1,8 @@
 
 actor main(env):
     l = [4, 9, 7, 1]
-#    if max(l, 0) != 9:
-#        print("max() incorrectly returned:", max(l, 0))
-#        await async env.exit(0)
+    if max_def(l, 0) != 9:
+        print("max_def() incorrectly returned:", max_def(l, 0))
+        await async env.exit(1)
 
     await async env.exit(0)

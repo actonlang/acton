@@ -10,10 +10,11 @@ actor main(env):
        env.exit(1)
     if list(map(lambda x : x*x,lst)) != [100, 121, 144, 169, 196]:
         print("map")
-        env.exit(1)                   
-    #if max(lst,None) != 14:
-    #    print("max")
-    #    env.exit(1)
+        env.exit(1)
+    a = max(lst)
+    if a is None or a != 14:
+        print("max")
+        env.exit(1)
     if hex(65536*65536) != "0x100000000":
         print("hex")
         env.exit(1)

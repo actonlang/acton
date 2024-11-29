@@ -1,8 +1,8 @@
 
 actor main(env):
     l = [4, 9, 7, 1]
-#    if min(l, 0) != 1:
-#        print("min() incorrectly returned:", max(l, 0))
-#        await async env.exit(0)
+    if min_def(l, 1000) != 1:
+        print("min_def() incorrectly returned:", min_def(l, 1000))
+        await async env.exit(1)
 
     await async env.exit(0)

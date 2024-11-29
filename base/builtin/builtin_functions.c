@@ -231,32 +231,84 @@ B_Iterator B_map(B_Iterable wit, $pure f, $WORD iter) {
 
 // max, min ///////////////////////////////////////////////////////////////////////////////////
 
-$WORD B_max(B_Ord wit, B_Iterable wit2, $WORD iter, $WORD deflt) {
+$WORD B_max(B_Ord wit, B_Iterable wit2, $WORD iter) {
+    $WORD res = NULL;
     B_Iterator it = wit2->$class->__iter__(wit2,iter);  
-    $WORD res, nxt;
-    res = it->$class->__next__(it);
-    if (res) {
-        while ((nxt = it->$class->__next__(it))) {
-            if (wit->$class->__lt__(wit,res,nxt)->val)
+    while(1) {
+        if ($PUSH()) {
+            $WORD nxt = it->$class->__next__(it);
+            if (!res || fromB_bool(wit->$class->__lt__(wit,res,nxt)))
                 res = nxt;
+            $DROP();
+        } else {
+            B_BaseException ex = $POP();
+            if ($ISINSTANCE0(ex, B_StopIteration))
+                break;
+           else
+               $RAISE(ex);
         }
-        return res;
-    } else
-        return deflt;
+    }
+    return res;
 }
 
-$WORD B_min(B_Ord wit, B_Iterable wit2, $WORD iter, $WORD deflt) {
+$WORD B_max_def(B_Ord wit, B_Iterable wit2, $WORD iter, $WORD dflt) {
+    $WORD res = dflt;
     B_Iterator it = wit2->$class->__iter__(wit2,iter);  
-    $WORD res, nxt;
-    res = it->$class->__next__(it);
-    if (res) {
-        while ((nxt = it->$class->__next__(it))) {
-            if (wit->$class->__gt__(wit,res,nxt)->val)
+    while(1) {
+        if ($PUSH()) {
+            $WORD nxt = it->$class->__next__(it);
+            if (fromB_bool(wit->$class->__lt__(wit,res,nxt)))
                 res = nxt;
+            $DROP();
+        } else {
+            B_BaseException ex = $POP();
+            if ($ISINSTANCE0(ex, B_StopIteration))
+                break;
+           else
+               $RAISE(ex);
         }
-        return res;
-    } else
-        return deflt;
+    }
+    return res;
+}
+
+$WORD B_min(B_Ord wit, B_Iterable wit2, $WORD iter) {
+    $WORD res = NULL;
+    B_Iterator it = wit2->$class->__iter__(wit2,iter);  
+    while(1) {
+        if ($PUSH()) {
+            $WORD nxt = it->$class->__next__(it);
+            if (!res || fromB_bool(wit->$class->__gt__(wit,res,nxt)))
+                res = nxt;
+            $DROP();
+        } else {
+            B_BaseException ex = $POP();
+            if ($ISINSTANCE0(ex, B_StopIteration))
+                break;
+           else
+               $RAISE(ex);
+        }
+    }
+    return res;
+}
+
+$WORD B_min_def(B_Ord wit, B_Iterable wit2, $WORD iter, $WORD dflt) {
+    $WORD res = dflt;
+    B_Iterator it = wit2->$class->__iter__(wit2,iter);  
+    while(1) {
+        if ($PUSH()) {
+            $WORD nxt = it->$class->__next__(it);
+            if (fromB_bool(wit->$class->__gt__(wit,res,nxt)))
+                res = nxt;
+            $DROP();
+        } else {
+            B_BaseException ex = $POP();
+            if ($ISINSTANCE0(ex, B_StopIteration))
+                break;
+           else
+               $RAISE(ex);
+        }
+    }
+    return res;
 }
  
 B_list B_sorted(B_Ord wit, B_Iterable wit2, $WORD iter) {
