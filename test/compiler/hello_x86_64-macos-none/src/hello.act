@@ -1,0 +1,6 @@
+#
+#
+
+actor main(env):
+    print("Hello World!")
+    await async env.exit(0)
