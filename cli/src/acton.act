@@ -159,7 +159,6 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
     if len(files) > 1:
         raise NotImplementedError("Multiple files not supported yet")
     var build_config = BuildConfig()
-    #
 
     def _on_actonc_exit(exit_code, term_signal, stdout_buf, stderr_buf):
         if exit_code == 0:
@@ -317,18 +316,14 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
 
         If there is no dependencies.json file, we will build the project.
         """
-        def read_buildconfig():
-            f = file.ReadFile(rfcap, "build.act.json")
-            conf = f.read()
-            return BuildConfig.from_json(conf.decode())
-
         try:
-            build_config = read_buildconfig()
+            build_config = BuildConfig.from_json(file.ReadFile(rfcap, "build.act.json").read().decode())
         except FileNotFoundError:
             pass
         except ValueError as e:
             print("ERROR:", e.error_message)
-            await async env.exit(1)
+            env.exit(1)
+            return
 
         write_buildzig(file.FileCap(env.cap), build_config)
         zfd = ZigFetchDeps(env, build_config, lambda x, y: check_deps(), on_zig_fetch_error)
@@ -743,21 +738,13 @@ actor ZigFetchDeps(env, build_config: BuildConfig, on_done: action(int, int) -> 
 
 actor CmdFetch(env, args):
     pcap = process.ProcessCap(env.cap)
+    fcap = file.FileCap(env.cap)
+    rfcap = file.ReadFileCap(fcap)
     fs = file.FS(file.FileCap(env.cap))
     zig = file.join_path([base_path(file.FileCap(env.cap)), "zig", "zig"])
 
     remaining_deps = {}
 
-    def get_build_config():
-        try:
-            return BuildConfig.from_json(file.ReadFile(file.ReadFileCap(file.FileCap(env.cap)), "build.act.json").read().decode())
-        except:
-            print("No build.act.json file found, nothing to do.")
-            await async env.exit(0)
-        return BuildConfig()
-
-    build_config = get_build_config()
-    write_buildzig(file.FileCap(env.cap), build_config)
 
     dep_processes = {}
     zig_processes = {}
@@ -773,7 +760,19 @@ actor CmdFetch(env, args):
         print(errmsg, err=True)
         env.exit(1)
 
-    zfd = ZigFetchDeps(env, build_config, all_done, on_zig_fetch_error, print_output=True)
+    def _read_build_config():
+        try:
+            build_config = BuildConfig.from_json(file.ReadFile(rfcap, "build.act.json").read().decode())
+            write_buildzig(file.FileCap(env.cap), build_config)
+            zfd = ZigFetchDeps(env, build_config, all_done, on_zig_fetch_error, print_output=True)
+        except FileNotFoundError:
+            print("No build.act.json file found, nothing to do.")
+            env.exit(0)
+            return
+        except ValueError as e:
+            print("ERROR:", e.error_message)
+            env.exit(1)
+            return
 
 
 actor CmdPkgAdd(env, args):
@@ -804,8 +803,12 @@ actor CmdPkgAdd(env, args):
     def get_build_config():
         try:
             return BuildConfig.from_json(file.ReadFile(file.ReadFileCap(file.FileCap(env.cap)), "build.act.json").read().decode())
-        except:
+        except FileNotFoundError:
+            # Ignore, we create a new file
             pass
+        except ValueError as e:
+            print("ERROR:", e.error_message)
+            await async env.exit(1)
         return BuildConfig()
 
     build_config = get_build_config()
@@ -868,10 +871,13 @@ actor CmdPkgRemove(env, args):
     def get_build_config():
         try:
             return BuildConfig.from_json(file.ReadFile(file.ReadFileCap(file.FileCap(env.cap)), "build.act.json").read().decode())
-        except:
-            print("No build.act.json file found, nothing to do.")
-            await async env.exit(0)
-        return BuildConfig() # unreachable
+        except FileNotFoundError:
+            # Ignore, we create a new file
+            pass
+        except ValueError as e:
+            print("ERROR:", e.error_message)
+            await async env.exit(1)
+        return BuildConfig()
 
     build_config = get_build_config()
 
@@ -917,8 +923,12 @@ actor CmdZigPkgAdd(env, args):
     def get_build_config():
         try:
             return BuildConfig.from_json(file.ReadFile(file.ReadFileCap(file.FileCap(env.cap)), "build.act.json").read().decode())
-        except:
+        except FileNotFoundError:
+            # Ignore, we create a new file
             pass
+        except ValueError as e:
+            print("ERROR:", e.error_message)
+            await async env.exit(1)
         return BuildConfig()
 
     build_config = get_build_config()
@@ -978,27 +988,32 @@ actor CmdZigPkgRemove(env, args):
         print("ERROR:", e)
         env.exit(1)
 
-    def get_build_config():
+    def _get_build_config():
         try:
-            return BuildConfig.from_json(file.ReadFile(file.ReadFileCap(file.FileCap(env.cap)), "build.act.json").read().decode())
-        except:
+            build_config = BuildConfig.from_json(file.ReadFile(file.ReadFileCap(file.FileCap(env.cap)), "build.act.json").read().decode())
+            _remove_zig_pkg(build_config, dep_name)
+        except FileNotFoundError:
+            # Ignore, we create a new file
             print("No build.act.json file found, nothing to do.")
-            await async env.exit(0)
-        return BuildConfig() # unreachable
+            env.exit(0)
+        except ValueError as e:
+            print("ERROR:", e.error_message)
+            env.exit(1)
 
-    build_config = get_build_config()
+    def _remove_zig_pkg(build_config, dep_name):
+        if dep_name in build_config.zig_dependencies:
+            print("Removed Zig package dependency", dep_name)
+            del build_config.zig_dependencies[dep_name]
+        else:
+            print("Zig dependency", dep_name, "not found in build.act.json. Nothing to do.")
 
-    if dep_name in build_config.zig_dependencies:
-        print("Removed Zig package dependency", dep_name)
-        del build_config.zig_dependencies[dep_name]
-    else:
-        print("Zig dependency", dep_name, "not found in build.act.json. Nothing to do.")
+        baj_file = file.WriteFile(file.WriteFileCap(file.FileCap(env.cap)), "build.act.json")
+        baj_file.write(build_config.to_json().encode()+b"\n")
+        await async baj_file.close()
 
-    baj_file = file.WriteFile(file.WriteFileCap(file.FileCap(env.cap)), "build.act.json")
-    baj_file.write(build_config.to_json().encode()+b"\n")
-    await async baj_file.close()
+        env.exit(0)
 
-    env.exit(0)
+    _get_build_config()
 
 
 actor main(env):
