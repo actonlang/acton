@@ -76,8 +76,8 @@ B_int B_intG_new(B_atom a, B_int base) {
             return res;
         }
     }
-    if ($ISINSTANCE0(a,B_u32)) {
-        unsigned short v = ((B_u32)a)->val;
+    if ($ISINSTANCE0(a,B_u16)) {
+        unsigned short v = ((B_u16)a)->val;
         if (v==0) 
             return to$int(0L);
         else {
