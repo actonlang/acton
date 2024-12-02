@@ -230,19 +230,12 @@ instance Norm Stmt where
       where t                       = typeOf env e
     norm' env (For l p e b els)     = do i <- newName "iter"
                                          v <- newName "val"
-                                         x <- newName "x"
                                          norm env [sAssign (pVar i $ conv t) e,
-                                                   While l (eBool True) (body i v x) []]
+                                                   handleStop (While l (eBool True) (body v i) []) els]
       where t@(TCon _ (TC c [t']))  = typeOf env e
             next i                  = eCall (eDot (eVar i) nextKW) []
-            body i v x              = [ sIf1 ePUSH
-                                             (sAssign (pVar v $ conv $ t') (next i) : sAssign p (eVar v) : b ++ [sDROP])
-                                             (els ++ [sPOP x, sIf1 (IsInstance NoLoc (eVar x) qnStopIteration)
-                                                                   [sBreak]
-                                                                   [sRAISE (eVar x)]
-                                                     ]
-                                             )
-                                      ]
+            handleStop loop els     = Try l [loop] [Handler (Except l0 qnStopIteration) (mkBody els)] [] []
+            body v i                = sAssign (pVar v t') (next i) : sAssign p (eVar v) : b
     {-
     with EXPRESSION as PATTERN:
         SUITE
