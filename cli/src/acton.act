@@ -136,12 +136,15 @@ actor CompilerRunner(process_cap, env, args, wdir=None, on_exit: ?action(int, in
             print("Error from process:", error)
             env.exit(1)
 
+
     fs = file.FS(file.FileCap(env.cap))
     # We find the path to actonc by looking at the executable path of the
     # current process. Since we are called 'acton', we just add a 'c'.
     cmd = [fs.exepath() + ("c" if exe == "actonc" else "")] + args
     p = process.Process(process_cap, cmd, on_actonc_stdout, on_actonc_stderr, on_actonc_exit, on_actonc_error, wdir)
 
+    def stop():
+        p.stop()
 
 actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None, on_build_failure: action(int, int, str) -> None, build_tests: bool=False, files: list[str]=[]):
     """Build the project including dependencies
@@ -233,8 +236,10 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
                 print("All dependencies built, building main project")
                 build_project()
         else:
-            # TODO: do better
-            raise ValueError("Error building dependency")
+            print("ERROR: Error building dependency", dep_name)
+            for dep in remaining_deps.values():
+                dep.stop()
+            env.exit(1)
 
 
     def on_dep_build_error(name, error):
@@ -258,7 +263,6 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
                 else:
                     raise ValueError("Dependency %s has no path or hash" % dep_name)
                 print(" -", dep_name)
-                remaining_deps[dep_name] = True
                 dep_args = []
                 for dep_arg in args.get_strlist("dep"):
                     dep_args.extend(["--dep", dep_arg])
@@ -272,6 +276,7 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
                     lambda error_msg: on_dep_build_error(dep_name, error_msg),
                     exe="acton"
                 )
+                remaining_deps[dep_name] = cr
 
     def check_deps():
         # 1. fetch dependencies (into zig global cache)
