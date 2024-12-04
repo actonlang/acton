@@ -158,8 +158,16 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
     zig_global_cache_dir = get_zig_global_cache_dir(file.FileCap(env.cap))
     if len(files) > 1:
         raise NotImplementedError("Multiple files not supported yet")
+
+    dep_path_overrides = {}
+    for dep_arg in args.get_strlist("dep"):
+        parts = dep_arg.split("=", 1)
+        dep_name, dep_path = parts[0], parts[1]
+        # Ensure we have absolute paths
+        abs_path = file.resolve_relative_path(fs.cwd(), dep_path)
+        dep_path_overrides[dep_name] = abs_path
+
     var build_config = BuildConfig()
-    #
 
     def _on_actonc_exit(exit_code, term_signal, stdout_buf, stderr_buf):
         if exit_code == 0:
@@ -251,7 +259,10 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
                     raise ValueError("Dependency %s has no path or hash" % dep_name)
                 print(" -", dep_name)
                 remaining_deps[dep_name] = True
-                cmd = ["build"] + build_cmd_args(args) + ["--keepbuild"]
+                dep_args = []
+                for dep_arg in args.get_strlist("dep"):
+                    dep_args.extend(["--dep", dep_arg])
+                cmd = ["build"] + build_cmd_args(args) + ["--keepbuild"] + dep_args
                 cr = CompilerRunner(
                     process_cap,
                     env,
@@ -330,8 +341,25 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
             print("ERROR:", e.error_message)
             await async env.exit(1)
 
+        build_config_fetchable = BuildConfig()
+        for dep_name, dep in build_config.dependencies.items():
+            if dep_name in dep_path_overrides:
+                dep_path = dep_path_overrides[dep_name]
+                # Zig wants relative paths
+                rel_path = file.get_relative_path(dep_path, fs.cwd())
+                dep.path = rel_path
+                print("INFO: Using dependency path %s for %s" % (rel_path, dep.name), err=True)
+            else:
+                build_config_fetchable.dependencies[dep_name] = dep
+
+        for dep_name, dep in build_config.zig_dependencies.items():
+            build_config_fetchable.zig_dependencies[dep_name] = dep
+
+        for dep_name, dep in build_config.dependencies.items():
+            print("Dependency:", dep_name, dep.path)
+
         write_buildzig(file.FileCap(env.cap), build_config)
-        zfd = ZigFetchDeps(env, build_config, lambda x, y: check_deps(), on_zig_fetch_error)
+        zfd = ZigFetchDeps(env, build_config_fetchable, lambda x, y: check_deps(), on_zig_fetch_error)
 
     def get_lock():
         """Try to get the build lock for the project
@@ -1110,6 +1138,7 @@ actor main(env):
         p.add_option("tempdir", "str", "?", "", "Directory for temporary build files")
         p.add_option("syspath", "str", "?", "", "syspath")
         p.add_option("target", "str", "?", "", "Target, e.g. x86_64-linux-gnu.2.28")
+        p.add_option("dep", "strlist", "+", [], "Override path to dependency, e.g. --dep-path foo=../my-foo-repo")
         p.add_arg("file", ".act file to compile, or .ty to show", False, "?")
 
         p_build = p.add_cmd("build", "Build", _cmd_build)
