@@ -91,3 +91,93 @@ def _test_fs_copytree(report_result: action(?bool, ?Exception) -> None, env: Env
         report_result(False, exc)
     except Exception as exc:
         report_result(None, exc)
+
+def _test_relative_path_basic():
+    rel = file.get_relative_path("/a/b/c", "/a/b/d")
+    testing.assertEqual(rel, "../c")
+
+def _test_relative_path_deeper():
+    rel = file.get_relative_path("/a/b/c/d", "/a/b/e/f")
+    testing.assertEqual(rel, "../../c/d")
+
+def _test_relative_path_same_directory():
+    rel = file.get_relative_path("/a/b/c", "/a/b/c")
+    testing.assertEqual(rel, ".")
+
+def _test_relative_path_from_root():
+    rel = file.get_relative_path("/a/b/c", "/")
+    testing.assertEqual(rel, "a/b/c")
+
+def _test_relative_path_to_root():
+    rel = file.get_relative_path("/", "/a/b/c")
+    testing.assertEqual(rel, "../../..")
+
+def _test_relative_path_no_common_prefix():
+    rel = file.get_relative_path("/x/y/z", "/a/b/c")
+    testing.assertEqual(rel, "../../../x/y/z")
+
+def _test_relative_path_partial_common_prefix():
+    rel = file.get_relative_path("/a/b2/c", "/a/b1/c")
+    testing.assertEqual(rel, "../../b2/c")
+
+def _test_relative_path_deep_nested_paths():
+    rel = file.get_relative_path("/a/b/c/d/e/f", "/a/b/c/x/y/z")
+    testing.assertEqual(rel, "../../../d/e/f")
+
+def _test_relative_path_invalid_absolute_paths1():
+    # Test non-absolute first path
+    try:
+        rel = file.get_relative_path("a/b/c", "/a/b/d")
+    except ValueError as exc:
+        return
+    testing.error("Expected ValueError for non-absolute first path")
+
+def _test_relative_path_invalid_absolute_paths2():
+    # Test non-absolute second path
+    try:
+        rel = file.get_relative_path("/a/b/c", "a/b/d")
+    except ValueError as exc:
+        return
+    testing.error("Expected ValueError for non-absolute second path")
+
+def _test_resolve_basic():
+    abs_path = file.resolve_relative_path("/a/b/c", "../d")
+    testing.assertEqual(abs_path, "/a/b/d")
+
+def _test_resolve_multiple_levels():
+    abs_path = file.resolve_relative_path("/a/b/c", "../../x/y")
+    testing.assertEqual(abs_path, "/a/x/y")
+
+def _test_resolve_current_dir():
+    abs_path = file.resolve_relative_path("/a/b/c", ".")
+    testing.assertEqual(abs_path, "/a/b/c")
+
+def _test_resolve_empty():
+    abs_path = file.resolve_relative_path("/a/b/c", "")
+    testing.assertEqual(abs_path, "/a/b/c")
+
+def _test_resolve_to_root():
+    abs_path = file.resolve_relative_path("/a/b/c", "../../..")
+    testing.assertEqual(abs_path, "/")
+
+def _test_resolve_above_root():
+    try:
+        abs_path = file.resolve_relative_path("/", "../b")
+        testing.error("Expected ValueError for path above root but got:" + abs_path)
+    except ValueError as exc:
+        return
+
+def _test_resolve_absolute_input():
+    abs_path = file.resolve_relative_path("/a/b", "/c/d")
+    testing.assertEqual(abs_path, "/c/d")
+
+def _test_resolve_relative_base():
+    try:
+        abs_path = file.resolve_relative_path("a/b", "c/d")
+    except ValueError as exc:
+        return
+    testing.error("Expected ValueError for relative path as base")
+
+def _test_resolve_complex():
+    abs_path = file.resolve_relative_path("/a/b/c", "../d/./e/../f/./g")
+    testing.assertEqual(abs_path, "/a/b/d/f/g")

@@ -12,6 +12,122 @@ class WriteFileCap():
     def __init__(self, cap: FileCap):
         pass
 
+def get_relative_path(target_path: str, from_path: str) -> str:
+    """
+    Compute the relative path from one absolute path to another.
+
+    Args:
+        target_path: The absolute path we want to reach
+        from_path: The absolute path we're starting from
+
+    Returns:
+        A relative path that will reach target_path from from_path
+
+    Raises:
+        ValueError: If either path is not absolute (doesn't start with '/')
+    """
+    # Validate inputs are absolute paths
+    if not target_path.startswith('/') or not from_path.startswith('/'):
+        raise ValueError("Both paths must be absolute (start with '/')")
+
+    # Split paths into components and remove empty strings
+    target_parts = []
+    for p in target_path.split('/'):
+        if p:
+            target_parts.append(p)
+
+    from_parts = []
+    for p in from_path.split('/'):
+        if p:
+            from_parts.append(p)
+
+    # Find common prefix
+    common_length = 0
+    for t, f in zip(target_parts, from_parts):
+        if t != f:
+            break
+        common_length += 1
+
+    # Build the relative path
+    # First go up as many levels as needed
+    up_levels = len(from_parts) - common_length
+    up_path = []
+    for _ in range(up_levels):
+        up_path.append('..')
+
+    # Then add the path to the target
+    down_path = []
+    for i in range(common_length, len(target_parts)):
+        down_path.append(target_parts[i])
+
+    # Combine the parts
+    relative_parts = []
+    relative_parts.extend(up_path)
+    relative_parts.extend(down_path)
+
+    # Handle special case where paths are identical
+    if not relative_parts:
+        return '.'
+
+    # Join with forward slashes
+    return '/'.join(relative_parts)
+
+
+def resolve_relative_path(start_dir: str, rel_path: str) -> str:
+    """
+    Resolve a relative path against a working directory to get an absolute path.
+
+    Args:
+        start_dir: Start directory (must be absolute)
+        rel_path: Relative path to resolve
+
+    Returns:
+        The resulting absolute path
+
+    Raises:
+        ValueError: If start_dir is not absolute or if rel_path is absolute
+    """
+    if not start_dir.startswith('/'):
+        raise ValueError("Working directory must be absolute (start with '/')")
+    if rel_path.startswith('/'):
+        # Relative path is already absolute
+        return rel_path
+
+    # Handle empty or current directory case
+    if not rel_path or rel_path == '.':
+        return start_dir
+
+    # Split both paths into components
+    sd_parts = []
+    for p in start_dir.split('/'):
+        if p:
+            sd_parts.append(p)
+
+    rel_parts = []
+    for p in rel_path.split('/'):
+        if p != '.':
+            rel_parts.append(p)
+
+    # Start with the working directory components
+    result_parts = []
+    result_parts.extend(sd_parts)
+
+    # Process each component of the relative path
+    for part in rel_parts:
+        if part == '..':
+            if not result_parts:
+                raise ValueError("Relative path goes above root directory")
+            result_parts.pop()
+        else:
+            result_parts.append(part)
+
+    # Construct the final path
+    if not result_parts:
+        return '/'
+    return '/' + '/'.join(result_parts)
+
+
+
 class FileStat(value):
     name: str
     dev: u64
