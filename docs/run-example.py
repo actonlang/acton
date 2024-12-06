@@ -13,7 +13,7 @@ import tempfile
 import time
 
 # TODO: This is the name of the language for the src block in the markdown file.
-# It should really be acton, but we don't get syntax hilighting with that
+# It should really be acton, but we don't get syntax highlighting with that
 # (nothing supports that), so using python for now
 SRCNAME='python'
 

@@ -1430,7 +1430,7 @@ class MutableSet[S,A] (Set[S,A]):
 # * Every protocol base "class" turns into a "typeclass" ancestor (with 'Self' inserted first)
 # * In every type scheme: 
 #   * Every type expression that is a protocol application is replaced by a new universally 
-#     quantified variable and a corresponding protocol constraint in the schema constaint tuple
+#     quantified variable and a corresponding protocol constraint in the schema constraint tuple
 #   * Every type variable with an explicit protocol bound has its bound moved to the schema constraint tuple
 #   * Nested types not occurring in type schemas of their own are treated as being part of the enclosing schema
 # * In every class or class:
