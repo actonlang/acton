@@ -232,9 +232,18 @@ B_NoneType B_dictD___init__(B_dict dict, B_Hashable hashwit, B_Iterable wit, $WO
     dict->table = NULL;
     if (wit && iterable) {
         B_Iterator it = wit->$class->__iter__(wit,iterable);
-        B_tuple nxt;
-        while((nxt = (B_tuple)it->$class->__next__(it))) {
-            B_dictD_setitem(dict,hashwit,nxt->components[0],nxt->components[1]);
+        while(1) {
+            if ($PUSH()) {
+                B_tuple nxt = (B_tuple)it->$class->__next__(it);
+                B_dictD_setitem(dict,hashwit,nxt->components[0],nxt->components[1]);
+                $DROP();
+            } else {
+                B_BaseException ex = $POP();
+                if ($ISINSTANCE0(ex, B_StopIteration))
+                    break;
+                else
+                    $RAISE(ex);
+            }
         }
     }
     return B_None;
@@ -337,13 +346,23 @@ B_bool B_dictrel(bool directfalse,B_OrdD_dict w, B_dict a, B_dict b) {
     B_MappingD_dict m = B_MappingD_dictG_new(wH);
     B_Iterator it = m->$class->keys(m,a);
     $WORD x,resa,resb;
-    while ((x = $next(it))) {
-        long h = 0;
-        if (a->table->tb_size > INIT_SIZE)
-            h = from$int(wH->$class->__hash__(wH,x));
-        int ixa = $lookdict(a, wH, h, x, &resa);
-        int ixb = $lookdict(b, wH, h, x ,&resb);
-        if (ixb<0 || wB->$class->__ne__(wB,resa,resb)->val) return B_False;
+    while(1) {
+        if ($PUSH()) {
+            x = it->$class->__next__(it);
+            long h = 0;
+            if (a->table->tb_size > INIT_SIZE)
+                h = from$int(wH->$class->__hash__(wH,x));
+            int ixa = $lookdict(a, wH, h, x, &resa);
+            int ixb = $lookdict(b, wH, h, x ,&resb);
+            if (ixb<0 || wB->$class->__ne__(wB,resa,resb)->val) return B_False;
+            $DROP();
+        } else {
+            B_BaseException ex = $POP();
+            if ($ISINSTANCE0(ex, B_StopIteration))
+                break;
+           else
+               $RAISE(ex);
+        }
     }
     return B_True;
 }
@@ -378,7 +397,7 @@ B_bool B_OrdD_dictD___ge__ (B_OrdD_dict w, B_dict a, B_dict b) {
  
 static $WORD B_IteratorD_dictD_next(B_IteratorD_dict self) {
     if (!self->src->table)
-        return NULL;
+        $RAISE ((B_BaseException)$NEW(B_StopIteration, to$str("dict keys iterator terminated")));
     int i = self->nxt;
     $table table = self->src->table;
     int n = table->tb_nentries;
@@ -390,6 +409,7 @@ static $WORD B_IteratorD_dictD_next(B_IteratorD_dict self) {
         }
         i++;
     }
+    $RAISE ((B_BaseException)$NEW(B_StopIteration, to$str("dict keys iterator terminated")));
     return NULL;
 }
 
@@ -435,6 +455,8 @@ B_Iterator B_MappingD_dictD___iter__ (B_MappingD_dict wit, B_dict dict) {
 }
 
 B_dict B_MappingD_dictD___fromiter__ (B_MappingD_dict wit, B_Iterable wit2, $WORD iter) {
+    return B_dictG_new(wit->W_HashableD_AD_MappingD_dict, wit2, iter);
+    /*
     B_Iterator it = wit2->$class->__iter__(wit2,iter);
     B_Hashable hashwit = wit->W_HashableD_AD_MappingD_dict;
     B_dict dict = $NEW(B_dict,hashwit,NULL,NULL);
@@ -443,6 +465,7 @@ B_dict B_MappingD_dictD___fromiter__ (B_MappingD_dict wit, B_Iterable wit2, $WOR
         B_dictD_setitem(dict,hashwit,nxt->components[0],nxt->components[1]);
     }
     return dict;
+    */
 }
 
 B_int B_MappingD_dictD___len__ (B_MappingD_dict wit, B_dict dict) {
@@ -491,7 +514,7 @@ static $WORD B_IteratorD_dict_values_next(B_IteratorD_dict_values self) {
     int i = self->nxt;
     $table table = self->src->table;
     if(!table)
-        return NULL;
+        $RAISE ((B_BaseException)$NEW(B_StopIteration, to$str("dict values iterator terminated")));
     int n = table->tb_nentries;
     while (i < n) {
         $entry_t entry =  &TB_ENTRIES(table)[i];
@@ -501,7 +524,7 @@ static $WORD B_IteratorD_dict_values_next(B_IteratorD_dict_values self) {
         }
         i++;
     }
-    return NULL;
+    $RAISE ((B_BaseException)$NEW(B_StopIteration, to$str("dict values iterator terminated")));
 }
  
 B_IteratorD_dict_values B_IteratorD_dict_valuesG_new(B_dict dict) {
@@ -545,7 +568,7 @@ static $WORD B_IteratorD_dict_items_next(B_IteratorD_dict_items self) {
     int i = self->nxt;
     $table table = self->src->table;
     if(!table)
-        return NULL;
+        $RAISE ((B_BaseException)$NEW(B_StopIteration, to$str("dict items iterator terminated")));
     int n = table->tb_nentries;
     while (i < n) {
         $entry_t entry =  &TB_ENTRIES(table)[i];
@@ -555,7 +578,7 @@ static $WORD B_IteratorD_dict_items_next(B_IteratorD_dict_items self) {
         }
         i++;
     }
-    return NULL;
+    $RAISE ((B_BaseException)$NEW(B_StopIteration, to$str("dict items iterator terminated")));
 }
  
 B_IteratorD_dict_items B_IteratorD_dict_itemsG_new(B_dict dict) {
@@ -606,9 +629,19 @@ B_Iterator B_MappingD_dictD_items (B_MappingD_dict wit, B_dict dict) {
 B_NoneType B_MappingD_dictD_update (B_MappingD_dict wit, B_dict dict, B_Iterable wit2, $WORD other) {
     B_Hashable hashwit = wit->W_HashableD_AD_MappingD_dict;
     B_Iterator it = wit2->$class->__iter__(wit2,other);
-    B_tuple item;
-    while ((item = (B_tuple)it->$class->__next__(it)))
-        B_dictD_setitem(dict,hashwit,item->components[0],item->components[1]);
+    while(1) {
+        if ($PUSH()) {
+            B_tuple item = it->$class->__next__(it);
+            B_dictD_setitem(dict,hashwit,item->components[0],item->components[1]);
+            $DROP();
+        } else {
+            B_BaseException ex = $POP();
+            if ($ISINSTANCE0(ex, B_StopIteration))
+                break;
+           else
+               $RAISE(ex);
+        }
+    }
     return B_None;
 }
 
