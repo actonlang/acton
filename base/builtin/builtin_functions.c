@@ -564,3 +564,10 @@ $WORD B_round (B_Real W_395, $WORD x, B_int n) {
     return W_395->$class->__round__(W_395, x, n);
 }
 */
+
+$WORD $ASSERT(B_bool test, B_str msg) {
+    if (!test->val) {
+        $RAISE(msg);
+    }
+    return B_None;
+}
