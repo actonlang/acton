@@ -215,6 +215,7 @@ instance Vars Stmt where
     bound (Decl _ ds)               = bound ds
     bound (Signature _ ns t d)      = ns
     bound (If _ bs els)             = bound bs ++ bound els
+    bound (While _ _ b els)         = bound b ++ bound els
     bound (With _ items b)          = bound b
     bound _                         = []
 

@@ -80,11 +80,11 @@ staticWitnessName _                 = (Nothing, [])
  
 -- Environment --------------------------------------------------------------------------------------
 
-genEnv env0                         = setX env0 GenX{ globalX = [], localX = [], retX = tNone }
+genEnv env0                         = setX env0 GenX{ globalX = [], localX = [], retX = tNone, volVarsX = []}
 
 type GenEnv                         = EnvF GenX
 
-data GenX                           = GenX { globalX :: [Name], localX :: [Name], retX :: Type }
+data GenX                           = GenX { globalX :: [Name], localX :: [Name], retX :: Type , volVarsX :: [Name]}
 
 gdefine te env                      = modX env1 $ \x -> x{ globalX = dom te ++ globalX x }
   where env1                        = define te env
@@ -100,6 +100,9 @@ defined env                         = globalX (envX env) ++ localX (envX env)
 
 ret env                             = retX $ envX env
 
+setVolVars as env                   = modX env $ \x -> x{ volVarsX = as }
+
+isVolVar a env                      = a `elem` volVarsX (envX env)
 
 -- Helpers ------------------------------------------------------------------------------------------
 
@@ -320,7 +323,7 @@ declDecl env (Def _ n q p KwdNIL (Just t) b d fx)
                                       text "*/"
   | otherwise                       = decl
   where decl                        = (genTypeDecl env n t1 <+> genTopName env n <+> parens (gen env p) <+> char '{') $+$
-                                      nest 4 (genSuite env1 b) $+$
+                                      nest 4 (fst(genSuite env1 b)) $+$
                                       char '}'
         env1                        = setRet t1 $ ldefine (envOf p) $ defineTVars q env
         t1                          = exposeMsg fx t
@@ -436,11 +439,14 @@ methodname c n                      = Derived c n
 
 class Gen a where
     gen                             :: GenEnv -> a -> Doc
+    genV                            :: GenEnv -> a -> (Doc,[Name])
 
+    genV env x                      = (gen env x,[])
+    gen env x                       = fst(genV env x)
 
 instance (Gen a) => Gen (Maybe a) where
     gen env x                       = maybe empty (gen env) x
-
+    genV env x                      = maybe (empty,[]) (genV env) x
 
 instance Gen ModName where
     gen env (ModName ns)            = hcat $ punctuate (text "Q_") $ map (gen env) ns
@@ -500,18 +506,20 @@ preEscape str                       = "A_" ++ str
 
 word                                = text "$WORD"
 
-genSuite env []                     = empty
-genSuite env (s:ss)                 = genStmt env s $+$ genSuite (ldefine (envOf s) env) ss
-  where te                          = envOf s `exclude` defined env
-        env1                        = ldefine te env
+genSuite env []                     = (empty,[])
+genSuite env (s:ss)                 = (genStmt (setVolVars vs env) s $+$ cs, volVars s ++ vs \\ bound s)
+    where (cs,vs)                   = genSuite (ldefine (envOf s) env) ss
 
+volVars (If _ [Branch e ss] fin)
+      | isPUSH e                    = bound ss
+volVars _                           = []
 
 isUnboxed (Internal BoxPass _ _)    = True
 isUnboxed _                         = False
 
-genTypeDecl env n t
-   | isUnboxed n && B.isUnboxable t = text (unboxed_c_type t)
-   | otherwise                      = gen env t
+genTypeDecl env n t                 =  (if isVolVar n env then text "volatile" else empty) <+>
+                                       if isUnboxed n && B.isUnboxable t then text (unboxed_c_type t) else gen env t
+
    
 genStmt env (Decl _ ds)             = empty
 genStmt env (Assign _ [PVar _ n (Just t)] e)
@@ -527,31 +535,40 @@ genStmt env s                       = vcat [ genTypeDecl env n t <+> gen env n <
         env1                        = ldefine te env
 
 instance Gen Stmt where
-    gen env s | isNotImpl s         = text "//" <+> text "NotImplemented"
-    gen env (Expr _ Strings{})      = semi
-    gen env (Expr _ e)              = genExp' env e <> semi
-    gen env (Assign _ [p] e)
-        | B.isUnboxable t           = gen env p <+> equals <+> gen env e <> semi
-        | otherwise                 = gen env p <+> equals <+> genExp env t e <> semi
+    genV env s | isNotImpl s        = (text "//" <+> text "NotImplemented",[])
+    genV env (Expr _ Strings{})     = (semi,[])
+    genV env (Expr _ e)             = (genExp' env e <> semi,[])
+    genV env (Assign _ [p] e)
+        | B.isUnboxable t           = (gen env p <+> equals <+> gen env e <> semi,[])
+        | otherwise                 = (gen env p <+> equals <+> genExp env t e <> semi,[])
        
       where t                       = typeOf env p
-    gen env (AugAssign _ tg op e)   = genTarget env tg <+> pretty op <+> genExp env t e <> semi
+    genV env (AugAssign _ tg op e)  = (genTarget env tg <+> pretty op <+> genExp env t e <> semi,[])
       where t                       = targetType env tg
-    gen env (MutAssign _ tg e)      = genTarget env tg <+> equals <+> genExp env t e <> semi
+    genV env (MutAssign _ tg e)     = (genTarget env tg <+> equals <+> genExp env t e <> semi,[])
       where t                       = targetType env tg
-    gen env (Pass _)                = empty
-    gen env (Return _ Nothing)      = text "return" <+> gen env eNone <> semi
-    gen env (Return _ (Just e))     = text "return" <+> genExp env (ret env) e <> semi
-    gen env (Break _)               = text "break" <> semi
-    gen env (Continue _)            = text "continue" <> semi
-    gen env (If _ (b:bs) b2)        = genBranch env "if" b $+$ vmap (genBranch env "else if") bs $+$ genElse env b2
-    gen env (While _ e b [])        = genBranch env "while" (Branch e b) 
-    gen env _                       = empty
+    genV env (Pass _)               = (empty,[])
+    genV env (Return _ Nothing)     = (text "return" <+> gen env eNone <> semi,[])
+    genV env (Return _ (Just e))    = (text "return" <+> genExp env (ret env) e <> semi,[])
+    genV env (Break _)              = (text "break" <> semi,[])
+    genV env (Continue _)           = (text "continue" <> semi,[])
+    genV env (If  _ [b@(Branch e ss)] fin)
+      | isPUSH e                    = (b' $+$ fin',v1++v2++bound ss)
+      where (b',v1)                 = genBranch env "if" b
+            (fin',v2)               = genElse env fin
+    genV env (If _ (b:bs) b2)       = (b' $+$ vcat bs' $+$ b2', v1++concat v2++v3)
+       where (b',v1)                = genBranch env "if" b
+             (bs',v2)               = unzip (map (genBranch env "else if") bs)
+             (b2',v3)               = genElse env b2
+    genV env (While _ e b [])       = genBranch env "while" (Branch e b) 
+    genV env _                      = (empty,[])
 
-genBranch env kw (Branch e b)       = (text kw <+> parens (gen env (B.unbox tBool e)) <+> char '{') $+$ nest 4 (genSuite env b) $+$ char '}'
-
-genElse env []                      = empty
-genElse env b                       = (text "else" <+> char '{') $+$ nest 4 (genSuite env b) $+$ char '}'
+genBranch env kw (Branch e b)       = ((text kw <+> parens (gen env (B.unbox tBool e)) <+> char '{') $+$ nest 4 b' $+$ char '}',vs)
+   where (b',vs)                    = genSuite env b
+   
+genElse env []                      = (empty,[])
+genElse env b                       = ((text "else" <+> char '{') $+$ nest 4 b' $+$ char '}',vs)
+   where (b',vs)                    = genSuite env b
 
 instance Gen PosPar where
     gen env (PosPar n (Just t) _ PosNIL)
@@ -767,7 +784,7 @@ instance Gen Expr where
       | otherwise                   = genQName env n
     gen env (Int _ i str)
         |i <= 9223372036854775807   = gen env primToInt <> parens (text str) -- literal is 2^63-1
-        | otherwise                 = gen env primToInt2 <> parens (doubleQuotes $ text (show i))
+        | otherwise                 = gen env primToInt2 <> parens (doubleQuotes $ text str)
     gen env (Float _ _ str)         = gen env primToFloat <> parens (text str)
     gen env (Bool _ True)           = gen env qnTrue
     gen env (Bool _ False)          = gen env qnFalse
