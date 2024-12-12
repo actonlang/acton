@@ -1,0 +1,17 @@
+
+
+def fun1() -> int:
+    res = 1
+    try:
+        res = 42
+    except:
+        pass
+    return res
+
+actor main(env):
+    out1 = fun1()
+    if out1 != 42:
+        print("Bad 1:", out1)
+        env.exit(1)
+
+    env.exit(0)
