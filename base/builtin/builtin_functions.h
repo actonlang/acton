@@ -173,8 +173,8 @@ $IdentityActor $IdentityActorG_new();
 
 // Various small functions //////////////////////////////////////////////////////////
 
-$WORD B_min(B_Ord wit, B_Iterable wit2, $WORD iter);
-$WORD B_max(B_Ord wit, B_Iterable wit2, $WORD iter);
+$WORD B_min(B_Ord wit, B_Iterable wit2, $WORD iter, $WORD deflt);
+$WORD B_max(B_Ord wit, B_Iterable wit2, $WORD iter, $WORD deflt);
 $WORD B_min_def(B_Ord wit, B_Iterable wit2, $WORD iter, $WORD deflt);
 $WORD B_max_def(B_Ord wit, B_Iterable wit2, $WORD iter, $WORD deflt);
 

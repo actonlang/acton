@@ -11,7 +11,7 @@ actor main(env):
     if list(map(lambda x : x*x,lst)) != [100, 121, 144, 169, 196]:
         print("map")
         env.exit(1)
-    a = max(lst)
+    a = max(lst, None)
     if a is None or a != 14:
         print("max")
         env.exit(1)

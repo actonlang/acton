@@ -231,8 +231,8 @@ B_Iterator B_map(B_Iterable wit, $pure f, $WORD iter) {
 
 // max, min ///////////////////////////////////////////////////////////////////////////////////
 
-$WORD B_max(B_Ord wit, B_Iterable wit2, $WORD iter) {
-    $WORD res = NULL;
+$WORD B_max(B_Ord wit, B_Iterable wit2, $WORD iter, $WORD dflt) {
+    $WORD res = dflt;
     B_Iterator it = wit2->$class->__iter__(wit2,iter);  
     while(1) {
         if ($PUSH()) {
@@ -248,6 +248,16 @@ $WORD B_max(B_Ord wit, B_Iterable wit2, $WORD iter) {
                $RAISE(ex);
         }
     }
+
+    // If no value was found in the iterable
+    if (!res) {
+        if (dflt) {
+            return dflt; // Return the provided default value
+        } else {
+            $RAISE(((B_BaseException)B_ValueErrorG_new($FORMAT("max() arg is an empty sequence"))));
+        }
+    }
+
     return res;
 }
 
@@ -271,7 +281,7 @@ $WORD B_max_def(B_Ord wit, B_Iterable wit2, $WORD iter, $WORD dflt) {
     return res;
 }
 
-$WORD B_min(B_Ord wit, B_Iterable wit2, $WORD iter) {
+$WORD B_min(B_Ord wit, B_Iterable wit2, $WORD iter, $WORD dflt) {
     $WORD res = NULL;
     B_Iterator it = wit2->$class->__iter__(wit2,iter);  
     while(1) {
@@ -284,10 +294,20 @@ $WORD B_min(B_Ord wit, B_Iterable wit2, $WORD iter) {
             B_BaseException ex = $POP();
             if ($ISINSTANCE0(ex, B_StopIteration))
                 break;
-           else
-               $RAISE(ex);
+            else
+                $RAISE(ex);
         }
     }
+
+    // If no value was found in the iterable
+    if (!res) {
+        if (dflt) {
+            return dflt; // Return the provided default value
+        } else {
+            $RAISE((B_BaseException)B_ValueErrorG_new($FORMAT("min() arg is an empty sequence")));
+        }
+    }
+
     return res;
 }
 
@@ -304,8 +324,8 @@ $WORD B_min_def(B_Ord wit, B_Iterable wit2, $WORD iter, $WORD dflt) {
             B_BaseException ex = $POP();
             if ($ISINSTANCE0(ex, B_StopIteration))
                 break;
-           else
-               $RAISE(ex);
+            else
+                $RAISE(ex);
         }
     }
     return res;

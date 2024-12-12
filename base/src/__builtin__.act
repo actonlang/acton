@@ -888,10 +888,10 @@ def len(x : Collection[A]) -> int:
 def map(function: (A) -> B, iterable: Iterable[A]) -> Iterator[B]:
     NotImplemented
 
-def max [A(Ord)] (iter: Iterable[A]) -> ?A:
+def max [A(Ord)] (iter: Iterable[A], dflt: ?A) -> A:
     NotImplemented
 
-def min [A(Ord)] (iter: Iterable[A]) -> ?A:
+def min [A(Ord)] (iter: Iterable[A], dflt: ?A) -> A:
     NotImplemented
 
 def max_def [A(Ord)] (iter: Iterable[A], dflt: A) -> A:
