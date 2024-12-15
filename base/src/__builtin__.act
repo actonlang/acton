@@ -891,6 +891,12 @@ def max [A(Ord)] (iter: Iterable[A], dflt: ?A) -> A:
 def min [A(Ord)] (iter: Iterable[A], dflt: ?A) -> A:
     NotImplemented
 
+def max_def [A(Ord)] (iter: Iterable[A], dflt: A) -> A:
+    NotImplemented
+
+def min_def [A(Ord)] (iter: Iterable[A], dflt: A) -> A:
+    NotImplemented
+
 def next(x : Iterator[A]) -> ?A:
     return x.__next__()
 

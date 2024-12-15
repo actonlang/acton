@@ -251,6 +251,21 @@ $WORD B_max(B_Ord wit, B_Iterable wit2, $WORD iter, $WORD deflt) {
         return deflt;
 }
 
+$WORD B_max_def(B_Ord wit, B_Iterable wit2, $WORD iter, $WORD deflt) {
+    B_Iterator it = wit2->$class->__iter__(wit2, iter);
+    $WORD res, nxt;
+    res = it->$class->__next__(it);
+    if (res) {
+        while ((nxt = it->$class->__next__(it))) {
+            if (wit->$class->__lt__(wit, res, nxt)->val)
+                res = nxt;
+        }
+        return res;
+    } else {
+        return deflt; // Return default if iterable is empty
+    }
+}
+
 $WORD B_min(B_Ord wit, B_Iterable wit2, $WORD iter, $WORD deflt) {
     B_Iterator it = wit2->$class->__iter__(wit2,iter);  
     $WORD res, nxt;
@@ -263,6 +278,21 @@ $WORD B_min(B_Ord wit, B_Iterable wit2, $WORD iter, $WORD deflt) {
         return res;
     } else
         return deflt;
+}
+
+$WORD B_min_def(B_Ord wit, B_Iterable wit2, $WORD iter, $WORD deflt) {
+    B_Iterator it = wit2->$class->__iter__(wit2, iter);
+    $WORD res, nxt;
+    res = it->$class->__next__(it);
+    if (res) {
+        while ((nxt = it->$class->__next__(it))) {
+            if (wit->$class->__gt__(wit, res, nxt)->val)
+                res = nxt;
+        }
+        return res;
+    } else {
+        return deflt; // Return default if iterable is empty
+    }
 }
  
 B_list B_sorted(B_Ord wit, B_Iterable wit2, $WORD iter) {
