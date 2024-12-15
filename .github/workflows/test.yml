@@ -90,9 +90,15 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            ~/.cache/acton/
             ~/.stack
           key: test-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}
+      - name: "Cache Acton"
+        if: matrix.cache == true
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/acton/
+          key: test-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}-acton
       - name: "Install build prerequisites"
         run: brew install haskell-stack
       - name: "Build Acton"
@@ -180,9 +186,15 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            ~/.cache/acton/
             ~/.stack
           key: test-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}
+      - name: "Cache Acton"
+        if: matrix.cache == true
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/acton/
+          key: test-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}-acton
       - name: "chown our home dir to avoid stack complaining"
         run: chown -R root:root /github/home
       - name: "Install build prerequisites"
