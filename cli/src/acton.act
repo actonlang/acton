@@ -462,7 +462,7 @@ actor RunTestList(env, args):
         _expected_modules = set(module_names)
 
         for module_name in module_names:
-            t = RunModuleTest(process_cap, module_name, ["list", "--modname", module_name], lambda x: _on_json_output(module_name, x), _on_test_error)
+            t = RunModuleTest(process_cap, module_name, ["list"], lambda x: _on_json_output(module_name, x), _on_test_error)
 
     def _on_build_success(stdout_buf: str):
         test_modules = []
@@ -595,7 +595,7 @@ actor RunTestTest(env: Env, args, perf_mode: bool=False):
         # List all tests first, which we can run in parallel. Once we have the
         # list of all tests we can start running them one at a time in sequence.
         for module_name in modules_to_test:
-            t = RunModuleTest(process_cap, module_name, ["list", "--modname", module_name] + test_cmd_args, lambda x: _on_json_output(module_name, x), lambda x, y, z: _on_test_error(module_name, x, y, z))
+            t = RunModuleTest(process_cap, module_name, ["list"] + test_cmd_args, lambda x: _on_json_output(module_name, x), lambda x, y, z: _on_test_error(module_name, x, y, z))
 
     def _run_module_tests(run_all=False):
         try:
@@ -603,7 +603,6 @@ actor RunTestTest(env: Env, args, perf_mode: bool=False):
             cmd = ["test"]
             if perf_mode:
                 cmd += ["perf"]
-            cmd += ["--modname", module_name]
             cmd += test_cmd_args
             t = RunModuleTest(process_cap, module_name, cmd, lambda x: _on_json_output(module_name, x), lambda x, y, z: _on_test_error(module_name, x, y, z))
         except ValueError:

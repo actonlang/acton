@@ -279,11 +279,11 @@ class Test(object):
         raise ValueError("Test: Invalid JSON")
 
 class UnitTest(Test):
-    def __init__(self, fn: mut() -> None, name: str, desc: str):
+    def __init__(self, fn: mut() -> None, name: str, desc: str, module: str):
         self.fn = fn
         self.name = name
         self.desc = desc
-        self.module = None
+        self.module = module
 
     def run_test(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler):
         output = None
@@ -302,11 +302,11 @@ class UnitTest(Test):
         report_result(success, exception, output)
 
 class SyncActorTest(Test):
-    def __init__(self, fn: proc(logging.Handler) -> None, name: str, desc: str):
+    def __init__(self, fn: proc(logging.Handler) -> None, name: str, desc: str, module: str):
         self.fn = fn
         self.name = name
         self.desc = desc
-        self.module = None
+        self.module = module
 
     def run_test(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler):
         output = None
@@ -325,11 +325,11 @@ class SyncActorTest(Test):
         report_result(success, exception, output)
 
 class AsyncActorTest(Test):
-    def __init__(self, fn: proc(action(?bool, ?Exception) -> None, logging.Handler) -> None, name: str, desc: str):
+    def __init__(self, fn: proc(action(?bool, ?Exception) -> None, logging.Handler) -> None, name: str, desc: str, module: str):
         self.fn = fn
         self.name = name
         self.desc = desc
-        self.module = None
+        self.module = module
 
     def run_test(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler):
         def repres(success: ?bool, exception: ?Exception):
@@ -337,11 +337,11 @@ class AsyncActorTest(Test):
         self.fn(repres, log_handler)
 
 class EnvTest(Test):
-    def __init__(self, fn: proc(action(?bool, ?Exception) -> None, Env, logging.Handler) -> None, name: str, desc: str):
+    def __init__(self, fn: proc(action(?bool, ?Exception) -> None, Env, logging.Handler) -> None, name: str, desc: str, module: str):
         self.fn = fn
         self.name = name
         self.desc = desc
-        self.module = None
+        self.module = module
 
     def run_test(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler):
         def repres(success: ?bool, exception: ?Exception):
@@ -1104,16 +1104,12 @@ actor test_runner(env: Env,
     def _init_results(args):
 
         for name, t in unit_tests.items():
-            t.module = args.get_str("modname")
             all_tests[name] = t
         for name, t in sync_actor_tests.items():
-            t.module = args.get_str("modname")
             all_tests[name] = t
         for name, t in async_actor_tests.items():
-            t.module = args.get_str("modname")
             all_tests[name] = t
         for name, t in env_tests.items():
-            t.module = args.get_str("modname")
             all_tests[name] = t
 
         tests = _filter_tests(all_tests, args)
@@ -1184,8 +1180,6 @@ actor test_runner(env: Env,
         p = argparse.Parser()
         p.add_bool("json", "Output results as JSON")
         p.add_bool("no_output", "No result output")
-        # TODO: remove modname arg and get it from __modname__ that compiler should provide
-        p.add_option("modname", "str", help="Name of module")
         p.add_option("name", "strlist", nargs="+", default=[], help="Filter tests by name")
         lp = p.add_cmd("list", "list tests", _list_tests)
         tp = p.add_cmd("test", "Run tests", _run_tests)
