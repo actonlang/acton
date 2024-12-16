@@ -356,9 +356,6 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
         for dep_name, dep in build_config.zig_dependencies.items():
             build_config_fetchable.zig_dependencies[dep_name] = dep
 
-        for dep_name, dep in build_config.dependencies.items():
-            print("Dependency:", dep_name, dep.path)
-
         write_buildzig(file.FileCap(env.cap), build_config)
         zfd = ZigFetchDeps(env, build_config_fetchable, lambda x, y: check_deps(), on_zig_fetch_error)
 
