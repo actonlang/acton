@@ -31,6 +31,7 @@ import Acton.TypeM
 import Acton.TypeEnv
 import qualified InterfaceFiles
 import qualified Data.Map
+import Data.List (intersperse)
 
 reconstruct                             :: String -> Env0 -> Module -> IO (TEnv, Module, Env0)
 reconstruct fname env0 (Module m i ss)  = do --traceM ("#################### original env0 for " ++ prstr m ++ ":")
@@ -56,6 +57,13 @@ reconstruct fname env0 (Module m i ss)  = do --traceM ("#################### ori
           | nstr n == "__test_main"     = rmTests ss
         rmTests (s : ss)                = s : rmTests ss
         rmTests []                      = []
+
+        -- Convert the module name (ModName) to a string, e.g. "foo.bar"
+        modNameStr (ModName ns) = concat (intersperse "." (map nstr ns))
+
+        -- Inject __name__ variable
+        __name__assign = Assign NoLoc [PVar NoLoc (name "__name__") Nothing] (Strings NoLoc [modNameStr m])
+        ss1T' = __name__assign : ss1T
          
 
 showTyFile env0 m fname         = do (ms,te) <- InterfaceFiles.readFile fname
