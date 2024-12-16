@@ -31,6 +31,7 @@ import Acton.TypeM
 import Acton.TypeEnv
 import qualified InterfaceFiles
 import qualified Data.Map
+import Data.List (intersperse)
 
 reconstruct                             :: String -> Env0 -> Module -> IO (TEnv, Module, Env0)
 reconstruct fname env0 (Module m i ss)  = do --traceM ("#################### original env0 for " ++ prstr m ++ ":")
@@ -41,7 +42,7 @@ reconstruct fname env0 (Module m i ss)  = do --traceM ("#################### ori
                                              return (iface, Module m i ss1T, env0')
                                              
   where ssT                             = if hasTesting i then ss ++ testStmts (emptyDict,emptyDict,emptyDict,emptyDict) else ss
-        ss1T                            = if hasTesting i then rmTests ss1 ++ finalStmts env2 ss1 else ss1
+        ss1T                            = if hasTesting i then rmTests ss1 ++ finalStmts env2 (modNameStr m) ss1 else ss1
         env1                            = reserve (assigned ssT) (typeX env0)
         (te,ss1)                        = runTypeM $ infTop env1 ssT
         env2                            = define te (setMod m env0)
@@ -56,6 +57,13 @@ reconstruct fname env0 (Module m i ss)  = do --traceM ("#################### ori
           | nstr n == "__test_main"     = rmTests ss
         rmTests (s : ss)                = s : rmTests ss
         rmTests []                      = []
+
+        -- Convert the module name (ModName) to a string, e.g. "foo.bar"
+        modNameStr (ModName ns) = concat (intersperse "." (map nstr ns))
+
+        -- Inject __name__ variable
+        __name__assign = Assign NoLoc [PVar NoLoc (name "__name__") Nothing] (Strings NoLoc [modNameStr m])
+        ss1T' = __name__assign : ss1T
          
 
 showTyFile env0 m fname         = do (ms,te) <- InterfaceFiles.readFile fname
@@ -1677,10 +1685,11 @@ testStmts  (uts, sats, aats, ets)       = [dictAssign "__unit_tests" "UnitTest" 
                                            dictAssign "__env_tests" "EnvTest" ets,
                                            testActor]
 
-finalStmts env ss                       = testStmts (mkDict "UnitTest" uts, mkDict "SyncActorTest" sats, mkDict "AsyncActorTest" aats, mkDict "EnvTest" ets)
-   where  (uts, sats, aats, ets)        = testFuns env ss
+finalStmts env m ss =
+    let (uts, sats, aats, ets) = testFuns env m ss
+    in testStmts (mkDict "UnitTest" uts, mkDict "SyncActorTest" sats, mkDict "AsyncActorTest" aats, mkDict "EnvTest" ets)
 
-gname ns n                              = GName (ModName ns) n 
+gname ns n                              = GName (ModName ns) n
 dername a b                             = Derived (name a) (name b)
 
 dictAssign dictname cl dict             = sAssign (pVar (name dictname) (tDict tStr (testing cl))) dict
@@ -1698,26 +1707,37 @@ testActor                               = sDecl [Actor NoLoc (name "__test_main"
 row2list (TRow _ _ _ t r)               = t : row2list r
 row2list (TNil _ _)                     = []
 
-mkAssoc d testType                      = Assoc (Strings NoLoc [nstr (dname d)])
-                                                (eCall (eQVar (gname [name "testing"] testType)) [eVar (dname d), Strings NoLoc [drop 6 (nstr (dname d))], comment (dbody d)])
-   where comment (Expr _ s@(Strings _ ss) : _)  = s
-         comment _                      = Strings NoLoc [""]
+mkAssoc d testType modName =
+    Assoc (Strings NoLoc [nstr (dname d)])
+          (eCall (eQVar (gname [name "testing"] testType))
+                 [ eVar (dname d)
+                 , Strings NoLoc [drop 6 (nstr (dname d))]
+                 , comment (dbody d)
+                 , Strings NoLoc [modName]
+                 ])
+  where comment (Expr _ s@(Strings _ ss) : _) = s
+        comment _ = Strings NoLoc [""]
 
-testFuns                                :: Env0 -> Suite -> ([Assoc],[Assoc],[Assoc],[Assoc])
-testFuns env ss                         = tF ss [] [] [] []
-   where tF (With _ _ ss' : ss) uts sats aats ets = tF (ss' ++ ss) uts sats aats ets
-         tF (Decl l (d@Def{}:ds) : ss) uts sats aats ets
-            | isTestName (dname d)      = case testType (findQName (NoQ (dname d)) env) of
-                                             Just UnitType  -> tF (Decl l ds : ss) (mkAssoc d (name "UnitTest"):uts) sats aats ets
-                                             Just SyncType  -> tF (Decl l ds : ss) uts (mkAssoc d (name "SyncActorTest"):sats) aats ets
-                                             Just AsyncType -> tF (Decl l ds : ss) uts sats (mkAssoc d (name "AsyncActorTest"):aats) ets
-                                             Just EnvType   -> tF (Decl l ds : ss) uts sats aats (mkAssoc d (name "EnvTest"):ets)
-                                             Nothing    -> tF (Decl l ds : ss) uts sats aats ets
-             | otherwise                 = tF (Decl l ds : ss) uts sats aats ets
-         tF (Decl l (d : ds) : ss) uts sats aats ets   = tF (Decl l ds : ss) uts sats aats ets
-         tF (Decl l [] : ss) uts sats aats ets = tF ss uts sats aats ets
-         tF (s : ss) uts sats aats ets   = tF ss uts sats aats ets
-         tF [] uts sats aats ets         = (reverse uts, reverse sats, reverse aats, reverse ets)
+testFuns :: Env0 -> String -> Suite -> ([Assoc],[Assoc],[Assoc],[Assoc])
+testFuns env modName ss = tF ss [] [] [] []
+  where
+    tF (With _ _ ss' : ss) uts sats aats ets = tF (ss' ++ ss) uts sats aats ets
+    tF (Decl l (d@Def{}:ds) : ss) uts sats aats ets
+      | isTestName (dname d) =
+          case testType (findQName (NoQ (dname d)) env) of
+            Just UnitType ->
+              tF (Decl l ds : ss) (mkAssoc d (name "UnitTest") modName : uts) sats aats ets
+            Just SyncType ->
+              tF (Decl l ds : ss) uts (mkAssoc d (name "SyncActorTest") modName : sats) aats ets
+            Just AsyncType ->
+              tF (Decl l ds : ss) uts sats (mkAssoc d (name "AsyncActorTest") modName : aats) ets
+            Just EnvType ->
+              tF (Decl l ds : ss) uts sats aats (mkAssoc d (name "EnvTest") modName : ets)
+            Nothing -> tF (Decl l ds : ss) uts sats aats ets
+    tF (Decl l (_:ds) : ss) uts sats aats ets = tF (Decl l ds : ss) uts sats aats ets
+    tF (Decl _ [] : ss) uts sats aats ets = tF ss uts sats aats ets
+    tF (_ : ss) uts sats aats ets = tF ss uts sats aats ets
+    tF [] uts sats aats ets = (reverse uts, reverse sats, reverse aats, reverse ets)
 
 isTestName n                             = take 6 (nstr n) == "_test_"
 
