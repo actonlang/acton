@@ -1717,7 +1717,7 @@ testFuns env ss                         = tF ss [] [] [] []
          tF (Decl l (d : ds) : ss) uts sats aats ets   = tF (Decl l ds : ss) uts sats aats ets
          tF (Decl l [] : ss) uts sats aats ets = tF ss uts sats aats ets
          tF (s : ss) uts sats aats ets   = tF ss uts sats aats ets
-         tF [] uts sats aats ets         = (uts, sats, aats, ets)
+         tF [] uts sats aats ets         = (reverse uts, reverse sats, reverse aats, reverse ets)
 
 isTestName n                             = take 6 (nstr n) == "_test_"
 
