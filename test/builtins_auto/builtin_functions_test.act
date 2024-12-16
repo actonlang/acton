@@ -27,4 +27,20 @@ actor main(env):
        print("ascii")
        env.exit(1)
 
+    # Test max_def
+    if max_def(lst, -1) != 14:
+        print("max_def with non-empty list")
+        env.exit(1)
+    if max_def([], -1) != -1:
+        print("max_def with empty list")
+        env.exit(1)
+
+    # Test min_def
+    if min_def(lst, 100) != 10:
+        print("min_def with non-empty list")
+        env.exit(1)
+    if min_def([], 100) != 100:
+        print("min_def with empty list")
+        env.exit(1)
+
     env.exit(0)
