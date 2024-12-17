@@ -118,10 +118,7 @@ B_IteratorD_enumerate B_IteratorD_enumerate$_deserialize(B_IteratorD_enumerate r
 
 $WORD B_IteratorD_enumerate_next(B_IteratorD_enumerate it) {
     $WORD w = it->it->$class->__next__(it->it);
-    if (w)
-        return $NEWTUPLE(2,to$int(it->nxt++),w);
-    else
-        return NULL;
+    return $NEWTUPLE(2,to$int(it->nxt++),w);
 }
 
 struct B_IteratorD_enumerateG_class B_IteratorD_enumerateG_methods = {"B_IteratorD_enumerate",UNASSIGNED,($SuperG_class)&B_IteratorG_methods,B_IteratorD_enumerate_init,
@@ -170,7 +167,7 @@ $WORD B_IteratorD_filter_next(B_IteratorD_filter it) {
     $WORD w;
     do
         w = it->it->$class->__next__(it->it);
-    while (w && !fromB_bool(it->f->$class->__eval__(it->f, w)));
+    while (!fromB_bool(it->f->$class->__eval__(it->f, w)));
     return w;
 }
 
@@ -215,10 +212,7 @@ B_IteratorD_map B_IteratorD_map$_deserialize(B_IteratorD_map res, $Serial$state 
 
 $WORD B_IteratorD_map_next(B_IteratorD_map it) {
     $WORD w = it->it->$class->__next__(it->it);
-    if (w)
-        return it->f->$class->__eval__(it->f, w);
-    else
-        return NULL;
+    return it->f->$class->__eval__(it->f, w);
 }
 
 struct B_IteratorD_mapG_class B_IteratorD_mapG_methods = {"B_IteratorD_map",UNASSIGNED,($SuperG_class)&B_IteratorG_methods,B_IteratorD_map_init,
@@ -237,64 +231,106 @@ B_Iterator B_map(B_Iterable wit, $pure f, $WORD iter) {
 
 // max, min ///////////////////////////////////////////////////////////////////////////////////
 
-$WORD B_max(B_Ord wit, B_Iterable wit2, $WORD iter, $WORD deflt) {
+$WORD B_max(B_Ord wit, B_Iterable wit2, $WORD iter, $WORD dflt) {
+    $WORD res = dflt;
     B_Iterator it = wit2->$class->__iter__(wit2,iter);  
-    $WORD res, nxt;
-    res = it->$class->__next__(it);
-    if (res) {
-        while ((nxt = it->$class->__next__(it))) {
-            if (wit->$class->__lt__(wit,res,nxt)->val)
+    while(1) {
+        if ($PUSH()) {
+            $WORD nxt = it->$class->__next__(it);
+            if (!res || fromB_bool(wit->$class->__lt__(wit,res,nxt)))
                 res = nxt;
+            $DROP();
+        } else {
+            B_BaseException ex = $POP();
+            if ($ISINSTANCE0(ex, B_StopIteration))
+                break;
+           else
+               $RAISE(ex);
         }
-        return res;
-    } else
-        return deflt;
-}
-
-$WORD B_max_def(B_Ord wit, B_Iterable wit2, $WORD iter, $WORD deflt) {
-    B_Iterator it = wit2->$class->__iter__(wit2, iter);
-    $WORD res, nxt;
-    res = it->$class->__next__(it);
-    if (res) {
-        while ((nxt = it->$class->__next__(it))) {
-            if (wit->$class->__lt__(wit, res, nxt)->val)
-                res = nxt;
-        }
-        return res;
-    } else {
-        return deflt; // Return default if iterable is empty
     }
+
+    // If no value was found in the iterable
+    if (!res) {
+        if (dflt) {
+            return dflt; // Return the provided default value
+        } else {
+            $RAISE(((B_BaseException)B_ValueErrorG_new($FORMAT("max() arg is an empty sequence"))));
+        }
+    }
+
+    return res;
 }
 
-$WORD B_min(B_Ord wit, B_Iterable wit2, $WORD iter, $WORD deflt) {
+$WORD B_max_def(B_Ord wit, B_Iterable wit2, $WORD iter, $WORD dflt) {
+    $WORD res = dflt;
+    B_Iterator it = wit2->$class->__iter__(wit2,iter);
+    while(1) {
+        if ($PUSH()) {
+            $WORD nxt = it->$class->__next__(it);
+            if (fromB_bool(wit->$class->__lt__(wit,res,nxt)))
+                res = nxt;
+            $DROP();
+        } else {
+            B_BaseException ex = $POP();
+            if ($ISINSTANCE0(ex, B_StopIteration))
+                break;
+           else
+               $RAISE(ex);
+        }
+    }
+    return res;
+}
+
+$WORD B_min(B_Ord wit, B_Iterable wit2, $WORD iter, $WORD dflt) {
+    $WORD res = NULL;
     B_Iterator it = wit2->$class->__iter__(wit2,iter);  
-    $WORD res, nxt;
-    res = it->$class->__next__(it);
-    if (res) {
-        while ((nxt = it->$class->__next__(it))) {
-            if (wit->$class->__gt__(wit,res,nxt)->val)
+    while(1) {
+        if ($PUSH()) {
+            $WORD nxt = it->$class->__next__(it);
+            if (!res || fromB_bool(wit->$class->__gt__(wit,res,nxt)))
                 res = nxt;
+            $DROP();
+        } else {
+            B_BaseException ex = $POP();
+            if ($ISINSTANCE0(ex, B_StopIteration))
+                break;
+            else
+                $RAISE(ex);
         }
-        return res;
-    } else
-        return deflt;
+    }
+
+    // If no value was found in the iterable
+    if (!res) {
+        if (dflt) {
+            return dflt; // Return the provided default value
+        } else {
+            $RAISE((B_BaseException)B_ValueErrorG_new($FORMAT("min() arg is an empty sequence")));
+        }
+    }
+
+    return res;
 }
 
-$WORD B_min_def(B_Ord wit, B_Iterable wit2, $WORD iter, $WORD deflt) {
-    B_Iterator it = wit2->$class->__iter__(wit2, iter);
-    $WORD res, nxt;
-    res = it->$class->__next__(it);
-    if (res) {
-        while ((nxt = it->$class->__next__(it))) {
-            if (wit->$class->__gt__(wit, res, nxt)->val)
+$WORD B_min_def(B_Ord wit, B_Iterable wit2, $WORD iter, $WORD dflt) {
+    $WORD res = dflt;
+    B_Iterator it = wit2->$class->__iter__(wit2,iter);  
+    while(1) {
+        if ($PUSH()) {
+            $WORD nxt = it->$class->__next__(it);
+            if (fromB_bool(wit->$class->__gt__(wit,res,nxt)))
                 res = nxt;
+            $DROP();
+        } else {
+            B_BaseException ex = $POP();
+            if ($ISINSTANCE0(ex, B_StopIteration))
+                break;
+            else
+                $RAISE(ex);
         }
-        return res;
-    } else {
-        return deflt; // Return default if iterable is empty
     }
+    return res;
 }
- 
+
 B_list B_sorted(B_Ord wit, B_Iterable wit2, $WORD iter) {
     B_CollectionD_SequenceD_list w = B_CollectionD_SequenceD_listG_witness;
     B_list res = w->$class->__fromiter__(w, wit2, iter);
@@ -308,8 +344,19 @@ $WORD B_sum(B_Plus wit, B_Iterable wit2, $WORD iter, $WORD start) {
     B_Iterator it = wit2->$class->__iter__(wit2,iter);  
     $WORD res = start;
     $WORD nxt;
-    while ((nxt = it->$class->__next__(it))) 
-        res = wit->$class->__add__(wit,res,nxt);
+    while(1) {
+        if ($PUSH()) {
+            nxt = it->$class->__next__(it);
+            res = wit->$class->__add__(wit,res,nxt);
+            $DROP();
+        } else {
+            B_BaseException ex = $POP();
+            if ($ISINSTANCE0(ex, B_StopIteration))
+                break;
+           else
+               $RAISE(ex);
+        }
+    }
     return res;
 }
 

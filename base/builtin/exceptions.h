@@ -1,5 +1,19 @@
+#include <setjmp.h>
+
+struct JumpBuf;
+typedef struct JumpBuf *JumpBuf;
+struct JumpBuf {
+    jmp_buf buf;
+    B_BaseException xval;
+    JumpBuf prev;
+};
 
 void $RAISE(B_BaseException e);
+JumpBuf $PUSH_BUF();
+void $DROP();
+B_BaseException $POP();
+#define $PUSH()             (!setjmp($PUSH_BUF()->buf))
+
  
 /*
   Exceptions hierarchy in Python 3.8 according to

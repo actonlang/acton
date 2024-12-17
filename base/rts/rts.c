@@ -294,7 +294,7 @@ struct termios old_stdin_attr;
 
 The strangeness of the next 30 lines are caused by the unfortunate presence of Msg in __builtin__.act.
 
--- This generates a stub of B_MsgD___init__ with wrong parameters, and its presence in the method table, do we define it here, but nver use it.
+-- This generates a stub of B_MsgD___init__ with wrong parameters, and its presence in the method table, so we define it here, but never use it.
 -- The out-commented version is how __init__ should really be defined
 -- The B_msgG_newXX function now inlines the proper __init__; it has to be renamed because of a generated and improper B_msgG_new.
 
@@ -856,7 +856,7 @@ B_BaseException $POP() {
     assert(wctx != NULL);
     JumpBuf current = wctx->jump_top;
     assert(current != NULL);
-    assert(current->prev != NULL);
+    //    assert(current->prev != NULL);
     wctx->jump_top = current->prev;
     return current->xval;
 }
@@ -866,7 +866,7 @@ void $DROP() {
     assert(wctx != NULL);
     JumpBuf current = wctx->jump_top;
     assert(current != NULL);
-    assert(current->prev != NULL);
+    //   (current->prev != NULL);
     wctx->jump_top = current->prev;
 }
 
@@ -2703,6 +2703,17 @@ int main(int argc, char **argv) {
     $register_builtin();
     B___init__();
     $register_rts();
+
+    WorkerCtx wctx = (WorkerCtx)GC_malloc(sizeof(struct WorkerCtx));
+    wctxs[0] = wctx;
+    wctx->id = 0;
+    wctx->uv_loop = uv_loops[wctx->id];
+    wctx->jump_top = NULL;
+    wctx->jump0 = NULL;
+#ifdef ACTON_THREADS
+    pthread_setspecific(pkey_wctx, (void *)wctx);
+#endif
+
     $ROOTINIT();
     acton_replace_allocator(GC_malloc, GC_malloc_atomic, GC_realloc, GC_calloc, GC_free, GC_strdup, GC_strndup);
 
@@ -2815,15 +2826,6 @@ int main(int argc, char **argv) {
     }
 #endif
 
-    WorkerCtx wctx = (WorkerCtx)GC_malloc(sizeof(struct WorkerCtx));
-    wctxs[0] = wctx;
-    wctx->id = 0;
-    wctx->uv_loop = uv_loops[wctx->id];
-    wctx->jump_top = NULL;
-    wctx->jump0 = NULL;
-#ifdef ACTON_THREADS
-    pthread_setspecific(pkey_wctx, (void *)wctx);
-#endif
 
     uv_check_init(aux_uv_loop, &work_ev[wctx->id]);
     work_ev[wctx->id].data = wctx;

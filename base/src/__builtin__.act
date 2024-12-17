@@ -109,7 +109,7 @@ class range (value):
         NotImplemented
 
 class Iterator[A] (object):
-    __next__      : () -> ?A
+    __next__      : () -> A
 
 protocol Iterable[A]:
     __iter__     : () -> Iterator[A]
@@ -354,6 +354,9 @@ class KeyboardInterrupt (BaseException):
     pass
 
 class Exception (BaseException):
+    pass
+
+class StopIteration (Exception):
     pass
 
 class AssertionError (Exception):
@@ -897,7 +900,7 @@ def max_def [A(Ord)] (iter: Iterable[A], dflt: A) -> A:
 def min_def [A(Ord)] (iter: Iterable[A], dflt: A) -> A:
     NotImplemented
 
-def next(x : Iterator[A]) -> ?A:
+def next(x : Iterator[A]) -> A:
     return x.__next__()
 
 def ord(c: str) -> int:

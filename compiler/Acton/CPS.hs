@@ -304,7 +304,7 @@ instance (NeedCont a, EnvOf a) => NeedCont [a] where
     needCont env (s : ss)               = needCont env s || needCont (define (envOf s) env) ss
 
 instance NeedCont Branch where
-    needCont env (Branch e ss)          = isPUSH e || needCont env ss
+    needCont env (Branch e ss)          = needCont env ss
 
 instance NeedCont Stmt where
     needCont env (Return _ (Just e))    = inCont env
