@@ -2,13 +2,13 @@ import testing
 
 import re
 
-def _test_basic():
+def _test_match_basic():
     """Basic regexp matching
     """
     m = re.match("foo[a-z]+", "åbc123 foobar åbc123")
     testing.assertIsNotNone(m, "basic regexp matching failed")
 
-def _test_group():
+def _test_match_group():
     """Regexp matching with groups
     """
     m = re.match("foo([a-z]+)", "åbc123 foobar åbc123")
@@ -17,7 +17,7 @@ def _test_group():
         testing.assertEqual(m.group[0], "foobar", "whole group match failed")
         testing.assertEqual(m.group[1], "bar", "first group match failed")
 
-def _test_nested_group():
+def _test_match_nested_group():
     """Regexp matching with groups
     """
     m = re.match("foo((B)[A-Z]+)", "åbc123 fooBAR åbc123")
@@ -27,7 +27,7 @@ def _test_nested_group():
         testing.assertEqual(m.group[1], "BAR", "first group match failed")
         testing.assertEqual(m.group[2], "B", "second group match failed")
 
-def _test_nested_group_without_match():
+def _test_match_nested_group_without_match():
     """Regexp matching with groups
     """
     m = re.match("foo((Z?)[A-Z]+)", "åbc123 fooBAR åbc123")
@@ -37,7 +37,7 @@ def _test_nested_group_without_match():
         testing.assertEqual(m.group[1], "BAR", "first group match failed")
         testing.assertEqual(m.group[2], "", "second group match failed")
 
-def _test_named_groups():
+def _test_match_named_groups():
     """Regexp matching with named groups
     """
     m = re.match("(?P<mypattern>foo[a-z]+)", "åbc123 foobar åbc123")
@@ -46,7 +46,7 @@ def _test_named_groups():
         testing.assertEqual(m.named["mypattern"], "foobar", "named group ('foobar') match failed")
 
 
-def _test_named_groups_without_match():
+def _test_match_named_groups_without_match():
     """Regexp matching with named groups but without a match on an inner group
     """
     m = re.match("(?P<mypattern>foo((?P<inner>AAA)|[a-z]+))", "åbc123 foobar åbc123")
@@ -54,7 +54,7 @@ def _test_named_groups_without_match():
     if m is not None:
         testing.assertEqual(m.named["mypattern"], "foobar", "named group ('foobar') match failed")
 
-def _test_multi_groups():
+def _test_match_multi_groups():
     """Regexp matching with multiple groups including named groups
     """
     m = re.match("([0-9]+).*(?P<mypattern>foo[a-z]+) *(?P<myotherpattern>bar[A-Za-z0-9]+)", "åbc123 foobar barEX4MPLE åbc123")
@@ -65,7 +65,7 @@ def _test_multi_groups():
         testing.assertEqual(m.group[2], "foobar", "failed to match named group 'mypattern'")
         testing.assertEqual(m.group[3], "barEX4MPLE", "failed to match named group 'myotherpattern'")
 
-def _test_matches():
+def _test_match_matches():
     """Regexp finding all matches
     """
     ms = re.matches(r"foo[0-9]+", "åbc123 foo1 foo2 foo3 åbc123 foo4")
@@ -74,3 +74,80 @@ def _test_matches():
     testing.assertEqual(ms[1].group[0], "foo2", "failed to match second match")
     testing.assertEqual(ms[2].group[0], "foo3", "failed to match third match")
     testing.assertEqual(ms[3].group[0], "foo4", "failed to match fourth match")
+
+def _test_match_positions():
+    """Test that match positions (start_pos and end_pos) are correct."""
+    # In "abc def ghi", the substring "def" starts at index 4 and ends at index 7 (0-based indexing)
+    # "a"=0, "b"=1, "c"=2, " "=3, "d"=4, "e"=5, "f"=6, " "=7, "g"=8, ...
+
+    m = re.match("def", "abc def ghi")
+    testing.assertIsNotNone(m, "Should have matched 'def' in 'abc def ghi'")
+    if m is not None:
+        testing.assertEqual(m.start_pos, 4)
+        testing.assertEqual(m.end_pos, 7)
+        # Also verify the substring matches what we expect
+        testing.assertEqual(m.string[m.start_pos:m.end_pos], "def")
+
+def _test_split_no_match():
+    """Split: pattern does not match anywhere"""
+    res = re.split("xyz", "abc def ghi")
+    testing.assertEqual(res, ["abc def ghi"])
+
+def _test_split_simple():
+    """Split: simple split on whitespace"""
+    res = re.split(" ", "abc def ghi")
+    testing.assertEqual(res, ["abc", "def", "ghi"])
+
+def _test_split_capturing_groups():
+    """Split: capturing groups included in the result"""
+    # Pattern with capturing group: split on digits but capture them
+    res = re.split("([0-9]+)", "abc123def456ghi")
+    # Expected: split around numbers, but include numbers as separate entries
+    # Result should be: ["abc", "123", "def", "456", "ghi"]
+    testing.assertEqual(res, ["abc", "123", "def", "456", "ghi"])
+
+def _test_split_start():
+    """Split: pattern at the start of the string"""
+    # Pattern at start
+    res = re.split("^", "abc")
+    # Splitting at start doesn't consume characters, capturing groups are none.
+    # splitting at start by "^" returns ['', 'abc']
+    testing.assertEqual(res, ["", "abc"])
+
+def _test_split_end():
+    """Split: pattern at the end of the string"""
+    res = re.split("$", "abc")
+    testing.assertEqual(res, ["abc", ""])
+
+def _test_split_zero_width():
+    """Split: zero-width matches should not cause infinite loops"""
+    # Pattern matches empty string (use a look-ahead to get zero-width matches)
+    # For example: matches position after every character
+    res = re.split("(?=b)", "abc")
+    # This should split before each 'b', but if pattern is zero-width, we must ensure no infinite loop.
+    # "abc" split at "(?=b)" gives ["a", "bc"] because it finds a zero-width match before 'b'.
+    testing.assertEqual(res, ["a", "bc"])
+
+def _test_split_maxsplit():
+    """Split: respect max_split parameter"""
+    # Pattern that splits on space
+    s = "one two three four five"
+    res = re.split(" ", s, max_split=2)
+    # max_split=2 means we do at most 2 splits: ["one", "two", "three four five"]
+    testing.assertEqual(res, ["one", "two", "three four five"])
+
+def _test_split_empty_pattern():
+    """Split: empty pattern should raise an error"""
+    try:
+        re.split("", "abc")
+    except ValueError:
+        return
+    testing.error("split with empty pattern should raise ValueError")
+
+def _test_split_with_named_groups():
+    """Split: named groups appear in the result if the pattern matches"""
+    # Even though split doesn't do anything special with named groups beyond capturing them,
+    # they appear as normal capturing groups. Named groups are included in m.group, so
+    # the order in group matches is determined by their group number, not their name.
+    res = re.split("(?P<number>[0-9]+)", "abc123def")
+    testing.assertEqual(res, ["abc", "123", "def"])
