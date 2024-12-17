@@ -1,0 +1,49 @@
+import testing
+
+import crypto.hash.md5
+
+def _test_md5_empty():
+    """MD5: empty string"""
+    digest = crypto.hash.md5.hash(b"")
+    testing.assertEqual(digest, b"\xd4\x1d\x8c\xd9\x8f\x00\xb2\x04\xe9\x80\x09\x98\xec\xf8\x42\x7e")
+
+def _test_md5_simple():
+    """MD5: simple known input 'abc'"""
+    digest = crypto.hash.md5.hash(b"abc")
+    testing.assertEqual(digest, b"\x90\x01\x50\x98\x3c\xd2\x4f\xb0\xd6\x96\x3f\x7d\x28\xe1\x7f\x72")
+
+def _test_md5_hello():
+    """MD5: another known input 'hello'"""
+    digest = crypto.hash.md5.hash(b"hello")
+    testing.assertEqual(digest, b"\x5d\x41\x40\x2a\xbc\x4b\x2a\x76\xb9\x71\x9d\x91\x10\x17\xc5\x92")
+
+def _test_md5_incremental():
+    """MD5: incremental updates should yield the same result as one-shot."""
+    hasher = crypto.hash.md5.Hasher()
+    hasher.update(b"a")
+    hasher.update(b"b")
+    hasher.update(b"c")
+    digest = hasher.finalize()
+    testing.assertEqual(digest, b"\x90\x01\x50\x98\x3c\xd2\x4f\xb0\xd6\x96\x3f\x7d\x28\xe1\x7f\x72")
+
+def _test_md5_large_input():
+    """MD5: large input hashing"""
+    # Hash of 1,000,000 'a' characters
+    data = b"aaaaaaaaaa" * 100000
+    # Known MD5 for 1,000,000 'a's: 77 07 d6 ae 4e 02 7c 70 ee a2 a9 35 c2 29 6f 21
+    digest = crypto.hash.md5.hash(data)
+    testing.assertEqual(digest, b"\x77\x07\xd6\xae\x4e\x02\x7c\x70\xee\xa2\xa9\x35\xc2\x29\x6f\x21")
+
+def _test_md5_reuse_of_hasher():
+    """MD5: ensure a hasher cannot be reused after finalize"""
+    hasher = crypto.hash.md5.Hasher()
+    hasher.update(b"abc")
+    digest1 = hasher.finalize()
+    testing.assertEqual(digest1, b"\x90\x01\x50\x98\x3c\xd2\x4f\xb0\xd6\x96\x3f\x7d\x28\xe1\x7f\x72")
+
+    try:
+        hasher.update(b"xyz")
+        testing.error("Expected an exception when updating a finalized hasher")
+    except Exception:
+        # Exception is expected, so we pass the test.
+        pass

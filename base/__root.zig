@@ -38,3 +38,23 @@ export fn base64Q_decode(data: *acton.str) callconv(.C) *acton.str {
     };
     return res;
 }
+
+export fn zig_crypto_hash_md5_init() callconv(.C) *std.crypto.hash.Md5 {
+    const alloc = gc.allocator();
+    const hasher_ptr = alloc.create(std.crypto.hash.Md5) catch {
+        unreachable("OOM while allocating Md5 hasher");
+    };
+    hasher_ptr.* = std.crypto.hash.Md5.init(.{});
+
+    return hasher_ptr;
+}
+
+export fn zig_crypto_hash_md5_update(hasher: *std.crypto.hash.Md5, data: *acton.bytes) callconv(.C) void {
+    hasher.update(std.mem.span(data.str));
+}
+
+export fn zig_crypto_hash_md5_finalize(hasher: *std.crypto.hash.Md5, output: *acton.bytes) callconv(.C) void {
+    const digest_len = 16;
+    const out_slice: *[16]u8 = @as([*]u8, @ptrCast(@constCast(output.str)))[0..digest_len];
+    hasher.final(out_slice);
+}
