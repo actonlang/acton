@@ -4,6 +4,18 @@ const c_acton = @cImport({
     @cInclude("builtin/builtin.h");
 });
 
+// B_bytes
+pub const bytes = extern struct {
+    class: usize,
+    nbytes: i32,              // length of str in bytes
+    str: [*:0]const u8            // str is UTF-8 encoded.
+};
+
+// B_NoneType
+pub const none = extern struct {
+    class: usize,
+};
+
 // B_str
 pub const str = extern struct {
     class: usize,

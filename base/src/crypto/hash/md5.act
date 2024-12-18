@@ -1,0 +1,26 @@
+class Hasher(object):
+    _hasher: u64
+    def __init__(self):
+        """Initialize a new MD5 hashing context
+        """
+        self._init()
+
+    def _init(self):
+        """C function to reach out to Zig code"""
+        NotImplemented
+
+    def update(self, data: bytes) -> None:
+        """Update the MD5 state with the given chunk of data"""
+        NotImplemented
+
+    def finalize(self) -> bytes:
+        """Finalize the hash and return the 16-byte MD5 digest as bytes
+        After final() is called, this instane should not be used again.
+        """
+        NotImplemented
+
+def hash(data: bytes) -> bytes:
+    """Compute and return the MD5 digest of the given data"""
+    m = Hasher()
+    m.update(data)
+    return m.finalize()
