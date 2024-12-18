@@ -99,6 +99,7 @@ B_bytes to$bytesD_len(char *str, int len);
 B_bytes actBytesFromCString(char *str);
 B_bytes actBytesFromCStringNoCopy(char *str);
 B_bytes actBytesFromCStringLength(char *str, int len);
+B_bytes actBytesFromCStringLengthNoCopy(char *str, int length);
 unsigned char *fromB_bytes(B_bytes b);
 
 

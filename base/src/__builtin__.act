@@ -203,6 +203,11 @@ class bytes (value):
         NotImplemented
     def find         (self, sub: bytes, start: ?int, end: ?int) -> int:
         NotImplemented
+    @staticmethod
+    def from_hex     (s: str) -> bytes:
+        NotImplemented
+    def hex          (self) -> str:
+        NotImplemented
     def index        (self, sub: bytes, start: ?int, end: ?int) -> int:
         NotImplemented
     def isalnum      (self) -> bool:
@@ -272,6 +277,11 @@ class bytearray (object):
     def expandtabs   (self, tabsize: ?int) -> bytearray:
         NotImplemented
     def find         (self, sub: bytearray, start: ?int, end: ?int) -> int:
+        NotImplemented
+    @staticmethod
+    def from_hex     (s: str) -> bytearray:
+        NotImplemented
+    def hex          (self) -> str:
         NotImplemented
     def index        (self, sub: bytearray, start: ?int, end: ?int) -> int:
         NotImplemented

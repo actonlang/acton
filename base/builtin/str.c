@@ -1628,6 +1628,71 @@ B_int B_bytearrayD_find(B_bytearray s, B_bytearray sub, B_int start, B_int end) 
     return to$int(n+p-s->str);
 }
 
+B_bytearray B_bytearrayD_from_hex(B_str s) {
+    // Each byte is represented by 2 hex chars
+    int strlen = s->nbytes;  // Changed from len to nbytes
+    if (strlen % 2 != 0) {
+        $RAISE((B_BaseException)$NEW(B_ValueError,to$str("from_hex: hex string must have even length")));
+    }
+
+    int bytelen = strlen / 2;
+    char *result = acton_malloc_atomic(bytelen);
+
+    for (int i = 0; i < strlen; i += 2) {
+        char high = s->str[i];
+        char low = s->str[i + 1];
+
+        // Convert hex chars to values 0-15
+        int high_val, low_val;
+
+        // Handle high nibble
+        if (high >= '0' && high <= '9')
+            high_val = high - '0';
+        else if (high >= 'a' && high <= 'f')
+            high_val = high - 'a' + 10;
+        else if (high >= 'A' && high <= 'F')
+            high_val = high - 'A' + 10;
+        else {
+            $RAISE((B_BaseException)$NEW(B_ValueError,to$str("from_hex: invalid hex character")));
+        }
+
+        // Handle low nibble
+        if (low >= '0' && low <= '9')
+            low_val = low - '0';
+        else if (low >= 'a' && low <= 'f')
+            low_val = low - 'a' + 10;
+        else if (low >= 'A' && low <= 'F')
+            low_val = low - 'A' + 10;
+        else {
+            $RAISE((B_BaseException)$NEW(B_ValueError,to$str("from_hex: invalid hex character")));
+        }
+
+        // Combine into byte
+        result[i/2] = (high_val << 4) | low_val;
+    }
+
+    return actBytesFromCStringLengthNoCopy(result, bytelen);
+}
+
+B_str B_bytearrayD_hex(B_bytearray s) {
+    // Each byte becomes 2 hex chars, so output length is 2 * number of bytes
+    int len = s->nbytes * 2;
+    char *result = malloc(len);
+
+    // Hex digit lookup table
+    const char hex_digits[] = "0123456789abcdef";
+
+    // Convert each byte to two hex digits
+    for (int i = 0; i < s->nbytes; i++) {
+        unsigned char byte = s->str[i];
+        result[i*2] = hex_digits[byte >> 4];     // High nibble
+        result[i*2 + 1] = hex_digits[byte & 0xf]; // Low nibble
+    }
+
+    // Convert to Acton string without copying
+    return to_str_noc(result);
+}
+
 
 B_int B_bytearrayD_index(B_bytearray s, B_bytearray sub, B_int start, B_int end) {
     B_int n = B_bytearrayD_find(s,sub,start,end);
@@ -2430,6 +2495,14 @@ B_bytes actBytesFromCStringLength(char *str, int len) {
     return res;
 }
 
+B_bytes actBytesFromCStringLengthNoCopy(char *str, int length) {
+    B_bytes res = acton_malloc(sizeof(struct B_bytes));
+    res->$class = &B_bytesG_methods;
+    res->nbytes = length;
+    res->str = str;
+    return res;
+}
+
 unsigned char *fromB_bytes(B_bytes b) {
     return b->str;
 }
@@ -2637,6 +2710,70 @@ B_int B_bytesD_find(B_bytes s, B_bytes sub, B_int start, B_int end) {
     return to$int(n+p-s->str);
 }
 
+B_bytes B_bytesD_from_hex(B_str s) {
+    // Each byte is represented by 2 hex chars
+    int strlen = s->nbytes;  // Changed from len to nbytes
+    if (strlen % 2 != 0) {
+        $RAISE((B_BaseException)$NEW(B_ValueError,to$str("from_hex: hex string must have even length")));
+    }
+
+    int bytelen = strlen / 2;
+    char *result = acton_malloc_atomic(bytelen);
+
+    for (int i = 0; i < strlen; i += 2) {
+        char high = s->str[i];
+        char low = s->str[i + 1];
+
+        // Convert hex chars to values 0-15
+        int high_val, low_val;
+
+        // Handle high nibble
+        if (high >= '0' && high <= '9')
+            high_val = high - '0';
+        else if (high >= 'a' && high <= 'f')
+            high_val = high - 'a' + 10;
+        else if (high >= 'A' && high <= 'F')
+            high_val = high - 'A' + 10;
+        else {
+            $RAISE((B_BaseException)$NEW(B_ValueError,to$str("from_hex: invalid hex character")));
+        }
+
+        // Handle low nibble
+        if (low >= '0' && low <= '9')
+            low_val = low - '0';
+        else if (low >= 'a' && low <= 'f')
+            low_val = low - 'a' + 10;
+        else if (low >= 'A' && low <= 'F')
+            low_val = low - 'A' + 10;
+        else {
+            $RAISE((B_BaseException)$NEW(B_ValueError,to$str("from_hex: invalid hex character")));
+        }
+
+        // Combine into byte
+        result[i/2] = (high_val << 4) | low_val;
+    }
+
+    return actBytesFromCStringLengthNoCopy(result, bytelen);
+}
+
+B_str B_bytesD_hex(B_bytes s) {
+    // Each byte becomes 2 hex chars, so output length is 2 * number of bytes
+    int len = s->nbytes * 2;
+    char *result = malloc(len);
+
+    // Hex digit lookup table
+    const char hex_digits[] = "0123456789abcdef";
+
+    // Convert each byte to two hex digits
+    for (int i = 0; i < s->nbytes; i++) {
+        unsigned char byte = s->str[i];
+        result[i*2] = hex_digits[byte >> 4];     // High nibble
+        result[i*2 + 1] = hex_digits[byte & 0xf]; // Low nibble
+    }
+
+    // Convert to Acton string without copying
+    return to_str_noc(result);
+}
 
 B_int B_bytesD_index(B_bytes s, B_bytes sub, B_int start, B_int end) {
     B_int n = B_bytesD_find(s,sub,start,end);
