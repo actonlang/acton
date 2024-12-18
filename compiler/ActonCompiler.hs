@@ -847,6 +847,17 @@ runZig opts zigCmd paths wd = do
           cleanup opts paths
           System.Exit.exitFailure
 
+#if defined(darwin_HOST_OS) && defined(aarch64_HOST_ARCH)
+defCpu = " -Dcpu=apple_a15"
+#elif defined(darwin_HOST_OS) && defined(x86_64_HOST_ARCH)
+defCpu = ""
+#elif defined(linux_HOST_OS) && defined(x86_64_HOST_ARCH)
+defCpu = ""
+#else
+#error "Unsupported platform"
+#endif
+
+
 zigBuild :: Acton.Env.Env0 -> C.CompileOptions -> Paths -> [CompileTask] -> [BinTask] -> IO ()
 zigBuild env opts paths tasks binTasks = do
     mapM (writeRootC env opts paths) binTasks
@@ -862,12 +873,12 @@ zigBuild env opts paths tasks binTasks = do
                        then C.cpu opts
                        else
                          case (splitOn "-" (C.target opts)) of
-                           ("native":_:_)        -> ""
-                           ("aarch64":"macos":_) -> " -Dcpu=apple_a15 "
+                           ("native":_)            -> defCpu
+                           ("aarch64":"macos":_)   -> " -Dcpu=apple_a15 "
     -- TODO: how do we do better here? Windows presumably runs on many CPUs that are not aarch64. We really just want to enable AES
                            ("aarch64":"windows":_) -> " -Dcpu=apple_a15 "
-                           ("x86_64":_:_)        -> " -Dcpu=westmere "
-                           (_:_:_)               -> ""
+                           ("x86_64":_:_)          -> " -Dcpu=westmere "
+                           (_:_:_)                 -> defCpu
         buildZigPath = joinPath [projPath paths, "build.zig"]
 
     -- Create .build directory if it doesn't exist

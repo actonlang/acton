@@ -78,7 +78,9 @@ coreLangTests =
 compilerTests =
   testGroup "compiler tests"
   [
-    testCase "partial rebuild" $ do
+    testCase "target native" $ do
+        testBuild "--target native" ExitSuccess False "test/actonc/project/simple"
+  , testCase "partial rebuild" $ do
         (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../test/compiler/rebuild/out") ""
         testBuild "" ExitSuccess False "../test/compiler/rebuild/"
         (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "touch ../test/compiler/rebuild/src/rebuild.act") ""
