@@ -64,6 +64,10 @@ B_complex B_NumberD_complexD___add__(B_NumberD_complex wit, B_complex a, B_compl
     return toB_complex(a->val + b->val);
 }  
 
+B_complex B_NumberD_complexD___zero__(B_NumberD_complex wit) {
+    return toB_complex(0.0);
+}
+
 B_complex B_NumberD_complexD___complex__ (B_NumberD_complex wit, B_complex c) {
     return c;
 }

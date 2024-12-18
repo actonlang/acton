@@ -81,6 +81,10 @@ B_u32 B_IntegralD_u32D___add__(B_IntegralD_u32 wit,  B_u32 a, B_u32 b) {
     return toB_u32(a->val + b->val);
 }  
 
+B_u32 B_IntegralD_u32D___zero__(B_IntegralD_u32 wit) {
+    return toB_u32(0);
+}
+
 B_complex B_IntegralD_u32D___complex__(B_IntegralD_u32 wit, B_u32 a) {
     return toB_complex((double)a->val);
 }

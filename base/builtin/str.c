@@ -1240,6 +1240,10 @@ B_str B_TimesD_strD___add__ (B_TimesD_str wit, B_str s, B_str t) {
     return res;
 }
 
+B_str B_TimesD_strD___zero__ (B_TimesD_str wit) {
+    return to$str("");
+}
+
 B_str B_TimesD_strD___mul__ (B_TimesD_str wit, B_str a, B_int n) {
     int nval = from$int(n);
     if (nval <= 0)
@@ -2362,6 +2366,10 @@ B_bytearray B_TimesD_SequenceD_bytearrayD___add__ (B_TimesD_SequenceD_bytearray 
     return res;
 }
 
+B_bytearray B_TimesD_SequenceD_bytearrayD___zero__ (B_TimesD_SequenceD_bytearray wit) {
+    return toB_bytearray("");
+}
+
 B_bytearray B_TimesD_SequenceD_bytearrayD___mul__ (B_TimesD_SequenceD_bytearray wit, B_bytearray a, B_int n) {
     int nval = from$int(n);
     if (nval <= 0)
@@ -3276,6 +3284,10 @@ B_bytes B_TimesD_bytesD___add__ (B_TimesD_bytes wit, B_bytes s, B_bytes t) {
     memcpy(res->str,s->str,s->nbytes);
     memcpy(res->str+s->nbytes,t->str,t->nbytes);
     return res;
+}
+
+B_bytes B_TimesD_bytesD___zero__ (B_TimesD_bytes wit) {
+    return to$bytes("");
 }
 
 B_bytes B_TimesD_bytesD___mul__ (B_TimesD_bytes wit, B_bytes a, B_int n) {

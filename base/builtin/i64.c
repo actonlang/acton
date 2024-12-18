@@ -79,7 +79,11 @@ long fromB_i64(B_i64 w) {
  
 B_i64 B_IntegralD_i64D___add__(B_IntegralD_i64 wit,  B_i64 a, B_i64 b) {
     return toB_i64(a->val + b->val);
-}  
+}
+
+B_i64 B_IntegralD_i64D___zero__(B_IntegralD_i64 wit) {
+    return toB_i64(0);
+}
 
 B_complex B_IntegralD_i64D___complex__(B_IntegralD_i64 wit, B_i64 a) {
     return toB_complex((double)a->val);
