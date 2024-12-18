@@ -180,6 +180,10 @@ B_int B_IntegralD_intD___add__(B_IntegralD_int wit,  B_int a, B_int b) {
     return res;
 }
 
+B_int B_IntegralD_intD___zero__(B_IntegralD_int wit) {
+    return to$int(0);
+}
+
 B_complex B_IntegralD_intD___complex__(B_IntegralD_int wit, B_int a) {
     $RAISE((B_BaseException)$NEW(B_NotImplementedError, to$str("Number.__complex__ not implemented for int")));
     return NULL; // This is just to silence compiler warning, above RAISE will longjmp from here anyway

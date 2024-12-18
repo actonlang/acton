@@ -272,6 +272,10 @@ B_list B_TimesD_SequenceD_listD___add__ (B_TimesD_SequenceD_list wit, B_list lst
     return res;
 }
 
+B_list B_TimesD_SequenceD_listD___zero__ (B_TimesD_SequenceD_list wit) {
+    return B_listD_new(0);
+}
+
 B_list B_TimesD_SequenceD_listD___mul__ (B_TimesD_SequenceD_list wit, B_list lst, B_int n) {
     int lstlen = lst->length;
     if (n->val.size <= 0)

@@ -307,9 +307,13 @@ B_list B_sorted(B_Ord wit, B_Iterable wit2, $WORD iter) {
 $WORD B_sum(B_Plus wit, B_Iterable wit2, $WORD iter, $WORD start) {
     B_Iterator it = wit2->$class->__iter__(wit2,iter);  
     $WORD res = start;
+    if (start == NULL) {
+        res = wit->$class->__zero__(wit);
+    }
+
     $WORD nxt;
     while ((nxt = it->$class->__next__(it))) 
-        res = wit->$class->__add__(wit,res,nxt);
+        res = wit->$class->__add__(wit, res, nxt);
     return res;
 }
 

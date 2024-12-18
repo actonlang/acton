@@ -1,0 +1,59 @@
+# Test sum of all builtin types
+# - int
+# - str
+# - float
+# - list
+# - i16, i32, i64, u16, u32, u64
+actor main(env):
+
+    s_int = sum([1, 2, 3])
+    if s_int != 6:
+        print("Error: sum([1, 2, 3]) != 6", s_int)
+        env.exit(1)
+
+    s_str = sum(["a", "b", "c"])
+    if s_str != "abc":
+        print("Error: sum(['a', 'b', 'c']) != 'abc'", s_str)
+        env.exit(1)
+
+    s_float = sum([0.1, 0.2, 0.3])
+    if not (s_float > 0.599999 and s_float < 0.600001):
+        print("Error: sum([0.1, 0.2, 0.3]) != 0.6", s_float)
+        env.exit(1)
+
+    s_list = sum([[1], [2], [3]], [])
+    if s_list != [1, 2, 3]:
+        print("Error: sum([[1], [2], [3]], []) != [1, 2, 3]", s_list)
+        env.exit(1)
+
+    s_i16 = sum([i16(1), i16(2), i16(3)])
+    if s_i16 != i16(6):
+        print("Error: sum([i16(1), i16(2), i16(3)]) != i16(6)", s_i16)
+        env.exit(1)
+
+    s_i32 = sum([i32(1), i32(2), i32(3)])
+    if s_i32 != i32(6):
+        print("Error: sum([i32(1), i32(2), i32(3)]) != i32(6)", s_i32)
+        env.exit(1)
+
+    s_i64 = sum([i64(1), i64(2), i64(3)])
+    if s_i64 != i64(6):
+        print("Error: sum([i64(1), i64(2), i64(3)]) != i64(6)", s_i64)
+        env.exit(1)
+
+    s_u16 = sum([u16(1), u16(2), u16(3)])
+    if s_u16 != u16(6):
+        print("Error: sum([u16(1), u16(2), u16(3)]) != u16(6)", s_u16)
+        env.exit(1)
+
+    s_u32 = sum([u32(1), u32(2), u32(3)])
+    if s_u32 != u32(6):
+        print("Error: sum([u32(1), u32(2), u32(3)]) != u32(6)", s_u32)
+        env.exit(1)
+
+    s_u64 = sum([u64(1), u64(2), u64(3)])
+    if s_u64 != u64(6):
+        print("Error: sum([u64(1), u64(2), u64(3)]) != u64(6)", s_u64)
+        env.exit(1)
+
+    env.exit(0)

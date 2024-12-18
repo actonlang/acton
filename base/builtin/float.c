@@ -106,6 +106,10 @@ B_float B_RealFloatD_floatD___add__(B_RealFloatD_float wit,  B_float a, B_float 
     return to$float(fromB_float(a) + fromB_float(b));
 }  
 
+B_float B_RealFloatD_floatD___zero__(B_RealFloatD_float wit) {
+    return to$float(0.0);
+}
+
 B_float B_RealFloatD_floatD___fromatom__(B_RealFloatD_float wit, B_atom a) {
     return B_floatG_new(a);
 }

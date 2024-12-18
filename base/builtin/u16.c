@@ -81,6 +81,10 @@ B_u16 B_IntegralD_u16D___add__(B_IntegralD_u16 wit,  B_u16 a, B_u16 b) {
     return toB_u16(a->val + b->val);
 }  
 
+B_u16 B_IntegralD_u16D___zero__(B_IntegralD_u16 wit) {
+    return toB_u16(0);
+}
+
 B_complex B_IntegralD_u16D___complex__(B_IntegralD_u16 wit, B_u16 a) {
     return toB_complex((double)a->val);
 }

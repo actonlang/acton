@@ -467,6 +467,8 @@ protocol Plus:
     __add__      : (Self,Self) -> Self
     @staticmethod
     __iadd__     : (Self,Self) -> Self
+    @staticmethod
+    __zero__     : () -> Self
 
     def __iadd__(a,b):
         return a + b

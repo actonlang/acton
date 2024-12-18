@@ -5,7 +5,7 @@ actor main(env):
     lst4 = list(range(1000))
     for i in range(100,1,-1):
         del lst4[1:1000:i]
-    if sum(lst4,0) != 4500:
+    if sum(lst4) != 4500:
         env.exit(1)
     env.exit(0)
     
