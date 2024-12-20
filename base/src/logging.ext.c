@@ -1,7 +1,5 @@
 
-void loggingQ___ext_init__() {
-
-}
+void loggingQ___ext_init__() {}
 
 B_int loggingQ_MessageD__get_actor_id (loggingQ_Message self) {
     $Actor actor_self = GET_SELF();
@@ -10,5 +8,5 @@ B_int loggingQ_MessageD__get_actor_id (loggingQ_Message self) {
 
 B_str loggingQ_MessageD__get_actor_class (loggingQ_Message self) {
     $Actor actor_self = GET_SELF();
-    return to$str(actor_self->$class->$GCINFO);
+    return to$str(unmangle_name(actor_self->$class->$GCINFO));
 }
