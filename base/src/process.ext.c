@@ -154,6 +154,7 @@ $R processQ_ProcessD__create_processG_local(processQ_Process self, $Cont c$cont)
         log_warn(errmsg);
         $action2 f = ($action2)self->on_error;
         f->$class->__asyn__(f, process_data->process, to$str(errmsg));
+        return $R_CONT(c$cont, B_None);
     }
     // TODO: do we need to do some magic to read any data produced before this
     // callback is installed?
