@@ -18,14 +18,20 @@ struct process_data {
     uv_pipe_t stderr_pipe;
 };
 
-
 void exit_handler(uv_process_t *req, int64_t exit_status, int term_signal) {
     struct process_data *process_data = req->data;
     uv_handle_t *stdin_handle = (uv_handle_t *)&process_data->stdin_pipe;
-    // stdin might be closed already from done_writing
+    // Ensure stdin is closed properly. stdin might be closed already from
+    // done_writing, so check if it's closing first
     if (uv_is_closing(stdin_handle) == 0)
         uv_close(stdin_handle, NULL);
+
+    // Close the process handle
     uv_close((uv_handle_t *)req, NULL);
+
+    process_data->process->_p = to$int(0);
+
+    // Trigger the on_exit callback
     $action3 f = ($action3)process_data->on_exit;
     f->$class->__asyn__(f, process_data->process, to$int(exit_status), to$int(term_signal));
 }
@@ -34,6 +40,9 @@ void read_stderr(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
     if (nread < 0) {
         if (nread == UV_EOF) {
             uv_close((uv_handle_t *)stream, NULL);
+        } else {
+            // Log and handle read error
+            log_warn("Error reading from stderr");
         }
     } else if (nread > 0) {
         if (stream->data) {
@@ -49,6 +58,9 @@ void read_stdout(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
     if (nread < 0) {
         if (nread == UV_EOF) {
             uv_close((uv_handle_t *)stream, NULL);
+        } else {
+            // Log and handle read error
+            log_warn("Error reading from stdout");
         }
     } else if (nread > 0) {
         if (stream->data) {
@@ -160,7 +172,10 @@ $R processQ_ProcessD_done_writingG_local(processQ_Process self, $Cont c$cont) {
     uv_process_t *p = (uv_process_t *)from$int(self->_p);
     struct process_data *process_data = (struct process_data *)p->data;
     uv_handle_t *stdin_handle = (uv_handle_t *)&process_data->stdin_pipe;
-    uv_close(stdin_handle, close_cb);
+    // Ensure stdin is closed properly. stdin might be closed already from
+    // exit_handler, so check if it's closing first
+    if (uv_is_closing(stdin_handle) == 0)
+        uv_close(stdin_handle, close_cb);
     return $R_CONT(c$cont, B_None);
 }
 
@@ -177,6 +192,10 @@ $R processQ_ProcessD_signalG_local(processQ_Process self, $Cont c$cont, B_int si
 
 $R processQ_ProcessD_writeG_local(processQ_Process self, $Cont c$cont, B_bytes data) {
     uv_process_t *p = (uv_process_t *)from$int(self->_p);
+    if (p == 0) {
+        log_warn("Process has exited, ignoring write request");
+        return $R_CONT(c$cont, B_None);
+    }
 
     uv_write_t *req = (uv_write_t *)acton_malloc(sizeof(uv_write_t));
     uv_buf_t buf = uv_buf_init(data->str, data->nbytes);
