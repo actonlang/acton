@@ -93,11 +93,10 @@ $R processQ_ProcessD__create_processG_local(processQ_Process self, $Cont c$cont)
 
     char **args = (char **)acton_malloc((self->cmd->length + 1) * sizeof(char *));
 
-    int i;
-    for (i = 0; i < self->cmd->length; i++) {
+    for (int i = 0; i < self->cmd->length; i++) {
         args[i] = (char *)fromB_str(self->cmd->data[i]);
     }
-    args[i] = NULL;
+    args[self->cmd->length] = NULL;
 
     if (self->workdir != B_None) {
         options->cwd = fromB_str(self->workdir);
@@ -109,7 +108,8 @@ $R processQ_ProcessD__create_processG_local(processQ_Process self, $Cont c$cont)
         char **env = (char **)acton_calloc((self->env->numelements + 1), sizeof(char *));
         B_IteratorD_dict_items iter = $NEW(B_IteratorD_dict_items, self->env);
         B_tuple item;
-        for (i=0; i < self->env->numelements; i++) {
+
+        for (int i = 0; i < self->env->numelements; i++) {
             item = (B_tuple)iter->$class->__next__(iter);
             char *key = fromB_str((B_str)item->components[0]);
             char *value = fromB_str((B_str)item->components[1]);
@@ -118,8 +118,7 @@ $R processQ_ProcessD__create_processG_local(processQ_Process self, $Cont c$cont)
             snprintf(env_var, env_size, "%s=%s", key, value);
             env[i] = env_var;
         }
-        env[i] = NULL;
-
+        env[self->env->numelements] = NULL;
         options->env = env;
     }
 
