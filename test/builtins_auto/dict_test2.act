@@ -27,6 +27,10 @@ actor main(env):
     w2 = dict.get('37',deflt)
     if w != '101' or w2 != '666':
         env.exit(1)
+    w3 = dict.get_def('100', deflt)
+    w4 = dict.get_def('37', deflt)
+    if w3 != '101' or w4 != '666':
+        env.exit(1)
     for j in range(11,200,20):
         other[str(j)] = str(2*j)
     dict.update(other.items())
