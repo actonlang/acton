@@ -648,7 +648,7 @@ jobs:
           apt-get install -qy git gnupg
       - name: Import GPG key
         id: import_gpg
-        uses: crazy-max/ghaction-import-gpg@v4
+        uses: crazy-max/ghaction-import-gpg@v6
         with:
           gpg_private_key: ${{ secrets.APT_GPG_PRIVATE_KEY }}
       - name: Check out code of apt.acton-lang.io repo
