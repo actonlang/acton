@@ -32,6 +32,10 @@ actor main(env):
     d.update({"x": 1337}.items())
     print("Dict after .update():", d)
 
+    # Use setdefault to set a value if it does not already exist in the dict
+    print("setdefault for existing key 'x' returns:", d.setdefault("x", "DEF_val"))
+    print("setdefault for new key 'new' returns:", d.setdefault("new", "DEF_val"))
+
     # Get a shallow copy of a dict. Note the use of .items() to get keys and values
     new_d = dict(d.items())
 
@@ -48,9 +52,9 @@ Output:
 ```sh
 Building project in /home/user/foo
   Compiling example.act for release
-   Finished compilation in   0.112 s
+   Finished compilation in   0.122 s
   Final compilation step
-   Finished final compilation step in  15.626 s
+   Finished final compilation step in  13.381 s
 Dict: {'foo':1, 'bar':2, 'x':42, 'cookie':3}
 len : 4
 item foo: 1
@@ -68,4 +72,6 @@ Pop item with key 'bar': 42
 Pop item: ('cookie', 3)
 Dict after .popitem(): {'x':42}
 Dict after .update(): {'x':1337}
+setdefault for existing key 'x' returns: 1337
+setdefault for new key 'new' returns: DEF_val
 ```
