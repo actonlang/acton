@@ -86,7 +86,6 @@ def test_i16():
        raise ValueError("unexpected: bool(x) != 0")
     if x != 0:
        raise ValueError("unexpected: x != 0")
-    return True
     if i16("1234") != 1234:
         raise ValueError('i16("1234") gives wrong result')
     if i16("0x1234") != 4660:
@@ -97,6 +96,7 @@ def test_i16():
         raise ValueError('i16("0b1111") gives wrong result')
     if i16("1234",7) != 466:
         raise ValueError('i16("1234",7) gives wrong result')
+    return True
 
 def test_i32():
     test_i32_divzero()
@@ -105,6 +105,18 @@ def test_i32():
        raise ValueError("unexpected: bool(x) != 0")
     if x != 0:
        raise ValueError("unexpected: x != 0")
+    if i32("1234") != 1234:
+        raise ValueError('i32("1234") gives wrong result')
+    if i32("0x1234") != 4660:
+        raise ValueError('i32("0x1234") gives wrong result')
+    if i32("0o1234") != 668:
+        raise ValueError('i32("0o1234") gives wrong result')
+    if i32("0b1111") != 15:
+        raise ValueError('i32("0b1111") gives wrong result')
+    if i32("1234", 7) != 466:
+        raise ValueError('i32("1234",7) gives wrong result')
+    if int(x) != 0:
+        raise ValueError("unexpected: int(x) != 0")
     return True
 
 def test_i64():
@@ -114,6 +126,18 @@ def test_i64():
        raise ValueError("unexpected: bool(x) != 0")
     if x != 0:
        raise ValueError("unexpected: x != 0")
+    if i64("1234") != 1234:
+        raise ValueError('i64("1234") gives wrong result')
+    if i64("0x1234") != 4660:
+        raise ValueError('i64("0x1234") gives wrong result')
+    if i64("0o1234") != 668:
+        raise ValueError('i64("0o1234") gives wrong result')
+    if i64("0b1111") != 15:
+        raise ValueError('i64("0b1111") gives wrong result')
+    if i64("1234", 7) != 466:
+        raise ValueError('i64("1234",7) gives wrong result')
+    if int(x) != 0:
+        raise ValueError("unexpected: int(x) != 0")
     return True
 
 def test_u16():
@@ -123,6 +147,18 @@ def test_u16():
        raise ValueError("unexpected: bool(x) != 0")
     if x != 0:
        raise ValueError("unexpected: x != 0")
+    if u16("1234") != 1234:
+        raise ValueError('u16("1234") gives wrong result')
+    if u16("0x1234") != 4660:
+        raise ValueError('u16("0x1234") gives wrong result')
+    if u16("0o1234") != 668:
+        raise ValueError('u16("0o1234") gives wrong result')
+    if u16("0b1111") != 15:
+        raise ValueError('u16("0b1111") gives wrong result')
+    if u16("1234", 7) != 466:
+        raise ValueError('u16("1234",7) gives wrong result')
+    if int(x) != 0:
+        raise ValueError("unexpected: int(x) != 0")
     return True
 
 def test_u32():
@@ -132,6 +168,18 @@ def test_u32():
        raise ValueError("unexpected: bool(x) != 0")
     if x != 0:
        raise ValueError("unexpected: x != 0")
+    if u32("1234") != 1234:
+        raise ValueError('u32("1234") gives wrong result')
+    if u32("0x1234") != 4660:
+        raise ValueError('u32("0x1234") gives wrong result')
+    if u32("0o1234") != 668:
+        raise ValueError('u32("0o1234") gives wrong result')
+    if u32("0b1111") != 15:
+        raise ValueError('u32("0b1111") gives wrong result')
+    if u32("1234", 7) != 466:
+        raise ValueError('u32("1234",7) gives wrong result')
+    if int(x) != 0:
+        raise ValueError("unexpected: int(x) != 0")
     return True
 
 def test_u64():
@@ -141,7 +189,6 @@ def test_u64():
        raise ValueError("unexpected: bool(x) != 0")
     if x != 0:
        raise ValueError("unexpected: x != 0")
-    return True
     if u64("1234") != 1234:
         raise ValueError('u64("1234") gives wrong result')
     if u64("0x1234") != 4660:
@@ -152,6 +199,9 @@ def test_u64():
         raise ValueError('u64("0b1111") gives wrong result')
     if u64("1234",7) != 466:
         raise ValueError('u64("1234",7) gives wrong result')
+    if int(x) != 0:
+        raise ValueError("unexpected: int(x) != 0")
+    return True
 
 
 
