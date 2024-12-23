@@ -526,7 +526,7 @@ jobs:
     needs: [test-macos, test-linux, build-debs]
     steps:
       - name: "Delete current tip release & tag"
-        uses: dev-drprasad/delete-tag-and-release@v1.0.1
+        uses: dev-drprasad/delete-tag-and-release@v1.1
         with:
           delete_release: true
           tag_name: tip
