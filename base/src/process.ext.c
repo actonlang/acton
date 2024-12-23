@@ -186,6 +186,10 @@ $R processQ_ProcessD_pidG_local(processQ_Process self, $Cont c$cont) {
 
 $R processQ_ProcessD_signalG_local(processQ_Process self, $Cont c$cont, B_int signal) {
     uv_process_t *p = (uv_process_t *)from$int(self->_p);
+    if (p == 0) {
+        log_warn("Process has exited, ignoring signal request");
+        return $R_CONT(c$cont, B_None);
+    }
     uv_process_kill(p, from$int(signal));
     return $R_CONT(c$cont, B_None);
 }
