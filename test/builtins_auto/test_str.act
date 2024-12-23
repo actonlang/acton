@@ -1,0 +1,34 @@
+
+def test_str_find():
+    s = "hello, world!"
+    if s.find("world") != 7:
+        raise ValueError("find() did not return the correct index: " + str(s.find("world")))
+    if s.find("world", 0) != 7:
+        raise ValueError("find() did not return the correct index: " + str(s.find("world")))
+    if s.find("world", 8) != -1:
+        raise ValueError("find() did not return -1 when the substring is not found")
+    if s.find("world", 0, 5) != -1:
+        raise ValueError("find() did not return -1 when the substring is not found")
+    if s.find("world", 0, 7) != -1:
+        raise ValueError("find() did not return -1 when the substring is not found")
+    if s.find("crap") != -1:
+        raise ValueError("find() did not return -1 when the substring is not found")
+
+
+actor main(env):
+    try:
+        test_str_find()
+    except Exception as e:
+        print("Unexpected exception during testing:", e)
+        await async env.exit(1)
+
+    b = b'\xde\xad\xbe\xef'
+    if b.hex() != "deadbeef":
+        print("ERROR: bytes.hex():", b.hex())
+        env.exit(1)
+
+    if bytes.from_hex("deadbeef").hex() != "deadbeef":
+        print("ERROR: bytes.from_hex():", bytes.from_hex("deadbeef").hex())
+        env.exit(1)
+
+    env.exit(0)
