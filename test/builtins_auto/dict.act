@@ -28,12 +28,34 @@ actor main(env):
         print("Unexpected result of del dict[\"b\"]:", d)
         await async env.exit(1)
 
-#    pop is a merhod of protocol Set, so for Mapping we have chosen name popitem...
-#    d["pop"] = 123
-#    p = d.pop("pop")
-#    if p != 123:
-#        print("Unexpected result of d.pop(\"b\"):", p)
-#        await async env.exit(1)
+    d["pop"] = "123"
+
+    q = d.pop("pop","5")
+    if q != "123":
+        print("Unexpected result of d.pop(\"pop\"):", q)
+        await async env.exit(1)
+
+    p = d.pop("pop","5")
+    if p != "5":
+        print("Unexpected result of d.pop(\"pop\"):", p)
+        await async env.exit(1)
+
+    q = d.pop("pop")
+    if q != None:
+        print("Unexpected result of d.pop(\"pop\"):", p)
+        await async env.exit(1)
+
+    d["pop"] = "123"
+
+    q = d.pop_def("pop","5")
+    if q != "123":
+        print("Unexpected result of d.pop(\"pop\"):", q)
+        await async env.exit(1)
+
+    p = d.pop_def("pop","5")
+    if p != "5":
+        print("Unexpected result of d.pop(\"pop\"):", p)
+        await async env.exit(1)
 
     d["popi"] = "POPI"
     pi = d.popitem()
@@ -41,7 +63,7 @@ actor main(env):
         print("Unexpected result of d.popitem():", str(pi.0), str(pi.1))
         await async env.exit(1)
 
-    g = d.get("a", "")
+    g = d.get_def("a", "")
     if g != "A":
         print("Unexpected result of d.get(\"a\"):", g)
         await async env.exit(1)

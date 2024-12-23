@@ -465,9 +465,24 @@ B_bool B_MappingD_dictD___containsnot__ (B_MappingD_dict wit, B_dict dict, $WORD
 }
 
 $WORD B_MappingD_dictD_get (B_MappingD_dict wit, B_dict dict, $WORD key, $WORD deflt) {
-    long hash = 0;
     if (!dict->table)
         return deflt;
+    long hash = 0;
+    B_Hashable hashwit = wit->W_HashableD_AD_MappingD_dict;
+    if (dict->table->tb_size > INIT_SIZE)
+        hash = from$int(hashwit->$class->__hash__(hashwit,key));
+    $WORD res;
+    int ix = $lookdict(dict,hashwit,hash,key,&res);
+    if (ix < 0)
+        return deflt;
+    else
+        return res;
+}
+
+$WORD B_MappingD_dictD_get_def (B_MappingD_dict wit, B_dict dict, $WORD key, $WORD deflt) {
+    if (!dict->table)
+        return deflt;
+    long hash = 0;
     B_Hashable hashwit = wit->W_HashableD_AD_MappingD_dict;
     if (dict->table->tb_size > INIT_SIZE) 
         hash = from$int(hashwit->$class->__hash__(hashwit,key));
@@ -477,6 +492,58 @@ $WORD B_MappingD_dictD_get (B_MappingD_dict wit, B_dict dict, $WORD key, $WORD d
         return deflt;
     else
         return res;
+}
+
+$WORD B_MappingD_dictD_pop(B_MappingD_dict wit, B_dict dict, $WORD key, $WORD deflt) {
+    if (dict->numelements == 0)
+        return deflt;
+    $table table = dict->table;
+    long hash = 0;
+    B_Hashable hashwit = wit->W_HashableD_AD_MappingD_dict;
+    if (table->tb_size > INIT_SIZE) {
+        hash = from$int(hashwit->$class->__hash__(hashwit,key));
+    }
+    $WORD res;
+    int ix = $lookdict(dict,hashwit,hash,key,&res);
+    if (ix < 0) 
+        return deflt;
+    else {
+        $entry_t entry = &TB_ENTRIES(table)[ix];
+        int i = $lookdict_index(table,hash,ix);
+        table->tb_indices[i] = DKIX_DUMMY;
+        res = entry->value;
+        entry->value = DELETED;
+        dict->numelements--;
+        if (10*dict->numelements < dict->table->tb_size) 
+        dictresize(hashwit,dict);
+        return res;
+    }
+}
+
+$WORD B_MappingD_dictD_pop_def(B_MappingD_dict wit, B_dict dict, $WORD key, $WORD deflt) {
+    if (dict->numelements == 0)
+        return deflt;
+    $table table = dict->table;
+    long hash = 0;
+    B_Hashable hashwit = wit->W_HashableD_AD_MappingD_dict;
+    if (table->tb_size > INIT_SIZE) {
+        hash = from$int(hashwit->$class->__hash__(hashwit,key));
+    }
+    $WORD res;
+    int ix = $lookdict(dict,hashwit,hash,key,&res);
+    if (ix < 0)
+        return deflt;
+    else {
+        $entry_t entry = &TB_ENTRIES(table)[ix];
+        int i = $lookdict_index(table,hash,ix);
+        table->tb_indices[i] = DKIX_DUMMY;
+        res = entry->value;
+        entry->value = DELETED;
+        dict->numelements--;
+        if (10*dict->numelements < dict->table->tb_size)
+            dictresize(hashwit,dict);
+        return res;
+    }
 }
 
 B_Iterator B_MappingD_dictD_keys (B_MappingD_dict wit, B_dict dict) {
@@ -697,9 +764,9 @@ B_NoneType B_IndexedD_MappingD_dictD___delitem__ (B_IndexedD_MappingD_dict wit, 
     int i = $lookdict_index(table,hash,ix);
     table->tb_indices[i] = DKIX_DUMMY;
     res = entry->value;
-    if (res == DELETED) {
-        $RAISE((B_BaseException)$NEW(B_KeyError, key, to$str("delitem: key already deleted")));
-    }
+    //if (res == DELETED) {
+    //    $RAISE((B_BaseException)$NEW(B_KeyError, key, to$str("delitem: key already deleted")));
+    //}
     entry->value = DELETED;
     dict->numelements--;
     if (10*dict->numelements < dict->table->tb_size) 
@@ -728,6 +795,31 @@ $WORD B_dictD_get(B_dict dict, B_Hashable hashwit, $WORD key, $WORD deflt) {
         return deflt;
     else
         return res;
+}
+
+$WORD B_dictD_pop(B_dict dict, B_Hashable hashwit, $WORD key, $WORD deflt) {
+    if (dict->numelements == 0)
+        return deflt;
+    $table table = dict->table;
+    long hash = 0;
+    if (table->tb_size > INIT_SIZE) {
+        hash = from$int(hashwit->$class->__hash__(hashwit,key));
+    }
+    $WORD res;
+    int ix = $lookdict(dict,hashwit,hash,key,&res);
+    if (ix < 0) 
+        return deflt;
+    else {
+        $entry_t entry = &TB_ENTRIES(table)[ix];
+        int i = $lookdict_index(table,hash,ix);
+        table->tb_indices[i] = DKIX_DUMMY;
+        res = entry->value;
+        entry->value = DELETED;
+        dict->numelements--;
+        if (10*dict->numelements < dict->table->tb_size) 
+        dictresize(hashwit,dict);
+        return res;
+    }
 }
 
 /*
