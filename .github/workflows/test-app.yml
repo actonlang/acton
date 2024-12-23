@@ -9,13 +9,16 @@ jobs:
   test-app:
     runs-on: ubuntu-latest
     steps:
+      - name: "Install gdb"
+        run: |
+          sudo apt update
+          sudo apt install -y gdb
       - name: "Download .deb files"
         uses: actions/download-artifact@v3
         with:
           name: acton-debs
       - name: "Install acton from .deb"
         run: |
-          sudo apt update
           sudo apt install -y ./deb/acton_*.deb
           acton --version
       - name: "Clone app repo"
