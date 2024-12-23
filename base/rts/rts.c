@@ -2176,16 +2176,21 @@ void print_trace() {
 #ifdef __linux__
     prctl(PR_SET_PTRACER, PR_SET_PTRACER_ANY, 0, 0, 0);
 #endif
+#ifdef __linux__
     int child_pid = fork();
     if (!child_pid) {
         dup2(2, 1); // redirect output to stderr
         execlp("lldb", "lldb", "-p", pid_buf, "--batch", "-o", "thread backtrace all", "-o", "exit", "--one-line-on-crash", "exit", name_buf, NULL);
         execlp("gdb", "gdb", "--quiet", "--batch", "-n", "-ex", "set confirm off", "-ex", "set pagination off", "-ex", "set debuginfod enabled off", "-ex", "thread", "-ex", "thread apply all backtrace full", name_buf, pid_buf, NULL);
-        fprintf(stderr, "Unable to get detailed backtrace using lldb or gdb");
+        fprintf(stderr, "Unable to get detailed backtrace using lldb or gdb\n");
         exit(0); /* If lldb/gdb failed to start */
     } else {
         waitpid(child_pid, NULL, 0);
     }
+#else
+    fprintf(stderr, "Unable to get detailed backtrace on this platform\n");
+    exit(0); /* If lldb/gdb failed to start */
+#endif
 }
 
 void launch_debugger(int signum) {
