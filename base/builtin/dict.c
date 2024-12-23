@@ -464,9 +464,9 @@ B_bool B_MappingD_dictD___containsnot__ (B_MappingD_dict wit, B_dict dict, $WORD
     return toB_bool(!B_MappingD_dictD___contains__(wit, dict, key)->val);
 }
 
-$WORD B_MappingD_dictD_get (B_MappingD_dict wit, B_dict dict, $WORD key, $WORD deflt) {
+$WORD B_MappingD_dictD_get (B_MappingD_dict wit, B_dict dict, $WORD key) {
     if (!dict->table)
-        return deflt;
+        return B_None;
     long hash = 0;
     B_Hashable hashwit = wit->W_HashableD_AD_MappingD_dict;
     if (dict->table->tb_size > INIT_SIZE)
@@ -474,7 +474,7 @@ $WORD B_MappingD_dictD_get (B_MappingD_dict wit, B_dict dict, $WORD key, $WORD d
     $WORD res;
     int ix = $lookdict(dict,hashwit,hash,key,&res);
     if (ix < 0)
-        return deflt;
+        return B_None;
     else
         return res;
 }
@@ -494,9 +494,9 @@ $WORD B_MappingD_dictD_get_def (B_MappingD_dict wit, B_dict dict, $WORD key, $WO
         return res;
 }
 
-$WORD B_MappingD_dictD_pop(B_MappingD_dict wit, B_dict dict, $WORD key, $WORD deflt) {
+$WORD B_MappingD_dictD_pop(B_MappingD_dict wit, B_dict dict, $WORD key) {
     if (dict->numelements == 0)
-        return deflt;
+        return B_None;
     $table table = dict->table;
     long hash = 0;
     B_Hashable hashwit = wit->W_HashableD_AD_MappingD_dict;
@@ -505,8 +505,8 @@ $WORD B_MappingD_dictD_pop(B_MappingD_dict wit, B_dict dict, $WORD key, $WORD de
     }
     $WORD res;
     int ix = $lookdict(dict,hashwit,hash,key,&res);
-    if (ix < 0) 
-        return deflt;
+    if (ix < 0)
+        return B_None;
     else {
         $entry_t entry = &TB_ENTRIES(table)[ix];
         int i = $lookdict_index(table,hash,ix);
@@ -514,8 +514,8 @@ $WORD B_MappingD_dictD_pop(B_MappingD_dict wit, B_dict dict, $WORD key, $WORD de
         res = entry->value;
         entry->value = DELETED;
         dict->numelements--;
-        if (10*dict->numelements < dict->table->tb_size) 
-        dictresize(hashwit,dict);
+        if (10*dict->numelements < dict->table->tb_size)
+            dictresize(hashwit,dict);
         return res;
     }
 }
