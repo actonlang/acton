@@ -22,6 +22,9 @@ executables:
     dependencies:
       - acton
       - base >= 4.7 && < 5
+      - lsp >= 2.7
+      - lsp-types
+      - text
     when:
     - condition: os(linux)
       ld-options:
