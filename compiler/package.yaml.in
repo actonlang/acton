@@ -18,7 +18,7 @@ description:         Please see the README on Github at <https://github.com/gith
 executables:
   actonc:
     main:                ActonCompiler.hs
-    source-dirs:         .
+    source-dirs:         src
     build-tools:
       - alex
       - happy
@@ -59,6 +59,7 @@ executables:
 tests:
   test_actonc:
     main:                test.hs
+    source-dirs: src
     dependencies:
       - base
       - bytestring
