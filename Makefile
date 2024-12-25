@@ -125,11 +125,11 @@ ACTONC_TEST_HS=$(wildcard compiler/tests/*.hs)
 ACTONC_HS=$(filter-out $(ACTONC_TEST_HS),$(ACTONC_ALL_HS))
 # NOTE: we're unsetting CC & CXX to avoid using zig cc & zig c++ for stack /
 # ghc, which doesn't seem to work properly
-compiler/actonc: compiler/package.yaml.in compiler/stack.yaml $(ACTONC_HS)
+dist/bin/actonc: compiler/package.yaml.in compiler/stack.yaml $(ACTONC_HS)
 	cd compiler && unset CC && unset CXX && unset CFLAGS && stack build --dry-run 2>&1 | grep "Nothing to build" || \
 		(sed 's,^version:.*,version:      "$(VERSION_INFO)",' < package.yaml.in > package.yaml \
 		&& stack build $(STACK_OPTS) --ghc-options='-j4 $(ACTC_GHC_OPTS)' \
-		&& stack --local-bin-path=. install 2>/dev/null)
+		&& stack --local-bin-path=../dist/bin install 2>/dev/null)
 
 .PHONY: clean-compiler
 clean-compiler:
@@ -424,22 +424,16 @@ dist/base: base base/.build base/__root.zig base/acton.zig base/build.zig base/b
 	cp -a base/__root.zig base/Acton.toml base/acton.zig base/build.zig base/build.zig.zon base/builtin base/rts base/src base/stdlib dist/base/
 	cp -a base/out/types dist/base/out/
 
-dist/bin/acton: cli/out/bin/acton
-	@mkdir -p $(dir $@)
-	cp -a $< $@.tmp
-	mv $@.tmp $@
-
 # This does a little hack, first copying and then moving the file in place. This
 # is to avoid an error if the executable is currently running. cp tries to open
 # the file and modify it, which the Linux kernel (and perhaps others?) will
 # prevent if the file to be modified is an executable program that is currently
 # running.  We work around it by moving / renaming the file in place instead!
-dist/bin/actonc: compiler/actonc $(DIST_ZIG)
+dist/bin/acton: cli/out/bin/acton
 	@mkdir -p $(dir $@)
-	cp $< $@.tmp
+	cp -a $< $@.tmp
 	mv $@.tmp $@
 
-#
 dist/bin/actondb: $(DIST_ZIG) $(DEPS)
 	@mkdir -p $(dir $@)
 	cd dist/backend && $(ZIG) build -Donly_actondb --prefix $(TD)/dist
