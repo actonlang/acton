@@ -1,0 +1,17 @@
+Building file test/typeerrors/ex11.act
+  Compiling ex11.act for development
+
+ERROR: Error when compiling ex11 module: Type error
+
+  |
+1 |def f(s):
+  |    ^
+
+
+  |
+4 |a = f([8])
+  |    ^^^^^^
+Type incompatibility between definition of and call of f (__builtin__.list[_] must be a subclass of __builtin__.str)
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+

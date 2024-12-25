@@ -1,0 +1,6 @@
+import math
+
+actor main(env):
+   print(math.sin("hej"))
+   env.exit(0)
+   

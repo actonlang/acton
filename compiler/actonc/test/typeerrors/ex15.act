@@ -1,0 +1,6 @@
+def f(x : str):
+    y = 1
+    raise y
+#    y = y + x[7]
+    return y
+

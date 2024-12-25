@@ -1,8 +1,0 @@
-def f(x,y):
-    if x<y:
-        return x
-    else:
-        return x+y
-
-a = f(3,"hej")
-

@@ -1,4 +1,0 @@
-f : [A(Plus)] => (A) -> A
-
-def f(x,y):
-    return x

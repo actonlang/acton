@@ -1,0 +1,6 @@
+def f(x):
+    return g(x)
+
+def g(x,y):
+    return x+y
+

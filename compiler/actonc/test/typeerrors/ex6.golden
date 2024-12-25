@@ -1,0 +1,12 @@
+Building file test/typeerrors/ex6.act
+  Compiling ex6.act for development
+
+ERROR: Error when compiling ex6 module: Type error
+
+  |
+1 |(a,b) = (1,3,5)
+  |        ^^^^^^^
+too many positional component(s) in tuple
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+

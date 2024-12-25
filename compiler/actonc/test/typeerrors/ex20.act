@@ -1,0 +1,4 @@
+f : (str,str) -> str
+
+def f(s : str, a):
+    return s * a

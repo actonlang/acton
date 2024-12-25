@@ -1,0 +1,3 @@
+actor main(env):
+    print("b")
+    env.exit(0)

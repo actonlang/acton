@@ -1,0 +1,12 @@
+Building file test/typeerrors/funargs2.act
+  Compiling funargs2.act for development
+
+ERROR: Error when compiling funargs2 module: Type error
+
+  |
+4 |a = f(3,z=3,y=3)
+  |        ^
+Keyword element 'z' is not expected
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+
