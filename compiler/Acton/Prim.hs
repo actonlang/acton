@@ -118,6 +118,9 @@ primISNONE0         = gPrim "ISNONE0"
 primSKIPRESc        = gPrim "SKIPRESc"
 primSKIPRES         = gPrim "SKIPRES"
 
+primBox             = gPrim "Box"
+valKW               = primKW "val"
+
 cActor              = TC primActor []
 tActor              = tCon cActor
 tR                  = tCon $ TC primR []
@@ -193,6 +196,8 @@ primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec),
                             (noq primR,             clR),
                             (noq primCont,          clCont),
 
+                            (noq primBox,           clBox),
+
                             (noq primRContc,        NDef scRContc NoDec),
                             (noq primRCont,         NDef scRCont NoDec),
                             (noq primRFail,         NDef scRFail NoDec),
@@ -265,6 +270,14 @@ clPure              = NClass [quant r, quant t] (leftpath [ cMut (tVar r) (tVar 
   where te          = [ (attr_eval_, NSig (monotype $ tFun fxPure (tVar r) kwdNil (tVar t)) NoDec) ]
         r           = TV PRow (name "R")
         t           = TV KType (name "T")
+
+--  class $Box[A] (object, value):
+--      ref         : A
+--      __init__    : (A) -> None
+clBox               = NClass [quant a] (leftpath [cObject, cValue]) te
+  where te          = [ (valKW,  NSig (monotype $ tVar a) Property),
+                        (initKW, NDef (monotype $ tFun fxPure (posRow (tVar a) posNil) kwdNil tNone) NoDec) ]
+        a           = TV KType (name "A")
 
 
 --  class $Actor (): pass
