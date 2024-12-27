@@ -73,7 +73,7 @@ type CPSEnv                             = EnvF CPSX
 
 data CPSX                               = CPSX { ctxtX :: [Frame], whereX :: Where }
 
-data Where                              = OnTop | InClass | InDef deriving (Eq,Show)
+data Where                              = OnTop | InClass | InDef | InLoop deriving (Eq,Show)
 
 cpsEnv env0                             = setX env0 CPSX{ ctxtX = [], whereX = OnTop }
 
@@ -83,57 +83,61 @@ infixr +:
 frame +: env                            = modX env $ \x -> x{ ctxtX = frame : ctxtX x }
 
 setClassCtxt env                        = modX env $ \x -> x{ ctxtX = [], whereX = InClass }
-
 setDefCtxt env                          = modX env $ \x -> x{ whereX = InDef }
+setInnerLoopCtxt env                    = modX env $ \x -> x{ whereX = InLoop }
 
 onTop env                               = whereX (envX env) == OnTop
 inClass env                             = whereX (envX env) == InClass
 inDef env                               = whereX (envX env) == InDef
+inInnerLoop env                         = whereX (envX env) == InLoop
 
 eCallCont e (c,t)                       = eCall (tApp (eQVar primRContc) [t]) [c, e]
 
 eCallCont0 (c, ns)                      = eCallCont eNone (c',tNone)
   where c'                              = kRef c ns g_skip tNone
 
-cntcont (Seq _ _ : ctx)                 = cntcont ctx                       -- 'continue':          followed by some cmd    -   ignore it
-cntcont (Loop c ns : ctx)               = (c, ns)                           --                      inside a loop           -   jump to its top
+cntcont env                             = cntC (ctxt env)
+brkcont env                             = brkC (ctxt env)
+seqcont env                             = seqC (ctxt env)
+retcont env                             = retC (ctxt env)
 
-brkcont (Seq _ _ : ctx)                 = brkcont ctx                       -- 'break':             followed by some cmd    -   ignore it
-brkcont (Loop _ _ : ctx)                = seqcont ctx                       --                      in a loop               -   jump to what follows
+cntC (Seq _ _ : ctx)                    = cntC ctx          -- 'continue'       followed by some cmd:   ignore it
+cntC (Loop c ns : ctx)                  = (c, ns)           --                  inside a loop:          jump to its top
 
-seqcont (Seq c ns : ctx)                = (c, ns)                           -- end of sequence:     followed by some cmd    -   jump to it
-seqcont (Loop c ns : ctx)               = (c, ns)                           --                      inside a loop           -   jump to its top
-seqcont (Meth c _ : _)                  = (c, [])                           --                      in a method             -   jump to its continuation
+brkC (Seq _ _ : ctx)                    = brkC ctx          -- 'break'          followed by some cmd:   ignore it
+brkC (Loop _ _ : ctx)                   = seqC ctx          --                  inside a loop:          jump to what follows
 
-retcont (Seq _ _ : ctx)                 = retcont ctx                       -- 'return':            followed by some cmd    -   ignore it
-retcont (Loop _ _ : ctx)                = retcont ctx                       --                      in a loop               -   ignore it
-retcont (Meth c t : _)                  = (eVar c, t)                       --                      in a method             -   jump to its continuation
+seqC (Seq c ns : ctx)                   = (c, ns)           -- end of sequence  followed by some cmd:   jump to it
+seqC (Loop c ns : ctx)                  = (c, ns)           --                  inside a loop:          jump to its top
+seqC (Meth c _ : _)                     = (c, [])           --                  in a method:            jump to its continuation
 
+retC (Seq _ _ : ctx)                    = retC ctx          -- 'return'         followed by some cmd:   ignore it
+retC (Loop _ _ : ctx)                   = retC ctx          --                  inside a loop:          ignore it
+retC (Meth c t : _)                     = (eVar c, t)       --                  in a method:            jump to its continuation
 
-cpsSuite env ss                         = cps env ss
 
 class CPS a where
     cps                                 :: CPSEnv -> a -> CpsM a
 
 instance CPS [Stmt] where
     cps env []
-      | inCont env                      = return [sReturn $ eCallCont0 $ seqcont $ ctxt env]
+      | inCont env                      = return [sReturn $ eCallCont0 $ seqcont env]
     cps env (Continue _ : _)
-      | inCont env                      = return [sReturn $ eCallCont0 $ cntcont $ ctxt env]
+      | inCont env                      = return [sReturn $ eCallCont0 $ cntcont env]
     cps env (Break _ : _)
-      | inCont env                      = return [sReturn $ eCallCont0 $ brkcont $ ctxt env]
+      | inCont env                      = return [sReturn $ eCallCont0 $ brkcont env]
     cps env (Return _ Nothing : _)
-      | inCont env                      = return [sReturn $ eCallCont eNone $ retcont (ctxt env)]
+      | inCont env                      = return [sReturn $ eCallCont eNone $ retcont env]
     cps env (Return _ (Just e) : _)
-      | contCall env e                  = return [sReturn $ addContArg env (conv e) $ fst $ retcont $ ctxt env]
-      | inCont env                      = return [sReturn $ eCallCont (conv e) $ retcont $ ctxt env]
+      | contCall env e                  = return [sReturn $ addContArg env (conv e) $ fst $ retcont env]
+      | inCont env                      = return [sReturn $ eCallCont (conv e) $ retcont env]
 
     cps env (Assign _ [PVar _ n _] e : 
              Return _ (Just e') : _)
-      | contCall env e, e' == eVar n    = return [sReturn $ addContArg env (conv e) $ fst $ retcont $ ctxt env]
+      | contCall env e, e' == eVar n    = return [sReturn $ addContArg env (conv e) $ fst $ retcont env]
 
     cps env [Expr _ e]
-      | contCall env e                  = return [sReturn $ addContArg env (conv e) $ cont $ seqcont $ ctxt env]
+      | contCall env e                  = return [sReturn $ addContArg env (conv e) $ cont $ seqcont env]
       where t                           = typeOf env e
             cont (c,ns)                 = if t == tNone then c' else eCall (tApp (eQVar primSKIPRESc) [t]) [c']
               where c'                  = kRef c ns g_skip t
@@ -175,15 +179,16 @@ instance CPS [Stmt] where
       where env1                        = define (envOf ds) env
     
     cps env (s : ss)
-      | not (needCont env s)            = do ss' <- cps env1 ss
+      | not (needCPS env s)             = do ss' <- cps env1 ss
+                                             --traceM ("### SIMPLE: " ++ prstr (conv s))
                                              return $ conv s : ss'
       where env1                        = define (envOf s) env
     
     cps env s@[If _ [Branch e ss1] ss2]
       | isPUSH e                        = do k <- newName "try"
                                              x <- newName "res"
-                                             ss1 <- cpsSuite env (map convPOPDROP ss1)
-                                             ss2 <- cpsSuite env (map convPOPDROP ss2)
+                                             ss1 <- cps env (map convPOPDROP ss1)
+                                             ss2 <- cps env (map convPOPDROP ss2)
                                              let body = sIf1 (eVar x) ss1 ss2 : []
                                              --traceM ("## kDef PUSH " ++ prstr k ++ ", updates: " ++ prstrs nts)
                                              return $ kDef env k nts x tBool body :
@@ -191,7 +196,7 @@ instance CPS [Stmt] where
       where nts                         = extraBinds env s
 
     cps env [If _ bs els]               = do bs' <- mapM (cps env) bs
-                                             els' <- cpsSuite env els
+                                             els' <- cps env els
                                              return $ sIf bs' els' : []
 
     cps env (If l bs els : s@(Expr _ e) : _)
@@ -199,8 +204,8 @@ instance CPS [Stmt] where
 
     cps env s@[While _ e b els]         = do k    <- newName "loop"
                                              x    <- newName "res"
-                                             b'   <- cpsSuite (Loop k (dom nts) +: env) b
-                                             els' <- cpsSuite env els
+                                             b'   <- cps (Loop k (dom nts) +: env) b
+                                             els' <- cps env els
                                              let body = sIf1 (conv e) b' els' : []
                                              --traceM ("## kDef While " ++ prstr k ++ ", updates: " ++ prstrs nts)
                                              return $ kDef env k nts x tNone body :
@@ -223,12 +228,12 @@ instance CPS [Stmt] where
 extraBinds env ss                       = [ (x, t) | x <- nub $ updatesOf ss, Just t <- [lookupVar x env] ]
 
 instance CPS Decl where
-    cps env (Class l n q cs b)          = do b' <- cpsSuite env1 b
+    cps env (Class l n q cs b)          = do b' <- cps env1 b
                                              return $ Class l n (conv q) (conv cs) b'
       where env1                        = defineSelf (NoQ n) q $ defineTVars q $ setClassCtxt env
 
     cps env (Def l n q p KwdNIL (Just t) b dec fx)
-      | contFX fx                       = do b' <- cpsSuite env1 b
+      | contFX fx                       = do b' <- cps env1 b
                                              return $ Def l n q' (addContPar env dec p' fx t') KwdNIL (Just tR) b' dec fx
       | otherwise                       = return $ Def l n q' p' KwdNIL (Just t') (conv b) dec fx
       where env1                        = define (envOf p) $ defineTVars q $ Meth contKW t' +: setDefCtxt env
@@ -240,7 +245,7 @@ instance CPS Decl where
     
 
 instance CPS Branch where
-    cps env (Branch e ss)               = Branch (conv e) <$> cpsSuite env ss
+    cps env (Branch e ss)               = Branch (conv e) <$> cps env ss
 
     
 kJump k nts                             = sReturn (eCall (eVar k) $ eNone : map eVar (dom nts)) : []
@@ -297,30 +302,34 @@ convPUSH (Call _ (Var _ x) _ _) arg
   | x == primPUSHF                      = eCall (eQVar primPUSHF_Cc) [arg]
 
 class NeedCont a where
-    needCont                            :: CPSEnv -> a -> Bool
+    needCPS                             :: CPSEnv -> a -> Bool
 
 instance (NeedCont a, EnvOf a) => NeedCont [a] where
-    needCont env []                     = False
-    needCont env (s : ss)               = needCont env s || needCont (define (envOf s) env) ss
+    needCPS env []                      = False
+    needCPS env (s : ss)                = needCPS env s || needCPS (define (envOf s) env) ss
 
 instance NeedCont Branch where
-    needCont env (Branch e ss)          = isPUSH e || needCont env ss
+    needCPS env (Branch e ss)           = needCPS env ss
 
 instance NeedCont Stmt where
-    needCont env (Return _ (Just e))    = inCont env
-    needCont env (Continue _)           = inCont env
-    needCont env (Break _)              = inCont env
-    needCont env (Expr _ e)             = contCall env e
-    needCont env (Assign _ _ e)         = contCall env e
-    needCont env (MutAssign _ _ e)      = contCall env e
-    needCont env (If _ bs els)          = needCont env bs || needCont env els
-    needCont env (While _ _ b els)      = needCont env b || needCont env els
-    needCont env (Decl _ ds)            = needCont (define (envOf ds) env) ds
-    needCont env _                      = False
+    needCPS env (Return _ (Just e))     = inCont env
+    needCPS env (Continue _)
+      | inInnerLoop env                 = False
+      | otherwise                       = inCont env
+    needCPS env (Break _)
+      | inInnerLoop env                 = False
+      | otherwise                       = inCont env
+    needCPS env (Expr _ e)              = contCall env e
+    needCPS env (Assign _ _ e)          = contCall env e
+    needCPS env (MutAssign _ _ e)       = contCall env e
+    needCPS env (If _ bs els)           = needCPS env bs || needCPS env els
+    needCPS env (While _ _ ss els)      = needCPS (setInnerLoopCtxt env) ss || needCPS env els
+    needCPS env (Decl _ ds)             = needCPS (define (envOf ds) env) ds
+    needCPS env _                       = False
 
 instance NeedCont Decl where
-    needCont env Class{}                = True
-    needCont env d@Def{}                = contFX (dfx d)
+    needCPS env Class{}                 = True
+    needCPS env d@Def{}                 = contFX (dfx d)
 
 ------------------------------------------------
 ------------------------------------------------
