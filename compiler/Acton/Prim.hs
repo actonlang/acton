@@ -119,7 +119,9 @@ primSKIPRESc        = gPrim "SKIPRESc"
 primSKIPRES         = gPrim "SKIPRES"
 
 primBox             = gPrim "Box"
-valKW               = primKW "val"
+tBox t              = tCon $ TC primBox [t]
+
+valKW               = name "val"
 
 cActor              = TC primActor []
 tActor              = tCon cActor
