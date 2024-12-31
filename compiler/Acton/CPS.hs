@@ -151,7 +151,7 @@ instance CPS [Stmt] where
       where t                           = typeOf env e
             nts                         = extraBinds env ss
 
-    cps env (Assign _ [p] e : ss)
+    cps env ss0@(Assign _ [p] e : ss)
       | contCall env e                  = do k <- newName "cont"
                                              x <- newName "res"
                                              ss' <- cps (define [(x,NVar t)] env) (sAssign p (eVar x) : ss)
@@ -159,7 +159,7 @@ instance CPS [Stmt] where
                                              return $ kDef env k nts x t ss' :
                                                       sReturn (addContArg env (conv env e) (kRef k (dom nts) x t)) : []
       where t                           = typeOf env e
-            nts                         = extraBinds env ss
+            nts                         = extraBinds env ss0
 
     cps env (MutAssign _ tg e : ss)
       | contCall env e                  = do k <- newName "cont"
@@ -534,6 +534,7 @@ instance Conv Expr where
       | n == primAWAITf                 = Var l primAWAITc
       | otherwise                       = Var l n
     conv env (Call l e ps KwdNil)       = Call l (conv env e) (conv env ps) KwdNil
+    conv env (Async l e)                = Async l (conv env e)
     conv env (TApp l e ts)              = TApp l (conv env e) (conv env ts)
     conv env (Cond l e1 e e2)           = Cond l (conv env e1) (conv env e) (conv env e2)
     conv env (IsInstance l e c)         = IsInstance l (conv env e) c
