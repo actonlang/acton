@@ -1,5 +1,52 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- Acton Vim plugin for syntax highlighting & indent, see
+  https://github.com/actonlang/vim-acton
+- Add `crypto.hash.md5` module for MD5 hashing
+  - supports incremental updates and one-shot
+- Add `bytes.from_hex()` & `bytes.hex()` for hex encoding/decoding of bytes
+- Add `.str_ms()` to `time.Duration`
+- Add `max_def` and `min_def` functions that require a default argument
+  - Unlike max() & min(), these functions require a default value that is
+    returned when the input iterable is empty
+    - `max_def([1, 2, 3], -1)` returns 3
+    - `max_def([], -1)` returns -1
+- Add `re.split()` function to split strings based on regular expressions
+  - `re.split(" +", "a  b   c")` returns `["a", "b", "c"]`
+- Add support for golden testing in the `testing` module
+  - Test functions can return a `str` to be compared against stored golden values
+  - `acton test` will show actual vs expected golden value
+  - Golden values are stored in `test/golden/MODULE/TEST_NAME`
+  - Update expected values with `--golden-update`
+- Unmangle actor class names in logging
+
+### Changed
+- Dict & Mapping methods `get` and `pop` now return `None` when key is not
+  found, instead of throwing KeyError
+  - Use new `get_def` & `pop_def` for explicit default values
+- Automatic backtrace printing on crashes disabled on non-Linux platforms
+  - LLDB on MacOS often hangs, so automatic backtrace printing is disabled
+
+### Fixed
+- Fix type conversion between `u16` and `int`
+- Fix XML default namespace parsing
+- Fix error handling in process actor
+  - Process signals are now ignored if process has exited
+  - Better error handling around stdin/stdout/stderr operations
+- Fix volatile variables in try-except blocks to avoid compiler optimization
+  issues impacting control flow
+- Fix string format in `time.DateTime`'s RFC1123 format (month was off by one)
+
+### Testing / CI
+- Add macos-aarch64 tip release build
+- Stop testing on Ubuntu 18.04
+- Install gdb in test-app environment for better crash analysis
+- Separate caches for Acton build and Stack/GHC in CI to avoid cache thrashing
+
+
 ## [0.24.1] (2024-11-09)
 
 ## Added
