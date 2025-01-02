@@ -8,10 +8,24 @@ def fun1() -> int:
         pass
     return res
 
+def fun2():
+    a = "FOOBAR2" # easy to find in C source
+    my_list = [1]
+    complete = True
+    if 1 == 1:
+        complete = False
+    for r in my_list:
+        complete = False
+    return complete
+
 actor main(env):
     out1 = fun1()
     if out1 != 42:
         print("Bad 1:", out1)
         env.exit(1)
+
+    out2 = fun2()
+    if out2 != False:
+        print("Bad 2:", out2)
 
     env.exit(0)
