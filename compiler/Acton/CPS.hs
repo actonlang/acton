@@ -28,7 +28,7 @@ import Acton.Env
 import Acton.QuickType
 
 convert                                 :: Env0 -> Module -> IO (Module, Env0)
-convert env0 m                          = return (runCpsM (convMod m), mapModules1 conv env0)
+convert env0 m                          = return (runCpsM (convMod m), mapModules1 (conv env) env0)
   where env                             = cpsEnv env0
         convMod (Module m imps ss)      = do ss' <- preSuite env ss
                                              --traceM ("######## preCPS:\n" ++ render (vcat $ map pretty ss') ++ "\n########")
@@ -71,11 +71,11 @@ instance Pretty Frame where
 
 type CPSEnv                             = EnvF CPSX
 
-data CPSX                               = CPSX { ctxtX :: [Frame], whereX :: Where }
+data CPSX                               = CPSX { ctxtX :: [Frame], whereX :: Where, volatileX :: [Name] }
 
-data Where                              = OnTop | InClass | InDef deriving (Eq,Show)
+data Where                              = OnTop | InClass | InDef | InLoop deriving (Eq,Show)
 
-cpsEnv env0                             = setX env0 CPSX{ ctxtX = [], whereX = OnTop }
+cpsEnv env0                             = setX env0 CPSX{ ctxtX = [], whereX = OnTop, volatileX = [] }
 
 ctxt env                                = ctxtX $ envX env
 
@@ -83,34 +83,36 @@ infixr +:
 frame +: env                            = modX env $ \x -> x{ ctxtX = frame : ctxtX x }
 
 setClassCtxt env                        = modX env $ \x -> x{ ctxtX = [], whereX = InClass }
-
 setDefCtxt env                          = modX env $ \x -> x{ whereX = InDef }
+setInnerLoopCtxt env                    = modX env $ \x -> x{ whereX = InLoop }
+setVolatiles ns env                     = modX env $ \x -> x{ volatileX = ns }
 
 onTop env                               = whereX (envX env) == OnTop
 inClass env                             = whereX (envX env) == InClass
 inDef env                               = whereX (envX env) == InDef
+inInnerLoop env                         = whereX (envX env) == InLoop
+
+volatiles env                           = volatileX (envX env)
 
 eCallCont e (c,t)                       = eCall (tApp (eQVar primRContc) [t]) [c, e]
 
 eCallCont0 (c, ns)                      = eCallCont eNone (c',tNone)
   where c'                              = kRef c ns g_skip tNone
 
-cntcont (Seq _ _ : ctx)                 = cntcont ctx                       -- 'continue':          followed by some cmd    -   ignore it
-cntcont (Loop c ns : ctx)               = (c, ns)                           --                      inside a loop           -   jump to its top
+cntcont (Seq _ _ : ctx)                 = cntcont ctx       -- 'continue'       followed by some cmd:   ignore it
+cntcont (Loop c ns : ctx)               = (c, ns)           --                  inside a loop:          jump to its top
 
-brkcont (Seq _ _ : ctx)                 = brkcont ctx                       -- 'break':             followed by some cmd    -   ignore it
-brkcont (Loop _ _ : ctx)                = seqcont ctx                       --                      in a loop               -   jump to what follows
+brkcont (Seq _ _ : ctx)                 = brkcont ctx       -- 'break'          followed by some cmd:   ignore it
+brkcont (Loop _ _ : ctx)                = seqcont ctx       --                  inside a loop:          jump to what follows
 
-seqcont (Seq c ns : ctx)                = (c, ns)                           -- end of sequence:     followed by some cmd    -   jump to it
-seqcont (Loop c ns : ctx)               = (c, ns)                           --                      inside a loop           -   jump to its top
-seqcont (Meth c _ : _)                  = (c, [])                           --                      in a method             -   jump to its continuation
+seqcont (Seq c ns : ctx)                = (c, ns)           -- end of sequence  followed by some cmd:   jump to it
+seqcont (Loop c ns : ctx)               = (c, ns)           --                  inside a loop:          jump to its top
+seqcont (Meth c _ : _)                  = (c, [])           --                  in a method:            jump to its continuation
 
-retcont (Seq _ _ : ctx)                 = retcont ctx                       -- 'return':            followed by some cmd    -   ignore it
-retcont (Loop _ _ : ctx)                = retcont ctx                       --                      in a loop               -   ignore it
-retcont (Meth c t : _)                  = (eVar c, t)                       --                      in a method             -   jump to its continuation
+retcont (Seq _ _ : ctx)                 = retcont ctx       -- 'return'         followed by some cmd:   ignore it
+retcont (Loop _ _ : ctx)                = retcont ctx       --                  inside a loop:          ignore it
+retcont (Meth c t : _)                  = (eVar c, t)       --                  in a method:            jump to its continuation
 
-
-cpsSuite env ss                         = cps env ss
 
 class CPS a where
     cps                                 :: CPSEnv -> a -> CpsM a
@@ -123,17 +125,17 @@ instance CPS [Stmt] where
     cps env (Break _ : _)
       | inCont env                      = return [sReturn $ eCallCont0 $ brkcont $ ctxt env]
     cps env (Return _ Nothing : _)
-      | inCont env                      = return [sReturn $ eCallCont eNone $ retcont (ctxt env)]
+      | inCont env                      = return [sReturn $ eCallCont eNone $ retcont $ ctxt env]
     cps env (Return _ (Just e) : _)
-      | contCall env e                  = return [sReturn $ addContArg env (conv e) $ fst $ retcont $ ctxt env]
-      | inCont env                      = return [sReturn $ eCallCont (conv e) $ retcont $ ctxt env]
+      | contCall env e                  = return [sReturn $ addContArg env (conv env e) $ fst $ retcont $ ctxt env]
+      | inCont env                      = return [sReturn $ eCallCont (conv env e) $ retcont $ ctxt env]
 
-    cps env (Assign _ [PVar _ n _] e : 
+    cps env (Assign _ [PVar _ n (Just _)] e :
              Return _ (Just e') : _)
-      | contCall env e, e' == eVar n    = return [sReturn $ addContArg env (conv e) $ fst $ retcont $ ctxt env]
+      | contCall env e, e' == eVar n    = return [sReturn $ addContArg env (conv env e) $ fst $ retcont $ ctxt env]
 
     cps env [Expr _ e]
-      | contCall env e                  = return [sReturn $ addContArg env (conv e) $ cont $ seqcont $ ctxt env]
+      | contCall env e                  = return [sReturn $ addContArg env (conv env e) $ cont $ seqcont $ ctxt env]
       where t                           = typeOf env e
             cont (c,ns)                 = if t == tNone then c' else eCall (tApp (eQVar primSKIPRESc) [t]) [c']
               where c'                  = kRef c ns g_skip t
@@ -144,20 +146,20 @@ instance CPS [Stmt] where
                                              ss' <- cps env ss
                                              --traceM ("## kDef Expr " ++ prstr k ++ ", updates: " ++ prstrs nts)
                                              return $ kDef env k nts x t ss' :
-                                                      sReturn (addContArg env (conv e) (kRef k (dom nts) x t)) : []
-      | isRAISE e                       = return $ sExpr (conv e) : []
+                                                      sReturn (addContArg env (conv env e) (kRef k (dom nts) x t)) : []
+      | isRAISE e                       = return $ sExpr (conv env e) : []
       where t                           = typeOf env e
             nts                         = extraBinds env ss
 
-    cps env (Assign _ [PVar _ x _] e : ss)
+    cps env ss0@(Assign _ [p] e : ss)
       | contCall env e                  = do k <- newName "cont"
-                                             ss' <- cps env1 ss
+                                             x <- newName "res"
+                                             ss' <- cps (define [(x,NVar t)] env) (sAssign p (eVar x) : ss)
                                              --traceM ("## kDef Assign " ++ prstr k ++ ", updates: " ++ prstrs nts)
                                              return $ kDef env k nts x t ss' :
-                                                      sReturn (addContArg env (conv e) (kRef k (dom nts) x t)) : []
+                                                      sReturn (addContArg env (conv env e) (kRef k (dom nts) x t)) : []
       where t                           = typeOf env e
-            env1                        = define [(x,NVar t)] env
-            nts                         = extraBinds env ss
+            nts                         = extraBinds env ss0
 
     cps env (MutAssign _ tg e : ss)
       | contCall env e                  = do k <- newName "cont"
@@ -165,7 +167,7 @@ instance CPS [Stmt] where
                                              ss' <- cps env (sMutAssign tg (eVar x) : ss)
                                              --traceM ("## kDef MutAssign " ++ prstr k ++ ", updates: " ++ prstrs nts)
                                              return $ kDef env k nts x t ss' :
-                                                      sReturn (addContArg env (conv e) (kRef k (dom nts) x t)) : []
+                                                      sReturn (addContArg env (conv env e) (kRef k (dom nts) x t)) : []
       where t                           = typeOf env e
             nts                         = extraBinds env ss
 
@@ -176,14 +178,15 @@ instance CPS [Stmt] where
     
     cps env (s : ss)
       | not (needCont env s)            = do ss' <- cps env1 ss
-                                             return $ conv s : ss'
+                                             --traceM ("### SIMPLE: " ++ prstr s)
+                                             return $ conv env s : ss'
       where env1                        = define (envOf s) env
     
     cps env s@[If _ [Branch e ss1] ss2]
       | isPUSH e                        = do k <- newName "try"
                                              x <- newName "res"
-                                             ss1 <- cpsSuite env (map convPOPDROP ss1)
-                                             ss2 <- cpsSuite env (map convPOPDROP ss2)
+                                             ss1 <- cps env (map convPOPDROP ss1)
+                                             ss2 <- cps env (map convPOPDROP ss2)
                                              let body = sIf1 (eVar x) ss1 ss2 : []
                                              --traceM ("## kDef PUSH " ++ prstr k ++ ", updates: " ++ prstrs nts)
                                              return $ kDef env k nts x tBool body :
@@ -191,7 +194,7 @@ instance CPS [Stmt] where
       where nts                         = extraBinds env s
 
     cps env [If _ bs els]               = do bs' <- mapM (cps env) bs
-                                             els' <- cpsSuite env els
+                                             els' <- cps env els
                                              return $ sIf bs' els' : []
 
     cps env (If l bs els : s@(Expr _ e) : _)
@@ -199,9 +202,9 @@ instance CPS [Stmt] where
 
     cps env s@[While _ e b els]         = do k    <- newName "loop"
                                              x    <- newName "res"
-                                             b'   <- cpsSuite (Loop k (dom nts) +: env) b
-                                             els' <- cpsSuite env els
-                                             let body = sIf1 (conv e) b' els' : []
+                                             b'   <- cps (Loop k (dom nts) +: env) b
+                                             els' <- cps env els
+                                             let body = sIf1 (conv env e) b' els' : []
                                              --traceM ("## kDef While " ++ prstr k ++ ", updates: " ++ prstrs nts)
                                              return $ kDef env k nts x tNone body :
                                                       kJump k nts
@@ -220,29 +223,43 @@ instance CPS [Stmt] where
 
     cps env []                          = return []
 
-extraBinds env ss                       = [ (x, t) | x <- nub $ updatesOf ss, Just t <- [lookupVar x env] ]
+extraBinds env ss                       = [ (x, t) | x <- nub $ updatesOf ss, x `notElem` volatiles env, Just t <- [lookupVar x env] ]
+
+volatileVars env stmts                  = nub $ vols env stmts
+  where vols env []                     = []
+        vols env (s:ss)                 = vol env s ++ vols (define (envOf s) env) ss
+        vol env (If _ [Branch e ss] els)
+          | isPUSH e, needCont env ss   = updatesOf ss ++ vols env ss ++ vols env els
+        vol env (If _ bs els)           = concat [ vols env ss | Branch _ ss <- bs ] ++ vols env els
+        vol env (While _ _ ss els)      = vols env ss ++ vols env els
+        vol env _                       = []
 
 instance CPS Decl where
-    cps env (Class l n q cs b)          = do b' <- cpsSuite env1 b
-                                             return $ Class l n (conv q) (conv cs) b'
+    cps env (Class l n q cs b)          = do b' <- cps env1 b
+                                             return $ Class l n (conv env q) (conv env cs) b'
       where env1                        = defineSelf (NoQ n) q $ defineTVars q $ setClassCtxt env
 
     cps env (Def l n q p KwdNIL (Just t) b dec fx)
-      | contFX fx                       = do b' <- cpsSuite env1 b
-                                             return $ Def l n q' (addContPar env dec p' fx t') KwdNIL (Just tR) b' dec fx
-      | otherwise                       = return $ Def l n q' p' KwdNIL (Just t') (conv b) dec fx
-      where env1                        = define (envOf p) $ defineTVars q $ Meth contKW t' +: setDefCtxt env
-            q'                          = conv q
-            p'                          = conv p
-            t'                          = conv t
+      | contFX fx                       = do b' <- cps env1 b
+                                             --traceM ("#### " ++ prstr n ++ " volatiles: " ++ prstrs volvs)
+                                             return $ Def l n q' (addContPar env dec p' fx t') KwdNIL (Just tR) (volinits ++ b') dec fx
+      | otherwise                       = return $ Def l n q' p' KwdNIL (Just t') (conv env b) dec fx
+      where env1                        = setVolatiles volvs $ define (envOf p) $ defineTVars q $ 
+                                          Meth contKW t' +: setDefCtxt env
+            volvs                       = volatileVars env1 b
+            volinits                    = [ sAssign (pVar v (tBox t)) (eCall (tApp (eQVar primBox) [t]) [eVar v])
+                                          | (v,NVar t) <- envOf p, v `elem` volvs ]
+            q'                          = conv env q
+            p'                          = conv env p
+            t'                          = conv env t
 
     cps env d                           = error ("cps unexpected: " ++ prstr d)
     
 
 instance CPS Branch where
-    cps env (Branch e ss)               = Branch (conv e) <$> cpsSuite env ss
+    cps env (Branch e ss)               = Branch (conv env e) <$> cps env ss
 
-    
+
 kJump k nts                             = sReturn (eCall (eVar k) $ eNone : map eVar (dom nts)) : []
 
 
@@ -258,7 +275,7 @@ tCont0                                  = tFun fxProc (posRow tNone posNil) kwdN
 
 tCont1 fx t                             = tFun fx (posRow t posNil) kwdNil tR
 
-kDef env k nts x t b                    = sDef k (conv $ pospar $ (x,t):nts) tR b fxProc
+kDef env k nts x t b                    = sDef k (conv env $ pospar $ (x,t):nts) tR b fxProc
 
 kRef k [] x t                           = eVar k
 kRef k ns x t                           = eLambda' [(x,t)] $ eCall (eVar k) (map eVar (x:ns))
@@ -304,17 +321,21 @@ instance (NeedCont a, EnvOf a) => NeedCont [a] where
     needCont env (s : ss)               = needCont env s || needCont (define (envOf s) env) ss
 
 instance NeedCont Branch where
-    needCont env (Branch e ss)          = isPUSH e || needCont env ss
+    needCont env (Branch e ss)          = needCont env ss
 
 instance NeedCont Stmt where
     needCont env (Return _ (Just e))    = inCont env
-    needCont env (Continue _)           = inCont env
-    needCont env (Break _)              = inCont env
+    needCont env (Continue _)
+      | inInnerLoop env                 = False
+      | otherwise                       = inCont env
+    needCont env (Break _)
+      | inInnerLoop env                 = False
+      | otherwise                       = inCont env
     needCont env (Expr _ e)             = contCall env e
     needCont env (Assign _ _ e)         = contCall env e
     needCont env (MutAssign _ _ e)      = contCall env e
     needCont env (If _ bs els)          = needCont env bs || needCont env els
-    needCont env (While _ _ b els)      = needCont env b || needCont env els
+    needCont env (While _ _ ss els)     = needCont (setInnerLoopCtxt env) ss || needCont env els
     needCont env (Decl _ ds)            = needCont (define (envOf ds) env) ds
     needCont env _                      = False
 
@@ -402,7 +423,7 @@ instance PreCPS Expr where
     pre env e0@(Lambda l p KwdNIL e fx)
       | contFX fx                       = do (prefixes,e') <- withPrefixes $ preTop env1 e
                                              case prefixes of
-                                                [] -> let p' = conv p; t' = conv t
+                                                [] -> let p' = conv env p; t' = conv env t
                                                           e1 = if contCall env e then addContArg env1 e' econt else eCallCont e' (econt,t')
                                                       in return $ Lambda l (addContPar0 p' fx t') KwdNIL e1 fx
                                                 _ -> do
@@ -437,104 +458,111 @@ instance PreCPS Assoc where
 -- Convert types ----------------------------------------------------------------------------------------
 
 class Conv a where
-    conv                                :: a -> a
+    conv                                :: CPSEnv -> a -> a
 
 instance (Conv a) => Conv [a] where
-    conv                                = map conv
+    conv env                            = map $ conv env
 
 instance (Conv a) => Conv (Maybe a) where
-    conv                                = fmap conv
+    conv env                            = fmap $ conv env
 
 instance (Conv a) => Conv (Name, a) where
-    conv (n, x)                         = (n, conv x)
+    conv env (n, x)                     = (n, conv env x)
 
 instance Conv NameInfo where
-    conv (NClass q ps te)               = NClass q (conv ps) (conv te)
-    conv (NSig sc dec)                  = NSig (conv sc) dec
-    conv (NDef sc dec)                  = NDef (conv sc) dec
-    conv (NVar t)                       = NVar (conv t)
-    conv (NSVar t)                      = NSVar (conv t)
-    conv ni                             = ni
+    conv env (NClass q ps te)           = NClass q (conv env ps) (conv env te)
+    conv env (NSig sc dec)              = NSig (conv env sc) dec
+    conv env (NDef sc dec)              = NDef (conv env sc) dec
+    conv env (NVar t)                   = NVar (conv env t)
+    conv env (NSVar t)                  = NSVar (conv env t)
+    conv env ni                         = ni
 
 instance Conv WTCon where
-    conv (w,c)                          = (w, conv c)
+    conv env (w,c)                      = (w, conv env c)
 
 instance Conv TSchema where
-    conv (TSchema l q t)                = TSchema l (conv q) (conv t)
+    conv env (TSchema l q t)            = TSchema l (conv env q) (conv env t)
 
 instance Conv QBind where
-    conv (Quant v cs)                   = Quant v (conv cs)
+    conv env (Quant v cs)               = Quant v (conv env cs)
 
 instance Conv Type where
-    conv t0@(TFun l fx p TNil{} t)
-       | contFX fx && t /= tR           = TFun l fx (addCont (conv p) (conv t)) kwdNil tR
-       | otherwise                      = TFun l fx (conv p) kwdNil (conv t)
+    conv env t0@(TFun l fx p TNil{} t)
+       | contFX fx && t /= tR           = TFun l fx (addCont (conv env p) (conv env t)) kwdNil tR
+       | otherwise                      = TFun l fx (conv env p) kwdNil (conv env t)
        where addCont p c                = posRow (tFun fx (posRow c posNil) kwdNil tR) p
-    conv (TCon l c)                     = TCon l (conv c)
-    conv (TTuple l p k)                 = TTuple l (conv p) (conv k)
-    conv (TOpt l t)                     = TOpt l (conv t)
-    conv (TRow l k n t r)               = TRow l k n (conv t) (conv r)
-    conv t                              = t
+    conv env (TCon l c)                 = TCon l (conv env c)
+    conv env (TTuple l p k)             = TTuple l (conv env p) (conv env k)
+    conv env (TOpt l t)                 = TOpt l (conv env t)
+    conv env (TRow l k n t r)           = TRow l k n (conv env t) (conv env r)
+    conv env t                          = t
 
 instance Conv TCon where
-    conv (TC c ts)                      = TC c (conv ts)
+    conv env (TC c ts)                  = TC c (conv env ts)
 
 instance Conv PosPar where
-    conv (PosPar n t Nothing p)         = PosPar n (conv t) Nothing (conv p)
-    conv PosNIL                         = PosNIL
+    conv env (PosPar n t Nothing p)     = PosPar n (conv env t) Nothing (conv env p)
+    conv env PosNIL                     = PosNIL
 
 instance Conv Stmt where
-    conv (Expr l e)                     = Expr l (conv e)
-    conv (Assign l ps e)                = Assign l (conv ps) (conv e)
-    conv (MutAssign l tg e)             = MutAssign l (conv tg) (conv e)
-    conv (Return l e)                   = Return l (conv e)
-    conv (If l bs els)                  = If l (conv bs) (conv els)
-    conv (While l e b els)              = While l (conv e) (conv b) (conv els)
-    conv (Signature l ns sc dec)        = Signature l ns (conv sc) dec
-    conv s                              = s
+    conv env (Expr l e)                 = Expr l (conv env e)
+    conv env (Assign l [PVar _ n Nothing] e)
+      | n `elem` volatiles env          = MutAssign l (eDot (eVar n) valKW) (conv env e)
+    conv env (Assign l [PVar _ n (Just t)] e)
+      | n `elem` volatiles env          = Assign l [pVar n (tBox t)] (eCall (tApp (eQVar primBox) [t]) [conv env e])
+    conv env (Assign l ps e)            = Assign l (conv env ps) (conv env e)
+    conv env (MutAssign l tg e)         = MutAssign l (conv env tg) (conv env e)
+    conv env (Return l e)               = Return l (conv env e)
+    conv env (If l bs els)              = If l (conv env bs) (conv env els)
+    conv env (While l e b els)          = While l (conv env e) (conv env b) (conv env els)
+    conv env (Signature l ns sc dec)    = Signature l ns (conv env sc) dec
+    conv env s                          = s
 
 instance Conv Branch where
-    conv (Branch e ss)                  = Branch (conv e) (conv ss)
+    conv env (Branch e ss)              = Branch (conv env e) (conv env ss)
 
 instance Conv Pattern where
-    conv (PVar l n t)                   = PVar l n (conv t)
-    conv p                              = p
+    conv env (PVar l n t)               = PVar l n (conv env t)
+    conv env p                          = p
 
 instance Conv Expr where
-    conv (Var l n)
+    conv env (Var l (NoQ n))
+      | n `elem` volatiles env          = Dot l (Var l (NoQ n)) valKW
+    conv env (Var l n)
       | n == primASYNCf                 = Var l primASYNCc
       | n == primAFTERf                 = Var l primAFTERc
       | n == primAWAITf                 = Var l primAWAITc
       | otherwise                       = Var l n
-    conv (Call l e ps KwdNil)           = Call l (conv e) (conv ps) KwdNil
-    conv (TApp l e ts)                  = TApp l (conv e) (conv ts)
-    conv (Cond l e1 e e2)               = Cond l (conv e1) (conv e) (conv e2)
-    conv (IsInstance l e c)             = IsInstance l (conv e) c
-    conv (BinOp l e1 Or e2)             = BinOp l (conv e1) Or (conv e2)
-    conv (BinOp l e1 And e2)            = BinOp l (conv e1) And (conv e2)
-    conv (UnOp l Not e)                 = UnOp l Not (conv e)
-    conv (Dot l e n)                    = Dot l (conv e) n
-    conv (DotI l e i)                   = DotI l (conv e) i
-    conv (RestI l e i)                  = RestI l (conv e) i
-    conv (Lambda l p KwdNIL e fx)       = Lambda l (conv p) KwdNIL (conv e) fx
-    conv (Yield l e)                    = Yield l (conv e)
-    conv (YieldFrom l e)                = YieldFrom l (conv e)
-    conv (Tuple l es ks)                = Tuple l (conv es) (conv ks)
-    conv (List l es)                    = List l (conv es)
-    conv (Dict l as)                    = Dict l (conv as)
-    conv (Set l es)                     = Set l (conv es)
-    conv e                              = e
+    conv env (Call l e ps KwdNil)       = Call l (conv env e) (conv env ps) KwdNil
+    conv env (Async l e)                = Async l (conv env e)
+    conv env (TApp l e ts)              = TApp l (conv env e) (conv env ts)
+    conv env (Cond l e1 e e2)           = Cond l (conv env e1) (conv env e) (conv env e2)
+    conv env (IsInstance l e c)         = IsInstance l (conv env e) c
+    conv env (BinOp l e1 Or e2)         = BinOp l (conv env e1) Or (conv env e2)
+    conv env (BinOp l e1 And e2)        = BinOp l (conv env e1) And (conv env e2)
+    conv env (UnOp l Not e)             = UnOp l Not (conv env e)
+    conv env (Dot l e n)                = Dot l (conv env e) n
+    conv env (DotI l e i)               = DotI l (conv env e) i
+    conv env (RestI l e i)              = RestI l (conv env e) i
+    conv env (Lambda l p KwdNIL e fx)   = Lambda l (conv env p) KwdNIL (conv env e) fx
+    conv env (Yield l e)                = Yield l (conv env e)
+    conv env (YieldFrom l e)            = YieldFrom l (conv env e)
+    conv env (Tuple l es ks)            = Tuple l (conv env es) (conv env ks)
+    conv env (List l es)                = List l (conv env es)
+    conv env (Dict l as)                = Dict l (conv env as)
+    conv env (Set l es)                 = Set l (conv env es)
+    conv env e                          = e
 
 instance Conv PosArg where
-    conv (PosArg e p)                   = PosArg (conv e) (conv p)
-    conv PosNil                         = PosNil
+    conv env (PosArg e p)               = PosArg (conv env e) (conv env p)
+    conv env PosNil                     = PosNil
 
 instance Conv KwdArg where
-    conv (KwdArg n e p)                 = KwdArg n (conv e) (conv p)
-    conv KwdNil                         = KwdNil
+    conv env (KwdArg n e p)             = KwdArg n (conv env e) (conv env p)
+    conv env KwdNil                     = KwdNil
 
 instance Conv Elem where
-    conv (Elem e)                       = Elem (conv e)
+    conv env (Elem e)                   = Elem (conv env e)
 
 instance Conv Assoc where
-    conv (Assoc k v)                    = Assoc (conv k) (conv v)
+    conv env (Assoc k v)                = Assoc (conv env k) (conv env v)

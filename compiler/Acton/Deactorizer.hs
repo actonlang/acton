@@ -139,7 +139,7 @@ instance Deact Decl where
             fvs                     = free decls
             live_vars
               | hasNotImpl body     = bound params ++ dom (envOf inits)
-              | otherwise           = bound params `intersect` fvs ++ [ n | n <- dom $ envOf inits, not (isHidden n) || n `elem` fvs ]
+              | otherwise           = bound params `intersect` fvs ++ [ n | n <- dom $ envOf inits, not (isHidden n) || n `elem` (stvars++fvs) ]
             locals                  = nub $ live_vars ++ bound decls
             wrapped                 = bound wrapdefs
             wrapdefs                = [ d | Decl _ ds <- decls, d@Def{dname=n, dfx=fx} <- ds, fx == fxProc || fx == fxAction ]
