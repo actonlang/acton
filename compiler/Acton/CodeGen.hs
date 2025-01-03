@@ -322,8 +322,9 @@ declDecl env (Def _ n q p KwdNIL (Just t) b d fx)
                                       decl $+$
                                       text "*/"
   | otherwise                       = decl
-  where decl                        = (genTypeDecl env n t1 <+> genTopName env n <+> parens (gen env p) <+> char '{') $+$
-                                      nest 4 (fst(genSuite env1 b)) $+$
+  where (ss',vs)                    = genSuite env1 b
+        decl                        = (genTypeDecl env n t1 <+> genTopName env n <+> parens (gen (setVolVars vs env) p) <+> char '{') $+$
+                                      nest 4 ss' $+$
                                       char '}'
         env1                        = setRet t1 $ ldefine (envOf p) $ defineTVars q env
         t1                          = exposeMsg fx t
@@ -511,7 +512,7 @@ genSuite env (s:ss)                 = (genStmt (setVolVars vs env) s $+$ cs, vol
     where (cs,vs)                   = genSuite (ldefine (envOf s) env) ss
 
 volVars (If _ [Branch e ss] fin)
-      | isPUSH e                    = bound ss
+  | isPUSH e                        = updatesOf ss
 volVars _                           = []
 
 isUnboxed (Internal BoxPass _ _)    = True

@@ -212,9 +212,18 @@ B_NoneType B_setD___init__(B_set set, B_Hashable hashwit, B_Iterable wit, $WORD 
     memset(set->table,0,MIN_SIZE*sizeof(B_setentry));
     if (wit && iterable) {
         B_Iterator it = wit->$class->__iter__(wit,iterable);
-        $WORD nxt;
-        while((nxt = it->$class->__next__(it))) {
-            B_set_add_entry(set,hashwit,nxt,from$int(hashwit->$class->__hash__(hashwit,nxt)));
+        while(1) {
+            if ($PUSH()) {
+                $WORD nxt = it->$class->__next__(it);
+                B_set_add_entry(set,hashwit,nxt,from$int(hashwit->$class->__hash__(hashwit,nxt)));
+                $DROP();
+            } else {
+                B_BaseException ex = $POP();
+                if ($ISINSTANCE0(ex, B_StopIteration))
+                    break;
+                else
+                    $RAISE(ex);
+            }
         }
     }
     return B_None;
@@ -305,7 +314,7 @@ static $WORD B_IteratorD_set_next_entry(B_IteratorD_set self) {
         }
         i++;
     }
-    return NULL;
+    $RAISE ((B_BaseException)$NEW(B_StopIteration, to$str("set iterator terminated")));
 }
 
 static B_Iterator B_set_iter_entry(B_set set) {
@@ -371,7 +380,8 @@ B_NoneType B_SetD_setD_add (B_SetD_set wit, B_set set, $WORD elem) {
 }
 
 B_set B_SetD_setD___fromiter__(B_SetD_set wit, B_Iterable wit2, $WORD iter) {
-    B_Hashable hashwit = wit->W_HashableD_AD_SetD_set;
+    return B_setG_new(wit->W_HashableD_AD_SetD_set, wit2, iter);
+    /*
     B_Iterator it = wit2->$class->__iter__(wit2,iter);
     B_set res = $NEW(B_set,hashwit,NULL,NULL);
     res->numelements = 0;
@@ -385,6 +395,7 @@ B_set B_SetD_setD___fromiter__(B_SetD_set wit, B_Iterable wit2, $WORD iter) {
         B_set_add_entry(res,hashwit,nxt,from$int(hashwit->$class->__hash__(hashwit,nxt)));
     }
     return res;
+    */
 }
 
 B_int B_SetD_setD___len__ (B_SetD_set wit, B_set set) {
@@ -424,13 +435,20 @@ B_NoneType B_SetD_setD_update (B_SetD_set wit, B_set set, B_Iterable otherwit, $
     B_Hashable hashwit = wit->W_HashableD_AD_SetD_set;
     if (set == other)
         return B_None;
-
     B_Iterator it = otherwit->$class->__iter__(otherwit, other);
-    $WORD nxt;
-    while((nxt = it->$class->__next__(it))) {
-        B_set_add_entry(set, hashwit, nxt, from$int(hashwit->$class->__hash__(hashwit,nxt)));
+    while(1) {
+        if ($PUSH()) {
+            $WORD e = it->$class->__next__(it);
+            B_set_add_entry(set, hashwit, e, from$int(hashwit->$class->__hash__(hashwit,e)));
+            $DROP();
+        } else {
+            B_BaseException ex = $POP();
+            if ($ISINSTANCE0(ex, B_StopIteration))
+                break;
+           else
+               $RAISE(ex);
+        }
     }
-
     return B_None;
 }
 
@@ -472,10 +490,12 @@ B_bool B_OrdD_SetD_setD___eq__ (B_OrdD_SetD_set wit, B_set set, B_set other) {
     if (set->numelements != other->numelements)
         return B_False;
     B_Iterator iter = B_set_iter_entry(other);
-    $WORD w;
-    while((w = $next(iter))){
+    long n = 0;
+    while(n < set->numelements) {
+        $WORD w = $next(iter);
         if(!B_set_contains_entry(set, hashwit, ((B_setentry*)w)->key, ((B_setentry*)w)->hash))
             return B_False;
+        n++;
     }
     return B_True;
 }
@@ -491,10 +511,12 @@ B_bool B_OrdD_SetD_setD___gt__ (B_OrdD_SetD_set wit, B_set set, B_set other) {
     if (set->numelements <= other->numelements)
         return B_False;
     B_Iterator iter = B_set_iter_entry(other);
-    $WORD w;
-    while((w = $next(iter))){
+    long n = 0;
+    while(n < other->numelements) {
+        $WORD w = $next(iter);
         if(!B_set_contains_entry(set, hashwit, ((B_setentry*)w)->key, ((B_setentry*)w)->hash))
             return B_False;
+        n++;
     }
     return B_True;
 }
@@ -506,10 +528,12 @@ B_bool B_OrdD_SetD_setD___ge__ (B_OrdD_SetD_set wit, B_set set, B_set other) {
     if (set->numelements < other->numelements)
         return B_False;
     B_Iterator iter = B_set_iter_entry(other);
-    $WORD w;
-    while((w = $next(iter))){
+    long n = 0;
+    while(n < other->numelements) {
+        $WORD w = $next(iter);
         if(!B_set_contains_entry(set, hashwit, ((B_setentry*)w)->key, ((B_setentry*)w)->hash))
             return B_False;
+        n++;
     }
     return B_True;
 }
@@ -529,11 +553,13 @@ B_set B_MinusD_SetD_setD___sub__ (B_MinusD_SetD_set wit, B_set set, B_set other)
     B_Hashable hashwit = ((B_SetD_set)wit->W_Set)->W_HashableD_AD_SetD_set;
     B_set res = B_set_copy(set,hashwit);
     B_Iterator iter = B_set_iter_entry(other);
-    $WORD w;
-    while((w = $next(iter))){
+    long n = 0;
+    while(n < other->numelements) {
+        $WORD w = $next(iter);
         $WORD key = ((B_setentry*)w)->key;
         long hash = ((B_setentry*)w)->hash;
         B_set_discard_entry(res,hashwit,key,hash);
+        n++;
     }
     return res;
 }
@@ -547,12 +573,14 @@ B_set B_LogicalD_SetD_setD___and__(B_LogicalD_SetD_set wit, B_set set, B_set oth
         return  B_LogicalD_SetD_setD___and__(wit,other,set);
     B_set res = $NEW(B_set,hashwit,NULL,NULL);
     B_Iterator iter = B_set_iter_entry(set);
-    $WORD w;
-    while((w = $next(iter))){
+    long n = 0;
+    while(n < set->numelements) {
+        $WORD w = $next(iter);
         $WORD key = ((B_setentry*)w)->key;
         long hash = ((B_setentry*)w)->hash;
         if (B_set_contains_entry(other,hashwit,key,hash))
             B_set_add_entry(res,hashwit,key,hash);
+        n++;
     }
     return res;
 }
@@ -563,11 +591,13 @@ B_set B_LogicalD_SetD_setD___or__ (B_LogicalD_SetD_set wit, B_set set, B_set oth
         return B_LogicalD_SetD_setD___or__ (wit,other,set);
     B_set res = B_set_copy(set, hashwit);
     B_Iterator iter = B_set_iter_entry(other);
-    $WORD w;
-    while((w = $next(iter))){
+    long n = 0;
+    while(n < other->numelements) {
+        $WORD w = $next(iter);
         $WORD key = ((B_setentry*)w)->key;
         long hash = ((B_setentry*)w)->hash;
         B_set_add_entry(res,hashwit,key,hash);
+        n++;
     }
     return res;
 }
@@ -576,12 +606,14 @@ B_set B_LogicalD_SetD_setD___xor__(B_LogicalD_SetD_set wit, B_set set, B_set oth
     B_Hashable hashwit = ((B_SetD_set)wit->W_Set)->W_HashableD_AD_SetD_set;
     B_set res = B_set_copy(set, hashwit);
     B_Iterator iter = B_set_iter_entry(other);
-    $WORD w;
-    while((w = $next(iter))){
+    long n = 0;
+    while(n < other->numelements) {
+        $WORD w = $next(iter);
         $WORD key = ((B_setentry*)w)->key;
         long hash = ((B_setentry*)w)->hash;
         if(!B_set_discard_entry(res,hashwit,key,hash))
             B_set_add_entry(res,hashwit,key,hash);
+        n++;
     }
     return res;
 }

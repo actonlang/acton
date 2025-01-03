@@ -175,17 +175,21 @@ notHidden                           = filter (not . isHidden)
 class Vars a where
     free                            :: a -> [Name]
     bound                           :: a -> [Name]
+    altbound                        :: a -> [Name]
 
     free x                          = []
     bound x                         = []
+    altbound x                      = bound x
 
 instance Vars a => Vars [a] where
     free                            = concatMap free
     bound                           = concatMap bound
+    altbound                        = concatMap altbound
 
 instance Vars a => Vars (Maybe a) where
     free                            = maybe [] free
     bound                           = maybe [] bound
+    altbound                        = maybe [] altbound
 
 instance Vars Stmt where
     free (Expr _ e)                 = free e
@@ -210,7 +214,7 @@ instance Vars Stmt where
     free (Decl _ ds)                = free ds
     free (Signature _ ns t d)       = free t
 
-    bound (Assign _ ps _)           = bound ps
+    bound (Assign _ ps _)           = altbound ps
     bound (VarAssign _ ps e)        = bound ps
     bound (Decl _ ds)               = bound ds
     bound (Signature _ ns t d)      = ns
@@ -226,6 +230,7 @@ assigned stmts                      = concatMap assig stmts
         assig (With _ items b)      = assigned b ++ bound items
         assig (Try _ b hs els fin)  = assigned b ++ concat [ bound ex ++ assigned b | Handler ex b <- hs ] ++ assigned els ++ assigned fin
         assig (If _ bs els)         = concat [ assigned b | Branch _ b <- bs ] ++ assigned els
+        assig (Assign _ ps _)       = bound ps
         assig s                     = bound s
 
 
@@ -385,6 +390,10 @@ instance Vars PosPat where
     bound (PosPat p ps)             = bound p ++ bound ps
     bound (PosPatStar p)            = bound p
     bound PosPatNil                 = []
+
+    altbound (PosPat p ps)          = altbound p ++ altbound ps
+    altbound (PosPatStar p)         = altbound p
+    altbound PosPatNil              = []
     
 instance Vars KwdPat where
     free (KwdPat n p ps)            = free p ++ free ps
@@ -394,6 +403,10 @@ instance Vars KwdPat where
     bound (KwdPat n p ps)           = bound p ++ bound ps
     bound (KwdPatStar p)            = bound p
     bound KwdPatNil                 = []
+
+    altbound (KwdPat n p ps)        = altbound p ++ altbound ps
+    altbound (KwdPatStar p)         = altbound p
+    altbound KwdPatNil              = []
     
 instance Vars Pattern where
     free (PWild _ _)                = []
@@ -404,12 +417,20 @@ instance Vars Pattern where
     free (PData _ n ixs)            = free ixs
 
     bound (PWild _ _)               = []
-    bound (PVar _ n a)              = [n]
+    bound (PVar _ n _)              = [n]
     bound (PTuple _ ps ks)          = bound ps ++ bound ks
     bound (PList _ ps p)            = bound ps ++ bound p
     bound (PParen _ p)              = bound p
     bound (PData _ n ixs)           = [n]
     
+    altbound (PWild _ _)            = []
+    altbound (PVar _ n (Just t))    = [n]
+    altbound (PVar _ n Nothing)     = []
+    altbound (PTuple _ ps ks)       = altbound ps ++ altbound ks
+    altbound (PList _ ps p)         = altbound ps ++ altbound p
+    altbound (PParen _ p)           = altbound p
+    altbound (PData _ n ixs)        = [n]
+
 instance Vars ModuleItem where
     bound (ModuleItem qn Nothing)   = free qn
     bound (ModuleItem qn (Just n))  = free n
