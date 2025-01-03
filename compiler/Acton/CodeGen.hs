@@ -512,7 +512,7 @@ genSuite env (s:ss)                 = (genStmt (setVolVars vs env) s $+$ cs, vol
     where (cs,vs)                   = genSuite (ldefine (envOf s) env) ss
 
 volVars (If _ [Branch e ss] fin)
-      | isPUSH e                    = bound ss
+  | isPUSH e                        = updatesOf ss
 volVars _                           = []
 
 isUnboxed (Internal BoxPass _ _)    = True
