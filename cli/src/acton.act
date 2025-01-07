@@ -422,47 +422,26 @@ actor RunModuleTest(process_cap, modname, test_cmd, on_json_output, on_test_erro
     p = process.Process(process_cap, cmd, on_stdout, on_stderr, on_exit, on_error)
 
 
-actor RunTestList(env, args):
+actor CmdListTest(env, args):
     """Print list of module tests
 
     Will run the project module test binaries with 'list --json' to get all
     module tests, collect the output and print a list of all project tests.
     """
     process_cap = process.ProcessCap(env.cap)
-    var _expected_modules: set[str] = set()
-    var _module_tests = {}
 
-    def print_module_tests():
-        for mn in _module_tests.keys():
-            print("Module %s:" % mn)
-            for module_test_name in _module_tests[mn]:
-                print(" ", module_test_name)
+    def print_module_tests(err, tests: dict[str, dict[str, testing.TestInfo]]={}):
+        if err != None:
+            print(err, err=True)
+            env.exit(1)
+            return
+
+        for module_name, module_tests in tests.items():
+            print("Module %s:" % module_name)
+            for test_name in module_tests:
+                print(" ", test_name)
             print()
-
-    def _on_json_output(module_name, update):
-        if module_name in _module_tests:
-            raise ValueError("Duplicate list of tests from module: " + module_name)
-        if isinstance(update, dict):
-            _module_tests[module_name] = []
-            update_tests = update["tests"]
-            if isinstance(update_tests, dict):
-                for test in update_tests.values():
-                    _module_tests[module_name].append(test["definition"]["name"])
-        else:
-            raise ValueError("Unexpected JSON data from module test: " + module_name)
-
-        if set(_module_tests.keys()) == _expected_modules:
-            print_module_tests()
-            env.exit(0)
-
-    def _on_test_error(exit_code, term_signal, stderr_buf):
-        pass
-
-    def _run_tests(module_names: list[str]):
-        _expected_modules = set(module_names)
-
-        for module_name in module_names:
-            t = RunModuleTest(process_cap, module_name, ["list"], lambda x: _on_json_output(module_name, x), _on_test_error)
+        env.exit(0)
 
     def _on_build_success(stdout_buf: str):
         test_modules = []
@@ -473,7 +452,7 @@ actor RunTestList(env, args):
             else:
                 if stdout_tests:
                     test_modules.append(line)
-        _run_tests(test_modules)
+        l = ListTests(process_cap, test_modules, print_module_tests)
 
     def _on_build_failure(exit_code, term_signal, stderr_buf: str):
         print("Failed to build project tests")
@@ -491,11 +470,59 @@ actor RunTestList(env, args):
     )
 
 
+actor ListTests(process_cap, test_modules: list[str], on_done: action(?str, ?dict[str, dict[str, testing.TestInfo]]) -> None):
+    """List all tests in project
+    """
+    remaining_mods = {}
+    tests: dict[str, dict[str, testing.TestInfo]] = {}
+
+    def _on_exit(module_name, p, exit_code, term_signal, stdout_buf, stderr_buf):
+        if exit_code == 0:
+            tests[module_name] = {}
+            try:
+                data = json.decode(stderr_buf.decode())
+                if isinstance(data, dict):
+                    if "tests" in data:
+                        for test_name, json_test_info in data["tests"].items():
+                            if isinstance(json_test_info, dict):
+                                tests[module_name][test_name] = TestInfo.from_json(json_test_info)
+                        del remaining_mods[module_name]
+                        if len(remaining_mods) == 0:
+                            on_done(None, tests)
+                    else:
+                        on_done("Error listing tests for module %s: no 'tests' key in JSON" % module_name)
+            except ValueError as e:
+                on_done("Error parsing JSON from module %s: %s" % (module_name, str(e)))
+        else:
+            on_done("Error listing tests for module %s, exited with code %d and term signal %d: %s" % (module_name, exit_code, term_signal, stderr_buf.decode()))
+
+    def _on_error(module_name, p, error):
+        err = "ERROR: Error listing tests for module %s: %s" % (module_name, error)
+        for op in remaining_mods.values():
+            op.stop()
+        on_done(err)
+
+    if len(test_modules) == 0:
+        on_done(None, {})
+
+    # List all tests by asking each module about its tests. This runs in
+    # parallel.
+    for module_name in test_modules:
+        cmd = [file.join_path(["out", "bin", ".test_" + module_name]), "list", "--json"]
+        p = process.RunProcess(
+            process_cap,
+            cmd,
+            lambda p, exit_code, term_signal, stdout_buf, stderr_buf: _on_exit(module_name, p, exit_code, term_signal, stdout_buf, stderr_buf),
+            lambda p, error: _on_error(module_name, p, error))
+        remaining_mods[module_name] = p
+
+
 actor RunTestTest(env: Env, args, perf_mode: bool=False):
+    """Run project tests, i.e. `acton test`
+    """
     process_cap = process.ProcessCap(env.cap)
-    var expected_modules_list: set[str] = set()
-    var _module_tests = {}
     var modules_to_test = set()
+    var tests = {}
     var perf_data = "{}"
     fs = file.FS(file.FileCap(env.cap))
 
@@ -541,24 +568,7 @@ actor RunTestTest(env: Env, args, perf_mode: bool=False):
 
     def _on_json_output(module_name, data):
         if isinstance(data, dict):
-            if "tests" in data:
-                data_tests = data["tests"]
-                tests = {}
-                for test_name, json_test_info in data_tests.items():
-                    if isinstance(json_test_info, dict):
-                        tests[test_name] = TestInfo.from_json(json_test_info)
-
-                ptr.update_module(module_name, tests)
-                expected_modules_list.discard(module_name)
-                if len(expected_modules_list) == 0:
-                    # We have received the test list from all modules, show
-                    # results to get empty skeleton and then run tests.
-                    # NOTE: in perf mode we run a single module at a time and
-                    # that module in turn limits concurrency to 1
-                    _periodic_show()
-                    _run_module_tests(run_all=not perf_mode)
-
-            elif "test_info" in data:
+            if "test_info" in data:
                 test_info = TestInfo.from_json(data["test_info"])
                 ptr.update(module_name, test_info.definition.name, test_info)
                 if ptr.is_module_done(module_name) and perf_mode:
@@ -577,26 +587,6 @@ actor RunTestTest(env: Env, args, perf_mode: bool=False):
             ptr.update_module_error(module_name, moderr)
         _run_module_tests()
 
-    def _run_tests(module_names: list[str]):
-        select_modules = set(args.get_strlist("module"))
-        if len(select_modules) > 0:
-            for module_name in module_names:
-                if module_name in select_modules:
-                    modules_to_test.add(module_name)
-        else:
-            modules_to_test = set(module_names)
-        expected_modules_list = set(modules_to_test)
-        ptr.expected_modules = set(modules_to_test)
-        if len(modules_to_test) == 0:
-            print("No tests found")
-            env.exit(0)
-            return
-
-        # List all tests first, which we can run in parallel. Once we have the
-        # list of all tests we can start running them one at a time in sequence.
-        for module_name in modules_to_test:
-            t = RunModuleTest(process_cap, module_name, ["list"] + test_cmd_args, lambda x: _on_json_output(module_name, x), lambda x, y, z: _on_test_error(module_name, x, y, z))
-
     def _run_module_tests(run_all=False):
         try:
             module_name = modules_to_test.pop()
@@ -611,6 +601,37 @@ actor RunTestTest(env: Env, args, perf_mode: bool=False):
         if run_all:
             _run_module_tests(run_all)
 
+    def _list_tests(built_modules: list[str]):
+        list_modules = []
+        select_modules = set(args.get_strlist("module"))
+        if len(select_modules) > 0:
+            for module_name in built_modules:
+                if module_name in select_modules:
+                    list_modules.append(module_name)
+        else:
+            list_modules = built_modules
+
+        if len(list_modules) == 0:
+            print("No tests found")
+            env.exit(0)
+            return
+
+        ListTests(process_cap, list_modules, _on_list_output)
+
+    def _on_list_output(err, tests: dict[str, dict[str, testing.TestInfo]]={}):
+        if err != None:
+            print(err, err=True)
+            env.exit(1)
+            return
+
+        modules_to_test = set(tests.keys())
+        ptr.expected_modules = set(modules_to_test)
+
+        tests = tests
+        for module_name, module_tests in tests.items():
+            ptr.update_module(module_name, module_tests)
+        _run_module_tests(run_all=not perf_mode)
+
     def _on_build_success(stdout_buf: str):
         print(term.clearline + term.up() + term.clearline, end="")
         test_modules = []
@@ -621,7 +642,7 @@ actor RunTestTest(env: Env, args, perf_mode: bool=False):
             else:
                 if stdout_tests:
                     test_modules.append(line)
-        _run_tests(test_modules)
+        _list_tests(test_modules)
 
     def _on_build_failure(exit_code, term_signal, stderr_buf: str):
         print("Failed to build project tests")
@@ -637,6 +658,7 @@ actor RunTestTest(env: Env, args, perf_mode: bool=False):
     dev = True
     print("Building project tests...")
     project_builder = BuildProject(process_cap, env, args, _on_build_success, _on_build_failure, build_tests=True)
+
 
 def build_cmd_args(args):
     cmdargs = []
@@ -673,7 +695,7 @@ actor ZigFetchDeps(env, build_config: BuildConfig, on_done: action(int, int) -> 
     var total = 0
     var fetched = 0
 
-    def on_exit(dep: Dependency, p, exit_code, term_signal, stdout_buf, stderr_buf):
+    def _on_exit(dep: Dependency, p, exit_code, term_signal, stdout_buf, stderr_buf):
         if exit_code == 0:
             fetched_hash: str = stdout_buf.decode().strip()
             if print_output:
@@ -699,7 +721,7 @@ actor ZigFetchDeps(env, build_config: BuildConfig, on_done: action(int, int) -> 
         else:
             on_fetch_error(stderr_buf.decode())
 
-    def on_error(dep, p, error):
+    def _on_error(dep, p, error):
         # TODO: collect all errors before calling on_fetch_error?
         on_fetch_error(error)
 
@@ -729,8 +751,8 @@ actor ZigFetchDeps(env, build_config: BuildConfig, on_done: action(int, int) -> 
             p = process.RunProcess(
                 pcap,
                 cmd,
-                lambda p, exit_code, term_signal, stdout_buf, stderr_buf: on_exit(dep, p, exit_code, term_signal, stdout_buf, stderr_buf),
-                lambda p, error: on_error(dep, p, error))
+                lambda p, exit_code, term_signal, stdout_buf, stderr_buf: _on_exit(dep, p, exit_code, term_signal, stdout_buf, stderr_buf),
+                lambda p, error: _on_error(dep, p, error))
             dep_processes[dep.name] = p
 
     for dep_name, dep in build_config.zig_dependencies.items():
@@ -758,8 +780,8 @@ actor ZigFetchDeps(env, build_config: BuildConfig, on_done: action(int, int) -> 
             p = process.RunProcess(
                 pcap,
                 cmd,
-                lambda p, exit_code, term_signal, stdout_buf, stderr_buf: on_exit(dep, p, exit_code, term_signal, stdout_buf, stderr_buf),
-                lambda p, error: on_error(dep, p, error))
+                lambda p, exit_code, term_signal, stdout_buf, stderr_buf: _on_exit(dep, p, exit_code, term_signal, stdout_buf, stderr_buf),
+                lambda p, error: _on_error(dep, p, error))
             zig_processes[dep.name] = p
 
     if len(dep_processes) == 0 and len(zig_processes) == 0:
@@ -1111,7 +1133,7 @@ actor main(env):
         run_tests = RunTestTest(env, args, perf_mode=True)
 
     def _cmd_list_test(args):
-        run_tests = RunTestList(env, args)
+        run_tests = CmdListTest(env, args)
 
     def _cmd_version(args):
         if args.get_bool("full"):
