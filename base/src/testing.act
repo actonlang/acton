@@ -237,20 +237,14 @@ class TestLogger(logging.Logger):
     pass
 
 class Test(object):
-    module: ?str
+    module: str
     name: str
     desc: str
 
-    def __init__(self, name: str, desc: str):
+    def __init__(self, name: str, desc: str, module):
         self.name = name
         self.desc = desc
-        self.module = None
-
-    def get_module(self) -> str:
-        mod = self.module
-        if mod is not None:
-            return mod
-        raise ValueError("Test: Module not set")
+        self.module = module
 
     def run(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler):
         if isinstance(self, UnitTest):
@@ -266,16 +260,18 @@ class Test(object):
 
     def to_json(self):
         return {
+            "module": self.module,
             "name": self.name,
             "desc": self.desc,
         }
 
     @staticmethod
     def from_json(data: dict[str, ?value]):
+        module = data["module"]
         name = data["name"]
         desc = data["desc"]
-        if isinstance(name, str) and isinstance(desc, str):
-            return Test(name, desc)
+        if isinstance(module, str) and isinstance(name, str) and isinstance(desc, str):
+            return Test(name, desc, module)
         raise ValueError("Test: Invalid JSON")
 
 class UnitTest(Test):
@@ -740,7 +736,7 @@ actor TestExecutor(syscap, config, get_test: () -> Test, report_complete, env):
         def repres(s: ?bool, e: ?Exception, val: ?str) -> None:
             # Compare expected golden value
             if val is not None:
-                exp_val = get_expected(t.get_module(), t.name)
+                exp_val = get_expected(t.module, t.name)
                 if exp_val is None or exp_val is not None and val != exp_val:
                     exc = NotEqualError(val, exp_val, "Test output does not match expected golden value.\nActual  : %s\nExpected: %s" % (val, exp_val if exp_val is not None else "None"))
                     _report_result(t, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, False, exc, val)
