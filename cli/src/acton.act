@@ -605,10 +605,9 @@ actor CmdTest(env: Env, args, perf_mode: bool=False):
     def _run_test():
         try:
             test_info = tests_to_run.pop(0)
-            cmd = ["test"]
+            cmd = ["test", test_info.definition.name]
             if perf_mode:
                 cmd += ["perf"]
-            cmd += ["--name", test_info.definition.name]
             cmd += test_cmd_args
             t = RunModuleTest(
                 process_cap,
@@ -648,10 +647,13 @@ actor CmdTest(env: Env, args, perf_mode: bool=False):
 
         ptr.expected_modules = set(tests.keys())
 
-        for module_name, module_tests in tests.items():
+        name_filter = set(args.get_strlist("name"))
+        for module_name in sorted(tests.keys()):
+            module_tests = tests[module_name]
             for test_name, test_info in module_tests.items():
-                ptr.update(module_name, test_name, test_info)
-                tests_to_run.append(test_info)
+                if len(name_filter) == 0 or test_name in name_filter:
+                    ptr.update(module_name, test_name, test_info)
+                    tests_to_run.append(test_info)
 
         _run_test()
 

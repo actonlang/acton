@@ -1017,45 +1017,6 @@ class ProjectTestResults(object):
             print()
         self.printed_lines += 3
 
-class ModuleTestResults(object):
-    tests: dict[str, TestInfo]
-    last_show: time.Instant
-
-    def __init__(self):
-        self.tests = {}
-        self.last_show = time.monotonic()
-        self.last_show.second -= 1
-
-    def set_tests(self, tests: dict[str, TestInfo]):
-        self.tests = tests
-
-    def update(self, test: Test, complete: bool, test_result: TestResult):
-        if test.name not in self.tests:
-            self.tests[test.name] = TestInfo(test)
-        tinfo = self.tests[test.name]
-        tinfo.update(complete, test_result)
-        self.show_test(test.name)
-
-    def is_test_done(self, name):
-        if name in self.tests:
-            return self.tests[name].complete
-        return False
-
-    def show_test(self, test_name: str):
-        tinfo = self.tests[test_name]
-        now = time.monotonic()
-        if tinfo.complete == False and now.since(self.last_show).to_float() < 0.05:
-            return
-        self.last_show = now
-        print(json.encode({"test_info": tinfo.to_json()}), err=True)
-
-    def show(self):
-        res = {}
-        for test_name, test_info in self.tests.items():
-            res[test_name] = test_info.to_json()
-        print(json.encode({"tests": res}), err=True)
-
-
 
 actor test_runner(env: Env,
                   unit_tests: dict[str, UnitTest],
@@ -1063,57 +1024,37 @@ actor test_runner(env: Env,
                   async_actor_tests: dict[str, AsyncActorTest],
                   env_tests: dict[str, EnvTest]):
     sw = time.Stopwatch()
-    var results = ModuleTestResults()
     var all_tests = {}
 
-    def _init_results(args):
+    for name, t in unit_tests.items():
+        all_tests[name] = t
+    for name, t in sync_actor_tests.items():
+        all_tests[name] = t
+    for name, t in async_actor_tests.items():
+        all_tests[name] = t
+    for name, t in env_tests.items():
+        all_tests[name] = t
 
-        for name, t in unit_tests.items():
-            all_tests[name] = t
-        for name, t in sync_actor_tests.items():
-            all_tests[name] = t
-        for name, t in async_actor_tests.items():
-            all_tests[name] = t
-        for name, t in env_tests.items():
-            all_tests[name] = t
-
-        tests = _filter_tests(all_tests, args)
-
-        test_module_results = {}
-        for test_def in tests.values():
-            test_module_results[test_def.name] = TestInfo(test_def)
-        results.set_tests(test_module_results)
-
-    def _filter_tests[T](tests: dict[str, T], args) -> dict[str, T]:
+    proc def _cmd_list(args):
         res = {}
-        name_filter = []
-        try:
-            name_filter = args.get_strlist("name")
-        except argparse.ArgumentError:
-            pass
-        test_names = set(name_filter)
-        if test_names == set():
-            return tests
-
-        TEST_PREFIX_LEN = len("_test_")
-        for name, t in tests.items():
-            if name[TEST_PREFIX_LEN:] in test_names:
-                res[name] = t
-        return res
-
-    proc def _list_tests(args):
-        _init_results(args)
-        results.show()
+        for test_name, test_def in all_tests.items():
+            test_info = TestInfo(test_def)
+            res[test_def.name] = test_info.to_json()
+        print(json.encode({"tests": res}), err=True)
         env.exit(0)
 
     proc def _run_tests(args, perf_mode: bool=False):
         config = TestRunnerConfig(perf_mode, args)
         if config.perf_mode:
             acton.rts.start_gc_performance_measurement(env.syscap)
-        _init_results(args)
 
+        test_name = args.get_str("name")
+        test_fun_name = "_test_" + test_name
+        if test_fun_name not in all_tests:
+            print("Test not found: %s" % test_fun_name)
+            env.exit(1)
         test_concurrency = 1 if config.perf_mode else env.nr_wthreads
-        my_tests = _filter_tests(all_tests, args)
+        my_tests = {test_name: all_tests[test_fun_name]}
         to_hand_out = list(my_tests.keys())
         tests_complete = set()
 
@@ -1145,9 +1086,9 @@ actor test_runner(env: Env,
         p = argparse.Parser()
         p.add_bool("json", "Output results as JSON")
         p.add_bool("no_output", "No result output")
-        p.add_option("name", "strlist", nargs="+", default=[], help="Filter tests by name")
-        lp = p.add_cmd("list", "list tests", _list_tests)
+        lp = p.add_cmd("list", "list tests", _cmd_list)
         tp = p.add_cmd("test", "Run tests", _run_tests)
+        tp.add_arg("name", "Name of the test to run")
         pp = tp.add_cmd("perf", "Performance benchmark tests", _run_perf_tests)
         pp.add_option("iterations", "int", "?", 1, "Number of iterations to run")
         pp.add_option("min_time", "int", "?", 1000, "Minimum time to run a test in milliseconds")
