@@ -786,19 +786,8 @@ actor TestExecutor(syscap, config, get_test: () -> Test, report_complete, env):
     after 0: _run_next()
 
 
-class ModuleError(object):
-    exit_code: int
-    term_signal: int
-    errout: str
-
-    def __init__(self, exit_code: int, term_signal: int, err: str):
-        self.exit_code = exit_code
-        self.term_signal = term_signal
-        self.err = err
-
 class ProjectTestResults(object):
     results: dict[str, dict[str, TestInfo]]
-    module_error: dict[str, ModuleError]
     last_results: dict[str, dict[str, TestInfo]]
     sw: time.Stopwatch
     expected_modules: set[str]
@@ -808,7 +797,6 @@ class ProjectTestResults(object):
 
     def __init__(self, perf_data: str, perf_mode: bool=False):
         self.results = {}
-        self.module_error = {}
         self.last_results = self.parse_perf_data(perf_data)
         self.sw = time.Stopwatch()
         self.expected_modules = set([''])
@@ -833,18 +821,6 @@ class ProjectTestResults(object):
             print("Failed to parse performance data")
             return {}
 
-    def set_expected(self, tests: dict[str, Test], modname: str=""):
-        for test_name, test in tests.items():
-            if modname not in self.results:
-                self.results[modname] = {}
-            self.results[modname][test_name] = TestInfo(test)
-
-    def update_module(self, module_name: str, test_results: dict[str, TestInfo]):
-        """Update test results for all tests in a module
-        """
-        self.up_to_date = False
-        self.results[module_name] = test_results
-
     def update(self, module_name: str, test_name: str, test_info: TestInfo):
         """Update result for individual test
         """
@@ -852,21 +828,6 @@ class ProjectTestResults(object):
         if module_name not in self.results:
             self.results[module_name] = {}
         self.results[module_name][test_name] = test_info
-
-    def update_result(self, module_name: str, test: Test, complete: bool, test_result: TestResult):
-        """Update result for individual test
-        """
-        self.up_to_date = False
-        if module_name not in self.results:
-            self.results[module_name] = {}
-        if test.name not in self.results[module_name]:
-            self.results[module_name][test.name] = TestInfo(test)
-        tres = self.results[module_name][test.name]
-        if test_result is not None:
-            tres.update(complete, test_result)
-
-    def update_module_error(self, module_name: str, moderr: ModuleError):
-        self.module_error[module_name] = moderr
 
     def num_tests(self):
         cnt = 0
@@ -951,10 +912,6 @@ class ProjectTestResults(object):
         if set(self.results.keys()) != self.expected_modules:
             complete = False
         for module_name in self.results:
-            if module_name in self.module_error:
-                for test_name, test_info in self.results[module_name].items():
-                    errors += 1
-                continue
             for test_name, test_info in self.results[module_name].items():
                 if not test_info.complete:
                     complete = False
@@ -1013,9 +970,6 @@ class ProjectTestResults(object):
                     if self.perf_mode:
                         msg += format_timing(module_name, test_name) + " "
                     msg += "%4d runs in %3.3fms" % (tinfo.num_iterations, tinfo.test_duration) + term.normal
-                elif module_name in self.module_error:
-                    moderr = self.module_error[module_name]
-                    msg = term.red + "##: Test crash? Exit code: %d  term signal: %d" % (moderr.exit_code, moderr.term_signal) + term.normal
                 else:
                     msg = term.yellow + "**" + term.normal
 
@@ -1035,14 +989,6 @@ class ProjectTestResults(object):
                     for line in str(exc).splitlines(None):
                         print(term.red + "    %s" % (line) + term.normal)
                         self.printed_lines += 1
-
-            if module_name in self.module_error:
-                moderr = self.module_error[module_name]
-                if moderr.err != "":
-                    msg = term.red + "Error:\n" + term.normal
-                    msg += moderr.err
-                    print(msg)
-                    self.printed_lines += len(msg.splitlines())
 
         print("")
         if complete:

@@ -517,12 +517,16 @@ actor ListTests(process_cap, test_modules: list[str], on_done: action(?str, ?dic
         remaining_mods[module_name] = p
 
 
-actor RunTestTest(env: Env, args, perf_mode: bool=False):
+actor CmdTest(env: Env, args, perf_mode: bool=False):
     """Run project tests, i.e. `acton test`
     """
     process_cap = process.ProcessCap(env.cap)
-    var modules_to_test = set()
-    var tests = {}
+    # TODO: test concurrency should consider the type of test, so unit tests get
+    # 1 CPU while actor / env tests get more. This is a simple approximation for
+    # a start...
+    concurrency = env.nr_wthreads // 2
+    var running_tests = {}
+    var tests_to_run = []
     var perf_data = "{}"
     fs = file.FS(file.FileCap(env.cap))
 
@@ -566,40 +570,58 @@ actor RunTestTest(env: Env, args, perf_mode: bool=False):
             return
         after 0.05: _periodic_show()
 
-    def _on_json_output(module_name, data):
+    def _on_json_output(test, data):
         if isinstance(data, dict):
             if "test_info" in data:
                 test_info = TestInfo.from_json(data["test_info"])
-                ptr.update(module_name, test_info.definition.name, test_info)
-                if ptr.is_module_done(module_name) and perf_mode:
-                    _run_module_tests()
+                ptr.update(test_info.definition.module, test_info.definition.name, test_info)
+                if test_info.complete:
+                    _run_test()
         else:
-            raise ValueError("Unexpected JSON data from module test: " + module_name)
+            raise ValueError("Unexpected JSON data from module test: " + test.module)
 
-    def _on_test_error(module_name: str, exit_code: int, term_signal: int, errout: str):
-        errmsg = "Module test error, exit_code %d and term signal %d, errout: " % (exit_code, term_signal)
+    def _on_test_error(test: testing.Test, exit_code: int, term_signal: int, errout: str):
+        errmsg = "Test error, exit_code %d and term signal %d, errout: " % (exit_code, term_signal)
         try:
             errmsg += errout
         except IndexError:
             pass
-        if module_name in ptr.results:
-            moderr = testing.ModuleError(exit_code, term_signal, errout)
-            ptr.update_module_error(module_name, moderr)
-        _run_module_tests()
+        # We construct our own TestInfo here since we didn't get one from the
+        # test process, because it crashed...
+        ptr.update(
+            test.module,
+            test.name,
+            testing.TestInfo(
+                test,
+                complete=True,
+                success=None,
+                exception="Test crash, exit_code %d and term signal %d" % (exit_code, term_signal),
+                num_iterations=1,
+                num_failures=0,
+                num_errors=1
+            ))
+        _run_test()
 
-    def _run_module_tests(run_all=False):
+    def _run_test():
         try:
-            module_name = modules_to_test.pop()
+            test_info = tests_to_run.pop(0)
             cmd = ["test"]
             if perf_mode:
                 cmd += ["perf"]
+            cmd += ["--name", test_info.definition.name]
             cmd += test_cmd_args
-            t = RunModuleTest(process_cap, module_name, cmd, lambda x: _on_json_output(module_name, x), lambda x, y, z: _on_test_error(module_name, x, y, z))
-        except ValueError:
-            _periodic_show()
-            return
-        if run_all:
-            _run_module_tests(run_all)
+            t = RunModuleTest(
+                process_cap,
+                test_info.definition.module,
+                cmd,
+                lambda x: _on_json_output(test_info.definition, x),
+                lambda x, y, z: _on_test_error(test_info.definition, x, y, z))
+            running_tests[test_info.definition] = t
+            if len(running_tests) < concurrency:
+                _run_test()
+        except IndexError:
+            pass
+        _periodic_show()
 
     def _list_tests(built_modules: list[str]):
         list_modules = []
@@ -624,13 +646,14 @@ actor RunTestTest(env: Env, args, perf_mode: bool=False):
             env.exit(1)
             return
 
-        modules_to_test = set(tests.keys())
-        ptr.expected_modules = set(modules_to_test)
+        ptr.expected_modules = set(tests.keys())
 
-        tests = tests
         for module_name, module_tests in tests.items():
-            ptr.update_module(module_name, module_tests)
-        _run_module_tests(run_all=not perf_mode)
+            for test_name, test_info in module_tests.items():
+                ptr.update(module_name, test_name, test_info)
+                tests_to_run.append(test_info)
+
+        _run_test()
 
     def _on_build_success(stdout_buf: str):
         print(term.clearline + term.up() + term.clearline, end="")
@@ -1127,10 +1150,10 @@ actor main(env):
         env.exit(0)
 
     def _cmd_test(args):
-        run_tests = RunTestTest(env, args, perf_mode=False)
+        run_tests = CmdTest(env, args, perf_mode=False)
 
     def _cmd_test_perf(args):
-        run_tests = RunTestTest(env, args, perf_mode=True)
+        run_tests = CmdTest(env, args, perf_mode=True)
 
     def _cmd_list_test(args):
         run_tests = CmdListTest(env, args)
