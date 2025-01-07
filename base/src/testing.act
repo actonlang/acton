@@ -274,6 +274,29 @@ class Test(object):
             return Test(name, desc, module)
         raise ValueError("Test: Invalid JSON")
 
+def safe_hash(h: int) -> int: # TODO: Remove when https://github.com/actonlang/acton/issues/1348 is fixed
+    limit = 2**63-1
+    sign = 1
+    if h < 0:
+        limit = 2**63
+        sign = -1
+        h = -h
+
+    while h > limit:
+        f = h // limit
+        h %= limit
+        h += f
+
+    return sign * h
+
+extension Test(Hashable):
+    def __eq__(self, other: Test) -> bool:
+        return self.module == other.module and self.name == other.name
+
+    def __hash__(self) -> int:
+        #return hash(self.data)
+        return safe_hash(2*hash(self.module) + 3*hash(self.name))
+
 class UnitTest(Test):
     def __init__(self, fn: mut() -> None, name: str, desc: str, module: str):
         self.fn = fn
