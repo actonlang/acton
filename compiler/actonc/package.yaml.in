@@ -28,6 +28,7 @@ executables:
       - clock
       - containers
       - data-default-class
+      - diagnose
       - dir-traverse
       - directory >= 1.3.1
       - filelock
