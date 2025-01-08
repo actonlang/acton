@@ -431,6 +431,8 @@ class TestInfo(object):
     success: ?bool
     exception: ?str
     output: ?str
+    stdout: ?str
+    stderr: ?str
     flaky_output: bool
     flaky: bool
     leaky: bool
@@ -453,6 +455,8 @@ class TestInfo(object):
                  success: ?bool=None,
                  exception: ?str=None,
                  output: ?str=None,
+                 stdout: ?str=None,
+                 stderr: ?str=None,
                  flaky: bool=False,
                  min_duration: float=-1.0,
                  max_duration: float=-1.0,
@@ -471,6 +475,8 @@ class TestInfo(object):
         self.success = success
         self.exception = exception
         self.output = output
+        self.stdout = stdout
+        self.stderr = stderr
         self.flaky_output = False
         self.flaky = flaky
         self.leaky = False
@@ -593,6 +599,8 @@ class TestInfo(object):
             "success": self.success,
             "exception": self.exception,
             "output": self.output,
+            "stdout": self.stdout,
+            "stderr": self.stderr,
             "flaky": self.flaky,
             "min_duration": self.min_duration,
             "max_duration": self.max_duration,
@@ -630,6 +638,14 @@ class TestInfo(object):
         output: ?str = None
         if out is not None and isinstance(out, str):
             output = out
+        stdout_d = json_data["stdout"]
+        stdout: ?str = None
+        if stdout_d is not None and isinstance(stdout_d, str):
+            stdout = stdout_d
+        stderr_d = json_data["stderr"]
+        stderr: ?str = None
+        if stderr_d is not None and isinstance(stderr_d, str):
+            stderr = stderr_d
         flaky = json_data["flaky"]
         min_duration = json_data["min_duration"]
         max_duration = json_data["max_duration"]
@@ -665,6 +681,8 @@ class TestInfo(object):
                             success,
                             exception,
                             output,
+                            stdout,
+                            stderr,
                             flaky,
                             min_duration,
                             max_duration,
@@ -739,7 +757,7 @@ actor TestExecutor(syscap, config, t: Test, report_complete, env):
             test_info.update(complete, TestResult(success, exc, val, testiter_dur, mem_usage_delta, non_gc_mem_usage_delta), test_dur*1000.0)
         if last_report.elapsed().to_float() > 0.05 or complete:
             if test_info is not None and config.output_enabled:
-                print(json.encode({"test_info": test_info.to_json()}), err=True)
+                print("\n" + json.encode({"test_info": test_info.to_json()}), err=True)
             last_report.reset()
         if not complete:
             _run_fn(test)
@@ -981,10 +999,27 @@ class ProjectTestResults(object):
                                                                         tinfo.non_gc_mem_inc_count,
                                                                         tinfo.num_iterations))
                     self.printed_lines += 3
-                if tinfo.complete and exc is not None:
-                    for line in str(exc).splitlines(None):
-                        print(term.red + "    %s" % (line) + term.normal)
-                        self.printed_lines += 1
+                if tinfo.complete:
+                    if exc != None:
+                        for line in str(exc).splitlines(None):
+                            print(term.red + "    %s" % (line) + term.normal)
+                            self.printed_lines += 1
+                    # Print stdout/stderr if the test failed
+                    if tinfo.num_failures > 0 or tinfo.num_errors > 0:
+                        stdout = tinfo.stdout
+                        if stdout != None and stdout != "":
+                            print("    STDOUT:")
+                            self.printed_lines += 1
+                            for line in stdout.splitlines():
+                                print("      " + line)
+                                self.printed_lines += 1
+                        stderr = tinfo.stderr
+                        if stderr != None and stderr != "":
+                            print("    STDERR:")
+                            self.printed_lines += 1
+                            for line in stderr.splitlines():
+                                print("      " + line)
+                                self.printed_lines += 1
 
         print("")
         if complete:
@@ -1036,7 +1071,7 @@ actor test_runner(env: Env,
         for test_name, test_def in all_tests.items():
             test_info = TestInfo(test_def)
             res[test_def.name] = test_info.to_json()
-        print(json.encode({"tests": res}), err=True)
+        print("\n" + json.encode({"tests": res}), err=True)
         env.exit(0)
 
 
@@ -1076,7 +1111,7 @@ actor test_runner(env: Env,
                 num_errors=1
                 )
             tests_complete.add(test_def)
-            print(json.encode({"test_info": test_info.to_json()}), err=True)
+            print("\n" + json.encode({"test_info": test_info.to_json()}), err=True)
             env.exit(0)
 
         def report_complete(t):

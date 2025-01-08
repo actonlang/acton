@@ -377,42 +377,36 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
 
 
 actor RunModuleTest(process_cap, modname, test_cmd, on_json_output, on_test_error):
-    var stdout_buf = b""
+    var captured_stdout = b""
     var stderr_buf = b""
-    var errout = ""
-    var likely_json = False
+    var captured_stderr = b""
 
     def on_stdout(p, data: bytes):
-        stdout_buf += data
+        captured_stdout += data
 
     def on_stderr(p, data):
-        if not likely_json:
-            if data.startswith(b"{"):
-                likely_json = True
+        # TODO: we shouldn't sent test data in-band on stderr - should be separate pipe
         stderr_buf += data
         lines = stderr_buf.splitlines(True)
         stderr_buf = b""
-        for line in lines:
-            if likely_json:
-                if line.endswith(b"\n"):
-                    # valid line
-                    try:
-                        upd = json.decode(line.decode())
-                    except ValueError:
-                        pass
-                    else:
-                        on_json_output(self, upd)
-                else:
-                    # incomplete line
-                    stderr_buf = line
-                    break
-            if not likely_json:
-                errout += line.decode()
+        for i, line in enumerate(lines):
+            if not line.endswith(b"\n"):
+                stderr_buf = b"".join(lines[i:])
+                break
 
+            # We have a complete line, check if it is valid JSON
+            try:
+                upd = json.decode(line.decode())
+                # We have a complete JSON object, pass it to the callback
+                on_json_output(self, upd, captured_stdout, captured_stderr)
+            except ValueError:
+                # Not a complete JSON object, append to captured_stderr
+                if line != b"\n":
+                    captured_stderr += line
 
     def on_exit(p, exit_code, term_signal):
         if exit_code != 0 or term_signal != 0:
-            on_test_error(exit_code, term_signal, stdout_buf.decode() + errout)
+            on_test_error(exit_code, term_signal, captured_stdout.decode() + captured_stderr.decode())
 
     def on_error(p, error):
         on_test_error(-1, -1, error)
@@ -573,10 +567,12 @@ actor CmdTest(env: Env, args, perf_mode: bool=False):
             return
         after 0.05: _periodic_show()
 
-    def _on_json_output(rmt, test, data):
+    def _on_json_output(rmt, test, data, stdout_buf, stderr_buf):
         if isinstance(data, dict):
             if "test_info" in data:
                 test_info = TestInfo.from_json(data["test_info"])
+                test_info.stdout = stdout_buf.decode()
+                test_info.stderr = stderr_buf.decode()
                 ptr.update(test_info.definition.module, test_info.definition.name, test_info)
                 if test_info.complete:
                     if test_info.success == None and test_info.exception == "Test timeout":
@@ -618,7 +614,7 @@ actor CmdTest(env: Env, args, perf_mode: bool=False):
                 process_cap,
                 test_info.definition.module,
                 cmd,
-                lambda rmt, x: _on_json_output(rmt, test_info.definition, x),
+                lambda rmt, x, stdout_buf, stderr_buf: _on_json_output(rmt, test_info.definition, x, stdout_buf, stderr_buf),
                 lambda x, y, z: _on_test_error(test_info.definition, x, y, z))
             running_tests[test_info.definition] = t
             if len(running_tests) < concurrency:
