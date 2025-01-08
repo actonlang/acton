@@ -696,9 +696,10 @@ class TestRunnerConfig(object):
         self.output_enabled = False if args.get_bool("no_output") else True
         self.min_test_duration = mtd
 
+class TimeoutError(Exception):
+    pass
 
-# TODO: add a timeout to this
-actor TestExecutor(syscap, config, get_test: () -> Test, report_complete, env):
+actor TestExecutor(syscap, config, get_test: action() -> Test, report_complete, env):
     """The actual executor of tests
     """
     log_handler = logging.Handler("TestRunner")
@@ -775,9 +776,9 @@ actor TestExecutor(syscap, config, get_test: () -> Test, report_complete, env):
 
     def _run_next():
         """Get the next available test and run it"""
-        test_sw = time.Stopwatch()
         try:
             t = get_test()
+            test_sw = time.Stopwatch()
             test_info = TestInfo(t)
             _run_fn(t)
         except Exception as e:
@@ -1043,24 +1044,52 @@ actor test_runner(env: Env,
         print(json.encode({"tests": res}), err=True)
         env.exit(0)
 
+
+
     proc def _run_tests(args, perf_mode: bool=False):
         config = TestRunnerConfig(perf_mode, args)
         if config.perf_mode:
             acton.rts.start_gc_performance_measurement(env.syscap)
+
+        test_concurrency = 1 if config.perf_mode else env.nr_wthreads
+        test_timeout = 3.0
 
         test_name = args.get_str("name")
         test_fun_name = "_test_" + test_name
         if test_fun_name not in all_tests:
             print("Test not found: %s" % test_fun_name)
             env.exit(1)
-        test_concurrency = 1 if config.perf_mode else env.nr_wthreads
-        my_tests = {test_name: all_tests[test_fun_name]}
+        my_tests = {test_fun_name: all_tests[test_fun_name]}
         to_hand_out = list(my_tests.keys())
         tests_complete = set()
+
+        def _check_timeout(test_id):
+            if test_id in tests_complete:
+                return
+            test_def = all_tests[test_id]
+            time_s = test_timeout * 1000.0
+            test_info = TestInfo(
+                test_def,
+                complete=True,
+                success=None,
+                exception="Test timeout",
+                min_duration=time_s,
+                max_duration=time_s,
+                avg_duration=time_s,
+                total_duration=time_s,
+                test_duration=time_s,
+                num_iterations=1,
+                num_failures=0,
+                num_errors=1
+                )
+            tests_complete.add(test_id)
+            print(json.encode({"test_info": test_info.to_json()}), err=True)
+            env.exit(0)
 
         def get_test():
             test_id = to_hand_out.pop()
             test = my_tests[test_id]
+            after test_timeout: _check_timeout(test_id)
             return test
 
         def check_complete():
@@ -1069,8 +1098,12 @@ actor test_runner(env: Env,
                 return True
             return False
 
-        def report_complete(t):
-            tests_complete.add("_test_" + t)
+        def report_complete(test_name):
+            test_id = "_test_" + test_name
+            if test_id in tests_complete:
+                # Report after we hit timeout
+                return
+            tests_complete.add(test_id)
             check_complete()
 
         test_executors = []

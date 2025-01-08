@@ -401,7 +401,7 @@ actor RunModuleTest(process_cap, modname, test_cmd, on_json_output, on_test_erro
                     except ValueError:
                         pass
                     else:
-                        on_json_output(upd)
+                        on_json_output(self, upd)
                 else:
                     # incomplete line
                     stderr_buf = line
@@ -420,6 +420,9 @@ actor RunModuleTest(process_cap, modname, test_cmd, on_json_output, on_test_erro
     # TODO: fs.join()
     cmd = ["out/bin/.test_" + modname, "--json"] + test_cmd
     p = process.Process(process_cap, cmd, on_stdout, on_stderr, on_exit, on_error)
+
+    def stop():
+        p.stop()
 
 
 actor CmdListTest(env, args):
@@ -570,12 +573,14 @@ actor CmdTest(env: Env, args, perf_mode: bool=False):
             return
         after 0.05: _periodic_show()
 
-    def _on_json_output(test, data):
+    def _on_json_output(rmt, test, data):
         if isinstance(data, dict):
             if "test_info" in data:
                 test_info = TestInfo.from_json(data["test_info"])
                 ptr.update(test_info.definition.module, test_info.definition.name, test_info)
                 if test_info.complete:
+                    if test_info.success == None and test_info.exception == "Test timeout":
+                        rmt.stop()
                     _run_test()
         else:
             raise ValueError("Unexpected JSON data from module test: " + test.module)
@@ -613,7 +618,7 @@ actor CmdTest(env: Env, args, perf_mode: bool=False):
                 process_cap,
                 test_info.definition.module,
                 cmd,
-                lambda x: _on_json_output(test_info.definition, x),
+                lambda rmt, x: _on_json_output(rmt, test_info.definition, x),
                 lambda x, y, z: _on_test_error(test_info.definition, x, y, z))
             running_tests[test_info.definition] = t
             if len(running_tests) < concurrency:
