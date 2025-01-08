@@ -228,8 +228,8 @@ extraBinds env ss                       = [ (x, t) | x <- nub $ updatesOf ss, x 
 volatileVars env stmts                  = nub $ vols env stmts
   where vols env []                     = []
         vols env (s:ss)                 = vol env s ++ vols (define (envOf s) env) ss
-        vol env (If _ [Branch e ss] els)
-          | isPUSH e, needCont env ss   = updatesOf ss ++ vols env ss ++ vols env els
+        vol env s@(If _ [Branch e ss] els)
+          | isPUSH e, needCont env s    = updatesOf ss ++ vols env ss ++ vols env els
         vol env (If _ bs els)           = concat [ vols env ss | Branch _ ss <- bs ] ++ vols env els
         vol env (While _ _ ss els)      = vols env ss ++ vols env els
         vol env _                       = []

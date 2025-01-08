@@ -520,7 +520,7 @@ class TestInfo(object):
             self.non_gc_mem_usage_delta_avg = self.non_gc_mem_usage_delta_avg // self.num_iterations-1
             self.avg_duration = self.total_duration / float(self.num_iterations)
 
-        if self.non_gc_mem_inc_count > min([1, self.num_iterations // 2]) and self.non_gc_mem_usage_delta_avg > 0:
+        if self.non_gc_mem_inc_count > min_def([1, self.num_iterations // 2],1) and self.non_gc_mem_usage_delta_avg > 0:
             self.leaky = True
 
         if self.num_failures > 0:
@@ -948,7 +948,7 @@ class ProjectTestResults(object):
         tname_width = 20
         for modname in self.results:
             for tname, tinfo in self.results[modname].items():
-                tname_width = max([tname_width, len(tinfo.definition.name)])
+                tname_width = max_def([tname_width, len(tinfo.definition.name)],0)
         tname_width += 5
 
         for module_name in sorted(self.results):
