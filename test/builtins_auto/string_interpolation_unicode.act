@@ -1,0 +1,8 @@
+
+actor main(env):
+    try:
+        print("✓ Hello, world!")
+        print("✗ Hello, %s!" % "world")
+    except:
+        env.exit(1)
+    env.exit(0)
