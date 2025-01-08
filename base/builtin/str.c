@@ -117,6 +117,7 @@ B_str to_str_noc(char *str) {
             isascii = false;
             break;
         }
+    p = (unsigned char*)str;
     int cp, cpnbytes;
     if (!isascii) {
         res->nchars = 0;
@@ -125,7 +126,7 @@ B_str to_str_noc(char *str) {
                 break;
             cpnbytes = utf8proc_iterate(p, -1, &cp);
             if (cpnbytes < 0) {
-                $RAISE((B_BaseException)$NEW(B_ValueError,to$str("to$str: Unicode decode error")));
+                $RAISE((B_BaseException)$NEW(B_ValueError,to$str("to_str_noc: Unicode decode error")));
                 return NULL;
             }
             p += cpnbytes;
