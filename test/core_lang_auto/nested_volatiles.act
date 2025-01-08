@@ -1,0 +1,15 @@
+def sum_iter(b: list[int], size):
+    v = 0
+    if size > 0:
+        v = b[0]
+        for x in b[1:]:
+            v += x
+    return v
+
+actor main(env):
+    x = sum_iter([1000,200,30,4], 4)
+    if x != 1234:
+        print('Excpected 1234, got', x)
+        env.exit(1)
+    else:
+        env.exit(0)

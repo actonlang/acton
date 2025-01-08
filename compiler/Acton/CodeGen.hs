@@ -399,7 +399,7 @@ initModule env (Decl _ ds : ss)     = vcat [ char '{' $+$ nest 4 (initClassBase 
         hasCDef b                   = inBuiltin env && any hasNotImpl [b' | Decl _ ds <- b, Def{dname=n',dbody=b'} <- ds, n' == initKW ]
         
 initModule env (Signature{} : ss)   = initModule env ss
-initModule env (s : ss)             = genStmt env s $+$
+initModule env (s : ss)             = genStmt1 env s $+$
                                       vcat [ genTopName env n <+> equals <+> gen env n <> semi | (n,_) <- te ] $+$
                                       initModule env1 ss
   where te                          = envOf s `exclude` defined env
@@ -427,7 +427,7 @@ initClass env c (Decl _ ds : ss) b  = vcat [ methodtable env c <> dot <> gen env
 initClass env c (Signature{} : ss) b = initClass env c ss b
 initClass env c (s : ss) b
   | isNotImpl s                     = initClass env c ss b
-  | otherwise                       = genStmt env s $+$
+  | otherwise                       = genStmt1 env s $+$
                                       vcat [ genTopName env c <> dot <> gen env n <+> equals <+> gen env n <> semi | (n,_) <- te ] $+$
                                       initClass env1 c ss b
   where te                          = envOf s `exclude` defined env
@@ -508,12 +508,9 @@ preEscape str                       = "A_" ++ str
 word                                = text "$WORD"
 
 genSuite env []                     = (empty,[])
-genSuite env (s:ss)                 = (genStmt (setVolVars vs env) s $+$ cs, volVars s ++ vs \\ bound s)
+genSuite env (s:ss)                 = (c $+$ cs, vs' ++ (vs `intersect` defined env))
     where (cs,vs)                   = genSuite (ldefine (envOf s) env) ss
-
-volVars (If _ [Branch e ss] fin)
-  | isPUSH e                        = updatesOf ss
-volVars _                           = []
+          (c,vs')                   = genStmt (setVolVars vs env) s
 
 isUnboxed (Internal BoxPass _ _)    = True
 isUnboxed _                         = False
@@ -522,53 +519,57 @@ genTypeDecl env n t                 =  (if isVolVar n env then text "volatile" e
                                        if isUnboxed n && B.isUnboxable t then text (unboxed_c_type t) else gen env t
 
    
-genStmt env (Decl _ ds)             = empty
+genStmt env (Decl _ ds)             = (empty, [])
 genStmt env (Assign _ [PVar _ n (Just t)] e)
-  | n `notElem` defined env         =  genTypeDecl env n t <+> gen env n <+> equals <+> rhs <> semi
+  | n `notElem` defined env         = (genTypeDecl env n t <+> gen env n <+> equals <+> rhs <> semi, [])
   where rhs                         = if B.isWitness n 
                                       then case staticWitnessName e of
-                                           (Just (nm),as) -> foldr (\x y -> y <>text "->" <> myPretty (x)) (parens(myPretty (tcname(tcon t))) <> myPretty (witName nm)) as 
-                                           _  ->  genExp env t e
+                                           (Just nm,as) ->
+                                               foldr (\x y -> y <> text "->" <> myPretty x) (parens (myPretty (tcname (tcon t))) <> myPretty (witName nm)) as
+                                           _  -> genExp env t e
                                       else genExp env t e
-genStmt env s                       = vcat [ genTypeDecl env n t <+> gen env n <> semi | (n,NVar t) <- te ] $+$
-                                      gen env1 s
+genStmt env s                       = (vcat [ genTypeDecl env n t <+> gen env n <> semi | (n,NVar t) <- te ] $+$ s', vs)
   where te                          = envOf s `exclude` defined env
         env1                        = ldefine te env
+        (s', vs)                    = genV env1 s
+
+genStmt1 env s                      = fst $ genStmt env s
 
 instance Gen Stmt where
-    genV env s | isNotImpl s        = (text "//" <+> text "NotImplemented",[])
-    genV env (Expr _ Strings{})     = (semi,[])
-    genV env (Expr _ e)             = (genExp' env e <> semi,[])
+    genV env s | isNotImpl s        = (text "//" <+> text "NotImplemented", [])
+    genV env (Expr _ Strings{})     = (semi, [])
+    genV env (Expr _ e)             = (genExp' env e <> semi, [])
     genV env (Assign _ [p] e)
-        | B.isUnboxable t           = (gen env p <+> equals <+> gen env e <> semi,[])
-        | otherwise                 = (gen env p <+> equals <+> genExp env t e <> semi,[])
+        | B.isUnboxable t           = (gen env p <+> equals <+> gen env e <> semi, [])
+        | otherwise                 = (gen env p <+> equals <+> genExp env t e <> semi, [])
        
       where t                       = typeOf env p
-    genV env (AugAssign _ tg op e)  = (genTarget env tg <+> pretty op <+> genExp env t e <> semi,[])
+    genV env (AugAssign _ tg op e)  = (genTarget env tg <+> pretty op <+> genExp env t e <> semi, [])
       where t                       = targetType env tg
-    genV env (MutAssign _ tg e)     = (genTarget env tg <+> equals <+> genExp env t e <> semi,[])
+    genV env (MutAssign _ tg e)     = (genTarget env tg <+> equals <+> genExp env t e <> semi, [])
       where t                       = targetType env tg
-    genV env (Pass _)               = (empty,[])
-    genV env (Return _ Nothing)     = (text "return" <+> gen env eNone <> semi,[])
-    genV env (Return _ (Just e))    = (text "return" <+> genExp env (ret env) e <> semi,[])
-    genV env (Break _)              = (text "break" <> semi,[])
-    genV env (Continue _)           = (text "continue" <> semi,[])
+    genV env (Pass _)               = (empty, [])
+    genV env (Return _ Nothing)     = (text "return" <+> gen env eNone <> semi, [])
+    genV env (Return _ (Just e))    = (text "return" <+> genExp env (ret env) e <> semi, [])
+    genV env (Break _)              = (text "break" <> semi, [])
+    genV env (Continue _)           = (text "continue" <> semi, [])
     genV env (If  _ [b@(Branch e ss)] fin)
-      | isPUSH e                    = (b' $+$ fin',v1++v2++bound ss)
+      | isPUSH e                    = (b' $+$ fin', v1 ++ v2 ++ volatiles)
       where (b',v1)                 = genBranch env "if" b
             (fin',v2)               = genElse env fin
-    genV env (If _ (b:bs) b2)       = (b' $+$ vcat bs' $+$ b2', v1++concat v2++v3)
+            volatiles               = bound ss `intersect` defined env
+    genV env (If _ (b:bs) b2)       = (b' $+$ vcat bs' $+$ b2', v1 ++ concat v2 ++ v3)
        where (b',v1)                = genBranch env "if" b
              (bs',v2)               = unzip (map (genBranch env "else if") bs)
              (b2',v3)               = genElse env b2
     genV env (While _ e b [])       = genBranch env "while" (Branch e b) 
-    genV env _                      = (empty,[])
+    genV env _                      = (empty, [])
 
-genBranch env kw (Branch e b)       = ((text kw <+> parens (gen env (B.unbox tBool e)) <+> char '{') $+$ nest 4 b' $+$ char '}',vs)
+genBranch env kw (Branch e b)       = ((text kw <+> parens (gen env (B.unbox tBool e)) <+> char '{') $+$ nest 4 b' $+$ char '}', vs)
    where (b',vs)                    = genSuite env b
    
-genElse env []                      = (empty,[])
-genElse env b                       = ((text "else" <+> char '{') $+$ nest 4 b' $+$ char '}',vs)
+genElse env []                      = (empty, [])
+genElse env b                       = ((text "else" <+> char '{') $+$ nest 4 b' $+$ char '}', vs)
    where (b',vs)                    = genSuite env b
 
 instance Gen PosPar where
