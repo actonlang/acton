@@ -169,8 +169,12 @@ B_NoneType netQ__lookup_aaaa (B_str name, $action on_resolve, $action on_error) 
 void netQ_TCPConnection__on_receive(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
     if (nread < 0){
         if (nread == UV_EOF) {
-            uv_close((uv_handle_t *)stream, NULL);
             netQ_TCPConnection self = stream->data;
+            if ((long int)stream != -1)
+                uv_close((uv_handle_t *)stream, NULL);
+            self->_sock = to$int(-1);
+            self->_sock4 = to$int(-1);
+            self->_sock6 = to$int(-1);
             if (self->on_remote_close) {
                 $action f = ($action)self->on_remote_close;
                 f->$class->__asyn__(f, self);
@@ -337,6 +341,7 @@ $R netQ_TCPConnectionD_closeG_local (netQ_TCPConnection self, $Cont c$cont, $act
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
         on_close->$class->__asyn__(on_close, self);
+        // TODO: we should always call uv_close() here
         return $R_CONT(c$cont, B_None);
     }
     return $R_CONT(c$cont, B_None);
@@ -513,8 +518,10 @@ $R netQ_TCPListenConnectionD__initG_local (netQ_TCPListenConnection self, $Cont 
 void netQ_TCPListenConnection__on_receive(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
     if (nread < 0){
         if (nread == UV_EOF) {
-            uv_close((uv_handle_t *)stream, NULL);
             netQ_TCPListenConnection self = stream->data;
+            if ((long int)stream != -1)
+                uv_close((uv_handle_t *)stream, NULL);
+            self->client = to$int(-1);
             if (self->on_remote_close) {
                 $action f = ($action)self->on_remote_close;
                 f->$class->__asyn__(f, self);
@@ -571,10 +578,16 @@ $R netQ_TCPListenConnectionD_writeG_local (netQ_TCPListenConnection self, $Cont 
 $R netQ_TCPListenConnectionD_closeG_local (netQ_TCPListenConnection self, $Cont c$cont) {
     log_debug("Closing TCP connection, affinity=%d", self->$affinity);
     uv_stream_t *client = (uv_stream_t *)from$int(self->client);
+    // fd == -1 means invalid FD and can happen after __resume__ or if the socket was closed
+    if ((long int)client == -1)
+        return $R_CONT(c$cont, B_None);
+
+    // TODO: shouldn't we call uv_shutdown() first? uv_read_stop() is not needed I think
     uv_read_stop(client);
     if (uv_is_closing((uv_handle_t *)client) == 0) {
         uv_close((uv_handle_t *)client, NULL);
     }
+    self->client = to$int(-1);
     return $R_CONT(c$cont, B_None);
 }
 
