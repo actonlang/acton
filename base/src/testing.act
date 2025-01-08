@@ -699,7 +699,7 @@ class TestRunnerConfig(object):
 class TimeoutError(Exception):
     pass
 
-actor TestExecutor(syscap, config, get_test: action() -> Test, report_complete, env):
+actor TestExecutor(syscap, config, t: Test, report_complete, env):
     """The actual executor of tests
     """
     log_handler = logging.Handler("TestRunner")
@@ -744,8 +744,7 @@ actor TestExecutor(syscap, config, get_test: action() -> Test, report_complete, 
         if not complete:
             _run_fn(test)
         else:
-            report_complete(test.name)
-            _run_next()
+            report_complete(t)
 
     def _run_fn(t: Test):
         # Run GC to get accurate memory usage
@@ -774,17 +773,13 @@ actor TestExecutor(syscap, config, get_test: action() -> Test, report_complete, 
         except Exception as e:
             _report_result(t, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, None, e, None)
 
-    def _run_next():
+    def _run_test():
         """Get the next available test and run it"""
-        try:
-            t = get_test()
-            test_sw = time.Stopwatch()
-            test_info = TestInfo(t)
-            _run_fn(t)
-        except Exception as e:
-            return None
+        test_sw = time.Stopwatch()
+        test_info = TestInfo(t)
+        _run_fn(t)
 
-    after 0: _run_next()
+    after 0: _run_test()
 
 
 class ProjectTestResults(object):
@@ -1057,16 +1052,14 @@ actor test_runner(env: Env,
         test_name = args.get_str("name")
         test_fun_name = "_test_" + test_name
         if test_fun_name not in all_tests:
-            print("Test not found: %s" % test_fun_name)
+            print("Test not found: %s" % test_name)
             env.exit(1)
-        my_tests = {test_fun_name: all_tests[test_fun_name]}
-        to_hand_out = list(my_tests.keys())
+        the_test = all_tests[test_fun_name]
         tests_complete = set()
 
-        def _check_timeout(test_id):
-            if test_id in tests_complete:
+        def _check_timeout(test_def):
+            if test_def in tests_complete:
                 return
-            test_def = all_tests[test_id]
             time_s = test_timeout * 1000.0
             test_info = TestInfo(
                 test_def,
@@ -1082,35 +1075,20 @@ actor test_runner(env: Env,
                 num_failures=0,
                 num_errors=1
                 )
-            tests_complete.add(test_id)
+            tests_complete.add(test_def)
             print(json.encode({"test_info": test_info.to_json()}), err=True)
             env.exit(0)
 
-        def get_test():
-            test_id = to_hand_out.pop()
-            test = my_tests[test_id]
-            after test_timeout: _check_timeout(test_id)
-            return test
-
-        def check_complete():
-            if tests_complete == set(my_tests.keys()):
-                env.exit(0)
-                return True
-            return False
-
-        def report_complete(test_name):
-            test_id = "_test_" + test_name
-            if test_id in tests_complete:
+        def report_complete(t):
+            if t in tests_complete:
                 # Report after we hit timeout
                 return
-            tests_complete.add(test_id)
-            check_complete()
+            tests_complete.add(t)
+            env.exit(0)
 
         test_executors = []
-        if not check_complete():
-            for i in range(test_concurrency):
-                te = TestExecutor(env.syscap, config, get_test, report_complete, env)
-                test_executors.append(te)
+        te = TestExecutor(env.syscap, config, the_test, report_complete, env)
+        after test_timeout: _check_timeout(the_test)
 
     proc def _run_perf_tests(args):
         _run_tests(args, perf_mode=True)
