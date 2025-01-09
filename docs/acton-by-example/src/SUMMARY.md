@@ -13,6 +13,7 @@
   - [Variable data types](primitives.md)
     - [Scalars](primitives/scalars.md)
       - [float](primitives/float.md)
+      - [complex](primitives/complex.md)
     - [Lists](primitives/lists.md)
     - [Dictionaries](primitives/dicts.md)
     - [Tuples](primitives/tuples.md)

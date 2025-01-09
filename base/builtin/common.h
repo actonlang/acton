@@ -58,4 +58,6 @@ void $default__init__($WORD);
     to_str_noc($b);                                      \
 })
 
+#define RAISE($T, ...)      $RAISE((B_BaseException)$NEW($T, ##__VA_ARGS__))
+
 char *unmangle_name(char *input);
