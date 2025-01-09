@@ -803,6 +803,7 @@ actor CmdFetch(env, args):
             print("ERROR:", e.error_message)
             env.exit(1)
             return
+    _read_build_config()
 
 
 actor CmdPkgAdd(env, args):
