@@ -28,6 +28,12 @@ B_int malloc_int() {
     return res;
 }
 
+void zz_malloc_fit(zz_ptr res, len_t m) {
+    res->n = acton_malloc_atomic(sizeof(unsigned long) * m);
+    res->size = 0;
+    res->alloc = m;
+}
+
 B_int B_IntegralD_intD___lshift__(B_IntegralD_int wit,  B_int a, B_int b);
 
 B_int B_intG_new(B_atom a, B_int base) {
@@ -352,7 +358,7 @@ B_int B_IntegralD_intD___lshift__(B_IntegralD_int wit,  B_int a, B_int b) {
     long mres = labs(ma) + shw + (shb > 0);
     B_int res = malloc_int();
     zz_ptr rval = &res->val;
-    zz_init_fit(rval,mres);
+    zz_malloc_fit(rval,mres);
     if (shb>0) {
         word_t ci = nn_shl(rval->n, aval.n, labs(ma), shb);
         if (ci>0)
@@ -386,7 +392,7 @@ B_int B_IntegralD_intD___rshift__(B_IntegralD_int wit,  B_int a, B_int b) {
     long shw = bval/64;
     long shb = bval%64;
     long mres = labs(ma) - shw;
-    zz_init_fit(rval,mres);
+    zz_malloc_fit(rval,mres);
     unsigned long tmp[mres];
     for (int i = 0; i < mres; i++)
         tmp[i] = aval.n[i+shw];
@@ -398,19 +404,46 @@ B_int B_IntegralD_intD___rshift__(B_IntegralD_int wit,  B_int a, B_int b) {
 }
  
 B_int B_IntegralD_intD___invert__(B_IntegralD_int wit,  B_int a) {
-    //return toB_i64(~a->val);
-    $RAISE((B_BaseException)$NEW(B_NotImplementedError,to$str("Number.__invert__ not implemented for int")));
-    return to$int(-1); // Silence compiler warning, remove when implemented
+    B_int res0 = malloc_int();
+    B_int res = malloc_int();
+    B_int one = to$int(1);
+    zz_neg(&res0->val,&a->val);
+    zz_sub(&res->val,&res0->val,&one->val);
+    return res;
 }
 
 
 // LogicalB_int  ////////////////////////////////////////////////////////////////////////////////////////
 
 B_int B_LogicalD_IntegralD_intD___and__(B_LogicalD_IntegralD_int wit,  B_int a, B_int b) {
-    // return toB_i64(a->val & b->val);
-    $RAISE((B_BaseException)$NEW(B_NotImplementedError,to$str("Protocol Logical not implemented for int; use i64\n")));
-    return NULL; // This is just to silence compiler warning, above RAISE will longjmp from here anyway
+    zz_struct aval = a->val;
+    zz_struct bval = b->val;
+    B_IntegralD_int wit1 = (B_IntegralD_int)wit->W_Integral;
+    if (aval.size>=0) {
+        if (bval.size>=0) {
+            if (aval.size < bval.size) {
+                return  B_LogicalD_IntegralD_intD___and__(wit, b, a);
+            } else {
+                B_int res = malloc_int();
+                zz_malloc_fit(&res->val,bval.size);
+                res->val.size = 0;                 
+                for (int i=bval.size-1; i>=0; i--) {
+                    res->val.n[i] = aval.n[i] & bval.n[i];
+                    if (res->val.size == 0 && res->val.n[i] != 0)
+                        res->val.size = i+1;
+                }
+            }
+        }
+    /* } else if (bval.size>=0) { */
+    /*     B_int a1 =  B_IntegralD_intD___invert__(wit1, a); */
+    /*     return B_IntegralD_intD___invert__(wit1, B_LogicalD_IntegralD_intD___xor__(wit, a1, b)); */
+    /* } else {  */
+    /*     B_int a1 =  B_IntegralD_intD___invert__(wit1, a); */
+    /*     B_int b1 =  B_IntegralD_intD___invert__(wit1, b); */
+    /*     return B_LogicalD_IntegralD_intD___xor__(wit, a1, b1); */
+    }
 }
+
                                                  
 B_int B_LogicalD_IntegralD_intD___or__(B_LogicalD_IntegralD_int wit,  B_int a, B_int b) {
     // return toB_i64(a->val | b->val);
@@ -419,9 +452,38 @@ B_int B_LogicalD_IntegralD_intD___or__(B_LogicalD_IntegralD_int wit,  B_int a, B
 }
                                                  
 B_int B_LogicalD_IntegralD_intD___xor__(B_LogicalD_IntegralD_int wit,  B_int a, B_int b) {
-    // return toB_i64(a->val ^ b->val);
-    $RAISE((B_BaseException)$NEW(B_NotImplementedError,to$str("Protocol Logical not implemented for int; use i64\n")));
-    return NULL; // This is just to silence compiler warning, above RAISE will longjmp from here anyway
+    zz_struct aval = a->val;
+    zz_struct bval = b->val;
+    B_IntegralD_int wit1 = (B_IntegralD_int)wit->W_Integral;
+    if (aval.size>=0) {
+        if (bval.size>=0) {
+            if (aval.size < bval.size) {
+                return  B_LogicalD_IntegralD_intD___xor__(wit, b, a);
+            } else {
+                B_int res = malloc_int();
+                zz_malloc_fit(&res->val,aval.size);
+                res->val.size = aval.size > bval.size ? aval.size : 0;
+                for (int i=bval.size-1; i>=0; i--) {
+                    res->val.n[i] = aval.n[i] ^ bval.n[i];
+                    if (res->val.size == 0 && res->val.n[i] != 0)
+                        res->val.size = i+1;
+                }
+                for (int i=bval.size; i<aval.size; i++)
+                    res->val.n[i] = aval.n[i];
+                return res;
+            }
+        } else {
+            B_int b1 =  B_IntegralD_intD___invert__(wit1, b);
+            return B_IntegralD_intD___invert__(wit1, B_LogicalD_IntegralD_intD___xor__(wit, a, b1));
+        }
+    } else if (bval.size>=0) {
+        B_int a1 =  B_IntegralD_intD___invert__(wit1, a);
+        return B_IntegralD_intD___invert__(wit1, B_LogicalD_IntegralD_intD___xor__(wit, a1, b));
+    } else { 
+        B_int a1 =  B_IntegralD_intD___invert__(wit1, a);
+        B_int b1 =  B_IntegralD_intD___invert__(wit1, b);
+        return B_LogicalD_IntegralD_intD___xor__(wit, a1, b1);
+    } 
 }
  
 // B_MinusD_IntegralD_int  ////////////////////////////////////////////////////////////////////////////////////////
