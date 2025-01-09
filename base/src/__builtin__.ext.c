@@ -12,6 +12,7 @@ void B___ext_init__() {
     B_HashableD_floatG_methods.__eq__ = (B_bool (*)(B_HashableD_float, B_float, B_float))B_OrdD_floatD___eq__;
     B_HashableD_strG_methods.__eq__ = (B_bool (*)(B_HashableD_str, B_str, B_str))B_OrdD_strD___eq__;
     B_HashableD_bytesG_methods.__eq__ = (B_bool (*)(B_HashableD_bytes, B_bytes, B_bytes))B_OrdD_bytesD___eq__;
+    B_HashableD_complexG_methods.__eq__ = (B_bool (*)(B_HashableD_complex, B_complex, B_complex))B_HashableD_complexD___eq__;
 
     B_ContainerD_listG_methods.__len__ = (B_int (*)(B_ContainerD_list, B_list))B_CollectionD_SequenceD_listD___len__;
     B_ContainerD_listG_methods.__fromiter__ = (B_list (*)(B_ContainerD_list, B_Iterable, $WORD))B_CollectionD_SequenceD_listD___fromiter__;
