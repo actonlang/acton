@@ -23,6 +23,12 @@ B_complex B_complexG_new(B_Number wit, $WORD c) {
     return $NEW(B_complex,wit,c);
 }
 
+B_complex B_complexD_from_real_imag (B_Real wit1, B_Real wit2, $WORD real, $WORD imag) {
+    double re = wit1->$class->__float__(wit1, real)->val;
+    double im = wit2->$class->__float__(wit2, imag)->val;
+    return toB_complex(re + im * _Complex_I);
+}
+
 B_NoneType B_complexD___init__(B_complex self, B_Number wit, $WORD c){
     self->val = wit->$class->__complx__(wit,c)->val;
     return B_None;
@@ -112,6 +118,9 @@ B_complex B_NumberD_complexD_conjugate (B_NumberD_complex wit, B_complex c) {
 // B_DivD_complex /////////////////////////////////////////////////////////////////////////////////////////
 
 B_complex B_DivD_complexD___truediv__ (B_DivD_complex wit, B_complex a, B_complex b) {
+    if (b->val == 0.0) {
+        RAISE(B_ZeroDivisionError, to_str_noc("complex truediv: divisor is zero"));
+    }
     return toB_complex(a->val/b->val);
 }
 

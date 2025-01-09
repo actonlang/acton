@@ -516,9 +516,12 @@ protocol Div[A]:
 protocol Hashable (Eq):
     __hash__     : () -> int
 
-
 class complex (value):
     def __init__(self, val: Number) -> None:
+        NotImplemented
+
+    @staticmethod
+    def from_real_imag(real: Real, imag: Real) -> complex:
         NotImplemented
 
 class dict[A(Hashable),B] (object):
