@@ -119,6 +119,14 @@ def test_complex() -> bool:
         print("Small number multiplication failed to handle underflow correctly")
         return False
 
+    # Test complex number as dictionary key
+    d = {}
+    d[c2] = 42
+    d[c3] = 43
+    if not (d[c2] == 42 and d[c3] == 43):
+        print("Complex number as dictionary key failed")
+        return False
+
     return True
 
 actor main(env):
