@@ -431,8 +431,8 @@ class TestInfo(object):
     success: ?bool
     exception: ?str
     output: ?str
-    stdout: ?str
-    stderr: ?str
+    std_out: ?str
+    std_err: ?str
     flaky_output: bool
     flaky: bool
     leaky: bool
@@ -455,8 +455,8 @@ class TestInfo(object):
                  success: ?bool=None,
                  exception: ?str=None,
                  output: ?str=None,
-                 stdout: ?str=None,
-                 stderr: ?str=None,
+                 std_out: ?str=None,
+                 std_err: ?str=None,
                  flaky: bool=False,
                  min_duration: float=-1.0,
                  max_duration: float=-1.0,
@@ -475,8 +475,8 @@ class TestInfo(object):
         self.success = success
         self.exception = exception
         self.output = output
-        self.stdout = stdout
-        self.stderr = stderr
+        self.std_out = std_out
+        self.std_err = std_err
         self.flaky_output = False
         self.flaky = flaky
         self.leaky = False
@@ -599,8 +599,8 @@ class TestInfo(object):
             "success": self.success,
             "exception": self.exception,
             "output": self.output,
-            "stdout": self.stdout,
-            "stderr": self.stderr,
+            "std_out": self.std_out,
+            "std_err": self.std_err,
             "flaky": self.flaky,
             "min_duration": self.min_duration,
             "max_duration": self.max_duration,
@@ -638,14 +638,14 @@ class TestInfo(object):
         output: ?str = None
         if out is not None and isinstance(out, str):
             output = out
-        stdout_d = json_data["stdout"]
-        stdout: ?str = None
-        if stdout_d is not None and isinstance(stdout_d, str):
-            stdout = stdout_d
-        stderr_d = json_data["stderr"]
-        stderr: ?str = None
-        if stderr_d is not None and isinstance(stderr_d, str):
-            stderr = stderr_d
+        std_out_d = json_data["std_out"]
+        std_out: ?str = None
+        if std_out_d is not None and isinstance(std_out_d, str):
+            std_out = std_out_d
+        std_err_d = json_data["std_err"]
+        std_err: ?str = None
+        if std_err_d is not None and isinstance(std_err_d, str):
+            std_err = std_err_d
         flaky = json_data["flaky"]
         min_duration = json_data["min_duration"]
         max_duration = json_data["max_duration"]
@@ -681,8 +681,8 @@ class TestInfo(object):
                             success,
                             exception,
                             output,
-                            stdout,
-                            stderr,
+                            std_out,
+                            std_err,
                             flaky,
                             min_duration,
                             max_duration,
@@ -1008,7 +1008,7 @@ class ProjectTestResults(object):
                         for line in str(exc).splitlines(None):
                             print(term.red + "    %s" % (line) + term.normal)
                             self.printed_lines += 1
-                    # Print stdout/stderr if the test failed
+                    # Print std_out/std_err if the test failed
                     if tinfo.num_failures > 0 or tinfo.num_errors > 0:
                         def test_output(msgs: str):
                             for line in msgs.splitlines():
@@ -1016,18 +1016,18 @@ class ProjectTestResults(object):
                                     return True
                             return False
 
-                        stdout = tinfo.stdout
-                        if stdout != None and test_output(stdout):
-                            print("    STDOUT:")
+                        std_out = tinfo.std_out
+                        if std_out != None and test_output(std_out):
+                            print("    STD_OUT:")
                             self.printed_lines += 1
-                            for line in stdout.strip().splitlines():
+                            for line in std_out.strip().splitlines():
                                 print("      " + line)
                                 self.printed_lines += 1
-                        stderr = tinfo.stderr
-                        if stderr != None and test_output(stderr):
-                            print("    STDERR:")
+                        std_err = tinfo.std_err
+                        if std_err != None and test_output(std_err):
+                            print("    STD_ERR:")
                             self.printed_lines += 1
-                            for line in stderr.strip().splitlines():
+                            for line in std_err.strip().splitlines():
                                 print("      " + line)
                                 self.printed_lines += 1
 

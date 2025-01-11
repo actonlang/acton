@@ -108,22 +108,22 @@ actor CompilerRunner(process_cap, env, args, wdir=None, on_exit: ?action(int, in
     with an error message. Similarly, if actonc encounters an error, it will
     print the error message and exit.
     """
-    var stdout_buf = b""
-    var stderr_buf = b""
+    var std_out_buf = b""
+    var std_err_buf = b""
 
-    def on_actonc_stderr(p, data):
-        stderr_buf += data
+    def on_actonc_std_err(p, data):
+        std_err_buf += data
         if print_output:
             print(data.decode(), end="")
 
-    def on_actonc_stdout(p, data):
-        stdout_buf += data
+    def on_actonc_std_out(p, data):
+        std_out_buf += data
         if print_output:
             print(data.decode(), end="")
 
     def on_actonc_exit(p, exit_code, term_signal):
         if on_exit is not None:
-            on_exit(exit_code, term_signal, stdout_buf, stderr_buf)
+            on_exit(exit_code, term_signal, std_out_buf, std_err_buf)
         else:
             if exit_code != 0:
                 print("actonc exited with code: ", exit_code, " terminated with signal:", term_signal)
@@ -141,7 +141,7 @@ actor CompilerRunner(process_cap, env, args, wdir=None, on_exit: ?action(int, in
     # We find the path to actonc by looking at the executable path of the
     # current process. Since we are called 'acton', we just add a 'c'.
     cmd = [fs.exepath() + ("c" if exe == "actonc" else "")] + args
-    p = process.Process(process_cap, cmd, on_actonc_stdout, on_actonc_stderr, on_actonc_exit, on_actonc_error, wdir)
+    p = process.Process(process_cap, cmd, on_actonc_std_out, on_actonc_std_err, on_actonc_exit, on_actonc_error, wdir)
 
     def stop():
         p.stop()
@@ -172,11 +172,11 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
 
     var build_config = BuildConfig()
 
-    def _on_actonc_exit(exit_code, term_signal, stdout_buf, stderr_buf):
+    def _on_actonc_exit(exit_code, term_signal, std_out_buf, std_err_buf):
         if exit_code == 0:
-            on_build_success(stdout_buf.decode())
+            on_build_success(std_out_buf.decode())
         else:
-            on_build_failure(exit_code, term_signal, stdout_buf.decode() + stderr_buf.decode())
+            on_build_failure(exit_code, term_signal, std_out_buf.decode() + std_err_buf.decode())
 
     def _on_actonc_failure(error: str):
         on_build_failure(-999, -999, error)
@@ -224,7 +224,7 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
             print_output=not build_tests
         )
 
-    def _on_dep_actonc_exit(dep_name, exit_code, term_signal, stdout_buf, stderr_buf):
+    def _on_dep_actonc_exit(dep_name, exit_code, term_signal, std_out_buf, std_err_buf):
         if exit_code == 0:
             print("Dependency", dep_name, "built successfully")
             try:
@@ -272,7 +272,7 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
                     env,
                     cmd,
                     path,
-                    lambda exit_code, term_signal, stdout_buf, stderr_buf: _on_dep_actonc_exit(dep_name, exit_code, term_signal, stdout_buf, stderr_buf),
+                    lambda exit_code, term_signal, std_out_buf, std_err_buf: _on_dep_actonc_exit(dep_name, exit_code, term_signal, std_out_buf, std_err_buf),
                     lambda error_msg: on_dep_build_error(dep_name, error_msg),
                     exe="acton"
                 )
@@ -377,43 +377,43 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
 
 
 actor RunModuleTest(process_cap, modname, test_cmd, on_json_output, on_test_error):
-    var captured_stdout = b""
-    var stderr_buf = b""
-    var captured_stderr = b""
+    var captured_std_out = b""
+    var std_err_buf = b""
+    var captured_std_err = b""
 
-    def on_stdout(p, data: bytes):
-        captured_stdout += data
+    def on_std_out(p, data: bytes):
+        captured_std_out += data
 
-    def on_stderr(p, data):
-        # TODO: we shouldn't sent test data in-band on stderr - should be separate pipe
-        stderr_buf += data
-        lines = stderr_buf.splitlines(True)
-        stderr_buf = b""
+    def on_std_err(p, data):
+        # TODO: we shouldn't sent test data in-band on std_err - should be separate pipe
+        std_err_buf += data
+        lines = std_err_buf.splitlines(True)
+        std_err_buf = b""
         for i, line in enumerate(lines):
             if not line.endswith(b"\n"):
-                stderr_buf = b"".join(lines[i:])
+                std_err_buf = b"".join(lines[i:])
                 break
 
             # We have a complete line, check if it is valid JSON
             try:
                 upd = json.decode(line.decode())
                 # We have a complete JSON object, pass it to the callback
-                on_json_output(self, upd, captured_stdout, captured_stderr)
+                on_json_output(self, upd, captured_std_out, captured_std_err)
             except ValueError:
-                # Not a complete JSON object, append to captured_stderr
+                # Not a complete JSON object, append to captured_std_err
                 if line != b"\n":
-                    captured_stderr += line
+                    captured_std_err += line
 
     def on_exit(p, exit_code, term_signal):
         if exit_code != 0 or term_signal != 0:
-            on_test_error(exit_code, term_signal, captured_stdout.decode() + captured_stderr.decode())
+            on_test_error(exit_code, term_signal, captured_std_out.decode() + captured_std_err.decode())
 
     def on_error(p, error):
         on_test_error(-1, -1, error)
 
     # TODO: fs.join()
     cmd = ["out/bin/.test_" + modname, "--json"] + test_cmd
-    p = process.Process(process_cap, cmd, on_stdout, on_stderr, on_exit, on_error)
+    p = process.Process(process_cap, cmd, on_std_out, on_std_err, on_exit, on_error)
 
     def stop():
         p.stop()
@@ -440,21 +440,21 @@ actor CmdListTest(env, args):
             print()
         env.exit(0)
 
-    def _on_build_success(stdout_buf: str):
+    def _on_build_success(std_out_buf: str):
         test_modules = []
-        stdout_tests = False
-        for line in stdout_buf.splitlines(False):
+        std_out_tests = False
+        for line in std_out_buf.splitlines(False):
             if line.startswith("Test executables:"):
-                stdout_tests = True
+                std_out_tests = True
             else:
-                if stdout_tests:
+                if std_out_tests:
                     test_modules.append(line)
         l = ListTests(process_cap, test_modules, print_module_tests)
 
-    def _on_build_failure(exit_code, term_signal, stderr_buf: str):
+    def _on_build_failure(exit_code, term_signal, std_err_buf: str):
         print("Failed to build project tests")
         print("actonc exited with code %d / %d" % (exit_code, term_signal))
-        print("stderr:", stderr_buf)
+        print("std_err:", std_err_buf)
         env.exit(1)
 
     project_builder = BuildProject(
@@ -473,11 +473,11 @@ actor ListTests(process_cap, test_modules: list[str], on_done: action(?str, ?dic
     remaining_mods = {}
     tests: dict[str, dict[str, testing.TestInfo]] = {}
 
-    def _on_exit(module_name, p, exit_code, term_signal, stdout_buf, stderr_buf):
+    def _on_exit(module_name, p, exit_code, term_signal, std_out_buf, std_err_buf):
         if exit_code == 0:
             tests[module_name] = {}
             try:
-                data = json.decode(stderr_buf.decode())
+                data = json.decode(std_err_buf.decode())
                 if isinstance(data, dict):
                     if "tests" in data:
                         for test_name, json_test_info in data["tests"].items():
@@ -491,7 +491,7 @@ actor ListTests(process_cap, test_modules: list[str], on_done: action(?str, ?dic
             except ValueError as e:
                 on_done("Error parsing JSON from module %s: %s" % (module_name, str(e)))
         else:
-            on_done("Error listing tests for module %s, exited with code %d and term signal %d: %s" % (module_name, exit_code, term_signal, stderr_buf.decode()))
+            on_done("Error listing tests for module %s, exited with code %d and term signal %d: %s" % (module_name, exit_code, term_signal, std_err_buf.decode()))
 
     def _on_error(module_name, p, error):
         err = "ERROR: Error listing tests for module %s: %s" % (module_name, error)
@@ -509,7 +509,7 @@ actor ListTests(process_cap, test_modules: list[str], on_done: action(?str, ?dic
         p = process.RunProcess(
             process_cap,
             cmd,
-            lambda p, exit_code, term_signal, stdout_buf, stderr_buf: _on_exit(module_name, p, exit_code, term_signal, stdout_buf, stderr_buf),
+            lambda p, exit_code, term_signal, std_out_buf, std_err_buf: _on_exit(module_name, p, exit_code, term_signal, std_out_buf, std_err_buf),
             lambda p, error: _on_error(module_name, p, error))
         remaining_mods[module_name] = p
 
@@ -567,12 +567,12 @@ actor CmdTest(env: Env, args, perf_mode: bool=False):
             return
         after 0.05: _periodic_show()
 
-    def _on_json_output(rmt, test, data, stdout_buf, stderr_buf):
+    def _on_json_output(rmt, test, data, std_out_buf, std_err_buf):
         if isinstance(data, dict):
             if "test_info" in data:
                 test_info = TestInfo.from_json(data["test_info"])
-                test_info.stdout = stdout_buf.decode()
-                test_info.stderr = stderr_buf.decode()
+                test_info.std_out = std_out_buf.decode()
+                test_info.std_err = std_err_buf.decode()
                 ptr.update(test_info.definition.module, test_info.definition.name, test_info)
                 if test_info.complete:
                     if test_info.success == None and test_info.exception == "Test timeout":
@@ -614,7 +614,7 @@ actor CmdTest(env: Env, args, perf_mode: bool=False):
                 process_cap,
                 test_info.definition.module,
                 cmd,
-                lambda rmt, x, stdout_buf, stderr_buf: _on_json_output(rmt, test_info.definition, x, stdout_buf, stderr_buf),
+                lambda rmt, x, std_out_buf, std_err_buf: _on_json_output(rmt, test_info.definition, x, std_out_buf, std_err_buf),
                 lambda x, y, z: _on_test_error(test_info.definition, x, y, z))
             running_tests[test_info.definition] = t
             if len(running_tests) < concurrency:
@@ -658,22 +658,22 @@ actor CmdTest(env: Env, args, perf_mode: bool=False):
 
         _run_test()
 
-    def _on_build_success(stdout_buf: str):
+    def _on_build_success(std_out_buf: str):
         print(term.clearline + term.up() + term.clearline, end="")
         test_modules = []
-        stdout_tests = False
-        for line in stdout_buf.splitlines(False):
+        std_out_tests = False
+        for line in std_out_buf.splitlines(False):
             if line.startswith("Test executables:"):
-                stdout_tests = True
+                std_out_tests = True
             else:
-                if stdout_tests:
+                if std_out_tests:
                     test_modules.append(line)
         _list_tests(test_modules)
 
-    def _on_build_failure(exit_code, term_signal, stderr_buf: str):
+    def _on_build_failure(exit_code, term_signal, std_err_buf: str):
         print("Failed to build project tests")
         print("actonc exited with code %d / %d" % (exit_code, term_signal))
-        print("stderr:", stderr_buf)
+        print("std_err:", std_err_buf)
         env.exit(1)
 
     # TODO: let dev mode enable for normal test and disable, i.e. use release mode for perf tests
@@ -721,9 +721,9 @@ actor ZigFetchDeps(env, build_config: BuildConfig, on_done: action(int, int) -> 
     var total = 0
     var fetched = 0
 
-    def _on_exit(dep: Dependency, p, exit_code, term_signal, stdout_buf, stderr_buf):
+    def _on_exit(dep: Dependency, p, exit_code, term_signal, std_out_buf, std_err_buf):
         if exit_code == 0:
-            fetched_hash: str = stdout_buf.decode().strip()
+            fetched_hash: str = std_out_buf.decode().strip()
             if print_output:
                 print("Fetched dependency %s with hash %s" % (dep.name, fetched_hash), err=True)
 
@@ -745,7 +745,7 @@ actor ZigFetchDeps(env, build_config: BuildConfig, on_done: action(int, int) -> 
             if len(dep_processes) == 0 and len(zig_processes) == 0:
                 on_done(total, fetched)
         else:
-            on_fetch_error(stderr_buf.decode())
+            on_fetch_error(std_err_buf.decode())
 
     def _on_error(dep, p, error):
         # TODO: collect all errors before calling on_fetch_error?
@@ -777,7 +777,7 @@ actor ZigFetchDeps(env, build_config: BuildConfig, on_done: action(int, int) -> 
             p = process.RunProcess(
                 pcap,
                 cmd,
-                lambda p, exit_code, term_signal, stdout_buf, stderr_buf: _on_exit(dep, p, exit_code, term_signal, stdout_buf, stderr_buf),
+                lambda p, exit_code, term_signal, std_out_buf, std_err_buf: _on_exit(dep, p, exit_code, term_signal, std_out_buf, std_err_buf),
                 lambda p, error: _on_error(dep, p, error))
             dep_processes[dep.name] = p
 
@@ -806,7 +806,7 @@ actor ZigFetchDeps(env, build_config: BuildConfig, on_done: action(int, int) -> 
             p = process.RunProcess(
                 pcap,
                 cmd,
-                lambda p, exit_code, term_signal, stdout_buf, stderr_buf: _on_exit(dep, p, exit_code, term_signal, stdout_buf, stderr_buf),
+                lambda p, exit_code, term_signal, std_out_buf, std_err_buf: _on_exit(dep, p, exit_code, term_signal, std_out_buf, std_err_buf),
                 lambda p, error: _on_error(dep, p, error))
             zig_processes[dep.name] = p
 
@@ -892,9 +892,9 @@ actor CmdPkgAdd(env, args):
 
     build_config = get_build_config()
 
-    def on_exit(p, exit_code, term_signal, stdout_buf, stderr_buf):
+    def on_exit(p, exit_code, term_signal, std_out_buf, std_err_buf):
         if exit_code == 0:
-            dep_hash = stdout_buf.decode().strip()
+            dep_hash = std_out_buf.decode().strip()
 
             if dep_name in build_config.dependencies:
                 bc_dep = build_config.dependencies[dep_name]
@@ -917,7 +917,7 @@ actor CmdPkgAdd(env, args):
 
             env.exit(0)
         else:
-            print("Error fetching", stderr_buf.decode())
+            print("Error fetching", std_err_buf.decode())
             env.exit(1)
 
     def on_error(p, error):
@@ -1012,9 +1012,9 @@ actor CmdZigPkgAdd(env, args):
 
     build_config = get_build_config()
 
-    def on_exit(p, exit_code, term_signal, stdout_buf, stderr_buf):
+    def on_exit(p, exit_code, term_signal, std_out_buf, std_err_buf):
         if exit_code == 0:
-            dep_hash = stdout_buf.decode().strip()
+            dep_hash = std_out_buf.decode().strip()
 
             if dep_name in build_config.zig_dependencies:
                 if build_config.zig_dependencies[dep_name].url != dep_url:
@@ -1037,7 +1037,7 @@ actor CmdZigPkgAdd(env, args):
 
             env.exit(0)
         else:
-            print("Error fetching", stderr_buf.decode())
+            print("Error fetching", std_err_buf.decode())
             env.exit(1)
 
     def on_error(p, error):
@@ -1111,11 +1111,11 @@ actor main(env):
 
     def _compilefile(_file, args):
         if in_project(_file):
-            def on_build_success(stdout_buf):
+            def on_build_success(std_out_buf):
                 env.exit(0)
 
-            def on_build_failure(exit_code: int,  term_signal: int, stderr_buf: str):
-                print("Error building project", stderr_buf)
+            def on_build_failure(exit_code: int,  term_signal: int, std_err_buf: str):
+                print("Error building project", std_err_buf)
                 env.exit(1)
 
             BuildProject(process_cap, env, args, on_build_success, on_build_failure, build_tests=False, files=[_file])
@@ -1124,11 +1124,11 @@ actor main(env):
             cr = CompilerRunner(process_cap, env, [_file] + cmdargs)
 
     def _cmd_build(args):
-        def on_build_success(stdout_buf):
+        def on_build_success(std_out_buf):
             env.exit(0)
 
-        def on_build_failure(exit_code: int,  term_signal: int, stderr_buf: str):
-            print("Error building project", stderr_buf)
+        def on_build_failure(exit_code: int,  term_signal: int, std_err_buf: str):
+            print("Error building project", std_err_buf)
             env.exit(1)
 
         BuildProject(process_cap, env, args, on_build_success, on_build_failure, build_tests=False)
