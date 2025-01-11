@@ -727,6 +727,7 @@ actor TestExecutor(syscap, config, t: Test, report_complete, env):
     var test_sw = time.Stopwatch()
     var last_report = time.Stopwatch()
     var test_info = None
+    var iteration = 0
 
     def get_expected(module: str, test: str) -> ?str:
         filename = file.join_path([fs.cwd(), "test", "golden", module, test])
@@ -765,6 +766,8 @@ actor TestExecutor(syscap, config, t: Test, report_complete, env):
             report_complete(t)
 
     def _run_fn(t: Test):
+        print("\n== Running test, iteration:", iteration)
+        print("\n== Running test, iteration:", iteration, err=True)
         # Run GC to get accurate memory usage
         if config.perf_mode:
             acton.rts.gc(syscap)
@@ -790,6 +793,7 @@ actor TestExecutor(syscap, config, t: Test, report_complete, env):
             _report_result(t, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, False, e, None)
         except Exception as e:
             _report_result(t, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, None, e, None)
+        iteration += 1
 
     def _run_test():
         """Get the next available test and run it"""
@@ -1006,18 +1010,24 @@ class ProjectTestResults(object):
                             self.printed_lines += 1
                     # Print stdout/stderr if the test failed
                     if tinfo.num_failures > 0 or tinfo.num_errors > 0:
+                        def test_output(msgs: str):
+                            for line in msgs.splitlines():
+                                if not (line.startswith("== Running test,") or line == ""):
+                                    return True
+                            return False
+
                         stdout = tinfo.stdout
-                        if stdout != None and stdout != "":
+                        if stdout != None and test_output(stdout):
                             print("    STDOUT:")
                             self.printed_lines += 1
-                            for line in stdout.splitlines():
+                            for line in stdout.strip().splitlines():
                                 print("      " + line)
                                 self.printed_lines += 1
                         stderr = tinfo.stderr
-                        if stderr != None and stderr != "":
+                        if stderr != None and test_output(stderr):
                             print("    STDERR:")
                             self.printed_lines += 1
-                            for line in stderr.splitlines():
+                            for line in stderr.strip().splitlines():
                                 print("      " + line)
                                 self.printed_lines += 1
 
