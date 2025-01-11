@@ -583,10 +583,7 @@ actor CmdTest(env: Env, args, perf_mode: bool=False):
 
     def _on_test_error(test: testing.Test, exit_code: int, term_signal: int, errout: str):
         errmsg = "Test error, exit_code %d and term signal %d, errout: " % (exit_code, term_signal)
-        try:
-            errmsg += errout
-        except IndexError:
-            pass
+        errmsg += errout
         # We construct our own TestInfo here since we didn't get one from the
         # test process, because it crashed...
         ptr.update(
@@ -646,15 +643,18 @@ actor CmdTest(env: Env, args, perf_mode: bool=False):
             env.exit(1)
             return
 
-        ptr.expected_modules = set(tests.keys())
 
+        expected_modules = set()
         name_filter = set(args.get_strlist("name"))
         for module_name in sorted(tests.keys()):
             module_tests = tests[module_name]
+            if len(module_tests) > 0:
+                expected_modules.add(module_name)
             for test_name, test_info in module_tests.items():
                 if len(name_filter) == 0 or test_name in name_filter:
                     ptr.update(module_name, test_name, test_info)
                     tests_to_run.append(test_info)
+        ptr.expected_modules = expected_modules
 
         _run_test()
 
