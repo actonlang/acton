@@ -237,20 +237,14 @@ class TestLogger(logging.Logger):
     pass
 
 class Test(object):
-    module: ?str
+    module: str
     name: str
     desc: str
 
-    def __init__(self, name: str, desc: str):
+    def __init__(self, name: str, desc: str, module):
         self.name = name
         self.desc = desc
-        self.module = None
-
-    def get_module(self) -> str:
-        mod = self.module
-        if mod is not None:
-            return mod
-        raise ValueError("Test: Module not set")
+        self.module = module
 
     def run(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler):
         if isinstance(self, UnitTest):
@@ -266,17 +260,42 @@ class Test(object):
 
     def to_json(self):
         return {
+            "module": self.module,
             "name": self.name,
             "desc": self.desc,
         }
 
     @staticmethod
     def from_json(data: dict[str, ?value]):
+        module = data["module"]
         name = data["name"]
         desc = data["desc"]
-        if isinstance(name, str) and isinstance(desc, str):
-            return Test(name, desc)
+        if isinstance(module, str) and isinstance(name, str) and isinstance(desc, str):
+            return Test(name, desc, module)
         raise ValueError("Test: Invalid JSON")
+
+def safe_hash(h: int) -> int: # TODO: Remove when https://github.com/actonlang/acton/issues/1348 is fixed
+    limit = 2**63-1
+    sign = 1
+    if h < 0:
+        limit = 2**63
+        sign = -1
+        h = -h
+
+    while h > limit:
+        f = h // limit
+        h %= limit
+        h += f
+
+    return sign * h
+
+extension Test(Hashable):
+    def __eq__(self, other: Test) -> bool:
+        return self.module == other.module and self.name == other.name
+
+    def __hash__(self) -> int:
+        #return hash(self.data)
+        return safe_hash(2*hash(self.module) + 3*hash(self.name))
 
 class UnitTest(Test):
     def __init__(self, fn: mut() -> None, name: str, desc: str, module: str):
@@ -412,6 +431,8 @@ class TestInfo(object):
     success: ?bool
     exception: ?str
     output: ?str
+    std_out: ?str
+    std_err: ?str
     flaky_output: bool
     flaky: bool
     leaky: bool
@@ -434,6 +455,8 @@ class TestInfo(object):
                  success: ?bool=None,
                  exception: ?str=None,
                  output: ?str=None,
+                 std_out: ?str=None,
+                 std_err: ?str=None,
                  flaky: bool=False,
                  min_duration: float=-1.0,
                  max_duration: float=-1.0,
@@ -452,6 +475,8 @@ class TestInfo(object):
         self.success = success
         self.exception = exception
         self.output = output
+        self.std_out = std_out
+        self.std_err = std_err
         self.flaky_output = False
         self.flaky = flaky
         self.leaky = False
@@ -574,6 +599,8 @@ class TestInfo(object):
             "success": self.success,
             "exception": self.exception,
             "output": self.output,
+            "std_out": self.std_out,
+            "std_err": self.std_err,
             "flaky": self.flaky,
             "min_duration": self.min_duration,
             "max_duration": self.max_duration,
@@ -611,6 +638,14 @@ class TestInfo(object):
         output: ?str = None
         if out is not None and isinstance(out, str):
             output = out
+        std_out_d = json_data["std_out"]
+        std_out: ?str = None
+        if std_out_d is not None and isinstance(std_out_d, str):
+            std_out = std_out_d
+        std_err_d = json_data["std_err"]
+        std_err: ?str = None
+        if std_err_d is not None and isinstance(std_err_d, str):
+            std_err = std_err_d
         flaky = json_data["flaky"]
         min_duration = json_data["min_duration"]
         max_duration = json_data["max_duration"]
@@ -646,6 +681,8 @@ class TestInfo(object):
                             success,
                             exception,
                             output,
+                            std_out,
+                            std_err,
                             flaky,
                             min_duration,
                             max_duration,
@@ -677,9 +714,10 @@ class TestRunnerConfig(object):
         self.output_enabled = False if args.get_bool("no_output") else True
         self.min_test_duration = mtd
 
+class TimeoutError(Exception):
+    pass
 
-# TODO: add a timeout to this
-actor TestExecutor(syscap, config, get_test: () -> Test, report_complete, env):
+actor TestExecutor(syscap, config, t: Test, report_complete, env):
     """The actual executor of tests
     """
     log_handler = logging.Handler("TestRunner")
@@ -689,6 +727,7 @@ actor TestExecutor(syscap, config, get_test: () -> Test, report_complete, env):
     var test_sw = time.Stopwatch()
     var last_report = time.Stopwatch()
     var test_info = None
+    var iteration = 0
 
     def get_expected(module: str, test: str) -> ?str:
         filename = file.join_path([fs.cwd(), "test", "golden", module, test])
@@ -719,15 +758,16 @@ actor TestExecutor(syscap, config, get_test: () -> Test, report_complete, env):
             test_info.update(complete, TestResult(success, exc, val, testiter_dur, mem_usage_delta, non_gc_mem_usage_delta), test_dur*1000.0)
         if last_report.elapsed().to_float() > 0.05 or complete:
             if test_info is not None and config.output_enabled:
-                print(json.encode({"test_info": test_info.to_json()}), err=True)
+                print("\n" + json.encode({"test_info": test_info.to_json()}), err=True)
             last_report.reset()
         if not complete:
             _run_fn(test)
         else:
-            report_complete(test.name)
-            _run_next()
+            report_complete(t)
 
     def _run_fn(t: Test):
+        print("\n== Running test, iteration:", iteration)
+        print("\n== Running test, iteration:", iteration, err=True)
         # Run GC to get accurate memory usage
         if config.perf_mode:
             acton.rts.gc(syscap)
@@ -740,7 +780,7 @@ actor TestExecutor(syscap, config, get_test: () -> Test, report_complete, env):
         def repres(s: ?bool, e: ?Exception, val: ?str) -> None:
             # Compare expected golden value
             if val is not None:
-                exp_val = get_expected(t.get_module(), t.name)
+                exp_val = get_expected(t.module, t.name)
                 if exp_val is None or exp_val is not None and val != exp_val:
                     exc = NotEqualError(val, exp_val, "Test output does not match expected golden value.\nActual  : %s\nExpected: %s" % (val, exp_val if exp_val is not None else "None"))
                     _report_result(t, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, False, exc, val)
@@ -753,33 +793,19 @@ actor TestExecutor(syscap, config, get_test: () -> Test, report_complete, env):
             _report_result(t, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, False, e, None)
         except Exception as e:
             _report_result(t, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, None, e, None)
+        iteration += 1
 
-    def _run_next():
+    def _run_test():
         """Get the next available test and run it"""
         test_sw = time.Stopwatch()
-        try:
-            t = get_test()
-            test_info = TestInfo(t)
-            _run_fn(t)
-        except Exception as e:
-            return None
+        test_info = TestInfo(t)
+        _run_fn(t)
 
-    after 0: _run_next()
+    after 0: _run_test()
 
-
-class ModuleError(object):
-    exit_code: int
-    term_signal: int
-    errout: str
-
-    def __init__(self, exit_code: int, term_signal: int, err: str):
-        self.exit_code = exit_code
-        self.term_signal = term_signal
-        self.err = err
 
 class ProjectTestResults(object):
     results: dict[str, dict[str, TestInfo]]
-    module_error: dict[str, ModuleError]
     last_results: dict[str, dict[str, TestInfo]]
     sw: time.Stopwatch
     expected_modules: set[str]
@@ -789,7 +815,6 @@ class ProjectTestResults(object):
 
     def __init__(self, perf_data: str, perf_mode: bool=False):
         self.results = {}
-        self.module_error = {}
         self.last_results = self.parse_perf_data(perf_data)
         self.sw = time.Stopwatch()
         self.expected_modules = set([''])
@@ -814,18 +839,6 @@ class ProjectTestResults(object):
             print("Failed to parse performance data")
             return {}
 
-    def set_expected(self, tests: dict[str, Test], modname: str=""):
-        for test_name, test in tests.items():
-            if modname not in self.results:
-                self.results[modname] = {}
-            self.results[modname][test_name] = TestInfo(test)
-
-    def update_module(self, module_name: str, test_results: dict[str, TestInfo]):
-        """Update test results for all tests in a module
-        """
-        self.up_to_date = False
-        self.results[module_name] = test_results
-
     def update(self, module_name: str, test_name: str, test_info: TestInfo):
         """Update result for individual test
         """
@@ -833,21 +846,6 @@ class ProjectTestResults(object):
         if module_name not in self.results:
             self.results[module_name] = {}
         self.results[module_name][test_name] = test_info
-
-    def update_result(self, module_name: str, test: Test, complete: bool, test_result: TestResult):
-        """Update result for individual test
-        """
-        self.up_to_date = False
-        if module_name not in self.results:
-            self.results[module_name] = {}
-        if test.name not in self.results[module_name]:
-            self.results[module_name][test.name] = TestInfo(test)
-        tres = self.results[module_name][test.name]
-        if test_result is not None:
-            tres.update(complete, test_result)
-
-    def update_module_error(self, module_name: str, moderr: ModuleError):
-        self.module_error[module_name] = moderr
 
     def num_tests(self):
         cnt = 0
@@ -932,10 +930,6 @@ class ProjectTestResults(object):
         if set(self.results.keys()) != self.expected_modules:
             complete = False
         for module_name in self.results:
-            if module_name in self.module_error:
-                for test_name, test_info in self.results[module_name].items():
-                    errors += 1
-                continue
             for test_name, test_info in self.results[module_name].items():
                 if not test_info.complete:
                     complete = False
@@ -994,9 +988,6 @@ class ProjectTestResults(object):
                     if self.perf_mode:
                         msg += format_timing(module_name, test_name) + " "
                     msg += "%4d runs in %3.3fms" % (tinfo.num_iterations, tinfo.test_duration) + term.normal
-                elif module_name in self.module_error:
-                    moderr = self.module_error[module_name]
-                    msg = term.red + "##: Test crash? Exit code: %d  term signal: %d" % (moderr.exit_code, moderr.term_signal) + term.normal
                 else:
                     msg = term.yellow + "**" + term.normal
 
@@ -1012,18 +1003,33 @@ class ProjectTestResults(object):
                                                                         tinfo.non_gc_mem_inc_count,
                                                                         tinfo.num_iterations))
                     self.printed_lines += 3
-                if tinfo.complete and exc is not None:
-                    for line in str(exc).splitlines(None):
-                        print(term.red + "    %s" % (line) + term.normal)
-                        self.printed_lines += 1
+                if tinfo.complete:
+                    if exc != None:
+                        for line in str(exc).splitlines(None):
+                            print(term.red + "    %s" % (line) + term.normal)
+                            self.printed_lines += 1
+                    # Print std_out/std_err if the test failed
+                    if tinfo.num_failures > 0 or tinfo.num_errors > 0:
+                        def test_output(msgs: str):
+                            for line in msgs.splitlines():
+                                if not (line.startswith("== Running test,") or line == ""):
+                                    return True
+                            return False
 
-            if module_name in self.module_error:
-                moderr = self.module_error[module_name]
-                if moderr.err != "":
-                    msg = term.red + "Error:\n" + term.normal
-                    msg += moderr.err
-                    print(msg)
-                    self.printed_lines += len(msg.splitlines())
+                        std_out = tinfo.std_out
+                        if std_out != None and test_output(std_out):
+                            print("    STD_OUT:")
+                            self.printed_lines += 1
+                            for line in std_out.strip().splitlines():
+                                print("      " + line)
+                                self.printed_lines += 1
+                        std_err = tinfo.std_err
+                        if std_err != None and test_output(std_err):
+                            print("    STD_ERR:")
+                            self.printed_lines += 1
+                            for line in std_err.strip().splitlines():
+                                print("      " + line)
+                                self.printed_lines += 1
 
         print("")
         if complete:
@@ -1052,45 +1058,6 @@ class ProjectTestResults(object):
             print()
         self.printed_lines += 3
 
-class ModuleTestResults(object):
-    tests: dict[str, TestInfo]
-    last_show: time.Instant
-
-    def __init__(self):
-        self.tests = {}
-        self.last_show = time.monotonic()
-        self.last_show.second -= 1
-
-    def set_tests(self, tests: dict[str, TestInfo]):
-        self.tests = tests
-
-    def update(self, test: Test, complete: bool, test_result: TestResult):
-        if test.name not in self.tests:
-            self.tests[test.name] = TestInfo(test)
-        tinfo = self.tests[test.name]
-        tinfo.update(complete, test_result)
-        self.show_test(test.name)
-
-    def is_test_done(self, name):
-        if name in self.tests:
-            return self.tests[name].complete
-        return False
-
-    def show_test(self, test_name: str):
-        tinfo = self.tests[test_name]
-        now = time.monotonic()
-        if tinfo.complete == False and now.since(self.last_show).to_float() < 0.05:
-            return
-        self.last_show = now
-        print(json.encode({"test_info": tinfo.to_json()}), err=True)
-
-    def show(self):
-        res = {}
-        for test_name, test_info in self.tests.items():
-            res[test_name] = test_info.to_json()
-        print(json.encode({"tests": res}), err=True)
-
-
 
 actor test_runner(env: Env,
                   unit_tests: dict[str, UnitTest],
@@ -1098,80 +1065,75 @@ actor test_runner(env: Env,
                   async_actor_tests: dict[str, AsyncActorTest],
                   env_tests: dict[str, EnvTest]):
     sw = time.Stopwatch()
-    var results = ModuleTestResults()
     var all_tests = {}
 
-    def _init_results(args):
+    for name, t in unit_tests.items():
+        all_tests[name] = t
+    for name, t in sync_actor_tests.items():
+        all_tests[name] = t
+    for name, t in async_actor_tests.items():
+        all_tests[name] = t
+    for name, t in env_tests.items():
+        all_tests[name] = t
 
-        for name, t in unit_tests.items():
-            all_tests[name] = t
-        for name, t in sync_actor_tests.items():
-            all_tests[name] = t
-        for name, t in async_actor_tests.items():
-            all_tests[name] = t
-        for name, t in env_tests.items():
-            all_tests[name] = t
-
-        tests = _filter_tests(all_tests, args)
-
-        test_module_results = {}
-        for test_def in tests.values():
-            test_module_results[test_def.name] = TestInfo(test_def)
-        results.set_tests(test_module_results)
-
-    def _filter_tests[T](tests: dict[str, T], args) -> dict[str, T]:
+    proc def _cmd_list(args):
         res = {}
-        name_filter = []
-        try:
-            name_filter = args.get_strlist("name")
-        except argparse.ArgumentError:
-            pass
-        test_names = set(name_filter)
-        if test_names == set():
-            return tests
-
-        TEST_PREFIX_LEN = len("_test_")
-        for name, t in tests.items():
-            if name[TEST_PREFIX_LEN:] in test_names:
-                res[name] = t
-        return res
-
-    proc def _list_tests(args):
-        _init_results(args)
-        results.show()
+        for test_name, test_def in all_tests.items():
+            test_info = TestInfo(test_def)
+            res[test_def.name] = test_info.to_json()
+        print("\n" + json.encode({"tests": res}), err=True)
         env.exit(0)
+
+
 
     proc def _run_tests(args, perf_mode: bool=False):
         config = TestRunnerConfig(perf_mode, args)
         if config.perf_mode:
             acton.rts.start_gc_performance_measurement(env.syscap)
-        _init_results(args)
 
         test_concurrency = 1 if config.perf_mode else env.nr_wthreads
-        my_tests = _filter_tests(all_tests, args)
-        to_hand_out = list(my_tests.keys())
+        test_timeout = 3.0
+
+        test_name = args.get_str("name")
+        test_fun_name = "_test_" + test_name
+        if test_fun_name not in all_tests:
+            print("Test not found: %s" % test_name)
+            env.exit(1)
+        the_test = all_tests[test_fun_name]
         tests_complete = set()
 
-        def get_test():
-            test_id = to_hand_out.pop()
-            test = my_tests[test_id]
-            return test
-
-        def check_complete():
-            if tests_complete == set(my_tests.keys()):
-                env.exit(0)
-                return True
-            return False
+        def _check_timeout(test_def):
+            if test_def in tests_complete:
+                return
+            time_s = test_timeout * 1000.0
+            test_info = TestInfo(
+                test_def,
+                complete=True,
+                success=None,
+                exception="Test timeout",
+                min_duration=time_s,
+                max_duration=time_s,
+                avg_duration=time_s,
+                total_duration=time_s,
+                test_duration=time_s,
+                num_iterations=1,
+                num_failures=0,
+                num_errors=1
+                )
+            tests_complete.add(test_def)
+            print("\n" + json.encode({"test_info": test_info.to_json()}), err=True)
+            env.exit(0)
 
         def report_complete(t):
-            tests_complete.add("_test_" + t)
-            check_complete()
+            if t in tests_complete:
+                # Report after we hit timeout
+                return
+            tests_complete.add(t)
+            env.exit(0)
 
         test_executors = []
-        if not check_complete():
-            for i in range(test_concurrency):
-                te = TestExecutor(env.syscap, config, get_test, report_complete, env)
-                test_executors.append(te)
+        te = TestExecutor(env.syscap, config, the_test, report_complete, env)
+        after test_timeout: _check_timeout(the_test)
 
     proc def _run_perf_tests(args):
         _run_tests(args, perf_mode=True)
@@ -1180,9 +1142,9 @@ actor test_runner(env: Env,
         p = argparse.Parser()
         p.add_bool("json", "Output results as JSON")
         p.add_bool("no_output", "No result output")
-        p.add_option("name", "strlist", nargs="+", default=[], help="Filter tests by name")
-        lp = p.add_cmd("list", "list tests", _list_tests)
+        lp = p.add_cmd("list", "list tests", _cmd_list)
         tp = p.add_cmd("test", "Run tests", _run_tests)
+        tp.add_arg("name", "Name of the test to run")
         pp = tp.add_cmd("perf", "Performance benchmark tests", _run_perf_tests)
         pp.add_option("iterations", "int", "?", 1, "Number of iterations to run")
         pp.add_option("min_time", "int", "?", 1000, "Minimum time to run a test in milliseconds")
