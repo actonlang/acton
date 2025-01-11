@@ -84,8 +84,8 @@ long B_i16D_hash (B_i16 n) {
 static long double_hash(double d) {
     int e, sign;
     double m;
-    long x, y;
-    
+    unsigned long x, y;
+
     if (!isfinite(d)) {
         if (isinf(d))
             return d > 0 ? _PyHASH_INF : -_PyHASH_INF;
@@ -103,13 +103,13 @@ static long double_hash(double d) {
 
     /* process 28 bits at a time;  this should work well both for binary
        and hexadecimal floating point. */
-    x = 0;
-    while (m) {
+    x = 0UL;
+    while (m != 0.0) {
         x = ((x << 28) & _PyHASH_MODULUS) | x >> (_PyHASH_BITS - 28);
         m *= 268435456.0;  /* 2**28 */
         e -= 28;
-        y = (long)m;  /* pull out integer part */
-        m -= y;
+        y = (unsigned long)m;
+        m -= (double)y;
         x += y;
         if (x >= _PyHASH_MODULUS)
             x -= _PyHASH_MODULUS;
@@ -119,10 +119,13 @@ static long double_hash(double d) {
     e = e >= 0 ? e % _PyHASH_BITS : _PyHASH_BITS-1-((-1-e) % _PyHASH_BITS);
     x = ((x << e) & _PyHASH_MODULUS) | x >> (_PyHASH_BITS - e);
 
-    x = x * sign;
-    if (x == (long)-1)
-        x = (long)-2;
-    return x;
+    /* now cast x back to signed and apply the sign */
+    long result = (long)x;
+    result = result * sign;
+
+    if (result == -1)
+        result = -2;
+    return result;
 }
 
 long B_floatD_hash(B_float v) {
