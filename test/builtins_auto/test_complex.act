@@ -71,11 +71,10 @@ def test_complex() -> bool:
     # Test power operation
     # (1 + i)² = 1 + 2i - 1 = 2i
     c = complex.from_real_imag(1.0, 1.0)
-    # TODO: this depends on __fromatom__ being implemented
-    #d = c ** 2
-    #if abs(d.real()) > 1e-10 or abs(d.imag() - 2.0) > 1e-10:
-    #    print("Power operation failed - expected 0.0+2.0i, got:", d.real(), "+", d.imag(), "i")
-    #    return False
+    d = c ** complex.from_real_imag(2, 0)
+    if abs(d.real()) > 1e-10 or abs(d.imag() - 2.0) > 1e-10:
+        print("Power operation failed - expected 0.0+2.0i, got:", d.real(), "+", d.imag(), "i")
+        return False
 
     # Test equality and hash consistency
     c1 = complex.from_real_imag(1.0, 2.0)
@@ -120,10 +119,10 @@ def test_complex() -> bool:
         return False
 
     # Test complex number as dictionary key
-    d = {}
-    d[c2] = 42
-    d[c3] = 43
-    if not (d[c2] == 42 and d[c3] == 43):
+    e = {}
+    e[c2] = 42
+    e[c3] = 43
+    if not (e[c2] == 42 and e[c3] == 43):
         print("Complex number as dictionary key failed")
         return False
 
