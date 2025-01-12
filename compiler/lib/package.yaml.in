@@ -1,5 +1,5 @@
 name:                acton
-version:             0.24.1
+version: BUILD_VERSION
 # github:              "/simple"
 license:             BSD3
 author:              "Author name here"
