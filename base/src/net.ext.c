@@ -319,8 +319,10 @@ static void after_shutdown(uv_shutdown_t* req, int status) {
 $R netQ_TCPConnectionD_closeG_local (netQ_TCPConnection self, $Cont c$cont, $action on_close) {
     uv_stream_t *stream = (uv_stream_t *)from$int(self->_sock);
     // fd == -1 means invalid FD and can happen after __resume__
-    if ((long int)stream == -1)
+    if ((long int)stream == -1) {
+        on_close->$class->__asyn__(on_close, self);
         return $R_CONT(c$cont, B_None);
+    }
 
     log_debug("Closing TCP connection");
     struct close_cb_data *cb_data = (struct close_cb_data *)acton_malloc(sizeof(struct close_cb_data));

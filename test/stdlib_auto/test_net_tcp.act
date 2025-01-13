@@ -28,15 +28,18 @@ actor Server(conn):
 
 
 actor Listener(env, address, port):
-    def on_lsock_error(l, error):
-        print("There was an error with the TCPListener socket:", error)
+    def on_listen(l, error):
+        if error != None:
+            print("There was an error with the TCPListener socket:", error)
+        else:
+            print("Successfully established listening socket on %s:%d" % (address, port))
 
     def on_server_accept(c):
         s = Server(c)
         c.cb_install(s.on_receive, s.on_error)
 
     listen_cap = net.TCPListenCap(net.TCPCap(net.NetCap(env.cap)))
-    server = net.TCPListener(listen_cap, address, port, on_lsock_error, on_server_accept)
+    server = net.TCPListener(listen_cap, address, port, on_listen, on_server_accept)
 
 
 actor Client(name, rts_monitor, env: Env, port: int, on_success):
