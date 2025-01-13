@@ -1,4 +1,0 @@
-def f(s):
-    return s + "!"
-
-a = f([8])

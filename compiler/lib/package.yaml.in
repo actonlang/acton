@@ -1,0 +1,64 @@
+name:                acton
+version: BUILD_VERSION
+# github:              "/simple"
+license:             BSD3
+author:              "Author name here"
+maintainer:          "example@example.com"
+copyright:           "2018 Author name here"
+
+# Metadata used when publishing your package
+# synopsis:            Short description of your package
+# category:            Web
+
+# To avoid duplicated efforts in documentation and dealing with the
+# complications of embedding Haddock markup inside cabal files, it is
+# common to point users to the README.md file.
+description:         Please see the README on Github at <https://github.com/githubuser/simple#readme>
+
+library:
+  source-dirs: src
+  exposed-modules:
+    - Acton.Boxing
+    - Acton.Builtin
+    - Acton.CPS
+    - Acton.CodeGen
+    - Acton.CommandLineParser
+    - Acton.Deactorizer
+    - Acton.Env
+    - Acton.Kinds
+    - Acton.LambdaLifter
+    - Acton.Normalizer
+    - Acton.Parser
+    - Acton.QuickType
+    - Acton.Relabel
+    - Acton.Solver
+    - Acton.Syntax
+    - Acton.Types
+    - Utils
+    - Pretty
+    - InterfaceFiles
+  build-tools:
+    - alex
+    - happy
+  dependencies:
+    - array
+    - base
+    - binary
+    - bytestring
+    - containers
+    - deepseq
+    - dir-traverse
+    - directory >= 1.3.1
+    - filelock
+    - filepath
+    - hashable
+    - megaparsec
+    - mtl
+    - optparse-applicative
+    - parser-combinators
+    - pretty
+    - scientific
+    - transformers
+    - unix
+    - utf8-string
+    - zlib

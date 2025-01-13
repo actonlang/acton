@@ -1,0 +1,29 @@
+Building file test/typeerrors/ex23.act
+  Compiling ex23.act for development
+
+ERROR: Error when compiling ex23 module: Type error
+
+Cannot satisfy the following simultaneous constraints for the unknown types t0, t1:
+
+  |
+2 |    if s==7:
+  |          ^
+The type of the indicated expression (which we call t0) must implement __builtin__.Number
+
+  |
+2 |    if s==7:
+  |          ^
+The type of the indicated expression (which we call t0) must be a subtype of t1
+
+  |
+2 |    if s==7:
+  |       ^
+The type of the indicated expression (inferred to be __builtin__.str) must be a subclass of t1
+
+  |
+2 |    if s==7:
+  |       ^^^^
+The type of the indicated expression (which we call t1) must implement __builtin__.Eq
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+

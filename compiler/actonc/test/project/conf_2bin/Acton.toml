@@ -1,0 +1,11 @@
+[[bin]]
+name = a
+root = a.main
+
+[[bin]]
+name = b
+root = b.main
+
+[[bin]]
+name = b2
+root = b.altroot

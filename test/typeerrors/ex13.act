@@ -1,7 +1,0 @@
-actor main(env):
-  a = Act(7)
-
-actor Act(s:int,t:str):
-  a = s
-  b = t
-

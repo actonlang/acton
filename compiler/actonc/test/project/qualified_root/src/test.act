@@ -1,0 +1,5 @@
+import b
+
+actor main(env):
+    b.foo()
+    env.exit(0)

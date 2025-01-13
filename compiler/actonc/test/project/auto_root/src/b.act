@@ -1,0 +1,2 @@
+def foo():
+    print("auto_root foo")

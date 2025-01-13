@@ -1,0 +1,31 @@
+name:                acton-lsp-server
+version: BUILD_VERSION
+# github:              "/simple"
+license:             BSD3
+author:              "Johan Nordlander, Björn von Sydow, Kristian Larsson"
+maintainer:          "example@example.com"
+copyright:           "Data Ductus, Deutsche Telekom"
+
+# Metadata used when publishing your package
+# synopsis:            Short description of your package
+# category:            Web
+
+# To avoid duplicated efforts in documentation and dealing with the
+# complications of embedding Haddock markup inside cabal files, it is
+# common to point users to the README.md file.
+description:         Please see the README on Github at <https://github.com/githubuser/simple#readme>
+
+executables:
+  acton-lsp-server:
+    main:                Main.hs
+    source-dirs:         .
+    dependencies:
+      - acton
+      - base >= 4.7 && < 5
+      - lsp >= 2.7
+      - lsp-types
+      - text
+    when:
+    - condition: os(linux)
+      ld-options:
+        - -static

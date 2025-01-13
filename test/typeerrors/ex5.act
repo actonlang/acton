@@ -1,8 +1,0 @@
-def f(x,y):
-    return x+y
-
-def apply(g,x):
-    return g(x)
-
-a = apply(f,3)
-

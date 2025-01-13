@@ -1,5 +1,0 @@
-actor main(env):
-    n : int = 7
-    for x in n:
-        pass
-    
