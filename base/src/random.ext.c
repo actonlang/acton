@@ -19,24 +19,30 @@ void randomQ___ext_init__() {
 // the time, which is prolly good enough for now. In a future, we could cook up
 // something better.
 
-B_int randomQ_randint (B_int min, B_int max) {
+long randlong (long min, long max) {
     // ensure we have a valid range where min is smaller than max
-    long minval = from$int(min);
-    long maxval = from$int(max);
-    if (minval > maxval) {
+    if (min > max) {
         $RAISE(((B_BaseException)B_ValueErrorG_new(to$str("min value must be smaller than max"))));
     }
     // upper end of the range we want when "based to 0"
-    int range = maxval - minval;
+    long range = max - min;
     // chop off all values that would cause skew, leaving only things within the
     // range that maps up to a multiple of the specified range
-    int end = RAND_MAX / range;
+    long end = RAND_MAX / range;
     // new end
     end *= range;
     // run rand() until we get a value below end
-    int r;
+    long r;
     // spin getting new values until we find one in range
     while ((r = rand()) >= end);
     // normalize back to the requested range
-    return to$int(minval + r%range);
+    return min + r%range;
+}
+
+B_int randomQ_randint (B_int min, B_int max) {
+    return to$int(randlong(from$int(min),from$int(max)));
+}
+
+B_i64 randomQ_randi64 (B_i64 min, B_i64 max) {
+    return toB_i64(randlong(fromB_i64(min),fromB_i64(max)));
 }
