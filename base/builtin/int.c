@@ -415,76 +415,161 @@ B_int B_IntegralD_intD___invert__(B_IntegralD_int wit,  B_int a) {
 
 // LogicalB_int  ////////////////////////////////////////////////////////////////////////////////////////
 
-B_int B_LogicalD_IntegralD_intD___and__(B_LogicalD_IntegralD_int wit,  B_int a, B_int b) {
-    zz_struct aval = a->val;
-    zz_struct bval = b->val;
-    B_IntegralD_int wit1 = (B_IntegralD_int)wit->W_Integral;
-    if (aval.size>=0) {
-        if (bval.size>=0) {
-            if (aval.size < bval.size) {
-                return  B_LogicalD_IntegralD_intD___and__(wit, b, a);
-            } else {
-                B_int res = malloc_int();
-                zz_malloc_fit(&res->val,bval.size);
-                res->val.size = 0;                 
-                for (int i=bval.size-1; i>=0; i--) {
-                    res->val.n[i] = aval.n[i] & bval.n[i];
-                    if (res->val.size == 0 && res->val.n[i] != 0)
-                        res->val.size = i+1;
-                }
-            }
+// Converts src (which must be non-zero), to two's complement form, stored in dst.
+// src and dst may be the same address.
+void twocompl(unsigned long *dst, unsigned long *src, long len) {
+    unsigned long carry = 1;
+    for (int i = 0; i < len; i++) {
+        unsigned long t = src[i] ^ ULONG_MAX;
+        if (t < ULONG_MAX || carry == 0) {
+            dst[i] = t + carry;
+            carry = 0;
+        } else {
+            dst[i] = 0;
         }
-    /* } else if (bval.size>=0) { */
-    /*     B_int a1 =  B_IntegralD_intD___invert__(wit1, a); */
-    /*     return B_IntegralD_intD___invert__(wit1, B_LogicalD_IntegralD_intD___xor__(wit, a1, b)); */
-    /* } else {  */
-    /*     B_int a1 =  B_IntegralD_intD___invert__(wit1, a); */
-    /*     B_int b1 =  B_IntegralD_intD___invert__(wit1, b); */
-    /*     return B_LogicalD_IntegralD_intD___xor__(wit, a1, b1); */
     }
 }
 
+B_int B_LogicalD_IntegralD_intD___and__(B_LogicalD_IntegralD_int wit,  B_int a, B_int b) {
+    long aneg = a->val.size < 0;
+    long bneg = b->val.size < 0;
+    long asize = labs(a->val.size);
+    long bsize = labs(b->val.size);
+    if (bsize==0) return to$int(0);
+    if (asize==0) return to$int(0);
+    unsigned long  *a1, *b1;
+    if (aneg) {
+        a1 = acton_malloc(asize*sizeof(long));
+        twocompl(a1, a->val.n, asize);
+    } else
+        a1 = a->val.n;
+    if (bneg) {
+        b1 = acton_malloc(bsize*sizeof(long));
+        twocompl(b1, b->val.n, bsize);
+    } else
+        b1 = b->val.n;
+    long rneg = aneg & bneg;
+    if (asize < bsize) {
+        unsigned long *t = a1; a1 = b1; b1 = t;
+        long tsize = asize; asize = bsize; bsize = tsize;
+        long tneg = aneg; aneg = bneg; bneg = tneg;
+    }
+    B_int res = malloc_int();
+    // if both are positive, rsize = bsize
+    // if one is positive, use that size
+    // if both are negative, rsize = asize
+    zz_malloc_fit(&res->val,bneg ? asize : bsize);
+    res->val.size = 0;
+    if (bneg) {
+        for (int i = asize-1; i >= bsize; i--) {
+            res->val.n[i] = a1[i];
+            if (res->val.size == 0 && res->val.n[i] != 0L)
+                res->val.size = i+1;
+        }
+    }
+    for (int i = bsize-1; i >= 0; i--) {
+        res->val.n[i] = a1[i] & b1[i];
+        if (res->val.size == 0 && res->val.n[i] != 0L)
+            res->val.size = i+1;
+    }
+    if (rneg) {
+        twocompl(res->val.n, res->val.n, res->val.size);
+        res->val.size = -res->val.size;
+    }
+    return res;
+}     
+
                                                  
 B_int B_LogicalD_IntegralD_intD___or__(B_LogicalD_IntegralD_int wit,  B_int a, B_int b) {
-    // return toB_i64(a->val | b->val);
-    $RAISE((B_BaseException)$NEW(B_NotImplementedError,to$str("Protocol Logical not implemented for int; use i64\n")));
-    return NULL; // This is just to silence compiler warning, above RAISE will longjmp from here anyway
-}
-                                                 
-B_int B_LogicalD_IntegralD_intD___xor__(B_LogicalD_IntegralD_int wit,  B_int a, B_int b) {
-    zz_struct aval = a->val;
-    zz_struct bval = b->val;
-    B_IntegralD_int wit1 = (B_IntegralD_int)wit->W_Integral;
-    if (aval.size>=0) {
-        if (bval.size>=0) {
-            if (aval.size < bval.size) {
-                return  B_LogicalD_IntegralD_intD___xor__(wit, b, a);
-            } else {
-                B_int res = malloc_int();
-                zz_malloc_fit(&res->val,aval.size);
-                res->val.size = aval.size > bval.size ? aval.size : 0;
-                for (int i=bval.size-1; i>=0; i--) {
-                    res->val.n[i] = aval.n[i] ^ bval.n[i];
-                    if (res->val.size == 0 && res->val.n[i] != 0)
-                        res->val.size = i+1;
-                }
-                for (int i=bval.size; i<aval.size; i++)
-                    res->val.n[i] = aval.n[i];
-                return res;
-            }
-        } else {
-            B_int b1 =  B_IntegralD_intD___invert__(wit1, b);
-            return B_IntegralD_intD___invert__(wit1, B_LogicalD_IntegralD_intD___xor__(wit, a, b1));
+    long aneg = a->val.size < 0;
+    long bneg = b->val.size < 0;
+    long asize = labs(a->val.size);
+    long bsize = labs(b->val.size);
+    if (bsize==0) return a;
+    if (asize==0) return b;
+    unsigned long  *a1, *b1;
+    if (aneg) {
+        a1 = acton_malloc(asize*sizeof(long));
+        twocompl(a1, a->val.n, asize);
+    } else
+        a1 = a->val.n;
+    if (bneg) {
+        b1 = acton_malloc(bsize*sizeof(long));
+        twocompl(b1, b->val.n, bsize);
+    } else
+        b1 = b->val.n;
+    long rneg = aneg | bneg;
+    if (asize < bsize) {
+        unsigned long *t = a1; a1 = b1; b1 = t;
+        long tsize = asize; asize = bsize; bsize = tsize;
+        long tneg = aneg; aneg = bneg; bneg = tneg;
+    }
+    B_int res = malloc_int();
+    zz_malloc_fit(&res->val,bneg ? bsize : asize);
+    res->val.size = 0;
+    if (!bneg) {
+        for (int i = asize-1; i >= bsize; i--) {
+            res->val.n[i] = a1[i];
+            if (res->val.size == 0 && res->val.n[i] != 0L)
+                res->val.size = i+1;
         }
-    } else if (bval.size>=0) {
-        B_int a1 =  B_IntegralD_intD___invert__(wit1, a);
-        return B_IntegralD_intD___invert__(wit1, B_LogicalD_IntegralD_intD___xor__(wit, a1, b));
-    } else { 
-        B_int a1 =  B_IntegralD_intD___invert__(wit1, a);
-        B_int b1 =  B_IntegralD_intD___invert__(wit1, b);
-        return B_LogicalD_IntegralD_intD___xor__(wit, a1, b1);
-    } 
-}
+    }
+    for (int i = bsize-1; i >= 0; i--) {
+        res->val.n[i] = a1[i] | b1[i];
+        if (res->val.size == 0 && res->val.n[i] != 0L)
+            res->val.size = i+1;
+    }
+    if (rneg) {
+        twocompl(res->val.n, res->val.n, res->val.size);
+        res->val.size = -res->val.size;
+    }
+    return res;
+}     
+
+
+B_int B_LogicalD_IntegralD_intD___xor__(B_LogicalD_IntegralD_int wit,  B_int a, B_int b) {
+    long aneg = a->val.size < 0;
+    long bneg = b->val.size < 0;
+    long asize = labs(a->val.size);
+    long bsize = labs(b->val.size);
+    if (bsize==0) return a;
+    if (asize==0) return b;
+    unsigned long  *a1, *b1;
+    if (aneg) {
+        a1 = acton_malloc(asize*sizeof(long));
+        twocompl(a1, a->val.n, asize);
+    } else
+        a1 = a->val.n;
+    if (bneg) {
+        b1 = acton_malloc(bsize*sizeof(long));
+        twocompl(b1, b->val.n, bsize);
+    } else
+        b1 = b->val.n;
+    long rneg = aneg ^ bneg;
+    if (asize < bsize) {
+        unsigned long *t = a1; a1 = b1; b1 = t;
+        long tsize = asize; asize = bsize; bsize = tsize;
+        long tneg = aneg; aneg = bneg; bneg = tneg;
+    }
+    B_int res = malloc_int();
+    zz_malloc_fit(&res->val,asize);
+    res->val.size = 0;
+    for (int i = asize-1; i >= bsize; i--) {
+        res->val.n[i] = bneg ? (~a1[i]) : a1[i];
+        if (res->val.size == 0 && res->val.n[i] != 0L)
+            res->val.size = i+1;
+     }
+    for (int i = bsize-1; i >= 0; i--) {
+        res->val.n[i] = a1[i] ^ b1[i];
+        if (res->val.size == 0 && res->val.n[i] != 0L)
+            res->val.size = i+1;
+    }
+    if (rneg) {
+        twocompl(res->val.n, res->val.n, res->val.size);
+        res->val.size = -res->val.size;
+    }
+    return res;
+}     
  
 // B_MinusD_IntegralD_int  ////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1105,5 +1190,3 @@ struct B_int B_int_strs[256] =
                          {&B_intG_methods, B_int_longs+253, 1, 1},
                          {&B_intG_methods, B_int_longs+254, 1, 1},
                          {&B_intG_methods, B_int_longs+255, 1, 1}};
-
-
