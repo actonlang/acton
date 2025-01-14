@@ -9,7 +9,7 @@ For Debian derivative distributions that use .dpkg and the APT ecosystem. Add th
 sudo install -m 0755 -d /etc/apt/keyrings
 sudo wget -q -O /etc/apt/keyrings/acton.asc https://apt.acton-lang.io/acton.gpg
 sudo chmod a+r /etc/apt/keyrings/acton.asc
-echo "deb [signed-by=/etc/apt/keyrings/acton.asc arch=amd64] http://aptip.acton-lang.io/ tip main" | sudo tee /etc/apt/sources.list.d/acton.list
+echo "deb [signed-by=/etc/apt/keyrings/acton.asc arch=amd64] http://aptip.acton-lang.io/ tip main" | sudo tee -a /etc/apt/sources.list.d/acton.list
 sudo apt-get update
 sudo apt-get install -qy acton
 ```
