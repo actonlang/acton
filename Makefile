@@ -137,7 +137,7 @@ dist/bin/actonc: compiler/lib/package.yaml.in compiler/actonc/package.yaml.in co
 .PHONY: clean-compiler
 clean-compiler:
 	cd compiler && stack clean >/dev/null 2>&1 || true
-	rm -f compiler/package.yaml compiler/acton.cabal
+	rm -f dist/bin/actonc compiler/package.yaml compiler/acton.cabal
 
 # /deps --------------------------------------------------
 DEPS += dist/deps/mbedtls
