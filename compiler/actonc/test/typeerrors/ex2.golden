@@ -1,17 +1,13 @@
 Building file test/typeerrors/ex2.act
   Compiling ex2.act for development
-
-ERROR: Error when compiling ex2 module: Type error
-
-  |
-1 |def f(x,y):
-  |    ^
-
-
-  |
-4 |a = f(3,4,5)
-  |    ^^^^^^^^
-Type incompatibility between definition of and call of f (too many positional argument(s) in call)
-
-- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-
+[error]: Incompatible types
+     +--> ex2@4:5-4:13
+     |
+   1 | def f(x,y):
+     :     ^ 
+     :     `- f is defined here
+     :
+   4 | a = f(3,4,5)
+     :     ^-------
+     :     `- too many positional argument(s) in call to f
+-----+

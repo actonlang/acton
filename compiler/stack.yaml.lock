@@ -47,6 +47,20 @@ packages:
   original:
     hackage: filepath-1.4.300.1
 - completed:
+    hackage: lsp-2.7.0.0@sha256:cec57fe8924368ab3f431726b0ca0c9d76fad025161fc3d2fde71ed814d0bf7e,3998
+    pantry-tree:
+      sha256: 93f62225c8d50459fb05346630aaf3934d7a4000dcfe5109e7ff45d94d8a283f
+      size: 1120
+  original:
+    hackage: lsp-2.7.0.0
+- completed:
+    hackage: lsp-types-2.3.0.0@sha256:ca17a686bda5dc7ff04105ca7081dce5a90bcd050c8800a13efd68b7f0901f1c,34215
+    pantry-tree:
+      sha256: 0bf22e394dc804c8cee74d19a7f38021cfd48a15082b39a14753c037f2a64288
+      size: 51996
+  original:
+    hackage: lsp-types-2.3.0.0
+- completed:
     hackage: parsec-3.1.17.0@sha256:8407cbd428d7f640a0fff8891bd2f7aca13cebe70a5e654856f8abec9a648b56,5149
     pantry-tree:
       sha256: 0922d72bd7115bbb590757bd92a827021dfe745ed6c0cd22856f767bee83d91f
@@ -74,20 +88,6 @@ packages:
       size: 5752
   original:
     hackage: unix-2.8.2.1
-- completed:
-    hackage: lsp-2.7.0.0@sha256:cec57fe8924368ab3f431726b0ca0c9d76fad025161fc3d2fde71ed814d0bf7e,3998
-    pantry-tree:
-      sha256: 93f62225c8d50459fb05346630aaf3934d7a4000dcfe5109e7ff45d94d8a283f
-      size: 1120
-  original:
-    hackage: lsp-2.7.0.0
-- completed:
-    hackage: lsp-types-2.3.0.0@sha256:ca17a686bda5dc7ff04105ca7081dce5a90bcd050c8800a13efd68b7f0901f1c,34215
-    pantry-tree:
-      sha256: 0bf22e394dc804c8cee74d19a7f38021cfd48a15082b39a14753c037f2a64288
-      size: 51996
-  original:
-    hackage: lsp-types-2.3.0.0
 snapshots:
 - completed:
     sha256: edbd50d7e7c85c13ad5f5835ae2db92fab1e9cf05ecf85340e2622ec0a303df1

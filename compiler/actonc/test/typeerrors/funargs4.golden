@@ -1,12 +1,9 @@
 Building file test/typeerrors/funargs4.act
   Compiling funargs4.act for development
-
-ERROR: Error when compiling funargs4 module: Type error
-
-  |
-4 |a = f(4,x=3,y=4)
-  |        ^
-Keyword element 'x' is not expected
-
-- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-
+[error]: Unexpected keyword argument
+     +--> funargs4@4:9-4:10
+     |
+   4 | a = f(4,x=3,y=4)
+     :         ^ 
+     :         `- Unexpected keyword argument 'x'
+-----+

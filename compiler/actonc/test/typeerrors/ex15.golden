@@ -1,24 +1,14 @@
 Building file test/typeerrors/ex15.act
   Compiling ex15.act for development
-
-ERROR: Error when compiling ex15 module: Type error
-
-Cannot satisfy the following simultaneous constraints for the unknown types t0, t1:
-
-  |
-3 |    raise y
-  |          ^
-The type of the indicated expression (which we call t0) must be a subclass of __builtin__.Exception
-
-  |
-2 |    y = 1
-  |        ^
-The type of the indicated expression (which we call t1) must implement __builtin__.Number
-
-  |
-2 |    y = 1
-  |        ^
-The type of the indicated expression (which we call t1) must be a subtype of t0
-
-- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-
+[error]: Cannot satisfy the following simultaneous constraints for the unknown types
+     +--> ex15@2:9-2:10
+     |
+   2 |     y = 1
+     :         ^
+     :         |- The type of the indicated expression (which we call t1) must implement __builtin__.Number
+     :         `- The type of the indicated expression (which we call t1) must be a subtype of t0
+   3 |     raise y
+     :           ^
+     :           `- The type of the indicated expression (which we call t0) must be a subclass of __builtin__.Exception
+     :              
+-----+

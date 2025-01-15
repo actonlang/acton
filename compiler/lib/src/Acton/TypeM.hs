@@ -14,12 +14,13 @@
 {-# LANGUAGE FlexibleInstances, FlexibleContexts #-}
 module Acton.TypeM where
 
+import qualified Control.Exception
 import Control.Monad.State.Strict
 import Control.Monad.Except
 import qualified Data.Map.Strict as Map
 import Data.Map.Strict (Map)
-import qualified Control.Exception
 import Data.Char
+import Error.Diagnose
 
 import Acton.Syntax
 import Acton.Printer
@@ -198,6 +199,105 @@ useless vs c                           = case c of
      where f (TVar _ v) = notElem v (tvSelf : vs)
            f _          = False
 
+--typeReport :: TypeError -> Report
+
+typeReport (TypeError l msg) filename src           = Err Nothing msg [(locToPosition l filename src, This msg)] []
+typeReport (RigidVariable tv) filename src          = Err Nothing msg [(locToPosition (loc tv) filename src, This msg)] []
+                                                      where msg = render (text "Type" <+> pretty tv <+> text "is rigid")
+typeReport (InfiniteType tv) filename src           = Err Nothing msg [(locToPosition (loc tv) filename src, This msg)] []
+                                                      where msg = render (text "Type" <+> pretty tv <+> text "is infinite")
+typeReport (ConflictingRow tv) filename src         = Err Nothing msg [(locToPosition (loc tv) filename src, This msg)] []
+                                                      where msg = render (text "Type" <+> pretty tv <+> text "has conflicting extensions")
+typeReport (KwdNotFound info n) filename src        = Err Nothing "Keyword argument missing" [(locToPosition (loc n) filename src, This msg)] []
+                                                      where msg = render (text "Keyword element" <+> quotes (pretty n) <+> text "is not found")
+typeReport (KwdUnexpected info n) filename src      = Err Nothing "Unexpected keyword argument" [(locToPosition (loc n) filename src, This msg)] []
+                                                      where msg = render (text "Unexpected keyword argument" <+> quotes (pretty n))
+typeReport (PosElemNotFound info s) filename src    = Err Nothing s [(locToPosition (loc info) filename src, This s)] []
+typeReport (EscapingVar tvs t) filename src         = Err Nothing msg [(locToPosition (loc tvs) filename src, This msg)] []
+                                                      where msg = render (text "Type annotation" <+> pretty t <+> text "is too general, type variable" <+>
+                                                                  pretty (head tvs) <+> text "escapes")
+typeReport (NoSelStatic n u) filename src           = Err Nothing msg [(locToPosition (loc n) filename src, This msg)] []
+                                                      where msg = render (text "Static method" <+> pretty n <+> text "cannot be selected from" <+> pretty u <+> text "instance")
+typeReport (NoSelInstByClass n u) filename src      = Err Nothing msg [(locToPosition (loc n) filename src, This msg)] []
+                                                      where msg = render (text "Instance attribute" <+> pretty n <+> text "cannot be selected from class" <+> pretty u)
+typeReport (NoMut n) filename src                   = Err Nothing msg [(locToPosition (loc n) filename src, This msg)] []
+                                                      where msg = render (text "Non @property attribute" <+> pretty n <+> text "cannot be mutated")
+typeReport (LackSig n) filename src                 = Err Nothing msg [(locToPosition (loc n) filename src, This msg)] []
+                                                      where msg = render (text "Declaration lacks accompanying signature")
+typeReport (LackDef n) filename src                 = Err Nothing msg [(locToPosition (loc n) filename src, This msg)] []
+                                                      where msg = render (text "Signature lacks accompanying definition")
+typeReport (NoRed c) filename src
+    | DeclInfo l1 l2 n _ _ <- info c = Err
+                                         Nothing
+                                         "Constraint violation"
+                                         [ (locToPosition l1 filename src, This (render (explainRequirement c <+> parens (explainRequirement c{info = dummyInfo}))))
+                                         , (locToPosition l2 filename src, Where (Pretty.print n ++ " is defined here"))
+                                         ]
+                                         []
+    | otherwise                      = Err
+                                          Nothing
+                                          "Constraint violation"
+                                          [(locToPosition (loc c) filename src, This (render (explainRequirement c)))]
+                                          []
+
+typeReport (NoSolve mbt vs cs) filename src         =
+    let header = case length cs of
+                    0 -> "Unable to give good error message: please report example"
+                    1 -> "Cannot satisfy the following constraint:"
+                    _ -> "Cannot satisfy the following simultaneous constraints for the unknown " ++
+                         (if length vs == 1
+                          then "type " ++ case head vs of
+                                          TCon _ tc -> nameStr (noq (tcname tc))
+                                          _ -> show (head vs)
+                          else "types")
+        -- Each constraint gets its own complete error message with source line
+        constraint_messages = concatMap (typeError . NoRed) cs
+        -- Filter out empty positions and merge their messages into the first real position
+        (noLocs, withLocs) = partition ((==NoLoc) . fst) constraint_messages
+        withLocsMsgs = case (withLocs, noLocs) of
+            ([], []) -> [(NoLoc, "Error: No location information")]
+            ([], (l,m):_) -> [(l,m)]
+            ((l,m):rest, extras) -> (l, m ++ "\n" ++ concatMap snd extras) : rest
+    in Err
+        Nothing
+        header
+        [(locToPosition l filename src, This m) | (l,m) <- withLocsMsgs]
+        []
+  where
+        nameStr (Name _ str) = str
+
+typeReport (NoUnify info t1 t2) filename src        =
+    case (loc t1, loc t2) of
+        (l1@Loc{}, l2@Loc{}) -> Err
+                                 Nothing
+                                 "Type unification error"
+                                 [ (locToPosition l1 filename src, This "First type appears here")
+                                 , (locToPosition l2 filename src, This "Second type appears here")
+                                 ]
+                                 []
+        _                     -> Err
+                                 Nothing
+                                 "Type unification error"
+                                 [(locToPosition (getLoc[loc info, loc t1, loc t2]) filename src, This msg)]
+                                 []
+    where msg = render (text "Incompatible types" <+> pretty t1 <+> text "and" <+> pretty t2)
+
+typeReport (IncompatError info msg) filename src    =
+    case info of
+        DeclInfo l1 l2 n sc msg1    -> Err
+                                         Nothing
+                                         "Incompatible types"
+                                         [ (locToPosition l1 filename src, This msg)
+                                         , (locToPosition l2 filename src, Where (Pretty.print n ++ " is defined here"))
+                                         ]
+                                         []
+        _                           -> Err
+                                         Nothing
+                                         "Incompatible types"
+                                         [(locToPosition (loc info) filename src, This msg)]
+                                         []
+
+
 typeError                           :: TypeError -> [(SrcLoc, String)]
 typeError (TypeError l str)          = [(l, str)]
 typeError (RigidVariable tv)         = [(loc tv, render (text "Type" <+> pretty tv <+> text "is rigid"))]
@@ -238,7 +338,7 @@ tyerrs xs s                         = throwError $ TypeError (loc $ head xs) (s 
 rigidVariable tv                    = throwError $ RigidVariable tv
 infiniteType tv                     = throwError $ InfiniteType tv
 conflictingRow tv                   = throwError $ ConflictingRow tv
-kwdNotFound info n                  = throwError $ incompatError info (render(text ("keyword " ++elemSpec info) <+> quotes (pretty n) <+> text ("is not defined" ++ elemSuffix info)))
+kwdNotFound info n                  = throwError $ incompatError info (render(text ("keyword " ++ elemSpec info) <+> quotes (pretty n) <+> text ("is missing" ++ elemSuffix info)))
 kwdUnexpected info n                = throwError $ KwdUnexpected info n
 escapingVar tvs t                   = throwError $ EscapingVar tvs t
 noSelStatic n u                     = throwError $ NoSelStatic n u
@@ -254,16 +354,54 @@ noUnify info t1 t2                  = throwError $ NoUnify info t1 t2
 posElemNotFound b c n               = throwError $ incompatError (info c) ("too " ++ (if b then "few " else "many positional ") ++ elemSpec (info c) ++ elemSuffix (info c))
  
 incompatError info msg             = case info of
-                                        DeclInfo l1 l2 f sc msg1 -> IncompatError info (msg1 ++ " (" ++ msg ++")")
+                                        DeclInfo l1 l2 f sc msg1 -> IncompatError info (msg ++ Pretty.print f)
                                         _ -> IncompatError info msg
 
 elemSpec DeclInfo{}               = "argument(s)"
 elemSpec _                        = "component(s)"
 
-elemSuffix DeclInfo{}             = " in call"
+elemSuffix DeclInfo{}             = " in call to "
 elemSuffix _                      = " in tuple"
 
 -- elemHint DeclInfo{}               = " Hint: The previous definition may have been implicit, using positional notation."
 -- elemHint _                        = ""
 
 dummyInfo                         = DfltInfo NoLoc 0 Nothing []
+
+
+--mkErrorDiagnostic :: String -> String -> Report String -> Diagnostic String
+mkErrorDiagnostic filename src report =
+  let diag = addFile mempty filename src
+  in addReport (addFile diag filename src) report
+
+-- | Convert internal locations to Diagnose positions
+locToPosition :: SrcLoc -> String -> String -> Position
+locToPosition NoLoc _ _ =
+  Position (0,0) (0,0) ""  -- Empty position
+locToPosition (Loc start end) filename src =
+  -- Convert byte offsets to line/col positions by counting in source
+  let startPos = offsetToLineCol start src
+      (endLine, endCol) = offsetToLineCol end src
+      -- For multi-line spans, adjust end line to match original error format
+      finalEndPos = if endLine > fst startPos
+                   then (endLine - 1, endCol)
+                   else (endLine, endCol)
+  in Position startPos finalEndPos filename
+
+-- | Helper to convert byte offset to line/col tuple
+offsetToLineCol :: Int -> String -> (Int, Int)
+offsetToLineCol offset src =
+  let beforeOffset = take offset src
+      lines = splitLines beforeOffset
+      lineNum = length lines
+      colNum = if null lines
+               then 1
+               else (length (last lines) + 1)
+  in (lineNum, colNum)
+  where
+    splitLines [] = [""]
+    splitLines s =
+      let (first, rest) = break (=='\n') s
+      in first : case rest of
+                  [] -> []
+                  (_:rest') -> splitLines rest'

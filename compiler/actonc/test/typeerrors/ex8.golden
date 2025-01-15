@@ -1,19 +1,11 @@
 Building file test/typeerrors/ex8.act
   Compiling ex8.act for development
-
-ERROR: Error when compiling ex8 module: Type error
-
-Cannot satisfy the following simultaneous constraints for the unknown type t0:
-
-  |
-3 |    for x in n:
-  |             ^
-The type of the indicated expression (which we call t0) must implement __builtin__.Iterable[_]
-
-  |
-3 |    for x in n:
-  |             ^
-The type of the indicated expression (inferred to be __builtin__.int) must be a subclass of t0
-
-- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-
+[error]: Cannot satisfy the following simultaneous constraints for the unknown type t0
+     +--> ex8@3:14-3:15
+     |
+   3 |     for x in n:
+     :              ^ 
+     :              |- The type of the indicated expression (which we call t0) must implement __builtin__.Iterable[_]
+     :                 
+     :              `- The type of the indicated expression (inferred to be __builtin__.int) must be a subclass of t0
+-----+

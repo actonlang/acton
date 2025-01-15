@@ -34,6 +34,7 @@ library:
     - Acton.Solver
     - Acton.Syntax
     - Acton.Types
+    - Acton.TypeM
     - Utils
     - Pretty
     - InterfaceFiles

@@ -1,17 +1,13 @@
 Building file test/typeerrors/funargs5.act
   Compiling funargs5.act for development
-
-ERROR: Error when compiling funargs5 module: Type error
-
-  |
-1 |def f(x,y,*z,w):
-  |    ^
-
-
-  |
-4 |a = f(3,4,5,6)
-  |    ^^^^^^^^^^
-Type incompatibility between definition of and call of f (keyword argument(s) 'w' is not defined in call)
-
-- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-
+[error]: Incompatible types
+     +--> funargs5@4:5-4:15
+     |
+   1 | def f(x,y,*z,w):
+     :     ^ 
+     :     `- f is defined here
+     :
+   4 | a = f(3,4,5,6)
+     :     ^---------
+     :     `- keyword argument(s) 'w' is missing in call to f
+-----+

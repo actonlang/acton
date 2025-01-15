@@ -1,29 +1,13 @@
 Building file test/typeerrors/ex17.act
   Compiling ex17.act for development
-
-ERROR: Error when compiling ex17 module: Type error
-
-Cannot satisfy the following simultaneous constraints for the unknown types t0, t1:
-
-  |
-2 |a = pow(3,"hej")
-  |    ^^^^^^^^^^^^
-The type of the indicated expression (inferred to be __builtin__.str) must be a subclass of t0
-
-  |
-2 |a = pow(3,"hej")
-  |    ^^^^^^^^^^^^
-The type of the indicated expression (which we call t1) must be a subtype of t0
-
-  |
-2 |a = pow(3,"hej")
-  |    ^^^
-pow has had its polymorphic type [A(Number)] => (a: A, b: A) -> A instantiated to (a: t0, b: t0) -> t0, so t0 must implement __builtin__.Number
-
-  |
-2 |a = pow(3,"hej")
-  |        ^
-The type of the indicated expression (which we call t1) must implement __builtin__.Number
-
-- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-
+[error]: Cannot satisfy the following simultaneous constraints for the unknown types
+     +--> ex17@2:5-2:17
+     |
+   2 | a = pow(3,"hej")
+     :     ^-----------
+     :     |----- The type of the indicated expression (inferred to be __builtin__.str) must be a subclass of t0
+     :         |  
+     :     |----- The type of the indicated expression (which we call t1) must be a subtype of t0
+     :     `----- pow has had its polymorphic type [A(Number)] => (a: A, b: A) -> A instantiated to (a: t0, b: t0) -> t0, so t0 must implement __builtin__.Number
+     :         `- The type of the indicated expression (which we call t1) must implement __builtin__.Number
+-----+

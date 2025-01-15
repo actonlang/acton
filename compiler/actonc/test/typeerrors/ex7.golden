@@ -1,12 +1,9 @@
 Building file test/typeerrors/ex7.act
   Compiling ex7.act for development
-
-ERROR: Error when compiling ex7 module: Type error
-
-  |
-4 |        return k
-  |               ^
-State variable may only be accessed in a proc
-
-- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-
+[error]: Constraint violation
+     +--> ex7@4:16-4:17
+     |
+   4 |         return k
+     :                ^
+     :                `- State variable may only be accessed in a proc
+-----+
