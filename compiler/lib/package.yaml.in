@@ -37,9 +37,6 @@ library:
     - Utils
     - Pretty
     - InterfaceFiles
-  build-tools:
-    - alex
-    - happy
   dependencies:
     - array
     - base

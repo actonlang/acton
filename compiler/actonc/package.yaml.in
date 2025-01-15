@@ -19,9 +19,6 @@ executables:
   actonc:
     main:                Main.hs
     source-dirs:         .
-    build-tools:
-      - alex
-      - happy
     dependencies:
       - MissingH
       - acton
