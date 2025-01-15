@@ -120,19 +120,17 @@ test-backend: $(BACKEND_TESTS)
 	./backend/test/skiplist_test
 
 # /compiler ----------------------------------------------
-ACTONC_ALL_HS=$(wildcard compiler/*.hs compiler/**/*.hs)
-ACTONC_TEST_HS=$(wildcard compiler/tests/*.hs)
-ACTONC_HS=$(filter-out $(ACTONC_TEST_HS),$(ACTONC_ALL_HS))
+ACTONC_HS=$(wildcard compiler/lib/src/*.hs compiler/lib/src/**/*.hs compiler/actonc/Main.hs)
 # NOTE: we're unsetting CC & CXX to avoid using zig cc & zig c++ for stack /
 # ghc, which doesn't seem to work properly
 dist/bin/actonc: compiler/lib/package.yaml.in compiler/actonc/package.yaml.in compiler/lsp-server/package.yaml.in compiler/stack.yaml $(ACTONC_HS) common.mk
 	mkdir -p dist/bin
 	cd compiler && sed 's,^version: BUILD_VERSION,version: "$(VERSION)",' < lib/package.yaml.in > lib/package.yaml
-	cd compiler && unset CC && unset CXX && unset CFLAGS && stack build --dry-run 2>&1 | grep "Nothing to build" || \
+	cd compiler && unset CC && unset CXX && unset CFLAGS && stack build actonc --dry-run 2>&1 | grep "Nothing to build" || \
 		(sed 's,^version: BUILD_VERSION,version: "$(VERSION_INFO)",' < actonc/package.yaml.in > actonc/package.yaml \
 		&& sed 's,^version: BUILD_VERSION,version: "$(VERSION_INFO)",' < lsp-server/package.yaml.in > lsp-server/package.yaml \
-		&& stack build $(STACK_OPTS) --ghc-options='-j4 $(ACTC_GHC_OPTS)')
-	cd compiler && unset CC && unset CXX && unset CFLAGS && stack --local-bin-path=../dist/bin install
+		&& stack build actonc $(STACK_OPTS) --ghc-options='-j4 $(ACTC_GHC_OPTS)')
+	cd compiler && unset CC && unset CXX && unset CFLAGS && stack --local-bin-path=../dist/bin install actonc
 
 .PHONY: clean-compiler
 clean-compiler:
