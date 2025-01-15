@@ -73,7 +73,7 @@ type CPSEnv                             = EnvF CPSX
 
 data CPSX                               = CPSX { ctxtX :: [Frame], whereX :: Where, volatileX :: [Name] }
 
-data Where                              = OnTop | InClass | InDef | InLoop deriving (Eq,Show)
+data Where                              = OnTop | InClass | InDef | InInnerLoop deriving (Eq,Show)
 
 cpsEnv env0                             = setX env0 CPSX{ ctxtX = [], whereX = OnTop, volatileX = [] }
 
@@ -82,15 +82,16 @@ ctxt env                                = ctxtX $ envX env
 infixr +:
 frame +: env                            = modX env $ \x -> x{ ctxtX = frame : ctxtX x }
 
-setClassCtxt env                        = modX env $ \x -> x{ ctxtX = [], whereX = InClass }
-setDefCtxt env                          = modX env $ \x -> x{ whereX = InDef }
-setInnerLoopCtxt env                    = modX env $ \x -> x{ whereX = InLoop }
-setVolatiles ns env                     = modX env $ \x -> x{ volatileX = ns }
+setInClass env                          = modX env $ \x -> x{ ctxtX = [], whereX = InClass }
+setInDef env                            = modX env $ \x -> x{ ctxtX = [], whereX = InDef }
+setInInnerLoop env                      = modX env $ \x -> x{ whereX = InInnerLoop }
 
 onTop env                               = whereX (envX env) == OnTop
 inClass env                             = whereX (envX env) == InClass
 inDef env                               = whereX (envX env) == InDef
-inInnerLoop env                         = whereX (envX env) == InLoop
+inInnerLoop env                         = whereX (envX env) == InInnerLoop
+
+setVolatiles ns env                     = modX env $ \x -> x{ volatileX = ns }
 
 volatiles env                           = volatileX (envX env)
 
@@ -147,7 +148,6 @@ instance CPS [Stmt] where
                                              --traceM ("## kDef Expr " ++ prstr k ++ ", updates: " ++ prstrs nts)
                                              return $ kDef env k nts x t ss' :
                                                       sReturn (addContArg env (conv env e) (kRef k (dom nts) x t)) : []
-      | isRAISE e                       = return $ sExpr (conv env e) : []
       where t                           = typeOf env e
             nts                         = extraBinds env ss
 
@@ -237,16 +237,18 @@ volatileVars env stmts                  = nub $ vols env stmts
 instance CPS Decl where
     cps env (Class l n q cs b)          = do b' <- cps env1 b
                                              return $ Class l n (conv env q) (conv env cs) b'
-      where env1                        = defineSelf (NoQ n) q $ defineTVars q $ setClassCtxt env
+      where env1                        = defineSelf (NoQ n) q $ defineTVars q $ setInClass env
 
     cps env (Def l n q p KwdNIL (Just t) b dec fx)
-      | contFX fx                       = do b' <- cps env1 b
-                                             --traceM ("#### " ++ prstr n ++ " volatiles: " ++ prstrs volvs)
+      | contFX fx                       = do --traceM ("#### Converting " ++ prstr n)
+                                             b' <- cps env2 b
                                              return $ Def l n q' (addContPar env dec p' fx t') KwdNIL (Just tR) (volinits ++ b') dec fx
-      | otherwise                       = return $ Def l n q' p' KwdNIL (Just t') (conv env b) dec fx
-      where env1                        = setVolatiles volvs $ define (envOf p) $ defineTVars q $ 
-                                          Meth contKW t' +: setDefCtxt env
-            volvs                       = volatileVars env1 b
+      | otherwise                       = do --traceM ("#### Preserving " ++ prstr n)
+                                             b' <- cps env1 b
+                                             return $ Def l n q' p' KwdNIL (Just t') b' dec fx
+      where env2                        = setVolatiles volvs $ Meth contKW t' +: env1
+            env1                        = define (envOf p) $ defineTVars q $ setInDef env
+            volvs                       = volatileVars env2 b
             volinits                    = [ sAssign (pVar v (tBox t)) (eCall (tApp (eQVar primBox) [t]) [eVar v])
                                           | (v,NVar t) <- envOf p, v `elem` volvs ]
             q'                          = conv env q
@@ -324,7 +326,7 @@ instance NeedCont Branch where
     needCont env (Branch e ss)          = needCont env ss
 
 instance NeedCont Stmt where
-    needCont env (Return _ (Just e))    = inCont env
+    needCont env (Return _ _)           = inCont env
     needCont env (Continue _)
       | inInnerLoop env                 = False
       | otherwise                       = inCont env
@@ -335,7 +337,7 @@ instance NeedCont Stmt where
     needCont env (Assign _ _ e)         = contCall env e
     needCont env (MutAssign _ _ e)      = contCall env e
     needCont env (If _ bs els)          = needCont env bs || needCont env els
-    needCont env (While _ _ ss els)     = needCont (setInnerLoopCtxt env) ss || needCont env els
+    needCont env (While _ _ ss els)     = needCont (setInInnerLoop env) ss || needCont env els
     needCont env (Decl _ ds)            = needCont (define (envOf ds) env) ds
     needCont env _                      = False
 
