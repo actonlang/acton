@@ -120,7 +120,7 @@ test-backend: $(BACKEND_TESTS)
 	./backend/test/skiplist_test
 
 # /compiler ----------------------------------------------
-ACTONC_HS=$(wildcard compiler/lib/src/*.hs compiler/lib/src/**/*.hs compiler/actonc/Main.hs)
+ACTONC_HS=$(wildcard compiler/lib/src/*.hs compiler/lib/src/*/*.hs compiler/actonc/Main.hs)
 # NOTE: we're unsetting CC & CXX to avoid using zig cc & zig c++ for stack /
 # ghc, which doesn't seem to work properly
 dist/bin/actonc: compiler/lib/package.yaml.in compiler/actonc/package.yaml.in compiler/lsp-server/package.yaml.in compiler/stack.yaml $(ACTONC_HS) common.mk
