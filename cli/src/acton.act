@@ -266,7 +266,7 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
                 dep_args = []
                 for dep_arg in args.get_strlist("dep"):
                     dep_args.extend(["--dep", dep_arg])
-                cmd = ["build"] + build_cmd_args(args) + ["--keepbuild"] + dep_args
+                cmd = ["build"] + build_cmd_args(args) + dep_args
                 cr = CompilerRunner(
                     process_cap,
                     env,
@@ -1199,7 +1199,6 @@ actor main(env):
         p.add_bool("dev", "Development mode")
         p.add_bool("only-build", "Only perform final build of .c files, do not compile .act files")
         p.add_bool("skip-build", "Skip final build of .c files")
-        p.add_bool("keepbuild", "Keep build.zig")
         p.add_option("root", "str", "?", "", "Set root actor")
         p.add_option("tempdir", "str", "?", "", "Directory for temporary build files")
         p.add_option("syspath", "str", "?", "", "syspath")

@@ -93,7 +93,6 @@ main = do
           C.target = C.targetB opts,
           C.cpu = C.cpuB opts,
           C.test = C.testB opts,
-          C.keepbuild = C.keepbuildB opts,
           C.searchpath = C.searchpathB opts
           }
         C.CmdOpt (C.Cloud opts) -> undefined
@@ -104,7 +103,7 @@ main = do
 
 defaultOpts   = C.CompileOptions False False False False False False False False False False False False
                                  False False False False False False False False False False False False
-                                 False "" "" "" C.defTarget "" False False []
+                                 False "" "" "" C.defTarget "" False []
 
 
 -- Auxiliary functions ---------------------------------------------------------------------------------------
@@ -137,11 +136,6 @@ cleanup opts paths = do
     -- Need platform free path separators
     removeFile (joinPath [projPath paths, ".actonc.lock"])
       `catch` handleNotExists
-    iff (not (C.keepbuild opts)) $ do
-      removeFile (joinPath [projPath paths, "build.zig"])
-        `catch` handleNotExists
-      removeFile (joinPath [projPath paths, "build.zig.zon"])
-        `catch` handleNotExists
   where
     handleNotExists :: IOException -> IO ()
     handleNotExists _ = return ()
@@ -848,6 +842,16 @@ runZig opts zigCmd paths wd = do
           cleanup opts paths
           System.Exit.exitFailure
 
+makeAlwaysRelative :: FilePath -> FilePath -> FilePath
+makeAlwaysRelative base target =
+    case makeRelative base target of
+        path | isAbsolute path ->  -- Still an absolute path, so no overlap found
+               let baseCount = length $ filter (/= "./") $ splitPath base
+                   targetPath = dropDrive path  -- Remove the drive part of the absolute path
+               in joinPath (replicate baseCount "..") </> targetPath
+            | otherwise -> path  -- makeRelative found overlap, use its result
+
+
 #if defined(darwin_HOST_OS) && defined(aarch64_HOST_ARCH)
 defCpu = " -Dcpu=apple_a15"
 #elif defined(darwin_HOST_OS) && defined(x86_64_HOST_ARCH)
@@ -857,7 +861,6 @@ defCpu = ""
 #else
 #error "Unsupported platform"
 #endif
-
 
 zigBuild :: Acton.Env.Env0 -> C.CompileOptions -> Paths -> [CompileTask] -> [BinTask] -> IO ()
 zigBuild env opts paths tasks binTasks = do
@@ -882,6 +885,7 @@ zigBuild env opts paths tasks binTasks = do
                            ("x86_64":_:_)          -> " -Dcpu=westmere "
                            (_:_:_)                 -> defCpu
         buildZigPath = joinPath [projPath paths, "build.zig"]
+        buildZonPath = joinPath [projPath paths, "build.zig.zon"]
 
     -- Create .build directory if it doesn't exist
     createDirectoryIfMissing True (joinPath [projPath paths, ".build"])
@@ -891,17 +895,28 @@ zigBuild env opts paths tasks binTasks = do
     createDirectoryLink (sysPath paths) (joinPath [projPath paths, ".build", "sys"])
 
     buildZigExists <- doesFileExist buildZigPath
-    let zigCmdBase =
-          if buildZigExists
-            then zig paths ++ " build " ++
-                 " --cache-dir " ++ local_cache_dir ++
+    buildZonExists <- doesFileExist buildZonPath
+    -- Compute relative path from current directory (projPath paths)
+    let relativeSysPath = makeAlwaysRelative (projPath paths) (sysPath paths)
+    iff (not buildZigExists) $ do
+      let distBuildZigPath = joinPath [(sysPath paths), "builder", "build.zig"]
+      copyFile distBuildZigPath buildZigPath
+    if buildZonExists
+      then do
+        curBuildZon <- readFile buildZonPath
+        let newBuildZon = replace "SYSPATH" relativeSysPath curBuildZon
+        removeFile buildZonPath
+          `catch` handleNotExists
+        writeFile buildZonPath newBuildZon
+      else do
+        let distBuildZonPath = joinPath [(sysPath paths), "builder", "build.zig.zon"]
+        distBuildZon <- readFile distBuildZonPath
+        let buildZon = replace "SYSPATH" relativeSysPath distBuildZon
+        writeFile buildZonPath buildZon
+
+    let zigCmdBase = zig paths ++ " build " ++ " --cache-dir " ++ local_cache_dir ++
                  " --global-cache-dir " ++ global_cache_dir ++
-                 if (C.debug opts) then " --verbose " else ""
-            else (joinPath [ sysPath paths, "builder", "builder" ]) ++ " " ++
-                 (joinPath [ sysPath paths, "zig/zig" ]) ++ " " ++
-                 projPath paths ++ " " ++
-                 local_cache_dir ++ " " ++
-                 global_cache_dir
+                 (if (C.debug opts) then " --verbose " else "")
     let zigCmd = zigCmdBase ++
                  " --prefix " ++ projOut paths ++ " --prefix-exe-dir 'bin'" ++
                  (if (C.debug opts) then " --verbose " else "") ++
