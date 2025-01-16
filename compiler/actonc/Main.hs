@@ -39,10 +39,11 @@ import qualified InterfaceFiles
 import Control.Applicative
 import Control.Concurrent.Async
 import Control.Concurrent.MVar
-import Control.Exception (throw,catch,displayException,IOException,ErrorCall)
+import Control.Exception (throw,catch,displayException,IOException,ErrorCall,try,SomeException)
 import Control.Exception (bracketOnError)
 import Control.Concurrent (forkIO)
 import Control.Monad
+import Data.Default.Class (def)
 import Data.List.Split
 import Data.Monoid ((<>))
 import Data.Ord
@@ -99,7 +100,17 @@ main = do
         C.CmdOpt (C.Doc opts)   -> printDocs opts
         C.CompileOpt nms opts   -> if length nms == 1 && takeExtension (head nms) == ".ty"
                                     then printDocs (C.DocOptions (head nms) "")
-                                    else compileFiles opts (catMaybes $ map filterActFile nms)
+                                    else do
+                                      home <- getHomeDirectory
+                                      let basePath = joinPath [home, ".cache", "acton", "scratch"]
+                                      createDirectoryIfMissing True basePath
+                                      maybeLockInfo <- findAvailableScratch basePath
+                                      case maybeLockInfo of
+                                        Nothing -> error "Could not acquire any scratch directory lock"
+                                        Just (lock, lockPath) -> do
+                                          let scratchDir = dropExtension lockPath
+                                          compileFiles (opts { C.tempdir = scratchDir }) (catMaybes $ map filterActFile nms)
+                                          unlockFile lock
 
 defaultOpts   = C.CompileOptions False False False False False False False False False False False False
                                  False False False False False False False False False False False False
@@ -116,6 +127,27 @@ cc paths opts = zig paths ++ " cc -target " ++ C.target opts
 
 dump mn h txt      = putStrLn ("\n\n== " ++ h ++ ": " ++ modNameToString mn ++ " ================================\n" ++ txt
                       ++'\n':replicate (38 + length h + length (modNameToString mn)) '=' ++ "\n")
+
+-- Try to acquire a lock, return Nothing if failed, Just (FileLock, FilePath) if succeeded
+tryLock :: FilePath -> IO (Maybe (FileLock, FilePath))
+tryLock lockPath = do
+    maybeLock <- tryLockFile lockPath Exclusive  -- This will fail immediately if locked
+    case maybeLock of
+        Nothing -> return Nothing  -- Lock failed
+        Just lock -> return $ Just (lock, lockPath)
+
+-- The rest of your code can stay the same
+-- Try locks sequentially until one succeeds or all fail
+findAvailableScratch :: FilePath -> IO (Maybe (FileLock, FilePath))
+findAvailableScratch basePath = go [0..31]  -- 32 possible scratch directories
+  where
+    go [] = return Nothing  -- All attempts failed
+    go (x:xs) = do
+        let lockPath = joinPath [basePath, "scratch" ++ show x ++ ".lock"]
+        result <- tryLock lockPath
+        case result of
+            Just lockInfo -> return $ Just lockInfo
+            Nothing -> go xs  -- Try next number
 
 getModPath :: FilePath -> A.ModName -> FilePath
 getModPath path mn =
@@ -300,13 +332,15 @@ removeOrphanFiles dir = do
         -- file and let it be recreated if necessary. Should be very cheap
         -- anyway since the file is so small. So check if filename ends with
         -- ".root.c" and remove it!
-        iff (takeExtension file == ".c" && takeExtension (takeBaseName file) == ".root") $ do
+        if takeExtension file == ".c" && takeExtension (takeBaseName file) == ".root"
+          then do
             removeIfExists (dir </> file)
-
-        -- Check if there is a corresponding .act file in the "src" directory.
-        srcExists <- doesFileExist srcFile
-        -- If the .act file doesn't exist, remove the file in the "out" directory.
-        when (not srcExists) $ removeFile (dir </> file)
+          else do
+            -- Check if there is a corresponding .act file in the "src" directory.
+            srcExists <- doesFileExist srcFile
+            -- If the .act file doesn't exist, remove the file in the "out" directory.
+            when (not srcExists) $ removeFile (dir </> file)
+              `catch` handleNotExists
   where
         removeIfExists f = removeFile f `catch` handleNotExists
         handleNotExists :: IOException -> IO ()
@@ -439,13 +473,8 @@ findPaths actFile opts  = do execDir <- takeDirectory <$> System.Environment.get
                              return $ Paths sPaths sysPath sysTypes sysLib projPath projOut projTypes projLib binDir srcDir isTmp rmTmp fileExt modName
   where (fileBody,fileExt) = splitExtension $ takeFileName actFile
 
-        analyze "/" ds  = do let rmTmp = if (null $ C.tempdir opts) then True else False
-                             tmpDir <- canonicalizePath "/tmp"
-                             tmp <- if (null $ C.tempdir opts)
-                               then createTempDirectory tmpDir "actonc"
-                               else canonicalizePath (C.tempdir opts)
-                             createDirectoryIfMissing True tmp
-                             return (True, rmTmp, tmp, [])
+        analyze "/" ds  = do tmp <- canonicalizePath (C.tempdir opts)
+                             return (True, True, tmp, [])
         analyze pre ds  = do exists <- doesFileExist (joinPath [pre, "Acton.toml"])
                              if not exists 
                                 then analyze (takeDirectory pre) (takeFileName pre : ds)
@@ -556,7 +585,11 @@ compileBins opts paths env tasks binTasks = do
     iff (not (altOutput opts)) $ do
       zigBuild env opts paths tasks binTasks
       when (rmTmp paths) $ removeDirectoryRecursive (projPath paths)
+        `catch` handleNotExists
     return ()
+  where
+    handleNotExists :: IOException -> IO ()
+    handleNotExists _ = return ()
 
 
 chaseImportedFiles :: C.CompileOptions -> Paths -> [CompileTask] -> IO [CompileTask]
