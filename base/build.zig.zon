@@ -5,46 +5,46 @@
         // Dependencies from build.act.json
         // base dependencies
         .actondb = .{
-            .path = ".build/sys/backend/",
+            .path = "../backend/",
         },
         .libbsdnt = .{
-            .path = ".build/sys/deps/libbsdnt/",
+            .path = "../deps/libbsdnt/",
         },
         .libgc = .{
-            .path = ".build/sys/deps/libgc/",
+            .path = "../deps/libgc/",
         },
         .libmbedtls = .{
-            .path = ".build/sys/deps/mbedtls/",
+            .path = "../deps/mbedtls/",
         },
         .libnetstring = .{
-            .path = ".build/sys/deps/libnetstring/",
+            .path = "../deps/libnetstring/",
         },
         .libpcre2 = .{
-            .path = ".build/sys/deps/pcre2/",
+            .path = "../deps/pcre2/",
         },
         .libprotobuf_c = .{
-            .path = ".build/sys/deps/libprotobuf_c/",
+            .path = "../deps/libprotobuf_c/",
         },
         .libsnappy = .{
-            .path = ".build/sys/deps/libsnappy_c/",
+            .path = "../deps/libsnappy_c/",
         },
         .libtlsuv = .{
-            .path = ".build/sys/deps/tlsuv/",
+            .path = "../deps/tlsuv/",
         },
         .libutf8proc = .{
-            .path = ".build/sys/deps/libutf8proc/",
+            .path = "../deps/libutf8proc/",
         },
         .libuuid = .{
-            .path = ".build/sys/deps/libuuid/",
+            .path = "../deps/libuuid/",
         },
         .libuv = .{
-            .path = ".build/sys/deps/libuv/",
+            .path = "../deps/libuv/",
         },
         .libxml2 = .{
-            .path = ".build/sys/deps/libxml2/",
+            .path = "../deps/libxml2/",
         },
         .libyyjson = .{
-            .path = ".build/sys/deps/libyyjson/",
+            .path = "../deps/libyyjson/",
         },
     },
     .paths = .{""},

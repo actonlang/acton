@@ -266,7 +266,7 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
                 dep_args = []
                 for dep_arg in args.get_strlist("dep"):
                     dep_args.extend(["--dep", dep_arg])
-                cmd = ["build"] + build_cmd_args(args) + ["--keepbuild"] + dep_args
+                cmd = ["build"] + build_cmd_args(args) + dep_args
                 cr = CompilerRunner(
                     process_cap,
                     env,
@@ -369,9 +369,17 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
             print("Build lock exists, trying again soon...")
             after 1: get_lock()
 
-    # check cache size and warn or clean if necessary...
-    warn_on_large_zig_global_cache(file.FileCap(env.cap))
-    clean_zig_local_cache(file.FileCap(env.cap))
+    if env.is_tty():
+        # Check cache size and warn or clean if necessary... but only if we are
+        # attached to a TTY, i.e. running interactively so there is a user to
+        # see the warning. Similarly, for cleaning we want to avoid cleaning if
+        # there are multiple concurrent builds happening. Having a TTY is a
+        # reasonable proxy for "user is probably just interactively running one
+        # acton invokation right now". In contrast, if we are triggered as a
+        # sub-compilation task to build a dependency project, we don't want to
+        # clean the cache.
+        warn_on_large_zig_global_cache(file.FileCap(env.cap))
+        clean_zig_local_cache(file.FileCap(env.cap))
     # and off we go! Start by grabbing the project build lock
     get_lock()
 
@@ -1199,7 +1207,6 @@ actor main(env):
         p.add_bool("dev", "Development mode")
         p.add_bool("only-build", "Only perform final build of .c files, do not compile .act files")
         p.add_bool("skip-build", "Skip final build of .c files")
-        p.add_bool("keepbuild", "Keep build.zig")
         p.add_option("root", "str", "?", "", "Set root actor")
         p.add_option("tempdir", "str", "?", "", "Directory for temporary build files")
         p.add_option("syspath", "str", "?", "", "syspath")

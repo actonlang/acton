@@ -69,7 +69,6 @@ data CompileOptions   = CompileOptions {
                          target      :: String,
                          cpu         :: String,
                          test        :: Bool,
-                         keepbuild   :: Bool,
                          searchpath  :: [String]
                      } deriving Show
 
@@ -90,7 +89,6 @@ data BuildOptions = BuildOptions {
                          targetB     :: String,
                          cpuB        :: String,
                          testB       :: Bool,
-                         keepbuildB  :: Bool,
                          searchpathB :: [String]
                      } deriving Show
                          
@@ -167,7 +165,6 @@ compileOptions = CompileOptions
         <*> strOption (long "target"    <> metavar "TARGET" <> value defTarget <> help "Target, e.g. x86_64-linux-gnu.2.28")
         <*> strOption (long "cpu"       <> metavar "CPU" <> value "" <> help "CPU, e.g. skylake")
         <*> switch (long "test"         <> help "Build tests")
-        <*> switch (long "keepbuild"    <> help "Keep build.zig")
         <*> many (strOption (long "searchpath" <> metavar "DIR" <> help "Add search path"))
 
 buildCommand          = Build <$> (
@@ -188,7 +185,6 @@ buildCommand          = Build <$> (
         <*> strOption (long "target"    <> metavar "TARGET" <> value defTarget <> help "Target, e.g. x86_64-linux-gnu.2.28")
         <*> strOption (long "cpu"       <> metavar "CPU" <> value "" <> help "CPU, e.g. skylake")
         <*> switch (long "test"         <> help "Build tests")
-        <*> switch (long "keepbuild"    <> help "Keep build.zig")
         <*> many (strOption (long "searchpath" <> metavar "DIR" <> help "Add search path"))
     )
                  
