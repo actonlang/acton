@@ -295,12 +295,7 @@ dist/deps/libyyjson: deps/libyyjson $(DIST_ZIG)
 	mkdir -p $(TD)/$@
 	cp -a $</* $(TD)/$@
 
-.PHONY: base/out/types/__builtin__.ty
-base/out/types/__builtin__.ty: $(ACTONC) $(DEPS)
-	cd base && ../dist/bin/actonc build --auto-stub --skip-build $(CPEDANTIC)
-
 # top level targets
-
 .PHONY: test test-builtins test-compiler test-db test-examples test-lang test-regressions test-rts test-stdlib
 test:
 	cd compiler && stack test
@@ -370,13 +365,11 @@ dist/backend%: backend/%
 	mkdir -p $(dir $@)
 	cp -a $< $@
 
-# We depend on __builtin__.ty because the base/out directory will be populated
-# as a result of building it, and we want to copy those files!
 .PHONY: dist/base
-dist/base: base base/.build base/__root.zig base/acton.zig base/build.zig base/build.zig.zon dist/base/out/types/__builtin__.ty base/acton.zig
-	mkdir -p $@ $@/out
+dist/base: base base/.build base/__root.zig base/acton.zig base/build.zig base/build.zig.zon base/acton.zig dist/bin/actonc $(DEPS)
+	mkdir -p $@ $@/.build $@/out
 	cp -a base/__root.zig base/Acton.toml base/acton.zig base/build.zig base/build.zig.zon base/builtin base/rts base/src base/stdlib dist/base/
-	cp -a base/out/types dist/base/out/
+	cd dist/base && ../bin/actonc build --dev --auto-stub && rm -rf .build
 
 # This does a little hack, first copying and then moving the file in place. This
 # is to avoid an error if the executable is currently running. cp tries to open
@@ -401,12 +394,7 @@ dist/builder: builder/build.zig builder/build.zig.zon
 	@mkdir -p $@
 	cp -a $^ $@/
 
-DIST_DEPS=$(addprefix dist/deps/,libargp libbsdnt libgc libnetstring libprotobuf_c libutf8proc libuuid libuv libxml2 libyyjson pcre2 libsnappy_c)
 dist/deps/%: deps/% $(DEPS)
-	@mkdir -p $(dir $@)
-	cp -a $< $@
-
-dist/base/out/types/__builtin__.ty: base/out/types/__builtin__.ty
 	@mkdir -p $(dir $@)
 	cp -a $< $@
 
@@ -434,7 +422,7 @@ endif
 
 .PHONY: distribution1 distribution clean-distribution
 distribution1: dist/base $(DIST_BACKEND_FILES) dist/builder $(DIST_BINS) $(DIST_ZIG)
-	$(MAKE) $(DIST_DEPS)
+	$(MAKE) $(DEPS)
 
 distribution: dist/bin/acton
 

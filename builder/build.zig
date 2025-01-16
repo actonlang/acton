@@ -183,7 +183,36 @@ pub fn build(b: *std.Build) void {
 
     // Register the produced header files in out/types using
     // libActonProject.installHeader / .installHeaderDirectory
+    // TODO: We should install out/types/*.h with installHeadersDirectory, but
+    // it's not working, we get cache issue where out-of-date files are being
+    // used. It works the first time but changes to the headers are often not
+    // picked up. Iterating and installing each file separately seems to work.
+    // Rather surprisingly, I don't see the same issue with the header files
+    // from builtin above, but if errors were to occur, we could do the same
+    // for those files as well. Obviously, this is not ideal and we should
+    // investigate further, find the root cause and address it.
     libActonProject.installHeadersDirectory(b.path("out/types"), "out/types", .{});
+
+    var hiter_dir = b.build_root.handle.openDir("out/types/", .{ .iterate = true }) catch unreachable;
+    var hwalker = hiter_dir.walk(b.allocator) catch unreachable;
+    defer hwalker.deinit();
+
+    // Find all .h files
+    while (true) {
+        const next_result = hwalker.next() catch unreachable;
+        if (next_result) |entry| {
+            if (entry.kind == .file) {
+                if (std.mem.endsWith(u8, entry.basename, ".h")) {
+                    const full_path = entry.dir.realpathAlloc(b.allocator, entry.basename) catch unreachable;
+                    const file_path = b.allocator.alloc(u8, full_path.len - buildroot_path.len - 1) catch unreachable;
+                    @memcpy(file_path, full_path[buildroot_path.len+1..]);
+                    libActonProject.installHeader(b.path(file_path), file_path);
+                }
+            }
+        } else {
+            break;
+        }
+    }
 
     if (!only_lib) {
         const libactondb_dep = b.dependency("actondb", .{
