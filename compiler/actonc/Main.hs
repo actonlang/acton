@@ -557,10 +557,9 @@ compileTasks opts paths tasks
         showTaskGraph ts         = "\n"++concatMap (\t-> concat (intersperse "." (A.modPath (name t)))++" ") ts
         containsBuiltin (AcyclicSCC task) = name task == (A.modName ["__builtin__"])
 
-compileBins opts paths env tasks preBinTasks = do
+compileBins:: C.CompileOptions -> Paths -> Acton.Env.Env0 -> [CompileTask] -> [BinTask] -> IO ()
+compileBins opts paths env tasks binTasks = do
     iff (not (altOutput opts)) $ do
-      detBinTasks <- catMaybes <$> mapM (filterMainActor env opts paths) preBinTasks
-      let binTasks = if (null (C.root opts)) then detBinTasks else preBinTasks
       zigBuild env opts paths tasks binTasks
       when (rmTmp paths) $ removeDirectoryRecursive (projPath paths)
     return ()
@@ -802,25 +801,27 @@ handle errKind f src paths mn ex = do putStrLn ("\nERROR: Error when compiling "
         handleNotExists _ = return ()
 
 writeRootC :: Acton.Env.Env0 -> C.CompileOptions -> Paths -> BinTask -> IO (Maybe BinTask)
-writeRootC env opts paths binTask
-                            = case lookup n (fromJust (Acton.Env.lookupMod m env)) of
-                               Just (A.NAct [] A.TNil{} (A.TRow _ _ _ t A.TNil{}) _)
-                                   | prstr t == "Env" || prstr t == "None"
-                                      || prstr t == "__builtin__.Env"|| prstr t == "__builtin__.None"-> do   -- !! To do: proper check of parameter type !!
-                                      c <- Acton.CodeGen.genRoot env qn
-                                      createDirectoryIfMissing True (takeDirectory rootFile)
-                                      writeFile rootFile c
-                                      return (Just binTask)
-                                   | otherwise -> handle "Type error" Acton.Types.typeError "" paths m
-                                     (Acton.Types.TypeError NoLoc ("Illegal type "++ prstr t ++ " of parameter to root actor " ++ prstr qn))
-                               Just t -> handle "Type error" Acton.Types.typeError "" paths m (Acton.Types.TypeError NoLoc (prstr qn ++ " has not actor type."))
-                               Nothing -> return Nothing
-  where mn                  = A.mname qn
-        qn@(A.GName m n)    = rootActor binTask
-        (sc,_)              = Acton.QuickType.schemaOf env (A.eQVar qn)
-        outbase             = outBase paths mn
-        rootFile            = if (isTest binTask) then outbase ++ ".test_root.c" else outbase ++ ".root.c"
-
+writeRootC env opts paths binTask = do
+    let qn@(A.GName m n) = rootActor binTask
+        mn = A.mname qn
+        outbase = outBase paths mn
+        rootFile = if (isTest binTask) then outbase ++ ".test_root.c" else outbase ++ ".root.c"
+    case Acton.Env.lookupMod m env of
+        Nothing -> return Nothing  -- Handle the case where module lookup fails
+        Just modEnv ->
+            case lookup n modEnv of
+                Just (A.NAct [] A.TNil{} (A.TRow _ _ _ t A.TNil{}) _)
+                    | prstr t == "Env" || prstr t == "None"
+                        || prstr t == "__builtin__.Env"|| prstr t == "__builtin__.None" -> do
+                        c <- Acton.CodeGen.genRoot env qn
+                        createDirectoryIfMissing True (takeDirectory rootFile)
+                        writeFile rootFile c
+                        return (Just binTask)
+                    | otherwise -> handle "Type error" Acton.Types.typeError "" paths m
+                        (Acton.Types.TypeError NoLoc ("Illegal type "++ prstr t ++ " of parameter to root actor " ++ prstr qn))
+                Just t -> handle "Type error" Acton.Types.typeError "" paths m
+                    (Acton.Types.TypeError NoLoc (prstr qn ++ " has not actor type."))
+                Nothing -> return Nothing
 
 modNameToString :: A.ModName -> String
 modNameToString (A.ModName names) = intercalate "." (map nameToString names)
@@ -860,7 +861,8 @@ defCpu = ""
 
 zigBuild :: Acton.Env.Env0 -> C.CompileOptions -> Paths -> [CompileTask] -> [BinTask] -> IO ()
 zigBuild env opts paths tasks binTasks = do
-    mapM (writeRootC env opts paths) binTasks
+    allBinTasks <- mapM (writeRootC env opts paths) binTasks
+    let realBinTasks = catMaybes allBinTasks
     iff (not (quiet opts)) $ putStrLn("  Final compilation step")
     timeStart <- getTime Monotonic
 
@@ -913,7 +915,7 @@ zigBuild env opts paths tasks binTasks = do
     iff (C.debug opts) $ putStrLn ("zigCmd: " ++ zigCmd)
     runZig opts zigCmd paths (Just (projPath paths))
     -- if we are in a temp acton project, copy the outputted binary next to the source file
-    if (isTmp paths && not (null binTasks))
+    if (isTmp paths && not (null realBinTasks))
       then do
         let baseName   = binName (head binTasks)
             exeName    = if isWindowsOS (C.target opts) then baseName ++ ".exe" else baseName
