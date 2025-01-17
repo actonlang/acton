@@ -195,11 +195,12 @@ liveCombine te Nothing                  = Nothing
 liveCombine Nothing te'                 = Nothing
 liveCombine (Just te) (Just te')        = Just $ te++te'
 
-unwrapSchema sc                         = sc{ sctype = unwrap $ sctype sc }
+fxUnwrapSc env sc                       = sc{ sctype = fxUnwrap env $ sctype sc }
 
-unwrap (TFun l fx p k t)                = TFun l (unwrap fx) p k t
-unwrap (TFX l FXAction)                 = TFX l FXProc
-unwrap t                                = t
+fxUnwrap env (TFun l fx p k t)          = TFun l (fxUnwrap env fx) p k t
+fxUnwrap env (TFX l FXAction)
+  | inAct env                           = TFX l FXProc
+fxUnwrap env t                          = t
 
 wrap t@TFun{}                           = do tvx <- newTVarOfKind KFX
                                              tvy <- newTVarOfKind KFX
@@ -451,13 +452,16 @@ matchDefAssumption env cs def
         t2 | inClass env                = addSelf t0 (Just dec)
            | otherwise                  = t0
         q1                              = qbinds def
+        fx | inAct env                  = dfx def
+           | otherwise                  = effect t2
         env0                            = defineTVars q1 $ defineTVars q0 env
         (pos0,kwd0)                     = qual env dec (pos def) (kwd def) (qualWPar env q0)
 
         match env cs eq0 def            = do (cs2,eq1) <- solveScoped env0 (qbound q0) [] t1 (Cast info t1 t2 : cs)
                                              checkNoEscape (loc def) env (qbound q0)
                                              cs2 <- msubst cs2
-                                             return (cs2, def{ qbinds = noqual env q0, pos = pos0, kwd = kwd0, dbody = bindWits (eq0++eq1) ++ dbody def })
+                                             return (cs2, def{ qbinds = noqual env q0, pos = pos0, kwd = kwd0,
+                                                               dbody = bindWits (eq0++eq1) ++ dbody def, dfx = fx })
            where t1                     = tFun (dfx def) (prowOf $ pos def) (krowOf $ kwd def) (fromJust $ ann def)
                  sc1                    = TSchema NoLoc q1 t1
                  mbl                    = findSigLoc (dname def) env
@@ -476,9 +480,9 @@ instance InfEnv Decl where
       | nodup (p,k)                     = case findName n env of
                                              NSig sc dec | t@TFun{} <- sctype sc, matchingDec n sc dec (deco d) -> do
                                                  --traceM ("\n## infEnv (sig) def " ++ prstr (n, NDef sc dec))
-                                                 return ([], [(n, NDef (unwrapSchema sc) dec)], d{deco = dec})
+                                                 return ([], [(n, NDef (fxUnwrapSc env sc) dec)], d{deco = dec})
                                              NReserved -> do
-                                                 t <- tFun (unwrap fx) (prowOf p) (krowOf k) <$> maybe newTVar return a
+                                                 t <- tFun (fxUnwrap env fx) (prowOf p) (krowOf k) <$> maybe newTVar return a
                                                  let sc = tSchema q (if inClass env then dropSelf t (deco d) else t)
                                                  --traceM ("\n## infEnv def " ++ prstr (n, NDef sc (deco d)))
                                                  return ([], [(n, NDef sc (deco d))], d)
@@ -771,7 +775,7 @@ instance Check Decl where
                                              return (cs, def{ pos = noDefaultsP (pos def), kwd = noDefaultsK (kwd def) })
       where env1                        = reserve (bound (p,k) ++ assigned b \\ stateScope env) $ defineTVars q env
             tvs                         = qbound q
-            fx'                         = unwrap fx
+            fx'                         = fxUnwrap env fx
 
     checkEnv env (Actor l n q p k b)    = do --traceM ("## checkEnv actor " ++ prstr n)
                                              pushFX fxProc tNone
