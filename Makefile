@@ -354,7 +354,7 @@ clean-base:
 	rm -rf base/out
 
 cli/out/bin/acton: distribution1
-	cd cli && $(ACTC) build $(ACTONC_TARGET)
+	cd cli && rm -f build.zig build.zig.zon && $(ACTC) build $(ACTONC_TARGET)
 
 # == DIST ==
 #
