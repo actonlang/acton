@@ -304,34 +304,34 @@ test:
 	$(MAKE) test-rts-db
 
 test-builtins:
-	cd compiler && stack test --ta '-p "Builtins"'
+	cd compiler && stack test actonc --ta '-p "Builtins"'
 
 test-compiler:
-	cd compiler && stack test --ta '-p "compiler"'
+	cd compiler && stack test actonc --ta '-p "compiler"'
 
 test-cross-compile:
-	cd compiler && stack test --ta '-p "cross-compilation"'
+	cd compiler && stack test actonc --ta '-p "cross-compilation"'
 
 test-typeerrors:
-	cd compiler && stack test --ta '-p "type errors"'
+	cd compiler && stack test actonc --ta '-p "type errors"'
 
 test-typeerrors-accept:
 	cd compiler/actonc && stack runghc -- test.hs -p "type errors" --accept
 
 test-db:
-	cd compiler && stack test --ta '-p "DB"'
+	cd compiler && stack test actonc --ta '-p "DB"'
 
 test-examples:
-	cd compiler && stack test --ta '-p "Examples"'
+	cd compiler && stack test actonc --ta '-p "Examples"'
 
 test-lang:
-	cd compiler && stack test --ta '-p "Core language"'
+	cd compiler && stack test actonc --ta '-p "Core language"'
 
 test-regressions:
-	cd compiler && stack test --ta '-p "Regression"'
+	cd compiler && stack test actonc --ta '-p "Regression"'
 
 test-rts:
-	cd compiler && stack test --ta '-p "RTS"'
+	cd compiler && stack test actonc --ta '-p "RTS"'
 
 test-rts-db:
 	$(MAKE) -C test
