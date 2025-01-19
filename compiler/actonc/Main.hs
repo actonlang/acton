@@ -84,6 +84,7 @@ main = do
         C.CmdOpt (C.New opts)   -> createProject (C.file opts)
         C.CmdOpt (C.Build opts) -> buildProject $ defaultOpts {
           C.alwaysbuild = C.alwaysB opts,
+          C.tty = C.ttyB opts,
           C.autostub = C.autostubB opts,
           C.cpedantic = C.cpedanticB opts,
           C.debug = C.debugB opts,
@@ -119,7 +120,7 @@ main = do
 
 defaultOpts   = C.CompileOptions False False False False False False False False False False False False
                                  False False False False False False False False False False False False
-                                 False "" "" "" C.defTarget "" False []
+                                 False False "" "" "" C.defTarget "" False []
 
 
 -- Auxiliary functions ---------------------------------------------------------------------------------------
@@ -660,7 +661,7 @@ doTask opts paths env t@(ActonTask mn src m stubMode) = do
         env' <- runRestPasses opts paths env m stubMode
           `catch` handle "Compilation error" generalError src paths mn
           `catch` handle "Compilation error" Acton.Env.compilationError src paths mn
-          `catch` handleTypeError "Type error" Acton.Types.typeError src paths mn
+          `catch` handleTypeError opts "Type error" Acton.Types.typeError src paths mn
         timeEnd <- getTime Monotonic
         iff (not (quiet opts)) $ putStrLn("   Finished compilation in  " ++ fmtTime(timeEnd - timeStart))
         return env'
@@ -827,8 +828,8 @@ handle errKind f src paths mn ex = do
     putStrLn (Acton.Parser.makeReport (f ex) src)
     handleCleanup paths mn
 
-handleTypeError errKind f src paths mn ex = do
-    printDiag $ mkErrorDiagnostic (modNameToString mn) src (typeReport ex (modNameToString mn) src)
+handleTypeError opts errKind f src paths mn ex = do
+    printDiag opts $ mkErrorDiagnostic (modNameToString mn) src (typeReport ex (modNameToString mn) src)
     handleCleanup paths mn
 
 handleCleanup paths mn = do
@@ -840,11 +841,11 @@ handleCleanup paths mn = do
         handleNotExists :: IOException -> IO ()
         handleNotExists _ = return ()
 
-printDiag :: Diagnostic String -> IO ()
-printDiag d = do
+printDiag :: C.CompileOptions -> Diagnostic String -> IO ()
+printDiag opts d = do
     -- TODO: change to print to stderr! current tests presume stdout so we print to stdout for now..
     tty <- hIsTerminalDevice stdout
-    if tty
+    if tty || (C.tty opts)
       then printDiagnostic stdout WithUnicode (TabSize 4) defaultStyle d
       else hPutDoc stdout $ unAnnotate (prettyDiagnostic WithoutUnicode (TabSize 4) d)
 
@@ -867,7 +868,7 @@ writeRootC env opts paths binTask = do
                         return (Just binTask)
                     | otherwise -> handle "Type error" Acton.Types.typeError "" paths m
                         (Acton.Types.TypeError NoLoc ("Illegal type "++ prstr t ++ " of parameter to root actor " ++ prstr qn))
-                Just t -> handleTypeError "Type error" Acton.Types.typeError "" paths m
+                Just t -> handleTypeError opts "Type error" Acton.Types.typeError "" paths m
                     (Acton.Types.TypeError NoLoc (prstr qn ++ " has not actor type."))
                 Nothing -> return Nothing
 
