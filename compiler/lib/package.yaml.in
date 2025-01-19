@@ -34,6 +34,7 @@ library:
     - Acton.Solver
     - Acton.Syntax
     - Acton.Types
+    - Acton.TypeM
     - Utils
     - Pretty
     - InterfaceFiles
@@ -44,6 +45,7 @@ library:
     - bytestring
     - containers
     - deepseq
+    - diagnose
     - dir-traverse
     - directory >= 1.3.1
     - filelock
@@ -55,6 +57,7 @@ library:
     - parser-combinators
     - pretty
     - scientific
+    - text
     - transformers
     - unix
     - utf8-string

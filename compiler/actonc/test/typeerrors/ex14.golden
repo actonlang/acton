@@ -1,17 +1,13 @@
 Building file test/typeerrors/ex14.act
   Compiling ex14.act for development
-
-ERROR: Error when compiling ex14 module: Type error
-
-  |
-2 |    return g(x)
-  |           ^^^^
-
-
-  |
-4 |def g(x,y):
-  |    ^
-Type incompatibility between definition of and call of g (keyword argument(s) 'y' is not defined in call)
-
-- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-
+[error]: Incompatible types
+     +--> ex14@2:12-2:16
+     |
+   2 |     return g(x)
+     :            ^---
+     :            `- keyword argument(s) 'y' is missing in call to g
+     :
+   4 | def g(x,y):
+     :     ^ 
+     :     `- g is defined here
+-----+

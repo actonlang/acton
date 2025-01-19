@@ -1,17 +1,13 @@
 Building file test/typeerrors/ex5.act
   Compiling ex5.act for development
-
-ERROR: Error when compiling ex5 module: Type error
-
-  |
-4 |def apply(g,x):
-  |    ^^^^^
-
-
-  |
-7 |a = apply(f,3)
-  |    ^^^^^^^^^^
-Type incompatibility between definition of and call of apply (keyword argument(s) 'y' is not defined in call)
-
-- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-
+[error]: Incompatible types
+     +--> ex5@7:5-7:15
+     |
+   4 | def apply(g,x):
+     :     ^---- 
+     :     `- apply is defined here
+     :
+   7 | a = apply(f,3)
+     :     ^---------
+     :     `- keyword argument(s) 'y' is missing in call to apply
+-----+

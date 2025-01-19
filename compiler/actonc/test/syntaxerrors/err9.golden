@@ -1,0 +1,13 @@
+Building file test/syntaxerrors/err9.act
+
+ERROR: Error when compiling err9 module: Syntax error
+
+test/syntaxerrors/err9.act:14:8:
+   |
+14 | f : [A]
+   |        ^
+unexpected end of input
+expecting "=>"
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+

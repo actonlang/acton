@@ -1,0 +1,13 @@
+Building file test/syntaxerrors/err4.act
+
+ERROR: Error when compiling err4 module: Syntax error
+
+test/syntaxerrors/err4.act:15:13:
+   |
+15 |    return x+pass
+   |             ^^^^^
+unexpected "pass<newline>   "
+expecting atomic expression or unary operator
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+

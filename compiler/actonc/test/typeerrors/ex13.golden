@@ -1,12 +1,9 @@
 Building file test/typeerrors/ex13.act
   Compiling ex13.act for development
-
-ERROR: Error when compiling ex13 module: Type error
-
-  |
-2 |  a = Act(7)
-  |      ^^^^^^
-keyword component(s) 't' is not defined in tuple
-
-- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-
+[error]: Incompatible types
+     +--> ex13@2:7-2:13
+     |
+   2 |   a = Act(7)
+     :       ^-----
+     :       `- keyword component(s) 't' is missing in tuple
+-----+

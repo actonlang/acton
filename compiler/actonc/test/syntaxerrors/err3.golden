@@ -1,0 +1,13 @@
+Building file test/syntaxerrors/err3.act
+
+ERROR: Error when compiling err3 module: Syntax error
+
+test/syntaxerrors/err3.act:15:13:
+   |
+15 |    return 2+
+   |             ^
+unexpected end of input
+expecting atomic expression or unary operator
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+

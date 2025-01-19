@@ -1,13 +1,10 @@
 Building file test/typeerrors/ex16.act
   Compiling ex16.act for development
-
-ERROR: Error when compiling ex16 module: Type error
-
-  |
-6 |        foo.append(4)
-  |        ^^^^^^^^^^
-?__builtin__.list[__builtin__.int] does not have an attribute append
-Hint: you may need to test if foo is not None
-
-- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-
+[error]: Constraint violation
+     +--> ex16@6:9-6:19
+     |
+   6 |         foo.append(4)
+     :         ^--------- 
+     :         `- ?__builtin__.list[__builtin__.int] does not have an attribute append
+     :            Hint: you may need to test if foo is not None
+-----+

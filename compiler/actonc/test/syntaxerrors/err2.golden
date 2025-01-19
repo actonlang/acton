@@ -1,0 +1,11 @@
+Building file test/syntaxerrors/err2.act
+
+ERROR: Error when compiling err2 module: Context error
+
+   |
+15 |   actor a():
+   |   ^^^^^
+actor declaration only allowed on the module top level
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+

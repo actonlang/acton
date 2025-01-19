@@ -24,6 +24,7 @@ import qualified Acton.Env
 import qualified Acton.QuickType
 import qualified Acton.Kinds
 import qualified Acton.Types
+import Acton.TypeM
 import qualified Acton.Solver
 import qualified Acton.Normalizer
 import qualified Acton.CPS
@@ -51,7 +52,11 @@ import Data.Graph
 import Data.String.Utils (replace)
 import Data.Version (showVersion)
 import qualified Data.List
+import Error.Diagnose
+import Error.Diagnose.Style (defaultStyle)
 import qualified Filesystem.Path.CurrentOS as Fsco
+import Prettyprinter (unAnnotate)
+import Prettyprinter.Render.Text (hPutDoc)
 import System.Clock
 import System.Directory
 import System.Directory.Recursive
@@ -79,6 +84,7 @@ main = do
         C.CmdOpt (C.New opts)   -> createProject (C.file opts)
         C.CmdOpt (C.Build opts) -> buildProject $ defaultOpts {
           C.alwaysbuild = C.alwaysB opts,
+          C.tty = C.ttyB opts,
           C.autostub = C.autostubB opts,
           C.cpedantic = C.cpedanticB opts,
           C.debug = C.debugB opts,
@@ -114,7 +120,7 @@ main = do
 
 defaultOpts   = C.CompileOptions False False False False False False False False False False False False
                                  False False False False False False False False False False False False
-                                 False "" "" "" C.defTarget "" False []
+                                 False False "" "" "" C.defTarget "" False []
 
 
 -- Auxiliary functions ---------------------------------------------------------------------------------------
@@ -655,7 +661,7 @@ doTask opts paths env t@(ActonTask mn src m stubMode) = do
         env' <- runRestPasses opts paths env m stubMode
           `catch` handle "Compilation error" generalError src paths mn
           `catch` handle "Compilation error" Acton.Env.compilationError src paths mn
-          `catch` handle "Type error" Acton.Types.typeError src paths mn
+          `catch` handleTypeError opts "Type error" Acton.Types.typeError src paths mn
         timeEnd <- getTime Monotonic
         iff (not (quiet opts)) $ putStrLn("   Finished compilation in  " ++ fmtTime(timeEnd - timeStart))
         return env'
@@ -817,15 +823,31 @@ runRestPasses opts paths env0 parsed stubMode = do
 
                       return $ Acton.Env.addMod mn iface (env0 `Acton.Env.withModulesFrom` env)
 
-handle errKind f src paths mn ex = do putStrLn ("\nERROR: Error when compiling " ++ (prstr mn) ++ " module: " ++ errKind)
-                                      putStrLn (Acton.Parser.makeReport (f ex) src)
-                                      removeIfExists (outbase++".ty")
-                                      when (rmTmp paths) $ removeDirectoryRecursive (projPath paths)
-                                      System.Exit.exitFailure
+handle errKind f src paths mn ex = do
+    putStrLn ("\nERROR: Error when compiling " ++ (prstr mn) ++ " module: " ++ errKind)
+    putStrLn (Acton.Parser.makeReport (f ex) src)
+    handleCleanup paths mn
+
+handleTypeError opts errKind f src paths mn ex = do
+    printDiag opts $ mkErrorDiagnostic (modNameToString mn) src (typeReport ex (modNameToString mn) src)
+    handleCleanup paths mn
+
+handleCleanup paths mn = do
+    removeIfExists (outbase++".ty")
+    when (rmTmp paths) $ removeDirectoryRecursive (projPath paths)
+    System.Exit.exitFailure
   where outbase        = outBase paths mn
         removeIfExists f = removeFile f `catch` handleNotExists
         handleNotExists :: IOException -> IO ()
         handleNotExists _ = return ()
+
+printDiag :: C.CompileOptions -> Diagnostic String -> IO ()
+printDiag opts d = do
+    -- TODO: change to print to stderr! current tests presume stdout so we print to stdout for now..
+    tty <- hIsTerminalDevice stdout
+    if tty || (C.tty opts)
+      then printDiagnostic stdout WithUnicode (TabSize 4) defaultStyle d
+      else hPutDoc stdout $ unAnnotate (prettyDiagnostic WithoutUnicode (TabSize 4) d)
 
 writeRootC :: Acton.Env.Env0 -> C.CompileOptions -> Paths -> BinTask -> IO (Maybe BinTask)
 writeRootC env opts paths binTask = do
@@ -846,7 +868,7 @@ writeRootC env opts paths binTask = do
                         return (Just binTask)
                     | otherwise -> handle "Type error" Acton.Types.typeError "" paths m
                         (Acton.Types.TypeError NoLoc ("Illegal type "++ prstr t ++ " of parameter to root actor " ++ prstr qn))
-                Just t -> handle "Type error" Acton.Types.typeError "" paths m
+                Just t -> handleTypeError opts "Type error" Acton.Types.typeError "" paths m
                     (Acton.Types.TypeError NoLoc (prstr qn ++ " has not actor type."))
                 Nothing -> return Nothing
 

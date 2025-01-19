@@ -39,6 +39,7 @@ data NewOptions     = NewOptions {
 
 data CompileOptions   = CompileOptions {
                          alwaysbuild :: Bool,
+                         tty         :: Bool,
                          db          :: Bool,
                          parse       :: Bool,
                          kinds       :: Bool,
@@ -74,6 +75,7 @@ data CompileOptions   = CompileOptions {
 
 data BuildOptions = BuildOptions {
                          alwaysB     :: Bool,
+                         ttyB        :: Bool,
                          cpedanticB  :: Bool,
                          dbB         :: Bool,
                          no_threadsB :: Bool,
@@ -135,6 +137,7 @@ newCommand = New <$> (NewOptions <$> argument (str :: ReadM String) (metavar "PR
 
 compileOptions = CompileOptions
         <$> switch (long "always-build" <> help "Show the result of parsing")
+        <*> switch (long "tty"          <> help "Act as if run from interactive TTY")
         <*> switch (long "db"           <> help "Enable DB backend")
         <*> switch (long "parse"        <> help "Show the result of parsing")
         <*> switch (long "kinds"        <> help "Show all the result after kind-checking")
@@ -170,6 +173,7 @@ compileOptions = CompileOptions
 buildCommand          = Build <$> (
     BuildOptions
         <$> switch (long "always-build" <> help "Development mode; include debug symbols etc")
+        <*> switch (long "tty"          <> help "Act as if run from interactive TTY")
         <*> switch (long "cpedantic"    <> help "Pedantic C compilation with -Werror")
         <*> switch (long "db"           <> help "Enable DB backend")
         <*> switch (long "no-threads"   <> help "Don't use threads")

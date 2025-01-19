@@ -1,12 +1,9 @@
 Building file test/typeerrors/ex24.act
   Compiling ex24.act for development
-
-ERROR: Error when compiling ex24 module: Type error
-
-  |
-4 |    a : ?str = ""
-  |        ^^^^^
-?__builtin__.str must implement __builtin__.Hashable
-
-- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-
+[error]: Constraint violation
+     +--> ex24@4:9-4:14
+     |
+   4 |     a : ?str = ""
+     :         ^---- 
+     :         `- ?__builtin__.str must implement __builtin__.Hashable
+-----+

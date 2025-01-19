@@ -1,12 +1,9 @@
 Building file test/typeerrors/ex10.act
   Compiling ex10.act for development
-
-ERROR: Error when compiling ex10 module: Type error
-
-  |
-4 |    except int:
-  |    ^^^^^^^^^^
-__builtin__.int must be a subclass of __builtin__.Exception
-
-- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-
+[error]: Constraint violation
+     +--> ex10@4:5-4:15
+     |
+   4 |     except int:
+     :     ^--------- 
+     :     `- __builtin__.int must be a subclass of __builtin__.Exception
+-----+

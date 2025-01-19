@@ -141,6 +141,8 @@ actor CompilerRunner(process_cap, env, args, wdir=None, on_exit: ?action(int, in
     # We find the path to actonc by looking at the executable path of the
     # current process. Since we are called 'acton', we just add a 'c'.
     cmd = [fs.exepath() + ("c" if exe == "actonc" else "")] + args
+    if env.is_tty():
+        cmd.append("--tty")
     p = process.Process(process_cap, cmd, on_actonc_std_out, on_actonc_std_err, on_actonc_exit, on_actonc_error, wdir)
 
     def stop():

@@ -1,0 +1,13 @@
+Building file test/syntaxerrors/err1.act
+
+ERROR: Error when compiling err1 module: Syntax error
+
+test/syntaxerrors/err1.act:14:11:
+   |
+14 | def f(x): if x>pass:
+   |           ^^^^^^^^^^^
+unexpected "if x>pass:<newline>   "
+expecting end of line or simple statement
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+

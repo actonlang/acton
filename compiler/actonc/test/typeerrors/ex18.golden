@@ -1,15 +1,10 @@
 Building file test/typeerrors/ex18.act
   Compiling ex18.act for development
-
-ERROR: Error when compiling ex18 module: Type error
-
-Cannot satisfy the following simultaneous constraints for the unknown type t0:
-
-__builtin__.atom must be a subclass of t0
-  |
-2 |    return len(ls) + "hej"
-  |           ^^^^^^^^^^^^^^^
-The type of the indicated expression (which we call t0) must implement __builtin__.Plus
-
-- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-
+[error]: Cannot satisfy the following simultaneous constraints for the unknown type t0
+     +--> ex18@2:12-2:27
+     |
+   2 |     return len(ls) + "hej"
+     :            ^--------------
+     :            `- The type of the indicated expression (which we call t0) must implement __builtin__.Plus
+     :               __builtin__.atom must be a subclass of t0
+-----+

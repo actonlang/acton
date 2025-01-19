@@ -1,17 +1,13 @@
 Building file test/typeerrors/ex1.act
   Compiling ex1.act for development
-
-ERROR: Error when compiling ex1 module: Type error
-
-  |
-1 |def f(x,y):
-  |    ^
-
-
-  |
-4 |a = f(3)
-  |    ^^^^
-Type incompatibility between definition of and call of f (keyword argument(s) 'y' is not defined in call)
-
-- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-
+[error]: Incompatible types
+     +--> ex1@4:5-4:9
+     |
+   1 | def f(x,y):
+     :     ^ 
+     :     `- f is defined here
+     :
+   4 | a = f(3)
+     :     ^---
+     :     `- keyword argument(s) 'y' is missing in call to f
+-----+
