@@ -41,6 +41,7 @@ main = do
     regressionSegfaultTests <- createTests "Regression segfaults" "../../test/regression_segfault" False [] (testBuild "" ExitSuccess)
     rtsAutoTests <- createAutoTests "RTS auto" "../../test/rts_auto"
     stdlibAutoTests <- createAutoTests "stdlib auto" "../../test/stdlib_auto"
+    syntaxErrorAutoTests <- createGoldenErrorAutoTests "syntax errors" "test/syntaxerrors"
     typeErrorAutoTests <- createGoldenErrorAutoTests "type errors" "test/typeerrors"
     defaultMain $ localOption timeout $ testGroup "Tests" $
       [ builtinsAutoTests
@@ -57,6 +58,7 @@ main = do
       , rtsTests
       , stdlibTests
       , stdlibAutoTests
+      , syntaxErrorAutoTests
       , typeErrorAutoTests
       , crossCompileTests
       ]
@@ -239,11 +241,11 @@ createAutoTest file = do
 
 createGoldenErrorAutoTests name dir = do
     actFiles <- findThings dir
-    return $ testGroup name $ map createGoldenErrorAutoTest actFiles
+    return $ testGroup name $ map (createGoldenErrorAutoTest dir) actFiles
 
-createGoldenErrorAutoTest file = do
+createGoldenErrorAutoTest dir file = do
     let testName  = fileBody
-        goldenFile = "test/typeerrors/" ++ fileBody ++ ".golden"
+        goldenFile = joinPath [dir, fileBody ++ ".golden"]
     goldenVsString testName goldenFile (getCompileError file)
   where (fileBody, fileExt) = splitExtension $ takeFileName file
 

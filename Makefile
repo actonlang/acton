@@ -312,6 +312,12 @@ test-compiler:
 test-cross-compile:
 	cd compiler && stack test actonc --ta '-p "cross-compilation"'
 
+test-syntaxerrors:
+	cd compiler && stack test actonc --ta '-p "syntax errors"'
+
+test-syntaxerrors-accept:
+	cd compiler/actonc && stack runghc -- test.hs -p "syntax errors" --accept
+
 test-typeerrors:
 	cd compiler && stack test actonc --ta '-p "type errors"'
 

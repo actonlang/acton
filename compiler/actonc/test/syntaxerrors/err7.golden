@@ -1,0 +1,13 @@
+Building file test/syntaxerrors/err7.act
+
+ERROR: Error when compiling err7 module: Syntax error
+
+test/syntaxerrors/err7.act:14:6:
+   |
+14 | f : [a (Eq)] => (a,a) -> bool
+   |      ^
+unexpected 'a'
+expecting type variable (upper case letter optionally followed by digits)
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+

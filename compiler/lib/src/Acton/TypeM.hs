@@ -200,7 +200,6 @@ useless vs c                           = case c of
            f _          = False
 
 --typeReport :: TypeError -> Report
-
 typeReport (TypeError l msg) filename src           = Err Nothing msg [(locToPosition l filename src, This msg)] []
 typeReport (RigidVariable tv) filename src          = Err Nothing msg [(locToPosition (loc tv) filename src, This msg)] []
                                                       where msg = render (text "Type" <+> pretty tv <+> text "is rigid")

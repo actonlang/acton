@@ -1,0 +1,13 @@
+Building file test/syntaxerrors/err6.act
+
+ERROR: Error when compiling err6 module: Syntax error
+
+test/syntaxerrors/err6.act:14:7:
+   |
+14 | def f(X):
+   |       ^^
+unexpected "X)"
+expecting "**", '*', or name (not type variable)
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+
