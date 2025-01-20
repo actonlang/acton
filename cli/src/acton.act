@@ -271,7 +271,7 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
                     absolute_path = file.resolve_relative_path(fs.cwd(), parts[1])
                     new_dep_arg = parts[0] + "=" + absolute_path
                     dep_args.extend(["--dep", new_dep_arg])
-                cmd = ["build"] + build_cmd_args(args) + dep_args
+                cmd = ["build"] + dep_build_cmd_args(args) + dep_args
                 cr = CompilerRunner(
                     process_cap,
                     env,
@@ -698,6 +698,26 @@ actor CmdTest(env: Env, args, perf_mode: bool=False):
     print("Building project tests...")
     project_builder = BuildProject(process_cap, env, args, _on_build_success, _on_build_failure, build_tests=True)
 
+def dep_build_cmd_args(args):
+    """Compute command line arguments for building dependencies
+
+    A subset of the command line arguments are relevant for building dependencies
+    """
+    cmdargs = []
+    for argname, arg in args.options.items():
+        if argname in {"always-build", "cpu", "dep", "dev", "target"}:
+            if arg.type == "bool":
+                if args.get_bool(argname):
+                    cmdargs.append("--" + argname)
+            elif arg.type == "str":
+                if args.get_str(argname) != '':
+                    cmdargs.append("--" + argname)
+                    cmdargs.append(args.get_str(argname))
+            elif arg.type == "int":
+                if args.get_int(argname) != 0:
+                    cmdargs.append("--" + argname)
+                    cmdargs.append(str(args.get_int(argname)))
+    return cmdargs
 
 def build_cmd_args(args):
     cmdargs = []
@@ -705,6 +725,7 @@ def build_cmd_args(args):
         # TODO: reverse this logic, we should only pass in a small set of options, not all
         if argname in {"file", "record", "golden-update"}:
             continue
+
         if arg.type == "bool":
             if args.get_bool(argname):
                 cmdargs.append("--" + argname)
