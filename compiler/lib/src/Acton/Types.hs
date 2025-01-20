@@ -619,8 +619,8 @@ checkNoEscape l env vs                  = do fvs <- tyfree <$> msubst env
                                              let escaped = vs `intersect` fvs
                                              when (not $ null escaped) $ do
                                                  env1 <- msubst env
-                                                 --traceM ("####### env:\n" ++ prstr env1)
-                                                 err l "Escaping type variable"
+                                                 traceM ("####### env:\n" ++ prstr env1)
+                                                 err l ("Escaping type variables: " ++ prstrs escaped)
 
 
 wellformed                              :: (WellFormed a) => Env -> a -> TypeM ()

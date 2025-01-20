@@ -661,7 +661,7 @@ genCall env [t] (Var _ n) PosNil
 -- TODO: would be even better to determine this in the compiler and not emit
 -- this line rather than inspect the method table at run time
 genCall env [TCon _ tc] (Var _ n) p
-  | n == primGCfinalizer            = text "if" <+> parens (gen env p <> text "->" <> gen env classKW <> text "->" <> gen env cleanupKW <+> text "!= $ActorD___cleanup__") <+> gen env n <> parens (gen env p <> comma <+> genTopName env (methodname (noq $ tcname tc) (name "_GC_finalizer")))
+  | n == primGCfinalizer            = text "if" <+> parens (text "(void*)" <> gen env p <> text "->" <> gen env classKW <> text "->" <> gen env cleanupKW <+> text "!= (void*)$ActorD___cleanup__") <+> gen env n <> parens (gen env p <> comma <+> genTopName env (methodname (noq $ tcname tc) (name "_GC_finalizer")))
 genCall env ts e@(Var _ n) p
   | NClass{} <- info                = genNew env n p
   | NDef{} <- info                  = (instCast env ts e $ gen env e) <> parens (gen env p)

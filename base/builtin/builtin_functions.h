@@ -195,3 +195,5 @@ B_Iterator B_reversed (B_Sequence, $WORD);
 $WORD B_round (B_Real, $WORD, B_int);
 $WORD B_sum(B_Plus, B_Iterable, $WORD, $WORD);
 */
+
+$WORD $ASSERT(B_bool, B_str);
