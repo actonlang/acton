@@ -731,7 +731,7 @@ isGitAvailable = do
 
 -- Check if any other non-standard output is enabled, like --cgen or --sigs
 altOutput opts =
-    (C.cgen opts) || (C.hgen opts) || (C.sigs opts) || (C.llift opts) || (C.cps opts) || (C.deact opts) || (C.norm opts)
+  (C.parse opts) || (C.kinds opts) || (C.types opts) || (C.sigs opts) || (C.norm opts) || (C.deact opts) || (C.cps opts) || (C.llift opts) || (C.box opts) || (C.hgen opts) || (C.cgen opts)
 
 runRestPasses :: C.CompileOptions -> Paths -> Acton.Env.Env0 -> A.Module -> Bool -> IO Acton.Env.Env0
 runRestPasses opts paths env0 parsed stubMode = do
