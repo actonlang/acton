@@ -267,7 +267,10 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
                 print(" -", dep_name)
                 dep_args = []
                 for dep_arg in args.get_strlist("dep"):
-                    dep_args.extend(["--dep", dep_arg])
+                    parts = dep_arg.split("=", 1)
+                    absolute_path = file.resolve_relative_path(fs.cwd(), parts[1])
+                    new_dep_arg = parts[0] + "=" + absolute_path
+                    dep_args.extend(["--dep", new_dep_arg])
                 cmd = ["build"] + build_cmd_args(args) + dep_args
                 cr = CompilerRunner(
                     process_cap,
