@@ -2,6 +2,9 @@
 def randint(min: int, max: int) -> int:
     NotImplemented
 
+def randi64(min: i64, max: i64) -> i64:
+    NotImplemented
+
 def randstr(length: int) -> str:
     char_set = list("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789")
     res = ""
@@ -46,3 +49,30 @@ def sample[T](population: list[T], k: int) -> list[T]:
         indices.pop(idx)
         result.append(population[idx_to_pop])
     return result
+
+
+def rand_bigint(size):
+    """
+    Returns a randomly chosen integer (positive, zero or negative)
+    
+    :param size: Maximal number of decimal digits (must be positive)
+    """
+    if (size <= 0):
+        raise ValueError('decimal length of int must be positive')
+    digits = [choice(["","-"])]
+    for i in range(size):
+        digits.append(choice(["0","1","2","3","4","5","6","7","8","9"]))
+    return int("".join(digits))
+
+def rand_list(size)->list[int]:
+    """
+    Returns a randomly chosen list of integers.
+    
+    :param size: Maximal number of elements and maximal size of list elements (must be positive)
+    """
+    if (size <= 0):
+        raise ValueError('decimal length of int must be positive')
+    res = []
+    for i in range(randint(0,size)):
+        res.append(randint(-size, size))
+    return res

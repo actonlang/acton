@@ -28,6 +28,12 @@ B_int malloc_int() {
     return res;
 }
 
+void zz_malloc_fit(zz_ptr res, len_t m) {
+    res->n = acton_malloc_atomic(sizeof(unsigned long) * m);
+    res->size = 0;
+    res->alloc = m;
+}
+
 B_int B_IntegralD_intD___lshift__(B_IntegralD_int wit,  B_int a, B_int b);
 
 B_int B_intG_new(B_atom a, B_int base) {
@@ -352,7 +358,7 @@ B_int B_IntegralD_intD___lshift__(B_IntegralD_int wit,  B_int a, B_int b) {
     long mres = labs(ma) + shw + (shb > 0);
     B_int res = malloc_int();
     zz_ptr rval = &res->val;
-    zz_init_fit(rval,mres);
+    zz_malloc_fit(rval,mres);
     if (shb>0) {
         word_t ci = nn_shl(rval->n, aval.n, labs(ma), shb);
         if (ci>0)
@@ -386,7 +392,7 @@ B_int B_IntegralD_intD___rshift__(B_IntegralD_int wit,  B_int a, B_int b) {
     long shw = bval/64;
     long shb = bval%64;
     long mres = labs(ma) - shw;
-    zz_init_fit(rval,mres);
+    zz_malloc_fit(rval,mres);
     unsigned long tmp[mres];
     for (int i = 0; i < mres; i++)
         tmp[i] = aval.n[i+shw];
@@ -398,31 +404,172 @@ B_int B_IntegralD_intD___rshift__(B_IntegralD_int wit,  B_int a, B_int b) {
 }
  
 B_int B_IntegralD_intD___invert__(B_IntegralD_int wit,  B_int a) {
-    //return toB_i64(~a->val);
-    $RAISE((B_BaseException)$NEW(B_NotImplementedError,to$str("Number.__invert__ not implemented for int")));
-    return to$int(-1); // Silence compiler warning, remove when implemented
+    B_int res0 = malloc_int();
+    B_int res = malloc_int();
+    B_int one = to$int(1);
+    zz_neg(&res0->val,&a->val);
+    zz_sub(&res->val,&res0->val,&one->val);
+    return res;
 }
 
 
 // LogicalB_int  ////////////////////////////////////////////////////////////////////////////////////////
 
-B_int B_LogicalD_IntegralD_intD___and__(B_LogicalD_IntegralD_int wit,  B_int a, B_int b) {
-    // return toB_i64(a->val & b->val);
-    $RAISE((B_BaseException)$NEW(B_NotImplementedError,to$str("Protocol Logical not implemented for int; use i64\n")));
-    return NULL; // This is just to silence compiler warning, above RAISE will longjmp from here anyway
+// Converts src (which must be non-zero), to two's complement form, stored in dst.
+// src and dst may be the same address.
+void twocompl(unsigned long *dst, unsigned long *src, long len) {
+    unsigned long carry = 1;
+    for (int i = 0; i < len; i++) {
+        unsigned long t = src[i] ^ ULONG_MAX;
+        if (t < ULONG_MAX || carry == 0) {
+            dst[i] = t + carry;
+            carry = 0;
+        } else {
+            dst[i] = 0;
+        }
+    }
 }
+
+B_int B_LogicalD_IntegralD_intD___and__(B_LogicalD_IntegralD_int wit,  B_int a, B_int b) {
+    long aneg = a->val.size < 0;
+    long bneg = b->val.size < 0;
+    long asize = labs(a->val.size);
+    long bsize = labs(b->val.size);
+    if (bsize==0) return to$int(0);
+    if (asize==0) return to$int(0);
+    unsigned long  *a1, *b1;
+    if (aneg) {
+        a1 = acton_malloc(asize*sizeof(long));
+        twocompl(a1, a->val.n, asize);
+    } else
+        a1 = a->val.n;
+    if (bneg) {
+        b1 = acton_malloc(bsize*sizeof(long));
+        twocompl(b1, b->val.n, bsize);
+    } else
+        b1 = b->val.n;
+    long rneg = aneg & bneg;
+    if (asize < bsize) {
+        unsigned long *t = a1; a1 = b1; b1 = t;
+        long tsize = asize; asize = bsize; bsize = tsize;
+        long tneg = aneg; aneg = bneg; bneg = tneg;
+    }
+    B_int res = malloc_int();
+    // if both are positive, rsize = bsize
+    // if one is positive, use that size
+    // if both are negative, rsize = asize
+    zz_malloc_fit(&res->val,bneg ? asize : bsize);
+    res->val.size = 0;
+    if (bneg) {
+        for (int i = asize-1; i >= bsize; i--) {
+            res->val.n[i] = a1[i];
+            if (res->val.size == 0 && res->val.n[i] != 0L)
+                res->val.size = i+1;
+        }
+    }
+    for (int i = bsize-1; i >= 0; i--) {
+        res->val.n[i] = a1[i] & b1[i];
+        if (res->val.size == 0 && res->val.n[i] != 0L)
+            res->val.size = i+1;
+    }
+    if (rneg) {
+        twocompl(res->val.n, res->val.n, res->val.size);
+        res->val.size = -res->val.size;
+    }
+    return res;
+}     
+
                                                  
 B_int B_LogicalD_IntegralD_intD___or__(B_LogicalD_IntegralD_int wit,  B_int a, B_int b) {
-    // return toB_i64(a->val | b->val);
-    $RAISE((B_BaseException)$NEW(B_NotImplementedError,to$str("Protocol Logical not implemented for int; use i64\n")));
-    return NULL; // This is just to silence compiler warning, above RAISE will longjmp from here anyway
-}
-                                                 
+    long aneg = a->val.size < 0;
+    long bneg = b->val.size < 0;
+    long asize = labs(a->val.size);
+    long bsize = labs(b->val.size);
+    if (bsize==0) return a;
+    if (asize==0) return b;
+    unsigned long  *a1, *b1;
+    if (aneg) {
+        a1 = acton_malloc(asize*sizeof(long));
+        twocompl(a1, a->val.n, asize);
+    } else
+        a1 = a->val.n;
+    if (bneg) {
+        b1 = acton_malloc(bsize*sizeof(long));
+        twocompl(b1, b->val.n, bsize);
+    } else
+        b1 = b->val.n;
+    long rneg = aneg | bneg;
+    if (asize < bsize) {
+        unsigned long *t = a1; a1 = b1; b1 = t;
+        long tsize = asize; asize = bsize; bsize = tsize;
+        long tneg = aneg; aneg = bneg; bneg = tneg;
+    }
+    B_int res = malloc_int();
+    zz_malloc_fit(&res->val,bneg ? bsize : asize);
+    res->val.size = 0;
+    if (!bneg) {
+        for (int i = asize-1; i >= bsize; i--) {
+            res->val.n[i] = a1[i];
+            if (res->val.size == 0 && res->val.n[i] != 0L)
+                res->val.size = i+1;
+        }
+    }
+    for (int i = bsize-1; i >= 0; i--) {
+        res->val.n[i] = a1[i] | b1[i];
+        if (res->val.size == 0 && res->val.n[i] != 0L)
+            res->val.size = i+1;
+    }
+    if (rneg) {
+        twocompl(res->val.n, res->val.n, res->val.size);
+        res->val.size = -res->val.size;
+    }
+    return res;
+}     
+
+
 B_int B_LogicalD_IntegralD_intD___xor__(B_LogicalD_IntegralD_int wit,  B_int a, B_int b) {
-    // return toB_i64(a->val ^ b->val);
-    $RAISE((B_BaseException)$NEW(B_NotImplementedError,to$str("Protocol Logical not implemented for int; use i64\n")));
-    return NULL; // This is just to silence compiler warning, above RAISE will longjmp from here anyway
-}
+    long aneg = a->val.size < 0;
+    long bneg = b->val.size < 0;
+    long asize = labs(a->val.size);
+    long bsize = labs(b->val.size);
+    if (bsize==0) return a;
+    if (asize==0) return b;
+    unsigned long  *a1, *b1;
+    if (aneg) {
+        a1 = acton_malloc(asize*sizeof(long));
+        twocompl(a1, a->val.n, asize);
+    } else
+        a1 = a->val.n;
+    if (bneg) {
+        b1 = acton_malloc(bsize*sizeof(long));
+        twocompl(b1, b->val.n, bsize);
+    } else
+        b1 = b->val.n;
+    long rneg = aneg ^ bneg;
+    if (asize < bsize) {
+        unsigned long *t = a1; a1 = b1; b1 = t;
+        long tsize = asize; asize = bsize; bsize = tsize;
+        long tneg = aneg; aneg = bneg; bneg = tneg;
+    }
+    B_int res = malloc_int();
+    zz_malloc_fit(&res->val,asize);
+    res->val.size = 0;
+    for (int i = asize-1; i >= bsize; i--) {
+        res->val.n[i] = bneg ? (~a1[i]) : a1[i];
+        if (res->val.size == 0 && res->val.n[i] != 0L)
+            res->val.size = i+1;
+     }
+    for (int i = bsize-1; i >= 0; i--) {
+        res->val.n[i] = a1[i] ^ b1[i];
+        if (res->val.size == 0 && res->val.n[i] != 0L)
+            res->val.size = i+1;
+    }
+    if (rneg) {
+        twocompl(res->val.n, res->val.n, res->val.size);
+        res->val.size = -res->val.size;
+    }
+    return res;
+}     
  
 // B_MinusD_IntegralD_int  ////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1043,5 +1190,3 @@ struct B_int B_int_strs[256] =
                          {&B_intG_methods, B_int_longs+253, 1, 1},
                          {&B_intG_methods, B_int_longs+254, 1, 1},
                          {&B_intG_methods, B_int_longs+255, 1, 1}};
-
-

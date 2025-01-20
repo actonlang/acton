@@ -28,12 +28,12 @@ B_i64 B_i64G_new(B_atom a, B_int base) {
     B_int b = B_intG_new(a, base);
     unsigned long n = b->val.n[0];
     long sz = b->val.size;
-    if (labs(sz) > 1 || (sz==1 && n > LONG_MAX) || sz == -1 && n > labs(LONG_MIN)) {
+    if (labs(sz) > 1 || (sz==1 && n > LONG_MAX) || sz == -1 && n > 0x8000000000000000U) {
         char errmsg[1024];
         snprintf(errmsg, sizeof(errmsg), "i64(): value %s out of range for type i64",get_str(&b->val));
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
     }
-    return toB_i64(n);
+    return toB_i64(n*sz);
 }
  
 B_NoneType B_i64D___init__(B_i64 self, B_atom a, B_int base){
