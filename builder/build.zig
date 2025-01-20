@@ -168,6 +168,10 @@ pub fn build(b: *std.Build) void {
         };
     }
 
+    flags.appendSlice(&.{
+        "-fno-sanitize=signed-integer-overflow",
+    }) catch unreachable;
+
     for (c_files.items) |entry| {
         libActonProject.addCSourceFile(.{ .file = .{ .cwd_relative = entry }, .flags = flags.items });
     }
