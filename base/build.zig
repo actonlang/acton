@@ -220,6 +220,10 @@ pub fn build(b: *std.Build) void {
         };
     }
 
+    flags.appendSlice(&.{
+        "-fno-sanitize=signed-integer-overflow",
+    }) catch unreachable;
+
     const libActon = b.addStaticLibrary(.{
         .name = "Acton",
         .target = target,

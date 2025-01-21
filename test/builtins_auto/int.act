@@ -96,6 +96,8 @@ def test_i16():
         raise ValueError('i16("0b1111") gives wrong result')
     if i16("1234",7) != 466:
         raise ValueError('i16("1234",7) gives wrong result')
+    #if i16(2**15-1) + 1 != -2**15:
+    #    raise ValueError("i16 wraparound failed")
     return True
 
 def test_i32():
@@ -117,6 +119,8 @@ def test_i32():
         raise ValueError('i32("1234",7) gives wrong result')
     if int(x) != 0:
         raise ValueError("unexpected: int(x) != 0")
+    if i32(2**31-1) + 1 != -2**31:
+        raise ValueError("i32 wraparound failed")
     return True
 
 def test_i64():
@@ -138,6 +142,8 @@ def test_i64():
         raise ValueError('i64("1234",7) gives wrong result')
     if int(x) != 0:
         raise ValueError("unexpected: int(x) != 0")
+    if i64(2**63-1) + 1 != -2**63:
+        raise ValueError("i64 wraparound failed")
     return True
 
 def test_u16():
@@ -159,6 +165,8 @@ def test_u16():
         raise ValueError('u16("1234",7) gives wrong result')
     if int(x) != 0:
         raise ValueError("unexpected: int(x) != 0")
+    #if u16(2**16-1) + 1 != 0:
+    #    raise ValueError("u16 wraparound failed")
     return True
 
 def test_u32():
@@ -180,6 +188,8 @@ def test_u32():
         raise ValueError('u32("1234",7) gives wrong result')
     if int(x) != 0:
         raise ValueError("unexpected: int(x) != 0")
+    if u32(2**32-1) + 1 != 0:
+        raise ValueError("u32 wraparound failed")
     return True
 
 def test_u64():
@@ -201,6 +211,8 @@ def test_u64():
         raise ValueError('u64("1234",7) gives wrong result')
     if int(x) != 0:
         raise ValueError("unexpected: int(x) != 0")
+    if u64(2**64-1) + 1 != 0:
+        raise ValueError("u64 wraparound failed")
     return True
 
 
