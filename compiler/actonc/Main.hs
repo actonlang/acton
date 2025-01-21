@@ -908,9 +908,11 @@ makeAlwaysRelative base target =
 
 
 #if defined(darwin_HOST_OS) && defined(aarch64_HOST_ARCH)
-defCpu = " -Dcpu=apple_a15"
+defCpu = " -Dcpu=apple_a15 "
 #elif defined(darwin_HOST_OS) && defined(x86_64_HOST_ARCH)
 defCpu = ""
+#elif defined(linux_HOST_OS) && defined(aarch64_HOST_ARCH)
+defCpu = " -Dcpu=cortex_a72 "
 #elif defined(linux_HOST_OS) && defined(x86_64_HOST_ARCH)
 defCpu = ""
 #else
