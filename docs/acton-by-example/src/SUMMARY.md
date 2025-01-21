@@ -66,6 +66,7 @@
 - [Package Management](package_management.md)
   - [Add Dependency](pkg/add_dependency.md)
   - [Local Dependencies](pkg/local_dependencies.md)
+  - [Override Dependency](pkg/override_dependency.md)
   - [Remove Dependency](pkg/remove_dependency.md)
   - [Fetch Deps (Airplane mode)](pkg/fetch_dependencies.md)
   - [Zig / C / C++ dependencies](zig_dependencies.md)

@@ -88,6 +88,8 @@ class Dependency(object):
 class PkgDependency(Dependency):
 
     def __init__(self, name: str, url: ?str, hash: ?str, path: ?str):
+        if path != None and url != None:
+            raise ValueError("Dependency '%s' has both path and url set. Set only path or url. You can override path for a dep, e.g.: acton build --dep %s=%s" % (name, name, path))
         self.name = zig_safe_name(name)
         self.url = url
         self.hash = hash
