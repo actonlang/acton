@@ -105,23 +105,13 @@ main = do
           }
         C.CmdOpt (C.Cloud opts) -> undefined
         C.CmdOpt (C.Doc opts)   -> printDocs opts
-        C.CompileOpt nms opts   -> if length nms == 1 && takeExtension (head nms) == ".ty"
-                                    then printDocs (C.DocOptions (head nms) "")
-                                    else do
-                                      home <- getHomeDirectory
-                                      let basePath = joinPath [home, ".cache", "acton", "scratch"]
-                                      createDirectoryIfMissing True basePath
-                                      maybeLockInfo <- findAvailableScratch basePath
-                                      case maybeLockInfo of
-                                        Nothing -> error "Could not acquire any scratch directory lock"
-                                        Just (lock, lockPath) -> do
-                                          let scratchDir = dropExtension lockPath
-                                          compileFiles (opts { C.tempdir = scratchDir }) (catMaybes $ map filterActFile nms)
-                                          unlockFile lock
+        C.CompileOpt nms opts   -> case takeExtension (head nms) of
+                                     ".act" -> buildFile opts (head nms)
+                                     ".ty" -> printDocs (C.DocOptions (head nms) "")
 
 defaultOpts   = C.CompileOptions False False False False False False False False False False False False
                                  False False False False False False False False False False False False
-                                 False False False "" "" "" C.defTarget "" False []
+                                 False False False False "" "" "" C.defTarget "" False []
 
 
 -- Auxiliary functions ---------------------------------------------------------------------------------------
@@ -230,8 +220,6 @@ printIce errMsg = do ccVer <- getCcVer
                         "\nNOTE: cc: " ++ ccVer
                         )
 
--- Project handling ------------------------------------------------------------------------------------------
-
 -- Create a project ---------------------------------------------------------------------------------------------
 
 createProject :: String -> IO ()
@@ -275,8 +263,8 @@ createProject name = do
 buildProject :: C.CompileOptions -> IO ()
 buildProject opts = do
                 iff (not (null $ (C.root opts)) && (length $ splitOn "." (C.root opts)) == 1) $
-                    printErrorAndExit("Project build requires a qualified root actor name, like foo.main")
-                    
+                  printErrorAndExit("Project build requires a qualified root actor name, like foo.main")
+
                 -- find all .act files in src/ directory, parse into tasks and
                 -- submit for compilation
                 curDir <- getCurrentDirectory
@@ -285,11 +273,51 @@ buildProject opts = do
                 if not srcDirExists
                   then printErrorAndExit "Missing src/ directory"
                   else do
+                    iff (not(quiet opts)) $ do
+                      putStrLn("Building project in " ++ projPath paths)
                     -- grab project lock
-                    lockFile (joinPath [projPath paths, ".actonc.lock"]) Exclusive
-                    allFiles <- getFilesRecursive (srcDir paths)
-                    let srcFiles = catMaybes $ map filterActFile allFiles
-                    compileFiles opts srcFiles
+                    withFileLock (joinPath [projPath paths, ".actonc.lock"]) Exclusive $ \_ -> do
+                      allFiles <- getFilesRecursive (srcDir paths)
+                      let srcFiles = catMaybes $ map filterActFile allFiles
+                      compileFiles opts srcFiles
+
+buildFile :: C.CompileOptions -> FilePath -> IO ()
+buildFile opts file = do
+    absFile <- canonicalizePath file
+    curDir <- getCurrentDirectory
+    -- Determine if we are in a project
+    projDir <- findProjectDir absFile
+    case projDir of
+      Just proj -> do
+        let relProj = makeRelative curDir proj
+        -- In a project, use project directory for compilation
+        -- If we are running as a sub-compiler, we just compile directly without
+        -- locking since we assume the parent compiler has already locked the
+        -- project and may run multiple sub-compilers concurrently
+        iff (not(quiet opts)) $ do
+          putStrLn("Building file " ++ file ++ " in project " ++ relProj)
+        if (C.sub opts)
+          then do
+            compileFiles opts [file]
+          else do
+            -- grab project lock
+            let lock_file = joinPath [proj, ".actonc.lock"]
+            withFileLock lock_file Exclusive $ \_ -> do
+              compileFiles opts [file]
+      Nothing -> do
+        iff (not(quiet opts)) $ do
+          putStrLn("Building file " ++ file)
+        -- Not in a project, use scratch directory for compilation
+        home <- getHomeDirectory
+        let basePath = joinPath [home, ".cache", "acton", "scratch"]
+        createDirectoryIfMissing True basePath
+        maybeLockInfo <- findAvailableScratch basePath
+        case maybeLockInfo of
+          Nothing -> error "Could not acquire any scratch directory lock"
+          Just (lock, lockPath) -> do
+            let scratchDir = dropExtension lockPath
+            compileFiles (opts { C.tempdir = scratchDir }) [file]
+            unlockFile lock
 
 -- Print documentation -------------------------------------------------------------------------------------------
 
@@ -359,10 +387,6 @@ compileFiles opts srcFiles = do
     -- we only care about project level path stuff and all source files are
     -- known to be in the same project
     paths <- findPaths (head srcFiles) opts
-    iff (not(quiet opts)) $ do
-        if isTmp paths
-          then putStrLn("Building file " ++ head srcFiles)
-          else putStrLn("Building project in " ++ projPath paths)
 
     when (C.debug opts) $ do
         putStrLn ("  Paths:")
@@ -461,6 +485,17 @@ searchPaths opts deps = do
   -- append /out/types to each dep
   let deps_paths = map (\d -> joinPath [d, "out", "types"]) deps
   return $ deps_paths
+
+findProjectDir :: FilePath -> IO (Maybe FilePath)
+findProjectDir path = do
+    let configFile = path </> "Acton.toml"
+    exists <- doesFileExist configFile
+    if exists
+        then return (Just path)
+        else if path == takeDirectory path  -- Check if we're at root
+            then return Nothing
+            else findProjectDir (takeDirectory path)
+
 
 findPaths               :: FilePath -> C.CompileOptions -> IO Paths
 findPaths actFile opts  = do execDir <- takeDirectory <$> System.Environment.getExecutablePath

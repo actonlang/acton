@@ -62,6 +62,7 @@ data CompileOptions   = CompileOptions {
                          debug       :: Bool,
                          dev         :: Bool,
                          listimports :: Bool,
+                         sub         :: Bool,
                          only_build  :: Bool,
                          skip_build  :: Bool,
                          no_threads  :: Bool,
@@ -114,14 +115,14 @@ data DocOptions     = DocOptions {
 -- Internal stuff
 
 cmdLineParser       :: Parser CmdLineOptions
-cmdLineParser       =  (VersionOpt <$> versionOptions)
-                      <|> (CmdOpt <$> hsubparser 
+cmdLineParser       = (CmdOpt <$> hsubparser
                         (  command "new"   (info newCommand (progDesc "Create a new Acton project"))
                         <> command "build" (info buildCommand (progDesc "Build an Acton project"))
                         <> command "cloud" (info cloudCommand (progDesc "Run an Acton project in the cloud"))
                         <> command "doc"   (info docCommand (progDesc "Show type and docstring info"))
-                      ))              
-                     <|> (CompileOpt <$> (some $ argument (str :: ReadM String) (metavar "ACTONFILENAMES" <> help "Compile Acton files" <> completer (bashCompleter "file -X '!*.act' -o plusdirs"))) <*> compileOptions)
+                      ))
+                     <|> (CompileOpt <$> (fmap (:[]) $ argument str (metavar "ACTONFILE" <> help "Compile Acton file" <> completer (bashCompleter "file -X '!*.act' -o plusdirs"))) <*> compileOptions)
+                     <|> (VersionOpt <$> versionOptions)
 
 versionOptions         = VersionOptions <$>
                                          switch (long "version"         <> help "Show version information")
@@ -162,6 +163,7 @@ compileOptions = CompileOptions
         <*> switch (long "debug"        <> help "Print debug stuff")
         <*> switch (long "dev"          <> help "Development mode; include debug symbols etc")
         <*> switch (long "list-imports" <> help "List module imports")
+        <*> switch (long "sub")
         <*> switch (long "only-build"   <> help "Only perform final build of .c files, do not compile .act files")
         <*> switch (long "skip-build"   <> help "Skip final bulid of .c files")
         <*> switch (long "no-threads"   <> help "Don't use threads")
