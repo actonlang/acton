@@ -58,23 +58,17 @@ endif
 # -- Apple Mac OS X ------------------------------------------------------------
 ifeq ($(shell uname -s),Darwin)
 OS:=macos
-ifeq ($(shell uname -m),arm64)
-ZIG_CPU := -Dcpu=apple_a15
-ZIG_TARGET := -Dtarget=aarch64-macos
-else
-ZIG_TARGET := -Dtarget=x86_64-macos
-endif
 endif
 
 # -- Linux ---------------------------------------------------------------------
 ifeq ($(shell uname -s),Linux)
 OS:=linux
 ifeq ($(shell uname -m),x86_64)
-ZIG_TARGET := -Dtarget=x86_64-linux-gnu.2.27
-ZIG_CPU := -Dcpu=skylake
 ACTONC_TARGET := --target x86_64-linux-gnu.2.27
+else ifeq ($(shell uname -m),aarch64)
+ACTONC_TARGET := --target aarch64-linux-gnu.2.27
 else
-$(error "Unsupported architecture for Linux?")
+$(error "Unsupported architecture for Linux?" $(shell uname -m))
 endif
 endif # -- END: Linux ----------------------------------------------------------
 
