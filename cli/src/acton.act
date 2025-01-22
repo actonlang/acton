@@ -1149,7 +1149,6 @@ actor main(env):
                 env.exit(0)
 
             def on_build_failure(exit_code: int,  term_signal: int, std_err_buf: str):
-                print("Error building project", std_err_buf)
                 env.exit(1)
 
             BuildProject(process_cap, env, args, on_build_success, on_build_failure, build_tests=False, files=[_file])
@@ -1162,7 +1161,6 @@ actor main(env):
             env.exit(0)
 
         def on_build_failure(exit_code: int,  term_signal: int, std_err_buf: str):
-            print("Error building project", std_err_buf)
             env.exit(1)
 
         BuildProject(process_cap, env, args, on_build_success, on_build_failure, build_tests=False)
