@@ -90,6 +90,7 @@ main = do
           C.debug = C.debugB opts,
           C.dev = C.devB opts,
           C.db = C.dbB opts,
+          C.listimports = C.listimportsB opts,
           C.only_build = C.only_buildB opts,
           C.skip_build = C.skip_buildB opts,
           C.no_threads = C.no_threadsB opts,
@@ -120,7 +121,7 @@ main = do
 
 defaultOpts   = C.CompileOptions False False False False False False False False False False False False
                                  False False False False False False False False False False False False
-                                 False False "" "" "" C.defTarget "" False []
+                                 False False False "" "" "" C.defTarget "" False []
 
 
 -- Auxiliary functions ---------------------------------------------------------------------------------------
@@ -380,6 +381,12 @@ compileFiles opts srcFiles = do
     removeOrphanFiles (projTypes paths)
 
     tasks <- mapM (parseActFile opts paths) srcFiles
+    iff (C.listimports opts) $ do
+        let module_imports = map (\t -> concat [ modNameToString (name t), ": ", (concat $ intersperse " " (map (modNameToString) (importsOf t))) ] ) tasks
+        let output = concat $ intersperse "\n" module_imports
+        putStrLn output
+        System.Exit.exitSuccess
+
     -- figure out binTasks, if --root is provided, use that, otherwise
     -- presumptuously use all non-stub source compile tasks, which get filtered
     -- out later on (after we parsed the project source files) in case they
