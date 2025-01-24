@@ -1,4 +1,4 @@
-Building file test/typeerrors/ex23.act
+Building file test/typeerrors/ex23.act using temporary scratch directory
   Compiling ex23.act for development
 [error]: Cannot satisfy the following simultaneous constraints for the unknown types
      +--> ex23@2:11-2:12

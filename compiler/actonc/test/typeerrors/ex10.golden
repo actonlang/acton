@@ -1,4 +1,4 @@
-Building file test/typeerrors/ex10.act
+Building file test/typeerrors/ex10.act using temporary scratch directory
   Compiling ex10.act for development
 [error]: Constraint violation
      +--> ex10@4:5-4:15

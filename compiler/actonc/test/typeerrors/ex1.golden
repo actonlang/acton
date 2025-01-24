@@ -1,4 +1,4 @@
-Building file test/typeerrors/ex1.act
+Building file test/typeerrors/ex1.act using temporary scratch directory
   Compiling ex1.act for development
 [error]: Incompatible types
      +--> ex1@4:5-4:9

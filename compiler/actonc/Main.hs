@@ -305,19 +305,30 @@ buildFile opts file = do
             withFileLock lock_file Exclusive $ \_ -> do
               compileFiles opts [file]
       Nothing -> do
-        iff (not(quiet opts)) $ do
-          putStrLn("Building file " ++ file)
-        -- Not in a project, use scratch directory for compilation
-        home <- getHomeDirectory
-        let basePath = joinPath [home, ".cache", "acton", "scratch"]
-        createDirectoryIfMissing True basePath
-        maybeLockInfo <- findAvailableScratch basePath
-        case maybeLockInfo of
-          Nothing -> error "Could not acquire any scratch directory lock"
-          Just (lock, lockPath) -> do
-            let scratchDir = dropExtension lockPath
-            compileFiles (opts { C.tempdir = scratchDir }) [file]
-            unlockFile lock
+        -- Not in a project, use scratch directory for compilation unless
+        -- --tempdir is provided - then use that
+        if (C.tempdir opts /= "")
+          then do
+            iff (not(quiet opts)) $ do
+              putStrLn("Building file " ++ file ++ " using temporary directory " ++ C.tempdir opts)
+            compileFiles opts [file]
+          else do
+            iff (not(quiet opts)) $ do
+              putStrLn("Building file " ++ file ++ " using temporary scratch directory")
+            home <- getHomeDirectory
+            let basePath = joinPath [home, ".cache", "acton", "scratch"]
+            createDirectoryIfMissing True basePath
+            maybeLockInfo <- findAvailableScratch basePath
+            case maybeLockInfo of
+              Nothing -> error "Could not acquire any scratch directory lock"
+              Just (lock, lockPath) -> do
+                let scratchDir = dropExtension lockPath
+                removeDirectoryRecursive scratchDir `catch` handleNotExists
+                compileFiles (opts { C.tempdir = scratchDir }) [file]
+                unlockFile lock
+  where
+    handleNotExists :: IOException -> IO ()
+    handleNotExists _ = return ()
 
 -- Print documentation -------------------------------------------------------------------------------------------
 
@@ -453,7 +464,6 @@ data Paths      = Paths {
                     binDir      :: FilePath,
                     srcDir      :: FilePath,
                     isTmp       :: Bool,
-                    rmTmp       :: Bool,
                     fileExt     :: String,
                     modName     :: A.ModName
                   }
@@ -502,7 +512,7 @@ findPaths actFile opts  = do execDir <- takeDirectory <$> System.Environment.get
                              sysPath <- canonicalizePath (if null $ C.syspath opts then execDir ++ "/.." else C.syspath opts)
                              let sysLib = joinPath [sysPath, "lib/" ++ if (C.dev opts) then "dev" else "rel"]
                              absSrcFile <- canonicalizePath actFile
-                             (isTmp, rmTmp, projPath, dirInSrc) <- analyze (takeDirectory absSrcFile) []
+                             (isTmp, projPath, dirInSrc) <- analyze (takeDirectory absSrcFile) []
                              let sysTypes = joinPath [sysPath, "base", "out", "types"]
                                  srcDir  = if isTmp then takeDirectory absSrcFile else joinPath [projPath, "src"]
                                  projOut = joinPath [projPath, "out"]
@@ -518,18 +528,18 @@ findPaths actFile opts  = do execDir <- takeDirectory <$> System.Environment.get
                              createDirectoryIfMissing True projTypes
                              createDirectoryIfMissing True projLib
                              createDirectoryIfMissing True (getModPath projTypes modName)
-                             return $ Paths sPaths sysPath sysTypes sysLib projPath projOut projTypes projLib binDir srcDir isTmp rmTmp fileExt modName
+                             return $ Paths sPaths sysPath sysTypes sysLib projPath projOut projTypes projLib binDir srcDir isTmp fileExt modName
   where (fileBody,fileExt) = splitExtension $ takeFileName actFile
 
         analyze "/" ds  = do tmp <- canonicalizePath (C.tempdir opts)
-                             return (True, True, tmp, [])
+                             return (True, tmp, [])
         analyze pre ds  = do exists <- doesFileExist (joinPath [pre, "Acton.toml"])
                              if not exists 
                                 then analyze (takeDirectory pre) (takeFileName pre : ds)
                                 else case ds of
-                                    [] -> return $ (False, False, pre, [])
-                                    "src":dirs -> return $ (False, False, pre, dirs)
-                                    "out":"types":dirs -> return $ (False, False, pre, dirs)
+                                    [] -> return $ (False, pre, [])
+                                    "src":dirs -> return $ (False, pre, dirs)
+                                    "out":"types":dirs -> return $ (False, pre, dirs)
                                     _ -> error ("************* Source file is not in a valid project directory: " ++ joinPath ds)
 
 
@@ -632,8 +642,6 @@ compileBins:: C.CompileOptions -> Paths -> Acton.Env.Env0 -> [CompileTask] -> [B
 compileBins opts paths env tasks binTasks = do
     iff (not (altOutput opts)) $ do
       zigBuild env opts paths tasks binTasks
-      when (rmTmp paths) $ removeDirectoryRecursive (projPath paths)
-        `catch` handleNotExists
     return ()
   where
     handleNotExists :: IOException -> IO ()
@@ -876,7 +884,6 @@ handleTypeError opts errKind f src paths mn ex = do
 
 handleCleanup paths mn = do
     removeIfExists (outbase++".ty")
-    when (rmTmp paths) $ removeDirectoryRecursive (projPath paths)
     System.Exit.exitFailure
   where outbase        = outBase paths mn
         removeIfExists f = removeFile f `catch` handleNotExists

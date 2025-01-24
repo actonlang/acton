@@ -1,4 +1,4 @@
-Building file test/syntaxerrors/err6.act
+Building file test/syntaxerrors/err6.act using temporary scratch directory
 
 ERROR: Error when compiling err6 module: Syntax error
 

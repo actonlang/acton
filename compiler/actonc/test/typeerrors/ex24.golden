@@ -1,4 +1,4 @@
-Building file test/typeerrors/ex24.act
+Building file test/typeerrors/ex24.act using temporary scratch directory
   Compiling ex24.act for development
 [error]: Constraint violation
      +--> ex24@4:9-4:14
