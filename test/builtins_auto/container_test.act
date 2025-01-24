@@ -1,7 +1,0 @@
-actor main(env):
-    lst = list(range(1, 100))
-    if 17 not in lst or 171 in lst or 100 in lst:
-        env.exit(1)
-    env.exit(0)
-
-   

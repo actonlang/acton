@@ -1,82 +1,94 @@
-def test_complex() -> bool:
-    # Test basic construction
+def test_basic_construction() -> bool:
     c1 = complex.from_real_imag(3.0, 4.0)
     if c1.real() != 3.0 or c1.imag() != 4.0:
         print("Basic construction failed - expected 3.0+4.0i, got:", c1.real(), "+", c1.imag(), "i")
         return False
+    return True
 
-    # Test zero components
+def test_zero_components() -> bool:
     c2 = complex.from_real_imag(0.0, 0.0)
     if c2.real() != 0.0 or c2.imag() != 0.0:
         print("Zero construction failed - expected 0.0+0.0i, got:", c2.real(), "+", c2.imag(), "i")
         return False
+    return True
 
-    # Test negative components
+def test_negative_components() -> bool:
     c3 = complex.from_real_imag(-1.0, -1.0)
     if c3.real() != -1.0 or c3.imag() != -1.0:
         print("Negative construction failed - expected -1.0-1.0i, got:", c3.real(), "+", c3.imag(), "i")
         return False
+    return True
 
-    # Test addition
+def test_addition() -> bool:
     a = complex.from_real_imag(1.0, 2.0)
     b = complex.from_real_imag(3.0, 4.0)
     sum = a + b
     if sum.real() != 4.0 or sum.imag() != 6.0:
         print("Addition failed - expected 4.0+6.0i, got:", sum.real(), "+", sum.imag(), "i")
         return False
+    return True
 
-    # Test subtraction
+def test_subtraction() -> bool:
+    a = complex.from_real_imag(1.0, 2.0)
+    b = complex.from_real_imag(3.0, 4.0)
     diff = b - a
     if diff.real() != 2.0 or diff.imag() != 2.0:
         print("Subtraction failed - expected 2.0+2.0i, got:", diff.real(), "+", diff.imag(), "i")
         return False
+    return True
 
-    # Test multiplication
-    # (1 + 2i)(3 + 4i) = (1×3 - 2×4) + (1×4 + 2×3)i = -5 + 10i
+def test_multiplication() -> bool:
+    a = complex.from_real_imag(1.0, 2.0)
+    b = complex.from_real_imag(3.0, 4.0)
     prod = a * b
     if prod.real() != -5.0 or prod.imag() != 10.0:
         print("Multiplication failed - expected -5.0+10.0i, got:", prod.real(), "+", prod.imag(), "i")
         return False
+    return True
 
-    # Test division
-    # (1 + 2i)/(1 + i) = (1 + 2i)(1 - i)/(1 + i)(1 - i) = (1 - i + 2i - 2i²)/(1 - i²) = (3 + i)/2
+def test_division() -> bool:
     num = complex.from_real_imag(1.0, 2.0)
     den = complex.from_real_imag(1.0, 1.0)
     quot = num / den
     if abs(quot.real() - 1.5) > 1e-10 or abs(quot.imag() - 0.5) > 1e-10:
         print("Division failed - expected 1.5+0.5i, got:", quot.real(), "+", quot.imag(), "i")
         return False
+    return True
 
-    # Test in-place division
+def test_in_place_division() -> bool:
     dividend = complex.from_real_imag(1.0, 2.0)
     divisor = complex.from_real_imag(1.0, 1.0)
     dividend /= divisor
     if abs(dividend.real() - 1.5) > 1e-10 or abs(dividend.imag() - 0.5) > 1e-10:
         print("In-place division failed - expected 1.5+0.5i, got:", dividend.real(), "+", dividend.imag(), "i")
         return False
+    return True
 
-    # Test conjugate
+def test_conjugate() -> bool:
+    a = complex.from_real_imag(1.0, 2.0)
     conj = a.conjugate()
     if conj.real() != 1.0 or conj.imag() != -2.0:
         print("Conjugate failed - expected 1.0-2.0i, got:", conj.real(), "+", conj.imag(), "i")
         return False
+    return True
 
-    # Test absolute value
-    # |1 + 2i| = √(1² + 2²) = √5
+def test_absolute_value() -> bool:
+    a = complex.from_real_imag(1.0, 2.0)
     abs_val = a.__abs__()
     if abs(abs_val - 2.236067977499790) > 1e-10:
         print("Absolute value failed - expected ≈2.236067977499790, got:", abs_val)
         return False
+    return True
 
-    # Test power operation
-    # (1 + i)² = 1 + 2i - 1 = 2i
+def test_power_operation() -> bool:
     c = complex.from_real_imag(1.0, 1.0)
     d = c ** complex.from_real_imag(2, 0)
     if abs(d.real()) > 1e-10 or abs(d.imag() - 2.0) > 1e-10:
         print("Power operation failed - expected 0.0+2.0i, got:", d.real(), "+", d.imag(), "i")
         return False
+    return True
 
-    # Test equality and hash consistency
+def test_equality_and_hash_consistency() -> bool:
     c1 = complex.from_real_imag(1.0, 2.0)
     c2 = complex.from_real_imag(1.0, 2.0)
     c3 = complex.from_real_imag(2.0, 1.0)
@@ -92,44 +104,80 @@ def test_complex() -> bool:
     if hash(c1) != hash(c2):
         print("Hash consistency failed - equal numbers have different hashes")
         return False
+    return True
 
-    # Test division by zero
+def test_division_by_zero() -> bool:
     try:
+        a = complex.from_real_imag(1.0, 2.0)
         zero = complex.from_real_imag(0.0, 0.0)
         bad = a / zero
         print("Division by zero didn't raise expected exception")
         return False
     except ZeroDivisionError:
         pass  # Expected behavior
+    return True
 
-    # Test very large numbers
+def test_very_large_numbers() -> bool:
     large = 1e308
     big = complex.from_real_imag(large, large)
     overflow = big * big
     if not (overflow.real() == float('inf') or overflow.imag() == float('inf')):
         print("Large number multiplication failed to handle overflow correctly")
         return False
+    return True
 
-    # Test very small numbers
+def test_very_small_numbers() -> bool:
     small = 1e-308
     tiny = complex.from_real_imag(small, small)
     underflow = tiny * tiny
     if not (underflow.real() == 0.0 or abs(underflow.real()) < 1e-307):
         print("Small number multiplication failed to handle underflow correctly")
         return False
+    return True
 
-    # Test complex number as dictionary key
+def test_complex_as_dict_key() -> bool:
+    c2 = complex.from_real_imag(1.0, 2.0)
+    c3 = complex.from_real_imag(2.0, 1.0)
     e = {}
     e[c2] = 42
     e[c3] = 43
     if not (e[c2] == 42 and e[c3] == 43):
         print("Complex number as dictionary key failed")
         return False
-
     return True
 
 actor main(env):
-    if test_complex():
-        print("All complex number tests passed!")
-        env.exit(0)
-    env.exit(1)
+    if not test_basic_construction():
+        env.exit(1)
+    if not test_zero_components():
+        env.exit(1)
+    if not test_negative_components():
+        env.exit(1)
+    if not test_addition():
+        env.exit(1)
+    if not test_subtraction():
+        env.exit(1)
+    if not test_multiplication():
+        env.exit(1)
+    if not test_division():
+        env.exit(1)
+    if not test_in_place_division():
+        env.exit(1)
+    if not test_conjugate():
+        env.exit(1)
+    if not test_absolute_value():
+        env.exit(1)
+    if not test_power_operation():
+        env.exit(1)
+    if not test_equality_and_hash_consistency():
+        env.exit(1)
+    if not test_division_by_zero():
+        env.exit(1)
+    if not test_very_large_numbers():
+        env.exit(1)
+    if not test_very_small_numbers():
+        env.exit(1)
+    if not test_complex_as_dict_key():
+        env.exit(1)
+
+    env.exit(0)

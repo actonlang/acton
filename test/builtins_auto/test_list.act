@@ -1,0 +1,211 @@
+import testing
+
+"""Test lists
+"""
+
+def test_list_index():
+    l = [1, 2, 3, 1, 2, 5, 1]
+    if l.index(1) != 0:
+        print("test_list_index failed: expected 0, got", l.index(1))
+        return False
+
+    if l.index(2) != 1:
+        print("test_list_index failed: expected 1, got", l.index(2))
+        return False
+
+    if l.index(1, 1) != 3:
+        print("test_list_index failed: expected 3, got", l.index(1, 1))
+        return False
+
+    if 3 in l[3:]:
+        print("test_list_index failed: 3 found in l[3:]")
+        return False
+
+    return True
+
+def test_list_index_errs():
+    l = [1, 2, 3]
+    if 1 in l[-1:]:
+        print("expected ValueError for l.index(1, -1)")
+        return False
+
+    if 1 in l[4:]:
+        print("expected ValueError for l.index(1, 4)")
+        return False
+
+    if 1 in l[1:-1]:
+        print("expected ValueError for l.index(1, 1, -1)")
+        return False
+
+    if 1 in l[1:0]:
+        print("expected ValueError for l.index(1, 1, 0)")
+        return False
+
+    if 1 in l[1:1]:
+        print("expected ValueError for l.index(1, 1, 1)")
+        return False
+
+    return True
+
+def test_list_append():
+    l = [1, 2]
+    l.append(3)
+    if l != [1, 2, 3]:
+        print("test_list_append failed: expected [1, 2, 3], got", l)
+        return False
+    return True
+
+def test_list_insert():
+    l = [1, 2, 3]
+    l.insert(0, 0)
+    if l != [0, 1, 2, 3]:
+        print("test_list_insert failed: expected [0, 1, 2, 3], got", l)
+        return False
+
+    l.insert(2, 37)
+    if l != [0, 1, 37, 2, 3]:
+        print("test_list_insert failed: expected [0, 1, 37, 2, 3], got", l)
+        return False
+
+    if l.index(37) != 2:
+        print("test_list_insert failed: expected index 2 for 37, got", l.index(37))
+        return False
+
+    return True
+
+def test_list_copy():
+    l = [0, 1, 37, 2, 3]
+    l2 = l.copy()
+    if l2 != [0, 1, 37, 2, 3]:
+        print("test_list_copy failed: expected [0, 1, 37, 2, 3], got", l2)
+        return False
+    return True
+
+def test_list_extend():
+    l = [0, 1, 37, 2, 3]
+    l.extend([45, 56])
+    if l != [0, 1, 37, 2, 3, 45, 56]:
+        print("test_list_extend failed: expected [0, 1, 37, 2, 3, 45, 56], got", l)
+        return False
+    return True
+
+def test_list_reverse():
+    l = [0, 1, 37, 2, 3, 45, 56]
+    l.reverse()
+    if l != [56, 45, 3, 2, 37, 1, 0]:
+        print("test_list_reverse failed: expected [56, 45, 3, 2, 37, 1, 0], got", l)
+        return False
+    return True
+
+def test_list_reversed():
+    lr = list(reversed([]))
+    if lr != []:
+        print("test_list_reversed failed: expected [], got", lr)
+        return False
+
+    lr2 = list(reversed([1]))
+    if lr2 != [1]:
+        print("test_list_reversed failed: expected [1], got", lr2)
+        return False
+
+    lr3 = list(reversed([1, 2, 3]))
+    if lr3 != [3, 2, 1]:
+        print("test_list_reversed failed: expected [3, 2, 1], got", lr3)
+        return False
+
+    return True
+
+def test_list_del():
+    l = [56, 45, 3, 2, 37, 1, 0]
+    del l[1]
+    if l != [56, 3, 2, 37, 1, 0]:
+        print("test_list_del failed: expected [56, 3, 2, 37, 1, 0], got", l)
+        return False
+    return True
+
+def test_list_pop():
+    l = [56, 3, 2, 37, 1, 0]
+    l.pop(-1)
+    if l != [56, 3, 2, 37, 1]:
+        print("test_list_pop failed: expected [56, 3, 2, 37, 1], got", l)
+        return False
+    return True
+
+def test_list_clear():
+    l = [56, 3, 2, 37, 1]
+    l.clear()
+    if l != []:
+        print("test_list_clear failed: expected [], got", l)
+        return False
+    return True
+
+def test_sorted():
+    l = [56, 3, 2, 37, 1]
+    if sorted(l) != [1, 2, 3, 37, 56]:
+        print("test_sorted failed: expected [1, 2, 3, 37, 56], got", sorted(l))
+        return False
+    return True
+
+def test_bool():
+    if bool([]):
+        print("test_bool failed: expected False, got True")
+        return False
+    return True
+
+def test_shrinking():
+    l = list(range(30))
+    for i in range(20):
+        l.pop(-1)
+    if len(l) != 10 or l[4] != 4:
+        print("test_shrinking failed: unexpected shrinking of list")
+        return False
+    return True
+
+def test_list_addition():
+    if [1] + [2] != [1, 2]:
+        print("test_list_addition failed: expected [1, 2], got", [1] + [2])
+        return False
+
+    if [1] + [] != [1]:
+        print("test_list_addition failed: expected [1], got", [1] + [])
+        return False
+
+    if [] + [2] != [2]:
+        print("test_list_addition failed: expected [2], got", [] + [2])
+        return False
+
+    return True
+
+actor main(env):
+    if not test_list_index():
+        env.exit(1)
+    if not test_list_index_errs():
+        env.exit(1)
+    if not test_list_append():
+        env.exit(1)
+    if not test_list_insert():
+        env.exit(1)
+    if not test_list_copy():
+        env.exit(1)
+    if not test_list_extend():
+        env.exit(1)
+    if not test_list_reverse():
+        env.exit(1)
+    if not test_list_reversed():
+        env.exit(1)
+    if not test_list_del():
+        env.exit(1)
+    if not test_list_pop():
+        env.exit(1)
+    if not test_list_clear():
+        env.exit(1)
+    if not test_sorted():
+        env.exit(1)
+    if not test_bool():
+        env.exit(1)
+    if not test_shrinking():
+        env.exit(1)
+    if not test_list_addition():
+        env.exit(1)
+
+    env.exit(0)
