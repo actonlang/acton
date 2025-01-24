@@ -1,0 +1,99 @@
+def test_bytes_find() -> bool:
+    b = b"hello, world!"
+    if b.find(b"world") != 7:
+        print("bytes.find() did not return the correct index:", b.find(b"world"))
+        return False
+    if b.find(b"world", 0) != 7:
+        print("bytes.find() did not return the correct index:", b.find(b"world"))
+        return False
+    if b.find(b"world", 8) != -1:
+        print("bytes.find() did not return -1 when the substring is not found")
+        return False
+    if b.find(b"world", 0, 5) != -1:
+        print("bytes.find() did not return -1 when the substring is not found")
+        return False
+    if b.find(b"world", 0, 7) != -1:
+        print("bytes.find() did not return -1 when the substring is not found")
+        return False
+    if b.find(b"crap") != -1:
+        print("bytes.find() did not return -1 when the substring is not found")
+        return False
+    return True
+
+def test_bytes_hex() -> bool:
+    b = b'\xde\xad\xbe\xef'
+    if b.hex() != "deadbeef":
+        print("bytes.hex():", b.hex())
+        return False
+    if bytes.from_hex("deadbeef").hex() != "deadbeef":
+        print("bytes.from_hex():", bytes.from_hex("deadbeef").hex())
+        return False
+    return True
+
+def test_bytes_strip() -> bool:
+    b = b""
+    a = [b.strip()]
+    if str(a) != "[b'']":
+        print("empty bytes failed")
+        return False
+    return True
+
+def test_bytes_slice() -> bool:
+    a = b"asdf"
+    b = a[0:1]
+    if b != b"a":
+        print("bytes slice did not return the correct character:", b)
+        return False
+    return True
+
+def test_bytes_slice_outside_of_range() -> bool:
+    a = b"asdf"
+    i = 6
+    b = a[i:]
+    if b != b'':
+        print("bytes slice outside of range did not return an empty string:", b)
+        return False
+    return True
+
+def test_bytes_slice_with_start_and_stop() -> bool:
+    a = b"abcdef"
+    b = a[1:4]
+    if b != b'bcd':
+        print("bytes slice with start and stop did not return the correct substring:", b)
+        return False
+    return True
+
+def test_bytes_slice_with_negative_stop() -> bool:
+    a = b"abcdef"
+    b = a[1:-1]
+    if b != b'bcde':
+        print("bytes slice with negative stop did not return the correct substring:", b)
+        return False
+    return True
+
+def test_bytes_slice_with_reverse_stepping() -> bool:
+    a = b"abcdef"
+    b = a[::-1]
+    if b != b'fedcba':
+        print("bytes slice with reverse stepping did not return the correct substring:", b)
+        return False
+    return True
+
+actor main(env: Env):
+    if not test_bytes_find():
+        env.exit(1)
+    if not test_bytes_hex():
+        env.exit(1)
+    if not test_bytes_strip():
+        env.exit(1)
+    if not test_bytes_slice():
+        env.exit(1)
+    if not test_bytes_slice_outside_of_range():
+        env.exit(1)
+    if not test_bytes_slice_with_start_and_stop():
+        env.exit(1)
+    if not test_bytes_slice_with_negative_stop():
+        env.exit(1)
+    if not test_bytes_slice_with_reverse_stepping():
+        env.exit(1)
+    env.exit(0)
