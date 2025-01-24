@@ -1404,7 +1404,7 @@ improve env te tt eq cs
         Right vclosed                   = closure
         (vvsL,vvsU)                     = unzip vclosed
         gsimple                         = gsimp vi vclosed obsvars (varvars vi)
-        multiUBnd                       = [ (v,us) | (v,ts) <- Map.assocs (ubounds vi), v `notElem` embedded vi, let us = noOpt ts, length us > 1 ]
+        multiUBnd                       = [ (v,us) | (v,ts) <- Map.assocs (ubounds vi), v `notElem` embedded vi, let us = unOpt ts, length us > 1, noLOpt v vi ]
         multiLBnd                       = [ (v,ts) | (v,ts) <- Map.assocs (lbounds vi), v `notElem` embedded vi, length ts > 1 ]
         multiPBnd                       = [ (v,ps) | (v,ps) <- Map.assocs (pbounds vi), length ps > 1 ]
         lowerBnd                        = [ (v,t) | (v,[t]) <- Map.assocs (lbounds vi), v `notElem` embedded vi ]
@@ -1429,10 +1429,6 @@ improve env te tt eq cs
         cyclic                          = if null (boundvars\\boundprot) then [ c | c <- cs, headvar c `elem` boundvars ] else []
         redSeal                         = sealed vi \\ (posvars ++ negvars ++ embedded vi ++ Map.keys (ubounds vi) ++ Map.keys (lbounds vi)
                                           ++ Map.keys (pbounds vi) ++ Map.keys (mutattrs vi) ++ Map.keys (selattrs vi))
-
-noOpt ts                                = filter chk ts
-  where chk TOpt{}                      = False
-        chk _                           = True
 
 dnClosed env (TCon _ c)                 = isActor env (tcname c)
 dnClosed env (TFX _ FXPure)             = True
@@ -1461,12 +1457,24 @@ implAll env ps t                        = False
 
 noDots env vi v                         = null (lookup' v $ selattrs vi) && null (lookup' v $ mutattrs vi)
 
+noLOpt v vi                             = not $ any optCon $ lookup' v (lbounds vi)
+  where optCon TNone{}                  = True
+        optCon TOpt{}                   = True
+        optCon _                        = False
+
+unOpt []                                = []
+unOpt (TOpt _ TVar{} : ts)              = unOpt ts
+unOpt (TOpt _ t : ts)                   = t : unOpt ts
+unOpt (t : ts)                          = t : unOpt ts
+
 replace ub lb c@(Cast _ TVar{} TVar{})  = c
+replace ub lb c@(Cast _ TVar{} (TOpt _ TVar{})) = c
 replace ub lb (Cast info (TVar _ v) t)
   | Just t' <- lookup v ub              = Cast info t' t
 replace ub lb (Cast info t (TVar _ v))
   | Just t' <- lookup v lb              = Cast info t t'
 replace ub lb c@(Sub _ _ TVar{} TVar{}) = c
+replace ub lb c@(Sub _ _ TVar{} (TOpt _ TVar{})) = c
 replace ub lb (Sub info w (TVar _ v) t)
   | Just t' <- lookup v ub              = Sub info w t' t
 replace ub lb (Sub info w t (TVar _ v))
