@@ -1,4 +1,4 @@
-Building file test/typeerrors/funargs6.act
+Building file test/typeerrors/funargs6.act using temporary scratch directory
   Compiling funargs6.act for development
 [error]: Incompatible types
      +--> funargs6@4:5-4:13

@@ -1,4 +1,4 @@
-Building file test/typeerrors/ex9.act
+Building file test/typeerrors/ex9.act using temporary scratch directory
   Compiling ex9.act for development
 [error]: Cannot satisfy the following simultaneous constraints for the unknown types
      +--> ex9@1:5-1:6

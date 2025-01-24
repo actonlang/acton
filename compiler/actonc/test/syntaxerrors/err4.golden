@@ -1,4 +1,4 @@
-Building file test/syntaxerrors/err4.act
+Building file test/syntaxerrors/err4.act using temporary scratch directory
 
 ERROR: Error when compiling err4 module: Syntax error
 
