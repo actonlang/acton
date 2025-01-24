@@ -661,12 +661,11 @@ actor CmdTest(env: Env, args, perf_mode: bool=False):
         name_filter = set(args.get_strlist("name"))
         for module_name in sorted(tests.keys()):
             module_tests = tests[module_name]
-            if len(module_tests) > 0:
-                expected_modules.add(module_name)
             for test_name, test_info in module_tests.items():
                 if len(name_filter) == 0 or test_name in name_filter:
                     ptr.update(module_name, test_name, test_info)
                     tests_to_run.append(test_info)
+                    expected_modules.add(module_name)
         ptr.expected_modules = expected_modules
 
         _run_test()
