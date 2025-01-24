@@ -629,7 +629,7 @@ cast' env _ (TWild _) t2                    = return ()
 cast' env _ t1 (TWild _)                    = return ()
 
 cast' env info (TCon _ c1) (TCon _ c2)
-  | Just (wf,c') <- search                  = if tcname c1 == tcname c2 && tcname c1 `elem` [qnDict] then
+  | Just (wf,c') <- search                  = if tcname c1 == tcname c2 && tcname c1 `elem` [qnSetT,qnDict,qnList] then  -- Ignore mutation for now!
                                                   castM env info (tcargs c') (tcargs c2)
                                               else                                              -- TODO: infer polarities in general!
                                                   unifyM info (tcargs c') (tcargs c2)
@@ -1319,17 +1319,19 @@ instwildcon env c                       = case tconKind (tcname c) env of
 
 
 mkGLB env (v,ts)
-  | Just t <- glbfold env ts            = do t <- instwild env KType t
+  | Just t <- glbfold env ts'           = do t <- instwild env KType t
                                              --traceM ("   glb " ++ prstrs ts ++ " = " ++ prstr t)
                                              return (v, t)
   | otherwise                           = tyerrs ts ("No common subtype:")
+  where ts'                             = map schematic ts
 
 
 mkLUB env (v,ts)
-  | Just t <- lubfold env ts            = do t <- instwild env KType t
+  | Just t <- lubfold env ts'           = do t <- instwild env KType t
                                              --traceM ("   lub " ++ prstrs ts ++ " = " ++ prstr t)
                                              return (v, t)
   | otherwise                           = tyerrs ts ("No common supertype:")
+  where ts'                             = map schematic ts
 
 
 ----------------------------------------------------------------------------------------------------------------------

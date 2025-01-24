@@ -863,6 +863,8 @@ castable env (TWild _) t2                   = True
 castable env t1 (TWild _)                   = True
 
 castable env (TCon _ c1) (TCon _ c2)
+  | tcname c1 == tcname c2,
+    tcname c1 `elem` [qnSetT,qnDict,qnList] = all (uncurry $ castable env) (tcargs c1 `zip` tcargs c2)  -- Ignore mutation for now!
   | Just (wf,c') <- search                  = tcargs c2 == tcargs c'
   where search                              = findAncestor env c1 (tcname c2)
 
