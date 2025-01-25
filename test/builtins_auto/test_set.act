@@ -1,0 +1,75 @@
+def test_set_pop():
+    s = {1, 2, 3}
+    if s.pop() not in {1, 2, 3}:
+        print("pop() returned an invalid value")
+        return False
+    if len(s) != 2:
+        print("pop() did not remove an element")
+        return False
+    s.pop()
+    s.pop()
+    try:
+        s.pop()
+    except ValueError:
+        return True
+    else:
+        print("pop() did not raise an exception when called on an empty set")
+        return False
+
+def test_set_update_int():
+    s1 = {1, 2, 3}
+    s2 = {3, 4, 5}
+    sexp = {1, 2, 3, 4, 5}
+
+    s1.update(s2)
+    if s1 != sexp:
+        print("update() did not work correctly, result is " + str(s1))
+        return False
+    return True
+
+def test_set_update_str():
+    s1 = {"a", "b", "c"}
+    s2 = {"c", "d", "e"}
+    sexp = {"a", "b", "c", "d", "e"}
+
+    s1.update(s2)
+    if s1 != sexp:
+        print("update() did not work correctly, result is " + str(s1))
+        return False
+    return True
+
+def test_set_operations():
+    s = {400}
+    for i in range(13, 1000):
+        s.add(i*i)
+    s.discard(64)
+    s.discard(225)
+    s.discard(10000)
+    n = 0
+    for k in range(1000):
+        if k in s: n += 1
+    if n != 18:
+        print("n is" + str(n) + ", not 18")
+        return False
+
+    s2 = {1}
+    for i in range(500):
+        s2.add(i*i*i*i)
+    if len(s) != 985 or len(s2) != 500:
+        print("set length error 1")
+        return False
+    if len(s & s2) != 27 or len(s | s2) != 1458 or len(s ^ s2) != 1431:  
+        print("set length error 2")
+        return False
+    return True
+
+actor main(env):
+    if not test_set_pop():
+        env.exit(1)
+    if not test_set_update_int():
+        env.exit(1)
+    if not test_set_update_str():
+        env.exit(1)
+    if not test_set_operations():
+        env.exit(1)
+    env.exit(0)

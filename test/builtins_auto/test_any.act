@@ -1,31 +1,29 @@
-
-
-
-
-def test_any1():
+def test_any1() -> bool:
     stuff = [True, True, True]
     if any(stuff):
-        return
-    raise ValueError("all stuff is True but any() returned False")
+        return True
+    print("all stuff is True but any() returned False")
+    return False
 
-def test_any2():
+def test_any2() -> bool:
     stuff = [True, False, True]
     if any(stuff):
-        return
-    raise ValueError("some stuff is True but any() returned False")
+        return True
+    print("some stuff is True but any() returned False")
+    return False
 
-def test_any3():
+def test_any3() -> bool:
     stuff = [False, False, False]
-    if any(stuff):
-        raise ValueError("no stuff is True but any() returned True")
-    return
+    if not any(stuff):
+        return True
+    print("no stuff is True but any() returned True")
+    return False
 
 actor main(env):
-    try:
-        test_any1()
-        test_any2()
-        test_any3()
-        env.exit(0)
-    except Exception as e:
-        print(e)
+    if not test_any1():
         env.exit(1)
+    if not test_any2():
+        env.exit(1)
+    if not test_any3():
+        env.exit(1)
+    env.exit(0)
