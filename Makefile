@@ -374,7 +374,7 @@ dist/backend%: backend/%
 dist/base: base base/.build base/__root.zig base/acton.zig base/build.zig base/build.zig.zon base/acton.zig dist/bin/actonc $(DEPS)
 	mkdir -p $@ $@/.build $@/out
 	cp -a base/__root.zig base/Acton.toml base/acton.zig base/build.zig base/build.zig.zon base/builtin base/rts base/src dist/base/
-	cd dist/base && ../bin/actonc build && rm -rf .build
+	cd dist/base && ../bin/actonc build --skip-build && rm -rf .build
 
 # This does a little hack, first copying and then moving the file in place. This
 # is to avoid an error if the executable is currently running. cp tries to open
