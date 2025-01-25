@@ -233,11 +233,9 @@ createProject name = do
     paths <- findPaths (joinPath [ curDir, name, "Acton.toml" ]) defaultOpts
     writeFile (joinPath [ curDir, name, ".gitignore" ]) (
       ".actonc.lock\n" ++
-      ".build\n" ++
-      "build.sh\n" ++
-      "out\n" ++
-      "zig-cache\n" ++
-      "zig-out\n"
+      "build.zig\n" ++
+      "build.zig.zon\n" ++
+      "out\n"
       )
     writeFile (joinPath [ curDir, name, "README.org" ]) (
       "* " ++ name ++ "\n" ++ name ++ " is a cool Acton project!\n\n\n"
@@ -990,13 +988,6 @@ zigBuild env opts paths tasks binTasks = do
                            (_:_:_)                 -> defCpu
         buildZigPath = joinPath [projPath paths, "build.zig"]
         buildZonPath = joinPath [projPath paths, "build.zig.zon"]
-
-    -- Create .build directory if it doesn't exist
-    createDirectoryIfMissing True (joinPath [projPath paths, ".build"])
-    -- symlink .build/sys to the syspath directory, always recreating it to make sure it's up to date
-    removeDirectoryLink (joinPath [projPath paths, ".build", "sys"])
-      `catch` handleNotExists
-    createDirectoryLink (sysPath paths) (joinPath [projPath paths, ".build", "sys"])
 
     buildZigExists <- doesFileExist buildZigPath
     buildZonExists <- doesFileExist buildZonPath

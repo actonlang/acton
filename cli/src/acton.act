@@ -95,7 +95,9 @@ def write_buildzig(file_cap, build_config: BuildConfig):
     await async b_file.close()
     # Write build.zig.zon
     bzz_file = file.WriteFile(file.WriteFileCap(file_cap), "build.zig.zon")
-    await async bzz_file.write(gen_buildzigzon(build_zig_zon_tpl, build_config).encode())
+    deps_path = file.get_relative_path(file.join_path([fs.homedir(), ".cache", "acton", "deps"]), fs.cwd())
+
+    await async bzz_file.write(gen_buildzigzon(build_zig_zon_tpl, build_config, deps_path).encode())
     await async bzz_file.close()
 
 
@@ -188,7 +190,7 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
         for dep_name, dep in build_config.dependencies.items():
             dep_hash = dep.hash
             dep_path = dep.path
-            if dep_path is not None:
+            if dep_path != None:
                 # TODO: deconstruct and put together to get OS independent path? i.e. flip / to \ on windows
                 if len(dep_path) == 0:
                     pass
@@ -196,11 +198,11 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
                     search_paths.append(file.join_path([dep_path, "out", "types"]))
                 else:
                     search_paths.append(file.join_path([fs.cwd(), dep_path, "out", "types"]))
-            elif dep_hash is not None:
+            elif dep_hash != None:
                 # For dependencies with hashes, we have previously copied them
-                # from the Zig global cache to .build/deps/
+                # from the Zig global cache to ~/.cache/acton/deps/
                 dep_dirname = dep_name + "-" + dep_hash
-                search_paths.append(file.join_path([fs.cwd(), ".build", "deps", dep_dirname, "out", "types"]))
+                search_paths.append(file.join_path([fs.homedir(), ".cache", "acton", "deps", dep_dirname, "out", "types"]))
             else:
                 raise ValueError("Dependency %s has no path or hash" % dep_name)
         search_path_arg = []
@@ -261,7 +263,7 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
                 if dep_path is not None:
                     path = dep_path
                 elif dep_hash is not None:
-                    path = file.join_path([".build", "deps", dep_name + "-" + dep_hash])
+                    path = file.join_path([fs.homedir(), ".cache", "acton", "deps", dep_name + "-" + dep_hash])
                 else:
                     raise ValueError("Dependency %s has no path or hash" % dep_name)
                 print(" -", dep_name)
@@ -285,22 +287,20 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
 
     def check_deps():
         # 1. fetch dependencies (into zig global cache)
-        # 2. copy dependencies from zig global cache to deps/
+        # 2. copy dependencies from zig global cache to ~/.cache/acton/deps/
         # 3. build dependencies
         # 4. build project
         deps_dir = set()
-        try:
-            await async fs.mkdir(".build")
-        except:
-            pass
+        dirs = [fs.homedir(), ".cache", "acton", "deps"]
+        # Create deps directory if it doesn't exist, going one dir component at a time
+        for i in range(1, len(dirs)+1):
+            try:
+                await async fs.mkdir(file.join_path(dirs[0:i]))
+            except:
+                pass
 
         try:
-            await async fs.mkdir(file.join_path([".build", "deps"]))
-        except:
-            pass
-
-        try:
-            deps_dir = set(fs.listdir(file.join_path([".build", "deps"])))
+            deps_dir = set(fs.listdir(file.join_path([fs.homedir(), ".cache", "acton", "deps"])))
         except OSError:
             pass
 
@@ -314,7 +314,7 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
                 dep_dirname = dep_name + "-" + dep_hash
                 if dep_dirname not in deps_dir:
                     src = file.join_path([zig_global_cache_dir, "p", dep_hash])
-                    dst = file.join_path([fs.cwd(), ".build", "deps", dep_dirname])
+                    dst = file.join_path([fs.homedir(), ".cache", "acton", "deps", dep_dirname])
                     try:
                         await async fs.mkdir(dst)
                     except:

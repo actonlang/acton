@@ -1,3 +1,4 @@
+import file
 import json
 import re
 
@@ -130,7 +131,7 @@ class PkgDependency(Dependency):
             res["path"] = path
         return res
 
-    def to_zon(self) -> str:
+    def to_zon(self, deps_path) -> str:
         path = ""
         self_path = self.path
         if self_path is not None:
@@ -138,7 +139,7 @@ class PkgDependency(Dependency):
         else:
             dep_hash = self.hash
             if dep_hash is not None:
-                path = ".build/deps/%s-%s" % (self.name, dep_hash)
+                path = file.join_path([deps_path, "%s-%s" % (self.name, dep_hash)])
             else:
                 raise ValueError("Invalid build.act.json, dependency '%s' has no path or hash" % self.name)
         return """        .%s = .{
@@ -278,10 +279,10 @@ def gen_buildzig(template: str, build_config: BuildConfig) -> str:
 
     return "\n".join(res)
 
-def gen_buildzigzon(template: str, build_config: BuildConfig) -> str:
+def gen_buildzigzon(template: str, build_config: BuildConfig, deps_path: str) -> str:
     deps = ""
     for dep_name, dep in build_config.dependencies.items():
-        deps += dep.to_zon()
+        deps += dep.to_zon(deps_path)
     for dep_name, dep in build_config.zig_dependencies.items():
         deps += dep.to_zon()
 
