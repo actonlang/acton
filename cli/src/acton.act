@@ -1,12 +1,15 @@
 import argparse
 import file
 import json
+import net
 import process
 import term
 import testing
 
 from buildy import *
 from testing import TestInfo
+
+import acton_cli.github as cli_gh
 
 def get_zig_local_cache_dir(file_cap: file.FileCap):
     fs = file.FS(file_cap)
@@ -964,6 +967,143 @@ actor CmdPkgAdd(env, args):
         on_exit,
         on_error)
 
+actor ZigFetch(on_dl: action(?str, ?str) -> None, env, dep_name: str, dep_url: str):
+    """zig fetch
+
+    Calls zig fetch to fetch a dependency and get the hash of the fetched dependency
+
+    Args:
+        on_dl: action(err: ?str, hash: ?str) - callback when download is done
+        env: Env - the environment
+        dep_name: str - the name of the dependency
+        dep_url: str - the URL to fetch the dependency from
+    """
+    pcap = process.ProcessCap(env.cap)
+    fs = file.FS(file.FileCap(env.cap))
+
+    zig = file.join_path([base_path(file.FileCap(env.cap)), "zig", "zig"])
+
+    def on_exit(p, exit_code, term_signal, std_out_buf, std_err_buf):
+        if exit_code == 0:
+            dep_hash = std_out_buf.decode().strip()
+            on_dl(None, dep_hash)
+        else:
+            error = "Error fetching: %s" % std_err_buf.decode()
+            on_dl(error, None)
+
+    def on_error(p, error):
+        on_dl(error, None)
+
+    cmd = [zig, "fetch", "--global-cache-dir", get_zig_global_cache_dir(file.FileCap(env.cap)), dep_url]
+    process.RunProcess(
+        pcap,
+        cmd,
+        on_exit,
+        on_error)
+
+
+actor CmdPkgUpgrade(env, args):
+    """Upgrade (or downgrade) a package dependency
+    """
+    tcpc_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(env.cap)))
+    pcap = process.ProcessCap(env.cap)
+    fs = file.FS(file.FileCap(env.cap))
+
+    zig = file.join_path([base_path(file.FileCap(env.cap)), "zig", "zig"])
+
+    # What arguments do we need?
+    # - the name of the dependency (e.g. "foo", used in the build.act.json config file)
+    # - the URL to fetch it from
+
+    # We need to fetch the dependency and get the (content) hash of the fetched
+    # dependency and store it in the build.act.json file. If the dependency is
+    # already in the build.act.json file, we need to check if the hash is the
+    # same as the one we just fetched. If it is, we do nothing. If it is not,
+
+    def get_build_config():
+        try:
+            return BuildConfig.from_json(file.ReadFile(file.ReadFileCap(file.FileCap(env.cap)), "build.act.json").read().decode())
+        except FileNotFoundError:
+            # Ignore, we create a new file
+            pass
+        except ValueError as e:
+            print("ERROR:", e.error_message)
+            await async env.exit(1)
+        return BuildConfig()
+
+    build_config = get_build_config()
+
+    remaining_fetch_ref = {}
+    remaining_zig_fetch = {}
+    new_pkg_urls = {}
+    new_pkg_hashes = {}
+
+    def _on_zig_fetch(dep_name: str, err: ?str, hash: ?str):
+        del remaining_zig_fetch[dep_name]
+        if hash != None:
+            new_pkg_hashes[dep_name] = hash
+        if err != None:
+            print("Error fetching updated hash for", dep_name, err)
+        if len(remaining_zig_fetch) == 0:
+            _update_build_config()
+
+    def _zig_fetch():
+        for dep_name, new_url in new_pkg_urls.items():
+            bc_dep = build_config.dependencies[dep_name]
+            if bc_dep.url != new_url:
+                remaining_zig_fetch[dep_name] = True
+                ZigFetch(lambda x, y: _on_zig_fetch(dep_name, x, y), env, dep_name, new_url)
+        if len(remaining_zig_fetch) == 0:
+            print("No dependencies to upgrade")
+            env.exit(0)
+
+    def _update_build_config():
+        updated = False
+        for dep_name, dep in build_config.dependencies.items():
+            new_url = new_pkg_urls.get_def(dep_name, dep.url)
+            new_hash = new_pkg_hashes.get_def(dep_name, dep.hash)
+            if new_url != dep.url or new_hash != dep.hash:
+                print("Updated dependency", dep_name, "with\n  - new URL", new_url, "\n  - new hash", new_hash)
+                dep.url = new_url
+                dep.hash = new_hash
+                updated = True
+
+        if updated:
+            baj_file = file.WriteFile(file.WriteFileCap(file.FileCap(env.cap)), "build.act.json")
+            baj_file.write(build_config.to_json().encode()+b"\n")
+            await async baj_file.close()
+            print("Wrote changes to build.act.json")
+        else:
+            print("No changes to build.act.json")
+        env.exit(0)
+
+    def _onPkgFetchRef(dep_name: str, err: ?Exception, url: ?str):
+        del remaining_fetch_ref[dep_name]
+        if url != None:
+            new_pkg_urls[dep_name] = url
+        if err != None:
+            print("Error fetching ref for", dep_name, err)
+        if len(remaining_fetch_ref) == 0:
+            _zig_fetch()
+
+    def _go():
+        for dep_name, dep in build_config.dependencies.items():
+            dep_repo_url = dep.repo_url
+            if dep_repo_url != None:
+                if dep_repo_url.startswith("https://github.com"):
+                    print(dep_name, "- fetching ref from", dep_repo_url)
+                    remaining_fetch_ref[dep_name] = dep
+                    cli_gh.FetchRef(lambda x, y: _onPkgFetchRef(dep_name, x, y), url=dep_repo_url, tcpc_cap=tcpc_cap, ref=dep.repo_ref)
+                else:
+                    print(dep_name, "- skipping upgrade: Unsupported git forge URL for", dep_name, ":", dep_repo_url, "only https://github.com is supported", err=True)
+            else:
+                print(dep_name, "- skipping upgrade: repo_url not set", err=True)
+
+        if len(remaining_fetch_ref) == 0:
+            print("No dependencies to upgrade")
+            env.exit(0)
+    _go()
+
 
 actor CmdPkgRemove(env, args):
     """Remove a package dependency from the project
@@ -1176,6 +1316,9 @@ actor main(env):
     def _cmd_pkg_add(args):
         c = CmdPkgAdd(env, args)
 
+    def _cmd_pkg_upgrade(args):
+        c = CmdPkgUpgrade(env, args)
+
     def _cmd_pkg_rm(args):
         c = CmdPkgRemove(env, args)
 
@@ -1250,6 +1393,9 @@ actor main(env):
 
         p_pkg_rm = p_pkg.add_cmd("remove", "Remove package dependency", _cmd_pkg_rm)
         p_pkg_rm.add_arg("name", "Name of dependency", True, "?")
+
+        p_pkg_upgrade = p_pkg.add_cmd("upgrade", "Upgrade (or downgrade) package dependency", _cmd_pkg_upgrade)
+        #p_pkg_upgrade.add_option("name", "str", "?", help="Dependency name")
 
         docp = p.add_cmd("doc", "Show documentation", _cmd_doc)
 

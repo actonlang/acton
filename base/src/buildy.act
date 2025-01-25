@@ -85,22 +85,28 @@ class Dependency(object):
     url: ?str
     hash: ?str
     path: ?str
+    repo_url: ?str
+    repo_ref: ?str
 
 class PkgDependency(Dependency):
 
-    def __init__(self, name: str, url: ?str, hash: ?str, path: ?str):
+    def __init__(self, name: str, url: ?str, hash: ?str, path: ?str, repo_url: ?str, repo_ref: ?str):
         if path != None and url != None:
             raise ValueError("Dependency '%s' has both path and url set. Set only path or url. You can override path for a dep, e.g.: acton build --dep %s=%s" % (name, name, path))
         self.name = zig_safe_name(name)
         self.url = url
         self.hash = hash
         self.path = path
+        self.repo_url = repo_url
+        self.repo_ref = repo_ref
 
     @staticmethod
     def from_json(dep_name, data: dict[str, str]):
         dep_url = None
         dep_hash = None
         dep_path = None
+        dep_repo_url = None
+        dep_repo_ref = None
         for key, value in data.items():
             if key == "url":
                 data_url = data["url"]
@@ -114,20 +120,34 @@ class PkgDependency(Dependency):
                 data_path = data["path"]
                 if isinstance(data_path, str):
                     dep_path = data_path
+            elif key == "repo_url":
+                data_repo_url = data["repo_url"]
+                if isinstance(data_repo_url, str):
+                    dep_repo_url = data_repo_url
+            elif key == "repo_ref":
+                data_repo_ref = data["repo_ref"]
+                if isinstance(data_repo_ref, str):
+                    dep_repo_ref = data_repo_ref
             else:
                 raise ValueError("Invalid build.act.json, unknown key '%s' in dependency '%s'" % (key, dep_name))
-        return PkgDependency(dep_name, dep_url, dep_hash, dep_path)
+        return PkgDependency(dep_name, dep_url, dep_hash, dep_path, dep_repo_url, dep_repo_ref)
 
     def to_json(self) -> dict[str, str]:
         res = {}
+        repo_url = self.repo_url
+        if repo_url != None:
+            res["repo_url"] = repo_url
+        repo_ref = self.repo_ref
+        if repo_ref != None:
+            res["repo_ref"] = repo_ref
         url = self.url
-        if url is not None:
+        if url != None:
             res["url"] = url
         hash = self.hash
-        if hash is not None:
+        if hash != None:
             res["hash"] = hash
         path = self.path
-        if path is not None:
+        if path != None:
             res["path"] = path
         return res
 
