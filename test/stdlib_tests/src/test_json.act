@@ -16,9 +16,9 @@ def _test_json():
         #log.debug("Input string", {"json_str": s})
         d = json.decode(s)
         #log.debug("Decoded JSON string to dict", {"dict": d})
-        testing.assertIsNotNone(d, "Failed to decode JSON")
+        testing.assertNotNone(d, "Failed to decode JSON")
         e = json.encode(d)
         #log.debug("Encoded to JSON", {"encoded": s})
-        testing.assertIsNotNone(e, "Failed to encode to JSON")
+        testing.assertNotNone(e, "Failed to encode to JSON")
         testing.assertEqual(s, e, "Input output via JSON round trip does not match")
 

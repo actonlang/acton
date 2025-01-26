@@ -9,229 +9,264 @@ import time
 
 # -- assert ---------------------------------------------------------------------
 
+def opt_str[T](s: ?T) -> str:
+    return str(s) if s != None else "None"
+
 class NotEqualError[T](AssertionError):
     a: ?T
     b: ?T
 
-    def __init__(self, a, b, msg: ?str=None):
+    def __init__(self, a, b, msg: ?str=None, print_vals: bool=True):
         self.a = a
         self.b = b
-        self.error_message = msg if msg is not None else "Expected equal values but they are non-equal."
-        self.print_vals = True if msg is None else False
+        self.error_message = msg if msg != None else "Expected equal values but they are non-equal."
+        self.print_vals = print_vals
 
     def __str__(self):
         msg = "%s: %s" % (self._name(), self.error_message)
         if self.print_vals:
-            a = self.a
-            msg += " A: " + str(a) if a is not None else "None"
-            b = self.b
-            msg += " B: " + str(b) if b is not None else "None"
+            msg += " A: " + opt_str(self.a)
+            msg += " B: " + opt_str(self.b)
         return msg
 
 class EqualError[T](AssertionError):
     a: ?T
     b: ?T
 
-    def __init__(self, a, b, msg: ?str=None):
+    def __init__(self, a, b, msg: ?str=None, print_vals: bool=True):
         self.a = a
         self.b = b
-        self.error_message = msg if msg is not None else "Expected non-equal values but they are equal."
-        self.print_vals = True if msg is None else False
+        self.error_message = msg if msg != None else "Expected non-equal values but they are equal."
+        self.print_vals = print_vals
 
     def __str__(self):
         msg = "%s: %s" % (self._name(), self.error_message)
         if self.print_vals:
-            a = self.a
-            msg += " A: " + str(a) if a is not None else "None"
-            b = self.b
-            msg += " B: " + str(b) if b is not None else "None"
+            msg += " A: " + opt_str(self.a)
+            msg += " B: " + opt_str(self.b)
         return msg
 
 class NotTrueError[T](AssertionError):
     a: ?T
 
-    def __init__(self, a, msg: ?str=None):
+    def __init__(self, a, msg: ?str=None, print_vals: bool=True):
         self.a = a
-        self.error_message = msg if msg is not None else "Expected True but got non-True"
-        self.print_vals = True if msg is None else False
+        self.error_message = msg if msg != None else "Expected True but got non-True"
+        self.print_vals = print_vals
 
     def __str__(self):
         msg = "%s: %s" % (self._name(), self.error_message)
         if self.print_vals:
-            a = self.a
-            msg += ", value: " + str(a) if a is not None else "None"
+            msg += ", value: " + opt_str(self.a)
         return msg
 
 class NotFalseError[T](AssertionError):
     a: ?T
 
-    def __init__(self, a, msg: ?str=None):
+    def __init__(self, a, msg: ?str=None, print_vals: bool=True):
         self.a = a
-        self.error_message = msg if msg is not None else "Expected False but got non-False."
-        self.print_vals = True if msg is None else False
+        self.error_message = msg if msg != None else "Expected False but got non-False."
+        self.print_vals = print_vals
 
     def __str__(self):
         msg = "%s: %s" % (self._name(), self.error_message)
         if self.print_vals:
-            a = self.a
-            msg += ", value: " + str(a) if a is not None else "None"
+            msg += ", value: " + opt_str(self.a)
         return msg
 
 class NotNoneError[T](AssertionError):
     a: ?T
 
-    def __init__(self, a, msg: ?str=None):
+    def __init__(self, a, msg: ?str=None, print_vals: bool=True):
         self.a = a
-        self.error_message = msg if msg is not None else "Expected None but got non-None."
-        self.print_vals = True if msg is None else False
+        self.error_message = msg if msg != None else "Expected None but got non-None."
+        self.print_vals = print_vals
 
     def __str__(self):
         msg = "%s: %s" % (self._name(), self.error_message)
         if self.print_vals:
-            a = self.a
-            msg += ", value: " + str(a) if a is not None else "None"
+            msg += ", value: " + opt_str(self.a)
         return msg
 
 class NoneError[T](AssertionError):
     a: ?T
 
-    def __init__(self, a, msg: ?str=None):
+    def __init__(self, a, msg: ?str=None, print_vals: bool=True):
         self.a = a
-        self.error_message = msg if msg is not None else "Expected non-None but got None."
-        self.print_vals = True if msg is None else False
+        self.error_message = msg if msg != None else "Expected non-None but got None."
+        self.print_vals = print_vals
 
     def __str__(self):
         msg = "%s: %s" % (self._name(), self.error_message)
         if self.print_vals:
             a = self.a
-            msg += ", value: " + str(a) if a is not None else "None"
+            msg += ", value: " + opt_str(a)
         return msg
 
 class NotInError[T,U](AssertionError):
     a: ?T
     b: ?U
 
-    def __init__(self, a, b, msg: ?str=None):
+    def __init__(self, a, b, msg: ?str=None, print_vals: bool=True):
         self.a = a
         self.b = b
-        self.error_message = msg if msg is not None else "Expected element not in container"
-        self.print_vals = True if msg is None else False
+        self.error_message = msg if msg != None else "Expected element not in container"
+        self.print_vals = print_vals
 
     def __str__(self):
         msg = "%s: %s" % (self._name(), self.error_message)
         if self.print_vals:
-            a = self.a
-            msg += ", element: " + str(a) if a is not None else "None"
-            b = self.b
-            msg += ", container: " + str(b) if b is not None else "None"
+            msg += ", element: " + opt_str(self.a)
+            msg += ", container: " + opt_str(self.b)
         return msg
 
 class InError[T,U](AssertionError):
     a: ?T
     b: ?U
 
-    def __init__(self, a, b, msg: ?str=None):
+    def __init__(self, a, b, msg: ?str=None, print_vals: bool=True):
         self.a = a
         self.b = b
-        self.error_message = msg if msg is not None else "Expected element in container"
-        self.print_vals = True if msg is None else False
+        self.error_message = msg if msg != None else "Expected element in container"
+        self.print_vals = print_vals
 
     def __str__(self):
         msg = "%s: %s" % (self._name(), self.error_message)
         if self.print_vals:
-            a = self.a
-            msg += ", element: " + str(a) if a is not None else "None"
-            b = self.b
-            msg += ", container: " + str(b) if b is not None else "None"
+            msg += ", element: " + opt_str(self.a)
+            msg += ", container: " + opt_str(self.b)
         return msg
 
-class NotIsError[T(Identity)](AssertionError):
-    a: ?T
-    b: ?T
-    def __init__(self, a, b, msg: ?str=None):
-        self.a = a
-        self.b = b
-        self.error_message = msg if msg is not None else "a is not b"
+class NotIsError[T](AssertionError):
+    a: T
+    b: T
 
-class IsError[T(Identity)](AssertionError):
-    a: ?T
-    b: ?T
-    def __init__(self, a, b, msg: ?str=None):
+    def __init__(self, a, b, msg: ?str=None, print_vals: bool=True):
         self.a = a
         self.b = b
-        self.error_message = msg if msg is not None else "a is b"
+        self.error_message = msg if msg != None else "Expected both objects to be the same identity (is)"
+        self.print_vals = print_vals
+
+    def __str__(self):
+        msg = "%s: %s" % (self._name(), self.error_message)
+        if self.print_vals:
+            msg += " A: " + str(self.a)
+            msg += " B: " + str(self.b)
+        return msg
+
+class IsError[T](AssertionError):
+    a: T
+    b: T
+
+    def __init__(self, a, b, msg: ?str=None, print_vals: bool=True):
+        self.a = a
+        self.b = b
+        self.error_message = msg if msg != None else "Expected both objects to be different identities (is not)"
+        self.print_vals = print_vals
+
+    def __str__(self):
+        msg = "%s: %s" % (self._name(), self.error_message)
+        if self.print_vals:
+            msg += " A: " + str(self.a)
+            msg += " B: " + str(self.b)
+        return msg
 
 class NotRaisesError(AssertionError):
-    def __init__(self, msg):
-        self.error_message = msg
-        self.a = None
+    def __init__(self, msg: ?str=None, print_vals: bool=True):
+        self.error_message = msg if msg != None else "Expected exception not raised"
+        self.print_vals = print_vals
 
-class IsInstanceError(AssertionError):
-    def __init__(self, msg):
-        self.error_message = msg
-        self.a = None
-        self.b = None
+class IsInstanceError[T](AssertionError):
+    a: ?T
+    t: str
 
-class NotIsInstanceError(AssertionError):
-    def __init__(self, msg):
-        self.error_message = msg
-        self.a = None
-        self.b = None
+    def __init__(self, a, t: str, msg: ?str=None, print_vals: bool=True):
+        self.a = a
+        self.t = t
+        self.error_message = msg if msg != None else "expected type of specific instance"
+        self.print_vals = print_vals
+
+class NotIsInstanceError[T](AssertionError):
+    a: ?T
+    t: str
+
+    def __init__(self, a, t: str, msg: ?str=None, print_vals: bool=True):
+        self.a = a
+        self.t = t
+        self.error_message = msg if msg != None else "expected type of specific instance"
 
 
-def assertEqual[T(Eq)](a: ?T, b: ?T, msg: ?str):
-    if ((a is None and b is not None)
-        or (a is not None and b is None)
-        or (a is not None and b is not None and not (a == b))):
-        raise NotEqualError(a, b, msg)
+def assertEqual[T(Eq)](a: ?T, b: ?T, msg: ?str, print_vals: bool=True):
+    """Assert that two values are equal
+    """
+    if ((a == None and b != None)
+        or (a != None and b == None)
+        or (a != None and b != None and not (a == b))):
+        raise NotEqualError(a, b, msg, print_vals)
 
-def assertNotEqual[T(Eq)](a: ?T, b: ?T, msg: ?str):
-    if ((a is None and b is None)
-        or (a is not None and b is not None and a == b)):
-        raise EqualError(a, b, msg)
+def assertNotEqual[T(Eq)](a: ?T, b: ?T, msg: ?str, print_vals: bool=True):
+    """Assert that two values are not equal
+    """
+    if ((a == None and b == None)
+        or (a != None and b != None and a == b)):
+        raise EqualError(a, b, msg, print_vals)
 
-def assertTrue(a, msg: ?str):
+def assertTrue(a, msg: ?str, print_vals: bool=True):
+    """Assert that the boolean evaluation of a value is True
+    """
     if not bool(a):
-        raise NotTrueError(a, msg)
+        raise NotTrueError(a, msg, print_vals)
 
-def assertFalse(a, msg: ?str):
+def assertFalse(a, msg: ?str, print_vals: bool=True):
+    """Assert that the boolean evaluation of a value is False
+    """
     if bool(a):
-        raise NotFalseError(a, msg)
+        raise NotFalseError(a, msg, print_vals)
 
-# TODO: fix this
-#def assertIs[T(Identity)](a: ?T, b: ?T, msg: ?str):
-#    if not (a is b):
-#        raise NotIsError(a, b, msg)
-# TODO: fix this
-#def assertIsNot[T(Identity)](a: ?T, b: ?T, msg: ?str):
-#    if not (a is not b):
-#        raise IsError(a, b, msg)
+def assertIs[T(Identity)](a: T, b: T, msg: ?str, print_vals: bool=True):
+    """Assert that two values are the same identity, i.e. the same object
+    """
+    if not (a is b):
+        raise NotIsError(a, b, msg)
 
-def assertIsNone(a, msg: ?str):
-    if not (a is None):
-        raise NotNoneError(a, msg)
+def assertIsNot[T(Identity)](a: T, b: T, msg: ?str, print_vals: bool=True):
+    """Assert that two values are not the same identity, i.e. different objects
+    """
+    if a is b:
+        raise IsError(a, b, msg)
 
-def assertIsNotNone(a, msg: ?str):
-    if not (a is not None):
-        raise NoneError(a, msg)
+def assertNone(a, msg: ?str, print_vals: bool=True):
+    """Assert that a value equals None
+    """
+    if not (a == None):
+        raise NotNoneError(a, msg, print_vals)
 
-def assertIn(a, b, msg: ?str):
+def assertNotNone(a, msg: ?str, print_vals: bool=True):
+    """Assert that a value does not equal None
+    """
+    if not (a != None):
+        raise NoneError(a, msg, print_vals)
+
+def assertIn(a, b, msg: ?str, print_vals: bool=True):
+    """Assert that a value is in a container
+    """
     if not (a in b):
-        raise NotInError(a, b, msg)
+        raise NotInError(a, b, msg, print_vals)
 
-def assertNotIn(a, b, msg: ?str):
+def assertNotIn(a, b, msg: ?str, print_vals: bool=True):
+    """Assert that a value is not in a container
+    """
     if a in b:
-        raise InError(a, b, msg)
-
+        raise InError(a, b, msg, print_vals)
 
 def error(msg: ?str):
     """Raise a generic test error"""
-    raise AssertionError(msg if msg is not None else "Test error")
+    raise AssertionError(msg if msg != None else "Test error")
 
 # -------------------------------------------------------------------------------
 
 def eq_opt[T(Eq)](a: ?T, b: ?T) -> bool:
-    return a is not None and b is not None and a == b or a is None and b is None
+    return a != None and b != None and a == b or a == None and b == None
 
 class TestLogger(logging.Logger):
     pass
@@ -525,7 +560,7 @@ class TestInfo(object):
             res_success = result.success
             if res_success == False:
                 self.num_failures += 1
-            elif res_success is None:
+            elif res_success == None:
                 self.num_errors += 1
 
         for result in self.results[1:]:
@@ -567,7 +602,7 @@ class TestInfo(object):
                                        non_gc_mem_usage_delta_avg: str,
                                        non_gc_mem_inc_count: str):
         def fmt_diff(new, old, unit="") -> str:
-            if old is not None:
+            if old != None:
                 diff = float(new) - float(old)
                 pct_diff = diff / float(old) * 100
                 sign = "+" if diff > 0 else ""
@@ -577,14 +612,14 @@ class TestInfo(object):
             else:
                 return "%10s" % ""
 
-        #return (min_duration=fmt_diff(self.min_duration, old.min_duration if old is not None else None, "ms"))
+        #return (min_duration=fmt_diff(self.min_duration, old.min_duration if old != None else None, "ms"))
         return (
-            fmt_diff(self.min_duration, old.min_duration if old is not None else None, "ms"),
-            fmt_diff(self.max_duration, old.max_duration if old is not None else None, "ms"),
-            fmt_diff(self.avg_duration, old.avg_duration if old is not None else None, "ms"),
-            fmt_diff(self.mem_usage_delta_avg, old.mem_usage_delta_avg if old is not None else None, "B"),
-            fmt_diff(self.non_gc_mem_usage_delta_avg, old.non_gc_mem_usage_delta_avg if old is not None else None, "B"),
-            fmt_diff(self.non_gc_mem_inc_count, old.non_gc_mem_inc_count if old is not None else None)
+            fmt_diff(self.min_duration, old.min_duration if old != None else None, "ms"),
+            fmt_diff(self.max_duration, old.max_duration if old != None else None, "ms"),
+            fmt_diff(self.avg_duration, old.avg_duration if old != None else None, "ms"),
+            fmt_diff(self.mem_usage_delta_avg, old.mem_usage_delta_avg if old != None else None, "B"),
+            fmt_diff(self.non_gc_mem_usage_delta_avg, old.non_gc_mem_usage_delta_avg if old != None else None, "B"),
+            fmt_diff(self.non_gc_mem_inc_count, old.non_gc_mem_inc_count if old != None else None)
         )
 
     def to_json(self, include_results: bool=False):
@@ -628,23 +663,23 @@ class TestInfo(object):
         complete = json_data["complete"]
         suc = json_data["success"]
         success: ?bool = None
-        if suc is not None and isinstance(suc, bool):
+        if suc != None and isinstance(suc, bool):
             success = suc
         exc = json_data["exception"]
         exception: ?str = None
-        if exc is not None and isinstance(exc, str):
+        if exc != None and isinstance(exc, str):
             exception = exc
         out = json_data["output"]
         output: ?str = None
-        if out is not None and isinstance(out, str):
+        if out != None and isinstance(out, str):
             output = out
         std_out_d = json_data["std_out"]
         std_out: ?str = None
-        if std_out_d is not None and isinstance(std_out_d, str):
+        if std_out_d != None and isinstance(std_out_d, str):
             std_out = std_out_d
         std_err_d = json_data["std_err"]
         std_err: ?str = None
-        if std_err_d is not None and isinstance(std_err_d, str):
+        if std_err_d != None and isinstance(std_err_d, str):
             std_err = std_err_d
         flaky = json_data["flaky"]
         min_duration = json_data["min_duration"]
@@ -753,11 +788,11 @@ actor TestExecutor(syscap, config, t: Test, report_complete, env):
         non_gc_mem_usage_delta = non_gc_mem_usage_after - non_gc_mem_usage_before
         #print("non-GC memory before: %d  after: %d  delta: %d" % (non_gc_mem_usage_before, non_gc_mem_usage_after, non_gc_mem_usage_delta))
         complete = True if test_dur > config.min_test_duration else False
-        if test_info is not None:
-            exc = str(exception) if exception is not None else None
+        if test_info != None:
+            exc = str(exception) if exception != None else None
             test_info.update(complete, TestResult(success, exc, val, testiter_dur, mem_usage_delta, non_gc_mem_usage_delta), test_dur*1000.0)
         if last_report.elapsed().to_float() > 0.05 or complete:
-            if test_info is not None and config.output_enabled:
+            if test_info != None and config.output_enabled:
                 print("\n" + json.encode({"test_info": test_info.to_json()}), err=True)
             last_report.reset()
         if not complete:
@@ -779,10 +814,10 @@ actor TestExecutor(syscap, config, t: Test, report_complete, env):
 
         def repres(s: ?bool, e: ?Exception, val: ?str) -> None:
             # Compare expected golden value
-            if val is not None:
+            if val != None:
                 exp_val = get_expected(t.module, t.name)
-                if exp_val is None or exp_val is not None and val != exp_val:
-                    exc = NotEqualError(val, exp_val, "Test output does not match expected golden value.\nActual  : %s\nExpected: %s" % (val, exp_val if exp_val is not None else "None"))
+                if exp_val == None or exp_val != None and val != exp_val:
+                    exc = NotEqualError(val, exp_val, "Test output does not match expected golden value.\nActual  : %s\nExpected: %s" % (val, exp_val if exp_val != None else "None"))
                     _report_result(t, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, False, exc, val)
                     return
             _report_result(t, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, s, e, val)
@@ -965,7 +1000,7 @@ class ProjectTestResults(object):
                 msg = ""
                 run_info = ""
                 if tinfo.complete:
-                    if exc is not None:
+                    if exc != None:
                         msg += term.bold + term.red
                         if tinfo.flaky:
                             msg += "FLAKY "
@@ -1151,7 +1186,7 @@ actor test_runner(env: Env,
 
         args = p.parse(env.argv)
         _cmd = args.cmd
-        if _cmd is not None:
+        if _cmd != None:
             _cmd(args)
         else:
             env.exit(0)

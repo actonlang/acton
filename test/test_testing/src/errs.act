@@ -1,0 +1,62 @@
+import testing
+
+def _test_equal_failure():
+    """Demonstrate assertEqual failure with different strings"""
+    testing.assertEqual("foo", "bar", "Strings should be equal")
+
+def _test_equal_none_failure():
+    """Demonstrate assertEqual failure with None comparison"""
+    testing.assertEqual("foo", None, "String should equal None")
+
+def _test_not_equal_failure():
+    """Demonstrate assertNotEqual failure with identical strings"""
+    testing.assertNotEqual("foo", "foo", "Strings should be different")
+
+def _test_not_equal_none_failure():
+    """Demonstrate assertNotEqual failure with None values"""
+    testing.assertNotEqual(None, None, "None values should be different")
+
+def _test_true_failure():
+    """Demonstrate assertTrue failure"""
+    testing.assertTrue(False, "False should be True")
+
+def _test_false_failure():
+    """Demonstrate assertFalse failure"""
+    testing.assertFalse(True, "True should be False")
+
+#def _test_is_failure():
+#    """Demonstrate assertIs failure with equal but different objects"""
+#    abc: str = "a"
+#    testing.assertIs(abc, abc, "Different lists should be identical")
+
+#def _test_is_not_failure():
+#    """Demonstrate assertIsNot failure with same object"""
+#    x = 1
+#    testing.assertIsNot(x, x, "Same list should be different")
+
+def _test_none_failure():
+    """Demonstrate assertNone failure"""
+    testing.assertNone("not none", "Non-None should be None")
+
+def _test_not_none_failure():
+    """Demonstrate assertNotNone failure"""
+    testing.assertNotNone(None, "None should be non-None")
+
+def _test_in_failure():
+    """Demonstrate assertIn failure"""
+    testing.assertIn(4, [1, 2, 3], "4 should be in [1, 2, 3]")
+
+def _test_not_in_failure():
+    """Demonstrate assertNotIn failure"""
+    testing.assertNotIn(1, [1, 2, 3], "1 should not be in [1, 2, 3]")
+
+def _test_performance_failure():
+    """Demonstrate a failure in a computationally intensive test"""
+    result = 0
+    for i in range(100000):
+        result += i
+    testing.assertEqual(result, 1, "Long computation should equal 1")
+
+def _test_generic_error():
+    """Demonstrate generic error"""
+    testing.error("This is a generic test error")
