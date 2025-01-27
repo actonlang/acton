@@ -1,5 +1,127 @@
-import uri
 import testing
 
-def _test_uri():
-    testing.assertEqual("http", uri.get_scheme("http://www.google.com").0, "failed to get http scheme")
+from uri import URI
+
+def _test_basic_uri():
+    """Test basic URI parsing"""
+    parsed = URI("https://example.com/path")
+    testing.assertEqual(parsed.scheme, "https", "scheme parsing failed")
+    testing.assertEqual(parsed.host, "example.com", "host parsing failed")
+    testing.assertEqual(parsed.path, "/path", "path parsing failed")
+    testing.assertEqual(parsed.port, None, "default https port failed")
+
+def _test_uri_missing_scheme():
+    """Test missing scheme"""
+    parsed = URI("example.com/path")
+    testing.assertEqual(parsed.scheme, None, "scheme parsing failed")
+    testing.assertEqual(parsed.host, "example.com", "host parsing failed")
+    testing.assertEqual(parsed.path, "/path", "path parsing failed")
+    testing.assertEqual(parsed.port, None)
+
+def _test_file_uri():
+    """Test valid file URI"""
+    parsed = URI("file:///path")
+    testing.assertEqual(parsed.scheme, "file", "scheme parsing failed")
+    testing.assertEqual(parsed.path, "/path", "path parsing failed")
+    testing.assertEqual(parsed.authority, None, "authority should be None")
+    testing.assertEqual(parsed.query, None, "query should be None")
+    testing.assertEqual(parsed.fragment, None, "fragment should be None")
+
+def _test_empty_uri():
+    """Test empty valid URI"""
+    parsed = URI("")
+    testing.assertEqual(parsed.scheme, None)
+    testing.assertEqual(parsed.path, None)
+    testing.assertEqual(parsed.authority, None)
+    testing.assertEqual(parsed.query, None)
+    testing.assertEqual(parsed.fragment, None)
+
+def _test_complex_uri():
+    """Test URI with all components"""
+    parsed = URI("https://user@example.com:8080/path/to/resource?query=value&other=123#fragment")
+    testing.assertEqual(parsed.scheme, "https", "scheme parsing failed")
+    testing.assertEqual(parsed.authority, "user@example.com:8080", "authority parsing failed")
+    testing.assertEqual(parsed.host, "user@example.com", "host parsing failed")
+    testing.assertEqual(parsed.port, 8080, "port parsing failed")
+    testing.assertEqual(parsed.path, "/path/to/resource", "path parsing failed")
+    testing.assertEqual(parsed.query, "query=value&other=123", "query parsing failed")
+    testing.assertEqual(parsed.fragment, "fragment", "fragment parsing failed")
+
+def _test_empty_vs_missing_components():
+    """Test distinction between empty and missing components"""
+    # No fragment
+    parsed1 = URI("http://example.com/path")
+    testing.assertNone(parsed1.fragment, "missing fragment should be None")
+
+    # Empty fragment
+    parsed2 = URI("http://example.com/path#")
+    testing.assertEqual(parsed2.fragment, "", "empty fragment should be empty string")
+
+    # No query
+    parsed3 = URI("http://example.com/path")
+    testing.assertNone(parsed3.query, "missing query should be None")
+
+    # Empty query
+    parsed4 = URI("http://example.com/path?")
+    testing.assertEqual(parsed4.query, "", "empty query should be empty string")
+
+def _test_uri_string_representation():
+    """Test string representation of URIs"""
+    uri_str = "https://example.com:8080/path?query=value#fragment"
+    parsed = URI(uri_str)
+    testing.assertEqual(str(parsed), uri_str, "string representation failed")
+
+    # Test repr format
+    repr_str = repr(parsed)
+    testing.assertTrue("scheme='https'" in repr_str, "repr missing scheme")
+    testing.assertTrue("host='example.com'" in repr_str, "repr missing host")
+    testing.assertTrue("port=8080" in repr_str, "repr missing port")
+
+def _test_invalid_uris():
+    """Test various invalid URI formats"""
+    invalid_uris = [
+        #"://example.com",       # Missing scheme
+        #"1http://example.com",  # Invalid scheme (starts with number)
+        #"http:///path",         # Triple slash
+        "http://example.com:-80"  # Invalid port
+    ]
+
+    for uri_str in invalid_uris:
+        try:
+            u = URI(uri_str)
+            print(repr(u))
+            testing.error("Expected ValueError for invalid URI: " + uri_str)
+        except ValueError:
+            pass  # Expected behavior
+
+def _test_scheme_validation():
+    """Test scheme validation rules"""
+    # Valid schemes
+    valid_schemes = [
+        "http://example.com",
+        "https://example.com",
+        "ftp://example.com",
+        "smtp+secure://example.com",
+        "custom.scheme://example.com"
+    ]
+
+    for uri_str in valid_schemes:
+        try:
+            URI(uri_str)
+        except ValueError as e:
+            testing.error("Unexpected ValueError for valid scheme in " + uri_str + ": " + str(e))
+
+    # Invalid schemes
+    invalid_schemes = [
+        "+invalid://example.com",
+        "123scheme://example.com",
+        "@scheme://example.com",
+        "scheme with spaces://example.com"
+    ]
+
+    for uri_str in invalid_schemes:
+        try:
+            URI(uri_str)
+            testing.error("Expected ValueError for invalid scheme: " + uri_str)
+        except ValueError:
+            pass

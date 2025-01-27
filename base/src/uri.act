@@ -1,36 +1,202 @@
-# TODO: read and implement https://datatracker.ietf.org/doc/html/rfc1630
-import re
 
-def get_scheme(uri: str) -> (str, str):
-    m = re.match("""(^[A-Za-z][A-Za-z0-9+\\-._@&!*",'$]*):(.*)""", uri)
-#    m = re.match("""^[a-zA-Z][a-zA-Z0]*:""", uri)
-    if m is not None:
-        g1 = m.group[1]
-        g2 = m.group[2]
-        if g1 is not None and g2 is not None:
-            return (g1, g2)
-    raise ValueError("Invalid URI: " + uri)
+class URI(object):
+    """A class representing a Uniform Resource Identifier (URI).
 
-def parse_http(url: str) -> (str, str, int, str):
-    scheme, rest = get_scheme(url)
-    if scheme not in {"http", "https"}:
-        raise ValueError("Invalid scheme: " + scheme)
-    # Match host, potentially port, and the rest which is the path
-    # host can be a domain name or an IP address
-    m = re.match("""^//(?P<host>[a-zA-Z0-9\\-._~%]+)(:(?P<port>[0-9]+))?(?P<path>/.*)?""", rest)
-    if m is not None:
-        gport = m.named["port"]
-        if gport is not None and gport != "":
-            port = int(gport)
-        else:
-            port = 80 if scheme == "http" else 443
-        host = ""
-        ghost = m.named["host"]
-        if ghost is not None:
-            host = ghost
-        path = ""
-        gpath = m.named["path"]
-        if gpath is not None:
-            path = gpath
-        return (scheme, host, port, path)
-    raise ValueError("Invalid URI: " + url)
+    Implements parsing according to RFC 1630.
+
+    Attributes:
+        scheme (str): The URI scheme (e.g. 'http', 'https', 'file')
+        authority (str | None): The authority component (e.g. 'example.com:8080')
+        host (str | None): The hostname part of the authority
+        port (int | None): The port number if specified
+        path (str | None): The path component
+        query (str | None): The query string if present
+        fragment (str | None): The fragment identifier if present
+    """
+    scheme: ?str
+    authority: ?str
+    host: ?str
+    port: ?int
+    path: ?str
+    query: ?str
+    fragment: ?str
+
+    def __init__(self, uri_string: str):
+        """Parse a URI string into its components.
+
+        Args:
+            uri_string: The URI string to parse
+
+        Raises:
+            ValueError: If the URI string is invalid
+        """
+        # Parse scheme
+        scheme, remainder = parse_schema(uri_string)
+        self.scheme = scheme
+
+        # Parse authority
+        authority, host, port, remainder = parse_authority(remainder)
+        self.authority = authority
+        self.host = host
+        self.port = port
+
+        # Parse path
+        path, remainder = parse_path(remainder)
+        self.path = path
+
+        # Parse query
+        query, remainder = parse_query(remainder)
+        self.query = query
+
+        # Parse fragment
+        self.fragment = parse_fragment(remainder)
+
+    def __str__(self) -> str:
+        """Return the canonical string representation of the URI."""
+        scheme_sep = "://" if self.scheme != None else ""
+        query_sep = "?" if self.query != None else ""
+        frag_sep = "#" if self.fragment != None else ""
+        return (e_str(self.scheme) +
+                scheme_sep +
+                e_str(self.authority) +
+                e_str(self.path) +
+                query_sep +
+                e_str(self.query) +
+                frag_sep +
+                e_str(self.fragment))
+
+    def __repr__(self) -> str:
+        """Return a detailed string representation for debugging."""
+        return "URI(scheme='%s', authority='%s', host='%s', port=%s, path='%s', query='%s', fragment='%s')" % (
+                opt_str(self.scheme), opt_str(self.authority),
+                opt_str(self.host), opt_str(self.port), opt_str(self.path),
+                opt_str(self.query), opt_str(self.fragment))
+
+
+def e_str[T](s: ?T) -> str:
+    return str(s) if s != None else ""
+
+def opt_str[T](s: ?T) -> str:
+    return str(s) if s != None else "None"
+
+def is_valid_scheme(scheme: str) -> bool:
+    """
+    Validate if a scheme string follows RFC 3986 rules:
+    1. Must begin with a letter
+    2. Can contain letters, digits, plus (+), period (.), or hyphen (-)
+    3. Case-insensitive
+
+    Args:
+        scheme: The scheme string to validate
+
+    Returns:
+        bool: True if scheme is valid, False otherwise
+    """
+    if not scheme or not scheme[0].isalpha():
+        return False
+
+    # Check each character is valid
+    valid_chars = set('abcdefghijklmnopqrstuvwxyz'
+                     'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+                     '0123456789'
+                     '+.-')
+
+    return all(map(lambda c: c in valid_chars, scheme))
+
+
+def parse_schema(uri: str) -> (?str, str):
+    if ":" not in uri:
+        return None, uri
+    split_result = uri.split(":", 1)
+    if len(split_result) == 1:
+        return None, split_result[0]
+    elif len(split_result) == 2:
+        scheme = split_result[0]
+        remainder = split_result[1]
+        if not remainder.startswith("//"):
+            raise ValueError("Invalid separator after scheme")
+        if not is_valid_scheme(scheme):
+            raise ValueError("Invalid scheme")
+        return scheme, remainder[2:]
+    raise ValueError("Invalid URI, unable to parse scheme")
+
+
+def parse_authority(uri: str) -> (?str, ?str, ?int, str):
+    """Parse authority component, returning authority, host, port, and remainder."""
+    if uri == "":
+        return None, None, None, ""
+
+    # Find end of authority component
+    slash_idx = uri.find("/")
+    question_idx = uri.find("?")
+    hash_idx = uri.find("#")
+
+    # Find the first occurring delimiter
+    end_idx = -1
+    if slash_idx != -1:
+        end_idx = slash_idx
+    if question_idx != -1 and (end_idx == -1 or question_idx < end_idx):
+        end_idx = question_idx
+    if hash_idx != -1 and (end_idx == -1 or hash_idx < end_idx):
+        end_idx = hash_idx
+
+    # Extract authority and remainder
+    if end_idx == -1:
+        authority = uri
+        remainder = ""
+    else:
+        authority = uri[:end_idx]
+        remainder = uri[end_idx:]
+
+    if not authority:
+        return None, None, None, remainder
+
+    # Parse host and port
+    if ":" in authority:
+        host_part = authority.split(":", 1)
+        try:
+            port = int(host_part[1])
+            if port < 0 or port > 65535:
+                raise ValueError("Port must be between 0 and 65535: %s" % host_part[1])
+            return authority, host_part[0], port, remainder
+        except ValueError:
+            raise ValueError("Invalid port: %s" % host_part[1])
+    else:
+        return authority, authority, None, remainder
+
+def parse_path(uri: str) -> (?str, str):
+    """Parse path component, returning path and remainder."""
+    if not uri:
+        return None, ""
+
+    if uri[0] != "/":
+        uri = "/" + uri
+
+    question_idx = uri.find("?")
+    hash_idx = uri.find("#")
+
+    if question_idx != -1 and (hash_idx == -1 or question_idx < hash_idx):
+        return uri[:question_idx], uri[question_idx:]
+    elif hash_idx != -1:
+        return uri[:hash_idx], uri[hash_idx:]
+    else:
+        return uri, ""
+
+def parse_query(uri: str) -> (?str, str):
+    """Parse query component, returning query and remainder."""
+    if not uri or uri[0] != "?":
+        return None, uri
+
+    hash_idx = uri.find("#")
+    if hash_idx != -1:
+        query = uri[1:hash_idx]
+        return "" if not query else query, uri[hash_idx:]
+    else:
+        query = uri[1:]
+        return "" if not query else query, ""
+
+def parse_fragment(uri: str) -> ?str:
+    """Parse fragment component."""
+    if not uri or uri[0] != "#":
+        return None
+    return "" if len(uri) == 1 else uri[1:]
