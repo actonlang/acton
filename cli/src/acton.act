@@ -70,7 +70,7 @@ def clean_zig_local_cache(cap: file.FileCap):
     limit = 5 * gb
     if total_size > limit:
         print("Build cache (", total_size // (1024*1024), "MB) over %dGB, cleaning it up." % (int(limit // gb)))
-        fs.rmtree(cache_dir)
+        await async fs.rmtree(cache_dir)
         total_size = 0
     if total_size == 0:
         print("INFO: Acton local cache is empty: rebuilding Acton base which will take some time...")
