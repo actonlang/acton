@@ -755,7 +755,8 @@ class TimeoutError(Exception):
 actor TestExecutor(syscap, config, t: Test, report_complete, env):
     """The actual executor of tests
     """
-    log_handler = logging.Handler("TestRunner")
+    log_handler = logging.Handler()
+    log_handler.add_sink(logging.ConsoleSink())
     fcap = file.FileCap(env.cap)
     rfcap = file.ReadFileCap(fcap)
     fs = file.FS(fcap)
@@ -1053,14 +1054,14 @@ class ProjectTestResults(object):
 
                         std_out = tinfo.std_out
                         if std_out != None and test_output(std_out):
-                            print("    STD_OUT:")
+                            print("    STDOUT:")
                             self.printed_lines += 1
                             for line in std_out.strip().splitlines():
                                 print("      " + line)
                                 self.printed_lines += 1
                         std_err = tinfo.std_err
                         if std_err != None and test_output(std_err):
-                            print("    STD_ERR:")
+                            print("    STDERR:")
                             self.printed_lines += 1
                             for line in std_err.strip().splitlines():
                                 print("      " + line)
