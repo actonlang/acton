@@ -1052,19 +1052,64 @@ class ProjectTestResults(object):
                                     return True
                             return False
 
+                        def dedup(buf: str) -> dict[str, set[int]]:
+                            # Initialize result dictionary
+                            result = {}
+
+                            # Split buffer into individual test iterations
+                            iterations = buf.split("== Running test, iteration: ")
+
+                            # Clean up iterations - remove empty entries
+                            cleaned_iterations = []
+                            for it in iterations:
+                                if it.strip():
+                                    cleaned_iterations.append(it.strip())
+
+                            # Process each iteration
+                            for iteration in cleaned_iterations:
+                                # Extract iteration number and content
+                                lines = iteration.split('\n', 1)
+                                iteration_num = int(lines[0])
+                                content = lines[1].strip()
+
+                                # Add to result dictionary
+                                if content not in result:
+                                    result[content] = set()
+                                result[content].add(iteration_num)
+
+                            return result
+
                         std_out = tinfo.std_out
                         if std_out != None and test_output(std_out):
                             print("    STDOUT:")
                             self.printed_lines += 1
-                            for line in std_out.strip().splitlines():
-                                print("      " + line)
+                            chunks = dedup(std_out.strip())
+                            for chunk, test_runs in chunks.items():
+                                if len(chunks) == 1:
+                                    pass
+                                else:
+                                    print("      == %d test runs with this output:" % len(test_runs))
+                                    self.printed_lines += 1
+                                for line in chunk.splitlines():
+                                    print("      " + line)
+                                    self.printed_lines += 1
+                                print("")
                                 self.printed_lines += 1
                         std_err = tinfo.std_err
                         if std_err != None and test_output(std_err):
                             print("    STDERR:")
                             self.printed_lines += 1
-                            for line in std_err.strip().splitlines():
-                                print("      " + line)
+                            chunks = dedup(std_err.strip())
+                            for chunk, test_runs in chunks.items():
+                                if len(chunks) == 1:
+                                    pass
+                                else:
+                                    print("      == %d test runs with this output:" % len(test_runs))
+                                    self.printed_lines += 1
+                                for line in chunk.splitlines():
+                                    print("      " + line)
+                                    self.printed_lines += 1
+                                print("")
                                 self.printed_lines += 1
 
         print("")
