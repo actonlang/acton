@@ -6,13 +6,13 @@ def _test_match_basic():
     """Basic regexp matching
     """
     m = re.match("foo[a-z]+", "åbc123 foobar åbc123")
-    testing.assertIsNotNone(m, "basic regexp matching failed")
+    testing.assertNotNone(m, "basic regexp matching failed")
 
 def _test_match_group():
     """Regexp matching with groups
     """
     m = re.match("foo([a-z]+)", "åbc123 foobar åbc123")
-    testing.assertIsNotNone(m, "group matching failed")
+    testing.assertNotNone(m, "group matching failed")
     if m is not None:
         testing.assertEqual(m.group[0], "foobar", "whole group match failed")
         testing.assertEqual(m.group[1], "bar", "first group match failed")
@@ -21,7 +21,7 @@ def _test_match_nested_group():
     """Regexp matching with groups
     """
     m = re.match("foo((B)[A-Z]+)", "åbc123 fooBAR åbc123")
-    testing.assertIsNotNone(m, "group matching failed")
+    testing.assertNotNone(m, "group matching failed")
     if m is not None:
         testing.assertEqual(m.group[0], "fooBAR", "whole group match failed")
         testing.assertEqual(m.group[1], "BAR", "first group match failed")
@@ -31,7 +31,7 @@ def _test_match_nested_group_without_match():
     """Regexp matching with groups
     """
     m = re.match("foo((Z?)[A-Z]+)", "åbc123 fooBAR åbc123")
-    testing.assertIsNotNone(m, "group matching failed")
+    testing.assertNotNone(m, "group matching failed")
     if m is not None:
         testing.assertEqual(m.group[0], "fooBAR", "whole group match failed")
         testing.assertEqual(m.group[1], "BAR", "first group match failed")
@@ -41,7 +41,7 @@ def _test_match_named_groups():
     """Regexp matching with named groups
     """
     m = re.match("(?P<mypattern>foo[a-z]+)", "åbc123 foobar åbc123")
-    testing.assertIsNotNone(m, "regexp matching with named groups failed")
+    testing.assertNotNone(m, "regexp matching with named groups failed")
     if m is not None:
         testing.assertEqual(m.named["mypattern"], "foobar", "named group ('foobar') match failed")
 
@@ -50,7 +50,7 @@ def _test_match_named_groups_without_match():
     """Regexp matching with named groups but without a match on an inner group
     """
     m = re.match("(?P<mypattern>foo((?P<inner>AAA)|[a-z]+))", "åbc123 foobar åbc123")
-    testing.assertIsNotNone(m, "regexp matching with named groups failed")
+    testing.assertNotNone(m, "regexp matching with named groups failed")
     if m is not None:
         testing.assertEqual(m.named["mypattern"], "foobar", "named group ('foobar') match failed")
 
@@ -58,7 +58,7 @@ def _test_match_multi_groups():
     """Regexp matching with multiple groups including named groups
     """
     m = re.match("([0-9]+).*(?P<mypattern>foo[a-z]+) *(?P<myotherpattern>bar[A-Za-z0-9]+)", "åbc123 foobar barEX4MPLE åbc123")
-    testing.assertIsNotNone(m, "regexp matching with multiple groups failed")
+    testing.assertNotNone(m, "regexp matching with multiple groups failed")
     if m is not None:
         testing.assertEqual(m.group[0], "123 foobar barEX4MPLE", "failed to match")
         testing.assertEqual(m.group[1], "123", "failed to match group 1")
@@ -81,7 +81,7 @@ def _test_match_positions():
     # "a"=0, "b"=1, "c"=2, " "=3, "d"=4, "e"=5, "f"=6, " "=7, "g"=8, ...
 
     m = re.match("def", "abc def ghi")
-    testing.assertIsNotNone(m, "Should have matched 'def' in 'abc def ghi'")
+    testing.assertNotNone(m, "Should have matched 'def' in 'abc def ghi'")
     if m is not None:
         testing.assertEqual(m.start_pos, 4)
         testing.assertEqual(m.end_pos, 7)

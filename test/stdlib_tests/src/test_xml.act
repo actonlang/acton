@@ -27,8 +27,8 @@ def _test_xml_roundtrip():
         e = xml.encode(d)
         #print(e)
 
-        testing.assertIsNotNone(d, "xml.decode() returned None")
-        testing.assertIsNotNone(e, "xml.encode() returned None")
+        testing.assertNotNone(d, "xml.decode() returned None")
+        testing.assertNotNone(e, "xml.encode() returned None")
         if s is not None and e is not None:
             testing.assertEqual(s, e, "XML str -> data -> XML str")
 

@@ -1,0 +1,17 @@
+import logging
+import testing
+
+actor AsyncTester(report_result, log_handler):
+    log = logging.Logger(log_handler)
+
+    def done():
+        report_result(False, None)
+
+    def test():
+        log.info("AsyncTester.test()", None)
+        after 0.01: done()
+
+def _test_asyncact(report_result, log_handler: logging.Handler) -> None:
+    s = AsyncTester(report_result, log_handler)
+    s.test()
+
