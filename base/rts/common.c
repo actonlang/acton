@@ -62,7 +62,7 @@ void acton_init_alloc() {
                          GC_calloc,
                          acton_noop_free);
 
-    tlsuv_replace_allocator(GC_malloc,
+    tlsuv_set_allocator(GC_malloc,
                             GC_realloc,
                             GC_calloc,
                             acton_noop_free);
