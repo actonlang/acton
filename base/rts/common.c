@@ -56,15 +56,16 @@ void *GC_calloc(size_t count, size_t size) {
 void acton_init_alloc() {
     // UV & TLSUV are used for IO, which is always done on the GC-heap. We don't
     // have any constants related to UV, so we can always use the GC
+
     uv_replace_allocator(GC_malloc,
                          GC_realloc,
                          GC_calloc,
-                         GC_free);
+                         acton_noop_free);
 
     tlsuv_replace_allocator(GC_malloc,
                             GC_realloc,
                             GC_calloc,
-                            GC_free);
+                            acton_noop_free);
 }
 
 int acton_replace_allocator(acton_malloc_func malloc_func,

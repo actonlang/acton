@@ -2320,7 +2320,7 @@ int main(int argc, char **argv) {
     GC_INIT();
     GC_set_warn_proc(DaveNull);
     acton_init_alloc();
-    acton_replace_allocator(GC_malloc, GC_malloc_atomic, GC_realloc, GC_calloc, GC_free, GC_strdup, GC_strndup);
+    acton_replace_allocator(GC_malloc, GC_malloc_atomic, GC_realloc, GC_calloc, acton_noop_free, GC_strdup, GC_strndup);
     int ddb_no_host = 0;
     char **ddb_host = NULL;
     char *rts_host = "localhost";
@@ -2704,7 +2704,7 @@ int main(int argc, char **argv) {
     // scanned. We therefore use the real_malloc (not GC_malloc) so that it is
     // not traced by the GC, thus saving loads of work scanning this memory
     // over and over.
-    acton_replace_allocator(malloc, malloc, realloc, calloc, free, strdup, strndup);
+    acton_replace_allocator(malloc, malloc, realloc, calloc, acton_noop_free, strdup, strndup);
     $register_builtin();
     B___init__();
     $register_rts();
@@ -2720,7 +2720,7 @@ int main(int argc, char **argv) {
 #endif
 
     $ROOTINIT();
-    acton_replace_allocator(GC_malloc, GC_malloc_atomic, GC_realloc, GC_calloc, GC_free, GC_strdup, GC_strndup);
+    acton_replace_allocator(GC_malloc, GC_malloc_atomic, GC_realloc, GC_calloc, acton_noop_free, GC_strdup, GC_strndup);
 
     unsigned int seed;
     if (ddb_host) {
