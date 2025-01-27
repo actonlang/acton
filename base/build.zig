@@ -74,6 +74,8 @@ pub fn build(b: *std.Build) void {
     const dep_libtlsuv = b.dependency("libtlsuv", .{
         .target = target,
         .optimize = optimize,
+        .http = false,
+        .keychain = false,
     });
 
     const dep_libprotobuf_c = b.dependency("libprotobuf_c", .{

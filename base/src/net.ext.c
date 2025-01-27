@@ -606,7 +606,6 @@ B_NoneType netQ_TCPListenConnectionD___resume__ (netQ_TCPListenConnection self) 
 
 static void tls_on_close(uv_handle_t* stream) {
     log_debug("TLS handle closed, stream: %p  stream->data: %p", stream, stream->data);
-    tlsuv_stream_free((tlsuv_stream_t *)stream);
 }
 
 static void tls_close(tlsuv_stream_t *stream) {

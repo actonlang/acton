@@ -210,7 +210,7 @@ dist/deps/libprotobuf_c: deps-download/$(LIBPROTOBUF_C_REF).tar.gz
 	touch $(TD)/$@
 
 # /deps/tlsuv ---------------------------------------------
-TLSUV_REF=5a811cce1efc360a2bd4fe11ada581ceb2a1c764
+TLSUV_REF=6232c3fae39a7820b5f99a0f4ccd054735473668
 deps-download/$(TLSUV_REF).tar.gz:
 	mkdir -p deps-download
 	curl -f -L -o $@ https://github.com/actonlang/tlsuv/archive/$(TLSUV_REF).tar.gz
