@@ -192,6 +192,17 @@ class StdoutSink(Sink):
                 text += " - " + str(data)
             print(text)
 
+class ConsoleSink(Sink):
+    """Log sink that writes to the console, i.e. stderr
+    """
+    def handle(self, m: Message):
+        text = self.formatter.format(m)
+        if text != None:
+            data = m.data
+            if data != None:
+                text += " - " + str(data)
+            print(text, err=True)
+
 # Untested and doesn't work yet?
 # TODO: implement this!
 #class FileSink(Sink):
