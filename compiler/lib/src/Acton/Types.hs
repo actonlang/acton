@@ -1286,7 +1286,7 @@ instance Infer Expr where
                                              t0 <- newTVar
                                              let con = case t of
                                                           TOpt _ _ -> Sel (Simple l (Pretty.print t ++ " does not have an attribute "++ Pretty.print n ++
-                                                                           "\nHint: you may need to test if " ++ Pretty.print e ++ " is not None")) w t n t0
+                                                                           "\nHint: you may need to test if " ++ Pretty.print e ++ " != None")) w t n t0
                                                           _ -> Sel (DfltInfo (loc e) 86 (Just e) []) w t n t0
                                              return  (con : cs, t0, eCall (eVar w) [e'])
 
