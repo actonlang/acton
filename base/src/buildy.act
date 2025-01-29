@@ -216,7 +216,7 @@ class ZigDependency(Dependency):
                 raise ValueError("Invalid build.act.json, unknown key '%s' in dependency '%s'" % (key, dep_name))
         return ZigDependency(dep_name, dep_url, dep_hash, dep_path, dep_options, dep_artifacts)
 
-    def to_json(self) -> dict[str, str]:
+    def to_json(self) -> dict[str, value]:
         res = {}
 
         url = self.url
