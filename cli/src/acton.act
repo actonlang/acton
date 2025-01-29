@@ -1060,9 +1060,9 @@ actor CmdPkgUpgrade(env, args):
     def _update_build_config():
         updated = False
         for dep_name, dep in build_config.dependencies.items():
-            new_url = new_pkg_urls.get_def(dep_name, dep.url)
-            new_hash = new_pkg_hashes.get_def(dep_name, dep.hash)
-            if new_url != dep.url or new_hash != dep.hash:
+            new_url = new_pkg_urls.get(dep_name)
+            new_hash = new_pkg_hashes.get(dep_name)
+            if new_url is not None or new_hash is not None:
                 print("Updated dependency", dep_name, "with\n  - new URL", new_url, "\n  - new hash", new_hash)
                 dep.url = new_url
                 dep.hash = new_hash
