@@ -440,10 +440,8 @@ matchingDec n sc dec dec'
   | otherwise                           = decorationMismatch n sc dec
 
 matchDefAssumption env cs def
-  | q0 == q1                            = do --traceM ("## matchDefAssumption A " ++ prstr (dname def) ++ ": " ++ prstr (Cast info t1 t2))
-                                             match env cs [] def
-  | otherwise                           = do --traceM ("## matchDefAssumption B " ++ prstr (dname def) ++ ": [" ++ prstrs q1 ++ "] => " ++ prstr (Cast info t1 t2))
-                                             (cs1, tvs) <- instQBinds env q1
+  | q0 == q1                            = match env cs [] def
+  | otherwise                           = do (cs1, tvs) <- instQBinds env q1
                                              let eq0 = witSubst env q1 cs1
                                                  s = qbound q1 `zip` tvs            -- This cannot just be memoized in the global TypeM substitution,
                                              def' <- msubstWith s def{ qbinds = [] } -- since the variables in (qbound q1) aren't necessarily globally unique
@@ -457,7 +455,8 @@ matchDefAssumption env cs def
         env0                            = defineTVars q1 $ defineTVars q0 env
         (pos0,kwd0)                     = qual env dec (pos def) (kwd def) (qualWPar env q0)
 
-        match env cs eq0 def            = do (cs2,eq1) <- solveScoped env0 (qbound q0) [] t1 (Cast info t1 t2 : cs)
+        match env cs eq0 def            = do --traceM ("## matchDefAssumption " ++ prstr (dname def) ++ ": [" ++ prstrs q1 ++ "] => " ++ prstr (Cast info t1 t2))
+                                             (cs2,eq1) <- solveScoped env0 (qbound q0) [] t1 (Cast info t1 t2 : cs)
                                              checkNoEscape (loc def) env (qbound q0)
                                              cs2 <- msubst cs2
                                              return (cs2, def{ qbinds = noqual env q0, pos = pos0, kwd = kwd0,
