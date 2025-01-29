@@ -20,6 +20,7 @@ import Data.Map.Strict (Map)
 
 import Acton.Syntax
 import Acton.Names
+import Acton.Builtin
 import Acton.Printer
 import Acton.TypeM
 import Utils
@@ -563,8 +564,13 @@ instance Polarity Type where
     polvars (TStar _ _ r)           = polvars r
     polvars (TFX l fx)              = ([],[])
 
+covariant                           = [qnSetT,qnDict,qnList]                -- Ignore mutation for now!
+
 instance Polarity TCon where
-    polvars (TC c ts)               = (vs,vs) where vs = tyfree ts
+    polvars (TC c ts)
+      | c `elem` covariant          = (vs,[])
+      | otherwise                   = (vs,vs)
+      where vs                      = tyfree ts
 
 instance Polarity QBind where
     polvars (Quant v cs)            = (vs,vs) where vs = v : tyfree cs
