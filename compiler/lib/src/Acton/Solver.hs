@@ -504,7 +504,7 @@ reduce' env eq c                            = noRed0 env c
 
 
 solveImpl env wit w t p                     = do (cs,t',we) <- instWitness env p wit
-                                                 cast env (DfltInfo NoLoc 7 Nothing []) t t'
+                                                 unify (DfltInfo NoLoc 7 Nothing []) t t'
                                                  return ([Eqn w (impl2type t p) we], cs)
 
 solveSelAttr env (wf,sc,d) c@(Sel info w t1 n t2)
@@ -629,7 +629,7 @@ cast' env _ (TWild _) t2                    = return ()
 cast' env _ t1 (TWild _)                    = return ()
 
 cast' env info (TCon _ c1) (TCon _ c2)
-  | Just (wf,c') <- search                  = if tcname c1 == tcname c2 && tcname c1 `elem` [qnSetT,qnDict,qnList] then  -- Ignore mutation for now!
+  | Just (wf,c') <- search                  = if tcname c1 == tcname c2 && tcname c1 `elem` covariant then
                                                   castM env info (tcargs c') (tcargs c2)
                                               else                                              -- TODO: infer polarities in general!
                                                   unifyM info (tcargs c') (tcargs c2)
@@ -853,18 +853,27 @@ rowTail r                                   = r
 
 varTails                                    = all (isTVar . rowTail)
 
+rowShape (TRow _ k n t r)                   = do t' <- newTVar
+                                                 r' <- rowShape r
+                                                 return (tRow k n t' r')
+rowShape (TStar _ k r)                      = do r' <- rowShape r
+                                                 return (tStar k r')
+rowShape r                                  = return r
+
 subpos                                      :: Env -> ErrInfo -> (Int -> Expr) -> Int -> PosRow -> PosRow -> TypeM (Constraints, PosArg, [(Expr,Type)])
 subpos env info f i TVar{}         TVar{}   = error "INTERNAL ERROR: subpos"
 subpos env info f i (TVar _ tv)     r2
   | tv `elem` tyfree r2                     = conflictingRow tv                     -- use rowTail?
-  | otherwise                               = do --traceM (" ## subpos " ++ prstr tv ++ " ~ " ++ prstr r2)
-                                                 substitute tv r2
-                                                 subpos env info f i r2 r2
+  | otherwise                               = do r1 <- rowShape r2
+                                                 --traceM (" ## subpos " ++ prstr tv ++ " ~ " ++ prstr r2)
+                                                 substitute tv r1
+                                                 subpos env info f i r1 r2
 subpos env info f i r1             (TVar _ tv)
   | tv `elem` tyfree r1                     = conflictingRow tv                     -- use rowTail?
-  | otherwise                               = do --traceM (" ## subpos " ++ prstr r1 ++ " ~ " ++ prstr tv)
-                                                 substitute tv r1
-                                                 subpos env info f i r1 r1
+  | otherwise                               = do r2 <- rowShape r1
+                                                 --traceM (" ## subpos " ++ prstr r1 ++ " ~ " ++ prstr tv)
+                                                 substitute tv r2
+                                                 subpos env info f i r1 r2
 
 subpos env info f i (TRow _ _ _ t1 r1) (TRow _ _ _ t2 r2)
                                             = do --traceM (" ## subpos A " ++ prstr t1 ++ " < " ++ prstr t2)
