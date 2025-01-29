@@ -1,0 +1,200 @@
+import json
+import http
+import net
+import re
+import uri
+
+import testing
+
+class RepoUrl(object):
+    """A GitHub repository URL
+    """
+    scheme: str
+    host: str
+    owner: str
+    repo: str
+    ref: ?str
+
+    def __init__(self, scheme: str, host: str, owner: str, repo: str, ref: ?str=None):
+        self.scheme = scheme
+        self.host = host
+        self.owner = owner
+        self.repo = repo
+        self.ref = ref
+
+    @staticmethod
+    def from_url(url: str):
+        u = uri.URI(url)
+        uscheme = u.scheme
+        scheme = uscheme if uscheme != None else "https"
+        uhost = u.host
+        host = uhost if uhost != None else "github.com"
+
+        def get_owner_repo(path: ?str) -> (str, str):
+            if path == None:
+                raise ValueError("No path in URL")
+            if path != None:
+                if path.startswith("/"):
+                    path = path[1:]
+                if path.endswith(".git"):
+                    path = path[:-4]
+                # Lacking .rsplit() we reverse the result
+                parts = path[::-1].split("/", 1)
+                if len(parts) == 2:
+                    # ... and reverse the parts again
+                    return parts[1][::-1], parts[0][::-1]
+            raise ValueError()
+
+        uowner, urepo = get_owner_repo(u.path)
+        owner = uowner
+        repo = urepo
+        return RepoUrl(scheme=scheme, host=host, owner=owner, repo=repo, ref=u.fragment)
+
+    def copy(self) -> RepoUrl:
+        return RepoUrl(
+            scheme=self.scheme,
+            host=self.host,
+            owner=self.owner,
+            repo=self.repo,
+            ref=self.ref
+        )
+
+    def archive_url(self) -> str:
+        self_ref = self.ref
+        ref = self_ref if self_ref != None else "XXX"
+        return self.scheme + "://" + self.host + "/" + self.owner + "/" + self.repo + "/archive/" + ref + ".zip"
+
+actor GetQuery(on_done: action(?str, ?http.Response) -> None, tcpc_cap: net.TCPConnectCap, url: str):
+    def parseUrl(url: str):
+        u = uri.URI(url)
+        uscheme = u.scheme
+        scheme = uscheme if uscheme != None else "https"
+        if scheme not in ["http", "https"]:
+            raise ValueError("Unsupported scheme: " + scheme)
+        uhost = u.host
+        host = uhost if uhost != None else ""
+        if host == "":
+            raise ValueError("No host in URL")
+        uport = u.port
+        port = uport if uport != None else (80 if scheme == "http" else 443)
+        upath = u.path
+        path = upath if upath != None else "/"
+        return (scheme=scheme, host=host, port=port, path=path)
+
+    urlp = parseUrl(url)
+
+    def _onHttpReceive(c, res):
+        on_done(None, res)
+
+    def _onHttpConnect(c):
+        c.get(urlp.path, _onHttpReceive, headers={"Accept": "application/vnd.github.v3+json"})
+
+    def _onHttpError(c, errmsg):
+        print(errmsg)
+
+    client = http.Client(tcpc_cap, urlp.host, _onHttpConnect, _onHttpError, scheme=urlp.scheme, port=urlp.port)
+
+
+actor FetchDefaultBranch(on_done: action(?str, ?str) -> None, url: str, tcpc_cap: net.TCPConnectCap, ref: ?str=None):
+    def _onQueryDone(err: ?str, res: ?http.Response):
+        if err != None:
+            on_done(err, None)
+            return
+        if res != None:
+            b = res.body.decode()
+            j = json.decode(b)
+            jdb = j.get("default_branch")
+            if isinstance(jdb, str):
+                if jdb != None:
+                    on_done(None, jdb)
+                else:
+                    on_done("No default branch", None)
+            return
+
+    def computeApiUrl(url: str):
+        ru = RepoUrl.from_url(url)
+        owner = ru.owner
+        repo = ru.repo
+        ruref = ru.ref
+        ref = ("/" + ruref) if ruref != None else ""
+        if owner != None and repo != None:
+            return "https://api.github.com/repos/" + owner + "/" + repo
+        else:
+            raise ValueError("Invalid URL")
+
+    api_url = computeApiUrl(url)
+    GetQuery(on_done=_onQueryDone, tcpc_cap=tcpc_cap, url=api_url)
+
+actor FetchRef(on_done: action(?Exception, ?str) -> None, url: str, tcpc_cap: net.TCPConnectCap, ref: ?str=None):
+    """Resolves a git reference, like a branch or tag, to a commit SHA"""
+    repo_url = RepoUrl.from_url(url)
+
+    def _onQueryDone(err: ?str, res: ?http.Response):
+        if err != None:
+            on_done(ValueError(err), None)
+            return
+        if res != None:
+            b = res.body.decode()
+            j = json.decode(b)
+            ref_obj = j.get("object")
+            if isinstance(ref_obj, dict):
+                sha = ref_obj.get("sha")
+                if isinstance(sha, str):
+                    if sha != None:
+                        new_url = repo_url.copy()
+                        new_url.ref = sha
+                        on_done(None, new_url.archive_url())
+                        return
+                on_done(ValueError("No SHA"), None)
+            else:
+                on_done(ValueError("No object"), None)
+            return
+
+    def computeApiUrl(url: str):
+        ru = RepoUrl.from_url(url)
+        owner = ru.owner
+        repo = ru.repo
+        ruref = ru.ref
+        ref_str = ""
+        if ref != None:
+            ref_str = ref
+        else:
+            if ruref != None:
+                ref_str = ruref
+
+        repo_ref = ref if ref != None else ruref if ruref != None else "main"
+        if owner != None and repo != None:
+            return "https://api.github.com/repos/" + owner + "/" + repo + "/git/refs/heads/" + repo_ref
+        else:
+            raise ValueError("Invalid URL")
+
+    def _gotRef(repo_ref: str):
+        api_url = computeApiUrl(url)
+        GetQuery(on_done=_onQueryDone, tcpc_cap=tcpc_cap, url=api_url)
+
+    def _onDefBranch(err: ?str, branch: ?str):
+        if branch != None:
+            _gotRef(branch)
+
+        if err != None:
+            on_done(ValueError(err), None)
+
+    def _go():
+        # Which ref should we use?
+        # - if both ref argument and URL fragment is set, ensure they match up!
+        # - if ref argument is set, use that
+        # - if ref argument is empty, look for branch embedded in URL as
+        #   fragment and use that
+        # - if no fragment, look up default branch and use that!
+        url_ref = repo_url.ref
+        if ref != None and url_ref != None:
+            if ref != url_ref:
+                on_done(ValueError("Ref mismatch"), None)
+                return
+        if ref == None:
+            if url_ref != None:
+                _gotRef(url_ref)
+            else:
+                FetchDefaultBranch(_onDefBranch, url=url, tcpc_cap=tcpc_cap)
+                return
+    _go()
