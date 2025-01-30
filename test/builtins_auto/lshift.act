@@ -1,0 +1,14 @@
+import qcheck
+
+def prop_lshift_1(n,i):
+    i1 = int(abs(i))
+    return n << i1 == n * 2**i1
+
+def prop_lshift_rshift_1(n,i):
+    i1 = int(abs(i))
+    return (n << i1) >> i1 == n
+
+actor main(env):
+     qcheck.qcheck_int_i64("lshift_1", prop_lshift_1)
+     qcheck.qcheck_int_i64("lshift_rshift_1", prop_lshift_1)
+     env.exit(0)
