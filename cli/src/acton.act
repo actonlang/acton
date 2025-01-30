@@ -193,7 +193,7 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
         for dep_name, dep in build_config.dependencies.items():
             dep_hash = dep.hash
             dep_path = dep.path
-            if dep_path != None:
+            if dep_path is not None:
                 # TODO: deconstruct and put together to get OS independent path? i.e. flip / to \ on windows
                 if len(dep_path) == 0:
                     pass
@@ -201,7 +201,7 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
                     search_paths.append(file.join_path([dep_path, "out", "types"]))
                 else:
                     search_paths.append(file.join_path([fs.cwd(), dep_path, "out", "types"]))
-            elif dep_hash != None:
+            elif dep_hash is not None:
                 # For dependencies with hashes, we have previously copied them
                 # from the Zig global cache to ~/.cache/acton/deps/
                 dep_dirname = dep_name + "-" + dep_hash
@@ -444,7 +444,7 @@ actor CmdListTest(env, args):
     process_cap = process.ProcessCap(env.cap)
 
     def print_module_tests(err, tests: dict[str, dict[str, testing.TestInfo]]={}):
-        if err != None:
+        if err is not None:
             print(err, err=True)
             env.exit(1)
             return
@@ -654,7 +654,7 @@ actor CmdTest(env: Env, args, perf_mode: bool=False):
         ListTests(process_cap, list_modules, _on_list_output)
 
     def _on_list_output(err, tests: dict[str, dict[str, testing.TestInfo]]={}):
-        if err != None:
+        if err is not None:
             print(err, err=True)
             env.exit(1)
             return
@@ -1040,9 +1040,9 @@ actor CmdPkgUpgrade(env, args):
 
     def _on_zig_fetch(dep_name: str, err: ?str, hash: ?str):
         del remaining_zig_fetch[dep_name]
-        if hash != None:
+        if hash is not None:
             new_pkg_hashes[dep_name] = hash
-        if err != None:
+        if err is not None:
             print("Error fetching updated hash for", dep_name, err)
         if len(remaining_zig_fetch) == 0:
             _update_build_config()
@@ -1062,7 +1062,7 @@ actor CmdPkgUpgrade(env, args):
         for dep_name, dep in build_config.dependencies.items():
             new_url = new_pkg_urls.get(dep_name)
             new_hash = new_pkg_hashes.get(dep_name)
-            if new_url is not None or new_hash is not None:
+            if new_url is not None and new_hash is not None and (new_url != dep.url or new_hash != dep.hash):
                 print("Updated dependency", dep_name, "with\n  - new URL", new_url, "\n  - new hash", new_hash)
                 dep.url = new_url
                 dep.hash = new_hash
@@ -1079,17 +1079,17 @@ actor CmdPkgUpgrade(env, args):
 
     def _onPkgFetchRef(dep_name: str, err: ?Exception, url: ?str):
         del remaining_fetch_ref[dep_name]
-        if url != None:
+        if url is not None:
             new_pkg_urls[dep_name] = url
-        if err != None:
-            print("Error fetching ref for", dep_name, err)
+        if err is not None:
+            print("Error fetching ref for %s:" % dep_name, err.error_message)
         if len(remaining_fetch_ref) == 0:
             _zig_fetch()
 
     def _go():
         for dep_name, dep in build_config.dependencies.items():
             dep_repo_url = dep.repo_url
-            if dep_repo_url != None:
+            if dep_repo_url is not None:
                 if dep_repo_url.startswith("https://github.com"):
                     print(dep_name, "- fetching ref from", dep_repo_url)
                     remaining_fetch_ref[dep_name] = dep

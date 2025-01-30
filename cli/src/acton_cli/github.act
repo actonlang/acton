@@ -97,19 +97,25 @@ actor GetQuery(on_done: action(?str, ?http.Response) -> None, tcpc_cap: net.TCPC
 
 actor FetchDefaultBranch(on_done: action(?str, ?str) -> None, url: str, tcpc_cap: net.TCPConnectCap, ref: ?str=None):
     def _onQueryDone(err: ?str, res: ?http.Response):
-        if err != None:
+        if err is not None:
             on_done(err, None)
             return
-        if res != None:
+        if res is not None:
             b = res.body.decode()
             j = json.decode(b)
+
+            msg = j.get("message")
+            if msg is not None and isinstance(msg, str):
+                # For example
+                # {"message":"API rate limit exceeded for 123.234.100.137. (But here's the good news: Authenticated requests get a higher rate limit. Check out the documentation for more details.)","documentation_url":"https://docs.github.com/rest/overview/resources-in-the-rest-api#rate-limiting"}
+                on_done("Unable to retrieve branch information: " + msg, None)
+                return
+
             jdb = j.get("default_branch")
-            if isinstance(jdb, str):
-                if jdb != None:
-                    on_done(None, jdb)
-                else:
-                    on_done("No default branch", None)
-            return
+            if jdb is not None and isinstance(jdb, str):
+                on_done(None, jdb)
+                return
+            on_done("No default branch:" + b, None)
 
     def computeApiUrl(url: str):
         ru = RepoUrl.from_url(url)
@@ -133,18 +139,26 @@ actor FetchRef(on_done: action(?Exception, ?str) -> None, url: str, tcpc_cap: ne
         if err != None:
             on_done(ValueError(err), None)
             return
+
         if res != None:
             b = res.body.decode()
             j = json.decode(b)
+
+            msg = j.get("message")
+            if msg is not None and isinstance(msg, str):
+                # For example
+                # {"message":"API rate limit exceeded for 123.234.100.137. (But here's the good news: Authenticated requests get a higher rate limit. Check out the documentation for more details.)","documentation_url":"https://docs.github.com/rest/overview/resources-in-the-rest-api#rate-limiting"}
+                on_done(ValueError("Unable to retrieve branch information: " + msg), None)
+                return
+
             ref_obj = j.get("object")
-            if isinstance(ref_obj, dict):
+            if ref_obj is not None and isinstance(ref_obj, dict):
                 sha = ref_obj.get("sha")
-                if isinstance(sha, str):
-                    if sha != None:
-                        new_url = repo_url.copy()
-                        new_url.ref = sha
-                        on_done(None, new_url.archive_url())
-                        return
+                if sha is not None and isinstance(sha, str):
+                    new_url = repo_url.copy()
+                    new_url.ref = sha
+                    on_done(None, new_url.archive_url())
+                    return
                 on_done(ValueError("No SHA"), None)
             else:
                 on_done(ValueError("No object"), None)
