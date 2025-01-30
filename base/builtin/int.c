@@ -359,13 +359,10 @@ B_int B_IntegralD_intD___lshift__(B_IntegralD_int wit,  B_int a, B_int b) {
     B_int res = malloc_int();
     zz_ptr rval = &res->val;
     zz_malloc_fit(rval,mres);
-    if (shb>0) {
-        word_t ci = nn_shl(rval->n, aval.n, labs(ma), shb);
-        if (ci>0)
-            rval->n[labs(ma)] = ci;
-    }
+    word_t ci = nn_shl(rval->n, aval.n, labs(ma), shb);
+    rval->n[labs(ma)] = ci;
     if (shw>0) {
-        for (int i = labs(ma); i >= 0; i--)
+        for (int i = labs(ma)-1+(shb>0); i >= 0; i--)
             rval->n[i+shw] = rval->n[i];
         for (int i = 0; i < shw; i++)
             rval->n[i] = 0;
