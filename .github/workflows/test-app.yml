@@ -14,7 +14,7 @@ jobs:
           sudo apt update
           sudo apt install -y gdb
       - name: "Download .deb files"
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: acton-debs
       - name: "Install acton from .deb"
