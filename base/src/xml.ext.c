@@ -82,7 +82,7 @@ B_str xmlQ_node2str(B_str tag, B_str nsdefs, B_str prefix, B_str attrs, B_str co
                     (text ? text->nchars:0) + cont->nchars + (tail ? tail->nchars:0) + 5;
     int one_line = 0;
     B_str res;
-    NEW_UNFILLED_STR(res, res_bytes, res_chars);
+    NEW_UNFILLED_STR(res, res_chars, res_bytes);
     unsigned char *p = res->str;
     *p++ = '<';
     if (prefix) {
@@ -136,7 +136,7 @@ static B_str xmlQ_encode_nsdefs(B_list nsdefs) {
         res_chars += (prefix ? prefix->nchars+1 : 0) + href->nchars + 9;
     }
     B_str res;
-    NEW_UNFILLED_STR(res, res_bytes, res_chars);
+    NEW_UNFILLED_STR(res, res_chars, res_bytes);
     unsigned char *p = res->str;
     for (int i=0; i<nsdefs->length; i++) {
         B_tuple nsdef = nsdefs->data[i];
@@ -167,7 +167,7 @@ static B_str xmlQ_encode_attrs(B_list attrs) {
         res_chars += ((B_str)attr->components[0])->nchars + ((B_str)attr->components[1])->nchars + 4;
     }
     B_str res;
-    NEW_UNFILLED_STR(res, res_bytes, res_chars);
+    NEW_UNFILLED_STR(res, res_chars, res_bytes);
 
     unsigned char *p = res->str;
     for (int i=0; i<attrs->length; i++) {
