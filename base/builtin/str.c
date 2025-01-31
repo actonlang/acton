@@ -42,6 +42,7 @@ static struct B_str whitespace_struct = {&B_strG_methods,6,6,(unsigned char *)" 
 static B_str whitespace_str = &whitespace_struct;
 
 #define NEW_UNFILLED_STR(nm,nchrs,nbtes)        \
+    assert(nbtes >= nchrs);                     \
     nm = acton_malloc(sizeof(struct B_str));           \
     (nm)->$class = &B_strG_methods;               \
     (nm)->nchars = nchrs;                       \
