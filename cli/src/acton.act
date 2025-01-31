@@ -9,6 +9,7 @@ import testing
 from buildy import *
 from testing import TestInfo
 
+import acton_cli.deps as deps
 import acton_cli.github as cli_gh
 
 def get_zig_local_cache_dir(file_cap: file.FileCap):
@@ -190,7 +191,14 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
 
     def build_project():
         search_paths = []
-        for dep_name, dep in build_config.dependencies.items():
+
+        all_deps = deps.get_deps_recursive(fcap, fs.cwd())
+        # Add transitive dependencies to write new build.zig(.zon)
+        build_config.dependencies.update(all_deps.pkg_deps.items())
+        build_config.zig_dependencies.update(all_deps.zig_deps.items())
+        write_buildzig(file.FileCap(env.cap), build_config)
+
+        for dep_name, dep in all_deps.pkg_deps.items():
             dep_hash = dep.hash
             dep_path = dep.path
             if dep_path is not None:
