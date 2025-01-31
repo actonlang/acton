@@ -497,6 +497,12 @@ jobs:
           make start
           make test
 
+  test-app-respnet:
+    needs: build-debs
+    uses: "./.github/workflows/test-app.yml"
+    with:
+      repo_url: "orchestron-orchestrator/respnet"
+
   test-app-orchestron:
     needs: build-debs
     uses: "./.github/workflows/test-app.yml"
