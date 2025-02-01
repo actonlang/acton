@@ -15,6 +15,9 @@
 
 xmlQ_Node $NodePtr2Node(xmlNodePtr node) {
     B_SequenceD_list wit = B_SequenceD_listG_witness;
+    if (node->type == XML_COMMENT_NODE) {
+        return NULL;
+    }
     if (node->type != XML_ELEMENT_NODE) {
         char *errmsg = NULL;
         $RAISE(((B_BaseException)B_RuntimeErrorG_new($FORMAT("Unexpected nodetype %d, content is %s", node->type, node->content))));
@@ -52,7 +55,9 @@ xmlQ_Node $NodePtr2Node(xmlNodePtr node) {
     }
 
     while (cur != NULL) {
-        wit->$class->append(wit,children, $NodePtr2Node(cur));
+        xmlQ_Node child = $NodePtr2Node(cur);
+        if (child)
+            wit->$class->append(wit,children, child);
         cur = cur->next;
     }
 
