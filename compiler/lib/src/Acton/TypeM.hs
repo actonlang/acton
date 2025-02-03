@@ -295,6 +295,8 @@ typeReport (IncompatError info msg) filename src    =
                                          "Incompatible types"
                                          [(locToPosition (loc info) filename src, This msg)]
                                          []
+typeReport (SurplusRow p) filename src =
+                                    Err Nothing "Too many arguments supplied" [(locToPosition NoLoc filename src, This (prstr (label p)))] []
 
 
 typeError                           :: TypeError -> [(SrcLoc, String)]
