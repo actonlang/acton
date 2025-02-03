@@ -871,36 +871,41 @@ instance Check Branch where
 --------------------------------------------------------------------------------------------------------------------------
 
 refine                                  :: Env -> Constraints -> TEnv -> Equations -> TypeM (Constraints, [TVar], Constraints, TEnv, Equations)
-refine env cs0 te eq
+refine env cs te eq
   | not $ null solve_cs                 = do --traceM ("  #solving: " ++ prstrs solve_cs)
-                                             (cs',eq') <- solve env (not . canQual) te tNone eq cs
+                                             (cs',eq') <- solve env doSolve te tNone eq cs
                                              refineAgain cs' eq'
   | not $ null ambig_vs                 = do --traceM ("  #defaulting: " ++ prstrs ambig_vs)
-                                             (cs',eq') <- solve env isAmbig te tNone eq cs
+                                             (cs',eq') <- solve env doDefault te tNone eq cs
                                              refineAgain cs' eq'
   | not $ null tail_vs                  = do sequence [ unify (Simple NoLoc "internal") (tVar v) (tNil $ tvkind v) | v <- tail_vs ]
                                              refineAgain cs eq
   | otherwise                           = do eq <- msubst eq
-                                             return (fix_cs, gen_vs, cs, te, eq)
-  where fix_vs                          = closeDepVars (tyfree env ++ fxfree te ++ fxfree cs0) cs0
-        (fix_cs, cs)                    = partition (all (`elem` fix_vs) . tyfree) cs0
-        solve_cs                        = [ c | c <- cs, not (canQual c) ]
+                                             let (fix_cs, gen_cs) = partition fixed cs
+                                             return (fix_cs, gen_vs, gen_cs, te, eq)
+  where fix_vs                          = closeDepVars (tyfree env ++ fxfree te ++ fxfree cs) cs
         ambig_vs                        = tyfree cs \\ closeDepVars (fix_vs++safe_vs) cs
-
         tail_vs                         = gen_vs `intersect` (tailvars te ++ tailvars cs)
 
         safe_vs                         = if null def_vss then [] else nub $ foldr1 intersect def_vss
         def_vss                         = [ nub $ filter canGen $ tyfree sc | (_, NDef sc _) <- te, null $ scbind sc ]
         gen_vs                          = nub (foldr union (tyfree cs) def_vss) \\ fix_vs
 
-        canQual (Impl _ _ (TVar _ v) _) = univar v
-        canQual _                       = False
+        solve_cs                        = [ c | c <- cs, doSolve c ]
+
+        fixed c                         = all (`elem` fix_vs) $ tyfree c
+
+        doSolve c                       = not (canQual c) && not (fixed c)
+        doDefault c                     = isAmbig c && not (fixed c)
+
+        canQual (Impl _ _ (TVar _ v) p) = univar v
+        canQual c                       = False
 
         canGen tv                       = tvkind tv /= KFX
 
         isAmbig c                       = any (`elem` ambig_vs) (tyfree c)
 
-        refineAgain cs eq               = do (cs1,eq1) <- simplify env te tNone (fix_cs++cs)
+        refineAgain cs eq               = do (cs1,eq1) <- simplify env te tNone cs
                                              te <- msubst te
                                              env <- msubst env
                                              refine env cs1 te (eq1++eq)
