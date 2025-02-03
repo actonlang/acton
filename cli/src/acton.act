@@ -193,9 +193,12 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
         search_paths = []
 
         all_deps = deps.get_deps_recursive(fcap, fs.cwd())
-        # Add transitive dependencies to write new build.zig(.zon)
-        build_config.dependencies.update(all_deps.pkg_deps.items())
-        build_config.zig_dependencies.update(all_deps.zig_deps.items())
+        # Add transitive dependencies to write new build.zig(.zon), but don't
+        # override existing ones, including local overrides
+        for dep_name, dep in all_deps.pkg_deps.items():
+            build_config.dependencies.setdefault(dep_name, dep)
+        for dep_name, dep in all_deps.zig_deps.items():
+            build_config.zig_dependencies.setdefault(dep_name, dep)
         write_buildzig(file.FileCap(env.cap), build_config)
 
         for dep_name, dep in all_deps.pkg_deps.items():
