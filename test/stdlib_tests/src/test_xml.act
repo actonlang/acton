@@ -46,3 +46,9 @@ def _test_xml_skip_comment():
     d = xml.decode(test_xml)
     e = xml.encode(d)
     testing.assertEqual(e, "<a><b>hello</b></a>", "XML str -> data -> XML str (remove comment)")
+
+def _test_xml_skip_comment_first():
+    test_xml = """<!-- comment --><a>woo</a>"""
+    d = xml.decode(test_xml)
+    e = xml.encode(d)
+    testing.assertEqual(e, "<a>woo</a>", "XML str -> data -> XML str (remove comment first)")
