@@ -274,7 +274,7 @@ jobs:
           path: |
             ./debian/.debhelper/
             ~/.stack
-          key: build-debs
+          key: build-debs-${{ matrix.arch }}
       - name: "locale en_US.UTF-8"
         run: |
           apt-get install -qy locales
