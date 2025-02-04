@@ -512,10 +512,15 @@ jobs:
           make test
 
   test-app-respnet:
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64]
     needs: build-debs
     uses: "./.github/workflows/test-app.yml"
     with:
       repo_url: "orchestron-orchestrator/respnet"
+      arch: ${{ matrix.arch }}
 
   test-app-orchestron:
     needs: build-debs
