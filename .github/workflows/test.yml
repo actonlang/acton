@@ -663,7 +663,7 @@ jobs:
 
   # Update apt repo
   update-apt-repo:
-    if: startsWith(github.ref, 'refs/tags/v')
+    #if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     container:
       image: debian:experimental
