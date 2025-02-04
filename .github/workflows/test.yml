@@ -458,7 +458,7 @@ jobs:
       - name: "Download .deb files"
         uses: actions/download-artifact@v4
         with:
-          name: acton-debs
+          name: acton-debs-amd64
       - name: "Install acton from .deb"
         run: |
           sudo dpkg -i ./deb/acton_*.deb
