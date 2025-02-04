@@ -694,11 +694,12 @@ jobs:
       - name: "Get the version"
         id: get_version
         run: |
-          echo ::set-output name=version::$(ls ../deb/*amd64.changes | sed -e 's/.*acton_//' -e 's/_amd64.*//')
+          echo "VERSION=$(ls ../deb/*amd64.changes | sed -e 's/.*acton_//' -e 's/_amd64.*//')" >> $GITHUB_ENV
       - name: "Include new deb in Apt repository"
         run: |
           cd apt
-          reprepro include stable ../deb/*.changes
+          reprepro include stable ../deb/*amd64.changes
+          reprepro include stable ../deb/*arm64.changes
       - name: "Push updates to git repository for apt.acton-lang.io"
         run: |
           cd apt
@@ -707,7 +708,7 @@ jobs:
           git add .
           git status
           git diff
-          git commit -a -m "Add Acton v${{steps.get_version.outputs.version}}"
+          git commit -a -m "Add Acton v${VERSION}"
           git push
 
   # Update apt tip repo
@@ -742,7 +743,6 @@ jobs:
         id: get_version
         run: |
           echo "VERSION=$(ls deb/*amd64.changes | sed -e 's/.*acton_//' -e 's/_amd64.*//')" >> $GITHUB_ENV
-          echo ::set-output name=version::$(ls deb/*amd64.changes | sed -e 's/.*acton_//' -e 's/_amd64.*//')
       - name: "Move .deb files in place"
         run: |
           cd apt
