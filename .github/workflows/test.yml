@@ -489,7 +489,7 @@ jobs:
       - name: "Download .deb files"
         uses: actions/download-artifact@v4
         with:
-          name: acton-debs
+          name: acton-debs-amd64
       - name: "Install acton from .deb"
         run: |
           apt update
@@ -572,10 +572,11 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: acton-debian-12
-      - name: "Download artifacts for Debian Linux x86_64"
+      - name: "Download artifacts for Debian Linux on amd64 (x86_64) & arm64 (aarch64)"
         uses: actions/download-artifact@v4
         with:
-          name: acton-debs
+          name: acton-debs-*
+          merge-multiple: true
       - name: "List downloaded artifacts"
         run: |
           ls
@@ -642,7 +643,8 @@ jobs:
       - name: "Download artifacts for Debian Linux"
         uses: actions/download-artifact@v4
         with:
-          name: acton-debs
+          name: acton-debs-*
+          merge-multiple: true
       - name: "List downloaded artifacts"
         run: ls
       - name: "Extract release notes"
@@ -688,7 +690,7 @@ jobs:
         with:
           path: .
           pattern: acton-debs-*
-          merge-multuple: true
+          merge-multiple: true
       - name: "Get the version"
         id: get_version
         run: |
@@ -735,7 +737,7 @@ jobs:
         with:
           path: .
           pattern: acton-debs-*
-          merge-multuple: true
+          merge-multiple: true
       - name: "Get the version"
         id: get_version
         run: |
