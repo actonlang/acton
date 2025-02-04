@@ -241,7 +241,11 @@ jobs:
 
 
   build-debs:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64]
+    runs-on: ${{ matrix.arch == 'amd64' && 'ubuntu-24.04' || 'ubuntu-24.04-arm' }}
     container:
       image: debian:12
     env:
@@ -252,6 +256,7 @@ jobs:
         run: |
           env
           cat /proc/cpuinfo
+          uname -a
       - name: "Set BUILD_RELEASE when we are building for a version tag"
         run: |
           echo "BUILD_RELEASE=1" >> $GITHUB_ENV
@@ -299,7 +304,7 @@ jobs:
       - name: "Upload artifact"
         uses: actions/upload-artifact@v4
         with:
-          name: acton-debs
+          name: acton-debs-${{ matrix.arch }}
           # Using a wildcard and then deb here to force the entire directory to
           # be part of resulting artifact.
           path: ${{ steps.vars.outputs.artifact_dir }}/*deb/
@@ -667,11 +672,13 @@ jobs:
       - name: "Download artifacts for Debian Linux"
         uses: actions/download-artifact@v4
         with:
-          name: acton-debs
+          path: .
+          pattern: acton-debs-*
+          merge-multuple: true
       - name: "Get the version"
         id: get_version
         run: |
-          echo ::set-output name=version::$(ls ../deb/*.changes | sed -e 's/.*acton_//' -e 's/_amd64.*//')
+          echo ::set-output name=version::$(ls ../deb/*amd64.changes | sed -e 's/.*acton_//' -e 's/_amd64.*//')
       - name: "Include new deb in Apt repository"
         run: |
           cd apt
@@ -712,12 +719,14 @@ jobs:
       - name: "Download artifacts for Debian Linux"
         uses: actions/download-artifact@v4
         with:
-          name: acton-debs
+          path: .
+          pattern: acton-debs-*
+          merge-multuple: true
       - name: "Get the version"
         id: get_version
         run: |
-          echo "VERSION=$(ls deb/*.changes | sed -e 's/.*acton_//' -e 's/_amd64.*//')" >> $GITHUB_ENV
-          echo ::set-output name=version::$(ls deb/*.changes | sed -e 's/.*acton_//' -e 's/_amd64.*//')
+          echo "VERSION=$(ls deb/*amd64.changes | sed -e 's/.*acton_//' -e 's/_amd64.*//')" >> $GITHUB_ENV
+          echo ::set-output name=version::$(ls deb/*amd64.changes | sed -e 's/.*acton_//' -e 's/_amd64.*//')
       - name: "Move .deb files in place"
         run: |
           cd apt
