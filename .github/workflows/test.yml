@@ -357,23 +357,32 @@ jobs:
         include:
           - os: "debian"
             version: "10"
+            arch: "amd64"
           - os: "debian"
             version: "11"
+            arch: "amd64"
           - os: "debian"
             version: "12"
+            arch: "amd64"
           - os: "ubuntu"
             version: "20.04"
+            arch: "amd64"
           - os: "ubuntu"
             version: "22.04"
+            arch: "amd64"
           - os: "ubuntu"
             version: "24.04"
+            arch: "amd64"
+          - os: "ubuntu"
+            version: "24.04"
+            arch: "arm64"
     env:
       # This makes it possible for the GitHub Action itself to run using an
       # older version of node, which is the only possibility to get it running
       # on Ubuntu 18.04 (in the matrix above)
       ACTIONS_RUNNER_FORCE_ACTIONS_NODE_VERSION: node16
       ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.arch == 'amd64' && 'ubuntu-latest' || 'ubuntu-24.04-arm' }}
     container:
       image: ${{ matrix.os }}:${{ matrix.version }}
       options: --privileged --ulimit core=-1 --security-opt seccomp=unconfined
@@ -385,7 +394,7 @@ jobs:
       - name: "Download .deb files"
         uses: actions/download-artifact@v4
         with:
-          name: acton-debs
+          name: acton-debs-${{ matrix.arch }}
       - name: "Install acton from .deb"
         run: |
           apt update
