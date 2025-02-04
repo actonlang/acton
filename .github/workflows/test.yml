@@ -241,7 +241,11 @@ jobs:
 
 
   build-debs:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64]
+    runs-on: ${{ matrix.arch == 'amd64' && 'ubuntu-24.04' || 'ubuntu-24.04-arm' }}
     container:
       image: debian:12
     env:
@@ -252,6 +256,7 @@ jobs:
         run: |
           env
           cat /proc/cpuinfo
+          uname -a
       - name: "Set BUILD_RELEASE when we are building for a version tag"
         run: |
           echo "BUILD_RELEASE=1" >> $GITHUB_ENV
@@ -269,7 +274,7 @@ jobs:
           path: |
             ./debian/.debhelper/
             ~/.stack
-          key: build-debs
+          key: build-debs-${{ matrix.arch }}
       - name: "locale en_US.UTF-8"
         run: |
           apt-get install -qy locales
@@ -299,7 +304,7 @@ jobs:
       - name: "Upload artifact"
         uses: actions/upload-artifact@v4
         with:
-          name: acton-debs
+          name: acton-debs-${{ matrix.arch }}
           # Using a wildcard and then deb here to force the entire directory to
           # be part of resulting artifact.
           path: ${{ steps.vars.outputs.artifact_dir }}/*deb/
@@ -352,23 +357,32 @@ jobs:
         include:
           - os: "debian"
             version: "10"
+            arch: "amd64"
           - os: "debian"
             version: "11"
+            arch: "amd64"
           - os: "debian"
             version: "12"
+            arch: "amd64"
           - os: "ubuntu"
             version: "20.04"
+            arch: "amd64"
           - os: "ubuntu"
             version: "22.04"
+            arch: "amd64"
           - os: "ubuntu"
             version: "24.04"
+            arch: "amd64"
+          - os: "ubuntu"
+            version: "24.04"
+            arch: "arm64"
     env:
       # This makes it possible for the GitHub Action itself to run using an
       # older version of node, which is the only possibility to get it running
       # on Ubuntu 18.04 (in the matrix above)
       ACTIONS_RUNNER_FORCE_ACTIONS_NODE_VERSION: node16
       ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.arch == 'amd64' && 'ubuntu-latest' || 'ubuntu-24.04-arm' }}
     container:
       image: ${{ matrix.os }}:${{ matrix.version }}
       options: --privileged --ulimit core=-1 --security-opt seccomp=unconfined
@@ -380,7 +394,7 @@ jobs:
       - name: "Download .deb files"
         uses: actions/download-artifact@v4
         with:
-          name: acton-debs
+          name: acton-debs-${{ matrix.arch }}
       - name: "Install acton from .deb"
         run: |
           apt update
@@ -444,7 +458,7 @@ jobs:
       - name: "Download .deb files"
         uses: actions/download-artifact@v4
         with:
-          name: acton-debs
+          name: acton-debs-amd64
       - name: "Install acton from .deb"
         run: |
           sudo dpkg -i ./deb/acton_*.deb
@@ -475,7 +489,7 @@ jobs:
       - name: "Download .deb files"
         uses: actions/download-artifact@v4
         with:
-          name: acton-debs
+          name: acton-debs-amd64
       - name: "Install acton from .deb"
         run: |
           apt update
@@ -498,10 +512,15 @@ jobs:
           make test
 
   test-app-respnet:
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64]
     needs: build-debs
     uses: "./.github/workflows/test-app.yml"
     with:
       repo_url: "orchestron-orchestrator/respnet"
+      arch: ${{ matrix.arch }}
 
   test-app-orchestron:
     needs: build-debs
@@ -553,10 +572,11 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: acton-debian-12
-      - name: "Download artifacts for Debian Linux x86_64"
+      - name: "Download artifacts for Debian Linux on amd64 (x86_64) & arm64 (aarch64)"
         uses: actions/download-artifact@v4
         with:
-          name: acton-debs
+          name: acton-debs-*
+          merge-multiple: true
       - name: "List downloaded artifacts"
         run: |
           ls
@@ -623,7 +643,8 @@ jobs:
       - name: "Download artifacts for Debian Linux"
         uses: actions/download-artifact@v4
         with:
-          name: acton-debs
+          name: acton-debs-*
+          merge-multiple: true
       - name: "List downloaded artifacts"
         run: ls
       - name: "Extract release notes"
@@ -667,11 +688,13 @@ jobs:
       - name: "Download artifacts for Debian Linux"
         uses: actions/download-artifact@v4
         with:
-          name: acton-debs
+          path: .
+          pattern: acton-debs-*
+          merge-multiple: true
       - name: "Get the version"
         id: get_version
         run: |
-          echo ::set-output name=version::$(ls ../deb/*.changes | sed -e 's/.*acton_//' -e 's/_amd64.*//')
+          echo ::set-output name=version::$(ls ../deb/*amd64.changes | sed -e 's/.*acton_//' -e 's/_amd64.*//')
       - name: "Include new deb in Apt repository"
         run: |
           cd apt
@@ -712,12 +735,14 @@ jobs:
       - name: "Download artifacts for Debian Linux"
         uses: actions/download-artifact@v4
         with:
-          name: acton-debs
+          path: .
+          pattern: acton-debs-*
+          merge-multiple: true
       - name: "Get the version"
         id: get_version
         run: |
-          echo "VERSION=$(ls deb/*.changes | sed -e 's/.*acton_//' -e 's/_amd64.*//')" >> $GITHUB_ENV
-          echo ::set-output name=version::$(ls deb/*.changes | sed -e 's/.*acton_//' -e 's/_amd64.*//')
+          echo "VERSION=$(ls deb/*amd64.changes | sed -e 's/.*acton_//' -e 's/_amd64.*//')" >> $GITHUB_ENV
+          echo ::set-output name=version::$(ls deb/*amd64.changes | sed -e 's/.*acton_//' -e 's/_amd64.*//')
       - name: "Move .deb files in place"
         run: |
           cd apt

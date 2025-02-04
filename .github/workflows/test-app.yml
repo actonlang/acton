@@ -5,9 +5,14 @@ on:
       repo_url:
         required: true
         type: string
+      arch:
+        required: false
+        type: string
+        default: "amd64"
+
 jobs:
   test-app:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04${{ inputs.arch == 'arm64' && '-arm' || '' }}
     steps:
       - name: "Install gdb"
         run: |
@@ -16,7 +21,7 @@ jobs:
       - name: "Download .deb files"
         uses: actions/download-artifact@v4
         with:
-          name: acton-debs
+          name: acton-debs-${{ inputs.arch }}
       - name: "Install acton from .deb"
         run: |
           sudo apt install -y ./deb/acton_*.deb
