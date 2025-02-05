@@ -575,7 +575,7 @@ jobs:
       - name: "Download artifacts for Debian Linux on amd64 (x86_64) & arm64 (aarch64)"
         uses: actions/download-artifact@v4
         with:
-          name: acton-debs-*
+          pattern: acton-debs-*
           merge-multiple: true
       - name: "List downloaded artifacts"
         run: |
