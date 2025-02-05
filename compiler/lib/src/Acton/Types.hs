@@ -127,7 +127,11 @@ pushEqns eqs ss                         = push eqns0 ss
           where eq1                     = collect [] (free s) (map fst eqns)
                 eq2                     = [ (eq, ns \\ ns') | (eq,ns) <- eqns ]
                 ns'                     = bound s
-        inject eqs (Decl l ds)          = Decl l [ d{ dbody = bindWits eqs ++ dbody d } | d <- ds ]
+        inject eqs (Decl l ds)          = Decl l (map inj ds)
+          where inj (Class l n q us b)  = Class l n q us (map inj' b)
+                inj d                   = d{ dbody = bindWits eqs ++ dbody d }
+                inj' (Decl l ds)        = Decl l (map inj ds)
+                inj' s                  = s
         inject eqs (With l [] ss)       = With l [] (pushEqns eqs ss)
         inject eqs s                    = error ("# Internal error: cyclic witnesses " ++ prstrs eqs ++ "\n# and statement\n" ++ prstr s)
         collect eq0 vs eq
