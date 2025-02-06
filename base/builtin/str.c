@@ -64,7 +64,6 @@ static struct B_bytearray whitespace_bytearray_struct = {&B_bytearrayG_methods,6
 static B_bytearray whitespace_bytearray = &whitespace_bytearray_struct;
 
 #define NEW_UNFILLED_STR(nm,nchrs,nbtes)        \
-    assert(nbtes >= nchrs);                     \
     nm = acton_malloc(sizeof(struct B_str));           \
     (nm)->$class = &B_strG_methods;               \
     (nm)->nchars = nchrs;                       \
@@ -471,16 +470,16 @@ B_NoneType B_strD___init__(B_str self, B_value s) {
     return B_None;
 }
 
-B_bool B_strD___bool__(B_str s) {
+B_bool B_BoolD_strD___bool__(B_str s) {
     return toB_bool(s->nchars > 0);
 };
 
-B_str B_strD___str__(B_str s) {
+B_str B_StrD_strD___str__(B_str s) {
     return s;
 }
 
 
-B_str B_strD___repr__(B_str s) {
+B_str B_StrD_strD___repr__(B_str s) {
     struct byte_counts bs = byte_count(s->str, s->nbytes);
     int newbytes = 2+bs.escaped+3*bs.non_printable+(bs.squotes>0 && bs.dquotes>0 ? bs.squotes : 0);
     B_str res;
@@ -1494,11 +1493,11 @@ B_NoneType B_bytearrayD___init__(B_bytearray self, B_bytes b) {
     return B_None;
 }
  
-B_bool B_bytearrayD___bool__(B_bytearray s) {
+B_bool B_BoolD_bytearrayD___bool__(B_bytearray s) {
     return toB_bool(s->nbytes > 0);
 };
 
-B_str B_bytearrayD___str__(B_bytearray s) {
+B_str B_StrD_bytearrayD___str__(B_bytearray s) {
     struct byte_counts bs = byte_count(s->str, s->nbytes);
     int newbytes = 14+bs.escaped+3*bs.non_printable+(bs.squotes>0 && bs.dquotes>0 ? bs.squotes : 0)+3*bs.non_ascii;
     B_str res;
@@ -1517,7 +1516,7 @@ B_str B_bytearrayD___str__(B_bytearray s) {
     return res;
 }
 
-B_str B_bytearrayD___repr__(B_bytearray s) {
+B_str B_StrD_bytearrayD___repr__(B_bytearray s) {
     return B_bytearrayD___str__(s);
 }
 
@@ -2592,11 +2591,11 @@ B_NoneType B_bytesD___init__(B_bytes self, B_Iterable wit, $WORD iter) {
     return B_None;
 }
 
-B_bool B_bytesD___bool__(B_bytes s) {
+B_bool B_BoolD_bytesD___bool__(B_bytes s) {
     return toB_bool(s->nbytes > 0);
 };
 
-B_str B_bytesD___str__(B_bytes s) {
+B_str B_StrD_bytesD___str__(B_bytes s) {
     struct byte_counts bs = byte_count(s->str, s->nbytes);
     int newbytes = 3+bs.escaped+3*bs.non_printable+(bs.dquotes>0 && bs.dquotes>0 ? bs.squotes : 0)+3*bs.non_ascii;
     B_str res;
@@ -2614,7 +2613,7 @@ B_str B_bytesD___str__(B_bytes s) {
     return res;
 }
 
-B_str B_bytesD___repr__(B_bytes s) {
+B_str B_StrD_bytesD___repr__(B_bytes s) {
     return  B_bytesD___str__(s);
 }
 
@@ -3676,324 +3675,3 @@ B_str $default__str__(B_value self) {
     return $FORMAT("<%s object at %p>", self->$class->$GCINFO, self);
 }
 
- 
-
-// Static witnesses
-
-
-/*
-struct B_OrdD_strG_class  B_OrdD_strG_methods = {
-    "B_OrdD_str",
-    UNASSIGNED,
-    ($SuperG_class)&B_OrdG_methods,
-    (B_NoneType (*)(B_OrdD_str))$default__init__,
-    B_OrdD_strD___serialize__,
-    B_OrdD_strD___deserialize__,
-    (B_bool (*)(B_OrdD_str))$default__bool__,
-    (B_str (*)(B_OrdD_str))$default__str__,
-    (B_str (*)(B_OrdD_str))$default__str__,
-    B_OrdD_strD___eq__,
-    B_OrdD_strD___ne__,
-    B_OrdD_strD___lt__,
-    B_OrdD_strD___le__,
-    B_OrdD_strD___gt__,
-    B_OrdD_strD___ge__
-};
-
-struct B_OrdD_str B_OrdD_str_instance = {&B_OrdD_strG_methods};
-B_OrdD_str B_OrdD_strG_witness = &B_OrdD_str_instance;
-
-struct B_ContainerD_strG_class  B_ContainerD_strG_methods = {
-    "B_ContainerD_str",
-    UNASSIGNED,
-    ($SuperG_class)&B_ContainerG_methods,
-    (B_NoneType (*)(B_ContainerD_str))$default__init__,
-    B_ContainerD_strD___serialize__,
-    B_ContainerD_strD___deserialize__,
-    (B_bool (*)(B_ContainerD_str))$default__bool__,
-    (B_str (*)(B_ContainerD_str))$default__str__,
-    (B_str (*)(B_ContainerD_str))$default__str__,
-    B_ContainerD_strD___iter__,
-    NULL,
-    B_ContainerD_strD___len__,
-    B_ContainerD_strD___contains__,
-    B_ContainerD_strD___containsnot__
-};
-
-struct B_ContainerD_str B_ContainerD_str_instance = {&B_ContainerD_strG_methods};
-B_ContainerD_str B_ContainerD_strG_witness = &B_ContainerD_str_instance;
-
-
-struct B_SliceableD_strG_class  B_SliceableD_strG_methods = {
-    "B_SliceableD_str",
-    UNASSIGNED,
-    ($SuperG_class)&B_SliceableG_methods,
-    (B_NoneType (*)(B_SliceableD_str))$default__init__,
-    B_SliceableD_strD___serialize__,
-    B_SliceableD_strD___deserialize__,
-    (B_bool (*)(B_SliceableD_str))$default__bool__,
-    (B_str (*)(B_SliceableD_str))$default__str__,
-    (B_str (*)(B_SliceableD_str))$default__str__,
-    B_SliceableD_strD___getitem__,
-    B_SliceableD_strD___setitem__,
-    B_SliceableD_strD___delitem__,
-    B_SliceableD_strD___getslice__,
-    B_SliceableD_strD___setslice__,
-    B_SliceableD_strD___delslice__
-};
-
-struct B_SliceableD_str B_SliceableD_str_instance = {&B_SliceableD_strG_methods};
-B_SliceableD_str B_SliceableD_strG_witness = &B_SliceableD_str_instance;
-
-struct B_TimesD_strG_class  B_TimesD_strG_methods = {
-    "B_TimesD_str",
-    UNASSIGNED,
-    ($SuperG_class)&B_TimesG_methods,
-    (B_NoneType (*)(B_TimesD_str))$default__init__,
-    B_TimesD_strD___serialize__,
-    B_TimesD_strD___deserialize__,
-    (B_bool (*)(B_TimesD_str))$default__bool__,
-    (B_str (*)(B_TimesD_str))$default__str__,
-    (B_str (*)(B_TimesD_str))$default__str__,
-    B_TimesD_strD___add__,
-    (B_str (*)(B_TimesD_str, B_str, B_str))B_PlusD___iadd__,
-    B_TimesD_strD___mul__,
-    (B_str (*)(B_TimesD_str, B_str, B_int))B_TimesD___imul__,
-
-};
-
-struct B_TimesD_str B_TimesD_str_instance = {&B_TimesD_strG_methods};
-B_TimesD_str B_TimesD_strG_witness = &B_TimesD_str_instance;
-
-struct B_HashableD_strG_class  B_HashableD_strG_methods = {
-    "B_HashableD_str",
-    UNASSIGNED,
-    ($SuperG_class)&B_HashableG_methods,
-    (B_NoneType (*)(B_HashableD_str))$default__init__,
-    B_HashableD_strD___serialize__,
-    B_HashableD_strD___deserialize__,
-    (B_bool (*)(B_HashableD_str))$default__bool__,
-    (B_str (*)(B_HashableD_str))$default__str__,
-    (B_str (*)(B_HashableD_str))$default__str__,
-    B_HashableD_strD___eq__,
-    B_HashableD_strD___ne__,
-    B_HashableD_strD___hash__
-};
-
-struct B_HashableD_str B_HashableD_str_instance = {&B_HashableD_strG_methods};
-B_HashableD_str B_HashableD_strG_witness = &B_HashableD_str_instance;
-
-struct B_SequenceD_bytearray  B_SequenceD_bytearray_instance;
-struct B_CollectionD_SequenceD_bytearray B_CollectionD_SequenceD_bytearray_instance;
-struct B_TimesD_SequenceD_bytearray B_TimesD_SequenceD_bytearray_instance;
-
-
-struct B_OrdD_bytearrayG_class  B_OrdD_bytearrayG_methods = {
-    "B_OrdD_bytearray",
-    UNASSIGNED,
-    ($SuperG_class)&B_OrdG_methods,
-    (B_NoneType (*)(B_OrdD_bytearray))$default__init__,
-    B_OrdD_bytearrayD___serialize__,
-    B_OrdD_bytearrayD___deserialize__,
-    (B_bool (*)(B_OrdD_bytearray))$default__bool__,
-    (B_str (*)(B_OrdD_bytearray))$default__str__,
-    (B_str (*)(B_OrdD_bytearray))$default__str__,
-    B_OrdD_bytearrayD___eq__, B_OrdD_bytearrayD___ne__,
-    B_OrdD_bytearrayD___lt__, B_OrdD_bytearrayD___le__,
-    B_OrdD_bytearrayD___gt__, B_OrdD_bytearrayD___ge__
-};
-
-struct B_OrdD_bytearray B_OrdD_bytearray_instance = {&B_OrdD_bytearrayG_methods};
-B_OrdD_bytearray B_OrdD_bytearrayG_witness = &B_OrdD_bytearray_instance;
-
-struct B_SequenceD_bytearrayG_class B_SequenceD_bytearrayG_methods = {
-    "B_SequenceD_bytearray",
-    UNASSIGNED,
-    ($SuperG_class)&B_SequenceG_methods,
-    (B_NoneType (*)(B_SequenceD_bytearray))$default__init__,
-    B_SequenceD_bytearrayD___serialize__,
-    B_SequenceD_bytearrayD___deserialize__,
-    (B_bool (*)(B_SequenceD_bytearray))$default__bool__,
-    (B_str (*)(B_SequenceD_bytearray))$default__str__,
-    (B_str (*)(B_SequenceD_bytearray))$default__str__,
-    B_SequenceD_bytearrayD___getitem__,
-    B_SequenceD_bytearrayD___setitem__,
-    B_SequenceD_bytearrayD___delitem__,
-    B_SequenceD_bytearrayD___getslice__,
-    B_SequenceD_bytearrayD___setslice__,
-    B_SequenceD_bytearrayD___delslice__,
-    B_SequenceD_bytearrayD___reversed__,
-    B_SequenceD_bytearray$insert,
-    B_SequenceD_bytearray$append,
-    B_SequenceD_bytearray$reverse
-};
-
-struct B_SequenceD_bytearray B_SequenceD_bytearray_instance = {
-    &B_SequenceD_bytearrayG_methods,
-    (B_Eq)&B_OrdD_intG_methods,
-    (B_Collection)&B_CollectionD_SequenceD_bytearray_instance,
-    (B_Times)&B_TimesD_SequenceD_bytearray_instance
-};
-B_SequenceD_bytearray B_SequenceD_bytearrayG_witness = &B_SequenceD_bytearray_instance;
-
-struct B_CollectionD_SequenceD_bytearrayG_class B_CollectionD_SequenceD_bytearrayG_methods = {
-    "B_CollectionD_SequenceD_bytearray",
-    UNASSIGNED,
-    ($SuperG_class)&B_CollectionG_methods,
-    B_CollectionD_SequenceD_bytearrayD___init__,
-    B_CollectionD_SequenceD_bytearrayD___serialize__,
-    B_CollectionD_SequenceD_bytearrayD___deserialize__,
-    (B_bool (*)(B_CollectionD_SequenceD_bytearray))$default__bool__,
-    (B_str (*)(B_CollectionD_SequenceD_bytearray))$default__str__,
-    (B_str (*)(B_CollectionD_SequenceD_bytearray))$default__str__,
-    B_CollectionD_SequenceD_bytearrayD___iter__,
-    B_CollectionD_SequenceD_bytearrayD___fromiter__,
-    B_CollectionD_SequenceD_bytearrayD___len__
-};
-
-struct B_CollectionD_SequenceD_bytearray B_CollectionD_SequenceD_bytearray_instance = {&B_CollectionD_SequenceD_bytearrayG_methods,(B_Sequence)&B_SequenceD_bytearray_instance};
-B_CollectionD_SequenceD_bytearray B_CollectionD_SequenceD_bytearrayG_witness = &B_CollectionD_SequenceD_bytearray_instance;
-
-struct B_TimesD_SequenceD_bytearrayG_class  B_TimesD_SequenceD_bytearrayG_methods = {
-    "B_TimesD_SequenceD_bytearray",
-    UNASSIGNED,
-    ($SuperG_class)&B_TimesG_methods,
-    B_TimesD_SequenceD_bytearrayD___init__,
-    B_TimesD_SequenceD_bytearrayD___serialize__,
-    B_TimesD_SequenceD_bytearrayD___deserialize__,
-    (B_bool (*)(B_TimesD_SequenceD_bytearray))$default__bool__,
-    (B_str (*)(B_TimesD_SequenceD_bytearray))$default__str__,
-    (B_str (*)(B_TimesD_SequenceD_bytearray))$default__str__,
-    B_TimesD_SequenceD_bytearrayD___add__,
-    (B_bytearray (*)(B_TimesD_SequenceD_bytearray, B_bytearray, B_bytearray))B_PlusD___iadd__,
-    B_TimesD_SequenceD_bytearrayD___mul__,
-    (B_bytearray (*)(B_TimesD_SequenceD_bytearray, B_bytearray, B_int))B_TimesD___imul__,
-};
-
-struct B_TimesD_SequenceD_bytearray B_TimesD_SequenceD_bytearray_instance = {&B_TimesD_SequenceD_bytearrayG_methods};
-B_TimesD_SequenceD_bytearray B_TimesD_SequenceD_bytearrayG_witness = &B_TimesD_SequenceD_bytearray_instance;
-
-struct B_ContainerD_bytearrayG_class B_ContainerD_bytearrayG_methods = {
-    "B_ContainerD_bytearray",
-    UNASSIGNED,
-    ($SuperG_class)&B_ContainerG_methods,
-    B_ContainerD_bytearrayD___init__,
-    B_ContainerD_bytearrayD___serialize__,
-    B_ContainerD_bytearrayD___deserialize__,
-    (B_bool (*)(B_ContainerD_bytearray))$default__bool__,
-    (B_str (*)(B_ContainerD_bytearray))$default__str__,
-    (B_str (*)(B_ContainerD_bytearray))$default__str__,
-    B_ContainerD_bytearrayD___iter__,
-    B_ContainerD_bytearrayD___fromiter__,
-    B_ContainerD_bytearrayD___len__,
-    B_ContainerD_bytearrayD___contains__,
-    B_ContainerD_bytearrayD___containsnot__
-};
-
-struct B_ContainerD_bytearray B_ContainerD_bytearray_instance = {&B_ContainerD_bytearrayG_methods};
-B_ContainerD_bytearray B_ContainerD_bytearrayG_witness = &B_ContainerD_bytearray_instance;
-
-
-
-struct B_OrdD_bytesG_class  B_OrdD_bytesG_methods = {
-    "B_OrdD_bytes",
-    UNASSIGNED,
-    ($SuperG_class)&B_OrdG_methods,
-    (B_NoneType (*)(B_OrdD_bytes))$default__init__,
-    B_OrdD_bytesD___serialize__,
-    B_OrdD_bytesD___deserialize__,
-    (B_bool (*)(B_OrdD_bytes))$default__bool__,
-    (B_str (*)(B_OrdD_bytes))$default__str__,
-    (B_str (*)(B_OrdD_bytes))$default__str__,
-    B_OrdD_bytesD___eq__,
-    B_OrdD_bytesD___ne__,
-    B_OrdD_bytesD___lt__,
-    B_OrdD_bytesD___le__,
-    B_OrdD_bytesD___gt__,
-    B_OrdD_bytesD___ge__
-};
-
-struct B_OrdD_bytes B_OrdD_bytes_instance = {&B_OrdD_bytesG_methods};
-B_OrdD_bytes B_OrdD_bytesG_witness = &B_OrdD_bytes_instance;
-
-struct B_ContainerD_bytesG_class  B_ContainerD_bytesG_methods = {
-    "B_ContainerD_bytes",
-    UNASSIGNED,
-    ($SuperG_class)&B_ContainerG_methods,
-    B_ContainerD_bytesD___init__,
-    B_ContainerD_bytesD___serialize__,
-    B_ContainerD_bytesD___deserialize__,
-    (B_bool (*)(B_ContainerD_bytes))$default__bool__,
-    (B_str (*)(B_ContainerD_bytes))$default__str__,
-    (B_str (*)(B_ContainerD_bytes))$default__str__,
-    B_ContainerD_bytesD___iter__,
-    NULL,
-    B_ContainerD_bytesD___len__,
-    B_ContainerD_bytesD___contains__,
-    B_ContainerD_bytesD___containsnot__
-};
-
-struct B_ContainerD_bytes B_ContainerD_bytes_instance = {&B_ContainerD_bytesG_methods};
-B_ContainerD_bytes B_ContainerD_bytesG_witness = &B_ContainerD_bytes_instance;
-
-
-struct B_SliceableD_bytesG_class  B_SliceableD_bytesG_methods = {
-    "B_SliceableD_bytes",
-    UNASSIGNED,
-    ($SuperG_class)&B_SliceableG_methods,
-    (B_NoneType (*)(B_SliceableD_bytes))$default__init__,
-    B_SliceableD_bytesD___serialize__,
-    B_SliceableD_bytesD___deserialize__,
-    (B_bool (*)(B_SliceableD_bytes))$default__bool__,
-    (B_str (*)(B_SliceableD_bytes))$default__str__,
-    (B_str (*)(B_SliceableD_bytes))$default__str__,
-    B_SliceableD_bytesD___getitem__,
-    B_SliceableD_bytesD___setitem__,
-    B_SliceableD_bytesD___delitem__,
-    B_SliceableD_bytesD___getslice__,
-    B_SliceableD_bytesD___setslice__,
-    B_SliceableD_bytesD___delslice__
-};
-
-struct B_SliceableD_bytes B_SliceableD_bytes_instance = {&B_SliceableD_bytesG_methods};
-B_SliceableD_bytes B_SliceableD_bytesG_witness = &B_SliceableD_bytes_instance;
-
-struct B_TimesD_bytesG_class  B_TimesD_bytesG_methods = {
-    "B_TimesD_bytes",
-    UNASSIGNED,
-    ($SuperG_class)&B_TimesG_methods,
-    (B_NoneType (*)(B_TimesD_bytes))$default__init__,
-    B_TimesD_bytesD___serialize__,
-    B_TimesD_bytesD___deserialize__,
-    (B_bool (*)(B_TimesD_bytes))$default__bool__,
-    (B_str (*)(B_TimesD_bytes))$default__str__,
-    (B_str (*)(B_TimesD_bytes))$default__str__,
-    B_TimesD_bytesD___add__,
-    (B_bytes (*)(B_TimesD_bytes, B_bytes, B_bytes))B_PlusD___iadd__,
-    B_TimesD_bytesD___mul__,
-    (B_bytes (*)(B_TimesD_bytes, B_bytes, B_int))B_TimesD___imul__,
-
-};
-
-struct B_TimesD_bytes B_TimesD_bytes_instance = {&B_TimesD_bytesG_methods};
-B_TimesD_bytes B_TimesD_bytesG_witness = &B_TimesD_bytes_instance;
-
-struct B_HashableD_bytesG_class  B_HashableD_bytesG_methods = {
-    "B_HashableD_bytes",
-    UNASSIGNED,
-    ($SuperG_class)&B_HashableG_methods,
-    (B_NoneType (*)(B_HashableD_bytes))$default__init__,
-    B_HashableD_bytesD___serialize__,
-    B_HashableD_bytesD___deserialize__,
-    (B_bool (*)(B_HashableD_bytes))$default__bool__,
-    (B_str (*)(B_HashableD_bytes))$default__str__,
-    (B_str (*)(B_HashableD_bytes))$default__str__,
-    B_HashableD_bytesD___eq__,
-    B_HashableD_bytesD___ne__,
-    B_HashableD_bytesD___hash__
-};
-
-struct B_HashableD_bytes B_HashableD_bytes_instance = {&B_HashableD_bytesG_methods};
-B_HashableD_bytes B_HashableD_bytesG_witness = &B_HashableD_bytes_instance;
-
-*/

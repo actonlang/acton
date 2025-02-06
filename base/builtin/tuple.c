@@ -25,11 +25,11 @@ B_NoneType B_tupleD___init__(B_tuple self,int size ,...) {
     return B_None;
 }
 
-B_bool B_tupleD___bool__(B_tuple self) {
+B_bool B_BoolD_tupleD___bool__(B_tuple self) {
     return toB_bool(self->size>0);
 }
 
-B_str B_tupleD___str__(B_tuple self) {
+B_str B_StrD_tupleD___str__(B_tuple self) {
     B_list s2 = B_listD_new(self->size);
     B_SequenceD_list wit = B_SequenceD_listG_witness;
     for (int i=0; i< self->size; i++) {
@@ -39,6 +39,9 @@ B_str B_tupleD___str__(B_tuple self) {
     return B_strD_join_par('(',s2,')');
 }
 
+B_str B_StrD_tupleD___repr__(B_tuple self) {
+    return B_tupleD___str__(self);
+}
 
 void B_tupleD___serialize__(B_tuple self, $Serial$state state) {
     B_int prevkey = (B_int)B_dictD_get(state->done,(B_Hashable)B_HashableD_WORDG_witness,self,NULL);

@@ -98,11 +98,11 @@ B_NoneType B_listD___init__(B_list lst, B_Iterable wit, $WORD iterable) {
     return B_None;
 }
   
-B_bool B_listD___bool__(B_list self) {
+B_bool B_BoolD_listD___bool__(B_list self) {
     return toB_bool(self->length>0);
 }
 
-B_str B_listD___str__(B_list self) {
+B_str B_StrD_listD___str__(B_list self) {
     B_list s2 = B_listD_new(self->length);
     B_SequenceD_list wit2 = B_SequenceD_listG_new();
     for (int i=0; i< self->length; i++) {
@@ -112,8 +112,8 @@ B_str B_listD___str__(B_list self) {
     return B_strD_join_par('[',s2,']');
 }
 
-B_str B_listD___repr__(B_list self) {
-    return B_listD___str__(self);
+B_str B_StrD_listD___repr__(B_list self) {
+    return B_StrD_listD___str__(self);
 }
 
 void B_listD___serialize__(B_list self,$Serial$state state) {
@@ -560,9 +560,6 @@ struct B_SequenceD_listG_class B_SequenceD_listG_methods = {
     NULL, //B_SequenceD_listD___init__,
     NULL, //B_SequenceD_listD___serialize__,
     NULL, //B_SequenceD_listD___deserialize__,
-    (B_bool (*)(B_SequenceD_list))$default__bool__,
-    (B_str (*)(B_SequenceD_list))$default__str__,
-    (B_str (*)(B_SequenceD_list))$default__str__,
     B_SequenceD_listD___getitem__,
     B_SequenceD_listD___setitem__,
     B_SequenceD_listD___delitem__,
@@ -574,30 +571,3 @@ struct B_SequenceD_listG_class B_SequenceD_listG_methods = {
     B_SequenceD_listD_append,
     B_SequenceD_listD_reverse
 };
-
-/*
-struct B_TimesD_SequenceD_list B_TimesD_SequenceD_list_instance;
-struct B_SequenceD_list B_SequenceD_list_instance;
-
-struct B_CollectionD_SequenceD_list B_CollectionD_SequenceD_list_instance = {
-    &B_CollectionD_SequenceD_listG_methods,
-    (B_Sequence)&B_SequenceD_list_instance
-};
-
-B_CollectionD_SequenceD_list B_CollectionD_SequenceD_listG_witness = &B_CollectionD_SequenceD_list_instance;
-
-struct B_SequenceD_list B_SequenceD_list_instance = { 
-    &B_SequenceD_listG_methods,
-    (B_Eq)&B_OrdD_intG_methods,
-    (B_Collection)&B_CollectionD_SequenceD_list_instance,
-    (B_Times)&B_TimesD_SequenceD_list_instance
-};
-
-B_SequenceD_list B_SequenceD_listG_witness = &B_SequenceD_list_instance;
-
-struct B_TimesD_SequenceD_list B_TimesD_SequenceD_list_instance = {
-    &B_TimesD_SequenceD_listG_methods,
-    (B_Sequence)&B_SequenceD_list_instance
-};
-B_TimesD_SequenceD_list B_TimesD_SequenceD_listG_witness = &B_TimesD_SequenceD_list_instance;
-*/

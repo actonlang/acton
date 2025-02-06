@@ -249,11 +249,11 @@ B_NoneType B_dictD___init__(B_dict dict, B_Hashable hashwit, B_Iterable wit, $WO
     return B_None;
 }
 
-B_bool B_dictD___bool__(B_dict self) {
+B_bool B_BoolD_dictD___bool__(B_dict self) {
     return toB_bool(self->numelements>0);
 }
 
-B_str B_dictD___str__(B_dict self) {
+B_str B_StrD_dictD___str__(B_dict self) {
     B_list s2 = B_listD_new(self->numelements);
     B_IteratorD_dict_items iter = $NEW(B_IteratorD_dict_items,self);
     B_tuple item;
@@ -278,8 +278,8 @@ B_str B_dictD___str__(B_dict self) {
     return B_strD_join_par('{',s2,'}');
 }
 
-B_str B_dictD___repr__(B_dict self) {
-    return B_dictD___str__(self);
+B_str B_StrD_dictD___repr__(B_dict self) {
+    return B_StrD_dictD___str__(self);
 }
 
 void B_dictD___serialize__(B_dict self,$Serial$state state) {

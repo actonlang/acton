@@ -69,15 +69,15 @@ B_float B_floatD___deserialize__(B_float self, $Serial$state state) {
     return to$float(x);
 }
 
-B_bool B_floatD___bool__(B_float x) {
+B_bool B_BoolD_floatD___bool__(B_float x) {
     return toB_bool(x->val != 0.0);
 }
 
-B_str B_floatD___str__(B_float x) {
+B_str B_StrD_floatD___str__(B_float x) {
     return $FORMAT("%g", x->val);
 }
 
-B_str B_floatD___repr__(B_float x) {
+B_str B_StrD_floatD___repr__(B_float x) {
     return $FORMAT("%g", x->val);
 }
 

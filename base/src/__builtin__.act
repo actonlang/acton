@@ -15,12 +15,7 @@
 
 class value:
     __init__ : () -> None
-    def __bool__(self) -> bool:
-        NotImplemented
-    def __str__(self) -> str:
-        NotImplemented
-    def __repr__(self) -> str:
-        NotImplemented
+
 
 class object (value):
     pass
@@ -58,6 +53,14 @@ class u16 (atom):
 
 class float (atom):
     def __init__(self, val: atom) -> None:
+        NotImplemented
+
+class complex (value):
+    def __init__(self, val: Number) -> None:
+        NotImplemented
+
+    @staticmethod
+    def from_real_imag(real: Real, imag: Real) -> complex:
         NotImplemented
 
 class bool (atom):
@@ -453,6 +456,13 @@ protocol Ord (Eq):
     def __ge__(a,b):
         return b <= a
 
+protocol Bool:
+    __bool__ : () -> bool
+
+protocol Str:
+    __str__  : () -> str
+    __repr__ : () -> str
+
 protocol Logical:
     @staticmethod
     __and__     : (Self,Self) -> Self
@@ -516,13 +526,85 @@ protocol Div[A]:
 protocol Hashable (Eq):
     __hash__     : () -> int
 
-class complex (value):
-    def __init__(self, val: Number) -> None:
-        NotImplemented
+## Bool extensions ################################################################################
 
-    @staticmethod
-    def from_real_imag(real: Real, imag: Real) -> complex:
-        NotImplemented
+extension int (Bool):
+    NotImplemented
+extension i64 (Bool):
+    NotImplemented
+extension i32 (Bool):
+    NotImplemented
+extension i16 (Bool):
+    NotImplemented
+extension u64 (Bool):
+    NotImplemented
+extension u32 (Bool):
+    NotImplemented
+extension u16 (Bool):
+    NotImplemented
+extension bool (Bool):
+    NotImplemented
+extension float (Bool):
+    NotImplemented
+extension complex (Bool):
+    NotImplemented
+extension str (Bool):
+    NotImplemented
+extension bytes (Bool):
+    NotImplemented
+extension bytearray (Bool):
+    NotImplemented
+extension list[A] (Bool):
+    NotImplemented
+extension set[A(Hashable)] (Bool):
+    NotImplemented
+extension dict[A(Hashable),B] (Bool):
+    NotImplemented
+extension range (Bool):
+    NotImplemented
+extension slice (Bool):
+    NotImplemented
+    
+## Str extensions ################################################################################
+
+extension int (Str):
+    NotImplemented
+extension i64 (Str):
+    NotImplemented
+extension i32 (Str):
+    NotImplemented
+extension i16 (Str):
+    NotImplemented
+extension u64 (Str):
+    NotImplemented
+extension u32 (Str):
+    NotImplemented
+extension u16 (Str):
+    NotImplemented
+extension bool (Str):
+    NotImplemented
+extension float (Str):
+    NotImplemented
+extension complex (Str):
+    NotImplemented
+extension str (Str):
+    NotImplemented
+extension bytes (Str):
+    NotImplemented
+extension bytearray (Str):
+    NotImplemented
+extension list[A] (Str):
+    NotImplemented
+extension set[A(Hashable)] (Str):
+    NotImplemented
+extension dict[A(Hashable),B] (Str):
+    NotImplemented
+extension range (Str):
+    NotImplemented
+extension slice (Str):
+    NotImplemented
+
+## dicts and sets (requires Hashable) ###############################################################
 
 class dict[A(Hashable),B] (object):
     def __init__(self, iterable: ?Iterable[(A,B)]) -> None:
@@ -633,6 +715,7 @@ protocol Integral (Rational,Logical):
 
     __invert__   : () -> Self
 
+    
 ## Number protocol extensions ######################################################################
 
 #extension bool (Eq): pass
@@ -941,7 +1024,7 @@ def print(*args, sep: str=" ", end: str="\n", err: bool=False, flush: bool=False
     """
     NotImplemented
 
-def repr(x : value):
+def repr [A (Str)](x : A):
     return x.__repr__()
 
 def reversed(seq : Sequence[A]) -> Iterator[A]:

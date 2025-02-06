@@ -41,7 +41,7 @@ reprKW                              = name "__repr__"
 cleanupKW                           = name "__cleanup__"
 resumeKW                            = name "__resume__"
 
-valueKWs                            = [boolKW, strKW, reprKW]
+valueKWs                            = []  -- [boolKW, strKW, reprKW]
 
 iaddKW                              = name "__iadd__"
 isubKW                              = name "__isub__"

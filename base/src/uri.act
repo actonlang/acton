@@ -50,7 +50,8 @@ class URI(object):
 
         # Parse fragment
         self.fragment = parse_fragment(remainder)
-
+        
+extension URI (Str):
     def __str__(self) -> str:
         """Return the canonical string representation of the URI."""
         scheme_sep = "://" if self.scheme != None else ""

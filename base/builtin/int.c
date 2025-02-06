@@ -156,15 +156,15 @@ B_int B_intD___deserialize__(B_int res,$Serial$state state) {
     }
 }
 
-B_bool B_intD___bool__(B_int n) {
+B_bool B_BoolD_intD___bool__(B_int n) {
     return toB_bool(zz_cmpi(&n->val,0));
 }
 
-B_str B_intD___str__(B_int n) {
+B_str B_StrD_intD___str__(B_int n) {
     return to_str_noc(get_str(&n->val));
 }
 
-B_str B_intD___repr__(B_int n) {
+B_str B_StrD_intD___repr__(B_int n) {
     return to_str_noc(get_str(&n->val));
 }
   

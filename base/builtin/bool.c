@@ -21,18 +21,18 @@ B_NoneType B_boolD___init__(B_bool self, B_value s){
     return B_None;
 }
 
-B_bool B_boolD___bool__(B_bool self) {
+B_bool B_BoolD_boolD___bool__(B_bool self) {
     return self;
 }
 
-B_str B_boolD___str__(B_bool self) {
+B_str B_StrD_boolD___str__(B_bool self) {
     if (self->val)
         return to$str("True");
     else
         return to$str("False");
 }
 
-B_str B_boolD___repr__(B_bool self) {
+B_str B_StrD_boolD___repr__(B_bool self) {
     if (self->val)
         return to$str("True");
     else

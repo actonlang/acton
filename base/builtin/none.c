@@ -27,12 +27,15 @@ B_NoneType B_NoneTypeD__deserialize__(B_NoneType self, $Serial$state state) {
   return NULL;
 }
 
-B_bool B_NoneTypeD__bool__(B_NoneType self) {
+B_bool B_BoolD_NoneTypeD___bool__(B_NoneType self) {
   return B_False;
 }
 
-B_str B_NoneTypeD__str__(B_NoneType self) {
+B_str B_StrD_NoneTypeD___str__(B_NoneType self) {
   return to$str("None");
+}
+B_str B_StrD_NoneTypeD__str___(B_NoneType self) {
+    return B_StrD_NoneTypeD___str__(self);
 }
 
 struct B_NoneTypeG_class B_NoneTypeG_methods = {"B_NoneType",UNASSIGNED,($SuperG_class)&B_valueG_methods,(void (*)(B_NoneType))$default__init__,

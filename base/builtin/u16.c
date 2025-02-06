@@ -50,15 +50,15 @@ B_u16 B_u16D___deserialize__(B_u16 n, $Serial$state state) {
     return toB_u16((short)(uintptr_t)$val_deserialize(state));
 }
 
-B_bool B_u16D___bool__(B_u16 n) {
+B_bool B_BoolD_u16D___bool__(B_u16 n) {
     return toB_bool(n->val != 0);
 }
 
-B_str B_u16D___str__(B_u16 n) {
+B_str B_StrD_u16D___str__(B_u16 n) {
     return $FORMAT("%hu", n->val);
 }
 
-B_str B_u16D___repr__(B_u16 n) {
+B_str B_StrD_u16D___repr__(B_u16 n) {
     return $FORMAT("%hu", n->val);
 }
 
