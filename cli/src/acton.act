@@ -288,6 +288,9 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
                     new_dep_arg = parts[0] + "=" + absolute_path
                     dep_args.extend(["--dep", new_dep_arg])
                 cmd = ["build"] + dep_build_cmd_args(args) + dep_args
+                # Build deps in dev mode if we are building tests
+                if build_tests:
+                    cmd.append("--dev")
                 cr = CompilerRunner(
                     process_cap,
                     env,
