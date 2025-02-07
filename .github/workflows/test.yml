@@ -571,7 +571,11 @@ jobs:
       - name: "Download artifacts for Linux x86_64, built on Debian:12"
         uses: actions/download-artifact@v4
         with:
-          name: acton-debian-12
+          name: acton-debian-12-x86_64
+      - name: "Download artifacts for Linux arm64, built on Ubuntu:24.04"
+        uses: actions/download-artifact@v4
+        with:
+          name: acton-ubuntu-24.04-arm64v8
       - name: "Download artifacts for Debian Linux on amd64 (x86_64) & arm64 (aarch64)"
         uses: actions/download-artifact@v4
         with:
@@ -604,8 +608,12 @@ jobs:
         run: mv $(ls acton-macos-x86_64*.tar.xz | tail -n1) acton-macos-x86_64-tip.tar.xz
       - name: "Remove version number from linux x86_64 tar ball"
         run: mv $(ls acton-linux-x86_64*.tar.xz | tail -n1) acton-linux-x86_64-tip.tar.xz
-      - name: "Remove version number from debian package"
-        run: mv $(ls deb/acton_*.deb | tail -n1) deb/acton_tip_amd64.deb
+      - name: "Remove version number from linux aarch64 tar ball"
+        run: mv $(ls acton-linux-aarch64*.tar.xz | tail -n1) acton-linux-aarch64-tip.tar.xz
+      - name: "Remove version number from debian amd64 package"
+        run: mv $(ls deb/acton_*amd64.deb | tail -n1) deb/acton_tip_amd64.deb
+      - name: "Remove version number from debian arm64 package"
+        run: mv $(ls deb/acton_*arm64.deb | tail -n1) deb/acton_tip_arm64.deb
       - name: "List files for debug"
         run: |
           ls
