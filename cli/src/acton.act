@@ -201,7 +201,7 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
             build_config.zig_dependencies.setdefault(dep_name, dep)
         write_buildzig(file.FileCap(env.cap), build_config)
 
-        for dep_name, dep in all_deps.pkg_deps.items():
+        for dep_name, dep in build_config.dependencies.items():
             dep_hash = dep.hash
             dep_path = dep.path
             if dep_path is not None:
