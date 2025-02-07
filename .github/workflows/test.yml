@@ -224,7 +224,7 @@ jobs:
       - name: "Upload artifact"
         uses: actions/upload-artifact@v4
         with:
-          name: acton-${{ matrix.os }}-${{ matrix.version }}
+          name: acton-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}
           path: ${{ github.workspace }}/acton-*
           if-no-files-found: error
       - name: "Run tests"
@@ -235,7 +235,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: test-debug-${{ matrix.os }}-${{ github.run_id }}.zip
+          name: test-debug-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}-${{ github.run_id }}.zip
           path: |
             ${{ github.workspace }}/test
 
