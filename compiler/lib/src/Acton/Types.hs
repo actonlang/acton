@@ -1205,8 +1205,10 @@ instance Infer Expr where
             rtype ShiftR t              = tInt
             rtype _ t                   = t
     infer env (UnOp l op e)
-      | op == Not                       = do (cs,_,_,_,e') <- inferTest env e
-                                             return (cs, tBool, UnOp l op e')
+      | op == Not                       = do (cs,_,_,t,e') <- inferTest env e
+                                             w <- newWitness
+                                             return (Impl (DfltInfo (loc e) 822 (Just e) []) w t (pBool) :
+                                                     cs, tBool, Cond NoLoc (eBool False) e' (eBool True))
       | otherwise                       = do (cs,t,e') <- infer env e
                                              w <- newWitness
                                              return (Impl (DfltInfo (loc e) 82 (Just e) []) w t (protocol op) :
