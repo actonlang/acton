@@ -388,7 +388,15 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
             lock_file = file.WriteFile(file.WriteFileCap(fcap), ".acton.lock", lock=True)
             check_for_buildconfig()
         except OSError:
-            print("Build lock exists, trying again soon...")
+            # Only warn if we are an interactive session, chances are otherwise
+            # that we are running as a sub-compiler for building a dependency
+            # and there's a risk of racing for diamond shaped dependencies. It's
+            # normal though and will resolve itself, once the other sub-compiler
+            # is done, it will be our turn and the up-to-date check will run in
+            # ~0 time and then we're done.
+            # TODO: perhaps we should have a better signal than tty-check though
+            if env.is_tty():
+                print("Build lock exists, trying again soon...")
             after 1: get_lock()
 
     if env.is_tty():
