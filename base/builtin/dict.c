@@ -346,23 +346,24 @@ B_bool B_dictrel(bool directfalse,B_OrdD_dict w, B_dict a, B_dict b) {
     B_MappingD_dict m = B_MappingD_dictG_new(wH);
     B_Iterator it = m->$class->keys(m,a);
     $WORD x,resa,resb;
-    while(1) {
-        if ($PUSH()) {
+    if ($PUSH()) {
+        while(1) {
             x = it->$class->__next__(it);
             long h = 0;
             if (a->table->tb_size > INIT_SIZE)
                 h = from$int(wH->$class->__hash__(wH,x));
             int ixa = $lookdict(a, wH, h, x, &resa);
             int ixb = $lookdict(b, wH, h, x ,&resb);
-            if (ixb<0 || wB->$class->__ne__(wB,resa,resb)->val) return B_False;
-            $DROP();
-        } else {
-            B_BaseException ex = $POP();
-            if ($ISINSTANCE0(ex, B_StopIteration))
-                break;
-           else
-               $RAISE(ex);
+            if (ixb<0 || wB->$class->__ne__(wB,resa,resb)->val) {
+                $DROP();
+                return B_False;
+            }
         }
+        $DROP();
+    } else {
+        B_BaseException ex = $POP();
+        if (! $ISINSTANCE0(ex, B_StopIteration))
+           $RAISE(ex);
     }
     return B_True;
 }
