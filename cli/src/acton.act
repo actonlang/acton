@@ -1,3 +1,4 @@
+import acton.rts
 import argparse
 import file
 import json
@@ -1032,6 +1033,14 @@ actor CmdPkgUpgrade(env, args):
     fs = file.FS(file.FileCap(env.cap))
 
     zig = file.join_path([base_path(file.FileCap(env.cap)), "zig", "zig"])
+
+    # GAAH, the TLS lib does DNS lookups which interferes with GC as the malloc
+    # / free is asymmetric, we malloc (using GC malloc) while the free happens
+    # deeper inside and then incorrectly tries to free a GC malloced chunk
+    # We should replace with our own DNS lookups, but until then, disable GC for
+    # pkg upgrade. Should not be a practical problem to run without GC.
+    # TODO: remove this!!!!
+    acton.rts.disable_gc(env.syscap)
 
     # What arguments do we need?
     # - the name of the dependency (e.g. "foo", used in the build.act.json config file)
