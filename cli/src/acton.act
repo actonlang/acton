@@ -117,16 +117,24 @@ actor CompilerRunner(process_cap, env, args, wdir=None, on_exit: ?action(int, in
     """
     var std_out_buf = b""
     var std_err_buf = b""
+    var std_out_done = False
+    var std_err_done = False
 
-    def on_actonc_std_err(p, data):
-        std_err_buf += data
-        if print_output:
-            print(data.decode(), end="")
+    def on_actonc_std_err(p, data: ?bytes):
+        if data is not None:
+            std_err_buf += data
+            if print_output:
+                print(data.decode(), end="")
+        else:
+            std_err_done = True
 
-    def on_actonc_std_out(p, data):
-        std_out_buf += data
-        if print_output:
-            print(data.decode(), end="")
+    def on_actonc_std_out(p, data: ?bytes):
+        if data is not None:
+            std_out_buf += data
+            if print_output:
+                print(data.decode(), end="")
+        else:
+            std_out_done = True
 
     def on_actonc_exit(p, exit_code, term_signal):
         if on_exit is not None:
@@ -427,28 +435,30 @@ actor RunModuleTest(process_cap, modname, test_cmd, on_json_output, on_test_erro
     var std_err_buf = b""
     var captured_std_err = b""
 
-    def on_std_out(p, data: bytes):
-        captured_std_out += data
+    def on_std_out(p, data: ?bytes):
+        if data is not None:
+            captured_std_out += data
 
-    def on_std_err(p, data):
+    def on_std_err(p, data: ?bytes):
         # TODO: we shouldn't sent test data in-band on std_err - should be separate pipe
-        std_err_buf += data
-        lines = std_err_buf.splitlines(True)
-        std_err_buf = b""
-        for i, line in enumerate(lines):
-            if not line.endswith(b"\n"):
-                std_err_buf = b"".join(lines[i:])
-                break
+        if data is not None:
+            std_err_buf += data
+            lines = std_err_buf.splitlines(True)
+            std_err_buf = b""
+            for i, line in enumerate(lines):
+                if not line.endswith(b"\n"):
+                    std_err_buf = b"".join(lines[i:])
+                    break
 
-            # We have a complete line, check if it is valid JSON
-            try:
-                upd = json.decode(line.decode())
-                # We have a complete JSON object, pass it to the callback
-                on_json_output(self, upd, captured_std_out, captured_std_err)
-            except ValueError:
-                # Not a complete JSON object, append to captured_std_err
-                if line != b"\n":
-                    captured_std_err += line
+                # We have a complete line, check if it is valid JSON
+                try:
+                    upd = json.decode(line.decode())
+                    # We have a complete JSON object, pass it to the callback
+                    on_json_output(self, upd, captured_std_out, captured_std_err)
+                except ValueError:
+                    # Not a complete JSON object, append to captured_std_err
+                    if line != b"\n":
+                        captured_std_err += line
 
     def on_exit(p, exit_code, term_signal):
         if exit_code != 0 or term_signal != 0:
@@ -535,7 +545,7 @@ actor ListTests(process_cap, test_modules: list[str], on_done: action(?str, ?dic
                     else:
                         on_done("Error listing tests for module %s: no 'tests' key in JSON" % module_name)
             except ValueError as e:
-                on_done("Error parsing JSON from module %s: %s" % (module_name, str(e)))
+                on_done("Error parsing JSON from module %s: %s input: %s" % (module_name, str(e), std_err_buf.decode()))
         else:
             on_done("Error listing tests for module %s, exited with code %d and term signal %d: %s" % (module_name, exit_code, term_signal, std_err_buf.decode()))
 
@@ -683,12 +693,11 @@ actor CmdTest(env: Env, args, perf_mode: bool=False):
 
         ListTests(process_cap, list_modules, _on_list_output)
 
-    def _on_list_output(err, tests: dict[str, dict[str, testing.TestInfo]]={}):
-        if err is not None:
-            print(err, err=True)
+    def _on_list_output(error, tests: dict[str, dict[str, testing.TestInfo]]={}):
+        if error is not None:
+            print("Error when listing tests", error, err=True)
             env.exit(1)
             return
-
 
         expected_modules = set()
         name_filter = set(args.get_strlist("name"))

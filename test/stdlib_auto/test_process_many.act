@@ -1,7 +1,6 @@
 import acton.rts
 import process
 
-NUM=100
 
 actor GC(env):
     def _tihi():
@@ -11,12 +10,19 @@ actor GC(env):
     after 0: _tihi()
 
 
-actor main(env):
+actor main(env: Env):
+    var num=1000
+    if len(env.argv) > 1:
+        num = int(env.argv[1])
+
     var exited = 0
     def on_exit(p, exit_code, term_signal, stdout_buf, stderr_buf):
         exited += 1
         print("Process exited with code: ", exit_code, " terminated with signal:", term_signal, "  exited:", exited)
-        if exited == NUM:
+        if stdout_buf != b"HELLO\n":
+            print("stdout_buf is not correct, got:", stdout_buf)
+            env.exit(1)
+        if exited == num:
             print("Enough...")
             env.exit(0)
 
@@ -31,5 +37,11 @@ actor main(env):
 
     gc = GC(env)
 
-    for i in range(NUM):
-        test()
+    var i = 0
+    def run_tests():
+        if i < num:
+            test()
+            i += 1
+            after 0: run_tests()
+
+    after 0: run_tests()

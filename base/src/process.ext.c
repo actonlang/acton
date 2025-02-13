@@ -37,36 +37,40 @@ void exit_handler(uv_process_t *req, int64_t exit_status, int term_signal) {
 }
 
 void read_stderr(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
+    struct process_data *process_data = (struct process_data *)stream->data;
+    processQ_Process self = process_data->process;
+    $action2 f = ($action2)process_data->on_stderr;
+
     if (nread < 0) {
         if (nread == UV_EOF) {
             uv_close((uv_handle_t *)stream, NULL);
+            f->$class->__asyn__(f, self, B_None);
         } else {
             // Log and handle read error
             log_warn("Error reading from stderr");
         }
     } else if (nread > 0) {
         if (stream->data) {
-            struct process_data *process_data = (struct process_data *)stream->data;
-            processQ_Process self = process_data->process;
-            $action2 f = ($action2)process_data->on_stderr;
             f->$class->__asyn__(f, self, to$bytesD_len(buf->base, nread));
         }
     }
 }
 
 void read_stdout(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
+    struct process_data *process_data = (struct process_data *)stream->data;
+    processQ_Process self = process_data->process;
+    $action2 f = ($action2)process_data->on_stdout;
+
     if (nread < 0) {
         if (nread == UV_EOF) {
             uv_close((uv_handle_t *)stream, NULL);
+            f->$class->__asyn__(f, self, B_None);
         } else {
             // Log and handle read error
             log_warn("Error reading from stdout");
         }
     } else if (nread > 0) {
         if (stream->data) {
-            struct process_data *process_data = (struct process_data *)stream->data;
-            processQ_Process self = process_data->process;
-            $action2 f = ($action2)process_data->on_stdout;
             f->$class->__asyn__(f, self, to$bytesD_len(buf->base, nread));
         }
     }

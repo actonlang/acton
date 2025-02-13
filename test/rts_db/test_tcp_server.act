@@ -92,10 +92,12 @@ actor Tester(env, verbose, port_chunk, app_wthreads=4):
             combined_output += psp[paid] + " " + prefix + ": " + line + "\n"
 
     def on_stderr(p, data):
-        log_process_output(p, "ERR", data)
+        if data is not None:
+            log_process_output(p, "ERR", data)
 
     def on_stdout(p, data):
-        log_process_output(p, "OUT", data)
+        if data is not None:
+            log_process_output(p, "OUT", data)
 
     def db_on_exit(p, exit_code, term_signal):
         log("DB Process exited with code: %d terminated with signal: %d" % (exit_code, term_signal))
@@ -187,21 +189,22 @@ actor Tester(env, verbose, port_chunk, app_wthreads=4):
             error("Client ERR: %s" % (msg))
 
         def app_server_on_stdout(p, data):
-            log_process_output(p, "OUT: state " + str(state), data)
-            if state == 0:
-                if data.find(b"NOW LISTENING", None, None) > -1:
-                    log("Server app listening in state %d, starting TCP client" % state)
-                    state = 1
-                    tcp_client = net.TCPConnection(connect_cap, "127.0.0.1", port, tcpc_on_connect, tcpc_on_receive, tcpc_on_error)
-                else:
-                    log("In state " + str(state) + ", read unexpected output from server app:" + str(data))
-            elif state == 6:
-                if data.find(b"NOW LISTENING", None, None) > -1:
-                    log("Server app listening in state %d, starting TCP client" % state)
-                    state = 7
-                    tcp_client = net.TCPConnection(connect_cap, "127.0.0.1", port, tcpc_on_connect, tcpc_on_receive, tcpc_on_error)
-                else:
-                    log("In state " + str(state) + ", read unexpected output from server app:" + str(data))
+            if data is not None:
+                log_process_output(p, "OUT: state " + str(state), data)
+                if state == 0:
+                    if data.find(b"NOW LISTENING", None, None) > -1:
+                        log("Server app listening in state %d, starting TCP client" % state)
+                        state = 1
+                        tcp_client = net.TCPConnection(connect_cap, "127.0.0.1", port, tcpc_on_connect, tcpc_on_receive, tcpc_on_error)
+                    else:
+                        log("In state " + str(state) + ", read unexpected output from server app:" + str(data))
+                elif state == 6:
+                    if data.find(b"NOW LISTENING", None, None) > -1:
+                        log("Server app listening in state %d, starting TCP client" % state)
+                        state = 7
+                        tcp_client = net.TCPConnection(connect_cap, "127.0.0.1", port, tcpc_on_connect, tcpc_on_receive, tcpc_on_error)
+                    else:
+                        log("In state " + str(state) + ", read unexpected output from server app:" + str(data))
 
         log("Running server test")
         dbc_start()
