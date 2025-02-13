@@ -535,7 +535,7 @@ actor ListTests(process_cap, test_modules: list[str], on_done: action(?str, ?dic
                     else:
                         on_done("Error listing tests for module %s: no 'tests' key in JSON" % module_name)
             except ValueError as e:
-                on_done("Error parsing JSON from module %s: %s" % (module_name, str(e)))
+                on_done("Error parsing JSON from module %s: %s input: %s" % (module_name, str(e), std_err_buf.decode()))
         else:
             on_done("Error listing tests for module %s, exited with code %d and term signal %d: %s" % (module_name, exit_code, term_signal, std_err_buf.decode()))
 
@@ -683,12 +683,11 @@ actor CmdTest(env: Env, args, perf_mode: bool=False):
 
         ListTests(process_cap, list_modules, _on_list_output)
 
-    def _on_list_output(err, tests: dict[str, dict[str, testing.TestInfo]]={}):
-        if err is not None:
-            print(err, err=True)
+    def _on_list_output(error, tests: dict[str, dict[str, testing.TestInfo]]={}):
+        if error is not None:
+            print("Error when listing tests", error, err=True)
             env.exit(1)
             return
-
 
         expected_modules = set()
         name_filter = set(args.get_strlist("name"))
