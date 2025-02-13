@@ -8,8 +8,8 @@ class ProcessCap():
 
 actor Process(cap: ProcessCap,
               cmd: list[str],
-              on_stdout: action(Process, bytes) -> None,
-              on_stderr: action(Process, bytes) -> None,
+              on_stdout: action(Process, ?bytes) -> None,
+              on_stderr: action(Process, ?bytes) -> None,
               on_exit: action(Process, int, int) -> None,
               on_error: action(Process, str) -> None,
               workdir: ?str=None,
@@ -104,31 +104,55 @@ actor RunProcess(cap: ProcessCap,
     """
     var out_buf = b""
     var err_buf = b""
+    var _out_done = False
+    var _err_done = False
+    var _exited = False
+    var _exit_code = 0
+    var _signal = 0
+    var _process: ?Process = None
 
-    def _on_stdout(p: Process, data: bytes):
-        out_buf += data
 
-    def _on_stderr(p: Process, data: bytes):
-        err_buf += data
+    def _on_stdout(p: Process, data: ?bytes):
+        if data is not None:
+            out_buf += data
+        else:
+            _out_done = True
+            _check_done()
+
+    def _on_stderr(p: Process, data: ?bytes):
+        if data is not None:
+            err_buf += data
+        else:
+            _err_done = True
+            _check_done()
 
     def _on_exit(p: Process, exit_code: int, signal: int):
-        on_exit(p, exit_code, signal, out_buf, err_buf)
+        _exited = True
+        _exit_code = exit_code
+        _signal = signal
+        _check_done()
 
-    p = Process(cap, cmd, _on_stdout, _on_stderr, _on_exit, on_error, workdir, env, timeout)
+    def _check_done():
+        if _process is not None:
+            if _out_done and _err_done and _exited:
+                on_exit(_process, _exit_code, _signal, out_buf, err_buf)
+
+    _p = Process(cap, cmd, _on_stdout, _on_stderr, _on_exit, on_error, workdir, env, timeout)
+    _process = _p
 
     def signal(sig: int):
         """Send signal to process"""
-        p.signal(sig)
+        _p.signal(sig)
 
     def kill():
         """Abrubtly kill process by sending SIGKILL
         """
-        p.kill()
+        _p.kill()
 
     def terminate():
         """Stop process by sending SIGTERM
         """
-        p.terminate()
+        _p.terminate()
 
     def stop():
         """Stop process
@@ -137,4 +161,4 @@ actor RunProcess(cap: ProcessCap,
         Unix system. After kill_after seconds (defaults to 1), SIGKILL is sent
         to ensure the process is stopped.
         """
-        p.stop()
+        _p.stop()

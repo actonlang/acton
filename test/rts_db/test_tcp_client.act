@@ -83,16 +83,18 @@ actor Tester(env, verbose, port_chunk):
 
         report()
 
-    def log_process_output(p, prefix, data):
+    def log_process_output(p, prefix, data: bytes):
         paid = p.aid()
         for line in data.decode().splitlines(False):
             combined_output += psp[paid] + " " + prefix + ": " + line + "\n"
 
     def on_stderr(p, data):
-        log_process_output(p, "ERR", data)
+        if data is not None:
+            log_process_output(p, "ERR", data)
 
     def on_stdout(p, data):
-        log_process_output(p, "OUT", data)
+        if data is not None:
+            log_process_output(p, "OUT", data)
 
     def db_on_exit(p, exit_code, term_signal):
         log("DB Process exited with code: %d terminated with signal: %d" % (exit_code, term_signal))
@@ -158,7 +160,8 @@ actor Tester(env, verbose, port_chunk):
 
         # TCP server
         def app_server_on_stdout(p, data):
-            log_process_output(p, "OUT: state " + str(state), data)
+            if data is not None:
+                log_process_output(p, "OUT: state " + str(state), data)
 
         def app_server_on_exit(p, exit_code, term_signal):
             log("Server app exited in state %d with exit code %d and termination signal %d" % (state, exit_code, term_signal))
@@ -206,13 +209,14 @@ actor Tester(env, verbose, port_chunk):
 
         def app_client_on_stdout(p, data):
             on_stdout(p, data)
-            if state == 0:
-                if data == b"Got a 0, doing noooothing...\n":
-                    state = 1
-                    log("YAY, got expected data, terminating client, current p_alive: " + str(p_alive))
-                    p.terminate()
-                else:
-                    error("Got unexpected data from client over stdout in state %d: %s" % (state, str(data)))
+            if data is not None:
+                if state == 0:
+                    if data == b"Got a 0, doing noooothing...\n":
+                        state = 1
+                        log("YAY, got expected data, terminating client, current p_alive: " + str(p_alive))
+                        p.terminate()
+                    else:
+                        error("Got unexpected data from client over stdout in state %d: %s" % (state, str(data)))
 
 
         def app_client_on_exit(p, exit_code, term_signal):

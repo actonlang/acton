@@ -67,10 +67,12 @@ actor Tester(env, verbose, port_chunk):
             combined_output += psp[paid] + " " + prefix + ": " + line + "\n"
 
     def on_stderr(p, data):
-        log_process_output(p, "ERR", data)
+        if data is not None:
+            log_process_output(p, "ERR", data)
 
     def on_stdout(p, data):
-        log_process_output(p, "OUT", data)
+        if data is not None:
+            log_process_output(p, "OUT", data)
 
 
     def db_on_exit(p, exit_code, term_signal):
