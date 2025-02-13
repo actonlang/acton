@@ -171,13 +171,22 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
     if len(files) > 1:
         raise NotImplementedError("Multiple files not supported yet")
 
-    dep_path_overrides = {}
-    for dep_arg in args.get_strlist("dep"):
-        parts = dep_arg.split("=", 1)
-        dep_name, dep_path = parts[0], parts[1]
-        # Ensure we have absolute paths
-        abs_path = file.resolve_relative_path(fs.cwd(), dep_path)
-        dep_path_overrides[dep_name] = abs_path
+    def parse_dep_path_overrides(args) -> dict[str, str]:
+        overrides = {}
+        for dep_arg in args.get_strlist("dep"):
+            parts = dep_arg.split("=", 1)
+            if len(parts) == 2:
+                dep_name, dep_path = parts[0], parts[1]
+                # Ensure we have absolute paths
+                abs_path = file.resolve_relative_path(fs.cwd(), dep_path)
+                overrides[dep_name] = abs_path
+            else:
+                print("Invalid dep argument: %s" % dep_arg, err=True)
+                print("HINT: Use --dep <depname>=<path> to specify a dependency path", err=True)
+                await async env.exit(1)
+        return overrides
+
+    dep_path_overrides = parse_dep_path_overrides(args)
 
     var build_config = BuildConfig()
 
@@ -271,6 +280,10 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
             build_project()
         else:
             print("Building dependencies:")
+            dep_args = []
+            for dep_name, dep_path in dep_path_overrides.items():
+                dep_args.extend(["--dep", dep_name + "=" + dep_path])
+
             for dep_name, dep in build_config.dependencies.items():
                 dep_hash = dep.hash
                 dep_path = dep.path
@@ -282,12 +295,6 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
                 else:
                     raise ValueError("Dependency %s has no path or hash" % dep_name)
                 print(" -", dep_name)
-                dep_args = []
-                for dep_arg in args.get_strlist("dep"):
-                    parts = dep_arg.split("=", 1)
-                    absolute_path = file.resolve_relative_path(fs.cwd(), parts[1])
-                    new_dep_arg = parts[0] + "=" + absolute_path
-                    dep_args.extend(["--dep", new_dep_arg])
                 cmd = ["build"] + dep_build_cmd_args(args) + dep_args
                 # Build deps in dev mode if we are building tests
                 if build_tests:
