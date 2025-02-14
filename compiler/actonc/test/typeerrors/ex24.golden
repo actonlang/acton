@@ -1,7 +1,7 @@
 Building file test/typeerrors/ex24.act using temporary scratch directory
   Compiling ex24.act for development
 [error]: Type unification error
-     +--> ex24@4:9-4:14
+     +--> ex24.act@4:9-4:14
      |
    4 |     a : ?str = ""
      :         ^---- 

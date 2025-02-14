@@ -1,7 +1,7 @@
 Building file test/typeerrors/ex5.act using temporary scratch directory
   Compiling ex5.act for development
 [error]: Incompatible types
-     +--> ex5@7:5-7:15
+     +--> ex5.act@7:5-7:15
      |
    4 | def apply(g,x):
      :     ^---- 

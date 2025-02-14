@@ -1,7 +1,7 @@
 Building file test/typeerrors/ex22.act using temporary scratch directory
   Compiling ex22.act for development
 [error]: Incompatible types
-     +--> ex22@1:1-1:2
+     +--> ex22.act@1:1-1:2
      |
    1 |    f : [A(Plus)] => (A) -> A
      :    ^ 

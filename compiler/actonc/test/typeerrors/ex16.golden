@@ -1,7 +1,7 @@
 Building file test/typeerrors/ex16.act using temporary scratch directory
   Compiling ex16.act for development
 [error]: Constraint violation
-     +--> ex16@6:9-6:19
+     +--> ex16.act@6:9-6:19
      |
    6 |         foo.append(4)
      :         ^--------- 

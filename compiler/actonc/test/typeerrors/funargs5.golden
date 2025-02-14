@@ -1,7 +1,7 @@
 Building file test/typeerrors/funargs5.act using temporary scratch directory
   Compiling funargs5.act for development
 [error]: Incompatible types
-     +--> funargs5@4:5-4:15
+     +--> funargs5.act@4:5-4:15
      |
    1 | def f(x,y,*z,w):
      :     ^ 
