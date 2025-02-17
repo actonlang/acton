@@ -1,7 +1,7 @@
 Building file test/typeerrors/ex8.act using temporary scratch directory
   Compiling ex8.act for development
 [error]: Cannot satisfy the following simultaneous constraints for the unknown type t0
-     +--> ex8@3:14-3:15
+     +--> ex8.act@3:14-3:15
      |
    3 |     for x in n:
      :              ^ 

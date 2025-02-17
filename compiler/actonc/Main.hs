@@ -876,8 +876,13 @@ handle errKind f src paths mn ex = do
     putStrLn (Acton.Parser.makeReport (f ex) src)
     handleCleanup paths mn
 
+modNameToFilename :: A.ModName -> String
+modNameToFilename mn = joinPath (map nameToString names) ++ ".act"
+  where
+    A.ModName names = mn
+
 handleTypeError opts errKind f src paths mn ex = do
-    printDiag opts $ mkErrorDiagnostic (modNameToString mn) src (typeReport ex (modNameToString mn) src)
+    printDiag opts $ mkErrorDiagnostic (modNameToFilename mn) src (typeReport ex (modNameToFilename mn) src)
     handleCleanup paths mn
 
 handleCleanup paths mn = do

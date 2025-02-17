@@ -1,7 +1,7 @@
 Building file test/typeerrors/ex19.act using temporary scratch directory
   Compiling ex19.act for development
 [error]: Cannot satisfy the following simultaneous constraints for the unknown types
-     +--> ex19@1:5-1:6
+     +--> ex19.act@1:5-1:6
      |
    1 | def f(x,y):
      :     ^ 

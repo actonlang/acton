@@ -1,7 +1,7 @@
 Building file test/typeerrors/funargs4.act using temporary scratch directory
   Compiling funargs4.act for development
 [error]: Unexpected keyword argument
-     +--> funargs4@4:9-4:10
+     +--> funargs4.act@4:9-4:10
      |
    4 | a = f(4,x=3,y=4)
      :         ^ 

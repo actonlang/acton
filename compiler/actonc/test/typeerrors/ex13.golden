@@ -1,7 +1,7 @@
 Building file test/typeerrors/ex13.act using temporary scratch directory
   Compiling ex13.act for development
 [error]: Incompatible types
-     +--> ex13@2:7-2:13
+     +--> ex13.act@2:7-2:13
      |
    2 |   a = Act(7)
      :       ^-----
