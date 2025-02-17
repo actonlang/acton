@@ -2792,6 +2792,14 @@ int main(int argc, char **argv) {
 #ifdef ACTON_THREADS
     cpu_set_t cpu_set;
 
+    size_t primary_thread_stack_size;
+    size_t target_thread_stack_size;
+    primary_thread_stack_size = pthread_get_stacksize_np(pthread_self());
+    target_thread_stack_size = REQUIRED_STACK_SIZE > primary_thread_stack_size ? (size_t)REQUIRED_STACK_SIZE : primary_thread_stack_size;
+
+    if (primary_thread_stack_size < target_thread_stack_size)
+        log_warn("Current primary thread stack size: %u, required thread stack size: %u", primary_thread_stack_size, target_thread_stack_size);
+
     // RTS Monitor Log
     pthread_t mon_log_thread;
     if (mon_log_path) {
@@ -2820,7 +2828,18 @@ int main(int argc, char **argv) {
     // thus we need to start 1..num_wthreads. Only need to keep track of
     // branches we start.
     for (int idx = 1; idx <= num_wthreads; idx++) {
-        pthread_create(&threads[idx-1], NULL, main_loop, (void*)(intptr_t)idx);
+        pthread_attr_t stackSizeAttribute;
+        size_t stackSize = 0;
+        pthread_attr_init(&stackSizeAttribute);
+        pthread_attr_getstacksize(&stackSizeAttribute, &stackSize);
+        if (stackSize < target_thread_stack_size)
+        {
+            log_debug("Current thread stack size: %d, required thread stack size: %d", stackSize, target_thread_stack_size);
+            int err = pthread_attr_setstacksize(&stackSizeAttribute, target_thread_stack_size);
+            if (err)
+                log_error("pthread_attr_setstacksize failed: %s", strerror(err));
+        }
+        pthread_create(&threads[idx-1], &stackSizeAttribute, main_loop, (void*)(intptr_t)idx);
         // Index start at 1 and we pin wthreads to CPU 1...n
         // We use CPU 0 for misc threads, like IO / mon etc
         if (cpu_pin) {

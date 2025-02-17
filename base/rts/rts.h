@@ -33,6 +33,8 @@
 #define SHARED_RQ 0
 #endif
 
+#define REQUIRED_STACK_SIZE 8*1024*1024
+
 #include "q.h"
 
 extern long num_wthreads;
