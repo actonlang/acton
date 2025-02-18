@@ -2794,7 +2794,14 @@ int main(int argc, char **argv) {
 
     size_t primary_thread_stack_size;
     size_t target_thread_stack_size;
+#if defined(IS_MACOS)
     primary_thread_stack_size = pthread_get_stacksize_np(pthread_self());
+#else
+    pthread_attr_t attr;
+    pthread_getattr_np(pthread_self(), &attr);
+    pthread_attr_getstacksize(&attr, &primary_thread_stack_size);
+    pthread_attr_destroy(&attr);
+#endif
     target_thread_stack_size = REQUIRED_STACK_SIZE > primary_thread_stack_size ? (size_t)REQUIRED_STACK_SIZE : primary_thread_stack_size;
 
     if (primary_thread_stack_size < target_thread_stack_size)
