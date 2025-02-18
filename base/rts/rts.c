@@ -2792,10 +2792,37 @@ int main(int argc, char **argv) {
 #ifdef ACTON_THREADS
     cpu_set_t cpu_set;
 
+    size_t primary_thread_stack_size;
+    size_t target_thread_stack_size;
+#if defined(IS_MACOS)
+    primary_thread_stack_size = pthread_get_stacksize_np(pthread_self());
+#else
+    pthread_attr_t attr;
+    pthread_getattr_np(pthread_self(), &attr);
+    pthread_attr_getstacksize(&attr, &primary_thread_stack_size);
+    pthread_attr_destroy(&attr);
+#endif
+    target_thread_stack_size = REQUIRED_STACK_SIZE > primary_thread_stack_size ? (size_t)REQUIRED_STACK_SIZE : primary_thread_stack_size;
+
+    if (primary_thread_stack_size < target_thread_stack_size)
+        log_warn("Current primary thread stack size: %u, required thread stack size: %u", primary_thread_stack_size, target_thread_stack_size);
+
+    pthread_attr_t ss_attr;
+    size_t secondary_thread_stack_size = 0;
+    pthread_attr_init(&ss_attr);
+    pthread_attr_getstacksize(&ss_attr, &secondary_thread_stack_size);
+    if (secondary_thread_stack_size < target_thread_stack_size)
+    {
+        log_debug("Secondary thread stack size: %d, required thread stack size: %d", secondary_thread_stack_size, target_thread_stack_size);
+        int err = pthread_attr_setstacksize(&ss_attr, target_thread_stack_size);
+        if (err)
+            log_error("pthread_attr_setstacksize failed: %s", strerror(err));
+    }
+
     // RTS Monitor Log
     pthread_t mon_log_thread;
     if (mon_log_path) {
-        pthread_create(&mon_log_thread, NULL, $mon_log_loop, (void *)(intptr_t)mon_log_period);
+        pthread_create(&mon_log_thread, &ss_attr, $mon_log_loop, (void *)(intptr_t)mon_log_period);
         if (cpu_pin) {
             CPU_ZERO(&cpu_set);
             CPU_SET(0, &cpu_set);
@@ -2806,7 +2833,7 @@ int main(int argc, char **argv) {
     // RTS Monitor Socket
     pthread_t mon_socket_thread;
     if (mon_socket_path) {
-        pthread_create(&mon_socket_thread, NULL, $mon_socket_loop, NULL);
+        pthread_create(&mon_socket_thread, &ss_attr, $mon_socket_loop, NULL);
         if (cpu_pin) {
             CPU_ZERO(&cpu_set);
             CPU_SET(0, &cpu_set);
@@ -2820,7 +2847,7 @@ int main(int argc, char **argv) {
     // thus we need to start 1..num_wthreads. Only need to keep track of
     // branches we start.
     for (int idx = 1; idx <= num_wthreads; idx++) {
-        pthread_create(&threads[idx-1], NULL, main_loop, (void*)(intptr_t)idx);
+        pthread_create(&threads[idx-1], &ss_attr, main_loop, (void*)(intptr_t)idx);
         // Index start at 1 and we pin wthreads to CPU 1...n
         // We use CPU 0 for misc threads, like IO / mon etc
         if (cpu_pin) {
@@ -2829,6 +2856,8 @@ int main(int argc, char **argv) {
             //pthread_setaffinity_np(threads[idx-1], sizeof(cpu_set), &cpu_set);
         }
     }
+
+    pthread_attr_destroy(&ss_attr);
 #endif
 
 
