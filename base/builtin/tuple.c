@@ -25,24 +25,6 @@ B_NoneType B_tupleD___init__(B_tuple self,int size ,...) {
     return B_None;
 }
 
-B_bool B_BoolD_tupleD___bool__(B_tuple self) {
-    return toB_bool(self->size>0);
-}
-
-B_str B_StrD_tupleD___str__(B_tuple self) {
-    B_list s2 = B_listD_new(self->size);
-    B_SequenceD_list wit = B_SequenceD_listG_witness;
-    for (int i=0; i< self->size; i++) {
-        B_value elem = (B_value)self->components[i];
-        wit->$class->append(wit,s2,elem->$class->__repr__(elem));
-    }
-    return B_strD_join_par('(',s2,')');
-}
-
-B_str B_StrD_tupleD___repr__(B_tuple self) {
-    return B_tupleD___str__(self);
-}
-
 void B_tupleD___serialize__(B_tuple self, $Serial$state state) {
     B_int prevkey = (B_int)B_dictD_get(state->done,(B_Hashable)B_HashableD_WORDG_witness,self,NULL);
     if (prevkey) {
@@ -83,9 +65,6 @@ struct B_tupleG_class B_tupleG_methods = {
     B_tupleD___init__,
     B_tupleD___serialize__,
     B_tupleD___deserialize__,
-    B_tupleD___bool__,
-    B_tupleD___str__,
-    B_tupleD___str__
 };
 // Iterators over tuples ///////////////////////////////////////////////////////
 
@@ -120,8 +99,103 @@ B_IteratorD_tuple B_IteratorD_tuple$_deserialize(B_IteratorD_tuple res, $Serial$
 }
 
 struct B_IteratorD_tupleG_class B_IteratorD_tupleG_methods = {"B_IteratorD_tuple",UNASSIGNED,($SuperG_class)&B_IteratorG_methods,B_IteratorD_tupleD_init,
-                                                        B_IteratorD_tupleD_serialize,B_IteratorD_tuple$_deserialize,B_IteratorD_tupleD_bool,B_IteratorD_tupleD_str,B_IteratorD_tupleD_str,B_IteratorD_tupleD_next};
+                                                        B_IteratorD_tupleD_serialize,B_IteratorD_tuple$_deserialize,B_IteratorD_tupleD_next};
 
+
+// Bool ///////////////////////////////////////////////////////////////
+
+struct B_BoolD_tupleG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__)(B_BoolD_tuple);
+    void (*__serialize__)(B_BoolD_tuple,$Serial$state);
+    B_BoolD_tuple (*__deserialize__)(B_BoolD_tuple,$Serial$state);
+    B_bool (*__bool__)(B_BoolD_tuple, B_tuple);
+};
+
+struct B_BoolD_tuple {
+    B_BoolD_tupleG_class $class;
+};
+
+B_bool B_BoolD_tupleD___bool__(B_BoolD_tuple wit, B_tuple self) {
+    return toB_bool(self->size>0);
+}
+
+B_NoneType B_BoolD_tupleD___init__(B_BoolD_tuple self) {
+    return B_None;
+}
+
+void B_BoolD_tupleD___serialize__(B_BoolD_tuple self, $Serial$state state) {
+}
+
+B_BoolD_tuple B_BoolD_tupleD___deserialize__(B_BoolD_tuple self, $Serial$state state) {
+    B_BoolD_tuple res = $DNEW(B_BoolD_tuple,state);
+    return res;
+}
+struct B_BoolD_tupleG_class B_BoolD_tupleG_methods = {
+    "B_BoolD_tuple",
+    UNASSIGNED,
+    ($SuperG_class)&B_BoolG_methods,
+    B_BoolD_tupleD___init__,
+    B_BoolD_tupleD___serialize__,
+    B_BoolD_tupleD___deserialize__,
+    B_BoolD_tupleD___bool__
+};
+
+// Show ///////////////////////////////////////////////////////////////
+
+struct B_ShowD_tupleG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__)(B_ShowD_tuple);
+    void (*__serialize__)(B_ShowD_tuple,$Serial$state);
+    B_ShowD_tuple (*__deserialize__)(B_ShowD_tuple,$Serial$state);
+    B_str (*__str__)(B_ShowD_tuple, B_tuple);
+    B_str (*__repr__)(B_ShowD_tuple, B_tuple);
+};
+
+struct B_ShowD_tuple {
+    B_ShowD_tupleG_class $class;
+};
+
+B_str B_ShowD_tupleD___str__(B_ShowD_tuple wit, B_tuple self) {
+    B_list s2 = B_listD_new(self->size);
+    B_SequenceD_list wit2 = B_SequenceD_listG_witness;
+    B_Show wit3 = B_ShowD_tupleG_witness;
+    for (int i=0; i< self->size; i++) {
+        $WORD elem = (B_value)self->components[i];
+        wit2->$class->append(wit2,s2,wit3->$class->__repr__(wit3,elem));
+    }
+    return B_strD_join_par('(',s2,')');
+}
+
+B_str B_ShowD_tupleD___repr__(B_ShowD_tuple wit, B_tuple self) {
+    return B_ShowD_tupleD___str__(wit, self);
+}
+
+B_NoneType B_ShowD_tupleD___init__(B_ShowD_tuple self) {
+    return B_None;
+}
+
+void B_ShowD_tupleD___serialize__(B_ShowD_tuple self, $Serial$state state) {
+}
+
+B_ShowD_tuple B_ShowD_tupleD___deserialize__(B_ShowD_tuple self, $Serial$state state) {
+    B_ShowD_tuple res = $DNEW(B_ShowD_tuple,state);
+    return res;
+}
+struct B_ShowD_tupleG_class B_ShowD_tupleG_methods = {
+    "B_ShowD_tuple",
+    UNASSIGNED,
+    ($SuperG_class)&B_ShowG_methods,
+    B_ShowD_tupleD___init__,
+    B_ShowD_tupleD___serialize__,
+    B_ShowD_tupleD___deserialize__,
+    B_ShowD_tupleD___str__,
+    B_ShowD_tupleD___repr__
+};
 
 // Iterable ///////////////////////////////////////////////////////////////
 
@@ -147,9 +221,6 @@ struct B_IterableD_tupleG_class B_IterableD_tupleG_methods = {
     B_IterableD_tupleD___init__,
     B_IterableD_tupleD___serialize__,
     B_IterableD_tupleD___deserialize__,
-    (B_bool (*)(B_IterableD_tuple))$default__bool__,
-    (B_str (*)(B_IterableD_tuple))$default__str__,
-    (B_str (*)(B_IterableD_tuple))$default__str__,
     B_IterableD_tupleD___iter__
 };
 //struct B_IterableD_tuple B_IterableD_tuple$instance = {&B_IterableD_tupleG_methods};
@@ -226,9 +297,6 @@ struct B_SliceableD_tupleG_class B_SliceableD_tupleG_methods = {
     B_SliceableD_tupleD___init__,
     B_SliceableD_tupleD___serialize__,
     B_SliceableD_tupleD___deserialize__,
-    (B_bool (*)(B_SliceableD_tuple))$default__bool__,
-    (B_str (*)(B_SliceableD_tuple))$default__str__,
-    (B_str (*)(B_SliceableD_tuple))$default__str__,
     B_SliceableD_tupleD___getitem__,
     B_SliceableD_tupleD___setitem__,
     B_SliceableD_tupleD___delitem__,
@@ -281,9 +349,6 @@ struct B_HashableD_tupleG_class B_HashableD_tupleG_methods = {
     B_HashableD_tupleD___init__,
     B_HashableD_tupleD___serialize__,
     B_HashableD_tupleD___deserialize__,
-    (B_bool (*)(B_HashableD_tuple))$default__bool__,
-    (B_str (*)(B_HashableD_tuple))$default__str__,
-    (B_str (*)(B_HashableD_tuple))$default__str__,
     B_HashableD_tupleD___eq__,
     B_HashableD_tupleD___ne__,
     B_HashableD_tupleD___hash__

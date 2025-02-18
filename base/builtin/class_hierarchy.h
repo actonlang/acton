@@ -51,3 +51,24 @@ struct $Serializable {
 extern struct $SerializableG_class $SerializableG_methods;
 $Serializable $SerializableG_new();
   
+// B_BoolD_value ////////////////////////////////////////////////////////////////
+
+struct B_BoolD_value;
+typedef struct B_BoolD_value *B_BoolD_value;
+
+struct B_BoolD_valueG_class;
+typedef struct B_BoolD_valueG_class *B_BoolD_valueG_class;
+
+extern struct B_BoolD_valueG_class B_BoolD_valueG_methods;
+B_BoolD_value B_BoolD_valueG_new();
+
+// B_ShowD_value ////////////////////////////////////////////////////////////////
+
+struct B_ShowD_value;
+typedef struct B_ShowD_value *B_ShowD_value;
+
+struct B_ShowD_valueG_class;
+typedef struct B_ShowD_valueG_class *B_ShowD_valueG_class;
+
+extern struct B_ShowD_valueG_class B_ShowD_valueG_methods;
+B_ShowD_value B_ShowD_valueG_new();

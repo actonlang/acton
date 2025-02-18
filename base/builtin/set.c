@@ -229,24 +229,25 @@ B_NoneType B_setD___init__(B_set set, B_Hashable hashwit, B_Iterable wit, $WORD 
     return B_None;
 }
 
-B_bool B_BoolD_setD___bool__(B_set self) {
+B_bool B_BoolD_setD___bool__(B_BoolD_set wit, B_set self) {
     return toB_bool(self->numelements>0);
 }
 
-B_str B_StrD_setD___str__(B_set self) {
+B_str B_ShowD_setD___str__(B_ShowD_set wit, B_set self) {
     B_list s2 = B_listD_new(self->numelements);
-    B_SequenceD_list wit = B_SequenceD_listG_witness;
+    B_SequenceD_list wit2 = B_SequenceD_listG_witness;
     B_IteratorD_set iter = $NEW(B_IteratorD_set,self);
-    B_value elem;
+    $WORD elem;
+    B_Show wit3 = wit->W_ShowD_AD_ShowD_set;
     for (int i=0; i<self->numelements; i++) {
-        elem = (B_value)iter->$class->__next__(iter);
-        wit->$class->append(wit,s2,elem->$class->__repr__(elem));
+        elem = iter->$class->__next__(iter);
+        wit2->$class->append(wit2,s2,wit3->$class->__repr__(wit3, elem));
     }
     return B_strD_join_par('{',s2,'}');
 }
 
-B_str B_StrD_setD___repr__(B_set self) {
-    return B_setD___str__(self);
+B_str B_ShowD_setD___repr__(B_ShowD_set wit, B_set self) {
+    return B_ShowD_setD___str__(wit,self);
 }
 
 void B_setD___serialize__(B_set self, $Serial$state state) {

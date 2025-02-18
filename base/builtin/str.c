@@ -463,23 +463,23 @@ B_NoneType B_strD___init__(B_str self, B_value s) {
         self->str = (unsigned char *)"None";
         return B_None;
     }
-    B_str res = s->$class->__str__(s);
+    B_str res = B_ShowD_valueG_witness->$class->__str__(B_ShowD_valueG_witness,s);
     self->nchars = res->nchars;
     self->nbytes = res->nbytes;
     self->str = res->str;
     return B_None;
 }
 
-B_bool B_BoolD_strD___bool__(B_str s) {
+B_bool B_BoolD_strD___bool__(B_BoolD_str wit, B_str s) {
     return toB_bool(s->nchars > 0);
 };
 
-B_str B_StrD_strD___str__(B_str s) {
+B_str B_ShowD_strD___str__(B_ShowD_str wit, B_str s) {
     return s;
 }
 
 
-B_str B_StrD_strD___repr__(B_str s) {
+B_str B_ShowD_strD___repr__(B_ShowD_str wit, B_str s) {
     struct byte_counts bs = byte_count(s->str, s->nbytes);
     int newbytes = 2+bs.escaped+3*bs.non_printable+(bs.squotes>0 && bs.dquotes>0 ? bs.squotes : 0);
     B_str res;
@@ -1493,11 +1493,11 @@ B_NoneType B_bytearrayD___init__(B_bytearray self, B_bytes b) {
     return B_None;
 }
  
-B_bool B_BoolD_bytearrayD___bool__(B_bytearray s) {
+B_bool B_BoolD_bytearrayD___bool__(B_BoolD_bytearray wit, B_bytearray s) {
     return toB_bool(s->nbytes > 0);
 };
 
-B_str B_StrD_bytearrayD___str__(B_bytearray s) {
+B_str B_ShowD_bytearrayD___str__(B_ShowD_bytearray wit, B_bytearray s) {
     struct byte_counts bs = byte_count(s->str, s->nbytes);
     int newbytes = 14+bs.escaped+3*bs.non_printable+(bs.squotes>0 && bs.dquotes>0 ? bs.squotes : 0)+3*bs.non_ascii;
     B_str res;
@@ -1516,8 +1516,8 @@ B_str B_StrD_bytearrayD___str__(B_bytearray s) {
     return res;
 }
 
-B_str B_StrD_bytearrayD___repr__(B_bytearray s) {
-    return B_bytearrayD___str__(s);
+B_str B_ShowD_bytearrayD___repr__(B_ShowD_bytearray wit, B_bytearray s) {
+    return B_ShowD_bytearrayD___str__(wit,s);
 }
 
 void B_bytearrayD___serialize__(B_bytearray str,$Serial$state state) {
@@ -1676,7 +1676,8 @@ B_bytearray B_bytearrayD_from_hex(B_str s) {
     }
 
     int bytelen = strlen / 2;
-    char *result = acton_malloc_atomic(bytelen);
+    char *result = acton_malloc_atomic(bytelen+1);
+    result[bytelen] = 0;
 
     for (int i = 0; i < strlen; i += 2) {
         char high = s->str[i];
@@ -1710,8 +1711,13 @@ B_bytearray B_bytearrayD_from_hex(B_str s) {
         // Combine into byte
         result[i/2] = (high_val << 4) | low_val;
     }
+    B_bytearray res = acton_malloc(sizeof(struct B_bytearray)); 
+    res->$class = &B_bytearrayG_methods;
+    res->nbytes = bytelen;
+    res->capacity = bytelen;
+    res->str = result;
 
-    return actBytesFromCStringLengthNoCopy(result, bytelen);
+    return res;
 }
 
 B_str B_bytearrayD_hex(B_bytearray s) {
@@ -2591,11 +2597,11 @@ B_NoneType B_bytesD___init__(B_bytes self, B_Iterable wit, $WORD iter) {
     return B_None;
 }
 
-B_bool B_BoolD_bytesD___bool__(B_bytes s) {
+B_bool B_BoolD_bytesD___bool__(B_BoolD_bytes wit, B_bytes s) {
     return toB_bool(s->nbytes > 0);
 };
 
-B_str B_StrD_bytesD___str__(B_bytes s) {
+B_str B_ShowD_bytesD___str__(B_ShowD_bytes wit, B_bytes s) {
     struct byte_counts bs = byte_count(s->str, s->nbytes);
     int newbytes = 3+bs.escaped+3*bs.non_printable+(bs.dquotes>0 && bs.dquotes>0 ? bs.squotes : 0)+3*bs.non_ascii;
     B_str res;
@@ -2613,8 +2619,8 @@ B_str B_StrD_bytesD___str__(B_bytes s) {
     return res;
 }
 
-B_str B_StrD_bytesD___repr__(B_bytes s) {
-    return  B_bytesD___str__(s);
+B_str B_ShowD_bytesD___repr__(B_ShowD_bytes wit, B_bytes s) {
+    return  B_ShowD_bytesD___str__(wit,s);
 }
 
 void B_bytesD___serialize__(B_bytes str,$Serial$state state) {
@@ -3518,8 +3524,8 @@ B_int B_HashableD_bytesD___hash__(B_HashableD_bytes wit, B_bytes str) {
 
 // Builtin functions involving strings /////////////////////////////////////////////
 
-B_str B_ascii(B_value v) {
-    B_str s  = v->$class->__str__(v);
+B_str B_ascii(B_Show wit, $WORD v) {
+    B_str s  = wit->$class->__str__(wit,v);
     struct byte_counts bs = byte_count(s->str, s->nbytes);
     //    printf("%d %d %d %d %d %d\n",bs.escaped,bs.squotes,bs.dquotes,bs.printable,bs.non_printable,bs.non_ascii);
     int newbytes = 2+bs.escaped+3*bs.non_printable+(bs.squotes>0 && bs.dquotes>0 ? bs.squotes : 0)+3*bs.non_ascii;

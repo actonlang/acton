@@ -38,16 +38,16 @@ B_NoneType B_rangeD___init__(B_range self, B_int start, B_int stop, B_int step) 
 }
 
 
-B_bool B_BoolD_rangeD___bool__(B_range self) {
+B_bool B_BoolD_rangeD___bool__(B_BoolD_range wit, B_range self) {
     return toB_bool ((self->step > 0 && self->stop > self->start) ||
                     (self->start > self->stop));
 }
 
-B_str B_StrD_rangeD___str__(B_range self) {
+B_str B_ShowD_rangeD___str__(B_ShowD_range wit, B_range self) {
     return $FORMAT("range(%ld,%ld,%ld)", self->start, self->stop, self->step);
 }
 
-B_str B_StrD_rangeD___repr__(B_range self) {
+B_str B_ShowD_rangeD___repr__(B_ShowD_range wit, B_range self) {
     return $FORMAT("range(%ld,%ld,%ld)", self->start, self->stop, self->step);
 }
 

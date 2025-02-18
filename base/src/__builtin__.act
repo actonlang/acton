@@ -64,8 +64,11 @@ class complex (value):
         NotImplemented
 
 class bool (atom):
-    def __init__(self, val: value) -> None:
+    def __init__(self, val: Bool) -> None:
         NotImplemented
+
+protocol Bool:
+    __bool__ : () -> bool
 
 class slice (value):
     def __init__(self, start: ?int, stop: ?int, step: ?int) -> None:
@@ -117,8 +120,15 @@ class Iterator[A] (object):
 protocol Iterable[A]:
     __iter__     : () -> Iterator[A]
 
+protocol Show:
+    __str__  : () -> str
+    __repr__ : () -> str
+
+    def __repr__(self):
+        return self.__str__()
+    
 class str (atom):
-    def __init__     (self, val: ?value) -> None:
+    def __init__     (self, val: Show) -> None:
         NotImplemented
     def capitalize   (self) -> str:
         NotImplemented
@@ -354,9 +364,6 @@ class BaseException (value):
     def __init__(self, msg: ?str) -> None:
         self.error_message = msg if msg is not None else ""
 
-    def __str__(self):
-        return "%s: %s" % (self._name(), self.error_message)
-
     def _name(self) -> str:
         NotImplemented
 
@@ -383,16 +390,10 @@ class IndexError (LookupError):
         self.index = index
         self.error_message = msg if msg is not None else "List index out of range"
 
-    def __str__(self):
-        return "%s: %s, index: %s" % (self._name(), self.error_message, str(self.index))
-
-class KeyError(LookupError):
-    def __init__(self, key: value, msg: ?str=None):
+class KeyError[A] (LookupError):
+    def __init__(self, key: A, msg: ?str=None):
         self.key = key
         self.error_message = msg if msg is not None else "Key not found"
-
-    def __str__(self):
-        return "%s: %s, key: %s" % (self._name(), self.error_message, str(self.key))
 
 class MemoryError (Exception):
     pass
@@ -403,9 +404,6 @@ class OSError (Exception):
 class FileNotFoundError (OSError):
     def __init__(self, filename: str):
         self.filename = filename
-
-    def __str__(self):
-        return "%s: No such file or directory: '%s'" % (self._name(), self.filename)
 
 class RuntimeError (Exception):
     pass
@@ -455,13 +453,6 @@ protocol Ord (Eq):
         return b < a
     def __ge__(a,b):
         return b <= a
-
-protocol Bool:
-    __bool__ : () -> bool
-
-protocol Str:
-    __str__  : () -> str
-    __repr__ : () -> str
 
 protocol Logical:
     @staticmethod
@@ -565,44 +556,57 @@ extension range (Bool):
 extension slice (Bool):
     NotImplemented
     
-## Str extensions ################################################################################
+## Show extensions ################################################################################
 
-extension int (Str):
+extension int (Show):
     NotImplemented
-extension i64 (Str):
+extension i64 (Show):
     NotImplemented
-extension i32 (Str):
+extension i32 (Show):
     NotImplemented
-extension i16 (Str):
+extension i16 (Show):
     NotImplemented
-extension u64 (Str):
+extension u64 (Show):
     NotImplemented
-extension u32 (Str):
+extension u32 (Show):
     NotImplemented
-extension u16 (Str):
+extension u16 (Show):
     NotImplemented
-extension bool (Str):
+extension bool (Show):
     NotImplemented
-extension float (Str):
+extension float (Show):
     NotImplemented
-extension complex (Str):
+extension complex (Show):
     NotImplemented
-extension str (Str):
+extension str (Show):
     NotImplemented
-extension bytes (Str):
+extension bytes (Show):
     NotImplemented
-extension bytearray (Str):
+extension bytearray (Show):
     NotImplemented
-extension list[A] (Str):
+extension list[A(Show)] (Show):
     NotImplemented
-extension set[A(Hashable)] (Str):
+extension set[A(Hashable, Show)] (Show):
     NotImplemented
-extension dict[A(Hashable),B] (Str):
+extension dict[A(Hashable, Show),B(Show)] (Show):
     NotImplemented
-extension range (Str):
+extension range (Show):
     NotImplemented
-extension slice (Str):
+extension slice (Show):
     NotImplemented
+
+#extension BaseException (Show):
+#    def __str__(self):
+#        return "%s: %s" % (self._name(), self.error_message)
+# extension IndexError (Show):
+#    def __str__(self):
+#        return "%s: %s, index: %s" % (self._name(), self.error_message, str(self.index))
+# extension KeyError[A(Show)] (Show):
+#     def __str__(self):
+#         return "%s: %s, key: %s" % (self._name(), self.error_message, self.key)
+# extension FileNotFoundError (Show):  
+#     def __str__(self):
+#         return "%s: No such file or directory: '%s'" % (self._name(), self.filename)
 
 ## dicts and sets (requires Hashable) ###############################################################
 
@@ -944,19 +948,19 @@ extension bytes (Hashable):
 def abs(x : Number) -> Real:
     return x.__abs__()
 
-def all[A(value)](it: Iterable[A]) -> bool:
+def all[A(Bool)](it: Iterable[A]) -> bool:
     for x in it:
         if bool(x) == False:
             return False
     return True
 
-def any[A(value)](it: Iterable[A]) -> bool:
+def any[A(Bool)](it: Iterable[A]) -> bool:
     for x in it:
         if bool(x) == True:
             return True
     return False
 
-def ascii(x : value) -> str:
+def ascii[A(Show)](x : A) -> str:
     NotImplemented
 
 def bin(x: Integral) -> str:
@@ -1010,7 +1014,7 @@ def ord(c: str) -> int:
 def pow [A(Number)] (a : A, b : A) -> A:
     return Number.__pow__(a,b)
 
-def print(*args, sep: str=" ", end: str="\n", err: bool=False, flush: bool=False) -> None:
+def print (*args, sep: str=" ", end: str="\n", err: bool=False, flush: bool=False) -> None:
     """Prints values
 
     Values are printed per default to stdout, but can be printed to stderr by
@@ -1024,7 +1028,7 @@ def print(*args, sep: str=" ", end: str="\n", err: bool=False, flush: bool=False
     """
     NotImplemented
 
-def repr [A (Str)](x : A):
+def repr [A (Show)](x : A):
     return x.__repr__()
 
 def reversed(seq : Sequence[A]) -> Iterator[A]:

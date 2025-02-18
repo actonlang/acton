@@ -52,15 +52,15 @@ B_complex B_complexD___deserialize__(B_complex self, $Serial$state state) {
     return toB_complex(re + im * _Complex_I);
 }
 
-B_bool B_BoolD_complexD___bool__(B_complex n) {
+B_bool B_BoolD_complexD___bool__( B_BoolD_complex wit, B_complex n) {
     return toB_bool(n->val != 0.0);
 }
 
-B_str B_StrD_complexD___str__(B_complex c) {
+B_str B_ShowD_complexD___str__(B_ShowD_complex wit, B_complex c) {
     return $FORMAT("%f + %f*I", creal(c->val), cimag(c->val));
 }
   
-B_str B_StrD_complexD___repr__(B_complex c) {
+B_str B_ShowD_complexD___repr__(B_ShowD_complex wit, B_complex c) {
     return $FORMAT("%f + %f*I", creal(c->val), cimag(c->val));
 }
   

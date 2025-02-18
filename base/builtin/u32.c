@@ -50,15 +50,15 @@ B_u32 B_u32D___deserialize__(B_u32 n, $Serial$state state) {
     return toB_u32((int)(uintptr_t)$val_deserialize(state));
 }
 
-B_bool B_BoolD_u32D___bool__(B_u32 n) {
+B_bool B_BoolD_u32D___bool__(B_BoolD_u32 wit, B_u32 n) {
     return toB_bool(n->val != 0);
 }
 
-B_str B_StrD_u32D___str__(B_u32 n) {
+B_str B_ShowD_u32D___str__(B_ShowD_u32 wit, B_u32 n) {
     return $FORMAT("%u", n->val);
 }
 
-B_str B_StrD_u32D___repr__(B_u32 n) {
+B_str B_ShowD_u32D___repr__(B_ShowD_u32 wit, B_u32 n) {
     return $FORMAT("%u", n->val);
 }
 

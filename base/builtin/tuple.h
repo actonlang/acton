@@ -5,9 +5,6 @@ struct B_tupleG_class {
     B_NoneType (*__init__)(B_tuple,int,...);
     void (*__serialize__)(B_tuple,$Serial$state); 
     B_tuple (*__deserialize__)(B_tuple,$Serial$state);
-    B_bool (*__bool__)(B_tuple);
-    B_str (*__str__)(B_tuple);
-    B_str (*__repr__)(B_tuple);
 };
 
 struct B_tuple {
@@ -52,6 +49,28 @@ typedef struct B_HashableD_tuple *B_HashableD_tuple;
 struct B_HashableD_tupleG_class;
 typedef struct B_HashableD_tupleG_class *B_HashableD_tupleG_class;
 
+// B_BoolD_tuple ////////////////////////////////////////////////////////////////
+
+struct B_BoolD_tuple;
+typedef struct B_BoolD_tuple *B_BoolD_tuple;
+
+struct B_BoolD_tupleG_class;
+typedef struct B_BoolD_tupleG_class *B_BoolD_tupleG_class;
+
+extern struct B_BoolD_tupleG_class B_BoolD_tupleG_methods;
+B_BoolD_tuple B_BoolD_tupleG_new();
+
+// B_ShowD_tuple ////////////////////////////////////////////////////////////////
+
+struct B_ShowD_tuple;
+typedef struct B_ShowD_tuple *B_ShowD_tuple;
+
+struct B_ShowD_tupleG_class;
+typedef struct B_ShowD_tupleG_class *B_ShowD_tupleG_class;
+
+extern struct B_ShowD_tupleG_class B_ShowD_tupleG_methods;
+B_ShowD_tuple B_ShowD_tupleG_new();
+
 // B_IterableD_tuple ////////////////////////////////////////////////////////////
 
 struct B_IterableD_tuple {
@@ -65,9 +84,6 @@ struct B_IterableD_tupleG_class {
     B_NoneType (*__init__)(B_IterableD_tuple);
     void (*__serialize__)(B_IterableD_tuple,$Serial$state);
     B_IterableD_tuple (*__deserialize__)(B_IterableD_tuple,$Serial$state);
-    B_bool (*__bool__)(B_IterableD_tuple);
-    B_str (*__str__)(B_IterableD_tuple);
-    B_str (*__repr__)(B_IterableD_tuple);
     B_Iterator (*__iter__)(B_IterableD_tuple, B_tuple);
 };
 
@@ -94,9 +110,6 @@ struct B_SliceableD_tupleG_class {
     B_NoneType (*__init__)(B_SliceableD_tuple);
     void (*__serialize__)(B_SliceableD_tuple,$Serial$state);
     B_SliceableD_tuple (*__deserialize__)(B_SliceableD_tuple,$Serial$state);
-    B_bool (*__bool__)(B_SliceableD_tuple);
-    B_str (*__str__)(B_SliceableD_tuple);
-    B_str (*__repr__)(B_SliceableD_tuple);
     $WORD (*__getitem__)(B_SliceableD_tuple, B_tuple, B_int);
     B_NoneType (*__setitem__)(B_SliceableD_tuple, B_tuple, B_int, $WORD);
     B_NoneType (*__delitem__)(B_SliceableD_tuple, B_tuple, B_int);
@@ -133,9 +146,6 @@ struct B_HashableD_tupleG_class {
     B_NoneType (*__init__)(B_HashableD_tuple,int,B_Hashable*);
     void (*__serialize__)(B_HashableD_tuple,$Serial$state);
     B_HashableD_tuple (*__deserialize__)(B_HashableD_tuple,$Serial$state);
-    B_bool (*__bool__)(B_HashableD_tuple);
-    B_str (*__str__)(B_HashableD_tuple);
-    B_str (*__repr__)(B_HashableD_tuple);
     B_bool (*__eq__)(B_HashableD_tuple, B_tuple, B_tuple);
     B_bool (*__ne__)(B_HashableD_tuple, B_tuple, B_tuple);
     B_int (*__hash__)(B_HashableD_tuple, B_tuple);
@@ -171,9 +181,6 @@ struct B_IteratorD_tupleG_class {
     B_NoneType (*__init__)(B_IteratorD_tuple, B_tuple);
     void (*__serialize__)(B_IteratorD_tuple,$Serial$state);
     B_IteratorD_tuple (*__deserialize__)(B_IteratorD_tuple,$Serial$state);
-    B_bool (*__bool__)(B_IteratorD_tuple);
-    B_str (*__str__)(B_IteratorD_tuple);
-    B_str (*__repr__)(B_IteratorD_tuple);
     $WORD(*__next__)(B_IteratorD_tuple);
 };
 

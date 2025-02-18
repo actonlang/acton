@@ -16,23 +16,23 @@
 
 // Serialization ///////////////////////////////////////////////////////////////////////
 
-B_NoneType B_boolD___init__(B_bool self, B_value s){
-    self->val = (s->$class->__bool__(s))->val;
+B_NoneType B_boolD___init__(B_bool self, B_Bool wit, $WORD s){
+    self->val = wit->$class->__bool__(wit, s);
     return B_None;
 }
 
-B_bool B_BoolD_boolD___bool__(B_bool self) {
+B_bool B_BoolD_boolD___bool__(B_BoolD_bool wit, B_bool self) {
     return self;
 }
 
-B_str B_StrD_boolD___str__(B_bool self) {
+B_str B_ShowD_boolD___str__(B_ShowD_bool wit, B_bool self) {
     if (self->val)
         return to$str("True");
     else
         return to$str("False");
 }
 
-B_str B_StrD_boolD___repr__(B_bool self) {
+B_str B_ShowD_boolD___repr__(B_ShowD_bool wit, B_bool self) {
     if (self->val)
         return to$str("True");
     else
@@ -47,8 +47,8 @@ B_bool B_boolD___deserialize__(B_bool self, $Serial$state state) {
     return toB_bool((long)$val_deserialize(state));
 }
 
-B_bool B_boolG_new(B_value s) {
-    return $NEW(B_bool, s);
+B_bool B_boolG_new(B_Bool wit, $WORD s) {
+    return $NEW(B_bool, wit, s);
 }
 
 B_bool toB_bool(long b) {

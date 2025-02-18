@@ -16,11 +16,12 @@
 
 // print //////////////////////////////////////////////////////////////////////////////
 
+/*
 static $WORD mkstr($WORD w) {
     B_value w1 = (B_value)w;
     return w1->$class->__str__(w);
 }
-/*
+
 B_NoneType B_print(int size, ...) {
     va_list args;
     va_start(args,size);
@@ -42,8 +43,10 @@ B_NoneType B_print(int size, ...) {
 B_str __str__(B_value x) {
     if (x == B_None)
         return to$str("None");
-    else
-        return x->$class->__str__(x);
+    else {
+        B_Show wit = B_ShowD_valueG_witness;
+        return wit->$class->__str__(wit,x);
+    }
 }
 
 B_NoneType B_print(B_tuple t, B_str sep_arg, B_str end_arg, B_bool stderr_arg, B_bool flush_arg) {
@@ -561,7 +564,7 @@ B_Iterator B_reversed (B_Sequence W_369, $WORD seq) {
 $WORD B_round (B_Real W_395, $WORD x, B_int n) {
     return W_395->$class->__round__(W_395, x, n);
 }
-*/
+
 
 $WORD $ASSERT(B_bool test, B_str msg) {
     if (!test->val) {
@@ -569,3 +572,4 @@ $WORD $ASSERT(B_bool test, B_str msg) {
     }
     return B_None;
 }
+*/

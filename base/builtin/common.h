@@ -29,7 +29,7 @@ void $default__init__($WORD);
 
 #define $OR(T, a, b)        ({ T $a = (a); ($a && ((B_value)$a)->$class->__bool__((B_value)$a)->val) ? $a : (b); })
 
-#define $NOT(T, a)          ({ T $a = (a); ($a && ((B_value)$a)->$class->__bool__((B_value)$a)->val) ? B_False : B_True; })
+#define $NOT(T, a)          ({ T $a = (a); ($a && a->val) ? B_False : B_True; })
 
 #define $ISINSTANCE($x,$T)  ({ \
                                /* If object is NULL (None), return False */ \

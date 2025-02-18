@@ -249,21 +249,23 @@ B_NoneType B_dictD___init__(B_dict dict, B_Hashable hashwit, B_Iterable wit, $WO
     return B_None;
 }
 
-B_bool B_BoolD_dictD___bool__(B_dict self) {
+B_bool B_BoolD_dictD___bool__( B_BoolD_dict wit, B_dict self) {
     return toB_bool(self->numelements>0);
 }
 
-B_str B_StrD_dictD___str__(B_dict self) {
+B_str B_ShowD_dictD___str__( B_ShowD_dict wit, B_dict self) {
     B_list s2 = B_listD_new(self->numelements);
     B_IteratorD_dict_items iter = $NEW(B_IteratorD_dict_items,self);
     B_tuple item;
-    B_SequenceD_list wit = B_SequenceD_listG_witness;
+    B_SequenceD_list wit2 = B_SequenceD_listG_witness;
     for (int i=0; i<self->numelements; i++) {
         item = (B_tuple)iter->$class->__next__(iter);
-        B_value key = ((B_value)item->components[0]);
-        B_value value = ((B_value)item->components[1]);
-        B_str keystr = key->$class->__repr__(key);
-        B_str valuestr = value ? value->$class->__repr__(value) : to$str("None");
+        $WORD key = item->components[0];
+        $WORD value = item->components[1];
+        B_Show wit3 = wit->W_ShowD_AD_ShowD_dict;
+        B_Show wit4 = wit->W_ShowD_BD_ShowD_dict;
+        B_str keystr = wit3->$class->__repr__(wit3,key);
+        B_str valuestr = value ? wit4->$class->__repr__(wit4,value) : to$str("None");
         B_str elem = acton_malloc(sizeof(struct B_str));
         elem->$class = &B_strG_methods;
         elem->nbytes = keystr->nbytes+valuestr->nbytes+1;
@@ -273,13 +275,13 @@ B_str B_StrD_dictD___str__(B_dict self) {
         elem->str[keystr->nbytes] = ':';
         memcpy(&elem->str[keystr->nbytes+1],valuestr->str,valuestr->nbytes);
         elem->str[elem->nbytes] = '\0';    
-        wit->$class->append(wit,s2,elem);
+        wit2->$class->append(wit2,s2,elem);
     }
     return B_strD_join_par('{',s2,'}');
 }
 
-B_str B_StrD_dictD___repr__(B_dict self) {
-    return B_StrD_dictD___str__(self);
+B_str B_ShowD_dictD___repr__( B_ShowD_dict wit, B_dict self) {
+    return B_ShowD_dictD___str__(wit, self);
 }
 
 void B_dictD___serialize__(B_dict self,$Serial$state state) {
@@ -647,6 +649,7 @@ static $WORD B_IteratorD_dict_items_next(B_IteratorD_dict_items self) {
         i++;
     }
     $RAISE ((B_BaseException)$NEW(B_StopIteration, to$str("dict items iterator terminated")));
+    return NULL; // TO avoid compiler warning
 }
  
 B_IteratorD_dict_items B_IteratorD_dict_itemsG_new(B_dict dict) {

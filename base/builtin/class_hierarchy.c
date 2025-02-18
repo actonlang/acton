@@ -35,7 +35,7 @@ B_object B_objectG_new() {
 B_NoneType B_objectD___init__ (B_object self) {
     return B_None;
 }
-*/
+
 B_str B_valueD___str__(B_value self) {
     return $FORMAT("<%s object at %p>", unmangle_name(self->$class->$GCINFO), self);
 }
@@ -54,6 +54,95 @@ B_bool B_valueD___bool__(B_value self) {
 B_bool B_objectD___bool__(B_object self) {
     return B_True;
 }
+*/
+
+// Bool ///////////////////////////////////////////////////////////////
+
+struct B_BoolD_valueG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__)(B_BoolD_value);
+    void (*__serialize__)(B_BoolD_value,$Serial$state);
+    B_BoolD_value (*__deserialize__)(B_BoolD_value,$Serial$state);
+    B_bool (*__bool__)(B_BoolD_value, B_value);
+};
+
+struct B_BoolD_value {
+    B_BoolD_valueG_class $class;
+};
+
+B_bool B_BoolD_valueD___bool__(B_BoolD_value wit, B_value self) {
+    return B_True;
+}
+
+B_NoneType B_BoolD_valueD___init__(B_BoolD_value self) {
+    return B_None;
+}
+
+void B_BoolD_valueD___serialize__(B_BoolD_value self, $Serial$state state) {
+}
+
+B_BoolD_value B_BoolD_valueD___deserialize__(B_BoolD_value self, $Serial$state state) {
+    B_BoolD_value res = $DNEW(B_BoolD_value,state);
+    return res;
+}
+struct B_BoolD_valueG_class B_BoolD_valueG_methods = {
+    "B_BoolD_value",
+    UNASSIGNED,
+    ($SuperG_class)&B_BoolG_methods,
+    B_BoolD_valueD___init__,
+    B_BoolD_valueD___serialize__,
+    B_BoolD_valueD___deserialize__,
+    B_BoolD_valueD___bool__
+};
+
+// Show ///////////////////////////////////////////////////////////////
+
+struct B_ShowD_valueG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__)(B_ShowD_value);
+    void (*__serialize__)(B_ShowD_value,$Serial$state);
+    B_ShowD_value (*__deserialize__)(B_ShowD_value,$Serial$state);
+    B_str (*__str__)(B_ShowD_value, B_value);
+    B_str (*__repr__)(B_ShowD_value, B_value);
+};
+
+struct B_ShowD_value {
+    B_ShowD_valueG_class $class;
+};
+
+B_str B_ShowD_valueD___str__( B_ShowD_value wit, B_value self) {
+    return $FORMAT("<%s object at %p>", unmangle_name(self->$class->$GCINFO), self);
+}
+
+B_str B_ShowD_valueD___repr__(B_ShowD_value wit, B_value self) {
+    return B_ShowD_valueD___str__(wit, self);
+}
+
+B_NoneType B_ShowD_valueD___init__(B_ShowD_value self) {
+    return B_None;
+}
+
+void B_ShowD_valueD___serialize__(B_ShowD_value self, $Serial$state state) {
+}
+
+B_ShowD_value B_ShowD_valueD___deserialize__(B_ShowD_value self, $Serial$state state) {
+    B_ShowD_value res = $DNEW(B_ShowD_value,state);
+    return res;
+}
+struct B_ShowD_valueG_class B_ShowD_valueG_methods = {
+    "B_ShowD_value",
+    UNASSIGNED,
+    ($SuperG_class)&B_ShowG_methods,
+    B_ShowD_valueD___init__,
+    B_ShowD_valueD___serialize__,
+    B_ShowD_valueD___deserialize__,
+    B_ShowD_valueD___str__,
+    B_ShowD_valueD___repr__
+};
 
 struct $SerializableG_class $SerializableG_methods = {"$Serializable",UNASSIGNED,NULL, $SerializableD___init__,NULL,NULL};
 

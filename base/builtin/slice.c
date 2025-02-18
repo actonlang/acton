@@ -98,14 +98,14 @@ B_slice B_sliceD___deserialize__ (B_slice self, $Serial$state state) {
     return res;
 }
 
-B_bool B_BoolD_sliceD___bool__(B_slice s) {
+B_bool B_BoolD_sliceD___bool__( B_BoolD_slice wit, B_slice s) {
     return B_True;
 }
 
-B_str B_StrD_sliceD___str__(B_slice s) {
+B_str B_ShowD_sliceD___str__(B_ShowD_slice wit, B_slice s) {
     return $FORMAT("Slice [%ld:%ld:%ld]", *s->start, *s->stop, *s->step);
 }
 
-B_str B_StrD_sliceD___repr__(B_slice s) {
-    return B_StrD_sliceD___str__(s);
+B_str B_ShowD_sliceD___repr__(B_ShowD_slice wit, B_slice s) {
+    return B_ShowD_sliceD___str__(wit,s);
 }

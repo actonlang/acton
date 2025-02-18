@@ -49,15 +49,15 @@ B_i64 B_i64D___deserialize__(B_i64 n, $Serial$state state) {
     return toB_i64((long)$val_deserialize(state));
 }
 
-B_bool B_BoolD_i64D___bool__(B_i64 n) {
+B_bool B_BoolD_i64D___bool__(B_BoolD_i64 wit, B_i64 n) {
     return toB_bool(n->val != 0);
 }
 
-B_str B_StrD_i64D___str__(B_i64 n) {
+B_str B_ShowD_i64D___str__(B_ShowD_i64 wit, B_i64 n) {
     return $FORMAT("%ld", n->val);
 }
 
-B_str B_StrD_i64D___repr__(B_i64 n) {
+B_str B_ShowD_i64D___repr__(B_ShowD_i64 wit, B_i64 n) {
     return $FORMAT("%ld", n->val);
 }
 

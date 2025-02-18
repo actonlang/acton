@@ -1,4 +1,3 @@
-
 class URI(object):
     """A class representing a Uniform Resource Identifier (URI).
 
@@ -51,7 +50,7 @@ class URI(object):
         # Parse fragment
         self.fragment = parse_fragment(remainder)
         
-extension URI (Str):
+extension URI (Show):
     def __str__(self) -> str:
         """Return the canonical string representation of the URI."""
         scheme_sep = "://" if self.scheme != None else ""

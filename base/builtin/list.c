@@ -98,22 +98,23 @@ B_NoneType B_listD___init__(B_list lst, B_Iterable wit, $WORD iterable) {
     return B_None;
 }
   
-B_bool B_BoolD_listD___bool__(B_list self) {
+B_bool B_BoolD_listD___bool__( B_BoolD_list wit, B_list self) {
     return toB_bool(self->length>0);
 }
 
-B_str B_StrD_listD___str__(B_list self) {
+B_str B_ShowD_listD___str__( B_ShowD_list wit, B_list self) {
     B_list s2 = B_listD_new(self->length);
     B_SequenceD_list wit2 = B_SequenceD_listG_new();
+    B_Show wit3 = wit->W_ShowD_AD_ShowD_list;
     for (int i=0; i< self->length; i++) {
-        B_value elem = (B_value)self->data[i];
-        wit2->$class->append(wit2, s2, elem->$class->__repr__(elem));
+        $WORD elem = self->data[i];
+        wit2->$class->append(wit2, s2, wit3->$class->__repr__(wit3, elem));
     }
     return B_strD_join_par('[',s2,']');
 }
 
-B_str B_StrD_listD___repr__(B_list self) {
-    return B_StrD_listD___str__(self);
+B_str B_ShowD_listD___repr__( B_ShowD_list wit, B_list self) {
+    return B_ShowD_listD___str__(wit, self);
 }
 
 void B_listD___serialize__(B_list self,$Serial$state state) {
@@ -216,6 +217,7 @@ B_int B_listD_index(B_list self, B_Eq W_EqD_B, $WORD val, B_int start, B_int sto
             return to$int(i);
     }
     $RAISE((B_BaseException)$NEW(B_KeyError, val, to$str("element is not in list")));
+    return NULL; //to avoid compiler warning 
 }
 
     
