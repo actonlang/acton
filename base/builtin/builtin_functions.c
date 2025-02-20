@@ -395,10 +395,7 @@ B_IteratorD_zip B_IteratorD_zip$_deserialize(B_IteratorD_zip res, $Serial$state 
 $WORD B_IteratorD_zip_next(B_IteratorD_zip it) {
     $WORD w1 = it->it1->$class->__next__(it->it1);
     $WORD w2 = it->it2->$class->__next__(it->it2);
-    if (w1 && w2)
-        return $NEWTUPLE(2,w1,w2);
-    else
-        return NULL;
+    return $NEWTUPLE(2,w1,w2);
 }
 
 struct B_IteratorD_zipG_class B_IteratorD_zipG_methods = {" B_IteratorD_zip",UNASSIGNED,($SuperG_class)&B_IteratorG_methods,B_IteratorD_zip_init,
@@ -409,9 +406,10 @@ B_IteratorD_zip B_IteratorD_zipG_new(B_Iterator iter1, B_Iterator iter2) {
     return $NEW(B_IteratorD_zip, iter1, iter2);
 }
 
+// Note dubious pairings of witnesses and WORDs. This fixes #2140 without breaking any test.
 B_Iterator B_zip (B_Iterable wit1, B_Iterable wit2, $WORD iter1, $WORD iter2) {
-    B_Iterator it1 = wit1->$class->__iter__(wit1,iter1);
-    B_Iterator it2 = wit2->$class->__iter__(wit2,iter2);
+    B_Iterator it1 = wit2->$class->__iter__(wit2,iter1);
+    B_Iterator it2 = wit1->$class->__iter__(wit1,iter2);
     return (B_Iterator)B_IteratorD_zipG_new(it1,it2);
 }
 
