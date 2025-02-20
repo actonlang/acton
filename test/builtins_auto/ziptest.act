@@ -1,0 +1,16 @@
+def _test_zip():
+    left = "1"
+    right = "2"
+    sides = [left, right]
+    return zip(sides,reversed(sides))
+
+actor main(env):
+    z = _test_zip()
+    a = next(z)
+    if a.0 != "1" or a.1 != "2":
+        env.exit(1)
+    b = next(z)
+    if b.0 != "2" or b.1 != "1":
+        env.exit(1)
+    env.exit(0)
+    
