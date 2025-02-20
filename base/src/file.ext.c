@@ -2,6 +2,7 @@
 #include "gc.h"
 
 #include <sys/file.h>
+#include <fnmatch.h>
 
 #include <uv.h>
 #include "../rts/io.h"
@@ -137,7 +138,7 @@ $R fileQ_FSD_mkdirG_local (fileQ_FS self, $Cont C_cont, B_str filename) {
 }
 
 // action def listdir(path: str) -> list[str]:
-$R fileQ_FSD_listdirG_local (fileQ_FS self, $Cont C_cont, B_str path) {
+$R fileQ_FSD_listdirG_local (fileQ_FS self, $Cont C_cont, B_str path, B_str glob) {
     B_SequenceD_list wit = B_SequenceD_listG_witness;
     uv_fs_t *req = (uv_fs_t *)acton_malloc(sizeof(uv_fs_t));
     B_list res = B_listD_new(0);
@@ -149,10 +150,23 @@ $R fileQ_FSD_listdirG_local (fileQ_FS self, $Cont C_cont, B_str path) {
         log_warn(errmsg);
         $RAISE(((B_BaseException)B_OSErrorG_new(to$str(errmsg))));
     }
+
     uv_dirent_t ent;
-    while (uv_fs_scandir_next(req, &ent) != UV_EOF) {
-        wit->$class->append(wit, res, to$str(ent.name));
+    const char* pattern = NULL;
+
+    if (glob != NULL) {
+        pattern = (const char*)fromB_str(glob);
     }
+
+    while (uv_fs_scandir_next(req, &ent) != UV_EOF) {
+        if (!pattern || strlen(pattern) == 0 || fnmatch(pattern, ent.name, 0) == 0) {
+            wit->$class->append(wit, res, to$str(ent.name));
+        }
+    }
+
+    uv_fs_req_cleanup(req);
+    acton_free(req);
+
     return $R_CONT(C_cont, res);
 }
 

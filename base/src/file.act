@@ -256,7 +256,7 @@ actor FS(cap: FileCap):
         mkdir(new_tmp_dir)
         return new_tmp_dir
 
-    action def listdir(path: str) -> list[str]:
+    action def listdir(path: str, glob: ?str=None) -> list[str]:
         """List directory contents"""
         NotImplemented
 

@@ -21,6 +21,28 @@ def _test_file_walk(report_result: action(?bool, ?Exception) -> None, env: Env, 
     except Exception as exc:
         report_result(None, exc)
 
+def _test_file_listdir(report_result: action(?bool, ?Exception) -> None, env: Env, log_handler: logging.Handler) -> None:
+    try:
+        fc = file.FileCap(env.cap)
+        fs = file.FS(fc)
+        tmpdir = fs.mktmpdir()
+        fs.mkdir(tmpdir + "/foo1")
+        fs.mkdir(tmpdir + "/foo2")
+        fs.mkdir(tmpdir + "/foo3")
+        fs.mkdir(tmpdir + "/bar")
+        testing.assertEqual(set(["foo1", "foo2", "foo3", "bar"]), set(fs.listdir(tmpdir)))
+        testing.assertEqual(set(["foo1", "foo2", "foo3", "bar"]), set(fs.listdir(tmpdir, glob="")), "empty glob")
+        testing.assertEqual(set(["foo1", "foo2", "foo3"]), set(fs.listdir(tmpdir, glob="foo*")), "wildcard glob")
+        testing.assertEqual(set(["foo2", "foo3"]), set(fs.listdir(tmpdir, glob="foo[23]")), "character class glob")
+        testing.assertEqual(set(["foo2", "foo3"]), set(fs.listdir(tmpdir, glob="foo[!1]")), "negated character class glob")
+        testing.assertEqual(set(["foo1", "foo2", "foo3"]), set(fs.listdir(tmpdir, glob="foo?")), "single character glob")
+        fs.rmtree(tmpdir)
+        report_result(True, None)
+    except AssertionError as exc:
+        report_result(False, exc)
+    except Exception as exc:
+        report_result(None, exc)
+
 def _test_fs_write_read_file(report_result: action(?bool, ?Exception) -> None, env: Env, log_handler: logging.Handler) -> None:
     try:
         fc = file.FileCap(env.cap)
