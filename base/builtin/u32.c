@@ -26,14 +26,15 @@ unsigned int u32_pow(unsigned int a, unsigned int e) {
 
 B_u32 B_u32G_new(B_atom a, B_int base) {
     B_int b = B_intG_new(a, base);
-    unsigned long n = b->val.n[0];
     long sz = b->val.size;
-    if (sz > 1 || sz < 0 || n > UINT_MAX) {
+    if (sz==0) return toB_u32(0);
+    unsigned long n = b->val.n[0];
+    if ((sz != 1 || n > 0xfffffffful)) {
         char errmsg[1024];
         snprintf(errmsg, sizeof(errmsg), "u32(): value %s out of range for type u32",get_str(&b->val));
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
     } 
-    return toB_u32(n);
+    return toB_u32((unsigned int)n);
 }
 
 B_NoneType B_u32D___init__(B_u32 self, B_atom a, B_int base){

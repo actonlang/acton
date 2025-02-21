@@ -26,14 +26,15 @@ unsigned short u16_pow(unsigned short a, unsigned short e) {
 
 B_u16 B_u16G_new(B_atom a, B_int base) {
     B_int b = B_intG_new(a, base);
-    unsigned long n = b->val.n[0];
     long sz = b->val.size;
-    if (sz > 1 || sz < 0 || n > USHRT_MAX) {
+    if (sz==0) return toB_u16(0);
+    unsigned long n = b->val.n[0];
+    if (sz != 1 || n > 0xfffful) {
         char errmsg[1024];
         snprintf(errmsg, sizeof(errmsg), "u16(): value %s out of range for type u16",get_str(&b->val));
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
     }
-    return toB_u16(n);
+return toB_u16((unsigned short)n);
 }
 
 B_NoneType B_u16D___init__(B_u16 self, B_atom a, B_int base){
