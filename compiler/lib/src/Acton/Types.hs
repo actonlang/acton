@@ -107,7 +107,7 @@ infTop env ss                           = do --traceM ("\n## infEnv top")
                                              popFX
                                              --traceM ("######## solve TOP: " ++ show (length cs))
                                              --traceM (prstrs cs)
-                                             eq <- solveAll (define (filter typeDecl te) env) te tNone cs
+                                             eq <- solveAll (posdefine (filter typeDecl te) env) te tNone cs
                                              --traceM ("######## termred TOP")
                                              ss <- termred <$> msubst (pushEqns eq ss)
                                              defaultVars (tyfree ss)
@@ -233,6 +233,7 @@ instance (InfEnv a) => InfEnv [a] where
     infEnv env (s : ss)                 = do (cs1,te1,s1) <- infEnv env s
                                              let te1' = if inDecl env then noDefs te1 else te1      -- TODO: also stop class instantiation!
                                                  env' = define te1' env
+                                             -- NOTE: constraints in cs1 are *not* seen when solving local constraints of 'ss'! Must fix!!!
                                              (cs2,te2,ss2) <- infEnv env' ss
                                              return (cs1++cs2, te1++te2, s1:ss2)
 
@@ -921,7 +922,7 @@ genEnv env cs te ds
   | any typeDecl te                     = do te <- msubst te
                                              --traceM ("## genEnv types 1\n" ++ render (nest 6 $ pretty te))
                                              --traceM ("## genEnv types cs:\n" ++ render (nest 4 $ vcat $ map pretty cs))
-                                             (cs,eq) <- simplify (define te env) te tNone cs
+                                             (cs,eq) <- simplify (posdefine te env) te tNone cs
                                              te <- msubst te
                                              --traceM ("## genEnv types 2\n" ++ render (nest 6 $ pretty te))
                                              return (cs, te, eq, ds)

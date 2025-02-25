@@ -578,6 +578,8 @@ findProtoByAttr env cn n    = case filter hasAttr $ witsByTName env cn of
   where hasAttr w           = n `elem` conAttrs env (tcname $ proto w)
 
 hasWitness                  :: Env -> Type -> PCon -> Bool
+hasWitness env (TVar _ tv) p
+  | univar tv               = True
 hasWitness env (TCon _ c) p
   | isActor env (tcname c),
     tcname p == qnIdentity  = True
@@ -1270,19 +1272,29 @@ varinfo cs                                  = f cs (VInfo [] [] [] Map.empty Map
   where
     f (Cast _ (TVar _ v1) (TVar _ v2) : cs)
       | v1 == v2                            = f cs
-      | otherwise                           = f cs . varvar v1 v2
-    f (Cast _ (TVar _ v) t : cs)            = f cs . ubound v t . embed (tyfree t)
-    f (Cast _ t (TVar _ v) : cs)            = f cs . lbound v t . embed (tyfree t)
-    f (Sub _ _ (TVar _ v1) (TVar _ v2) : cs)= f cs . varvar v1 v2
-    f (Sub _ _ (TVar _ v) t : cs)           = f cs . ubound v t . embed (tyfree t)
-    f (Sub _ _ t (TVar _ v) : cs)           = f cs . lbound v t . embed (tyfree t)
-    f (Impl _ w (TVar _ v) p : cs)          = f cs . pbound v w p . embed (tyfree p)
+      | univar v1, univar v2                = f cs . varvar v1 v2
+    f (Cast _ (TVar _ v) t : cs)
+      | univar v                            = f cs . ubound v t . embed (tyfree t)
+    f (Cast _ t (TVar _ v) : cs)
+      | univar v                            = f cs . lbound v t . embed (tyfree t)
+    f (Sub _ _ (TVar _ v1) (TVar _ v2) : cs)
+      | v1 == v2                            = f cs
+      | univar v1, univar v2                = f cs . varvar v1 v2
+    f (Sub _ _ (TVar _ v) t : cs)
+      | univar v                            = f cs . ubound v t . embed (tyfree t)
+    f (Sub _ _ t (TVar _ v) : cs)
+      | univar v                            = f cs . lbound v t . embed (tyfree t)
+    f (Impl _ w (TVar _ v) p : cs)
+      | univar v                            = f cs . pbound v w p . embed (tyfree p)
     f (Impl _ w t p : cs)
       | not $ null vs                       = f cs . embed (vs ++ tyfree p)
-      where vs                              = tyfree t
-    f (Mut _ (TVar _ v) n t : cs)           = f cs . mutattr v n . embed (tyfree t)
-    f (Sel _ _ (TVar _ v) n t : cs)         = f cs . selattr v n . embed (tyfree t)
-    f (Seal _ (TVar _ v) : cs)              = f cs . seal v
+      where vs                              = filter univar $ tyfree t
+    f (Mut _ (TVar _ v) n t : cs)
+      | univar v                            = f cs . mutattr v n . embed (tyfree t)
+    f (Sel _ _ (TVar _ v) n t : cs)
+      | univar v                            = f cs . selattr v n . embed (tyfree t)
+    f (Seal _ (TVar _ v) : cs)
+      | univar v                            = f cs . seal v
     f []                                    = Just
     f (_ : cs)                              = \_ -> Nothing
 
@@ -1391,9 +1403,11 @@ improve env te tt eq cs
                                              let cs' = [ Cast (DfltInfo NoLoc 14 Nothing []) (tVar v) t | (v,t) <- ub ] ++ [ Cast (DfltInfo NoLoc 110 Nothing []) t (tVar v) | (v,t) <- lb ]
                                              simplify' env te tt eq (cs' ++ map (replace ub lb) cs)
   | not $ null posLBnd                  = do --traceM ("  *S-simplify (dn) " ++ prstrs posLBnd)
+                                             --traceM ("   posnames "  ++ prstrs (posnames $ envX env))
                                              sequence [ unify (DfltInfo NoLoc 15 Nothing []) (tVar v) t | (v,t) <- posLBnd ]
                                              simplify' env te tt eq cs
   | not $ null negUBnd                  = do --traceM ("  *S-simplify (up) " ++ prstrs negUBnd)
+                                             --traceM ("   posnames "  ++ prstrs (posnames $ envX env))
                                              sequence [ unify (DfltInfo NoLoc 16 Nothing []) (tVar v) t | (v,t) <- negUBnd ]
                                              simplify' env te tt eq cs
   | not $ null closUBnd                 = do --traceM ("  *Simplify upper closed bound " ++ prstrs closUBnd)
@@ -1435,8 +1449,8 @@ improve env te tt eq cs
         fixedvars                       = tyfree env
         pvars                           = Map.keys (pbounds vi) ++ tyfree (Map.elems (pbounds vi))
         dotvars                         = Map.keys (selattrs vi) ++ Map.keys (mutattrs vi)
-        (posvars0,negvars0)             = polvars te `polcat` polvars tt
-        (posvars,negvars)               = (posvars0++fixedvars++vvsL, negvars0++fixedvars++vvsU)
+        (posvars0,negvars0)             = polvars te `polcat` polvars tt `polcat` polvars env
+        (posvars,negvars)               = (posvars0++vvsL, negvars0++vvsU)
         obsvars                         = posvars0 ++ negvars0 ++ fixedvars ++ pvars ++ dotvars ++ embedded vi ++ sealed vi
         boundvars                       = Map.keys (ubounds vi) ++ Map.keys (lbounds vi)
         boundprot                       = tyfree (Map.elems $ ubounds vi) ++ tyfree (Map.elems $ lbounds vi)
@@ -1481,14 +1495,18 @@ unOpt (TOpt _ TVar{} : ts)              = unOpt ts
 unOpt (TOpt _ t : ts)                   = t : unOpt ts
 unOpt (t : ts)                          = t : unOpt ts
 
-replace ub lb c@(Cast _ TVar{} TVar{})  = c
-replace ub lb c@(Cast _ TVar{} (TOpt _ TVar{})) = c
+replace ub lb c@(Cast _ (TVar _ v1) (TVar _ v2))
+  | univar v1, univar v2                = c
+replace ub lb c@(Cast _ (TVar _ v1) (TOpt _ (TVar _ v2)))
+  | univar v1, univar v2                = c
 replace ub lb (Cast info (TVar _ v) t)
   | Just t' <- lookup v ub              = Cast info t' t
 replace ub lb (Cast info t (TVar _ v))
   | Just t' <- lookup v lb              = Cast info t t'
-replace ub lb c@(Sub _ _ TVar{} TVar{}) = c
-replace ub lb c@(Sub _ _ TVar{} (TOpt _ TVar{})) = c
+replace ub lb c@(Sub _ _ (TVar _ v1) (TVar _ v2))
+  | univar v1, univar v2                = c
+replace ub lb c@(Sub _ _ (TVar _ v1) (TOpt _ (TVar _ v2)))
+  | univar v1, univar v2                = c
 replace ub lb (Sub info w (TVar _ v) t)
   | Just t' <- lookup v ub              = Sub info w t' t
 replace ub lb (Sub info w t (TVar _ v))
