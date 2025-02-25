@@ -26,6 +26,7 @@ import Acton.Subst
 import Acton.Unify
 
 data TypeX                      = TypeX {
+                                    posnames   :: [Name],
                                     context    :: EnvCtx,
                                     indecl     :: Bool,
                                     forced     :: Bool }
@@ -34,7 +35,7 @@ type Env                        = EnvF TypeX
 
 data EnvCtx                     = CtxTop | CtxDef | CtxAct | CtxClass deriving (Eq,Show)
 
-typeX env0                      = setX env0 TypeX{ context = CtxTop, indecl = False, forced = False }
+typeX env0                      = setX env0 TypeX{ posnames = [], context = CtxTop, indecl = False, forced = False }
 
 instance Pretty TypeX where
     pretty _                    = empty
@@ -43,6 +44,8 @@ instance Subst TypeX where
     msubst x                    = return x
     tyfree x                    = []
 
+
+posdefine te env                = modX (define te env) $ \x -> x{ posnames = dom te ++ posnames x }
 
 setInDef env                    = modX env $ \x -> x{ context = CtxDef }
 
@@ -65,6 +68,12 @@ inClass env                     = context (envX env) == CtxClass
 inDecl env                      = indecl $ envX env
 
 isForced env                    = forced $ envX env
+
+
+instance Polarity Env where
+    polvars env                 = polvars pte `polcat` invvars ite
+      where (pte, ite)          = span ((`elem` pvs) . fst) (names env)
+            pvs                 = posnames $ envX env
 
 
 -- Well-formed tycon applications -------------------------------------------------------------------------------------------------

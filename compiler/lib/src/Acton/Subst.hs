@@ -564,6 +564,9 @@ instance Polarity Type where
     polvars (TStar _ _ r)           = polvars r
     polvars (TFX l fx)              = ([],[])
 
+invvars x                           = (vs, vs)
+  where vs                          = tyfree x
+
 covariant                           = [qnSetT,qnDict,qnList]                -- Ignore mutation for now!
 
 instance Polarity TCon where

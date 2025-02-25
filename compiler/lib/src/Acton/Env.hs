@@ -216,7 +216,7 @@ instance Subst WTCon where
 
 instance Polarity NameInfo where
     polvars (NVar t)                = polvars t
-    polvars (NSVar t)               = polvars t
+    polvars (NSVar t)               = invvars t
     polvars (NDef t d)              = polvars t
     polvars (NSig t d)              = polvars t
     polvars (NAct q p k te)         = (polvars q `polcat` polneg (polvars p `polcat` polvars k) `polcat` polvars te) `polminus` (tvSelf : qbound q)
