@@ -509,12 +509,12 @@ solveImpl env wit w t p                     = do (cs,t',we) <- instWitness env p
                                                  unify (DfltInfo NoLoc 7 Nothing []) t t'
                                                  return ([Eqn w (impl2type t p) we], cs)
 
-solveSelAttr env (wf,sc,d) c@(Sel info w t1 n t2)
+solveSelAttr env (wf,sc,d) (Sel info w t1 n t2)
                                             = do (cs,tvs,t) <- instantiate env sc
                                                  when (tvSelf `elem` snd (polvars t)) (tyerr n "Contravariant Self attribute not selectable by instance")
                                                  w' <- newWitness
                                                  let e = eLambda [(px0,t1)] (eCallVar w' [app t (tApp (eDot (wf $ eVar px0) n) tvs) $ witsOf cs])
-                                                     c = Sub (DfltInfo NoLoc 8 Nothing []) w' (subst [(tvSelf,t1)] t) t2
+                                                     c = Sub (DfltInfo (loc info) 8 Nothing []) w' (subst [(tvSelf,t1)] t) t2
                                                  return ([Eqn w (wFun t1 t2) e], c:cs)
 
 --  e1.__setslice__(sl, e2)
