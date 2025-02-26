@@ -1,0 +1,6 @@
+class Foo(object):
+    def __init__(self):
+        pass
+
+    def foo(a: int):
+        return 42
