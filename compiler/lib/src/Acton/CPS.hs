@@ -422,18 +422,18 @@ instance PreCPS Expr where
     pre env (Dot l e n)                 = Dot l <$> pre env e <*> return n
     pre env (DotI l e i)                = DotI l <$> pre env e <*> return i
     pre env (RestI l e i)               = RestI l <$> pre env e <*> return i
-    pre env e0@(Lambda l p KwdNIL e fx)
-      | contFX fx                       = do (prefixes,e') <- withPrefixes $ preTop env1 e
+    pre env (Lambda l p KwdNIL e fx)    = do (prefixes,e') <- withPrefixes $ preTop env1 e
                                              case prefixes of
-                                                [] -> let p' = conv env p; t' = conv env t
-                                                          e1 = if contCall env e then addContArg env1 e' econt else eCallCont e' (econt,t')
-                                                      in return $ Lambda l (addContPar0 p' fx t') KwdNIL e1 fx
+                                                [] | contFX fx ->
+                                                        let p' = conv env p; t' = conv env t
+                                                            e1 = if contCall env e then addContArg env1 e' econt else eCallCont e' (econt,t')
+                                                        in return $ Lambda l (addContPar0 p' fx t') KwdNIL e1 fx
+                                                   | otherwise ->
+                                                        return $ Lambda l p KwdNIL e' fx
                                                 _ -> do
                                                     f <- newName "lambda"
                                                     prefix [sDecl [Def l f [] p KwdNIL (Just t) (prefixes ++ [sReturn e']) NoDec fx]]
                                                     return (Var l0 (NoQ f))
-      | otherwise                       = do e' <- pre env1 e
-                                             return $ Lambda l p KwdNIL e' fx
       where env1                        = define (envOf p) env
             t                           = typeOf env1 e
             econt                       = eVar contKW
