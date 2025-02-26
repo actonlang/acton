@@ -745,7 +745,7 @@ infInitEnv env self (Expr l e : b)
 infInitEnv env self b                   = infSuiteEnv env b
 
 abstractDefs env q eq b                 = map absDef b
-  where absDef (Decl l ds)              = Decl l (map absDef' ds)
+  where absDef (Decl l ds)               = Decl l (map absDef' ds)
         absDef (If l bs els)            = If l [ Branch e (map absDef ss) | Branch e ss <- bs ] (map absDef els)
         absDef stmt                     = stmt
         absDef' d@Def{}                 = d{ pos = pos1, dbody = bindWits eq ++ dbody d }
@@ -762,8 +762,9 @@ instance Check Decl where
                                              st <- newTVar
                                              wellformed env1 q
                                              wellformed env1 a
-                                             when (inClass env) $ do
-                                                 unify (DfltInfo l 600 Nothing []) tSelf $ selfType p k dec
+                                             when (inClass env) $ 
+                                              --   unify (DfltInfo l 600 Nothing []) tSelf $ selfType p k dec
+                                                 unify (Simple l "Type of first parameter of class method does not unify with Self") tSelf $ selfType p k dec
                                              (csp,te0,p') <- infEnv env1 p
                                              (csk,te1,k') <- infEnv (define te0 env1) k
                                              (csb,_,b') <- infDefBody (define te1 (define te0 env1)) n p' k' b
@@ -1296,7 +1297,7 @@ instance Infer Expr where
                                              let con = case t of
                                                           TOpt _ _ -> Sel (Simple l (Pretty.print t ++ " does not have an attribute "++ Pretty.print n ++
                                                                            "\nHint: you may need to test if " ++ Pretty.print e ++ " is not None")) w t n t0
-                                                          _ -> Sel (DfltInfo (loc e) 86 (Just e) []) w t n t0
+                                                          _ -> Sel (DfltInfo l 86 (Just e) []) w t n t0
                                              return  (con : cs, t0, eCall (eVar w) [e'])
 
     infer env e@(Rest _ _ _)            = notYetExpr e
@@ -1405,7 +1406,7 @@ instance Infer Expr where
     infer env (Paren l e)               = do (cs,t,e') <- infer env e
                                              return (cs, t, Paren l e')
 
-inferCall env unwrap l e ps ks          = do (cs1,t,e') <- infer env e
+inferCall env unwrap l e ps ks          = do (cs1,t,e') <- infer env e{eloc = l}
                                              (cs1,t,e') <- if unwrap && actorSelf env then wrapped l attrUnwrap env cs1 [t] [e'] else pure (cs1,t,e')
                                              (cs2,prow,ps') <- infer env ps
                                              (cs3,krow,ks') <- infer env ks
