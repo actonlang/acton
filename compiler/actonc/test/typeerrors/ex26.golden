@@ -1,0 +1,9 @@
+Building file test/typeerrors/ex26.act using temporary scratch directory
+  Compiling ex26.act for development
+[error]: Constraint violation
+     +--> ex26.act@15:5-15:33
+     |
+  15 |     p.extend(remove_thing(foos))
+     :     ^---------------------------
+     :     `- None must be a subclass of __builtin__.list[_]
+-----+
