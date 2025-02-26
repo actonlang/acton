@@ -348,7 +348,7 @@ instance InfEnv Stmt where
                                              (cs1,e) <- inferSub env t e
                                              (cs2,stmt) <- asgn t0 t e0 e tg
                                              return (cs0++cs1++cs2, [], stmt)
-      where asgn t0 t e0 e (TgVar n)    = do unify (DfltInfo l 40 Nothing []) t0 t
+      where asgn t0 t e0 e (TgVar n)    = do tryUnify (DfltInfo l 40 Nothing []) t0 t
                                              return ( [], sAssign (pVar' n) e )
             asgn t0 t e0 e (TgIndex ix) = do (cs,ti,ix) <- infer env ix
                                              w <- newWitness
@@ -384,13 +384,13 @@ instance InfEnv Stmt where
             oper _ BAndA                = (pLogical,  iandKW)
             oper _ MMultA               = (pMatrix,   imatmulKW)
             
-            aug t0 t x f e (TgVar _)    = do unify (DfltInfo l 46 Nothing []) t0 t
+            aug t0 t x f e (TgVar _)    = do tryUnify (DfltInfo l 46 Nothing []) t0 t
                                              return ( [], sAssign (pVar' x) $ f [eVar x, e] )
             aug t0 t x f e (TgIndex ix) = do (cs,ti,ix) <- infer env ix
                                              w <- newWitness
                                              return ( Impl (DfltInfo l 47 Nothing []) w t0 (pIndexed ti t) :
                                                       cs, sExpr $ dotCall w setitemKW [eVar x, ix, f [dotCall w getitemKW [eVar x, ix], e]])
-            aug t0 t x f e (TgSlice sl) = do unify (DfltInfo l 1115 Nothing []) t0 t
+            aug t0 t x f e (TgSlice sl) = do tryUnify (DfltInfo l 1115 Nothing []) t0 t
                                              (cs,sl) <- inferSlice env sl
                                              t' <- newTVar
                                              w <- newWitness
@@ -763,8 +763,8 @@ instance Check Decl where
                                              wellformed env1 q
                                              wellformed env1 a
                                              when (inClass env) $ 
-                                              --   unify (DfltInfo l 600 Nothing []) tSelf $ selfType p k dec
-                                                 unify (Simple l "Type of first parameter of class method does not unify with Self") tSelf $ selfType p k dec
+                                              --   tryUnify (DfltInfo l 600 Nothing []) tSelf $ selfType p k dec
+                                                 tryUnify (Simple l "Type of first parameter of class method does not unify with Self") tSelf $ selfType p k dec
                                              (csp,te0,p') <- infEnv env1 p
                                              (csk,te1,k') <- infEnv (define te0 env1) k
                                              (csb,_,b') <- infDefBody (define te1 (define te0 env1)) n p' k' b
@@ -884,7 +884,7 @@ refine env cs te eq
   | not $ null ambig_vs                 = do --traceM ("  #defaulting: " ++ prstrs ambig_vs)
                                              (cs',eq') <- solve env doDefault te tNone eq cs
                                              refineAgain cs' eq'
-  | not $ null tail_vs                  = do sequence [ unify (Simple NoLoc "internal") (tVar v) (tNil $ tvkind v) | v <- tail_vs ]
+  | not $ null tail_vs                  = do sequence [ tryUnify (Simple NoLoc "internal") (tVar v) (tNil $ tvkind v) | v <- tail_vs ]
                                              refineAgain cs eq
   | otherwise                           = do eq <- msubst eq
                                              let (fix_cs, gen_cs) = partition fixed cs
@@ -1683,7 +1683,7 @@ instance InfEnvT [Pattern] where
                                              return (cs1,te1,t1,[p'])
     infEnvT env (p:ps)                  = do (cs1,te1,t1,p') <- infEnvT env p
                                              (cs2,te2,t2,ps') <- infEnvT env ps
-                                             unify (DfltInfo (loc p) 109 Nothing []) t1 t2
+                                             tryUnify (DfltInfo (loc p) 109 Nothing []) t1 t2
                                              return (cs1++cs2, te1++te2, t1, p':ps')
 
 

@@ -15,7 +15,8 @@
 module Acton.Unify where
 
 import Control.Monad
-
+import Control.Monad.Except
+import qualified Control.Exception 
 import Utils
 import Pretty
 import Acton.Syntax
@@ -24,6 +25,8 @@ import Acton.TypeM
 
 
 -- unification ----------------------------------------------------------------------------------------------------------------------
+
+tryUnify info t1 t2                         = unify info t1 t2 `catchError` \err -> Control.Exception.throw err
 
 unify                                       :: ErrInfo -> Type -> Type -> TypeM ()
 unify info t1 t2                            = do t1' <- msubst t1

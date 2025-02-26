@@ -240,7 +240,7 @@ typeReport (NoRed c) filename src
                                           []
 
 typeReport (NoSolve mbt vs cs) filename src         =
-    let header = case length cs of
+    let header = trace (show (head cs)) $ case length cs of
                     0 -> "Unable to give good error message: please report example"
                     1 -> "Cannot satisfy the following constraint:"
                     _ -> "Cannot satisfy the following simultaneous constraints for the unknown " ++
@@ -265,6 +265,7 @@ typeReport (NoSolve mbt vs cs) filename src         =
   where
         nameStr (Name _ str) = str
 
+typeReport (NoUnify (Simple l msg) _ _) filename src = Err Nothing "Type unification error" [(locToPosition l filename src, This msg)] []
 typeReport (NoUnify info t1 t2) filename src        =
     case (loc t1, loc t2) of
         (l1@Loc{}, l2@Loc{}) -> Err
