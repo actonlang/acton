@@ -1,0 +1,9 @@
+Building file test/typeerrors/ex25.act using temporary scratch directory
+  Compiling ex25.act for development
+[error]: Incompatible types
+     +--> ex25.act@8:9-8:16
+     |
+   8 |         b.foo()
+     :         ^------
+     :         `- keyword component(s) 'cb' is missing in tuple
+-----+

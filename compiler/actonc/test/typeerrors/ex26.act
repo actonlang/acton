@@ -1,0 +1,15 @@
+class Foo(object):
+    thing: ?bool
+
+    def __init__(self, thing):
+        self.thing = thing
+
+mut def remove_thing(foos):
+    for f in foos:
+        f.thing = None
+
+def process():
+    p = []
+    foos = [Foo(True)]
+    # This is obviously wrong, remove_thing() does not return Iterable
+    p.extend(remove_thing(foos))

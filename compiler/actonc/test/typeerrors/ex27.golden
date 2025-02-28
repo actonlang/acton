@@ -1,0 +1,10 @@
+Building file test/typeerrors/ex27.act using temporary scratch directory
+  Compiling ex27.act for development
+[error]: Type unification error
+     +--> ex27.act@5:5-6:1
+     |
+   5 | +>     def foo(a: int):
+   6 | |>         return 42
+     : | 
+     : `- Type of first parameter of class method does not unify with Self
+-----+
