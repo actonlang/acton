@@ -22,6 +22,17 @@
   - Golden values are stored in `test/golden/MODULE/TEST_NAME`
   - Update expected values with `--golden-update`
 - Unmangle actor class names in logging
+- Add `--no-threads` option to compile single-threaded applications
+- Set minimum thread stack size to 8MB to avoid stack overflows
+- Add better documentation for integer types in the guide
+- Add `__name__` variable containing current module name
+- Add `complex.from_real_imag()` function to create complex numbers
+- Add support for complex numbers as dictionary keys
+- Add proper implementation of the Logical protocol for integers
+- Add URI parsing module for handling HTTP URLs and other URIs
+- Add `--list-imports` option to actonc to show imported modules
+- Add a ConsoleSink to the logging module
+- Capture log messages in tests for easier troubleshooting
 
 ### Changed
 - Dict & Mapping methods `get` and `pop` now return `None` when key is not
@@ -29,6 +40,19 @@
   - Use new `get_def` & `pop_def` for explicit default values
 - Automatic backtrace printing on crashes disabled on non-Linux platforms
   - LLDB on MacOS often hangs, so automatic backtrace printing is disabled
+- Make module paths in type error messages clickable for easier navigation
+- Improve `RunProcess` handling to properly await EOF for stdout/stderr
+- Disable garbage collection during package upgrade operations to improve performance
+- Silence build lock messages for dependency builds to reduce output noise
+- Use development mode (`--dev`) to build dependencies in test command
+- Don't store protocol witnesses in class attributes, push further into methods instead
+- Upgrade tlsuv library to v0.33.4 for improved TLS support
+- Enhance package dependency handling with support for transitive dependencies
+- Use a global dependencies directory in `~/.cache` for better dependency management
+- Improve testing output with deduplication of stdout/stderr messages
+- Colorize error messages for better readability
+- Reintroduce `--tempdir` option to actonc for manual control of temporary files
+- Allow integers to overflow for fixed-size integer types (i16, i32, i64, etc.)
 
 ### Fixed
 - Fix type conversion between `u16` and `int`
@@ -39,12 +63,42 @@
 - Fix volatile variables in try-except blocks to avoid compiler optimization
   issues impacting control flow
 - Fix string format in `time.DateTime`'s RFC1123 format (month was off by one)
+- Improve error messages with better source location information
+  - Added location details for "Missing constraint" errors
+  - Added location details for "missing tuple component" errors
+  - Better error reporting when class method's first parameter doesn't match Self type
+- Fix dictionary iteration in relation context
+- Fix constructor functions for bounded integer types
+- Fix CPS transformation for nested lambdas with preprocessing requirements
+- Fix handling of main project local dependency overrides
+- Fix `zip()` function implementation
+- Fix left shift operator (`<<`) for integers
+- Fix XML encoding to properly handle UTF-8
+- Fix TCP connection close to properly mark socket as invalid
+- Fix hash function to avoid signed overflow undefined behavior
+- Fix depth subtyping for builtin collections (list, dict, set)
+- Fix discovery of root actor based on name
+- Fix `acton test --name` to correctly filter tests by name
+- Fix string allocation in `B_str` to properly account for byte length
+- Fix package upgrade correctness
+- Fix handling of XML comments during parsing
+- Fix main project dependencies in build.zig.zon
+- Fix polarity improvement handling in type solver
+- Fix exception handling in iterate-relation context
+- Fix `free()` behavior (now a no-op in GC environment)
 
 ### Testing / CI
 - Add macos-aarch64 tip release build
 - Stop testing on Ubuntu 18.04
 - Install gdb in test-app environment for better crash analysis
 - Separate caches for Acton build and Stack/GHC in CI to avoid cache thrashing
+- Add caching for Linux ARM64 builds to improve CI speed
+- Ensure uniqueness of test artifact names to prevent collisions
+- Add support for Linux on ARM64 (aarch64) in CI
+- Add test of respnet (a real-world Acton application) to CI
+- Add testing on Ubuntu 24.04 for ARM64
+- Use artifact upload/download v4 for better performance
+- Await cache cleaning to avoid race conditions
 
 
 ## [0.24.1] (2024-11-09)
