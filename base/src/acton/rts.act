@@ -90,6 +90,16 @@ def rts_stats(cap: SysCap) -> dict[u64, (state: str, sleeps: u64, conts_count: u
     """Return all I/O handles and their type for the current worker thread"""
     NotImplemented
 
+def db_actors(cap: SysCap) -> dict[i64, (rts: str, local: bool, status: str)]:
+    NotImplemented
+
+def db_servers(cap: SysCap) -> dict[str, (ntype: str, hostname: str, status: str)]:
+    NotImplemented
+
+def db_rtses(cap: SysCap) -> dict[str, (ntype: str, hostname: str, status: str, local_rts_id: u64, dc_id: u64, rack_id: u64)]:
+    NotImplemented
+
+
 actor WThreadMonitor(env: Env, arg_wthread_id: int):
     wthread_id = arg_wthread_id
 

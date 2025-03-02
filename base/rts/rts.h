@@ -21,6 +21,10 @@
 #include "common.h"
 #include "../builtin/builtin.h"
 
+#ifdef ACTON_DB
+#include "../backend/client_api.h"
+#endif
+
 #define MSGQ 2
 #ifdef ACTON_THREADS
 #define MAX_WTHREADS 256
@@ -36,6 +40,8 @@
 #define REQUIRED_STACK_SIZE 8*1024*1024
 
 #include "q.h"
+
+extern const char *WT_State_name[];
 
 extern long num_wthreads;
 struct wt_stat {
@@ -304,3 +310,7 @@ void $deserialize_rts($ROW);
 
 
 void $register_rts();
+
+#ifdef ACTON_DB
+extern remote_db_t *db;
+#endif
