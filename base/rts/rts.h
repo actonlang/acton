@@ -146,9 +146,6 @@ struct $ActorG_class {
     void (*__init__)($Actor);
     void (*__serialize__)($Actor, $Serial$state);
     $Actor (*__deserialize__)($Actor, $Serial$state);
-    B_bool (*__bool__)($Actor);
-    B_str (*__str__)($Actor);
-    B_str (*__repr__)($Actor);
     B_NoneType (*__resume__)($Actor);
     B_NoneType (*__cleanup__)($Actor);
 };
@@ -173,9 +170,6 @@ struct $CatcherG_class {
     void (*__init__)($Catcher, $Cont);
     void (*__serialize__)($Catcher, $Serial$state);
     $Catcher (*__deserialize__)($Catcher, $Serial$state);
-    B_bool (*__bool__)($Catcher);
-    B_str (*__str__)($Catcher);
-    B_str (*__repr__)($Catcher);
 };
 struct $Catcher {
     struct $CatcherG_class *$class;
@@ -192,9 +186,6 @@ struct $ConstContG_class {
     void (*__init__)($ConstCont, $WORD, $Cont);
     void (*__serialize__)($ConstCont, $Serial$state);
     $ConstCont (*__deserialize__)($ConstCont, $Serial$state);
-    B_bool (*__bool__)($ConstCont);
-    B_str (*__str__)($ConstCont);
-    B_str (*__repr__)($ConstCont);
     $R (*__call__)($ConstCont, $WORD);
 };
 struct $ConstCont {
@@ -292,9 +283,9 @@ void $Actor$serialize($Actor, B_NoneType);
 void $Actor$deserialize($Actor, B_NoneType);
 B_NoneType $ActorD___cleanup__($Actor);
 
-B_bool B_MsgD___bool__(B_Msg self); 
-B_str B_MsgD___str__(B_Msg self);
-B_str B_MsgD___repr__(B_Msg self); 
+// B_bool B_MsgD___bool__(B_Msg self); 
+// B_str B_MsgD___str__(B_Msg self);
+// B_str B_MsgD___repr__(B_Msg self); 
 void B_MsgD___serialize__(B_Msg self, $Serial$state state);
 B_Msg B_MsgD___deserialize__(B_Msg res, $Serial$state state);
 

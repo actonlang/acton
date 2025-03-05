@@ -130,7 +130,7 @@ B_str to_str_noc(char *str) {
     res->$class = &B_strG_methods;
     res->nbytes = strlen(str);
     res->nchars = res->nbytes;
-    res->str = str;
+    res->str = (unsigned char *)str;
 
     bool isascii = true;
     unsigned char *p = (unsigned char*)str;
@@ -451,19 +451,12 @@ void escape_str(unsigned char *out, unsigned char *in, int outlen, int inlen, in
 
 // General methods ////////////////////////////////////////////////////////////// 
 
-B_str B_strG_new(B_value s) {
-    return $NEW(B_str, s);
+B_str B_strG_new(B_Show wit, $WORD s) {
+    return $NEW(B_str, wit, s);
 }
 
-B_NoneType B_strD___init__(B_str self, B_value s) {
-    // If s is None (C NULL) we use the "None" string.
-    if (s == NULL) {
-        self->nchars = 4;
-        self->nbytes = 4;
-        self->str = (unsigned char *)"None";
-        return B_None;
-    }
-    B_str res = B_ShowD_valueG_witness->$class->__str__(B_ShowD_valueG_witness,s);
+B_NoneType B_strD___init__(B_str self, B_Show wit, $WORD s) {
+    B_str res = wit->$class->__str__(wit,s);
     self->nchars = res->nchars;
     self->nbytes = res->nbytes;
     self->str = res->str;
@@ -1359,6 +1352,7 @@ static B_str B_IteratorB_strD_next(B_IteratorB_str self) {
         return mk_char(p);
     }
     $RAISE ((B_BaseException)$NEW(B_StopIteration, to$str("str iterator terminated")));
+    return NULL;
 ;
 }
 
@@ -1715,7 +1709,7 @@ B_bytearray B_bytearrayD_from_hex(B_str s) {
     res->$class = &B_bytearrayG_methods;
     res->nbytes = bytelen;
     res->capacity = bytelen;
-    res->str = result;
+    res->str = (unsigned char *)result;
 
     return res;
 }
@@ -2243,8 +2237,10 @@ B_bool B_OrdD_bytearrayD___ge__ (B_OrdD_bytearray wit, B_bytearray a, B_bytearra
 // Iterable
 
 static B_int B_IteratorB_bytearrayD_next(B_IteratorB_bytearray self) {
-    if (self->nxt >= self->src->nbytes)
+    if (self->nxt >= self->src->nbytes) {
         $RAISE ((B_BaseException)$NEW(B_StopIteration, to$str("bytearray iterator terminated")));
+        return NULL;
+    }
     else
         return to$int(self->src->str[self->nxt++]);
 }
@@ -2537,7 +2533,7 @@ B_bytes actBytesFromCStringNoCopy(char *str) {
     B_bytes res = acton_malloc(sizeof(struct B_bytes));
     res->$class = &B_bytesG_methods;
     res->nbytes = strlen(str);
-    res->str = str;
+    res->str = (unsigned char *)str;
     return res;
 }
 
@@ -2552,7 +2548,7 @@ B_bytes actBytesFromCStringLengthNoCopy(char *str, int length) {
     B_bytes res = acton_malloc(sizeof(struct B_bytes));
     res->$class = &B_bytesG_methods;
     res->nbytes = length;
-    res->str = str;
+    res->str = (unsigned char *)str;
     return res;
 }
 
@@ -3398,8 +3394,10 @@ B_str B_IteratorB_bytesD_str(B_IteratorB_bytes self) {
 
 // this is next function for forward iteration
 static B_int B_IteratorB_bytesD_next(B_IteratorB_bytes self) {
-    if (self->nxt >= self->src->nbytes)
+    if (self->nxt >= self->src->nbytes) {
         $RAISE ((B_BaseException)$NEW(B_StopIteration, to$str("bytes iterator terminated")));
+        return NULL;
+    }
     else
         return to$int(self->src->str[self->nxt++]);
 }

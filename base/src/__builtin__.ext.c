@@ -17,6 +17,8 @@ void B___ext_init__() {
     B_ContainerD_listG_methods.__len__ = (B_int (*)(B_ContainerD_list, B_list))B_CollectionD_SequenceD_listD___len__;
     B_ContainerD_listG_methods.__fromiter__ = (B_list (*)(B_ContainerD_list, B_Iterable, $WORD))B_CollectionD_SequenceD_listD___fromiter__;
     B_ContainerD_listG_methods.__iter__ = (B_Iterator (*)(B_ContainerD_list, B_list))B_CollectionD_SequenceD_listD___iter__;
+
+    B_ShowD_strG_methods.__repr__ = (B_str (*)(B_ShowD_str, B_str))B_ShowD_strD___repr__;
 }
 
 B_str B_BaseExceptionD__name (B_BaseException self) {
@@ -35,7 +37,7 @@ $R B_EnvD_getenvbG_local (B_Env self, $Cont C_cont, B_bytes name) {
     char smallval[256];
     char *value = smallval;
 
-    const char* env_var = fromB_bytes(name);
+    const char* env_var = (char *)fromB_bytes(name);
 
     // First, query the required buffer size by passing NULL as the buffer
     int r = uv_os_getenv(env_var, value, &len);
@@ -54,8 +56,8 @@ $R B_EnvD_getenvbG_local (B_Env self, $Cont C_cont, B_bytes name) {
 }
 
 $R B_EnvD_setenvbG_local (B_Env self, $Cont C_cont, B_bytes name, B_bytes value) {
-    const char* env_var = fromB_bytes(name);
-    const char* env_val = fromB_bytes(value);
+    const char* env_var = (char *)fromB_bytes(name);
+    const char* env_val = (char *)fromB_bytes(value);
     int r = uv_os_setenv(env_var, env_val);
     if (r < 0) {
         $RAISE((B_BaseException)B_RuntimeErrorG_new($FORMAT("Failed to set the environment variable %s: %s", env_var, uv_strerror(r))));
@@ -64,7 +66,7 @@ $R B_EnvD_setenvbG_local (B_Env self, $Cont C_cont, B_bytes name, B_bytes value)
 }
 
 $R B_EnvD_unsetenvbG_local (B_Env self, $Cont C_cont, B_bytes name) {
-    const char* env_var = fromB_bytes(name);
+    const char* env_var = (char *)fromB_bytes(name);
     int r = uv_os_unsetenv(env_var);
     if (r < 0) {
         $RAISE((B_BaseException)B_RuntimeErrorG_new($FORMAT("Failed to unset the environment variable %s: %s", env_var, uv_strerror(r))));

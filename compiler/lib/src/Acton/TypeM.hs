@@ -257,7 +257,7 @@ typeReport (NoSolve mbt vs cs) filename src         =
             ([], []) -> [(NoLoc, "Error: No location information")]
             ([], (l,m):_) -> [(l,m)]
             ((l,m):rest, extras) -> (l, m ++ "\n" ++ concatMap snd extras) : rest
-    in Err
+    in trace (show cs) $ Err
         Nothing
         header
         [(locToPosition l filename src, This m) | (l,m) <- withLocsMsgs]

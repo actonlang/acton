@@ -523,9 +523,6 @@ struct $ActorG_class $ActorG_methods = {
     $ActorD___init__,
     $ActorD___serialize__,
     $ActorD___deserialize__,
-    $ActorD___bool__,
-    $ActorD___str__,
-    $ActorD___str__,
     $ActorD___resume__,
     $ActorD___cleanup__
 };
@@ -536,10 +533,7 @@ struct $CatcherG_class $CatcherG_methods = {
     NULL,
     $CatcherD___init__,
     $CatcherD___serialize__,
-    $CatcherD___deserialize__,
-    $CatcherD___bool__,
-    $CatcherD___str__,
-    $CatcherD___str__
+    $CatcherD___deserialize__
 };
 
 struct $ConstContG_class $ConstContG_methods = {
@@ -549,9 +543,6 @@ struct $ConstContG_class $ConstContG_methods = {
     $ConstContD___init__,
     $ConstContD___serialize__,
     $ConstContD___deserialize__,
-    $ConstContD___bool__,
-    $ConstContD___str__,
-    $ConstContD___str__,
     $ConstContD___call__
 };
 
@@ -671,9 +662,6 @@ struct $ContG_class $DoneG_methods = {
     $ContD___init__,
     $Done__serialize__,
     $Done__deserialize__,
-    $DoneD___bool__,
-    $DoneD___str__,
-    $DoneD___str__,
     $DoneD___call__
 };
 struct $Cont $Done$instance = {
@@ -709,9 +697,6 @@ struct $ContG_class $FailG_methods = {
     $ContD___init__,
     $Fail__serialize__,
     $Fail__deserialize__,
-    $FailD___bool__,
-    $FailD___str__,
-    $FailD___str__,
     $FailD___call__
 };
 struct $Cont $Fail$instance = {
@@ -730,9 +715,6 @@ struct $ContG_class $InitRootG_methods = {
     $ContD___init__,
     $ContD___serialize__,
     $ContD___deserialize__,
-    $ContD___bool__,
-    $ContD___str__,
-    $ContD___str__,
     $InitRootD___call__
 };
 struct $Cont $InitRoot$cont = {
@@ -1619,6 +1601,7 @@ void wt_work_cb(uv_check_t *ev) {
             } else {                            // An unhandled exception
                 save_actor_state(current, m);
                 B_BaseException ex = (B_BaseException)r.value;
+                B_ShowD_value wit = B_ShowD_valueG_witness;;
                 m->value = r.value;                                 // m->value holds the raised exception,
                 $Actor b = FREEZE_waiting(m, MARK_EXCEPTION);       // so mark this and stop further m->waiting additions
                 // If any other actor is waiting for our result / exception,
@@ -1627,7 +1610,7 @@ void wt_work_cb(uv_check_t *ev) {
                 // the waiting actor. Thus we only print Unhandled exception in
                 // the originating actor when there is no one waiting for us.
                 if (!b)
-                    fprintf(stderr, "Unhandled exception in actor: %s[%ld]:\n  %s\n", unmangle_name(current->$class->$GCINFO), current->$globkey, fromB_str(ex->$class->__str__(ex)));
+                    fprintf(stderr, "Unhandled exception in actor: %s[%ld]:\n  %s\n", unmangle_name(current->$class->$GCINFO), current->$globkey, fromB_str(wit->$class->__str__(wit,(B_value)ex)));
                 while (b) {
                     b->B_Msg->$cont = &$Fail$instance;
                     b->B_Msg->value = r.value;
@@ -1827,7 +1810,7 @@ const char* stats_to_json () {
         return NULL;
     }
 #else
-    localtime_r(&ts.tv_sec, &tm);
+    localtime_r((const time_t *)&ts.tv_sec, &tm);
 #endif
     char dt[32];    // = "YYYY-MM-ddTHH:mm:ss.SSS+0000";
     strftime(dt, 32, "%Y-%m-%dT%H:%M:%S.000%z", &tm);
@@ -1966,7 +1949,7 @@ const char* actors_to_json () {
         return NULL;
     }
 #else
-    localtime_r(&ts.tv_sec, &tm);
+    localtime_r((const time_t *)&ts.tv_sec, &tm);
 #endif
     char dt[32];    // = "YYYY-MM-ddTHH:mm:ss.SSS+0000";
     strftime(dt, 32, "%Y-%m-%dT%H:%M:%S.000%z", &tm);

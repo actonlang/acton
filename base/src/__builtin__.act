@@ -390,8 +390,8 @@ class IndexError (LookupError):
         self.index = index
         self.error_message = msg if msg is not None else "List index out of range"
 
-class KeyError[A] (LookupError):
-    def __init__(self, key: A, msg: ?str=None):
+class KeyError (LookupError):
+    def __init__(self, key: value, msg: ?str=None):
         self.key = key
         self.error_message = msg if msg is not None else "Key not found"
 
@@ -519,6 +519,8 @@ protocol Hashable (Eq):
 
 ## Bool extensions ################################################################################
 
+extension value (Bool):
+    NotImplemented
 extension int (Bool):
     NotImplemented
 extension i64 (Bool):
@@ -558,6 +560,8 @@ extension slice (Bool):
     
 ## Show extensions ################################################################################
 
+extension value (Show):
+    NotImplemented
 extension int (Show):
     NotImplemented
 extension i64 (Show):

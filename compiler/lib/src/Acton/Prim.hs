@@ -294,9 +294,9 @@ clActor             = NClass [] (leftpath [cValue]) te
                         (primKW "consume_hd", NSig (monotype $ tCon $ TC (gPrim "int64") []) Property),
                         (primKW "catcher",    NSig (monotype $ tCon $ TC (gPrim "Catcher") []) Property),
                         (primKW "globkey",    NSig (monotype $ tCon $ TC (gPrim "long") []) Property),
-                        (boolKW,              NDef (monotype $ tFun fxPure posNil kwdNil tBool) NoDec),
-                        (strKW,               NDef (monotype $ tFun fxPure posNil kwdNil tStr) NoDec),
-                        (reprKW,              NDef (monotype $ tFun fxPure posNil kwdNil tStr) NoDec),
+--                        (boolKW,              NDef (monotype $ tFun fxPure posNil kwdNil tBool) NoDec),
+--                        (strKW,               NDef (monotype $ tFun fxPure posNil kwdNil tStr) NoDec),
+--                        (reprKW,              NDef (monotype $ tFun fxPure posNil kwdNil tStr) NoDec),
                         (resumeKW,            NDef (monotype $ tFun fxMut posNil kwdNil tNone) NoDec),
                         (cleanupKW,           NDef (monotype $ tFun fxMut posNil kwdNil tNone) NoDec)
                       ]

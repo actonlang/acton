@@ -163,7 +163,7 @@ struct B_ShowD_tuple {
 B_str B_ShowD_tupleD___str__(B_ShowD_tuple wit, B_tuple self) {
     B_list s2 = B_listD_new(self->size);
     B_SequenceD_list wit2 = B_SequenceD_listG_witness;
-    B_Show wit3 = B_ShowD_tupleG_witness;
+    B_ShowD_tuple wit3 = B_ShowD_tupleG_witness;
     for (int i=0; i< self->size; i++) {
         $WORD elem = (B_value)self->components[i];
         wit2->$class->append(wit2,s2,wit3->$class->__repr__(wit3,elem));

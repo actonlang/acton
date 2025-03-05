@@ -766,7 +766,7 @@ class TestInfo(object):
                 test_definition = jd["definition"]
                 if isinstance(test_definition, dict):
                     return Test.from_json(test_definition)
-            raise ValueError("Invalid Test JSON: " + str(jd))
+            raise ValueError("Invalid Test JSON")
         definition: Test = take_definition(json_data)
         complete = json_data["complete"]
         suc = json_data["success"]

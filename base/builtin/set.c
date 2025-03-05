@@ -316,6 +316,7 @@ static $WORD B_IteratorD_set_next_entry(B_IteratorD_set self) {
         i++;
     }
     $RAISE ((B_BaseException)$NEW(B_StopIteration, to$str("set iterator terminated")));
+    return NULL;
 }
 
 static B_Iterator B_set_iter_entry(B_set set) {

@@ -658,7 +658,7 @@ B_int to$int(long n) {
         return &B_int_strs[n];
     else {
         B_int res = malloc_int();
-        res->val.n[0] = n > 0 ? n : (n == LONG_MIN ? 9223372036854775808 : -n);
+        res->val.n[0] = n > 0 ? n : (n == LONG_MIN ? 9223372036854775808UL : -n);
         res->val.size = n < 0 ? -1 : n > 0;
         return res;
     }
@@ -667,7 +667,7 @@ B_int to$int(long n) {
 B_int to$int2(char *str) {
     B_int res = malloc_int();
     res->$class = &B_intG_methods;
-    set_str(&res->val, str, NULL);
+    set_str(&res->val, (unsigned char *)str, NULL);
     return res;
 }
 
@@ -717,7 +717,7 @@ int get_str0(bool ishead, zz_ptr n, zz_ptr dens[], int d, char *res, int pos) {
         }
     } else {
         char buf[POW10INWORD + 1];
-        sprintf(&buf, "%lu", (unsigned long)n->n[0]);
+        sprintf((char *)&buf, "%lu", (unsigned long)n->n[0]);
         int len = strlen(buf);
         if (ishead) {
             memcpy(&res[pos], buf, len);
@@ -862,7 +862,7 @@ int set_str(zz_ptr a, unsigned char *nstr, B_int intbase) {
     int offset =  len % POWINWORD[base];
     
     if (offset == 0) {
-        return set_str0(a, nstr, base, parts);
+        return set_str0(a, (char *)nstr, base, parts);
         a->size *= sgn;
     } else {
         unsigned long headval = 0;
@@ -873,7 +873,7 @@ int set_str(zz_ptr a, unsigned char *nstr, B_int intbase) {
         if (parts > 0) {
             zz_ptr res0 = acton_malloc(sizeof(zz_struct));
             zz_init(res0);
-            partdigits = set_str0(res0, &nstr[offset], base, parts);
+            partdigits = set_str0(res0, (char *)&nstr[offset], base, parts);
             zz_seti(a, base);
             zz_powi(a, a, POWINWORD[base] * parts);
             zz_muli(a, a, headval);

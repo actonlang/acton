@@ -294,9 +294,10 @@ cModule env srcbase (Module m imps stmts)
                                       (text "void" <+> genTopName env initKW <+> parens empty <+> char '{') $+$
                                       nest 4 (text "if" <+> parens (genTopName env initFlag) <+> text "return" <> semi $+$
                                               genTopName env initFlag <+> equals <+> text "1" <> semi $+$
-                                              ext_init $+$
+                                              -- ext_init $+$
                                               initImports $+$
-                                              initModule env stmts) $+$
+                                              initModule env stmts $+$
+                                              ext_init) $+$
                                       char '}'
   where initImports                 = vcat [ gen env (GName m initKW) <> parens empty <> semi | m <- modNames imps ]
         external                    = hasNotImpl stmts && not (inBuiltin env)
@@ -407,7 +408,7 @@ initModule env (s : ss)             = genStmt1 env s $+$
 
 initClassBase env c q as hasCDef    = methodtable env c <> dot <> gen env gcinfoKW <+> equals <+> doubleQuotes (genTopName env c) <> semi $+$
                                       methodtable env c <> dot <> gen env superclassKW <+> equals <+> super <> semi $+$
-                                      vcat [ inherit c' n | (c',n) <- inheritedAttrs env (NoQ c) ]
+                                        vcat [ inherit c' n | (c',n) <- inheritedAttrs env (NoQ c) ]
   where super                       = if null as then text "NULL" else parens (gen env qnSuperClass) <> text "&" <> methodtable' env (tcname $ head as)
         selfsubst                   = subst [(tvSelf, tCon tc)]
         tc                          = TC (NoQ c) [ tVar v | Quant v _ <- q ]

@@ -595,6 +595,7 @@ static $WORD B_IteratorD_dict_values_next(B_IteratorD_dict_values self) {
         i++;
     }
     $RAISE ((B_BaseException)$NEW(B_StopIteration, to$str("dict values iterator terminated")));
+    return NULL;
 }
  
 B_IteratorD_dict_values B_IteratorD_dict_valuesG_new(B_dict dict) {

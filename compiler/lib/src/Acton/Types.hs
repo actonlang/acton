@@ -1412,7 +1412,10 @@ instance Infer Expr where
 
 inferCall env unwrap l e ps ks          = do (cs1,t,e') <- infer env e{eloc = l}
                                              (cs1,t,e') <- if unwrap && actorSelf env then wrapped l attrUnwrap env cs1 [t] [e'] else pure (cs1,t,e')
-                                             (cs2,prow,ps') <- infer env ps
+                                             let ps1 = case e of
+                                                         Var _ (NoQ (Name _ "print")) -> map (\e -> Call (loc e) (eVar (name "str")) (PosArg e PosNil) KwdNil) (posargs ps)
+                                                         _ -> posargs ps
+                                             (cs2,prow,ps') <- infer env (posarg ps1)
                                              (cs3,krow,ks') <- infer env ks
                                              t0 <- newTVar
                                              fx <- currFX

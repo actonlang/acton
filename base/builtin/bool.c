@@ -17,7 +17,7 @@
 // Serialization ///////////////////////////////////////////////////////////////////////
 
 B_NoneType B_boolD___init__(B_bool self, B_Bool wit, $WORD s){
-    self->val = wit->$class->__bool__(wit, s);
+    self->val = wit->$class->__bool__(wit, s)->val;
     return B_None;
 }
 

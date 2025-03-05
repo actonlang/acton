@@ -14,6 +14,7 @@
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
+/*
 B_bool $procD___bool__($proc self) {
   return B_True;
 }
@@ -41,16 +42,18 @@ B_bool $pureD___bool__($pure self) {
 B_str $pureD___str__($pure self) {
   return $FORMAT("<pure closure at %p>", self);
 }
-
+*/
 void $ContD___init__($Cont $this) {
     // Empty
 }
+/*
 B_bool $ContD___bool__($Cont self) {
   return B_True;
 }
 B_str $ContD___str__($Cont self) {
   return $FORMAT("<$Cont closure at %p>", self);
 }
+*/
 void $ContD___serialize__($Cont self, $Serial$state state) {
     // Empty
 }
@@ -65,9 +68,6 @@ struct $ContG_class $ContG_methods = {
     $ContD___init__,
     $ContD___serialize__,
     $ContD___deserialize__,
-    $ContD___bool__,
-    $ContD___str__,
-    $ContD___str__,
     NULL                /* __call__ */
 };
 struct $procG_class $procG_methods = {
@@ -77,9 +77,6 @@ struct $procG_class $procG_methods = {
     NULL,               /* __init__ */
     NULL,               /* __serialize__ */
     NULL,               /* __deserialize__ */
-    $procD___bool__,
-    $procD___str__,
-    $procD___str__,
     NULL,               /* __call__ */
     NULL                /* __exec__ */
 };
@@ -90,9 +87,6 @@ struct $actionG_class $actionG_methods = {
     NULL,               /* __init__ */
     NULL,               /* __serialize__ */
     NULL,               /* __deserialize__ */
-    $actionD___bool__,
-    $actionD___str__,
-    $actionD___str__,
     NULL,               /* __call__ */
     NULL,               /* __exec__ */
     NULL                /* __asyn__ */
@@ -104,9 +98,6 @@ struct $mutG_class $mutG_methods = {
     NULL,               /* __init__ */
     NULL,               /* __serialize__ */
     NULL,               /* __deserialize__ */
-    $mutD___bool__,
-    $mutD___str__,
-    $mutD___str__,
     NULL,               /* __call__ */
     NULL,               /* __exec__ */
     NULL                /* __eval__ */
@@ -118,9 +109,6 @@ struct $pureG_class $pureG_methods = {
     NULL,               /* __init__ */
     NULL,               /* __serialize__ */
     NULL,               /* __deserialize__ */
-    $pureD___bool__,
-    $pureD___str__,
-    $pureD___str__,
     NULL,               /* __call__ */
     NULL,               /* __exec__ */
     NULL                /* __eval__ */
