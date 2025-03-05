@@ -31,13 +31,23 @@ void $default__init__($WORD);
 
 #define $NOT(T, a)          ({ T $a = (a); ($a && ((B_value)$a)->$class->__bool__((B_value)$a)->val) ? B_False : B_True; })
 
-#define $ISINSTANCE($x,$T)  ({ $SuperG_class $c = (($Super)$x)->$class; \
-                               while($c && $c != ($SuperG_class)&$T ## G_methods) $c = $c->$superclass; \
-                               toB_bool($c != 0); })
+#define $ISINSTANCE($x,$T)  ({ \
+                               /* If object is NULL (None), return False */ \
+                               ($x) == B_None ? B_False : ({ \
+                                 $SuperG_class $c = (($Super)$x)->$class; \
+                                 while($c && $c != ($SuperG_class)&$T ## G_methods) $c = $c->$superclass; \
+                                 toB_bool($c != 0); \
+                               }); \
+                             })
 
-#define $ISINSTANCE0($x,$T)  ({ $SuperG_class $c = (($Super)$x)->$class; \
-                               while($c && $c != ($SuperG_class)&$T ## G_methods) $c = $c->$superclass; \
-                               $c != 0; })
+#define $ISINSTANCE0($x,$T)  ({ \
+                               /* If object is NULL (None), return 0 (False) */ \
+                               ($x) == B_None ? 0 : ({ \
+                                 $SuperG_class $c = (($Super)$x)->$class; \
+                                 while($c && $c != ($SuperG_class)&$T ## G_methods) $c = $c->$superclass; \
+                                 $c != 0; \
+                               }); \
+                             })
 
 #define $ISNOTNONE(x)       ((x) != B_None ? B_True : B_False)
 
