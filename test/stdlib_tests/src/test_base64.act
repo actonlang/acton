@@ -3,9 +3,15 @@ import base64
 import testing
 
 def _test_base64():
-    i = "foobar"
+    i = b"foobar"
     for a in range(1000):
         e = base64.encode(i)
-        #testing.assertEqual(e, "Zm9vYmFy")
+        testing.assertEqual(e, b"Zm9vYmFy")
         d = base64.decode(e)
         testing.assertEqual(i, d)
+
+    h = "Hello Acton 🫡".encode()
+    e = base64.encode(h)
+    testing.assertEqual(e, b"SGVsbG8gQWN0b24g8J+roQ==")
+    d = base64.decode(e)
+    testing.assertEqual(h, d)
