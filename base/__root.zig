@@ -6,7 +6,8 @@ const gc = @import("rts/gc.zig");
 export fn base64Q_encode(data: *acton.str) callconv(.C) *acton.str {
     const alloc = gc.allocator();
     const encoder = std.base64.standard.Encoder;
-    const data_len: usize = @intCast(data.nchars);
+    // For possible Unicode input, bytes and chars may not be 1:1
+    const data_len: usize = @intCast(data.nbytes);
     const out_len = encoder.calcSize(data_len);
     const buffer = alloc.alloc(u8, out_len) catch @panic("OOM");
     const encoded = encoder.encode(buffer, std.mem.span(data.str));
@@ -15,7 +16,7 @@ export fn base64Q_encode(data: *acton.str) callconv(.C) *acton.str {
     res.* = .{
         .class = data.class,
         .nbytes = @intCast(out_len),
-        .nchars = @intCast(out_len),
+        .nchars = @intCast(out_len), // For base64 output, bytes and chars are 1:1
         .str = @as([*:0]const u8, @ptrCast(encoded.ptr))
     };
     return res;
@@ -24,16 +25,19 @@ export fn base64Q_encode(data: *acton.str) callconv(.C) *acton.str {
 export fn base64Q_decode(data: *acton.str) callconv(.C) *acton.str {
     const alloc = gc.allocator();
     const decoder = std.base64.standard.Decoder;
-    const data_len: usize = @intCast(data.nchars);
-    const out_len = decoder.calcSizeUpperBound(data_len) catch unreachable;
+    // Convert null-terminated string to slice for decoder
+    const data_slice = std.mem.sliceTo(data.str, 0);
+    const out_len = decoder.calcSizeForSlice(data_slice) catch unreachable;
     const buffer = alloc.alloc(u8, out_len) catch @panic("OOM");
     decoder.decode(buffer, std.mem.span(data.str)) catch unreachable;
+    // Count the number characters in a possible Unicode string
+    const width = std.unicode.utf8CountCodepoints(buffer) catch unreachable;
 
     const res = alloc.create(acton.str) catch @panic("OOM");
     res.* = .{
         .class = data.class,
         .nbytes = @intCast(out_len),
-        .nchars = @intCast(out_len),
+        .nchars = @intCast(width),
         .str = @as([*:0]const u8, @ptrCast(buffer.ptr))
     };
     return res;
