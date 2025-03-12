@@ -1,5 +1,5 @@
-def encode(data: str) -> str:
+def encode(data: bytes) -> bytes:
     NotImplemented
 
-def decode(data: str) -> str:
+def decode(data: bytes) -> bytes:
     NotImplemented
