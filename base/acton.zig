@@ -3,6 +3,7 @@ const expect = std.testing.expect;
 const c_acton = @cImport({
     @cInclude("builtin/builtin.h");
 });
+const gc = @import("rts/gc.zig");
 
 // B_bytes
 pub const bytes = extern struct {
@@ -23,6 +24,35 @@ pub const str = extern struct {
     nchars: i32,              // length of str in Unicode chars
     str: [*:0]const u8            // str is UTF-8 encoded.
 };
+
+// B_ValueError
+pub const ValueError = extern struct {
+    class: *c_acton.B_ValueErrorG_class,
+    error_message: c_acton.B_str,
+};
+
+// This is the equivalent of the expanded macro in C:
+//   $NEW(B_ValueError,to$str(message))
+pub fn new_value_error(message: []const u8) *c_acton.B_ValueError {
+    const alloc = gc.allocator();
+
+    const error_ptr = alloc.create(ValueError) catch @panic("OOM");
+    const c_error_message = @constCast(message.ptr);
+    const error_message_ptr = c_acton.to_str_noc(c_error_message);
+    error_ptr.* = .{ .class = @ptrCast(&c_acton.B_ValueErrorG_methods), .error_message = null };
+    if (error_ptr.class.__init__) |init_fn| {
+        _ = init_fn(@ptrCast(error_ptr), error_message_ptr);
+    }
+    return @ptrCast(error_ptr);
+}
+
+// This is the equivalent of the function call in C:
+//   $RAISE((B_BaseException)$NEW(B_ValueError,to$str(message)))
+pub fn raise_value_error(message: []const u8) void {
+    const error_ptr = new_value_error(message);
+    // @ptrCast is used to cast the pointer to the correct type expected by the C function
+    c_acton.@"$RAISE"(@ptrCast(error_ptr));
+}
 
 test "str struct" {
     // Check that our struct is the same size as the C struct, by using @typeInfo

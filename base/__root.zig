@@ -27,7 +27,10 @@ export fn base64Q_decode(data: *acton.bytes) callconv(.C) *acton.bytes {
     // Convert null-terminated string to slice for decoder
     const data_slice = std.mem.sliceTo(data.str, 0);
     // And then compute the exact number of bytes we need to decode, without padding
-    const out_len = decoder.calcSizeForSlice(data_slice) catch unreachable;
+    const out_len = decoder.calcSizeForSlice(data_slice) catch {
+        acton.raise_value_error("Invalid base64 input data");
+        unreachable;
+    };
     const buffer = alloc.alloc(u8, out_len) catch @panic("OOM");
     decoder.decode(buffer, std.mem.span(data.str)) catch unreachable;
 
