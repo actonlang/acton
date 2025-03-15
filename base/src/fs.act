@@ -1,0 +1,175 @@
+
+def path_separator() -> str:
+    """Get the path separator for the current platform."""
+    # TODO: Implement this function
+    return "/"
+
+# The local platform's path separator
+sep: str = path_separator()
+
+def join_path(parts: list[str], path_separator: ?str=None) -> str:
+    """Join path components together"""
+    psep = path_separator if path_separator is not None else sep
+    return psep.join(parts)
+
+def glob(pattern: str, path: str, path_separator: ?str=None) -> bool:
+    """Match a glob pattern against a file path.
+
+    Supports the following glob features:
+    - '*': Matches any sequence of characters within a single path segment
+    - '**': Matches any sequence of characters across multiple path segments
+    - '?': Matches any single character
+    - '[abc]': Matches any character in the set (a, b, or c)
+    - '[a-z]': Matches any character in the range (a through z)
+    - '[^abc]': Matches any character NOT in the set (negated character class)
+    - Escaping special characters with backslash
+    - '{a,b,c}': Matches any of the comma-separated terms
+
+    Args:
+        pattern: The glob pattern to match against
+        path: The file path to match
+        path_separator: The path separator character to use. Defaults to fs.sep.
+
+    Returns:
+        True if the path matches the pattern, False otherwise
+    """
+    separator = path_separator if path_separator is not None else sep
+    return _glob_recursive(pattern, 0, path, 0, separator)
+
+def _glob_recursive(pattern: str, p_idx: int, path: str, s_idx: int, separator: str) -> bool:
+    """
+    Recursive helper function for pattern matching.
+
+    Args:
+        pattern: The glob pattern to match against
+        p_idx: Current index in the pattern
+        path: The file path to match
+        s_idx: Current index in the path
+        separator: The path separator character
+
+    Returns:
+        True if the remainder of the path matches the remainder of the pattern
+    """
+    # Base case: if we've reached the end of the pattern
+    if p_idx == len(pattern):
+        # Match if we've also reached the end of the path
+        return s_idx == len(path)
+
+    # Handle escaping with backslash
+    if p_idx < len(pattern) - 1 and pattern[p_idx] == '\\':
+        # Match the escaped character literally
+        if s_idx < len(path) and pattern[p_idx + 1] == path[s_idx]:
+            return _glob_recursive(pattern, p_idx + 2, path, s_idx + 1, separator)
+        return False
+
+    # Handle ** wildcard (matches across multiple path segments)
+    if p_idx + 1 < len(pattern) and pattern[p_idx:p_idx+2] == '**':
+        # Check if the next character after ** is a path separator
+        if p_idx + 2 < len(pattern) and pattern[p_idx + 2] == separator:
+            # Handle **/ pattern - match any number of directories
+            next_idx = p_idx + 3  # Skip past **/
+
+            # Try to match the rest of the pattern at every position in the path
+            for i in range(s_idx, len(path) + 1):
+                if _glob_recursive(pattern, next_idx, path, i, separator):
+                    return True
+
+            return False
+        else:
+            # Treat ** as * if not followed by separator
+            # Skip both * characters and match any sequence
+            return (_glob_recursive(pattern, p_idx + 2, path, s_idx, separator) or
+                    (s_idx < len(path) and _glob_recursive(pattern, p_idx, path, s_idx + 1, separator)))
+
+    # Handle * wildcard (matches any sequence within a path segment)
+    if pattern[p_idx] == '*':
+        # Find the next path separator in both pattern and path
+        next_sep_pattern = pattern.find(separator, p_idx + 1)
+        if next_sep_pattern == -1:
+            next_sep_pattern = len(pattern)
+
+        next_sep_path = path.find(separator, s_idx)
+        if next_sep_path == -1:
+            next_sep_path = len(path)
+
+        # Try to match the rest of the pattern with the rest of the path
+        # but don't cross path separators
+        return (_glob_recursive(pattern, p_idx + 1, path, s_idx, separator) or
+                (s_idx < len(path) and s_idx < next_sep_path and _glob_recursive(pattern, p_idx, path, s_idx + 1, separator)))
+
+    # Handle ? wildcard (matches any single character)
+    if pattern[p_idx] == '?':
+        return s_idx < len(path) and _glob_recursive(pattern, p_idx + 1, path, s_idx + 1, separator)
+
+    # Handle character class [...]
+    if pattern[p_idx] == '[' and p_idx < len(pattern) - 1:
+        # Find the closing bracket
+        close_idx = pattern.find(']', p_idx + 1)
+        if close_idx == -1:
+            # If no closing bracket, treat [ as a literal character
+            return s_idx < len(path) and pattern[p_idx] == path[s_idx] and _glob_recursive(pattern, p_idx + 1, path, s_idx + 1, separator)
+
+        # If we're at the end of the path, no match
+        if s_idx >= len(path):
+            return False
+
+        # Extract the character class content
+        char_class = pattern[p_idx + 1:close_idx]
+
+        # Check if it's a negated class
+        negated = char_class.startswith('!') or char_class.startswith('^')
+        if negated:
+            char_class = char_class[1:]
+
+        # Check if the character matches the class
+        match_found = False
+
+        # Handle character ranges like a-z
+        i = 0
+        while i < len(char_class):
+            if i + 2 < len(char_class) and char_class[i + 1] == '-':
+                # It's a range
+                if char_class[i] <= path[s_idx] and path[s_idx] <= char_class[i + 2]:
+                    match_found = True
+                    break
+                i += 3
+            else:
+                # It's a single character
+                if char_class[i] == path[s_idx]:
+                    match_found = True
+                    break
+                i += 1
+
+        # If negated, invert the result
+        if negated:
+            match_found = not match_found
+
+        # If the character matched the class, continue matching
+        if match_found:
+            return _glob_recursive(pattern, close_idx + 1, path, s_idx + 1, separator)
+
+        return False
+
+    # Handle brace expansion {a,b,c}
+    if pattern[p_idx] == '{' and p_idx < len(pattern) - 1:
+        close_idx = pattern.find('}', p_idx + 1)
+        if close_idx == -1:
+            # If no closing brace, treat { as a literal character
+            return s_idx < len(path) and pattern[p_idx] == path[s_idx] and _glob_recursive(pattern, p_idx + 1, path, s_idx + 1, separator)
+
+        # Extract the options
+        options = pattern[p_idx + 1:close_idx].split(',')
+
+        # Try to match each option with the remainder of the pattern
+        for option in options:
+            # Create a new pattern with this option replacing the brace expression
+            new_pattern = pattern[:p_idx] + option + pattern[close_idx + 1:]
+            if _glob_recursive(new_pattern, 0, path, 0, separator):
+                return True
+
+        return False
+
+    # Default case: literal character match
+    return (s_idx < len(path) and
+            pattern[p_idx] == path[s_idx] and
+            _glob_recursive(pattern, p_idx + 1, path, s_idx + 1, separator))

@@ -1,0 +1,185 @@
+import testing
+
+from fs import glob
+
+def _test_fs_glob_literal_matching():
+    """Test literal path matching."""
+    testing.assertTrue(glob("foo", "foo"))
+    testing.assertTrue(glob("bar", "bar"))
+    testing.assertTrue(glob("", ""))
+    testing.assertFalse(glob("foo", "bar"))
+    testing.assertFalse(glob("foo", "fo"))
+    testing.assertFalse(glob("foo", "fooo"))
+
+
+def _test_fs_glob_asterisk_wildcard():
+    """Test fs.glob with * wildcard matching any character sequence."""
+    testing.assertTrue(glob("*", ""))
+    testing.assertTrue(glob("*", "foo"))
+    testing.assertTrue(glob("*", "bar"))
+    testing.assertTrue(glob("foo*", "foo"))
+    testing.assertTrue(glob("foo*", "foobar"))
+    testing.assertTrue(glob("*foo", "foo"))
+    testing.assertTrue(glob("*foo", "barfoo"))
+    testing.assertTrue(glob("foo*bar", "foobar"))
+    testing.assertTrue(glob("foo*bar", "foobazbar"))
+    testing.assertFalse(glob("foo*bar", "foobaz"))
+    testing.assertFalse(glob("foo*bar", "bazbar"))
+
+
+def _test_fs_glob_question_mark_wildcard():
+    """Test fs.glob with ? wildcard matching exactly one character."""
+    testing.assertTrue(glob("?", "a"))
+    testing.assertTrue(glob("?", "b"))
+    testing.assertFalse(glob("?", ""))
+    testing.assertFalse(glob("?", "ab"))
+    testing.assertTrue(glob("foo?", "fooa"))
+    testing.assertTrue(glob("foo?", "foob"))
+    testing.assertFalse(glob("foo?", "foo"))
+    testing.assertFalse(glob("foo?", "fooab"))
+    testing.assertTrue(glob("?foo", "afoo"))
+    testing.assertFalse(glob("?foo", "foo"))
+    testing.assertFalse(glob("?foo", "abfoo"))
+    testing.assertTrue(glob("foo?bar", "fooxbar"))
+    testing.assertFalse(glob("foo?bar", "foobar"))
+    testing.assertFalse(glob("foo?bar", "fooxybar"))
+
+
+def _test_fs_glob_character_classes():
+    """Test fs.glob with character class patterns like [abc] and [^abc]."""
+    # [abc] matches a single character from the set
+    testing.assertTrue(glob("[abc]", "a"))
+    testing.assertTrue(glob("[abc]", "b"))
+    testing.assertTrue(glob("[abc]", "c"))
+    testing.assertFalse(glob("[abc]", "d"))
+    testing.assertFalse(glob("[abc]", ""))
+    testing.assertFalse(glob("[abc]", "ab"))
+
+    # [a-z] matches a character range
+    testing.assertTrue(glob("[a-z]", "a"))
+    testing.assertTrue(glob("[a-z]", "m"))
+    testing.assertTrue(glob("[a-z]", "z"))
+    testing.assertFalse(glob("[a-z]", "A"))
+    testing.assertFalse(glob("[a-z]", "0"))
+
+    # [^abc] negates the character class
+    testing.assertFalse(glob("[^abc]", "a"))
+    testing.assertFalse(glob("[^abc]", "b"))
+    testing.assertFalse(glob("[^abc]", "c"))
+    testing.assertTrue(glob("[^abc]", "d"))
+    testing.assertFalse(glob("[^abc]", ""))
+
+    # Character classes in context
+    testing.assertTrue(glob("foo[abc]bar", "fooabar"))
+    testing.assertTrue(glob("foo[abc]bar", "foobbar"))
+    testing.assertTrue(glob("foo[abc]bar", "foocbar"))
+    testing.assertFalse(glob("foo[abc]bar", "foodbar"))
+    testing.assertFalse(glob("foo[abc]bar", "foobar"))
+
+
+def _test_fs_glob_escaping():
+    """Test fs.glob with escaped special characters."""
+    testing.assertTrue(glob("\\*", "*"))
+    testing.assertTrue(glob("\\?", "?"))
+    testing.assertTrue(glob("\\[", "["))
+    testing.assertTrue(glob("foo\\*", "foo*"))
+    testing.assertFalse(glob("foo\\*", "foobar"))
+    testing.assertTrue(glob("\\\\", "\\"))
+
+
+def _test_fs_glob_complex_patterns():
+    """Test fs.glob with complex patterns combining multiple features."""
+    # Combining multiple wildcards and character classes
+    testing.assertTrue(glob("*.[ch]", "file.c"))
+    testing.assertTrue(glob("*.[ch]", "file.h"))
+    testing.assertFalse(glob("*.[ch]", "file.o"))
+
+    testing.assertTrue(glob("???", "abc"))
+    testing.assertFalse(glob("???", "abcd"))
+
+    testing.assertTrue(glob("*.[^o]", "file.c"))
+    testing.assertTrue(glob("*.[^o]", "file.h"))
+    testing.assertFalse(glob("*.[^o]", "file.o"))
+
+    testing.assertTrue(glob("*/*.[ch]", "dir/file.c"))
+    testing.assertTrue(glob("*/*.[ch]", "dir/file.h"))
+    testing.assertFalse(glob("*/*.[ch]", "dir/file.o"))
+
+    testing.assertTrue(glob("*.{c,h}", "file.c"))
+    testing.assertTrue(glob("*.{c,h}", "file.h"))
+    testing.assertFalse(glob("*.{c,h}", "file.o"))
+
+    testing.assertTrue(glob("foo?bar*baz", "foo1barXYZbaz"))
+    testing.assertFalse(glob("foo?bar*baz", "foobarXYZbaz"))
+    testing.assertFalse(glob("foo?bar*baz", "foo1barXYZ"))
+
+
+def _test_fs_glob_edge_cases():
+    """Test fs.glob with edge cases like empty patterns and multiple wildcards."""
+    # Empty patterns and strings
+    testing.assertTrue(glob("", ""))
+    testing.assertFalse(glob("", "a"))
+
+    # Pattern is just wildcards
+    testing.assertTrue(glob("*", ""))
+    testing.assertTrue(glob("*", "anything"))
+    testing.assertTrue(glob("**", "anything"))
+    testing.assertTrue(glob("***", "anything"))
+
+    testing.assertTrue(glob("?*", "a"))
+    testing.assertTrue(glob("?*", "anything"))
+    testing.assertFalse(glob("?*", ""))
+
+    # Multiple adjacent wildcards
+    testing.assertTrue(glob("a**b", "ab"))
+    testing.assertTrue(glob("a**b", "axb"))
+    testing.assertTrue(glob("a**b", "aXYZb"))
+
+    testing.assertTrue(glob("a??b", "aXYb"))
+    testing.assertFalse(glob("a??b", "aXYZb"))
+
+    # Character class edge cases
+    testing.assertTrue(glob("[a-zA-Z0-9]", "a"))
+    testing.assertTrue(glob("[a-zA-Z0-9]", "Z"))
+    testing.assertTrue(glob("[a-zA-Z0-9]", "5"))
+    testing.assertFalse(glob("[a-zA-Z0-9]", "-"))
+
+    # Escaped backslash
+    testing.assertTrue(glob("\\\\", "\\"))
+    testing.assertFalse(glob("\\\\", "x"))
+
+
+def _test_fs_glob_double_star():
+    """Test fs.glob with ** patterns that match across directories."""
+    # ** should match across directories
+    testing.assertTrue(glob("**/*.c", "file.c"))
+    testing.assertTrue(glob("**/*.c", "dir/file.c"))
+    testing.assertTrue(glob("**/*.c", "dir/subdir/file.c"))
+    testing.assertFalse(glob("**/*.c", "file.h"))
+    testing.assertFalse(glob("**/*.c", "dir/file.h"))
+
+    # * should not match across directories
+    testing.assertTrue(glob("*/*.c", "dir/file.c"))
+    testing.assertFalse(glob("*/*.c", "file.c"))  # No directory segment
+    testing.assertFalse(glob("*/*.c", "dir/subdir/file.c"))  # Too many directory segments
+
+    # Mix of * and **
+    testing.assertTrue(glob("**/src/*.c", "src/file.c"))
+    testing.assertTrue(glob("**/src/*.c", "project/src/file.c"))
+    testing.assertFalse(glob("**/src/*.c", "src/subdir/file.c"))
+
+    # ** at the end
+    testing.assertTrue(glob("dir/**", "dir/file"))
+    testing.assertTrue(glob("dir/**", "dir/subdir/file"))
+    testing.assertFalse(glob("dir/**", "other/file"))
+
+    # ** in the middle
+    testing.assertTrue(glob("dir/**/file.c", "dir/file.c"))
+    testing.assertTrue(glob("dir/**/file.c", "dir/subdir/file.c"))
+    testing.assertTrue(glob("dir/**/file.c", "dir/subdir/subsubdir/file.c"))
+    testing.assertFalse(glob("dir/**/file.c", "other/file.c"))
+
+    # Test with custom separator
+    testing.assertTrue(glob("dir/**", "dir/file", "/"))  # Using explicit / separator
+    testing.assertTrue(glob("dir:**", "dir:file", ":"))  # Using : as separator
+    testing.assertTrue(glob("dir|**", "dir|file", "|"))  # Using | as separator
