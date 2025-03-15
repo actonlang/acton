@@ -15,3 +15,13 @@ def _test_base64():
     testing.assertEqual(e, b"SGVsbG8gQWN0b24g8J+roQ==")
     d = base64.decode(e)
     testing.assertEqual(h, d)
+
+def _test_base64_decode_garbage():
+    # Invalid base64
+    i = b"garbage"
+    try:
+        d = base64.decode(i)
+    except ValueError as e:
+        testing.assertEqual(str(e), "ValueError: Invalid base64 input data")
+    else:
+        raise Exception("Expected ValueError")

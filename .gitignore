@@ -70,6 +70,7 @@ test/**/*.log
 # tests organized as acton projects; ignore all but source
 test/*/*/out/**
 test/*/*/build.sh
+compiler/actonc/test/project/*/out
 
 
 **/.build/sys/*
