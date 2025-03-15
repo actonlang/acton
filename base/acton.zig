@@ -33,7 +33,7 @@ pub const ValueError = extern struct {
 
 // This is the equivalent of the expanded macro in C:
 //   $NEW(B_ValueError,to$str(message))
-pub fn new_value_error(message: []const u8) *c_acton.B_ValueError {
+pub fn new_ValueError(message: []const u8) *c_acton.B_ValueError {
     const alloc = gc.allocator();
 
     const error_ptr = alloc.create(ValueError) catch @panic("OOM");
@@ -48,10 +48,12 @@ pub fn new_value_error(message: []const u8) *c_acton.B_ValueError {
 
 // This is the equivalent of the function call in C:
 //   $RAISE((B_BaseException)$NEW(B_ValueError,to$str(message)))
-pub fn raise_value_error(message: []const u8) void {
-    const error_ptr = new_value_error(message);
+pub fn raise_ValueError(message: []const u8) void {
+    const error_ptr = new_ValueError(message);
     // @ptrCast is used to cast the pointer to the correct type expected by the C function
     c_acton.@"$RAISE"(@ptrCast(error_ptr));
+    // RAISE does not return, it does a longjmp, so this code is unreachable
+    unreachable;
 }
 
 test "str struct" {
