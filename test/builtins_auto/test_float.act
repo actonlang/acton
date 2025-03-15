@@ -1,0 +1,12 @@
+def test_float() -> bool:
+    d = {}
+    for i in range(-10000, 10000):
+        f = float(i)
+        d[f] = hash(f)
+    print(d)
+    return True
+
+actor main(env):
+    if not test_float():
+        env.exit(1)
+    env.exit(0)

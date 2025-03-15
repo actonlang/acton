@@ -1,34 +1,38 @@
-
-def test_str_find():
+def test_str_find() -> bool:
     s = "hello, world!"
     if s.find("world") != 7:
-        raise ValueError("find() did not return the correct index: " + str(s.find("world")))
+        print("find() did not return the correct index:", s.find("world"))
+        return False
     if s.find("world", 0) != 7:
-        raise ValueError("find() did not return the correct index: " + str(s.find("world")))
+        print("find() did not return the correct index:", s.find("world"))
+        return False
     if s.find("world", 8) != -1:
-        raise ValueError("find() did not return -1 when the substring is not found")
+        print("find() did not return -1 when the substring is not found")
+        return False
     if s.find("world", 0, 5) != -1:
-        raise ValueError("find() did not return -1 when the substring is not found")
+        print("find() did not return -1 when the substring is not found")
+        return False
     if s.find("world", 0, 7) != -1:
-        raise ValueError("find() did not return -1 when the substring is not found")
+        print("find() did not return -1 when the substring is not found")
+        return False
     if s.find("crap") != -1:
-        raise ValueError("find() did not return -1 when the substring is not found")
+        print("find() did not return -1 when the substring is not found")
+        return False
+    return True
 
-
-actor main(env):
-    try:
-        test_str_find()
-    except Exception as e:
-        print("Unexpected exception during testing:", e)
-        await async env.exit(1)
-
+def test_bytes_hex() -> bool:
     b = b'\xde\xad\xbe\xef'
     if b.hex() != "deadbeef":
-        print("ERROR: bytes.hex():", b.hex())
-        env.exit(1)
-
+        print("bytes.hex():", b.hex())
+        return False
     if bytes.from_hex("deadbeef").hex() != "deadbeef":
-        print("ERROR: bytes.from_hex():", bytes.from_hex("deadbeef").hex())
-        env.exit(1)
+        print("bytes.from_hex():", bytes.from_hex("deadbeef").hex())
+        return False
+    return True
 
+actor main(env):
+    if not test_str_find():
+        env.exit(1)
+    if not test_bytes_hex():
+        env.exit(1)
     env.exit(0)
