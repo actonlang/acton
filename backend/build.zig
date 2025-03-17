@@ -95,6 +95,26 @@ pub fn build(b: *std.Build) void {
         .flags = flags.items
     });
     libactondb.defineCMacro("LOG_USER_COLOR", "");
+
+    libactondb.installHeader(b.path("client_api.h"), "client_api.h");
+    libactondb.installHeader(b.path("hash_ring.h"), "hash_ring.h");
+    libactondb.installHeader(b.path("db.h"), "db.h");
+    libactondb.installHeader(b.path("queue_callback.h"), "queue_callback.h");
+    libactondb.installHeader(b.path("queue_groups.h"), "queue_groups.h");
+    libactondb.installHeader(b.path("queue.h"), "queue.h");
+    libactondb.installHeader(b.path("consumer_state.h"), "consumer_state.h");
+    libactondb.installHeader(b.path("common.h"), "common.h");
+    libactondb.installHeader(b.path("skiplist.h"), "skiplist.h");
+    libactondb.installHeader(b.path("fastrand.h"), "fastrand.h");
+    libactondb.installHeader(b.path("txns.h"), "txns.h");
+    libactondb.installHeader(b.path("comm.h"), "comm.h");
+    libactondb.installHeader(b.path("txn_state.h"), "txn_state.h");
+    libactondb.installHeader(b.path("failure_detector/vector_clock.h"), "failure_detector/vector_clock.h");
+    libactondb.installHeader(b.path("failure_detector/db_messages.pb-c.h"), "failure_detector/db_messages.pb-c.h");
+    libactondb.installHeader(b.path("failure_detector/db_queries.h"), "failure_detector/db_queries.h");
+    libactondb.installHeader(b.path("failure_detector/cells.h"), "failure_detector/cells.h");
+    libactondb.installHeader(b.path("failure_detector/fd.h"), "failure_detector/fd.h");
+
     libactondb.linkLibrary(dep_libgc.artifact("gc"));
     libactondb.linkLibrary(dep_libprotobuf_c.artifact("protobuf-c"));
     libactondb.linkLibrary(dep_libuuid.artifact("uuid"));
@@ -106,23 +126,25 @@ pub fn build(b: *std.Build) void {
         b.installArtifact(libactondb);
     }
 
-    const actondb = b.addExecutable(.{
-        .name = "actondb",
-        .target = target,
-        .optimize = optimize,
-    });
-    actondb.addCSourceFile(.{ .file = b.path("actondb.c"), .flags = &[_][]const u8{
-        "-fno-sanitize=undefined",
-    }});
-    actondb.addCSourceFile(.{ .file = b.path("log.c"), .flags = flags.items });
-    actondb.addLibraryPath(b.path("../lib"));
-    actondb.linkLibrary(libactondb);
-    actondb.linkLibrary(dep_libargp.artifact("argp"));
-    actondb.linkLibrary(dep_libnetstring.artifact("netstring"));
-    actondb.linkLibrary(dep_libprotobuf_c.artifact("protobuf-c"));
-    actondb.linkLibrary(dep_libyyjson.artifact("yyjson"));
-    actondb.linkLibrary(dep_libuuid.artifact("uuid"));
-    actondb.linkLibC();
-    actondb.linkLibCpp();
-    b.installArtifact(actondb);
+    if (only_actondb) {
+        const actondb = b.addExecutable(.{
+            .name = "actondb",
+            .target = target,
+            .optimize = optimize,
+        });
+        actondb.addCSourceFile(.{ .file = b.path("actondb.c"), .flags = &[_][]const u8{
+            "-fno-sanitize=undefined",
+        }});
+        actondb.addCSourceFile(.{ .file = b.path("log.c"), .flags = flags.items });
+        actondb.addLibraryPath(b.path("../lib"));
+        actondb.linkLibrary(libactondb);
+        actondb.linkLibrary(dep_libargp.artifact("argp"));
+        actondb.linkLibrary(dep_libnetstring.artifact("netstring"));
+        actondb.linkLibrary(dep_libprotobuf_c.artifact("protobuf-c"));
+        actondb.linkLibrary(dep_libyyjson.artifact("yyjson"));
+        actondb.linkLibrary(dep_libuuid.artifact("uuid"));
+        actondb.linkLibC();
+        actondb.linkLibCpp();
+        b.installArtifact(actondb);
+    }
 }

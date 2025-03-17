@@ -21,6 +21,11 @@
 #include "common.h"
 #include "../builtin/builtin.h"
 
+#ifdef ACTON_DB
+#include <client_api.h>
+extern remote_db_t *db;
+#endif
+
 #define MSGQ 2
 #ifdef ACTON_THREADS
 #define MAX_WTHREADS 256
