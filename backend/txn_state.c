@@ -21,7 +21,7 @@
 #include <string.h>
 #include <assert.h>
 
-#include "txn_state.h"
+#include "backend/txn_state.h"
 
 int txn_write_cmp(WORD e1, WORD e2)
 {

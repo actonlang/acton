@@ -17,7 +17,7 @@
  *      Author: aagapi
  */
 
-#include "queue_callback.h"
+#include "backend/queue_callback.h"
 
 queue_callback_args * get_queue_callback_args(WORD table_key, WORD queue_id, WORD app_id, WORD shard_id, WORD consumer_id, WORD group_id, int status)
 {

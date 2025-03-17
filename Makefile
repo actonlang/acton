@@ -360,13 +360,17 @@ cli/out/bin/acton: distribution1
 #
 
 .PHONY: dist/backend
-BACKEND_FILES1= backend/build.zig backend/build.zig.zon $(wildcard backend/*.c backend/*.h)
-BACKEND_FILES2= $(wildcard backend/failure_detector/*.c backend/failure_detector/*.h)
-dist/backend: $(BACKEND_FILES1) $(BACKEND_FILES2) $(DEPS)
-	mkdir -p $@ $@/failure_detector
+BACKEND_FILES= backend/build.zig backend/build.zig.zon $(wildcard backend/*.c backend/*.h) $(wildcard backend/backend/*.h)
+BACKEND_FILES_FD= $(wildcard backend/failure_detector/*.c backend/failure_detector/*.h)
+BACKEND_FILES_BACKEND= $(wildcard backend/backend/*.h)
+BACKEND_FILES_BACKEND_FD= $(wildcard backend/backend/failure_detector/*.h)
+dist/backend: $(BACKEND_FILES) $(BACKEND_FILES_FD) $(BACKEND_FILES_BACKEND) $(BACKEND_FILES_BACKEND_FD) $(DEPS)
+	mkdir -p $@/failure_detector $@/backend/failure_detector
 	ln -sf ../deps $@/deps
-	cp -a $(BACKEND_FILES1) $@/
-	cp -a $(BACKEND_FILES2) $@/failure_detector
+	cp -a $(BACKEND_FILES) $@/
+	cp -a $(BACKEND_FILES_FD) $@/failure_detector/
+	cp -a $(BACKEND_FILES_BACKEND) $@/backend/
+	cp -a $(BACKEND_FILES_BACKEND_FD) $@/backend/failure_detector/
 
 .PHONY: dist/base
 dist/base: base base/.build base/__root.zig base/acton.zig base/build.zig base/build.zig.zon base/acton.zig dist/bin/actonc $(DEPS)

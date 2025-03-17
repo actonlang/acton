@@ -3,10 +3,13 @@ const print = @import("std").debug.print;
 const ArrayList = std.ArrayList;
 
 pub fn build(b: *std.Build) void {
+    const buildroot_path = b.build_root.handle.realpathAlloc(b.allocator, ".") catch unreachable;
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
     const no_threads = b.option(bool, "no_threads", "") orelse false;
     const only_actondb = b.option(bool, "only_actondb", "") orelse false;
+
+    print("Acton Backend Builder\nBuilding in {s}\n", .{buildroot_path});
 
     const dep_libargp = b.dependency("libargp", .{
         .target = target,
@@ -96,24 +99,26 @@ pub fn build(b: *std.Build) void {
     });
     libactondb.defineCMacro("LOG_USER_COLOR", "");
 
-    libactondb.installHeader(b.path("client_api.h"), "client_api.h");
-    libactondb.installHeader(b.path("hash_ring.h"), "hash_ring.h");
-    libactondb.installHeader(b.path("db.h"), "db.h");
-    libactondb.installHeader(b.path("queue_callback.h"), "queue_callback.h");
-    libactondb.installHeader(b.path("queue_groups.h"), "queue_groups.h");
-    libactondb.installHeader(b.path("queue.h"), "queue.h");
-    libactondb.installHeader(b.path("consumer_state.h"), "consumer_state.h");
-    libactondb.installHeader(b.path("common.h"), "common.h");
-    libactondb.installHeader(b.path("skiplist.h"), "skiplist.h");
-    libactondb.installHeader(b.path("fastrand.h"), "fastrand.h");
-    libactondb.installHeader(b.path("txns.h"), "txns.h");
-    libactondb.installHeader(b.path("comm.h"), "comm.h");
-    libactondb.installHeader(b.path("txn_state.h"), "txn_state.h");
-    libactondb.installHeader(b.path("failure_detector/vector_clock.h"), "failure_detector/vector_clock.h");
-    libactondb.installHeader(b.path("failure_detector/db_messages.pb-c.h"), "failure_detector/db_messages.pb-c.h");
-    libactondb.installHeader(b.path("failure_detector/db_queries.h"), "failure_detector/db_queries.h");
-    libactondb.installHeader(b.path("failure_detector/cells.h"), "failure_detector/cells.h");
-    libactondb.installHeader(b.path("failure_detector/fd.h"), "failure_detector/fd.h");
+    libactondb.installHeader(b.path("backend/client_api.h"), "backend/client_api.h");
+    libactondb.installHeader(b.path("backend/hash_ring.h"), "backend/hash_ring.h");
+    libactondb.installHeader(b.path("backend/db.h"), "backend/db.h");
+    libactondb.installHeader(b.path("backend/queue_callback.h"), "backend/queue_callback.h");
+    libactondb.installHeader(b.path("backend/queue_groups.h"), "backend/queue_groups.h");
+    libactondb.installHeader(b.path("backend/queue.h"), "backend/queue.h");
+    libactondb.installHeader(b.path("backend/consumer_state.h"), "backend/consumer_state.h");
+    libactondb.installHeader(b.path("backend/common.h"), "backend/common.h");
+    libactondb.installHeader(b.path("backend/skiplist.h"), "backend/skiplist.h");
+    libactondb.installHeader(b.path("backend/fastrand.h"), "backend/fastrand.h");
+    libactondb.installHeader(b.path("backend/txns.h"), "backend/txns.h");
+    libactondb.installHeader(b.path("backend/comm.h"), "backend/comm.h");
+    libactondb.installHeader(b.path("backend/txn_state.h"), "backend/txn_state.h");
+    libactondb.installHeader(b.path("backend/failure_detector/vector_clock.h"), "backend/failure_detector/vector_clock.h");
+    libactondb.installHeader(b.path("backend/failure_detector/db_messages.pb-c.h"), "backend/failure_detector/db_messages.pb-c.h");
+    libactondb.installHeader(b.path("backend/failure_detector/db_queries.h"), "backend/failure_detector/db_queries.h");
+    libactondb.installHeader(b.path("backend/failure_detector/cells.h"), "backend/failure_detector/cells.h");
+    libactondb.installHeader(b.path("backend/failure_detector/fd.h"), "backend/failure_detector/fd.h");
+
+    libactondb.addIncludePath(.{ .cwd_relative = buildroot_path });
 
     libactondb.linkLibrary(dep_libgc.artifact("gc"));
     libactondb.linkLibrary(dep_libprotobuf_c.artifact("protobuf-c"));
@@ -136,6 +141,7 @@ pub fn build(b: *std.Build) void {
             "-fno-sanitize=undefined",
         }});
         actondb.addCSourceFile(.{ .file = b.path("log.c"), .flags = flags.items });
+        actondb.addIncludePath(.{ .cwd_relative = buildroot_path });
         actondb.addLibraryPath(b.path("../lib"));
         actondb.linkLibrary(libactondb);
         actondb.linkLibrary(dep_libargp.artifact("argp"));
