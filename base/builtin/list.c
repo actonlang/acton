@@ -397,7 +397,7 @@ B_NoneType B_SequenceD_listD___delitem__(B_SequenceD_list wit, B_list lst, B_int
     long ix = from$int(n);
     long ix0 = ix < 0 ? len + ix : ix;
     if(ix0 < 0 || ix0 >= len) {
-        $RAISE((B_BaseException)$NEW(B_IndexError, to$int(ix0), to$str("delitem: index outside list")));
+        return B_None;
     }
     memmove(lst->data + ix0,
             lst->data + (ix0 + 1),
