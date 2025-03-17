@@ -594,7 +594,10 @@ class (Subst a) => Tailvars a where
 instance Tailvars Type where
     tailvars (TCon _ c)             = tailvars c
     tailvars (TFun _ fx p k t)      = tailvars fx ++ tailvars' p ++ tailvars' k ++ tailvars t
-    tailvars (TTuple _ p k)         = tailvars' p ++ tailvars' k
+    tailvars (TTuple _ p k)
+      | TVar{} <- p, TNil{} <- k    = []
+      | TNil{} <- p, TVar{} <- k    = []
+      | otherwise                   = tailvars' p ++ tailvars' k
     tailvars (TOpt _ t)             = tailvars t
     tailvars _                      = []
 

@@ -53,6 +53,15 @@ def test13(c: str, a, d: str, **kw):
     expect : (a: str, **) = (c=c, a=a, d=d, **kw)
     return expect
 
+def test14(x, *args):
+    return args
+
+def test15(x, **kwargs):
+    return kwargs
+
+def test16(x, *args, y, **kwargs):
+    return (args, kwargs)
+
 actor main(env):
     out1 = test1('a', 'c').__str__()
     out2 = test2('c', 'a', ('b', e='e')).__str__()
@@ -67,6 +76,9 @@ actor main(env):
     out11 = test11('c', 'a', d='d').__str__()
     out12 = test12('c', 'a', 'd').__str__()
     out13 = test13('c', 'a', 'd', b='b').__str__()
+    out14 = test14(None, 'a', 3.5)
+    out15 = test15(None, a='a', b=3.5)
+    out16, out17 = test16(None, 18, '19', a='a', y=3, b=3.5)
     
 #    print(out1)
 #    print(out2)
@@ -120,6 +132,18 @@ actor main(env):
         env.exit(1)
     if out13 != "('a', ('c', 'd', ('b')))":
         print("Bad 13:", out13)
+        env.exit(1)
+    if out14.0 != 'a' or out14.1 != 3.5:
+        print("Bad 14:", out14)
+        env.exit(1)
+    if out15.a != 'a' or out15.b != 3.5:
+        print("Bad 15:", out15)
+        env.exit(1)
+    if out16.0 != 18 or out16.1 != '19':
+        print("Bad 16:", out16)
+        env.exit(1)
+    if out17.a != 'a' or out17.b != 3.5:
+        print("Bad 17:", out17)
         env.exit(1)
     
     print("All is well")
