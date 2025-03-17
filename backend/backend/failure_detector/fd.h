@@ -7,7 +7,7 @@
 #ifndef BACKEND_FAILURE_DETECTOR_FD_H_
 #define BACKEND_FAILURE_DETECTOR_FD_H_
 
-#include "vector_clock.h"
+#include "backend/failure_detector/vector_clock.h"
 
 #define MAX_MSG_SIZE_GS (MAX_MSG_SIZE_VC + 16)
 

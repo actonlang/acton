@@ -29,8 +29,8 @@
 #include <netdb.h>
 #include <uuid/uuid.h>
 
-#include "client_api.h"
-#include "fastrand.h"
+#include "backend/client_api.h"
+#include "backend/fastrand.h"
 
 
 #define COLLECTION_ID_0 0 // rcv_counters map

@@ -13,42 +13,50 @@
  */
 
 /*
- * queue_callback.h
+ * queue_groups.h
  *      Author: aagapi
  */
 
-#ifndef BACKEND_QUEUE_CALLBACK_H_
-#define BACKEND_QUEUE_CALLBACK_H_
+#ifndef BACKEND_QUEUE_GROUPS_H_
+#define BACKEND_QUEUE_GROUPS_H_
 
-#include "common.h"
+#include "backend/common.h"
+#include "backend/queue_callback.h"
+#include "backend/queue.h"
+#include "backend/skiplist.h"
 
-typedef struct queue_callback_args
-{
-    WORD table_key;
-    WORD queue_id;
+#define GROUP_STATUS_ACTIVE 0
+#define GROUP_STATUS_INACTIVE 1
 
-    WORD consumer_id;
-    WORD shard_id;
-    WORD app_id;
-
+typedef struct group_state {
     WORD group_id;
-
+    skiplist_t * queue_tables;
+    skiplist_t * consumers;
+    pthread_mutex_t* group_lock;
     int status;
-} queue_callback_args;
+} group_state;
 
-typedef struct queue_callback
-{
-    void (*callback)(queue_callback_args *);
-    pthread_mutex_t * lock;
-    pthread_cond_t * signal;
-} queue_callback;
+typedef struct consumer_state consumer_state;
 
-#define DEBUG_QUEUE_CALLBACK 0
+// Queue group management fctns:
 
-queue_callback_args * get_queue_callback_args(WORD table_key, WORD queue_id, WORD app_id, WORD shard_id, WORD consumer_id, WORD group_id, int status);
-void free_queue_callback_args(queue_callback_args * qca);
-queue_callback * get_queue_callback(void (*callback)(queue_callback_args *));
-int wait_on_queue_callback(queue_callback *);
-void free_queue_callback(queue_callback * qc);
+group_state * get_group(WORD group_id);
+int delete_group(group_state * group);
+int clear_group(group_state * group);
+void activate_group(group_state * group);
+void deactivate_group(group_state * group);
+int add_queue_to_group(group_state * group, WORD table_key, WORD queue_id, unsigned int * fastrandstate);
+int remove_queue_from_group(group_state * group, WORD table_key, WORD queue_id);
+int add_listener_to_group(group_state * group,
+                        WORD consumer_id, WORD shard_id, WORD app_id,
+                        queue_callback * callback,
+                        int * sockfd,
+                        unsigned int * fastrandstate);
+int lookup_listener_in_group(group_state * group, WORD consumer_id, WORD queue_id, consumer_state ** cs);
+int remove_listener_from_group(group_state * group, WORD consumer_id);
+int is_queue_in_group(group_state * group, WORD table_key, WORD queue_id);
+void free_group_state(WORD gs);
+WORD get_group_state_key(WORD rs);
+WORD get_group_state_live_field(WORD rs);
 
-#endif /* BACKEND_QUEUE_CALLBACK_H_ */
+#endif /* BACKEND_QUEUE_GROUPS_H_ */
