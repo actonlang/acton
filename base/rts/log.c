@@ -25,7 +25,9 @@
 #endif
 
 #include <uv.h>
-#include "log.h"
+#ifdef ACTON_DB
+#include <backend/log.h>
+#endif
 
 #define MAX_CALLBACKS 32
 #ifdef ACTON_THREADS

@@ -360,14 +360,21 @@ cli/out/bin/acton: distribution1
 # == DIST ==
 #
 
-BACKEND_FILES = backend/build.zig backend/build.zig.zon $(wildcard backend/*.c backend/*.h backend/failure_detector/*.c backend/failure_detector/*.h)
-DIST_BACKEND_FILES = $(addprefix dist/,$(BACKEND_FILES)) dist/backend/deps dist/bin/actondb
-dist/backend%: backend/%
-	mkdir -p $(dir $@)
-	cp -a $< $@
+.PHONY: dist/backend
+BACKEND_FILES= backend/build.zig backend/build.zig.zon $(wildcard backend/*.c backend/*.h) $(wildcard backend/backend/*.h)
+BACKEND_FILES_FD= $(wildcard backend/failure_detector/*.c backend/failure_detector/*.h)
+BACKEND_FILES_BACKEND= $(wildcard backend/backend/*.h)
+BACKEND_FILES_BACKEND_FD= $(wildcard backend/backend/failure_detector/*.h)
+dist/backend: $(BACKEND_FILES) $(BACKEND_FILES_FD) $(BACKEND_FILES_BACKEND) $(BACKEND_FILES_BACKEND_FD) $(DEPS)
+	mkdir -p $@/failure_detector $@/backend/failure_detector
+	ln -sf ../deps $@/deps
+	cp -a $(BACKEND_FILES) $@/
+	cp -a $(BACKEND_FILES_FD) $@/failure_detector/
+	cp -a $(BACKEND_FILES_BACKEND) $@/backend/
+	cp -a $(BACKEND_FILES_BACKEND_FD) $@/backend/failure_detector/
 
 .PHONY: dist/base
-dist/base: base base/.build base/__root.zig base/acton.zig base/build.zig base/build.zig.zon base/acton.zig dist/bin/actonc $(DEPS)
+dist/base: base base/.build base/__root.zig base/acton.zig base/build.zig base/build.zig.zon base/acton.zig dist/bin/actonc dist/backend $(DEPS)
 	mkdir -p $@ $@/.build $@/out
 	cp -a base/__root.zig base/Acton.toml base/acton.zig base/build.zig base/build.zig.zon base/builtin base/rts base/src base/stdlib dist/base/
 	cd dist/base && ../bin/actonc build --dev --auto-stub && rm -rf .build
@@ -382,7 +389,7 @@ dist/bin/acton: cli/out/bin/acton
 	cp -a $< $@.tmp
 	mv $@.tmp $@
 
-dist/bin/actondb: $(DIST_ZIG) $(DEPS)
+dist/bin/actondb: dist/backend $(DIST_ZIG) $(DEPS)
 	@mkdir -p $(dir $@)
 	cd dist/backend && $(ZIG) build -Donly_actondb --prefix $(TD)/dist
 
@@ -422,7 +429,7 @@ else
 endif
 
 .PHONY: distribution1 distribution clean-distribution
-distribution1: dist/base $(DIST_BACKEND_FILES) dist/builder $(DIST_BINS) $(DIST_ZIG)
+distribution1: dist/base dist/backend dist/builder $(DIST_BINS) $(DIST_ZIG)
 	$(MAKE) $(DEPS)
 
 distribution: dist/bin/acton

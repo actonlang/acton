@@ -276,12 +276,18 @@ pub fn build(b: *std.Build) void {
 
     libActon.addIncludePath(.{ .cwd_relative = buildroot_path });
 
+    // Get backend dependency and its headers
+    const libactondb_dep = b.dependency("actondb", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    const libactondb = libactondb_dep.artifact("ActonDB");
+
+    // Install backend headers so they're available to downstream consumers
+    libActon.installLibraryHeaders(libactondb);
+
     if (use_db) {
-        const libactondb_dep = b.dependency("actondb", .{
-            .target = target,
-            .optimize = optimize,
-        });
-        libActon.linkLibrary(libactondb_dep.artifact("ActonDB"));
+        libActon.linkLibrary(libactondb);
     }
 
     libActon.linkLibrary(dep_libbsdnt.artifact("bsdnt"));

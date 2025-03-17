@@ -21,10 +21,10 @@
 #ifndef BACKEND_FAILURE_DETECTOR_DB_QUERIES_H_
 #define BACKEND_FAILURE_DETECTOR_DB_QUERIES_H_
 
-#include "cells.h"
-#include "../db.h"
-#include "../txns.h"
-#include "fd.h"
+#include "backend/failure_detector/cells.h"
+#include "backend/db.h"
+#include "backend/txns.h"
+#include "backend/failure_detector/fd.h"
 #include <uuid/uuid.h>
 
 #define RPC_TYPE_WRITE 0

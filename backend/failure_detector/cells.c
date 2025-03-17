@@ -18,8 +18,8 @@
  *      Author: aagapi
  */
 
-#include "cells.h"
-#include "../log.h"
+#include "backend/failure_detector/cells.h"
+#include "backend/log.h"
 
 #include <stdlib.h>
 #include <stdio.h>

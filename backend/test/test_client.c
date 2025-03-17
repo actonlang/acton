@@ -30,8 +30,8 @@
 #include <netdb.h>
 #include <uuid/uuid.h>
 
-#include "client_api.h"
-#include "fastrand.h"
+#include "backend/client_api.h"
+#include "backend/fastrand.h"
 
 typedef struct actor_collection_item {
     int actor_id;

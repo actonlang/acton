@@ -21,8 +21,8 @@
 #ifndef BACKEND_CONSUMER_STATE_H_
 #define BACKEND_CONSUMER_STATE_H_
 
-#include "common.h"
-#include "failure_detector/vector_clock.h"
+#include "backend/common.h"
+#include "backend/failure_detector/vector_clock.h"
 
 typedef struct group_state group_state;
 

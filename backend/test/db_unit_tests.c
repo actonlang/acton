@@ -17,7 +17,7 @@
 #include <pthread.h>
 #include <assert.h>
 
-#include "db.h"
+#include "backend/db.h"
 
 typedef struct actor_collection_item {
     int actor_id;

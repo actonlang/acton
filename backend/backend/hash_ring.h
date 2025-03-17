@@ -21,8 +21,8 @@
 #ifndef BACKEND_HASH_RING_H_
 #define BACKEND_HASH_RING_H_
 
-#include "common.h"
-#include "skiplist.h"
+#include "backend/common.h"
+#include "backend/skiplist.h"
 
 #define BUCKET_LIVE 0
 #define BUCKET_DEAD 1

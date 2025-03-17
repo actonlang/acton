@@ -18,8 +18,13 @@
     #define IS_MACOS
 #endif
 
-#include "common.h"
 #include "../builtin/builtin.h"
+
+#ifdef ACTON_DB
+#include <backend/common.h>
+#include <backend/client_api.h>
+extern remote_db_t *db;
+#endif
 
 #define MSGQ 2
 #ifdef ACTON_THREADS

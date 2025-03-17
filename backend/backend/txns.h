@@ -7,8 +7,8 @@
 #ifndef BACKEND_TXNS_H_
 #define BACKEND_TXNS_H_
 
-#include "txn_state.h"
-#include "queue.h"
+#include "backend/txn_state.h"
+#include "backend/queue.h"
 
 #define VAL_STATUS_COMMIT 0
 #define VAL_STATUS_ABORT 1

@@ -18,12 +18,12 @@
  *      Author: aagapi
  */
 
-#include "client_api.h"
-#include "hash_ring.h"
-#include "log.h"
+#include "backend/client_api.h"
+#include "backend/hash_ring.h"
+#include "backend/log.h"
 
 #define GC_THREADS 1
-#include "gc.h"
+#include <gc.h>
 
 struct dbc_stat dbc_stats;
 

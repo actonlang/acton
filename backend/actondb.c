@@ -20,13 +20,14 @@
 
 // ActonDB Server:
 
-#include "db.h"
-#include "queue_callback.h"
-#include "failure_detector/db_queries.h"
-#include "failure_detector/fd.h"
-#include "comm.h"
-#include "fastrand.h"
-#include "log.h"
+#include "backend/db.h"
+#include "backend/queue_callback.h"
+#include "backend/failure_detector/db_queries.h"
+#include "backend/failure_detector/fd.h"
+#include "backend/comm.h"
+#include "backend/fastrand.h"
+#include "backend/log.h"
+
 #include "netstring.h"
 #include "yyjson.h"
 

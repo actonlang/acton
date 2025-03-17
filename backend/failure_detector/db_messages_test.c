@@ -18,10 +18,10 @@
  *      Author: aagapi
  */
 
-#include "vector_clock.h"
-#include "fd.h"
-#include "cells.h"
-#include "db_queries.h"
+#include "backend/failure_detector/vector_clock.h"
+#include "backend/failure_detector/fd.h"
+#include "backend/failure_detector/cells.h"
+#include "backend/failure_detector/db_queries.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>

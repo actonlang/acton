@@ -6,8 +6,9 @@
 #define BACKEND_TXN_STATE_H_
 
 #include <uuid/uuid.h>
-#include "db.h"
-#include "queue_callback.h"
+
+#include "backend/db.h"
+#include "backend/queue_callback.h"
 
 #define TXN_STATUS_ACTIVE 0
 #define TXN_STATUS_VALIDATED 1

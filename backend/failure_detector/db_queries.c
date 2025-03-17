@@ -18,9 +18,9 @@
  *      Author: aagapi
  */
 
-#include "db_queries.h"
-#include "db_messages.pb-c.h"
-#include "../log.h"
+#include "backend/failure_detector/db_queries.h"
+#include "backend/failure_detector/db_messages.pb-c.h"
+#include "backend/log.h"
 
 #include <stdlib.h>
 #include <stdio.h>

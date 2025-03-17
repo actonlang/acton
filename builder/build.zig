@@ -178,9 +178,24 @@ pub fn build(b: *std.Build) void {
 
     libActonProject.addIncludePath(.{ .cwd_relative = buildroot_path });
 
+    const libactondb_dep = b.dependency("actondb", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
+    // Install the headers for downstream use
+    libActonProject.installLibraryHeaders(libactondb_dep.artifact("ActonDB"));
+
     // lib: link with dependencies / get headers from build.act.json
 
     libActonProject.linkLibrary(actonbase_dep.artifact("Acton"));
+    libActonProject.installLibraryHeaders(actonbase_dep.artifact("Acton"));
+
+    if (db) {
+        print("Linking with ActonDB\n", .{});
+        libActonProject.linkLibrary(libactondb_dep.artifact("ActonDB"));
+    }
+
     libActonProject.linkLibC();
     libActonProject.linkLibCpp();
     b.installArtifact(libActonProject);
@@ -219,11 +234,6 @@ pub fn build(b: *std.Build) void {
     }
 
     if (!only_lib) {
-        const libactondb_dep = b.dependency("actondb", .{
-            .target = target,
-            .optimize = optimize,
-        });
-
         for (root_c_files.items) |entry| {
             // Get the binary name, by removing .root.c from end and having it relative to the projpath_outtypes
             var nlen = ".root.c".len;

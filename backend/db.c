@@ -24,10 +24,10 @@
 #include <string.h>
 #include <assert.h>
 
-#include "db.h"
-#include "queue_groups.h"
-#include "skiplist.h"
-#include "log.h"
+#include "backend/db.h"
+#include "backend/queue_groups.h"
+#include "backend/skiplist.h"
+#include "backend/log.h"
 
 // DB API:
 

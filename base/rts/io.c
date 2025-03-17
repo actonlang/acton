@@ -8,8 +8,9 @@
 #include <uv.h>
 #include <unistd.h>
 
-#include "log.h"
-#include "log.h"
+#ifdef ACTON_DB
+#include <backend/log.h>
+#endif
 
 extern char rts_exit;
 

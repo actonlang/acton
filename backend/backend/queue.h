@@ -21,10 +21,10 @@
 #ifndef BACKEND_QUEUE_H_
 #define BACKEND_QUEUE_H_
 
-#include "db.h"
-#include "queue_callback.h"
-#include "consumer_state.h"
-#include "queue_groups.h"
+#include "backend/db.h"
+#include "backend/queue_callback.h"
+#include "backend/consumer_state.h"
+#include "backend/queue_groups.h"
 
 #define DB_ERR_NO_TABLE -1
 #define DB_ERR_NO_QUEUE -2

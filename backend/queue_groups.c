@@ -17,7 +17,7 @@
  *      Author: aagapi
  */
 
-#include "queue_groups.h"
+#include "backend/queue_groups.h"
 
 // Queue group management fctns:
 

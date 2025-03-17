@@ -13,7 +13,7 @@
 #define VC_INCOMPARABLE -2
 #define VC_DISJOINT -3
 
-#include "db_messages.pb-c.h"
+#include "backend/failure_detector/db_messages.pb-c.h"
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netinet/ip.h>

@@ -21,7 +21,7 @@
 #include <string.h>
 #include <time.h>
 
-#include "queue.h"
+#include "backend/queue.h"
 
 int no_cols = 2;
 int no_items = 10;

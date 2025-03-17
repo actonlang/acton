@@ -18,15 +18,15 @@
  *      Author: aagapi
  */
 
-#include "queue.h"
-#include "log.h"
-#include "failure_detector/cells.h"
-#include "failure_detector/db_queries.h"
-
 #include <limits.h>
 #include <assert.h>
 #include <stdlib.h>
 #include <stdio.h>
+
+#include "backend/queue.h"
+#include "backend/log.h"
+#include "backend/failure_detector/cells.h"
+#include "backend/failure_detector/db_queries.h"
 
 #define MIN(x, y) (((x)<(y))?(x):(y))
 #define MAX(x, y) (((x)>(y))?(x):(y))

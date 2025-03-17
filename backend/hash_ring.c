@@ -18,8 +18,8 @@
  *      Author: aagapi
  */
 
-#include "hash_ring.h"
-#include "hashes.h"
+#include "backend/hash_ring.h"
+#include "backend/hashes.h"
 
 hash_ring * get_hash_ring()
 {

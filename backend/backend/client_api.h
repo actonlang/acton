@@ -21,12 +21,12 @@
 #ifndef BACKEND_CLIENT_API_H_
 #define BACKEND_CLIENT_API_H_
 
-#include "db.h"
-#include "queue_callback.h"
-#include "failure_detector/db_queries.h"
-#include "failure_detector/fd.h"
-#include "fastrand.h"
-#include "comm.h"
+#include "backend/db.h"
+#include "backend/queue_callback.h"
+#include "backend/failure_detector/db_queries.h"
+#include "backend/failure_detector/fd.h"
+#include "backend/fastrand.h"
+#include "backend/comm.h"
 
 #include <stdio.h>
 #include <stdlib.h>

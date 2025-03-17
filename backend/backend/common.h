@@ -13,50 +13,35 @@
  */
 
 /*
- * queue_groups.h
+ * common.h
  *      Author: aagapi
  */
 
-#ifndef BACKEND_QUEUE_GROUPS_H_
-#define BACKEND_QUEUE_GROUPS_H_
+#ifndef BACKEND_COMMON_H_
+#define BACKEND_COMMON_H_
 
-#include "common.h"
-#include "queue_callback.h"
-#include "queue.h"
-#include "skiplist.h"
+// Avoid conflict with Windows WORD type
+#if !defined(_WIN32) && !defined(_WIN64) && !defined(__MINGW32__) && !defined(__MINGW64__) && !defined(__CYGWIN__)
+typedef void *WORD;
+#endif
 
-#define GROUP_STATUS_ACTIVE 0
-#define GROUP_STATUS_INACTIVE 1
+#define DB_TYPE_CHAR 0
+#define DB_TYPE_INT16 1
+#define DB_TYPE_INT32 2
+#define DB_TYPE_INT64 3
+#define DB_TYPE_FLOAT32 4
+#define DB_TYPE_FLOAT64 5
+#define DB_TYPE_BLOB 6
 
-typedef struct group_state {
-    WORD group_id;
-    skiplist_t * queue_tables;
-    skiplist_t * consumers;
-    pthread_mutex_t* group_lock;
-    int status;
-} group_state;
+#define VERBOSE_BACKEND 0
 
-typedef struct consumer_state consumer_state;
+#include <stdlib.h>
+#if !defined(_WIN32) && !defined(_WIN64) && !defined(__MINGW32__) && !defined(__MINGW64__) && !defined(__CYGWIN__)
+#include <pthread.h>
+#include <unistd.h>
+#endif
+#include <inttypes.h>
+#include <string.h>
+#include <assert.h>
 
-// Queue group management fctns:
-
-group_state * get_group(WORD group_id);
-int delete_group(group_state * group);
-int clear_group(group_state * group);
-void activate_group(group_state * group);
-void deactivate_group(group_state * group);
-int add_queue_to_group(group_state * group, WORD table_key, WORD queue_id, unsigned int * fastrandstate);
-int remove_queue_from_group(group_state * group, WORD table_key, WORD queue_id);
-int add_listener_to_group(group_state * group,
-                        WORD consumer_id, WORD shard_id, WORD app_id,
-                        queue_callback * callback,
-                        int * sockfd,
-                        unsigned int * fastrandstate);
-int lookup_listener_in_group(group_state * group, WORD consumer_id, WORD queue_id, consumer_state ** cs);
-int remove_listener_from_group(group_state * group, WORD consumer_id);
-int is_queue_in_group(group_state * group, WORD table_key, WORD queue_id);
-void free_group_state(WORD gs);
-WORD get_group_state_key(WORD rs);
-WORD get_group_state_live_field(WORD rs);
-
-#endif /* BACKEND_QUEUE_GROUPS_H_ */
+#endif /* BACKEND_COMMON_H_ */

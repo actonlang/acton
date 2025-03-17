@@ -20,7 +20,7 @@
 #define PROTOBUF_C__NO_DEPRECATED
 #endif
 
-#include "db_messages.pb-c.h"
+#include "backend/failure_detector/db_messages.pb-c.h"
 void   node_state_message__init
                      (NodeStateMessage         *message)
 {

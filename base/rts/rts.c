@@ -52,7 +52,6 @@
 #include <sys/prctl.h>
 #endif
 
-#include "common.h"
 #include "common.c"
 
 #include "yyjson.h"
@@ -70,8 +69,9 @@
 #include "../builtin/function.h"
 
 #ifdef ACTON_DB
-#include "../backend/client_api.h"
-#include "../backend/fastrand.h"
+#include <backend/common.h>
+#include <backend/client_api.h>
+#include <backend/fastrand.h>
 extern struct dbc_stat dbc_stats;
 #endif
 
