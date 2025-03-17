@@ -195,18 +195,19 @@ actor FetchRef(on_done: action(?Exception, ?str) -> None, url: str, tcpc_cap: ne
 
     def _go():
         # Which ref should we use?
-        # - if both ref argument and URL fragment is set, ensure they match up!
         # - if ref argument is set, use that
+        #   - if both ref argument and URL fragment is set, ensure they match
         # - if ref argument is empty, look for branch embedded in URL as
         #   fragment and use that
         # - if no fragment, look up default branch and use that!
         url_ref = repo_url.ref
-        if ref != None and url_ref != None:
-            if ref != url_ref:
+        if ref is not None:
+            if url_ref is not None and ref != url_ref:
                 on_done(ValueError("Ref mismatch"), None)
                 return
-        if ref == None:
-            if url_ref != None:
+            _gotRef(ref)
+        else:
+            if url_ref is not None:
                 _gotRef(url_ref)
             else:
                 FetchDefaultBranch(_onDefBranch, url=url, tcpc_cap=tcpc_cap)
