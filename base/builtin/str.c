@@ -171,6 +171,9 @@ typedef int (*transform)(int codepoint);
 // For the moment only used for str_upper and str_lower;
 // maybe not worthwhile to keep.
 static B_str str_transform(B_str s, transform f) {
+    if (s->nchars == 0) {
+        return null_str;
+    }
     int cp, cpu, cplen, cpulen;
     unsigned char *p = s->str;
     unsigned char buffer[4*s->nchars];
@@ -589,6 +592,9 @@ B_bool B_strD_endswith(B_str s, B_str sub, B_int start, B_int end) {
 }
 
 B_str B_strD_expandtabs(B_str s, B_int tabsize){
+    if (s->nchars == 0) {
+        return null_str;
+    }
     int tabsz = tabsize?from$int(tabsize):8;
     int pos = 0;
     int expanded = 0;

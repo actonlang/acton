@@ -31,4 +31,18 @@ actor main(env):
         print("ERROR: bytes.from_hex():", bytes.from_hex("deadbeef").hex())
         env.exit(1)
 
+    s = "Hello, world!"
+    if s.lower() != "hello, world!":
+        print("ERROR: str.lower():", s.lower())
+        env.exit(1)
+    
+    s = ""
+    if s.lower() != "":
+        print("ERROR: str.lower():", s.lower())
+        env.exit(1)
+
+    if s.expandtabs() != "":
+        print("ERROR: str.expandtabs():", s.expandtabs())
+        env.exit(1)
+        
     env.exit(0)
