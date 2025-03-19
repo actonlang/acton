@@ -958,7 +958,7 @@ makeAlwaysRelative base target =
                in joinPath (replicate baseCount "..") </> targetPath
             | otherwise -> path  -- makeRelative found overlap, use its result
 
-
+-- TODO: replace all of this with generic+crypto?!
 #if defined(darwin_HOST_OS) && defined(aarch64_HOST_ARCH)
 defCpu = " -Dcpu=apple_a15 "
 #elif defined(darwin_HOST_OS) && defined(x86_64_HOST_ARCH)
@@ -991,6 +991,7 @@ zigBuild env opts paths tasks binTasks = do
                            ("aarch64":"macos":_)   -> " -Dcpu=apple_a15 "
     -- TODO: how do we do better here? Windows presumably runs on many CPUs that are not aarch64. We really just want to enable AES
                            ("aarch64":"windows":_) -> " -Dcpu=apple_a15 "
+                           ("aarch64":"linux":_)   -> " -Dcpu=cortex_a72 "
                            ("x86_64":_:_)          -> " -Dcpu=westmere "
                            (_:_:_)                 -> defCpu
         buildZigPath = joinPath [projPath paths, "build.zig"]
