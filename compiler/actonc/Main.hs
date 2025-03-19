@@ -984,7 +984,7 @@ zigBuild env opts paths tasks binTasks = do
         global_cache_dir = joinPath [ homeDir, ".cache", "acton", "zig-global-cache" ]
         no_threads = if isWindowsOS (C.target opts) then True else C.no_threads opts
         target_cpu = if (C.cpu opts /= "")
-                       then C.cpu opts
+                       then " -Dcpu=" ++ C.cpu opts
                        else
                          case (splitOn "-" (C.target opts)) of
                            ("native":_)            -> defCpu
