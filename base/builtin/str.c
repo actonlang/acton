@@ -1851,6 +1851,8 @@ B_bytearray B_bytearrayD_join(B_bytearray s, B_Iterable wit, $WORD iter) {
 }
 
 B_bytearray B_bytearrayD_ljust(B_bytearray s, B_int width, B_bytearray fill) {
+    if (!fill)
+        fill = toB_bytearray(" ");
     int wval = from$int(width);
     if (fill->nbytes != 1) {
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("bytearray ljust: fill array not single char")));
@@ -1972,6 +1974,8 @@ B_int B_bytearrayD_rindex(B_bytearray s, B_bytearray sub, B_int start, B_int end
 }
 
 B_bytearray B_bytearrayD_rjust(B_bytearray s, B_int width, B_bytearray fill) {
+    if (!fill)
+        fill = toB_bytearray(" ");
     int wval = from$int(width);
     if (fill->nbytes != 1) {
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("rjust: fill string not single char")));
