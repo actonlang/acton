@@ -26,14 +26,12 @@ class RepoUrl(object):
     def from_url(url: str):
         u = uri.URI(url)
         uscheme = u.scheme
-        scheme = uscheme if uscheme != None else "https"
+        scheme = uscheme if uscheme is not None else "https"
         uhost = u.host
-        host = uhost if uhost != None else "github.com"
+        host = uhost if uhost is not None else "github.com"
 
         def get_owner_repo(path: ?str) -> (str, str):
-            if path == None:
-                raise ValueError("No path in URL")
-            if path != None:
+            if path is not None:
                 if path.startswith("/"):
                     path = path[1:]
                 if path.endswith(".git"):
@@ -43,7 +41,7 @@ class RepoUrl(object):
                 if len(parts) == 2:
                     # ... and reverse the parts again
                     return parts[1][::-1], parts[0][::-1]
-            raise ValueError()
+            raise ValueError("No path in URL")
 
         uowner, urepo = get_owner_repo(u.path)
         owner = uowner
@@ -61,24 +59,25 @@ class RepoUrl(object):
 
     def archive_url(self) -> str:
         self_ref = self.ref
-        ref = self_ref if self_ref != None else "XXX"
-        return self.scheme + "://" + self.host + "/" + self.owner + "/" + self.repo + "/archive/" + ref + ".zip"
+        if self_ref is not None:
+            return self.scheme + "://" + self.host + "/" + self.owner + "/" + self.repo + "/archive/" + self_ref + ".zip"
+        raise ValueError("No ref in URL")
 
 actor GetQuery(on_done: action(?str, ?http.Response) -> None, tcpc_cap: net.TCPConnectCap, url: str):
     def parseUrl(url: str):
         u = uri.URI(url)
         uscheme = u.scheme
-        scheme = uscheme if uscheme != None else "https"
+        scheme = uscheme if uscheme is not None else "https"
         if scheme not in ["http", "https"]:
             raise ValueError("Unsupported scheme: " + scheme)
         uhost = u.host
-        host = uhost if uhost != None else ""
+        host = uhost if uhost is not None else ""
         if host == "":
             raise ValueError("No host in URL")
         uport = u.port
-        port = uport if uport != None else (80 if scheme == "http" else 443)
+        port = uport if uport is not None else (80 if scheme == "http" else 443)
         upath = u.path
-        path = upath if upath != None else "/"
+        path = upath if upath is not None else "/"
         return (scheme=scheme, host=host, port=port, path=path)
 
     urlp = parseUrl(url)
@@ -122,8 +121,8 @@ actor FetchDefaultBranch(on_done: action(?str, ?str) -> None, url: str, tcpc_cap
         owner = ru.owner
         repo = ru.repo
         ruref = ru.ref
-        ref = ("/" + ruref) if ruref != None else ""
-        if owner != None and repo != None:
+        ref = ("/" + ruref) if ruref is not None else ""
+        if owner is not None and repo is not None:
             return "https://api.github.com/repos/" + owner + "/" + repo
         else:
             raise ValueError("Invalid URL")
@@ -136,11 +135,11 @@ actor FetchRef(on_done: action(?Exception, ?str) -> None, url: str, tcpc_cap: ne
     repo_url = RepoUrl.from_url(url)
 
     def _onQueryDone(err: ?str, res: ?http.Response):
-        if err != None:
+        if err is not None:
             on_done(ValueError(err), None)
             return
 
-        if res != None:
+        if res is not None:
             b = res.body.decode()
             j = json.decode(b)
 
@@ -170,14 +169,14 @@ actor FetchRef(on_done: action(?Exception, ?str) -> None, url: str, tcpc_cap: ne
         repo = ru.repo
         ruref = ru.ref
         ref_str = ""
-        if ref != None:
+        if ref is not None:
             ref_str = ref
         else:
-            if ruref != None:
+            if ruref is not None:
                 ref_str = ruref
 
-        repo_ref = ref if ref != None else ruref if ruref != None else "main"
-        if owner != None and repo != None:
+        repo_ref = ref if ref is not None else ruref if ruref is not None else "main"
+        if owner is not None and repo is not None:
             return "https://api.github.com/repos/" + owner + "/" + repo + "/git/refs/heads/" + repo_ref
         else:
             raise ValueError("Invalid URL")
@@ -187,10 +186,10 @@ actor FetchRef(on_done: action(?Exception, ?str) -> None, url: str, tcpc_cap: ne
         GetQuery(on_done=_onQueryDone, tcpc_cap=tcpc_cap, url=api_url)
 
     def _onDefBranch(err: ?str, branch: ?str):
-        if branch != None:
+        if branch is not None:
             _gotRef(branch)
 
-        if err != None:
+        if err is not None:
             on_done(ValueError(err), None)
 
     def _go():
