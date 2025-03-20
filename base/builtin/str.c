@@ -2737,6 +2737,8 @@ B_int B_bytesD_find(B_bytes s, B_bytes sub, B_int start, B_int end) {
 }
 
 B_bytes B_bytesD_from_hex(B_str s) {
+    if (s->nbytes == 0)
+        return null_bytes;
     // Each byte is represented by 2 hex chars
     int strlen = s->nbytes;  // Changed from len to nbytes
     if (strlen % 2 != 0) {
@@ -2783,6 +2785,8 @@ B_bytes B_bytesD_from_hex(B_str s) {
 }
 
 B_str B_bytesD_hex(B_bytes s) {
+    if (s->nbytes == 0)
+        return null_bytes;
     // Each byte becomes 2 hex chars, so output length is 2 * number of bytes
     int len = s->nbytes * 2;
     char *result = malloc(len);
