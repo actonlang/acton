@@ -1711,7 +1711,7 @@ B_bytearray B_bytearrayD_from_hex(B_str s) {
 B_str B_bytearrayD_hex(B_bytearray s) {
     // Each byte becomes 2 hex chars, so output length is 2 * number of bytes
     int len = s->nbytes * 2;
-    char *result = malloc(len);
+    char *result = acton_malloc_atomic(len);
 
     // Hex digit lookup table
     const char hex_digits[] = "0123456789abcdef";
@@ -2807,7 +2807,7 @@ B_str B_bytesD_hex(B_bytes s) {
         return null_bytes;
     // Each byte becomes 2 hex chars, so output length is 2 * number of bytes
     int len = s->nbytes * 2;
-    char *result = malloc(len);
+    char *result = acton_malloc_atomic(len);
 
     // Hex digit lookup table
     const char hex_digits[] = "0123456789abcdef";
