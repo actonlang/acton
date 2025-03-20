@@ -338,6 +338,7 @@ instance Lift Expr where
                                                       | fx == fxProc    = attr_call_
                                                       | fx == fxMut     = attr_eval_
                                                       | fx == fxPure    = attr_eval_
+                                                      | fx == fxAction  = attr_asyn_
                                              return $ Call l (eDot e' attr) p' KwdNil
       | otherwise                       = do e' <- llSub env e
                                              p' <- ll env p

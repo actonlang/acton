@@ -363,6 +363,7 @@ preSuite env (s : ss)                   = do (prefixes,s') <- withPrefixes $ pre
                                              ss' <- preSuite (define (envOf s) env) ss
                                              return (prefixes ++ s' : ss')
 
+
 instance (PreCPS a, EnvOf a) => PreCPS [a] where
     pre env []                          = return []
     pre env (a:as)                      = (:) <$> pre env a <*> pre env1 as
@@ -380,7 +381,7 @@ instance PreCPS Stmt where
     pre env (Assign l ps e)             = Assign l ps <$> preTop env e
     pre env (MutAssign l t e)           = MutAssign l <$> pre env t <*> preTop env e
     pre env (Return l e)                = Return l <$> preTop env e
-    pre env (If l bs els)               = If l <$> pre env bs <*> preSuite env els
+    pre env (If l bs els)               = If l <$> pre env bs <*> preSuite env els      -- TODO: rewrite in case the 'bs' produce out-of-order prefixes
     pre env (While l e b els)           = While l <$> pre env e <*> preSuite env b <*> preSuite env els
     pre env (Decl l ds)                 = Decl l <$> pre env1 ds
       where env1                        = define (envOf ds) env
@@ -414,7 +415,20 @@ instance PreCPS Expr where
       where t                           = typeOf env e0
     pre env (Async l e)                 = Async l <$> pre env e
     pre env (TApp l e ts)               = TApp l <$> pre env e <*> pure ts
-    pre env (Cond l e1 e e2)            = Cond l <$> pre env e1 <*> pre env e <*> pre env e2
+    pre env (Cond l e1 e e2)            = do (pre1,e1') <- withPrefixes $ pre env e1
+                                             (pre2,e2') <- withPrefixes $ pre env e2
+                                             (pre0,e0') <- withPrefixes $ pre env e
+                                             case pre1++pre2 of
+                                                 [] -> do
+                                                     prefix pre0
+                                                     return $ Cond l e1' e0' e2'
+                                                 _ -> do
+                                                     v <- newName "pre"
+                                                     let s1 = pre1 ++ [sAssign (pVar v t) e1']
+                                                         s2 = pre2 ++ [sAssign (pVar v t) e2']
+                                                     prefix $ pre0 ++ [sIf1 e0' s1 s2]
+                                                     return $ eVar v
+      where t                           = upbound env $ map (typeOf env) [e1,e2]
     pre env (IsInstance l e c)          = IsInstance l <$> pre env e <*> return c
     pre env (BinOp l e1 Or e2)          = BinOp l <$> pre env e1 <*> pure Or <*> pre env e2
     pre env (BinOp l e1 And e2)         = BinOp l <$> pre env e1 <*> pure And <*> pre env e2
