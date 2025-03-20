@@ -45,6 +45,10 @@ static struct B_bytes null_bytes_struct = {&B_bytesG_methods,0,&nul};
 
 static B_bytes null_bytes = &null_bytes_struct;
 
+static struct B_bytes space_bytes_struct = {&B_bytesG_methods,1,(unsigned char *)" "};
+
+static B_bytes space_bytes = &space_bytes_struct;
+
 #define NEW_UNFILLED_STR(nm,nchrs,nbtes)        \
     assert(nbtes >= nchrs);                     \
     nm = acton_malloc(sizeof(struct B_str));           \
@@ -2934,6 +2938,8 @@ B_bytes B_bytesD_join(B_bytes s, B_Iterable wit, $WORD iter) {
 }
 
 B_bytes B_bytesD_ljust(B_bytes s, B_int width, B_bytes fill) {
+    if (!fill)
+        fill = space_bytes;
     int wval = from$int(width);
     if (fill->nbytes != 1) {
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("bytes ljust: fill array not single char")));
@@ -3080,6 +3086,8 @@ B_int B_bytesD_rindex(B_bytes s, B_bytes sub, B_int start, B_int end) {
 }
 
 B_bytes B_bytesD_rjust(B_bytes s, B_int width, B_bytes fill) {
+    if (!fill)
+        fill = space_bytes;
     if (fill->nbytes != 1) {
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("rjust: fill string not single char")));
     }
