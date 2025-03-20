@@ -3245,7 +3245,7 @@ B_bool B_bytesD_startswith(B_bytes s, B_bytes sub, B_int start, B_int end) {
     B_int en = end;
     if (fix_start_end(s->nbytes,&st,&en) < 0) return B_False;
     unsigned char *p = s->str + from$int(st);
-    if (p+sub->nbytes >= s->str+s->nbytes) return B_False;
+    if (sub->nbytes > 0 && p+sub->nbytes >= s->str+s->nbytes) return B_False;
     unsigned char *q = sub->str;
     for (int i=0; i<sub->nbytes; i++) {
         if (p >= s->str + from$int(en) || *p++ != *q++) {
