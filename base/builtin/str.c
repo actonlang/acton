@@ -41,6 +41,10 @@ static struct B_str whitespace_struct = {&B_strG_methods,6,6,(unsigned char *)" 
 
 static B_str whitespace_str = &whitespace_struct;
 
+static struct B_bytes null_bytes_struct = {&B_bytesG_methods,0,&nul};
+
+static B_bytes null_bytes = &null_bytes_struct;
+
 #define NEW_UNFILLED_STR(nm,nchrs,nbtes)        \
     assert(nbtes >= nchrs);                     \
     nm = acton_malloc(sizeof(struct B_str));           \
@@ -1594,6 +1598,9 @@ B_bool B_bytearrayD_endswith(B_bytearray s, B_bytearray sub, B_int start, B_int 
 }
 
 B_bytearray B_bytearrayD_expandtabs(B_bytearray s, B_int tabsz){
+    if (s->nbytes == 0) {
+        return toB_bytearray("");
+    }
     int pos = 0;
     int expanded = 0;
     int tabsize = from$int(tabsz);
@@ -2679,6 +2686,9 @@ B_bool B_bytesD_endswith(B_bytes s, B_bytes sub, B_int start, B_int end) {
 }
 
 B_bytes B_bytesD_expandtabs(B_bytes s, B_int tabsz){
+    if (s->nbytes == 0) {
+        return null_bytes;
+    }
     int pos = 0;
     int expanded = 0;
     int tabsize = from$int(tabsz);
