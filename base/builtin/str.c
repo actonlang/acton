@@ -49,6 +49,16 @@ static struct B_bytes space_bytes_struct = {&B_bytesG_methods,1,(unsigned char *
 
 static B_bytes space_bytes = &space_bytes_struct;
 
+// We avoid returning the bytearray singleton from bytearray methods, this is
+// just used internally as a default value for the fill character.
+static struct B_bytearray space_bytearray_struct = {&B_bytearrayG_methods,1,(unsigned char *)" ",1};
+
+static B_bytearray space_bytearray = &space_bytearray_struct;
+
+static struct B_bytearray whitespace_bytearray_struct = {&B_bytearrayG_methods,6,(unsigned char *)" \t\n\r\x0b\x0c",6};
+
+static B_bytearray whitespace_bytearray = &whitespace_bytearray_struct;
+
 #define NEW_UNFILLED_STR(nm,nchrs,nbtes)        \
     assert(nbtes >= nchrs);                     \
     nm = acton_malloc(sizeof(struct B_str));           \
@@ -1538,7 +1548,7 @@ B_bytearray B_bytearrayD_capitalize(B_bytearray s) {
 }
 
 B_bytearray B_bytearrayD_center(B_bytearray s, B_int width, B_bytearray fill) {
-    if (!fill) fill = toB_bytearray(" ");
+    if (!fill) fill = space_bytearray;
     if (fill->nbytes != 1) {
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("center: fill bytearray not single char")));
     }
@@ -1852,7 +1862,7 @@ B_bytearray B_bytearrayD_join(B_bytearray s, B_Iterable wit, $WORD iter) {
 
 B_bytearray B_bytearrayD_ljust(B_bytearray s, B_int width, B_bytearray fill) {
     if (!fill)
-        fill = toB_bytearray(" ");
+        fill = space_bytearray;
     int wval = from$int(width);
     if (fill->nbytes != 1) {
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("bytearray ljust: fill array not single char")));
@@ -1880,7 +1890,7 @@ B_bytearray B_bytearrayD_lower(B_bytearray s) {
 
 B_bytearray B_bytearrayD_lstrip(B_bytearray s, B_bytearray cs) {
     if (!cs)
-        cs = toB_bytearray(" \t\n\r\x0b\x0c");
+        cs = whitespace_bytearray;
     int nstrip = 0;
     for (int i=0; i<s->nbytes; i++) {
         unsigned char c = s->str[i];
@@ -1975,7 +1985,7 @@ B_int B_bytearrayD_rindex(B_bytearray s, B_bytearray sub, B_int start, B_int end
 
 B_bytearray B_bytearrayD_rjust(B_bytearray s, B_int width, B_bytearray fill) {
     if (!fill)
-        fill = toB_bytearray(" ");
+        fill = space_bytearray;
     int wval = from$int(width);
     if (fill->nbytes != 1) {
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("rjust: fill string not single char")));
@@ -2013,7 +2023,7 @@ B_tuple B_bytearrayD_rpartition(B_bytearray s, B_bytearray sep) {
 
 B_bytearray B_bytearrayD_rstrip(B_bytearray s, B_bytearray cs) {
     if (!cs)
-        cs = toB_bytearray(" \t\n\r\x0b\x0c");
+        cs = whitespace_bytearray;
     int nstrip = 0;
     for (int i=s->nbytes-1; i>=0; i--) {
         unsigned char c = s->str[i];
