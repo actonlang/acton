@@ -1,4 +1,3 @@
-
 def test_str_find():
     s = "hello, world!"
     if s.find("world") != 7:
@@ -15,9 +14,128 @@ def test_str_find():
         raise ValueError("find() did not return -1 when the substring is not found")
 
 
+def test_empty_str_methods():
+    s = ""
+
+    # Test all string methods with empty string
+    if s.capitalize() != "":
+        raise ValueError("str.capitalize() failed: " + s.capitalize())
+
+    if s.center(5) != "     ":
+        raise ValueError("str.center() failed: " + s.center(5))
+
+    if s.count("a") != 0:
+        raise ValueError("str.count() failed: " + str(s.count("a")))
+
+    if s.encode() != b"":
+        raise ValueError("str.encode() failed: " + str(s.encode()))
+
+    if s.endswith("") != True:
+        raise ValueError("str.endswith() failed: " + str(s.endswith("")))
+
+    if s.expandtabs() != "":
+        raise ValueError("str.expandtabs() failed: " + s.expandtabs())
+
+    if s.find("a") != -1:
+        raise ValueError("str.find() failed: " + str(s.find("a")))
+
+    try:
+        s.index("a")
+        raise ValueError("str.index() didn't raise ValueError")
+    except ValueError:
+        pass
+
+    if s.isalnum() != False:
+        raise ValueError("str.isalnum() failed: " + str(s.isalnum()))
+
+    if s.isalpha() != False:
+        raise ValueError("str.isalpha() failed: " + str(s.isalpha()))
+
+    if s.isascii() != True:
+        raise ValueError("str.isascii() failed: " + str(s.isascii()))
+
+    if s.isdecimal() != False:
+        raise ValueError("str.isdecimal() failed: " + str(s.isdecimal()))
+
+    if s.islower() != False:
+        raise ValueError("str.islower() failed: " + str(s.islower()))
+
+    # TODO:%s/\s\+$//: Is this right?!
+    if s.isprintable() != False:
+        raise ValueError("str.isprintable() failed: " + str(s.isprintable()))
+
+    if s.isspace() != False:
+        raise ValueError("str.isspace() failed: " + str(s.isspace()))
+
+    if s.istitle() != False:
+        raise ValueError("str.istitle() failed: " + str(s.istitle()))
+
+    if s.isupper() != False:
+        raise ValueError("str.isupper() failed: " + str(s.isupper()))
+
+    if s.join(["a", "b", "c"]) != "abc":
+        raise ValueError("str.join() failed: " + s.join(["a", "b", "c"]))
+
+    if s.ljust(5) != "     ":
+        raise ValueError("str.ljust() failed: " + s.ljust(5))
+
+    if s.lower() != "":
+        raise ValueError("str.lower() failed: " + s.lower())
+
+    if s.lstrip() != "":
+        raise ValueError("str.lstrip() failed: " + s.lstrip())
+
+    sp = s.partition("a")
+    if sp.0 != "" or sp.1 != "" or sp.2 != "":
+        sp = s.partition("a")
+        raise ValueError("str.partition() failed: " + sp.0 + sp.1 + sp.2)
+
+    if s.replace("a", "b") != "":
+        raise ValueError("str.replace() failed: " + s.replace("a", "b"))
+
+    if s.rfind("a") != -1:
+        raise ValueError("str.rfind() failed: " + str(s.rfind("a")))
+
+    try:
+        s.rindex("a")
+        raise ValueError("str.rindex() didn't raise ValueError")
+    except ValueError:
+        pass
+
+    if s.rjust(5) != "     ":
+        raise ValueError("str.rjust() failed: " + s.rjust(5))
+
+    sp = s.rpartition("a")
+    if sp.0 != "" or sp.1 != "" or sp.2 != "":
+        sp = s.rpartition("a")
+        raise ValueError("str.rpartition() failed: " + sp.0 + sp.1 + sp.2)
+
+    if s.rstrip() != "":
+        raise ValueError("str.rstrip() failed: " + s.rstrip())
+
+    if s.split("a") != [""]:
+        raise ValueError("str.split() failed: " + str(s.split("a")))
+
+    if s.splitlines() != []:
+        raise ValueError("str.splitlines() failed: " + str(s.splitlines()))
+
+    if s.startswith("") != True:
+        raise ValueError("str.startswith() failed: " + str(s.startswith("")))
+
+    if s.strip() != "":
+        raise ValueError("str.strip() failed: " + s.strip())
+
+    if s.upper() != "":
+        raise ValueError("str.upper() failed: " + s.upper())
+
+    if s.zfill(5) != "00000":
+        raise ValueError("str.zfill() failed: " + s.zfill(5))
+
+
 actor main(env):
     try:
         test_str_find()
+        test_empty_str_methods()
     except Exception as e:
         print("Unexpected exception during testing:", e)
         await async env.exit(1)

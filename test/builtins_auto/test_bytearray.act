@@ -1,0 +1,186 @@
+def test_bytearray_basic():
+    ba = bytearray(b"hello, world!")
+    if len(ba) != 13:
+        raise ValueError("Length of bytearray incorrect: " + str(len(ba)))
+    if ba[0] != 104:  # ASCII 'h'
+        raise ValueError("Indexing failed: " + str(ba[0]))
+    
+    # Test modification
+    ba[0] = 72  # ASCII 'H'
+    if ba[0] != 72:
+        raise ValueError("Modification failed: " + str(ba[0]))
+    
+    # Test slicing
+    if ba[0:5] != bytearray(b"Hello"):
+        raise ValueError("Slicing failed: " + str(ba[0:5]))
+
+def test_bytearray_find():
+    ba = bytearray(b"hello, world!")
+    world = bytearray(b"world")
+    if ba.find(world) != 7:
+        raise ValueError("find() did not return the correct index: " + str(ba.find(world)))
+    if ba.find(world, 0) != 7:
+        raise ValueError("find() did not return the correct index: " + str(ba.find(world, 0)))
+    if ba.find(world, 8) != -1:
+        raise ValueError("find() did not return -1 when the substring is not found")
+    if ba.find(world, 0, 5) != -1:
+        raise ValueError("find() did not return -1 when the substring is not found")
+    if ba.find(world, 0, 7) != -1:
+        raise ValueError("find() did not return -1 when the substring is not found")
+    if ba.find(bytearray(b"crap")) != -1:
+        raise ValueError("find() did not return -1 when the substring is not found")
+
+def test_bytearray_sequence_methods():
+    ba = bytearray(b"test")
+    
+    # Test append
+    ba.append(33)  # ASCII '!'
+    if ba != bytearray(b"test!"):
+        raise ValueError("append() failed: " + str(ba))
+    
+    # Test insert
+    ba.insert(0, 65)  # ASCII 'A'
+    if ba != bytearray(b"Atest!"):
+        raise ValueError("insert() failed: " + str(ba))
+    
+    # Test reverse
+    ba.reverse()
+    if ba != bytearray(b"!tsetA"):
+        raise ValueError("reverse() failed: " + str(ba))
+
+def test_empty_bytearray_methods():
+    ba = bytearray(b"")
+
+    # Test all bytearray methods with empty bytearray
+    if ba.capitalize() != ba:
+        raise ValueError("bytearray.capitalize() failed: " + str(ba.capitalize()))
+
+    if ba.center(5) != bytearray(b"     "):
+        raise ValueError("bytearray.center() failed: " + str(ba.center(5)))
+
+    if ba.count(bytearray(b"a")) != 0:
+        raise ValueError("bytearray.count() failed: " + str(ba.count(bytearray(b"a"))))
+
+    if ba.decode() != "":
+        raise ValueError("bytearray.decode() failed: " + str(ba.decode()))
+
+    if ba.endswith(bytearray(b"")) != True:
+        raise ValueError("bytearray.endswith() failed: " + str(ba.endswith(bytearray(b""))))
+
+    if ba.expandtabs() != bytearray(b""):
+        raise ValueError("bytearray.expandtabs() failed: " + str(ba.expandtabs()))
+
+    if ba.find(bytearray(b"a")) != -1:
+        raise ValueError("bytearray.find() failed: " + str(ba.find(bytearray(b"a"))))
+
+    try:
+        ba.index(bytearray(b"a"))
+        raise ValueError("bytearray.index() didn't raise ValueError")
+    except ValueError:
+        pass
+
+    if ba.isalnum() != False:
+        raise ValueError("bytearray.isalnum() failed: " + str(ba.isalnum()))
+
+    if ba.isalpha() != False:
+        raise ValueError("bytearray.isalpha() failed: " + str(ba.isalpha()))
+
+    if ba.isascii() != True:
+        raise ValueError("bytearray.isascii() failed: " + str(ba.isascii()))
+
+    if ba.isdigit() != False:
+        raise ValueError("bytearray.isdigit() failed: " + str(ba.isdigit()))
+
+    if ba.islower() != False:
+        raise ValueError("bytearray.islower() failed: " + str(ba.islower()))
+
+    if ba.isspace() != False:
+        raise ValueError("bytearray.isspace() failed: " + str(ba.isspace()))
+
+    if ba.istitle() != False:
+        raise ValueError("bytearray.istitle() failed: " + str(ba.istitle()))
+
+    if ba.isupper() != False:
+        raise ValueError("bytearray.isupper() failed: " + str(ba.isupper()))
+
+    if ba.join([bytearray(b"a"), bytearray(b"b"), bytearray(b"c")]) != bytearray(b"abc"):
+        raise ValueError("bytearray.join() failed: " + str(ba.join([bytearray(b"a"), bytearray(b"b"), bytearray(b"c")])))
+
+    if ba.ljust(5) != bytearray(b"     "):
+        raise ValueError("bytearray.ljust() failed: " + str(ba.ljust(5)))
+
+    if ba.lower() != bytearray(b""):
+        raise ValueError("bytearray.lower() failed: " + str(ba.lower()))
+
+    if ba.lstrip() != bytearray(b""):
+        raise ValueError("bytearray.lstrip() failed: " + str(ba.lstrip()))
+
+    parts = ba.partition(bytearray(b"a"))
+    if parts.0 != bytearray(b"") or parts.1 != bytearray(b"") or parts.2 != bytearray(b""):
+        raise ValueError("bytearray.partition() failed: " + str(parts.0) + " " + str(parts.1) + " " + str(parts.2))
+
+    if ba.replace(bytearray(b""), bytearray(b"")) != bytearray(b""):
+        raise ValueError("bytearray.replace() failed: " + str(ba.replace(bytearray(b""), bytearray(b""))))
+
+    if ba.replace(bytearray(b"a"), bytearray(b"b")) != bytearray(b""):
+        raise ValueError("bytearray.replace() failed: " + str(ba.replace(bytearray(b"a"), bytearray(b"b"))))
+
+    if ba.rfind(bytearray(b"a")) != -1:
+        raise ValueError("bytearray.rfind() failed: " + str(ba.rfind(bytearray(b"a"))))
+
+    try:
+        ba.rindex(bytearray(b"a"))
+        raise ValueError("bytearray.rindex() didn't raise ValueError")
+    except ValueError:
+        pass
+
+    if ba.rjust(5) != bytearray(b"     "):
+        raise ValueError("bytearray.rjust() failed: " + str(ba.rjust(5)))
+
+    parts = ba.rpartition(bytearray(b"a"))
+    if parts.0 != bytearray(b"") or parts.1 != bytearray(b"") or parts.2 != bytearray(b""):
+        raise ValueError("bytearray.rpartition() failed: " + str(parts.0) + " " + str(parts.1) + " " + str(parts.2))
+
+    if ba.rstrip() != bytearray(b""):
+        raise ValueError("bytearray.rstrip() failed: " + str(ba.rstrip()))
+
+    if ba.split(bytearray(b"a")) != [bytearray(b"")]:
+        raise ValueError("bytearray.split() failed: " + str(ba.split(bytearray(b"a"))))
+
+    if ba.splitlines() != []:
+        raise ValueError("bytearray.splitlines() failed: " + str(ba.splitlines()))
+
+    if ba.startswith(bytearray(b"")) != True:
+        raise ValueError("bytearray.startswith() failed: " + str(ba.startswith(bytearray(b""))))
+
+    if ba.strip() != bytearray(b""):
+        raise ValueError("bytearray.strip() failed: " + str(ba.strip()))
+
+    if ba.upper() != bytearray(b""):
+        raise ValueError("bytearray.upper() failed: " + str(ba.upper()))
+
+    if ba.zfill(5) != bytearray(b"00000"):
+        raise ValueError("bytearray.zfill() failed: " + str(ba.zfill(5)))
+
+def test_hex_methods():
+    # Test hex encoding/decoding
+    ba = bytearray(b"\xde\xad\xbe\xef")
+    if ba.hex() != "deadbeef":
+        raise ValueError("bytearray.hex() failed: " + ba.hex())
+
+    if bytearray.from_hex("deadbeef").hex() != "deadbeef":
+        raise ValueError("bytearray.from_hex() failed: " + bytearray.from_hex("deadbeef").hex())
+
+actor main(env):
+    try:
+        test_bytearray_basic()
+        test_bytearray_find()
+        test_bytearray_sequence_methods()
+        test_empty_bytearray_methods()
+        test_hex_methods()
+        print("All bytearray tests passed!")
+    except Exception as e:
+        print("Unexpected exception during testing:", e)
+        await async env.exit(1)
+
+    env.exit(0)

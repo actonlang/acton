@@ -1,0 +1,154 @@
+def test_bytes_find():
+    b = b"hello, world!"
+    if b.find(b"world") != 7:
+        raise ValueError("find() did not return the correct index: " + str(b.find(b"world")))
+    if b.find(b"world", 0) != 7:
+        raise ValueError("find() did not return the correct index: " + str(b.find(b"world")))
+    if b.find(b"world", 8) != -1:
+        raise ValueError("find() did not return -1 when the substring is not found")
+    if b.find(b"world", 0, 5) != -1:
+        raise ValueError("find() did not return -1 when the substring is not found")
+    if b.find(b"world", 0, 7) != -1:
+        raise ValueError("find() did not return -1 when the substring is not found")
+    if b.find(b"crap") != -1:
+        raise ValueError("find() did not return -1 when the substring is not found")
+
+
+def test_empty_bytes_methods():
+    b = b""
+
+    # Test all bytes methods with empty bytes
+    if b.capitalize() != b"":
+        raise ValueError("bytes.capitalize() failed: " + str(b.capitalize()))
+
+    if b.center(5) != b"     ":
+        raise ValueError("bytes.center() failed: " + str(b.center(5)))
+
+    if b.count(b"a") != 0:
+        raise ValueError("bytes.count() failed: " + str(b.count(b"a")))
+
+    if b.decode() != "":
+        raise ValueError("bytes.decode() failed: " + str(b.decode()))
+
+    if b.endswith(b"") != True:
+        raise ValueError("bytes.endswith() failed: " + str(b.endswith(b"")))
+
+    if b.expandtabs() != b"":
+        raise ValueError("bytes.expandtabs() failed: " + str(b.expandtabs()))
+
+    if b.find(b"a") != -1:
+        raise ValueError("bytes.find() failed: " + str(b.find(b"a")))
+
+    try:
+        b.index(b"a")
+        raise ValueError("bytes.index() didn't raise ValueError")
+    except ValueError:
+        pass
+
+    if b.isalnum() != False:
+        raise ValueError("bytes.isalnum() failed: " + str(b.isalnum()))
+
+    if b.isalpha() != False:
+        raise ValueError("bytes.isalpha() failed: " + str(b.isalpha()))
+
+    if b.isascii() != True:
+        raise ValueError("bytes.isascii() failed: " + str(b.isascii()))
+
+    if b.isdigit() != False:
+        raise ValueError("bytes.isdigit() failed: " + str(b.isdigit()))
+
+    if b.islower() != False:
+        raise ValueError("bytes.islower() failed: " + str(b.islower()))
+
+    if b.isspace() != False:
+        raise ValueError("bytes.isspace() failed: " + str(b.isspace()))
+
+    if b.istitle() != False:
+        raise ValueError("bytes.istitle() failed: " + str(b.istitle()))
+
+    if b.isupper() != False:
+        raise ValueError("bytes.isupper() failed: " + str(b.isupper()))
+
+    if b.join([b"a", b"b", b"c"]) != b"abc":
+        raise ValueError("bytes.join() failed: " + str(b.join([b"a", b"b", b"c"])))
+
+    if b.ljust(5) != b"     ":
+        raise ValueError("bytes.ljust() failed: " + str(b.ljust(5)))
+
+    if b.lower() != b"":
+        raise ValueError("bytes.lower() failed: " + str(b.lower()))
+
+    if b.lstrip() != b"":
+        raise ValueError("bytes.lstrip() failed: " + str(b.lstrip()))
+
+    sp = b.partition(b"a")
+    if sp.0 != b"" or sp.1 != b"" or sp.2 != b"":
+        sp = b.partition(b"a")
+        raise ValueError("bytes.partition() failed: " + str(sp.0) + str(sp.1) + str(sp.2))
+
+    if b.replace(b"a", b"b") != b"":
+        raise ValueError("bytes.replace() failed: " + str(b.replace(b"a", b"b")))
+
+    if b.rfind(b"a") != -1:
+        raise ValueError("bytes.rfind() failed: " + str(b.rfind(b"a")))
+
+    try:
+        b.rindex(b"a")
+        raise ValueError("bytes.rindex() didn't raise ValueError")
+    except ValueError:
+        pass
+
+    if b.rjust(5) != b"     ":
+        raise ValueError("bytes.rjust() failed: " + str(b.rjust(5)))
+
+    sp = b.rpartition(b"a")
+    if sp.0 != b"" or sp.1 != b"" or sp.2 != b"":
+        sp = b.rpartition(b"a")
+        raise ValueError("bytes.rpartition() failed: " + str(sp.0) + str(sp.1) + str(sp.2))
+
+    if b.rstrip() != b"":
+        raise ValueError("bytes.rstrip() failed: " + str(b.rstrip()))
+
+    if b.split(b"a") != [b""]:
+        raise ValueError("bytes.split() failed: " + str(b.split(b"a")))
+
+    if b.splitlines() != []:
+        raise ValueError("bytes.splitlines() failed: " + str(b.splitlines()))
+
+    if b.startswith(b"") != True:
+        raise ValueError("bytes.startswith() failed: " + str(b.startswith(b"")))
+
+    if b.strip() != b"":
+        raise ValueError("bytes.strip() failed: " + str(b.strip()))
+
+    if b.upper() != b"":
+        raise ValueError("bytes.upper() failed: " + str(b.upper()))
+
+    if b.zfill(5) != b"00000":
+        raise ValueError("bytes.zfill() failed: " + str(b.zfill(5)))
+        
+    if b"".hex() != "":
+        raise ValueError("bytes.hex() failed: " + str(b.hex()))
+
+    if bytes.from_hex("") != b"":
+        raise ValueError("bytes.from_hex() failed: " + str(bytes.from_hex("")))
+
+actor main(env):
+    try:
+        test_bytes_find()
+        test_empty_bytes_methods()
+    except Exception as e:
+        print("Unexpected exception during testing:", e)
+        await async env.exit(1)
+
+    # Test bytes.hex() and bytes.from_hex()
+    b = b'\xde\xad\xbe\xef'
+    if b.hex() != "deadbeef":
+        print("ERROR: bytes.hex():", b.hex())
+        env.exit(1)
+
+    if bytes.from_hex("deadbeef").hex() != "deadbeef":
+        print("ERROR: bytes.from_hex():", bytes.from_hex("deadbeef").hex())
+        env.exit(1)
+
+    env.exit(0)

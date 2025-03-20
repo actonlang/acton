@@ -41,6 +41,28 @@ static struct B_str whitespace_struct = {&B_strG_methods,6,6,(unsigned char *)" 
 
 static B_str whitespace_str = &whitespace_struct;
 
+static struct B_bytes null_bytes_struct = {&B_bytesG_methods,0,&nul};
+
+static B_bytes null_bytes = &null_bytes_struct;
+
+static struct B_bytes space_bytes_struct = {&B_bytesG_methods,1,(unsigned char *)" "};
+
+static B_bytes space_bytes = &space_bytes_struct;
+
+static struct B_bytes whitespace_bytes_struct = {&B_bytesG_methods,6,(unsigned char *)" \t\n\r\x0b\x0c"};
+
+static B_bytes whitespace_bytes = &whitespace_bytes_struct;
+
+// We avoid returning the bytearray singleton from bytearray methods, this is
+// just used internally as a default value for the fill character.
+static struct B_bytearray space_bytearray_struct = {&B_bytearrayG_methods,1,(unsigned char *)" ",1};
+
+static B_bytearray space_bytearray = &space_bytearray_struct;
+
+static struct B_bytearray whitespace_bytearray_struct = {&B_bytearrayG_methods,6,(unsigned char *)" \t\n\r\x0b\x0c",6};
+
+static B_bytearray whitespace_bytearray = &whitespace_bytearray_struct;
+
 #define NEW_UNFILLED_STR(nm,nchrs,nbtes)        \
     assert(nbtes >= nchrs);                     \
     nm = acton_malloc(sizeof(struct B_str));           \
@@ -171,6 +193,9 @@ typedef int (*transform)(int codepoint);
 // For the moment only used for str_upper and str_lower;
 // maybe not worthwhile to keep.
 static B_str str_transform(B_str s, transform f) {
+    if (s->nchars == 0) {
+        return null_str;
+    }
     int cp, cpu, cplen, cpulen;
     unsigned char *p = s->str;
     unsigned char buffer[4*s->nchars];
@@ -589,6 +614,9 @@ B_bool B_strD_endswith(B_str s, B_str sub, B_int start, B_int end) {
 }
 
 B_str B_strD_expandtabs(B_str s, B_int tabsize){
+    if (s->nchars == 0) {
+        return null_str;
+    }
     int tabsz = tabsize?from$int(tabsize):8;
     int pos = 0;
     int expanded = 0;
@@ -1243,13 +1271,13 @@ B_str B_TimesD_strD___add__ (B_TimesD_str wit, B_str s, B_str t) {
 }
 
 B_str B_TimesD_strD___zero__ (B_TimesD_str wit) {
-    return to$str("");
+    return null_str;
 }
 
 B_str B_TimesD_strD___mul__ (B_TimesD_str wit, B_str a, B_int n) {
     int nval = from$int(n);
     if (nval <= 0)
-        return to$str("");
+        return null_str;
     else {
         B_str res;
         NEW_UNFILLED_STR(res,a->nchars * nval, a->nbytes * nval);
@@ -1263,7 +1291,7 @@ B_str B_TimesD_strD___mul__ (B_TimesD_str wit, B_str a, B_int n) {
 
 
 B_str B_ContainerD_strD___fromiter__ (B_ContainerD_str wit, B_Iterable wit2, $WORD iter) {
-    return B_strD_join(to$str(""),wit2,iter);
+    return B_strD_join(null_str,wit2,iter);
 }
 
 B_int B_ContainerD_strD___len__ (B_ContainerD_str wit, B_str s){
@@ -1368,7 +1396,7 @@ B_str B_SliceableD_strD___getslice__ (B_SliceableD_str wit, B_str s, B_slice slc
     long start, stop, step, slen;
     normalize_slice(slc, nchars, &slen, &start, &stop, &step);
     if (slen == 0) {
-        return to$str("");
+        return null_str;
     }
     //slice notation have been eliminated and default values applied.
     unsigned char buffer[4*slen]; // very conservative buffer size.
@@ -1524,7 +1552,7 @@ B_bytearray B_bytearrayD_capitalize(B_bytearray s) {
 }
 
 B_bytearray B_bytearrayD_center(B_bytearray s, B_int width, B_bytearray fill) {
-    if (!fill) fill = toB_bytearray(" ");
+    if (!fill) fill = space_bytearray;
     if (fill->nbytes != 1) {
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("center: fill bytearray not single char")));
     }
@@ -1588,6 +1616,9 @@ B_bool B_bytearrayD_endswith(B_bytearray s, B_bytearray sub, B_int start, B_int 
 }
 
 B_bytearray B_bytearrayD_expandtabs(B_bytearray s, B_int tabsz){
+    if (s->nbytes == 0) {
+        return toB_bytearray("");
+    }
     int pos = 0;
     int expanded = 0;
     int tabsize = from$int(tabsz);
@@ -1834,6 +1865,8 @@ B_bytearray B_bytearrayD_join(B_bytearray s, B_Iterable wit, $WORD iter) {
 }
 
 B_bytearray B_bytearrayD_ljust(B_bytearray s, B_int width, B_bytearray fill) {
+    if (!fill)
+        fill = space_bytearray;
     int wval = from$int(width);
     if (fill->nbytes != 1) {
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("bytearray ljust: fill array not single char")));
@@ -1861,7 +1894,7 @@ B_bytearray B_bytearrayD_lower(B_bytearray s) {
 
 B_bytearray B_bytearrayD_lstrip(B_bytearray s, B_bytearray cs) {
     if (!cs)
-        cs = toB_bytearray(" \t\n\r\x0b\x0c");
+        cs = whitespace_bytearray;
     int nstrip = 0;
     for (int i=0; i<s->nbytes; i++) {
         unsigned char c = s->str[i];
@@ -1955,6 +1988,8 @@ B_int B_bytearrayD_rindex(B_bytearray s, B_bytearray sub, B_int start, B_int end
 }
 
 B_bytearray B_bytearrayD_rjust(B_bytearray s, B_int width, B_bytearray fill) {
+    if (!fill)
+        fill = space_bytearray;
     int wval = from$int(width);
     if (fill->nbytes != 1) {
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("rjust: fill string not single char")));
@@ -1992,7 +2027,7 @@ B_tuple B_bytearrayD_rpartition(B_bytearray s, B_bytearray sep) {
 
 B_bytearray B_bytearrayD_rstrip(B_bytearray s, B_bytearray cs) {
     if (!cs)
-        cs = toB_bytearray(" \t\n\r\x0b\x0c");
+        cs = whitespace_bytearray;
     int nstrip = 0;
     for (int i=s->nbytes-1; i>=0; i--) {
         unsigned char c = s->str[i];
@@ -2120,7 +2155,7 @@ B_bool B_bytearrayD_startswith(B_bytearray s, B_bytearray sub, B_int start, B_in
     B_int en = end;
     if (fix_start_end(s->nbytes,&st,&en) < 0) return B_False;
     unsigned char *p = s->str + from$int(st);
-    if (p+sub->nbytes >= s->str+s->nbytes) return B_False;
+    if (sub->nbytes > 0 && p+sub->nbytes >= s->str+s->nbytes) return B_False;
     unsigned char *q = sub->str;
     for (int i=0; i<sub->nbytes; i++) {
         if (p >= s->str + from$int(en) || *p++ != *q++) {
@@ -2673,6 +2708,9 @@ B_bool B_bytesD_endswith(B_bytes s, B_bytes sub, B_int start, B_int end) {
 }
 
 B_bytes B_bytesD_expandtabs(B_bytes s, B_int tabsz){
+    if (s->nbytes == 0) {
+        return null_bytes;
+    }
     int pos = 0;
     int expanded = 0;
     int tabsize = from$int(tabsz);
@@ -2717,6 +2755,8 @@ B_int B_bytesD_find(B_bytes s, B_bytes sub, B_int start, B_int end) {
 }
 
 B_bytes B_bytesD_from_hex(B_str s) {
+    if (s->nbytes == 0)
+        return null_bytes;
     // Each byte is represented by 2 hex chars
     int strlen = s->nbytes;  // Changed from len to nbytes
     if (strlen % 2 != 0) {
@@ -2763,6 +2803,8 @@ B_bytes B_bytesD_from_hex(B_str s) {
 }
 
 B_str B_bytesD_hex(B_bytes s) {
+    if (s->nbytes == 0)
+        return null_bytes;
     // Each byte becomes 2 hex chars, so output length is 2 * number of bytes
     int len = s->nbytes * 2;
     char *result = malloc(len);
@@ -2918,6 +2960,8 @@ B_bytes B_bytesD_join(B_bytes s, B_Iterable wit, $WORD iter) {
 }
 
 B_bytes B_bytesD_ljust(B_bytes s, B_int width, B_bytes fill) {
+    if (!fill)
+        fill = space_bytes;
     int wval = from$int(width);
     if (fill->nbytes != 1) {
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("bytes ljust: fill array not single char")));
@@ -2945,7 +2989,7 @@ B_bytes B_bytesD_lower(B_bytes s) {
 
 B_bytes B_bytesD_lstrip(B_bytes s, B_bytes cs) {
     if (!cs)
-        cs = to$bytes(" \t\n\r\x0b\x0c");
+        cs = whitespace_bytes;
     int nstrip = 0;
     for (int i=0; i<s->nbytes; i++) {
         unsigned char c = s->str[i];
@@ -3064,6 +3108,8 @@ B_int B_bytesD_rindex(B_bytes s, B_bytes sub, B_int start, B_int end) {
 }
 
 B_bytes B_bytesD_rjust(B_bytes s, B_int width, B_bytes fill) {
+    if (!fill)
+        fill = space_bytes;
     if (fill->nbytes != 1) {
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("rjust: fill string not single char")));
     }
@@ -3101,7 +3147,7 @@ B_tuple B_bytesD_rpartition(B_bytes s, B_bytes sep) {
 
 B_bytes B_bytesD_rstrip(B_bytes s, B_bytes cs) {
     if (!cs)
-        cs = to$bytes(" \t\n\r\x0b\x0c");
+        cs = whitespace_bytes;
     int nstrip = 0;
     for (int i=s->nbytes-1; i>=0; i--) {
         unsigned char c = s->str[i];
@@ -3229,7 +3275,7 @@ B_bool B_bytesD_startswith(B_bytes s, B_bytes sub, B_int start, B_int end) {
     B_int en = end;
     if (fix_start_end(s->nbytes,&st,&en) < 0) return B_False;
     unsigned char *p = s->str + from$int(st);
-    if (p+sub->nbytes >= s->str+s->nbytes) return B_False;
+    if (sub->nbytes > 0 && p+sub->nbytes >= s->str+s->nbytes) return B_False;
     unsigned char *q = sub->str;
     for (int i=0; i<sub->nbytes; i++) {
         if (p >= s->str + from$int(en) || *p++ != *q++) {
