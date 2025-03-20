@@ -1249,13 +1249,13 @@ B_str B_TimesD_strD___add__ (B_TimesD_str wit, B_str s, B_str t) {
 }
 
 B_str B_TimesD_strD___zero__ (B_TimesD_str wit) {
-    return to$str("");
+    return null_str;
 }
 
 B_str B_TimesD_strD___mul__ (B_TimesD_str wit, B_str a, B_int n) {
     int nval = from$int(n);
     if (nval <= 0)
-        return to$str("");
+        return null_str;
     else {
         B_str res;
         NEW_UNFILLED_STR(res,a->nchars * nval, a->nbytes * nval);
@@ -1269,7 +1269,7 @@ B_str B_TimesD_strD___mul__ (B_TimesD_str wit, B_str a, B_int n) {
 
 
 B_str B_ContainerD_strD___fromiter__ (B_ContainerD_str wit, B_Iterable wit2, $WORD iter) {
-    return B_strD_join(to$str(""),wit2,iter);
+    return B_strD_join(null_str,wit2,iter);
 }
 
 B_int B_ContainerD_strD___len__ (B_ContainerD_str wit, B_str s){
@@ -1374,7 +1374,7 @@ B_str B_SliceableD_strD___getslice__ (B_SliceableD_str wit, B_str s, B_slice slc
     long start, stop, step, slen;
     normalize_slice(slc, nchars, &slen, &start, &stop, &step);
     if (slen == 0) {
-        return to$str("");
+        return null_str;
     }
     //slice notation have been eliminated and default values applied.
     unsigned char buffer[4*slen]; // very conservative buffer size.
