@@ -49,6 +49,10 @@ static struct B_bytes space_bytes_struct = {&B_bytesG_methods,1,(unsigned char *
 
 static B_bytes space_bytes = &space_bytes_struct;
 
+static struct B_bytes whitespace_bytes_struct = {&B_bytesG_methods,6,(unsigned char *)" \t\n\r\x0b\x0c"};
+
+static B_bytes whitespace_bytes = &whitespace_bytes_struct;
+
 // We avoid returning the bytearray singleton from bytearray methods, this is
 // just used internally as a default value for the fill character.
 static struct B_bytearray space_bytearray_struct = {&B_bytearrayG_methods,1,(unsigned char *)" ",1};
@@ -2985,7 +2989,7 @@ B_bytes B_bytesD_lower(B_bytes s) {
 
 B_bytes B_bytesD_lstrip(B_bytes s, B_bytes cs) {
     if (!cs)
-        cs = to$bytes(" \t\n\r\x0b\x0c");
+        cs = whitespace_bytes;
     int nstrip = 0;
     for (int i=0; i<s->nbytes; i++) {
         unsigned char c = s->str[i];
@@ -3143,7 +3147,7 @@ B_tuple B_bytesD_rpartition(B_bytes s, B_bytes sep) {
 
 B_bytes B_bytesD_rstrip(B_bytes s, B_bytes cs) {
     if (!cs)
-        cs = to$bytes(" \t\n\r\x0b\x0c");
+        cs = whitespace_bytes;
     int nstrip = 0;
     for (int i=s->nbytes-1; i>=0; i--) {
         unsigned char c = s->str[i];
