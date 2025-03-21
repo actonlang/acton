@@ -976,6 +976,9 @@ def type(a: value) -> str:
     """
     NotImplemented
 
+def actorid() -> str:
+    NotImplemented
+
 actor StringDecoder(cb_out: action(str) -> None, encoding: ?str="utf-8", on_error: ?action(str, bytes) -> None):
     """Bytes to string decoder
 

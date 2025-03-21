@@ -76,3 +76,8 @@ $R B_EnvD_unsetenvbG_local (B_Env self, $Cont C_cont, B_bytes name) {
 $R B_EnvD_is_ttyG_local (B_Env self, $Cont C_cont) {
     return $R_CONT(C_cont, toB_bool(isatty(1)));
 }
+
+B_str B_actorid() {
+    $Actor a = GET_SELF();
+    return $FORMAT("%ld", a->$globkey);
+}
