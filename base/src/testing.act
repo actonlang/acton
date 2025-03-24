@@ -271,6 +271,19 @@ def eq_opt[T(Eq)](a: ?T, b: ?T) -> bool:
 class TestLogger(logging.Logger):
     pass
 
+class AsyncT(value):
+    def __init__(self, report_result: action(?bool, ?Exception, ?str) -> None):
+        self.report_result = report_result
+
+    def success(self, output: ?str=None):
+        self.report_result(True, None, output)
+
+    def failure(self, exception: Exception):
+        self.report_result(False, exception, None)
+
+    def error(self, exception: Exception):
+        self.report_result(None, exception, None)
+
 class Test(object):
     module: str
     name: str
@@ -287,6 +300,8 @@ class Test(object):
         elif isinstance(self, SyncActorTest):
             self.run_test(report_result, env, log_handler)
         elif isinstance(self, AsyncActorTest):
+            self.run_test(report_result, env, log_handler)
+        elif isinstance(self, AsyncTest):
             self.run_test(report_result, env, log_handler)
         elif isinstance(self, EnvTest):
             self.run_test(report_result, env, log_handler)
@@ -389,6 +404,16 @@ class AsyncActorTest(Test):
         def repres(success: ?bool, exception: ?Exception):
             report_result(success, exception, None)
         self.fn(repres, log_handler)
+
+class AsyncTest(Test):
+    def __init__(self, fn: proc(AsyncT) -> None, name: str, desc: str, module: str):
+        self.fn = fn
+        self.name = name
+        self.desc = desc
+        self.module = module
+
+    def run_test(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler):
+        self.fn(AsyncT(report_result))
 
 class EnvTest(Test):
     def __init__(self, fn: proc(action(?bool, ?Exception) -> None, Env, logging.Handler) -> None, name: str, desc: str, module: str):
@@ -1144,6 +1169,7 @@ actor test_runner(env: Env,
                   unit_tests: dict[str, UnitTest],
                   sync_actor_tests: dict[str, SyncActorTest],
                   async_actor_tests: dict[str, AsyncActorTest],
+                  async_tests: dict[str, AsyncTest],
                   env_tests: dict[str, EnvTest]):
     sw = time.Stopwatch()
     var all_tests = {}
@@ -1153,6 +1179,8 @@ actor test_runner(env: Env,
     for name, t in sync_actor_tests.items():
         all_tests[name] = t
     for name, t in async_actor_tests.items():
+        all_tests[name] = t
+    for name, t in async_tests.items():
         all_tests[name] = t
     for name, t in env_tests.items():
         all_tests[name] = t
