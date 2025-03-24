@@ -1070,7 +1070,9 @@ class ProjectTestResults(object):
                                 # Extract iteration number and content
                                 lines = iteration.split('\n', 1)
                                 iteration_num = int(lines[0])
-                                content = lines[1].strip()
+                                content = ""
+                                if len(lines) > 1: # might not be any real test output yet!?
+                                    content = lines[1].strip()
 
                                 # Add to result dictionary
                                 if content not in result:
