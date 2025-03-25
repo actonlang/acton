@@ -6,40 +6,79 @@ actor MathTester():
         return a + b
 
 
-actor SyncTester(log_handler):
+actor SyncActTester(log_handler):
     log = logging.Logger(log_handler)
     def test():
         m = MathTester()
-        log.info("SyncTester.test()", None)
+        log.info("SyncActTester.test()")
         testing.assertEqual(m.add(1, 2), 3, "1 + 2 = 3")
 
-actor AsyncTester(report_result, log_handler):
-    log = logging.Logger(log_handler)
+actor SimpleSyncTester():
     def test():
-        log.info("AsyncTester.test()", None)
-        report_result(True, None)
+        m = MathTester()
+        print("SimpleSyncTester.test()")
+        testing.assertEqual(m.add(1, 2), 3, "1 + 2 = 3")
 
-actor EnvTester(report_result, env, log_handler):
+actor SyncTester(t):
+    log = logging.Logger(t.log_handler)
+    def test():
+        m = MathTester()
+        log.info("SyncTester.test()")
+        print("SyncTester.test()")
+        testing.assertEqual(m.add(1, 2), 3, "1 + 2 = 3")
+
+actor AsyncActTester(report_result, log_handler):
     log = logging.Logger(log_handler)
     def test():
-        log.info("EnvTester.test()", None)
+        log.info("AsyncTester.test()")
         report_result(True, None)
+    after 0: test()
+
+actor AsyncTester(t):
+    log = logging.Logger(t.log_handler)
+    def test():
+        log.info("AsyncTester.test()", {"data": "test"})
+        t.success()
+    after 0: test()
+
+actor OldEnvTester(report_result, env, log_handler):
+    log = logging.Logger(log_handler)
+    def test():
+        log.info("EnvTester.test()")
+        report_result(True, None)
+    after 0: test()
+
+actor EnvTester(t):
+    log = logging.Logger(t.log_handler)
+    def test():
+        log.info("EnvTester.test() wthreads:", {"nr_wthreads": t.env.nr_wthreads})
+        print("EnvTester.test() wthreads:", t.env.nr_wthreads)
+        t.success()
+    after 0: test()
 
 def _test_foo() -> None:
     pass
 
 def _test_syncact(log_handler: logging.Handler) -> None:
-    s = SyncTester(log_handler)
+    s = SyncActTester(log_handler)
+    return s.test()
+
+def _test_simple_sync() -> None:
+    s = SimpleSyncTester()
+    return s.test()
+
+def _test_sync(t: testing.SyncT) -> None:
+    s = SyncTester(t)
     return s.test()
 
 def _test_asyncact(report_result, log_handler: logging.Handler) -> None:
-    s = AsyncTester(report_result, log_handler)
-    s.test()
+    s = AsyncActTester(report_result, log_handler)
 
 def _test_async(t: testing.AsyncT) -> None:
-    t.success()
+    s = AsyncTester(t)
 
-# this doesn't work because actonc doesn't infer the right type signature
-def _test_envtest(report_result, env, log_handler: logging.Handler) -> None:
-    s = EnvTester(report_result, env, log_handler)
-    s.test()
+def _test_oldenvtest(report_result, env: Env, log_handler: logging.Handler) -> None:
+    s = OldEnvTester(report_result, env, log_handler)
+
+def _test_envtest(t: testing.EnvT) -> None:
+    s = EnvTester(t)
