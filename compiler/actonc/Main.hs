@@ -229,7 +229,11 @@ createProject name = do
     iff (projDirExists) $
         printErrorAndExit ("Unable to create project " ++ name ++ ", directory already exists.")
     createDirectoryIfMissing True name
+    
+    -- Create both Acton.toml (for backward compatibility) and build.act.json (the new format)
     writeFile (joinPath [ curDir, name, "Acton.toml" ]) ""
+    writeFile (joinPath [ curDir, name, "build.act.json" ]) "{}"
+    
     paths <- findPaths (joinPath [ curDir, name, "Acton.toml" ]) defaultOpts
     writeFile (joinPath [ curDir, name, ".gitignore" ]) (
       ".actonc.lock\n" ++
@@ -266,18 +270,36 @@ buildProject opts = do
                 -- find all .act files in src/ directory, parse into tasks and
                 -- submit for compilation
                 curDir <- getCurrentDirectory
-                paths <- findPaths (joinPath [ curDir, "Acton.toml" ]) opts
-                srcDirExists <- doesDirectoryExist (srcDir paths)
-                if not srcDirExists
-                  then printErrorAndExit "Missing src/ directory"
-                  else do
-                    iff (not(quiet opts)) $ do
-                      putStrLn("Building project in " ++ projPath paths)
-                    -- grab project lock
-                    withFileLock (joinPath [projPath paths, ".actonc.lock"]) Exclusive $ \_ -> do
-                      allFiles <- getFilesRecursive (srcDir paths)
-                      let srcFiles = catMaybes $ map filterActFile allFiles
-                      compileFiles opts srcFiles
+                
+                -- Try to find a project file (Acton.toml, build.act, or build.act.json)
+                projectFile <- findProjectFile curDir
+                case projectFile of
+                  Nothing -> printErrorAndExit "No project file (Acton.toml, build.act, or build.act.json) found in current directory"
+                  Just pf -> do
+                    paths <- findPaths pf opts
+                    srcDirExists <- doesDirectoryExist (srcDir paths)
+                    if not srcDirExists
+                      then printErrorAndExit "Missing src/ directory"
+                      else do
+                        iff (not(quiet opts)) $ do
+                          putStrLn("Building project in " ++ projPath paths)
+                        -- grab project lock
+                        withFileLock (joinPath [projPath paths, ".actonc.lock"]) Exclusive $ \_ -> do
+                          allFiles <- getFilesRecursive (srcDir paths)
+                          let srcFiles = catMaybes $ map filterActFile allFiles
+                          compileFiles opts srcFiles
+                          
+-- Find a project file (Acton.toml, build.act, or build.act.json) in the given directory
+findProjectFile :: FilePath -> IO (Maybe FilePath)
+findProjectFile dir = do
+    let projectFiles = [joinPath [dir, "Acton.toml"],
+                        joinPath [dir, "build.act"],
+                        joinPath [dir, "build.act.json"]]
+    
+    -- Check each file and return the first one that exists
+    existsResults <- mapM doesFileExist projectFiles
+    let results = zip projectFiles existsResults
+    return $ listToMaybe [file | (file, True) <- results]
 
 buildFile :: C.CompileOptions -> FilePath -> IO ()
 buildFile opts file = do
@@ -496,9 +518,10 @@ searchPaths opts deps = do
 
 findProjectDir :: FilePath -> IO (Maybe FilePath)
 findProjectDir path = do
-    let configFile = path </> "Acton.toml"
-    exists <- doesFileExist configFile
-    if exists
+    -- Check for any project file: Acton.toml, build.act, or build.act.json
+    let projectFiles = [path </> "Acton.toml", path </> "build.act", path </> "build.act.json"]
+    existsResults <- mapM doesFileExist projectFiles
+    if or existsResults
         then return (Just path)
         else if path == takeDirectory path  -- Check if we're at root
             then return Nothing
@@ -531,7 +554,13 @@ findPaths actFile opts  = do execDir <- takeDirectory <$> System.Environment.get
 
         analyze "/" ds  = do tmp <- canonicalizePath (C.tempdir opts)
                              return (True, tmp, [])
-        analyze pre ds  = do exists <- doesFileExist (joinPath [pre, "Acton.toml"])
+        analyze pre ds  = do
+                             -- Check for any project file (Acton.toml, build.act, build.act.json)
+                             let projectFiles = [joinPath [pre, "Acton.toml"], 
+                                               joinPath [pre, "build.act"], 
+                                               joinPath [pre, "build.act.json"]]
+                             existsResults <- mapM doesFileExist projectFiles
+                             let exists = or existsResults
                              if not exists 
                                 then analyze (takeDirectory pre) (takeFileName pre : ds)
                                 else case ds of

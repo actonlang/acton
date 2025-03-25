@@ -1321,13 +1321,17 @@ actor main(env):
 
     def in_project(filename: str):
         """Are we in a project?
+        
+        Detect by presence of Acton.toml, build.act, or build.act.json
         """
         fs = file.FS(file_cap)
-        try:
-            s = fs.stat("Acton.toml")
-        except:
-            return False
-        return True
+        for project_file in ["Acton.toml", "build.act", "build.act.json"]:
+            try:
+                s = fs.stat(project_file)
+                return True
+            except:
+                pass
+        return False
 
     def _compilefile(_file, args):
         if in_project(_file):
