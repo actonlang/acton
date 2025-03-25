@@ -318,17 +318,11 @@ class Test(object):
     def run(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler):
         if isinstance(self, UnitTest):
             self.run_test(report_result, env, log_handler)
-        elif isinstance(self, SyncActorTest):
-            self.run_test(report_result, env, log_handler)
         elif isinstance(self, SimpleSyncTest):
             self.run_test(report_result, env, log_handler)
         elif isinstance(self, SyncTest):
             self.run_test(report_result, env, log_handler)
-        elif isinstance(self, AsyncActorTest):
-            self.run_test(report_result, env, log_handler)
         elif isinstance(self, AsyncTest):
-            self.run_test(report_result, env, log_handler)
-        elif isinstance(self, OldEnvTest):
             self.run_test(report_result, env, log_handler)
         elif isinstance(self, EnvTest):
             self.run_test(report_result, env, log_handler)
@@ -397,29 +391,6 @@ class UnitTest(Test):
             exception = e
         report_result(success, exception, output)
 
-class SyncActorTest(Test):
-    def __init__(self, fn: proc(logging.Handler) -> None, name: str, desc: str, module: str):
-        self.fn = fn
-        self.name = name
-        self.desc = desc
-        self.module = module
-
-    def run_test(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler):
-        output = None
-        success = None
-        exception = None
-        try:
-            output = self.fn(log_handler)
-            success = True
-            exception = None
-        except AssertionError as e:
-            success = False
-            exception = e
-        except Exception as e:
-            success = None
-            exception = e
-        report_result(success, exception, output)
-
 class SimpleSyncTest(Test):
     def __init__(self, fn: proc() -> None, name: str, desc: str, module: str):
         self.fn = fn
@@ -466,18 +437,6 @@ class SyncTest(Test):
             exception = e
         report_result(success, exception, output)
 
-class AsyncActorTest(Test):
-    def __init__(self, fn: proc(action(?bool, ?Exception) -> None, logging.Handler) -> None, name: str, desc: str, module: str):
-        self.fn = fn
-        self.name = name
-        self.desc = desc
-        self.module = module
-
-    def run_test(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler):
-        def repres(success: ?bool, exception: ?Exception):
-            report_result(success, exception, None)
-        self.fn(repres, log_handler)
-
 class AsyncTest(Test):
     def __init__(self, fn: proc(AsyncT) -> None, name: str, desc: str, module: str):
         self.fn = fn
@@ -487,18 +446,6 @@ class AsyncTest(Test):
 
     def run_test(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler):
         self.fn(AsyncT(report_result, log_handler))
-
-class OldEnvTest(Test):
-    def __init__(self, fn: proc(action(?bool, ?Exception) -> None, Env, logging.Handler) -> None, name: str, desc: str, module: str):
-        self.fn = fn
-        self.name = name
-        self.desc = desc
-        self.module = module
-
-    def run_test(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler):
-        def repres(success: ?bool, exception: ?Exception):
-            report_result(success, exception, None)
-        self.fn(repres, env, log_handler)
 
 class EnvTest(Test):
     def __init__(self, fn: proc(EnvT) -> None, name: str, desc: str, module: str):
@@ -1252,29 +1199,20 @@ class ProjectTestResults(object):
 
 actor test_runner(env: Env,
                   unit_tests: dict[str, UnitTest],
-                  sync_actor_tests: dict[str, SyncActorTest],
                   simple_sync_tests: dict[str, SimpleSyncTest],
                   sync_tests: dict[str, SyncTest],
-                  async_actor_tests: dict[str, AsyncActorTest],
                   async_tests: dict[str, AsyncTest],
-                  old_env_tests: dict[str, OldEnvTest],
                   env_tests: dict[str, EnvTest]):
     sw = time.Stopwatch()
     var all_tests = {}
 
     for name, t in unit_tests.items():
         all_tests[name] = t
-    for name, t in sync_actor_tests.items():
-        all_tests[name] = t
     for name, t in simple_sync_tests.items():
         all_tests[name] = t
     for name, t in sync_tests.items():
         all_tests[name] = t
-    for name, t in async_actor_tests.items():
-        all_tests[name] = t
     for name, t in async_tests.items():
-        all_tests[name] = t
-    for name, t in old_env_tests.items():
         all_tests[name] = t
     for name, t in env_tests.items():
         all_tests[name] = t
