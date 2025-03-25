@@ -9,18 +9,25 @@ actor MathTester():
     def add(a, b):
         return a + b
 
-actor SyncTester(log_handler):
+actor SyncTester(t):
+    log = logging.Logger(t.log_handler)
     def test():
         m = MathTester()
-        testing.assertEqual(m.add(1, 2), 3, "1 + 2 = 3")
+        log.info("Calculating numbers..")
+        testing.assertEqual(m.add(1, 2), 3)
+    after 0: test()
 
-def _test_syncact(log_handler: logging.Handler) -> None:
+def _test_syncact(t: testing.SyncT) -> None:
     """A test using actors and synchronous control flow"""
     # We make use of an actor as the central point for running our test logic.
     # This _test_syncact function is just a wrapper picked up by the acton
     # test framework runner
-    s = SyncTester(log_handler)
-    return s.test()
+    s = SyncTester(t)
+
+def _test_syncact_simple() -> None:
+    # The simplest sync test style, without the SyncT argument
+    m = MathTester()
+    testing.assertEqual(m.add(1, 2), 3)
 ```
 
 Run:
@@ -38,8 +45,9 @@ Building project in /home/user/foo
 
 Tests - module example:
   syncact:               OK: 1175 runs in 50.005ms
+  syncact_simple:        OK: 1231 runs in 50.014ms
 
-All 1 tests passed (0.655s)
+All 2 tests passed (0.655s)
 
 ```
 
@@ -47,4 +55,6 @@ Since the Acton RTS is multi-threaded and actors are scheduled concurrently on w
 
 For example, actor A might be scheduled before or after actor B so if the test relies on ordering of the output, it could fail or succeed intermittently. Interacting with the surrounding environment by reading files or communicating over the network introduces even more sources of non-determinism. Avoid it if you can. 
 
-The test discovery finds synchronous actor tests based on the name starting with `_test_` and has a function signature of `mut(logging.Handler) -> None` or `pure(logging.Handler) -> None`.
+The test discovery finds synchronous actor tests based on the name starting with `_test_` and has a function signature of `proc() -> None` or `proc(testing.SyncT) -> None`.
+
+*Golden testing* can be enabled by returning a *str*. The Acton test framework will take care about recognizing the test as a golden test and comparing its output to the expected *golden value*.

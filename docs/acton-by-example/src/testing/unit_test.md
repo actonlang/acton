@@ -36,3 +36,5 @@ The test discovery finds unit tests based on the name starting with `_test_` and
 ```admonish
 Once effect analysis has been improved in the compiler to contain scope local effects, the test discovery will only consider `pure` functions to be unit tests. See https://github.com/actonlang/acton/issues/1632
 ```
+
+*Golden testing* can be enabled by returning a *str*. The Acton test framework will take care about recognizing the test as a golden test and comparing its output to the expected *golden value*.
