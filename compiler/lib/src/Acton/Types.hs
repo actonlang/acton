@@ -41,7 +41,7 @@ reconstruct fname env0 (Module m i ss)  = do --traceM ("#################### ori
                                              --traceM (render (pretty env0'))
                                              return (iface, Module m i ss1T, env0')
                                              
-  where ssT                             = if hasTesting i then ss ++ testStmts (emptyDict,emptyDict,emptyDict,emptyDict,emptyDict) else ss
+  where ssT                             = if hasTesting i then ss ++ testStmts (emptyDict,emptyDict,emptyDict,emptyDict,emptyDict,emptyDict,emptyDict,emptyDict) else ss
         ss1T                            = if hasTesting i then rmTests ss1 ++ finalStmts env2 (modNameStr m) ss1 else ss1
         env1                            = reserve (assigned ssT) (typeX env0)
         (te,ss1)                        = runTypeM $ infTop env1 ssT
@@ -51,7 +51,7 @@ reconstruct fname env0 (Module m i ss)  = do --traceM ("#################### ori
         env0'                           = convEnvProtos env0
         hasTesting i                    = Import NoLoc [ModuleItem (ModName [name "testing"]) Nothing] `elem` i
         rmTests (Assign _ [PVar _ n _] _ : ss)
-          | nstr n `elem` ["__unit_tests","__sync_actor_tests","__async_actor_tests","__async_tests", "__env_tests"]
+          | nstr n `elem` ["__unit_tests","__sync_actor_tests","__simple_sync_tests","__sync_tests","__async_actor_tests","__async_tests", "__old_env_tests", "__env_tests"]
                                         = rmTests ss
         rmTests (Decl _ [Actor _ n _ _ _ _] : ss)
           | nstr n == "__test_main"     = rmTests ss
@@ -1693,16 +1693,19 @@ instance InfEnvT [Pattern] where
 tEnv                                    = tCon (TC (gname [name "__builtin__"] (name "Env")) []) 
 emptyDict                               = Dict NoLoc []
 
-testStmts (uts, sats, aats, ats, ets) = [dictAssign "__unit_tests" "UnitTest" uts,
+testStmts (uts, sats, ssts, sts, aats, ats, oets, ets) = [dictAssign "__unit_tests" "UnitTest" uts,
                                            dictAssign "__sync_actor_tests" "SyncActorTest" sats,
+                                           dictAssign "__simple_sync_tests" "SimpleSyncTest" ssts,
+                                           dictAssign "__sync_tests" "SyncTest" sts,
                                            dictAssign "__async_actor_tests" "AsyncActorTest" aats,
                                            dictAssign "__async_tests" "AsyncTest" ats,
+                                           dictAssign "__old_env_tests" "OldEnvTest" oets,
                                            dictAssign "__env_tests" "EnvTest" ets,
                                            testActor]
 
 finalStmts env m ss =
-    let (uts, sats, aats, ats, ets) = testFuns env m ss
-    in testStmts (mkDict "UnitTest" uts, mkDict "SyncActorTest" sats, mkDict "AsyncActorTest" aats, mkDict "AsyncTest" ats, mkDict "EnvTest" ets)
+    let (uts, sats, ssts, sts, aats, ats, oets, ets) = testFuns env m ss
+    in testStmts (mkDict "UnitTest" uts, mkDict "SyncActorTest" sats, mkDict "SimpleSyncTest" ssts, mkDict "SyncTest" sts, mkDict "AsyncActorTest" aats, mkDict "AsyncTest" ats, mkDict "OldEnvTest" oets, mkDict "EnvTest" ets)
 
 gname ns n                              = GName (ModName ns) n
 dername a b                             = Derived (name a) (name b)
@@ -1717,7 +1720,7 @@ mkDict cl as                            = eCall (tApp (eQVar primMkDict) [tStr, 
 testActor                               = sDecl [Actor NoLoc (name "__test_main") []
                                                  PosNIL (KwdPar (name "env")  (Just tEnv) Nothing KwdNIL)
                                              [sExpr (eCall (eQVar (gname [name "testing"] (name "test_runner")))
-                                                           (map (eVar . name) ["env","__unit_tests","__sync_actor_tests","__async_actor_tests","__async_tests","__env_tests"]))]]
+                                                           (map (eVar . name) ["env","__unit_tests","__sync_actor_tests","__simple_sync_tests","__sync_tests","__async_actor_tests","__async_tests","__old_env_tests","__env_tests"]))]]
 
 row2list (TRow _ _ _ t r)               = t : row2list r
 row2list (TNil _ _)                     = []
@@ -1733,44 +1736,52 @@ mkAssoc d testType modName =
   where comment (Expr _ s@(Strings _ ss) : _) = s
         comment _ = Strings NoLoc [""]
 
-testFuns :: Env0 -> String -> Suite -> ([Assoc],[Assoc],[Assoc],[Assoc],[Assoc])
-testFuns env modName ss = tF ss [] [] [] [] []
+testFuns :: Env0 -> String -> Suite -> ([Assoc],[Assoc],[Assoc],[Assoc],[Assoc],[Assoc],[Assoc],[Assoc])
+testFuns env modName ss = tF ss [] [] [] [] [] [] [] []
   where
-    tF (With _ _ ss' : ss) uts sats aats ats ets = tF (ss' ++ ss) uts sats aats ats ets
-    tF (Decl l (d@Def{}:ds) : ss) uts sats aats ats ets
+    tF (With _ _ ss' : ss) uts sats ssts sts aats ats oets ets = tF (ss' ++ ss) uts sats ssts sts aats ats oets ets
+    tF (Decl l (d@Def{}:ds) : ss) uts sats ssts sts aats ats oets ets
       | isTestName (dname d) =
           case testType (findQName (NoQ (dname d)) env) of
             Just UnitType ->
-              tF (Decl l ds : ss) (mkAssoc d (name "UnitTest") modName : uts) sats aats ats ets
+              tF (Decl l ds : ss) (mkAssoc d (name "UnitTest") modName : uts) sats ssts sts aats ats oets ets
             Just SyncType ->
-              tF (Decl l ds : ss) uts (mkAssoc d (name "SyncActorTest") modName : sats) aats ats ets
+              tF (Decl l ds : ss) uts (mkAssoc d (name "SyncActorTest") modName : sats) ssts sts aats ats oets ets
+            Just SimpleSyncTest ->
+              tF (Decl l ds : ss) uts sats (mkAssoc d (name "SimpleSyncTest") modName : ssts) sts aats ats oets ets
+            Just SyncTest ->
+              tF (Decl l ds : ss) uts sats ssts (mkAssoc d (name "SyncTest") modName : sts) aats ats oets ets
             Just AsyncType ->
-              tF (Decl l ds : ss) uts sats (mkAssoc d (name "AsyncActorTest") modName : aats) ats ets
+              tF (Decl l ds : ss) uts sats ssts sts (mkAssoc d (name "AsyncActorTest") modName : aats) ats oets ets
             Just AsyncTest ->
-              tF (Decl l ds : ss) uts sats aats (mkAssoc d (name "AsyncTest") modName : ats) ets
-            Just EnvType ->
-              tF (Decl l ds : ss) uts sats aats ats (mkAssoc d (name "EnvTest") modName : ets)
-            Nothing -> tF (Decl l ds : ss) uts sats aats ats ets
-    tF (Decl l (_:ds) : ss) uts sats aats ats ets = tF (Decl l ds : ss) uts sats aats ats ets
-    tF (Decl _ [] : ss) uts sats aats ats ets = tF ss uts sats aats ats ets
-    tF (_ : ss) uts sats aats ats ets = tF ss uts sats aats ats ets
-    tF [] uts sats aats ats ets = (reverse uts, reverse sats, reverse aats, reverse ats, reverse ets)
+              tF (Decl l ds : ss) uts sats ssts sts aats (mkAssoc d (name "AsyncTest") modName : ats) oets ets
+            Just OldEnvType ->
+              tF (Decl l ds : ss) uts sats ssts sts aats ats (mkAssoc d (name "OldEnvTest") modName : oets) ets
+            Just EnvTest ->
+              tF (Decl l ds : ss) uts sats ssts sts aats ats oets (mkAssoc d (name "EnvTest") modName : ets)
+            Nothing -> tF (Decl l ds : ss) uts sats ssts sts aats ats oets ets
+    tF (Decl l (_:ds) : ss) uts sats ssts sts aats ats oets ets = tF (Decl l ds : ss) uts sats ssts sts aats ats oets ets
+    tF (Decl _ [] : ss) uts sats ssts sts aats ats oets ets = tF ss uts sats ssts sts aats ats oets ets
+    tF (_ : ss) uts sats ssts sts aats ats oets ets = tF ss uts sats ssts sts aats ats oets ets
+    tF [] uts sats ssts sts aats ats oets ets = (reverse uts, reverse sats, reverse aats, reverse ssts, reverse sts, reverse ats, reverse oets, reverse ets)
 
 isTestName n                             = take 6 (nstr n) == "_test_"
 
-data TestType = UnitType | SyncType | AsyncType | AsyncTest | EnvType
+data TestType = UnitType | SyncType | SimpleSyncTest | SyncTest | AsyncType | AsyncTest | OldEnvType | EnvTest
                 deriving (Eq,Show,Read)
 
 testType (NDef (TSchema _ []  (TFun _ fx (TNil _ PRow) k res)) _)
               | res /= tNone && res /= tStr = Nothing
               | otherwise    = case row2list k of
-                                []         -> if fx == fxPure || fx == fxMut then Just UnitType else Nothing
-                                [t]        -> if t == logging_handler then Just SyncType else if t == asyncT then Just AsyncTest else Nothing
+                                []         -> if fx == fxPure || fx == fxMut then Just UnitType else if fx == fxProc then Just SimpleSyncTest else Nothing
+                                [t]        -> if t == logging_handler then Just SyncType else if t == syncT then Just SyncTest else if t == asyncT then Just AsyncTest else if t == envT then Just EnvTest else Nothing
                                 [t1,t2]    -> if t2 == logging_handler && isGoodAction t1 then Just AsyncType else Nothing
-                                [t1,t2,t3] -> if t3 == logging_handler && isGoodAction t1 && t2 == tEnv then Just EnvType else Nothing
+                                [t1,t2,t3] -> if t3 == logging_handler && isGoodAction t1 && t2 == tEnv then Just OldEnvType else Nothing
                                 _          -> Nothing
     where logging_handler      =  tCon (TC (gname [name "logging"] (name "Handler")) [])
+          syncT                =  tCon (TC (gname [name "testing"] (name "SyncT")) [])
           asyncT               =  tCon (TC (gname [name "testing"] (name "AsyncT")) [])
+          envT                 =  tCon (TC (gname [name "testing"] (name "EnvT")) [])
           isGoodAction t@(TFun _ fx p (TNil _ KRow) res)
              | fx == fxAction
                && res == tNone  = case row2list p of
