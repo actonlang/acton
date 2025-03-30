@@ -301,6 +301,7 @@ test-builtins:
 	cd compiler && stack test actonc --ta '-p "Builtins"'
 
 test-compiler:
+	cd compiler && stack test acton
 	cd compiler && stack test actonc --ta '-p "compiler"'
 
 test-cross-compile:
@@ -337,7 +338,7 @@ test-rts-db:
 	$(MAKE) -C test
 
 test-stdlib: dist/bin/acton
-	cd compiler && stack test --ta '-p "stdlib"'
+	cd compiler && stack test actonc --ta '-p "stdlib"'
 	cd test/stdlib_tests && $(ACTON) test
 
 
