@@ -55,8 +55,12 @@ instance ShowErrorComponent [Char] where
 --- Main parsing and error message functions ------------------------------------------------------
 
 parseModule :: S.ModName -> String -> String -> IO S.Module
-parseModule qn fileName fileContent = 
-    case runParser (St.evalStateT file_input initState) fileName (fileContent) of
+parseModule qn fileName fileContent =
+    -- Add a newline at the end if there isn't one already to allow files ending without newline
+    let contentWithNewline = if null fileContent || last fileContent == '\n' 
+                             then fileContent 
+                             else fileContent ++ "\n"
+    in case runParser (St.evalStateT file_input initState) fileName contentWithNewline of
         Left err -> Control.Exception.throw err
         Right (i,s) -> return $ S.Module qn i s
 
@@ -73,7 +77,7 @@ parserError err = [(NoLoc,errorBundlePretty err)]
 extractSrcSpan :: SrcLoc -> String -> SrcSpan
 extractSrcSpan NoLoc src = SpanEmpty
 extractSrcSpan (Loc l r) src = sp
-  where Right sp = runParser (St.evalStateT (extractP l r) initState) "" (src ++ "\n")
+  where Right sp = runParser (St.evalStateT (extractP l r) initState) "" src
         extractP :: Int -> Int -> Parser SrcSpan
         extractP l r = do
             setOffset l
