@@ -115,7 +115,7 @@ protocol Iterable[A]:
     __iter__     : () -> Iterator[A]
 
 class str (atom):
-    def __init__     (self, val: value) -> None:
+    def __init__     (self, val: ?value) -> None:
         NotImplemented
     def capitalize   (self) -> str:
         NotImplemented

@@ -457,6 +457,13 @@ B_str B_strG_new(B_value s) {
 }
 
 B_NoneType B_strD___init__(B_str self, B_value s) {
+    // If s is None (C NULL) we use the "None" string.
+    if (s == NULL) {
+        self->nchars = 4;
+        self->nbytes = 4;
+        self->str = (unsigned char *)"None";
+        return B_None;
+    }
     B_str res = s->$class->__str__(s);
     self->nchars = res->nchars;
     self->nbytes = res->nbytes;
