@@ -202,7 +202,8 @@ jobs:
         run: |
           export DEBIAN_FRONTEND=noninteractive
           apt-get update
-          apt-get install -qy bzip2 curl g++ gdb haskell-stack make procps zlib1g-dev
+          apt-get install -qy bzip2 curl g++ haskell-stack libtinfo-dev make procps zlib1g-dev
+          apt-get install -qy gdb
       - name: "locale en_US.UTF-8"
         run: |
           apt-get install -qy locales
@@ -264,7 +265,7 @@ jobs:
       - name: "Install build prerequisites"
         run: |
           apt-get update
-          apt-get install -qy bzip2 curl g++ haskell-stack make procps zlib1g-dev
+          apt-get install -qy bzip2 curl g++ haskell-stack libtinfo-dev make procps zlib1g-dev
           apt-get install -qy bash-completion build-essential debhelper devscripts
       - name: "Check out repository code"
         uses: actions/checkout@v4
