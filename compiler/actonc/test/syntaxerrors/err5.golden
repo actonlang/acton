@@ -2,10 +2,10 @@ Building file test/syntaxerrors/err5.act using temporary scratch directory
 
 ERROR: Error when compiling err5 module: Syntax error
 
-test/syntaxerrors/err5.act:16:4:
-   |
-16 |    return x + y
-   |    ^
+test/syntaxerrors/err5.act:3:5:
+  |
+3 |     return x + y
+  |     ^
 unexpected 'r'
 expecting a closing parenthesis, call arguments, slice/index expression, comma, if clause, or operator
 

@@ -1,9 +1,9 @@
 Building file test/syntaxerrors/err8.act using temporary scratch directory
 
 ERROR: Error when compiling err8 module: Indentation error
-   |
-16 |     z = x+y
-   |     ^
+  |
+3 |     z = x+y
+  |     ^
 Too much indentation
 
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
