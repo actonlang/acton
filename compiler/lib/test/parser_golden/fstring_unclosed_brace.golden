@@ -1,0 +1,6 @@
+ERROR: 1:2:
+  |
+1 | f"Unclosed brace: {name
+  |  ^^^
+unexpected ""Un"
+expecting "%=", "&=", "**=", "*=", "+=", "-=", "//=", "/=", "<<=", ">>=", "@=", "^=", "|=", ':', '=', call arguments, slice/index expression, or comma

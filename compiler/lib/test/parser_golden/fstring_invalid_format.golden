@@ -1,0 +1,6 @@
+ERROR: 1:2:
+  |
+1 | f"Invalid format specifier {name:@Z}"
+  |  ^^^
+unexpected ""In"
+expecting "%=", "&=", "**=", "*=", "+=", "-=", "//=", "/=", "<<=", ">>=", "@=", "^=", "|=", ':', '=', call arguments, slice/index expression, or comma

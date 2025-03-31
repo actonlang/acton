@@ -1,0 +1,6 @@
+ERROR: 1:2:
+  |
+1 | f"Unbalanced format {name:}:10}"
+  |  ^^^
+unexpected ""Un"
+expecting "%=", "&=", "**=", "*=", "+=", "-=", "//=", "/=", "<<=", ">>=", "@=", "^=", "|=", ':', '=', call arguments, slice/index expression, or comma
