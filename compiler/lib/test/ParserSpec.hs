@@ -7,10 +7,12 @@ import qualified Acton.Syntax as S
 import qualified Acton.Printer as AP
 import Pretty (print)
 import Test.Syd
+import Test.Syd.Def.Golden (goldenTextFile)
 import qualified Control.Monad.Trans.State.Strict as St
 import Text.Megaparsec (runParser, errorBundlePretty)
 import qualified Data.Text as T
 import Data.List (isInfixOf, isPrefixOf)
+import System.FilePath ((</>))
 
 -- Generic parser runner for Acton source code
 parseActon :: String -> Either String String
@@ -98,3 +100,34 @@ main = sydTest $ do
         testParseOutput "f\"Message: {greeting}!\"" "\"Message: %s!\" % str(greeting)"       -- Simple variable
         testParseOutput "f\"{name:@10}\"" "\"%s\" % str(name)"                -- Invalid format accepted
         testParseOutput "f\"He said \"hello\" to me\"" "\"He said \" % ()"    -- Unescaped quotes
+
+      describe "F-String Error Handling Golden Tests" $ do
+        it "Unclosed brace in f-string" $ do
+          let input = "f\"Unclosed brace: {name"
+          case parseActon input of
+            Left err -> goldenTextFile "test/parser_golden/fstring_unclosed_brace.golden" $ return $ T.pack $ "ERROR: " ++ err
+            Right result -> goldenTextFile "test/parser_golden/fstring_unclosed_brace.golden" $ return $ T.pack $ "PARSED: " ++ result
+
+        it "Empty expression in f-string" $ do
+          let input = "f\"Empty expression {}\""
+          case parseActon input of
+            Left err -> goldenTextFile "test/parser_golden/fstring_empty_expression.golden" $ return $ T.pack $ "ERROR: " ++ err
+            Right result -> goldenTextFile "test/parser_golden/fstring_empty_expression.golden" $ return $ T.pack $ "PARSED: " ++ result
+
+        it "Missing expression with format specifier" $ do
+          let input = "f\"Missing expression {:10}\""
+          case parseActon input of
+            Left err -> goldenTextFile "test/parser_golden/fstring_missing_expression.golden" $ return $ T.pack $ "ERROR: " ++ err
+            Right result -> goldenTextFile "test/parser_golden/fstring_missing_expression.golden" $ return $ T.pack $ "PARSED: " ++ result
+
+        it "Unbalanced format specifier" $ do
+          let input = "f\"Unbalanced format {name:}:10}\""
+          case parseActon input of
+            Left err -> goldenTextFile "test/parser_golden/fstring_unbalanced_format.golden" $ return $ T.pack $ "ERROR: " ++ err
+            Right result -> goldenTextFile "test/parser_golden/fstring_unbalanced_format.golden" $ return $ T.pack $ "PARSED: " ++ result
+
+        it "Invalid format specifier" $ do
+          let input = "f\"Invalid format specifier {name:@Z}\""
+          case parseActon input of
+            Left err -> goldenTextFile "test/parser_golden/fstring_invalid_format.golden" $ return $ T.pack $ "ERROR: " ++ err
+            Right result -> goldenTextFile "test/parser_golden/fstring_invalid_format.golden" $ return $ T.pack $ "PARSED: " ++ result
