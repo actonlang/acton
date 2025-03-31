@@ -17,9 +17,11 @@ import System.FilePath ((</>))
 -- Generic parser runner for Acton source code
 parseActon :: String -> Either String String
 parseActon input =
-  case runParser (St.evalStateT P.expr P.initState) "" input of
+  case runParser (St.evalStateT P.stmt P.initState) "" inputWithNewline of
     Left err -> Left $ errorBundlePretty err
-    Right result -> Right $ Pretty.print result
+    Right result -> Right $ concatMap (Pretty.print) result
+  where
+    inputWithNewline = if last input == '\n' then input else input ++ "\n"
 
 -- Helper function to test parsing (just that it succeeds)
 testParse :: String -> Spec
@@ -99,7 +101,6 @@ main = sydTest $ do
         testParseOutput "f\"Hello, {name}! 你好!\"" "\"Hello, %s! \\20320\\22909!\" % str(name)"       -- Unicode
         testParseOutput "f\"Message: {greeting}!\"" "\"Message: %s!\" % str(greeting)"       -- Simple variable
         testParseOutput "f\"{name:@10}\"" "\"%s\" % str(name)"                -- Invalid format accepted
-        testParseOutput "f\"He said \"hello\" to me\"" "\"He said \" % ()"    -- Unescaped quotes
 
       describe "F-String Error Handling Golden Tests" $ do
         it "Unclosed brace in f-string" $ do

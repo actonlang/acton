@@ -1,1 +1,6 @@
-PARSED: f
+ERROR: 1:2:
+  |
+1 | f"Missing expression {:10}"
+  |  ^^^
+unexpected ""Mi"
+expecting "%=", "&=", "**=", "*=", "+=", "-=", "//=", "/=", "<<=", ">>=", "@=", "^=", "|=", ':', '=', call arguments, slice/index expression, or comma
