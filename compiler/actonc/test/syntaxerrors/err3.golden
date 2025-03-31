@@ -2,11 +2,11 @@ Building file test/syntaxerrors/err3.act using temporary scratch directory
 
 ERROR: Error when compiling err3 module: Syntax error
 
-test/syntaxerrors/err3.act:15:13:
-   |
-15 |    return 2+
-   |             ^
-unexpected end of input
+test/syntaxerrors/err3.act:2:14:
+  |
+2 |     return 2+
+  |              ^
+unexpected newline
 expecting atomic expression or unary operator
 
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
