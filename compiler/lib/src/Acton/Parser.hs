@@ -474,22 +474,22 @@ fstringLiteral = (try tripleQuotedFstring <|> try tripleSingleQuotedFstring <|> 
                 case next of
                     Nothing -> fail "Unexpected end of input while parsing f-string expression"
                     Just c -> case c of
-                        '{' -> anySingle >> braceCounting (depth + 1) (acc ++ [c])
+                        '{' -> anySingle >> braceCounting (depth + 1) (c:acc)
                         '}' -> if depth == 0
-                                then return acc  -- Found closing brace at top level
-                                else anySingle >> braceCounting (depth - 1) (acc ++ [c])
+                                then return $ reverse acc  -- Found closing brace at top level
+                                else anySingle >> braceCounting (depth - 1) (c:acc)
                         ':' -> if depth == 0
-                                then return acc  -- Found colon at top level
-                                else anySingle >> braceCounting depth (acc ++ [c])
+                                then return $ reverse acc  -- Found colon at top level
+                                else anySingle >> braceCounting depth (c:acc)
                         ' ' -> do
                             -- For spaces, we need to check if they're followed by : or } at depth 0
                             anySingle  -- Consume the space
                             ahead <- lookAhead (optional anySingle)
                             case ahead of
-                                Just ':' | depth == 0 -> return acc  -- Space before colon at top level
-                                Just '}' | depth == 0 -> return acc  -- Space before closing brace at top level
-                                _ -> braceCounting depth (acc ++ [c])
-                        _ -> anySingle >> braceCounting depth (acc ++ [c])
+                                Just ':' | depth == 0 -> return $ reverse acc  -- Space before colon at top level
+                                Just '}' | depth == 0 -> return $ reverse acc  -- Space before closing brace at top level
+                                _ -> braceCounting depth (c:acc)
+                        _ -> anySingle >> braceCounting depth (c:acc)
 
         exprContent <- braceCounting 0 ""
 
