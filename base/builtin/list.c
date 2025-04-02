@@ -345,7 +345,7 @@ B_IteratorD_list B_IteratorD_list$_deserialize(B_IteratorD_list res, $Serial$sta
 }
 
 struct B_IteratorD_listG_class B_IteratorD_listG_methods = {"B_IteratorD_list",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, B_IteratorD_listD_init,
-                                                      B_IteratorD_listD_serialize, B_IteratorD_list$_deserialize,B_IteratorD_listD_bool,B_IteratorD_listD_str,B_IteratorD_listD_str,B_IteratorD_listD_next};
+                                                      B_IteratorD_listD_serialize, B_IteratorD_list$_deserialize,B_IteratorD_listD_next};
 
 // Now, we can define the protocol methods
 

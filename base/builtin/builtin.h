@@ -89,6 +89,7 @@ typedef struct $Catcher *$Catcher;
 #include "complx.h"
 #include "box.h"
 #include "none.h"
+#include "opt.h"
 #include "int.h"
 #include "slice.h"
 #include "float.h"

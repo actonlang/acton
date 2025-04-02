@@ -21,9 +21,6 @@ struct B_IteratorD_listG_class {
   void (*__init__)(B_IteratorD_list, B_list);
   void (*__serialize__)(B_IteratorD_list,$Serial$state);
   B_IteratorD_list (*__deserialize__)(B_IteratorD_list,$Serial$state);
-  B_bool (*__bool__)(B_IteratorD_list);
-  B_str (*__str__)(B_IteratorD_list);
-  B_str (*__repr__)(B_IteratorD_list);
   $WORD(*__next__)(B_IteratorD_list);
 };
 

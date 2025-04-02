@@ -1231,7 +1231,7 @@ classdefGen k pname ctx con = addLoc $ do
 extdef = addLoc $ do
                 (s,l) <- withPos (rwordLoc "extension")
                 assertTop l "extension"
-                (q,c) <- try head1 <|> try head2 <|> head3
+                (q,c) <- try head1 <|> try head2 <|> head3 <|> head4
                 cs <- optbounds
                 S.Extension NoLoc q c cs <$> suite EXT s
   where head1 = do q <- binds
@@ -1243,7 +1243,9 @@ extdef = addLoc $ do
         head3 = do n <- qual_name
                    q <- binds
                    return (q, S.TC n [ S.tVar v | S.Quant v _ <- q ])
-
+        head4 = do q <- (try . parens) (return []) <|> parens (do  b <- qbind; bs <- many (comma *> qbind); return (b:bs))
+                   return (q, S.TC (S.GName (S.ModName [S.name "__builtin__"]) (S.name ("Tup"++show(length q)))) [ S.tVar v | S.Quant v _ <- q ])
+                   
 -- Compound statements -------------------------------------------------------------------------
 
 compound_stmt :: Parser S.Stmt

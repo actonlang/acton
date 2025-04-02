@@ -627,6 +627,7 @@ class set[A(Hashable)] (object):
     def __init__(self, iterable: ?Iterable[A]) -> None:
         NotImplemented
 
+     
 ## Number protocols ################################################################################
 
 #   Plus

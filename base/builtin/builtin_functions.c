@@ -125,8 +125,7 @@ $WORD B_IteratorD_enumerate_next(B_IteratorD_enumerate it) {
 }
 
 struct B_IteratorD_enumerateG_class B_IteratorD_enumerateG_methods = {"B_IteratorD_enumerate",UNASSIGNED,($SuperG_class)&B_IteratorG_methods,B_IteratorD_enumerate_init,
-                                                                B_IteratorD_enumerate_serialize, B_IteratorD_enumerate$_deserialize, 
-                                                                B_IteratorD_enumerate_bool,B_IteratorD_enumerate_str,B_IteratorD_enumerate_str, B_IteratorD_enumerate_next};
+                                                                B_IteratorD_enumerate_serialize, B_IteratorD_enumerate$_deserialize, B_IteratorD_enumerate_next};
 
 
 B_IteratorD_enumerate B_IteratorD_enumerateG_new(B_Iterator it, B_int n) {
@@ -175,8 +174,7 @@ $WORD B_IteratorD_filter_next(B_IteratorD_filter it) {
 }
 
 struct B_IteratorD_filterG_class B_IteratorD_filterG_methods = {"B_IteratorD_filter",UNASSIGNED,($SuperG_class)&B_IteratorG_methods,B_IteratorD_filter_init,
-                                                          B_IteratorD_filter_serialize, B_IteratorD_filter$_deserialize, 
-                                                          B_IteratorD_filter_bool,B_IteratorD_filter_str,B_IteratorD_filter_str, B_IteratorD_filter_next};
+                                                          B_IteratorD_filter_serialize, B_IteratorD_filter$_deserialize, B_IteratorD_filter_next};
 
 B_IteratorD_filter B_IteratorD_filterG_new(B_Iterator it, $pure f) {
     return $NEW(B_IteratorD_filter, it, f);
@@ -219,8 +217,7 @@ $WORD B_IteratorD_map_next(B_IteratorD_map it) {
 }
 
 struct B_IteratorD_mapG_class B_IteratorD_mapG_methods = {"B_IteratorD_map",UNASSIGNED,($SuperG_class)&B_IteratorG_methods,B_IteratorD_map_init,
-                                                    B_IteratorD_map_serialize, B_IteratorD_map$_deserialize,  
-                                                    B_IteratorD_map_bool,B_IteratorD_map_str,B_IteratorD_map_str, B_IteratorD_map_next};
+                                                    B_IteratorD_map_serialize, B_IteratorD_map$_deserialize, B_IteratorD_map_next};
 
 B_IteratorD_map B_IteratorD_mapG_new(B_Iterator it, $pure f) {
     return $NEW(B_IteratorD_map, it, f);
@@ -235,7 +232,7 @@ B_Iterator B_map(B_Iterable wit, $pure f, $WORD iter) {
 // max, min ///////////////////////////////////////////////////////////////////////////////////
 
 $WORD B_max(B_Ord wit, B_Iterable wit2, $WORD iter, $WORD dflt) {
-    $WORD res = dflt;
+    volatile $WORD res = dflt;
     B_Iterator it = wit2->$class->__iter__(wit2,iter);  
     while(1) {
         if ($PUSH()) {
@@ -265,7 +262,7 @@ $WORD B_max(B_Ord wit, B_Iterable wit2, $WORD iter, $WORD dflt) {
 }
 
 $WORD B_max_def(B_Ord wit, B_Iterable wit2, $WORD iter, $WORD dflt) {
-    $WORD res = dflt;
+    volatile $WORD res = dflt;
     B_Iterator it = wit2->$class->__iter__(wit2,iter);
     while(1) {
         if ($PUSH()) {
@@ -285,7 +282,7 @@ $WORD B_max_def(B_Ord wit, B_Iterable wit2, $WORD iter, $WORD dflt) {
 }
 
 $WORD B_min(B_Ord wit, B_Iterable wit2, $WORD iter, $WORD dflt) {
-    $WORD res = NULL;
+    volatile $WORD res = NULL;
     B_Iterator it = wit2->$class->__iter__(wit2,iter);  
     while(1) {
         if ($PUSH()) {
@@ -315,10 +312,9 @@ $WORD B_min(B_Ord wit, B_Iterable wit2, $WORD iter, $WORD dflt) {
 }
 
 $WORD B_min_def(B_Ord wit, B_Iterable wit2, $WORD iter, $WORD dflt) {
-    $WORD res = dflt;
+    volatile $WORD res = dflt;
     B_Iterator it = wit2->$class->__iter__(wit2,iter);  
     while(1) {
-        printf("In loop\n");
         if ($PUSH()) {
             $WORD nxt = it->$class->__next__(it);
             if (fromB_bool(wit->$class->__gt__(wit,res,nxt)))
@@ -403,8 +399,7 @@ $WORD B_IteratorD_zip_next(B_IteratorD_zip it) {
 }
 
 struct B_IteratorD_zipG_class B_IteratorD_zipG_methods = {" B_IteratorD_zip",UNASSIGNED,($SuperG_class)&B_IteratorG_methods,B_IteratorD_zip_init,
-                                                    B_IteratorD_zip_serialize, B_IteratorD_zip$_deserialize, 
-                                                    B_IteratorD_zip_bool,B_IteratorD_zip_str,B_IteratorD_zip_str, B_IteratorD_zip_next};
+                                                    B_IteratorD_zip_serialize, B_IteratorD_zip$_deserialize, B_IteratorD_zip_next};
 
 B_IteratorD_zip B_IteratorD_zipG_new(B_Iterator iter1, B_Iterator iter2) {
     return $NEW(B_IteratorD_zip, iter1, iter2);
@@ -416,55 +411,6 @@ B_Iterator B_zip (B_Iterable wit1, B_Iterable wit2, $WORD iter1, $WORD iter2) {
     B_Iterator it2 = wit1->$class->__iter__(wit1,iter2);
     return (B_Iterator)B_IteratorD_zipG_new(it1,it2);
 }
-
-// EqOpt //////////////////////////////////////////////////////
-
-extern struct $EqOptG_class $EqOptG_methods;
-
-void $EqOptD___init__($EqOpt wit, B_Eq W_Eq$A) {
-    wit->W_Eq$A = W_Eq$A;
-}
-
-B_bool $EqOptD_bool($EqOpt self) {
-    return B_True;
-}
-
-B_str $EqOptD_str($EqOpt self) {
-    return $FORMAT("<EqOpt witness at %p>", self);
-}
-
-void $EqOptD_serialize($EqOpt self,$Serial$state state) {
-    $step_serialize(self->W_Eq$A,state);
-}
-
-$EqOpt $EqOptD_deserialize($EqOpt res, $Serial$state state) {
-    if (!res)
-        res = $DNEW($EqOpt,state);
-    res->W_Eq$A = $step_deserialize(state);
-    return res;
-}
-
-B_bool $EqOptD___eq__($EqOpt wit, $WORD a, $WORD b) {
-    if (a && b) {
-        return wit->W_Eq$A->$class->__eq__(wit->W_Eq$A, a, b);
-    }
-    return (!a && !b) ? B_True : B_False;
-}
-
-B_bool $EqOptD___ne__($EqOpt wit, $WORD a, $WORD b) {
-    if (a && b)
-        return wit->W_Eq$A->$class->__ne__(wit->W_Eq$A, a, b);
-    return (!a && !b) ? B_False : B_True;
-}
-
-struct $EqOptG_class $EqOptG_methods = {"$EqOpt", UNASSIGNED, NULL, $EqOptD___init__, $EqOptD_serialize, $EqOptD_deserialize, 
-                                         $EqOptD_bool, $EqOptD_str, $EqOptD_str, $EqOptD___eq__, $EqOptD___ne__};
-
-
-$EqOpt $EqOptG_new(B_Eq W_Eq$A) {
-    return $NEW($EqOpt, W_Eq$A);
-}
-
 
 // IdentityActor //////////////////////////////////////////////////////
 
@@ -497,80 +443,9 @@ B_bool $IdentityActorD___isnot__($IdentityActor wit, $WORD a, $WORD b) {
 }
 
 struct $IdentityActorG_class $IdentityActorG_methods = {"$IdentityActor", UNASSIGNED, NULL, $IdentityActorD___init__, $IdentityActorD_serialize, $IdentityActorD_deserialize, 
-                                         $IdentityActorD_bool, $IdentityActorD_str, $IdentityActorD_str, $IdentityActorD___is__, $IdentityActorD___isnot__};
+                                           $IdentityActorD___is__, $IdentityActorD___isnot__};
 
 
 $IdentityActor $IdentityActorG_new() {
     return $NEW($IdentityActor);
 }
-
-
-// Various small functions //////////////////////////////////////////////////////////////
-
-// Code generated by actonc
-/*
-$WORD B_abs (B_Number W_149, B_Real W_148, $WORD x) {
-    return W_149->$class->__abs__(W_149, x, W_148);
-}
-
-B_bool B_all (B_Iterable W_164, $WORD it) {
-    B_Iterator nB_iter = W_164->$class->__iter__(W_164, it);
-    $WORD n$1val = nB_iter->$class->__next__(nB_iter);
-    while ($ISNOTNONE(n$1val)) {
-        B_value x = (B_value)n$1val;
-        if (!x->$class->__bool__(x)->val) {
-            return (B_bool)B_False;
-        }
-        n$1val = nB_iter->$class->__next__(nB_iter);
-    }
-    return (B_bool)B_True;
-}
-B_bool B_any (B_Iterable W_179, $WORD it) {
-    B_Iterator n$2iter = W_179->$class->__iter__(W_179, it);
-    $WORD n$3val = n$2iter->$class->__next__(n$2iter);
-    while ($ISNOTNONE(n$3val)) {
-        B_value x = (B_value)n$3val;
-        if (x->$class->__bool__(x)->val) {
-            return (B_bool)B_True;
-        }
-        n$3val = n$2iter->$class->__next__(n$2iter);
-    }
-    return (B_bool)B_False;
-}
-
-B_tuple B_divmod (B_Integral W_225, $WORD a, $WORD b) {
-    return W_225->$class->__divmod__(W_225, a, b);
-}
-B_int B_hash (B_Hashable W_255, $WORD x) {
-    return W_255->$class->__hash__(W_255, x);
-}
-B_Iterator B_iter (B_Iterable W_278, $WORD x) {
-    return W_278->$class->__iter__(W_278, x);
-}
-B_int B_len (B_Collection W_301, $WORD x) {
-    return W_301->$class->__len__(W_301, x);
-}
-
-$WORD B_pow (B_Number W_344, $WORD a, $WORD b) {
-    return W_344->$class->__pow__(W_344, a, b);
-}
-
-B_str B_repr(B_value x) {
-    return x->$class->__repr__(x);
-}
-
-B_Iterator B_reversed (B_Sequence W_369, $WORD seq) {
-    return W_369->$class->__reversed__(W_369, seq);
-}
-$WORD B_round (B_Real W_395, $WORD x, B_int n) {
-    return W_395->$class->__round__(W_395, x, n);
-}
-
-
-$WORD $ASSERT(B_bool test, B_str msg) {
-    if (!test->val) {
-        $RAISE(msg);
-    }
-    return B_None;
-}
-*/

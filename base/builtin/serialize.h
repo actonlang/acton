@@ -70,9 +70,6 @@ struct B_HashableD_WORDG_class {
     void (*__init__)(B_HashableD_WORD);
     void (*__serialize__)(B_HashableD_WORD,$Serial$state);
     B_HashableD_WORD (*__deserialize__)(B_HashableD_WORD,$Serial$state);
-    B_bool (*__bool__)(B_HashableD_WORD);
-    B_str (*__str__)(B_HashableD_WORD);
-    B_str (*__repr__)(B_HashableD_WORD);
     B_bool (*__eq__)(B_HashableD_WORD, $WORD, $WORD);
     B_bool (*__ne__)(B_HashableD_WORD, $WORD, $WORD);
     B_int (*__hash__)(B_HashableD_WORD, $WORD);

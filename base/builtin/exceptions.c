@@ -44,9 +44,6 @@ struct $SEQG_class $SEQG_methods = {
     .$GCINFO            = "$SEQ",
     .$superclass        = ($SuperG_class)&B_ExceptionG_methods,
     .__init__           = $SEQD___init__,
-    .__bool__           = (B_bool (*) ($SEQ))B_valueD___bool__,
-    .__str__            = (B_str (*) ($SEQ))B_valueD___str__,
-    .__repr__           = (B_str (*) ($SEQ))B_valueD___repr__,
     .__serialize__      = (void (*) ($SEQ, $Serial$state))B_BaseExceptionD___serialize__,
     .__deserialize__    = $SEQD___deserialize__
 };
@@ -74,9 +71,6 @@ struct $BRKG_class $BRKG_methods = {
     .$GCINFO            = "$BRK",
     .$superclass        = ($SuperG_class)&B_ExceptionG_methods,
     .__init__           = (B_NoneType (*) ($BRK))$SEQD___init__,
-    .__bool__           = (B_bool (*) ($BRK))B_valueD___bool__,
-    .__str__            = (B_str (*) ($BRK))B_valueD___str__,
-    .__repr__           = (B_str (*) ($BRK))B_valueD___repr__,
     .__serialize__      = (void (*) ($BRK, $Serial$state))B_BaseExceptionD___serialize__,
     .__deserialize__    = $BRKD___deserialize__
 };
@@ -104,9 +98,6 @@ struct $CNTG_class $CNTG_methods = {
     .$GCINFO            = "$CNT",
     .$superclass        = ($SuperG_class)&B_ExceptionG_methods,
     .__init__           = (B_NoneType (*) ($CNT))$SEQD___init__,
-    .__bool__           = (B_bool (*) ($CNT))B_valueD___bool__,
-    .__str__            = (B_str (*) ($CNT))B_valueD___str__,
-    .__repr__           = (B_str (*) ($CNT))B_valueD___repr__,
     .__serialize__      = (void (*) ($CNT, $Serial$state))B_BaseExceptionD___serialize__,
     .__deserialize__    = $CNTD___deserialize__
 };
@@ -143,9 +134,6 @@ struct $RETG_class $RETG_methods = {
     .$GCINFO            = "$RET",
     .$superclass        = ($SuperG_class)&B_ExceptionG_methods,
     .__init__           = $RETD___init__,
-    .__bool__           = (B_bool (*) ($RET))B_valueD___bool__,
-    .__str__            = (B_str (*) ($RET))B_valueD___str__,
-    .__repr__           = (B_str (*) ($RET))B_valueD___repr__,
     .__serialize__      = $RETD___serialize__,
     .__deserialize__    = $RETD___deserialize__
 };

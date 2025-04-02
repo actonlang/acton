@@ -17,9 +17,6 @@ struct B_IteratorB_rangeG_class {
     void (*__init__)(B_IteratorB_range, B_range);
     void (*__serialize__)(B_IteratorB_range,$Serial$state);
     B_IteratorB_range (*__deserialize__)(B_IteratorB_range,$Serial$state);
-    B_bool (*__bool__)(B_IteratorB_range);
-    B_str (*__str__)(B_IteratorB_range);
-    B_str (*__repr__)(B_IteratorB_range);
     $WORD(*__next__)(B_IteratorB_range);
 };
 

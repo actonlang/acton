@@ -432,6 +432,9 @@ reduce' env eq c@(Impl info w t@(TOpt _ t') p)
   | tcname p == qnEq                        = do w' <- newWitness
                                                  let e = eCall (tApp (eQVar primEqOpt) [t']) [eVar w']
                                                  reduce env (Eqn w (impl2type t p) e : eq) [Impl info w' t' p]
+  | tcname p == qnShow                      = do w' <- newWitness
+                                                 let e = eCall (tApp (eQVar primShowOpt) [t']) [eVar w']
+                                                 reduce env (Eqn w (impl2type t p) e : eq) [Impl info w' t' p]
 
 reduce' env eq c@(Impl _ w t@(TNone _) p)
   | tcname p == qnIdentity                  = return (Eqn w (impl2type t p) (eQVar primWIdentityNone) : eq)

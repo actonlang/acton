@@ -21,7 +21,7 @@ actor main(env):
     assert_eq(~a, 18446744073709551578)
     print(d[37])  #assert_eq gives infinite loop during compilation
     for i in d.keys():
-        print(i)
+        print("i =",i)
 
     a16 : i16 = 32
     print(a16*8)

@@ -15,8 +15,8 @@ struct $Cont {
 extern struct $ContG_class $ContG_methods;
 
 void $ContD___init__($Cont);
-B_bool $ContD___bool__($Cont);
-B_str $ContD___str__($Cont);
+// B_bool $ContD___bool__($Cont);
+// B_str $ContD___str__($Cont);
 void $ContD___serialize__($Cont, $Serial$state);
 $Cont $ContD___deserialize__($Cont, $Serial$state);
 

@@ -233,7 +233,7 @@ long B_bytesD_hash(B_bytes s) {
 
 //  "Old" hash algorithm for tuples; used in Python versions <= 3.7. 
 //  From 3.8 the xxHash-based algorithm above is used.
-
+/*
 long B_tupleD_hash(B_HashableD_tuple wit,B_tuple tup) {
     int size = tup->size;
     long x = 0x345678UL;
@@ -250,4 +250,4 @@ long B_tupleD_hash(B_HashableD_tuple wit,B_tuple tup) {
         x = -2;
     return x;
 }
-
+*/

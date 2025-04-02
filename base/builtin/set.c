@@ -368,7 +368,7 @@ B_IteratorD_set B_IteratorD_setD__deserialize(B_IteratorD_set res, $Serial$state
 }
 
 struct B_IteratorD_setG_class B_IteratorD_setG_methods = {"B_IteratorD_set",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, B_IteratorD_set_init,
-                                                    B_IteratorD_set_serialize, B_IteratorD_setD__deserialize,B_IteratorD_set_bool,B_IteratorD_set_str,B_IteratorD_set_str, B_IteratorD_set_next};
+                                                    B_IteratorD_set_serialize, B_IteratorD_setD__deserialize, B_IteratorD_set_next};
 
 
 B_Iterator B_SetD_setD___iter__ (B_SetD_set wit, B_set set) {

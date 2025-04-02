@@ -100,8 +100,8 @@ extern B_BoolD_bytes B_BoolD_bytesG_witness;
 extern B_BoolD_bytearray B_BoolD_bytearrayG_witness;
 extern B_BoolD_range B_BoolD_rangeG_witness;
 extern B_BoolD_slice B_BoolD_sliceG_witness;
-extern B_BoolD_tuple B_BoolD_tupleG_witness;
 extern B_BoolD_NoneType B_BoolD_NoneTypeG_witness;
+//extern B_BoolD_opt B_BoolD_optG_witness;
 
 extern B_ShowD_value B_ShowD_valueG_witness;
 extern B_ShowD_bool B_ShowD_boolG_witness;
@@ -122,8 +122,8 @@ extern B_ShowD_bytes B_ShowD_bytesG_witness;
 extern B_ShowD_bytearray B_ShowD_bytearrayG_witness;
 extern B_ShowD_range B_ShowD_rangeG_witness;
 extern B_ShowD_slice B_ShowD_sliceG_witness;
-extern B_ShowD_tuple B_ShowD_tupleG_witness;
 extern B_ShowD_NoneType B_ShowD_NoneTypeG_witness;
+//extern B_ShowD_opt B_ShowD_optG_witness;
 
 extern B_OrdD_list B_OrdD_listD_bytesG_witness;
 extern B_MappingD_dict B_MappingD_dictD_strG_witness;

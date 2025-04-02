@@ -1328,7 +1328,7 @@ void B_IteratorB_strD_serialize(B_IteratorB_str self,$Serial$state state) {
 }
 
 
-B_IteratorB_str B_IteratorB_str$_deserialize(B_IteratorB_str res, $Serial$state state) {
+B_IteratorB_str B_IteratorB_strD_deserialize(B_IteratorB_str res, $Serial$state state) {
     if (!res)
         res = $DNEW(B_IteratorB_str,state);
     res->src = (B_str)$step_deserialize(state);
@@ -1358,8 +1358,7 @@ static B_str B_IteratorB_strD_next(B_IteratorB_str self) {
 
 
 struct B_IteratorB_strG_class B_IteratorB_strG_methods = {"B_IteratorB_str",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, B_IteratorB_strD_init,
-                                                    B_IteratorB_strD_serialize, B_IteratorB_str$_deserialize,
-                                                    B_IteratorB_strD_bool, B_IteratorB_strD_str, B_IteratorB_strD_str, B_IteratorB_strD_next};
+                                                          B_IteratorB_strD_serialize,  B_IteratorB_strD_deserialize, B_IteratorB_strD_next};
 
 // now, define __iter__
 
@@ -2279,9 +2278,6 @@ struct B_IteratorB_bytearrayG_class B_IteratorB_bytearrayG_methods = {
     B_IteratorB_bytearrayD_init,
     B_IteratorB_bytearrayD_serialize,
     B_IteratorB_bytearray$_deserialize,
-    B_IteratorB_bytearrayD_bool,
-    B_IteratorB_bytearrayD_str,
-    B_IteratorB_bytearrayD_str,
     B_IteratorB_bytearrayD_next
 };
 
@@ -3403,8 +3399,7 @@ static B_int B_IteratorB_bytesD_next(B_IteratorB_bytes self) {
 }
 
 struct B_IteratorB_bytesG_class B_IteratorB_bytesG_methods = {"B_IteratorB_bytes",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, B_IteratorB_bytesD_init,
-                                                        B_IteratorB_bytesD_serialize, B_IteratorB_bytes$_deserialize,
-                                                        B_IteratorB_bytesD_bool, B_IteratorB_bytesD_str,  B_IteratorB_bytesD_str, B_IteratorB_bytesD_next};
+                                                        B_IteratorB_bytesD_serialize, B_IteratorB_bytes$_deserialize, B_IteratorB_bytesD_next};
 
 B_Iterator B_ContainerD_bytesD___iter__ (B_ContainerD_bytes wit, B_bytes str) {
     return (B_Iterator)$NEW(B_IteratorB_bytes,str);

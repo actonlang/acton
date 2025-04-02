@@ -240,7 +240,7 @@ typeReport (NoRed c) filename src
                                           []
 
 typeReport (NoSolve mbt vs cs) filename src         =
-    let header = trace (show (head cs)) $ case length cs of
+    let header = case length cs of
                     0 -> "Unable to give good error message: please report example"
                     1 -> "Cannot satisfy the following constraint:"
                     _ -> "Cannot satisfy the following simultaneous constraints for the unknown " ++
@@ -257,7 +257,7 @@ typeReport (NoSolve mbt vs cs) filename src         =
             ([], []) -> [(NoLoc, "Error: No location information")]
             ([], (l,m):_) -> [(l,m)]
             ((l,m):rest, extras) -> (l, m ++ "\n" ++ concatMap snd extras) : rest
-    in trace (show cs) $ Err
+    in Err
         Nothing
         header
         [(locToPosition l filename src, This m) | (l,m) <- withLocsMsgs]

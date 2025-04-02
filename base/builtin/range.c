@@ -112,9 +112,6 @@ struct B_IteratorB_rangeG_class B_IteratorB_rangeG_methods = {
     B_IteratorB_rangeD_init,
     B_IteratorB_rangeD_serialize,
     B_IteratorB_range$_deserialize,
-    B_IteratorB_rangeD_bool,
-    B_IteratorB_rangeD_str,
-    B_IteratorB_rangeD_str,
     B_IteratorB_rangeD_next
 };
 

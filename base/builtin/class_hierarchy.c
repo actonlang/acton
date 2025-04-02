@@ -58,20 +58,7 @@ B_bool B_objectD___bool__(B_object self) {
 */
 
 // Bool ///////////////////////////////////////////////////////////////
-
-/* struct B_BoolD_valueG_class { */
-/*     char *$GCINFO; */
-/*     int $class_id; */
-/*     $SuperG_class $superclass; */
-/*     B_NoneType (*__init__)(B_BoolD_value); */
-/*     void (*__serialize__)(B_BoolD_value,$Serial$state); */
-/*     B_BoolD_value (*__deserialize__)(B_BoolD_value,$Serial$state); */
-/*     B_bool (*__bool__)(B_BoolD_value, B_value); */
-/* }; */
-
-/* struct B_BoolD_value { */
-/*     B_BoolD_valueG_class $class; */
-/* }; */
+ 
 
 B_bool B_BoolD_valueD___bool__(B_BoolD_value wit, B_value self) {
     return B_True;

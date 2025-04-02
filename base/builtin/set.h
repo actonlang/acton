@@ -25,9 +25,6 @@ struct B_IteratorD_setG_class {
     void (*__init__)(B_IteratorD_set, B_set);
     void (*__serialize__)(B_IteratorD_set, $Serial$state);
     B_IteratorD_set (*__deserialize__)(B_IteratorD_set, $Serial$state);
-    B_bool (*__bool__)(B_IteratorD_set);
-    B_str (*__str__)(B_IteratorD_set);
-    B_str (*__repr__)(B_IteratorD_set);
     $WORD(*__next__)(B_IteratorD_set);
 };
 

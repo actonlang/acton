@@ -97,8 +97,8 @@ struct B_ShowD_bytes B_ShowD_bytesG_instance = {&B_ShowD_bytesG_methods};
 struct B_ShowD_bytearray B_ShowD_bytearrayG_instance = {&B_ShowD_bytearrayG_methods};
 struct B_ShowD_range B_ShowD_rangeG_instance = {&B_ShowD_rangeG_methods};
 struct B_ShowD_slice B_ShowD_sliceG_instance = {&B_ShowD_sliceG_methods};
-struct B_ShowD_tuple B_ShowD_tupleG_instance = {&B_ShowD_tupleG_methods};
 struct B_ShowD_NoneType B_ShowD_NoneTypeG_instance = {&B_ShowD_NoneTypeG_methods};
+//struct B_ShowD_opt B_ShowD_optG_instance = {&B_ShowD_optG_methods};
 
 struct B_BoolD_value B_BoolD_valueG_instance = {&B_BoolD_valueG_methods};
 struct B_BoolD_bool B_BoolD_boolG_instance = {&B_BoolD_boolG_methods};
@@ -119,8 +119,8 @@ struct B_BoolD_bytes B_BoolD_bytesG_instance = {&B_BoolD_bytesG_methods};
 struct B_BoolD_bytearray B_BoolD_bytearrayG_instance = {&B_BoolD_bytearrayG_methods};
 struct B_BoolD_range B_BoolD_rangeG_instance = {&B_BoolD_rangeG_methods};
 struct B_BoolD_slice B_BoolD_sliceG_instance = {&B_BoolD_sliceG_methods};
-struct B_BoolD_tuple B_BoolD_tupleG_instance = {&B_BoolD_tupleG_methods};
 struct B_BoolD_NoneType B_BoolD_NoneTypeG_instance = {&B_BoolD_NoneTypeG_methods};
+//struct B_BoolD_opt B_BoolD_optG_instance = {&B_BoolD_optG_methods};
 
 
 struct B_HashableD_bytes B_HashableD_bytesG_instance = {&B_HashableD_bytesG_methods};
@@ -324,7 +324,6 @@ B_BoolD_bytes B_BoolD_bytesG_witness = &B_BoolD_bytesG_instance;
 B_BoolD_bytearray B_BoolD_bytearrayG_witness = &B_BoolD_bytearrayG_instance;
 B_BoolD_range B_BoolD_rangeG_witness = &B_BoolD_rangeG_instance;
 B_BoolD_slice B_BoolD_sliceG_witness = &B_BoolD_sliceG_instance;
-B_BoolD_tuple B_BoolD_tupleG_witness = &B_BoolD_tupleG_instance;
 B_BoolD_NoneType B_BoolD_NoneTypeG_witness = &B_BoolD_NoneTypeG_instance;
 
 B_ShowD_value B_ShowD_valueG_witness = &B_ShowD_valueG_instance;
@@ -346,6 +345,5 @@ B_ShowD_bytes B_ShowD_bytesG_witness = &B_ShowD_bytesG_instance;
 B_ShowD_bytearray B_ShowD_bytearrayG_witness = &B_ShowD_bytearrayG_instance;
 B_ShowD_range B_ShowD_rangeG_witness = &B_ShowD_rangeG_instance;
 B_ShowD_slice B_ShowD_sliceG_witness = &B_ShowD_sliceG_instance;
-B_ShowD_tuple B_ShowD_tupleG_witness = &B_ShowD_tupleG_instance;
 B_ShowD_NoneType B_ShowD_NoneTypeG_witness = &B_ShowD_NoneTypeG_instance;
 

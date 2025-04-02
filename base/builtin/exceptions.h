@@ -111,9 +111,6 @@ struct $SEQG_class {
     B_NoneType (*__init__) ($SEQ);
     void (*__serialize__) ($SEQ, $Serial$state);
     $SEQ (*__deserialize__) ($SEQ, $Serial$state);
-    B_bool (*__bool__) ($SEQ);
-    B_str (*__str__) ($SEQ);
-    B_str (*__repr__) ($SEQ);
 };
 struct $SEQ {
     struct $SEQG_class *$class;
@@ -126,9 +123,6 @@ struct $BRKG_class {
     B_NoneType (*__init__) ($BRK);
     void (*__serialize__) ($BRK, $Serial$state);
     $BRK (*__deserialize__) ($BRK, $Serial$state);
-    B_bool (*__bool__) ($BRK);
-    B_str (*__str__) ($BRK);
-    B_str (*__repr__) ($BRK);
 };
 struct $BRK {
     struct $BRKG_class *$class;
@@ -141,9 +135,6 @@ struct $CNTG_class {
     B_NoneType (*__init__) ($CNT);
     void (*__serialize__) ($CNT, $Serial$state);
     $CNT (*__deserialize__) ($CNT, $Serial$state);
-    B_bool (*__bool__) ($CNT);
-    B_str (*__str__) ($CNT);
-    B_str (*__repr__) ($CNT);
 };
 struct $CNT {
     struct $CNTG_class *$class;
@@ -156,9 +147,6 @@ struct $RETG_class {
     B_NoneType (*__init__) ($RET, B_value);
     void (*__serialize__) ($RET, $Serial$state);
     $RET (*__deserialize__) ($RET, $Serial$state);
-    B_bool (*__bool__) ($RET);
-    B_str (*__str__) ($RET);
-    B_str (*__repr__) ($RET);
 };
 struct $RET {
     struct $RETG_class *$class;

@@ -9,4 +9,3 @@ long B_string_hash(B_str s);
 long B_bytesD_hash(B_bytes s);
 
 long $pointer_hash($WORD w);
-long B_tupleD_hash(B_HashableD_tuple wit,B_tuple tup);
