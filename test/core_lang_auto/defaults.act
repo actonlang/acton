@@ -6,6 +6,8 @@ class Foo(object):
         self.x = x
         self.y = y
 
+
+extension Foo (Show):
     def __str__(self):
         return self.x + ', ' + self.y
 
