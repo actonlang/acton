@@ -5,6 +5,12 @@ module Main (main) where
 import qualified Acton.Parser as P
 import qualified Acton.Syntax as S
 import qualified Acton.Printer as AP
+import qualified Acton.Env
+import qualified Acton.Kinds
+import qualified Acton.Types
+import qualified Acton.Normalizer
+import qualified Acton.Deactorizer
+import qualified Acton.CPS
 import Pretty (print)
 import Test.Syd
 import Test.Syd.Def.Golden (goldenTextFile)
@@ -12,7 +18,7 @@ import qualified Control.Monad.Trans.State.Strict as St
 import Text.Megaparsec (runParser, errorBundlePretty)
 import qualified Data.Text as T
 import Data.List (isInfixOf, isPrefixOf)
-import System.FilePath ((</>))
+import System.FilePath ((</>), joinPath, takeFileName, takeBaseName, takeDirectory)
 
 -- Generic parser runner for Acton source code
 parseActon :: String -> Either String String
@@ -39,9 +45,36 @@ testParseOutput input expected = do
       Left err -> expectationFailure $ "Parse failed: " ++ err
       Right output -> output `shouldBe` expected
 
+
+testCps testname = do
+  let test_dir = joinPath ["test", "6-cps"]
+      act_file = test_dir </> testname ++ ".act"
+      input_golden = test_dir </> testname ++ ".input"
+      output_golden = test_dir </> testname ++ ".output"
+      sysTypesPath = ".." </> ".." </> "dist" </> "base" </> "out" </> "types"
+
+  env0 <- liftIO $ Acton.Env.initEnv sysTypesPath False
+
+  src <- liftIO $ readFile act_file
+  parsed <- liftIO $ P.parseModule (S.modName [testname]) act_file src
+  env <- liftIO $ Acton.Env.mkEnv [sysTypesPath] env0 parsed
+  kchecked <- liftIO $ Acton.Kinds.check env parsed
+  (iface, tchecked, typeEnv) <- liftIO $ Acton.Types.reconstruct "" env kchecked
+  (normalized, normEnv) <- liftIO $ Acton.Normalizer.normalize typeEnv tchecked
+  (deacted, deactEnv) <- liftIO $ Acton.Deactorizer.deactorize normEnv normalized
+  (cpstyled, _) <- liftIO $ Acton.CPS.convert deactEnv deacted
+
+  describe testname $ do
+    it "Check CPS input (after deactorizer)" $ do
+      goldenTextFile input_golden $ return $ T.pack $ Pretty.print deacted
+    it "Check CPS output" $ do
+      goldenTextFile output_golden $ return $ T.pack $ Pretty.print cpstyled
+
+
 main :: IO ()
 main = sydTest $ do
-  describe "Acton Parser Tests" $ do
+
+  describe "Parser" $ do
 
     describe "F-String Tests" $ do
 
@@ -132,3 +165,7 @@ main = sydTest $ do
           case parseActon input of
             Left err -> goldenTextFile "test/parser_golden/fstring_invalid_format.golden" $ return $ T.pack $ "ERROR: " ++ err
             Right result -> goldenTextFile "test/parser_golden/fstring_invalid_format.golden" $ return $ T.pack $ "PARSED: " ++ result
+
+
+  describe "CPS" $ do
+    testCps "cps_volatiles"

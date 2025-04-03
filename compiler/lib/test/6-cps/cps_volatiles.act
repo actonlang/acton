@@ -1,0 +1,19 @@
+proc def force_cps(arg: int):
+    return arg
+
+def compute(aa: int) -> int:
+    xx = 1
+    try:
+        xx += force_cps(1)
+        aa += force_cps(1)
+    except ValueError:
+        pass
+    return xx + aa
+
+actor main(env):
+    v = compute(10)
+    if v == 13:
+        env.exit(0)
+    else:
+        print('Excpected 13, got', v)
+        env.exit(1)

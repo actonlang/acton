@@ -65,8 +65,8 @@ library:
     - zlib
 
 tests:
-  parser-test:
-    main: ParserSpec.hs
+  test:
+    main: ActonSpec.hs
     source-dirs: test
     dependencies:
       - acton

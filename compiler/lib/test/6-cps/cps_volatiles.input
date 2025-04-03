@@ -1,0 +1,41 @@
+
+W_73: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+W_75: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
+
+proc def force_cps (arg : __builtin__.int) -> __builtin__.int:
+    return arg
+
+proc def compute (aa : __builtin__.int) -> __builtin__.int:
+    W_14: __builtin__.Plus[__builtin__.int] = __builtin__.IntegralD_int()
+    xx: __builtin__.int = W_73.__fromatom__(1)
+    if $PUSH():
+        xx = W_14.__iadd__(xx, force_cps(W_73.__fromatom__(1)))
+        aa = W_14.__iadd__(aa, force_cps(W_73.__fromatom__(1)))
+        $DROP()
+    else:
+        N_x: __builtin__.BaseException = $POP()
+        if isinstance(N_x, ValueError):
+            pass
+        else:
+            $RAISE(N_x)
+    N_1tmp: __builtin__.int = W_14.__add__(xx, aa)
+    return N_1tmp
+
+# recursive group:
+class main ($Actor, __builtin__.value):
+    @property
+    v : __builtin__.int
+    proc def __init__ (self : Self, env : __builtin__.Env) -> None:
+        self.v = compute(W_73.__fromatom__(10))
+        if W_75.__eq__(self.v, W_73.__fromatom__(13)):
+            (async env.exit)(W_73.__fromatom__(0))
+        else:
+            print@[(__builtin__.str, __builtin__.int)](("\"Excpected 13, got\"", self.v), None, None, None, None)
+            (async env.exit)(W_73.__fromatom__(1))
+proc def mainG_newact (env : __builtin__.Env) -> main:
+    G_act: main = $NEWACTOR@[main]()
+    $GCfinalizer@[main](G_act)
+    $AWAITf@[None]($ASYNCf@[None](G_act, proc lambda: G_act.__init__(env)))
+    return G_act
+# (recursive group)
