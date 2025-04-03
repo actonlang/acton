@@ -1,0 +1,88 @@
+
+W_221: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+W_223: __builtin__.Times[__builtin__.int, __builtin__.int] = __builtin__.IntegralD_int()
+
+W_586: __builtin__.Plus[__builtin__.int] = __builtin__.IntegralD_int()
+
+W_761: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
+
+# recursive group:
+class Apa ($Actor, __builtin__.value):
+    proc def __init__ (self : Self) -> None:
+        self.setupG_local(self.notice)
+        print@[(__builtin__.str,)](("\"Apa\"",), None, None, None, None)
+    proc def setupG_local (self : Self, cb : action(__builtin__.int) -> __builtin__.int) -> None:
+        print@[(__builtin__.str,)](("\"setup\"",), None, None, None, None)
+        (async cb)(W_221.__fromatom__(0))
+        return None
+    proc def computeG_local (self : Self, cb : action(__builtin__.int) -> __builtin__.int) -> __builtin__.int:
+        print@[(__builtin__.str,)](("\"compute\"",), None, None, None, None)
+        v: __builtin__.int = $AWAITf@[__builtin__.int]((async cb)(W_221.__fromatom__(1)))
+        m: __builtin__.Msg[__builtin__.int] = (async cb)(W_221.__fromatom__(2))
+        N_tmp: __builtin__.int = W_223.__mul__(v, W_221.__fromatom__(10))
+        return N_tmp
+    proc def noticeG_local (self : Self, i : __builtin__.int) -> __builtin__.int:
+        print@[(__builtin__.str,)](("\"notice\"",), None, None, None, None)
+        N_1tmp: __builtin__.int = W_586.__add__(i, W_221.__fromatom__(1))
+        return N_1tmp
+    action def setup (self : Self, cb : action(__builtin__.int) -> __builtin__.int) -> None:
+        return $ASYNCf@[None](self, proc lambda: self.setupG_local(cb))
+    action def compute (self : Self, cb : action(__builtin__.int) -> __builtin__.int) -> __builtin__.int:
+        return $ASYNCf@[__builtin__.int](self, proc lambda: self.computeG_local(cb))
+    action def notice (self : Self, i : __builtin__.int) -> __builtin__.int:
+        return $ASYNCf@[__builtin__.int](self, proc lambda: self.noticeG_local(i))
+class Bepa ($Actor, __builtin__.value):
+    proc def __init__ (self : Self) -> None:
+        print@[(__builtin__.str,)](("\"Bepa\"",), None, None, None, None)
+    proc def callbackG_local (self : Self, i : __builtin__.int) -> __builtin__.int:
+        print@[(__builtin__.str, __builtin__.int)](("\"callback\"", i), None, None, None, None)
+        N_2tmp: __builtin__.int = W_586.__add__(i, W_221.__fromatom__(1))
+        return N_2tmp
+    action def callback (self : Self, i : __builtin__.int) -> __builtin__.int:
+        return $ASYNCf@[__builtin__.int](self, proc lambda: self.callbackG_local(i))
+class main ($Actor, __builtin__.value):
+    @property
+    env : __builtin__.Env
+    @property
+    a : Apa
+    @property
+    b : Bepa
+    @property
+    x : __builtin__.Msg[__builtin__.int]
+    @property
+    r : __builtin__.int
+    proc def __init__ (self : Self, env : __builtin__.Env) -> None:
+        self.env = env
+        self.a = ApaG_newact()
+        self.b = BepaG_newact()
+        print@[(__builtin__.str,)](("\"-----\"",), None, None, None, None)
+        (async self.a.setup)(self.a.notice)
+        self.x = (async self.a.compute)(self.b.callback)
+        self.r = $AWAITf@[__builtin__.int](self.x)
+        print@[(__builtin__.str, __builtin__.int)](("\"r =\"", self.r), None, None, None, None)
+        (async self.a.compute)(self.myproc)
+        print@[(__builtin__.str,)](("\"main\"",), None, None, None, None)
+    proc def myprocG_local (self : Self, i : __builtin__.int) -> __builtin__.int:
+        print@[(__builtin__.str, __builtin__.int)](("\"myproc\"", i), None, None, None, None)
+        if W_761.__eq__(i, W_221.__fromatom__(2)):
+            (async self.env.exit)(W_221.__fromatom__(0))
+        return i
+    action def myproc (self : Self, i : __builtin__.int) -> __builtin__.int:
+        return $ASYNCf@[__builtin__.int](self, proc lambda: self.myprocG_local(i))
+proc def ApaG_newact () -> Apa:
+    G_act: Apa = $NEWACTOR@[Apa]()
+    $GCfinalizer@[Apa](G_act)
+    $AWAITf@[None]($ASYNCf@[None](G_act, proc lambda: G_act.__init__()))
+    return G_act
+proc def BepaG_newact () -> Bepa:
+    G_act: Bepa = $NEWACTOR@[Bepa]()
+    $GCfinalizer@[Bepa](G_act)
+    $AWAITf@[None]($ASYNCf@[None](G_act, proc lambda: G_act.__init__()))
+    return G_act
+proc def mainG_newact (env : __builtin__.Env) -> main:
+    G_act: main = $NEWACTOR@[main]()
+    $GCfinalizer@[main](G_act)
+    $AWAITf@[None]($ASYNCf@[None](G_act, proc lambda: G_act.__init__(env)))
+    return G_act
+# (recursive group)

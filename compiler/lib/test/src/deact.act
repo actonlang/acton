@@ -1,0 +1,37 @@
+actor Apa():
+    def setup(cb):
+        print("setup")
+        cb(0)
+    def compute(cb):
+        print("compute")
+        v = cb(1)
+        m = async cb(2)
+        return v*10
+    def notice(i):
+        print("notice")
+        return i+1
+
+    setup(notice)
+    print("Apa")
+
+actor Bepa():
+    def callback(i):
+        print("callback", i)
+        return i+1
+    print("Bepa")
+    
+actor main(env):
+    def myproc(i):
+        print("myproc", i)
+        if i == 2:
+            env.exit(0)
+        return i
+    a = Apa()
+    b = Bepa()
+    print("-----")
+    a.setup(a.notice)
+    x = async a.compute(b.callback)
+    r = await x
+    print("r =", r)
+    a.compute(myproc)
+    print("main")
