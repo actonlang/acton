@@ -780,7 +780,7 @@ B_NoneType B_IndexedD_MappingD_dictD___setitem__ (B_IndexedD_MappingD_dict wit, 
 
 B_NoneType B_IndexedD_MappingD_dictD___delitem__ (B_IndexedD_MappingD_dict wit, B_dict dict, $WORD key) {
     if (dict->numelements == 0)  {
-        $RAISE((B_BaseException)$NEW(B_KeyError, key, to$str("delitem: empty dictionary")));
+        return B_None;
     }
     $table table = dict->table;
     long hash = 0;
@@ -791,8 +791,8 @@ B_NoneType B_IndexedD_MappingD_dictD___delitem__ (B_IndexedD_MappingD_dict wit, 
     $WORD res;
     int ix = $lookdict(dict,hashwit,hash,key,&res);
     //printf("ix = %d\n",ix);
-    if (ix < 0)  {
-        $RAISE((B_BaseException)$NEW(B_KeyError, key, to$str("delitem: key not in dictionary")));
+    if (ix < 0)  { // No such key
+        return B_None;
     }      
     $entry_t entry = &TB_ENTRIES(table)[ix];
     int i = $lookdict_index(table,hash,ix);
