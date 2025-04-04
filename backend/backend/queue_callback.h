@@ -13,37 +13,42 @@
  */
 
 /*
- * hash_ring.h
- *  - Thread safe consistent hashing API
+ * queue_callback.h
  *      Author: aagapi
  */
 
-#ifndef BACKEND_HASH_RING_H_
-#define BACKEND_HASH_RING_H_
+#ifndef BACKEND_QUEUE_CALLBACK_H_
+#define BACKEND_QUEUE_CALLBACK_H_
 
-#include "common.h"
-#include "skiplist.h"
+#include "backend/common.h"
 
-#define BUCKET_LIVE 0
-#define BUCKET_DEAD 1
-
-typedef struct hash_ring
+typedef struct queue_callback_args
 {
-    skiplist_t * buckets;
-    int live_buckets;
+    WORD table_key;
+    WORD queue_id;
+
+    WORD consumer_id;
+    WORD shard_id;
+    WORD app_id;
+
+    WORD group_id;
+
+    int status;
+} queue_callback_args;
+
+typedef struct queue_callback
+{
+    void (*callback)(queue_callback_args *);
     pthread_mutex_t * lock;
-} hash_ring;
+    pthread_cond_t * signal;
+} queue_callback;
 
-hash_ring * get_hash_ring();
-void free_hash_ring(hash_ring * ring, void (*free_val)(WORD));
-int add_bucket(hash_ring * ring, WORD bucket, void * (*get_key)(void *), void * (*get_live_field)(void *), unsigned int * fastrandstate);
-snode_t * lookup_bucket(hash_ring * ring, WORD bucket_id);
-int get_bucket_status(hash_ring * ring, WORD bucket, void * (*get_key)(void *), void * (*get_live_field)(void *));
-int set_bucket_status(hash_ring * ring, WORD bucket, int status, void * (*get_key)(void *), void * (*get_live_field)(void *));
-int mark_bucket_dead(hash_ring * ring, WORD bucket, void * (*get_key)(void *), void * (*get_live_field)(void *));
-int mark_bucket_live(hash_ring * ring, WORD bucket, void * (*get_key)(void *), void * (*get_live_field)(void *));
-WORD get_buckets_for_object(hash_ring * ring, int object_id, int replication_factor,
-                            void * (*get_key)(void *), void * (*get_live_field)(void *),
-                            unsigned int * fastrandstate);
+#define DEBUG_QUEUE_CALLBACK 0
 
-#endif /* BACKEND_HASH_RING_H_ */
+queue_callback_args * get_queue_callback_args(WORD table_key, WORD queue_id, WORD app_id, WORD shard_id, WORD consumer_id, WORD group_id, int status);
+void free_queue_callback_args(queue_callback_args * qca);
+queue_callback * get_queue_callback(void (*callback)(queue_callback_args *));
+int wait_on_queue_callback(queue_callback *);
+void free_queue_callback(queue_callback * qc);
+
+#endif /* BACKEND_QUEUE_CALLBACK_H_ */

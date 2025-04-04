@@ -18,8 +18,8 @@
  *  Author: aagapi
  */
 
-#include "vector_clock.h"
-#include "db_messages.pb-c.h"
+#include "backend/failure_detector/vector_clock.h"
+#include "backend/failure_detector/db_messages.pb-c.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
