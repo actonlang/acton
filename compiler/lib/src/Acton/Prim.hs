@@ -36,14 +36,11 @@ cMut r t            = TC primMut [r,t]
 cPure r t           = TC primPure [r,t]
 
 attr_call_          = name "__call__"
-primTup0            = gBuiltin (name "Tup0")
-primTup1            = gBuiltin (name "Tup1")
-primTup2            = gBuiltin (name "Tup2")
-primTup3            = gBuiltin (name "Tup3")
 
 attr_exec_          = name "__exec__"
 attr_asyn_          = name "__asyn__"
 attr_eval_          = name "__eval__"
+
 
 primActor           = gPrim "Actor"
 primR               = gPrim "R"
@@ -106,11 +103,6 @@ primEqOpt           = gPrim "EqOpt"
 primShowOpt         = gPrim "ShowOpt"
 primBoolOpt         = gPrim "BoolOpt"
 primIdentityOpt     = gPrim "IdentityOpt"
-
-primShowTup0        = gPrim "ShowTup0"
-primShowTup1        = gPrim "ShowTup1"
-primShowTup2        = gPrim "ShowTup2"
-primShowTup3        = gPrim "ShowTup3"
 
 primIdentityActor   = gPrim "IdentityActor"
 
@@ -219,14 +211,6 @@ primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec),
                             (noq primEqOpt,         clEqOpt),
                             (noq primShowOpt,       clShowOpt),
                             (noq primBoolOpt,       clBoolOpt),
-                            (noq primShowTup0,      clShowTup0),
-                            (noq primShowTup1,      clShowTup1),
-                            (noq primShowTup2,      clShowTup2),
-                            (noq primShowTup3,      clShowTup3),
---                            (noq primTup0,          clTup0),
---                            (noq primTup1,          clTup1),
---                            (noq primTup2,          clTup2),
---                            (noq primTup3,          clTup3),
                             (noq primIdentityOpt,   clIdentityOpt),
                             (noq primIdentityActor, clIdentityActor),
                             
@@ -530,50 +514,6 @@ clBoolOpt           =  NClass [quant a] (leftpath [TC qnBool [tOpt $ tVar a]]) c
         scInit      = tSchema [] $ tFun fxPure (posRow (tCon $ TC qnBool [tVar a]) posNil) kwdNil tNone
         a           = TV KType (name "A")
 
-clShowTup0          =  NClass [] (leftpath [TC qnShow [tCon (TC primTup0 $ [])]]) clTEnv
-  where clTEnv      = [ (initKW, NDef scInit NoDec) ]
-        scInit      = tSchema [] $ tFun fxPure posNil kwdNil tNone
-
-clShowTup1          =  NClass [quant a] (leftpath [TC qnShow [tCon (TC primTup1 $ [tVar a])]]) clTEnv
-  where clTEnv      = [ (initKW, NDef scInit NoDec) ]
-        scInit      = tSchema [] $ tFun fxPure (posRow (tCon $ TC qnShow [tVar a]) posNil) kwdNil tNone
-        a           = TV KType (name "A")
-
-clShowTup2          =  NClass [quant a, quant b] (leftpath [TC qnShow [tCon (TC primTup2 $ [tVar a, tVar b])]]) clTEnv
-  where clTEnv      = [ (initKW, NDef scInit NoDec) ]
-        scInit      = tSchema [] $ tFun fxPure (posRow (tCon $ TC qnShow [tVar a]) (posRow (tCon $ TC qnShow [tVar b]) posNil)) kwdNil tNone
-        a           = TV KType (name "A")
-        b           = TV KType (name "B")
-
-clShowTup3          =  NClass [quant a, quant b, quant c] (leftpath [TC qnShow [tCon (TC primTup3 $ [tVar a, tVar b, tVar c])]]) clTEnv
-  where clTEnv      = [ (initKW, NDef scInit NoDec) ]
-        scInit      = tSchema [] $ tFun fxPure (posRow (tCon $ TC qnShow [tVar a]) (posRow (tCon $ TC qnShow [tVar b]) (posRow (tCon $ TC qnShow [tVar c]) posNil))) kwdNil tNone
-        a           = TV KType (name "A")
-        b           = TV KType (name "B")
-        c           = TV KType (name "C")
-{-
-clTup0              =  NClass [] (leftpath [cValue]) clTEnv
-  where clTEnv      = [ (initKW, NDef scInit NoDec) ]
-        scInit      = tSchema [] $ tFun fxPure posNil kwdNil tNone
-
-clTup1              =  NClass [quant a] (leftpath [cValue]) clTEnv
-  where clTEnv      = [ (initKW, NDef scInit NoDec) ]
-        scInit      = tSchema [] $ tFun fxPure (posRow (tVar a) posNil) kwdNil tNone
-        a           = TV KType (name "A")
-
-clTup2              =  NClass [quant a, quant b] (leftpath [cValue]) clTEnv
-  where clTEnv      = [ (initKW, NDef scInit NoDec) ]
-        scInit      = tSchema [] $ tFun fxPure (posRow (tVar a) (posRow (tVar b) posNil)) kwdNil tNone
-        a           = TV KType (name "A")
-        b           = TV KType (name "B")
-
-clTup3              =  NClass [quant a, quant b, quant c] (leftpath [cValue]) clTEnv
-  where clTEnv      = [ (initKW, NDef scInit NoDec) ]
-        scInit      = tSchema [] $ tFun fxPure (posRow (tVar a) (posRow (tVar b) (posRow (tVar c) posNil))) kwdNil tNone
-        a           = TV KType (name "A")
-        b           = TV KType (name "B")
-        c           = TV KType (name "C")
--}
 --  class $IdentityOpt[A] (Identity[?A]): pass
 clIdentityOpt       = NClass [quant a] (leftpath [TC qnIdentity [tOpt $ tVar a]]) []    -- methods not modelled
   where a           = TV KType (name "A")
