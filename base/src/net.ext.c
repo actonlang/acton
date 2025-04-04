@@ -748,6 +748,16 @@ $R netQ_TLSConnectionD__connect_tlsG_local (netQ_TLSConnection self, $Cont c$con
 
     // TODO: take ALPN as input to TLSConnection actor
     //const char *alpn[] = { "http/1.1" };
+    int num_protocols = self->protocols->length;
+
+    if (num_protocols > 0) {
+        char **protocols = (char **)acton_calloc(num_protocols, sizeof(char*));
+
+        for(int i = 0; i < num_protocols; ++i) {
+            protocols[i] = fromB_str(self->protocols->data[i]);
+        }
+        tlsuv_stream_set_protocols(stream, num_protocols, protocols);
+    }
     //tlsuv_stream_set_protocols(stream, 1, alpn);
     // No ALPN for now.
     // TODO: take SNI as input to TLSConnection actor
