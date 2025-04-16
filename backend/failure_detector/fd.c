@@ -17,9 +17,9 @@
  * Author: aagapi
  */
 
-#include "fd.h"
-#include "db_messages.pb-c.h"
-#include "../log.h"
+#include "backend/failure_detector/fd.h"
+#include "backend/failure_detector/db_messages.pb-c.h"
+#include "backend/log.h"
 
 #include <stdio.h>
 #include <stdlib.h>
