@@ -585,9 +585,9 @@ bool ADD_waiting($Actor a, B_Msg m) {
 $Actor FREEZE_waiting(B_Msg m, $Cont mark) {
     spinlock_lock(&m->$wait_lock);
     m->$cont = mark;
-    spinlock_unlock(&m->$wait_lock);
     $Actor res = m->$waiting;
     m->$waiting = NULL;
+    spinlock_unlock(&m->$wait_lock);
     return res;
 }
 
