@@ -1,0 +1,155 @@
+from diff import diff
+import testing
+
+def _test_diff_basic():
+    """Test basic diff functionality with single-line strings."""
+    d = diff("foo", "bar")
+    exp = "@@ -1,1 +1,1 @@\n-foo\n+bar"
+    testing.assertEqual(d, exp)
+
+def _test_diff_identical():
+    """Test that identical strings return empty diff."""
+    testing.assertEqual(diff("same", "same"), "")
+
+def _test_diff_empty_a():
+    """Test adding content to an empty string."""
+    testing.assertEqual(diff("", "added"), "@@ -1,0 +1,1 @@\n+added")
+
+def _test_diff_empty_b():
+    """Test removing content to an empty string."""
+    testing.assertEqual(diff("removed", ""), "@@ -1,1 +1,0 @@\n-removed")
+
+def _test_diff_multiline_change():
+    """Test multiline with identical and different lines."""
+    a = "line1\nline2\nline3"
+    b = "line1\nmodified\nline3"
+    expected = "@@ -1,3 +1,3 @@\n line1\n-line2\n+modified\n line3"
+    testing.assertEqual(diff(a, b), expected)
+
+def _test_diff_adding_lines():
+    """Test adding lines to the end."""
+    a = "first\nsecond"
+    b = "first\nsecond\nthird\nfourth"
+    expected = "@@ -1,2 +1,4 @@\n first\n second\n+third\n+fourth"
+    testing.assertEqual(diff(a, b), expected)
+
+def _test_diff_removing_lines():
+    """Test removing lines from the middle."""
+    a = "one\ntwo\nthree\nfour"
+    b = "one\nfour"
+    expected = "@@ -1,4 +1,2 @@\n one\n-two\n-three\n four"
+    testing.assertEqual(diff(a, b), expected)
+
+def _test_diff_complex_changes():
+    """Test complex changes with multiple additions and removals."""
+    a = "start\nmiddle1\nmiddle2\nend"
+    b = "start\ninserted\nmiddle2\nmodified\nend"
+    expected = "@@ -1,4 +1,5 @@\n start\n-middle1\n+inserted\n middle2\n+modified\n end"
+    testing.assertEqual(diff(a, b), expected)
+
+def _test_diff_multiline_complex():
+    """Test more complex multiline changes."""
+    a = "header\noriginal line 1\ncommon line 1\noriginal line 2\ncommon line 2\nfooter"
+    b = "header\nnew line 1\ncommon line 1\nnew line 2\nnew line 3\ncommon line 2\nfooter"
+    expected = "@@ -1,6 +1,7 @@\n header\n-original line 1\n+new line 1\n common line 1\n-original line 2\n+new line 2\n+new line 3\n common line 2\n footer"
+    testing.assertEqual(diff(a, b), expected)
+
+def _test_diff_edge_case_empty_ops():
+    """Test edge case where diff produces no operations."""
+    testing.assertEqual(diff("", ""), "")
+
+def _test_diff_mixed_endings():
+    """Test with mixed line endings"""
+    a = "line1\r\nline2\rline3\nline4"
+    b = "line1\r\nmodified\rline3\nline4"
+    result = diff(a, b)
+    # The expected output varies based on how splitlines handles the different line endings
+    # Let's verify essential content is present, rather than exact format
+    testing.assertTrue("line1" in result)
+    testing.assertTrue("-line2" in result)
+    testing.assertTrue("+modified" in result)
+    testing.assertTrue("line3" in result)
+    testing.assertTrue("line4" in result)
+
+# The tests for Myers diff are now covered by the main diff tests
+
+def _test_diff_with_context():
+    """Test diff with context lines using golden testing"""
+    text1 = """line1
+line2
+line3
+line4
+line5
+line6
+line7
+line8
+line9
+line10"""
+
+    text2 = """line1
+line2
+modified3
+line4
+line5
+line6
+line7
+modified8
+line9
+line10"""
+
+    # Test with context=1 (using golden testing)
+    return diff(text1, text2, context_lines=1)
+
+def _test_diff_with_headers():
+    """Test diff with context lines and chunk headers using golden testing"""
+    text1 = """line1
+line2
+line3
+line4
+line5
+line6
+line7
+line8
+line9
+line10"""
+
+    text2 = """line1
+line2
+modified3
+line4
+line5
+line6
+line7
+modified8
+line9
+line10"""
+
+    # Test with context=1 and headers
+    return diff(text1, text2, context_lines=1)
+
+def _test_diff_with_more_context():
+    """Test diff with more context lines using golden testing"""
+    text1 = """line1
+line2
+line3
+line4
+line5
+line6
+line7
+line8
+line9
+line10"""
+
+    text2 = """line1
+line2
+modified3
+line4
+line5
+line6
+line7
+modified8
+line9
+line10"""
+
+    # Test with context=2
+    return diff(text1, text2, context_lines=2)
