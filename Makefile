@@ -1,4 +1,4 @@
-include common.mk
+include version.mk
 TD:=$(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 CHANGELOG_VERSION=$(shell grep '^\#\# \[[0-9]' CHANGELOG.md | sed 's/\#\# \[\([^]]\{1,\}\)].*/\1/' | head -n1)
 GIT_VERSION_TAG=$(shell git tag --points-at HEAD 2>/dev/null | grep "v[0-9]" | sed -e 's/^v//')
@@ -91,11 +91,11 @@ help:
 .PHONY: version-check
 version-check:
 ifneq ($(VERSION), $(CHANGELOG_VERSION))
-	$(error Version in common.mk ($(VERSION)) differs from last version in CHANGELOG.md ($(CHANGELOG_VERSION)))
+	$(error Version in version.mk ($(VERSION)) differs from last version in CHANGELOG.md ($(CHANGELOG_VERSION)))
 endif
 ifneq ($(GIT_VERSION_TAG),) # if we are on a git tag..
-ifneq ($(VERSION),$(GIT_VERSION_TAG)) # ..ensure the git tag is same as version in common.mk
-	$(error Current git tag ($(GIT_VERSION_TAG)) differs from version in common.mk ($(VERSION)))
+ifneq ($(VERSION),$(GIT_VERSION_TAG)) # ..ensure the git tag is same as version in version.mk
+	$(error Current git tag ($(GIT_VERSION_TAG)) differs from version in version.mk ($(VERSION)))
 endif
 endif
 
@@ -117,7 +117,7 @@ test-backend: $(BACKEND_TESTS)
 ACTONC_HS=$(wildcard compiler/lib/src/*.hs compiler/lib/src/*/*.hs compiler/actonc/Main.hs)
 # NOTE: we're unsetting CC & CXX to avoid using zig cc & zig c++ for stack /
 # ghc, which doesn't seem to work properly
-dist/bin/actonc: compiler/lib/package.yaml.in compiler/actonc/package.yaml.in compiler/lsp-server/package.yaml.in compiler/stack.yaml $(ACTONC_HS) common.mk
+dist/bin/actonc: compiler/lib/package.yaml.in compiler/actonc/package.yaml.in compiler/lsp-server/package.yaml.in compiler/stack.yaml $(ACTONC_HS) version.mk
 	mkdir -p dist/bin
 	cd compiler && sed 's,^version: BUILD_VERSION,version: "$(VERSION)",' < lib/package.yaml.in > lib/package.yaml
 	cd compiler && unset CC && unset CXX && unset CFLAGS && stack build actonc --dry-run 2>&1 | grep "Nothing to build" || \
