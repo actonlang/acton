@@ -1,6 +1,6 @@
-
 import acton.rts
 import argparse
+import diff
 import file
 import json
 import logging
@@ -926,7 +926,7 @@ actor TestExecutor(syscap, config, t: Test, report_complete, env):
             if val != None:
                 exp_val = get_expected(t.module, t.name)
                 if exp_val == None or exp_val != None and val != exp_val:
-                    exc = NotEqualError(val, exp_val, "Test output does not match expected golden value.\nActual  : %s\nExpected: %s" % (val, exp_val if exp_val != None else "None"), print_vals=False)
+                    exc = NotEqualError(val, exp_val, f"Test output does not match expected golden value.\n{term.normal}{diff.diff(str(exp_val), val, color=True)}", print_vals=False)
                     _report_result(t, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, False, exc, val)
                     return
             _report_result(t, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, s, e, val)
