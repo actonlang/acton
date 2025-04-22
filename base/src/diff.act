@@ -1,0 +1,471 @@
+import term
+
+# Implementation of Myers-inspired diff algorithm, which is efficient and produces
+# good results for typical text file differences.
+# This algorithm uses a divide-and-conquer approach with features from Myers and
+# Patience diff algorithms to identify changes between two sequences.
+# The algorithm focuses on finding common sequences and anchors to produce
+# minimal, readable diffs.
+# Myers algorithm is documented at: http://blog.robertelder.org/diff-algorithm/
+
+def myers_diff(e: list[str], f: list[str], i: int = 0, j: int = 0) -> list[Op]:
+    """
+    Myers-inspired diff algorithm implementation - finds the minimal edit script between two sequences.
+
+    This algorithm combines elements of Myers diff and Patience diff to efficiently find
+    differences between sequences. It uses a divide-and-conquer approach that:
+    1. Quickly identifies common prefixes and suffixes
+    2. Finds matching sections in the middle ("middle snake")
+    3. Uses unique lines as anchors to align content
+    4. Handles special cases efficiently (empty sequences, single elements)
+
+    The implementation creates Keep/Insert/Delete operations directly, compatible with the
+    unified diff format.
+
+    Args:
+        e: First sequence (old)
+        f: Second sequence (new)
+        i: Starting position in first sequence (used in recursion)
+        j: Starting position in second sequence (used in recursion)
+
+    Returns:
+        List of diff operations (Keep, Insert, Delete) representing the minimal edit script
+    """
+    # Handle edge cases first
+    if len(e) == 0:
+        # All lines in f were inserted
+        result = []
+        for n in range(0, len(f)):
+            result.append(Insert(f[n], j + n))
+        return result
+
+    if len(f) == 0:
+        # All lines in e were deleted
+        result = []
+        for n in range(0, len(e)):
+            result.append(Delete(e[n], i + n))
+        return result
+
+    # Find the longest common prefix
+    prefix_len = 0
+    while prefix_len < len(e) and prefix_len < len(f) and e[prefix_len] == f[prefix_len]:
+        prefix_len += 1
+
+    # Generate Keep operations for the common prefix
+    prefix_ops = []
+    for n in range(0, prefix_len):
+        prefix_ops.append(Keep(e[n], i + n, j + n))
+
+    # Find the longest common suffix
+    suffix_len = 0
+    while suffix_len < len(e) - prefix_len and suffix_len < len(f) - prefix_len and e[len(e) - 1 - suffix_len] == f[len(f) - 1 - suffix_len]:
+        suffix_len += 1
+
+    # Generate Keep operations for the common suffix
+    suffix_ops = []
+    for n in range(0, suffix_len):
+        old_idx = len(e) - suffix_len + n
+        new_idx = len(f) - suffix_len + n
+        suffix_ops.append(Keep(e[old_idx], i + old_idx, j + new_idx))
+
+    # If we have a common prefix or suffix, recursively diff the middle part
+    if prefix_len > 0 or suffix_len > 0:
+        middle_ops = myers_diff(
+            e[prefix_len:len(e)-suffix_len],
+            f[prefix_len:len(f)-suffix_len],
+            i + prefix_len,
+            j + prefix_len
+        )
+        return prefix_ops + middle_ops + suffix_ops
+
+    # If e is just one element and f has multiple elements, delete e and insert all of f
+    if len(e) == 1 and len(f) > 1:
+        result = [Delete(e[0], i)]
+        for n in range(0, len(f)):
+            result.append(Insert(f[n], j + n))
+        return result
+
+    # If f is just one element and e has multiple elements, delete all of e and insert f
+    if len(f) == 1 and len(e) > 1:
+        result = []
+        for n in range(0, len(e)):
+            result.append(Delete(e[n], i + n))
+        result.append(Insert(f[0], j))
+        return result
+
+    # If both have just one element, compare them
+    if len(e) == 1 and len(f) == 1:
+        if e[0] == f[0]:
+            return [Keep(e[0], i, j)]
+        else:
+            return [Delete(e[0], i), Insert(f[0], j)]
+
+    # Divide and conquer: find the middle snake
+    middle = len(e) // 2
+
+    # Find best matching line in f for the middle of e
+    best_match_pos = -1
+    best_match_len = -1
+
+    for pos in range(0, len(f)):
+        match_len = 0
+        while middle + match_len < len(e) and pos + match_len < len(f) and e[middle + match_len] == f[pos + match_len]:
+            match_len += 1
+
+        if match_len > best_match_len:
+            best_match_len = match_len
+            best_match_pos = pos
+
+    if best_match_len > 0:
+        # Generate Keep operations for the matching segment
+        match_ops = []
+        for n in range(0, best_match_len):
+            match_ops.append(Keep(e[middle + n], i + middle + n, j + best_match_pos + n))
+
+        # Recursively diff the segments before and after the match
+        before_ops = myers_diff(e[0:middle], f[0:best_match_pos], i, j)
+        after_ops = myers_diff(
+            e[middle+best_match_len:],
+            f[best_match_pos+best_match_len:],
+            i + middle + best_match_len,
+            j + best_match_pos + best_match_len
+        )
+
+        return before_ops + match_ops + after_ops
+
+    # No good match in the middle, use Patience diff approach
+    # Try to identify unique lines and align around them
+    unique_lines_e = {}
+    for idx, line in enumerate(e):
+        if line not in unique_lines_e:
+            unique_lines_e[line] = []
+        unique_lines_e[line].append(idx)
+
+    unique_lines_f = {}
+    for idx, line in enumerate(f):
+        if line not in unique_lines_f:
+            unique_lines_f[line] = []
+        unique_lines_f[line].append(idx)
+
+    # Find lines that appear exactly once in both sequences
+    anchors: list[(int, int)] = []
+
+    for line, e_indices in unique_lines_e.items():
+        if len(e_indices) == 1 and line in unique_lines_f and len(unique_lines_f[line]) == 1:
+            e_idx = e_indices[0]
+            f_idx = unique_lines_f[line][0]
+            anchors.append((e_idx, f_idx))
+
+    # Sort anchors by position in e
+    # We'll do a simple bubble sort that uses a temporary variable for the swap
+    sorted_anchors = list(anchors)  # Make a copy
+    for i in range(len(sorted_anchors)):
+        for j in range(len(sorted_anchors) - i - 1):
+            if sorted_anchors[j].0 > sorted_anchors[j+1].0:
+                # Swap using a temporary variable
+                temp = sorted_anchors[j]
+                sorted_anchors[j] = sorted_anchors[j+1]
+                sorted_anchors[j+1] = temp
+
+    # Extract sorted indices
+    sorted_e_indices = []
+    sorted_f_indices = []
+    for anchor in sorted_anchors:
+        sorted_e_indices.append(anchor.0)
+        sorted_f_indices.append(anchor.1)
+
+    if len(sorted_e_indices) > 0:
+        # We found unique matching lines, use them as anchors
+        result = []
+
+        # Initialize with starting positions
+        last_e = 0
+        last_f = 0
+
+        for idx in range(len(sorted_e_indices)):
+            e_idx = sorted_e_indices[idx]
+            f_idx = sorted_f_indices[idx]
+
+            # Recursively diff the segment before this anchor
+            if e_idx > last_e or f_idx > last_f:
+                before_ops = myers_diff(e[last_e:e_idx], f[last_f:f_idx], i + last_e, j + last_f)
+                result.extend(before_ops)
+
+            # Add the anchor line as a Keep operation
+            result.append(Keep(e[e_idx], i + e_idx, j + f_idx))
+
+            # Update last positions
+            last_e = e_idx + 1
+            last_f = f_idx + 1
+
+        # Process the last segment after the last anchor
+        if last_e < len(e) or last_f < len(f):
+            after_ops = myers_diff(e[last_e:], f[last_f:], i + last_e, j + last_f)
+            result.extend(after_ops)
+
+        return result
+
+    # Fall back to simple edit script if no anchors found
+    result = []
+    for n in range(0, len(e)):
+        result.append(Delete(e[n], i + n))
+    for n in range(0, len(f)):
+        result.append(Insert(f[n], j + n))
+    return result
+
+# Base operation class
+class Op:
+    def __init__(self):
+        pass
+
+    def format_with_color(self) -> str:
+        return ""
+
+class Gap(Op):
+    def __init__(self):
+        pass
+
+    def __str__(self) -> str:
+        return "..."
+
+    def format_with_color(self) -> str:
+        return term.grey20 + "..." + term.normal
+
+# Keep operation class (for context lines)
+class Keep(Op):
+    content: str
+    index_old: int
+    index_new: int
+
+    def __init__(self, content: str, index_old: int, index_new: int):
+        self.content = content
+        self.index_old = index_old
+        self.index_new = index_new
+
+    def __str__(self) -> str:
+        return f" {self.content}"
+
+    def format_with_color(self) -> str:
+        return term.grey20 + str(self) + term.normal
+
+# Delete operation class
+class Delete(Op):
+    content: str
+    index_old: int
+
+    def __init__(self, content: str, index_old: int):
+        self.content = content
+        self.index_old = index_old
+
+    def __str__(self) -> str:
+        return f"-{self.content}"
+
+    def format_with_color(self) -> str:
+        return term.red + str(self) + term.normal
+
+# Insert operation class
+class Insert(Op):
+    content: str
+    index_new: int
+
+    def __init__(self, content: str, index_new: int):
+        self.content = content
+        self.index_new = index_new
+
+    def __str__(self) -> str:
+        return f"+{self.content}"
+
+    def format_with_color(self) -> str:
+        return term.green + str(self) + term.normal
+
+def filter_operations_with_context(operations: list[Op], context_lines: int) -> list[Op]:
+    """
+    Filter operations to only include changes and their surrounding context.
+
+    Args:
+        operations: List of diff operations
+        context_lines: Number of unchanged lines to include around each change
+
+    Returns:
+        Filtered list of operations with only changes and their context
+    """
+    if context_lines < 0:
+        # Show all context
+        return operations
+
+    # Find the indices of operations with changes (deletes and inserts)
+    change_indices = []
+    for i in range(len(operations)):
+        if isinstance(operations[i], Delete) or isinstance(operations[i], Insert):
+            change_indices.append(i)
+
+    # If no changes, return empty list
+    if len(change_indices) == 0:
+        return []
+
+    # Determine which lines should be included
+    include_line = [False] * len(operations)
+
+    # Mark lines within context_lines of any change
+    for i in range(len(operations)):
+        for change_idx in change_indices:
+            if abs(i - change_idx) <= context_lines:
+                include_line[i] = True
+                break
+
+    # Create filtered list
+    filtered_ops = []
+
+    # Add operations with Gap markers for gaps
+    in_chunk = False
+    for i in range(len(operations)):
+        if include_line[i]:
+            # If starting a new chunk after a gap, add a marker line
+            if not in_chunk and i > 0 and len(filtered_ops) > 0:
+                filtered_ops.append(Gap())
+
+            filtered_ops.append(operations[i])
+            in_chunk = True
+        else:
+            in_chunk = False
+
+    return filtered_ops
+
+def generate_chunk_header(chunk_ops: list[Op]) -> str:
+    """
+    Generate a unified diff chunk header showing line numbers.
+
+    Format: @@ -<old_start>,<old_count> +<new_start>,<new_count> @@
+
+    Args:
+        chunk_ops: List of operations for this chunk
+
+    Returns:
+        Chunk header string in unified diff format
+    """
+    # Find line numbers for old and new files
+    old_start = -1
+    old_count = 0
+    new_start = -1
+    new_count = 0
+
+    for op in chunk_ops:
+        if isinstance(op, Gap):
+            continue
+
+        if isinstance(op, Keep):
+            # Line exists in both files
+            if old_start == -1:
+                old_start = op.index_old
+            if new_start == -1:
+                new_start = op.index_new
+            old_count += 1
+            new_count += 1
+        elif isinstance(op, Delete):
+            # Line only exists in old file
+            if old_start == -1:
+                old_start = op.index_old
+            old_count += 1
+        elif isinstance(op, Insert):
+            # Line only exists in new file
+            if new_start == -1:
+                new_start = op.index_new
+            new_count += 1
+
+    # Default to 1 if no valid index found (shouldn't happen)
+    if old_start == -1:
+        old_start = 0
+    if new_start == -1:
+        new_start = 0
+
+    # Line numbers in display are 1-based
+    return f"@@ -{old_start+1},{old_count} +{new_start+1},{new_count} @@"
+
+def find_chunks(operations: list[Op]) -> list[list[Op]]:
+    """
+    Split operations into chunks, using Gap operations as dividers.
+
+    Args:
+        operations: List of diff operations, potentially including Gap markers
+
+    Returns:
+        List of operation chunks, where each chunk is a list of operations
+    """
+    chunks = []
+    current_chunk = []
+
+    for op in operations:
+        if isinstance(op, Gap):
+            # End the current chunk if it has operations
+            if len(current_chunk) > 0:
+                chunks.append(current_chunk)
+                current_chunk = []
+        else:
+            # Add to the current chunk
+            current_chunk.append(op)
+
+    # Add the last chunk if it exists
+    if len(current_chunk) > 0:
+        chunks.append(current_chunk)
+
+    return chunks
+
+def diff(old_text: str, new_text: str, color=False, context_lines=3) -> str:
+    """ Generate a unified diff between two text strings
+
+    Uses the Myers diff algorithm.
+
+    Args:
+        old_text: Original text content
+        new_text: New text content
+        color: Whether to add terminal color codes to the output (default False)
+        context_lines: Number of unchanged lines to show around each change
+                       (default 3 lines), use -1 for showing all lines
+
+    Returns:
+        Empty string if texts are identical, otherwise returns a unified diff.
+        If context_lines is specified, only shows that many unchanged lines around changes.
+    """
+    if old_text == new_text:
+        return ""
+
+    old_lines = old_text.splitlines(True)
+    new_lines = new_text.splitlines(True)
+
+    # Handle case where last line doesn't have newline
+    if len(old_lines) > 0 and old_text[-1] != '\n':
+        old_lines[-1] = old_lines[-1] + '\n'
+    if len(new_lines) > 0 and new_text[-1] != '\n':
+        new_lines[-1] = new_lines[-1] + '\n'
+
+    operations = myers_diff(old_lines, new_lines)
+
+    if context_lines >= 0:
+        operations = filter_operations_with_context(operations, context_lines)
+
+    if len(operations) == 0:
+        return ""
+
+    result = []
+
+    # Skip headers only when context_lines=-1 (showing full file)
+    # We're going to simplify our approach here
+    skip_headers = context_lines < 0
+
+    for chunk in find_chunks(operations):
+        if not skip_headers:
+            # Generate and add chunk header
+            header = generate_chunk_header(chunk)
+            if color:
+                result.append(term.grey20 + header + "\n" + term.normal)
+            else:
+                result.append(header + "\n")
+
+        # Add the operations for this chunk
+        for op in chunk:
+            if color:
+                result.append(op.format_with_color())
+            else:
+                result.append(str(op))
+
+    return "".join(result).rstrip()
