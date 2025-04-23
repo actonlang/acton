@@ -10,10 +10,10 @@ name: Build, Test & Release
 #
 # To release:
 # - create new branch using name: release-vX.Y.Z
-# - update version in common.mk
-# - update CHANGELOG.md, second entry must equal version in common.mk
+# - update version in version.mk
+# - update CHANGELOG.md, second entry must equal version in version.mk
 #   - first entry is assumed to be "Unreleased"
-# - push a tag like vX.Y.Z which is equal to version in common.mk
+# - push a tag like vX.Y.Z which is equal to version in version.mk
 #
 
 on:
@@ -782,9 +782,9 @@ jobs:
     steps:
       - name: "Check out code of main acton repo"
         uses: actions/checkout@v4
-      - name: "Get the version from common.mk"
+      - name: "Get the version from version.mk"
         id: get_version
-        run: echo "version=$(grep VERSION= common.mk | cut -d = -f 2)" >> $GITHUB_OUTPUT
+        run: echo "version=$(grep VERSION= version.mk | cut -d = -f 2)" >> $GITHUB_OUTPUT
       - run: wget https://github.com/actonlang/acton/archive/refs/tags/v${{ steps.get_version.outputs.version }}.tar.gz
       - run: sha256sum v${{ steps.get_version.outputs.version }}.tar.gz
       - id: shasum

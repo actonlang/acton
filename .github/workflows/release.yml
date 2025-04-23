@@ -19,7 +19,7 @@ jobs:
           ssh-key: ${{ secrets.ACTONBOT_DEPLOY_KEY }}
       - name: "Get the version"
         id: get_version
-        run: echo ::set-output name=version::$(grep VERSION= common.mk | cut -d = -f 2)
+        run: echo ::set-output name=version::$(grep VERSION= version.mk | cut -d = -f 2)
       - name: "Add version tag and push"
         run: |
           git config user.name "Apt Bot"
