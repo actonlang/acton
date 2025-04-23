@@ -1,0 +1,13 @@
+import testing
+
+import hash.wyhash as wyhash
+
+def _test_wyhash():
+    """Test wyhash with golden testing"""
+    testing.assertEqual(0x409638ee2bde459, wyhash.hash(0, b""))
+    testing.assertEqual(0xa8412d091b5fe0a9, wyhash.hash(1, b"a"))
+    testing.assertEqual(0x32dd92e4b2915153, wyhash.hash(2, b"abc"))
+    testing.assertEqual(0x8619124089a3a16b, wyhash.hash(3, b"message digest"))
+    testing.assertEqual(0x7a43afb61d7f5f40, wyhash.hash(4, b"abcdefghijklmnopqrstuvwxyz"))
+    testing.assertEqual(0xff42329b90e50d58, wyhash.hash(5, b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"))
+    testing.assertEqual(0xc39cab13b115aad3, wyhash.hash(6, b"12345678901234567890123456789012345678901234567890123456789012345678901234567890"))

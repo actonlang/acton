@@ -62,3 +62,26 @@ export fn zig_crypto_hash_md5_finalize(hasher: *std.crypto.hash.Md5, output: *ac
     const out_slice: *[16]u8 = @as([*]u8, @ptrCast(@constCast(output.str)))[0..digest_len];
     hasher.final(out_slice);
 }
+
+export fn zig_hash_wyhash_init(seed: u64) callconv(.C) *std.hash.Wyhash {
+    const alloc = gc.allocator();
+    const hasher_ptr = alloc.create(std.hash.Wyhash) catch {
+        acton.raise_MemoryError("OOM while allocating Wyhash hasher");
+        unreachable; // raise above does longjmp so this is unreachable
+    };
+    hasher_ptr.* = std.hash.Wyhash.init(seed);
+
+    return hasher_ptr;
+}
+
+export fn zig_hash_wyhash_update(hasher: *std.hash.Wyhash, data: *acton.bytes) callconv(.C) void {
+    hasher.update(std.mem.span(data.str));
+}
+
+export fn zig_hash_wyhash_final(hasher: *std.hash.Wyhash) callconv(.C) u64 {
+    return hasher.final();
+}
+
+export fn zig_hash_wyhash_hash(seed: u64, data: *acton.bytes) callconv(.C) u64 {
+    return std.hash.Wyhash.hash(seed, std.mem.span(data.str));
+}
