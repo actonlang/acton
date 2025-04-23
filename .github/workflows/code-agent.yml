@@ -1,0 +1,43 @@
+name: Code Agent
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+on:
+  issues:
+    types: [opened]
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+
+jobs:
+  code-agent:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.sender.type != 'Bot' }}
+    steps:
+      - uses: potproject/code-agent@main
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+          # [Claude Code Settings]
+          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+
+          # [Optional Claude Code Settings]
+          # anthropic-base-url: "https://api.anthropic.com"
+          # anthropic-model: "claude-3-7-sonnet-20250219"
+          # anthropic-small-fast-model: "claude-3-5-haiku-20241022"
+          # claude-code-use-bedrock: "1"
+          # anthropic-bedrock-base-url: "https://bedrock.us-east-1.amazonaws.com"
+          # aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          # aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          # aws-region: "us-east-1"
+          # disable-prompt-caching: "1"
+
+          # [Codex Settings]
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+
+          # [Optional Codex Settings]
+          # openai-base-url: "https://api.openai.com"
