@@ -3,6 +3,14 @@
 ## [Unreleased]
 
 ### Added
+- Add GitHub Actions workflow for automated release management
+  - Streamlines creation of release branches with proper versioning
+  - Automatically updates CHANGELOG.md with release date and version
+  - Handles version bumping (major, minor, patch) through UI options
+- Add GitHub Issue templates and automated workflows
+  - New templates for bug reports, feature requests, and internal compiler errors
+  - Add Code Agent workflow for enhanced GitHub interaction
+  - Add automated testing workflow for applications using Acton
 - Acton Vim plugin for syntax highlighting & indent, see
   https://github.com/actonlang/vim-acton
 - Add `crypto.hash.md5` module for MD5 hashing
