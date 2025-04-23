@@ -56,6 +56,37 @@ pub fn raise_ValueError(message: []const u8) void {
     unreachable;
 }
 
+// B_MemoryError
+pub const MemoryError = extern struct {
+    class: *c_acton.B_MemoryErrorG_class,
+    error_message: c_acton.B_str,
+};
+
+// This is the equivalent of the expanded macro in C:
+//  $NEW(B_MemoryError,to$str(message))
+pub fn new_MemoryError(message: []const u8) *c_acton.B_MemoryError {
+    const alloc = gc.allocator();
+
+    const error_ptr = alloc.create(MemoryError) catch @panic("OOM");
+    const c_error_message = @constCast(message.ptr);
+    const error_message_ptr = c_acton.to_str_noc(c_error_message);
+    error_ptr.* = .{ .class = @ptrCast(&c_acton.B_MemoryErrorG_methods), .error_message = null };
+    if (error_ptr.class.__init__) |init_fn| {
+        _ = init_fn(@ptrCast(error_ptr), error_message_ptr);
+    }
+    return @ptrCast(error_ptr);
+}
+
+// This is the equivalent of the function call in C:
+//   $RAISE((B_BaseException)$NEW(B_MemoryError,to$str(message)))
+pub fn raise_MemoryError(message: []const u8) void {
+    const error_ptr = new_MemoryError(message);
+    // @ptrCast is used to cast the pointer to the correct type expected by the C function
+    c_acton.@"$RAISE"(@ptrCast(error_ptr));
+    // RAISE does not return, it does a longjmp, so this code is unreachable
+    unreachable;
+}
+
 test "str struct" {
     // Check that our struct is the same size as the C struct, by using @typeInfo
     // B_str is a pointer to a C struct, so we need to "dereference" the pointer

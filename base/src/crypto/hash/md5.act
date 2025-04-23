@@ -10,12 +10,12 @@ class Hasher(object):
         NotImplemented
 
     def update(self, data: bytes) -> None:
-        """Update the MD5 state with the given chunk of data"""
+        """Update the hasher state with the given chunk of data"""
         NotImplemented
 
     def finalize(self) -> bytes:
         """Finalize the hash and return the 16-byte MD5 digest as bytes
-        After final() is called, this instane should not be used again.
+        After final() is called, this instance should not be used again.
         """
         NotImplemented
 
