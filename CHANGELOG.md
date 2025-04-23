@@ -3,6 +3,10 @@
 ## [Unreleased]
 
 ### Added
+
+## [0.24.1] - 2025-04-23
+
+### Added
 - Acton Vim plugin for syntax highlighting & indent, see
   https://github.com/actonlang/vim-acton
 - Add `crypto.hash.md5` module for MD5 hashing
@@ -3077,6 +3081,9 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [0.12.0]: https://github.com/actonlang/acton/compare/v0.11.7...v0.12.0
 [0.13.0]: https://github.com/actonlang/acton/compare/v0.12.0...v0.13.0
 [0.13.1]: https://github.com/actonlang/acton/compare/v0.13.0...v0.13.1
+[0.24.0]: https://github.com/actonlang/acton/compare/v0.13.1...v0.24.0
+[0.24.1]: https://github.com/actonlang/acton/compare/v0.24.0...v0.24.1
+[Unreleased]: https://github.com/actonlang/acton/compare/v0.24.1...HEAD
 
 [homebrew-acton#7]: https://github.com/actonlang/homebrew-acton/pull/7
 [homebrew-acton#28]: https://github.com/actonlang/homebrew-acton/pull/28
