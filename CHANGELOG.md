@@ -33,6 +33,10 @@
 - Add `--list-imports` option to actonc to show imported modules
 - Add a ConsoleSink to the logging module
 - Capture log messages in tests for easier troubleshooting
+- Add diff module for comparing strings
+  - Support for unified diff format with customizable context headers and colors
+- Add GitHub Action to create new releases automatically
+- Add support for ALPN (Application-Layer Protocol Negotiation) in TLS
 
 ### Changed
 - Dict & Mapping methods `get` and `pop` now return `None` when key is not
@@ -53,6 +57,9 @@
 - Colorize error messages for better readability
 - Reintroduce `--tempdir` option to actonc for manual control of temporary files
 - Allow integers to overflow for fixed-size integer types (i16, i32, i64, etc.)
+- Use diff for golden testing when outputs don't match
+- Rename common.mk to version.mk to better reflect its purpose
+- Make del operator idempotent for lists and dictionaries
 
 ### Fixed
 - Fix type conversion between `u16` and `int`
@@ -86,6 +93,8 @@
 - Fix polarity improvement handling in type solver
 - Fix exception handling in iterate-relation context
 - Fix `free()` behavior (now a no-op in GC environment)
+- Fix race condition in actor waiting queue operations
+- Optimize f-string parsing for better performance
 
 ### Testing / CI
 - Add macos-aarch64 tip release build
@@ -98,6 +107,7 @@
 - Add test of respnet (a real-world Acton application) to CI
 - Add testing on Ubuntu 24.04 for ARM64
 - Use artifact upload/download v4 for better performance
+- Add tests for all compiler passes
 - Await cache cleaning to avoid race conditions
 
 
