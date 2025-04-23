@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.25.0] - 2025-04-23
 
 ### Added
 - Acton Vim plugin for syntax highlighting & indent, see
