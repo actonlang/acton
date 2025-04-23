@@ -3,6 +3,13 @@
 ## [Unreleased]
 
 ### Added
+- Add GitHub issue templates and workflows
+  - Add bug report, feature request, and internal compiler error templates
+  - Add code-agent workflow for AI assistance with GitHub issues and PRs
+  - Add release workflow for automated version tagging
+  - Add test-app workflow for application testing
+
+### Added
 - Acton Vim plugin for syntax highlighting & indent, see
   https://github.com/actonlang/vim-acton
 - Add `crypto.hash.md5` module for MD5 hashing
