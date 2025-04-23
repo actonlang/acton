@@ -1,0 +1,95 @@
+name: Create Release Branch
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: 'Release Type'
+        required: true
+        type: choice
+        options:
+          - major
+          - minor
+          - patch
+        default: 'patch'
+
+jobs:
+  create-release-branch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ssh-key: ${{ secrets.ACTONBOT_DEPLOY_KEY }}
+          fetch-depth: 0
+
+      - name: Set up Git user
+        run: |
+          git config user.name "Acton Bot"
+          git config user.email apt@acton-lang.org
+
+      - name: Get current version
+        id: current_version
+        run: |
+          VERSION=$(grep "^VERSION=" version.mk | cut -d= -f2)
+          echo "Current version: $VERSION"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+          # Split version
+          MAJOR=$(echo $VERSION | cut -d. -f1)
+          MINOR=$(echo $VERSION | cut -d. -f2)
+          PATCH=$(echo $VERSION | cut -d. -f3)
+
+          echo "major=$MAJOR" >> $GITHUB_OUTPUT
+          echo "minor=$MINOR" >> $GITHUB_OUTPUT
+          echo "patch=$PATCH" >> $GITHUB_OUTPUT
+
+      - name: Calculate new version
+        id: new_version
+        run: |
+          MAJOR=${{ steps.current_version.outputs.major }}
+          MINOR=${{ steps.current_version.outputs.minor }}
+          PATCH=${{ steps.current_version.outputs.patch }}
+
+          if [[ "${{ github.event.inputs.release_type }}" == "major" ]]; then
+            MAJOR=$((MAJOR + 1))
+            MINOR=0
+            PATCH=0
+          elif [[ "${{ github.event.inputs.release_type }}" == "minor" ]]; then
+            MINOR=$((MINOR + 1))
+            PATCH=0
+          else # patch
+            PATCH=$((PATCH + 1))
+          fi
+
+          NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+          echo "New version: $NEW_VERSION"
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Update version in version.mk
+        run: |
+          NEW_VERSION=${{ steps.new_version.outputs.version }}
+          sed -i "s/^VERSION=.*/VERSION=${NEW_VERSION}/" version.mk
+
+      - name: Update CHANGELOG.md
+        run: |
+          NEW_VERSION=${{ steps.new_version.outputs.version }}
+          TODAY=$(date +%Y-%m-%d)
+
+          # Replace [Unreleased] with the new version
+          sed -i "s/## \[Unreleased\]/## [${NEW_VERSION}] - ${TODAY}/" CHANGELOG.md
+
+          # Add new Unreleased section at the top
+          sed -i '2i ## [Unreleased]\n\n### Added\n\n### Changed\n\n### Fixed\n\n### Removed\n' CHANGELOG.md
+
+      - name: Create and push release branch
+        run: |
+          NEW_VERSION=${{ steps.new_version.outputs.version }}
+          BRANCH_NAME="release-v${NEW_VERSION}"
+
+          git checkout -b $BRANCH_NAME
+          git add version.mk CHANGELOG.md
+          git commit -m "Release version ${NEW_VERSION}"
+          git push origin $BRANCH_NAME
+
+          echo "::notice::Created release branch $BRANCH_NAME with version $NEW_VERSION"
