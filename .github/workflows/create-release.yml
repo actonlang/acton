@@ -79,9 +79,6 @@ jobs:
           # Replace [Unreleased] with the new version
           sed -i "s/## \[Unreleased\]/## [${NEW_VERSION}] - ${TODAY}/" CHANGELOG.md
 
-          # Add new Unreleased section at the top
-          sed -i '2i ## [Unreleased]\n\n### Added\n\n### Changed\n\n### Fixed\n\n### Removed\n' CHANGELOG.md
-
       - name: Create and push release branch
         run: |
           NEW_VERSION=${{ steps.new_version.outputs.version }}
@@ -93,3 +90,16 @@ jobs:
           git push origin $BRANCH_NAME
 
           echo "::notice::Created release branch $BRANCH_NAME with version $NEW_VERSION"
+
+      - name: Create pull request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          NEW_VERSION=${{ steps.new_version.outputs.version }}
+          BRANCH_NAME="release-v${NEW_VERSION}"
+
+          gh pr create \
+            --title "Release v${NEW_VERSION}" \
+            --base main \
+            --head $BRANCH_NAME \
+            --body "This PR updates the version to ${NEW_VERSION} and prepares the CHANGELOG.md for release."
