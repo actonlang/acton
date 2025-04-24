@@ -656,7 +656,7 @@ jobs:
       - name: "Download artifacts for Debian Linux"
         uses: actions/download-artifact@v4
         with:
-          name: acton-debs-*
+          pattern: acton-debs-*
           merge-multiple: true
       - name: "List downloaded artifacts"
         run: ls
@@ -707,11 +707,13 @@ jobs:
       - name: "Get the version"
         id: get_version
         run: |
-          echo ::set-output name=version::$(ls ../deb/*amd64.changes | sed -e 's/.*acton_//' -e 's/_amd64.*//')
+          echo "version=$(ls ../deb/*amd64.changes | sed -e 's/.*acton_//' -e 's/_amd64.*//')" >> $GITHUB_OUTPUT
       - name: "Include new deb in Apt repository"
         run: |
           cd apt
-          reprepro include stable ../deb/*.changes
+          for changes_file in ../deb/*.changes; do
+            reprepro include stable "$changes_file"
+          done
       - name: "Push updates to git repository for apt.acton-lang.io"
         run: |
           cd apt
@@ -755,7 +757,7 @@ jobs:
         id: get_version
         run: |
           echo "VERSION=$(ls deb/*amd64.changes | sed -e 's/.*acton_//' -e 's/_amd64.*//')" >> $GITHUB_ENV
-          echo ::set-output name=version::$(ls deb/*amd64.changes | sed -e 's/.*acton_//' -e 's/_amd64.*//')
+          echo "version=$(ls deb/*amd64.changes | sed -e 's/.*acton_//' -e 's/_amd64.*//')" >> $GITHUB_OUTPUT
       - name: "Move .deb files in place"
         run: |
           cd apt
@@ -784,11 +786,22 @@ jobs:
         uses: actions/checkout@v4
       - name: "Get the version from version.mk"
         id: get_version
-        run: echo "version=$(grep VERSION= version.mk | cut -d = -f 2)" >> $GITHUB_OUTPUT
-      - run: wget https://github.com/actonlang/acton/archive/refs/tags/v${{ steps.get_version.outputs.version }}.tar.gz
-      - run: sha256sum v${{ steps.get_version.outputs.version }}.tar.gz
+        run: |
+          cat version.mk
+          # Set both as environment variable for current job and as output for other steps
+          VERSION=$(grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+' version.mk)
+          echo "Found version: $VERSION"
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+      - name: "Download release tarball"
+        run: wget https://github.com/actonlang/acton/archive/refs/tags/v${VERSION}.tar.gz
+      - name: "Calculate SHA256 checksum"
+        run: sha256sum v${VERSION}.tar.gz
       - id: shasum
-        run: echo "sum=$(sha256sum v${{ steps.get_version.outputs.version }}.tar.gz | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+        run: |
+          CHECKSUM=$(sha256sum v${VERSION}.tar.gz | cut -d' ' -f1)
+          echo "sum=$CHECKSUM" >> $GITHUB_OUTPUT
+          echo "Checksum: $CHECKSUM"
       - name: "Check out code of our brew repo"
         uses: actions/checkout@v4
         with:
@@ -799,16 +812,18 @@ jobs:
           cp homebrew/Formula/acton.rb homebrew-acton/Formula/acton.rb
       - name: "Update brew formula for acton with new version"
         run: |
-          sed -i -e 's,^  url.*,  url "https://github.com/actonlang/acton/archive/refs/tags/v${{ steps.get_version.outputs.version }}.tar.gz",' -e 's/^  sha256.*/  sha256 "${{ steps.shasum.outputs.sum }}"/' homebrew-acton/Formula/acton.rb
+          sed -i -e 's,^  url.*,  url "https://github.com/actonlang/acton/archive/refs/tags/v'${VERSION}'.tar.gz",' -e 's/^  sha256.*/  sha256 "'${{ steps.shasum.outputs.sum }}'"/' homebrew-acton/Formula/acton.rb
+          echo "Updated formula to version ${VERSION} with checksum ${{ steps.shasum.outputs.sum }}"
+          cat homebrew-acton/Formula/acton.rb | grep -A 1 "^ *url"
       - name: "Create Pull Request"
         uses: peter-evans/create-pull-request@v7
         with:
           path: homebrew-acton
           token: ${{ secrets.ACTBOT_PAT }}
-          branch: acton-v${{ steps.get_version.outputs.version }}
-          title: "acton v${{ steps.get_version.outputs.version }}"
+          branch: acton-v${VERSION}
+          title: "acton v${VERSION}"
           body: |
             Automatic update triggered by release on actonlang/acton.
           committer: Acton Bot <actbot@acton-lang.org>
-          commit-message: "acton v${{ steps.get_version.outputs.version }}"
+          commit-message: "acton v${VERSION}"
           signoff: false
