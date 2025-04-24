@@ -978,7 +978,10 @@ void FLUSH_outgoing_local($Actor self) {
         if (m->$baseline == self->B_Msg->$baseline) {
             $Actor to = m->$to;
             if (ENQ_msg(m, to)) {
+                fprintf(stderr, ">>>> ASYNC msg %p from actor %ld wakes up target %ld\n", m, self->$globkey, to->$globkey);
                 ENQ_ready(to);
+            } else {
+                fprintf(stderr, ">>>> ASYNC msg %p from actor %ld queued on target %ld\n", m, self->$globkey, to->$globkey);
             }
             dest = to->$globkey;
         } else {
