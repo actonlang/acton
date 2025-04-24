@@ -1587,13 +1587,18 @@ void wt_work_cb(uv_check_t *ev) {
             save_actor_state(current, m);
             m->value = r.value;                             // m->value holds the message result,
             $Actor b = FREEZE_waiting(m, MARK_RESULT);      // so mark this and stop further m->waiting additions
-            while (b) {
-                b->B_Msg->value = r.value;
-                b->$waitsfor = NULL;
-                $Actor c = b->$next;
-                ENQ_ready(b);
-                rtsd_printf("## Waking up actor %ld : %s", b->$globkey, b->$class->$GCINFO);
-                b = c;
+            if (b) {
+                while (b) {
+                    b->B_Msg->value = r.value;
+                    b->$waitsfor = NULL;
+                    $Actor c = b->$next;
+                    ENQ_ready(b);
+                    rtsd_printf("## Waking up actor %ld : %s", b->$globkey, b->$class->$GCINFO);
+                    fprintf(stderr, "==== Result by actor %ld for msg %p, waking up client %ld\n", current->$globkey, m, b->$globkey);
+                    b = c;
+                }
+            } else {
+                fprintf(stderr, "==== Result by actor %ld for msg %p, no waiting clients\n", current->$globkey, m);
             }
             rtsd_printf("## DONE actor %ld : %s", current->$globkey, current->$class->$GCINFO);
             if (DEQ_msg(current)) {
@@ -1635,6 +1640,7 @@ void wt_work_cb(uv_check_t *ev) {
                     $Actor c = b->$next;
                     ENQ_ready(b);
                     rtsd_printf("## Propagating exception to actor %ld : %s", b->$globkey, b->$class->$GCINFO);
+                    fprintf(stderr, "==== Exception by actor %ld for msg %p, waking up client %ld\n", current->$globkey, m, b->$globkey);
                     b = c;
                 }
                 if (DEQ_msg(current)) {
@@ -1676,14 +1682,17 @@ void wt_work_cb(uv_check_t *ev) {
             assert(x != NULL);
             if (ADD_waiting(current, x)) {      // x->cont is a proper $Cont: x is still being processed so current was added to x->waiting
                 rtsd_printf("## AWAIT actor %ld : %s", current->$globkey, current->$class->$GCINFO);
+                fprintf(stderr, "---- AWAIT by client %ld on msg %p to actor %ld\n", current->$globkey, x, x->$to->$globkey);
                 current->$waitsfor = x;
             } else if (EXCEPTIONAL(x)) {        // x->cont == MARK_EXCEPTION: x->value holds the raised exception, current is not in x->waiting
                 rtsd_printf("## AWAIT/fail actor %ld : %s", current->$globkey, current->$class->$GCINFO);
+                fprintf(stderr, "---- Immediate exception found by client %ld in msg %p to actor %ld\n", current->$globkey, x, x->$to->$globkey);
                 m->$cont = &$Fail$instance;
                 m->value = x->value;
                 ENQ_ready(current);
             } else {                            // x->cont == MARK_RESULT: x->value holds the final response, current is not in x->waiting
                 rtsd_printf("## AWAIT/wakeup actor %ld : %s", current->$globkey, current->$class->$GCINFO);
+                fprintf(stderr, "---- Immediate result found by client %ld in msg %p to actor %ld\n", current->$globkey, x, x->$to->$globkey);
                 m->value = x->value;
                 ENQ_ready(current);
             }
@@ -2346,6 +2355,8 @@ int main(int argc, char **argv) {
 
     appname = argv[0];
     pid = getpid();
+
+    fprintf(stderr, "RTS-DEBUG\n");
 
 #ifndef _WIN32
     // Do line buffered output
