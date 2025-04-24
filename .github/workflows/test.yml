@@ -528,6 +528,7 @@ jobs:
     uses: "./.github/workflows/test-app.yml"
     with:
       repo_url: "orchestron-orchestrator/orchestron"
+      branch: "debug"
 
   test-app-snappy:
     needs: build-debs
