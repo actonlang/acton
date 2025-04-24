@@ -445,7 +445,7 @@ jobs:
       - name: "Install Acton from APT tip repo"
         run: |
           wget -q -O - https://apt.acton-lang.io/acton.gpg | sudo apt-key add -
-          echo "deb [arch=amd64] http://aptip.acton-lang.io/ tip main" | sudo tee /etc/apt/sources.list.d/acton.list
+          echo "deb http://aptip.acton-lang.io/ tip main" | sudo tee /etc/apt/sources.list.d/acton.list
           sudo apt-get update
           sudo apt-get install -qy acton
           acton --version
