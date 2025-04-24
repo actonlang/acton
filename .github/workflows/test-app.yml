@@ -47,5 +47,6 @@ jobs:
         run: |
           cd app
           acton build
+          for ((i = 0; i < 1000; i++)); do out/bin/test_ttt_callbacks; echo "\n\n\n"; done
           acton test
           acton test perf
