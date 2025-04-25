@@ -978,7 +978,7 @@ void FLUSH_outgoing_local($Actor self) {
         if (m->$baseline == self->B_Msg->$baseline) {
             $Actor to = m->$to;
             if (ENQ_msg(m, to)) {
-                fprintf(stderr, ">>>> ASYNC msg %p from actor %ld wakes up target %ld\n", m, self->$globkey, to->$globkey);
+                fprintf(stderr, ">>>> ASYNC msg %p from actor %ld WAKEUP target %ld\n", m, self->$globkey, to->$globkey);
                 ENQ_ready(to);
             } else {
                 fprintf(stderr, ">>>> ASYNC msg %p from actor %ld queued on target %ld\n", m, self->$globkey, to->$globkey);
@@ -1003,6 +1003,7 @@ void handle_timeout() {
     if (m) {
         rtsd_printf("## Dequeued timed msg with baseline %ld (now is %ld)", m->$baseline, now);
         if (ENQ_msg(m, m->$to)) {
+            fprintf(stderr, "     Timed WAKEUP of actor %ld\n", m->$to->$globkey);
             int wtid = ENQ_ready(m->$to);
             wake_wt(wtid);
         }
@@ -1422,6 +1423,7 @@ void BOOTSTRAP(int argc, char *argv[]) {
     }
 #endif
     if (ENQ_msg(m, root_actor)) {
+        fprintf(stderr, "Bootstrap WAKEUP %ld\n", root_actor->$globkey);
         ENQ_ready(root_actor);
     }
 
@@ -1558,7 +1560,7 @@ void wt_work_cb(uv_check_t *ev) {
                 wctx->jump0 = wctx->jump_top;
             }
             rtsd_printf("## Running actor %ld : %s", current->$globkey, current->$class->$GCINFO);
-            fprintf(stderr, "RUNNING actor %ld : %s\n", current->$globkey, current->$class->$GCINFO);
+            fprintf(stderr, "Run %ld msg %p\n", current->$globkey, m);
             r = cont->$class->__call__(cont, val);
 
             uv_clock_gettime(UV_CLOCK_MONOTONIC, &ts2);
@@ -1598,14 +1600,15 @@ void wt_work_cb(uv_check_t *ev) {
                     $Actor c = b->$next;
                     ENQ_ready(b);
                     rtsd_printf("## Waking up actor %ld : %s", b->$globkey, b->$class->$GCINFO);
-                    fprintf(stderr, "==== Result by actor %ld for msg %p, waking up client %ld\n", current->$globkey, m, b->$globkey);
+                    fprintf(stderr, "==== Result by actor %ld for msg %p, WAKEUP client %ld\n", current->$globkey, m, b->$globkey);
                     b = c;
                 }
             } else {
-                fprintf(stderr, "==== Result by actor %ld for msg %p, no waiting clients\n", current->$globkey, m);
+                fprintf(stderr, "==== Result by actor %ld for msg %p, no clients\n", current->$globkey, m);
             }
             rtsd_printf("## DONE actor %ld : %s", current->$globkey, current->$class->$GCINFO);
             if (DEQ_msg(current)) {
+                fprintf(stderr, "     More work for actor %ld, keep AWAKE\n", current->$globkey);
                 ENQ_ready(current);
             }
             break;
@@ -1648,6 +1651,7 @@ void wt_work_cb(uv_check_t *ev) {
                     b = c;
                 }
                 if (DEQ_msg(current)) {
+                    fprintf(stderr, "     More work for actor %ld after exception, keep AWAKE\n", current->$globkey);
                     ENQ_ready(current);
                 }
                 rtsd_printf("## Done handling failed actor %ld : %s", current->$globkey, current->$class->$GCINFO);
