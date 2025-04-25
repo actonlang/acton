@@ -1558,6 +1558,7 @@ void wt_work_cb(uv_check_t *ev) {
                 wctx->jump0 = wctx->jump_top;
             }
             rtsd_printf("## Running actor %ld : %s", current->$globkey, current->$class->$GCINFO);
+            fprintf(stderr, "RUNNING actor %ld : %s\n", current->$globkey, current->$class->$GCINFO);
             r = cont->$class->__call__(cont, val);
 
             uv_clock_gettime(UV_CLOCK_MONOTONIC, &ts2);
