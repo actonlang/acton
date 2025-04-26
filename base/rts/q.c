@@ -17,6 +17,10 @@ int ENQ_ready($Actor a) {
 #elif defined MPMC && MPMC == 2
 int ENQ_ready($Actor a) {
     int i = a->$affinity;
+    $Actor b = a ? a->$waitsfor : NULL;
+    if (b != NULL) {
+        fprintf(stderr, "????????????? ENQ_ready(%d) inserts actor %ld that waits for actor %ld!\n", i, a->$globkey, b->$globkey);
+    }
     spinlock_lock(&rqs[i].lock);
     if (rqs[i].tail) {
         rqs[i].tail->$next = a;
@@ -91,7 +95,12 @@ $Actor _DEQ_ready(int idx) {
         rqs[idx].tail = NULL;
     }
     rqs[idx].count--;
+    $Actor b = res ? res->$waitsfor : NULL;
     spinlock_unlock(&rqs[idx].lock);
+    if (b != NULL) {
+        fprintf(stderr, "????????????? DEQ_ready(%d) returns actor %ld that waits for actor %ld!\n", idx, res->$globkey, b->$globkey);
+    }
+//        assert(res->$waitsfor == NULL);
     return res;
 }
 #else
