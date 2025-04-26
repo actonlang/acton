@@ -1598,9 +1598,9 @@ void wt_work_cb(uv_check_t *ev) {
                     b->B_Msg->value = r.value;
                     b->$waitsfor = NULL;
                     $Actor c = b->$next;
+                    fprintf(stderr, "==== Result by actor %ld for msg %p, WAKEUP client %ld\n", current->$globkey, m, b->$globkey);
                     ENQ_ready(b);
                     rtsd_printf("## Waking up actor %ld : %s", b->$globkey, b->$class->$GCINFO);
-                    fprintf(stderr, "==== Result by actor %ld for msg %p, WAKEUP client %ld\n", current->$globkey, m, b->$globkey);
                     b = c;
                 }
             } else {
