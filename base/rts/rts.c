@@ -1560,7 +1560,7 @@ void wt_work_cb(uv_check_t *ev) {
                 wctx->jump0 = wctx->jump_top;
             }
             rtsd_printf("## Running actor %ld : %s", current->$globkey, current->$class->$GCINFO);
-            fprintf(stderr, "Run %ld msg %p\n", current->$globkey, m);
+            fprintf(stderr, "Run %ld msg %p (%p)\n", current->$globkey, m, m->$waiting);
             r = cont->$class->__call__(cont, val);
 
             uv_clock_gettime(UV_CLOCK_MONOTONIC, &ts2);
@@ -1592,6 +1592,7 @@ void wt_work_cb(uv_check_t *ev) {
         case $RDONE: {
             save_actor_state(current, m);
             m->value = r.value;                             // m->value holds the message result,
+            fprintf(stderr, "     (Result by actor %ld for msg %p, waiting: %p)\n", current->$globkey, m, m->$waiting);
             $Actor b = FREEZE_waiting(m, MARK_RESULT);      // so mark this and stop further m->waiting additions
             if (b) {
                 while (b) {
