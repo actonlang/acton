@@ -17,6 +17,7 @@ int ENQ_ready($Actor a) {
 #elif defined MPMC && MPMC == 2
 int ENQ_ready($Actor a) {
     int i = a->$affinity;
+    assert(a != NULL && a->$waitsfor == NULL);
     spinlock_lock(&rqs[i].lock);
     if (rqs[i].tail) {
         rqs[i].tail->$next = a;
@@ -87,6 +88,7 @@ $Actor _DEQ_ready(int idx) {
         if (rqs[idx].head == NULL) {
             rqs[idx].tail = NULL;
         }
+        assert(res->$waitsfor == NULL);
     } else {
         rqs[idx].tail = NULL;
     }

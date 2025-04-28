@@ -575,6 +575,7 @@ bool ADD_waiting($Actor a, B_Msg m) {
     if (!FROZEN(m)) {
         a->$next = m->$waiting;
         m->$waiting = a;
+        a->$waitsfor = m;
         did_add = true;
     }
     spinlock_unlock(&m->$wait_lock);
@@ -1676,7 +1677,6 @@ void wt_work_cb(uv_check_t *ev) {
             assert(x != NULL);
             if (ADD_waiting(current, x)) {      // x->cont is a proper $Cont: x is still being processed so current was added to x->waiting
                 rtsd_printf("## AWAIT actor %ld : %s", current->$globkey, current->$class->$GCINFO);
-                current->$waitsfor = x;
             } else if (EXCEPTIONAL(x)) {        // x->cont == MARK_EXCEPTION: x->value holds the raised exception, current is not in x->waiting
                 rtsd_printf("## AWAIT/fail actor %ld : %s", current->$globkey, current->$class->$GCINFO);
                 m->$cont = &$Fail$instance;
