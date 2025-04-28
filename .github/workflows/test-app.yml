@@ -9,6 +9,9 @@ on:
         required: false
         type: string
         default: "amd64"
+      branch:
+        required: false
+        type: string
 
 jobs:
   test-app:
@@ -26,14 +29,24 @@ jobs:
         run: |
           sudo apt install -y ./deb/acton_*.deb
           acton --version
-      - name: "Clone app repo"
+      - name: "Clone app repo with default branch"
+        if: inputs.branch == ''
         uses: actions/checkout@v4
         with:
           repository: ${{ inputs.repo_url }}
           path: app
+          
+      - name: "Clone app repo with specific branch"
+        if: inputs.branch != ''
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.repo_url }}
+          path: app
+          ref: ${{ inputs.branch }}
       - name: "Compile acton program"
         run: |
           cd app
           acton build
+          for ((i = 0; i < 1000; i++)); do out/bin/test_ttt_callbacks; echo "\n\n\n"; done
           acton test
           acton test perf
