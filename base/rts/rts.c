@@ -571,13 +571,18 @@ bool ADD_waiting($Actor a, B_Msg m) {
 
     assert(m != NULL);
 
+    $Actor prev;
     spinlock_lock(&m->$wait_lock);
     if (!FROZEN(m)) {
+        prev = m->$waiting;
         a->$next = m->$waiting;
         m->$waiting = a;
         did_add = true;
     }
     spinlock_unlock(&m->$wait_lock);
+    if (did_add) {
+        fprintf(stderr, "    (wrote waiting %p to %p, was %p)\n", a, m, prev);
+    }
     return did_add;
 }
 
@@ -798,6 +803,7 @@ B_Msg $ASYNC($Actor to, $Cont cont) {
     B_Msg m = B_MsgG_newXX(to, cont, baseline, &$Done$instance);
     if (self) {                                         // $ASYNC called by actor code
         m->$baseline = self->B_Msg->$baseline;
+        fprintf(stderr, "     Outgoing msg %p by actor %ld (waiting: %p)\n", m, self->$globkey, m->$waiting);
         PUSH_outgoing(self, m);
     } else {                                            // $ASYNC called by the event loop
         m->$baseline = current_time();
@@ -978,10 +984,10 @@ void FLUSH_outgoing_local($Actor self) {
         if (m->$baseline == self->B_Msg->$baseline) {
             $Actor to = m->$to;
             if (ENQ_msg(m, to)) {
-                fprintf(stderr, ">>>> ASYNC msg %p from actor %ld WAKEUP target %ld\n", m, self->$globkey, to->$globkey);
+                fprintf(stderr, ">>>> ASYNC msg %p from actor %ld WAKEUP target %ld (waiting: %p)\n", m, self->$globkey, to->$globkey, m->$waiting);
                 ENQ_ready(to);
             } else {
-                fprintf(stderr, ">>>> ASYNC msg %p from actor %ld queued on target %ld\n", m, self->$globkey, to->$globkey);
+                fprintf(stderr, ">>>> ASYNC msg %p from actor %ld queued on target %ld (waiting: %p)\n", m, self->$globkey, to->$globkey, m->$waiting);
             }
             dest = to->$globkey;
         } else {
@@ -1559,8 +1565,8 @@ void wt_work_cb(uv_check_t *ev) {
             if (!wctx->jump0) {
                 wctx->jump0 = wctx->jump_top;
             }
-            rtsd_printf("## Running actor %ld : %s", current->$globkey, current->$class->$GCINFO);
-            fprintf(stderr, "Run %ld msg %p (%p)\n", current->$globkey, m, m->$waiting);
+            rtsd_printf("## Running actor %ld : %s", wctx->id, current->$globkey, current->$class->$GCINFO);
+            fprintf(stderr, "(%d) Run %ld msg %p (%p)\n", wctx->id, current->$globkey, m, m->$waiting);
             r = cont->$class->__call__(cont, val);
 
             uv_clock_gettime(UV_CLOCK_MONOTONIC, &ts2);
@@ -1592,24 +1598,24 @@ void wt_work_cb(uv_check_t *ev) {
         case $RDONE: {
             save_actor_state(current, m);
             m->value = r.value;                             // m->value holds the message result,
-            fprintf(stderr, "     (Result by actor %ld for msg %p, waiting: %p)\n", current->$globkey, m, m->$waiting);
+            fprintf(stderr, "     (%d) (Result by actor %ld for msg %p, waiting: %p)\n", wctx->id, current->$globkey, m, m->$waiting);
             $Actor b = FREEZE_waiting(m, MARK_RESULT);      // so mark this and stop further m->waiting additions
             if (b) {
                 while (b) {
                     b->B_Msg->value = r.value;
                     b->$waitsfor = NULL;
                     $Actor c = b->$next;
-                    fprintf(stderr, "==== Result by actor %ld for msg %p, WAKEUP client %ld\n", current->$globkey, m, b->$globkey);
+                    fprintf(stderr, "==== (%d) Result by actor %ld for msg %p, WAKEUP client %ld\n", wctx->id, current->$globkey, m, b->$globkey);
                     ENQ_ready(b);
                     rtsd_printf("## Waking up actor %ld : %s", b->$globkey, b->$class->$GCINFO);
                     b = c;
                 }
             } else {
-                fprintf(stderr, "==== Result by actor %ld for msg %p, no clients\n", current->$globkey, m);
+                fprintf(stderr, "==== (%d) Result by actor %ld for msg %p, no clients\n", wctx->id, current->$globkey, m);
             }
             rtsd_printf("## DONE actor %ld : %s", current->$globkey, current->$class->$GCINFO);
             if (DEQ_msg(current)) {
-                fprintf(stderr, "     More work for actor %ld, keep AWAKE\n", current->$globkey);
+                fprintf(stderr, "     (%d) More work for actor %ld, keep AWAKE\n", wctx->id, current->$globkey);
                 ENQ_ready(current);
             }
             break;
@@ -1691,17 +1697,17 @@ void wt_work_cb(uv_check_t *ev) {
             assert(x != NULL);
             if (ADD_waiting(current, x)) {      // x->cont is a proper $Cont: x is still being processed so current was added to x->waiting
                 rtsd_printf("## AWAIT actor %ld : %s", current->$globkey, current->$class->$GCINFO);
-                fprintf(stderr, "---- AWAIT by client %ld on msg %p to actor %ld\n", current->$globkey, x, x->$to->$globkey);
+                fprintf(stderr, "---- (%d) AWAIT by client %ld on msg %p to actor %ld\n", wctx->id, current->$globkey, x, x->$to->$globkey);
                 current->$waitsfor = x;
             } else if (EXCEPTIONAL(x)) {        // x->cont == MARK_EXCEPTION: x->value holds the raised exception, current is not in x->waiting
                 rtsd_printf("## AWAIT/fail actor %ld : %s", current->$globkey, current->$class->$GCINFO);
-                fprintf(stderr, "---- Immediate exception found by client %ld in msg %p to actor %ld\n", current->$globkey, x, x->$to->$globkey);
+                fprintf(stderr, "---- (%d) Immediate exception found by client %ld in msg %p to actor %ld\n", wctx->id, current->$globkey, x, x->$to->$globkey);
                 m->$cont = &$Fail$instance;
                 m->value = x->value;
                 ENQ_ready(current);
             } else {                            // x->cont == MARK_RESULT: x->value holds the final response, current is not in x->waiting
                 rtsd_printf("## AWAIT/wakeup actor %ld : %s", current->$globkey, current->$class->$GCINFO);
-                fprintf(stderr, "---- Immediate result found by client %ld in msg %p to actor %ld\n", current->$globkey, x, x->$to->$globkey);
+                fprintf(stderr, "---- (%d) Immediate result found by client %ld in msg %p to actor %ld\n", wctx->id, current->$globkey, x, x->$to->$globkey);
                 m->value = x->value;
                 ENQ_ready(current);
             }
