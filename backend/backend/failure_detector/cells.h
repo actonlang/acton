@@ -7,8 +7,8 @@
 #ifndef BACKEND_FAILURE_DETECTOR_CELLS_H_
 #define BACKEND_FAILURE_DETECTOR_CELLS_H_
 
-#include "db_messages.pb-c.h"
-#include "vector_clock.h"
+#include "backend/failure_detector/db_messages.pb-c.h"
+#include "backend/failure_detector/vector_clock.h"
 
 typedef void * WORD;
 

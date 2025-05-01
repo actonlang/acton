@@ -24,9 +24,9 @@
 #include <uuid/uuid.h>
 #include <inttypes.h>
 
-#include "skiplist.h"
-#include "log.h"
-#include "fastrand.h"
+#include "backend/skiplist.h"
+#include "backend/log.h"
+#include "backend/fastrand.h"
 
 int long_cmp(WORD e1, WORD e2) {
     return (int) ((int64_t) e1 - (int64_t) e2);

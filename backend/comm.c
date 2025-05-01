@@ -18,11 +18,12 @@
  *      Author: aagapi
  */
 
-#include "comm.h"
-#include "log.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+
+#include "backend/comm.h"
+#include "backend/log.h"
 
 int parse_message_v1(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short * out_msg_type, int64_t * nonce, short is_server)
 {
