@@ -54,21 +54,21 @@ B_bool B_i64D___bool__(B_i64 n) {
 }
 
 B_str B_i64D___str__(B_i64 n) {
-    return $FORMAT("%ld", n->val);
+    return $FORMAT("%lld", n->val);
 }
 
 B_str B_i64D___repr__(B_i64 n) {
-    return $FORMAT("%ld", n->val);
+    return $FORMAT("%lld", n->val);
 }
 
-B_i64 toB_i64(long i) {
+B_i64 toB_i64(int64_t i) {
     B_i64 res = acton_malloc(sizeof(struct B_i64));
     res->$class = &B_i64G_methods;
     res->val = i;
     return res;
 }
 
-long fromB_i64(B_i64 w) {
+int64_t fromB_i64(B_i64 w) {
     return w->val;
 }
 
@@ -270,6 +270,11 @@ B_bool B_HashableD_i64D___ne__(B_HashableD_i64 wit, B_i64 a, B_i64 b) {
     return toB_bool(a->val != b->val);
 }
 
-B_int B_HashableD_i64D___hash__(B_HashableD_i64 wit, B_i64 a) {
-    return to$int(B_i64D_hash(a));
+B_u64 B_HashableD_i64D___hash__(B_HashableD_i64 wit, B_i64 a) {
+    return toB_u64(zig_hash_wyhash_hash(0,to$bytesD_len((char *)&(a->val),8)));
+}
+
+B_NoneType B_HashableD_i64D_putBytes(B_HashableD_i64 wit, B_i64 a, B_hasher h) {
+    zig_hash_wyhash_update(h->_hasher,to$bytesD_len((char *)&(a->val),8));
+    return B_None;
 }
