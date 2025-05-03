@@ -83,7 +83,11 @@ B_bool B_HashableD_boolD___ne__(B_HashableD_bool wit, B_bool a, B_bool b) {
     return toB_bool(a->val != b->val);
 }
 
-B_int B_HashableD_boolD___hash__(B_HashableD_bool wit, B_bool a) {
-    return to$int(B_i64D_hash((B_i64)a));
+B_u64 B_HashableD_boolD___hash__(B_HashableD_bool wit, B_bool a) {
+    return toB_u64(zig_hash_wyhash_hash(0,to$bytesD_len((char *)&(a->val),8)));
 }
- 
+
+B_NoneType B_HashableD_boolD_putBytes(B_HashableD_bool wit, B_bool a, B_hasher h) {
+    zig_hash_wyhash_update(h->_hasher,to$bytesD_len((char *)&(a->val),8));
+    return B_None;
+}

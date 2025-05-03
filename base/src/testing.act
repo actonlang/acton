@@ -379,9 +379,13 @@ extension Test(Hashable):
     def __eq__(self, other: Test) -> bool:
         return self.module == other.module and self.name == other.name
 
-    def __hash__(self) -> int:
-        #return hash(self.data)
-        return safe_hash(2*hash(self.module) + 3*hash(self.name))
+    def putBytes(self, h):
+        h.update(self.module.encode())
+        h.update(self.name.encode())
+
+#    def __hash__(self) -> int:
+#        #return hash(self.data)
+#        return safe_hash(2*hash(self.module) + 3*hash(self.name))
 
 class UnitTest(Test):
     def __init__(self, fn: mut() -> None, name: str, desc: str, module: str):

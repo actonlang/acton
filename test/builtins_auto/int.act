@@ -242,8 +242,8 @@ def test_int():
         raise ValueError("round(-123456789, -10) != -1234567890000000000")
     if int('123') != 123:
         raise ValueError("int('123') != 123")
-    if hash(2**131) >= 2**64:
-        raise ValueError("hash(2**131) too big")
+#    if hash(2**131) >= 2**64:        Hash values now has type u64, so 2**64 == 0 !
+#        raise ValueError("hash(2**131) too big")
     if int("1234") != 1234:
         raise ValueError('int("1234") gives wrong result')
     if int("0x1234") != 4660:

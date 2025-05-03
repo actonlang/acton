@@ -111,4 +111,5 @@ typedef struct $Catcher *$Catcher;
 #include "env.h"
 #include "staticWitnesses.h"
 #include "utils.h"
+#include "hasher.h"
 

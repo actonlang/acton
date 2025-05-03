@@ -15,7 +15,7 @@
 // Auxiliary //////////////////////////////////////////////////////////////////////////////
 
 // only called with e>=0.
-unsigned long u64_pow(unsigned long a, unsigned long e) {
+uint64_t u64_pow(uint64_t a, uint64_t e) {
     if (e == 0) return 1;
     if (e == 1) return a;
     if (e%2 == 0) return u64_pow(a*a,e/2);
@@ -28,7 +28,7 @@ B_u64 B_u64G_new(B_atom a, B_int base) {
     B_int b = B_intG_new(a, base);
     long sz = b->val.size;
     if (sz==0) return toB_u64(0);
-    unsigned long n = b->val.n[0];
+    uint64_t n = b->val.n[0];
     if (sz != 1) {
         char errmsg[1024];
         snprintf(errmsg, sizeof(errmsg), "u64(): value %s out of range for type u64",get_str(&b->val));
@@ -55,21 +55,21 @@ B_bool B_u64D___bool__(B_u64 n) {
 }
 
 B_str B_u64D___str__(B_u64 n) {
-    return $FORMAT("%lu", n->val);
+    return $FORMAT("%llu", n->val);
 }
 
 B_str B_u64D___repr__(B_u64 n) {
-    return $FORMAT("%lu", n->val);
+    return $FORMAT("%llu", n->val);
 }
 
-B_u64 toB_u64(unsigned long i) {
+B_u64 toB_u64(uint64_t i) {
     B_u64 res = acton_malloc(sizeof(struct B_u64));
     res->$class = &B_u64G_methods;
     res->val = i;
     return res;
 }
 
-unsigned long fromB_u64(B_u64 w) {
+uint64_t fromB_u64(B_u64 w) {
     return w->val;
 }
 
@@ -145,12 +145,12 @@ $WORD B_IntegralD_u64D___ceil__ (B_IntegralD_u64 wit, B_u64 n, B_Integral wit2) 
 }
   
 B_u64 B_IntegralD_u64D___round__ (B_IntegralD_u64 wit, B_u64 n, B_int p) {
-    unsigned long nval = n->val;
+    uint64_t nval = n->val;
     long pval = p==NULL ? 0 : from$int(p);
     if (pval>=0)
         return n;
-    unsigned long p10 = u64_pow(10,-pval);
-    unsigned long res = nval/p10;
+    uint64_t p10 = u64_pow(10,-pval);
+    uint64_t res = nval/p10;
     if (nval%p10 * 2 > p10)
         res++; 
     return toB_u64 (res * p10);
@@ -267,6 +267,11 @@ B_bool B_HashableD_u64D___ne__(B_HashableD_u64 wit, B_u64 a, B_u64 b) {
     return toB_bool(a->val != b->val);
 }
 
-B_int B_HashableD_u64D___hash__(B_HashableD_u64 wit, B_u64 a) {
-    return to$int(B_i64D_hash((B_i64)a));
+B_u64 B_HashableD_u64D___hash__(B_HashableD_u64 wit, B_u64 a) {
+    return toB_u64(zig_hash_wyhash_hash(0,to$bytesD_len((char *)&(a->val),8)));
+}
+
+B_NoneType B_HashableD_u64D_putBytes(B_HashableD_u64 wit, B_u64 a, B_hasher h) {
+    zig_hash_wyhash_update(h->_hasher,to$bytesD_len((char *)&(a->val),8));
+    return B_None;
 }

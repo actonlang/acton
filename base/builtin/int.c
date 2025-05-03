@@ -632,16 +632,27 @@ B_bool B_HashableD_intD___ne__(B_HashableD_int wit, B_int a, B_int b) {
     return toB_bool(1-zz_equal(&a->val,&b->val));
 }
 
-B_int B_HashableD_intD___hash__(B_HashableD_int wit, B_int a) {
+B_u64 B_HashableD_intD___hash__(B_HashableD_int wit, B_int a) {
     long sz = a->val.size;
-    if (sz==0) return to$int(sz);
-    unsigned long res = a->val.n[0];
-    if (res > LONG_MAX || labs(sz) > 1) 
-        return to$int(B_i64D_hash(toB_i64((long)res & LONG_MAX)));
+    long data;
+    if (sz==0)
+        data = 0;
     else
-        return to$int(B_i64D_hash(toB_i64(sz<0 ? -res : res)));
+        data = (long)a->val.n[0];
+    return toB_u64(zig_hash_wyhash_hash(0,to$bytesD_len((char *)&data,8)));
 }
- 
+
+B_NoneType B_HashableD_intD_putBytes(B_HashableD_int wit, B_int a, B_hasher h) {
+    long sz = a->val.size;
+    long data;
+    if (sz==0)
+        data = 0;
+    else
+        data = (long)a->val.n[0];
+    zig_hash_wyhash_update(h->_hasher,to$bytesD_len((char *)&data,8));
+    return B_None;
+}
+
 long from$int(B_int n) { 
     long sz = n->val.size;
     if (sz==0) return 0;
@@ -658,7 +669,7 @@ B_int to$int(long n) {
         return &B_int_strs[n];
     else {
         B_int res = malloc_int();
-        res->val.n[0] = n > 0 ? n : (n == LONG_MIN ? 9223372036854775808 : -n);
+        res->val.n[0] = n > 0 ? n : (n == LONG_MIN ? 9223372036854775808UL : -n);
         res->val.size = n < 0 ? -1 : n > 0;
         return res;
     }
@@ -667,7 +678,7 @@ B_int to$int(long n) {
 B_int to$int2(char *str) {
     B_int res = malloc_int();
     res->$class = &B_intG_methods;
-    set_str(&res->val, str, NULL);
+    set_str(&res->val, (unsigned char *)str, NULL);
     return res;
 }
 
@@ -702,7 +713,7 @@ unsigned char digvalue[256] = {
 };
 
 
-int get_str0(bool ishead, zz_ptr n, zz_ptr dens[], int d, char *res, int pos) {
+int get_str0(bool ishead, zz_ptr n, zz_ptr dens[], int d, unsigned char *res, int pos) {
     if (d >= 0) {
         zz_ptr hi = acton_malloc(sizeof(zz_struct));
         zz_ptr lo = acton_malloc(sizeof(zz_struct));
@@ -717,7 +728,7 @@ int get_str0(bool ishead, zz_ptr n, zz_ptr dens[], int d, char *res, int pos) {
         }
     } else {
         char buf[POW10INWORD + 1];
-        sprintf(&buf, "%lu", (unsigned long)n->n[0]);
+        sprintf(buf, "%lu", (unsigned long)n->n[0]);
         int len = strlen(buf);
         if (ishead) {
             memcpy(&res[pos], buf, len);
@@ -767,13 +778,13 @@ char * get_str(zz_ptr nval) {
         res[0] = '-';
         pos++;
     }
-    int newpos = get_str0(true, npos, dens, d-1, res, pos);
+    int newpos = get_str0(true, npos, dens, d-1, (unsigned char *)res, pos);
     res[newpos] = '\0';
     return res;
 }
 
 
-int set_str0(zz_ptr a, char *nstr, unsigned char base, int parts) {
+int set_str0(zz_ptr a, unsigned char *nstr, unsigned char base, int parts) {
     // assert(parts > 0);
     if (parts == 1) {
         unsigned long val = 0;
