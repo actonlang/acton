@@ -3373,27 +3373,39 @@ B_bytes B_bytesD_zfill(B_bytes s, B_int width) {
 
  
 B_bool B_OrdD_bytesD___eq__ (B_OrdD_bytes wit, B_bytes a, B_bytes b) {
-    return toB_bool(strcmp((char *)a->str,(char *)b->str)==0);
+    if (a->nbytes != b->nbytes)
+        return B_False;
+    for (int i=0; i < a->nbytes; i++)
+        if (a->str[i] != b->str[i])
+            return B_False;
+    return B_True;
 }
 
 B_bool B_OrdD_bytesD___ne__ (B_OrdD_bytes wit, B_bytes a, B_bytes b) {
-    return  toB_bool(strcmp((char *)a->str,(char *)b->str)!=0);
+    return  toB_bool(!B_OrdD_bytesD___eq__(wit,a,b)->val);
 }
 
 B_bool B_OrdD_bytesD___lt__ (B_OrdD_bytes wit, B_bytes a, B_bytes b) {
-    return toB_bool(strcmp((char *)a->str,(char *)b->str)<0);
+    int minl = a->nbytes<b->nbytes ? a->nbytes : b->nbytes;
+    int i=0;
+    while (i<minl && a->str[i]==b->str[i]) i++;
+    if (i==a->nbytes)
+        return toB_bool(i<b->nbytes);
+    if (i==b->nbytes)
+        return B_False;
+    return toB_bool(a->str[i]<b->str[i]);
 }
 
 B_bool B_OrdD_bytesD___le__ (B_OrdD_bytes wit, B_bytes a, B_bytes b){
-    return toB_bool(strcmp((char *)a->str,(char *)b->str)<=0);
+    return toB_bool(!B_OrdD_bytesD___lt__(wit,b,a)->val);
 }
 
 B_bool B_OrdD_bytesD___gt__ (B_OrdD_bytes wit, B_bytes a, B_bytes b){
-    return toB_bool(strcmp((char *)a->str,(char *)b->str)>0);
+    return B_OrdD_bytesD___lt__(wit,b,a);
 }
 
 B_bool B_OrdD_bytesD___ge__ (B_OrdD_bytes wit, B_bytes a, B_bytes b){
-    return toB_bool(strcmp((char *)a->str,(char *)b->str)>=0);
+    return toB_bool(!B_OrdD_bytesD___lt__(wit,a,b)->val);
 }
 
 // Container
@@ -3546,11 +3558,16 @@ B_bytes B_TimesD_bytesD___mul__ (B_TimesD_bytes wit, B_bytes a, B_int n) {
 
 
 B_bool B_HashableD_bytesD___eq__ (B_HashableD_bytes wit, B_bytes a, B_bytes b) {
-    return toB_bool(strcmp((char *)a->str,(char *)b->str)==0);
+    if (a->nbytes != b->nbytes)
+        return B_False;
+    for (int i=0; i < a->nbytes; i++)
+        if (a->str[i] != b->str[i])
+            return B_False;
+    return B_True;
 }
 
 B_bool B_HashableD_bytesD___ne__ (B_HashableD_bytes wit, B_bytes a, B_bytes b) {
-    return toB_bool(strcmp((char *)a->str,(char *)b->str)!=0);
+    return  toB_bool(!B_HashableD_bytesD___eq__(wit,a,b)->val);
 }
 
 B_u64 B_HashableD_bytesD___hash__(B_HashableD_bytes wit, B_bytes a) {
