@@ -37,7 +37,7 @@
 #include "complex.c"
 #include "Iterator.c"
 #include "slice.c"
-#include "hash.c"
+// #include "hash.c"
 #include "timsort.c"
 #include "list.c"
 #include "dict.c"

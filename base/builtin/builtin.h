@@ -98,7 +98,7 @@ typedef struct $Catcher *$Catcher;
 #include "str.h"
 #include "set.h"
 #include "tuple.h"
-#include "hash.h"
+// #include "hash.h"
 #include "i64.h"
 #include "i32.h"
 #include "i16.h"
