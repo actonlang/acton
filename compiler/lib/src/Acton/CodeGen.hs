@@ -270,7 +270,7 @@ primToInt2                          = name "to$int2"
 primToFloat                         = name "to$float"
 primToStr                           = name "to$str"
 primToBytearray                     = name "to$bytearray"
-primToBytes                         = name "to$bytes"
+primToBytes                         = name "to$bytesD_len"
 
 tmpV                                = primKW "tmp"
 
@@ -792,7 +792,8 @@ instance Gen Expr where
     gen env (Bool _ False)          = gen env qnFalse
     gen env (None _)                = gen env qnNone
     gen env e@Strings{}             = gen env primToStr <> parens(hsep (map pretty (sval e)))
-    gen env e@BStrings{}            = gen env primToBytes <> parens(hsep (map pretty (sval e)))
+    gen env e@BStrings{}            = gen env primToBytes <> parens( hsep (map pretty es) <> comma <+>text(show(length(read(concat es) :: String))))
+      where es                      = sval e
     gen env (Call l  (TApp _ e@(Var _ mk) _) p@(PosArg w (PosArg (Set _ es) PosNil)) KwdNil)
       | mk == primMkSet             = text "B_mk_set" <> parens (pretty (length es) <> comma <+> gen env w <> hsep [comma <+> gen env e | e <- es])
     gen env (Call l  (TApp _ e@(Var _ mk) _) p@(PosArg w (PosArg (Dict _ es) PosNil)) KwdNil)

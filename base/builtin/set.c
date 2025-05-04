@@ -105,7 +105,7 @@ static B_setentry *B_set_lookkey(B_set set, B_Hashable hashwit, $WORD key, long 
             $WORD *startkey = entry->key;
             // startkey cannot be a dummy because the dummy hash field is -1 
             // assert(startkey != dummy);
-            if (startkey == key || hashwit->$class->__eq__(hashwit,startkey,key))
+            if (startkey == key || hashwit->$class->__eq__(hashwit,startkey,key)) 
                 return entry;
         }
         perturb >>= PERTURB_SHIFT;

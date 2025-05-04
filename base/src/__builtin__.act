@@ -910,6 +910,11 @@ def filter (function: ?((A) -> B), iterable: Iterable[A]) -> Iterator[A]:
 def hash(x: Hashable) -> u64:
     return x.__hash__()
 
+def seed_hash(seed: u64, x: Hashable) -> u64:
+    h = hasher(seed)
+    x.putBytes(h)
+    return h.finalize()
+
 def hex(i: Integral) -> str:
     NotImplemented
 
