@@ -644,9 +644,9 @@ B_u64 B_HashableD_intD___hash__(B_HashableD_int wit, B_int a) {
 
 B_NoneType B_HashableD_intD_putBytes(B_HashableD_int wit, B_int a, B_hasher h) {
     long sz = a->val.size;
-    long data;
+    unsigned long data;
     if (sz==0)
-        data = 0;
+        data = 0UL;
     else
         data = (long)a->val.n[0];
     zig_hash_wyhash_update(h->_hasher,to$bytesD_len((char *)&data,8));
