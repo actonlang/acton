@@ -11,3 +11,9 @@ def _test_wyhash():
     testing.assertEqual(0x7a43afb61d7f5f40, wyhash.hash(4, b"abcdefghijklmnopqrstuvwxyz"))
     testing.assertEqual(0xff42329b90e50d58, wyhash.hash(5, b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"))
     testing.assertEqual(0xc39cab13b115aad3, wyhash.hash(6, b"12345678901234567890123456789012345678901234567890123456789012345678901234567890"))
+
+def _test_null_bytes():
+    """NULL bytes are also bytes and should affect the hash value"""
+    testing.assertEqual(0x32dd92e4b2915153, wyhash.hash(2, b"abc"))
+    testing.assertEqual(11814336239142192361, wyhash.hash(2, b"abc\0abc"))
+    testing.assertEqual(11397175339119758699, wyhash.hash(2, b"abc\0abd"))
