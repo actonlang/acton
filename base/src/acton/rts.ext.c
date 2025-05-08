@@ -90,7 +90,7 @@ B_NoneType actonQ_rtsQ_sleep (B_SysCap cap, B_float sleep_time) {
 #if _WIN32 // Windows
         uv_sleep((uint64_t)ts.tv_sec * 1000 + ts.tv_nsec / 1000000);
         break;
-#else __linux__
+#elif __linux__
         int r = nanosleep(&ts, &ts);
         if (r == 0)
             break;
