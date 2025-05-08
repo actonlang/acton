@@ -1266,7 +1266,7 @@ B_u64 B_HashableD_strD___hash__(B_HashableD_str wit, B_str a) {
     return toB_u64(zig_hash_wyhash_hash(0,to$bytes((char *)a->str)));
 }
 
-B_NoneType B_HashableD_strD_putBytes(B_HashableD_str wit, B_str a, B_hasher h) {
+B_NoneType B_HashableD_strD_hash(B_HashableD_str wit, B_str a, B_hasher h) {
     zig_hash_wyhash_update(h->_hasher,to$bytes((char *)a->str));
     return B_None;
 }
@@ -3574,8 +3574,8 @@ B_u64 B_HashableD_bytesD___hash__(B_HashableD_bytes wit, B_bytes a) {
     return toB_u64(zig_hash_wyhash_hash(0,a));
 }
 
-B_NoneType B_HashableD_bytesD_putBytes(B_HashableD_bytes wit, B_bytes a, B_hasher h) {
-    zig_hash_wyhash_update(h->_hasher,a);
+B_NoneType B_HashableD_bytesD_hash(B_HashableD_bytes wit, B_bytes a, B_hasher h) {
+    zig_hash_wyhash_update(h->_hasher, a);
     return B_None;
 }
 

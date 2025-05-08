@@ -49,12 +49,12 @@ B_bool B_HashableD_WORD_ne(B_HashableD_WORD wit, $WORD a, $WORD b) {
     return  toB_bool(a != b);
 }
 
-B_u64 B_HashableD_WORD_hash(B_HashableD_WORD wit, $WORD a) {
+B_u64 B_HashableD_WORD___hash__(B_HashableD_WORD wit, $WORD a) {
     return toB_u64(zig_hash_wyhash_hash(0,to$bytesD_len((char *)&a,8)));
 }
 
-B_NoneType B_HashableD_WORD_putBytes(B_HashableD_WORD wit, $WORD a, B_hasher h) {
-    zig_hash_wyhash_update(h->_hasher,to$bytesD_len((char *)&a,8));
+B_NoneType B_HashableD_WORD_hash(B_HashableD_WORD wit, $WORD a, B_hasher h) {
+    zig_hash_wyhash_update(h->_hasher, to$bytesD_len((char *)&a, 8));
     return B_None;
 }
 
@@ -70,8 +70,8 @@ struct B_HashableD_WORDG_class B_HashableD_WORDG_methods = {
     (B_str (*)(B_HashableD_WORD))$default__str__,
     B_HashableD_WORD_eq,
     B_HashableD_WORD_ne,
-    B_HashableD_WORD_putBytes,
     B_HashableD_WORD_hash,
+    B_HashableD_WORD___hash__,
     
 };
 struct B_HashableD_WORD B_HashableD_WORD_instance = {&B_HashableD_WORDG_methods};

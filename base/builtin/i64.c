@@ -274,7 +274,7 @@ B_u64 B_HashableD_i64D___hash__(B_HashableD_i64 wit, B_i64 a) {
     return toB_u64(zig_hash_wyhash_hash(0,to$bytesD_len((char *)&(a->val),8)));
 }
 
-B_NoneType B_HashableD_i64D_putBytes(B_HashableD_i64 wit, B_i64 a, B_hasher h) {
+B_NoneType B_HashableD_i64D_hash(B_HashableD_i64 wit, B_i64 a, B_hasher h) {
     zig_hash_wyhash_update(h->_hasher,to$bytesD_len((char *)&(a->val),8));
     return B_None;
 }
