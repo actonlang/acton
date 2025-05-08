@@ -525,7 +525,10 @@ class hasher(object):
 
 protocol Hashable (Eq):
     hash_bytes : (hasher) -> None
-    __hash__     : () -> u64
+    __hash__   : () -> u64
+
+#    def hash_bytes(self, h) -> None:
+#        pass
 
     def __hash__(self):
         h = hasher()
