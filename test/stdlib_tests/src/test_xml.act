@@ -178,3 +178,14 @@ def _test_xml_namespace_attributes_undefined():
     testing.assertEqual(child_attr.1, 'child', "Undefined namespace: child attribute value not preserved")
     e = xml.encode(d)
     testing.assertEqual(e, test_xml, "Undefined namespace: roundtrip failed")
+
+def _test_xml_empty_none():
+    test_xml = """<data>
+    <a></a>
+    <b />
+    <c><!-- comment --></c>
+</data>"""
+    d = xml.decode(test_xml)
+    for c in d.children:
+        testing.assertNone(c.text, f"{c.tag}: get text")
+        testing.assertEqual(len(c.children), 0, f"{c.tag}: get children")

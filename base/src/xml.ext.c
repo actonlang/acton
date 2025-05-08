@@ -75,7 +75,7 @@ static unsigned char* copy_with_xml_escape(unsigned char *dst, B_str src, int es
 static B_str collect_text_cdata_nodes(xmlNodePtr *cur_ptr) {
     xmlNodePtr cur = *cur_ptr;
     if (!cur || (cur->type != XML_TEXT_NODE && cur->type != XML_CDATA_SECTION_NODE)) {
-        return to$str("");
+        return NULL;
     }
 
     // Count total length of combined text and CDATA nodes
@@ -106,7 +106,7 @@ static B_str collect_text_cdata_nodes(xmlNodePtr *cur_ptr) {
     }
 
     *cur_ptr = cur;
-    return to$str("");
+    return NULL;
 }
 
 xmlQ_Node $NodePtr2Node(xmlNodePtr node) {
