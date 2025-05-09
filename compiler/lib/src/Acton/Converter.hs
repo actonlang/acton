@@ -39,9 +39,7 @@ pruneStmts xs (s@Assign{} : ss)
   | null ns                             = pruneStmts xs ss
   | otherwise                           = s : pruneStmts xs ss
   where ns                              = bound s `intersect` xs
-pruneStmts xs (s : ss)
-  | isNotImpl s                         = pruneStmts xs ss
-  | otherwise                           = s : pruneStmts xs ss
+pruneStmts xs (s : ss)                  = s : pruneStmts xs ss
 pruneStmts xs []                        = []
 
 pruneBody env n ss                      = pruneStmts xs ss
