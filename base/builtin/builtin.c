@@ -53,3 +53,4 @@
 #include "env.c"
 #include "staticWitnesses.c"
 #include "utils.c"
+#include "hasher.c"

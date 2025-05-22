@@ -9,7 +9,7 @@ const gc = @import("rts/gc.zig");
 pub const bytes = extern struct {
     class: usize,
     nbytes: i32,              // length of str in bytes
-    str: [*:0]const u8            // str is UTF-8 encoded.
+    str: [*]const u8            // str is UTF-8 encoded.
 };
 
 // B_NoneType

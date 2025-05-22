@@ -131,7 +131,7 @@ B_str to_str_noc(char *str) {
     res->$class = &B_strG_methods;
     res->nbytes = strlen(str);
     res->nchars = res->nbytes;
-    res->str = str;
+    res->str = (unsigned char*)str;
 
     bool isascii = true;
     unsigned char *p = (unsigned char*)str;
@@ -1262,11 +1262,14 @@ B_bool B_HashableD_strD___ne__ (B_HashableD_str wit, B_str a, B_str b) {
     return toB_bool(strcmp((char *)a->str,(char *)b->str) != 0);
 }
  
-// hash function B_string_hash defined in hash.c
-B_int B_HashableD_strD___hash__(B_HashableD_str wit, B_str s) {
-    return to$int(B_string_hash(s));
+B_u64 B_HashableD_strD___hash__(B_HashableD_str wit, B_str a) {
+    return toB_u64(zig_hash_wyhash_hash(0,to$bytes((char *)a->str)));
 }
 
+B_NoneType B_HashableD_strD_hash(B_HashableD_str wit, B_str a, B_hasher h) {
+    zig_hash_wyhash_update(h->_hasher,to$bytes((char *)a->str));
+    return B_None;
+}
 // B_Times /////////////////////////////////////////////////////////////////////////////////////////////
 
 B_str B_TimesD_strD___add__ (B_TimesD_str wit, B_str s, B_str t) {
@@ -1360,7 +1363,7 @@ static B_str B_IteratorB_strD_next(B_IteratorB_str self) {
         return mk_char(p);
     }
     $RAISE ((B_BaseException)$NEW(B_StopIteration, to$str("str iterator terminated")));
-;
+    return NULL; // to avoid compiler warning
 }
 
 
@@ -1445,6 +1448,45 @@ B_bytearray toB_bytearray(char *str) {
     int len = strlen(str);
     NEW_UNFILLED_BYTEARRAY(res,len);
     memcpy(res->str,str,len);
+    return res;
+}
+
+
+B_bytearray to$bytearrayD_len(char *str, int len) {
+    B_bytearray res;
+    NEW_UNFILLED_BYTEARRAY(res, len);
+    memcpy(res->str, str, len);
+    return res;
+}
+
+B_bytearray actBytearrayFromCString(char *str) {
+    B_bytearray res;
+    int len = strlen(str);
+    NEW_UNFILLED_BYTEARRAY(res,len);
+    memcpy(res->str,str,len);
+    return res;
+}
+
+B_bytearray actBytearrayFromCStringNoCopy(char *str) {
+    B_bytearray res = acton_malloc(sizeof(struct B_bytearray));
+    res->$class = &B_bytearrayG_methods;
+    res->nbytes = strlen(str);
+    res->str = (unsigned char*)str;
+    return res;
+}
+
+B_bytearray actBytearrayFromCStringLength(char *str, int len) {
+    B_bytearray res;
+    NEW_UNFILLED_BYTEARRAY(res, len);
+    memcpy(res->str, str, len);
+    return res;
+}
+
+B_bytearray actBytearrayFromCStringLengthNoCopy(char *str, int length) {
+    B_bytearray res = acton_malloc(sizeof(struct B_bytearray));
+    res->$class = &B_bytearrayG_methods;
+    res->nbytes = length;
+    res->str = (unsigned char*)str;
     return res;
 }
 
@@ -1712,7 +1754,7 @@ B_bytearray B_bytearrayD_from_hex(B_str s) {
         result[i/2] = (high_val << 4) | low_val;
     }
 
-    return actBytesFromCStringLengthNoCopy(result, bytelen);
+    return actBytearrayFromCStringLengthNoCopy(result, bytelen);
 }
 
 B_str B_bytearrayD_hex(B_bytearray s) {
@@ -2240,8 +2282,7 @@ B_bool B_OrdD_bytearrayD___ge__ (B_OrdD_bytearray wit, B_bytearray a, B_bytearra
 static B_int B_IteratorB_bytearrayD_next(B_IteratorB_bytearray self) {
     if (self->nxt >= self->src->nbytes)
         $RAISE ((B_BaseException)$NEW(B_StopIteration, to$str("bytearray iterator terminated")));
-    else
-        return to$int(self->src->str[self->nxt++]);
+    return to$int(self->src->str[self->nxt++]);
 }
 
 B_NoneType B_IteratorB_bytearrayD_init(B_IteratorB_bytearray self, B_bytearray b) {
@@ -2532,7 +2573,7 @@ B_bytes actBytesFromCStringNoCopy(char *str) {
     B_bytes res = acton_malloc(sizeof(struct B_bytes));
     res->$class = &B_bytesG_methods;
     res->nbytes = strlen(str);
-    res->str = str;
+    res->str =  (unsigned char*)str;
     return res;
 }
 
@@ -2547,7 +2588,7 @@ B_bytes actBytesFromCStringLengthNoCopy(char *str, int length) {
     B_bytes res = acton_malloc(sizeof(struct B_bytes));
     res->$class = &B_bytesG_methods;
     res->nbytes = length;
-    res->str = str;
+    res->str =  (unsigned char*)str;
     return res;
 }
 
@@ -2811,7 +2852,7 @@ B_bytes B_bytesD_from_hex(B_str s) {
 
 B_str B_bytesD_hex(B_bytes s) {
     if (s->nbytes == 0)
-        return null_bytes;
+        return null_str;
     // Each byte becomes 2 hex chars, so output length is 2 * number of bytes
     int len = s->nbytes * 2;
     char *result = acton_malloc_atomic(len);
@@ -3332,27 +3373,39 @@ B_bytes B_bytesD_zfill(B_bytes s, B_int width) {
 
  
 B_bool B_OrdD_bytesD___eq__ (B_OrdD_bytes wit, B_bytes a, B_bytes b) {
-    return toB_bool(strcmp((char *)a->str,(char *)b->str)==0);
+    if (a->nbytes != b->nbytes)
+        return B_False;
+    for (int i=0; i < a->nbytes; i++)
+        if (a->str[i] != b->str[i])
+            return B_False;
+    return B_True;
 }
 
 B_bool B_OrdD_bytesD___ne__ (B_OrdD_bytes wit, B_bytes a, B_bytes b) {
-    return  toB_bool(strcmp((char *)a->str,(char *)b->str)!=0);
+    return  toB_bool(!B_OrdD_bytesD___eq__(wit,a,b)->val);
 }
 
 B_bool B_OrdD_bytesD___lt__ (B_OrdD_bytes wit, B_bytes a, B_bytes b) {
-    return toB_bool(strcmp((char *)a->str,(char *)b->str)<0);
+    int minl = a->nbytes<b->nbytes ? a->nbytes : b->nbytes;
+    int i=0;
+    while (i<minl && a->str[i]==b->str[i]) i++;
+    if (i==a->nbytes)
+        return toB_bool(i<b->nbytes);
+    if (i==b->nbytes)
+        return B_False;
+    return toB_bool(a->str[i]<b->str[i]);
 }
 
 B_bool B_OrdD_bytesD___le__ (B_OrdD_bytes wit, B_bytes a, B_bytes b){
-    return toB_bool(strcmp((char *)a->str,(char *)b->str)<=0);
+    return toB_bool(!B_OrdD_bytesD___lt__(wit,b,a)->val);
 }
 
 B_bool B_OrdD_bytesD___gt__ (B_OrdD_bytes wit, B_bytes a, B_bytes b){
-    return toB_bool(strcmp((char *)a->str,(char *)b->str)>0);
+    return B_OrdD_bytesD___lt__(wit,b,a);
 }
 
 B_bool B_OrdD_bytesD___ge__ (B_OrdD_bytes wit, B_bytes a, B_bytes b){
-    return toB_bool(strcmp((char *)a->str,(char *)b->str)>=0);
+    return toB_bool(!B_OrdD_bytesD___lt__(wit,a,b)->val);
 }
 
 // Container
@@ -3395,8 +3448,7 @@ B_str B_IteratorB_bytesD_str(B_IteratorB_bytes self) {
 static B_int B_IteratorB_bytesD_next(B_IteratorB_bytes self) {
     if (self->nxt >= self->src->nbytes)
         $RAISE ((B_BaseException)$NEW(B_StopIteration, to$str("bytes iterator terminated")));
-    else
-        return to$int(self->src->str[self->nxt++]);
+    return to$int(self->src->str[self->nxt++]);
 }
 
 struct B_IteratorB_bytesG_class B_IteratorB_bytesG_methods = {"B_IteratorB_bytes",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, B_IteratorB_bytesD_init,
@@ -3506,15 +3558,25 @@ B_bytes B_TimesD_bytesD___mul__ (B_TimesD_bytes wit, B_bytes a, B_int n) {
 
 
 B_bool B_HashableD_bytesD___eq__ (B_HashableD_bytes wit, B_bytes a, B_bytes b) {
-    return toB_bool(strcmp((char *)a->str,(char *)b->str)==0);
+    if (a->nbytes != b->nbytes)
+        return B_False;
+    for (int i=0; i < a->nbytes; i++)
+        if (a->str[i] != b->str[i])
+            return B_False;
+    return B_True;
 }
 
 B_bool B_HashableD_bytesD___ne__ (B_HashableD_bytes wit, B_bytes a, B_bytes b) {
-    return toB_bool(strcmp((char *)a->str,(char *)b->str)!=0);
+    return  toB_bool(!B_HashableD_bytesD___eq__(wit,a,b)->val);
 }
 
-B_int B_HashableD_bytesD___hash__(B_HashableD_bytes wit, B_bytes str) {
-    return to$int(B_bytesD_hash(str));
+B_u64 B_HashableD_bytesD___hash__(B_HashableD_bytes wit, B_bytes a) {
+    return toB_u64(zig_hash_wyhash_hash(0,a));
+}
+
+B_NoneType B_HashableD_bytesD_hash(B_HashableD_bytes wit, B_bytes a, B_hasher h) {
+    zig_hash_wyhash_update(h->_hasher, a);
+    return B_None;
 }
 
 // Builtin functions involving strings /////////////////////////////////////////////
