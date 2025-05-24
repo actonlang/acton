@@ -26,7 +26,7 @@ import Control.Monad.State.Lazy
 import Debug.Trace
 
 normalize                           :: Env0 -> Module -> IO (Module, Env0)
-normalize env0 m                    = return (evalState (norm env m) 0, env0')
+normalize env0 m                    = return (evalState (norm env m) (0,[]), env0')
   where env                         = normEnv env0
         env0'                       = mapModules convEnv env0
         
@@ -40,21 +40,27 @@ normalize env0 m                    = return (evalState (norm env m) 0, env0')
 --  - With statemenmts are replaced by enter/exit prim calls + exception handling
 --  X The assert statement is replaced by a prim call ASSERT
 --  X Return without argument is replaced by return None
---  - The else branch of a while loop is replaced by an explicit if statement enclosing the loop
+                                                                                                                 --  - The else branch of a while loop is replaced by an explicit if statement enclosing the loop
 --  X Superclass lists are transitively closed
 
 
 -- Normalizing monad
-type NormM a                        = State Int a
+type NormM a                        = State (Int,[(Name,PosPar,Expr)]) a
 
 newName                             :: String -> NormM Name
-newName s                           = do n <- get
-                                         put (n+1)
+newName s                           = do (n,ts) <- get
+                                         put (n+1,ts)
                                          return $ Internal NormPass s n
 
+addComp                             :: (Name,PosPar,Expr) -> NormM ()
+addComp t                           = state (\(n,ts) -> ((),(n,t:ts)))
+
+getComps                            :: NormM [(Name,PosPar,Expr)]
+getComps                            = state (\(n,ts) -> (ts, (n,[])))
+ 
 type NormEnv                        = EnvF NormX
 
-data NormX                          = NormX { contextX :: [ContextMark], rtypeX :: Maybe Type }
+data NormX                          = NormX { contextX :: [ContextMark], rtypeX :: Maybe Type, lambdavarsX :: PosPar }
 
 data ContextMark                    = DROP | LOOP | FINAL deriving (Eq,Show)
 
@@ -68,10 +74,57 @@ setRet t env                        = modX env $ \x -> x{ rtypeX = t }
 
 getRet env                          = fromJust $ rtypeX $ envX env
 
-normEnv env0                        = setX env0 NormX{ contextX = [], rtypeX = Nothing }
+addLambdavars p env                 = modX env $ \x -> x{ lambdavarsX = joinP (lambdavarsX x) p }
+  where joinP PosNIL p              = p
+        joinP (PosPar n mbt mbe p') p
+                                    = PosPar n mbt mbe (joinP p' p)
 
+getLambdavars env                   = lambdavarsX $ envX env
+
+normEnv env0                        = setX env0 NormX{ contextX = [], rtypeX = Nothing, lambdavarsX = PosNIL }
 
 -- Normalize terms ---------------------------------------------------------------------------------------
+
+normSuite env []                    = return []
+normSuite env (s : ss)              = do s' <- norm' env s
+                                         ps <- getComps
+                                         ss' <- normSuite (define (envOf s) env) ss
+                                         fs <- mapM mkFunDef ps
+                                         return (fs ++ s' ++ ss')
+  where mkFunDef (f,p,comp@(ListComp _ (Elem e) _))
+                                    = do res <- newName "res"
+                                         let vres = eVar res
+                                         ss <- norm' env (transListComp vres (witSequenceList (typeOf env e)) comp)
+                                         let compT = conv (typeOf env comp)
+                                             body = sAssign (pVar res compT) (empty comp) : ss ++ [sReturn vres]
+                                         return $ sDef f p compT body fxPure
+        transListComp xs w (ListComp _ (Elem e) NoComp)
+                                    = sExpr $ eCall (eDot w (name "append")) [xs,e]
+        transListComp xs w (ListComp _ e (CompFor l1 p e1 co))
+                                    = For NoLoc p e1 [transListComp xs w (ListComp l1 e co)] []
+        transListComp xs w (ListComp _ e (CompIf l1 e1 co))
+                                    = If NoLoc [Branch e1 [transListComp xs w (ListComp l1 e co)]] []
+        witSequenceList t          = eCall (tApp (eQVar (gBuiltin (Derived nSequence nList))) [t]) []
+        -- witSetPSetT t              = eCall (tApp (eQVar (gBuiltin (Derived nSetP nSetT))) [t]) [eQVar(wname w)]
+        --    where w                 = head [w | w <- witnesses env, tcname (proto w) == qnHashable, t == wtype w]
+        -- witMappingDict k v         = eCall (tApp (eQVar (gBuiltin (Derived nMapping nDict))) [k,v]) [eQVar(wname w)]
+        --    where w                 = head [w | w <- witnesses env, tcname (proto w) == qnHashable, k == wtype w]
+        -- transComp xs (SetComp _ (Elem e) NoComp)
+        --                             = sExpr $ eCall (eDot (witSetPSetT (typeOf env e)) (name "add")) [xs,e]
+        -- transComp xs (SetComp _ e (CompFor l1 p e1 co))
+        --                             = For NoLoc p e1 [transComp xs (SetComp l1 e co)] []
+        -- transComp xs (SetComp _ e (CompIf l1 e1 co))
+        --                             = If NoLoc [Branch e1 [transComp xs (SetComp l1 e co)]] []
+        empty ListComp{}            = List NoLoc []
+        -- empty (SetComp l (Elem e) co)
+        --                             = eCall (tApp (eQVar primMkSet) [t]) [eQVar (wname w),Set NoLoc []]
+        --    where t                  = typeOf env e
+        --          w                  = head [w | w <- witnesses env, tcname (proto w) == qnHashable, t == wtype w]
+        -- empty (DictComp l (Assoc ek ev) co)
+        --                             = eCall (tApp (eQVar primMkDict) [tk, tv]) [eQVar (wname w),Dict NoLoc []]
+        --    where tk                 = typeOf env ek
+        --          tv                 = typeOf env ev
+        --          w                  = head [w | w <- witnesses env, tcname (proto w) == qnHashable, tk == wtype w]
 
 normPat                             :: NormEnv -> Pattern -> NormM (Pattern,Suite)
 normPat _ (PWild l a)               = do n <- newName "ignore"
@@ -118,7 +171,7 @@ instance Norm a => Norm (Maybe a) where
     norm env (Just a)               = Just <$> norm env a
 
 instance Norm Module where
-    norm env (Module m imps ss)     = Module m imps <$> norm env ss
+    norm env (Module m imps ss)     = Module m imps <$> normSuite env ss
 
 handle env x hs                     = do bs <- sequence [ branch e b | Handler e b <- hs ]
                                          return $ [sIf bs [sExpr $ eCall (eQVar primRAISE) [eVar x]]]
@@ -172,8 +225,8 @@ instance Norm Stmt where
     norm env (Pass l)               = return $ Pass l
     norm env (Raise l e)            = do e' <- norm env e
                                          return $ Expr l $ eCall (eQVar primRAISE) [e']
-    norm env (If l bs els)          = If l <$> norm env bs <*> norm env els
-    norm env (While l e b els)      = While l <$> normBool env e <*> norm (pushMark LOOP env) b <*> norm env els
+    norm env (If l bs els)          = If l <$> norm env bs <*> normSuite env els
+    norm env (While l e b els)      = While l <$> normBool env e <*> normSuite (pushMark LOOP env) b <*> normSuite env els
     norm env (Data l mbp ss)        = Data l <$> norm env mbp <*> norm env ss
     norm env (VarAssign l ps e)     = VarAssign l <$> norm env ps <*> norm env e
     norm env (After l e e')         = After l <$> norm env e <*> norm env e'
@@ -274,7 +327,7 @@ normItem env (WithItem e (Just p))  = do e' <- norm env e
 
 instance Norm Decl where
     norm env (Def l n q p k t b d x)= do p' <- joinPar <$> norm env0 p <*> norm (define (envOf p) env0) k
-                                         b' <- norm env1 b
+                                         b' <- normSuite env1 b
                                          return $ Def l n q p' KwdNIL (conv t) (ret b') d x
       where env1                    = setContext [] $ setRet t $ define (envOf p ++ envOf k) env0
             env0                    = defineTVars q env
@@ -341,16 +394,22 @@ instance Norm Expr where
     norm env (DotI l e i)           = DotI l <$> norm env e <*> pure i
     norm env (RestI l e i)          = RestI l <$> norm env e <*> pure i
     norm env (Lambda l p k e fx)    = do p' <- joinPar <$> norm env p <*> norm (define (envOf p) env) k
+                                         let env1 = define (envOf p ++ envOf k) ( addLambdavars p' env)
                                          eta <$> (Lambda l p' KwdNIL <$> norm env1 e <*> pure fx)
-      where env1                    = define (envOf p ++ envOf k) env
     norm env (Yield l e)            = Yield l <$> norm env e
     norm env (YieldFrom l e)        = YieldFrom l <$> norm env e
     norm env (Tuple l ps ks)        = Tuple l <$> norm env (joinArg ps ks) <*> pure KwdNil
     norm env (List l es)            = List l <$> norm env es
-    norm env e0@(ListComp l e c)    = notYet l e0                                   -- TODO: eliminate here
-      where env1                    = define (envOf c) env
+    norm env e0@(ListComp l e c)    = do f <- newName "compfun"
+                                         let p = getLambdavars env
+                                         addComp (f,p,e0) 
+                                         return (Call NoLoc (eVar f) (posarg $ map eVar $ pospars' p) KwdNil)
     norm env (Dict l as)            = Dict l <$> norm env as
     norm env (Set l es)             = Set l <$> norm env es
+    norm env e0@(SetComp l e c)     = do f <- newName "compfun"
+                                         let p = getLambdavars env
+                                         addComp (f,p,e0) 
+                                         return (Call NoLoc (eVar f) (posarg $ map eVar $ pospars' p) KwdNil)
     norm env (Paren l e)            = norm env e
     norm env e                      = error ("norm unexpected: " ++ prstr e)
 
@@ -382,10 +441,10 @@ instance Norm Pattern where
     norm env (PParen l p)           = norm env p
 
 instance Norm Branch where
-    norm env (Branch e ss)          = Branch <$> normBool env e <*> norm env ss
+    norm env (Branch e ss)          = Branch <$> normBool env e <*> normSuite env ss
 
 instance Norm Handler where
-    norm env (Handler ex b)         = Handler ex <$> norm env1 b
+    norm env (Handler ex b)         = Handler ex <$> normSuite env1 b
       where env1                    = define (envOf ex) env
 
 instance Norm PosPar where
@@ -500,3 +559,4 @@ joinRow (TNil _ _) r                = conv r
 -- To be removed:
 joinRow p (TNil _ _)                = conv p
 joinRow p r                         = error ("##### joinRow " ++ prstr p ++ "  AND  " ++ prstr r)
+
