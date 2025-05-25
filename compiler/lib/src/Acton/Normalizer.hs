@@ -97,7 +97,7 @@ normSuite env (s : ss)              = do s' <- norm' env s
                                              ss' = transComp compEnv vres comp
                                          ss <- norm' compEnv ss'  --(transComp vres comp)
                                          let compT = conv (typeOf env comp)
-                                             body = sAssign (pVar res compT) (empty comp) : ss ++ [sReturn vres]
+                                             body = sAssign (pVar res compT) (empty compEnv comp) : ss ++ [sReturn vres]
                                          return $ sDef f p compT body fxPure
         transComp cenv xs (ListComp _ (Elem e) NoComp)
                                     = sExpr $ eCall (eDot (witSequenceList (typeOf cenv e)) (name "append")) [xs,e]
@@ -125,16 +125,16 @@ normSuite env (s : ss)              = do s' <- norm' env s
         getCompClause (ListComp _ _ c) = c
         getCompClause (SetComp _ _ c)  = c
         getCompClause (DictComp _ _ c) = c
-        empty ListComp{}            = List NoLoc []
-        empty (SetComp l (Elem e) co)
+        empty cenv ListComp{}       = List NoLoc []
+        empty cenv (SetComp l (Elem e) co)
                                     = eCall (tApp (eQVar primMkSet) [t]) [eQVar (wname w),Set NoLoc []]
-           where t                  = typeOf env e
-                 w                  = head [w | w <- witnesses env, tcname (proto w) == qnHashable, t == wtype w]
-        empty (DictComp l (Assoc ek ev) co)
+           where t                  = typeOf cenv e
+                 w                  = head [w | w <- witnesses cenv, tcname (proto w) == qnHashable, t == wtype w]
+        empty cenv (DictComp l (Assoc ek ev) co)
                                     = eCall (tApp (eQVar primMkDict) [tk, tv]) [eQVar (wname w),Dict NoLoc []]
-           where tk                 = typeOf env ek
-                 tv                 = typeOf env ev
-                 w                  = head [w | w <- witnesses env, tcname (proto w) == qnHashable, tk == wtype w]
+           where tk                 = typeOf cenv ek
+                 tv                 = typeOf cenv ev
+                 w                  = head [w | w <- witnesses cenv, tcname (proto w) == qnHashable, tk == wtype w]
 
 normPat                             :: NormEnv -> Pattern -> NormM (Pattern,Suite)
 normPat _ (PWild l a)               = do n <- newName "ignore"
