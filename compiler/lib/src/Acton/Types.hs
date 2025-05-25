@@ -1336,49 +1336,34 @@ instance Infer Expr where
     infer env (List l es)               = do t0 <- newTVar
                                              (cs,es') <- infElems env es t0
                                              return (cs, tList t0, List l es')
-    infer env e@(ListComp l e1 co)
+    infer env (ListComp l e co)
       | nodup co                        = do (cs1,te,co') <- infEnv env co
                                              t0 <- newTVar
-                                             (cs2,es) <- infElems (define te env) [e1] t0
-                                             let [e1'] = es
-                                                 t2 = tList t0
-                                             return (cs1++cs2, t2, ListComp l e1' co')
+                                             (cs2,es) <- infElems (define te env) [e] t0
+                                             let [e'] = es
+                                             return (cs1++cs2, tList t0, ListComp l e' co')
     infer env (Set l es)                = do t0 <- newTVar
                                              (cs,es')  <- infElems env es t0
                                              w <- newWitness
                                              return (Impl (DfltInfo l 87 Nothing []) w t0 pHashable : cs, tSet t0, eCall (tApp (eQVar primMkSet) [t0]) [eVar w,Set l es'])
-    infer env e@(SetComp l e1 co)
+    infer env (SetComp l e co)
       | nodup co                        = do (cs1,te,co') <- infEnv env co
                                              t0 <- newTVar
-                                             (cs2,es) <- infElems (define te env) [e1] t0
-                                             let [e1'] = es
-                                                 t2 = tSet t0
-                                             return (cs1++cs2, t2, SetComp l e1' co')
+                                             (cs2,es) <- infElems (define te env) [e] t0
+                                             let [e'] = es
+                                             return (cs1++cs2, tSet t0, SetComp l e' co')
     infer env (Dict l as)               = do tk <- newTVar
                                              tv <- newTVar
                                              (cs,as') <- infAssocs env as tk tv
                                              w <- newWitness 
                                              return (Impl (DfltInfo l 88 Nothing []) w tk pHashable : cs, tDict tk tv, eCall (tApp (eQVar primMkDict) [tk, tv]) [eVar w,Dict l as'])
---                                             t1 <- newTVar
---                                             w1 <- newWitness
---                                             let t2 = tList (tTupleP (posRow tk $ posRow tv posNil))
---                                                 w2 = eQVar witCollectionList
---                                             return (Impl w1 t1 (pMapping tk tv) :
---                                                     cs, t1, eCall (tApp (eDot (eVar w1) fromiterKW) [t2]) [w2, List l as'])
-
-    infer env e@(DictComp l a1 co)
+    infer env (DictComp l a co)
       | nodup co                        = do (cs1,te,co') <- infEnv env co
                                              tk <- newTVar
                                              tv <- newTVar
-                                             (cs2,as) <- infAssocs (define te env) [a1] tk tv
---                                             let [a1'] = as
---                                             t1 <- newTVar
---                                             w1 <- newWitness
---                                             let t2 = tList (tTupleP (posRow tk $ posRow tv posNil))
---                                                 w2 = eQVar witCollectionList
---                                             return (Impl w1 t1 (pMapping tk tv) :
---                                                     cs1++cs2, t1, eCall (tApp (eDot (eVar w1) fromiterKW) [t2]) [w2, ListComp l a1' co'])
-                                             notYet l e
+                                             (cs2,as) <- infAssocs (define te env) [a] tk tv
+                                             let [a'] = as
+                                             return (cs1++cs2, tDict tk tv, DictComp l a' co')
 
     infer env (Paren l e)               = do (cs,t,e') <- infer env e
                                              return (cs, t, Paren l e')

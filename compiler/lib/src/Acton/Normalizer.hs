@@ -91,40 +91,46 @@ normSuite env (s : ss)              = do s' <- norm' env s
                                          ss' <- normSuite (define (envOf s) env) ss
                                          fs <- mapM mkFunDef ps
                                          return (fs ++ s' ++ ss')
-  where mkFunDef (f,p,comp@(ListComp _ (Elem e) _))
-                                    = do res <- newName "res"
+  where mkFunDef (f,p,comp)         = do res <- newName "res"
                                          let vres = eVar res
-                                         ss <- norm' env (transListComp vres (witSequenceList (typeOf env e)) comp)
+                                             ss' = transComp vres comp
+                                         ss <- norm' env ss'  --(transComp vres comp)
                                          let compT = conv (typeOf env comp)
                                              body = sAssign (pVar res compT) (empty comp) : ss ++ [sReturn vres]
                                          return $ sDef f p compT body fxPure
-        transListComp xs w (ListComp _ (Elem e) NoComp)
-                                    = sExpr $ eCall (eDot w (name "append")) [xs,e]
-        transListComp xs w (ListComp _ e (CompFor l1 p e1 co))
-                                    = For NoLoc p e1 [transListComp xs w (ListComp l1 e co)] []
-        transListComp xs w (ListComp _ e (CompIf l1 e1 co))
-                                    = If NoLoc [Branch e1 [transListComp xs w (ListComp l1 e co)]] []
+        transComp xs (ListComp _ (Elem e) NoComp)
+                                    = sExpr $ eCall (eDot (witSequenceList (typeOf env e)) (name "append")) [xs,e]
+        transComp xs (ListComp _ e (CompFor l1 p e1 co))
+                                    = For NoLoc p e1 [transComp xs (ListComp l1 e co)] []
+        transComp xs (ListComp _ e (CompIf l1 e1 co))
+                                    = If NoLoc [Branch e1 [transComp xs (ListComp l1 e co)]] []
+        transComp xs (SetComp _ (Elem e) NoComp)
+                                    = sExpr $ eCall (eDot (witSetPSetT (typeOf env e)) (name "add")) [xs,e]
+        transComp xs (SetComp _ e (CompFor l1 p e1 co))
+                                    = For NoLoc p e1 [transComp xs (SetComp l1 e co)] []
+        transComp xs (SetComp _ e (CompIf l1 e1 co))
+                                    = If NoLoc [Branch e1 [transComp xs (SetComp l1 e co)]] []
+        transComp xs (DictComp _ (Assoc ek ev) NoComp)
+                                    = sExpr $ eCall (eDot (eDot (witMappingDict (typeOf env ek) (typeOf env ev)) (Internal Witness "Indexed" 0)) (name "__setitem__")) [xs,ek,ev]
+        transComp xs (DictComp _ a (CompFor l1 p e1 co))
+                                    = For NoLoc p e1 [transComp xs (DictComp l1 a co)] []
+        transComp xs (DictComp _ a (CompIf l1 e1 co))
+                                    = If NoLoc [Branch e1 [transComp xs (DictComp l1 a co)]] []
         witSequenceList t          = eCall (tApp (eQVar (gBuiltin (Derived nSequence nList))) [t]) []
-        -- witSetPSetT t              = eCall (tApp (eQVar (gBuiltin (Derived nSetP nSetT))) [t]) [eQVar(wname w)]
-        --    where w                 = head [w | w <- witnesses env, tcname (proto w) == qnHashable, t == wtype w]
-        -- witMappingDict k v         = eCall (tApp (eQVar (gBuiltin (Derived nMapping nDict))) [k,v]) [eQVar(wname w)]
-        --    where w                 = head [w | w <- witnesses env, tcname (proto w) == qnHashable, k == wtype w]
-        -- transComp xs (SetComp _ (Elem e) NoComp)
-        --                             = sExpr $ eCall (eDot (witSetPSetT (typeOf env e)) (name "add")) [xs,e]
-        -- transComp xs (SetComp _ e (CompFor l1 p e1 co))
-        --                             = For NoLoc p e1 [transComp xs (SetComp l1 e co)] []
-        -- transComp xs (SetComp _ e (CompIf l1 e1 co))
-        --                             = If NoLoc [Branch e1 [transComp xs (SetComp l1 e co)]] []
+        witSetPSetT t              = eCall (tApp (eQVar (gBuiltin (Derived nSetP nSetT))) [t]) [eCall (eQVar(wname w)) []]
+           where w                 = head [w | w <- witnesses env, tcname (proto w) == qnHashable, t == wtype w]
+        witMappingDict k v         = eCall (tApp (eQVar (gBuiltin (Derived nMapping nDict))) [k,v]) [eCall (eQVar(wname w)) []]
+           where w                 = head [w | w <- witnesses env, tcname (proto w) == qnHashable, k == wtype w]
         empty ListComp{}            = List NoLoc []
-        -- empty (SetComp l (Elem e) co)
-        --                             = eCall (tApp (eQVar primMkSet) [t]) [eQVar (wname w),Set NoLoc []]
-        --    where t                  = typeOf env e
-        --          w                  = head [w | w <- witnesses env, tcname (proto w) == qnHashable, t == wtype w]
-        -- empty (DictComp l (Assoc ek ev) co)
-        --                             = eCall (tApp (eQVar primMkDict) [tk, tv]) [eQVar (wname w),Dict NoLoc []]
-        --    where tk                 = typeOf env ek
-        --          tv                 = typeOf env ev
-        --          w                  = head [w | w <- witnesses env, tcname (proto w) == qnHashable, tk == wtype w]
+        empty (SetComp l (Elem e) co)
+                                    = eCall (tApp (eQVar primMkSet) [t]) [eQVar (wname w),Set NoLoc []]
+           where t                  = typeOf env e
+                 w                  = head [w | w <- witnesses env, tcname (proto w) == qnHashable, t == wtype w]
+        empty (DictComp l (Assoc ek ev) co)
+                                    = eCall (tApp (eQVar primMkDict) [tk, tv]) [eQVar (wname w),Dict NoLoc []]
+           where tk                 = typeOf env ek
+                 tv                 = typeOf env ev
+                 w                  = head [w | w <- witnesses env, tcname (proto w) == qnHashable, tk == wtype w]
 
 normPat                             :: NormEnv -> Pattern -> NormM (Pattern,Suite)
 normPat _ (PWild l a)               = do n <- newName "ignore"
@@ -281,7 +287,7 @@ instance Norm Stmt where
                                          let p'@(PVar _ n _) : ps' = ps2
                                          return $ Assign l [p'] e' : [ Assign l [p] (eVar n) | p <- ps' ] ++ concat stmts
       where t                       = typeOf env e
-    norm' env (For l p e b els)     = do i <- newName "iter"
+    norm' env s@(For l p e b els)   = do i <- newName "iter"
                                          v <- newName "val"
                                          norm env [sAssign (pVar i $ conv t) e,
                                                    handleStop (While l (eBool True) (body v i) []) els]
@@ -400,15 +406,19 @@ instance Norm Expr where
     norm env (YieldFrom l e)        = YieldFrom l <$> norm env e
     norm env (Tuple l ps ks)        = Tuple l <$> norm env (joinArg ps ks) <*> pure KwdNil
     norm env (List l es)            = List l <$> norm env es
-    norm env e0@(ListComp l e c)    = do f <- newName "compfun"
+    norm env e@ListComp{}           = do f <- newName "compfun"
                                          let p = getLambdavars env
-                                         addComp (f,p,e0) 
+                                         addComp (f,p,e) 
                                          return (Call NoLoc (eVar f) (posarg $ map eVar $ pospars' p) KwdNil)
     norm env (Dict l as)            = Dict l <$> norm env as
-    norm env (Set l es)             = Set l <$> norm env es
-    norm env e0@(SetComp l e c)     = do f <- newName "compfun"
+    norm env e@DictComp{}           = do f <- newName "compfun"
                                          let p = getLambdavars env
-                                         addComp (f,p,e0) 
+                                         addComp (f,p,e) 
+                                         return (Call NoLoc (eVar f) (posarg $ map eVar $ pospars' p) KwdNil)
+    norm env (Set l es)             = Set l <$> norm env es
+    norm env e@SetComp{}            = do f <- newName "compfun"
+                                         let p = getLambdavars env
+                                         addComp (f,p,e) 
                                          return (Call NoLoc (eVar f) (posarg $ map eVar $ pospars' p) KwdNil)
     norm env (Paren l e)            = norm env e
     norm env e                      = error ("norm unexpected: " ++ prstr e)
@@ -559,4 +569,3 @@ joinRow (TNil _ _) r                = conv r
 -- To be removed:
 joinRow p (TNil _ _)                = conv p
 joinRow p r                         = error ("##### joinRow " ++ prstr p ++ "  AND  " ++ prstr r)
-
