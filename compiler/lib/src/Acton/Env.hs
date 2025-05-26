@@ -601,6 +601,9 @@ isDefOrClass env n          = case findQName n env of
 witsByPName                 :: EnvF x -> QName -> [Witness]
 witsByPName env pn          = [ w | w <- witnesses env, tcname (proto w) == pn ]
 
+witsByPNameAndType          :: EnvF x -> QName -> Type -> [Witness]
+witsByPNameAndType env pn t = [ w | w <- witsByPName env pn, wtype w == t ]
+
 witsByTName                 :: EnvF x -> QName -> [Witness]
 witsByTName env tn          = [ w | w <- witnesses env, eqname (wtype w) ]
   where eqname (TCon _ c)   = tcname c == tn

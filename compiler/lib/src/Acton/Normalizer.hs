@@ -93,48 +93,45 @@ normSuite env (s : ss)              = do s' <- norm' env s
                                          return (fs ++ s' ++ ss')
   where mkFunDef (f,p,comp)         = do res <- newName "res"
                                          let vres = eVar res
-                                             compEnv = define (envOf p ++ envOf (getCompClause comp)) env
-                                             ss' = transComp compEnv vres comp
-                                         ss <- norm' compEnv ss'  --(transComp vres comp)
-                                         let compT = conv (typeOf env comp)
-                                             body = sAssign (pVar res compT) (empty compEnv comp) : ss ++ [sReturn vres]
+                                             env1 = define (envOf p) env
+                                             ss' = transComp env1 vres comp
+                                         ss <- norm' env1 ss'
+                                         let compT = conv (typeOf env1 comp)
+                                             body = sAssign (pVar res compT) (empty compT) : ss ++ [sReturn vres]
                                          return $ sDef f p compT body fxPure
-        transComp cenv xs (ListComp _ (Elem e) NoComp)
-                                    = sExpr $ eCall (eDot (witSequenceList (typeOf cenv e)) (name "append")) [xs,e]
-        transComp cenv xs (ListComp _ e (CompFor l1 p e1 co))
-                                    = For NoLoc p e1 [transComp cenv xs (ListComp l1 e co)] []
-        transComp cenv xs (ListComp _ e (CompIf l1 e1 co))
-                                    = If NoLoc [Branch e1 [transComp cenv xs (ListComp l1 e co)]] []
-        transComp cenv xs (SetComp _ (Elem e) NoComp)
-                                    = sExpr $ eCall (eDot (witSetPSetT (typeOf cenv e)) (name "add")) [xs,e]
-        transComp cenv xs (SetComp _ e (CompFor l1 p e1 co))
-                                    = For NoLoc p e1 [transComp cenv xs (SetComp l1 e co)] []
-        transComp cenv xs (SetComp _ e (CompIf l1 e1 co))
-                                    = If NoLoc [Branch e1 [transComp cenv xs (SetComp l1 e co)]] []
-        transComp cenv xs (DictComp _ (Assoc ek ev) NoComp)
-                                    = sExpr $ eCall (eDot (eDot (witMappingDict (typeOf cenv ek) (typeOf cenv ev)) (Internal Witness "Indexed" 0)) (name "__setitem__")) [xs,ek,ev]
-        transComp cenv xs (DictComp _ a (CompFor l1 p e1 co))
-                                    = For NoLoc p e1 [transComp cenv xs (DictComp l1 a co)] []
-        transComp cenv xs (DictComp _ a (CompIf l1 e1 co))
-                                    = If NoLoc [Branch e1 [transComp cenv xs (DictComp l1 a co)]] []
-        witSequenceList t          = eCall (tApp (eQVar (gBuiltin (Derived nSequence nList))) [t]) []
-        witSetPSetT t              = eCall (tApp (eQVar (gBuiltin (Derived nSetP nSetT))) [t]) [eCall (eQVar(wname w)) []]
-           where w                 = head [w | w <- witnesses env, tcname (proto w) == qnHashable, t == wtype w]
-        witMappingDict k v         = eCall (tApp (eQVar (gBuiltin (Derived nMapping nDict))) [k,v]) [eCall (eQVar(wname w)) []]
-           where w                 = head [w | w <- witnesses env, tcname (proto w) == qnHashable, k == wtype w]
-        getCompClause (ListComp _ _ c) = c
-        getCompClause (SetComp _ _ c)  = c
-        getCompClause (DictComp _ _ c) = c
-        empty cenv ListComp{}       = List NoLoc []
-        empty cenv (SetComp l (Elem e) co)
-                                    = eCall (tApp (eQVar primMkSet) [t]) [eQVar (wname w),Set NoLoc []]
-           where t                  = typeOf cenv e
-                 w                  = head [w | w <- witnesses cenv, tcname (proto w) == qnHashable, t == wtype w]
-        empty cenv (DictComp l (Assoc ek ev) co)
-                                    = eCall (tApp (eQVar primMkDict) [tk, tv]) [eQVar (wname w),Dict NoLoc []]
-           where tk                 = typeOf cenv ek
-                 tv                 = typeOf cenv ev
-                 w                  = head [w | w <- witnesses cenv, tcname (proto w) == qnHashable, tk == wtype w]
+        transComp env r (ListComp _ (Elem e) NoComp)
+                                    = sExpr $ eCall (eDot witSequenceList (name "append")) [r,e]
+          where t                   = typeOf env e
+                witSequenceList     = eCall (tApp (eQVar (gBuiltin (Derived nSequence nList))) [t]) []
+        transComp env r (ListComp _ e (CompFor l1 p e1 co))
+                                    = For NoLoc p e1 [transComp (define (envOf p) env) r (ListComp l1 e co)] []
+        transComp env r (ListComp _ e (CompIf l1 e1 co))
+                                    = If NoLoc [Branch e1 [transComp env r (ListComp l1 e co)]] []
+        transComp env r (SetComp _ (Elem e) NoComp)
+                                    = sExpr $ eCall (eDot witSetPSetT (name "add")) [r,e]
+          where t                   = typeOf env e
+                witSetPSetT         = eCall (tApp (eQVar (gBuiltin (Derived nSetP nSetT))) [t]) [eCall (eQVar(wname w)) []]
+                w                   = head $ witsByPNameAndType env qnHashable t
+        transComp env r (SetComp _ e (CompFor l1 p e1 co))
+                                    = For NoLoc p e1 [transComp (define (envOf p) env) r (SetComp l1 e co)] []
+        transComp env r (SetComp _ e (CompIf l1 e1 co))
+                                    = If NoLoc [Branch e1 [transComp env r (SetComp l1 e co)]] []
+        transComp env r (DictComp _ (Assoc ek ev) NoComp)
+                                    = sExpr $ eCall (eDot (eDot witMappingDict (Internal Witness "Indexed" 0)) (name "__setitem__")) [r,ek,ev]
+          where k                   = typeOf env ek
+                v                   = typeOf env ev
+                witMappingDict      = eCall (tApp (eQVar (gBuiltin (Derived nMapping nDict))) [k,v]) [eCall (eQVar(wname w)) []]
+                w                   = head $ witsByPNameAndType env qnHashable k
+        transComp env r (DictComp _ a (CompFor l1 p e1 co))
+                                    = For NoLoc p e1 [transComp (define (envOf p) env) r (DictComp l1 a co)] []
+        transComp env r (DictComp _ a (CompIf l1 e1 co))
+                                    = If NoLoc [Branch e1 [transComp env r (DictComp l1 a co)]] []
+        empty (TCon _ (TC n ts))
+          | n == qnList             = List NoLoc []
+          | n == qnSetT             = eCall (tApp (eQVar primMkSet) ts) [eQVar (wname w),Set NoLoc []]
+          | n == qnDict             = eCall (tApp (eQVar primMkDict) ts) [eQVar (wname w),Dict NoLoc []]
+          where w                   = head $ witsByPNameAndType env qnHashable $ head ts
+
 
 normPat                             :: NormEnv -> Pattern -> NormM (Pattern,Suite)
 normPat _ (PWild l a)               = do n <- newName "ignore"
