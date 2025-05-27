@@ -1,0 +1,17 @@
+# The translation of Dict and set comprehensions currently fail if the
+# implied Hashable requirement constrains a generic type parameter and
+# not a top-level class
+
+# fun1: [A(Hashable)] => (list[A]) -> dict[A,str]
+
+def fun1(keys):
+    return {key: "hello" for key in keys}
+
+# fun2: [A(Hashable)] => (list[A]) -> set[A]
+
+def fun2(keys):
+    return {key for key in keys}
+
+actor main(env):
+    d = fun1([1,2,3])
+    s = fun2([1,2,3])
