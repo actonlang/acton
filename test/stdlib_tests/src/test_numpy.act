@@ -5,3 +5,150 @@ import numpy
 
 def _test_arange():
     ar = numpy.arange(0, 3, 1)
+    testing.assertEqual(ar.shape, [3])
+    testing.assertEqual(ar.size, 3)
+
+def _test_array():
+    # Create array from list
+    arr = numpy.array([1, 2, 3, 4, 5])
+    testing.assertEqual(arr.shape, [5])
+    testing.assertEqual(arr.size, 5)
+
+def _test_reshape():
+    # Test reshape
+    arr = numpy.arange(0, 12)
+    reshaped = arr.reshape([3, 4])
+    testing.assertEqual(reshaped.shape, [3, 4])
+    testing.assertEqual(reshaped.size, 12)
+
+def _test_transpose():
+    # Test transpose
+    arr = numpy.arange(0, 6).reshape([2, 3])
+    trans = arr.transpose(None)
+    testing.assertEqual(trans.shape, [3, 2])
+
+def _test_flatten():
+    # Test flatten
+    arr = numpy.arange(0, 12).reshape([3, 4])
+    flat = arr.flatten()
+    testing.assertEqual(flat.shape, [12])
+    testing.assertEqual(flat.size, 12)
+
+def _test_copy():
+    # Test copy
+    arr = numpy.array([1, 2, 3, 4])
+    arr_copy = arr.copy()
+    testing.assertEqual(arr_copy.shape, arr.shape)
+    testing.assertEqual(arr_copy.size, arr.size)
+
+def _test_sum():
+    # Test sum without axis
+    arr = numpy.array([1, 2, 3, 4])
+    s = numpy.sum(arr, None)
+    testing.assertEqual(numpy.scalar(s), 10)
+
+def _test_mean():
+    # Test mean
+    arr = numpy.array([1, 2, 3, 4])
+    m = numpy.mean(arr, None)
+    testing.assertEqual(numpy.scalar(m), 2.5)
+
+def _test_abs():
+    # Test abs
+    arr = numpy.array([-1, -2, 3, -4])
+    abs_arr = numpy.abs(arr)
+    testing.assertEqual(abs_arr.shape, [4])
+
+def _test_dot():
+    # Test dot product for 1D arrays
+    a = numpy.array([1, 2, 3])
+    b = numpy.array([4, 5, 6])
+    dot_result = numpy.dot(a, b)
+    testing.assertEqual(numpy.scalar(dot_result), 32)  # 1*4 + 2*5 + 3*6
+
+def _test_concatenate():
+    # Test concatenate
+    a1 = numpy.array([1, 2, 3])
+    a2 = numpy.array([4, 5, 6])
+    concat = numpy.concatenate([a1, a2])
+    testing.assertEqual(concat.shape, [6])
+    testing.assertEqual(concat.size, 6)
+
+def _test_sort():
+    # Test sort
+    arr = numpy.array([3, 1, 4, 1, 5])
+    sorted_arr = numpy.sort(arr, None)
+    testing.assertEqual(sorted_arr.shape, [5])
+
+def _test_scalar():
+    # Test scalar extraction - scalar only works on 0-dim arrays
+    # The sum of an array without axis returns a 0-dim array
+    arr = numpy.array([42])
+    sum_result = numpy.sum(arr, None)
+    val = numpy.scalar(sum_result)
+    testing.assertEqual(val, 42)
+
+def _test_linspace():
+    # Create linearly spaced array
+    lin = numpy.linspace(0.0, 1.0, 5)
+    testing.assertEqual(lin.shape, [5])
+    testing.assertEqual(lin.size, 5)
+
+def _test_roll():
+    # Test roll
+    arr = numpy.array([1, 2, 3, 4, 5])
+    rolled = numpy.roll(arr, 2)
+    testing.assertEqual(rolled.shape, [5])
+
+def _test_tile():
+    # Test tile
+    arr = numpy.array([1, 2, 3])
+    tiled = numpy.tile(arr, 3)
+    testing.assertEqual(tiled.shape, [9])
+    testing.assertEqual(tiled.size, 9)
+
+def _test_clip():
+    # Test clip
+    arr = numpy.array([1, 2, 3, 4, 5])
+    clipped = numpy.clip(arr, 2, 4)
+    testing.assertEqual(clipped.shape, [5])
+
+# def _test_partition():
+#     # Test partition - commented out due to internal error
+#     arr = numpy.array([3, 1, 4, 1, 5, 9, 2, 6])
+#     part = numpy.partition(arr, 3)
+#     testing.assertEqual(part.shape, [8])
+
+def _test_random():
+    # Test random integer generation
+    rand_int = numpy.unirandint(0, 10, 100)
+    testing.assertEqual(rand_int.shape, [100])
+    testing.assertEqual(rand_int.size, 100)
+
+    # Test random float generation
+    rand_float = numpy.unirandfloat(0.0, 1.0, 50)
+    testing.assertEqual(rand_float.shape, [50])
+    testing.assertEqual(rand_float.size, 50)
+
+def _test_slicing():
+    # Test basic slicing
+    arr = numpy.arange(0, 10)
+    sliced = arr[2:7]
+    testing.assertEqual(sliced.shape, [5])
+
+def _test_arithmetic():
+    # Test basic arithmetic operations
+    a = numpy.array([1, 2, 3])
+    b = numpy.array([4, 5, 6])
+
+    # Addition
+    c = a + b
+    testing.assertEqual(c.shape, [3])
+
+    # Subtraction
+    d = b - a
+    testing.assertEqual(d.shape, [3])
+
+    # Multiplication
+    e = a * b
+    testing.assertEqual(e.shape, [3])
