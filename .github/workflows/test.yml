@@ -512,7 +512,7 @@ jobs:
           make start
           make test
 
-  test-app-respnet:
+  test-app-sorespo:
     strategy:
       fail-fast: false
       matrix:
@@ -520,7 +520,7 @@ jobs:
     needs: build-debs
     uses: "./.github/workflows/test-app.yml"
     with:
-      repo_url: "orchestron-orchestrator/respnet"
+      repo_url: "orchestron-orchestrator/sorespo"
       arch: ${{ matrix.arch }}
 
   test-app-orchestron:
