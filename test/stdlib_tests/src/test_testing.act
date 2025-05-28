@@ -41,7 +41,7 @@ actor AsyncTester(t):
         t.success()
     after 0: test()
 
-actor OldEnvTester(report_result, env, log_handler):
+actor OldEnvTester(report_result, env: Env, log_handler):
     log = logging.Logger(log_handler)
     def test():
         log.info("EnvTester.test()")
