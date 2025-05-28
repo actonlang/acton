@@ -240,7 +240,7 @@ typeReport (NoRed c) filename src
                                           []
 
 typeReport (NoSolve mbt vs cs) filename src         =
-    let header = trace (show (head cs)) $ case length cs of
+    let header = case length cs of
                     0 -> "Unable to give good error message: please report example"
                     1 -> "Cannot satisfy the following constraint:"
                     _ -> "Cannot satisfy the following simultaneous constraints for the unknown " ++

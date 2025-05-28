@@ -107,17 +107,6 @@ nodup x
   | otherwise                   = True
   where vs                      = duplicates (bound x)
 
-defaultTE                           :: Env -> TEnv -> TypeM TEnv
-defaultTE env te                    = do defaultVars (tyfree te \\ tyfree env)
-                                         msubst te
-
-defaultVars tvs                     = do tvs' <- tyfree <$> msubst (map tVar tvs)
-                                         sequence [ substitute tv (dflt (tvkind tv)) | tv <- tvs' ]
-  where dflt KType                  = tNone
-        dflt KFX                    = fxPure
-        dflt PRow                   = posNil
-        dflt KRow                   = kwdNil
-
 
 addTyping env n s t c                   = c {info = addT n (simp env s) t (info c){errloc = loc n}}
     where addT n s t (DfltInfo l m mbe ts)
@@ -129,22 +118,35 @@ addTyping env n s t c                   = c {info = addT n (simp env s) t (info 
 infTop                                  :: Env -> Suite -> TypeM (TEnv,Suite)
 infTop env ss                           = do --traceM ("\n## infEnv top")
                                              pushFX fxPure tNone
-                                             (cs,te,ss) <- (if stub env then infEnv else infSuiteEnv) env ss
-                                             ss <- msubst ss
-                                             popFX
-                                             --traceM ("######## solve TOP: " ++ show (length cs))
-                                             --traceM (prstrs cs)
-                                             eq <- solveAll (posdefine (filter typeDecl te) env) te tNone cs
-                                             --traceM ("######## termred TOP")
-                                             ss <- termred <$> msubst (pushEqns eq ss)
-                                             defaultVars (tyfree ss)
-                                             te <- defaultTE env  te
-                                             ss <- msubst ss
-                                             --traceM ("-------- done TOP")
+                                             (te,ss) <- infTopStmts env ss
+                                             checkSigs env te
                                              return (te, ss)
 
-pushEqns eqs ss                         = push eqns0 ss
-  where eqns0                           = [ (eq,ns) | eq <- eqs, let ns = free eq `intersect` bound ss ]
+infTopStmts env []                      = return ([], [])
+infTopStmts env (s : ss)                = do (cs,te1,s) <- infEnv env s
+                                             --traceM ("###########\n" ++ render (nest 4 $ vcat $ map pretty te))
+                                             --traceM ("-----------\n" ++ render (nest 4 $ vcat $ map pretty cs))
+                                             eq <- solveAll (posdefine (filter typeDecl te1) env) te1 tNone cs
+                                             te1 <- defaultTE env te1
+                                             --traceM ("===========\n" ++ render (nest 4 $ vcat $ map pretty te))
+                                             ss1 <- termred <$> msubst (pushEqns eq [s])
+                                             defaultVars (tyfree ss1)
+                                             ss1 <- msubst ss1
+
+                                             (te2,ss2) <- infTopStmts (define te1 env) ss
+                                             return (te1++te2, ss1++ss2)
+
+  where defaultTE env te                = do defaultVars (tyfree te)
+                                             msubst te
+        defaultVars tvs                 = do tvs' <- (filter univar . tyfree) <$> msubst (map tVar tvs)
+                                             sequence [ substitute tv (dflt (tvkind tv)) | tv <- tvs' ]
+        dflt KType                      = tNone
+        dflt KFX                        = fxPure
+        dflt PRow                       = posNil
+        dflt KRow                       = kwdNil
+
+        pushEqns eqs ss                 = push eqns0 ss
+          where eqns0                   = [ (eq,ns) | eq <- eqs, let ns = free eq `intersect` bound ss ]
         push eqns ss                    = bindWits (map fst eq1) ++ push' eq2 ss
           where (eq1,eq2)               = partition (null . snd) eqns
         push' [] ss                     = ss
@@ -211,10 +213,14 @@ commonTEnv env (te:tes)                 = unifEnv tes (restrict te vs)
 
 
 infSuiteEnv env ss                      = do (cs,te,ss') <- infEnv env ss
-                                             let (sigs,terms) = sigTerms te
-                                             case dom sigs \\ dom terms of
-                                                [] -> return (cs, te, ss')
-                                                ns -> err2 ns "Signature lacks subsequent binding"
+                                             checkSigs env te
+                                             return (cs, te, ss')
+
+checkSigs env te
+  | stub env || null ns                 = return ()
+  | otherwise                           = err2 ns "Signature lacks subsequent binding"
+  where (sigs,terms)                    = sigTerms te
+        ns                              = dom sigs \\ dom terms
 
 infLiveEnv env x
   | fallsthru x                         = do (cs,te,x') <- infSuiteEnv env x
