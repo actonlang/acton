@@ -19,7 +19,7 @@ actor AsyncTester(report_result, log_handler):
         log.info("AsyncTester.test()", None)
         report_result(True, None)
 
-actor EnvTester(report_result, env, log_handler):
+actor EnvTester(report_result, env: Env, log_handler):
     log = logging.Logger(log_handler)
     def test():
         log.info("EnvTester.test()", None)
