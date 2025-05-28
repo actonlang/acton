@@ -1351,7 +1351,11 @@ instance Infer Expr where
                                              t0 <- newTVar
                                              (cs2,es) <- infElems (define te env) [e] t0
                                              let [e'] = es
-                                             return (cs1++cs2, tSet t0, SetComp l e' co')
+                                             w <- newWitness
+                                             let wrapComp = eCall (tApp (eQVar primSetCompWithWitness) [t0]) 
+                                                                 [eVar w, SetComp l e' co']
+                                             return (Impl (DfltInfo l 89 Nothing []) w t0 pHashable : cs1++cs2, 
+                                                    tSet t0, wrapComp)
     infer env (Dict l as)               = do tk <- newTVar
                                              tv <- newTVar
                                              (cs,as') <- infAssocs env as tk tv
@@ -1363,7 +1367,11 @@ instance Infer Expr where
                                              tv <- newTVar
                                              (cs2,as) <- infAssocs (define te env) [a] tk tv
                                              let [a'] = as
-                                             return (cs1++cs2, tDict tk tv, DictComp l a' co')
+                                             w <- newWitness
+                                             let wrapComp = eCall (tApp (eQVar primDictCompWithWitness) [tk, tv]) 
+                                                                 [eVar w, DictComp l a' co']
+                                             return (Impl (DfltInfo l 90 Nothing []) w tk pHashable : cs1++cs2, 
+                                                    tDict tk tv, wrapComp)
 
     infer env (Paren l e)               = do (cs,t,e') <- infer env e
                                              return (cs, t, Paren l e')

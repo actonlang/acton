@@ -45,7 +45,11 @@ normalize env0 m                    = return (evalState (norm env m) (0,[]), env
 
 
 -- Normalizing monad
-type NormM a                        = State (Int,[(Name,PosPar,Expr)]) a
+-- Extended to support witness information for comprehensions
+data CompInfo = CompInfo Expr                      -- Regular comprehension
+              | CompWithWit Expr Expr               -- Comprehension with witness
+
+type NormM a                        = State (Int,[(Name,PosPar,CompInfo)]) a
 
 newName                             :: String -> NormM Name
 newName s                           = do (n,ts) <- get
@@ -53,9 +57,12 @@ newName s                           = do (n,ts) <- get
                                          return $ Internal NormPass s n
 
 addComp                             :: (Name,PosPar,Expr) -> NormM ()
-addComp t                           = state (\(n,ts) -> ((),(n,t:ts)))
+addComp (n,p,e)                     = state (\(i,ts) -> ((),(i,(n,p,CompInfo e):ts)))
 
-getComps                            :: NormM [(Name,PosPar,Expr)]
+addCompWithWit                      :: (Name,PosPar,Expr,Expr) -> NormM ()
+addCompWithWit (n,p,w,e)            = state (\(i,ts) -> ((),(i,(n,p,CompWithWit w e):ts)))
+
+getComps                            :: NormM [(Name,PosPar,CompInfo)]
 getComps                            = state (\(n,ts) -> (ts, (n,[])))
  
 type NormEnv                        = EnvF NormX
@@ -91,46 +98,56 @@ normSuite env (s : ss)              = do s' <- norm' env s
                                          ss' <- normSuite (define (envOf s) env) ss
                                          fs <- mapM mkFunDef ps
                                          return (fs ++ s' ++ ss')
-  where mkFunDef (f,p,comp)         = do res <- newName "res"
+  where mkFunDef (f,p,compInfo)     = do res <- newName "res"
                                          let vres = eVar res
                                              env1 = define (envOf p) env
-                                             ss' = transComp env1 vres comp
+                                             (comp, mbWit) = case compInfo of
+                                                CompInfo e -> (e, Nothing)
+                                                CompWithWit w e -> (e, Just w)
+                                             ss' = transComp env1 vres comp mbWit
                                          ss <- norm' env1 ss'
                                          let compT = conv (typeOf env1 comp)
-                                             body = sAssign (pVar res compT) (empty compT) : ss ++ [sReturn vres]
+                                             body = sAssign (pVar res compT) (empty compT mbWit) : ss ++ [sReturn vres]
                                          return $ sDef f p compT body fxPure
-        transComp env r (ListComp _ (Elem e) NoComp)
+        transComp env r (ListComp _ (Elem e) NoComp) mbWit
                                     = sExpr $ eCall (eDot witSequenceList (name "append")) [r,e]
           where t                   = typeOf env e
                 witSequenceList     = eCall (tApp (eQVar (gBuiltin (Derived nSequence nList))) [t]) []
-        transComp env r (ListComp _ e (CompFor l1 p e1 co))
-                                    = For NoLoc p e1 [transComp (define (envOf p) env) r (ListComp l1 e co)] []
-        transComp env r (ListComp _ e (CompIf l1 e1 co))
-                                    = If NoLoc [Branch e1 [transComp env r (ListComp l1 e co)]] []
-        transComp env r (SetComp _ (Elem e) NoComp)
+        transComp env r (ListComp _ e (CompFor l1 p e1 co)) mbWit
+                                    = For NoLoc p e1 [transComp (define (envOf p) env) r (ListComp l1 e co) mbWit] []
+        transComp env r (ListComp _ e (CompIf l1 e1 co)) mbWit
+                                    = If NoLoc [Branch e1 [transComp env r (ListComp l1 e co) mbWit]] []
+        transComp env r (SetComp _ (Elem e) NoComp) mbWit
                                     = sExpr $ eCall (eDot witSetPSetT (name "add")) [r,e]
           where t                   = typeOf env e
-                witSetPSetT         = eCall (tApp (eQVar (gBuiltin (Derived nSetP nSetT))) [t]) [eCall (eQVar(wname w)) []]
-                w                   = head $ witsByPNameAndType env qnHashable t
-        transComp env r (SetComp _ e (CompFor l1 p e1 co))
-                                    = For NoLoc p e1 [transComp (define (envOf p) env) r (SetComp l1 e co)] []
-        transComp env r (SetComp _ e (CompIf l1 e1 co))
-                                    = If NoLoc [Branch e1 [transComp env r (SetComp l1 e co)]] []
-        transComp env r (DictComp _ (Assoc ek ev) NoComp)
+                witSetPSetT         = case mbWit of
+                                        Just wit -> eCall (tApp (eQVar (gBuiltin (Derived nSetP nSetT))) [t]) [wit]
+                                        Nothing -> eCall (tApp (eQVar (gBuiltin (Derived nSetP nSetT))) [t]) [eCall (eQVar(wname w)) []]
+                                          where w = head $ witsByPNameAndType env qnHashable t
+        transComp env r (SetComp _ e (CompFor l1 p e1 co)) mbWit
+                                    = For NoLoc p e1 [transComp (define (envOf p) env) r (SetComp l1 e co) mbWit] []
+        transComp env r (SetComp _ e (CompIf l1 e1 co)) mbWit
+                                    = If NoLoc [Branch e1 [transComp env r (SetComp l1 e co) mbWit]] []
+        transComp env r (DictComp _ (Assoc ek ev) NoComp) mbWit
                                     = sExpr $ eCall (eDot (eDot witMappingDict (Internal Witness "Indexed" 0)) (name "__setitem__")) [r,ek,ev]
           where k                   = typeOf env ek
                 v                   = typeOf env ev
-                witMappingDict      = eCall (tApp (eQVar (gBuiltin (Derived nMapping nDict))) [k,v]) [eCall (eQVar(wname w)) []]
-                w                   = head $ witsByPNameAndType env qnHashable k
-        transComp env r (DictComp _ a (CompFor l1 p e1 co))
-                                    = For NoLoc p e1 [transComp (define (envOf p) env) r (DictComp l1 a co)] []
-        transComp env r (DictComp _ a (CompIf l1 e1 co))
-                                    = If NoLoc [Branch e1 [transComp env r (DictComp l1 a co)]] []
-        empty (TCon _ (TC n ts))
+                witMappingDict      = case mbWit of
+                                        Just wit -> eCall (tApp (eQVar (gBuiltin (Derived nMapping nDict))) [k,v]) [wit]
+                                        Nothing -> eCall (tApp (eQVar (gBuiltin (Derived nMapping nDict))) [k,v]) [eCall (eQVar(wname w)) []]
+                                          where w = head $ witsByPNameAndType env qnHashable k
+        transComp env r (DictComp _ a (CompFor l1 p e1 co)) mbWit
+                                    = For NoLoc p e1 [transComp (define (envOf p) env) r (DictComp l1 a co) mbWit] []
+        transComp env r (DictComp _ a (CompIf l1 e1 co)) mbWit
+                                    = If NoLoc [Branch e1 [transComp env r (DictComp l1 a co) mbWit]] []
+        empty (TCon _ (TC n ts)) mbWit
           | n == qnList             = List NoLoc []
-          | n == qnSetT             = eCall (tApp (eQVar primMkSet) ts) [eQVar (wname w),Set NoLoc []]
-          | n == qnDict             = eCall (tApp (eQVar primMkDict) ts) [eQVar (wname w),Dict NoLoc []]
-          where w                   = head $ witsByPNameAndType env qnHashable $ head ts
+          | n == qnSetT             = eCall (tApp (eQVar primMkSet) ts) [witExpr,Set NoLoc []]
+          | n == qnDict             = eCall (tApp (eQVar primMkDict) ts) [witExpr,Dict NoLoc []]
+          where witExpr = case mbWit of
+                            Just wit -> wit
+                            Nothing -> eQVar (wname w)
+                              where w = head $ witsByPNameAndType env qnHashable $ head ts
 
 
 normPat                             :: NormEnv -> Pattern -> NormM (Pattern,Suite)
@@ -380,6 +397,9 @@ instance Norm Expr where
     norm env (Ellipsis l)           = return $ Ellipsis l
     norm env (Strings l ss)         = return $ Strings l (catStrings ss)
     norm env (BStrings l ss)        = return $ BStrings l (catStrings ss)
+    norm env (Call l (TApp _ (Var _ n) _) (PosArg wit (PosArg comp PosNil)) KwdNil)
+      | n == primSetCompWithWitness = normSetCompWithWit env wit comp
+      | n == primDictCompWithWitness = normDictCompWithWit env wit comp
     norm env (Call l e p k)         = Call l <$> norm env e <*> norm env (joinArg p k) <*> pure KwdNil
     norm env (TApp l e ts)          = TApp l <$> normInst env ts e <*> pure (conv ts)
     norm env (Dot l (Var l' x) n)
@@ -432,6 +452,22 @@ eta (Lambda _ p KwdNIL (Call _ e p' KwdNil) fx)
     eq1 PosNIL PosNil                   = True
     eq1 _ _                             = False
 eta e                               = e
+
+-- Handle wrapped set comprehensions from Types pass
+normSetCompWithWit env wit comp@(SetComp l e co) = do
+    f <- newName "compfun"
+    let p = getLambdavars env
+    -- Store witness with comprehension for mkFunDef to use
+    addCompWithWit (f, p, wit, comp)
+    return (Call NoLoc (eVar f) (posarg $ map eVar $ pospars' p) KwdNil)
+
+-- Handle wrapped dict comprehensions from Types pass  
+normDictCompWithWit env wit comp@(DictComp l a co) = do
+    f <- newName "compfun"
+    let p = getLambdavars env
+    -- Store witness with comprehension for mkFunDef to use
+    addCompWithWit (f, p, wit, comp)
+    return (Call NoLoc (eVar f) (posarg $ map eVar $ pospars' p) KwdNil)
 
 nargs (TRow _ _ _ _ r)              = 1 + nargs r
 nargs (TStar _ _ _)                 = 1

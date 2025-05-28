@@ -147,6 +147,8 @@ primWRAP            = gPrim "WRAP"
 
 primMkSet           = gPrim "mkSet"
 primMkDict          = gPrim "mkDict"
+primSetCompWithWitness = gPrim "setCompWithWitness"
+primDictCompWithWitness = gPrim "dictCompWithWitness"
 
 primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec),
                             (noq primAFTERf,        NDef scAFTERf NoDec),
@@ -230,7 +232,9 @@ primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec),
                             (noq primWRAP,          NDef scWRAP NoDec),
 
                             (noq primMkSet,         NDef scMkSet NoDec),
-                            (noq primMkDict,        NDef scMkDict NoDec)
+                            (noq primMkDict,        NDef scMkDict NoDec),
+                            (noq primSetCompWithWitness,  NDef scSetCompWithWitness NoDec),
+                            (noq primDictCompWithWitness, NDef scDictCompWithWitness NoDec)
                       ]
 
 tSequenceListWild   = tCon (TC qnSequence [tList tWild, tWild])
@@ -549,6 +553,19 @@ scMkSet             = tSchema [quant a] tMkSet
 --  $MkDict         : [A] => (Hashable[A], dict[A]) -> dict[A]
 scMkDict            = tSchema [quant a, quant b] tMkDict
   where tMkDict     = tFun fxPure (posRow tHashableA (posRow (tDict (tVar a) (tVar b)) posNil)) kwdNil (tDict (tVar a)(tVar b))
+        tHashableA  = tCon (TC qnHashable [tVar a])
+        a           = TV KType $ name "A"
+        b           = TV KType $ name "B"
+
+--  $SetCompWithWitness : [A] => (Hashable[A], SetComp[A]) -> set[A]
+scSetCompWithWitness = tSchema [quant a] tSetCompWithWitness
+  where tSetCompWithWitness = tFun fxPure (posRow tHashableA (posRow (tSet (tVar a)) posNil)) kwdNil (tSet (tVar a))
+        tHashableA  = tCon (TC qnHashable [tVar a])
+        a           = TV KType $ name "A"
+
+--  $DictCompWithWitness : [A,B] => (Hashable[A], DictComp[A,B]) -> dict[A,B]
+scDictCompWithWitness = tSchema [quant a, quant b] tDictCompWithWitness
+  where tDictCompWithWitness = tFun fxPure (posRow tHashableA (posRow (tDict (tVar a) (tVar b)) posNil)) kwdNil (tDict (tVar a) (tVar b))
         tHashableA  = tCon (TC qnHashable [tVar a])
         a           = TV KType $ name "A"
         b           = TV KType $ name "B"
