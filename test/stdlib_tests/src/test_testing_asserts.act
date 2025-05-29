@@ -2,14 +2,15 @@
 import testing
 from testing import NotEqualError
 
-def _test_assert_equal() -> None:
+def _test_assert_equal():
     """Test assertEqual"""
+    messages = []
 
     # should raise NotEqualError because 1 != 2
     try:
         testing.assertEqual(1, 2)
     except AssertionError as e:
-        pass
+        messages.append(str(e))
     else:
         raise Exception("assertEqual(1, 2) should have raised NotEqualError")
 
@@ -17,7 +18,7 @@ def _test_assert_equal() -> None:
     try:
         testing.assertEqual(1, None)
     except AssertionError as e:
-        pass
+        messages.append(str(e))
     else:
         raise Exception("assertEqual(1, None) should have raised NotEqualError")
 
@@ -25,7 +26,7 @@ def _test_assert_equal() -> None:
     try:
         testing.assertEqual(None, 1)
     except AssertionError as e:
-        pass
+        messages.append(str(e))
     else:
         raise Exception("assertEqual(None, 1) should have raised NotEqualError")
 
@@ -35,8 +36,11 @@ def _test_assert_equal() -> None:
     except AssertionError as e:
         raise Exception("assertEqual(None, None) should not have raised NotEqual")
 
-def _test_assert_not_equal() -> None:
+    return "\n".join(messages)
+
+def _test_assert_not_equal():
     """Test assertNotEqual"""
+    messages = []
 
     # should not raise NotEqualError because 1 != 2
     try:
@@ -60,13 +64,15 @@ def _test_assert_not_equal() -> None:
     try:
         testing.assertNotEqual(None, None)
     except AssertionError as e:
-        pass
+        messages.append(str(e))
     else:
         raise Exception("assertNotEqual(None, None) should have raised NotEqual")
 
     try:
         testing.assertNotEqual(1, 1)
     except AssertionError as e:
-        pass
+        messages.append(str(e))
     else:
         raise Exception("assertNotEqual(1, 1) should have raised NotEqual")
+
+    return "\n".join(messages)
