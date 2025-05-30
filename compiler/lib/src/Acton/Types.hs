@@ -124,11 +124,11 @@ infTop env ss                           = do --traceM ("\n## infEnv top")
 
 infTopStmts env []                      = return ([], [])
 infTopStmts env (s : ss)                = do (cs,te1,s) <- infEnv env s
-                                             --traceM ("###########\n" ++ render (nest 4 $ vcat $ map pretty te))
-                                             --traceM ("-----------\n" ++ render (nest 4 $ vcat $ map pretty cs))
+                                             traceM ("###########\n" ++ render (nest 4 $ vcat $ map pretty te1))
+                                             traceM ("-----------\n" ++ render (nest 4 $ vcat $ map pretty cs))
                                              eq <- solveAll (posdefine (filter typeDecl te1) env) te1 tNone cs
                                              te1 <- defaultTE env te1
-                                             --traceM ("===========\n" ++ render (nest 4 $ vcat $ map pretty te))
+                                             traceM ("===========\n" ++ render (nest 4 $ vcat $ map pretty te1))
                                              ss1 <- termred <$> msubst (pushEqns eq [s])
                                              defaultVars (tyfree ss1)
                                              ss1 <- msubst ss1
@@ -932,7 +932,7 @@ refine env cs te eq
   | otherwise                           = do eq <- msubst eq
                                              let (fix_cs, gen_cs) = partition fixed cs
                                              return (fix_cs, gen_vs, gen_cs, te, eq)
-  where fix_vs                          = closeDepVars (tyfree env ++ fxfree te ++ fxfree cs) cs
+  where fix_vs                          = [] -- fxfree te ++ fxfree cs
         ambig_vs                        = tyfree cs \\ closeDepVars (fix_vs++safe_vs) cs
         tail_vs                         = gen_vs `intersect` (tailvars te ++ tailvars cs)
 
@@ -964,25 +964,28 @@ fxfree te                               = [ tv | tv <- tyfree te, tvkind tv == K
 genEnv                                  :: Env -> Constraints -> TEnv -> [Decl] -> TypeM (Constraints,TEnv,Equations,[Decl])
 genEnv env cs te ds
   | any typeDecl te                     = do te <- msubst te
-                                             --traceM ("## genEnv types 1\n" ++ render (nest 6 $ pretty te))
-                                             --traceM ("## genEnv types cs:\n" ++ render (nest 4 $ vcat $ map pretty cs))
+                                             traceM ("## genEnv types 1\n" ++ render (nest 6 $ pretty te))
+                                             traceM ("   where\n" ++ render (nest 6 $ vcat $ map pretty cs))
                                              (cs,eq) <- simplify (posdefine te env) te tNone cs
                                              te <- msubst te
-                                             --traceM ("## genEnv types 2\n" ++ render (nest 6 $ pretty te))
+                                             traceM ("## genEnv types 2\n" ++ render (nest 6 $ pretty te))
+                                             traceM ("   where\n" ++ render (nest 6 $ vcat $ map pretty cs))
                                              return (cs, te, eq, ds)
   | onTop env                           = do te <- msubst te
-                                             --traceM ("## genEnv defs 1\n" ++ render (nest 6 $ pretty te))
-                                             --traceM ("## genEnv defs cs:\n" ++ render (nest 4 $ vcat $ map pretty cs))
+                                             traceM ("## genEnv defs 1\n" ++ render (nest 6 $ pretty te))
+                                             traceM ("   where\n" ++ render (nest 6 $ vcat $ map pretty cs))
                                              (cs,eq) <- simplify env te tNone cs
                                              te <- msubst te
                                              env <- msubst env
                                              (fix_cs, gen_vs, gen_cs, te, eq) <- refine env cs te eq
-                                             --traceM ("## genEnv defs 2 [" ++ prstrs gen_vs ++ "]\n" ++ render (nest 6 $ pretty te))
+                                             traceM ("## genEnv defs 2 [" ++ prstrs gen_vs ++ "]\n" ++ render (nest 6 $ pretty te))
+                                             traceM ("   where\n" ++ render (nest 6 $ vcat $ map pretty gen_cs))
                                              let (q,ws) = qualify gen_vs gen_cs
                                                  te1 = map (generalize gen_vs q) te
                                                  (eq1,eq2) = splitEqs (dom ws) eq
                                                  ds1 = map (abstract q ds ws eq1) ds
-                                             --traceM ("## genEnv defs 3 [" ++ prstrs gen_vs ++ "]\n" ++ render (nest 6 $ pretty te1))
+                                             traceM ("## genEnv defs 3 [" ++ prstrs gen_vs ++ "]\n" ++ render (nest 6 $ pretty te1))
+                                             traceM ("   fixed:\n" ++ render (nest 6 $ vcat $ map pretty fix_cs))
                                              return (fix_cs, te1, eq2, ds1)
   | otherwise                           = do --traceM ("## genEnv local\n" ++ render (nest 6 $ pretty te))
                                              --traceM ("## genEnv local cs:\n" ++ render (nest 4 $ vcat $ map pretty cs))
