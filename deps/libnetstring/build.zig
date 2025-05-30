@@ -16,6 +16,7 @@ pub fn build(b: *std.Build) void {
     };
 
     lib.addCSourceFiles(.{
+        .root = b.path("."),
         .files = &source_files,
         .flags = &[_][]const u8{}
     });
