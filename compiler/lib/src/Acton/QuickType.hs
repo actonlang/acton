@@ -176,6 +176,14 @@ instance QType Expr where
       where (_, c')                 = qType env f c
             (t, e')                 = qType env1 f e
             env1                    = define (envOf c) env
+    qType env f (SetComp l e c)     = (tSet t, SetComp l e' c')
+      where (_, c')                 = qType env f c
+            (t, e')                 = qType env1 f e
+            env1                    = define (envOf c) env
+    qType env f (DictComp l a c)    = (tDict tk tv, DictComp l a' c')
+      where (_, c')                 = qType env f c
+            (TTuple _ tk tv, a')    = qType env1 f a
+            env1                    = define (envOf c) env
     qType env f (Dict l as)         = (tDict (upbound env ts1) (upbound env ts2), Dict l (zipWith Assoc ks vs))
       where (ts1, ks)               = unzip $ [ qType env f k | Assoc k v <- as ]
             (ts2, vs)               = unzip $ [ qType env f v | Assoc k v <- as ]
@@ -194,6 +202,13 @@ instance QType Elem where
       where (t, e')                 = qType env f e
 
     qMatch f t t' (Elem e)          = Elem (qMatch f t t' e)
+
+instance QType Assoc where
+    qType env f (Assoc ek ev)       = (tTuple tk tv, Assoc ek' ev')
+      where (tk, ek')               = qType env f ek
+            (tv, ev')               = qType env f ev     
+
+    qMatch f t t' a                 = a
 
 instance QType PosArg where
     qType env f (PosArg e p)        = (posRow t r, PosArg e' p')

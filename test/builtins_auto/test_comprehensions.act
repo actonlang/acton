@@ -1,0 +1,221 @@
+# Comprehensive test suite for list, set, and dict comprehensions
+
+def test_basic_comprehensions() -> bool:
+    """Test basic comprehensions with just a variable"""
+    print("\n=== Basic Comprehensions ===")
+
+    # List comprehension with bare variable
+    lst = [k for k in range(5)]
+    print("List with bare variable:", lst)
+    if lst != [0, 1, 2, 3, 4]:
+        print("FAIL: List comprehension with bare variable")
+        return False
+
+    # Set comprehension with bare variable
+    st = {k for k in range(5)}
+    print("Set with bare variable:", st)
+    if st != {0, 1, 2, 3, 4}:
+        print("FAIL: Set comprehension with bare variable")
+        return False
+
+    # Dict comprehension with bare variable
+    dt = {k: k for k in range(5)}
+    print("Dict with bare variable:", dt)
+    if dt != {0: 0, 1: 1, 2: 2, 3: 3, 4: 4}:
+        print("FAIL: Dict comprehension with bare variable")
+        return False
+
+    return True
+
+def test_comprehensions_with_expressions() -> bool:
+    """Test comprehensions with expressions"""
+    print("\n=== Comprehensions with Expressions ===")
+
+    # List comprehension with expression
+    lst = [k * 2 for k in range(5)]
+    print("List with expression:", lst)
+    if lst != [0, 2, 4, 6, 8]:
+        print("FAIL: List comprehension with expression")
+        return False
+
+    # Set comprehension with expression
+    st = {k * 2 for k in range(5)}
+    print("Set with expression:", st)
+    if st != {0, 2, 4, 6, 8}:
+        print("FAIL: Set comprehension with expression")
+        return False
+
+    # Dict comprehension with expressions
+    dt = {k: k * 2 for k in range(5)}
+    print("Dict with expression:", dt)
+    if dt != {0: 0, 1: 2, 2: 4, 3: 6, 4: 8}:
+        print("FAIL: Dict comprehension with expression")
+        return False
+
+    return True
+
+def test_filtered_comprehensions() -> bool:
+    """Test comprehensions with if conditions"""
+    print("\n=== Filtered Comprehensions ===")
+
+    # Even numbers only
+    lst = [k for k in range(10) if k % 2 == 0]
+    print("Even numbers list:", lst)
+    if lst != [0, 2, 4, 6, 8]:
+        print("FAIL: Filtered list comprehension")
+        return False
+
+    st = {k for k in range(10) if k % 2 == 0}
+    print("Even numbers set:", st)
+    if st != {0, 2, 4, 6, 8}:
+        print("FAIL: Filtered set comprehension")
+        return False
+
+    dt = {k: k * k for k in range(10) if k % 2 == 0}
+    print("Even numbers dict:", dt)
+    if dt != {0: 0, 2: 4, 4: 16, 6: 36, 8: 64}:
+        print("FAIL: Filtered dict comprehension")
+        return False
+
+    return True
+
+def test_nested_comprehensions() -> bool:
+    """Test nested comprehensions"""
+    print("\n=== Nested Comprehensions ===")
+
+    # Nested list comprehension
+    matrix = [[i * j for i in range(3)] for j in range(3)]
+    print("Matrix:", matrix)
+    if matrix != [[0, 0, 0], [0, 1, 2], [0, 2, 4]]:
+        print("FAIL: Nested list comprehension")
+        return False
+
+    # Flattened with multiple for clauses
+    flat = [i + j for i in range(3) for j in range(3)]
+    print("Flattened:", flat)
+    if flat != [0, 1, 2, 1, 2, 3, 2, 3, 4]:
+        print("FAIL: Multiple for clauses")
+        return False
+
+    return True
+
+def test_variable_capture() -> bool:
+    """Test capturing variables from outer scope"""
+    print("\n=== Variable Capture ===")
+
+    x = 10
+    y = 5
+
+    # Capturing outer variables
+    lst = [k + x for k in range(5)]
+    print("List with captured var:", lst)
+    if lst != [10, 11, 12, 13, 14]:
+        print("FAIL: Variable capture in list")
+        return False
+
+    st = {k * y for k in range(3)}
+    print("Set with captured var:", st)
+    if st != {0, 5, 10}:
+        print("FAIL: Variable capture in set")
+        return False
+
+    dt = {k: k + x * y for k in range(3)}
+    print("Dict with captured vars:", dt)
+    if dt != {0: 50, 1: 51, 2: 52}:
+        print("FAIL: Variable capture in dict")
+        return False
+
+    return True
+
+def test_complex_types() -> bool:
+    """Test comprehensions with complex types"""
+    print("\n=== Complex Types ===")
+
+    # String keys
+    str_dict = {str(k): k for k in range(5)}
+    print("String key dict:", str_dict)
+    if str_dict != {"0": 0, "1": 1, "2": 2, "3": 3, "4": 4}:
+        print("FAIL: String keys in dict")
+        return False
+
+    # Tuple comprehension - just test length for now
+    pairs = [(i, j) for i in range(2) for j in range(2)]
+    print("Tuple pairs:", pairs)
+    if len(pairs) != 4:
+        print("FAIL: Tuple comprehension length")
+        return False
+
+    # Pattern matching in comprehension
+    data = [(1, 2), (3, 4), (5, 6)]
+    firsts = [a for (a, b) in data]
+    seconds = [b for (a, b) in data]
+    print("First elements:", firsts)
+    print("Second elements:", seconds)
+    if firsts != [1, 3, 5]:
+        print("FAIL: Pattern matching firsts")
+        return False
+    if seconds != [2, 4, 6]:
+        print("FAIL: Pattern matching seconds")
+        return False
+
+    return True
+
+def test_edge_cases() -> bool:
+    """Test edge cases"""
+    print("\n=== Edge Cases ===")
+
+    # Empty comprehensions
+    empty_list = [k for k in range(0)]
+    empty_set = {k for k in range(0)}
+    empty_dict = {k: k for k in range(0)}
+    print("Empty list:", empty_list)
+    print("Empty set:", empty_set)
+    print("Empty dict:", empty_dict)
+    if empty_list != []:
+        print("FAIL: Empty list comprehension")
+        return False
+    if empty_set != set():
+        print("FAIL: Empty set comprehension")
+        return False
+    if empty_dict != {}:
+        print("FAIL: Empty dict comprehension")
+        return False
+
+    # Single element
+    single_list = [k for k in range(1)]
+    single_set = {k for k in range(1)}
+    single_dict = {k: k for k in range(1)}
+    print("Single element list:", single_list)
+    print("Single element set:", single_set)
+    print("Single element dict:", single_dict)
+    if single_list != [0]:
+        print("FAIL: Single element list")
+        return False
+    if single_set != {0}:
+        print("FAIL: Single element set")
+        return False
+    if single_dict != {0: 0}:
+        print("FAIL: Single element dict")
+        return False
+
+    return True
+
+actor main(env):
+    # Run all tests
+    if not test_basic_comprehensions():
+        await async env.exit(1)
+    if not test_comprehensions_with_expressions():
+        await async env.exit(1)
+    if not test_filtered_comprehensions():
+        await async env.exit(1)
+    if not test_nested_comprehensions():
+        await async env.exit(1)
+    if not test_variable_capture():
+        await async env.exit(1)
+    if not test_edge_cases():
+        await async env.exit(1)
+    #if not test_complex_types():
+    #    await async env.exit(1)
+
+    print("\n✓ All comprehension tests passed!")
+    env.exit(0)

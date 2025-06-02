@@ -1702,9 +1702,6 @@ ttype    =  addLoc (
             rword "None" *> return (S.TNone NoLoc)
         <|> (S.TVar NoLoc . S.TV S.KType) <$> (S.Name <$> rwordLoc "Self" <*> return "Self")
         <|> S.TOpt NoLoc <$> (qmark *> ttype)
---        <|> braces (do t <- ttype
---                       mbt <- optional (colon *> ttype)
---                       return (maybe (Builtin.tSetExist t) (Builtin.tMapping t) mbt))
         <|> try (do mbfx <- optional effect
                     (p,k) <- parens funrows
                     arrow
@@ -1715,7 +1712,6 @@ ttype    =  addLoc (
                       Left (p,k) -> return (S.TTuple NoLoc p k)
                       Right t -> return t)
         <|> parens (return (S.TTuple NoLoc S.posNil S.kwdNil))
---        <|> try (brackets (Builtin.tSequence <$> ttype))
         <|> try (S.TVar NoLoc <$> tvar)
         <|> rword "_" *> return (S.TWild NoLoc)
         <|> S.TCon NoLoc <$> tcon)
