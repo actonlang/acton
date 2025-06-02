@@ -303,11 +303,18 @@ tBaseException                      = tCon cBaseException
 tException                          = tCon cException
 tStopIteration                      = tCon cStopIteration
 tValueError                         = tCon cValueError
+
 ---
-tSequence a                         = tCon (pSequence a)
-tMapping a b                        = tCon (pMapping a b)
-tSetExist a                         = tCon (pSet a)
-tCollection a                       = tCon (pCollection a)
+
+tSequenceW self a                   = tCon (TC qnSequence [self,a])
+tMappingW self a b                  = tCon (TC qnMapping [self, a, b])
+tSetW self a                        = tCon (TC qnSetP [self, a])
+tCollectionW self a                 = tCon (TC qnCollection [self, a])
+tHashableW self                     = tCon (TC qnHashable [self])
+
+witSequenceList                     = gBuiltin (Derived nSequence nList)
+witSetSet                           = gBuiltin (Derived nSetP nSetT)
+witMappingDict                      = gBuiltin (Derived nMapping nDict)
 
 nNumpy                              = name "numpy"
 mNumpy                              = ModName [nNumpy]

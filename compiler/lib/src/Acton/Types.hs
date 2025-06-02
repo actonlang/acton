@@ -1350,12 +1350,10 @@ instance Infer Expr where
       | nodup co                        = do (cs1,te,co') <- infEnv env co
                                              t0 <- newTVar
                                              (cs2,es) <- infElems (define te env) [e] t0
-                                             let [e'] = es
                                              w <- newWitness
-                                             let wrapComp = eCall (tApp (eQVar primSetCompWithWitness) [t0]) 
-                                                                 [eVar w, SetComp l e' co']
-                                             return (Impl (DfltInfo l 89 Nothing []) w t0 pHashable : cs1++cs2, 
-                                                    tSet t0, wrapComp)
+                                             let Elem v = head es
+                                                 e' = Elem (annot (tHashableW t0) (eVar w) t0 v)
+                                             return (Impl (DfltInfo l 89 Nothing []) w t0 pHashable : cs1++cs2, tSet t0, SetComp l e' co')
     infer env (Dict l as)               = do tk <- newTVar
                                              tv <- newTVar
                                              (cs,as') <- infAssocs env as tk tv
@@ -1366,12 +1364,10 @@ instance Infer Expr where
                                              tk <- newTVar
                                              tv <- newTVar
                                              (cs2,as) <- infAssocs (define te env) [a] tk tv
-                                             let [a'] = as
                                              w <- newWitness
-                                             let wrapComp = eCall (tApp (eQVar primDictCompWithWitness) [tk, tv]) 
-                                                                 [eVar w, DictComp l a' co']
-                                             return (Impl (DfltInfo l 90 Nothing []) w tk pHashable : cs1++cs2, 
-                                                    tDict tk tv, wrapComp)
+                                             let Assoc k v = head as
+                                                 a' = Assoc (annot (tHashableW tk) (eVar w) tk k) v
+                                             return (Impl (DfltInfo l 90 Nothing []) w tk pHashable : cs1++cs2, tDict tk tv, DictComp l a' co')
 
     infer env (Paren l e)               = do (cs,t,e') <- infer env e
                                              return (cs, t, Paren l e')

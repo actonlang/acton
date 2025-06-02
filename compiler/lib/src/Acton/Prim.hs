@@ -107,8 +107,6 @@ primWIdentityNone   = gPrim "wIdentityNone"
 
 witIntegralInt      = GName mPrim $ Derived (deriveQ qnIntegral) $ Derived (deriveQ qnInt) suffixWitness
 witIntegralI64      = GName mPrim $ Derived (deriveQ qnIntegral) $ Derived (deriveQ qnI64) suffixWitness
-witSequenceList     = GName mPrim $ Derived (deriveQ qnSequence) $ Derived (deriveQ qnList) suffixWitness
-witCollectionList   = GName mPrim $ Derived (deriveQ qnCollection) $ Derived (deriveQ qnList) suffixWitness
 
 primISNOTNONE       = gPrim "ISNOTNONE"
 primISNOTNONE0      = gPrim "ISNOTNONE0"
@@ -147,8 +145,12 @@ primWRAP            = gPrim "WRAP"
 
 primMkSet           = gPrim "mkSet"
 primMkDict          = gPrim "mkDict"
-primSetCompWithWitness = gPrim "setCompWithWitness"
-primDictCompWithWitness = gPrim "dictCompWithWitness"
+primAnnot           = gPrim "annot"
+
+annot t_ann ann t e = eCall (tApp (eQVar primAnnot) [t_ann, t]) [ann, e]
+
+unAnnot t_ann (Call _ (TApp _ (Var _ n) [t,_]) (PosArg w (PosArg e PosNil)) KwdNil)
+  | n == primAnnot && t == t_ann    = (w, e)
 
 primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec),
                             (noq primAFTERf,        NDef scAFTERf NoDec),
@@ -213,8 +215,6 @@ primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec),
                             (noq primWEqNone,       NVar tEqNone),
                             (noq primWIdentityNone, NVar tIdentityNone),
                             (noq witIntegralInt,    NVar tIntegralInt),
-                            (noq witSequenceList,   NVar tSequenceListWild),
-                            (noq witCollectionList, NVar tCollectionListWild),
 
                             (noq primISNOTNONE,     NDef scISNOTNONE NoDec),
                             (noq primISNONE,        NDef scISNONE NoDec),
@@ -233,12 +233,8 @@ primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec),
 
                             (noq primMkSet,         NDef scMkSet NoDec),
                             (noq primMkDict,        NDef scMkDict NoDec),
-                            (noq primSetCompWithWitness,  NDef scSetCompWithWitness NoDec),
-                            (noq primDictCompWithWitness, NDef scDictCompWithWitness NoDec)
+                            (noq primAnnot,         NDef scAnnot NoDec)
                       ]
-
-tSequenceListWild   = tCon (TC qnSequence [tList tWild, tWild])
-tCollectionListWild = tCon (TC qnCollection [tList tWild, tWild])
 
 --  class $Cont[T] (value): pass
 --      __call__    : proc(T) -> $R
@@ -557,19 +553,12 @@ scMkDict            = tSchema [quant a, quant b] tMkDict
         a           = TV KType $ name "A"
         b           = TV KType $ name "B"
 
---  $SetCompWithWitness : [A] => (Hashable[A], SetComp[A]) -> set[A]
-scSetCompWithWitness = tSchema [quant a] tSetCompWithWitness
-  where tSetCompWithWitness = tFun fxPure (posRow tHashableA (posRow (tSet (tVar a)) posNil)) kwdNil (tSet (tVar a))
-        tHashableA  = tCon (TC qnHashable [tVar a])
-        a           = TV KType $ name "A"
-
---  $DictCompWithWitness : [A,B] => (Hashable[A], DictComp[A,B]) -> dict[A,B]
-scDictCompWithWitness = tSchema [quant a, quant b] tDictCompWithWitness
-  where tDictCompWithWitness = tFun fxPure (posRow tHashableA (posRow (tDict (tVar a) (tVar b)) posNil)) kwdNil (tDict (tVar a) (tVar b))
-        tHashableA  = tCon (TC qnHashable [tVar a])
+--  $annot : [A,B] => (A,B) -> B
+scAnnot             = tSchema [quant a, quant b] tAnnot
+  where tAnnot      = tFun fxPure (posRow (tVar a) (posRow (tVar b) posNil)) kwdNil (tVar b)
         a           = TV KType $ name "A"
         b           = TV KType $ name "B"
-       
+
 --  $WRAP           : [A,B,C] => ($Actor, proc(*A,**B)->C) -> action(*A,**B)->C
 scWRAP              = tSchema [quant a, quant b, quant c] tWRAP
   where tWRAP       = tFun0 [tActor, abcFun fxProc] (abcFun fxAction)
