@@ -1,5 +1,15 @@
 # Development Workflow n stuff
 
+## Changelog
+
+We keep a `CHANGELOG.md`. It is good practice for PRs to contain a changelog
+entry for whatever they are updating. This is often forgotten and so in
+practice, we often update `CHANGELOG.md` in batches. When making a release,
+carefully inspect the git log and update `CHANGELOG.md` accordingly. Match the
+style and tone in `CHANGELOG.md`. For long descriptive git commit messages or
+whole branches with multiple commits, write a shorter summary. If the git commit
+messages are very brief, inspect the code and attempt to sum it up.
+
 
 ## Git workflow
 
