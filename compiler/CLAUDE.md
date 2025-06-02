@@ -291,6 +291,220 @@ addTyping env n s t c                   = c {info = addT n (simp env s) t (info 
 
 This style helps when working with complex mathematical algorithms by making the structure visually apparent, similar to how one would write equations on a whiteboard with careful spacing and alignment.
 
+## Acton Compiler Style Guide
+
+These patterns represent the ideal coding style for the Acton compiler. These principles apply broadly across the entire codebase and should be followed in all contributions:
+
+### 1. **Simplify and Remove Dead Code**
+```haskell
+-- BAD: Keep unused data types, functions, or complex abstractions
+data CompInfo = CompInfo Expr | CompWithWit Expr Expr  -- Dead code
+normalize' env x = normalize env x  -- Unnecessary wrapper
+
+-- GOOD: Keep only what's needed
+type NormM a = State (Int,[(Name,PosPar,Expr)]) a
+normalize env x = ...  -- Direct implementation
+```
+
+### 2. **Separate Concerns Clearly**
+```haskell
+-- BAD: Mix different responsibilities in one function
+processExpr env expr = 
+  case expr of
+    Add x y -> let tx = typeOf x
+                   ty = typeOf y
+               in if tx == ty then ... else error ...
+    Mul x y -> ...  -- Similar mixed logic
+
+-- GOOD: Separate type checking from transformation
+typeCheck env expr = ...  -- Just type checking
+transform env expr = ...  -- Just transformation
+
+-- Or factor out common patterns
+processExpr env expr = transform env (typeCheck env expr)
+```
+
+### 3. **Use Generic Abstractions Over Ad-Hoc Solutions**
+```haskell
+-- BAD: Create specific functions for each use case
+handleListError :: Error -> String
+handleDictError :: Error -> String
+handleSetError :: Error -> String
+
+-- GOOD: One generic function that handles all cases
+handleError :: Error -> String
+handleError (TypeError t) = "Type error: " ++ show t
+handleError (SyntaxError s) = "Syntax error: " ++ s
+```
+
+### 4. **Consistent Naming and Alignment**
+```haskell
+-- Use consistent variable names across the codebase:
+-- env  - Environment
+-- t    - Type
+-- e    - Expression  
+-- p    - Pattern or Parameter
+-- n    - Name
+-- l    - Location
+-- s    - Statement or String
+-- c    - Constraint or Context
+-- w    - Witness
+-- r    - Result or Row
+
+-- Align related definitions for visual clarity
+tInt              = tCon (TC qnInt [])
+tFloat            = tCon (TC qnFloat [])
+tString           = tCon (TC qnString [])
+tBool             = tCon (TC qnBool [])
+```
+
+### 5. **Factor Out Common Patterns**
+```haskell
+-- BAD: Repeat similar code in multiple places
+infer env (Add e1 e2) = do
+  (cs1, t1, e1') <- infer env e1
+  (cs2, t2, e2') <- infer env e2
+  t <- newTVar
+  return (cs1 ++ cs2 ++ [Cast t1 t, Cast t2 t], t, Add e1' e2')
+  
+infer env (Mul e1 e2) = do
+  (cs1, t1, e1') <- infer env e1
+  (cs2, t2, e2') <- infer env e2
+  t <- newTVar
+  return (cs1 ++ cs2 ++ [Cast t1 t, Cast t2 t], t, Mul e1' e2')
+
+-- GOOD: Extract common binary operation pattern
+inferBinOp env op e1 e2 = do
+  (cs1, t1, e1') <- infer env e1
+  (cs2, t2, e2') <- infer env e2
+  t <- newTVar
+  return (cs1 ++ cs2 ++ [Cast t1 t, Cast t2 t], t, op e1' e2')
+```
+
+### 6. **Clear Data Flow with Where Clauses**
+```haskell
+-- Structure where clauses to show data dependencies clearly
+processExpr env expr = finalResult
+  where 
+    -- 1. Extract/compute base values
+    baseType = typeOf env expr
+    location = loc expr
+    
+    -- 2. Build intermediate results  
+    constraints = gatherConstraints baseType
+    simplified = simplify expr
+    
+    -- 3. Construct final result
+    finalResult = Result simplified constraints location
+    
+-- Each binding depends only on earlier bindings
+-- Clear progression from inputs to outputs
+```
+
+### 7. **Handle Each Case in Its Own Context**
+```haskell
+-- BAD: Share state across unrelated computations
+processAll items = do
+  state <- initState
+  mapM (process state) items  -- Shared mutable state
+
+-- GOOD: Each computation gets fresh context
+processAll items = mapM processOne items
+  where 
+    processOne item = do
+      state <- initState  -- Fresh state for each
+      process state item
+```
+
+### 8. **Prefer Explicit Over Implicit**
+```haskell
+-- BAD: Rely on implicit behavior
+findThing xs = head xs  -- Crashes on empty list
+
+-- GOOD: Make expectations explicit
+findThing xs = case xs of
+  []    -> error "findThing: empty list"
+  (x:_) -> x
+  
+-- Or better, use Maybe
+findThing :: [a] -> Maybe a
+findThing []    = Nothing
+findThing (x:_) = Just x
+```
+
+### Key Principle: These Patterns Apply Everywhere
+
+The above patterns aren't specific to any particular feature or module. They represent the ideal coding style throughout:
+- **Parser**: Clean separation of lexing/parsing concerns
+- **Type Checker**: Generic constraint handling, clear error messages
+- **Normalizer**: Simple transformations, no unnecessary complexity
+- **Code Generator**: Explicit mappings, clear output structure
+- **All modules**: Consistent naming, factored patterns, clean data flow
+
+When in doubt, look at recent high-quality commits in the repository for examples of how to refactor code to match these ideals.
+
+## AI-Assisted Development Process
+
+When working with AI assistants on the Acton compiler, follow this structured approach:
+
+### 1. **Problem Discussion Phase**
+- Thoroughly discuss the problem and solution requirements
+- Identify affected compiler phases
+- Consider edge cases and interactions with existing features
+
+### 2. **Test-Driven Development**
+```haskell
+-- AI writes test cases based on requirements
+-- Human reviews and approves test suite
+-- Example: test/comprehensions/generic_test.act
+def test_generic_list_comp():
+    result = [x * 2 for x in [1, 2, 3]]
+    testing.assertEqual(result, [2, 4, 6])
+```
+
+### 3. **Implementation Phase**
+- AI implements code to pass tests
+- Iteratively compile and run tests
+- Fix errors until all tests pass
+
+### 4. **Code Review and Cleanup Phase** ⚠️ **CRITICAL**
+After getting tests to pass, AI MUST perform a holistic code review:
+
+#### Checklist for AI Code Review:
+- [ ] **Remove dead code** - Delete unused functions, data types, imports
+- [ ] **Simplify complex patterns** - Look for opportunities to factor out common code
+- [ ] **Check naming consistency** - Ensure variables and functions follow conventions
+- [ ] **Verify error handling** - Proper error messages with source locations
+- [ ] **Review data flow** - Ensure clean separation of concerns
+- [ ] **Check integration** - Verify the change fits well with existing code
+- [ ] **Update related code** - Ensure all affected areas are updated
+
+#### Example Cleanup Pattern:
+```haskell
+-- BEFORE: Quick fix to pass tests
+addCompWithWit :: (Name,PosPar,Expr,Expr) -> NormM ()
+addComp :: (Name,PosPar,Expr) -> NormM ()
+-- Two similar functions, ad-hoc solution
+
+-- AFTER: Unified clean design
+addComp :: (Name,PosPar,Expr) -> NormM ()
+-- Single function, witness handled through annotation
+```
+
+### 5. **Final Review Before Commit**
+- Ensure code follows the Acton compiler style guide
+- Verify no regression in existing functionality
+- Check that the solution is elegant and maintainable
+- Confirm error messages are helpful
+
+## Common Pitfalls to Avoid
+
+1. **Tunnel Vision**: Don't focus only on making tests pass
+2. **Ad-hoc Solutions**: Avoid quick fixes that complicate the codebase
+3. **Inconsistent Patterns**: Match existing code style and patterns
+4. **Missing Edge Cases**: Consider all variants (e.g., nested comprehensions)
+5. **Poor Error Messages**: Always include helpful context in errors
+
 ## Performance Considerations
 
 1. **Parser Performance**

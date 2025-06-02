@@ -158,3 +158,11 @@ typedef struct actor_state_t {
 5. Keep commits focused and well-described
 
 For detailed development workflow and release procedures, see [docs/dev.md](docs/dev.md)
+
+## Git Commit Guidelines
+
+When making commits:
+- Do not include AI assistant attribution (no "Generated with Claude" or similar)
+- Write commit messages as if you wrote the code yourself
+- Focus on what the change does, not how it was created
+- Try hard to use short summary messages (< 50 chars)
