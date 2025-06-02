@@ -390,6 +390,33 @@ removeOrphanFiles dir = do
         handleNotExists :: IOException -> IO ()
         handleNotExists _ = return ()
 
+-- Remove executables that no longer have corresponding root actors
+removeOrphanExecutables :: FilePath -> FilePath -> [BinTask] -> IO ()
+removeOrphanExecutables binDir projTypes binTasks = do
+    -- Get all executables in bin directory
+    binDirExists <- doesDirectoryExist binDir
+    when binDirExists $ do
+        binFiles <- listDirectory binDir
+        forM_ binFiles $ \exeFile -> do
+            -- Convert executable name back to module path format
+            let exeName = takeBaseName exeFile  -- Remove .exe if present
+                modPath = map (\c -> if c == '.' then '/' else c) exeName
+                rootCFile = projTypes </> modPath <.> "root.c"
+                testRootCFile = projTypes </> modPath <.> "test_root.c"
+
+            -- Check if this executable is in the current binTasks
+            let isCurrentBin = any (\t -> binName t == exeName) binTasks
+
+            -- If not in current binTasks and no root.c file exists, remove the executable
+            rootExists <- doesFileExist rootCFile
+            testRootExists <- doesFileExist testRootCFile
+            when (not isCurrentBin && not rootExists && not testRootExists) $ do
+                removeFile (binDir </> exeFile)
+                  `catch` handleNotExists
+  where
+        handleNotExists :: IOException -> IO ()
+        handleNotExists _ = return ()
+
 compileFiles :: C.CompileOptions -> [String] -> IO ()
 compileFiles opts srcFiles = do
     -- it is ok to get paths from just the first file here since at this point
@@ -975,6 +1002,7 @@ zigBuild :: Acton.Env.Env0 -> C.CompileOptions -> Paths -> [CompileTask] -> [Bin
 zigBuild env opts paths tasks binTasks = do
     allBinTasks <- mapM (writeRootC env opts paths) binTasks
     let realBinTasks = catMaybes allBinTasks
+    removeOrphanExecutables (binDir paths) (projTypes paths) realBinTasks
     iff (not (quiet opts)) $ putStrLn("  Final compilation step")
     timeStart <- getTime Monotonic
 
