@@ -166,3 +166,40 @@ When making commits:
 - Write commit messages as if you wrote the code yourself
 - Focus on what the change does, not how it was created
 - Try hard to use short summary messages (< 50 chars)
+- **NEVER use `git add -A` or `git add .`** - always add files deliberately
+- Be careful not to add generated files (like `package.yaml` which are generated from `.in` templates)
+
+## Release Process
+
+### Creating a New Release
+
+1. **Create release branch**: Use format `release-vX.Y.Z` (note the `v` prefix!)
+   ```bash
+   git checkout -b release-v0.26.0
+   ```
+
+2. **Update version files**:
+   - `version.mk` - Update VERSION (this controls the version for the entire project)
+   - Note: Do NOT manually edit `package.yaml` files - they are generated from `package.yaml.in` templates
+
+3. **Update CHANGELOG.md**:
+   - Add new version section with **today's date** (format: YYYY-MM-DD)
+   - Organize changes under: Added, Changed, Fixed, Documentation, Testing/CI
+   - Add PR links for all referenced PRs at the bottom
+   - Add version comparison link
+
+4. **Create and merge PR**:
+   ```bash
+   git push -u origin release-vX.Y.Z
+   gh pr create --title "Release vX.Y.Z"
+   ```
+
+5. **After PR merge**:
+   - Create and push tag: `git tag vX.Y.Z && git push origin vX.Y.Z`
+   - GitHub Actions will automatically create the release
+   - Update Homebrew formula if needed
+
+### Important Release Notes
+- Always use `release-v` prefix for release branches (not just `release-`)
+- Always use today's date in the changelog (not a future or past date)
+- The changelog update process is documented in `docs/dev.md`
