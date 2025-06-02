@@ -48,17 +48,3 @@ There are two types of releases, "version releases" and the `tip` release.
       available
   - the release has a stable URL:
     https://github.com/actonlang/acton/releases/tag/tip
-
-
-# Dependencies
-
-## Run time
-- GMP
-  - actonc is written in Haskell which uses GMP for big integers
-    - for releases on Linux, we build a static binary so GMP is linked in and
-      thus not a dependency
-    - for non-releases or MacOS, we need gmp as a shared library
-
-## Build time
-- ghc
-- make

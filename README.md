@@ -75,6 +75,8 @@ Check out our [learning resources](https://www.acton-lang.org/learn).
 # Building Acton from source
 See [building Acton from source](https://www.acton-lang.org/install/from-source).
 
+# Developing Acton
+See [dev info](docs/dev.md).
 
 # Contributions
 
