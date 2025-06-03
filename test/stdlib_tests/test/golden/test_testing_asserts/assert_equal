@@ -1,0 +1,15 @@
+testing.NotEqualError: Expected equal values but they are non-equal. A: 1 B: 2
+[0m[38;5;251m@@ -1,1 +1,1 @@
+[0m[31m-1
+[0m[32m+2
+[0m[0m
+testing.NotEqualError: Expected equal values but they are non-equal. A: 1 B: None
+[0m[38;5;251m@@ -1,1 +1,1 @@
+[0m[31m-1
+[0m[32m+None
+[0m[0m
+testing.NotEqualError: Expected equal values but they are non-equal. A: None B: 1
+[0m[38;5;251m@@ -1,1 +1,1 @@
+[0m[31m-None
+[0m[32m+1
+[0m[0m
