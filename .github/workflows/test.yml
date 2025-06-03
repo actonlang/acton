@@ -820,10 +820,10 @@ jobs:
         with:
           path: homebrew-acton
           token: ${{ secrets.ACTBOT_PAT }}
-          branch: acton-v${VERSION}
-          title: "acton v${VERSION}"
+          branch: acton-v${{ env.VERSION }}
+          title: "acton v${{ env.VERSION }}"
           body: |
             Automatic update triggered by release on actonlang/acton.
           committer: Acton Bot <actbot@acton-lang.org>
-          commit-message: "acton v${VERSION}"
+          commit-message: "acton v${{ env.VERSION }}"
           signoff: false
