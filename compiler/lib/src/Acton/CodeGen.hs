@@ -775,10 +775,10 @@ adjust (TCon _ c) (TCon _ c') e
 adjust t t' e                       = typecast t t' e
 
 genExp env t' e                     = gen env (adjust t t' e')
-  where (t, e')                     = qType env adjust e
+  where (t, fx, e')                 = qType env adjust e
 
 genExp' env e                       = gen env e'
-  where (t, e')                     = qType env adjust e
+  where (t, fx, e')                 = qType env adjust e
 
 instance Gen Expr where
     gen env (Var _ n)

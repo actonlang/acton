@@ -1,7 +1,3 @@
-# The translation of Dict and set comprehensions currently fail if the
-# implied Hashable requirement constrains a generic type parameter and
-# not a top-level class
-
 # fun1: [A(Hashable)] => (list[A]) -> dict[A,str]
 
 def fun1(keys):
