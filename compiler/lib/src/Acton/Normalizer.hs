@@ -93,14 +93,15 @@ normSuite env (s : ss)              = do s' <- norm' env s
                                          return (defs ++ s' ++ ss')
   where mkCompFun (f,lambound,comp) = do w <- newName "w"
                                          r <- newName "res"
-                                         let (tw,w1,tr,e0,stmt) = transComp w r comp
+                                         let env0 = define (envOf lambound) env
+                                             (tw,w1,tr,e0,stmt) = transComp env0 w r comp
                                              body = sAssign (pVar w tw) w1 :
                                                     sAssign (pVar r tr) e0 :
                                                     stmt :
                                                     sReturn (eVar r) : []
                                          norm env (sDef f lambound tr body fxPure)
 
-        transComp w r (ListComp _ (Elem e) co)
+        transComp env w r (ListComp _ (Elem e) co)
                                     = (tw, w1, tr, e0, compStmt co e1)
           where env1                = define (envOf co) env
                 te                  = typeOf env1 e
@@ -109,7 +110,7 @@ normSuite env (s : ss)              = do s' <- norm' env s
                 e0                  = List NoLoc []
                 e1                  = eCall (eDot (eVar w) appendKW) [eVar r, e]
                 w1                  = eCall (tApp (eQVar witSequenceList) [te]) []
-        transComp w r (SetComp _ (Elem annot_e) co)
+        transComp env w r (SetComp _ (Elem annot_e) co)
                                     = (tw, w1, tr, e0, compStmt co e1)
           where env1                = define (envOf co) env
                 te                  = typeOf env1 annot_e
@@ -119,7 +120,7 @@ normSuite env (s : ss)              = do s' <- norm' env s
                 e0                  = eCall (tApp (eQVar primMkSet) [te]) [w0, Set NoLoc []]
                 e1                  = eCall (eDot (eVar w) (name "add")) [eVar r, e]
                 w1                  = eCall (tApp (eQVar witSetSet) [te]) [w0]
-        transComp w r (DictComp _ (Assoc annot_k v) co)
+        transComp env w r (DictComp _ (Assoc annot_k v) co)
                                     = (tw, w1, tr, e0, compStmt co e1)
           where env1                = define (envOf co) env
                 tk                  = typeOf env1 annot_k
