@@ -231,8 +231,9 @@ solve' env select hist te tt eq cs
 
         deco (RRed cs)                      = (0, 0, 0, 0)
         deco (RSealed t)                    = (2, 0, 0, 0)
-        deco (RTry (TVar _ v) [TTuple{}] r) = (4, length $ filter (==v) embvs, 1, length $ filter (==v) univs)
-        deco (RTry (TVar _ v) as r)         = (3, length $ filter (==v) embvs, length as, length $ filter (==v) univs)
+        deco (RTry (TVar _ v) as r)         = (w, length $ filter (==v) embvs, length as, length $ filter (==v) univs)
+          where w | wildTuple `elem` as     =  3
+                  | otherwise               =  4
         deco (RTry t as r)                  = (5, 0, length as, 0)
         deco (RVar t as)                    = (6, 0, length as, 0)
         deco (ROvl t)                       = (7, 0, 0, 0)
@@ -268,7 +269,7 @@ rank env c@(Impl _ _ t p)
   | not $ null $ tyfree t                   = RTry t ts False
   where ts                                  = allExtProto env t p
 
-rank env (Sel _ _ t@TVar{} n _)             = RTry t (allConAttr env n ++ allProtoAttr env n ++ allExtProtoAttr env n ++ [tTuple tWild tWild]) False
+rank env (Sel _ _ t@TVar{} n _)             = RTry t (allConAttr env n ++ allProtoAttr env n ++ allExtProtoAttr env n ++ [wildTuple]) False
 rank env (Mut _ t@TVar{} n _)               = RTry t (allConAttr env n) False
 
 rank env (Seal _ t@TVar{})
@@ -277,6 +278,7 @@ rank env (Seal _ t@TVar{})
 
 rank env c                                  = RRed c
 
+wildTuple                                   = tTuple tWild tWild
 
 -------------------------------------------------------------------------------------------------------------------------
 
