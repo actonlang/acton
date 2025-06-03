@@ -94,12 +94,13 @@ normSuite env (s : ss)              = do s' <- norm' env s
   where mkCompFun (f,lambound,comp) = do w <- newName "w"
                                          r <- newName "res"
                                          let env0 = define (envOf lambound) env
+                                             fx = fxOf env0 comp
                                              (tw,w1,tr,e0,stmt) = transComp env0 w r comp
                                              body = sAssign (pVar w tw) w1 :
                                                     sAssign (pVar r tr) e0 :
                                                     stmt :
                                                     sReturn (eVar r) : []
-                                         norm env (sDef f lambound tr body fxPure)
+                                         norm env (sDef f lambound tr body fx)
 
         transComp env w r (ListComp _ (Elem e) co)
                                     = (tw, w1, tr, e0, compStmt co e1)
