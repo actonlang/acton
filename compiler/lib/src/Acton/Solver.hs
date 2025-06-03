@@ -119,7 +119,7 @@ solve env select te tt eq cs                = do css <- groupCs env cs
                                                  return (cs', eq'++eq)
 
 solveGroups env select te tt []             = return ([], [])
-solveGroups env select te tt (cs:css)       = do traceM ("\n\n######### solveGroup\n" ++ render (nest 4 $ vcat $ map pretty cs))
+solveGroups env select te tt (cs:css)       = do --traceM ("\n\n######### solveGroup\n" ++ render (nest 4 $ vcat $ map pretty cs))
                                                  (cs1,eq1) <- solve' env select [] te tt [] cs `catchError` \err -> Control.Exception.throw err
                                                  env <- msubst env
                                                  (cs2,eq2) <- solveGroups env select te tt css
@@ -147,7 +147,7 @@ solve' env select hist te tt eq cs
                                                         --traceM ("### try goal " ++ prstr t ++ ", candidates: " ++ prstrs [fxAction, fxPure])
                                                         tryAlts st t [fxAction, fxPure]
                                                     RTry t alts r -> do
-                                                        traceM ("### try goal " ++ prstr t ++ ", candidates: " ++ prstrs alts ++ if r then " (rev)" else "")
+                                                        --traceM ("### try goal " ++ prstr t ++ ", candidates: " ++ prstrs alts ++ if r then " (rev)" else "")
                                                         tryAlts st t alts
                                                     RVar t alts -> do
                                                         --traceM ("### var goal " ++ prstr t ++ ", unifying with " ++ prstrs alts)
@@ -183,23 +183,23 @@ solve' env select hist te tt eq cs
         tryAlt t0 (TCon _ c)
           | isProto env (tcname c)          = do p <- instwildcon env c
                                                  w <- newWitness
-                                                 traceM ("  # trying " ++ prstr t0 ++ " (" ++ prstr p ++ ")")
+                                                 --traceM ("  # trying " ++ prstr t0 ++ " (" ++ prstr p ++ ")")
                                                  proceed hist (Impl (DfltInfo NoLoc 4 Nothing []) w t0 p : cs)
         tryAlt t0 (TTuple _ _ _)
           | not $ null attrs                = do t <- instwild env KType (tTupleK $ foldr (\n -> kwdRow n tWild) tWild attrs)
-                                                 traceM ("  # trying tuple " ++ prstr t0 ++ " = " ++ prstr t)
+                                                 --traceM ("  # trying tuple " ++ prstr t0 ++ " = " ++ prstr t)
                                                  unify (DfltInfo NoLoc 5 Nothing []) t0 t
                                                  proceed (t:hist) cs
           where attrs                       = sortBy (\a b -> compare (nstr a) (nstr b)) $ nub [ n | Sel _ _ t n _ <- solve_cs, t == t0 ]
         tryAlt t0@(TVar _ tv) t
           | tvkind tv == KFX                = do t <- instwild env (kindOf env t0) t
-                                                 traceM ("  # trying " ++ prstr t0 ++ " = " ++ prstr t)
+                                                 --traceM ("  # trying " ++ prstr t0 ++ " = " ++ prstr t)
                                                  unify (DfltInfo NoLoc 5 Nothing []) t0 t
                                                  (cs,eq) <- quicksimp env eq cs
                                                  hist <- msubst hist
                                                  solve' env select hist te tt eq cs
         tryAlt t0 t                         = do t <- instwild env (kindOf env t0) t
-                                                 traceM ("  # trying " ++ prstr t0 ++ " = " ++ prstr t)
+                                                 --traceM ("  # trying " ++ prstr t0 ++ " = " ++ prstr t)
                                                  unify (DfltInfo NoLoc 5 Nothing []) t0 t
                                                  proceed (t:hist) cs
         proceed hist cs                     = do te <- msubst te
