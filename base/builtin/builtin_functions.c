@@ -565,7 +565,8 @@ $WORD B_round (B_Real W_395, $WORD x, B_int n) {
 
 $WORD $ASSERT(B_bool test, B_str msg) {
     if (!test->val) {
-        $RAISE(msg);
+        $RAISE((B_BaseException)$NEW(B_AssertionError,msg));
+        return NULL; // to avoid compiler warning
     }
     return B_None;
 }

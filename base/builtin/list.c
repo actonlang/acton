@@ -216,6 +216,7 @@ B_int B_listD_index(B_list self, B_Eq W_EqD_B, $WORD val, B_int start, B_int sto
             return to$int(i);
     }
     $RAISE((B_BaseException)$NEW(B_KeyError, val, to$str("element is not in list")));
+    return NULL; //to prevent compiler warning
 }
 
     
