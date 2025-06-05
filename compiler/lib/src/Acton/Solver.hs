@@ -120,6 +120,7 @@ solve env select te tt eq cs                = do css <- groupCs env cs
 
 solveGroups env select te tt []             = return ([], [])
 solveGroups env select te tt (cs:css)       = do --traceM ("\n\n######### solveGroup\n" ++ render (nest 4 $ vcat $ map pretty cs))
+                                                 --traceM ("  ### te:\n" ++ render (nest 4 $ vcat $ map pretty te))
                                                  (cs1,eq1) <- solve' env select [] te tt [] cs `catchError` \err -> Control.Exception.throw err
                                                  env <- msubst env
                                                  (cs2,eq2) <- solveGroups env select te tt css

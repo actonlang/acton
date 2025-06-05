@@ -126,7 +126,7 @@ infTopStmts env []                      = return ([], [])
 infTopStmts env (s : ss)                = do (cs,te1,s) <- infEnv env s
                                              --traceM ("###########\n" ++ render (nest 4 $ vcat $ map pretty te1))
                                              --traceM ("-----------\n" ++ render (nest 4 $ vcat $ map pretty cs))
-                                             eq <- solveAll (posdefine (filter typeDecl te1) env) te1 tNone cs
+                                             eq <- solveAll (posdefine (filter typeDecl te1) env) te1 cs
                                              te1 <- defaultTE env te1
                                              --traceM ("===========\n" ++ render (nest 4 $ vcat $ map pretty te1))
                                              ss1 <- termred <$> msubst (pushEqns eq [s])
@@ -646,10 +646,10 @@ toSigs te                               = map makeSig te
 
 --------------------------------------------------------------------------------------------------------------------------
 
-solveAll env te tt []                   = return []
-solveAll env te tt cs                   = do --traceM ("\n\n### solveAll " ++ prstrs cs)
-                                             (cs,eq) <- simplify env te tt cs
-                                             (cs,eq) <- solve env (const True) te tt eq cs
+solveAll env te []                      = return []
+solveAll env te cs                      = do --traceM ("\n\n### solveAll " ++ prstrs cs)
+                                             (cs,eq) <- simplify env te tNone cs
+                                             (cs,eq) <- solve env (const True) te tNone eq cs
                                              return eq
 
 solveScoped env vs te tt []             = return ([], [])
@@ -668,13 +668,13 @@ checkNoEscape l env vs                  = do fvs <- tyfree <$> msubst env
 
 
 wellformed                              :: (WellFormed a) => Env -> a -> TypeM ()
-wellformed env x                        = do _ <- solveAll env [] tNone cs
+wellformed env x                        = do _ <- solveAll env [] cs
                                              return ()
   where cs                              = wf env x
 
 wellformedProtos                        :: Env -> [PCon] -> TypeM (Constraints, [(QName,[Expr])])
 wellformedProtos env ps                 = do (css0, css1) <- unzip <$> mapM (wfProto env) ps
-                                             _ <- solveAll env [] tNone (concat css0)
+                                             _ <- solveAll env [] (concat css0)
                                              return (concat css1, [ (tcname p, witsOf cs) | (p,cs) <- ps `zip` css1 ])
 
 
@@ -919,36 +919,30 @@ instance Check Branch where
 
 --------------------------------------------------------------------------------------------------------------------------
 
-refine                                  :: Env -> Constraints -> TEnv -> Equations -> TypeM (Constraints, [TVar], Constraints, TEnv, Equations)
+refine                                  :: Env -> Constraints -> TEnv -> Equations -> TypeM ([TVar], Constraints, TEnv, Equations)
 refine env cs te eq
   | not $ null solve_cs                 = do --traceM ("  #solving: " ++ prstrs solve_cs)
-                                             (cs',eq') <- solve env doSolve te tNone eq cs
+                                             (cs',eq') <- solve env noQual te tNone eq cs
                                              refineAgain cs' eq'
   | not $ null ambig_vs                 = do --traceM ("  #defaulting: " ++ prstrs ambig_vs)
-                                             (cs',eq') <- solve env doDefault te tNone eq cs
+                                             (cs',eq') <- solve env isAmbig te tNone eq cs
                                              refineAgain cs' eq'
   | not $ null tail_vs                  = do sequence [ tryUnify (Simple NoLoc "internal") (tVar v) (tNil $ tvkind v) | v <- tail_vs ]
                                              refineAgain cs eq
   | otherwise                           = do eq <- msubst eq
-                                             let (fix_cs, gen_cs) = partition fixed cs
-                                             return (fix_cs, gen_vs, gen_cs, te, eq)
-  where fix_vs                          = [] -- fxfree te ++ fxfree cs
-        ambig_vs                        = tyfree cs \\ closeDepVars (fix_vs++safe_vs) cs
+                                             return (gen_vs, cs, te, eq)
+  where ambig_vs                        = tyfree cs \\ closeDepVars (safe_vs) cs
         tail_vs                         = gen_vs `intersect` (tailvars te ++ tailvars cs)
 
         safe_vs                         = if null def_vss then [] else nub $ foldr1 intersect def_vss
         def_vss                         = [ nub $ filter canGen $ tyfree sc | (_, NDef sc _ _) <- te, null $ scbind sc ]
-        gen_vs                          = nub (foldr union (tyfree cs) def_vss) \\ fix_vs
+        gen_vs                          = nub (foldr union (tyfree cs) def_vss)
 
-        solve_cs                        = [ c | c <- cs, doSolve c ]
+        solve_cs                        = [ c | c <- cs, noQual c ]
 
-        fixed c                         = all (`elem` fix_vs) $ tyfree c
-
-        doSolve c                       = not (canQual c) && not (fixed c)
-        doDefault c                     = isAmbig c && not (fixed c)
-
-        canQual (Impl _ _ (TVar _ v) p) = univar v
-        canQual c                       = False
+        noQual (Impl _ _ (TVar _ v) p)
+          | univar v                    = False
+        noQual c                        = True
 
         canGen tv                       = tvkind tv /= KFX
 
@@ -977,7 +971,7 @@ genEnv env cs te ds
                                              (cs,eq) <- simplify env te tNone cs
                                              te <- msubst te
                                              env <- msubst env
-                                             (fix_cs, gen_vs, gen_cs, te, eq) <- refine env cs te eq
+                                             (gen_vs, gen_cs, te, eq) <- refine env cs te eq
                                              --traceM ("## genEnv defs 2 [" ++ prstrs gen_vs ++ "]\n" ++ render (nest 6 $ pretty te))
                                              --traceM ("   where\n" ++ render (nest 6 $ vcat $ map pretty gen_cs))
                                              let (q,ws) = qualify gen_vs gen_cs
@@ -985,8 +979,7 @@ genEnv env cs te ds
                                                  (eq1,eq2) = splitEqs (dom ws) eq
                                                  ds1 = map (abstract q ds ws eq1) ds
                                              --traceM ("## genEnv defs 3 [" ++ prstrs gen_vs ++ "]\n" ++ render (nest 6 $ pretty te1))
-                                             --traceM ("   fixed:\n" ++ render (nest 6 $ vcat $ map pretty fix_cs))
-                                             return (fix_cs, te1, eq2, ds1)
+                                             return ([], te1, eq2, ds1)
   | otherwise                           = do --traceM ("## genEnv local\n" ++ render (nest 6 $ pretty te))
                                              --traceM ("## genEnv local cs:\n" ++ render (nest 4 $ vcat $ map pretty cs))
                                              return (cs, te, [], ds)
