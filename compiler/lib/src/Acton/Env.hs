@@ -164,7 +164,7 @@ prettyOrPass te
 
 prettyDocstring :: Maybe String -> Doc
 prettyDocstring Nothing         = empty
-prettyDocstring (Just doc)      = text "\"\"\"" <+> text doc <+> text "\"\"\""
+prettyDocstring (Just docstring) = text "\"\"\"" <+> text docstring <+> text "\"\"\""
 
 instance Pretty WTCon where
     pretty (ws,u)               = --dotCat prettyW ws <+> colon <+>
@@ -390,10 +390,11 @@ initEnv path True          = return $ EnvF{ names = [(nPrim,NMAlias mPrim)],
                                             thismod = Nothing,
                                             stub = False,
                                             envX = () }
-initEnv path False         = do (_,envBuiltin) <- InterfaceFiles.readFile (joinPath [path,"__builtin__.ty"])
-                                let env0 = EnvF{ names = [(nPrim,NMAlias mPrim), (nBuiltin,NMAlias mBuiltin)],
+initEnv path False         = do (_,nmod) <- InterfaceFiles.readFile (joinPath [path,"__builtin__.ty"])
+                                let NModule envBuiltin builtinDocstring = nmod
+                                    env0 = EnvF{ names = [(nPrim,NMAlias mPrim), (nBuiltin,NMAlias mBuiltin)],
                                                  imports = [mPrim,mBuiltin],
-                                                 modules = [(nPrim,NModule primEnv Nothing), (nBuiltin,NModule envBuiltin Nothing)],
+                                                 modules = [(nPrim,NModule primEnv Nothing), (nBuiltin,NModule envBuiltin builtinDocstring)],
                                                  witnesses = primWits,
                                                  thismod = Nothing,
                                                  stub = False,
@@ -441,8 +442,8 @@ defineInst c ps w env       = foldl addWit env wits
 setMod                      :: ModName -> EnvF x -> EnvF x
 setMod m env                = env{ thismod = Just m }
 
-addMod                     :: ModName -> TEnv -> EnvF x -> EnvF x
-addMod m newte env          = env{ modules = addM ns (modules env) }
+addMod                     :: ModName -> TEnv -> Maybe String -> EnvF x -> EnvF x
+addMod m newte mdoc env     = env{ modules = addM ns (modules env) }
   where
     ModName ns              = m
     addM [] te              = newte ++ te
@@ -451,7 +452,7 @@ addMod m newte env          = env{ modules = addM ns (modules env) }
       | n == x,
         NModule te1 doc <- i    = (n, NModule (addM ns te1) doc) : te
     update n ns (ni:te)     = ni : update n ns te
-    update n ns []          = (n, NModule (addM ns []) Nothing) : []
+    update n ns []          = (n, NModule (addM ns []) mdoc) : []
 
 
 -- General Env queries -----------------------------------------------------------------------------------------------------------
@@ -1136,10 +1137,10 @@ doImp spath env m            = case lookupMod m env of
                                         case tyFile of
                                           Nothing -> fileNotFound m
                                           Just tyF -> do
-                                            (ms,te) <- InterfaceFiles.readFile tyF
+                                            (ms,nmod) <- InterfaceFiles.readFile tyF
                                             env' <- subImp spath env ms
-                                            return (addMod m te env', te)
-
+                                            let NModule te mdoc = nmod
+                                            return (addMod m te mdoc env', te)
 
 importSome                  :: [ImportItem] -> ModName -> TEnv -> EnvF x -> EnvF x
 importSome items m te env   = define (map pick items) env

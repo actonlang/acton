@@ -1,4 +1,91 @@
-"""First syntax test"""
+"""Module docstring for syntax1 test.
+This tests docstring support across all language constructs.
+"""
 
 import net
 
+# Test function definition with docstring (NDef)
+def add(x: int, y: int) -> int:
+    """Add two numbers together.
+
+    This function takes two integers and returns their sum.
+    """
+    def foo():
+        """A nested function that does nothing."""
+        pass
+    return x + y
+
+# Test function with just signature (NSig would be in a protocol/class)
+# We'll test NSig in the protocol below
+
+# Test class with docstring (NClass)
+class Calculator:
+    """A calculator class with basic operations.
+
+    This class provides methods for arithmetic operations.
+    """
+    def multiply(self, x: int, y: int) -> int:
+        """Multiply two numbers.
+
+        Args:
+            x: First number
+            y: Second number
+
+        Returns:
+            The product of x and y
+        """
+        return x * y
+    def divide(self, x: int, y: int) -> float:
+        """Divide x by y."""
+        return float(x) / float(y)
+
+# Test actor with docstring (NAct)
+actor Counter(name: str):
+    """An actor that counts things.
+
+    This actor maintains a count and can increment it.
+    """
+    var count = 0
+    var name = name
+    def increment():
+        """Increment the counter by one."""
+        count += 1
+    def get_count() -> int:
+        """Get the current count value."""
+        return count
+
+# Test protocol with docstring (NProto)
+protocol Drawable:
+    """Protocol for objects that can be drawn.
+
+    Any class implementing this protocol must provide a draw method.
+    """
+    # This creates NSig entries for protocol methods
+    draw: () -> None
+    get_color: () -> str
+
+# Test extension with docstring (NExt)
+extension Calculator (Drawable):
+    """Extension to make Calculator drawable.
+
+    This adds drawing capabilities to the Calculator class.
+    """
+    def draw(self):
+        """Draw the calculator."""
+        print("Drawing a calculator")
+    def get_color(self) -> str:
+        """Get the calculator's color."""
+        return "black"
+
+# Test top-level function without docstring
+def subtract(x: int, y: int) -> int:
+    return x - y
+
+# Test nested functions with docstrings
+def outer_function(x: int) -> int:
+    """Outer function with a nested function inside."""
+
+    def inner_function(y: int) -> int:
+        """Inner function that adds to the outer parameter."""
+        return x + y
+    return inner_function(10)

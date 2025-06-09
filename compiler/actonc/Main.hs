@@ -699,11 +699,12 @@ doTask opts paths env t@(ActonTask mn src m stubMode) = do
     if C.only_build opts || (ok && not (mn == (modName paths) && (forceCompilation opts)))
       then do
         timeBeforeTy <- getTime Monotonic
-        (_,te) <- InterfaceFiles.readFile tyFile
+        (_,nmod) <- InterfaceFiles.readFile tyFile
         timeEnd <- getTime Monotonic
         iff (C.timing opts) $ putStrLn("   Read .ty file " ++ makeRelative (projPath paths) tyFile ++ ": " ++ fmtTime(timeEnd - timeBeforeTy))
         iff (not (quiet opts)) $ putStrLn("   Already up to date, in   " ++ fmtTime(timeEnd - timeStart))
-        return (Acton.Env.addMod mn te env)
+        let A.NModule te mdoc = nmod
+        return (Acton.Env.addMod mn te mdoc env)
       else do
         createDirectoryIfMissing True (getModPath (projTypes paths) mn)
         env' <- runRestPasses opts paths env m stubMode
@@ -803,7 +804,9 @@ runRestPasses opts paths env0 parsed stubMode = do
                       timeKindsCheck <- getTime Monotonic
                       iff (C.timing opts) $ putStrLn("    Pass: Kinds check     : " ++ fmtTime (timeKindsCheck - timeEnv))
 
-                      (iface,tchecked,typeEnv) <- Acton.Types.reconstruct outbase env kchecked
+                      (nmod,tchecked,typeEnv) <- Acton.Types.reconstruct outbase env kchecked
+
+                      let A.NModule iface mdoc = nmod
                       iff (C.types opts && mn == (modName paths)) $ dump mn "types" (Pretty.print tchecked)
                       iff (C.sigs opts && mn == (modName paths)) $ dump mn "sigs" (Acton.Types.prettySigs env mn iface)
                       --traceM ("#################### typed env0:")
@@ -869,7 +872,7 @@ runRestPasses opts paths env0 parsed stubMode = do
                           iff (C.timing opts) $ putStrLn("    Pass: Writing code    : " ++ fmtTime (timeCodeWrite - timeCodeGen))
                                                            )
 
-                      return $ Acton.Env.addMod mn iface (env0 `Acton.Env.withModulesFrom` env)
+                      return $ Acton.Env.addMod mn iface mdoc (env0 `Acton.Env.withModulesFrom` env)
 
 handle errKind f src paths mn ex = do
     putStrLn ("\nERROR: Error when compiling " ++ (prstr mn) ++ " module: " ++ errKind)
