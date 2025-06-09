@@ -591,7 +591,7 @@ data BinTask            = BinTask { isDefaultRoot :: Bool, binName :: String, ro
 filterMainActor env opts paths binTask
                          = case Acton.Env.lookupMod m env of
                              Just te -> case lookup n te of
-                               Just (A.NAct [] A.TNil{} (A.TRow _ _ _ t A.TNil{}) _)
+                               Just (A.NAct [] A.TNil{} (A.TRow _ _ _ t A.TNil{}) _ _)
                                    | prstr t == "Env" || prstr t == "None"
                                       || prstr t == "__builtin__.Env"|| prstr t == "__builtin__.None"-> do   -- TODO: proper check of parameter type
                                       return (Just binTask)
@@ -911,7 +911,7 @@ writeRootC env opts paths binTask = do
         Nothing -> return Nothing  -- Handle the case where module lookup fails
         Just modEnv ->
             case lookup n modEnv of
-                Just (A.NAct [] A.TNil{} (A.TRow _ _ _ t A.TNil{}) _)
+                Just (A.NAct [] A.TNil{} (A.TRow _ _ _ t A.TNil{}) _ _)
                     | prstr t == "Env" || prstr t == "None"
                         || prstr t == "__builtin__.Env"|| prstr t == "__builtin__.None" -> do
                         c <- Acton.CodeGen.genRoot env qn

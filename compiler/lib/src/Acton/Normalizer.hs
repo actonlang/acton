@@ -538,10 +538,10 @@ instance (Conv a) => Conv (Name, a) where
     conv (n, x)                     = (n, conv x)
 
 instance Conv NameInfo where
-    conv (NAct q p k te)            = NAct q (joinRow p k) kwdNil (conv te)
-    conv (NClass q ps te)           = NClass q (conv ps) (conv te)
-    conv (NSig sc dec)              = NSig (conv sc) dec
-    conv (NDef sc dec)              = NDef (conv sc) dec
+    conv (NAct q p k te doc)        = NAct q (joinRow p k) kwdNil (conv te) doc
+    conv (NClass q ps te doc)       = NClass q (conv ps) (conv te) doc
+    conv (NSig sc dec doc)          = NSig (conv sc) dec doc
+    conv (NDef sc dec doc)          = NDef (conv sc) dec doc
     conv (NVar t)                   = NVar (conv t)
     conv (NSVar t)                  = NSVar (conv t)
     conv ni                         = ni

@@ -230,20 +230,22 @@ convStmts t0 eq stmts                   = map conv stmts
 
 convEnvProtos env                       = mapModules conv env
   where
-    conv env1 m (n, NDef sc d)          = [(n, NDef (convS sc) d)]
-    conv env1 m (n, NSig sc d)          = [(n, NSig (convS sc) d)]
-    conv env1 m (n, NAct q p k te)      = [(n, NAct (noqual env q) (qualWRow env q p) k (concat $ map (conv env m) te))]
-    conv env1 m ni@(n, NProto q us te)  = map (fromClass env) $ convProtocol (define [ni] env) n q us [] [] (fromTEnv te)
-    conv env1 m ni@(n, NExt q c us te)  = map (fromClass env) $ convExtension (define [ni] env) n c q us [] [] (fromTEnv te)
-    conv env1 m (n, NClass q us te)     = [(n, NClass (noqual env q) us (convClassTEnv env q te))]
+    conv env1 m (n, NDef sc d doc)      = [(n, NDef (convS sc) d doc)]
+    conv env1 m (n, NSig sc d doc)      = [(n, NSig (convS sc) d doc)]
+    conv env1 m (n, NAct q p k te doc)  = [(n, NAct (noqual env q) (qualWRow env q p) k (concat $ map (conv env m) te) doc)]
+    conv env1 m ni@(n, NProto q us te doc)
+                                        = map (fromClass env) $ convProtocol (define [ni] env) n q us [] [] (fromTEnv te)
+    conv env1 m ni@(n, NExt q c us te doc)
+                                        = map (fromClass env) $ convExtension (define [ni] env) n c q us [] [] (fromTEnv te)
+    conv env1 m (n, NClass q us te doc) = [(n, NClass (noqual env q) us (convClassTEnv env q te) doc)]
     conv env1 m ni                      = [ni]
     convS (TSchema l q t)               = TSchema l (noqual env q) (convT q t)
     convT q (TFun l x p k t)            = TFun l x (qualWRow env q p) k t
     convT q t                           = t
 
-fromClass env (Class _ n q us b)        = (n, NClass q (leftpath us) (fromStmts env b))
+fromClass env (Class _ n q us b)        = (n, NClass q (leftpath us) (fromStmts env b) Nothing)
 
-fromStmts env (Signature _ ns sc d : ss)= [ (n, NSig (convS sc) d) | n <- ns ] ++ fromStmts env ss
+fromStmts env (Signature _ ns sc d : ss)= [ (n, NSig (convS sc) d Nothing) | n <- ns ] ++ fromStmts env ss
   where convS (TSchema l q t)           = TSchema l (noqual env q) (convT q t)
         convT q (TFun l x p k t)        = TFun l x (qualWRow env q p) k t
         convT q t                       = t
@@ -254,14 +256,14 @@ fromStmts env (_ : ss)                  = fromStmts env ss
 fromStmts env []                        = []
 
 fromDefs env (Def l n q p k a _ d fx : ds)
-                                        = (n, NDef (TSchema NoLoc q (TFun NoLoc fx (prowOf' p d) (krowOf k) (fromJust a))) d) : fromDefs env ds
+                                        = (n, NDef (TSchema NoLoc q (TFun NoLoc fx (prowOf' p d) (krowOf k) (fromJust a))) d Nothing) : fromDefs env ds
   where prowOf' p Static                = prowOf p
         prowOf' (PosPar _ _ _ p) _      = prowOf p
 fromDefs env (_ : ds)                   = fromDefs env ds
 fromDefs env []                         = []
 
-fromTEnv ((n, NSig sc dec) : te)        = Signature NoLoc [n] sc dec : fromTEnv te
-fromTEnv ((n, NDef sc dec) : te)        = Decl NoLoc [def] : fromTEnv te
+fromTEnv ((n, NSig sc dec doc) : te)    = Signature NoLoc [n] sc dec : fromTEnv te
+fromTEnv ((n, NDef sc dec doc) : te)    = Decl NoLoc [def] : fromTEnv te
   where TSchema _ q (TFun _ fx p k t)   = sc
         def                             = Def NoLoc n q (pPar' dec p) (kPar attrKW k) (Just t) [sNotImpl] dec fx
         pPar' Static p                  = pPar pNames p
@@ -271,8 +273,8 @@ fromTEnv (_ : te)                       = fromTEnv te
 fromTEnv []                             = []
 
 convClassTEnv env q0 te                 = [ (n, conv i) | (n,i) <- te ]
-  where conv (NSig sc dec)              = NSig (convS sc) dec
-        conv (NDef sc dec)              = NDef (convS sc) dec
+  where conv (NSig sc dec doc)          = NSig (convS sc) dec doc
+        conv (NDef sc dec doc)          = NDef (convS sc) dec doc
         conv i                          = i
         convS (TSchema l q t)           = TSchema l (noqual env q) (convT q t)
         convT q (TFun l x p k t)        = TFun l x (qualWRow env (q0++q) p) k t

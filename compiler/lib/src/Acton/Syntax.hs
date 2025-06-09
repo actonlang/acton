@@ -434,16 +434,16 @@ type TEnv               = [(Name, NameInfo)]
 
 data NameInfo           = NVar      Type
                         | NSVar     Type
-                        | NDef      TSchema Deco
-                        | NSig      TSchema Deco
-                        | NAct      QBinds PosRow KwdRow TEnv
-                        | NClass    QBinds [WTCon] TEnv
-                        | NProto    QBinds [WTCon] TEnv
-                        | NExt      QBinds TCon [WTCon] TEnv
+                        | NDef      TSchema Deco (Maybe String)
+                        | NSig      TSchema Deco (Maybe String)
+                        | NAct      QBinds PosRow KwdRow TEnv (Maybe String)
+                        | NClass    QBinds [WTCon] TEnv (Maybe String)
+                        | NProto    QBinds [WTCon] TEnv (Maybe String)
+                        | NExt      QBinds TCon [WTCon] TEnv (Maybe String)
                         | NTVar     Kind CCon
                         | NAlias    QName
                         | NMAlias   ModName
-                        | NModule   TEnv
+                        | NModule   TEnv (Maybe String)
                         | NReserved
                         deriving (Eq,Show,Read,Generic)
 
@@ -467,12 +467,12 @@ instance (Leaves a) => Leaves (Name,a) where
     leaves (n,x)            = leaves x
 
 instance Leaves NameInfo where
-    leaves (NClass q cs te) = leaves q ++ leaves cs ++ leaves te
-    leaves (NProto q ps te) = leaves q ++ leaves ps ++ leaves te
-    leaves (NAct q p k te)  = leaves q ++ leaves [p,k] ++ leaves te
-    leaves (NExt q c ps te) = leaves q ++ leaves c ++ leaves ps ++ leaves te
-    leaves (NDef sc dec)    = leaves sc
-    leaves _                = []
+    leaves (NClass q cs te _) = leaves q ++ leaves cs ++ leaves te
+    leaves (NProto q ps te _) = leaves q ++ leaves ps ++ leaves te
+    leaves (NAct q p k te _)  = leaves q ++ leaves [p,k] ++ leaves te
+    leaves (NExt q c ps te _) = leaves q ++ leaves c ++ leaves ps ++ leaves te
+    leaves (NDef sc dec _)    = leaves sc
+    leaves _                  = []
 
 instance Leaves QBind where
     leaves (Quant tv ps)    = tVar tv : leaves ps

@@ -260,9 +260,9 @@ kchkSuite env (Decl l ds : ss)      = do ds <- instKWild (map (autoQuantD env) d
                                          ds <- kchk env1 ds
                                          ss <- kchkSuite env1 ss
                                          return (Decl l ds : ss)
-  where kinds (Actor _ n q _ _ _)   = [(n, NAct q posNil kwdNil [])]
-        kinds (Class _ n q _ _)     = [(n, NClass q [] [])]
-        kinds (Protocol _ n q _ _)  = [(n, NProto q [] [])]
+  where kinds (Actor _ n q _ _ _)   = [(n, NAct q posNil kwdNil [] Nothing)]
+        kinds (Class _ n q _ _)     = [(n, NClass q [] [] Nothing)]
+        kinds (Protocol _ n q _ _)  = [(n, NProto q [] [] Nothing)]
         kinds _                     = []
         kind k []                   = k
         kind k q                    = KFun [ tvkind v | Quant v _ <- q ] k

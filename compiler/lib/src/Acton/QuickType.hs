@@ -52,7 +52,7 @@ schemaOf env e                      = (sc, dec)
 closedType                          :: EnvF x -> Expr -> Bool
 closedType env (Var _ n)            = isClosed $ findQName n env
 closedType env (Dot _ (Var _ x) n)
-  | NClass q _ _ <- findQName x env = closedAttr env (TC x (map tVar $ qbound q)) n
+  | NClass q _ _ _ <- findQName x env = closedAttr env (TC x (map tVar $ qbound q)) n
 closedType env (Dot _ e n)          = case typeOf env e of
                                         TCon _ c -> closedAttr env c n
                                         TVar _ v  -> closedAttr env (findTVBound env v) n
@@ -68,20 +68,20 @@ qSchema env f e@(Var _ n)           = case findQName n env of
                                             (monotype t, fxPure, Nothing, e)
                                         NSVar t ->
                                             (monotype t, fxPure, Nothing, e)
-                                        NDef sc dec ->
+                                        NDef sc dec _ ->
                                             (sc, fxPure, Just dec, e)
-                                        NSig sc dec ->
+                                        NSig sc dec _ ->
                                             (sc, fxPure, Just dec, e)
-                                        NClass q _ _ ->
+                                        NClass q _ _ _ ->
                                             let tc = TC (unalias env n) (map tVar $ qbound q)
                                                 (TSchema _ q' t, _) = findAttr' env tc initKW
                                                 t' = if restype t == tR then t else t{ restype = tSelf }
                                             in (tSchema (q++q') $ subst [(tvSelf,tCon tc)] t', fxPure, Just NoDec, e)
-                                        NAct q p k _ ->
+                                        NAct q p k _ _ ->
                                             (tSchema q (tFun fxProc p k (tCon0 n q)), fxPure, Just NoDec, e)
                                         i -> error ("### qSchema Var unexpected " ++ prstr (noq n,i))
 qSchema env f e@(Dot _ (Var _ x) n)
-  | NClass q _ _ <- info            = let tc = TC x (map tVar $ qbound q)
+  | NClass q _ _ _ <- info          = let tc = TC x (map tVar $ qbound q)
                                           (TSchema _ q' t, mbdec) = findAttr' env tc n
                                       in (tSchema (q++q') $ subst [(tvSelf,tCon tc)] (addSelf t mbdec), fxPure, mbdec, e)
   where info                        = findQName x env
@@ -333,7 +333,7 @@ instance EnvOf Stmt where
     envOf (Assign _ ps e)           = envOf ps
     envOf (VarAssign _ ps e)        = envOf ps
     envOf (Decl _ ds)               = envOf ds
-    envOf (Signature _ ns sc dec)   = [ (n, NSig sc dec) | n <- ns ]
+    envOf (Signature _ ns sc dec)   = [ (n, NSig sc dec Nothing) | n <- ns ]
     envOf (If _ [Branch e ss] fin)
       | isPUSHF e                   = envOf ss ++ envOf fin
     envOf (If _ bs els)             = commonEnvOf ([ ss | Branch _ ss <- bs ] ++ [els])
@@ -348,17 +348,17 @@ commonEnvOf suites
 
 instance EnvOf Decl where
     envOf (Def _ n q p k (Just t) b dec fx)
-                                    = [(n, NDef (TSchema NoLoc q $ TFun NoLoc fx (prowOf p) (krowOf k) t) dec)]
-    envOf (Class _ n q as ss)       = [(n, NClass q (leftpath as) (map dropDefSelf $ envOf ss))]
+                                    = [(n, NDef (TSchema NoLoc q $ TFun NoLoc fx (prowOf p) (krowOf k) t) dec Nothing)]
+    envOf (Class _ n q as ss)       = [(n, NClass q (leftpath as) (map dropDefSelf $ envOf ss) Nothing)]
 
-    envOf (Actor _ n q p k ss)      = [(n, NAct q (prowOf p) (krowOf k) (map wrap te))]
+    envOf (Actor _ n q p k ss)      = [(n, NAct q (prowOf p) (krowOf k) (map wrap te) Nothing)]
       where te                      = filter (not . isHidden . fst) $ envOf ss `exclude` statevars ss
-            wrap (n, NDef sc dec)   = (n, NDef (wrapFX sc) dec)
+            wrap (n, NDef sc dec doc) = (n, NDef (wrapFX sc) dec doc)
             wrap (n, i)             = (n, i)
             wrapFX (TSchema l q t)  = TSchema l q (if effect t == fxProc then t{ effect = fxAction } else t)
 
-dropDefSelf (n, NDef (TSchema l q t) dec)
-                                    = (n, NDef (TSchema l q (dropSelf t dec)) dec)
+dropDefSelf (n, NDef (TSchema l q t) dec doc)
+                                    = (n, NDef (TSchema l q (dropSelf t dec)) dec doc)
 dropDefSelf (n, i)                  = (n, i)
 
 --  The following constructs are translated away during type inference:

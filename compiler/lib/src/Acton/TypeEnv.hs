@@ -90,9 +90,9 @@ instance (WellFormed a) => WellFormed [a] where
 instance WellFormed TCon where
     wf env (TC n ts)        = wf env ts ++ subst s [ constr u (tVar v) | Quant v us <- q, u <- us ]
       where q               = case findQName  n env of
-                                NAct q p k te  -> q
-                                NClass q us te -> q
-                                NProto q us te -> q
+                                NAct q p k te _ -> q
+                                NClass q us te _ -> q
+                                NProto q us te _ -> q
                                 NReserved -> nameReserved n
                                 i -> err1 n ("wf: Class or protocol name expected, got " ++ show i)
             s               = qbound q `zip` ts
@@ -102,7 +102,7 @@ wfProto                     :: EnvF x -> TCon -> TypeM (Constraints, Constraints
 wfProto env (TC n ts)       = do cs <- instQuals env q ts
                                  return (wf env ts, cs)
   where q                   = case findQName n env of
-                                NProto q us te -> q
+                                NProto q us te _ -> q
                                 NReserved -> nameReserved n
                                 i -> err1 n ("wfProto: Protocol name expected, got " ++ show i)
             
