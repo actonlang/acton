@@ -625,25 +625,6 @@ witsByTName env tn          = [ w | w <- witnesses env, eqname (wtype w) ]
         eqname (TVar _ v)   = NoQ (tvname v) == tn
         eqname _            = False
 
-schematic (TCon _ tc)       = tCon (schematic' tc)
-schematic (TFun _ _ _ _ _)  = tFun tWild tWild tWild tWild
-schematic (TTuple _ _ _)    = tTuple tWild tWild
-schematic (TOpt _ _)        = tOpt tWild
-schematic (TRow _ k n _ r)  = tRow k n tWild (schematic r)
-schematic (TStar _ k _)     = tStar k tWild
-schematic t                 = t
-
-schematic' (TC n ts)         = TC n [ tWild | _ <- ts ]
-
-wild t                      = subst [ (v,tWild) | v <- nub (tyfree t), univar v ] t
-
-wildargs i                  = [ tWild | _ <- nbinds i ]
-  where
-    nbinds (NAct q _ _ _ _) = q
-    nbinds (NClass q _ _ _) = q
-    nbinds (NProto q _ _ _) = q
-    nbinds (NExt q _ _ _ _) = q
-
 
 -- TCon queries ------------------------------------------------------------------------------------------------------------------
 

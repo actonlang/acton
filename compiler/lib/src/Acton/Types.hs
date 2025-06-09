@@ -482,7 +482,7 @@ matchDefAssumption env cs def
   | otherwise                           = do (cs1, tvs) <- instQBinds env q1
                                              let eq0 = witSubst env q1 cs1
                                                  s = qbound q1 `zip` tvs            -- This cannot just be memoized in the global TypeM substitution,
-                                             def' <- msubstWith s def{ qbinds = [] } -- since the variables in (qbound q1) aren't necessarily globally unique
+                                                 def' = subst s def{ qbinds = [] }  -- since the variables in (qbound q1) aren't necessarily globally unique
                                              match env (cs ++ cs1) eq0 def'
   where NDef (TSchema _ q0 t0) dec _    = findName (dname def) env
         t2 | inClass env                = addSelf t0 (Just dec)

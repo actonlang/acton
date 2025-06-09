@@ -42,7 +42,6 @@ selfType p k NoDec
   | TRow _ _ _ t _ <- krowOf k          = t
 selfType _ _ _                          = tSelf
 
-
 closeDepVars vs cs
   | null vs'                        = nub vs
   | otherwise                       = closeDepVars (vs'++vs) cs
@@ -185,59 +184,29 @@ testSchemaSubst = do
         s4  = [(TV KType (name "B"), tVar (TV KType (name "C"))), (TV KType (name "C"), tSelf)]
         s5  = [(TV KType (name "B"), tVar (TV KType (name "D"))), (TV KType (name "D"), tSelf)]
 
-msubstRenaming                      :: Subst a => a -> TypeM (Substitution,Substitution)
-msubstRenaming c                    = do s <- Map.toList . Map.filterWithKey relevant <$> getSubstitution
-                                         return $ (dom s `zip` subst (renaming (tyfree (rng s))) (rng s),renaming (tyfree (rng s)))
-      where relevant k _            = k `elem` vs0
-            vs0                     = tyfree c
-            vs                      = tybound c
-            renaming newvars        = tvarSupplyMap clashvars avoidvars
-              where clashvars       = vs `intersect` newvars
-                    avoidvars       = vs0 ++ vs ++ newvars
 
-msubstWith                          :: (Subst a) => Substitution -> a -> TypeM a
-msubstWith [] x                     = return x
-msubstWith s x                      = do s0 <- getSubstitution
-                                         sequence [ substitute tv t | (tv,t) <- s ]
-                                         x' <- msubst x
-                                         setSubstitution s0
-                                         return x'
+schematic (TCon _ tc)               = tCon (schematic' tc)
+schematic (TFun _ _ _ _ _)          = tFun tWild tWild tWild tWild
+schematic (TTuple _ _ _)            = tTuple tWild tWild
+schematic (TOpt _ _)                = tOpt tWild
+schematic (TRow _ k n _ r)          = tRow k n tWild (schematic r)
+schematic (TStar _ k _)             = tStar k tWild
+schematic t                         = t
+
+schematic' (TC n ts)                = TC n [ tWild | _ <- ts ]
+
+wild t                              = subst [ (v,tWild) | v <- nub (tyfree t), univar v ] t
 
 wildify                             :: (Subst a) => a -> TypeM a
-wildify a                           = msubstWith (zip (tyfree a \\ (tvSelf : tybound a)) (repeat tWild)) a
+wildify a                           = return (wild a)
 
-testMsubstRenaming = do
-    putStrLn ("p1: " ++ render (pretty (runTypeM p1)))
-    putStrLn ("p2: " ++ render (pretty (runTypeM p2)))
-    putStrLn ("p3: " ++ render (pretty (runTypeM p3)))
-    putStrLn ("r1: " ++ render (pretty (runTypeM r1)))
-    putStrLn ("r2: " ++ render (pretty (runTypeM r2)))
-    putStrLn ("r3: " ++ render (pretty (runTypeM r3)))
-  where t   = tSchema [Quant (TV KType (name "A")) [TC (noQ "Eq") []]]
-                            (tCon (TC (noQ "apa") [tVar (TV KType (name "A")),
-                                                   tVar (TV KType (name "B"))]))
-        msubst' sc@(TSchema l q t) = do (s,ren) <- msubstRenaming sc
-                                        return $ TSchema l (subst s (subst ren q)) (subst s (subst ren t))
-        p1 = do
-            substitute (TV KType (name "B")) tSelf
-            msubst t
-        p2 = do
-            substitute (TV KType (name "A")) tSelf
-            msubst t
-        p3 = do
-            substitute (TV KType (name "B")) (tVar (TV KType (name "A")))
-            msubst t
-        r1 = do
-            substitute (TV KType (name "B")) tSelf
-            msubst' t
-        r2 = do
-            substitute (TV KType (name "A")) tSelf
-            msubst' t
-        r3 = do
-            substitute (TV KType (name "B")) (tVar (TV KType (name "A")))
-            msubst' t
-
-
+wildargs i                          = [ tWild | _ <- nbinds i ]
+  where
+    nbinds (NAct q _ _ _ _)         = q
+    nbinds (NClass q _ _ _)         = q
+    nbinds (NProto q _ _ _)         = q
+    nbinds (NExt q _ _ _ _)         = q
+            
 
 
 instance Subst TVar where
@@ -309,20 +278,7 @@ instance Subst Decl where
     msubst (Class l n q bs ss doc)          = Class l n <$> msubst q <*> msubst bs <*> msubst ss <*> return doc
     msubst (Protocol l n q bs ss doc)       = Protocol l n <$> msubst q <*> msubst bs <*> msubst ss <*> return doc
     msubst (Extension l q c bs ss doc)      = Extension l <$> msubst q <*> msubst c <*> msubst bs <*> msubst ss <*> return doc
-    {-
-    msubst d@(Protocol l n q bs ss)     = do (s,ren) <- msubstRenaming d
-                                             return $ Protocol l n (subst s (subst ren q)) (subst s (subst ren bs)) (subst s (subst ren ss))
-    msubst d@(Class l n q bs ss)        = do (s,ren) <- msubstRenaming d
-                                             return $ Class l n (subst s (subst ren q)) (subst s (subst ren bs)) (subst s (subst ren ss))
-    msubst d@(Extension l q c bs ss)    = do (s,ren) <- msubstRenaming d
-                                             return $ Extension l (subst s (subst ren q)) (subst s (subst ren c)) (subst s (subst ren bs)) (subst s (subst ren ss))
-    msubst d@(Def l n q p k a ss de fx) = do (s,ren) <- msubstRenaming d
-                                             return $ Def l n (subst s (subst ren q)) (subst s (subst ren p)) (subst s (subst ren k))
-                                                              (subst s (subst ren a)) (subst s (subst ren ss)) de (subst s fx)
-    msubst d@(Actor l n q p k ss)       = do (s,ren) <- msubstRenaming d
-                                             return $ Actor l n (subst s (subst ren q)) (subst s (subst ren p)) (subst s (subst ren k))
-                                                                (subst s (subst ren ss))
-    -}
+
     tybound (Protocol l n q ps b _)   = tvSelf : tybound q
     tybound (Class l n q ps b _)      = tvSelf : tybound q
     tybound (Extension l q c ps b _)  = tvSelf : tybound q
