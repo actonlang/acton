@@ -1311,7 +1311,7 @@ instance (Simp a) => Simp [a] where
     simp env                        = map (simp env)
 
 instance Simp TSchema where
-    simp env (TSchema l q t)        = TSchema l q' (substIteratively s $ simp env' t)
+    simp env (TSchema l q t)        = TSchema l q' (subst s $ simp env' t)
       where (q', s)                 = simpQuant env (simp env' q) (tyfree t)
             env'                    = defineTVars (stripQual q) env
 

@@ -175,8 +175,7 @@ solve' env select hist te tt eq cs
                                                      vs = filter (\v -> length (filter (\c -> v `elem` tyfree c) cs) > 1) (nub(tyfree cs))
                                                      cs' = if length cs == 1 then cs else filter (not . useless vs) cs
                                                      vs' = filter (\ v -> length (filter (\c -> v `elem` tyfree c) cs') > 1) (nub(tyfree cs'))
-                                                 cs' <- msubstWith (zip vs' ts) cs'
-                                                 noSolve0 env (Just t) (take (length vs') ts) cs'
+                                                 noSolve0 env (Just t) (take (length vs') ts) $ subst (zip vs' ts) cs'
         tryAlts st _ []                     = noSolve0 env Nothing [] cs
         tryAlts st t0 (t:ts)                = tryAlt t0 t `catchError` const (
                                                     do --traceM ("=== ROLLBACK " ++ prstr t0)
