@@ -1,0 +1,6 @@
+ERROR: test.act:2:1:
+  |
+2 | import math
+  | ^
+unexpected 'i'
+expecting end of input, end of line, or statement

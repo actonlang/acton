@@ -1,0 +1,4 @@
+"""First syntax test"""
+
+import net
+

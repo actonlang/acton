@@ -162,7 +162,7 @@ For detailed development workflow and release procedures, see [docs/dev.md](docs
 ## Git Commit Guidelines
 
 When making commits:
-- Do not include AI assistant attribution (no "Generated with Claude" or similar)
+- Do not include AI assistant attribution (no "Generated with Claude", co-authored-by or similar)
 - Write commit messages as if you wrote the code yourself
 - Focus on what the change does, not how it was created
 - Try hard to use short summary messages (< 50 chars)

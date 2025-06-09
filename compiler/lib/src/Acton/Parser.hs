@@ -886,12 +886,24 @@ braces p = withCtx PAR (L.symbol sc2 "{" *> p <* char '}') <* currSC
 
 --- Top-level parsers ------------------------------------------------------------
 
+-- Parse a docstring statement (just a string literal as an expression statement)
+docstring_stmt :: Parser S.Stmt
+docstring_stmt = addLoc $ do
+    e <- strings
+    return (S.Expr NoLoc e)
+
 file_input :: Parser ([S.Import], S.Suite)
 file_input = sc2 *>  do
+    -- Allow optional module docstring before imports
+    mbDocstring <- optional (try (L.nonIndented sc2 docstring_stmt <* eol <* sc2))
     is <- imports
     s <-  withCtx TOP top_suite
     eof
-    return (is,s)
+    -- Prepend docstring to suite if present
+    let suite = case mbDocstring of
+                  Nothing -> s
+                  Just ds -> ds : s
+    return (is,suite)
 
 -- (((,) <$> imports <*> withCtx TOP top_suite) <* eof)
 

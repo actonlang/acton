@@ -37,6 +37,35 @@ main = do
   sydTest $ do
     describe "Pass 1: Parser" $ do
 
+      describe "Syntax" $ do
+        testParse env0 "syntax1"
+
+      describe "Module-level docstring tests" $ do
+        describe "Valid docstrings before imports" $ do
+          it "allows single-line docstring before import" $ do
+            let input = "\"\"\"Module docstring\"\"\"\nimport math\n"
+            case parseModuleTest input of
+              Left err -> expectationFailure $ "Parse failed: " ++ err
+              Right _ -> return ()
+
+          it "allows multi-line docstring before import" $ do
+            let input = "\"\"\"Module docstring\nwith multiple lines\"\"\"\nimport math\n"
+            case parseModuleTest input of
+              Left err -> expectationFailure $ "Parse failed: " ++ err
+              Right _ -> return ()
+
+        describe "Invalid expressions before imports (golden tests)" $ do
+          testModuleParseError "module_var_before_import" "x = 42\nimport math\n"
+          testModuleParseError "module_call_before_import" "print(\"hello\")\nimport math\n"
+          testModuleParseError "module_number_before_import" "42\nimport math\n"
+          testModuleParseError "module_list_before_import" "[1, 2, 3]\nimport math\n"
+          testModuleParseError "module_dict_before_import" "{\"key\": \"value\"}\nimport math\n"
+          testModuleParseError "module_if_before_import" "if True:\n    pass\nimport math\n"
+          testModuleParseError "module_for_before_import" "for i in range(10):\n    pass\nimport math\n"
+          testModuleParseError "module_class_before_import" "class Foo:\n    pass\nimport math\n"
+          testModuleParseError "module_func_before_import" "def foo():\n    pass\nimport math\n"
+          testModuleParseError "module_actor_before_import" "actor Foo():\n    pass\nimport math\n"
+
       describe "F-String Tests" $ do
 
         describe "Basic f-string syntax" $ do
@@ -164,13 +193,33 @@ parseActon input =
   where
     inputWithNewline = if last input == '\n' then input else input ++ "\n"
 
+-- Helper function to parse a full module (for testing module-level constructs)
+parseModuleTest :: String -> Either String String
+parseModuleTest input =
+  case runParser (St.evalStateT P.file_input P.initState) "test.act" inputWithNewline of
+    Left err -> Left $ errorBundlePretty err
+    Right (imports, suite) -> Right $ "Module parsed successfully"
+  where
+    inputWithNewline = if null input || last input == '\n' then input else input ++ "\n"
+
+-- Helper function to test module-level parser errors with golden files
+testModuleParseError :: String -> String -> Spec
+testModuleParseError testName input = do
+  it testName $ do
+    case parseModuleTest input of
+      Left err -> goldenTextFile ("test/parser_golden/" ++ testName ++ ".golden") $
+        return $ T.pack $ "ERROR: " ++ err
+      Right result -> goldenTextFile ("test/parser_golden/" ++ testName ++ ".golden") $
+        return $ T.pack $ "PARSED: " ++ result
+
 -- Helper function to test parsing (just that it succeeds)
-testParse :: String -> Spec
-testParse input = do
-  it (show input) $ do
-    case parseActon input of
-      Left err -> expectationFailure $ "Parse failed: " ++ err
-      Right _ -> pure ()
+testParse env0 testname = do
+  let act_file = "test" </> "src" </> testname ++ ".act"
+      dir      = "test" </> "1-parse"
+
+  (env, parsed) <- parseAct env0 act_file
+
+  genTests "Parse Check" dir testname parsed parsed
 
 -- Helper function to test parsing with output validation
 testParseOutput :: String -> String -> Spec
