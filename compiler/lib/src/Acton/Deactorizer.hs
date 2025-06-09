@@ -211,7 +211,7 @@ instance Deact Branch where
 
 isProcMeth env e
   | Just n <- isQVar e,
-    NDef sc _ <- findQName n env,
+    NDef sc _ _ <- findQName n env,
     TFun{effect=fx} <- sctype sc    = fx == fxProc
 isProcMeth env _                    = False
 
@@ -351,10 +351,10 @@ instance LambdaFree Elem where
 
 -- Convert types and environments -----------------------------------------------------------------------
 
-conv env m (n, NAct q p k te')      = (n, NClass q (leftpath [TC primActor [], cValue]) (convActorEnv q p k te')) :
-                                      (newactName n, NDef (tSchema q (tFun fxProc p k t)) NoDec) :
+conv env m (n, NAct q p k te' doc)  = (n, NClass q (leftpath [TC primActor [], cValue]) (convActorEnv q p k te') doc) :
+                                      (newactName n, NDef (tSchema q (tFun fxProc p k t)) NoDec Nothing) :
                                       []
-  where convActorEnv q0 p k te'     = (initKW, NDef t0 NoDec) : te'
+  where convActorEnv q0 p k te'     = (initKW, NDef t0 NoDec Nothing) : te'
           where t0                  = tSchema q0 (tFun fxProc p k tNone)
         t                           = tCon $ TC (GName m n) (map tVar $ qbound q)
 conv env m ni                       = [ni]

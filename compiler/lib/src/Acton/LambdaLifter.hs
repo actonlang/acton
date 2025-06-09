@@ -450,10 +450,10 @@ instance (Conv a) => Conv (Name, a) where
     conv (n, x)                         = (n, conv x)
 
 instance Conv NameInfo where
-    conv (NClass q ps te)               = NClass (conv q) (conv ps) (conv te)
-    conv (NSig sc Property)             = NSig (conv sc) Property
-    conv (NSig sc dec)                  = NSig (convTop sc) dec
-    conv (NDef sc dec)                  = NDef (convTop sc) dec
+    conv (NClass q ps te doc)           = NClass (conv q) (conv ps) (conv te) doc
+    conv (NSig sc Property doc)         = NSig (conv sc) Property doc
+    conv (NSig sc dec doc)              = NSig (convTop sc) dec doc
+    conv (NDef sc dec doc)              = NDef (convTop sc) dec doc
     conv (NVar t)                       = NVar (conv t)
     conv (NSVar t)                      = NSVar (conv t)
     conv ni                             = ni

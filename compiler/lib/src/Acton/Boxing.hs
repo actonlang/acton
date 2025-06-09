@@ -124,7 +124,7 @@ instance {-# OVERLAPS #-} Boxing ([Stmt]) where
                                           return (ws1++ws2, s : ss ++ xs')
       where te                       = envOf x
             
-    boxing env (x : xs)              = do ps <- if (isInClass env) then return [] else newNames [n | (n,NDef (TSchema _ [] (TFun _ _ p _ t)) _) <- te, isUnboxable t ||  hasUnboxableType p]
+    boxing env (x : xs)              = do ps <- if (isInClass env) then return [] else newNames [n | (n,NDef (TSchema _ [] (TFun _ _ p _ t)) _ _) <- te, isUnboxable t ||  hasUnboxableType p]
                                           (ws1,x') <- boxing (addUnboxedVars ps env) x
                                           (ws2,xs') <- boxing (addUnboxedVars ps env1) xs
                                           return (ws1++ws2, x' : xs')

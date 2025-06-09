@@ -74,15 +74,15 @@ mapModules f env            = walk env0 [] mods
         prim : mods         = modules env
 
         walk env ns []      = env
-        walk env ns ((n,NModule te1):te)
+        walk env ns ((n,NModule te1 _):te)
                             = walk env2 ns te
-          where env1        = env{ modules = app ns (modules env) [(n, NModule [])] }
+          where env1        = env{ modules = app ns (modules env) [(n, NModule [] Nothing)] }
                 env2        = walk env1 (ns++[n]) te1
         walk env ns (ni:te) = walk env1 ns te
           where env1        = env{ modules = app ns (modules env) (f env (ModName ns) ni) }
 
-        app (n:ns) ((m,NModule te1):te) te'
-          | n == m          = (m, NModule $ app ns te1 te') : te
+        app (n:ns) ((m,NModule te1 doc):te) te'
+          | n == m          = (m, NModule (app ns te1 te') doc) : te
         app ns (ni:te) te'  = ni : app ns te te'
         app ns [] te'       = te'
 
@@ -132,30 +132,39 @@ instance Pretty () where
 instance Pretty (Name,NameInfo) where
     pretty (n, NVar t)          = pretty n <+> colon <+> pretty t
     pretty (n, NSVar t)         = text "var" <+> pretty n <+> colon <+> pretty t
-    pretty (n, NDef t d)        = prettyDec d $ pretty n <+> colon <+> pretty t
-    pretty (n, NSig t d)        = prettyDec d $ pretty n <+> colon <+> pretty t
-    pretty (n, NAct q p k te)   = text "actor" <+> pretty n <> nonEmpty brackets commaList q <+>
-                                  parens (prettyFunRow p k) <> colon $+$ (nest 4 $ prettyOrPass te)
-    pretty (n, NClass q us te)  = text "class" <+> pretty n <> nonEmpty brackets commaList q <+>
-                                  nonEmpty parens commaList us <> colon $+$ (nest 4 $ prettyOrPass te)
-    pretty (n, NProto q us te)  = text "protocol" <+> pretty n <> nonEmpty brackets commaList q <+>
-                                  nonEmpty parens commaList us <> colon $+$ (nest 4 $ prettyOrPass te)
-    pretty (w, NExt [] c ps te) = {-pretty w  <+> colon <+> -}
+    pretty (n, NDef t d doc)    = prettyDec d $ pretty n <+> colon <+> pretty t $+$ nest 4 (prettyDocstring doc)
+    pretty (n, NSig t d doc)    = prettyDec d $ pretty n <+> colon <+> pretty t $+$ nest 4 (prettyDocstring doc)
+    pretty (n, NAct q p k te doc)
+                                = text "actor" <+> pretty n <> nonEmpty brackets commaList q <+>
+                                  parens (prettyFunRow p k) <> colon $+$ nest 4 (prettyDocstring doc) $+$ (nest 4 $ prettyOrPass te)
+    pretty (n, NClass q us te doc)
+                                = text "class" <+> pretty n <> nonEmpty brackets commaList q <+>
+                                  nonEmpty parens commaList us <> colon $+$ nest 4 (prettyDocstring doc) $+$ (nest 4 $ prettyOrPass te)
+    pretty (n, NProto q us te doc)
+                                = text "protocol" <+> pretty n <> nonEmpty brackets commaList q <+>
+                                  nonEmpty parens commaList us <> colon $+$ nest 4 (prettyDocstring doc) $+$ (nest 4 $ prettyOrPass te)
+    pretty (w, NExt [] c ps te doc)
+                                = {-pretty w  <+> colon <+> -}
                                   text "extension" <+> pretty c <+> parens (commaList ps) <>
-                                  colon $+$ (nest 4 $ prettyOrPass te)
-    pretty (w, NExt q c ps te)  = {-pretty w  <+> colon <+> -}
+                                  colon $+$ nest 4 (prettyDocstring doc) $+$ (nest 4 $ prettyOrPass te)
+    pretty (w, NExt q c ps te doc)
+                                = {-pretty w  <+> colon <+> -}
                                   text "extension" <+> pretty q <+> text "=>" <+> pretty c <+> parens (commaList ps) <>
-                                  colon $+$ (nest 4 $ prettyOrPass te)
+                                  colon $+$ nest 4 (prettyDocstring doc) $+$ (nest 4 $ prettyOrPass te)
     pretty (n, NTVar k c)       = pretty n <> parens (pretty c)
     pretty (n, NAlias qn)       = text "alias" <+> pretty n <+> equals <+> pretty qn
     pretty (n, NMAlias m)       = text "module" <+> pretty n <+> equals <+> pretty m
-    pretty (n, NModule te)      = text "module" <+> pretty n <> colon $+$ nest 4 (pretty te)
+    pretty (n, NModule te doc)  = text "module" <+> pretty n <> colon $+$ nest 4 (prettyDocstring doc) $+$ nest 4 (pretty te)
     pretty (n, NReserved)       = pretty n <+> text "(reserved)"
 
 prettyOrPass te
   | isEmpty doc                 = text "pass"
   | otherwise                   = doc
   where doc                     = pretty te
+
+prettyDocstring :: Maybe String -> Doc
+prettyDocstring Nothing         = empty
+prettyDocstring (Just doc)      = text "\"\"\"" <+> text doc <+> text "\"\"\""
 
 instance Pretty WTCon where
     pretty (ws,u)               = --dotCat prettyW ws <+> colon <+>
@@ -173,30 +182,30 @@ instance (Subst x) => Subst (EnvF x) where
 instance Subst NameInfo where
     msubst (NVar t)             = NVar <$> msubst t
     msubst (NSVar t)            = NSVar <$> msubst t
-    msubst (NDef t d)           = NDef <$> msubst t <*> return d
-    msubst (NSig t d)           = NSig <$> msubst t <*> return d
-    msubst (NAct q p k te)      = NAct <$> msubst q <*> msubst p <*> msubst k <*> msubst te
-    msubst (NClass q us te)     = NClass <$> msubst q <*> msubst us <*> msubst te
-    msubst (NProto q us te)     = NProto <$> msubst q <*> msubst us <*> msubst te
-    msubst (NExt q c ps te)     = NExt <$> msubst q <*> msubst c <*> msubst ps <*> msubst te
+    msubst (NDef t d doc)       = NDef <$> msubst t <*> return d <*> return doc
+    msubst (NSig t d doc)       = NSig <$> msubst t <*> return d <*> return doc
+    msubst (NAct q p k te doc)  = NAct <$> msubst q <*> msubst p <*> msubst k <*> msubst te <*> return doc
+    msubst (NClass q us te doc) = NClass <$> msubst q <*> msubst us <*> msubst te <*> return doc
+    msubst (NProto q us te doc) = NProto <$> msubst q <*> msubst us <*> msubst te <*> return doc
+    msubst (NExt q c ps te doc) = NExt <$> msubst q <*> msubst c <*> msubst ps <*> msubst te <*> return doc
     msubst (NTVar k c)          = NTVar k <$> msubst c
     msubst (NAlias qn)          = NAlias <$> return qn
     msubst (NMAlias m)          = NMAlias <$> return m
-    msubst (NModule te)         = NModule <$> return te     -- actually msubst te, but te has no free variables (top-level)
+    msubst (NModule te doc)     = NModule <$> return te <*> return doc     -- actually msubst te, but te has no free variables (top-level)
     msubst NReserved            = return NReserved
 
     tyfree (NVar t)             = tyfree t
     tyfree (NSVar t)            = tyfree t
-    tyfree (NDef t d)           = tyfree t
-    tyfree (NSig t d)           = tyfree t
-    tyfree (NAct q p k te)      = (tyfree q ++ tyfree p ++ tyfree k ++ tyfree te) \\ (tvSelf : qbound q)
-    tyfree (NClass q us te)     = (tyfree q ++ tyfree us ++ tyfree te) \\ (tvSelf : qbound q)
-    tyfree (NProto q us te)     = (tyfree q ++ tyfree us ++ tyfree te) \\ (tvSelf : qbound q)
-    tyfree (NExt q c ps te)     = (tyfree q ++ tyfree c ++ tyfree ps ++ tyfree te) \\ (tvSelf : qbound q)
+    tyfree (NDef t d _)         = tyfree t
+    tyfree (NSig t d _)         = tyfree t
+    tyfree (NAct q p k te _)    = (tyfree q ++ tyfree p ++ tyfree k ++ tyfree te) \\ (tvSelf : qbound q)
+    tyfree (NClass q us te _)   = (tyfree q ++ tyfree us ++ tyfree te) \\ (tvSelf : qbound q)
+    tyfree (NProto q us te _)   = (tyfree q ++ tyfree us ++ tyfree te) \\ (tvSelf : qbound q)
+    tyfree (NExt q c ps te _)   = (tyfree q ++ tyfree c ++ tyfree ps ++ tyfree te) \\ (tvSelf : qbound q)
     tyfree (NTVar k c)          = tyfree c
     tyfree (NAlias qn)          = []
     tyfree (NMAlias qn)         = []
-    tyfree (NModule te)         = []        -- actually tyfree te, but a module has no free variables on the top level
+    tyfree (NModule te doc)     = []        -- actually tyfree te, but a module has no free variables on the top level
     tyfree NReserved            = []
 
 instance Subst Witness where
@@ -217,12 +226,12 @@ instance Subst WTCon where
 instance Polarity NameInfo where
     polvars (NVar t)                = polvars t
     polvars (NSVar t)               = invvars t
-    polvars (NDef t d)              = polvars t
-    polvars (NSig t d)              = polvars t
-    polvars (NAct q p k te)         = (polvars q `polcat` polneg (polvars p `polcat` polvars k) `polcat` polvars te) `polminus` (tvSelf : qbound q)
-    polvars (NClass q us te)        = (polvars q `polcat` polvars us `polcat` polvars te) `polminus` (tvSelf : qbound q)
-    polvars (NProto q us te)        = (polvars q `polcat` polvars us `polcat` polvars te) `polminus` (tvSelf : qbound q)
-    polvars (NExt q c ps te)        = (polvars q `polcat` polvars c `polcat` polvars ps `polcat` polvars te) `polminus` (tvSelf : qbound q)
+    polvars (NDef t d _)            = polvars t
+    polvars (NSig t d _)            = polvars t
+    polvars (NAct q p k te _)       = (polvars q `polcat` polneg (polvars p `polcat` polvars k) `polcat` polvars te) `polminus` (tvSelf : qbound q)
+    polvars (NClass q us te _)      = (polvars q `polcat` polvars us `polcat` polvars te) `polminus` (tvSelf : qbound q)
+    polvars (NProto q us te _)      = (polvars q `polcat` polvars us `polcat` polvars te) `polminus` (tvSelf : qbound q)
+    polvars (NExt q c ps te _)      = (polvars q `polcat` polvars c `polcat` polvars ps `polcat` polvars te) `polminus` (tvSelf : qbound q)
     polvars (NTVar k c)             = polvars c
     polvars _                       = ([],[])
 
@@ -233,15 +242,15 @@ instance Polarity (Name,NameInfo) where
     polvars (n, i)                  = polvars i
 
 negself te                          = concat $ map nself te
-  where nself (_, NSig t NoDec)     = filter (==tvSelf) (snd $ polvars t)
-        nself (_, NDef t NoDec)     = filter (==tvSelf) (snd $ polvars t)
+  where nself (_, NSig t NoDec _)   = filter (==tvSelf) (snd $ polvars t)
+        nself (_, NDef t NoDec _)   = filter (==tvSelf) (snd $ polvars t)
         nself (_, _)                = []
 
 
 instance Tailvars (Name, NameInfo) where
     tailvars (n, NVar t)            = tailvars t
     tailvars (n, NSVar t)           = tailvars t
-    tailvars (n, NDef sc _)         = tailvars sc
+    tailvars (n, NDef sc _ _)       = tailvars sc
     tailvars _                      = []
 
 -------------------------------------------------------------------------------------------------------------------
@@ -301,16 +310,16 @@ instance Unalias Type where
 instance Unalias NameInfo where
     unalias env (NVar t)            = NVar (unalias env t)
     unalias env (NSVar t)           = NSVar (unalias env t)
-    unalias env (NDef t d)          = NDef (unalias env t) d
-    unalias env (NSig t d)          = NSig (unalias env t) d
-    unalias env (NAct q p k te)     = NAct (unalias env q) (unalias env p) (unalias env k) (unalias env te)
-    unalias env (NClass q us te)    = NClass (unalias env q) (unalias env us) (unalias env te)
-    unalias env (NProto q us te)    = NProto (unalias env q) (unalias env us) (unalias env te)
-    unalias env (NExt q c ps te)    = NExt (unalias env q) (unalias env c) (unalias env ps) (unalias env te)
+    unalias env (NDef t d doc)      = NDef (unalias env t) d doc
+    unalias env (NSig t d doc)      = NSig (unalias env t) d doc
+    unalias env (NAct q p k te doc) = NAct (unalias env q) (unalias env p) (unalias env k) (unalias env te) doc
+    unalias env (NClass q us te doc)= NClass (unalias env q) (unalias env us) (unalias env te) doc
+    unalias env (NProto q us te doc)= NProto (unalias env q) (unalias env us) (unalias env te) doc
+    unalias env (NExt q c ps te doc)= NExt (unalias env q) (unalias env c) (unalias env ps) (unalias env te) doc
     unalias env (NTVar k c)         = NTVar k (unalias env c)
     unalias env (NAlias qn)         = NAlias (unalias env qn)
     unalias env (NMAlias m)         = NMAlias (unalias env m)
-    unalias env (NModule te)        = NModule (unalias env te)
+    unalias env (NModule te doc)    = NModule (unalias env te) doc
     unalias env NReserved           = NReserved
 
 instance Unalias (Name,NameInfo) where
@@ -326,10 +335,10 @@ instance Unalias (Either QName QName) where
 -- TEnv filters --------------------------------------------------------------------------------------------------------
 
 nSigs                       :: TEnv -> TEnv
-nSigs te                    = [ (n,i) | (n, i@(NSig sc dec)) <- te, not $ isProp dec sc ]
+nSigs te                    = [ (n,i) | (n, i@(NSig sc dec _)) <- te, not $ isProp dec sc ]
 
 propSigs                    :: TEnv -> TEnv
-propSigs te                 = [ (n,i) | (n, i@(NSig sc dec)) <- te, isProp dec sc ]
+propSigs te                 = [ (n,i) | (n, i@(NSig sc dec _)) <- te, isProp dec sc ]
 
 isProp                      :: Deco -> TSchema -> Bool
 isProp Property _           = True
@@ -362,9 +371,10 @@ normTEnv te                 = f [] te
 
 unSig                       :: TEnv -> TEnv
 unSig te                    = map f te
-  where f (n, NSig (TSchema _ [] t) Property)   = (n, NVar t)
-        f (n, NSig sc@(TSchema _ _ TFun{}) dec) = (n, NDef sc dec)
-        f (n, NSig (TSchema _ _ t) _)           = (n, NVar t)
+  where f (n, NSig (TSchema _ [] t) Property _) = (n, NVar t)
+        f (n, NSig sc@(TSchema _ _ TFun{}) dec doc)
+                                                = (n, NDef sc dec doc)
+        f (n, NSig (TSchema _ _ t) _ _)         = (n, NVar t)
         f (n, i)                                = (n, i)
 
 
@@ -375,7 +385,7 @@ unSig te                    = map f te
 initEnv                    :: FilePath -> Bool -> IO Env0
 initEnv path True          = return $ EnvF{ names = [(nPrim,NMAlias mPrim)],
                                             imports = [mPrim],
-                                            modules = [(nPrim,NModule primEnv)],
+                                            modules = [(nPrim,NModule primEnv Nothing)],
                                             witnesses = primWits,
                                             thismod = Nothing,
                                             stub = False,
@@ -383,7 +393,7 @@ initEnv path True          = return $ EnvF{ names = [(nPrim,NMAlias mPrim)],
 initEnv path False         = do (_,envBuiltin) <- InterfaceFiles.readFile (joinPath [path,"__builtin__.ty"])
                                 let env0 = EnvF{ names = [(nPrim,NMAlias mPrim), (nBuiltin,NMAlias mBuiltin)],
                                                  imports = [mPrim,mBuiltin],
-                                                 modules = [(nPrim,NModule primEnv), (nBuiltin,NModule envBuiltin)],
+                                                 modules = [(nPrim,NModule primEnv Nothing), (nBuiltin,NModule envBuiltin Nothing)],
                                                  witnesses = primWits,
                                                  thismod = Nothing,
                                                  stub = False,
@@ -406,7 +416,7 @@ reserve xs env              = env{ names = [ (x, NReserved) | x <- nub xs ] ++ n
 define                      :: TEnv -> EnvF x -> EnvF x
 define te env               = foldl addWit env1 ws
   where env1                = env{ names = reverse te ++ names env }
-        ws                  = [ WClass q (tCon c) p (NoQ w) ws | (w, NExt q c ps te') <- te, (ws,p) <- ps ]
+        ws                  = [ WClass q (tCon c) p (NoQ w) ws | (w, NExt q c ps te' _) <- te, (ws,p) <- ps ]
 
 addImport                   :: ModName -> EnvF x -> EnvF x
 addImport m env             = env{ imports = m : imports env }
@@ -439,9 +449,9 @@ addMod m newte env          = env{ modules = addM ns (modules env) }
     addM (n:ns) te          = update n ns te
     update n ns ((x,i):te)
       | n == x,
-        NModule te1 <- i    = (n, NModule $ addM ns te1) : te
+        NModule te1 doc <- i    = (n, NModule (addM ns te1) doc) : te
     update n ns (ni:te)     = ni : update n ns te
-    update n ns []          = (n, NModule $ addM ns []) : []
+    update n ns []          = (n, NModule (addM ns []) Nothing) : []
 
 
 -- General Env queries -----------------------------------------------------------------------------------------------------------
@@ -522,7 +532,7 @@ lookupMod (ModName ns) env  = f ns (modules env)
           | not (all isNModule te) = Just te
           | otherwise              = Nothing
         f (n:ns) te         = case lookup n te of
-                                Just (NModule te') -> f ns te'
+                                Just (NModule te' _) -> f ns te'
                                 Just (NMAlias (ModName m)) -> lookupMod (ModName $ m++ns) env
                                 _ -> Nothing
         isNModule (_, NModule{}) = True
@@ -552,9 +562,9 @@ kindOf env TFX{}            = KFX
 
 tconKind                    :: QName -> EnvF x -> Kind
 tconKind n env              = case findQName n env of
-                                NAct q _ _ _ -> kind KType q
-                                NClass q _ _ -> kind KType q
-                                NProto q _ _ -> kind KProto q
+                                NAct q _ _ _ _ -> kind KType q
+                                NClass q _ _ _ -> kind KType q
+                                NProto q _ _ _ -> kind KProto q
                                 NReserved    -> nameReserved n
                                 _            -> notClassOrProto n
   where kind k []           = k
@@ -574,28 +584,28 @@ actorMethod env n0          = walk [] (names env)
 
 isDef                       :: EnvF x -> QName -> Bool
 isDef env n                 = case findQName n env of
-                                NDef _ _ -> True
+                                NDef _ _ _ -> True
                                 _ -> False
 
 isActor                     :: EnvF x -> QName -> Bool
 isActor env n               = case findQName n env of
-                                NAct q p k te -> True
+                                NAct q p k te _ -> True
                                 _ -> False
 
 isClass                     :: EnvF x -> QName -> Bool
 isClass env n               = case findQName n env of
-                                NClass q us te -> True
+                                NClass q us te _ -> True
                                 _ -> False
 
 isProto                     :: EnvF x -> QName -> Bool
 isProto env n               = case findQName n env of
-                                NProto q us te -> True
+                                NProto q us te _ -> True
                                 _ -> False
 
 isDefOrClass                :: EnvF x -> QName -> Bool
 isDefOrClass env n          = case findQName n env of
-                                NDef _ _ -> True
-                                NClass _ _ _ -> True
+                                NDef _ _ _ -> True
+                                NClass _ _ _ _ -> True
                                 _ -> False
 
 witsByPName                 :: EnvF x -> QName -> [Witness]
@@ -624,10 +634,10 @@ wild t                      = subst [ (v,tWild) | v <- nub (tyfree t), univar v 
 
 wildargs i                  = [ tWild | _ <- nbinds i ]
   where
-    nbinds (NAct q _ _ _)   = q
-    nbinds (NClass q _ _)   = q
-    nbinds (NProto q _ _)   = q
-    nbinds (NExt q _ _ _)   = q
+    nbinds (NAct q _ _ _ _) = q
+    nbinds (NClass q _ _ _) = q
+    nbinds (NProto q _ _ _) = q
+    nbinds (NExt q _ _ _ _) = q
 
 
 -- TCon queries ------------------------------------------------------------------------------------------------------------------
@@ -682,10 +692,10 @@ findCon env (TC n ts)
         s                   = tvs `zip` ts
       
 findConName n env           = case findQName n env of
-                                NAct q p k te  -> (q,[],te)
-                                NClass q us te -> (q,us,te)
-                                NProto q us te -> (q,us,te)
-                                NExt q c us te -> (q,us,te)
+                                NAct q p k te _  -> (q,[],te)
+                                NClass q us te _ -> (q,us,te)
+                                NProto q us te _ -> (q,us,te)
+                                NExt q c us te _ -> (q,us,te)
                                 NReserved -> nameReserved n
                                 i -> err1 n ("findConName: Class or protocol name expected, got " ++ show i ++ " --- ")
 
@@ -708,8 +718,8 @@ parentTEnv env us           = [ (n,i) | (_,c) <- us, let (_,te) = findCon env c,
 findAttr                    :: EnvF x -> TCon -> Name -> Maybe (Expr->Expr, TSchema, Maybe Deco)
 findAttr env tc n           = listToMaybe $ attributes f env tc
   where f wp i x | x /= n   = Nothing
-        f wp (NSig sc d) x  = Just (wexpr wp, sc, Just d)
-        f wp (NDef sc d) x  = Just (wexpr wp, sc, Just d)
+        f wp (NSig sc d _) x  = Just (wexpr wp, sc, Just d)
+        f wp (NDef sc d _) x  = Just (wexpr wp, sc, Just d)
         f wp (NVar t)    x  = Just (wexpr wp, monotype t, Nothing)
         f wp (NSVar t)   x  = Just (wexpr wp, monotype t, Nothing)
 
@@ -738,7 +748,7 @@ directAttrs                 = attributes' f
 
 abstractAttrs               :: EnvF x -> QName -> [Name]
 abstractAttrs env n         = attributes' f env n
-  where f _ (NSig _ dec) n  = if dec == Property then Nothing else Just n
+  where f _ (NSig _ dec _) n  = if dec == Property then Nothing else Just n
         f _ _ _             = Nothing
 
 closedAttr                  :: EnvF x -> TCon -> Name -> Bool
@@ -752,8 +762,8 @@ closedAttrs                 = attributes' f
 
 isClosed (NVar _)                   = True
 isClosed (NSVar _)                  = True
-isClosed (NSig _ Property)          = True
-isClosed (NSig sc _)
+isClosed (NSig _ Property _)          = True
+isClosed (NSig sc _ _)
   | TFun{} <- sctype sc             = False
   | otherwise                       = True      -- 'closed' ~ 'not a function'
 isClosed _                          = False
@@ -775,7 +785,7 @@ allCons env                 = reverse locals ++ concat [ cons m (lookupMod m env
         con NClass{}        = True
         con NAct{}          = True
         con _               = False
-        cons m (Just te)    = [ TC (GName m n) (wildargs i) | (n,i) <- te, con i ] ++ concat [ cons (modCat m n) (Just te') | (n,NModule te') <- te ]
+        cons m (Just te)    = [ TC (GName m n) (wildargs i) | (n,i) <- te, con i ] ++ concat [ cons (modCat m n) (Just te') | (n,NModule te' _) <- te ]
 
 allProtos                   :: EnvF x -> [PCon]
 allProtos env               = reverse locals ++ concat [ protos m (lookupMod m env) | m <- moduleRefs env, m /= mPrim ]
@@ -784,7 +794,7 @@ allProtos env               = reverse locals ++ concat [ protos m (lookupMod m e
           | otherwise       = [ TC (NoQ n) (wildargs i) | (n,i) <- names env, proto i ]
         proto NProto{}      = True
         proto _             = False
-        protos m (Just te)  = [ TC (GName m n) (wildargs i) | (n,i) <- te, proto i ] ++ concat [ protos (modCat m n) (Just te') | (n,NModule te') <- te ]
+        protos m (Just te)  = [ TC (GName m n) (wildargs i) | (n,i) <- te, proto i ] ++ concat [ protos (modCat m n) (Just te') | (n,NModule te' _) <- te ]
 
 allConAttr                  :: EnvF x -> Name -> [Type]
 allConAttr env n            = [ tCon tc | tc <- allCons env, n `elem` allAttrs' env tc ]
@@ -1145,18 +1155,18 @@ importAll m te env          = define (impNames m te) env
 impNames                    :: ModName -> TEnv -> TEnv
 impNames m te               = mapMaybe imp te
   where 
-    imp (n, NAct _ _ _ _)   = Just (n, NAlias (GName m n))
-    imp (n, NClass _ _ _)   = Just (n, NAlias (GName m n))
-    imp (n, NProto _ _ _)   = Just (n, NAlias (GName m n))
-    imp (n, NExt _ _ _ _)   = Nothing
+    imp (n, NAct _ _ _ _ _)   = Just (n, NAlias (GName m n))
+    imp (n, NClass _ _ _ _)   = Just (n, NAlias (GName m n))
+    imp (n, NProto _ _ _ _)   = Just (n, NAlias (GName m n))
+    imp (n, NExt _ _ _ _ _)   = Nothing
     imp (n, NAlias _)       = Just (n, NAlias (GName m n))
     imp (n, NVar t)         = Just (n, NAlias (GName m n))
-    imp (n, NDef t d)       = Just (n, NAlias (GName m n))
+    imp (n, NDef t d _)       = Just (n, NAlias (GName m n))
     imp _                   = Nothing                               -- cannot happen
 
 importWits                  :: ModName -> TEnv -> EnvF x -> EnvF x
 importWits m te env         = foldl addWit env ws
-  where ws                  = [ WClass q (tCon c) p (GName m n) ws | (n, NExt q c ps te') <- te, (ws,p) <- ps ]
+  where ws                  = [ WClass q (tCon c) p (GName m n) ws | (n, NExt q c ps te' _) <- te, (ws,p) <- ps ]
 
 
 
@@ -1318,18 +1328,18 @@ instance Simp WTCon where
     simp env (w, c)                 = (w, simp env c)
 
 instance Simp (Name, NameInfo) where
-    simp env (n, NSig sc dec)       = (n, NSig (simp env sc) dec)
-    simp env (n, NDef sc dec)       = (n, NDef (simp env sc) dec)
+    simp env (n, NSig sc dec doc)   = (n, NSig (simp env sc) dec doc)
+    simp env (n, NDef sc dec doc)   = (n, NDef (simp env sc) dec doc)
     simp env (n, NVar t)            = (n, NVar (simp env t))
     simp env (n, NSVar t)           = (n, NSVar (simp env t))
-    simp env (n, NClass q us te)    = (n, NClass (simp env' q) (simp env' us) (simp env' te))
+    simp env (n, NClass q us te doc)= (n, NClass (simp env' q) (simp env' us) (simp env' te) doc)
       where env'                    = defineTVars (stripQual q) env
-    simp env (n, NProto q us te)    = (n, NProto (simp env' q) (simp env' us) (simp env' te))
+    simp env (n, NProto q us te doc)= (n, NProto (simp env' q) (simp env' us) (simp env' te) doc)
       where env'                    = defineTVars (stripQual q) env
-    simp env (n, NExt q c us te)    = (n, NExt q' (subst s $ simp env' c) (subst s $ simp env' us) (subst s $ simp env' te))
+    simp env (n, NExt q c us te doc)= (n, NExt q' (subst s $ simp env' c) (subst s $ simp env' us) (subst s $ simp env' te) doc)
       where (q', s)                 = simpQuant env (simp env' q) (tyfree c ++ tyfree us ++ tyfree te)
             env'                    = defineTVars (stripQual q) env
-    simp env (n, NAct q p k te)     = (n, NAct (simp env' q) (simp env' p) (simp env' k) (simp env' te))
+    simp env (n, NAct q p k te doc) = (n, NAct (simp env' q) (simp env' p) (simp env' k) (simp env' te) doc)
       where env'                    = defineTVars (stripQual q) env
     simp env (n, i)                 = (n, i)
 

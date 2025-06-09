@@ -151,7 +151,7 @@ decl env (Class _ n q a b)          = (text "struct" <+> classname env n <+> cha
                                       inst_struct
   where tc                          = TC (NoQ n) [ tVar v | Quant v _ <- q ]
         initdef : meths             = fields env tc
-        properties                  = [ varsig env n (sctype sc) <> semi | (n, NSig sc Property) <- fullAttrEnv env tc ]
+        properties                  = [ varsig env n (sctype sc) <> semi | (n, NSig sc Property _) <- fullAttrEnv env tc ]
         inst_struct | initNotImpl   = empty
                     | otherwise     = (text "struct" <+> genTopName env n <+> char '{') $+$ 
                                       nest 4 (classlink env n $+$ vcat properties) $+$
@@ -172,12 +172,13 @@ constub env t n r b
 
 fields env c                        = map field (subst [(tvSelf,tCon c)] te)
   where te                          = fullAttrEnv env c
-        field (n, NDef sc Static)   = funsig env n (sctype sc) <> semi
-        field (n, NDef sc NoDec)    = methsig env c n (sctype sc) <> semi
+        field (n, NDef sc Static _) = funsig env n (sctype sc) <> semi
+        field (n, NDef sc NoDec _)  = methsig env c n (sctype sc) <> semi
         field (n, NVar t)           = varsig env n t <> semi
-        field (n, NSig sc Static)   = funsig env n (sctype sc) <> semi
-        field (n, NSig sc NoDec)    = methsig env c n (sctype sc) <> semi
-        field (n, NSig sc Property) = empty
+        field (n, NSig sc Static _) = funsig env n (sctype sc) <> semi
+        field (n, NSig sc NoDec _)  = methsig env c n (sctype sc) <> semi
+        field (n, NSig sc Property _)
+                                    = empty
 
 funsig env n (TFun _ _ r _ t)       = gen env t <+> parens (char '*' <> gen env n) <+> parens (params env r)
 funsig env n t                      = varsig env n t
@@ -341,7 +342,7 @@ declDecl env (Class _ n q as b)
   where b'                          = subst [(tvSelf, tCon c)] b
         c                           = TC (NoQ n) (map tVar $ qbound q)
         env1                        = defineTVars q env
-        props                       = [ n | (n, NSig sc Property) <- fullAttrEnv env c ]
+        props                       = [ n | (n, NSig sc Property _) <- fullAttrEnv env c ]
         sup_c                       = filter ((`elem` special_repr) . tcname) as
         special_repr                = [primActor] -- To be extended...
         cDefinedClass               = inBuiltin env && any hasNotImpl [b' | Decl _ ds <- b, Def{dname=n',dbody=b'} <- ds, n' == initKW ]
@@ -414,8 +415,8 @@ initClassBase env c q as hasCDef    = methodtable env c <> dot <> gen env gcinfo
         inherit c' n
           | hasCDef                 = methodtable env c <> dot <> gen env n <+> equals <+> genTopName env (methodname c n) <> semi
           | otherwise               = methodtable env c <> dot <> gen env n <+> equals <+> cast (fromJust $ lookup n te) <> methodtable' env c' <> dot <> gen env n <> semi
-        cast (NSig sc dec)          = parens (gen env (selfsubst $ addSelf (sctype sc) (Just dec)))
-        cast (NDef sc dec)          = parens (gen env (selfsubst $ addSelf (sctype sc) (Just dec)))
+        cast (NSig sc dec _)        = parens (gen env (selfsubst $ addSelf (sctype sc) (Just dec)))
+        cast (NDef sc dec _)        = parens (gen env (selfsubst $ addSelf (sctype sc) (Just dec)))
         cast (NVar t)               = parens (gen env $ selfsubst t)
         te                          = fullAttrEnv env $ TC (NoQ c) [ tVar v | Quant v _ <- q ]
 
@@ -733,7 +734,7 @@ acton_malloc env n                  = text "acton_malloc" <> parens (text "sizeo
 comma' x                            = if isEmpty x then empty else comma <+> x
 
 genDotCall env ts dec e@(Var _ x) n p
-  | NClass q _ _ <- info,
+  | NClass q _ _ _ <- info,
     Just _ <- dec                   = classCast env ts x q n (methodtable' env x <> text "." <> gen env n) <> parens (gen env p)
   where info                        = findQName x env
 genDotCall env ts dec e n p
@@ -742,7 +743,7 @@ genDotCall env ts dec e n p
 
 
 genDot env ts e@(Var _ x) n
-  | NClass q _ _ <- findQName x env = classCast env ts x q n $ methodtable' env x <> text "." <> gen env n
+  | NClass q _ _ _ <- findQName x env = classCast env ts x q n $ methodtable' env x <> text "." <> gen env n
 genDot env ts e n                   = dotCast env False ts e n $ gen env e <> text "->" <> gen env n
 -- NOTE: all method references are eta-expanded by the lambda-lifter at this point, so n cannot be a method (i.e., require methodtable lookup) here
 
