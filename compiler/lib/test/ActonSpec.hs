@@ -268,7 +268,10 @@ testTypes env0 testname = do
   (env, parsed) <- parseAct env0 act_file
 
   kchecked <- liftIO $ Acton.Kinds.check env parsed
-  (iface, tchecked, typeEnv) <- liftIO $ Acton.Types.reconstruct "" env kchecked
+  (nmod, tchecked, typeEnv) <- liftIO $ Acton.Types.reconstruct "" env kchecked
+  let iface = case nmod of
+                S.NModule te _ -> te
+                _ -> error "reconstruct should return NModule"
 
   genTests "Type Check" dir testname kchecked tchecked
 
@@ -280,7 +283,10 @@ testNorm env0 testname = do
   (env, parsed) <- parseAct env0 act_file
 
   kchecked <- liftIO $ Acton.Kinds.check env parsed
-  (iface, tchecked, typeEnv) <- liftIO $ Acton.Types.reconstruct "" env kchecked
+  (nmod, tchecked, typeEnv) <- liftIO $ Acton.Types.reconstruct "" env kchecked
+  let iface = case nmod of
+                S.NModule te _ -> te
+                _ -> error "reconstruct should return NModule"
   (normalized, normEnv) <- liftIO $ Acton.Normalizer.normalize typeEnv tchecked
 
   genTests "Normalizer" dir testname tchecked normalized
@@ -293,7 +299,10 @@ testDeact env0 testname = do
   (env, parsed) <- parseAct env0 act_file
 
   kchecked <- liftIO $ Acton.Kinds.check env parsed
-  (iface, tchecked, typeEnv) <- liftIO $ Acton.Types.reconstruct "" env kchecked
+  (nmod, tchecked, typeEnv) <- liftIO $ Acton.Types.reconstruct "" env kchecked
+  let iface = case nmod of
+                S.NModule te _ -> te
+                _ -> error "reconstruct should return NModule"
   (normalized, normEnv) <- liftIO $ Acton.Normalizer.normalize typeEnv tchecked
   (deacted, deactEnv) <- liftIO $ Acton.Deactorizer.deactorize normEnv normalized
 
@@ -307,7 +316,10 @@ testCps env0 testname = do
   (env, parsed) <- parseAct env0 act_file
 
   kchecked <- liftIO $ Acton.Kinds.check env parsed
-  (iface, tchecked, typeEnv) <- liftIO $ Acton.Types.reconstruct "" env kchecked
+  (nmod, tchecked, typeEnv) <- liftIO $ Acton.Types.reconstruct "" env kchecked
+  let iface = case nmod of
+                S.NModule te _ -> te
+                _ -> error "reconstruct should return NModule"
   (normalized, normEnv) <- liftIO $ Acton.Normalizer.normalize typeEnv tchecked
   (deacted, deactEnv) <- liftIO $ Acton.Deactorizer.deactorize normEnv normalized
   (cpstyled, _) <- liftIO $ Acton.CPS.convert deactEnv deacted
@@ -322,7 +334,10 @@ testLL env0 testname = do
   (env, parsed) <- parseAct env0 act_file
 
   kchecked <- liftIO $ Acton.Kinds.check env parsed
-  (iface, tchecked, typeEnv) <- liftIO $ Acton.Types.reconstruct "" env kchecked
+  (nmod, tchecked, typeEnv) <- liftIO $ Acton.Types.reconstruct "" env kchecked
+  let iface = case nmod of
+                S.NModule te _ -> te
+                _ -> error "reconstruct should return NModule"
   (normalized, normEnv) <- liftIO $ Acton.Normalizer.normalize typeEnv tchecked
   (deacted, deactEnv) <- liftIO $ Acton.Deactorizer.deactorize normEnv normalized
   (cpstyled, cpsEnv) <- liftIO $ Acton.CPS.convert deactEnv deacted
@@ -338,7 +353,10 @@ testBoxing env0 testname = do
   (env, parsed) <- parseAct env0 act_file
 
   kchecked <- liftIO $ Acton.Kinds.check env parsed
-  (iface, tchecked, typeEnv) <- liftIO $ Acton.Types.reconstruct "" env kchecked
+  (nmod, tchecked, typeEnv) <- liftIO $ Acton.Types.reconstruct "" env kchecked
+  let iface = case nmod of
+                S.NModule te _ -> te
+                _ -> error "reconstruct should return NModule"
   (normalized, normEnv) <- liftIO $ Acton.Normalizer.normalize typeEnv tchecked
   (deacted, deactEnv) <- liftIO $ Acton.Deactorizer.deactorize normEnv normalized
   (cpstyled, cpsEnv) <- liftIO $ Acton.CPS.convert deactEnv deacted
@@ -355,7 +373,10 @@ testCodeGen env0 testname = do
   (env, parsed) <- parseAct env0 act_file
 
   kchecked <- liftIO $ Acton.Kinds.check env parsed
-  (iface, tchecked, typeEnv) <- liftIO $ Acton.Types.reconstruct "" env kchecked
+  (nmod, tchecked, typeEnv) <- liftIO $ Acton.Types.reconstruct "" env kchecked
+  let iface = case nmod of
+                S.NModule te _ -> te
+                _ -> error "reconstruct should return NModule"
   (normalized, normEnv) <- liftIO $ Acton.Normalizer.normalize typeEnv tchecked
   (deacted, deactEnv) <- liftIO $ Acton.Deactorizer.deactorize normEnv normalized
   (cpstyled, cpsEnv) <- liftIO $ Acton.CPS.convert deactEnv deacted
