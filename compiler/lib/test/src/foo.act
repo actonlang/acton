@@ -1,0 +1,348 @@
+import bar
+
+"""Foo module - demonstrates cross-module type usage
+
+This module extensively uses types from the bar module
+to demonstrate documentation of cross-module references.
+"""
+
+# Module constants
+DEFAULT_PREFIX: str = "AUTO_"
+"""Default prefix for auto-generated labels"""
+
+# Functions using bar.Data
+def create_data(value: str) -> bar.Data:
+    """Create a new Data instance
+    
+    Args:
+        value: Value for the data
+        
+    Returns:
+        A new bar.Data instance with auto-generated label
+        
+    Examples:
+        >>> d = create_data("test")
+        >>> d.get_value()
+        "test"
+    """
+    return bar.Data(value, DEFAULT_PREFIX + str(len(value)))
+
+def transform_data(d: bar.Data, f: (str) -> str) -> bar.Data:
+    """Transform data by applying function to its value
+    
+    Args:
+        d: Data object to transform
+        f: Transformation function
+        
+    Returns:
+        New bar.Data with transformed value
+        
+    See Also:
+        bar.process_data: For simple processing
+        bar.combine_data: For combining multiple data objects
+    """
+    new_value = f(d.get_value())
+    return bar.Data(new_value, d.label + "_transformed")
+
+def analyze_multiple(data_list: list[bar.Data]) -> dict[str, int]:
+    """Analyze multiple data objects
+    
+    Args:
+        data_list: List of bar.Data objects
+        
+    Returns:
+        Statistics about the data
+        
+    Raises:
+        ValueError: If list is empty
+    """
+    if len(data_list) == 0:
+        raise ValueError("Cannot analyze empty list")
+    
+    total_length = 0
+    total_accesses = 0
+    
+    for d in data_list:
+        total_length += len(d.value)
+        total_accesses += d.count
+    
+    return {
+        "count": len(data_list),
+        "total_length": total_length,
+        "total_accesses": total_accesses
+    }
+
+# Class that uses bar.Data
+class DataManager(object):
+    """Manages a collection of bar.Data objects
+    
+    This class provides high-level operations on collections
+    of Data objects from the bar module.
+    """
+    storage: list[bar.Data]
+    default: bar.Data
+    name: str
+    
+    def __init__(self, name: str):
+        """Initialize manager
+        
+        Args:
+            name: Name for this manager
+        """
+        self.storage = []
+        self.default = bar.Data("", "empty")
+        self.name = name
+    
+    def add_data(self, d: bar.Data):
+        """Add a data object to storage
+        
+        Args:
+            d: bar.Data object to add
+            
+        Raises:
+            ValueError: If storage is full
+        """
+        if len(self.storage) >= bar.MAX_ITEMS:
+            raise ValueError("Storage is full")
+        self.storage.append(d)
+    
+    def find_by_label(self, label: str) -> ?bar.Data:
+        """Find first data with matching label
+        
+        Args:
+            label: Label to search for
+            
+        Returns:
+            Matching bar.Data or None if not found
+        """
+        for item in self.storage:
+            if item.label == label:
+                return item
+        return None
+    
+    def get_or_default(self, label: str) -> bar.Data:
+        """Get data by label or return default
+        
+        Args:
+            label: Label to search for
+            
+        Returns:
+            Found bar.Data or the default instance
+        """
+        found = self.find_by_label(label)
+        if found is not None:
+            return found
+        return self.default
+    
+    def transform_all(self, f: (bar.Data) -> bar.Data) -> list[bar.Data]:
+        """Transform all stored data
+        
+        Args:
+            f: Transformation function
+            
+        Returns:
+            List of transformed bar.Data objects
+        """
+        result = []
+        for d in self.storage:
+            result.append(f(d))
+        return result
+
+# Function that works with bar types
+def process_with_prefix(d: bar.Data, prefix: str) -> bar.Data:
+    """Process data with a prefix
+    
+    Args:
+        d: Data to process
+        prefix: Prefix to add to data values
+        
+    Returns:
+        New bar.Data with prefixed value
+    """
+    new_value = prefix + d.value
+    return bar.Data(new_value, d.label + "_prefixed")
+
+# Actor using bar types
+actor DataHandler(initial: bar.Data):
+    """Actor that handles bar.Data objects
+    
+    Args:
+        initial: Initial bar.Data to store
+    """
+    var current: bar.Data = initial
+    var history: list[bar.Data] = [initial]
+    var processor: ?bar.DataProcessor = None
+    
+    def update(new_data: bar.Data):
+        """Update current data
+        
+        Args:
+            new_data: New bar.Data to set as current
+        """
+        current = new_data
+        history.append(new_data)
+    
+    def get_current() -> bar.Data:
+        """Get current data
+        
+        Returns:
+            Current bar.Data instance
+        """
+        return current
+    
+    def transform_with(f: (bar.Data) -> bar.Data) -> bar.Data:
+        """Transform current data
+        
+        Args:
+            f: Transformation function
+            
+        Returns:
+            Transformed bar.Data
+        """
+        new_data = f(current)
+        update(new_data)
+        return new_data
+    
+    def combine_with(other: bar.Data) -> bar.Data:
+        """Combine current with another data
+        
+        Args:
+            other: bar.Data to combine with
+            
+        Returns:
+            Combined bar.Data using bar.combine_data
+        """
+        combined = bar.combine_data(current, other)
+        update(combined)
+        return combined
+    
+    def send_to_processor(p: bar.DataProcessor):
+        """Send current data to a processor
+        
+        Args:
+            p: bar.DataProcessor to send to
+        """
+        processor = p
+        p.enqueue(current)
+    
+    def get_history() -> list[bar.Data]:
+        """Get full history of data
+        
+        Returns:
+            List of all bar.Data objects in history
+        """
+        return history
+
+# Higher-order functions with bar types
+def apply_transformation(d: bar.Data, transform: (str) -> str) -> bar.Data:
+    """Apply transformation to bar.Data value
+    
+    Args:
+        d: Data to transform
+        transform: Function to apply to value
+        
+    Returns:
+        New bar.Data with transformed value
+    """
+    new_value = transform(d.value)
+    return bar.Data(new_value, d.label + "_transformed")
+
+def apply_to_list(items: list[bar.Data], f: (bar.Data) -> str) -> list[str]:
+    """Apply function to all items in list
+    
+    Args:
+        items: List of bar.Data objects
+        f: Function to apply
+        
+    Returns:
+        List of results
+    """
+    result = []
+    for item in items:
+        result.append(f(item))
+    return result
+
+# Complex type signatures
+def process_nested(data: list[(str, bar.Data)]) -> dict[str, list[bar.Data]]:
+    """Process nested data structures
+    
+    Args:
+        data: List of tuples containing keys and bar.Data
+        
+    Returns:
+        Dictionary grouping bar.Data by key
+    """
+    result: dict[str, list[bar.Data]] = {}
+    for key, d in data:
+        if key not in result:
+            result[key] = []
+        result[key].append(d)
+    return result
+
+# Main actor demonstrating usage
+actor main(env):
+    """Main actor demonstrating bar module usage"""
+    
+    # Create and use bar.Data
+    d1 = bar.Data("hello", "greeting")
+    d2 = create_data("world")
+    d3 = bar.combine_data(d1, d2)
+    
+    print("Data 1:", d1.get_info())
+    print("Data 2:", d2.get_info())
+    print("Combined:", d3.get_info())
+    
+    # Use list instead of container for simplicity
+    data_list = [d1, d2, d3]
+    
+    # Filter long values
+    long_values = []
+    for d in data_list:
+        if len(d.value) > 5:
+            long_values.append(d.value)
+    print("Long values:", long_values)
+    
+    # Use DataManager
+    manager = DataManager("test_manager")
+    manager.add_data(d1)
+    manager.add_data(d2)
+    
+    found = manager.find_by_label("greeting")
+    if found is not None:
+        print("Found:", found.get_value())
+    
+    # Use actors
+    handler = DataHandler(d1)
+    handler.update(d2)
+    handler.combine_with(d3)
+    
+    processor = bar.DataProcessor()
+    handler.send_to_processor(processor)
+    
+    # Process some data
+    processor.enqueue(d1)
+    processor.enqueue(d2)
+    processed = processor.process_next()
+    if processed is not None:
+        print("Processed:", processed.get_info())
+    
+    print("Processor stats:", processor.get_stats())
+    
+    # Use transformation functions
+    transformed = process_with_prefix(d1, "PREFIX_")
+    print("Transformed:", transformed.get_info())
+    
+    # Complex operations
+    items = [("key1", d1), ("key2", d2), ("key1", d3)]
+    grouped = process_nested(items)
+    print("Grouped count:", len(grouped))
+    
+    # Use protocol functionality
+    processed_results = bar.process_items([d1, d2, d3])
+    print("Processed via protocol:", processed_results)
+    
+    # Check metadata
+    meta = d1.get_metadata()
+    print("Metadata:", meta)
+    
+    env.exit(0)

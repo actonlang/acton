@@ -1,0 +1,316 @@
+"""Bar module - defines shared types and utilities
+
+This module provides common data structures and utilities
+that are used across the application.
+"""
+
+# Module constants
+VERSION: str = "1.0.0"
+"""Current version of the bar module"""
+
+MAX_ITEMS: int = 1000
+"""Maximum number of items allowed in a container"""
+
+# Basic data class
+class Data(object):
+    """A data container with metadata
+    
+    This class holds arbitrary data along with metadata
+    about when it was created and last modified.
+    
+    Examples:
+        >>> d = Data("hello", "test-data")
+        >>> d.get_value()
+        "hello"
+    """
+    value: str
+    label: str
+    count: int
+    
+    def __init__(self, value: str, label: str):
+        """Initialize data with value and label
+        
+        Args:
+            value: The data value
+            label: A descriptive label
+        """
+        self.value = value
+        self.label = label
+        self.count = 0
+    
+    def get_value(self) -> str:
+        """Get the stored value
+        
+        Returns:
+            The data value
+        """
+        self.count += 1
+        return self.value
+    
+    def update(self, new_value: str):
+        """Update the value
+        
+        Args:
+            new_value: New value to store
+            
+        Note:
+            This increments the access count
+        """
+        self.value = new_value
+        self.count += 1
+    
+    def get_info(self) -> str:
+        """Get formatted information about this data
+        
+        Returns:
+            A string with label, value, and count
+        """
+        return f"{self.label}: {self.value} (accessed {self.count} times)"
+
+# Generic container
+class Container[T](object):
+    """A generic container that can hold items of any type
+    
+    This container maintains a list of items with various
+    operations for manipulation and querying.
+    
+    Type Args:
+        T: The type of items stored in the container
+    """
+    items: list[T]
+    name: str
+    
+    def __init__(self, name: str):
+        """Create an empty container
+        
+        Args:
+            name: Container name for identification
+        """
+        self.items = []
+        self.name = name
+    
+    def add(self, item: T):
+        """Add an item to the container
+        
+        Args:
+            item: Item to add
+            
+        Raises:
+            ValueError: If container is full
+        """
+        if len(self.items) >= MAX_ITEMS:
+            raise ValueError("Container is full")
+        self.items.append(item)
+    
+    def get_all(self) -> list[T]:
+        """Get all items
+        
+        Returns:
+            List of all items in the container
+        """
+        return self.items
+    
+    def filter[U](self, predicate: (T) -> bool, transform: (T) -> U) -> list[U]:
+        """Filter and transform items
+        
+        Args:
+            predicate: Function to test each item
+            transform: Function to transform matching items
+            
+        Returns:
+            List of transformed items that match predicate
+            
+        Examples:
+            >>> c = Container[int]("numbers")
+            >>> c.add(1)
+            >>> c.add(2)
+            >>> c.filter(lambda x: x > 1, lambda x: str(x))
+            ["2"]
+        """
+        result = []
+        for item in self.items:
+            if predicate(item):
+                result.append(transform(item))
+        return result
+    
+    def count(self) -> int:
+        """Get number of items in container
+        
+        Returns:
+            Number of items
+        """
+        return len(self.items)
+
+# Utility functions
+def process_data(d: Data) -> str:
+    """Process a data object and return summary
+    
+    Args:
+        d: Data object to process
+        
+    Returns:
+        Processed summary string
+        
+    See Also:
+        Data.get_info: For detailed information
+    """
+    return f"Processed: {d.get_value()}"
+
+def combine_data(d1: Data, d2: Data) -> Data:
+    """Combine two data objects
+    
+    Args:
+        d1: First data object
+        d2: Second data object
+        
+    Returns:
+        New Data object with combined values
+    """
+    combined_value = d1.value + " + " + d2.value
+    combined_label = f"{d1.label}/{d2.label}"
+    return Data(combined_value, combined_label)
+
+# Actor that works with Data
+actor DataProcessor():
+    """Actor that processes Data objects
+    
+    This actor maintains a queue of data objects
+    and processes them asynchronously.
+    """
+    var queue: list[Data] = []
+    var processed_count: int = 0
+    
+    def enqueue(d: Data):
+        """Add data to processing queue
+        
+        Args:
+            d: Data object to process
+        """
+        queue.append(d)
+    
+    def process_next() -> ?Data:
+        """Process next item in queue
+        
+        Returns:
+            Processed data or None if queue empty
+        """
+        if len(queue) > 0:
+            d = queue[0]
+            queue = queue[1:]
+            processed_count += 1
+            # Simulate processing
+            d.update(d.value.upper())
+            return d
+        return None
+    
+    def get_stats() -> dict[str, int]:
+        """Get processing statistics
+        
+        Returns:
+            Dict with queue size and processed count
+        """
+        return {
+            "queued": len(queue),
+            "processed": processed_count
+        }
+
+# Type constraint for documentation
+def sum_counts[T(Plus)](items: list[T]) -> T:
+    """Sum a list of items that support addition
+    
+    Args:
+        items: List of summable items
+        
+    Returns:
+        Sum of all items
+        
+    Raises:
+        ValueError: If list is empty
+    """
+    if len(items) == 0:
+        raise ValueError("Cannot sum empty list")
+    result = items[0]
+    for i in range(1, len(items)):
+        result = result + items[i]
+    return result
+
+# Protocol definition
+protocol Processable[T]:
+    """Protocol for objects that can be processed
+    
+    This protocol defines the interface for objects that
+    can be processed and transformed into a result of type T.
+    
+    Type Args:
+        T: The type of the processing result
+    """
+    
+    process : () -> T
+    validate : () -> bool  
+    get_metadata : () -> dict[str, str]
+
+# Extension to make Data implement Processable
+extension Data(Processable[str]):
+    """Makes Data implement the Processable protocol
+    
+    This extension allows Data objects to be processed
+    according to the Processable protocol, returning
+    string results.
+    """
+    
+    def process(self) -> str:
+        """Process data by converting to uppercase
+        
+        Returns:
+            Uppercase version of the data value
+        """
+        return self.value.upper()
+    
+    def validate(self) -> bool:
+        """Check if data is non-empty
+        
+        Returns:
+            True if data has content, False if empty
+        """
+        return len(self.value) > 0
+    
+    def get_metadata(self) -> dict[str, str]:
+        """Get data metadata
+        
+        Returns:
+            Metadata including label and access count
+        """
+        return {
+            "label": self.label,
+            "access_count": str(self.count),
+            "length": str(len(self.value))
+        }
+
+# Function that uses the protocol
+def process_items[T](items: list[Processable[T]]) -> list[T]:
+    """Process a list of processable items
+    
+    Args:
+        items: List of items implementing Processable protocol
+        
+    Returns:
+        List of processed results
+        
+    Examples:
+        >>> d1 = Data("hello", "test")
+        >>> d2 = Data("world", "test2")
+        >>> results = process_items([d1, d2])
+        >>> results
+        ["HELLO", "WORLD"]
+    """
+    results = []
+    for item in items:
+        if item.validate():
+            results.append(item.process())
+    return results
+
+def gt(a, b, c, d):
+    """Function that takes generic types"""
+    return (a + b, a - b, c + d)
+
+gt(1, 2, "a", "b")

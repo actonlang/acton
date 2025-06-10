@@ -1,0 +1,200 @@
+[1mbar[0m - Bar module - defines shared types and utilities
+
+This module provides common data structures and utilities
+that are used across the application.
+
+
+
+[36mclass[0m [1mData[0m(object)
+  A data container with metadata
+    
+    This class holds arbitrary data along with metadata
+    about when it was created and last modified.
+    
+    Examples:
+        >>> d = Data("hello", "test-data")
+        >>> d.get_value()
+        "hello"
+    
+
+  [33mAttributes:[0m
+    - value: str
+    - label: str
+    - count: int
+
+  [33mMethods:[0m
+    - [1m__init__[0m(self, value: [32mstr[0m, label: [32mstr[0m)
+      Initialize data with value and label
+        
+        Args:
+            value: The data value
+            label: A descriptive label
+        
+    - [1mget_value[0m(self) -> [32mstr[0m
+      Get the stored value
+        
+        Returns:
+            The data value
+        
+    - [1mupdate[0m(self, new_value: [32mstr[0m)
+      Update the value
+        
+        Args:
+            new_value: New value to store
+            
+        Note:
+            This increments the access count
+        
+    - [1mget_info[0m(self) -> [32mstr[0m
+      Get formatted information about this data
+        
+        Returns:
+            A string with label, value, and count
+        
+
+[36mclass[0m [1mContainer[0m[T](object)
+  A generic container that can hold items of any type
+    
+    This container maintains a list of items with various
+    operations for manipulation and querying.
+    
+    Type Args:
+        T: The type of items stored in the container
+    
+
+  [33mAttributes:[0m
+    - items: list[T]
+    - name: str
+
+  [33mMethods:[0m
+    - [1m__init__[0m(self, name: [32mstr[0m)
+      Create an empty container
+        
+        Args:
+            name: Container name for identification
+        
+    - [1madd[0m(self, item: [32mT[0m)
+      Add an item to the container
+        
+        Args:
+            item: Item to add
+            
+        Raises:
+            ValueError: If container is full
+        
+    - [1mget_all[0m(self) -> [32mlist[T][0m
+      Get all items
+        
+        Returns:
+            List of all items in the container
+        
+    - [1mfilter[0m[U](self, predicate: [32m(T) -> bool[0m, transform: [32m(T) -> U[0m) -> [32mlist[U][0m
+      Filter and transform items
+        
+        Args:
+            predicate: Function to test each item
+            transform: Function to transform matching items
+            
+        Returns:
+            List of transformed items that match predicate
+            
+        Examples:
+            >>> c = Container[int]("numbers")
+            >>> c.add(1)
+            >>> c.add(2)
+            >>> c.filter(lambda x: x > 1, lambda x: str(x))
+            ["2"]
+        
+    - [1mcount[0m(self) -> [32mint[0m
+      Get number of items in container
+        
+        Returns:
+            Number of items
+        
+
+[1mprocess_data[0m(d: [32mbar.Data[0m) -> [32mstr[0m
+  Process a data object and return summary
+    
+    Args:
+        d: Data object to process
+        
+    Returns:
+        Processed summary string
+        
+    See Also:
+        Data.get_info: For detailed information
+    
+
+[1mcombine_data[0m(d1: [32mbar.Data[0m, d2: [32mbar.Data[0m) -> [32mbar.Data[0m
+  Combine two data objects
+    
+    Args:
+        d1: First data object
+        d2: Second data object
+        
+    Returns:
+        New Data object with combined values
+    
+
+[36mactor[0m [1mDataProcessor[0m()
+  Actor that processes Data objects
+    
+    This actor maintains a queue of data objects
+    and processes them asynchronously.
+    
+
+[1msum_counts[0m[T](items: [32mlist[T][0m) -> [32mT[0m
+  Sum a list of items that support addition
+    
+    Args:
+        items: List of summable items
+        
+    Returns:
+        Sum of all items
+        
+    Raises:
+        ValueError: If list is empty
+    
+
+[36mprotocol[0m [1mProcessable[0m[T]
+  Protocol for objects that can be processed
+    
+    This protocol defines the interface for objects that
+    can be processed and transformed into a result of type T.
+    
+    Type Args:
+        T: The type of the processing result
+    
+
+  [33mMethods:[0m
+    - process: T
+    - validate: bool
+    - get_metadata: dict[str,str]
+
+[36mextension[0m Data(Processable[str])
+  Makes Data implement the Processable protocol
+    
+    This extension allows Data objects to be processed
+    according to the Processable protocol, returning
+    string results.
+    
+
+[1mprocess_items[0m[T](items: [32mlist[A][0m) -> [32mlist[T][0m
+  Process a list of processable items
+    
+    Args:
+        items: List of items implementing Processable protocol
+        
+    Returns:
+        List of processed results
+        
+    Examples:
+        >>> d1 = Data("hello", "test")
+        >>> d2 = Data("world", "test2")
+        >>> results = process_items([d1, d2])
+        >>> results
+        ["HELLO", "WORLD"]
+    
+
+[1mgt[0m[A,B](a: [32mA[0m, b: [32mA[0m, c: [32mB[0m, d: [32mB[0m) -> [32m(A, A, B)[0m
+  Function that takes generic types

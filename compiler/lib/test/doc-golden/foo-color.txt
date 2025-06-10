@@ -1,0 +1,158 @@
+[1mfoo[0m - Foo module - demonstrates cross-module type usage
+
+This module extensively uses types from the bar module
+to demonstrate documentation of cross-module references.
+
+
+
+[1mcreate_data[0m(value: [32mstr[0m) -> [32mbar.Data[0m
+  Create a new Data instance
+    
+    Args:
+        value: Value for the data
+        
+    Returns:
+        A new bar.Data instance with auto-generated label
+        
+    Examples:
+        >>> d = create_data("test")
+        >>> d.get_value()
+        "test"
+    
+
+[1mtransform_data[0m(d: [32mbar.Data[0m, f: [32m(str) -> str[0m) -> [32mbar.Data[0m
+  Transform data by applying function to its value
+    
+    Args:
+        d: Data object to transform
+        f: Transformation function
+        
+    Returns:
+        New bar.Data with transformed value
+        
+    See Also:
+        bar.process_data: For simple processing
+        bar.combine_data: For combining multiple data objects
+    
+
+[1manalyze_multiple[0m(data_list: [32mlist[bar.Data][0m) -> [32mdict[str,int][0m
+  Analyze multiple data objects
+    
+    Args:
+        data_list: List of bar.Data objects
+        
+    Returns:
+        Statistics about the data
+        
+    Raises:
+        ValueError: If list is empty
+    
+
+[36mclass[0m [1mDataManager[0m(object)
+  Manages a collection of bar.Data objects
+    
+    This class provides high-level operations on collections
+    of Data objects from the bar module.
+    
+
+  [33mAttributes:[0m
+    - storage: list[bar.Data]
+    - default: bar.Data
+    - name: str
+
+  [33mMethods:[0m
+    - [1m__init__[0m(self, name: [32mstr[0m)
+      Initialize manager
+        
+        Args:
+            name: Name for this manager
+        
+    - [1madd_data[0m(self, d: [32mbar.Data[0m)
+      Add a data object to storage
+        
+        Args:
+            d: bar.Data object to add
+            
+        Raises:
+            ValueError: If storage is full
+        
+    - [1mfind_by_label[0m(self, label: [32mstr[0m) -> [32m?bar.Data[0m
+      Find first data with matching label
+        
+        Args:
+            label: Label to search for
+            
+        Returns:
+            Matching bar.Data or None if not found
+        
+    - [1mget_or_default[0m(self, label: [32mstr[0m) -> [32mbar.Data[0m
+      Get data by label or return default
+        
+        Args:
+            label: Label to search for
+            
+        Returns:
+            Found bar.Data or the default instance
+        
+    - [1mtransform_all[0m(self, f: [32m(bar.Data) -> bar.Data[0m) -> [32mlist[bar.Data][0m
+      Transform all stored data
+        
+        Args:
+            f: Transformation function
+            
+        Returns:
+            List of transformed bar.Data objects
+        
+
+[1mprocess_with_prefix[0m(d: [32mbar.Data[0m, prefix: [32mstr[0m) -> [32mbar.Data[0m
+  Process data with a prefix
+    
+    Args:
+        d: Data to process
+        prefix: Prefix to add to data values
+        
+    Returns:
+        New bar.Data with prefixed value
+    
+
+[36mactor[0m [1mDataHandler[0m(initial: [32mbar.Data[0m)
+  Actor that handles bar.Data objects
+    
+    Args:
+        initial: Initial bar.Data to store
+    
+
+[1mapply_transformation[0m(d: [32mbar.Data[0m, transform: [32m(str) -> str[0m) -> [32mbar.Data[0m
+  Apply transformation to bar.Data value
+    
+    Args:
+        d: Data to transform
+        transform: Function to apply to value
+        
+    Returns:
+        New bar.Data with transformed value
+    
+
+[1mapply_to_list[0m(items: [32mlist[bar.Data][0m, f: [32m(bar.Data) -> str[0m) -> [32mlist[str][0m
+  Apply function to all items in list
+    
+    Args:
+        items: List of bar.Data objects
+        f: Function to apply
+        
+    Returns:
+        List of results
+    
+
+[1mprocess_nested[0m(data: [32mlist[(str, bar.Data)][0m) -> [32mdict[str,list[bar.Data]][0m
+  Process nested data structures
+    
+    Args:
+        data: List of tuples containing keys and bar.Data
+        
+    Returns:
+        Dictionary grouping bar.Data by key
+    
+
+[36mactor[0m [1mmain[0m(env)
+  Main actor demonstrating bar module usage

@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>bar</title>
+  <style>
+    /* Light theme colors (default) */
+    :root {
+      --text-primary: #24292e;
+      --text-secondary: #6a737d;
+      --text-link: #0366d6;
+      --bg-primary: #ffffff;
+      --bg-secondary: #f6f8fa;
+      --border: #e1e4e8;
+      --code-bg: #f6f8fa;
+      --type-color: #6f42c1;
+      --keyword-color: #d73a49;
+      --generic-color: #e36209;
+      --generic-hover: #fb8532;
+      --shadow: rgba(27, 31, 35, 0.04);
+      --shadow-medium: rgba(27, 31, 35, 0.12);
+    }
+    
+    /* Dark theme colors (activated by OS preference) */
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --text-primary: #c9d1d9;
+        --text-secondary: #8b949e;
+        --text-link: #58a6ff;
+        --bg-primary: #0d1117;
+        --bg-secondary: #161b22;
+        --border: #30363d;
+        --code-bg: #161b22;
+        --type-color: #d2a8ff;
+        --keyword-color: #ff7b72;
+        --generic-color: #ffa657;
+        --generic-hover: #ffb77c;
+        --shadow: rgba(0, 0, 0, 0.3);
+        --shadow-medium: rgba(0, 0, 0, 0.5);
+      }
+    }
+    
+    * { box-sizing: border-box; }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      font-size: 16px;
+      line-height: 1.5;
+      color: var(--text-primary);
+      background: var(--bg-primary);
+      margin: 0;
+      padding: 0;
+    }
+    
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+    
+    /* Typography */
+    h1 {
+      font-size: 2rem;
+      font-weight: 600;
+      margin: 0 0 1rem 0;
+      padding-bottom: 0.3rem;
+      border-bottom: 1px solid var(--border);
+    }
+    
+    h2 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin: 2.5rem 0 1rem 0;
+    }
+    
+    h3 {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin: 1.5rem 0 0.5rem 0;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+    }
+    
+    /* Indent ATTRIBUTES/METHODS headers under classes/actors */
+    .declaration-block h3 {
+      margin-left: 2rem;
+    }
+    
+    p {
+      margin: 0 0 1rem 0;
+    }
+    
+    /* Code */
+    code {
+      font-family: 'SF Mono', Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+      font-size: 0.875em;
+      background: var(--code-bg);
+      padding: 0.2em 0.4em;
+      border-radius: 3px;
+      border: 1px solid var(--border);
+    }
+    
+    h2 code {
+      background: none;
+      padding: 0;
+      font-size: 1em;
+      border: none;
+    }
+    
+    /* Type coloring */
+    .type {
+      color: var(--type-color);
+    }
+    
+    /* Type links */
+    .type-link {
+      color: var(--type-color);
+      text-decoration: none;
+      border-bottom: 1px dotted var(--type-color);
+    }
+    
+    .type-link:hover {
+      text-decoration: none;
+      border-bottom: 1px solid var(--type-color);
+    }
+    
+    .keyword {
+      color: var(--keyword-color);
+      font-weight: 500;
+      font-size: 1rem;
+    }
+    
+    .param-name {
+      font-weight: 500;
+    }
+    
+    .default-value {
+      color: var(--text-secondary);
+    }
+    
+    /* Generic type parameters */
+    .generic-type {
+      color: var(--generic-color);
+      cursor: pointer;
+      transition: color 0.2s ease;
+      position: relative;
+      display: inline-block;
+    }
+    
+    .generic-type:hover,
+    .generic-type.highlight {
+      color: var(--generic-hover);
+      text-decoration: underline;
+      text-decoration-style: dotted;
+    }
+    
+    /* Tooltip for generic types - default position below */
+    .generic-type[data-tooltip]:hover::after {
+      content: attr(data-tooltip);
+      display: block;
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      margin-top: 5px;
+      padding: 8px 12px;
+      background-color: rgba(0, 0, 0, 0.8);
+      color: white;
+      font-size: 0.75rem;
+      font-weight: normal;
+      white-space: pre-wrap;
+      max-width: 700px;
+      min-width: 200px;
+      text-align: left;
+      border-radius: 4px;
+      pointer-events: none;
+      opacity: 0;
+      animation: fadeIn 0.2s ease-in-out forwards;
+      z-index: 1000;
+    }
+    
+    /* Tooltip positioned above when not near top */
+    .generic-type[data-tooltip]:not(.tooltip-below):hover::after {
+      top: auto;
+      bottom: 100%;
+      margin-top: 0;
+      margin-bottom: 5px;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    
+    /* Documentation strings */
+    .docstring {
+      color: var(--text-secondary);
+      margin: 0.5rem 0 1.5rem 0;
+      padding-left: 1rem;
+    }
+    
+    .module-doc {
+      margin: 1rem 0 2rem 0;
+      color: var(--text-primary);
+      font-size: 1.1rem;
+      line-height: 1.6;
+    }
+    
+    /* Sections */
+    .section {
+      margin: 1.5rem 0;
+      padding-left: 2rem;
+    }
+    
+    /* Lists */
+    ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    
+    li {
+      margin: 0.5rem 0;
+    }
+    
+    /* Attribute items */
+    .attribute-item {
+      margin: 0.5rem 0;
+      padding-left: 1rem;
+      border-left: 3px solid var(--border);
+    }
+    
+    .attribute-item code {
+      background: none;
+      padding: 0;
+      border: none;
+    }
+    
+    /* Method items */
+    .method-item {
+      margin: 1rem 0;
+    }
+    
+    .method-signature {
+      font-family: 'SF Mono', Monaco, Consolas, monospace;
+      font-size: 0.875rem;
+      padding-left: 1rem;
+      border-left: 3px solid var(--border);
+    }
+    
+    .method-signature code {
+      background: none;
+      padding: 0;
+      border: none;
+    }
+    
+    .method-doc {
+      color: var(--text-secondary);
+      margin: 0.25rem 0 0 1.5rem;
+      font-size: 0.875rem;
+    }
+    
+    /* Attributes and methods sections */
+    .attributes, .methods {
+      margin: 1.5rem 0 1.5rem 2rem;
+    }
+    
+    /* Declaration blocks - no visual boxes, just spacing */
+    .declaration-block {
+      margin: 2rem 0;
+    }
+    
+    /* Module index styles */
+    .module-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    
+    .module-item {
+      margin: 0.5rem 0;
+      padding: 0.75rem 1rem;
+      background: var(--bg-secondary);
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      transition: all 0.2s ease;
+    }
+    
+    .module-item:hover {
+      border-color: var(--text-link);
+      transform: translateY(-1px);
+    }
+    
+    .module-link {
+      text-decoration: none;
+      color: var(--text-link);
+      font-weight: 500;
+      display: block;
+    }
+    
+    .module-path {
+      font-family: 'SF Mono', Monaco, Consolas, monospace;
+      font-size: 0.875rem;
+    }
+    
+    .module-doc {
+      color: var(--text-secondary);
+      font-size: 0.875rem;
+      margin-top: 0.25rem;
+    }
+    
+    /* Smooth transitions for theme changes */
+    * {
+      transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+    }
+    
+    /* Responsive */
+    @media (max-width: 768px) {
+      .container {
+        padding: 1rem;
+      }
+      h1 {
+        font-size: 1.75rem;
+      }
+      h2 {
+        font-size: 1.25rem;
+      }
+    }
+
+  </style>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const genericTypes = document.querySelectorAll('.generic-type');
+      
+      genericTypes.forEach(function(elem) {
+        elem.addEventListener('mouseenter', function() {
+          const typeName = elem.getAttribute('data-generic');
+          
+          // Check if tooltip would go off-screen at the top
+          const rect = elem.getBoundingClientRect();
+          const tooltipHeight = 200; // Approximate height
+          if (rect.top < tooltipHeight) {
+            elem.classList.add('tooltip-below');
+          } else {
+            elem.classList.remove('tooltip-below');
+          }
+          
+          // Get the scope attribute - all generic types should have this
+          const scope = elem.getAttribute('data-scope');
+          
+          // Only highlight elements with same type name AND same scope
+          document.querySelectorAll('.generic-type[data-generic="' + typeName + '"][data-scope="' + scope + '"]').forEach(function(t) {
+            t.classList.add('highlight');
+          });
+        });
+        
+        elem.addEventListener('mouseleave', function() {
+          const typeName = elem.getAttribute('data-generic');
+          document.querySelectorAll('.generic-type[data-generic="' + typeName + '"].highlight').forEach(function(t) {
+            t.classList.remove('highlight');
+          });
+        });
+      });
+    });
+
+  </script>
+</head>
+<body>
+  <div class="container">
+<h1>bar - Bar module - defines shared types and utilities</h1>
+<div class="module-doc">This module provides common data structures and utilities<br>that are used across the application.</div>
+<div class="declaration-block">
+<h2 id="class-Data" class="type-context"><span class="keyword">class</span> <code>Data</code>(<span class="type">object</span>)</h2>
+<div class="docstring">A data container with metadata<br>    <br>    This class holds arbitrary data along with metadata<br>    about when it was created and last modified.<br>    <br>    Examples:<br>        &gt;&gt;&gt; d = Data(&quot;hello&quot;, &quot;test-data&quot;)<br>        &gt;&gt;&gt; d.get_value()<br>        &quot;hello&quot;<br>    </div>
+
+<h3>Attributes</h3>
+<div class="attributes">
+<div class="attribute-item"><code>value</code>: <span class="type">str</span></div>
+<div class="attribute-item"><code>label</code>: <span class="type">str</span></div>
+<div class="attribute-item"><code>count</code>: <span class="type">int</span></div>
+</div>
+
+<h3>Methods</h3>
+<div class="methods">
+<div class="method-item">
+<div class="method-signature"><code>__init__</code>(<span class="param-name">self</span>, <span class="param-name">value</span>: <span class="type">str</span>, <span class="param-name">label</span>: <span class="type">str</span>)</div>
+<div class="method-doc">Initialize data with value and label<br>        <br>        Args:<br>            value: The data value<br>            label: A descriptive label<br>        </div>
+</div>
+<div class="method-item">
+<div class="method-signature"><code>get_value</code>(<span class="param-name">self</span>) → <span class="type">str</span></div>
+<div class="method-doc">Get the stored value<br>        <br>        Returns:<br>            The data value<br>        </div>
+</div>
+<div class="method-item">
+<div class="method-signature"><code>update</code>(<span class="param-name">self</span>, <span class="param-name">new_value</span>: <span class="type">str</span>)</div>
+<div class="method-doc">Update the value<br>        <br>        Args:<br>            new_value: New value to store<br>            <br>        Note:<br>            This increments the access count<br>        </div>
+</div>
+<div class="method-item">
+<div class="method-signature"><code>get_info</code>(<span class="param-name">self</span>) → <span class="type">str</span></div>
+<div class="method-doc">Get formatted information about this data<br>        <br>        Returns:<br>            A string with label, value, and count<br>        </div>
+</div>
+</div>
+</div>
+
+<div class="declaration-block">
+<h2 id="class-Container" class="type-context"><span class="keyword">class</span> <code>Container</code>[<span class="generic-type" data-generic="T" data-scope="class-Container" data-tooltip="Generic type T
+
+This is a placeholder for any type.
+All Ts must be the same type.">T</span>](<span class="type">object</span>)</h2>
+<div class="docstring">A generic container that can hold items of any type<br>    <br>    This container maintains a list of items with various<br>    operations for manipulation and querying.<br>    <br>    Type Args:<br>        T: The type of items stored in the container<br>    </div>
+
+<h3>Attributes</h3>
+<div class="attributes">
+<div class="attribute-item"><code>items</code>: <span class="type">list[<span class="generic-type" data-generic="T" data-tooltip="Generic type T
+
+This is a placeholder for any type.
+All Ts must be the same type.">T</span>]</span></div>
+<div class="attribute-item"><code>name</code>: <span class="type">str</span></div>
+</div>
+
+<h3>Methods</h3>
+<div class="methods">
+<div class="method-item">
+<div class="method-signature"><code>__init__</code>(<span class="param-name">self</span>, <span class="param-name">name</span>: <span class="type">str</span>)</div>
+<div class="method-doc">Create an empty container<br>        <br>        Args:<br>            name: Container name for identification<br>        </div>
+</div>
+<div class="method-item">
+<div class="method-signature"><code>add</code>(<span class="param-name">self</span>, <span class="param-name">item</span>: <span class="type"><span class="generic-type" data-generic="T" data-tooltip="Generic type T
+
+This is a placeholder for any type.
+All Ts must be the same type.">T</span></span>)</div>
+<div class="method-doc">Add an item to the container<br>        <br>        Args:<br>            item: Item to add<br>            <br>        Raises:<br>            ValueError: If container is full<br>        </div>
+</div>
+<div class="method-item">
+<div class="method-signature"><code>get_all</code>(<span class="param-name">self</span>) → <span class="type">list[<span class="generic-type" data-generic="T" data-tooltip="Generic type T
+
+This is a placeholder for any type.
+All Ts must be the same type.">T</span>]</span></div>
+<div class="method-doc">Get all items<br>        <br>        Returns:<br>            List of all items in the container<br>        </div>
+</div>
+<div class="method-item">
+<div class="method-signature"><code>filter</code>[<span class="generic-type" data-generic="U" data-scope="" data-tooltip="Generic type U
+
+This is a placeholder for any type.
+All Us must be the same type.">U</span>](<span class="param-name">self</span>, <span class="param-name">predicate</span>: <span class="type">(<span class="generic-type" data-generic="T" data-tooltip="Generic type T
+
+This is a placeholder for any type.
+All Ts must be the same type.">T</span>) -> bool</span>, <span class="param-name">transform</span>: <span class="type">(<span class="generic-type" data-generic="T" data-tooltip="Generic type T
+
+This is a placeholder for any type.
+All Ts must be the same type.">T</span>) -> U</span>) → <span class="type">list[<span class="generic-type" data-generic="U" data-tooltip="Generic type U
+
+This is a placeholder for any type.
+All Us must be the same type.">U</span>]</span></div>
+<div class="method-doc">Filter and transform items<br>        <br>        Args:<br>            predicate: Function to test each item<br>            transform: Function to transform matching items<br>            <br>        Returns:<br>            List of transformed items that match predicate<br>            <br>        Examples:<br>            &gt;&gt;&gt; c = Container[int](&quot;numbers&quot;)<br>            &gt;&gt;&gt; c.add(1)<br>            &gt;&gt;&gt; c.add(2)<br>            &gt;&gt;&gt; c.filter(lambda x: x &gt; 1, lambda x: str(x))<br>            [&quot;2&quot;]<br>        </div>
+</div>
+<div class="method-item">
+<div class="method-signature"><code>count</code>(<span class="param-name">self</span>) → <span class="type">int</span></div>
+<div class="method-doc">Get number of items in container<br>        <br>        Returns:<br>            Number of items<br>        </div>
+</div>
+</div>
+</div>
+
+<h2 class="type-context"><code>process_data</code>(<span class="param-name">d</span>: <span class="type"><a href="bar.html#class-Data" class="type-link">bar.Data</a></span>) → <span class="type">str</span></h2>
+<div class="docstring">Process a data object and return summary<br>    <br>    Args:<br>        d: Data object to process<br>        <br>    Returns:<br>        Processed summary string<br>        <br>    See Also:<br>        Data.get_info: For detailed information<br>    </div>
+
+<h2 class="type-context"><code>combine_data</code>(<span class="param-name">d1</span>: <span class="type"><a href="bar.html#class-Data" class="type-link">bar.Data</a></span>, <span class="param-name">d2</span>: <span class="type"><a href="bar.html#class-Data" class="type-link">bar.Data</a></span>) → <span class="type"><a href="bar.html#class-Data" class="type-link">bar.Data</a></span></h2>
+<div class="docstring">Combine two data objects<br>    <br>    Args:<br>        d1: First data object<br>        d2: Second data object<br>        <br>    Returns:<br>        New Data object with combined values<br>    </div>
+
+<div class="declaration-block">
+<h2 class="type-context"><span class="keyword">actor</span> <code>DataProcessor</code>()</h2>
+<div class="docstring">Actor that processes Data objects<br>    <br>    This actor maintains a queue of data objects<br>    and processes them asynchronously.<br>    </div>
+
+<h3>Internal Attributes</h3>
+<div class="attributes">
+<div class="attribute-item"><code>queue</code>: <span class="type">list[<a href="#class-Data" class="type-link">Data</a>]</span></div>
+<div class="attribute-item"><code>processed_count</code>: <span class="type">int</span></div>
+</div>
+<h3>Methods</h3>
+<div class="methods">
+<div class="method-item">
+<div class="method-signature"><code>enqueue</code>(<span class="param-name">d</span>: <span class="type"><a href="#class-Data" class="type-link">Data</a></span>)</div>
+<div class="method-doc">Add data to processing queue<br>        <br>        Args:<br>            d: Data object to process<br>        </div>
+</div>
+<div class="method-item">
+<div class="method-signature"><code>process_next</code>() → <span class="type">?<a href="#class-Data" class="type-link">Data</a></span></div>
+<div class="method-doc">Process next item in queue<br>        <br>        Returns:<br>            Processed data or None if queue empty<br>        </div>
+</div>
+<div class="method-item">
+<div class="method-signature"><code>get_stats</code>() → <span class="type">dict[str, int]</span></div>
+<div class="method-doc">Get processing statistics<br>        <br>        Returns:<br>            Dict with queue size and processed count<br>        </div>
+</div>
+</div>
+</div>
+
+<h2 class="type-context"><code>sum_counts</code>[<span class="generic-type" data-generic="T" data-scope="def-sum_counts" data-tooltip="Generic type T
+
+This is a placeholder for any type.
+All Ts must be the same type.
+
+T must support:
+  • Plus protocol (protocol methods)
+">T</span>(Plus)] => (<span class="param-name">items</span>: <span class="type">[<span class="generic-type" data-generic="T" data-scope="def-sum_counts" data-tooltip="Generic type T
+
+This is a placeholder for any type.
+All Ts must be the same type.
+
+T must support:
+  • Plus protocol (protocol methods)
+">T</span>]</span>) → <span class="type"><span class="generic-type" data-generic="T" data-scope="def-sum_counts" data-tooltip="Generic type T
+
+This is a placeholder for any type.
+All Ts must be the same type.
+
+T must support:
+  • Plus protocol (protocol methods)
+">T</span></span></h2>
+<div class="docstring">Sum a list of items that support addition<br>    <br>    Args:<br>        items: List of summable items<br>        <br>    Returns:<br>        Sum of all items<br>        <br>    Raises:<br>        ValueError: If list is empty<br>    </div>
+
+<div class="declaration-block">
+<h2 class="type-context"><span class="keyword">protocol</span> <code>Processable</code>[<span class="generic-type" data-generic="T" data-scope="protocol-Processable" data-tooltip="Generic type T
+
+This is a placeholder for any type.
+All Ts must be the same type.">T</span>]</h2>
+<div class="docstring">Protocol for objects that can be processed<br>    <br>    This protocol defines the interface for objects that<br>    can be processed and transformed into a result of type T.<br>    <br>    Type Args:<br>        T: The type of the processing result<br>    </div>
+
+<h3>Required Methods</h3>
+<div class="methods">
+<div class="method-item">
+<div class="method-signature"><code>process</code>() → <span class="type"><span class="generic-type" data-generic="T" data-tooltip="Generic type T
+
+This is a placeholder for any type.
+All Ts must be the same type.">T</span></span></div>
+</div>
+<div class="method-item">
+<div class="method-signature"><code>validate</code>() → <span class="type">bool</span></div>
+</div>
+<div class="method-item">
+<div class="method-signature"><code>get_metadata</code>() → <span class="type">dict[str, str]</span></div>
+</div>
+</div>
+</div>
+
+<div class="declaration-block">
+<h2 class="type-context"><span class="keyword">extension</span> <code>Data</code>(<span class="type">Processable[str]</span>)</h2>
+<div class="docstring">Makes Data implement the Processable protocol<br>    <br>    This extension allows Data objects to be processed<br>    according to the Processable protocol, returning<br>    string results.<br>    </div>
+
+<h3>Methods</h3>
+<div class="methods">
+<div class="method-item">
+<div class="method-signature"><code>process</code>(<span class="param-name">self</span>) → <span class="type">str</span></div>
+<div class="method-doc">Process data by converting to uppercase<br>        <br>        Returns:<br>            Uppercase version of the data value<br>        </div>
+</div>
+<div class="method-item">
+<div class="method-signature"><code>validate</code>(<span class="param-name">self</span>) → <span class="type">bool</span></div>
+<div class="method-doc">Check if data is non-empty<br>        <br>        Returns:<br>            True if data has content, False if empty<br>        </div>
+</div>
+<div class="method-item">
+<div class="method-signature"><code>get_metadata</code>(<span class="param-name">self</span>) → <span class="type">dict[str, str]</span></div>
+<div class="method-doc">Get data metadata<br>        <br>        Returns:<br>            Metadata including label and access count<br>        </div>
+</div>
+</div>
+</div>
+
+<h2 class="type-context"><code>process_items</code>[<span class="generic-type" data-generic="T" data-scope="def-process_items" data-tooltip="Generic type T
+
+This is a placeholder for any type.
+All Ts must be the same type.">T</span>, <span class="generic-type" data-generic="A" data-scope="def-process_items" data-tooltip="Generic type A
+
+This is a placeholder for any type.
+All As must be the same type.
+
+A must support:
+  • bar.Processable protocol (protocol methods)
+">A</span>(bar.Processable)] => (<span class="param-name">items</span>: <span class="type">[<span class="generic-type" data-generic="A" data-scope="def-process_items" data-tooltip="Generic type A
+
+This is a placeholder for any type.
+All As must be the same type.
+
+A must support:
+  • bar.Processable protocol (protocol methods)
+">A</span>]</span>) → <span class="type">[<span class="generic-type" data-generic="T" data-scope="def-process_items" data-tooltip="Generic type T
+
+This is a placeholder for any type.
+All Ts must be the same type.">T</span>]</span></h2>
+<div class="docstring">Process a list of processable items<br>    <br>    Args:<br>        items: List of items implementing Processable protocol<br>        <br>    Returns:<br>        List of processed results<br>        <br>    Examples:<br>        &gt;&gt;&gt; d1 = Data(&quot;hello&quot;, &quot;test&quot;)<br>        &gt;&gt;&gt; d2 = Data(&quot;world&quot;, &quot;test2&quot;)<br>        &gt;&gt;&gt; results = process_items([d1, d2])<br>        &gt;&gt;&gt; results<br>        [&quot;HELLO&quot;, &quot;WORLD&quot;]<br>    </div>
+
+<h2 class="type-context"><code>gt</code>[<span class="generic-type" data-generic="A" data-scope="def-gt" data-tooltip="Generic type A
+
+This is a placeholder for any type.
+All As must be the same type.
+
+A must support:
+  • Minus protocol (protocol methods)
+  • Plus protocol (protocol methods)
+">A</span>(Minus, Plus), <span class="generic-type" data-generic="B" data-scope="def-gt" data-tooltip="Generic type B
+
+This is a placeholder for any type.
+All Bs must be the same type.
+
+B must support:
+  • Plus protocol (protocol methods)
+">B</span>(Plus)] => (<span class="param-name">a</span>: <span class="type"><span class="generic-type" data-generic="A" data-scope="def-gt" data-tooltip="Generic type A
+
+This is a placeholder for any type.
+All As must be the same type.
+
+A must support:
+  • Minus protocol (protocol methods)
+  • Plus protocol (protocol methods)
+">A</span></span>, <span class="param-name">b</span>: <span class="type"><span class="generic-type" data-generic="A" data-scope="def-gt" data-tooltip="Generic type A
+
+This is a placeholder for any type.
+All As must be the same type.
+
+A must support:
+  • Minus protocol (protocol methods)
+  • Plus protocol (protocol methods)
+">A</span></span>, <span class="param-name">c</span>: <span class="type"><span class="generic-type" data-generic="B" data-scope="def-gt" data-tooltip="Generic type B
+
+This is a placeholder for any type.
+All Bs must be the same type.
+
+B must support:
+  • Plus protocol (protocol methods)
+">B</span></span>, <span class="param-name">d</span>: <span class="type"><span class="generic-type" data-generic="B" data-scope="def-gt" data-tooltip="Generic type B
+
+This is a placeholder for any type.
+All Bs must be the same type.
+
+B must support:
+  • Plus protocol (protocol methods)
+">B</span></span>) → <span class="type">(<span class="generic-type" data-generic="A" data-scope="def-gt" data-tooltip="Generic type A
+
+This is a placeholder for any type.
+All As must be the same type.
+
+A must support:
+  • Minus protocol (protocol methods)
+  • Plus protocol (protocol methods)
+">A</span>, <span class="generic-type" data-generic="A" data-scope="def-gt" data-tooltip="Generic type A
+
+This is a placeholder for any type.
+All As must be the same type.
+
+A must support:
+  • Minus protocol (protocol methods)
+  • Plus protocol (protocol methods)
+">A</span>, <span class="generic-type" data-generic="B" data-scope="def-gt" data-tooltip="Generic type B
+
+This is a placeholder for any type.
+All Bs must be the same type.
+
+B must support:
+  • Plus protocol (protocol methods)
+">B</span>)</span></h2>
+<div class="docstring">Function that takes generic types</div>
+  </div>
+</body>
+</html>

@@ -8,6 +8,7 @@ import Data.Char (toLower)
 import qualified Acton.Parser as P
 import qualified Acton.Syntax as S
 import qualified Acton.Printer as AP
+import qualified Acton.DocPrinter as DocP
 import qualified Acton.Env
 import qualified Acton.Kinds
 import qualified Acton.Types
@@ -25,6 +26,8 @@ import Text.Megaparsec (runParser, errorBundlePretty)
 import qualified Data.Text as T
 import Data.List (isInfixOf, isPrefixOf)
 import System.FilePath ((</>), joinPath, takeFileName, takeBaseName, takeDirectory)
+import System.Directory (getCurrentDirectory, setCurrentDirectory)
+import Control.Monad (forM_, when, foldM)
 
 
 
@@ -126,36 +129,17 @@ main = do
           testParseOutput "f\"{name:@10}\"" "\"%s\" % str(name)"                -- Invalid format accepted
 
         describe "F-String Error Handling Golden Tests" $ do
-          it "Unclosed brace in f-string" $ do
-            let input = "f\"Unclosed brace: {name"
-            case parseActon input of
-              Left err -> goldenTextFile "test/parser_golden/fstring_unclosed_brace.golden" $ return $ T.pack $ "ERROR: " ++ err
-              Right result -> goldenTextFile "test/parser_golden/fstring_unclosed_brace.golden" $ return $ T.pack $ "PARSED: " ++ result
+          testParseError "fstring_unclosed_brace" "f\"Unclosed brace: {name"
+          testParseError "fstring_empty_expression" "f\"Empty expression {}\""
+          testParseError "fstring_missing_expression" "f\"Missing expression {:10}\""
+          testParseError "fstring_unbalanced_format" "f\"Unbalanced format {name:}:10}\""
+          testParseError "fstring_invalid_format" "f\"Invalid format specifier {name:@Z}\""
 
-          it "Empty expression in f-string" $ do
-            let input = "f\"Empty expression {}\""
-            case parseActon input of
-              Left err -> goldenTextFile "test/parser_golden/fstring_empty_expression.golden" $ return $ T.pack $ "ERROR: " ++ err
-              Right result -> goldenTextFile "test/parser_golden/fstring_empty_expression.golden" $ return $ T.pack $ "PARSED: " ++ result
 
-          it "Missing expression with format specifier" $ do
-            let input = "f\"Missing expression {:10}\""
-            case parseActon input of
-              Left err -> goldenTextFile "test/parser_golden/fstring_missing_expression.golden" $ return $ T.pack $ "ERROR: " ++ err
-              Right result -> goldenTextFile "test/parser_golden/fstring_missing_expression.golden" $ return $ T.pack $ "PARSED: " ++ result
-
-          it "Unbalanced format specifier" $ do
-            let input = "f\"Unbalanced format {name:}:10}\""
-            case parseActon input of
-              Left err -> goldenTextFile "test/parser_golden/fstring_unbalanced_format.golden" $ return $ T.pack $ "ERROR: " ++ err
-              Right result -> goldenTextFile "test/parser_golden/fstring_unbalanced_format.golden" $ return $ T.pack $ "PARSED: " ++ result
-
-          it "Invalid format specifier" $ do
-            let input = "f\"Invalid format specifier {name:@Z}\""
-            case parseActon input of
-              Left err -> goldenTextFile "test/parser_golden/fstring_invalid_format.golden" $ return $ T.pack $ "ERROR: " ++ err
-              Right result -> goldenTextFile "test/parser_golden/fstring_invalid_format.golden" $ return $ T.pack $ "PARSED: " ++ result
-
+    describe "Documentation Printing" $ do
+      -- Test documentation generation for modules
+      -- TODO: Fix import resolution for foo module
+      testDocFiles env0 ["bar"]
 
     describe "Pass 2: Kinds" $ do
       testKinds env0 "deact"
@@ -229,6 +213,68 @@ testParseOutput input expected = do
       Left err -> expectationFailure $ "Parse failed: " ++ err
       Right output -> output `shouldBe` expected
 
+-- Helper function to test parser errors with golden files
+testParseError :: String -> String -> Spec
+testParseError testName input = do
+  it testName $ do
+    case parseActon input of
+      Left err -> goldenTextFile ("test/parser_golden/" ++ testName ++ ".golden") $
+        return $ T.pack $ "ERROR: " ++ err
+      Right result -> goldenTextFile ("test/parser_golden/" ++ testName ++ ".golden") $
+        return $ T.pack $ "PARSED: " ++ result
+
+-- Helper function for documentation golden tests
+-- Takes a list of module names (without .act extension) in dependency order
+-- and generates golden files for all three formats: .txt (ASCII), .md (Markdown), .html (HTML)
+testDocFiles :: Acton.Env.Env0 -> [String] -> Spec
+testDocFiles env0 moduleNames = do
+  let testDir = "test"
+      goldenDir = "doc-golden"
+      sysTypesPath = ".." </> ".." </> ".." </> "dist" </> "base" </> "out" </> "types"
+
+  -- Process modules in dependency order
+  oldDir <- runIO getCurrentDirectory
+  
+  -- Parse and type-check all modules, building up the environment
+  modules <- runIO $ do
+    setCurrentDirectory (oldDir </> testDir)
+    
+    -- Process modules in order, accumulating environment
+    let processModule (accEnv, accModules) modName = do
+          let act_file = "src" </> modName ++ ".act"
+          src <- readFile act_file
+          let base = takeBaseName act_file
+          parsed <- P.parseModule (S.modName [base]) act_file src
+          env <- Acton.Env.mkEnv [sysTypesPath] accEnv parsed
+          kchecked <- Acton.Kinds.check env parsed
+          (nmod, tchecked, typeEnv) <- Acton.Types.reconstruct "" env kchecked
+          let S.NModule tenv mdoc = nmod
+          -- The new environment includes the processed module
+          return (env, accModules ++ [(modName, parsed, tenv)])
+    
+    (finalEnv, mods) <- foldM processModule (env0, []) moduleNames
+    setCurrentDirectory oldDir
+    return mods
+  
+  -- Generate documentation for each module
+  forM_ modules $ \(modName, parsed, tenv) -> do
+    describe modName $ do
+      it "generates ASCII documentation (plain)" $ do
+        let asciiDoc = DocP.printAsciiDoc False tenv parsed
+        goldenTextFile (testDir </> goldenDir </> modName ++ ".txt") $ return $ T.pack asciiDoc
+
+      it "generates ASCII documentation (styled)" $ do
+        let asciiDoc = DocP.printAsciiDoc True tenv parsed
+        goldenTextFile (testDir </> goldenDir </> modName ++ "-color.txt") $ return $ T.pack asciiDoc
+
+      it "generates Markdown documentation" $ do
+        let mdDoc = DocP.printMdDoc tenv parsed
+        goldenTextFile (testDir </> goldenDir </> modName ++ ".md") $ return $ T.pack mdDoc
+
+      it "generates HTML documentation" $ do
+        let htmlDoc = DocP.printHtmlDoc tenv parsed
+        goldenTextFile (testDir </> goldenDir </> modName ++ ".html") $ return $ T.pack htmlDoc
+
 parseAct env0 act_file = do
   let dir = takeDirectory act_file
       base = takeBaseName act_file
@@ -269,9 +315,7 @@ testTypes env0 testname = do
 
   kchecked <- liftIO $ Acton.Kinds.check env parsed
   (nmod, tchecked, typeEnv) <- liftIO $ Acton.Types.reconstruct "" env kchecked
-  let iface = case nmod of
-                S.NModule te _ -> te
-                _ -> error "reconstruct should return NModule"
+  let S.NModule tenv mdoc = nmod
 
   genTests "Type Check" dir testname kchecked tchecked
 
@@ -284,9 +328,7 @@ testNorm env0 testname = do
 
   kchecked <- liftIO $ Acton.Kinds.check env parsed
   (nmod, tchecked, typeEnv) <- liftIO $ Acton.Types.reconstruct "" env kchecked
-  let iface = case nmod of
-                S.NModule te _ -> te
-                _ -> error "reconstruct should return NModule"
+  let S.NModule tenv mdoc = nmod
   (normalized, normEnv) <- liftIO $ Acton.Normalizer.normalize typeEnv tchecked
 
   genTests "Normalizer" dir testname tchecked normalized
@@ -300,9 +342,7 @@ testDeact env0 testname = do
 
   kchecked <- liftIO $ Acton.Kinds.check env parsed
   (nmod, tchecked, typeEnv) <- liftIO $ Acton.Types.reconstruct "" env kchecked
-  let iface = case nmod of
-                S.NModule te _ -> te
-                _ -> error "reconstruct should return NModule"
+  let S.NModule tenv mdoc = nmod
   (normalized, normEnv) <- liftIO $ Acton.Normalizer.normalize typeEnv tchecked
   (deacted, deactEnv) <- liftIO $ Acton.Deactorizer.deactorize normEnv normalized
 
@@ -317,9 +357,7 @@ testCps env0 testname = do
 
   kchecked <- liftIO $ Acton.Kinds.check env parsed
   (nmod, tchecked, typeEnv) <- liftIO $ Acton.Types.reconstruct "" env kchecked
-  let iface = case nmod of
-                S.NModule te _ -> te
-                _ -> error "reconstruct should return NModule"
+  let S.NModule tenv mdoc = nmod
   (normalized, normEnv) <- liftIO $ Acton.Normalizer.normalize typeEnv tchecked
   (deacted, deactEnv) <- liftIO $ Acton.Deactorizer.deactorize normEnv normalized
   (cpstyled, _) <- liftIO $ Acton.CPS.convert deactEnv deacted
@@ -335,9 +373,7 @@ testLL env0 testname = do
 
   kchecked <- liftIO $ Acton.Kinds.check env parsed
   (nmod, tchecked, typeEnv) <- liftIO $ Acton.Types.reconstruct "" env kchecked
-  let iface = case nmod of
-                S.NModule te _ -> te
-                _ -> error "reconstruct should return NModule"
+  let S.NModule tenv mdoc = nmod
   (normalized, normEnv) <- liftIO $ Acton.Normalizer.normalize typeEnv tchecked
   (deacted, deactEnv) <- liftIO $ Acton.Deactorizer.deactorize normEnv normalized
   (cpstyled, cpsEnv) <- liftIO $ Acton.CPS.convert deactEnv deacted
@@ -354,9 +390,7 @@ testBoxing env0 testname = do
 
   kchecked <- liftIO $ Acton.Kinds.check env parsed
   (nmod, tchecked, typeEnv) <- liftIO $ Acton.Types.reconstruct "" env kchecked
-  let iface = case nmod of
-                S.NModule te _ -> te
-                _ -> error "reconstruct should return NModule"
+  let S.NModule tenv mdoc = nmod
   (normalized, normEnv) <- liftIO $ Acton.Normalizer.normalize typeEnv tchecked
   (deacted, deactEnv) <- liftIO $ Acton.Deactorizer.deactorize normEnv normalized
   (cpstyled, cpsEnv) <- liftIO $ Acton.CPS.convert deactEnv deacted
@@ -374,9 +408,7 @@ testCodeGen env0 testname = do
 
   kchecked <- liftIO $ Acton.Kinds.check env parsed
   (nmod, tchecked, typeEnv) <- liftIO $ Acton.Types.reconstruct "" env kchecked
-  let iface = case nmod of
-                S.NModule te _ -> te
-                _ -> error "reconstruct should return NModule"
+  let S.NModule tenv mdoc = nmod
   (normalized, normEnv) <- liftIO $ Acton.Normalizer.normalize typeEnv tchecked
   (deacted, deactEnv) <- liftIO $ Acton.Deactorizer.deactorize normEnv normalized
   (cpstyled, cpsEnv) <- liftIO $ Acton.CPS.convert deactEnv deacted
@@ -396,3 +428,4 @@ testCodeGen env0 testname = do
       goldenTextFile h_golden $ return $ T.pack $ Pretty.print h
     it ("Check " ++ pass_name ++ " .c output") $ do
       goldenTextFile c_golden $ return $ T.pack $ Pretty.print c
+
