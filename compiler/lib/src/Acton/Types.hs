@@ -35,7 +35,7 @@ import Data.List (intersperse)
 
 -- | Extract docstring from the first statement of a Suite if it's a string expression
 extractDocstring :: Suite -> Maybe String
-extractDocstring (Expr _ (Strings _ [s]) : _) = Just (stripQuotes s)
+extractDocstring (Expr _ (Strings _ [s]) : _) = Just (unescapeString $ stripQuotes s)
   where
     stripQuotes ('"':'"':'"':xs) | take 3 (reverse xs) == "\"\"\"" = take (length xs - 3) xs
     stripQuotes ('\'':'\'':'\'':xs) | take 3 (reverse xs) == "'''" = take (length xs - 3) xs
@@ -43,6 +43,16 @@ extractDocstring (Expr _ (Strings _ [s]) : _) = Just (stripQuotes s)
     stripQuotes ('"':xs) | last xs == '"' = init xs
     stripQuotes s = s
 extractDocstring _ = Nothing
+
+unescapeString :: String -> String
+unescapeString [] = []
+unescapeString ('\\':'n':xs) = '\n' : unescapeString xs
+unescapeString ('\\':'t':xs) = '\t' : unescapeString xs
+unescapeString ('\\':'r':xs) = '\r' : unescapeString xs
+unescapeString ('\\':'\\':xs) = '\\' : unescapeString xs
+unescapeString ('\\':'"':xs) = '"' : unescapeString xs
+unescapeString ('\\':'\'':xs) = '\'' : unescapeString xs
+unescapeString (x:xs) = x : unescapeString xs
 
 reconstruct                             :: String -> Env0 -> Module -> IO (NameInfo, Module, Env0)
 reconstruct fname env0 (Module m i ss)  = do --traceM ("#################### original env0 for " ++ prstr m ++ ":")

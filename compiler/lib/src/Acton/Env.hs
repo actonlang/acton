@@ -164,7 +164,7 @@ prettyOrPass te
 
 prettyDocstring :: Maybe String -> Doc
 prettyDocstring Nothing         = empty
-prettyDocstring (Just docstring) = text "\"\"\"" <+> text docstring <+> text "\"\"\""
+prettyDocstring (Just docstring) = text "\"\"\"" <> text docstring <> text "\"\"\""
 
 instance Pretty WTCon where
     pretty (ws,u)               = --dotCat prettyW ws <+> colon <+>
