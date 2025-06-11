@@ -1,0 +1,149 @@
+# Acton Ecosystem Lift Process
+
+This document describes the process for lifting the entire Acton ecosystem when introducing new language features or breaking changes.
+
+## Ecosystem Repositories
+
+The following repositories contain syntax highlighting and similar for editors / IDE and should be updated when the language has been changed:
+
+- git@github.com:actonlang/Acton.tmbundle.git
+- git@github.com:actonlang/acton-mode.git
+- git@github.com:actonlang/sublime-acton.git
+- git@github.com:actonlang/vim-acton.git
+- git@github.com:actonlang/vscode-acton.git
+
+The following repositories contain Acton code and should be updated when making language changes:
+
+- git@github.com:actonlang/acton-snappy.git
+- git@github.com:actonlang/acton-zlib.git
+- git@github.com:orchestron-orchestrator/acton-yang.git
+- git@github.com:orchestron-orchestrator/orchestron.git
+- git@github.com:orchestron-orchestrator/sorespo.git
+
+- git@github.com:telemetrify-collector/telemetrify.git
+- git@github.com:actonlang/acton-grpc.git
+- git@github.com:actonlang/acton-http2.git
+
+## General Process
+
+We group together the remote git operations, so start by cloing all operations, perform steps for each repository, then push all repositories at the end.
+
+The ecosystem lift process consists of the following steps for each repository:
+
+1. **Clone the repository** (into the `repos/` directory) - done in batch
+   ```bash
+   cd ecolift/repos
+   git clone <repo-url>
+   cd <repo-name>
+   ```
+
+2. **Create a new branch**
+   ```bash
+   git checkout -b ecolift/<feature-name>
+   ```
+
+3. **Apply the language changes**
+   - Find .act files
+   - Update the code for the particular feature
+
+4. **Test the changes**
+   ```bash
+   acton build
+   acton test
+   ```
+
+5. **Commit**
+   ```bash
+   git add -u
+   git commit -m "Adapt to <feature-name> in Acton"
+   ```
+
+   the user can at this point review locally
+
+6. **Push and create a pull request**
+   ```bash
+   git push -u origin ecolift/<feature-name>
+   gh pr create --title "Adapt to <feature-name> in Acton" --body "This PR updates the codebase to be compatible with <feature-name> in Acton"
+   ```
+
+## Identifying Changes to Ecolift
+
+When performing an ecolift, the user requesting the ecolift should provide sufficient details about what changes need to be made. If the details are unclear, **prompt the user for more information** before proceeding.
+
+### Required Information from User
+
+The user should provide one or more of the following:
+
+1. **Specific commit IDs** from the main acton repository that introduced the changes:
+   ```
+   Please provide the commit ID(s) that introduced this feature: abc123def
+   ```
+
+2. **Examples of the transformation** showing old vs new syntax:
+   ```
+   Old syntax: "Hello " + name + "!"
+   New syntax: f"Hello {name}!"
+   ```
+
+3. **Feature description** with concrete examples of what needs to change:
+   ```
+   Added comprehensions: transform loops like `for x in items: result.append(x*2)` 
+   to `[x*2 for x in items]`
+   ```
+
+### If Information is Unclear
+
+If the user's request lacks sufficient detail, ask clarifying questions:
+
+- "Can you provide the commit ID(s) from the main acton repo that introduced this feature?"
+- "Can you show an example of the old syntax vs new syntax transformation?"
+- "What specific language constructs or patterns need to be updated?"
+- "Are there test cases in the main repo that demonstrate this change?"
+
+### Using Provided Information
+
+Once you have the necessary details:
+
+1. **Examine the referenced commits** to understand the full scope of changes
+2. **Study compiler test cases** that show transformation patterns
+3. **Look for examples** in the main repo's test files (`test/compiler/`, `test/stdlib_tests/`)
+4. **Extract transformation patterns** from the diffs and apply them systematically
+
+## Feature-Specific Transformations
+
+### Example: F-strings
+
+When introducing f-strings to Acton, the transformation would involve:
+
+1. Identifying string formatting patterns like:
+   ```acton
+   "Hello " + name + ", you have " + str(count) + " messages"
+   ```
+   or
+   ```acton
+   "Hello %s" % name
+   ```
+
+2. Converting to f-string syntax:
+   ```acton
+   f"Hello {name}, you have {count} messages"
+   ```
+
+   ```acton
+   f"Hello {name}"
+   ```
+
+### Example: Comprehensions
+
+When adding comprehensions, look for patterns like:
+```acton
+result = []
+for x in items:
+    if x > 0:
+        result.append(x * 2)
+```
+
+And convert to:
+```acton
+result = [x * 2 for x in items if x > 0]
+```
