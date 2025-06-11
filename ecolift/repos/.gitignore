@@ -1,0 +1,4 @@
+# Ignore all cloned repositories
+*
+# But keep this file
+!.gitignore
