@@ -7,7 +7,7 @@
 #ifndef BACKEND_COMM_H_
 #define BACKEND_COMM_H_
 
-#include "failure_detector/db_queries.h"
+#include "backend/failure_detector/db_queries.h"
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <sys/types.h>

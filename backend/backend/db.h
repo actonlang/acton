@@ -20,11 +20,11 @@
 #ifndef BACKEND_DB_H_
 #define BACKEND_DB_H_
 
-#include "common.h"
-#include "skiplist.h"
-#include "fastrand.h"
-#include "failure_detector/vector_clock.h"
-#include "hash_ring.h"
+#include "backend/common.h"
+#include "backend/skiplist.h"
+#include "backend/fastrand.h"
+#include "backend/failure_detector/vector_clock.h"
+#include "backend/hash_ring.h"
 
 // High level API:
 
