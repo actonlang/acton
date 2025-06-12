@@ -24,6 +24,7 @@ library:
     - Acton.CodeGen
     - Acton.CommandLineParser
     - Acton.Deactorizer
+    - Acton.DocPrinter
     - Acton.Env
     - Acton.Kinds
     - Acton.LambdaLifter

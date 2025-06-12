@@ -1,6 +1,5 @@
 **/.ccls-cache/*
 **/.zig-cache/*
-**/.build/sys/*
 
 *~
 *.o
@@ -15,6 +14,10 @@
 **/build-cache
 **/zig-cache
 **/.actonc.lock
+**/.acton.lock
+**/.build/
+**/*.swp
+**/*.ty
 
 backend/actondb
 backend/failure_detector/db_messages_test
@@ -25,7 +28,6 @@ backend/test/queue_unit_tests
 backend/test/skiplist_test
 backend/test/test_client
 
-base/.actonc.lock
 base/build-cache
 base/out
 
@@ -34,7 +36,10 @@ builder/build_runner.zig
 builder/zig-cache
 
 compiler/package.yaml
-compiler/tests/*.ty
+compiler/actonc/package.yaml
+compiler/lib/package.yaml
+compiler/lsp-server/package.yaml
+test/package.yaml
 
 debian/.debhelper
 debian/acton/
@@ -71,6 +76,3 @@ test/**/*.log
 test/*/*/out/**
 test/*/*/build.sh
 compiler/actonc/test/project/*/out
-
-
-**/.build/sys/*

@@ -21,6 +21,7 @@ import qualified Acton.Syntax as A
 import qualified Acton.CommandLineParser as C
 import qualified Acton.Relabel
 import qualified Acton.Env
+import Acton.Env (simp, define, setMod)
 import qualified Acton.QuickType
 import qualified Acton.Kinds
 import qualified Acton.Types
@@ -33,6 +34,7 @@ import qualified Acton.LambdaLifter
 import qualified Acton.Boxing
 import qualified Acton.CodeGen
 import qualified Acton.Builtin
+import qualified Acton.DocPrinter as DocP
 import Utils
 import qualified Pretty
 import qualified InterfaceFiles
@@ -40,18 +42,20 @@ import qualified InterfaceFiles
 import Control.Applicative
 import Control.Concurrent.Async
 import Control.Concurrent.MVar
-import Control.Exception (throw,catch,displayException,IOException,ErrorCall,try,SomeException)
+import Control.Exception (throw,catch,displayException,IOException,ErrorCall)
 import Control.Exception (bracketOnError)
 import Control.Concurrent (forkIO)
 import Control.Monad
 import Data.Default.Class (def)
 import Data.List.Split
+import Data.Maybe (isJust)
 import Data.Monoid ((<>))
 import Data.Ord
 import Data.Graph
 import Data.String.Utils (replace)
 import Data.Version (showVersion)
 import qualified Data.List
+import qualified Data.Set
 import Error.Diagnose
 import Error.Diagnose.Style (defaultStyle)
 import qualified Filesystem.Path.CurrentOS as Fsco
@@ -60,6 +64,7 @@ import Prettyprinter.Render.Text (hPutDoc)
 import System.Clock
 import System.Directory
 import System.Directory.Recursive
+import System.Environment (lookupEnv)
 import System.Exit
 import System.FileLock
 import System.FilePath ((</>))
@@ -107,7 +112,7 @@ main = do
         C.CmdOpt (C.Doc opts)   -> printDocs opts
         C.CompileOpt nms opts   -> case takeExtension (head nms) of
                                      ".act" -> buildFile opts (head nms)
-                                     ".ty" -> printDocs (C.DocOptions (head nms) "")
+                                     ".ty" -> printDocs (C.DocOptions (head nms) (Just C.AsciiFormat) Nothing)
 
 defaultOpts   = C.CompileOptions False False False False False False False False False False False False
                                  False False False False False False False False False False False False
@@ -195,7 +200,7 @@ printVersion opts = do
     cv <-  getCcVer
     iff (C.version opts) (putStrLn (showVer cv))
     iff (C.numeric_version opts) (putStrLn getVer)
- 
+
 getVer          = showVersion Paths_actonc.version
 getVerExtra     = unwords ["compiled by", compilerName, showVersion compilerVersion, "on", os, arch]
 
@@ -330,19 +335,157 @@ buildFile opts file = do
 
 -- Print documentation -------------------------------------------------------------------------------------------
 
+-- | Detect if we're running in a GUI environment
+-- On macOS: Always assume GUI unless SSH_CONNECTION is set
+-- On Linux: Check for DISPLAY variable
+-- On Windows: Always assume GUI
+detectGuiEnvironment :: IO Bool
+detectGuiEnvironment = do
+    case System.Info.os of
+        "darwin" -> do
+            -- On macOS, assume GUI unless we're in SSH session
+            sshConn <- lookupEnv "SSH_CONNECTION"
+            return $ isNothing sshConn
+        "linux" -> do
+            -- On Linux, check for DISPLAY
+            display <- lookupEnv "DISPLAY"
+            return $ isJust display && display /= Just ""
+        _ ->
+            -- Windows or other, assume GUI
+            return True
+
+-- | Generate and display documentation for Acton modules
+--
+-- Behavior summary:
+-- * No format flag + GUI environment → HTML to file + open browser
+-- * No format flag + terminal/SSH → ASCII to stdout
+-- * Explicit format (-t, --html, --md) → Always to stdout (unless -o specified)
+-- * -o flag → Always to that file
+-- * -o - → Always to stdout
+--
+-- GUI detection:
+-- * macOS: Assumes GUI unless SSH_CONNECTION is set
+-- * Linux: Checks for DISPLAY variable
+-- * Windows: Always assumes GUI
+--
+-- The command line parser just parses options without making behavior decisions.
+-- All logic is centralized here in printDocs for predictable, intuitive behavior.
 printDocs :: C.DocOptions -> IO ()
 printDocs opts = do
-              iff (not (null $ C.signs opts)) $ do
-                     let filename = C.signs opts
-                         (fileBody,fileExt) = splitExtension $ takeFileName filename
-                     case fileExt of
-                            ".ty" -> do
-                                paths <- findPaths filename defaultOpts
-                                env0 <- Acton.Env.initEnv (sysTypes paths) False
-                                Acton.Types.showTyFile env0 (modName paths) filename
-                            _     -> printErrorAndExit ("Unknown filetype: " ++ filename)
-              iff (not (null $ C.full opts)) $
-                   putStrLn "Full documentation not implemented"           -- issue #708
+    if null (C.inputFile opts) then do
+        -- No file provided - check what to do
+        case C.outputFormat opts of
+            Just C.AsciiFormat -> printErrorAndExit "Terminal output requires a specific file. Usage: actonc doc -t <file.act>"
+            Just C.MarkdownFormat -> printErrorAndExit "Markdown output requires a specific file. Usage: actonc doc --md <file.act>"
+            _ -> do
+                -- HTML or auto mode - check if we're in a project
+                curDir <- getCurrentDirectory
+                projDir <- findProjectDir curDir
+                if isJust projDir then do
+                    -- We're in a project - open the documentation index
+                    let indexFile = "out/doc/index.html"
+                    indexExists <- doesFileExist indexFile
+                    if indexExists then do
+                        -- Open the existing index
+                        let openCmd = case System.Info.os of
+                                "darwin" -> "open"
+                                "linux" -> "xdg-open"
+                                _ -> ""
+                        unless (null openCmd) $ do
+                            _ <- system $ openCmd ++ " " ++ indexFile
+                            return ()
+                    else
+                        printErrorAndExit "No documentation found. Run 'actonc build' first to generate documentation."
+                else
+                    printErrorAndExit "Not in an Acton project. Please specify a file to document."
+    else do
+        let filename = C.inputFile opts
+            (fileBody,fileExt) = splitExtension $ takeFileName filename
+
+        case fileExt of
+            ".ty" -> do
+                paths <- findPaths filename defaultOpts
+                env0 <- Acton.Env.initEnv (sysTypes paths) False
+                Acton.Types.showTyFile env0 (modName paths) filename
+
+            ".act" -> do
+                src <- readFile filename
+                let modname = A.modName $ map (replace ".act" "") $ splitOn "/" $ fileBody
+                parsed <- Acton.Parser.parseModule modname filename src
+
+                -- Run compiler passes to get type information
+                paths <- findPaths filename defaultOpts
+                env0 <- Acton.Env.initEnv (sysTypes paths) False
+                env <- Acton.Env.mkEnv (searchPath paths) env0 parsed
+                kchecked <- Acton.Kinds.check env parsed
+                (nmod, _, env') <- Acton.Types.reconstruct "" env kchecked
+                let A.NModule tenv mdoc = nmod
+
+                -- 1. If format is explicitly set (via -t, --html, --markdown), use it
+                -- 2. Otherwise, check if we're in a GUI environment
+                inGui <- detectGuiEnvironment
+                let format = case C.outputFormat opts of
+                        Just fmt -> fmt
+                        Nothing -> if inGui then C.HtmlFormat else C.AsciiFormat
+
+                docOutput <- case format of
+                    C.HtmlFormat -> return $ DocP.printHtmlDoc tenv parsed
+                    C.AsciiFormat -> return $ DocP.printAsciiDoc False tenv parsed
+                    C.MarkdownFormat -> return $ DocP.printMdDoc tenv parsed
+
+                -- Handle output destination
+                case C.outputFile opts of
+                    Just "-" ->
+                        -- Explicit stdout
+                        putStr docOutput
+                    Just outFile -> do
+                        -- Write to specified file
+                        createDirectoryIfMissing True (takeDirectory outFile)
+                        writeFile outFile docOutput
+                        putStrLn $ "Documentation written to: " ++ outFile
+                    Nothing ->
+                        -- No explicit output file
+                        if isJust (C.outputFormat opts) then
+                            -- Format was explicitly set, write to stdout
+                            putStr docOutput
+                        else if format == C.AsciiFormat then
+                            -- Auto-detected ASCII (no DISPLAY), write to stdout
+                            putStr docOutput
+                        else do
+                            -- Auto-detected HTML (DISPLAY set), write to file and open browser
+                            curDir <- getCurrentDirectory
+                            projDir <- findProjectDir curDir
+                            outputPath <- if isJust projDir then do
+                                -- In project: use out/doc/
+                                let modPath = map (replace ".act" "") $ splitOn "/" filename
+                                    cleanPath = case modPath of
+                                        "src":rest -> rest
+                                        path -> path
+                                    docFile = if null cleanPath
+                                              then "out/doc/unnamed.html"
+                                              else joinPath ("out" : "doc" : init cleanPath) </> last cleanPath <.> "html"
+                                return docFile
+                            else do
+                                -- Outside project: use temp file
+                                writeSystemTempFile "acton-doc.html" docOutput
+
+                            -- Write the file
+                            when (isJust projDir) $ do
+                                createDirectoryIfMissing True (takeDirectory outputPath)
+                                writeFile outputPath docOutput
+
+                            putStrLn $ "HTML documentation written to: " ++ outputPath
+
+                            -- Open in browser
+                            let openCmd = case System.Info.os of
+                                    "darwin" -> "open"
+                                    "linux" -> "xdg-open"
+                                    _ -> ""
+                            unless (null openCmd) $ do
+                                _ <- system $ openCmd ++ " " ++ outputPath
+                                return ()
+
+            _ -> printErrorAndExit ("Unknown filetype: " ++ filename)
 
 
 -- Compile Acton files ---------------------------------------------------------------------------------------------
@@ -390,6 +533,8 @@ removeOrphanFiles dir = do
         handleNotExists :: IOException -> IO ()
         handleNotExists _ = return ()
 
+
+
 compileFiles :: C.CompileOptions -> [String] -> IO ()
 compileFiles opts srcFiles = do
     -- it is ok to get paths from just the first file here since at this point
@@ -433,6 +578,11 @@ compileFiles opts srcFiles = do
           | otherwise        = [binTask]
         preTestBinTasks = map (\t -> BinTask True (modNameToString (name t)) (A.GName (name t) (A.name "__test_main")) True) (filter (not . stubmode) tasks)
     env <- compileTasks opts paths tasks
+    -- Generate project documentation index
+    unless (C.skip_build opts || isTmp paths) $ do
+        let docDir = joinPath [projPath paths, "out", "doc"]
+        createDirectoryIfMissing True docDir
+        DocP.generateDocIndex docDir (map (\t -> (name t, src t, atree t, stubmode t)) (filter (not . stubmode) tasks))
     if C.skip_build opts
       then
         putStrLn "  Skipping final build step"
@@ -532,7 +682,7 @@ findPaths actFile opts  = do execDir <- takeDirectory <$> System.Environment.get
         analyze "/" ds  = do tmp <- canonicalizePath (C.tempdir opts)
                              return (True, tmp, [])
         analyze pre ds  = do exists <- doesFileExist (joinPath [pre, "Acton.toml"])
-                             if not exists 
+                             if not exists
                                 then analyze (takeDirectory pre) (takeFileName pre : ds)
                                 else case ds of
                                     [] -> return $ (False, pre, [])
@@ -556,7 +706,7 @@ parseActFile opts paths actFile = do
                     paths <- findPaths actFile opts
                     src <- readFile actFile
                     timeRead <- getTime Monotonic
-                    iff (C.timing opts) $ putStrLn("Reading file " ++ makeRelative (srcDir paths) actFile 
+                    iff (C.timing opts) $ putStrLn("Reading file " ++ makeRelative (srcDir paths) actFile
                                                    ++ ": " ++ fmtTime(timeRead - timeStart))
                     m <- Acton.Parser.parseModule (modName paths) actFile src
                       `catch` handle "Syntax error" Acton.Parser.parserError "" paths (modName paths)
@@ -653,7 +803,7 @@ chaseImportedFiles opts paths itasks
                                  newtasks <- catMaybes <$> mapM (readAFile itasks) itasks_imps
                                  chaseRecursively (itasks ++ newtasks) (map name newtasks) (concatMap importsOf newtasks)
 
-  where readAFile tasks mn  = case lookUp mn tasks of    -- read and parse file mn in the project directory, unless it is already in tasks 
+  where readAFile tasks mn  = case lookUp mn tasks of    -- read and parse file mn in the project directory, unless it is already in tasks
                                  Just t -> return Nothing
                                  Nothing -> do let actFile = srcFile paths mn
                                                ok <- System.Directory.doesFileExist actFile
@@ -666,7 +816,7 @@ chaseImportedFiles opts paths itasks
           | name t == mn     = Just t
           | otherwise        = lookUp mn ts
         lookUp _ []          = Nothing
-        
+
         chaseRecursively tasks mns []
                              = return tasks
         chaseRecursively tasks mns (imn : imns)
@@ -809,6 +959,27 @@ runRestPasses opts paths env0 parsed stubMode = do
                       let A.NModule iface mdoc = nmod
                       iff (C.types opts && mn == (modName paths)) $ dump mn "types" (Pretty.print tchecked)
                       iff (C.sigs opts && mn == (modName paths)) $ dump mn "sigs" (Acton.Types.prettySigs env mn iface)
+
+                      -- Generate documentation, if building for a project
+                      when (not (C.skip_build opts) && not stubMode && not (isTmp paths)) $ do
+                          let docDir = joinPath [projPath paths, "out", "doc"]
+                              modPathList = A.modPath mn
+                              docFile = if null modPathList
+                                        then docDir </> "unnamed" <.> "html"
+                                        else joinPath (docDir : init modPathList) </> last modPathList <.> "html"
+                              docFileDir = takeDirectory docFile
+                              -- Get the type environment for this module
+                              modTypeEnv = case Acton.Env.lookupMod mn typeEnv of
+                                  Just te -> te
+                                  Nothing -> iface
+                              -- Apply the same simplification as --sigs uses
+                              env1 = define iface $ setMod mn env
+                              simplifiedTypeEnv = simp env1 modTypeEnv
+                          createDirectoryIfMissing True docFileDir
+                          -- Use parsed (original AST) to preserve docstrings
+                          let htmlDoc = DocP.printHtmlDoc simplifiedTypeEnv parsed
+                          writeFile docFile htmlDoc
+
                       --traceM ("#################### typed env0:")
                       --traceM (Pretty.render (Pretty.pretty typeEnv))
                       timeTypeCheck <- getTime Monotonic

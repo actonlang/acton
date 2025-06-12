@@ -27,7 +27,7 @@ data VersionOptions = VersionOptions {
                         version :: Bool,
                         numeric_version :: Bool
                      } deriving Show
-                     
+
 data Command        = New NewOptions
                     | Build BuildOptions
                     | Cloud CloudOptions
@@ -98,7 +98,7 @@ data BuildOptions = BuildOptions {
                          testB       :: Bool,
                          searchpathB :: [String]
                      } deriving Show
-                         
+
 
 data CloudOptions   = CloudOptions {
                          run  :: Bool,
@@ -109,9 +109,12 @@ data CloudOptions   = CloudOptions {
 
 
 data DocOptions     = DocOptions {
-                         signs :: String,
-                         full  :: String
+                         inputFile :: String,
+                         outputFormat :: Maybe DocFormat,
+                         outputFile :: Maybe String
                     }  deriving Show
+
+data DocFormat = AsciiFormat | MarkdownFormat | HtmlFormat deriving (Show, Eq)
 
 --------------------------------------------------------------------
 -- Internal stuff
@@ -132,11 +135,11 @@ versionOptions         = VersionOptions <$>
 
 
 {-
-generalOptions         = GeneralOptions <$> 
+generalOptions         = GeneralOptions <$>
                              strOption (long "tempdir" <> metavar "TEMPDIR" <> value "" <> help "Set temporary directory for build files")
                          <*> strOption (long "syspath" <> metavar "TARGETDIR" <>  value "" <> help "Set syspath")
                          <*> switch (long "dev"        <> help "Development mode; include debug symbols etc")
- -}                       
+ -}
 
 newCommand = New <$> (NewOptions <$> argument (str :: ReadM String) (metavar "PROJECTDIR"))
 
@@ -199,7 +202,7 @@ buildCommand          = Build <$> (
         <*> switch (long "test"         <> help "Build tests")
         <*> many (strOption (long "searchpath" <> metavar "DIR" <> help "Add search path"))
     )
-                 
+
 cloudCommand        = Cloud <$> (
     CloudOptions
         <$> switch (long "run"          <> help "Help run!")
@@ -207,10 +210,19 @@ cloudCommand        = Cloud <$> (
         <*> switch (long "show"         <> help "Help show!")
         <*> switch (long "stop"         <> help "Help stop!"))
 
-docCommand          = Doc <$> (
-    DocOptions
-        <$> strOption (long "signs" <> metavar "TYFILE" <> value "" <> help "Show type signatures" <> completer (bashCompleter "file -X '!*.ty' -o plusdirs"))
-        <*> strOption (long "full" <> metavar "ACTONFILE" <> value "" <> help "Show type signatures and docstrings" <> completer (bashCompleter "file -X '!*.act' -o plusdirs")))
+docCommand          = Doc <$> docOptions
+  where
+    docOptions = DocOptions
+        <$> (argument str (metavar "FILE" <> help "Input file (.act or .ty) - optional in projects" <> completer (bashCompleter "file -X '!*.act' -X '!*.ty' -o plusdirs")) <|> pure "")
+        <*> formatFlags
+        <*> optional (strOption (long "output" <> short 'o' <> metavar "FILE" <> help "Output file (default: stdout)"))
+
+    -- Parse format flags - simple and explicit
+    formatFlags = optional (
+              flag' AsciiFormat (short 't' <> help "Terminal output (ASCII format)")
+          <|> flag' MarkdownFormat (long "md" <> long "markdown" <> help "Output in Markdown format")
+          <|> flag' HtmlFormat (long "html" <> help "Output in HTML format")
+        )
 
 descr               = fullDesc <> progDesc "Compilation and management of Acton source code and projects"
                       <> header "actonc - the Acton compiler"

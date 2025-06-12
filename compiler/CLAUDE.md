@@ -1,6 +1,6 @@
 # Acton Compiler - Development Guide
 
-The Acton compiler (`actonc`) is written in Haskell and transforms Acton source code into C code that can be compiled and linked with the runtime system.
+The Acton compiler (`actonc`) is written in Haskell and compiled Acton source code into C code that can be compiled and linked with the runtime system.
 
 ## Quick Reference
 
@@ -153,6 +153,18 @@ traceShow ("Debug info", someValue) $ restOfExpression
 -- Or use the built-in pretty printer
 import Pretty
 traceShow (renderDoc $ pp someAst) $ ...
+```
+
+### Testing Documentation Generation
+
+Documentation generation tests are located in `test/test_doc_printing/`. This directory contains various test files demonstrating different documentation scenarios.
+
+To test documentation generation:
+```bash
+actonc doc src/basics.act
+
+# Whole project
+actonc doc
 ```
 
 ### Error Messages

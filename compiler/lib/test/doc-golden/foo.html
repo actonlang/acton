@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>foo</title>
+  <style>
+    /* Light theme colors (default) */
+    :root {
+      --text-primary: #24292e;
+      --text-secondary: #6a737d;
+      --text-link: #0366d6;
+      --bg-primary: #ffffff;
+      --bg-secondary: #f6f8fa;
+      --border: #e1e4e8;
+      --code-bg: #f6f8fa;
+      --type-color: #6f42c1;
+      --keyword-color: #d73a49;
+      --generic-color: #e36209;
+      --generic-hover: #fb8532;
+      --shadow: rgba(27, 31, 35, 0.04);
+      --shadow-medium: rgba(27, 31, 35, 0.12);
+    }
+    
+    /* Dark theme colors (activated by OS preference) */
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --text-primary: #c9d1d9;
+        --text-secondary: #8b949e;
+        --text-link: #58a6ff;
+        --bg-primary: #0d1117;
+        --bg-secondary: #161b22;
+        --border: #30363d;
+        --code-bg: #161b22;
+        --type-color: #d2a8ff;
+        --keyword-color: #ff7b72;
+        --generic-color: #ffa657;
+        --generic-hover: #ffb77c;
+        --shadow: rgba(0, 0, 0, 0.3);
+        --shadow-medium: rgba(0, 0, 0, 0.5);
+      }
+    }
+    
+    * { box-sizing: border-box; }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      font-size: 16px;
+      line-height: 1.5;
+      color: var(--text-primary);
+      background: var(--bg-primary);
+      margin: 0;
+      padding: 0;
+    }
+    
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+    
+    /* Typography */
+    h1 {
+      font-size: 2rem;
+      font-weight: 600;
+      margin: 0 0 1rem 0;
+      padding-bottom: 0.3rem;
+      border-bottom: 1px solid var(--border);
+    }
+    
+    h2 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin: 2.5rem 0 1rem 0;
+    }
+    
+    h3 {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin: 1.5rem 0 0.5rem 0;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+    }
+    
+    /* Indent ATTRIBUTES/METHODS headers under classes/actors */
+    .declaration-block h3 {
+      margin-left: 2rem;
+    }
+    
+    p {
+      margin: 0 0 1rem 0;
+    }
+    
+    /* Code */
+    code {
+      font-family: 'SF Mono', Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+      font-size: 0.875em;
+      background: var(--code-bg);
+      padding: 0.2em 0.4em;
+      border-radius: 3px;
+      border: 1px solid var(--border);
+    }
+    
+    h2 code {
+      background: none;
+      padding: 0;
+      font-size: 1em;
+      border: none;
+    }
+    
+    /* Type coloring */
+    .type {
+      color: var(--type-color);
+    }
+    
+    /* Type links */
+    .type-link {
+      color: var(--type-color);
+      text-decoration: none;
+      border-bottom: 1px dotted var(--type-color);
+    }
+    
+    .type-link:hover {
+      text-decoration: none;
+      border-bottom: 1px solid var(--type-color);
+    }
+    
+    .keyword {
+      color: var(--keyword-color);
+      font-weight: 500;
+      font-size: 1rem;
+    }
+    
+    .param-name {
+      font-weight: 500;
+    }
+    
+    .default-value {
+      color: var(--text-secondary);
+    }
+    
+    /* Generic type parameters */
+    .generic-type {
+      color: var(--generic-color);
+      cursor: pointer;
+      transition: color 0.2s ease;
+      position: relative;
+      display: inline-block;
+    }
+    
+    .generic-type:hover,
+    .generic-type.highlight {
+      color: var(--generic-hover);
+      text-decoration: underline;
+      text-decoration-style: dotted;
+    }
+    
+    /* Tooltip for generic types - default position below */
+    .generic-type[data-tooltip]:hover::after {
+      content: attr(data-tooltip);
+      display: block;
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      margin-top: 5px;
+      padding: 8px 12px;
+      background-color: rgba(0, 0, 0, 0.8);
+      color: white;
+      font-size: 0.75rem;
+      font-weight: normal;
+      white-space: pre-wrap;
+      max-width: 700px;
+      min-width: 200px;
+      text-align: left;
+      border-radius: 4px;
+      pointer-events: none;
+      opacity: 0;
+      animation: fadeIn 0.2s ease-in-out forwards;
+      z-index: 1000;
+    }
+    
+    /* Tooltip positioned above when not near top */
+    .generic-type[data-tooltip]:not(.tooltip-below):hover::after {
+      top: auto;
+      bottom: 100%;
+      margin-top: 0;
+      margin-bottom: 5px;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    
+    /* Documentation strings */
+    .docstring {
+      color: var(--text-secondary);
+      margin: 0.5rem 0 1.5rem 0;
+      padding-left: 1rem;
+    }
+    
+    .module-doc {
+      margin: 1rem 0 2rem 0;
+      color: var(--text-primary);
+      font-size: 1.1rem;
+      line-height: 1.6;
+    }
+    
+    /* Sections */
+    .section {
+      margin: 1.5rem 0;
+      padding-left: 2rem;
+    }
+    
+    /* Lists */
+    ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    
+    li {
+      margin: 0.5rem 0;
+    }
+    
+    /* Attribute items */
+    .attribute-item {
+      margin: 0.5rem 0;
+      padding-left: 1rem;
+      border-left: 3px solid var(--border);
+    }
+    
+    .attribute-item code {
+      background: none;
+      padding: 0;
+      border: none;
+    }
+    
+    /* Method items */
+    .method-item {
+      margin: 1rem 0;
+    }
+    
+    .method-signature {
+      font-family: 'SF Mono', Monaco, Consolas, monospace;
+      font-size: 0.875rem;
+      padding-left: 1rem;
+      border-left: 3px solid var(--border);
+    }
+    
+    .method-signature code {
+      background: none;
+      padding: 0;
+      border: none;
+    }
+    
+    .method-doc {
+      color: var(--text-secondary);
+      margin: 0.25rem 0 0 1.5rem;
+      font-size: 0.875rem;
+    }
+    
+    /* Attributes and methods sections */
+    .attributes, .methods {
+      margin: 1.5rem 0 1.5rem 2rem;
+    }
+    
+    /* Declaration blocks - no visual boxes, just spacing */
+    .declaration-block {
+      margin: 2rem 0;
+    }
+    
+    /* Module index styles */
+    .module-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    
+    .module-item {
+      margin: 0.5rem 0;
+      padding: 0.75rem 1rem;
+      background: var(--bg-secondary);
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      transition: all 0.2s ease;
+    }
+    
+    .module-item:hover {
+      border-color: var(--text-link);
+      transform: translateY(-1px);
+    }
+    
+    .module-link {
+      text-decoration: none;
+      color: var(--text-link);
+      font-weight: 500;
+      display: block;
+    }
+    
+    .module-path {
+      font-family: 'SF Mono', Monaco, Consolas, monospace;
+      font-size: 0.875rem;
+    }
+    
+    .module-doc {
+      color: var(--text-secondary);
+      font-size: 0.875rem;
+      margin-top: 0.25rem;
+    }
+    
+    /* Smooth transitions for theme changes */
+    * {
+      transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+    }
+    
+    /* Responsive */
+    @media (max-width: 768px) {
+      .container {
+        padding: 1rem;
+      }
+      h1 {
+        font-size: 1.75rem;
+      }
+      h2 {
+        font-size: 1.25rem;
+      }
+    }
+
+  </style>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const genericTypes = document.querySelectorAll('.generic-type');
+      
+      genericTypes.forEach(function(elem) {
+        elem.addEventListener('mouseenter', function() {
+          const typeName = elem.getAttribute('data-generic');
+          
+          // Check if tooltip would go off-screen at the top
+          const rect = elem.getBoundingClientRect();
+          const tooltipHeight = 200; // Approximate height
+          if (rect.top < tooltipHeight) {
+            elem.classList.add('tooltip-below');
+          } else {
+            elem.classList.remove('tooltip-below');
+          }
+          
+          // Get the scope attribute - all generic types should have this
+          const scope = elem.getAttribute('data-scope');
+          
+          // Only highlight elements with same type name AND same scope
+          document.querySelectorAll('.generic-type[data-generic="' + typeName + '"][data-scope="' + scope + '"]').forEach(function(t) {
+            t.classList.add('highlight');
+          });
+        });
+        
+        elem.addEventListener('mouseleave', function() {
+          const typeName = elem.getAttribute('data-generic');
+          document.querySelectorAll('.generic-type[data-generic="' + typeName + '"].highlight').forEach(function(t) {
+            t.classList.remove('highlight');
+          });
+        });
+      });
+    });
+
+  </script>
+</head>
+<body>
+  <div class="container">
+<h1>foo - Foo module - demonstrates cross-module type usage</h1>
+<div class="module-doc">This module extensively uses types from the bar module<br>to demonstrate documentation of cross-module references.</div>
+<h2 class="type-context"><code>create_data</code>(<span class="param-name">value</span>: <span class="type">str</span>) → <span class="type"><a href="bar.html#class-Data" class="type-link">bar.Data</a></span></h2>
+<div class="docstring">Create a new Data instance<br>    <br>    Args:<br>        value: Value for the data<br>        <br>    Returns:<br>        A new bar.Data instance with auto-generated label<br>        <br>    Examples:<br>        &gt;&gt;&gt; d = create_data(&quot;test&quot;)<br>        &gt;&gt;&gt; d.get_value()<br>        &quot;test&quot;<br>    </div>
+
+<h2 class="type-context"><code>transform_data</code>(<span class="param-name">d</span>: <span class="type"><a href="bar.html#class-Data" class="type-link">bar.Data</a></span>, <span class="param-name">f</span>: <span class="type">(str) -> str</span>) → <span class="type"><a href="bar.html#class-Data" class="type-link">bar.Data</a></span></h2>
+<div class="docstring">Transform data by applying function to its value<br>    <br>    Args:<br>        d: Data object to transform<br>        f: Transformation function<br>        <br>    Returns:<br>        New bar.Data with transformed value<br>        <br>    See Also:<br>        bar.process_data: For simple processing<br>        bar.combine_data: For combining multiple data objects<br>    </div>
+
+<h2 class="type-context"><code>analyze_multiple</code>(<span class="param-name">data_list</span>: <span class="type">list[<a href="bar.html#class-Data" class="type-link">bar.Data</a>]</span>) → <span class="type">dict[str, int]</span></h2>
+<div class="docstring">Analyze multiple data objects<br>    <br>    Args:<br>        data_list: List of bar.Data objects<br>        <br>    Returns:<br>        Statistics about the data<br>        <br>    Raises:<br>        ValueError: If list is empty<br>    </div>
+
+<div class="declaration-block">
+<h2 id="class-DataManager" class="type-context"><span class="keyword">class</span> <code>DataManager</code>(<span class="type">object</span>)</h2>
+<div class="docstring">Manages a collection of bar.Data objects<br>    <br>    This class provides high-level operations on collections<br>    of Data objects from the bar module.<br>    </div>
+
+<h3>Attributes</h3>
+<div class="attributes">
+<div class="attribute-item"><code>storage</code>: <span class="type">list[<a href="bar.html#class-Data" class="type-link">bar.Data</a>]</span></div>
+<div class="attribute-item"><code>default</code>: <span class="type"><a href="bar.html#class-Data" class="type-link">bar.Data</a></span></div>
+<div class="attribute-item"><code>name</code>: <span class="type">str</span></div>
+</div>
+
+<h3>Methods</h3>
+<div class="methods">
+<div class="method-item">
+<div class="method-signature"><code>__init__</code>(<span class="param-name">self</span>, <span class="param-name">name</span>: <span class="type">str</span>)</div>
+<div class="method-doc">Initialize manager<br>        <br>        Args:<br>            name: Name for this manager<br>        </div>
+</div>
+<div class="method-item">
+<div class="method-signature"><code>add_data</code>(<span class="param-name">self</span>, <span class="param-name">d</span>: <span class="type"><a href="bar.html#class-Data" class="type-link">bar.Data</a></span>)</div>
+<div class="method-doc">Add a data object to storage<br>        <br>        Args:<br>            d: bar.Data object to add<br>            <br>        Raises:<br>            ValueError: If storage is full<br>        </div>
+</div>
+<div class="method-item">
+<div class="method-signature"><code>find_by_label</code>(<span class="param-name">self</span>, <span class="param-name">label</span>: <span class="type">str</span>) → <span class="type">?<a href="bar.html#class-Data" class="type-link">bar.Data</a></span></div>
+<div class="method-doc">Find first data with matching label<br>        <br>        Args:<br>            label: Label to search for<br>            <br>        Returns:<br>            Matching bar.Data or None if not found<br>        </div>
+</div>
+<div class="method-item">
+<div class="method-signature"><code>get_or_default</code>(<span class="param-name">self</span>, <span class="param-name">label</span>: <span class="type">str</span>) → <span class="type"><a href="bar.html#class-Data" class="type-link">bar.Data</a></span></div>
+<div class="method-doc">Get data by label or return default<br>        <br>        Args:<br>            label: Label to search for<br>            <br>        Returns:<br>            Found bar.Data or the default instance<br>        </div>
+</div>
+<div class="method-item">
+<div class="method-signature"><code>transform_all</code>(<span class="param-name">self</span>, <span class="param-name">f</span>: <span class="type">(<a href="bar.html#class-Data" class="type-link">bar.Data</a>) -> <a href="bar.html#class-Data" class="type-link">bar.Data</a></span>) → <span class="type">list[<a href="bar.html#class-Data" class="type-link">bar.Data</a>]</span></div>
+<div class="method-doc">Transform all stored data<br>        <br>        Args:<br>            f: Transformation function<br>            <br>        Returns:<br>            List of transformed bar.Data objects<br>        </div>
+</div>
+</div>
+</div>
+
+<h2 class="type-context"><code>process_with_prefix</code>(<span class="param-name">d</span>: <span class="type"><a href="bar.html#class-Data" class="type-link">bar.Data</a></span>, <span class="param-name">prefix</span>: <span class="type">str</span>) → <span class="type"><a href="bar.html#class-Data" class="type-link">bar.Data</a></span></h2>
+<div class="docstring">Process data with a prefix<br>    <br>    Args:<br>        d: Data to process<br>        prefix: Prefix to add to data values<br>        <br>    Returns:<br>        New bar.Data with prefixed value<br>    </div>
+
+<div class="declaration-block">
+<h2 class="type-context"><span class="keyword">actor</span> <code>DataHandler</code>(<span class="param-name">initial</span>: <span class="type"><a href="bar.html#class-Data" class="type-link">bar.Data</a></span>)</h2>
+<div class="docstring">Actor that handles bar.Data objects<br>    <br>    Args:<br>        initial: Initial bar.Data to store<br>    </div>
+
+<h3>Internal Attributes</h3>
+<div class="attributes">
+<div class="attribute-item"><code>current</code>: <span class="type"><a href="bar.html#class-Data" class="type-link">bar.Data</a></span></div>
+<div class="attribute-item"><code>history</code>: <span class="type">list[<a href="bar.html#class-Data" class="type-link">bar.Data</a>]</span></div>
+<div class="attribute-item"><code>processor</code>: <span class="type">?<a href="bar.html#class-DataProcessor" class="type-link">bar.DataProcessor</a></span></div>
+</div>
+<h3>Methods</h3>
+<div class="methods">
+<div class="method-item">
+<div class="method-signature"><code>update</code>(<span class="param-name">new_data</span>: <span class="type"><a href="bar.html#class-Data" class="type-link">bar.Data</a></span>)</div>
+<div class="method-doc">Update current data<br>        <br>        Args:<br>            new_data: New bar.Data to set as current<br>        </div>
+</div>
+<div class="method-item">
+<div class="method-signature"><code>get_current</code>() → <span class="type"><a href="bar.html#class-Data" class="type-link">bar.Data</a></span></div>
+<div class="method-doc">Get current data<br>        <br>        Returns:<br>            Current bar.Data instance<br>        </div>
+</div>
+<div class="method-item">
+<div class="method-signature"><code>transform_with</code>(<span class="param-name">f</span>: <span class="type">(<a href="bar.html#class-Data" class="type-link">bar.Data</a>) -> <a href="bar.html#class-Data" class="type-link">bar.Data</a></span>) → <span class="type"><a href="bar.html#class-Data" class="type-link">bar.Data</a></span></div>
+<div class="method-doc">Transform current data<br>        <br>        Args:<br>            f: Transformation function<br>            <br>        Returns:<br>            Transformed bar.Data<br>        </div>
+</div>
+<div class="method-item">
+<div class="method-signature"><code>combine_with</code>(<span class="param-name">other</span>: <span class="type"><a href="bar.html#class-Data" class="type-link">bar.Data</a></span>) → <span class="type"><a href="bar.html#class-Data" class="type-link">bar.Data</a></span></div>
+<div class="method-doc">Combine current with another data<br>        <br>        Args:<br>            other: bar.Data to combine with<br>            <br>        Returns:<br>            Combined bar.Data using bar.combine_data<br>        </div>
+</div>
+<div class="method-item">
+<div class="method-signature"><code>send_to_processor</code>(<span class="param-name">p</span>: <span class="type"><a href="bar.html#class-DataProcessor" class="type-link">bar.DataProcessor</a></span>)</div>
+<div class="method-doc">Send current data to a processor<br>        <br>        Args:<br>            p: bar.DataProcessor to send to<br>        </div>
+</div>
+<div class="method-item">
+<div class="method-signature"><code>get_history</code>() → <span class="type">list[<a href="bar.html#class-Data" class="type-link">bar.Data</a>]</span></div>
+<div class="method-doc">Get full history of data<br>        <br>        Returns:<br>            List of all bar.Data objects in history<br>        </div>
+</div>
+</div>
+</div>
+
+<h2 class="type-context"><code>apply_transformation</code>(<span class="param-name">d</span>: <span class="type"><a href="bar.html#class-Data" class="type-link">bar.Data</a></span>, <span class="param-name">transform</span>: <span class="type">(str) -> str</span>) → <span class="type"><a href="bar.html#class-Data" class="type-link">bar.Data</a></span></h2>
+<div class="docstring">Apply transformation to bar.Data value<br>    <br>    Args:<br>        d: Data to transform<br>        transform: Function to apply to value<br>        <br>    Returns:<br>        New bar.Data with transformed value<br>    </div>
+
+<h2 class="type-context"><code>apply_to_list</code>(<span class="param-name">items</span>: <span class="type">list[<a href="bar.html#class-Data" class="type-link">bar.Data</a>]</span>, <span class="param-name">f</span>: <span class="type">(<a href="bar.html#class-Data" class="type-link">bar.Data</a>) -> str</span>) → <span class="type">list[str]</span></h2>
+<div class="docstring">Apply function to all items in list<br>    <br>    Args:<br>        items: List of bar.Data objects<br>        f: Function to apply<br>        <br>    Returns:<br>        List of results<br>    </div>
+
+<h2 class="type-context"><code>process_nested</code>(<span class="param-name">data</span>: <span class="type">list[(str, <a href="bar.html#class-Data" class="type-link">bar.Data</a>)]</span>) → <span class="type">dict[str, list[<a href="bar.html#class-Data" class="type-link">bar.Data</a>]]</span></h2>
+<div class="docstring">Process nested data structures<br>    <br>    Args:<br>        data: List of tuples containing keys and bar.Data<br>        <br>    Returns:<br>        Dictionary grouping bar.Data by key<br>    </div>
+
+<div class="declaration-block">
+<h2 class="type-context"><span class="keyword">actor</span> <code>main</code>(<span class="param-name">env</span>)</h2>
+<div class="docstring">Main actor demonstrating bar module usage</div>
+
+<h3>Public Constants</h3>
+<div class="attributes">
+<div class="attribute-item"><code>d1</code></div>
+<div class="attribute-item"><code>d2</code></div>
+<div class="attribute-item"><code>d3</code></div>
+<div class="attribute-item"><code>data_list</code></div>
+<div class="attribute-item"><code>long_values</code></div>
+<div class="attribute-item"><code>manager</code></div>
+<div class="attribute-item"><code>found</code></div>
+<div class="attribute-item"><code>handler</code></div>
+<div class="attribute-item"><code>processor</code></div>
+<div class="attribute-item"><code>processed</code></div>
+<div class="attribute-item"><code>transformed</code></div>
+<div class="attribute-item"><code>items</code></div>
+<div class="attribute-item"><code>grouped</code></div>
+<div class="attribute-item"><code>processed_results</code></div>
+<div class="attribute-item"><code>meta</code></div>
+</div>
+</div>
+  </div>
+</body>
+</html>
