@@ -1,5 +1,14 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- Add comprehensive documentation generation system [#2274]
+  - GitHub issue templates for bug reports and feature requests
+  - GitHub Actions workflows for automated documentation
+  - Dependabot configuration for dependency management
+  - Enhanced documentation structure and generation tools
+
 ## [0.26.0] - 2025-06-02
 
 ### Added
