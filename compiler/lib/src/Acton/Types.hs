@@ -139,7 +139,7 @@ infTopStmts env (s : ss)                = do (cs,te1,s) <- infEnv env s
   where defaultTE env te                = do defaultVars (tyfree te)
                                              msubst te
         defaultVars tvs                 = do tvs' <- (filter univar . tyfree) <$> msubst (map tVar tvs)
-                                             sequence [ substitute tv (dflt (tvkind tv)) | tv <- tvs' ]
+                                             sequence [ setUni tv (dflt (tvkind tv)) | tv <- tvs' ]
         dflt KType                      = tNone
         dflt KFX                        = fxPure
         dflt PRow                       = posNil
@@ -610,7 +610,7 @@ instance InfEnv Decl where
             env1                        = define (toSigs te') $ reserve (assigned b) $ defineSelfOpaque $ defineTVars (stripQual q) $ setInClass env
             witsearch                   = [ w | w <- witsByPName env (tcname u), matchExactly (tCon c) u w, matching [wtype w] (qbound q) [tCon c] ]
             u                           = head us
-            ps                          = subst [(tvSelf,tCon c)] $ mro1 env us -- TODO: check that ps doesn't contradict any previous extension mro for c
+            ps                          = subst s $ mro1 env us -- TODO: check that ps doesn't contradict any previous extension mro for c
             final                       = concat [ conAttrs env (tcname p) | (_,p) <- tail ps, hasWitness env (tCon c) p ]
             te'                         = parentTEnv env ps
             s                           = [(tvSelf, tCon c)]

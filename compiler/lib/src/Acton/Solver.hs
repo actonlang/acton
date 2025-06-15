@@ -654,10 +654,10 @@ cast' env info (TTuple _ p1 k1) (TTuple _ p2 k2)
 cast' env info (TOpt _ t1@TOpt{}) t2        = cast env info t1 t2
 cast' env info t1 (TOpt _ t2@TOpt{})        = cast env info t1 t2
 cast' env info (TOpt _ t1) (TOpt _ t2)      = cast env info t1 t2
-cast' env info (TVar _ tv) t2@TNone{}       = do substitute tv tNone
+cast' env info (TVar _ tv) t2@TNone{}       = do setUni tv tNone
                                                  cast env info tNone t2
 cast' env info t1@TOpt{} (TVar _ tv)        = do t2 <- instwild env KType $ tOpt tWild      -- What if tv is in t1???
-                                                 substitute tv t2
+                                                 setUni tv t2
                                                  cast env info t1 t2
 cast' env info t1 (TOpt _ t2)
   | t1 == t2                                = return ()
@@ -679,10 +679,10 @@ cast' env info t1@(TFX _ fx1) t2@(TFX _ fx2)
 cast' env _ (TNil _ k1) (TNil _ k2)
   | k1 == k2                                = return ()
 cast' env info (TVar _ tv) r2@(TNil _ k)
-  | tvkind tv == k                          = do substitute tv (tNil k)
+  | tvkind tv == k                          = do setUni tv (tNil k)
                                                  cast env info (tNil k) r2
 cast' env info r1@(TNil _ k) (TVar _ tv)
-  | k == tvkind tv                          = do substitute tv (tNil k)
+  | k == tvkind tv                          = do setUni tv (tNil k)
                                                  cast env info r1 (tNil k)
 cast' env info (TRow _ k1 n1 t1 r1) (TRow _ k2 n2 t2 r2)
   | k1 == k2 && n1 == n2                    = do cast env info t1 t2
@@ -695,32 +695,32 @@ cast' env info (TStar _ k1 r1) (TStar _ k2 r2)
   | k1 == k2                                = cast env info r1 r2
 cast' env info (TVar _ tv) r2@(TRow _ k n _ _)
   | tvkind tv == k                          = do r1 <- instwild env k $ tRow k n tWild tWild
-                                                 substitute tv r1
+                                                 setUni tv r1
                                                  cast env info r1 r2
 cast' env info r1@(TRow _ k n _ _) (TVar _ tv)
   | k == tvkind tv                          = do r2 <- instwild env k $ tRow k n tWild tWild
-                                                 substitute tv r2
+                                                 setUni tv r2
                                                  cast env info r1 r2
 cast' env info (TVar _ tv) r2@(TStar _ k _)
   | tvkind tv == k                          = do r1 <- instwild env k $ tStar k tWild
-                                                 substitute tv r2
+                                                 setUni tv r2
                                                  cast env info r1 r2
 cast' env info r1@(TStar _ k _) (TVar _ tv)
   | k == tvkind tv                          = do r2 <- instwild env k $ tStar k tWild
-                                                 substitute tv r1
+                                                 setUni tv r1
                                                  cast env info r1 r2
 
 cast' env info (TVar _ tv) t2@TFun{}
   | univar tv && tvkind tv == KType         = do t1 <- instwild env KType $ tFun tWild tWild tWild tWild
-                                                 substitute tv t1
+                                                 setUni tv t1
                                                  cast env info t1 t2
 cast' env info t1@TFun{} (TVar _ tv)                                                                             -- Should remove this, rejects tv = TOpt...
   | univar tv && KType == tvkind tv         = do t2 <- instwild env KType $ tFun tWild tWild tWild tWild
-                                                 substitute tv t2
+                                                 setUni tv t2
                                                  cast env info t1 t2
 cast' env info (TVar _ tv) t2@TTuple{}
   | univar tv && tvkind tv == KType         = do t1 <- instwild env KType $ tTuple tWild tWild
-                                                 substitute tv t1
+                                                 setUni tv t1
                                                  cast env info t1 t2
 
 cast' env info (TVar _ tv1) (TVar _ tv2)
@@ -831,16 +831,16 @@ sub' env info eq w t1@(TTuple _ p1 k1) t2@(TTuple _ p2 k2)
 
 sub' env info eq w (TVar _ tv) t2@TFun{}
   | univar tv                               = do t1 <- instwild env KType $ tFun tWild tWild tWild tWild
-                                                 substitute tv t1
+                                                 setUni tv t1
                                                  sub env info eq w t1 t2
 sub' env info eq w t1@TFun{} (TVar _ tv)                                                                             -- Should remove this, rejects tv = TOpt...
   | univar tv                               = do t2 <- instwild env KType $ tFun tWild tWild tWild tWild
-                                                 substitute tv t2
+                                                 setUni tv t2
                                                  sub env info eq w t1 t2
 
 sub' env info eq w (TVar _ tv) t2@TTuple{}
   | univar tv                               = do t1 <- instwild env KType $ tTuple tWild tWild
-                                                 substitute tv t1
+                                                 setUni tv t1
                                                  sub env info eq w t1 t2
 
 sub' env info eq w t1@TTuple{} t2@(TVar _ tv)
@@ -872,13 +872,13 @@ subpos env info f i (TVar _ tv)     r2
   | tv `elem` tyfree r2                     = conflictingRow tv                     -- use rowTail?
   | otherwise                               = do r1 <- rowShape r2
                                                  --traceM (" ## subpos L " ++ prstr tv ++ " ~ " ++ prstr r1)
-                                                 substitute tv r1
+                                                 setUni tv r1
                                                  subpos env info f i r1 r2
 subpos env info f i r1             (TVar _ tv)
   | tv `elem` tyfree r1                     = conflictingRow tv                     -- use rowTail?
   | otherwise                               = do r2 <- rowShape r1
                                                  --traceM (" ## subpos R " ++ prstr r2 ++ " ~ " ++ prstr tv)
-                                                 substitute tv r2
+                                                 setUni tv r2
                                                  subpos env info f i r1 r2
 
 subpos env info f i (TRow _ _ _ t1 r1) (TRow _ _ _ t2 r2)

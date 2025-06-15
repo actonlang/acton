@@ -29,16 +29,14 @@ import Pretty
 
 -- Type inference monad ------------------------------------------------------------------
 
-type TVarMap                            = Map TVar Type
-
 data TypeState                          = TypeState {
                                                 nextint         :: Int,
                                                 effectstack     :: [(TFX,Type)],
                                                 deferred        :: Constraints,
-                                                currsubst       :: TVarMap
+                                                unisubst        :: Map TUni Type
                                           }
 
-initTypeState s                         = TypeState { nextint = 1, effectstack = [], deferred = [], currsubst = s }
+initTypeState s                         = TypeState { nextint = 1, effectstack = [], deferred = [], unisubst = s }
 
 type TypeM a                            = ExceptT TypeError (State TypeState) a
 
@@ -78,16 +76,13 @@ defer cs                                = lift $ state $ \st -> ((), st{ deferre
 collectDeferred                         :: TypeM Constraints
 collectDeferred                         = lift $ state $ \st -> (deferred st, st{ deferred = [] })
 
-substitute                              :: TVar -> Type -> TypeM ()
-substitute tv t                         = lift $
-                                          --trace ("  #substitute " ++ prstr tv ++ " ~ " ++ prstr t) $
-                                          state $ \st -> ((), st{ currsubst = Map.insert tv t (currsubst st)})
+setUni                                  :: TVar -> Type -> TypeM ()
+setUni tv t                             = lift $
+                                          --trace ("  #setUni " ++ prstr tv ++ " ~ " ++ prstr t) $
+                                          state $ \st -> ((), st{ unisubst = Map.insert tv t (unisubst st)})
 
-getSubstitution                         :: TypeM (Map TVar Type)
-getSubstitution                         = lift $ state $ \st -> (currsubst st, st)
-
-setSubstitution                         :: Map TVar Type -> TypeM ()
-setSubstitution s                       = lift $ state $ \st -> ((), st{ currsubst = s })
+getUni                                  :: TypeM (Map TUni Type)
+getUni                                  = lift $ state $ \st -> (unisubst st, st)
 
 
 -- Name generation ------------------------------------------------------------------------------------------------------------------

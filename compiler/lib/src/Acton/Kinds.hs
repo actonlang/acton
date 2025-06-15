@@ -36,23 +36,23 @@ check env0 (Module m imps ss)       = return (Module m imps ss1)
 
 data KindState                      = KindState {
                                         nextint     :: Int,
-                                        currsubst   :: Map KVar Kind,
+                                        unisubst    :: Map KUni Kind,
                                         xvars       :: QBinds
                                       }
 
 type KindM a                        = State KindState a
 
 runKindM                            :: KindM a -> a
-runKindM m                          = evalState m $ KindState { nextint = 1, currsubst = Map.empty, xvars = [] }
+runKindM m                          = evalState m $ KindState { nextint = 1, unisubst = Map.empty, xvars = [] }
 
 newUnique                           :: KindM Int
 newUnique                           = state $ \st -> (nextint st, st{ nextint = nextint st + 1 })
 
-substitute                          :: KVar -> Kind -> KindM ()
-substitute kv k                     = state $ \st -> ((), st{ currsubst = Map.insert kv k (currsubst st)})
+setUni                              :: KUni -> Kind -> KindM ()
+setUni kv k                         = state $ \st -> ((), st{ unisubst = Map.insert kv k (unisubst st)})
 
-getSubstitution                     :: KindM (Map KVar Kind)
-getSubstitution                     = state $ \st -> (currsubst st, st)
+getUni                              :: KindM (Map KUni Kind)
+getUni                              = state $ \st -> (unisubst st, st)
 
 storeXVar                           :: TVar -> TCon -> KindM ()
 storeXVar xv p                      = state $ \st -> ((), st{ xvars = Quant xv [p] : xvars st })
@@ -60,11 +60,11 @@ storeXVar xv p                      = state $ \st -> ((), st{ xvars = Quant xv [
 swapXVars                           :: QBinds -> KindM QBinds
 swapXVars q                         = state $ \st -> (xvars st, st{ xvars = q })
 
-newWildvar                          = do k <- newKVar
+newWildvar                          = do k <- newKUni
                                          n <- Internal Typevar "w" <$> newUnique
                                          return $ TV k n
 
-newKVar                             = KVar <$> (Internal Kindvar "" <$> newUnique)
+newKUni                             = KUni <$> newUnique
 
 newXVar                             = TV KType <$> (Internal Xistvar "" <$> newUnique)
 
@@ -134,7 +134,7 @@ instance InstKWild TSchema where
     instKWild (TSchema l q t)       = TSchema l <$> instKWild q <*> return t
 
 instance InstKWild TVar where
-    instKWild (TV KWild n)          = TV <$> newKVar <*> return n
+    instKWild (TV KWild n)          = TV <$> newKUni <*> return n
     instKWild v                     = return v
 
 instance InstKWild (Maybe Type) where
@@ -483,7 +483,7 @@ class KInfer t where
 
 
 instance (KInfer t) => KInfer (Maybe t) where
-    kinfer env Nothing              = do k <- newKVar; return (k, Nothing)
+    kinfer env Nothing              = do k <- newKUni; return (k, Nothing)
     kinfer env (Just t)             = do (k,t) <- kinfer env t; return (k, Just t)
 
 instance KInfer TVar where
@@ -494,7 +494,7 @@ instance KInfer TCon where
     kinfer env (TC n [])            = return (tcKind n env, TC (unalias env n) [])
     kinfer env (TC n ts)            = do let kn = tcKind n env
                                          (ks,ts) <- fmap unzip $ mapM (kinfer env) ts
-                                         k <- newKVar
+                                         k <- newKUni
                                          kunify (loc n) kn (KFun ks k)
                                          k <- ksubst False k
                                          return (k, TC (unalias env n) ts)
@@ -543,12 +543,12 @@ kexp k env t                        = do (k',t') <- kinfer env t
 
 kunify l k1 k2                      = do k1 <- ksubst False k1; k2 <- ksubst False k2; kunify' l k1 k2
 
-kunify' l (KVar v1) (KVar v2)
+kunify' l (KUni v1) (KUni v2)
   | v1 == v2                        = return ()
-kunify' l (KVar v) k2               = do when (v `elem` kfree k2) (infiniteKind l v k2)
-                                         substitute v k2
-kunify' l k1 (KVar v)               = do when (v `elem` kfree k1) (infiniteKind l v k1)
-                                         substitute v k1
+kunify' l (KUni v) k2               = do when (v `elem` kfree k2) (infiniteKind l v k2)
+                                         setUni v k2
+kunify' l k1 (KUni v)               = do when (v `elem` kfree k1) (infiniteKind l v k1)
+                                         setUni v k1
 kunify' l (KFun ks1 k1) (KFun ks2 k2)
   | length ks1 == length ks2        = do mapM_ (uncurry $ kunify l) (ks1 `zip` ks2)
                                          kunify l k1 k2
@@ -557,7 +557,7 @@ kunify' l k1 k2
   | otherwise                       = noKUnify l k1 k2
 
 
-kfree (KVar v)                      = []
+kfree (KUni v)                      = []
 kfree (KFun ks k)                   = concatMap kfree (k:ks)
 kfree _                             = []
 
@@ -567,7 +567,7 @@ kfree _                             = []
 ----------------------------------------------------------------------------------------------------------------------
 
 class KSubst s where
-    ksubst                          :: Bool -> s -> KindM s             -- Bool flag controls whether free KVars are replaced with KType or not
+    ksubst                          :: Bool -> s -> KindM s             -- Bool flag controls whether free KUnis are replaced with KType or not
 
 instance KSubst a => KSubst [a] where
     ksubst g                        = mapM (ksubst g)
@@ -577,10 +577,10 @@ instance KSubst a => KSubst (Maybe a) where
 
 instance KSubst Kind where
     ksubst g KWild                  = return KWild
-    ksubst g (KVar v)               = do s <- getSubstitution
-                                         case Map.lookup v s of
+    ksubst g (KUni i)               = do s <- getUni
+                                         case Map.lookup i s of
                                             Just k  -> ksubst g k
-                                            Nothing -> return (if g then KType else KVar v)
+                                            Nothing -> return (if g then KType else KUni i)
     ksubst g (KFun ks k)            = KFun <$> mapM (ksubst g) ks <*> ksubst g k
     ksubst g k                      = return k
 

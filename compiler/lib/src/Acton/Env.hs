@@ -1179,7 +1179,7 @@ headvar (Seal _ (TVar _ v))         = v
 -- Error handling ----------------------------------------------------------------------------------------------------
 
 data CompilationError               = KindError SrcLoc Kind Kind
-                                    | InfiniteKind SrcLoc KVar Kind
+                                    | InfiniteKind SrcLoc KUni Kind
                                     | VariableFX TVar
 
                                     | FileNotFound ModName

@@ -86,8 +86,6 @@ subst s x0
         used                        = dom s ++ tyfree (rng s)
         tmp                         = take (length clash) $ map (TV KWild) tmpNames \\ used
 
-erase x                             = subst s x
-  where s                           = [ (tv, tWild) | tv <- nub (tyfree x) ]
 
 class Subst t where
     msubst                          :: t -> TypeM t
@@ -143,46 +141,11 @@ instance Subst ErrInfo where
 instance Subst TSchema where
     msubst (TSchema l [] t)         = TSchema l [] <$> msubst t
     msubst (TSchema l q t)          = TSchema l <$> msubst q <*> msubst t
-    {-
-    msubst sc@(TSchema l q t)       = (msubst' . Map.toList . Map.filterWithKey relevant) <$> getSubstitution
-      where relevant k v            = k `elem` vs0
-            vs0                     = tyfree sc
-            msubst' s               = TSchema l (subst s q') (subst s t')
-              where vs              = tybound q
-                    newvars         = tyfree (rng s)
-                    clashvars       = vs `intersect` newvars
-                    avoidvars       = vs0 ++ vs ++ newvars
-                    renaming        = tvarSupplyMap clashvars avoidvars
-                    q'              = [ Quant (subst renaming v) (subst renaming cs) | Quant v cs <- q ]
-                    t'              = subst renaming t
-    -}
+
     tyfree (TSchema _ [] t)         = tyfree t
     tyfree (TSchema _ q t)          = (tyfree q ++ tyfree t) \\ tybound q
-    tybound (TSchema _ q t)         = tybound q
 
-testSchemaSubst = do
-    putStrLn ("t:  " ++ prstr t)
-    putStrLn ("c:  " ++ prstr c)
-    putStrLn ("s1: " ++ prstrs s1)
-    putStrLn ("s2: " ++ prstrs s2)
-    putStrLn ("s3: " ++ prstrs s3)
-    putStrLn ("s4: " ++ prstrs s4)
-    putStrLn ("s5: " ++ prstrs s5)
-    putStrLn ("subst s1 t: " ++ prstr (subst s1 t))
-    putStrLn ("subst s2 t: " ++ prstr (subst s2 t))
-    putStrLn ("subst s3 t: " ++ prstr (subst s3 t))
-    putStrLn ("subst s4 t: " ++ prstr (subst s4 t))
-    putStrLn ("subst s5 t: " ++ prstr (subst s5 t))
-    putStrLn ("subst s5 c: " ++ prstr (subst s5 c))
-  where t   = tSchema [Quant (TV KType (name "A")) [TC (noQ "Eq") []]] c
-        c   = (tCon (TC (noQ "apa") [tVar (TV KType (name "A")),
-                                     tVar (TV KType (name "B")),
-                                     tVar (TV KType (name "C"))]))
-        s1  = [(TV KType (name "B"), tSelf)]
-        s2  = [(TV KType (name "A"), tSelf)]
-        s3  = [(TV KType (name "B"), tVar (TV KType (name "A")))]
-        s4  = [(TV KType (name "B"), tVar (TV KType (name "C"))), (TV KType (name "C"), tSelf)]
-        s5  = [(TV KType (name "B"), tVar (TV KType (name "D"))), (TV KType (name "D"), tSelf)]
+    tybound (TSchema _ q t)         = tybound q
 
 
 schematic (TCon _ tc)               = tCon (schematic' tc)
@@ -226,7 +189,7 @@ instance Subst QBind where
     tybound (Quant v cs)            = [v]
 
 instance Subst Type where
-    msubst (TVar l v)               = do s <- getSubstitution
+    msubst (TVar l v)               = do s <- getUni
                                          case Map.lookup v s of
                                             Just t ->  msubst t
                                             Nothing -> return (TVar l v)

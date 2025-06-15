@@ -116,7 +116,7 @@ data Pattern    = PWild         { ploc::SrcLoc, pann::Maybe Type }
 
 type Target     = Expr
 
-data Prefix     = Globvar | Kindvar | Xistvar | Typevar | Tempvar | Witness | NormPass | CPSPass | LLiftPass | BoxPass
+data Prefix     = Globvar | Xistvar | Typevar | Tempvar | Witness | NormPass | CPSPass | LLiftPass | BoxPass
                 deriving (Eq,Ord,Show,Read,Generic,NFData)
 
 data Name       = Name SrcLoc String | Derived Name Name | Internal Prefix String Int deriving (Generic,Show,NFData)
@@ -134,7 +134,6 @@ nstr (Derived n s)
   | otherwise               = nstr n ++ "D_" ++ nstr s
 nstr (Internal p s i)       = prefix p ++ "_" ++ unique i ++ s
   where prefix Globvar      = "G"
-        prefix Kindvar      = "K"
         prefix Xistvar      = "E"
         prefix Typevar      = "T"
         prefix Tempvar      = "V"
@@ -212,7 +211,7 @@ data Comparison = Eq|NEq|LtGt|Lt|Gt|GE|LE|In|NotIn|Is|IsNot deriving (Show,Eq,Re
 
 data Deco       = NoDec | Property | Static deriving (Eq,Show,Read,Generic,NFData)
 
-data Kind       = KType | KProto | KFX | PRow | KRow | KFun [Kind] Kind | KVar Name | KWild deriving (Eq,Ord,Show,Read,Generic,NFData)
+data Kind       = KType | KProto | KFX | PRow | KRow | KFun [Kind] Kind | KUni Int | KWild deriving (Eq,Ord,Show,Read,Generic,NFData)
 
 data TSchema    = TSchema { scloc::SrcLoc, scbind::QBinds, sctype::Type } deriving (Show,Read,Generic,NFData)
 
@@ -229,7 +228,9 @@ type QBinds     = [QBind]
 type PCon       = TCon
 type CCon       = TCon
 
-type KVar       = Name
+type TUni       = TVar      -- temporary
+
+type KUni       = Int
 
 data Type       = TVar      { tloc::SrcLoc, tvar::TVar }
                 | TCon      { tloc::SrcLoc, tcon::TCon }

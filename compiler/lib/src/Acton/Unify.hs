@@ -72,10 +72,10 @@ unify' info (TVar _ tv1) (TVar _ tv2)
 
 unify' info (TVar _ tv) t2
   | univar tv                               = do when (tv `elem` tyfree t2) (infiniteType tv)
-                                                 substitute tv t2
+                                                 setUni tv t2
 unify' info t1 (TVar _ tv)
   | univar tv                               = do when (tv `elem` tyfree t1) (infiniteType tv)
-                                                 substitute tv t1
+                                                 setUni tv t1
 
 unify' info t1 t2                           = noUnify info t1 t2
 
