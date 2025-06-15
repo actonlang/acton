@@ -42,6 +42,7 @@
     - [for](control_flow/for.md)
     - [while](control_flow/while.md)
     - [after / sleep](control_flow/after_sleep.md)
+  - [Comprehensions](comprehensions.md)
   - [Security](security.md)
     - [Capabilities](security/capabilities.md)
   - [Environment](environment.md)
