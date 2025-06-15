@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- Add comprehensive documentation generation system [#2274]
+  - GitHub issue templates for bug reports, feature requests, and ICE reports
+  - GitHub Actions workflows for automated CI/CD, testing, and releases
+  - Dependabot configuration for automated dependency updates
+  - Component-specific CLAUDE.md files providing AI assistant guidance
+  - Complete project README.md and CONTRIBUTING.md documentation
+
 ## [0.26.0] - 2025-06-02
 
 ### Added
