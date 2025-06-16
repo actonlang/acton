@@ -1352,7 +1352,46 @@ actor main(env):
         BuildProject(process_cap, env, args, on_build_success, on_build_failure, build_tests=False)
 
     def _cmd_doc(args):
-        env.exit(0)
+        """Run actonc doc command"""
+        cmdargs = ["doc"]
+        
+        # Optional file argument
+        try:
+            file_arg = args.get_str("docfile")
+            if file_arg != "":
+                cmdargs.append(file_arg)
+        except argparse.ArgumentError:
+            pass  # docfile is optional, ignore if not provided (and we get exception)
+        
+        # Format flags
+        if args.get_bool("terminal"):
+            cmdargs.append("-t")
+        elif args.get_bool("md"):
+            cmdargs.append("--md")
+        elif args.get_bool("html"):
+            cmdargs.append("--html")
+        
+        # Output file
+        output_file = args.get_str("output")
+        if output_file != "":
+            cmdargs.extend(["-o", output_file])
+        
+        # Force color based on TTY (since stdio is piped)
+        cmdargs.append("--color=always" if env.is_tty() else "--color=never")
+        
+        # Pass through global options
+        if args.get_bool("debug"):
+            cmdargs.append("--debug")
+        if args.get_bool("quiet"):
+            cmdargs.append("--quiet")
+        if args.get_bool("timing"):
+            cmdargs.append("--timing")
+        
+        # Custom exit handler (suppress CompilerRunner's default message)
+        def on_doc_exit(exit_code: int, term_signal: int, std_out_buf: bytes, std_err_buf: bytes):
+            env.exit(exit_code)
+        
+        CompilerRunner(process_cap, env, cmdargs, on_exit=on_doc_exit)
 
     def _cmd_fetch(args):
         c = CmdFetch(env, args)
@@ -1447,6 +1486,11 @@ actor main(env):
         #p_pkg_upgrade.add_option("name", "str", "?", help="Dependency name")
 
         docp = p.add_cmd("doc", "Show documentation", _cmd_doc)
+        docp.add_arg("docfile", "Input file (.act or .ty) - optional in projects", False, "?")
+        docp.add_bool("terminal", "Terminal output (ASCII format)", short="t")
+        docp.add_bool("md", "Output in Markdown format")
+        docp.add_bool("html", "Output in HTML format")
+        docp.add_option("output", "str", "?", "", "Output file (default: stdout)")
 
         newp = p.add_cmd("new", "New project", _cmd_new)
         newp.add_arg("projectdir", "Project directory", True, "?")

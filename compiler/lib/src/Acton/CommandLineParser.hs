@@ -231,7 +231,7 @@ docOptions = DocOptions
   where
     -- Parse format flags - simple and explicit
     formatFlags = optional (
-              flag' AsciiFormat (short 't' <> help "Terminal output (ASCII format)")
+              flag' AsciiFormat (long "terminal" <> short 't' <> help "Terminal output (ASCII format)")
           <|> flag' MarkdownFormat (long "md" <> long "markdown" <> help "Output in Markdown format")
           <|> flag' HtmlFormat (long "html" <> help "Output in HTML format")
         )
