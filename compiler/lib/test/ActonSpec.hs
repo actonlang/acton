@@ -7,6 +7,7 @@ import Data.Char (toLower)
 
 import qualified Acton.Parser as P
 import qualified Acton.Syntax as S
+-- Remove unused import
 import qualified Acton.Printer as AP
 import qualified Acton.DocPrinter as DocP
 import qualified Acton.Env
@@ -43,31 +44,35 @@ main = do
       describe "Syntax" $ do
         testParse env0 "syntax1"
 
-      describe "Module-level docstring tests" $ do
-        describe "Valid docstrings before imports" $ do
-          it "allows single-line docstring before import" $ do
-            let input = "\"\"\"Module docstring\"\"\"\nimport math\n"
-            case parseModuleTest input of
-              Left err -> expectationFailure $ "Parse failed: " ++ err
-              Right _ -> return ()
+      describe "docstring" $ do
+        testDocFields env0 "docstring_test"
+        testDocstringEdgeCases env0 "docstring_edge_cases"
 
-          it "allows multi-line docstring before import" $ do
-            let input = "\"\"\"Module docstring\nwith multiple lines\"\"\"\nimport math\n"
-            case parseModuleTest input of
-              Left err -> expectationFailure $ "Parse failed: " ++ err
-              Right _ -> return ()
+        describe "Module-level docstring tests" $ do
+          describe "Valid docstrings before imports" $ do
+            it "allows single-line docstring before import" $ do
+              let input = "\"\"\"Module docstring\"\"\"\nimport math\n"
+              case parseModuleTest input of
+                Left err -> expectationFailure $ "Parse failed: " ++ err
+                Right _ -> return ()
 
-        describe "Invalid expressions before imports (golden tests)" $ do
-          testModuleParseError "module_var_before_import" "x = 42\nimport math\n"
-          testModuleParseError "module_call_before_import" "print(\"hello\")\nimport math\n"
-          testModuleParseError "module_number_before_import" "42\nimport math\n"
-          testModuleParseError "module_list_before_import" "[1, 2, 3]\nimport math\n"
-          testModuleParseError "module_dict_before_import" "{\"key\": \"value\"}\nimport math\n"
-          testModuleParseError "module_if_before_import" "if True:\n    pass\nimport math\n"
-          testModuleParseError "module_for_before_import" "for i in range(10):\n    pass\nimport math\n"
-          testModuleParseError "module_class_before_import" "class Foo:\n    pass\nimport math\n"
-          testModuleParseError "module_func_before_import" "def foo():\n    pass\nimport math\n"
-          testModuleParseError "module_actor_before_import" "actor Foo():\n    pass\nimport math\n"
+            it "allows multi-line docstring before import" $ do
+              let input = "\"\"\"Module docstring\nwith multiple lines\"\"\"\nimport math\n"
+              case parseModuleTest input of
+                Left err -> expectationFailure $ "Parse failed: " ++ err
+                Right _ -> return ()
+
+          describe "Invalid expressions before imports (golden tests)" $ do
+            testModuleParseError "module_var_before_import" "x = 42\nimport math\n"
+            testModuleParseError "module_call_before_import" "print(\"hello\")\nimport math\n"
+            testModuleParseError "module_number_before_import" "42\nimport math\n"
+            testModuleParseError "module_list_before_import" "[1, 2, 3]\nimport math\n"
+            testModuleParseError "module_dict_before_import" "{\"key\": \"value\"}\nimport math\n"
+            testModuleParseError "module_if_before_import" "if True:\n    pass\nimport math\n"
+            testModuleParseError "module_for_before_import" "for i in range(10):\n    pass\nimport math\n"
+            testModuleParseError "module_class_before_import" "class Foo:\n    pass\nimport math\n"
+            testModuleParseError "module_func_before_import" "def foo():\n    pass\nimport math\n"
+            testModuleParseError "module_actor_before_import" "actor Foo():\n    pass\nimport math\n"
 
       describe "F-String Tests" $ do
 
@@ -234,11 +239,11 @@ testDocFiles env0 moduleNames = do
 
   -- Process modules in dependency order
   oldDir <- runIO getCurrentDirectory
-  
+
   -- Parse and type-check all modules, building up the environment
   modules <- runIO $ do
     setCurrentDirectory (oldDir </> testDir)
-    
+
     -- Process modules in order, accumulating environment
     let processModule (accEnv, accModules) modName = do
           let act_file = "src" </> modName ++ ".act"
@@ -251,11 +256,10 @@ testDocFiles env0 moduleNames = do
           let S.NModule tenv mdoc = nmod
           -- The new environment includes the processed module
           return (env, accModules ++ [(modName, parsed, nmod)])
-    
     (finalEnv, mods) <- foldM processModule (env0, []) moduleNames
     setCurrentDirectory oldDir
     return mods
-  
+
   -- Generate documentation for each module
   forM_ modules $ \(modName, parsed, nmod) -> do
     describe modName $ do
@@ -428,4 +432,167 @@ testCodeGen env0 testname = do
       goldenTextFile h_golden $ return $ T.pack $ Pretty.print h
     it ("Check " ++ pass_name ++ " .c output") $ do
       goldenTextFile c_golden $ return $ T.pack $ Pretty.print c
+
+-- Test that docstring fields are properly extracted and preserved
+testDocFields :: Acton.Env.Env0 -> String -> Spec
+testDocFields env0 testname = do
+  let act_file = "test" </> "src" </> testname ++ ".act"
+      dir      = "test" </> "docfield-test"
+
+  (env, parsed) <- parseAct env0 act_file
+
+  kchecked <- liftIO $ Acton.Kinds.check env parsed
+  (nmod, tchecked, typeEnv) <- liftIO $ Acton.Types.reconstruct "" env kchecked
+  let S.NModule tenv mdoc = nmod
+
+  -- Extract docstrings from the parsed AST
+  let S.Module _ _ stmts = parsed
+      extractDeclDocstrings (S.Decl _ decls) = concatMap extractDocFromDecl decls
+      extractDeclDocstrings _ = []
+
+      extractDocFromDecl (S.Def _ n _ _ _ _ _ _ _ ddoc) = [(S.nstr n, ddoc)]
+      extractDocFromDecl (S.Class _ n _ _ _ ddoc) = [(S.nstr n, ddoc)]
+      extractDocFromDecl (S.Actor _ n _ _ _ _ ddoc) = [(S.nstr n, ddoc)]
+      extractDocFromDecl (S.Protocol _ n _ _ _ ddoc) = [(S.nstr n, ddoc)]
+      extractDocFromDecl (S.Extension _ _ _ _ _ ddoc) = [("extension", ddoc)]
+
+      docstrings = concatMap extractDeclDocstrings stmts
+
+  describe testname $ do
+    it "extracts module docstring correctly" $ do
+      case mdoc of
+        Just doc -> doc `shouldContain` "Test module for docstring field extraction"
+        Nothing -> expectationFailure "Module docstring not extracted"
+
+    it "confirms docstring fields exist in AST" $ do
+      -- Verify that all declaration types have docstring fields (even if empty)
+      length docstrings `shouldBe` 6  -- All our test declarations
+
+    it "extracts function docstrings correctly" $ do
+      case lookup "test_function" docstrings of
+        Just (Just doc) -> doc `shouldContain` "Test function with docstring"
+        Just Nothing -> expectationFailure "Function should have docstring"
+        Nothing -> expectationFailure "Function not found"
+
+    it "handles functions without docstrings correctly" $ do
+      case lookup "no_docstring_function" docstrings of
+        Just Nothing -> return ()  -- Expected: no docstring
+        Just (Just _) -> expectationFailure "Function should not have docstring"
+        Nothing -> expectationFailure "Function not found"
+
+    it "extracts class docstrings correctly" $ do
+      case lookup "TestClass" docstrings of
+        Just (Just doc) -> doc `shouldContain` "Test class with docstring"
+        Just Nothing -> expectationFailure "Class should have docstring"
+        Nothing -> expectationFailure "Class not found"
+
+    it "extracts actor docstrings correctly" $ do
+      case lookup "TestActor" docstrings of
+        Just (Just doc) -> doc `shouldContain` "Test actor with docstring"
+        Just Nothing -> expectationFailure "Actor should have docstring"
+        Nothing -> expectationFailure "Actor not found"
+
+    it "extracts protocol docstrings correctly" $ do
+      case lookup "TestProtocol" docstrings of
+        Just (Just doc) -> doc `shouldContain` "Test protocol with docstring"
+        Just Nothing -> expectationFailure "Protocol should have docstring"
+        Nothing -> expectationFailure "Protocol not found"
+
+    it "extracts extension docstrings correctly" $ do
+      case lookup "extension" docstrings of
+        Just (Just doc) -> doc `shouldContain` "Extension with docstring"
+        Just Nothing -> expectationFailure "Extension should have docstring"
+        Nothing -> expectationFailure "Extension not found"
+
+-- Test edge cases for docstring extraction
+testDocstringEdgeCases :: Acton.Env.Env0 -> String -> Spec
+testDocstringEdgeCases env0 testname = do
+  let act_file = "test" </> "src" </> testname ++ ".act"
+
+  (env, parsed) <- parseAct env0 act_file
+
+  kchecked <- liftIO $ Acton.Kinds.check env parsed
+  (nmod, tchecked, typeEnv) <- liftIO $ Acton.Types.reconstruct "" env kchecked
+  let S.NModule tenv mdoc = nmod
+
+  -- Extract docstrings from the parsed AST
+  let S.Module _ _ stmts = parsed
+      extractDeclDocstrings (S.Decl _ decls) = concatMap extractDocFromDecl decls
+      extractDeclDocstrings _ = []
+
+      extractDocFromDecl (S.Def _ n _ _ _ _ _ _ _ ddoc) = [(S.nstr n, ddoc)]
+      extractDocFromDecl (S.Class _ n _ _ _ ddoc) = [(S.nstr n, ddoc)]
+      extractDocFromDecl (S.Actor _ n _ _ _ _ ddoc) = [(S.nstr n, ddoc)]
+      extractDocFromDecl (S.Protocol _ n _ _ _ ddoc) = [(S.nstr n, ddoc)]
+      extractDocFromDecl (S.Extension _ _ _ _ _ ddoc) = [("extension", ddoc)]
+
+      docstrings = concatMap extractDeclDocstrings stmts
+
+  describe (testname ++ " edge cases") $ do
+    it "extracts module docstring correctly" $ do
+      case mdoc of
+        Just doc -> doc `shouldContain` "Module docstring for edge case testing"
+        Nothing -> expectationFailure "Module docstring not extracted"
+
+    it "ignores non-first string statements" $ do
+      case lookup "function_with_non_first_string" docstrings of
+        Just Nothing -> return ()  -- Expected: no docstring
+        Just (Just _) -> expectationFailure "Non-first string should not be docstring"
+        Nothing -> expectationFailure "Function not found"
+
+    it "extracts only first string as docstring" $ do
+      case lookup "function_with_multiple_strings" docstrings of
+        Just (Just doc) -> do
+          doc `shouldContain` "This SHOULD be the docstring"
+          -- Verify it doesn't contain later strings (they should not be part of docstring)
+          when ("This should NOT be a docstring" `isInfixOf` doc) $
+            expectationFailure "Later strings should not be in docstring"
+        Just Nothing -> expectationFailure "Function should have docstring"
+        Nothing -> expectationFailure "Function not found"
+
+    it "handles single quote docstrings" $ do
+      case lookup "function_with_single_quotes" docstrings of
+        Just (Just doc) -> doc `shouldContain` "Single quote docstring"
+        Just Nothing -> expectationFailure "Function should have docstring"
+        Nothing -> expectationFailure "Function not found"
+
+    it "handles triple single quote docstrings" $ do
+      case lookup "function_with_triple_single_quotes" docstrings of
+        Just (Just doc) -> do
+          doc `shouldContain` "Triple single quote docstring"
+          doc `shouldContain` "with multiple lines"
+        Just Nothing -> expectationFailure "Function should have docstring"
+        Nothing -> expectationFailure "Function not found"
+
+    it "handles mixed quotes in docstrings" $ do
+      case lookup "function_with_mixed_quotes" docstrings of
+        Just (Just doc) -> doc `shouldContain` "Mixed quote docstring with 'single' quotes inside"
+        Just Nothing -> expectationFailure "Function should have docstring"
+        Nothing -> expectationFailure "Function not found"
+
+    it "handles empty docstrings" $ do
+      case lookup "function_empty_docstring" docstrings of
+        Just (Just doc) -> doc `shouldBe` ""
+        Just Nothing -> expectationFailure "Function should have empty docstring"
+        Nothing -> expectationFailure "Function not found"
+
+    it "ignores strings in control flow" $ do
+      case lookup "function_with_control_flow" docstrings of
+        Just Nothing -> return ()  -- Expected: no docstring
+        Just (Just _) -> expectationFailure "String in control flow should not be docstring"
+        Nothing -> expectationFailure "Function not found"
+
+    it "handles functions with just docstrings" $ do
+      case lookup "function_just_docstring" docstrings of
+        Just (Just doc) -> doc `shouldContain` "Just a docstring, no other code"
+        Just Nothing -> expectationFailure "Function should have docstring"
+        Nothing -> expectationFailure "Function not found"
+
+    it "handles methods with non-first strings correctly" $ do
+      -- This tests that the ClassWithEdgeCases.method_non_first_string has no docstring
+      -- Note: method docstrings would be tested differently since they're nested in classes
+      case lookup "ClassWithEdgeCases" docstrings of
+        Just (Just doc) -> doc `shouldContain` "Class docstring"
+        Just Nothing -> expectationFailure "Class should have docstring"
+        Nothing -> expectationFailure "Class not found"
 

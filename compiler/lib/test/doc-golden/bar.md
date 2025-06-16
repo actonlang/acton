@@ -8,10 +8,10 @@ that are used across the application.
 ## *class* `Data`(object)
 
 A data container with metadata
-    
+
     This class holds arbitrary data along with metadata
     about when it was created and last modified.
-    
+
     Examples:
         >>> d = Data("hello", "test-data")
         >>> d.get_value()
@@ -29,7 +29,7 @@ A data container with metadata
 - `__init__`(self, value: *str*, label: *str*)
 
   Initialize data with value and label
-        
+
         Args:
             value: The data value
             label: A descriptive label
@@ -37,24 +37,24 @@ A data container with metadata
 - `get_value`(self) → *str*
 
   Get the stored value
-        
+
         Returns:
             The data value
         
 - `update`(self, new_value: *str*)
 
   Update the value
-        
+
         Args:
             new_value: New value to store
-            
+
         Note:
             This increments the access count
         
 - `get_info`(self) → *str*
 
   Get formatted information about this data
-        
+
         Returns:
             A string with label, value, and count
         
@@ -63,10 +63,10 @@ A data container with metadata
 ## *class* `Container`[T](object)
 
 A generic container that can hold items of any type
-    
+
     This container maintains a list of items with various
     operations for manipulation and querying.
-    
+
     Type Args:
         T: The type of items stored in the container
     
@@ -81,38 +81,38 @@ A generic container that can hold items of any type
 - `__init__`(self, name: *str*)
 
   Create an empty container
-        
+
         Args:
             name: Container name for identification
         
 - `add`(self, item: *T*)
 
   Add an item to the container
-        
+
         Args:
             item: Item to add
-            
+
         Raises:
             ValueError: If container is full
         
 - `get_all`(self) → *list[T]*
 
   Get all items
-        
+
         Returns:
             List of all items in the container
         
 - `filter`[U](self, predicate: *(T) -> bool*, transform: *(T) -> U*) → *list[U]*
 
   Filter and transform items
-        
+
         Args:
             predicate: Function to test each item
             transform: Function to transform matching items
-            
+
         Returns:
             List of transformed items that match predicate
-            
+
         Examples:
             >>> c = Container[int]("numbers")
             >>> c.add(1)
@@ -123,7 +123,7 @@ A generic container that can hold items of any type
 - `count`(self) → *int*
 
   Get number of items in container
-        
+
         Returns:
             Number of items
         
@@ -132,13 +132,13 @@ A generic container that can hold items of any type
 ## `process_data`(d: *bar.Data*) → *str*
 
 Process a data object and return summary
-    
+
     Args:
         d: Data object to process
-        
+
     Returns:
         Processed summary string
-        
+
     See Also:
         Data.get_info: For detailed information
     
@@ -147,11 +147,11 @@ Process a data object and return summary
 ## `combine_data`(d1: *bar.Data*, d2: *bar.Data*) → *bar.Data*
 
 Combine two data objects
-    
+
     Args:
         d1: First data object
         d2: Second data object
-        
+
     Returns:
         New Data object with combined values
     
@@ -160,7 +160,7 @@ Combine two data objects
 ## *actor* `DataProcessor`()
 
 Actor that processes Data objects
-    
+
     This actor maintains a queue of data objects
     and processes them asynchronously.
     
@@ -169,13 +169,13 @@ Actor that processes Data objects
 ## `sum_counts`[T(Plus)](items: *list[T]*) → *T*
 
 Sum a list of items that support addition
-    
+
     Args:
         items: List of summable items
-        
+
     Returns:
         Sum of all items
-        
+
     Raises:
         ValueError: If list is empty
     
@@ -184,10 +184,10 @@ Sum a list of items that support addition
 ## *protocol* `Processable`[T]
 
 Protocol for objects that can be processed
-    
+
     This protocol defines the interface for objects that
     can be processed and transformed into a result of type T.
-    
+
     Type Args:
         T: The type of the processing result
     
@@ -202,7 +202,7 @@ Protocol for objects that can be processed
 ## *extension* `Data`(Processable[str])
 
 Makes Data implement the Processable protocol
-    
+
     This extension allows Data objects to be processed
     according to the Processable protocol, returning
     string results.
@@ -212,13 +212,13 @@ Makes Data implement the Processable protocol
 ## `process_items`[T](items: *list[A]*) → *list[T]*
 
 Process a list of processable items
-    
+
     Args:
         items: List of items implementing Processable protocol
-        
+
     Returns:
         List of processed results
-        
+
     Examples:
         >>> d1 = Data("hello", "test")
         >>> d2 = Data("world", "test2")

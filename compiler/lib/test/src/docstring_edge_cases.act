@@ -1,0 +1,50 @@
+"""Module docstring for edge case testing.
+
+This module tests edge cases for docstring extraction.
+"""
+
+import math
+
+def function_with_non_first_string(x: int) -> int:
+    y = x + 1
+    "This should NOT be a docstring"
+    return y * 2
+
+def function_with_multiple_strings(x: int) -> int:
+    """This SHOULD be the docstring."""
+    "This should NOT be a docstring"
+    '''This also should NOT be a docstring'''
+    return x * 3
+
+def function_with_single_quotes(x: int) -> int:
+    '''Single quote docstring'''
+    return x + 1
+
+def function_with_triple_single_quotes(x: int) -> int:
+    '''Triple single quote docstring
+    with multiple lines'''
+    return x + 2
+
+def function_with_mixed_quotes(x: int) -> int:
+    """Mixed quote docstring with 'single' quotes inside"""
+    return x + 3
+
+def function_empty_docstring():
+    """"""
+    pass
+
+def function_with_control_flow():
+    if True:
+        "This should NOT be a docstring"
+    return 42
+
+class ClassWithEdgeCases:
+    """Class docstring."""
+    
+    def method_non_first_string(self):
+        x = 1
+        "Not a docstring"
+        return x
+
+def function_just_docstring():
+    """Just a docstring, no other code."""

@@ -1196,6 +1196,23 @@ decorator sig = do
                        return S.Static
          decoration = (if sig then property <|> static else static) <|> return S.NoDec
 
+-- | Extract docstring from a suite (if it's the first statement and is a string)
+extractDocstring :: S.Suite -> Maybe String
+extractDocstring [] = Nothing
+extractDocstring (S.Expr _ (S.Strings _ ss) : _) = Just (unescapeString $ concat ss)
+extractDocstring _ = Nothing
+
+-- | Unescape string literals (convert \n to actual newlines, etc.)
+unescapeString :: String -> String
+unescapeString [] = []
+unescapeString ('\\':'n':rest) = '\n' : unescapeString rest
+unescapeString ('\\':'t':rest) = '\t' : unescapeString rest
+unescapeString ('\\':'r':rest) = '\r' : unescapeString rest
+unescapeString ('\\':'\\':rest) = '\\' : unescapeString rest
+unescapeString ('\\':'"':rest) = '"' : unescapeString rest
+unescapeString ('\\':'\'':rest) = '\'' : unescapeString rest
+unescapeString (c:rest) = c : unescapeString rest
+
 funcdef :: Parser S.Decl
 funcdef =  addLoc $ do
               (p,(deco,fx,l)) <- withPos (((,,) <$> decorator False <*> optional effect <*> rwordLoc "def"))
@@ -1203,7 +1220,10 @@ funcdef =  addLoc $ do
               n <- name
               q <- optbinds
               (ppar,kpar) <- params
-              S.Def NoLoc n q ppar kpar <$> optional (arrow *> ttype) <*> suite DEF p <*> return deco <*> return (maybe S.tWild id fx) <*> return Nothing
+              retType <- optional (arrow *> ttype)
+              body <- suite DEF p
+              let docstring = extractDocstring body
+              return $ S.Def NoLoc n q ppar kpar retType body deco (maybe S.tWild id fx) docstring
 
 params :: Parser (S.PosPar, S.KwdPar)
 params = try ((\k ->(S.PosNIL,k)) <$> parens (kwdpar True))
@@ -1222,7 +1242,8 @@ actordef = addLoc $ do
                 q <- optbinds
                 (ppar,kpar) <- params
                 ss <- suite ACTOR s
-                return $ S.Actor NoLoc nm q ppar kpar ss Nothing
+                let docstring = extractDocstring ss
+                return $ S.Actor NoLoc nm q ppar kpar ss docstring
 
 -- classdef: 'class' NAME ['(' [arglist] ')'] ':' suite
 -- protodef: 'class' NAME ['(' [arglist] ')'] ':' suite
@@ -1238,14 +1259,18 @@ classdefGen k pname ctx con = addLoc $ do
                 nm <- pname
                 q <- optbinds
                 cs <- optbounds
-                con NoLoc nm q cs <$> suite ctx s <*> return Nothing
+                ss <- suite ctx s
+                let docstring = extractDocstring ss
+                return $ con NoLoc nm q cs ss docstring
 
 extdef = addLoc $ do
                 (s,l) <- withPos (rwordLoc "extension")
                 assertTop l "extension"
                 (q,c) <- try head1 <|> try head2 <|> head3
                 cs <- optbounds
-                S.Extension NoLoc q c cs <$> suite EXT s <*> return Nothing
+                ss <- suite EXT s
+                let docstring = extractDocstring ss
+                return $ S.Extension NoLoc q c cs ss docstring
   where head1 = do q <- binds
                    fatarrow
                    c <- tcon
