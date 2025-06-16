@@ -70,12 +70,12 @@ instance Relabel Stmt where
     relabel (Signature _ ns t d) = Signature <$> newLoc <*> relabel ns <*> relabel t <*> return d
 
 instance Relabel Decl where
-    relabel (Def _ n q ps ks ann ss dec fx) = Def <$> newLoc <*> relabel n <*> relabel q <*> relabel ps <*> relabel ks <*> 
-                                            relabel ann <*> relabel ss <*> return dec <*> return fx
-    relabel (Actor _ n q ps ks b) = Actor <$> newLoc <*> relabel n <*> relabel q <*> relabel ps <*> relabel ks <*> relabel b
-    relabel (Class _ n q as ss) = Class <$> newLoc <*> relabel n <*> relabel q <*> relabel as <*> relabel ss
-    relabel (Protocol _ n q as ss) = Protocol <$> newLoc <*> relabel n <*> relabel q <*> relabel as <*> relabel ss
-    relabel (Extension _ q c as ss) = Extension <$> newLoc <*> relabel q <*> relabel c <*> relabel as <*> relabel ss
+    relabel (Def _ n q ps ks ann ss dec fx doc) = Def <$> newLoc <*> relabel n <*> relabel q <*> relabel ps <*> relabel ks <*>
+                                            relabel ann <*> relabel ss <*> return dec <*> return fx <*> return doc
+    relabel (Actor _ n q ps ks b doc) = Actor <$> newLoc <*> relabel n <*> relabel q <*> relabel ps <*> relabel ks <*> relabel b <*> return doc
+    relabel (Class _ n q as ss doc) = Class <$> newLoc <*> relabel n <*> relabel q <*> relabel as <*> relabel ss <*> return doc
+    relabel (Protocol _ n q as ss doc) = Protocol <$> newLoc <*> relabel n <*> relabel q <*> relabel as <*> relabel ss <*> return doc
+    relabel (Extension _ q c as ss doc) = Extension <$> newLoc <*> relabel q <*> relabel c <*> relabel as <*> relabel ss <*> return doc
 
 instance Relabel Expr where
     relabel (Var _ nm) = Var <$> newLoc <*> relabel nm
@@ -99,7 +99,7 @@ instance Relabel Expr where
     relabel (IsInstance _ e c) = IsInstance <$> newLoc <*> relabel e <*> relabel c
     relabel (BinOp _ l op r) = BinOp <$> newLoc <*> relabel l <*> pure op <*> relabel r
     relabel (CompOp _ e ops) = CompOp <$> newLoc <*> relabel e <*> relabel ops
-    relabel (UnOp _ op e) = UnOp <$> newLoc <*> pure op <*> relabel e 
+    relabel (UnOp _ op e) = UnOp <$> newLoc <*> pure op <*> relabel e
     relabel (Dot _ e nm) = Dot <$> newLoc <*> relabel e <*> relabel nm
     relabel (Rest _ e nm) = Rest <$> newLoc <*> relabel e <*> relabel nm
     relabel (DotI _ e i) = DotI <$> newLoc <*> relabel e <*> return i
@@ -159,32 +159,32 @@ instance Relabel PosPar where
     relabel (PosPar n t e p) = PosPar <$> relabel n <*> relabel t <*> relabel e <*> relabel p
     relabel (PosSTAR n t) = PosSTAR <$> relabel n <*> relabel t
     relabel PosNIL = return PosNIL
-    
+
 instance Relabel KwdPar where
     relabel (KwdPar n t e k) = KwdPar <$> relabel n <*> relabel t <*> relabel e <*> relabel k
     relabel (KwdSTAR n t) = KwdSTAR <$> relabel n <*> relabel t
     relabel KwdNIL = return KwdNIL
-    
+
 instance Relabel PosArg where
     relabel (PosArg e p) = PosArg <$> relabel e <*> relabel p
     relabel (PosStar e) = PosStar <$> relabel e
     relabel PosNil = return PosNil
-    
+
 instance Relabel KwdArg where
     relabel (KwdArg n e k) = KwdArg <$> relabel n <*> relabel e <*> relabel k
     relabel (KwdStar e) = KwdStar <$> relabel e
     relabel KwdNil = return KwdNil
-    
+
 instance Relabel PosPat where
     relabel (PosPat p ps) = PosPat <$> relabel p <*> relabel ps
     relabel (PosPatStar p) = PosPatStar <$> relabel p
     relabel PosPatNil = return PosPatNil
-    
+
 instance Relabel KwdPat where
     relabel (KwdPat n p ps) = KwdPat <$> relabel n <*> relabel p <*> relabel ps
     relabel (KwdPatStar p) = KwdPatStar <$> relabel p
     relabel KwdPatNil = return KwdPatNil
-    
+
 instance Relabel OpArg where
     relabel (OpArg op e) = OpArg op <$> relabel e
 
@@ -203,7 +203,7 @@ instance Relabel Elem where
 instance Relabel Assoc where
   relabel (Assoc e1 e2) = Assoc <$> relabel e1 <*> relabel e2
   relabel (StarStar e) = StarStar <$> relabel e
-  
+
 instance Relabel Sliz where
   relabel (Sliz _ e1 e2 e3) = Sliz <$> newLoc <*> relabel e1 <*> relabel e2 <*> relabel e3
 

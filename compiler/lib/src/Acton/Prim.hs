@@ -545,7 +545,7 @@ scMkSet             = tSchema [quant a] tMkSet
   where tMkSet      = tFun fxPure (posRow tHashableA (posRow (tSet (tVar a)) posNil)) kwdNil (tSet (tVar a))
         tHashableA  = tCon (TC qnHashable [tVar a])
         a           = TV KType $ name "A"
-       
+
 --  $MkDict         : [A] => (Hashable[A], dict[A]) -> dict[A]
 scMkDict            = tSchema [quant a, quant b] tMkDict
   where tMkDict     = tFun fxPure (posRow tHashableA (posRow (tDict (tVar a) (tVar b)) posNil)) kwdNil (tDict (tVar a)(tVar b))
@@ -615,7 +615,7 @@ primWits            = [ WInst []        fxAction (pWrapped fxProc fxProc)   prim
                       ]
   where path        = [Left (noQ "_")]
         y           = TV KFX (name "Y")
-        
+
 isPUSH (Call _ (Var _ x) _ _)   = x `elem` [primPUSH,primPUSHF]
 isPUSH _                        = False
 

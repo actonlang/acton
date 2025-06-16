@@ -57,12 +57,12 @@ data Stmt       = Expr          { sloc::SrcLoc, expr::Expr }
                 | Decl          { sloc::SrcLoc, decls::[Decl] }
                 deriving (Show,Read,NFData,Generic)
 
-data Decl       = Def           { dloc::SrcLoc, dname:: Name, qbinds::QBinds, pos::PosPar, kwd::KwdPar, ann::Maybe Type, dbody::Suite, deco::Deco, dfx::TFX }
-                | Actor         { dloc::SrcLoc, dname:: Name, qbinds::QBinds, pos::PosPar, kwd::KwdPar, dbody::Suite }
-                | Class         { dloc::SrcLoc, dname:: Name, qbinds::QBinds, bounds::[TCon], dbody::Suite }
-                | Protocol      { dloc::SrcLoc, dname:: Name, qbinds::QBinds, bounds::[PCon], dbody::Suite }
+data Decl       = Def           { dloc::SrcLoc, dname:: Name, qbinds::QBinds, pos::PosPar, kwd::KwdPar, ann::Maybe Type, dbody::Suite, deco::Deco, dfx::TFX, ddoc::Maybe String }
+                | Actor         { dloc::SrcLoc, dname:: Name, qbinds::QBinds, pos::PosPar, kwd::KwdPar, dbody::Suite, ddoc::Maybe String }
+                | Class         { dloc::SrcLoc, dname:: Name, qbinds::QBinds, bounds::[TCon], dbody::Suite, ddoc::Maybe String }
+                | Protocol      { dloc::SrcLoc, dname:: Name, qbinds::QBinds, bounds::[PCon], dbody::Suite, ddoc::Maybe String }
 --                | Extension     { dloc::SrcLoc, dqname::QName, qbinds::QBinds, bounds::[PCon], dbody::Suite }
-                | Extension     { dloc::SrcLoc, qbinds::QBinds, tycon::TCon, bounds::[PCon], dbody::Suite }
+                | Extension     { dloc::SrcLoc, qbinds::QBinds, tycon::TCon, bounds::[PCon], dbody::Suite, ddoc::Maybe String }
                 deriving (Show,Read,NFData,Generic)
 
 data Expr       = Var           { eloc::SrcLoc, var::QName }
@@ -257,13 +257,13 @@ data Constraint = Cast  {info :: ErrInfo, type1 :: Type, type2 :: Type}
                 | Seal  {info :: ErrInfo, type1 :: Type}
                 deriving (Eq,Show,Read,Generic,NFData)
 
-type Constraints = [Constraint] 
+type Constraints = [Constraint]
 
 data ErrInfo    = DfltInfo {errloc :: SrcLoc, errno :: Int, errexpr :: Maybe Expr, errinsts :: [(QName,TSchema,Type)]}
                 | DeclInfo {errloc :: SrcLoc, errloc2 :: SrcLoc, errname :: Name, errschema :: TSchema, errmsg :: String}
                 | Simple {errloc ::SrcLoc, errmsg :: String}
                 deriving (Eq,Show,Read,Generic,NFData)
-                
+
 type WPath      = [Either QName QName]
 
 type WTCon      = (WPath,PCon)
@@ -274,8 +274,8 @@ leftpath tcs    = [ (map Left ns, tc) | (ns,tc) <- nss `zip` tcs ]
 mkBody []       = [Pass NoLoc]
 mkBody b        = b
 
- 
-sDef n p t b fx = sDecl [Def NoLoc n [] p KwdNIL (Just t) b NoDec fx]
+
+sDef n p t b fx = sDecl [Def NoLoc n [] p KwdNIL (Just t) b NoDec fx Nothing]
 sReturn e       = Return NoLoc (Just e)
 sAssign p e     = Assign NoLoc [p] e
 sMutAssign t e  = MutAssign NoLoc t e
@@ -326,7 +326,7 @@ pospars' PosNIL = []
 
 posarg es       = foldr PosArg PosNil es
 
-posargs (PosArg e p) 
+posargs (PosArg e p)
                 = e : posargs p
 posargs (PosStar e)
                 = [e]
@@ -561,12 +561,12 @@ instance HasLoc Name where
 
 instance HasLoc ModName where
     loc (ModName ns)    = loc ns
-    
+
 instance HasLoc QName where
     loc (QName m n)     = loc m `upto` loc n
     loc (NoQ n)         = loc n
     loc (GName m n)     = loc m `upto` loc n
-    
+
 instance HasLoc Elem where
     loc (Elem e)        = loc e
     loc (Star e)        = loc e
@@ -598,11 +598,11 @@ instance HasLoc Constraint where
       loc (Mut info t1  n1 t2) = getLoc [loc info, loc t1, loc n1, loc t2]
       loc (Seal info  t1) =  getLoc [loc info, loc t1]
 
-instance HasLoc ErrInfo where 
+instance HasLoc ErrInfo where
       loc (Simple l _)   = l
       loc (DfltInfo l _ _ _) = l
       loc (DeclInfo l _ _ _ _) = l
-      
+
 instance HasLoc PosArg where
       loc (PosArg e p) = loc e  `upto` loc p
       loc (PosStar e)  = loc e
@@ -648,12 +648,12 @@ instance Eq Stmt where
     _                   ==  _                   = False
 
 instance Eq Decl where
-    Def _ n1 q1 p1 k1 a1 b1 m1 d1   ==  Def _ n2 q2 p2 k2 a2 b2 m2 d2 
-                                                                    = n1==n2 && q1==q2 && p1==p2 && k1==k2 && a1==a2 && b1==b2 && d1==d2 && m1==m2
-    Actor _ n1 q1 p1 k1 b1          ==  Actor _ n2 q2 p2 k2 b2      = n1 == n2 && q1 == q2 && p1 == p2 && k1 == k2 && b1 == b2
-    Class _ n1 q1 a1 b1             ==  Class _ n2 q2 a2 b2         = n1 == n2 && q1 == q2 && a1 == a2 && b1 == b2
-    Protocol _ n1 q1 a1 b1          ==  Protocol _ n2 q2 a2 b2      = n1 == n2 && q1 == q2 && a1 == a2 && b1 == b2
-    Extension _ q1 c1 a1 b1         ==  Extension _ q2 c2 a2 b2     = q1 == q2 && c1 == c2 && a1 == a2 && b1 == b2
+    Def _ n1 q1 p1 k1 a1 b1 m1 d1 doc1   ==  Def _ n2 q2 p2 k2 a2 b2 m2 d2 doc2
+                                                                    = n1==n2 && q1==q2 && p1==p2 && k1==k2 && a1==a2 && b1==b2 && d1==d2 && m1==m2 && doc1==doc2
+    Actor _ n1 q1 p1 k1 b1 doc1          ==  Actor _ n2 q2 p2 k2 b2 doc2      = n1 == n2 && q1 == q2 && p1 == p2 && k1 == k2 && b1 == b2 && doc1 == doc2
+    Class _ n1 q1 a1 b1 doc1             ==  Class _ n2 q2 a2 b2 doc2         = n1 == n2 && q1 == q2 && a1 == a2 && b1 == b2 && doc1 == doc2
+    Protocol _ n1 q1 a1 b1 doc1          ==  Protocol _ n2 q2 a2 b2 doc2      = n1 == n2 && q1 == q2 && a1 == a2 && b1 == b2 && doc1 == doc2
+    Extension _ q1 c1 a1 b1 doc1         ==  Extension _ q2 c2 a2 b2 doc2     = q1 == q2 && c1 == c2 && a1 == a2 && b1 == b2 && doc1 == doc2
     _                               == _                            = False
 
 instance Eq Expr where
@@ -772,7 +772,7 @@ instance Read Name where
 -- Helpers ------------------
 
 importsOf (Module _ imps _)         = impsOf imps
-  where 
+  where
     impsOf []                       = []
     impsOf (Import _ mis : i)       = map mName mis ++ impsOf i
     impsOf (FromImport _ mr _ : i)  = mRef mr : impsOf i
@@ -819,7 +819,7 @@ hasNotImpl ss                       = any isNotImpl ss
 -- Check for __cleanup__ method on actor
 hasCleanup ss                       = any isCleanup ss
 
-isCleanup (Def _ n _ _ _ _ _ _ _)   = n == Name NoLoc "__cleanup__"
+isCleanup (Def _ n _ _ _ _ _ _ _ _) = n == Name NoLoc "__cleanup__"
 
 isNotImpl (Expr _ e)                = e == eNotImpl
 isNotImpl (Assign _ _ e)            = e == eNotImpl

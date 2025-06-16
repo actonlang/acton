@@ -58,8 +58,8 @@ instance ShowErrorComponent [Char] where
 parseModule :: S.ModName -> String -> String -> IO S.Module
 parseModule qn fileName fileContent =
     -- Add a newline at the end if there isn't one already to allow files ending without newline
-    let contentWithNewline = if null fileContent || last fileContent == '\n' 
-                             then fileContent 
+    let contentWithNewline = if null fileContent || last fileContent == '\n'
+                             then fileContent
                              else fileContent ++ "\n"
     in case runParser (St.evalStateT file_input initState) fileName contentWithNewline of
         Left err -> Control.Exception.throw err
@@ -1203,7 +1203,7 @@ funcdef =  addLoc $ do
               n <- name
               q <- optbinds
               (ppar,kpar) <- params
-              S.Def NoLoc n q ppar kpar <$> optional (arrow *> ttype) <*> suite DEF p <*> return deco <*> return (maybe S.tWild id fx)
+              S.Def NoLoc n q ppar kpar <$> optional (arrow *> ttype) <*> suite DEF p <*> return deco <*> return (maybe S.tWild id fx) <*> return Nothing
 
 params :: Parser (S.PosPar, S.KwdPar)
 params = try ((\k ->(S.PosNIL,k)) <$> parens (kwdpar True))
@@ -1222,7 +1222,7 @@ actordef = addLoc $ do
                 q <- optbinds
                 (ppar,kpar) <- params
                 ss <- suite ACTOR s
-                return $ S.Actor NoLoc nm q ppar kpar ss
+                return $ S.Actor NoLoc nm q ppar kpar ss Nothing
 
 -- classdef: 'class' NAME ['(' [arglist] ')'] ':' suite
 -- protodef: 'class' NAME ['(' [arglist] ')'] ':' suite
@@ -1238,14 +1238,14 @@ classdefGen k pname ctx con = addLoc $ do
                 nm <- pname
                 q <- optbinds
                 cs <- optbounds
-                con NoLoc nm q cs <$> suite ctx s
+                con NoLoc nm q cs <$> suite ctx s <*> return Nothing
 
 extdef = addLoc $ do
                 (s,l) <- withPos (rwordLoc "extension")
                 assertTop l "extension"
                 (q,c) <- try head1 <|> try head2 <|> head3
                 cs <- optbounds
-                S.Extension NoLoc q c cs <$> suite EXT s
+                S.Extension NoLoc q c cs <$> suite EXT s <*> return Nothing
   where head1 = do q <- binds
                    fatarrow
                    c <- tcon

@@ -15,7 +15,7 @@ module Acton.Builtin where
 
 import Utils
 import Acton.Syntax
-    
+
 selfKW                              = name "self"
 
 initKW                              = name "__init__"
@@ -58,8 +58,8 @@ iandKW                              = name "__iand__"
 imatmulKW                           = name "__imatmul__"
 
 incrBinopKWs                        = [iaddKW, isubKW, imulKW, ipowKW, itruedivKW, imodKW, ifloordivKW,
-                                       ilshiftKW, irshiftKW, iorKW, ixorKW, iandKW, imatmulKW]  
-                                        
+                                       ilshiftKW, irshiftKW, iorKW, ixorKW, iandKW, imatmulKW]
+
 addKW                               = name "__add__"
 subKW                               = name "__sub__"
 mulKW                               = name "__mul__"
@@ -75,7 +75,7 @@ andKW                               = name "__and__"
 matmulKW                            = name "__matmul__"
 
 binopKWs                            = [addKW, subKW, mulKW, powKW, truedivKW, modKW, floordivKW,
-                                       lshiftKW, rshiftKW, orKW, xorKW, andKW, matmulKW]  
+                                       lshiftKW, rshiftKW, orKW, xorKW, andKW, matmulKW]
 
 posKW                               = name "__pos__"
 negKW                               = name "__neg__"

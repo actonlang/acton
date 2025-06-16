@@ -55,7 +55,7 @@ simplify' env te tt eq []                   = return ([], eq)
 simplify' env te tt eq cs                   = do eq1 <- reduce env eq cs
                                                  cs1 <- msubst =<< collectDeferred
                                                  --traceM ("## Improving:\n" ++ render (nest 8 $ vcat $ map pretty cs1))
-                                                 env1 <- msubst env 
+                                                 env1 <- msubst env
                                                  te1 <- msubst te
                                                  tt1 <- msubst tt
                                                  improve env1 te1 tt1 eq1 cs1
@@ -242,7 +242,7 @@ solve' env select hist te tt eq cs
         subrev (t:ts)                       = subrev ts1 ++ t : subrev ts2
           where (ts1,ts2)                   = partition (\t' -> castable env t' t) ts
 
--- subrev [int,Pt,float,CPt,C3Pt]           = [] ++ int : subrev [Pt,float,CPt,C3Pt] 
+-- subrev [int,Pt,float,CPt,C3Pt]           = [] ++ int : subrev [Pt,float,CPt,C3Pt]
 --                                          = int : subrev [CPt,C3Pt] ++ Pt : subrev [float]
 --                                          = int : [C3Pt] ++ CPt ++ subrev [] ++ Pt : [] ++ float : subrev []
 --                                          = int : C3Pt : CPt : Pt : float
@@ -377,7 +377,7 @@ instance Subst Equation where
     msubst (Eqn w t e)                      = do t <- msubst t
                                                  e <- msubst e
                                                  return (Eqn w t e)
-    
+
     tyfree (Eqn w t e)                      = tyfree t ++ tyfree e
 
 instance Vars Equation where
@@ -410,7 +410,7 @@ reduce' env eq c@(Impl _ w t@(TVar _ tv) p)
   where witSearch                           = findWitness env t p
         tc                                  = findTVBound env tv
         witSearch'                          = findWitness env (tCon tc) p
-  
+
 reduce' env eq c@(Impl _ w t@(TCon _ tc) p)
   | tcname p == qnIdentity,
     isActor env (tcname tc)                 = do let e = eCall (eQVar primIdentityActor) []
@@ -1251,8 +1251,8 @@ data VInfo                                  = VInfo {
                                                 varvars     :: [(TVar,TVar)],
                                                 embedded    :: [TVar],
                                                 sealed      :: [TVar],
-                                                ubounds     :: Map TVar [Type], 
-                                                lbounds     :: Map TVar [Type], 
+                                                ubounds     :: Map TVar [Type],
+                                                lbounds     :: Map TVar [Type],
                                                 pbounds     :: Map TVar [(Name,PCon)],
                                                 mutattrs    :: Map TVar [Name],
                                                 selattrs    :: Map TVar [Name] }
@@ -1560,7 +1560,7 @@ app2nd _ tx e []                        = e
 app2nd _ tx e es                        = Lambda NoLoc p' k' (Call NoLoc e (PosArg pSelf (exp2arg es pArgs)) (kArg k')) fx
   where TFun _ fx p k _                 = tx                    -- If it already takes a first argument, it must be a function!
         (p',k')                         = (pPar pNames p, kPar attrKW k)
-        PosArg pSelf pArgs              = pArg p'                    
+        PosArg pSelf pArgs              = pArg p'
 
 idwit env w t1 t2                       = Eqn w (wFun t1 t2) (eLambda [(px0,t1)] (eVar px0))
 

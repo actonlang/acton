@@ -29,7 +29,7 @@ normalize                           :: Env0 -> Module -> IO (Module, Env0)
 normalize env0 m                    = return (evalState (norm env m) (0,[]), env0')
   where env                         = normEnv env0
         env0'                       = mapModules convEnv env0
-        
+
 
 --  Normalization:
 --  X All module aliases are replaced by their original module name
@@ -57,7 +57,7 @@ addComp (n,p,e)                     = state (\(i,ts) -> ((),(i,(n,p,e):ts)))
 
 getComps                            :: NormM [(Name,PosPar,Expr)]
 getComps                            = state (\(n,ts) -> (ts, (n,[])))
- 
+
 type NormEnv                        = EnvF NormX
 
 data NormX                          = NormX { contextX :: [ContextMark], rtypeX :: Maybe Type, lambdavarsX :: PosPar }
@@ -161,7 +161,7 @@ normPat env p@(PList _ ps pt)       = do v <- newName "lst"
                                         [eVar v, Int NoLoc n (show n)])
         normList v n [] (Just p)    = [Assign NoLoc [p] (eCall (eDot (eQVar qnSliceable) getsliceKW)
                                         [eVar v, Int NoLoc n (show n), None NoLoc, None NoLoc])]
-        normList v n [] Nothing     = [] 
+        normList v n [] Nothing     = []
         t                           = typeOf env p
 
 
@@ -245,7 +245,7 @@ instance Norm Stmt where
     norm env (Decl l ds)            = Decl l <$> norm env1 ds
       where env1                    = define (envOf ds) env
     norm env (Signature l ns t d)   = return $ Signature l ns (conv t) d
-    norm env s                      = error ("norm unexpected stmt: " ++ prstr s)    
+    norm env s                      = error ("norm unexpected stmt: " ++ prstr s)
 
     norm' env (Try l b [] els [])   = norm env (b ++ els)
     norm' env (Try l b hs els [])   = do b <- norm (pushMark DROP env) b
@@ -260,7 +260,7 @@ instance Norm Stmt where
                                          return [sIf [Branch ePUSHF (ss++mbseq)] (sPOP x : fin ++ relays x)]
       where try0                    = Try l b hs els []
             relays x                = iff [ Branch (eIsInstance x n) s | (n,s) <- map (relay x) ctrl, valid s] [sRAISE $ eVar x]
-            relay _ SEQ             = (primSEQ, [sPass]) 
+            relay _ SEQ             = (primSEQ, [sPass])
             relay _ BRK             = (primBRK, exitContext env sBreak)
             relay _ CNT             = (primCNT, exitContext env sContinue)
             relay x RET             = (primRET, downcast : exitContext env ret)
@@ -338,20 +338,22 @@ normItem env (WithItem e (Just p))  = do e' <- norm env e
                                          return (e', Just p', ss)
 
 instance Norm Decl where
-    norm env (Def l n q p k t b d x)= do p' <- joinPar <$> norm env0 p <*> norm (define (envOf p) env0) k
+    norm env (Def l n q p k t b d x doc)
+                                    = do p' <- joinPar <$> norm env0 p <*> norm (define (envOf p) env0) k
                                          b' <- normSuite env1 b
-                                         return $ Def l n q p' KwdNIL (conv t) (ret b') d x
+                                         return $ Def l n q p' KwdNIL (conv t) (ret b') d x doc
       where env1                    = setContext [] $ setRet t $ define (envOf p ++ envOf k) env0
             env0                    = defineTVars q env
             ret b | fallsthru b     = b ++ [sReturn eNone]
                   | otherwise       = b
-    norm env (Actor l n q p k b)    = do p' <- joinPar <$> norm env0 p <*> norm (define (envOf p) env0) k
+    norm env (Actor l n q p k b doc)
+                                    = do p' <- joinPar <$> norm env0 p <*> norm (define (envOf p) env0) k
                                          b' <- norm env1 b
-                                         return $ Actor l n q p' KwdNIL b'
+                                         return $ Actor l n q p' KwdNIL b' doc
       where env1                    = setContext [] $ define (envOf p ++ envOf k) env0
             env0                    = define [(selfKW, NVar t0)] $ defineTVars q env
             t0                      = tCon $ TC (NoQ n) (map tVar $ qbound q)
-    norm env (Class l n q as b)     = Class l n q as <$> norm env1 b
+    norm env (Class l n q as b doc) = Class l n q as <$> norm env1 b <*> return doc
       where env1                    = defineSelf (NoQ n) q $ defineTVars q env
     norm env d                      = error ("norm unexpected: " ++ prstr d)
 
@@ -422,7 +424,7 @@ instance Norm Expr where
 
 deferComp env e                     = do f <- newName "compfun"
                                          let p = getLambdavars env
-                                         addComp (f,p,e) 
+                                         addComp (f,p,e)
                                          return (Call NoLoc (eVar f) (posarg $ map eVar $ pospars' p) KwdNil)
 
 eta (Lambda _ p KwdNIL (Call _ e p' KwdNil) fx)
@@ -463,7 +465,7 @@ instance Norm PosPar where
     norm env (PosPar n t e p)       = PosPar n (conv t) <$> norm env e <*> norm (define [(n,NVar $ fromJust t)] env) p
     norm env (PosSTAR n t)          = return $ PosSTAR n (conv t)
     norm env PosNIL                 = return PosNIL
-    
+
 instance Norm KwdPar where
     norm env (KwdPar n t e k)       = KwdPar n (conv t) <$> norm env e <*> norm (define [(n,NVar $ fromJust t)] env) k
     norm env (KwdSTAR n t)          = return $ KwdSTAR n (conv t)
@@ -490,22 +492,22 @@ instance Norm PosArg where
     norm env (PosArg e p)           = PosArg <$> norm env e <*> norm env p
     norm env (PosStar e)            = PosStar <$> norm env e
     norm env PosNil                 = return PosNil
-    
+
 instance Norm KwdArg where
     norm env (KwdArg n e k)         = KwdArg n <$> norm env e <*> norm env k
     norm env (KwdStar e)            = KwdStar <$> norm env e
     norm env KwdNil                 = return KwdNil
-    
+
 instance Norm PosPat where
     norm env (PosPat p ps)          = PosPat <$> norm env p <*> norm env ps
     norm env (PosPatStar p)         = PosPatStar <$> norm env p
     norm env PosPatNil              = return PosPatNil
-    
+
 instance Norm KwdPat where
     norm env (KwdPat n p ps)        = KwdPat n <$> norm env p <*> norm env ps
     norm env (KwdPatStar p)         = KwdPatStar <$> norm env p
     norm env KwdPatNil              = return KwdPatNil
-    
+
 instance Norm Comp where
     norm env (CompFor l p e c)      = CompFor l <$> norm env p <*> norm env e <*> norm (define (envOf p) env) c
     norm env (CompIf l e c)         = CompIf l <$> normBool env e <*> norm env c

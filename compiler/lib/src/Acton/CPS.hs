@@ -175,13 +175,13 @@ instance CPS [Stmt] where
                                              ss' <- cps env1 ss
                                              return $ sDecl ds' : ss'
       where env1                        = define (envOf ds) env
-    
+
     cps env (s : ss)
       | not (needCont env s)            = do ss' <- cps env1 ss
                                              --traceM ("### SIMPLE: " ++ prstr s)
                                              return $ conv env s : ss'
       where env1                        = define (envOf s) env
-    
+
     cps env s@[If _ [Branch e ss1] ss2]
       | isPUSH e                        = do k <- newName "try"
                                              x <- newName "res"
@@ -235,17 +235,17 @@ volatileVars env stmts                  = nub $ vols env stmts
         vol env _                       = []
 
 instance CPS Decl where
-    cps env (Class l n q cs b)          = do b' <- cps env1 b
-                                             return $ Class l n (conv env q) (conv env cs) b'
+    cps env (Class l n q cs b ddoc)     = do b' <- cps env1 b
+                                             return $ Class l n (conv env q) (conv env cs) b' ddoc
       where env1                        = defineSelf (NoQ n) q $ defineTVars q $ setInClass env
 
-    cps env (Def l n q p KwdNIL (Just t) b dec fx)
+    cps env (Def l n q p KwdNIL (Just t) b dec fx ddoc)
       | contFX fx                       = do --traceM ("#### Converting " ++ prstr n)
                                              b' <- cps env2 b
-                                             return $ Def l n q' (addContPar env dec p' fx t') KwdNIL (Just tR) (volinits ++ b') dec fx
+                                             return $ Def l n q' (addContPar env dec p' fx t') KwdNIL (Just tR) (volinits ++ b') dec fx ddoc
       | otherwise                       = do --traceM ("#### Preserving " ++ prstr n)
                                              b' <- cps env1 b
-                                             return $ Def l n q' p' KwdNIL (Just t') b' dec fx
+                                             return $ Def l n q' p' KwdNIL (Just t') b' dec fx ddoc
       where env2                        = setVolatiles volvs $ Meth contKW t' +: env1
             env1                        = define (envOf p) $ defineTVars q $ setInDef env
             volvs                       = volatileVars env2 b
@@ -256,7 +256,7 @@ instance CPS Decl where
             t'                          = conv env t
 
     cps env d                           = error ("cps unexpected: " ++ prstr d)
-    
+
 
 instance CPS Branch where
     cps env (Branch e ss)               = Branch (conv env e) <$> cps env ss
@@ -372,7 +372,7 @@ instance (PreCPS a, EnvOf a) => PreCPS [a] where
 instance PreCPS a => PreCPS (Maybe a) where
     pre env Nothing                     = return Nothing
     pre env (Just a)                    = fmap Just (pre env a)
-    
+
     preTop env Nothing                  = return Nothing
     preTop env (Just a)                 = fmap Just (preTop env a)
 
@@ -388,9 +388,10 @@ instance PreCPS Stmt where
     pre env s                           = return s
 
 instance PreCPS Decl where
-    pre env (Class l n q cs b)          = Class l n q cs <$> pre env1 b
+    pre env (Class l n q cs b ddoc)     = Class l n q cs <$> pre env1 b <*> pure ddoc
       where env1                        = defineSelf (NoQ n) q $ defineTVars q env
-    pre env (Def l n q p _k a b d fx)   = Def l n q p _k a <$> preSuite env1 b <*> pure d <*> pure fx
+    pre env (Def l n q p _k a b d fx ddoc)
+                                        = Def l n q p _k a <$> preSuite env1 b <*> pure d <*> pure fx <*> pure ddoc
       where env1                        = define (envOf p) $ defineTVars q env
 
 instance PreCPS Branch where
@@ -446,7 +447,7 @@ instance PreCPS Expr where
                                                         return $ Lambda l p KwdNIL e' fx
                                                 _ -> do
                                                     f <- newName "lambda"
-                                                    prefix [sDecl [Def l f [] p KwdNIL (Just t) (prefixes ++ [sReturn e']) NoDec fx]]
+                                                    prefix [sDecl [Def l f [] p KwdNIL (Just t) (prefixes ++ [sReturn e']) NoDec fx Nothing]]
                                                     return (Var l0 (NoQ f))
       where env1                        = define (envOf p) env
             t                           = typeOf env1 e

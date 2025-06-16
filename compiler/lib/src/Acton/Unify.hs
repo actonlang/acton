@@ -16,7 +16,7 @@ module Acton.Unify where
 
 import Control.Monad
 import Control.Monad.Except
-import qualified Control.Exception 
+import qualified Control.Exception
 import Utils
 import Pretty
 import Acton.Syntax
