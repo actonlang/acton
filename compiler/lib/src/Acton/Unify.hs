@@ -29,8 +29,8 @@ import Acton.TypeM
 tryUnify info t1 t2                         = unify info t1 t2 `catchError` \err -> Control.Exception.throw err
 
 unify                                       :: ErrInfo -> Type -> Type -> TypeM ()
-unify info t1 t2                            = do t1' <- msubst t1
-                                                 t2' <- msubst t2
+unify info t1 t2                            = do t1' <- usubst t1
+                                                 t2' <- usubst t2
                                                  --traceM ("  #unify " ++ prstr t1' ++ " and " ++ prstr t2')
                                                  unify' info t1' t2'
 
@@ -71,11 +71,11 @@ unify' info (TVar _ tv1) (TVar _ tv2)
   | tv1 == tv2                              = return ()
 
 unify' info (TVar _ tv) t2
-  | univar tv                               = do when (tv `elem` tyfree t2) (infiniteType tv)
-                                                 setUni tv t2
+  | univar tv                               = do when (tv `elem` ufree t2) (infiniteType tv)
+                                                 usubstitute tv t2
 unify' info t1 (TVar _ tv)
-  | univar tv                               = do when (tv `elem` tyfree t1) (infiniteType tv)
-                                                 setUni tv t1
+  | univar tv                               = do when (tv `elem` ufree t1) (infiniteType tv)
+                                                 usubstitute tv t1
 
 unify' info t1 t2                           = noUnify info t1 t2
 
@@ -105,7 +105,7 @@ match vs (TStar _ k1 r1) (TStar _ k2 r2)
 match vs (TVar _ tv1) (TVar _ tv2)
   | tv1 == tv2                              = Just []
 match vs t1 (TVar _ tv)
-  | tv `elem` vs && tv `notElem` tyfree t1  = Just [(tv, t1)]
+  | tv `elem` vs && tv `notElem` ufree t1  = Just [(tv, t1)]
 match vs t1 t2                              = Nothing
 
 matches vs [] []                            = Just []

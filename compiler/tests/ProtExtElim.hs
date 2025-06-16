@@ -172,7 +172,7 @@ transChain mb env b e (c : cs)          = c2{dname = c2nm, dbody = sigs} : trans
                                           ++ nub (dbody c2) -- nub (addWitnesses env ws (dbody c2))
 
 
-substAll ts (Class l nm qs bs ss)       = Class l nm (nub $ map tBind (tyfree ts)) [tc] (subst2 s ss)
+substAll ts (Class l nm qs bs ss)       = Class l nm (nub $ map tBind (ufree ts)) [tc] (subst2 s ss)
    where s                              = tVars qs `zip` ts
          tc                             = subst2 s (mkTC (NoQ nm) qs)
 
@@ -189,7 +189,7 @@ addSigs ps (TC n qs : _)                = addSigs ps (subst2 s (bounds p)) ++ su
 
 subst2                                  :: Subst a => Substitution -> a -> a
 subst2 s                                = subst s2 . subst s1
-  where (s1,s2)                         = partition (\p -> null (tyfree(snd p) `intersect` (tyfree (dom s)))) (red s)
+  where (s1,s2)                         = partition (\p -> null (ufree(snd p) `intersect` (ufree (dom s)))) (red s)
         red []                          = []
         red ((tv,TVar _ tv') : ps)
             |tv == tv'                  = red ps

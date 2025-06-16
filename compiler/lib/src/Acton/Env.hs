@@ -173,13 +173,14 @@ instance Pretty WTCon where
             prettyW (Right n)   = text "R"
 
 instance (Subst x) => Subst (EnvF x) where
-    msubst env                  = do ne <- msubst (names env)
-                                     we <- msubst (witnesses env)
-                                     ex <- msubst (envX env)
+    usubst env                  = do ne <- usubst (names env)
+                                     we <- usubst (witnesses env)
+                                     ex <- usubst (envX env)
                                      return env{ names = ne, witnesses = we, envX = ex }
-    tyfree env                  = tvarScope0 env ++ tyfree (names env) ++ tyfree (witnesses env) ++ tyfree (envX env)
+    ufree env                   = tvarScope0 env ++ ufree (names env) ++ ufree (witnesses env) ++ ufree (envX env)
 
 instance Subst NameInfo where
+<<<<<<< HEAD
     msubst (NVar t)             = NVar <$> msubst t
     msubst (NSVar t)            = NSVar <$> msubst t
     msubst (NDef t d doc)       = NDef <$> msubst t <*> return d <*> return doc
@@ -207,12 +208,42 @@ instance Subst NameInfo where
     tyfree (NMAlias qn)         = []
     tyfree (NModule te doc)     = []        -- actually tyfree te, but a module has no free variables on the top level
     tyfree NReserved            = []
+=======
+    usubst (NVar t)             = NVar <$> usubst t
+    usubst (NSVar t)            = NSVar <$> usubst t
+    usubst (NDef t d)           = NDef <$> usubst t <*> return d
+    usubst (NSig t d)           = NSig <$> usubst t <*> return d
+    usubst (NAct q p k te)      = NAct <$> usubst q <*> usubst p <*> usubst k <*> usubst te
+    usubst (NClass q us te)     = NClass <$> usubst q <*> usubst us <*> usubst te
+    usubst (NProto q us te)     = NProto <$> usubst q <*> usubst us <*> usubst te
+    usubst (NExt q c ps te)     = NExt <$> usubst q <*> usubst c <*> usubst ps <*> usubst te
+    usubst (NTVar k c)          = NTVar k <$> usubst c
+    usubst (NAlias qn)          = NAlias <$> return qn
+    usubst (NMAlias m)          = NMAlias <$> return m
+    usubst (NModule te)         = NModule <$> return te     -- actually usubst te, but te has no free variables (top-level)
+    usubst NReserved            = return NReserved
+
+    ufree (NVar t)              = ufree t
+    ufree (NSVar t)             = ufree t
+    ufree (NDef t d)            = ufree t
+    ufree (NSig t d)            = ufree t
+    ufree (NAct q p k te)       = (ufree q ++ ufree p ++ ufree k ++ ufree te) \\ (tvSelf : qbound q)
+    ufree (NClass q us te)      = (ufree q ++ ufree us ++ ufree te) \\ (tvSelf : qbound q)
+    ufree (NProto q us te)      = (ufree q ++ ufree us ++ ufree te) \\ (tvSelf : qbound q)
+    ufree (NExt q c ps te)      = (ufree q ++ ufree c ++ ufree ps ++ ufree te) \\ (tvSelf : qbound q)
+    ufree (NTVar k c)           = ufree c
+    ufree (NAlias qn)           = []
+    ufree (NMAlias qn)          = []
+    ufree (NModule te)          = []        -- actually ufree te, but a module has no free variables on the top level
+    ufree NReserved             = []
+>>>>>>> 617a09c9 (Rename msubst -> usubst, tyfree -> ufree)
 
 instance Subst Witness where
-    msubst w@WClass{}           = return w                      -- A WClass (i.e., an extension) can't have any free type variables
-    msubst w@WInst{}            = do t <- msubst (wtype w)
-                                     p <- msubst (proto w)
+    usubst w@WClass{}           = return w                      -- A WClass (i.e., an extension) can't have any free type variables
+    usubst w@WInst{}            = do t <- usubst (wtype w)
+                                     p <- usubst (proto w)
                                      return w{ wtype  = t, proto = p }
+<<<<<<< HEAD
 
     tyfree w@WClass{}           = []
     tyfree w@WInst{}            = (tyfree (wtype w) ++ tyfree (proto w)) \\ qbound (binds w)
@@ -222,6 +253,17 @@ instance Subst WTCon where
     msubst (w,u)                = (,) <$> return w <*> msubst u
 
     tyfree (w,u)                = tyfree u
+=======
+    
+    ufree w@WClass{}            = []
+    ufree w@WInst{}             = (ufree (wtype w) ++ ufree (proto w)) \\ qbound (binds w)
+    
+
+instance Subst WTCon where
+    usubst (w,u)                = (,) <$> return w <*> usubst u
+    
+    ufree (w,u)                 = ufree u
+>>>>>>> 617a09c9 (Rename msubst -> usubst, tyfree -> ufree)
 
 instance Polarity NameInfo where
     polvars (NVar t)                = polvars t
@@ -786,7 +828,7 @@ allConAttr                  :: EnvF x -> Name -> [Type]
 allConAttr env n            = [ tCon tc | tc <- allCons env, n `elem` allAttrs' env tc ]
 
 allConAttrFree              :: EnvF x -> Name -> [TVar]
-allConAttrFree env n        = concat [ tyfree $ fst $ findAttr' env tc n | tc <- allCons env, n `elem` allAttrs' env tc ]
+allConAttrFree env n        = concat [ ufree $ fst $ findAttr' env tc n | tc <- allCons env, n `elem` allAttrs' env tc ]
 
 allProtoAttr                :: EnvF x -> Name -> [Type]
 allProtoAttr env n          = [ tCon p | p <- allProtos env, n `elem` allAttrs' env p ]
@@ -1293,14 +1335,14 @@ instance (Simp a) => Simp [a] where
 
 instance Simp TSchema where
     simp env (TSchema l q t)        = TSchema l q' (subst s $ simp env' t)
-      where (q', s)                 = simpQuant env (simp env' q) (tyfree t)
+      where (q', s)                 = simpQuant env (simp env' q) (ufree t)
             env'                    = defineTVars (stripQual q) env
 
 simpQuant env q vs0                 = (subst s [ Quant v ps | Quant v ps <- q2, not $ null ps ], s)
   where (q1,q2)                     = partition isEX q
         isEX (Quant v [p])          = length (filter (==v) vs) == 1
         isEX _                      = False
-        vs                          = concat [ tyfree ps | Quant v ps <- q ] ++ vs0
+        vs                          = concat [ ufree ps | Quant v ps <- q ] ++ vs0
         s                           = s1 ++ s2
         s1                          = [ (v, tCon p) | Quant v [p] <- q1 ]                       -- Inline existentials
         s2                          = univars `zip` beautyvars                                  -- Beautify univars
@@ -1323,7 +1365,7 @@ instance Simp (Name, NameInfo) where
     simp env (n, NProto q us te doc)= (n, NProto (simp env' q) (simp env' us) (simp env' te) doc)
       where env'                    = defineTVars (stripQual q) env
     simp env (n, NExt q c us te doc)= (n, NExt q' (subst s $ simp env' c) (subst s $ simp env' us) (subst s $ simp env' te) doc)
-      where (q', s)                 = simpQuant env (simp env' q) (tyfree c ++ tyfree us ++ tyfree te)
+      where (q', s)                 = simpQuant env (simp env' q) (ufree c ++ ufree us ++ ufree te)
             env'                    = defineTVars (stripQual q) env
     simp env (n, NAct q p k te doc) = (n, NAct (simp env' q) (simp env' p) (simp env' k) (simp env' te) doc)
       where env'                    = defineTVars (stripQual q) env

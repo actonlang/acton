@@ -129,17 +129,17 @@ infTopStmts env (s : ss)                = do (cs,te1,s) <- infEnv env s
                                              eq <- solveAll (posdefine (filter typeDecl te1) env) te1 cs
                                              te1 <- defaultTE env te1
                                              --traceM ("===========\n" ++ render (nest 4 $ vcat $ map pretty te1))
-                                             ss1 <- termred <$> msubst (pushEqns eq [s])
-                                             defaultVars (tyfree ss1)
-                                             ss1 <- msubst ss1
+                                             ss1 <- termred <$> usubst (pushEqns eq [s])
+                                             defaultVars (ufree ss1)
+                                             ss1 <- usubst ss1
 
                                              (te2,ss2) <- infTopStmts (define te1 env) ss
                                              return (te1++te2, ss1++ss2)
 
-  where defaultTE env te                = do defaultVars (tyfree te)
-                                             msubst te
-        defaultVars tvs                 = do tvs' <- (filter univar . tyfree) <$> msubst (map tVar tvs)
-                                             sequence [ setUni tv (dflt (tvkind tv)) | tv <- tvs' ]
+  where defaultTE env te                = do defaultVars (ufree te)
+                                             usubst te
+        defaultVars tvs                 = do tvs' <- (filter univar . ufree) <$> usubst (map tVar tvs)
+                                             sequence [ usubstitute tv (dflt (tvkind tv)) | tv <- tvs' ]
         dflt KType                      = tNone
         dflt KFX                        = fxPure
         dflt PRow                       = posNil
@@ -255,8 +255,8 @@ wrapped l kw env cs ts args             = do tvx <- newTVarOfKind KFX
                                                  t2 = tFun fxPure (foldr posRow posNil ts) kwdNil t'
                                              w <- newWitness
                                              (cs0,_) <- simplify env [] t' [Cast (DfltInfo l 30 Nothing []) t1 t2]
-                                             t' <- msubst t'
-                                             cs1 <- msubst (Impl (DfltInfo l 29 Nothing []) w fx p : cs)
+                                             t' <- usubst t'
+                                             cs1 <- usubst (Impl (DfltInfo l 29 Nothing []) w fx p : cs)
                                              return (cs0++cs1, t', eCall (tApp (Dot l0 (eVar w) kw) tvs) args)
 
 --------------------------------------------------------------------------------------------------------------------------
@@ -496,7 +496,7 @@ matchDefAssumption env cs def
         match env cs eq0 def            = do --traceM ("## matchDefAssumption " ++ prstr (dname def) ++ ": [" ++ prstrs q1 ++ "] => " ++ prstr (Cast info t1 t2))
                                              (cs2,eq1) <- solveScoped env0 (qbound q0) [] t1 (Cast info t1 t2 : cs)
                                              checkNoEscape (loc def) env (qbound q0)
-                                             cs2 <- msubst cs2
+                                             cs2 <- usubst cs2
                                              return (cs2, def{ qbinds = noqual env q0, pos = pos0, kwd = kwd0,
                                                                dbody = bindWits (eq0++eq1) ++ dbody def, dfx = fx })
            where t1                     = tFun (dfx def) (prowOf $ pos def) (krowOf $ kwd def) (fromJust $ ann def)
@@ -575,7 +575,7 @@ instance InfEnv Decl where
                                                  (cs1,eq1) <- solveScoped env1 (qbound q) te tNone cs
                                                  checkNoEscape l env (qbound q)
                                                  (nterms,_,sigs) <- checkAttributes [] te' te
-                                                 let noself = [ n | (n, NSig sc Static _) <- te, tvSelf `notElem` tyfree sc ]
+                                                 let noself = [ n | (n, NSig sc Static _) <- te, tvSelf `notElem` ufree sc ]
                                                  when (notImplBody b) $ err0 (notImpls b) "A protocol body cannot be NotImplemented"
                                                  when (not $ null nterms) $ err2 (dom nterms) "Method/attribute lacks signature:"
                                                  when (initKW `elem` sigs) $ err2 (filter (==initKW) sigs) "A protocol cannot define __init__"
@@ -656,13 +656,13 @@ solveScoped env vs te tt []             = return ([], [])
 solveScoped env [] te tt cs             = simplify env te tt cs
 solveScoped env vs te tt cs             = do --traceM ("\n\n### solveScoped: " ++ prstrs cs)
                                              (cs,eq) <- simplify env te tt cs
-                                             solve env (any (`elem` vs) . tyfree) te tt eq cs
+                                             solve env (any (`elem` vs) . ufree) te tt eq cs
 
 checkNoEscape _ env []                  = return ()
-checkNoEscape l env vs                  = do fvs <- tyfree <$> msubst env
+checkNoEscape l env vs                  = do fvs <- ufree <$> usubst env
                                              let escaped = vs `intersect` fvs
                                              when (not $ null escaped) $ do
-                                                 env1 <- msubst env
+                                                 env1 <- usubst env
                                                  traceM ("####### env:\n" ++ prstr env1)
                                                  err l ("Escaping type variables: " ++ prstrs escaped)
 
@@ -833,7 +833,7 @@ instance Check Decl where
                                              popFX
                                              (cs1,eq1) <- solveScoped env1 (tvSelf:tvs) te tNone (csp++csk++csb++cs0)
                                              checkNoEscape l env (tvSelf:tvs)
-                                             fvs <- tyfree <$> msubst env
+                                             fvs <- ufree <$> usubst env
                                              let body = bindWits (eq1++eq0) ++ defaultsP p' ++ defaultsK k' ++ b'
                                                  act = Actor l n (noqual env q) (qualWPar env q p') k' body ddoc
                                              return (cs1, act{ pos = noDefaultsP (pos act), kwd = noDefaultsK (kwd act) })
@@ -867,7 +867,7 @@ instance Check Decl where
                                              popFX
                                              (cs1,eq1) <- solveScoped env1 (tvSelf:tvs) te tNone (csu++csb)
                                              checkNoEscape l env (tvSelf:tvs)
-                                             b' <- msubst b'
+                                             b' <- usubst b'
                                              return (cs1, convProtocol env n q ps eq1 wmap b')
       where env1                        = defineSelf (NoQ n) q $ defineTVars q $ setInClass env
             tvs                         = tvSelf : qbound q
@@ -884,7 +884,7 @@ instance Check Decl where
                                              popFX
                                              (cs1,eq1) <- solveScoped env1 (tvSelf:tvs) te tNone (csu++csb)
                                              checkNoEscape l env (tvSelf:tvs)
-                                             b' <- msubst b'
+                                             b' <- usubst b'
                                              return (cs1, convExtension env n' c q ps eq1 wmap b')
       where env1                        = defineInst c ps thisKW' $ defineSelf n q $ defineTVars q $ setInClass env
             tvs                         = tvSelf : qbound q
@@ -929,14 +929,13 @@ refine env cs te eq
                                              refineAgain cs' eq'
   | not $ null tail_vs                  = do sequence [ tryUnify (Simple NoLoc "internal") (tVar v) (tNil $ tvkind v) | v <- tail_vs ]
                                              refineAgain cs eq
-  | otherwise                           = do eq <- msubst eq
+  | otherwise                           = do eq <- usubst eq
                                              return (gen_vs, cs, te, eq)
-  where ambig_vs                        = tyfree cs \\ closeDepVars (safe_vs) cs
+  where ambig_vs                        = ufree cs \\ closeDepVars (safe_vs) cs
         tail_vs                         = gen_vs `intersect` (tailvars te ++ tailvars cs)
 
-        safe_vs                         = if null def_vss then [] else nub $ foldr1 intersect def_vss
-        def_vss                         = [ nub $ filter canGen $ tyfree sc | (_, NDef sc _ _) <- te, null $ scbind sc ]
-        gen_vs                          = nub (foldr union (tyfree cs) def_vss)
+        def_vss                         = [ nub $ filter canGen $ ufree sc | (_, NDef sc _ _) <- te, null $ scbind sc ]
+        gen_vs                          = nub (foldr union (ufree cs) def_vss)
 
         solve_cs                        = [ c | c <- cs, noQual c ]
 
@@ -946,31 +945,31 @@ refine env cs te eq
 
         canGen tv                       = tvkind tv /= KFX
 
-        isAmbig c                       = any (`elem` ambig_vs) (tyfree c)
+        isAmbig c                       = any (`elem` ambig_vs) (ufree c)
 
         refineAgain cs eq               = do (cs1,eq1) <- simplify env te tNone cs
-                                             te <- msubst te
-                                             env <- msubst env
+                                             te <- usubst te
+                                             env <- usubst env
                                              refine env cs1 te (eq1++eq)
 
-fxfree te                               = [ tv | tv <- tyfree te, tvkind tv == KFX ]
+fxfree te                               = [ tv | tv <- ufree te, tvkind tv == KFX ]
 
 genEnv                                  :: Env -> Constraints -> TEnv -> [Decl] -> TypeM (Constraints,TEnv,Equations,[Decl])
 genEnv env cs te ds
-  | any typeDecl te                     = do te <- msubst te
+  | any typeDecl te                     = do te <- usubst te
                                              --traceM ("## genEnv types 1\n" ++ render (nest 6 $ pretty te))
                                              --traceM ("   where\n" ++ render (nest 6 $ vcat $ map pretty cs))
                                              (cs,eq) <- simplify (posdefine te env) te tNone cs
-                                             te <- msubst te
+                                             te <- usubst te
                                              --traceM ("## genEnv types 2\n" ++ render (nest 6 $ pretty te))
                                              --traceM ("   where\n" ++ render (nest 6 $ vcat $ map pretty cs))
                                              return (cs, te, eq, ds)
-  | onTop env                           = do te <- msubst te
+  | onTop env                           = do te <- usubst te
                                              --traceM ("## genEnv defs 1\n" ++ render (nest 6 $ pretty te))
                                              --traceM ("   where\n" ++ render (nest 6 $ vcat $ map pretty cs))
                                              (cs,eq) <- simplify env te tNone cs
-                                             te <- msubst te
-                                             env <- msubst env
+                                             te <- usubst te
+                                             env <- usubst env
                                              (gen_vs, gen_cs, te, eq) <- refine env cs te eq
                                              --traceM ("## genEnv defs 2 [" ++ prstrs gen_vs ++ "]\n" ++ render (nest 6 $ pretty te))
                                              --traceM ("   where\n" ++ render (nest 6 $ vcat $ map pretty gen_cs))

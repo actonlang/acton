@@ -48,11 +48,11 @@ runKindM m                          = evalState m $ KindState { nextint = 1, uni
 newUnique                           :: KindM Int
 newUnique                           = state $ \st -> (nextint st, st{ nextint = nextint st + 1 })
 
-setUni                              :: KUni -> Kind -> KindM ()
-setUni kv k                         = state $ \st -> ((), st{ unisubst = Map.insert kv k (unisubst st)})
+usubstitute                         :: KUni -> Kind -> KindM ()
+usubstitute kv k                    = state $ \st -> ((), st{ unisubst = Map.insert kv k (unisubst st)})
 
-getUni                              :: KindM (Map KUni Kind)
-getUni                              = state $ \st -> (unisubst st, st)
+usubstitution                       :: KindM (Map KUni Kind)
+usubstitution                       = state $ \st -> (unisubst st, st)
 
 storeXVar                           :: TVar -> TCon -> KindM ()
 storeXVar xv p                      = state $ \st -> ((), st{ xvars = Quant xv [p] : xvars st })
@@ -95,14 +95,14 @@ instance Pretty (Name,Kind) where
 
 
 autoQuantS env (TSchema l q t)      = TSchema l (q ++ auto_q) t
-  where auto_q                      = map quant $ nub (tyfree q ++ tyfree t) \\ (tvSelf : qbound q ++ tvars env)
+  where auto_q                      = map quant $ nub (ufree q ++ ufree t) \\ (tvSelf : qbound q ++ tvars env)
 
 autoQuantD env (Def l n q p k t b d x doc)
                                     = Def l n (q ++ auto_q) p k t b d x doc
-  where auto_q                      = map quant $ nub (tyfree q ++ tyfree p ++ tyfree k ++ tyfree t) \\ (tvSelf : qbound q ++ tvars env)
+  where auto_q                      = map quant $ nub (ufree q ++ ufree p ++ ufree k ++ ufree t) \\ (tvSelf : qbound q ++ tvars env)
 autoQuantD env (Extension l q c ps b doc)
                                     = Extension l (q ++ auto_q) c ps b doc
-  where auto_q                      = map quant $ nub (tyfree q ++ tyfree c ++ tyfree ps) \\ (tvSelf : qbound q ++ tvars env)
+  where auto_q                      = map quant $ nub (ufree q ++ ufree c ++ ufree ps) \\ (tvSelf : qbound q ++ tvars env)
 autoQuantD env d                    = d
 
 
@@ -304,7 +304,7 @@ instance KCheck Decl where
                                          env1 <- extvars (qbound q) env
                                          q <- kchkQBinds env1 (q++q')
                                          Def l n q <$> kchk env1 p <*> kchk env1 k <*> kexp KType env1 t <*> kchkSuite env1 b <*> pure d <*> kfx env1 x <*> pure doc
-      where ambig                   = qualbound q \\ closeDepVarsQ (tyfree p ++ tyfree k ++ tyfree t ++ tyfree x) q
+      where ambig                   = qualbound q \\ closeDepVarsQ (ufree p ++ ufree k ++ ufree t ++ ufree x) q
     kchk env (Actor l n q p k b doc)= do p <- convPExist env =<< convTWild p
                                          k <- convPExist env =<< convTWild k
                                          env1 <- extvars (qbound q) env
@@ -325,8 +325,8 @@ instance KCheck Decl where
                                          env1 <- extvars (tvSelf : qbound q) env
                                          Extension l <$> kchkQBinds env1 (q++q') <*> kexp KType env1 c <*> kchkPBounds env1 us <*> kchkSuite env1 b <*> pure doc
       where ambig                   = qualbound q \\ vs
-            undet                   = tyfree us \\ (tvSelf : vs)
-            vs                      = closeDepVarsQ (tyfree c) q
+            undet                   = ufree us \\ (tvSelf : vs)
+            vs                      = closeDepVarsQ (ufree c) q
 
 instance KCheck Expr where
     kchk env (Var l n)              = return $ Var l n
@@ -458,7 +458,7 @@ instance KCheck TSchema where
                                          q' <- swapXVars tmp
                                          env1 <- extvars (qbound q) env
                                          TSchema l <$> kchkQBinds env1 (q++q') <*> kexp KType env1 t
-      where ambig                   = qualbound q \\ closeDepVarsQ (tyfree t) q
+      where ambig                   = qualbound q \\ closeDepVarsQ (ufree t) q
 
 kchkQBinds env []                   = return []
 kchkQBinds env (Quant v us : q)     = do us <- kchkBounds env us
@@ -546,9 +546,9 @@ kunify l k1 k2                      = do k1 <- ksubst False k1; k2 <- ksubst Fal
 kunify' l (KUni v1) (KUni v2)
   | v1 == v2                        = return ()
 kunify' l (KUni v) k2               = do when (v `elem` kfree k2) (infiniteKind l v k2)
-                                         setUni v k2
+                                         usubstitute v k2
 kunify' l k1 (KUni v)               = do when (v `elem` kfree k1) (infiniteKind l v k1)
-                                         setUni v k1
+                                         usubstitute v k1
 kunify' l (KFun ks1 k1) (KFun ks2 k2)
   | length ks1 == length ks2        = do mapM_ (uncurry $ kunify l) (ks1 `zip` ks2)
                                          kunify l k1 k2
@@ -577,7 +577,7 @@ instance KSubst a => KSubst (Maybe a) where
 
 instance KSubst Kind where
     ksubst g KWild                  = return KWild
-    ksubst g (KUni i)               = do s <- getUni
+    ksubst g (KUni i)               = do s <- usubstitution
                                          case Map.lookup i s of
                                             Just k  -> ksubst g k
                                             Nothing -> return (if g then KType else KUni i)
