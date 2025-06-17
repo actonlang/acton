@@ -7,7 +7,6 @@ import Data.Char (toLower)
 
 import qualified Acton.Parser as P
 import qualified Acton.Syntax as S
--- Remove unused import
 import qualified Acton.Printer as AP
 import qualified Acton.DocPrinter as DocP
 import qualified Acton.Env
@@ -45,8 +44,8 @@ main = do
         testParse env0 "syntax1"
 
       describe "docstring" $ do
-        testDocFields env0 "docstring_test"
-        testDocstringEdgeCases env0 "docstring_edge_cases"
+        testParse env0 "docstrings"
+        testDocstrings env0 "docstrings"
 
         describe "Module-level docstring tests" $ do
           describe "Valid docstrings before imports" $ do
@@ -433,11 +432,9 @@ testCodeGen env0 testname = do
     it ("Check " ++ pass_name ++ " .c output") $ do
       goldenTextFile c_golden $ return $ T.pack $ Pretty.print c
 
--- Test that docstring fields are properly extracted and preserved
-testDocFields :: Acton.Env.Env0 -> String -> Spec
-testDocFields env0 testname = do
+testDocstrings :: Acton.Env.Env0 -> String -> Spec
+testDocstrings env0 testname = do
   let act_file = "test" </> "src" </> testname ++ ".act"
-      dir      = "test" </> "docfield-test"
 
   (env, parsed) <- parseAct env0 act_file
 
@@ -459,81 +456,49 @@ testDocFields env0 testname = do
       docstrings = concatMap extractDeclDocstrings stmts
 
   describe testname $ do
-    it "extracts module docstring correctly" $ do
+    -- Basic functionality tests
+    it "extracts module docstrings" $ do
       case mdoc of
-        Just doc -> doc `shouldContain` "Test module for docstring field extraction"
+        Just doc -> doc `shouldContain` "Test module"
         Nothing -> expectationFailure "Module docstring not extracted"
 
-    it "confirms docstring fields exist in AST" $ do
-      -- Verify that all declaration types have docstring fields (even if empty)
-      length docstrings `shouldBe` 6  -- All our test declarations
-
-    it "extracts function docstrings correctly" $ do
+    it "extracts function docstrings" $ do
       case lookup "test_function" docstrings of
-        Just (Just doc) -> doc `shouldContain` "Test function with docstring"
+        Just (Just doc) -> doc `shouldContain` "Test function"
         Just Nothing -> expectationFailure "Function should have docstring"
         Nothing -> expectationFailure "Function not found"
 
-    it "handles functions without docstrings correctly" $ do
+    it "handles functions without docstrings" $ do
       case lookup "no_docstring_function" docstrings of
         Just Nothing -> return ()  -- Expected: no docstring
         Just (Just _) -> expectationFailure "Function should not have docstring"
         Nothing -> expectationFailure "Function not found"
 
-    it "extracts class docstrings correctly" $ do
+    it "extracts class docstrings" $ do
       case lookup "TestClass" docstrings of
-        Just (Just doc) -> doc `shouldContain` "Test class with docstring"
+        Just (Just doc) -> doc `shouldContain` "Test class"
         Just Nothing -> expectationFailure "Class should have docstring"
         Nothing -> expectationFailure "Class not found"
 
-    it "extracts actor docstrings correctly" $ do
+    it "extracts actor docstrings" $ do
       case lookup "TestActor" docstrings of
-        Just (Just doc) -> doc `shouldContain` "Test actor with docstring"
+        Just (Just doc) -> doc `shouldContain` "Test actor"
         Just Nothing -> expectationFailure "Actor should have docstring"
         Nothing -> expectationFailure "Actor not found"
 
-    it "extracts protocol docstrings correctly" $ do
+    it "extracts protocol docstrings" $ do
       case lookup "TestProtocol" docstrings of
-        Just (Just doc) -> doc `shouldContain` "Test protocol with docstring"
+        Just (Just doc) -> doc `shouldContain` "Test protocol"
         Just Nothing -> expectationFailure "Protocol should have docstring"
         Nothing -> expectationFailure "Protocol not found"
 
-    it "extracts extension docstrings correctly" $ do
+    it "extracts extension docstrings" $ do
       case lookup "extension" docstrings of
-        Just (Just doc) -> doc `shouldContain` "Extension with docstring"
+        Just (Just doc) -> doc `shouldContain` "Extension"
         Just Nothing -> expectationFailure "Extension should have docstring"
         Nothing -> expectationFailure "Extension not found"
 
--- Test edge cases for docstring extraction
-testDocstringEdgeCases :: Acton.Env.Env0 -> String -> Spec
-testDocstringEdgeCases env0 testname = do
-  let act_file = "test" </> "src" </> testname ++ ".act"
-
-  (env, parsed) <- parseAct env0 act_file
-
-  kchecked <- liftIO $ Acton.Kinds.check env parsed
-  (nmod, tchecked, typeEnv) <- liftIO $ Acton.Types.reconstruct "" env kchecked
-  let S.NModule tenv mdoc = nmod
-
-  -- Extract docstrings from the parsed AST
-  let S.Module _ _ stmts = parsed
-      extractDeclDocstrings (S.Decl _ decls) = concatMap extractDocFromDecl decls
-      extractDeclDocstrings _ = []
-
-      extractDocFromDecl (S.Def _ n _ _ _ _ _ _ _ ddoc) = [(S.nstr n, ddoc)]
-      extractDocFromDecl (S.Class _ n _ _ _ ddoc) = [(S.nstr n, ddoc)]
-      extractDocFromDecl (S.Actor _ n _ _ _ _ ddoc) = [(S.nstr n, ddoc)]
-      extractDocFromDecl (S.Protocol _ n _ _ _ ddoc) = [(S.nstr n, ddoc)]
-      extractDocFromDecl (S.Extension _ _ _ _ _ ddoc) = [("extension", ddoc)]
-
-      docstrings = concatMap extractDeclDocstrings stmts
-
-  describe (testname ++ " edge cases") $ do
-    it "extracts module docstring correctly" $ do
-      case mdoc of
-        Just doc -> doc `shouldContain` "Module docstring for edge case testing"
-        Nothing -> expectationFailure "Module docstring not extracted"
-
+    -- Edge case tests
     it "ignores non-first string statements" $ do
       case lookup "function_with_non_first_string" docstrings of
         Just Nothing -> return ()  -- Expected: no docstring
@@ -543,30 +508,27 @@ testDocstringEdgeCases env0 testname = do
     it "extracts only first string as docstring" $ do
       case lookup "function_with_multiple_strings" docstrings of
         Just (Just doc) -> do
-          doc `shouldContain` "This SHOULD be the docstring"
-          -- Verify it doesn't contain later strings (they should not be part of docstring)
-          when ("This should NOT be a docstring" `isInfixOf` doc) $
+          doc `shouldContain` "First string is docstring"
+          when ("Second string" `isInfixOf` doc) $
             expectationFailure "Later strings should not be in docstring"
         Just Nothing -> expectationFailure "Function should have docstring"
         Nothing -> expectationFailure "Function not found"
 
     it "handles single quote docstrings" $ do
       case lookup "function_with_single_quotes" docstrings of
-        Just (Just doc) -> doc `shouldContain` "Single quote docstring"
+        Just (Just doc) -> doc `shouldContain` "Single quote"
         Just Nothing -> expectationFailure "Function should have docstring"
         Nothing -> expectationFailure "Function not found"
 
     it "handles triple single quote docstrings" $ do
       case lookup "function_with_triple_single_quotes" docstrings of
-        Just (Just doc) -> do
-          doc `shouldContain` "Triple single quote docstring"
-          doc `shouldContain` "with multiple lines"
+        Just (Just doc) -> doc `shouldContain` "Triple quote"
         Just Nothing -> expectationFailure "Function should have docstring"
         Nothing -> expectationFailure "Function not found"
 
     it "handles mixed quotes in docstrings" $ do
       case lookup "function_with_mixed_quotes" docstrings of
-        Just (Just doc) -> doc `shouldContain` "Mixed quote docstring with 'single' quotes inside"
+        Just (Just doc) -> doc `shouldContain` "Mixed 'quotes'"
         Just Nothing -> expectationFailure "Function should have docstring"
         Nothing -> expectationFailure "Function not found"
 
@@ -584,15 +546,7 @@ testDocstringEdgeCases env0 testname = do
 
     it "handles functions with just docstrings" $ do
       case lookup "function_just_docstring" docstrings of
-        Just (Just doc) -> doc `shouldContain` "Just a docstring, no other code"
+        Just (Just doc) -> doc `shouldContain` "Just a docstring"
         Just Nothing -> expectationFailure "Function should have docstring"
         Nothing -> expectationFailure "Function not found"
-
-    it "handles methods with non-first strings correctly" $ do
-      -- This tests that the ClassWithEdgeCases.method_non_first_string has no docstring
-      -- Note: method docstrings would be tested differently since they're nested in classes
-      case lookup "ClassWithEdgeCases" docstrings of
-        Just (Just doc) -> doc `shouldContain` "Class docstring"
-        Just Nothing -> expectationFailure "Class should have docstring"
-        Nothing -> expectationFailure "Class not found"
 

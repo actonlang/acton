@@ -1,0 +1,61 @@
+import math
+
+"Test module for docstring functionality."
+
+def test_function (x : int) -> int:
+    """Test function with docstring."""
+    return x * 2
+
+def no_docstring_function (x : int) -> int:
+    return x * 3
+
+# recursive group:
+class TestClass:
+    """Test class with docstring."""
+    def method (self, x : int) -> int:
+        return x + 1
+actor TestActor (name : str):
+    """Test actor with docstring."""
+    var name = name
+protocol TestProtocol:
+    """Test protocol with docstring."""
+    test_method : (int) -> int
+extension TestClass (TestProtocol):
+    """Extension with docstring."""
+    def test_method (self, x : int) -> int:
+        return x * 10
+# (recursive group)
+
+def function_with_non_first_string (x : int) -> int:
+    y = x + 1
+    "Not a docstring"
+    return y
+
+def function_with_multiple_strings (x : int) -> int:
+    """First string is docstring."""
+    "Second string is not"
+    return x
+
+def function_with_single_quotes (x : int) -> int:
+    """Single quote docstring"""
+    return x
+
+def function_with_triple_single_quotes (x : int) -> int:
+    """Triple quote docstring"""
+    return x
+
+def function_with_mixed_quotes (x : int) -> int:
+    """Mixed 'quotes' in docstring"""
+    return x
+
+def function_empty_docstring ():
+    """"""
+    pass
+
+def function_with_control_flow ():
+    if True:
+        "Not a docstring"
+    return 42
+
+def function_just_docstring ():
+    """Just a docstring, no code."""

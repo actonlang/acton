@@ -3,42 +3,65 @@ import net
 "Module docstring for syntax1 test.\\nThis tests docstring support across all language constructs.\\n"
 
 def add (x : int, y : int) -> int:
-    "Add two numbers together.\\n\\n    This function takes two integers and returns their sum.\\n    "
+    """Add two numbers together.
+
+    This function takes two integers and returns their sum.
+    """
     def foo ():
-        "A nested function that does nothing."
+        """A nested function that does nothing."""
         pass
     return x + y
 
 # recursive group:
 class Calculator:
-    "A calculator class with basic operations.\\n\\n    This class provides methods for arithmetic operations.\\n    "
+    """A calculator class with basic operations.
+
+    This class provides methods for arithmetic operations.
+    """
     def multiply (self, x : int, y : int) -> int:
-        "Multiply two numbers.\\n\\n        Args:\\n            x: First number\\n            y: Second number\\n\\n        Returns:\\n            The product of x and y\\n        "
+        """Multiply two numbers.
+
+        Args:
+            x: First number
+            y: Second number
+
+        Returns:
+            The product of x and y
+        """
         return x * y
     def divide (self, x : int, y : int) -> float:
-        "Divide x by y."
+        """Divide x by y."""
         return float(x) / float(y)
 actor Counter (name : str):
-    "An actor that counts things.\\n\\n    This actor maintains a count and can increment it.\\n    "
+    """An actor that counts things.
+
+    This actor maintains a count and can increment it.
+    """
     var count = 0
     var name = name
     def increment ():
-        "Increment the counter by one."
+        """Increment the counter by one."""
         count += 1
     def get_count () -> int:
-        "Get the current count value."
+        """Get the current count value."""
         return count
 protocol Drawable:
-    "Protocol for objects that can be drawn.\\n\\n    Any class implementing this protocol must provide a draw method.\\n    "
+    """Protocol for objects that can be drawn.
+
+    Any class implementing this protocol must provide a draw method.
+    """
     draw : () -> None
     get_color : () -> str
 extension Calculator (Drawable):
-    "Extension to make Calculator drawable.\\n\\n    This adds drawing capabilities to the Calculator class.\\n    "
+    """Extension to make Calculator drawable.
+
+    This adds drawing capabilities to the Calculator class.
+    """
     def draw (self):
-        "Draw the calculator."
+        """Draw the calculator."""
         print("Drawing a calculator")
     def get_color (self) -> str:
-        "Get the calculator's color."
+        """Get the calculator's color."""
         return "black"
 # (recursive group)
 
@@ -46,8 +69,8 @@ def subtract (x : int, y : int) -> int:
     return x - y
 
 def outer_function (x : int) -> int:
-    "Outer function with a nested function inside."
+    """Outer function with a nested function inside."""
     def inner_function (y : int) -> int:
-        "Inner function that adds to the outer parameter."
+        """Inner function that adds to the outer parameter."""
         return x + y
     return inner_function(10)

@@ -1,3 +1,0 @@
-actor TestActor():
-    def __init__(self):
-        pass

@@ -36,6 +36,18 @@ instance Pretty Import where
 
 prettySuite ss                      = nest 4 $ vcat $ map pretty ss
 
+-- Pretty print a suite with optional docstring at the beginning
+prettyDocSuite :: Maybe String -> Suite -> Doc
+prettyDocSuite Nothing ss           = prettySuite ss
+prettyDocSuite (Just doc) ss        = nest 4 $ vcat $ text "\"\"\"" <> text (escapeDocstring doc) <> text "\"\"\"" : map pretty ss
+
+-- Escape special characters in docstrings for pretty printing
+escapeDocstring :: String -> String
+escapeDocstring []                  = []
+escapeDocstring ('\\':xs)           = '\\' : '\\' : escapeDocstring xs
+escapeDocstring ('"':xs)            = '\\' : '"' : escapeDocstring xs
+escapeDocstring (x:xs)              = x : escapeDocstring xs
+
 instance Pretty Stmt where
     pretty (Expr _ e)               = pretty e
     pretty (Assign _ ps e)          = hsep . punctuate (space <> equals) $ map pretty ps ++ [pretty e]
@@ -64,20 +76,20 @@ instance Pretty Stmt where
     pretty (Signature _ vs sc d)    = prettyDec d $ commaList vs <+> colon <+> pretty sc
 
 instance Pretty Decl where
-    pretty (Def _ n q p k a b d x _)
+    pretty (Def _ n q p k a b d x doc)
                                     = (prettyDecFX d x $ text "def" <+> pretty n <> nonEmpty brackets commaList q <+>
-                                      parens (pretty (p,k)) <> nonEmpty (text " -> " <>) pretty a <> colon) $+$ prettySuite b
-    pretty (Actor _ n q p k b _)    = text "actor" <+> pretty n <> nonEmpty brackets commaList q <+>
-                                      parens (pretty (p,k)) <> colon $+$ prettySuite b
-    pretty (Class _ n q a b _)      = text "class" <+> pretty n <> nonEmpty brackets commaList q <+>
-                                      nonEmpty parens commaList a <> colon $+$ prettySuite b
-    pretty (Protocol _ n q a b _)   = text "protocol" <+> pretty n <> nonEmpty brackets commaList q <+>
-                                      nonEmpty parens commaList a <> colon $+$ prettySuite b
-    pretty (Extension _ q c a b _)
+                                      parens (pretty (p,k)) <> nonEmpty (text " -> " <>) pretty a <> colon) $+$ prettyDocSuite doc b
+    pretty (Actor _ n q p k b doc)  = text "actor" <+> pretty n <> nonEmpty brackets commaList q <+>
+                                      parens (pretty (p,k)) <> colon $+$ prettyDocSuite doc b
+    pretty (Class _ n q a b doc)    = text "class" <+> pretty n <> nonEmpty brackets commaList q <+>
+                                      nonEmpty parens commaList a <> colon $+$ prettyDocSuite doc b
+    pretty (Protocol _ n q a b doc) = text "protocol" <+> pretty n <> nonEmpty brackets commaList q <+>
+                                      nonEmpty parens commaList a <> colon $+$ prettyDocSuite doc b
+    pretty (Extension _ q c a b doc)
       | tvs == tcargs c             = text "extension" <+> pretty (tcname c) <> nonEmpty brackets commaList q <+>
-                                      nonEmpty parens commaList a <> colon $+$ prettySuite b
+                                      nonEmpty parens commaList a <> colon $+$ prettyDocSuite doc b
       | otherwise                   = text "extension" <+> prettyQual q <+> pretty c <+>
-                                      nonEmpty parens commaList a <> colon $+$ prettySuite b
+                                      nonEmpty parens commaList a <> colon $+$ prettyDocSuite doc b
       where tvs                     = map tVar $ qbound q
 
 prettyDecFX d fx                    = prettyDec d . (prettyFXnoWild fx <+>)

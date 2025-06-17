@@ -1196,22 +1196,6 @@ decorator sig = do
                        return S.Static
          decoration = (if sig then property <|> static else static) <|> return S.NoDec
 
--- | Extract docstring from a suite (if it's the first statement and is a string)
-extractDocstring :: S.Suite -> Maybe String
-extractDocstring [] = Nothing
-extractDocstring (S.Expr _ (S.Strings _ ss) : _) = Just (unescapeString $ concat ss)
-extractDocstring _ = Nothing
-
--- | Unescape string literals (convert \n to actual newlines, etc.)
-unescapeString :: String -> String
-unescapeString [] = []
-unescapeString ('\\':'n':rest) = '\n' : unescapeString rest
-unescapeString ('\\':'t':rest) = '\t' : unescapeString rest
-unescapeString ('\\':'r':rest) = '\r' : unescapeString rest
-unescapeString ('\\':'\\':rest) = '\\' : unescapeString rest
-unescapeString ('\\':'"':rest) = '"' : unescapeString rest
-unescapeString ('\\':'\'':rest) = '\'' : unescapeString rest
-unescapeString (c:rest) = c : unescapeString rest
 
 funcdef :: Parser S.Decl
 funcdef =  addLoc $ do
@@ -1220,10 +1204,9 @@ funcdef =  addLoc $ do
               n <- name
               q <- optbinds
               (ppar,kpar) <- params
-              retType <- optional (arrow *> ttype)
-              body <- suite DEF p
-              let docstring = extractDocstring body
-              return $ S.Def NoLoc n q ppar kpar retType body deco (maybe S.tWild id fx) docstring
+              t <- optional (arrow *> ttype)
+              (ss, docstring) <- suiteWithDocstring DEF p
+              return $ S.Def NoLoc n q ppar kpar t ss deco (maybe S.tWild id fx) docstring
 
 params :: Parser (S.PosPar, S.KwdPar)
 params = try ((\k ->(S.PosNIL,k)) <$> parens (kwdpar True))
@@ -1241,8 +1224,7 @@ actordef = addLoc $ do
                 nm <- name <?> "actor name"
                 q <- optbinds
                 (ppar,kpar) <- params
-                ss <- suite ACTOR s
-                let docstring = extractDocstring ss
+                (ss, docstring) <- suiteWithDocstring ACTOR s
                 return $ S.Actor NoLoc nm q ppar kpar ss docstring
 
 -- classdef: 'class' NAME ['(' [arglist] ')'] ':' suite
@@ -1259,8 +1241,7 @@ classdefGen k pname ctx con = addLoc $ do
                 nm <- pname
                 q <- optbinds
                 cs <- optbounds
-                ss <- suite ctx s
-                let docstring = extractDocstring ss
+                (ss, docstring) <- suiteWithDocstring ctx s
                 return $ con NoLoc nm q cs ss docstring
 
 extdef = addLoc $ do
@@ -1268,8 +1249,7 @@ extdef = addLoc $ do
                 assertTop l "extension"
                 (q,c) <- try head1 <|> try head2 <|> head3
                 cs <- optbounds
-                ss <- suite EXT s
-                let docstring = extractDocstring ss
+                (ss, docstring) <- suiteWithDocstring EXT s
                 return $ S.Extension NoLoc q c cs ss docstring
   where head1 = do q <- binds
                    fatarrow
@@ -1354,11 +1334,17 @@ data_stmt = addLoc $
               assertDef l "data"
               S.Data NoLoc Nothing <$> suite DATA s
 
+suiteWithDocstring :: CTX -> Pos -> Parser (S.Suite, Maybe String)
+suiteWithDocstring c p = do
+    stmts <- suite c p
+    return $ extractAndRemoveDocstring stmts
+
 suite :: CTX -> Pos -> Parser S.Suite
 suite c p = do
     o <- getOffset
     withCtx c colon
-    withCtx c (indentSuite p <|> simple_stmt)
+    stmts <- withCtx c (indentSuite p <|> simple_stmt)
+    return stmts
   where indentSuite p = do
           newline1
           p1 <- L.indentGuard sc1 GT p
@@ -1369,6 +1355,28 @@ suite c p = do
                          Control.Exception.throw $ IndentationError (Loc o o) --L.incorrectIndent LT p1 p2
                 EQ -> stmt
                 GT -> L.incorrectIndent GT p2 p1)
+
+
+-- Extract docstring from the first statement of a Suite if it's a string expression
+extractAndRemoveDocstring :: S.Suite -> (S.Suite, Maybe String)
+extractAndRemoveDocstring ss@(S.Expr _ (S.Strings _ [s]) : rest) = (rest, Just (unescapeString $ stripQuotes s))
+  where
+    stripQuotes ('"':'"':'"':xs) | take 3 (reverse xs) == "\"\"\"" = take (length xs - 3) xs
+    stripQuotes ('\'':'\'':'\'':xs) | take 3 (reverse xs) == "'''" = take (length xs - 3) xs
+    stripQuotes ('\'':xs) | last xs == '\'' = init xs
+    stripQuotes ('"':xs) | last xs == '"' = init xs
+    stripQuotes s = s
+extractAndRemoveDocstring ss = (ss, Nothing)
+
+unescapeString :: String -> String
+unescapeString [] = []
+unescapeString ('\\':'n':xs) = '\n' : unescapeString xs
+unescapeString ('\\':'t':xs) = '\t' : unescapeString xs
+unescapeString ('\\':'r':xs) = '\r' : unescapeString xs
+unescapeString ('\\':'\\':xs) = '\\' : unescapeString xs
+unescapeString ('\\':'"':xs) = '"' : unescapeString xs
+unescapeString ('\\':'\'':xs) = '\'' : unescapeString xs
+unescapeString (x:xs) = x : unescapeString xs
 
 ------------------------------------------------------------------------------------------------
 --- Expressions ----------------------------------------------------------------
