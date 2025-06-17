@@ -1,5 +1,7 @@
 def test_str_find():
     s = "hello, world!"
+    if s.find("hello, world!") != 0:
+        raise ValueError("find() did not return the correct index: " + str(s.find("hello, world!")))
     if s.find("world") != 7:
         raise ValueError("find() did not return the correct index: " + str(s.find("world")))
     if s.find("world", 0) != 7:
@@ -139,6 +141,10 @@ actor main(env):
     except Exception as e:
         print("Unexpected exception during testing:", e)
         await async env.exit(1)
+
+    if "hello, world!" not in "hello, world!":
+        print("ERROR: 'hello, world!' not in 'hello, world!'")
+        env.exit(1)
 
     b = b'\xde\xad\xbe\xef'
     if b.hex() != "deadbeef":

@@ -1309,7 +1309,7 @@ B_int B_ContainerD_strD___len__ (B_ContainerD_str wit, B_str s){
 
  
 B_bool B_ContainerD_strD___contains__ (B_ContainerD_str wit, B_str s, B_str sub) {
-    return toB_bool(bmh(s->str,sub->str,s->nbytes,sub->nbytes) > 0);
+    return toB_bool(bmh(s->str,sub->str,s->nbytes,sub->nbytes) >= 0);
 }
 
 B_bool B_ContainerD_strD___containsnot__ (B_ContainerD_str wit, B_str s, B_str sub) {
