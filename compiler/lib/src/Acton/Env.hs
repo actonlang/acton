@@ -479,23 +479,27 @@ selfSubst env               = [ (TV k n, tCon c) | (n, NTVar k c) <- names env, 
 -- Name queries -------------------------------------------------------------------------------------------------------------------
 
 findQName                   :: QName -> EnvF x -> NameInfo
-findQName (QName m n) env   = case findMod m env of
+findQName n env             = case tryQName n env of
+                                 Just i -> i
+                                 Nothing -> nameNotFound (noq n)
+
+tryQName                    :: QName -> EnvF x -> Maybe NameInfo
+tryQName (QName m n) env    = case findMod m env of
                                 Just te -> case lookup n te of
-                                    Just (NAlias qn) -> findQName qn env
-                                    Just i -> i
+                                    Just (NAlias qn) -> tryQName qn env
+                                    Just i -> Just i
                                     _ -> noItem m n
                                 _ -> noModule m
-findQName (NoQ n) env       = case lookup n (names env) of
-                                Just (NAlias qn) -> findQName qn env
-                                Just info -> info
-                                Nothing -> nameNotFound n
-findQName (GName m n) env
-  | Just m == thismod env   = findQName (NoQ n) env
+tryQName (NoQ n) env        = case lookup n (names env) of
+                                Just (NAlias qn) -> tryQName qn env
+                                res -> res
+tryQName (GName m n) env
+  | Just m == thismod env   = tryQName (NoQ n) env
   | inBuiltin env,
-    m==mBuiltin             = findQName (NoQ n) env
+    m==mBuiltin             = tryQName (NoQ n) env
   | otherwise               = case lookupMod m env of
                                 Just te -> case lookup n te of
-                                    Just i -> i
+                                    Just i -> Just i
                                     Nothing -> noItem m n -- error ("## Failed lookup of " ++ prstr n ++ " in module " ++ prstr m)
                                 Nothing -> noModule m -- error ("## Failed lookup of module " ++ prstr m)
 
@@ -584,29 +588,29 @@ actorMethod env n0          = walk [] (names env)
     walk ns []              = False
 
 isDef                       :: EnvF x -> QName -> Bool
-isDef env n                 = case findQName n env of
-                                NDef _ _ _ -> True
+isDef env n                 = case tryQName n env of
+                                Just NDef{} -> True
                                 _ -> False
 
 isActor                     :: EnvF x -> QName -> Bool
-isActor env n               = case findQName n env of
-                                NAct q p k te _ -> True
+isActor env n               = case tryQName n env of
+                                Just NAct{} -> True
                                 _ -> False
 
 isClass                     :: EnvF x -> QName -> Bool
-isClass env n               = case findQName n env of
-                                NClass q us te _ -> True
+isClass env n               = case tryQName n env of
+                                Just NClass{} -> True
                                 _ -> False
 
 isProto                     :: EnvF x -> QName -> Bool
-isProto env n               = case findQName n env of
-                                NProto q us te _ -> True
+isProto env n               = case tryQName n env of
+                                Just NProto{} -> True
                                 _ -> False
 
 isDefOrClass                :: EnvF x -> QName -> Bool
-isDefOrClass env n          = case findQName n env of
-                                NDef _ _ _ -> True
-                                NClass _ _ _ _ -> True
+isDefOrClass env n          = case tryQName n env of
+                                Just NDef{} -> True
+                                Just NClass{} -> True
                                 _ -> False
 
 witsByPName                 :: EnvF x -> QName -> [Witness]
