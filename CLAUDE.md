@@ -28,6 +28,7 @@ acton/
 ├── base/             # Standard library & RTS → [See base/CLAUDE.md]
 ├── backend/          # Distributed runtime → [See backend/CLAUDE.md]
 ├── cli/              # CLI tool → [See cli/CLAUDE.md]
+├── ecolift/          # Ecosystem lift process → [See ecolift/CLAUDE.md]
 ├── test/             # Test suites
 ├── docs/             # Documentation (mdBook)
 └── build.zig         # Main build configuration
@@ -40,6 +41,7 @@ For detailed information about each component, see:
 - **[base/CLAUDE.md](base/CLAUDE.md)** - Standard library modules, RTS, builtins
 - **[backend/CLAUDE.md](backend/CLAUDE.md)** - Distributed database, actor persistence
 - **[cli/CLAUDE.md](cli/CLAUDE.md)** - CLI commands, package management
+- **[ecolift/CLAUDE.md](ecolift/CLAUDE.md)** - Ecosystem lift process for external repositories
 
 ## Language Concepts
 
