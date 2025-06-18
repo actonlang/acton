@@ -39,10 +39,11 @@ import System.FilePath ((</>), (<.>), joinPath)
 
 
 -- | Generate documentation from a module in Markdown format with types
-docModuleWithTypes :: TEnv -> Module -> Doc
-docModuleWithTypes tenv (Module qn _ stmts) =
-    -- Extract docstring directly from the module's statements
-    let (title, restDoc) = case extractDocstring stmts of
+docModuleWithTypes :: NameInfo -> Module -> Doc
+docModuleWithTypes (NModule tenv mdocstring) (Module qn _ stmts) =
+    -- Use module docstring from NModule
+    let moduleDocstring = mdocstring
+        (title, restDoc) = case moduleDocstring of
             Just ds -> splitDocstring ds
             Nothing -> ("", Nothing)
         header = if null title
@@ -465,17 +466,17 @@ docMethodWithTypes tenv (Def _ n q p k a b _ _) =
 docMethodWithTypes _ _ = empty
 
 -- | Print documentation as Markdown with type information
-printMdDoc :: TEnv -> Module -> String
-printMdDoc tenv m = render (docModuleWithTypes tenv m)
+printMdDoc :: NameInfo -> Module -> String
+printMdDoc nmod m = render (docModuleWithTypes nmod m)
 
 -- | Print documentation as ASCII with optional styling and type information
 -- Parameters:
 --   useStyle: Enable ANSI control codes (bold + color)
 --   tenv: Type environment for enhanced type information
 --   module: The module to document
-printAsciiDoc :: Bool -> TEnv -> Module -> String
-printAsciiDoc useStyle tenv m =
-    render (docModuleAsciiUnified useStyle tenv m) ++ "\n"
+printAsciiDoc :: Bool -> NameInfo -> Module -> String
+printAsciiDoc useStyle nmod m =
+    render (docModuleAsciiUnified useStyle nmod m) ++ "\n"
 
 
 -- Terminal formatting codes
@@ -499,9 +500,11 @@ dim True = "\ESC[2m"
 dim False = ""
 
 -- | Generate ASCII documentation from a module with unified style and type handling
-docModuleAsciiUnified :: Bool -> TEnv -> Module -> Doc
-docModuleAsciiUnified useStyle tenv (Module qn _ stmts) =
-    let (title, restDoc) = case extractDocstring stmts of
+docModuleAsciiUnified :: Bool -> NameInfo -> Module -> Doc
+docModuleAsciiUnified useStyle (NModule tenv mdocstring) (Module qn _ stmts) =
+    -- Use module docstring from NModule
+    let moduleDocstring = mdocstring
+        (title, restDoc) = case moduleDocstring of
             Just ds -> splitDocstring ds
             Nothing -> ("", Nothing)
         -- Module header with visual emphasis
@@ -1181,8 +1184,8 @@ docRetTypeAscii (Just t) = text " -> " <> pretty (SimplifiedType t)
 
 
 -- | Print documentation as HTML with type information
-printHtmlDoc :: TEnv -> Module -> String
-printHtmlDoc tenv m = unlines
+printHtmlDoc :: NameInfo -> Module -> String
+printHtmlDoc nmod m = unlines
         [ "<!DOCTYPE html>"
         , "<html lang=\"en\">"
         , "<head>"
@@ -1198,7 +1201,7 @@ printHtmlDoc tenv m = unlines
         , "</head>"
         , "<body>"
         , "  <div class=\"container\">"
-        , render (docModuleHtmlWithTypes tenv m)
+        , render (docModuleHtmlWithTypes nmod m)
         , "  </div>"
         , "</body>"
         , "</html>"
@@ -1574,18 +1577,13 @@ htmlScript = unlines
     , "    });"
     ]
 
--- | Generate HTML documentation from a module
-docModuleHtml :: Module -> Doc
-docModuleHtml m@(Module modName _ _) =
-    -- For backward compatibility, just collect local classes
-    let classNames = collectClassNames (mbody m)
-    in docModuleHtmlWithTypes [] m
 
 -- | Generate HTML documentation from a module with type information
-docModuleHtmlWithTypes :: TEnv -> Module -> Doc
-docModuleHtmlWithTypes tenv (Module modName _ stmts) =
-    -- Extract docstring directly from the module's statements
-    let (title, restDoc) = case extractDocstring stmts of
+docModuleHtmlWithTypes :: NameInfo -> Module -> Doc
+docModuleHtmlWithTypes (NModule tenv mdocstring) (Module modName _ stmts) =
+    -- Use module docstring from NModule
+    let moduleDocstring = mdocstring
+        (title, restDoc) = case moduleDocstring of
             Just ds -> splitDocstring ds
             Nothing -> ("", Nothing)
         header = text "<h1>" <> text (render (pretty modName)) <>
@@ -1602,9 +1600,12 @@ docModuleHtmlWithTypes tenv (Module modName _ stmts) =
 -- | Collect class information from local module and imported modules
 collectClassInfos :: ModName -> TEnv -> Suite -> Set ClassInfo
 collectClassInfos currentModule tenv stmts =
-    -- For now, just collect local classes
-    -- TODO: Extract imported class info from type environment
-    Set.map (\n -> ClassInfo n currentModule True) (collectClassNames stmts)
+    let localClasses = Set.map (\n -> ClassInfo n currentModule True) (collectClassNames stmts)
+        importedClasses = Set.fromList $ concatMap extractClassFromTEnv tenv
+    in Set.union localClasses importedClasses
+  where
+    extractClassFromTEnv (n, NClass _ _ _ _) = [ClassInfo n currentModule False]  -- Mark as imported
+    extractClassFromTEnv _ = []
 
 -- | Collect all class names defined in the module
 collectClassNames :: Suite -> Set Name
@@ -2451,7 +2452,6 @@ docDeclHtmlWithTypes tenv = docDeclHtmlWithTypesAndClasses tenv Set.empty
 -- | Document a declaration in HTML with types and class info for cross-module linking
 docDeclHtmlWithTypesAndClassInfo :: TEnv -> ModName -> Set ClassInfo -> Decl -> Doc
 docDeclHtmlWithTypesAndClassInfo tenv currentModule classInfos decl =
-    -- For now, convert back to simple Set Name for compatibility
     let classNames = Set.map ciName $ Set.filter ciIsLocal classInfos
     in docDeclHtmlWithTypesAndClassesAndModule tenv currentModule classNames decl
 

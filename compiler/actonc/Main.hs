@@ -429,9 +429,9 @@ printDocs opts = do
                         Nothing -> if inGui then C.HtmlFormat else C.AsciiFormat
 
                 docOutput <- case format of
-                    C.HtmlFormat -> return $ DocP.printHtmlDoc tenv parsed
-                    C.AsciiFormat -> return $ DocP.printAsciiDoc False tenv parsed
-                    C.MarkdownFormat -> return $ DocP.printMdDoc tenv parsed
+                    C.HtmlFormat -> return $ DocP.printHtmlDoc nmod parsed
+                    C.AsciiFormat -> return $ DocP.printAsciiDoc False nmod parsed
+                    C.MarkdownFormat -> return $ DocP.printMdDoc nmod parsed
 
                 -- Handle output destination
                 case C.outputFile opts of
@@ -977,7 +977,7 @@ runRestPasses opts paths env0 parsed stubMode = do
                               simplifiedTypeEnv = simp env1 modTypeEnv
                           createDirectoryIfMissing True docFileDir
                           -- Use parsed (original AST) to preserve docstrings
-                          let htmlDoc = DocP.printHtmlDoc simplifiedTypeEnv parsed
+                          let htmlDoc = DocP.printHtmlDoc (A.NModule simplifiedTypeEnv mdoc) parsed
                           writeFile docFile htmlDoc
 
                       --traceM ("#################### typed env0:")
