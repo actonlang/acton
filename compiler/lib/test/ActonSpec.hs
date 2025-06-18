@@ -250,29 +250,29 @@ testDocFiles env0 moduleNames = do
           (nmod, tchecked, typeEnv) <- Acton.Types.reconstruct "" env kchecked
           let S.NModule tenv mdoc = nmod
           -- The new environment includes the processed module
-          return (env, accModules ++ [(modName, parsed, tenv)])
+          return (env, accModules ++ [(modName, parsed, nmod)])
     
     (finalEnv, mods) <- foldM processModule (env0, []) moduleNames
     setCurrentDirectory oldDir
     return mods
   
   -- Generate documentation for each module
-  forM_ modules $ \(modName, parsed, tenv) -> do
+  forM_ modules $ \(modName, parsed, nmod) -> do
     describe modName $ do
       it "generates ASCII documentation (plain)" $ do
-        let asciiDoc = DocP.printAsciiDoc False tenv parsed
+        let asciiDoc = DocP.printAsciiDoc False nmod parsed
         goldenTextFile (testDir </> goldenDir </> modName ++ ".txt") $ return $ T.pack asciiDoc
 
       it "generates ASCII documentation (styled)" $ do
-        let asciiDoc = DocP.printAsciiDoc True tenv parsed
+        let asciiDoc = DocP.printAsciiDoc True nmod parsed
         goldenTextFile (testDir </> goldenDir </> modName ++ "-color.txt") $ return $ T.pack asciiDoc
 
       it "generates Markdown documentation" $ do
-        let mdDoc = DocP.printMdDoc tenv parsed
+        let mdDoc = DocP.printMdDoc nmod parsed
         goldenTextFile (testDir </> goldenDir </> modName ++ ".md") $ return $ T.pack mdDoc
 
       it "generates HTML documentation" $ do
-        let htmlDoc = DocP.printHtmlDoc tenv parsed
+        let htmlDoc = DocP.printHtmlDoc nmod parsed
         goldenTextFile (testDir </> goldenDir </> modName ++ ".html") $ return $ T.pack htmlDoc
 
 parseAct env0 act_file = do
