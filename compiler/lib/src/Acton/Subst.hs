@@ -84,7 +84,7 @@ subst s x0
         s0                          = [ (v, subst (clash `zip` map tVar tmp) t) | (v,t) <- s ]
         s1                          = tmp `zip` map tVar clash
         clash                       = dom s `intersect` tyfree (rng s)
-        used                        = dom s ++ tyfree (rng s)                             
+        used                        = dom s ++ tyfree (rng s)
         tmp                         = take (length clash) $ map (TV KWild) tmpNames \\ used
 
 substIteratively                    :: Subst a => Substitution -> a -> a
@@ -139,11 +139,11 @@ instance Subst ErrInfo where
     msubst (DfltInfo l n mbe ts)    = DfltInfo l n <$> msubst mbe <*> msubst ts
     msubst (DeclInfo l1 l2 n t msg) = DeclInfo l1 l2 n <$> msubst t <*> return msg
     msubst info                     = return info
-    
+
     tyfree (DfltInfo l n mbe ts)    = tyfree mbe ++ tyfree ts
     tyfree (DeclInfo l1 l2 n t msg) = tyfree t
     tyfree _                        = []
-    
+
 instance Subst TSchema where
     msubst (TSchema l [] t)         = TSchema l [] <$> msubst t
     msubst (TSchema l q t)          = TSchema l <$> msubst q <*> msubst t
@@ -179,7 +179,7 @@ testSchemaSubst = do
     putStrLn ("subst s5 t: " ++ prstr (subst s5 t))
     putStrLn ("subst s5 c: " ++ prstr (subst s5 c))
   where t   = tSchema [Quant (TV KType (name "A")) [TC (noQ "Eq") []]] c
-        c   = (tCon (TC (noQ "apa") [tVar (TV KType (name "A")), 
+        c   = (tCon (TC (noQ "apa") [tVar (TV KType (name "A")),
                                      tVar (TV KType (name "B")),
                                      tVar (TV KType (name "C"))]))
         s1  = [(TV KType (name "B"), tSelf)]
@@ -217,7 +217,7 @@ testMsubstRenaming = do
     putStrLn ("r2: " ++ render (pretty (runTypeM r2)))
     putStrLn ("r3: " ++ render (pretty (runTypeM r3)))
   where t   = tSchema [Quant (TV KType (name "A")) [TC (noQ "Eq") []]]
-                            (tCon (TC (noQ "apa") [tVar (TV KType (name "A")), 
+                            (tCon (TC (noQ "apa") [tVar (TV KType (name "A")),
                                                    tVar (TV KType (name "B"))]))
         msubst' sc@(TSchema l q t) = do (s,ren) <- msubstRenaming sc
                                         return $ TSchema l (subst s (subst ren q)) (subst s (subst ren t))
@@ -239,8 +239,8 @@ testMsubstRenaming = do
         r3 = do
             substitute (TV KType (name "B")) (tVar (TV KType (name "A")))
             msubst' t
-        
-            
+
+
 
 
 instance Subst TVar where
@@ -249,7 +249,7 @@ instance Subst TVar where
                                             TVar _ v' -> return v'
                                             _         -> return v
     tyfree v                        = [v]
-        
+
 instance Subst TCon where
     msubst (TC n ts)                = TC n <$> msubst ts
     tyfree (TC n ts)                = tyfree ts
@@ -287,12 +287,12 @@ instance Subst Type where
     tyfree (TStar _ _ r)            = tyfree r
     tyfree (TFX l fx)               = []
 
-    
+
 instance Subst PosPar where
     msubst (PosPar n t e p)         = PosPar n <$> msubst t <*> msubst e <*> msubst p
     msubst (PosSTAR n t)            = PosSTAR n <$> msubst t
     msubst PosNIL                   = return PosNIL
-    
+
     tyfree (PosPar n t e p)         = tyfree t ++ tyfree p
     tyfree (PosSTAR n t)            = tyfree t
     tyfree PosNIL                   = []
@@ -301,17 +301,17 @@ instance Subst KwdPar where
     msubst (KwdPar n t e p)         = KwdPar n <$> msubst t <*> msubst e <*> msubst p
     msubst (KwdSTAR n t)            = KwdSTAR n <$> msubst t
     msubst KwdNIL                   = return KwdNIL
-    
+
     tyfree (KwdPar n t e p)         = tyfree t ++ tyfree p
     tyfree (KwdSTAR n t)            = tyfree t
     tyfree KwdNIL                   = []
 
 instance Subst Decl where
-    msubst (Def l n q p k a ss de fx)   = Def l n <$> msubst q <*> msubst p <*> msubst k <*> msubst a <*> msubst ss <*> return de <*> msubst fx
-    msubst (Actor l n q p k ss)         = Actor l n <$> msubst q <*> msubst p <*> msubst k <*> msubst ss
-    msubst (Class l n q bs ss)          = Class l n <$> msubst q <*> msubst bs <*> msubst ss
-    msubst (Protocol l n q bs ss)       = Protocol l n <$> msubst q <*> msubst bs <*> msubst ss
-    msubst (Extension l q c bs ss)      = Extension l <$> msubst q <*> msubst c <*> msubst bs <*> msubst ss
+    msubst (Def l n q p k a ss de fx doc)   = Def l n <$> msubst q <*> msubst p <*> msubst k <*> msubst a <*> msubst ss <*> return de <*> msubst fx <*> return doc
+    msubst (Actor l n q p k ss doc)         = Actor l n <$> msubst q <*> msubst p <*> msubst k <*> msubst ss <*> return doc
+    msubst (Class l n q bs ss doc)          = Class l n <$> msubst q <*> msubst bs <*> msubst ss <*> return doc
+    msubst (Protocol l n q bs ss doc)       = Protocol l n <$> msubst q <*> msubst bs <*> msubst ss <*> return doc
+    msubst (Extension l q c bs ss doc)      = Extension l <$> msubst q <*> msubst c <*> msubst bs <*> msubst ss <*> return doc
     {-
     msubst d@(Protocol l n q bs ss)     = do (s,ren) <- msubstRenaming d
                                              return $ Protocol l n (subst s (subst ren q)) (subst s (subst ren bs)) (subst s (subst ren ss))
@@ -326,18 +326,18 @@ instance Subst Decl where
                                              return $ Actor l n (subst s (subst ren q)) (subst s (subst ren p)) (subst s (subst ren k))
                                                                 (subst s (subst ren ss))
     -}
-    tybound (Protocol l n q ps b)   = tvSelf : tybound q
-    tybound (Class l n q ps b)      = tvSelf : tybound q
-    tybound (Extension l q c ps b)  = tvSelf : tybound q
-    tybound (Def l n q p k t b d x) = tybound q
-    tybound (Actor l n q p k b)     = tybound q
-    
-    tyfree (Protocol l n q ps b)   = nub (tyfree q ++ tyfree ps ++ tyfree b) \\ (tvSelf : tybound q)
-    tyfree (Class l n q ps b)      = nub (tyfree q ++ tyfree ps ++ tyfree b) \\ (tvSelf : tybound q)
-    tyfree (Extension l q c ps b)  = nub (tyfree q ++ tyfree c ++ tyfree ps ++ tyfree b) \\ (tvSelf : tybound q)
-    tyfree (Def l n q p k t b d x) = nub (tyfree q ++ tyfree p ++ tyfree k ++ tyfree b ++ tyfree t ++ tyfree x) \\ tybound q
-    tyfree (Actor l n q p k b)     = nub (tyfree q ++ tyfree p ++ tyfree k ++ tyfree b) \\ (tybound q)
-    
+    tybound (Protocol l n q ps b _)   = tvSelf : tybound q
+    tybound (Class l n q ps b _)      = tvSelf : tybound q
+    tybound (Extension l q c ps b _)  = tvSelf : tybound q
+    tybound (Def l n q p k t b d x _) = tybound q
+    tybound (Actor l n q p k b _)     = tybound q
+
+    tyfree (Protocol l n q ps b _)   = nub (tyfree q ++ tyfree ps ++ tyfree b) \\ (tvSelf : tybound q)
+    tyfree (Class l n q ps b _)      = nub (tyfree q ++ tyfree ps ++ tyfree b) \\ (tvSelf : tybound q)
+    tyfree (Extension l q c ps b _)  = nub (tyfree q ++ tyfree c ++ tyfree ps ++ tyfree b) \\ (tvSelf : tybound q)
+    tyfree (Def l n q p k t b d x _) = nub (tyfree q ++ tyfree p ++ tyfree k ++ tyfree b ++ tyfree t ++ tyfree x) \\ tybound q
+    tyfree (Actor l n q p k b _)     = nub (tyfree q ++ tyfree p ++ tyfree k ++ tyfree b) \\ (tybound q)
+
 instance Subst Stmt where
     msubst (Expr l e)               = Expr l <$> msubst e
     msubst (Assign l ps e)          = Assign l <$> msubst ps <*> msubst e
@@ -438,7 +438,7 @@ instance Subst Expr where
 
 instance Subst Branch where
     msubst (Branch e b)             = Branch <$> msubst e <*> msubst b
-    
+
     tyfree (Branch e b)             = tyfree e ++ tyfree b
 
 instance Subst Pattern where
@@ -447,7 +447,7 @@ instance Subst Pattern where
     msubst (PParen l p)             = PParen l <$> msubst p
     msubst (PTuple l p k)           = PTuple l <$> msubst p <*> msubst k
     msubst (PList l ps p)           = PList l <$> msubst ps <*> msubst p
-    
+
     tyfree (PWild _ t)              = tyfree t
     tyfree (PVar _ n t)             = tyfree t
     tyfree (PParen _ p)             = tyfree p
@@ -479,7 +479,7 @@ instance Subst Handler where
 
 instance Subst WithItem where
     msubst (WithItem e p)           = WithItem <$> msubst e <*> msubst p
-    
+
     tyfree (WithItem e p)           = tyfree e ++ tyfree p
 
 instance Subst PosArg where
@@ -511,7 +511,7 @@ instance Subst NDSliz where
 
     tyfree (NDExpr e)               = tyfree e
     tyfree (NDSliz s)               = tyfree s
-    
+
 
 
 instance Subst OpArg where

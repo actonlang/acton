@@ -118,18 +118,18 @@ instance Deact Stmt where
       where t2                      = typeOf env e2
             t                       = tFun fxProc posNil kwdNil t2
     deact env (Decl l ds)           = do ds1 <- deact env1 ds
-                                         return $ Decl l $ ds1 ++ [ newact env1 n q p | Actor _ n q p _ _ <- ds, not $ abstractActor env1 (NoQ n) ]
+                                         return $ Decl l $ ds1 ++ [ newact env1 n q p Nothing | Actor _ n q p _ _ _ <- ds, not $ abstractActor env1 (NoQ n) ]
       where env1                    = define (envOf ds) env
     deact env (Signature l ns t d)  = return $ Signature l ns t d
     deact env s                     = error ("deact unexpected stmt: " ++ prstr s)
 
 instance Deact Decl where
-    deact env (Actor l n q params KwdNIL body)
+    deact env (Actor l n q params KwdNIL body ddoc)
                                     = do inits1 <- deactSuite (define (envOf decls) env1) inits
                                          decls1 <- deactSuite (define (envOf inits) env1) decls
-                                         let _init_ = Def l0 initKW [] (addSelfPar params) KwdNIL (Just tNone) (mkBody $ copies++inits1) NoDec fxProc
+                                         let _init_ = Def l0 initKW [] (addSelfPar params) KwdNIL (Just tNone) (mkBody $ copies++inits1) NoDec fxProc Nothing
                                              decls2 = [ Decl l $ map deactMeth ds | Decl l ds <- decls1 ]
-                                         return $ Class l n q [TC primActor [], cValue] (propsigs ++ [Decl l0 [_init_]] ++ decls2 ++ wraps)
+                                         return $ Class l n q [TC primActor [], cValue] (propsigs ++ [Decl l0 [_init_]] ++ decls2 ++ wraps) ddoc
       where env1                    = setActor wrapped stvars locals $ define (envOf params) $ define [(selfKW, NVar t0)] $ defineTVars q env
             t0                      = tCon $ TC (NoQ n) (map tVar $ qbound q)
 
@@ -159,29 +159,30 @@ instance Deact Decl where
             props' _                = []
 
             copies                  = [ MutAssign l0 (selfRef n) (Var l0 (NoQ n)) | n <- bound params, n `elem` locals ]
-            
-            deactMeth (Def l n q p KwdNIL t b d fx)
-                                    = Def l n' q (addSelfPar p) KwdNIL t b d fx
+
+            deactMeth (Def l n q p KwdNIL t b d fx ddoc)
+                                    = Def l n' q (addSelfPar p) KwdNIL t b d fx ddoc
               where n'              = if n `elem` wrapped then localName n else n
 
-            wraps                   = [ wrap n q p t | Def _ n q p KwdNIL (Just t) _ _ _ <- wrapdefs ]
-            
-            wrap n q p t            = Decl l0 [Def l0 n q (addSelfPar p) KwdNIL (Just t) [ret] NoDec fxAction]
+            wraps                   = [ wrap n q p t | Def _ n q p KwdNIL (Just t) _ _ _ _ <- wrapdefs ]
+
+            wrap n q p t            = Decl l0 [Def l0 n q (addSelfPar p) KwdNIL (Just t) [ret] NoDec fxAction Nothing]
               where ret             = sReturn $ eCall (tApp (eQVar primASYNCf) [t]) [self,lam]
                     lam             = Lambda l0 PosNIL KwdNIL (eCallP (tApp (eDot self $ localName n) (map tVar $ qbound q)) (pArg p)) fxProc
                     self            = eVar selfKW
 
-    deact env (Def l n q p KwdNIL (Just t) b d fx)
+    deact env (Def l n q p KwdNIL (Just t) b d fx ddoc)
                                     = do b <- deactSuite env1 b
-                                         return $ Def l n q p KwdNIL (Just t) b d fx
+                                         return $ Def l n q p KwdNIL (Just t) b d fx ddoc
       where env1                    = defineAndShadow (envOf p) $ defineTVars q env
 
-    deact env (Class l n q u b)     = Class l n q u <$> deactSuite env1 b
+    deact env (Class l n q u b ddoc)
+                                    = Class l n q u <$> deactSuite env1 b <*> pure ddoc
       where env1                    = defineSelf (NoQ n) q $ defineTVars q env
 
     deact env d                     = error ("deact unexpected decl: " ++ prstr d)
 
-newact env n q p                    = Def l0 (newactName n) q p KwdNIL (Just t) [newassign, install_gc_finalizer, waitinit, sReturn x] NoDec fxProc
+newact env n q p ddoc               = Def l0 (newactName n) q p KwdNIL (Just t) [newassign, install_gc_finalizer, waitinit, sReturn x] NoDec fxProc ddoc
   where t                           = tCon $ TC (NoQ n) (map tVar $ qbound q)
         x                           = eVar g_act
         newassign                   = sAssign (pVar g_act t) (eCall (tApp (eQVar primNEWACTOR) [t]) [])

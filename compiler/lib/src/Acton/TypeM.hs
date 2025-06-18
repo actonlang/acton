@@ -158,16 +158,16 @@ intro t mbe                            = case mbe of
                                                            (if isGen t then text "which we call" else text "inferred to be") <+> pretty t Pretty.<> text ")"
    where isGen (TCon _ (TC (NoQ (Name _ ('t' : ds))) [])) = all isDigit ds
          isGen _ = False
-         
+
 explainViolation c                   = case info c of
                                           Simple l s -> text s
-                                          DfltInfo l n mbe ts -> -- text (show n)  $+$ 
-                                               (case c of 
+                                          DfltInfo l n mbe ts -> -- text (show n)  $+$
+                                               (case c of
                                                   Cast _ t1 t2  -> intro t1 mbe <+> text "is not a subclass of" <+> pretty t2
                                                   Sub _ _ t1 t2 -> intro t1 mbe <+> text "is not a subtype of" <+> pretty t2
                                                   Impl _ _ t p -> intro  t mbe <+> text "does not implement" <+> pretty p
                                                   Sel _ _ t n t0 -> intro t mbe <+> text "does not have an attribute" <+> pretty n <+> text "with type" <+> pretty t0
-                                                  _ -> pretty c <+> text "does not hold") 
+                                                  _ -> pretty c <+> text "does not hold")
                                           DeclInfo _ _ n sc msg -> text msg  -- $+$ pretty n <+> text "is inferred to have type"<+> pretty sc
 
 explainRequirement c                = case info c of
@@ -175,16 +175,16 @@ explainRequirement c                = case info c of
                                           DfltInfo l n mbe ts ->
                                              (if ts /= []
                                               then text (concatMap (\(n,s,t) -> Pretty.print n ++ " has had its polymorphic type "
-                                                            ++  Pretty.print s ++ " instantiated to " ++ Pretty.print t) ts++", so ")  
-                                                                    
-                                              else empty) Pretty.<> 
+                                                            ++  Pretty.print s ++ " instantiated to " ++ Pretty.print t) ts++", so ")
+
+                                              else empty) Pretty.<>
                                                (case c of
                                                    Cast _ t1 t2 -> intro t1 mbe <+> text "must be a subclass of" <+> pretty t2
-                                                   Sub i _ t1 t2 -> intro t1 mbe <+> text "must be a subtype of" <+> pretty t2 
+                                                   Sub i _ t1 t2 -> intro t1 mbe <+> text "must be a subtype of" <+> pretty t2
                                                    Impl _ _ t p -> intro t mbe <+> text "must implement" <+> pretty p
                                                    Sel _ _ t n t0 -> intro t mbe <+> text "must have an attribute" <+> pretty n <+> text "with type" <+> pretty t0
                                                                           Pretty.<> text "; no such type is known."
-                                                   _ -> pretty c <+> text "must hold")  
+                                                   _ -> pretty c <+> text "must hold")
                                           DeclInfo _ _ n sc msg -> text msg   -- $+$ pretty n <+> text "is inferred to have type"<+> pretty sc
 
 
@@ -354,7 +354,7 @@ noSolve mbt vs cs                   = throwError $ NoSolve mbt vs cs
 noUnify info t1 t2                  = throwError $ NoUnify info t1 t2
 
 posElemNotFound b c n               = throwError $ incompatError (info c) ("too " ++ (if b then "few " else "many positional ") ++ elemSpec (info c) ++ elemSuffix (info c))
- 
+
 incompatError info msg             = case info of
                                         DeclInfo l1 l2 f sc msg1 -> IncompatError info (msg ++ Pretty.print f)
                                         _ -> IncompatError info msg

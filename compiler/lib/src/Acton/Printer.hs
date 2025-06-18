@@ -36,6 +36,18 @@ instance Pretty Import where
 
 prettySuite ss                      = nest 4 $ vcat $ map pretty ss
 
+-- Pretty print a suite with optional docstring at the beginning
+prettyDocSuite :: Maybe String -> Suite -> Doc
+prettyDocSuite Nothing ss           = prettySuite ss
+prettyDocSuite (Just doc) ss        = nest 4 $ vcat $ text "\"\"\"" <> text (escapeDocstring doc) <> text "\"\"\"" : map pretty ss
+
+-- Escape special characters in docstrings for pretty printing
+escapeDocstring :: String -> String
+escapeDocstring []                  = []
+escapeDocstring ('\\':xs)           = '\\' : '\\' : escapeDocstring xs
+escapeDocstring ('"':xs)            = '\\' : '"' : escapeDocstring xs
+escapeDocstring (x:xs)              = x : escapeDocstring xs
+
 instance Pretty Stmt where
     pretty (Expr _ e)               = pretty e
     pretty (Assign _ ps e)          = hsep . punctuate (space <> equals) $ map pretty ps ++ [pretty e]
@@ -50,7 +62,7 @@ instance Pretty Stmt where
     pretty (Continue _)             = text "continue"
     pretty (If _ (b:bs) b2)         = prettyBranch "if" b $+$ vmap (prettyBranch "elif") bs $+$ prettyEnd "else" b2
     pretty (While _ e b b2)         = text "while" <+> pretty e <> colon $+$ prettySuite b $+$ prettyEnd "else" b2
-    pretty (For _ p e b b2)         = text "for" <+> pretty p <+> text "in" <+> pretty e <> colon $+$ 
+    pretty (For _ p e b b2)         = text "for" <+> pretty p <+> text "in" <+> pretty e <> colon $+$
                                       prettySuite b $+$ prettyEnd "else" b2
     pretty (Try _ b hs b2 b3)       = text "try" <> colon $+$ prettySuite b $+$ vmap pretty hs $+$
                                       prettyEnd "else" b2 $+$ prettyEnd "finally" b3
@@ -64,19 +76,20 @@ instance Pretty Stmt where
     pretty (Signature _ vs sc d)    = prettyDec d $ commaList vs <+> colon <+> pretty sc
 
 instance Pretty Decl where
-    pretty (Def _ n q p k a b d x)  = (prettyDecFX d x $ text "def" <+> pretty n <> nonEmpty brackets commaList q <+> 
-                                      parens (pretty (p,k)) <> nonEmpty (text " -> " <>) pretty a <> colon) $+$ prettySuite b
-    pretty (Actor _ n q p k b)      = text "actor" <+> pretty n <> nonEmpty brackets commaList q <+> 
-                                      parens (pretty (p,k)) <> colon $+$ prettySuite b
-    pretty (Class _ n q a b)        = text "class" <+> pretty n <> nonEmpty brackets commaList q <+>
-                                      nonEmpty parens commaList a <> colon $+$ prettySuite b
-    pretty (Protocol _ n q a b)     = text "protocol" <+> pretty n <> nonEmpty brackets commaList q <+>
-                                      nonEmpty parens commaList a <> colon $+$ prettySuite b
-    pretty (Extension _ q c a b)
+    pretty (Def _ n q p k a b d x doc)
+                                    = (prettyDecFX d x $ text "def" <+> pretty n <> nonEmpty brackets commaList q <+>
+                                      parens (pretty (p,k)) <> nonEmpty (text " -> " <>) pretty a <> colon) $+$ prettyDocSuite doc b
+    pretty (Actor _ n q p k b doc)  = text "actor" <+> pretty n <> nonEmpty brackets commaList q <+>
+                                      parens (pretty (p,k)) <> colon $+$ prettyDocSuite doc b
+    pretty (Class _ n q a b doc)    = text "class" <+> pretty n <> nonEmpty brackets commaList q <+>
+                                      nonEmpty parens commaList a <> colon $+$ prettyDocSuite doc b
+    pretty (Protocol _ n q a b doc) = text "protocol" <+> pretty n <> nonEmpty brackets commaList q <+>
+                                      nonEmpty parens commaList a <> colon $+$ prettyDocSuite doc b
+    pretty (Extension _ q c a b doc)
       | tvs == tcargs c             = text "extension" <+> pretty (tcname c) <> nonEmpty brackets commaList q <+>
-                                      nonEmpty parens commaList a <> colon $+$ prettySuite b
+                                      nonEmpty parens commaList a <> colon $+$ prettyDocSuite doc b
       | otherwise                   = text "extension" <+> prettyQual q <+> pretty c <+>
-                                      nonEmpty parens commaList a <> colon $+$ prettySuite b
+                                      nonEmpty parens commaList a <> colon $+$ prettyDocSuite doc b
       where tvs                     = map tVar $ qbound q
 
 prettyDecFX d fx                    = prettyDec d . (prettyFXnoWild fx <+>)
@@ -108,7 +121,7 @@ instance Pretty KwdPar where
 instance Pretty (PosPar,KwdPar) where
     pretty (PosNIL, ks)             = pretty ks
     pretty (ps, KwdNIL)             = pretty ps
-    pretty (ps, ks)                 = pretty ps <> comma <+> pretty ks    
+    pretty (ps, ks)                 = pretty ps <> comma <+> pretty ks
 
 instance Pretty PosArg where
     pretty (PosArg e PosNil)        = pretty e
@@ -190,9 +203,9 @@ We assign precedences to operator expressions according to their main operator a
 The Python language reference does not assign numerical precedences, but the precedence order
 implied by the syntax rules is consistent with the values below, with one exception:
 Quote from section 6.5 in The Python Language Reference (v 3.8.6):
-    "The power operator binds more tightly than unary operators on its left; 
+    "The power operator binds more tightly than unary operators on its left;
      it binds less tightly than unary operators on its right."
-Printing here does not minimize the use of parentheses; unary operator expressions are 
+Printing here does not minimize the use of parentheses; unary operator expressions are
 put in parenthesis (for clarity) in all operator contexts, also where the parser does not need them.
 
 12 **
@@ -262,10 +275,10 @@ instance Pretty QName where
 
 instance Pretty ModRef where
     pretty (ModRef (i,n))           = hcat (replicate i dot) <> pretty n
-    
+
 instance Pretty Handler where
     pretty (Handler ex b)           = pretty ex <> colon $+$ prettySuite b
-    
+
 instance Pretty Except where
     pretty (ExceptAll _)            = text "except"
     pretty (Except _ x)             = text "except" <+> pretty x
@@ -319,7 +332,7 @@ instance Pretty KwdPat where
 instance Pretty (PosPat,KwdPat) where
     pretty (PosPatNil, ks)          = pretty ks
     pretty (ps, KwdPatNil)          = pretty ps
-    pretty (ps, ks)                 = pretty ps <> comma <+> pretty ks    
+    pretty (ps, ks)                 = pretty ps <> comma <+> pretty ks
 
 instance Pretty Pattern where
     pretty (PWild _ a)              = text "_" <> prettyAnn a
@@ -430,7 +443,7 @@ prettyPosRow (TVar _ v)             = text "+" <> pretty v
 prettyPosRow (TWild _)              = text "+"
 prettyPosRow (TNil _ PRow)          = empty
 prettyPosRow t                      = text "??" <>  pretty t
-    
+
 prettyKwdRow (TRow _ KRow n t (TNil _ KRow))
                                     = pretty n <> colon <+> pretty t
 prettyKwdRow (TRow _ KRow n t k)    = pretty n <> colon <+> pretty t <> comma <+> prettyKwdRow k
@@ -442,7 +455,7 @@ prettyKwdRow (TVar _ v)             = text "++" <> pretty v
 prettyKwdRow (TWild _)              = text "++"
 prettyKwdRow (TNil _ KRow)          = empty
 prettyKwdRow t                      = text "??" <>  pretty t
-    
+
 prettyFunRow (TNil _ PRow) k        = prettyKwdRow k
 prettyFunRow p (TNil _ KRow)        = prettyPosRow p
 prettyFunRow p k                    = prettyPosRow p <> comma <+> prettyKwdRow k

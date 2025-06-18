@@ -117,7 +117,7 @@ unescapeString (c:rest) = c : unescapeString rest
 
 -- | Document a declaration in Markdown format with types
 docDeclWithTypes :: TEnv -> Decl -> Doc
-docDeclWithTypes tenv (Def _ n q p k a b d x) =
+docDeclWithTypes tenv (Def _ n q p k a b d x ddoc) =
     let -- Look up inferred type information
         (inferredType, qConstraints, mdocstring) = case lookup n tenv of
             Just info@(NDef schema _ _) -> (Just schema, getQBindsFromSchema schema, extractNameDocstring info)
@@ -142,10 +142,10 @@ docDeclWithTypes tenv (Def _ n q p k a b d x) =
                 in (enrichParamsMarkdown cleanPosRow cleanKwdRow p k, Just cleanRetType, if null q then cleanConstraints else q)
             _ -> (docParamsWithTypes p k, a, q)
 
-        -- Fall back to extracting from body if not in TEnv
+        -- Use docstring from AST declaration
         docstr = case mdocstring of
             Just ds -> Just ds
-            Nothing -> extractDocstring b
+            Nothing -> ddoc
 
         -- Use cleaned up constraints for generics display
         genericsDoc = if null cleanedQ
@@ -216,28 +216,28 @@ docDeclWithTypes tenv (Def _ n q p k a b d x) =
     advanceRow (TRow _ _ _ _ rest) = rest
     advanceRow t = t
 
-docDeclWithTypes tenv (Actor _ n q p k b) =
+docDeclWithTypes tenv (Actor _ n q p k b ddoc) =
     let mdocstring = case lookup n tenv of
             Just info -> extractNameDocstring info
             _ -> Nothing
-        -- Fall back to extracting from body if not in TEnv
+        -- Use docstring from AST declaration
         docstr = case mdocstring of
             Just ds -> Just ds
-            Nothing -> extractDocstring b
+            Nothing -> ddoc
         header = text "##" <+> text "*actor*" <+> text "`" <> pretty n <> text "`" <> docGenerics q <> docParamsWithTypes p k
         docstrDoc = case docstr of
             Just ds -> blank $+$ text ds
             Nothing -> empty
     in header $+$ docstrDoc
 
-docDeclWithTypes tenv (Class _ n q a b) =
+docDeclWithTypes tenv (Class _ n q a b ddoc) =
     let mdocstring = case lookup n tenv of
             Just info -> extractNameDocstring info
             _ -> Nothing
-        -- Fall back to extracting from body if not in TEnv
+        -- Use docstring from AST declaration
         docstr = case mdocstring of
             Just ds -> Just ds
-            Nothing -> extractDocstring b
+            Nothing -> ddoc
         header = text "##" <+> text "*class*" <+> text "`" <> pretty n <> text "`" <> docGenerics q <> docAncestors a
         docstrDoc = case docstr of
             Just ds -> blank $+$ text ds
@@ -246,14 +246,14 @@ docDeclWithTypes tenv (Class _ n q a b) =
     in header $+$ docstrDoc $+$
        (if isEmpty methods then empty else blank $+$ methods)
 
-docDeclWithTypes tenv (Protocol _ n q a b) =
+docDeclWithTypes tenv (Protocol _ n q a b ddoc) =
     let mdocstring = case lookup n tenv of
             Just info -> extractNameDocstring info
             _ -> Nothing
         -- Fall back to extracting from body if not in TEnv
         docstr = case mdocstring of
             Just ds -> Just ds
-            Nothing -> extractDocstring b
+            Nothing -> ddoc
         header = text "##" <+> text "*protocol*" <+> text "`" <> pretty n <> text "`" <> docGenerics q <> docAncestors a
         docstrDoc = case docstr of
             Just ds -> blank $+$ text ds
@@ -262,10 +262,10 @@ docDeclWithTypes tenv (Protocol _ n q a b) =
     in header $+$ docstrDoc $+$
        (if isEmpty methods then empty else blank $+$ methods)
 
-docDeclWithTypes tenv (Extension _ q c a b) =
+docDeclWithTypes tenv (Extension _ q c a b ddoc) =
     let mdocstring = Nothing  -- Extensions don't have their own docstrings in TEnv
-        -- Get docstring from body
-        docstr = extractDocstring b
+        -- Use docstring from AST declaration
+        docstr = ddoc
         header = text "##" <+> text "*extension*" <+> text "`" <> pretty c <> text "`" <> docGenerics q <> docAncestors a
         docstrDoc = case docstr of
             Just ds -> blank $+$ text ds
@@ -392,7 +392,7 @@ docMethodSignature vs (TSchema _ _ t) =
 
 -- | Document a method in Markdown with types
 docMethodWithTypes :: TEnv -> Decl -> Doc
-docMethodWithTypes tenv (Def _ n q p k a b _ _) =
+docMethodWithTypes tenv (Def _ n q p k a b _ _ ddoc) =
     let (inferredType, paramsWithTypes, retType) = case lookup n tenv of
             Just (NDef (TSchema _ _ t@(TFun _ _ posRow kwdRow resType)) _ _) ->
                 (Just t, enrichParamsMarkdown posRow kwdRow p k, Just resType)
@@ -401,7 +401,7 @@ docMethodWithTypes tenv (Def _ n q p k a b _ _) =
             _ -> (Nothing, docParamsWithTypes p k, a)
         signature = text "-" <+> text "`" <> pretty n <> text "`" <> docGenerics q <> paramsWithTypes <>
                     docRetTypeFormatted (if isJust retType then retType else a)
-        docstr = case extractDocstring b of
+        docstr = case ddoc of
             Just ds -> nest 2 (text ds)
             Nothing -> empty
     in signature $+$
@@ -602,7 +602,7 @@ cleanupQBinds mapping = map cleanupQBind
 
 -- | Document a declaration with unified style and type handling
 docDeclUnified :: Bool -> TEnv -> Decl -> Doc
-docDeclUnified useStyle tenv decl@(Def _ n q p k a b d x) =
+docDeclUnified useStyle tenv decl@(Def _ n q p k a b d x ddoc) =
     let explicitGenerics = extractGenerics q
         -- Look up inferred type information
         (inferredType, qConstraints, docstringFromTEnv) = case lookup n tenv of
@@ -627,10 +627,10 @@ docDeclUnified useStyle tenv decl@(Def _ n q p k a b d x) =
                 in (enrichParamsStyledAsciiDecl useStyle cleanPosRow cleanKwdRow p k, Just cleanRetType)
             _ -> (docParamsStyledAscii useStyle useStyle p k, a)
 
-        -- Always get docstring from either TEnv or AST
+        -- Use docstring from AST declaration
         docstr = case docstringFromTEnv of
             Just ds -> Just ds
-            Nothing -> extractDocstring b
+            Nothing -> ddoc
 
         -- Show generics if we have them (either explicit or inferred)
         allGenerics = if null q && not (null typeVarMapping)
@@ -736,15 +736,15 @@ docDeclUnified useStyle tenv decl@(Def _ n q p k a b d x) =
                      then param
                      else param <> comma <+> nextParams
 
-docDeclUnified useStyle tenv (Actor _ n q p k b) =
+docDeclUnified useStyle tenv (Actor _ n q p k b ddoc) =
     let (paramsWithTypes, docstringFromTEnv) = case lookup n tenv of
             Just info@(NAct _ posRow kwdRow _ mdoc) ->
                 (enrichParamsStyledAsciiActr useStyle posRow kwdRow p k, mdoc)
             _ -> (docParamsStyledAscii useStyle useStyle p k, Nothing)
-        -- Always get docstring from either TEnv or AST
+        -- Use docstring from AST declaration
         docstr = case docstringFromTEnv of
             Just ds -> Just ds
-            Nothing -> extractDocstring b
+            Nothing -> ddoc
         header = text (cyan useStyle ++ "actor" ++ reset useStyle) <+>
                  text (bold useStyle) <> pretty n <> text (reset useStyle) <>
                  docGenerics q <> paramsWithTypes
@@ -791,14 +791,14 @@ docDeclUnified useStyle tenv (Actor _ n q p k b) =
                      then param
                      else param <> comma <+> nextParams
 
-docDeclUnified useStyle tenv (Class _ n q a b) =
+docDeclUnified useStyle tenv (Class _ n q a b ddoc) =
     let docstringFromTEnv = case lookup n tenv of
             Just info -> extractNameDocstring info
             _ -> Nothing
         -- Always get docstring from either TEnv or AST
         docstr = case docstringFromTEnv of
             Just ds -> Just ds
-            Nothing -> extractDocstring b
+            Nothing -> ddoc
         header = text (cyan useStyle ++ "class" ++ reset useStyle) <+>
                  text (bold useStyle) <> pretty n <> text (reset useStyle) <>
                  docGenerics q <> docAncestors a
@@ -898,14 +898,14 @@ docDeclUnified useStyle tenv (Class _ n q a b) =
                          then param
                          else param <> comma <+> nextParams
 
-docDeclUnified useStyle tenv (Protocol _ n q a b) =
+docDeclUnified useStyle tenv (Protocol _ n q a b ddoc) =
     let docstringFromTEnv = case lookup n tenv of
             Just info -> extractNameDocstring info
             _ -> Nothing
         -- Always get docstring from either TEnv or AST
         docstr = case docstringFromTEnv of
             Just ds -> Just ds
-            Nothing -> extractDocstring b
+            Nothing -> ddoc
         header = text (cyan useStyle ++ "protocol" ++ reset useStyle) <+>
                  text (bold useStyle) <> pretty n <> text (reset useStyle) <>
                  docGenerics q <> docAncestors a
@@ -932,10 +932,10 @@ docDeclUnified useStyle tenv (Protocol _ n q a b) =
                 Nothing -> empty
         in header $+$ (if isEmpty docstrDoc then empty else docstrDoc)
 
-docDeclUnified useStyle tenv (Extension _ q c a b) =
+docDeclUnified useStyle tenv (Extension _ q c a b ddoc) =
     let docstringFromTEnv = Nothing  -- Extensions don't have docstrings in TEnv
         -- Get docstring from AST
-        docstr = extractDocstring b
+        docstr = ddoc
         header = text (cyan useStyle ++ "extension" ++ reset useStyle) <+>
                  pretty c <> docAncestors a
         docstrDoc = case docstr of
@@ -1056,10 +1056,10 @@ docAttributeStyled useBold useColor vs (TSchema _ _ t) =
 
 -- | Document a method with styling
 docMethodStyled :: Bool -> Bool -> Decl -> Doc
-docMethodStyled useBold useColor (Def _ n q p k a b _ _) =
+docMethodStyled useBold useColor (Def _ n q p k a b _ _ ddoc) =
     let signature = nest 2 $ text "- " <> text (bold useBold) <> pretty n <> text (reset useBold) <>
                     docGenerics q <> docParamsStyledAscii useBold useColor p k <> docRetTypeStyled useBold useColor a
-        docstr = case extractDocstring b of
+        docstr = case ddoc of
             Just ds -> nest 4 (text ds)
             Nothing -> empty
     in signature $+$
@@ -1075,7 +1075,7 @@ docMethodSignatureStyled useBold useColor vs (TSchema _ _ t) =
 
 -- | Document a method with styling and types
 docMethodStyledWithTypes :: Bool -> Bool -> TEnv -> Decl -> Doc
-docMethodStyledWithTypes useBold useColor tenv (Def _ n q p k a b _ _) =
+docMethodStyledWithTypes useBold useColor tenv (Def _ n q p k a b _ _ ddoc) =
     let (inferredType, paramsWithTypes, retType) = case lookup n tenv of
             Just (NDef (TSchema _ _ t@(TFun _ _ posRow kwdRow resType)) _ _) ->
                 (Just t, enrichParamsStyledAscii useBold useColor posRow kwdRow p k, Just resType)
@@ -1085,7 +1085,7 @@ docMethodStyledWithTypes useBold useColor tenv (Def _ n q p k a b _ _) =
         signature = nest 2 $ text "- " <> text (bold useBold) <> pretty n <> text (reset useBold) <>
                     docGenerics q <> paramsWithTypes <>
                     docRetTypeStyled useBold useColor (if isJust retType then retType else a)
-        docstr = case extractDocstring b of
+        docstr = case ddoc of
             Just ds -> nest 4 (text ds)
             Nothing -> empty
     in signature $+$
@@ -1617,7 +1617,7 @@ collectClassNames stmts = Set.fromList $ concatMap extractClassNames stmts
     extractClassNames _ = []
 
     extractClassNamesFromDecl :: Decl -> [Name]
-    extractClassNamesFromDecl (Class _ n _ _ _) = [n]
+    extractClassNamesFromDecl (Class _ n _ _ _ _) = [n]
     extractClassNamesFromDecl _ = []
 
 -- | Data type to track class locations for cross-module linking
@@ -2460,19 +2460,19 @@ docDeclHtmlWithTypesAndClassesAndModule :: TEnv -> ModName -> Set Name -> Decl -
 docDeclHtmlWithTypesAndClassesAndModule tenv currentModule classNames decl =
     -- Update all type rendering to use the module-aware version
     case decl of
-        Def _ n q p k a b d x -> docDefHtmlWithModule tenv currentModule classNames n q p k a b d
-        Actor _ n q p k b -> docActorHtmlWithModule tenv currentModule classNames n q p k b
-        Class _ n q a b ->
+        Def _ n q p k a b d x ddoc -> docDefHtmlWithModule tenv currentModule classNames n q p k a b d ddoc
+        Actor _ n q p k b ddoc -> docActorHtmlWithModule tenv currentModule classNames n q p k b ddoc
+        Class _ n q a b ddoc ->
             let wtcons = map (\tc -> ([], tc)) a  -- PCon is just a type alias for TCon
-            in docClassHtmlWithModule tenv currentModule classNames n q wtcons b
-        Protocol _ n q a b ->
+            in docClassHtmlWithModule tenv currentModule classNames n q wtcons b ddoc
+        Protocol _ n q a b ddoc ->
             let wtcons = map (\pc -> ([], pc)) a
-            in docProtocolHtmlWithModule tenv currentModule classNames n q wtcons b
-        Extension _ q c a b ->
+            in docProtocolHtmlWithModule tenv currentModule classNames n q wtcons b ddoc
+        Extension _ q c a b ddoc ->
             let wtcons = map (\pc -> ([], pc)) a
-            in docExtensionHtmlWithModule tenv currentModule classNames q c wtcons b
+            in docExtensionHtmlWithModule tenv currentModule classNames q c wtcons b ddoc
   where
-    docDefHtmlWithModule tenv curMod classNames n q p k a b d =
+    docDefHtmlWithModule tenv curMod classNames n q p k a b d ddoc =
         let explicitGenerics = extractGenerics q
             funcScope = "def-" ++ nstr n
             -- Look up inferred type information
@@ -2516,12 +2516,12 @@ docDeclHtmlWithTypesAndClassesAndModule tenv currentModule classNames decl =
 
             header = text "<h2 class=\"type-context\"><code>" <> pretty n <> text "</code>" <>
                      constraintsDoc <> genericsDoc <> paramsWithTypes <> actualRetType <> text "</h2>"
-            docstr = case extractDocstring b of
+            docstr = case ddoc of
                 Just ds -> text "<div class=\"docstring\">" <> text (nl2br $ htmlEscape ds) <> text "</div>"
                 Nothing -> empty
         in header $+$ docstr
 
-    docActorHtmlWithModule tenv curMod classNames n q p k b =
+    docActorHtmlWithModule tenv curMod classNames n q p k b ddoc =
         let explicitGenerics = extractGenerics q
             -- Look up inferred type information for actors
             (paramsWithTypes, allGenerics, constraints) = case lookup n tenv of
@@ -2539,7 +2539,7 @@ docDeclHtmlWithTypesAndClassesAndModule tenv currentModule classNames decl =
                               else docConstraintsHtml allGenerics constraints
             header = text "<h2 class=\"type-context\"><span class=\"keyword\">actor</span> <code>" <> pretty n <> text "</code>" <>
                      genericsDoc <> paramsWithTypes <> text "</h2>"
-            docstr = case extractDocstring b of
+            docstr = case ddoc of
                 Just ds -> text "<div class=\"docstring\">" <> text (nl2br $ htmlEscape ds) <> text "</div>"
                 Nothing -> empty
             -- Process actor body to extract public constants, internal attributes and methods
@@ -2549,7 +2549,7 @@ docDeclHtmlWithTypesAndClassesAndModule tenv currentModule classNames decl =
            (if isEmpty body then empty else blank $+$ body) $+$
            text "</div>"
 
-    docClassHtmlWithModule tenv curMod classNames n q a b =
+    docClassHtmlWithModule tenv curMod classNames n q a b ddoc =
         let generics = extractGenerics q
             -- Always use docConstraintsHtml for rich tooltips - it handles both constrained and unconstrained generics
             classScope = "class-" ++ nstr n
@@ -2558,7 +2558,7 @@ docDeclHtmlWithTypesAndClassesAndModule tenv currentModule classNames decl =
                          else docConstraintsHtmlWithScope generics classScope q
             header = text "<h2 id=\"class-" <> text (nstr n) <> text "\" class=\"type-context\"><span class=\"keyword\">class</span> <code>" <> pretty n <> text "</code>" <>
                      genericsDoc <> docAncestorsHtmlWithGenericsAndClassesModule curMod generics classNames a <> text "</h2>"
-            docstr = case extractDocstring b of
+            docstr = case ddoc of
                 Just ds -> text "<div class=\"docstring\">" <> text (nl2br $ htmlEscape ds) <> text "</div>"
                 Nothing -> empty
             methods = docClassBodyHtmlWithGenericsTypesAndClassesModule tenv curMod generics classNames b
@@ -2567,7 +2567,7 @@ docDeclHtmlWithTypesAndClassesAndModule tenv currentModule classNames decl =
            (if isEmpty methods then empty else blank $+$ methods) $+$
            text "</div>"
 
-    docProtocolHtmlWithModule tenv curMod classNames n q a b =
+    docProtocolHtmlWithModule tenv curMod classNames n q a b ddoc =
         let generics = extractGenerics q
             -- Always use docConstraintsHtml for rich tooltips - it handles both constrained and unconstrained generics
             protocolScope = "protocol-" ++ nstr n
@@ -2576,7 +2576,7 @@ docDeclHtmlWithTypesAndClassesAndModule tenv currentModule classNames decl =
                          else docConstraintsHtmlWithScope generics protocolScope q
             header = text "<h2 class=\"type-context\"><span class=\"keyword\">protocol</span> <code>" <> pretty n <> text "</code>" <>
                      genericsDoc <> docAncestorsHtmlWithGenericsAndClassesModule curMod generics classNames a <> text "</h2>"
-            docstr = case extractDocstring b of
+            docstr = case ddoc of
                 Just ds -> text "<div class=\"docstring\">" <> text (nl2br $ htmlEscape ds) <> text "</div>"
                 Nothing -> empty
             methods = docProtocolBodyHtmlWithGenericsTypesAndClassesModule tenv curMod generics classNames b
@@ -2585,7 +2585,7 @@ docDeclHtmlWithTypesAndClassesAndModule tenv currentModule classNames decl =
            (if isEmpty methods then empty else blank $+$ methods) $+$
            text "</div>"
 
-    docExtensionHtmlWithModule tenv curMod classNames q c a b =
+    docExtensionHtmlWithModule tenv curMod classNames q c a b ddoc =
         let generics = extractGenerics q
             -- Always use docConstraintsHtml for rich tooltips - it handles both constrained and unconstrained generics
             genericsDoc = if null q
@@ -2593,7 +2593,7 @@ docDeclHtmlWithTypesAndClassesAndModule tenv currentModule classNames decl =
                          else docConstraintsHtml generics q
             header = text "<h2 class=\"type-context\"><span class=\"keyword\">extension</span> <code>" <> pretty c <> text "</code>" <>
                      genericsDoc <> docAncestorsHtmlWithGenericsAndClassesModule curMod generics classNames a <> text "</h2>"
-            docstr = case extractDocstring b of
+            docstr = case ddoc of
                 Just ds -> text "<div class=\"docstring\">" <> text (nl2br $ htmlEscape ds) <> text "</div>"
                 Nothing -> empty
             methods = docClassBodyHtmlWithGenericsTypesAndClassesModule tenv curMod generics classNames b
@@ -2605,7 +2605,7 @@ docDeclHtmlWithTypesAndClassesAndModule tenv currentModule classNames decl =
     nl2br = intercalate "<br>" . lines
 
 docDeclHtmlWithTypesAndClasses :: TEnv -> Set Name -> Decl -> Doc
-docDeclHtmlWithTypesAndClasses tenv classNames (Def _ n q p k a b d x) =
+docDeclHtmlWithTypesAndClasses tenv classNames (Def _ n q p k a b d x ddoc) =
     let explicitGenerics = extractGenerics q
         -- Look up inferred type information
         (inferredType, qConstraints) = case lookup n tenv of
@@ -2658,7 +2658,7 @@ docDeclHtmlWithTypesAndClasses tenv classNames (Def _ n q p k a b d x) =
   where
     nl2br = intercalate "<br>" . lines
 
-docDeclHtmlWithTypesAndClasses tenv classNames (Actor _ n q p k b) =
+docDeclHtmlWithTypesAndClasses tenv classNames (Actor _ n q p k b ddoc) =
     let explicitGenerics = extractGenerics q
         -- Look up inferred type information for actors
         (paramsWithTypes, allGenerics, constraints) = case lookup n tenv of
@@ -2683,7 +2683,7 @@ docDeclHtmlWithTypesAndClasses tenv classNames (Actor _ n q p k b) =
   where
     nl2br = intercalate "<br>" . lines
 
-docDeclHtmlWithTypesAndClasses tenv classNames (Class _ n q a b) =
+docDeclHtmlWithTypesAndClasses tenv classNames (Class _ n q a b ddoc) =
     let generics = extractGenerics q
         header = text "<h2 id=\"class-" <> text (nstr n) <> text "\" class=\"type-context\"><span class=\"keyword\">class</span> <code>" <> pretty n <> text "</code>" <>
                  docGenericsHtmlWithHighlight generics q <> docAncestorsHtmlWithGenericsAndClasses generics classNames a <> text "</h2>"
@@ -2699,7 +2699,7 @@ docDeclHtmlWithTypesAndClasses tenv classNames (Class _ n q a b) =
   where
     nl2br = intercalate "<br>" . lines
 
-docDeclHtmlWithTypesAndClasses tenv classNames (Protocol _ n q a b) =
+docDeclHtmlWithTypesAndClasses tenv classNames (Protocol _ n q a b ddoc) =
     let generics = extractGenerics q
         protocolScope = "protocol-" ++ nstr n
         header = text "<h2 class=\"type-context\"><span class=\"keyword\">protocol</span> <code>" <> pretty n <> text "</code>" <>
@@ -2716,7 +2716,7 @@ docDeclHtmlWithTypesAndClasses tenv classNames (Protocol _ n q a b) =
   where
     nl2br = intercalate "<br>" . lines
 
-docDeclHtmlWithTypesAndClasses tenv classNames (Extension _ q c a b) =
+docDeclHtmlWithTypesAndClasses tenv classNames (Extension _ q c a b ddoc) =
     let generics = extractGenerics q
         header = text "<h2 class=\"type-context\"><span class=\"keyword\">extension</span> <code>" <> pretty c <> text "</code>" <>
                  docGenericsHtmlWithHighlight generics q <> docAncestorsHtmlWithGenericsAndClasses generics classNames a <> text "</h2>"
@@ -2932,8 +2932,8 @@ extractClassMembers stmts = foldr extractMember ([], []) stmts
         foldr extractDeclMember (attrs, methods) decls
     extractMember _ acc = acc
 
-    extractDeclMember (Def _ n q p k ret body _ _) (attrs, methods) =
-        (attrs, (n, q, p, k, ret, extractDocstring body) : methods)
+    extractDeclMember (Def _ n q p k ret body _ _ ddoc) (attrs, methods) =
+        (attrs, (n, q, p, k, ret, ddoc) : methods)
     extractDeclMember _ acc = acc
 
 -- | Extract actor members (public constants, internal attributes, and methods) from an actor body
@@ -2950,8 +2950,8 @@ extractActorMembers stmts = foldr extractMember ([], [], []) stmts
         foldr extractDeclMember (publics, internals, methods) decls
     extractMember _ acc = acc
 
-    extractDeclMember (Def _ n q p k ret body _ _) (publics, internals, methods) =
-        (publics, internals, (n, q, p, k, ret, extractDocstring body) : methods)
+    extractDeclMember (Def _ n q p k ret body _ _ ddoc) (publics, internals, methods) =
+        (publics, internals, (n, q, p, k, ret, ddoc) : methods)
     extractDeclMember _ acc = acc
 
 -- | Extract protocol methods from a protocol body
@@ -2968,8 +2968,8 @@ extractProtocolMethods stmts = foldr extractMethod [] stmts
             _ -> [(n, q, PosNIL, KwdNIL, Just t, Nothing) | n <- names] ++ methods  -- Non-function signatures
     extractMethod _ methods = methods
 
-    extractDeclMethod (Def _ n q p k ret body _ _) methods =
-        (n, q, p, k, ret, extractDocstring body) : methods
+    extractDeclMethod (Def _ n q p k ret body _ _ ddoc) methods =
+        (n, q, p, k, ret, ddoc) : methods
     extractDeclMethod _ methods = methods
 
     -- Convert rows to parameters for protocol methods
@@ -3383,8 +3383,8 @@ partitionActorMembersHtmlWithGenericsTypesAndClasses tenv generics classNames st
         foldl extractDeclMember (publics, internals, methods) decls
     partition acc _ = acc
 
-    extractDeclMember (publics, internals, methods) (Def _ n q p k ret body _ _) =
-        (publics, internals, methods ++ [(n, q, p, k, ret, extractDocstring body)])
+    extractDeclMember (publics, internals, methods) (Def _ n q p k ret body _ _ ddoc) =
+        (publics, internals, methods ++ [(n, q, p, k, ret, ddoc)])
     extractDeclMember acc _ = acc
 
 -- | Document protocol body in HTML with generic type support
@@ -3468,7 +3468,7 @@ docMethodHtmlWithGenericsAndTypes tenv generics = docMethodHtmlWithGenericsTypes
 
 -- | Document a method in HTML with generics, type environment and class links
 docMethodHtmlWithGenericsTypesAndClasses :: TEnv -> Set Name -> Set Name -> Decl -> Doc
-docMethodHtmlWithGenericsTypesAndClasses tenv generics classNames (Def _ n q p k a b _ _) =
+docMethodHtmlWithGenericsTypesAndClasses tenv generics classNames (Def _ n q p k a b _ _ ddoc) =
     let methodGenerics = Set.union generics (extractGenerics q)
         -- Look up inferred type information
         (paramsWithTypes, inferredRetType, constraints) = case lookup n tenv of
@@ -3485,7 +3485,7 @@ docMethodHtmlWithGenericsTypesAndClasses tenv generics classNames (Def _ n q p k
 
         signature = text "<div class=\"method-signature type-context\"><code>" <> pretty n <> text "</code>" <>
                     docGenericsHtmlWithHighlight methodGenerics q <> paramsWithTypes <> actualRetType <> text "</div>"
-        docstr = case extractDocstring b of
+        docstr = case ddoc of
             Just ds -> text "<div class=\"method-doc\">" <> text (nl2br $ htmlEscape ds) <> text "</div>"
             Nothing -> empty
     in text "<li class=\"method-item\">" <> signature <> docstr <> text "</li>"

@@ -373,7 +373,7 @@
 <div class="module-doc">This module provides common data structures and utilities<br>that are used across the application.</div>
 <div class="declaration-block">
 <h2 id="class-Data" class="type-context"><span class="keyword">class</span> <code>Data</code>(<span class="type">object</span>)</h2>
-<div class="docstring">A data container with metadata<br>    <br>    This class holds arbitrary data along with metadata<br>    about when it was created and last modified.<br>    <br>    Examples:<br>        &gt;&gt;&gt; d = Data(&quot;hello&quot;, &quot;test-data&quot;)<br>        &gt;&gt;&gt; d.get_value()<br>        &quot;hello&quot;<br>    </div>
+<div class="docstring">A data container with metadata<br><br>    This class holds arbitrary data along with metadata<br>    about when it was created and last modified.<br><br>    Examples:<br>        &gt;&gt;&gt; d = Data(&quot;hello&quot;, &quot;test-data&quot;)<br>        &gt;&gt;&gt; d.get_value()<br>        &quot;hello&quot;<br>    </div>
 
 <h3>Attributes</h3>
 <div class="attributes">
@@ -386,19 +386,19 @@
 <div class="methods">
 <div class="method-item">
 <div class="method-signature"><code>__init__</code>(<span class="param-name">self</span>, <span class="param-name">value</span>: <span class="type">str</span>, <span class="param-name">label</span>: <span class="type">str</span>)</div>
-<div class="method-doc">Initialize data with value and label<br>        <br>        Args:<br>            value: The data value<br>            label: A descriptive label<br>        </div>
+<div class="method-doc">Initialize data with value and label<br><br>        Args:<br>            value: The data value<br>            label: A descriptive label<br>        </div>
 </div>
 <div class="method-item">
 <div class="method-signature"><code>get_value</code>(<span class="param-name">self</span>) → <span class="type">str</span></div>
-<div class="method-doc">Get the stored value<br>        <br>        Returns:<br>            The data value<br>        </div>
+<div class="method-doc">Get the stored value<br><br>        Returns:<br>            The data value<br>        </div>
 </div>
 <div class="method-item">
 <div class="method-signature"><code>update</code>(<span class="param-name">self</span>, <span class="param-name">new_value</span>: <span class="type">str</span>)</div>
-<div class="method-doc">Update the value<br>        <br>        Args:<br>            new_value: New value to store<br>            <br>        Note:<br>            This increments the access count<br>        </div>
+<div class="method-doc">Update the value<br><br>        Args:<br>            new_value: New value to store<br><br>        Note:<br>            This increments the access count<br>        </div>
 </div>
 <div class="method-item">
 <div class="method-signature"><code>get_info</code>(<span class="param-name">self</span>) → <span class="type">str</span></div>
-<div class="method-doc">Get formatted information about this data<br>        <br>        Returns:<br>            A string with label, value, and count<br>        </div>
+<div class="method-doc">Get formatted information about this data<br><br>        Returns:<br>            A string with label, value, and count<br>        </div>
 </div>
 </div>
 </div>
@@ -408,7 +408,7 @@
 
 This is a placeholder for any type.
 All Ts must be the same type.">T</span>](<span class="type">object</span>)</h2>
-<div class="docstring">A generic container that can hold items of any type<br>    <br>    This container maintains a list of items with various<br>    operations for manipulation and querying.<br>    <br>    Type Args:<br>        T: The type of items stored in the container<br>    </div>
+<div class="docstring">A generic container that can hold items of any type<br><br>    This container maintains a list of items with various<br>    operations for manipulation and querying.<br><br>    Type Args:<br>        T: The type of items stored in the container<br>    </div>
 
 <h3>Attributes</h3>
 <div class="attributes">
@@ -423,21 +423,21 @@ All Ts must be the same type.">T</span>]</span></div>
 <div class="methods">
 <div class="method-item">
 <div class="method-signature"><code>__init__</code>(<span class="param-name">self</span>, <span class="param-name">name</span>: <span class="type">str</span>)</div>
-<div class="method-doc">Create an empty container<br>        <br>        Args:<br>            name: Container name for identification<br>        </div>
+<div class="method-doc">Create an empty container<br><br>        Args:<br>            name: Container name for identification<br>        </div>
 </div>
 <div class="method-item">
 <div class="method-signature"><code>add</code>(<span class="param-name">self</span>, <span class="param-name">item</span>: <span class="type"><span class="generic-type" data-generic="T" data-tooltip="Generic type T
 
 This is a placeholder for any type.
 All Ts must be the same type.">T</span></span>)</div>
-<div class="method-doc">Add an item to the container<br>        <br>        Args:<br>            item: Item to add<br>            <br>        Raises:<br>            ValueError: If container is full<br>        </div>
+<div class="method-doc">Add an item to the container<br><br>        Args:<br>            item: Item to add<br><br>        Raises:<br>            ValueError: If container is full<br>        </div>
 </div>
 <div class="method-item">
 <div class="method-signature"><code>get_all</code>(<span class="param-name">self</span>) → <span class="type">list[<span class="generic-type" data-generic="T" data-tooltip="Generic type T
 
 This is a placeholder for any type.
 All Ts must be the same type.">T</span>]</span></div>
-<div class="method-doc">Get all items<br>        <br>        Returns:<br>            List of all items in the container<br>        </div>
+<div class="method-doc">Get all items<br><br>        Returns:<br>            List of all items in the container<br>        </div>
 </div>
 <div class="method-item">
 <div class="method-signature"><code>filter</code>[<span class="generic-type" data-generic="U" data-scope="" data-tooltip="Generic type U
@@ -453,24 +453,24 @@ All Ts must be the same type.">T</span>) -> U</span>) → <span class="type">lis
 
 This is a placeholder for any type.
 All Us must be the same type.">U</span>]</span></div>
-<div class="method-doc">Filter and transform items<br>        <br>        Args:<br>            predicate: Function to test each item<br>            transform: Function to transform matching items<br>            <br>        Returns:<br>            List of transformed items that match predicate<br>            <br>        Examples:<br>            &gt;&gt;&gt; c = Container[int](&quot;numbers&quot;)<br>            &gt;&gt;&gt; c.add(1)<br>            &gt;&gt;&gt; c.add(2)<br>            &gt;&gt;&gt; c.filter(lambda x: x &gt; 1, lambda x: str(x))<br>            [&quot;2&quot;]<br>        </div>
+<div class="method-doc">Filter and transform items<br><br>        Args:<br>            predicate: Function to test each item<br>            transform: Function to transform matching items<br><br>        Returns:<br>            List of transformed items that match predicate<br><br>        Examples:<br>            &gt;&gt;&gt; c = Container[int](&quot;numbers&quot;)<br>            &gt;&gt;&gt; c.add(1)<br>            &gt;&gt;&gt; c.add(2)<br>            &gt;&gt;&gt; c.filter(lambda x: x &gt; 1, lambda x: str(x))<br>            [&quot;2&quot;]<br>        </div>
 </div>
 <div class="method-item">
 <div class="method-signature"><code>count</code>(<span class="param-name">self</span>) → <span class="type">int</span></div>
-<div class="method-doc">Get number of items in container<br>        <br>        Returns:<br>            Number of items<br>        </div>
+<div class="method-doc">Get number of items in container<br><br>        Returns:<br>            Number of items<br>        </div>
 </div>
 </div>
 </div>
 
 <h2 class="type-context"><code>process_data</code>(<span class="param-name">d</span>: <span class="type"><a href="bar.html#class-Data" class="type-link">bar.Data</a></span>) → <span class="type">str</span></h2>
-<div class="docstring">Process a data object and return summary<br>    <br>    Args:<br>        d: Data object to process<br>        <br>    Returns:<br>        Processed summary string<br>        <br>    See Also:<br>        Data.get_info: For detailed information<br>    </div>
+<div class="docstring">Process a data object and return summary<br><br>    Args:<br>        d: Data object to process<br><br>    Returns:<br>        Processed summary string<br><br>    See Also:<br>        Data.get_info: For detailed information<br>    </div>
 
 <h2 class="type-context"><code>combine_data</code>(<span class="param-name">d1</span>: <span class="type"><a href="bar.html#class-Data" class="type-link">bar.Data</a></span>, <span class="param-name">d2</span>: <span class="type"><a href="bar.html#class-Data" class="type-link">bar.Data</a></span>) → <span class="type"><a href="bar.html#class-Data" class="type-link">bar.Data</a></span></h2>
-<div class="docstring">Combine two data objects<br>    <br>    Args:<br>        d1: First data object<br>        d2: Second data object<br>        <br>    Returns:<br>        New Data object with combined values<br>    </div>
+<div class="docstring">Combine two data objects<br><br>    Args:<br>        d1: First data object<br>        d2: Second data object<br><br>    Returns:<br>        New Data object with combined values<br>    </div>
 
 <div class="declaration-block">
 <h2 class="type-context"><span class="keyword">actor</span> <code>DataProcessor</code>()</h2>
-<div class="docstring">Actor that processes Data objects<br>    <br>    This actor maintains a queue of data objects<br>    and processes them asynchronously.<br>    </div>
+<div class="docstring">Actor that processes Data objects<br><br>    This actor maintains a queue of data objects<br>    and processes them asynchronously.<br>    </div>
 
 <h3>Internal Attributes</h3>
 <div class="attributes">
@@ -481,15 +481,15 @@ All Us must be the same type.">U</span>]</span></div>
 <div class="methods">
 <div class="method-item">
 <div class="method-signature"><code>enqueue</code>(<span class="param-name">d</span>: <span class="type"><a href="#class-Data" class="type-link">Data</a></span>)</div>
-<div class="method-doc">Add data to processing queue<br>        <br>        Args:<br>            d: Data object to process<br>        </div>
+<div class="method-doc">Add data to processing queue<br><br>        Args:<br>            d: Data object to process<br>        </div>
 </div>
 <div class="method-item">
 <div class="method-signature"><code>process_next</code>() → <span class="type">?<a href="#class-Data" class="type-link">Data</a></span></div>
-<div class="method-doc">Process next item in queue<br>        <br>        Returns:<br>            Processed data or None if queue empty<br>        </div>
+<div class="method-doc">Process next item in queue<br><br>        Returns:<br>            Processed data or None if queue empty<br>        </div>
 </div>
 <div class="method-item">
 <div class="method-signature"><code>get_stats</code>() → <span class="type">dict[str, int]</span></div>
-<div class="method-doc">Get processing statistics<br>        <br>        Returns:<br>            Dict with queue size and processed count<br>        </div>
+<div class="method-doc">Get processing statistics<br><br>        Returns:<br>            Dict with queue size and processed count<br>        </div>
 </div>
 </div>
 </div>
@@ -516,14 +516,14 @@ All Ts must be the same type.
 T must support:
   • Plus protocol (protocol methods)
 ">T</span></span></h2>
-<div class="docstring">Sum a list of items that support addition<br>    <br>    Args:<br>        items: List of summable items<br>        <br>    Returns:<br>        Sum of all items<br>        <br>    Raises:<br>        ValueError: If list is empty<br>    </div>
+<div class="docstring">Sum a list of items that support addition<br><br>    Args:<br>        items: List of summable items<br><br>    Returns:<br>        Sum of all items<br><br>    Raises:<br>        ValueError: If list is empty<br>    </div>
 
 <div class="declaration-block">
 <h2 class="type-context"><span class="keyword">protocol</span> <code>Processable</code>[<span class="generic-type" data-generic="T" data-scope="protocol-Processable" data-tooltip="Generic type T
 
 This is a placeholder for any type.
 All Ts must be the same type.">T</span>]</h2>
-<div class="docstring">Protocol for objects that can be processed<br>    <br>    This protocol defines the interface for objects that<br>    can be processed and transformed into a result of type T.<br>    <br>    Type Args:<br>        T: The type of the processing result<br>    </div>
+<div class="docstring">Protocol for objects that can be processed<br><br>    This protocol defines the interface for objects that<br>    can be processed and transformed into a result of type T.<br><br>    Type Args:<br>        T: The type of the processing result<br>    </div>
 
 <h3>Required Methods</h3>
 <div class="methods">
@@ -544,21 +544,21 @@ All Ts must be the same type.">T</span></span></div>
 
 <div class="declaration-block">
 <h2 class="type-context"><span class="keyword">extension</span> <code>Data</code>(<span class="type">Processable[str]</span>)</h2>
-<div class="docstring">Makes Data implement the Processable protocol<br>    <br>    This extension allows Data objects to be processed<br>    according to the Processable protocol, returning<br>    string results.<br>    </div>
+<div class="docstring">Makes Data implement the Processable protocol<br><br>    This extension allows Data objects to be processed<br>    according to the Processable protocol, returning<br>    string results.<br>    </div>
 
 <h3>Methods</h3>
 <div class="methods">
 <div class="method-item">
 <div class="method-signature"><code>process</code>(<span class="param-name">self</span>) → <span class="type">str</span></div>
-<div class="method-doc">Process data by converting to uppercase<br>        <br>        Returns:<br>            Uppercase version of the data value<br>        </div>
+<div class="method-doc">Process data by converting to uppercase<br><br>        Returns:<br>            Uppercase version of the data value<br>        </div>
 </div>
 <div class="method-item">
 <div class="method-signature"><code>validate</code>(<span class="param-name">self</span>) → <span class="type">bool</span></div>
-<div class="method-doc">Check if data is non-empty<br>        <br>        Returns:<br>            True if data has content, False if empty<br>        </div>
+<div class="method-doc">Check if data is non-empty<br><br>        Returns:<br>            True if data has content, False if empty<br>        </div>
 </div>
 <div class="method-item">
 <div class="method-signature"><code>get_metadata</code>(<span class="param-name">self</span>) → <span class="type">dict[str, str]</span></div>
-<div class="method-doc">Get data metadata<br>        <br>        Returns:<br>            Metadata including label and access count<br>        </div>
+<div class="method-doc">Get data metadata<br><br>        Returns:<br>            Metadata including label and access count<br>        </div>
 </div>
 </div>
 </div>
@@ -584,7 +584,7 @@ A must support:
 
 This is a placeholder for any type.
 All Ts must be the same type.">T</span>]</span></h2>
-<div class="docstring">Process a list of processable items<br>    <br>    Args:<br>        items: List of items implementing Processable protocol<br>        <br>    Returns:<br>        List of processed results<br>        <br>    Examples:<br>        &gt;&gt;&gt; d1 = Data(&quot;hello&quot;, &quot;test&quot;)<br>        &gt;&gt;&gt; d2 = Data(&quot;world&quot;, &quot;test2&quot;)<br>        &gt;&gt;&gt; results = process_items([d1, d2])<br>        &gt;&gt;&gt; results<br>        [&quot;HELLO&quot;, &quot;WORLD&quot;]<br>    </div>
+<div class="docstring">Process a list of processable items<br><br>    Args:<br>        items: List of items implementing Processable protocol<br><br>    Returns:<br>        List of processed results<br><br>    Examples:<br>        &gt;&gt;&gt; d1 = Data(&quot;hello&quot;, &quot;test&quot;)<br>        &gt;&gt;&gt; d2 = Data(&quot;world&quot;, &quot;test2&quot;)<br>        &gt;&gt;&gt; results = process_items([d1, d2])<br>        &gt;&gt;&gt; results<br>        [&quot;HELLO&quot;, &quot;WORLD&quot;]<br>    </div>
 
 <h2 class="type-context"><code>gt</code>[<span class="generic-type" data-generic="A" data-scope="def-gt" data-tooltip="Generic type A
 

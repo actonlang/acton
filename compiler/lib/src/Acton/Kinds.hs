@@ -97,11 +97,11 @@ instance Pretty (Name,Kind) where
 autoQuantS env (TSchema l q t)      = TSchema l (q ++ auto_q) t
   where auto_q                      = map quant $ nub (tyfree q ++ tyfree t) \\ (tvSelf : qbound q ++ tvars env)
 
-autoQuantD env (Def l n q p k t b d x)
-                                    = Def l n (q ++ auto_q) p k t b d x
+autoQuantD env (Def l n q p k t b d x doc)
+                                    = Def l n (q ++ auto_q) p k t b d x doc
   where auto_q                      = map quant $ nub (tyfree q ++ tyfree p ++ tyfree k ++ tyfree t) \\ (tvSelf : qbound q ++ tvars env)
-autoQuantD env (Extension l q c ps b)
-                                    = Extension l (q ++ auto_q) c ps b
+autoQuantD env (Extension l q c ps b doc)
+                                    = Extension l (q ++ auto_q) c ps b doc
   where auto_q                      = map quant $ nub (tyfree q ++ tyfree c ++ tyfree ps) \\ (tvSelf : qbound q ++ tvars env)
 autoQuantD env d                    = d
 
@@ -123,7 +123,7 @@ class InstKWild a where
 
 instance (InstKWild a) => InstKWild [a] where
     instKWild                       = mapM instKWild
-    
+
 instance InstKWild Decl where
     instKWild d                     = do q <- instKWild (qbinds d); return d{ qbinds = q }
 
@@ -180,7 +180,7 @@ instance ConvTWild PosPar where
       | TTuple{} <- t               = PosSTAR n <$> Just <$> convTWild t
       | otherwise                   = err1 t "Tuple type expected"
     convTWild PosNIL                = return PosNIL
-    
+
 instance ConvTWild KwdPar where
     convTWild (KwdPar n t e k)      = KwdPar n <$> convTWild t <*> return e <*> convTWild k
     convTWild (KwdSTAR n Nothing)   = KwdSTAR n <$> Just <$> (TTuple NoLoc posNil <$> convTWild tWild)
@@ -231,7 +231,7 @@ instance ConvPExist PosPar where
     convPExist env (PosPar n t e p) = PosPar n <$> convPExist env t <*> return e <*> convPExist env p
     convPExist env (PosSTAR n t)    = PosSTAR n <$> convPExist env t
     convPExist env PosNIL           = return PosNIL
-    
+
 instance ConvPExist KwdPar where
     convPExist env (KwdPar n t e k) = KwdPar n <$> convPExist env t <*> return e <*> convPExist env k
     convPExist env (KwdSTAR n t)    = KwdSTAR n <$> convPExist env t
@@ -260,9 +260,9 @@ kchkSuite env (Decl l ds : ss)      = do ds <- instKWild (map (autoQuantD env) d
                                          ds <- kchk env1 ds
                                          ss <- kchkSuite env1 ss
                                          return (Decl l ds : ss)
-  where kinds (Actor _ n q _ _ _)   = [(n, NAct q posNil kwdNil [] Nothing)]
-        kinds (Class _ n q _ _)     = [(n, NClass q [] [] Nothing)]
-        kinds (Protocol _ n q _ _)  = [(n, NProto q [] [] Nothing)]
+  where kinds (Actor _ n q _ _ _ _) = [(n, NAct q posNil kwdNil [] Nothing)]
+        kinds (Class _ n q _ _ _)   = [(n, NClass q [] [] Nothing)]
+        kinds (Protocol _ n q _ _ _)= [(n, NProto q [] [] Nothing)]
         kinds _                     = []
         kind k []                   = k
         kind k q                    = KFun [ tvkind v | Quant v _ <- q ] k
@@ -292,7 +292,7 @@ instance KCheck Stmt where
     kchk env (Signature l ns sc d)  = Signature l ns <$> (kchk env =<< instKWild (autoQuantS env sc)) <*> return d
 
 instance KCheck Decl where
-    kchk env (Def l n q p k t b d x)
+    kchk env (Def l n q p k t b d x doc)
       | not $ null ambig            = err2 ambig "Ambiguous type variable in annotation:"
       | otherwise                   = do tmp <- swapXVars []
                                          q <- convPExist env =<< convTWild q
@@ -303,17 +303,18 @@ instance KCheck Decl where
                                          q' <- swapXVars tmp
                                          env1 <- extvars (qbound q) env
                                          q <- kchkQBinds env1 (q++q')
-                                         Def l n q <$> kchk env1 p <*> kchk env1 k <*> kexp KType env1 t <*> kchkSuite env1 b <*> pure d <*> kfx env1 x
+                                         Def l n q <$> kchk env1 p <*> kchk env1 k <*> kexp KType env1 t <*> kchkSuite env1 b <*> pure d <*> kfx env1 x <*> pure doc
       where ambig                   = qualbound q \\ closeDepVarsQ (tyfree p ++ tyfree k ++ tyfree t ++ tyfree x) q
-    kchk env (Actor l n q p k b)    = do p <- convPExist env =<< convTWild p
+    kchk env (Actor l n q p k b doc)= do p <- convPExist env =<< convTWild p
                                          k <- convPExist env =<< convTWild k
                                          env1 <- extvars (qbound q) env
-                                         Actor l n <$> kchkQBinds env1 q <*> kchk env1 p <*> kchk env1 k <*> kchkSuite env1 b
-    kchk env (Class l n q us b)     = do env1 <- extvars (tvSelf : qbound q) env
-                                         Class l n <$> kchkQBinds env1 q <*> kchkBounds env1 us <*> kchkSuite env1 b
-    kchk env (Protocol l n q us b)  = do env1 <- extvars (tvSelf : qbound q) env
-                                         Protocol l n <$> kchkQBinds env1 q <*> kchkPBounds env1 us <*> kchkSuite env1 b
-    kchk env (Extension l q c us b)
+                                         Actor l n <$> kchkQBinds env1 q <*> kchk env1 p <*> kchk env1 k <*> kchkSuite env1 b <*> pure doc
+    kchk env (Class l n q us b doc) = do env1 <- extvars (tvSelf : qbound q) env
+                                         Class l n <$> kchkQBinds env1 q <*> kchkBounds env1 us <*> kchkSuite env1 b <*> pure doc
+    kchk env (Protocol l n q us b doc)
+                                    = do env1 <- extvars (tvSelf : qbound q) env
+                                         Protocol l n <$> kchkQBinds env1 q <*> kchkPBounds env1 us <*> kchkSuite env1 b <*> pure doc
+    kchk env (Extension l q c us b doc)
       | not $ null ambig            = err2 ambig "Ambiguous type variables in extension:"
       | not $ null undet            = err2 undet "Type variables undetermined by extended class:"
       | otherwise                   = do tmp <- swapXVars []
@@ -322,7 +323,7 @@ instance KCheck Decl where
                                          us <- convPExist env us
                                          q' <- swapXVars tmp
                                          env1 <- extvars (tvSelf : qbound q) env
-                                         Extension l <$> kchkQBinds env1 (q++q') <*> kexp KType env1 c <*> kchkPBounds env1 us <*> kchkSuite env1 b
+                                         Extension l <$> kchkQBinds env1 (q++q') <*> kexp KType env1 c <*> kchkPBounds env1 us <*> kchkSuite env1 b <*> pure doc
       where ambig                   = qualbound q \\ vs
             undet                   = tyfree us \\ (tvSelf : vs)
             vs                      = closeDepVarsQ (tyfree c) q
@@ -349,14 +350,14 @@ instance KCheck Expr where
     kchk env (IsInstance l e c)     = IsInstance l <$> kchk env e <*> return (unalias env c)
     kchk env (BinOp l e1 op e2)     = BinOp l <$> kchk env e1 <*> return op <*> kchk env e2
     kchk env (CompOp l e ops)       = CompOp l <$> kchk env e <*> kchk env ops
-    kchk env (UnOp l op e)          = UnOp l op <$> kchk env e 
+    kchk env (UnOp l op e)          = UnOp l op <$> kchk env e
     kchk env (Dot l e n)
       | Just m <- isModule env e    = return $ Var l (QName m n)
       | otherwise                   = Dot l <$> kchk env e <*> return n
     kchk env (Rest l e n)           = Rest l <$> kchk env e <*> return n
     kchk env (DotI l e i)           = DotI l <$> kchk env e <*> return i
     kchk env (RestI l e i)          = RestI l <$> kchk env e <*> return i
-    kchk env (Lambda l p k e x)     = Lambda l <$> (kchk env =<< convTWild p) <*> (kchk env =<< convTWild k) <*> 
+    kchk env (Lambda l p k e x)     = Lambda l <$> (kchk env =<< convTWild p) <*> (kchk env =<< convTWild k) <*>
                                                    kchk env e <*> (kfx env =<< convTWild x)
     kchk env (Yield l e)            = Yield l <$> kchk env e
     kchk env (YieldFrom l e)        = YieldFrom l <$> kchk env e
@@ -396,32 +397,32 @@ instance KCheck PosPar where
     kchk env (PosPar n t e p)       = PosPar n <$> kexp KType env t <*> kchk env e <*> kchk env p
     kchk env (PosSTAR n t)          = PosSTAR n <$> kexp KType env t
     kchk env PosNIL                 = return PosNIL
-    
+
 instance KCheck KwdPar where
     kchk env (KwdPar n t e k)       = KwdPar n <$> kexp KType env t <*> kchk env e <*> kchk env k
     kchk env (KwdSTAR n t)          = KwdSTAR n <$> kexp KType env t
     kchk env KwdNIL                 = return KwdNIL
-    
+
 instance KCheck PosArg where
     kchk env (PosArg e p)           = PosArg <$> kchk env e <*> kchk env p
     kchk env (PosStar e)            = PosStar <$> kchk env e
     kchk env PosNil                 = return PosNil
-    
+
 instance KCheck KwdArg where
     kchk env (KwdArg n e k)         = KwdArg n <$> kchk env e <*> kchk env k
     kchk env (KwdStar e)            = KwdStar <$> kchk env e
     kchk env KwdNil                 = return KwdNil
-    
+
 instance KCheck PosPat where
     kchk env (PosPat p ps)          = PosPat <$> kchk env p <*> kchk env ps
     kchk env (PosPatStar p)         = PosPatStar <$> kchk env p
     kchk env PosPatNil              = return PosPatNil
-    
+
 instance KCheck KwdPat where
     kchk env (KwdPat n p ps)        = KwdPat n <$> kchk env p <*> kchk env ps
     kchk env (KwdPatStar p)         = KwdPatStar <$> kchk env p
     kchk env KwdPatNil              = return KwdPatNil
-    
+
 instance KCheck OpArg where
     kchk env (OpArg op e)           = OpArg op <$> kchk env e
 
@@ -440,14 +441,14 @@ instance KCheck Elem where
 instance KCheck Assoc where
     kchk env (Assoc e1 e2)          = Assoc <$> kchk env e1 <*> kchk env e2
     kchk env (StarStar e)           = StarStar <$> kchk env e
-  
+
 instance KCheck Sliz where
     kchk env (Sliz l e1 e2 e3)      = Sliz l <$> kchk env e1 <*> kchk env e2 <*> kchk env e3
 
 instance KCheck NDSliz where
     kchk env (NDExpr e)             = NDExpr <$> kchk env e
     kchk env (NDSliz s)             = NDSliz <$> kchk env s
-    
+
 instance KCheck TSchema where
     kchk env (TSchema l q t)
       | not $ null ambig            = err2 ambig "Ambiguous type variable in schema:"
@@ -469,7 +470,7 @@ kchkBounds env (u:us)               = do (k,u) <- kinfer env u
                                          case k of
                                             KProto -> (:) u <$> kchkPBounds env us
                                             _ -> do kunify (loc u) k KType; (:) u <$> kchkPBounds env us
-    
+
 kchkPBounds env us                  = mapM (kexp KProto env) us
 
 
@@ -582,13 +583,13 @@ instance KSubst Kind where
                                             Nothing -> return (if g then KType else KVar v)
     ksubst g (KFun ks k)            = KFun <$> mapM (ksubst g) ks <*> ksubst g k
     ksubst g k                      = return k
-        
+
 instance KSubst TSchema where
     ksubst g (TSchema l q t)        = TSchema l <$> ksubst g q <*> ksubst g t
 
 instance KSubst TVar where
     ksubst g (TV k n)               = TV <$> ksubst g k <*> return n
-    
+
 instance KSubst TCon where
     ksubst g (TC n ts)              = TC n <$> ksubst g ts
 
@@ -631,11 +632,15 @@ instance KSubst Stmt where
     ksubst g (Signature l ns t d)   = Signature l ns <$> ksubst g t <*> return d
 
 instance KSubst Decl where
-    ksubst g (Def l n q p k a b d x)= Def l n <$> ksubst g q <*> ksubst g p <*> ksubst g k <*> ksubst g a <*> ksubst g b <*> return d <*> ksubst g x
-    ksubst g (Actor l n q p k b)    = Actor l n <$> ksubst g q <*> ksubst g p <*> ksubst g k <*> ksubst g b
-    ksubst g (Class l n q as b)     = Class l n <$> ksubst g q <*> ksubst g as <*> ksubst g b
-    ksubst g (Protocol l n q as b)  = Protocol l n <$> ksubst g q <*> ksubst g as <*> ksubst g b
-    ksubst g (Extension l q c as b) = Extension l <$> ksubst g q <*> ksubst g c <*> ksubst g as <*> ksubst g b
+    ksubst g (Def l n q p k a b d x doc)
+                                    = Def l n <$> ksubst g q <*> ksubst g p <*> ksubst g k <*> ksubst g a <*> ksubst g b <*> return d <*> ksubst g x <*> return doc
+    ksubst g (Actor l n q p k b doc)
+                                    = Actor l n <$> ksubst g q <*> ksubst g p <*> ksubst g k <*> ksubst g b <*> return doc
+    ksubst g (Class l n q as b doc) = Class l n <$> ksubst g q <*> ksubst g as <*> ksubst g b <*> return doc
+    ksubst g (Protocol l n q as b doc)
+                                    = Protocol l n <$> ksubst g q <*> ksubst g as <*> ksubst g b <*> return doc
+    ksubst g (Extension l q c as b doc)
+                                    = Extension l <$> ksubst g q <*> ksubst g c <*> ksubst g as <*> ksubst g b <*> return doc
 
 instance KSubst Expr where
     ksubst g (Var l n)              = return $ Var l n
@@ -659,7 +664,7 @@ instance KSubst Expr where
     ksubst g (IsInstance l e c)     = IsInstance l <$> ksubst g e <*> return c
     ksubst g (BinOp l e1 op e2)     = BinOp l <$> ksubst g e1 <*> return op <*> ksubst g e2
     ksubst g (CompOp l e ops)       = CompOp l <$> ksubst g e <*> ksubst g ops
-    ksubst g (UnOp l op e)          = UnOp l op <$> ksubst g e 
+    ksubst g (UnOp l op e)          = UnOp l op <$> ksubst g e
     ksubst g (Dot l e n)            = Dot l <$> ksubst g e <*> return n
     ksubst g (Rest l e n)           = Rest l <$> ksubst g e <*> return n
     ksubst g (DotI l e i)           = DotI l <$> ksubst g e <*> return i
@@ -693,32 +698,32 @@ instance KSubst PosPar where
     ksubst g (PosPar n t e p)       = PosPar n <$> ksubst g t <*> ksubst g e <*> ksubst g p
     ksubst g (PosSTAR n t)          = PosSTAR n <$> ksubst g t
     ksubst g PosNIL                 = return PosNIL
-    
+
 instance KSubst KwdPar where
     ksubst g (KwdPar n t e k)       = KwdPar n <$> ksubst g t <*> ksubst g e <*> ksubst g k
     ksubst g (KwdSTAR n t)          = KwdSTAR n <$> ksubst g t
     ksubst g KwdNIL                 = return KwdNIL
-    
+
 instance KSubst PosArg where
     ksubst g (PosArg e p)           = PosArg <$> ksubst g e <*> ksubst g p
     ksubst g (PosStar e)            = PosStar <$> ksubst g e
     ksubst g PosNil                 = return PosNil
-    
+
 instance KSubst KwdArg where
     ksubst g (KwdArg n e k)         = KwdArg n <$> ksubst g e <*> ksubst g k
     ksubst g (KwdStar e)            = KwdStar <$> ksubst g e
     ksubst g KwdNil                 = return KwdNil
-    
+
 instance KSubst PosPat where
     ksubst g (PosPat p ps)          = PosPat <$> ksubst g p <*> ksubst g ps
     ksubst g (PosPatStar p)         = PosPatStar <$> ksubst g p
     ksubst g PosPatNil              = return PosPatNil
-    
+
 instance KSubst KwdPat where
     ksubst g (KwdPat n p ps)        = KwdPat n <$> ksubst g p <*> ksubst g ps
     ksubst g (KwdPatStar p)         = KwdPatStar <$> ksubst g p
     ksubst g KwdPatNil              = return KwdPatNil
-    
+
 instance KSubst OpArg where
     ksubst g (OpArg op e)           = OpArg op <$> ksubst g e
 
@@ -737,12 +742,12 @@ instance KSubst Elem where
 instance KSubst Assoc where
     ksubst g (Assoc e1 e2)          = Assoc <$> ksubst g e1 <*> ksubst g e2
     ksubst g (StarStar e)           = StarStar <$> ksubst g e
-  
+
 instance KSubst Sliz where
     ksubst g (Sliz l e1 e2 e3)      = Sliz l <$> ksubst g e1 <*> ksubst g e2 <*> ksubst g e3
 
 instance KSubst NDSliz where
     ksubst g (NDExpr e)             = NDExpr <$> ksubst g e
     ksubst g (NDSliz s)             = NDSliz <$> ksubst g s
-    
-    
+
+

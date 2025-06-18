@@ -58,8 +58,8 @@ instance ShowErrorComponent [Char] where
 parseModule :: S.ModName -> String -> String -> IO S.Module
 parseModule qn fileName fileContent =
     -- Add a newline at the end if there isn't one already to allow files ending without newline
-    let contentWithNewline = if null fileContent || last fileContent == '\n' 
-                             then fileContent 
+    let contentWithNewline = if null fileContent || last fileContent == '\n'
+                             then fileContent
                              else fileContent ++ "\n"
     in case runParser (St.evalStateT file_input initState) fileName contentWithNewline of
         Left err -> Control.Exception.throw err
@@ -1196,6 +1196,7 @@ decorator sig = do
                        return S.Static
          decoration = (if sig then property <|> static else static) <|> return S.NoDec
 
+
 funcdef :: Parser S.Decl
 funcdef =  addLoc $ do
               (p,(deco,fx,l)) <- withPos (((,,) <$> decorator False <*> optional effect <*> rwordLoc "def"))
@@ -1203,7 +1204,9 @@ funcdef =  addLoc $ do
               n <- name
               q <- optbinds
               (ppar,kpar) <- params
-              S.Def NoLoc n q ppar kpar <$> optional (arrow *> ttype) <*> suite DEF p <*> return deco <*> return (maybe S.tWild id fx)
+              t <- optional (arrow *> ttype)
+              (ss, docstring) <- suiteWithDocstring DEF p
+              return $ S.Def NoLoc n q ppar kpar t ss deco (maybe S.tWild id fx) docstring
 
 params :: Parser (S.PosPar, S.KwdPar)
 params = try ((\k ->(S.PosNIL,k)) <$> parens (kwdpar True))
@@ -1221,8 +1224,8 @@ actordef = addLoc $ do
                 nm <- name <?> "actor name"
                 q <- optbinds
                 (ppar,kpar) <- params
-                ss <- suite ACTOR s
-                return $ S.Actor NoLoc nm q ppar kpar ss
+                (ss, docstring) <- suiteWithDocstring ACTOR s
+                return $ S.Actor NoLoc nm q ppar kpar ss docstring
 
 -- classdef: 'class' NAME ['(' [arglist] ')'] ':' suite
 -- protodef: 'class' NAME ['(' [arglist] ')'] ':' suite
@@ -1238,14 +1241,16 @@ classdefGen k pname ctx con = addLoc $ do
                 nm <- pname
                 q <- optbinds
                 cs <- optbounds
-                con NoLoc nm q cs <$> suite ctx s
+                (ss, docstring) <- suiteWithDocstring ctx s
+                return $ con NoLoc nm q cs ss docstring
 
 extdef = addLoc $ do
                 (s,l) <- withPos (rwordLoc "extension")
                 assertTop l "extension"
                 (q,c) <- try head1 <|> try head2 <|> head3
                 cs <- optbounds
-                S.Extension NoLoc q c cs <$> suite EXT s
+                (ss, docstring) <- suiteWithDocstring EXT s
+                return $ S.Extension NoLoc q c cs ss docstring
   where head1 = do q <- binds
                    fatarrow
                    c <- tcon
@@ -1329,11 +1334,17 @@ data_stmt = addLoc $
               assertDef l "data"
               S.Data NoLoc Nothing <$> suite DATA s
 
+suiteWithDocstring :: CTX -> Pos -> Parser (S.Suite, Maybe String)
+suiteWithDocstring c p = do
+    stmts <- suite c p
+    return $ extractAndRemoveDocstring stmts
+
 suite :: CTX -> Pos -> Parser S.Suite
 suite c p = do
     o <- getOffset
     withCtx c colon
-    withCtx c (indentSuite p <|> simple_stmt)
+    stmts <- withCtx c (indentSuite p <|> simple_stmt)
+    return stmts
   where indentSuite p = do
           newline1
           p1 <- L.indentGuard sc1 GT p
@@ -1344,6 +1355,28 @@ suite c p = do
                          Control.Exception.throw $ IndentationError (Loc o o) --L.incorrectIndent LT p1 p2
                 EQ -> stmt
                 GT -> L.incorrectIndent GT p2 p1)
+
+
+-- Extract docstring from the first statement of a Suite if it's a string expression
+extractAndRemoveDocstring :: S.Suite -> (S.Suite, Maybe String)
+extractAndRemoveDocstring ss@(S.Expr _ (S.Strings _ [s]) : rest) = (rest, Just (unescapeString $ stripQuotes s))
+  where
+    stripQuotes ('"':'"':'"':xs) | take 3 (reverse xs) == "\"\"\"" = take (length xs - 3) xs
+    stripQuotes ('\'':'\'':'\'':xs) | take 3 (reverse xs) == "'''" = take (length xs - 3) xs
+    stripQuotes ('\'':xs) | last xs == '\'' = init xs
+    stripQuotes ('"':xs) | last xs == '"' = init xs
+    stripQuotes s = s
+extractAndRemoveDocstring ss = (ss, Nothing)
+
+unescapeString :: String -> String
+unescapeString [] = []
+unescapeString ('\\':'n':xs) = '\n' : unescapeString xs
+unescapeString ('\\':'t':xs) = '\t' : unescapeString xs
+unescapeString ('\\':'r':xs) = '\r' : unescapeString xs
+unescapeString ('\\':'\\':xs) = '\\' : unescapeString xs
+unescapeString ('\\':'"':xs) = '"' : unescapeString xs
+unescapeString ('\\':'\'':xs) = '\'' : unescapeString xs
+unescapeString (x:xs) = x : unescapeString xs
 
 ------------------------------------------------------------------------------------------------
 --- Expressions ----------------------------------------------------------------

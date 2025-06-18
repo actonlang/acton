@@ -109,7 +109,7 @@ instance Pretty Witness where
                                       equals <+> pretty (wexpr ws (eCall (eQVar w) []))
     pretty (WInst q t p w ws)   = text "WInst" <+> prettyQual q <+> pretty t <+> parens (pretty p) <+>
                                       equals <+> pretty (wexpr ws (eQVar w))
-        
+
 instance Pretty TEnv where
     pretty tenv                 = vcat (map pretty $ normTEnv tenv)
 
@@ -213,14 +213,14 @@ instance Subst Witness where
     msubst w@WInst{}            = do t <- msubst (wtype w)
                                      p <- msubst (proto w)
                                      return w{ wtype  = t, proto = p }
-    
+
     tyfree w@WClass{}           = []
     tyfree w@WInst{}            = (tyfree (wtype w) ++ tyfree (proto w)) \\ qbound (binds w)
-    
+
 
 instance Subst WTCon where
     msubst (w,u)                = (,) <$> return w <*> msubst u
-    
+
     tyfree (w,u)                = tyfree u
 
 instance Polarity NameInfo where
@@ -288,7 +288,7 @@ instance Unalias QName where
     unalias env (GName m n)
 --      | inBuiltin env, m==mBuiltin  = NoQ n
       | otherwise                   = GName m n
-                                    
+
 instance Unalias TSchema where
     unalias env (TSchema l q t)     = TSchema l (unalias env q) (unalias env t)
 
@@ -695,7 +695,7 @@ findCon env (TC n ts)
   where (q,us,te)           = findConName n env
         tvs                 = qbound q
         s                   = tvs `zip` ts
-      
+
 findConName n env           = case findQName n env of
                                 NAct q p k te _  -> (q,[],te)
                                 NClass q us te _ -> (q,us,te)
@@ -850,7 +850,7 @@ mro                                     :: EnvF x -> [TCon] -> [WTCon]
 mro env us                              = merge [] $ map lin us' ++ [us']
   where
     us'                                 = case us of [] -> []; u:us -> ([Left (tcname u)],u) : [ ([Right (tcname u)],u) | u <- us ]
-    
+
     lin                                 :: WTCon -> [WTCon]
     lin (w,u)                           = (w,u) : [ (w++w',u') | (w',u') <- us' ]
       where (us',_)                     = findCon env u
@@ -1148,10 +1148,10 @@ doImp spath env m            = case lookupMod m env of
 
 importSome                  :: [ImportItem] -> ModName -> TEnv -> EnvF x -> EnvF x
 importSome items m te env   = define (map pick items) env
-  where 
+  where
     te1                     = impNames m te
     pick (ImportItem n mbn) = case lookup n te1 of
-                                    Just i  -> (maybe n id mbn, i) 
+                                    Just i  -> (maybe n id mbn, i)
                                     Nothing -> noItem m n
 
 importAll                   :: ModName -> TEnv -> EnvF x -> EnvF x
@@ -1159,7 +1159,7 @@ importAll m te env          = define (impNames m te) env
 
 impNames                    :: ModName -> TEnv -> TEnv
 impNames m te               = mapMaybe imp te
-  where 
+  where
     imp (n, NAct _ _ _ _ _)   = Just (n, NAlias (GName m n))
     imp (n, NClass _ _ _ _)   = Just (n, NAlias (GName m n))
     imp (n, NProto _ _ _ _)   = Just (n, NAlias (GName m n))

@@ -105,7 +105,7 @@ wfProto env (TC n ts)       = do cs <- instQuals env q ts
                                 NProto q us te _ -> q
                                 NReserved -> nameReserved n
                                 i -> err1 n ("wfProto: Protocol name expected, got " ++ show i)
-            
+
 instance WellFormed Type where
     wf env (TCon _ tc)      = wf env tc
     wf env (TFun _ x p k t) = wf env x ++ wf env p ++ wf env p ++ wf env k ++ wf env t

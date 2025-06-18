@@ -200,7 +200,7 @@ instance QType Expr where
     qType env f (UnBox t e)         = (t, fx, UnBox t e)
       where (_, fx, e')             = qType env f e
     qType env f e                   = error ("qType, e = " ++ show e)
-   
+
     qMatch f t t' e                 = f t t' e
 
 instance QType Elem where
@@ -255,21 +255,21 @@ instance QType Pattern where
     qType env f (PTuple l ps ks)    = (tTuple (typeOf env ps) (typeOf env ks), fxPure, PTuple l ps ks)
     qType env f (PList l ps p)      = (tList (typeOf env $ head ps), fxPure, PList l ps p)
     qType env f (PParen l p)        = (typeOf env p, fxPure, PParen l p)
-    
+
     qMatch f t t' p                 = p
 
 instance QType PosPat where
     qType env f (PosPat p ps)       = (posRow (typeOf env p) (typeOf env ps), fxPure, PosPat p ps)
     qType env f (PosPatStar p)      = (typeOf env p, fxPure, PosPatStar p)
     qType env f PosPatNil           = (posNil, fxPure, PosPatNil)
-    
+
     qMatch f r r' p                 = p
 
 instance QType KwdPat where
     qType env f (KwdPat n p ps)     = (kwdRow n (typeOf env p) (typeOf env ps), fxPure, KwdPat n p ps)
     qType env f (KwdPatStar p)      = (typeOf env p, fxPure, KwdPatStar p)
     qType env f KwdPatNil           = (kwdNil, fxPure, KwdPatNil)
-    
+
     qMatch f r r' p                 = p
 
 instance QType Comp where
@@ -347,11 +347,11 @@ commonEnvOf suites
   where liveSuites                  = filter fallsthru suites
 
 instance EnvOf Decl where
-    envOf (Def _ n q p k (Just t) b dec fx)
-                                    = [(n, NDef (TSchema NoLoc q $ TFun NoLoc fx (prowOf p) (krowOf k) t) dec Nothing)]
-    envOf (Class _ n q as ss)       = [(n, NClass q (leftpath as) (map dropDefSelf $ envOf ss) Nothing)]
+    envOf (Def _ n q p k (Just t) b dec fx doc)
+                                    = [(n, NDef (TSchema NoLoc q $ TFun NoLoc fx (prowOf p) (krowOf k) t) dec doc)]
+    envOf (Class _ n q as ss doc)   = [(n, NClass q (leftpath as) (map dropDefSelf $ envOf ss) doc)]
 
-    envOf (Actor _ n q p k ss)      = [(n, NAct q (prowOf p) (krowOf k) (map wrap te) Nothing)]
+    envOf (Actor _ n q p k ss doc)  = [(n, NAct q (prowOf p) (krowOf k) (map wrap te) doc)]
       where te                      = filter (not . isHidden . fst) $ envOf ss `exclude` statevars ss
             wrap (n, NDef sc dec doc) = (n, NDef (wrapFX sc) dec doc)
             wrap (n, i)             = (n, i)

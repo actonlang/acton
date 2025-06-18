@@ -93,13 +93,14 @@ instance Transform Stmt where
     trans env s                         = s
 
 instance Transform Decl where
-    trans env (Def l n q p k t b d fx)  = Def l n q (trans env1 p) (trans env1 k) t (wtrans env1 b) d fx
+    trans env (Def l n q p k t b d fx doc)
+                                        = Def l n q (trans env1 p) (trans env1 k) t (wtrans env1 b) d fx doc
       where env1                        = blockscope (bound p ++ bound k) env
-    trans env (Actor l n q p k b)       = Actor l n q (trans env1 p) (trans env1 k) (wtrans env1 b)
+    trans env (Actor l n q p k b doc)   = Actor l n q (trans env1 p) (trans env1 k) (wtrans env1 b) doc
       where env1                        = blockscope (bound p ++ bound k) env
-    trans env (Class l n q us b)        = Class l n q us (wtrans env b)
-    trans env (Protocol l n q us b)     = Protocol l n q us (wtrans env b)
-    trans env (Extension l n q us b)    = Extension l n q us (wtrans env b)
+    trans env (Class l n q us b doc)    = Class l n q us (wtrans env b) doc
+    trans env (Protocol l n q us b doc) = Protocol l n q us (wtrans env b) doc
+    trans env (Extension l n q us b doc)= Extension l n q us (wtrans env b) doc
 
 transCall (Dot _ (Var _ n) m) ts [e1,e2]
   | n == primWrapProc,  m == attrWrap   = Just e2
@@ -271,12 +272,12 @@ instance Transform PosArg where
     trans env (PosArg e p)              = PosArg (trans env e) (trans env p)
     trans env (PosStar e)               = PosStar (trans env e)
     trans env PosNil                    = PosNil
-    
+
 instance Transform KwdArg where
     trans env (KwdArg n e k)            = KwdArg n (trans env e) (trans env k)
     trans env (KwdStar e)               = KwdStar (trans env e)
     trans env KwdNil                    = KwdNil
-    
+
 instance Transform OpArg where
     trans env (OpArg op e)              = OpArg op (trans env e)
 
@@ -295,10 +296,10 @@ instance Transform Elem where
 instance Transform Assoc where
     trans env (Assoc e1 e2)             = Assoc (trans env e1) (trans env e2)
     trans env (StarStar e)              = StarStar (trans env e)
-  
+
 instance Transform Sliz where
     trans env (Sliz l e1 e2 e3)         = Sliz l (trans env e1) (trans env e2) (trans env e3)
 
 instance Transform NDSliz where
-    trans env (NDExpr e)                = NDExpr (trans env e) 
+    trans env (NDExpr e)                = NDExpr (trans env e)
     trans env (NDSliz s)                = NDSliz (trans env s)

@@ -73,7 +73,7 @@ declnames (Extension{} : ds)        = declnames ds
 declnames (d : ds)                  = dname d : declnames ds
 declnames []                        = []
 
-dname' (Extension _ _ c us _)       = extensionName us c
+dname' (Extension _ _ c us _ _)     = extensionName us c
 dname' d                            = dname d
 
 splitDeclGroup []                   = []
@@ -108,7 +108,7 @@ instance Flows a => Flows [a] where
     flows []                        = [SEQ]
     flows (s : ss)                  = flows s `seq` flows ss
       where f1 `seq` f2             = if SEQ `elem` f1 then (f1\\[SEQ])++f2 else f1
-    
+
 instance Flows Stmt where
     flows (Expr _ e) | e==eNotImpl  = []                -- Not tracked
     flows Raise{}                   = []                -- Not tracked
@@ -121,7 +121,7 @@ instance Flows Stmt where
     flows (With _ _ b)              = flows b
     flows (Try _ b hs els fin)      = flows (b++els) ++ concatMap flows hs ++ (flows fin \\ [SEQ])
     flows _                         = [SEQ]
-    
+
 instance Flows Branch where
     flows (Branch _ ss)             = flows ss
 
@@ -231,22 +231,23 @@ assigned stmts                      = concatMap assig stmts
 
 
 instance Vars Decl where
-    free (Def _ n q ps ks t b d fx) = (free ps ++ free ks ++ free b ++ free fx) \\ (n : bound q ++ bound ps ++ bound ks ++ assigned b)
-    free (Actor _ n q ps ks b)      = (free ps ++ free ks ++ free b) \\ (n : self : bound q ++ bound ps ++ bound ks ++ assigned b)
-    free (Class _ n q cs b)         = (free cs ++ free b) \\ (n : bound q ++ assigned b)
-    free (Protocol _ n q ps b)      = (free ps ++ free b) \\ (n : bound q ++ assigned b)
-    free (Extension _ q c ps b)     = (free c ++ free ps ++ free b) \\ (bound q ++ assigned b)
+    free (Def _ n q ps ks t b d fx _)
+                                    = (free ps ++ free ks ++ free b ++ free fx) \\ (n : bound q ++ bound ps ++ bound ks ++ assigned b)
+    free (Actor _ n q ps ks b _)    = (free ps ++ free ks ++ free b) \\ (n : self : bound q ++ bound ps ++ bound ks ++ assigned b)
+    free (Class _ n q cs b _)       = (free cs ++ free b) \\ (n : bound q ++ assigned b)
+    free (Protocol _ n q ps b _)    = (free ps ++ free b) \\ (n : bound q ++ assigned b)
+    free (Extension _ q c ps b _)   = (free c ++ free ps ++ free b) \\ (bound q ++ assigned b)
 
-    bound (Def _ n _ _ _ _ _ _ _)   = [n]
-    bound (Actor _ n _ _ _ _)       = [n]
-    bound (Class _ n _ _ _)         = [n]
-    bound (Protocol _ n _ _ _)      = [n]
-    bound (Extension _ _ _ _ _)     = []
+    bound (Def _ n _ _ _ _ _ _ _ _) = [n]
+    bound (Actor _ n _ _ _ _ _)     = [n]
+    bound (Class _ n _ _ _ _)       = [n]
+    bound (Protocol _ n _ _ _ _)    = [n]
+    bound (Extension _ _ _ _ _ _)   = []
 
 instance Vars Branch where
     free (Branch e ss)              = free e ++ free ss
     bound (Branch e ss)             = bound ss
-    
+
 instance Vars Handler where
     free (Handler ex ss)            = free ex ++ (free ss \\ bound ex)
     bound (Handler ex ss)           = bound ss ++ bound ex
@@ -314,7 +315,7 @@ instance Vars PosPar where
     free (PosPar n t e p)           = free t ++ free e ++ free p
     free (PosSTAR n t)              = free t
     free PosNIL                     = []
-    
+
     bound (PosPar n t e p)          = n : bound p
     bound (PosSTAR n t)             = [n]
     bound PosNIL                    = []
@@ -323,14 +324,14 @@ instance Vars KwdPar where
     free (KwdPar n t e k)           = free t ++ free e ++ free k
     free (KwdSTAR n t)              = free t
     free KwdNIL                     = []
-    
+
     bound (KwdPar n t e k)          = n : bound k
     bound (KwdSTAR n t)             = [n]
     bound KwdNIL                    = []
 
 instance Vars (PosPar,KwdPar) where
     free (ppar,kpar)                = free ppar ++ free kpar
-    
+
     bound (ppar,kpar)               = bound ppar ++ bound kpar
 
 instance Vars Elem where
@@ -339,7 +340,7 @@ instance Vars Elem where
 
     bound (Elem p)                  = bound p
     bound (Star p)                  = bound p
-    
+
 instance Vars Assoc where
     free (Assoc k v)                = free k ++ free v
     free (StarStar e)               = free e
@@ -410,18 +411,18 @@ instance Vars Pattern where
     bound (PList _ ps p)            = bound ps ++ bound p
     bound (PParen _ p)              = bound p
     bound (PData _ n ixs)           = [n]
-    
+
 instance Vars ModuleItem where
     bound (ModuleItem qn Nothing)   = free qn
     bound (ModuleItem qn (Just n))  = free n
 
 instance Vars ImportItem where
     free (ImportItem n1 as)         = []
-    
+
     bound (ImportItem n Nothing)    = free n
     bound (ImportItem n (Just as))  = free as
 
-instance Vars ModRef where 
+instance Vars ModRef where
     bound (ModRef (0, n))           = free n
     bound _                         = []
 

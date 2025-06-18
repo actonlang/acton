@@ -19,7 +19,7 @@ actor Bepa():
         print("callback", i)
         return i+1
     print("Bepa")
-    
+
 actor main(env):
     def myproc(i):
         print("myproc", i)

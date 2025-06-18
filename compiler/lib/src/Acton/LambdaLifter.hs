@@ -103,7 +103,7 @@ data LiftX                      = LiftX {
                                     freemapX  :: [(Name,[Name])],
                                     quantmapX :: [(Name,[TVar])],
                                     namemapX  :: [(Name,Name)]
-                                  } 
+                                  }
                                   deriving (Eq,Show)
 
 data LiftCtxt                   = OnTop | InDef | InClass deriving (Eq,Show)
@@ -134,7 +134,7 @@ extNames m env                  = modX env $ \x -> x{ namemapX = m ++ namemap en
 findFree n env                  = case lookup n (freemap env) of
                                     Just vs -> Just [ (v,t) | v <- vs, Just t <- [lookup v $ locals env] ]
                                     _ -> Nothing
-    
+
 
 liftedName env n                = case lookup n (namemap env) of
                                     Just n' -> n'
@@ -228,16 +228,16 @@ instance Lift Stmt where
     ll env s                            = error ("ll unexpected: " ++ prstr s)
 
 instance Lift Decl where
-    ll env (Def l n q p KwdNIL a b d fx)
+    ll env (Def l n q p KwdNIL a b d fx doc)
                                         = do b' <- llSuite (setCtxt InDef env1) b
-                                             return $ Def l n' q' p' KwdNIL (conv a) b' d fx
+                                             return $ Def l n' q' p' KwdNIL (conv a) b' d fx doc
       where env1                        = extLocals p $ define (envOf p) $ defineTVars q env
             q'                          = if ctxt env == InDef then quantScope env ++ q else q
             p'                          = addParams vts (conv p)
             n'                          = liftedName env n
             vts                         = extraArgs env n
-    ll env (Class l n q cs b)           = do b' <- llSuite (setCtxt InClass env1) b
-                                             return $ Class l n q (conv cs) b'
+    ll env (Class l n q cs b doc)       = do b' <- llSuite (setCtxt InClass env1) b
+                                             return $ Class l n q (conv cs) b' doc
       where env1                        = defineSelf (NoQ n) q $ defineTVars q env
     ll env d                            = error ("ll unexpected: " ++ prstr d)
 
@@ -258,7 +258,7 @@ freefun env e                           = Nothing
 
 closureConvert env lambda t0 vts0 es    = do n <- newName (nstr $ noq basename)
                                              --traceM ("## closureConvert " ++ prstr lambda ++ "  as  " ++ prstr n)
-                                             liftToTop [Class l0 n q bases body]
+                                             liftToTop [Class l0 n q bases body Nothing]
                                              return $ eCall (tApp (eVar n) (map tVar $ tvarScope env)) es
   where q                               = quantScope env
         s                               = selfSubst env
@@ -270,25 +270,25 @@ closureConvert env lambda t0 vts0 es    = do n <- newName (nstr $ noq basename)
         vts                             = conv $ subst s vts0
         body                            = props ++ [Decl l0 [initDef], Decl l0 defs]
         props                           = [ Signature l0 [v] (monotype t) Property | (v,t) <- subst s vts ]
-        initDef                         = Def l0 initKW [] initPars KwdNIL (Just tNone) (initBody++[sReturn eNone]) NoDec fxPure
+        initDef                         = Def l0 initKW [] initPars KwdNIL (Just tNone) (initBody++[sReturn eNone]) NoDec fxPure Nothing
         initPars                        = PosPar llSelf (Just tSelf) Nothing $ pospar vts
         initBody                        = mkBody [ MutAssign l0 (eDot (eVar llSelf) v) (eVar v) | (v,t) <- vts ]
-        mainDef attr                    = Def l0 attr [] pars KwdNIL (Just $ conv t1) mainBody NoDec fx
+        mainDef attr                    = Def l0 attr [] pars KwdNIL (Just $ conv t1) mainBody NoDec fx Nothing
         pars                            = conv $ addSelfPar p
         args                            = pArg p
         methCall to                     = eCallP (eDot (eVar llSelf) to) args
         parsC tc                        = conv $ addSelfPar $ addContPar tc p
         mainBody                        = [ sAssign (pVar v t) (eDot (eVar llSelf) v) | (v,t) <- vts ] ++ [sReturn e]
         callDef                         = mainDef attr_call_
-        execDef                         = Def l0 attr_exec_ [] pars KwdNIL (Just t1) [ sReturn (methCall attr_call_) ] NoDec fxProc
+        execDef                         = Def l0 attr_exec_ [] pars KwdNIL (Just t1) [ sReturn (methCall attr_call_) ] NoDec fxProc Nothing
         asynDef                         = mainDef attr_asyn_
-        callDefA                        = Def l0 attr_call_ [] (parsC t1) KwdNIL (Just tR) callBodyA NoDec fxProc
+        callDefA                        = Def l0 attr_call_ [] (parsC t1) KwdNIL (Just tR) callBodyA NoDec fxProc Nothing
         callBodyA                       = [ sReturn $ eCall (tApp (eQVar primAWAIT) [t1]) [eVar llCont, methCall attr_asyn_] ]
         execDefA                        = delegate attr_exec_ attr_asyn_ tValue
         evalDef                         = mainDef attr_eval_
         callDefF                        = delegate attr_call_ attr_eval_ t1
         execDefF                        = delegate attr_exec_ attr_eval_ tValue
-        delegate name to tc             = Def l0 name [] (parsC tc) KwdNIL (Just tR) (delegateBody to tc) NoDec fxProc
+        delegate name to tc             = Def l0 name [] (parsC tc) KwdNIL (Just tR) (delegateBody to tc) NoDec fxProc Nothing
         delegateBody to tc              = [ sReturn $ eCall (tApp (eQVar primRCont) [tValue]) [eVar llCont, methCall to] ]
         defs
           | basename == primCont        = [callDef]
@@ -330,7 +330,7 @@ instance Lift Expr where
       | Async _ e' <- e,
         closedType env e'               = do e' <- ll env e'
                                              p' <- ll env p
-                                             return $ Call l (eDot e' attr_asyn_) p' KwdNil      
+                                             return $ Call l (eDot e' attr_asyn_) p' KwdNil
       | closedType env e                = do e' <- llSub env e
                                              p' <- ll env p
                                              let t@TFun{effect = fx}   = typeOf env e'
