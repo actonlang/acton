@@ -1,18 +1,186 @@
 """Command line argument parsing
 
-parser = argparse.Parser(None)
+The argparse module provides command-line argument parsing for Acton applications.
+It supports options (flags), positional arguments, sub-commands, and automatic
+help generation.
 
-The Parser parses the passed argv in a first pass looking for all options
-(--option), with all unknowns arguments registered as a 'rest'. If a sub-command
-is encountered, it is registered. Once all arguments have been parsed, if a
-sub-command was identified, the sub-command parser will be run with the 'rest'
-of the arguments, i.e. the ones that could not be identified. This happens
-recursively for nested sub-commands. After all sub-command parsing is done, a
-third pass over the remaining arguments is performed, matching the rest of argv
-to positional arguments. The inner-most parser, for sub-command parsing, gets to
-parse positional argument first. This makes it possible to have optional
-positional arguments on a higher level parser but still consume positional
-arguments in a sub command.
+## Basic Usage
+
+```acton
+import argparse
+
+actor main(env):
+    def _parse_args():
+        p = argparse.Parser()
+        p.add_option("lines", "int", default=10, help="Number of lines", short="n")
+        p.add_bool("follow", "Follow file changes", short="f")
+        p.add_arg("file", "File to tail")
+        return p.parse(env.argv)
+
+    try:
+        args = _parse_args()
+
+        num_lines = args.get_int("lines")
+        follow = args.get_bool("follow")
+        filename = args.get_str("file")
+
+        print("Tailing", num_lines, "lines from", filename)
+        if follow:
+            print("Following file changes...")
+
+    except argparse.PrintUsage as exc:
+        print(exc.error_message)
+        env.exit(0)
+    except argparse.ArgumentError as exc:
+        print(exc.error_message, err=True)
+        env.exit(1)
+```
+
+The typical idiom is to define a `_parse_args()` function that sets up the parser
+and returns the parsed arguments, then wrap the main logic in a try/except block
+to handle help requests and argument errors gracefully.
+
+## Positional arguments
+
+Positional arguments must appear in a specific order and as plain values, i.e.
+no leading `-` or `--`:
+
+```acton
+p.add_arg("file", "File to tail")                    # required
+p.add_arg("backup", "Backup file", required=False)   # optional
+p.add_arg("files", "Files to tail", nargs="+")       # one or more
+
+# Usage: tail log.txt
+# Usage: tail log.txt backup.log
+# Usage: tail app.log error.log debug.log
+```
+
+## Boolean flags
+
+Boolean flags are options that do not take a value. If present, they are `True`,
+otherwise they are `False`:
+
+```acton
+p.add_bool("follow", "Follow file changes", short="f")
+p.add_bool("quiet", "Suppress headers", short="q")
+
+args = p.parse(["tail", "-f", "-q", "app.log"])
+follow = args.get_bool("follow")   # True
+quiet = args.get_bool("quiet")     # True
+
+# Usage: tail -f app.log
+# Usage: tail --follow --quiet app.log
+# Usage: tail -fq app.log  (grouped)
+```
+
+
+## Options with values
+
+Options can take values of different types:
+
+```acton
+# Integer option
+p.add_option("lines", "int", default=10, help="Number of lines", short="n")
+num_lines = args.get_int("lines")
+
+# String option
+p.add_option("format", "str", default="plain", help="Output format")
+fmt = args.get_str("format")
+
+# String list option
+p.add_option("exclude", "strlist", nargs="+", help="Patterns to exclude")
+patterns = args.get_strlist("exclude")
+
+# Usage: tail -n 20 --format json --exclude "ERROR" "DEBUG" app.log
+```
+
+## Short options
+
+Short options are single character aliases prefixed with a single dash:
+
+```acton
+p.add_option("lines", "int", default=10, help="Number of lines", short="n")
+p.add_bool("follow", "Follow file changes", short="f")
+
+# These are equivalent:
+# --lines 20 --follow
+# -n 20 -f
+# -n20 -f      (inline value)
+# -fn 20       (grouped boolean + option)
+```
+
+### Grouping rules
+- Boolean flags can be grouped: `-fq` = `-f -q`
+- Options with values: `-n 20` or `-n20` (inline)
+- Short options must be alphanumeric (a-z, A-Z, 0-9)
+- Each short option must be unique
+
+## Sub-commands
+
+Sub-commands enable hierarchical CLIs like `git add` or `docker run`:
+
+```acton
+def cmd_head(args):
+    lines = args.get_int("lines")
+    print("Head mode:", lines, "lines")
+
+def cmd_tail(args):
+    lines = args.get_int("lines")
+    follow = args.get_bool("follow")
+    print("Tail mode:", lines, "lines, follow:", follow)
+
+p = argparse.Parser()
+p.add_bool("verbose", "Verbose output", short="v")
+
+head_cmd = p.add_cmd("head", "Show first lines", cmd_head)
+head_cmd.add_option("lines", "int", default=10, short="n")
+
+tail_cmd = p.add_cmd("tail", "Show last lines", cmd_tail)
+tail_cmd.add_option("lines", "int", default=10, short="n")
+tail_cmd.add_bool("follow", "Follow changes", short="f")
+
+# Usage: viewer -v tail -n 20 -f app.log
+```
+
+## Command handlers and execution
+
+After parsing, execute the command handler if one was specified:
+
+```acton
+args = parser.parse(env.argv)
+cmd = args.cmd
+if cmd is not None:
+    cmd(args)  # Execute the command function
+else:
+    # No sub-command, default behavior
+    filename = args.get_str("file")
+    print("Processing", filename, "with default settings")
+```
+
+## Help generation
+
+Help is automatically generated and displayed with `--help`:
+
+```
+Usage: tail [-n LINES] [-f] FILE
+
+Positional arguments:
+  FILE               File to tail
+
+Options:
+  -n, --lines LINES  Number of lines
+  -f, --follow       Follow file changes
+  --help             show this help message
+```
+
+## Error handling
+
+The parser raises specific exceptions for different error conditions:
+
+- `ArgumentError`: Invalid arguments, missing values, unknown options
+- `PrintUsage`: Help requested (catch and print, then exit)
+
+Always wrap parsing in try/except to handle these gracefully.
 """
 
 # TODO: mutually exclusive argument groups
@@ -20,6 +188,31 @@ arguments in a sub command.
 # TODO: required options (oxymoronic)?
 # TODO: bash completion
 #
+
+# Parsing Algorithm: Three-Phase Approach
+#
+# Phase 1 - Option Recognition and Collection:
+# Parser processes argv sequentially, identifying known long options (--option) and
+# short options (-x). For grouped short options (-abc), recognized options are processed
+# immediately while unknown options are reconstructed and added to 'rest'. Sub-commands
+# are detected and registered but parsing continues. All unrecognized arguments go to 'rest'.
+#
+# Phase 2 - Sub-command Processing (recursive):
+# If a sub-command was identified, its parser receives the 'rest' arguments and repeats
+# Phase 1 with its own option definitions. This happens recursively for nested sub-commands,
+# with each level processing its known options and passing unknowns down the chain.
+#
+# Phase 3 - Positional Argument Matching:
+# After all option processing, remaining arguments are matched to positional argument
+# definitions. Inner-most parsers (deepest sub-commands) process positional arguments
+# first, enabling optional positional arguments at higher levels while still consuming
+# required positional arguments in sub-commands.
+#
+# Grouped Short Options (-abc):
+# Recognized options are processed immediately, unknown options are reconstructed as
+# separate arguments for 'rest' (e.g., -a known, -bc unknown -> -bc goes to rest).
+# This enables mixed groups where some options belong to the main parser and others
+# to sub-command parsers.
 
 class ArgumentError(Exception):
     pass
@@ -42,54 +235,55 @@ class Args(object):
         try:
             opt = self.options[name]
             if opt.type != "bool":
-                raise ValueError("Option %s is not a bool" % name)
+                raise ValueError(f"Option {name} is not a bool")
             val = opt.value
             if isinstance(val, bool):
                 return val
-            raise ValueError("Option value %s is not a bool" % str(val))
+            raise ValueError(f"Option value {val} is not a bool")
         except KeyError:
-            raise ArgumentError("Option '%s' not found" % name)
+            raise ArgumentError(f"Option '{name}' not found")
 
     def get_int(self, name: str) -> int:
         try:
             opt = self.options[name]
             if opt.type != "int":
-                raise ValueError("Option '%s' is not a int" % name)
+                raise ValueError(f"Option '{name}' is not a int")
             val = opt.value
             if isinstance(val, int):
                 return val
-            raise ValueError("Option value '%s' is not a int" % str(val))
+            raise ValueError(f"Option value '{val}' is not a int")
         except KeyError:
-            raise ArgumentError("Option '%s' not found" % name)
+            raise ArgumentError(f"Option '{name}' not found")
 
     def get_str(self, name: str) -> str:
         try:
             opt = self.options[name]
             if opt.type != "str":
-                raise ValueError("Option '%s' is not a str" % name)
+                raise ValueError(f"Option '{name}' is not a str")
             val = opt.value
             if isinstance(val, str):
                 return val
-            raise ValueError("Option value '%s' is not a str" % str(val))
+            raise ValueError(f"Option value '{val}' is not a str")
         except KeyError:
-            raise ArgumentError("Option '%s' not found" % name)
+            raise ArgumentError(f"Option '{name}' not found")
 
     def get_strlist(self, name: str) -> list[str]:
         try:
             opt = self.options[name]
             if opt.type != "strlist":
-                raise ValueError("Option '%s' is not a list[str]" % name)
+                raise ValueError(f"Option '{name}' is not a list[str]")
             val = opt.value
             if isinstance(val, list):
                 return val
-            raise ValueError("Option value '%s' is not a list[str]" % str(val))
+            raise ValueError(f"Option value '{val}' is not a list[str]")
         except KeyError:
-            raise ArgumentError("Option '%s' not found" % name)
+            raise ArgumentError(f"Option '{name}' not found")
 
 
 class Parser(object):
     cmd: str
-    opts: dict[str, (name: str, type: str, nargs: str, default: ?value, help: str)]
+    opts: dict[str, (name: str, type: str, nargs: str, default: ?value, help: str, short: ?str)]
+    short_opts: dict[str, str]  # short -> long name mapping
     args: list[(name: str, help: str, required: bool, nargs: str, left: int)]
     cmds: dict[str, (help: str, parser: Parser, fn: proc(Args) -> None)]
     prog: str
@@ -97,19 +291,40 @@ class Parser(object):
     def __init__(self, cmd=""):
         self.cmd = cmd
         self.opts = {}
+        self.short_opts = {}
         self.args = []
         self.cmds = {}
         self.prog = ""
 
-    def add_bool(self, name: str, help: str):
-        self.opts[name] = (name=name, type="bool", nargs="?", default=False, help=help)
+    def add_bool(self, name: str, help: str, short: ?str=None):
+        if short is not None:
+            if len(short) != 1:
+                raise ArgumentError("Short option must be exactly one character")
+            if not short.isalnum():
+                raise ArgumentError("Short option must be alphanumeric")
+            if short in self.short_opts:
+                raise ArgumentError(f"Short option '{short}' already exists")
+            self.short_opts[short] = name
 
-    def add_option(self, name: str, type: str, nargs: str="?", default: ?value=None, help=""):
+        self.opts[name] = (name=name, type="bool", nargs="?", default=False, help=help, short=short)
+
+    def add_option(self, name: str, type: str, nargs: str="?", default: ?value=None, help="", short: ?str=None):
         if name in self.opts:
-            raise ArgumentError("Option '%s' already exists" % name)
+            raise ArgumentError(f"Option '{name}' already exists")
         if type not in {"int", "str", "strlist"}:
-            raise ArgumentError("Invalid option type '%s'" % type)
-        self.opts[name] = (name=name, type=type, nargs=nargs, default=default, help="")
+            raise ArgumentError(f"Invalid option type '{type}'")
+
+        if short is not None:
+            if len(short) != 1:
+                raise ArgumentError("Short option must be exactly one character")
+            if not short.isalnum():
+                raise ArgumentError("Short option must be alphanumeric")
+            if short in self.short_opts:
+                raise ArgumentError(f"Short option '{short}' already exists")
+            self.short_opts[short] = name
+
+        self.opts[name] = (name=name, type=type, nargs=nargs, default=default, help=help, short=short)
+
 
     def add_arg(self, name: str, help: str="", required: bool=True, nargs: str="?"):
         if nargs == "+" or nargs == "*":
@@ -131,42 +346,52 @@ class Parser(object):
         short_opts = ""
         for name in sorted(self.opts.keys()):
             opt = self.opts[name]
+            short_opt = opt.short
             if opt.type == "bool":
-                short_opts += " [--%s]" % name
+                if short_opt is not None:
+                    short_opts += " [-%s]" % short_opt
+                else:
+                    short_opts += " [--%s]" % name
             else:
-                short_opts += " [--%s %s]" % (name, name.upper())
+                if short_opt is not None:
+                    short_opts += " [-%s %s]" % (short_opt, name.upper())
+                else:
+                    short_opts += " [--%s %s]" % (name, name.upper())
         for arg in self.args:
             n = arg.name
             if n is not None:
                 if arg.nargs == "?":
                     if arg.required:
-                        short_opts += " %s" % (n.upper())
+                        short_opts += f" {n.upper()}"
                     else:
-                        short_opts += " [%s]" % (n.upper())
+                        short_opts += f" [{n.upper()}]"
                 elif arg.nargs == "+":
-                    short_opts += " %s [%s ...]" % (n.upper(), n.upper())
+                    short_opts += f" {n.upper()} [{n.upper()} ...]"
         if len(self.cmds) > 0:
             short_opts += " COMMAND"
-        usage_text += "Usage: %s%s\n" % (self.prog, short_opts)
+        usage_text += f"Usage: {self.prog}{short_opts}\n"
 
         if len(self.cmds) > 0:
             usage_text += "\nCommands:\n"
             for name in sorted(self.cmds.keys()):
-                usage_text += "  %-14s %s\n" % (name, self.cmds[name].help)
+                usage_text += f"  {name:<14} {self.cmds[name].help}\n"
         if len(self.args) > 0:
             usage_text += "\nPositional arguments:\n"
             for arg in self.args:
                 n = arg.name
                 if n is not None:
-                    usage_text += "  %-14s %s\n" % (n.upper(), arg.help)
+                    usage_text += f"  {n.upper():<14} {arg.help}\n"
         if len(self.opts) > 0:
             usage_text += "\nOptions:\n"
             for name in sorted(self.opts.keys()):
                 opt = self.opts[name]
-                opt_help = "--%s" % name
+                opt_help = f"--{name}"
+                short_opt = opt.short
+                if short_opt is not None:
+                    opt_help = f"-{short_opt}, {opt_help}"
                 if opt.type != "bool":
-                    opt_help += " %s" % name.upper()
-                usage_text += "  %-14s %s\n" % (opt_help, opt.help)
+                    opt_help += f" {name.upper()}"
+                usage_text += f"  {opt_help:<14} {opt.help}\n"
         return usage_text
 
     def parse(self, argv: list[str]) -> Args:
@@ -193,7 +418,7 @@ class Parser(object):
 
         for arg in self.args:
             if arg.required and arg.name not in args.options:
-                raise ArgumentError("Missing positional argument: %s" % arg.name)
+                raise ArgumentError(f"Missing positional argument: {arg.name}")
 
         return args
 
@@ -241,7 +466,7 @@ class Parser(object):
                             try:
                                 val = argv[p+1]
                             except IndexError:
-                                raise ArgumentError("Missing value to option %s" % arg)
+                                raise ArgumentError(f"Missing value to option {arg}")
                             skip += 1
 
                     if aspec.type == "bool":
@@ -250,7 +475,7 @@ class Parser(object):
                         try:
                             res.options[akey] = ("type"="int", "value"=int(val))
                         except ValueError:
-                            raise ArgumentError("Option %s requires an integer value" % akey)
+                            raise ArgumentError(f"Option {akey} requires an integer value")
                     elif aspec.type == "str":
                         res.options[akey] = ("type"="str", "value"=val)
                     elif aspec.type == "strlist":
@@ -264,6 +489,97 @@ class Parser(object):
                 else:
                     #raise ArgumentError("Unknown option %s" % arg)
                     rest.append(arg)
+            elif arg.startswith('-') and len(arg) > 1:
+                # Handle short options (-x or -xyz for grouped bools only)
+                short_chars = arg[1:]  # Remove leading dash
+
+                # Check if this is a single non-bool option with inline value
+                if len(short_chars) > 1:
+                    first_char = short_chars[0]
+                    if first_char in self.short_opts:
+                        first_spec = self.opts[self.short_opts[first_char]]
+                        if first_spec.type != "bool":
+                            # Single non-bool option with inline value: -ofile.txt
+                            akey = self.short_opts[first_char]
+                            val = short_chars[1:]  # Rest is the value
+
+                            if first_spec.type == "int":
+                                try:
+                                    res.options[akey] = ("type"="int", "value"=int(val))
+                                except ValueError:
+                                    raise ArgumentError(f"Option -{first_char} requires an integer value")
+                            elif first_spec.type == "str":
+                                res.options[akey] = ("type"="str", "value"=val)
+                            elif first_spec.type == "strlist":
+                                newval = []
+                                if akey in res.options:
+                                    curlist = res.options[akey].value
+                                    if isinstance(curlist, list):
+                                        newval = curlist
+                                newval.append(val)
+                                res.options[akey] = ("type"="strlist", "value"=newval)
+                            continue  # Skip to next argument
+
+                # Process as grouped boolean options or single option
+                unknown_chars = []
+                processed_any = False
+
+                for j in range(len(short_chars)):
+                    short_char = short_chars[j]
+
+                    if short_char in self.short_opts:
+                        akey = self.short_opts[short_char]
+                        aspec = self.opts[akey]
+
+                        if aspec.type == "bool":
+                            res.options[akey] = ("type"="bool", "value"=True)
+                            processed_any = True
+                        else:
+                            # Non-bool short option in group context
+                            if j != len(short_chars) - 1:
+                                raise ArgumentError(f"Non-boolean option -{short_char} cannot be grouped (must be last or use separate argument)")
+
+                            # Single non-bool option, value comes from next arg
+                            val = ""
+                            try:
+                                val = argv[p+1]
+                                skip += 1
+                            except IndexError:
+                                raise ArgumentError(f"Missing value to option -{short_char}")
+
+                            if aspec.type == "int":
+                                try:
+                                    res.options[akey] = ("type"="int", "value"=int(val))
+                                except ValueError:
+                                    raise ArgumentError(f"Option -{short_char} requires an integer value")
+                            elif aspec.type == "str":
+                                res.options[akey] = ("type"="str", "value"=val)
+                            elif aspec.type == "strlist":
+                                newval = []
+                                if akey in res.options:
+                                    curlist = res.options[akey].value
+                                    if isinstance(curlist, list):
+                                        newval = curlist
+                                newval.append(val)
+                                res.options[akey] = ("type"="strlist", "value"=newval)
+                            processed_any = True
+                            break  # Exit loop after processing value
+                    else:
+                        # Unknown short option, collect for later
+                        unknown_chars.append(short_char)
+
+                # If we have unknown chars, add them to rest as separate arguments
+                if len(unknown_chars) > 0:
+                    if len(unknown_chars) == 1:
+                        rest.append("-" + unknown_chars[0])
+                    else:
+                        rest.append("-" + "".join(unknown_chars))
+
+                # If no known options were processed and we have unknowns,
+                # it means the entire arg was unknown
+                if not processed_any and len(unknown_chars) > 0:
+                    # We already added the reconstructed unknown args above
+                    pass
             else:
                 if arg in self.cmds:
                     # We found a sub-command, store which one but continue
