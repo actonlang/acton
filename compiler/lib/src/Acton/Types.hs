@@ -510,14 +510,14 @@ instance InfEnv Decl where
     infEnv env d@(Def _ n q p k a _ _ fx)
       | nodup (p,k)                     = case findName n env of
                                              NSig sc dec _ | t@TFun{} <- sctype sc, matchingDec n sc dec (deco d) -> do
-                                                 --traceM ("\n## infEnv (sig) def " ++ prstr (n, NDef sc dec))
+                                                 --traceM ("\n## infEnv (sig) def " ++ prstr (n, NDef sc dec Nothing))
                                                  let docstring = extractDocstring (dbody d)
                                                  return ([], [(n, NDef (fxUnwrapSc env sc) dec docstring)], d{deco = dec})
                                              NReserved -> do
                                                  t <- tFun (fxUnwrap env fx) (prowOf p) (krowOf k) <$> maybe newTVar return a
                                                  let sc = tSchema q (if inClass env then dropSelf t (deco d) else t)
                                                      docstring = extractDocstring (dbody d)
-                                                 --traceM ("\n## infEnv def " ++ prstr (n, NDef sc (deco d)))
+                                                 --traceM ("\n## infEnv def " ++ prstr (n, NDef sc (deco d) Nothing))
                                                  return ([], [(n, NDef sc (deco d) docstring)], d)
                                              _ ->
                                                  illegalRedef n
