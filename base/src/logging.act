@@ -160,7 +160,7 @@ class DefaultFormatter(Formatter):
         text = str(m.ts) + " %-7s" % lvl_name
         if len(str_path) > 0:
             text += str_path + ": "
-        text += m.actor_class + "[" + str(m.actor_id) + "]: "
+        text += f"{m.actor_class}[{str(m.actor_id)}]: "
         if msg is not None:
             text += msg
         return text

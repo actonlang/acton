@@ -4,6 +4,8 @@ This document describes the process for lifting the entire Acton ecosystem when 
 
 ## Ecosystem Repositories
 
+builtin & stdlib are in this repo in the base/ directory.
+
 The following repositories contain syntax highlighting and similar for editors / IDE and should be updated when the language has been changed:
 
 - git@github.com:actonlang/Acton.tmbundle.git
