@@ -295,6 +295,173 @@ actor test_help_subcmd():
     test()
 
 
+def test_short_bool():
+    p = argparse.Parser()
+    p.add_bool("verbose", "Enable verbose output", short="v")
+    p.add_bool("debug", "Enable debug mode", short="d")
+
+    # Test short option
+    args = p.parse(["./app", "-v"])
+    if args.get_bool("verbose") != True:
+        raise ValueError("short bool -v should be True")
+    if args.get_bool("debug") != False:
+        raise ValueError("debug should remain False")
+
+    # Test long option still works
+    args = p.parse(["./app", "--verbose"])
+    if args.get_bool("verbose") != True:
+        raise ValueError("long bool --verbose should be True")
+
+def test_short_option_with_value():
+    p = argparse.Parser()
+    p.add_option("output", "str", default="out.txt", help="Output file", short="o")
+    p.add_option("count", "int", default=1, help="Number of times", short="n")
+
+    # Test short option with value
+    args = p.parse(["./app", "-o", "result.txt"])
+    if args.get_str("output") != "result.txt":
+        raise ValueError("short option -o should set output to result.txt")
+
+    # Test short option with int value
+    args = p.parse(["./app", "-n", "42"])
+    if args.get_int("count") != 42:
+        raise ValueError("short option -n should set count to 42")
+
+    # Test long options still work
+    args = p.parse(["./app", "--output", "final.txt", "--count", "100"])
+    if args.get_str("output") != "final.txt":
+        raise ValueError("long option --output should work")
+    if args.get_int("count") != 100:
+        raise ValueError("long option --count should work")
+
+def test_short_grouped():
+    p = argparse.Parser()
+    p.add_bool("verbose", "Enable verbose output", short="v")
+    p.add_bool("debug", "Enable debug mode", short="d")
+    p.add_bool("force", "Force operation", short="f")
+
+    # Test grouped short options
+    args = p.parse(["./app", "-vdf"])
+    if args.get_bool("verbose") != True:
+        raise ValueError("grouped -vdf should set verbose=True")
+    if args.get_bool("debug") != True:
+        raise ValueError("grouped -vdf should set debug=True")
+    if args.get_bool("force") != True:
+        raise ValueError("grouped -vdf should set force=True")
+
+def test_short_mixed_with_long():
+    p = argparse.Parser()
+    p.add_bool("verbose", "Enable verbose output", short="v")
+    p.add_option("output", "str", default="out.txt", help="Output file", short="o")
+    p.add_bool("debug", "Enable debug mode")  # No short option
+
+    args = p.parse(["./app", "-v", "--debug", "-o", "test.txt"])
+    if args.get_bool("verbose") != True:
+        raise ValueError("mixed: -v should be True")
+    if args.get_bool("debug") != True:
+        raise ValueError("mixed: --debug should be True")
+    if args.get_str("output") != "test.txt":
+        raise ValueError("mixed: -o should set output")
+
+def test_short_option_conflicts():
+    p = argparse.Parser()
+    p.add_bool("verbose", "Enable verbose output", short="v")
+    try:
+        p.add_bool("version", "Show version", short="v")  # Conflict!
+    except argparse.ArgumentError:
+        return
+    raise ValueError("Expected ArgumentError for conflicting short options")
+
+def test_short_invalid_chars():
+    p = argparse.Parser()
+    try:
+        p.add_bool("verbose", "Enable verbose output", short="ab")  # Too long
+    except argparse.ArgumentError:
+        pass
+    else:
+        raise ValueError("Expected ArgumentError for multi-char short option")
+
+    try:
+        p.add_bool("debug", "Enable debug", short="")  # Empty
+    except argparse.ArgumentError:
+        pass
+    else:
+        raise ValueError("Expected ArgumentError for empty short option")
+
+    try:
+        p.add_bool("force", "Force operation", short="-")  # Invalid char
+    except argparse.ArgumentError:
+        pass
+    else:
+        raise ValueError("Expected ArgumentError for invalid character")
+
+    try:
+        p.add_bool("quiet", "Quiet mode", short="=")  # Invalid char
+    except argparse.ArgumentError:
+        pass
+    else:
+        raise ValueError("Expected ArgumentError for invalid character")
+
+def test_short_inline_values():
+    p = argparse.Parser()
+    p.add_option("output", "str", help="Output file", short="o")
+    p.add_option("count", "int", help="Number", short="n")
+
+    # Test inline string value
+    args = p.parse(["./app", "-otest.txt"])
+    if args.get_str("output") != "test.txt":
+        raise ValueError("Inline string value -otest.txt failed")
+
+    # Test inline int value
+    args = p.parse(["./app", "-n42"])
+    if args.get_int("count") != 42:
+        raise ValueError("Inline int value -n42 failed")
+
+def test_short_ambiguous_grouping():
+    p = argparse.Parser()
+    p.add_bool("verbose", "Enable verbose", short="v")
+    p.add_option("output", "str", help="Output file", short="o")
+
+    # This should be treated as -o with value "verbose.txt"
+    args = p.parse(["./app", "-overbose.txt"])
+    if args.get_str("output") != "verbose.txt":
+        raise ValueError("Expected -overbose.txt to be treated as -o with value 'verbose.txt'")
+
+    # But this should fail: non-bool option in middle of group
+    try:
+        args = p.parse(["./app", "-vov"])  # -v -o -v but -o needs value
+    except argparse.ArgumentError:
+        pass
+    else:
+        raise ValueError("Expected error for non-bool option in middle of group")
+
+def test_short_options_with_subcommands():
+    def _cmd_build(args):
+        pass
+
+    p = argparse.Parser()
+    p.add_bool("verbose", "Enable verbose output", short="v")
+
+    build_cmd = p.add_cmd("build", "Build project", _cmd_build)
+    build_cmd.add_bool("dev", "Development mode", short="d")
+    build_cmd.add_option("output", "str", help="Output file", short="o")
+
+    # Test short option on main parser
+    args = p.parse(["./app", "-v", "build", "-d", "-o", "result.txt"])
+    if args.get_bool("verbose") != True:
+        raise ValueError("Main parser short option -v should work")
+    if args.get_bool("dev") != True:
+        raise ValueError("Sub-command short option -d should work")
+    if args.get_str("output") != "result.txt":
+        raise ValueError("Sub-command short option -o should work")
+
+    # Test grouped short options on sub-command
+    args = p.parse(["./app", "build", "-do", "test.txt"])
+    if args.get_bool("dev") != True:
+        raise ValueError("Grouped sub-command short option -d should work")
+    if args.get_str("output") != "test.txt":
+        raise ValueError("Grouped sub-command short option -o should work")
+
 actor main(env):
     try:
         test_opts()
@@ -315,6 +482,15 @@ actor main(env):
         test_cmd_optional_argument()
         test_help()
         test_help_subcmd()
+        test_short_bool()
+        test_short_option_with_value()
+        test_short_grouped()
+        test_short_mixed_with_long()
+        test_short_option_conflicts()
+        test_short_invalid_chars()
+        test_short_inline_values()
+        test_short_ambiguous_grouping()
+        test_short_options_with_subcommands()
         env.exit(0)
     except Exception as exc:
         env.exit(1)
