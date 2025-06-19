@@ -1,6 +1,12 @@
 """Constructs for spawning and interacting with sub-processes
 """
 
+
+def _get_env_path() -> ?str:
+    """Get the PATH environment variable as seen by this process"""
+    NotImplemented
+
+
 class ProcessCap():
     """Capability to start processes"""
     def __init__(self, cap: WorldCap):
@@ -27,6 +33,16 @@ actor Process(cap: ProcessCap,
     - on_error: error callback
     - workdir: working directory, use None for current directory
     - env: environment for process, use None to inherit current environment
+      ACTON BEHAVIOR: When providing a custom environment dict, PATH is
+      automatically inherited from the parent ONLY when the command does not
+      contain a slash (/). For commands like "python" or "sh", PATH is needed
+      for resolution and will be inherited. For commands like "/bin/sh" or
+      "./script", PATH is not used for resolution, so the child gets exactly
+      the specified environment. This ensures executable resolution works
+      beyond default system paths (/bin:/usr/bin). Standard Unix behavior
+      with custom environments omits PATH (and other parent environment
+      variables), limiting resolution to minimal system defaults. PATH can
+      always be explicitly overridden in the provided environment dict.
     - timeout: time in seconds before process is stopped
     """
     _p = 0
@@ -87,6 +103,17 @@ actor Process(cap: ProcessCap,
         terminate()
         after 1.0: kill()
 
+    # Handle PATH inheritance for custom environments
+    # Only inherit PATH if the executable doesn't contain a slash (/)
+    # When the executable contains /, PATH is not used for resolution,
+    # so we respect the user's exact environment specification
+    if env is not None and "PATH" not in env and "/" not in cmd[0]:
+        parent_path = _get_env_path()
+        if parent_path is not None:
+            # Create a shallow copy to avoid mutating the caller's dict
+            env = dict(env.items())
+            env["PATH"] = parent_path
+
     _create_process()
 
     if timeout is not None:
@@ -136,6 +163,17 @@ actor RunProcess(cap: ProcessCap,
         if _process is not None:
             if _out_done and _err_done and _exited:
                 on_exit(_process, _exit_code, _signal, out_buf, err_buf)
+
+    # Handle PATH inheritance for custom environments
+    # Only inherit PATH if the executable doesn't contain a slash (/)
+    # When the executable contains /, PATH is not used for resolution,
+    # so we respect the user's exact environment specification
+    if env is not None and "PATH" not in env and "/" not in cmd[0]:
+        parent_path = _get_env_path()
+        if parent_path is not None:
+            # Create a shallow copy to avoid mutating the caller's dict
+            env = dict(env.items())
+            env["PATH"] = parent_path
 
     _p = Process(cap, cmd, _on_stdout, _on_stderr, _on_exit, on_error, workdir, env, timeout)
     _process = _p

@@ -220,3 +220,26 @@ $R processQ_ProcessD_writeG_local(processQ_Process self, $Cont c$cont, B_bytes d
 
     return $R_CONT(c$cont, B_None);
 }
+
+B_str processQ__get_env_path() {
+    size_t path_size = 1024;  // Initial buffer size
+    char *path_buf = acton_malloc(path_size);
+
+    int r = uv_os_getenv("PATH", path_buf, &path_size);
+    if (r == UV_ENOBUFS) {
+        // Buffer too small, reallocate with required size
+        acton_free(path_buf);
+        path_buf = acton_malloc(path_size);
+        r = uv_os_getenv("PATH", path_buf, &path_size);
+    }
+
+    if (r != 0) {
+        // If PATH is not set or other error occurred, return None
+        acton_free(path_buf);
+        return (B_str)B_None;
+    }
+
+    B_str result = to$str(path_buf);
+    acton_free(path_buf);
+    return result;
+}
