@@ -436,7 +436,9 @@ printDocs gopts opts = do
 
                 docOutput <- case format of
                     C.HtmlFormat -> return $ DocP.printHtmlDoc nmod parsed
-                    C.AsciiFormat -> return $ DocP.printAsciiDoc False nmod parsed
+                    C.AsciiFormat -> do
+                        shouldColor <- useColor gopts
+                        return $ DocP.printAsciiDoc shouldColor nmod parsed
                     C.MarkdownFormat -> return $ DocP.printMdDoc nmod parsed
 
                 -- Handle output destination

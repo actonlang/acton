@@ -1377,7 +1377,10 @@ actor main(env):
             cmdargs.extend(["-o", output_file])
         
         # Force color based on TTY (since stdio is piped)
-        cmdargs.append("--color=always" if env.is_tty() else "--color=never")
+        if env.is_tty():
+            cmdargs.extend(["--color", "always"])
+        else:
+            cmdargs.extend(["--color", "never"])
         
         # Pass through global options
         if args.get_bool("debug"):
