@@ -818,7 +818,7 @@ docDeclUnified useStyle tenv (Class _ n q a b ddoc) =
     -- Document a single attribute
     docAttrUnified :: Bool -> (Name, Maybe Type) -> Doc
     docAttrUnified useStyle (name, mtype) =
-        text "- " <> pretty name <>
+        pretty name <>
         case mtype of
             Just t -> text ": " <> pretty (SimplifiedType t)
             Nothing -> empty
@@ -845,7 +845,7 @@ docDeclUnified useStyle tenv (Class _ n q a b ddoc) =
                                     then empty
                                     else docRetTypeStyled useStyle useStyle (Just t)
                           Nothing -> empty
-            header = text "- " <> text (bold useStyle) <> pretty methodName <> text (reset useStyle) <>
+            header = text (bold useStyle) <> pretty methodName <> text (reset useStyle) <>
                      docGenerics q <> paramsWithTypes <> showRetType
             docstrDoc = case docstr of
                 Just ds -> text ds
@@ -923,7 +923,7 @@ docDeclUnified useStyle tenv (Protocol _ n q a b ddoc) =
     docProtocolMethod :: (Name, QBinds, PosPar, KwdPar, Maybe Type, Maybe String) -> Doc
     docProtocolMethod (methodName, q, p, k, retType, docstr) =
         -- Protocol methods are just signatures
-        let header = text "- " <> pretty methodName <> text ":" <+>
+        let header = pretty methodName <> text ":" <+>
                      case retType of
                          Just t -> pretty (SimplifiedType t)
                          Nothing -> text "()"

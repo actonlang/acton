@@ -18,25 +18,25 @@ class Data(object)
     
 
   Attributes:
-    - value: str
-    - label: str
-    - count: int
+    value: str
+    label: str
+    count: int
 
   Methods:
-    - __init__(self, value: str, label: str)
+    __init__(self, value: str, label: str)
       Initialize data with value and label
 
         Args:
             value: The data value
             label: A descriptive label
         
-    - get_value(self) -> str
+    get_value(self) -> str
       Get the stored value
 
         Returns:
             The data value
         
-    - update(self, new_value: str)
+    update(self, new_value: str)
       Update the value
 
         Args:
@@ -45,7 +45,7 @@ class Data(object)
         Note:
             This increments the access count
         
-    - get_info(self) -> str
+    get_info(self) -> str
       Get formatted information about this data
 
         Returns:
@@ -63,17 +63,17 @@ class Container[T](object)
     
 
   Attributes:
-    - items: list[T]
-    - name: str
+    items: list[T]
+    name: str
 
   Methods:
-    - __init__(self, name: str)
+    __init__(self, name: str)
       Create an empty container
 
         Args:
             name: Container name for identification
         
-    - add(self, item: T)
+    add(self, item: T)
       Add an item to the container
 
         Args:
@@ -82,13 +82,13 @@ class Container[T](object)
         Raises:
             ValueError: If container is full
         
-    - get_all(self) -> list[T]
+    get_all(self) -> list[T]
       Get all items
 
         Returns:
             List of all items in the container
         
-    - filter[U](self, predicate: (T) -> bool, transform: (T) -> U) -> list[U]
+    filter[U](self, predicate: (T) -> bool, transform: (T) -> U) -> list[U]
       Filter and transform items
 
         Args:
@@ -105,7 +105,7 @@ class Container[T](object)
             >>> c.filter(lambda x: x > 1, lambda x: str(x))
             ["2"]
         
-    - count(self) -> int
+    count(self) -> int
       Get number of items in container
 
         Returns:
@@ -167,9 +167,9 @@ protocol Processable[T]
     
 
   Methods:
-    - process: T
-    - validate: bool
-    - get_metadata: dict[str,str]
+    process: T
+    validate: bool
+    get_metadata: dict[str,str]
 
 extension Data(Processable[str])
   Makes Data implement the Processable protocol
