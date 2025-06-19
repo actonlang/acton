@@ -347,10 +347,7 @@ class DateTime(object):
             tz_str = t.str_offset()
 
         # Most of the clocks
-        return "%04d-%02d-%02dT%02d:%02d:%02d.%09d%s" % (
-            self.year, self.month, self.day,
-            self.hour, self.minute, self.second,
-            self.attosecond // 10**9, tz_str)
+        return f"{self.year:04d}-{self.month:02d}-{self.day:02d}T{self.hour:02d}:{self.minute:02d}:{self.second:02d}.{self.attosecond // 10**9:09d}{tz_str}"
 
     @staticmethod
     def now():
@@ -444,17 +441,17 @@ class Instant(object):
     def str_ms(self):
         """Return a string representation of the duration with milliseconds.
         """
-        return "%d.%03d" % (self.second, self.attosecond // 10**15)
+        return f"{self.second}.{self.attosecond // 10**15:03d}"
 
     def str_us(self):
         """Return a string representation of the duration with microseconds.
         """
-        return "%d.%06d" % (self.second, self.attosecond // 10**12)
+        return f"{self.second}.{self.attosecond // 10**12:06d}"
 
     def str_ns(self):
         """Return a string representation of the duration with nanoseconds.
         """
-        return "%d.%09d" % (self.second, self.attosecond // 10**9)
+        return f"{self.second}.{self.attosecond // 10**9:09d}"
 
 #    TODO: fix this
 #    def __sub__(self, other: Instant) -> Duration:
@@ -538,7 +535,7 @@ class Duration(object):
         return self.str_human()
 
     def __repr__(self):
-        return "%d.%018d" % (self.second, self.attosecond)
+        return f"{self.second}.{self.attosecond:018d}"
 
     @staticmethod
     def from_parts(week: int, day: int, hour: int, minute: int, second: int, attosecond: int, c: Clock) -> Duration:
@@ -567,23 +564,22 @@ class Duration(object):
         hours = (self.second % (24 * 60 * 60)) // (60 * 60)
         minutes = (self.second % (60 * 60)) // 60
         seconds = self.second % 60
-        return "%dw %dd %dh %dm %ds %dns" % (
-            weeks, days, hours, minutes, seconds, self.attosecond // 10**9)
+        return f"{weeks}w {days}d {hours}h {minutes}m {seconds}s {self.attosecond // 10**9}ns"
 
     def str_ms(self):
         """Return a string representation of the duration with milliseconds.
         """
-        return "%d.%03d" % (self.second, self.attosecond // 10**15)
+        return f"{self.second}.{self.attosecond // 10**15:03d}"
 
     def str_us(self):
         """Return a string representation of the duration with microseconds.
         """
-        return "%d.%06d" % (self.second, self.attosecond // 10**12)
+        return f"{self.second}.{self.attosecond // 10**12:06d}"
 
     def str_ns(self):
         """Return a string representation of the duration with nanoseconds.
         """
-        return "%d.%09d" % (self.second, self.attosecond // 10**9)
+        return f"{self.second}.{self.attosecond // 10**9:09d}"
 
     def to_float(self) -> float:
         return float(self.second) + (float(self.attosecond) / 10**18)

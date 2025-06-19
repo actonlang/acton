@@ -157,7 +157,7 @@ class Request(object):
         self.body = body
 
     def __str__(self):
-        return "<http.Request " + str(self.method) + " " + str(self.path) + " " + str(self.version) + " " + self.headers.__str__() + " " + str(self.body) + ">"
+        return f"<http.Request {str(self.method)} {str(self.path)} {str(self.version)} {self.headers.__str__()} {str(self.body)}>"
 
 extension Request(Eq):
     def __eq__(self, other):
@@ -181,7 +181,7 @@ class Response(object):
         self.body = body
 
     def __str__(self) -> str:
-        return "<http.Response " + str(self.status) + ">"
+        return f"<http.Response {str(self.status)}>"
 
     def decode_json(self):
         return json.decode(self.body.decode())
