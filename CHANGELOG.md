@@ -1,5 +1,46 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- Add `acton doc` command for generating documentation [#2292]
+  - Supports multiple output formats (text, markdown, HTML)
+  - Default is to open browser into HTML docs when window environment is
+    available, in terminal we fall back to colored text output. Use `acton doc
+    -t` to force text / terminal output.
+  - Plain `acton doc` will show module index in browser - for terminal output, a
+    source file must be given, like `acton doc src/foo.act -t`
+  - Text output is colored for output to TTY (terminal), piping output falls
+    back to plain ASCII output. Also honors `NO_COLOR` env var
+  - HTML supports:
+    - colorized output of types etc
+    - inter-module links to type definitions
+    - explanatory tooltips for generic types
+- Add docstring support throughout compiler and AST [#2282]
+  - Parse docstrings in AST declarations [#2269, #2270, #2271]
+  - Unescape docstrings in NameInfo
+  - Allow module docstrings before imports
+- Add short options support for argparse module [#2289]
+- Add global command-line options support to actonc [#2291]
+
+### Changed
+- Use f-strings throughout standard library [#2297, #2290]
+- Improve process environment handling [#2298]
+  - Inherit PATH when custom environment is provided
+- Enhance ecosystem lift process with additional documentation [#2288]
+- Extend QuickType with effect output for better comprehension translation [#2267]
+
+### Fixed
+- Fix string 'in' operator for substrings found at position 0 [#2280]
+- Fix unintended dependency on complete scope when scanning __init__ for attributes [#2285]
+- Ensure lambda-bound variables are in scope when comprehensions are translated [#2267]
+- Default print diff for testing.assertEqual failure [#2260]
+- Fix VERSION substitution in Homebrew PR creation [#2266]
+
+### Documentation
+- Add ecosystem lift process documentation
+
+
 ## [0.26.0] - 2025-06-02
 
 ### Added
