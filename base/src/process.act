@@ -157,17 +157,6 @@ actor RunProcess(cap: ProcessCap,
             if _out_done and _err_done and _exited:
                 on_exit(_process, _exit_code, _signal, out_buf, err_buf)
 
-    # Handle PATH inheritance for custom environments
-    # Only inherit PATH if the executable doesn't contain a slash (/)
-    # When the executable contains /, PATH is not used for resolution,
-    # so we respect the user's exact environment specification
-    if env is not None and "PATH" not in env and "/" not in cmd[0]:
-        parent_path = _get_env_path()
-        if parent_path is not None:
-            # Create a shallow copy to avoid mutating the caller's dict
-            env = dict(env.items())
-            env["PATH"] = parent_path
-
     _p = Process(cap, cmd, _on_stdout, _on_stderr, _on_exit, on_error, workdir, env, timeout)
     _process = _p
 
