@@ -1,0 +1,155 @@
+import logging
+import process
+import testing
+
+
+actor ProcessEnvExclusiveTester(t: testing.EnvT):
+    """Custom env with single variable (no PATH) - verify exclusive behavior"""
+    log = logging.Logger(t.log_handler)
+
+    def on_stdout(p, data):
+        if data is not None:
+            output = data.decode()
+            # Parse environment variables
+            vars = {}
+            for line in output.strip().splitlines():
+                if "=" in line:
+                    parts = line.split("=", 1)
+                    vars[parts[0]] = parts[1]
+
+            # Should have exactly FOO and PATH, nothing else
+            if "FOO" in vars and vars["FOO"] == "BAR" and "PATH" in vars and len(vars) == 2:
+                log.info("PASS: Exclusive environment with FOO=BAR and inherited PATH")
+                t.success()
+            else:
+                log.error("FAIL: Expected only FOO and PATH, got: " + str(vars.keys()))
+                t.failure(AssertionError("Expected only FOO and PATH, got: " + str(vars.keys())))
+
+    def on_exit(p, exit_code, term_signal):
+        pass
+
+    def on_stderr(p, data):
+        if data is not None:
+            log.warning("Stderr: " + str(data))
+
+    def on_error(p, error):
+        log.error("Process error: " + error)
+        t.error(Exception("Process error: " + error))
+
+    log.debug("Starting test: Single environment variable")
+    pc = process.ProcessCap(t.env.cap)
+    p1 = process.Process(pc, ["env"], on_stdout, on_stderr, on_exit, on_error,
+                       env={"FOO": "BAR"})
+
+
+
+actor ProcessEnvInheritAllTester(t: testing.EnvT):
+    """No custom env (inherit all including PATH)"""
+    log = logging.Logger(t.log_handler)
+
+    def on_stdout(p, data):
+        if data is not None:
+            output = data.decode()
+            if "PATH=" in output:
+                log.info("PASS: PATH inherited when no custom env")
+                t.success()
+            else:
+                log.error("FAIL: PATH not found in inherited env")
+                t.failure(AssertionError("PATH not found in inherited env"))
+
+    def on_exit(p, exit_code, term_signal):
+        pass
+
+    def on_stderr(p, data):
+        if data is not None:
+            log.warning("Stderr: " + str(data))
+
+    def on_error(p, error):
+        log.error("Process error: " + error)
+        t.error(Exception("Process error: " + error))
+
+    log.debug("Starting test: No custom env (inherit all)")
+    pc = process.ProcessCap(t.env.cap)
+    p2 = process.Process(pc, ["sh", "-c", "env | grep PATH | head -n1"],
+                       on_stdout, on_stderr, on_exit, on_error)
+
+
+actor ProcessEnvInheritPathTester(t: testing.EnvT):
+    """Custom env without PATH (should inherit PATH from parent)"""
+    log = logging.Logger(t.log_handler)
+
+    def on_stdout(p, data):
+        if data is not None:
+            output = data.decode()
+            has_custom = "MY_VAR=test123" in output
+            has_path = "PATH=" in output
+            if has_custom and has_path:
+                log.info("PASS: PATH inherited with custom env")
+                t.success()
+            else:
+                log.error("FAIL: Missing vars - has_custom: " + str(has_custom) + ", has_path: " + str(has_path))
+                t.failure(AssertionError("Missing vars - has_custom: " + str(has_custom) + ", has_path: " + str(has_path)))
+
+    def on_exit(p, exit_code, term_signal):
+        pass
+
+    def on_stderr(p, data):
+        if data is not None:
+            log.warning("Stderr: " + str(data))
+
+    def on_error(p, error):
+        log.error("Process error: " + error)
+        t.error(Exception("Process error: " + error))
+
+    log.debug("Starting test: Custom env without PATH")
+    pc = process.ProcessCap(t.env.cap)
+    p3 = process.Process(pc, ["env"], on_stdout, on_stderr, on_exit, on_error,
+                       env={"MY_VAR": "test123"})
+
+
+actor ProcessEnvCustomPathTester(t: testing.EnvT):
+    """Custom env with custom PATH (should use provided PATH)"""
+    log = logging.Logger(t.log_handler)
+
+    def on_stdout(p, data):
+        if data is not None:
+            output = data.decode()
+            if "PATH=/custom/path:/usr/bin" in output:
+                log.info("PASS: Custom PATH preserved")
+                t.success()
+            else:
+                log.error("FAIL: Custom PATH not found in output")
+                t.failure(AssertionError("Custom PATH not found in output"))
+
+    def on_exit(p, exit_code, term_signal):
+        pass
+
+    def on_stderr(p, data):
+        if data is not None:
+            log.warning("Stderr: " + str(data))
+
+    def on_error(p, error):
+        log.error("Process error: " + error)
+        t.error(Exception("Process error: " + error))
+
+    log.debug("Starting test: Custom env with custom PATH")
+    pc = process.ProcessCap(t.env.cap)
+    p4 = process.Process(pc, ["env"], on_stdout, on_stderr, on_exit, on_error,
+                       env={"PATH": "/custom/path:/usr/bin"})
+
+
+def _test_process_env_exclusive(t: testing.EnvT):
+    """Custom env with single var - exclusive environment (only specified vars + PATH)"""
+    ProcessEnvExclusiveTester(t)
+
+def _test_process_env_inherit_all(t: testing.EnvT):
+    """No custom env - inherit all environment variables"""
+    ProcessEnvInheritAllTester(t)
+
+def _test_process_env_inherit_path(t: testing.EnvT):
+    """Custom env without PATH - PATH is inherited for command resolution"""
+    ProcessEnvInheritPathTester(t)
+
+def _test_process_env_custom_path(t: testing.EnvT):
+    """Custom env with PATH - provided PATH is used"""
+    ProcessEnvCustomPathTester(t)
