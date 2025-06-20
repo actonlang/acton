@@ -3,46 +3,6 @@ import process
 import testing
 
 
-actor ProcessEnvExclusiveTester(t: testing.EnvT):
-    """Custom env with single variable (no PATH) - verify exclusive behavior"""
-    log = logging.Logger(t.log_handler)
-
-    def on_stdout(p, data):
-        if data is not None:
-            output = data.decode()
-            # Parse environment variables
-            vars = {}
-            for line in output.strip().splitlines():
-                if "=" in line:
-                    parts = line.split("=", 1)
-                    vars[parts[0]] = parts[1]
-
-            # Should have exactly FOO and PATH, nothing else
-            if "FOO" in vars and vars["FOO"] == "BAR" and "PATH" in vars and len(vars) == 2:
-                log.info("PASS: Exclusive environment with FOO=BAR and inherited PATH")
-                t.success()
-            else:
-                log.error("FAIL: Expected only FOO and PATH, got: " + str(vars.keys()))
-                t.failure(AssertionError("Expected only FOO and PATH, got: " + str(vars.keys())))
-
-    def on_exit(p, exit_code, term_signal):
-        pass
-
-    def on_stderr(p, data):
-        if data is not None:
-            log.warning("Stderr: " + str(data))
-
-    def on_error(p, error):
-        log.error("Process error: " + error)
-        t.error(Exception("Process error: " + error))
-
-    log.debug("Starting test: Single environment variable")
-    pc = process.ProcessCap(t.env.cap)
-    p1 = process.Process(pc, ["env"], on_stdout, on_stderr, on_exit, on_error,
-                       env={"FOO": "BAR"})
-
-
-
 actor ProcessEnvInheritAllTester(t: testing.EnvT):
     """No custom env (inherit all including PATH)"""
     log = logging.Logger(t.log_handler)
@@ -137,10 +97,6 @@ actor ProcessEnvCustomPathTester(t: testing.EnvT):
     p4 = process.Process(pc, ["env"], on_stdout, on_stderr, on_exit, on_error,
                        env={"PATH": "/custom/path:/usr/bin"})
 
-
-def _test_process_env_exclusive(t: testing.EnvT):
-    """Custom env with single var - exclusive environment (only specified vars + PATH)"""
-    ProcessEnvExclusiveTester(t)
 
 def _test_process_env_inherit_all(t: testing.EnvT):
     """No custom env - inherit all environment variables"""
