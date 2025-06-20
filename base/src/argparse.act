@@ -239,7 +239,7 @@ class Args(object):
             val = opt.value
             if isinstance(val, bool):
                 return val
-            raise ValueError(f"Option value {val} is not a bool")
+            raise ValueError(f"Option value {str(val)} is not a bool")
         except KeyError:
             raise ArgumentError(f"Option '{name}' not found")
 
@@ -251,7 +251,7 @@ class Args(object):
             val = opt.value
             if isinstance(val, int):
                 return val
-            raise ValueError(f"Option value '{val}' is not a int")
+            raise ValueError(f"Option value '{str(val)}' is not a int")
         except KeyError:
             raise ArgumentError(f"Option '{name}' not found")
 
@@ -263,7 +263,7 @@ class Args(object):
             val = opt.value
             if isinstance(val, str):
                 return val
-            raise ValueError(f"Option value '{val}' is not a str")
+            raise ValueError(f"Option value '{str(val)}' is not a str")
         except KeyError:
             raise ArgumentError(f"Option '{name}' not found")
 
@@ -275,7 +275,7 @@ class Args(object):
             val = opt.value
             if isinstance(val, list):
                 return val
-            raise ValueError(f"Option value '{val}' is not a list[str]")
+            raise ValueError(f"Option value '{str(val)}' is not a list[str]")
         except KeyError:
             raise ArgumentError(f"Option '{name}' not found")
 
@@ -325,7 +325,6 @@ class Parser(object):
 
         self.opts[name] = (name=name, type=type, nargs=nargs, default=default, help=help, short=short)
 
-
     def add_arg(self, name: str, help: str="", required: bool=True, nargs: str="?"):
         if nargs == "+" or nargs == "*":
             for arg in self.args:
@@ -349,14 +348,14 @@ class Parser(object):
             short_opt = opt.short
             if opt.type == "bool":
                 if short_opt is not None:
-                    short_opts += " [-%s]" % short_opt
+                    short_opts += f" [-{short_opt}]"
                 else:
-                    short_opts += " [--%s]" % name
+                    short_opts += f" [--{name}]"
             else:
                 if short_opt is not None:
-                    short_opts += " [-%s %s]" % (short_opt, name.upper())
+                    short_opts += f" [-{short_opt} {name.upper()}]"
                 else:
-                    short_opts += " [--%s %s]" % (name, name.upper())
+                    short_opts += f" [--{name} {name.upper()}]"
         for arg in self.args:
             n = arg.name
             if n is not None:
@@ -487,7 +486,7 @@ class Parser(object):
                         newval.append(val)
                         res.options[akey] = ("type"="strlist", "value"=newval)
                 else:
-                    #raise ArgumentError("Unknown option %s" % arg)
+                    #raise ArgumentError(f"Unknown option {arg}")
                     rest.append(arg)
             elif arg.startswith('-') and len(arg) > 1:
                 # Handle short options (-x or -xyz for grouped bools only)

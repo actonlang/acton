@@ -67,10 +67,7 @@ class URI(object):
 
     def __repr__(self) -> str:
         """Return a detailed string representation for debugging."""
-        return "URI(scheme='%s', authority='%s', host='%s', port=%s, path='%s', query='%s', fragment='%s')" % (
-                opt_str(self.scheme), opt_str(self.authority),
-                opt_str(self.host), opt_str(self.port), opt_str(self.path),
-                opt_str(self.query), opt_str(self.fragment))
+        return f"URI(scheme='{self.scheme}', authority='{self.authority}', host='{self.host}', port={self.port}, path='{self.path}', query='{self.query}', fragment='{self.fragment}')"
 
 
 def e_str[T](s: ?T) -> str:
@@ -157,10 +154,10 @@ def parse_authority(uri: str) -> (?str, ?str, ?int, str):
         try:
             port = int(host_part[1])
             if port < 0 or port > 65535:
-                raise ValueError("Port must be between 0 and 65535: %s" % host_part[1])
+                raise ValueError(f"Port must be between 0 and 65535: {host_part[1]}")
             return authority, host_part[0], port, remainder
         except ValueError:
-            raise ValueError("Invalid port: %s" % host_part[1])
+            raise ValueError(f"Invalid port: {host_part[1]}")
     else:
         return authority, authority, None, remainder
 
