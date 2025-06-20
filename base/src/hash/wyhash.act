@@ -3,7 +3,6 @@ class Hasher(object):
     def __init__(self, seed: u64 = 0):
         """Initialize a new MD5 hashing context
         """
-        pass # TODO: remove this after fixing actonc bug
         self._init(seed)
 
     def _init(self, seed: u64) -> None:

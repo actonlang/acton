@@ -3,7 +3,6 @@ class Hasher(object):
     def __init__(self):
         """Initialize a new MD5 hashing context
         """
-        pass # TODO: remove this after fixing actonc bug
         self._init()
 
     def _init(self):
