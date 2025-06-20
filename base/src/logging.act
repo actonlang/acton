@@ -157,7 +157,7 @@ class DefaultFormatter(Formatter):
         if msg is None and data is None:
             return
         str_path = '>'.join(m.path)
-        text = str(m.ts) + " %-7s" % lvl_name
+        text = f"{str(m.ts)} {lvl_name:<7}"
         if len(str_path) > 0:
             text += str_path + ": "
         text += f"{m.actor_class}[{str(m.actor_id)}]: "

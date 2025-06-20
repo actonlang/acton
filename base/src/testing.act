@@ -26,8 +26,8 @@ class NotEqualError[T](AssertionError):
     def __str__(self):
         msg = f"{self._name()}: {self.error_message}"
         if self.print_vals:
-            msg += f" A: {opt_str(self.a)}"
-            msg += f" B: {opt_str(self.b)}"
+            msg += f" A: {self.a}"
+            msg += f" B: {self.b}"
         ds = self.diff_str
         if ds is not None:
             msg += "\n" + ds
@@ -46,8 +46,8 @@ class EqualError[T](AssertionError):
     def __str__(self):
         msg = f"{self._name()}: {self.error_message}"
         if self.print_vals:
-            msg += f" A: {opt_str(self.a)}"
-            msg += f" B: {opt_str(self.b)}"
+            msg += f" A: {self.a}"
+            msg += f" B: {self.b}"
         return msg
 
 class NotTrueError[T](AssertionError):
@@ -61,7 +61,7 @@ class NotTrueError[T](AssertionError):
     def __str__(self):
         msg = f"{self._name()}: {self.error_message}"
         if self.print_vals:
-            msg += f", value: {opt_str(self.a)}"
+            msg += f", value: {self.a}"
         return msg
 
 class NotFalseError[T](AssertionError):
@@ -75,7 +75,7 @@ class NotFalseError[T](AssertionError):
     def __str__(self):
         msg = f"{self._name()}: {self.error_message}"
         if self.print_vals:
-            msg += f", value: {opt_str(self.a)}"
+            msg += f", value: {self.a}"
         return msg
 
 class NotNoneError[T](AssertionError):
@@ -89,7 +89,7 @@ class NotNoneError[T](AssertionError):
     def __str__(self):
         msg = f"{self._name()}: {self.error_message}"
         if self.print_vals:
-            msg += f", value: {opt_str(self.a)}"
+            msg += f", value: {self.a}"
         return msg
 
 class NoneError[T](AssertionError):
@@ -104,7 +104,7 @@ class NoneError[T](AssertionError):
         msg = f"{self._name()}: {self.error_message}"
         if self.print_vals:
             a = self.a
-            msg += f", value: {opt_str(a)}"
+            msg += f", value: {a}"
         return msg
 
 class NotInError[T,U](AssertionError):
@@ -120,8 +120,8 @@ class NotInError[T,U](AssertionError):
     def __str__(self):
         msg = f"{self._name()}: {self.error_message}"
         if self.print_vals:
-            msg += f", element: {opt_str(self.a)}"
-            msg += f", container: {opt_str(self.b)}"
+            msg += f", element: {self.a}"
+            msg += f", container: {self.b}"
         return msg
 
 class InError[T,U](AssertionError):
@@ -137,8 +137,8 @@ class InError[T,U](AssertionError):
     def __str__(self):
         msg = f"{self._name()}: {self.error_message}"
         if self.print_vals:
-            msg += f", element: {opt_str(self.a)}"
-            msg += f", container: {opt_str(self.b)}"
+            msg += f", element: {self.a}"
+            msg += f", container: {self.b}"
         return msg
 
 class NotIsError[T](AssertionError):
@@ -210,7 +210,7 @@ def assertEqual[T(Eq)](a: ?T, b: ?T, msg: ?str, print_vals: bool=True, print_dif
         if print_diff:
             # We calculate diff here and not in NotEqualError.__str__ because the
             # "mut" effect leaks out of the diff() function, but __str__() must be pure
-            diff_str = f"{term.normal}{diff.diff(opt_str(a), opt_str(b), color=True)}{term.normal}"
+            diff_str = f"{term.normal}{diff.diff(str(a), str(b), color=True)}{term.normal}"
         raise NotEqualError(a, b, msg, print_vals, diff_str)
 
 def assertNotEqual[T(Eq)](a: ?T, b: ?T, msg: ?str, print_vals: bool=True):
@@ -904,7 +904,7 @@ actor TestExecutor(syscap, config, t: Test, report_complete, env):
             acton.rts.gc(syscap)
         non_gc_mem_usage_after = int(acton.rts.get_rss(syscap) - acton.rts.get_mem_usage(syscap))
         non_gc_mem_usage_delta = non_gc_mem_usage_after - non_gc_mem_usage_before
-        #print("non-GC memory before: %d  after: %d  delta: %d" % (non_gc_mem_usage_before, non_gc_mem_usage_after, non_gc_mem_usage_delta))
+        #print(f"non-GC memory before: {non_gc_mem_usage_before}  after: {non_gc_mem_usage_after}  delta: {non_gc_mem_usage_delta}")
         complete = True if test_dur > config.min_test_duration else False
         if test_info != None:
             exc = str(exception) if exception != None else None
@@ -1103,7 +1103,7 @@ class ProjectTestResults(object):
                 print("\nTests")
                 self.printed_lines += 2
             elif len(self.results[module_name]) > 0:
-                print("\nTests - module %s:" % module_name)
+                print(f"\nTests - module {module_name}:")
                 self.printed_lines += 2
 
             for test_name, tinfo in self.results[module_name].items():
@@ -1159,7 +1159,7 @@ class ProjectTestResults(object):
                 if tinfo.complete:
                     if exc != None:
                         for line in str(exc).splitlines(None):
-                            print(term.red + "    %s" % (line) + term.normal)
+                            print(f"{term.red}    {line}{term.normal}")
                             self.printed_lines += 1
                     # Print std_out/std_err if the test failed
                     if tinfo.num_failures > 0 or tinfo.num_errors > 0:
@@ -1207,7 +1207,7 @@ class ProjectTestResults(object):
                                 if len(chunks) == 1:
                                     pass
                                 else:
-                                    print("      == %d test runs with this output:" % len(test_runs))
+                                    print(f"      == {len(test_runs)} test runs with this output:")
                                     self.printed_lines += 1
                                 for line in chunk.splitlines():
                                     print("      " + line)
@@ -1223,7 +1223,7 @@ class ProjectTestResults(object):
                                 if len(chunks) == 1:
                                     pass
                                 else:
-                                    print("      == %d test runs with this output:" % len(test_runs))
+                                    print(f"      == {len(test_runs)} test runs with this output:")
                                     self.printed_lines += 1
                                 for line in chunk.splitlines():
                                     print("      " + line)
@@ -1309,7 +1309,7 @@ actor test_runner(env: Env,
         test_name = args.get_str("name")
         test_fun_name = "_test_" + test_name
         if test_fun_name not in all_tests:
-            print("Test not found: %s" % test_name)
+            print(f"Test not found: {test_name}")
             env.exit(1)
         the_test = all_tests[test_fun_name]
         tests_complete = set()

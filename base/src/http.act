@@ -157,7 +157,7 @@ class Request(object):
         self.body = body
 
     def __str__(self):
-        return f"<http.Request {str(self.method)} {str(self.path)} {str(self.version)} {self.headers.__str__()} {str(self.body)}>"
+        return f"<http.Request {self.method} {self.path} {str(self.version)} {self.headers.__str__()} {str(self.body)}>"
 
 extension Request(Eq):
     def __eq__(self, other):
@@ -181,7 +181,7 @@ class Response(object):
         self.body = body
 
     def __str__(self) -> str:
-        return f"<http.Response {str(self.status)}>"
+        return f"<http.Response {self.status}>"
 
     def decode_json(self):
         return json.decode(self.body.decode())
@@ -214,7 +214,7 @@ def parse_message(i: bytes, log: logging.Logger) -> (?Message, bytes):
         rest = b""
         if "content-length" in headers:
             clen = int(headers["content-length"].strip(" "))
-            log.trace("Got content-length in headers, expecting %d bytes" % clen, None)
+            log.trace(f"Got content-length in headers, expecting {clen} bytes", None)
             if len(rs[1]) >= clen:
                 body = rs[1][:clen]
                 rest = rs[1][clen:]
@@ -230,7 +230,7 @@ def parse_message(i: bytes, log: logging.Logger) -> (?Message, bytes):
                 log.trace("Got chunked transfer-encoding", None)
                 reached_end = False
                 rest = rs[1]
-                log.trace("Rest: %s" % str(rest), None)
+                log.trace(f"Rest: {str(rest)}", None)
                 body = b""
                 while not reached_end:
                     maybe_chunk = rest.split(b"\r\n", 1)
@@ -240,28 +240,31 @@ def parse_message(i: bytes, log: logging.Logger) -> (?Message, bytes):
                     elif len(maybe_chunk) == 2:
                         chunk_header = maybe_chunk[0].strip(b"\r\n")
                         rest = maybe_chunk[1]
-                        log.trace("Chunk header: %s" % chunk_header.decode()[:20], None)
+                        header_preview = chunk_header.decode()[:20]
+                        log.trace(f"Chunk header: {header_preview}", None)
                         if chunk_header == b"":
                             log.trace("Empty chunk header", None)
                             return None, i
                         else:
                             try:
                                 clen = int(chunk_header.decode(), 16)
-                                log.trace("Chunk length: %d" % clen, None)
+                                log.trace(f"Chunk length: {clen}", None)
                             except ValueError:
                                 log.trace("Chunk header not a length", None)
                             else:
                                 if len(rest) >= clen:
                                     gap = rest[clen-10:clen+10]
                                     chunk = rest[:clen]
-                                    log.trace("Read chunk: %s" % str(chunk), None)
+                                    log.trace(f"Read chunk: {str(chunk)}", None)
                                     rest = rest[clen:]
                                     if len(rest) < 2 and rest[0:2] != b"\r\n":
                                         log.trace("Could not find chunk end marker", None)
                                         return None, i
                                     rest = rest[2:]
                                     #log.trace("Enough data to reach end of chunk", None)
-                                    log.trace("Enough data to reach end of chunk, chunk gap: %s|%s" % (str(chunk[-5:]), str(rest[:5])), None)
+                                    chunk_preview = str(chunk[-5:])
+                                    rest_preview = str(rest[:5])
+                                    log.trace(f"Enough data to reach end of chunk, chunk gap: {chunk_preview}|{rest_preview}", None)
                                     body += chunk
                                     if clen == 0:
                                         reached_end = True
@@ -398,7 +401,7 @@ actor Server(conn: net.TCPListenConnection, on_accept: action(Server) -> None, l
 
     def on_tcp_error(conn, error):
         # TODO: the conn should really be in here, but type error!?
-        _log.trace("There was an error: %s from: %s" % (str(error), str("")), None)
+        _log.trace(f"There was an error: {str(error)} from: {str("")}", None)
 
     def close():
         conn.close()
@@ -463,7 +466,7 @@ actor Client(cap: net.TCPConnectCap, address: str, on_connect: action(Client) ->
             tls_port = port if port is not None else 443
             tls_conn = net.TLSConnection(cap, address, tls_port, _on_tls_connect, _on_tls_receive, _on_tls_error, None, tls_verify)
         else:
-            raise ValueError("Only http and https schemes are supported. Unsupported scheme: %s" % scheme)
+            raise ValueError(f"Only http and https schemes are supported. Unsupported scheme: {scheme}")
 
     def _on_conn_connect():
         # If there are outstanding requests, it probably means we were

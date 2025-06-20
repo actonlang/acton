@@ -381,7 +381,7 @@ class IndexError (LookupError):
         self.error_message = msg if msg is not None else "List index out of range"
 
     def __str__(self):
-        return f"{self._name()}: {self.error_message}, index: {str(self.index)}"
+        return f"{self._name()}: {self.error_message}, index: {self.index}"
 
 class KeyError(LookupError):
     def __init__(self, key: value, msg: ?str=None):
@@ -1009,7 +1009,7 @@ actor StringDecoder(cb_out: action(str) -> None, encoding: ?str="utf-8", on_erro
         if on_error is not None:
             on_error("Invalid UTF-8", buf)
         else:
-            raise ValueError("Invalid UTF-8: %s" % str(buf))
+            raise ValueError(f"Invalid UTF-8: {str(buf)}")
 
 ## Environment ################################################
 

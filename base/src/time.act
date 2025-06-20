@@ -279,9 +279,9 @@ class Timezone:
                 tz_str = "+"
             else:
                 tz_str = "-"
-            tz_str += "%02d" % (self.offset // 3600)
+            tz_str += f"{self.offset // 3600:02d}"
             if self.offset % 3600 > 0:
-                tz_str += ":%02d" % ((self.offset % 3600) // 60)
+                tz_str += f":{(self.offset % 3600) // 60:02d}"
         return tz_str
 
 
@@ -433,10 +433,10 @@ class Instant(object):
         self.clock = c
 
     def __str__(self):
-        return "%d.%018d" % (self.second, self.attosecond)
+        return f"{self.second}.{self.attosecond:018d}"
 
     def __repr__(self):
-        return "Instant(%d, %d)" % (self.second, self.attosecond)
+        return f"Instant({self.second}, {self.attosecond})"
 
     def str_ms(self):
         """Return a string representation of the duration with milliseconds.
