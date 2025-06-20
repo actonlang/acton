@@ -18,25 +18,25 @@ that are used across the application.
     
 
   [33mAttributes:[0m
-    - value: str
-    - label: str
-    - count: int
+    value: str
+    label: str
+    count: int
 
   [33mMethods:[0m
-    - [1m__init__[0m(self, value: [32mstr[0m, label: [32mstr[0m)
+    [1m__init__[0m(self, value: [32mstr[0m, label: [32mstr[0m)
       Initialize data with value and label
 
         Args:
             value: The data value
             label: A descriptive label
         
-    - [1mget_value[0m(self) -> [32mstr[0m
+    [1mget_value[0m(self) -> [32mstr[0m
       Get the stored value
 
         Returns:
             The data value
         
-    - [1mupdate[0m(self, new_value: [32mstr[0m)
+    [1mupdate[0m(self, new_value: [32mstr[0m)
       Update the value
 
         Args:
@@ -45,7 +45,7 @@ that are used across the application.
         Note:
             This increments the access count
         
-    - [1mget_info[0m(self) -> [32mstr[0m
+    [1mget_info[0m(self) -> [32mstr[0m
       Get formatted information about this data
 
         Returns:
@@ -63,17 +63,17 @@ that are used across the application.
     
 
   [33mAttributes:[0m
-    - items: list[T]
-    - name: str
+    items: list[T]
+    name: str
 
   [33mMethods:[0m
-    - [1m__init__[0m(self, name: [32mstr[0m)
+    [1m__init__[0m(self, name: [32mstr[0m)
       Create an empty container
 
         Args:
             name: Container name for identification
         
-    - [1madd[0m(self, item: [32mT[0m)
+    [1madd[0m(self, item: [32mT[0m)
       Add an item to the container
 
         Args:
@@ -82,13 +82,13 @@ that are used across the application.
         Raises:
             ValueError: If container is full
         
-    - [1mget_all[0m(self) -> [32mlist[T][0m
+    [1mget_all[0m(self) -> [32mlist[T][0m
       Get all items
 
         Returns:
             List of all items in the container
         
-    - [1mfilter[0m[U](self, predicate: [32m(T) -> bool[0m, transform: [32m(T) -> U[0m) -> [32mlist[U][0m
+    [1mfilter[0m[U](self, predicate: [32m(T) -> bool[0m, transform: [32m(T) -> U[0m) -> [32mlist[U][0m
       Filter and transform items
 
         Args:
@@ -105,7 +105,7 @@ that are used across the application.
             >>> c.filter(lambda x: x > 1, lambda x: str(x))
             ["2"]
         
-    - [1mcount[0m(self) -> [32mint[0m
+    [1mcount[0m(self) -> [32mint[0m
       Get number of items in container
 
         Returns:
@@ -167,9 +167,9 @@ that are used across the application.
     
 
   [33mMethods:[0m
-    - process: T
-    - validate: bool
-    - get_metadata: dict[str,str]
+    process: T
+    validate: bool
+    get_metadata: dict[str,str]
 
 [36mextension[0m Data(Processable[str])
   Makes Data implement the Processable protocol
