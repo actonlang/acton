@@ -106,14 +106,14 @@ $R processQ_ProcessD__create_processG_local(processQ_Process self, $Cont c$cont)
         options->cwd = fromB_str(self->workdir);
     }
 
-    if (self->env == B_None) {
+    if (self->new_env == B_None) {
         options->env = NULL;
     } else {
-        char **env = (char **)acton_calloc((self->env->numelements + 1), sizeof(char *));
-        B_IteratorD_dict_items iter = $NEW(B_IteratorD_dict_items, self->env);
+        char **env = (char **)acton_calloc((self->new_env->numelements + 1), sizeof(char *));
+        B_IteratorD_dict_items iter = $NEW(B_IteratorD_dict_items, self->new_env);
         B_tuple item;
 
-        for (int i = 0; i < self->env->numelements; i++) {
+        for (int i = 0; i < self->new_env->numelements; i++) {
             item = (B_tuple)iter->$class->__next__(iter);
             char *key = fromB_str((B_str)item->components[0]);
             char *value = fromB_str((B_str)item->components[1]);
@@ -122,7 +122,7 @@ $R processQ_ProcessD__create_processG_local(processQ_Process self, $Cont c$cont)
             snprintf(env_var, env_size, "%s=%s", key, value);
             env[i] = env_var;
         }
-        env[self->env->numelements] = NULL;
+        env[self->new_env->numelements] = NULL;
         options->env = env;
     }
 

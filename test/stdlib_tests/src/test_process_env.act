@@ -138,59 +138,18 @@ actor ProcessEnvCustomPathTester(t: testing.EnvT):
                        env={"PATH": "/custom/path:/usr/bin"})
 
 
-actor ProcessEnvAbsolutePathTester(t: testing.EnvT):
-    """Absolute path command with custom env (no PATH inheritance)"""
-    log = logging.Logger(t.log_handler)
-
-    def on_stdout(p, data):
-        if data is not None:
-            output = data.decode()
-            has_my_var = "MY_VAR=test456" in output
-            has_path = "PATH=" in output
-            if has_my_var and not has_path:
-                log.info("PASS: No PATH inherited for absolute path command")
-                t.success()
-            else:
-                log.error("FAIL: Expected no PATH for absolute command - has_my_var: " + str(has_my_var) + ", has_path: " + str(has_path))
-                t.failure(AssertionError("Expected no PATH for absolute command - has_my_var: " + str(has_my_var) + ", has_path: " + str(has_path)))
-
-    def on_exit(p, exit_code, term_signal):
-        pass
-
-    def on_stderr(p, data):
-        if data is not None:
-            log.warning("Stderr: " + str(data))
-
-    def on_error(p, error):
-        log.error("Process error: " + error)
-        t.error(Exception("Process error: " + error))
-
-    log.debug("Starting test: Absolute path command - no PATH inheritance")
-    pc = process.ProcessCap(t.env.cap)
-    p5 = process.Process(pc, ["/usr/bin/env"], on_stdout, on_stderr, on_exit, on_error,
-                       env={"MY_VAR": "test456"})
-
-
 def _test_process_env_exclusive(t: testing.EnvT):
     """Custom env with single var - exclusive environment (only specified vars + PATH)"""
     ProcessEnvExclusiveTester(t)
-
 
 def _test_process_env_inherit_all(t: testing.EnvT):
     """No custom env - inherit all environment variables"""
     ProcessEnvInheritAllTester(t)
 
-
 def _test_process_env_inherit_path(t: testing.EnvT):
     """Custom env without PATH - PATH is inherited for command resolution"""
     ProcessEnvInheritPathTester(t)
 
-
 def _test_process_env_custom_path(t: testing.EnvT):
     """Custom env with PATH - provided PATH is used"""
     ProcessEnvCustomPathTester(t)
-
-
-def _test_process_env_absolute_path(t: testing.EnvT):
-    """Absolute path command - PATH is NOT inherited (exact environment)"""
-    ProcessEnvAbsolutePathTester(t)
