@@ -83,19 +83,18 @@ B_NoneType actonQ_rtsQ_sleep (B_SysCap cap, B_float sleep_time) {
         ts.tv_nsec -= 1e9;
     }
 
+    // Use high precision nanosleep where available, otherwise fall back to uv_sleep.
+#if defined(__linux__) || defined(__APPLE__)
     // Unlike usleep, nanosleep() tolerates signal interrupts and will write the
     // remaining time (that it didn't sleep) into the third argument. We spin
     // until it completes successfully.
-    while (1) {
-#if _WIN32 // Windows
-        uv_sleep((uint64_t)ts.tv_sec * 1000 + ts.tv_nsec / 1000000);
-        break;
-#else __linux__
-        int r = nanosleep(&ts, &ts);
-        if (r == 0)
-            break;
-#endif
+    while (nanosleep(&ts, &ts) != 0) {
+        // Continue sleeping with remaining time
     }
+#else
+    // For other platforms, fall back to uv_sleep (millisecond granularity)
+    uv_sleep((uint64_t)ts.tv_sec * 1000 + ts.tv_nsec / 1000000);
+#endif
     return B_None;
 }
 
