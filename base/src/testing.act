@@ -379,9 +379,11 @@ extension Test(Hashable):
     def __eq__(self, other: Test) -> bool:
         return self.module == other.module and self.name == other.name
 
-    def putBytes(self, h):
-        h.update(self.module.encode())
-        h.update(self.name.encode())
+    def hash(self, h):
+        self.module.hash(h)
+        self.name.hash(h)
+        #h.update(self.module.encode())
+        #h.update(self.name.encode())
 
 #    def __hash__(self) -> int:
 #        #return hash(self.data)

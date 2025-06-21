@@ -139,6 +139,7 @@ struct B_HashableD_tupleG_class {
     B_bool (*__eq__)(B_HashableD_tuple, B_tuple, B_tuple);
     B_bool (*__ne__)(B_HashableD_tuple, B_tuple, B_tuple);
     B_int (*__hash__)(B_HashableD_tuple, B_tuple);
+    B_NoneType (*hash) (B_HashableD_tuple, B_tuple, B_hasher);
 };
   
 B_NoneType B_HashableD_tupleD___init__ (B_HashableD_tuple,int,B_Hashable*);

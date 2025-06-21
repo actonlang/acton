@@ -524,12 +524,12 @@ class hasher(object):
         NotImplemented  
 
 protocol Hashable (Eq):
-    putBytes : (hasher) -> None
+    hash : (hasher) -> None
     __hash__     : () -> u64
 
     def __hash__(self):
         h = hasher()
-        self.putBytes(h)
+        self.hash(h)
         return h.finalize()
     
 class complex (value):
@@ -908,11 +908,13 @@ def filter (function: ?((A) -> B), iterable: Iterable[A]) -> Iterator[A]:
     NotImplemented
 
 def hash(x: Hashable) -> u64:
-    return x.__hash__()
+    h = hasher()
+    x.hash(h)
+    return h.finalize()
 
 def seed_hash(seed: u64, x: Hashable) -> u64:
     h = hasher(seed)
-    x.putBytes(h)
+    x.hash(h)
     return h.finalize()
 
 def hex(i: Integral) -> str:

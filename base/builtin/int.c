@@ -642,7 +642,7 @@ B_u64 B_HashableD_intD___hash__(B_HashableD_int wit, B_int a) {
     return toB_u64(zig_hash_wyhash_hash(0,to$bytesD_len((char *)&data,8)));
 }
 
-B_NoneType B_HashableD_intD_putBytes(B_HashableD_int wit, B_int a, B_hasher h) {
+B_NoneType B_HashableD_intD_hash(B_HashableD_int wit, B_int a, B_hasher h) {
     long sz = a->val.size;
     unsigned long data;
     if (sz==0)
