@@ -76,7 +76,6 @@ struct B_HashableD_WORDG_class {
     B_bool (*__eq__)(B_HashableD_WORD, $WORD, $WORD);
     B_bool (*__ne__)(B_HashableD_WORD, $WORD, $WORD);
     B_NoneType (* hash)(B_HashableD_WORD, $WORD, B_hasher);
-    B_u64 (*__hash__)(B_HashableD_WORD, $WORD);
 };
 
 struct B_HashableD_WORD {

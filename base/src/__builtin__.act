@@ -525,12 +525,6 @@ class hasher(object):
 
 protocol Hashable (Eq):
     hash : (hasher) -> None
-    __hash__     : () -> u64
-
-    def __hash__(self):
-        h = hasher()
-        self.hash(h)
-        return h.finalize()
     
 class complex (value):
     def __init__(self, val: Number) -> None:

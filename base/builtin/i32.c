@@ -271,10 +271,6 @@ B_bool B_HashableD_i32D___ne__(B_HashableD_i32 wit, B_i32 a, B_i32 b) {
     return toB_bool(a->val != b->val);
 }
 
-B_u64 B_HashableD_i32D___hash__(B_HashableD_i32 wit, B_i32 a) {
-    return toB_u64(zig_hash_wyhash_hash(0,to$bytesD_len((char *)&(a->val),4)));
-}
-
 B_NoneType B_HashableD_i32D_hash(B_HashableD_i32 wit, B_i32 a, B_hasher h) {
     zig_hash_wyhash_update(h->_hasher, to$bytesD_len((char *)&(a->val), 4));
     return B_None;
