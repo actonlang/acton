@@ -150,10 +150,6 @@ B_bool B_HashableD_complexD___ne__(B_HashableD_complex wit, B_complex a, B_compl
     return toB_bool(!fromB_bool(B_HashableD_complexD___eq__(wit,a,b)));
 }
 
-B_u64 B_HashableD_complexD___hash__(B_HashableD_complex wit, B_complex a) {
-    return toB_u64(zig_hash_wyhash_hash(0,to$bytesD_len((char *)&(a->val),16)));
-}
-
 B_NoneType B_HashableD_complexD_hash(B_HashableD_complex wit, B_complex a, B_hasher h) {
     zig_hash_wyhash_update(h->_hasher, to$bytesD_len((char *)&(a->val), 16));
     return B_None;
@@ -293,8 +289,7 @@ struct B_HashableD_complexG_class B_HashableD_complexG_methods = {
     (B_str (*)(B_HashableD_complex))$default__str__,
     (B_str (*)(B_HashableD_complex))$default__str__,
     B_HashableD_complexD___eq__,
-    B_HashableD_complexD___ne__,
-    B_HashableD_complexD___hash__
+    B_HashableD_complexD___ne__
 };
 struct B_HashableD_complex B_HashableD_complex_instance = {&B_HashableD_complexG_methods};
 B_HashableD_complex B_HashableD_complexG_witness = &B_HashableD_complex_instance;

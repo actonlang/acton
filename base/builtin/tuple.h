@@ -138,7 +138,6 @@ struct B_HashableD_tupleG_class {
     B_str (*__repr__)(B_HashableD_tuple);
     B_bool (*__eq__)(B_HashableD_tuple, B_tuple, B_tuple);
     B_bool (*__ne__)(B_HashableD_tuple, B_tuple, B_tuple);
-    B_int (*__hash__)(B_HashableD_tuple, B_tuple);
     B_NoneType (*hash) (B_HashableD_tuple, B_tuple, B_hasher);
 };
   
@@ -147,7 +146,7 @@ void B_HashableD_tupleD___serialize__(B_HashableD_tuple, $Serial$state);
 B_HashableD_tuple B_HashableD_tupleD___deserialize__(B_HashableD_tuple, $Serial$state);
 B_bool B_HashableD_tupleD___eq__ (B_HashableD_tuple, B_tuple, B_tuple);
 B_bool B_HashableD_tupleD___ne__ (B_HashableD_tuple, B_tuple, B_tuple);
-B_int B_HashableD_tupleD___hash__ (B_HashableD_tuple, B_tuple);
+B_NoneType B_HashableD_tupleD_hash (B_HashableD_tuple, B_tuple, B_hasher);
 
 extern struct B_HashableD_tupleG_class B_HashableD_tupleG_methods;
 B_HashableD_tuple B_HashableD_tupleG_new();

@@ -1261,10 +1261,6 @@ B_bool B_HashableD_strD___eq__ (B_HashableD_str wit, B_str a, B_str b) {
 B_bool B_HashableD_strD___ne__ (B_HashableD_str wit, B_str a, B_str b) {
     return toB_bool(strcmp((char *)a->str,(char *)b->str) != 0);
 }
- 
-B_u64 B_HashableD_strD___hash__(B_HashableD_str wit, B_str a) {
-    return toB_u64(zig_hash_wyhash_hash(0,to$bytes((char *)a->str)));
-}
 
 B_NoneType B_HashableD_strD_hash(B_HashableD_str wit, B_str a, B_hasher h) {
     zig_hash_wyhash_update(h->_hasher,to$bytes((char *)a->str));
@@ -3570,10 +3566,6 @@ B_bool B_HashableD_bytesD___ne__ (B_HashableD_bytes wit, B_bytes a, B_bytes b) {
     return  toB_bool(!B_HashableD_bytesD___eq__(wit,a,b)->val);
 }
 
-B_u64 B_HashableD_bytesD___hash__(B_HashableD_bytes wit, B_bytes a) {
-    return toB_u64(zig_hash_wyhash_hash(0,a));
-}
-
 B_NoneType B_HashableD_bytesD_hash(B_HashableD_bytes wit, B_bytes a, B_hasher h) {
     zig_hash_wyhash_update(h->_hasher, a);
     return B_None;
@@ -3838,8 +3830,7 @@ struct B_HashableD_strG_class  B_HashableD_strG_methods = {
     (B_str (*)(B_HashableD_str))$default__str__,
     (B_str (*)(B_HashableD_str))$default__str__,
     B_HashableD_strD___eq__,
-    B_HashableD_strD___ne__,
-    B_HashableD_strD___hash__
+    B_HashableD_strD___ne__
 };
 
 struct B_HashableD_str B_HashableD_str_instance = {&B_HashableD_strG_methods};
@@ -4051,8 +4042,7 @@ struct B_HashableD_bytesG_class  B_HashableD_bytesG_methods = {
     (B_str (*)(B_HashableD_bytes))$default__str__,
     (B_str (*)(B_HashableD_bytes))$default__str__,
     B_HashableD_bytesD___eq__,
-    B_HashableD_bytesD___ne__,
-    B_HashableD_bytesD___hash__
+    B_HashableD_bytesD___ne__
 };
 
 struct B_HashableD_bytes B_HashableD_bytes_instance = {&B_HashableD_bytesG_methods};
