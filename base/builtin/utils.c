@@ -14,7 +14,7 @@ B_set B_mk_set(int len, B_Hashable w,...) {
     va_start(args, w);
     for (int i=0; i < len; i++) {
         $WORD elem = va_arg(args, $WORD);
-        B_set_add_entry(res,w,elem,fromB_u64(w->$class->__hash__(w,elem)));
+        B_set_add_entry(res,w,elem,fromB_u64(B_hash(w, elem)));
     }
     return res;
 }

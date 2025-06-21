@@ -215,7 +215,7 @@ B_NoneType B_setD___init__(B_set set, B_Hashable hashwit, B_Iterable wit, $WORD 
         while(1) {
             if ($PUSH()) {
                 $WORD nxt = it->$class->__next__(it);
-                B_set_add_entry(set,hashwit,nxt,fromB_u64(hashwit->$class->__hash__(hashwit,nxt)));
+                B_set_add_entry(set,hashwit,nxt,fromB_u64(B_hash(hashwit, nxt)));
                 $DROP();
             } else {
                 B_BaseException ex = $POP();
@@ -376,7 +376,7 @@ B_Iterator B_SetD_setD___iter__ (B_SetD_set wit, B_set set) {
 
 B_NoneType B_SetD_setD_add (B_SetD_set wit, B_set set, $WORD elem) {
     B_Hashable hashwit = wit->W_HashableD_AD_SetD_set;
-    B_set_add_entry(set,hashwit,elem,fromB_u64(hashwit->$class->__hash__(hashwit,elem)));
+    B_set_add_entry(set,hashwit,elem,fromB_u64(B_hash(hashwit, elem)));
     return B_None;
 }
 
@@ -393,7 +393,7 @@ B_set B_SetD_setD___fromiter__(B_SetD_set wit, B_Iterable wit2, $WORD iter) {
     memset(res->table,0,MIN_SIZE*sizeof(B_setentry));
     $WORD nxt;
     while((nxt = it->$class->__next__(it))) {
-        B_set_add_entry(res,hashwit,nxt,fromB_u64(hashwit->$class->__hash__(hashwit,nxt)));
+        B_set_add_entry(res,hashwit,nxt,fromB_u64(B_hash(hashwit, nxt)));
     }
     return res;
     */
@@ -405,7 +405,7 @@ B_int B_SetD_setD___len__ (B_SetD_set wit, B_set set) {
 
 B_bool B_SetD_setD___contains__ (B_SetD_set wit, B_set set, $WORD val) {
     B_Hashable hashwit = wit->W_HashableD_AD_SetD_set;
-    return toB_bool(B_set_contains_entry(set,hashwit,val,fromB_u64(hashwit->$class->__hash__(hashwit,val))));
+    return toB_bool(B_set_contains_entry(set,hashwit,val,fromB_u64(B_hash(hashwit, val))));
 }
 
 B_bool B_SetD_setD___containsnot__ (B_SetD_set wit, B_set set, $WORD v) {
@@ -440,7 +440,7 @@ B_NoneType B_SetD_setD_update (B_SetD_set wit, B_set set, B_Iterable otherwit, $
     while(1) {
         if ($PUSH()) {
             $WORD e = it->$class->__next__(it);
-            B_set_add_entry(set, hashwit, e, fromB_u64(hashwit->$class->__hash__(hashwit,e)));
+            B_set_add_entry(set, hashwit, e, fromB_u64(B_hash(hashwit, e)));
             $DROP();
         } else {
             B_BaseException ex = $POP();
@@ -455,7 +455,7 @@ B_NoneType B_SetD_setD_update (B_SetD_set wit, B_set set, B_Iterable otherwit, $
 
 B_NoneType B_SetD_setD_discard (B_SetD_set wit, B_set set, $WORD elem) {
     B_Hashable hashwit = wit->W_HashableD_AD_SetD_set;
-    B_set_discard_entry(set,hashwit,elem,fromB_u64(hashwit->$class->__hash__(hashwit,elem)));
+    B_set_discard_entry(set,hashwit,elem,fromB_u64(B_hash(hashwit, elem)));
     return B_None;
 }
 
