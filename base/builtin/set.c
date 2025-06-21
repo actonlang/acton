@@ -105,7 +105,7 @@ static B_setentry *B_set_lookkey(B_set set, B_Hashable hashwit, $WORD key, long 
             $WORD *startkey = entry->key;
             // startkey cannot be a dummy because the dummy hash field is -1 
             // assert(startkey != dummy);
-            if (startkey == key || hashwit->$class->__eq__(hashwit,startkey,key))
+            if (startkey == key || hashwit->$class->__eq__(hashwit,startkey,key)) 
                 return entry;
         }
         perturb >>= PERTURB_SHIFT;
@@ -215,7 +215,7 @@ B_NoneType B_setD___init__(B_set set, B_Hashable hashwit, B_Iterable wit, $WORD 
         while(1) {
             if ($PUSH()) {
                 $WORD nxt = it->$class->__next__(it);
-                B_set_add_entry(set,hashwit,nxt,from$int(hashwit->$class->__hash__(hashwit,nxt)));
+                B_set_add_entry(set,hashwit,nxt,fromB_u64(B_hash(hashwit, nxt)));
                 $DROP();
             } else {
                 B_BaseException ex = $POP();
@@ -300,7 +300,7 @@ B_set B_setD___deserialize__ (B_set res, $Serial$state state) {
 
 // B_Set
 
-// Iterable ///////////////////////////////////////////////////////////////////////////////////////
+// Iterable ///////////////////////////////////////////////////////////////////////////////////////  Leif 
 
 static $WORD B_IteratorD_set_next_entry(B_IteratorD_set self) {
     B_setentry *table = self->src->table;
@@ -315,6 +315,7 @@ static $WORD B_IteratorD_set_next_entry(B_IteratorD_set self) {
         i++;
     }
     $RAISE ((B_BaseException)$NEW(B_StopIteration, to$str("set iterator terminated")));
+    return NULL; //to avoid compiler warning
 }
 
 static B_Iterator B_set_iter_entry(B_set set) {
@@ -375,7 +376,7 @@ B_Iterator B_SetD_setD___iter__ (B_SetD_set wit, B_set set) {
 
 B_NoneType B_SetD_setD_add (B_SetD_set wit, B_set set, $WORD elem) {
     B_Hashable hashwit = wit->W_HashableD_AD_SetD_set;
-    B_set_add_entry(set,hashwit,elem,from$int(hashwit->$class->__hash__(hashwit,elem)));
+    B_set_add_entry(set,hashwit,elem,fromB_u64(B_hash(hashwit, elem)));
     return B_None;
 }
 
@@ -392,7 +393,7 @@ B_set B_SetD_setD___fromiter__(B_SetD_set wit, B_Iterable wit2, $WORD iter) {
     memset(res->table,0,MIN_SIZE*sizeof(B_setentry));
     $WORD nxt;
     while((nxt = it->$class->__next__(it))) {
-        B_set_add_entry(res,hashwit,nxt,from$int(hashwit->$class->__hash__(hashwit,nxt)));
+        B_set_add_entry(res,hashwit,nxt,fromB_u64(B_hash(hashwit, nxt)));
     }
     return res;
     */
@@ -404,7 +405,7 @@ B_int B_SetD_setD___len__ (B_SetD_set wit, B_set set) {
 
 B_bool B_SetD_setD___contains__ (B_SetD_set wit, B_set set, $WORD val) {
     B_Hashable hashwit = wit->W_HashableD_AD_SetD_set;
-    return toB_bool(B_set_contains_entry(set,hashwit,val,from$int(hashwit->$class->__hash__(hashwit,val))));
+    return toB_bool(B_set_contains_entry(set,hashwit,val,fromB_u64(B_hash(hashwit, val))));
 }
 
 B_bool B_SetD_setD___containsnot__ (B_SetD_set wit, B_set set, $WORD v) {
@@ -439,7 +440,7 @@ B_NoneType B_SetD_setD_update (B_SetD_set wit, B_set set, B_Iterable otherwit, $
     while(1) {
         if ($PUSH()) {
             $WORD e = it->$class->__next__(it);
-            B_set_add_entry(set, hashwit, e, from$int(hashwit->$class->__hash__(hashwit,e)));
+            B_set_add_entry(set, hashwit, e, fromB_u64(B_hash(hashwit, e)));
             $DROP();
         } else {
             B_BaseException ex = $POP();
@@ -454,7 +455,7 @@ B_NoneType B_SetD_setD_update (B_SetD_set wit, B_set set, B_Iterable otherwit, $
 
 B_NoneType B_SetD_setD_discard (B_SetD_set wit, B_set set, $WORD elem) {
     B_Hashable hashwit = wit->W_HashableD_AD_SetD_set;
-    B_set_discard_entry(set,hashwit,elem,from$int(hashwit->$class->__hash__(hashwit,elem)));
+    B_set_discard_entry(set,hashwit,elem,fromB_u64(B_hash(hashwit, elem)));
     return B_None;
 }
 

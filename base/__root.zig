@@ -10,7 +10,8 @@ export fn base64Q_encode(data: *acton.bytes) callconv(.C) *acton.bytes {
     const data_len: usize = @intCast(data.nbytes);
     const out_len = encoder.calcSize(data_len);
     const buffer = alloc.alloc(u8, out_len) catch @panic("OOM");
-    const encoded = encoder.encode(buffer, std.mem.span(data.str));
+    const data_slice = data.str[0..data_len];
+    const encoded = encoder.encode(buffer, data_slice);
 
     const res = alloc.create(acton.bytes) catch @panic("OOM");
     res.* = .{
@@ -25,14 +26,15 @@ export fn base64Q_decode(data: *acton.bytes) callconv(.C) *acton.bytes {
     const alloc = gc.allocator();
     const decoder = std.base64.standard.Decoder;
     // Convert null-terminated string to slice for decoder
-    const data_slice = std.mem.sliceTo(data.str, 0);
+    const data_len: usize = @intCast(data.nbytes);
+    const data_slice = data.str[0..data_len];
     // And then compute the exact number of bytes we need to decode, without padding
     const out_len = decoder.calcSizeForSlice(data_slice) catch {
         acton.raise_ValueError("Invalid base64 input data");
         unreachable; // raise above does longjmp so this is unreachable
     };
     const buffer = alloc.alloc(u8, out_len) catch @panic("OOM");
-    decoder.decode(buffer, std.mem.span(data.str)) catch unreachable;
+    decoder.decode(buffer, data_slice) catch unreachable;
 
     const res = alloc.create(acton.bytes) catch @panic("OOM");
     res.* = .{
@@ -54,7 +56,9 @@ export fn zig_crypto_hash_md5_init() callconv(.C) *std.crypto.hash.Md5 {
 }
 
 export fn zig_crypto_hash_md5_update(hasher: *std.crypto.hash.Md5, data: *acton.bytes) callconv(.C) void {
-    hasher.update(std.mem.span(data.str));
+    const len: usize = @intCast(data.nbytes); // destination type from context
+    const slice = data.str[0..len];
+    hasher.update(slice);
 }
 
 export fn zig_crypto_hash_md5_finalize(hasher: *std.crypto.hash.Md5, output: *acton.bytes) callconv(.C) void {
@@ -75,7 +79,9 @@ export fn zig_hash_wyhash_init(seed: u64) callconv(.C) *std.hash.Wyhash {
 }
 
 export fn zig_hash_wyhash_update(hasher: *std.hash.Wyhash, data: *acton.bytes) callconv(.C) void {
-    hasher.update(std.mem.span(data.str));
+    const len: usize = @intCast(data.nbytes); // destination type from context
+    const slice = data.str[0..len];
+    hasher.update(slice);
 }
 
 export fn zig_hash_wyhash_final(hasher: *std.hash.Wyhash) callconv(.C) u64 {
@@ -83,5 +89,7 @@ export fn zig_hash_wyhash_final(hasher: *std.hash.Wyhash) callconv(.C) u64 {
 }
 
 export fn zig_hash_wyhash_hash(seed: u64, data: *acton.bytes) callconv(.C) u64 {
-    return std.hash.Wyhash.hash(seed, std.mem.span(data.str));
+    const len: usize = @intCast(data.nbytes); // destination type from context
+    const slice = data.str[0..len];
+    return std.hash.Wyhash.hash(seed, slice);
 }

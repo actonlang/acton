@@ -267,9 +267,9 @@ B_bool B_HashableD_tupleD___ne__ (B_HashableD_tuple wit, B_tuple tup1, B_tuple t
 }
     
   
-B_int B_HashableD_tupleD___hash__ (B_HashableD_tuple wit, B_tuple tup) {
-    return to$int(B_tupleD_hash(wit,tup));
-}
+// B_int B_HashableD_tupleD___hash__ (B_HashableD_tuple wit, B_tuple tup) {
+//    return to$int(B_tupleD_hash(wit,tup));
+// }
 
 struct B_HashableD_tupleG_class B_HashableD_tupleG_methods = {
     "B_HashableD_tuple",
@@ -282,6 +282,5 @@ struct B_HashableD_tupleG_class B_HashableD_tupleG_methods = {
     (B_str (*)(B_HashableD_tuple))$default__str__,
     (B_str (*)(B_HashableD_tuple))$default__str__,
     B_HashableD_tupleD___eq__,
-    B_HashableD_tupleD___ne__,
-    B_HashableD_tupleD___hash__
+    B_HashableD_tupleD___ne__
 };

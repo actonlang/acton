@@ -513,9 +513,25 @@ protocol Div[A]:
     def __itruediv__(a,b):
         return a / b
 
-protocol Hashable (Eq):
-    __hash__     : () -> int
+class hasher(object):
+    def __init__(self, seed : u64 = 0) -> None:
+        NotImplemented 
 
+    def update(self, b : bytes) -> None:
+        NotImplemented  
+
+    def finalize(self) -> u64:
+        NotImplemented  
+
+protocol Hashable (Eq):
+    hash : (hasher) -> None
+    __hash__     : () -> u64
+
+    def __hash__(self):
+        h = hasher()
+        self.hash(h)
+        return h.finalize()
+    
 class complex (value):
     def __init__(self, val: Number) -> None:
         NotImplemented
@@ -891,8 +907,15 @@ def enumerate(iterable: Iterable[A], start: ?int) -> Iterator[(int,A)]:
 def filter (function: ?((A) -> B), iterable: Iterable[A]) -> Iterator[A]:
     NotImplemented
 
-def hash(x: Hashable) -> int:
-    return x.__hash__()
+def hash(x: Hashable) -> u64:
+    h = hasher()
+    x.hash(h)
+    return h.finalize()
+
+def seed_hash(seed: u64, x: Hashable) -> u64:
+    h = hasher(seed)
+    x.hash(h)
+    return h.finalize()
 
 def hex(i: Integral) -> str:
     NotImplemented

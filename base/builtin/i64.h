@@ -1,11 +1,11 @@
 struct B_i64 {
     struct B_i64G_class *$class;
-    long val;
+    int64_t val;
 };
 
  
-B_i64 toB_i64(long n);
-long fromB_i64(B_i64 n);
+B_i64 toB_i64(int64_t n);
+int64_t fromB_i64(B_i64 n);
 
 B_i64 B_i64G_new(B_atom a, B_int base);
 

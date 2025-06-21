@@ -537,9 +537,6 @@ B_bool B_any (B_Iterable W_179, $WORD it) {
 B_tuple B_divmod (B_Integral W_225, $WORD a, $WORD b) {
     return W_225->$class->__divmod__(W_225, a, b);
 }
-B_int B_hash (B_Hashable W_255, $WORD x) {
-    return W_255->$class->__hash__(W_255, x);
-}
 B_Iterator B_iter (B_Iterable W_278, $WORD x) {
     return W_278->$class->__iter__(W_278, x);
 }
@@ -565,7 +562,8 @@ $WORD B_round (B_Real W_395, $WORD x, B_int n) {
 
 $WORD $ASSERT(B_bool test, B_str msg) {
     if (!test->val) {
-        $RAISE(msg);
+        $RAISE((B_BaseException)$NEW(B_AssertionError,msg));
+        return NULL; // to avoid compiler warning
     }
     return B_None;
 }
