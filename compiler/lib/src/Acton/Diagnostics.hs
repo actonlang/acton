@@ -1,5 +1,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
+
+-- | Bridge between Acton error representations and the diagnose pretty-printing library
 module Acton.Diagnostics where
 
 import Error.Diagnose.Diagnostic
@@ -26,7 +28,9 @@ import Utils (SrcLoc(..))
 import Acton.Parser () -- Import for ShowErrorComponent String instance
 
 
--- | Create a Diagnose Diagnostic from a Megaparsec ParseErrorBundle using structured data
+-- | Convert Megaparsec parse errors to diagnose format
+-- Handles syntax errors from the parsing phase with rich error information
+-- like expected/unexpected tokens and parse positions.
 parseDiagnosticFromBundle :: String -> String -> ParseErrorBundle String String -> Diagnostic String
 parseDiagnosticFromBundle filename src bundle =
     let -- Extract the first error (most relevant)
@@ -54,13 +58,18 @@ parseDiagnosticFromBundle filename src bundle =
 
 
 
--- | Create a Diagnose Diagnostic for errors with structured location data
+-- | Convert Acton compiler errors to diagnose format
+-- Handles post-parse errors (context, type, compilation) that use SrcLoc offsets.
+-- Uses Megaparsec's reachOffset just for offset-to-line/column conversion.
 errorDiagnosticWithLoc :: String -> String -> String -> SrcLoc -> String -> Diagnostic String
 errorDiagnosticWithLoc errorKind filename src srcLoc msg =
     let (line, col, endCol) = case srcLoc of
             NoLoc -> (1, 1, 2)  -- Default if no location
             Loc startOffset endOffset ->
                 -- Use Megaparsec's reachOffset to convert offset to position
+                -- Note: We're borrowing Megaparsec's offset-to-line/column conversion
+                -- utility here, but these are NOT Megaparsec errors - they're Acton's
+                -- own errors that just store character offsets for efficiency.
                 -- Create a minimal PosState for the conversion
                 let initialState = PosState
                         { pstateInput = src
