@@ -1,13 +1,12 @@
 Building file test/syntaxerrors/err3.act using temporary scratch directory
+[error Parse error]: unexpected newline
+                     expecting atomic expression or unary operator
 
-ERROR: Error when compiling err3 module: Syntax error
-
-test/syntaxerrors/err3.act:2:14:
-  |
-2 |     return 2+
-  |              ^
-unexpected newline
-expecting atomic expression or unary operator
-
-- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-
+     +--> test/syntaxerrors/err3.act@2:14-2:15
+     |
+   2 |     return 2+
+     :              ^
+     :              `- unexpected newline
+     :                 expecting atomic expression or unary operator
+     :                 
+-----+

@@ -1,13 +1,12 @@
 Building file test/syntaxerrors/err5.act using temporary scratch directory
+[error Parse error]: unexpected 'r'
+                     expecting a closing parenthesis, call arguments, slice/index expression, comma, if clause, or operator
 
-ERROR: Error when compiling err5 module: Syntax error
-
-test/syntaxerrors/err5.act:3:5:
-  |
-3 |     return x + y
-  |     ^
-unexpected 'r'
-expecting a closing parenthesis, call arguments, slice/index expression, comma, if clause, or operator
-
-- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-
+     +--> test/syntaxerrors/err5.act@3:5-3:6
+     |
+   3 |     return x + y
+     :     ^ 
+     :     `- unexpected 'r'
+     :        expecting a closing parenthesis, call arguments, slice/index expression, comma, if clause, or operator
+     :        
+-----+

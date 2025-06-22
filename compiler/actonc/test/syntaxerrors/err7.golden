@@ -1,13 +1,12 @@
 Building file test/syntaxerrors/err7.act using temporary scratch directory
+[error Parse error]: unexpected 'a'
+                     expecting type variable (upper case letter optionally followed by digits)
 
-ERROR: Error when compiling err7 module: Syntax error
-
-test/syntaxerrors/err7.act:1:6:
-  |
-1 | f : [a (Eq)] => (a,a) -> bool
-  |      ^
-unexpected 'a'
-expecting type variable (upper case letter optionally followed by digits)
-
-- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-
+     +--> test/syntaxerrors/err7.act@1:6-1:7
+     |
+   1 | f : [a (Eq)] => (a,a) -> bool
+     :      ^ 
+     :      `- unexpected 'a'
+     :         expecting type variable (upper case letter optionally followed by digits)
+     :         
+-----+
