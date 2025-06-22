@@ -1,0 +1,4 @@
+# Invalid lambda syntax
+def higher_order():
+    f = x => x + 1
+    return f(5)

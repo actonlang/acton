@@ -1,0 +1,4 @@
+# Invalid f-string syntax
+def bad_fstring():
+    name = "world"
+    return f"Hello {name"

@@ -1,0 +1,4 @@
+# Unclosed string literal
+def greet(name):
+    msg = "Hello, 
+    return msg

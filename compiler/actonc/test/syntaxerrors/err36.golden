@@ -1,0 +1,12 @@
+Building file test/syntaxerrors/err36.act using temporary scratch directory
+[error Parse error]: unexpected "x:<newline>"
+                     expecting "%=", "&=", "**=", "*=", "+=", "-=", "//=", "/=", "<<=", ">>=", "@=", "^=", "|=", ':', '=', call arguments, slice/index expression, or comma
+
+     +--> test/syntaxerrors/err36.act@3:11-3:12
+     |
+   3 |     match x:
+     :           ^ 
+     :           `- unexpected "x:<newline>"
+     :              expecting "%=", "&=", "**=", "*=", "+=", "-=", "//=", "/=", "<<=", ">>=", "@=", "^=", "|=", ':', '=', call arguments, slice/index expression, or comma
+     :              
+-----+

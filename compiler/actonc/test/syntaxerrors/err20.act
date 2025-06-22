@@ -1,0 +1,4 @@
+# Invalid decorator syntax
+@
+def decorated():
+    pass

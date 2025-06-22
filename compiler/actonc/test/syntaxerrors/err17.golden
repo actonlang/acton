@@ -1,0 +1,12 @@
+Building file test/syntaxerrors/err17.act using temporary scratch directory
+[error Parse error]: unexpected ':'
+                     expecting "for", '}', call arguments, slice/index expression, comma, if clause, or operator
+
+     +--> test/syntaxerrors/err17.act@3:14-3:15
+     |
+   3 |     return {x:: 1}
+     :              ^ 
+     :              `- unexpected ':'
+     :                 expecting "for", '}', call arguments, slice/index expression, comma, if clause, or operator
+     :                 
+-----+

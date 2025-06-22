@@ -1,0 +1,3 @@
+# Double colon in type annotation
+def typed_func() :: int:
+    return 42

@@ -1,0 +1,12 @@
+Building file test/syntaxerrors/err25.act using temporary scratch directory
+[error Parse error]: unexpected "def inner():<newline> "
+                     expecting "action", "lambda", "mut", "proc", "pure", "yield", '*', '=', '_', comma, or relational expression
+
+     +--> test/syntaxerrors/err25.act@3:9-3:10
+     |
+   3 |     x = def inner():
+     :         ^ 
+     :         `- unexpected "def inner():<newline> "
+     :            expecting "action", "lambda", "mut", "proc", "pure", "yield", '*', '=', '_', comma, or relational expression
+     :            
+-----+

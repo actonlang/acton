@@ -1,0 +1,12 @@
+Building file test/syntaxerrors/err37.act using temporary scratch directory
+[error Parse error]: unexpected "b1"
+                     expecting ';', call arguments, slice/index expression, comma, digit, end of line, if clause, or operator
+
+     +--> test/syntaxerrors/err37.act@3:13-3:14
+     |
+   3 |     return 0b102
+     :             ^ 
+     :             `- unexpected "b1"
+     :                expecting ';', call arguments, slice/index expression, comma, digit, end of line, if clause, or operator
+     :                
+-----+

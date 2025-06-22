@@ -1,0 +1,12 @@
+Building file test/syntaxerrors/err18.act using temporary scratch directory
+[error Parse error]: unexpected "> x + 1<newline>    re"
+                     expecting "action", "lambda", "mut", "proc", "pure", "yield", '*', '=', '_', comma, or relational expression
+
+     +--> test/syntaxerrors/err18.act@3:12-3:13
+     |
+   3 |     f = x => x + 1
+     :            ^ 
+     :            `- unexpected "> x + 1<newline>    re"
+     :               expecting "action", "lambda", "mut", "proc", "pure", "yield", '*', '=', '_', comma, or relational expression
+     :               
+-----+

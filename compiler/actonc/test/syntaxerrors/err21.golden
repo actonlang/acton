@@ -1,0 +1,12 @@
+Building file test/syntaxerrors/err21.act using temporary scratch directory
+[error Parse error]: unexpected newline
+                     expecting '(', ':', or '['
+
+     +--> test/syntaxerrors/err21.act@2:14-2:15
+     |
+   2 | class MyClass
+     :              ^
+     :              `- unexpected newline
+     :                 expecting '(', ':', or '['
+     :                 
+-----+

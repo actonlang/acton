@@ -1,0 +1,12 @@
+Building file test/syntaxerrors/err31.act using temporary scratch directory
+[error Parse error]: unexpected "** 2<newline>"
+                     expecting atomic expression or unary operator
+
+     +--> test/syntaxerrors/err31.act@3:17-3:18
+     |
+   3 |     return 5 ** ** 2
+     :                 ^ 
+     :                 `- unexpected "** 2<newline>"
+     :                    expecting atomic expression or unary operator
+     :                    
+-----+

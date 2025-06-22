@@ -1,0 +1,12 @@
+Building file test/syntaxerrors/err22.act using temporary scratch directory
+[error Parse error]: unexpected "]<newline>"
+                     expecting relational expression
+
+     +--> test/syntaxerrors/err22.act@3:23-3:24
+     |
+   3 |     return [x for x in]
+     :                       ^
+     :                       `- unexpected "]<newline>"
+     :                          expecting relational expression
+     :                          
+-----+

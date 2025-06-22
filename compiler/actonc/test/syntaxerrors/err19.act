@@ -1,0 +1,4 @@
+# Invalid use of else without if
+def orphan_else():
+    else:
+        pass

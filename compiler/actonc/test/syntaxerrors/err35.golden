@@ -1,0 +1,12 @@
+Building file test/syntaxerrors/err35.act using temporary scratch directory
+[error Parse error]: unexpected ':'
+                     expecting '(' or '['
+
+     +--> test/syntaxerrors/err35.act@2:14-2:15
+     |
+   2 | actor MyActor:
+     :              ^
+     :              `- unexpected ':'
+     :                 expecting '(' or '['
+     :                 
+-----+

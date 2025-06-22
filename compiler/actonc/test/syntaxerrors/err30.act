@@ -1,0 +1,4 @@
+# Tab/space mixing indentation error
+def mixed_indent():
+    x = 1
+	y = 2  # This line starts with a tab

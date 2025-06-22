@@ -1,0 +1,3 @@
+# Unexpected token after valid statement
+def unexpected():
+    x = 5 ]

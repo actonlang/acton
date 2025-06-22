@@ -1,0 +1,12 @@
+Building file test/syntaxerrors/err24.act using temporary scratch directory
+[error Parse error]: unexpected ": int:<newline>    ret"
+                     expecting end of line or simple statement
+
+     +--> test/syntaxerrors/err24.act@2:19-2:20
+     |
+   2 | def typed_func() :: int:
+     :                   ^ 
+     :                   `- unexpected ": int:<newline>    ret"
+     :                      expecting end of line or simple statement
+     :                      
+-----+

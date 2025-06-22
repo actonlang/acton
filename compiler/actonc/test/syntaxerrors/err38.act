@@ -1,0 +1,3 @@
+# Hex literal error
+def bad_hex():
+    return 0xGHI
