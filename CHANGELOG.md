@@ -22,6 +22,25 @@
   - Allow module docstrings before imports
 - Add short options support for argparse module [#2289]
 - Add global command-line options support to actonc [#2291]
+- Parser / Syntax errors are now prettier [#2309]
+  - Replace basic error rendering with elegant unicode style using Diagnose library
+  - Better structured error reporting using Megaparsec's ADT typed error system
+- Improve error messages for type variable name violations
+  - Clear hints explaining that single uppercase letters are reserved for type variables
+  - Show cases possibilities of new parser error diagnostics
+  - Plain ASCII example (in terminal is even prettier):
+```
+[error Parse error]: Invalid name (reserved for type variables)
+
+     +--> test/syntaxerrors/err41.act@1:7-1:8
+     |
+   1 | class Z(value):
+     :       ^
+     :       `- invalid name 'Z'
+     :
+     | Hint: Single upper case character (optionally followed by digits) are reserved for type variables. Use a longer name.
+-----+
+```
 
 ### Changed
 - Use f-strings throughout standard library [#2297, #2290]

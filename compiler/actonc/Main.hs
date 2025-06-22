@@ -19,6 +19,7 @@ import Prelude hiding (readFile, writeFile)
 import qualified Acton.Parser
 import qualified Acton.Syntax as A
 import Text.Megaparsec.Error (ParseErrorBundle)
+import Acton.Parser (CustomParseError)
 import qualified Acton.CommandLineParser as C
 import qualified Acton.Relabel
 import qualified Acton.Env
@@ -729,7 +730,7 @@ parseActFile gopts opts paths actFile = do
                                                                    ++ ": " ++ fmtTime(timeParse - timeRead))
                     stubMode <- detectStubMode paths actFile opts
                     return $ ActonTask (modName paths) srcContent m stubMode
-    where handleParseError :: String -> ParseErrorBundle String String -> IO A.Module
+    where handleParseError :: String -> ParseErrorBundle String CustomParseError -> IO A.Module
           handleParseError srcContent bundle = do
                     let diagnostic = Diag.parseDiagnosticFromBundle actFile srcContent bundle
                     printDiag gopts opts diagnostic
