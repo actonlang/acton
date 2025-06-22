@@ -22,6 +22,13 @@
   - Allow module docstrings before imports
 - Add short options support for argparse module [#2289]
 - Add global command-line options support to actonc [#2291]
+- Add new Hashable protocol and hash() builtin function [#2255]
+  - Replace __hash__ method with new composable hashing approach
+  - Types implement `.hash(self, hasher)` method to update a stateful hasher object
+  - The hasher accumulates state from multiple fields: `self.x.hash(h); self.y.hash(h)`
+  - Use the `hash()` function to get hash values: `h = hash(my_object)`
+  - All built-in types implement Hashable protocol
+  - Uses fast wyhash algorithm via Zig implementation
 - Parser / Syntax errors are now prettier [#2309]
   - Replace basic error rendering with elegant unicode style using Diagnose library
   - Better structured error reporting using Megaparsec's ADT typed error system
@@ -48,6 +55,9 @@
   - Inherit PATH when custom environment is provided
 - Enhance ecosystem lift process with additional documentation [#2288]
 - Extend QuickType with effect output for better comprehension translation [#2267]
+- Improve acton.rts.sleep platform coverage [#2303]
+- Switch to use new hash() function instead of __hash__ [#2255]
+- Remove __hash__ special method in favor of hash() builtin [#2304]
 
 ### Fixed
 - Fix string 'in' operator for substrings found at position 0 [#2280]
@@ -58,6 +68,7 @@
 
 ### Documentation
 - Add ecosystem lift process documentation
+- Add Hashable protocol documentation to Acton Guide
 
 
 ## [0.26.0] - 2025-06-02
