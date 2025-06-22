@@ -1,11 +1,11 @@
-Building file test/syntaxerrors/err6.act using temporary scratch directory
+Building file test/syntaxerrors/err42.act using temporary scratch directory
 [error Parse error]: Invalid name (reserved for type variables)
 
-     +--> test/syntaxerrors/err6.act@1:7-1:8
+     +--> test/syntaxerrors/err42.act@1:5-1:6
      |
-   1 | def f(X):
-     :       ^ 
-     :       `- invalid name 'X'
+   1 | def Z():
+     :     ^ 
+     :     `- invalid name 'Z'
      :
      | Hint: Single upper case character (optionally followed by digits) are reserved for type variables. Use a longer name.
 -----+

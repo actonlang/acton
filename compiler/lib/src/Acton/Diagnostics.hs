@@ -9,6 +9,7 @@ import Error.Diagnose.Report
 import Error.Diagnose.Position
 import Error.Diagnose.Style
 import Error.Diagnose (addReport, addFile, printDiagnostic, prettyDiagnostic)
+import Error.Diagnose.Report (Note(..))
 
 import Data.List (intersperse, isPrefixOf, isInfixOf, intercalate)
 import Data.Maybe (fromMaybe)
@@ -16,22 +17,23 @@ import Control.Exception (Exception(..), SomeException)
 import qualified Data.List.NonEmpty as NE
 import Text.Read (readMaybe)
 import Data.Char (isDigit, isSpace)
+import qualified Data.Set as S
 
 import Text.Megaparsec (PosState(..), reachOffset)
-import Text.Megaparsec.Error (ParseErrorBundle(..), parseErrorPretty, bundleErrors, errorBundlePretty, ShowErrorComponent(..), ParseError(..), errorOffset, parseErrorTextPretty)
+import Text.Megaparsec.Error (ParseErrorBundle(..), parseErrorPretty, bundleErrors, errorBundlePretty, ShowErrorComponent(..), ParseError(..), errorOffset, parseErrorTextPretty, ErrorFancy(..))
 import Text.Megaparsec.Pos (SourcePos(..), unPos, sourceLine, sourceColumn, mkPos)
 import qualified Text.Megaparsec.Error as ME
 
 import Acton.Syntax
 import SrcLocation
 import Utils (SrcLoc(..))
-import Acton.Parser () -- Import for ShowErrorComponent String instance
+import Acton.Parser (CustomParseError(..)) -- Import for custom error types
 
 
 -- | Convert Megaparsec parse errors to diagnose format
 -- Handles syntax errors from the parsing phase with rich error information
 -- like expected/unexpected tokens and parse positions.
-parseDiagnosticFromBundle :: String -> String -> ParseErrorBundle String String -> Diagnostic String
+parseDiagnosticFromBundle :: String -> String -> ParseErrorBundle String CustomParseError -> Diagnostic String
 parseDiagnosticFromBundle filename src bundle =
     let -- Extract the first error (most relevant)
         firstError = NE.head (bundleErrors bundle)
@@ -51,8 +53,22 @@ parseDiagnosticFromBundle filename src bundle =
         -- Create position span
         position = Position (line, col) (line, col + 1) filename
 
+        -- Check if this is a type variable name error and add hint
+        (hints, markerMsg) = case firstError of
+                  ME.FancyError _ errs -> 
+                    case findTypeVarError (S.toList errs) of
+                      Just name -> ([Hint ("Single upper case character (optionally followed by digits) are reserved for type variables. Use a longer name.")],
+                                   "invalid name '" ++ name ++ "'")
+                      Nothing -> ([], msg)
+                  _ -> ([], msg)
+        
+        findTypeVarError :: [ErrorFancy CustomParseError] -> Maybe String
+        findTypeVarError [] = Nothing
+        findTypeVarError (ErrorCustom (TypeVariableNameError name) : _) = Just name
+        findTypeVarError (_ : rest) = findTypeVarError rest
+        
         -- Create the report
-        report = Err (Just "Parse error") msg [(position, This msg)] []
+        report = Err (Just "Parse error") msg [(position, This markerMsg)] hints
         diagnostic = addReport mempty report
     in addFile diagnostic filename src
 

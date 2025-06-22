@@ -13,7 +13,10 @@
 
 {-# LANGUAGE FlexibleInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
-module Acton.Parser where
+module Acton.Parser 
+  ( module Acton.Parser
+  , CustomParseError(..)
+  ) where
 
 import qualified Control.Monad.Trans.State.Strict as St
 import qualified Control.Exception
@@ -39,9 +42,14 @@ import Utils
 import Debug.Trace
 import System.IO.Unsafe
 
--- Orphan instance needed for errorBundlePretty
-instance ShowErrorComponent String where
-  showErrorComponent s = s
+-- Custom error types for better structured error handling
+data CustomParseError = TypeVariableNameError String  -- Name that looks like type variable
+                      | OtherError String
+                      deriving (Eq, Ord, Show)
+
+instance ShowErrorComponent CustomParseError where
+  showErrorComponent (TypeVariableNameError name) = "Invalid name (reserved for type variables)"
+  showErrorComponent (OtherError msg) = msg
 
 -- Context errors -------------------------------------------------------------------------------
 
@@ -94,7 +102,7 @@ extractSrcSpan (Loc l r) src = sp
 
 type ParserState = (Bool, [CTX])  -- (Is numpy imported?, Parser contexts)
 
-type Parser = St.StateT ParserState (Parsec String String)
+type Parser = St.StateT ParserState (Parsec CustomParseError String)
 
 pushCtx ctx (b,ctxs) = (b, ctx:ctxs)
 popCtx (b,ctxs)      = (b,tail ctxs)
@@ -845,7 +853,7 @@ name, escname, tvarname :: Parser S.Name
 name = do off <- getOffset
           x <- identifier
           if isUpper (head x) && all isDigit (tail x)
-            then parseError  (TrivialError off (Just (Tokens (N.fromList x))) (S.fromList [Label (N.fromList "name (not type variable)")]))
+            then parseError (FancyError off (S.fromList [ErrorCustom (TypeVariableNameError x)]))
             else return $ S.Name (Loc off (off+length x)) x
 
 escname = name <|> addLoc (S.Name NoLoc . head <$> plainstrLiteral)  -- Assumes an escname cannot contain hex escape sequences
