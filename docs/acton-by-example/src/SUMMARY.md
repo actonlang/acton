@@ -27,6 +27,7 @@
   - [Classes](classes/intro.md)
     - [Inheritance](classes/inheritance.md)
   - [Protocols](protocols/intro.md)
+    - [The Hashable Protocol](protocols/hashable.md)
     - [Method Dispatch](protocols/dispatch.md)
   - [Actors](actors.md)
     - [Root Actor](actors/root.md)
