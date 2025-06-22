@@ -1,13 +1,12 @@
 Building file test/syntaxerrors/err1.act using temporary scratch directory
+[error Parse error]: unexpected "if x>pass:<newline>   "
+                     expecting end of line or simple statement
 
-ERROR: Error when compiling err1 module: Syntax error
-
-test/syntaxerrors/err1.act:1:11:
-  |
-1 | def f(x): if x>pass:
-  |           ^^^^^^^^^^^
-unexpected "if x>pass:<newline>   "
-expecting end of line or simple statement
-
-- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-
+     +--> test/syntaxerrors/err1.act@1:11-1:12
+     |
+   1 | def f(x): if x>pass:
+     :           ^ 
+     :           `- unexpected "if x>pass:<newline>   "
+     :              expecting end of line or simple statement
+     :              
+-----+

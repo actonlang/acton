@@ -12,6 +12,7 @@
 --
 
 {-# LANGUAGE FlexibleInstances #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 module Acton.Parser where
 
 import qualified Control.Monad.Trans.State.Strict as St
@@ -38,6 +39,10 @@ import Utils
 import Debug.Trace
 import System.IO.Unsafe
 
+-- Orphan instance needed for errorBundlePretty
+instance ShowErrorComponent String where
+  showErrorComponent s = s
+
 -- Context errors -------------------------------------------------------------------------------
 
 tr :: Show a => String -> Parser a -> Parser a
@@ -49,9 +54,6 @@ tr msg p = do
 
 makeReport ps src = errReport (map setSpan ps) src
   where setSpan (loc, msg) = (extractSrcSpan loc src, msg)
-
-instance ShowErrorComponent [Char] where
-  showErrorComponent s = s
 
 --- Main parsing and error message functions ------------------------------------------------------
 
@@ -70,10 +72,6 @@ parseModule qn fileName fileContent =
 parseTestStr b p str = case runParser (St.evalStateT p (b,[])) "" str of
                          Left err -> putStrLn (errorBundlePretty err)
                          Right t  -> print t
-
-parserError :: ParseErrorBundle String String -> [(SrcLoc,String)]
-parserError err = [(NoLoc,errorBundlePretty err)]
-
 
 extractSrcSpan :: SrcLoc -> String -> SrcSpan
 extractSrcSpan NoLoc src = SpanEmpty

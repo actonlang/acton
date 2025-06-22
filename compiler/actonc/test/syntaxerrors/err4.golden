@@ -1,13 +1,12 @@
 Building file test/syntaxerrors/err4.act using temporary scratch directory
+[error Parse error]: unexpected "pass<newline>"
+                     expecting atomic expression or unary operator
 
-ERROR: Error when compiling err4 module: Syntax error
-
-test/syntaxerrors/err4.act:2:14:
-  |
-2 |     return x+pass
-  |              ^^^^^
-unexpected "pass<newline>"
-expecting atomic expression or unary operator
-
-- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-
+     +--> test/syntaxerrors/err4.act@2:14-2:15
+     |
+   2 |     return x+pass
+     :              ^ 
+     :              `- unexpected "pass<newline>"
+     :                 expecting atomic expression or unary operator
+     :                 
+-----+

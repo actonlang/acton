@@ -1,13 +1,12 @@
 Building file test/syntaxerrors/err6.act using temporary scratch directory
+[error Parse error]: unexpected "X)"
+                     expecting "**", '*', or name (not type variable)
 
-ERROR: Error when compiling err6 module: Syntax error
-
-test/syntaxerrors/err6.act:1:7:
-  |
-1 | def f(X):
-  |       ^^
-unexpected "X)"
-expecting "**", '*', or name (not type variable)
-
-- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-
+     +--> test/syntaxerrors/err6.act@1:7-1:8
+     |
+   1 | def f(X):
+     :       ^ 
+     :       `- unexpected "X)"
+     :          expecting "**", '*', or name (not type variable)
+     :          
+-----+

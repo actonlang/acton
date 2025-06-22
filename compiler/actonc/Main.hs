@@ -18,6 +18,7 @@ import Prelude hiding (readFile, writeFile)
 
 import qualified Acton.Parser
 import qualified Acton.Syntax as A
+import Text.Megaparsec.Error (ParseErrorBundle)
 import qualified Acton.CommandLineParser as C
 import qualified Acton.Relabel
 import qualified Acton.Env
@@ -35,6 +36,7 @@ import qualified Acton.Boxing
 import qualified Acton.CodeGen
 import qualified Acton.Builtin
 import qualified Acton.DocPrinter as DocP
+import qualified Acton.Diagnostics as Diag
 import Utils
 import qualified Pretty
 import qualified InterfaceFiles
@@ -712,22 +714,27 @@ parseActFile :: C.GlobalOptions -> C.CompileOptions -> Paths -> String -> IO Com
 parseActFile gopts opts paths actFile = do
                     timeStart <- getTime Monotonic
                     paths <- findPaths actFile opts
-                    src <- readFile actFile
+                    srcContent <- readFile actFile
                     timeRead <- getTime Monotonic
                     iff (C.timing gopts) $ putStrLn("Reading file " ++ makeRelative (srcDir paths) actFile
                                                    ++ ": " ++ fmtTime(timeRead - timeStart))
-                    m <- Acton.Parser.parseModule (modName paths) actFile src
-                      `catch` handle "Syntax error" Acton.Parser.parserError "" paths (modName paths)
-                      `catch` handle "Context error" Acton.Parser.contextError src paths (modName paths)
-                      `catch` handle "Indentation error" Acton.Parser.indentationError src paths (modName paths)
-                      `catch` handle "Syntax error" Acton.Parser.failFastError src paths (modName paths)
+                    m <- Acton.Parser.parseModule (modName paths) actFile srcContent
+                      `catch` handleParseError srcContent
+                      `catch` handle gopts opts "Context error" Acton.Parser.contextError srcContent paths (modName paths)
+                      `catch` handle gopts opts "Indentation error" Acton.Parser.indentationError srcContent paths (modName paths)
+                      `catch` handle gopts opts "Syntax error" Acton.Parser.failFastError srcContent paths (modName paths)
                     iff (C.parse opts) $ dump (modName paths) "parse" (Pretty.print m)
                     timeParse <- getTime Monotonic
                     iff (C.timing gopts) $ putStrLn("Parsing file " ++ makeRelative (srcDir paths) actFile
                                                                    ++ ": " ++ fmtTime(timeParse - timeRead))
                     stubMode <- detectStubMode paths actFile opts
-                    return $ ActonTask (modName paths) src m stubMode
-    where detectStubMode :: Paths -> String -> C.CompileOptions -> IO Bool
+                    return $ ActonTask (modName paths) srcContent m stubMode
+    where handleParseError :: String -> ParseErrorBundle String String -> IO A.Module
+          handleParseError srcContent bundle = do
+                    let diagnostic = Diag.parseDiagnosticFromBundle actFile srcContent bundle
+                    printDiag gopts opts diagnostic
+                    handleCleanup paths (modName paths)
+          detectStubMode :: Paths -> String -> C.CompileOptions -> IO Bool
           detectStubMode paths srcfile opts = do
                     exists <- doesFileExist cFile
                     return (exists && C.autostub opts)
@@ -866,8 +873,8 @@ doTask gopts opts paths env t@(ActonTask mn src m stubMode) = do
       else do
         createDirectoryIfMissing True (getModPath (projTypes paths) mn)
         env' <- runRestPasses gopts opts paths env m stubMode
-          `catch` handle "Compilation error" generalError src paths mn
-          `catch` handle "Compilation error" Acton.Env.compilationError src paths mn
+          `catch` handle gopts opts "Compilation error" generalError src paths mn
+          `catch` handle gopts opts "Compilation error" Acton.Env.compilationError src paths mn
           `catch` handleTypeError gopts opts "Type error" Acton.Types.typeError src paths mn
         timeEnd <- getTime Monotonic
         iff (not (quiet gopts opts)) $ putStrLn("   Finished compilation in  " ++ fmtTime(timeEnd - timeStart))
@@ -1053,10 +1060,19 @@ runRestPasses gopts opts paths env0 parsed stubMode = do
 
                       return $ Acton.Env.addMod mn iface mdoc (env0 `Acton.Env.withModulesFrom` env)
 
-handle errKind f src paths mn ex = do
-    putStrLn ("\nERROR: Error when compiling " ++ (prstr mn) ++ " module: " ++ errKind)
-    putStrLn (Acton.Parser.makeReport (f ex) src)
-    handleCleanup paths mn
+handle gopts opts errKind f src paths mn ex = do
+    let actFile = modNameToFilename mn
+    let errors = f ex
+    -- Convert the first error to a diagnostic
+    case errors of
+        [] -> do
+            -- Fallback if no error location
+            putStrLn ("\nERROR: Error when compiling " ++ (prstr mn) ++ " module: " ++ errKind)
+            handleCleanup paths mn
+        ((loc, msg):_) -> do
+            let diagnostic = Diag.errorDiagnosticWithLoc errKind actFile src loc msg
+            printDiag gopts opts diagnostic
+            handleCleanup paths mn
 
 modNameToFilename :: A.ModName -> String
 modNameToFilename mn = joinPath (map nameToString names) ++ ".act"
@@ -1117,7 +1133,7 @@ writeRootC env gopts opts paths binTask = do
                         createDirectoryIfMissing True (takeDirectory rootFile)
                         writeFile rootFile c
                         return (Just binTask)
-                    | otherwise -> handle "Type error" Acton.Types.typeError "" paths m
+                    | otherwise -> handle gopts opts "Type error" Acton.Types.typeError "" paths m
                         (Acton.Types.TypeError NoLoc ("Illegal type "++ prstr t ++ " of parameter to root actor " ++ prstr qn))
                 Just t -> handleTypeError gopts opts "Type error" Acton.Types.typeError "" paths m
                     (Acton.Types.TypeError NoLoc (prstr qn ++ " has not actor type."))

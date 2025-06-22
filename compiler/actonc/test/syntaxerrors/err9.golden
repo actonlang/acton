@@ -1,13 +1,12 @@
 Building file test/syntaxerrors/err9.act using temporary scratch directory
+[error Parse error]: unexpected newline
+                     expecting "=>"
 
-ERROR: Error when compiling err9 module: Syntax error
-
-test/syntaxerrors/err9.act:1:8:
-  |
-1 | f : [A]
-  |        ^
-unexpected newline
-expecting "=>"
-
-- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-
+     +--> test/syntaxerrors/err9.act@1:8-1:9
+     |
+   1 | f : [A]
+     :        ^
+     :        `- unexpected newline
+     :           expecting "=>"
+     :           
+-----+

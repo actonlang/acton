@@ -33,6 +33,7 @@ executables:
       - directory >= 1.3.1
       - filelock
       - filepath
+      - megaparsec
       - prettyprinter
       - process
       - split
