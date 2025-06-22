@@ -1,0 +1,12 @@
+Building file test/syntaxerrors/err28.act using temporary scratch directory
+[error Parse error]: unexpected '2'
+                     expecting a closing parenthesis
+
+     +--> test/syntaxerrors/err28.act@3:14-3:15
+     |
+   3 |     print(1,,2)
+     :              ^ 
+     :              `- unexpected '2'
+     :                 expecting a closing parenthesis
+     :                 
+-----+

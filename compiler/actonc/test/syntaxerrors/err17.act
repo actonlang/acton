@@ -1,0 +1,3 @@
+# Double dots in dictionary
+def make_dict():
+    return {x:: 1}

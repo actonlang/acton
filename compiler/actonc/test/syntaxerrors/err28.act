@@ -1,0 +1,3 @@
+# Missing expression between commas
+def bad_args():
+    print(1,,2)

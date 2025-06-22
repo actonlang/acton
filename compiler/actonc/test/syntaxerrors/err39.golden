@@ -1,0 +1,12 @@
+Building file test/syntaxerrors/err39.act using temporary scratch directory
+[error Parse error]: unexpected newline
+                     expecting """"", "'''", '"', ''', '~', identifier, or integer
+
+     +--> test/syntaxerrors/err39.act@3:16-3:17
+     |
+   3 |     return obj.
+     :                ^
+     :                `- unexpected newline
+     :                   expecting """"", "'''", '"', ''', '~', identifier, or integer
+     :                   
+-----+

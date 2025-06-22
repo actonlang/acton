@@ -1,0 +1,3 @@
+# Invalid operator combination
+def bad_op():
+    return 5 ** ** 2

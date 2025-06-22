@@ -1,0 +1,4 @@
+# Invalid use of def inside expression
+def expr_def():
+    x = def inner():
+        pass

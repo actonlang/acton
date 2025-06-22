@@ -1,0 +1,3 @@
+# Invalid attribute access
+def bad_attr():
+    return obj.

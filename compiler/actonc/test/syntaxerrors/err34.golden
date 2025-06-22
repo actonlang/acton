@@ -1,0 +1,12 @@
+Building file test/syntaxerrors/err34.act using temporary scratch directory
+[error Parse error]: unexpected newline
+                     expecting "->" or ':'
+
+     +--> test/syntaxerrors/err34.act@3:17-3:18
+     |
+   3 |     def method()
+     :                 ^
+     :                 `- unexpected newline
+     :                    expecting "->" or ':'
+     :                    
+-----+

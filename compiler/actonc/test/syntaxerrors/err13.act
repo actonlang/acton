@@ -1,0 +1,3 @@
+# Missing comma in list literal
+def make_list():
+    return [1 2 3]

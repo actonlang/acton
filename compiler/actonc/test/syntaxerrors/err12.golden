@@ -1,0 +1,12 @@
+Building file test/syntaxerrors/err12.act using temporary scratch directory
+[error Parse error]: unexpected '-'
+                     expecting '(' or '['
+
+     +--> test/syntaxerrors/err12.act@2:7-2:8
+     |
+   2 | def my-function(x):
+     :       ^ 
+     :       `- unexpected '-'
+     :          expecting '(' or '['
+     :          
+-----+

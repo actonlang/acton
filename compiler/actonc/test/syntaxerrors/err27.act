@@ -1,0 +1,3 @@
+# Invalid numeric literal
+def bad_number():
+    return 123abc

@@ -1,0 +1,12 @@
+Building file test/syntaxerrors/err32.act using temporary scratch directory
+[error Parse error]: unexpected end of input
+                     expecting a closing parenthesis, call arguments, slice/index expression, comma, if clause, or operator
+
+     +--> test/syntaxerrors/err32.act@4:1-4:2
+     |
+   4 | <no line>
+     : ^
+     : `- unexpected end of input
+     :    expecting a closing parenthesis, call arguments, slice/index expression, comma, if clause, or operator
+     :    
+-----+

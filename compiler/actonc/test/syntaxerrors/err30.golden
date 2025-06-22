@@ -1,0 +1,8 @@
+Building file test/syntaxerrors/err30.act using temporary scratch directory
+[error Indentation error]: Too much indentation
+     +--> err30.act@4:9-4:9
+     |
+   4 |     y = 2  # This line starts with a tab
+     :             
+     :            `- Too much indentation
+-----+

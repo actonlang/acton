@@ -1,0 +1,3 @@
+# Binary literal error
+def bad_binary():
+    return 0b102

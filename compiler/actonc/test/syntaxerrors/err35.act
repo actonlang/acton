@@ -1,0 +1,3 @@
+# Actor with invalid method definition
+actor MyActor:
+    def

@@ -1,0 +1,3 @@
+# Missing parenthesis in tuple
+def bad_tuple():
+    return (1, 2, 3

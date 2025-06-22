@@ -1,0 +1,12 @@
+Building file test/syntaxerrors/err33.act using temporary scratch directory
+[error Parse error]: unexpected newline
+                     expecting identifier
+
+     +--> test/syntaxerrors/err33.act@2:7-2:8
+     |
+   2 | import
+     :       ^
+     :       `- unexpected newline
+     :          expecting identifier
+     :          
+-----+

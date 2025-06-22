@@ -1,0 +1,5 @@
+# Invalid match/case syntax
+def matcher(x):
+    match x:
+        case 1
+            return "one"

@@ -1,0 +1,12 @@
+Building file test/syntaxerrors/err19.act using temporary scratch directory
+[error Parse error]: unexpected "else:<newline>        "
+                     expecting statement
+
+     +--> test/syntaxerrors/err19.act@3:5-3:6
+     |
+   3 |     else:
+     :     ^ 
+     :     `- unexpected "else:<newline>        "
+     :        expecting statement
+     :        
+-----+

@@ -1,0 +1,12 @@
+Building file test/syntaxerrors/err16.act using temporary scratch directory
+[error Parse error]: unexpected "[1"
+                     expecting "in", ':', or comma
+
+     +--> test/syntaxerrors/err16.act@3:11-3:12
+     |
+   3 |     for x [1, 2, 3]:
+     :           ^ 
+     :           `- unexpected "[1"
+     :              expecting "in", ':', or comma
+     :              
+-----+
