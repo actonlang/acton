@@ -1,13 +1,13 @@
 name: Trigger rebuild of Acton Web page
 
-# When there are changes to files under docs/acton-by-example on main branch,
+# When there are changes to files under docs/acton-guide on main branch,
 # trigger the workflow to rebuild the Acton web page
 on:
   push:
     branches:
       - main
     paths:
-      - 'docs/acton-by-example/**'
+      - 'docs/acton-guide/**'
 
 jobs:
   trigger_web_rebuild:

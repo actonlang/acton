@@ -58,6 +58,7 @@
 - Improve acton.rts.sleep platform coverage [#2303]
 - Switch to use new hash() function instead of __hash__ [#2255]
 - Remove __hash__ special method in favor of hash() builtin [#2304]
+- Rename `docs/acton-by-example` to `docs/acton-guide`
 
 ### Fixed
 - Fix string 'in' operator for substrings found at position 0 [#2280]
