@@ -1,6 +1,6 @@
 # Root Actor
 
-Like C has a main() function, Acton has a root actor. To compile a binary executable, there must be a root actor. Per default, if a source (`.act`) file contains an actor named `main`, it will be used as the root actor but it can also be specified using the `--root` argument. While the convention is to call the root actor `main`, you are free to name it anything.
+Every Acton program has a root actor. To compile a binary executable, there must be a root actor. Per default, if a source (`.act`) file contains an actor named `main`, it will be used as the root actor. You can specify which actor should be the root using the `--root` argument. While the convention is to call the root actor `main`, you are free to name it anything.
 
 Given this Acton program:
 ```python
