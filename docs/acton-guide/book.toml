@@ -1,13 +1,14 @@
 [book]
+title = "Acton Guide"
 authors = []
 language = "en"
 multilingual = false
 preferred-dark-theme = "ayu"
 src = "src"
-site-url = "/learn/acton-by-example/"
+site-url = "/learn/acton-guide/"
 git-repository-url = "https://github.com/actonlang/acton"
 git-repository-icon = "fa-github"
-edit-url-template = "https://github.com/actonlang/acton/edit/master/docs/acton-by-example/{path}"
+edit-url-template = "https://github.com/actonlang/acton/edit/master/docs/acton-guide/{path}"
 
 [preprocessor.tabs]
 

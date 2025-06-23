@@ -1,4 +1,4 @@
-# Acton by Example
+# Acton Guide
 
 ## Writers Guide
 
