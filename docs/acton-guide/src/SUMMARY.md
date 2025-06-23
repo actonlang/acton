@@ -33,6 +33,7 @@
     - [Root Actor](actors/root.md)
     - [Lifetime](actors/lifetime.md)
     - [Attributes](actors/attributes.md)
+    - [`self` reference](actors/self.md)
     - [Concurrency](actors/concurrency.md)
     - [Sync Method calls](actors/sync_method_call.md)
     - [Async Method calls](actors/async_method_call.md)

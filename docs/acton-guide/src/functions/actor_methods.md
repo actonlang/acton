@@ -2,7 +2,7 @@
 
 Actor methods are declared under an `actor` using the `def` keyword.
 
-An actor method runs in the context of the actor and can access its private state. As Actors are sequential processes, calling other methods on the local actor or any function is going to be run sequentially.
+An actor method runs in the context of the actor and can access its private state. As Actors are sequential processes, calling other methods on the local actor or any function is going to run sequentially.
 
 Calling an actor method on the local actor can be done simply by calling it by its name, without any prefix such as `self.`.
 
