@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## Unreleased
 
 ### Added
 - Add `acton doc` command for generating documentation [#2292]
