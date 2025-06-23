@@ -28,8 +28,8 @@ command = "mdbook-admonish"
 assets_version = "3.0.2" # do not edit: managed by `mdbook-admonish install`
 
 [output.html]
-additional-css = ["svgbob.css", "theme/tabs.css", "./mdbook-admonish.css", "theme/sbscode.css"]
-additional-js = ["theme/tabs.js", "theme/sbscode_copy.js"]
+additional-css = ["svgbob.css", "theme/tabs.css", "./mdbook-admonish.css", "theme/sbscode.css", "theme/skill-slider.css", "theme/content-width.css"]
+additional-js = ["theme/tabs.js", "theme/sbscode_copy.js", "theme/skill-slider.js"]
 
 [output.html.fold]
 enable = true

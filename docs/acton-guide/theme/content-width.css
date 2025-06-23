@@ -1,0 +1,55 @@
+/* Wider content area for better side-by-side code display */
+
+/* Increase main content width and center it */
+.content main {
+    max-width: 900px !important;
+    margin: 0 auto !important;
+    padding: 0 15px;
+}
+
+/* Wider content on larger screens */
+@media (min-width: 1200px) {
+    .content main {
+        max-width: 950px !important;
+    }
+}
+
+@media (min-width: 1400px) {
+    .content main {
+        max-width: 1000px !important;
+    }
+}
+
+@media (min-width: 1600px) {
+    .content main {
+        max-width: 1050px !important;
+    }
+}
+
+/* Make code blocks in side-by-side tables use available space better */
+.side-by-side-code td:first-child {
+    width: 35%; /* Explanations/comments column */
+}
+
+.side-by-side-code td:last-child {
+    width: 65%; /* Code column - more space for code */
+}
+
+/* Adjust pre/code blocks to not add unnecessary padding in tables */
+.side-by-side-code pre {
+    margin: 0;
+    padding: 10px;
+}
+
+.side-by-side-code td {
+    padding: 12px;
+}
+
+/* For very wide screens, cap the side-by-side table width for readability */
+@media (min-width: 1600px) {
+    .side-by-side-code {
+        max-width: 1400px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+}
