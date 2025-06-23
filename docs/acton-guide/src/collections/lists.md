@@ -73,3 +73,52 @@ List after clear: []
 
 - All items in a list must be of the same type
   - It is not allowed to mix, like `["foo", 1]` leads to a compiler error
+
+## List Comprehensions
+
+List comprehensions provide a concise way to create lists based on existing sequences or ranges.
+
+Source:
+```python
+actor main(env):
+    # Basic list comprehension
+    squares = [x * x for x in range(5)]
+    print("Squares:", squares)
+    
+    # With condition
+    evens = [x for x in range(10) if x % 2 == 0]
+    print("Even numbers:", evens)
+    
+    # Multiple iterators (flattened)
+    pairs = [(x, y) for x in range(3) for y in range(3)]
+    print("All pairs:", pairs)
+    
+    # Nested list comprehension
+    matrix = [[i * j for i in range(4)] for j in range(3)]
+    print("Matrix:")
+    for row in matrix:
+        print("  ", row)
+    
+    # Using comprehension with existing list
+    words = ["hello", "world", "acton"]
+    lengths = [len(w) for w in words]
+    print("Word lengths:", lengths)
+    
+    # Filtering and transforming
+    long_caps = [w.upper() for w in words if len(w) > 4]
+    print("Long words in caps:", long_caps)
+
+    env.exit(0)
+```
+
+Output:
+```
+Squares: [0, 1, 4, 9, 16]
+Even numbers: [0, 2, 4, 6, 8]
+All pairs: [(0, 0), (0, 1), (0, 2), (1, 0), (1, 1), (1, 2), (2, 0), (2, 1), (2, 2)]
+Matrix:
+   [0, 0, 0, 0]
+   [0, 1, 2, 3]
+   [0, 2, 4, 6]
+Word lengths: [5, 5, 5]
+Long words in caps: ['HELLO', 'WORLD', 'ACTON']
