@@ -1,5 +1,7 @@
 # Dictionaries
 
+Dictionaries in Acton are ordered collections that map keys to values. They maintain insertion order, so when iterating over keys, values, or items, they will be returned in the order they were first inserted. All keys must be of the same type, and all values must be of the same type.
+
 Source:
 ```python
 actor main(env):

@@ -1,5 +1,7 @@
 # Lists
 
+Lists in Acton are ordered mutable sequences. Lists can only contain values of one type at a time.
+
 Source:
 ```python
 actor main(env):

@@ -1,20 +1,16 @@
 # Data Types
 
-Every value in Acton is of a certain *data type*. The *type* specifies what kind of data is being specified and how to work with that data.
-
-Acton supports a plethora of primitive data types.
+Every value in Acton is of a certain *type*. The *type* specifies what kind of data is being specified and how to work with that data. Acton has a number of built-in data types.
 
 - [integers](primitives/integers.md), like `1`, `2`, `123512`, `-6542` or `1267650600228229401496703205376`
   - `int` is arbitrary precision and can grow beyond machine word sizes
   - `i16`, `i32`, `i64`, `u16`, `u32`, `u64` are fixed size integers
-- `float` 64 bit float, like `1.3` or `-382.31`
+- [float](primitives/float.md) 64 bit float, like `1.3` or `-382.31`
+- [complex](primitives/complex.md) complex numbers like `1+2j`
 - `bool` boolean, like `True` or `False`
 - `str` strings, like `foo`
   - strings support Unicode characters
-- [lists](primitives/lists.md) like `[1, 2, 3]` or `["foo", "bar"]`
-- [dictionaries](primitives/dicts.md) like `{"foo": 1, "bar": 3}`
-- [tuples](primitives/tuples.md) like `(1, "foo")`
-- [sets](primitives/sets.md) like `{"foo", "bar"}`
+- [tuples](primitives/tuples.md) for structuring multiple values, like `(1, "foo")` or `(a="bar", b=1337)`
 
 In Acton, mutable state can only be held by actors. Global definitions in modules are constant. Assigning to the same name in an actor will shadow the global variable.
 

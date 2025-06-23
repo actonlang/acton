@@ -1,5 +1,7 @@
 # Tuples
 
+Tuples allow structuring multiple values of different type into one value.
+
 Source:
 ```python
 actor main(env):
