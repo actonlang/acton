@@ -1,5 +1,7 @@
 # Sets
 
+Sets in Acton are unordered collections of unique elements. They do not preserve insertion order, so when iterating over a set or printing it, elements may appear in any order. Sets can only contain values of one type at a time.
+
 Source:
 ```python
 actor main(env):
