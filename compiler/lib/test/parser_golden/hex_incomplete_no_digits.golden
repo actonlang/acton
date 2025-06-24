@@ -1,0 +1,7 @@
+ERROR: [error Syntax error]: "\x" must be followed by two hexadecimal digits
+     ╭──▶ test@1:4-1:4
+     │
+   1 │ "\x"
+     •     
+     •    ╰╸ "\x" must be followed by two hexadecimal digits
+─────╯

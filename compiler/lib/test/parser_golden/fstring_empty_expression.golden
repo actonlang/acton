@@ -1,6 +1,7 @@
-ERROR: 1:2:
-  |
-1 | f"Empty expression {}"
-  |  ^^^
-unexpected ""Em"
-expecting "%=", "&=", "**=", "*=", "+=", "-=", "//=", "/=", "<<=", ">>=", "@=", "^=", "|=", ':', '=', call arguments, slice/index expression, or comma
+ERROR: [error Syntax error]: Empty expression in string interpolation
+     ╭──▶ test@1:21-1:21
+     │
+   1 │ f"Empty expression {}"
+     •                      
+     •                     ╰╸ Empty expression in string interpolation
+─────╯

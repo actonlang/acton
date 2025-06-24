@@ -1,6 +1,7 @@
-ERROR: 1:2:
-  |
-1 | f"Missing expression {:10}"
-  |  ^^^
-unexpected ""Mi"
-expecting "%=", "&=", "**=", "*=", "+=", "-=", "//=", "/=", "<<=", ">>=", "@=", "^=", "|=", ':', '=', call arguments, slice/index expression, or comma
+ERROR: [error Syntax error]: Missing expression before format specifier
+     ╭──▶ test@1:23-1:23
+     │
+   1 │ f"Missing expression {:10}"
+     •                        
+     •                       ╰╸ Missing expression before format specifier
+─────╯

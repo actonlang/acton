@@ -1,0 +1,7 @@
+ERROR: [error Syntax error]: Invalid character '@' in format specifier
+     ╭──▶ test@1:23-1:24
+     │
+   1 │ "a {"b {"c {"d {"e {f:@}"}"}"}"}"}"
+     •                       ┬ 
+     •                       ╰╸ Invalid character '@' in format specifier
+─────╯

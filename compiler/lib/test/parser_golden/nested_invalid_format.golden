@@ -1,0 +1,7 @@
+ERROR: [error Syntax error]: Invalid character '@' in format specifier
+     ╭──▶ test@1:19-1:20
+     │
+   1 │ "outer {"inner {x:@10}"}"
+     •                   ┬ 
+     •                   ╰╸ Invalid character '@' in format specifier
+─────╯

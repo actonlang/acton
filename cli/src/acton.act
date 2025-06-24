@@ -580,7 +580,7 @@ actor CmdTest(env: Env, args, perf_mode: bool=False):
     concurrency = env.nr_wthreads // 2
     var running_tests = {}
     var tests_to_run = []
-    var perf_data = "{}"
+    var perf_data = r"{}"
     fs = file.FS(file.FileCap(env.cap))
 
     test_cmd_args = []

@@ -1,6 +1,7 @@
-ERROR: 1:2:
-  |
-1 | f"Unbalanced format {name:}:10}"
-  |  ^^^
-unexpected ""Un"
-expecting "%=", "&=", "**=", "*=", "+=", "-=", "//=", "/=", "<<=", ">>=", "@=", "^=", "|=", ':', '=', call arguments, slice/index expression, or comma
+ERROR: [error Syntax error]: Empty format specifier after ':'
+     ╭──▶ test@1:27-1:27
+     │
+   1 │ f"Unbalanced format {name:}:10}"
+     •                            
+     •                           ╰╸ Empty format specifier after ':'
+─────╯

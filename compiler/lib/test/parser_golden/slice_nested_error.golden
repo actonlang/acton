@@ -1,0 +1,9 @@
+ERROR: [error Parse error]: missing closing "
+
+     ╭──▶ test@1:8-1:9
+     │
+   1 │ "outer {arr[inner[}"
+     •        ┬ 
+     •        ╰╸ missing closing "
+     •           
+─────╯

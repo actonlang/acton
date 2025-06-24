@@ -1,7 +1,7 @@
 import file
 import time
 
-"""Advanced actor based logging
+r"""Advanced actor based logging
 
 There are three main components to the logging system:
 - Loggers: each actor that wants to emit logs creates its own Logger object

@@ -1,0 +1,7 @@
+ERROR: [error Syntax error]: missing closing '}' for expression
+     ╭──▶ test@1:28-1:29
+     │
+   1 │ "level1 {"level2 {"level3 {x
+     •                            ┬
+     •                            ╰╸ missing closing '}' for expression
+─────╯

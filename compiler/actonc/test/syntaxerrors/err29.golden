@@ -1,12 +1,12 @@
 Building file test/syntaxerrors/err29.act using temporary scratch directory
 [error Parse error]: unexpected ':'
-                     expecting "action", "lambda", "mut", "proc", "pure", ']', '_', comma, or relational expression
+                     expecting "action", "lambda", "mut", "proc", "pure", '_', closing ']', comma, or relational expression
 
      +--> test/syntaxerrors/err29.act@4:19-4:20
      |
    4 |     return arr[1:::]
      :                   ^ 
      :                   `- unexpected ':'
-     :                      expecting "action", "lambda", "mut", "proc", "pure", ']', '_', comma, or relational expression
+     :                      expecting "action", "lambda", "mut", "proc", "pure", '_', closing ']', comma, or relational expression
      :                      
 -----+

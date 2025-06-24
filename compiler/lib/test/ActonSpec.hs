@@ -18,6 +18,7 @@ import qualified Acton.CPS
 import qualified Acton.LambdaLifter
 import qualified Acton.Boxing
 import qualified Acton.CodeGen
+import qualified Acton.Diagnostics as Diag
 import Pretty (print)
 import Test.Syd
 import Test.Syd.Def.Golden (goldenTextFile)
@@ -25,9 +26,15 @@ import qualified Control.Monad.Trans.State.Strict as St
 import Text.Megaparsec (runParser, errorBundlePretty)
 import qualified Data.Text as T
 import Data.List (isInfixOf, isPrefixOf)
+import Error.Diagnose (printDiagnostic, prettyDiagnostic, WithUnicode(..), TabSize(..), defaultStyle)
+import Prettyprinter (unAnnotate, layoutPretty, defaultLayoutOptions)
+import Prettyprinter.Render.Text (renderStrict)
 import System.FilePath ((</>), joinPath, takeFileName, takeBaseName, takeDirectory)
 import System.Directory (getCurrentDirectory, setCurrentDirectory)
 import Control.Monad (forM_, when, foldM)
+import qualified Control.Exception as E
+import Utils (SrcLoc(..))
+import qualified System.IO.Unsafe
 
 
 
@@ -40,109 +47,284 @@ main = do
   sydTest $ do
     describe "Pass 1: Parser" $ do
 
-      describe "Syntax" $ do
+      describe "Basic Syntax" $ do
         testParse env0 "syntax1"
 
-      describe "docstring" $ do
+      describe "Docstrings" $ do
         testParse env0 "docstrings"
         testDocstrings env0 "docstrings"
 
-        describe "Module-level docstring tests" $ do
-          describe "Valid docstrings before imports" $ do
-            it "allows single-line docstring before import" $ do
-              let input = "\"\"\"Module docstring\"\"\"\nimport math\n"
-              case parseModuleTest input of
-                Left err -> expectationFailure $ "Parse failed: " ++ err
-                Right _ -> return ()
+      describe "Module Structure" $ do
+        describe "Module-level docstrings" $ do
+          it "allows single-line docstring before import" $ do
+            let input = "\"\"\"Module docstring\"\"\"\nimport math\n"
+            case parseModuleTest input of
+              Left err -> expectationFailure $ "Parse failed: " ++ err
+              Right _ -> return ()
 
-            it "allows multi-line docstring before import" $ do
-              let input = "\"\"\"Module docstring\nwith multiple lines\"\"\"\nimport math\n"
-              case parseModuleTest input of
-                Left err -> expectationFailure $ "Parse failed: " ++ err
-                Right _ -> return ()
+          it "allows multi-line docstring before import" $ do
+            let input = "\"\"\"Module docstring\nwith multiple lines\"\"\"\nimport math\n"
+            case parseModuleTest input of
+              Left err -> expectationFailure $ "Parse failed: " ++ err
+              Right _ -> return ()
 
-          describe "Invalid expressions before imports (golden tests)" $ do
-            testModuleParseError "module_var_before_import" "x = 42\nimport math\n"
-            testModuleParseError "module_call_before_import" "print(\"hello\")\nimport math\n"
-            testModuleParseError "module_number_before_import" "42\nimport math\n"
-            testModuleParseError "module_list_before_import" "[1, 2, 3]\nimport math\n"
-            testModuleParseError "module_dict_before_import" "{\"key\": \"value\"}\nimport math\n"
-            testModuleParseError "module_if_before_import" "if True:\n    pass\nimport math\n"
-            testModuleParseError "module_for_before_import" "for i in range(10):\n    pass\nimport math\n"
-            testModuleParseError "module_class_before_import" "class Foo:\n    pass\nimport math\n"
-            testModuleParseError "module_func_before_import" "def foo():\n    pass\nimport math\n"
-            testModuleParseError "module_actor_before_import" "actor Foo():\n    pass\nimport math\n"
+        describe "Invalid module structure (before imports)" $ do
+          testModuleParseError "module_var_before_import" "x = 42\nimport math\n"
+          testModuleParseError "module_call_before_import" "print(\"hello\")\nimport math\n"
+          testModuleParseError "module_number_before_import" "42\nimport math\n"
+          testModuleParseError "module_list_before_import" "[1, 2, 3]\nimport math\n"
+          testModuleParseError "module_dict_before_import" "{\"key\": \"value\"}\nimport math\n"
+          testModuleParseError "module_if_before_import" "if True:\n    pass\nimport math\n"
+          testModuleParseError "module_for_before_import" "for i in range(10):\n    pass\nimport math\n"
+          testModuleParseError "module_class_before_import" "class Foo:\n    pass\nimport math\n"
+          testModuleParseError "module_func_before_import" "def foo():\n    pass\nimport math\n"
+          testModuleParseError "module_actor_before_import" "actor Foo():\n    pass\nimport math\n"
 
-      describe "F-String Tests" $ do
+      describe "String Interpolation" $ do
+        -- Note: In these tests, we use Haskell string literals which require escaping.
+        -- The test format is: testParseOutput <Haskell literal> <expected parser output>
+        --
+        -- Examples of what the Haskell escapes mean in actual Acton code:
+        --   Haskell literal: "\"\""           → Acton code: ""
+        --   Haskell literal: "\"hello\""      → Acton code: "hello"
+        --   Haskell literal: "'world'"        → Acton code: 'world'
+        --   Haskell literal: "f\"x = {x}\""   → Acton code: f"x = {x}"
+        --   Haskell literal: "\"x = {x}\""    → Acton code: "x = {x}"
+        --
+        -- Interpolation is a core feature in standard Acton strings.
+        -- Both "string {expr}" and f"string {expr}" support interpolation
 
-        describe "Basic f-string syntax" $ do
-          testParseOutput "f\"hello {a}!\"" "\"hello %s!\" % str(a)"
-          testParseOutput "f\"\"" "\"\" % ()"
-          testParseOutput "f\"plain text\"" "\"plain text\" % ()"
+        -- Basic functionality (simplest to more complex)
+        describe "Basic string literals" $ do
+          testParseOutput "\"\"" "\"\""
+          testParseOutput "\"plain text\"" "\"plain text\""
+          testParseOutput "'hello world'" "\"hello world\""  -- single quotes convert to double
 
-        describe "Variables and types" $ do
+        describe "Basic interpolation" $ do
+          testParseOutput "\"hello {name}\"" "\"hello %s\" % str(name)"  -- default interpolation
+          testParseOutput "f\"hello {name}!\"" "\"hello %s!\" % str(name)"  -- with f-prefix
+          testParseOutput "'Value: {x}'" "\"Value: %s\" % str(x)"  -- single quotes work too
+
+        describe "Multiple interpolations" $ do
           testParseOutput "f\"Hello {name}, your score is {score}\"" "\"Hello %s, your score is %s\" % (str(name), str(score))"
-          testParseOutput "f\"Types: {s}, {i}, {f}, {l}\"" "\"Types: %s, %s, %s, %s\" % (str(s), str(i), str(f), str(l))"
-          testParseOutput "f\"None value: {n}\"" "\"None value: %s\" % str(n)"
-          testParseOutput "f\"True: {t}, False: {f}\"" "\"True: %s, False: %s\" % (str(t), str(f))"
+          testParseOutput "\"First: {a}, Second: {b}, Third: {c}\"" "\"First: %s, Second: %s, Third: %s\" % (str(a), str(b), str(c))"
 
-        describe "Alignment and formatting" $ do
+        describe "Expressions in interpolation" $ do
+          testParseOutput "\"Sum: {a + b}\"" "\"Sum: %s\" % str(a + b)"  -- simple expression
+          testParseOutput "f\"Calculation: {a * b // 2}\"" "\"Calculation: %s\" % str(a * b // 2)"  -- complex expression
+          testParseOutput "f\"Result: {func({a: b})}\"" "\"Result: %s\" % str(func({a: b}))"  -- nested braces
+
+        describe "Formatting specifications" $ do
+          -- Width
+          testParseOutput "f\"{num:5}\"" "\"%5s\" % str(num)"
+          testParseOutput "f\"{num:10}\"" "\"%10s\" % str(num)"
+
           -- Alignment
-          testParseOutput "f\"{name:^10}\"" "\"%s\" % str(name).center(10)"  -- center
-          testParseOutput "f\"{name:<9}\"" "\"%-9s\" % str(name)"   -- left
-          testParseOutput "f\"{name:>10}\"" "\"%10s\" % str(name)"  -- right
-          testParseOutput "f\"{a:>10}:{b:^10}:{c:<10}\"" "\"%10s:%s:%-10s\" % (str(a), str(b).center(10), str(c))"  -- combined
+          testParseOutput "f\"{name:<9}\"" "\"%-9s\" % str(name)"           -- left
+          testParseOutput "f\"{name:>10}\"" "\"%10s\" % str(name)"         -- right
+          testParseOutput "f\"{name:^10}\"" "\"%s\" % str(name).center(10)" -- center
 
-          -- Numeric formatting
-          testParseOutput "f\"{num:5}\"" "\"%5s\" % str(num)"        -- width
-          testParseOutput "f\"{num:05}\"" "\"%05d\" % num"       -- zero padding
-          testParseOutput "f\"{num:010}\"" "\"%010d\" % num"      -- zero padding with width
-          testParseOutput "f\"{neg_num:05}\"" "\"%05d\" % neg_num"   -- negative with padding
-          testParseOutput "f\"{pi:.2f}\"" "\"%.2f\" % pi"       -- float precision
-          testParseOutput "f\"{pi:.4f}\"" "\"%.4f\" % pi"       -- float precision 4dp
-          testParseOutput "f\"{pi:.0f}\"" "\"%.0f\" % pi"       -- float precision 0dp
-          testParseOutput "f\"{pi:10.2f}\"" "\"%10.2f\" % pi"     -- float width and precision
-          testParseOutput "f\"{num:+08.2f}\"" "\"%08.2f\" % num"   -- sign, width, precision
+          -- Zero padding
+          testParseOutput "f\"{num:05}\"" "\"%05d\" % num"
+          testParseOutput "f\"{num:010}\"" "\"%010d\" % num"
 
-        describe "Expressions and escaping" $ do
-          testParseOutput "f\"something but {{{substituted}}}\"" "\"something but {%s}\" % str(substituted)"  -- escaped braces
-          testParseOutput "f\"Sum: {a + b}\"" "\"Sum: %s\" % str(a + b)"                    -- simple expression
-          testParseOutput "f\"Calculation: {a * b // 2}\"" "\"Calculation: %s\" % str(a * b // 2)"       -- complex expression
-          testParseOutput "f\"Result: {func({a: b})}\"" "\"Result: %s\" % str(func({a: b}))"          -- nested braces in expr
+          -- Floating point precision
+          testParseOutput "f\"{pi:.2f}\"" "\"%.2f\" % pi"
+          testParseOutput "f\"{pi:.4f}\"" "\"%.4f\" % pi"
+          testParseOutput "f\"{pi:.0f}\"" "\"%.0f\" % pi"
+          testParseOutput "f\"{pi:10.2f}\"" "\"%10.2f\" % pi"
 
-        describe "String variations" $ do
-          -- Multiline
-          testParseOutput "f\"\"\"Name: {name}\nAge: {age}\"\"\"" "\"Name: %s\\\\nAge: %s\" % (str(name), str(age))"
-          testParseOutput "f\"\"\"\n    Name: {name}\n    Age: {age}\n    \"\"\"" "\"\\\\n    Name: %s\\\\n    Age: %s\\\\n    \" % (str(name), str(age))"
+          -- Combined formatting
+          testParseOutput "f\"{a:>10}:{b:^10}:{c:<10}\"" "\"%10s:%s:%-10s\" % (str(a), str(b).center(10), str(c))"
+          testParseOutput "f\"{num:+08.2f}\"" "\"%08.2f\" % num"
 
-          -- Alternative quotes
-          testParseOutput "f'hello {a}!'" "\"hello %s!\" % str(a)"
-          testParseOutput "f'''hello {a}!'''" "\"hello %s!\" % str(a)"
+          -- Spaces in format spec (various positions allowed)
+          testParseOutput "f\"{ num : 10 }\"" "\"%10s\" % str(num)"  -- spaces everywhere
 
-          -- Spaces in format specifier
-          testParseOutput "f\"{ num : 10 }\"" "\"%10s\" % str(num)"
-          testParseOutput "f\"{num: 10}\"" "\"%10s\" % str(num)"
-          testParseOutput "f\"{num :10}\"" "\"%10s\" % str(num)"
-          testParseOutput "f\"{ name : >10 }\"" "\"%10s\" % str(name)"
-          testParseOutput "f\"{ name : ^10 }\"" "\"%s\" % str(name).center(10)"
-          testParseOutput "f\"{ name : <10 }\"" "\"%-10s\" % str(name)"
+        describe "String quote variations" $ do
+          -- Triple quotes support interpolation by default
+          testParseOutput "\"\"\"hello {name}!\"\"\"" "\"hello %s!\" % str(name)"  -- triple double quotes
+          testParseOutput "'''multi-line\n{value}'''" "\"multi-line\\\\n%s\" % str(value)"  -- triple single quotes
+          testParseOutput "f\"\"\"Name: {name}\nAge: {age}\"\"\"" "\"Name: %s\\\\nAge: %s\" % (str(name), str(age))"  -- f-prefix with multi-line
+          testParseOutput "\"\"\"Plain text without interpolation\"\"\"" "\"Plain text without interpolation\""  -- no braces = no interpolation
 
-        describe "Special cases" $ do
-          testParseOutput "f\"Hello, {name}! 你好!\"" "\"Hello, %s! \\20320\\22909!\" % str(name)"       -- Unicode
-          testParseOutput "f\"Message: {greeting}!\"" "\"Message: %s!\" % str(greeting)"       -- Simple variable
-          testParseOutput "f\"{name:@10}\"" "\"%s\" % str(name)"                -- Invalid format accepted
+        describe "Special characters and escaping" $ do
+          -- Escaped braces
+          testParseOutput "f\"something but {{{substituted}}}\"" "\"something but {%s}\" % str(substituted)"
 
-        describe "F-String Error Handling Golden Tests" $ do
+          -- Escaped quotes
+          testParseOutput "f\"hello \\\"thing\\\"\"" "\"hello \\\"thing\\\"\""
+          testParseOutput "f'hello \\'thing\\''" "\"hello 'thing'\""
+          testParseOutput "f\"Value: {x} with \\\"quotes\\\"\"" "\"Value: %s with \\\"quotes\\\"\" % str(x)"
+
+          -- Unicode
+          testParseOutput "f\"Hello, {name}! 你好!\"" "\"Hello, %s! \\20320\\22909!\" % str(name)"
+
+        describe "Slice expressions in interpolation" $ do
+          -- Basic slice patterns
+          testParseOutput "\"slice: {arr[1:3]}\"" "\"slice: %s\" % str(arr[1:3])"  -- basic range
+          testParseOutput "\"slice: {arr[:5]}\"" "\"slice: %s\" % str(arr[:5])"  -- from start
+          testParseOutput "\"slice: {arr[2:]}\"" "\"slice: %s\" % str(arr[2:])"  -- to end
+
+          -- Step parameter
+          testParseOutput "\"step: {arr[1:10:2]}\"" "\"step: %s\" % str(arr[1:10:2])"  -- with step
+          testParseOutput "\"reverse: {arr[::-1]}\"" "\"reverse: %s\" % str(arr[::-1])"  -- negative step
+
+          -- Complex expressions
+          testParseOutput "\"complex: {arr[i+1:j*2]}\"" "\"complex: %s\" % str(arr[i + 1:j * 2])"  -- expressions in slice
+          testParseOutput "\"nested: {matrix[i][j:k]}\"" "\"nested: %s\" % str(matrix[i][j:k])"  -- nested indexing
+
+        describe "Nested string interpolation" $ do
+          testParseOutput "\"outer {\"inner {x}\"}\"" "\"outer %s\" % str(\"inner %s\" % str(x))"
+          testParseOutput "\"outer {'inner {x}'}\"" "\"outer %s\" % str(\"inner %s\" % str(x))"
+          testParseOutput "'outer {\"inner {x}\"}'" "\"outer %s\" % str(\"inner %s\" % str(x))"
+          testParseOutput "\"level1 {\"level2 {\"level3 {x}\"}\"}\""  "\"level1 %s\" % str(\"level2 %s\" % str(\"level3 %s\" % str(x)))"
+          testParseOutput "\"outer {{literal}} {\"inner {x}\"}\"" "\"outer {literal} %s\" % str(\"inner %s\" % str(x))"
+
+        describe "Escape sequences" $ do
+          -- Standard escapes (preserved during parsing)
+          testParseOutput "\"\\n\\t\\r\"" "\"\\\\n\\\\t\\\\r\""
+
+          -- Hex escapes (note splitting behavior when followed by hex chars)
+          testParseOutput "\"\\x48ello\"" "\"\\\\x48\" \"ello\""  -- splits to prevent C reading too many hex digits
+          testParseOutput "\"\\x41BC\"" "\"\\\\x41\" \"BC\""
+
+          -- Unicode escapes
+          testParseOutput "\"\\u0041\"" "\"\\\\u0041\""  -- 4-digit unicode
+          testParseOutput "\"\\U00000041\"" "\"\\\\U00000041\""  -- 8-digit unicode
+
+          -- Octal escapes
+          testParseOutput "\"\\123\"" "\"\\\\123\""  -- 3-digit octal
+          testParseOutput "\"\\7\"" "\"\\\\7\""  -- 1-digit octal
+
+          -- Mixed with interpolation
+          testParseOutput "f\"Hello \\n{name}\\t!\"" "\"Hello \\\\n%s\\\\t!\" % str(name)"
+
+      -- ==== OTHER STRING LITERAL TESTS ====
+      describe "Other String Literals" $ do
+
+        describe "Raw strings (no interpolation)" $ do
+          testParseOutput "r\"hello {world}\"" "\"hello {world}\""
+          testParseOutput "r'test {x} value'" "\"test {x} value\""
+          testParseOutput "r\"\"\"multi\nline {no} interpolation\"\"\"" "\"multi\\\\nline {no} interpolation\""
+          testParseOutput "r\"path\\to\\file\"" "\"path\\\\\\\\to\\\\\\\\file\""
+          testParseOutput "r\"regex: \\x[0-9a-f]+\"" "\"regex: \\\\\\\\x[0-9a-f]+\""
+          testParseOutput "r\"test \\n \\t \\r\"" "\"test \\\\\\\\n \\\\\\\\t \\\\\\\\r\""
+
+        describe "Bytes literals" $ do
+          -- Basic bytes
+          testParseOutput "b\"hello\"" " bhello"
+          testParseOutput "b\"\"\"multi\nline\"\"\"" " bmulti\\nline"
+
+          -- Bytes with hex escapes (note splitting behavior)
+          testParseOutput "b\"\\x48ello\"" " b\\x48  bello"  -- splits hex from following text
+          testParseOutput "b\"\\x48\\x65llo\"" " b\\x48\\x65llo"  -- multiple hex escapes
+
+          -- Other escapes in bytes
+          testParseOutput "b\"Hello\\nWorld\"" " bHello\\nWorld"
+
+        describe "Raw bytes literals" $ do
+          testParseOutput "rb\"hello\"" " bhello"
+          testParseOutput "rb'world'" " bworld"
+          testParseOutput "rb\"\"\"multi\nline\"\"\"" " bmulti\\nline"
+
+        describe "Legacy percent formatting (not interpolated)" $ do
+          testParseOutput "\"hello %s\" % name" "\"hello %s\" % name"
+          testParseOutput "\"Value: %d\" % count" "\"Value: %d\" % count"
+
+      -- ==== ERROR HANDLING TESTS ====
+      describe "String Parsing Errors" $ do
+        describe "Basic string errors" $ do
+          testModuleParseError "unclosed_string" "a = \"hello"
+          testModuleParseError "unclosed_string_triple" "z = 1\na = \"\"\"hello\nb = 3\ndef foo():\n    pass"
+
+        describe "Basic interpolation errors" $ do
+          -- F-string errors
           testParseError "fstring_unclosed_brace" "f\"Unclosed brace: {name"
           testParseError "fstring_empty_expression" "f\"Empty expression {}\""
           testParseError "fstring_missing_expression" "f\"Missing expression {:10}\""
           testParseError "fstring_unbalanced_format" "f\"Unbalanced format {name:}:10}\""
+
+          -- String interpolation errors (without f-prefix)
+          testParseError "string_unclosed_brace" "\"Unclosed brace: {name"
+          testParseError "tristring_unclosed_brace" "\"\"\"Unclosed brace: {name"
+          testParseError "string_empty_expression" "\"Empty expression {}\""
+          testParseError "string_missing_expression" "\"Missing expression {:10}\""
+
+        describe "Format specification errors" $ do
           testParseError "fstring_invalid_format" "f\"Invalid format specifier {name:@Z}\""
+          testParseError "fstring_invalid_alignment" "f\"{name:@10}\""
+          testParseError "string_invalid_format" "\"{name:@Z}\""
+          testParseError "fstring_empty_format_specifier" "f\"Empty format spec {x:}\""
+          testParseError "fstring_missing_precision_digits_error" "f\"Missing precision digits {value:10.}\""
+          testParseError "invalid_after_width" "\"value: {x:10@}\""
+          testParseError "invalid_after_align" "\"value: {x:>10@}\""
+          testParseError "invalid_after_precision" "\"value: {x:10.2@}\""
+          testParseError "invalid_in_type_spec" "\"value: {x:10.2@f}\""
 
+        describe "Nested interpolation errors" $ do
+          testParseError "nested_unclosed_outer" "\"outer {\"inner"
+          testParseError "nested_unclosed_inner" "\"outer {\"inner {x}\""
+          testParseError "nested_empty_inner" "\"outer {\"inner {}\"}\""
+          testParseError "nested_invalid_format" "\"outer {\"inner {x:@10}\"}\""
+          testParseError "triple_nested_unclosed" "\"level1 {\"level2 {\"level3 {x"
+          testParseError "mixed_quotes_unclosed" "\"outer {'inner {x"
+          testParseError "escaped_brace_error" "\"outer {{broken {x}\""
+          testParseError "nested_empty_format" "\"outer {\"inner {x:}\"}\""
+          testParseError "nested_invalid_align" "\"outer {\"inner {x:@5}\"}\""
+          testParseError "nested_bad_type_spec" "\"outer {\"inner {x:5@}\"}\""
+          testParseError "deep_nesting_error" "\"a {\"b {\"c {\"d {\"e {f:@}\"}\"}\"}\"}\"}\""
+          testParseError "alternating_quotes_error" "\"a {'b {\"c {'d {e'}\"}'}\""
 
-    describe "Documentation Printing" $ do
-      -- Test documentation generation for modules
-      -- TODO: Fix import resolution for foo module
+        describe "Position-specific errors" $ do
+          testParseError "error_at_start" "{x} at start"
+          testParseError "error_at_end" "\"at end {x"
+          testParseError "error_in_middle" "\"start {x:@} end\""
+          testParseError "multiline_unclosed" "\"\"\"Line 1\nLine 2 {x\nLine 3\"\"\""
+          testParseError "multiline_nested_error" "\"\"\"First line\n{\"inner\n  {broken}\n\"}\"\"\""
+          testParseError "multiline_format_error" "\"\"\"\nValue: {x:@invalid}\nMore text\"\"\""
+          testParseError "newline_in_expr" "\"value: {x\n}\""
+          testParseError "tab_in_format" "\"value: {x:\t10}\""
+          testParseError "unicode_format_error" "\"你好 {name:你}\""
+
+        describe "Slice expression errors" $ do
+          testParseError "slice_unclosed_bracket" "\"slice: {arr[1:3\""
+          testParseError "slice_invalid_step" "\"slice: {arr[:::\""
+          testParseError "slice_missing_bracket" "\"slice: {arr 1:3]}\""
+          testParseError "slice_nested_error" "\"outer {arr[inner[}\""
+          testParseError "slice_format_error" "\"slice: {arr[1:3]:@10}\""
+
+      describe "Escape Sequence Errors" $ do
+
+        describe "Hex escape errors" $ do
+          testParseError "hex_incomplete_one_digit" "\"\\x4\""
+          testParseError "hex_incomplete_no_digits" "\"\\x\""
+          testParseError "hex_invalid_char" "\"\\xAG\""
+          testParseError "hex_incomplete_in_interpolation" "f\"value: {x} and \\x4\""
+
+        describe "Unicode escape errors" $ do
+          testParseError "unicode_short_incomplete" "\"\\u123\""
+          testParseError "unicode_short_no_digits" "\"\\u\""
+          testParseError "unicode_short_invalid_char" "\"\\u123G\""
+          testParseError "unicode_short_in_fstring" "f\"Hello \\u123\""
+          testParseError "unicode_long_incomplete" "\"\\U1234567\""
+          testParseError "unicode_long_no_digits" "\"\\U\""
+          testParseError "unicode_long_invalid_char" "\"\\U1234567G\""
+          testParseError "unicode_long_in_fstring" "f\"Hello \\U1234567\""
+
+        describe "Octal escape errors" $ do
+          testParseError "octal_out_of_range" "\"\\777\""
+          testParseError "octal_invalid_first_digit" "\"\\8\""
+          testParseError "octal_invalid_char" "\"\\12G\""
+          testParseError "octal_out_of_range_in_fstring" "f\"value: {x} \\777\""
+
+        describe "Unknown escape sequences" $ do
+          testParseError "unknown_escape_p" "\"\\p\""
+          testParseError "unknown_escape_z" "\"\\z\""
+          testParseError "unknown_escape_in_fstring" "f\"unknown: \\q\""
+          testParseError "unknown_escape_with_interpolation" "f\"value: {x} \\k\""
+
+    describe "Documentation Generation" $ do
       testDocFiles env0 ["bar"]
 
     describe "Pass 2: Kinds" $ do
@@ -172,23 +354,67 @@ main = do
 
 
 
-
 parseActon :: String -> Either String String
 parseActon input =
-  case runParser (St.evalStateT P.stmt P.initState) "" inputWithNewline of
-    Left err -> Left $ errorBundlePretty err
-    Right result -> Right $ concatMap (Pretty.print) result
+  System.IO.Unsafe.unsafePerformIO $
+    E.catch
+      (E.evaluate $ case runParser (St.evalStateT P.stmt P.initState) "" inputWithNewline of
+        Left err -> Left $ renderDiagnostic err
+        Right result -> Right $ concatMap (Pretty.print) result)
+      handleFailFastError
   where
     inputWithNewline = if last input == '\n' then input else input ++ "\n"
+    handleFailFastError :: P.FailFastError -> IO (Either String String)
+    renderDiagnostic err =
+      let diagnostic = Diag.parseDiagnosticFromBundle "test" inputWithNewline err
+          doc = prettyDiagnostic WithUnicode (TabSize 4) diagnostic
+          layout = layoutPretty defaultLayoutOptions (unAnnotate doc)
+      in T.unpack $ renderStrict layout
+    handleFailFastError (P.FailFastError loc msg) =
+      return $ Left $ formatFailFastError loc msg
+
+    formatFailFastError :: SrcLoc -> String -> String
+    formatFailFastError loc msg =
+      let diagnostic = Diag.errorDiagnosticWithLoc "Syntax error" "test" inputWithNewline loc msg
+          doc = prettyDiagnostic WithUnicode (TabSize 4) diagnostic
+          layout = layoutPretty defaultLayoutOptions (unAnnotate doc)
+      in T.unpack $ renderStrict layout
+
+    offsetToLineCol :: Int -> String -> (Int, Int)
+    offsetToLineCol offset s =
+      let before = take offset s
+          lineNum = length (filter (== '\n') before) + 1
+          colNum = case reverse before of
+                     [] -> 1
+                     (c:cs) -> length (takeWhile (/= '\n') (c:cs)) + 1
+      in (lineNum, colNum)
 
 -- Helper function to parse a full module (for testing module-level constructs)
 parseModuleTest :: String -> Either String String
 parseModuleTest input =
-  case runParser (St.evalStateT P.file_input P.initState) "test.act" inputWithNewline of
-    Left err -> Left $ errorBundlePretty err
-    Right (imports, suite) -> Right $ "Module parsed successfully"
+  System.IO.Unsafe.unsafePerformIO $
+    E.catch
+      (E.evaluate $ case runParser (St.evalStateT P.file_input P.initState) "test.act" inputWithNewline of
+        Left err -> Left $ renderDiagnostic err
+        Right (imports, suite) -> Right $ "Module parsed successfully")
+      handleFailFastError
   where
     inputWithNewline = if null input || last input == '\n' then input else input ++ "\n"
+    renderDiagnostic err =
+      let diagnostic = Diag.parseDiagnosticFromBundle "test.act" inputWithNewline err
+          doc = prettyDiagnostic WithUnicode (TabSize 4) diagnostic
+          layout = layoutPretty defaultLayoutOptions (unAnnotate doc)
+      in T.unpack $ renderStrict layout
+    handleFailFastError :: P.FailFastError -> IO (Either String String)
+    handleFailFastError (P.FailFastError loc msg) =
+      return $ Left $ formatFailFastError loc msg
+
+    formatFailFastError :: SrcLoc -> String -> String
+    formatFailFastError loc msg =
+      let diagnostic = Diag.errorDiagnosticWithLoc "Parse error" "test.act" inputWithNewline loc msg
+          doc = prettyDiagnostic WithUnicode (TabSize 4) diagnostic
+          layout = layoutPretty defaultLayoutOptions (unAnnotate doc)
+      in T.unpack $ renderStrict layout
 
 -- Helper function to test module-level parser errors with golden files
 testModuleParseError :: String -> String -> Spec
@@ -549,4 +775,3 @@ testDocstrings env0 testname = do
         Just (Just doc) -> doc `shouldContain` "Just a docstring"
         Just Nothing -> expectationFailure "Function should have docstring"
         Nothing -> expectationFailure "Function not found"
-

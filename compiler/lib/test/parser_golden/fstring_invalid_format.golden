@@ -1,6 +1,7 @@
-ERROR: 1:2:
-  |
-1 | f"Invalid format specifier {name:@Z}"
-  |  ^^^
-unexpected ""In"
-expecting "%=", "&=", "**=", "*=", "+=", "-=", "//=", "/=", "<<=", ">>=", "@=", "^=", "|=", ':', '=', call arguments, slice/index expression, or comma
+ERROR: [error Syntax error]: Invalid character '@' in format specifier
+     ╭──▶ test@1:34-1:35
+     │
+   1 │ f"Invalid format specifier {name:@Z}"
+     •                                  ┬ 
+     •                                  ╰╸ Invalid character '@' in format specifier
+─────╯

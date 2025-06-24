@@ -1,0 +1,7 @@
+ERROR: [error Syntax error]: Invalid character '你' in format specifier
+     ╭──▶ test@1:11-1:12
+     │
+   1 │ "你好 {name:你}"
+     •             ┬─ 
+     •             ╰╸ Invalid character '你' in format specifier
+─────╯

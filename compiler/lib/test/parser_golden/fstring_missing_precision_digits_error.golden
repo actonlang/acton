@@ -1,0 +1,7 @@
+ERROR: [error Syntax error]: Expected digits after '.' in format specifier
+     ╭──▶ test@1:38-1:38
+     │
+   1 │ f"Missing precision digits {value:10.}"
+     •                                       
+     •                                      ╰╸ Expected digits after '.' in format specifier
+─────╯

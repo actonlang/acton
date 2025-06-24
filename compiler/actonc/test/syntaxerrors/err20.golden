@@ -1,12 +1,12 @@
 Building file test/syntaxerrors/err20.act using temporary scratch directory
 [error Parse error]: unexpected '@'
-                     expecting bytes literal, end of input, end of line, f-string literal, import statement, statement, or string literal
+                     expecting bytes literal, end of input, end of line, import statement, statement, or string literal
 
      +--> test/syntaxerrors/err20.act@2:1-2:2
      |
    2 | @
      : ^
      : `- unexpected '@'
-     :    expecting bytes literal, end of input, end of line, f-string literal, import statement, statement, or string literal
+     :    expecting bytes literal, end of input, end of line, import statement, statement, or string literal
      :    
 -----+

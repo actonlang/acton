@@ -1,0 +1,7 @@
+ERROR: [error Syntax error]: missing closing "
+     ╭──▶ test@1:14-1:15
+     │
+   1 │ "outer {"inner
+     •              ┬
+     •              ╰╸ missing closing "
+─────╯

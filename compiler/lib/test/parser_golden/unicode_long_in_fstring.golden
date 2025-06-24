@@ -1,0 +1,7 @@
+ERROR: [error Syntax error]: Incomplete universal character name (8 hex digits needed)
+     ╭──▶ test@1:11-1:18
+     │
+   1 │ f"Hello \U1234567"
+     •           ┬────── 
+     •           ╰╸ Incomplete universal character name (8 hex digits needed)
+─────╯

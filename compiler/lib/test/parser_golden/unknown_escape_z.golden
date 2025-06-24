@@ -1,0 +1,7 @@
+ERROR: [error Syntax error]: unknown escape sequence in string/bytes literal
+     ╭──▶ test@1:4-1:4
+     │
+   1 │ "\z"
+     •     
+     •    ╰╸ unknown escape sequence in string/bytes literal
+─────╯

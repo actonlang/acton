@@ -13,7 +13,7 @@ def join_path(parts: list[str], path_separator: ?str=None) -> str:
     return psep.join(parts)
 
 def glob(pattern: str, path: str, path_separator: ?str=None) -> bool:
-    """Match a glob pattern against a file path.
+    r"""Match a glob pattern against a file path.
 
     Supports the following glob features:
     - '*': Matches any sequence of characters within a single path segment
@@ -151,8 +151,8 @@ def _glob_recursive(pattern: str, p_idx: int, path: str, s_idx: int, separator: 
         return False
 
     # Handle brace expansion {a,b,c}
-    if pattern[p_idx] == '{' and p_idx < len(pattern) - 1:
-        close_idx = pattern.find('}', p_idx + 1)
+    if pattern[p_idx] == r'{' and p_idx < len(pattern) - 1:
+        close_idx = pattern.find(r'}', p_idx + 1)
         if close_idx == -1:
             # If no closing brace, treat { as a literal character
             return s_idx < len(path) and pattern[p_idx] == path[s_idx] and _glob_recursive(pattern, p_idx + 1, path, s_idx + 1, separator)
