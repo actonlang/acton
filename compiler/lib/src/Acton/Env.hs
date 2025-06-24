@@ -180,90 +180,48 @@ instance (Subst x) => Subst (EnvF x) where
     ufree env                   = tvarScope0 env ++ ufree (names env) ++ ufree (witnesses env) ++ ufree (envX env)
 
 instance Subst NameInfo where
-<<<<<<< HEAD
-    msubst (NVar t)             = NVar <$> msubst t
-    msubst (NSVar t)            = NSVar <$> msubst t
-    msubst (NDef t d doc)       = NDef <$> msubst t <*> return d <*> return doc
-    msubst (NSig t d doc)       = NSig <$> msubst t <*> return d <*> return doc
-    msubst (NAct q p k te doc)  = NAct <$> msubst q <*> msubst p <*> msubst k <*> msubst te <*> return doc
-    msubst (NClass q us te doc) = NClass <$> msubst q <*> msubst us <*> msubst te <*> return doc
-    msubst (NProto q us te doc) = NProto <$> msubst q <*> msubst us <*> msubst te <*> return doc
-    msubst (NExt q c ps te doc) = NExt <$> msubst q <*> msubst c <*> msubst ps <*> msubst te <*> return doc
-    msubst (NTVar k c)          = NTVar k <$> msubst c
-    msubst (NAlias qn)          = NAlias <$> return qn
-    msubst (NMAlias m)          = NMAlias <$> return m
-    msubst (NModule te doc)     = NModule <$> return te <*> return doc     -- actually msubst te, but te has no free variables (top-level)
-    msubst NReserved            = return NReserved
-
-    tyfree (NVar t)             = tyfree t
-    tyfree (NSVar t)            = tyfree t
-    tyfree (NDef t d _)         = tyfree t
-    tyfree (NSig t d _)         = tyfree t
-    tyfree (NAct q p k te _)    = (tyfree q ++ tyfree p ++ tyfree k ++ tyfree te) \\ (tvSelf : qbound q)
-    tyfree (NClass q us te _)   = (tyfree q ++ tyfree us ++ tyfree te) \\ (tvSelf : qbound q)
-    tyfree (NProto q us te _)   = (tyfree q ++ tyfree us ++ tyfree te) \\ (tvSelf : qbound q)
-    tyfree (NExt q c ps te _)   = (tyfree q ++ tyfree c ++ tyfree ps ++ tyfree te) \\ (tvSelf : qbound q)
-    tyfree (NTVar k c)          = tyfree c
-    tyfree (NAlias qn)          = []
-    tyfree (NMAlias qn)         = []
-    tyfree (NModule te doc)     = []        -- actually tyfree te, but a module has no free variables on the top level
-    tyfree NReserved            = []
-=======
     usubst (NVar t)             = NVar <$> usubst t
     usubst (NSVar t)            = NSVar <$> usubst t
-    usubst (NDef t d)           = NDef <$> usubst t <*> return d
-    usubst (NSig t d)           = NSig <$> usubst t <*> return d
-    usubst (NAct q p k te)      = NAct <$> usubst q <*> usubst p <*> usubst k <*> usubst te
-    usubst (NClass q us te)     = NClass <$> usubst q <*> usubst us <*> usubst te
-    usubst (NProto q us te)     = NProto <$> usubst q <*> usubst us <*> usubst te
-    usubst (NExt q c ps te)     = NExt <$> usubst q <*> usubst c <*> usubst ps <*> usubst te
+    usubst (NDef t d doc)       = NDef <$> usubst t <*> return d <*> return doc
+    usubst (NSig t d doc)       = NSig <$> usubst t <*> return d <*> return doc
+    usubst (NAct q p k te doc)  = NAct <$> usubst q <*> usubst p <*> usubst k <*> usubst te <*> return doc
+    usubst (NClass q us te doc) = NClass <$> usubst q <*> usubst us <*> usubst te <*> return doc
+    usubst (NProto q us te doc) = NProto <$> usubst q <*> usubst us <*> usubst te <*> return doc
+    usubst (NExt q c ps te doc) = NExt <$> usubst q <*> usubst c <*> usubst ps <*> usubst te <*> return doc
     usubst (NTVar k c)          = NTVar k <$> usubst c
     usubst (NAlias qn)          = NAlias <$> return qn
     usubst (NMAlias m)          = NMAlias <$> return m
-    usubst (NModule te)         = NModule <$> return te     -- actually usubst te, but te has no free variables (top-level)
+    usubst (NModule te doc)     = NModule <$> return te <*> return doc     -- actually usubst te, but te has no free variables (top-level)
     usubst NReserved            = return NReserved
 
     ufree (NVar t)              = ufree t
     ufree (NSVar t)             = ufree t
-    ufree (NDef t d)            = ufree t
-    ufree (NSig t d)            = ufree t
-    ufree (NAct q p k te)       = (ufree q ++ ufree p ++ ufree k ++ ufree te) \\ (tvSelf : qbound q)
-    ufree (NClass q us te)      = (ufree q ++ ufree us ++ ufree te) \\ (tvSelf : qbound q)
-    ufree (NProto q us te)      = (ufree q ++ ufree us ++ ufree te) \\ (tvSelf : qbound q)
-    ufree (NExt q c ps te)      = (ufree q ++ ufree c ++ ufree ps ++ ufree te) \\ (tvSelf : qbound q)
+    ufree (NDef t d _)          = ufree t
+    ufree (NSig t d _)          = ufree t
+    ufree (NAct q p k te _)     = (ufree q ++ ufree p ++ ufree k ++ ufree te) \\ (tvSelf : qbound q)
+    ufree (NClass q us te _)    = (ufree q ++ ufree us ++ ufree te) \\ (tvSelf : qbound q)
+    ufree (NProto q us te _)    = (ufree q ++ ufree us ++ ufree te) \\ (tvSelf : qbound q)
+    ufree (NExt q c ps te _)    = (ufree q ++ ufree c ++ ufree ps ++ ufree te) \\ (tvSelf : qbound q)
     ufree (NTVar k c)           = ufree c
     ufree (NAlias qn)           = []
     ufree (NMAlias qn)          = []
-    ufree (NModule te)          = []        -- actually ufree te, but a module has no free variables on the top level
+    ufree (NModule te doc)      = []        -- actually ufree te, but a module has no free variables on the top level
     ufree NReserved             = []
->>>>>>> 617a09c9 (Rename msubst -> usubst, tyfree -> ufree)
 
 instance Subst Witness where
     usubst w@WClass{}           = return w                      -- A WClass (i.e., an extension) can't have any free type variables
     usubst w@WInst{}            = do t <- usubst (wtype w)
                                      p <- usubst (proto w)
                                      return w{ wtype  = t, proto = p }
-<<<<<<< HEAD
 
-    tyfree w@WClass{}           = []
-    tyfree w@WInst{}            = (tyfree (wtype w) ++ tyfree (proto w)) \\ qbound (binds w)
-
-
-instance Subst WTCon where
-    msubst (w,u)                = (,) <$> return w <*> msubst u
-
-    tyfree (w,u)                = tyfree u
-=======
-    
     ufree w@WClass{}            = []
     ufree w@WInst{}             = (ufree (wtype w) ++ ufree (proto w)) \\ qbound (binds w)
-    
+
 
 instance Subst WTCon where
     usubst (w,u)                = (,) <$> return w <*> usubst u
-    
+
     ufree (w,u)                 = ufree u
->>>>>>> 617a09c9 (Rename msubst -> usubst, tyfree -> ufree)
 
 instance Polarity NameInfo where
     polvars (NVar t)                = polvars t

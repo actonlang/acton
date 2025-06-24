@@ -934,6 +934,7 @@ refine env cs te eq
   where ambig_vs                        = ufree cs \\ closeDepVars (safe_vs) cs
         tail_vs                         = gen_vs `intersect` (tailvars te ++ tailvars cs)
 
+        safe_vs                         = if null def_vss then [] else nub $ foldr1 intersect def_vss
         def_vss                         = [ nub $ filter canGen $ ufree sc | (_, NDef sc _ _) <- te, null $ scbind sc ]
         gen_vs                          = nub (foldr union (ufree cs) def_vss)
 
