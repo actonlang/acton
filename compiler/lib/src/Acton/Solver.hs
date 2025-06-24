@@ -375,7 +375,7 @@ allBelow env (TFX _ FXAction)           = [fxAction]
 -- reduce
 ----------------------------------------------------------------------------------------------------------------------
 
-instance Subst Equation where
+instance USubst Equation where
     usubst (Eqn w t e)                      = do t <- usubst t
                                                  e <- usubst e
                                                  return (Eqn w t e)

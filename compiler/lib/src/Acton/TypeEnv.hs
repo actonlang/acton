@@ -40,7 +40,7 @@ typeX env0                      = setX env0 TypeX{ posnames = [], context = CtxT
 instance Pretty TypeX where
     pretty _                    = empty
 
-instance Subst TypeX where
+instance USubst TypeX where
     usubst x                    = return x
     ufree x                     = []
 

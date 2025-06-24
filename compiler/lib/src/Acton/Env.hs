@@ -172,14 +172,14 @@ instance Pretty WTCon where
       where prettyW (Left n)    = text "L"
             prettyW (Right n)   = text "R"
 
-instance (Subst x) => Subst (EnvF x) where
+instance (USubst x) => USubst (EnvF x) where
     usubst env                  = do ne <- usubst (names env)
                                      we <- usubst (witnesses env)
                                      ex <- usubst (envX env)
                                      return env{ names = ne, witnesses = we, envX = ex }
     ufree env                   = tvarScope0 env ++ ufree (names env) ++ ufree (witnesses env) ++ ufree (envX env)
 
-instance Subst NameInfo where
+instance USubst NameInfo where
     usubst (NVar t)             = NVar <$> usubst t
     usubst (NSVar t)            = NSVar <$> usubst t
     usubst (NDef t d doc)       = NDef <$> usubst t <*> return d <*> return doc
@@ -208,7 +208,7 @@ instance Subst NameInfo where
     ufree (NModule te doc)      = []        -- actually ufree te, but a module has no free variables on the top level
     ufree NReserved             = []
 
-instance Subst Witness where
+instance USubst Witness where
     usubst w@WClass{}           = return w                      -- A WClass (i.e., an extension) can't have any free type variables
     usubst w@WInst{}            = do t <- usubst (wtype w)
                                      p <- usubst (proto w)
@@ -218,7 +218,7 @@ instance Subst Witness where
     ufree w@WInst{}             = (ufree (wtype w) ++ ufree (proto w)) \\ qbound (binds w)
 
 
-instance Subst WTCon where
+instance USubst WTCon where
     usubst (w,u)                = (,) <$> return w <*> usubst u
 
     ufree (w,u)                 = ufree u
