@@ -179,6 +179,26 @@ instance (USubst x) => USubst (EnvF x) where
                                      return env{ names = ne, witnesses = we, envX = ex }
     ufree env                   = tvarScope0 env ++ ufree (names env) ++ ufree (witnesses env) ++ ufree (envX env)
 
+
+instance VSubst NameInfo where
+    vsubst s (NVar t)           = NVar (vsubst s t)
+    vsubst s (NSVar t)          = NSVar (vsubst s t)
+    vsubst s (NDef t d x)       = NDef (vsubst s t) d x
+    vsubst s (NSig t d x)       = NSig (vsubst s t) d x
+    vsubst s (NAct q p k te x)  = NAct (vsubst s q) (vsubst s p) (vsubst s k) (vsubst s te) x
+    vsubst s (NClass q us te x) = NClass (vsubst s q) (vsubst s us) (vsubst s te) x
+    vsubst s (NProto q us te x) = NProto (vsubst s q) (vsubst s us) (vsubst s te) x
+    vsubst s (NExt q c ps te x) = NExt (vsubst s q) (vsubst s c) (vsubst s ps) (vsubst s te) x
+    vsubst s (NTVar k c)        = NTVar k (vsubst s c)
+    vsubst s (NAlias qn)        = NAlias qn
+    vsubst s (NMAlias m)        = NMAlias m
+    vsubst s (NModule te x)     = NModule te x          -- actually vsubst s te, but te has no free variables (top-level)
+    vsubst s NReserved          = NReserved
+
+instance VSubst WTCon where
+    vsubst s (w,u)              = (w, vsubst s u)
+
+
 instance USubst NameInfo where
     usubst (NVar t)             = NVar <$> usubst t
     usubst (NSVar t)            = NSVar <$> usubst t
@@ -207,6 +227,10 @@ instance USubst NameInfo where
     ufree (NMAlias qn)          = []
     ufree (NModule te doc)      = []        -- actually ufree te, but a module has no free variables on the top level
     ufree NReserved             = []
+
+--instance Subst Witness where
+--    subst s w@WClass{}          = w                             -- A WClass (i.e., an extension) can't have any free type variables
+--    subst s w@WInst{}           = w{ wtype = subst s (wtype w), proto = subst s (proto w) }
 
 instance USubst Witness where
     usubst w@WClass{}           = return w                      -- A WClass (i.e., an extension) can't have any free type variables
@@ -785,7 +809,7 @@ allProtos env               = reverse locals ++ concat [ protos m (lookupMod m e
 allConAttr                  :: EnvF x -> Name -> [Type]
 allConAttr env n            = [ tCon tc | tc <- allCons env, n `elem` allAttrs' env tc ]
 
-allConAttrFree              :: EnvF x -> Name -> [TVar]
+allConAttrFree              :: EnvF x -> Name -> [TUni]
 allConAttrFree env n        = concat [ ufree $ fst $ findAttr' env tc n | tc <- allCons env, n `elem` allAttrs' env tc ]
 
 allProtoAttr                :: EnvF x -> Name -> [Type]

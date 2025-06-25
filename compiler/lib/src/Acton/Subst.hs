@@ -73,6 +73,54 @@ closeDepVarsQ vs q
 
 qualbound q                         = [ v | Quant v ps <- q, not $ null ps ]
 
+-------------------------------------------------------------------------------------------------------
+
+class VSubst a where
+    vsubst                          :: Substitution -> a -> a
+
+tyfree = ufree
+
+instance VSubst a => VSubst [a] where
+    vsubst s                        = map $ vsubst s
+
+instance VSubst a => VSubst (Name,a) where
+    vsubst s (n, t)                 = (n, vsubst s t)
+
+instance VSubst Type where
+    vsubst s (TVar l v)             = case lookup v s of
+                                        Just t ->  t
+                                        Nothing -> TVar l v
+    vsubst s (TCon l c)             = TCon l (vsubst s c)
+    vsubst s (TFun l fx p k t)      = TFun l (vsubst s fx) (vsubst s p) (vsubst s k) (vsubst s t)
+    vsubst s (TTuple l p k)         = TTuple l (vsubst s p) (vsubst s k)
+    vsubst s (TOpt l t)             = TOpt l (vsubst s t)
+    vsubst s (TRow l k n t r)       = TRow l k n (vsubst s t) (vsubst s r)
+    vsubst s (TStar l k r)          = TStar l k (vsubst s r)
+    vsubst s (TNone l)              = TNone l
+    vsubst s (TWild l)              = TWild l
+    vsubst s (TNil l k)             = TNil l k
+    vsubst s (TFX l fx)             = TFX l fx
+
+instance VSubst TCon where
+    vsubst s (TC n ts)              = TC n (vsubst s ts)
+
+instance VSubst TVar where
+    vsubst s v                      = case lookup v s of
+                                         Just (TVar _ v') -> v'
+                                         _ -> v
+
+instance VSubst TSchema where
+    vsubst s (TSchema l [] t)       = TSchema l [] (vsubst s t)
+    vsubst s (TSchema l q t)        = TSchema l (vsubst s' q) (vsubst s' t)
+      where s0                      = s `exclude` qbound q
+            clash                   = nub $ tyfree (rng s0) `intersect` qbound q
+            ren                     = clash `zip` map rename clash
+            rename (TV k n)         = tVar $ TV k $ Derived n undefined                    ---------------- <<<<
+            s'                      = ren ++ s0
+
+instance VSubst QBind where
+    vsubst s (Quant v ts)           = Quant (vsubst s v) (vsubst s ts)
+
 
 subst                               :: USubst a => Substitution -> a -> a
 subst s x0
@@ -87,9 +135,57 @@ subst s x0
         tmp                         = take (length clash) $ map (TV KWild) tmpNames \\ used
 
 
+-------------------------------------------------------------------------------------------------------
+class UWild a where
+    uwild                           :: a -> a
+
+instance UWild a => UWild [a] where
+    uwild                           = map uwild
+
+instance UWild a => UWild (Maybe a) where
+    uwild                           = fmap uwild
+
+instance UWild TCon where
+    uwild (TC n ts)                 = TC n (uwild ts)
+
+instance UWild Type where
+    uwild (TVar l v) | univar v     = tWild
+    uwild (TCon l c)                = TCon l (uwild c)
+    uwild (TFun l fx p k t)         = TFun l fx (uwild p) (uwild k) (uwild t)
+    uwild (TTuple l p k)            = TTuple l (uwild p) (uwild k)
+    uwild (TOpt l t)                = TOpt l (uwild t)
+    uwild (TRow l k n t r)          = TRow l k n (uwild t) (uwild r)
+    uwild (TStar l k r)             = TStar l k (uwild r)
+    uwild t                         = t
+
+instance UWild TSchema where
+    uwild (TSchema l q t)           = TSchema l (uwild q) (uwild t)
+
+instance UWild QBind where
+    uwild (Quant v cs)              = Quant v (uwild cs)
+
+instance UWild Constraint where
+    uwild (Cast info t1 t2)         = Cast (uwild info) (uwild t1) (uwild t2)
+    uwild (Sub info w t1 t2)        = Sub (uwild info) w (uwild t1) (uwild t2)
+    uwild (Impl info w t p)         = Impl (uwild info) w (uwild t) (uwild p)
+    uwild (Sel info w t1 n t2)      = Sel (uwild info) w (uwild t1) n (uwild t2)
+    uwild (Mut info t1 n t2)        = Mut (uwild info) (uwild t1) n (uwild t2)
+    uwild (Seal info t)             = Seal (uwild info) (uwild t)
+
+instance UWild ErrInfo where
+    uwild (DfltInfo l n mbe ts)     = DfltInfo l n mbe (uwild ts)
+    uwild (DeclInfo l1 l2 n t msg)  = DeclInfo l1 l2 n (uwild t) msg
+    uwild info                      = info
+
+instance (UWild a, UWild b) => UWild (QName,a,b) where
+    uwild (n, t, u)                 = (n, uwild t, uwild u)
+
+
+-------------------------------------------------------------------------------------------------------
+
 class USubst t where
     usubst                          :: t -> TypeM t
-    ufree                           :: t -> [TVar]
+    ufree                           :: t -> [TUni]
     tybound                         :: t -> [TVar]
     tybound _                       = []
 
@@ -158,10 +254,10 @@ schematic t                         = t
 
 schematic' (TC n ts)                = TC n [ tWild | _ <- ts ]
 
-wild t                              = subst [ (v,tWild) | v <- nub (ufree t), univar v ] t
+wild t                              = uwild t
 
-wildify                             :: (USubst a) => a -> TypeM a
-wildify a                           = return (wild a)
+wildify                             :: (UWild a) => a -> TypeM a
+wildify a                           = return (uwild a)
 
 wildargs i                          = [ tWild | _ <- nbinds i ]
   where
@@ -459,7 +555,7 @@ instance USubst Comp where
     ufree NoComp                    = []
 
 class (USubst a) => Polarity a where
-    polvars                         :: a -> ([TVar],[TVar])
+    polvars                         :: a -> ([TUni],[TUni])
 
 (p,n) `polcat` (p',n')              = (p++p', n++n')
 
@@ -505,7 +601,7 @@ instance (Polarity a) => Polarity [a] where
 
 
 class (USubst a) => Tailvars a where
-    tailvars                        :: a -> [TVar]
+    tailvars                        :: a -> [TUni]
 
 instance Tailvars Type where
     tailvars (TCon _ c)             = tailvars c

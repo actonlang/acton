@@ -919,7 +919,7 @@ instance Check Branch where
 
 --------------------------------------------------------------------------------------------------------------------------
 
-refine                                  :: Env -> Constraints -> TEnv -> Equations -> TypeM ([TVar], Constraints, TEnv, Equations)
+refine                                  :: Env -> Constraints -> TEnv -> Equations -> TypeM ([TUni], Constraints, TEnv, Equations)
 refine env cs te eq
   | not $ null solve_cs                 = do --traceM ("  #solving: " ++ prstrs solve_cs)
                                              (cs',eq') <- solve env noQual te tNone eq cs

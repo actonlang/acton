@@ -76,10 +76,10 @@ defer cs                                = lift $ state $ \st -> ((), st{ deferre
 collectDeferred                         :: TypeM Constraints
 collectDeferred                         = lift $ state $ \st -> (deferred st, st{ deferred = [] })
 
-usubstitute                             :: TVar -> Type -> TypeM ()
-usubstitute tv t                        = lift $
-                                          --trace ("  #usubstitute " ++ prstr tv ++ " ~ " ++ prstr t) $
-                                          state $ \st -> ((), st{ unisubst = Map.insert tv t (unisubst st)})
+usubstitute                             :: TUni -> Type -> TypeM ()
+usubstitute uv t                        = lift $
+                                          --trace ("  #usubstitute " ++ prstr uv ++ " ~ " ++ prstr t) $
+                                          state $ \st -> ((), st{ unisubst = Map.insert uv t (unisubst st)})
 
 usubstitution                           :: TypeM (Map TUni Type)
 usubstitution                           = lift $ state $ \st -> (unisubst st, st)

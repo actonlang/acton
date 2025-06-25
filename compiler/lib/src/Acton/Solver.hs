@@ -172,10 +172,12 @@ solve' env select hist te tt eq cs
         rnks                                = map (rank env) solve_cs
         tryAlts st t@(TVar _ tv) []        = do  --traceM ("### FAIL " ++ prstr tv ++ ":\n" ++ render (nest 4 $ vcat $ map pretty cs))
                                                  let ts = map (\n -> tCon (TC (noQ ('t':show n)) [])) [0..]
-                                                     vs = filter (\v -> length (filter (\c -> v `elem` ufree c) cs) > 1) (nub(ufree cs))
+                                                     vs = filter (\v -> length (filter (\c -> v `elem` ufree c) cs) > 1) (nub (ufree cs))
                                                      cs' = if length cs == 1 then cs else filter (not . useless vs) cs
-                                                     vs' = filter (\ v -> length (filter (\c -> v `elem` ufree c) cs') > 1) (nub(ufree cs'))
-                                                 noSolve0 env (Just t) (take (length vs') ts) $ subst (zip vs' ts) cs'
+                                                     vs' = filter (\v -> length (filter (\c -> v `elem` ufree c) cs') > 1) (nub (ufree cs'))
+                                                 sequence [ usubstitute uv t | (uv,t) <- vs' `zip` ts ]
+                                                 cs' <- usubst cs'
+                                                 noSolve0 env (Just t) (take (length vs') ts) cs'
         tryAlts st _ []                     = noSolve0 env Nothing [] cs
         tryAlts st t0 (t:ts)                = tryAlt t0 t `catchError` const (
                                                     do --traceM ("=== ROLLBACK " ++ prstr t0)
@@ -283,7 +285,7 @@ wildTuple                                   = tTuple tWild tWild
 -------------------------------------------------------------------------------------------------------------------------
 
 class OptVars a where
-    optvars                             :: a -> [TVar]
+    optvars                             :: a -> [TUni]
 
 instance (OptVars a) => OptVars [a] where
     optvars                             = concat . map optvars
@@ -1250,14 +1252,14 @@ subpos 0 (A,*R) (A,B,*S)                        = Arg x.0 $ subpos 1 (*R) (B,*S)
 ----------------------------------------------------------------------------------------------------------------------
 
 data VInfo                                  = VInfo {
-                                                varvars     :: [(TVar,TVar)],
-                                                embedded    :: [TVar],
-                                                sealed      :: [TVar],
-                                                ubounds     :: Map TVar [Type],
-                                                lbounds     :: Map TVar [Type],
-                                                pbounds     :: Map TVar [(Name,PCon)],
-                                                mutattrs    :: Map TVar [Name],
-                                                selattrs    :: Map TVar [Name] }
+                                                varvars     :: [(TUni,TUni)],
+                                                embedded    :: [TUni],
+                                                sealed      :: [TUni],
+                                                ubounds     :: Map TUni [Type],
+                                                lbounds     :: Map TUni [Type],
+                                                pbounds     :: Map TUni [(Name,PCon)],
+                                                mutattrs    :: Map TUni [Name],
+                                                selattrs    :: Map TUni [Name] }
 
 varvar v1 v2 vi                             = vi{ varvars = (v1,v2) : varvars vi }
 embed vs vi                                 = vi{ embedded = vs ++ embedded vi }
