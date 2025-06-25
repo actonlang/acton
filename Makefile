@@ -364,16 +364,11 @@ cli/out/bin/acton: distribution1
 #
 
 .PHONY: dist/backend
-BACKEND_FILES= deps backend/build.zig backend/build.zig.zon $(wildcard backend/*.c backend/*.h) $(wildcard backend/backend/*.h)
+BACKEND_FILES= backend/build.zig backend/build.zig.zon $(wildcard backend/*.c backend/*.h) $(wildcard backend/backend/*.h)
 BACKEND_FILES_FD= $(wildcard backend/failure_detector/*.c backend/failure_detector/*.h)
 BACKEND_FILES_BACKEND= $(wildcard backend/backend/*.h)
 BACKEND_FILES_BACKEND_FD= $(wildcard backend/backend/failure_detector/*.h)
-dist/backend: $(BACKEND_FILES) $(BACKEND_FILES_FD) $(BACKEND_FILES_BACKEND) $(BACKEND_FILES_BACKEND_FD) $(DEPS)
-	mkdir -p $@/failure_detector $@/backend/failure_detector
-	cp -a $(BACKEND_FILES) $@/
-	cp -a $(BACKEND_FILES_FD) $@/failure_detector/
-	cp -a $(BACKEND_FILES_BACKEND) $@/backend/
-	cp -a $(BACKEND_FILES_BACKEND_FD) $@/backend/failure_detector/
+dist/backend: dist/backend/.complete
 
 .PHONY: dist/base
 dist/base: base base/.build base/__root.zig base/acton.zig base/build.zig base/build.zig.zon base/acton.zig dist/bin/actonc dist/backend $(DEPS)
@@ -391,18 +386,19 @@ dist/bin/acton: cli/out/bin/acton
 	cp -a $< $@.tmp
 	mv $@.tmp $@
 
-dist/bin/actondb: dist/backend $(DIST_ZIG) $(DEPS)
+dist/bin/actondb: dist/backend/.complete $(DIST_ZIG) $(DEPS)
 	@mkdir -p $(dir $@)
-	@# Ensure deps are actually available through the symlink
-	@for d in libargp libgc libnetstring libprotobuf_c libuuid libyyjson; do \
-		if [ ! -f dist/backend/deps/$$d/build.zig ]; then \
-			echo "ERROR: dist/backend/deps/$$d/build.zig not found"; \
-			echo "Contents of dist/deps/:"; ls -la dist/deps/ 2>&1 | head -20; \
-			echo "Contents of dist/backend/:"; ls -la dist/backend/ 2>&1 | head -20; \
-			exit 1; \
-		fi; \
-	done
-	cd dist/backend && rm -rf .zig-cache zig-cache && $(ZIG) build -Donly_actondb --prefix $(TD)/dist 2>&1 || (cd $(TD) && echo "Build failed. Contents of dist/backend:"; ls -la dist/backend/; echo "Contents of dist/backend/deps:"; ls -la dist/backend/deps/ 2>&1 | head -20; echo "Checking specific deps:"; for d in libargp libgc libnetstring libprotobuf_c libuuid libyyjson; do echo -n "$$d: "; ls -la dist/backend/deps/$$d/build.zig 2>&1 || echo "MISSING"; done; echo "Checking if circular symlink exists:"; ls -la dist/backend/deps/deps 2>&1 || echo "No circular symlink"; exit 1)
+	cd dist/backend && $(ZIG) build -Donly_actondb --prefix $(TD)/dist || (echo "Build failed with exit code $$?"; exit 1)
+
+dist/backend/.complete: $(BACKEND_FILES) $(BACKEND_FILES_FD) $(BACKEND_FILES_BACKEND) $(BACKEND_FILES_BACKEND_FD) $(DEPS)
+	@rm -rf dist/backend
+	@mkdir -p dist/backend/failure_detector dist/backend/backend/failure_detector
+	ln -sf ../deps dist/backend/deps
+	cp -a $(BACKEND_FILES) dist/backend/
+	cp -a $(BACKEND_FILES_FD) dist/backend/failure_detector/
+	cp -a $(BACKEND_FILES_BACKEND) dist/backend/backend/
+	cp -a $(BACKEND_FILES_BACKEND_FD) dist/backend/backend/failure_detector/
+	@touch $@
 
 dist/bin/runacton: bin/runacton
 	@mkdir -p $(dir $@)
