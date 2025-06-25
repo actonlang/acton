@@ -364,13 +364,12 @@ cli/out/bin/acton: distribution1
 #
 
 .PHONY: dist/backend
-BACKEND_FILES= backend/build.zig backend/build.zig.zon $(wildcard backend/*.c backend/*.h) $(wildcard backend/backend/*.h)
+BACKEND_FILES= deps backend/build.zig backend/build.zig.zon $(wildcard backend/*.c backend/*.h) $(wildcard backend/backend/*.h)
 BACKEND_FILES_FD= $(wildcard backend/failure_detector/*.c backend/failure_detector/*.h)
 BACKEND_FILES_BACKEND= $(wildcard backend/backend/*.h)
 BACKEND_FILES_BACKEND_FD= $(wildcard backend/backend/failure_detector/*.h)
 dist/backend: $(BACKEND_FILES) $(BACKEND_FILES_FD) $(BACKEND_FILES_BACKEND) $(BACKEND_FILES_BACKEND_FD) $(DEPS)
 	mkdir -p $@/failure_detector $@/backend/failure_detector
-	ln -sf ../deps $@/deps
 	cp -a $(BACKEND_FILES) $@/
 	cp -a $(BACKEND_FILES_FD) $@/failure_detector/
 	cp -a $(BACKEND_FILES_BACKEND) $@/backend/
