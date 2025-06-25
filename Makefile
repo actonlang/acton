@@ -394,7 +394,7 @@ dist/bin/acton: cli/out/bin/acton
 
 dist/bin/actondb: dist/backend $(DIST_ZIG) $(DEPS)
 	@mkdir -p $(dir $@)
-	cd dist/backend && $(ZIG) build -Donly_actondb --prefix $(TD)/dist --verbose 2>&1 || (echo "Build failed. Contents of dist/backend:"; ls -la dist/backend/; echo "Contents of dist/backend/deps:"; ls -la dist/backend/deps/ 2>&1 | head -10; echo "Checking specific deps:"; for d in libargp libgc libnetstring libprotobuf_c libuuid libyyjson; do echo -n "$$d: "; ls -la dist/backend/deps/$$d/build.zig 2>&1 || echo "MISSING"; done; exit 1)
+	cd dist/backend && $(ZIG) build -Donly_actondb --prefix $(TD)/dist --verbose 2>&1 || (cd $(TD) && echo "Build failed. Contents of dist/backend:"; ls -la dist/backend/; echo "Contents of dist/backend/deps:"; ls -la dist/backend/deps/ 2>&1 | head -10; echo "Checking specific deps:"; for d in libargp libgc libnetstring libprotobuf_c libuuid libyyjson; do echo -n "$$d: "; ls -la dist/backend/deps/$$d/build.zig 2>&1 || echo "MISSING"; done; exit 1)
 
 dist/bin/runacton: bin/runacton
 	@mkdir -p $(dir $@)
