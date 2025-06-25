@@ -393,19 +393,12 @@ dist/bin/acton: cli/out/bin/acton
 
 dist/bin/actondb: dist/backend $(DIST_ZIG) $(DEPS)
 	@mkdir -p $(dir $@)
-	@# Ensure build files exist
-	@if [ ! -f dist/backend/build.zig ]; then echo "ERROR: dist/backend/build.zig not found"; exit 1; fi
-	@if [ ! -f dist/backend/build.zig.zon ]; then echo "ERROR: dist/backend/build.zig.zon not found"; exit 1; fi
 	@# Ensure deps are actually available through the symlink
 	@for d in libargp libgc libnetstring libprotobuf_c libuuid libyyjson; do \
 		if [ ! -f dist/backend/deps/$$d/build.zig ]; then \
 			echo "ERROR: dist/backend/deps/$$d/build.zig not found"; \
 			echo "Contents of dist/deps/:"; ls -la dist/deps/ 2>&1 | head -20; \
 			echo "Contents of dist/backend/:"; ls -la dist/backend/ 2>&1 | head -20; \
-			exit 1; \
-		fi; \
-		if [ ! -f dist/backend/deps/$$d/build.zig.zon ] && [ -f dist/deps/$$d/build.zig.zon ]; then \
-			echo "ERROR: dist/backend/deps/$$d/build.zig.zon not found (but exists in dist/deps/$$d/)"; \
 			exit 1; \
 		fi; \
 	done
