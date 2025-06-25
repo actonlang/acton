@@ -235,6 +235,7 @@ dist/deps/libutf8proc: deps-download/$(LIBUTF8PROC_REF).tar.gz
 dist/deps/libuuid: deps/libuuid
 	mkdir -p $(TD)/$@
 	cp -a $</* $(TD)/$@
+	touch $(TD)/$@
 
 # /deps/libuv --------------------------------------------
 LIBUV_REF=f20620733fb8fb5fb261699bbb858887ac6ec0bb
@@ -284,10 +285,12 @@ dist/deps/libsnappy_c: deps-download/$(LIBSNAPPY_C_REF).tar.gz
 dist/deps/libnetstring: deps/libnetstring $(DIST_ZIG)
 	mkdir -p $(TD)/$@
 	cp -a $</* $(TD)/$@
+	touch $(TD)/$@
 
 dist/deps/libyyjson: deps/libyyjson $(DIST_ZIG)
 	mkdir -p $(TD)/$@
 	cp -a $</* $(TD)/$@
+	touch $(TD)/$@
 
 # top level targets
 .PHONY: test test-builtins test-compiler test-db test-examples test-lang test-regressions test-rts test-stdlib
@@ -391,7 +394,7 @@ dist/bin/acton: cli/out/bin/acton
 
 dist/bin/actondb: dist/backend $(DIST_ZIG) $(DEPS)
 	@mkdir -p $(dir $@)
-	cd dist/backend && $(ZIG) build -Donly_actondb --prefix $(TD)/dist
+	cd dist/backend && $(ZIG) build -Donly_actondb --prefix $(TD)/dist --verbose
 
 dist/bin/runacton: bin/runacton
 	@mkdir -p $(dir $@)
