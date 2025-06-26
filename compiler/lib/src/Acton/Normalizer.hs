@@ -20,6 +20,7 @@ import Acton.Env
 import Acton.QuickType
 import Acton.Prim
 import Acton.Builtin
+import Data.List
 import Pretty
 import Utils
 import Control.Monad.State.Lazy
@@ -348,7 +349,7 @@ instance Norm Decl where
                   | otherwise       = b
     norm env (Actor l n q p k b doc)
                                     = do p' <- joinPar <$> norm env0 p <*> norm (define (envOf p) env0) k
-                                         b' <- norm env1 b
+                                         b' <- normSuite env1 b
                                          return $ Actor l n q p' KwdNIL b' doc
       where env1                    = setContext [] $ define (envOf p ++ envOf k) env0
             env0                    = define [(selfKW, NVar t0)] $ defineTVars q env
