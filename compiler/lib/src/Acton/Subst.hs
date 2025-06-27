@@ -83,6 +83,9 @@ tyfree = ufree
 instance VSubst a => VSubst [a] where
     vsubst s                        = map $ vsubst s
 
+instance VSubst a => VSubst (Maybe a) where
+    vsubst s                        = fmap $ vsubst s
+
 instance VSubst a => VSubst (Name,a) where
     vsubst s (n, t)                 = (n, vsubst s t)
 
@@ -128,7 +131,7 @@ subst s x0
   | otherwise                       = x2
   where x1                          = runTypeM' s0 (usubst x0)
         x2                          = runTypeM' s1 (usubst x1)
-        s0                          = [ (v, subst (clash `zip` map tVar tmp) t) | (v,t) <- s ]
+        s0                          = [ (v, vsubst (clash `zip` map tVar tmp) t) | (v,t) <- s ]
         s1                          = tmp `zip` map tVar clash
         clash                       = dom s `intersect` ufree (rng s)
         used                        = dom s ++ ufree (rng s)                             
