@@ -116,5 +116,5 @@ matches vs (t:ts) (t':ts')                  = do s1 <- match vs t t'
 merge s1 s2
   | agree                                   = Just $ s1 ++ s2
   | otherwise                               = Nothing
-  where agree                               = and [ subst s1 (tVar v) `wildeq` subst s2 (tVar v) | v <- dom s1 `intersect` dom s2 ]
+  where agree                               = and [ vsubst s1 (tVar v) `wildeq` vsubst s2 (tVar v) | v <- dom s1 `intersect` dom s2 ]
         t `wildeq` t'                       = match [] t t' == Just []

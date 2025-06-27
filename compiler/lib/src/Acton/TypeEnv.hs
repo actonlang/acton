@@ -88,7 +88,7 @@ instance (WellFormed a) => WellFormed [a] where
     wf env                  = concatMap (wf env)
 
 instance WellFormed TCon where
-    wf env (TC n ts)        = wf env ts ++ [ constr (subst s u) (subst s $ tVar v) | Quant v us <- q, u <- us ]
+    wf env (TC n ts)        = wf env ts ++ [ constr (vsubst s u) (vsubst s $ tVar v) | Quant v us <- q, u <- us ]
       where q               = case findQName n env of
                                 NAct q p k te _ -> q
                                 NClass q us te _ -> q
@@ -127,7 +127,7 @@ instantiate                 :: EnvF x -> TSchema -> TypeM (Constraints, [Type], 
 instantiate env (TSchema _ q t)
                             = do (cs, tvs) <- instQBinds env q
                                  let s = qbound q `zip` tvs
-                                 return (cs, tvs, subst s t)
+                                 return (cs, tvs, vsubst s t)
 
 instQBinds                  :: EnvF x -> QBinds -> TypeM (Constraints, [Type])
 instQBinds env q            = do ts <- newTVars [ tvkind v | Quant v _ <- q ]
@@ -139,20 +139,20 @@ instWitness env p0 wit      = case wit of
                                  WClass q t p w ws -> do
                                     (cs,tvs) <- instQBinds env q
                                     let s = (tvSelf,t) : qbound q `zip` tvs
-                                    unifyM (DfltInfo (loc p0) 22 Nothing []) (tcargs p0) (tcargs $ subst s p)
-                                    t <- usubst (subst s t)
+                                    unifyM (DfltInfo (loc p0) 22 Nothing []) (tcargs p0) (tcargs $ vsubst s p)
+                                    t <- usubst (vsubst s t)
                                     cs <- usubst cs
                                     return (cs, t, wexpr ws (eCall (tApp (eQVar w) tvs) $ wvars cs))
                                  WInst q t p w ws -> do
                                     (cs,tvs) <- instQBinds env q
                                     let s = (tvSelf,t) : qbound q `zip` tvs
-                                    unifyM (DfltInfo (loc p0) 23 Nothing []) (tcargs p0) (tcargs $ subst s p)
-                                    t <- usubst (subst s t)
+                                    unifyM (DfltInfo (loc p0) 23 Nothing []) (tcargs p0) (tcargs $ vsubst s p)
+                                    t <- usubst (vsubst s t)
                                     return (cs, t, wexpr ws (eQVar w))
 
 instQuals                   :: EnvF x -> QBinds -> [Type] -> TypeM Constraints
 instQuals env q ts          = do let s = qbound q `zip` ts
-                                 sequence [ constr (subst s (tVar v)) (subst s u) | Quant v us <- q, u <- us ]
+                                 sequence [ constr (vsubst s (tVar v)) (vsubst s u) | Quant v us <- q, u <- us ]
   where constr t u@(TC n _)
           | isProto env n   = do w <- newWitness; return $ Impl (DfltInfo NoLoc 24 Nothing []) w t u
           | otherwise       = return $ Cast (DfltInfo NoLoc 25 Nothing []) t (tCon u)

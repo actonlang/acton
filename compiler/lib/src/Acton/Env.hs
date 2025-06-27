@@ -228,10 +228,6 @@ instance USubst NameInfo where
     ufree (NModule te doc)      = []        -- actually ufree te, but a module has no free variables on the top level
     ufree NReserved             = []
 
---instance Subst Witness where
---    subst s w@WClass{}          = w                             -- A WClass (i.e., an extension) can't have any free type variables
---    subst s w@WInst{}           = w{ wtype = subst s (wtype w), proto = subst s (proto w) }
-
 instance USubst Witness where
     usubst w@WClass{}           = return w                      -- A WClass (i.e., an extension) can't have any free type variables
     usubst w@WInst{}            = do t <- usubst (wtype w)
@@ -695,7 +691,7 @@ allDescendants env tc       = [ schematic' c | c <- allCons env, hasAncestor' en
 findCon                     :: EnvF x -> TCon -> ([WTCon],TEnv)
 findCon env (TC n ts)
   | map tVar tvs == ts      = (us, te)
-  | otherwise               = (subst s us, subst s te)
+  | otherwise               = (vsubst s us, vsubst s te)
   where (q,us,te)           = findConName n env
         tvs                 = qbound q
         s                   = tvs `zip` ts
@@ -1358,11 +1354,11 @@ instance (Simp a) => Simp [a] where
     simp env                        = map (simp env)
 
 instance Simp TSchema where
-    simp env (TSchema l q t)        = TSchema l q' (subst s $ simp env' t)
+    simp env (TSchema l q t)        = TSchema l q' (vsubst s $ simp env' t)
       where (q', s)                 = simpQuant env (simp env' q) (ufree t)
             env'                    = defineTVars (stripQual q) env
 
-simpQuant env q vs0                 = (subst s [ Quant v ps | Quant v ps <- q2, not $ null ps ], s)
+simpQuant env q vs0                 = (vsubst s [ Quant v ps | Quant v ps <- q2, not $ null ps ], s)
   where (q1,q2)                     = partition isEX q
         isEX (Quant v [p])          = length (filter (==v) vs) == 1
         isEX _                      = False
@@ -1388,7 +1384,7 @@ instance Simp (Name, NameInfo) where
       where env'                    = defineTVars (stripQual q) env
     simp env (n, NProto q us te doc)= (n, NProto (simp env' q) (simp env' us) (simp env' te) doc)
       where env'                    = defineTVars (stripQual q) env
-    simp env (n, NExt q c us te doc)= (n, NExt q' (subst s $ simp env' c) (subst s $ simp env' us) (subst s $ simp env' te) doc)
+    simp env (n, NExt q c us te doc)= (n, NExt q' (vsubst s $ simp env' c) (vsubst s $ simp env' us) (vsubst s $ simp env' te) doc)
       where (q', s)                 = simpQuant env (simp env' q) (ufree c ++ ufree us ++ ufree te)
             env'                    = defineTVars (stripQual q) env
     simp env (n, NAct q p k te doc) = (n, NAct (simp env' q) (simp env' p) (simp env' k) (simp env' te) doc)
