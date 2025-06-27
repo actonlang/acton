@@ -1,0 +1,28 @@
+class Ix:
+    pass
+
+extension Ix(Eq):
+    def __eq__(self, other):
+        return True
+
+class SubIx(Ix):
+    pass
+
+class Node(object):
+    def __init__(self):
+        pass
+
+extension Node(Indexed[Ix, str]):
+    def __getitem__(self, ix):
+        return "get"
+    def __setitem__(self, ix, node):
+        pass
+    def __delitem__(self, ix):
+        pass
+
+actor main(env):
+    def target(node: Node, ix: SubIx):
+        node[ix] = "x"
+        node[ix] += "y"
+        del node[ix]
+    env.exit(0)

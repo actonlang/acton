@@ -365,7 +365,8 @@ instance InfEnv Stmt where
                                              (cs1,stmt) <- del t0 e0 tg
                                              return (cs0++cs1, [], stmt)
       where del t0 e0 (TgVar n)         = do return ( Cast (DfltInfo l 35 Nothing []) tNone t0 : [], sAssign (pVar' n) eNone)
-            del t0 e0 (TgIndex ix)      = do (cs,ti,ix) <- infer env ix
+            del t0 e0 (TgIndex ix)      = do ti <- newTVar
+                                             (cs,ix) <- inferSub env ti ix
                                              t <- newTVar
                                              w <- newWitness
                                              return ( Impl (DfltInfo l 36 Nothing []) w t0 (pIndexed ti t) : cs, sExpr $ dotCall w delitemKW [e0, ix] )
@@ -383,7 +384,8 @@ instance InfEnv Stmt where
                                              return (cs0++cs1++cs2, [], stmt)
       where asgn t0 t e0 e (TgVar n)    = do tryUnify (DfltInfo l 40 Nothing []) t0 t
                                              return ( [], sAssign (pVar' n) e )
-            asgn t0 t e0 e (TgIndex ix) = do (cs,ti,ix) <- infer env ix
+            asgn t0 t e0 e (TgIndex ix) = do ti <- newTVar
+                                             (cs,ix) <- inferSub env ti ix
                                              w <- newWitness
                                              return ( Impl (DfltInfo l 41 Nothing []) w t0 (pIndexed ti t) : cs, sExpr $ dotCall w setitemKW [e0, ix, e] )
             asgn t0 t e0 e (TgSlice sl) = do (cs,sl) <- inferSlice env sl
@@ -419,7 +421,8 @@ instance InfEnv Stmt where
 
             aug t0 t x f e (TgVar _)    = do tryUnify (DfltInfo l 46 Nothing []) t0 t
                                              return ( [], sAssign (pVar' x) $ f [eVar x, e] )
-            aug t0 t x f e (TgIndex ix) = do (cs,ti,ix) <- infer env ix
+            aug t0 t x f e (TgIndex ix) = do ti <- newTVar
+                                             (cs,ix) <- inferSub env ti ix
                                              w <- newWitness
                                              return ( Impl (DfltInfo l 47 Nothing []) w t0 (pIndexed ti t) :
                                                       cs, sExpr $ dotCall w setitemKW [eVar x, ix, f [dotCall w getitemKW [eVar x, ix], e]])
