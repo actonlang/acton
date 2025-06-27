@@ -76,14 +76,14 @@ qSchema env f e@(Var _ n)           = case findQName n env of
                                             let tc = TC (unalias env n) (map tVar $ qbound q)
                                                 (TSchema _ q' t, _) = findAttr' env tc initKW
                                                 t' = if restype t == tR then t else t{ restype = tSelf }
-                                            in (tSchema (q++q') $ subst [(tvSelf,tCon tc)] t', fxPure, Just NoDec, e)
+                                            in (tSchema (q++q') $ vsubst [(tvSelf,tCon tc)] t', fxPure, Just NoDec, e)
                                         NAct q p k _ _ ->
                                             (tSchema q (tFun fxProc p k (tCon0 n q)), fxPure, Just NoDec, e)
                                         i -> error ("### qSchema Var unexpected " ++ prstr (noq n,i))
 qSchema env f e@(Dot _ (Var _ x) n)
   | NClass q _ _ _ <- info          = let tc = TC x (map tVar $ qbound q)
                                           (TSchema _ q' t, mbdec) = findAttr' env tc n
-                                      in (tSchema (q++q') $ subst [(tvSelf,tCon tc)] (addSelf t mbdec), fxPure, mbdec, e)
+                                      in (tSchema (q++q') $ vsubst [(tvSelf,tCon tc)] (addSelf t mbdec), fxPure, mbdec, e)
   where info                        = findQName x env
 qSchema env f e0@(Dot l e n)        = case t of
                                         TCon _ c -> addE e' $ findAttr' env c n
@@ -94,7 +94,7 @@ qSchema env f e0@(Dot l e n)        = case t of
                                            where tc = findTVBound env v
                                         t -> error ("### qSchema Dot unexpected " ++ prstr e0 ++ "  ::  " ++ prstr t)
   where (t, fx, e')                 = qType env f e
-        addE e1 (sc, dec)           = (subst [(tvSelf,t)] sc, fx, dec, Dot l e1 n)
+        addE e1 (sc, dec)           = (vsubst [(tvSelf,t)] sc, fx, dec, Dot l e1 n)
         pick n (TRow l k x t r)     = if x == n then t else pick n r
         pick n (TStar l k r)
           | n == attrKW             = tTupleK r
@@ -108,7 +108,7 @@ qInst                               :: EnvF x -> Checker -> [Type] -> Expr -> (T
 qInst env f [] (TApp _ e ts)        = qInst env f ts e
 qInst env f ts e                    = case qSchema env f e of
                                         (TSchema _ q t, fx, _, e') | length q == length ts -> (t', fx, tApp e' ts)
-                                           where t' = subst (qbound q `zip` ts) t
+                                           where t' = vsubst (qbound q `zip` ts) t
                                         (sc, _, _, _) -> error ("###### qInst [" ++ prstrs ts ++ "] " ++ prstr e ++ " is " ++ prstr sc)
 
 instance QType Expr where

@@ -515,7 +515,7 @@ solveSelAttr env (wf,sc,d) (Sel info w t1 n t2)
                                                  when (tvSelf `elem` snd (polvars t)) (tyerr n "Contravariant Self attribute not selectable by instance")
                                                  w' <- newWitness
                                                  let e = eLambda [(px0,t1)] (eCallVar w' [app t (tApp (eDot (wf $ eVar px0) n) tvs) $ witsOf cs])
-                                                     c = Sub (DfltInfo (loc info) 8 Nothing []) w' (subst [(tvSelf,t1)] t) t2
+                                                     c = Sub (DfltInfo (loc info) 8 Nothing []) w' (vsubst [(tvSelf,t1)] t) t2
                                                  return ([Eqn w (wFun t1 t2) e], c:cs)
 
 --  e1.__setslice__(sl, e2)
@@ -538,13 +538,13 @@ solveSelWit env (p,we) c0@(Sel info w t1 n t2)
                                                  when (tvSelf `elem` snd (polvars t)) (tyerr n "Contravariant Self attribute not selectable by instance")
                                                  w' <- newWitness
                                                  let e = eLambda [(px0,t1)] (eCallVar w' [app t (tApp (eDot (wf we) n) tvs) $ eVar px0 : witsOf cs])
-                                                     c = Sub (DfltInfo NoLoc 9 Nothing []) w' (subst [(tvSelf,t1)] t) t2
+                                                     c = Sub (DfltInfo NoLoc 9 Nothing []) w' (vsubst [(tvSelf,t1)] t) t2
                                                  return ([Eqn w (wFun t1 t2) e], c:cs)
 
 solveMutAttr env (wf,sc,dec) c@(Mut info t1 n t2)
                                             = do when (dec /= Just Property) (noMut n)
                                                  let TSchema _ [] t = sc
-                                                 cast env (DfltInfo (loc c) 10 Nothing []) t2 (subst [(tvSelf,t1)] t)
+                                                 cast env (DfltInfo (loc c) 10 Nothing []) t2 (vsubst [(tvSelf,t1)] t)
 
 ----------------------------------------------------------------------------------------------------------------------
 -- witness lookup
@@ -563,7 +563,7 @@ findWitness env t p
         p_                  = wild p                    -- matching against wild p also accepts witnesses that would instantiate p
         force               = isForced env
         t'                  = if force then t_ else t   -- allow instantiation only when in forced mode
-        elimSelf wc         = wc{ proto = subst [(tvSelf,wtype wc)] (proto wc) }
+        elimSelf wc         = wc{ proto = vsubst [(tvSelf,wtype wc)] (proto wc) }
         all_ws              = reverse $ filter (matchCoarse t_ p_) $ map elimSelf $ witsByPName env $ tcname p -- all witnesses that could be used
         (match_ws, rest_ws) = partition (matchFine t') all_ws                                                  -- only those that match t exactly
         uni_ws              = filter (unifying (DfltInfo (loc t) 11 Nothing []) t) rest_ws
@@ -609,7 +609,7 @@ matchExactly t p w          = matching (t : tcargs p) (qbound $ binds w) (wtype 
 
 matchWit w w'               = matchExactly (wtype w) (proto w) w'
 
-matching ts vs ts'          = isJust $ matches vs ts ts'    -- there is a substitution s with domain vs such that ts == subst s ts'
+matching ts vs ts'          = isJust $ matches vs ts ts'    -- there is a substitution s with domain vs such that ts == vsubst s ts'
 
 unifying info t w           = runTypeM $ tryUnify `catchError` const (return False)
   where tryUnify            = do unify info t (wtype w)
@@ -1530,7 +1530,7 @@ ctxtReduce env vi multiPBnds            = (concat eqs, concat css)
                                           imp v (Eqn w (impl2type (tVar v) p) (wf (eVar w')) : eq) ((tcargs p `zip` tcargs p') ++ uni) wps wps'
           | otherwise                   = --trace ("   (Not covered: " ++ prstr p ++ " in context " ++ prstrs (map snd (wps++wps')) ++ ")") $
                                           imp v eq uni ((w,p):wps) wps'
-          where hits                    = [ (w',wf,p0,subst s p') | (w',p0) <- wps++wps', w'/=w, Just (wf,p') <- [findAncestor env p0 (tcname p)] ]
+          where hits                    = [ (w',wf,p0,vsubst s p') | (w',p0) <- wps++wps', w'/=w, Just (wf,p') <- [findAncestor env p0 (tcname p)] ]
                 s                       = [(tvSelf,tVar v)]
         imp v eq uni wps []             = (eq, uni)
   -- TODO: also check that an mro exists (?)

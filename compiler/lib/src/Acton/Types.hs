@@ -251,7 +251,7 @@ wrapped l kw env cs ts args             = do tvx <- newTVarOfKind KFX
                                              (_,tvs,t0) <- instantiate env sc
                                              fx <- newTVarOfKind KFX
                                              t' <- newTVar
-                                             let t1 = subst [(fxSelf,fx)] t0
+                                             let t1 = vsubst [(fxSelf,fx)] t0
                                                  t2 = tFun fxPure (foldr posRow posNil ts) kwdNil t'
                                              w <- newWitness
                                              (cs0,_) <- simplify env [] t' [Cast (DfltInfo l 30 Nothing []) t1 t2]
@@ -604,7 +604,7 @@ instance InfEnv Decl where
                                              when (not $ null nterms) $ err2 (dom nterms) "Method/attribute not in listed protocols:"
                                              when (not $ null sigs) $ err2 sigs "Extension with new methods/attributes not supported"
                                              when (not (null asigs || notImplBody b)) $ err3 l (dom asigs) "Protocol method/attribute lacks implementation:"
-                                             let te1 = unSig $ subst s asigs
+                                             let te1 = unSig $ vsubst s asigs
                                                  te2 = te ++ te1
                                                  b2 = addImpl te1 b1
                                              let docstring = extractDocstring b
@@ -613,7 +613,7 @@ instance InfEnv Decl where
             env1                        = define (toSigs te') $ reserve (assigned b) $ defineSelfOpaque $ defineTVars (stripQual q) $ setInClass env
             witsearch                   = [ w | w <- witsByPName env (tcname u), matchExactly (tCon c) u w, matching [wtype w] (qbound q) [tCon c] ]
             u                           = head us
-            ps                          = subst s $ mro1 env us -- TODO: check that ps doesn't contradict any previous extension mro for c
+            ps                          = vsubst s $ mro1 env us -- TODO: check that ps doesn't contradict any previous extension mro for c
             final                       = concat [ conAttrs env (tcname p) | (_,p) <- tail ps, hasWitness env (tCon c) p ]
             te'                         = parentTEnv env ps
             s                           = [(tvSelf, tCon c)]
@@ -889,7 +889,7 @@ instance Check Decl where
                                              pushFX fxPure tNone
                                              wellformed env1 q
                                              wellformed env1 us
-                                             (csb,b') <- checkEnv (define (subst s te) env1) b
+                                             (csb,b') <- checkEnv (define (vsubst s te) env1) b
                                              popFX
                                              (cs1,eq1) <- solveScoped env1 (tvSelf:tvs) te tNone csb
                                              checkNoEscape l env (tvSelf:tvs)
@@ -921,7 +921,7 @@ instance Check Decl where
                                              pushFX fxPure tNone
                                              wellformed env1 q
                                              (csu,wmap) <- wellformedProtos env1 us
-                                             (csb,b') <- checkEnv (define (subst s te) env1) b
+                                             (csb,b') <- checkEnv (define (vsubst s te) env1) b
                                              popFX
                                              (cs1,eq1) <- solveScoped env1 (tvSelf:tvs) te tNone (csu++csb)
                                              checkNoEscape l env (tvSelf:tvs)
@@ -1136,7 +1136,7 @@ instance Infer Expr where
                                                     Just (_,sc,_) -> do
                                                         (cs1,tvs,t) <- instantiate env sc
                                                         let t0 = tCon $ TC (unalias env n) ts
-                                                            t' = subst [(tvSelf,t0)] t{ restype = tSelf }
+                                                            t' = vsubst [(tvSelf,t0)] t{ restype = tSelf }
                                                         return (cs0++cs1, t', app t' (tApp x (ts++tvs)) $ witsOf (cs0++cs1))
                                             NAct q p k _ _ -> do
 --                                                when (abstractActor env n) (err1 n "Abstract actor cannot be instantiated:")
@@ -1340,7 +1340,7 @@ instance Infer Expr where
                                                   | abstractAttr env tc n -> err l "Abstract attribute not selectable by class"
                                                   | otherwise -> do
                                                       (cs1,tvs,t) <- instantiate env sc
-                                                      let t' = subst [(tvSelf,tCon tc)] $ addSelf t dec
+                                                      let t' = vsubst [(tvSelf,tCon tc)] $ addSelf t dec
                                                       return (cs0++cs1, t', app2nd dec t' (tApp (Dot l x n) (ts++tvs)) $ witsOf (cs0++cs1))
                                                 Nothing ->
                                                     case findProtoByAttr env c' n of
@@ -1349,7 +1349,7 @@ instance Infer Expr where
                                                             we <- eVar <$> newWitness
                                                             let Just (wf,sc,dec) = findAttr env p n
                                                             (cs2,tvs,t) <- instantiate env sc
-                                                            let t' = subst [(tvSelf,tCon tc)] $ addSelf t dec
+                                                            let t' = vsubst [(tvSelf,tCon tc)] $ addSelf t dec
                                                             return (cs2, t', app t' (tApp (eDot (wf we) n) tvs) $ witsOf cs2)
                                                         Nothing -> err1 l "Attribute not found"
       | NProto q us te _ <- cinfo       = do (_,ts) <- instQBinds env q
@@ -1358,7 +1358,7 @@ instance Infer Expr where
                                                 Just (wf,sc,dec) -> do
                                                     (cs1,tvs,t) <- instantiate env sc
                                                     t0 <- newTVar
-                                                    let t' = subst [(tvSelf,t0)] $ addSelf t dec
+                                                    let t' = vsubst [(tvSelf,t0)] $ addSelf t dec
                                                     w <- newWitness
                                                     return (Impl (DfltInfo l 85 Nothing []) w t0 tc :
                                                             cs1, t', app t' (tApp (Dot l (wf $ eVar w) n) tvs) $ witsOf cs1)
