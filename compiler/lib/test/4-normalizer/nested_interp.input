@@ -1,0 +1,266 @@
+
+with:
+    W_4: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+    pure def simple_nested () -> __builtin__.str:
+        x: ?__builtin__.value = W_4.__fromatom__(42)
+        s: __builtin__.str = $FORMAT@[(__builtin__.str,)]("outer %s", (str(val = $FORMAT@[(__builtin__.str,)]("inner %s", (str(val = x),))),))
+        return s
+
+with:
+    W_22: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+    pure def multi_level () -> __builtin__.str:
+        x: ?__builtin__.value = W_22.__fromatom__(1)
+        s: __builtin__.str = $FORMAT@[(__builtin__.str,)]("L1 %s", (str(val = $FORMAT@[(__builtin__.str,)]("L2 %s", (str(val = $FORMAT@[(__builtin__.str,)]("L3 %s", (str(val = x),))),))),))
+        return s
+
+pure def with_format_spec () -> __builtin__.str:
+    W_45: __builtin__.RealFloat[__builtin__.float] = __builtin__.RealFloatD_float()
+    x: __builtin__.float = W_45.__fromatom__(3.14159)
+    s: __builtin__.str = $FORMAT@[(__builtin__.str,)]("Result: %s", (str(val = $FORMAT@[(__builtin__.float,)]("PI = %.2f", (x,))),))
+    return s
+
+with:
+    W_59: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+    pure def multiple_args () -> __builtin__.str:
+        a: ?__builtin__.value = W_59.__fromatom__(10)
+        b: ?__builtin__.value = W_59.__fromatom__(20)
+        s: __builtin__.str = $FORMAT@[(__builtin__.str, __builtin__.str)]("Outer %s and %s", (str(val = $FORMAT@[(__builtin__.str,)]("A=%s", (str(val = a),))), str(val = $FORMAT@[(__builtin__.str,)]("B=%s", (str(val = b),)))))
+        return s
+
+with:
+    W_92: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+    pure def mixed_quotes () -> (__builtin__.str, __builtin__.str):
+        x: __builtin__.value = W_92.__fromatom__(42)
+        s1: __builtin__.str = $FORMAT@[(__builtin__.str,)]("outer %s", (str(val = $FORMAT@[(__builtin__.str,)]("inner %s", (str(val = x),))),))
+        s2: __builtin__.str = $FORMAT@[(__builtin__.str,)]("outer %s", (str(val = $FORMAT@[(__builtin__.str,)]("inner %s", (str(val = x),))),))
+        return (s1, s2)
+
+with:
+    W_124: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+    pure def in_expression () -> __builtin__.str:
+        W_140: __builtin__.Plus[__builtin__.str] = __builtin__.TimesD_str()
+        x: ?__builtin__.value = W_124.__fromatom__(5)
+        result: __builtin__.str = W_140.__add__(W_140.__add__("prefix ", $FORMAT@[(__builtin__.str,)]("middle %s", (str(val = $FORMAT@[(__builtin__.str,)]("nested %s", (str(val = x),))),))), " suffix")
+        return result
+
+with:
+    W_150: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+    mut def in_for_loop () -> __builtin__.list[__builtin__.str]:
+        W_164: __builtin__.Iterable[__builtin__.range, __builtin__.int] = __builtin__.IterableD_range()
+        W_201: __builtin__.Sequence[__builtin__.list[__builtin__.str], __builtin__.str] = __builtin__.SequenceD_list@[__builtin__.str]()
+        W_180: __builtin__.Iterable[__builtin__.list[__builtin__.str], __builtin__.str] = __builtin__.SequenceD_list@[__builtin__.str]().W_Collection
+        x: ?__builtin__.value = W_150.__fromatom__(42)
+        result: __builtin__.list[__builtin__.str] = []
+        for i: __builtin__.str in W_180.__iter__([$FORMAT@[(__builtin__.str, __builtin__.str)]("item_%s_%s", (str(val = $FORMAT@[(__builtin__.str,)]("nested_%s", (str(val = x),))), str(val = j))) for j: __builtin__.int in W_164.__iter__(range(start = W_150.__fromatom__(3), stop = None, step = None))]):
+            W_201.append(result, i)
+        return result
+
+with:
+    W_209: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+    pure def in_for_direct () -> None:
+        W_227: __builtin__.Iterable[__builtin__.list[__builtin__.str], __builtin__.str] = __builtin__.SequenceD_list@[__builtin__.str]().W_Collection
+        x: ?__builtin__.value = W_209.__fromatom__(10)
+        for item: __builtin__.str in W_227.__iter__($FORMAT@[(__builtin__.str,)]("items_%s", (str(val = $FORMAT@[(__builtin__.str,)]("category_%s", (str(val = x),))),)).split(sep = "_", maxsplit = None)):
+            print@[(__builtin__.str,)](*(item,), sep = None, end = None, err = None, flush = None)
+
+with:
+    W_251: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+    pure def in_assert () -> None:
+        W_262: __builtin__.Eq[__builtin__.str] = __builtin__.OrdD_str()
+        x: __builtin__.value = W_251.__fromatom__(42)
+        assert W_262.__eq__($FORMAT@[(__builtin__.str,)]("value_%s", (str(val = $FORMAT@[(__builtin__.str,)]("nested_%s", (str(val = x),))),)), "value_nested_42")
+        assert True, $FORMAT@[(__builtin__.str,)]("Error: %s", (str(val = $FORMAT@[(__builtin__.str,)]("details_%s", (str(val = x),))),))
+
+with:
+    W_281: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+    pure def in_raise () -> __builtin__.str:
+        x: ?__builtin__.value = W_281.__fromatom__(99)
+        try:
+            raise Exception(msg = $FORMAT@[(__builtin__.str,)]("Error: %s", (str(val = $FORMAT@[(__builtin__.str,)]("code_%s", (str(val = x),))),)))
+        except Exception as e:
+            return str(val = e)
+
+with:
+    W_305: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+    pure def in_while[T_64w] (W_326 : __builtin__.Ord[T_64w], W_309 : __builtin__.Number[T_64w]) -> T_64w:
+        W_320: __builtin__.Eq[__builtin__.str] = __builtin__.OrdD_str()
+        x: ?__builtin__.value = W_305.__fromatom__(0)
+        counter: T_64w = W_309.__fromatom__(0)
+        while W_320.__eq__($FORMAT@[(__builtin__.str,)]("cond_%s", (str(val = $FORMAT@[(__builtin__.str,)]("state_%s", (str(val = x),))),)), "cond_state_0") and W_326.__lt__(counter, W_309.__fromatom__(1)):
+            counter = W_309.__iadd__(counter, W_309.__fromatom__(1))
+            x = W_305.__fromatom__(1)
+        return counter
+
+with:
+    W_347: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+    pure def in_if () -> __builtin__.str:
+        W_358: __builtin__.Eq[__builtin__.str] = __builtin__.OrdD_str()
+        x: ?__builtin__.value = W_347.__fromatom__(42)
+        if W_358.__eq__($FORMAT@[(__builtin__.str,)]("check_%s", (str(val = $FORMAT@[(__builtin__.str,)]("value_%s", (str(val = x),))),)), "check_value_42"):
+            return "matched"
+        else:
+            return "not matched"
+
+with:
+    W_368: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+    pure def in_list_comp () -> __builtin__.list[__builtin__.int]:
+        W_387: __builtin__.Eq[__builtin__.str] = __builtin__.OrdD_str()
+        W_388: __builtin__.Iterable[__builtin__.range, __builtin__.int] = __builtin__.IterableD_range()
+        x: ?__builtin__.value = W_368.__fromatom__(5)
+        result: __builtin__.list[__builtin__.int] = [i for i: __builtin__.int in W_388.__iter__(range(start = W_368.__fromatom__(10), stop = None, step = None)) if W_387.__eq__($FORMAT@[(__builtin__.str,)]("item_%s", (str(val = $FORMAT@[(__builtin__.str,)]("idx_%s", (str(val = x),))),)), "item_idx_5")]
+        return result
+
+with:
+    W_402: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+    pure def complex_nested_return () -> __builtin__.str:
+        x: ?__builtin__.value = W_402.__fromatom__(100)
+        y: ?__builtin__.value = W_402.__fromatom__(200)
+        return $FORMAT@[(__builtin__.str,)]("Result: %s", (str(val = $FORMAT@[(__builtin__.str, __builtin__.str)]("Part1: %s, Part2: %s", (str(val = $FORMAT@[(__builtin__.str,)]("X=%s", (str(val = x),))), str(val = $FORMAT@[(__builtin__.str,)]("Y=%s", (str(val = y),)))))),))
+
+with:
+    W_438: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+    pure def nested_in_function_arg () -> __builtin__.str:
+        x: ?__builtin__.value = W_438.__fromatom__(7)
+        pure def process (msg : __builtin__.str) -> __builtin__.str:
+            W_444: __builtin__.Plus[__builtin__.str] = __builtin__.TimesD_str()
+            return W_444.__add__("Processed: ", msg)
+        result: __builtin__.str = process(msg = $FORMAT@[(__builtin__.str,)]("Input: %s", (str(val = $FORMAT@[(__builtin__.str,)]("data_%s", (str(val = x),))),)))
+        return result
+
+with:
+    W_466: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+    W_497: __builtin__.Hashable[__builtin__.int] = __builtin__.HashableD_int()
+    pure def in_dict_comp () -> __builtin__.dict[__builtin__.int, __builtin__.str]:
+        W_485: __builtin__.Eq[__builtin__.str] = __builtin__.OrdD_str()
+        W_486: __builtin__.Iterable[__builtin__.range, __builtin__.int] = __builtin__.IterableD_range()
+        x: __builtin__.value = W_466.__fromatom__(5)
+        result: __builtin__.dict[__builtin__.int, __builtin__.str] = {$annot@[__builtin__.Hashable[__builtin__.int], __builtin__.int](W_497, i): $FORMAT@[(__builtin__.str,)]("val_%s", (str(val = $FORMAT@[(__builtin__.str,)]("idx_%s", (str(val = x),))),)) for i: __builtin__.int in W_486.__iter__(range(start = W_466.__fromatom__(3), stop = None, step = None)) if W_485.__eq__($FORMAT@[(__builtin__.str,)]("check_%s", (str(val = $FORMAT@[(__builtin__.str,)]("num_%s", (str(val = x),))),)), "check_num_5")}
+        return result
+
+with:
+    W_513: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+    W_528: __builtin__.Ord[__builtin__.int] = __builtin__.OrdD_int()
+    W_540: __builtin__.Hashable[__builtin__.str] = __builtin__.HashableD_str()
+    pure def in_set_comp () -> __builtin__.set[__builtin__.str]:
+        W_529: __builtin__.Iterable[__builtin__.range, __builtin__.int] = __builtin__.IterableD_range()
+        x: ?__builtin__.value = W_513.__fromatom__(10)
+        result: __builtin__.set[__builtin__.str] = {$annot@[__builtin__.Hashable[__builtin__.str], __builtin__.str](W_540, $FORMAT@[(__builtin__.str, __builtin__.str)]("item_%s_%s", (str(val = $FORMAT@[(__builtin__.str,)]("type_%s", (str(val = x),))), str(val = i)))) for i: __builtin__.int in W_529.__iter__(range(start = W_513.__fromatom__(3), stop = None, step = None)) if W_528.__lt__(i, W_513.__fromatom__(2))}
+        return result
+
+with:
+    W_556: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+    pure def in_elif_condition () -> __builtin__.str:
+        W_571: __builtin__.Eq[__builtin__.str] = __builtin__.OrdD_str()
+        x: ?__builtin__.value = W_556.__fromatom__(1)
+        y: ?__builtin__.value = W_556.__fromatom__(2)
+        if W_571.__eq__($FORMAT@[(__builtin__.str,)]("test_%s", (str(val = $FORMAT@[(__builtin__.str,)]("case_%s", (str(val = x),))),)), "test_case_0"):
+            return "first"
+        elif W_571.__eq__($FORMAT@[(__builtin__.str,)]("test_%s", (str(val = $FORMAT@[(__builtin__.str,)]("case_%s", (str(val = y),))),)), "test_case_2"):
+            return "second"
+        else:
+            return "third"
+
+with:
+    W_596: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+    pure def in_nested_if () -> __builtin__.str:
+        W_607: __builtin__.Eq[__builtin__.str] = __builtin__.OrdD_str()
+        x: __builtin__.value = W_596.__fromatom__(100)
+        if W_607.__eq__($FORMAT@[(__builtin__.str,)]("outer_%s", (str(val = $FORMAT@[(__builtin__.str,)]("check_%s", (str(val = x),))),)), "outer_check_100"):
+            if W_607.__eq__($FORMAT@[(__builtin__.str,)]("inner_%s", (str(val = $FORMAT@[(__builtin__.str,)]("verify_%s", (str(val = x),))),)), "inner_verify_100"):
+                return "matched both"
+        return "no match"
+
+with:
+    W_631: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+    pure def in_try_except () -> ?__builtin__.str:
+        W_642: __builtin__.Eq[__builtin__.str] = __builtin__.OrdD_str()
+        x: __builtin__.value = W_631.__fromatom__(99)
+        try:
+            if W_642.__eq__($FORMAT@[(__builtin__.str,)]("error_%s", (str(val = $FORMAT@[(__builtin__.str,)]("code_%s", (str(val = x),))),)), "error_code_99"):
+                raise ValueError(msg = $FORMAT@[(__builtin__.str,)]("Error: %s", (str(val = $FORMAT@[(__builtin__.str,)]("details_%s", (str(val = x),))),)))
+        except ValueError as e:
+            return $FORMAT@[(__builtin__.str,)]("Caught: %s", (str(val = e),))
+        except Exception as e:
+            return "Other error"
+
+with:
+    W_672: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+    pure def in_with_statement () -> __builtin__.str:
+        x: __builtin__.int = W_672.__fromatom__(42)
+        return "with not implemented"
+
+with:
+    W_678: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+    pure def in_lambda () -> __builtin__.str:
+        x: ?__builtin__.value = W_678.__fromatom__(5)
+        fn: (?__builtin__.value) -> __builtin__.str = pure lambda (y : ?__builtin__.value): $FORMAT@[(__builtin__.str, __builtin__.str)]("result_%s_%s", (str(val = $FORMAT@[(__builtin__.str,)]("input_%s", (str(val = x),))), str(val = y)))
+        return fn(W_678.__fromatom__(10))
+
+with:
+    W_715: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+    pure def in_tuple_elements () -> (__builtin__.str, __builtin__.str, __builtin__.int):
+        x: __builtin__.int = W_715.__fromatom__(7)
+        t: (__builtin__.str, __builtin__.str, __builtin__.int) = ($FORMAT@[(__builtin__.str,)]("first_%s", (str(val = $FORMAT@[(__builtin__.str,)]("val_%s", (str(val = x),))),)), $FORMAT@[(__builtin__.str,)]("second_%s", (str(val = $FORMAT@[(__builtin__.str,)]("val_%s", (str(val = x),))),)), x)
+        return t
+
+with:
+    W_746: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+    pure def in_list_elements () -> __builtin__.list[__builtin__.str]:
+        W_756: __builtin__.Iterable[__builtin__.range, __builtin__.int] = __builtin__.IterableD_range()
+        x: ?__builtin__.value = W_746.__fromatom__(3)
+        lst: __builtin__.list[__builtin__.str] = [$FORMAT@[(__builtin__.str, __builtin__.str)]("item_%s_%s", (str(val = $FORMAT@[(__builtin__.str,)]("idx_%s", (str(val = x),))), str(val = i))) for i: __builtin__.int in W_756.__iter__(range(start = W_746.__fromatom__(3), stop = None, step = None))]
+        return lst
+
+with:
+    W_782: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+    W_803: __builtin__.Hashable[__builtin__.str] = __builtin__.HashableD_str()
+    pure def in_dict_values () -> __builtin__.dict[__builtin__.str, __builtin__.str]:
+        x: __builtin__.value = W_782.__fromatom__(8)
+        d: __builtin__.dict[__builtin__.str, __builtin__.str] = $mkDict@[__builtin__.str, __builtin__.str](W_803, {"key1": $FORMAT@[(__builtin__.str,)]("value_%s", (str(val = $FORMAT@[(__builtin__.str,)]("data_%s", (str(val = x),))),)), "key2": $FORMAT@[(__builtin__.str,)]("other_%s", (str(val = $FORMAT@[(__builtin__.str,)]("info_%s", (str(val = x),))),))})
+        return d
+
+with:
+    W_817: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+    pure def in_slice_expr () -> __builtin__.list[__builtin__.str]:
+        W_841: __builtin__.Sliceable[__builtin__.list[__builtin__.str], __builtin__.str] = __builtin__.SequenceD_list@[__builtin__.str]()
+        x: ?__builtin__.value = W_817.__fromatom__(2)
+        data: __builtin__.list[__builtin__.str] = ["a", "b", "c", "d", "e"]
+        result: __builtin__.list[__builtin__.str] = W_841.__getslice__(data, __builtin__.slice(int(val = $FORMAT@[(__builtin__.str,)]("start_%s", (str(val = $FORMAT@[(__builtin__.str,)]("pos_%s", (str(val = x),))),)), base = None), W_817.__fromatom__(4), None))
+        return result
+
+with:
+    W_854: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+    pure def in_multi_assign () -> (__builtin__.str, __builtin__.str):
+        x: __builtin__.value = W_854.__fromatom__(10)
+        a: __builtin__.str, b: __builtin__.str = ($FORMAT@[(__builtin__.str,)]("first_%s", (str(val = $FORMAT@[(__builtin__.str,)]("val_%s", (str(val = x),))),)), $FORMAT@[(__builtin__.str,)]("second_%s", (str(val = $FORMAT@[(__builtin__.str,)]("val_%s", (str(val = x),))),)))
+        return (a, b)
+
+with:
+    W_887: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+    pure def in_aug_assign () -> __builtin__.str:
+        W_899: __builtin__.Plus[__builtin__.str] = __builtin__.TimesD_str()
+        x: ?__builtin__.value = W_887.__fromatom__(5)
+        result: __builtin__.str = "initial"
+        result = W_899.__iadd__(result, $FORMAT@[(__builtin__.str,)]("_suffix_%s", (str(val = $FORMAT@[(__builtin__.str,)]("tag_%s", (str(val = x),))),)))
+        return result
+
+with:
+    W_908: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+    mut def complex_mixed_case () -> __builtin__.list[__builtin__.str]:
+        W_937: __builtin__.Eq[__builtin__.str] = __builtin__.OrdD_str()
+        W_976: __builtin__.Iterable[__builtin__.range, __builtin__.int] = __builtin__.IterableD_range()
+        W_1032: __builtin__.Sequence[__builtin__.list[__builtin__.str], __builtin__.str] = __builtin__.SequenceD_list@[__builtin__.str]()
+        x: __builtin__.int = W_908.__fromatom__(1)
+        y: ?__builtin__.value = W_908.__fromatom__(2)
+        z: __builtin__.value = W_908.__fromatom__(3)
+        result: __builtin__.list[__builtin__.str] = []
+        for i: __builtin__.int in W_976.__iter__(range(start = W_908.__fromatom__(3), stop = None, step = None)):
+            if W_937.__eq__($FORMAT@[(__builtin__.str,)]("check_%s", (str(val = $FORMAT@[(__builtin__.str,)]("iter_%s", (str(val = i),))),)), "check_iter_0"):
+                W_1032.append(result, $FORMAT@[(__builtin__.str,)]("Match: %s", (str(val = $FORMAT@[(__builtin__.str,)]("found_%s", (str(val = $FORMAT@[(__builtin__.str,)]("val_%s", (str(val = y),))),))),)))
+            else:
+                try:
+                    assert W_937.__eq__($FORMAT@[(__builtin__.str,)]("verify_%s", (str(val = $FORMAT@[(__builtin__.str,)]("state_%s", (str(val = z),))),)), "verify_state_3"), $FORMAT@[(__builtin__.str,)]("Assert: %s", (str(val = $FORMAT@[(__builtin__.str,)]("error_%s", (str(val = z),))),))
+                    W_1032.append(result, "OK")
+                except:
+                    W_1032.append(result, "Failed")
+        return result
