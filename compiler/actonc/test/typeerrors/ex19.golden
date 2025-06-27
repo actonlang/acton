@@ -6,14 +6,14 @@ Building file test/typeerrors/ex19.act using temporary scratch directory
    1 | def f(x,y):
      :     ^ 
      :     |- 
+     :        
      :     `- 
      :
    7 | a = f(3,"hej")
-     :     ^-^-------
-     :     | `- The type of the indicated expression (which we call t0) must implement __builtin__.Number
-     :     |    
-     :     |- f has had its polymorphic type [A(Plus, Ord)] => (x: A, y: A) -> A instantiated to (x: t1, y: t1) -> t1, so t1 must implement __builtin__.Ord
-     :     |- f has had its polymorphic type [A(Plus, Ord)] => (x: A, y: A) -> A instantiated to (x: t1, y: t1) -> t1, so t1 must implement __builtin__.Plus
-     :     |- Type incompatibility between definition of and call of f (t0 must be a subtype of t1)
-     :     `- Type incompatibility between definition of and call of f (__builtin__.str must be a subclass of t1)
+     :     ^---------
+     :     |--- Type incompatibility between definition of and call of f (__builtin__.str must be a subclass of t0)
+     :     |--- Type incompatibility between definition of and call of f (t1 must be a subtype of t0)
+     :     |--- f has had its polymorphic type [A(Plus, Ord)] => (x: A, y: A) -> A instantiated to (x: t0, y: t0) -> t0, so t0 must implement __builtin__.Plus
+     :     `--- f has had its polymorphic type [A(Plus, Ord)] => (x: A, y: A) -> A instantiated to (x: t0, y: t0) -> t0, so t0 must implement __builtin__.Ord
+     :       `- The type of the indicated expression (which we call t1) must implement __builtin__.Number
 -----+

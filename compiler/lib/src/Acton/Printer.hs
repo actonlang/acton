@@ -499,7 +499,7 @@ instance Pretty Kind where
     pretty PRow                     = text "positional row"
     pretty KRow                     = text "keyword row"
     pretty (KFun ks k)              = brackets (commaSep pretty ks) <+> text "=>" <+> pretty k
-    pretty (KVar v)                 = pretty v
+    pretty (KUni i)                 = text "K_" <> pretty i
     pretty KWild                    = text "_"
 
 instance Pretty Constraint where

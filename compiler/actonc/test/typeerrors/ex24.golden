@@ -1,12 +1,9 @@
 Building file test/typeerrors/ex24.act using temporary scratch directory
   Compiling ex24.act for development
 [error]: Type unification error
-     +--> ex24.act@4:9-4:14
+     +--> ex24.act@5:13-5:16
      |
-   4 |     a : ?str = ""
-     :         ^---- 
-     :         `- Second type appears here
    5 |     b: dict[str, str] = {}
      :             ^-- 
-     :             `- First type appears here
+     :             `- Incompatible types __builtin__.str and ?T_12
 -----+

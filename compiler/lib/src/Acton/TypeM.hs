@@ -29,16 +29,14 @@ import Pretty
 
 -- Type inference monad ------------------------------------------------------------------
 
-type TVarMap                            = Map TVar Type
-
 data TypeState                          = TypeState {
                                                 nextint         :: Int,
                                                 effectstack     :: [(TFX,Type)],
                                                 deferred        :: Constraints,
-                                                currsubst       :: TVarMap
+                                                unisubst        :: Map TUni Type
                                           }
 
-initTypeState s                         = TypeState { nextint = 1, effectstack = [], deferred = [], currsubst = s }
+initTypeState s                         = TypeState { nextint = 1, effectstack = [], deferred = [], unisubst = s }
 
 type TypeM a                            = ExceptT TypeError (State TypeState) a
 
@@ -78,16 +76,13 @@ defer cs                                = lift $ state $ \st -> ((), st{ deferre
 collectDeferred                         :: TypeM Constraints
 collectDeferred                         = lift $ state $ \st -> (deferred st, st{ deferred = [] })
 
-substitute                              :: TVar -> Type -> TypeM ()
-substitute tv t                         = lift $
-                                          --trace ("  #substitute " ++ prstr tv ++ " ~ " ++ prstr t) $
-                                          state $ \st -> ((), st{ currsubst = Map.insert tv t (currsubst st)})
+usubstitute                             :: TUni -> Type -> TypeM ()
+usubstitute uv t                        = lift $
+                                          --trace ("  #usubstitute " ++ prstr uv ++ " ~ " ++ prstr t) $
+                                          state $ \st -> ((), st{ unisubst = Map.insert uv t (unisubst st)})
 
-getSubstitution                         :: TypeM (Map TVar Type)
-getSubstitution                         = lift $ state $ \st -> (currsubst st, st)
-
-setSubstitution                         :: Map TVar Type -> TypeM ()
-setSubstitution s                       = lift $ state $ \st -> ((), st{ currsubst = s })
+usubstitution                           :: TypeM (Map TUni Type)
+usubstitution                           = lift $ state $ \st -> (unisubst st, st)
 
 
 -- Name generation ------------------------------------------------------------------------------------------------------------------
@@ -240,7 +235,7 @@ typeReport (NoRed c) filename src
                                           []
 
 typeReport (NoSolve mbt vs cs) filename src         =
-    let header = trace (show (head cs)) $ case length cs of
+    let header = case length cs of
                     0 -> "Unable to give good error message: please report example"
                     1 -> "Cannot satisfy the following constraint:"
                     _ -> "Cannot satisfy the following simultaneous constraints for the unknown " ++

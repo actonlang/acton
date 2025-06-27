@@ -40,9 +40,9 @@ typeX env0                      = setX env0 TypeX{ posnames = [], context = CtxT
 instance Pretty TypeX where
     pretty _                    = empty
 
-instance Subst TypeX where
-    msubst x                    = return x
-    tyfree x                    = []
+instance USubst TypeX where
+    usubst x                    = return x
+    ufree x                     = []
 
 
 posdefine te env                = modX (define te env) $ \x -> x{ posnames = dom te ++ posnames x }
@@ -88,8 +88,8 @@ instance (WellFormed a) => WellFormed [a] where
     wf env                  = concatMap (wf env)
 
 instance WellFormed TCon where
-    wf env (TC n ts)        = wf env ts ++ subst s [ constr u (tVar v) | Quant v us <- q, u <- us ]
-      where q               = case findQName  n env of
+    wf env (TC n ts)        = wf env ts ++ [ constr (subst s u) (subst s $ tVar v) | Quant v us <- q, u <- us ]
+      where q               = case findQName n env of
                                 NAct q p k te _ -> q
                                 NClass q us te _ -> q
                                 NProto q us te _ -> q
@@ -140,14 +140,14 @@ instWitness env p0 wit      = case wit of
                                     (cs,tvs) <- instQBinds env q
                                     let s = (tvSelf,t) : qbound q `zip` tvs
                                     unifyM (DfltInfo (loc p0) 22 Nothing []) (tcargs p0) (tcargs $ subst s p)
-                                    t <- msubst (subst s t)
-                                    cs <- msubst cs
+                                    t <- usubst (subst s t)
+                                    cs <- usubst cs
                                     return (cs, t, wexpr ws (eCall (tApp (eQVar w) tvs) $ wvars cs))
                                  WInst q t p w ws -> do
                                     (cs,tvs) <- instQBinds env q
                                     let s = (tvSelf,t) : qbound q `zip` tvs
                                     unifyM (DfltInfo (loc p0) 23 Nothing []) (tcargs p0) (tcargs $ subst s p)
-                                    t <- msubst (subst s t)
+                                    t <- usubst (subst s t)
                                     return (cs, t, wexpr ws (eQVar w))
 
 instQuals                   :: EnvF x -> QBinds -> [Type] -> TypeM Constraints

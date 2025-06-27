@@ -1,15 +1,12 @@
 
-W_73: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
-
-W_75: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
-
 proc def force_cps (C_cont : proc(__builtin__.int) -> $R, arg : __builtin__.int) -> $R:
     return $R_CONTc@[__builtin__.int](C_cont, arg)
 
 proc def compute (C_cont : proc(__builtin__.int) -> $R, aa : __builtin__.int) -> $R:
     aa: $Box[__builtin__.int] = $Box@[__builtin__.int](aa)
+    W_6: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
     W_14: __builtin__.Plus[__builtin__.int] = __builtin__.IntegralD_int()
-    xx: $Box[__builtin__.int] = $Box@[__builtin__.int](W_73.__fromatom__(1))
+    xx: $Box[__builtin__.int] = $Box@[__builtin__.int](W_6.__fromatom__(1))
     proc def C_3cont (C_4res : None) -> $R:
         N_1tmp: __builtin__.int = W_14.__add__(xx.val, aa.val)
         return $R_CONTc@[__builtin__.int](C_cont, N_1tmp)
@@ -23,8 +20,8 @@ proc def compute (C_cont : proc(__builtin__.int) -> $R, aa : __builtin__.int) ->
                     aa.val = W_14.__iadd__(aa.val, C_2pre)
                     $DROP_C()
                     return $R_CONTc@[None](C_3cont, None)
-                return force_cps(C_9cont, W_73.__fromatom__(1))
-            return force_cps(C_7cont, W_73.__fromatom__(1))
+                return force_cps(C_9cont, W_6.__fromatom__(1))
+            return force_cps(C_7cont, W_6.__fromatom__(1))
         else:
             N_x: __builtin__.BaseException = $POP_C()
             if isinstance(N_x, ValueError):
@@ -33,6 +30,10 @@ proc def compute (C_cont : proc(__builtin__.int) -> $R, aa : __builtin__.int) ->
                 $RAISE(N_x)
             return $R_CONTc@[None](C_3cont, None)
     return $PUSH_Cc(C_5try)
+
+W_73: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+W_75: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
 
 # recursive group:
 class main ($Actor, __builtin__.value):
