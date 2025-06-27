@@ -1,0 +1,61 @@
+
+W_4: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+pure def simple_nested () -> __builtin__.str:
+    x: ?__builtin__.value = W_4.__fromatom__(42)
+    N_fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"inner %s\"", (str(x),))
+    N_1fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"outer %s\"", (str(N_fmt),))
+    s: __builtin__.str = N_1fmt
+    return s
+
+W_22: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+pure def multi_level () -> __builtin__.str:
+    x: ?__builtin__.value = W_22.__fromatom__(1)
+    N_2fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"L3 %s\"", (str(x),))
+    N_3fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"L2 %s\"", (str(N_2fmt),))
+    N_4fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"L1 %s\"", (str(N_3fmt),))
+    s: __builtin__.str = N_4fmt
+    return s
+
+pure def with_format_spec () -> __builtin__.str:
+    W_45: __builtin__.RealFloat[__builtin__.float] = __builtin__.RealFloatD_float()
+    x: __builtin__.float = W_45.__fromatom__(3.14159)
+    N_5fmt: __builtin__.str = $FORMAT@[(__builtin__.float,)]("\"PI = %.2f\"", (x,))
+    N_6fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"Result: %s\"", (str(N_5fmt),))
+    s: __builtin__.str = N_6fmt
+    return s
+
+W_59: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+pure def multiple_args () -> __builtin__.str:
+    a: ?__builtin__.value = W_59.__fromatom__(10)
+    b: ?__builtin__.value = W_59.__fromatom__(20)
+    N_7fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"A=%s\"", (str(a),))
+    N_8fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"B=%s\"", (str(b),))
+    N_9fmt: __builtin__.str = $FORMAT@[(__builtin__.str, __builtin__.str)]("\"Outer %s and %s\"", (str(N_7fmt), str(N_8fmt)))
+    s: __builtin__.str = N_9fmt
+    return s
+
+W_92: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+pure def mixed_quotes () -> (__builtin__.str, __builtin__.str):
+    x: __builtin__.value = W_92.__fromatom__(42)
+    N_10fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"inner %s\"", (str(x),))
+    N_11fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"outer %s\"", (str(N_10fmt),))
+    s1: __builtin__.str = N_11fmt
+    N_12fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"inner %s\"", (str(x),))
+    N_13fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"outer %s\"", (str(N_12fmt),))
+    s2: __builtin__.str = N_13fmt
+    N_14tmp: (__builtin__.str, __builtin__.str) = (s1, s2)
+    return N_14tmp
+
+W_124: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+pure def in_expression () -> __builtin__.str:
+    W_140: __builtin__.Plus[__builtin__.str] = __builtin__.TimesD_str()
+    x: ?__builtin__.value = W_124.__fromatom__(5)
+    N_15fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"nested %s\"", (str(x),))
+    N_16fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"middle %s\"", (str(N_15fmt),))
+    result: __builtin__.str = W_140.__add__(W_140.__add__("\"prefix \"", N_16fmt), "\" suffix\"")
+    return result

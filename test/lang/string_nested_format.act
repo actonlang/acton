@@ -1,0 +1,43 @@
+# Test that nested format strings are properly extracted to temporary variables
+# This prevents generation of invalid C code with nested $FORMAT macros
+
+actor main(env):
+    # Test nested %-operator formats
+    name = "Alice"
+    age = 30
+    
+    # Single level nesting
+    msg1 = "User: %s" % ("Name: %s" % name)
+    if msg1 != "User: Name: Alice":
+        print("FAIL: msg1 =", msg1)
+        env.exit(1)
+    
+    # Multiple nested formats in same expression
+    msg2 = "Info: %s, %s" % ("Name: %s" % name, "Age: %d" % age)
+    if msg2 != "Info: Name: Alice, Age: 30":
+        print("FAIL: msg2 =", msg2)
+        env.exit(1)
+    
+    # Deep nesting (3 levels)
+    msg3 = "L1: %s" % ("L2: %s" % ("L3: %s" % name))
+    if msg3 != "L1: L2: L3: Alice":
+        print("FAIL: msg3 =", msg3)
+        env.exit(1)
+    
+    # Nested formats in function arguments
+    def check_msg(msg):
+        return msg == "Result: Value: 42"
+    
+    if not check_msg("Result: %s" % ("Value: %d" % 42)):
+        print("FAIL: nested format in function arg")
+        env.exit(1)
+    
+    # Nested formats with f-string syntax
+    inner = "{name}"
+    outer = "User: {inner}"
+    if outer != "User: Alice":
+        print("FAIL: f-string nesting")
+        env.exit(1)
+    
+    print("OK")
+    env.exit(0)

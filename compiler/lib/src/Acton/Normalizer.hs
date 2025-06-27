@@ -279,20 +279,22 @@ instance Norm Stmt where
     norm' env s@(Break l)           = return $ exitContext env s
     norm' env s@(Continue l)        = return $ exitContext env s
     norm' env (Return l Nothing)    = return $ exitContext env (Return l $ Just eNone)
-    norm' env (Return l (Just e))   = do e <- norm env e
-                                         case isVal e of
-                                             True -> return $ retContext e
+    norm' env (Return l (Just e))   = do
+                                         (stmts, e') <- normWithFormats env e
+                                         case isVal e' of
+                                             True -> return $ stmts ++ retContext e'
                                              False -> do
                                                  n <- newName "tmp"
-                                                 return $ sAssign (pVar n $ conv t) e : retContext (eVar n)
+                                                 return $ stmts ++ [sAssign (pVar n $ conv t) e'] ++ retContext (eVar n)
       where retContext e            = exitContext env $ Return l $ Just e
             t                       = typeOf env e
 
-    norm' env (Assign l ps e)       = do e' <- norm env e
+    norm' env (Assign l ps e)       = do
+                                         (formatStmts, e') <- normWithFormats env e
                                          (ps1,stmts) <- unzip <$> mapM (normPat env) ps
                                          ps2 <- norm env ps1
                                          let p'@(PVar _ n _) : ps' = ps2
-                                         return $ Assign l [p'] e' : [ Assign l [p] (eVar n) | p <- ps' ] ++ concat stmts
+                                         return $ formatStmts ++ [Assign l [p'] e'] ++ [ Assign l [p] (eVar n) | p <- ps' ] ++ concat stmts
       where t                       = typeOf env e
     norm' env s@(For l p e b els)   = do i <- newName "iter"
                                          v <- newName "val"
@@ -329,6 +331,17 @@ instance Norm Stmt where
                                          return undefined
       where env1                    = define (envOf i) env
     norm' env (With l [] b)         = norm env b
+    norm' env (Expr l e)            = do
+                                         (stmts, e') <- normWithFormats env e
+                                         return $ stmts ++ [Expr l e']
+    norm' env (MutAssign l t e)     = do
+                                         t' <- norm env t
+                                         (stmts, e') <- normWithFormats env e
+                                         return $ stmts ++ [MutAssign l t' e']
+    norm' env (VarAssign l ps e)    = do
+                                         ps' <- norm env ps
+                                         (stmts, e') <- normWithFormats env e
+                                         return $ stmts ++ [VarAssign l ps' e']
     norm' env s                     = do s' <- norm env s
                                          return [s']
 
@@ -388,7 +401,7 @@ instance Norm Expr where
     norm env (Ellipsis l)           = return $ Ellipsis l
     norm env (Strings l ss)         = return $ Strings l (catStrings ss)
     norm env (BStrings l ss)        = return $ BStrings l (catStrings ss)
-    norm env (Call l e p k)         = Call l <$> norm env e <*> norm env (joinArg p k) <*> pure KwdNil
+    norm env call@(Call l e p k)    = normCall env call
     norm env (TApp l e ts)          = TApp l <$> normInst env ts e <*> pure (conv ts)
     norm env (Dot l (Var l' x) n)
       | NClass{} <- findQName x env = pure $ Dot l (Var l' x) n
@@ -436,6 +449,48 @@ eta (Lambda _ p KwdNIL (Call _ e p' KwdNil) fx)
     eq1 PosNIL PosNil                   = True
     eq1 _ _                             = False
 eta e                               = e
+
+-- Handle Call expressions normally
+normCall                            :: NormEnv -> Expr -> NormM Expr
+normCall env (Call l e p k)         = Call l <$> norm env e <*> norm env (joinArg p k) <*> pure KwdNil
+
+-- Extract nested primFORMAT calls from an expression into statements
+-- Returns (statements to prepend, simplified expression)
+extractFormats                      :: NormEnv -> Expr -> NormM ([Stmt], Expr)
+extractFormats env e@(Call l f@(TApp _ (Var _ qn) _) p k)
+  | qn == primFORMAT                = do
+                                      -- First extract formats from the arguments
+                                      (stmts, p') <- extractFormatsFromArgs env p
+                                      -- Create a temp variable for this primFORMAT call
+                                      tmp <- newName "fmt"
+                                      let t = typeOf env e
+                                          finalCall = Call l f p' k
+                                      return (stmts ++ [sAssign (pVar tmp $ conv t) finalCall], eVar tmp)
+extractFormats env (Call l f p k)   = do
+                                      -- For non-primFORMAT calls, just extract from arguments
+                                      (stmts, p') <- extractFormatsFromArgs env p
+                                      return (stmts, Call l f p' k)
+extractFormats env (Tuple l ps ks)  = do -- Handle tuples - extract from all elements
+                                      (stmts, ps') <- extractFormatsFromArgs env ps
+                                      return (stmts, Tuple l ps' ks)
+extractFormats env e                = return ([], e)
+
+-- Extract formats from arguments
+extractFormatsFromArgs              :: NormEnv -> PosArg -> NormM ([Stmt], PosArg)
+extractFormatsFromArgs env PosNil   = return ([], PosNil)
+extractFormatsFromArgs env (PosArg e rest) = do
+                                             (stmts1, e') <- extractFormats env e
+                                             (stmts2, rest') <- extractFormatsFromArgs env rest
+                                             return (stmts1 ++ stmts2, PosArg e' rest')
+extractFormatsFromArgs env (PosStar e) = do
+                                         (stmts, e') <- extractFormats env e
+                                         return (stmts, PosStar e')
+
+-- Normalize an expression and extract any nested primFORMAT calls
+normWithFormats                     :: NormEnv -> Expr -> NormM ([Stmt], Expr)
+normWithFormats env e               = do
+                                      e' <- norm env e
+                                      extractFormats env e'
 
 nargs (TRow _ _ _ _ r)              = 1 + nargs r
 nargs (TStar _ _ _)                 = 1

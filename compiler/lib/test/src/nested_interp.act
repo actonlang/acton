@@ -1,0 +1,39 @@
+# Test nested interpolated strings for codegen
+
+def simple_nested():
+    x = 42
+    # Simple case: one level of nesting
+    s = "outer {"inner {x}"}"
+    return s
+
+def multi_level():
+    x = 1
+    # Multiple levels of nesting
+    s = "L1 {"L2 {"L3 {x}"}"}"
+    return s
+
+def with_format_spec():
+    x = 3.14159
+    # Nested with format specifiers
+    s = "Result: {"PI = {x:.2f}"}"
+    return s
+
+def multiple_args():
+    a = 10
+    b = 20
+    # Multiple interpolations at each level
+    s = "Outer {"A={a}"} and {"B={b}"}"
+    return s
+
+def mixed_quotes():
+    x = 42
+    # Mixed quote styles
+    s1 = "outer {'inner {x}'}"
+    s2 = 'outer {"inner {x}"}'
+    return (s1, s2)
+
+def in_expression():
+    x = 5
+    # Nested interpolation in larger expression
+    result = "prefix " + "middle {"nested {x}"}" + " suffix"
+    return result
