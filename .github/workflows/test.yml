@@ -529,6 +529,12 @@ jobs:
     with:
       repo_url: "orchestron-orchestrator/orchestron"
 
+  test-app-netcli:
+    needs: build-debs
+    uses: "./.github/workflows/test-app.yml"
+    with:
+      repo_url: "orchestron-orchestrator/netcli"
+
   test-app-snappy:
     needs: build-debs
     uses: "./.github/workflows/test-app.yml"
