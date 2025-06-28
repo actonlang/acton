@@ -1,0 +1,3 @@
+actor Test(first, self):
+    def test_method():
+        pass

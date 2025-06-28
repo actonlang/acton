@@ -1,0 +1,11 @@
+Building file test/typeerrors/actor_self_reserved_variable.act using temporary scratch directory
+  Compiling actor_self_reserved_variable.act for development
+[error]: 'self' cannot be used as a parameter name in actors.
+     +--> actor_self_reserved_variable.act@2:9-2:13
+     |
+   2 |     var self = 42
+     :         ^--- 
+     :         `- 'self' cannot be used as a parameter name in actors.
+     :
+     | Hint: In actors, 'self' is reserved and implicitly available as a reference to the own actor that can be passed to other actors.
+-----+

@@ -53,20 +53,21 @@ parseDiagnosticFromBundle filename src bundle =
         -- Create position span
         position = Position (line, col) (line, col + 1) filename
 
-        -- Check if this is a type variable name error and add hint
+        -- Check if this is a custom error and add appropriate hint
         (hints, markerMsg) = case firstError of
-                  ME.FancyError _ errs -> 
-                    case findTypeVarError (S.toList errs) of
-                      Just name -> ([Hint ("Single upper case character (optionally followed by digits) are reserved for type variables. Use a longer name.")],
-                                   "invalid name '" ++ name ++ "'")
-                      Nothing -> ([], msg)
+                  ME.FancyError _ errs ->
+                    case findCustomError (S.toList errs) of
+                      Just (TypeVariableNameError name) ->
+                          ([Hint ("Single upper case character (optionally followed by digits) are reserved for type variables. Use a longer name.")],
+                           "invalid name '" ++ name ++ "'")
+                      _ -> ([], msg)
                   _ -> ([], msg)
-        
-        findTypeVarError :: [ErrorFancy CustomParseError] -> Maybe String
-        findTypeVarError [] = Nothing
-        findTypeVarError (ErrorCustom (TypeVariableNameError name) : _) = Just name
-        findTypeVarError (_ : rest) = findTypeVarError rest
-        
+
+        findCustomError :: [ErrorFancy CustomParseError] -> Maybe CustomParseError
+        findCustomError [] = Nothing
+        findCustomError (ErrorCustom err : _) = Just err
+        findCustomError (_ : rest) = findCustomError rest
+
         -- Create the report
         report = Err (Just "Parse error") msg [(position, This markerMsg)] hints
         diagnostic = addReport mempty report
