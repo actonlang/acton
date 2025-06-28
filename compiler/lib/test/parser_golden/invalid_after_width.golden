@@ -1,0 +1,7 @@
+ERROR: [error Syntax error]: Invalid character '@' in format specifier
+     ╭──▶ test@1:14-1:14
+     │
+   1 │ "value: {x:10@}"
+     •               
+     •              ╰╸ Invalid character '@' in format specifier
+─────╯

@@ -1,0 +1,7 @@
+ERROR: [error Syntax error]: Empty expression in string interpolation
+     ╭──▶ test@1:20-1:20
+     │
+   1 │ "Empty expression {}"
+     •                     
+     •                    ╰╸ Empty expression in string interpolation
+─────╯

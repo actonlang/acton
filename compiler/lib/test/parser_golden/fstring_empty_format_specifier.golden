@@ -1,0 +1,7 @@
+ERROR: [error Syntax error]: Empty format specifier after ':'
+     ╭──▶ test@1:24-1:24
+     │
+   1 │ f"Empty format spec {x:}"
+     •                         
+     •                        ╰╸ Empty format specifier after ':'
+─────╯

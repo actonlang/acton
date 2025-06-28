@@ -1,0 +1,7 @@
+ERROR: [error Syntax error]: missing closing '}' for expression
+     ╭──▶ test@2:9-2:10
+     │
+   2 │ Line 2 {x
+     •         ┬
+     •         ╰╸ missing closing '}' for expression
+─────╯

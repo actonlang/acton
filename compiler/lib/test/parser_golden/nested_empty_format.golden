@@ -1,0 +1,7 @@
+ERROR: [error Syntax error]: Empty format specifier after ':'
+     ╭──▶ test@1:19-1:19
+     │
+   1 │ "outer {"inner {x:}"}"
+     •                    
+     •                   ╰╸ Empty format specifier after ':'
+─────╯

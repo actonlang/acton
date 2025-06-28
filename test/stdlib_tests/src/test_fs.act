@@ -105,9 +105,9 @@ def _test_fs_glob_complex_patterns():
     testing.assertTrue(glob("*/*.[ch]", "dir/file.h"))
     testing.assertFalse(glob("*/*.[ch]", "dir/file.o"))
 
-    testing.assertTrue(glob("*.{c,h}", "file.c"))
-    testing.assertTrue(glob("*.{c,h}", "file.h"))
-    testing.assertFalse(glob("*.{c,h}", "file.o"))
+    testing.assertTrue(glob("*.{{c,h}}", "file.c"))
+    testing.assertTrue(glob("*.{{c,h}}", "file.h"))
+    testing.assertFalse(glob("*.{{c,h}}", "file.o"))
 
     testing.assertTrue(glob("foo?bar*baz", "foo1barXYZbaz"))
     testing.assertFalse(glob("foo?bar*baz", "foobarXYZbaz"))

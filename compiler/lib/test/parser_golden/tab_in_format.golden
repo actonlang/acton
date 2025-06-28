@@ -1,0 +1,7 @@
+ERROR: [error Syntax error]: Tab character not allowed in format specifier
+     ╭──▶ test@1:12-1:17
+     │
+   1 │ "value: {x:    10}"
+     •            ┬───────
+     •            ╰╸ Tab character not allowed in format specifier
+─────╯

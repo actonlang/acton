@@ -1,8 +1,8 @@
 Building file test/syntaxerrors/err11.act using temporary scratch directory
-[error Syntax error]: unescaped newline in single-quoted string literal
-     +--> err11.act@3:19-3:1
+[error Syntax error]: missing closing "
+     +--> err11.act@3:18-3:19
      |
    3 |     msg = "Hello, 
-     :  
-     :                   `- unescaped newline in single-quoted string literal
+     :                  ^
+     :                  `- missing closing "
 -----+

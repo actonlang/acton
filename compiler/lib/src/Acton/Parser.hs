@@ -13,15 +13,16 @@
 
 {-# LANGUAGE FlexibleInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
-module Acton.Parser 
+module Acton.Parser
   ( module Acton.Parser
   , CustomParseError(..)
   ) where
 
 import qualified Control.Monad.Trans.State.Strict as St
 import qualified Control.Exception
-import Control.Monad (void)
+import Control.Monad (void, when)
 import Data.List (isPrefixOf)
+import Data.Maybe (fromMaybe)
 import Data.Void
 import Data.Char
 import qualified Data.List.NonEmpty as N
@@ -341,7 +342,8 @@ symbol str = lexeme (string str)
 newline1 :: Parser [S.Stmt]
 newline1 = const [] <$> (eol *> sc2)
 
---- Strings in their many variants -----------------------------------------------
+
+--- START OF STRING PARSING --------------------------------------------------------
 
 {-
 
@@ -350,18 +352,18 @@ the transformations in Acton.Normalize
 
 Literal syntax is as in subsections 2.4.1 and 2.4.2 in the Python Language Reference, version 3.10.4,
 except that only the following prefixes are allowed:
-- no prefix: plain string literal
+- no prefix: string literal with interpolation
+- prefix 'f': string literal with interpolation. the f prefix is optional and
+  has no effect, it is supported as a convenience for users coming from Python
+- prefix 'r': raw string literal with no interpolation
 - prefix 'b': plain bytes literal
-- prefix 'r': raw string literal
-- prefix 'rb': raw bytes literals.
+- prefix 'rb': raw bytes literals
 
 Thus we disallow
 - upper case versions of the above prefixes (for no particular reason other than the opinion that it is not an
   unreasonable burden on the programmer to have to stick to lower case prefixes). For similar reasons we disallow
   prefix 'br' and thus just form a raw literal by prefixing a plain literal with 'r'.)
 - the 'u' prefix which only exists in Python for legacy reasons.
-- the 'f' prefix for formatted string literals; a version of these is instead supported in Acton
-  using the % operator in the print statement.
 
 Prefix sequences are also as in subsection 2.4.1 with the following exceptions
 - unrecognized escape sequences (like \p or \z or any other sequence not listed in the table of 2.4.1)
@@ -377,372 +379,435 @@ Prefix sequences are also as in subsection 2.4.1 with the following exceptions
 
 strings :: Parser S.Expr
 strings = addLoc $
-       S.BStrings NoLoc . concat<$> some bytesLiteral
+       bytesLiteral
        <|>
-       S.Strings NoLoc . concat <$> some stringLiteral
+       rawStringLiteral
        <|>
-       fstringLiteral
+       fstringLiteral  -- Explicit f"..." syntax, with interpolation
+       <|>
+       stringLiteral -- "" strings - all strings support interpolation
 
-bytesLiteral, stringLiteral :: Parser [String]
-bytesLiteral =  plainbytesLiteral <|> rawbytesLiteral <?> "bytes literal"
-stringLiteral = plainstrLiteral <|> rawstrLiteral <?> "string literal"
+-- We use this `some` construct because Acton allows multiple adjacent strings
+-- to be effectively concatenated together without specifying any explicit
+-- operator. This is allowed in Python, and we have inherited this behavior.
+-- It's weird though, so we might want to change it in the future.
+-- For example, in Acton / Python, the following is valid:
+--   s = "Hello, " "world!"
+-- This will be parsed as a single string literal, not two separate ones.
 
--- | Parts of an f-string expression
-data FStringPart
+bytesLiteral :: Parser S.Expr
+bytesLiteral = S.BStrings NoLoc . concat <$> some bytesLiteralCombo
+
+-- | b"" and rb""
+bytesLiteralCombo :: Parser [String]
+bytesLiteralCombo = plainbytesLiteral <|> rawbytesLiteral <?> "bytes literal"
+
+-- | Raw string literals (r"...") that don't support interpolation
+rawStringLiteral :: Parser S.Expr
+rawStringLiteral = S.Strings NoLoc . concat <$> some rawstrLiteral <?> "string literal"
+
+-- Explicit f-string syntax (f"...") - kept for compatibility
+-- Note: Regular strings ("...") also support interpolation via the unified parser
+fstringLiteral :: Parser S.Expr
+fstringLiteral = concatStringLiterals singleFstring <?> "string literal"
+  where
+    -- Parse a single f-string
+    singleFstring =
+         try (parseInterpolatedString "f\"\"\"" "\"\"\"" (parseTextPart "\"" True True))
+      <|> try (parseInterpolatedString "f'''" "'''" (parseTextPart "'" True True))
+      <|> try (parseInterpolatedString "f\"" "\"" (parseTextPart "\"" False False))
+      <|> parseInterpolatedString "f'" "'" (parseTextPart "'" False False)
+
+-- | Normal strings in Acton support interpolation
+-- This means literal { and } must be escaped as {{ and }}
+stringLiteral :: Parser S.Expr
+stringLiteral = concatStringLiterals singleInterpolatedString <?> "string literal"
+  where
+    -- Parse a single string
+    singleInterpolatedString =
+         try (parseInterpolatedString "\"\"\"" "\"\"\"" (parseTextPart "\"" True True))
+      <|> try (parseInterpolatedString "'''" "'''" (parseTextPart "'" True True))
+      <|> try (parseInterpolatedString "\"" "\"" (parseTextPart "\"" False False))
+      <|> parseInterpolatedString "'" "'" (parseTextPart "'" False False)
+
+-- | Helper function to concatenate multiple adjacent string literals
+-- Supports both regular strings and f-strings with the same logic
+concatStringLiterals :: Parser S.Expr -> Parser S.Expr
+concatStringLiterals singleStringParser = do
+    -- Parse one or more consecutive string literals which are concatenated into a single string
+    -- like: a = 'foo' 'bar' or a = f'foo' f'bar'
+    parts <- some singleStringParser
+    -- Combine all parts into a single expression
+    case parts of
+        [single] -> return single  -- Single string, return as-is
+        multiple -> do
+            -- Multiple strings need to be concatenated
+            -- We need to combine all the format strings and collect all expressions
+            let (formatParts, exprLists) = unzip $ map extractParts multiple
+                combinedFormat = concat formatParts
+                combinedExprs = concat exprLists
+
+            if null combinedExprs
+                then return $ S.Strings NoLoc [combinedFormat]
+                else return $ S.BinOp NoLoc
+                               (S.Strings NoLoc [combinedFormat])
+                               S.Mod
+                               (if length combinedExprs == 1
+                                 then head combinedExprs
+                                 else S.Tuple NoLoc (foldr S.PosArg S.PosNil combinedExprs) S.KwdNil)
+  where
+    -- Extract format string and expressions from each part
+    extractParts :: S.Expr -> (String, [S.Expr])
+    extractParts (S.Strings _ ss) = (concat ss, [])
+    extractParts (S.BinOp _ (S.Strings _ [fmt]) S.Mod expr) =
+        case expr of
+            S.Tuple _ args _ -> (fmt, tupleToList args)
+            e -> (fmt, [e])
+    extractParts _ = ("", [])  -- Should not happen
+
+    -- Convert tuple arguments to list
+    tupleToList :: S.PosArg -> [S.Expr]
+    tupleToList S.PosNil = []
+    tupleToList (S.PosArg e rest) = e : tupleToList rest
+
+
+-- | Parts of an interpolated string
+data StringPart
   = TextPart String      -- ^ Regular text content
   | ExprPart S.Expr String  -- ^ Expression with format specifier
   deriving Show
 
--- | Parse an f-string literal expression with various quoting styles
-fstringLiteral :: Parser S.Expr
-fstringLiteral = (try tripleQuotedFstring <|> try tripleSingleQuotedFstring <|> try quotedFstring <|> try singleQuotedFstring) <?> "f-string literal"
-  where
-    -- | Convert f-string parts to a format string with specifiers
-    buildFormatString :: [FStringPart] -> String
-    buildFormatString [] = ""
-    buildFormatString (TextPart s : rest) = s ++ buildFormatString rest
-    buildFormatString (ExprPart _ fmt : rest) = "%" ++ fmt ++ buildFormatString rest
+-- | Convert f-string parts to a format string with specifiers
+buildFormatString :: [StringPart] -> String
+buildFormatString [] = ""
+buildFormatString (TextPart s : rest) = s ++ buildFormatString rest
+buildFormatString (ExprPart _ fmt : rest) = "%" ++ fmt ++ buildFormatString rest
 
-    -- | Generic f-string parser for all variants of f-strings, i.e.
-    -- | - one double quote f"..."
-    -- | - one single quote f'...'
-    -- | - triple double quote f"""..."""
-    -- | - triple single quote f'''...'''
-    parseFstring :: String -> String -> Parser FStringPart -> Parser S.Expr
-    parseFstring prefix ending textPartParser = lexeme $ do
-      try $ string prefix
-      parts <- many (try exprPart <|> textPartParser)
-      string ending
+-- | Parse a string with optional interpolation expressions
+-- Both regular strings and f-strings support interpolation in Acton
+-- i.e. "{foo}" and f"{foo}" are equivalent
+parseInterpolatedString :: String -> String -> Parser StringPart -> Parser S.Expr
+parseInterpolatedString startQuote endQuote textPartParser = lexeme $ do
+  startLoc <- getOffset
+  try $ string startQuote
+  parts <- many (try exprPart <|> textPartParser)
+  (string endQuote <?> ("closing " ++ endQuote)) <|> do
+    -- If we couldn't parse the closing quote, check why
+    currentPos <- getOffset
+    nextChar <- lookAhead (optional anySingle)
+    let isMultiline = length endQuote == 3  -- Triple quotes indicate multiline strings
+    case nextChar of
+      Nothing ->
+        if isMultiline
+        then failImmediately (Loc (startLoc - length startQuote) startLoc) $ "missing closing " ++ endQuote
+        else fail $ "string at position " ++ show startLoc ++ " is not closed"
+      _ -> fail $ "missing closing " ++ endQuote
 
+  -- Check if we found any expressions
+  let exprs = [e | ExprPart e _ <- parts]
+
+  if null exprs
+    then do
+      -- No expressions found, create a regular string
+      let textContent = concat [s | TextPart s <- parts]
+      -- Apply hex splitting to handle cases like "\x48ello" -> ["\x48", "ello"]
+      return $ S.Strings NoLoc (hexSplitString textContent)
+    else do
+      -- Found expressions, create interpolated string format
       let formatStr = buildFormatString parts
-          exprs = [e | ExprPart e _ <- parts]
-
-          -- Create the final expression using %-formatting
           result = S.BinOp NoLoc
                     (S.Strings NoLoc [formatStr])
                     S.Mod
                     (if length exprs == 1
-                      then head exprs  -- Single expression case
-                      else S.Tuple NoLoc (foldr S.PosArg S.PosNil exprs) S.KwdNil)  -- Multiple expressions
-
+                      then head exprs
+                      else S.Tuple NoLoc (foldr S.PosArg S.PosNil exprs) S.KwdNil)
       return result
 
-    -- | F-string variant definitions
-    tripleQuotedFstring       = parseFstring "f\"\"\"" "\"\"\"" (parseTextPart "\"" True True)
-    tripleSingleQuotedFstring = parseFstring "f'''" "'''" (parseTextPart "'" True True)
-    quotedFstring             = parseFstring "f\"" "\"" (parseTextPart "\"" False False)
-    singleQuotedFstring       = parseFstring "f'" "'" (parseTextPart "'" False False)
+-- | Create a text part parser for given quote style
+parseTextPart :: String -> Bool -> Bool -> Parser StringPart
+parseTextPart quoteStr isTriple handleNewlines = do
+  chunks <- some $ choice [
+      -- Escaped braces for interpolation
+      try (string "{{" >> return "{"),
+      try (string "}}" >> return "}"),
 
-    -- | Create a text part parser for given quote style
-    parseTextPart :: String -> Bool -> Bool -> Parser FStringPart
-    parseTextPart quoteStr isTriple handleNewlines = TextPart <$> do
-      chunks <- some $ choice [
-          -- Escaped braces
-          try (string "{{" >> return "{"),
-          try (string "}}" >> return "}"),
+      -- Use existing escape sequence parsers with better error handling
+      try (char '\\' >> choice [
+          -- Escaped quotes - handle quote-specific escaping
+          try (string quoteStr >> return quoteStr),
 
-          -- Handle newlines in triple-quoted strings
-          if handleNewlines
-            then try (string "\n" >> return "\\n")
-            else empty,
+          -- Use existing escape parsers for consistency and better error messages
+          try hexEscape,
+          try univ1Escape,
+          try univ2Escape,
+          try octEscape,
+          try singleCharEscape,
+          try newlineEscape,
 
-          -- Handle standalone quotes in triple-quoted strings
-          if isTriple
-            then try (do
-                    c <- char (head quoteStr)
-                    let nextChars = if head quoteStr == '"' then "\"\"" else "''"
-                    notFollowedBy (string nextChars)
-                    return [c])
-            else empty,
+          -- Handle unknown escape sequences with proper error
+          anyC >>= \c -> unknownEscape (return c)
+        ]),
 
-          -- Any other character not in braces or quotes
-          (:[]) <$> noneOf ("{" ++ quoteStr)
-        ]
+      -- Handle newlines in triple-quoted strings
+      if handleNewlines
+        then try (string "\n" >> return "\\n")
+        else empty,
 
-      return (concat chunks)
+      -- Handle standalone quotes in triple-quoted strings
+      if isTriple
+        then try (do
+                c <- char (head quoteStr)
+                let nextChars = if head quoteStr == '"' then "\"\"" else "''"
+                notFollowedBy (string nextChars)
+                return [c])
+        else empty,
 
-    -- Parse an expression in braces with optional format specifier
-    exprPart :: Parser FStringPart
-    exprPart = do
-        char '{'
-        -- Allow for spaces around the expression
-        spaces <- many (char ' ')
-
-        -- We need to carefully handle expressions with operators. Instead of using manyTill,
-        -- we'll count braces to find the matching closing brace or colon
-        -- First, try to find the end position (either a colon or closing brace)
-        -- that's not inside a nested set of braces
-
-        -- Get all content up to the first unmatched colon or closing brace
-        let braceCounting :: Int -> String -> Parser String
-            braceCounting depth acc = do
-                next <- lookAhead (optional anySingle)
-                case next of
-                    Nothing -> fail "Unexpected end of input while parsing f-string expression"
-                    Just c -> case c of
-                        '{' -> anySingle >> braceCounting (depth + 1) (c:acc)
-                        '}' -> if depth == 0
-                                then return $ reverse acc  -- Found closing brace at top level
-                                else anySingle >> braceCounting (depth - 1) (c:acc)
-                        ':' -> if depth == 0
-                                then return $ reverse acc  -- Found colon at top level
-                                else anySingle >> braceCounting depth (c:acc)
-                        ' ' -> do
-                            -- For spaces, we need to check if they're followed by : or } at depth 0
-                            anySingle  -- Consume the space
-                            ahead <- lookAhead (optional anySingle)
-                            case ahead of
-                                Just ':' | depth == 0 -> return $ reverse acc  -- Space before colon at top level
-                                Just '}' | depth == 0 -> return $ reverse acc  -- Space before closing brace at top level
-                                _ -> braceCounting depth (c:acc)
-                        _ -> anySingle >> braceCounting depth (c:acc)
-
-        exprContent <- braceCounting 0 ""
-
-        -- Debug the parsed expression content
-        --trace ("Parsed expression: '" ++ exprContent ++ "'") $ return ()
-
-        -- Check what's next (after any spaces) - should be either : or }
-        hasFormat <- lookAhead (many (char ' ') >> optional (char ':'))
-        formatInfo <- case hasFormat of
+      -- Any other character not in braces or quotes
+      if not isTriple
+        then do
+          -- Check for newline in single-line string
+          nextChar <- lookAhead (optional (char '\n'))
+          case nextChar of
             Just _ -> do
-                -- Consume any spaces before the colon
-                many (char ' ')
-                char ':' -- Consume the colon
-                -- Allow spaces after the colon
-                many (char ' ')
-                -- Special case for .Nf as a direct parser for float formatting with precision
-                directFmt <- optional $ try $ do
-                    char '.'
-                    digits <- some digitChar
-                    char 'f'
-                    -- Allow spaces before closing brace
-                    many (char ' ')
-                    char '}'
-                    return ("." ++ digits ++ "f", True, Just digits, Just 'f', False, Nothing)
-
-                case directFmt of
-                    Just fmt -> return fmt
-                    Nothing -> do
-                        format <- formatSpec  -- Parse format specifier
-                        return format
+              pos <- getOffset
+              failImmediately (Loc (pos - 1) pos) $ "missing closing " ++ quoteStr
             Nothing -> do
-                -- Allow spaces before the closing brace
-                many (char ' ')
-                char '}'
-                return ("s", False, Nothing, Nothing, False, Nothing)  -- No format specifier, just close brace
+              (loc, c) <- withLoc $ noneOf ("{}" ++ quoteStr ++ "\n")
+              return [c]
+        else
+          (:[]) <$> noneOf ("{}" ++ quoteStr)
+    ]
 
-        let (fmt, isZeroPad, precisionInfo, typeSpecInfo, isCenterAlign, widthInfo) = formatInfo
-
-        -- Debug output
-        --trace ("f-string format for expression: " ++ exprContent ++ " => " ++ fmt ++
-        --       ", isCenterAlign: " ++ show isCenterAlign ++
-        --       ", width: " ++ show widthInfo) $ return ()
-
-        -- Parse the expression content
-        let result = runParser (St.evalStateT expr initState) "" exprContent
-        case result of
-            Left err -> fail $ "Failed to parse expression in f-string: " ++ errorBundlePretty err
-            Right expr ->
-                if isCenterAlign && widthInfo /= Nothing
-                then
-                    -- Handle center alignment by using str.center() method
-                    let widthExpr = case widthInfo of
-                                        Just w -> S.Int NoLoc (read w) w
-                                        Nothing -> S.Int NoLoc 0 "0"
-                        -- First convert the expression to a string
-                        strExpr = S.Call NoLoc (S.Var NoLoc (S.NoQ (S.Name NoLoc "str"))) (S.PosArg expr S.PosNil) S.KwdNil
-                        -- Then call the center method on the string
-                        centerMethod = S.Dot NoLoc strExpr (S.Name NoLoc "center")
-                        -- Call center(width)
-                        centeredExpr = S.Call NoLoc centerMethod (S.PosArg widthExpr S.PosNil) S.KwdNil
-                    in return $ ExprPart centeredExpr "s"
-                -- Handle float format specifiers directly
-                else if isZeroPad || (precisionInfo /= Nothing)
-                then
-                    -- For formatting with a type specifier (like .2f), pass the raw expression
-                    -- This allows printf to apply the format directly to the value
-                    return $ ExprPart expr fmt
-                -- For normal formatting, convert to str
-                else return $ ExprPart (S.Call NoLoc (S.Var NoLoc (S.NoQ (S.Name NoLoc "str"))) (S.PosArg expr S.PosNil) S.KwdNil) fmt
-
-    -- Parse format specifier after the colon (colon is already consumed)
-    formatSpec :: Parser (String, Bool, Maybe String, Maybe Char, Bool, Maybe String)  -- Returns (format, isZeroPadded, precision, typeSpec, isCenterAlign, width)
-    formatSpec = do
-        -- Allow spaces at the beginning
-        many (char ' ')
-
-        -- Check for fill character and alignment
-        -- You can specify a fill character followed by an alignment
-        -- For zero-padding, this would be '0' followed by no alignment specifier
-        firstChar <- optional anySingle
-        align <- optional $ oneOf "<>^"
-
-        -- Allow spaces after alignment
-        many (char ' ')
-
-        -- Is this a center alignment?
-        -- Check either for direct ^ or for a character followed by ^
-        let isCenterAlign = case (firstChar, align) of
-                (_, Just '^') -> True
-                (Just '^', _) -> True
-                _ -> False
-
-        -- Debug the parsed characters
-        --trace ("formatSpec firstChar: " ++ show firstChar ++ ", align: " ++ show align ++ ", isCenterAlign: " ++ show isCenterAlign) $ return ()
-
-        -- Special handling for the case where the first character is a digit
-        -- In that case, it's the start of the width, not a fill character
-        (fill, actualAlign, widthPrefix) <- case (firstChar, align) of
-                -- Zero padding - special case to handle correctly
-                (Just '0', _) -> return ('0', align, Nothing)
-                -- First char is a non-zero digit - save it for width
-                (Just c, Nothing) | isDigit c && c /= '0' -> do
-                    --trace ("First char is a digit: " ++ [c]) $ return ()
-                    return (' ', Nothing, Just [c])
-                -- Center alignment with fill character (pass through the alignment)
-                (Just c, Just '^') -> do
-                    --trace ("Center alignment with fill character: " ++ [c]) $ return ()
-                    return (c, Just '^', Nothing)
-                -- Other alignment with fill character
-                (Just c, Just a) -> return (c, Just a, Nothing)
-                -- First char is alignment
-                (Just c, Nothing) -> return (' ', Just c, Nothing)
-                -- No fill character but has center alignment
-                (Nothing, Just '^') -> do
-                    --trace ("Center alignment with no fill character") $ return ()
-                    return (' ', Just '^', Nothing)
-                -- No fill character, other alignment
-                (Nothing, a) -> return (' ', a, Nothing)
-
-        -- Allow spaces before width
-        many (char ' ')
-
-        -- Width is a sequence of digits, possibly prefixed by the firstChar if it was a digit
-        width <- optional $ do
-            digits <- some digitChar
-            return $ maybe digits (++ digits) widthPrefix
-
-        -- Allow spaces after width
-        many (char ' ')
-
-        -- Debug width
-        --trace ("formatSpec width: " ++ show width) $ return ()
-
-        -- For the special case where firstChar is a digit but no more digits followed
-        -- need to create a width value from the firstChar itself
-        width <- case (firstChar, width) of
-            (Just c, Nothing) | isDigit c -> return (Just [c])
-            _ -> return width
-
-        -- Allow spaces before precision
-        many (char ' ')
-
-        -- Check for precision (for floats)
-        precision <- optional $ try $ do
-            char '.'
-            digits <- some digitChar
-            return digits
-
-        -- Allow spaces after precision
-        many (char ' ')
-
-        -- Check for type specifier
-        typeSpec <- optional $ oneOf "fdeEgGnoxX%"
-
-        -- Allow spaces after type specifier
-        many (char ' ')
-
-        -- Close the format specifier
-        char '}'
-
-        -- Determine if this is zero-padded format
-        let isZeroPadding = fill == '0' && width /= Nothing
-
-        -- Convert to printf format
-        -- For zero padding of numbers, we use "%0Nd" format
-        -- For left-align, we use "%-Ns" format, where N is the width
-        -- For right-align or default, we use "%Ns" format
-        -- For center-align, we fall back to right-align for now
-        -- For precision with floats, we use "%.Pf" format
-        let fmt = case (precision, typeSpec) of
-                -- Float with precision and width (e.g., 10.2f becomes %10.2f for printf)
-                (Just p, Just 'f') -> case width of
-                    Just w -> w ++ "." ++ p ++ "f"  -- Add width and precision
-                    Nothing -> "." ++ p ++ "f"      -- Just precision, no width
-                -- Default to float if precision specified but no type
-                (Just p, _) -> case width of
-                    Just w -> w ++ "." ++ p ++ "f"  -- Add width and precision
-                    Nothing -> "." ++ p ++ "f"      -- Just precision, no width
-                -- Float without precision
-                (Nothing, Just 'f') -> "f"
-                -- Other formats
-                (Nothing, _) -> case (fill, actualAlign, width) of
-                    -- Zero padding with width (for numbers)
-                    -- This should format with %0Nd not %NNs
-                    ('0', _, Just w) -> "0" ++ w ++ "d"
-                    -- Left-aligned with width
-                    (_, Just '<', Just w) -> "-" ++ w ++ "s"
-                    -- Right-aligned with width
-                    (_, Just '>', Just w) -> w ++ "s"
-                    -- Center-aligned we should use "s" because we handle it separately with str.center()
-                    (_, Just '^', Just w) -> "s"
-                    -- Left-aligned, no width
-                    (_, Just '<', Nothing) -> "-s"
-                    -- Right-aligned, no width
-                    (_, Just '>', Nothing) -> "s"
-                    -- Center-aligned, no width
-                    (_, Just '^', Nothing) -> "s"
-                    -- IMPORTANT: With our new parsing, this case handles a raw digit like {x:5}
-                    -- When no alignment is specified, but there is a width, we'll use default right alignment
-                    (_, Nothing, Just w) -> w ++ "s"
-                    -- No alignment, no width
-                    (_, Nothing, Nothing)  -> "s"
-                    -- Catch-all for any other combinations
-                    _                      -> "s"
-
-        -- Print out debug information about what format string we're generating
-        --trace ("Final format string: " ++ fmt ++
-        --       " from (firstChar=" ++ show firstChar ++
-        --       ", align=" ++ show align ++
-        --       ", width=" ++ show width ++
-        --       ", precision=" ++ show precision ++
-        --       ", typeSpec=" ++ show typeSpec ++ ")") $ return ()
-
-        -- Determine if this is a float format (for type conversion)
-        let isFloat = precision /= Nothing || (typeSpec == Just 'f')
-            isZeroOrFloat = isZeroPadding || isFloat
-
-        return (fmt, isZeroOrFloat, precision, typeSpec, isCenterAlign, width)
+  -- Concatenate chunks
+  return (TextPart (concat chunks))
 
 
-manyTillEsc, someTillEsc :: Parser String -> Parser String -> Parser String -> Parser [String]
-manyTillEsc p esc end =  (const [] <$> end) <|> (someTillEsc p esc end)
+-- | Parse an expression in braces with optional format specifier
+exprPart :: Parser StringPart
+exprPart = do
+    openLoc <- getOffset
+    char '{'
+    -- Allow for spaces around the expression
+    many (char ' ')
 
-someTillEsc p esc end = do
-    a <- (char '\\' *> esc) <|> p
-    b <- manyTillEsc p esc end
-    return $ a : b
+    -- Check for empty expression or immediate colon
+    closeLoc <- getOffset
+    nextChar <- lookAhead (optional (oneOf "}:"))
+    case nextChar of
+        Just '}' -> failImmediately (Loc closeLoc closeLoc) "Empty expression in string interpolation"
+        Just ':' -> failImmediately (Loc closeLoc closeLoc) "Missing expression before format specifier"
+        _ -> return ()
 
-hexSplit ss = hS ss [] []
-   where hS :: [String] -> [String] -> [String] -> [String]
-   -- first arg: list of short (single-char or escape sequence chunks) produced by manyTillEsc
-   -- second arg: accumulates next piece, until we find a hex escape sequence where the next chunk is a hex digit.
-   -- third arg: accumulates complete pieces (each ending with a hex escape sequences where the next piece starts with a hex digit)
-   -- We need to do this since C allows hex escape sequences with more than two hex digits
-         hS [] ps as = reverse (rev2 ps [] : as)
-         hS (h@('\\':'x':_):k@[d]:ss) ps as
-           |isHex d = hS (k:ss) [] ((rev2 ps h) : as)
-         hS (s:ss) ps as = hS ss (s:ps) as
-         rev [] ys = ys
-         rev (x:xs) ys = rev xs (x:ys)
-         rev2 [] y = y
-         rev2 (x:xs) ys = rev2 xs (x++ys)
-         isHex c = c `elem` "012346789abcdef"
+    -- Parse the expression - now allowing interpolated strings since f-prefix is optional
+    parsedExpr <- expr <?> "expression"
 
-stringTempl :: String -> Parser String -> Parser String -> String -> Parser [String]
-stringTempl q single esc prefix = hexSplit <$> lexeme (string (prefix++q) >> manyTillEsc single esc (string q))
-   where surround s str     = s ++ str ++ s
+    -- Allow spaces before format specifier or closing brace
+    many (char ' ')
+
+    -- Check for optional format specifier
+    formatInfo <- (char ':' *> formatSpec) <|> do
+        closeBraceLoc <- getOffset
+        char '}' <|> failImmediately (Loc (openLoc + 1) (closeBraceLoc)) "missing closing '}' for expression"
+        return ("s", False, Nothing, Nothing, False, Nothing)
+
+    let (fmt, isZeroPad, precisionInfo, typeSpecInfo, isCenterAlign, widthInfo) = formatInfo
+
+    -- Apply formatting logic
+    finalExpr <-
+        if isCenterAlign && widthInfo /= Nothing
+        then do
+            -- Handle center alignment by using str.center() method
+            let widthExpr = case widthInfo of
+                                Just w -> S.Int NoLoc (read w) w
+                                Nothing -> S.Int NoLoc 0 "0"
+                -- First convert the expression to a string
+                strExpr = S.Call NoLoc (S.Var NoLoc (S.NoQ (S.Name NoLoc "str"))) (S.PosArg parsedExpr S.PosNil) S.KwdNil
+                -- Then call the center method on the string
+                centerMethod = S.Dot NoLoc strExpr (S.Name NoLoc "center")
+                -- Call center(width)
+                centeredExpr = S.Call NoLoc centerMethod (S.PosArg widthExpr S.PosNil) S.KwdNil
+            return centeredExpr
+        -- Handle float format specifiers directly
+        else if isZeroPad || (precisionInfo /= Nothing)
+        then
+            -- For formatting with a type specifier (like .2f), pass the raw expression
+            -- This allows printf to apply the format directly to the value
+            return parsedExpr
+        -- For normal formatting, convert to str
+        else return $ S.Call NoLoc (S.Var NoLoc (S.NoQ (S.Name NoLoc "str"))) (S.PosArg parsedExpr S.PosNil) S.KwdNil
+
+    return $ ExprPart finalExpr fmt
+
+-- | Parse format specifier after the colon (colon is already consumed)
+formatSpec :: Parser (String, Bool, Maybe String, Maybe Char, Bool, Maybe String)  -- Returns (format, isZeroPadded, precision, typeSpec, isCenterAlign, width)
+formatSpec = do
+    specLoc <- getOffset
+    -- Allow spaces at the beginning
+    many (char ' ')
+
+    -- Check if there's any content before trying to parse
+    beforeParseLoc <- getOffset
+    nextChar <- lookAhead (optional anySingle)
+    case nextChar of
+        Just '}' -> failImmediately (Loc specLoc beforeParseLoc) "Empty format specifier after ':'"
+        _ -> return ()
+
+    -- Try to parse fill character and alignment
+    -- First, check if we have an invalid character at the start
+    firstChar <- lookAhead (optional anySingle)
+    _ <- case firstChar of
+        Just c | c `notElem` "<>^+-#0123456789.} " && c /= '\t' && c /= '\n' -> do
+            -- Check if this might be a fill character followed by alignment
+            secondChar <- lookAhead (optional (anySingle >> anySingle))
+            case secondChar of
+                Just a | a `elem` "<>^" -> return ()  -- Valid fill+align pattern
+                _ -> do
+                    -- Record position before consuming
+                    badCharPos <- getOffset
+                    -- Consume the character to advance position
+                    _ <- anySingle
+                    failImmediately (Loc badCharPos (badCharPos + 1)) $
+                         "Invalid character '" ++ [c] ++ "' in format specifier"
+        Just '\t' -> do
+            tabPos <- getOffset
+            _ <- anySingle
+            failImmediately (Loc tabPos (tabPos + 1)) "Tab character not allowed in format specifier"
+        Just '\n' -> do
+            nlPos <- getOffset
+            _ <- anySingle
+            failImmediately (Loc nlPos (nlPos + 1)) "Newline not allowed in format specifier"
+        _ -> return ()
+
+    mbFillAlign <- optional $ try (do
+        -- Try to parse fill + alignment (strict validation)
+        try (do
+            f <- anySingle
+            a <- oneOf "<>^" <?> "alignment character (<, >, or ^)"
+            return (f, Just a)
+          ) <|> do
+            a <- oneOf "<>^" <?> "alignment character (<, >, or ^)"
+            return (' ', Just a)
+      )
+
+    let (fill, align) = fromMaybe (' ', Nothing) mbFillAlign
+
+    -- Optional sign
+    _sign <- optional $ oneOf "+-"
+
+    -- Optional # (alternate form)
+    _alternate <- optional $ char '#'
+
+    -- Optional zero padding (0 flag)
+    zeroPad <- optional $ char '0'
+
+    -- Optional width
+    width <- optional $ some digitChar
+
+    -- Optional precision
+    precision <- optional $ do
+        char '.'
+        digitLoc <- getOffset
+        digits <- optional $ some digitChar
+        case digits of
+            Nothing -> failImmediately (Loc digitLoc digitLoc) "Expected digits after '.' in format specifier"
+            Just d -> return d
+
+    -- Optional type specifier
+    typeLoc <- getOffset
+    typeSpec <- optional (oneOf "fdeEgGnoxX%bos" <?> "type specifier")
+
+    -- Allow spaces before closing brace
+    many (char ' ')
+
+    -- Check for any remaining invalid characters
+    invalidCharLoc <- getOffset
+    invalidChar <- lookAhead (optional (noneOf "}"))
+    case invalidChar of
+        Just c ->
+            if c == '\t'
+            then failImmediately (Loc invalidCharLoc invalidCharLoc) "Tab character not allowed in format specifier"
+            else if c == '\n'
+            then failImmediately (Loc invalidCharLoc invalidCharLoc) "Newline not allowed in format specifier"
+            else failImmediately (Loc invalidCharLoc invalidCharLoc) $ "Invalid character '" ++ [c] ++ "' in format specifier"
+        Nothing -> return ()
+
+    -- Check if we parsed nothing meaningful (this should be rare now)
+    endLoc <- getOffset
+    when (align == Nothing && _sign == Nothing && zeroPad == Nothing &&
+          width == Nothing && precision == Nothing && typeSpec == Nothing &&
+          beforeParseLoc == endLoc) $
+        failImmediately (Loc specLoc endLoc) "Invalid format specifier"
+
+    -- Consume the closing brace
+    char '}' <?> "closing brace '}' after format specifier"
+
+    -- Determine various format properties
+    let isZeroPadding = zeroPad == Just '0' && width /= Nothing
+        isCenterAlign = align == Just '^'
+
+    -- Convert to printf format
+    let fmt = case (precision, typeSpec) of
+            -- Float with precision and width (e.g., 10.2f becomes %10.2f for printf)
+            (Just p, Just 'f') -> case (zeroPad, width) of
+                (Just '0', Just w) -> "0" ++ w ++ "." ++ p ++ "f"  -- Zero-padded float
+                (_, Just w) -> w ++ "." ++ p ++ "f"               -- Regular float with width
+                (_, Nothing) -> "." ++ p ++ "f"                   -- Just precision, no width
+            -- Default to float if precision specified but no type
+            (Just p, _) -> case (zeroPad, width) of
+                (Just '0', Just w) -> "0" ++ w ++ "." ++ p ++ "f"
+                (_, Just w) -> w ++ "." ++ p ++ "f"
+                (_, Nothing) -> "." ++ p ++ "f"
+            -- Float without precision
+            (Nothing, Just 'f') -> "f"
+            -- Other formats based on alignment and width
+            (Nothing, _) -> case (zeroPad, align, width) of
+                -- Zero padding with width (for numbers) - use integer format
+                (Just '0', _, Just w) -> "0" ++ w ++ "d"
+                -- Left-aligned with width
+                (_, Just '<', Just w) -> "-" ++ w ++ "s"
+                -- Right-aligned with width
+                (_, Just '>', Just w) -> w ++ "s"
+                -- Center-aligned with width
+                (_, Just '^', Just w) -> "s"  -- Width handled separately in expr processing
+                -- Just width, no alignment
+                (_, Nothing, Just w) -> w ++ "s"
+                -- Default case
+                _ -> "s"
+
+    return (fmt, isZeroPadding, precision, typeSpec, isCenterAlign, width)
+
+-- Split string when hex escape is followed by hex digit (to prevent C compiler issues)
+-- Only splits if the string contains actual hex escapes (not literal \x patterns)
+hexSplitString :: String -> [String]
+hexSplitString "" = [""]
+hexSplitString s
+  | hasActualHexEscapes s = filter (not . null) $ reverse $ map reverse $ process s [] []
+  | otherwise = [s]  -- No splitting needed for raw strings or strings without hex escapes
+  where
+    -- Check if string has actual hex escapes (single backslash followed by x and hex digits)
+    -- Raw strings produce \\x patterns (double backslashes) which should NOT be split
+    hasActualHexEscapes [] = False
+    hasActualHexEscapes ('\\':'\\':'x':rest) = hasActualHexEscapes rest  -- Skip \\x pattern (raw string)
+    hasActualHexEscapes ('\\':'x':h1:h2:rest)
+      | isHex h1 && isHex h2 = True
+      | otherwise = hasActualHexEscapes rest
+    hasActualHexEscapes (_:rest) = hasActualHexEscapes rest
+
+    process [] acc chunks = acc : chunks
+    process ('\\':'x':h1:h2:rest) acc chunks
+      | isHex h1 && isHex h2 && (not (null rest) && isHex (head rest)) =
+          -- Next char is hex, split here - complete current chunk with hex escape
+          let completedChunk = h2:h1:'x':'\\':acc
+          in process rest [] (completedChunk : chunks)
+      | isHex h1 && isHex h2 =
+          -- Valid hex escape, continue accumulating
+          process rest (h2:h1:'x':'\\':acc) chunks
+      | otherwise =
+          -- Invalid hex escape, keep as-is
+          process (h1:h2:rest) ('x':'\\':acc) chunks
+    process (c:cs) acc chunks = process cs (c:acc) chunks
+    isHex c = c `elem` "0123456789abcdefABCDEF"
+
 
 newlineEscape =  "" <$ newline
 singleCharEscape =  (\c -> '\\':c:[]) <$> (oneOf ("\'\"\\abfnrtv"))
@@ -773,7 +838,7 @@ univ2Escape = do
 asciiC   = do
       (loc,c) <- withLoc anySingle
       if c == '\n'
-         then failImmediately loc "unescaped newline in single-quoted bytes literal"
+         then failImmediately loc "unclosed string"
          else if isAscii c
               then return [c]
               else failImmediately loc "Only ASCII chars allowed in bytes literal"
@@ -781,7 +846,7 @@ asciiC   = do
 anyC  = do
       (loc,c) <- withLoc anySingle
       if c == '\n'
-         then failImmediately loc "unescaped newline in single-quoted string literal"
+         then failImmediately loc "unclosed string"
          else return [c]
 
 unknownEscape charParser = do
@@ -813,6 +878,27 @@ rawbytesLiteral = rawLiteral asciiC "rb"
 
 rawstrLiteral = rawLiteral ((:[]) <$> anySingle) "r"
 
+stringTempl :: String -> Parser String -> Parser String -> String -> Parser [String]
+stringTempl q single esc prefix = do
+    startLoc <- getOffset
+    _ <- string (prefix++q)
+    content <- manyTillEsc single esc (string q <?> closingQuoteError startLoc q)
+    currSC  -- Apply lexeme whitespace consumption
+    return $ hexSplitString . concat $ content
+  where
+    closingQuoteError startLoc quote
+      | quote `elem` ["\"\"\"", "'''"] = "closing triple quote " ++ quote ++ " for string starting at position " ++ show startLoc
+      | otherwise = "closing quote " ++ quote ++ " for string"
+
+manyTillEsc, someTillEsc :: Parser String -> Parser String -> Parser String -> Parser [String]
+manyTillEsc p esc end =  (const [] <$> end) <|> (someTillEsc p esc end)
+
+someTillEsc p esc end = do
+    a <- (char '\\' *> esc) <|> p
+    b <- manyTillEsc p esc end
+    return $ a : b
+
+--- END OF STRING PARSING --------------------------------------------------------
 
 -- Reserved words, other symbols and names ----------------------------------------------------------
 
@@ -884,11 +970,11 @@ qual_name = do
 --- Helper functions for parenthesised forms -----------------------------------
 
 parens, brackets, braces :: Parser a -> Parser a
-parens p = withCtx PAR (L.symbol sc2 "(" *> p <* (char ')' <?> "a closing parenthesis")) <* currSC
+parens p = withCtx PAR (L.symbol sc2 "(" *> p <* (char ')' <?> "closing ')'")) <* currSC
 
-brackets p = withCtx PAR (L.symbol sc2 "[" *> p <* char ']') <* currSC
+brackets p = withCtx PAR (L.symbol sc2 "[" *> p <* (char ']' <?> "closing ']'")) <* currSC
 
-braces p = withCtx PAR (L.symbol sc2 "{" *> p <* char '}') <* currSC
+braces p = withCtx PAR (L.symbol sc2 "{" *> p <* (char '}' <?> "closing '}'")) <* currSC
 
 --- Top-level parsers ------------------------------------------------------------
 

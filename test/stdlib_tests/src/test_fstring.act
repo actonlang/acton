@@ -6,27 +6,27 @@ import testing
 # Basic test cases
 def _test_simple():
     w = "world"
-    output = f"hello {w}"
+    output = "hello {w}"
     testing.assertEqual(output, "hello world")
 
 def _test_empty_template():
     # Test with an empty f-string
-    output = f""
+    output = ""
     testing.assertEqual(output, "")
 
 def _test_comment():
     w = "world"
-    output = f"hello {w}" # Comment
+    output = "hello {w}" # Comment
     testing.assertEqual(output, "hello world")
 
 def _test_expression():
     w = "world"
-    output = f"hello {w}" if True else "goodbye"
+    output = "hello {w}" if True else "goodbye"
     testing.assertEqual(output, "hello world")
 
 def _test_no_substitutions():
     # Test with an f-string that has no substitutions
-    output = f"plain text"
+    output = "plain text"
     testing.assertEqual(output, "plain text")
 
 # Multiple substitutions
@@ -34,7 +34,7 @@ def _test_multiple_substitutions():
     # Test basic multiple substitutions
     name = "Alice"
     score = 95
-    output = f"Hello {name}, your score is {score}"
+    output = "Hello {name}, your score is {score}"
     testing.assertEqual(output, "Hello Alice, your score is 95")
 
 # Type handling tests
@@ -43,18 +43,18 @@ def _test_different_types():
     i = 42
     f = 3.14
     l = [1, 2, 3]
-    output = f"Types: {s}, {i}, {f}, {l}"
+    output = "Types: {s}, {i}, {f}, {l}"
     testing.assertEqual(output, "Types: string, 42, 3.14, [1, 2, 3]")
 
 def _test_complex_objects():
     d = {"name": "Alice", "age": 30}
     l = ["apple", "banana", "cherry"]
-    output = f"Dict: {d}, List: {l}"
-    testing.assertEqual(output, "Dict: {'name':'Alice', 'age':30}, List: ['apple', 'banana', 'cherry']")
+    output = "Dict: {d}, List: {l}"
+    testing.assertEqual(output, r"Dict: {'name':'Alice', 'age':30}, List: ['apple', 'banana', 'cherry']")
 
 def _test_none_value():
     n = None
-    output = f"None value: {n}"
+    output = "None value: {n}"
     testing.assertEqual(output, "None value: None")
 
 # Boolean test
@@ -62,37 +62,37 @@ def _test_boolean_value():
     # Test with boolean values
     t = True
     f = False
-    output = f"True: {t}, False: {f}"
+    output = "True: {t}, False: {f}"
     testing.assertEqual(output, "True: True, False: False")
 
 # Width formatting test - using % operator instead of f-string due to limitations
 def _test_width_formatting():
     # Test single digit width with % operator directly (this works correctly)
     num = 42
-    output = f"{num:5}"
+    output = "{num:5}"
     testing.assertEqual(output, "   42")
 
 # Alignment tests
 def _test_left_align():
     # Test regular left alignment
     name = "Alice"
-    output = f"{name:<9}"
+    output = "{name:<9}"
     expected = "Alice    "  # 4 spaces after "Alice" to make 9 chars total
-    print(f"Left align - Actual: '{output}', Expected: '{expected}'")
+    print("Left align - Actual: '{output}', Expected: '{expected}'")
     testing.assertEqual(output, expected)
 
 def _test_right_align():
     # Test basic right alignment
     name = "Alice"
-    output = f"{name:>10}"
+    output = "{name:>10}"
     testing.assertEqual(output, "     Alice")
 
 def _test_center_align():
     name = "Anna"
-    output = f"{name:^10}"
+    output = "{name:^10}"
     # Expected output for proper center alignment
     expected = "   Anna   "
-    print(f"Center align - Actual: '{output}', Expected: '{expected}'")
+    print("Center align - Actual: '{output}', Expected: '{expected}'")
     testing.assertEqual(output, expected)
 
 # Alignment combinations test
@@ -101,28 +101,28 @@ def _test_alignment_combinations():
     a = "Right"
     b = "Center"
     c = "Left"
-    output = f"{a:>10}:{b:^10}:{c:<10}"
+    output = "{a:>10}:{b:^10}:{c:<10}"
     # Note: The center part will actually be right-aligned with current implementation
     # This is the expected output if center was properly centered:
     expected = "     Right:  Center  :Left      "
-    print(f"Alignment combinations - Actual: '{output}'")
+    print("Alignment combinations - Actual: '{output}'")
     testing.assertEqual(output, expected)
 
 # Zero padding tests
 def _test_zero_padding():
     # Test basic zero padding
     num = 42
-    output1 = f"{num:05}"
+    output1 = "{num:05}"
     testing.assertEqual(output1, "00042")
     
     # Test zero padding with double-digit width
-    output2 = f"{num:010}"
+    output2 = "{num:010}"
     expected2 = "0000000042"
     testing.assertEqual(output2, expected2)
     
     # Test zero padding with negative number
     neg_num = -42
-    output3 = f"{neg_num:05}"
+    output3 = "{neg_num:05}"
     expected3 = "-0042"
     testing.assertEqual(output3, expected3)
 
@@ -130,40 +130,40 @@ def _test_zero_padding():
 def _test_float_precision():
     pi = 3.14159
     # Test with 2 decimal places
-    output1 = f"{pi:.2f}"
+    output1 = "{pi:.2f}"
     testing.assertEqual(output1, "3.14")
     
     # Test with 4 decimal places
-    output2 = f"{pi:.4f}"
+    output2 = "{pi:.4f}"
     testing.assertEqual(output2, "3.1416")
     
     # Test with 0 decimal places
-    output3 = f"{pi:.0f}"
+    output3 = "{pi:.0f}"
     testing.assertEqual(output3, "3")
 
 # Float width and precision test
 def _test_float_width_and_precision():
     pi = 3.14159
     # Test width and precision together
-    output = f"{pi:10.2f}"
+    output = "{pi:10.2f}"
     # Expected output should have 6 spaces before 3.14
     expected = "      3.14"
     testing.assertEqual(output, expected)
 
 def _test_escaping():
     substituted = "replaced"
-    output = f"something but {{{substituted}}}"
-    testing.assertEqual(output, "something but {replaced}")
+    output = "something but {{{substituted}}}"
+    testing.assertEqual(output, r"something but {replaced}")
 
 def _test_expression_in_braces():
     # Test with simple expression in braces
     a = 10
     b = 20
-    output1 = f"Sum: {a + b}"
+    output1 = "Sum: {a + b}"
     testing.assertEqual(output1, "Sum: 30")
     
     # Test with more complex expression
-    output2 = f"Calculation: {a * b // 2}"
+    output2 = "Calculation: {a * b // 2}"
     testing.assertEqual(output2, "Calculation: 100")
 
 def _test_multiline_fstring():
@@ -172,7 +172,7 @@ def _test_multiline_fstring():
     age = 30
     
     # Multi-line f-string with variables
-    profile = f"""Name: {name}
+    profile = """Name: {name}
 Age: {age}"""
     
     # Expected result with proper newlines
@@ -186,7 +186,7 @@ def _test_triple_quoted_fstrings():
     age = 30
     
     # Basic triple-quoted f-string
-    profile = f"""
+    profile = """
     Name: {name}
     Age: {age}
     """
@@ -197,7 +197,7 @@ def _test_triple_quoted_fstrings():
     
     # Test with alignment and width formatting in triple-quoted f-strings
     header = "User Info"
-    formatted = f"""
+    formatted = """
     {header:^20}
     {"=" * 20}
     Name: {name:>10}
@@ -212,7 +212,7 @@ def _test_triple_quoted_fstrings():
     # Test with expressions in triple-quoted f-strings
     a = 10
     b = 20
-    math_results = f"""
+    math_results = """
     Sum: {a + b}
     Product: {a * b}
     Ratio: {b / a:.2f}
@@ -224,19 +224,19 @@ def _test_triple_quoted_fstrings():
     testing.assertTrue("Ratio: 2.00" in math_results)
     
     # Test with escaping in triple-quoted f-strings
-    escaped = f"""
+    escaped = """
     Braces: {{escaped}}
     Variables: {name}, {age}
     """
     
     # Verify escaping works correctly
     testing.assertTrue("{escaped}" in escaped)
-    expected_var_text = f"Variables: {name}, {age}"
+    expected_var_text = "Variables: {name}, {age}"
     testing.assertTrue(expected_var_text in escaped)
     
     # Test formatting with variables in triple-quoted f-strings
     pi = 3.14159
-    formatted_num = f"""
+    formatted_num = """
     Pi with 2 decimal places: {pi:.2f}
     Pi with width 10: {pi:10.2f}
     """
@@ -251,33 +251,33 @@ def _test_triple_quoted_fstrings():
 def _test_nested_fstrings():
     # Test nested f-strings (f-strings inside f-strings)
     name = "Alice"
-    greeting = f"Hello, {name}"
-    output = f"Message: {greeting}!"
+    greeting = "Hello, {name}"
+    output = "Message: {greeting}!"
     testing.assertEqual(output, "Message: Hello, Alice!")
 
 def _test_width_precision_float():
     num = 42.1
-    output1 = f"{num:10.2f}"
+    output1 = "{num:10.2f}"
     expected1 = "     42.10"
     testing.assertEqual(output1, expected1)
 
 def _test_sign_width_precision_float():
     num = 42.1
     # Test with sign, width, and precision
-    output1 = f"{num:+08.2f}"
+    output1 = "{num:+08.2f}"
     expected1 = "+0042.10"
     
 def _test_format_with_spaces():
      # Test spaces in f-string expressions
      num = 42
      # Spaces around num and width
-     output1 = f"{ num : 10 }"
+     output1 = "{ num : 10 }"
      # Space after colon only
-     output2 = f"{num: 10}"
+     output2 = "{num: 10}"
      # Space before colon only
-     output3 = f"{num :10}"
+     output3 = "{num :10}"
      # Mixed spaces
-     output4 = f"{ num: 10 }"
+     output4 = "{ num: 10 }"
      
      # All should produce the same result (right-aligned with width 10)
      expected = "        42"
@@ -289,11 +289,11 @@ def _test_format_with_spaces():
      # Test with alignment and spaces
      name = "Alice"
      # Explicit right alignment with spaces
-     output5 = f"{ name : >10 }"
+     output5 = "{ name : >10 }"
      # Center alignment with spaces
-     output6 = f"{ name : ^10 }"
+     output6 = "{ name : ^10 }"
      # Left alignment with spaces
-     output7 = f"{ name : <10 }"
+     output7 = "{ name : <10 }"
      
      # Verify the different alignments work correctly
      testing.assertEqual(output5, "     Alice")

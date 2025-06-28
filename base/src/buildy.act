@@ -162,9 +162,9 @@ class PkgDependency(Dependency):
                 path = file.join_path([deps_path, f"{self.name}-{dep_hash}"])
             else:
                 raise ValueError(f"Invalid build.act.json, dependency '{self.name}' has no path or hash")
-        return """        .%s = .{
+        return """        .%s = .{{
             .path = "%s"
-        },
+        }},
 """ % (
             self.name,
             path
@@ -246,15 +246,15 @@ class ZigDependency(Dependency):
         hash = self.hash
         self_path = self.path
         if self_path is not None:
-            return """        .%s = .{
+            return """        .%s = .{{
                 .path = "%s",
-            },
+            }},
     """ % (self.name, self_path)
 
-        return """        .%s = .{
+        return """        .%s = .{{
             .url = "%s",
             .hash = "%s",
-        },
+        }},
 """ % (
             self.name,
             url if url is not None else "",
@@ -267,21 +267,21 @@ def gen_buildzig(template: str, build_config: BuildConfig) -> str:
     exelink_lines = ""
 
     for dep in build_config.dependencies.values():
-        deps_defs += "    const actdep_" + dep.name + " = b.dependency(\"" + dep.name + "\", .{\n"
+        deps_defs += "    const actdep_" + dep.name + " = b.dependency(\"" + dep.name + "\", .{{\n"
         deps_defs += "        .target = target,\n"
         deps_defs += "        .optimize = optimize,\n"
-        deps_defs += "    });\n"
+        deps_defs += "    }});\n"
         liblink_lines += "    libActonProject.linkLibrary(actdep_" + dep.name + ".artifact(\"ActonProject\"));\n"
         exelink_lines += "            executable.linkLibrary(actdep_" + dep.name + ".artifact(\"ActonProject\"));\n"
 
     for dep_name, dep in build_config.zig_dependencies.items():
         if len(dep.artifacts) > 0:
-            deps_defs += "    const dep_" + dep.name + " = b.dependency(\"" + dep.name + "\", .{\n"
+            deps_defs += "    const dep_" + dep.name + " = b.dependency(\"" + dep.name + "\", .{{\n"
             deps_defs += "        .target = target,\n"
             deps_defs += "        .optimize = optimize,\n"
             for key, value in dep.options.items():
                 deps_defs += "        ." + key + " = " + value + ",\n"
-            deps_defs += "    });\n"
+            deps_defs += "    }});\n"
             for artifact in dep.artifacts:
                 liblink_lines += "    libActonProject.linkLibrary(dep_" + dep.name + ".artifact(\"" + artifact + "\"));\n"
                 exelink_lines += "            executable.linkLibrary(dep_" + dep.name + ".artifact(\"" + artifact + "\"));\n"

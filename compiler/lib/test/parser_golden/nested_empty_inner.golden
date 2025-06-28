@@ -1,0 +1,7 @@
+ERROR: [error Syntax error]: Empty expression in string interpolation
+     ╭──▶ test@1:17-1:17
+     │
+   1 │ "outer {"inner {}"}"
+     •                  
+     •                 ╰╸ Empty expression in string interpolation
+─────╯

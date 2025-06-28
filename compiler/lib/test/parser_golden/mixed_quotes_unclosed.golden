@@ -1,0 +1,7 @@
+ERROR: [error Syntax error]: missing closing '}' for expression
+     ╭──▶ test@1:17-1:18
+     │
+   1 │ "outer {'inner {x
+     •                 ┬
+     •                 ╰╸ missing closing '}' for expression
+─────╯

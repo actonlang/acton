@@ -1,6 +1,11 @@
-ERROR: test.act:2:1:
-  |
-2 | import math
-  | ^
-unexpected 'i'
-expecting end of input, end of line, or statement
+ERROR: [error Parse error]: unexpected 'i'
+                     expecting end of input, end of line, or statement
+
+     ╭──▶ test.act@2:1-2:2
+     │
+   2 │ import math
+     • ┬ 
+     • ╰╸ unexpected 'i'
+     •    expecting end of input, end of line, or statement
+     •    
+─────╯

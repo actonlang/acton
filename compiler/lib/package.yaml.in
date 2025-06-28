@@ -88,6 +88,7 @@ tests:
       - mtl
       - parser-combinators
       - pretty
+      - prettyprinter
       - scientific
       - text
       - transformers

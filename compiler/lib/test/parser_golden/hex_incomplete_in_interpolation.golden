@@ -1,0 +1,7 @@
+ERROR: [error Syntax error]: "\x" must be followed by two hexadecimal digits
+     ╭──▶ test@1:20-1:21
+     │
+   1 │ f"value: {x} and \x4"
+     •                    ┬ 
+     •                    ╰╸ "\x" must be followed by two hexadecimal digits
+─────╯

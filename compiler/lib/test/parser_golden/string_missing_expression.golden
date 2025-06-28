@@ -1,0 +1,7 @@
+ERROR: [error Syntax error]: Missing expression before format specifier
+     ╭──▶ test@1:22-1:22
+     │
+   1 │ "Missing expression {:10}"
+     •                       
+     •                      ╰╸ Missing expression before format specifier
+─────╯

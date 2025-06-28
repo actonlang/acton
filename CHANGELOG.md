@@ -48,6 +48,30 @@
      | Hint: Single upper case character (optionally followed by digits) are reserved for type variables. Use a longer name.
 -----+
 ```
+- Improve string interpolation parsing
+  - String parsing has been rewritten from scratch
+  - String interpolation now works by default in all string literals (no f-prefix required)
+    - Both `"hello {name}"` and `f"hello {name}"` support interpolation
+  - The change to interpolate normal strings is backwards **incompatible**, any
+    strings containing curly braces now need to be escaped or be converted to
+    raw strings, i.e. "{" -> "{{" or r"{"
+  - Backwards compatibility for classic `%` operator style is currently
+    maintained, i.e. NO interpolation is performed for `s = "hello %s, here is
+    {}" % name`, so curly braces are treated literaly
+    - NOTE: %-operator style formatting will be deprecated in the future
+  - Parser support nested interpolation strings (thought the necessary rewrites
+  - Properly handle escape sequences in interpolated strings
+  - Support complex expressions in interpolations including slices (`{arr[1:3]}`)
+  - Better error messages for malformed format specifications and many other cases
+```
+ERROR: [error Syntax error]: Empty format specifier after ':'
+     ╭──▶ test@1:27-1:27
+     │
+   1 │ f"Unbalanced format {name:}:10}"
+     •                            
+     •                           ╰╸ Empty format specifier after ':'
+─────╯
+```
 
 ### Changed
 - Use f-strings throughout standard library [#2297, #2290]
