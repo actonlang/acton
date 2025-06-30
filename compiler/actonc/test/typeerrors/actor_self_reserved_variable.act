@@ -1,0 +1,2 @@
+actor Test():
+    var self = 42

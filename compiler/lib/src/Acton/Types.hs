@@ -797,6 +797,26 @@ abstractDefs env q eq b                 = map absDef b
                                                 PosPar nSelf t e $ qualWPar env q p
                                             p -> qualWPar env q p
 
+-- Check if 'self' appears in parameters (for actors and methods in actors)
+checkSelfInParams :: Bool -> PosPar -> KwdPar -> TypeM ()
+checkSelfInParams shouldCheck p k
+  | shouldCheck                         = checkPos p >> checkKwd k
+  | otherwise                           = return ()
+  where
+    checkPos (PosPar n _ _ p)
+      | rawstr n == "self"              = selfParamError (loc n)
+      | otherwise                       = checkPos p
+    checkPos (PosSTAR n _)
+      | rawstr n == "self"              = selfParamError (loc n)
+    checkPos _                          = return ()
+
+    checkKwd (KwdPar n _ _ k)
+      | rawstr n == "self"              = selfParamError (loc n)
+      | otherwise                       = checkKwd k
+    checkKwd (KwdSTAR n _)
+      | rawstr n == "self"              = selfParamError (loc n)
+    checkKwd _                          = return ()
+
 instance Check Decl where
     checkEnv env (Def l n q p k a b dec fx ddoc)
                                         = do --traceM ("## checkEnv def " ++ prstr n ++ " FX " ++ prstr fx')
@@ -808,6 +828,10 @@ instance Check Decl where
                                              when (inClass env) $
                                               --   tryUnify (DfltInfo l 600 Nothing []) tSelf $ selfType p k dec
                                                  tryUnify (Simple l "Type of first parameter of class method does not unify with Self") tSelf $ selfType p k dec
+                                             checkSelfInParams (inAct env) p k -- Check for 'self' in parameters if we're inside an actor
+                                             -- Check for 'self' as method name in actors
+                                             when (inAct env && rawstr n == "self") $
+                                                 selfParamError (loc n)
                                              (csp,te0,p') <- infEnv env1 p
                                              (csk,te1,k') <- infEnv (define te0 env1) k
                                              (csb,_,b') <- infDefBody (define te1 (define te0 env1)) n p' k' b
@@ -829,6 +853,7 @@ instance Check Decl where
                                         = do --traceM ("## checkEnv actor " ++ prstr n)
                                              pushFX fxProc tNone
                                              wellformed env1 q
+                                             checkSelfInParams True p k -- Check for 'self' in parameters (always check for actors)
                                              (csp,te1,p') <- infEnv env1 p
                                              (csk,te2,k') <- infEnv (define te1 env1) k
                                              (csb,te,b') <- (if stub env then infEnv else infSuiteEnv) (define te2 $ define te1 env1) b
@@ -1645,6 +1670,9 @@ instance InfEnvT Pattern where
                                              wellformed env t
                                              return ([], [], t, PWild l (Just t))
     infEnvT env (PVar l n a)            = do t <- maybe newTVar return a
+                                             -- Check for 'self' parameter in actors
+                                             when (inAct env && rawstr n == "self") $
+                                                 selfParamError (loc n)
                                              wellformed env t
                                              case findName n env of
                                                  NReserved -> do
@@ -1797,3 +1825,4 @@ testType (NDef (TSchema _ []  (TFun _ fx (TNil _ PRow) k res)) _ _)
                                     _       -> False
           isGoodAction t        = False
 testType _                      = Nothing
+
