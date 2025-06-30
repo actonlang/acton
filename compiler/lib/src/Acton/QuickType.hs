@@ -157,6 +157,8 @@ instance QType Expr where
                                         TTuple _ p _ -> (pick i p, fx, DotI l e' i)
       where (t, fx, e')             = qType env f e
             pick i (TRow _ _ _ t' p) = if i == 0 then t' else pick (i-1) p
+            pick _ (TNil _ _)       = tUnit  -- End of tuple
+            pick _ _                = tUnit  -- Other cases default to unit
     qType env f (RestI l e i)       = case t of
                                         TTuple _ p _ -> (TTuple NoLoc (pick i p) kwdNil, fx, RestI l e' i)
       where (t, fx, e')             = qType env f e
@@ -395,7 +397,9 @@ instance EnvOf Assoc where
     envOf _                         = []
 
 
-upbound env ts                      = case lubfold env ts of Just u -> u
+upbound env ts                      = case lubfold env ts of
+                                        Just u -> u
+                                        Nothing -> tUnit  -- No common upper bound, default to unit
 
 nvarsOf te                          = [ (n,t) | (n, NVar t) <- te ]
 

@@ -1,0 +1,220 @@
+# Test nested interpolated strings for Normalization
+
+def simple_nested():
+    x = 42
+    # Simple case: one level of nesting
+    s = "outer {"inner {x}"}"
+    return s
+
+def multi_level():
+    x = 1
+    # Multiple levels of nesting
+    s = "L1 {"L2 {"L3 {x}"}"}"
+    return s
+
+def with_format_spec():
+    x = 3.14159
+    # Nested with format specifiers
+    s = "Result: {"PI = {x:.2f}"}"
+    return s
+
+def multiple_args():
+    a = 10
+    b = 20
+    # Multiple interpolations at each level
+    s = "Outer {"A={a}"} and {"B={b}"}"
+    return s
+
+def mixed_quotes():
+    x = 42
+    # Mixed quote styles
+    s1 = "outer {'inner {x}'}"
+    s2 = 'outer {"inner {x}"}'
+    return (s1, s2)
+
+def in_expression():
+    x = 5
+    # Nested interpolation in larger expression
+    result = "prefix " + "middle {"nested {x}"}" + " suffix"
+    return result
+
+def in_for_loop():
+    x = 42
+    result = []
+    # Nested format in for loop iterator
+    for i in ["item_{"nested_{x}"}_{j}" for j in range(3)]:
+        result.append(i)
+    return result
+
+def in_for_direct():
+    x = 10
+    # Direct nested format in for iterator expression
+    for item in "items_{"category_{x}"}".split("_"):
+        print(item)
+
+def in_assert():
+    x = 42
+    # Nested format in assert condition
+    assert "value_{"nested_{x}"}" == "value_nested_42"
+    
+    # Nested format in assert message
+    assert True, "Error: {"details_{x}"}"
+
+def in_raise():
+    x = 99
+    # Nested format in raise expression
+    try:
+        raise Exception("Error: {"code_{x}"}")
+    except Exception as e:
+        return str(e)
+
+def in_while():
+    x = 0
+    counter = 0
+    # Nested format in while condition
+    while "cond_{"state_{x}"}" == "cond_state_0" and counter < 1:
+        counter += 1
+        x = 1  # This will change the condition
+    return counter
+
+def in_if():
+    x = 42
+    # Nested format in if condition
+    if "check_{"value_{x}"}" == "check_value_42":
+        return "matched"
+    else:
+        return "not matched"
+
+def in_list_comp():
+    x = 5
+    # Nested format in list comprehension condition
+    result = [i for i in range(10) if "item_{"idx_{x}"}" == "item_idx_5"]
+    return result
+
+def complex_nested_return():
+    x = 100
+    y = 200
+    # Complex nested format in return statement
+    return "Result: {"Part1: {"X={x}"}, Part2: {"Y={y}"}"}"
+
+def nested_in_function_arg():
+    x = 7
+    # Nested format as function argument
+    def process(msg: str) -> str:
+        return "Processed: " + msg
+    
+    result = process("Input: {"data_{x}"}")
+    return result
+
+# More exhaustive test cases
+
+def in_dict_comp():
+    x = 5
+    # Nested format in dict comprehension
+    result = {i: "val_{"idx_{x}"}" for i in range(3) if "check_{"num_{x}"}" == "check_num_5"}
+    return result
+
+def in_set_comp():
+    x = 10
+    # Nested format in set comprehension  
+    result = {"item_{"type_{x}"}_{i}" for i in range(3) if i < 2}
+    return result
+
+def in_elif_condition():
+    x = 1
+    y = 2
+    # Nested format in elif conditions
+    if "test_{"case_{x}"}" == "test_case_0":
+        return "first"
+    elif "test_{"case_{y}"}" == "test_case_2":
+        return "second"
+    else:
+        return "third"
+
+def in_nested_if():
+    x = 100
+    # Deeply nested if with formats
+    if "outer_{"check_{x}"}" == "outer_check_100":
+        if "inner_{"verify_{x}"}" == "inner_verify_100":
+            return "matched both"
+    return "no match"
+
+def in_try_except():
+    x = 99
+    # Nested format in exception handling
+    try:
+        if "error_{"code_{x}"}" == "error_code_99":
+            raise ValueError("Error: {"details_{x}"}")
+    except ValueError as e:
+        return f"Caught: {e}"
+    except Exception as e:
+        return "Other error"
+
+def in_with_statement():
+    x = 42
+    # Nested format in with statement (when implemented)
+    # Note: with statements may not be fully implemented yet
+    # with open("file_{"name_{x}"}.txt") as f:
+    #     return f.read()
+    return "with not implemented"
+
+def in_lambda():
+    x = 5
+    # Nested format in lambda
+    fn = lambda y: "result_{"input_{x}"}_{y}"
+    return fn(10)
+
+def in_tuple_elements():
+    x = 7
+    # Nested format in tuple construction
+    t = ("first_{"val_{x}"}", "second_{"val_{x}"}", x)
+    return t
+
+def in_list_elements():
+    x = 3
+    # Nested format in list construction
+    lst = ["item_{"idx_{x}"}_{i}" for i in range(3)]
+    return lst
+
+def in_dict_values():
+    x = 8
+    # Nested format in dict construction
+    d = {"key1": "value_{"data_{x}"}", "key2": "other_{"info_{x}"}"}
+    return d
+
+def in_slice_expr():
+    x = 2
+    data = ["a", "b", "c", "d", "e"]
+    # Nested format in slice
+    result = data[int("start_{"pos_{x}"}"):4]
+    return result
+
+def in_multi_assign():
+    x = 10
+    # Nested format in multiple assignment
+    a, b = "first_{"val_{x}"}", "second_{"val_{x}"}"
+    return (a, b)
+
+def in_aug_assign():
+    x = 5
+    # Nested format in augmented assignment
+    result = "initial"
+    result += "_suffix_{"tag_{x}"}"
+    return result
+
+def complex_mixed_case():
+    x = 1
+    y = 2
+    z = 3
+    # Mix of multiple cases
+    result = []
+    for i in range(3):  # Would use: int(f"count_{x}")
+        if "check_{"iter_{i}"}" == "check_iter_0":
+            result.append("Match: {"found_{"val_{y}"}"}")
+        else:
+            try:
+                assert "verify_{"state_{z}"}" == "verify_state_3", "Assert: {"error_{z}"}"
+                result.append("OK")
+            except:
+                result.append("Failed")
+    return result

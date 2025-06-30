@@ -1,0 +1,496 @@
+
+W_4: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+pure def simple_nested () -> __builtin__.str:
+    x: ?__builtin__.value = W_4.__fromatom__(42)
+    N_fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"inner %s\"", (str(x),))
+    N_1fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"outer %s\"", (str(N_fmt),))
+    s: __builtin__.str = N_1fmt
+    return s
+
+W_22: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+pure def multi_level () -> __builtin__.str:
+    x: ?__builtin__.value = W_22.__fromatom__(1)
+    N_2fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"L3 %s\"", (str(x),))
+    N_3fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"L2 %s\"", (str(N_2fmt),))
+    N_4fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"L1 %s\"", (str(N_3fmt),))
+    s: __builtin__.str = N_4fmt
+    return s
+
+pure def with_format_spec () -> __builtin__.str:
+    W_45: __builtin__.RealFloat[__builtin__.float] = __builtin__.RealFloatD_float()
+    x: __builtin__.float = W_45.__fromatom__(3.14159)
+    N_5fmt: __builtin__.str = $FORMAT@[(__builtin__.float,)]("\"PI = %.2f\"", (x,))
+    N_6fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"Result: %s\"", (str(N_5fmt),))
+    s: __builtin__.str = N_6fmt
+    return s
+
+W_59: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+pure def multiple_args () -> __builtin__.str:
+    a: ?__builtin__.value = W_59.__fromatom__(10)
+    b: ?__builtin__.value = W_59.__fromatom__(20)
+    N_7fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"A=%s\"", (str(a),))
+    N_8fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"B=%s\"", (str(b),))
+    N_9fmt: __builtin__.str = $FORMAT@[(__builtin__.str, __builtin__.str)]("\"Outer %s and %s\"", (str(N_7fmt), str(N_8fmt)))
+    s: __builtin__.str = N_9fmt
+    return s
+
+W_92: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+pure def mixed_quotes () -> (__builtin__.str, __builtin__.str):
+    x: __builtin__.value = W_92.__fromatom__(42)
+    N_10fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"inner %s\"", (str(x),))
+    N_11fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"outer %s\"", (str(N_10fmt),))
+    s1: __builtin__.str = N_11fmt
+    N_12fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"inner %s\"", (str(x),))
+    N_13fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"outer %s\"", (str(N_12fmt),))
+    s2: __builtin__.str = N_13fmt
+    N_14tmp: (__builtin__.str, __builtin__.str) = (s1, s2)
+    return N_14tmp
+
+W_124: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+pure def in_expression () -> __builtin__.str:
+    W_140: __builtin__.Plus[__builtin__.str] = __builtin__.TimesD_str()
+    x: ?__builtin__.value = W_124.__fromatom__(5)
+    N_15fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"nested %s\"", (str(x),))
+    N_16fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"middle %s\"", (str(N_15fmt),))
+    result: __builtin__.str = W_140.__add__(W_140.__add__("\"prefix \"", N_16fmt), "\" suffix\"")
+    return result
+
+W_150: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+mut def in_for_loop () -> __builtin__.list[__builtin__.str]:
+    W_164: __builtin__.Iterable[__builtin__.range, __builtin__.int] = __builtin__.IterableD_range()
+    W_201: __builtin__.Sequence[__builtin__.list[__builtin__.str], __builtin__.str] = __builtin__.SequenceD_list@[__builtin__.str]()
+    W_180: __builtin__.Iterable[__builtin__.list[__builtin__.str], __builtin__.str] = __builtin__.SequenceD_list@[__builtin__.str]().W_Collection
+    x: ?__builtin__.value = W_150.__fromatom__(42)
+    result: __builtin__.list[__builtin__.str] = []
+    N_17iter: __builtin__.Iterator[__builtin__.str] = W_180.__iter__(N_19compfun())
+    if $PUSH():
+        while True:
+            pure def N_19compfun () -> __builtin__.list[__builtin__.str]:
+                N_20w: __builtin__.Sequence[__builtin__.list[__builtin__.str], __builtin__.str] = __builtin__.SequenceD_list@[__builtin__.str]()
+                N_21res: __builtin__.list[__builtin__.str] = []
+                N_22iter: __builtin__.Iterator[__builtin__.int] = W_164.__iter__(range(W_150.__fromatom__(3), None, None))
+                if $PUSH():
+                    while True:
+                        N_23val: __builtin__.int = N_22iter.__next__()
+                        j: __builtin__.int = N_23val
+                        N_24fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"nested_%s\"", (str(x),))
+                        N_25fmt: __builtin__.str = $FORMAT@[(__builtin__.str, __builtin__.str)]("\"item_%s_%s\"", (str(N_24fmt), str(j)))
+                        N_20w.append(N_21res, N_25fmt)
+                    $DROP()
+                else:
+                    N_26x: __builtin__.BaseException = $POP()
+                    if isinstance(N_26x, __builtin__.StopIteration):
+                        pass
+                    else:
+                        $RAISE(N_26x)
+                return N_21res
+            N_18val: __builtin__.str = N_17iter.__next__()
+            i: __builtin__.str = N_18val
+            W_201.append(result, i)
+        $DROP()
+    else:
+        N_27x: __builtin__.BaseException = $POP()
+        if isinstance(N_27x, __builtin__.StopIteration):
+            pass
+        else:
+            $RAISE(N_27x)
+    return result
+
+W_209: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+pure def in_for_direct () -> None:
+    W_227: __builtin__.Iterable[__builtin__.list[__builtin__.str], __builtin__.str] = __builtin__.SequenceD_list@[__builtin__.str]().W_Collection
+    x: ?__builtin__.value = W_209.__fromatom__(10)
+    N_28iter: __builtin__.Iterator[__builtin__.str] = W_227.__iter__($FORMAT@[(__builtin__.str,)]("\"\\\"items_%s\\\"\"", (str($FORMAT@[(__builtin__.str,)]("\"\\\"category_%s\\\"\"", (str(x),))),)).split("\"\\\"_\\\"\"", None))
+    if $PUSH():
+        while True:
+            N_29val: __builtin__.str = N_28iter.__next__()
+            item: __builtin__.str = N_29val
+            print@[(__builtin__.str,)]((item,), None, None, None, None)
+        $DROP()
+    else:
+        N_30x: __builtin__.BaseException = $POP()
+        if isinstance(N_30x, __builtin__.StopIteration):
+            pass
+        else:
+            $RAISE(N_30x)
+    return None
+
+W_251: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+pure def in_assert () -> None:
+    W_262: __builtin__.Eq[__builtin__.str] = __builtin__.OrdD_str()
+    x: __builtin__.value = W_251.__fromatom__(42)
+    N_31fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"nested_%s\"", (str(x),))
+    N_32fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"value_%s\"", (str(N_31fmt),))
+    $ASSERT(W_262.__eq__(N_32fmt, "\"value_nested_42\""), None)
+    N_33fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"details_%s\"", (str(x),))
+    N_34fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"Error: %s\"", (str(N_33fmt),))
+    $ASSERT(True, N_34fmt)
+    return None
+
+W_281: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+pure def in_raise () -> __builtin__.str:
+    x: ?__builtin__.value = W_281.__fromatom__(99)
+    if $PUSH():
+        N_35fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"code_%s\"", (str(x),))
+        N_36fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"Error: %s\"", (str(N_35fmt),))
+        $RAISE(Exception(N_36fmt))
+        $DROP()
+    else:
+        N_37x: __builtin__.BaseException = $POP()
+        if isinstance(N_37x, Exception):
+            e: Exception = N_37x
+            N_38tmp: __builtin__.str = str(e)
+            return N_38tmp
+        else:
+            $RAISE(N_37x)
+    return None
+
+W_305: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+pure def in_while[T_64w] (W_326 : __builtin__.Ord[T_64w], W_309 : __builtin__.Number[T_64w]) -> T_64w:
+    W_320: __builtin__.Eq[__builtin__.str] = __builtin__.OrdD_str()
+    x: ?__builtin__.value = W_305.__fromatom__(0)
+    counter: T_64w = W_309.__fromatom__(0)
+    while W_320.__eq__($FORMAT@[(__builtin__.str,)]("\"cond_%s\"", (str($FORMAT@[(__builtin__.str,)]("\"state_%s\"", (str(x),))),)), "\"cond_state_0\"") and W_326.__lt__(counter, W_309.__fromatom__(1)):
+        counter = W_309.__iadd__(counter, W_309.__fromatom__(1))
+        x = W_305.__fromatom__(1)
+    return counter
+
+W_347: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+pure def in_if () -> __builtin__.str:
+    W_358: __builtin__.Eq[__builtin__.str] = __builtin__.OrdD_str()
+    x: ?__builtin__.value = W_347.__fromatom__(42)
+    N_39fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"value_%s\"", (str(x),))
+    N_40fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"check_%s\"", (str(N_39fmt),))
+    if W_358.__eq__(N_40fmt, "\"check_value_42\""):
+        return "\"matched\""
+    else:
+        return "\"not matched\""
+
+W_368: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+pure def in_list_comp () -> __builtin__.list[__builtin__.int]:
+    W_387: __builtin__.Eq[__builtin__.str] = __builtin__.OrdD_str()
+    W_388: __builtin__.Iterable[__builtin__.range, __builtin__.int] = __builtin__.IterableD_range()
+    x: ?__builtin__.value = W_368.__fromatom__(5)
+    pure def N_41compfun () -> __builtin__.list[__builtin__.int]:
+        N_42w: __builtin__.Sequence[__builtin__.list[__builtin__.int], __builtin__.int] = __builtin__.SequenceD_list@[__builtin__.int]()
+        N_43res: __builtin__.list[__builtin__.int] = []
+        N_44iter: __builtin__.Iterator[__builtin__.int] = W_388.__iter__(range(W_368.__fromatom__(10), None, None))
+        if $PUSH():
+            while True:
+                N_45val: __builtin__.int = N_44iter.__next__()
+                i: __builtin__.int = N_45val
+                N_46fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"idx_%s\"", (str(x),))
+                N_47fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"item_%s\"", (str(N_46fmt),))
+                if W_387.__eq__(N_47fmt, "\"item_idx_5\""):
+                    N_42w.append(N_43res, i)
+            $DROP()
+        else:
+            N_48x: __builtin__.BaseException = $POP()
+            if isinstance(N_48x, __builtin__.StopIteration):
+                pass
+            else:
+                $RAISE(N_48x)
+        return N_43res
+    result: __builtin__.list[__builtin__.int] = N_41compfun()
+    return result
+
+W_402: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+pure def complex_nested_return () -> __builtin__.str:
+    x: ?__builtin__.value = W_402.__fromatom__(100)
+    y: ?__builtin__.value = W_402.__fromatom__(200)
+    N_49fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"X=%s\"", (str(x),))
+    N_50fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"Y=%s\"", (str(y),))
+    N_51fmt: __builtin__.str = $FORMAT@[(__builtin__.str, __builtin__.str)]("\"Part1: %s, Part2: %s\"", (str(N_49fmt), str(N_50fmt)))
+    N_52fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"Result: %s\"", (str(N_51fmt),))
+    return N_52fmt
+
+W_438: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+pure def nested_in_function_arg () -> __builtin__.str:
+    x: ?__builtin__.value = W_438.__fromatom__(7)
+    pure def process (msg : __builtin__.str) -> __builtin__.str:
+        W_444: __builtin__.Plus[__builtin__.str] = __builtin__.TimesD_str()
+        N_53tmp: __builtin__.str = W_444.__add__("\"Processed: \"", msg)
+        return N_53tmp
+    N_54fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"data_%s\"", (str(x),))
+    N_55fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"Input: %s\"", (str(N_54fmt),))
+    result: __builtin__.str = process(N_55fmt)
+    return result
+
+W_466: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+W_497: __builtin__.Hashable[__builtin__.int] = __builtin__.HashableD_int()
+
+pure def in_dict_comp () -> __builtin__.dict[__builtin__.int, __builtin__.str]:
+    W_485: __builtin__.Eq[__builtin__.str] = __builtin__.OrdD_str()
+    W_486: __builtin__.Iterable[__builtin__.range, __builtin__.int] = __builtin__.IterableD_range()
+    x: __builtin__.value = W_466.__fromatom__(5)
+    pure def N_56compfun () -> __builtin__.dict[__builtin__.int, __builtin__.str]:
+        N_57w: __builtin__.Mapping[__builtin__.dict[__builtin__.int, __builtin__.str], __builtin__.int, __builtin__.str] = __builtin__.MappingD_dict@[__builtin__.int, __builtin__.str](W_497)
+        N_58res: __builtin__.dict[__builtin__.int, __builtin__.str] = $mkDict@[__builtin__.str, __builtin__.int](W_497, {})
+        N_59iter: __builtin__.Iterator[__builtin__.int] = W_486.__iter__(range(W_466.__fromatom__(3), None, None))
+        if $PUSH():
+            while True:
+                N_60val: __builtin__.int = N_59iter.__next__()
+                i: __builtin__.int = N_60val
+                N_63fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"num_%s\"", (str(x),))
+                N_64fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"check_%s\"", (str(N_63fmt),))
+                if W_485.__eq__(N_64fmt, "\"check_num_5\""):
+                    N_61fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"idx_%s\"", (str(x),))
+                    N_62fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"val_%s\"", (str(N_61fmt),))
+                    N_57w.W_Indexed.__setitem__(N_58res, i, N_62fmt)
+            $DROP()
+        else:
+            N_65x: __builtin__.BaseException = $POP()
+            if isinstance(N_65x, __builtin__.StopIteration):
+                pass
+            else:
+                $RAISE(N_65x)
+        return N_58res
+    result: __builtin__.dict[__builtin__.int, __builtin__.str] = N_56compfun()
+    return result
+
+W_513: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+W_528: __builtin__.Ord[__builtin__.int] = __builtin__.OrdD_int()
+
+W_540: __builtin__.Hashable[__builtin__.str] = __builtin__.HashableD_str()
+
+pure def in_set_comp () -> __builtin__.set[__builtin__.str]:
+    W_529: __builtin__.Iterable[__builtin__.range, __builtin__.int] = __builtin__.IterableD_range()
+    x: ?__builtin__.value = W_513.__fromatom__(10)
+    pure def N_66compfun () -> __builtin__.set[__builtin__.str]:
+        N_67w: __builtin__.Set[__builtin__.set[__builtin__.str], __builtin__.str] = __builtin__.SetD_set@[__builtin__.str](W_540)
+        N_68res: __builtin__.set[__builtin__.str] = $mkSet@[__builtin__.str](W_540, set())
+        N_69iter: __builtin__.Iterator[__builtin__.int] = W_529.__iter__(range(W_513.__fromatom__(3), None, None))
+        if $PUSH():
+            while True:
+                N_70val: __builtin__.int = N_69iter.__next__()
+                i: __builtin__.int = N_70val
+                if W_528.__lt__(i, W_513.__fromatom__(2)):
+                    N_71fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"type_%s\"", (str(x),))
+                    N_72fmt: __builtin__.str = $FORMAT@[(__builtin__.str, __builtin__.str)]("\"item_%s_%s\"", (str(N_71fmt), str(i)))
+                    N_67w.add(N_68res, N_72fmt)
+            $DROP()
+        else:
+            N_73x: __builtin__.BaseException = $POP()
+            if isinstance(N_73x, __builtin__.StopIteration):
+                pass
+            else:
+                $RAISE(N_73x)
+        return N_68res
+    result: __builtin__.set[__builtin__.str] = N_66compfun()
+    return result
+
+W_556: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+pure def in_elif_condition () -> __builtin__.str:
+    W_571: __builtin__.Eq[__builtin__.str] = __builtin__.OrdD_str()
+    x: ?__builtin__.value = W_556.__fromatom__(1)
+    y: ?__builtin__.value = W_556.__fromatom__(2)
+    N_74fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"case_%s\"", (str(x),))
+    N_75fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"test_%s\"", (str(N_74fmt),))
+    N_76fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"case_%s\"", (str(y),))
+    N_77fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"test_%s\"", (str(N_76fmt),))
+    if W_571.__eq__(N_75fmt, "\"test_case_0\""):
+        return "\"first\""
+    elif W_571.__eq__(N_77fmt, "\"test_case_2\""):
+        return "\"second\""
+    else:
+        return "\"third\""
+
+W_596: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+pure def in_nested_if () -> __builtin__.str:
+    W_607: __builtin__.Eq[__builtin__.str] = __builtin__.OrdD_str()
+    x: __builtin__.value = W_596.__fromatom__(100)
+    N_80fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"check_%s\"", (str(x),))
+    N_81fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"outer_%s\"", (str(N_80fmt),))
+    if W_607.__eq__(N_81fmt, "\"outer_check_100\""):
+        N_78fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"verify_%s\"", (str(x),))
+        N_79fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"inner_%s\"", (str(N_78fmt),))
+        if W_607.__eq__(N_79fmt, "\"inner_verify_100\""):
+            return "\"matched both\""
+    return "\"no match\""
+
+W_631: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+pure def in_try_except () -> ?__builtin__.str:
+    W_642: __builtin__.Eq[__builtin__.str] = __builtin__.OrdD_str()
+    x: __builtin__.value = W_631.__fromatom__(99)
+    if $PUSH():
+        N_84fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"code_%s\"", (str(x),))
+        N_85fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"error_%s\"", (str(N_84fmt),))
+        if W_642.__eq__(N_85fmt, "\"error_code_99\""):
+            N_82fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"details_%s\"", (str(x),))
+            N_83fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"Error: %s\"", (str(N_82fmt),))
+            $RAISE(ValueError(N_83fmt))
+        $DROP()
+    else:
+        N_86x: __builtin__.BaseException = $POP()
+        if isinstance(N_86x, ValueError):
+            e: ValueError = N_86x
+            N_87fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"Caught: %s\"", (str(e),))
+            return N_87fmt
+        elif isinstance(N_86x, Exception):
+            e: Exception = N_86x
+            return "\"Other error\""
+        else:
+            $RAISE(N_86x)
+    return None
+
+W_672: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+pure def in_with_statement () -> __builtin__.str:
+    x: __builtin__.int = W_672.__fromatom__(42)
+    return "\"with not implemented\""
+
+W_678: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+pure def in_lambda () -> __builtin__.str:
+    x: ?__builtin__.value = W_678.__fromatom__(5)
+    fn: (?__builtin__.value) -> __builtin__.str = pure lambda (y : ?__builtin__.value): $FORMAT@[(__builtin__.str, __builtin__.str)]("\"result_%s_%s\"", (str($FORMAT@[(__builtin__.str,)]("\"input_%s\"", (str(x),))), str(y)))
+    N_88tmp: __builtin__.str = fn(W_678.__fromatom__(10))
+    return N_88tmp
+
+W_715: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+pure def in_tuple_elements () -> (__builtin__.str, __builtin__.str, __builtin__.int):
+    x: __builtin__.int = W_715.__fromatom__(7)
+    N_89fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"val_%s\"", (str(x),))
+    N_90fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"first_%s\"", (str(N_89fmt),))
+    N_91fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"val_%s\"", (str(x),))
+    N_92fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"second_%s\"", (str(N_91fmt),))
+    t: (__builtin__.str, __builtin__.str, __builtin__.int) = (N_90fmt, N_92fmt, x)
+    return t
+
+W_746: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+pure def in_list_elements () -> __builtin__.list[__builtin__.str]:
+    W_756: __builtin__.Iterable[__builtin__.range, __builtin__.int] = __builtin__.IterableD_range()
+    x: ?__builtin__.value = W_746.__fromatom__(3)
+    pure def N_93compfun () -> __builtin__.list[__builtin__.str]:
+        N_94w: __builtin__.Sequence[__builtin__.list[__builtin__.str], __builtin__.str] = __builtin__.SequenceD_list@[__builtin__.str]()
+        N_95res: __builtin__.list[__builtin__.str] = []
+        N_96iter: __builtin__.Iterator[__builtin__.int] = W_756.__iter__(range(W_746.__fromatom__(3), None, None))
+        if $PUSH():
+            while True:
+                N_97val: __builtin__.int = N_96iter.__next__()
+                i: __builtin__.int = N_97val
+                N_98fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"idx_%s\"", (str(x),))
+                N_99fmt: __builtin__.str = $FORMAT@[(__builtin__.str, __builtin__.str)]("\"item_%s_%s\"", (str(N_98fmt), str(i)))
+                N_94w.append(N_95res, N_99fmt)
+            $DROP()
+        else:
+            N_100x: __builtin__.BaseException = $POP()
+            if isinstance(N_100x, __builtin__.StopIteration):
+                pass
+            else:
+                $RAISE(N_100x)
+        return N_95res
+    lst: __builtin__.list[__builtin__.str] = N_93compfun()
+    return lst
+
+W_782: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+W_803: __builtin__.Hashable[__builtin__.str] = __builtin__.HashableD_str()
+
+pure def in_dict_values () -> __builtin__.dict[__builtin__.str, __builtin__.str]:
+    x: __builtin__.value = W_782.__fromatom__(8)
+    d: __builtin__.dict[__builtin__.str, __builtin__.str] = $mkDict@[__builtin__.str, __builtin__.str](W_803, {"\"key1\"": $FORMAT@[(__builtin__.str,)]("\"value_%s\"", (str($FORMAT@[(__builtin__.str,)]("\"data_%s\"", (str(x),))),)), "\"key2\"": $FORMAT@[(__builtin__.str,)]("\"other_%s\"", (str($FORMAT@[(__builtin__.str,)]("\"info_%s\"", (str(x),))),))})
+    return d
+
+W_817: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+pure def in_slice_expr () -> __builtin__.list[__builtin__.str]:
+    W_841: __builtin__.Sliceable[__builtin__.list[__builtin__.str], __builtin__.str] = __builtin__.SequenceD_list@[__builtin__.str]()
+    x: ?__builtin__.value = W_817.__fromatom__(2)
+    data: __builtin__.list[__builtin__.str] = ["\"a\"", "\"b\"", "\"c\"", "\"d\"", "\"e\""]
+    N_101fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"pos_%s\"", (str(x),))
+    N_102fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"start_%s\"", (str(N_101fmt),))
+    result: __builtin__.list[__builtin__.str] = W_841.__getslice__(data, __builtin__.slice(int(N_102fmt, None), W_817.__fromatom__(4), None))
+    return result
+
+W_854: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+pure def in_multi_assign () -> (__builtin__.str, __builtin__.str):
+    x: __builtin__.value = W_854.__fromatom__(10)
+    N_103fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"val_%s\"", (str(x),))
+    N_104fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"first_%s\"", (str(N_103fmt),))
+    N_105fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"val_%s\"", (str(x),))
+    N_106fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"second_%s\"", (str(N_105fmt),))
+    N_107tup: (__builtin__.str, __builtin__.str) = (N_104fmt, N_106fmt)
+    a: __builtin__.str = N_107tup.0
+    b: __builtin__.str = N_107tup.1
+    N_108tmp: (__builtin__.str, __builtin__.str) = (a, b)
+    return N_108tmp
+
+W_887: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+pure def in_aug_assign () -> __builtin__.str:
+    W_899: __builtin__.Plus[__builtin__.str] = __builtin__.TimesD_str()
+    x: ?__builtin__.value = W_887.__fromatom__(5)
+    result: __builtin__.str = "\"initial\""
+    N_109fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"tag_%s\"", (str(x),))
+    N_110fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"_suffix_%s\"", (str(N_109fmt),))
+    result = W_899.__iadd__(result, N_110fmt)
+    return result
+
+W_908: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+mut def complex_mixed_case () -> __builtin__.list[__builtin__.str]:
+    W_937: __builtin__.Eq[__builtin__.str] = __builtin__.OrdD_str()
+    W_976: __builtin__.Iterable[__builtin__.range, __builtin__.int] = __builtin__.IterableD_range()
+    W_1032: __builtin__.Sequence[__builtin__.list[__builtin__.str], __builtin__.str] = __builtin__.SequenceD_list@[__builtin__.str]()
+    x: __builtin__.int = W_908.__fromatom__(1)
+    y: ?__builtin__.value = W_908.__fromatom__(2)
+    z: __builtin__.value = W_908.__fromatom__(3)
+    result: __builtin__.list[__builtin__.str] = []
+    N_111iter: __builtin__.Iterator[__builtin__.int] = W_976.__iter__(range(W_908.__fromatom__(3), None, None))
+    if $PUSH():
+        while True:
+            N_112val: __builtin__.int = N_111iter.__next__()
+            i: __builtin__.int = N_112val
+            N_121fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"iter_%s\"", (str(i),))
+            N_122fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"check_%s\"", (str(N_121fmt),))
+            if W_937.__eq__(N_122fmt, "\"check_iter_0\""):
+                N_113fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"val_%s\"", (str(y),))
+                N_114fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"found_%s\"", (str(N_113fmt),))
+                N_115fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"Match: %s\"", (str(N_114fmt),))
+                W_1032.append(result, N_115fmt)
+            else:
+                if $PUSH():
+                    N_116fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"state_%s\"", (str(z),))
+                    N_117fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"verify_%s\"", (str(N_116fmt),))
+                    N_118fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"error_%s\"", (str(z),))
+                    N_119fmt: __builtin__.str = $FORMAT@[(__builtin__.str,)]("\"Assert: %s\"", (str(N_118fmt),))
+                    $ASSERT(W_937.__eq__(N_117fmt, "\"verify_state_3\""), N_119fmt)
+                    W_1032.append(result, "\"OK\"")
+                    $DROP()
+                else:
+                    N_120x: __builtin__.BaseException = $POP()
+                    if True:
+                        W_1032.append(result, "\"Failed\"")
+                    else:
+                        $RAISE(N_120x)
+        $DROP()
+    else:
+        N_123x: __builtin__.BaseException = $POP()
+        if isinstance(N_123x, __builtin__.StopIteration):
+            pass
+        else:
+            $RAISE(N_123x)
+    return result

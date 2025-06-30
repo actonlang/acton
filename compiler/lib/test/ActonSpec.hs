@@ -335,6 +335,7 @@ main = do
 
     describe "Pass 4: Normalizer" $ do
       testNorm env0 "deact"
+      testNorm env0 "nested_interp"
 
     describe "Pass 5: Deactorizer" $ do
       testDeact env0 "deact"
