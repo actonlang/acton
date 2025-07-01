@@ -1,0 +1,5 @@
+actor Test():
+    try:
+        raise ValueError("test")
+    except ValueError as self:
+        print(self)

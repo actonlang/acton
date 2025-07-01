@@ -40,6 +40,7 @@ import Prelude hiding ((<>))
 
 
 
+
 mkEnv                       :: [FilePath] -> Env0 -> Module -> IO Env0
 mkEnv spath env m           = getImps spath env (imps m)
 
@@ -442,6 +443,7 @@ define                      :: TEnv -> EnvF x -> EnvF x
 define te env               = foldl addWit env1 ws
   where env1                = env{ names = reverse te ++ names env }
         ws                  = [ WClass q (tCon c) p (NoQ w) ws | (w, NExt q c ps te' _) <- te, (ws,p) <- ps ]
+
 
 addImport                   :: ModName -> EnvF x -> EnvF x
 addImport m env             = env{ imports = m : imports env }

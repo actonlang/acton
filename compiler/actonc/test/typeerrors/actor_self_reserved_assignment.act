@@ -1,0 +1,2 @@
+actor Test():
+    self, x = 1, 2

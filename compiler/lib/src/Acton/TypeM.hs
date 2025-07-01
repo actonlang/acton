@@ -15,6 +15,7 @@
 module Acton.TypeM where
 
 import qualified Control.Exception
+import Control.Exception (throw)
 import Control.Monad.State.Strict
 import Control.Monad.Except
 import qualified Data.Map.Strict as Map
@@ -107,6 +108,7 @@ newTVar                                 = newTVarOfKind KType
 -- Type errors ---------------------------------------------------------------------------------------------------------------------
 
 data TypeError                      = TypeError SrcLoc String
+                                    | SelfParamError SrcLoc
                                     | RigidVariable TVar
                                     | InfiniteType TVar
                                     | ConflictingRow TVar
@@ -130,6 +132,7 @@ instance Control.Exception.Exception TypeError
 
 instance HasLoc TypeError where
     loc (TypeError l str)           = l
+    loc (SelfParamError l)          = l
     loc (RigidVariable tv)          = loc tv
     loc (InfiniteType tv)           = loc tv
     loc (ConflictingRow tv)         = loc tv
@@ -196,6 +199,8 @@ useless vs c                           = case c of
 
 --typeReport :: TypeError -> Report
 typeReport (TypeError l msg) filename src           = Err Nothing msg [(locToPosition l filename src, This msg)] []
+typeReport (SelfParamError l) filename src          = Err Nothing msg [(locToPosition l filename src, This msg)] [Hint "In actors, 'self' is reserved and implicitly available as a reference to the own actor that can be passed to other actors."]
+                                                      where msg = "'self' cannot be used as a parameter name in actors."
 typeReport (RigidVariable tv) filename src          = Err Nothing msg [(locToPosition (loc tv) filename src, This msg)] []
                                                       where msg = render (text "Type" <+> pretty tv <+> text "is rigid")
 typeReport (InfiniteType tv) filename src           = Err Nothing msg [(locToPosition (loc tv) filename src, This msg)] []
@@ -297,6 +302,7 @@ typeReport (SurplusRow p) filename src =
 
 typeError                           :: TypeError -> [(SrcLoc, String)]
 typeError (TypeError l str)          = [(l, str)]
+typeError (SelfParamError l)         = [(l, "'self' cannot be used as a parameter name in actors.")]
 typeError (RigidVariable tv)         = [(loc tv, render (text "Type" <+> pretty tv <+> text "is rigid"))]
 typeError (InfiniteType tv)          = [(loc tv, render (text "Type" <+> pretty tv <+> text "is infinite"))]
 typeError (ConflictingRow tv)        = [(loc tv, render (text "Type" <+> pretty tv <+> text "has conflicting extensions"))]
@@ -330,8 +336,14 @@ typeError (IncompatError info msg)   = case info of
 
 
 
+-- Error throwing functions:
+-- Most use throwError to stay within the TypeM monad, but selfParamError uses
+-- Control.Exception.throw to escape the monad immediately. This is necessary
+-- because self-parameter checks happen in contexts (like pattern matching)
+-- where we need the error to propagate up through pure code.
 tyerr x s                           = throwError $ TypeError (loc x) (s ++ " " ++ prstr x)
 tyerrs xs s                         = throwError $ TypeError (loc $ head xs) (s ++ " " ++ prstrs xs)
+selfParamError l                    = Control.Exception.throw $ SelfParamError l
 rigidVariable tv                    = throwError $ RigidVariable tv
 infiniteType tv                     = throwError $ InfiniteType tv
 conflictingRow tv                   = throwError $ ConflictingRow tv
