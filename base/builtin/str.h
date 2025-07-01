@@ -18,6 +18,8 @@ B_str to_str_noc(char *str);
 // Destructor; recover the internal string.
 unsigned char *fromB_str(B_str str);
 
+B_str $FORMAT(const char *format, ...);
+
 // Iterators over str's ///////////////////////////////////////////////////////
 
 typedef struct B_IteratorB_str *B_IteratorB_str; ;

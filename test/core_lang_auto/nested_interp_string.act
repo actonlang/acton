@@ -1,0 +1,15 @@
+
+
+def test_nested_interp_string():
+    a = "aaa>{', '.join(["{"{a:>5}" if a != 'z' else ('Z' + str(len(a))):<10}" for a in ['a', 'b', 'c']])}<bbb"
+    print(a)
+    return a == "aaa>    a     ,     b     ,     c     <bbb"
+
+actor main(env):
+    test_funcs = {"test_nested_interp_string": test_nested_interp_string}
+    failed = False
+    for test_name, test_func in test_funcs.items():
+        if not test_func():
+            print(f"Test {test_name} failed.")
+            failed = True
+    env.exit(1 if failed else 0)
