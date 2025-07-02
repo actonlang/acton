@@ -1025,6 +1025,9 @@ lub env t1@TVar{} t2@TVar{}
 lub env TVar{} _                        = pure tWild
 lub env _ TVar{}                        = pure tWild
 
+lub env t (TVar _ v)                    = lub env t (tCon $ findTVBound env v)
+lub env (TVar _ v) t                    = lub env (tCon $ findTVBound env v) t
+
 lub env (TCon _ c1) (TCon _ c2)
   | tcname c1 == tcname c2              = pure $ tCon c1
   | hasAncestor env c1 c2               = pure $ tCon c2
