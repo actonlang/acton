@@ -1,0 +1,104 @@
+import testing
+
+def test_post_if_return():
+    """Test post-if type narrowing with return"""
+    x: ?int = 42
+    if x is None:
+        return
+    # x should be narrowed to int here
+    result = x + 1
+    testing.assertEqual(result, 43)
+
+def test_post_if_raise():
+    """Test post-if type narrowing with raise"""
+    def helper():
+        y: ?int = 100
+        if y is None:
+            raise ValueError("y is None")
+        # y should be narrowed to int here
+        return y + 50
+    
+    testing.assertEqual(helper(), 150)
+
+def test_post_if_multiple_branches():
+    """Test post-if narrowing with multiple branches that exit"""
+    x: ?int = 42
+    y: ?int = 10
+    
+    if x is None:
+        return
+    elif y is None:
+        raise ValueError("y is None")
+    
+    # Both x and y should be narrowed here
+    result = x + y
+    testing.assertEqual(result, 52)
+
+def test_post_if_with_else():
+    """Test post-if narrowing with else branch"""
+    x: ?int = 42
+    
+    if x is None:
+        return
+    else:
+        # x is already narrowed in else
+        testing.assertEqual(x + 1, 43)
+    
+    # x should still be narrowed after if
+    testing.assertEqual(x * 2, 84)
+
+def test_no_narrowing_without_exit():
+    """Test that narrowing doesn't apply when branch doesn't exit"""
+    x: ?int = 42
+    
+    if x is None:
+        pass  # No early exit
+    
+    # x should NOT be narrowed here
+    # This would fail to compile: x + 1
+    # So we test with explicit check
+    if x is not None:
+        testing.assertEqual(x + 1, 43)
+
+def test_break_in_loop():
+    """Test post-if narrowing with break in loop"""
+    for i in range(1):
+        x: ?int = 42
+        if x is None:
+            break
+        # x should be narrowed here
+        testing.assertEqual(x + 1, 43)
+
+def test_continue_in_loop():
+    """Test post-if narrowing with continue in loop"""
+    for i in range(1):
+        x: ?int = 42
+        if x is None:
+            continue
+        # x should be narrowed here
+        testing.assertEqual(x + 1, 43)
+
+def test_nested_narrowing():
+    """Test nested post-if narrowing"""
+    x: ?int = 42
+    y: ?int = 10
+    
+    if x is None:
+        return
+    # x is narrowed
+    
+    if y is None:
+        return
+    # Both x and y are narrowed
+    
+    testing.assertEqual(x + y, 52)
+
+def _test():
+    test_post_if_return()
+    test_post_if_raise()
+    test_post_if_multiple_branches()
+    test_post_if_with_else()
+    test_no_narrowing_without_exit()
+    test_break_in_loop()
+    test_continue_in_loop()
+    test_nested_narrowing()

@@ -32,6 +32,7 @@ import Acton.TypeEnv
 import qualified InterfaceFiles
 import qualified Data.Map
 import Data.List (intersperse)
+import Data.Maybe (fromMaybe)
 
 -- | Extract docstring from the first statement of a Suite if it's a string expression
 extractDocstring :: Suite -> Maybe String
@@ -311,7 +312,16 @@ instance InfEnv Stmt where
                                              -- Process else with potentially narrowed environment
                                              (cs0,te,els') <- infLiveEnv elseEnv els
                                              (cs1,te1) <- commonTEnv env $ catMaybes (te:tes)
-                                             return (cs0++cs1++concat css, te1, If l bs' els')
+
+                                             -- Check for post-if narrowing: collect variables tested with 'is None' in non-fallthrough branches
+                                             let narrowVars = [(n, t') | (Branch (CompOp _ e1 [OpArg op e2]) body, _) <- zip bs bs'
+                                                                       , Just n <- [isNone e1 op e2]
+                                                                       , not (fallsthru body)
+                                                                       , NVar (TOpt _ t') <- [findName n env]]
+                                                 -- Apply narrowing to the resulting environment
+                                                 postIfEnv = foldr (\(n, t) e -> (n, NVar t) : e) te1 narrowVars
+
+                                             return (cs0++cs1++concat css, postIfEnv, If l bs' els')
     infEnv env (While l e b els)        = do (cs1,env',s,_,e') <- inferTest env e
                                              (cs2,te1,b') <- infSuiteEnv env' b
                                              (cs3,te2,els') <- infSuiteEnv env els
