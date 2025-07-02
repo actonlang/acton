@@ -1,0 +1,129 @@
+import testing
+
+def test_basic_is_none_narrowing():
+    """Test that 'is None' narrows type in else branch"""
+    x: ?int = 42
+
+    if x is None:
+        testing.assertEqual(False, True, "Should not reach here")
+    else:
+        # x should be narrowed to int here
+        result = x + 1
+        testing.assertEqual(result, 43)
+
+def test_none_value():
+    """Test with actual None value"""
+    x: ?int = None
+
+    if x is None:
+        # This branch should execute
+        pass
+    else:
+        testing.assertEqual(False, True, "Should not reach here")
+
+def test_nested_narrowing():
+    """Test nested if statements with narrowing"""
+    x: ?int = 42
+    y: ?int = 10
+
+    if x is None:
+        testing.assertEqual(False, True, "x should not be None")
+    else:
+        # x is narrowed to int
+        if y is None:
+            testing.assertEqual(False, True, "y should not be None")
+        else:
+            # Both x and y are narrowed
+            result = x + y
+            testing.assertEqual(result, 52)
+
+def test_mixed_patterns():
+    """Test mixing 'is None' and 'is not None' patterns"""
+    x: ?int = 42
+    y: ?int = 10
+
+    if x is None:
+        testing.assertEqual(False, True, "x should not be None")
+    else:
+        # x is narrowed to int
+        if y is not None:
+            # y is also narrowed to int
+            result = x + y
+            testing.assertEqual(result, 52)
+        else:
+            testing.assertEqual(False, True, "y should not be None")
+
+def test_early_return():
+    """Test type narrowing with early return"""
+    def helper(x: ?int) -> int:
+        if x is None:
+            return 0
+        else:
+            # x should be narrowed to int here
+            return x + 1
+
+    testing.assertEqual(helper(None), 0)
+    testing.assertEqual(helper(42), 43)
+
+def test_string_operations():
+    """Test narrowing with string operations"""
+    s: ?str = "hello"
+    if s is None:
+        testing.assertEqual(False, True, "s should not be None")
+    else:
+        # s should be narrowed to str here
+        testing.assertEqual(len(s), 5)
+        # Note: s.upper() would trigger QuickType error, so we test with len()
+
+def test_arithmetic_operations():
+    """Test narrowing with various arithmetic operations"""
+    x: ?int = 42
+    y: ?int = 10
+
+    if x is None:
+        testing.assertEqual(False, True, "x should not be None")
+    else:
+        # x is narrowed to int
+        testing.assertEqual(x + 1, 43)
+        testing.assertEqual(x * 2, 84)
+        testing.assertEqual(x - 10, 32)
+        testing.assertEqual(x // 5, 8)
+
+        if y is None:
+            testing.assertEqual(False, True, "y should not be None")
+        else:
+            # Both x and y are narrowed
+            testing.assertEqual(x + y, 52)
+            testing.assertEqual(x - y, 32)
+            testing.assertEqual(x * y, 420)
+            testing.assertEqual(x // y, 4)
+
+def test_comparison_operations():
+    """Test narrowing with comparison operations"""
+    x: ?int = 42
+    y: ?int = 10
+
+    if x is None:
+        testing.assertEqual(False, True, "x should not be None")
+    else:
+        # x is narrowed to int
+        if y is None:
+            testing.assertEqual(False, True, "y should not be None")
+        else:
+            # Both x and y are narrowed to int here
+            testing.assertEqual(x > y, True)
+            testing.assertEqual(x < y, False)
+            testing.assertEqual(x >= y, True)
+            testing.assertEqual(x <= y, False)
+            testing.assertEqual(x == y, False)
+            testing.assertEqual(x != y, True)
+
+def _test():
+    test_basic_is_none_narrowing()
+    test_none_value()
+    test_nested_narrowing()
+    test_mixed_patterns()
+    test_early_return()
+    test_string_operations()
+    test_arithmetic_operations()
+    test_comparison_operations()

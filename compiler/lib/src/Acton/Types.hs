@@ -297,8 +297,19 @@ instance InfEnv Stmt where
                                              return (Cast (DfltInfo (loc e) 32 (Just e) []) t tException : cs, [], Raise l e')
     infEnv env s@(Break _)              = return ([], [], s)
     infEnv env s@(Continue _)           = return ([], [], s)
-    infEnv env (If l bs els)            = do (css,tes,bs') <- fmap unzip3 $ mapM (infLiveEnv env) bs
-                                             (cs0,te,els') <- infLiveEnv env els
+    infEnv env (If l bs els)            = do
+                                             -- Check for single branch with 'is None' test that needs else narrowing
+                                             elseEnv <- case bs of
+                                                [Branch (CompOp _ e1 [OpArg op e2]) _]
+                                                  | Just n <- isNone e1 op e2 ->
+                                                      case findName n env of
+                                                        NVar (TOpt _ t') -> return $ define [(n, NVar t')] env
+                                                        _ -> return env
+                                                _ -> return env
+                                             -- Process branches normally
+                                             (css,tes,bs') <- fmap unzip3 $ mapM (infLiveEnv env) bs
+                                             -- Process else with potentially narrowed environment
+                                             (cs0,te,els') <- infLiveEnv elseEnv els
                                              (cs1,te1) <- commonTEnv env $ catMaybes (te:tes)
                                              return (cs0++cs1++concat css, te1, If l bs' els')
     infEnv env (While l e b els)        = do (cs1,env',s,_,e') <- inferTest env e
