@@ -539,7 +539,7 @@ instance InfEnv Decl where
                                                  let prow = prowOf p
                                                      krow = krowOf k
                                                      docstring = extractDocstring b
-                                                 --traceM ("\n## infEnv actor " ++ prstr (n, NAct q prow krow te))
+                                                 --traceM ("\n## infEnv actor " ++ prstr (n, NAct q prow krow te ddoc))
                                                  return ([], [(n, NAct q prow krow te docstring)], d)
                                              _ ->
                                                  illegalRedef n
