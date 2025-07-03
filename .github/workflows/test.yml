@@ -535,6 +535,12 @@ jobs:
     with:
       repo_url: "orchestron-orchestrator/netcli"
 
+  test-app-netclics:
+    needs: build-debs
+    uses: "./.github/workflows/test-app.yml"
+    with:
+      repo_url: "orchestron-orchestrator/netclics"
+
   test-app-snappy:
     needs: build-debs
     uses: "./.github/workflows/test-app.yml"
@@ -546,6 +552,12 @@ jobs:
     uses: "./.github/workflows/test-app.yml"
     with:
       repo_url: "orchestron-orchestrator/acton-yang"
+
+  test-app-zlib:
+    needs: build-debs
+    uses: "./.github/workflows/test-app.yml"
+    with:
+      repo_url: "actonlang/acton-zlib"
 
   # If we are on the main branch, we'll create or update a pre-release called
   # 'tip' which holds the latest build output from the main branch!  We upload
