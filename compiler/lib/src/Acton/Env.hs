@@ -942,8 +942,8 @@ glb env t1 (TWild _)                    = pure t1
 
 glb env t1@TVar{} t2@TVar{}
   | t1 == t2                            = pure t1
-glb env TVar{} _                        = pure tWild
-glb env _ TVar{}                        = pure tWild
+glb env (TVar _ v) _ | univar v         = pure tWild
+glb env _ (TVar _ v) | univar v         = pure tWild
 
 glb env (TCon _ c1) (TCon _ c2)
   | tcname c1 == tcname c2              = pure $ tCon c1
@@ -1022,8 +1022,8 @@ lub env t1 (TWild _)                    = pure t1
 
 lub env t1@TVar{} t2@TVar{}
   | t1 == t2                            = pure t1
-lub env TVar{} _                        = pure tWild
-lub env _ TVar{}                        = pure tWild
+lub env (TVar _ v) _ | univar v         = pure tWild
+lub env _ (TVar _ v) | univar v         = pure tWild
 
 lub env t (TVar _ v)                    = lub env t (tCon $ findTVBound env v)
 lub env (TVar _ v) t                    = lub env (tCon $ findTVBound env v) t
