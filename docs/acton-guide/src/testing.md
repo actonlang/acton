@@ -2,7 +2,7 @@
 
 Testing your code is a really good idea! While Acton's type system allows interfaces to be precisely defined, it is imperative that the behavior of a function or actor is tested!
 
-Test functions are automatically discovered by the compiler. Run tests with `acton test`. Import the testing module and name your test functions starting with `_test`. The type signature should match the test intended test category. Use the assertion functions available in the testing module. Here is a simple unit test:
+Test functions and test actors are automatically discovered by the compiler. Run tests with `acton test`. Import the testing module and name your test functions or actors starting with `_test_`. The type signature should match the test intended test category. Use the assertion functions available in the testing module. Here is a simple unit test:
 
 Source:
 ```python src/ut.act
@@ -45,3 +45,13 @@ There are 4 kinds of tests
     - this is a source of non-determinism so be mindful of this and try to avoid non-deterministic functions to the largest degree possible
   
 When possible, strive to use unit tests rather than actor based tests and strive to avoid env tests.
+
+## Module Filtering
+
+You can run tests from specific modules using the `--module` flag:
+
+```sh
+acton test --module foo --module bar
+```
+
+This will only run tests from the `foo` and `bar` modules, skipping all other test modules.

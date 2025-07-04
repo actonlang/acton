@@ -324,20 +324,25 @@ class Test(object):
         self.desc = desc
         self.module = module
 
+    def display_name(self) -> str:
+        """Return a pretty display name for the test"""
+        n = self.name
+        # Remove _test_ prefix
+        if n.startswith("_test_"):
+            n = n[6:]
+        # Remove _wrapper suffix
+        if n.endswith("_wrapper"):
+            n = n[:-8]
+        return n
+
     def run(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler):
         if isinstance(self, UnitTest):
-            self.run_test(report_result, env, log_handler)
-        elif isinstance(self, SyncActorTest):
             self.run_test(report_result, env, log_handler)
         elif isinstance(self, SimpleSyncTest):
             self.run_test(report_result, env, log_handler)
         elif isinstance(self, SyncTest):
             self.run_test(report_result, env, log_handler)
-        elif isinstance(self, AsyncActorTest):
-            self.run_test(report_result, env, log_handler)
         elif isinstance(self, AsyncTest):
-            self.run_test(report_result, env, log_handler)
-        elif isinstance(self, OldEnvTest):
             self.run_test(report_result, env, log_handler)
         elif isinstance(self, EnvTest):
             self.run_test(report_result, env, log_handler)
@@ -412,29 +417,6 @@ class UnitTest(Test):
             exception = e
         report_result(success, exception, output)
 
-class SyncActorTest(Test):
-    def __init__(self, fn: proc(logging.Handler) -> None, name: str, desc: str, module: str):
-        self.fn = fn
-        self.name = name
-        self.desc = desc
-        self.module = module
-
-    def run_test(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler):
-        output = None
-        success = None
-        exception = None
-        try:
-            output = self.fn(log_handler)
-            success = True
-            exception = None
-        except AssertionError as e:
-            success = False
-            exception = e
-        except Exception as e:
-            success = None
-            exception = e
-        report_result(success, exception, output)
-
 class SimpleSyncTest(Test):
     def __init__(self, fn: proc() -> None, name: str, desc: str, module: str):
         self.fn = fn
@@ -481,18 +463,6 @@ class SyncTest(Test):
             exception = e
         report_result(success, exception, output)
 
-class AsyncActorTest(Test):
-    def __init__(self, fn: proc(action(?bool, ?Exception) -> None, logging.Handler) -> None, name: str, desc: str, module: str):
-        self.fn = fn
-        self.name = name
-        self.desc = desc
-        self.module = module
-
-    def run_test(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler):
-        def repres(success: ?bool, exception: ?Exception):
-            report_result(success, exception, None)
-        self.fn(repres, log_handler)
-
 class AsyncTest(Test):
     def __init__(self, fn: proc(AsyncT) -> None, name: str, desc: str, module: str):
         self.fn = fn
@@ -502,18 +472,6 @@ class AsyncTest(Test):
 
     def run_test(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler):
         self.fn(AsyncT(report_result, log_handler))
-
-class OldEnvTest(Test):
-    def __init__(self, fn: proc(action(?bool, ?Exception) -> None, Env, logging.Handler) -> None, name: str, desc: str, module: str):
-        self.fn = fn
-        self.name = name
-        self.desc = desc
-        self.module = module
-
-    def run_test(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler):
-        def repres(success: ?bool, exception: ?Exception):
-            report_result(success, exception, None)
-        self.fn(repres, env, log_handler)
 
 class EnvTest(Test):
     def __init__(self, fn: proc(EnvT) -> None, name: str, desc: str, module: str):
@@ -939,7 +897,7 @@ actor TestExecutor(syscap, config, t: Test, report_complete, env):
         def repres(s: ?bool, e: ?Exception, val: ?str) -> None:
             # Compare expected golden value
             if val != None:
-                exp_val = get_expected(t.module, t.name)
+                exp_val = get_expected(t.module, t.display_name())
                 if exp_val == None or exp_val != None and val != exp_val:
                     exc = NotEqualError(val, exp_val, f"Test output does not match expected golden value.", diff_str=f"{term.normal}{diff.diff(str(exp_val), val, color=True)}", print_vals=False)
                     _report_result(t, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, False, exc, val)
@@ -1101,7 +1059,7 @@ class ProjectTestResults(object):
         tname_width = 20
         for modname in self.results:
             for tname, tinfo in self.results[modname].items():
-                tname_width = max_def([tname_width, len(tinfo.definition.name)],0)
+                tname_width = max_def([tname_width, len(tinfo.definition.display_name())],0)
         tname_width += 5
 
         for module_name in sorted(self.results):
@@ -1116,7 +1074,7 @@ class ProjectTestResults(object):
                 last_tinfo = None
                 if module_name in self.last_results and test_name in self.last_results[module_name]:
                     last_tinfo = self.last_results[module_name][test_name]
-                prefix = f"  {tinfo.definition.name}: "
+                prefix = "  {tinfo.definition.display_name()}: "
                 prefix += " " * (tname_width - len(prefix))
                 success = tinfo.success
                 exc = tinfo.exception
@@ -1267,29 +1225,20 @@ class ProjectTestResults(object):
 
 actor test_runner(env: Env,
                   unit_tests: dict[str, UnitTest],
-                  sync_actor_tests: dict[str, SyncActorTest],
                   simple_sync_tests: dict[str, SimpleSyncTest],
                   sync_tests: dict[str, SyncTest],
-                  async_actor_tests: dict[str, AsyncActorTest],
                   async_tests: dict[str, AsyncTest],
-                  old_env_tests: dict[str, OldEnvTest],
                   env_tests: dict[str, EnvTest]):
     sw = time.Stopwatch()
     var all_tests = {}
 
     for name, t in unit_tests.items():
         all_tests[name] = t
-    for name, t in sync_actor_tests.items():
-        all_tests[name] = t
     for name, t in simple_sync_tests.items():
         all_tests[name] = t
     for name, t in sync_tests.items():
         all_tests[name] = t
-    for name, t in async_actor_tests.items():
-        all_tests[name] = t
     for name, t in async_tests.items():
-        all_tests[name] = t
-    for name, t in old_env_tests.items():
         all_tests[name] = t
     for name, t in env_tests.items():
         all_tests[name] = t
@@ -1298,7 +1247,7 @@ actor test_runner(env: Env,
         res = {}
         for test_name, test_def in all_tests.items():
             test_info = TestInfo(test_def)
-            res[test_def.name] = test_info.to_json()
+            res[test_name] = test_info.to_json()
         print("\n" + json.encode({"tests": res}), err=True)
         env.exit(0)
 
@@ -1313,11 +1262,10 @@ actor test_runner(env: Env,
         test_timeout = 3.0
 
         test_name = args.get_str("name")
-        test_fun_name = "_test_" + test_name
-        if test_fun_name not in all_tests:
+        if test_name not in all_tests:
             print(f"Test not found: {test_name}")
             env.exit(1)
-        the_test = all_tests[test_fun_name]
+        the_test = all_tests[test_name]
         tests_complete = set()
 
         def _check_timeout(test_def):

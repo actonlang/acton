@@ -7,7 +7,7 @@ Source:
 import logging
 import testing
 
-actor EnvTester(t):
+actor _TestWithEnv(t: testing.EnvT):
     log = logging.Logger(t.log_handler)
     def test():
         log.info("EnvTester.test() running, going to check with the env", {"worker_threads": t.env.nr_wthreads})
@@ -18,13 +18,6 @@ actor EnvTester(t):
         #   t.failure(ValueError("whopsy"))
         #   t.error(ValueError("whopsy"))
     after 0: test()
-
-def _test_envtest1(t: testing.EnvT) -> None:
-    """A test interacting with the environment"""
-    # We make use of an actor as the central point for running our test logic.
-    # This _test_envtest1 function is just a wrapper picked up by the acton
-    # test framework runner
-    s = EnvTester(t)
 ```
 
 Run:
@@ -47,6 +40,6 @@ All 1 tests passed (0.689s)
 
 ```
 
-The test discovery finds env actor tests based on the name starting with `_test_` and has a function signature of `proc(testing.EnvT) -> None`.
+The test discovery system finds environment tests by looking for *actors* that take a `testing.EnvT` parameter.
 
 *Golden testing* can be enabled by providing an output of type *str* to the `.success(output: ?str)` function. The Acton test framework will take care about recognizing the test as a golden test and comparing its output to the expected *golden value*.

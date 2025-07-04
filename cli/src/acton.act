@@ -491,8 +491,12 @@ actor CmdListTest(env, args):
 
         for module_name, module_tests in tests.items():
             print("Module %s:" % module_name)
-            for test_name in module_tests:
-                print(" ", test_name)
+            for test_name, test_info in module_tests.items():
+                display_name = test_info.definition.display_name()
+                if display_name != test_name:
+                    print("  %s (%s)" % (display_name, test_name))
+                else:
+                    print("  %s" % display_name)
             print()
         env.exit(0)
 
@@ -608,7 +612,7 @@ actor CmdTest(env: Env, args, perf_mode: bool=False):
                         output = test_info.output
                         if exc is not None and output is not None and exc.startswith("testing.NotEqualError: Test output does not match expected golden value"):
                             rpath = ["test", "golden", module_name]
-                            filename = file.join_path([fs.cwd()] + rpath + [test_name])
+                            filename = file.join_path([fs.cwd()] + rpath + [test_info.definition.display_name()])
                             for idx in range(1, len(rpath)+1):
                                 mkdir_path = file.join_path([fs.cwd()] + rpath[0:idx])
                                 try:
@@ -704,7 +708,9 @@ actor CmdTest(env: Env, args, perf_mode: bool=False):
         for module_name in sorted(tests.keys()):
             module_tests = tests[module_name]
             for test_name, test_info in module_tests.items():
-                if len(name_filter) == 0 or test_name in name_filter:
+                # Check if test matches by either real name or pretty display name
+                display_name = test_info.definition.display_name()
+                if len(name_filter) == 0 or test_name in name_filter or display_name in name_filter:
                     ptr.update(module_name, test_name, test_info)
                     tests_to_run.append(test_info)
                     expected_modules.add(module_name)

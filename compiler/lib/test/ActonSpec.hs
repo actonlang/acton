@@ -332,6 +332,7 @@ main = do
 
     describe "Pass 3: Types" $ do
       testTypes env0 "deact"
+      testTypes env0 "test_discovery"
 
     describe "Pass 4: Normalizer" $ do
       testNorm env0 "deact"
