@@ -559,6 +559,12 @@ jobs:
     with:
       repo_url: "actonlang/acton-zlib"
 
+  test-app-http2:
+    needs: build-debs
+    uses: "./.github/workflows/test-app.yml"
+    with:
+      repo_url: "actonlang/acton-http2"
+
   # If we are on the main branch, we'll create or update a pre-release called
   # 'tip' which holds the latest build output from the main branch!  We upload
   # artifacts twice, first with the version number held in the filename and a
