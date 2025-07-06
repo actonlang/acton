@@ -1,0 +1,96 @@
+import logging
+
+import testing
+
+W_6: __builtin__.Plus[__builtin__.int] = __builtin__.IntegralD_int()
+
+actor MathTester ():
+    proc def add (a : __builtin__.int, b : __builtin__.int) -> __builtin__.int:
+        return W_6.__add__(a, b)
+
+pure def _test_foo () -> None:
+    pass
+
+W_104: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
+
+W_194: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+# recursive group:
+actor _test_SimpleSyncTester ():
+    m: MathTester = MathTester()
+    print@[(__builtin__.str,)](*("SimpleSyncTester.test()",), sep = None, end = None, err = None, flush = None)
+    testing.assertEqual@[__builtin__.int](W_104, a = m.add(a = W_194.__fromatom__(1), b = W_194.__fromatom__(2)), b = W_194.__fromatom__(3), msg = "1 + 2 = 3", print_vals = None, print_diff = None)
+actor _SyncTester (t : testing.SyncT):
+    log: logging.Logger = logging.Logger(handler = t.log_handler)
+    m: MathTester = MathTester()
+    log.info(msg = "SyncTester.test()", data = None)
+    print@[(__builtin__.str,)](*("SyncTester.test()",), sep = None, end = None, err = None, flush = None)
+    testing.assertEqual@[__builtin__.int](W_104, a = m.add(a = W_194.__fromatom__(1), b = W_194.__fromatom__(2)), b = W_194.__fromatom__(3), msg = "1 + 2 = 3", print_vals = None, print_diff = None)
+actor _SyncTesterCore ():
+    m: MathTester = MathTester()
+    print@[(__builtin__.str,)](*("SimpleSyncTester.test()",), sep = None, end = None, err = None, flush = None)
+    testing.assertEqual@[__builtin__.int](W_104, a = m.add(a = W_194.__fromatom__(1), b = W_194.__fromatom__(2)), b = W_194.__fromatom__(3), msg = "1 + 2 = 3", print_vals = None, print_diff = None)
+# (recursive group)
+
+proc def _test_simple_sync () -> None:
+    s: _SyncTesterCore = _SyncTesterCore()
+
+proc def _test_sync (t : testing.SyncT) -> __builtin__.str:
+    W_689: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+    m: MathTester = MathTester()
+    return str(val = m.add(a = W_689.__fromatom__(1), b = W_689.__fromatom__(2)))
+
+# recursive group:
+actor AsyncTester (t : testing.AsyncT):
+    W_760: __builtin__.Hashable[__builtin__.str] = __builtin__.HashableD_str()
+    W_794: __builtin__.Number[__builtin__.float] = __builtin__.RealFloatD_float()
+    log: logging.Logger = logging.Logger(handler = t.log_handler)
+    proc def test () -> None:
+        log.info(msg = "AsyncTester.test()", data = $mkDict@[__builtin__.str, __builtin__.str](W_760, {"data": "test"}))
+        t.success(output = None)
+    after W_794.__fromatom__(0): test()
+actor EnvTester (t : testing.EnvT):
+    W_887: __builtin__.Hashable[__builtin__.str] = __builtin__.HashableD_str()
+    W_1013: __builtin__.Number[__builtin__.float] = __builtin__.RealFloatD_float()
+    log: logging.Logger = logging.Logger(handler = t.log_handler)
+    proc def test () -> None:
+        log.info(msg = "EnvTester.test() wthreads:", data = $mkDict@[__builtin__.str, __builtin__.int](W_887, {"nr_wthreads": t.env.nr_wthreads}))
+        print@[(__builtin__.str, __builtin__.int)](*("EnvTester.test() wthreads:", t.env.nr_wthreads), sep = None, end = None, err = None, flush = None)
+        t.success(output = None)
+    after W_1013.__fromatom__(0): test()
+# (recursive group)
+
+proc def _test_SimpleSyncTester_wrapper () -> None:
+    s: _test_SimpleSyncTester = _test_SimpleSyncTester()
+
+proc def _test__SyncTester (t : testing.SyncT) -> None:
+    s: _SyncTester = _SyncTester(t = t)
+
+proc def _test_AsyncTester (t : testing.AsyncT) -> None:
+    s: AsyncTester = AsyncTester(t = t)
+
+proc def _test_EnvTester (t : testing.EnvT) -> None:
+    s: EnvTester = EnvTester(t = t)
+
+W_1087: __builtin__.Hashable[__builtin__.str] = __builtin__.HashableD_str()
+
+W_1091: __builtin__.Hashable[__builtin__.str] = __builtin__.HashableD_str()
+
+W_1095: __builtin__.Hashable[__builtin__.str] = __builtin__.HashableD_str()
+
+W_1099: __builtin__.Hashable[__builtin__.str] = __builtin__.HashableD_str()
+
+W_1103: __builtin__.Hashable[__builtin__.str] = __builtin__.HashableD_str()
+
+__unit_tests: __builtin__.dict[__builtin__.str, testing.UnitTest] = $mkDict@[__builtin__.str, testing.UnitTest](__builtin__.HashableD_str(), {"_test_foo": testing.UnitTest(_test_foo, "_test_foo", "", "test_discovery")})
+
+__simple_sync_tests: __builtin__.dict[__builtin__.str, testing.SimpleSyncTest] = $mkDict@[__builtin__.str, testing.SimpleSyncTest](__builtin__.HashableD_str(), {"_test_simple_sync": testing.SimpleSyncTest(_test_simple_sync, "_test_simple_sync", "", "test_discovery"), "_test_SimpleSyncTester_wrapper": testing.SimpleSyncTest(_test_SimpleSyncTester_wrapper, "_test_SimpleSyncTester_wrapper", "", "test_discovery")})
+
+__sync_tests: __builtin__.dict[__builtin__.str, testing.SyncTest] = $mkDict@[__builtin__.str, testing.SyncTest](__builtin__.HashableD_str(), {"_test_sync": testing.SyncTest(_test_sync, "_test_sync", "", "test_discovery"), "_test__SyncTester": testing.SyncTest(_test__SyncTester, "_test__SyncTester", "", "test_discovery")})
+
+__async_tests: __builtin__.dict[__builtin__.str, testing.AsyncTest] = $mkDict@[__builtin__.str, testing.AsyncTest](__builtin__.HashableD_str(), {"_test_AsyncTester": testing.AsyncTest(_test_AsyncTester, "_test_AsyncTester", "", "test_discovery")})
+
+__env_tests: __builtin__.dict[__builtin__.str, testing.EnvTest] = $mkDict@[__builtin__.str, testing.EnvTest](__builtin__.HashableD_str(), {"_test_EnvTester": testing.EnvTest(_test_EnvTester, "_test_EnvTester", "", "test_discovery")})
+
+actor __test_main (env : __builtin__.Env):
+    testing.test_runner(env, __unit_tests, __simple_sync_tests, __sync_tests, __async_tests, __env_tests)

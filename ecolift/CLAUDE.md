@@ -8,36 +8,26 @@ builtin & stdlib are in this repo in the base/ directory.
 
 The following repositories contain syntax highlighting and similar for editors / IDE and should be updated when the language has been changed:
 
-- git@github.com:actonlang/Acton.tmbundle.git
-- git@github.com:actonlang/acton-mode.git
-- git@github.com:actonlang/sublime-acton.git
-- git@github.com:actonlang/vim-acton.git
-- git@github.com:actonlang/vscode-acton.git
+- [ ] git@github.com:actonlang/Acton.tmbundle.git
+- [ ] git@github.com:actonlang/acton-mode.git
+- [ ] git@github.com:actonlang/sublime-acton.git
+- [ ] git@github.com:actonlang/vim-acton.git
+- [ ] git@github.com:actonlang/vscode-acton.git
 
-The following repositories contain Acton code and should be updated when making language changes.
-The Orchestron application stack consists of device drivers (netconf, netclics,
-actmf), YANG library (acton-yang), the Orchestron framework itself (orchestron)
-and the SORESPO application using the entire stack (sorespo).
-netcli is a separate application that uses netclics, netconf and acton-yang
-packages to translate CLI or NETCONF configuration snippets into Acton code
-suitable for writing Orchestron transforms.
+The following are Acton projects:
 
-- git@github.com:orchestron-orchestrator/acton-yang.git
-- git@github.com:orchestron-orchestrator/orchestron.git
-- git@github.com:orchestron-orchestrator/sorespo.git
-- git@github.com:orchestron-orchestrator/netconf.git
-- git@github.com:orchestron-orchestrator/actmf.git
-- git@github.com:orchestron-orchestrator/netcli.git
-- git@github.com:orchestron-orchestrator/netclics.git
-
-The Telemetrify application stack consists of the Telemetrify application
-(telemetrify) and its supporting protocol libraries.
-
-- git@github.com:telemetrify-collector/telemetrify.git
-- git@github.com:actonlang/acton-grpc.git
-- git@github.com:actonlang/acton-http2.git
-- git@github.com:actonlang/acton-snappy.git
-- git@github.com:actonlang/acton-zlib.git
+- [ ] git@github.com:actonlang/acton-grpc.git
+- [ ] git@github.com:actonlang/acton-http2.git
+- [ ] git@github.com:actonlang/acton-snappy.git
+- [ ] git@github.com:actonlang/acton-zlib.git
+- [ ] git@github.com:orchestron-orchestrator/actmf.git
+- [ ] git@github.com:orchestron-orchestrator/acton-yang.git
+- [ ] git@github.com:orchestron-orchestrator/netcli.git
+- [ ] git@github.com:orchestron-orchestrator/netclics.git
+- [ ] git@github.com:orchestron-orchestrator/netconf.git
+- [ ] git@github.com:orchestron-orchestrator/orchestron.git
+- [ ] git@github.com:orchestron-orchestrator/sorespo.git
+- [ ] git@github.com:telemetrify-collector/telemetrify.git
 
 ## General Process
 

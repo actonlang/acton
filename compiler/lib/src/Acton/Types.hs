@@ -31,7 +31,8 @@ import Acton.TypeM
 import Acton.TypeEnv
 import qualified InterfaceFiles
 import qualified Data.Map
-import Data.List (intersperse)
+import Data.List (intersperse, isPrefixOf, partition)
+import Data.Maybe (mapMaybe)
 
 -- | Extract docstring from the first statement of a Suite if it's a string expression
 extractDocstring :: Suite -> Maybe String
@@ -64,7 +65,7 @@ reconstruct fname env0 (Module m i ss)  = do --traceM ("#################### ori
                                              return (nmod, Module m i ss1T, env0')
 
   where moduleDocstring                 = extractDocstring ss
-        ssT                             = if hasTesting i then ss ++ testStmts (emptyDict,emptyDict,emptyDict,emptyDict,emptyDict,emptyDict,emptyDict,emptyDict) else ss
+        ssT                             = if hasTesting i then genTestActorWrappers env0 ss ++ testStmts (emptyDict,emptyDict,emptyDict,emptyDict,emptyDict) else ss
         ss1T                            = if hasTesting i then rmTests ss1 ++ finalStmts env2 (modNameStr m) ss1 else ss1
         env1                            = reserve (assigned ssT) (typeX env0)
         (te,ss1)                        = runTypeM $ infTop env1 ssT
@@ -74,7 +75,7 @@ reconstruct fname env0 (Module m i ss)  = do --traceM ("#################### ori
         env0'                           = convEnvProtos env0
         hasTesting i                    = Import NoLoc [ModuleItem (ModName [name "testing"]) Nothing] `elem` i
         rmTests (Assign _ [PVar _ n _] _ : ss)
-          | nstr n `elem` ["__unit_tests","__sync_actor_tests","__simple_sync_tests","__sync_tests","__async_actor_tests","__async_tests", "__old_env_tests", "__env_tests"]
+          | nstr n `elem` ["__unit_tests","__simple_sync_tests","__sync_tests","__async_tests","__env_tests"]
                                         = rmTests ss
         rmTests (Decl _ [Actor _ n _ _ _ _ _] : ss)
           | nstr n == "__test_main"     = rmTests ss
@@ -1742,19 +1743,16 @@ instance InfEnvT [Pattern] where
 tEnv                                    = tCon (TC (gname [name "__builtin__"] (name "Env")) [])
 emptyDict                               = Dict NoLoc []
 
-testStmts (uts, sats, ssts, sts, aats, ats, oets, ets) = [dictAssign "__unit_tests" "UnitTest" uts,
-                                           dictAssign "__sync_actor_tests" "SyncActorTest" sats,
+testStmts (uts, ssts, sts, ats, ets) = [dictAssign "__unit_tests" "UnitTest" uts,
                                            dictAssign "__simple_sync_tests" "SimpleSyncTest" ssts,
                                            dictAssign "__sync_tests" "SyncTest" sts,
-                                           dictAssign "__async_actor_tests" "AsyncActorTest" aats,
                                            dictAssign "__async_tests" "AsyncTest" ats,
-                                           dictAssign "__old_env_tests" "OldEnvTest" oets,
                                            dictAssign "__env_tests" "EnvTest" ets,
                                            testActor]
 
 finalStmts env m ss =
-    let (uts, sats, ssts, sts, aats, ats, oets, ets) = testFuns env m ss
-    in testStmts (mkDict "UnitTest" uts, mkDict "SyncActorTest" sats, mkDict "SimpleSyncTest" ssts, mkDict "SyncTest" sts, mkDict "AsyncActorTest" aats, mkDict "AsyncTest" ats, mkDict "OldEnvTest" oets, mkDict "EnvTest" ets)
+    let (uts, ssts, sts, ats, ets) = testFuns env m ss
+    in testStmts (mkDict "UnitTest" uts, mkDict "SimpleSyncTest" ssts, mkDict "SyncTest" sts, mkDict "AsyncTest" ats, mkDict "EnvTest" ets)
 
 gname ns n                              = GName (ModName ns) n
 dername a b                             = Derived (name a) (name b)
@@ -1769,7 +1767,7 @@ mkDict cl as                            = eCall (tApp (eQVar primMkDict) [tStr, 
 testActor                               = sDecl [Actor NoLoc (name "__test_main") []
                                                  PosNIL (KwdPar (name "env")  (Just tEnv) Nothing KwdNIL)
                                              [sExpr (eCall (eQVar (gname [name "testing"] (name "test_runner")))
-                                                           (map (eVar . name) ["env","__unit_tests","__sync_actor_tests","__simple_sync_tests","__sync_tests","__async_actor_tests","__async_tests","__old_env_tests","__env_tests"]))] Nothing]
+                                                           (map (eVar . name) ["env","__unit_tests","__simple_sync_tests","__sync_tests","__async_tests","__env_tests"]))] Nothing]
 
 row2list (TRow _ _ _ t r)               = t : row2list r
 row2list (TNil _ _)                     = []
@@ -1778,64 +1776,159 @@ mkAssoc d testType modName =
     Assoc (Strings NoLoc [nstr (dname d)])
           (eCall (eQVar (gname [name "testing"] testType))
                  [ eVar (dname d)
-                 , Strings NoLoc [drop 6 (nstr (dname d))]
+                 , Strings NoLoc [nstr (dname d)]
                  , comment (dbody d)
                  , Strings NoLoc [modName]
                  ])
   where comment (Expr _ s@(Strings _ ss) : _) = s
         comment _ = Strings NoLoc [""]
 
-testFuns :: Env0 -> String -> Suite -> ([Assoc],[Assoc],[Assoc],[Assoc],[Assoc],[Assoc],[Assoc],[Assoc])
-testFuns env modName ss = tF ss [] [] [] [] [] [] [] []
+mkAssocActor (Actor _ n _ _ _ body _) testType modName =
+    Assoc (Strings NoLoc [nstr n])
+          (eCall (eQVar (gname [name "testing"] testType))
+                 [ eVar n
+                 , Strings NoLoc [nstr n]
+                 , comment body
+                 , Strings NoLoc [modName]
+                 ])
+  where comment (Expr _ s@(Strings _ ss) : _) = s
+        comment _ = Strings NoLoc [""]
+
+
+testFuns :: Env0 -> String -> Suite -> ([Assoc],[Assoc],[Assoc],[Assoc],[Assoc])
+testFuns env modName ss = tF ss ss [] [] [] [] []
   where
-    tF (With _ _ ss' : ss) uts sats ssts sts aats ats oets ets = tF (ss' ++ ss) uts sats ssts sts aats ats oets ets
-    tF (Decl l (d@Def{}:ds) : ss) uts sats ssts sts aats ats oets ets
+    tF origSuite (With _ _ ss' : ss) uts ssts sts ats ets = tF origSuite (ss' ++ ss) uts ssts sts ats ets
+    tF origSuite (Decl l (d@Def{}:ds) : ss) uts ssts sts ats ets
       | isTestName (dname d) =
           case testType (findQName (NoQ (dname d)) env) of
-            Just UnitType ->
-              tF (Decl l ds : ss) (mkAssoc d (name "UnitTest") modName : uts) sats ssts sts aats ats oets ets
-            Just SyncType ->
-              tF (Decl l ds : ss) uts (mkAssoc d (name "SyncActorTest") modName : sats) ssts sts aats ats oets ets
+            Just UnitTest ->
+              tF origSuite (Decl l ds : ss) (mkAssoc d (name "UnitTest") modName : uts) ssts sts ats ets
             Just SimpleSyncTest ->
-              tF (Decl l ds : ss) uts sats (mkAssoc d (name "SimpleSyncTest") modName : ssts) sts aats ats oets ets
+              tF origSuite (Decl l ds : ss) uts (mkAssoc d (name "SimpleSyncTest") modName : ssts) sts ats ets
             Just SyncTest ->
-              tF (Decl l ds : ss) uts sats ssts (mkAssoc d (name "SyncTest") modName : sts) aats ats oets ets
-            Just AsyncType ->
-              tF (Decl l ds : ss) uts sats ssts sts (mkAssoc d (name "AsyncActorTest") modName : aats) ats oets ets
+              tF origSuite (Decl l ds : ss) uts ssts (mkAssoc d (name "SyncTest") modName : sts) ats ets
             Just AsyncTest ->
-              tF (Decl l ds : ss) uts sats ssts sts aats (mkAssoc d (name "AsyncTest") modName : ats) oets ets
-            Just OldEnvType ->
-              tF (Decl l ds : ss) uts sats ssts sts aats ats (mkAssoc d (name "OldEnvTest") modName : oets) ets
+              tF origSuite (Decl l ds : ss) uts ssts sts (mkAssoc d (name "AsyncTest") modName : ats) ets
             Just EnvTest ->
-              tF (Decl l ds : ss) uts sats ssts sts aats ats oets (mkAssoc d (name "EnvTest") modName : ets)
-            Nothing -> tF (Decl l ds : ss) uts sats ssts sts aats ats oets ets
-    tF (Decl l (_:ds) : ss) uts sats ssts sts aats ats oets ets = tF (Decl l ds : ss) uts sats ssts sts aats ats oets ets
-    tF (Decl _ [] : ss) uts sats ssts sts aats ats oets ets = tF ss uts sats ssts sts aats ats oets ets
-    tF (_ : ss) uts sats ssts sts aats ats oets ets = tF ss uts sats ssts sts aats ats oets ets
-    tF [] uts sats ssts sts aats ats oets ets = (reverse uts, reverse sats, reverse aats, reverse ssts, reverse sts, reverse ats, reverse oets, reverse ets)
+              tF origSuite (Decl l ds : ss) uts ssts sts ats (mkAssoc d (name "EnvTest") modName : ets)
+            Nothing -> tF origSuite (Decl l ds : ss) uts ssts sts ats ets
+    -- Don't discover actors here - they're handled via wrapper generation
+    tF origSuite (Decl l (_:ds) : ss) uts ssts sts ats ets = tF origSuite (Decl l ds : ss) uts ssts sts ats ets
+    tF origSuite (Decl _ [] : ss) uts ssts sts ats ets = tF origSuite ss uts ssts sts ats ets
+    tF origSuite (_ : ss) uts ssts sts ats ets = tF origSuite ss uts ssts sts ats ets
+    tF _ [] uts ssts sts ats ets = (reverse uts, reverse ssts, reverse sts, reverse ats, reverse ets)
 
 isTestName n                             = take 6 (nstr n) == "_test_"
 
-data TestType = UnitType | SyncType | SimpleSyncTest | SyncTest | AsyncType | AsyncTest | OldEnvType | EnvTest
+-- Generate wrapper functions for test actors
+genTestActorWrappers :: Env0 -> Suite -> Suite
+genTestActorWrappers env ss =
+    let testActors = findTestActors ss
+        existingFunctions = collectFunctionNames ss
+        wrappers = mapMaybe (genWrapper existingFunctions) testActors
+    in ss ++ wrappers
+  where
+    -- Find actors that are test actors (either with testing params or _test_ prefix)
+    findTestActors :: Suite -> [Decl]
+    findTestActors = go []
+      where
+        go actors [] = actors
+        go actors (Decl _ ds : rest) =
+            go (actors ++ filter isTestActor ds) rest
+        go actors (_ : rest) = go actors rest
+
+    isTestActor (Actor _ n _ ppar kpar _ _) =
+        checkTestActorParams ppar kpar || (isTestName n && ppar == PosNIL && kpar == KwdNIL)
+    isTestActor _ = False
+
+    checkTestActorParams PosNIL (KwdPar _ (Just t) _ KwdNIL) =
+        t == tCon (TC (gname [name "testing"] (name "SyncT")) []) ||
+        t == tCon (TC (gname [name "testing"] (name "AsyncT")) []) ||
+        t == tCon (TC (gname [name "testing"] (name "EnvT")) [])
+    checkTestActorParams (PosPar _ (Just t) _ PosNIL) KwdNIL =
+        t == tCon (TC (gname [name "testing"] (name "SyncT")) []) ||
+        t == tCon (TC (gname [name "testing"] (name "AsyncT")) []) ||
+        t == tCon (TC (gname [name "testing"] (name "EnvT")) [])
+    checkTestActorParams _ _ = False
+
+    -- Collect all function names to check for conflicts
+    collectFunctionNames :: Suite -> [Name]
+    collectFunctionNames = go []
+      where
+        go names [] = names
+        go names (Decl _ ds : rest) = go (names ++ mapMaybe getFuncName ds) rest
+        go names (_ : rest) = go names rest
+        getFuncName (Def _ n _ _ _ _ _ _ _ _) = Just n
+        getFuncName _ = Nothing
+
+    -- Generate a wrapper function for a test actor if needed
+    genWrapper :: [Name] -> Decl -> Maybe Stmt
+    genWrapper existingFuncs (Actor _ actorName _ ppar kpar _ _) =
+        let tParam = name "t"
+            sVar = name "s"
+            paramType = getActorParamType ppar kpar
+            -- actor Foo(t: testing.AsyncT)           -> _test_Foo
+            -- actor _test_Foo(t: testing.AsyncT)     -> _test_Foo_wrapper
+            wrapperName = if "_test_" `isPrefixOf` nstr actorName
+                          then name (nstr actorName ++ "_wrapper")
+                          else name ("_test_" ++ nstr actorName)
+            checkName = case paramType of
+                          Nothing | isTestName actorName && ppar == PosNIL && kpar == KwdNIL ->
+                            name (nstr actorName ++ "_wrapper")
+                          _ -> wrapperName
+        in if checkName `elem` existingFuncs
+           then Nothing  -- Wrapper / test function already exists, don't generate
+           else case paramType of
+                Just pType ->
+                    Just $ sDecl [Def NoLoc wrapperName []  -- Wrapper function with positional param
+                                        (PosPar tParam (Just pType) Nothing PosNIL)
+                                        KwdNIL
+                                        (Just (TNone NoLoc))
+                                        [Assign NoLoc [pVar' sVar] (eCall (eVar actorName) [eVar tParam])]  -- Call original actor, passing parameters
+                                        NoDec
+                                        fxProc
+                                        Nothing]
+                Nothing ->
+                    -- SimpleSyncTest actor - no parameters
+                    if isTestName actorName && ppar == PosNIL && kpar == KwdNIL
+                    then
+                        Just $ sDecl [Def NoLoc wrapperName []
+                                        PosNIL
+                                        KwdNIL
+                                        (Just (TNone NoLoc))
+                                        [Assign NoLoc [pVar' sVar] (eCall (eVar actorName) [])]  -- Call original actor
+                                        NoDec
+                                        fxProc
+                                        Nothing]
+                    else Nothing
+    genWrapper _ _ = Nothing
+
+    -- Get the parameter type from actor parameters
+    getActorParamType PosNIL (KwdPar _ (Just t) _ KwdNIL) = Just t
+    getActorParamType (PosPar _ (Just t) _ PosNIL) KwdNIL = Just t
+    getActorParamType _ _ = Nothing
+
+
+
+data TestType = UnitTest | SimpleSyncTest | SyncTest | AsyncTest | EnvTest
                 deriving (Eq,Show,Read)
 
-testType (NDef (TSchema _ []  (TFun _ fx (TNil _ PRow) k res)) _ _)
-              | res /= tNone && res /= tStr = Nothing
-              | otherwise    = case row2list k of
-                                []         -> if fx == fxPure || fx == fxMut then Just UnitType else if fx == fxProc then Just SimpleSyncTest else Nothing
-                                [t]        -> if t == logging_handler then Just SyncType else if t == syncT then Just SyncTest else if t == asyncT then Just AsyncTest else if t == envT then Just EnvTest else Nothing
-                                [t1,t2]    -> if t2 == logging_handler && isGoodAction t1 then Just AsyncType else Nothing
-                                [t1,t2,t3] -> if t3 == logging_handler && isGoodAction t1 && t2 == tEnv then Just OldEnvType else Nothing
-                                _          -> Nothing
-    where logging_handler      =  tCon (TC (gname [name "logging"] (name "Handler")) [])
-          syncT                =  tCon (TC (gname [name "testing"] (name "SyncT")) [])
-          asyncT               =  tCon (TC (gname [name "testing"] (name "AsyncT")) [])
-          envT                 =  tCon (TC (gname [name "testing"] (name "EnvT")) [])
-          isGoodAction t@(TFun _ fx p (TNil _ KRow) res)
-             | fx == fxAction
-               && res == tNone  = case row2list p of
-                                    [t1,t2] -> (t1 == tOpt tBool || t1 == tBool || t1 == tNone) && (t2 == tOpt tException || t2 == tException || t2 == tNone)
-                                    _       -> False
-          isGoodAction t        = False
-testType _                      = Nothing
-
+-- Determine test type based on function signature
+testType (NDef (TSchema _ [] (TFun _ fx ppar kpar res)) _ _)
+                                        = case (res, fx, row2list ppar, row2list kpar) of
+                                             -- Functions with no parameters
+                                             (r, fx', [], [])  | validReturn r && (fx' == fxPure || fx' == fxMut) -> Just UnitTest
+                                             (r, fx', [], [])  | validReturn r && fx' == fxProc                   -> Just SimpleSyncTest
+                                             -- Functions with positional test parameters
+                                             (r, fx', [t], []) | t == syncT  && validReturn r                     -> Just SyncTest
+                                             (r, fx', [t], []) | t == asyncT && validReturn r                     -> Just AsyncTest
+                                             (r, fx', [t], []) | t == envT   && validReturn r                     -> Just EnvTest
+                                             -- Functions with keyword test parameters
+                                             (r, fx', [], [t]) | t == syncT  && validReturn r                     -> Just SyncTest
+                                             _                                                                    -> Nothing
+    where validReturn r                 = r == tNone || r == TNone NoLoc || r == tStr
+          syncT                         = tCon (TC (gname [name "testing"] (name "SyncT")) [])
+          asyncT                        = tCon (TC (gname [name "testing"] (name "AsyncT")) [])
+          envT                          = tCon (TC (gname [name "testing"] (name "EnvT")) [])
+testType _                              = Nothing
