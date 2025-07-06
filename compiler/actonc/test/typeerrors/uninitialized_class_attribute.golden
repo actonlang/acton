@@ -1,0 +1,9 @@
+Building file test/typeerrors/uninitialized_class_attribute.act using temporary scratch directory
+  Compiling uninitialized_class_attribute.act for development
+[error Compilation error]: attribute 'count' is not initialized in __init__
+     +--> uninitialized_class_attribute.act@2:5-2:10
+     |
+   2 |     count: int
+     :     ^---- 
+     :     `- attribute 'count' is not initialized in __init__
+-----+

@@ -1,0 +1,12 @@
+class Bar(object):
+    x: int
+    y: str
+    z: float
+
+    def __init__(self):
+        self.x = 42
+        # y and z are not initialized
+
+actor main(env):
+    b = Bar()
+    env.exit(0)

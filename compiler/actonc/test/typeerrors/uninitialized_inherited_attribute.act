@@ -1,0 +1,16 @@
+class Base(object):
+    base_count: int
+    
+    def __init__(self):
+        self.base_count = 0
+
+class Derived(Base):
+    derived_value: str
+    
+    def __init__(self):
+        # Forgot to call Base.__init__ or initialize base_count
+        self.derived_value = "hello"
+
+actor main(env):
+    d = Derived()
+    env.exit(0)

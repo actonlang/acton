@@ -1,0 +1,9 @@
+Building file test/typeerrors/uninitialized_multiple_attributes.act using temporary scratch directory
+  Compiling uninitialized_multiple_attributes.act for development
+[error Compilation error]: attribute 'y' is not initialized in __init__
+     +--> uninitialized_multiple_attributes.act@3:5-3:6
+     |
+   3 |     y: str
+     :     ^ 
+     :     `- attribute 'y' is not initialized in __init__
+-----+

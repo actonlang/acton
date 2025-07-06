@@ -1,0 +1,14 @@
+class Foo(object):
+    count: int
+
+    def __init__(self, a: int):
+        self.a = a
+
+    def increment(self):
+        self.count += 1
+        print(f"Count is now {self.count}")
+
+actor main(env):
+    f = Foo(42)
+    f.increment()
+    env.exit(0)
