@@ -15,6 +15,8 @@
 module Acton.Types(reconstruct, showTyFile, prettySigs, typeError, TypeError(..)) where
 
 import Control.Monad
+import Data.Maybe (isJust)
+import Data.List (nub)
 import Pretty
 import Utils
 import Acton.Syntax
@@ -556,6 +558,7 @@ instance InfEnv Decl where
                                                  popFX
                                                  (cs1,eq1) <- solveScoped env1 (qbound q) te tNone cs
                                                  checkNoEscape l env (qbound q)
+                                                 checkClassAttributesInitialized env as' te0 b
                                                  (nterms,asigs,_) <- checkAttributes [] te' te
                                                  let te1 = if notImplBody b then unSig asigs else []
                                                      te2 = te ++ te1
@@ -670,6 +673,25 @@ checkNoEscape l env vs                  = do fvs <- ufree <$> usubst env
                                                  traceM ("####### env:\n" ++ prstr env1)
                                                  err l ("Escaping type variables: " ++ prstrs escaped)
 
+checkClassAttributesInitialized         :: Env -> [WTCon] -> TEnv -> Suite -> TypeM ()
+checkClassAttributesInitialized env ancestors inferredProps b
+                                        = do let inherited = concatMap (getPropertiesFromClass env . tcname . snd) ancestors
+                                                 explicit  = concat [ ns | Signature _ ns sc dec <- b, isProp dec sc ]
+                                                 expected  = nub $ inherited ++ explicit
+
+                                                 -- Find __init__ method and get initialized properties
+                                                 initialized = case findInitMethod b of
+                                                     Just (self, initBody) -> scanSelfAssignments env self initBody
+                                                     Nothing -> []
+
+                                                 -- Find uninitialized
+                                                 uninitialized = expected \\ initialized
+
+                                             forM_ uninitialized $ \prop ->
+                                                 err (loc prop) $ "attribute '" ++ prstr prop ++ "' is not initialized in __init__"
+  where getPropertiesFromClass env qn   = let (_,_,te) = findConName qn env
+                                          in [ n | (n, NSig _ Property _) <- te ]
+
 
 wellformed                              :: (WellFormed a) => Env -> a -> TypeM ()
 wellformed env x                        = do _ <- solveAll env [] cs
@@ -748,25 +770,35 @@ matchActorAssumption env n0 p k te      = do --traceM ("## matchActorAssumption 
         kloc (KwdSTAR n _)              = loc n
         kloc _                          = NoLoc
 
+-- Find __init__ method in class body, return self parameter and body
+findInitMethod :: Suite -> Maybe (Name, Suite)
+findInitMethod b = listToMaybe [ (x, dbody d) | Decl _ ds <- b, d <- ds, dname d == initKW, Just x <- [selfPar d] ]
+  where
+    selfPar Def{pos=PosPar x _ _ _} = Just x
+    selfPar Def{kwd=KwdPar x _ _ _} = Just x
+    selfPar _                       = Nothing
+
+-- scan suite for self.attr assignments
+scanSelfAssignments :: Env -> Name -> Suite -> [Name]
+scanSelfAssignments env self [] = []
+scanSelfAssignments env self (MutAssign _ (Dot _ (Var _ (NoQ x)) n) _ : rest)
+    | x == self = n : scanSelfAssignments env self rest
+    | otherwise = scanSelfAssignments env self rest
+scanSelfAssignments env self (Expr _ (Call _ (Dot _ (Var _ c) n) _ _) : rest)
+    | isClass env c, n == initKW = scanSelfAssignments env self rest
+scanSelfAssignments env self (_ : rest) = scanSelfAssignments env self rest
+
 infProperties env as b
-  | Just (self,ss) <- inits             = infProps self ss
+  | Just (self,ss) <- findInitMethod b  = do let assigned  = scanSelfAssignments env self ss
+                                                 inherited = concat $ map (conAttrs env . tcname . snd) as
+                                                 explicit  = concat [ ns | Signature _ ns sc dec <- b, isProp dec sc ]
+                                                 newProps  = assigned \\ (inherited ++ explicit)
+                                             -- Create type entries for newly inferred properties
+                                             forM newProps $ \n -> do
+                                                 t <- newTVar
+                                                 return (n, NSig (monotype t) Property Nothing)
   | otherwise                           = return []
-  where inherited                       = concat $ map (conAttrs env . tcname . snd) as
-        explicit                        = concat [ ns | Signature _ ns sc dec <- b, isProp dec sc ]
-        inits                           = listToMaybe [ (x, dbody d) | Decl _ ds <- b, d <- ds, dname d == initKW, Just x <- [selfPar d] ]
-        infProps self (MutAssign _ (Dot _ (Var _ (NoQ x)) n) _ : b)
-          | x /= self                   = return []
-          | n `notElem` inherited,
-            n `notElem` explicit        = do t <- newTVar
-                                             te <- infProps self b
-                                             return ((n,NSig (monotype t) Property Nothing) : te)
-          | otherwise                   = infProps self b
-        infProps self (Expr _ (Call _ (Dot _ (Var _ c) n) _ _) : b)
-          | isClass env c, n == initKW  = infProps self b
-        infProps self _                 = return []
-        selfPar Def{pos=PosPar x _ _ _} = Just x
-        selfPar Def{kwd=KwdPar x _ _ _} = Just x
-        selfPar _                       = Nothing
+
 
 infDefBody env n (PosPar x _ _ _) k b
   | inClass env && n == initKW          = infInitEnv (setInDef env) x b
