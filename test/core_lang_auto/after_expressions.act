@@ -1,0 +1,41 @@
+# Test some expressions in after statements
+
+actor Foo():
+    var value = 0
+    
+    def set_value(v: int):
+        value = v
+        print("Foo.value set to", v)
+    
+    def get_value() -> int:
+        return value
+    
+    def increment():
+        value += 1
+        print("Foo.value incremented to", value)
+
+class Bar:
+    def __init__(self, name: str):
+        self.name = name
+    
+    def greet(self):
+        print(f"Hello from {self.name}")
+
+actor TestActor(cb: action() -> None):
+    f = Foo()
+    b = Bar("TestBar")
+    var counter = 0
+    
+    after 0.1: f.set_value(42)
+    after 0.2: f.set_value(10 + 5)
+    after 0.3: f.increment()
+    after 0.4: b.greet()
+    after 0.8: print([i * 2 for i in [1, 2, 3]])
+    after 1.0: cb()
+
+actor main(env):
+    def done():
+        print("All tests completed")
+        env.exit(0)
+    
+    t = TestActor(done)

@@ -1174,10 +1174,7 @@ after_stmt = addLoc $ do
                 assertDefAct l "after"
                 e <- expr
                 colon
-                e' <- addLoc $ do
-                    n <- name
-                    (ps,ks) <- parens funargs
-                    return $ S.Call NoLoc (S.Var (S.nloc n) (S.NoQ n)) ps ks
+                e' <- expr
                 return $ S.After NoLoc e e'
 
 var_stmt :: Parser S.Stmt
