@@ -8,7 +8,6 @@ import term
 import testing
 
 from buildy import *
-from testing import TestInfo
 
 import acton_cli.deps as deps
 import acton_cli.github as cli_gh
@@ -542,7 +541,7 @@ actor ListTests(process_cap, test_modules: list[str], on_done: action(?str, ?dic
                     if "tests" in data:
                         for test_name, json_test_info in data["tests"].items():
                             if isinstance(json_test_info, dict):
-                                tests[module_name][test_name] = TestInfo.from_json(json_test_info)
+                                tests[module_name][test_name] = testing.TestInfo.from_json(json_test_info)
                         del remaining_mods[module_name]
                         if len(remaining_mods) == 0:
                             on_done(None, tests)
@@ -630,7 +629,7 @@ actor CmdTest(env: Env, args, perf_mode: bool=False):
     def _on_json_output(rmt, test, data, std_out_buf, std_err_buf):
         if isinstance(data, dict):
             if "test_info" in data:
-                test_info = TestInfo.from_json(data["test_info"])
+                test_info = testing.TestInfo.from_json(data["test_info"])
                 test_info.std_out = std_out_buf.decode()
                 test_info.std_err = std_err_buf.decode()
                 ptr.update(test_info.definition.module, test_info.definition.name, test_info)
