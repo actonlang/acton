@@ -63,7 +63,7 @@ void $register_builtin() {
   $register_force(VALUESITERATOR_ID,&B_IteratorD_dict_valuesG_methods);
   $register_force(ITEMSITERATOR_ID,&B_IteratorD_dict_itemsG_methods);
   $register_force(SETITERATOR_ID,&B_IteratorD_setG_methods);
-  $register_force(RANGEITERATOR_ID,&B_IteratorB_rangeG_methods);
+  $register_force(RANGEITERATOR_ID,&B_IteratorD_rangeG_methods);
   $register_force(ENUMERATEITERATOR_ID,&B_IteratorD_enumerateG_methods);
   // $register_force(FILTERITERATOR_ID,&B_IteratorD_filterG_methods);
   // $register_force(MAPITERATOR_ID,&B_IteratorD_mapG_methods);
