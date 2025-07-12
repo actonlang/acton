@@ -1,8 +1,0 @@
-import numpy
-import math
-
-actor main(env):
-   lst = [4,5]
-   print(lst)
-   
-
