@@ -173,13 +173,13 @@ B_NoneType B_listD_extend(B_list lst, B_list other) {
     return B_None;
 }
 
-$WORD B_listD_pop(B_list lst, B_int i) {
+$WORD B_listD_pop(B_list lst, B_i64 i) {
     long ix;
     int len =lst->length;
     if (!i)
         ix = len-1;
     else
-        ix = from$int(i);
+        ix = fromB_i64(i);
     long ix0 = ix < 0 ? len + ix : ix;
     if (ix0 < 0 || ix0 >= len) {
         $RAISE((B_BaseException)$NEW(B_IndexError, to$int(ix0), to$str("pop: index outside list")));
@@ -237,8 +237,9 @@ B_int B_listD_count(B_list self, B_Eq W_EqD_B, $WORD val) {
 B_bool B_OrdD_listD___eq__ (B_OrdD_list w, B_list a, B_list b) {
     if (a->length != b->length) return B_False;                                
     B_Ord w2 = w->W_OrdD_AD_OrdD_list;
-    for (int i = 0; i<a->length; i++)
+    for (int i = 0; i<a->length; i++) {
         if ((w2->$class->__ne__(w2,a->data[i],b->data[i]))->val) return B_False;
+    }
     return B_True;
 }
 
@@ -299,12 +300,12 @@ B_list B_TimesD_SequenceD_listD___zero__ (B_TimesD_SequenceD_list wit) {
     return B_listD_new(0);
 }
 
-B_list B_TimesD_SequenceD_listD___mul__ (B_TimesD_SequenceD_list wit, B_list lst, B_int n) {
+B_list B_TimesD_SequenceD_listD___mul__ (B_TimesD_SequenceD_list wit, B_list lst, B_i64 n) {
     int lstlen = lst->length;
-    if (n->val.size <= 0)
+    long n64 =  fromB_i64(n);
+    if (lstlen == 0 || n64 <= 0)
         return B_listD_new(0);
     else {
-        long n64 =  from$int(n);
         B_list res = B_listD_new(lstlen * n64);
         for (int i=0; i<n64; i++)
             memcpy(res->data + i*lstlen, lst->data, lstlen * sizeof($WORD));
@@ -377,26 +378,26 @@ B_list B_CollectionD_SequenceD_listD___fromiter__ (B_CollectionD_SequenceD_list 
     */
 }
 
-B_int B_CollectionD_SequenceD_listD___len__(B_CollectionD_SequenceD_list wit, B_list self) {
-    return to$int(self->length);
+B_i64 B_CollectionD_SequenceD_listD___len__(B_CollectionD_SequenceD_list wit, B_list self) {
+    return toB_i64(self->length);
 }
 
 //  B_SequenceD_list //////////////////////////////////////////////////////////////////
  
-$WORD B_SequenceD_listD___getitem__(B_SequenceD_list wit, B_list lst, B_int n) {
+$WORD B_SequenceD_listD___getitem__(B_SequenceD_list wit, B_list lst, B_i64 n) {
     int len = lst->length;
-    long ix = from$int(n);
-    long ix0 = ix < 0 ? len + ix : ix;
+    int64_t ix = fromB_i64(n);
+    int ix0 = ix < 0 ? len + ix : ix;
     if (ix0 < 0 || ix0 >= len) {
         $RAISE((B_BaseException)$NEW(B_IndexError, to$int(ix0), to$str("getitem: index outside list")));
     }
     return lst->data[ix0];
 }
 
-B_NoneType B_SequenceD_listD___setitem__(B_SequenceD_list wit, B_list lst, B_int n, $WORD val) {
+B_NoneType B_SequenceD_listD___setitem__(B_SequenceD_list wit, B_list lst, B_i64 n, $WORD val) {
     int len = lst->length;
-    long ix = from$int(n);
-    long ix0 = ix < 0 ? len + ix : ix;
+    int64_t ix = fromB_i64(n);
+    int ix0 = ix < 0 ? len + ix : ix;
     if (ix0 < 0 || ix0 >= len) {
         $RAISE((B_BaseException)$NEW(B_IndexError, to$int(ix0), to$str("setitem: index outside list")));
     }
@@ -404,10 +405,10 @@ B_NoneType B_SequenceD_listD___setitem__(B_SequenceD_list wit, B_list lst, B_int
     return B_None;
 }
 
-B_NoneType B_SequenceD_listD___delitem__(B_SequenceD_list wit, B_list lst, B_int n) {
+B_NoneType B_SequenceD_listD___delitem__(B_SequenceD_list wit, B_list lst, B_i64 n) {
     int len = lst->length;
-    long ix = from$int(n);
-    long ix0 = ix < 0 ? len + ix : ix;
+    int64_t ix = fromB_i64(n);
+    int ix0 = ix < 0 ? len + ix : ix;
     if(ix0 < 0 || ix0 >= len) {
         return B_None;
     }
@@ -420,19 +421,19 @@ B_NoneType B_SequenceD_listD___delitem__(B_SequenceD_list wit, B_list lst, B_int
     return B_None;
 }
 
+B_NoneType B_SequenceD_listD_append(B_SequenceD_list wit, B_list lst, $WORD elem);
+
+
 B_list B_SequenceD_listD___getslice__(B_SequenceD_list wit, B_list lst, B_slice slc) {
     int len = lst->length;
-    long start, stop, step, slen;
+    int64_t start, stop, step, slen;
     normalize_slice(slc, len, &slen, &start, &stop, &step);
     // slice notation has been eliminated and default values applied.
     // slen is now the length of the slice
     B_list rlst = B_listD_new(slen);
-    long t = start;
-    B_SequenceD_list wit2 = B_SequenceD_listG_new();
+    int64_t t = start;
     for (int i=0; i<slen; i++) {
-        $WORD w;
-        w = B_SequenceD_listD___getitem__(wit, lst, to$int(t));
-        wit2->$class->append(wit2, rlst, w);
+        B_SequenceD_listD_append(NULL, rlst, lst->data[t]);
         t += step;
     }
     return rlst;
@@ -457,7 +458,7 @@ B_NoneType B_SequenceD_listD___setslice__(B_SequenceD_list wit, B_list lst, B_It
         }
     }
     int olen = other->length; 
-    long start, stop, step, slen;
+    int64_t start, stop, step, slen;
     normalize_slice(slc, len, &slen, &start, &stop, &step);
     if (step != 1 && olen != slen) {
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("setslice: illegal slice")));
@@ -493,7 +494,7 @@ B_NoneType B_SequenceD_listD___setslice__(B_SequenceD_list wit, B_list lst, B_It
 
 B_NoneType B_SequenceD_listD___delslice__(B_SequenceD_list wit, B_list lst, B_slice slc) {
     int len = lst->length;
-    long start, stop, step, slen;
+    int64_t start, stop, step, slen;
     normalize_slice(slc, len, &slen, &start, &stop, &step);
     if (slen==0) return B_None;
     $WORD *p = lst->data + start;
@@ -522,9 +523,9 @@ B_Iterator B_SequenceD_listD___reversed__(B_SequenceD_list wit, B_list lst) {
     return B_CollectionD_SequenceD_listD___iter__((B_CollectionD_SequenceD_list)wit->W_Collection, copy);
 }
 
-B_NoneType B_SequenceD_listD_insert(B_SequenceD_list wit, B_list lst, B_int n, $WORD elem) {
+B_NoneType B_SequenceD_listD_insert(B_SequenceD_list wit, B_list lst, B_i64 n, $WORD elem) {
     int len = lst->length;
-    long ix = from$int(n);
+    long ix = fromB_i64(n);
     expand(lst,1);
     long ix0 = ix < 0 ? (len+ix < 0 ? 0 : len+ix) : (ix < len ? ix : len);
     memmove(lst->data + (ix0 + 1),

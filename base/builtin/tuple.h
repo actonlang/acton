@@ -97,9 +97,9 @@ struct B_SliceableD_tupleG_class {
     B_bool (*__bool__)(B_SliceableD_tuple);
     B_str (*__str__)(B_SliceableD_tuple);
     B_str (*__repr__)(B_SliceableD_tuple);
-    $WORD (*__getitem__)(B_SliceableD_tuple, B_tuple, B_int);
-    B_NoneType (*__setitem__)(B_SliceableD_tuple, B_tuple, B_int, $WORD);
-    B_NoneType (*__delitem__)(B_SliceableD_tuple, B_tuple, B_int);
+    $WORD (*__getitem__)(B_SliceableD_tuple, B_tuple, B_i64);
+    B_NoneType (*__setitem__)(B_SliceableD_tuple, B_tuple, B_i64, $WORD);
+    B_NoneType (*__delitem__)(B_SliceableD_tuple, B_tuple, B_i64);
     B_tuple (*__getslice__)(B_SliceableD_tuple, B_tuple, B_slice);
     B_NoneType (*__setslice__)(B_SliceableD_tuple, B_tuple, B_Iterable, B_slice, $WORD);
     B_NoneType (*__delslice__)(B_SliceableD_tuple, B_tuple, B_slice);
@@ -108,9 +108,9 @@ struct B_SliceableD_tupleG_class {
 B_NoneType B_SliceableD_tupleD___init__ (B_SliceableD_tuple);
 void B_SliceableD_tupleD___serialize__(B_SliceableD_tuple, $Serial$state);
 B_SliceableD_tuple B_SliceableD_tupleD___deserialize__(B_SliceableD_tuple, $Serial$state);
-$WORD B_SliceableD_tupleD___getitem__ (B_SliceableD_tuple, B_tuple, B_int);
-B_NoneType B_SliceableD_tupleD___setitem__ (B_SliceableD_tuple, B_tuple, B_int, $WORD);
-B_NoneType B_SliceableD_tupleD___delitem__ (B_SliceableD_tuple, B_tuple, B_int);
+$WORD B_SliceableD_tupleD___getitem__ (B_SliceableD_tuple, B_tuple, B_i64);
+B_NoneType B_SliceableD_tupleD___setitem__ (B_SliceableD_tuple, B_tuple, B_i64, $WORD);
+B_NoneType B_SliceableD_tupleD___delitem__ (B_SliceableD_tuple, B_tuple, B_i64);
 B_tuple B_SliceableD_tupleD___getslice__ (B_SliceableD_tuple, B_tuple, B_slice);
 B_NoneType B_SliceableD_tupleD___setslice__ (B_SliceableD_tuple, B_tuple, B_Iterable, B_slice, $WORD);
 B_NoneType B_SliceableD_tupleD___delslice__ (B_SliceableD_tuple, B_tuple, B_slice);

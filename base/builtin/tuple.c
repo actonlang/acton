@@ -170,9 +170,9 @@ B_NoneType B_SliceableD_tupleD___init__ (B_SliceableD_tuple wit) {
     return B_None;
 }
 
-$WORD B_SliceableD_tupleD___getitem__ (B_SliceableD_tuple wit, B_tuple self, B_int n) {
+$WORD B_SliceableD_tupleD___getitem__ (B_SliceableD_tuple wit, B_tuple self, B_i64 n) {
     int size = self->size;
-    int ix = from$int(n);
+    int ix = fromB_i64(n);
     int ix0 = ix < 0 ? size + ix : ix;
     if (ix0 < 0 || ix0 >= size) {
         $RAISE((B_BaseException)$NEW(B_IndexError, to$int(ix0), to$str("tuple.getitem: index outside tuple")));
@@ -181,12 +181,12 @@ $WORD B_SliceableD_tupleD___getitem__ (B_SliceableD_tuple wit, B_tuple self, B_i
 }
 
 
-B_NoneType B_SliceableD_tupleD___setitem__ (B_SliceableD_tuple wit, B_tuple self, B_int ix, $WORD elem) {
+B_NoneType B_SliceableD_tupleD___setitem__ (B_SliceableD_tuple wit, B_tuple self, B_i64 ix, $WORD elem) {
     $RAISE((B_BaseException)$NEW(B_NotImplementedError,to$str("call to mutating method setitem on tuple")));
     return B_None;
 }
 
-B_NoneType B_SliceableD_tupleD___delitem__ (B_SliceableD_tuple wit, B_tuple self, B_int ix) {
+B_NoneType B_SliceableD_tupleD___delitem__ (B_SliceableD_tuple wit, B_tuple self, B_i64 ix) {
     $RAISE((B_BaseException)$NEW(B_NotImplementedError,to$str("call to mutating method delitem on tuple")));
     return B_None;
 }
@@ -194,7 +194,7 @@ B_NoneType B_SliceableD_tupleD___delitem__ (B_SliceableD_tuple wit, B_tuple self
 
 B_tuple B_SliceableD_tupleD___getslice__ (B_SliceableD_tuple wit, B_tuple self, B_slice slc) {
     int size = self->size;
-    long start, stop, step, slen;
+    int64_t start, stop, step, slen;
     normalize_slice(slc, size, &slen, &start, &stop, &step);
     //slice notation have been eliminated and default values applied.
     // slen now is the length of the slice
