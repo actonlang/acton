@@ -64,8 +64,8 @@ class bool (atom):
     def __init__(self, val: value) -> None:
         NotImplemented
 
-class slice (value):
-    def __init__(self, start: ?int, stop: ?int, step: ?int) -> None:
+class slice(value):
+    def __init__(self, start: ?i64, stop: ?i64, step: ?i64) -> None:
         NotImplemented
 
 class list[A] (object):
@@ -77,7 +77,7 @@ class list[A] (object):
         NotImplemented
     def extend(self, other: list[A]) -> None:
         NotImplemented
-    def pop(self, n :?int) -> A:
+    def pop(self, n :?i64) -> A:
         NotImplemented
     # TODO: improve this, to like A(Eq) or something
     # generic type B should really just be A(Eq), but I don't think we can say
@@ -94,7 +94,7 @@ class list[A] (object):
         """
         NotImplemented
 
-class range (value):
+class range[A(Integral)] (value):
     """Return an object that produces a sequence of integers from start
     (inclusive) to stop (exclusive) in step sizes as specified by the step
     argument, which is 1 per default. It is possible to call with just a single
@@ -105,7 +105,7 @@ class range (value):
     - `range(0, 3)` produces [0, 1, 2]
     - `range(3)` produces [0, 1, 2]
     """
-    def __init__(self, start: int, stop: ?int, step: int=1) -> None:
+    def __init__(self, start: A, stop: ?A, step: A=1) -> None:
         NotImplemented
 
 class Iterator[A] (object):
@@ -119,19 +119,19 @@ class str (atom):
         NotImplemented
     def capitalize   (self) -> str:
         NotImplemented
-    def center       (self, width: int, fillchar: ?str) -> str:
+    def center       (self, width: i64, fillchar: ?str) -> str:
         NotImplemented
-    def count        (self, sub: str, start: ?int, end: ?int) -> int:
+    def count        (self, sub: str, start: ?i64, end: ?i64) -> i64:
         NotImplemented
     def encode       (self) -> bytes:
         NotImplemented
-    def endswith     (self, suffix: str, start: ?int, end: ?int) -> bool:
+    def endswith     (self, suffix: str, start: ?i64, end: ?i64) -> bool:
         NotImplemented
-    def expandtabs   (self, tabsize: ?int) -> str:
+    def expandtabs   (self, tabsize: ?i64) -> str:
         NotImplemented
-    def find         (self, sub: str, start: ?int, end: ?int) -> int:
+    def find         (self, sub: str, start: ?i64, end: ?i64) -> i64:
         NotImplemented
-    def index        (self, sub: str, start: ?int, end: ?int) -> int:
+    def index        (self, sub: str, start: ?i64, end: ?i64) -> i64:
         NotImplemented
     def isalnum      (self) -> bool:
         NotImplemented
@@ -153,7 +153,7 @@ class str (atom):
         NotImplemented
     def join         (self, iterable: Iterable[str]) -> str:
         NotImplemented
-    def ljust        (self, width: int, fillchar: ?str) -> str:
+    def ljust        (self, width: i64, fillchar: ?str) -> str:
         NotImplemented
     def lower        (self) -> str:
         NotImplemented
@@ -161,29 +161,29 @@ class str (atom):
         NotImplemented
     def partition    (self, sep: str) -> (str,str,str):
         NotImplemented
-    def replace      (self, old: str, new: str, count: ?int) -> str:
+    def replace      (self, old: str, new: str, count: ?i64) -> str:
         NotImplemented
-    def rfind        (self, sub: str, start: ?int, end: ?int) -> int:
+    def rfind        (self, sub: str, start: ?i64, end: ?i64) -> i64:
         NotImplemented
-    def rindex       (self, sub: str, start: ?int, end: ?int) -> int:
+    def rindex       (self, sub: str, start: ?i64, end: ?i64) -> i64:
         NotImplemented
-    def rjust        (self, width: int, fillchar: ?str) -> str:
+    def rjust        (self, width: i64, fillchar: ?str) -> str:
         NotImplemented
     def rpartition   (self, sep: str) -> (str,str,str):
         NotImplemented
     def rstrip       (self, chars: ?str) -> str:
         NotImplemented
-    def split        (self, sep: str, maxsplit: ?int) -> list[str]:
+    def split        (self, sep: str, maxsplit: ?i64) -> list[str]:
         NotImplemented
     def splitlines   (self, keepends: ?bool) -> list[str]:
         NotImplemented
-    def startswith   (self, prefix: str, start: ?int, end: ?int) -> bool:
+    def startswith   (self, prefix: str, start: ?i64, end: ?i64) -> bool:
         NotImplemented
     def strip        (self, chars: ?str) -> str:
         NotImplemented
     def upper        (self) -> str:
         NotImplemented
-    def zfill        (self, width: int) -> str:
+    def zfill        (self, width: i64) -> str:
         NotImplemented
 
 class bytes (value):
@@ -191,24 +191,24 @@ class bytes (value):
         NotImplemented
     def capitalize   (self) -> bytes:
         NotImplemented
-    def center       (self, width: int, fillchar: ?bytes) -> bytes:
+    def center       (self, width: i64, fillchar: ?bytes) -> bytes:
         NotImplemented
-    def count        (self, sub: bytes, start: ?int, end: ?int) -> int:
+    def count        (self, sub: bytes, start: ?i64, end: ?i64) -> i64:
         NotImplemented
     def decode       (self) -> str:
         NotImplemented
-    def endswith     (self, suffix: bytes, start: ?int, end: ?int) -> bool:
+    def endswith     (self, suffix: bytes, start: ?i64, end: ?i64) -> bool:
         NotImplemented
-    def expandtabs   (self, tabsize: ?int) -> bytes:
+    def expandtabs   (self, tabsize: ?i64) -> bytes:
         NotImplemented
-    def find         (self, sub: bytes, start: ?int, end: ?int) -> int:
+    def find         (self, sub: bytes, start: ?i64, end: ?i64) -> i64:
         NotImplemented
     @staticmethod
     def from_hex     (s: str) -> bytes:
         NotImplemented
     def hex          (self) -> str:
         NotImplemented
-    def index        (self, sub: bytes, start: ?int, end: ?int) -> int:
+    def index        (self, sub: bytes, start: ?i64, end: ?i64) -> i64:
         NotImplemented
     def isalnum      (self) -> bool:
         NotImplemented
@@ -228,7 +228,7 @@ class bytes (value):
         NotImplemented
     def join         (self, iterable: Iterable[bytes]) -> bytes:
         NotImplemented
-    def ljust        (self, width: int, fillchar: ?bytes) -> bytes:
+    def ljust        (self, width: i64, fillchar: ?bytes) -> bytes:
         NotImplemented
     def lower        (self) -> bytes:
         NotImplemented
@@ -236,29 +236,29 @@ class bytes (value):
         NotImplemented
     def partition    (self, sep: bytes) -> (bytes,bytes,bytes):
         NotImplemented
-    def replace      (self, old: bytes, new: bytes, count: ?int) -> bytes:
+    def replace      (self, old: bytes, new: bytes, count: ?i64) -> bytes:
         NotImplemented
-    def rfind        (self, sub: bytes, start: ?int, end: ?int) -> int:
+    def rfind        (self, sub: bytes, start: ?i64, end: ?i64) -> i64:
         NotImplemented
-    def rindex       (self, sub: bytes, start: ?int, end: ?int) -> int:
+    def rindex       (self, sub: bytes, start: ?i64, end: ?i64) -> i64:
         NotImplemented
-    def rjust        (self, width: int, fillchar: ?bytes) -> bytes:
+    def rjust        (self, width: i64, fillchar: ?bytes) -> bytes:
         NotImplemented
     def rpartition   (self, sep: bytes) -> (bytes,bytes,bytes):
         NotImplemented
     def rstrip       (self, chars: ?bytes) -> bytes:
         NotImplemented
-    def split        (self, sep: bytes, maxsplit: ?int) -> list[bytes]:
+    def split        (self, sep: bytes, maxsplit: ?i64) -> list[bytes]:
         NotImplemented
     def splitlines   (self, keepends: ?bool) -> list[bytes]:
         NotImplemented
-    def startswith   (self, prefix: bytes, start: ?int, end: ?int) -> bool:
+    def startswith   (self, prefix: bytes, start: ?i64, end: ?i64) -> bool:
         NotImplemented
     def strip        (self, chars: ?bytes) -> bytes:
         NotImplemented
     def upper        (self) -> bytes:
         NotImplemented
-    def zfill        (self, width: int) -> bytes:
+    def zfill        (self, width: i64) -> bytes:
         NotImplemented
 
 class bytearray (object):
@@ -266,24 +266,24 @@ class bytearray (object):
         NotImplemented
     def capitalize   (self) -> bytearray:
         NotImplemented
-    def center       (self, width: int, fillchar: ?bytearray) -> bytearray:
+    def center       (self, width: i64, fillchar: ?bytearray) -> bytearray:
         NotImplemented
-    def count        (self, sub: bytearray, start: ?int, end: ?int) -> int:
+    def count        (self, sub: bytearray, start: ?i64, end: ?i64) -> i64:
         NotImplemented
     def decode       (self) -> str:
         NotImplemented
-    def endswith     (self, suffix: bytearray, start: ?int, end: ?int) -> bool:
+    def endswith     (self, suffix: bytearray, start: ?i64, end: ?i64) -> bool:
         NotImplemented
-    def expandtabs   (self, tabsize: ?int) -> bytearray:
+    def expandtabs   (self, tabsize: ?i64) -> bytearray:
         NotImplemented
-    def find         (self, sub: bytearray, start: ?int, end: ?int) -> int:
+    def find         (self, sub: bytearray, start: ?i64, end: ?i64) -> i64:
         NotImplemented
     @staticmethod
     def from_hex     (s: str) -> bytearray:
         NotImplemented
     def hex          (self) -> str:
         NotImplemented
-    def index        (self, sub: bytearray, start: ?int, end: ?int) -> int:
+    def index        (self, sub: bytearray, start: ?i64, end: ?i64) -> i64:
         NotImplemented
     def isalnum      (self) -> bool:
         NotImplemented
@@ -303,7 +303,7 @@ class bytearray (object):
         NotImplemented
     def join         (self, iterable: Iterable[bytearray]) -> bytearray:
         NotImplemented
-    def ljust        (self, width: int, fillchar: ?bytearray) -> bytearray:
+    def ljust        (self, width: i64, fillchar: ?bytearray) -> bytearray:
         NotImplemented
     def lower        (self) -> bytearray:
         NotImplemented
@@ -311,29 +311,29 @@ class bytearray (object):
         NotImplemented
     def partition    (self, sep: bytearray) -> (bytearray,bytearray,bytearray):
         NotImplemented
-    def replace      (self, old: bytearray, new: bytearray, count: ?int) -> bytearray:
+    def replace      (self, old: bytearray, new: bytearray, count: ?i64) -> bytearray:
         NotImplemented
-    def rfind        (self, sub: bytearray, start: ?int, end: ?int) -> int:
+    def rfind        (self, sub: bytearray, start: ?i64, end: ?i64) -> i64:
         NotImplemented
-    def rindex       (self, sub: bytearray, start: ?int, end: ?int) -> int:
+    def rindex       (self, sub: bytearray, start: ?i64, end: ?i64) -> i64:
         NotImplemented
-    def rjust        (self, width: int, fillchar: ?bytearray) -> bytearray:
+    def rjust        (self, width: i64, fillchar: ?bytearray) -> bytearray:
         NotImplemented
     def rpartition   (self, sep: bytearray) -> (bytearray,bytearray,bytearray):
         NotImplemented
     def rstrip       (self, chars: ?bytearray) -> bytearray:
         NotImplemented
-    def split        (self, sep: bytearray, maxsplit: ?int) -> list[bytearray]:
+    def split        (self, sep: bytearray, maxsplit: ?i64) -> list[bytearray]:
         NotImplemented
     def splitlines   (self, keepends: ?bool) -> list[bytearray]:
         NotImplemented
-    def startswith   (self, prefix: bytearray, start: ?int, end: ?int) -> bool:
+    def startswith   (self, prefix: bytearray, start: ?i64, end: ?i64) -> bool:
         NotImplemented
     def strip        (self, chars: ?bytearray) -> bytearray:
         NotImplemented
     def upper        (self) -> bytearray:
         NotImplemented
-    def zfill        (self, width: int) -> bytearray:
+    def zfill        (self, width: i64) -> bytearray:
         NotImplemented
 
 class Msg[A] (value):
@@ -608,6 +608,7 @@ protocol Rational (Real):
 
 protocol Integral (Rational,Logical):
     __int__      : () -> int
+    __i64__      : () -> i64
     __index__    : () -> int
 
     @staticmethod
@@ -737,7 +738,7 @@ protocol Indexed[A (Eq),B]:
     __setitem__  : mut(A,B) -> None
     __delitem__  : mut(A) -> None
 
-protocol Sliceable[A] (Indexed[int,A]):
+protocol Sliceable[A] (Indexed[i64,A]):
     __getslice__ : (slice) -> Self
     __setslice__ : mut(slice,Iterable[A]) -> None
     __delslice__ : mut(slice) -> None
@@ -745,7 +746,7 @@ protocol Sliceable[A] (Indexed[int,A]):
 protocol Collection[A] (Iterable[A]):
     @staticmethod
     __fromiter__ : (Iterable[A]) -> Self
-    __len__      : () -> int
+    __len__      : () -> i64
 
 protocol Container[A(Eq)] (Collection[A]):
     __contains__    : (A) -> bool
@@ -761,9 +762,9 @@ protocol Container[A(Eq)] (Collection[A]):
 #    |               |               |
 #   Sequence <-------- <--------------
 
-protocol Sequence[A] (Sliceable[A], Collection[A], Times[int]):
+protocol Sequence[A] (Sliceable[A], Collection[A], Times[i64]):
     __reversed__ : () -> Iterator[A]
-    insert      : mut(int,A) -> None
+    insert      : mut(i64,A) -> None
     append      : mut(A) -> None
     reverse     : mut() -> None
 
@@ -834,7 +835,7 @@ extension set[A(Hashable)] (Set[A]):
 extension Iterator[A](Iterable[A]):
     NotImplemented
 
-extension range (Iterable[int]):
+extension range[A](Iterable[A]):
     NotImplemented
 
 extension str (Ord):
@@ -843,7 +844,7 @@ extension str (Container[str]):
     NotImplemented
 extension str (Sliceable[str]):
     NotImplemented
-extension str (Times[int]):
+extension str (Times[i64]):
     NotImplemented
 extension str (Hashable):
     NotImplemented
@@ -861,7 +862,7 @@ extension bytes (Sliceable[int]):
     NotImplemented
 extension bytes (Container[int]):
     NotImplemented
-extension bytes (Times[int]):
+extension bytes (Times[i64]):
     NotImplemented
 extension bytes (Hashable):
     NotImplemented
@@ -895,7 +896,7 @@ def chr(i: Integral) -> str:
 def divmod [A(Integral)] (a : A, b : A) -> (A, A): 
     return Integral.__divmod__(a,b)
 
-def enumerate(iterable: Iterable[A], start: ?int) -> Iterator[(int,A)]:
+def enumerate(iterable: Iterable[A], start: ?i64) -> Iterator[(i64,A)]:
     NotImplemented
 
 def filter (function: ?((A) -> B), iterable: Iterable[A]) -> Iterator[A]:
@@ -917,7 +918,7 @@ def hex(i: Integral) -> str:
 def iter(x : Iterable[A]) -> Iterator[A]:
     return x.__iter__()
 
-def len(x : Collection[A]) -> int:
+def len(x : Collection[A]) -> i64:
     return x.__len__()
 
 def map(function: (A) -> B, iterable: Iterable[A]) -> Iterator[B]:
@@ -963,7 +964,7 @@ def repr(x: ?value):
         return x.__repr__()
     return "None"
 
-def reversed(seq : Sequence[A]) -> Iterator[A]:
+def reversed[A](seq : Sequence[A]) -> Iterator[A]:
     return seq.__reversed__()
 
 def round [A(Real)] (x : A, n : ?int) -> A:

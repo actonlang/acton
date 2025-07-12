@@ -29,7 +29,7 @@
 
 
 class Match:
-    def __init__(self, pattern: str, string: str, start_pos: int, end_pos: int, group: list[?str], named_group: dict[str, ?str]) -> None:
+    def __init__(self, pattern: str, string: str, start_pos: i64, end_pos: i64, group: list[?str], named_group: dict[str, ?str]) -> None:
         self.pattern = pattern
         self.string = string
         self.start_pos = start_pos
@@ -40,7 +40,7 @@ class Match:
 # TODO: add _compile function to compile a pattern to a regex, and use it in
 # _match function to avoid recompiling the pattern each time
 
-def _match(pattern: str, string: str, start_pos: int) -> ?Match:
+def _match(pattern: str, string: str, start_pos: i64) -> ?Match:
     NotImplemented
 
 def match(pattern: str, string: str) -> ?Match:

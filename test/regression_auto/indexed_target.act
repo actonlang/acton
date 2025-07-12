@@ -3,13 +3,13 @@ class tree():
         self.children = children
         self.data = data
 
-def getchild(self : tree, n : int) -> tree:
+def getchild(self : tree, n : i64) -> tree:
     return self.children[n]
 
-def setchild(self : tree, n : int, t : tree) -> None:
+def setchild(self : tree, n : i64, t : tree) -> None:
     self.children[n] = t
 
-def delchild(self : tree, n : int) -> None:
+def delchild(self : tree, n : i64) -> None:
     del self.children[n]
 
 actor main(env):

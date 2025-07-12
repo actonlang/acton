@@ -5,7 +5,7 @@ def randint(min: int, max: int) -> int:
 def randi64(min: i64, max: i64) -> i64:
     NotImplemented
 
-def randstr(length: int) -> str:
+def randstr(length: i64) -> str:
     char_set = list("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789")
     res = ""
     for i in range(length):
@@ -22,11 +22,11 @@ def choice[T](sequence: Sequence[T]) -> T:
     if len(sequence) == 0:
         raise ValueError('Cannot choose from an empty sequence')
 
-    index = randint(0, len(sequence))
+    index = randi64(0, len(sequence))
     return sequence[index]
 
 
-def sample[T](population: list[T], k: int) -> list[T]:
+def sample[T](population: list[T], k: i64) -> list[T]:
     """
     Chooses k unique random elements from a population sequence.
 

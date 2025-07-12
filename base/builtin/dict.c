@@ -469,8 +469,8 @@ B_dict B_MappingD_dictD___fromiter__ (B_MappingD_dict wit, B_Iterable wit2, $WOR
     */
 }
 
-B_int B_MappingD_dictD___len__ (B_MappingD_dict wit, B_dict dict) {
-    return to$int(dict->numelements);
+B_i64 B_MappingD_dictD___len__ (B_MappingD_dict wit, B_dict dict) {
+    return toB_i64(dict->numelements);
 }
   
 B_bool B_MappingD_dictD___contains__ (B_MappingD_dict wit, B_dict dict, $WORD key) {

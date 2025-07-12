@@ -14,7 +14,7 @@ void B___ext_init__() {
     B_HashableD_bytesG_methods.__eq__ = (B_bool (*)(B_HashableD_bytes, B_bytes, B_bytes))B_OrdD_bytesD___eq__;
     B_HashableD_complexG_methods.__eq__ = (B_bool (*)(B_HashableD_complex, B_complex, B_complex))B_HashableD_complexD___eq__;
 
-    B_ContainerD_listG_methods.__len__ = (B_int (*)(B_ContainerD_list, B_list))B_CollectionD_SequenceD_listD___len__;
+    B_ContainerD_listG_methods.__len__ = (B_i64 (*)(B_ContainerD_list, B_list))B_CollectionD_SequenceD_listD___len__;
     B_ContainerD_listG_methods.__fromiter__ = (B_list (*)(B_ContainerD_list, B_Iterable, $WORD))B_CollectionD_SequenceD_listD___fromiter__;
     B_ContainerD_listG_methods.__iter__ = (B_Iterator (*)(B_ContainerD_list, B_list))B_CollectionD_SequenceD_listD___iter__;
 }
@@ -37,7 +37,7 @@ $R B_EnvD_getenvbG_local (B_Env self, $Cont C_cont, B_bytes name) {
     char smallval[256];
     char *value = smallval;
 
-    const char* env_var = fromB_bytes(name);
+    const char* env_var = (char*)fromB_bytes(name);
 
     // First, query the required buffer size by passing NULL as the buffer
     int r = uv_os_getenv(env_var, value, &len);

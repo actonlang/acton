@@ -11,7 +11,7 @@ struct B_IteratorD_enumerateG_class {
   char *$GCINFO;
   int $class_id;
   $SuperG_class $superclass;
-  void (*__init__)(B_IteratorD_enumerate, B_Iterator,B_int);
+  void (*__init__)(B_IteratorD_enumerate, B_Iterator,B_i64);
   void (*__serialize__)(B_IteratorD_enumerate,$Serial$state);
   B_IteratorD_enumerate (*__deserialize__)(B_IteratorD_enumerate,$Serial$state);
   B_bool (*__bool__)(B_IteratorD_enumerate);
@@ -27,7 +27,7 @@ struct B_IteratorD_enumerate {
 };
 
 extern struct B_IteratorD_enumerateG_class B_IteratorD_enumerateG_methods;
-B_IteratorD_enumerate B_IteratorD_enumerateG_new(B_Iterator,B_int);
+B_IteratorD_enumerate B_IteratorD_enumerateG_new(B_Iterator,B_i64);
 
 
 // filter ////////////////////////////////////////////////////////////

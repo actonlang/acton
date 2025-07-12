@@ -310,6 +310,17 @@ B_int B_IntegralD_intD___int__ (B_IntegralD_int wit, B_int n) {
     return n;
 }
 
+B_i64 B_IntegralD_intD___i64__ (B_IntegralD_int wit, B_int n) {
+    unsigned long k = n->val.n[0];
+    long sz = n->val.size;
+    if (labs(sz) > 1 || (sz==1 && k > 0x7ffffffffffffffful) || sz == -1 && k > 0x8000000000000000ul) {
+        char errmsg[1024];
+        snprintf(errmsg, sizeof(errmsg), "i64(): value %s out of range for type i64",get_str(&n->val));
+        $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
+    }
+    return toB_i64(k*sz);
+}
+
 B_int B_IntegralD_intD___index__(B_IntegralD_int wit, B_int n) {
     return n;
 }
