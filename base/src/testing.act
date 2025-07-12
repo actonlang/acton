@@ -671,7 +671,7 @@ class TestInfo(object):
         self.max_duration = -1.0
         self.avg_duration = -1.0
         self.total_duration = 0.0
-        self.num_iterations = len(self.results)
+        self.num_iterations = int(len(self.results))
         self.num_failures = 0
         self.num_errors = 0
         self.mem_usage_delta_avg = 0

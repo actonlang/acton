@@ -399,8 +399,8 @@ B_set B_SetD_setD___fromiter__(B_SetD_set wit, B_Iterable wit2, $WORD iter) {
     */
 }
 
-B_int B_SetD_setD___len__ (B_SetD_set wit, B_set set) {
-    return to$int(set->numelements);
+B_i64 B_SetD_setD___len__ (B_SetD_set wit, B_set set) {
+    return toB_i64(set->numelements);
 }
 
 B_bool B_SetD_setD___contains__ (B_SetD_set wit, B_set set, $WORD val) {
