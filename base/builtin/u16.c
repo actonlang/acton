@@ -168,6 +168,10 @@ B_int B_IntegralD_u16D___int__ (B_IntegralD_u16 wit, B_u16 n) {
     return B_intG_new((B_atom)n,NULL);
 }
 
+B_i64 B_IntegralD_u16D___i64__ (B_IntegralD_u16 wit, B_u16 n) {
+    return toB_i64(n->val);
+}
+
 B_int B_IntegralD_u16D___index__(B_IntegralD_u16 wit, B_u16 n) {
     return B_intG_new((B_atom)n,NULL);
 }

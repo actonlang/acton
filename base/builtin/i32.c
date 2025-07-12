@@ -172,6 +172,10 @@ B_int B_IntegralD_i32D___int__ (B_IntegralD_i32 wit, B_i32 n) {
     return B_intG_new((B_atom)n,NULL);
 }
 
+B_i64 B_IntegralD_i32D___i64__ (B_IntegralD_i32 wit, B_i32 n) {
+    return toB_i64(n->val);
+}
+
 B_int B_IntegralD_i32D___index__(B_IntegralD_i32 wit, B_i32 n) {
     return B_intG_new((B_atom)n,NULL);
 }

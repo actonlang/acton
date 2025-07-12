@@ -2001,9 +2001,9 @@ isNone e op e'                          = Nothing
 
 sCast n t t'                            = [(n, eCAST t t' (eVar n))]
 
-inferSlice env (Sliz l e1 e2 e3)        = do (cs1,e1') <- inferSub env tInt e1
-                                             (cs2,e2') <- inferSub env tInt e2
-                                             (cs3,e3') <- inferSub env tInt e3
+inferSlice env (Sliz l e1 e2 e3)        = do (cs1,e1') <- inferSub env tI64 e1
+                                             (cs2,e2') <- inferSub env tI64 e2
+                                             (cs3,e3') <- inferSub env tI64 e3
                                              return (cs1++cs2++cs3, Sliz l e1' e2' e3')
 
 

@@ -177,6 +177,7 @@ instance Vars Stmt where
 
     bound (Assign _ ps _)           = bound ps
     bound (VarAssign _ ps e)        = bound ps
+    bound (AugAssign _ t _ e)       = free t
     bound (Decl _ ds)               = bound ds
     bound (Signature _ ns t d)      = ns
     bound (If _ bs els)             = bound bs ++ bound els
@@ -254,6 +255,8 @@ instance Vars Expr where
     free (Set _ es)                 = free es
     free (SetComp _ e co)           = (free e \\ bound co) ++ free co
     free (Paren _ e)                = free e
+    free (UnBox t e)                = free e
+    free (Box t e)                  = free e
 
 instance Vars Name where
     free n                          = [n]

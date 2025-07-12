@@ -389,9 +389,10 @@ instance {-# OVERLAPS #-} Boxing [Decl] where
                                          (ws2,ds2) <- boxing env ds
                                          return (ws1++ws2,c1:ds2)
     boxing env (d@Def{} : ds)
-      | hasNotImpl (dbody d)        = do (ws,ds1) <- boxing env ds
-                                         return (ws, d : ds1)
-      | otherwise                   = case lookup (dname d) (unboxedVars env) of
+   --   | hasNotImpl (dbody d)        = do (ws,ds1) <- boxing env ds
+   --                                      return (ws, d : ds1)
+   --   | otherwise                   = case lookup (dname d) (unboxedVars env) of
+                                      = case lookup (dname d) (unboxedVars env) of
                                         Just un -> do
                                            (ws1,d1) <- boxing (setDelayedUnbox True env) d{dname = un}
                                            let ds1 =  [mkWrapper d un]

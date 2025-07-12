@@ -319,7 +319,7 @@ declModule env (s : ss)             = vcat [ genTypeDecl env n t <+> genTopName 
 
 
 declDecl env (Def _ n q p KwdNIL (Just t) b d fx ddoc)
-  | hasNotImpl b                    = gen env t <+> genTopName env n <+> parens (gen env p) <> semi $+$
+  | hasNotImpl b                    = genTypeDecl env n t1 <+> genTopName env n <+> parens (gen env p) <> semi $+$
                                       text "/*" $+$
                                       decl $+$
                                       text "*/"

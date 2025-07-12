@@ -19,13 +19,13 @@
    - Otherwise, 
    - on input, len must be the # of elements in the sequence being sliced
    - on output 
-      - 0 <= *start < len is the starting position
-      - 0 <= *stop < len is the ending position (*non-inclusive*!)
-      - *step is the step size
+      - 0 <= *start <= len is the starting position
+      - 0 <= *stop <= len is the ending position (*non-inclusive*!)
+      - *step is the step size (which may be negative)
       - *slen is the # of elements in the slice. 
 */
 
-void normalize_slice(B_slice slc, long len, long *slen, long *start, long *stop, long *step) {
+void normalize_slice(B_slice slc, int64_t len, int64_t *slen, int64_t *start, int64_t *stop, int64_t *step) {
     if (slc->step == NULL)
         *step = 1;
     else
@@ -54,24 +54,24 @@ void normalize_slice(B_slice slc, long len, long *slen, long *start, long *stop,
         *slen = (*stop-*start)/ *step + ((*stop-*start)%*step != 0);
 }
 
-B_slice B_sliceG_new(B_int start,B_int stop,B_int step) {
+B_slice B_sliceG_new(B_i64 start, B_i64 stop, B_i64 step) {
     return $NEW(B_slice,start,stop,step);
 }
 
-B_NoneType B_sliceD___init__(B_slice s, B_int start, B_int stop, B_int step) {
+B_NoneType B_sliceD___init__(B_slice s, B_i64 start, B_i64 stop, B_i64 step) {
     if (start) {
-        s->start = acton_malloc(sizeof(long));
-        *s->start = from$int(start);
+        s->start = acton_malloc(sizeof(int64_t));
+        *s->start = fromB_i64(start);
     } else
         s->start = NULL;
     if (stop) {
-        s->stop = acton_malloc(sizeof(long));
-        *s->stop = from$int(stop);
+        s->stop = acton_malloc(sizeof(int64_t));
+        *s->stop = fromB_i64(stop);
     } else
         s->stop = NULL;
     if (step) {
-        s->step = acton_malloc(sizeof(long));
-        *s->step = from$int(step);
+        s->step = acton_malloc(sizeof(int64_t));
+        *s->step = fromB_i64(step);
     } else
         s->step = NULL;
     return B_None;

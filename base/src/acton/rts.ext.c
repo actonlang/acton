@@ -71,8 +71,8 @@ B_u64 actonQ_rtsQ_get_rss (B_SysCap cap) {
     return toB_u64(rsm);
 }
 
-B_NoneType actonQ_rtsQ_sleep (B_SysCap cap, B_float sleep_time) {
-    double st = fromB_float(sleep_time);
+B_NoneType actonQ_rtsQ_U_sleep (B_SysCap cap, double sleep_time) {
+    double st = sleep_time;
     struct timespec ts;
     ts.tv_sec = (int)st;
     ts.tv_nsec = (st - (float)ts.tv_sec)*1e9;

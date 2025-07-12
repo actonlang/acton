@@ -3,7 +3,7 @@ class tree():
         self.children = children
         self.data = data
 
-extension tree (Indexed[int,tree]):
+extension tree (Indexed[i64,tree]):
     def __getitem__(self,n):
         return self.children[n]
     def __setitem__(self,n,t):
