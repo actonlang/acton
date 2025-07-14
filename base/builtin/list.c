@@ -384,25 +384,31 @@ B_i64 B_CollectionD_SequenceD_listD___len__(B_CollectionD_SequenceD_list wit, B_
 
 //  B_SequenceD_list //////////////////////////////////////////////////////////////////
  
-$WORD B_SequenceD_listD___getitem__(B_SequenceD_list wit, B_list lst, B_i64 n) {
+$WORD $listD_U__getitem__(B_list lst, int64_t n) {
     int len = lst->length;
-    int64_t ix = fromB_i64(n);
-    int ix0 = ix < 0 ? len + ix : ix;
+    int ix0 = n < 0 ? len + n : n;
     if (ix0 < 0 || ix0 >= len) {
         $RAISE((B_BaseException)$NEW(B_IndexError, to$int(ix0), to$str("getitem: index outside list")));
     }
     return lst->data[ix0];
 }
 
-B_NoneType B_SequenceD_listD___setitem__(B_SequenceD_list wit, B_list lst, B_i64 n, $WORD val) {
+$WORD B_SequenceD_listD___getitem__(B_SequenceD_list wit, B_list lst, B_i64 n) {
+    return  $listD_U__getitem__(lst, fromB_i64(n));
+}
+
+B_NoneType listD_U__setitem__(B_list lst, int64_t n, $WORD val) {
     int len = lst->length;
-    int64_t ix = fromB_i64(n);
-    int ix0 = ix < 0 ? len + ix : ix;
+    int ix0 = n < 0 ? len + n : n;
     if (ix0 < 0 || ix0 >= len) {
         $RAISE((B_BaseException)$NEW(B_IndexError, to$int(ix0), to$str("setitem: index outside list")));
     }
     lst->data[ix0] = val;
     return B_None;
+}
+
+B_NoneType B_SequenceD_listD___setitem__(B_SequenceD_list wit, B_list lst, B_i64 n, $WORD val) {
+    return  listD_U__setitem__(lst, fromB_i64(n), val);
 }
 
 B_NoneType B_SequenceD_listD___delitem__(B_SequenceD_list wit, B_list lst, B_i64 n) {

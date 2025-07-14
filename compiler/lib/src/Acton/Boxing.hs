@@ -162,6 +162,7 @@ instance Boxing Expr where
                                         NVar (TCon _ (TC _ ts))
                                            | any (not . vFree) ts    -> return ([n], eCallP (eDot (eQVar w) attr) p)
                                            | attr == fromatomKW      -> boxingFromAtom w ts es
+                                           | attr == getitemKW       -> boxingGetItem w ts es
                                            | attr `elem` binopKWs    -> boxingBinop w attr es ts
                                            | attr `elem` eqordKWs    -> boxingCompop w attr es ts
                                         _                            -> return ([n], eCallP (eDot (eQVar w) attr) p)
@@ -174,12 +175,15 @@ instance Boxing Expr where
         where t = head ts
       boxingFromAtom w ts [x@Float{}]
                                     = return ([], Box (last ts) (unbox (head ts) x))
-      boxingFromAtom w t es         = return ([n], Call NoLoc (eDot (eQVar w) fromatomKW) (posarg es) KwdNil)
+      boxingFromAtom w ts es        = return ([n], eCall (eDot (eQVar w) fromatomKW) es)
+      boxingGetItem w (_:t:t1:_) es@[a, k]
+        | t == tI64                 = return ([], eCall (tApp (eQVar primUGetItem) [t1]) [a, unbox t k])
+        | otherwise                 = return ([n], eCall (eDot (eQVar w) attr) es)
       boxingBinop w attr es@[x1, x2] ts
         | isUnboxable t            =  return ([], Box (last ts) $ Paren NoLoc $ BinOp NoLoc (unbox t x1) op (unbox t x2))
         where t                     = head ts
               op                    = bin2Binary attr
-      boxingBinop w attr es _       = return ([n], eCall(eDot (eQVar w) attr) es)
+      boxingBinop w attr es _       = return ([n], eCall (eDot (eQVar w) attr) es)
 
       boxingCompop w attr es@[x1, x2] ts
         | isUnboxable t             = return ([], Box tBool $ Paren NoLoc $ CompOp NoLoc (unbox t x1) [OpArg op (unbox t x2)])

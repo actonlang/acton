@@ -964,8 +964,8 @@ instance Gen Expr where
     gen env (UnBox _ (Float _ x s)) = text s
     gen env (UnBox _ v@(Var _ (NoQ n)))
        | isUnboxed n                = gen env v
-    gen env (UnBox _ e@Var{})       = gen env e <> text "->val"
-    gen env (UnBox _ e)             = parens (gen env e) <> text "->val"
+    gen env (UnBox t e)             = parens (parens (gen env t) <> gen env e) <> text "->val"
+--    gen env (UnBox t e)             = parens (gen env e) <> text "->val"
     gen env e                       = error ("CodeGen.gen for Expr: e = " ++ show e)
 
 gencFunCall env nm []               = text nm <> parens empty
