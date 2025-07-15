@@ -229,7 +229,7 @@ static int char_no(B_str text,int i) {
     return res;
 }
 
-static unsigned char *skip_chars(unsigned char* start,int n, int isascii) {
+static unsigned char *skip_chars(unsigned char* start, int n, int isascii) {
     unsigned char *res = start;
     if (isascii)
         return start+n;
@@ -275,7 +275,6 @@ static int get_index(int i, int nchars) {
 
 static int fix_start_end(int nchars, B_int *start, B_int *end) {
     if (*start==NULL) {
-        *start = acton_malloc(sizeof(struct B_int));
         *start = to$int(0);
     } else {
         int st = from$int(*start);
@@ -287,7 +286,6 @@ static int fix_start_end(int nchars, B_int *start, B_int *end) {
         *start = to$int(st);
     }
     if (*end==NULL) {
-        *end = acton_malloc(sizeof(struct B_int));
         *end = to$int(nchars);
     } else {
         int en = from$int(*end);
@@ -609,6 +607,7 @@ B_bool B_strD_endswith(B_str s, B_str sub, B_int start, B_int end) {
     B_int st = start;
     B_int en = end;
     if (fix_start_end(s->nchars,&st,&en) < 0) return B_False;
+    if (en-st < sub->nbytes) return B_False;
     int isascii = s->nchars==s->nbytes;
     unsigned char *p = skip_chars(s->str + s->nbytes,from$int(en) - s->nchars,isascii) - sub->nbytes;
     unsigned char *q = sub->str;
