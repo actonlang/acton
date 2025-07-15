@@ -15,6 +15,34 @@ copyright:           "2018 Author name here"
 # common to point users to the README.md file.
 description:         Please see the README on Github at <https://github.com/githubuser/simple#readme>
 
+dependencies:
+  - array
+  - base
+  - binary
+  - bytestring
+  - containers
+  - deepseq
+  - diagnose
+  - dir-traverse
+  - directory >= 1.3.1
+  - filelock
+  - filepath
+  - hashable
+  - megaparsec
+  - mtl
+  - optparse-applicative
+  - parser-combinators
+  - pretty
+  - prettyprinter
+  - scientific
+  - sydtest
+  - sydtest-discover
+  - text
+  - transformers
+  - unix
+  - utf8-string
+  - zlib
+
 library:
   source-dirs: src
   exposed-modules:
@@ -41,62 +69,13 @@ library:
     - Utils
     - Pretty
     - InterfaceFiles
-  dependencies:
-    - array
-    - base
-    - binary
-    - bytestring
-    - containers
-    - deepseq
-    - diagnose
-    - dir-traverse
-    - directory >= 1.3.1
-    - filelock
-    - filepath
-    - hashable
-    - megaparsec
-    - mtl
-    - optparse-applicative
-    - parser-combinators
-    - pretty
-    - scientific
-    - text
-    - transformers
-    - unix
-    - utf8-string
-    - zlib
 
 tests:
-  test:
+  test_lib:
     main: ActonSpec.hs
     source-dirs: test
     dependencies:
       - acton
-      - array
-      - base
-      - binary
-      - bytestring
-      - containers
-      - deepseq
-      - diagnose
-      - dir-traverse
-      - directory >= 1.3.1
-      - filelock
-      - filepath
-      - hashable
-      - megaparsec
-      - mtl
-      - parser-combinators
-      - pretty
-      - prettyprinter
-      - scientific
-      - text
-      - transformers
-      - unix
-      - utf8-string
-      - zlib
-      - sydtest
-      - sydtest-discover
     ghc-options:
       - -threaded
       - -rtsopts
