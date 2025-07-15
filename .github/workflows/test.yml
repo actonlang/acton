@@ -357,9 +357,6 @@ jobs:
       matrix:
         include:
           - os: "debian"
-            version: "10"
-            arch: "amd64"
-          - os: "debian"
             version: "11"
             arch: "amd64"
           - os: "debian"
