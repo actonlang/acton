@@ -134,10 +134,26 @@ def test_empty_str_methods():
         raise ValueError("str.zfill() failed: " + s.zfill(5))
 
 
+def test_endswith():
+    s = "foobar"
+    if not s.endswith("foobar"):
+        raise ValueError("Unexpected result for endswith('foobar')")
+
+    if not s.endswith("bar"):
+        raise ValueError("Unexpected result for endswith('bar')")
+
+    if s.endswith("banana"):
+        raise ValueError("Unexpected result for endswith('banana')")
+
+    if s.endswith("longbanana"):
+        raise ValueError("Unexpected result for endswith('longbanana')")
+
+
 actor main(env):
     try:
         test_str_find()
         test_empty_str_methods()
+        test_endswith()
     except Exception as e:
         print("Unexpected exception during testing:", e)
         await async env.exit(1)

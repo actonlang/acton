@@ -609,6 +609,7 @@ B_bool B_strD_endswith(B_str s, B_str sub, B_int start, B_int end) {
     B_int st = start;
     B_int en = end;
     if (fix_start_end(s->nchars,&st,&en) < 0) return B_False;
+    if (en-st < sub->nbytes) return B_False;
     int isascii = s->nchars==s->nbytes;
     unsigned char *p = skip_chars(s->str + s->nbytes,from$int(en) - s->nchars,isascii) - sub->nbytes;
     unsigned char *q = sub->str;
