@@ -26,11 +26,12 @@ data CmdLineOptions = CompileOpt [String] GlobalOptions CompileOptions
 data ColorWhen = Auto | Always | Never deriving (Show, Eq)
 
 data GlobalOptions = GlobalOptions {
-                        tty :: Bool,
-                        debug :: Bool,
-                        quiet :: Bool,
-                        timing :: Bool,
-                        color :: ColorWhen
+                        tty          :: Bool,
+                        verbose      :: Bool,
+                        verboseZig   :: Bool,
+                        quiet        :: Bool,
+                        timing       :: Bool,
+                        color        :: ColorWhen
                      } deriving Show
 
 data VersionOptions = VersionOptions {
@@ -135,10 +136,11 @@ cmdLineParser       = hsubparser
 
 globalOptions :: Parser GlobalOptions
 globalOptions = GlobalOptions
-    <$> switch (long "tty"    <> help "Act as if run from interactive TTY")
-    <*> switch (long "debug"  <> help "Print debug stuff")
-    <*> switch (long "quiet"  <> help "Don't print stuff")
-    <*> switch (long "timing" <> help "Print timing information")
+    <$> switch (long "tty"         <> help "Act as if run from interactive TTY")
+    <*> switch (long "verbose"     <> help "Verbose output")
+    <*> switch (long "verbose-zig" <> help "Verbose Zig output")
+    <*> switch (long "quiet"       <> help "Don't print stuff")
+    <*> switch (long "timing"      <> help "Print timing information")
     <*> option colorReader
         (long "color"
          <> metavar "WHEN"

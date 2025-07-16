@@ -553,7 +553,7 @@ compileFiles gopts opts srcFiles = do
     -- known to be in the same project
     paths <- findPaths (head srcFiles) opts
 
-    when (C.debug gopts) $ do
+    when (C.verbose gopts) $ do
         putStrLn ("  Paths:")
         putStrLn ("    sysPath  : " ++ sysPath paths)
         putStrLn ("    sysTypes : " ++ sysTypes paths)
@@ -892,7 +892,7 @@ doTask gopts opts paths env t@(ActonTask mn src m stubMode) = do
 
 checkUptoDate :: C.GlobalOptions -> C.CompileOptions -> Paths -> FilePath -> [FilePath] -> [A.ModName] -> IO Bool
 checkUptoDate gopts opts paths actFile outFiles imps = do
-    iff (C.debug gopts) (putStrLn ("    Checking " ++ makeRelative (srcDir paths) actFile ++ " is up to date..."))
+    iff (C.verbose gopts) (putStrLn ("    Checking " ++ makeRelative (srcDir paths) actFile ++ " is up to date..."))
     -- get the path to the actonc binary, i.e. ourself
     actoncBin <- System.Environment.getExecutablePath
     -- get path to `acton` which is the actonc binary without the `c` at the end
@@ -903,7 +903,7 @@ checkUptoDate gopts opts paths actFile outFiles imps = do
 
     if not (and outExists)
         then do
-            iff (C.debug gopts) (putStrLn ("    Missing output files: " ++ show outExists ++ " for " ++ show outFiles))
+            iff (C.verbose gopts) (putStrLn ("    Missing output files: " ++ show outExists ++ " for " ++ show outFiles))
             return False
         else do
             -- get the time of the last modified source file
@@ -1156,7 +1156,7 @@ runZig gopts opts zigCmd paths wd = do
     (returnCode, zigStdout, zigStderr) <- readCreateProcessWithExitCode (shell $ zigCmd){ cwd = wd } ""
     case returnCode of
         ExitSuccess -> do
-          iff (C.debug gopts) $ putStrLn zigStderr
+          iff (C.verboseZig gopts) $ putStrLn zigStderr
           return ()
         ExitFailure ret -> do
           printIce ("compilation of generated Zig code failed, returned error code" ++ show ret)
@@ -1235,10 +1235,10 @@ zigBuild env gopts opts paths tasks binTasks = do
 
     let zigCmdBase = zig paths ++ " build " ++ " --cache-dir " ++ local_cache_dir ++
                  " --global-cache-dir " ++ global_cache_dir ++
-                 (if (C.debug gopts) then " --verbose " else "")
+                 (if (C.verboseZig gopts) then " --verbose " else "")
     let zigCmd = zigCmdBase ++
                  " --prefix " ++ projOut paths ++ " --prefix-exe-dir 'bin'" ++
-                 (if (C.debug gopts) then " --verbose " else "") ++
+                 (if (C.verboseZig gopts) then " --verbose " else "") ++
                  " -Dtarget=" ++ (C.target opts) ++
                  target_cpu ++
                  " -Doptimize=" ++ (if (C.dev opts) then "Debug" else "ReleaseFast") ++
@@ -1246,7 +1246,7 @@ zigBuild env gopts opts paths tasks binTasks = do
                  (if no_threads then " -Dno_threads " else "") ++
                  (if (C.cpedantic opts) then " -Dcpedantic " else "")
 
-    iff (C.debug gopts) $ putStrLn ("zigCmd: " ++ zigCmd)
+    iff (C.verbose gopts) $ putStrLn ("zigCmd: " ++ zigCmd)
     runZig gopts opts zigCmd paths (Just (projPath paths))
     -- if we are in a temp acton project, copy the outputted binary next to the source file
     if (isTmp paths && not (null realBinTasks))
