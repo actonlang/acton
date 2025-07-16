@@ -13,7 +13,7 @@ struct B_TimesD_str B_TimesD_strG_instance;
 struct B_SliceableD_str B_SliceableD_strG_instance;
 struct B_ContainerD_str B_ContainerD_strG_instance;
 struct B_OrdD_str B_OrdD_strG_instance;
-struct B_IterableD_range B_IterableD_rangeG_instance;
+// struct B_IterableD_range B_IterableD_rangeG_instance;
 struct B_IterableD_Iterator B_IterableD_IteratorG_instance;
 struct B_TimesD_SequenceD_list B_TimesD_SequenceD_listG_instance;
 struct B_CollectionD_SequenceD_list B_CollectionD_SequenceD_listG_instance;
@@ -107,9 +107,7 @@ struct B_TimesD_str B_TimesD_strG_instance = {&B_TimesD_strG_methods};
 struct B_SliceableD_str B_SliceableD_strG_instance = {&B_SliceableD_strG_methods, (B_Eq)&B_OrdD_intG_instance};
 struct B_ContainerD_str B_ContainerD_strG_instance = {&B_ContainerD_strG_methods, (B_Eq)&B_OrdD_intG_instance};
 struct B_OrdD_str B_OrdD_strG_instance = {&B_OrdD_strG_methods};
-
-struct B_IterableD_range B_IterableD_rangeG_instance = {&B_IterableD_rangeG_methods};
-
+//struct B_IterableD_range B_IterableD_rangeG_instance = {&B_IterableD_rangeG_methods};
 struct B_IterableD_Iterator B_IterableD_IteratorG_instance = {&B_IterableD_IteratorG_methods};
 
 struct B_TimesD_SequenceD_list B_TimesD_SequenceD_listG_instance = {&B_TimesD_SequenceD_listG_methods, (B_Sequence)&B_SequenceD_listG_instance};
@@ -217,7 +215,7 @@ B_TimesD_str B_TimesD_strG_witness = &B_TimesD_strG_instance;
 B_SliceableD_str B_SliceableD_strG_witness = &B_SliceableD_strG_instance;
 B_ContainerD_str B_ContainerD_strG_witness = &B_ContainerD_strG_instance;
 B_OrdD_str B_OrdD_strG_witness = &B_OrdD_strG_instance;
-B_IterableD_range B_IterableD_rangeG_witness = &B_IterableD_rangeG_instance;
+//B_IterableD_range B_IterableD_rangeG_witness = &B_IterableD_rangeG_instance;
 B_IterableD_Iterator B_IterableD_IteratorG_witness = &B_IterableD_IteratorG_instance;
 B_TimesD_SequenceD_list B_TimesD_SequenceD_listG_witness = &B_TimesD_SequenceD_listG_instance;
 B_CollectionD_SequenceD_list B_CollectionD_SequenceD_listG_witness = &B_CollectionD_SequenceD_listG_instance;
