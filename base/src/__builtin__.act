@@ -94,7 +94,14 @@ class list[A] (object):
         """
         NotImplemented
 
-class range[A(Integral)] (value):
+class Iterator[A] (object):
+    __next__     : () -> A
+    
+
+protocol Iterable[A]:
+    __iter__     : () -> Iterator[A]
+
+class range[A(Integral)] (Iterator[A]):
     """Return an object that produces a sequence of integers from start
     (inclusive) to stop (exclusive) in step sizes as specified by the step
     argument, which is 1 per default. It is possible to call with just a single
@@ -107,12 +114,8 @@ class range[A(Integral)] (value):
     """
     def __init__(self, start: A, stop: ?A, step: A=1) -> None:
         NotImplemented
-
-class Iterator[A] (object):
-    __next__      : () -> A
-
-protocol Iterable[A]:
-    __iter__     : () -> Iterator[A]
+    def __next__(self)->A:
+        NotImplemented
 
 class str (atom):
     def __init__     (self, val: ?value) -> None:
@@ -848,8 +851,8 @@ extension set[A(Hashable)] (Set[A]):
 extension Iterator[A](Iterable[A]):
     NotImplemented
 
-extension range[A](Iterable[A]):
-    NotImplemented
+# extension range[A](Iterable[A]):
+#     NotImplemented
 
 extension str (Ord):
     NotImplemented
