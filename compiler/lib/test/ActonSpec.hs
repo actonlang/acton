@@ -30,7 +30,7 @@ import Error.Diagnose (printDiagnostic, prettyDiagnostic, WithUnicode(..), TabSi
 import Prettyprinter (unAnnotate, layoutPretty, defaultLayoutOptions)
 import Prettyprinter.Render.Text (renderStrict)
 import System.FilePath ((</>), joinPath, takeFileName, takeBaseName, takeDirectory, splitDirectories)
-import System.Directory (getCurrentDirectory, setCurrentDirectory)
+import System.Directory (getCurrentDirectory, setCurrentDirectory, createDirectoryIfMissing)
 import Control.Monad (forM_, when, foldM)
 import qualified Control.Exception as E
 import Utils (SrcLoc(..))
@@ -325,7 +325,7 @@ main = do
           testParseError "unknown_escape_with_interpolation" "f\"value: {x} \\k\""
 
     describe "Documentation Generation" $ do
-      testDocFiles env0 ["bar"]
+      testDocGen env0 ["bar", "foo"]
 
     describe "Pass 2: Kinds" $ do
       testKinds env0 "deact"
@@ -454,59 +454,48 @@ testParseError testName input = do
         return $ T.pack $ "PARSED: " ++ result
 
 -- Helper function for documentation golden tests
--- Takes a list of module names (without .act extension) in dependency order
--- and generates golden files for all three formats: .txt (ASCII), .md (Markdown), .html (HTML)
-testDocFiles :: Acton.Env.Env0 -> [String] -> Spec
-testDocFiles env0 moduleNames = do
-  let testDir = "test"
-      goldenDir = "doc-golden"
-      sysTypesPath = ".." </> ".." </> ".." </> "dist" </> "base" </> "out" </> "types"
-
-  -- Process modules in dependency order
+-- Takes a list of module paths in dependency order
+-- Examples: ["bar", "foo"] or ["utils/math", "utils/strings", "app"]
+-- Generates golden files for all formats: .txt (ASCII), .md (Markdown), .html (HTML)
+testDocGen :: Acton.Env.Env0 -> [String] -> Spec
+testDocGen env0 modulePaths = do
   oldDir <- runIO getCurrentDirectory
+  let goldenDir = oldDir </> "test" </> "doc-golden"
 
-  -- Parse and type-check all modules, building up the environment
   modules <- runIO $ do
-    setCurrentDirectory (oldDir </> testDir)
-
-    -- Process modules in order, accumulating environment
-    let processModule (accEnv, accModules) modName = do
-          let act_file = "src" </> modName ++ ".act"
-          src <- readFile act_file
-          let base = takeBaseName act_file
-          parsed <- P.parseModule (S.modName [base]) act_file src
-          env <- Acton.Env.mkEnv [sysTypesPath] accEnv parsed
+    let processModule (accEnv, accModules) modulePath = do
+          (env, parsed) <- parseAct accEnv modulePath
           kchecked <- Acton.Kinds.check env parsed
           (nmod, tchecked, typeEnv, _) <- Acton.Types.reconstruct env kchecked
-          let S.NModule tenv mdoc = nmod
-          -- The new environment includes the processed module
-          return (env, accModules ++ [(modName, parsed, nmod)])
-    (finalEnv, mods) <- foldM processModule (env0, []) moduleNames
-    setCurrentDirectory oldDir
-    return mods
+          let S.NModule moduleTypeEnv moduleDoc = nmod
+          let newAccEnv = Acton.Env.addMod (S.modname parsed) moduleTypeEnv moduleDoc accEnv
+          return (newAccEnv, accModules ++ [((takeFileName modulePath), parsed, nmod)])
+
+    (finalEnv, modules) <- foldM processModule (env0, []) modulePaths
+    return modules
 
   -- Generate documentation for each module
   forM_ modules $ \(modName, parsed, nmod) -> do
     describe modName $ do
       it "generates ASCII documentation (plain)" $ do
         let asciiDoc = DocP.printAsciiDoc False nmod parsed
-        goldenTextFile (testDir </> goldenDir </> modName ++ ".txt") $ return $ T.pack asciiDoc
+        goldenTextFile (goldenDir </> modName ++ ".txt") $ return $ T.pack asciiDoc
 
       it "generates ASCII documentation (styled)" $ do
         let asciiDoc = DocP.printAsciiDoc True nmod parsed
-        goldenTextFile (testDir </> goldenDir </> modName ++ "-color.txt") $ return $ T.pack asciiDoc
+        goldenTextFile (goldenDir </> modName ++ "-color.txt") $ return $ T.pack asciiDoc
 
       it "generates Markdown documentation" $ do
         let mdDoc = DocP.printMdDoc nmod parsed
-        goldenTextFile (testDir </> goldenDir </> modName ++ ".md") $ return $ T.pack mdDoc
+        goldenTextFile (goldenDir </> modName ++ ".md") $ return $ T.pack mdDoc
 
       it "generates HTML documentation" $ do
         let htmlDoc = DocP.printHtmlDoc nmod parsed
-        goldenTextFile (testDir </> goldenDir </> modName ++ ".html") $ return $ T.pack htmlDoc
+        goldenTextFile (goldenDir </> modName ++ ".html") $ return $ T.pack htmlDoc
 
 -- Parse an Acton module by module path
 -- Examples: "foo" -> src/foo.act, module foo
---           "foo/bar" -> src/foo/bar.act, module foo.bar  
+--           "foo/bar" -> src/foo/bar.act, module foo.bar
 parseAct env0 modulePath = do
   let moduleComponents = splitDirectories modulePath
       moduleName = S.modName moduleComponents

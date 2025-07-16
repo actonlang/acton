@@ -372,17 +372,17 @@
 <h1>foo - Foo module - demonstrates cross-module type usage</h1>
 <div class="module-doc">This module extensively uses types from the bar module<br>to demonstrate documentation of cross-module references.</div>
 <h2 class="type-context"><code>create_data</code>(<span class="param-name">value</span>: <span class="type">str</span>) → <span class="type"><a href="bar.html#class-Data" class="type-link">bar.Data</a></span></h2>
-<div class="docstring">Create a new Data instance<br>    <br>    Args:<br>        value: Value for the data<br>        <br>    Returns:<br>        A new bar.Data instance with auto-generated label<br>        <br>    Examples:<br>        &gt;&gt;&gt; d = create_data(&quot;test&quot;)<br>        &gt;&gt;&gt; d.get_value()<br>        &quot;test&quot;<br>    </div>
+<div class="docstring">Create a new Data instance<br><br>    Args:<br>        value: Value for the data<br><br>    Returns:<br>        A new bar.Data instance with auto-generated label<br><br>    Examples:<br>        &gt;&gt;&gt; d = create_data(&quot;test&quot;)<br>        &gt;&gt;&gt; d.get_value()<br>        &quot;test&quot;<br>    </div>
 
 <h2 class="type-context"><code>transform_data</code>(<span class="param-name">d</span>: <span class="type"><a href="bar.html#class-Data" class="type-link">bar.Data</a></span>, <span class="param-name">f</span>: <span class="type">(str) -> str</span>) → <span class="type"><a href="bar.html#class-Data" class="type-link">bar.Data</a></span></h2>
-<div class="docstring">Transform data by applying function to its value<br>    <br>    Args:<br>        d: Data object to transform<br>        f: Transformation function<br>        <br>    Returns:<br>        New bar.Data with transformed value<br>        <br>    See Also:<br>        bar.process_data: For simple processing<br>        bar.combine_data: For combining multiple data objects<br>    </div>
+<div class="docstring">Transform data by applying function to its value<br><br>    Args:<br>        d: Data object to transform<br>        f: Transformation function<br><br>    Returns:<br>        New bar.Data with transformed value<br><br>    See Also:<br>        bar.process_data: For simple processing<br>        bar.combine_data: For combining multiple data objects<br>    </div>
 
-<h2 class="type-context"><code>analyze_multiple</code>(<span class="param-name">data_list</span>: <span class="type">list[<a href="bar.html#class-Data" class="type-link">bar.Data</a>]</span>) → <span class="type">dict[str, int]</span></h2>
-<div class="docstring">Analyze multiple data objects<br>    <br>    Args:<br>        data_list: List of bar.Data objects<br>        <br>    Returns:<br>        Statistics about the data<br>        <br>    Raises:<br>        ValueError: If list is empty<br>    </div>
+<h2 class="type-context"><code>analyze_multiple</code>(<span class="param-name">data_list</span>: <span class="type">[<a href="bar.html#class-Data" class="type-link">bar.Data</a>]</span>) → <span class="type">{str: int}</span></h2>
+<div class="docstring">Analyze multiple data objects<br><br>    Args:<br>        data_list: List of bar.Data objects<br><br>    Returns:<br>        Statistics about the data<br><br>    Raises:<br>        ValueError: If list is empty<br>    </div>
 
 <div class="declaration-block">
 <h2 id="class-DataManager" class="type-context"><span class="keyword">class</span> <code>DataManager</code>(<span class="type">object</span>)</h2>
-<div class="docstring">Manages a collection of bar.Data objects<br>    <br>    This class provides high-level operations on collections<br>    of Data objects from the bar module.<br>    </div>
+<div class="docstring">Manages a collection of bar.Data objects<br><br>    This class provides high-level operations on collections<br>    of Data objects from the bar module.<br>    </div>
 
 <h3>Attributes</h3>
 <div class="attributes">
@@ -395,33 +395,33 @@
 <div class="methods">
 <div class="method-item">
 <div class="method-signature"><code>__init__</code>(<span class="param-name">self</span>, <span class="param-name">name</span>: <span class="type">str</span>)</div>
-<div class="method-doc">Initialize manager<br>        <br>        Args:<br>            name: Name for this manager<br>        </div>
+<div class="method-doc">Initialize manager<br><br>        Args:<br>            name: Name for this manager<br>        </div>
 </div>
 <div class="method-item">
 <div class="method-signature"><code>add_data</code>(<span class="param-name">self</span>, <span class="param-name">d</span>: <span class="type"><a href="bar.html#class-Data" class="type-link">bar.Data</a></span>)</div>
-<div class="method-doc">Add a data object to storage<br>        <br>        Args:<br>            d: bar.Data object to add<br>            <br>        Raises:<br>            ValueError: If storage is full<br>        </div>
+<div class="method-doc">Add a data object to storage<br><br>        Args:<br>            d: bar.Data object to add<br><br>        Raises:<br>            ValueError: If storage is full<br>        </div>
 </div>
 <div class="method-item">
 <div class="method-signature"><code>find_by_label</code>(<span class="param-name">self</span>, <span class="param-name">label</span>: <span class="type">str</span>) → <span class="type">?<a href="bar.html#class-Data" class="type-link">bar.Data</a></span></div>
-<div class="method-doc">Find first data with matching label<br>        <br>        Args:<br>            label: Label to search for<br>            <br>        Returns:<br>            Matching bar.Data or None if not found<br>        </div>
+<div class="method-doc">Find first data with matching label<br><br>        Args:<br>            label: Label to search for<br><br>        Returns:<br>            Matching bar.Data or None if not found<br>        </div>
 </div>
 <div class="method-item">
 <div class="method-signature"><code>get_or_default</code>(<span class="param-name">self</span>, <span class="param-name">label</span>: <span class="type">str</span>) → <span class="type"><a href="bar.html#class-Data" class="type-link">bar.Data</a></span></div>
-<div class="method-doc">Get data by label or return default<br>        <br>        Args:<br>            label: Label to search for<br>            <br>        Returns:<br>            Found bar.Data or the default instance<br>        </div>
+<div class="method-doc">Get data by label or return default<br><br>        Args:<br>            label: Label to search for<br><br>        Returns:<br>            Found bar.Data or the default instance<br>        </div>
 </div>
 <div class="method-item">
 <div class="method-signature"><code>transform_all</code>(<span class="param-name">self</span>, <span class="param-name">f</span>: <span class="type">(<a href="bar.html#class-Data" class="type-link">bar.Data</a>) -> <a href="bar.html#class-Data" class="type-link">bar.Data</a></span>) → <span class="type">list[<a href="bar.html#class-Data" class="type-link">bar.Data</a>]</span></div>
-<div class="method-doc">Transform all stored data<br>        <br>        Args:<br>            f: Transformation function<br>            <br>        Returns:<br>            List of transformed bar.Data objects<br>        </div>
+<div class="method-doc">Transform all stored data<br><br>        Args:<br>            f: Transformation function<br><br>        Returns:<br>            List of transformed bar.Data objects<br>        </div>
 </div>
 </div>
 </div>
 
 <h2 class="type-context"><code>process_with_prefix</code>(<span class="param-name">d</span>: <span class="type"><a href="bar.html#class-Data" class="type-link">bar.Data</a></span>, <span class="param-name">prefix</span>: <span class="type">str</span>) → <span class="type"><a href="bar.html#class-Data" class="type-link">bar.Data</a></span></h2>
-<div class="docstring">Process data with a prefix<br>    <br>    Args:<br>        d: Data to process<br>        prefix: Prefix to add to data values<br>        <br>    Returns:<br>        New bar.Data with prefixed value<br>    </div>
+<div class="docstring">Process data with a prefix<br><br>    Args:<br>        d: Data to process<br>        prefix: Prefix to add to data values<br><br>    Returns:<br>        New bar.Data with prefixed value<br>    </div>
 
 <div class="declaration-block">
 <h2 class="type-context"><span class="keyword">actor</span> <code>DataHandler</code>(<span class="param-name">initial</span>: <span class="type"><a href="bar.html#class-Data" class="type-link">bar.Data</a></span>)</h2>
-<div class="docstring">Actor that handles bar.Data objects<br>    <br>    Args:<br>        initial: Initial bar.Data to store<br>    </div>
+<div class="docstring">Actor that handles bar.Data objects<br><br>    Args:<br>        initial: Initial bar.Data to store<br>    </div>
 
 <h3>Internal Attributes</h3>
 <div class="attributes">
@@ -433,42 +433,42 @@
 <div class="methods">
 <div class="method-item">
 <div class="method-signature"><code>update</code>(<span class="param-name">new_data</span>: <span class="type"><a href="bar.html#class-Data" class="type-link">bar.Data</a></span>)</div>
-<div class="method-doc">Update current data<br>        <br>        Args:<br>            new_data: New bar.Data to set as current<br>        </div>
+<div class="method-doc">Update current data<br><br>        Args:<br>            new_data: New bar.Data to set as current<br>        </div>
 </div>
 <div class="method-item">
 <div class="method-signature"><code>get_current</code>() → <span class="type"><a href="bar.html#class-Data" class="type-link">bar.Data</a></span></div>
-<div class="method-doc">Get current data<br>        <br>        Returns:<br>            Current bar.Data instance<br>        </div>
+<div class="method-doc">Get current data<br><br>        Returns:<br>            Current bar.Data instance<br>        </div>
 </div>
 <div class="method-item">
 <div class="method-signature"><code>transform_with</code>(<span class="param-name">f</span>: <span class="type">(<a href="bar.html#class-Data" class="type-link">bar.Data</a>) -> <a href="bar.html#class-Data" class="type-link">bar.Data</a></span>) → <span class="type"><a href="bar.html#class-Data" class="type-link">bar.Data</a></span></div>
-<div class="method-doc">Transform current data<br>        <br>        Args:<br>            f: Transformation function<br>            <br>        Returns:<br>            Transformed bar.Data<br>        </div>
+<div class="method-doc">Transform current data<br><br>        Args:<br>            f: Transformation function<br><br>        Returns:<br>            Transformed bar.Data<br>        </div>
 </div>
 <div class="method-item">
 <div class="method-signature"><code>combine_with</code>(<span class="param-name">other</span>: <span class="type"><a href="bar.html#class-Data" class="type-link">bar.Data</a></span>) → <span class="type"><a href="bar.html#class-Data" class="type-link">bar.Data</a></span></div>
-<div class="method-doc">Combine current with another data<br>        <br>        Args:<br>            other: bar.Data to combine with<br>            <br>        Returns:<br>            Combined bar.Data using bar.combine_data<br>        </div>
+<div class="method-doc">Combine current with another data<br><br>        Args:<br>            other: bar.Data to combine with<br><br>        Returns:<br>            Combined bar.Data using bar.combine_data<br>        </div>
 </div>
 <div class="method-item">
 <div class="method-signature"><code>send_to_processor</code>(<span class="param-name">p</span>: <span class="type"><a href="bar.html#class-DataProcessor" class="type-link">bar.DataProcessor</a></span>)</div>
-<div class="method-doc">Send current data to a processor<br>        <br>        Args:<br>            p: bar.DataProcessor to send to<br>        </div>
+<div class="method-doc">Send current data to a processor<br><br>        Args:<br>            p: bar.DataProcessor to send to<br>        </div>
 </div>
 <div class="method-item">
 <div class="method-signature"><code>get_history</code>() → <span class="type">list[<a href="bar.html#class-Data" class="type-link">bar.Data</a>]</span></div>
-<div class="method-doc">Get full history of data<br>        <br>        Returns:<br>            List of all bar.Data objects in history<br>        </div>
+<div class="method-doc">Get full history of data<br><br>        Returns:<br>            List of all bar.Data objects in history<br>        </div>
 </div>
 </div>
 </div>
 
 <h2 class="type-context"><code>apply_transformation</code>(<span class="param-name">d</span>: <span class="type"><a href="bar.html#class-Data" class="type-link">bar.Data</a></span>, <span class="param-name">transform</span>: <span class="type">(str) -> str</span>) → <span class="type"><a href="bar.html#class-Data" class="type-link">bar.Data</a></span></h2>
-<div class="docstring">Apply transformation to bar.Data value<br>    <br>    Args:<br>        d: Data to transform<br>        transform: Function to apply to value<br>        <br>    Returns:<br>        New bar.Data with transformed value<br>    </div>
+<div class="docstring">Apply transformation to bar.Data value<br><br>    Args:<br>        d: Data to transform<br>        transform: Function to apply to value<br><br>    Returns:<br>        New bar.Data with transformed value<br>    </div>
 
-<h2 class="type-context"><code>apply_to_list</code>(<span class="param-name">items</span>: <span class="type">list[<a href="bar.html#class-Data" class="type-link">bar.Data</a>]</span>, <span class="param-name">f</span>: <span class="type">(<a href="bar.html#class-Data" class="type-link">bar.Data</a>) -> str</span>) → <span class="type">list[str]</span></h2>
-<div class="docstring">Apply function to all items in list<br>    <br>    Args:<br>        items: List of bar.Data objects<br>        f: Function to apply<br>        <br>    Returns:<br>        List of results<br>    </div>
+<h2 class="type-context"><code>apply_to_list</code>(<span class="param-name">items</span>: <span class="type">[<a href="bar.html#class-Data" class="type-link">bar.Data</a>]</span>, <span class="param-name">f</span>: <span class="type">(<a href="bar.html#class-Data" class="type-link">bar.Data</a>) -> str</span>) → <span class="type">[str]</span></h2>
+<div class="docstring">Apply function to all items in list<br><br>    Args:<br>        items: List of bar.Data objects<br>        f: Function to apply<br><br>    Returns:<br>        List of results<br>    </div>
 
-<h2 class="type-context"><code>process_nested</code>(<span class="param-name">data</span>: <span class="type">list[(str, <a href="bar.html#class-Data" class="type-link">bar.Data</a>)]</span>) → <span class="type">dict[str, list[<a href="bar.html#class-Data" class="type-link">bar.Data</a>]]</span></h2>
-<div class="docstring">Process nested data structures<br>    <br>    Args:<br>        data: List of tuples containing keys and bar.Data<br>        <br>    Returns:<br>        Dictionary grouping bar.Data by key<br>    </div>
+<h2 class="type-context"><code>process_nested</code>(<span class="param-name">data</span>: <span class="type">[(str, <a href="bar.html#class-Data" class="type-link">bar.Data</a>)]</span>) → <span class="type">{str: [<a href="bar.html#class-Data" class="type-link">bar.Data</a>]}</span></h2>
+<div class="docstring">Process nested data structures<br><br>    Args:<br>        data: List of tuples containing keys and bar.Data<br><br>    Returns:<br>        Dictionary grouping bar.Data by key<br>    </div>
 
 <div class="declaration-block">
-<h2 class="type-context"><span class="keyword">actor</span> <code>main</code>(<span class="param-name">env</span>)</h2>
+<h2 class="type-context"><span class="keyword">actor</span> <code>main</code>(<span class="param-name">env</span>: <span class="type">Env</span>)</h2>
 <div class="docstring">Main actor demonstrating bar module usage</div>
 
 <h3>Public Constants</h3>
