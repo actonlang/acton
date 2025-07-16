@@ -7,10 +7,10 @@ class Manager ($Actor, __builtin__.value):
     proc def __init__ (self : Self) -> None:
         pass
     proc def create_decoderG_local (self : Self) -> __builtin__.StringDecoder:
-        decoder: __builtin__.StringDecoder = StringDecoderG_newact(self.decode_callback, None, None)
+        decoder: __builtin__.StringDecoder = __builtin__.StringDecoderG_newact(self.decode_callback, None, None)
         return decoder
     proc def create_apaG_local (self : Self) -> deact.Apa:
-        apa: deact.Apa = ApaG_newact()
+        apa: deact.Apa = deact.ApaG_newact()
         return apa
     proc def decode_callbackG_local (self : Self, s : __builtin__.str) -> None:
         pass
