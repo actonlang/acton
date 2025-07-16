@@ -374,6 +374,14 @@ jobs:
           - os: "ubuntu"
             version: "24.04"
             arch: "arm64"
+          - os: "ubuntu"
+            version: "24.04"
+            arch: "amd64"
+            target: "x86_64-linux-musl"
+          - os: "ubuntu"
+            version: "24.04"
+            arch: "arm64"
+            target: "aarch64-linux-musl"
     env:
       # This makes it possible for the GitHub Action itself to run using an
       # older version of node, which is the only possibility to get it running
@@ -412,8 +420,9 @@ jobs:
           echo '    print("Hello, world")' >> acton-test.act
           echo '    env.exit(0)'           >> acton-test.act
           chmod a+x acton-test.act
-          ./acton-test.act
-          ./acton-test.act | grep "Hello, world"
+          acton build ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
+          ./out/bin/acton-test
+          ./out/bin/acton-test | grep "Hello, world"
       - name: "ls core"
         if: failure()
         run: |
