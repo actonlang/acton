@@ -55,14 +55,13 @@ unescapeString ('\\':'"':xs) = '"' : unescapeString xs
 unescapeString ('\\':'\'':xs) = '\'' : unescapeString xs
 unescapeString (x:xs) = x : unescapeString xs
 
-reconstruct                             :: String -> Env0 -> Module -> IO (NameInfo, Module, Env0)
-reconstruct fname env0 (Module m i ss)  = do --traceM ("#################### original env0 for " ++ prstr m ++ ":")
+reconstruct                             :: Env0 -> Module -> IO (NameInfo, Module, Env0, [Acton.Syntax.ModName])
+reconstruct env0 (Module m i ss)         = do --traceM ("#################### original env0 for " ++ prstr m ++ ":")
                                              --traceM (render (pretty env0))
                                              let nmod = NModule iface moduleDocstring
-                                             InterfaceFiles.writeFile (fname ++ ".ty") mrefs nmod
                                              --traceM ("#################### converted env0:")
                                              --traceM (render (pretty env0'))
-                                             return (nmod, Module m i ss1T, env0')
+                                             return (nmod, Module m i ss1T, env0', mrefs)
 
   where moduleDocstring                 = extractDocstring ss
         ssT                             = if hasTesting i then genTestActorWrappers env0 ss ++ testStmts (emptyDict,emptyDict,emptyDict,emptyDict,emptyDict) else ss

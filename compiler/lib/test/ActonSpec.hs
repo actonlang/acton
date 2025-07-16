@@ -478,7 +478,7 @@ testDocFiles env0 moduleNames = do
           parsed <- P.parseModule (S.modName [base]) act_file src
           env <- Acton.Env.mkEnv [sysTypesPath] accEnv parsed
           kchecked <- Acton.Kinds.check env parsed
-          (nmod, tchecked, typeEnv) <- Acton.Types.reconstruct "" env kchecked
+          (nmod, tchecked, typeEnv, _) <- Acton.Types.reconstruct env kchecked
           let S.NModule tenv mdoc = nmod
           -- The new environment includes the processed module
           return (env, accModules ++ [(modName, parsed, nmod)])
@@ -544,7 +544,7 @@ testTypes env0 testname = do
   (env, parsed) <- parseAct env0 act_file
 
   kchecked <- liftIO $ Acton.Kinds.check env parsed
-  (nmod, tchecked, typeEnv) <- liftIO $ Acton.Types.reconstruct "" env kchecked
+  (nmod, tchecked, typeEnv, _) <- liftIO $ Acton.Types.reconstruct env kchecked
   let S.NModule tenv mdoc = nmod
 
   genTests "Type Check" dir testname kchecked tchecked
@@ -557,7 +557,7 @@ testNorm env0 testname = do
   (env, parsed) <- parseAct env0 act_file
 
   kchecked <- liftIO $ Acton.Kinds.check env parsed
-  (nmod, tchecked, typeEnv) <- liftIO $ Acton.Types.reconstruct "" env kchecked
+  (nmod, tchecked, typeEnv, _) <- liftIO $ Acton.Types.reconstruct env kchecked
   let S.NModule tenv mdoc = nmod
   (normalized, normEnv) <- liftIO $ Acton.Normalizer.normalize typeEnv tchecked
 
@@ -571,7 +571,7 @@ testDeact env0 testname = do
   (env, parsed) <- parseAct env0 act_file
 
   kchecked <- liftIO $ Acton.Kinds.check env parsed
-  (nmod, tchecked, typeEnv) <- liftIO $ Acton.Types.reconstruct "" env kchecked
+  (nmod, tchecked, typeEnv, _) <- liftIO $ Acton.Types.reconstruct env kchecked
   let S.NModule tenv mdoc = nmod
   (normalized, normEnv) <- liftIO $ Acton.Normalizer.normalize typeEnv tchecked
   (deacted, deactEnv) <- liftIO $ Acton.Deactorizer.deactorize normEnv normalized
@@ -586,7 +586,7 @@ testCps env0 testname = do
   (env, parsed) <- parseAct env0 act_file
 
   kchecked <- liftIO $ Acton.Kinds.check env parsed
-  (nmod, tchecked, typeEnv) <- liftIO $ Acton.Types.reconstruct "" env kchecked
+  (nmod, tchecked, typeEnv, _) <- liftIO $ Acton.Types.reconstruct env kchecked
   let S.NModule tenv mdoc = nmod
   (normalized, normEnv) <- liftIO $ Acton.Normalizer.normalize typeEnv tchecked
   (deacted, deactEnv) <- liftIO $ Acton.Deactorizer.deactorize normEnv normalized
@@ -602,7 +602,7 @@ testLL env0 testname = do
   (env, parsed) <- parseAct env0 act_file
 
   kchecked <- liftIO $ Acton.Kinds.check env parsed
-  (nmod, tchecked, typeEnv) <- liftIO $ Acton.Types.reconstruct "" env kchecked
+  (nmod, tchecked, typeEnv, _) <- liftIO $ Acton.Types.reconstruct env kchecked
   let S.NModule tenv mdoc = nmod
   (normalized, normEnv) <- liftIO $ Acton.Normalizer.normalize typeEnv tchecked
   (deacted, deactEnv) <- liftIO $ Acton.Deactorizer.deactorize normEnv normalized
@@ -619,7 +619,7 @@ testBoxing env0 testname = do
   (env, parsed) <- parseAct env0 act_file
 
   kchecked <- liftIO $ Acton.Kinds.check env parsed
-  (nmod, tchecked, typeEnv) <- liftIO $ Acton.Types.reconstruct "" env kchecked
+  (nmod, tchecked, typeEnv, _) <- liftIO $ Acton.Types.reconstruct env kchecked
   let S.NModule tenv mdoc = nmod
   (normalized, normEnv) <- liftIO $ Acton.Normalizer.normalize typeEnv tchecked
   (deacted, deactEnv) <- liftIO $ Acton.Deactorizer.deactorize normEnv normalized
@@ -637,7 +637,7 @@ testCodeGen env0 testname = do
   (env, parsed) <- parseAct env0 act_file
 
   kchecked <- liftIO $ Acton.Kinds.check env parsed
-  (nmod, tchecked, typeEnv) <- liftIO $ Acton.Types.reconstruct "" env kchecked
+  (nmod, tchecked, typeEnv, _) <- liftIO $ Acton.Types.reconstruct env kchecked
   let S.NModule tenv mdoc = nmod
   (normalized, normEnv) <- liftIO $ Acton.Normalizer.normalize typeEnv tchecked
   (deacted, deactEnv) <- liftIO $ Acton.Deactorizer.deactorize normEnv normalized
@@ -666,7 +666,7 @@ testDocstrings env0 testname = do
   (env, parsed) <- parseAct env0 act_file
 
   kchecked <- liftIO $ Acton.Kinds.check env parsed
-  (nmod, tchecked, typeEnv) <- liftIO $ Acton.Types.reconstruct "" env kchecked
+  (nmod, tchecked, typeEnv, _) <- liftIO $ Acton.Types.reconstruct env kchecked
   let S.NModule tenv mdoc = nmod
 
   -- Extract docstrings from the parsed AST
