@@ -427,7 +427,7 @@ printDocs gopts opts = do
                 env0 <- Acton.Env.initEnv (sysTypes paths) False
                 env <- Acton.Env.mkEnv (searchPath paths) env0 parsed
                 kchecked <- Acton.Kinds.check env parsed
-                (nmod, _, env') <- Acton.Types.reconstruct "" env kchecked
+                (nmod, _, env', _) <- Acton.Types.reconstruct env kchecked
                 let A.NModule tenv mdoc = nmod
 
                 -- 1. If format is explicitly set (via -t, --html, --markdown), use it
@@ -970,7 +970,8 @@ runRestPasses gopts opts paths env0 parsed stubMode = do
                       timeKindsCheck <- getTime Monotonic
                       iff (C.timing gopts) $ putStrLn("    Pass: Kinds check     : " ++ fmtTime (timeKindsCheck - timeEnv))
 
-                      (nmod,tchecked,typeEnv) <- Acton.Types.reconstruct outbase env kchecked
+                      (nmod,tchecked,typeEnv,mrefs) <- Acton.Types.reconstruct env kchecked
+                      InterfaceFiles.writeFile (outbase ++ ".ty") mrefs nmod
 
                       let A.NModule iface mdoc = nmod
                       iff (C.types opts && mn == (modName paths)) $ dump mn "types" (Pretty.print tchecked)
