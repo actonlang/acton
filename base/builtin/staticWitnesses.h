@@ -13,7 +13,7 @@ extern B_TimesD_str B_TimesD_strG_witness;
 extern B_SliceableD_str B_SliceableD_strG_witness;
 extern B_ContainerD_str B_ContainerD_strG_witness;
 extern B_OrdD_str B_OrdD_strG_witness;
-extern B_IterableD_range B_IterableD_rangeG_witness;
+// extern B_IterableD_range B_IterableD_rangeG_witness;
 extern B_IterableD_Iterator B_IterableD_IteratorG_witness;
 extern B_MinusD_SetD_set B_MinusD_SetD_setG_witness;
 extern B_LogicalD_SetD_set B_LogicalD_SetD_setG_witness;

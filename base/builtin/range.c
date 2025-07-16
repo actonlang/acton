@@ -18,35 +18,40 @@ B_range B_rangeG_new(B_Integral wit, $WORD start, $WORD stop, $WORD step) {
 
 
 B_NoneType B_rangeD___init__(B_range self, B_Integral wit, $WORD start, $WORD stop, $WORD step) {
+    int64_t ustart, ustop, ustep;
     if (stop) {
-        self->start = wit->$class->__i64__(wit,start)->val;
-        self->stop = wit->$class->__i64__(wit,stop)->val;
+        ustart = wit->$class->__i64__(wit,start)->val;
+        ustop = wit->$class->__i64__(wit,stop)->val;
     } else {
-        self->start = 0;
-        self->stop = wit->$class->__i64__(wit,start)->val;
+        ustart = 0;
+        ustop = wit->$class->__i64__(wit,start)->val;
     }
     if (step) {
         int stp = wit->$class->__i64__(wit,step)->val;
         if (stp == 0) {
             $RAISE((B_BaseException)$NEW(B_ValueError, to$str("range() step size must not be zero")));
         } else {
-            self->step = stp;
+            ustep = stp;
         }
     } else {
-        self->step = 1;
+        ustep = 1;
     }
+    int64_t stp = self->step = ustep;
+    int64_t r = ustop - ustart;
+    self->nxt = ustart - stp;
+    self->remaining = r/stp + (r%stp != 0);
     if ($ISINSTANCE0(start,B_int)) {
-        self->box = ($WORD (*)(long))to$int;
+        self->box = ($WORD (*)(int64_t))to$int;
     }
     else if ($ISINSTANCE0(start,B_i64)) {
-        self->box = ($WORD (*)(long))toB_i64;
+        self->box = ($WORD (*)(int64_t))toB_i64;
     }
     else
         printf("no type found\n");
     return B_None;
 }
 
-
+/*
 B_bool B_rangeD___bool__(B_range self) {
     return toB_bool ((self->step > 0 && self->stop > self->start) ||
                     (self->start > self->stop));
@@ -73,50 +78,58 @@ B_range B_rangeD___deserialize__(B_range self, $Serial$state state) {
     state->row_no++;
     B_range res = acton_malloc(sizeof(struct B_range));
     res->$class = &B_rangeG_methods;
-    res->start = (long)this->blob[0];
-    res->stop = (long)this->blob[1];
-    res->step = (long)this->blob[2];
+    res->start = (int64_t)this->blob[0];
+    res->stop = (int64_t)this->blob[1];
+    res->step = (int64_t)this->blob[2];
     return res;
 }
-
-static $WORD B_IteratorD_rangeD_next(B_IteratorD_range self) {
+*/
+int64_t rangeD_U__next__(B_range self) {
     if (self->remaining-- <= 0)
         $RAISE ((B_BaseException)$NEW(B_StopIteration, to$str("range iterator terminated")));
-    return (self->box)(self->nxt += self->step);
+    return self->nxt += self->step;
 }
 
-
+$WORD B_rangeD___next__(B_range self, B_Integral wit) {
+    return (self->box)(rangeD_U__next__(self));
+}
+/*
 void B_IteratorD_rangeD_init(B_IteratorD_range self, B_range rng) {
-    long stp = self->step = rng->step;
-    long r = rng->stop - rng->start;
+    int64_t stp = self->step = rng->step;
+    int64_t r = rng->stop - rng->start;
     self->nxt = rng->start - stp;
     self->remaining = r/stp + (r%stp != 0);
     self->box = rng->box;
 }                                    
+*/
 
 
-B_bool B_IteratorD_rangeD_bool(B_IteratorD_range self) {
+B_bool B_rangeD___bool__(B_range self) {
     return B_True;
 }
 
-B_str B_IteratorD_rangeD_str(B_IteratorD_range self) {
-    return $FORMAT("<range iterator object at %p>", self);
+B_str B_rangeD___repr__(B_range self) {
+    return $FORMAT("<range object at %p>", self);
 }
 
-void B_IteratorD_rangeD_serialize(B_IteratorD_range self, $Serial$state state) {
+B_str B_rangeD___str__(B_range self) {
+    return $FORMAT("<range object at %p>", self);
+}
+
+void B_rangeD___serialize__(B_range self, $Serial$state state) {
     $step_serialize(to$int(self->nxt),state);
     $step_serialize(to$int(self->step),state);
     $step_serialize(to$int(self->remaining),state);
 }
 
-B_IteratorD_range B_IteratorD_range$_deserialize(B_IteratorD_range self, $Serial$state state) {
-    B_IteratorD_range res = $DNEW(B_IteratorD_range,state);
+B_range B_rangeD___deserialize__(B_range self, $Serial$state state) {
+    B_range res = $DNEW(B_range,state);
     res->nxt = from$int((B_int)$step_deserialize(state));
     res->step = from$int((B_int)$step_deserialize(state));
     res->remaining = from$int((B_int)$step_deserialize(state));
     return res;
 }
-
+/*
 struct B_IteratorD_rangeG_class B_IteratorD_rangeG_methods = {
     "B_IteratorD_range",
     UNASSIGNED,
@@ -133,3 +146,4 @@ struct B_IteratorD_rangeG_class B_IteratorD_rangeG_methods = {
 B_Iterator B_IterableD_rangeD___iter__ (B_IterableD_range wit, B_range rng) {
     return (B_Iterator)$NEW(B_IteratorD_range,rng);
 }
+*/
