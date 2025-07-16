@@ -152,10 +152,11 @@ instance Boxing Expr where
                                           Nothing -> return ([], e)
        where ps                     = unboxedVars env
     boxing env v@Var{}              = return ([], v)
-    boxing env (Call _ (Dot _ (Var _ w@(NoQ n)) attr) p KwdNil)
+    boxing env (Call _ (Dot _ e@(Var _ w@(NoQ n)) attr) p KwdNil)
       | isWitness n                 = do (ws1,p1) <- boxing env p
                                          (ws2,e1) <- boxingWitness env w attr ws1 p1
                                          return (ws1++ws2,e1)
+      | attr == nextKW              = trace ("range is " ++ show (IsInstance NoLoc e qnRange)) $ return ([n], eCallP (eDot (eQVar w) attr) p) 
      where
       boxingWitness                 :: BoxEnv -> QName -> Name -> [Name] ->PosArg -> BoxM ([Name],Expr)
       boxingWitness env w attr ws p = case findQName w env of
@@ -179,6 +180,7 @@ instance Boxing Expr where
       boxingGetItem w (_:t:t1:_) es@[a, k]
         | t == tI64                 = return ([], eCall (tApp (eQVar primUGetItem) [t1]) [a, unbox t k])
         | otherwise                 = return ([n], eCall (eDot (eQVar w) attr) es)
+   --   boxingNext w ts []
       boxingBinop w attr es@[x1, x2] ts
         | isUnboxable t            =  return ([], Box (last ts) $ Paren NoLoc $ BinOp NoLoc (unbox t x1) op (unbox t x2))
         where t                     = head ts
