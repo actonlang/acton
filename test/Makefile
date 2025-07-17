@@ -17,19 +17,19 @@ DDB_TESTS=test_db_app test_db_resume_tcp_server test_db_resume_tcp_client
 # a simple app. We do not really verify that the RTS uses the database - we
 # assume it does and would fail catastrohpically if it encounters an error.
 test_db_app:
-	$(ACTONC) --db --dev rts_db/ddb_test_app.act
-	$(ACTONC) --db --dev rts_db/test_db_app.act
+	$(ACTONC) --db rts_db/ddb_test_app.act
+	$(ACTONC) --db rts_db/test_db_app.act
 	rts_db/test_db_app
 
 test_db_resume_tcp_server:
-	$(ACTONC) --db --dev rts_db/ddb_test_server.act
-	$(ACTONC) --db --dev rts_db/test_tcp_server.act
+	$(ACTONC) --db rts_db/ddb_test_server.act
+	$(ACTONC) --db rts_db/test_tcp_server.act
 	rts_db/test_tcp_server
 
 test_db_resume_tcp_client:
-	$(ACTONC) --db --dev rts_db/ddb_test_server.act
-	$(ACTONC) --db --dev rts_db/ddb_test_client.act
-	$(ACTONC) --db --dev rts_db/test_tcp_client.act
+	$(ACTONC) --db rts_db/ddb_test_server.act
+	$(ACTONC) --db rts_db/ddb_test_client.act
+	$(ACTONC) --db rts_db/test_tcp_client.act
 	rts_db/test_tcp_client
 
 

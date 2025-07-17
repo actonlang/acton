@@ -1,5 +1,5 @@
 Building file test/typeerrors/ex27.act using temporary scratch directory
-  Compiling ex27.act for development
+  Compiling ex27.act with Debug
 [error]: Type unification error
      +--> ex27.act@5:5-6:1
      |

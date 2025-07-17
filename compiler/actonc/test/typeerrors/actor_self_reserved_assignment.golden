@@ -1,5 +1,5 @@
 Building file test/typeerrors/actor_self_reserved_assignment.act using temporary scratch directory
-  Compiling actor_self_reserved_assignment.act for development
+  Compiling actor_self_reserved_assignment.act with Debug
 [error]: 'self' cannot be used as a parameter name in actors.
      +--> actor_self_reserved_assignment.act@2:5-2:9
      |

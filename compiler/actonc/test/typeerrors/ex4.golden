@@ -1,5 +1,5 @@
 Building file test/typeerrors/ex4.act using temporary scratch directory
-  Compiling ex4.act for development
+  Compiling ex4.act with Debug
 [error]: Incompatible types
      +--> ex4.act@5:22-5:26
      |

@@ -94,7 +94,7 @@ main = do
           C.alwaysbuild = C.alwaysB opts,
           C.autostub = C.autostubB opts,
           C.cpedantic = C.cpedanticB opts,
-          C.dev = C.devB opts,
+          C.optimize = C.optimizeB opts,
           C.db = C.dbB opts,
           C.listimports = C.listimportsB opts,
           C.only_build = C.only_buildB opts,
@@ -116,7 +116,7 @@ main = do
                                      _ -> printErrorAndExit ("Unknown filetype: " ++ head nms)
 
 defaultOpts   = C.CompileOptions False False False False False False False False False False False False
-                                 False False False False False False False False False False False False
+                                 False False False False False False C.Debug False False False False False
                                  "" "" "" C.defTarget "" False []
 
 -- Apply global options to compile options
@@ -125,6 +125,12 @@ applyGlobalOpts gopts opts = opts
 
 
 -- Auxiliary functions ---------------------------------------------------------------------------------------
+
+optimizeModeToZig :: C.OptimizeMode -> String
+optimizeModeToZig C.Debug        = "Debug"
+optimizeModeToZig C.ReleaseSafe  = "ReleaseSafe"
+optimizeModeToZig C.ReleaseSmall = "ReleaseSmall"
+optimizeModeToZig C.ReleaseFast  = "ReleaseFast"
 
 zig :: Paths -> FilePath
 zig paths = sysPath paths ++ "/zig/zig"
@@ -670,7 +676,7 @@ findProjectDir path = do
 findPaths               :: FilePath -> C.CompileOptions -> IO Paths
 findPaths actFile opts  = do execDir <- takeDirectory <$> System.Environment.getExecutablePath
                              sysPath <- canonicalizePath (if null $ C.syspath opts then execDir ++ "/.." else C.syspath opts)
-                             let sysLib = joinPath [sysPath, "lib/" ++ if (C.dev opts) then "dev" else "rel"]
+                             let sysLib = joinPath [sysPath, "lib/"]
                              absSrcFile <- canonicalizePath actFile
                              (isTmp, projPath, dirInSrc) <- analyze (takeDirectory absSrcFile) []
                              let sysTypes = joinPath [sysPath, "base", "out", "types"]
@@ -853,7 +859,7 @@ quiet gopts opts = C.quiet gopts || altOutput opts
 doTask :: C.GlobalOptions -> C.CompileOptions -> Paths -> Acton.Env.Env0 -> CompileTask -> IO Acton.Env.Env0
 doTask gopts opts paths env t@(ActonTask mn src m stubMode) = do
     iff (not (quiet gopts opts))  (putStrLn("  Compiling " ++ makeRelative (srcDir paths) actFile
-              ++ (if (C.dev opts) then " for development" else " for release")
+              ++ " with " ++ show (C.optimize opts)
               ++ (if stubMode then " in stub mode" else "")))
 
     timeStart <- getTime Monotonic
@@ -1245,7 +1251,7 @@ zigBuild env gopts opts paths tasks binTasks = do
                  (if (C.verboseZig gopts) then " --verbose " else "") ++
                  " -Dtarget=" ++ (C.target opts) ++
                  target_cpu ++
-                 " -Doptimize=" ++ (if (C.dev opts) then "Debug" else "ReleaseFast") ++
+                 " -Doptimize=" ++ optimizeModeToZig (C.optimize opts) ++
                  (if (C.db opts) then " -Ddb " else "") ++
                  (if no_threads then " -Dno_threads " else "") ++
                  (if (C.cpedantic opts) then " -Dcpedantic " else "")
