@@ -1328,11 +1328,20 @@ actor main(env):
         """Are we in a project?
         """
         fs = file.FS(file_cap)
-        try:
-            s = fs.stat("Acton.toml")
-        except:
-            return False
-        return True
+        project_files = ["Acton.toml", "Build.act", "build.act.json"]
+        for project_file in project_files:
+            try:
+                s = fs.stat(project_file)
+                # Also check if src/ directory exists next to the project file
+                try:
+                    src_stat = fs.stat("src")
+                    if src_stat.is_dir():
+                        return True
+                except:
+                    continue
+            except:
+                continue
+        return False
 
     def _compilefile(_file, args):
         if in_project(_file):
@@ -1359,7 +1368,7 @@ actor main(env):
     def _cmd_doc(args):
         """Run actonc doc command"""
         cmdargs = ["doc"]
-        
+
         # Optional file argument
         try:
             file_arg = args.get_str("docfile")
@@ -1367,7 +1376,7 @@ actor main(env):
                 cmdargs.append(file_arg)
         except argparse.ArgumentError:
             pass  # docfile is optional, ignore if not provided (and we get exception)
-        
+
         # Format flags
         if args.get_bool("terminal"):
             cmdargs.append("-t")
@@ -1375,18 +1384,18 @@ actor main(env):
             cmdargs.append("--md")
         elif args.get_bool("html"):
             cmdargs.append("--html")
-        
+
         # Output file
         output_file = args.get_str("output")
         if output_file != "":
             cmdargs.extend(["-o", output_file])
-        
+
         # Force color based on TTY (since stdio is piped)
         if env.is_tty():
             cmdargs.extend(["--color", "always"])
         else:
             cmdargs.extend(["--color", "never"])
-        
+
         # Pass through global options
         if args.get_bool("verbose"):
             cmdargs.append("--verbose")
@@ -1396,11 +1405,11 @@ actor main(env):
             cmdargs.append("--quiet")
         if args.get_bool("timing"):
             cmdargs.append("--timing")
-        
+
         # Custom exit handler (suppress CompilerRunner's default message)
         def on_doc_exit(exit_code: int, term_signal: int, std_out_buf: bytes, std_err_buf: bytes):
             env.exit(exit_code)
-        
+
         CompilerRunner(process_cap, env, cmdargs, on_exit=on_doc_exit)
 
     def _cmd_fetch(args):

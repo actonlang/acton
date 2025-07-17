@@ -657,9 +657,10 @@ searchPaths opts deps = do
 
 findProjectDir :: FilePath -> IO (Maybe FilePath)
 findProjectDir path = do
-    let configFile = path </> "Acton.toml"
-    exists <- doesFileExist configFile
-    if exists
+    let projectFiles = ["Acton.toml", "Build.act", "build.act.json"]
+    hasProjectFile <- or <$> mapM (\file -> doesFileExist (path </> file)) projectFiles
+    hasSrcDir <- doesDirectoryExist (path </> "src")
+    if hasProjectFile && hasSrcDir
         then return (Just path)
         else if path == takeDirectory path  -- Check if we're at root
             then return Nothing
@@ -692,14 +693,16 @@ findPaths actFile opts  = do execDir <- takeDirectory <$> System.Environment.get
 
         analyze "/" ds  = do tmp <- canonicalizePath (C.tempdir opts)
                              return (True, tmp, [])
-        analyze pre ds  = do exists <- doesFileExist (joinPath [pre, "Acton.toml"])
-                             if not exists
-                                then analyze (takeDirectory pre) (takeFileName pre : ds)
-                                else case ds of
+        analyze pre ds  = do let projectFiles = ["Acton.toml", "build.act", "build.act.json"]
+                             hasProjectFile <- or <$> mapM (\file -> doesFileExist (joinPath [pre, file])) projectFiles
+                             hasSrcDir <- doesDirectoryExist (joinPath [pre, "src"])
+                             if hasProjectFile && hasSrcDir
+                                then case ds of
                                     [] -> return $ (False, pre, [])
                                     "src":dirs -> return $ (False, pre, dirs)
                                     "out":"types":dirs -> return $ (False, pre, dirs)
                                     _ -> error ("************* Source file is not in a valid project directory: " ++ joinPath ds)
+                                else analyze (takeDirectory pre) (takeFileName pre : ds)
 
 
 -- Handling Acton files -----------------------------------------------------------------------------
