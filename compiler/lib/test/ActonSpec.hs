@@ -29,8 +29,8 @@ import Data.List (isInfixOf, isPrefixOf)
 import Error.Diagnose (printDiagnostic, prettyDiagnostic, WithUnicode(..), TabSize(..), defaultStyle)
 import Prettyprinter (unAnnotate, layoutPretty, defaultLayoutOptions)
 import Prettyprinter.Render.Text (renderStrict)
-import System.FilePath ((</>), joinPath, takeFileName, takeBaseName, takeDirectory)
-import System.Directory (getCurrentDirectory, setCurrentDirectory)
+import System.FilePath ((</>), joinPath, takeFileName, takeBaseName, takeDirectory, splitDirectories)
+import System.Directory (getCurrentDirectory, setCurrentDirectory, createDirectoryIfMissing)
 import Control.Monad (forM_, when, foldM)
 import qualified Control.Exception as E
 import Utils (SrcLoc(..))
@@ -48,10 +48,10 @@ main = do
     describe "Pass 1: Parser" $ do
 
       describe "Basic Syntax" $ do
-        testParse env0 "syntax1"
+        testParse env0 ["syntax1"]
 
       describe "Docstrings" $ do
-        testParse env0 "docstrings"
+        testParse env0 ["docstrings"]
         testDocstrings env0 "docstrings"
 
       describe "Module Structure" $ do
@@ -325,32 +325,32 @@ main = do
           testParseError "unknown_escape_with_interpolation" "f\"value: {x} \\k\""
 
     describe "Documentation Generation" $ do
-      testDocFiles env0 ["bar"]
+      testDocGen env0 ["bar", "foo"]
 
     describe "Pass 2: Kinds" $ do
-      testKinds env0 "deact"
+      testKinds env0 ["deact"]
 
     describe "Pass 3: Types" $ do
-      testTypes env0 "deact"
-      testTypes env0 "test_discovery"
+      testTypes env0 ["deact"]
+      testTypes env0 ["test_discovery"]
 
     describe "Pass 4: Normalizer" $ do
-      testNorm env0 "deact"
+      testNorm env0 ["deact"]
 
     describe "Pass 5: Deactorizer" $ do
-      testDeact env0 "deact"
+      testDeact env0 ["deact"]
 
     describe "Pass 6: CPS" $ do
-      testCps env0 "cps_volatiles"
+      testCps env0 ["cps_volatiles"]
 
     describe "Pass 7: Lambda Lifting" $ do
-      testLL env0 "deact"
+      testLL env0 ["deact"]
 
     describe "Pass 8: Boxing" $ do
-      testBoxing env0 "deact"
+      testBoxing env0 ["deact"]
 
     describe "Pass 9: CodeGen" $ do
-      testCodeGen env0 "deact"
+      testCodeGen env0 ["deact"]
 
 
 
@@ -428,13 +428,20 @@ testModuleParseError testName input = do
         return $ T.pack $ "PARSED: " ++ result
 
 -- Helper function to test parsing (just that it succeeds)
-testParse env0 testname = do
-  let act_file = "test" </> "src" </> testname ++ ".act"
-      dir      = "test" </> "1-parse"
+testParse :: Acton.Env.Env0 -> [String] -> Spec
+testParse env0 modulePaths = do
+  let dir = "test" </> "1-parse"
 
-  (env, parsed) <- parseAct env0 act_file
+  modules <- runIO $ do
+    let processModule (accEnv, accModules) modulePath = do
+          (env, parsed) <- parseAct accEnv modulePath
+          return (accEnv, accModules ++ [(takeFileName modulePath, parsed)])
+    
+    (_, modules) <- foldM processModule (env0, []) modulePaths
+    return modules
 
-  genTests "Parse Check" dir testname parsed parsed
+  forM_ modules $ \(modName, parsed) ->
+    genTests "Parse Check" dir modName parsed parsed
 
 -- Helper function to test parsing with output validation
 testParseOutput :: String -> String -> Spec
@@ -455,65 +462,59 @@ testParseError testName input = do
         return $ T.pack $ "PARSED: " ++ result
 
 -- Helper function for documentation golden tests
--- Takes a list of module names (without .act extension) in dependency order
--- and generates golden files for all three formats: .txt (ASCII), .md (Markdown), .html (HTML)
-testDocFiles :: Acton.Env.Env0 -> [String] -> Spec
-testDocFiles env0 moduleNames = do
-  let testDir = "test"
-      goldenDir = "doc-golden"
-      sysTypesPath = ".." </> ".." </> ".." </> "dist" </> "base" </> "out" </> "types"
-
-  -- Process modules in dependency order
+-- Takes a list of module paths in dependency order
+-- Examples: ["bar", "foo"] or ["utils/math", "utils/strings", "app"]
+-- Generates golden files for all formats: .txt (ASCII), .md (Markdown), .html (HTML)
+testDocGen :: Acton.Env.Env0 -> [String] -> Spec
+testDocGen env0 modulePaths = do
   oldDir <- runIO getCurrentDirectory
+  let goldenDir = oldDir </> "test" </> "doc-golden"
 
-  -- Parse and type-check all modules, building up the environment
   modules <- runIO $ do
-    setCurrentDirectory (oldDir </> testDir)
-
-    -- Process modules in order, accumulating environment
-    let processModule (accEnv, accModules) modName = do
-          let act_file = "src" </> modName ++ ".act"
-          src <- readFile act_file
-          let base = takeBaseName act_file
-          parsed <- P.parseModule (S.modName [base]) act_file src
-          env <- Acton.Env.mkEnv [sysTypesPath] accEnv parsed
+    let processModule (accEnv, accModules) modulePath = do
+          (env, parsed) <- parseAct accEnv modulePath
           kchecked <- Acton.Kinds.check env parsed
           (nmod, tchecked, typeEnv, _) <- Acton.Types.reconstruct env kchecked
-          let S.NModule tenv mdoc = nmod
-          -- The new environment includes the processed module
-          return (env, accModules ++ [(modName, parsed, nmod)])
-    (finalEnv, mods) <- foldM processModule (env0, []) moduleNames
-    setCurrentDirectory oldDir
-    return mods
+          let S.NModule moduleTypeEnv moduleDoc = nmod
+          let newAccEnv = Acton.Env.addMod (S.modname parsed) moduleTypeEnv moduleDoc accEnv
+          return (newAccEnv, accModules ++ [((takeFileName modulePath), parsed, nmod)])
+
+    (finalEnv, modules) <- foldM processModule (env0, []) modulePaths
+    return modules
 
   -- Generate documentation for each module
   forM_ modules $ \(modName, parsed, nmod) -> do
     describe modName $ do
       it "generates ASCII documentation (plain)" $ do
         let asciiDoc = DocP.printAsciiDoc False nmod parsed
-        goldenTextFile (testDir </> goldenDir </> modName ++ ".txt") $ return $ T.pack asciiDoc
+        goldenTextFile (goldenDir </> modName ++ ".txt") $ return $ T.pack asciiDoc
 
       it "generates ASCII documentation (styled)" $ do
         let asciiDoc = DocP.printAsciiDoc True nmod parsed
-        goldenTextFile (testDir </> goldenDir </> modName ++ "-color.txt") $ return $ T.pack asciiDoc
+        goldenTextFile (goldenDir </> modName ++ "-color.txt") $ return $ T.pack asciiDoc
 
       it "generates Markdown documentation" $ do
         let mdDoc = DocP.printMdDoc nmod parsed
-        goldenTextFile (testDir </> goldenDir </> modName ++ ".md") $ return $ T.pack mdDoc
+        goldenTextFile (goldenDir </> modName ++ ".md") $ return $ T.pack mdDoc
 
       it "generates HTML documentation" $ do
         let htmlDoc = DocP.printHtmlDoc nmod parsed
-        goldenTextFile (testDir </> goldenDir </> modName ++ ".html") $ return $ T.pack htmlDoc
+        goldenTextFile (goldenDir </> modName ++ ".html") $ return $ T.pack htmlDoc
 
-parseAct env0 act_file = do
-  let dir = takeDirectory act_file
-      base = takeBaseName act_file
+-- Parse an Acton module by module path
+-- Examples: "foo" -> src/foo.act, module foo
+--           "foo/bar" -> src/foo/bar.act, module foo.bar
+parseAct env0 modulePath = do
+  let moduleComponents = splitDirectories modulePath
+      moduleName = S.modName moduleComponents
+      act_file = "test" </> "src" </> modulePath ++ ".act"
       sysTypesPath = ".." </> ".." </> "dist" </> "base" </> "out" </> "types"
 
   src <- liftIO $ readFile act_file
-  parsed <- liftIO $ P.parseModule (S.modName [base]) act_file src
+  parsed <- liftIO $ P.parseModule moduleName act_file src
   env <- liftIO $ Acton.Env.mkEnv [sysTypesPath] env0 parsed
   return (env, parsed)
+
 
 genTests pass_name dir testname input_data output_data = do
   let input_golden = dir </> testname ++ ".input"
@@ -526,144 +527,197 @@ genTests pass_name dir testname input_data output_data = do
       goldenTextFile output_golden $ return $ T.pack $ Pretty.print output_data
 
 -- pass 2 Kinds check
-testKinds env0 testname = do
-  let act_file = "test" </> "src" </> testname ++ ".act"
-      dir      = "test" </> "2-kinds"
+testKinds :: Acton.Env.Env0 -> [String] -> Spec
+testKinds env0 modulePaths = do
+  let dir = "test" </> "2-kinds"
 
-  (env, parsed) <- parseAct env0 act_file
+  modules <- runIO $ do
+    let processModule (accEnv, accModules) modulePath = do
+          (env, parsed) <- parseAct accEnv modulePath
+          kchecked <- Acton.Kinds.check env parsed
+          return (accEnv, accModules ++ [(takeFileName modulePath, parsed, kchecked)])
+    
+    (_, modules) <- foldM processModule (env0, []) modulePaths
+    return modules
 
-  kchecked <- liftIO $ Acton.Kinds.check env parsed
-
-  genTests "Kinds Check" dir testname parsed kchecked
+  forM_ modules $ \(modName, parsed, kchecked) ->
+    genTests "Kinds Check" dir modName parsed kchecked
 
 -- pass 3 Type check
-testTypes env0 testname = do
-  let act_file = "test" </> "src" </> testname ++ ".act"
-      dir      = "test" </> "3-types"
+testTypes :: Acton.Env.Env0 -> [String] -> Spec
+testTypes env0 modulePaths = do
+  let dir = "test" </> "3-types"
 
-  (env, parsed) <- parseAct env0 act_file
+  modules <- runIO $ do
+    let processModule (accEnv, accModules) modulePath = do
+          (env, parsed) <- parseAct accEnv modulePath
+          kchecked <- Acton.Kinds.check env parsed
+          (nmod, tchecked, typeEnv, _) <- Acton.Types.reconstruct env kchecked
+          let S.NModule tenv mdoc = nmod
+          let newAccEnv = Acton.Env.addMod (S.modname parsed) tenv mdoc accEnv
+          return (newAccEnv, accModules ++ [(takeFileName modulePath, kchecked, tchecked)])
+    
+    (_, modules) <- foldM processModule (env0, []) modulePaths
+    return modules
 
-  kchecked <- liftIO $ Acton.Kinds.check env parsed
-  (nmod, tchecked, typeEnv, _) <- liftIO $ Acton.Types.reconstruct env kchecked
-  let S.NModule tenv mdoc = nmod
-
-  genTests "Type Check" dir testname kchecked tchecked
+  forM_ modules $ \(modName, kchecked, tchecked) ->
+    genTests "Type Check" dir modName kchecked tchecked
 
 -- pass 4 Normalizer
-testNorm env0 testname = do
-  let act_file = "test" </> "src" </> testname ++ ".act"
-      dir      = "test" </> "4-normalizer"
+testNorm :: Acton.Env.Env0 -> [String] -> Spec
+testNorm env0 modulePaths = do
+  let dir = "test" </> "4-normalizer"
 
-  (env, parsed) <- parseAct env0 act_file
+  modules <- runIO $ do
+    let processModule (accEnv, accModules) modulePath = do
+          (env, parsed) <- parseAct accEnv modulePath
+          kchecked <- Acton.Kinds.check env parsed
+          (nmod, tchecked, typeEnv, _) <- Acton.Types.reconstruct env kchecked
+          let S.NModule tenv mdoc = nmod
+          (normalized, normEnv) <- Acton.Normalizer.normalize typeEnv tchecked
+          let newAccEnv = Acton.Env.addMod (S.modname parsed) tenv mdoc accEnv
+          return (newAccEnv, accModules ++ [(takeFileName modulePath, tchecked, normalized)])
+    
+    (_, modules) <- foldM processModule (env0, []) modulePaths
+    return modules
 
-  kchecked <- liftIO $ Acton.Kinds.check env parsed
-  (nmod, tchecked, typeEnv, _) <- liftIO $ Acton.Types.reconstruct env kchecked
-  let S.NModule tenv mdoc = nmod
-  (normalized, normEnv) <- liftIO $ Acton.Normalizer.normalize typeEnv tchecked
-
-  genTests "Normalizer" dir testname tchecked normalized
+  forM_ modules $ \(modName, tchecked, normalized) ->
+    genTests "Normalizer" dir modName tchecked normalized
 
 -- pass 5 Deactorizer
-testDeact env0 testname = do
-  let act_file = "test" </> "src" </> testname ++ ".act"
-      dir      = "test" </> "5-deactorizer"
+testDeact :: Acton.Env.Env0 -> [String] -> Spec
+testDeact env0 modulePaths = do
+  let dir = "test" </> "5-deactorizer"
 
-  (env, parsed) <- parseAct env0 act_file
+  modules <- runIO $ do
+    let processModule (accEnv, accModules) modulePath = do
+          (env, parsed) <- parseAct accEnv modulePath
+          kchecked <- Acton.Kinds.check env parsed
+          (nmod, tchecked, typeEnv, _) <- Acton.Types.reconstruct env kchecked
+          let S.NModule tenv mdoc = nmod
+          (normalized, normEnv) <- Acton.Normalizer.normalize typeEnv tchecked
+          (deacted, deactEnv) <- Acton.Deactorizer.deactorize normEnv normalized
+          let newAccEnv = Acton.Env.addMod (S.modname parsed) tenv mdoc accEnv
+          return (newAccEnv, accModules ++ [(takeFileName modulePath, normalized, deacted)])
+    
+    (_, modules) <- foldM processModule (env0, []) modulePaths
+    return modules
 
-  kchecked <- liftIO $ Acton.Kinds.check env parsed
-  (nmod, tchecked, typeEnv, _) <- liftIO $ Acton.Types.reconstruct env kchecked
-  let S.NModule tenv mdoc = nmod
-  (normalized, normEnv) <- liftIO $ Acton.Normalizer.normalize typeEnv tchecked
-  (deacted, deactEnv) <- liftIO $ Acton.Deactorizer.deactorize normEnv normalized
-
-  genTests "Deactorizer" dir testname normalized deacted
+  forM_ modules $ \(modName, normalized, deacted) ->
+    genTests "Deactorizer" dir modName normalized deacted
 
 -- pass 6 CPS
-testCps env0 testname = do
-  let act_file = "test" </> "src" </> testname ++ ".act"
-      dir      = "test" </> "6-cps"
+testCps :: Acton.Env.Env0 -> [String] -> Spec
+testCps env0 modulePaths = do
+  let dir = "test" </> "6-cps"
 
-  (env, parsed) <- parseAct env0 act_file
+  modules <- runIO $ do
+    let processModule (accEnv, accModules) modulePath = do
+          (env, parsed) <- parseAct accEnv modulePath
+          kchecked <- Acton.Kinds.check env parsed
+          (nmod, tchecked, typeEnv, _) <- Acton.Types.reconstruct env kchecked
+          let S.NModule tenv mdoc = nmod
+          (normalized, normEnv) <- Acton.Normalizer.normalize typeEnv tchecked
+          (deacted, deactEnv) <- Acton.Deactorizer.deactorize normEnv normalized
+          (cpstyled, _) <- Acton.CPS.convert deactEnv deacted
+          let newAccEnv = Acton.Env.addMod (S.modname parsed) tenv mdoc accEnv
+          return (newAccEnv, accModules ++ [(takeFileName modulePath, deacted, cpstyled)])
+    
+    (_, modules) <- foldM processModule (env0, []) modulePaths
+    return modules
 
-  kchecked <- liftIO $ Acton.Kinds.check env parsed
-  (nmod, tchecked, typeEnv, _) <- liftIO $ Acton.Types.reconstruct env kchecked
-  let S.NModule tenv mdoc = nmod
-  (normalized, normEnv) <- liftIO $ Acton.Normalizer.normalize typeEnv tchecked
-  (deacted, deactEnv) <- liftIO $ Acton.Deactorizer.deactorize normEnv normalized
-  (cpstyled, _) <- liftIO $ Acton.CPS.convert deactEnv deacted
-
-  genTests "CPS" dir testname deacted cpstyled
+  forM_ modules $ \(modName, deacted, cpstyled) ->
+    genTests "CPS" dir modName deacted cpstyled
 
 -- pass 7 Lambda Lifting
-testLL env0 testname = do
-  let act_file = "test" </> "src" </> testname ++ ".act"
-      dir      = "test" </> "7-lambdalifting"
+testLL :: Acton.Env.Env0 -> [String] -> Spec
+testLL env0 modulePaths = do
+  let dir = "test" </> "7-lambdalifting"
 
-  (env, parsed) <- parseAct env0 act_file
+  modules <- runIO $ do
+    let processModule (accEnv, accModules) modulePath = do
+          (env, parsed) <- parseAct accEnv modulePath
+          kchecked <- Acton.Kinds.check env parsed
+          (nmod, tchecked, typeEnv, _) <- Acton.Types.reconstruct env kchecked
+          let S.NModule tenv mdoc = nmod
+          (normalized, normEnv) <- Acton.Normalizer.normalize typeEnv tchecked
+          (deacted, deactEnv) <- Acton.Deactorizer.deactorize normEnv normalized
+          (cpstyled, cpsEnv) <- Acton.CPS.convert deactEnv deacted
+          (lifted,liftEnv) <- Acton.LambdaLifter.liftModule cpsEnv cpstyled
+          let newAccEnv = Acton.Env.addMod (S.modname parsed) tenv mdoc accEnv
+          return (newAccEnv, accModules ++ [(takeFileName modulePath, cpstyled, lifted)])
+    
+    (_, modules) <- foldM processModule (env0, []) modulePaths
+    return modules
 
-  kchecked <- liftIO $ Acton.Kinds.check env parsed
-  (nmod, tchecked, typeEnv, _) <- liftIO $ Acton.Types.reconstruct env kchecked
-  let S.NModule tenv mdoc = nmod
-  (normalized, normEnv) <- liftIO $ Acton.Normalizer.normalize typeEnv tchecked
-  (deacted, deactEnv) <- liftIO $ Acton.Deactorizer.deactorize normEnv normalized
-  (cpstyled, cpsEnv) <- liftIO $ Acton.CPS.convert deactEnv deacted
-  (lifted,liftEnv) <- liftIO $ Acton.LambdaLifter.liftModule cpsEnv cpstyled
-
-  genTests "Lambda Lifting" dir testname cpstyled lifted
+  forM_ modules $ \(modName, cpstyled, lifted) ->
+    genTests "Lambda Lifting" dir modName cpstyled lifted
 
 -- pass 8 Boxing
-testBoxing env0 testname = do
-  let act_file = "test" </> "src" </> testname ++ ".act"
-      dir      = "test" </> "8-boxing"
+testBoxing :: Acton.Env.Env0 -> [String] -> Spec
+testBoxing env0 modulePaths = do
+  let dir = "test" </> "8-boxing"
 
-  (env, parsed) <- parseAct env0 act_file
+  modules <- runIO $ do
+    let processModule (accEnv, accModules) modulePath = do
+          (env, parsed) <- parseAct accEnv modulePath
+          kchecked <- Acton.Kinds.check env parsed
+          (nmod, tchecked, typeEnv, _) <- Acton.Types.reconstruct env kchecked
+          let S.NModule tenv mdoc = nmod
+          (normalized, normEnv) <- Acton.Normalizer.normalize typeEnv tchecked
+          (deacted, deactEnv) <- Acton.Deactorizer.deactorize normEnv normalized
+          (cpstyled, cpsEnv) <- Acton.CPS.convert deactEnv deacted
+          (lifted,liftEnv) <- Acton.LambdaLifter.liftModule cpsEnv cpstyled
+          boxed <- Acton.Boxing.doBoxing liftEnv lifted
+          let newAccEnv = Acton.Env.addMod (S.modname parsed) tenv mdoc accEnv
+          return (newAccEnv, accModules ++ [(takeFileName modulePath, lifted, boxed)])
+    
+    (_, modules) <- foldM processModule (env0, []) modulePaths
+    return modules
 
-  kchecked <- liftIO $ Acton.Kinds.check env parsed
-  (nmod, tchecked, typeEnv, _) <- liftIO $ Acton.Types.reconstruct env kchecked
-  let S.NModule tenv mdoc = nmod
-  (normalized, normEnv) <- liftIO $ Acton.Normalizer.normalize typeEnv tchecked
-  (deacted, deactEnv) <- liftIO $ Acton.Deactorizer.deactorize normEnv normalized
-  (cpstyled, cpsEnv) <- liftIO $ Acton.CPS.convert deactEnv deacted
-  (lifted,liftEnv) <- liftIO $ Acton.LambdaLifter.liftModule cpsEnv cpstyled
-  boxed <- liftIO $ Acton.Boxing.doBoxing liftEnv lifted
-
-  genTests "Boxing" dir testname lifted boxed
+  forM_ modules $ \(modName, lifted, boxed) ->
+    genTests "Boxing" dir modName lifted boxed
 
 -- pass 9 CodeGen
-testCodeGen env0 testname = do
-  let act_file = "test" </> "src" </> testname ++ ".act"
-      dir      = "test" </> "9-codegen"
+testCodeGen :: Acton.Env.Env0 -> [String] -> Spec
+testCodeGen env0 modulePaths = do
+  let dir = "test" </> "9-codegen"
 
-  (env, parsed) <- parseAct env0 act_file
+  modules <- runIO $ do
+    let processModule (accEnv, accModules) modulePath = do
+          (env, parsed) <- parseAct accEnv modulePath
+          kchecked <- Acton.Kinds.check env parsed
+          (nmod, tchecked, typeEnv, _) <- Acton.Types.reconstruct env kchecked
+          let S.NModule tenv mdoc = nmod
+          (normalized, normEnv) <- Acton.Normalizer.normalize typeEnv tchecked
+          (deacted, deactEnv) <- Acton.Deactorizer.deactorize normEnv normalized
+          (cpstyled, cpsEnv) <- Acton.CPS.convert deactEnv deacted
+          (lifted,liftEnv) <- Acton.LambdaLifter.liftModule cpsEnv cpstyled
+          boxed <- Acton.Boxing.doBoxing liftEnv lifted
+          (n,h,c) <- Acton.CodeGen.generate liftEnv "" boxed
+          let newAccEnv = Acton.Env.addMod (S.modname parsed) tenv mdoc accEnv
+          return (newAccEnv, accModules ++ [(takeFileName modulePath, boxed, n, h, c)])
+    
+    (_, modules) <- foldM processModule (env0, []) modulePaths
+    return modules
 
-  kchecked <- liftIO $ Acton.Kinds.check env parsed
-  (nmod, tchecked, typeEnv, _) <- liftIO $ Acton.Types.reconstruct env kchecked
-  let S.NModule tenv mdoc = nmod
-  (normalized, normEnv) <- liftIO $ Acton.Normalizer.normalize typeEnv tchecked
-  (deacted, deactEnv) <- liftIO $ Acton.Deactorizer.deactorize normEnv normalized
-  (cpstyled, cpsEnv) <- liftIO $ Acton.CPS.convert deactEnv deacted
-  (lifted,liftEnv) <- liftIO $ Acton.LambdaLifter.liftModule cpsEnv cpstyled
-  boxed <- liftIO $ Acton.Boxing.doBoxing liftEnv lifted
-  (n,h,c) <- liftIO $ Acton.CodeGen.generate liftEnv "" boxed
+  forM_ modules $ \(modName, boxed, n, h, c) -> do
+    let pass_name = "CodeGen"
+    let input_golden = dir </> modName ++ ".input"
+        h_golden = dir </> modName ++ ".h"
+        c_golden = dir </> modName ++ ".c"
 
-  let pass_name = "CodeGen"
-  let input_golden = dir </> testname ++ ".input"
-      h_golden = dir </> testname ++ ".h"
-      c_golden = dir </> testname ++ ".c"
-
-  describe testname $ do
-    it ("Check " ++ pass_name ++ " input") $ do
-      goldenTextFile input_golden $ return $ T.pack $ Pretty.print boxed
-    it ("Check " ++ pass_name ++ " .h output") $ do
-      goldenTextFile h_golden $ return $ T.pack $ Pretty.print h
-    it ("Check " ++ pass_name ++ " .c output") $ do
-      goldenTextFile c_golden $ return $ T.pack $ Pretty.print c
+    describe modName $ do
+      it ("Check " ++ pass_name ++ " input") $ do
+        goldenTextFile input_golden $ return $ T.pack $ Pretty.print boxed
+      it ("Check " ++ pass_name ++ " .h output") $ do
+        goldenTextFile h_golden $ return $ T.pack $ Pretty.print h
+      it ("Check " ++ pass_name ++ " .c output") $ do
+        goldenTextFile c_golden $ return $ T.pack $ Pretty.print c
 
 testDocstrings :: Acton.Env.Env0 -> String -> Spec
 testDocstrings env0 testname = do
-  let act_file = "test" </> "src" </> testname ++ ".act"
-
-  (env, parsed) <- parseAct env0 act_file
+  (env, parsed) <- parseAct env0 testname
 
   kchecked <- liftIO $ Acton.Kinds.check env parsed
   (nmod, tchecked, typeEnv, _) <- liftIO $ Acton.Types.reconstruct env kchecked
