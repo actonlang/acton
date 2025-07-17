@@ -19,11 +19,12 @@ parseCmdLine        :: IO CmdLineOptions
 parseCmdLine        = execParser (info (cmdLineParser <**> helper) descr)
 
 data CmdLineOptions = CompileOpt [String] GlobalOptions CompileOptions
-                    | VersionOpt VersionOptions
                     | CmdOpt GlobalOptions Command
                     deriving Show
 
 data ColorWhen = Auto | Always | Never deriving (Show, Eq)
+
+data OptimizeMode = Debug | ReleaseSafe | ReleaseSmall | ReleaseFast deriving (Show, Eq)
 
 data GlobalOptions = GlobalOptions {
                         tty          :: Bool,
@@ -34,16 +35,11 @@ data GlobalOptions = GlobalOptions {
                         color        :: ColorWhen
                      } deriving Show
 
-data VersionOptions = VersionOptions {
-                        version :: Bool,
-                        numeric_version :: Bool
-                     } deriving Show
-
 data Command        = New NewOptions
                     | Build BuildOptions
                     | Cloud CloudOptions
                     | Doc DocOptions
-                    | Version VersionOptions
+                    | Version
                     deriving Show
 
 
@@ -70,7 +66,7 @@ data CompileOptions   = CompileOptions {
                          autostub    :: Bool,
                          stub        :: Bool,
                          cpedantic   :: Bool,
-                         dev         :: Bool,
+                         optimize    :: OptimizeMode,
                          listimports :: Bool,
                          sub         :: Bool,
                          only_build  :: Bool,
@@ -90,7 +86,7 @@ data BuildOptions = BuildOptions {
                          cpedanticB  :: Bool,
                          dbB         :: Bool,
                          no_threadsB :: Bool,
-                         devB        :: Bool,
+                         optimizeB   :: OptimizeMode,
                          listimportsB :: Bool,
                          only_buildB :: Bool,
                          skip_buildB :: Bool,
@@ -129,10 +125,9 @@ cmdLineParser       = hsubparser
                         <> command "build"   (info (CmdOpt <$> globalOptions <*> (Build <$> buildOptions)) (progDesc "Build an Acton project"))
                         <> command "cloud"   (info (CmdOpt <$> globalOptions <*> (Cloud <$> cloudOptions)) (progDesc "Run an Acton project in the cloud"))
                         <> command "doc"     (info (CmdOpt <$> globalOptions <*> (Doc <$> docOptions)) (progDesc "Show type and docstring info"))
-                        <> command "version" (info (CmdOpt <$> globalOptions <*> (Version <$> versionOptions)) (progDesc "Show version information"))
+                        <> command "version" (info (CmdOpt <$> globalOptions <*> pure Version) (progDesc "Show version"))
                       )
                      <|> (CompileOpt <$> (fmap (:[]) $ argument str (metavar "ACTONFILE" <> help "Compile Acton file" <> completer (bashCompleter "file -X '!*.act' -o plusdirs"))) <*> globalOptions <*> compileOptions)
-                     <|> (VersionOpt <$> versionOptions)
 
 globalOptions :: Parser GlobalOptions
 globalOptions = GlobalOptions
@@ -156,9 +151,14 @@ globalOptions = GlobalOptions
             "never"  -> Right Never
             _        -> Left $ "Invalid color option: " ++ s ++ " (expected: auto, always, never)"
 
-versionOptions         = VersionOptions <$>
-                                         switch (long "version" <> short 'v' <> help "Show version information")
-                                     <*> switch (long "numeric-version" <> short 'n' <> help "Show numeric version")
+optimizeReader :: ReadM OptimizeMode
+optimizeReader = eitherReader $ \s ->
+    case s of
+        "Debug"       -> Right Debug
+        "ReleaseSafe" -> Right ReleaseSafe
+        "ReleaseSmall" -> Right ReleaseSmall
+        "ReleaseFast" -> Right ReleaseFast
+        _             -> Left $ "Invalid optimize option: " ++ s ++ " (expected: Debug, ReleaseSafe, ReleaseSmall, ReleaseFast)"
 
 
 {-
@@ -189,7 +189,7 @@ compileOptions = CompileOptions
         <*> switch (long "auto-stub"    <> help "Allow automatic stub detection")
         <*> switch (long "stub"         <> help "Stub (.ty) file generation only")
         <*> switch (long "cpedantic"    <> help "Pedantic C compilation with -Werror")
-        <*> switch (long "dev"          <> help "Development mode; include debug symbols etc")
+        <*> optimizeOption
         <*> switch (long "list-imports" <> help "List module imports")
         <*> switch (long "sub")
         <*> switch (long "only-build"   <> help "Only perform final build of .c files, do not compile .act files")
@@ -208,7 +208,7 @@ buildOptions = BuildOptions
         <*> switch (long "cpedantic"    <> help "Pedantic C compilation with -Werror")
         <*> switch (long "db"           <> help "Enable DB backend")
         <*> switch (long "no-threads"   <> help "Don't use threads")
-        <*> switch (long "dev"          <> help "Development mode; include debug symbols etc")
+        <*> optimizeOption
         <*> switch (long "list-imports" <> help "List module imports")
         <*> switch (long "only-build"   <> help "Only perform final build of .c files, do not compile .act files")
         <*> switch (long "skip-build"   <> help "Skip final build of .c files")
@@ -237,6 +237,14 @@ docOptions = DocOptions
           <|> flag' MarkdownFormat (long "md" <> long "markdown" <> help "Output in Markdown format")
           <|> flag' HtmlFormat (long "html" <> help "Output in HTML format")
         )
+
+optimizeOption :: Parser OptimizeMode
+optimizeOption = option optimizeReader
+    (long "optimize"
+     <> metavar "MODE"
+     <> value Debug
+     <> help "Optimization mode (Debug, ReleaseSafe, ReleaseSmall, ReleaseFast)"
+    )
 
 descr               = fullDesc <> progDesc "Compilation and management of Acton source code and projects"
                       <> header "actonc - the Acton compiler"

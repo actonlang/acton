@@ -25,7 +25,7 @@ jobs:
       - name: "Install acton from .deb"
         run: |
           sudo apt install -y ./deb/acton_*.deb
-          acton --version
+          acton version
       - name: "Clone app repo"
         uses: actions/checkout@v4
         with:

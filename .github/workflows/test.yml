@@ -405,7 +405,7 @@ jobs:
         run: |
           apt update
           apt install -y ./deb/acton_*.deb
-          acton --version
+          acton version
       - name: "Enable dumping core files to /tmp/core..."
         run: |
           apt install -qy procps
@@ -454,10 +454,10 @@ jobs:
           echo "deb http://aptip.acton-lang.io/ tip main" | sudo tee /etc/apt/sources.list.d/acton.list
           sudo apt-get update
           sudo apt-get install -qy acton
-          acton --version
+          acton version
       - name: "Run perf tests and record"
         run: |
-          acton --version
+          acton version
           cd test/stdlib_tests
           acton test perf --record
           cd ../perf
@@ -469,7 +469,7 @@ jobs:
       - name: "Install acton from .deb"
         run: |
           sudo dpkg -i ./deb/acton_*.deb
-          acton --version
+          acton version
       - name: "Run perf tests to compare"
         run: |
           cd test/stdlib_tests
@@ -502,7 +502,7 @@ jobs:
           apt update
           apt install -qy make netcat-openbsd
           apt install -y ./deb/acton_*.deb
-          acton --version
+          acton version
       - name: "Clone Telemetrify and check out acton-next branch"
         uses: actions/checkout@v4
         with:

@@ -165,7 +165,7 @@ actor CompilerRunner(process_cap, env, args, wdir=None, on_exit: ?action(int, in
 actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None, on_build_failure: action(int, int, str) -> None, build_tests: bool=False, files: list[str]=[]):
     """Build the project including dependencies
 
-    - check for dependencies.json, if found, download dependencies
+    - check for build.act.json, if found, download dependencies
     - build dependencies
     - build
     """
@@ -246,7 +246,6 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
             cmdargs.extend([files[0]])
         cmdargs.extend(build_cmd_args(args))
         if build_tests:
-            cmdargs.append("--dev")
             cmdargs.append("--test")
         cmd = cmdargs + search_path_arg
         cr = CompilerRunner(
@@ -303,9 +302,6 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
                     raise ValueError("Dependency %s has no path or hash" % dep_name)
                 print(" -", dep_name)
                 cmd = ["build"] + dep_build_cmd_args(args) + dep_args
-                # Build deps in dev mode if we are building tests
-                if build_tests:
-                    cmd.append("--dev")
                 cr = CompilerRunner(
                     process_cap,
                     env,
@@ -362,13 +358,13 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
         env.exit(1)
 
     def check_for_buildconfig():
-        """Check if dependencies.json exists
+        """Check if build.act.json exists
 
-        If there is a dependencies.json file, we will read it and check if the
+        If there is a build.act.json file, we will read it and check if the
         dependencies also exist locally. If not, we will download them and
         proceed to build the dependencies and then build the project.
 
-        If there is no dependencies.json file, we will build the project.
+        If there is no build.act.json file, we will build the project.
         """
         try:
             build_config = BuildConfig.from_json(file.ReadFile(rfcap, "build.act.json").read().decode())
@@ -767,9 +763,23 @@ def dep_build_cmd_args(args):
 
 def build_cmd_args(args):
     cmdargs = []
+
+    # Handle backward compatibility for --dev and --release flags
+    optimize_mode = "Debug"
+    if args.get_bool("dev"):
+        optimize_mode = "Debug"
+    if args.get_bool("release"):
+        optimize_mode = "ReleaseFast"
+
+    # Use explicit --optimize argument if set, otherwise use the default
+    optimize_arg = args.get_str("optimize")
+    if optimize_arg != "":
+        optimize_mode = optimize_arg
+    cmdargs.extend(["--optimize", optimize_mode])
+
     for argname, arg in args.options.items():
         # TODO: reverse this logic, we should only pass in a small set of options, not all
-        if argname in {"file", "record", "golden-update"}:
+        if argname in {"file", "record", "golden-update", "dev", "release", "optimize"}:
             continue
 
         if arg.type == "bool":
@@ -1441,10 +1451,7 @@ actor main(env):
         run_tests = CmdListTest(env, args)
 
     def _cmd_version(args):
-        if args.get_bool("full"):
-            CompilerRunner(process_cap, env, ["--version"])
-        else:
-            CompilerRunner(process_cap, env, ["--numeric-version"])
+        CompilerRunner(process_cap, env, ["version"])
 
     def _cmd_zigpkg(args):
         env.exit(0)
@@ -1476,6 +1483,8 @@ actor main(env):
         p.add_bool("quiet", "Be quiet")
         p.add_bool("verbose", "Verbose output")
         p.add_bool("dev", "Development mode")
+        p.add_option("optimize", "str", "?", "", "Optimization mode (Debug, ReleaseSafe, ReleaseSmall, ReleaseFast)")
+        p.add_bool("release", "Release mode (alias for --optimize=ReleaseFast)")
         p.add_bool("no-threads", "Don't use threads")
         p.add_bool("only-build", "Only perform final build of .c files, do not compile .act files")
         p.add_bool("skip-build", "Skip final build of .c files")
@@ -1525,7 +1534,6 @@ actor main(env):
         testperfp = testp.add_cmd("perf", "Perf", _cmd_test_perf)
 
         version_p = p.add_cmd("version", "Show version", _cmd_version)
-        version_p.add_bool("full", "Show full version info")
 
         p_zigpkg = p.add_cmd("zig-pkg", "Manage Zig package dependencies", _cmd_zigpkg)
 

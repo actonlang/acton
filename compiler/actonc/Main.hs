@@ -88,13 +88,12 @@ main = do
     hSetBuffering stdout LineBuffering
     arg <- C.parseCmdLine
     case arg of
-        C.VersionOpt opts       -> printVersion opts
         C.CmdOpt gopts (C.New opts)   -> createProject (C.file opts)
         C.CmdOpt gopts (C.Build opts) -> buildProject gopts $ defaultOpts {
           C.alwaysbuild = C.alwaysB opts,
           C.autostub = C.autostubB opts,
           C.cpedantic = C.cpedanticB opts,
-          C.dev = C.devB opts,
+          C.optimize = C.optimizeB opts,
           C.db = C.dbB opts,
           C.listimports = C.listimportsB opts,
           C.only_build = C.only_buildB opts,
@@ -109,14 +108,14 @@ main = do
           }
         C.CmdOpt gopts (C.Cloud opts) -> undefined
         C.CmdOpt gopts (C.Doc opts)   -> printDocs gopts opts
-        C.CmdOpt gopts (C.Version opts) -> printVersion opts
+        C.CmdOpt gopts C.Version      -> printVersion
         C.CompileOpt nms gopts opts   -> case takeExtension (head nms) of
                                      ".act" -> buildFile gopts (applyGlobalOpts gopts opts) (head nms)
                                      ".ty" -> printDocs gopts (C.DocOptions (head nms) (Just C.AsciiFormat) Nothing)
                                      _ -> printErrorAndExit ("Unknown filetype: " ++ head nms)
 
 defaultOpts   = C.CompileOptions False False False False False False False False False False False False
-                                 False False False False False False False False False False False False
+                                 False False False False False False C.Debug False False False False False
                                  "" "" "" C.defTarget "" False []
 
 -- Apply global options to compile options
@@ -125,6 +124,12 @@ applyGlobalOpts gopts opts = opts
 
 
 -- Auxiliary functions ---------------------------------------------------------------------------------------
+
+optimizeModeToZig :: C.OptimizeMode -> String
+optimizeModeToZig C.Debug        = "Debug"
+optimizeModeToZig C.ReleaseSafe  = "ReleaseSafe"
+optimizeModeToZig C.ReleaseSmall = "ReleaseSmall"
+optimizeModeToZig C.ReleaseFast  = "ReleaseFast"
 
 zig :: Paths -> FilePath
 zig paths = sysPath paths ++ "/zig/zig"
@@ -201,37 +206,15 @@ fmtTime t =
 
 -- Version handling ------------------------------------------------------------------------------------------
 
-printVersion opts = do
-    cv <-  getCcVer
-    -- If neither flag is set, default to showing version
-    if not (C.version opts || C.numeric_version opts)
-        then putStrLn (showVer cv)
-        else do
-            iff (C.version opts) (putStrLn (showVer cv))
-            iff (C.numeric_version opts) (putStrLn getVer)
+printVersion = putStrLn getVer
 
 getVer          = showVersion Paths_actonc.version
-getVerExtra     = unwords ["compiled by", compilerName, showVersion compilerVersion, "on", os, arch]
 
-getCcVer        = do
-    sysPath <- takeDirectory <$> System.Environment.getExecutablePath
-    zigPath <- canonicalizePath (sysPath ++ "/../zig/zig")
-    verStr <- readProcess zigPath ["version"] []
-                `catch` handleNoCc                    -- NOTE: the error is not handled (but actonc would terminate anyhow)
-    return $ unwords $ take 1 $ lines verStr
-  where handleNoCc :: IOException -> IO String
-        handleNoCc e = printErrorAndExit "ERROR: Unable to find cc (the C compiler)\nHINT: Ensure cc is in your PATH"
-
-
-showVer cv      = "acton " ++ getVer ++ "\n" ++ getVerExtra ++ "\ncc: " ++ cv
-
-printIce errMsg = do ccVer <- getCcVer
-                     putStrLn(
+printIce errMsg = putStrLn(
                         "ERROR: internal compiler error: " ++ errMsg ++
                         "\nNOTE: this is likely a bug in actonc, please report this at:" ++
                         "\nNOTE: https://github.com/actonlang/acton/issues/new?template=ice.yaml" ++
-                        "\nNOTE: acton " ++ getVer ++ " " ++ getVerExtra ++
-                        "\nNOTE: cc: " ++ ccVer
+                        "\nNOTE: acton " ++ getVer
                         )
 
 -- Create a project ---------------------------------------------------------------------------------------------
@@ -670,7 +653,7 @@ findProjectDir path = do
 findPaths               :: FilePath -> C.CompileOptions -> IO Paths
 findPaths actFile opts  = do execDir <- takeDirectory <$> System.Environment.getExecutablePath
                              sysPath <- canonicalizePath (if null $ C.syspath opts then execDir ++ "/.." else C.syspath opts)
-                             let sysLib = joinPath [sysPath, "lib/" ++ if (C.dev opts) then "dev" else "rel"]
+                             let sysLib = joinPath [sysPath, "lib/"]
                              absSrcFile <- canonicalizePath actFile
                              (isTmp, projPath, dirInSrc) <- analyze (takeDirectory absSrcFile) []
                              let sysTypes = joinPath [sysPath, "base", "out", "types"]
@@ -853,7 +836,7 @@ quiet gopts opts = C.quiet gopts || altOutput opts
 doTask :: C.GlobalOptions -> C.CompileOptions -> Paths -> Acton.Env.Env0 -> CompileTask -> IO Acton.Env.Env0
 doTask gopts opts paths env t@(ActonTask mn src m stubMode) = do
     iff (not (quiet gopts opts))  (putStrLn("  Compiling " ++ makeRelative (srcDir paths) actFile
-              ++ (if (C.dev opts) then " for development" else " for release")
+              ++ " with " ++ show (C.optimize opts)
               ++ (if stubMode then " in stub mode" else "")))
 
     timeStart <- getTime Monotonic
@@ -1245,7 +1228,7 @@ zigBuild env gopts opts paths tasks binTasks = do
                  (if (C.verboseZig gopts) then " --verbose " else "") ++
                  " -Dtarget=" ++ (C.target opts) ++
                  target_cpu ++
-                 " -Doptimize=" ++ (if (C.dev opts) then "Debug" else "ReleaseFast") ++
+                 " -Doptimize=" ++ optimizeModeToZig (C.optimize opts) ++
                  (if (C.db opts) then " -Ddb " else "") ++
                  (if no_threads then " -Dno_threads " else "") ++
                  (if (C.cpedantic opts) then " -Dcpedantic " else "")
