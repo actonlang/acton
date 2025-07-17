@@ -36,7 +36,7 @@ data GlobalOptions = GlobalOptions {
                      } deriving Show
 
 data Command        = New NewOptions
-                    | Build BuildOptions
+                    | Build CompileOptions
                     | Cloud CloudOptions
                     | Doc DocOptions
                     | Version
@@ -81,23 +81,6 @@ data CompileOptions   = CompileOptions {
                          searchpath  :: [String]
                      } deriving Show
 
-data BuildOptions = BuildOptions {
-                         alwaysB     :: Bool,
-                         cpedanticB  :: Bool,
-                         dbB         :: Bool,
-                         no_threadsB :: Bool,
-                         optimizeB   :: OptimizeMode,
-                         listimportsB :: Bool,
-                         only_buildB :: Bool,
-                         skip_buildB :: Bool,
-                         autostubB   :: Bool,
-                         rootB       :: String,
-                         ccmdB       :: Bool,
-                         targetB     :: String,
-                         cpuB        :: String,
-                         testB       :: Bool,
-                         searchpathB :: [String]
-                     } deriving Show
 
 
 data CloudOptions   = CloudOptions {
@@ -122,7 +105,7 @@ data DocFormat = AsciiFormat | MarkdownFormat | HtmlFormat deriving (Show, Eq)
 cmdLineParser       :: Parser CmdLineOptions
 cmdLineParser       = hsubparser
                         (  command "new"     (info (CmdOpt <$> globalOptions <*> (New <$> newOptions)) (progDesc "Create a new Acton project"))
-                        <> command "build"   (info (CmdOpt <$> globalOptions <*> (Build <$> buildOptions)) (progDesc "Build an Acton project"))
+                        <> command "build"   (info (CmdOpt <$> globalOptions <*> (Build <$> compileOptions)) (progDesc "Build an Acton project"))
                         <> command "cloud"   (info (CmdOpt <$> globalOptions <*> (Cloud <$> cloudOptions)) (progDesc "Run an Acton project in the cloud"))
                         <> command "doc"     (info (CmdOpt <$> globalOptions <*> (Doc <$> docOptions)) (progDesc "Show type and docstring info"))
                         <> command "version" (info (CmdOpt <$> globalOptions <*> pure Version) (progDesc "Show version"))
@@ -198,23 +181,6 @@ compileOptions = CompileOptions
         <*> strOption (long "root"      <> metavar "ROOTACTOR" <> value "" <> help "Set root actor")
         <*> strOption (long "tempdir"   <> metavar "TEMPDIR" <> value "" <> help "Set directory for build files")
         <*> strOption (long "syspath"   <> metavar "TARGETDIR" <> value "" <> help "Set syspath")
-        <*> strOption (long "target"    <> metavar "TARGET" <> value defTarget <> help "Target, e.g. x86_64-linux-gnu.2.28")
-        <*> strOption (long "cpu"       <> metavar "CPU" <> value "" <> help "CPU, e.g. skylake")
-        <*> switch (long "test"         <> help "Build tests")
-        <*> many (strOption (long "searchpath" <> metavar "DIR" <> help "Add search path"))
-
-buildOptions = BuildOptions
-        <$> switch (long "always-build" <> help "Development mode; include debug symbols etc")
-        <*> switch (long "cpedantic"    <> help "Pedantic C compilation with -Werror")
-        <*> switch (long "db"           <> help "Enable DB backend")
-        <*> switch (long "no-threads"   <> help "Don't use threads")
-        <*> optimizeOption
-        <*> switch (long "list-imports" <> help "List module imports")
-        <*> switch (long "only-build"   <> help "Only perform final build of .c files, do not compile .act files")
-        <*> switch (long "skip-build"   <> help "Skip final build of .c files")
-        <*> switch (long "auto-stub"    <> help "Allow automatic stub detection")
-        <*> strOption (long "root"      <> metavar "ROOTACTOR" <> value "" <> help "Set root actor")
-        <*> switch (long "ccmd"         <> help "Show CC / LD commands")
         <*> strOption (long "target"    <> metavar "TARGET" <> value defTarget <> help "Target, e.g. x86_64-linux-gnu.2.28")
         <*> strOption (long "cpu"       <> metavar "CPU" <> value "" <> help "CPU, e.g. skylake")
         <*> switch (long "test"         <> help "Build tests")

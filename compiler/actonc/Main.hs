@@ -89,23 +89,7 @@ main = do
     arg <- C.parseCmdLine
     case arg of
         C.CmdOpt gopts (C.New opts)   -> createProject (C.file opts)
-        C.CmdOpt gopts (C.Build opts) -> buildProject gopts $ defaultOpts {
-          C.alwaysbuild = C.alwaysB opts,
-          C.autostub = C.autostubB opts,
-          C.cpedantic = C.cpedanticB opts,
-          C.optimize = C.optimizeB opts,
-          C.db = C.dbB opts,
-          C.listimports = C.listimportsB opts,
-          C.only_build = C.only_buildB opts,
-          C.skip_build = C.skip_buildB opts,
-          C.no_threads = C.no_threadsB opts,
-          C.root = C.rootB opts,
-          C.ccmd = C.ccmdB opts,
-          C.target = C.targetB opts,
-          C.cpu = C.cpuB opts,
-          C.test = C.testB opts,
-          C.searchpath = C.searchpathB opts
-          }
+        C.CmdOpt gopts (C.Build opts) -> buildProject gopts opts
         C.CmdOpt gopts (C.Cloud opts) -> undefined
         C.CmdOpt gopts (C.Doc opts)   -> printDocs gopts opts
         C.CmdOpt gopts C.Version      -> printVersion
