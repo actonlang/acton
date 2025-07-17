@@ -29,7 +29,7 @@ import Data.List (isInfixOf, isPrefixOf)
 import Error.Diagnose (printDiagnostic, prettyDiagnostic, WithUnicode(..), TabSize(..), defaultStyle)
 import Prettyprinter (unAnnotate, layoutPretty, defaultLayoutOptions)
 import Prettyprinter.Render.Text (renderStrict)
-import System.FilePath ((</>), joinPath, takeFileName, takeBaseName, takeDirectory)
+import System.FilePath ((</>), joinPath, takeFileName, takeBaseName, takeDirectory, splitDirectories)
 import System.Directory (getCurrentDirectory, setCurrentDirectory)
 import Control.Monad (forM_, when, foldM)
 import qualified Control.Exception as E
@@ -429,10 +429,9 @@ testModuleParseError testName input = do
 
 -- Helper function to test parsing (just that it succeeds)
 testParse env0 testname = do
-  let act_file = "test" </> "src" </> testname ++ ".act"
-      dir      = "test" </> "1-parse"
+  let dir = "test" </> "1-parse"
 
-  (env, parsed) <- parseAct env0 act_file
+  (env, parsed) <- parseAct env0 testname
 
   genTests "Parse Check" dir testname parsed parsed
 
@@ -505,15 +504,20 @@ testDocFiles env0 moduleNames = do
         let htmlDoc = DocP.printHtmlDoc nmod parsed
         goldenTextFile (testDir </> goldenDir </> modName ++ ".html") $ return $ T.pack htmlDoc
 
-parseAct env0 act_file = do
-  let dir = takeDirectory act_file
-      base = takeBaseName act_file
+-- Parse an Acton module by module path
+-- Examples: "foo" -> src/foo.act, module foo
+--           "foo/bar" -> src/foo/bar.act, module foo.bar  
+parseAct env0 modulePath = do
+  let moduleComponents = splitDirectories modulePath
+      moduleName = S.modName moduleComponents
+      act_file = "test" </> "src" </> modulePath ++ ".act"
       sysTypesPath = ".." </> ".." </> "dist" </> "base" </> "out" </> "types"
 
   src <- liftIO $ readFile act_file
-  parsed <- liftIO $ P.parseModule (S.modName [base]) act_file src
+  parsed <- liftIO $ P.parseModule moduleName act_file src
   env <- liftIO $ Acton.Env.mkEnv [sysTypesPath] env0 parsed
   return (env, parsed)
+
 
 genTests pass_name dir testname input_data output_data = do
   let input_golden = dir </> testname ++ ".input"
@@ -527,10 +531,9 @@ genTests pass_name dir testname input_data output_data = do
 
 -- pass 2 Kinds check
 testKinds env0 testname = do
-  let act_file = "test" </> "src" </> testname ++ ".act"
-      dir      = "test" </> "2-kinds"
+  let dir = "test" </> "2-kinds"
 
-  (env, parsed) <- parseAct env0 act_file
+  (env, parsed) <- parseAct env0 testname
 
   kchecked <- liftIO $ Acton.Kinds.check env parsed
 
@@ -538,10 +541,9 @@ testKinds env0 testname = do
 
 -- pass 3 Type check
 testTypes env0 testname = do
-  let act_file = "test" </> "src" </> testname ++ ".act"
-      dir      = "test" </> "3-types"
+  let dir = "test" </> "3-types"
 
-  (env, parsed) <- parseAct env0 act_file
+  (env, parsed) <- parseAct env0 testname
 
   kchecked <- liftIO $ Acton.Kinds.check env parsed
   (nmod, tchecked, typeEnv, _) <- liftIO $ Acton.Types.reconstruct env kchecked
@@ -551,10 +553,9 @@ testTypes env0 testname = do
 
 -- pass 4 Normalizer
 testNorm env0 testname = do
-  let act_file = "test" </> "src" </> testname ++ ".act"
-      dir      = "test" </> "4-normalizer"
+  let dir = "test" </> "4-normalizer"
 
-  (env, parsed) <- parseAct env0 act_file
+  (env, parsed) <- parseAct env0 testname
 
   kchecked <- liftIO $ Acton.Kinds.check env parsed
   (nmod, tchecked, typeEnv, _) <- liftIO $ Acton.Types.reconstruct env kchecked
@@ -565,10 +566,9 @@ testNorm env0 testname = do
 
 -- pass 5 Deactorizer
 testDeact env0 testname = do
-  let act_file = "test" </> "src" </> testname ++ ".act"
-      dir      = "test" </> "5-deactorizer"
+  let dir = "test" </> "5-deactorizer"
 
-  (env, parsed) <- parseAct env0 act_file
+  (env, parsed) <- parseAct env0 testname
 
   kchecked <- liftIO $ Acton.Kinds.check env parsed
   (nmod, tchecked, typeEnv, _) <- liftIO $ Acton.Types.reconstruct env kchecked
@@ -580,10 +580,9 @@ testDeact env0 testname = do
 
 -- pass 6 CPS
 testCps env0 testname = do
-  let act_file = "test" </> "src" </> testname ++ ".act"
-      dir      = "test" </> "6-cps"
+  let dir = "test" </> "6-cps"
 
-  (env, parsed) <- parseAct env0 act_file
+  (env, parsed) <- parseAct env0 testname
 
   kchecked <- liftIO $ Acton.Kinds.check env parsed
   (nmod, tchecked, typeEnv, _) <- liftIO $ Acton.Types.reconstruct env kchecked
@@ -596,10 +595,9 @@ testCps env0 testname = do
 
 -- pass 7 Lambda Lifting
 testLL env0 testname = do
-  let act_file = "test" </> "src" </> testname ++ ".act"
-      dir      = "test" </> "7-lambdalifting"
+  let dir = "test" </> "7-lambdalifting"
 
-  (env, parsed) <- parseAct env0 act_file
+  (env, parsed) <- parseAct env0 testname
 
   kchecked <- liftIO $ Acton.Kinds.check env parsed
   (nmod, tchecked, typeEnv, _) <- liftIO $ Acton.Types.reconstruct env kchecked
@@ -613,10 +611,9 @@ testLL env0 testname = do
 
 -- pass 8 Boxing
 testBoxing env0 testname = do
-  let act_file = "test" </> "src" </> testname ++ ".act"
-      dir      = "test" </> "8-boxing"
+  let dir = "test" </> "8-boxing"
 
-  (env, parsed) <- parseAct env0 act_file
+  (env, parsed) <- parseAct env0 testname
 
   kchecked <- liftIO $ Acton.Kinds.check env parsed
   (nmod, tchecked, typeEnv, _) <- liftIO $ Acton.Types.reconstruct env kchecked
@@ -631,10 +628,9 @@ testBoxing env0 testname = do
 
 -- pass 9 CodeGen
 testCodeGen env0 testname = do
-  let act_file = "test" </> "src" </> testname ++ ".act"
-      dir      = "test" </> "9-codegen"
+  let dir = "test" </> "9-codegen"
 
-  (env, parsed) <- parseAct env0 act_file
+  (env, parsed) <- parseAct env0 testname
 
   kchecked <- liftIO $ Acton.Kinds.check env parsed
   (nmod, tchecked, typeEnv, _) <- liftIO $ Acton.Types.reconstruct env kchecked
@@ -661,9 +657,7 @@ testCodeGen env0 testname = do
 
 testDocstrings :: Acton.Env.Env0 -> String -> Spec
 testDocstrings env0 testname = do
-  let act_file = "test" </> "src" </> testname ++ ".act"
-
-  (env, parsed) <- parseAct env0 act_file
+  (env, parsed) <- parseAct env0 testname
 
   kchecked <- liftIO $ Acton.Kinds.check env parsed
   (nmod, tchecked, typeEnv, _) <- liftIO $ Acton.Types.reconstruct env kchecked
