@@ -731,12 +731,6 @@ actor CmdTest(env: Env, args, perf_mode: bool=False):
         print("std_err:", std_err_buf)
         env.exit(1)
 
-    # TODO: let dev mode enable for normal test and disable, i.e. use release mode for perf tests
-    # However, we have some stability issue due to wonky compilation
-    # optimizations so we get crashes. Thus we now always run in dev mode to get
-    # actually working code.
-    #dev = not perf_mode
-    dev = True
     print("Building project tests...")
     project_builder = BuildProject(process_cap, env, args, _on_build_success, _on_build_failure, build_tests=True)
 
@@ -747,7 +741,7 @@ def dep_build_cmd_args(args):
     """
     cmdargs = []
     for argname, arg in args.options.items():
-        if argname in {"always-build", "cpu", "dep", "dev", "target"}:
+        if argname in {"always-build", "cpu", "dep", "target"}:
             if arg.type == "bool":
                 if args.get_bool(argname):
                     cmdargs.append("--" + argname)
@@ -763,23 +757,11 @@ def dep_build_cmd_args(args):
 
 def build_cmd_args(args):
     cmdargs = []
-
-    # Handle backward compatibility for --dev and --release flags
-    optimize_mode = "Debug"
-    if args.get_bool("dev"):
-        optimize_mode = "Debug"
-    if args.get_bool("release"):
-        optimize_mode = "ReleaseFast"
-
-    # Use explicit --optimize argument if set, otherwise use the default
-    optimize_arg = args.get_str("optimize")
-    if optimize_arg != "":
-        optimize_mode = optimize_arg
-    cmdargs.extend(["--optimize", optimize_mode])
+    cmdargs.extend(["--optimize", args.get_str("optimize")])
 
     for argname, arg in args.options.items():
         # TODO: reverse this logic, we should only pass in a small set of options, not all
-        if argname in {"file", "record", "golden-update", "dev", "release", "optimize"}:
+        if argname in {"file", "record", "golden-update", "optimize"}:
             continue
 
         if arg.type == "bool":
@@ -1482,9 +1464,7 @@ actor main(env):
         p.add_bool("cpedantic", "Pedantic C compilation")
         p.add_bool("quiet", "Be quiet")
         p.add_bool("verbose", "Verbose output")
-        p.add_bool("dev", "Development mode")
-        p.add_option("optimize", "str", "?", "", "Optimization mode (Debug, ReleaseSafe, ReleaseSmall, ReleaseFast)")
-        p.add_bool("release", "Release mode (alias for --optimize=ReleaseFast)")
+        p.add_option("optimize", "str", "?", "Debug", "Optimization mode (Debug, ReleaseSafe, ReleaseSmall, ReleaseFast)")
         p.add_bool("no-threads", "Don't use threads")
         p.add_bool("only-build", "Only perform final build of .c files, do not compile .act files")
         p.add_bool("skip-build", "Skip final build of .c files")
