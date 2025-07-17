@@ -165,7 +165,7 @@ actor CompilerRunner(process_cap, env, args, wdir=None, on_exit: ?action(int, in
 actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None, on_build_failure: action(int, int, str) -> None, build_tests: bool=False, files: list[str]=[]):
     """Build the project including dependencies
 
-    - check for dependencies.json, if found, download dependencies
+    - check for build.act.json, if found, download dependencies
     - build dependencies
     - build
     """
@@ -358,13 +358,13 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
         env.exit(1)
 
     def check_for_buildconfig():
-        """Check if dependencies.json exists
+        """Check if build.act.json exists
 
-        If there is a dependencies.json file, we will read it and check if the
+        If there is a build.act.json file, we will read it and check if the
         dependencies also exist locally. If not, we will download them and
         proceed to build the dependencies and then build the project.
 
-        If there is no dependencies.json file, we will build the project.
+        If there is no build.act.json file, we will build the project.
         """
         try:
             build_config = BuildConfig.from_json(file.ReadFile(rfcap, "build.act.json").read().decode())
