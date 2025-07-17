@@ -1452,9 +1452,9 @@ actor main(env):
 
     def _cmd_version(args):
         if args.get_bool("full"):
-            CompilerRunner(process_cap, env, ["--version"])
+            CompilerRunner(process_cap, env, ["version"])
         else:
-            CompilerRunner(process_cap, env, ["--numeric-version"])
+            CompilerRunner(process_cap, env, ["version", "--numeric-version"])
 
     def _cmd_zigpkg(args):
         env.exit(0)
