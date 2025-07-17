@@ -12,7 +12,7 @@ body:
     id: version
     attributes:
       label: Acton Version
-      description: "The output of `actonc --version`"
+      description: "The output of `acton version`"
       placeholder: "0.16.3"
     validations:
       required: true

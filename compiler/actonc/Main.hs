@@ -88,7 +88,6 @@ main = do
     hSetBuffering stdout LineBuffering
     arg <- C.parseCmdLine
     case arg of
-        C.VersionOpt opts       -> printVersion opts
         C.CmdOpt gopts (C.New opts)   -> createProject (C.file opts)
         C.CmdOpt gopts (C.Build opts) -> buildProject gopts $ defaultOpts {
           C.alwaysbuild = C.alwaysB opts,
@@ -109,7 +108,7 @@ main = do
           }
         C.CmdOpt gopts (C.Cloud opts) -> undefined
         C.CmdOpt gopts (C.Doc opts)   -> printDocs gopts opts
-        C.CmdOpt gopts (C.Version opts) -> printVersion opts
+        C.CmdOpt gopts C.Version      -> printVersion
         C.CompileOpt nms gopts opts   -> case takeExtension (head nms) of
                                      ".act" -> buildFile gopts (applyGlobalOpts gopts opts) (head nms)
                                      ".ty" -> printDocs gopts (C.DocOptions (head nms) (Just C.AsciiFormat) Nothing)
@@ -207,37 +206,15 @@ fmtTime t =
 
 -- Version handling ------------------------------------------------------------------------------------------
 
-printVersion opts = do
-    cv <-  getCcVer
-    -- If neither flag is set, default to showing version
-    if not (C.version opts || C.numeric_version opts)
-        then putStrLn (showVer cv)
-        else do
-            iff (C.version opts) (putStrLn (showVer cv))
-            iff (C.numeric_version opts) (putStrLn getVer)
+printVersion = putStrLn getVer
 
 getVer          = showVersion Paths_actonc.version
-getVerExtra     = unwords ["compiled by", compilerName, showVersion compilerVersion, "on", os, arch]
 
-getCcVer        = do
-    sysPath <- takeDirectory <$> System.Environment.getExecutablePath
-    zigPath <- canonicalizePath (sysPath ++ "/../zig/zig")
-    verStr <- readProcess zigPath ["version"] []
-                `catch` handleNoCc                    -- NOTE: the error is not handled (but actonc would terminate anyhow)
-    return $ unwords $ take 1 $ lines verStr
-  where handleNoCc :: IOException -> IO String
-        handleNoCc e = printErrorAndExit "ERROR: Unable to find cc (the C compiler)\nHINT: Ensure cc is in your PATH"
-
-
-showVer cv      = "acton " ++ getVer ++ "\n" ++ getVerExtra ++ "\ncc: " ++ cv
-
-printIce errMsg = do ccVer <- getCcVer
-                     putStrLn(
+printIce errMsg = putStrLn(
                         "ERROR: internal compiler error: " ++ errMsg ++
                         "\nNOTE: this is likely a bug in actonc, please report this at:" ++
                         "\nNOTE: https://github.com/actonlang/acton/issues/new?template=ice.yaml" ++
-                        "\nNOTE: acton " ++ getVer ++ " " ++ getVerExtra ++
-                        "\nNOTE: cc: " ++ ccVer
+                        "\nNOTE: acton " ++ getVer
                         )
 
 -- Create a project ---------------------------------------------------------------------------------------------

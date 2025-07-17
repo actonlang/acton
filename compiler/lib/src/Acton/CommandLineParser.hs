@@ -19,7 +19,6 @@ parseCmdLine        :: IO CmdLineOptions
 parseCmdLine        = execParser (info (cmdLineParser <**> helper) descr)
 
 data CmdLineOptions = CompileOpt [String] GlobalOptions CompileOptions
-                    | VersionOpt VersionOptions
                     | CmdOpt GlobalOptions Command
                     deriving Show
 
@@ -36,16 +35,11 @@ data GlobalOptions = GlobalOptions {
                         color        :: ColorWhen
                      } deriving Show
 
-data VersionOptions = VersionOptions {
-                        version :: Bool,
-                        numeric_version :: Bool
-                     } deriving Show
-
 data Command        = New NewOptions
                     | Build BuildOptions
                     | Cloud CloudOptions
                     | Doc DocOptions
-                    | Version VersionOptions
+                    | Version
                     deriving Show
 
 
@@ -131,10 +125,9 @@ cmdLineParser       = hsubparser
                         <> command "build"   (info (CmdOpt <$> globalOptions <*> (Build <$> buildOptions)) (progDesc "Build an Acton project"))
                         <> command "cloud"   (info (CmdOpt <$> globalOptions <*> (Cloud <$> cloudOptions)) (progDesc "Run an Acton project in the cloud"))
                         <> command "doc"     (info (CmdOpt <$> globalOptions <*> (Doc <$> docOptions)) (progDesc "Show type and docstring info"))
-                        <> command "version" (info (CmdOpt <$> globalOptions <*> (Version <$> versionOptions)) (progDesc "Show version information"))
+                        <> command "version" (info (CmdOpt <$> globalOptions <*> pure Version) (progDesc "Show version"))
                       )
                      <|> (CompileOpt <$> (fmap (:[]) $ argument str (metavar "ACTONFILE" <> help "Compile Acton file" <> completer (bashCompleter "file -X '!*.act' -o plusdirs"))) <*> globalOptions <*> compileOptions)
-                     <|> (VersionOpt <$> versionOptions)
 
 globalOptions :: Parser GlobalOptions
 globalOptions = GlobalOptions
@@ -166,10 +159,6 @@ optimizeReader = eitherReader $ \s ->
         "ReleaseSmall" -> Right ReleaseSmall
         "ReleaseFast" -> Right ReleaseFast
         _             -> Left $ "Invalid optimize option: " ++ s ++ " (expected: Debug, ReleaseSafe, ReleaseSmall, ReleaseFast)"
-
-versionOptions         = VersionOptions <$>
-                                         switch (long "version" <> short 'v' <> help "Show version information")
-                                     <*> switch (long "numeric-version" <> short 'n' <> help "Show numeric version")
 
 
 {-

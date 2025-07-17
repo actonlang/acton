@@ -1451,10 +1451,7 @@ actor main(env):
         run_tests = CmdListTest(env, args)
 
     def _cmd_version(args):
-        if args.get_bool("full"):
-            CompilerRunner(process_cap, env, ["version"])
-        else:
-            CompilerRunner(process_cap, env, ["version", "--numeric-version"])
+        CompilerRunner(process_cap, env, ["version"])
 
     def _cmd_zigpkg(args):
         env.exit(0)
@@ -1537,7 +1534,6 @@ actor main(env):
         testperfp = testp.add_cmd("perf", "Perf", _cmd_test_perf)
 
         version_p = p.add_cmd("version", "Show version", _cmd_version)
-        version_p.add_bool("full", "Show full version info")
 
         p_zigpkg = p.add_cmd("zig-pkg", "Manage Zig package dependencies", _cmd_zigpkg)
 
