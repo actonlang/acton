@@ -1,0 +1,9 @@
+Building file test/typeerrors/uninitialized_inherited_attribute.act using temporary scratch directory
+  Compiling uninitialized_inherited_attribute.act for development
+[error Compilation error]: attribute 'base_count' is not initialized in __init__
+     +--> uninitialized_inherited_attribute.act@2:5-2:15
+     |
+   2 |     base_count: int
+     :     ^--------- 
+     :     `- attribute 'base_count' is not initialized in __init__
+-----+
