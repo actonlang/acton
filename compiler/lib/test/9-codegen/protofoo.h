@@ -6,11 +6,13 @@ extern B_Hashable protofooQ_W_194;
 struct protofooQ_L_2Cont;
 struct protofooQ_L_3proc;
 struct protofooQ_Key;
+struct protofooQ_EqD_Key;
 struct protofooQ_HashableD_Key;
 struct protofooQ_main;
 typedef struct protofooQ_L_2Cont *protofooQ_L_2Cont;
 typedef struct protofooQ_L_3proc *protofooQ_L_3proc;
 typedef struct protofooQ_Key *protofooQ_Key;
+typedef struct protofooQ_EqD_Key *protofooQ_EqD_Key;
 typedef struct protofooQ_HashableD_Key *protofooQ_HashableD_Key;
 typedef struct protofooQ_main *protofooQ_main;
 $R protofooQ_L_1C_1cont ($Cont, protofooQ_main, B_NoneType);
@@ -64,6 +66,22 @@ struct protofooQ_Key {
     struct protofooQ_KeyG_class *$class;
     B_int x;
 };
+struct protofooQ_EqD_KeyG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (protofooQ_EqD_Key);
+    void (*__serialize__) (protofooQ_EqD_Key, $Serial$state);
+    protofooQ_EqD_Key (*__deserialize__) (protofooQ_EqD_Key, $Serial$state);
+    B_bool (*__bool__) (protofooQ_EqD_Key);
+    B_str (*__str__) (protofooQ_EqD_Key);
+    B_str (*__repr__) (protofooQ_EqD_Key);
+    B_bool (*__eq__) (protofooQ_EqD_Key, protofooQ_Key, protofooQ_Key);
+    B_bool (*__ne__) (protofooQ_EqD_Key, protofooQ_Key, protofooQ_Key);
+};
+struct protofooQ_EqD_Key {
+    struct protofooQ_EqD_KeyG_class *$class;
+};
 struct protofooQ_HashableD_KeyG_class {
     char *$GCINFO;
     int $class_id;
@@ -115,8 +133,9 @@ extern struct protofooQ_L_3procG_class protofooQ_L_3procG_methods;
 protofooQ_L_3proc protofooQ_L_3procG_new(protofooQ_main, B_Env);
 extern struct protofooQ_KeyG_class protofooQ_KeyG_methods;
 protofooQ_Key protofooQ_KeyG_new(B_int);
+extern struct protofooQ_EqD_KeyG_class protofooQ_EqD_KeyG_methods;
+protofooQ_EqD_Key protofooQ_EqD_KeyG_new();
 extern struct protofooQ_HashableD_KeyG_class protofooQ_HashableD_KeyG_methods;
-protofooQ_HashableD_Key protofooQ_HashableD_KeyG_new();
 extern struct protofooQ_mainG_class protofooQ_mainG_methods;
 $R protofooQ_mainG_new($Cont, B_Env);
 void protofooQ___init__ ();

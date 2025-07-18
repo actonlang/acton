@@ -42,13 +42,17 @@ class Key (__builtin__.value):
     pure def __init__ (self : Key, x : __builtin__.int) -> None:
         self.x = x
         return None
+class EqD_Key (__builtin__.Eq[Key], __builtin__.value):
+    pure def __init__ (W_self : EqD_Key) -> None:
+        __builtin__.Eq.__init__@[Key](W_self)
+        return None
+    pure def __eq__ (W_self : EqD_Key, a : Key, b : Key) -> __builtin__.bool:
+        N_tmp: __builtin__.bool = W_14.__eq__(a.x, b.x)
+        return N_tmp
 class HashableD_Key (__builtin__.Hashable[Key], __builtin__.Eq[Key], __builtin__.value):
     pure def __init__ (W_self : HashableD_Key) -> None:
         __builtin__.Hashable.__init__@[Key](W_self)
         return None
-    pure def __eq__ (W_self : HashableD_Key, a : Key, b : Key) -> __builtin__.bool:
-        N_tmp: __builtin__.bool = W_14.__eq__(a.x, b.x)
-        return N_tmp
     pure def hash (W_self : HashableD_Key, self : Key, hasher : __builtin__.hasher) -> None:
         W_194.hash(self.x, hasher)
         return None

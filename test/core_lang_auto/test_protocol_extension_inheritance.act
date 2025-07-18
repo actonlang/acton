@@ -1,3 +1,6 @@
+# Test protocol extensions where the protocol inherits from another protocol
+# Regression test: extensions should get constructors even with inherited abstract methods
+
 class Key:
     def __init__(self, x):
         self.x = x

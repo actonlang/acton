@@ -102,13 +102,37 @@ protofooQ_Key protofooQ_KeyG_new(B_int G_1) {
     return $tmp;
 }
 struct protofooQ_KeyG_class protofooQ_KeyG_methods;
+B_NoneType protofooQ_EqD_KeyD___init__ (protofooQ_EqD_Key W_self) {
+    ((B_NoneType (*) (B_Eq))B_EqG_methods.__init__)(((B_Eq)W_self));
+    return B_None;
+}
+B_bool protofooQ_EqD_KeyD___eq__ (protofooQ_EqD_Key W_self, protofooQ_Key a, protofooQ_Key b) {
+    B_bool N_tmp = ((B_bool (*) (B_Eq, B_int, B_int))protofooQ_W_14->$class->__eq__)(protofooQ_W_14, a->x, b->x);
+    return N_tmp;
+}
+void protofooQ_EqD_KeyD___serialize__ (protofooQ_EqD_Key self, $Serial$state state) {
+}
+protofooQ_EqD_Key protofooQ_EqD_KeyD___deserialize__ (protofooQ_EqD_Key self, $Serial$state state) {
+    if (!self) {
+        if (!state) {
+            self = acton_malloc(sizeof(struct protofooQ_EqD_Key));
+            self->$class = &protofooQ_EqD_KeyG_methods;
+            return self;
+        }
+        self = $DNEW(protofooQ_EqD_Key, state);
+    }
+    return self;
+}
+protofooQ_EqD_Key protofooQ_EqD_KeyG_new() {
+    protofooQ_EqD_Key $tmp = acton_malloc(sizeof(struct protofooQ_EqD_Key));
+    $tmp->$class = &protofooQ_EqD_KeyG_methods;
+    protofooQ_EqD_KeyG_methods.__init__($tmp);
+    return $tmp;
+}
+struct protofooQ_EqD_KeyG_class protofooQ_EqD_KeyG_methods;
 B_NoneType protofooQ_HashableD_KeyD___init__ (protofooQ_HashableD_Key W_self) {
     ((B_NoneType (*) (B_Hashable))B_HashableG_methods.__init__)(((B_Hashable)W_self));
     return B_None;
-}
-B_bool protofooQ_HashableD_KeyD___eq__ (protofooQ_HashableD_Key W_self, protofooQ_Key a, protofooQ_Key b) {
-    B_bool N_tmp = ((B_bool (*) (B_Eq, B_int, B_int))protofooQ_W_14->$class->__eq__)(protofooQ_W_14, a->x, b->x);
-    return N_tmp;
 }
 B_NoneType protofooQ_HashableD_KeyD_hash (protofooQ_HashableD_Key W_self, protofooQ_Key self, B_hasher hasher) {
     ((B_NoneType (*) (B_Hashable, B_int, B_hasher))protofooQ_W_194->$class->hash)(protofooQ_W_194, self->x, hasher);
@@ -218,6 +242,19 @@ void protofooQ___init__ () {
         $register(&protofooQ_KeyG_methods);
     }
     {
+        protofooQ_EqD_KeyG_methods.$GCINFO = "protofooQ_EqD_Key";
+        protofooQ_EqD_KeyG_methods.$superclass = ($SuperG_class)&B_EqG_methods;
+        protofooQ_EqD_KeyG_methods.__bool__ = (B_bool (*) (protofooQ_EqD_Key))B_valueG_methods.__bool__;
+        protofooQ_EqD_KeyG_methods.__str__ = (B_str (*) (protofooQ_EqD_Key))B_valueG_methods.__str__;
+        protofooQ_EqD_KeyG_methods.__repr__ = (B_str (*) (protofooQ_EqD_Key))B_valueG_methods.__repr__;
+        protofooQ_EqD_KeyG_methods.__ne__ = (B_bool (*) (protofooQ_EqD_Key, protofooQ_Key, protofooQ_Key))B_EqG_methods.__ne__;
+        protofooQ_EqD_KeyG_methods.__init__ = protofooQ_EqD_KeyD___init__;
+        protofooQ_EqD_KeyG_methods.__eq__ = protofooQ_EqD_KeyD___eq__;
+        protofooQ_EqD_KeyG_methods.__serialize__ = protofooQ_EqD_KeyD___serialize__;
+        protofooQ_EqD_KeyG_methods.__deserialize__ = protofooQ_EqD_KeyD___deserialize__;
+        $register(&protofooQ_EqD_KeyG_methods);
+    }
+    {
         protofooQ_HashableD_KeyG_methods.$GCINFO = "protofooQ_HashableD_Key";
         protofooQ_HashableD_KeyG_methods.$superclass = ($SuperG_class)&B_HashableG_methods;
         protofooQ_HashableD_KeyG_methods.__bool__ = (B_bool (*) (protofooQ_HashableD_Key))B_valueG_methods.__bool__;
@@ -225,7 +262,6 @@ void protofooQ___init__ () {
         protofooQ_HashableD_KeyG_methods.__repr__ = (B_str (*) (protofooQ_HashableD_Key))B_valueG_methods.__repr__;
         protofooQ_HashableD_KeyG_methods.__ne__ = (B_bool (*) (protofooQ_HashableD_Key, protofooQ_Key, protofooQ_Key))B_EqG_methods.__ne__;
         protofooQ_HashableD_KeyG_methods.__init__ = protofooQ_HashableD_KeyD___init__;
-        protofooQ_HashableD_KeyG_methods.__eq__ = protofooQ_HashableD_KeyD___eq__;
         protofooQ_HashableD_KeyG_methods.hash = protofooQ_HashableD_KeyD_hash;
         protofooQ_HashableD_KeyG_methods.__serialize__ = protofooQ_HashableD_KeyD___serialize__;
         protofooQ_HashableD_KeyG_methods.__deserialize__ = protofooQ_HashableD_KeyD___deserialize__;
