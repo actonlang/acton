@@ -356,6 +356,7 @@ main = do
 
     describe "Pass 9: CodeGen" $ do
       testCodeGen env0 ["deact"]
+      testCodeGen env0 ["protofoo"]
 
 
 

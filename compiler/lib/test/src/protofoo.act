@@ -1,0 +1,15 @@
+class Key:
+    def __init__(self, x):
+        self.x = x
+
+extension Key(Hashable):
+    def __eq__(a, b) -> bool:
+        return a.x == b.x
+
+    def hash(self, hasher):
+        self.x.hash(hasher)
+
+actor main(env):
+    k = Key(42)
+    print(hash(k))
+    env.exit(0)

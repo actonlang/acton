@@ -1,0 +1,68 @@
+
+W_14: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
+
+W_194: __builtin__.Hashable[__builtin__.int] = __builtin__.HashableD_int()
+
+# recursive group:
+proc def L_1C_1cont (C_cont : $Cont[main], G_act : main, C_2res : None) -> $R:
+    return $R_CONT@[main](C_cont, G_act)
+class L_2Cont ($Cont[None], __builtin__.value):
+    @property
+    C_cont : $Cont[main]
+    @property
+    G_act : main
+    pure def __init__ (L_self : L_2Cont, C_cont : $Cont[main], G_act : main) -> None:
+        L_self.C_cont = C_cont
+        L_self.G_act = G_act
+        return None
+    proc def __call__ (L_self : L_2Cont, G_1 : None) -> $R:
+        C_cont: $Cont[main] = L_self.C_cont
+        G_act: main = L_self.G_act
+        return L_1C_1cont(C_cont, G_act, G_1)
+class L_3proc ($proc[(), None], __builtin__.value):
+    @property
+    G_act : main
+    @property
+    env : __builtin__.Env
+    pure def __init__ (L_self : L_3proc, G_act : main, env : __builtin__.Env) -> None:
+        L_self.G_act = G_act
+        L_self.env = env
+        return None
+    # recursive group:
+    proc def __call__ (L_self : L_3proc, C_cont : $Cont[None]) -> $R:
+        G_act: main = L_self.G_act
+        env: __builtin__.Env = L_self.env
+        return G_act.__init__(C_cont, env)
+    proc def __exec__ (L_self : L_3proc, C_cont : $Cont[None]) -> $R:
+        return L_self.__call__(C_cont)
+    # (recursive group)
+class Key (__builtin__.value):
+    @property
+    x : __builtin__.int
+    pure def __init__ (self : Key, x : __builtin__.int) -> None:
+        self.x = x
+        return None
+class HashableD_Key (__builtin__.Hashable[Key], __builtin__.Eq[Key], __builtin__.value):
+    pure def __init__ (W_self : HashableD_Key) -> None:
+        __builtin__.Hashable.__init__@[Key](W_self)
+        return None
+    pure def __eq__ (W_self : HashableD_Key, a : Key, b : Key) -> __builtin__.bool:
+        N_tmp: __builtin__.bool = W_14.__eq__(a.x, b.x)
+        return N_tmp
+    pure def hash (W_self : HashableD_Key, self : Key, hasher : __builtin__.hasher) -> None:
+        W_194.hash(self.x, hasher)
+        return None
+class main ($Actor, __builtin__.value):
+    @property
+    k : Key
+    proc def __init__ (self : main, C_cont : $Cont[None], env : __builtin__.Env) -> $R:
+        W_117: __builtin__.Hashable[Key] = HashableD_Key()
+        self.k = Key(42)
+        print@[(__builtin__.u64,)]((hash@[Key](W_117, self.k),), None, None, None, None)
+        (async env.exit)(0)
+        return $R_CONT@[None](C_cont, None)
+proc def mainG_newact (C_cont : $Cont[main], env : __builtin__.Env) -> $R:
+    G_act: main = $NEWACTOR@[main]()
+    $GCfinalizer@[main](G_act)
+    return $AWAIT@[None](L_2Cont(C_cont, G_act), $ASYNC@[None](G_act, L_3proc(G_act, env)))
+# (recursive group)
