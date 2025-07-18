@@ -1,0 +1,19 @@
+from deact import Apa
+
+actor Manager():
+    def create_decoder() -> StringDecoder:
+        decoder = StringDecoder(self.decode_callback)
+        return decoder
+
+    def create_apa() -> Apa:
+        apa = Apa()
+        return apa
+
+    def decode_callback(s: str) -> None:
+        pass
+
+actor main(env):
+    mgr = Manager()
+    decoder = mgr.create_decoder()
+    apa = mgr.create_apa()
+    env.exit(0)

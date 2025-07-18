@@ -338,7 +338,7 @@ main = do
       testNorm env0 ["deact"]
 
     describe "Pass 5: Deactorizer" $ do
-      testDeact env0 ["deact"]
+      testDeact env0 ["deact", "deact_from_import"]
 
     describe "Pass 6: CPS" $ do
       testCps env0 ["cps_volatiles"]

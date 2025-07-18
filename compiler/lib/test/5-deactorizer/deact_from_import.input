@@ -1,0 +1,21 @@
+from deact import Apa
+
+W_184: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+# recursive group:
+actor Manager ():
+    proc def create_decoder () -> __builtin__.StringDecoder:
+        decoder: __builtin__.StringDecoder = StringDecoder(self.decode_callback, None, None)
+        return decoder
+    proc def create_apa () -> deact.Apa:
+        apa: deact.Apa = Apa()
+        return apa
+    proc def decode_callback (s : __builtin__.str) -> None:
+        pass
+        return None
+actor main (env : __builtin__.Env):
+    mgr: Manager = Manager()
+    decoder: __builtin__.StringDecoder = mgr.create_decoder()
+    apa: deact.Apa = mgr.create_apa()
+    env.exit(W_184.__fromatom__(0))
+# (recursive group)

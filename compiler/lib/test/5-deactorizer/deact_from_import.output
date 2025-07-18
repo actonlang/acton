@@ -1,0 +1,46 @@
+from deact import Apa
+
+W_184: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+# recursive group:
+class Manager ($Actor, __builtin__.value):
+    proc def __init__ (self : Self) -> None:
+        pass
+    proc def create_decoderG_local (self : Self) -> __builtin__.StringDecoder:
+        decoder: __builtin__.StringDecoder = __builtin__.StringDecoderG_newact(self.decode_callback, None, None)
+        return decoder
+    proc def create_apaG_local (self : Self) -> deact.Apa:
+        apa: deact.Apa = deact.ApaG_newact()
+        return apa
+    proc def decode_callbackG_local (self : Self, s : __builtin__.str) -> None:
+        pass
+        return None
+    action def create_decoder (self : Self) -> __builtin__.StringDecoder:
+        return $ASYNCf@[__builtin__.StringDecoder](self, proc lambda: self.create_decoderG_local())
+    action def create_apa (self : Self) -> deact.Apa:
+        return $ASYNCf@[deact.Apa](self, proc lambda: self.create_apaG_local())
+    action def decode_callback (self : Self, s : __builtin__.str) -> None:
+        return $ASYNCf@[None](self, proc lambda: self.decode_callbackG_local(s))
+class main ($Actor, __builtin__.value):
+    @property
+    mgr : Manager
+    @property
+    decoder : __builtin__.StringDecoder
+    @property
+    apa : deact.Apa
+    proc def __init__ (self : Self, env : __builtin__.Env) -> None:
+        self.mgr = ManagerG_newact()
+        self.decoder = $AWAITf@[__builtin__.StringDecoder]((async self.mgr.create_decoder)())
+        self.apa = $AWAITf@[deact.Apa]((async self.mgr.create_apa)())
+        (async env.exit)(W_184.__fromatom__(0))
+proc def ManagerG_newact () -> Manager:
+    G_act: Manager = $NEWACTOR@[Manager]()
+    $GCfinalizer@[Manager](G_act)
+    $AWAITf@[None]($ASYNCf@[None](G_act, proc lambda: G_act.__init__()))
+    return G_act
+proc def mainG_newact (env : __builtin__.Env) -> main:
+    G_act: main = $NEWACTOR@[main]()
+    $GCfinalizer@[main](G_act)
+    $AWAITf@[None]($ASYNCf@[None](G_act, proc lambda: G_act.__init__(env)))
+    return G_act
+# (recursive group)

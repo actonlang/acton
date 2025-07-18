@@ -196,6 +196,11 @@ newactQName (QName m n)             = QName m (newactName n)
 newactQName (NoQ n)                 = NoQ (newactName n)
 newactQName (GName m n)             = GName m (newactName n)
 
+qnName :: QName -> Name
+qnName (NoQ n) = n
+qnName (QName _ n) = n
+qnName (GName _ n) = n
+
 addSelfPar p                        = PosPar selfKW (Just tSelf) Nothing p
 
 selfRef n                           = Dot l0 (Var l0 (NoQ selfKW)) n
@@ -227,7 +232,7 @@ instance Deact Expr where
       | n `elem` locals env         = return $ Dot l (Var l (NoQ selfKW)) n'
       where n'                      = if n `elem` wrapped env then localName n else n
     deact env (Var l n)
-      | isActor env n               = return $ Var l $ newactQName n
+      | isActor env n               = return $ Var l $ newactQName (unalias env n)
       | otherwise                   = return $ Var l n
     deact env (Async l e)           = Async l <$> deact env e
     deact env (Await l e)           = do e' <- deact env e
