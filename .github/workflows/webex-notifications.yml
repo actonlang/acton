@@ -1,0 +1,69 @@
+name: Webex Notifications
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+jobs:
+  notify-webex:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.merged == true
+
+    steps:
+    - name: Prepare notification message
+      id: message
+      run: |
+        PR_NUMBER="${{ github.event.pull_request.number }}"
+        PR_URL="${{ github.event.pull_request.html_url }}"
+        PR_TITLE="${{ github.event.pull_request.title }}"
+        PR_BODY="${{ github.event.pull_request.body }}"
+        PR_AUTHOR="${{ github.event.pull_request.user.login }}"
+        PR_MERGER="${{ github.event.pull_request.merged_by.login }}"
+
+        MESSAGE="### PR merged: ${PR_TITLE}"
+        MESSAGE="${MESSAGE}"$'\n'" [PR${PR_NUMBER}](${PR_URL}) by ${PR_AUTHOR} merged by ${PR_MERGER}"
+
+        if [ -n "$PR_BODY" ]; then
+          MESSAGE="${MESSAGE}"$'\n'$'\n''```'
+          MESSAGE="${MESSAGE}"$'\n'"${PR_BODY}"
+          MESSAGE="${MESSAGE}"$'\n''```'
+        fi
+
+        echo "message<<EOF" >> $GITHUB_OUTPUT
+        echo "$MESSAGE" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+    - name: Send Webex notification
+      env:
+        WEBEX_TOKEN: ${{ secrets.WEBEX_TOKEN }}
+        WEBEX_ROOM_ID: ${{ secrets.WEBEX_ROOM_ID }}
+      run: |
+        MESSAGE='${{ steps.message.outputs.message }}'
+
+        # Escape the message for JSON
+        ESCAPED_MESSAGE=$(echo "$MESSAGE" | jq -Rs .)
+
+        # Build JSON payload
+        JSON_PAYLOAD=$(jq -n \
+          --arg roomId "$WEBEX_ROOM_ID" \
+          --argjson markdown "$ESCAPED_MESSAGE" \
+          '{roomId: $roomId, markdown: $markdown}')
+
+        # Send message to Webex room using direct API call
+        RESPONSE=$(curl -s -X POST "https://webexapis.com/v1/messages" \
+          -H "Authorization: Bearer $WEBEX_TOKEN" \
+          -H "Content-Type: application/json" \
+          -d "$JSON_PAYLOAD" \
+          -w "\n%{http_code}")
+
+        HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+        BODY=$(echo "$RESPONSE" | head -n-1)
+
+        if [ "$HTTP_CODE" -ne 200 ]; then
+          echo "::error::Failed to send Webex notification. HTTP code: $HTTP_CODE"
+          echo "Response: $BODY"
+          exit 1
+        else
+          echo "✅ Webex notification sent successfully!"
+        fi
