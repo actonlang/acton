@@ -72,6 +72,17 @@ ERROR: [error Syntax error]: Empty format specifier after ':'
      •                           ╰╸ Empty format specifier after ':'
 ─────╯
 ```
+- Let `repr()` and `type()` accept optional values [#2373]
+  - `repr(None)` returns `"None"` and `type(None)` returns `"None"`
+  - More convenient than needing wrapper functions for optional values
+- Add webex PR merge notification [#2372]
+- Recognize projects by `Build.act` & `build.act.json` [#2358]
+  - Accept `Build.act` (new ideal), `build.act.json` (common), or `Acton.toml` (existing)
+  - Check for `src/` directory presence for robustness
+- Allow any expression after `after` [#2342]
+  - Previously limited to local functions, now supports method calls, actor methods, etc.
+  - `after 1.5: obj.method()` and `after 0.1: remote_actor.action()` are now valid
+- Add `utils/update-changelog.sh` script to update this file (`CHANGELOG.md`) using Claude - it's a good prompt!
 
 ### Changed
 - Use f-strings throughout standard library [#2297, #2290]
@@ -83,6 +94,14 @@ ERROR: [error Syntax error]: Empty format specifier after ':'
 - Switch to use new hash() function instead of __hash__ [#2255]
 - Remove __hash__ special method in favor of hash() builtin [#2304]
 - Rename `docs/acton-by-example` to `docs/acton-guide`
+- Adopt Zig optimization levels in Acton [#2362]
+  - Replace `--dev` flag with `--optimize` accepting: Debug, ReleaseSafe, ReleaseSmall, ReleaseFast
+  - Change default from ReleaseFast to Debug (matching Zig's default)
+  - `--dev` maps to Debug for backward compatibility, new `--release` maps to ReleaseFast
+- Simplify command-line parser structure [#2367]
+- Remove deprecated `--dev` option [#2366]
+- Revamp `actonc` debug / verbose mode [#2354]
+- Avoid writing `.ty` files in Types.reconstruct [#2357]
 
 ### Fixed
 - Fix string 'in' operator for substrings found at position 0 [#2280]
@@ -90,10 +109,38 @@ ERROR: [error Syntax error]: Empty format specifier after ':'
 - Ensure lambda-bound variables are in scope when comprehensions are translated [#2267]
 - Default print diff for testing.assertEqual failure [#2260]
 - Fix VERSION substitution in Homebrew PR creation [#2266]
+- Fix escaped braces in strings at position 0 [#2370]
+  - Escaped braces `{{` and `}}` at start of strings were incorrectly parsed as interpolation
+  - Now correctly converts `"{{a}}"` to `"{a}"` and handles mixed cases like `"{{hello}} {world}"`
+- Fix actor constructor alias resolution [#2365]
+  - Aliased actors from imports (`from worker import Worker`) now correctly generate module-prefixed constructors
+  - Fixes issues with builtin actors like `StringDecoder` and explicit aliased imports
+- Fix `.endswith()` for strings shorter than needle [#2348]
+  - Prevent out-of-bounds memory access when haystack is shorter than needle
+- Fix `acton version` command structure [#2363]
+- Avoid superfluous rebuilds for actonc [#2349]
+- Replace `$FORMAT` macro with C function [#2327]
+- Fix "2320" error [#2323]
+- Fix Hashable protocol implementation [#2255]
+  - Correct zig bytes definition
+  - Fix issues with bytes containing NUL character
 
 ### Documentation
 - Add ecosystem lift process documentation
 - Add Hashable protocol documentation to Acton Guide
+
+### Testing/CI
+- Support test discovery of actors [#2337]
+  - Recognize test actors without needing wrapper functions
+  - Compiler generates wrappers automatically for discovered test actors
+  - Remove old test types (sync/async/env test functions)
+- Test run MUSL executables on Linux [#2355]
+- Test http2, netclics, zlib, netcli applications [#2338, #2331, #2324]
+- Add self name check for actors [#2317]
+- Add more parser / syntax error test cases [#2308]
+- Stop testing Debian 10 [#2352]
+- Support multiple files for compiler testing framework [#2363]
+  - Accumulate environment from modules to support imports
 
 
 ## [0.26.0] - 2025-06-02
