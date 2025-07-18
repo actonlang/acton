@@ -24,7 +24,9 @@ B_str B_BaseExceptionD__name (B_BaseException self) {
 }
 
 B_str B_type(B_value a) {
-    return to$str(unmangle_name(a->$class->$GCINFO));
+    if (a)
+        return to$str(unmangle_name(a->$class->$GCINFO));
+    return to$str("None");
 }
 
 $R B_EnvD_getenvbG_local (B_Env self, $Cont C_cont, B_bytes name) {
