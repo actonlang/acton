@@ -151,6 +151,11 @@ main = do
         describe "Special characters and escaping" $ do
           -- Escaped braces
           testParseOutput "f\"something but {{{substituted}}}\"" "\"something but {%s}\" % str(substituted)"
+          testParseOutput "\"{{a}}\"" "\"{a}\""  -- Escaped braces should not trigger interpolation
+          testParseOutput "\"{{\"" "\"{\""  -- Just escaped opening brace
+          testParseOutput "\"}}\"" "\"}\""  -- Just escaped closing brace
+          testParseOutput "f\"{{hello}}\"" "\"{hello}\""  -- f-string with escaped braces
+          testParseOutput "\"{{hello}} {world}\"" "\"{hello} %s\" % str(world)"  -- Mix of escaped and interpolated
 
           -- Escaped quotes
           testParseOutput "f\"hello \\\"thing\\\"\"" "\"hello \\\"thing\\\"\""

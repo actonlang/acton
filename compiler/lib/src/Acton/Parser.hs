@@ -490,8 +490,17 @@ parseInterpolatedString :: String -> String -> Parser StringPart -> Parser S.Exp
 parseInterpolatedString startQuote endQuote textPartParser = lexeme $ do
   startLoc <- getOffset
   try $ string startQuote
-  parts <- many (try exprPart <|> textPartParser)
-  (string endQuote <?> ("closing " ++ endQuote)) <|> do
+  let stringPart = choice [
+          -- Escaped braces - handle these BEFORE expression parsing
+          try (string "{{" >> return (TextPart "{")),
+          try (string "}}" >> return (TextPart "}")),
+          -- Expression parts (now without the notFollowedBy check)
+          try exprPart,
+          -- Regular text
+          textPartParser
+        ]
+  parts <- many stringPart
+  string endQuote <|> do
     -- If we couldn't parse the closing quote, check why
     currentPos <- getOffset
     nextChar <- lookAhead (optional anySingle)
@@ -527,10 +536,6 @@ parseInterpolatedString startQuote endQuote textPartParser = lexeme $ do
 parseTextPart :: String -> Bool -> Bool -> Parser StringPart
 parseTextPart quoteStr isTriple handleNewlines = do
   chunks <- some $ choice [
-      -- Escaped braces for interpolation
-      try (string "{{" >> return "{"),
-      try (string "}}" >> return "}"),
-
       -- Use existing escape sequence parsers with better error handling
       try (char '\\' >> choice [
           -- Escaped quotes - handle quote-specific escaping

@@ -1,0 +1,38 @@
+
+
+def test_nested_interp_string():
+    a = "aaa>{', '.join(["{"{a:>5}" if a != 'z' else ('Z' + str(len(a))):<10}" for a in ['a', 'b', 'c']])}<bbb"
+    print(a)
+    return a == "aaa>    a     ,     b     ,     c     <bbb"
+
+def test_escaped_start_brace():
+    a = "{{"
+    print(a)
+    return a == r"{"
+
+def test_escaped_end_brace():
+    a = "}}"
+    print(a)
+    return a == r"}"
+
+def test_escaped_brace():
+    a = "{{a}}"
+    print(a)
+    return a == r"{a}"
+
+tests = {
+    "test_nested_interp_string": test_nested_interp_string,
+    "test_escaped_start_brace": test_escaped_start_brace,
+    "test_escaped_end_brace": test_escaped_end_brace,
+    "test_escaped_brace": test_escaped_brace,
+    }
+
+actor main(env):
+    failed = False
+    for name, t in tests.items():
+        print("== test: {name}")
+        if not t():
+            print("-- FAILED test: {name}")
+            failed = True
+        print()
+    env.exit(1 if failed else 0)
