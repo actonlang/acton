@@ -958,8 +958,10 @@ def print(*args, sep: str=" ", end: str="\n", err: bool=False, flush: bool=False
     """
     NotImplemented
 
-def repr(x : value):
-    return x.__repr__()
+def repr(x: ?value):
+    if x is not None:
+        return x.__repr__()
+    return "None"
 
 def reversed(seq : Sequence[A]) -> Iterator[A]:
     return seq.__reversed__()
@@ -982,7 +984,7 @@ def gcd(a : int, b : int) -> int:
 def xgcd(a : int, b : int) -> (int, int, int):
     NotImplemented
 
-def type(a: value) -> str:
+def type(a: ?value) -> str:
     """Get the name of the type of something as a string
 
     Do not use this for meta-programming. Use isinstance().

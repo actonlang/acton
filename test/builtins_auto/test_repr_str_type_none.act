@@ -1,0 +1,28 @@
+
+def test_repr():
+    print(repr(None))
+    return repr(None) == "None"
+
+def test_str():
+    print(str(None))
+    return str(None) == "None"
+
+def test_type():
+    print(type(None))
+    return type(None) == "None"
+
+tests = {
+    "test_repr": test_type,
+    "test_str": test_str,
+    "test_type": test_type,
+    }
+
+actor main(env):
+    failed = False
+    for name, t in tests.items():
+        print("== test: {name}")
+        if not t():
+            print("-- FAILED test: {name}")
+            failed = True
+        print()
+    env.exit(1 if failed else 0)
