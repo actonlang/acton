@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+
+claude --dangerously-skip-permissions 'Update CHANGELOG.md based on the git log. Review git commits from the latest versioned release git tag and make sure they are covered by an entry in the changelog. If it is not covered, check `git log -U` for the particular commit in order to understand what was done and why, then write an entry for CHANGELOG.md. Use the keepachangelog.com format. Keep the same tone and style already used in CHANGELOG.md - we want a brief, concice, technical no-nonsense tone. It is OK to intermingle examples - this is appreciated by users who can immediately understand the effects of a change'
