@@ -99,7 +99,7 @@ main = do
                                      _ -> printErrorAndExit ("Unknown filetype: " ++ head nms)
 
 defaultOpts   = C.CompileOptions False False False False False False False False False False False False
-                                 False False False False False False C.Debug False False False False False
+                                 False False False False False False C.Debug False False False False
                                  "" "" "" C.defTarget "" False []
 
 -- Apply global options to compile options
@@ -275,7 +275,7 @@ buildFile gopts opts file = do
         -- project and may run multiple sub-compilers concurrently
         iff (not(C.quiet gopts)) $ do
           putStrLn("Building file " ++ file ++ " in project " ++ relProj)
-        if (C.sub opts)
+        if (C.sub gopts)
           then do
             compileFiles gopts opts [file]
           else do

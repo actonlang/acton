@@ -27,12 +27,13 @@ data ColorWhen = Auto | Always | Never deriving (Show, Eq)
 data OptimizeMode = Debug | ReleaseSafe | ReleaseSmall | ReleaseFast deriving (Show, Eq)
 
 data GlobalOptions = GlobalOptions {
+                        color        :: ColorWhen,
+                        quiet        :: Bool,
+                        sub          :: Bool,
+                        timing       :: Bool,
                         tty          :: Bool,
                         verbose      :: Bool,
-                        verboseZig   :: Bool,
-                        quiet        :: Bool,
-                        timing       :: Bool,
-                        color        :: ColorWhen
+                        verboseZig   :: Bool
                      } deriving Show
 
 data Command        = New NewOptions
@@ -68,7 +69,6 @@ data CompileOptions   = CompileOptions {
                          cpedantic   :: Bool,
                          optimize    :: OptimizeMode,
                          listimports :: Bool,
-                         sub         :: Bool,
                          only_build  :: Bool,
                          skip_build  :: Bool,
                          no_threads  :: Bool,
@@ -114,17 +114,18 @@ cmdLineParser       = hsubparser
 
 globalOptions :: Parser GlobalOptions
 globalOptions = GlobalOptions
-    <$> switch (long "tty"         <> help "Act as if run from interactive TTY")
-    <*> switch (long "verbose"     <> help "Verbose output")
-    <*> switch (long "verbose-zig" <> help "Verbose Zig output")
-    <*> switch (long "quiet"       <> help "Don't print stuff")
-    <*> switch (long "timing"      <> help "Print timing information")
-    <*> option colorReader
+    <$> option colorReader
         (long "color"
          <> metavar "WHEN"
          <> value Auto
          <> help "Use colored output (WHEN: auto, always, never)"
         )
+    <*> switch (long "quiet"       <> help "Don't print stuff")
+    <*> switch (long "sub")
+    <*> switch (long "timing"      <> help "Print timing information")
+    <*> switch (long "tty"         <> help "Act as if run from interactive TTY")
+    <*> switch (long "verbose"     <> help "Verbose output")
+    <*> switch (long "verbose-zig" <> help "Verbose Zig output")
   where
     colorReader :: ReadM ColorWhen
     colorReader = eitherReader $ \s ->
@@ -174,7 +175,6 @@ compileOptions = CompileOptions
         <*> switch (long "cpedantic"    <> help "Pedantic C compilation with -Werror")
         <*> optimizeOption
         <*> switch (long "list-imports" <> help "List module imports")
-        <*> switch (long "sub")
         <*> switch (long "only-build"   <> help "Only perform final build of .c files, do not compile .act files")
         <*> switch (long "skip-build"   <> help "Skip final bulid of .c files")
         <*> switch (long "no-threads"   <> help "Don't use threads")
