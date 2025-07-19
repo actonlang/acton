@@ -62,89 +62,117 @@ def test15(x, **kwargs):
 def test16(x, *args, y, **kwargs):
     return (args, kwargs)
 
-actor main(env):
-    out1 = test1('a', 'c').__str__()
-    out2 = test2('c', 'a', ('b', e='e')).__str__()
-    out3 = test3('c', ('b', x='x')).__str__()
-    out4 = test4('c', 'a', ('b', e='e')).__str__()
-    out5 = test5('c', 'a', ('b', e='e')).__str__()
-    out6 = test6('c', 'a', e='e', b='b', f='f').__str__()
-    out7 = test7('c', 'a', 'd', b='b', e='e').__str__()
-    out8 = test8('c', 'a', e='e', b='b').__str__()
-    out9 = test9('c', 'a', 'd', b='b').__str__()
-    out10 = test10('c', 'a', 'd', b='b', e='e').__str__()
-    out11 = test11('c', 'a', d='d').__str__()
-    out12 = test12('c', 'a', 'd').__str__()
-    out13 = test13('c', 'a', 'd', b='b').__str__()
-    out14 = test14(None, 'a', 3.5)
-    out15 = test15(None, a='a', b=3.5)
-    out16, out17 = test16(None, 18, '19', a='a', y=3, b=3.5)
-    
-#    print(out1)
-#    print(out2)
-#    print(out3)
-#    print(out4)
-#    print(out5)
-#    print(out6)
-#    print(out7)
-#    print(out8)
-#    print(out9)
-#    print(out10)
-#    print(out11)
-#    print(out12)
-#    print(out13)
 
-    if out1 != "('a', 'c')":
-        print("Bad 1:", out1)
-        env.exit(1)
-    if out2 != "('a', 'b', 'c', 'e')":
-        print("Bad 2:", out2)
-        env.exit(1)
-    if out3 != "('c', ('b', ('x')))":
-        print("Bad 3:", out3)
-        env.exit(1)
-    if out4 != "('a', 'b', 'c', ('e'))":
-        print("Bad 4:", out4)
-        env.exit(1)
-    if out5 != "('a', 'b', 'c', 'e', ())":
-        print("Bad 5:", out5)
-        env.exit(1)
-    if out6 != "('a', 'b', 'c', 'e', ('f'))":
-        print("Bad 6:", out6)
-        env.exit(1)
-    if out7 != "('a', 'b', 'c', 'e', ('d', ()))":
-        print("Bad 7:", out7)
-        env.exit(1)
-    if out8 != "('a', 'c', ('e', 'b'))":
-        print("Bad 8:", out8)
-        env.exit(1)
-    if out9 != "('a', 'c', ('d', ('b')))":
-        print("Bad 9:", out9)
-        env.exit(1)
-    if out10 != "('a', 'c', ('d', ('b', 'e')))":
-        print("Bad 10:", out10)
-        env.exit(1)
-    if out11 != "('a', 'c', ('d', ()))":
-        print("Bad 11:", out11)
-        env.exit(1)
-    if out12 != "('a', ('c', 'd'))":
-        print("Bad 12:", out12)
-        env.exit(1)
-    if out13 != "('a', ('c', 'd', ('b')))":
-        print("Bad 13:", out13)
-        env.exit(1)
-    if out14.0 != 'a' or out14.1 != 3.5:
-        print("Bad 14:", out14)
-        env.exit(1)
-    if out15.a != 'a' or out15.b != 3.5:
-        print("Bad 15:", out15)
-        env.exit(1)
-    if out16.0 != 18 or out16.1 != '19':
-        print("Bad 16:", out16)
-        env.exit(1)
-    if out17.a != 'a' or out17.b != 3.5:
-        print("Bad 17:", out17)
-        env.exit(1)
-    
-    print("All is well")
-    env.exit(0)
+def test_row_type_1():
+    out = test1('a', 'c').__str__()
+    print(out)
+    return out == '("a", "c")'
+
+def test_row_type_2():
+    out = test2('c', 'a', ('b', e='e')).__str__()
+    print(out)
+    return out == '("a", "b", "c", "e")'
+
+def test_row_type_3():
+    out = test3('c', ('b', x='x')).__str__()
+    print(out)
+    return out == '("c", ("b", ("x")))'
+
+def test_row_type_4():
+    out = test4('c', 'a', ('b', e='e')).__str__()
+    print(out)
+    return out == '("a", "b", "c", ("e"))'
+
+def test_row_type_5():
+    out = test5('c', 'a', ('b', e='e')).__str__()
+    print(out)
+    return out == '("a", "b", "c", "e", ())'
+
+def test_row_type_6():
+    out = test6('c', 'a', e='e', b='b', f='f').__str__()
+    print(out)
+    return out == '("a", "b", "c", "e", ("f"))'
+
+def test_row_type_7():
+    out = test7('c', 'a', 'd', b='b', e='e').__str__()
+    print(out)
+    return out == '("a", "b", "c", "e", ("d", ()))'
+
+def test_row_type_8():
+    out = test8('c', 'a', e='e', b='b').__str__()
+    print(out)
+    return out == '("a", "c", ("e", "b"))'
+
+def test_row_type_9():
+    out = test9('c', 'a', 'd', b='b').__str__()
+    print(out)
+    return out == '("a", "c", ("d", ("b")))'
+
+def test_row_type_10():
+    out = test10('c', 'a', 'd', b='b', e='e').__str__()
+    print(out)
+    return out == '("a", "c", ("d", ("b", "e")))'
+
+def test_row_type_11():
+    out = test11('c', 'a', d='d').__str__()
+    print(out)
+    return out == '("a", "c", ("d", ()))'
+
+def test_row_type_12():
+    out = test12('c', 'a', 'd').__str__()
+    print(out)
+    return out == '("a", ("c", "d"))'
+
+def test_row_type_13():
+    out = test13('c', 'a', 'd', b='b').__str__()
+    print(out)
+    return out == '("a", ("c", "d", ("b")))'
+
+def test_varargs_14():
+    out = test14(None, 'a', 3.5)
+    print(out)
+    return out.0 == "a" and out.1 == 3.5
+
+def test_kwargs_15():
+    out = test15(None, a='a', b=3.5)
+    print(out)
+    return out.a == "a" and out.b == 3.5
+
+def test_varargs_kwargs_16():
+    args, kwargs = test16(None, 18, '19', a='a', y=3, b=3.5)
+    print("args:", args)
+    print("kwargs:", kwargs)
+    return args.0 == 18 and args.1 == "19" and kwargs.a == "a" and kwargs.b == 3.5
+
+tests = {
+    "test_row_type_1": test_row_type_1,
+    "test_row_type_2": test_row_type_2,
+    "test_row_type_3": test_row_type_3,
+    "test_row_type_4": test_row_type_4,
+    "test_row_type_5": test_row_type_5,
+    "test_row_type_6": test_row_type_6,
+    "test_row_type_7": test_row_type_7,
+    "test_row_type_8": test_row_type_8,
+    "test_row_type_9": test_row_type_9,
+    "test_row_type_10": test_row_type_10,
+    "test_row_type_11": test_row_type_11,
+    "test_row_type_12": test_row_type_12,
+    "test_row_type_13": test_row_type_13,
+    "test_varargs_14": test_varargs_14,
+    "test_kwargs_15": test_kwargs_15,
+    "test_varargs_kwargs_16": test_varargs_kwargs_16,
+}
+
+actor main(env):
+    failed = 0
+    for name, t in tests.items():
+        print("== test: " + name)
+        if not t():
+            print("-- FAILED test: " + name)
+            failed += 1
+        print()
+    if failed == 0:
+        print("All tests OK!")
+    else:
+        print("{failed} tests failed...")
+    env.exit(max([0, min([failed, 1])]))

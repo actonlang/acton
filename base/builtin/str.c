@@ -380,12 +380,12 @@ static int rbmh( unsigned char *text, unsigned char *pattern, int tbytes, int pb
 }
 
 struct byte_counts {
-    int printable, squotes, dquotes, escaped, non_printable, non_ascii;
+    int printable, squotes, dquotes, escaped, non_printable, non_ascii, braces;
 };
         
 
 struct byte_counts byte_count(unsigned char *s, int len) {
-   struct byte_counts res = {0,0,0,0,0,0};
+   struct byte_counts res = {0,0,0,0,0,0,0};
     unsigned char c;
     for (int i=0; i<len; i++) {
         c = s[i];
@@ -397,6 +397,8 @@ struct byte_counts byte_count(unsigned char *s, int len) {
             res.squotes++;
         else if (c=='"')
             res.dquotes++;
+        else if (c=='{' || c=='}')
+            res.braces++;
         else if (c<127)
             res.printable++;
         else
@@ -405,11 +407,25 @@ struct byte_counts byte_count(unsigned char *s, int len) {
     return res;
 }
 
-void escape_str(unsigned char *out, unsigned char *in, int outlen, int inlen, int max_esc, bool esc_squote) {
+void escape_str(unsigned char *out, unsigned char *in, int outlen, int inlen, int max_esc, bool esc_squote, bool esc_dquote, bool esc_braces, bool esc_triple_dquote) {
     unsigned char *hexdigits = (unsigned char *)"0123456789abcdef";
     unsigned char *p = out;
     for (int i=0; i<inlen; i++) {
         unsigned char c = in[i];
+
+        // Handle """ sequences if requested
+        if (esc_triple_dquote && i + 2 < inlen && c == '"' && in[i+1] == '"' && in[i+2] == '"') {
+            // Escape all three quotes: """ -> \"\"\"
+            *p = '\\'; p++;
+            *p = '"'; p++;
+            *p = '\\'; p++;
+            *p = '"'; p++;
+            *p = '\\'; p++;
+            *p = '"'; p++;
+            i += 2;  // Skip the other two quotes
+            continue;
+        }
+
         if ((c < 32 && c != '\t' && c != '\r' && c != '\n') || ( c > 126 && c <= max_esc)) {
             *p = '\\'; p++;
             *p = 'x'; p++;
@@ -426,6 +442,24 @@ void escape_str(unsigned char *out, unsigned char *in, int outlen, int inlen, in
                     *p = '\\'; p++;
                 }
                 *p = '\''; p++;
+                break;
+            case '"':
+                if (esc_dquote) {
+                    *p = '\\'; p++;
+                }
+                *p = '"'; p++;
+                break;
+            case '{':
+                if (esc_braces) {
+                    *p = '{'; p++;
+                }
+                *p = '{'; p++;
+                break;
+            case '}':
+                if (esc_braces) {
+                    *p = '}'; p++;
+                }
+                *p = '}'; p++;
                 break;
             case '\t':
                 *p = '\\'; p++;
@@ -480,17 +514,56 @@ B_str B_strD___str__(B_str s) {
 
 B_str B_strD___repr__(B_str s) {
     struct byte_counts bs = byte_count(s->str, s->nbytes);
-    int newbytes = 2+bs.escaped+3*bs.non_printable+(bs.squotes>0 && bs.dquotes>0 ? bs.squotes : 0);
-    B_str res;
-    NEW_UNFILLED_STR(res,s->nchars+newbytes, s->nbytes+newbytes);
-    escape_str(res->str+1,s->str,res->nbytes-1,s->nbytes,127,bs.squotes>0 && bs.dquotes>0);
-    if (bs.dquotes==0 && bs.squotes>0) {
-        res->str[0] = '"';
-        res->str[res->nbytes-1] = '"';
+    // We aim to produce a simple, readable representation of the string
+    // - Default to single quotes unless string contains single quotes
+    // - Use double quotes if string contains single quotes
+    // - Use triple quotes (""") if both quote types are present
+    // - If """ appears in the content, escape it as \"\"\"
+
+    bool use_triple_quotes = (bs.dquotes > 0 && bs.squotes > 0); // Use triple quotes if both types are present
+    bool use_double_quotes = false;  // Default to single quotes
+
+    if (use_triple_quotes) {
+        // Always use """ for triple quotes
+        use_double_quotes = true;
     } else {
-        res->str[0] = '\'';
-        res->str[res->nbytes-1] = '\'';
-    }        
+        // Simple case: use single quotes unless string contains single quotes
+        use_double_quotes = (bs.squotes > 0);
+    }
+
+    int quotes_per_side = use_triple_quotes ? 3 : 1;
+    int quote_bytes = quotes_per_side * 2;
+
+    // Count how many """ sequences need escaping (only relevant if using """ delimiters)
+    int escape_triple_bytes = 0;
+    if (use_triple_quotes) {
+        unsigned char *p = s->str;
+        int remaining = s->nbytes;
+        int pos;
+        while ((pos = bmh(p, (unsigned char*)"\"\"\"", remaining, 3)) >= 0) {
+            escape_triple_bytes += 3;  // Each quote needs a backslash: """ -> \"\"\"
+            p += pos + 3;
+            remaining = s->nbytes - (p - s->str);
+        }
+    }
+
+    int newbytes = quote_bytes + bs.escaped + 3*bs.non_printable + bs.braces + escape_triple_bytes;
+
+    B_str res;
+    NEW_UNFILLED_STR(res, s->nchars + newbytes, s->nbytes + newbytes);
+
+    char quote_char = use_double_quotes ? '"' : '\'';
+
+    // Add opening quotes
+    for (int i = 0; i < quotes_per_side; i++)
+        res->str[i] = quote_char;
+
+    escape_str(res->str + quotes_per_side, s->str, res->nbytes - quote_bytes, s->nbytes, 127, false, false, true, use_triple_quotes);
+
+    // Add closing quotes
+    for (int i = 0; i < quotes_per_side; i++)
+        res->str[res->nbytes - quotes_per_side + i] = quote_char;
+
     return res;
 }
 
@@ -1537,18 +1610,20 @@ B_bool B_bytearrayD___bool__(B_bytearray s) {
 
 B_str B_bytearrayD___str__(B_bytearray s) {
     struct byte_counts bs = byte_count(s->str, s->nbytes);
-    int newbytes = 14+bs.escaped+3*bs.non_printable+(bs.squotes>0 && bs.dquotes>0 ? bs.squotes : 0)+3*bs.non_ascii;
+    bool use_single_quotes = !(bs.dquotes==0 && bs.squotes>0);
+    int escaped_quotes = use_single_quotes ? bs.dquotes : bs.squotes;
+    int newbytes = 14+bs.escaped+3*bs.non_printable+escaped_quotes+3*bs.non_ascii;
     B_str res;
     int nbytes = s->nbytes+newbytes;
     NEW_UNFILLED_STR(res,nbytes,nbytes);
-    escape_str(res->str+12,s->str,res->nbytes-12,s->nbytes,255,bs.squotes>0 && bs.dquotes>0);
-    if (bs.dquotes==0 && bs.squotes>0) {
-        res->str[11] = '"';
-        res->str[res->nbytes-2] = '"';
-    } else {
+    escape_str(res->str+12,s->str,res->nbytes-12,s->nbytes,255,!use_single_quotes,use_single_quotes,false,false);
+    if (use_single_quotes) {
         res->str[11] = '\'';
         res->str[res->nbytes-2] = '\'';
-    }        
+    } else {
+        res->str[11] = '"';
+        res->str[res->nbytes-2] = '"';
+    }
     memcpy(res->str, "bytearray(b",11);
     res->str[res->nbytes-1] = ')';
     return res;
@@ -2634,18 +2709,20 @@ B_bool B_bytesD___bool__(B_bytes s) {
 
 B_str B_bytesD___str__(B_bytes s) {
     struct byte_counts bs = byte_count(s->str, s->nbytes);
-    int newbytes = 3+bs.escaped+3*bs.non_printable+(bs.dquotes>0 && bs.dquotes>0 ? bs.squotes : 0)+3*bs.non_ascii;
+    bool use_single_quotes = !(bs.dquotes==0 && bs.squotes>0);
+    int escaped_quotes = use_single_quotes ? bs.dquotes : bs.squotes;
+    int newbytes = 3+bs.escaped+3*bs.non_printable+escaped_quotes+3*bs.non_ascii;
     B_str res;
     int nbytes = s->nbytes+newbytes;
     NEW_UNFILLED_STR(res,nbytes,nbytes);
-    escape_str(res->str+2,s->str,res->nbytes-2,s->nbytes,255,bs.squotes>0 && bs.dquotes>0);
-    if (bs.dquotes==0 && bs.squotes>0) {
-        res->str[1] = '"';
-        res->str[res->nbytes-1] = '"';
-    } else {
+    escape_str(res->str+2,s->str,res->nbytes-2,s->nbytes,255,!use_single_quotes,use_single_quotes,false,false);
+    if (use_single_quotes) {
         res->str[1] = '\'';
         res->str[res->nbytes-1] = '\'';
-    }        
+    } else {
+        res->str[1] = '"';
+        res->str[res->nbytes-1] = '"';
+    }
     res->str[0] = 'b';
     return res;
 }
@@ -3576,20 +3653,22 @@ B_str B_ascii(B_value v) {
     B_str s  = v->$class->__str__(v);
     struct byte_counts bs = byte_count(s->str, s->nbytes);
     //    printf("%d %d %d %d %d %d\n",bs.escaped,bs.squotes,bs.dquotes,bs.printable,bs.non_printable,bs.non_ascii);
-    int newbytes = 2+bs.escaped+3*bs.non_printable+(bs.squotes>0 && bs.dquotes>0 ? bs.squotes : 0)+3*bs.non_ascii;
+    bool use_single_quotes = !(bs.dquotes==0 && bs.squotes>0);
+    int escaped_quotes = use_single_quotes ? bs.dquotes : bs.squotes;
+    int newbytes = 2+bs.escaped+3*bs.non_printable+escaped_quotes+3*bs.non_ascii;
     B_str res;
     NEW_UNFILLED_STR(res,s->nchars+newbytes,s->nbytes+newbytes);
-    escape_str(res->str+1,s->str,res->nbytes-1,s->nbytes,255,bs.squotes>0 && bs.dquotes>0);
-    if (bs.dquotes==0 && bs.squotes>0) {
-        res->str[0] = '"';
-        res->str[res->nbytes-1] = '"';
-    } else {
+    escape_str(res->str+1,s->str,res->nbytes-1,s->nbytes,255,!use_single_quotes,use_single_quotes,false,false);
+    if (use_single_quotes) {
         res->str[0] = '\'';
         res->str[res->nbytes-1] = '\'';
-    }        
+    } else {
+        res->str[0] = '"';
+        res->str[res->nbytes-1] = '"';
+    }
     return res;
 }
- 
+
 B_str B_bin(B_Integral wit, $WORD n) {
     long v = from$int(wit->$class->__int__(wit,n));
     int sign = v<0;

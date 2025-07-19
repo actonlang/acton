@@ -1,0 +1,280 @@
+"""Test string repr handling of quotes"""
+
+def test_basic_repr():
+    s = "Hello"
+    exp = r"'Hello'"
+    print(repr(s))
+    print(exp)
+    return repr(s) == exp
+
+def test_single_quotes():
+    s = "Hello 'world'"
+    # When string contains single quotes, uses double quotes (no escaping needed)
+    exp = r'''"Hello 'world'"'''
+    print(repr(s))
+    print(exp)
+    return repr(s) == exp
+
+def test_double_quotes():
+    s = 'Hello "world"'
+    # When string contains double quotes, repr uses single quotes (no escaping needed)
+    exp = r"""'Hello "world"'"""
+    print(repr(s))
+    print(exp)
+    return repr(s) == exp
+
+def test_both_quotes():
+    s = '''Hello "world" and 'universe''''
+    # When string contains both quotes, uses triple quotes
+    exp = r'''"""Hello "world" and 'universe'"""'''
+    print(repr(s))
+    print(exp)
+    return repr(s) == exp
+
+def test_starts_ends_with_quotes():
+    s = '"quoted"'
+    exp = r"""'"quoted"'"""
+    print(repr(s))
+    print(exp)
+    return repr(s) == exp
+
+def test_escaped_characters():
+    s = "Hello\nworld\ttab"
+    exp = r"'Hello\nworld\ttab'"
+    print(repr(s))
+    print(exp)
+    return repr(s) == exp
+
+def test_empty_string():
+    s = ""
+    exp = r"''"
+    print(repr(s))
+    print(exp)
+    return repr(s) == exp
+
+def test_backslashes():
+    s = "Path\\to\\file"
+    exp = r"'Path\\to\\file'"
+    print(repr(s))
+    print(exp)
+    return repr(s) == exp
+
+def test_single_open_brace():
+    s = "{{"
+    exp = r"'{{'"
+    print(repr(s))
+    print(exp)
+    return repr(s) == exp
+
+def test_single_close_brace():
+    s = "}}"
+    exp = r"'}}'"
+    print(repr(s))
+    print(exp)
+    return repr(s) == exp
+
+def test_basic_braces():
+    s = "foo {{ bar }}"
+    exp = r"'foo {{ bar }}'"
+    print(repr(s))
+    print(exp)
+    return repr(s) == exp
+
+def test_empty_braces():
+    s = "{{}}"
+    exp = r"'{{}}'"
+    print(repr(s))
+    print(exp)
+    return repr(s) == exp
+
+def test_nested_braces():
+    s = "{{{{{{}}}}}}"
+    exp = r"'{{{{{{}}}}}}'"
+    print(repr(s))
+    print(exp)
+    return repr(s) == exp
+
+def test_mixed_quotes_and_braces():
+    s = 'He said "Hello {{world}}"!'
+    exp = r"""'He said "Hello {{world}}"!'"""
+    print(repr(s))
+    print(exp)
+    return repr(s) == exp
+
+def test_json_like_content():
+    s = 'JSON: {{"key": "value"}}'
+    exp = r"""'JSON: {{"key": "value"}}'"""
+    print(repr(s))
+    print(exp)
+    return repr(s) == exp
+
+def test_string_with_single_quotes_and_braces():
+    s = "foo's {{ bar }}"
+    exp = r'''"foo's {{ bar }}"'''
+    print(repr(s))
+    print(exp)
+    return repr(s) == exp
+
+def test_multiline_string():
+    s = """Hello
+world
+this is a test"""
+    exp = r"'Hello\nworld\nthis is a test'"
+    print(repr(s))
+    print(exp)
+    return repr(s) == exp
+
+def test_multiline_with_quotes():
+    s = """He said "Hello"
+and she replied 'Hi'"""
+    # When string contains both quote types, repr() produces triple-quoted string
+    exp = '''"""He said \"Hello\"\\nand she replied 'Hi'"""'''
+    print(repr(s))
+    print(exp)
+    return repr(s) == exp
+
+def test_multiline_with_braces():
+    s = """Line 1 {{
+Line 2 }}
+Line 3 {{}}"""
+    exp = r"'Line 1 {{\nLine 2 }}\nLine 3 {{}}'"
+    print(repr(s))
+    print(exp)
+    return repr(s) == exp
+
+def test_string_ending_with_double_quote():
+    s = 'String ending with"'
+    # Should use single quotes since it contains double quote
+    exp = r"""'String ending with"'"""
+    print(repr(s))
+    print(exp)
+    return repr(s) == exp
+
+def test_string_ending_with_single_quote():
+    s = "String ending with'"
+    # Should use double quotes since it contains single quote
+    exp = r'''"String ending with'"'''
+    print(repr(s))
+    print(exp)
+    return repr(s) == exp
+
+def test_both_quotes_ending_with_double_quote():
+    s = '''Both 'quotes' and ends with"'''
+    exp = '''"""Both 'quotes' and ends with""""'''
+    print(repr(s))
+    print(exp)
+    return repr(s) == exp
+
+def test_both_quotes_ending_with_single_quote():
+    s = "Both \"quotes\" and ends with'"
+    exp = r'''"""Both "quotes" and ends with'"""'''
+    print(repr(s))
+    print(exp)
+    return repr(s) == exp
+
+def test_triple_quote_starting_with_quote():
+    # String starting with quotes
+    s = '''"Starting with double and has 'single''''
+    exp = r'''""""Starting with double and has 'single'"""'''
+    print(repr(s))
+    print(exp)
+    return repr(s) == exp
+
+def test_triple_quote_many_quotes():
+    s = '''It's a "test" with 'many' "quotes" everywhere'''
+    exp = r'''"""It's a "test" with 'many' "quotes" everywhere"""'''
+    print(repr(s))
+    print(exp)
+    return repr(s) == exp
+
+def test_triple_quotes_can_end_with_quote():
+    # With new parser, triple quotes can handle strings ending with same quote
+    s = '''String with 'both' "quotes" ending with"'''
+    # Uses """ and adds extra quote (4 total) since string ends with "
+    exp_repr = '"""String with \'both\' "quotes" ending with""""'
+    print(repr(s))
+    print(exp_repr)
+    return repr(s) == exp_repr
+
+def test_triple_quotes_ending_with_two_quotes():
+    # String ending with two quotes
+    s = '''Text with 'quotes' ending with""'''
+    # Uses """ with 5 quotes total at the end (new parser feature)
+    exp_repr = '"""Text with \'quotes\' ending with"""""'
+    print(repr(s))
+    print(exp_repr)
+    return repr(s) == exp_repr
+
+def test_string_with_three_double_quotes():
+    # String containing """ should still work
+    s = 'Text with """ inside'
+    exp = "'Text with \"\"\" inside'"  # Uses single quotes
+    print(repr(s))
+    print(exp)
+    return repr(s) == exp
+
+def test_string_with_three_single_quotes():
+    # String containing ''' should still work
+    s = "Text with ''' inside"
+    exp = "\"Text with ''' inside\""  # Uses double quotes
+    print(repr(s))
+    print(exp)
+    return repr(s) == exp
+
+def test_string_with_both_triple_quotes():
+    # Special case: string contains both """ and '''
+    s = 'Has both """ and \'\'\' inside'
+    # Must escape all three quotes: """ -> \"\"\"
+    exp = '''"""Has both \\"\\"\\" and \'\'\' inside"""'''
+    print(repr(s))
+    print(exp)
+    return repr(s) == exp
+
+tests = {
+    "test_basic_repr": test_basic_repr,
+    "test_single_quotes": test_single_quotes,
+    "test_double_quotes": test_double_quotes,
+    "test_both_quotes": test_both_quotes,
+    "test_starts_ends_with_quotes": test_starts_ends_with_quotes,
+    "test_escaped_characters": test_escaped_characters,
+    "test_empty_string": test_empty_string,
+    "test_backslashes": test_backslashes,
+    "test_single_open_brace": test_single_open_brace,
+    "test_single_close_brace": test_single_close_brace,
+    "test_basic_braces": test_basic_braces,
+    "test_empty_braces": test_empty_braces,
+    "test_nested_braces": test_nested_braces,
+    "test_mixed_quotes_and_braces": test_mixed_quotes_and_braces,
+    "test_json_like_content": test_json_like_content,
+    "test_string_with_single_quotes_and_braces": test_string_with_single_quotes_and_braces,
+    "test_multiline_string": test_multiline_string,
+    "test_multiline_with_quotes": test_multiline_with_quotes,
+    "test_multiline_with_braces": test_multiline_with_braces,
+    "test_string_ending_with_double_quote": test_string_ending_with_double_quote,
+    "test_string_ending_with_single_quote": test_string_ending_with_single_quote,
+    "test_both_quotes_ending_with_double_quote": test_both_quotes_ending_with_double_quote,
+    "test_both_quotes_ending_with_single_quote": test_both_quotes_ending_with_single_quote,
+    "test_triple_quote_starting_with_quote": test_triple_quote_starting_with_quote,
+    "test_triple_quote_many_quotes": test_triple_quote_many_quotes,
+    "test_triple_quotes_can_end_with_quote": test_triple_quotes_can_end_with_quote,
+    "test_triple_quotes_ending_with_two_quotes": test_triple_quotes_ending_with_two_quotes,
+    "test_string_with_three_double_quotes": test_string_with_three_double_quotes,
+    "test_string_with_three_single_quotes": test_string_with_three_single_quotes,
+    "test_string_with_both_triple_quotes": test_string_with_both_triple_quotes,
+}
+
+actor main(env):
+    failed = []
+    for name, t in tests.items():
+        print("== test: " + name)
+        if not t():
+            print("-- FAILED test: " + name)
+            failed.append(name)
+        print()
+    if len(failed) == 0:
+        print("All {len(tests)} tests OK!")
+    else:
+        print("\n{len(failed)} of {len(tests)} tests failed:")
+        for name in failed:
+            print(" - {name}")
+    env.exit(max([0, min([len(failed), 1])]))

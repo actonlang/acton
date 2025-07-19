@@ -1,30 +1,44 @@
+def test_helloworld():
+    ascii = "Hello, world!"
+    hex = "\x48ello, world!"
+    return ascii == hex
+
+def test_limdef():
+    uniesc = "\u2200 \u03b5>0 \u2203 \u03b4>0 . |x - a| < \u03b4 \u21d2 |f(x) - c| < \u03b5."
+    uni = "∀ ε>0 ∃ δ>0 . |x - a| < δ ⇒ |f(x) - c| < ε."
+    return uniesc == uni
+
+def test_encode_decode():
+    uniesc = "\u2200 \u03b5>0 \u2203 \u03b4>0 . |x - a| < \u03b4 \u21d2 |f(x) - c| < \u03b5."
+    blim = uniesc.encode()
+    ulim = blim.decode()
+    # encoding & decoding function pairs are exceedingly well suited to
+    # property based testing, but we don't have a property based testing
+    # library in Acton :/
+    return uniesc == ulim
+
+def test_strip():
+    s = ""
+    a = [s.strip()]
+    return str(a) == '[""]'
+
+tests = {
+    "test_helloworld": test_helloworld,
+    "test_limdef": test_limdef,
+    "test_encode_decode": test_encode_decode,
+    "test_strip": test_strip,
+}
+
 actor main(env):
-    def assertEqual(desc, e, a):
-        if e != a:
-            await async env.exit(1)
-
-    def test_helloworld():
-        ascii = "Hello, world!"
-        hex = "\x48ello, world!"
-        assertEqual("ascii == escaped hex codes", ascii, hex)
-
-    def test_limdef():
-        uniesc = "\u2200 \u03b5>0 \u2203 \u03b4>0 . |x - a| < \u03b4 \u21d2 |f(x) - c| < \u03b5."
-        uni = "∀ ε>0 ∃ δ>0 . |x - a| < δ ⇒ |f(x) - c| < ε."
-        assertEqual("escaped unicode == actual unicode in source", uniesc, uni)
-        blim = uniesc.encode()
-        ulim = blim.decode()
-        # encoding & decoding function pairs are exceedingly well suited to
-        # property based testing, but we don't have a property based testing
-        # library in Acton :/
-        assertEqual("encoded & decoded == original", uniesc, ulim)
-
-    def test_strip():
-        s = ""
-        a = [s.strip()]
-        assertEqual("empty string", "['']", str(a))
-
-    test_helloworld()
-    test_limdef()
-    test_strip()
-    env.exit(0)
+    failed = 0
+    for name, t in tests.items():
+        print("== test: " + name)
+        if not t():
+            print("-- FAILED test: " + name)
+            failed += 1
+        print()
+    if failed == 0:
+        print("All tests OK!")
+    else:
+        print("{failed} tests failed...")
+    env.exit(max([0, min([failed, 1])]))
