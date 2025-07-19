@@ -711,7 +711,8 @@ classCast env ts x q n              = parens . (parens (gen env t) <>)
 genNew env n p                      = newcon' env n <> parens (gen env p)
 
 declCon env n q b
-  | null abstr || hasNotImpl b      = (gen env tRes <+> newcon env n <> parens (gen env pars) <+> char '{') $+$
+  | null abstr || hasNotImpl b || isProtocolExtension b
+                                    = (gen env tRes <+> newcon env n <> parens (gen env pars) <+> char '{') $+$
                                       nest 4 (gen env tObj <+> gen env tmpV <+> equals <+> acton_malloc env (gname env n) <> semi $+$
                                               gen env tmpV <> text "->" <> gen env1 classKW <+> equals <+> char '&' <> methodtable env1 n <> semi $+$
                                               initcall env1) $+$
@@ -728,6 +729,13 @@ declCon env n q b
         retobj (PosArg e p)         = PosArg (eCall (tApp (eQVar primCONSTCONT) [tObj]) [eVar tmpV, e]) p
         env1                        = ldefine ((tmpV, NVar tObj) : envOf pars) env
         abstr                       = abstractAttrs env (NoQ n)
+        -- Check if this is a protocol extension class
+        -- Protocol extensions are created by convExtension with names like:
+        -- Derived protocol_name class_name (e.g., Derived Hashable Key -> HashableD_Key)
+        -- By the time we reach declCon in CodeGen, only protocol extensions have Derived names
+        isProtocolExtension b       = case n of
+                                        Derived _ _ -> True
+                                        _           -> False
 
 acton_malloc env n                  = text "acton_malloc" <> parens (text "sizeof" <> parens (text "struct" <+> gen env n))
 
