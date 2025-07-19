@@ -83,6 +83,9 @@ ERROR: [error Syntax error]: Empty format specifier after ':'
   - Previously limited to local functions, now supports method calls, actor methods, etc.
   - `after 1.5: obj.method()` and `after 0.1: remote_actor.action()` are now valid
 - Add `utils/update-changelog.sh` script to update this file (`CHANGELOG.md`) using Claude - it's a good prompt!
+- Allow logging of optional values [#2382]
+  - Change logging data parameter type from `dict[str, value]` to `dict[str, ?value]`
+  - Enables structured logging with None values like `{"user": None, "count": 42}`
 
 ### Changed
 - Use f-strings throughout standard library [#2297, #2290]
@@ -102,6 +105,10 @@ ERROR: [error Syntax error]: Empty format specifier after ':'
 - Remove deprecated `--dev` option [#2366]
 - Revamp `actonc` debug / verbose mode [#2354]
 - Avoid writing `.ty` files in Types.reconstruct [#2357]
+- Remove unused sysLib & projLib fields from compiler Paths
+  - Cleanup remnants from pre-Zig build system migration
+- Simplify Webex PR merge notification & handle escapes [#2384]
+  - Improve message formatting and environment variable handling
 
 ### Fixed
 - Fix string 'in' operator for substrings found at position 0 [#2280]
