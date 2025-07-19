@@ -58,7 +58,7 @@ actor MyApp(log_handler):
 
     def _work():
         log.info("Doing some work", None)
-        log.info("Bidabopp", {"actor": "MyApp", "thing": "bopp", "number": 42})
+        log.info("Bidabopp", {"actor": "MyApp", "thing": "bopp", "number": 42, "nothingness": None})
         deepfun(logh)
     _work()
 
