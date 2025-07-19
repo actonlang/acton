@@ -122,9 +122,9 @@ class Message():
     name: ?str
     path: list[str]
     msg: ?str
-    data: ?dict[str, value]
+    data: ?dict[str, ?value]
 
-    def __init__(self, level: int, path: list[str], name: ?str, msg: ?str, data: ?dict[str, value]):
+    def __init__(self, level: int, path: list[str], name: ?str, msg: ?str, data: ?dict[str, ?value]):
         self.ts = time.now()
         self.level = level
         self.actor_class = self._get_actor_class()
@@ -266,7 +266,7 @@ class Logger(object):
     def _set_level(self, level: int):
         self.output_level = level
 
-    def log(self, level, msg, data):
+    def log(self, level, msg, data: ?dict[str, ?value]):
         handler = self.handler
         if handler is not None:
             path = []
@@ -282,32 +282,32 @@ class Logger(object):
             if level <= self.output_level:
                 async handler.handle(m)
 
-    def emergency(self, msg: ?str, data: ?dict[str, value]):
+    def emergency(self, msg: ?str, data: ?dict[str, ?value]):
         self.log(EMERGENCY, msg, data)
 
-    def alert(self, msg: ?str, data: ?dict[str, value]):
+    def alert(self, msg: ?str, data: ?dict[str, ?value]):
         self.log(ALERT, msg, data)
 
-    def critical(self, msg: ?str, data: ?dict[str, value]):
+    def critical(self, msg: ?str, data: ?dict[str, ?value]):
         self.log(CRITICAL, msg, data)
 
-    def error(self, msg: ?str, data: ?dict[str, value]):
+    def error(self, msg: ?str, data: ?dict[str, ?value]):
         self.log(ERR, msg, data)
 
-    def warning(self, msg: ?str, data: ?dict[str, value]):
+    def warning(self, msg: ?str, data: ?dict[str, ?value]):
         self.log(WARNING, msg, data)
 
-    def info(self, msg: ?str, data: ?dict[str, value]):
+    def info(self, msg: ?str, data: ?dict[str, ?value]):
         self.log(INFO, msg, data)
 
-    def notice(self, msg: ?str, data: ?dict[str, value]):
+    def notice(self, msg: ?str, data: ?dict[str, ?value]):
         self.log(NOTICE, msg, data)
 
-    def debug(self, msg: ?str, data: ?dict[str, value]):
+    def debug(self, msg: ?str, data: ?dict[str, ?value]):
         self.log(DEBUG, msg, data)
 
-    def verbose(self, msg: ?str, data: ?dict[str, value]):
+    def verbose(self, msg: ?str, data: ?dict[str, ?value]):
         self.log(VERBOSE, msg, data)
 
-    def trace(self, msg: ?str, data: ?dict[str, value]):
+    def trace(self, msg: ?str, data: ?dict[str, ?value]):
         self.log(TRACE, msg, data)
