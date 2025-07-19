@@ -13,16 +13,17 @@ jobs:
     steps:
     - name: Prepare notification message
       id: message
+      env:
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        PR_URL: ${{ github.event.pull_request.html_url }}
+        PR_TITLE: ${{ github.event.pull_request.title }}
+        PR_BODY: ${{ github.event.pull_request.body }}
       run: |
-        PR_NUMBER="${{ github.event.pull_request.number }}"
-        PR_URL="${{ github.event.pull_request.html_url }}"
-        PR_TITLE="${{ github.event.pull_request.title }}"
-        PR_BODY="${{ github.event.pull_request.body }}"
-
-        MESSAGE="### [PR${PR_NUMBER} merged: ${PR_TITLE}](${PR_URL})"
+        MESSAGE="### PR [#${PR_NUMBER}](${PR_URL}) merged: ${PR_TITLE}"
 
         if [ -n "$PR_BODY" ]; then
           #MESSAGE="${MESSAGE}"$'\n'$'\n''```'
+          # TODO: does this contain an extra newline?
           MESSAGE="${MESSAGE}"$'\n'"${PR_BODY}"
           #MESSAGE="${MESSAGE}"$'\n''```'
         fi
