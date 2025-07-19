@@ -524,11 +524,9 @@ compileFiles gopts opts srcFiles = do
         putStrLn ("  Paths:")
         putStrLn ("    sysPath  : " ++ sysPath paths)
         putStrLn ("    sysTypes : " ++ sysTypes paths)
-        putStrLn ("    sysLib   : " ++ sysLib paths)
         putStrLn ("    projPath : " ++ projPath paths)
         putStrLn ("    projOut  : " ++ projOut paths)
         putStrLn ("    projTypes: " ++ projTypes paths)
-        putStrLn ("    projLib  : " ++ projLib paths)
         putStrLn ("    binDir   : " ++ binDir paths)
         putStrLn ("    srcDir   : " ++ srcDir paths)
         iff (length srcFiles == 1) (putStrLn ("    modName  : " ++ prstr (modName paths)))
@@ -582,11 +580,9 @@ data Paths      = Paths {
                     searchPath  :: [FilePath],
                     sysPath     :: FilePath,
                     sysTypes    :: FilePath,
-                    sysLib      :: FilePath,
                     projPath    :: FilePath,
                     projOut     :: FilePath,
                     projTypes   :: FilePath,
-                    projLib     :: FilePath,
                     binDir      :: FilePath,
                     srcDir      :: FilePath,
                     isTmp       :: Bool,
@@ -597,11 +593,9 @@ data Paths      = Paths {
 -- Given a FILE and optionally --syspath PATH:
 -- 'sysPath' is the path to the system directory as given by PATH, defaulting to the actonc executable directory.
 -- 'sysTypes' is directory "types" under 'sysPath'.
--- 'sysLib' is directory "lib" under 'sysPath'.
 -- 'projPath' is the closest parent directory of FILE that contains an 'Acton.toml' file, or a temporary directory in "/tmp" if no such parent exists.
 -- 'projOut' is directory "out" under 'projPath'.
 -- 'projTypes' is directory "types" under 'projOut'.
--- 'projLib' is directory "lib" under 'projOut'.
 -- 'binDir' is the directory prefix of FILE if 'projPath' is temporary, otherwise it is directory "bin" under 'projOut'
 -- 'srcDir' is the directory prefix of FILE if 'projPath' is temporary, otherwise it is directory "src" under 'projPath'
 -- 'fileExt' is file suffix of FILE.
@@ -637,13 +631,11 @@ findProjectDir path = do
 findPaths               :: FilePath -> C.CompileOptions -> IO Paths
 findPaths actFile opts  = do execDir <- takeDirectory <$> System.Environment.getExecutablePath
                              sysPath <- canonicalizePath (if null $ C.syspath opts then execDir ++ "/.." else C.syspath opts)
-                             let sysLib = joinPath [sysPath, "lib/"]
                              absSrcFile <- canonicalizePath actFile
                              (isTmp, projPath, dirInSrc) <- analyze (takeDirectory absSrcFile) []
                              let sysTypes = joinPath [sysPath, "base", "out", "types"]
                                  srcDir  = if isTmp then takeDirectory absSrcFile else joinPath [projPath, "src"]
                                  projOut = joinPath [projPath, "out"]
-                                 projLib = joinPath [projOut, "lib"]
                                  projTypes = joinPath [projOut, "types"]
                                  binDir  = if isTmp then srcDir else joinPath [projOut, "bin"]
                                  modName = A.modName $ dirInSrc ++ [fileBody]
@@ -653,9 +645,8 @@ findPaths actFile opts  = do execDir <- takeDirectory <$> System.Environment.get
                              createDirectoryIfMissing True binDir
                              createDirectoryIfMissing True projOut
                              createDirectoryIfMissing True projTypes
-                             createDirectoryIfMissing True projLib
                              createDirectoryIfMissing True (getModPath projTypes modName)
-                             return $ Paths sPaths sysPath sysTypes sysLib projPath projOut projTypes projLib binDir srcDir isTmp fileExt modName
+                             return $ Paths sPaths sysPath sysTypes projPath projOut projTypes binDir srcDir isTmp fileExt modName
   where (fileBody,fileExt) = splitExtension $ takeFileName actFile
 
         analyze "/" ds  = do tmp <- canonicalizePath (C.tempdir opts)
