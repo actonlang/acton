@@ -36,15 +36,48 @@ import Prelude hiding ((<>))
 
 -- | Convert CustomParseError to diagnostic components (error message and hints/notes)
 customParseErrorToDiagnostic :: CustomParseError -> (String, [Note String])
-customParseErrorToDiagnostic (TypeVariableNameError name)      = ("invalid name '" ++ name ++ "'",
+customParseErrorToDiagnostic (TypeVariableNameError name)      = ("Invalid name '" ++ name ++ "'",
                                                                   [Note "Single upper case character (optionally followed by digits) are reserved for type variables",
                                                                    Hint "Use a longer name"])
-customParseErrorToDiagnostic (InvalidFormatSpecifier spec)     = ("invalid format specifier" ++ if null spec then "" else ": " ++ spec,
+customParseErrorToDiagnostic (InvalidFormatSpecifier spec)     = ("Invalid format specifier" ++ if null spec then "" else ": " ++ spec,
                                                                   [])
-customParseErrorToDiagnostic TooManyQuotesError                = ("too many quote characters",
-                                                                  [Note "Triple-quoted strings accept 3-5 quotes at the end"])
-customParseErrorToDiagnostic UnclosedString                    = ("missing closing \"",
+customParseErrorToDiagnostic (TooManyQuotesError quote)        = ("Too many quote characters",
+                                                                  [Note "Triple-quoted strings accept 3-5 quotes at the end",
+                                                                   Hint "Using 4 quotes results in a string with 1 quote at the end, e.g. \"\"\"text\"\"\"\" -> text\"",
+                                                                   Hint "Using 5 quotes results in a string with 2 quotes at the end, e.g. \"\"\"text\"\"\"\"\" -> text\"\"",
+                                                                   Hint "Use escape sequences for quotes inside strings, e.g. \"\"\"text \\\"with quotes\\\"\"\" -> text \"with quotes\""])
+customParseErrorToDiagnostic (MissingClosingQuote quote)       = ("Missing closing " ++ quote,
+                                                                  [Hint $ "Add a closing quote (" ++ quote ++ ") to match the opening one"])
+-- String interpolation errors
+customParseErrorToDiagnostic EmptyInterpolationExpression       = ("Empty expression in string interpolation",
+                                                                  [Hint "Add an expression between the braces, e.g. {name}"])
+customParseErrorToDiagnostic MissingExpressionBeforeFormat      = ("Missing expression before format specifier",
+                                                                  [Hint "Add an expression before the colon, e.g. {value:10}"])
+customParseErrorToDiagnostic UnclosedInterpolationBrace         = ("Missing closing '}' for expression",
+                                                                  [Hint "Add a closing brace to complete the interpolation"])
+customParseErrorToDiagnostic EmptyFormatSpecifierError          = ("Empty format specifier after ':'",
+                                                                  [Hint "Add a format specification or remove the colon"])
+customParseErrorToDiagnostic TabInFormatSpecifier               = ("Tab character not allowed in format specifier",
                                                                   [])
+customParseErrorToDiagnostic NewlineInFormatSpecifier           = ("Newline not allowed in format specifier",
+                                                                  [Hint "Keep format specifiers on a single line"])
+customParseErrorToDiagnostic (InvalidCharInFormatSpecifier c)   = ("Invalid character '" ++ [c] ++ "' in format specifier",
+                                                                  [Note "Valid format specifiers use <, >, ^, +, -, #, 0, width, .precision, and type characters",
+                                                                   Hint "Use a format specifier, e.g. '{name:<18}'"])
+customParseErrorToDiagnostic MissingFormatPrecisionDigits       = ("Expected digits after '.' in format specifier",
+                                                                  [Hint "Add precision digits, e.g. .2f for 2 decimal places"])
+-- Escape sequence errors
+customParseErrorToDiagnostic (IncompleteHexEscape c)            = ("Incomplete hex character",
+                                                                  [Note "Hex-escaped characters must be specified by two hexadecimal digits",
+                                                                   Hint "Use two characters, e.g. \\x9a"])
+customParseErrorToDiagnostic OctalEscapeOutOfRange              = ("Octal escape sequence out of range",
+                                                                  [Note "Octal values must be between \\000 and \\377"])
+customParseErrorToDiagnostic (IncompleteUnicodeEscape exp found) = ("Incomplete universal character name",
+                                                                   [Note $ "Expected " ++ show exp ++ " hex digits, found " ++ show found])
+customParseErrorToDiagnostic NonAsciiInBytesLiteral             = ("Only ASCII characters allowed in bytes literal",
+                                                                  [Hint "Use escape sequences for non-ASCII values"])
+customParseErrorToDiagnostic UnknownEscapeSequence              = ("Unknown escape sequence",
+                                                                  [Note "Valid escape sequences: \\\\, \\\", \\', \\n, \\r, \\t, \\a, \\b, \\f, \\v, \\xHH, \\ooo, \\uHHHH, \\UHHHHHHHH"])
 customParseErrorToDiagnostic (OtherError msg)                  = (msg,
                                                                   [])
 

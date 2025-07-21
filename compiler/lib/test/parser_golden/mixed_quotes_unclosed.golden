@@ -1,7 +1,9 @@
-ERROR: [error Syntax error]: missing closing '}' for expression
+ERROR: [error Syntax error]: Missing closing '}' for expression
      ╭──▶ test@1:17-1:18
      │
    1 │ "outer {'inner {x
      •                 ┬
-     •                 ╰╸ missing closing '}' for expression
+     •                 ╰╸ Missing closing '}' for expression
+     •
+     │ Hint: Add a closing brace to complete the interpolation
 ─────╯

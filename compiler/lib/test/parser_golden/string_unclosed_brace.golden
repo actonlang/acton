@@ -1,7 +1,9 @@
-ERROR: [error Syntax error]: missing closing '}' for expression
+ERROR: [error Syntax error]: Missing closing '}' for expression
      ╭──▶ test@1:19-1:23
      │
    1 │ "Unclosed brace: {name
      •                   ┬───
-     •                   ╰╸ missing closing '}' for expression
+     •                   ╰╸ Missing closing '}' for expression
+     •
+     │ Hint: Add a closing brace to complete the interpolation
 ─────╯

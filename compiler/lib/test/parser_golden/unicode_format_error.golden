@@ -4,4 +4,7 @@ ERROR: [error Syntax error]: Invalid character '你' in format specifier
    1 │ "你好 {name:你}"
      •             ┬─ 
      •             ╰╸ Invalid character '你' in format specifier
+     •
+     │ Note: Valid format specifiers use <, >, ^, +, -, #, 0, width, .precision, and type characters
+     │ Hint: Use a format specifier, e.g. '{name:<18}'
 ─────╯

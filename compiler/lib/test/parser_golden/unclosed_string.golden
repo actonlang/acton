@@ -1,7 +1,9 @@
-ERROR: [error Syntax error]: missing closing "
+ERROR: [error Syntax error]: Missing closing "
      ╭──▶ test.act@1:10-1:11
      │
    1 │ a = "hello
      •          ┬
-     •          ╰╸ missing closing "
+     •          ╰╸ Missing closing "
+     •
+     │ Hint: Add a closing quote (") to match the opening one
 ─────╯

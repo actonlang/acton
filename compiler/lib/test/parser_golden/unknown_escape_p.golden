@@ -1,7 +1,9 @@
-ERROR: [error Syntax error]: unknown escape sequence in string/bytes literal
+ERROR: [error Syntax error]: Unknown escape sequence
      ╭──▶ test@1:4-1:4
      │
    1 │ "\p"
      •     
-     •    ╰╸ unknown escape sequence in string/bytes literal
+     •    ╰╸ Unknown escape sequence
+     •
+     │ Note: Valid escape sequences: \\, \", \', \n, \r, \t, \a, \b, \f, \v, \xHH, \ooo, \uHHHH, \UHHHHHHHH
 ─────╯

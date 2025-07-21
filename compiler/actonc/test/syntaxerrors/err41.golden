@@ -5,7 +5,7 @@ Building file test/syntaxerrors/err41.act using temporary scratch directory
      |
    1 | class Z(value):
      :       ^ 
-     :       `- invalid name 'Z'
+     :       `- Invalid name 'Z'
      :
      | Note: Single upper case character (optionally followed by digits) are reserved for type variables
      | Hint: Use a longer name
