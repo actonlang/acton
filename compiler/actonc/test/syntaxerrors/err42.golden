@@ -7,5 +7,6 @@ Building file test/syntaxerrors/err42.act using temporary scratch directory
      :     ^ 
      :     `- invalid name 'Z'
      :
-     | Hint: Single upper case character (optionally followed by digits) are reserved for type variables. Use a longer name.
+     | Note: Single upper case character (optionally followed by digits) are reserved for type variables
+     | Hint: Use a longer name
 -----+

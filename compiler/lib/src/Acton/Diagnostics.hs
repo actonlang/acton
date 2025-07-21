@@ -37,7 +37,8 @@ import Prelude hiding ((<>))
 -- | Convert CustomParseError to diagnostic components (error message and hints/notes)
 customParseErrorToDiagnostic :: CustomParseError -> (String, [Note String])
 customParseErrorToDiagnostic (TypeVariableNameError name)      = ("invalid name '" ++ name ++ "'",
-                                                                  [Hint ("Single upper case character (optionally followed by digits) are reserved for type variables. Use a longer name.")])
+                                                                  [Note "Single upper case character (optionally followed by digits) are reserved for type variables",
+                                                                   Hint "Use a longer name"])
 customParseErrorToDiagnostic (InvalidFormatSpecifier spec)     = ("invalid format specifier" ++ if null spec then "" else ": " ++ spec,
                                                                   [])
 customParseErrorToDiagnostic TooManyQuotesError                = ("too many quote characters",
