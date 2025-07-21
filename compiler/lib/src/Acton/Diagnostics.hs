@@ -40,6 +40,8 @@ customParseErrorToDiagnostic (TypeVariableNameError name)      = ("invalid name 
                                                                   [Hint ("Single upper case character (optionally followed by digits) are reserved for type variables. Use a longer name.")])
 customParseErrorToDiagnostic (InvalidFormatSpecifier spec)     = ("invalid format specifier" ++ if null spec then "" else ": " ++ spec,
                                                                   [])
+customParseErrorToDiagnostic TooManyQuotesError                = ("too many quote characters",
+                                                                  [Note "Triple-quoted strings accept 3-5 quotes at the end"])
 customParseErrorToDiagnostic UnclosedString                    = ("missing closing \"",
                                                                   [])
 customParseErrorToDiagnostic (OtherError msg)                  = (msg,

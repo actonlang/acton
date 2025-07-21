@@ -1,0 +1,9 @@
+ERROR: [error Syntax error]: too many quote characters
+     ╭──▶ test@1:10-1:16
+     │
+   1 │ f'''x={x}''''''
+     •          ┬─────
+     •          ╰╸ too many quote characters
+     •
+     │ Note: Triple-quoted strings accept 3-5 quotes at the end
+─────╯

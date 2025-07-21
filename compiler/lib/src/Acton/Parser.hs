@@ -47,6 +47,7 @@ import System.IO.Unsafe
 data CustomParseError = TypeVariableNameError String  -- Name that looks like type variable
                       | InvalidFormatSpecifier String
                       | UnclosedString
+                      | TooManyQuotesError
                       | OtherError String
                       deriving (Eq, Ord, Show)
 
@@ -559,13 +560,30 @@ parseTextPart quoteStr isTriple handleNewlines = do
         then try (string "\n" >> return "\\n")
         else empty,
 
-      -- Handle standalone quotes in triple-quoted strings
+      -- Handle quotes in triple-quoted strings
       if isTriple
         then try (do
+                -- When we see a quote char, check if it's part of closing sequence
                 c <- char (head quoteStr)
-                let nextChars = if head quoteStr == '"' then "\"\"" else "''"
-                notFollowedBy (string nextChars)
-                return [c])
+                quotes <- lookAhead $ many (char (head quoteStr))
+                let totalQuotes = 1 + length quotes
+                case totalQuotes of
+                  -- 1-2 quotes: always consume as content
+                  1 -> return [c]
+                  2 -> char (head quoteStr) >> return [c, head quoteStr]
+                  -- 3 quotes exactly: this is the closing sequence, stop
+                  3 -> empty
+                  -- 4 quotes: consume 1, leave 3 for closing
+                  4 -> return [c]
+                  -- 5 quotes: consume 2, leave 3 for closing
+                  5 -> char (head quoteStr) >> return [c, head quoteStr]
+                  -- 6+ quotes: this is an error
+                  _ -> do
+                    curPos <- getOffset
+                    let startPos = curPos - 1
+                        endPos   = startPos + totalQuotes
+                    parseException (Loc (startPos) endPos) TooManyQuotesError
+                    )
         else empty,
 
       -- Any other character not in braces or quotes

@@ -1,0 +1,9 @@
+ERROR: [error Syntax error]: too many quote characters
+     ╭──▶ test@1:8-1:16
+     │
+   1 │ '''test''''''''
+     •        ┬───────
+     •        ╰╸ too many quote characters
+     •
+     │ Note: Triple-quoted strings accept 3-5 quotes at the end
+─────╯
