@@ -45,11 +45,15 @@ import System.IO.Unsafe
 
 -- Custom error types for better structured error handling
 data CustomParseError = TypeVariableNameError String  -- Name that looks like type variable
+                      | InvalidFormatSpecifier String
+                      | UnclosedString
                       | OtherError String
                       deriving (Eq, Ord, Show)
 
 instance ShowErrorComponent CustomParseError where
   showErrorComponent (TypeVariableNameError name) = "Invalid name (reserved for type variables)"
+  showErrorComponent (InvalidFormatSpecifier spec) = "Invalid format specifier" ++ if null spec then "" else ": " ++ spec
+  showErrorComponent UnclosedString = "unclosed string"
   showErrorComponent (OtherError msg) = msg
 
 -- Context errors -------------------------------------------------------------------------------
@@ -198,17 +202,14 @@ instance HasLoc IndentationError where
 indentationError     :: IndentationError -> [(SrcLoc, String)]
 indentationError err = [(loc err, "Too much indentation")]
 
--- Fail fast error ----------------------------------------------------------
+-- Parser Exceptions --------------------------------------------------------
 
-data FailFastError = FailFastError SrcLoc String deriving (Show, Eq)
+data CustomParseException = CustomParseException SrcLoc CustomParseError deriving (Show, Eq)
 
-instance Control.Exception.Exception FailFastError
+instance Control.Exception.Exception CustomParseException
 
-
-failFastError :: FailFastError -> [(SrcLoc, String)]
-failFastError (FailFastError loc str) = [(loc, str)]
-
-failImmediately loc msg =  Control.Exception.throw $ FailFastError loc msg
+parseException :: SrcLoc -> CustomParseError -> a
+parseException loc customErr = Control.Exception.throw $ CustomParseException loc customErr
 
 --- Whitespace consumers ----------------------------------------------------
 
@@ -508,7 +509,7 @@ parseInterpolatedString startQuote endQuote textPartParser = lexeme $ do
     case nextChar of
       Nothing ->
         if isMultiline
-        then failImmediately (Loc (startLoc - length startQuote) startLoc) $ "missing closing " ++ endQuote
+        then parseException (Loc (startLoc - length startQuote) startLoc) $ OtherError $ "missing closing " ++ endQuote
         else fail $ "string at position " ++ show startLoc ++ " is not closed"
       _ -> fail $ "missing closing " ++ endQuote
 
@@ -575,7 +576,7 @@ parseTextPart quoteStr isTriple handleNewlines = do
           case nextChar of
             Just _ -> do
               pos <- getOffset
-              failImmediately (Loc (pos - 1) pos) $ "missing closing " ++ quoteStr
+              parseException (Loc (pos - 1) pos) $ OtherError $ "missing closing " ++ quoteStr
             Nothing -> do
               (loc, c) <- withLoc $ noneOf ("{}" ++ quoteStr ++ "\n")
               return [c]
@@ -599,8 +600,8 @@ exprPart = do
     closeLoc <- getOffset
     nextChar <- lookAhead (optional (oneOf "}:"))
     case nextChar of
-        Just '}' -> failImmediately (Loc closeLoc closeLoc) "Empty expression in string interpolation"
-        Just ':' -> failImmediately (Loc closeLoc closeLoc) "Missing expression before format specifier"
+        Just '}' -> parseException (Loc closeLoc closeLoc) $ OtherError "Empty expression in string interpolation"
+        Just ':' -> parseException (Loc closeLoc closeLoc) $ OtherError "Missing expression before format specifier"
         _ -> return ()
 
     -- Parse the expression - now allowing interpolated strings since f-prefix is optional
@@ -612,7 +613,7 @@ exprPart = do
     -- Check for optional format specifier
     formatInfo <- (char ':' *> formatSpec) <|> do
         closeBraceLoc <- getOffset
-        char '}' <|> failImmediately (Loc (openLoc + 1) (closeBraceLoc)) "missing closing '}' for expression"
+        char '}' <|> parseException (Loc (openLoc + 1) (closeBraceLoc)) (OtherError "missing closing '}' for expression")
         return ("s", False, Nothing, Nothing, False, Nothing)
 
     let (fmt, isZeroPad, precisionInfo, typeSpecInfo, isCenterAlign, widthInfo) = formatInfo
@@ -654,7 +655,7 @@ formatSpec = do
     beforeParseLoc <- getOffset
     nextChar <- lookAhead (optional anySingle)
     case nextChar of
-        Just '}' -> failImmediately (Loc specLoc beforeParseLoc) "Empty format specifier after ':'"
+        Just '}' -> parseException (Loc specLoc beforeParseLoc) $ OtherError "Empty format specifier after ':'"
         _ -> return ()
 
     -- Try to parse fill character and alignment
@@ -671,16 +672,16 @@ formatSpec = do
                     badCharPos <- getOffset
                     -- Consume the character to advance position
                     _ <- anySingle
-                    failImmediately (Loc badCharPos (badCharPos + 1)) $
-                         "Invalid character '" ++ [c] ++ "' in format specifier"
+                    parseException (Loc badCharPos (badCharPos + 1)) $
+                         OtherError $ "Invalid character '" ++ [c] ++ "' in format specifier"
         Just '\t' -> do
             tabPos <- getOffset
             _ <- anySingle
-            failImmediately (Loc tabPos (tabPos + 1)) "Tab character not allowed in format specifier"
+            parseException (Loc tabPos (tabPos + 1)) $ OtherError "Tab character not allowed in format specifier"
         Just '\n' -> do
             nlPos <- getOffset
             _ <- anySingle
-            failImmediately (Loc nlPos (nlPos + 1)) "Newline not allowed in format specifier"
+            parseException (Loc nlPos (nlPos + 1)) $ OtherError "Newline not allowed in format specifier"
         _ -> return ()
 
     mbFillAlign <- optional $ try (do
@@ -714,7 +715,7 @@ formatSpec = do
         digitLoc <- getOffset
         digits <- optional $ some digitChar
         case digits of
-            Nothing -> failImmediately (Loc digitLoc digitLoc) "Expected digits after '.' in format specifier"
+            Nothing -> parseException (Loc digitLoc digitLoc) $ OtherError "Expected digits after '.' in format specifier"
             Just d -> return d
 
     -- Optional type specifier
@@ -730,10 +731,10 @@ formatSpec = do
     case invalidChar of
         Just c ->
             if c == '\t'
-            then failImmediately (Loc invalidCharLoc invalidCharLoc) "Tab character not allowed in format specifier"
+            then parseException (Loc invalidCharLoc invalidCharLoc) $ OtherError "Tab character not allowed in format specifier"
             else if c == '\n'
-            then failImmediately (Loc invalidCharLoc invalidCharLoc) "Newline not allowed in format specifier"
-            else failImmediately (Loc invalidCharLoc invalidCharLoc) $ "Invalid character '" ++ [c] ++ "' in format specifier"
+            then parseException (Loc invalidCharLoc invalidCharLoc) $ OtherError "Newline not allowed in format specifier"
+            else parseException (Loc invalidCharLoc invalidCharLoc) $ OtherError $ "Invalid character '" ++ [c] ++ "' in format specifier"
         Nothing -> return ()
 
     -- Check if we parsed nothing meaningful (this should be rare now)
@@ -741,7 +742,7 @@ formatSpec = do
     when (align == Nothing && _sign == Nothing && zeroPad == Nothing &&
           width == Nothing && precision == Nothing && typeSpec == Nothing &&
           beforeParseLoc == endLoc) $
-        failImmediately (Loc specLoc endLoc) "Invalid format specifier"
+        parseException (Loc specLoc endLoc) $ InvalidFormatSpecifier ""
 
     -- Consume the closing brace
     char '}' <?> "closing brace '}' after format specifier"
@@ -821,42 +822,42 @@ hexEscape = do
       (loc,cs) <- withLoc (count' 0 2 hexDigitChar)
       if length cs == 2
        then return ("\\x" ++ cs)
-       else failImmediately loc "\"\\x\" must be followed by two hexadecimal digits"
+       else parseException loc $ OtherError "\"\\x\" must be followed by two hexadecimal digits"
 octEscape = do
        (loc,cs) <- withLoc (count' 1 3 octDigitChar)
        if length cs == 3 && head cs > '3'
-          then  failImmediately loc "octal escape sequence out of range"
+          then  parseException loc $ OtherError "octal escape sequence out of range"
           else return ("\\" ++ cs)
 univ1Escape = do
       char 'u'
       (loc,cs) <- withLoc (count' 0 4 hexDigitChar)
       if length cs < 4
-        then failImmediately loc "Incomplete universal character name (4 hex digits needed)"
+        then parseException loc $ OtherError "Incomplete universal character name (4 hex digits needed)"
         else return ("\\u" ++ cs)
 univ2Escape = do
       char 'U'
       (loc,cs) <- withLoc (count' 0 8 hexDigitChar)
       if length cs < 8
-        then failImmediately loc "Incomplete universal character name (8 hex digits needed)"
+        then parseException loc $ OtherError "Incomplete universal character name (8 hex digits needed)"
         else return ("\\U" ++ cs)
 
 asciiC   = do
       (loc,c) <- withLoc anySingle
       if c == '\n'
-         then failImmediately loc "unclosed string"
+         then parseException loc UnclosedString
          else if isAscii c
               then return [c]
-              else failImmediately loc "Only ASCII chars allowed in bytes literal"
+              else parseException loc $ OtherError "Only ASCII chars allowed in bytes literal"
 
 anyC  = do
       (loc,c) <- withLoc anySingle
       if c == '\n'
-         then failImmediately loc "unclosed string"
+         then parseException loc UnclosedString
          else return [c]
 
 unknownEscape charParser = do
          (loc,c) <- withLoc charParser
-         failImmediately loc "unknown escape sequence in string/bytes literal"
+         parseException loc $ OtherError "unknown escape sequence in string/bytes literal"
 
 plainLiteral charParser prefix tailEscapes = stringTempl "\"\"\"" longItem esc prefix
                                           <|> stringTempl "'''" longItem esc prefix

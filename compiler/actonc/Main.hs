@@ -693,7 +693,7 @@ parseActFile gopts opts paths actFile = do
                       `catch` handleParseError srcContent
                       `catch` handle gopts opts "Context error" Acton.Parser.contextError srcContent paths (modName paths)
                       `catch` handle gopts opts "Indentation error" Acton.Parser.indentationError srcContent paths (modName paths)
-                      `catch` handle gopts opts "Syntax error" Acton.Parser.failFastError srcContent paths (modName paths)
+                      `catch` handle gopts opts "Syntax error" Diag.customParseException srcContent paths (modName paths)
                     iff (C.parse opts) $ dump (modName paths) "parse" (Pretty.print m)
                     timeParse <- getTime Monotonic
                     iff (C.timing gopts) $ putStrLn("Parsing file " ++ makeRelative (srcDir paths) actFile

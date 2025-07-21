@@ -23,7 +23,7 @@ import Pretty (print)
 import Test.Syd
 import Test.Syd.Def.Golden (goldenTextFile)
 import qualified Control.Monad.Trans.State.Strict as St
-import Text.Megaparsec (runParser, errorBundlePretty)
+import Text.Megaparsec (runParser, errorBundlePretty, ShowErrorComponent(..))
 import qualified Data.Text as T
 import Data.List (isInfixOf, isPrefixOf)
 import Error.Diagnose (printDiagnostic, prettyDiagnostic, WithUnicode(..), TabSize(..), defaultStyle)
@@ -367,21 +367,22 @@ parseActon input =
       (E.evaluate $ case runParser (St.evalStateT P.stmt P.initState) "" inputWithNewline of
         Left err -> Left $ renderDiagnostic err
         Right result -> Right $ concatMap (Pretty.print) result)
-      handleFailFastError
+      handleCustomParseException
   where
     inputWithNewline = if last input == '\n' then input else input ++ "\n"
-    handleFailFastError :: P.FailFastError -> IO (Either String String)
+    handleCustomParseException :: P.CustomParseException -> IO (Either String String)
     renderDiagnostic err =
       let diagnostic = Diag.parseDiagnosticFromBundle "test" inputWithNewline err
           doc = prettyDiagnostic WithUnicode (TabSize 4) diagnostic
           layout = layoutPretty defaultLayoutOptions (unAnnotate doc)
       in T.unpack $ renderStrict layout
-    handleFailFastError (P.FailFastError loc msg) =
-      return $ Left $ formatFailFastError loc msg
+    handleCustomParseException (P.CustomParseException loc err) =
+      return $ Left $ formatCustomParseError loc err
 
-    formatFailFastError :: SrcLoc -> String -> String
-    formatFailFastError loc msg =
-      let diagnostic = Diag.errorDiagnosticWithLoc "Syntax error" "test" inputWithNewline loc msg
+    formatCustomParseError :: SrcLoc -> P.CustomParseError -> String
+    formatCustomParseError loc err =
+      let msg = showErrorComponent err
+          diagnostic = Diag.errorDiagnosticWithLoc "Syntax error" "test" inputWithNewline loc msg
           doc = prettyDiagnostic WithUnicode (TabSize 4) diagnostic
           layout = layoutPretty defaultLayoutOptions (unAnnotate doc)
       in T.unpack $ renderStrict layout
@@ -403,7 +404,7 @@ parseModuleTest input =
       (E.evaluate $ case runParser (St.evalStateT P.file_input P.initState) "test.act" inputWithNewline of
         Left err -> Left $ renderDiagnostic err
         Right (imports, suite) -> Right $ "Module parsed successfully")
-      handleFailFastError
+      handleCustomParseException
   where
     inputWithNewline = if null input || last input == '\n' then input else input ++ "\n"
     renderDiagnostic err =
@@ -411,13 +412,14 @@ parseModuleTest input =
           doc = prettyDiagnostic WithUnicode (TabSize 4) diagnostic
           layout = layoutPretty defaultLayoutOptions (unAnnotate doc)
       in T.unpack $ renderStrict layout
-    handleFailFastError :: P.FailFastError -> IO (Either String String)
-    handleFailFastError (P.FailFastError loc msg) =
-      return $ Left $ formatFailFastError loc msg
+    handleCustomParseException :: P.CustomParseException -> IO (Either String String)
+    handleCustomParseException (P.CustomParseException loc err) =
+      return $ Left $ formatCustomParseError loc err
 
-    formatFailFastError :: SrcLoc -> String -> String
-    formatFailFastError loc msg =
-      let diagnostic = Diag.errorDiagnosticWithLoc "Parse error" "test.act" inputWithNewline loc msg
+    formatCustomParseError :: SrcLoc -> P.CustomParseError -> String
+    formatCustomParseError loc err =
+      let msg = showErrorComponent err
+          diagnostic = Diag.errorDiagnosticWithLoc "Parse error" "test.act" inputWithNewline loc msg
           doc = prettyDiagnostic WithUnicode (TabSize 4) diagnostic
           layout = layoutPretty defaultLayoutOptions (unAnnotate doc)
       in T.unpack $ renderStrict layout

@@ -27,7 +27,19 @@ import qualified Text.Megaparsec.Error as ME
 import Acton.Syntax
 import SrcLocation
 import Utils (SrcLoc(..))
-import Acton.Parser (CustomParseError(..)) -- Import for custom error types
+import Acton.Parser (CustomParseError(..), CustomParseException(..)) -- Import for custom error types
+
+
+-- | Convert CustomParseError to diagnostic components (error message and hints/notes)
+customParseErrorToDiagnostic :: CustomParseError -> (String, [Note String])
+customParseErrorToDiagnostic (TypeVariableNameError name)      = ("invalid name '" ++ name ++ "'",
+                                                                  [Hint ("Single upper case character (optionally followed by digits) are reserved for type variables. Use a longer name.")])
+customParseErrorToDiagnostic (InvalidFormatSpecifier spec)     = ("invalid format specifier" ++ if null spec then "" else ": " ++ spec,
+                                                                  [])
+customParseErrorToDiagnostic UnclosedString                    = ("missing closing \"",
+                                                                  [])
+customParseErrorToDiagnostic (OtherError msg)                  = (msg,
+                                                                  [])
 
 
 -- | Convert Megaparsec parse errors to diagnose format
@@ -45,7 +57,6 @@ parseDiagnosticFromBundle filename src bundle =
         sourcePos = pstateSourcePos newPosState
         line = unPos (sourceLine sourcePos)
         col = unPos (sourceColumn sourcePos)
-        -- Get the error message
         msg = parseErrorTextPretty firstError
 
         -- For parse errors, we only have a single position, not a span
@@ -54,14 +65,12 @@ parseDiagnosticFromBundle filename src bundle =
         position = Position (line, col) (line, col + 1) filename
 
         -- Check if this is a custom error and add appropriate hint
-        (hints, markerMsg) = case firstError of
+        (prettyMsg, hints) = case firstError of
                   ME.FancyError _ errs ->
                     case findCustomError (S.toList errs) of
-                      Just (TypeVariableNameError name) ->
-                          ([Hint ("Single upper case character (optionally followed by digits) are reserved for type variables. Use a longer name.")],
-                           "invalid name '" ++ name ++ "'")
-                      _ -> ([], msg)
-                  _ -> ([], msg)
+                      Just customErr -> customParseErrorToDiagnostic customErr
+                      Nothing -> (msg, [])
+                  _ -> (msg, [])
 
         findCustomError :: [ErrorFancy CustomParseError] -> Maybe CustomParseError
         findCustomError [] = Nothing
@@ -69,7 +78,7 @@ parseDiagnosticFromBundle filename src bundle =
         findCustomError (_ : rest) = findCustomError rest
 
         -- Create the report
-        report = Err (Just "Parse error") msg [(position, This markerMsg)] hints
+        report = Err (Just "Parse error") msg [(position, This prettyMsg)] hints
         diagnostic = addReport mempty report
     in addFile diagnostic filename src
 
@@ -109,3 +118,9 @@ errorDiagnosticWithLoc errorKind filename src srcLoc msg =
         diagnostic = addReport mempty report
     in addFile diagnostic filename src
 
+
+-- | Convert CustomParseException to error list format expected by handle
+customParseException :: CustomParseException -> [(SrcLoc, String)]
+customParseException (CustomParseException loc customErr) =
+    let (msg, _) = customParseErrorToDiagnostic customErr
+    in [(loc, msg)]
