@@ -1,4 +1,4 @@
-ERROR: [error Parse error]: missing closing """
+ERROR: [error Syntax error]: missing closing """
      ╭──▶ test.act@2:2-2:5
      │
    2 │ a = """hello

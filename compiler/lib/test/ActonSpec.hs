@@ -359,6 +359,13 @@ main = do
 
 
 
+-- Helper function to format custom parse errors consistently
+formatCustomParseError :: String -> String -> SrcLoc -> P.CustomParseError -> String
+formatCustomParseError filename input loc err =
+  let diagnostic = Diag.customParseErrorDiagnostic "Syntax error" filename input loc err
+      doc = prettyDiagnostic WithUnicode (TabSize 4) diagnostic
+      layout = layoutPretty defaultLayoutOptions (unAnnotate doc)
+  in T.unpack $ renderStrict layout
 
 parseActon :: String -> Either String String
 parseActon input =
@@ -377,24 +384,7 @@ parseActon input =
           layout = layoutPretty defaultLayoutOptions (unAnnotate doc)
       in T.unpack $ renderStrict layout
     handleCustomParseException (P.CustomParseException loc err) =
-      return $ Left $ formatCustomParseError loc err
-
-    formatCustomParseError :: SrcLoc -> P.CustomParseError -> String
-    formatCustomParseError loc err =
-      let msg = showErrorComponent err
-          diagnostic = Diag.errorDiagnosticWithLoc "Syntax error" "test" inputWithNewline loc msg
-          doc = prettyDiagnostic WithUnicode (TabSize 4) diagnostic
-          layout = layoutPretty defaultLayoutOptions (unAnnotate doc)
-      in T.unpack $ renderStrict layout
-
-    offsetToLineCol :: Int -> String -> (Int, Int)
-    offsetToLineCol offset s =
-      let before = take offset s
-          lineNum = length (filter (== '\n') before) + 1
-          colNum = case reverse before of
-                     [] -> 1
-                     (c:cs) -> length (takeWhile (/= '\n') (c:cs)) + 1
-      in (lineNum, colNum)
+      return $ Left $ formatCustomParseError "test" inputWithNewline loc err
 
 -- Helper function to parse a full module (for testing module-level constructs)
 parseModuleTest :: String -> Either String String
@@ -414,15 +404,7 @@ parseModuleTest input =
       in T.unpack $ renderStrict layout
     handleCustomParseException :: P.CustomParseException -> IO (Either String String)
     handleCustomParseException (P.CustomParseException loc err) =
-      return $ Left $ formatCustomParseError loc err
-
-    formatCustomParseError :: SrcLoc -> P.CustomParseError -> String
-    formatCustomParseError loc err =
-      let msg = showErrorComponent err
-          diagnostic = Diag.errorDiagnosticWithLoc "Parse error" "test.act" inputWithNewline loc msg
-          doc = prettyDiagnostic WithUnicode (TabSize 4) diagnostic
-          layout = layoutPretty defaultLayoutOptions (unAnnotate doc)
-      in T.unpack $ renderStrict layout
+      return $ Left $ formatCustomParseError "test.act" inputWithNewline loc err
 
 -- Helper function to test module-level parser errors with golden files
 testModuleParseError :: String -> String -> Spec

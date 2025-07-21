@@ -1,6 +1,6 @@
 Building file test/syntaxerrors/err23.act using temporary scratch directory
 [error Syntax error]: missing closing '}' for expression
-     +--> err23.act@4:21-4:25
+     +--> test/syntaxerrors/err23.act@4:21-4:25
      |
    4 |     return f"Hello {name"
      :                     ^--- 

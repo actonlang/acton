@@ -26,8 +26,12 @@ import qualified Text.Megaparsec.Error as ME
 
 import Acton.Syntax
 import SrcLocation
-import Utils (SrcLoc(..))
-import Acton.Parser (CustomParseError(..), CustomParseException(..)) -- Import for custom error types
+import Utils (SrcLoc(..), loc)
+import Acton.Parser (CustomParseError(..), CustomParseException(..), ContextError(..), IndentationError(..), ctxMsg) -- Import for custom error types
+import qualified Utils as U
+import qualified Acton.Env as Env
+import Pretty (render, pretty, text, (<+>), (<>), comma, equals)
+import Prelude hiding ((<>))
 
 
 -- | Convert CustomParseError to diagnostic components (error message and hints/notes)
@@ -64,7 +68,7 @@ parseDiagnosticFromBundle filename src bundle =
         -- Create position span
         position = Position (line, col) (line, col + 1) filename
 
-        -- Check if this is a custom error and add appropriate hint
+        -- Check if this is a custom error and get the text message & hints / notes
         (prettyMsg, hints) = case firstError of
                   ME.FancyError _ errs ->
                     case findCustomError (S.toList errs) of
@@ -77,26 +81,27 @@ parseDiagnosticFromBundle filename src bundle =
         findCustomError (ErrorCustom err : _) = Just err
         findCustomError (_ : rest) = findCustomError rest
 
-        -- Create the report
         report = Err (Just "Parse error") msg [(position, This prettyMsg)] hints
         diagnostic = addReport mempty report
     in addFile diagnostic filename src
 
 
+-- | Convert CustomParseException to diagnostic format directly
+-- CustomParseExceptions are essentially an exception container for
+-- CustomParseError, so extract the error and convert that
+customParseExceptionToDiagnostic :: String -> String -> CustomParseException -> Diagnostic String
+customParseExceptionToDiagnostic filename src (CustomParseException loc customErr) =
+    customParseErrorDiagnostic "Syntax error" filename src loc customErr
 
--- | Convert Acton compiler errors to diagnose format
--- Handles post-parse errors (context, type, compilation) that use SrcLoc offsets.
--- Uses Megaparsec's reachOffset just for offset-to-line/column conversion.
-errorDiagnosticWithLoc :: String -> String -> String -> SrcLoc -> String -> Diagnostic String
-errorDiagnosticWithLoc errorKind filename src srcLoc msg =
-    let (line, col, endCol) = case srcLoc of
-            NoLoc -> (1, 1, 2)  -- Default if no location
+
+-- | Convert CustomParseError to Diagnostic
+-- This is used by tests to ensure consistent error formatting
+customParseErrorDiagnostic :: String -> String -> String -> SrcLoc -> CustomParseError -> Diagnostic String
+customParseErrorDiagnostic errKind filename src srcLoc customErr =
+    let (msg, hints) = customParseErrorToDiagnostic customErr
+        (line, col, endCol) = case srcLoc of
+            NoLoc -> (1, 1, 2)
             Loc startOffset endOffset ->
-                -- Use Megaparsec's reachOffset to convert offset to position
-                -- Note: We're borrowing Megaparsec's offset-to-line/column conversion
-                -- utility here, but these are NOT Megaparsec errors - they're Acton's
-                -- own errors that just store character offsets for efficiency.
-                -- Create a minimal PosState for the conversion
                 let initialState = PosState
                         { pstateInput = src
                         , pstateOffset = 0
@@ -109,18 +114,16 @@ errorDiagnosticWithLoc errorKind filename src srcLoc msg =
                     startPos = pstateSourcePos startState
                     endPos = pstateSourcePos endState
                 in (unPos (sourceLine startPos), unPos (sourceColumn startPos), unPos (sourceColumn endPos))
-
-        -- Create position span
+        
         position = Position (line, col) (line, endCol) filename
-
-        -- Create the report
-        report = Err (Just errorKind) msg [(position, This msg)] []
+        report = Err (Just errKind) msg [(position, This msg)] hints
         diagnostic = addReport mempty report
     in addFile diagnostic filename src
 
-
--- | Convert CustomParseException to error list format expected by handle
-customParseException :: CustomParseException -> [(SrcLoc, String)]
-customParseException (CustomParseException loc customErr) =
-    let (msg, _) = customParseErrorToDiagnostic customErr
-    in [(loc, msg)]
+-- | Convert Acton compiler errors to diagnose format
+-- Classic Acton errors consist of (loc, msg). Wrap in OtherError and convert to
+-- Diagnostic.
+-- One day we'll convert everything to more structured errors and get rid of
+-- this function
+actErrToDiagnostic errKind filename src srcLoc msg =
+    customParseErrorDiagnostic errKind filename src srcLoc (OtherError msg)
