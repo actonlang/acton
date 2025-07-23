@@ -1,8 +1,10 @@
 Building file test/syntaxerrors/err23.act using temporary scratch directory
-[error Syntax error]: missing closing '}' for expression
-     +--> err23.act@4:21-4:25
+[error Syntax error]: Missing closing '}' for expression
+     +--> test/syntaxerrors/err23.act@4:21-4:25
      |
    4 |     return f"Hello {name"
      :                     ^--- 
-     :                     `- missing closing '}' for expression
+     :                     `- Missing closing '}' for expression
+     :
+     | Hint: Add a closing brace to complete the interpolation
 -----+

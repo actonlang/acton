@@ -4,4 +4,7 @@ ERROR: [error Syntax error]: Invalid character '@' in format specifier
    1 │ "outer {"inner {x:5@}"}"
      •                     
      •                    ╰╸ Invalid character '@' in format specifier
+     •
+     │ Note: Valid format specifiers use <, >, ^, +, -, #, 0, width, .precision, and type characters
+     │ Hint: Use a format specifier, e.g. '{name:<18}'
 ─────╯

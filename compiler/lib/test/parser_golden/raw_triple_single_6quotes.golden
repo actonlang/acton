@@ -1,0 +1,11 @@
+ERROR: [error Parse error]: unexpected "''"
+                     expecting "r"", "r"""", "r'", "r'''", ';', call arguments, slice/index expression, comma, end of line, if clause, or operator
+
+     ╭──▶ test@1:11-1:12
+     │
+   1 │ r'''raw''''''
+     •           ┬ 
+     •           ╰╸ unexpected "''"
+     •              expecting "r"", "r"""", "r'", "r'''", ';', call arguments, slice/index expression, comma, end of line, if clause, or operator
+     •              
+─────╯

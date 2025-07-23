@@ -4,4 +4,6 @@ ERROR: [error Syntax error]: Expected digits after '.' in format specifier
    1 │ f"Missing precision digits {value:10.}"
      •                                       
      •                                      ╰╸ Expected digits after '.' in format specifier
+     •
+     │ Hint: Add precision digits, e.g. .2f for 2 decimal places
 ─────╯

@@ -681,10 +681,12 @@ parseActFile gopts opts paths actFile = do
                     iff (C.timing gopts) $ putStrLn("Reading file " ++ makeRelative (srcDir paths) actFile
                                                    ++ ": " ++ fmtTime(timeRead - timeStart))
                     m <- Acton.Parser.parseModule (modName paths) actFile srcContent
+                      -- Parse errors from MegaParsec
                       `catch` handleParseError srcContent
+                      -- Custom parse errors from Acton.Parser, thrown directly by parseException
+                      `catch` (\err -> handleDiagnostic gopts opts paths (modName paths) $ Diag.customParseExceptionToDiagnostic actFile srcContent err)
                       `catch` handle gopts opts "Context error" Acton.Parser.contextError srcContent paths (modName paths)
                       `catch` handle gopts opts "Indentation error" Acton.Parser.indentationError srcContent paths (modName paths)
-                      `catch` handle gopts opts "Syntax error" Acton.Parser.failFastError srcContent paths (modName paths)
                     iff (C.parse opts) $ dump (modName paths) "parse" (Pretty.print m)
                     timeParse <- getTime Monotonic
                     iff (C.timing gopts) $ putStrLn("Parsing file " ++ makeRelative (srcDir paths) actFile
@@ -692,10 +694,8 @@ parseActFile gopts opts paths actFile = do
                     stubMode <- detectStubMode paths actFile opts
                     return $ ActonTask (modName paths) srcContent m stubMode
     where handleParseError :: String -> ParseErrorBundle String CustomParseError -> IO A.Module
-          handleParseError srcContent bundle = do
-                    let diagnostic = Diag.parseDiagnosticFromBundle actFile srcContent bundle
-                    printDiag gopts opts diagnostic
-                    handleCleanup paths (modName paths)
+          handleParseError srcContent bundle =
+                    handleDiagnostic gopts opts paths (modName paths) $ Diag.parseDiagnosticFromBundle actFile srcContent bundle
           detectStubMode :: Paths -> String -> C.CompileOptions -> IO Bool
           detectStubMode paths srcfile opts = do
                     exists <- doesFileExist cFile
@@ -1033,7 +1033,7 @@ handle gopts opts errKind f src paths mn ex = do
             putStrLn ("\nERROR: Error when compiling " ++ (prstr mn) ++ " module: " ++ errKind)
             handleCleanup paths mn
         ((loc, msg):_) -> do
-            let diagnostic = Diag.errorDiagnosticWithLoc errKind actFile src loc msg
+            let diagnostic = Diag.actErrToDiagnostic errKind actFile src loc msg
             printDiag gopts opts diagnostic
             handleCleanup paths mn
 
@@ -1041,6 +1041,15 @@ modNameToFilename :: A.ModName -> String
 modNameToFilename mn = joinPath (map nameToString names) ++ ".act"
   where
     A.ModName names = mn
+
+-- | Handle errors by converting them to diagnostics and printing them
+-- This is meant to eventually replace the `handle` function by being a more
+-- modern alternative that natively works with the Diagnose library we use to
+-- print errors
+handleDiagnostic :: C.GlobalOptions -> C.CompileOptions -> Paths -> A.ModName -> Diagnostic String -> IO a
+handleDiagnostic gopts opts paths mn diagnostic = do
+    printDiag gopts opts diagnostic
+    handleCleanup paths mn
 
 handleTypeError gopts opts errKind f src paths mn ex = do
     printDiag gopts opts $ mkErrorDiagnostic (modNameToFilename mn) src (typeReport ex (modNameToFilename mn) src)

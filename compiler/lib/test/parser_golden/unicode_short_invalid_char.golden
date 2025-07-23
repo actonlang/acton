@@ -1,7 +1,9 @@
-ERROR: [error Syntax error]: Incomplete universal character name (4 hex digits needed)
+ERROR: [error Syntax error]: Incomplete universal character name
      ╭──▶ test@1:4-1:7
      │
    1 │ "\u123G"
      •    ┬── 
-     •    ╰╸ Incomplete universal character name (4 hex digits needed)
+     •    ╰╸ Incomplete universal character name
+     •
+     │ Note: Expected 4 hex digits, found 3
 ─────╯

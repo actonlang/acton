@@ -1,7 +1,10 @@
-ERROR: [error Syntax error]: "\x" must be followed by two hexadecimal digits
+ERROR: [error Syntax error]: Incomplete hex character
      ╭──▶ test@1:4-1:4
      │
    1 │ "\x"
      •     
-     •    ╰╸ "\x" must be followed by two hexadecimal digits
+     •    ╰╸ Incomplete hex character
+     •
+     │ Note: Hex-escaped characters must be specified by two hexadecimal digits
+     │ Hint: Use two characters, e.g. \x9a
 ─────╯

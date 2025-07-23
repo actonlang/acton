@@ -23,7 +23,7 @@ import Pretty (print)
 import Test.Syd
 import Test.Syd.Def.Golden (goldenTextFile)
 import qualified Control.Monad.Trans.State.Strict as St
-import Text.Megaparsec (runParser, errorBundlePretty)
+import Text.Megaparsec (runParser, errorBundlePretty, ShowErrorComponent(..))
 import qualified Data.Text as T
 import Data.List (isInfixOf, isPrefixOf)
 import Error.Diagnose (printDiagnostic, prettyDiagnostic, WithUnicode(..), TabSize(..), defaultStyle)
@@ -148,6 +148,46 @@ main = do
           testParseOutput "f\"\"\"Name: {name}\nAge: {age}\"\"\"" "\"Name: %s\\\\nAge: %s\" % (str(name), str(age))"  -- f-prefix with multi-line
           testParseOutput "\"\"\"Plain text without interpolation\"\"\"" "\"Plain text without interpolation\""  -- no braces = no interpolation
 
+        describe "Triple quotes with 4-5 quotes (ending with quotes)" $ do
+          -- Triple double quotes with 4 quotes (string ends with single ")
+          testParseOutput "\"\"\"\"foo\"\"\"" "\"\\\"foo\""  -- """"foo""" -> "foo (1 quote in content)
+          testParseOutput "\"\"\"\"hello world\"\"\"\"" "\"\\\"hello world\\\"\""  -- """""hello world""""" -> ""hello world"" (2 quotes in content)
+          testParseOutput "r\"\"\"\"raw quote\"\"\"" "\"\\\"raw quote\""  -- raw string with 4 quotes
+          testParseOutput "r\"\"\"\"\"raw two quotes\"\"\"" "\"\\\"\\\"raw two quotes\""  -- raw string with 5 quotes
+
+          -- Triple single quotes with 4 quotes (string ends with single ')
+          testParseOutput "''''bar'''" "\"'bar\""  -- ''''bar''' -> 'bar (1 quote in content)
+          testParseOutput "'''''test me'''''" "\"''test me''\""  -- '''''test me''''' -> ''test me'' (2 quotes in content)
+          testParseOutput "r''''raw single'''" "\"'raw single\""  -- raw string with 4 quotes
+          testParseOutput "r'''''raw two singles'''" "\"''raw two singles\""  -- raw string with 5 quotes
+
+          -- Interpolation with trailing quotes
+          testParseOutput "\"\"\"\"value: {x}\"\"\"" "\"\\\"value: %s\" % str(x)"  -- interpolation with trailing quote
+          testParseOutput "\"\"\"\"\"formatted {y}\"\"\"\"\"" "\"\\\"\\\"formatted %s\\\"\\\"\" % str(y)"  -- 2 quotes before and after
+          testParseOutput "f''''x = {x}'''" "\"'x = %s\" % str(x)"  -- f-string with 4 single quotes
+          testParseOutput "f'''''vals: {a}, {b}'''''" "\"''vals: %s, %s''\" % (str(a), str(b))"  -- f-string with 5 single quotes
+
+        describe "Triple quotes with 6+ quotes (error cases)" $ do
+          -- Triple double quotes with 6+ quotes should fail
+          testParseError "triple_double_6quotes" "\"\"\"foo\"\"\"\"\"\""  -- 3 opening, 6 closing
+          testParseError "triple_double_7quotes" "\"\"\"bar\"\"\"\"\"\"\""  -- 3 opening, 7 closing
+          testParseError "triple_double_8quotes" "\"\"\"test\"\"\"\"\"\"\"\""  -- 3 opening, 8 closing
+          testParseError "triple_double_10quotes" "\"\"\"content\"\"\"\"\"\"\"\"\"\""  -- 3 opening, 10 closing
+
+          -- Triple single quotes with 6+ quotes should fail
+          testParseError "triple_single_6quotes" "'''foo''''''"  -- 3 opening, 6 closing
+          testParseError "triple_single_7quotes" "'''bar'''''''"  -- 3 opening, 7 closing
+          testParseError "triple_single_8quotes" "'''test''''''''"  -- 3 opening, 8 closing
+          testParseError "triple_single_10quotes" "'''content''''''''''"  -- 3 opening, 10 closing
+
+          -- Raw strings with 6+ quotes should fail
+          testParseError "raw_triple_double_6quotes" "r\"\"\"raw\"\"\"\"\"\""  -- raw with 6 closing quotes
+          testParseError "raw_triple_single_6quotes" "r'''raw''''''"  -- raw with 6 closing quotes
+
+          -- F-strings with 6+ quotes should fail
+          testParseError "fstring_triple_double_6quotes" "f\"\"\"x={x}\"\"\"\"\"\""  -- f-string with 6 closing quotes
+          testParseError "fstring_triple_single_6quotes" "f'''x={x}''''''"  -- f-string with 6 closing quotes
+
         describe "Special characters and escaping" $ do
           -- Escaped braces
           testParseOutput "f\"something but {{{substituted}}}\"" "\"something but {%s}\" % str(substituted)"
@@ -242,6 +282,13 @@ main = do
         describe "Basic string errors" $ do
           testModuleParseError "unclosed_string" "a = \"hello"
           testModuleParseError "unclosed_string_triple" "z = 1\na = \"\"\"hello\nb = 3\ndef foo():\n    pass"
+
+        describe "Triple quote errors (6+ quotes)" $ do
+          testModuleParseError "six_double_quotes" "a = \"\"\"\"\"\"test\"\"\"\"\"\""  -- 6 quotes each side
+          testModuleParseError "six_single_quotes" "a = ''''''test''''''"  -- 6 quotes each side
+          testModuleParseError "seven_double_quotes" "a = \"\"\"\"\"\"\"test\"\"\"\"\"\"\""  -- 7 quotes each side
+          testModuleParseError "mixed_six_quotes_double" "a = \"\"\"\"\"\"mixed content with {interpolation}\"\"\"\"\"\""
+          testModuleParseError "raw_six_quotes" "a = r\"\"\"\"\"\"raw test\"\"\"\"\"\""
 
         describe "Basic interpolation errors" $ do
           -- F-string errors
@@ -359,6 +406,13 @@ main = do
 
 
 
+-- Helper function to format custom parse errors consistently
+formatCustomParseError :: String -> String -> SrcLoc -> P.CustomParseError -> String
+formatCustomParseError filename input loc err =
+  let diagnostic = Diag.customParseErrorDiagnostic "Syntax error" filename input loc err
+      doc = prettyDiagnostic WithUnicode (TabSize 4) diagnostic
+      layout = layoutPretty defaultLayoutOptions (unAnnotate doc)
+  in T.unpack $ renderStrict layout
 
 parseActon :: String -> Either String String
 parseActon input =
@@ -367,33 +421,17 @@ parseActon input =
       (E.evaluate $ case runParser (St.evalStateT P.stmt P.initState) "" inputWithNewline of
         Left err -> Left $ renderDiagnostic err
         Right result -> Right $ concatMap (Pretty.print) result)
-      handleFailFastError
+      handleCustomParseException
   where
     inputWithNewline = if last input == '\n' then input else input ++ "\n"
-    handleFailFastError :: P.FailFastError -> IO (Either String String)
+    handleCustomParseException :: P.CustomParseException -> IO (Either String String)
     renderDiagnostic err =
       let diagnostic = Diag.parseDiagnosticFromBundle "test" inputWithNewline err
           doc = prettyDiagnostic WithUnicode (TabSize 4) diagnostic
           layout = layoutPretty defaultLayoutOptions (unAnnotate doc)
       in T.unpack $ renderStrict layout
-    handleFailFastError (P.FailFastError loc msg) =
-      return $ Left $ formatFailFastError loc msg
-
-    formatFailFastError :: SrcLoc -> String -> String
-    formatFailFastError loc msg =
-      let diagnostic = Diag.errorDiagnosticWithLoc "Syntax error" "test" inputWithNewline loc msg
-          doc = prettyDiagnostic WithUnicode (TabSize 4) diagnostic
-          layout = layoutPretty defaultLayoutOptions (unAnnotate doc)
-      in T.unpack $ renderStrict layout
-
-    offsetToLineCol :: Int -> String -> (Int, Int)
-    offsetToLineCol offset s =
-      let before = take offset s
-          lineNum = length (filter (== '\n') before) + 1
-          colNum = case reverse before of
-                     [] -> 1
-                     (c:cs) -> length (takeWhile (/= '\n') (c:cs)) + 1
-      in (lineNum, colNum)
+    handleCustomParseException (P.CustomParseException loc err) =
+      return $ Left $ formatCustomParseError "test" inputWithNewline loc err
 
 -- Helper function to parse a full module (for testing module-level constructs)
 parseModuleTest :: String -> Either String String
@@ -403,7 +441,7 @@ parseModuleTest input =
       (E.evaluate $ case runParser (St.evalStateT P.file_input P.initState) "test.act" inputWithNewline of
         Left err -> Left $ renderDiagnostic err
         Right (imports, suite) -> Right $ "Module parsed successfully")
-      handleFailFastError
+      handleCustomParseException
   where
     inputWithNewline = if null input || last input == '\n' then input else input ++ "\n"
     renderDiagnostic err =
@@ -411,16 +449,9 @@ parseModuleTest input =
           doc = prettyDiagnostic WithUnicode (TabSize 4) diagnostic
           layout = layoutPretty defaultLayoutOptions (unAnnotate doc)
       in T.unpack $ renderStrict layout
-    handleFailFastError :: P.FailFastError -> IO (Either String String)
-    handleFailFastError (P.FailFastError loc msg) =
-      return $ Left $ formatFailFastError loc msg
-
-    formatFailFastError :: SrcLoc -> String -> String
-    formatFailFastError loc msg =
-      let diagnostic = Diag.errorDiagnosticWithLoc "Parse error" "test.act" inputWithNewline loc msg
-          doc = prettyDiagnostic WithUnicode (TabSize 4) diagnostic
-          layout = layoutPretty defaultLayoutOptions (unAnnotate doc)
-      in T.unpack $ renderStrict layout
+    handleCustomParseException :: P.CustomParseException -> IO (Either String String)
+    handleCustomParseException (P.CustomParseException loc err) =
+      return $ Left $ formatCustomParseError "test.act" inputWithNewline loc err
 
 -- Helper function to test module-level parser errors with golden files
 testModuleParseError :: String -> String -> Spec
@@ -441,7 +472,7 @@ testParse env0 modulePaths = do
     let processModule (accEnv, accModules) modulePath = do
           (env, parsed) <- parseAct accEnv modulePath
           return (accEnv, accModules ++ [(takeFileName modulePath, parsed)])
-    
+
     (_, modules) <- foldM processModule (env0, []) modulePaths
     return modules
 
@@ -541,7 +572,7 @@ testKinds env0 modulePaths = do
           (env, parsed) <- parseAct accEnv modulePath
           kchecked <- Acton.Kinds.check env parsed
           return (accEnv, accModules ++ [(takeFileName modulePath, parsed, kchecked)])
-    
+
     (_, modules) <- foldM processModule (env0, []) modulePaths
     return modules
 
@@ -561,7 +592,7 @@ testTypes env0 modulePaths = do
           let S.NModule tenv mdoc = nmod
           let newAccEnv = Acton.Env.addMod (S.modname parsed) tenv mdoc accEnv
           return (newAccEnv, accModules ++ [(takeFileName modulePath, kchecked, tchecked)])
-    
+
     (_, modules) <- foldM processModule (env0, []) modulePaths
     return modules
 
@@ -582,7 +613,7 @@ testNorm env0 modulePaths = do
           (normalized, normEnv) <- Acton.Normalizer.normalize typeEnv tchecked
           let newAccEnv = Acton.Env.addMod (S.modname parsed) tenv mdoc accEnv
           return (newAccEnv, accModules ++ [(takeFileName modulePath, tchecked, normalized)])
-    
+
     (_, modules) <- foldM processModule (env0, []) modulePaths
     return modules
 
@@ -604,7 +635,7 @@ testDeact env0 modulePaths = do
           (deacted, deactEnv) <- Acton.Deactorizer.deactorize normEnv normalized
           let newAccEnv = Acton.Env.addMod (S.modname parsed) tenv mdoc accEnv
           return (newAccEnv, accModules ++ [(takeFileName modulePath, normalized, deacted)])
-    
+
     (_, modules) <- foldM processModule (env0, []) modulePaths
     return modules
 
@@ -627,7 +658,7 @@ testCps env0 modulePaths = do
           (cpstyled, _) <- Acton.CPS.convert deactEnv deacted
           let newAccEnv = Acton.Env.addMod (S.modname parsed) tenv mdoc accEnv
           return (newAccEnv, accModules ++ [(takeFileName modulePath, deacted, cpstyled)])
-    
+
     (_, modules) <- foldM processModule (env0, []) modulePaths
     return modules
 
@@ -651,7 +682,7 @@ testLL env0 modulePaths = do
           (lifted,liftEnv) <- Acton.LambdaLifter.liftModule cpsEnv cpstyled
           let newAccEnv = Acton.Env.addMod (S.modname parsed) tenv mdoc accEnv
           return (newAccEnv, accModules ++ [(takeFileName modulePath, cpstyled, lifted)])
-    
+
     (_, modules) <- foldM processModule (env0, []) modulePaths
     return modules
 
@@ -676,7 +707,7 @@ testBoxing env0 modulePaths = do
           boxed <- Acton.Boxing.doBoxing liftEnv lifted
           let newAccEnv = Acton.Env.addMod (S.modname parsed) tenv mdoc accEnv
           return (newAccEnv, accModules ++ [(takeFileName modulePath, lifted, boxed)])
-    
+
     (_, modules) <- foldM processModule (env0, []) modulePaths
     return modules
 
@@ -702,7 +733,7 @@ testCodeGen env0 modulePaths = do
           (n,h,c) <- Acton.CodeGen.generate liftEnv "" boxed
           let newAccEnv = Acton.Env.addMod (S.modname parsed) tenv mdoc accEnv
           return (newAccEnv, accModules ++ [(takeFileName modulePath, boxed, n, h, c)])
-    
+
     (_, modules) <- foldM processModule (env0, []) modulePaths
     return modules
 

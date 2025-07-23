@@ -4,4 +4,6 @@ ERROR: [error Syntax error]: Empty format specifier after ':'
    1 │ f"Empty format spec {x:}"
      •                         
      •                        ╰╸ Empty format specifier after ':'
+     •
+     │ Hint: Add a format specification or remove the colon
 ─────╯

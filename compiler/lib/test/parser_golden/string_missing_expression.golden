@@ -4,4 +4,6 @@ ERROR: [error Syntax error]: Missing expression before format specifier
    1 │ "Missing expression {:10}"
      •                       
      •                      ╰╸ Missing expression before format specifier
+     •
+     │ Hint: Add an expression before the colon, e.g. {value:10}
 ─────╯

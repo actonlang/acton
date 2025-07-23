@@ -5,7 +5,8 @@ Building file test/syntaxerrors/err6.act using temporary scratch directory
      |
    1 | def f(X):
      :       ^ 
-     :       `- invalid name 'X'
+     :       `- Invalid name 'X'
      :
-     | Hint: Single upper case character (optionally followed by digits) are reserved for type variables. Use a longer name.
+     | Note: Single upper case character (optionally followed by digits) are reserved for type variables
+     | Hint: Use a longer name
 -----+

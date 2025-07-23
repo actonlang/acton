@@ -4,4 +4,6 @@ ERROR: [error Syntax error]: Empty expression in string interpolation
    1 │ f"Empty expression {}"
      •                      
      •                     ╰╸ Empty expression in string interpolation
+     •
+     │ Hint: Add an expression between the braces, e.g. {name}
 ─────╯

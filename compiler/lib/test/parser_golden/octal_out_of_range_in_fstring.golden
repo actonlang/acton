@@ -1,7 +1,9 @@
-ERROR: [error Syntax error]: octal escape sequence out of range
+ERROR: [error Syntax error]: Octal escape sequence out of range
      ╭──▶ test@1:15-1:18
      │
    1 │ f"value: {x} \777"
      •               ┬── 
-     •               ╰╸ octal escape sequence out of range
+     •               ╰╸ Octal escape sequence out of range
+     •
+     │ Note: Octal values must be between \000 and \377
 ─────╯

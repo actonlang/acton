@@ -26,8 +26,60 @@ import qualified Text.Megaparsec.Error as ME
 
 import Acton.Syntax
 import SrcLocation
-import Utils (SrcLoc(..))
-import Acton.Parser (CustomParseError(..)) -- Import for custom error types
+import Utils (SrcLoc(..), loc)
+import Acton.Parser (CustomParseError(..), CustomParseException(..), ContextError(..), IndentationError(..), ctxMsg) -- Import for custom error types
+import qualified Utils as U
+import qualified Acton.Env as Env
+import Pretty (render, pretty, text, (<+>), (<>), comma, equals)
+import Prelude hiding ((<>))
+
+
+-- | Convert CustomParseError to diagnostic components (error message and hints/notes)
+customParseErrorToDiagnostic :: CustomParseError -> (String, [Note String])
+customParseErrorToDiagnostic (TypeVariableNameError name)      = ("Invalid name '" ++ name ++ "'",
+                                                                  [Note "Single upper case character (optionally followed by digits) are reserved for type variables",
+                                                                   Hint "Use a longer name"])
+customParseErrorToDiagnostic (InvalidFormatSpecifier spec)     = ("Invalid format specifier" ++ if null spec then "" else ": " ++ spec,
+                                                                  [])
+customParseErrorToDiagnostic (TooManyQuotesError quote)        = ("Too many quote characters",
+                                                                  [Note "Triple-quoted strings accept 3-5 quotes at the end",
+                                                                   Hint "Using 4 quotes results in a string with 1 quote at the end, e.g. \"\"\"text\"\"\"\" -> text\"",
+                                                                   Hint "Using 5 quotes results in a string with 2 quotes at the end, e.g. \"\"\"text\"\"\"\"\" -> text\"\"",
+                                                                   Hint "Use escape sequences for quotes inside strings, e.g. \"\"\"text \\\"with quotes\\\"\"\" -> text \"with quotes\""])
+customParseErrorToDiagnostic (MissingClosingQuote quote)       = ("Missing closing " ++ quote,
+                                                                  [Hint $ "Add a closing quote (" ++ quote ++ ") to match the opening one"])
+-- String interpolation errors
+customParseErrorToDiagnostic EmptyInterpolationExpression       = ("Empty expression in string interpolation",
+                                                                  [Hint "Add an expression between the braces, e.g. {name}"])
+customParseErrorToDiagnostic MissingExpressionBeforeFormat      = ("Missing expression before format specifier",
+                                                                  [Hint "Add an expression before the colon, e.g. {value:10}"])
+customParseErrorToDiagnostic UnclosedInterpolationBrace         = ("Missing closing '}' for expression",
+                                                                  [Hint "Add a closing brace to complete the interpolation"])
+customParseErrorToDiagnostic EmptyFormatSpecifierError          = ("Empty format specifier after ':'",
+                                                                  [Hint "Add a format specification or remove the colon"])
+customParseErrorToDiagnostic TabInFormatSpecifier               = ("Tab character not allowed in format specifier",
+                                                                  [])
+customParseErrorToDiagnostic NewlineInFormatSpecifier           = ("Newline not allowed in format specifier",
+                                                                  [Hint "Keep format specifiers on a single line"])
+customParseErrorToDiagnostic (InvalidCharInFormatSpecifier c)   = ("Invalid character '" ++ [c] ++ "' in format specifier",
+                                                                  [Note "Valid format specifiers use <, >, ^, +, -, #, 0, width, .precision, and type characters",
+                                                                   Hint "Use a format specifier, e.g. '{name:<18}'"])
+customParseErrorToDiagnostic MissingFormatPrecisionDigits       = ("Expected digits after '.' in format specifier",
+                                                                  [Hint "Add precision digits, e.g. .2f for 2 decimal places"])
+-- Escape sequence errors
+customParseErrorToDiagnostic (IncompleteHexEscape c)            = ("Incomplete hex character",
+                                                                  [Note "Hex-escaped characters must be specified by two hexadecimal digits",
+                                                                   Hint "Use two characters, e.g. \\x9a"])
+customParseErrorToDiagnostic OctalEscapeOutOfRange              = ("Octal escape sequence out of range",
+                                                                  [Note "Octal values must be between \\000 and \\377"])
+customParseErrorToDiagnostic (IncompleteUnicodeEscape exp found) = ("Incomplete universal character name",
+                                                                   [Note $ "Expected " ++ show exp ++ " hex digits, found " ++ show found])
+customParseErrorToDiagnostic NonAsciiInBytesLiteral             = ("Only ASCII characters allowed in bytes literal",
+                                                                  [Hint "Use escape sequences for non-ASCII values"])
+customParseErrorToDiagnostic UnknownEscapeSequence              = ("Unknown escape sequence",
+                                                                  [Note "Valid escape sequences: \\\\, \\\", \\', \\n, \\r, \\t, \\a, \\b, \\f, \\v, \\xHH, \\ooo, \\uHHHH, \\UHHHHHHHH"])
+customParseErrorToDiagnostic (OtherError msg)                  = (msg,
+                                                                  [])
 
 
 -- | Convert Megaparsec parse errors to diagnose format
@@ -45,7 +97,6 @@ parseDiagnosticFromBundle filename src bundle =
         sourcePos = pstateSourcePos newPosState
         line = unPos (sourceLine sourcePos)
         col = unPos (sourceColumn sourcePos)
-        -- Get the error message
         msg = parseErrorTextPretty firstError
 
         -- For parse errors, we only have a single position, not a span
@@ -53,41 +104,40 @@ parseDiagnosticFromBundle filename src bundle =
         -- Create position span
         position = Position (line, col) (line, col + 1) filename
 
-        -- Check if this is a custom error and add appropriate hint
-        (hints, markerMsg) = case firstError of
+        -- Check if this is a custom error and get the text message & hints / notes
+        (prettyMsg, hints) = case firstError of
                   ME.FancyError _ errs ->
                     case findCustomError (S.toList errs) of
-                      Just (TypeVariableNameError name) ->
-                          ([Hint ("Single upper case character (optionally followed by digits) are reserved for type variables. Use a longer name.")],
-                           "invalid name '" ++ name ++ "'")
-                      _ -> ([], msg)
-                  _ -> ([], msg)
+                      Just customErr -> customParseErrorToDiagnostic customErr
+                      Nothing -> (msg, [])
+                  _ -> (msg, [])
 
         findCustomError :: [ErrorFancy CustomParseError] -> Maybe CustomParseError
         findCustomError [] = Nothing
         findCustomError (ErrorCustom err : _) = Just err
         findCustomError (_ : rest) = findCustomError rest
 
-        -- Create the report
-        report = Err (Just "Parse error") msg [(position, This markerMsg)] hints
+        report = Err (Just "Parse error") msg [(position, This prettyMsg)] hints
         diagnostic = addReport mempty report
     in addFile diagnostic filename src
 
 
+-- | Convert CustomParseException to diagnostic format directly
+-- CustomParseExceptions are essentially an exception container for
+-- CustomParseError, so extract the error and convert that
+customParseExceptionToDiagnostic :: String -> String -> CustomParseException -> Diagnostic String
+customParseExceptionToDiagnostic filename src (CustomParseException loc customErr) =
+    customParseErrorDiagnostic "Syntax error" filename src loc customErr
 
--- | Convert Acton compiler errors to diagnose format
--- Handles post-parse errors (context, type, compilation) that use SrcLoc offsets.
--- Uses Megaparsec's reachOffset just for offset-to-line/column conversion.
-errorDiagnosticWithLoc :: String -> String -> String -> SrcLoc -> String -> Diagnostic String
-errorDiagnosticWithLoc errorKind filename src srcLoc msg =
-    let (line, col, endCol) = case srcLoc of
-            NoLoc -> (1, 1, 2)  -- Default if no location
+
+-- | Convert CustomParseError to Diagnostic
+-- This is used by tests to ensure consistent error formatting
+customParseErrorDiagnostic :: String -> String -> String -> SrcLoc -> CustomParseError -> Diagnostic String
+customParseErrorDiagnostic errKind filename src srcLoc customErr =
+    let (msg, hints) = customParseErrorToDiagnostic customErr
+        (line, col, endCol) = case srcLoc of
+            NoLoc -> (1, 1, 2)
             Loc startOffset endOffset ->
-                -- Use Megaparsec's reachOffset to convert offset to position
-                -- Note: We're borrowing Megaparsec's offset-to-line/column conversion
-                -- utility here, but these are NOT Megaparsec errors - they're Acton's
-                -- own errors that just store character offsets for efficiency.
-                -- Create a minimal PosState for the conversion
                 let initialState = PosState
                         { pstateInput = src
                         , pstateOffset = 0
@@ -100,12 +150,16 @@ errorDiagnosticWithLoc errorKind filename src srcLoc msg =
                     startPos = pstateSourcePos startState
                     endPos = pstateSourcePos endState
                 in (unPos (sourceLine startPos), unPos (sourceColumn startPos), unPos (sourceColumn endPos))
-
-        -- Create position span
+        
         position = Position (line, col) (line, endCol) filename
-
-        -- Create the report
-        report = Err (Just errorKind) msg [(position, This msg)] []
+        report = Err (Just errKind) msg [(position, This msg)] hints
         diagnostic = addReport mempty report
     in addFile diagnostic filename src
 
+-- | Convert Acton compiler errors to diagnose format
+-- Classic Acton errors consist of (loc, msg). Wrap in OtherError and convert to
+-- Diagnostic.
+-- One day we'll convert everything to more structured errors and get rid of
+-- this function
+actErrToDiagnostic errKind filename src srcLoc msg =
+    customParseErrorDiagnostic errKind filename src srcLoc (OtherError msg)
