@@ -89,7 +89,7 @@ static B_bytearray whitespace_bytearray = &whitespace_bytearray_struct;
 
 // Conversion to and from C strings
 
-B_str to$str(char *str) { 
+B_str to$str(char *str) {
     B_str res;
     int nbytes = 0;
     int nchars = 0;
@@ -165,25 +165,25 @@ unsigned char *fromB_str(B_str str) {
 
 // #bytes in UTF-8 to represent codepoint cp
 static int byte_length(unsigned int cp) {
-    if (cp < 0x80) 
+    if (cp < 0x80)
         return 1;
-    else if (cp < 0x800) 
+    else if (cp < 0x800)
         return 2;
-    else if (cp < 0x10000) 
+    else if (cp < 0x10000)
         return 3;
-    else 
+    else
         return 4;
 }
 
 // #bytes in UTF-8 for char starting with byte c
 static int byte_length2(unsigned char c) {
-    if (c < 0x7f) 
+    if (c < 0x7f)
         return 1;
-    else if (c < 0xdf) 
+    else if (c < 0xdf)
         return 2;
-    else if (c < 0xef) 
+    else if (c < 0xef)
         return 3;
-    else 
+    else
         return 4;
 }
 
@@ -256,7 +256,7 @@ static int byte_no(B_str text, int i) {
     return res;
 }
 
-// Handles negative indices in getitem etc (slice notation) 
+// Handles negative indices in getitem etc (slice notation)
 static int get_index(int i, int nchars) {
     if (i >= 0) {
         if (i<nchars)
@@ -269,7 +269,7 @@ static int get_index(int i, int nchars) {
     return 0;
 }
 
- 
+
 // Eliminates slice notation in find, index, count and other methods
 // with optional start and end and adds defaults for omitted parameters.
 
@@ -280,7 +280,7 @@ static int fix_start_end(int nchars, B_int *start, B_int *end) {
         int st = from$int(*start);
         if (st > nchars)
             return -1;
-        if (st < 0) 
+        if (st < 0)
             st += nchars+1;
         st = st < 0 ? 0 : st;
         *start = to$int(st);
@@ -289,12 +289,12 @@ static int fix_start_end(int nchars, B_int *start, B_int *end) {
         *end = to$int(nchars);
     } else {
         int en = from$int(*end);
-        if (en > nchars)   
-            en = nchars;      
-        else if (en < 0) 
-            en += nchars+1;     
-        en = en < 0 ? 0 : en;    
-        
+        if (en > nchars)
+            en = nchars;
+        else if (en < 0)
+            en += nchars+1;
+        en = en < 0 ? 0 : en;
+
         *end = to$int(en);
     }
     return 0;
@@ -330,7 +330,7 @@ static int islinebreak_codepoint(int codepoint) {
     // For now we ignore the three codepoints below which are counted as linebreaks by
     // Python's splitlines for strings.
     //  || codepoint == 0x85 || codepoint == 0x2028 ||codepoint == 0x2029;
-    
+
 }
 
 // The Boyer-Moore-Horspool algorithm for searching for pattern in text.
@@ -380,12 +380,12 @@ static int rbmh( unsigned char *text, unsigned char *pattern, int tbytes, int pb
 }
 
 struct byte_counts {
-    int printable, squotes, dquotes, escaped, non_printable, non_ascii;
+    int printable, squotes, dquotes, escaped, non_printable, non_ascii, braces;
 };
-        
+
 
 struct byte_counts byte_count(unsigned char *s, int len) {
-   struct byte_counts res = {0,0,0,0,0,0};
+   struct byte_counts res = {0,0,0,0,0,0,0};
     unsigned char c;
     for (int i=0; i<len; i++) {
         c = s[i];
@@ -397,6 +397,8 @@ struct byte_counts byte_count(unsigned char *s, int len) {
             res.squotes++;
         else if (c=='"')
             res.dquotes++;
+        else if (c=='{' || c=='}')
+            res.braces++;
         else if (c<127)
             res.printable++;
         else
@@ -405,11 +407,25 @@ struct byte_counts byte_count(unsigned char *s, int len) {
     return res;
 }
 
-void escape_str(unsigned char *out, unsigned char *in, int outlen, int inlen, int max_esc, bool esc_squote) {
+void escape_str(unsigned char *out, unsigned char *in, int outlen, int inlen, int max_esc, bool esc_squote, bool esc_dquote, bool esc_braces, bool esc_triple_dquote) {
     unsigned char *hexdigits = (unsigned char *)"0123456789abcdef";
     unsigned char *p = out;
     for (int i=0; i<inlen; i++) {
         unsigned char c = in[i];
+
+        // Handle """ sequences if requested
+        if (esc_triple_dquote && i + 2 < inlen && c == '"' && in[i+1] == '"' && in[i+2] == '"') {
+            // Escape all three quotes: """ -> \"\"\"
+            *p = '\\'; p++;
+            *p = '"'; p++;
+            *p = '\\'; p++;
+            *p = '"'; p++;
+            *p = '\\'; p++;
+            *p = '"'; p++;
+            i += 2;  // Skip the other two quotes
+            continue;
+        }
+
         if ((c < 32 && c != '\t' && c != '\r' && c != '\n') || ( c > 126 && c <= max_esc)) {
             *p = '\\'; p++;
             *p = 'x'; p++;
@@ -427,6 +443,24 @@ void escape_str(unsigned char *out, unsigned char *in, int outlen, int inlen, in
                 }
                 *p = '\''; p++;
                 break;
+            case '"':
+                if (esc_dquote) {
+                    *p = '\\'; p++;
+                }
+                *p = '"'; p++;
+                break;
+            case '{':
+                if (esc_braces) {
+                    *p = '{'; p++;
+                }
+                *p = '{'; p++;
+                break;
+            case '}':
+                if (esc_braces) {
+                    *p = '}'; p++;
+                }
+                *p = '}'; p++;
+                break;
             case '\t':
                 *p = '\\'; p++;
                 *p = 't'; p++;
@@ -439,7 +473,7 @@ void escape_str(unsigned char *out, unsigned char *in, int outlen, int inlen, in
                 *p = '\\'; p++;
                 *p = 'r'; p++;
                 break;
-            default:        
+            default:
                 *p = c; p++;
             }
         }
@@ -448,7 +482,7 @@ void escape_str(unsigned char *out, unsigned char *in, int outlen, int inlen, in
 
 
 
-// General methods ////////////////////////////////////////////////////////////// 
+// General methods //////////////////////////////////////////////////////////////
 
 B_str B_strG_new(B_value s) {
     return $NEW(B_str, s);
@@ -480,24 +514,63 @@ B_str B_strD___str__(B_str s) {
 
 B_str B_strD___repr__(B_str s) {
     struct byte_counts bs = byte_count(s->str, s->nbytes);
-    int newbytes = 2+bs.escaped+3*bs.non_printable+(bs.squotes>0 && bs.dquotes>0 ? bs.squotes : 0);
-    B_str res;
-    NEW_UNFILLED_STR(res,s->nchars+newbytes, s->nbytes+newbytes);
-    escape_str(res->str+1,s->str,res->nbytes-1,s->nbytes,127,bs.squotes>0 && bs.dquotes>0);
-    if (bs.dquotes==0 && bs.squotes>0) {
-        res->str[0] = '"';
-        res->str[res->nbytes-1] = '"';
+    // We aim to produce a simple, readable representation of the string
+    // - Default to single quotes unless string contains single quotes
+    // - Use double quotes if string contains single quotes
+    // - Use triple quotes (""") if both quote types are present
+    // - If """ appears in the content, escape it as \"\"\"
+
+    bool use_triple_quotes = (bs.dquotes > 0 && bs.squotes > 0); // Use triple quotes if both types are present
+    bool use_double_quotes = false;  // Default to single quotes
+
+    if (use_triple_quotes) {
+        // Always use """ for triple quotes
+        use_double_quotes = true;
     } else {
-        res->str[0] = '\'';
-        res->str[res->nbytes-1] = '\'';
-    }        
+        // Simple case: use single quotes unless string contains single quotes
+        use_double_quotes = (bs.squotes > 0);
+    }
+
+    int quotes_per_side = use_triple_quotes ? 3 : 1;
+    int quote_bytes = quotes_per_side * 2;
+
+    // Count how many """ sequences need escaping (only relevant if using """ delimiters)
+    int escape_triple_bytes = 0;
+    if (use_triple_quotes) {
+        unsigned char *p = s->str;
+        int remaining = s->nbytes;
+        int pos;
+        while ((pos = bmh(p, (unsigned char*)"\"\"\"", remaining, 3)) >= 0) {
+            escape_triple_bytes += 3;  // Each quote needs a backslash: """ -> \"\"\"
+            p += pos + 3;
+            remaining = s->nbytes - (p - s->str);
+        }
+    }
+
+    int newbytes = quote_bytes + bs.escaped + 3*bs.non_printable + bs.braces + escape_triple_bytes;
+
+    B_str res;
+    NEW_UNFILLED_STR(res, s->nchars + newbytes, s->nbytes + newbytes);
+
+    char quote_char = use_double_quotes ? '"' : '\'';
+
+    // Add opening quotes
+    for (int i = 0; i < quotes_per_side; i++)
+        res->str[i] = quote_char;
+
+    escape_str(res->str + quotes_per_side, s->str, res->nbytes - quote_bytes, s->nbytes, 127, false, false, true, use_triple_quotes);
+
+    // Add closing quotes
+    for (int i = 0; i < quotes_per_side; i++)
+        res->str[res->nbytes - quotes_per_side + i] = quote_char;
+
     return res;
 }
 
 void B_strD___serialize__(B_str str,$Serial$state state) {
     int nWords = str->nbytes/sizeof($WORD) + 1;         // # $WORDS needed to store str->str, including terminating 0.
     $ROW row = $add_header(STR_ID,2+nWords,state);
-    long nbytes = (int)str->nbytes;                    // We could pack nbytes and nchars in one $WORD, 
+    long nbytes = (int)str->nbytes;                    // We could pack nbytes and nchars in one $WORD,
     memcpy(row->blob,&nbytes,sizeof($WORD));            // but we should think of a better, general approach.
     long nchars = (int)str->nchars;
     memcpy(row->blob+1,&nchars,sizeof($WORD));
@@ -521,7 +594,7 @@ B_str B_strD___deserialize__(B_str self, $Serial$state state) {
     return res;
 }
 
- 
+
 // str-specific methods ////////////////////////////////////////////////////////
 
 B_str B_strD_capitalize(B_str s) {
@@ -567,7 +640,7 @@ B_str B_strD_center(B_str s, B_int width, B_str fill) {
     unsigned char *p = res->str;
     p += padleft*fillbytes+sbytes;
     for (int i = 0; i<padright; i++) {
-        for (int j = 0; j < fillbytes; j++) 
+        for (int j = 0; j < fillbytes; j++)
             p[j] = c[j];
         p += fillbytes;
     }
@@ -878,7 +951,7 @@ B_str B_strD_ljust(B_str s, B_int width, B_str fill) {
     unsigned char *c = fill->str;
     unsigned char *p = res->str + s->nbytes;
     for (int i = 0; i<pad; i++) {
-        for (int j = 0; j < fill->nbytes; j++) 
+        for (int j = 0; j < fill->nbytes; j++)
             *p++ = c[j];
     }
     memcpy(res->str,s->str,s->nbytes);
@@ -898,11 +971,11 @@ B_str B_strD_lstrip(B_str s, B_str cs) {
     for (i = 0; i < s->nchars; i++) {
         unsigned char *q = cs->str;
         for (k = 0; k < cs->nchars; k++) {
-            if (equal_bytes(p,q,byte_length2(*q))) 
+            if (equal_bytes(p,q,byte_length2(*q)))
                 break;
             else
                 q +=  byte_length2(*q);
-        }    
+        }
         if (k == cs->nchars) break;
         p +=  byte_length2(*p);
     }
@@ -911,7 +984,7 @@ B_str B_strD_lstrip(B_str s, B_str cs) {
     memcpy(res->str,p,res->nbytes);
     return res;
 }
- 
+
 B_tuple B_strD_partition(B_str s, B_str sep) {
     int n = from$int(B_strD_find(s,sep,NULL,NULL));
     if (n<0) {
@@ -962,7 +1035,7 @@ B_str B_strD_replace(B_str s, B_str old, B_str new, B_int count) {
         memcpy(q,p,plen);
     return res;
 }
-      
+
 
 B_int B_strD_rfind(B_str s, B_str sub, B_int start, B_int end) {
     int isascii = s->nchars == s->nbytes;
@@ -1000,13 +1073,13 @@ B_str B_strD_rjust(B_str s, B_int width, B_str fill) {
     unsigned char *c = fill->str;
     unsigned char *p = res->str;
     for (int i = 0; i<pad; i++) {
-        for (int j = 0; j < fill->nbytes; j++) 
+        for (int j = 0; j < fill->nbytes; j++)
             *p++ = c[j];
     }
     memcpy(p,s->str,s->nbytes);
     return res;
 }
-                                
+
 B_tuple B_strD_rpartition(B_str s, B_str sep) {
     int n = from$int(B_strD_rfind(s,sep,NULL,NULL));
     if (n<0) {
@@ -1017,7 +1090,7 @@ B_tuple B_strD_rpartition(B_str s, B_str sep) {
         NEW_UNFILLED_STR(ls,n,nb);
         memcpy(ls->str,s->str,nb);
         int nbr = s->nbytes - sep->nbytes - nb;
-        B_str rs;    
+        B_str rs;
         NEW_UNFILLED_STR(rs,s->nchars-n-sep->nchars,nbr);
         memcpy(rs->str,s->str+nb+sep->nbytes,nbr);
         return  $NEWTUPLE(3,ls,sep,rs);
@@ -1028,7 +1101,7 @@ B_tuple B_strD_rpartition(B_str s, B_str sep) {
 B_list B_strD_split(B_str s, B_str sep, B_int maxsplit) {
     B_list res = $NEW(B_list,NULL,NULL);
     B_SequenceD_list wit = B_SequenceD_listG_witness;
-    if (maxsplit == NULL || from$int(maxsplit) < 0) maxsplit = to$int(INT_MAX); 
+    if (maxsplit == NULL || from$int(maxsplit) < 0) maxsplit = to$int(INT_MAX);
     int remaining = s->nchars;
     if (sep == NULL) {
         unsigned char *p = s->str;
@@ -1102,7 +1175,7 @@ B_list B_strD_split(B_str s, B_str sep, B_int maxsplit) {
         return res;
     }
 }
- 
+
 B_list B_strD_splitlines(B_str s, B_bool keepends) {
     B_SequenceD_list wit = B_SequenceD_listG_witness;
     if (!keepends)
@@ -1141,7 +1214,7 @@ B_list B_strD_splitlines(B_str s, B_bool keepends) {
         wit->$class->append(wit,res,line);
     }
     return res;
-} 
+}
 
 B_str B_strD_rstrip(B_str s, B_str cs) {
     if (s->nchars == 0) return s;
@@ -1152,11 +1225,11 @@ B_str B_strD_rstrip(B_str s, B_str cs) {
         unsigned char *q = cs->str;
         p = skip_chars(p,-1,0);
         for (k = 0; k < cs->nchars; k++) {
-            if (equal_bytes(p,q,byte_length2(*q))) 
+            if (equal_bytes(p,q,byte_length2(*q)))
                 break;
             else
                 q += byte_length2(*q);
-        }    
+        }
         if (k == cs->nchars) break;
     }
     p = skip_chars(p,1,0);
@@ -1204,7 +1277,7 @@ B_str B_strD_zfill(B_str s, B_int width) {
         *q = *p;
         q++;
     }
-    for (int i=0; i < fill; i++) 
+    for (int i=0; i < fill; i++)
         *q++ = '0';
     memcpy(res->str+hassign+fill,s->str+hassign,s->nbytes-hassign);
     return res;
@@ -1213,9 +1286,9 @@ B_str B_strD_zfill(B_str s, B_int width) {
 
 
 // Protocol methods; string implementations /////////////////////////////////////////////////////////////////////////////
-/* 
-   Note: We make str instances for Indexed and Sliceable even though these protocols 
-   include mutating methods. 
+/*
+   Note: We make str instances for Indexed and Sliceable even though these protocols
+   include mutating methods.
 */
 
 // B_Ord ///////////////////////////////////////////////////////////////////////////////////////////////
@@ -1223,18 +1296,18 @@ B_str B_strD_zfill(B_str s, B_int width) {
 
 // TODO: We should consider how to normalize strings before comparisons
 
- 
+
 // The comparisons below do lexicographic byte-wise comparisons.
 // Thus they do not in general reflect locale-dependent order conventions.
- 
+
 B_bool B_OrdD_strD___eq__ (B_OrdD_str wit, B_str a, B_str b) {
     return toB_bool(strcmp((char *)a->str,(char *)b->str) == 0);
 }
- 
+
 B_bool B_OrdD_strD___ne__ (B_OrdD_str wit, B_str a, B_str b) {
     return toB_bool(strcmp((char *)a->str,(char *)b->str) != 0);
 }
- 
+
 B_bool B_OrdD_strD___lt__ (B_OrdD_str wit, B_str a, B_str b) {
     return toB_bool(strcmp((char *)a->str,(char *)b->str) < 0);
 }
@@ -1242,7 +1315,7 @@ B_bool B_OrdD_strD___lt__ (B_OrdD_str wit, B_str a, B_str b) {
 B_bool B_OrdD_strD___le__ (B_OrdD_str wit, B_str a, B_str b) {
     return toB_bool(strcmp((char *)a->str,(char *)b->str) <= 0);
 }
- 
+
 B_bool B_OrdD_strD___gt__ (B_OrdD_str wit, B_str a, B_str b) {
     return toB_bool(strcmp((char *)a->str,(char *)b->str) > 0);
 }
@@ -1250,13 +1323,13 @@ B_bool B_OrdD_strD___gt__ (B_OrdD_str wit, B_str a, B_str b) {
 B_bool B_OrdD_strD___ge__ (B_OrdD_str wit, B_str a, B_str b) {
     return toB_bool(strcmp((char *)a->str,(char *)b->str) >= 0);
 }
-  
+
 // B_Hashable ///////////////////////////////////////////////////////////////////////////////////
 
 B_bool B_HashableD_strD___eq__ (B_HashableD_str wit, B_str a, B_str b) {
     return toB_bool(strcmp((char *)a->str,(char *)b->str) == 0);
 }
- 
+
 B_bool B_HashableD_strD___ne__ (B_HashableD_str wit, B_str a, B_str b) {
     return toB_bool(strcmp((char *)a->str,(char *)b->str) != 0);
 }
@@ -1305,7 +1378,7 @@ B_int B_ContainerD_strD___len__ (B_ContainerD_str wit, B_str s){
 
 // B_Container ///////////////////////////////////////////////////////////////////////////
 
- 
+
 B_bool B_ContainerD_strD___contains__ (B_ContainerD_str wit, B_str s, B_str sub) {
     return toB_bool(bmh(s->str,sub->str,s->nbytes,sub->nbytes) >= 0);
 }
@@ -1505,7 +1578,7 @@ static void expand_bytearray(B_bytearray b,int n) {
     }
     b->str = newstr;
     b->capacity = newcapacity;
-}  
+}
 
 static B_bytearray B_bytearrayD_copy(B_bytearray s) {
     B_bytearray res;
@@ -1515,8 +1588,8 @@ static B_bytearray B_bytearrayD_copy(B_bytearray s) {
     return res;
 }
 
- 
-// General methods 
+
+// General methods
 
 B_bytearray B_bytearrayG_new(B_bytes b) {
     return $NEW(B_bytearray, b);
@@ -1530,25 +1603,27 @@ B_NoneType B_bytearrayD___init__(B_bytearray self, B_bytes b) {
     memcpy(self->str,b->str,len+1);
     return B_None;
 }
- 
+
 B_bool B_bytearrayD___bool__(B_bytearray s) {
     return toB_bool(s->nbytes > 0);
 };
 
 B_str B_bytearrayD___str__(B_bytearray s) {
     struct byte_counts bs = byte_count(s->str, s->nbytes);
-    int newbytes = 14+bs.escaped+3*bs.non_printable+(bs.squotes>0 && bs.dquotes>0 ? bs.squotes : 0)+3*bs.non_ascii;
+    bool use_single_quotes = !(bs.dquotes==0 && bs.squotes>0);
+    int escaped_quotes = use_single_quotes ? bs.dquotes : bs.squotes;
+    int newbytes = 14+bs.escaped+3*bs.non_printable+escaped_quotes+3*bs.non_ascii;
     B_str res;
     int nbytes = s->nbytes+newbytes;
     NEW_UNFILLED_STR(res,nbytes,nbytes);
-    escape_str(res->str+12,s->str,res->nbytes-12,s->nbytes,255,bs.squotes>0 && bs.dquotes>0);
-    if (bs.dquotes==0 && bs.squotes>0) {
-        res->str[11] = '"';
-        res->str[res->nbytes-2] = '"';
-    } else {
+    escape_str(res->str+12,s->str,res->nbytes-12,s->nbytes,255,!use_single_quotes,use_single_quotes,false,false);
+    if (use_single_quotes) {
         res->str[11] = '\'';
         res->str[res->nbytes-2] = '\'';
-    }        
+    } else {
+        res->str[11] = '"';
+        res->str[res->nbytes-2] = '"';
+    }
     memcpy(res->str, "bytearray(b",11);
     res->str[res->nbytes-1] = ')';
     return res;
@@ -1561,8 +1636,8 @@ B_str B_bytearrayD___repr__(B_bytearray s) {
 void B_bytearrayD___serialize__(B_bytearray str,$Serial$state state) {
     int nWords = str->nbytes/sizeof($WORD) + 1;         // # $WORDS needed to store str->str, including terminating 0.
     $ROW row = $add_header(BYTEARRAY_ID,1+nWords,state);
-    long nbytes = (long)str->nbytes;                    
-    memcpy(row->blob,&nbytes,sizeof($WORD));            
+    long nbytes = (long)str->nbytes;
+    memcpy(row->blob,&nbytes,sizeof($WORD));
     memcpy(row->blob+1,str->str,nbytes+1);
 }
 
@@ -1590,7 +1665,7 @@ B_bytearray B_bytearrayD_capitalize(B_bytearray s) {
     B_bytearray res;
     NEW_UNFILLED_BYTEARRAY(res,s->nbytes);
     res->str[0] = toupper(s->str[0]);
-    for (int i=1; i<s->nbytes; i++) 
+    for (int i=1; i<s->nbytes; i++)
         res->str[i] = tolower(s->str[i]);
     return res;
 }
@@ -1605,7 +1680,7 @@ B_bytearray B_bytearrayD_center(B_bytearray s, B_int width, B_bytearray fill) {
         return B_bytearrayD_copy(s);
     }
     int pad = (wval-s->nbytes);
-    int padleft = pad/2; 
+    int padleft = pad/2;
     int padright = pad-padleft;
     int sbytes = s->nbytes;
     B_bytearray res;
@@ -1821,7 +1896,7 @@ B_bool B_bytearrayD_isdigit(B_bytearray s) {
     }
     return B_True;
 }
- 
+
 
 B_bool B_bytearrayD_islower(B_bytearray s) {
     int has_lower = 0;
@@ -1954,7 +2029,7 @@ B_bytearray B_bytearrayD_lstrip(B_bytearray s, B_bytearray cs) {
     }
     B_bytearray res;
     NEW_UNFILLED_BYTEARRAY(res,s->nbytes-nstrip);
-    memcpy(res->str,s->str+nstrip,res->nbytes);       
+    memcpy(res->str,s->str+nstrip,res->nbytes);
     return res;
 }
 
@@ -2009,7 +2084,7 @@ B_bytearray B_bytearrayD_replace(B_bytearray s, B_bytearray old, B_bytearray new
         memcpy(q,p,plen);
     return res;
 }
-      
+
 
 B_int B_bytearrayD_rfind(B_bytearray s, B_bytearray sub, B_int start, B_int end) {
     B_int st = start;
@@ -2051,7 +2126,7 @@ B_bytearray B_bytearrayD_rjust(B_bytearray s, B_int width, B_bytearray fill) {
     memcpy(&res->str[pad],s->str,s->nbytes);
     return res;
 }
-                                
+
 B_tuple B_bytearrayD_rpartition(B_bytearray s, B_bytearray sep) {
     int n = from$int(B_bytearrayD_rfind(s,sep,NULL,NULL));
     if (n<0) {
@@ -2062,7 +2137,7 @@ B_tuple B_bytearrayD_rpartition(B_bytearray s, B_bytearray sep) {
         NEW_UNFILLED_BYTEARRAY(ls,nb);
         memcpy(ls->str,s->str,nb);
         int nbr = s->nbytes - sep->nbytes - nb;
-        B_bytearray rs;    
+        B_bytearray rs;
         NEW_UNFILLED_BYTEARRAY(rs,nbr);
         memcpy(rs->str,s->str+nb+sep->nbytes,nbr);
         return  $NEWTUPLE(3,ls,sep,rs);
@@ -2087,14 +2162,14 @@ B_bytearray B_bytearrayD_rstrip(B_bytearray s, B_bytearray cs) {
     }
     B_bytearray res;
     NEW_UNFILLED_BYTEARRAY(res,s->nbytes-nstrip);
-    memcpy(res->str,s->str,res->nbytes);       
+    memcpy(res->str,s->str,res->nbytes);
     return res;
 }
- 
+
 B_list B_bytearrayD_split(B_bytearray s, B_bytearray sep, B_int maxsplit) {
     B_list res = $NEW(B_list,NULL,NULL);
     B_SequenceD_list wit = B_SequenceD_listG_witness;
-    if (maxsplit == NULL || from$int(maxsplit) < 0) maxsplit = to$int(INT_MAX); 
+    if (maxsplit == NULL || from$int(maxsplit) < 0) maxsplit = to$int(INT_MAX);
     if (sep == NULL) {
         unsigned char *p = s->str;
         if (s->nbytes==0) {
@@ -2109,7 +2184,7 @@ B_list B_bytearrayD_split(B_bytearray s, B_bytearray sep, B_int maxsplit) {
                     q = p;
                     if (res->length == from$int(maxsplit))
                         break; // we have now removed leading whitespace in remainder
-                } 
+                }
             } else {
                 if (inword) {
                     inword = 0;
@@ -2192,7 +2267,7 @@ B_list B_bytearrayD_splitlines(B_bytearray s, B_bool keepends) {
         wit->$class->append(wit,res,line);
     }
     return res;
-} 
+}
 
 B_bool B_bytearrayD_startswith(B_bytearray s, B_bytearray sub, B_int start, B_int end) {
     B_int st = start;
@@ -2236,13 +2311,13 @@ B_bytearray B_bytearrayD_zfill(B_bytearray s, B_int width) {
         *q = *p;
         q++;
     }
-    for (int i=0; i < fill; i++) 
+    for (int i=0; i < fill; i++)
         *q++ = '0';
     memcpy(res->str+hassign+fill,s->str+hassign,s->nbytes-hassign);
     return res;
 }
 
- 
+
 // Ord
 
 
@@ -2434,12 +2509,12 @@ B_bytearray B_SequenceD_bytearrayD___getslice__ (B_SequenceD_bytearray wit, B_by
 B_NoneType B_SequenceD_bytearrayD___setslice__ (B_SequenceD_bytearray wit,  B_bytearray self, B_Iterable wit2, B_slice slc, $WORD iter) {
     B_Iterator it = wit2->$class->__iter__(wit2,iter);
     int len = self->nbytes;
-    B_bytearray other;    
+    B_bytearray other;
     NEW_UNFILLED_BYTEARRAY(other,0);
     $WORD w;
     while ((w=it->$class->__next__(it)))
         B_SequenceD_bytearrayD_append(wit, other,(B_int)w);
-    int olen = other->nbytes; 
+    int olen = other->nbytes;
     long start, stop, step, slen;
     normalize_slice(slc, len, &slen, &start, &stop, &step);
     if (step != 1 && olen != slen) {
@@ -2531,7 +2606,7 @@ B_bytearray B_TimesD_SequenceD_bytearrayD___mul__ (B_TimesD_SequenceD_bytearray 
         return res;
     }
 }
- 
+
 // End of bytearray implementation ////////////////////////////////////////////////
 
 
@@ -2601,11 +2676,11 @@ static B_bytes B_bytesD_copy(B_bytes s) {
     return res;
 }
 
- 
+
 
 // Bytes methods, implementations
 
-// General methods ////////////////////////////////////////////////////////////// 
+// General methods //////////////////////////////////////////////////////////////
 
 B_bytes B_bytesG_new(B_Iterable iter, $WORD wit) {
     return $NEW(B_bytes, iter, wit);
@@ -2634,18 +2709,20 @@ B_bool B_bytesD___bool__(B_bytes s) {
 
 B_str B_bytesD___str__(B_bytes s) {
     struct byte_counts bs = byte_count(s->str, s->nbytes);
-    int newbytes = 3+bs.escaped+3*bs.non_printable+(bs.dquotes>0 && bs.dquotes>0 ? bs.squotes : 0)+3*bs.non_ascii;
+    bool use_single_quotes = !(bs.dquotes==0 && bs.squotes>0);
+    int escaped_quotes = use_single_quotes ? bs.dquotes : bs.squotes;
+    int newbytes = 3+bs.escaped+3*bs.non_printable+escaped_quotes+3*bs.non_ascii;
     B_str res;
     int nbytes = s->nbytes+newbytes;
     NEW_UNFILLED_STR(res,nbytes,nbytes);
-    escape_str(res->str+2,s->str,res->nbytes-2,s->nbytes,255,bs.squotes>0 && bs.dquotes>0);
-    if (bs.dquotes==0 && bs.squotes>0) {
-        res->str[1] = '"';
-        res->str[res->nbytes-1] = '"';
-    } else {
+    escape_str(res->str+2,s->str,res->nbytes-2,s->nbytes,255,!use_single_quotes,use_single_quotes,false,false);
+    if (use_single_quotes) {
         res->str[1] = '\'';
         res->str[res->nbytes-1] = '\'';
-    }        
+    } else {
+        res->str[1] = '"';
+        res->str[res->nbytes-1] = '"';
+    }
     res->str[0] = 'b';
     return res;
 }
@@ -2657,8 +2734,8 @@ B_str B_bytesD___repr__(B_bytes s) {
 void B_bytesD___serialize__(B_bytes str,$Serial$state state) {
     int nWords = str->nbytes/sizeof($WORD) + 1;         // # $WORDS needed to store str->str, including terminating 0.
     $ROW row = $add_header(STR_ID,1+nWords,state);
-    long nbytes = (long)str->nbytes;                    
-    memcpy(row->blob,&nbytes,sizeof($WORD));            
+    long nbytes = (long)str->nbytes;
+    memcpy(row->blob,&nbytes,sizeof($WORD));
     memcpy(row->blob+1,str->str,nbytes+1);
 }
 
@@ -2675,7 +2752,7 @@ B_bytes B_bytesD___deserialize__(B_bytes self, $Serial$state state) {
     memcpy(res->str,this->blob+2,nbytes+1);
     return res;
 }
-   
+
 B_bytes B_bytesD_capitalize(B_bytes s) {
     if (s->nbytes==0) {
         return s;
@@ -2683,7 +2760,7 @@ B_bytes B_bytesD_capitalize(B_bytes s) {
     B_bytes res;
     NEW_UNFILLED_BYTES(res,s->nbytes);
     res->str[0] = toupper(s->str[0]);
-    for (int i = 1; i < s->nbytes; i++) 
+    for (int i = 1; i < s->nbytes; i++)
         res->str[i] = tolower(s->str[i]);
     return res;
 }
@@ -2698,7 +2775,7 @@ B_bytes B_bytesD_center(B_bytes s, B_int width, B_bytes fill) {
         return s;
     }
     int pad = (wval-s->nbytes);
-    int padleft = pad/2; 
+    int padleft = pad/2;
     int padright = pad-padleft;
     int sbytes = s->nbytes;
     B_bytes res;
@@ -2915,7 +2992,7 @@ B_bool B_bytesD_isdigit(B_bytes s) {
     }
     return B_True;
 }
- 
+
 
 B_bool B_bytesD_islower(B_bytes s) {
     int has_lower = 0;
@@ -3048,7 +3125,7 @@ B_bytes B_bytesD_lstrip(B_bytes s, B_bytes cs) {
     }
     B_bytes res;
     NEW_UNFILLED_BYTES(res,s->nbytes-nstrip);
-    memcpy(res->str,s->str+nstrip,res->nbytes);       
+    memcpy(res->str,s->str+nstrip,res->nbytes);
     return res;
 }
 
@@ -3128,7 +3205,7 @@ B_bytes B_bytesD_replace(B_bytes s, B_bytes old, B_bytes new, B_int count) {
         memcpy(q,p,plen);
     return res;
 }
-      
+
 
 B_int B_bytesD_rfind(B_bytes s, B_bytes sub, B_int start, B_int end) {
     B_int st = start;
@@ -3156,7 +3233,7 @@ B_bytes B_bytesD_rjust(B_bytes s, B_int width, B_bytes fill) {
     if (fill->nbytes != 1) {
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("rjust: fill string not single char")));
     }
-    int wval = from$int(width); 
+    int wval = from$int(width);
     if (wval <= s->nbytes) {
         return B_bytesD_copy(s);
     }
@@ -3170,7 +3247,7 @@ B_bytes B_bytesD_rjust(B_bytes s, B_int width, B_bytes fill) {
     memcpy(&res->str[pad],s->str,s->nbytes);
     return res;
 }
-                                
+
 B_tuple B_bytesD_rpartition(B_bytes s, B_bytes sep) {
     int n = from$int(B_bytesD_rfind(s,sep,NULL,NULL));
     if (n<0) {
@@ -3181,7 +3258,7 @@ B_tuple B_bytesD_rpartition(B_bytes s, B_bytes sep) {
         NEW_UNFILLED_BYTES(ls,nb);
         memcpy(ls->str,s->str,nb);
         int nbr = s->nbytes - sep->nbytes - nb;
-        B_bytes rs;    
+        B_bytes rs;
         NEW_UNFILLED_BYTES(rs,nbr);
         memcpy(rs->str,s->str+nb+sep->nbytes,nbr);
         return  $NEWTUPLE(3,ls,sep,rs);
@@ -3206,14 +3283,14 @@ B_bytes B_bytesD_rstrip(B_bytes s, B_bytes cs) {
     }
     B_bytes res;
     NEW_UNFILLED_BYTES(res,s->nbytes-nstrip);
-    memcpy(res->str,s->str,res->nbytes);       
+    memcpy(res->str,s->str,res->nbytes);
     return res;
 }
- 
+
 B_list B_bytesD_split(B_bytes s, B_bytes sep, B_int maxsplit) {
     B_list res = $NEW(B_list,NULL,NULL);
     B_SequenceD_list wit = B_SequenceD_listG_witness;
-    if (maxsplit == NULL || from$int(maxsplit) < 0) maxsplit = to$int(INT_MAX); 
+    if (maxsplit == NULL || from$int(maxsplit) < 0) maxsplit = to$int(INT_MAX);
     if (sep == NULL) {
         unsigned char *p = s->str;
         if (s->nbytes==0) {
@@ -3228,7 +3305,7 @@ B_list B_bytesD_split(B_bytes s, B_bytes sep, B_int maxsplit) {
                     q = p;
                     if (res->length == from$int(maxsplit))
                         break; // we have now removed leading whitespace in remainder
-                } 
+                }
             } else {
                 if (inword) {
                     inword = 0;
@@ -3311,7 +3388,7 @@ B_list B_bytesD_splitlines(B_bytes s, B_bool keepends) {
         wit->$class->append(wit,res,line);
     }
     return res;
-} 
+}
 
 B_bool B_bytesD_startswith(B_bytes s, B_bytes sub, B_int start, B_int end) {
     B_int st = start;
@@ -3338,7 +3415,7 @@ B_bytes B_bytesD_upper(B_bytes s) {
     NEW_UNFILLED_BYTES(res,s->nbytes);
     for (int i=0; i< s->nbytes; i++)
         res->str[i] = toupper(res->str[i]);
-  
+
     return res;
 }
 
@@ -3356,17 +3433,17 @@ B_bytes B_bytesD_zfill(B_bytes s, B_int width) {
         *q = *p;
         q++;
     }
-    for (int i=0; i < fill; i++) 
+    for (int i=0; i < fill; i++)
         *q++ = '0';
     memcpy(res->str+hassign+fill,s->str+hassign,s->nbytes-hassign);
     return res;
 }
 
 // protocol methods ///////////////////////////////////////////////////
- 
+
 // Ord
 
- 
+
 B_bool B_OrdD_bytesD___eq__ (B_OrdD_bytes wit, B_bytes a, B_bytes b) {
     if (a->nbytes != b->nbytes)
         return B_False;
@@ -3475,7 +3552,7 @@ B_bool B_ContainerD_bytesD___contains__ (B_ContainerD_bytes wit, B_bytes str, B_
 
 B_bool B_ContainerD_bytesD___containsnot__ (B_ContainerD_bytes wit, B_bytes str, B_int n) {
     return toB_bool(!B_ContainerD_bytesD___contains__(wit, str, n)->val);
-}  
+}
 
 // Sliceable
 
@@ -3523,7 +3600,7 @@ B_NoneType B_SliceableD_bytesD___delslice__ (B_SliceableD_bytes wit, B_bytes str
 
 // Times
 
- 
+
 B_bytes B_TimesD_bytesD___add__ (B_TimesD_bytes wit, B_bytes s, B_bytes t) {
     B_bytes res;
     NEW_UNFILLED_BYTES(res,s->nbytes + t->nbytes);
@@ -3576,20 +3653,22 @@ B_str B_ascii(B_value v) {
     B_str s  = v->$class->__str__(v);
     struct byte_counts bs = byte_count(s->str, s->nbytes);
     //    printf("%d %d %d %d %d %d\n",bs.escaped,bs.squotes,bs.dquotes,bs.printable,bs.non_printable,bs.non_ascii);
-    int newbytes = 2+bs.escaped+3*bs.non_printable+(bs.squotes>0 && bs.dquotes>0 ? bs.squotes : 0)+3*bs.non_ascii;
+    bool use_single_quotes = !(bs.dquotes==0 && bs.squotes>0);
+    int escaped_quotes = use_single_quotes ? bs.dquotes : bs.squotes;
+    int newbytes = 2+bs.escaped+3*bs.non_printable+escaped_quotes+3*bs.non_ascii;
     B_str res;
     NEW_UNFILLED_STR(res,s->nchars+newbytes,s->nbytes+newbytes);
-    escape_str(res->str+1,s->str,res->nbytes-1,s->nbytes,255,bs.squotes>0 && bs.dquotes>0);
-    if (bs.dquotes==0 && bs.squotes>0) {
-        res->str[0] = '"';
-        res->str[res->nbytes-1] = '"';
-    } else {
+    escape_str(res->str+1,s->str,res->nbytes-1,s->nbytes,255,!use_single_quotes,use_single_quotes,false,false);
+    if (use_single_quotes) {
         res->str[0] = '\'';
         res->str[res->nbytes-1] = '\'';
-    }        
+    } else {
+        res->str[0] = '"';
+        res->str[res->nbytes-1] = '"';
+    }
     return res;
 }
- 
+
 B_str B_bin(B_Integral wit, $WORD n) {
     long v = from$int(wit->$class->__int__(wit,n));
     int sign = v<0;
@@ -3627,7 +3706,7 @@ B_str B_bin(B_Integral wit, $WORD n) {
         *p = u & (1L << i) ? '1' : '0'; p++;
     }
     return res;
-}  
+}
 
 B_str B_chr(B_Integral wit, $WORD n) {
     long v = from$int(wit->$class->__int__(wit,n));
@@ -3703,7 +3782,7 @@ B_str B_strD_join_par(char lpar, B_list elems, char rpar) {
     }
     if (len > 1) {
         totchars += (len-1) * 2; // 2 is length of ", "
-        totbytes += (len-1) * 2; 
+        totbytes += (len-1) * 2;
     }
     B_str res;
     NEW_UNFILLED_STR(res,totchars,totbytes);
@@ -3729,7 +3808,7 @@ B_str $default__str__(B_value self) {
     return $FORMAT("<%s object at %p>", self->$class->$GCINFO, self);
 }
 
- 
+
 
 // Static witnesses
 

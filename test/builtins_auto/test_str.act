@@ -1,174 +1,296 @@
 def test_str_find():
     s = "hello, world!"
-    if s.find("hello, world!") != 0:
-        raise ValueError("find() did not return the correct index: " + str(s.find("hello, world!")))
-    if s.find("world") != 7:
-        raise ValueError("find() did not return the correct index: " + str(s.find("world")))
-    if s.find("world", 0) != 7:
-        raise ValueError("find() did not return the correct index: " + str(s.find("world")))
-    if s.find("world", 8) != -1:
-        raise ValueError("find() did not return -1 when the substring is not found")
-    if s.find("world", 0, 5) != -1:
-        raise ValueError("find() did not return -1 when the substring is not found")
-    if s.find("world", 0, 7) != -1:
-        raise ValueError("find() did not return -1 when the substring is not found")
-    if s.find("crap") != -1:
-        raise ValueError("find() did not return -1 when the substring is not found")
+    print("Testing str.find()")
+    return (s.find("hello, world!") == 0 and
+            s.find("world") == 7 and
+            s.find("world", 0) == 7 and
+            s.find("world", 8) == -1 and
+            s.find("world", 0, 5) == -1 and
+            s.find("world", 0, 7) == -1 and
+            s.find("crap") == -1)
 
+def test_empty_str_capitalize():
+    result = "".capitalize()
+    print("empty str.capitalize(): '{result}'")
+    return result == ""
 
-def test_empty_str_methods():
-    s = ""
+def test_empty_str_center():
+    result = "".center(5)
+    print("empty str.center(5): '{result}'")
+    return result == "     "
 
-    # Test all string methods with empty string
-    if s.capitalize() != "":
-        raise ValueError("str.capitalize() failed: " + s.capitalize())
+def test_empty_str_count():
+    result = "".count("a")
+    print("empty str.count('a'): {result}")
+    return result == 0
 
-    if s.center(5) != "     ":
-        raise ValueError("str.center() failed: " + s.center(5))
+def test_empty_str_encode():
+    result = "".encode()
+    print("empty str.encode(): {result}")
+    return result == b""
 
-    if s.count("a") != 0:
-        raise ValueError("str.count() failed: " + str(s.count("a")))
+def test_empty_str_endswith():
+    result = "".endswith("")
+    print("empty str.endswith(''): {result}")
+    return result == True
 
-    if s.encode() != b"":
-        raise ValueError("str.encode() failed: " + str(s.encode()))
+def test_empty_str_expandtabs():
+    result = "".expandtabs()
+    print("empty str.expandtabs(): '{result}'")
+    return result == ""
 
-    if s.endswith("") != True:
-        raise ValueError("str.endswith() failed: " + str(s.endswith("")))
+def test_empty_str_find():
+    result = "".find("a")
+    print("empty str.find('a'): {result}")
+    return result == -1
 
-    if s.expandtabs() != "":
-        raise ValueError("str.expandtabs() failed: " + s.expandtabs())
-
-    if s.find("a") != -1:
-        raise ValueError("str.find() failed: " + str(s.find("a")))
-
+def test_empty_str_index():
+    print("empty str.index('a'): testing exception")
     try:
-        s.index("a")
-        raise ValueError("str.index() didn't raise ValueError")
+        "".index("a")
+        return False
     except ValueError:
-        pass
+        return True
 
-    if s.isalnum() != False:
-        raise ValueError("str.isalnum() failed: " + str(s.isalnum()))
+def test_empty_str_isalnum():
+    result = "".isalnum()
+    print("empty str.isalnum(): {result}")
+    return result == False
 
-    if s.isalpha() != False:
-        raise ValueError("str.isalpha() failed: " + str(s.isalpha()))
+def test_empty_str_isalpha():
+    result = "".isalpha()
+    print("empty str.isalpha(): {result}")
+    return result == False
 
-    if s.isascii() != True:
-        raise ValueError("str.isascii() failed: " + str(s.isascii()))
+def test_empty_str_isascii():
+    result = "".isascii()
+    print("empty str.isascii(): {result}")
+    return result == True
 
-    if s.isdecimal() != False:
-        raise ValueError("str.isdecimal() failed: " + str(s.isdecimal()))
+def test_empty_str_isdecimal():
+    result = "".isdecimal()
+    print("empty str.isdecimal(): {result}")
+    return result == False
 
-    if s.islower() != False:
-        raise ValueError("str.islower() failed: " + str(s.islower()))
+def test_empty_str_islower():
+    result = "".islower()
+    print("empty str.islower(): {result}")
+    return result == False
 
-    # TODO:%s/\s\+$//: Is this right?!
-    if s.isprintable() != False:
-        raise ValueError("str.isprintable() failed: " + str(s.isprintable()))
+def test_empty_str_isprintable():
+    result = "".isprintable()
+    print("empty str.isprintable(): {result}")
+    # TODO: Is this right?!
+    return result == False
 
-    if s.isspace() != False:
-        raise ValueError("str.isspace() failed: " + str(s.isspace()))
+def test_empty_str_isspace():
+    result = "".isspace()
+    print("empty str.isspace(): {result}")
+    return result == False
 
-    if s.istitle() != False:
-        raise ValueError("str.istitle() failed: " + str(s.istitle()))
+def test_empty_str_istitle():
+    result = "".istitle()
+    print("empty str.istitle(): {result}")
+    return result == False
 
-    if s.isupper() != False:
-        raise ValueError("str.isupper() failed: " + str(s.isupper()))
+def test_empty_str_isupper():
+    result = "".isupper()
+    print("empty str.isupper(): {result}")
+    return result == False
 
-    if s.join(["a", "b", "c"]) != "abc":
-        raise ValueError("str.join() failed: " + s.join(["a", "b", "c"]))
+def test_empty_str_join():
+    result = "".join(["a", "b", "c"])
+    print("empty str.join(['a', 'b', 'c']): '{result}'")
+    return result == "abc"
 
-    if s.ljust(5) != "     ":
-        raise ValueError("str.ljust() failed: " + s.ljust(5))
+def test_empty_str_ljust():
+    result = "".ljust(5)
+    print("empty str.ljust(5): '{result}'")
+    return result == "     "
 
-    if s.lower() != "":
-        raise ValueError("str.lower() failed: " + s.lower())
+def test_empty_str_lower():
+    result = "".lower()
+    print("empty str.lower(): '{result}'")
+    return result == ""
 
-    if s.lstrip() != "":
-        raise ValueError("str.lstrip() failed: " + s.lstrip())
+def test_empty_str_lstrip():
+    result = "".lstrip()
+    print("empty str.lstrip(): '{result}'")
+    return result == ""
 
-    sp = s.partition("a")
-    if sp.0 != "" or sp.1 != "" or sp.2 != "":
-        sp = s.partition("a")
-        raise ValueError("str.partition() failed: " + sp.0 + sp.1 + sp.2)
+def test_empty_str_partition():
+    sp = "".partition("a")
+    print("empty str.partition('a'): ({sp.0}, {sp.1}, {sp.2})")
+    return sp.0 == "" and sp.1 == "" and sp.2 == ""
 
-    if s.replace("a", "b") != "":
-        raise ValueError("str.replace() failed: " + s.replace("a", "b"))
+def test_empty_str_replace():
+    result = "".replace("a", "b")
+    print("empty str.replace('a', 'b'): '{result}'")
+    return result == ""
 
-    if s.rfind("a") != -1:
-        raise ValueError("str.rfind() failed: " + str(s.rfind("a")))
+def test_empty_str_rfind():
+    result = "".rfind("a")
+    print("empty str.rfind('a'): {result}")
+    return result == -1
 
+def test_empty_str_rindex():
+    print("empty str.rindex('a'): testing exception")
     try:
-        s.rindex("a")
-        raise ValueError("str.rindex() didn't raise ValueError")
+        "".rindex("a")
+        return False
     except ValueError:
-        pass
+        return True
 
-    if s.rjust(5) != "     ":
-        raise ValueError("str.rjust() failed: " + s.rjust(5))
+def test_empty_str_rjust():
+    result = "".rjust(5)
+    print("empty str.rjust(5): '{result}'")
+    return result == "     "
 
-    sp = s.rpartition("a")
-    if sp.0 != "" or sp.1 != "" or sp.2 != "":
-        sp = s.rpartition("a")
-        raise ValueError("str.rpartition() failed: " + sp.0 + sp.1 + sp.2)
+def test_empty_str_rpartition():
+    sp = "".rpartition("a")
+    print("empty str.rpartition('a'): ({sp.0}, {sp.1}, {sp.2})")
+    return sp.0 == "" and sp.1 == "" and sp.2 == ""
 
-    if s.rstrip() != "":
-        raise ValueError("str.rstrip() failed: " + s.rstrip())
+def test_empty_str_rstrip():
+    result = "".rstrip()
+    print("empty str.rstrip(): '{result}'")
+    return result == ""
 
-    if s.split("a") != [""]:
-        raise ValueError("str.split() failed: " + str(s.split("a")))
+def test_empty_str_split():
+    result = "".split("a")
+    print("empty str.split('a'): {result}")
+    return result == [""]
 
-    if s.splitlines() != []:
-        raise ValueError("str.splitlines() failed: " + str(s.splitlines()))
+def test_empty_str_splitlines():
+    result = "".splitlines()
+    print("empty str.splitlines(): {result}")
+    return result == []
 
-    if s.startswith("") != True:
-        raise ValueError("str.startswith() failed: " + str(s.startswith("")))
+def test_empty_str_startswith():
+    result = "".startswith("")
+    print("empty str.startswith(''): {result}")
+    return result == True
 
-    if s.strip() != "":
-        raise ValueError("str.strip() failed: " + s.strip())
+def test_empty_str_strip():
+    result = "".strip()
+    print("empty str.strip(): '{result}'")
+    return result == ""
 
-    if s.upper() != "":
-        raise ValueError("str.upper() failed: " + s.upper())
+def test_empty_str_upper():
+    result = "".upper()
+    print("empty str.upper(): '{result}'")
+    return result == ""
 
-    if s.zfill(5) != "00000":
-        raise ValueError("str.zfill() failed: " + s.zfill(5))
-
+def test_empty_str_zfill():
+    result = "".zfill(5)
+    print("empty str.zfill(5): '{result}'")
+    return result == "00000"
 
 def test_endswith():
     s = "foobar"
-    if not s.endswith("foobar"):
-        raise ValueError("Unexpected result for endswith('foobar')")
+    print("Testing str.endswith()")
+    return (s.endswith("foobar") == True and
+            s.endswith("bar") == True and
+            s.endswith("banana") == False and
+            s.endswith("longbanana") == False)
 
-    if not s.endswith("bar"):
-        raise ValueError("Unexpected result for endswith('bar')")
+def test_str_contains():
+    result = "hello, world!" in "hello, world!"
+    print("'hello, world!' in 'hello, world!': {result}")
+    return result == True
 
-    if s.endswith("banana"):
-        raise ValueError("Unexpected result for endswith('banana')")
+def test_bytes_hex():
+    b = b'\xde\xad\xbe\xef'
+    result = b.hex()
+    print("bytes.hex(): {result}")
+    return result == "deadbeef"
 
-    if s.endswith("longbanana"):
-        raise ValueError("Unexpected result for endswith('longbanana')")
+def test_bytes_from_hex():
+    result = bytes.from_hex("deadbeef").hex()
+    print("bytes.from_hex('deadbeef').hex(): {result}")
+    return result == "deadbeef"
 
+# Tests from strings_and_bytes.act
+def test_helloworld():
+    ascii = "Hello, world!"
+    hex = "\x48ello, world!"
+    return ascii == hex
+
+def test_limdef():
+    uniesc = "\u2200 \u03b5>0 \u2203 \u03b4>0 . |x - a| < \u03b4 \u21d2 |f(x) - c| < \u03b5."
+    uni = "∀ ε>0 ∃ δ>0 . |x - a| < δ ⇒ |f(x) - c| < ε."
+    return uniesc == uni
+
+def test_encode_decode():
+    uniesc = "\u2200 \u03b5>0 \u2203 \u03b4>0 . |x - a| < \u03b4 \u21d2 |f(x) - c| < \u03b5."
+    blim = uniesc.encode()
+    ulim = blim.decode()
+    # encoding & decoding function pairs are exceedingly well suited to
+    # property based testing, but we don't have a property based testing
+    # library in Acton :/
+    return uniesc == ulim
+
+def test_strip_list_str():
+    a = ["".strip()]
+    return str(a) == "['']"
+
+tests = {
+    "test_str_find": test_str_find,
+    "test_empty_str_capitalize": test_empty_str_capitalize,
+    "test_empty_str_center": test_empty_str_center,
+    "test_empty_str_count": test_empty_str_count,
+    "test_empty_str_encode": test_empty_str_encode,
+    "test_empty_str_endswith": test_empty_str_endswith,
+    "test_empty_str_expandtabs": test_empty_str_expandtabs,
+    "test_empty_str_index": test_empty_str_index,
+    "test_empty_str_isalnum": test_empty_str_isalnum,
+    "test_empty_str_isalpha": test_empty_str_isalpha,
+    "test_empty_str_isascii": test_empty_str_isascii,
+    "test_empty_str_isdecimal": test_empty_str_isdecimal,
+    "test_empty_str_islower": test_empty_str_islower,
+    "test_empty_str_isprintable": test_empty_str_isprintable,
+    "test_empty_str_isspace": test_empty_str_isspace,
+    "test_empty_str_istitle": test_empty_str_istitle,
+    "test_empty_str_isupper": test_empty_str_isupper,
+    "test_empty_str_join": test_empty_str_join,
+    "test_empty_str_ljust": test_empty_str_ljust,
+    "test_empty_str_lower": test_empty_str_lower,
+    "test_empty_str_lstrip": test_empty_str_lstrip,
+    "test_empty_str_partition": test_empty_str_partition,
+    "test_empty_str_replace": test_empty_str_replace,
+    "test_empty_str_rfind": test_empty_str_rfind,
+    "test_empty_str_rindex": test_empty_str_rindex,
+    "test_empty_str_rjust": test_empty_str_rjust,
+    "test_empty_str_rpartition": test_empty_str_rpartition,
+    "test_empty_str_rstrip": test_empty_str_rstrip,
+    "test_empty_str_split": test_empty_str_split,
+    "test_empty_str_splitlines": test_empty_str_splitlines,
+    "test_empty_str_startswith": test_empty_str_startswith,
+    "test_empty_str_strip": test_empty_str_strip,
+    "test_empty_str_upper": test_empty_str_upper,
+    "test_empty_str_zfill": test_empty_str_zfill,
+    "test_endswith": test_endswith,
+    "test_str_contains": test_str_contains,
+    "test_bytes_hex": test_bytes_hex,
+    "test_bytes_from_hex": test_bytes_from_hex,
+    "test_helloworld": test_helloworld,
+    "test_limdef": test_limdef,
+    "test_encode_decode": test_encode_decode,
+    "test_strip_list_str": test_strip_list_str,
+}
 
 actor main(env):
-    try:
-        test_str_find()
-        test_empty_str_methods()
-        test_endswith()
-    except Exception as e:
-        print("Unexpected exception during testing:", e)
-        await async env.exit(1)
-
-    if "hello, world!" not in "hello, world!":
-        print("ERROR: 'hello, world!' not in 'hello, world!'")
-        env.exit(1)
-
-    b = b'\xde\xad\xbe\xef'
-    if b.hex() != "deadbeef":
-        print("ERROR: bytes.hex():", b.hex())
-        env.exit(1)
-
-    if bytes.from_hex("deadbeef").hex() != "deadbeef":
-        print("ERROR: bytes.from_hex():", bytes.from_hex("deadbeef").hex())
-        env.exit(1)
-
-    env.exit(0)
+    failed = []
+    for name, t in tests.items():
+        print("== test: " + name)
+        if not t():
+            print("-- FAILED test: " + name)
+            failed.append(name)
+        print()
+    if len(failed) == 0:
+        print("All {len(tests)} tests OK!")
+    else:
+        print("\n{len(failed)} of {len(tests)} tests failed:")
+        for name in failed:
+            print(" - {name}")
+    env.exit(max([0, min([len(failed), 1])]))
