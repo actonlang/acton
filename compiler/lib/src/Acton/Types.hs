@@ -12,10 +12,14 @@
 --
 
 {-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, FlexibleContexts #-}
-module Acton.Types(reconstruct, showTyFile, prettySigs, typeError, TypeError(..)) where
+module Acton.Types(reconstruct, showTyFile, prettySigs, TypeError(..)) where
 
 import Control.Monad
+import Data.Maybe (isJust)
+import Data.List (nub, intersect)
 import Pretty
+import qualified Control.Exception
+import Debug.Trace
 import Utils
 import Acton.Syntax
 import Acton.Names
@@ -555,6 +559,7 @@ instance InfEnv Decl where
                                                  popFX
                                                  (cs1,eq1) <- solveScoped env1 (qbound q) te tNone cs
                                                  checkNoEscape l env (qbound q)
+                                                 checkClassAttributesInitialized n env as' te0 b
                                                  (nterms,asigs,_) <- checkAttributes [] te' te
                                                  let te1 = if notImplBody b then unSig asigs else []
                                                      te2 = te ++ te1
@@ -669,6 +674,34 @@ checkNoEscape l env vs                  = do fvs <- ufree <$> usubst env
                                                  traceM ("####### env:\n" ++ prstr env1)
                                                  err l ("Escaping type variables: " ++ prstrs escaped)
 
+checkClassAttributesInitialized         :: Name -> Env -> [WTCon] -> TEnv -> Suite -> TypeM ()
+checkClassAttributesInitialized className env ancestors inferredProps b
+                                        = do -- Only check if the class defines its own __init__. If it doesn't, it uses the parent's
+                                             -- __init__ which already initialized everything (and we check the parent separately)
+                                             case findInitMethod b of
+                                                 Nothing -> return ()  -- No __init__, uses parent's
+                                                 Just (self, initBody) ->
+                                                     -- Check if __init__ is implemented in C (body is NotImplemented)
+                                                     -- or if it calls self methods that might be C implementations
+                                                     if hasNotImpl initBody
+                                                       then return ()  -- Assume all is OK - we can't analyze C implementation
+                                                       else do
+                                                         let inherited = concatMap (getPropertiesFromClass env . tcname . snd) ancestors
+                                                             explicit  = concat [ ns | Signature _ ns sc dec <- b, isProp dec sc ]
+                                                             inferred  = inferClassAttributes env self initBody
+                                                             expected  = nub $ inherited ++ explicit ++ inferred
+                                                             initialized = scanSelfAssigns env self initBody
+                                                             -- Track which parent __init__ methods are called
+                                                             calledParentInits = getCalledParentInits env initBody
+                                                             -- Get attributes initialized by called parent __init__ methods
+                                                             parentInitialized = nub $ concatMap (getInitializedByParent env) calledParentInits
+                                                             uninitialized = expected \\ (initialized ++ parentInitialized)
+
+                                                         forM_ uninitialized $ \prop ->
+                                                             Control.Exception.throw $ UninitializedAttribute (loc prop) prop
+  where getPropertiesFromClass env qn   = let (_,_,te) = findConName qn env
+                                          in [ n | (n, NSig _ Property _) <- te ]
+
 
 wellformed                              :: (WellFormed a) => Env -> a -> TypeM ()
 wellformed env x                        = do _ <- solveAll env [] cs
@@ -747,25 +780,264 @@ matchActorAssumption env n0 p k te      = do --traceM ("## matchActorAssumption 
         kloc (KwdSTAR n _)              = loc n
         kloc _                          = NoLoc
 
+-- Find __init__ method in class body, return self parameter and body
+findInitMethod :: Suite -> Maybe (Name, Suite)
+findInitMethod b                        = listToMaybe [ (x, dbody d) | Decl _ ds <- b, d <- ds, dname d == initKW, Just x <- [selfPar d] ]
+  where
+    selfPar Def{pos=PosPar x _ _ _}     = Just x
+    selfPar Def{kwd=KwdPar x _ _ _}     = Just x
+    selfPar _                           = Nothing
+
+-- Scan __init__ for "self.x = ..." to find which class attributes are definitely
+-- assigned before any complex control flow. Only scans through safe statements to
+-- ensure these initializations happen. We allow the obvious, assigning to self.X
+-- but also assignment to local variables, expressions, calling functions and actor
+-- methods or methods on other objects but not passing references to `self`. We are
+-- also handling if/elif/else as well as some variations of exception handling and raising.
+-- This conservative approach is used for initialization checking.
+scanSelfAssigns :: Env -> Name -> Suite -> [Name]
+scanSelfAssigns env self stmts          = scanSuite [] stmts
+  where
+    scanSuite seen []                   = []
+    -- Handle assignments
+    scanSuite seen (MutAssign _ (Dot _ (Var _ (NoQ x)) n) e : rest)
+        | x == self                     = if checkNoSelfReference self seen e
+                                            then n : scanSuite (n:seen) rest
+                                            else []  -- Stop at self reference
+    scanSuite seen (MutAssign _ _ _ : rest)
+                                        =     -- Continue: local assignment is OK
+                                          scanSuite seen rest
+    scanSuite seen (Assign _ _ e : rest)
+                                        =     -- Continue past local assignments, unless RHS contains self reference
+                                          if checkNoSelfReference self seen e
+                                            then scanSuite seen rest  -- Continue past assignment
+                                            else []  -- Stop at self reference
+    scanSuite seen (AugAssign _ (Dot _ (Var _ (NoQ x)) n) _ _ : rest)
+        | x == self && n `elem` seen     -- OK: augmenting already-initialized attribute
+                                        = scanSuite seen rest
+        | x == self                     = []  -- STOP: can't augment uninitialized attribute
+    scanSuite seen (AugAssign _ _ _ _ : rest)
+                                        =     -- Continue: local augmented assignment is OK
+                                          scanSuite seen rest
+    -- Handle if/elif/else - only count assignments that happen in ALL branches, or branch exits early (raise!)
+    scanSuite seen (If _ branches elseBranch : rest)
+                                        =     -- Check which branches complete normally (don't raise/return)
+                                          let branchResults = map (\(Branch _ body) ->
+                                                  if branchExitsEarly body
+                                                    then Nothing  -- Branch exits early, ignore it
+                                                    else Just (scanSuite seen body)) branches
+                                              elseResult = if branchExitsEarly elseBranch
+                                                             then Nothing
+                                                             else Just (scanSuite seen elseBranch)
+
+                                              -- Collect only branches that complete normally
+                                              normalBranches = [assigns | Just assigns <- branchResults]
+                                              normalElse = case elseResult of
+                                                             Just assigns -> [assigns]
+                                                             Nothing -> []
+
+                                              -- All normal branches must initialize
+                                              allNormalBranches = normalBranches ++ normalElse
+
+                                              -- We need either:
+                                              -- 1. An else branch that completes normally, OR
+                                              -- 2. All if/elif branches exit early
+                                              hasNormalPath = not (null normalElse) || null normalBranches
+
+                                              newAssigns = if hasNormalPath && not (null allNormalBranches)
+                                                          then foldl1 intersect allNormalBranches
+                                                          else []
+                                          in newAssigns ++ scanSuite (newAssigns ++ seen) rest
+    -- Only continue past simple statements
+    scanSuite seen (Pass _ : rest)      = scanSuite seen rest
+    -- Parent init calls are special - they initialize parent attributes
+    scanSuite seen (Expr _ (Call _ (Dot _ (Var _ c) n) _ _) : rest)
+        | isClass env c, n == initKW    = scanSuite seen rest
+    -- Stop at method calls, could potentially refine this to allow pure?
+    scanSuite seen (Expr _ (Call _ (Dot _ _ _) _ _) : _)
+                                        = []  -- STOP: method call
+    -- Allow expressions without references to `self`
+    scanSuite seen (Expr _ e : rest)
+        | checkNoSelfReference self seen e
+                                        = scanSuite seen rest
+    -- Handle try/except/finally
+    scanSuite seen (Try _ tryBody handlers elseBranch finallyBlock : rest)
+                                        = let -- Finally block always executes
+                                              finallyAssigns = scanSuite seen finallyBlock
+                                              seenAfterFinally = finallyAssigns ++ seen
+
+                                              -- For try/except, we need ALL paths to initialize
+                                              tryAssigns = scanSuite seenAfterFinally tryBody
+                                              handlerAssigns = map (\(Handler _ hbody) -> scanSuite seenAfterFinally hbody) handlers
+                                              elseAssigns = scanSuite seenAfterFinally elseBranch
+
+                                              -- Compute what's guaranteed from try/except/else paths
+                                              allPaths = if null handlers
+                                                         then [tryAssigns]  -- No handlers, only try block matters
+                                                         else if null elseBranch
+                                                              then tryAssigns : handlerAssigns  -- try + all handlers
+                                                              else []  -- else only executes if no exception, too complex
+
+                                              guaranteedFromPaths = if null allPaths || any null allPaths
+                                                                    then []  -- Some path doesn't initialize
+                                                                    else foldl1 intersect allPaths
+
+                                          in finallyAssigns ++ guaranteedFromPaths ++ scanSuite (finallyAssigns ++ guaranteedFromPaths ++ seen) rest
+    -- Stop at complex control flow
+    scanSuite _ (While _ _ _ _ : _)     = []  -- STOP: Loop might not execute
+    scanSuite _ (For _ _ _ _ _ : _)     = []  -- STOP: Loop might not execute
+    scanSuite _ (With _ _ _ : _)        = []  -- STOP: with statements not supported
+    scanSuite _ (Assert _ _ _ : _)      = []  -- STOP: might fail
+    scanSuite _ (Return _ _ : _)        = []  -- STOP: early exit
+    scanSuite _ (Raise _ _ : _)         = []  -- STOP: raises exception
+    scanSuite _ (Break _ : _)           = []  -- STOP: affects control flow
+    scanSuite _ (Continue _ : _)        = []  -- STOP: affects control flow
+    scanSuite _ (Delete _ _ : _)        = []  -- STOP: delete statement
+    scanSuite _ (After _ _ _ : _)       = []  -- STOP: after statement (async)
+    -- Allow nested function declarations, scan what comes after
+    scanSuite seen (Decl _ _ : rest)    = scanSuite seen rest
+    scanSuite _ (_ : _)                 = []  -- STOP: unhandled statement type (safe default)
+
+
+-- Check if an expression contains disallowed references to self
+-- We allow self.x since it can be seen as just a lone variable, which is valid
+-- as long as it has been previously assigned, but we cannot pass a reference to
+-- the whole `self`
+checkNoSelfReference :: Name -> [Name] -> Expr -> Bool
+checkNoSelfReference self seen expr = checkExpr expr
+  where
+    -- Check if an expression is allowed
+    checkExpr :: Expr -> Bool
+    checkExpr (Await _ _)               = False  -- Await is not allowed
+    checkExpr (Var _ (NoQ n)) | n == self
+                                        = False  -- Direct reference to self not allowed
+    checkExpr e@(Dot _ (Var _ (NoQ n)) attr)
+        | n == self                     = attr `elem` seen  -- self.attr is OK only if attr is initialized
+    -- For other expressions, recursively check subexpressions
+    checkExpr (Call _ func args kwds)   = checkExpr func && checkPosArgs args && checkKwdArgs kwds
+    checkExpr (BinOp _ e1 _ e2)         = checkExpr e1 && checkExpr e2
+    checkExpr (UnOp _ _ e)              = checkExpr e
+    checkExpr (List _ elems)            = all checkElem elems
+    checkExpr (Tuple _ args kwds)       = checkPosArgs args && checkKwdArgs kwds
+    checkExpr (Paren _ e)               = checkExpr e
+    checkExpr (Cond _ cond thenE elseE) = checkExpr cond && checkExpr thenE && checkExpr elseE
+    checkExpr (Index _ base idx)        = checkExpr base && checkExpr idx
+    checkExpr (Slice _ base (Sliz _ start stop step))
+                                        = checkExpr base &&
+                                          maybe True checkExpr start &&
+                                          maybe True checkExpr stop &&
+                                          maybe True checkExpr step
+    checkExpr (Dict _ items)            = all checkItem items
+    checkExpr (Set _ elems)             = all checkElem elems
+    checkExpr (ListComp _ elem comp)    = checkElem elem && checkComp comp
+    checkExpr (DictComp _ (Assoc k v) comp)
+                                        = checkExpr k && checkExpr v && checkComp comp
+    checkExpr (SetComp _ elem comp)     = checkElem elem && checkComp comp
+    checkExpr (Lambda _ _ _ body _)     = checkExpr body
+    checkExpr (Yield _ e)               = maybe True checkExpr e
+    checkExpr (YieldFrom _ e)           = checkExpr e
+    checkExpr (Dot _ e _)               = checkExpr e  -- Check base expression
+    checkExpr _                         = True  -- Other expressions are OK (literals, etc.)
+
+    checkPosArgs (PosArg e rest)        = checkExpr e && checkPosArgs rest
+    checkPosArgs (PosStar e)            = checkExpr e
+    checkPosArgs PosNil                 = True
+
+    checkKwdArgs (KwdArg _ e rest)      = checkExpr e && checkKwdArgs rest
+    checkKwdArgs (KwdStar e)            = checkExpr e
+    checkKwdArgs KwdNil                 = True
+
+    checkElem (Elem e)                  = checkExpr e
+    checkElem (Star e)                  = checkExpr e
+
+    checkItem (Assoc k v)               = checkExpr k && checkExpr v
+
+    checkComp (CompFor _ _ iter c)      = checkExpr iter && checkComp c
+    checkComp (CompIf _ test c)         = checkExpr test && checkComp c
+    checkComp NoComp                    = True
+
+
+-- Infer all class attributes by scanning the entire __init__ method for any
+-- self.x assignments, regardless of control flow. This is used for attribute
+-- discovery/inference, not for initialization checking.
+inferClassAttributes :: Env -> Name -> Suite -> [Name]
+inferClassAttributes env self stmts = nub $ scanAll stmts
+  where
+    scanAll []                          = []
+    -- Direct assignment to self.attribute
+    scanAll (MutAssign _ (Dot _ (Var _ (NoQ x)) n) _ : rest)
+        | x == self                     = n : scanAll rest
+    -- Scan inside control structures
+    scanAll (If _ branches elseBranch : rest)
+                                        = concatMap (\(Branch _ body) -> scanAll body) branches
+                                          ++ scanAll elseBranch
+                                          ++ scanAll rest
+    scanAll (While _ _ body elseBranch : rest)
+                                        = scanAll body ++ scanAll elseBranch ++ scanAll rest
+    scanAll (For _ _ _ body elseBranch : rest)
+                                        = scanAll body ++ scanAll elseBranch ++ scanAll rest
+    scanAll (Try _ tryBody handlers elseBranch finallyBlock : rest)
+                                        = scanAll tryBody ++
+                                          concatMap (\(Handler _ hbody) -> scanAll hbody) handlers ++
+                                          scanAll elseBranch ++
+                                          scanAll finallyBlock ++
+                                          scanAll rest
+    -- TODO: uh, do what with "with"??
+    scanAll (With _ witems body : rest) = scanAll body ++ scanAll rest
+    scanAll (After _ _ _ : rest)        = scanAll rest  -- After has expressions, not suite
+    -- Skip declarations - we don't scan nested function bodies
+    scanAll (Decl _ _ : rest)           = scanAll rest
+    -- Continue past other statements
+    scanAll (_ : rest)                  = scanAll rest
+
+
+-- Check if a statement list ends with an early exit (only raise - not return!)
+-- Return would give back an uninitialized object, so it doesn't excuse initialization
+branchExitsEarly :: Suite -> Bool
+branchExitsEarly []                     = False
+branchExitsEarly stmts                  = case last stmts of
+                                              Raise _ _ -> True  -- Only raise truly prevents object creation
+                                              -- Recursively check nested if/else
+                                              If _ branches elseBranch ->
+                                                  all (\(Branch _ body) -> branchExitsEarly body) branches &&
+                                                  (not (null elseBranch) && branchExitsEarly elseBranch)
+                                              _ -> False
+
+-- Get all parent classes whose __init__ methods are called
+getCalledParentInits :: Env -> Suite -> [QName]
+getCalledParentInits _ []               = []
+getCalledParentInits env (Expr _ (Call _ (Dot _ (Var _ c) n) _ _) : rest)
+    | isClass env c, n == initKW        = c : getCalledParentInits env rest
+getCalledParentInits env (_ : rest)     = getCalledParentInits env rest
+
+-- Get attributes that would be initialized by calling a parent's __init__
+-- This assumes the parent's __init__ properly initializes all attributes it's
+-- responsible for - we can rely on this since the parent's __init__ in turn
+-- will be checked
+getInitializedByParent :: Env -> QName -> [Name]
+getInitializedByParent env qn           = -- When calling ParentClass.__init__(self), we assume it initializes:
+                                          -- 1. All attributes declared in ParentClass
+                                          -- 2. All attributes ParentClass inherited (since it should call its parent's __init__)
+                                          let (_,ancestors,te) = findConName qn env
+                                              inherited = concatMap (getPropertiesFromClass env . tcname . snd) ancestors
+                                              declared = [ n | (n, NSig _ Property _) <- te ]
+                                          in nub $ inherited ++ declared
+  where getPropertiesFromClass env qn   = let (_,_,te) = findConName qn env
+                                          in [ n | (n, NSig _ Property _) <- te ]
+
+
+
 infProperties env as b
-  | Just (self,ss) <- inits             = infProps self ss
+  | Just (self,ss) <- inits             = forM newProps $ \n -> do
+                                             t <- newTVar
+                                             return (n, NSig (monotype t) Property Nothing)
   | otherwise                           = return []
   where inherited                       = concat $ map (conAttrs env . tcname . snd) as
         explicit                        = concat [ ns | Signature _ ns sc dec <- b, isProp dec sc ]
-        inits                           = listToMaybe [ (x, dbody d) | Decl _ ds <- b, d <- ds, dname d == initKW, Just x <- [selfPar d] ]
-        infProps self (MutAssign _ (Dot _ (Var _ (NoQ x)) n) _ : b)
-          | x /= self                   = return []
-          | n `notElem` inherited,
-            n `notElem` explicit        = do t <- newTVar
-                                             te <- infProps self b
-                                             return ((n,NSig (monotype t) Property Nothing) : te)
-          | otherwise                   = infProps self b
-        infProps self (Expr _ (Call _ (Dot _ (Var _ c) n) _ _) : b)
-          | isClass env c, n == initKW  = infProps self b
-        infProps self _                 = return []
-        selfPar Def{pos=PosPar x _ _ _} = Just x
-        selfPar Def{kwd=KwdPar x _ _ _} = Just x
-        selfPar _                       = Nothing
+        inits                           = findInitMethod b
+        assigned                        = maybe [] (\(self,ss) -> inferClassAttributes env self ss) inits
+        newProps                        = assigned \\ (inherited ++ explicit)
+
 
 infDefBody env n (PosPar x _ _ _) k b
   | inClass env && n == initKW          = infInitEnv (setInDef env) x b

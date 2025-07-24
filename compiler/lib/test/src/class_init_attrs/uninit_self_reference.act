@@ -1,0 +1,26 @@
+# Test case: Direct references to self should stop scanning
+# This ensures we don't pass incomplete objects around
+
+def external_func(obj):
+    # This function might access obj which is not fully initialized when this
+    # function is called
+    return obj.x * 2
+
+class TestClass(object):
+    x: int
+    y: int
+    z: int
+    
+    def __init__(self):
+        self.x = 1
+        
+        # This should stop scanning because we're passing self
+        result = external_func(self)  
+        
+        # These won't be scanned, so z will be reported as uninitialized
+        self.y = result
+        self.z = 3
+
+actor main(env):
+    t = TestClass()
+    env.exit(0)

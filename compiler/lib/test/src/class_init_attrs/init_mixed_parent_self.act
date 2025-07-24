@@ -1,0 +1,12 @@
+class Base:
+    x: int
+    def __init__(self):
+        self.x = 1
+
+class Derived(Base):
+    y: int
+    def __init__(self):
+        Base.__init__(self)
+        self.y = 2
+
+d = Derived()

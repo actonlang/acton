@@ -1,0 +1,7 @@
+[error Type error]: Attribute 'y' is not initialized in __init__
+     +--> uninit_method_call.act@7:5-7:6
+     |
+   7 |     y: int
+     :     ^ 
+     :     `- Attribute 'y' is not initialized in __init__
+-----+

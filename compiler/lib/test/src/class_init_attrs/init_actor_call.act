@@ -1,0 +1,16 @@
+actor Act():
+    def foo():
+        return 1
+
+class TestClass(object):
+    x: int
+    y: int
+
+    def __init__(self, a):
+        self.x = 1
+        self.y = a.foo()
+
+actor main(env):
+    a = Act()
+    t = TestClass(a)
+    env.exit(0)

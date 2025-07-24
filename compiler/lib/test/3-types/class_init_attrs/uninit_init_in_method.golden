@@ -1,0 +1,7 @@
+[error Type error]: Attribute 'x' is not initialized in __init__
+     +--> uninit_init_in_method.act@4:5-4:6
+     |
+   4 |     x: int
+     :     ^ 
+     :     `- Attribute 'x' is not initialized in __init__
+-----+
