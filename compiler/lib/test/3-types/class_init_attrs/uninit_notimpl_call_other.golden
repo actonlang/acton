@@ -1,0 +1,22 @@
+[error Type error]: Attribute 'y' is not initialized in TestClass.__init__
+     +--> uninit_notimpl_call_other.act@8:5-15:5
+     |
+   4 |    class TestClass(object):
+     :    ^-----------------------
+     :    `- In class TestClass
+     :
+   6 |        y: int
+     :        ^ 
+     :        `- Attribute 'y' is defined here
+     :
+   8 | +>     def __init__(self):
+   9 | |          # Calling a NotImplemented method on self should be allowed since it's
+  10 | |          # implemented in C and thus trusted to do the right thing.
+  11 | |          self.setup()
+  12 | |          self.x = 1
+  13 | |          self.setup2()
+  14 | |          self.y = 2
+  15 | |> 
+     : | 
+     : `- Attribute 'y' is not initialized in __init__
+-----+

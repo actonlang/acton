@@ -1,0 +1,7 @@
+[error Type error]: Attribute 'pi' is not initialized in __init__
+     +--> uninit_method_call_assign.act@7:5-7:7
+     |
+   7 |     pi: int
+     :     ^- 
+     :     `- Attribute 'pi' is not initialized in __init__
+-----+

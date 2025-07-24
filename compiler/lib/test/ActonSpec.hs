@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings, ScopedTypeVariables #-}
 
 module Main (main) where
 
@@ -10,8 +10,11 @@ import qualified Acton.Syntax as S
 import qualified Acton.Printer as AP
 import qualified Acton.DocPrinter as DocP
 import qualified Acton.Env
+import Acton.Env (CompilationError(..))
 import qualified Acton.Kinds
 import qualified Acton.Types
+import qualified Acton.TypeM
+import Acton.TypeM (TypeError(..))
 import qualified Acton.Normalizer
 import qualified Acton.Deactorizer
 import qualified Acton.CPS
@@ -19,21 +22,23 @@ import qualified Acton.LambdaLifter
 import qualified Acton.Boxing
 import qualified Acton.CodeGen
 import qualified Acton.Diagnostics as Diag
-import Pretty (print)
+import Pretty (print, prettyText)
+import qualified Pretty
 import Test.Syd
 import Test.Syd.Def.Golden (goldenTextFile)
 import qualified Control.Monad.Trans.State.Strict as St
 import Text.Megaparsec (runParser, errorBundlePretty, ShowErrorComponent(..))
 import qualified Data.Text as T
 import Data.List (isInfixOf, isPrefixOf)
-import Error.Diagnose (printDiagnostic, prettyDiagnostic, WithUnicode(..), TabSize(..), defaultStyle)
+import Error.Diagnose (printDiagnostic, prettyDiagnostic, WithUnicode(..), TabSize(..), defaultStyle, addReport, addFile)
+import Error.Diagnose.Report (Report(..))
 import Prettyprinter (unAnnotate, layoutPretty, defaultLayoutOptions)
 import Prettyprinter.Render.Text (renderStrict)
 import System.FilePath ((</>), joinPath, takeFileName, takeBaseName, takeDirectory, splitDirectories)
-import System.Directory (getCurrentDirectory, setCurrentDirectory, createDirectoryIfMissing)
+import System.Directory (getCurrentDirectory, setCurrentDirectory)
 import Control.Monad (forM_, when, foldM)
 import qualified Control.Exception as E
-import Utils (SrcLoc(..))
+import Utils (SrcLoc(..), loc, prstr)
 import qualified System.IO.Unsafe
 
 
@@ -385,6 +390,8 @@ main = do
     describe "Pass 3: Types" $ do
       testTypes env0 ["deact"]
       testTypes env0 ["test_discovery"]
+
+      testAttributesInitialization env0
 
     describe "Pass 4: Normalizer" $ do
       testNorm env0 ["deact"]
@@ -866,3 +873,163 @@ testDocstrings env0 testname = do
         Just (Just doc) -> doc `shouldContain` "Just a docstring"
         Just Nothing -> expectationFailure "Function should have docstring"
         Nothing -> expectationFailure "Function not found"
+
+-- Tests for uninitialized class attribute checking
+
+testAttributesInitialization :: Acton.Env.Env0 -> Spec
+testAttributesInitialization env0 = do
+  describe "Class Attribute Initialization Check" $ do
+    testTypeSuccess env0 "class_init_attrs/init_basic"
+    testTypeSuccess env0 "class_init_attrs/init_inferred_only"
+    testTypeError   env0 "class_init_attrs/uninit_basic"
+
+    testTypeSuccess env0 "class_init_attrs/init_multiple"
+    testTypeError   env0 "class_init_attrs/uninit_partial"
+
+    testTypeSuccess env0 "class_init_attrs/init_inherited"
+    testTypeError   env0 "class_init_attrs/uninit_inherited"
+    testTypeSuccess env0 "class_init_attrs/init_parent_call"
+    testTypeSuccess env0 "class_init_attrs/init_mixed_parent_self"
+    testTypeSuccess env0 "class_init_attrs/init_grandparent_call"
+    testTypeError   env0 "class_init_attrs/uninit_no_parent_init"
+    testTypeError   env0 "class_init_attrs/uninit_grandparent"
+    testTypeError   env0 "class_init_attrs/uninit_grandparent2"
+    testTypeSuccess env0 "class_init_attrs/init_no_init_uses_parent"
+
+    testTypeSuccess env0 "class_init_attrs/init_conditional"
+
+    testTypeSuccess env0 "class_init_attrs/init_nested_if"
+    testTypeSuccess env0 "class_init_attrs/init_nested_if_raise"
+    testTypeError   env0 "class_init_attrs/uninit_nested_if"
+    testTypeError   env0 "class_init_attrs/uninit_elif_missing"
+
+    testTypeSuccess env0 "class_init_attrs/init_try_except"
+    testTypeSuccess env0 "class_init_attrs/init_try_finally"
+    testTypeSuccess env0 "class_init_attrs/init_try_except_finally"
+    testTypeError   env0 "class_init_attrs/uninit_try_except"
+    testTypeSuccess env0 "class_init_attrs/init_try_except_raise"
+    testTypeSuccess env0 "class_init_attrs/init_try_else_combined"
+    testTypeSuccess env0 "class_init_attrs/init_multiple_except_handlers"
+    testTypeSuccess env0 "class_init_attrs/init_except_raise_after_assignment"
+    testTypeSuccess env0 "class_init_attrs/init_try_inside_if"
+    testTypeSuccess env0 "class_init_attrs/init_constant_condition"
+    testTypeSuccess env0 "class_init_attrs/init_raise_after_assignment"
+    testTypeSuccess env0 "class_init_attrs/init_both_branches_with_raise"
+    testTypeSuccess env0 "class_init_attrs/init_elif_raise_after_assignment"
+    testTypeSuccess env0 "class_init_attrs/init_after_statements"
+
+    testTypeSuccess env0 "class_init_attrs/init_self_attr_access"
+    testTypeSuccess env0 "class_init_attrs/init_self_attr_in_expr"
+    testTypeError   env0 "class_init_attrs/uninit_self_attr_access"
+    testTypeSuccess env0 "class_init_attrs/init_self_attr_conditional"
+    testTypeSuccess env0 "class_init_attrs/init_self_attr_in_loop"
+    testTypeError   env0 "class_init_attrs/uninit_method_reference"
+
+    testTypeSuccess env0 "class_init_attrs/init_function_call"
+    testTypeSuccess env0 "class_init_attrs/init_nested_function_call"
+    testTypeError   env0 "class_init_attrs/uninit_method_call"
+    testTypeError   env0 "class_init_attrs/uninit_method_call_assign"
+    testTypeSuccess env0 "class_init_attrs/init_actor"
+    testTypeSuccess env0 "class_init_attrs/init_actor_call"
+
+    testTypeSuccess env0 "class_init_attrs/init_notimplemented"
+    testTypeSuccess env0 "class_init_attrs/init_notimpl_call"
+    testTypeError   env0 "class_init_attrs/uninit_notimpl_call_other"
+    testTypeError   env0 "class_init_attrs/uninit_augmented_assign"
+    testTypeError   env0 "class_init_attrs/uninit_for_loop"
+    testTypeSuccess env0 "class_init_attrs/init_after_loop"
+    testTypeSuccess env0 "class_init_attrs/init_after_while"
+    testTypeError   env0 "class_init_attrs/uninit_loop_references_self"
+    testTypeError   env0 "class_init_attrs/uninit_init_in_method"
+    testTypeError   env0 "class_init_attrs/uninit_return_early"
+
+    testTypeError   env0 "class_init_attrs/uninit_self_reference"
+    testTypeSuccess env0 "class_init_attrs/init_self_attr_reference"
+    testTypeError   env0 "class_init_attrs/uninit_self_in_list"
+
+    testTypeSuccess env0 "class_init_attrs/init_loop_break"
+    testTypeSuccess env0 "class_init_attrs/init_loop_continue"
+    testTypeSuccess env0 "class_init_attrs/init_assert"
+    testTypeSuccess env0 "class_init_attrs/init_assert_with_self"
+    testTypeError   env0 "class_init_attrs/uninit_assert_uninit_attr"
+    testTypeSuccess env0 "class_init_attrs/init_delete"
+    testTypeSuccess env0 "class_init_attrs/init_nested_function"
+    testTypeError   env0 "class_init_attrs/uninit_nested_function_with_self"
+    testTypeError   env0 "class_init_attrs/uninit_nested_function_escape"
+
+
+-- Test a file that should produce a type error
+-- Path can be "testname" or "subdir/testname"
+testTypeError :: Acton.Env.Env0 -> String -> Spec
+testTypeError env0 path = do
+  let (subdir, testname) = case break (=='/') path of
+                             (name, "") -> ("", name)
+                             (dir, '/':name) -> (dir, name)
+                             _ -> error $ "Invalid test path: " ++ path
+      act_file = "test" </> "src" </> path ++ ".act"
+      golden_file = "test" </> "3-types" </> path ++ ".golden"
+      -- For error display, use just the basename like actonc does
+      display_file = testname ++ ".act"
+
+  it testname $ do
+    goldenTextFile golden_file $ liftIO $ do
+      -- Read the source file for error formatting
+      srcContent <- readFile act_file
+
+      result <- E.try $ do
+        (env, parsed) <- parseAct env0 path
+        kchecked <- Acton.Kinds.check env parsed
+        (nmod, tchecked, typeEnv, mrefs) <- Acton.Types.reconstruct env kchecked
+        -- Force evaluation to trigger any lazy exceptions
+        E.evaluate $ length (show tchecked)
+        return ()
+
+      case result of
+        Left (e :: E.SomeException) -> do
+          -- Format the error like actonc does
+          let diagnostic = case E.fromException e :: Maybe TypeError of
+                Just typeErr ->
+                  -- Use the typeReport function to format all TypeError variants with richer diagnostics
+                  let report = Acton.TypeM.typeReport typeErr display_file srcContent
+                      diag = addReport mempty report
+                  in addFile diag display_file srcContent
+                _ -> case E.fromException e :: Maybe CompilationError of
+                  Just (IllegalSigOverride n) ->
+                    Diag.actErrToDiagnostic "Compilation error" display_file srcContent (loc n) ("Illegal signature override: " ++ prettyText n)
+                  Just (OtherError loc msg) ->
+                    Diag.actErrToDiagnostic "Compilation error" display_file srcContent loc msg
+                  Just compErr ->
+                    -- For other compilation errors, use the default show instance
+                    Diag.actErrToDiagnostic "Compilation error" display_file srcContent (loc compErr) (show compErr)
+                  _ ->
+                    -- For now, just use the default formatting for other errors
+                    let diagnostic = addReport mempty $ Err (Just "error") (show e) [] []
+                    in addFile diagnostic display_file srcContent
+
+          -- Pretty print the diagnostic
+          return $ T.pack $ show $
+            unAnnotate (prettyDiagnostic WithoutUnicode (TabSize 4) diagnostic)
+        Right _ ->
+          return $ T.pack "ERROR: Expected type error but compilation succeeded"
+
+-- Test a file that should type check successfully
+-- Path can be "testname" or "subdir/testname"
+testTypeSuccess :: Acton.Env.Env0 -> String -> Spec
+testTypeSuccess env0 path = do
+  let testname = takeBaseName path
+      act_file = "test" </> "src" </> path ++ ".act"
+
+  it testname $ do
+    result <- E.try $ do
+      (env, parsed) <- parseAct env0 path
+      kchecked <- Acton.Kinds.check env parsed
+      (nmod, tchecked, typeEnv, mrefs) <- Acton.Types.reconstruct env kchecked
+      -- Force evaluation to trigger any lazy exceptions
+      E.evaluate $ length (show tchecked)
+      return ()
+
+    case result of
+      Left (e :: E.SomeException) ->
+        expectationFailure $ "Expected success but got error: " ++ show e
+      Right _ ->
+        return ()

@@ -1,0 +1,24 @@
+# Test case: nested function that captures uninitialized self attributes
+class TestClass(object):
+    value: int
+    result: int
+    
+    def __init__(self, x: int):
+        self.value = x
+        
+        # Nested function that captures self with uninitialized attribute
+        def get_result() -> int:
+            return self.result  # References uninitialized self.result!
+        
+        # Pass the function externally (self escapes via closure)
+        register(get_result)
+        
+        # This won't be recognized as initialized (self escaped)
+        self.result = 42
+
+def register(f: () -> int):
+    pass
+
+actor main(env):
+    t = TestClass(5)
+    env.exit(0)

@@ -26,6 +26,7 @@
     - [Explicit types](types/explicit.md)
     - [Generics](types/generics.md)
   - [Classes](classes/intro.md)
+    - [Initialization](classes/initialization.md)
     - [Inheritance](classes/inheritance.md)
   - [Protocols](protocols/intro.md)
     - [The Hashable Protocol](protocols/hashable.md)

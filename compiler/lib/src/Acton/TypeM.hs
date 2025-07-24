@@ -25,6 +25,7 @@ import Error.Diagnose
 
 import Acton.Syntax
 import Acton.Printer
+import Acton.Names
 import Utils
 import Pretty
 
@@ -124,6 +125,7 @@ data TypeError                      = TypeError SrcLoc String
                                     | NoRed Constraint
                                     | NoSolve (Maybe Type) [Type] [Constraint]
                                     | NoUnify ErrInfo Type Type
+                                    | UninitializedAttribute SrcLoc Name
                                     deriving (Show)
 
 instance Control.Exception.Exception TypeError
@@ -147,6 +149,7 @@ instance HasLoc TypeError where
     loc (NoRed c)                   = loc c
     loc (NoSolve _ _ _)             = NoLoc
     loc (NoUnify info t1 t2)        = loc info
+    loc (UninitializedAttribute l n) = l
 
 intro t mbe                            = case mbe of
                                              Nothing ->  pretty t
@@ -296,6 +299,9 @@ typeReport (IncompatError info msg) filename src    =
                                          []
 typeReport (SurplusRow p) filename src =
                                     Err Nothing "Too many arguments supplied" [(locToPosition NoLoc filename src, This (prstr (label p)))] []
+typeReport (UninitializedAttribute l n) filename src =
+                                    Err (Just "Type error") msg [(locToPosition l filename src, This msg)] []
+                                    where msg = "Attribute '" ++ prstr n ++ "' is not initialized in __init__"
 
 
 typeError                           :: TypeError -> [(SrcLoc, String)]
@@ -314,6 +320,7 @@ typeError (NoSelInstByClass n u)     = [(loc n, render (text "Instance attribute
 typeError (NoMut n)                  = [(loc n, render (text "Non @property attribute" <+> pretty n <+> text "cannot be mutated"))]
 typeError (LackSig n)                = [(loc n, render (text "Declaration lacks accompanying signature"))]
 typeError (LackDef n)                = [(loc n, render (text "Signature lacks accompanying definition"))]
+typeError (UninitializedAttribute l n) = [(l, "attribute '" ++ prstr n ++ "' is not initialized in __init__")]
 typeError (NoRed c)
     | DeclInfo l1 l2 _ _ _ <- info c = [(min l1 l2,""), (max l1 l2,render (explainRequirement c <+> parens (explainRequirement c{info = dummyInfo})))]
 --    | DfltInfo l n mbe is <- info c  = [(loc c, render (explainRequirement c <+> parens (text ("errcode " ++ show n))))]

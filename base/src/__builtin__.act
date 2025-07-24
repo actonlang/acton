@@ -408,6 +408,7 @@ class OSError (Exception):
 
 class FileNotFoundError (OSError):
     def __init__(self, filename: str):
+        self.error_message = ""
         self.filename = filename
 
     def __str__(self):

@@ -1,0 +1,23 @@
+# Test case: Loop that references self - must stop scanning
+class TestClass(object):
+    x: int
+    y: int
+
+    def __init__(self):
+        # Loop that references self - not safe to continue
+        for i in range(10):
+            process(self)  # Leaks self reference!
+        # These assignments are after the loop but we can't reach them
+        # because the loop leaked self
+        self.x = 1
+        self.y = 2
+
+def range(n: int) -> list[int]:
+    return []
+
+def process(obj: TestClass) -> None:
+    pass
+
+actor main(env):
+    t = TestClass()
+    env.exit(0)

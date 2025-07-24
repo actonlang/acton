@@ -1,0 +1,7 @@
+[error Type error]: Attribute 'y' is not initialized in __init__
+     +--> uninit_partial.act@3:5-3:6
+     |
+   3 |     y: str
+     :     ^ 
+     :     `- Attribute 'y' is not initialized in __init__
+-----+

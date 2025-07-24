@@ -1,0 +1,17 @@
+# Test case: assert that references uninitialized attribute should fail
+class TestClass(object):
+    value: int
+    result: int
+    
+    def __init__(self, x: int):
+        self.value = x
+        
+        # Assert that references uninitialized self.result - should fail!
+        assert self.result > 0, "result must be positive"
+        
+        # This should NOT be recognized as initialized
+        self.result = 42
+
+actor main(env):
+    t = TestClass(5)
+    env.exit(0)

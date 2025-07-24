@@ -1,0 +1,15 @@
+# Test case: Break/continue in loops affecting initialization
+class TestClass(object):
+    x: int
+    y: int
+    
+    def __init__(self, items: list[int]):
+        self.x = 1
+        for item in items:
+            if item == 0:
+                break
+            self.y = item  # Might not execute if we break early or items is empty
+
+actor main(env):
+    t = TestClass([1, 2, 0, 3])  # y will be set to 2
+    env.exit(0)

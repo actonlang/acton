@@ -1,0 +1,14 @@
+# Test case: Accessing already-initialized attributes should be allowed
+class TestClass(object):
+    x: int
+    y: int
+    z: int
+    
+    def __init__(self):
+        self.x = 10
+        self.y = self.x * 2  # OK: x is already initialized
+        self.z = self.x + self.y  # OK: both x and y are initialized
+
+actor main(env):
+    t = TestClass()
+    env.exit(0)

@@ -1,0 +1,7 @@
+[error Type error]: Attribute 'x' is not initialized in __init__
+     +--> uninit_elif_missing.act@3:5-3:6
+     |
+   3 |     x: int
+     :     ^ 
+     :     `- Attribute 'x' is not initialized in __init__
+-----+

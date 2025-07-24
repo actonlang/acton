@@ -1,0 +1,19 @@
+[error Type error]: Attribute 'handler' is not initialized in TestClass.__init__
+     +--> uninit_method_reference.act@12:5-17:5
+     |
+   8 |    class TestClass(object):
+     :    ^-----------------------
+     :    `- In class TestClass
+   9 |        handler: Callback
+     :        ^------ 
+     :        `- Attribute 'handler' is defined here
+     :
+  12 | +>     def __init__(self):
+  13 | |          # This should work - we're just passing a method reference
+  14 | |          # But currently the compiler sees self._on_event as leaking self
+  15 | |          self.handler = Callback(self._on_event)
+  16 | |          self.value = 42  # This won't be seen as initialized
+  17 | |>     
+     : | 
+     : `- Attribute 'handler' is not initialized in __init__
+-----+

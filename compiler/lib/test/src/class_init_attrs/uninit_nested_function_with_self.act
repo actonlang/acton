@@ -1,0 +1,19 @@
+# Test case: nested function that captures self stops initialization scanning
+class TestClass(object):
+    value: int
+    result: int
+    
+    def __init__(self, x: int):
+        self.value = x
+        
+        # Nested function that captures self - stops scanning
+        def get_value() -> int:
+            return self.value  # References self (even though value is initialized)
+        
+        # The nested function captured self, so we conservatively stop scanning
+        # This will NOT be seen as initialized
+        self.result = 42
+
+actor main(env):
+    t = TestClass(5)
+    env.exit(0)

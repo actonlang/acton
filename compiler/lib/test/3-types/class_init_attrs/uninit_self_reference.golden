@@ -1,0 +1,7 @@
+[error Type error]: Attribute 'y' is not initialized in __init__
+     +--> uninit_self_reference.act@11:5-11:6
+     |
+  11 |     y: int
+     :     ^ 
+     :     `- Attribute 'y' is not initialized in __init__
+-----+
