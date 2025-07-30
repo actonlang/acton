@@ -559,7 +559,7 @@ instance InfEnv Decl where
                                                  popFX
                                                  (cs1,eq1) <- solveScoped env1 (tvSelf:qbound q) te tNone cs
                                                  checkNoEscape l env (qbound q)
-                                                 checkClassAttributesInitialized n env as' te0 b
+                                                 checkClassAttributesInitialized n l env as' te0 b
                                                  (nterms,asigs,_) <- checkAttributes [] te' te
                                                  let te1 = if notImplBody b then unSig asigs else []
                                                      te2 = te ++ te1
@@ -674,13 +674,13 @@ checkNoEscape l env vs                  = return ()
 --                                                 traceM ("#### ufree env: " ++ prstrs fvs)
 --                                                 err l ("Escaping type variables: " ++ prstrs escaped)
 
-checkClassAttributesInitialized         :: Name -> Env -> [WTCon] -> TEnv -> Suite -> TypeM ()
-checkClassAttributesInitialized className env ancestors inferredProps b
+checkClassAttributesInitialized         :: Name -> SrcLoc -> Env -> [WTCon] -> TEnv -> Suite -> TypeM ()
+checkClassAttributesInitialized className classLoc env ancestors inferredProps b
                                         = do -- Only check if the class defines its own __init__. If it doesn't, it uses the parent's
                                              -- __init__ which already initialized everything (and we check the parent separately)
                                              case findInitMethod b of
                                                  Nothing -> return ()  -- No __init__, uses parent's
-                                                 Just (self, initBody) ->
+                                                 Just (self, initBody, initLoc) ->
                                                      -- Check if __init__ is implemented in C (body is NotImplemented)
                                                      if hasNotImpl initBody
                                                        then return ()  -- Assume all is OK - we can't analyze C implementation
@@ -697,9 +697,30 @@ checkClassAttributesInitialized className env ancestors inferredProps b
                                                              uninitialized = expected \\ (initialized ++ parentInitialized)
 
                                                          forM_ uninitialized $ \prop ->
-                                                             Control.Exception.throw $ UninitializedAttribute (loc prop) prop
+                                                             let parentInfo = findAttributeParent prop
+                                                                 isInferred = prop `elem` inferred && prop `notElem` explicit && prop `notElem` inherited
+                                                             in Control.Exception.throw $ UninitializedAttribute (loc prop) prop isInferred initLoc classLoc className parentInfo
   where getPropertiesFromClass env qn   = let (_,_,te) = findConName qn env
                                           in [ n | (n, NSig _ Property _) <- te ]
+
+        -- Helper to look up class location in environment
+        getClassLoc env qname           = case [ className | (className, NClass{}) <- names env, className == noq qname ] of
+                                            (Name classLoc _:_) -> classLoc
+                                            _                   -> NoLoc
+
+        -- Find which parent class (if any) defines the given attribute
+        findAttributeParent attrName    = case [ n | Signature _ ns _ _ <- b, n <- ns, n == attrName ] of
+                                              (_:_) -> Nothing  -- Defined in current class
+                                              []    -> -- Look for it in ancestors
+                                                     case mapMaybe (findInAncestor attrName) ancestors of
+                                                         (result:_) -> Just result
+                                                         []         -> Nothing
+
+        -- Check if a specific ancestor defines the attribute
+        findInAncestor attrName (_, anc)= let ancName = tcname anc
+                                          in if attrName `elem` getPropertiesFromClass env ancName
+                                             then Just (noq ancName, getClassLoc env ancName)
+                                             else Nothing
 
 
 wellformed                              :: (WellFormed a) => Env -> a -> TypeM ()
@@ -779,9 +800,9 @@ matchActorAssumption env n0 p k te      = do --traceM ("## matchActorAssumption 
         kloc (KwdSTAR n _)              = loc n
         kloc _                          = NoLoc
 
--- Find __init__ method in class body, return self parameter and body
-findInitMethod :: Suite -> Maybe (Name, Suite)
-findInitMethod b                        = listToMaybe [ (x, dbody d) | Decl _ ds <- b, d <- ds, dname d == initKW, Just x <- [selfPar d] ]
+-- Find __init__ method in class body, return self parameter, body and location
+findInitMethod :: Suite -> Maybe (Name, Suite, SrcLoc)
+findInitMethod b                        = listToMaybe [ (x, dbody d, loc d) | Decl _ ds <- b, d <- ds, dname d == initKW, Just x <- [selfPar d] ]
   where
     selfPar Def{pos=PosPar x _ _ _}     = Just x
     selfPar Def{kwd=KwdPar x _ _ _}     = Just x
@@ -1170,7 +1191,9 @@ infProperties env as b
   | otherwise                           = return []
   where inherited                       = concat $ map (conAttrs env . tcname . snd) as
         explicit                        = concat [ ns | Signature _ ns sc dec <- b, isProp dec sc ]
-        inits                           = findInitMethod b
+        inits                           = case findInitMethod b of
+                                              Just (self, body, _) -> Just (self, body)
+                                              Nothing -> Nothing
         assigned                        = maybe [] (\(self,ss) -> inferClassAttributes env self ss) inits
         newProps                        = assigned \\ (inherited ++ explicit)
 

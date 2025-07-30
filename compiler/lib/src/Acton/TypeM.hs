@@ -125,7 +125,7 @@ data TypeError                      = TypeError SrcLoc String
                                     | NoRed Constraint
                                     | NoSolve (Maybe Type) [Type] [Constraint]
                                     | NoUnify ErrInfo Type Type
-                                    | UninitializedAttribute SrcLoc Name
+                                    | UninitializedAttribute SrcLoc Name Bool SrcLoc SrcLoc Name (Maybe (Name, SrcLoc)) -- attr loc, attr name, is inferred, init loc, class loc, class name, parent class info
                                     deriving (Show)
 
 instance Control.Exception.Exception TypeError
@@ -149,7 +149,7 @@ instance HasLoc TypeError where
     loc (NoRed c)                   = loc c
     loc (NoSolve _ _ _)             = NoLoc
     loc (NoUnify info t1 t2)        = loc info
-    loc (UninitializedAttribute l n) = l
+    loc (UninitializedAttribute l _ _ _ _ _ _) = l
 
 intro t mbe                            = case mbe of
                                              Nothing ->  pretty t
@@ -299,9 +299,19 @@ typeReport (IncompatError info msg) filename src    =
                                          []
 typeReport (SurplusRow p) filename src =
                                     Err Nothing "Too many arguments supplied" [(locToPosition NoLoc filename src, This (prstr (label p)))] []
-typeReport (UninitializedAttribute l n) filename src =
-                                    Err (Just "Type error") msg [(locToPosition l filename src, This msg)] []
-                                    where msg = "Attribute '" ++ prstr n ++ "' is not initialized in __init__"
+typeReport (UninitializedAttribute attrLoc attrName isInferred initLoc classLoc className parentInfo) filename src =
+                                    Err (Just "Type error") msg
+                                        ([ (locToPosition initLoc filename src, This $ "Attribute '" ++ prstr attrName ++ "' is not initialized in __init__")
+                                         , (locToPosition (makeLineOnlyLoc classLoc src) filename src, Where $ "In class " ++ prstr className)
+                                         ] ++
+                                         (case parentInfo of
+                                             Just (parentName, parentLoc) -> [(locToPosition (makeLineOnlyLoc parentLoc src) filename src, Where $ "Attribute inherited from " ++ prstr parentName)]
+                                             Nothing -> []) ++
+                                         [ (locToPosition attrLoc filename src, Where $ "Attribute '" ++ prstr attrName ++ "' " ++ 
+                                             if isInferred then "inferred from use" else "is defined here")
+                                         ])
+                                        []
+                                    where msg = "Attribute '" ++ prstr attrName ++ "' is not initialized in " ++ prstr className ++ ".__init__"
 
 
 typeError                           :: TypeError -> [(SrcLoc, String)]
@@ -320,7 +330,7 @@ typeError (NoSelInstByClass n u)     = [(loc n, render (text "Instance attribute
 typeError (NoMut n)                  = [(loc n, render (text "Non @property attribute" <+> pretty n <+> text "cannot be mutated"))]
 typeError (LackSig n)                = [(loc n, render (text "Declaration lacks accompanying signature"))]
 typeError (LackDef n)                = [(loc n, render (text "Signature lacks accompanying definition"))]
-typeError (UninitializedAttribute l n) = [(l, "attribute '" ++ prstr n ++ "' is not initialized in __init__")]
+typeError (UninitializedAttribute attrLoc attrName isInferred initLoc classLoc className parentInfo) = [(initLoc, "attribute '" ++ prstr attrName ++ "' is not initialized in __init__ of " ++ prstr className)]
 typeError (NoRed c)
     | DeclInfo l1 l2 _ _ _ <- info c = [(min l1 l2,""), (max l1 l2,render (explainRequirement c <+> parens (explainRequirement c{info = dummyInfo})))]
 --    | DfltInfo l n mbe is <- info c  = [(loc c, render (explainRequirement c <+> parens (text ("errcode " ++ show n))))]
@@ -419,3 +429,18 @@ offsetToLineCol offset src =
       in first : case rest of
                   [] -> []
                   (_:rest') -> splitLines rest'
+
+-- | Make a location that only spans the first line
+-- Many of our locations, like for a class definition, span all the lines of the
+-- definition. For printing error messages it's commonly more useful to just
+-- point to where the definition starts rather than highlighting the whole.
+makeLineOnlyLoc :: SrcLoc -> String -> SrcLoc
+makeLineOnlyLoc NoLoc _ = NoLoc
+makeLineOnlyLoc (Loc start _) src =
+  let endOfLine = findEndOfLine start src
+  in Loc start endOfLine
+  where
+    findEndOfLine pos s =
+      let remaining = drop pos s
+          lineEnd = takeWhile (/= '\n') remaining
+      in pos + length lineEnd

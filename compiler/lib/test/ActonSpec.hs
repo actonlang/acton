@@ -882,6 +882,7 @@ testAttributesInitialization env0 = do
     testTypeSuccess env0 "class_init_attrs/init_basic"
     testTypeSuccess env0 "class_init_attrs/init_inferred_only"
     testTypeError   env0 "class_init_attrs/uninit_basic"
+    testTypeError   env0 "class_init_attrs/uninit_basic_inferred"
 
     testTypeSuccess env0 "class_init_attrs/init_multiple"
     testTypeError   env0 "class_init_attrs/uninit_partial"

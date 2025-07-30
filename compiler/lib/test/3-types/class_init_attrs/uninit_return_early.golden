@@ -1,7 +1,22 @@
-[error Type error]: Attribute 'y' is not initialized in __init__
-     +--> uninit_return_early.act@4:5-4:6
+[error Type error]: Attribute 'y' is not initialized in TestClass.__init__
+     +--> uninit_return_early.act@6:5-13:1
      |
-   4 |     y: int
-     :     ^ 
-     :     `- Attribute 'y' is not initialized in __init__
+   2 |    class TestClass(object):
+     :    ^-----------------------
+     :    `- In class TestClass
+     :
+   4 |        y: int
+     :        ^ 
+     :        `- Attribute 'y' is defined here
+     :
+   6 | +>     def __init__(self, quick_exit: bool):
+   7 | |          if quick_exit:
+   8 | |              self.x = 0
+   9 | |              return  # Early return - but y is still uninitialized!
+  10 | |          else:
+  11 | |              self.x = 1
+  12 | |              self.y = 2
+  13 | |> 
+     : | 
+     : `- Attribute 'y' is not initialized in __init__
 -----+

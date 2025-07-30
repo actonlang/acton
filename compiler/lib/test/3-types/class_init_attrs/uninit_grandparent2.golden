@@ -1,7 +1,20 @@
-[error Type error]: Attribute 'y' is not initialized in __init__
-     +--> uninit_grandparent2.act@7:5-7:6
+[error Type error]: Attribute 'y' is not initialized in TestClass.__init__
+     +--> uninit_grandparent2.act@14:5-17:1
      |
-   7 |     y: int
-     :     ^ 
-     :     `- Attribute 'y' is not initialized in __init__
+   6 |    class BaseB(BaseA):
+     :          ^------------
+     :          `- Attribute inherited from BaseB
+   7 |        y: int
+     :        ^ 
+     :        `- Attribute 'y' is defined here
+     :
+  13 |    class TestClass(BaseB):
+     :    ^----------------------
+     :    `- In class TestClass
+  14 | +>     def __init__(self):
+  15 | |          BaseA.__init__(self)
+  16 | |          # Should get a failure since y is not initialized
+  17 | |> 
+     : | 
+     : `- Attribute 'y' is not initialized in __init__
 -----+
