@@ -1,7 +1,19 @@
-[error Type error]: Attribute 'x' is not initialized in __init__
-     +--> uninit_inherited.act@2:5-2:6
+[error Type error]: Attribute 'x' is not initialized in TestClass.__init__
+     +--> uninit_inherited.act@5:5-7:1
      |
-   2 |     x: int
-     :     ^ 
-     :     `- Attribute 'x' is not initialized in __init__
+   1 |    class Base:
+     :          ^----
+     :          `- Attribute inherited from Base
+   2 |        x: int
+     :        ^ 
+     :        `- Attribute 'x' is defined here
+     :
+   4 |    class TestClass(Base):
+     :    ^---------------------
+     :    `- In class TestClass
+   5 | +>     def __init__(self):
+   6 | |          pass
+   7 | |> 
+     : | 
+     : `- Attribute 'x' is not initialized in __init__
 -----+

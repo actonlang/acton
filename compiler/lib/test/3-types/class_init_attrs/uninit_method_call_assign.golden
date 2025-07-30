@@ -1,7 +1,19 @@
-[error Type error]: Attribute 'pi' is not initialized in __init__
-     +--> uninit_method_call_assign.act@7:5-7:7
+[error Type error]: Attribute 'pi' is not initialized in TestClass.__init__
+     +--> uninit_method_call_assign.act@12:5-17:5
      |
-   7 |     pi: int
-     :     ^- 
-     :     `- Attribute 'pi' is not initialized in __init__
+   6 |    class TestClass(object):
+     :    ^-----------------------
+     :    `- In class TestClass
+   7 |        pi: int
+     :        ^- 
+     :        `- Attribute 'pi' is defined here
+     :
+  12 | +>     def __init__(self):
+  13 | |          self.counter = 0
+  14 | |          self.x = 1
+  15 | |          self.pi = self.pure_helper()
+  16 | |          self.y = 2  # Not reached by scanner
+  17 | |>     
+     : | 
+     : `- Attribute 'pi' is not initialized in __init__
 -----+
