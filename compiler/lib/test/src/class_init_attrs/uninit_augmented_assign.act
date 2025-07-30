@@ -1,0 +1,5 @@
+class TestClass(object):
+    x: int
+    
+    def __init__(self):
+        self.x += 1  # Should fail - x not initialized before augmented assignment

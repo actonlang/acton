@@ -1,0 +1,13 @@
+# Test case: if-elif without else
+class TestClass(object):
+    x: int
+    
+    def __init__(self, mode: int):
+        if mode == 1:
+            self.x = 1
+        elif mode == 2:
+            self.x = 2
+        # No else - x not initialized for other values
+
+actor main(env):
+    env.exit(0)

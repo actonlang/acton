@@ -1,0 +1,20 @@
+[error Type error]: Attribute 'y' is not initialized in TestClass.__init__
+     +--> uninit_method_call.act@10:5-15:5
+     |
+   5 |    class TestClass(object):
+     :    ^-----------------------
+     :    `- In class TestClass
+     :
+   7 |        y: int
+     :        ^ 
+     :        `- Attribute 'y' is defined here
+     :
+  10 | +>     def __init__(self):
+  11 | |          self.counter = 0
+  12 | |          self.x = 1
+  13 | |          self.helper()  # Method call on self - scanner should stop here
+  14 | |          self.y = 2  # Not reached by scanner
+  15 | |> 
+     : | 
+     : `- Attribute 'y' is not initialized in __init__
+-----+
