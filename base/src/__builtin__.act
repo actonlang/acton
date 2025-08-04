@@ -341,18 +341,19 @@ class Msg[A] (value):
 
 ## Exceptions ##################################################################################
 
-# All exceptions should have a human readable error in the error_message field.
+# All exceptions should have a human readable error in the msg field.
 # It is generally set by the constructor for each exception class that inherits
 # from BaseException to something appropriate for that particular exception. It
 # is also a common convention to accept a message as an argument to the
 # constructor, which can be used to override the default message.
 class BaseException (value):
-    error_message: str
+    msg: str
+
     def __init__(self, msg: ?str) -> None:
-        self.error_message = msg if msg is not None else ""
+        self.msg = msg if msg is not None else ""
 
     def __str__(self):
-        return f"{self._name()}: {self.error_message}"
+        return f"{self._name()}: {self.msg}"
 
     def _name(self) -> str:
         NotImplemented
@@ -378,18 +379,18 @@ class LookupError (Exception):
 class IndexError (LookupError):
     def __init__(self, index: int, msg: ?str=None):
         self.index = index
-        self.error_message = msg if msg is not None else "List index out of range"
+        self.msg = msg if msg is not None else "List index out of range"
 
     def __str__(self):
-        return f"{self._name()}: {self.error_message}, index: {self.index}"
+        return f"{self._name()}: {self.msg}, index: {self.index}"
 
 class KeyError(LookupError):
     def __init__(self, key: value, msg: ?str=None):
         self.key = key
-        self.error_message = msg if msg is not None else "Key not found"
+        self.msg = msg if msg is not None else "Key not found"
 
     def __str__(self):
-        return f"{self._name()}: {self.error_message}, key: {str(self.key)}"
+        return f"{self._name()}: {self.msg}, key: {str(self.key)}"
 
 class MemoryError (Exception):
     pass

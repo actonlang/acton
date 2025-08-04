@@ -29,10 +29,10 @@ actor main(env):
             print("Following file changes...")
 
     except argparse.PrintUsage as exc:
-        print(exc.error_message)
+        print(exc.msg)
         env.exit(0)
     except argparse.ArgumentError as exc:
-        print(exc.error_message, err=True)
+        print(exc.msg, err=True)
         env.exit(1)
 ```
 
