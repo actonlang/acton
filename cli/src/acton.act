@@ -371,7 +371,7 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
         except FileNotFoundError:
             pass
         except ValueError as e:
-            print("ERROR:", e.error_message)
+            print("ERROR:", e.msg)
             env.exit(1)
             return
 
@@ -920,7 +920,7 @@ actor CmdFetch(env, args):
             env.exit(0)
             return
         except ValueError as e:
-            print("ERROR:", e.error_message)
+            print("ERROR:", e.msg)
             env.exit(1)
             return
     _read_build_config()
@@ -958,7 +958,7 @@ actor CmdPkgAdd(env, args):
             # Ignore, we create a new file
             pass
         except ValueError as e:
-            print("ERROR:", e.error_message)
+            print("ERROR:", e.msg)
             await async env.exit(1)
         return BuildConfig()
 
@@ -1071,7 +1071,7 @@ actor CmdPkgUpgrade(env, args):
             # Ignore, we create a new file
             pass
         except ValueError as e:
-            print("ERROR:", e.error_message)
+            print("ERROR:", e.msg)
             await async env.exit(1)
         return BuildConfig()
 
@@ -1126,7 +1126,7 @@ actor CmdPkgUpgrade(env, args):
         if url is not None:
             new_pkg_urls[dep_name] = url
         if err is not None:
-            print("Error fetching ref for %s:" % dep_name, err.error_message)
+            print("Error fetching ref for %s:" % dep_name, err.msg)
         if len(remaining_fetch_ref) == 0:
             _zig_fetch()
 
@@ -1171,7 +1171,7 @@ actor CmdPkgRemove(env, args):
             # Ignore, we create a new file
             pass
         except ValueError as e:
-            print("ERROR:", e.error_message)
+            print("ERROR:", e.msg)
             await async env.exit(1)
         return BuildConfig()
 
@@ -1223,7 +1223,7 @@ actor CmdZigPkgAdd(env, args):
             # Ignore, we create a new file
             pass
         except ValueError as e:
-            print("ERROR:", e.error_message)
+            print("ERROR:", e.msg)
             await async env.exit(1)
         return BuildConfig()
 
@@ -1293,7 +1293,7 @@ actor CmdZigPkgRemove(env, args):
             print("No build.act.json file found, nothing to do.")
             env.exit(0)
         except ValueError as e:
-            print("ERROR:", e.error_message)
+            print("ERROR:", e.msg)
             env.exit(1)
 
     def _remove_zig_pkg(build_config, dep_name):
@@ -1547,8 +1547,8 @@ actor main(env):
             else:
                 env.exit(0)
     except argparse.PrintUsage as exc:
-        print(exc.error_message)
+        print(exc.msg)
         env.exit(0)
     except argparse.ArgumentError as exc:
-        print(exc.error_message)
+        print(exc.msg)
         env.exit(1)
