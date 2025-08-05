@@ -185,6 +185,10 @@ $R processQ_ProcessD_done_writingG_local(processQ_Process self, $Cont c$cont) {
 
 $R processQ_ProcessD_pidG_local(processQ_Process self, $Cont c$cont) {
     uv_process_t *p = (uv_process_t *)from$int(self->_p);
+    if (p == 0) {
+        log_warn("Process has exited, ignoring PID request");
+        return $R_CONT(c$cont, B_None);
+    }
     return $R_CONT(c$cont, (B_atom)to$int(p->pid));
 }
 
