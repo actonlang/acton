@@ -1100,6 +1100,46 @@ lubfold env []                          = pure tWild
 lubfold env (t:ts)                      = foldM (lub env) t ts
 
 
+-- Control flow --------------------
+
+data Flow                           = RET | BRK | CNT | SEQ deriving (Eq, Show)
+
+class Flows a where
+    flows                           :: a -> [Flow]
+
+fallsthru x                         = SEQ `elem` flows x
+
+brkseq flow                         = (if BRK `elem` flow then SEQ:flow else flow) \\ [BRK,CNT]
+
+
+instance Flows a => Flows [a] where
+    flows []                        = [SEQ]
+    flows (s : ss)                  = flows s `seq` flows ss
+      where f1 `seq` f2             = if SEQ `elem` f1 then (f1\\[SEQ])++f2 else f1
+
+instance Flows Stmt where
+    flows (Expr _ e)
+      | e == eNotImpl               = []                -- Not tracked
+      | Call _ (Var _ n) _ _ <- e,
+        n == primRAISE              = []                -- Not tracked
+    flows Raise{}                   = []                -- Not tracked
+    flows Return{}                  = [RET]
+    flows Break{}                   = [BRK]
+    flows Continue{}                = [CNT]
+    flows (If _ bs els)             = concatMap flows bs ++ flows els
+    flows (While _ _ b els)         = brkseq (flows b) ++ flows els
+    flows (For _ _ _ b els)         = brkseq (flows b) ++ flows els
+    flows (With _ _ b)              = flows b
+    flows (Try _ b hs els fin)      = flows (b++els) ++ concatMap flows hs ++ (flows fin \\ [SEQ])
+    flows _                         = [SEQ]
+
+instance Flows Branch where
+    flows (Branch _ ss)             = flows ss
+
+instance Flows Handler where
+    flows (Handler _ ss)            = flows ss
+
+
 -- Import handling (local definitions only) ----------------------------------------------
 
 --getImps                         :: [FilePath] -> EnvF x -> [Import] -> IO (EnvF x)
