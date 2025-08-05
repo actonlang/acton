@@ -1419,9 +1419,9 @@ instance Infer Expr where
                                              (cs,es') <- infElems env es t0
                                              return (cs, tList t0, List l es')
     infer env (ListComp l e co)
-      | nodup co                        = do (cs1,te,co') <- infEnv env co
+      | nodup co                        = do (cs1,env',co') <- infComp env co
                                              t0 <- newTVar
-                                             (cs2,es) <- infElems (define te env) [e] t0
+                                             (cs2,es) <- infElems env' [e] t0
                                              let [e'] = es
                                              return (cs1++cs2, tList t0, ListComp l e' co')
     infer env (Set l es)                = do t0 <- newTVar
@@ -1429,9 +1429,9 @@ instance Infer Expr where
                                              w <- newWitness
                                              return (Impl (DfltInfo l 87 Nothing []) w t0 pHashable : cs, tSet t0, eCall (tApp (eQVar primMkSet) [t0]) [eVar w,Set l es'])
     infer env (SetComp l e co)
-      | nodup co                        = do (cs1,te,co') <- infEnv env co
+      | nodup co                        = do (cs1,env',co') <- infComp env co
                                              t0 <- newTVar
-                                             (cs2,es) <- infElems (define te env) [e] t0
+                                             (cs2,es) <- infElems env' [e] t0
                                              w <- newWitness
                                              let Elem v = head es
                                                  e' = Elem (annot (tHashableW t0) (eVar w) t0 v)
@@ -1442,10 +1442,10 @@ instance Infer Expr where
                                              w <- newWitness
                                              return (Impl (DfltInfo l 88 Nothing []) w tk pHashable : cs, tDict tk tv, eCall (tApp (eQVar primMkDict) [tk, tv]) [eVar w,Dict l as'])
     infer env (DictComp l a co)
-      | nodup co                        = do (cs1,te,co') <- infEnv env co
+      | nodup co                        = do (cs1,env',co') <- infComp env co
                                              tk <- newTVar
                                              tv <- newTVar
-                                             (cs2,as) <- infAssocs (define te env) [a] tk tv
+                                             (cs2,as) <- infAssocs env' [a] tk tv
                                              w <- newWitness
                                              let Assoc k v = head as
                                                  a' = Assoc (annot (tHashableW tk) (eVar w) tk k) v
@@ -1644,18 +1644,18 @@ instance Infer KwdArg where
                                              return (cs, kwdStar krow, KwdStar e')
     infer env KwdNil                    = return ([], kwdNil, KwdNil)
 
-instance InfEnv Comp where
-    infEnv env NoComp                   = return ([], [], NoComp)
-    infEnv env (CompIf l e c)           = do (cs1,env',s,_,e') <- inferTest env e
-                                             (cs2,te,c') <- infEnv env' c
-                                             return (cs1++cs2, te, CompIf l e' (termsubst s c'))
-    infEnv env (CompFor l p e c)        = do (cs1,te1,t1,p') <- infEnvT (reserve (bound p) env) p
+
+infComp env NoComp                      = return ([], env, NoComp)
+infComp env (CompIf l e c)              = do (cs1,env1,s,_,e') <- inferTest env e
+                                             (cs2,env2,c') <- infComp env1 c
+                                             return (cs1++cs2, env2, CompIf l e' (termsubst s c'))
+infComp env (CompFor l p e c)           = do (cs1,te1,t1,p') <- infEnvT (reserve (bound p) env) p
                                              t2 <- newTVar
                                              (cs2,e') <- inferSub env t2 e
-                                             (cs3,te2,c') <- infEnv (define te1 env) c
+                                             (cs3,env',c') <- infComp (define te1 env) c
                                              w <- newWitness
                                              return (Impl (DfltInfo (loc e) 101 (Just e) []) w t2 (pIterable t1) :
-                                                     cs1++cs2++cs3, te1++te2, CompFor l p' (eCall (eDot (eVar w) iterKW) [e']) c')
+                                                     cs1++cs2++cs3, env', CompFor l p' (eCall (eDot (eVar w) iterKW) [e']) c')
 
 instance InfEnvT PosPat where
     infEnvT env (PosPat p ps)           = do (cs1,te1,t,p') <- infEnvT env p
