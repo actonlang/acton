@@ -369,7 +369,7 @@ instance USubst PosPar where
     usubst (PosPar n t e p)         = PosPar n <$> usubst t <*> usubst e <*> usubst p
     usubst (PosSTAR n t)            = PosSTAR n <$> usubst t
     usubst PosNIL                   = return PosNIL
-    
+
 instance UFree PosPar where
     ufree (PosPar n t e p)          = ufree t ++ ufree p
     ufree (PosSTAR n t)             = ufree t
@@ -379,7 +379,7 @@ instance USubst KwdPar where
     usubst (KwdPar n t e p)         = KwdPar n <$> usubst t <*> usubst e <*> usubst p
     usubst (KwdSTAR n t)            = KwdSTAR n <$> usubst t
     usubst KwdNIL                   = return KwdNIL
-    
+
 instance UFree KwdPar where
     ufree (KwdPar n t e p)          = ufree t ++ ufree p
     ufree (KwdSTAR n t)             = ufree t
@@ -391,7 +391,7 @@ instance USubst Decl where
     usubst (Class l n q bs ss doc)          = Class l n <$> usubst q <*> usubst bs <*> usubst ss <*> return doc
     usubst (Protocol l n q bs ss doc)       = Protocol l n <$> usubst q <*> usubst bs <*> usubst ss <*> return doc
     usubst (Extension l q c bs ss doc)      = Extension l <$> usubst q <*> usubst c <*> usubst bs <*> usubst ss <*> return doc
-
+{-
 instance UFree Decl where
     tybound (Protocol l n q ps b _)   = tvSelf : tybound q
     tybound (Class l n q ps b _)      = tvSelf : tybound q
@@ -399,12 +399,12 @@ instance UFree Decl where
     tybound (Def l n q p k t b d x _) = tybound q
     tybound (Actor l n q p k b _)     = tybound q
     
-    ufree (Protocol l n q ps b _)     = nub (ufree q ++ ufree ps ++ ufree b) \\ (tvSelf : tybound q)
-    ufree (Class l n q ps b _)        = nub (ufree q ++ ufree ps ++ ufree b) \\ (tvSelf : tybound q)
-    ufree (Extension l q c ps b _)    = nub (ufree q ++ ufree c ++ ufree ps ++ ufree b) \\ (tvSelf : tybound q)
-    ufree (Def l n q p k t b d x _)   = nub (ufree q ++ ufree p ++ ufree k ++ ufree b ++ ufree t ++ ufree x) \\ tybound q
-    ufree (Actor l n q p k b _)       = nub (ufree q ++ ufree p ++ ufree k ++ ufree b) \\ (tybound q)
-    
+    ufree (Protocol l n q ps b _)     = nub (ufree q ++ ufree ps ++ ufree b)
+    ufree (Class l n q ps b _)        = nub (ufree q ++ ufree ps ++ ufree b)
+    ufree (Extension l q c ps b _)    = nub (ufree q ++ ufree c ++ ufree ps ++ ufree b)
+    ufree (Def l n q p k t b d x _)   = nub (ufree q ++ ufree p ++ ufree k ++ ufree b ++ ufree t ++ ufree x)
+    ufree (Actor l n q p k b _)       = nub (ufree q ++ ufree p ++ ufree k ++ ufree b)
+-}
 instance USubst Stmt where
     usubst (Expr l e)               = Expr l <$> usubst e
     usubst (Assign l ps e)          = Assign l <$> usubst ps <*> usubst e
@@ -424,7 +424,7 @@ instance USubst Stmt where
     usubst (Decl l ds)              = Decl l <$> usubst ds
     usubst (Signature l ns tsc d)   = Signature l ns <$> usubst tsc <*> return d
     usubst s                        = return s
-
+{-
 instance UFree Stmt where
     ufree (Expr l e)                = ufree e
     ufree (Assign l ps e)           = ufree ps ++ ufree e
@@ -444,7 +444,7 @@ instance UFree Stmt where
     ufree (Decl l ds)               = ufree ds
     ufree (Signature l ns tsc d)    = ufree tsc
     ufree s                         = []
-
+-}
 instance USubst Expr where
     usubst (Call l e p k)           = Call l <$> usubst e <*> usubst p <*> usubst k
     usubst (TApp l e ts)            = TApp l <$> usubst e <*> usubst ts
@@ -505,10 +505,10 @@ instance UFree Expr where
 
 instance USubst Branch where
     usubst (Branch e b)             = Branch <$> usubst e <*> usubst b
-    
+{-    
 instance UFree Branch where
     ufree (Branch e b)              = ufree e ++ ufree b
-
+-}
 instance USubst Pattern where
     usubst (PWild l t)              = PWild l <$> usubst t
     usubst (PVar l n t)             = PVar l n <$> usubst t
@@ -545,10 +545,10 @@ instance UFree KwdPat where
 
 instance USubst Handler where
     usubst (Handler ex b)           = Handler ex <$> usubst b
-
+{-
 instance UFree Handler where
     ufree (Handler ex b)            = ufree b
-
+-}
 instance USubst WithItem where
     usubst (WithItem e p)           = WithItem <$> usubst e <*> usubst p
     
@@ -651,7 +651,7 @@ instance Polarity QBind where
     polvars (Quant v cs)            = (vs,vs) where vs = v : ufree cs
 
 instance Polarity TSchema where
-    polvars (TSchema _ q t)         = (polvars q `polcat` polvars t) `polminus` tybound q
+    polvars (TSchema _ q t)         = polvars q `polcat` polvars t
 
 instance (Polarity a) => Polarity (Maybe a) where
     polvars                         = maybe ([],[]) polvars
@@ -660,6 +660,27 @@ instance (Polarity a) => Polarity [a] where
     polvars                         = foldr polcat ([],[]) . map polvars
 
 
+-- Does Self occur positively?
+posself (TVar _ v)                  = v == tvSelf
+posself (TCon _ c)                  = any posself (tcargs c)
+posself (TFun _ fx p k t)           = any posself [fx,t] || any negself [p,k]
+posself (TTuple _ p k)              = any posself [p,k]
+posself (TOpt _ t)                  = posself t
+posself (TRow _ _ _ t r)            = any posself [t,r]
+posself (TStar _ _ r)               = posself r
+posself _                           = False
+
+-- Does Self occur negatively?
+negself (TCon _ c)                  = any negself (tcargs c)
+negself (TFun _ fx p k t)           = any negself [fx,t] || any posself [p,k]
+negself (TTuple _ p k)              = any negself [p,k]
+negself (TOpt _ t)                  = negself t
+negself (TRow _ _ _ t r)            = any negself [t,r]
+negself (TStar _ _ r)               = negself r
+negself _                           = False
+
+
+-- Find free univars of kind PRow or KRow (for the purpose of defaulting them to TNil)
 class (UFree a) => Tailvars a where
     tailvars                        :: a -> [TUni]
 
@@ -667,8 +688,8 @@ instance Tailvars Type where
     tailvars (TCon _ c)             = tailvars c
     tailvars (TFun _ fx p k t)      = tailvars fx ++ tailvars' p ++ tailvars' k ++ tailvars t
     tailvars (TTuple _ p k)
-      | TVar{} <- p, TNil{} <- k    = []
-      | TNil{} <- p, TVar{} <- k    = []
+      | TVar{} <- p, TNil{} <- k    = []    -- Exclude open * tuples
+      | TNil{} <- p, TVar{} <- k    = []    -- Exclude open ** tuples
       | otherwise                   = tailvars' p ++ tailvars' k
     tailvars (TOpt _ t)             = tailvars t
     tailvars _                      = []
@@ -685,7 +706,7 @@ instance Tailvars QBind where
     tailvars (Quant v cs)           = tailvars cs
 
 instance Tailvars TSchema where
-    tailvars (TSchema _ q t)        = (tailvars q ++ tailvars t) \\ tybound q
+    tailvars (TSchema _ q t)        = tailvars q ++ tailvars t
 
 instance (Tailvars a) => Tailvars (Maybe a) where
     tailvars                        = maybe [] tailvars
