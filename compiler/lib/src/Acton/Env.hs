@@ -266,11 +266,6 @@ instance Polarity WTCon where
 instance Polarity (Name,NameInfo) where
     polvars (n, i)                  = polvars i
 
-negself te                          = concat $ map nself te
-  where nself (_, NSig t NoDec _)   = filter (==tvSelf) (snd $ polvars t)
-        nself (_, NDef t NoDec _)   = filter (==tvSelf) (snd $ polvars t)
-        nself (_, _)                = []
-
 
 instance Tailvars (Name, NameInfo) where
     tailvars (n, NVar t)            = tailvars t

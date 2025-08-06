@@ -130,7 +130,7 @@ infTopStmts env (s : ss)                = do (cs,te1,s) <- infEnv env s
                                              te1 <- defaultTE env te1
                                              --traceM ("===========\n" ++ render (nest 4 $ vcat $ map pretty te1))
                                              ss1 <- termred <$> usubst (pushEqns eq [s])
-                                             defaultVars (ufree ss1)
+--                                             defaultVars (ufree ss1)
                                              ss1 <- usubst ss1
 
                                              (te2,ss2) <- infTopStmts (define te1 env) ss
@@ -624,7 +624,6 @@ checkAttributes final te' te
   | not $ null dupsigs                  = err2 dupsigs "Duplicate signatures for"
   | not $ null props                    = err2 props "Property attributes cannot have class-level definitions:"
   | not $ null nodef                    = err2 nodef "Methods finalized in a previous extension cannot be overridden:"
---  | not $ null nself                    = err0 nself "Negative Self in non-static method signature"
   | otherwise                           = return (nterms, abssigs, dom sigs)
   where (sigs,terms)                    = sigTerms te
         (sigs',terms')                  = sigTerms te'
@@ -634,7 +633,6 @@ checkAttributes final te' te
         abssigs                         = allsigs `exclude` (dom allterms ++ final)
         props                           = dom terms `intersect` dom (propSigs allsigs)
         nodef                           = dom terms `intersect` final
-        nself                           = negself te
 
 addImpl [] ss                           = ss
 addImpl asigs (s : ss)
