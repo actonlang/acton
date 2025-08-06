@@ -382,6 +382,7 @@ instance USubst Equation where
                                                  e <- usubst e
                                                  return (Eqn w t e)
     
+instance UFree Equation where
     ufree (Eqn w t e)                       = ufree t ++ ufree e
 
 instance Vars Equation where

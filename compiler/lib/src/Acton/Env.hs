@@ -177,6 +177,8 @@ instance (USubst x) => USubst (EnvF x) where
                                      we <- usubst (witnesses env)
                                      ex <- usubst (envX env)
                                      return env{ names = ne, witnesses = we, envX = ex }
+
+instance (UFree x) => UFree (EnvF x) where
     ufree env                   = tvarScope0 env ++ ufree (names env) ++ ufree (witnesses env) ++ ufree (envX env)
 
 
@@ -214,6 +216,7 @@ instance USubst NameInfo where
     usubst (NModule te doc)     = NModule <$> return te <*> return doc     -- actually usubst te, but te has no free variables (top-level)
     usubst NReserved            = return NReserved
 
+instance UFree NameInfo where
     ufree (NVar t)              = ufree t
     ufree (NSVar t)             = ufree t
     ufree (NDef t d _)          = ufree t
@@ -234,6 +237,7 @@ instance USubst Witness where
                                      p <- usubst (proto w)
                                      return w{ wtype  = t, proto = p }
 
+instance UFree Witness where
     ufree w@WClass{}            = []
     ufree w@WInst{}             = (ufree (wtype w) ++ ufree (proto w)) \\ qbound (binds w)
 
@@ -241,6 +245,7 @@ instance USubst Witness where
 instance USubst WTCon where
     usubst (w,u)                = (,) <$> return w <*> usubst u
 
+instance UFree WTCon where
     ufree (w,u)                 = ufree u
 
 instance Polarity NameInfo where
