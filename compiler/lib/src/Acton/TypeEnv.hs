@@ -42,6 +42,8 @@ instance Pretty TypeX where
 
 instance USubst TypeX where
     usubst x                    = return x
+
+instance UFree TypeX where
     ufree x                     = []
 
 
