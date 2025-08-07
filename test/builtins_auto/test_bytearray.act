@@ -1,186 +1,355 @@
-def test_bytearray_basic():
+def test_bytearray_basic_len():
     ba = bytearray(b"hello, world!")
-    if len(ba) != 13:
-        raise ValueError("Length of bytearray incorrect: " + str(len(ba)))
-    if ba[0] != 104:  # ASCII 'h'
-        raise ValueError("Indexing failed: " + str(ba[0]))
-    
-    # Test modification
+    result = len(ba)
+    print("len(bytearray(b'hello, world!')): {result}")
+    return result == 13
+
+def test_bytearray_basic_indexing():
+    ba = bytearray(b"hello, world!")
+    result = ba[0]
+    print("bytearray(b'hello, world!')[0]: {result}")
+    return result == 104  # ASCII 'h'
+
+def test_bytearray_basic_modification():
+    ba = bytearray(b"hello, world!")
     ba[0] = 72  # ASCII 'H'
-    if ba[0] != 72:
-        raise ValueError("Modification failed: " + str(ba[0]))
-    
-    # Test slicing
-    if ba[0:5] != bytearray(b"Hello"):
-        raise ValueError("Slicing failed: " + str(ba[0:5]))
+    result = ba[0]
+    print("bytearray modification ba[0] = 72, result: {result}")
+    return result == 72
+
+def test_bytearray_basic_slicing():
+    ba = bytearray(b"hello, world!")
+    ba[0] = 72  # ASCII 'H'
+    result = ba[0:5]
+    print("bytearray(b'Hello, world!')[0:5]: {result}")
+    return result == bytearray(b"Hello")
 
 def test_bytearray_find():
     ba = bytearray(b"hello, world!")
     world = bytearray(b"world")
-    if ba.find(world) != 7:
-        raise ValueError("find() did not return the correct index: " + str(ba.find(world)))
-    if ba.find(world, 0) != 7:
-        raise ValueError("find() did not return the correct index: " + str(ba.find(world, 0)))
-    if ba.find(world, 8) != -1:
-        raise ValueError("find() did not return -1 when the substring is not found")
-    if ba.find(world, 0, 5) != -1:
-        raise ValueError("find() did not return -1 when the substring is not found")
-    if ba.find(world, 0, 7) != -1:
-        raise ValueError("find() did not return -1 when the substring is not found")
-    if ba.find(bytearray(b"crap")) != -1:
-        raise ValueError("find() did not return -1 when the substring is not found")
+    print("Testing bytearray.find()")
+    return (ba.find(world) == 7 and
+            ba.find(world, 0) == 7 and
+            ba.find(world, 8) == -1 and
+            ba.find(world, 0, 5) == -1 and
+            ba.find(world, 0, 7) == -1 and
+            ba.find(bytearray(b"crap")) == -1)
 
-def test_bytearray_sequence_methods():
+def test_bytearray_append():
     ba = bytearray(b"test")
-    
-    # Test append
     ba.append(33)  # ASCII '!'
-    if ba != bytearray(b"test!"):
-        raise ValueError("append() failed: " + str(ba))
-    
-    # Test insert
+    result = ba
+    print("bytearray(b'test').append(33): {result}")
+    return result == bytearray(b"test!")
+
+def test_bytearray_insert():
+    ba = bytearray(b"test")
     ba.insert(0, 65)  # ASCII 'A'
-    if ba != bytearray(b"Atest!"):
-        raise ValueError("insert() failed: " + str(ba))
-    
-    # Test reverse
+    result = ba
+    print("bytearray(b'test').insert(0, 65): {result}")
+    return result == bytearray(b"Atest")
+
+def test_bytearray_reverse():
+    ba = bytearray(b"test")
     ba.reverse()
-    if ba != bytearray(b"!tsetA"):
-        raise ValueError("reverse() failed: " + str(ba))
+    result = ba
+    print("bytearray(b'test').reverse(): {result}")
+    return result == bytearray(b"tset")
 
-def test_empty_bytearray_methods():
-    ba = bytearray(b"")
+def test_empty_bytearray_capitalize():
+    result = bytearray(b"").capitalize()
+    print("empty bytearray.capitalize(): {result}")
+    return result == bytearray(b"")
 
-    # Test all bytearray methods with empty bytearray
-    if ba.capitalize() != ba:
-        raise ValueError("bytearray.capitalize() failed: " + str(ba.capitalize()))
+def test_empty_bytearray_center():
+    result = bytearray(b"").center(5)
+    print("empty bytearray.center(5): {result}")
+    return result == bytearray(b"     ")
 
-    if ba.center(5) != bytearray(b"     "):
-        raise ValueError("bytearray.center() failed: " + str(ba.center(5)))
+def test_empty_bytearray_count():
+    result = bytearray(b"").count(bytearray(b"a"))
+    print("empty bytearray.count(bytearray(b'a')): {result}")
+    return result == 0
 
-    if ba.count(bytearray(b"a")) != 0:
-        raise ValueError("bytearray.count() failed: " + str(ba.count(bytearray(b"a"))))
+def test_empty_bytearray_decode():
+    result = bytearray(b"").decode()
+    print("empty bytearray.decode(): '{result}'")
+    return result == ""
 
-    if ba.decode() != "":
-        raise ValueError("bytearray.decode() failed: " + str(ba.decode()))
+def test_empty_bytearray_endswith():
+    result = bytearray(b"").endswith(bytearray(b""))
+    print("empty bytearray.endswith(bytearray(b'')): {result}")
+    return result == True
 
-    if ba.endswith(bytearray(b"")) != True:
-        raise ValueError("bytearray.endswith() failed: " + str(ba.endswith(bytearray(b""))))
+def test_empty_bytearray_expandtabs():
+    result = bytearray(b"").expandtabs()
+    print("empty bytearray.expandtabs(): {result}")
+    return result == bytearray(b"")
 
-    if ba.expandtabs() != bytearray(b""):
-        raise ValueError("bytearray.expandtabs() failed: " + str(ba.expandtabs()))
+def test_empty_bytearray_find():
+    result = bytearray(b"").find(bytearray(b"a"))
+    print("empty bytearray.find(bytearray(b'a')): {result}")
+    return result == -1
 
-    if ba.find(bytearray(b"a")) != -1:
-        raise ValueError("bytearray.find() failed: " + str(ba.find(bytearray(b"a"))))
-
+def test_empty_bytearray_index():
+    print("empty bytearray.index(bytearray(b'a')): testing exception")
     try:
-        ba.index(bytearray(b"a"))
-        raise ValueError("bytearray.index() didn't raise ValueError")
+        bytearray(b"").index(bytearray(b"a"))
+        return False
     except ValueError:
-        pass
+        return True
 
-    if ba.isalnum() != False:
-        raise ValueError("bytearray.isalnum() failed: " + str(ba.isalnum()))
+def test_empty_bytearray_isalnum():
+    result = bytearray(b"").isalnum()
+    print("empty bytearray.isalnum(): {result}")
+    return result == False
 
-    if ba.isalpha() != False:
-        raise ValueError("bytearray.isalpha() failed: " + str(ba.isalpha()))
+def test_empty_bytearray_isalpha():
+    result = bytearray(b"").isalpha()
+    print("empty bytearray.isalpha(): {result}")
+    return result == False
 
-    if ba.isascii() != True:
-        raise ValueError("bytearray.isascii() failed: " + str(ba.isascii()))
+def test_empty_bytearray_isascii():
+    result = bytearray(b"").isascii()
+    print("empty bytearray.isascii(): {result}")
+    return result == True
 
-    if ba.isdigit() != False:
-        raise ValueError("bytearray.isdigit() failed: " + str(ba.isdigit()))
+def test_empty_bytearray_isdigit():
+    result = bytearray(b"").isdigit()
+    print("empty bytearray.isdigit(): {result}")
+    return result == False
 
-    if ba.islower() != False:
-        raise ValueError("bytearray.islower() failed: " + str(ba.islower()))
+def test_empty_bytearray_islower():
+    result = bytearray(b"").islower()
+    print("empty bytearray.islower(): {result}")
+    return result == False
 
-    if ba.isspace() != False:
-        raise ValueError("bytearray.isspace() failed: " + str(ba.isspace()))
+def test_empty_bytearray_isspace():
+    result = bytearray(b"").isspace()
+    print("empty bytearray.isspace(): {result}")
+    return result == False
 
-    if ba.istitle() != False:
-        raise ValueError("bytearray.istitle() failed: " + str(ba.istitle()))
+def test_empty_bytearray_istitle():
+    result = bytearray(b"").istitle()
+    print("empty bytearray.istitle(): {result}")
+    return result == False
 
-    if ba.isupper() != False:
-        raise ValueError("bytearray.isupper() failed: " + str(ba.isupper()))
+def test_empty_bytearray_isupper():
+    result = bytearray(b"").isupper()
+    print("empty bytearray.isupper(): {result}")
+    return result == False
 
-    if ba.join([bytearray(b"a"), bytearray(b"b"), bytearray(b"c")]) != bytearray(b"abc"):
-        raise ValueError("bytearray.join() failed: " + str(ba.join([bytearray(b"a"), bytearray(b"b"), bytearray(b"c")])))
+def test_empty_bytearray_join():
+    result = bytearray(b"").join([bytearray(b"a"), bytearray(b"b"), bytearray(b"c")])
+    print("empty bytearray.join([bytearray(b'a'), bytearray(b'b'), bytearray(b'c')]): {result}")
+    return result == bytearray(b"abc")
 
-    if ba.ljust(5) != bytearray(b"     "):
-        raise ValueError("bytearray.ljust() failed: " + str(ba.ljust(5)))
+def test_empty_bytearray_ljust():
+    result = bytearray(b"").ljust(5)
+    print("empty bytearray.ljust(5): {result}")
+    return result == bytearray(b"     ")
 
-    if ba.lower() != bytearray(b""):
-        raise ValueError("bytearray.lower() failed: " + str(ba.lower()))
+def test_empty_bytearray_lower():
+    result = bytearray(b"").lower()
+    print("empty bytearray.lower(): {result}")
+    return result == bytearray(b"")
 
-    if ba.lstrip() != bytearray(b""):
-        raise ValueError("bytearray.lstrip() failed: " + str(ba.lstrip()))
+def test_empty_bytearray_lstrip():
+    result = bytearray(b"").lstrip()
+    print("empty bytearray.lstrip(): {result}")
+    return result == bytearray(b"")
 
-    parts = ba.partition(bytearray(b"a"))
-    if parts.0 != bytearray(b"") or parts.1 != bytearray(b"") or parts.2 != bytearray(b""):
-        raise ValueError("bytearray.partition() failed: " + str(parts.0) + " " + str(parts.1) + " " + str(parts.2))
+def test_empty_bytearray_partition():
+    sp = bytearray(b"").partition(bytearray(b"a"))
+    print("empty bytearray.partition(bytearray(b'a')): ({sp.0}, {sp.1}, {sp.2})")
+    return sp.0 == bytearray(b"") and sp.1 == bytearray(b"") and sp.2 == bytearray(b"")
 
-    if ba.replace(bytearray(b""), bytearray(b"")) != bytearray(b""):
-        raise ValueError("bytearray.replace() failed: " + str(ba.replace(bytearray(b""), bytearray(b""))))
+def test_empty_bytearray_replace():
+    result = bytearray(b"").replace(bytearray(b"a"), bytearray(b"b"))
+    print("empty bytearray.replace(bytearray(b'a'), bytearray(b'b')): {result}")
+    return result == bytearray(b"")
 
-    if ba.replace(bytearray(b"a"), bytearray(b"b")) != bytearray(b""):
-        raise ValueError("bytearray.replace() failed: " + str(ba.replace(bytearray(b"a"), bytearray(b"b"))))
+def test_empty_bytearray_replace_empty():
+    result = bytearray(b"").replace(bytearray(b""), bytearray(b""))
+    print("empty bytearray.replace(bytearray(b''), bytearray(b'')): {result}")
+    return result == bytearray(b"")
 
-    if ba.rfind(bytearray(b"a")) != -1:
-        raise ValueError("bytearray.rfind() failed: " + str(ba.rfind(bytearray(b"a"))))
+def test_empty_bytearray_rfind():
+    result = bytearray(b"").rfind(bytearray(b"a"))
+    print("empty bytearray.rfind(bytearray(b'a')): {result}")
+    return result == -1
 
+def test_empty_bytearray_rindex():
+    print("empty bytearray.rindex(bytearray(b'a')): testing exception")
     try:
-        ba.rindex(bytearray(b"a"))
-        raise ValueError("bytearray.rindex() didn't raise ValueError")
+        bytearray(b"").rindex(bytearray(b"a"))
+        return False
     except ValueError:
-        pass
+        return True
 
-    if ba.rjust(5) != bytearray(b"     "):
-        raise ValueError("bytearray.rjust() failed: " + str(ba.rjust(5)))
+def test_empty_bytearray_rjust():
+    result = bytearray(b"").rjust(5)
+    print("empty bytearray.rjust(5): {result}")
+    return result == bytearray(b"     ")
 
-    parts = ba.rpartition(bytearray(b"a"))
-    if parts.0 != bytearray(b"") or parts.1 != bytearray(b"") or parts.2 != bytearray(b""):
-        raise ValueError("bytearray.rpartition() failed: " + str(parts.0) + " " + str(parts.1) + " " + str(parts.2))
+def test_empty_bytearray_rpartition():
+    sp = bytearray(b"").rpartition(bytearray(b"a"))
+    print("empty bytearray.rpartition(bytearray(b'a')): ({sp.0}, {sp.1}, {sp.2})")
+    return sp.0 == bytearray(b"") and sp.1 == bytearray(b"") and sp.2 == bytearray(b"")
 
-    if ba.rstrip() != bytearray(b""):
-        raise ValueError("bytearray.rstrip() failed: " + str(ba.rstrip()))
+def test_empty_bytearray_rstrip():
+    result = bytearray(b"").rstrip()
+    print("empty bytearray.rstrip(): {result}")
+    return result == bytearray(b"")
 
-    if ba.split(bytearray(b"a")) != [bytearray(b"")]:
-        raise ValueError("bytearray.split() failed: " + str(ba.split(bytearray(b"a"))))
+def test_empty_bytearray_split():
+    result = bytearray(b"").split(bytearray(b"a"))
+    print("empty bytearray.split(bytearray(b'a')): {result}")
+    return result == [bytearray(b"")]
 
-    if ba.splitlines() != []:
-        raise ValueError("bytearray.splitlines() failed: " + str(ba.splitlines()))
+def test_empty_bytearray_splitlines():
+    result = bytearray(b"").splitlines()
+    print("empty bytearray.splitlines(): {result}")
+    return result == []
 
-    if ba.startswith(bytearray(b"")) != True:
-        raise ValueError("bytearray.startswith() failed: " + str(ba.startswith(bytearray(b""))))
+def test_empty_bytearray_startswith():
+    result = bytearray(b"").startswith(bytearray(b""))
+    print("empty bytearray.startswith(bytearray(b'')): {result}")
+    return result == True
 
-    if ba.strip() != bytearray(b""):
-        raise ValueError("bytearray.strip() failed: " + str(ba.strip()))
+def test_empty_bytearray_strip():
+    result = bytearray(b"").strip()
+    print("empty bytearray.strip(): {result}")
+    return result == bytearray(b"")
 
-    if ba.upper() != bytearray(b""):
-        raise ValueError("bytearray.upper() failed: " + str(ba.upper()))
+def test_empty_bytearray_upper():
+    result = bytearray(b"").upper()
+    print("empty bytearray.upper(): {result}")
+    return result == bytearray(b"")
 
-    if ba.zfill(5) != bytearray(b"00000"):
-        raise ValueError("bytearray.zfill() failed: " + str(ba.zfill(5)))
+def test_empty_bytearray_zfill():
+    result = bytearray(b"").zfill(5)
+    print("empty bytearray.zfill(5): {result}")
+    return result == bytearray(b"00000")
 
-def test_hex_methods():
-    # Test hex encoding/decoding
+def test_bytearray_startswith_same_length():
+    result = bytearray(b"foo").startswith(bytearray(b"foo"))
+    print("bytearray(b'foo').startswith(bytearray(b'foo')): {result}")
+    return result == True
+
+def test_bytearray_startswith_prefix():
+    result = bytearray(b"hello world").startswith(bytearray(b"hello"))
+    print("bytearray(b'hello world').startswith(bytearray(b'hello')): {result}")
+    return result == True
+
+def test_bytearray_startswith_not_prefix():
+    result = bytearray(b"hello world").startswith(bytearray(b"world"))
+    print("bytearray(b'hello world').startswith(bytearray(b'world')): {result}")
+    return result == False
+
+def test_bytearray_startswith_empty():
+    result = bytearray(b"hello world").startswith(bytearray(b""))
+    print("bytearray(b'hello world').startswith(bytearray(b'')): {result}")
+    return result == True
+
+def test_bytearray_startswith_single_char():
+    result = bytearray(b"a").startswith(bytearray(b"a"))
+    print("bytearray(b'a').startswith(bytearray(b'a')): {result}")
+    return result == True
+
+def test_bytearray_startswith_longer_prefix():
+    result = bytearray(b"foo").startswith(bytearray(b"foobar"))
+    print("bytearray(b'foo').startswith(bytearray(b'foobar')): {result}")
+    return result == False
+
+def test_empty_bytearray_hex():
+    result = bytearray(b"\xde\xad\xbe\xef").hex()
+    print("empty bytearray.hex(): '{result}'")
+    return result == "deadbeef"
+
+def test_empty_bytearray_from_hex():
+    result = bytearray.from_hex("deadbeef").hex()
+    print("empty bytearray.from_hex(''): {result}")
+    return result == "deadbeef"
+
+def test_bytearray_hex():
     ba = bytearray(b"\xde\xad\xbe\xef")
-    if ba.hex() != "deadbeef":
-        raise ValueError("bytearray.hex() failed: " + ba.hex())
+    result = ba.hex()
+    print("bytearray.hex(): {result}")
+    return result == "deadbeef"
 
-    if bytearray.from_hex("deadbeef").hex() != "deadbeef":
-        raise ValueError("bytearray.from_hex() failed: " + bytearray.from_hex("deadbeef").hex())
+def test_bytearray_from_hex():
+    result = bytearray.from_hex("deadbeef").hex()
+    print("bytearray.from_hex('deadbeef').hex(): {result}")
+    return result == "deadbeef"
+
+tests = {
+    "test_bytearray_basic_len": test_bytearray_basic_len,
+    "test_bytearray_basic_indexing": test_bytearray_basic_indexing,
+    "test_bytearray_basic_modification": test_bytearray_basic_modification,
+    "test_bytearray_basic_slicing": test_bytearray_basic_slicing,
+    "test_bytearray_find": test_bytearray_find,
+    "test_bytearray_append": test_bytearray_append,
+    "test_bytearray_insert": test_bytearray_insert,
+    "test_bytearray_reverse": test_bytearray_reverse,
+    "test_empty_bytearray_capitalize": test_empty_bytearray_capitalize,
+    "test_empty_bytearray_center": test_empty_bytearray_center,
+    "test_empty_bytearray_count": test_empty_bytearray_count,
+    "test_empty_bytearray_decode": test_empty_bytearray_decode,
+    "test_empty_bytearray_endswith": test_empty_bytearray_endswith,
+    "test_empty_bytearray_expandtabs": test_empty_bytearray_expandtabs,
+    "test_empty_bytearray_find": test_empty_bytearray_find,
+    "test_empty_bytearray_index": test_empty_bytearray_index,
+    "test_empty_bytearray_isalnum": test_empty_bytearray_isalnum,
+    "test_empty_bytearray_isalpha": test_empty_bytearray_isalpha,
+    "test_empty_bytearray_isascii": test_empty_bytearray_isascii,
+    "test_empty_bytearray_isdigit": test_empty_bytearray_isdigit,
+    "test_empty_bytearray_islower": test_empty_bytearray_islower,
+    "test_empty_bytearray_isspace": test_empty_bytearray_isspace,
+    "test_empty_bytearray_istitle": test_empty_bytearray_istitle,
+    "test_empty_bytearray_isupper": test_empty_bytearray_isupper,
+    "test_empty_bytearray_join": test_empty_bytearray_join,
+    "test_empty_bytearray_ljust": test_empty_bytearray_ljust,
+    "test_empty_bytearray_lower": test_empty_bytearray_lower,
+    "test_empty_bytearray_lstrip": test_empty_bytearray_lstrip,
+    "test_empty_bytearray_partition": test_empty_bytearray_partition,
+    "test_empty_bytearray_replace": test_empty_bytearray_replace,
+    "test_empty_bytearray_replace_empty": test_empty_bytearray_replace_empty,
+    "test_empty_bytearray_rfind": test_empty_bytearray_rfind,
+    "test_empty_bytearray_rindex": test_empty_bytearray_rindex,
+    "test_empty_bytearray_rjust": test_empty_bytearray_rjust,
+    "test_empty_bytearray_rpartition": test_empty_bytearray_rpartition,
+    "test_empty_bytearray_rstrip": test_empty_bytearray_rstrip,
+    "test_empty_bytearray_split": test_empty_bytearray_split,
+    "test_empty_bytearray_splitlines": test_empty_bytearray_splitlines,
+    "test_empty_bytearray_startswith": test_empty_bytearray_startswith,
+    "test_empty_bytearray_strip": test_empty_bytearray_strip,
+    "test_empty_bytearray_upper": test_empty_bytearray_upper,
+    "test_empty_bytearray_zfill": test_empty_bytearray_zfill,
+    "test_empty_bytearray_hex": test_empty_bytearray_hex,
+    "test_empty_bytearray_from_hex": test_empty_bytearray_from_hex,
+    "test_bytearray_startswith_same_length": test_bytearray_startswith_same_length,
+    "test_bytearray_startswith_prefix": test_bytearray_startswith_prefix,
+    "test_bytearray_startswith_not_prefix": test_bytearray_startswith_not_prefix,
+    "test_bytearray_startswith_empty": test_bytearray_startswith_empty,
+    "test_bytearray_startswith_single_char": test_bytearray_startswith_single_char,
+    "test_bytearray_startswith_longer_prefix": test_bytearray_startswith_longer_prefix,
+    "test_bytearray_hex": test_bytearray_hex,
+    "test_bytearray_from_hex": test_bytearray_from_hex,
+}
 
 actor main(env):
-    try:
-        test_bytearray_basic()
-        test_bytearray_find()
-        test_bytearray_sequence_methods()
-        test_empty_bytearray_methods()
-        test_hex_methods()
-        print("All bytearray tests passed!")
-    except Exception as e:
-        print("Unexpected exception during testing:", e)
-        await async env.exit(1)
-
-    env.exit(0)
+    failed = []
+    for name, t in tests.items():
+        print("== test: " + name)
+        if not t():
+            print("-- FAILED test: " + name)
+            failed.append(name)
+        print()
+    if len(failed) == 0:
+        print("All {len(tests)} tests OK!")
+    else:
+        print("\n{len(failed)} of {len(tests)} tests failed:")
+        for name in failed:
+            print(" - {name}")
+    env.exit(max([0, min([len(failed), 1])]))

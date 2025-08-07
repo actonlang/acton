@@ -199,6 +199,36 @@ def test_str_contains():
     print("'hello, world!' in 'hello, world!': {result}")
     return result == True
 
+def test_str_startswith_same_length():
+    result = "hello world".startswith("hello world")
+    print("'hello world'.startswith('hello world'): {result}")
+    return result == True
+
+def test_str_startswith_prefix():
+    result = "hello world".startswith("hello")
+    print("'hello world'.startswith('hello'): {result}")
+    return result == True
+
+def test_str_startswith_not_prefix():
+    result = "hello world".startswith("world")
+    print("'hello world'.startswith('world'): {result}")
+    return result == False
+
+def test_str_startswith_empty():
+    result = "hello world".startswith("")
+    print("'hello world'.startswith(''): {result}")
+    return result == True
+
+def test_str_startswith_single_char():
+    result = "a".startswith("a")
+    print("'a'.startswith('a'): {result}")
+    return result == True
+
+def test_str_startswith_longer_prefix():
+    result = "foo".startswith("foobar")
+    print("'foo'.startswith('foobar'): {result}")
+    return result == False
+
 def test_bytes_hex():
     b = b'\xde\xad\xbe\xef'
     result = b.hex()
@@ -271,6 +301,12 @@ tests = {
     "test_empty_str_zfill": test_empty_str_zfill,
     "test_endswith": test_endswith,
     "test_str_contains": test_str_contains,
+    "test_str_startswith_same_length": test_str_startswith_same_length,
+    "test_str_startswith_prefix": test_str_startswith_prefix,
+    "test_str_startswith_not_prefix": test_str_startswith_not_prefix,
+    "test_str_startswith_empty": test_str_startswith_empty,
+    "test_str_startswith_single_char": test_str_startswith_single_char,
+    "test_str_startswith_longer_prefix": test_str_startswith_longer_prefix,
     "test_bytes_hex": test_bytes_hex,
     "test_bytes_from_hex": test_bytes_from_hex,
     "test_helloworld": test_helloworld,
