@@ -583,6 +583,16 @@ actor CmdTest(env: Env, args, perf_mode: bool=False):
     fs = file.FS(file.FileCap(env.cap))
 
     test_cmd_args = []
+    if args.get_int("iter") > 0:
+        test_cmd_args += ["--max-iter", str(args.get_int("iter"))]
+        test_cmd_args += ["--min-iter", str(args.get_int("iter"))]
+        test_cmd_args += ["--max-time", str(10**6)]
+        test_cmd_args += ["--min-time", str(1)]
+    else:
+        test_cmd_args += ["--max-iter", str(args.get_int("max-iter"))]
+        test_cmd_args += ["--min-iter", str(args.get_int("min-iter"))]
+        test_cmd_args += ["--max-time", str(args.get_int("max-time"))]
+        test_cmd_args += ["--min-time", str(args.get_int("min-time"))]
     for name_filter in args.get_strlist("name"):
         test_cmd_args.extend(["--name", name_filter])
 
@@ -1531,6 +1541,11 @@ actor main(env):
         testp = p.add_cmd("test", "Test", _cmd_test)
         testp.add_bool("record", "Record test performance results")
         testp.add_bool("golden-update", "Update expected golden values based on current values")
+        testp.add_option("iter", "int", default=-1, help="Number of iterations to run a test")
+        testp.add_option("max-iter", "int", default=10**6, help="Maximum number of iterations to run a test")
+        testp.add_option("min-iter", "int", default=3, help="Minimum number of iterations to run a test")
+        testp.add_option("max-time", "int", default=10**3, help="Maximum time to run a test")
+        testp.add_option("min-time", "int", default=50, help="Minimum time to run a test (default: 50ms & 1000ms for perf testing)")
         testp.add_option("module", "strlist", "+", [], "Filter on test module name")
         testp.add_option("name", "strlist", "+", [], "Filter on test name")
 
