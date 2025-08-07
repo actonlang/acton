@@ -12,6 +12,48 @@ def test_bytes_find():
         raise ValueError("find() did not return -1 when the substring is not found")
     if b.find(b"crap") != -1:
         raise ValueError("find() did not return -1 when the substring is not found")
+    return True
+
+
+def test_bytes_startswith_same_length():
+    # Test case for the bug: same length strings
+    b1 = b"foo"
+    if not b1.startswith(b"foo"):
+        raise ValueError("bytes.startswith() failed: b'foo'.startswith(b'foo') returned False")
+    return True
+
+def test_bytes_startswith_prefix():
+    # Test normal prefix matching
+    b2 = b"hello world"
+    if not b2.startswith(b"hello"):
+        raise ValueError("bytes.startswith() failed: b'hello world'.startswith(b'hello') returned False")
+    return True
+
+def test_bytes_startswith_not_prefix():
+    # Test that non-prefix returns False
+    b2 = b"hello world"
+    if b2.startswith(b"world"):
+        raise ValueError("bytes.startswith() failed: b'hello world'.startswith(b'world') returned True")
+    return True
+
+def test_bytes_startswith_empty():
+    # Test empty prefix
+    b2 = b"hello world"
+    if not b2.startswith(b""):
+        raise ValueError("bytes.startswith() failed: empty prefix should always return True")
+    return True
+
+def test_bytes_startswith_single_char():
+    # Test with single character
+    if not b"a".startswith(b"a"):
+        raise ValueError("bytes.startswith() failed: b'a'.startswith(b'a') returned False")
+    return True
+
+def test_bytes_startswith_longer_prefix():
+    # Test longer prefix than string
+    if b"foo".startswith(b"foobar"):
+        raise ValueError("bytes.startswith() failed: prefix longer than string returned True")
+    return True
 
 
 def test_empty_bytes_methods():
@@ -126,29 +168,57 @@ def test_empty_bytes_methods():
 
     if b.zfill(5) != b"00000":
         raise ValueError("bytes.zfill() failed: " + str(b.zfill(5)))
-        
+
     if b"".hex() != "":
         raise ValueError("bytes.hex() failed: " + str(b.hex()))
 
     if bytes.from_hex("") != b"":
         raise ValueError("bytes.from_hex() failed: " + str(bytes.from_hex("")))
 
-actor main(env):
-    try:
-        test_bytes_find()
-        test_empty_bytes_methods()
-    except Exception as e:
-        print("Unexpected exception during testing:", e)
-        await async env.exit(1)
+    return True
 
-    # Test bytes.hex() and bytes.from_hex()
+def test_bytes_hex():
     b = b'\xde\xad\xbe\xef'
     if b.hex() != "deadbeef":
-        print("ERROR: bytes.hex():", b.hex())
-        env.exit(1)
+        raise ValueError("bytes.hex() failed: " + b.hex())
+    return True
 
+def test_bytes_from_hex():
     if bytes.from_hex("deadbeef").hex() != "deadbeef":
-        print("ERROR: bytes.from_hex():", bytes.from_hex("deadbeef").hex())
-        env.exit(1)
+        raise ValueError("bytes.from_hex() failed: " + bytes.from_hex("deadbeef").hex())
+    return True
 
-    env.exit(0)
+tests = {
+    "test_bytes_find": test_bytes_find,
+    "test_bytes_startswith_same_length": test_bytes_startswith_same_length,
+    "test_bytes_startswith_prefix": test_bytes_startswith_prefix,
+    "test_bytes_startswith_not_prefix": test_bytes_startswith_not_prefix,
+    "test_bytes_startswith_empty": test_bytes_startswith_empty,
+    "test_bytes_startswith_single_char": test_bytes_startswith_single_char,
+    "test_bytes_startswith_longer_prefix": test_bytes_startswith_longer_prefix,
+    "test_empty_bytes_methods": test_empty_bytes_methods,
+    "test_bytes_hex": test_bytes_hex,
+    "test_bytes_from_hex": test_bytes_from_hex,
+}
+
+actor main(env):
+    failed = []
+    for name, t in tests.items():
+        print("== test: " + name)
+        try:
+            if not t():
+                print("-- FAILED test: " + name)
+                failed.append(name)
+        except Exception as e:
+            print("-- FAILED test: " + name + " with exception: " + str(e))
+            failed.append(name)
+        print()
+
+    if len(failed) == 0:
+        print("All {len(tests)} tests OK!")
+    else:
+        print("\n{len(failed)} of {len(tests)} tests failed:")
+        for name in failed:
+            print(" - {name}")
+
+    env.exit(max([0, min([len(failed), 1])]))

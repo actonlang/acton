@@ -4,15 +4,16 @@ def test_bytearray_basic():
         raise ValueError("Length of bytearray incorrect: " + str(len(ba)))
     if ba[0] != 104:  # ASCII 'h'
         raise ValueError("Indexing failed: " + str(ba[0]))
-    
+
     # Test modification
     ba[0] = 72  # ASCII 'H'
     if ba[0] != 72:
         raise ValueError("Modification failed: " + str(ba[0]))
-    
+
     # Test slicing
     if ba[0:5] != bytearray(b"Hello"):
         raise ValueError("Slicing failed: " + str(ba[0:5]))
+    return True
 
 def test_bytearray_find():
     ba = bytearray(b"hello, world!")
@@ -29,24 +30,26 @@ def test_bytearray_find():
         raise ValueError("find() did not return -1 when the substring is not found")
     if ba.find(bytearray(b"crap")) != -1:
         raise ValueError("find() did not return -1 when the substring is not found")
+    return True
 
 def test_bytearray_sequence_methods():
     ba = bytearray(b"test")
-    
+
     # Test append
     ba.append(33)  # ASCII '!'
     if ba != bytearray(b"test!"):
         raise ValueError("append() failed: " + str(ba))
-    
+
     # Test insert
     ba.insert(0, 65)  # ASCII 'A'
     if ba != bytearray(b"Atest!"):
         raise ValueError("insert() failed: " + str(ba))
-    
+
     # Test reverse
     ba.reverse()
     if ba != bytearray(b"!tsetA"):
         raise ValueError("reverse() failed: " + str(ba))
+    return True
 
 def test_empty_bytearray_methods():
     ba = bytearray(b"")
@@ -162,6 +165,48 @@ def test_empty_bytearray_methods():
     if ba.zfill(5) != bytearray(b"00000"):
         raise ValueError("bytearray.zfill() failed: " + str(ba.zfill(5)))
 
+    return True
+
+def test_bytearray_startswith_same_length():
+    # Test case for the bug: same length strings
+    ba1 = bytearray(b"foo")
+    if not ba1.startswith(bytearray(b"foo")):
+        raise ValueError("bytearray.startswith() failed: bytearray(b'foo').startswith(bytearray(b'foo')) returned False")
+    return True
+
+def test_bytearray_startswith_prefix():
+    # Test normal prefix matching
+    ba2 = bytearray(b"hello world")
+    if not ba2.startswith(bytearray(b"hello")):
+        raise ValueError("bytearray.startswith() failed: bytearray(b'hello world').startswith(bytearray(b'hello')) returned False")
+    return True
+
+def test_bytearray_startswith_not_prefix():
+    # Test that non-prefix returns False
+    ba2 = bytearray(b"hello world")
+    if ba2.startswith(bytearray(b"world")):
+        raise ValueError("bytearray.startswith() failed: bytearray(b'hello world').startswith(bytearray(b'world')) returned True")
+    return True
+
+def test_bytearray_startswith_empty():
+    # Test empty prefix
+    ba2 = bytearray(b"hello world")
+    if not ba2.startswith(bytearray(b"")):
+        raise ValueError("bytearray.startswith() failed: empty prefix should always return True")
+    return True
+
+def test_bytearray_startswith_single_char():
+    # Test with single character
+    if not bytearray(b"a").startswith(bytearray(b"a")):
+        raise ValueError("bytearray.startswith() failed: bytearray(b'a').startswith(bytearray(b'a')) returned False")
+    return True
+
+def test_bytearray_startswith_longer_prefix():
+    # Test longer prefix than string
+    if bytearray(b"foo").startswith(bytearray(b"foobar")):
+        raise ValueError("bytearray.startswith() failed: prefix longer than string returned True")
+    return True
+
 def test_hex_methods():
     # Test hex encoding/decoding
     ba = bytearray(b"\xde\xad\xbe\xef")
@@ -170,17 +215,40 @@ def test_hex_methods():
 
     if bytearray.from_hex("deadbeef").hex() != "deadbeef":
         raise ValueError("bytearray.from_hex() failed: " + bytearray.from_hex("deadbeef").hex())
+    return True
+
+tests = {
+    "test_bytearray_basic": test_bytearray_basic,
+    "test_bytearray_find": test_bytearray_find,
+    "test_bytearray_sequence_methods": test_bytearray_sequence_methods,
+    "test_bytearray_startswith_same_length": test_bytearray_startswith_same_length,
+    "test_bytearray_startswith_prefix": test_bytearray_startswith_prefix,
+    "test_bytearray_startswith_not_prefix": test_bytearray_startswith_not_prefix,
+    "test_bytearray_startswith_empty": test_bytearray_startswith_empty,
+    "test_bytearray_startswith_single_char": test_bytearray_startswith_single_char,
+    "test_bytearray_startswith_longer_prefix": test_bytearray_startswith_longer_prefix,
+    "test_empty_bytearray_methods": test_empty_bytearray_methods,
+    "test_hex_methods": test_hex_methods,
+}
 
 actor main(env):
-    try:
-        test_bytearray_basic()
-        test_bytearray_find()
-        test_bytearray_sequence_methods()
-        test_empty_bytearray_methods()
-        test_hex_methods()
-        print("All bytearray tests passed!")
-    except Exception as e:
-        print("Unexpected exception during testing:", e)
-        await async env.exit(1)
+    failed = []
+    for name, t in tests.items():
+        print("== test: " + name)
+        try:
+            if not t():
+                print("-- FAILED test: " + name)
+                failed.append(name)
+        except Exception as e:
+            print("-- FAILED test: " + name + " with exception: " + str(e))
+            failed.append(name)
+        print()
 
-    env.exit(0)
+    if len(failed) == 0:
+        print("All {len(tests)} tests OK!")
+    else:
+        print("\n{len(failed)} of {len(tests)} tests failed:")
+        for name in failed:
+            print(" - {name}")
+
+    env.exit(max([0, min([len(failed), 1])]))
