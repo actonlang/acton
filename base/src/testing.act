@@ -1009,7 +1009,7 @@ class ProjectTestResults(object):
             res[modname] = modres
         return json.encode(res)
 
-    def show(self, only_show_complete=False, perf_mem=True):
+    def show(self, show_ongoing: bool=False, show_log: bool=False, perf_mem: bool=True):
 
         def format_diff(new, old, unit=""):
             diff = float(new) - float(old)
@@ -1059,7 +1059,7 @@ class ProjectTestResults(object):
             for test_name, test_info in self.results[module_name].items():
                 if not test_info.complete:
                     complete = False
-        if only_show_complete and not complete:
+        if not show_ongoing and not complete:
             return
 
         for i in range(self.printed_lines):
@@ -1135,7 +1135,7 @@ class ProjectTestResults(object):
                             print(f"{term.red}    {line}{term.normal}")
                             self.printed_lines += 1
                     # Print std_out/std_err if the test failed
-                    if tinfo.num_failures > 0 or tinfo.num_errors > 0:
+                    if show_log or tinfo.num_failures > 0 or tinfo.num_errors > 0:
                         def test_output(msgs: str):
                             for line in msgs.splitlines():
                                 if not (line.startswith("== Running test,") or line == ""):

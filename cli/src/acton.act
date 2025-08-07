@@ -604,7 +604,7 @@ actor CmdTest(env: Env, args, perf_mode: bool=False):
     ptr = testing.ProjectTestResults(perf_data, perf_mode)
 
     def _periodic_show():
-        r = ptr.show(only_show_complete=not env.is_tty())
+        r = ptr.show(show_ongoing=not env.is_tty(), show_log=args.get_bool("show-log"))
         if r is not None:
             if args.get_bool("record"):
                 perf_wfile = file.WriteFile(file.WriteFileCap(file.FileCap(env.cap)), "perf_data")
@@ -1539,6 +1539,7 @@ actor main(env):
         newp.add_arg("projectdir", "Project directory", True, "?")
 
         testp = p.add_cmd("test", "Test", _cmd_test)
+        testp.add_bool("show-log", "Show test log output")
         testp.add_bool("record", "Record test performance results")
         testp.add_bool("golden-update", "Update expected golden values based on current values")
         testp.add_option("iter", "int", default=-1, help="Number of iterations to run a test")
