@@ -95,14 +95,14 @@ instance Pretty (Name,Kind) where
 
 
 autoQuantS env (TSchema l q t)      = TSchema l (q ++ auto_q) t
-  where auto_q                      = map quant $ nub (ufree q ++ ufree t) \\ (tvSelf : qbound q ++ tvars env)
+  where auto_q                      = map quant $ nub (vfree q ++ vfree t) \\ (tvSelf : qbound q ++ tvars env)
 
 autoQuantD env (Def l n q p k t b d x doc)
                                     = Def l n (q ++ auto_q) p k t b d x doc
-  where auto_q                      = map quant $ nub (ufree q ++ ufree p ++ ufree k ++ ufree t) \\ (tvSelf : qbound q ++ tvars env)
+  where auto_q                      = map quant $ nub (vfree q ++ vfree p ++ vfree k ++ vfree t) \\ (tvSelf : qbound q ++ tvars env)
 autoQuantD env (Extension l q c ps b doc)
                                     = Extension l (q ++ auto_q) c ps b doc
-  where auto_q                      = map quant $ nub (ufree q ++ ufree c ++ ufree ps) \\ (tvSelf : qbound q ++ tvars env)
+  where auto_q                      = map quant $ nub (vfree q ++ vfree c ++ vfree ps) \\ (tvSelf : qbound q ++ tvars env)
 autoQuantD env d                    = d
 
 
@@ -304,7 +304,7 @@ instance KCheck Decl where
                                          env1 <- extvars (qbound q) env
                                          q <- kchkQBinds env1 (q++q')
                                          Def l n q <$> kchk env1 p <*> kchk env1 k <*> kexp KType env1 t <*> kchkSuite env1 b <*> pure d <*> kfx env1 x <*> pure doc
-      where ambig                   = qualbound q \\ closeDepVarsQ (ufree p ++ ufree k ++ ufree t ++ ufree x) q
+      where ambig                   = qualbound q \\ closeDepVarsQ (vfree p ++ vfree k ++ vfree t ++ vfree x) q
     kchk env (Actor l n q p k b doc)= do p <- convPExist env =<< convTWild p
                                          k <- convPExist env =<< convTWild k
                                          env1 <- extvars (qbound q) env
@@ -325,8 +325,8 @@ instance KCheck Decl where
                                          env1 <- extvars (tvSelf : qbound q) env
                                          Extension l <$> kchkQBinds env1 (q++q') <*> kexp KType env1 c <*> kchkPBounds env1 us <*> kchkSuite env1 b <*> pure doc
       where ambig                   = qualbound q \\ vs
-            undet                   = ufree us \\ (tvSelf : vs)
-            vs                      = closeDepVarsQ (ufree c) q
+            undet                   = vfree us \\ (tvSelf : vs)
+            vs                      = closeDepVarsQ (vfree c) q
 
 instance KCheck Expr where
     kchk env (Var l n)              = return $ Var l n
@@ -453,7 +453,7 @@ instance KCheck TSchema where
                                          q' <- swapXVars tmp
                                          env1 <- extvars (qbound q) env
                                          TSchema l <$> kchkQBinds env1 (q++q') <*> kexp KType env1 t
-      where ambig                   = qualbound q \\ closeDepVarsQ (ufree t) q
+      where ambig                   = qualbound q \\ closeDepVarsQ (vfree t) q
 
 kchkQBinds env []                   = return []
 kchkQBinds env (Quant v us : q)     = do us <- kchkBounds env us
