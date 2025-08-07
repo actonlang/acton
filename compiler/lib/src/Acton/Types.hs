@@ -578,7 +578,7 @@ instance InfEnv Decl where
                                                  (cs1,eq1) <- solveScoped env1 (qbound q) te tNone cs
                                                  checkNoEscape l env (qbound q)
                                                  (nterms,_,sigs) <- checkAttributes [] te' te
-                                                 let noself = [ n | (n, NSig sc Static _) <- te, tvSelf `notElem` ufree sc ]
+                                                 let noself = [ n | (n, NSig sc Static _) <- te, tvSelf `notElem` vfree sc ]
                                                  when (notImplBody b) $ err0 (notImpls b) "A protocol body cannot be NotImplemented"
                                                  when (not $ null nterms) $ err2 (dom nterms) "Method/attribute lacks signature:"
                                                  when (initKW `elem` sigs) $ err2 (filter (==initKW) sigs) "A protocol cannot define __init__"

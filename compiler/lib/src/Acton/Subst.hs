@@ -81,8 +81,13 @@ class VFree a where
 instance VFree a => VFree [a] where
     vfree                           = concatMap vfree
 
+instance VFree a => VFree (Maybe a) where
+    vfree                           = maybe [] vfree
+
 instance VFree Type where
-    vfree (TVar _ v)                = [v]
+    vfree (TVar _ v)
+      | not (univar v)              = [v]
+      | otherwise                   = []
     vfree (TCon _ c)                = vfree c
     vfree (TFun _ fx p k t)         = vfree fx ++ vfree p ++ vfree k ++ vfree t
     vfree (TTuple _ p k)            = vfree p ++ vfree k
@@ -93,6 +98,24 @@ instance VFree Type where
 
 instance VFree TCon where
     vfree (TC n ts)                 = vfree ts
+
+instance VFree QBind where
+    vfree (Quant v cs)              = vfree cs
+
+instance VFree TSchema where
+    vfree (TSchema _ q t)           = (vfree q ++ vfree t) \\ qbound q
+
+instance VFree PosPar where
+    vfree (PosPar n t e p)          = vfree t ++ vfree p
+    vfree (PosSTAR n t)             = vfree t
+    vfree PosNIL                    = []
+
+instance VFree KwdPar where
+    vfree (KwdPar n t e k)          = vfree t ++ vfree k
+    vfree (KwdSTAR n t)             = vfree t
+    vfree KwdNIL                    = []
+
+
 
 
 class VSubst a where
@@ -220,36 +243,30 @@ class USubst t where
 
 class UFree t where
     ufree                           :: t -> [TUni]
-    tybound                         :: t -> [TVar]
-    tybound _                       = []
 
 instance USubst a => USubst (Name,a) where
     usubst (n, t)                   = (,) <$> return n <*> usubst t
 
 instance UFree a => UFree (Name,a) where
     ufree (n, t)                    = ufree t
-    tybound (n, t)                  = tybound t
 
 instance (USubst a, USubst b) => USubst (QName,a,b) where
     usubst (n, t, u)                = (,,) <$> return n <*> usubst t <*> usubst u
 
 instance (UFree a, UFree b) => UFree (QName,a,b) where
     ufree (n, t, u)                 = ufree t ++ ufree u
-    tybound (n, t, u)               = tybound t ++ tybound u
 
 instance USubst a => USubst [a] where
     usubst                          = mapM usubst
 
 instance UFree a => UFree [a] where
     ufree                           = concat . map ufree
-    tybound                         = concat . map tybound
 
 instance USubst a => USubst (Maybe a) where
     usubst                          = maybe (return Nothing) (\x -> Just <$> usubst x)
 
 instance UFree a => UFree (Maybe a) where
     ufree                           = maybe [] ufree
-    tybound                         = maybe [] tybound
 
 instance USubst Constraint where
     usubst (Cast info t1 t2)        = Cast <$> usubst info <*> usubst t1 <*> usubst t2
@@ -284,9 +301,7 @@ instance USubst TSchema where
 
 instance UFree TSchema where
     ufree (TSchema _ [] t)          = ufree t
-    ufree (TSchema _ q t)           = (ufree q ++ ufree t) \\ tybound q
-
-    tybound (TSchema _ q t)         = tybound q
+    ufree (TSchema _ q t)           = (ufree q ++ ufree t) \\ qbound q
 
 
 schematic (TCon _ tc)               = tCon (schematic' tc)
@@ -333,7 +348,6 @@ instance USubst QBind where
 
 instance UFree QBind where
     ufree (Quant v cs)              = v : ufree cs
-    tybound (Quant v cs)            = [v]
 
 instance USubst Type where
     usubst (TVar l v)               = do s <- usubstitution
@@ -393,12 +407,6 @@ instance USubst Decl where
     usubst (Extension l q c bs ss doc)      = Extension l <$> usubst q <*> usubst c <*> usubst bs <*> usubst ss <*> return doc
 {-
 instance UFree Decl where
-    tybound (Protocol l n q ps b _)   = tvSelf : tybound q
-    tybound (Class l n q ps b _)      = tvSelf : tybound q
-    tybound (Extension l q c ps b _)  = tvSelf : tybound q
-    tybound (Def l n q p k t b d x _) = tybound q
-    tybound (Actor l n q p k b _)     = tybound q
-    
     ufree (Protocol l n q ps b _)     = nub (ufree q ++ ufree ps ++ ufree b)
     ufree (Class l n q ps b _)        = nub (ufree q ++ ufree ps ++ ufree b)
     ufree (Extension l q c ps b _)    = nub (ufree q ++ ufree c ++ ufree ps ++ ufree b)
