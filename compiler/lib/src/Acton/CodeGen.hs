@@ -840,9 +840,10 @@ instance Gen Expr where
     gen env (UnBox _ e@(Call _ (Dot _ (Var _ w) op) (PosArg x (PosArg y PosNil)) KwdNil))  -- use macro for int (in)equality tests
                                     = case findQName w env of
                                         NVar (TCon _ (TC p [TCon _ (TC t [])]))
-                                          | (p==qnOrd || p==qnEq) && elem t [qnInt, qnI64] ->
-                                             text "ORD_" <> genQName env t <> text (nstr op) <> parens(gen env x <> comma <+> gen env y)
+                                          | (p==qnOrd || p==qnEq) &&  t == qnInt ->
+                                             text "ORD_" <> tname <> text (nstr op) <> parens(parens (parens tname <> gen env x) <> comma <+> parens (parens tname <> gen env y))
                                         _ -> genBool env e <> text "->val"
+      where tname                   = genQName env qnInt
 
     gen env (UnBox _ (IsInstance _ e c))
                                     = gen env primISINSTANCE0 <> parens(gen env e <> comma <+> genQName env c)
