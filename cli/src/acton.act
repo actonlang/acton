@@ -760,8 +760,33 @@ def build_cmd_args(args):
     cmdargs.extend(["--optimize", args.get_str("optimize")])
 
     for argname, arg in args.options.items():
-        # TODO: reverse this logic, we should only pass in a small set of options, not all
-        if argname in {"file", "record", "golden-update", "optimize"}:
+        if argname not in {
+            "always-build",
+            "auto-stub",
+            "ccmd",
+            "cgen",
+            "cps",
+            "cpu",
+            "deact",
+            "dep",
+            "hgen",
+            "kinds",
+            "llift",
+            "no-threads",
+            "norm",
+            "only-build",
+            "parse",
+            "root",
+            "sigs",
+            "skip-build",
+            "stub",
+            "syspath",
+            "target",
+            "tempdir",
+            "timing",
+            "types",
+            "verbose"
+            }:
             continue
 
         if arg.type == "bool":
