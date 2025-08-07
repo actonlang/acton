@@ -156,7 +156,7 @@ instance Boxing Expr where
       | isWitness n                 = do (ws1,p1) <- boxing env p
                                          (ws2,e1) <- boxingWitness env w attr ws1 p1
                                          return (ws1++ws2,e1)
-      | attr == nextKW              = trace ("range is " ++ show (IsInstance NoLoc e qnRange)) $ return ([n], eCallP (eDot (eQVar w) attr) p) 
+      | attr == nextKW              = return ([n], eCallP (eDot (eQVar w) attr) p) 
      where
       boxingWitness                 :: BoxEnv -> QName -> Name -> [Name] ->PosArg -> BoxM ([Name],Expr)
       boxingWitness env w attr ws p = case findQName w env of
@@ -177,9 +177,10 @@ instance Boxing Expr where
       boxingFromAtom w ts [x@Float{}]
                                     = return ([], Box (last ts) (unbox (head ts) x))
       boxingFromAtom w ts es        = return ([n], eCall (eDot (eQVar w) fromatomKW) es)
-      boxingGetItem w (_:t:t1:_) es@[a, k]
-        | t == tI64                 = return ([], eCall (tApp (eQVar primUGetItem) [t1]) [a, unbox t k])
+      boxingGetItem w (t0:t:t1:_) es@[a, k]       
+        | t == tI64 && tn == qnList = return ([], eCall (tApp (eQVar primUGetItem) [t1]) [a, unbox t k])  -- only list indexing optimized. TODO: str indexing
         | otherwise                 = return ([n], eCall (eDot (eQVar w) attr) es)
+        where TCon _ (TC tn _)      = t0
    --   boxingNext w ts []
       boxingBinop w attr es@[x1, x2] ts
         | isUnboxable t            =  return ([], Box (last ts) $ Paren NoLoc $ BinOp NoLoc (unbox t x1) op (unbox t x2))
