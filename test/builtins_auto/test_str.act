@@ -32,7 +32,7 @@ def test_empty_str_encode():
 def test_empty_str_endswith():
     result = "".endswith("")
     print("empty str.endswith(''): {result}")
-    return result == True
+    return result
 
 def test_empty_str_expandtabs():
     result = "".expandtabs()
@@ -189,10 +189,14 @@ def test_empty_str_zfill():
 def test_endswith():
     s = "foobar"
     print("Testing str.endswith()")
-    return (s.endswith("foobar") == True and
-            s.endswith("bar") == True and
-            s.endswith("banana") == False and
-            s.endswith("longbanana") == False)
+    print(s.endswith("foobar"))
+    print(s.endswith("bar"))
+    print(s.endswith("banana"))
+    print(s.endswith("longbanana"))
+    return (s.endswith("foobar") and
+            s.endswith("bar") and
+            not s.endswith("banana") and
+            not s.endswith("longbanana"))
 
 def test_str_contains():
     result = "hello, world!" in "hello, world!"
@@ -289,8 +293,9 @@ actor main(env):
         print()
     if len(failed) == 0:
         print("All {len(tests)} tests OK!")
+        env.exit(0)
     else:
         print("\n{len(failed)} of {len(tests)} tests failed:")
         for name in failed:
             print(" - {name}")
-    env.exit(max([0, min([len(failed), 1])]))
+        env.exit(1)

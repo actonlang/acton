@@ -8,7 +8,7 @@ that are used across the application.
 VERSION: str = "1.0.0"
 """Current version of the bar module"""
 
-MAX_ITEMS: int = 1000
+MAX_ITEMS: i64 = 1000
 """Maximum number of items allowed in a container"""
 
 # Basic data class
@@ -133,7 +133,7 @@ class Container[T](object):
                 result.append(transform(item))
         return result
 
-    def count(self) -> int:
+    def count(self) -> i64:
         """Get number of items in container
 
         Returns:
@@ -178,7 +178,7 @@ actor DataProcessor():
     and processes them asynchronously.
     """
     var queue: list[Data] = []
-    var processed_count: int = 0
+    var processed_count: i64 = 0
 
     def enqueue(d: Data):
         """Add data to processing queue
@@ -203,7 +203,7 @@ actor DataProcessor():
             return d
         return None
 
-    def get_stats() -> dict[str, int]:
+    def get_stats() -> dict[str, i64]:
         """Get processing statistics
 
         Returns:

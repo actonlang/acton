@@ -279,9 +279,10 @@ static int fix_start_end(int nchars, B_i64 *start, B_i64 *end) {
         *start = toB_i64(0);
     } else {
         int st = fromB_i64(*start);
-        if (st > nchars)
+        if (st > nchars) {
             return -1;
-        if (st < 0)
+        }
+        if (st < 0) 
             st += nchars+1;
         st = st < 0 ? 0 : st;
         *start = toB_i64(st);
@@ -679,10 +680,13 @@ B_bytes B_strD_encode(B_str s) {
 }
 
 B_bool B_strD_endswith(B_str s, B_str sub, B_i64 start, B_i64 end) {
+    printf("starting endswith\n");
     B_i64 st = start;
     B_i64 en = end;
     if (fix_start_end(s->nchars,&st,&en) < 0) return B_False;
-    if (en-st < sub->nbytes) return B_False;
+    printf("after 1; en = %ld, st = %ld, sub->nbytes = %d \n",st->val, en->val, sub->nbytes);
+    if (en->val-st->val < sub->nbytes) return B_False;
+    printf("after 2\n");
     int isascii = s->nchars==s->nbytes;
     unsigned char *p = skip_chars(s->str + s->nbytes,fromB_i64(en) - s->nchars,isascii) - sub->nbytes;
     unsigned char *q = sub->str;
