@@ -817,18 +817,19 @@ class TestInfo(object):
 
 class TestRunnerConfig(object):
     perf_mode: bool
-    min_test_duration: float
+    max_iter: int
+    min_iter: int
+    max_time: float
+    min_time: float
     output_enabled: bool
 
     def __init__(self, perf_mode: bool, args):
         self.perf_mode = perf_mode
-        mtd = 0.05
-        try:
-            mtd = float(args.get_int("min_time")) / 1000.0
-        except:
-            pass
         self.output_enabled = False if args.get_bool("no_output") else True
-        self.min_test_duration = mtd
+        self.max_iter = args.get_int("max-iter")
+        self.min_iter = args.get_int("min-iter")
+        self.max_time = float(args.get_int("max-time")) / 1000.0
+        self.min_time = float(args.get_int("min-time")) / 1000.0
 
 class TimeoutError(Exception):
     pass
@@ -869,7 +870,15 @@ actor TestExecutor(syscap, config, t: Test, report_complete, env):
         non_gc_mem_usage_after = int(acton.rts.get_rss(syscap) - acton.rts.get_mem_usage(syscap))
         non_gc_mem_usage_delta = non_gc_mem_usage_after - non_gc_mem_usage_before
         #print(f"non-GC memory before: {non_gc_mem_usage_before}  after: {non_gc_mem_usage_after}  delta: {non_gc_mem_usage_delta}")
-        complete = True if test_dur > config.min_test_duration else False
+
+        complete = False
+        if test_dur > config.min_time and iteration > config.min_iter:
+            complete = True
+        if config.max_time > 0 and test_dur > config.max_time:
+            complete = True
+        if config.max_iter > 0 and iteration >= config.max_iter:
+            complete = True
+
         if test_info != None:
             exc = str(exception) if exception != None else None
             test_info.update(complete, TestResult(success, exc, val, testiter_dur, mem_usage_delta, non_gc_mem_usage_delta), test_dur*1000.0)
@@ -1000,7 +1009,7 @@ class ProjectTestResults(object):
             res[modname] = modres
         return json.encode(res)
 
-    def show(self, only_show_complete=False, perf_mem=True):
+    def show(self, show_ongoing: bool=False, show_log: bool=False, perf_mem: bool=True):
 
         def format_diff(new, old, unit=""):
             diff = float(new) - float(old)
@@ -1050,7 +1059,7 @@ class ProjectTestResults(object):
             for test_name, test_info in self.results[module_name].items():
                 if not test_info.complete:
                     complete = False
-        if only_show_complete and not complete:
+        if not show_ongoing and not complete:
             return
 
         for i in range(self.printed_lines):
@@ -1126,7 +1135,7 @@ class ProjectTestResults(object):
                             print(f"{term.red}    {line}{term.normal}")
                             self.printed_lines += 1
                     # Print std_out/std_err if the test failed
-                    if tinfo.num_failures > 0 or tinfo.num_errors > 0:
+                    if show_log or tinfo.num_failures > 0 or tinfo.num_errors > 0:
                         def test_output(msgs: str):
                             for line in msgs.splitlines():
                                 if not (line.startswith("== Running test,") or line == ""):
@@ -1311,9 +1320,11 @@ actor test_runner(env: Env,
         lp = p.add_cmd("list", "list tests", _cmd_list)
         tp = p.add_cmd("test", "Run tests", _run_tests)
         tp.add_arg("name", "Name of the test to run")
+        tp.add_option("max-iter", "int", default=10**6, help="Maximum number of iterations to run")
+        tp.add_option("min-iter", "int", default=3, help="Minumum number of iterations to run")
+        tp.add_option("max-time", "int", default=1000, help="Maximum time to run a test in milliseconds")
+        tp.add_option("min-time", "int", default=50, help="Minimum time to run a test in milliseconds")
         pp = tp.add_cmd("perf", "Performance benchmark tests", _run_perf_tests)
-        pp.add_option("iterations", "int", "?", 1, "Number of iterations to run")
-        pp.add_option("min_time", "int", "?", 1000, "Minimum time to run a test in milliseconds")
 
         args = p.parse(env.argv)
         _cmd = args.cmd
