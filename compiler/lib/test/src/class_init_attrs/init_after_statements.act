@@ -1,0 +1,11 @@
+class TestClass(object):
+    x: int
+
+    def __init__(self):
+        print("hello")
+        pass
+        self.x = 1
+
+actor main(env):
+    t = TestClass()
+    env.exit(0)

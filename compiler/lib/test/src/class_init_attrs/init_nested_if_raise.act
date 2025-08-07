@@ -1,0 +1,16 @@
+class Rational(object):
+    def __init__(self, num: int, denom: int):
+        if denom == 0:
+            raise ValueError("Denominator in rational is zero")
+        else:
+            if denom > 0:
+                self.num = num
+                self.denom = denom
+            else:
+                self.num = -num
+                self.denom = -denom
+
+actor main(env):
+    r = Rational(1, 2)
+    print("Rational created:", r.num, "/", r.denom)
+    env.exit(0)

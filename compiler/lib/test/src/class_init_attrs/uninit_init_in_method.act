@@ -1,0 +1,14 @@
+# Test case: Initialization in another method called from __init__
+# Should fail because we don't allow calling any methods in init constructor
+class TestClass(object):
+    x: int
+    
+    def __init__(self):
+        self.setup()
+    
+    def setup(self):
+        self.x = 1
+
+actor main(env):
+    t = TestClass()
+    env.exit(0)
