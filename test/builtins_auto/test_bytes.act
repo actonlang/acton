@@ -1,202 +1,306 @@
+def test_bytes_basic_len():
+    b = b"hello, world!"
+    result = len(b)
+    print("len(b'hello, world!'): {result}")
+    return result == 13
+
+def test_bytes_basic_indexing():
+    b = b"hello, world!"
+    result = b[0]
+    print("b'hello, world!'[0]: {result}")
+    return result == 104  # ASCII 'h'
+
+def test_bytes_basic_slicing():
+    b = b"hello, world!"
+    result = b[0:5]
+    print("b'hello, world!'[0:5]: {result}")
+    return result == b"hello"
+
 def test_bytes_find():
     b = b"hello, world!"
-    if b.find(b"world") != 7:
-        raise ValueError("find() did not return the correct index: " + str(b.find(b"world")))
-    if b.find(b"world", 0) != 7:
-        raise ValueError("find() did not return the correct index: " + str(b.find(b"world")))
-    if b.find(b"world", 8) != -1:
-        raise ValueError("find() did not return -1 when the substring is not found")
-    if b.find(b"world", 0, 5) != -1:
-        raise ValueError("find() did not return -1 when the substring is not found")
-    if b.find(b"world", 0, 7) != -1:
-        raise ValueError("find() did not return -1 when the substring is not found")
-    if b.find(b"crap") != -1:
-        raise ValueError("find() did not return -1 when the substring is not found")
-    return True
+    print("Testing bytes.find()")
+    return (b.find(b"hello, world!") == 0 and
+            b.find(b"world") == 7 and
+            b.find(b"world", 0) == 7 and
+            b.find(b"world", 8) == -1 and
+            b.find(b"world", 0, 5) == -1 and
+            b.find(b"world", 0, 7) == -1 and
+            b.find(b"crap") == -1)
 
+def test_empty_bytes_capitalize():
+    result = b"".capitalize()
+    print("empty bytes.capitalize(): {result}")
+    return result == b""
+
+def test_empty_bytes_center():
+    result = b"".center(5)
+    print("empty bytes.center(5): {result}")
+    return result == b"     "
+
+def test_empty_bytes_count():
+    result = b"".count(b"a")
+    print("empty bytes.count(b'a'): {result}")
+    return result == 0
+
+def test_empty_bytes_decode():
+    result = b"".decode()
+    print("empty bytes.decode(): '{result}'")
+    return result == ""
+
+def test_empty_bytes_endswith():
+    result = b"".endswith(b"")
+    print("empty bytes.endswith(b''): {result}")
+    return result == True
+
+def test_empty_bytes_expandtabs():
+    result = b"".expandtabs()
+    print("empty bytes.expandtabs(): {result}")
+    return result == b""
+
+def test_empty_bytes_find():
+    result = b"".find(b"a")
+    print("empty bytes.find(b'a'): {result}")
+    return result == -1
+
+def test_empty_bytes_index():
+    print("empty bytes.index(b'a'): testing exception")
+    try:
+        b"".index(b"a")
+        return False
+    except ValueError:
+        return True
+
+def test_empty_bytes_isalnum():
+    result = b"".isalnum()
+    print("empty bytes.isalnum(): {result}")
+    return result == False
+
+def test_empty_bytes_isalpha():
+    result = b"".isalpha()
+    print("empty bytes.isalpha(): {result}")
+    return result == False
+
+def test_empty_bytes_isascii():
+    result = b"".isascii()
+    print("empty bytes.isascii(): {result}")
+    return result == True
+
+def test_empty_bytes_isdigit():
+    result = b"".isdigit()
+    print("empty bytes.isdigit(): {result}")
+    return result == False
+
+def test_empty_bytes_islower():
+    result = b"".islower()
+    print("empty bytes.islower(): {result}")
+    return result == False
+
+def test_empty_bytes_isspace():
+    result = b"".isspace()
+    print("empty bytes.isspace(): {result}")
+    return result == False
+
+def test_empty_bytes_istitle():
+    result = b"".istitle()
+    print("empty bytes.istitle(): {result}")
+    return result == False
+
+def test_empty_bytes_isupper():
+    result = b"".isupper()
+    print("empty bytes.isupper(): {result}")
+    return result == False
+
+def test_empty_bytes_join():
+    result = b"".join([b"a", b"b", b"c"])
+    print("empty bytes.join([b'a', b'b', b'c']): {result}")
+    return result == b"abc"
+
+def test_empty_bytes_ljust():
+    result = b"".ljust(5)
+    print("empty bytes.ljust(5): {result}")
+    return result == b"     "
+
+def test_empty_bytes_lower():
+    result = b"".lower()
+    print("empty bytes.lower(): {result}")
+    return result == b""
+
+def test_empty_bytes_lstrip():
+    result = b"".lstrip()
+    print("empty bytes.lstrip(): {result}")
+    return result == b""
+
+def test_empty_bytes_partition():
+    sp = b"".partition(b"a")
+    print("empty bytes.partition(b'a'): ({sp.0}, {sp.1}, {sp.2})")
+    return sp.0 == b"" and sp.1 == b"" and sp.2 == b""
+
+def test_empty_bytes_replace():
+    result = b"".replace(b"a", b"b")
+    print("empty bytes.replace(b'a', b'b'): {result}")
+    return result == b""
+
+def test_empty_bytes_replace_empty():
+    result = b"".replace(b"", b"")
+    print("empty bytes.replace(b'', b''): {result}")
+    return result == b""
+
+def test_empty_bytes_rfind():
+    result = b"".rfind(b"a")
+    print("empty bytes.rfind(b'a'): {result}")
+    return result == -1
+
+def test_empty_bytes_rindex():
+    print("empty bytes.rindex(b'a'): testing exception")
+    try:
+        b"".rindex(b"a")
+        return False
+    except ValueError:
+        return True
+
+def test_empty_bytes_rjust():
+    result = b"".rjust(5)
+    print("empty bytes.rjust(5): {result}")
+    return result == b"     "
+
+def test_empty_bytes_rpartition():
+    sp = b"".rpartition(b"a")
+    print("empty bytes.rpartition(b'a'): ({sp.0}, {sp.1}, {sp.2})")
+    return sp.0 == b"" and sp.1 == b"" and sp.2 == b""
+
+def test_empty_bytes_rstrip():
+    result = b"".rstrip()
+    print("empty bytes.rstrip(): {result}")
+    return result == b""
+
+def test_empty_bytes_split():
+    result = b"".split(b"a")
+    print("empty bytes.split(b'a'): {result}")
+    return result == [b""]
+
+def test_empty_bytes_splitlines():
+    result = b"".splitlines()
+    print("empty bytes.splitlines(): {result}")
+    return result == []
+
+def test_empty_bytes_startswith():
+    result = b"".startswith(b"")
+    print("empty bytes.startswith(b''): {result}")
+    return result == True
+
+def test_empty_bytes_strip():
+    result = b"".strip()
+    print("empty bytes.strip(): {result}")
+    return result == b""
+
+def test_empty_bytes_upper():
+    result = b"".upper()
+    print("empty bytes.upper(): {result}")
+    return result == b""
+
+def test_empty_bytes_zfill():
+    result = b"".zfill(5)
+    print("empty bytes.zfill(5): {result}")
+    return result == b"00000"
+
+def test_empty_bytes_hex():
+    result = b"".hex()
+    print("empty bytes.hex(): '{result}'")
+    return result == ""
+
+def test_empty_bytes_from_hex():
+    result = bytes.from_hex("")
+    print("empty bytes.from_hex(''): {result}")
+    return result == b""
 
 def test_bytes_startswith_same_length():
-    # Test case for the bug: same length strings
-    b1 = b"foo"
-    if not b1.startswith(b"foo"):
-        raise ValueError("bytes.startswith() failed: b'foo'.startswith(b'foo') returned False")
-    return True
+    result = b"foo".startswith(b"foo")
+    print("b'foo'.startswith(b'foo'): {result}")
+    return result == True
 
 def test_bytes_startswith_prefix():
-    # Test normal prefix matching
-    b2 = b"hello world"
-    if not b2.startswith(b"hello"):
-        raise ValueError("bytes.startswith() failed: b'hello world'.startswith(b'hello') returned False")
-    return True
+    result = b"hello world".startswith(b"hello")
+    print("b'hello world'.startswith(b'hello'): {result}")
+    return result == True
 
 def test_bytes_startswith_not_prefix():
-    # Test that non-prefix returns False
-    b2 = b"hello world"
-    if b2.startswith(b"world"):
-        raise ValueError("bytes.startswith() failed: b'hello world'.startswith(b'world') returned True")
-    return True
+    result = b"hello world".startswith(b"world")
+    print("b'hello world'.startswith(b'world'): {result}")
+    return result == False
 
 def test_bytes_startswith_empty():
-    # Test empty prefix
-    b2 = b"hello world"
-    if not b2.startswith(b""):
-        raise ValueError("bytes.startswith() failed: empty prefix should always return True")
-    return True
+    result = b"hello world".startswith(b"")
+    print("b'hello world'.startswith(b''): {result}")
+    return result == True
 
 def test_bytes_startswith_single_char():
-    # Test with single character
-    if not b"a".startswith(b"a"):
-        raise ValueError("bytes.startswith() failed: b'a'.startswith(b'a') returned False")
-    return True
+    result = b"a".startswith(b"a")
+    print("b'a'.startswith(b'a'): {result}")
+    return result == True
 
 def test_bytes_startswith_longer_prefix():
-    # Test longer prefix than string
-    if b"foo".startswith(b"foobar"):
-        raise ValueError("bytes.startswith() failed: prefix longer than string returned True")
-    return True
-
-
-def test_empty_bytes_methods():
-    b = b""
-
-    # Test all bytes methods with empty bytes
-    if b.capitalize() != b"":
-        raise ValueError("bytes.capitalize() failed: " + str(b.capitalize()))
-
-    if b.center(5) != b"     ":
-        raise ValueError("bytes.center() failed: " + str(b.center(5)))
-
-    if b.count(b"a") != 0:
-        raise ValueError("bytes.count() failed: " + str(b.count(b"a")))
-
-    if b.decode() != "":
-        raise ValueError("bytes.decode() failed: " + str(b.decode()))
-
-    if b.endswith(b"") != True:
-        raise ValueError("bytes.endswith() failed: " + str(b.endswith(b"")))
-
-    if b.expandtabs() != b"":
-        raise ValueError("bytes.expandtabs() failed: " + str(b.expandtabs()))
-
-    if b.find(b"a") != -1:
-        raise ValueError("bytes.find() failed: " + str(b.find(b"a")))
-
-    try:
-        b.index(b"a")
-        raise ValueError("bytes.index() didn't raise ValueError")
-    except ValueError:
-        pass
-
-    if b.isalnum() != False:
-        raise ValueError("bytes.isalnum() failed: " + str(b.isalnum()))
-
-    if b.isalpha() != False:
-        raise ValueError("bytes.isalpha() failed: " + str(b.isalpha()))
-
-    if b.isascii() != True:
-        raise ValueError("bytes.isascii() failed: " + str(b.isascii()))
-
-    if b.isdigit() != False:
-        raise ValueError("bytes.isdigit() failed: " + str(b.isdigit()))
-
-    if b.islower() != False:
-        raise ValueError("bytes.islower() failed: " + str(b.islower()))
-
-    if b.isspace() != False:
-        raise ValueError("bytes.isspace() failed: " + str(b.isspace()))
-
-    if b.istitle() != False:
-        raise ValueError("bytes.istitle() failed: " + str(b.istitle()))
-
-    if b.isupper() != False:
-        raise ValueError("bytes.isupper() failed: " + str(b.isupper()))
-
-    if b.join([b"a", b"b", b"c"]) != b"abc":
-        raise ValueError("bytes.join() failed: " + str(b.join([b"a", b"b", b"c"])))
-
-    if b.ljust(5) != b"     ":
-        raise ValueError("bytes.ljust() failed: " + str(b.ljust(5)))
-
-    if b.lower() != b"":
-        raise ValueError("bytes.lower() failed: " + str(b.lower()))
-
-    if b.lstrip() != b"":
-        raise ValueError("bytes.lstrip() failed: " + str(b.lstrip()))
-
-    sp = b.partition(b"a")
-    if sp.0 != b"" or sp.1 != b"" or sp.2 != b"":
-        sp = b.partition(b"a")
-        raise ValueError("bytes.partition() failed: " + str(sp.0) + str(sp.1) + str(sp.2))
-
-    if b.replace(b"a", b"b") != b"":
-        raise ValueError("bytes.replace() failed: " + str(b.replace(b"a", b"b")))
-
-    if b.rfind(b"a") != -1:
-        raise ValueError("bytes.rfind() failed: " + str(b.rfind(b"a")))
-
-    try:
-        b.rindex(b"a")
-        raise ValueError("bytes.rindex() didn't raise ValueError")
-    except ValueError:
-        pass
-
-    if b.rjust(5) != b"     ":
-        raise ValueError("bytes.rjust() failed: " + str(b.rjust(5)))
-
-    sp = b.rpartition(b"a")
-    if sp.0 != b"" or sp.1 != b"" or sp.2 != b"":
-        sp = b.rpartition(b"a")
-        raise ValueError("bytes.rpartition() failed: " + str(sp.0) + str(sp.1) + str(sp.2))
-
-    if b.rstrip() != b"":
-        raise ValueError("bytes.rstrip() failed: " + str(b.rstrip()))
-
-    if b.split(b"a") != [b""]:
-        raise ValueError("bytes.split() failed: " + str(b.split(b"a")))
-
-    if b.splitlines() != []:
-        raise ValueError("bytes.splitlines() failed: " + str(b.splitlines()))
-
-    if b.startswith(b"") != True:
-        raise ValueError("bytes.startswith() failed: " + str(b.startswith(b"")))
-
-    if b.strip() != b"":
-        raise ValueError("bytes.strip() failed: " + str(b.strip()))
-
-    if b.upper() != b"":
-        raise ValueError("bytes.upper() failed: " + str(b.upper()))
-
-    if b.zfill(5) != b"00000":
-        raise ValueError("bytes.zfill() failed: " + str(b.zfill(5)))
-
-    if b"".hex() != "":
-        raise ValueError("bytes.hex() failed: " + str(b.hex()))
-
-    if bytes.from_hex("") != b"":
-        raise ValueError("bytes.from_hex() failed: " + str(bytes.from_hex("")))
-
-    return True
+    result = b"foo".startswith(b"foobar")
+    print("b'foo'.startswith(b'foobar'): {result}")
+    return result == False
 
 def test_bytes_hex():
     b = b'\xde\xad\xbe\xef'
-    if b.hex() != "deadbeef":
-        raise ValueError("bytes.hex() failed: " + b.hex())
-    return True
+    result = b.hex()
+    print("bytes.hex(): {result}")
+    return result == "deadbeef"
 
 def test_bytes_from_hex():
-    if bytes.from_hex("deadbeef").hex() != "deadbeef":
-        raise ValueError("bytes.from_hex() failed: " + bytes.from_hex("deadbeef").hex())
-    return True
+    result = bytes.from_hex("deadbeef").hex()
+    print("bytes.from_hex('deadbeef').hex(): {result}")
+    return result == "deadbeef"
 
 tests = {
+    "test_bytes_basic_len": test_bytes_basic_len,
+    "test_bytes_basic_indexing": test_bytes_basic_indexing,
+    "test_bytes_basic_slicing": test_bytes_basic_slicing,
     "test_bytes_find": test_bytes_find,
+    "test_empty_bytes_capitalize": test_empty_bytes_capitalize,
+    "test_empty_bytes_center": test_empty_bytes_center,
+    "test_empty_bytes_count": test_empty_bytes_count,
+    "test_empty_bytes_decode": test_empty_bytes_decode,
+    "test_empty_bytes_endswith": test_empty_bytes_endswith,
+    "test_empty_bytes_expandtabs": test_empty_bytes_expandtabs,
+    "test_empty_bytes_find": test_empty_bytes_find,
+    "test_empty_bytes_index": test_empty_bytes_index,
+    "test_empty_bytes_isalnum": test_empty_bytes_isalnum,
+    "test_empty_bytes_isalpha": test_empty_bytes_isalpha,
+    "test_empty_bytes_isascii": test_empty_bytes_isascii,
+    "test_empty_bytes_isdigit": test_empty_bytes_isdigit,
+    "test_empty_bytes_islower": test_empty_bytes_islower,
+    "test_empty_bytes_isspace": test_empty_bytes_isspace,
+    "test_empty_bytes_istitle": test_empty_bytes_istitle,
+    "test_empty_bytes_isupper": test_empty_bytes_isupper,
+    "test_empty_bytes_join": test_empty_bytes_join,
+    "test_empty_bytes_ljust": test_empty_bytes_ljust,
+    "test_empty_bytes_lower": test_empty_bytes_lower,
+    "test_empty_bytes_lstrip": test_empty_bytes_lstrip,
+    "test_empty_bytes_partition": test_empty_bytes_partition,
+    "test_empty_bytes_replace": test_empty_bytes_replace,
+    "test_empty_bytes_replace_empty": test_empty_bytes_replace_empty,
+    "test_empty_bytes_rfind": test_empty_bytes_rfind,
+    "test_empty_bytes_rindex": test_empty_bytes_rindex,
+    "test_empty_bytes_rjust": test_empty_bytes_rjust,
+    "test_empty_bytes_rpartition": test_empty_bytes_rpartition,
+    "test_empty_bytes_rstrip": test_empty_bytes_rstrip,
+    "test_empty_bytes_split": test_empty_bytes_split,
+    "test_empty_bytes_splitlines": test_empty_bytes_splitlines,
+    "test_empty_bytes_startswith": test_empty_bytes_startswith,
+    "test_empty_bytes_strip": test_empty_bytes_strip,
+    "test_empty_bytes_upper": test_empty_bytes_upper,
+    "test_empty_bytes_zfill": test_empty_bytes_zfill,
+    "test_empty_bytes_hex": test_empty_bytes_hex,
+    "test_empty_bytes_from_hex": test_empty_bytes_from_hex,
     "test_bytes_startswith_same_length": test_bytes_startswith_same_length,
     "test_bytes_startswith_prefix": test_bytes_startswith_prefix,
     "test_bytes_startswith_not_prefix": test_bytes_startswith_not_prefix,
     "test_bytes_startswith_empty": test_bytes_startswith_empty,
     "test_bytes_startswith_single_char": test_bytes_startswith_single_char,
     "test_bytes_startswith_longer_prefix": test_bytes_startswith_longer_prefix,
-    "test_empty_bytes_methods": test_empty_bytes_methods,
     "test_bytes_hex": test_bytes_hex,
     "test_bytes_from_hex": test_bytes_from_hex,
 }
@@ -205,20 +309,14 @@ actor main(env):
     failed = []
     for name, t in tests.items():
         print("== test: " + name)
-        try:
-            if not t():
-                print("-- FAILED test: " + name)
-                failed.append(name)
-        except Exception as e:
-            print("-- FAILED test: " + name + " with exception: " + str(e))
+        if not t():
+            print("-- FAILED test: " + name)
             failed.append(name)
         print()
-
     if len(failed) == 0:
         print("All {len(tests)} tests OK!")
     else:
         print("\n{len(failed)} of {len(tests)} tests failed:")
         for name in failed:
             print(" - {name}")
-
     env.exit(max([0, min([len(failed), 1])]))
