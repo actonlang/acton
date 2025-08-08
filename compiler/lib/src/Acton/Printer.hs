@@ -173,7 +173,6 @@ instance Pretty Expr where
     pretty (Await _ e)              = text "await" <+> pretty e
     pretty (Index _ e ix)           = pretty e <> brackets (pretty ix)
     pretty (Slice _ e sl)           = pretty e <> brackets (pretty sl)
-    pretty (NDSlice _ e sl)         = pretty e <> brackets (commaList sl)
     pretty (IsInstance _ e c)       = text "isinstance" <> parens (pretty e <> comma <+> pretty c)
     pretty (Dot _ e n)              = pretty e <> dot <> pretty n
     pretty (Rest _ e n)             = pretty e <> dot <> text "~" <> pretty n
@@ -306,10 +305,6 @@ instance Pretty ImportItem where
 
 instance Pretty Sliz where
     pretty (Sliz _ a b c)           = pretty a <> colon <> pretty b <> nonEmpty (colon <>) pretty c
-
-instance Pretty NDSliz where
-    pretty (NDExpr e)               = pretty e
-    pretty (NDSliz s)               = pretty s
 
 instance Pretty Comp where
     pretty (CompFor _ p e c)        = text "for" <+> pretty p <+> text "in" <+> pretty e <+> pretty c

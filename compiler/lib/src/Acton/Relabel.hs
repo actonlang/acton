@@ -94,7 +94,6 @@ instance Relabel Expr where
     relabel (Await _ e) = Await <$> newLoc <*> relabel e
     relabel (Index _ e is) = Index <$> newLoc <*> relabel e <*> relabel is
     relabel (Slice _ e sl) = Slice <$> newLoc <*> relabel e <*> relabel sl
-    relabel (NDSlice _ e sl) = NDSlice <$> newLoc <*> relabel e <*> relabel sl
     relabel (Cond _ e1 e2 e3) = Cond <$> newLoc <*> relabel e1 <*> relabel e2 <*> relabel e3
     relabel (IsInstance _ e c) = IsInstance <$> newLoc <*> relabel e <*> relabel c
     relabel (BinOp _ l op r) = BinOp <$> newLoc <*> relabel l <*> pure op <*> relabel r
@@ -206,10 +205,6 @@ instance Relabel Assoc where
 
 instance Relabel Sliz where
   relabel (Sliz _ e1 e2 e3) = Sliz <$> newLoc <*> relabel e1 <*> relabel e2 <*> relabel e3
-
-instance Relabel NDSliz where
-  relabel (NDExpr e) = NDExpr <$> relabel e
-  relabel (NDSliz s) = NDSliz <$> relabel s
 
 instance Relabel TSchema where
     relabel (TSchema _ q t) = TSchema <$> newLoc <*> relabel q <*> relabel t

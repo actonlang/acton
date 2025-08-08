@@ -397,7 +397,6 @@ instance USubst Expr where
     usubst (Await l e)              = Await l <$> usubst e
     usubst (Index l e ix)           = Index l <$> usubst e <*> usubst ix
     usubst (Slice l e sl)           = Slice l <$> usubst e <*> usubst sl
-    usubst (NDSlice l e sl)         = NDSlice l <$> usubst e <*> usubst sl
     usubst (Cond l e1 cond e2)      = Cond l <$> usubst e1 <*> usubst cond <*> usubst e2
     usubst (IsInstance l e c)       = IsInstance l <$> usubst e <*> return c
     usubst (BinOp l e1 op e2)       = BinOp l <$> usubst e1 <*> return op <*> usubst e2
@@ -426,7 +425,6 @@ instance USubst Expr where
     ufree (Await l e)               = ufree e
     ufree (Index l e ix)            = ufree e ++ ufree ix
     ufree (Slice l e sl)            = ufree e ++ ufree sl
-    ufree (NDSlice l e sl)          = ufree e ++ ufree sl
     ufree (Cond l e1 cond e2)       = ufree e1 ++ ufree cond ++ ufree e2
     ufree (IsInstance l e c)        = ufree e
     ufree (BinOp l e1 op e2)        = ufree e1 ++ ufree e2
@@ -518,12 +516,6 @@ instance USubst Sliz where
 
     ufree (Sliz _ e1 e2 e3)         = ufree e1 ++ ufree e2 ++ ufree e3
 
-instance USubst NDSliz where
-    usubst (NDExpr e)               = NDExpr <$> usubst e
-    usubst (NDSliz s)               = NDSliz <$> usubst s
-
-    ufree (NDExpr e)                = ufree e
-    ufree (NDSliz s)                = ufree s
     
 
 instance USubst OpArg where

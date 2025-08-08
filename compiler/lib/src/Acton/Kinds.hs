@@ -345,7 +345,6 @@ instance KCheck Expr where
     kchk env (Await l e)            = Await l <$> kchk env e
     kchk env (Index l e is)         = Index l <$> kchk env e <*> kchk env is
     kchk env (Slice l e sl)         = Slice l <$> kchk env e <*> kchk env sl
-    kchk env (NDSlice l e ss)       = NDSlice l <$> kchk env e <*> kchk env ss
     kchk env (Cond l e1 e2 e3)      = Cond l <$> kchk env e1 <*> kchk env e2 <*> kchk env e3
     kchk env (IsInstance l e c)     = IsInstance l <$> kchk env e <*> return (unalias env c)
     kchk env (BinOp l e1 op e2)     = BinOp l <$> kchk env e1 <*> return op <*> kchk env e2
@@ -444,10 +443,6 @@ instance KCheck Assoc where
 
 instance KCheck Sliz where
     kchk env (Sliz l e1 e2 e3)      = Sliz l <$> kchk env e1 <*> kchk env e2 <*> kchk env e3
-
-instance KCheck NDSliz where
-    kchk env (NDExpr e)             = NDExpr <$> kchk env e
-    kchk env (NDSliz s)             = NDSliz <$> kchk env s
 
 instance KCheck TSchema where
     kchk env (TSchema l q t)
@@ -659,7 +654,6 @@ instance KSubst Expr where
     ksubst g (Await l e)            = Await l <$> ksubst g e
     ksubst g (Index l e is)         = Index l <$> ksubst g e <*> ksubst g is
     ksubst g (Slice l e sl)         = Slice l <$> ksubst g e <*> ksubst g sl
-    ksubst g (NDSlice l e sl)       = NDSlice l <$> ksubst g e <*> ksubst g sl
     ksubst g (Cond l e1 e2 e3)      = Cond l <$> ksubst g e1 <*> ksubst g e2 <*> ksubst g e3
     ksubst g (IsInstance l e c)     = IsInstance l <$> ksubst g e <*> return c
     ksubst g (BinOp l e1 op e2)     = BinOp l <$> ksubst g e1 <*> return op <*> ksubst g e2
@@ -745,9 +739,5 @@ instance KSubst Assoc where
 
 instance KSubst Sliz where
     ksubst g (Sliz l e1 e2 e3)      = Sliz l <$> ksubst g e1 <*> ksubst g e2 <*> ksubst g e3
-
-instance KSubst NDSliz where
-    ksubst g (NDExpr e)             = NDExpr <$> ksubst g e
-    ksubst g (NDSliz s)             = NDSliz <$> ksubst g s
 
 
