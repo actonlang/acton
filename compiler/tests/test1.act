@@ -18,19 +18,19 @@ def f1(x : ?(int)->int):
     return x(7) if x is not None else 0
 
 def f2(x : ?int):
-    return x == None
+    return x is None
 
 def f3(x : ?int):
     return x == 7
 
 def f4(x : ?int):
-    return x + 7 if x != None else 0
+    return x + 7 if x is not None else 0
 
 def f5(x : ?int):
-    return x+1 if x != None and x > 0 else 0
+    return x+1 if x is not None and x > 0 else 0
 
 def f6(x : ?(?int)):
-    return (x + 7 if x != None else 1) if x != None else 0
+    return (x + 7 if x is not None else 1) if x is not None else 0
 
 def f7a(x : ?int):
     return x == 7

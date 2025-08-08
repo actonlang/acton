@@ -14,7 +14,7 @@ def _test_assert_equal():
     else:
         raise Exception("assertEqual(1, 2) should have raised NotEqualError")
 
-    # should raise NotEqualError because 1 != None
+    # should raise NotEqualError because 1 is not None
     try:
         testing.assertEqual(1, None)
     except AssertionError as e:
@@ -30,7 +30,7 @@ def _test_assert_equal():
     else:
         raise Exception("assertEqual(None, 1) should have raised NotEqualError")
 
-    # should not raise NotEqualError because None == None
+    # should not raise NotEqualError because None is None
     try:
         testing.assertEqual(None, None)
     except AssertionError as e:
@@ -48,7 +48,7 @@ def _test_assert_not_equal():
     except AssertionError as e:
         raise Exception("assertNotEqual(1, 2) should not have raised NotEqualError")
 
-    # should not raise NotEqualError because 1 != None
+    # should not raise NotEqualError because 1 is not None
     try:
         testing.assertNotEqual(1, None)
     except AssertionError as e:
@@ -60,7 +60,7 @@ def _test_assert_not_equal():
     except AssertionError as e:
         raise Exception("assertNotEqual(None, 1) should not have raised NotEqualError")
 
-    # should raise NotEqualError because None == None
+    # should raise NotEqualError because None is None
     try:
         testing.assertNotEqual(None, None)
     except AssertionError as e:

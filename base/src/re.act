@@ -62,7 +62,7 @@ def matches(pattern: str, string: str) -> list[Match]:
         m = _match(pattern, string, pos)
         if m is None:
             break
-        if m != None:
+        if m is not None:
             res.append(m)
             if m.end_pos == pos:
                 # Zero-width match: move forward one character if possible
@@ -90,13 +90,13 @@ def split(pattern: str, subject: str, max_split: int=0) -> list[str]:
             break
 
         m = _match(pattern, subject, pos)
-        if m != None:
+        if m is not None:
             # Append substring before match (normal match)
             if m.end_pos > pos:
                 result.append(subject[pos:m.start_pos])
                 if len(m.group) > 1:
                     for g in m.group[1:]:
-                        result.append(g if g != None else "")
+                        result.append(g if g is not None else "")
                 pos = m.end_pos
                 splits_done += 1
             else:
@@ -109,7 +109,7 @@ def split(pattern: str, subject: str, max_split: int=0) -> list[str]:
                     # If there are capturing groups, append them (if any)
                     if len(m.group) > 1:
                         for g in m.group[1:]:
-                            result.append(g if g != None else "")
+                            result.append(g if g is not None else "")
 
                 # After handling zero-width match, break to avoid infinite loops
                 break

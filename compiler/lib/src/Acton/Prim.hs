@@ -98,12 +98,10 @@ primRCont           = gPrim "R_CONT"
 primRFail           = gPrim "R_FAIL"
 
 primEqOpt           = gPrim "EqOpt"
-primIdentityOpt     = gPrim "IdentityOpt"
 
 primIdentityActor   = gPrim "IdentityActor"
 
 primWEqNone         = gPrim "wEqNone"
-primWIdentityNone   = gPrim "wIdentityNone"
 
 witIntegralInt      = GName mPrim $ Derived (deriveQ qnIntegral) $ Derived (deriveQ qnInt) suffixWitness
 witIntegralI64      = GName mPrim $ Derived (deriveQ qnIntegral) $ Derived (deriveQ qnI64) suffixWitness
@@ -209,11 +207,9 @@ primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec Nothing)
                             (noq primRFail,         NDef scRFail NoDec Nothing),
 
                             (noq primEqOpt,         clEqOpt),
-                            (noq primIdentityOpt,   clIdentityOpt),
                             (noq primIdentityActor, clIdentityActor),
 
                             (noq primWEqNone,       NVar tEqNone),
-                            (noq primWIdentityNone, NVar tIdentityNone),
                             (noq witIntegralInt,    NVar tIntegralInt),
 
                             (noq primISNOTNONE,     NDef scISNOTNONE NoDec Nothing),
@@ -495,18 +491,11 @@ clEqOpt             = NClass [quant a] (leftpath [TC qnEq [tOpt $ tVar a]]) clTE
         scInit      = tSchema [] $ tFun fxPure (posRow (tCon $ TC qnEq [tVar a]) posNil) kwdNil tNone
         a           = TV KType (name "A")
 
---  class $IdentityOpt[A] (Identity[?A]): pass
-clIdentityOpt       = NClass [quant a] (leftpath [TC qnIdentity [tOpt $ tVar a]]) [] Nothing   -- methods not modelled
-  where a           = TV KType (name "A")
-
 --  class $IdentityActor (Identity[$Actor]): pass
 clIdentityActor     = NClass [] (leftpath [TC qnIdentity [tActor]]) [] Nothing                 -- methods not modelled
 
 --  w$EqNone        : Eq[None]
 tEqNone             = tCon $ TC qnEq [tNone]
-
---  w$IdentityNone  : Identity[None]
-tIdentityNone       = tCon $ TC qnIdentity [tNone]
 
 --  $Integral$Int$witness : Integral[int]
 tIntegralInt        = tCon $ TC qnIntegral [tInt]

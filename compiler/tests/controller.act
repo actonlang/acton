@@ -20,7 +20,7 @@ actor Controller(env, address, port):
     var setting = 0
     
     def restart(what):
-        if nc != None:
+        if nc is not None:
             nc.abort()
             nc = None
         print('Controller', str(address) + ':' + str(port), what)
@@ -28,7 +28,7 @@ actor Controller(env, address, port):
         state = 'IDLE'
 
     def _established(sess):
-        if sess != None:
+        if sess is not None:
             nc = sess
             after 10: _tick()
         else:

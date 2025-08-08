@@ -38,7 +38,7 @@ actor main(env):
         env.exit(1)
 
     q = d.pop("pop")
-    if q != None:
+    if q is not None:
         print("Unexpected result of d.pop(\"pop\"):", q)
         env.exit(1)
 
