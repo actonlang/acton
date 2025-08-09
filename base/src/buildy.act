@@ -91,7 +91,7 @@ class Dependency(object):
 class PkgDependency(Dependency):
 
     def __init__(self, name: str, url: ?str, hash: ?str, path: ?str, repo_url: ?str, repo_ref: ?str):
-        if path != None and url != None:
+        if path is not None and url is not None:
             raise ValueError(f"Dependency '{name}' has both path and url set. Set only path or url. You can override path for a dep, e.g.: acton build --dep {name}={path}")
         self.name = zig_safe_name(name)
         self.url = url
@@ -135,19 +135,19 @@ class PkgDependency(Dependency):
     def to_json(self) -> dict[str, str]:
         res = {}
         repo_url = self.repo_url
-        if repo_url != None:
+        if repo_url is not None:
             res["repo_url"] = repo_url
         repo_ref = self.repo_ref
-        if repo_ref != None:
+        if repo_ref is not None:
             res["repo_ref"] = repo_ref
         url = self.url
-        if url != None:
+        if url is not None:
             res["url"] = url
         hash = self.hash
-        if hash != None:
+        if hash is not None:
             res["hash"] = hash
         path = self.path
-        if path != None:
+        if path is not None:
             res["path"] = path
         return res
 

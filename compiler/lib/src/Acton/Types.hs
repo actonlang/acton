@@ -1524,6 +1524,20 @@ inferTest env (BinOp l e1 Or e2)        = do (cs1,_,_,t1,e1') <- inferTest env e
                                                      cs1++cs2, env, [], t, BinOp l (eCall (eVar w1) [e1']) Or (eCall (eVar w2) [e2']))
 inferTest env (UnOp l Not e)            = do (cs,_,_,_,e') <- inferTest env e
                                              return (cs, env, [], tBool, UnOp l Not e')
+inferTest env (CompOp l e [OpArg IsNot None{}])
+                                        = do t <- newTVar
+                                             (cs1,e1) <- inferSub env (tOpt t) e
+                                             let e' = eCall (tApp (eQVar primISNOTNONE) [t]) [e1]
+                                             case e of
+                                               Var _ (NoQ n) ->
+                                                  return (cs1, define [(n,NVar t)] env, sCast n (tOpt t) t, tBool, e')
+                                               _ ->
+                                                 return (cs1, env, [], tBool, e')
+inferTest env (CompOp l e [OpArg Is None{}])
+                                        = do t <- newTVar
+                                             (cs1,e') <- inferSub env (tOpt t) e
+                                             return (cs1, env, [], tBool, eCall (tApp (eQVar primISNONE) [t]) [e'])
+{-
 inferTest env (CompOp l e1 [OpArg op e2])
   | Just n <- isNotNone e1 op e2        = do t <- newTVar
                                              (cs1,e') <- inferSub env (tOpt t) (eVar n)
@@ -1531,6 +1545,7 @@ inferTest env (CompOp l e1 [OpArg op e2])
   | Just n <- isNone e1 op e2           = do t <- newTVar
                                              (cs1,e') <- inferSub env (tOpt t) (eVar n)
                                              return (cs1, env, [], tBool, eCall (tApp (eQVar primISNONE) [t]) [e'])
+-}
 inferTest env (IsInstance l e@(Var _ (NoQ n)) c)
                                         = case findQName c env of
                                              NClass q _ _ _ -> do

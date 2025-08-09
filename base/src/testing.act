@@ -10,7 +10,7 @@ import time
 # -- assert ---------------------------------------------------------------------
 
 def opt_str[T](s: ?T) -> str:
-    return str(s) if s != None else "None"
+    return str(s) if s is not None else "None"
 
 class NotEqualError[T](AssertionError):
     a: ?T
@@ -19,7 +19,7 @@ class NotEqualError[T](AssertionError):
     def __init__(self, a, b, msg: ?str=None, print_vals: bool=True, diff_str: ?str=None):
         self.a = a
         self.b = b
-        self.error_message = msg if msg != None else "Expected equal values but they are non-equal."
+        self.error_message = msg if msg is not None else "Expected equal values but they are non-equal."
         self.print_vals = print_vals
         self.diff_str = diff_str
 
@@ -40,7 +40,7 @@ class EqualError[T](AssertionError):
     def __init__(self, a, b, msg: ?str=None, print_vals: bool=True):
         self.a = a
         self.b = b
-        self.error_message = msg if msg != None else "Expected non-equal values but they are equal."
+        self.error_message = msg if msg is not None else "Expected non-equal values but they are equal."
         self.print_vals = print_vals
 
     def __str__(self):
@@ -55,7 +55,7 @@ class NotTrueError[T](AssertionError):
 
     def __init__(self, a, msg: ?str=None, print_vals: bool=True):
         self.a = a
-        self.error_message = msg if msg != None else "Expected True but got non-True"
+        self.error_message = msg if msg is not None else "Expected True but got non-True"
         self.print_vals = print_vals
 
     def __str__(self):
@@ -69,7 +69,7 @@ class NotFalseError[T](AssertionError):
 
     def __init__(self, a, msg: ?str=None, print_vals: bool=True):
         self.a = a
-        self.error_message = msg if msg != None else "Expected False but got non-False."
+        self.error_message = msg if msg is not None else "Expected False but got non-False."
         self.print_vals = print_vals
 
     def __str__(self):
@@ -83,7 +83,7 @@ class NotNoneError[T](AssertionError):
 
     def __init__(self, a, msg: ?str=None, print_vals: bool=True):
         self.a = a
-        self.error_message = msg if msg != None else "Expected None but got non-None."
+        self.error_message = msg if msg is not None else "Expected None but got non-None."
         self.print_vals = print_vals
 
     def __str__(self):
@@ -97,7 +97,7 @@ class NoneError[T](AssertionError):
 
     def __init__(self, a, msg: ?str=None, print_vals: bool=True):
         self.a = a
-        self.error_message = msg if msg != None else "Expected non-None but got None."
+        self.error_message = msg if msg is not None else "Expected non-None but got None."
         self.print_vals = print_vals
 
     def __str__(self):
@@ -114,7 +114,7 @@ class NotInError[T,U](AssertionError):
     def __init__(self, a, b, msg: ?str=None, print_vals: bool=True):
         self.a = a
         self.b = b
-        self.error_message = msg if msg != None else "Expected element not in container"
+        self.error_message = msg if msg is not None else "Expected element not in container"
         self.print_vals = print_vals
 
     def __str__(self):
@@ -131,7 +131,7 @@ class InError[T,U](AssertionError):
     def __init__(self, a, b, msg: ?str=None, print_vals: bool=True):
         self.a = a
         self.b = b
-        self.error_message = msg if msg != None else "Expected element in container"
+        self.error_message = msg if msg is not None else "Expected element in container"
         self.print_vals = print_vals
 
     def __str__(self):
@@ -148,7 +148,7 @@ class NotIsError[T](AssertionError):
     def __init__(self, a, b, msg: ?str=None, print_vals: bool=True):
         self.a = a
         self.b = b
-        self.error_message = msg if msg != None else "Expected both objects to be the same identity (is)"
+        self.error_message = msg if msg is not None else "Expected both objects to be the same identity (is)"
         self.print_vals = print_vals
 
     def __str__(self):
@@ -165,7 +165,7 @@ class IsError[T](AssertionError):
     def __init__(self, a, b, msg: ?str=None, print_vals: bool=True):
         self.a = a
         self.b = b
-        self.error_message = msg if msg != None else "Expected both objects to be different identities (is not)"
+        self.error_message = msg if msg is not None else "Expected both objects to be different identities (is not)"
         self.print_vals = print_vals
 
     def __str__(self):
@@ -177,7 +177,7 @@ class IsError[T](AssertionError):
 
 class NotRaisesError(AssertionError):
     def __init__(self, msg: ?str=None, print_vals: bool=True):
-        self.error_message = msg if msg != None else "Expected exception not raised"
+        self.error_message = msg if msg is not None else "Expected exception not raised"
         self.print_vals = print_vals
 
 class IsInstanceError[T](AssertionError):
@@ -187,7 +187,7 @@ class IsInstanceError[T](AssertionError):
     def __init__(self, a, t: str, msg: ?str=None, print_vals: bool=True):
         self.a = a
         self.t = t
-        self.error_message = msg if msg != None else "expected type of specific instance"
+        self.error_message = msg if msg is not None else "expected type of specific instance"
         self.print_vals = print_vals
 
 class NotIsInstanceError[T](AssertionError):
@@ -197,15 +197,15 @@ class NotIsInstanceError[T](AssertionError):
     def __init__(self, a, t: str, msg: ?str=None, print_vals: bool=True):
         self.a = a
         self.t = t
-        self.error_message = msg if msg != None else "expected type of specific instance"
+        self.error_message = msg if msg is not None else "expected type of specific instance"
 
 
 def assertEqual[T(Eq)](a: ?T, b: ?T, msg: ?str, print_vals: bool=True, print_diff: bool=True):
     """Assert that two values are equal
     """
-    if ((a == None and b != None)
-        or (a != None and b == None)
-        or (a != None and b != None and not (a == b))):
+    if ((a is None and b is not None)
+        or (a is not None and b is None)
+        or (a is not None and b is not None and not (a == b))):
         diff_str = None
         if print_diff:
             # We calculate diff here and not in NotEqualError.__str__ because the
@@ -216,8 +216,8 @@ def assertEqual[T(Eq)](a: ?T, b: ?T, msg: ?str, print_vals: bool=True, print_dif
 def assertNotEqual[T(Eq)](a: ?T, b: ?T, msg: ?str, print_vals: bool=True):
     """Assert that two values are not equal
     """
-    if ((a == None and b == None)
-        or (a != None and b != None and a == b)):
+    if ((a is None and b is None)
+        or (a is not None and b is not None and a == b)):
         raise EqualError(a, b, msg, print_vals)
 
 def assertTrue(a, msg: ?str, print_vals: bool=True):
@@ -247,13 +247,13 @@ def assertIsNot[T(Identity)](a: T, b: T, msg: ?str, print_vals: bool=True):
 def assertNone(a, msg: ?str, print_vals: bool=True):
     """Assert that a value equals None
     """
-    if not (a == None):
+    if not (a is None):
         raise NotNoneError(a, msg, print_vals)
 
 def assertNotNone(a, msg: ?str, print_vals: bool=True):
     """Assert that a value does not equal None
     """
-    if not (a != None):
+    if not (a is not None):
         raise NoneError(a, msg, print_vals)
 
 def assertIn(a, b, msg: ?str, print_vals: bool=True):
@@ -270,12 +270,12 @@ def assertNotIn(a, b, msg: ?str, print_vals: bool=True):
 
 def error(msg: ?str):
     """Raise a generic test error"""
-    raise AssertionError(msg if msg != None else "Test error")
+    raise AssertionError(msg if msg is not None else "Test error")
 
 # -------------------------------------------------------------------------------
 
 def eq_opt[T(Eq)](a: ?T, b: ?T) -> bool:
-    return a != None and b != None and a == b or a == None and b == None
+    return a is not None and b is not None and a == b or a is None and b is None
 
 class TestLogger(logging.Logger):
     pass
@@ -641,7 +641,7 @@ class TestInfo(object):
             res_success = result.success
             if res_success == False:
                 self.num_failures += 1
-            elif res_success == None:
+            elif res_success is None:
                 self.num_errors += 1
 
         for result in self.results[1:]:
@@ -683,7 +683,7 @@ class TestInfo(object):
                                        non_gc_mem_usage_delta_avg: str,
                                        non_gc_mem_inc_count: str):
         def fmt_diff(new, old, unit="") -> str:
-            if old != None:
+            if old is not None:
                 diff = float(new) - float(old)
                 pct_diff = diff / float(old) * 100
                 sign = "+" if diff > 0 else ""
@@ -693,14 +693,14 @@ class TestInfo(object):
             else:
                 return f"{'':>10}"
 
-        #return (min_duration=fmt_diff(self.min_duration, old.min_duration if old != None else None, "ms"))
+        #return (min_duration=fmt_diff(self.min_duration, old.min_duration if old is not None else None, "ms"))
         return (
-            fmt_diff(self.min_duration, old.min_duration if old != None else None, "ms"),
-            fmt_diff(self.max_duration, old.max_duration if old != None else None, "ms"),
-            fmt_diff(self.avg_duration, old.avg_duration if old != None else None, "ms"),
-            fmt_diff(self.mem_usage_delta_avg, old.mem_usage_delta_avg if old != None else None, "B"),
-            fmt_diff(self.non_gc_mem_usage_delta_avg, old.non_gc_mem_usage_delta_avg if old != None else None, "B"),
-            fmt_diff(self.non_gc_mem_inc_count, old.non_gc_mem_inc_count if old != None else None)
+            fmt_diff(self.min_duration, old.min_duration if old is not None else None, "ms"),
+            fmt_diff(self.max_duration, old.max_duration if old is not None else None, "ms"),
+            fmt_diff(self.avg_duration, old.avg_duration if old is not None else None, "ms"),
+            fmt_diff(self.mem_usage_delta_avg, old.mem_usage_delta_avg if old is not None else None, "B"),
+            fmt_diff(self.non_gc_mem_usage_delta_avg, old.non_gc_mem_usage_delta_avg if old is not None else None, "B"),
+            fmt_diff(self.non_gc_mem_inc_count, old.non_gc_mem_inc_count if old is not None else None)
         )
 
     def to_json(self, include_results: bool=False):
@@ -744,23 +744,23 @@ class TestInfo(object):
         complete = json_data["complete"]
         suc = json_data["success"]
         success: ?bool = None
-        if suc != None and isinstance(suc, bool):
+        if suc is not None and isinstance(suc, bool):
             success = suc
         exc = json_data["exception"]
         exception: ?str = None
-        if exc != None and isinstance(exc, str):
+        if exc is not None and isinstance(exc, str):
             exception = exc
         out = json_data["output"]
         output: ?str = None
-        if out != None and isinstance(out, str):
+        if out is not None and isinstance(out, str):
             output = out
         std_out_d = json_data["std_out"]
         std_out: ?str = None
-        if std_out_d != None and isinstance(std_out_d, str):
+        if std_out_d is not None and isinstance(std_out_d, str):
             std_out = std_out_d
         std_err_d = json_data["std_err"]
         std_err: ?str = None
-        if std_err_d != None and isinstance(std_err_d, str):
+        if std_err_d is not None and isinstance(std_err_d, str):
             std_err = std_err_d
         flaky = json_data["flaky"]
         min_duration = json_data["min_duration"]
@@ -879,11 +879,11 @@ actor TestExecutor(syscap, config, t: Test, report_complete, env):
         if config.max_iter > 0 and iteration >= config.max_iter:
             complete = True
 
-        if test_info != None:
-            exc = str(exception) if exception != None else None
+        if test_info is not None:
+            exc = str(exception) if exception is not None else None
             test_info.update(complete, TestResult(success, exc, val, testiter_dur, mem_usage_delta, non_gc_mem_usage_delta), test_dur*1000.0)
         if last_report.elapsed().to_float() > 0.05 or complete:
-            if test_info != None and config.output_enabled:
+            if test_info is not None and config.output_enabled:
                 print("\n" + json.encode({"test_info": test_info.to_json()}), err=True)
             last_report.reset()
         if not complete:
@@ -905,9 +905,9 @@ actor TestExecutor(syscap, config, t: Test, report_complete, env):
 
         def repres(s: ?bool, e: ?Exception, val: ?str) -> None:
             # Compare expected golden value
-            if val != None:
+            if val is not None:
                 exp_val = get_expected(t.module, t.display_name())
-                if exp_val == None or exp_val != None and val != exp_val:
+                if exp_val is None or exp_val is not None and val != exp_val:
                     exc = NotEqualError(val, exp_val, f"Test output does not match expected golden value.", diff_str=f"{term.normal}{diff.diff(str(exp_val), val, color=True)}", print_vals=False)
                     _report_result(t, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, False, exc, val)
                     return
@@ -1091,7 +1091,7 @@ class ProjectTestResults(object):
                 msg = ""
                 run_info = ""
                 if tinfo.complete:
-                    if exc != None:
+                    if exc is not None:
                         msg += term.bold + term.red
                         if tinfo.flaky:
                             msg += "FLAKY "
@@ -1130,7 +1130,7 @@ class ProjectTestResults(object):
                                                                         tinfo.num_iterations))
                     self.printed_lines += 3
                 if tinfo.complete:
-                    if exc != None:
+                    if exc is not None:
                         for line in str(exc).splitlines(None):
                             print(f"{term.red}    {line}{term.normal}")
                             self.printed_lines += 1
@@ -1172,7 +1172,7 @@ class ProjectTestResults(object):
                             return result
 
                         std_out = tinfo.std_out
-                        if std_out != None and test_output(std_out):
+                        if std_out is not None and test_output(std_out):
                             print("    STDOUT:")
                             self.printed_lines += 1
                             chunks = dedup(std_out.strip())
@@ -1188,7 +1188,7 @@ class ProjectTestResults(object):
                                 print("")
                                 self.printed_lines += 1
                         std_err = tinfo.std_err
-                        if std_err != None and test_output(std_err):
+                        if std_err is not None and test_output(std_err):
                             print("    STDERR:")
                             self.printed_lines += 1
                             chunks = dedup(std_err.strip())
@@ -1328,7 +1328,7 @@ actor test_runner(env: Env,
 
         args = p.parse(env.argv)
         _cmd = args.cmd
-        if _cmd != None:
+        if _cmd is not None:
             _cmd(args)
         else:
             env.exit(0)

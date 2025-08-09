@@ -640,7 +640,7 @@ actor CmdTest(env: Env, args, perf_mode: bool=False):
                 test_info.std_err = std_err_buf.decode()
                 ptr.update(test_info.definition.module, test_info.definition.name, test_info)
                 if test_info.complete:
-                    if test_info.success == None and test_info.exception == "Test timeout":
+                    if test_info.success is None and test_info.exception == "Test timeout":
                         rmt.stop()
                     _run_test()
         else:

@@ -197,9 +197,9 @@ class ConsoleSink(Sink):
     """
     def handle(self, m: Message):
         text = self.formatter.format(m)
-        if text != None:
+        if text is not None:
             data = m.data
-            if data != None:
+            if data is not None:
                 text += " - " + str(data)
             print(text, err=True)
 

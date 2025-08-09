@@ -53,9 +53,9 @@ class URI(object):
 
     def __str__(self) -> str:
         """Return the canonical string representation of the URI."""
-        scheme_sep = "://" if self.scheme != None else ""
-        query_sep = "?" if self.query != None else ""
-        frag_sep = "#" if self.fragment != None else ""
+        scheme_sep = "://" if self.scheme is not None else ""
+        query_sep = "?" if self.query is not None else ""
+        frag_sep = "#" if self.fragment is not None else ""
         return (e_str(self.scheme) +
                 scheme_sep +
                 e_str(self.authority) +
@@ -71,10 +71,10 @@ class URI(object):
 
 
 def e_str[T](s: ?T) -> str:
-    return str(s) if s != None else ""
+    return str(s) if s is not None else ""
 
 def opt_str[T](s: ?T) -> str:
-    return str(s) if s != None else "None"
+    return str(s) if s is not None else "None"
 
 def is_valid_scheme(scheme: str) -> bool:
     """

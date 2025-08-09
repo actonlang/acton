@@ -29,7 +29,7 @@ actor Server(conn):
 
 actor Listener(env, address, port):
     def on_listen(l, error):
-        if error != None:
+        if error is not None:
             print("There was an error with the TCPListener socket:", error)
         else:
             print("Successfully established listening socket on %s:%d" % (address, port))

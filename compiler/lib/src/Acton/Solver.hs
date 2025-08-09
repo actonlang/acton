@@ -431,14 +431,11 @@ reduce' env eq c@(Impl _ w t@(TFX _ tc) p)
   where witSearch                           = findWitness env t p
 
 reduce' env eq c@(Impl info w t@(TOpt _ t') p)
-  | tcname p == qnIdentity                  = do let e = eCall (tApp (eQVar primIdentityOpt) [t']) []
-                                                 return (Eqn w (impl2type t p) e : eq)
   | tcname p == qnEq                        = do w' <- newWitness
                                                  let e = eCall (tApp (eQVar primEqOpt) [t']) [eVar w']
                                                  reduce env (Eqn w (impl2type t p) e : eq) [Impl info w' t' p]
 
 reduce' env eq c@(Impl _ w t@(TNone _) p)
-  | tcname p == qnIdentity                  = return (Eqn w (impl2type t p) (eQVar primWIdentityNone) : eq)
   | tcname p == qnEq                        = return (Eqn w (impl2type t p) (eQVar primWEqNone) : eq)
 
 reduce' env eq c@(Sel _ w (TVar _ tv) n _)
