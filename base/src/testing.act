@@ -880,7 +880,7 @@ actor TestExecutor(syscap, config, t: Test, report_complete, env):
             complete = True
 
         if test_info is not None:
-            exc = str(exception) if exception != None else None
+            exc = str(exception) if exception is not None else None
             test_info.update(complete, TestResult(success, exc, val, testiter_dur, mem_usage_delta, non_gc_mem_usage_delta), test_dur*1000.0)
         if last_report.elapsed().to_float() > 0.05 or complete:
             if test_info is not None and config.output_enabled:
