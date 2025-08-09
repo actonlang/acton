@@ -20,7 +20,7 @@ module Acton.Parser
 
 import qualified Control.Monad.Trans.State.Strict as St
 import qualified Control.Exception
-import Control.Monad (void, when)
+import Control.Monad (void, when, join)
 import Data.List (isPrefixOf)
 import Data.Maybe (fromMaybe)
 import Data.Void
@@ -84,7 +84,7 @@ instance ShowErrorComponent CustomParseError where
   -- Escape sequence errors
   showErrorComponent (IncompleteHexEscape n) = "\"\\x\" must be followed by two hexadecimal digits"
   showErrorComponent OctalEscapeOutOfRange = "octal escape sequence out of range"
-  showErrorComponent (IncompleteUnicodeEscape expected found) = 
+  showErrorComponent (IncompleteUnicodeEscape expected found) =
     "Incomplete universal character name (" ++ show expected ++ " hex digits needed)"
   showErrorComponent NonAsciiInBytesLiteral = "Only ASCII chars allowed in bytes literal"
   showErrorComponent UnknownEscapeSequence = "unknown escape sequence in string/bytes literal"
@@ -140,18 +140,15 @@ extractSrcSpan (Loc l r) src = sp
 
 -- Parser state -----------------------------------------------------------
 
-type ParserState = (Bool, [CTX])  -- (Is numpy imported?, Parser contexts)
+type ParserState = [CTX]  -- Parser contexts
 
 type Parser = St.StateT ParserState (Parsec CustomParseError String)
 
-pushCtx ctx (b,ctxs) = (b, ctx:ctxs)
-popCtx (b,ctxs)      = (b,tail ctxs)
-getCtxs (_,ctxs)      = ctxs
+pushCtx ctx ctxs = ctx:ctxs
+popCtx ctxs      = tail ctxs
+getCtxs          = id
 
-setNumpy b1 (b,ctxs) = (b1,ctxs)
-getNumpy (b,_)       = b
-
-initState            = (False,[])
+initState        = []
 
 -- Parser contexts ---------------------------------------------------------
 
@@ -1275,8 +1272,7 @@ import_stmt = import_name <|> import_from <?> "import statement"
                 S.Import NoLoc <$> module_item `sepBy1` comma
 
          module_item = do
-                dn@(S.ModName ns) <- module_name
-                iff (length ns==1 && S.nstr(head ns) == "numpy") $  St.modify (setNumpy True)
+                dn <- module_name
                 S.ModuleItem dn <$> optional (rword "as" *> name)
 
          import_from = addLoc $ do
@@ -1291,9 +1287,6 @@ import_stmt = import_name <|> import_from <?> "import statement"
          import_module = do
                 ds <- many dot
                 mbn <- optional module_name
-                let isNumpy Nothing = False
-                    isNumpy (Just (S.ModName ns)) = length ns==1 && S.nstr(head ns) == "numpy"
-                iff (null ds && isNumpy mbn) $ St.modify (setNumpy True)
                 return $ S.ModRef (length ds, mbn)
          import_items = ([] <$ star)   -- Note: [] means all...
                      <|> parens import_as_names
@@ -1717,9 +1710,8 @@ atom_expr = do
         trailer :: Parser (SrcLoc,S.Expr -> S.Expr)
         trailer = withLoc (
                       (do
-                        ss <- brackets bslicelist
-                        numpyImp <- St.gets getNumpy
-                        return (\a -> splitlist a numpyImp ss))
+                        f <- brackets sliceOrIndex
+                        return f)
                     <|>
                       (do
                          (ps,ks) <- parens funargs
@@ -1742,19 +1734,21 @@ atom_expr = do
                         (l,ss) <- withLoc plainstrLiteral
                         return (\a -> S.Dot (loc a `upto` l) a (S.Name l (head ss)))
 
-                 bslicelist = (:) <$> bslice <*> commaList bslice
-                 tailslice = (,) <$> (colon *> optional expr) <*> (maybe Nothing id <$> optional (colon *> optional expr))
-                 bslice :: Parser S.NDSliz
-                 bslice =  S.NDSliz . uncurry (S.Sliz NoLoc Nothing) <$> tailslice
-                       <|> do e <- expr
-                              mbt <- optional tailslice
-                              return (maybe (S.NDExpr e) (S.NDSliz . uncurry (S.Sliz NoLoc (Just e))) mbt)
-                 splitlist a _ [S.NDExpr e] = S.Index NoLoc a e
-                 splitlist a _ [S.NDSliz s] = S.Slice NoLoc a s
-                 splitlist a numpyImp ss
-                     | not numpyImp && all isNDExpr ss = S.Index NoLoc a (S.eTuple [e | S.NDExpr e <- ss])
-                     | otherwise                       = S.NDSlice NoLoc a ss
-                 isNDExpr (S.NDExpr _) =True; isNDExpr _ = False
+                 -- Parse slice or index: try slice first since it can start with expr
+                 sliceOrIndex = try sliceParser <|> indexParser
+
+                 -- Parse slice notation: [start]:[stop][:[step]]
+                 sliceParser = do
+                     start <- optional expr
+                     colon
+                     stop <- optional expr
+                     step <- optional (colon *> optional expr)
+                     return (\a -> S.Slice NoLoc a (S.Sliz NoLoc start stop (join step)))
+
+                 -- Parse index: single expr or comma-separated exprs (tuple)
+                 indexParser = do
+                     es <- expr `sepBy1` comma
+                     return (\a -> S.Index NoLoc a (if length es == 1 then head es else S.eTuple es))
 
 
 comp_iter, comp_for, comp_if :: Parser S.Comp
