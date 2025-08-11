@@ -64,8 +64,6 @@ data CompileOptions   = CompileOptions {
                          cgen        :: Bool,
                          ccmd        :: Bool,
                          ty          :: Bool,
-                         autostub    :: Bool,
-                         stub        :: Bool,
                          cpedantic   :: Bool,
                          optimize    :: OptimizeMode,
                          listimports :: Bool,
@@ -170,8 +168,6 @@ compileOptions = CompileOptions
         <*> switch (long "cgen"         <> help "Show the generated .c code")
         <*> switch (long "ccmd"         <> help "Show CC / LD commands")
         <*> switch (long "ty"           <> help "Write .ty file to src file directory")
-        <*> switch (long "auto-stub"    <> help "Allow automatic stub detection")
-        <*> switch (long "stub"         <> help "Stub (.ty) file generation only")
         <*> switch (long "cpedantic"    <> help "Pedantic C compilation with -Werror")
         <*> optimizeOption
         <*> switch (long "list-imports" <> help "List module imports")

@@ -217,7 +217,7 @@ infSuiteEnv env ss                      = do (cs,te,ss') <- infEnv env ss
                                              return (cs, te, ss')
 
 checkSigs env te
-  | stub env || null ns                 = return ()
+  | null ns                            = return ()
   | otherwise                           = err2 ns "Signature lacks subsequent binding"
   where (sigs,terms)                    = sigTerms te
         ns                              = dom sigs \\ dom terms
@@ -869,7 +869,7 @@ instance Check Decl where
                                              checkSelfInActor env1 Nothing (Just p) (Just k)
                                              (csp,te1,p') <- infEnv env1 p
                                              (csk,te2,k') <- infEnv (define te1 env1) k
-                                             (csb,te,b') <- (if stub env then infEnv else infSuiteEnv) (define te2 $ define te1 env1) b
+                                             (csb,te,b') <- infSuiteEnv (define te2 $ define te1 env1) b
                                              (cs0,eq0) <- matchActorAssumption env1 n p' k' te
                                              popFX
                                              (cs1,eq1) <- solveScoped env1 (tvSelf:tvs) te tNone (csp++csk++csb++cs0)

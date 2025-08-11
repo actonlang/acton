@@ -1494,8 +1494,6 @@ actor main(env):
         p.add_bool("cgen", "Show generated .c code")
         p.add_bool("ccmd", "Show CC / LD command lines")
         p.add_bool("timing", "Show timing information")
-        p.add_bool("auto-stub", "Allow automatica stub detection")
-        p.add_bool("stub", "Stub (.ty) file generation only")
         p.add_bool("cpedantic", "Pedantic C compilation")
         p.add_bool("quiet", "Be quiet")
         p.add_bool("verbose", "Verbose output")
