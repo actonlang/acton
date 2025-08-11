@@ -99,7 +99,7 @@ main = do
                                      _ -> printErrorAndExit ("Unknown filetype: " ++ head nms)
 
 defaultOpts   = C.CompileOptions False False False False False False False False False False False False
-                                 False False False False False False C.Debug False False False False
+                                 False False False False C.Debug False False False False
                                  "" "" "" C.defTarget "" False []
 
 -- Apply global options to compile options
@@ -550,15 +550,15 @@ compileFiles gopts opts srcFiles = do
         guessMod  = if length rootParts == 1 then modName paths else A.modName rootMod
         binTask   = BinTask False (prstr guessMod) (A.GName guessMod (A.name $ last rootParts)) False
         preBinTasks
-          | null (C.root opts) = map (\t -> BinTask True (modNameToString (name t)) (A.GName (name t) (A.name "main")) False) (filter (not . stubmode) tasks)
+          | null (C.root opts) = map (\t -> BinTask True (modNameToString (name t)) (A.GName (name t) (A.name "main")) False) tasks
           | otherwise        = [binTask]
-        preTestBinTasks = map (\t -> BinTask True (modNameToString (name t)) (A.GName (name t) (A.name "__test_main")) True) (filter (not . stubmode) tasks)
+        preTestBinTasks = map (\t -> BinTask True (modNameToString (name t)) (A.GName (name t) (A.name "__test_main")) True) tasks
     env <- compileTasks gopts opts paths tasks
     -- Generate project documentation index
     unless (C.skip_build opts || isTmp paths) $ do
         let docDir = joinPath [projPath paths, "out", "doc"]
         createDirectoryIfMissing True docDir
-        DocP.generateDocIndex docDir (map (\t -> (name t, src t, atree t, stubmode t)) (filter (not . stubmode) tasks))
+        DocP.generateDocIndex docDir (map (\t -> (name t, src t, atree t, False)) tasks)
     if C.skip_build opts
       then
         putStrLn "  Skipping final build step"
@@ -691,21 +691,15 @@ parseActFile gopts opts paths actFile = do
                     timeParse <- getTime Monotonic
                     iff (C.timing gopts) $ putStrLn("Parsing file " ++ makeRelative (srcDir paths) actFile
                                                                    ++ ": " ++ fmtTime(timeParse - timeRead))
-                    stubMode <- detectStubMode paths actFile opts
-                    return $ ActonTask (modName paths) srcContent m stubMode
+                    return $ ActonTask (modName paths) srcContent m
     where handleParseError :: String -> ParseErrorBundle String CustomParseError -> IO A.Module
           handleParseError srcContent bundle =
                     handleDiagnostic gopts opts paths (modName paths) $ Diag.parseDiagnosticFromBundle actFile srcContent bundle
-          detectStubMode :: Paths -> String -> C.CompileOptions -> IO Bool
-          detectStubMode paths srcfile opts = do
-                    exists <- doesFileExist cFile
-                    return (exists && C.autostub opts)
-              where cFile = replaceExtension srcfile ".c"
 
 
 -- Compilation tasks, chasing imported modules, compilation and building executables -------------------------------------------
 
-data CompileTask        = ActonTask { name :: A.ModName, src :: String, atree:: A.Module, stubmode :: Bool } deriving (Show)
+data CompileTask        = ActonTask { name :: A.ModName, src :: String, atree:: A.Module } deriving (Show)
 -- TODO: replace binName String type with ModName just like for CompileTask.
 -- ModName is a array so a hierarchy with submodules is represented, we can then
 -- get it use joinPath (modPath) to get a path or modName to get a string
@@ -809,19 +803,13 @@ quiet :: C.GlobalOptions -> C.CompileOptions -> Bool
 quiet gopts opts = C.quiet gopts || altOutput opts
 
 doTask :: C.GlobalOptions -> C.CompileOptions -> Paths -> Acton.Env.Env0 -> CompileTask -> IO Acton.Env.Env0
-doTask gopts opts paths env t@(ActonTask mn src m stubMode) = do
+doTask gopts opts paths env t@(ActonTask mn src m) = do
     iff (not (quiet gopts opts))  (putStrLn("  Compiling " ++ makeRelative (srcDir paths) actFile
-              ++ " with " ++ show (C.optimize opts)
-              ++ (if stubMode then " in stub mode" else "")))
+              ++ " with " ++ show (C.optimize opts)))
 
     timeStart <- getTime Monotonic
-    -- For stub modules, copy the .c & .h files from src/ to out/types/
-    -- Note how this is different from .ext.c style modules
-    iff stubMode $ do
-        copyFileWithMetadata (replaceExtension actFile ".c") cFile
-        copyFileWithMetadata (replaceExtension actFile ".h") hFile
 
-    let outFiles = if stubMode then [tyFile] else [tyFile, hFile, cFile]
+    let outFiles = [tyFile, hFile, cFile]
     ok <- checkUptoDate gopts opts paths actFile outFiles (importsOf t)
     if C.only_build opts || (ok && not (mn == (modName paths) && (forceCompilation opts)))
       then do
@@ -834,7 +822,7 @@ doTask gopts opts paths env t@(ActonTask mn src m stubMode) = do
         return (Acton.Env.addMod mn te mdoc env)
       else do
         createDirectoryIfMissing True (getModPath (projTypes paths) mn)
-        env' <- runRestPasses gopts opts paths env m stubMode
+        env' <- runRestPasses gopts opts paths env m
           `catch` handle gopts opts "Compilation error" generalError src paths mn
           `catch` handle gopts opts "Compilation error" Acton.Env.compilationError src paths mn
           `catch` handleTypeError gopts opts "Type error" Acton.Types.typeError src paths mn
@@ -909,8 +897,8 @@ isGitAvailable = do
 altOutput opts =
   (C.parse opts) || (C.kinds opts) || (C.types opts) || (C.sigs opts) || (C.norm opts) || (C.deact opts) || (C.cps opts) || (C.llift opts) || (C.box opts) || (C.hgen opts) || (C.cgen opts)
 
-runRestPasses :: C.GlobalOptions -> C.CompileOptions -> Paths -> Acton.Env.Env0 -> A.Module -> Bool -> IO Acton.Env.Env0
-runRestPasses gopts opts paths env0 parsed stubMode = do
+runRestPasses :: C.GlobalOptions -> C.CompileOptions -> Paths -> Acton.Env.Env0 -> A.Module -> IO Acton.Env.Env0
+runRestPasses gopts opts paths env0 parsed = do
                       let mn = A.modname parsed
                       let outbase = outBase paths mn
                       let absSrcBase = srcBase paths mn
@@ -919,8 +907,7 @@ runRestPasses gopts opts paths env0 parsed stubMode = do
 
                       timeStart <- getTime Monotonic
 
-                      envTmp <- Acton.Env.mkEnv (searchPath paths) env0 parsed
-                      let env = envTmp { Acton.Env.stub = stubMode }
+                      env <- Acton.Env.mkEnv (searchPath paths) env0 parsed
                       --traceM ("#################### initial env0:")
                       --traceM (Pretty.render (Pretty.pretty env))
                       timeEnv <- getTime Monotonic
@@ -939,7 +926,7 @@ runRestPasses gopts opts paths env0 parsed stubMode = do
                       iff (C.sigs opts && mn == (modName paths)) $ dump mn "sigs" (Acton.Types.prettySigs env mn iface)
 
                       -- Generate documentation, if building for a project
-                      when (not (C.skip_build opts) && not stubMode && not (isTmp paths)) $ do
+                      when (not (C.skip_build opts) && not (isTmp paths)) $ do
                           let docDir = joinPath [projPath paths, "out", "doc"]
                               modPathList = A.modPath mn
                               docFile = if null modPathList
@@ -1007,7 +994,7 @@ runRestPasses gopts opts paths env0 parsed stubMode = do
                           putStrLn(c)
                           System.Exit.exitSuccess
 
-                      iff (altOutput opts || not stubMode) (do
+                      iff (not (altOutput opts)) (do
                           let cFile = outbase ++ ".c"
                               hFile = outbase ++ ".h"
 

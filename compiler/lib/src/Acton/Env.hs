@@ -51,7 +51,6 @@ data EnvF x                 = EnvF {
                                 modules    :: TEnv,
                                 witnesses  :: [Witness],
                                 thismod    :: Maybe ModName,
-                                stub       :: Bool,
                                 envX       :: x }
 
 type Env0                   = EnvF ()
@@ -59,7 +58,7 @@ type Env0                   = EnvF ()
 
 setX                        :: EnvF y -> x -> EnvF x
 setX env x                  = EnvF { names = names env, imports = imports env, modules = modules env,
-                                     witnesses = witnesses env, thismod = thismod env, stub = stub env,
+                                     witnesses = witnesses env, thismod = thismod env,
                                      envX = x }
 
 modX                        :: EnvF x -> (x -> x) -> EnvF x
@@ -413,7 +412,6 @@ initEnv path True          = return $ EnvF{ names = [(nPrim,NMAlias mPrim)],
                                             modules = [(nPrim,NModule primEnv Nothing)],
                                             witnesses = primWits,
                                             thismod = Nothing,
-                                            stub = False,
                                             envX = () }
 initEnv path False         = do (_,nmod) <- InterfaceFiles.readFile (joinPath [path,"__builtin__.ty"])
                                 let NModule envBuiltin builtinDocstring = nmod
@@ -422,7 +420,6 @@ initEnv path False         = do (_,nmod) <- InterfaceFiles.readFile (joinPath [p
                                                  modules = [(nPrim,NModule primEnv Nothing), (nBuiltin,NModule envBuiltin builtinDocstring)],
                                                  witnesses = primWits,
                                                  thismod = Nothing,
-                                                 stub = False,
                                                  envX = () }
                                     env = importAll mBuiltin envBuiltin $ importWits mBuiltin envBuiltin $ env0
                                 return env
