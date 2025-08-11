@@ -288,8 +288,8 @@ actor test_help_subcmd():
             args = p.parse(["./app", "build", "--help"])
         except argparse.PrintUsage as e:
             # We want to see the help for the build command
-            if "HAXX" not in e.error_message:
-                raise ValueError("Expected help for build command, got:\n" + e.error_message)
+            if "HAXX" not in e.msg:
+                raise ValueError("Expected help for build command, got:\n{e.msg}")
             return
         raise ValueError("Expected PrintUsage")
     test()

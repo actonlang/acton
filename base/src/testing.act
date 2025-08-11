@@ -19,12 +19,12 @@ class NotEqualError[T](AssertionError):
     def __init__(self, a, b, msg: ?str=None, print_vals: bool=True, diff_str: ?str=None):
         self.a = a
         self.b = b
-        self.error_message = msg if msg is not None else "Expected equal values but they are non-equal."
+        self.msg = msg if msg is not None else "Expected equal values but they are non-equal."
         self.print_vals = print_vals
         self.diff_str = diff_str
 
     def __str__(self):
-        msg = f"{self._name()}: {self.error_message}"
+        msg = f"{self._name()}: {self.msg}"
         if self.print_vals:
             msg += f" A: {self.a}"
             msg += f" B: {self.b}"
@@ -40,11 +40,11 @@ class EqualError[T](AssertionError):
     def __init__(self, a, b, msg: ?str=None, print_vals: bool=True):
         self.a = a
         self.b = b
-        self.error_message = msg if msg is not None else "Expected non-equal values but they are equal."
+        self.msg = msg if msg is not None else "Expected non-equal values but they are equal."
         self.print_vals = print_vals
 
     def __str__(self):
-        msg = f"{self._name()}: {self.error_message}"
+        msg = f"{self._name()}: {self.msg}"
         if self.print_vals:
             msg += f" A: {self.a}"
             msg += f" B: {self.b}"
@@ -55,11 +55,11 @@ class NotTrueError[T](AssertionError):
 
     def __init__(self, a, msg: ?str=None, print_vals: bool=True):
         self.a = a
-        self.error_message = msg if msg is not None else "Expected True but got non-True"
+        self.msg = msg if msg is not None else "Expected True but got non-True"
         self.print_vals = print_vals
 
     def __str__(self):
-        msg = f"{self._name()}: {self.error_message}"
+        msg = f"{self._name()}: {self.msg}"
         if self.print_vals:
             msg += f", value: {self.a}"
         return msg
@@ -69,11 +69,11 @@ class NotFalseError[T](AssertionError):
 
     def __init__(self, a, msg: ?str=None, print_vals: bool=True):
         self.a = a
-        self.error_message = msg if msg is not None else "Expected False but got non-False."
+        self.msg = msg if msg is not None else "Expected False but got non-False."
         self.print_vals = print_vals
 
     def __str__(self):
-        msg = f"{self._name()}: {self.error_message}"
+        msg = f"{self._name()}: {self.msg}"
         if self.print_vals:
             msg += f", value: {self.a}"
         return msg
@@ -83,11 +83,11 @@ class NotNoneError[T](AssertionError):
 
     def __init__(self, a, msg: ?str=None, print_vals: bool=True):
         self.a = a
-        self.error_message = msg if msg is not None else "Expected None but got non-None."
+        self.msg = msg if msg is not None else "Expected None but got non-None."
         self.print_vals = print_vals
 
     def __str__(self):
-        msg = f"{self._name()}: {self.error_message}"
+        msg = f"{self._name()}: {self.msg}"
         if self.print_vals:
             msg += f", value: {self.a}"
         return msg
@@ -97,11 +97,11 @@ class NoneError[T](AssertionError):
 
     def __init__(self, a, msg: ?str=None, print_vals: bool=True):
         self.a = a
-        self.error_message = msg if msg is not None else "Expected non-None but got None."
+        self.msg = msg if msg is not None else "Expected non-None but got None."
         self.print_vals = print_vals
 
     def __str__(self):
-        msg = f"{self._name()}: {self.error_message}"
+        msg = f"{self._name()}: {self.msg}"
         if self.print_vals:
             a = self.a
             msg += f", value: {a}"
@@ -114,11 +114,11 @@ class NotInError[T,U](AssertionError):
     def __init__(self, a, b, msg: ?str=None, print_vals: bool=True):
         self.a = a
         self.b = b
-        self.error_message = msg if msg is not None else "Expected element not in container"
+        self.msg = msg if msg is not None else "Expected element not in container"
         self.print_vals = print_vals
 
     def __str__(self):
-        msg = f"{self._name()}: {self.error_message}"
+        msg = f"{self._name()}: {self.msg}"
         if self.print_vals:
             msg += f", element: {self.a}"
             msg += f", container: {self.b}"
@@ -131,11 +131,11 @@ class InError[T,U](AssertionError):
     def __init__(self, a, b, msg: ?str=None, print_vals: bool=True):
         self.a = a
         self.b = b
-        self.error_message = msg if msg is not None else "Expected element in container"
+        self.msg = msg if msg is not None else "Expected element in container"
         self.print_vals = print_vals
 
     def __str__(self):
-        msg = f"{self._name()}: {self.error_message}"
+        msg = f"{self._name()}: {self.msg}"
         if self.print_vals:
             msg += f", element: {self.a}"
             msg += f", container: {self.b}"
@@ -148,11 +148,11 @@ class NotIsError[T](AssertionError):
     def __init__(self, a, b, msg: ?str=None, print_vals: bool=True):
         self.a = a
         self.b = b
-        self.error_message = msg if msg is not None else "Expected both objects to be the same identity (is)"
+        self.msg = msg if msg is not None else "Expected both objects to be the same identity (is)"
         self.print_vals = print_vals
 
     def __str__(self):
-        msg = f"{self._name()}: {self.error_message}"
+        msg = f"{self._name()}: {self.msg}"
         if self.print_vals:
             msg += f" A: {str(self.a)}"
             msg += f" B: {str(self.b)}"
@@ -165,11 +165,11 @@ class IsError[T](AssertionError):
     def __init__(self, a, b, msg: ?str=None, print_vals: bool=True):
         self.a = a
         self.b = b
-        self.error_message = msg if msg is not None else "Expected both objects to be different identities (is not)"
+        self.msg = msg if msg is not None else "Expected both objects to be different identities (is not)"
         self.print_vals = print_vals
 
     def __str__(self):
-        msg = f"{self._name()}: {self.error_message}"
+        msg = f"{self._name()}: {self.msg}"
         if self.print_vals:
             msg += f" A: {str(self.a)}"
             msg += f" B: {str(self.b)}"
@@ -177,7 +177,7 @@ class IsError[T](AssertionError):
 
 class NotRaisesError(AssertionError):
     def __init__(self, msg: ?str=None, print_vals: bool=True):
-        self.error_message = msg if msg is not None else "Expected exception not raised"
+        self.msg = msg if msg is not None else "Expected exception not raised"
         self.print_vals = print_vals
 
 class IsInstanceError[T](AssertionError):
@@ -187,7 +187,7 @@ class IsInstanceError[T](AssertionError):
     def __init__(self, a, t: str, msg: ?str=None, print_vals: bool=True):
         self.a = a
         self.t = t
-        self.error_message = msg if msg is not None else "expected type of specific instance"
+        self.msg = msg if msg is not None else "expected type of specific instance"
         self.print_vals = print_vals
 
 class NotIsInstanceError[T](AssertionError):
@@ -197,7 +197,7 @@ class NotIsInstanceError[T](AssertionError):
     def __init__(self, a, t: str, msg: ?str=None, print_vals: bool=True):
         self.a = a
         self.t = t
-        self.error_message = msg if msg is not None else "expected type of specific instance"
+        self.msg = msg if msg is not None else "expected type of specific instance"
 
 
 def assertEqual[T(Eq)](a: ?T, b: ?T, msg: ?str, print_vals: bool=True, print_diff: bool=True):
@@ -1335,8 +1335,8 @@ actor test_runner(env: Env,
     try:
         _parse_args()
     except argparse.PrintUsage as exc:
-        print(exc.error_message)
+        print(exc.msg)
         env.exit(0)
     except argparse.ArgumentError as exc:
-        print(exc.error_message)
+        print(exc.msg)
         env.exit(1)
