@@ -231,6 +231,21 @@ instance UFree NameInfo where
     ufree (NModule te doc)      = []        -- actually ufree te, but a module has no free variables on the top level
     ufree NReserved             = []
 
+instance VFree NameInfo where
+    vfree (NVar t)              = vfree t
+    vfree (NSVar t)             = vfree t
+    vfree (NDef t d _)          = vfree t
+    vfree (NSig t d _)          = vfree t
+    vfree (NAct q p k te _)     = (vfree q ++ vfree p ++ vfree k ++ vfree te) \\ (tvSelf : qbound q)
+    vfree (NClass q us te _)    = (vfree q ++ vfree us ++ vfree te) \\ (tvSelf : qbound q)
+    vfree (NProto q us te _)    = (vfree q ++ vfree us ++ vfree te) \\ (tvSelf : qbound q)
+    vfree (NExt q c ps te _)    = (vfree q ++ vfree c ++ vfree ps ++ vfree te) \\ (tvSelf : qbound q)
+    vfree (NTVar k c)           = vfree c
+    vfree (NAlias qn)           = []
+    vfree (NMAlias qn)          = []
+    vfree (NModule te doc)      = []        -- actually vfree te, but a module has no free variables on the top level
+    vfree NReserved             = []
+
 instance USubst Witness where
     usubst w@WClass{}           = return w                      -- A WClass (i.e., an extension) can't have any free type variables
     usubst w@WInst{}            = do t <- usubst (wtype w)
@@ -247,6 +262,9 @@ instance USubst WTCon where
 
 instance UFree WTCon where
     ufree (w,u)                 = ufree u
+
+instance VFree WTCon where
+    vfree (w,u)                 = vfree u
 
 instance Polarity NameInfo where
     polvars (NVar t)                = polvars t
@@ -1355,14 +1373,14 @@ instance (Simp a) => Simp [a] where
 
 instance Simp TSchema where
     simp env (TSchema l q t)        = TSchema l q' (vsubst s $ simp env' t)
-      where (q', s)                 = simpQuant env (simp env' q) (ufree t)
+      where (q', s)                 = simpQuant env (simp env' q) (vfree t)
             env'                    = defineTVars (stripQual q) env
 
 simpQuant env q vs0                 = (vsubst s [ Quant v ps | Quant v ps <- q2, not $ null ps ], s)
   where (q1,q2)                     = partition isEX q
         isEX (Quant v [p])          = length (filter (==v) vs) == 1
         isEX _                      = False
-        vs                          = concat [ ufree ps | Quant v ps <- q ] ++ vs0
+        vs                          = concat [ vfree ps | Quant v ps <- q ] ++ vs0
         s                           = s1 ++ s2
         s1                          = [ (v, tCon p) | Quant v [p] <- q1 ]                       -- Inline existentials
         s2                          = univars `zip` beautyvars                                  -- Beautify univars
@@ -1385,7 +1403,7 @@ instance Simp (Name, NameInfo) where
     simp env (n, NProto q us te doc)= (n, NProto (simp env' q) (simp env' us) (simp env' te) doc)
       where env'                    = defineTVars (stripQual q) env
     simp env (n, NExt q c us te doc)= (n, NExt q' (vsubst s $ simp env' c) (vsubst s $ simp env' us) (vsubst s $ simp env' te) doc)
-      where (q', s)                 = simpQuant env (simp env' q) (ufree c ++ ufree us ++ ufree te)
+      where (q', s)                 = simpQuant env (simp env' q) (vfree c ++ vfree us ++ vfree te)
             env'                    = defineTVars (stripQual q) env
     simp env (n, NAct q p k te doc) = (n, NAct (simp env' q) (simp env' p) (simp env' k) (simp env' te) doc)
       where env'                    = defineTVars (stripQual q) env

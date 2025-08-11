@@ -553,7 +553,7 @@ instance InfEnv Decl where
                                                  te0 <- infProperties env as' b
                                                  (cs,te,b1) <- infEnv env1 b
                                                  popFX
-                                                 (cs1,eq1) <- solveScoped env1 (qbound q) te tNone cs
+                                                 (cs1,eq1) <- solveScoped env1 (tvSelf:qbound q) te tNone cs
                                                  checkNoEscape l env (qbound q)
                                                  (nterms,asigs,_) <- checkAttributes [] te' te
                                                  let te1 = if notImplBody b then unSig asigs else []
@@ -575,7 +575,7 @@ instance InfEnv Decl where
                                                  pushFX fxPure tNone
                                                  (cs,te,b') <- infEnv env1 b
                                                  popFX
-                                                 (cs1,eq1) <- solveScoped env1 (qbound q) te tNone cs
+                                                 (cs1,eq1) <- solveScoped env1 (tvSelf:qbound q) te tNone cs
                                                  checkNoEscape l env (qbound q)
                                                  (nterms,_,sigs) <- checkAttributes [] te' te
                                                  let noself = [ n | (n, NSig sc Static _) <- te, tvSelf `notElem` vfree sc ]
@@ -604,7 +604,7 @@ instance InfEnv Decl where
                                              when (not $ null nterms) $ err2 (dom nterms) "Method/attribute not in listed protocols:"
                                              when (not $ null sigs) $ err2 sigs "Extension with new methods/attributes not supported"
                                              when (not (null asigs || notImplBody b)) $ err3 l (dom asigs) "Protocol method/attribute lacks implementation:"
-                                             let te1 = unSig $ vsubst s asigs
+                                             let te1 = unSig $ vsubst selfsubst asigs
                                                  te2 = te ++ te1
                                                  b2 = addImpl te1 b1
                                              let docstring = extractDocstring b
@@ -613,10 +613,10 @@ instance InfEnv Decl where
             env1                        = define (toSigs te') $ reserve (assigned b) $ defineSelfOpaque $ defineTVars (stripQual q) $ setInClass env
             witsearch                   = [ w | w <- witsByPName env (tcname u), matchExactly (tCon c) u w, matching [wtype w] (qbound q) [tCon c] ]
             u                           = head us
-            ps                          = vsubst s $ mro1 env us -- TODO: check that ps doesn't contradict any previous extension mro for c
+            ps                          = vsubst selfsubst $ mro1 env us -- TODO: check that ps doesn't contradict any previous extension mro for c
             final                       = concat [ conAttrs env (tcname p) | (_,p) <- tail ps, hasWitness env (tCon c) p ]
             te'                         = parentTEnv env ps
-            s                           = [(tvSelf, tCon c)]
+            selfsubst                   = [(tvSelf, tCon c)]
 
 --------------------------------------------------------------------------------------------------------------------------
 
@@ -657,7 +657,7 @@ solveScoped env vs te tt []             = return ([], [])
 solveScoped env [] te tt cs             = simplify env te tt cs
 solveScoped env vs te tt cs             = do --traceM ("\n\n### solveScoped: " ++ prstrs cs)
                                              (cs,eq) <- simplify env te tt cs
-                                             solve env (any (`elem` vs) . ufree) te tt eq cs
+                                             solve env (any (`elem` vs) . vfree) te tt eq cs
 
 checkNoEscape _ env []                  = return ()
 checkNoEscape l env vs                  = do fvs <- ufree <$> usubst env
@@ -665,6 +665,7 @@ checkNoEscape l env vs                  = do fvs <- ufree <$> usubst env
                                              when (not $ null escaped) $ do
                                                  env1 <- usubst env
                                                  traceM ("####### env:\n" ++ prstr env1)
+                                                 traceM ("#### ufree env: " ++ prstrs fvs)
                                                  err l ("Escaping type variables: " ++ prstrs escaped)
 
 
@@ -872,7 +873,6 @@ instance Check Decl where
                                              popFX
                                              (cs1,eq1) <- solveScoped env1 (tvSelf:tvs) te tNone (csp++csk++csb++cs0)
                                              checkNoEscape l env (tvSelf:tvs)
-                                             fvs <- ufree <$> usubst env
                                              let body = bindWits (eq1++eq0) ++ defaultsP p' ++ defaultsK k' ++ b'
                                                  act = Actor l n (noqual env q) (qualWPar env q p') k' body ddoc
                                              return (cs1, act{ pos = noDefaultsP (pos act), kwd = noDefaultsK (kwd act) })
@@ -887,15 +887,15 @@ instance Check Decl where
                                              pushFX fxPure tNone
                                              wellformed env1 q
                                              wellformed env1 us
-                                             (csb,b') <- checkEnv (define (vsubst s te) env1) b
+                                             (csb,b') <- checkEnv (define (vsubst selfsubst te) env1) b
                                              popFX
-                                             (cs1,eq1) <- solveScoped env1 (tvSelf:tvs) te tNone csb
-                                             checkNoEscape l env (tvSelf:tvs)
+                                             (cs1,eq1) <- solveScoped env1 tvs te tNone csb
+                                             checkNoEscape l env tvs
                                              return (cs1, [Class l n (noqual env q) (map snd as) (abstractDefs env q eq1 b') ddoc])
       where env1                        = defineSelf (NoQ n) q $ defineTVars q $ setInClass env
             tvs                         = tvSelf : qbound q
             NClass _ as te _            = findName n env
-            s                           = [(tvSelf, tCon (TC (NoQ n) (map tVar $ qbound q)))]
+            selfsubst                   = [(tvSelf, tCon (TC (NoQ n) (map tVar $ qbound q)))]
 
     checkEnv' env (Protocol l n q us b ddoc)
                                         = do --traceM ("## checkEnv protocol " ++ prstr n)
@@ -904,8 +904,8 @@ instance Check Decl where
                                              (csu,wmap) <- wellformedProtos env1 us
                                              (csb,b') <- checkEnv (define te env1) b
                                              popFX
-                                             (cs1,eq1) <- solveScoped env1 (tvSelf:tvs) te tNone (csu++csb)
-                                             checkNoEscape l env (tvSelf:tvs)
+                                             (cs1,eq1) <- solveScoped env1 tvs te tNone (csu++csb)
+                                             checkNoEscape l env tvs
                                              b' <- usubst b'
                                              return (cs1, convProtocol env n q ps eq1 wmap b')
       where env1                        = defineSelf (NoQ n) q $ defineTVars q $ setInClass env
@@ -919,10 +919,10 @@ instance Check Decl where
                                              pushFX fxPure tNone
                                              wellformed env1 q
                                              (csu,wmap) <- wellformedProtos env1 us
-                                             (csb,b') <- checkEnv (define (vsubst s te) env1) b
+                                             (csb,b') <- checkEnv (define (vsubst selfsubst te) env1) b
                                              popFX
-                                             (cs1,eq1) <- solveScoped env1 (tvSelf:tvs) te tNone (csu++csb)
-                                             checkNoEscape l env (tvSelf:tvs)
+                                             (cs1,eq1) <- solveScoped env1 tvs te tNone (csu++csb)
+                                             checkNoEscape l env tvs
                                              b' <- usubst b'
                                              return (cs1, convExtension env n' c q ps eq1 wmap b')
       where env1                        = defineInst c ps thisKW' $ defineSelf n q $ defineTVars q $ setInClass env
@@ -930,7 +930,7 @@ instance Check Decl where
             n                           = tcname c
             n'                          = extensionName us c
             NExt _ _ ps te _            = findName n' env
-            s                           = [(tvSelf, tCon $ TC n (map tVar $ qbound q))]
+            selfsubst                   = [(tvSelf, tCon $ TC n (map tVar $ qbound q))]
 
     checkEnv' env x                     = do (cs,x') <- checkEnv env x
                                              return (cs, [x'])

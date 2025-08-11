@@ -69,7 +69,7 @@ closeDepVars vs cs
 closeDepVarsQ vs q
   | null vs'                        = nub vs
   | otherwise                       = closeDepVarsQ (vs'++vs) q
-  where vs'                         = concat [ ufree us \\ vs | Quant v us <- q, v `elem` vs ]
+  where vs'                         = concat [ vfree us \\ vs | Quant v us <- q, v `elem` vs ]
 
 qualbound q                         = [ v | Quant v ps <- q, not $ null ps ]
 
@@ -83,6 +83,9 @@ instance VFree a => VFree [a] where
 
 instance VFree a => VFree (Maybe a) where
     vfree                           = maybe [] vfree
+
+instance VFree a => VFree (Name,a) where
+    vfree (n, t)                    = vfree t
 
 instance VFree Type where
     vfree (TVar _ v)
@@ -115,6 +118,13 @@ instance VFree KwdPar where
     vfree (KwdSTAR n t)             = vfree t
     vfree KwdNIL                    = []
 
+instance VFree Constraint where
+    vfree (Cast info t1 t2)         = vfree t1 ++ vfree t2
+    vfree (Sub info w t1 t2)        = vfree t1 ++ vfree t2
+    vfree (Impl info w t p)         = vfree t ++ vfree p
+    vfree (Sel info w t1 n t2)      = vfree t1 ++ vfree t2
+    vfree (Mut info t1 n t2)        = vfree t1 ++ vfree t2
+    vfree (Seal info t)             = vfree t
 
 
 
@@ -301,7 +311,7 @@ instance USubst TSchema where
 
 instance UFree TSchema where
     ufree (TSchema _ [] t)          = ufree t
-    ufree (TSchema _ q t)           = (ufree q ++ ufree t) \\ qbound q
+    ufree (TSchema _ q t)           = (ufree q ++ ufree t) \\ qbound q          -- Remove \\ !
 
 
 schematic (TCon _ tc)               = tCon (schematic' tc)
@@ -347,7 +357,7 @@ instance USubst QBind where
     usubst (Quant v cs)             = Quant <$> usubst v <*> usubst cs
 
 instance UFree QBind where
-    ufree (Quant v cs)              = v : ufree cs
+    ufree (Quant v cs)              = ufree cs
 
 instance USubst Type where
     usubst (TVar l v)               = do s <- usubstitution
@@ -366,7 +376,10 @@ instance USubst Type where
     usubst (TFX l fx)               = return $ TFX l fx
 
 instance UFree Type where
-    ufree (TVar _ v)                = [v]
+    ufree (TVar _ v)
+      | univar v                    = [v]
+--      | otherwise                   = []
+      | otherwise                   = [v]
     ufree (TCon _ c)                = ufree c
     ufree (TFun _ fx p k t)         = ufree fx ++ ufree p ++ ufree k ++ ufree t
     ufree (TTuple _ p k)            = ufree p ++ ufree k
