@@ -315,29 +315,3 @@ tHashableW self                     = tCon (TC qnHashable [self])
 witSequenceList                     = gBuiltin (Derived nSequence nList)
 witSetSet                           = gBuiltin (Derived nSetP nSetT)
 witMappingDict                      = gBuiltin (Derived nMapping nDict)
-
-nNumpy                              = name "numpy"
-mNumpy                              = ModName [nNumpy]
-gNumpy n                            = GName mNumpy n
-
-ndgetsliceKW                        = name "__ndgetslice__"
-
-nNDArray                            = name "ndarray"
-nNDSelect                           = name "ndselect"
-nNDIndex                            = name "ndindex"
-nNDSlice                            = name "ndslice"
-
-qnNDArray                           = gNumpy nNDArray
-qnNDSelect                          = gNumpy nNDSelect
-qnNDIndex                           = gNumpy nNDIndex
-qnNDSlice                           = gNumpy nNDSlice
-
-cNDArray a                          = TC qnNDArray [a]
-cNDSelect                           = TC qnNDSelect []
-cNDIndex                            = TC qnNDIndex []
-cNDSlice                            = TC qnNDSlice []
-
-tNDArray a                          = tCon (cNDArray a)
-tNDSelect                           = tCon cNDSelect
-tNDIndex                            = tCon cNDIndex
-tNDSlice                            = tCon cNDSlice

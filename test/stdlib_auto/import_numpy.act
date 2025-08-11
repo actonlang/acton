@@ -1,4 +1,0 @@
-import numpy
-
-actor main(env):
-    env.exit(0)

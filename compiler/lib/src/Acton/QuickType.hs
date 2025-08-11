@@ -382,9 +382,6 @@ instance EnvOf Handler where
 instance EnvOf Sliz where
     envOf _                         = []
 
-instance EnvOf NDSliz where
-    envOf _                         = []
-
 instance EnvOf OpArg where
     envOf _                         = []
 

@@ -1186,10 +1186,6 @@ instance Infer Expr where
                                              w <- newWitness
                                              return (Impl (DfltInfo (loc e) 77 (Just e) []) w t (pSliceable t0) :
                                                      cs1++cs2, t, eCall (eDot (eVar w) getsliceKW) [e', sliz2exp sl'])
-    infer env (NDSlice l e slz)         = do (css,es) <- fmap unzip $ mapM (inferNDSlice env) slz
-                                             t <- newTVar
-                                             (cs,e') <- inferSub env (tNDArray t) e
-                                             return (concat css++cs, (tNDArray t), eCall (eDot e' ndgetsliceKW) [List l (map Elem es)])
     infer env (Cond l e1 e e2)          = do t0 <- newTVar
                                              (cs0,env',s,_,e') <- inferTest env e
                                              (cs1,e1') <- inferSub env' t0 e1
@@ -1579,11 +1575,6 @@ inferSlice env (Sliz l e1 e2 e3)        = do (cs1,e1') <- inferSub env tInt e1
                                              (cs2,e2') <- inferSub env tInt e2
                                              (cs3,e3') <- inferSub env tInt e3
                                              return (cs1++cs2++cs3, Sliz l e1' e2' e3')
-
-inferNDSlice env (NDExpr e)             = do (cs, e') <- inferSub env tInt e
-                                             return (cs, eCall (eQVar qnNDIndex) [e'])
-inferNDSlice env (NDSliz sl)            = do (cs, sl') <- inferSlice env sl
-                                             return (cs, eCall (eQVar qnNDSlice) [sliz2exp sl'])
 
 
 class InferSub a where
