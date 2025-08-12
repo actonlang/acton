@@ -12,6 +12,61 @@
     (nm)->str = acton_malloc_atomic((nm)->nbytes + 1);       \
     (nm)->str[(nm)->nbytes] = 0
 
+// Helper function to count extra bytes needed for XML escaping
+// Returns the number of extra bytes needed to replace the special character
+// with encoded entity (not total bytes)
+//
+static int count_xml_escape_extra(B_str str, int escape_quotes) {
+    int extra = 0;
+    // Note: It's safe to iterate byte-by-byte even for UTF-8 strings because we
+    // only check for ASCII characters (&, <, "). The codepoints for ASCII
+    // characters are backwards compatible (0x00-0x7F -> 00000000-01111111).
+    // Continuation bytes (2nd, ...) in multi-byte UTF-8 characters always have
+    // the same pattern 10xxxxxx (0x80-0xBF) so no UTF-8 continuation byte can
+    // be mistaken for an ASCII character.
+    for (int i = 0; i < str->nbytes; i++) {
+        switch (str->str[i]) {
+            case '&': extra += 4; break;  // &amp; = 5 bytes instead of 1
+            case '<': extra += 3; break;  // &lt; = 4 bytes instead of 1
+            case '"':
+                if (escape_quotes) extra += 5;  // &quot; = 6 bytes instead of 1
+                break;
+        }
+    }
+    return extra;
+}
+
+// Helper function to copy string with XML escaping
+// Returns pointer to position after copied data
+static unsigned char* copy_with_xml_escape(unsigned char *dst, B_str src, int escape_quotes) {
+    for (int i = 0; i < src->nbytes; i++) {
+        // Note: It's safe to iterate byte-for-byte here because we're only
+        // inserting ASCII and copying (maybe UTF-8 multi-byte) characters as
+        // individual bytes, iterating over the total byte length of B_str
+        switch (src->str[i]) {
+            case '&':
+                memcpy(dst, "&amp;", 5);
+                dst += 5;
+                break;
+            case '<':
+                memcpy(dst, "&lt;", 4);
+                dst += 4;
+                break;
+            case '"':
+                if (escape_quotes) {
+                    memcpy(dst, "&quot;", 6);
+                    dst += 6;
+                } else {
+                    *dst++ = src->str[i];
+                }
+                break;
+            default:
+                *dst++ = src->str[i];
+                break;
+        }
+    }
+    return dst;
+}
 
 xmlQ_Node $NodePtr2Node(xmlNodePtr node) {
     B_SequenceD_list wit = B_SequenceD_listG_witness;
@@ -115,11 +170,17 @@ xmlQ_Node xmlQ_decode(B_str data) {
 
 
 B_str xmlQ_node2str(B_str tag, B_str nsdefs, B_str prefix, B_str attrs, B_str cont, B_str text, B_str tail) {
+    // Calculate extra bytes needed for escaping text and tail
+    int text_extra = text ? count_xml_escape_extra(text, 0) : 0;
+    int tail_extra = tail ? count_xml_escape_extra(tail, 0) : 0;
+
     int res_bytes = 2*tag->nbytes + 2*(prefix ? prefix->nbytes+1:0) + nsdefs->nbytes + attrs->nbytes +
-                    (text ? text->nbytes:0) + cont->nbytes + (tail ? tail->nbytes:0) + 5; // 5 = len ("<" + ">" + "</" + ">")
+                    (text ? text->nbytes + text_extra : 0) + cont->nbytes +
+                    (tail ? tail->nbytes + tail_extra : 0) + 5; // 5 = len("<" + ">" + "</" + ">")
     int res_chars = 2*tag->nchars + 2*(prefix ? prefix->nchars+1:0) + nsdefs->nchars + attrs->nchars +
-                    (text ? text->nchars:0) + cont->nchars + (tail ? tail->nchars:0) + 5;
-    int one_line = 0;
+                    (text ? text->nchars + text_extra : 0) + cont->nchars +
+                    (tail ? tail->nchars + tail_extra : 0) + 5;
+
     B_str res;
     NEW_UNFILLED_STR(res, res_chars, res_bytes);
     unsigned char *p = res->str;
@@ -133,8 +194,7 @@ B_str xmlQ_node2str(B_str tag, B_str nsdefs, B_str prefix, B_str attrs, B_str co
     memcpy(p, attrs->str, attrs->nbytes); p += attrs->nbytes;
     *p++ = '>';
     if (text) {
-        memcpy(p, text->str, text->nbytes);
-        p += text->nbytes;
+        p = copy_with_xml_escape(p, text, 0);
     }
     memcpy(p, cont->str, cont->nbytes); p += cont->nbytes;
     *p++ = '<';
@@ -146,8 +206,7 @@ B_str xmlQ_node2str(B_str tag, B_str nsdefs, B_str prefix, B_str attrs, B_str co
     memcpy(p, tag->str, tag->nbytes); p += tag->nbytes;
     *p++ = '>';
     if (tail) {
-        memcpy(p, tail->str, tail->nbytes);
-        p += tail->nbytes;
+        p = copy_with_xml_escape(p, tail, 0);
     }
     return res;
 }
@@ -171,8 +230,12 @@ static B_str xmlQ_encode_nsdefs(B_list nsdefs) {
         B_tuple nsdef = nsdefs->data[i];
         B_str prefix = (B_str)nsdef->components[0];
         B_str href = (B_str)nsdef->components[1];
-        res_bytes += (prefix ? prefix->nbytes+1 : 0) + href->nbytes + 9;
-        res_chars += (prefix ? prefix->nchars+1 : 0) + href->nchars + 9;
+
+        // Count extra bytes needed for escaping href
+        int href_extra = count_xml_escape_extra(href, 1);
+
+        res_bytes += (prefix ? prefix->nbytes+1 : 0) + href->nbytes + href_extra + 9; // 9 = len(" xmlns" + "=" + '"' + '"')
+        res_chars += (prefix ? prefix->nchars+1 : 0) + href->nchars + href_extra + 9;
     }
     B_str res;
     NEW_UNFILLED_STR(res, res_chars, res_bytes);
@@ -190,7 +253,7 @@ static B_str xmlQ_encode_nsdefs(B_list nsdefs) {
         }
         *p++ = '=';
         *p++ = '"';
-        memcpy(p, href->str, href->nbytes); p += href->nbytes;
+        p = copy_with_xml_escape(p, href, 1);
         *p++ = '"';
     }
     return res;
@@ -202,22 +265,28 @@ static B_str xmlQ_encode_attrs(B_list attrs) {
     int res_chars = 0;
     for (int i=0; i < attrs->length; i++) {
         B_tuple attr = attrs->data[i];
-        res_bytes += ((B_str)attr->components[0])->nbytes + ((B_str)attr->components[1])->nbytes + 4; // 4 = ' ','=,'"', '"'
-        res_chars += ((B_str)attr->components[0])->nchars + ((B_str)attr->components[1])->nchars + 4;
+        B_str key = (B_str)attr->components[0];
+        B_str value = (B_str)attr->components[1];
+
+        // Count extra bytes needed for escaping
+        int extra_bytes = count_xml_escape_extra(value, 1);
+
+        res_bytes += key->nbytes + value->nbytes + extra_bytes + 4; // 4 = len(" " + "=" + "'" + "'")
+        res_chars += key->nchars + value->nchars + extra_bytes + 4;
     }
     B_str res;
     NEW_UNFILLED_STR(res, res_chars, res_bytes);
 
     unsigned char *p = res->str;
-    for (int i=0; i<attrs->length; i++) {
+    for (int i=0; i < attrs->length; i++) {
         B_tuple attr = attrs->data[i];
-        *p++ = ' ';
         B_str key = (B_str)attr->components[0];
         B_str value = (B_str)attr->components[1];
+        *p++ = ' ';
         memcpy(p, key->str, key->nbytes); p += key->nbytes;
         *p++ = '=';
         *p++ = '"';
-        memcpy(p, value->str, value->nbytes); p += value->nbytes;
+        p = copy_with_xml_escape(p, value, 1);
         *p++ = '"';
     }
     return res;
