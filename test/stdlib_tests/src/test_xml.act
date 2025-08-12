@@ -103,3 +103,39 @@ def _test_xml_entity_escaping_single_quotes():
     """Test that single quotes in attributes are not escaped (we quote with double quotes)"""
     node = xml.Node("a", attributes=[("attr", "it's fine")])
     testing.assertEqual(xml.encode(node), """<a attr="it's fine"></a>""", "Single quotes should not be escaped")
+
+def _test_xml_cdata():
+    """Test CDATA section handling"""
+
+    # Test simple CDATA in element text
+    test_xml = "<data><![CDATA[This is raw text]]></data>"
+    d = xml.decode(test_xml)
+    testing.assertEqual(d.tag, "data", "CDATA: tag mismatch")
+    testing.assertEqual(d.text, "This is raw text", "CDATA: text content mismatch")
+
+def _test_xml_cdata_special_chars():
+    """Test CDATA with special characters that would normally need escaping"""
+    test_xml = "<data><![CDATA[<raw> text & symbols > < ]]></data>"
+    d = xml.decode(test_xml)
+    testing.assertEqual(d.text, "<raw> text & symbols > < ", "CDATA: special chars not preserved")
+
+def _test_xml_cdata_mixed():
+    """Test mixed text and CDATA nodes"""
+    test_xml = "<mixed>Text before<![CDATA[<cdata content>]]>Text after</mixed>"
+    d = xml.decode(test_xml)
+    testing.assertEqual(d.text, "Text before<cdata content>Text after", "CDATA: mixed content failed")
+
+def _test_xml_cdata_multiple():
+    """Test multiple CDATA sections"""
+    test_xml = "<multi><![CDATA[First]]> middle <![CDATA[Second]]></multi>"
+    d = xml.decode(test_xml)
+    testing.assertEqual(d.text, "First middle Second", "CDATA: multiple sections failed")
+
+    # Test roundtrip - CDATA content should be preserved (though may not be re-encoded as CDATA)
+    test_xml = "<data><![CDATA[<special> & chars]]></data>"
+    d = xml.decode(test_xml)
+    e = xml.encode(d)
+    # The content should be preserved, but is entity-encoded instead of CDATA
+    testing.assertEqual(e, "<data>&lt;special> &amp; chars</data>")
+    d2 = xml.decode(e)
+    testing.assertEqual(d2.text, "<special> & chars", "CDATA: roundtrip content not preserved")

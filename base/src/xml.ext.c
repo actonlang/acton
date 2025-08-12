@@ -68,6 +68,47 @@ static unsigned char* copy_with_xml_escape(unsigned char *dst, B_str src, int es
     return dst;
 }
 
+// Helper function to collect text from consecutive TEXT and CDATA nodes
+// Returns the combined string and updates the node pointer to the first non-text node
+// Note: cur_ptr is passed by reference (pointer to pointer) so we can update the caller's pointer
+//       to skip past all consumed text/CDATA nodes
+static B_str collect_text_cdata_nodes(xmlNodePtr *cur_ptr) {
+    xmlNodePtr cur = *cur_ptr;
+    if (!cur || (cur->type != XML_TEXT_NODE && cur->type != XML_CDATA_SECTION_NODE)) {
+        return to$str("");
+    }
+
+    // Count total length of combined text and CDATA nodes
+    size_t text_len = 0;
+    xmlNodePtr text_start = cur;
+    while (cur && (cur->type == XML_TEXT_NODE || cur->type == XML_CDATA_SECTION_NODE)) {
+        if (cur->content) text_len += strlen((char *)cur->content);
+        cur = cur->next;
+    }
+
+    // Create combined string
+    if (text_len > 0) {
+        char *combined = acton_malloc_atomic(text_len + 1);
+        char *p = combined;
+        xmlNodePtr t = text_start;
+        while (t != cur) {
+            if (t->content) {
+                size_t len = strlen((char *)t->content);
+                memcpy(p, t->content, len);
+                p += len;
+            }
+            t = t->next;
+        }
+        *p = '\0';
+        B_str result = to_str_noc(combined);
+        *cur_ptr = cur;
+        return result;
+    }
+
+    *cur_ptr = cur;
+    return to$str("");
+}
+
 xmlQ_Node $NodePtr2Node(xmlNodePtr node) {
     B_SequenceD_list wit = B_SequenceD_listG_witness;
     if (node->type == XML_COMMENT_NODE) {
@@ -99,15 +140,11 @@ xmlQ_Node $NodePtr2Node(xmlNodePtr node) {
         attr = attr->next;
     }
 
-    B_str text = to$str("");
-    B_str tail = to$str("");
-
     B_list children = B_listG_new(NULL, NULL);
     xmlNodePtr cur = node->xmlChildrenNode;
-    if (cur && cur->type == XML_TEXT_NODE) {
-        text = to$str((char *)cur->content);
-        cur = cur->next;
-    }
+
+    // Collect initial text/CDATA nodes
+    B_str text = collect_text_cdata_nodes(&cur);
 
     while (cur != NULL) {
         xmlQ_Node child = $NodePtr2Node(cur);
@@ -116,10 +153,14 @@ xmlQ_Node $NodePtr2Node(xmlNodePtr node) {
         cur = cur->next;
     }
 
-    if (node->next && node->next->type == XML_TEXT_NODE) { // the root node has no next.
-        tail = to$str((char *)node->next->content);
-        node->next = node->next->next;
-    }
+    // Collect tail text/CDATA nodes after we have exhausted the child nodes
+    cur = node->next;
+    B_str tail = collect_text_cdata_nodes(&cur);
+    // Update the tree structure to skip consumed tail text/CDATA nodes.
+    // This prevents the parent from seeing these text nodes again during its
+    // child iteration, since tail text of an element is part of the parent's
+    // child list in the XML tree.
+    node->next = cur;
     return (xmlQ_Node)$NEW(xmlQ_Node, to$str((char *)node->name), nsdefs, prefix, attributes, children, text, tail);
 }
 
