@@ -69,10 +69,33 @@ xmlQ_Node $NodePtr2Node(xmlNodePtr node) {
 }
 
 xmlQ_Node xmlQ_decode(B_str data) {
-    xmlDocPtr doc = xmlReadMemory((char *)data->str, data->nbytes, NULL, NULL, 0);
+    // With XML_PARSE_NOERROR we suppress printing error and warning reports to stderr
+    xmlDocPtr doc = xmlReadMemory((char *)data->str, data->nbytes, NULL, NULL, XML_PARSE_NOERROR);
     if (!doc) {
-        // xmlErrorPtr err = xmlGetLastError();
-        $RAISE(((B_BaseException)B_RuntimeErrorG_new(to$str("xml parse error"))));
+        xmlErrorPtr err = xmlGetLastError();
+        B_str errmsg;
+        if (err && err->message) {
+            // Strip trailing whitespace from error message if needed
+            int orig_len = strlen(err->message);
+            int len = orig_len;
+            while (len > 0 && isspace((unsigned char)err->message[len-1])) {
+                len--;
+            }
+
+            if (len < orig_len) {
+                // Only copy if we actually stripped something
+                char msg_clean[len + 1];
+                strncpy(msg_clean, err->message, len);
+                msg_clean[len] = '\0';
+                errmsg = $FORMAT("XML parse error: %s", msg_clean);
+            } else {
+                // Use original message as-is
+                errmsg = $FORMAT("XML parse error: %s", err->message);
+            }
+        } else {
+            errmsg = to$str("XML parse error");
+        }
+        $RAISE(((B_BaseException)B_RuntimeErrorG_new(errmsg)));
     }
     xmlNodePtr root = xmlDocGetRootElement(doc);
     xmlQ_Node t = $NodePtr2Node(root);
