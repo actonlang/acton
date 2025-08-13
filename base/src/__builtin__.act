@@ -354,6 +354,9 @@ class BaseException (value):
     def __str__(self):
         return f"{self._name()}: {self.error_message}"
 
+    def __repr__(self):
+        return "{self._name()}({self.error_message.__repr__()})"
+
     def _name(self) -> str:
         NotImplemented
 
@@ -383,6 +386,9 @@ class IndexError (LookupError):
     def __str__(self):
         return f"{self._name()}: {self.error_message}, index: {self.index}"
 
+    def __repr__(self):
+        return "{self._name()}({self.index}, {self.error_message.__repr__()})"
+
 class KeyError(LookupError):
     def __init__(self, key: value, msg: ?str=None):
         self.key = key
@@ -390,6 +396,9 @@ class KeyError(LookupError):
 
     def __str__(self):
         return f"{self._name()}: {self.error_message}, key: {str(self.key)}"
+
+    def __repr__(self):
+        return '{self._name()}({self.key.__repr__()}, {self.error_message.__repr__()})'
 
 class MemoryError (Exception):
     pass
@@ -403,6 +412,9 @@ class FileNotFoundError (OSError):
 
     def __str__(self):
         return f"{self._name()}: No such file or directory: '{self.filename}'"
+
+    def __repr__(self):
+        return '{self._name()}({self.filename.__repr__()})'
 
 class RuntimeError (Exception):
     pass
