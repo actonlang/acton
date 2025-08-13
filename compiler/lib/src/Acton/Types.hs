@@ -1009,30 +1009,32 @@ genEnv env cs te ds
                                              --traceM ("   where\n" ++ render (nest 6 $ vcat $ map pretty cs))
                                              (cs,eq) <- simplify env te tNone cs
                                              te <- usubst te
-                                             env <- usubst env
-                                             (gen_vs, gen_cs, te, eq) <- refine env cs te eq
+                                             (gen_us, gen_cs, te, eq) <- refine env cs te eq
+                                             let gen_vs = take (length gen_us) tvarSupply
+                                             sequence [ usubstitute uv (tVar tv) | (uv,tv) <- gen_us `zip` gen_vs ]
+                                             te <- usubst te
+                                             gen_cs <- usubst gen_cs
                                              --traceM ("## genEnv defs 2 [" ++ prstrs gen_vs ++ "]\n" ++ render (nest 6 $ pretty te))
                                              --traceM ("   where\n" ++ render (nest 6 $ vcat $ map pretty gen_cs))
                                              let (q,ws) = qualify gen_vs gen_cs
-                                                 te1 = map (generalize gen_vs q) te
+                                                 te1 = map (generalize q) te
                                                  (eq1,eq2) = splitEqs (dom ws) eq
                                                  ds1 = map (abstract q ds ws eq1) ds
-                                             --traceM ("## genEnv defs 3 [" ++ prstrs gen_vs ++ "]\n" ++ render (nest 6 $ pretty te1))
+                                             --traceM ("## genEnv defs 3 [" ++ prstrs q ++ "]\n" ++ render (nest 6 $ pretty te1))
                                              return ([], te1, eq2, ds1)
   | otherwise                           = do --traceM ("## genEnv local\n" ++ render (nest 6 $ pretty te))
                                              --traceM ("## genEnv local cs:\n" ++ render (nest 4 $ vcat $ map pretty cs))
                                              return (cs, te, [], ds)
   where
-    qualify vs cs                       = let (q,wss) = unzip $ map qbind vs in (q, concat wss)
-      where qbind v                     = (Quant v (casts ++ impls), wits)
-              where casts               = [ u | Cast _ (TVar _ v') (TCon _ u) <- cs, v == v' ]
-                    impls               = [ p | Impl _ w (TVar _ v') p <- cs, v == v' ]
+    qualify vs cs                       = (q, concat wss)
+      where (q,wss)                     = unzip $ map qbind vs
+            qbind v                     = (Quant v bounds, wits)
+              where bounds              = [ p | Impl _ w (TVar _ v') p <- cs, v == v' ]
                     wits                = [ (w, impl2type t p) | Impl _ w t@(TVar _ v') p <- cs, v == v' ]
 
-    generalize vs q (n, NDef sc d doc)
-      | null $ scbind sc                = (n, NDef (tSchema q1 (sctype sc)) d doc)
-      where q1                          = [ qv | qv@(Quant v _) <- q, v `elem` vs ]
-    generalize vs q (n, i)              = (n, i)
+    generalize q (n, NDef (TSchema l [] t) d doc)
+                                        = (n, NDef (TSchema l q t) d doc)
+    generalize q (n, i)                 = (n, i)
 
 
     abstract q ds ws eq d@Def{}

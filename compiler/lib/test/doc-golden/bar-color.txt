@@ -196,5 +196,5 @@ that are used across the application.
         ["HELLO", "WORLD"]
     
 
-[1mgt[0m[A,B](a: [32mA[0m, b: [32mA[0m, c: [32mB[0m, d: [32mB[0m) -> [32m(A, A, B)[0m
+[1mgt[0m(a: [32mA[0m, b: [32mA[0m, c: [32mB[0m, d: [32mB[0m) -> [32m(A, A, B)[0m
   Function that takes generic types

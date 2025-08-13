@@ -196,5 +196,5 @@ process_items[T](items: list[A]) -> list[T]
         ["HELLO", "WORLD"]
     
 
-gt[A,B](a: A, b: A, c: B, d: B) -> (A, A, B)
+gt(a: A, b: A, c: B, d: B) -> (A, A, B)
   Function that takes generic types

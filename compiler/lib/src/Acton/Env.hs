@@ -1381,11 +1381,7 @@ simpQuant env q vs0                 = (vsubst s [ Quant v ps | Quant v ps <- q2,
         isEX (Quant v [p])          = length (filter (==v) vs) == 1
         isEX _                      = False
         vs                          = concat [ vfree ps | Quant v ps <- q ] ++ vs0
-        s                           = s1 ++ s2
-        s1                          = [ (v, tCon p) | Quant v [p] <- q1 ]                       -- Inline existentials
-        s2                          = univars `zip` beautyvars                                  -- Beautify univars
-        univars                     = filter univar $ qbound q2
-        beautyvars                  = map tVar $ tvarSupply \\ tvarScope env
+        s                           = [ (v, tCon p) | Quant v [p] <- q1 ]                       -- Inline existentials
 
 instance Simp QBind where
     simp env (Quant v ps)           = Quant v (simp env ps)
@@ -1419,14 +1415,14 @@ instance Simp Type where
     simp env t                      = t
 
 instance Simp TCon where
-    simp env (TC n ts)              = TC (simp env n) (simp env ts)
+    simp env (TC n ts)              = TC (simp env n) (simp env ts)                             -- Simplify constructor names
 
 instance Simp QName where
     simp env (GName m n)
-      | inBuiltin env               = NoQ n
-      | Just m == thismod env       = NoQ n
+      | inBuiltin env               = NoQ n                                                     -- Restore builtins
+      | Just m == thismod env       = NoQ n                                                     -- Restore locals
     simp env n
-      | not $ null aliases          = NoQ $ head aliases
+      | not $ null aliases          = NoQ $ head aliases                                        -- Restore aliases
       | otherwise                   = n
       where aliases                 = [ n1 | (n1, NAlias n2) <- names env, n2 == n ]
 
