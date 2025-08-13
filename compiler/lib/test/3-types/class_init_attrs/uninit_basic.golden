@@ -1,0 +1,15 @@
+[error Type error]: Attribute 'x' is not initialized in TestClass.__init__
+     +--> uninit_basic.act@3:5-5:1
+     |
+   1 |    class TestClass(object):
+     :    ^-----------------------
+     :    `- In class TestClass
+   2 |        x: int
+     :        ^ 
+     :        `- Attribute 'x' is defined here
+   3 | +>     def __init__(self):
+   4 | |          pass
+   5 | |> 
+     : | 
+     : `- Attribute 'x' is not initialized in __init__
+-----+
