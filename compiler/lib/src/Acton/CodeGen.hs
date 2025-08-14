@@ -339,7 +339,7 @@ declDecl env (Class _ n q as b ddoc)
                                       declCleanup env1 n sup_c $+$
                                       declCon env1 n q b $+$
                                       text "struct" <+> classname env n <+> methodtable env n <> semi
-  where b'                          = subst [(tvSelf, tCon c)] b
+  where b'                          = vsubst [(tvSelf, tCon c)] b
         c                           = TC (NoQ n) (map tVar $ qbound q)
         env1                        = defineTVars q env
         props                       = [ n | (n, NSig sc Property _) <- fullAttrEnv env c ]

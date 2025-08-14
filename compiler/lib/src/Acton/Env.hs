@@ -181,6 +181,28 @@ instance (USubst x) => USubst (EnvF x) where
 instance (UFree x) => UFree (EnvF x) where
     ufree env                   = tvarScope0 env ++ ufree (names env) ++ ufree (witnesses env) ++ ufree (envX env)
 
+-- VFree ----------------------------------------------------------------------------------------
+
+instance VFree NameInfo where
+    vfree (NVar t)              = vfree t
+    vfree (NSVar t)             = vfree t
+    vfree (NDef t d _)          = vfree t
+    vfree (NSig t d _)          = vfree t
+    vfree (NAct q p k te _)     = (vfree q ++ vfree p ++ vfree k ++ vfree te) \\ (tvSelf : qbound q)
+    vfree (NClass q us te _)    = (vfree q ++ vfree us ++ vfree te) \\ (tvSelf : qbound q)
+    vfree (NProto q us te _)    = (vfree q ++ vfree us ++ vfree te) \\ (tvSelf : qbound q)
+    vfree (NExt q c ps te _)    = (vfree q ++ vfree c ++ vfree ps ++ vfree te) \\ (tvSelf : qbound q)
+    vfree (NTVar k c)           = vfree c
+    vfree (NAlias qn)           = []
+    vfree (NMAlias qn)          = []
+    vfree (NModule te doc)      = []        -- actually vfree te, but a module has no free variables on the top level
+    vfree NReserved             = []
+
+instance VFree WTCon where
+    vfree (w,u)                 = vfree u
+
+
+-- VSubst ---------------------------------------------------------------------------------------
 
 instance VSubst NameInfo where
     vsubst s (NVar t)           = NVar (vsubst s t)
@@ -201,20 +223,7 @@ instance VSubst WTCon where
     vsubst s (w,u)              = (w, vsubst s u)
 
 
-instance USubst NameInfo where
-    usubst (NVar t)             = NVar <$> usubst t
-    usubst (NSVar t)            = NSVar <$> usubst t
-    usubst (NDef t d doc)       = NDef <$> usubst t <*> return d <*> return doc
-    usubst (NSig t d doc)       = NSig <$> usubst t <*> return d <*> return doc
-    usubst (NAct q p k te doc)  = NAct <$> usubst q <*> usubst p <*> usubst k <*> usubst te <*> return doc
-    usubst (NClass q us te doc) = NClass <$> usubst q <*> usubst us <*> usubst te <*> return doc
-    usubst (NProto q us te doc) = NProto <$> usubst q <*> usubst us <*> usubst te <*> return doc
-    usubst (NExt q c ps te doc) = NExt <$> usubst q <*> usubst c <*> usubst ps <*> usubst te <*> return doc
-    usubst (NTVar k c)          = NTVar k <$> usubst c
-    usubst (NAlias qn)          = NAlias <$> return qn
-    usubst (NMAlias m)          = NMAlias <$> return m
-    usubst (NModule te doc)     = NModule <$> return te <*> return doc     -- actually usubst te, but te has no free variables (top-level)
-    usubst NReserved            = return NReserved
+-- UFree ----------------------------------------------------------------------------------------
 
 instance UFree NameInfo where
     ufree (NVar t)              = ufree t
@@ -231,40 +240,12 @@ instance UFree NameInfo where
     ufree (NModule te doc)      = []        -- actually ufree te, but a module has no free variables on the top level
     ufree NReserved             = []
 
-instance VFree NameInfo where
-    vfree (NVar t)              = vfree t
-    vfree (NSVar t)             = vfree t
-    vfree (NDef t d _)          = vfree t
-    vfree (NSig t d _)          = vfree t
-    vfree (NAct q p k te _)     = (vfree q ++ vfree p ++ vfree k ++ vfree te) \\ (tvSelf : qbound q)
-    vfree (NClass q us te _)    = (vfree q ++ vfree us ++ vfree te) \\ (tvSelf : qbound q)
-    vfree (NProto q us te _)    = (vfree q ++ vfree us ++ vfree te) \\ (tvSelf : qbound q)
-    vfree (NExt q c ps te _)    = (vfree q ++ vfree c ++ vfree ps ++ vfree te) \\ (tvSelf : qbound q)
-    vfree (NTVar k c)           = vfree c
-    vfree (NAlias qn)           = []
-    vfree (NMAlias qn)          = []
-    vfree (NModule te doc)      = []        -- actually vfree te, but a module has no free variables on the top level
-    vfree NReserved             = []
-
-instance USubst Witness where
-    usubst w@WClass{}           = return w                      -- A WClass (i.e., an extension) can't have any free type variables
-    usubst w@WInst{}            = do t <- usubst (wtype w)
-                                     p <- usubst (proto w)
-                                     return w{ wtype  = t, proto = p }
-
 instance UFree Witness where
     ufree w@WClass{}            = []
     ufree w@WInst{}             = (ufree (wtype w) ++ ufree (proto w)) \\ qbound (binds w)
 
-
-instance USubst WTCon where
-    usubst (w,u)                = (,) <$> return w <*> usubst u
-
 instance UFree WTCon where
     ufree (w,u)                 = ufree u
-
-instance VFree WTCon where
-    vfree (w,u)                 = vfree u
 
 instance Polarity NameInfo where
     polvars (NVar t)                = polvars t
@@ -278,6 +259,36 @@ instance Polarity NameInfo where
     polvars (NTVar k c)             = polvars c
     polvars _                       = ([],[])
 
+
+-- USubst ---------------------------------------------------------------------------------------
+
+instance USubst NameInfo where
+    usubst (NVar t)             = NVar <$> usubst t
+    usubst (NSVar t)            = NSVar <$> usubst t
+    usubst (NDef t d doc)       = NDef <$> usubst t <*> return d <*> return doc
+    usubst (NSig t d doc)       = NSig <$> usubst t <*> return d <*> return doc
+    usubst (NAct q p k te doc)  = NAct <$> usubst q <*> usubst p <*> usubst k <*> usubst te <*> return doc
+    usubst (NClass q us te doc) = NClass <$> usubst q <*> usubst us <*> usubst te <*> return doc
+    usubst (NProto q us te doc) = NProto <$> usubst q <*> usubst us <*> usubst te <*> return doc
+    usubst (NExt q c ps te doc) = NExt <$> usubst q <*> usubst c <*> usubst ps <*> usubst te <*> return doc
+    usubst (NTVar k c)          = NTVar k <$> usubst c
+    usubst (NAlias qn)          = NAlias <$> return qn
+    usubst (NMAlias m)          = NMAlias <$> return m
+    usubst (NModule te doc)     = NModule <$> return te <*> return doc     -- actually usubst te, but te has no free variables (top-level)
+    usubst NReserved            = return NReserved
+
+instance USubst Witness where
+    usubst w@WClass{}           = return w                      -- A WClass (i.e., an extension) can't have any free type variables
+    usubst w@WInst{}            = do t <- usubst (wtype w)
+                                     p <- usubst (proto w)
+                                     return w{ wtype  = t, proto = p }
+
+instance USubst WTCon where
+    usubst (w,u)                = (,) <$> return w <*> usubst u
+
+
+-- Polarity -------------------------------------------------------------------------------------
+
 instance Polarity WTCon where
     polvars (w, c)                  = polvars c
 
@@ -285,13 +296,16 @@ instance Polarity (Name,NameInfo) where
     polvars (n, i)                  = polvars i
 
 
+-- Tailvars -------------------------------------------------------------------------------------
+
 instance Tailvars (Name, NameInfo) where
     tailvars (n, NVar t)            = tailvars t
     tailvars (n, NSVar t)           = tailvars t
     tailvars (n, NDef sc _ _)       = tailvars sc
     tailvars _                      = []
 
--------------------------------------------------------------------------------------------------------------------
+
+-- Unalias --------------------------------------------------------------------------------------
 
 class Unalias a where
     unalias                         :: EnvF x -> a -> a
@@ -369,6 +383,7 @@ instance Unalias WTCon where
 instance Unalias (Either QName QName) where
     unalias env (Left n)            = Left $ unalias env n
     unalias env (Right n)           = Right $ unalias env n
+
 
 -- TEnv filters --------------------------------------------------------------------------------------------------------
 

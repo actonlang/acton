@@ -187,7 +187,7 @@ commonTEnv env (te:tes)                 = unifEnv tes (restrict te vs)
   where vs                              = foldr intersect (dom te) $ map dom tes
         l                               = length tes
         unifEnv tes []                  = return ([], [])
-        unifEnv tes ((n,i):te)          = do t <- newTVar
+        unifEnv tes ((n,i):te)          = do t <- newUnivar
                                              let (cs1,i') = unif n t i
                                              (cs2,te') <- unifEnv tes te
                                              return (cs1++cs2, (n,i'):te')
@@ -239,18 +239,18 @@ fxUnwrap env (TFX l FXAction)
   | inAct env                           = TFX l FXProc
 fxUnwrap env t                          = t
 
-wrap t@TFun{}                           = do tvx <- newTVarOfKind KFX
-                                             tvy <- newTVarOfKind KFX
+wrap t@TFun{}                           = do tvx <- newUnivarOfKind KFX
+                                             tvy <- newUnivarOfKind KFX
                                              w <- newWitness
                                              return (Impl (DfltInfo (loc t) 28 Nothing []) w tvx (pWrapped (effect t) tvy), t{ effect = tvx })
 
-wrapped l kw env cs ts args             = do tvx <- newTVarOfKind KFX
-                                             tvy <- newTVarOfKind KFX
+wrapped l kw env cs ts args             = do tvx <- newUnivarOfKind KFX
+                                             tvy <- newUnivarOfKind KFX
                                              let p = pWrapped tvx tvy
                                                  Just (_, sc, Just Static) = findAttr env p kw
                                              (_,tvs,t0) <- instantiate env sc
-                                             fx <- newTVarOfKind KFX
-                                             t' <- newTVar
+                                             fx <- newUnivarOfKind KFX
+                                             t' <- newUnivar
                                              let t1 = vsubst [(fxSelf,fx)] t0
                                                  t2 = tFun fxPure (foldr posRow posNil ts) kwdNil t'
                                              w <- newWitness
@@ -307,7 +307,7 @@ instance InfEnv Stmt where
                                              return (cs1++cs2++cs3, [], While l e' (termsubst s b') els')
     infEnv env (For l p e b els)
       | nodup p                         = do (cs1,te,t1,p') <- infEnvT env p
-                                             t2 <- newTVar
+                                             t2 <- newUnivar
                                              (cs2,e') <- inferSub env t2 e
                                              (cs3,te1,b') <- infSuiteEnv (define te env) b
                                              (cs4,te2,els') <- infSuiteEnv env els
@@ -365,31 +365,31 @@ instance InfEnv Stmt where
                                              (cs1,stmt) <- del t0 e0 tg
                                              return (cs0++cs1, [], stmt)
       where del t0 e0 (TgVar n)         = do return ( Cast (DfltInfo l 35 Nothing []) tNone t0 : [], sAssign (pVar' n) eNone)
-            del t0 e0 (TgIndex ix)      = do ti <- newTVar
+            del t0 e0 (TgIndex ix)      = do ti <- newUnivar
                                              (cs,ix) <- inferSub env ti ix
-                                             t <- newTVar
+                                             t <- newUnivar
                                              w <- newWitness
                                              return ( Impl (DfltInfo l 36 Nothing []) w t0 (pIndexed ti t) : cs, sExpr $ dotCall w delitemKW [e0, ix] )
             del t0 e0 (TgSlice sl)      = do (cs,sl) <- inferSlice env sl
-                                             t <- newTVar
+                                             t <- newUnivar
                                              w <- newWitness
                                              return ( Impl (DfltInfo l 37 Nothing []) w t0 (pSliceable t) : cs, sExpr $ dotCall w delsliceKW [e0, sliz2exp sl] )
-            del t0 e0 (TgDot n)         = do t <- newTVar
+            del t0 e0 (TgDot n)         = do t <- newUnivar
                                              return ( Mut (DfltInfo l 38 Nothing []) t0 n t : Cast (DfltInfo l 39 Nothing []) tNone t : [], sMutAssign (eDot e0 n) eNone )
 
     infEnv env (MutAssign l targ e)     = do (cs0,t0,e0,tg) <- infTarg env targ
-                                             t <- newTVar
+                                             t <- newUnivar
                                              (cs1,e) <- inferSub env t e
                                              (cs2,stmt) <- asgn t0 t e0 e tg
                                              return (cs0++cs1++cs2, [], stmt)
       where asgn t0 t e0 e (TgVar n)    = do tryUnify (DfltInfo l 40 Nothing []) t0 t
                                              return ( [], sAssign (pVar' n) e )
-            asgn t0 t e0 e (TgIndex ix) = do ti <- newTVar
+            asgn t0 t e0 e (TgIndex ix) = do ti <- newUnivar
                                              (cs,ix) <- inferSub env ti ix
                                              w <- newWitness
                                              return ( Impl (DfltInfo l 41 Nothing []) w t0 (pIndexed ti t) : cs, sExpr $ dotCall w setitemKW [e0, ix, e] )
             asgn t0 t e0 e (TgSlice sl) = do (cs,sl) <- inferSlice env sl
-                                             t' <- newTVar
+                                             t' <- newUnivar
                                              w <- newWitness
                                              w' <- newWitness
                                              return ( Impl (DfltInfo l 42 Nothing []) w t0 (pSliceable t') :
@@ -398,10 +398,10 @@ instance InfEnv Stmt where
             asgn t0 t e0 e (TgDot n)    = do return ( Mut (DfltInfo l 44 Nothing []) t0 n t : [], sMutAssign (eDot e0 n) e )
 
     infEnv env (AugAssign l targ o e)   = do (cs0,t0,e0,tg) <- infTarg env targ
-                                             t1 <- newTVar
+                                             t1 <- newUnivar
                                              (cs1,e) <- inferSub env t1 e
                                              let (proto,kw) = oper t1 o
-                                             t <- if o `elem` [MultA,DivA] then newTVar else pure t1
+                                             t <- if o `elem` [MultA,DivA] then newUnivar else pure t1
                                              w <- newWitness
                                              (ss,x) <- mkvar t0 e0
                                              (cs2,stmt) <- aug t0 t x (dotCall w kw) e tg
@@ -421,14 +421,14 @@ instance InfEnv Stmt where
 
             aug t0 t x f e (TgVar _)    = do tryUnify (DfltInfo l 46 Nothing []) t0 t
                                              return ( [], sAssign (pVar' x) $ f [eVar x, e] )
-            aug t0 t x f e (TgIndex ix) = do ti <- newTVar
+            aug t0 t x f e (TgIndex ix) = do ti <- newUnivar
                                              (cs,ix) <- inferSub env ti ix
                                              w <- newWitness
                                              return ( Impl (DfltInfo l 47 Nothing []) w t0 (pIndexed ti t) :
                                                       cs, sExpr $ dotCall w setitemKW [eVar x, ix, f [dotCall w getitemKW [eVar x, ix], e]])
             aug t0 t x f e (TgSlice sl) = do tryUnify (DfltInfo l 1115 Nothing []) t0 t
                                              (cs,sl) <- inferSlice env sl
-                                             t' <- newTVar
+                                             t' <- newUnivar
                                              w <- newWitness
                                              w' <- newWitness
                                              let e1 = f [dotCall w getsliceKW [eVar x, sliz2exp sl], e]
@@ -482,10 +482,10 @@ matchingDec n sc dec dec'
 
 matchDefAssumption env cs def
   | q0 == q1                            = match env cs [] def
-  | otherwise                           = do (cs1, tvs) <- instQBinds env q1
+  | otherwise                           = do (cs1, uvs) <- instQBinds env q1
                                              let eq0 = witSubst env q1 cs1
-                                                 s = qbound q1 `zip` tvs            -- This cannot just be memoized in the global TypeM substitution,
-                                                 def' = subst s def{ qbinds = [] }  -- since the variables in (qbound q1) aren't necessarily globally unique
+                                                 s = qbound q1 `zip` uvs
+                                                 def' = vsubst s def{ qbinds = [] }
                                              match env (cs ++ cs1) eq0 def'
   where NDef (TSchema _ q0 t0) dec _    = findName (dname def) env
         t2 | inClass env                = addSelf t0 (Just dec)
@@ -523,7 +523,7 @@ instance InfEnv Decl where
                                                  let docstring = extractDocstring (dbody d)
                                                  return ([], [(n, NDef (fxUnwrapSc env sc) dec docstring)], d{deco = dec})
                                              NReserved -> do
-                                                 t <- tFun (fxUnwrap env fx) (prowOf p) (krowOf k) <$> maybe newTVar return a
+                                                 t <- tFun (fxUnwrap env fx) (prowOf p) (krowOf k) <$> maybe newUnivar return a
                                                  let sc = tSchema q (if inClass env then dropSelf t (deco d) else t)
                                                      docstring = extractDocstring (dbody d)
                                                  --traceM ("\n## infEnv def " ++ prstr (n, NDef sc (deco d) Nothing))
@@ -703,7 +703,7 @@ infActorEnv env ss                      = do dsigs <- mapM mkNDef dvars         
   where sigs                            = [ (n, NSig sc dec Nothing) | Signature _ ns sc dec <- ss, n <- ns, not $ isHidden n ]
         (concsigs, abssigs)             = partition ((`elem`(dvars++pvars)) . fst) sigs
         dvars                           = notHidden $ methods ss \\ dom sigs
-        mkNDef n                        = do t <- newTVar
+        mkNDef n                        = do t <- newUnivar
                                              return (n, NDef (monotype $ t) NoDec Nothing)
         svars                           = statevars ss
         pvars                           = pvarsF ss \\ dom (sigs) \\ dvars
@@ -711,7 +711,7 @@ infActorEnv env ss                      = do dsigs <- mapM mkNDef dvars         
           where pvs (Assign _ pats _)   = notHidden $ bound pats \\ svars   -- svars only excluded until we move stateful actor cmds to __init__
                 pvs (If _ bs els)       = foldr intersect (pvarsF els) [ pvarsF ss | Branch _ ss <- bs ]
                 pvs _                   = []
-        mkNVar n                        = do t <- newTVar
+        mkNVar n                        = do t <- newUnivar
                                              return (n, NVar t)
 
 matchActorAssumption env n0 p k te      = do --traceM ("## matchActorAssumption " ++ prstrs te)
@@ -755,7 +755,7 @@ infProperties env as b
         infProps self (MutAssign _ (Dot _ (Var _ (NoQ x)) n) _ : b)
           | x /= self                   = return []
           | n `notElem` inherited,
-            n `notElem` explicit        = do t <- newTVar
+            n `notElem` explicit        = do t <- newUnivar
                                              te <- infProps self b
                                              return ((n,NSig (monotype t) Property Nothing) : te)
           | otherwise                   = infProps self b
@@ -774,7 +774,7 @@ infDefBody env _ _ _ b                  = infSuiteEnv (setInDef env) b
 
 infInitEnv env self (MutAssign l (Dot l' e1@(Var _ (NoQ x)) n) e2 : b)
   | x == self                           = do (cs1,t1,e1') <- infer env e1
-                                             t2 <- newTVar
+                                             t2 <- newUnivar
                                              (cs2,e2') <- inferSub env t2 e2
                                              (cs3,te,b') <- infInitEnv env self b
                                              return (Mut (DfltInfo l 64 Nothing []) t1 n t2 :
@@ -835,9 +835,9 @@ checkSelfInActor env mName mPosPar mKwdPar
 instance Check Decl where
     checkEnv env (Def l n q p k a b dec fx ddoc)
                                         = do --traceM ("## checkEnv def " ++ prstr n ++ " FX " ++ prstr fx')
-                                             t <- maybe newTVar return a
+                                             t <- maybe newUnivar return a
                                              pushFX fx' t
-                                             st <- newTVar
+                                             st <- newUnivar
                                              wellformed env1 q
                                              wellformed env1 a
                                              when (inClass env) $
@@ -1146,10 +1146,10 @@ instance Infer Expr where
                                             NReserved -> nameReserved n
                                             _ -> nameUnexpected n
 
-    infer env e@(Int _ val s)           = do t <- newTVar
+    infer env e@(Int _ val s)           = do t <- newUnivar
                                              w <- newWitness
                                              return ([Impl (DfltInfo (loc e) 72 (Just e) []) w t pNumber], t, eCall (eDot (eVar w) fromatomKW) [e])
-    infer env e@(Float _ val s)         = do t <- newTVar
+    infer env e@(Float _ val s)         = do t <- newUnivar
                                              w <- newWitness
                                              return ([Impl (DfltInfo (loc e) 73 (Just e) []) w t pRealFloat], t, eCall (eDot (eVar w) fromatomKW) [e])
     infer env e@Imaginary{}             = notYetExpr e
@@ -1162,31 +1162,31 @@ instance Infer Expr where
     infer env (Call l e ps ks)          = inferCall env True l e ps ks
     infer env (TApp l e ts)             = internal l "Unexpected TApp in infer"
     infer env (Async l e)               = do (cs,t,e) <- infer env e                        -- expect an action returning t'
-                                             prow <- newTVarOfKind PRow
-                                             krow <- newTVarOfKind KRow
-                                             t' <- newTVar
+                                             prow <- newUnivarOfKind PRow
+                                             krow <- newUnivarOfKind KRow
+                                             t' <- newUnivar
                                              let tf fx = tFun fx prow krow
                                              return (Cast (DfltInfo (loc e) 74 (Just e) []) t (tf fxAction t') :
                                                      cs, tf fxProc (tMsg t'), Async l e)    -- produce a proc returning Msg[t']
-    infer env (Await l e)               = do t0 <- newTVar
+    infer env (Await l e)               = do t0 <- newUnivar
                                              (cs1,e') <- inferSub env (tMsg t0) e
                                              fx <- currFX
                                              return (Cast (DfltInfo (loc e) 75 (Just e) []) fxProc fx :
                                                      cs1, t0, Await l e')
-    infer env (Index l e ix)            = do ti <- newTVar
+    infer env (Index l e ix)            = do ti <- newUnivar
                                              (cs1,ix') <- inferSub env ti ix
-                                             t0 <- newTVar
+                                             t0 <- newUnivar
                                              w <- newWitness
                                              (cs2,t,e') <- infer env e
                                              return (Impl (DfltInfo (loc e) 76 (Just e) []) w t (pIndexed ti t0) :
                                                      cs1++cs2, t0, eCall (eDot (eVar w) getitemKW) [e', ix'])
     infer env (Slice l e sl)            = do (cs1,sl') <- inferSlice env sl
                                              (cs2,t,e') <- infer env e
-                                             t0 <- newTVar
+                                             t0 <- newUnivar
                                              w <- newWitness
                                              return (Impl (DfltInfo (loc e) 77 (Just e) []) w t (pSliceable t0) :
                                                      cs1++cs2, t, eCall (eDot (eVar w) getsliceKW) [e', sliz2exp sl'])
-    infer env (Cond l e1 e e2)          = do t0 <- newTVar
+    infer env (Cond l e1 e e2)          = do t0 <- newUnivar
                                              (cs0,env',s,_,e') <- inferTest env e
                                              (cs1,e1') <- inferSub env' t0 e1
                                              (cs2,e2') <- inferSub env t0 e2
@@ -1194,7 +1194,7 @@ instance Infer Expr where
     infer env (IsInstance l e c)        = case findQName c env of
                                              NClass q _ _ _ -> do
                                                 (cs,t,e') <- infer env e
-                                                ts <- newTVars [ tvkind v | v <- qbound q ]
+                                                ts <- newUnivars [ tvkind v | v <- qbound q ]
                                                 return (cs, tBool, IsInstance l e' c)
                                              _ -> nameUnexpected c
     infer env (BinOp l s@Strings{} Mod e)
@@ -1236,21 +1236,21 @@ instance Infer Expr where
     infer env e@(BinOp l e1 op e2)
       | op `elem` [Or,And]              = do (cs,_,_,t,e') <- inferTest env e
                                              return (cs, t, e')
-      | op == Mult                      = do t <- newTVar
-                                             t' <- newTVar
+      | op == Mult                      = do t <- newUnivar
+                                             t' <- newUnivar
                                              (cs1,e1') <- inferSub env t e1
                                              (cs2,e2') <- inferSub env t' e2
                                              w <- newWitness
                                              return (Impl (DfltInfo l 79 (Just e) []) w t (pTimes t') :
                                                      cs1++cs2, t, eCall (eDot (eVar w) mulKW) [e1',e2'])
-      | op == Div                       = do t <- newTVar
-                                             t' <- newTVar
+      | op == Div                       = do t <- newUnivar
+                                             t' <- newUnivar
                                              (cs1,e1') <- inferSub env t e1
                                              (cs2,e2') <- inferSub env t e2
                                              w <- newWitness
                                              return (Impl (DfltInfo l 80 (Just e) []) w t (pDiv t') :
                                                      cs1++cs2, t', eCall (eDot (eVar w) truedivKW) [e1',e2'])
-      | otherwise                       = do t <- newTVar
+      | otherwise                       = do t <- newUnivar
                                              (cs1,e1') <- inferSub env t e1
                                              (cs2,e2') <- inferSub env (rtype op t) e2
                                              w <- newWitness
@@ -1295,14 +1295,14 @@ instance Infer Expr where
             method UMinus               = negKW
             method BNot                 = invertKW
     infer env e@(CompOp l e1 [OpArg op e2])
-      | op `elem` [In,NotIn]            = do t1 <- newTVar
+      | op `elem` [In,NotIn]            = do t1 <- newUnivar
                                              (cs1,e1') <- inferSub env t1 e1
-                                             t2 <- newTVar
+                                             t2 <- newUnivar
                                              (cs2,e2') <- inferSub env t2 e2
                                              w <- newWitness
                                              return (Impl (DfltInfo (loc e1) 83 (Just e) []) w t2 (pContainer t1) :
                                                      cs1++cs2, tBool, eCall (eDot (eVar w) (method op)) [e2', e1'])
-      | otherwise                       = do t <- newTVar
+      | otherwise                       = do t <- newUnivar
                                              (cs1,e1') <- inferSub env t e1
                                              (cs2,e2') <- inferSub env t e2
                                              w <- newWitness
@@ -1357,7 +1357,7 @@ instance Infer Expr where
                                              case findAttr env tc n of
                                                 Just (wf,sc,dec) -> do
                                                     (cs1,tvs,t) <- instantiate env sc
-                                                    t0 <- newTVar
+                                                    t0 <- newUnivar
                                                     let t' = vsubst [(tvSelf,t0)] $ addSelf t dec
                                                     w <- newWitness
                                                     return (Impl (DfltInfo l 85 Nothing []) w t0 tc :
@@ -1370,7 +1370,7 @@ instance Infer Expr where
       | n == initKW                     = err1 n "__init__ cannot be selected by instance"
       | otherwise                       = do (cs,t,e') <- infer env e
                                              w <- newWitness
-                                             t0 <- newTVar
+                                             t0 <- newUnivar
                                              let con = case t of
                                                           TOpt _ _ -> Sel (Simple l (Pretty.print t ++ " does not have an attribute "++ Pretty.print n ++
                                                                            "\nHint: you may need to test if " ++ Pretty.print e ++ " is not None")) w t n t0
@@ -1378,9 +1378,9 @@ instance Infer Expr where
                                              return  (con : cs, t0, eCall (eVar w) [e'])
 
     infer env e@(Rest _ _ _)            = notYetExpr e
---    infer env (Rest l e n)              = do p <- newTVarOfKind PRow
---                                             k <- newTVarOfKind KRow
---                                             t0 <- newTVar
+--    infer env (Rest l e n)              = do p <- newUnivarOfKind PRow
+--                                             k <- newUnivarOfKind KRow
+--                                             t0 <- newUnivar
 --                                             (cs,e') <- inferSub env (tTuple p (kwdRow n t0 k)) e
 --                                             return (cs, tTuple p k, Rest l e' n)
 
@@ -1411,36 +1411,36 @@ instance Infer Expr where
     infer env (Tuple l pargs kargs)     = do (cs1,prow,pargs') <- infer env pargs
                                              (cs2,krow,kargs') <- infer env kargs
                                              return (cs1++cs2, TTuple l prow krow, Tuple l pargs' kargs')
-    infer env (List l es)               = do t0 <- newTVar
+    infer env (List l es)               = do t0 <- newUnivar
                                              (cs,es') <- infElems env es t0
                                              return (cs, tList t0, List l es')
     infer env (ListComp l e co)
       | nodup co                        = do (cs1,env',co') <- infComp env co
-                                             t0 <- newTVar
+                                             t0 <- newUnivar
                                              (cs2,es) <- infElems env' [e] t0
                                              let [e'] = es
                                              return (cs1++cs2, tList t0, ListComp l e' co')
-    infer env (Set l es)                = do t0 <- newTVar
+    infer env (Set l es)                = do t0 <- newUnivar
                                              (cs,es')  <- infElems env es t0
                                              w <- newWitness
                                              return (Impl (DfltInfo l 87 Nothing []) w t0 pHashable : cs, tSet t0, eCall (tApp (eQVar primMkSet) [t0]) [eVar w,Set l es'])
     infer env (SetComp l e co)
       | nodup co                        = do (cs1,env',co') <- infComp env co
-                                             t0 <- newTVar
+                                             t0 <- newUnivar
                                              (cs2,es) <- infElems env' [e] t0
                                              w <- newWitness
                                              let Elem v = head es
                                                  e' = Elem (annot (tHashableW t0) (eVar w) t0 v)
                                              return (Impl (DfltInfo l 89 Nothing []) w t0 pHashable : cs1++cs2, tSet t0, SetComp l e' co')
-    infer env (Dict l as)               = do tk <- newTVar
-                                             tv <- newTVar
+    infer env (Dict l as)               = do tk <- newUnivar
+                                             tv <- newUnivar
                                              (cs,as') <- infAssocs env as tk tv
                                              w <- newWitness
                                              return (Impl (DfltInfo l 88 Nothing []) w tk pHashable : cs, tDict tk tv, eCall (tApp (eQVar primMkDict) [tk, tv]) [eVar w,Dict l as'])
     infer env (DictComp l a co)
       | nodup co                        = do (cs1,env',co') <- infComp env co
-                                             tk <- newTVar
-                                             tv <- newTVar
+                                             tk <- newUnivar
+                                             tv <- newUnivar
                                              (cs2,as) <- infAssocs env' [a] tk tv
                                              w <- newWitness
                                              let Assoc k v = head as
@@ -1454,7 +1454,7 @@ inferCall env unwrap l e ps ks          = do (cs1,t,e') <- infer env e{eloc = l}
                                              (cs1,t,e') <- if unwrap && actorSelf env then wrapped l attrUnwrap env cs1 [t] [e'] else pure (cs1,t,e')
                                              (cs2,prow,ps') <- infer env ps
                                              (cs3,krow,ks') <- infer env ks
-                                             t0 <- newTVar
+                                             t0 <- newUnivar
                                              fx <- currFX
                                              w <- newWitness
                                              let i = case e of
@@ -1469,9 +1469,9 @@ inferCall env unwrap l e ps ks          = do (cs1,t,e') <- infer env e{eloc = l}
 
 
 
-tupleTemplate i                         = do ts <- mapM (const newTVar) [0..i]              -- Handle DotI or RestI...
-                                             p <- newTVarOfKind PRow
-                                             k <- newTVarOfKind KRow
+tupleTemplate i                         = do ts <- mapM (const newUnivar) [0..i]              -- Handle DotI or RestI...
+                                             p <- newUnivarOfKind PRow
+                                             k <- newUnivarOfKind KRow
                                              let p0 = foldl (flip posRow) p ts
                                                  p1 = foldl (flip posRow) p (tail ts)
                                              return (TTuple NoLoc p0 k, head ts, TTuple NoLoc p1 k)
@@ -1481,7 +1481,7 @@ infElems env [] t0                      = return ([], [])
 infElems env (Elem e : es) t0           = do (cs1,e') <- inferSub env t0 e
                                              (cs2,es') <- infElems env es t0
                                              return (cs1++cs2, Elem e' : es')
-infElems env (Star e : es) t0           = do t1 <- newTVar
+infElems env (Star e : es) t0           = do t1 <- newUnivar
                                              (cs1,e') <- inferSub env t1 e
                                              (cs2,es') <- infElems env es t0
                                              w <- newWitness
@@ -1495,7 +1495,7 @@ infAssocs env (Assoc k v : as) tk tv    = do (cs1,k') <- inferSub env tk k
                                              (cs3,as') <- infAssocs env as tk tv
 --                                             return (cs1++cs2++cs3, Elem (eTuple [k',v']) : as')
                                              return (cs1++cs2++cs3, Assoc k' v' : as')
-infAssocs env (StarStar e : as) tk tv   = do t1 <- newTVar
+infAssocs env (StarStar e : as) tk tv   = do t1 <- newUnivar
                                              (cs1,e') <- inferSub env t1 e
                                              (cs2,as') <- infAssocs env as tk tv
                                              w <- newWitness
@@ -1506,14 +1506,14 @@ infAssocs env (StarStar e : as) tk tv   = do t1 <- newTVar
 
 inferTest env (BinOp l e1 And e2)       = do (cs1,env1,s1,t1,e1') <- inferTest env e1
                                              (cs2,env2,s2,t2,e2') <- inferTest env1 e2
-                                             t <- newTVar
+                                             t <- newUnivar
                                              w1 <- newWitness
                                              w2 <- newWitness
                                              return (Sub (DfltInfo l 91 (Just e1) []) w1 t1 t : Sub (DfltInfo l 92 (Just e2) []) w2 t2 t :
                                                      cs1++cs2, env2, s1++s2, t, BinOp l (eCall (eVar w1) [e1']) And (eCall (eVar w2) [termsubst s1 e2']))
 inferTest env (BinOp l e1 Or e2)        = do (cs1,_,_,t1,e1') <- inferTest env e1
                                              (cs2,_,_,t2,e2') <- inferTest env e2
-                                             t <- newTVar
+                                             t <- newUnivar
                                              w1 <- newWitness
                                              w2 <- newWitness
                                              return (Sub (DfltInfo (loc e1) 93 (Just e1) []) w1 t1 (tOpt t) : Sub (DfltInfo (loc e1) 94 (Just e2) []) w2 t2 t :
@@ -1521,7 +1521,7 @@ inferTest env (BinOp l e1 Or e2)        = do (cs1,_,_,t1,e1') <- inferTest env e
 inferTest env (UnOp l Not e)            = do (cs,_,_,_,e') <- inferTest env e
                                              return (cs, env, [], tBool, UnOp l Not e')
 inferTest env (CompOp l e [OpArg IsNot None{}])
-                                        = do t <- newTVar
+                                        = do t <- newUnivar
                                              (cs1,e1) <- inferSub env (tOpt t) e
                                              let e' = eCall (tApp (eQVar primISNOTNONE) [t]) [e1]
                                              case e of
@@ -1530,15 +1530,15 @@ inferTest env (CompOp l e [OpArg IsNot None{}])
                                                _ ->
                                                  return (cs1, env, [], tBool, e')
 inferTest env (CompOp l e [OpArg Is None{}])
-                                        = do t <- newTVar
+                                        = do t <- newUnivar
                                              (cs1,e') <- inferSub env (tOpt t) e
                                              return (cs1, env, [], tBool, eCall (tApp (eQVar primISNONE) [t]) [e'])
 {-
 inferTest env (CompOp l e1 [OpArg op e2])
-  | Just n <- isNotNone e1 op e2        = do t <- newTVar
+  | Just n <- isNotNone e1 op e2        = do t <- newUnivar
                                              (cs1,e') <- inferSub env (tOpt t) (eVar n)
                                              return (cs1, define [(n,NVar t)] env, sCast n (tOpt t) t, tBool, eCall (tApp (eQVar primISNOTNONE) [t]) [e'])
-  | Just n <- isNone e1 op e2           = do t <- newTVar
+  | Just n <- isNone e1 op e2           = do t <- newUnivar
                                              (cs1,e') <- inferSub env (tOpt t) (eVar n)
                                              return (cs1, env, [], tBool, eCall (tApp (eQVar primISNONE) [t]) [e'])
 -}
@@ -1546,7 +1546,7 @@ inferTest env (IsInstance l e@(Var _ (NoQ n)) c)
                                         = case findQName c env of
                                              NClass q _ _ _ -> do
                                                 (cs,t,e') <- infer env e
-                                                ts <- newTVars [ tvkind v | v <- qbound q ]
+                                                ts <- newUnivars [ tvkind v | v <- qbound q ]
                                                 let tc = tCon (TC c ts)
                                                 return (cs, define [(n,NVar tc)] env, sCast n t tc, tBool, IsInstance l e' c)
                                              _ -> nameUnexpected c
@@ -1592,41 +1592,41 @@ instance InferSub (Maybe Expr) where
 
 
 instance (Infer a) => Infer (Maybe a) where
-    infer env Nothing                   = do t <- newTVar
+    infer env Nothing                   = do t <- newUnivar
                                              return ([], t, Nothing)
     infer env (Just x)                  = do (cs,t,e') <- infer env x
                                              return (cs, t, Just e')
 
 instance InfEnv PosPar where
-    infEnv env (PosPar n a Nothing p)   = do t <- maybe newTVar return a
+    infEnv env (PosPar n a Nothing p)   = do t <- maybe newUnivar return a
                                              wellformed env t
                                              let t' = t -- {tloc = loc n}
                                              (cs,te,p') <- infEnv (define [(n, NVar t')] env) p
                                              return (cs, (n, NVar t'):te, PosPar n (Just t') Nothing p')
-    infEnv env (PosPar n a (Just e) p)  = do t <- maybe newTVar return a
+    infEnv env (PosPar n a (Just e) p)  = do t <- maybe newUnivar return a
                                              wellformed env t
                                              (cs1,e') <- inferSub env t e
                                              (cs2,te,p') <- infEnv (define [(n, NVar t)] env) p
                                              return (cs1++cs2, (n, NVar t):te, PosPar n (Just t) (Just e') p')
-    infEnv env (PosSTAR n a)            = do t <- maybe newTVar return a
+    infEnv env (PosSTAR n a)            = do t <- maybe newUnivar return a
                                              wellformed env t
-                                             r <- newTVarOfKind PRow
+                                             r <- newUnivarOfKind PRow
                                              return ([Cast (DfltInfo (loc n) 97 Nothing []) t (tTupleP r)], [(n, NVar t)], PosSTAR n (Just $ tTupleP r))
     infEnv env PosNIL                   = return ([], [], PosNIL)
 
 instance InfEnv KwdPar where
-    infEnv env (KwdPar n a Nothing k)   = do t <- maybe newTVar return a
+    infEnv env (KwdPar n a Nothing k)   = do t <- maybe newUnivar return a
                                              wellformed env t
                                              (cs,te,k') <- infEnv (define [(n, NVar t)] env) k
                                              return (cs, (n, NVar t):te, KwdPar n (Just t) Nothing k')
-    infEnv env (KwdPar n a (Just e) k)  = do t <- maybe newTVar return a
+    infEnv env (KwdPar n a (Just e) k)  = do t <- maybe newUnivar return a
                                              wellformed env t
                                              (cs1,e') <- inferSub env t e
                                              (cs2,te,k') <- infEnv (define [(n, NVar t)] env) k
                                              return (cs1++cs2, (n, NVar t):te, KwdPar n (Just t) (Just e') k')
-    infEnv env (KwdSTAR n a)            = do t <- maybe newTVar return a
+    infEnv env (KwdSTAR n a)            = do t <- maybe newUnivar return a
                                              wellformed env t
-                                             r <- newTVarOfKind KRow
+                                             r <- newUnivarOfKind KRow
                                              return ([Cast (DfltInfo (loc n) 98 Nothing []) t (tTupleK r)], [(n, NVar t)], KwdSTAR n (Just $ tTupleK r))
     infEnv env KwdNIL                   = return ([], [], KwdNIL)
 
@@ -1636,7 +1636,7 @@ instance Infer PosArg where
     infer env (PosArg e p)              = do (cs1,t,e') <- infer env e
                                              (cs2,prow,p') <- infer env p
                                              return (cs1++cs2, posRow t prow, PosArg e' p')
-    infer env (PosStar e)               = do prow <- newTVarOfKind PRow
+    infer env (PosStar e)               = do prow <- newUnivarOfKind PRow
                                              (cs,e') <- inferSub env (tTupleP prow) e
                                              return (cs, posStar prow, PosStar e')
     infer env PosNil                    = return ([], posNil, PosNil)
@@ -1645,7 +1645,7 @@ instance Infer KwdArg where
     infer env (KwdArg n e k)            = do (cs1,t,e') <- infer env e
                                              (cs2,krow,k') <- infer env k
                                              return (cs1++cs2, kwdRow n t krow, KwdArg n e' k')
-    infer env (KwdStar e)               = do krow <- newTVarOfKind KRow
+    infer env (KwdStar e)               = do krow <- newUnivarOfKind KRow
                                              (cs,e') <- inferSub env (tTupleK krow) e
                                              return (cs, kwdStar krow, KwdStar e')
     infer env KwdNil                    = return ([], kwdNil, KwdNil)
@@ -1656,7 +1656,7 @@ infComp env (CompIf l e c)              = do (cs1,env1,s,_,e') <- inferTest env 
                                              (cs2,env2,c') <- infComp env1 c
                                              return (cs1++cs2, env2, CompIf l e' (termsubst s c'))
 infComp env (CompFor l p e c)           = do (cs1,te1,t1,p') <- infEnvT (reserve (bound p) env) p
-                                             t2 <- newTVar
+                                             t2 <- newUnivar
                                              (cs2,e') <- inferSub env t2 e
                                              (cs3,env',c') <- infComp (define te1 env) c
                                              w <- newWitness
@@ -1668,7 +1668,7 @@ instance InfEnvT PosPat where
                                              (cs2,te2,r,ps') <- infEnvT env ps
                                              return (cs1++cs2, te1++te2, posRow t r, PosPat p' ps')
     infEnvT env (PosPatStar p)          = do (cs,te,t,p') <- infEnvT env p
-                                             r <- newTVarOfKind PRow
+                                             r <- newUnivarOfKind PRow
                                              return (Cast (DfltInfo (loc p) 102 Nothing []) t (tTupleP r) :
                                                      cs, te, posStar r, PosPatStar p')
     infEnvT env PosPatNil               = return ([], [], posNil, PosPatNil)
@@ -1679,7 +1679,7 @@ instance InfEnvT KwdPat where
                                              (cs2,te2,r,ps') <- infEnvT env ps
                                              return (cs1++cs2, te1++te2, kwdRow n t r, KwdPat n p' ps')
     infEnvT env (KwdPatStar p)          = do (cs,te,t,p') <- infEnvT env p
-                                             r <- newTVarOfKind KRow
+                                             r <- newUnivarOfKind KRow
                                              return (Cast (DfltInfo (loc p) 103 Nothing []) t (tTupleK r) :
                                                      cs, te, kwdStar r, KwdPatStar p')
     infEnvT env KwdPatNil               = return ([], [], kwdNil, KwdPatNil)
@@ -1687,10 +1687,10 @@ instance InfEnvT KwdPat where
 
 
 instance InfEnvT Pattern where
-    infEnvT env (PWild l a)             = do t <- maybe newTVar return a
+    infEnvT env (PWild l a)             = do t <- maybe newUnivar return a
                                              wellformed env t
                                              return ([], [], t, PWild l (Just t))
-    infEnvT env (PVar l n a)            = do t <- maybe newTVar return a
+    infEnvT env (PVar l n a)            = do t <- maybe newUnivar return a
                                              checkSelfInActor env (Just n) Nothing Nothing
                                              wellformed env t
                                              case findName n env of
@@ -1728,7 +1728,7 @@ instance InfEnvT Pattern where
 
 
 instance InfEnvT (Maybe Pattern) where
-    infEnvT env Nothing                 = do t <- newTVar
+    infEnvT env Nothing                 = do t <- newUnivar
                                              return ([], [], t, Nothing)
     infEnvT env (Just p)                = do (cs,te,t,p') <- infEnvT env p
                                              return (cs, te, t, Just p')

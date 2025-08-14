@@ -187,6 +187,117 @@ instance VSubst KwdPar where
     vsubst s (KwdSTAR n t)          = KwdSTAR n (vsubst s t)
     vsubst s KwdNIL                 = KwdNIL
 
+instance VSubst Decl where
+    vsubst s (Def l n q p k a ss de fx doc)   = Def l n (vsubst s q) (vsubst s p) (vsubst s k) (vsubst s a) (vsubst s ss) de (vsubst s fx) doc
+    vsubst s (Actor l n q p k ss doc)         = Actor l n (vsubst s q) (vsubst s p) (vsubst s k) (vsubst s ss) doc
+    vsubst s (Class l n q bs ss doc)          = Class l n (vsubst s q) (vsubst s bs) (vsubst s ss) doc
+    vsubst s (Protocol l n q bs ss doc)       = Protocol l n (vsubst s q) (vsubst s bs) (vsubst s ss) doc
+    vsubst s (Extension l q c bs ss doc)      = Extension l (vsubst s q) (vsubst s c) (vsubst s bs) (vsubst s ss) doc
+
+instance VSubst Stmt where
+    vsubst s (Expr l e)             = Expr l (vsubst s e)
+    vsubst s (Assign l ps e)        = Assign l (vsubst s ps) (vsubst s e)
+    vsubst s (MutAssign l t e)      = MutAssign l (vsubst s t) (vsubst s e)
+    vsubst s (AugAssign l t op e)   = AugAssign l (vsubst s t) op (vsubst s e)
+    vsubst s (Assert l e mbe)       = Assert l (vsubst s e) (vsubst s mbe)
+    vsubst s (Delete l t)           = Delete l (vsubst s t)
+    vsubst s (Return l mbe)         = Return l (vsubst s mbe)
+    vsubst s (Raise l e)            = Raise l (vsubst s e)
+    vsubst s (If l bs els)          = If l (vsubst s bs) (vsubst s els)
+    vsubst s (While l e b els)      = While l (vsubst s e) (vsubst s b) (vsubst s els)
+    vsubst s (For l p e b els)      = For l (vsubst s p) (vsubst s e) (vsubst s b) (vsubst s els)
+    vsubst s (Try l b hs els fin)   = Try l (vsubst s b) (vsubst s hs) (vsubst s els) (vsubst s fin)
+    vsubst s (With l is b)          = With l (vsubst s is) (vsubst s b)
+    vsubst s (VarAssign l ps e)     = VarAssign l (vsubst s ps) (vsubst s e)
+    vsubst s (After l e e')         = After l (vsubst s e) (vsubst s e')
+    vsubst s (Decl l ds)            = Decl l (vsubst s ds)
+    vsubst s (Signature l ns tsc d) = Signature l ns (vsubst s tsc) d
+    vsubst s stmt                   = stmt
+
+instance VSubst Expr where
+    vsubst s (Call l e p k)         = Call l (vsubst s e) (vsubst s p) (vsubst s k)
+    vsubst s (TApp l e ts)          = TApp l (vsubst s e) (vsubst s ts)
+    vsubst s (Async l e)            = Async l (vsubst s e)
+    vsubst s (Await l e)            = Await l (vsubst s e)
+    vsubst s (Index l e ix)         = Index l (vsubst s e) (vsubst s ix)
+    vsubst s (Slice l e sl)         = Slice l (vsubst s e) (vsubst s sl)
+    vsubst s (Cond l e1 cond e2)    = Cond l (vsubst s e1) (vsubst s cond) (vsubst s e2)
+    vsubst s (IsInstance l e c)     = IsInstance l (vsubst s e) c
+    vsubst s (BinOp l e1 op e2)     = BinOp l (vsubst s e1) op (vsubst s e2)
+    vsubst s (CompOp l e ops)       = CompOp l (vsubst s e) (vsubst s ops)
+    vsubst s (UnOp l op e)          = UnOp l op (vsubst s e)
+    vsubst s (Dot l e n)            = Dot l (vsubst s e) n
+    vsubst s (Rest l e n)           = Rest l (vsubst s e) n
+    vsubst s (DotI l e i)           = DotI l (vsubst s e) i
+    vsubst s (RestI l e i)          = RestI l (vsubst s e) i
+    vsubst s (Lambda l p k e fx)    = Lambda l (vsubst s p) (vsubst s k) (vsubst s e) (vsubst s fx)
+    vsubst s (Yield l e)            = Yield l (vsubst s e)
+    vsubst s (YieldFrom l e)        = YieldFrom l (vsubst s e)
+    vsubst s (Tuple l p k)          = Tuple l (vsubst s p) (vsubst s k)
+    vsubst s (List l es)            = List l (vsubst s es)
+    vsubst s (ListComp l e c)       = ListComp l (vsubst s e) (vsubst s c)
+    vsubst s (Dict l as)            = Dict l (vsubst s as)
+    vsubst s (DictComp l a c)       = DictComp l (vsubst s a) (vsubst s c)
+    vsubst s (Set l es)             = Set l (vsubst s es)
+    vsubst s (SetComp l e c)        = SetComp l (vsubst s e) (vsubst s c)
+    vsubst s (Paren l e)            = Paren l (vsubst s e)
+    vsubst s e                      = e
+
+instance VSubst Branch where
+    vsubst s (Branch e b)           = Branch (vsubst s e) (vsubst s b)
+
+instance VSubst Pattern where
+    vsubst s (PWild l t)            = PWild l (vsubst s t)
+    vsubst s (PVar l n t)           = PVar l n (vsubst s t)
+    vsubst s (PParen l p)           = PParen l (vsubst s p)
+    vsubst s (PTuple l p k)         = PTuple l (vsubst s p) (vsubst s k)
+    vsubst s (PList l ps p)         = PList l (vsubst s ps) (vsubst s p)
+    
+instance VSubst PosPat where
+    vsubst s (PosPat p pp)          = PosPat (vsubst s p) (vsubst s pp)
+    vsubst s (PosPatStar p)         = PosPatStar (vsubst s p)
+    vsubst s PosPatNil              = PosPatNil
+
+instance VSubst KwdPat where
+    vsubst s (KwdPat n p kp)        = KwdPat n (vsubst s p) (vsubst s kp)
+    vsubst s (KwdPatStar p)         = KwdPatStar (vsubst s p)
+    vsubst s KwdPatNil              = KwdPatNil
+
+instance VSubst Handler where
+    vsubst s (Handler ex b)         = Handler ex (vsubst s b)
+
+instance VSubst WithItem where
+    vsubst s (WithItem e p)         = WithItem (vsubst s e) (vsubst s p)
+    
+instance VSubst PosArg where
+    vsubst s (PosArg e p)           = PosArg (vsubst s e) (vsubst s p)
+    vsubst s (PosStar e)            = PosStar (vsubst s e)
+    vsubst s PosNil                 = PosNil
+
+instance VSubst KwdArg where
+    vsubst s (KwdArg n e k)         = KwdArg n (vsubst s e) (vsubst s k)
+    vsubst s (KwdStar e)            = KwdStar (vsubst s e)
+    vsubst s KwdNil                 = KwdNil
+
+instance VSubst Assoc where
+    vsubst s (Assoc k v)            = Assoc (vsubst s k) (vsubst s v)
+    vsubst s (StarStar e)           = StarStar (vsubst s e)
+
+instance VSubst Elem where
+    vsubst s (Elem e)               = Elem (vsubst s e)
+    vsubst s (Star e)               = Star (vsubst s e)
+
+instance VSubst Comp where
+    vsubst s (CompFor l p e c)      = CompFor l (vsubst s p) (vsubst s e) (vsubst s c)
+    vsubst s (CompIf l e c)         = CompIf l (vsubst s e) (vsubst s c)
+    vsubst s NoComp                 = NoComp
+
+instance VSubst Sliz where
+    vsubst s (Sliz l e1 e2 e3)      = Sliz l (vsubst s e1) (vsubst s e2) (vsubst s e3)
+
+instance VSubst OpArg where
+    vsubst s (OpArg op e)           = OpArg op (vsubst s e)
+
 
 -- UFree ----------------------------------------------------------------------------------------------
 
@@ -513,21 +624,6 @@ instance USubst Sliz where
 
 instance USubst OpArg where
     usubst (OpArg op e)             = OpArg op <$> usubst e
-
-
--- !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subst                               :: USubst a => Substitution -> a -> a
-subst s x0
-  | null clash                      = runTypeM' s (usubst x0)
-  | otherwise                       = x2
-  where x1                          = runTypeM' s0 (usubst x0)
-        x2                          = runTypeM' s1 (usubst x1)
-        s0                          = [ (v, vsubst (clash `zip` map tVar tmp) t) | (v,t) <- s ]
-        s1                          = tmp `zip` map tVar clash
-        clash                       = dom s `intersect` ufree (rng s)
-        used                        = dom s ++ ufree (rng s)                             
-        tmp                         = take (length clash) $ map (TV KWild) tmpNames \\ used
--- !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 
 -- Polarity -------------------------------------------------------------------------------------------

@@ -92,18 +92,18 @@ newWitness                              = Internal Witness "" <$> newUnique
 
 newTmp                                  = Internal Tempvar "" <$> newUnique
 
-newTVarOfKind k                         = TVar NoLoc <$> TV k <$> Internal Typevar (str k) <$> newUnique
+newUnivarOfKind k                       = TVar NoLoc <$> TV k <$> Internal Typevar (str k) <$> newUnique
   where str KType                       = ""
         str KFX                         = "x"
         str PRow                        = "p"
         str KRow                        = "k"
         str _                           = ""
 
-newTVarToken n                          = TVar NoLoc $ TV KWild $ Internal Typevar "z" n
+newUnivarToken n                        = TVar NoLoc $ TV KWild $ Internal Typevar "z" n
 
-newTVars ks                             = mapM newTVarOfKind ks
+newUnivars ks                           = mapM newUnivarOfKind ks
 
-newTVar                                 = newTVarOfKind KType
+newUnivar                               = newUnivarOfKind KType
 
 -- Type errors ---------------------------------------------------------------------------------------------------------------------
 
