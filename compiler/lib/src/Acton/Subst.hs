@@ -310,8 +310,7 @@ instance USubst TSchema where
     usubst (TSchema l q t)          = TSchema l <$> usubst q <*> usubst t
 
 instance UFree TSchema where
-    ufree (TSchema _ [] t)          = ufree t
-    ufree (TSchema _ q t)           = (ufree q ++ ufree t) \\ qbound q          -- Remove \\ !
+    ufree (TSchema _ q t)           = ufree q ++ ufree t
 
 
 schematic (TCon _ tc)               = tCon (schematic' tc)
@@ -378,8 +377,7 @@ instance USubst Type where
 instance UFree Type where
     ufree (TVar _ v)
       | univar v                    = [v]
---      | otherwise                   = []
-      | otherwise                   = [v]
+      | otherwise                   = []
     ufree (TCon _ c)                = ufree c
     ufree (TFun _ fx p k t)         = ufree fx ++ ufree p ++ ufree k ++ ufree t
     ufree (TTuple _ p k)            = ufree p ++ ufree k
