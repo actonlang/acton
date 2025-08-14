@@ -560,8 +560,8 @@ findWitness env t p
                                 w:u | force        -> {-trace (" # best forced: " ++ prstrs (w:u)) $ -}[w]
                                 _   | force        -> {-trace (" # first forced: " ++ prstr (head all_ws)) $ -}[head all_ws]
                                     | otherwise    -> {-trace (" # all") $ -}all_ws
-  where t_                  = wild t                    -- matching against wild t also accepts witnesses that would instantiate t
-        p_                  = wild p                    -- matching against wild p also accepts witnesses that would instantiate p
+  where t_                  = uwild t                   -- matching against uwild t also accepts witnesses that would instantiate t
+        p_                  = uwild p                   -- matching against uwild p also accepts witnesses that would instantiate p
         force               = isForced env
         t'                  = if force then t_ else t   -- allow instantiation only when in forced mode
         elimSelf wc         = wc{ proto = vsubst [(tvSelf,wtype wc)] (proto wc) }
@@ -589,8 +589,8 @@ hasWitness env t p          =  not $ null $ findWitness env t p
 
 allExtProto                 :: Env -> Type -> PCon -> [Type]
 allExtProto env t p         = reverse [ schematic (wtype w) | w <- witsByPName env (tcname p), matchCoarse t_ p_ w ]
-  where t_                  = wild t                    -- matching against wild t also accepts witnesses that would instantiate t
-        p_                  = wild p                    -- matching against wild p also accepts witnesses that would instantiate p
+  where t_                  = uwild t                   -- matching against uwild t also accepts witnesses that would instantiate t
+        p_                  = uwild p                   -- matching against uwild p also accepts witnesses that would instantiate p
 
 allExtProtoAttr             :: Env -> Name -> [Type]
 allExtProtoAttr env n       = [ tCon tc | tc <- allCons env, any ((n `elem`) . allAttrs' env . proto) (witsByTName env $ tcname tc) ]
@@ -743,22 +743,17 @@ simpInfo env info                           = case info of
                                               --   SelInfo l1 l2 n t msg -> SelInfo l1 l2 n (simp env t) msg
                                                  _ -> info
 
-noRed0 env c                                = do c <- usubst c
-                                                 c <- wildify c
+noRed0 env c                                = do c <- uwild <$> usubst c
                                                  noRed (c{info = simpInfo env (info c)})
 
-noSolve0 env mbt vs cs                      = do mbt <- usubst mbt
-                                                 cs <- usubst cs
-                                                 mbt <- wildify mbt
-                                                 cs <- wildify cs
+noSolve0 env mbt vs cs                      = do mbt <- uwild <$> usubst mbt
+                                                 cs <- uwild <$> usubst cs
                                                  noSolve mbt vs $ map (\c -> c{info = simpInfo env (info c)}) cs
 
-posElemNotFound0 env b c n                  = do c <- usubst c
-                                                 c <- wildify c
+posElemNotFound0 env b c n                  = do c <- uwild <$> usubst c
                                                  posElemNotFound b (c{info = simpInfo env (info c)}) n
 
-kwdNotFound0 env info n                     = do i <- usubst info
-                                                 i <- wildify i
+kwdNotFound0 env info n                     = do i <- uwild <$> usubst info
                                                  kwdNotFound (simpInfo env i) n
 
 castPos env info p1 p2 k1 k2                = (do cast env info p1 p2; return k1) `catchError` handler
