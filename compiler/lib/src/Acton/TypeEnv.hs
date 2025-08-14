@@ -132,7 +132,7 @@ instantiate env (TSchema _ q t)
                                  return (cs, tvs, vsubst s t)
 
 instQBinds                  :: EnvF x -> QBinds -> TypeM (Constraints, [Type])
-instQBinds env q            = do ts <- newTVars [ tvkind v | Quant v _ <- q ]
+instQBinds env q            = do ts <- newUnivars [ tvkind v | Quant v _ <- q ]
                                  cs <- instQuals env q ts
                                  return (cs, ts)
 

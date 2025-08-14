@@ -181,7 +181,7 @@ llSuite env (Decl l ds : ss)
   | ctxt env == InDef                   = do ns <- zip fs <$> mapM (newName . nstr) (bound ds)
                                              let env1 = extNames ns env'
                                              ds1 <- ll env1 ds
-                                             liftToTop (subst (selfSubst env) ds1)
+                                             liftToTop (vsubst (selfSubst env) ds1)
                                              llSuite env1 ss
   | ctxt env == InClass                 = do ds' <- ll env1 ds
                                              ss' <- llSuite env1 ss
@@ -262,7 +262,7 @@ closureConvert env lambda t0 vts0 es    = do n <- newName (nstr $ noq basename)
                                              return $ eCall (tApp (eVar n) (map tVar $ tvarScope env)) es
   where q                               = quantScope env
         s                               = selfSubst env
-        Lambda _ p _ e fx               = subst s lambda
+        Lambda _ p _ e fx               = vsubst s lambda
         t1                              = vsubst s t0
         cBase                           = conv $ closureCon fx (prowOf p) t1
         basename                        = tcname cBase

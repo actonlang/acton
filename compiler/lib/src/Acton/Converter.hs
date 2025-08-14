@@ -213,7 +213,6 @@ selfKW'                                 = Internal Witness "self" 0
 thisKW'                                 = Internal Witness "this" 0
 
 convSelf t0 t                           = vsubst [(tvSelf, t0)] t
-convSelf' t0 x                          = subst [(tvSelf, t0)] x
 
 convStmts t0 eq stmts                   = map conv stmts
   where conv (Signature l ns sc Static) = Signature l ns (convSelf t0 sc) NoDec
@@ -224,7 +223,7 @@ convStmts t0 eq stmts                   = map conv stmts
         convT (TFun l fx p k t)         = TFun l fx (posRow (tVar tvSelf) p) k t
         convT t                         = t
         convD (Def l n q p k t b _ x ddoc)
-                                        = Def l n (convSelf t0 q) (wit2par [(selfKW',tSelf)] $ convSelf' t0 p) (convSelf' t0 k) (convSelf t0 t) b' NoDec x ddoc
+                                        = Def l n (convSelf t0 q) (wit2par [(selfKW',tSelf)] $ convSelf t0 p) (convSelf t0 k) (convSelf t0 t) b' NoDec x ddoc
           where b'                      = bindWits eq ++ b
         convD d                         = d
 

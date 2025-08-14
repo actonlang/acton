@@ -72,14 +72,14 @@ groupCs env cs                              = do st <- currentState
                                                  return $ Map.elems m
   where mark (n,c)                          = do tvs <- (filter univar . ufree) <$> usubst c
                                                  tvs' <- (filter univar . ufree) <$> usubst (map tVar $ attrfree c)
-                                                 sequence [ unify (DfltInfo NoLoc 1 Nothing []) (newTVarToken n) (tVar tv) | tv <- nub (tvs++tvs') ]
+                                                 sequence [ unify (DfltInfo NoLoc 1 Nothing []) (newUnivarToken n) (tVar tv) | tv <- nub (tvs++tvs') ]
         group m c                           = do tvs <- (filter univar . ufree) <$> usubst c
                                                  let tv = case tvs of [] -> tv0; tv:_ -> tv
                                                  return $ Map.insertWith (++) tv [c] m
         attrfree c@(Sel _ _ _ n _)          = allConAttrFree env n
         attrfree c@(Mut _ _ n _)            = allConAttrFree env n
         attrfree _                          = []
-        TVar _ tv0                          = newTVarToken 0
+        TVar _ tv0                          = newUnivarToken 0
 
 
 ----------------------------------------------------------------------------------------------------------------------
@@ -854,7 +854,7 @@ rowTail r                                   = r
 
 varTails                                    = all (isTVar . rowTail)
 
-rowShape (TRow _ k n t r)                   = do t' <- newTVar
+rowShape (TRow _ k n t r)                   = do t' <- newUnivar
                                                  r' <- rowShape r
                                                  return (tRow k n t' r')
 rowShape (TStar _ k r)                      = do r' <- rowShape r
@@ -931,13 +931,13 @@ subkwd env info f seen r1 (TVar _ tv)       = do unif f seen r1
                                                  unif f (seen\\[n]) r
           | tv `elem` ufree r              = conflictingRow tv                     -- use rowTail?
           | otherwise                       = do --traceM (" ## subkwd Row - Var: " ++ prstr (tRow KRow n t r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr tv)
-                                                 t2 <- newTVar
-                                                 r2 <- tRow KRow n t2 <$> newTVarOfKind KRow
+                                                 t2 <- newUnivar
+                                                 r2 <- tRow KRow n t2 <$> newUnivarOfKind KRow
                                                  unify info (tVar tv) r2
         unif f seen (TStar _ _ r)
           | tv `elem` ufree r              = conflictingRow tv                     -- use rowTail?
           | otherwise                       = do --traceM (" ## subkwd Star - Var: " ++ prstr (tStar KRow r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr tv)
-                                                 r2 <- tStar KRow <$> newTVarOfKind KRow
+                                                 r2 <- tStar KRow <$> newUnivarOfKind KRow
                                                  unify info (tVar tv) r2
         unif f seen TNil{}                  = do --traceM (" ## subkwd Nil - Var: " ++ prstr (tNil KRow) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr tv)
                                                  r2 <- pure $ tNil KRow
@@ -952,7 +952,7 @@ subkwd env info f seen r1 (TRow _ _ n2 t2 r2)
   where pick f seen (TVar _ tv)
           | tv `elem` ufree r2             = conflictingRow tv                     -- use rowTail?
           | otherwise                       = do --traceM (" ## subkwd Var - Row: " ++ prstr (tVar tv) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tRow KRow n2 t2 r2))
-                                                 r1 <- tRow KRow n2 t2 <$> newTVarOfKind KRow
+                                                 r1 <- tRow KRow n2 t2 <$> newUnivarOfKind KRow
                                                  unify info (tVar tv) r1
                                                  pick f seen r1
         pick f seen (TRow _ _ n t r)
@@ -974,7 +974,7 @@ subkwd env info f seen r1 (TStar _ _ r2)    = do (cs,e) <- match f seen r1
   where match f seen (TVar _ tv)
           | tv `elem` ufree r2             = conflictingRow tv                     -- use rowTail?
           | otherwise                       = do --traceM (" ## subkwd Var - Star: " ++ prstr (tVar tv) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tStar KRow r2))
-                                                 r1 <- tStar KRow <$> newTVarOfKind KRow
+                                                 r1 <- tStar KRow <$> newUnivarOfKind KRow
                                                  unify info (tVar tv) r1
                                                  match f seen r1
         match f seen r1@(TRow _ _ n t r)
@@ -1325,7 +1325,7 @@ gsimp vi cl obs ((x,y):xys)
         x_obs                           = x `elem` obs
         y_obs                           = y `elem` obs
 
-instwild env k (TWild _)                = newTVarOfKind k
+instwild env k (TWild _)                = newUnivarOfKind k
 instwild env _ (TFun l e p k t)         = TFun l <$> instwild env KFX e <*> instwild env PRow p <*> instwild env KRow k <*> instwild env KType t
 instwild env _ (TTuple l p k)           = TTuple l <$> instwild env PRow p <*> instwild env KRow k
 instwild env _ (TOpt l t)               = TOpt l <$> instwild env KType t

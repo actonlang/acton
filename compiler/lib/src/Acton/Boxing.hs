@@ -413,7 +413,7 @@ instance Boxing Decl where
     boxing env (Class l n q cs ss ddoc)
                                     = do (ws1, ss1) <- boxing env1 ss'
                                          return (ws1, Class l n q cs ss1 ddoc)
-        where ss'                   = subst [(tvSelf, tCon c)] ss
+        where ss'                   = vsubst [(tvSelf, tCon c)] ss
               c                     = TC (NoQ n) (map tVar $ qbound q)
               env1                  = defineTVars q env
     boxing env (Def l n q p KwdNIL t ss dec fx ddoc)
