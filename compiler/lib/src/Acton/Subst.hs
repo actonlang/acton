@@ -73,7 +73,8 @@ closeDepVarsQ vs q
 
 qualbound q                         = [ v | Quant v ps <- q, not $ null ps ]
 
--------------------------------------------------------------------------------------------------------
+
+-- VFree ----------------------------------------------------------------------------------------------
 
 class VFree a where
     vfree                           :: a -> [TVar]
@@ -127,10 +128,10 @@ instance VFree Constraint where
     vfree (Seal info t)             = vfree t
 
 
+-- VSubst ---------------------------------------------------------------------------------------------
 
 class VSubst a where
     vsubst                          :: Substitution -> a -> a
-
 
 instance VSubst a => VSubst [a] where
     vsubst s                        = map $ vsubst s
@@ -187,104 +188,22 @@ instance VSubst KwdPar where
     vsubst s KwdNIL                 = KwdNIL
 
 
-subst                               :: USubst a => Substitution -> a -> a
-subst s x0
-  | null clash                      = runTypeM' s (usubst x0)
-  | otherwise                       = x2
-  where x1                          = runTypeM' s0 (usubst x0)
-        x2                          = runTypeM' s1 (usubst x1)
-        s0                          = [ (v, vsubst (clash `zip` map tVar tmp) t) | (v,t) <- s ]
-        s1                          = tmp `zip` map tVar clash
-        clash                       = dom s `intersect` ufree (rng s)
-        used                        = dom s ++ ufree (rng s)                             
-        tmp                         = take (length clash) $ map (TV KWild) tmpNames \\ used
-
-
--------------------------------------------------------------------------------------------------------
-class UWild a where
-    uwild                           :: a -> a
-
-instance UWild a => UWild [a] where
-    uwild                           = map uwild
-
-instance UWild a => UWild (Maybe a) where
-    uwild                           = fmap uwild
-
-instance UWild TCon where
-    uwild (TC n ts)                 = TC n (uwild ts)
-
-instance UWild Type where
-    uwild (TVar l v) | univar v     = tWild
-    uwild (TCon l c)                = TCon l (uwild c)
-    uwild (TFun l fx p k t)         = TFun l fx (uwild p) (uwild k) (uwild t)
-    uwild (TTuple l p k)            = TTuple l (uwild p) (uwild k)
-    uwild (TOpt l t)                = TOpt l (uwild t)
-    uwild (TRow l k n t r)          = TRow l k n (uwild t) (uwild r)
-    uwild (TStar l k r)             = TStar l k (uwild r)
-    uwild t                         = t
-
-instance UWild TSchema where
-    uwild (TSchema l q t)           = TSchema l (uwild q) (uwild t)
-
-instance UWild QBind where
-    uwild (Quant v cs)              = Quant v (uwild cs)
-
-instance UWild Constraint where
-    uwild (Cast info t1 t2)         = Cast (uwild info) (uwild t1) (uwild t2)
-    uwild (Sub info w t1 t2)        = Sub (uwild info) w (uwild t1) (uwild t2)
-    uwild (Impl info w t p)         = Impl (uwild info) w (uwild t) (uwild p)
-    uwild (Sel info w t1 n t2)      = Sel (uwild info) w (uwild t1) n (uwild t2)
-    uwild (Mut info t1 n t2)        = Mut (uwild info) (uwild t1) n (uwild t2)
-    uwild (Seal info t)             = Seal (uwild info) (uwild t)
-
-instance UWild ErrInfo where
-    uwild (DfltInfo l n mbe ts)     = DfltInfo l n mbe (uwild ts)
-    uwild (DeclInfo l1 l2 n t msg)  = DeclInfo l1 l2 n (uwild t) msg
-    uwild info                      = info
-
-instance (UWild a, UWild b) => UWild (QName,a,b) where
-    uwild (n, t, u)                 = (n, uwild t, uwild u)
-
-
--------------------------------------------------------------------------------------------------------
-
-class USubst t where
-    usubst                          :: t -> TypeM t
+-- UFree ----------------------------------------------------------------------------------------------
 
 class UFree t where
     ufree                           :: t -> [TUni]
 
-instance USubst a => USubst (Name,a) where
-    usubst (n, t)                   = (,) <$> return n <*> usubst t
-
 instance UFree a => UFree (Name,a) where
     ufree (n, t)                    = ufree t
-
-instance (USubst a, USubst b) => USubst (QName,a,b) where
-    usubst (n, t, u)                = (,,) <$> return n <*> usubst t <*> usubst u
 
 instance (UFree a, UFree b) => UFree (QName,a,b) where
     ufree (n, t, u)                 = ufree t ++ ufree u
 
-instance USubst a => USubst [a] where
-    usubst                          = mapM usubst
-
 instance UFree a => UFree [a] where
     ufree                           = concat . map ufree
 
-instance USubst a => USubst (Maybe a) where
-    usubst                          = maybe (return Nothing) (\x -> Just <$> usubst x)
-
 instance UFree a => UFree (Maybe a) where
     ufree                           = maybe [] ufree
-
-instance USubst Constraint where
-    usubst (Cast info t1 t2)        = Cast <$> usubst info <*> usubst t1 <*> usubst t2
-    usubst (Sub info w t1 t2)       = Sub <$> usubst info <*> return w <*> usubst t1 <*> usubst t2
-    usubst (Impl info w t p)        = Impl <$> usubst info <*> return w <*>usubst t <*> usubst p
-    usubst (Sel info w t1 n t2)     = Sel <$> usubst info <*> return w <*>usubst t1 <*> return n <*> usubst t2
-    usubst (Mut info t1 n t2)       = Mut <$> usubst info <*> usubst t1 <*> return n <*> usubst t2
-    usubst (Seal info t)            = Seal <$> usubst info <*> usubst t
 
 instance UFree Constraint where
     ufree (Cast info t1 t2)         = ufree info ++ ufree t1 ++ ufree t2
@@ -294,85 +213,22 @@ instance UFree Constraint where
     ufree (Mut info t1 n t2)        = ufree info ++ ufree t1 ++ ufree t2
     ufree (Seal info t)             = ufree info ++ ufree t
 
-
-instance USubst ErrInfo where
-    usubst (DfltInfo l n mbe ts)    = DfltInfo l n <$> usubst mbe <*> usubst ts
-    usubst (DeclInfo l1 l2 n t msg) = DeclInfo l1 l2 n <$> usubst t <*> return msg
-    usubst info                     = return info
-    
 instance UFree ErrInfo where
     ufree (DfltInfo l n mbe ts)     = ufree mbe ++ ufree ts
     ufree (DeclInfo l1 l2 n t msg)  = ufree t
     ufree _                         = []
     
-instance USubst TSchema where
-    usubst (TSchema l [] t)         = TSchema l [] <$> usubst t
-    usubst (TSchema l q t)          = TSchema l <$> usubst q <*> usubst t
-
 instance UFree TSchema where
     ufree (TSchema _ q t)           = ufree q ++ ufree t
-
-
-schematic (TCon _ tc)               = tCon (schematic' tc)
-schematic (TFun _ _ _ _ _)          = tFun tWild tWild tWild tWild
-schematic (TTuple _ _ _)            = tTuple tWild tWild
-schematic (TOpt _ _)                = tOpt tWild
-schematic (TRow _ k n _ r)          = tRow k n tWild (schematic r)
-schematic (TStar _ k _)             = tStar k tWild
-schematic t                         = t
-
-schematic' (TC n ts)                = TC n [ tWild | _ <- ts ]
-
-wild t                              = uwild t
-
-wildify                             :: (UWild a) => a -> TypeM a
-wildify a                           = return (uwild a)
-
-wildargs i                          = [ tWild | _ <- nbinds i ]
-  where
-    nbinds (NAct q _ _ _ _)         = q
-    nbinds (NClass q _ _ _)         = q
-    nbinds (NProto q _ _ _)         = q
-    nbinds (NExt q _ _ _ _)         = q
-            
-
-
-instance USubst TVar where
-    usubst v                        = do t <- usubst (TVar NoLoc v)
-                                         case t of
-                                            TVar _ v' -> return v'
-                                            _         -> return v
 
 instance UFree TVar where
     ufree v                         = [v]
         
-instance USubst TCon where
-    usubst (TC n ts)                = TC n <$> usubst ts
-
 instance UFree TCon where
     ufree (TC n ts)                 = ufree ts
 
-instance USubst QBind where
-    usubst (Quant v cs)             = Quant <$> usubst v <*> usubst cs
-
 instance UFree QBind where
     ufree (Quant v cs)              = ufree cs
-
-instance USubst Type where
-    usubst (TVar l v)               = do s <- usubstitution
-                                         case Map.lookup v s of
-                                            Just t ->  usubst t
-                                            Nothing -> return (TVar l v)
-    usubst (TCon l c)               = TCon l <$> usubst c
-    usubst (TFun l fx p k t)        = TFun l <$> usubst fx <*> usubst p <*> usubst k <*> usubst t
-    usubst (TTuple l p k)           = TTuple l <$> usubst p <*> usubst k
-    usubst (TOpt l t)               = TOpt l <$> usubst t
-    usubst (TNone l)                = return $ TNone l
-    usubst (TWild l)                = return $ TWild l
-    usubst (TNil l s)               = return $ TNil l s
-    usubst (TRow l k n t r)         = TRow l k n <$> usubst t <*> usubst r
-    usubst (TStar l k r)            = TStar l k <$> usubst r
-    usubst (TFX l fx)               = return $ TFX l fx
 
 instance UFree Type where
     ufree (TVar _ v)
@@ -389,109 +245,15 @@ instance UFree Type where
     ufree (TStar _ _ r)             = ufree r
     ufree (TFX l fx)                = []
 
-
-instance USubst PosPar where
-    usubst (PosPar n t e p)         = PosPar n <$> usubst t <*> usubst e <*> usubst p
-    usubst (PosSTAR n t)            = PosSTAR n <$> usubst t
-    usubst PosNIL                   = return PosNIL
-
 instance UFree PosPar where
     ufree (PosPar n t e p)          = ufree t ++ ufree p
     ufree (PosSTAR n t)             = ufree t
     ufree PosNIL                    = []
 
-instance USubst KwdPar where
-    usubst (KwdPar n t e p)         = KwdPar n <$> usubst t <*> usubst e <*> usubst p
-    usubst (KwdSTAR n t)            = KwdSTAR n <$> usubst t
-    usubst KwdNIL                   = return KwdNIL
-
 instance UFree KwdPar where
     ufree (KwdPar n t e p)          = ufree t ++ ufree p
     ufree (KwdSTAR n t)             = ufree t
     ufree KwdNIL                    = []
-
-instance USubst Decl where
-    usubst (Def l n q p k a ss de fx doc)   = Def l n <$> usubst q <*> usubst p <*> usubst k <*> usubst a <*> usubst ss <*> return de <*> usubst fx <*> return doc
-    usubst (Actor l n q p k ss doc)         = Actor l n <$> usubst q <*> usubst p <*> usubst k <*> usubst ss <*> return doc
-    usubst (Class l n q bs ss doc)          = Class l n <$> usubst q <*> usubst bs <*> usubst ss <*> return doc
-    usubst (Protocol l n q bs ss doc)       = Protocol l n <$> usubst q <*> usubst bs <*> usubst ss <*> return doc
-    usubst (Extension l q c bs ss doc)      = Extension l <$> usubst q <*> usubst c <*> usubst bs <*> usubst ss <*> return doc
-{-
-instance UFree Decl where
-    ufree (Protocol l n q ps b _)     = nub (ufree q ++ ufree ps ++ ufree b)
-    ufree (Class l n q ps b _)        = nub (ufree q ++ ufree ps ++ ufree b)
-    ufree (Extension l q c ps b _)    = nub (ufree q ++ ufree c ++ ufree ps ++ ufree b)
-    ufree (Def l n q p k t b d x _)   = nub (ufree q ++ ufree p ++ ufree k ++ ufree b ++ ufree t ++ ufree x)
-    ufree (Actor l n q p k b _)       = nub (ufree q ++ ufree p ++ ufree k ++ ufree b)
--}
-instance USubst Stmt where
-    usubst (Expr l e)               = Expr l <$> usubst e
-    usubst (Assign l ps e)          = Assign l <$> usubst ps <*> usubst e
-    usubst (MutAssign l t e)        = MutAssign l <$> usubst t <*> usubst e
-    usubst (AugAssign l t op e)     = AugAssign l <$> usubst t <*> return op <*> usubst e
-    usubst (Assert l e mbe)         = Assert l <$> usubst e <*> usubst mbe
-    usubst (Delete l t)             = Delete l <$> usubst t
-    usubst (Return l mbe)           = Return l <$> usubst mbe
-    usubst (Raise l e)              = Raise l <$> usubst e
-    usubst (If l bs els)            = If l <$> usubst bs <*> usubst els
-    usubst (While l e b els)        = While l <$> usubst e <*> usubst b <*> usubst els
-    usubst (For l p e b els)        = For l <$> usubst p <*> usubst e <*> usubst b <*> usubst els
-    usubst (Try l b hs els fin)     = Try l <$> usubst b <*> usubst hs <*> usubst els <*> usubst fin
-    usubst (With l is b)            = With l <$> usubst is <*> usubst b
-    usubst (VarAssign l ps e)       = VarAssign l <$> usubst ps <*> usubst e
-    usubst (After l e e')           = After l <$> usubst e <*> usubst e'
-    usubst (Decl l ds)              = Decl l <$> usubst ds
-    usubst (Signature l ns tsc d)   = Signature l ns <$> usubst tsc <*> return d
-    usubst s                        = return s
-{-
-instance UFree Stmt where
-    ufree (Expr l e)                = ufree e
-    ufree (Assign l ps e)           = ufree ps ++ ufree e
-    ufree (MutAssign l t e)         = ufree t ++ ufree e
-    ufree (AugAssign l t op e)      = ufree t ++ ufree e
-    ufree (Assert l e mbe)          = ufree mbe
-    ufree (Delete l t)              = ufree t
-    ufree (Return l mbe)            = ufree mbe
-    ufree (Raise l e)               = ufree e
-    ufree (If l bs els)             = ufree bs ++ ufree els
-    ufree (While l e b els)         = ufree e ++ ufree b ++ ufree els
-    ufree (For l p e b els)         = ufree p ++ ufree e ++ ufree b ++ ufree els
-    ufree (Try l b hs els fin)      = ufree b ++ ufree hs ++ ufree els ++ ufree fin
-    ufree (With l is b)             = ufree is ++ ufree b
-    ufree (VarAssign l ps e)        = ufree ps ++ ufree e
-    ufree (After l e e')            = ufree e ++ ufree e'
-    ufree (Decl l ds)               = ufree ds
-    ufree (Signature l ns tsc d)    = ufree tsc
-    ufree s                         = []
--}
-instance USubst Expr where
-    usubst (Call l e p k)           = Call l <$> usubst e <*> usubst p <*> usubst k
-    usubst (TApp l e ts)            = TApp l <$> usubst e <*> usubst ts
-    usubst (Async l e)              = Async l <$> usubst e
-    usubst (Await l e)              = Await l <$> usubst e
-    usubst (Index l e ix)           = Index l <$> usubst e <*> usubst ix
-    usubst (Slice l e sl)           = Slice l <$> usubst e <*> usubst sl
-    usubst (Cond l e1 cond e2)      = Cond l <$> usubst e1 <*> usubst cond <*> usubst e2
-    usubst (IsInstance l e c)       = IsInstance l <$> usubst e <*> return c
-    usubst (BinOp l e1 op e2)       = BinOp l <$> usubst e1 <*> return op <*> usubst e2
-    usubst (CompOp l e ops)         = CompOp l <$> usubst e <*> usubst ops
-    usubst (UnOp l op e)            = UnOp l op <$> usubst e
-    usubst (Dot l e n)              = Dot l <$> usubst e <*> return n
-    usubst (Rest l e n)             = Rest l <$> usubst e <*> return n
-    usubst (DotI l e i)             = DotI l <$> usubst e <*> return i
-    usubst (RestI l e i)            = RestI l <$> usubst e <*> return i
-    usubst (Lambda l p k e fx)      = Lambda l <$> usubst p <*> usubst k <*> usubst e <*> usubst fx
-    usubst (Yield l e)              = Yield l <$> usubst e
-    usubst (YieldFrom l e)          = YieldFrom l <$> usubst e
-    usubst (Tuple l p k)            = Tuple l <$> usubst p <*> usubst k
-    usubst (List l es)              = List l <$> usubst es
-    usubst (ListComp l e c)         = ListComp l <$> usubst e <*> usubst c
-    usubst (Dict l as)              = Dict l <$> usubst as
-    usubst (DictComp l a c)         = DictComp l <$> usubst a <*> usubst c
-    usubst (Set l es)               = Set l <$> usubst es
-    usubst (SetComp l e c)          = SetComp l <$> usubst e <*> usubst c
-    usubst (Paren l e)              = Paren l <$> usubst e
-    usubst e                        = return e
 
 instance UFree Expr where
     ufree (Call l e p k)            = ufree e ++ ufree p ++ ufree k
@@ -522,19 +284,6 @@ instance UFree Expr where
     ufree (Paren l e)               = ufree e
     ufree e                         = []
 
-instance USubst Branch where
-    usubst (Branch e b)             = Branch <$> usubst e <*> usubst b
-{-    
-instance UFree Branch where
-    ufree (Branch e b)              = ufree e ++ ufree b
--}
-instance USubst Pattern where
-    usubst (PWild l t)              = PWild l <$> usubst t
-    usubst (PVar l n t)             = PVar l n <$> usubst t
-    usubst (PParen l p)             = PParen l <$> usubst p
-    usubst (PTuple l p k)           = PTuple l <$> usubst p <*> usubst k
-    usubst (PList l ps p)           = PList l <$> usubst ps <*> usubst p
-    
 instance UFree Pattern where
     ufree (PWild _ t)               = ufree t
     ufree (PVar _ n t)              = ufree t
@@ -542,96 +291,246 @@ instance UFree Pattern where
     ufree (PTuple _ p k)            = ufree p ++ ufree k
     ufree (PList _ ps p)            = ufree ps ++ ufree p
 
-instance USubst PosPat where
-    usubst (PosPat p pp)            = PosPat <$> usubst p <*> usubst pp
-    usubst (PosPatStar p)           = PosPatStar <$> usubst p
-    usubst PosPatNil                = return PosPatNil
-
 instance UFree PosPat where
     ufree (PosPat p pp)             = ufree p ++ ufree pp
     ufree (PosPatStar p)            = ufree p
     ufree PosPatNil                 = []
-
-instance USubst KwdPat where
-    usubst (KwdPat n p kp)          = KwdPat n <$> usubst p <*> usubst kp
-    usubst (KwdPatStar p)           = KwdPatStar <$> usubst p
-    usubst KwdPatNil                = return KwdPatNil
 
 instance UFree KwdPat where
     ufree (KwdPat n p kp)           = ufree p ++ ufree kp
     ufree (KwdPatStar p)            = ufree p
     ufree KwdPatNil                 = []
 
-instance USubst Handler where
-    usubst (Handler ex b)           = Handler ex <$> usubst b
-{-
-instance UFree Handler where
-    ufree (Handler ex b)            = ufree b
--}
-instance USubst WithItem where
-    usubst (WithItem e p)           = WithItem <$> usubst e <*> usubst p
-    
-instance UFree WithItem where
-    ufree (WithItem e p)            = ufree e ++ ufree p
-
-instance USubst PosArg where
-    usubst (PosArg e p)             = PosArg <$> usubst e <*> usubst p
-    usubst (PosStar e)              = PosStar <$> usubst e
-    usubst PosNil                   = return PosNil
-
 instance UFree PosArg where
     ufree (PosArg e p)              = ufree e ++ ufree p
     ufree (PosStar e)               = ufree e
     ufree PosNil                    = []
-
-instance USubst KwdArg where
-    usubst (KwdArg n e k)           = KwdArg n <$> usubst e <*> usubst k
-    usubst (KwdStar e)              = KwdStar <$> usubst e
-    usubst KwdNil                   = return KwdNil
 
 instance UFree KwdArg where
     ufree (KwdArg n e k)            = ufree e ++ ufree k
     ufree (KwdStar e)               = ufree e
     ufree KwdNil                    = []
 
-instance USubst Sliz where
-    usubst (Sliz l e1 e2 e3)        = Sliz l <$> usubst e1 <*> usubst e2 <*> usubst e3
+instance UFree Elem where
+    ufree (Elem e)                  = ufree e
+    ufree (Star e)                  = ufree e
+
+instance UFree Assoc where
+    ufree (Assoc k v)               = ufree k ++ ufree v
+    ufree (StarStar e)              = ufree e
+
+instance UFree Comp where
+    ufree (CompFor _ p e c)         = ufree p ++ ufree e ++ ufree c
+    ufree (CompIf _ e c)            = ufree e ++ ufree c
+    ufree NoComp                    = []
 
 instance UFree Sliz where
     ufree (Sliz _ e1 e2 e3)         = ufree e1 ++ ufree e2 ++ ufree e3
 
-
-instance USubst OpArg where
-    usubst (OpArg op e)             = OpArg op <$> usubst e
-
 instance UFree OpArg where
     ufree (OpArg op e)              = ufree e
 
-instance USubst Elem where
-    usubst (Elem e)                 = Elem <$> usubst e
-    usubst (Star e)                 = Star <$> usubst e
 
-instance UFree Elem where
-    ufree (Elem e)                  = ufree e
-    ufree (Star e)                  = ufree e
+-- USubst ---------------------------------------------------------------------------------------------
+
+class USubst t where
+    usubst                          :: t -> TypeM t
+
+instance USubst a => USubst (Name,a) where
+    usubst (n, t)                   = (,) <$> return n <*> usubst t
+
+instance (USubst a, USubst b) => USubst (QName,a,b) where
+    usubst (n, t, u)                = (,,) <$> return n <*> usubst t <*> usubst u
+
+instance USubst a => USubst [a] where
+    usubst                          = mapM usubst
+
+instance USubst a => USubst (Maybe a) where
+    usubst                          = maybe (return Nothing) (\x -> Just <$> usubst x)
+
+instance USubst Constraint where
+    usubst (Cast info t1 t2)        = Cast <$> usubst info <*> usubst t1 <*> usubst t2
+    usubst (Sub info w t1 t2)       = Sub <$> usubst info <*> return w <*> usubst t1 <*> usubst t2
+    usubst (Impl info w t p)        = Impl <$> usubst info <*> return w <*>usubst t <*> usubst p
+    usubst (Sel info w t1 n t2)     = Sel <$> usubst info <*> return w <*>usubst t1 <*> return n <*> usubst t2
+    usubst (Mut info t1 n t2)       = Mut <$> usubst info <*> usubst t1 <*> return n <*> usubst t2
+    usubst (Seal info t)            = Seal <$> usubst info <*> usubst t
+
+instance USubst ErrInfo where
+    usubst (DfltInfo l n mbe ts)    = DfltInfo l n <$> usubst mbe <*> usubst ts
+    usubst (DeclInfo l1 l2 n t msg) = DeclInfo l1 l2 n <$> usubst t <*> return msg
+    usubst info                     = return info
+    
+instance USubst TSchema where
+    usubst (TSchema l [] t)         = TSchema l [] <$> usubst t
+    usubst (TSchema l q t)          = TSchema l <$> usubst q <*> usubst t
+
+instance USubst TVar where
+    usubst v                        = do t <- usubst (TVar NoLoc v)
+                                         case t of
+                                            TVar _ v' -> return v'
+                                            _         -> return v
+
+instance USubst TCon where
+    usubst (TC n ts)                = TC n <$> usubst ts
+
+instance USubst QBind where
+    usubst (Quant v cs)             = Quant <$> usubst v <*> usubst cs
+
+instance USubst Type where
+    usubst (TVar l v)               = do s <- usubstitution
+                                         case Map.lookup v s of
+                                            Just t ->  usubst t
+                                            Nothing -> return (TVar l v)
+    usubst (TCon l c)               = TCon l <$> usubst c
+    usubst (TFun l fx p k t)        = TFun l <$> usubst fx <*> usubst p <*> usubst k <*> usubst t
+    usubst (TTuple l p k)           = TTuple l <$> usubst p <*> usubst k
+    usubst (TOpt l t)               = TOpt l <$> usubst t
+    usubst (TNone l)                = return $ TNone l
+    usubst (TWild l)                = return $ TWild l
+    usubst (TNil l s)               = return $ TNil l s
+    usubst (TRow l k n t r)         = TRow l k n <$> usubst t <*> usubst r
+    usubst (TStar l k r)            = TStar l k <$> usubst r
+    usubst (TFX l fx)               = return $ TFX l fx
+
+instance USubst PosPar where
+    usubst (PosPar n t e p)         = PosPar n <$> usubst t <*> usubst e <*> usubst p
+    usubst (PosSTAR n t)            = PosSTAR n <$> usubst t
+    usubst PosNIL                   = return PosNIL
+
+instance USubst KwdPar where
+    usubst (KwdPar n t e p)         = KwdPar n <$> usubst t <*> usubst e <*> usubst p
+    usubst (KwdSTAR n t)            = KwdSTAR n <$> usubst t
+    usubst KwdNIL                   = return KwdNIL
+
+instance USubst Decl where
+    usubst (Def l n q p k a ss de fx doc)   = Def l n <$> usubst q <*> usubst p <*> usubst k <*> usubst a <*> usubst ss <*> return de <*> usubst fx <*> return doc
+    usubst (Actor l n q p k ss doc)         = Actor l n <$> usubst q <*> usubst p <*> usubst k <*> usubst ss <*> return doc
+    usubst (Class l n q bs ss doc)          = Class l n <$> usubst q <*> usubst bs <*> usubst ss <*> return doc
+    usubst (Protocol l n q bs ss doc)       = Protocol l n <$> usubst q <*> usubst bs <*> usubst ss <*> return doc
+    usubst (Extension l q c bs ss doc)      = Extension l <$> usubst q <*> usubst c <*> usubst bs <*> usubst ss <*> return doc
+
+instance USubst Stmt where
+    usubst (Expr l e)               = Expr l <$> usubst e
+    usubst (Assign l ps e)          = Assign l <$> usubst ps <*> usubst e
+    usubst (MutAssign l t e)        = MutAssign l <$> usubst t <*> usubst e
+    usubst (AugAssign l t op e)     = AugAssign l <$> usubst t <*> return op <*> usubst e
+    usubst (Assert l e mbe)         = Assert l <$> usubst e <*> usubst mbe
+    usubst (Delete l t)             = Delete l <$> usubst t
+    usubst (Return l mbe)           = Return l <$> usubst mbe
+    usubst (Raise l e)              = Raise l <$> usubst e
+    usubst (If l bs els)            = If l <$> usubst bs <*> usubst els
+    usubst (While l e b els)        = While l <$> usubst e <*> usubst b <*> usubst els
+    usubst (For l p e b els)        = For l <$> usubst p <*> usubst e <*> usubst b <*> usubst els
+    usubst (Try l b hs els fin)     = Try l <$> usubst b <*> usubst hs <*> usubst els <*> usubst fin
+    usubst (With l is b)            = With l <$> usubst is <*> usubst b
+    usubst (VarAssign l ps e)       = VarAssign l <$> usubst ps <*> usubst e
+    usubst (After l e e')           = After l <$> usubst e <*> usubst e'
+    usubst (Decl l ds)              = Decl l <$> usubst ds
+    usubst (Signature l ns tsc d)   = Signature l ns <$> usubst tsc <*> return d
+    usubst s                        = return s
+
+instance USubst Expr where
+    usubst (Call l e p k)           = Call l <$> usubst e <*> usubst p <*> usubst k
+    usubst (TApp l e ts)            = TApp l <$> usubst e <*> usubst ts
+    usubst (Async l e)              = Async l <$> usubst e
+    usubst (Await l e)              = Await l <$> usubst e
+    usubst (Index l e ix)           = Index l <$> usubst e <*> usubst ix
+    usubst (Slice l e sl)           = Slice l <$> usubst e <*> usubst sl
+    usubst (Cond l e1 cond e2)      = Cond l <$> usubst e1 <*> usubst cond <*> usubst e2
+    usubst (IsInstance l e c)       = IsInstance l <$> usubst e <*> return c
+    usubst (BinOp l e1 op e2)       = BinOp l <$> usubst e1 <*> return op <*> usubst e2
+    usubst (CompOp l e ops)         = CompOp l <$> usubst e <*> usubst ops
+    usubst (UnOp l op e)            = UnOp l op <$> usubst e
+    usubst (Dot l e n)              = Dot l <$> usubst e <*> return n
+    usubst (Rest l e n)             = Rest l <$> usubst e <*> return n
+    usubst (DotI l e i)             = DotI l <$> usubst e <*> return i
+    usubst (RestI l e i)            = RestI l <$> usubst e <*> return i
+    usubst (Lambda l p k e fx)      = Lambda l <$> usubst p <*> usubst k <*> usubst e <*> usubst fx
+    usubst (Yield l e)              = Yield l <$> usubst e
+    usubst (YieldFrom l e)          = YieldFrom l <$> usubst e
+    usubst (Tuple l p k)            = Tuple l <$> usubst p <*> usubst k
+    usubst (List l es)              = List l <$> usubst es
+    usubst (ListComp l e c)         = ListComp l <$> usubst e <*> usubst c
+    usubst (Dict l as)              = Dict l <$> usubst as
+    usubst (DictComp l a c)         = DictComp l <$> usubst a <*> usubst c
+    usubst (Set l es)               = Set l <$> usubst es
+    usubst (SetComp l e c)          = SetComp l <$> usubst e <*> usubst c
+    usubst (Paren l e)              = Paren l <$> usubst e
+    usubst e                        = return e
+
+instance USubst Branch where
+    usubst (Branch e b)             = Branch <$> usubst e <*> usubst b
+
+instance USubst Pattern where
+    usubst (PWild l t)              = PWild l <$> usubst t
+    usubst (PVar l n t)             = PVar l n <$> usubst t
+    usubst (PParen l p)             = PParen l <$> usubst p
+    usubst (PTuple l p k)           = PTuple l <$> usubst p <*> usubst k
+    usubst (PList l ps p)           = PList l <$> usubst ps <*> usubst p
+    
+instance USubst PosPat where
+    usubst (PosPat p pp)            = PosPat <$> usubst p <*> usubst pp
+    usubst (PosPatStar p)           = PosPatStar <$> usubst p
+    usubst PosPatNil                = return PosPatNil
+
+instance USubst KwdPat where
+    usubst (KwdPat n p kp)          = KwdPat n <$> usubst p <*> usubst kp
+    usubst (KwdPatStar p)           = KwdPatStar <$> usubst p
+    usubst KwdPatNil                = return KwdPatNil
+
+instance USubst Handler where
+    usubst (Handler ex b)           = Handler ex <$> usubst b
+
+instance USubst WithItem where
+    usubst (WithItem e p)           = WithItem <$> usubst e <*> usubst p
+    
+instance USubst PosArg where
+    usubst (PosArg e p)             = PosArg <$> usubst e <*> usubst p
+    usubst (PosStar e)              = PosStar <$> usubst e
+    usubst PosNil                   = return PosNil
+
+instance USubst KwdArg where
+    usubst (KwdArg n e k)           = KwdArg n <$> usubst e <*> usubst k
+    usubst (KwdStar e)              = KwdStar <$> usubst e
+    usubst KwdNil                   = return KwdNil
 
 instance USubst Assoc where
     usubst (Assoc k v)              = Assoc <$> usubst k <*> usubst v
     usubst (StarStar e)             = StarStar <$> usubst e
 
-instance UFree Assoc where
-    ufree (Assoc k v)               = ufree k ++ ufree v
-    ufree (StarStar e)              = ufree e
+instance USubst Elem where
+    usubst (Elem e)                 = Elem <$> usubst e
+    usubst (Star e)                 = Star <$> usubst e
 
 instance USubst Comp where
     usubst (CompFor l p e c)        = CompFor l <$> usubst p <*> usubst e <*> usubst c
     usubst (CompIf l e c)           = CompIf l <$> usubst e <*> usubst c
     usubst NoComp                   = return NoComp
 
-instance UFree Comp where
-    ufree (CompFor _ p e c)         = ufree p ++ ufree e ++ ufree c
-    ufree (CompIf _ e c)            = ufree e ++ ufree c
-    ufree NoComp                    = []
+instance USubst Sliz where
+    usubst (Sliz l e1 e2 e3)        = Sliz l <$> usubst e1 <*> usubst e2 <*> usubst e3
+
+instance USubst OpArg where
+    usubst (OpArg op e)             = OpArg op <$> usubst e
+
+
+-- !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subst                               :: USubst a => Substitution -> a -> a
+subst s x0
+  | null clash                      = runTypeM' s (usubst x0)
+  | otherwise                       = x2
+  where x1                          = runTypeM' s0 (usubst x0)
+        x2                          = runTypeM' s1 (usubst x1)
+        s0                          = [ (v, vsubst (clash `zip` map tVar tmp) t) | (v,t) <- s ]
+        s1                          = tmp `zip` map tVar clash
+        clash                       = dom s `intersect` ufree (rng s)
+        used                        = dom s ++ ufree (rng s)                             
+        tmp                         = take (length clash) $ map (TV KWild) tmpNames \\ used
+-- !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+-- Polarity -------------------------------------------------------------------------------------------
 
 class (USubst a, UFree a) => Polarity a where
     polvars                         :: a -> ([TUni],[TUni])
@@ -699,8 +598,10 @@ negself (TStar _ _ r)               = negself r
 negself _                           = False
 
 
--- Find free univars of kind PRow or KRow (for the purpose of defaulting them to TNil)
+-- Tailvars -------------------------------------------------------------------------------------------
+
 class (UFree a) => Tailvars a where
+    -- Find free univars of kind PRow or KRow (for the purpose of defaulting them to TNil)
     tailvars                        :: a -> [TUni]
 
 instance Tailvars Type where
@@ -740,3 +641,68 @@ instance Tailvars Constraint where
     tailvars (Sel _ w t1 n t2)      = tailvars t1 ++ tailvars t2
     tailvars (Mut _ t1 n t2)        = tailvars t1 ++ tailvars t2
     tailvars (Seal _ t)             = tailvars t
+
+
+-- Misc. ---------------------------------------------------------------------------------------------
+
+schematic (TCon _ tc)               = tCon (schematic' tc)
+schematic (TFun _ _ _ _ _)          = tFun tWild tWild tWild tWild
+schematic (TTuple _ _ _)            = tTuple tWild tWild
+schematic (TOpt _ _)                = tOpt tWild
+schematic (TRow _ k n _ r)          = tRow k n tWild (schematic r)
+schematic (TStar _ k _)             = tStar k tWild
+schematic t                         = t
+
+schematic' (TC n ts)                = TC n [ tWild | _ <- ts ]
+
+wildargs i                          = [ tWild | _ <- nbinds i ]
+  where
+    nbinds (NAct q _ _ _ _)         = q
+    nbinds (NClass q _ _ _)         = q
+    nbinds (NProto q _ _ _)         = q
+    nbinds (NExt q _ _ _ _)         = q
+
+
+class UWild a where
+    uwild                           :: a -> a
+
+instance UWild a => UWild [a] where
+    uwild                           = map uwild
+
+instance UWild a => UWild (Maybe a) where
+    uwild                           = fmap uwild
+
+instance UWild TCon where
+    uwild (TC n ts)                 = TC n (uwild ts)
+
+instance UWild Type where
+    uwild (TVar l v) | univar v     = tWild
+    uwild (TCon l c)                = TCon l (uwild c)
+    uwild (TFun l fx p k t)         = TFun l fx (uwild p) (uwild k) (uwild t)
+    uwild (TTuple l p k)            = TTuple l (uwild p) (uwild k)
+    uwild (TOpt l t)                = TOpt l (uwild t)
+    uwild (TRow l k n t r)          = TRow l k n (uwild t) (uwild r)
+    uwild (TStar l k r)             = TStar l k (uwild r)
+    uwild t                         = t
+
+instance UWild TSchema where
+    uwild (TSchema l q t)           = TSchema l (uwild q) (uwild t)
+
+instance UWild QBind where
+    uwild (Quant v cs)              = Quant v (uwild cs)
+
+instance UWild Constraint where
+    uwild (Cast info t1 t2)         = Cast (uwild info) (uwild t1) (uwild t2)
+    uwild (Sub info w t1 t2)        = Sub (uwild info) w (uwild t1) (uwild t2)
+    uwild (Impl info w t p)         = Impl (uwild info) w (uwild t) (uwild p)
+    uwild (Sel info w t1 n t2)      = Sel (uwild info) w (uwild t1) n (uwild t2)
+    uwild (Mut info t1 n t2)        = Mut (uwild info) (uwild t1) n (uwild t2)
+    uwild (Seal info t)             = Seal (uwild info) (uwild t)
+
+instance UWild ErrInfo where
+    uwild (DfltInfo l n mbe ts)     = DfltInfo l n mbe (uwild ts)
+    uwild (DeclInfo l1 l2 n t msg)  = DeclInfo l1 l2 n (uwild t) msg
+    uwild info                      = info
+
+instance (UWild a, UWild b) => UWild (QName,a,b) where
+    uwild (n, t, u)                 = (n, uwild t, uwild u)
