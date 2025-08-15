@@ -88,6 +88,14 @@ instance VFree a => VFree (Maybe a) where
 instance VFree a => VFree (Name,a) where
     vfree (n, t)                    = vfree t
 
+instance VFree Constraint where
+    vfree (Cast info t1 t2)         = vfree t1 ++ vfree t2
+    vfree (Sub info w t1 t2)        = vfree t1 ++ vfree t2
+    vfree (Impl info w t p)         = vfree t ++ vfree p
+    vfree (Sel info w t1 n t2)      = vfree t1 ++ vfree t2
+    vfree (Mut info t1 n t2)        = vfree t1 ++ vfree t2
+    vfree (Seal info t)             = vfree t
+
 instance VFree Type where
     vfree (TVar _ v)
       | not (univar v)              = [v]
@@ -119,13 +127,116 @@ instance VFree KwdPar where
     vfree (KwdSTAR n t)             = vfree t
     vfree KwdNIL                    = []
 
-instance VFree Constraint where
-    vfree (Cast info t1 t2)         = vfree t1 ++ vfree t2
-    vfree (Sub info w t1 t2)        = vfree t1 ++ vfree t2
-    vfree (Impl info w t p)         = vfree t ++ vfree p
-    vfree (Sel info w t1 n t2)      = vfree t1 ++ vfree t2
-    vfree (Mut info t1 n t2)        = vfree t1 ++ vfree t2
-    vfree (Seal info t)             = vfree t
+instance VFree Decl where
+    vfree (Def _ n q p k a ss de fx doc) = vfree q ++ vfree p ++ vfree k ++ vfree a ++ vfree ss ++ vfree fx
+    vfree (Actor _ n q p k ss doc)       = vfree q ++ vfree p ++ vfree k ++ vfree ss
+    vfree (Class _ n q bs ss doc)        = vfree q ++ vfree bs ++ vfree ss
+    vfree (Protocol _ n q bs ss doc)     = vfree q ++ vfree bs ++ vfree ss
+    vfree (Extension _ q c bs ss doc)    = vfree q ++ vfree c ++ vfree bs ++ vfree ss
+
+instance VFree Stmt where
+    vfree (Expr _ e)               = vfree e
+    vfree (Assign _ ps e)          = vfree ps ++ vfree e
+    vfree (MutAssign _ t e)        = vfree t ++ vfree e
+    vfree (AugAssign _ t op e)     = vfree t ++ vfree e
+    vfree (Assert _ e mbe)         = vfree e ++ vfree mbe
+    vfree (Delete _ t)             = vfree t
+    vfree (Return _ mbe)           = vfree mbe
+    vfree (Raise _ e)              = vfree e
+    vfree (If _ bs els)            = vfree bs ++ vfree els
+    vfree (While _ e b els)        = vfree e ++ vfree b ++ vfree els
+    vfree (For _ p e b els)        = vfree p ++ vfree e ++ vfree b ++ vfree els
+    vfree (Try _ b hs els fin)     = vfree b ++ vfree hs ++ vfree els ++ vfree fin
+    vfree (With _ is b)            = vfree is ++ vfree b
+    vfree (VarAssign _ ps e)       = vfree ps ++ vfree e
+    vfree (After _ e e')           = vfree e ++ vfree e'
+    vfree (Decl _ ds)              = vfree ds
+    vfree (Signature _ ns tsc d)   = vfree tsc
+    vfree s                        = []
+
+instance VFree Branch where
+    vfree (Branch e b)              = vfree e ++ vfree b
+
+instance VFree Handler where
+    vfree (Handler ex b)            = vfree b
+
+instance VFree WithItem where
+    vfree (WithItem e p)            = vfree e ++ vfree p
+
+instance VFree Expr where
+    vfree (Call l e p k)            = vfree e ++ vfree p ++ vfree k
+    vfree (TApp l e ts)             = vfree e ++ vfree ts
+    vfree (Async l e)               = vfree e
+    vfree (Await l e)               = vfree e
+    vfree (Index l e ix)            = vfree e ++ vfree ix
+    vfree (Slice l e sl)            = vfree e ++ vfree sl
+    vfree (Cond l e1 cond e2)       = vfree e1 ++ vfree cond ++ vfree e2
+    vfree (IsInstance l e c)        = vfree e
+    vfree (BinOp l e1 op e2)        = vfree e1 ++ vfree e2
+    vfree (CompOp l e ops)          = vfree e ++ vfree ops
+    vfree (UnOp l op e)             = vfree e
+    vfree (Dot l e n)               = vfree e
+    vfree (Rest l e n)              = vfree e
+    vfree (DotI l e i)              = vfree e
+    vfree (RestI l e i)             = vfree e
+    vfree (Lambda l p k e fx)       = vfree p ++ vfree k ++ vfree e ++ vfree fx
+    vfree (Yield l e)               = vfree e
+    vfree (YieldFrom l e)           = vfree e
+    vfree (Tuple l p k)             = vfree p ++ vfree k
+    vfree (List l es)               = vfree es
+    vfree (ListComp l e c)          = vfree e ++ vfree c
+    vfree (Dict l as)               = vfree as
+    vfree (DictComp l a c)          = vfree a ++ vfree c
+    vfree (Set l es)                = vfree es
+    vfree (SetComp l e c)           = vfree e ++ vfree c
+    vfree (Paren l e)               = vfree e
+    vfree e                         = []
+
+instance VFree Pattern where
+    vfree (PWild _ t)               = vfree t
+    vfree (PVar _ n t)              = vfree t
+    vfree (PParen _ p)              = vfree p
+    vfree (PTuple _ p k)            = vfree p ++ vfree k
+    vfree (PList _ ps p)            = vfree ps ++ vfree p
+
+instance VFree PosPat where
+    vfree (PosPat p pp)             = vfree p ++ vfree pp
+    vfree (PosPatStar p)            = vfree p
+    vfree PosPatNil                 = []
+
+instance VFree KwdPat where
+    vfree (KwdPat n p kp)           = vfree p ++ vfree kp
+    vfree (KwdPatStar p)            = vfree p
+    vfree KwdPatNil                 = []
+
+instance VFree PosArg where
+    vfree (PosArg e p)              = vfree e ++ vfree p
+    vfree (PosStar e)               = vfree e
+    vfree PosNil                    = []
+
+instance VFree KwdArg where
+    vfree (KwdArg n e k)            = vfree e ++ vfree k
+    vfree (KwdStar e)               = vfree e
+    vfree KwdNil                    = []
+
+instance VFree Elem where
+    vfree (Elem e)                  = vfree e
+    vfree (Star e)                  = vfree e
+
+instance VFree Assoc where
+    vfree (Assoc k v)               = vfree k ++ vfree v
+    vfree (StarStar e)              = vfree e
+
+instance VFree Comp where
+    vfree (CompFor _ p e c)         = vfree p ++ vfree e ++ vfree c
+    vfree (CompIf _ e c)            = vfree e ++ vfree c
+    vfree NoComp                    = []
+
+instance VFree Sliz where
+    vfree (Sliz _ e1 e2 e3)         = vfree e1 ++ vfree e2 ++ vfree e3
+
+instance VFree OpArg where
+    vfree (OpArg op e)              = vfree e
 
 
 -- VSubst ---------------------------------------------------------------------------------------------
@@ -166,13 +277,16 @@ instance VSubst TVar where
                                          _ -> v
 
 instance VSubst TSchema where
-    vsubst s (TSchema l [] t)       = TSchema l [] (vsubst s t)
     vsubst s (TSchema l q t)        = TSchema l (vsubst s' q) (vsubst s' t)
-      where s0                      = s `exclude` qbound q
-            clash                   = nub $ vfree (rng s0) `intersect` qbound q
-            ren                     = clash `zip` map rename clash
-            rename (TV k n)         = tVar $ TV k $ Derived n undefined                    ---------------- <<<<
-            s'                      = ren ++ s0
+      where s'                      = quantsubst s q (vfree t)
+
+quantsubst s [] vs                  = s
+quantsubst s q vs                   = alpha ++ pruned
+  where pruned                      = s `exclude` qbound q
+        new                         = nub $ vfree (rng pruned)
+        clash                       = new `intersect` qbound q
+        alpha                       = clash `zip` map tVar (tvarSupply \\ avoid)
+        avoid                       = new ++ vfree q ++ vs
 
 instance VSubst QBind where
     vsubst s (Quant v ts)           = Quant (vsubst s v) (vsubst s ts)
@@ -188,11 +302,16 @@ instance VSubst KwdPar where
     vsubst s KwdNIL                 = KwdNIL
 
 instance VSubst Decl where
-    vsubst s (Def l n q p k a ss de fx doc)   = Def l n (vsubst s q) (vsubst s p) (vsubst s k) (vsubst s a) (vsubst s ss) de (vsubst s fx) doc
-    vsubst s (Actor l n q p k ss doc)         = Actor l n (vsubst s q) (vsubst s p) (vsubst s k) (vsubst s ss) doc
-    vsubst s (Class l n q bs ss doc)          = Class l n (vsubst s q) (vsubst s bs) (vsubst s ss) doc
-    vsubst s (Protocol l n q bs ss doc)       = Protocol l n (vsubst s q) (vsubst s bs) (vsubst s ss) doc
-    vsubst s (Extension l q c bs ss doc)      = Extension l (vsubst s q) (vsubst s c) (vsubst s bs) (vsubst s ss) doc
+    vsubst s (Def l n q p k a ss de fx doc) = Def l n (vsubst r q) (vsubst r p) (vsubst r k) (vsubst r a) (vsubst r ss) de (vsubst r fx) doc
+      where r                               = quantsubst s q (vfree p ++ vfree k ++ vfree a ++ vfree ss ++ vfree fx)
+    vsubst s (Actor l n q p k ss doc)       = Actor l n (vsubst r q) (vsubst r p) (vsubst r k) (vsubst r ss) doc
+      where r                               = quantsubst s q (vfree p ++ vfree k ++ vfree ss)
+    vsubst s (Class l n q bs ss doc)        = Class l n (vsubst s q) (vsubst s bs) (vsubst s ss) doc
+      where r                               = quantsubst s q (vfree bs ++ vfree ss)
+    vsubst s (Protocol l n q bs ss doc)     = Protocol l n (vsubst s q) (vsubst s bs) (vsubst s ss) doc
+      where r                               = quantsubst s q (vfree bs ++ vfree ss)
+    vsubst s (Extension l q c bs ss doc)    = Extension l (vsubst s q) (vsubst s c) (vsubst s bs) (vsubst s ss) doc
+      where r                               = quantsubst s q (vfree c ++ vfree bs ++ vfree ss)
 
 instance VSubst Stmt where
     vsubst s (Expr l e)             = Expr l (vsubst s e)
