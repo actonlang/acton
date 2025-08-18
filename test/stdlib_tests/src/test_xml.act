@@ -19,7 +19,8 @@ def _test_xml_roundtrip():
         """<a>\n    <b1>hej</b1>\n    <b2>test</b2>\n</a>""",
         """<a xmlns="http://foo"><b>2</b></a>""",
         """<a xmlns:ns="http://foo"><ns:b>2</ns:b></a>""",
-        """<data><l>čaw</l><baw></baw></data>"""
+        """<data><l>čaw</l><baw></baw></data>""",
+        """<a>100 ㏀</a>""",
     ]
     for s in test_xml:
         #print(s)
@@ -61,3 +62,91 @@ def _test_xml_parse_error():
         testing.assertEqual(e.error_message, "Premature end of data in tag a line 1")
     else:
         testing.error("Expected exception on parsing error")
+
+def _test_xml_entity_escaping_roundtrip():
+    """Test roundtrip of already-encoded entities
+
+    In this test case, we first "exercise" libxml2 to decode already encoded
+    entities, then our XML encoder to ensure that special characters (< & ")
+    remain encoded.
+    """
+    roundtrip_cases = [
+        # Entity decoding behavior: &gt; decodes to > and is not re-encoded
+        ('<', "<a>&lt;</a>", "<a>&lt;</a>"),  # &lt; stays encoded
+        ('>', "<a>&gt;</a>", "<a>></a>"),     # &gt; decodes to > (not re-encoded)
+        ('&', "<a>&amp;</a>", "<a>&amp;</a>"), # &amp; stays encoded
+        ('<>&', "<a>&lt;&gt;&amp;</a>", "<a>&lt;>&amp;</a>"),  # Mixed entities
+        ('"', '<a attr="&lt;&gt;&amp;">&quot;</a>', '<a attr="&lt;>&amp;">"</a>'),  # In attributes and text
+    ]
+
+    for char, input_xml, expected_xml in roundtrip_cases:
+        d = xml.decode(input_xml)
+        testing.assertEqual(d.text, char)
+        e = xml.encode(d)
+        testing.assertEqual(e, expected_xml, f"Roundtrip failed for: {input_xml}")
+
+def _test_xml_entity_escaping_text():
+    """Test encoding of raw special characters in text via Node constructor"""
+    node = xml.Node("a", text="< & > text")
+    testing.assertEqual(xml.encode(node), "<a>&lt; &amp; > text</a>", "Text escaping failed")
+
+def _test_xml_entity_escaping_attributes():
+    """Test encoding of raw special characters in attributes"""
+    node = xml.Node("a", attributes=[("attr", '< & > "quotes"')])
+    testing.assertEqual(xml.encode(node), '<a attr="&lt; &amp; > &quot;quotes&quot;"></a>', "Attribute escaping failed")
+
+def _test_xml_entity_escaping_tail():
+    """Test encoding of raw special characters in tail text"""
+    node = xml.Node("a", children=[xml.Node("b", tail=" < & > tail")])
+    testing.assertEqual(xml.encode(node), "<a><b></b> &lt; &amp; > tail</a>", "Tail escaping failed")
+
+def _test_xml_entity_escaping_single_quotes():
+    """Test that single quotes in attributes are not escaped (we quote with double quotes)"""
+    node = xml.Node("a", attributes=[("attr", "it's fine")])
+    testing.assertEqual(xml.encode(node), """<a attr="it's fine"></a>""", "Single quotes should not be escaped")
+
+def _test_xml_entity_escaping_utf8():
+    """Test that encoding leaves UTF-8 multi-byte characters intact"""
+    node = xml.Node("a", text="100 ㏀ < ∞")
+    testing.assertEqual(xml.encode(node), "<a>100 ㏀ &lt; ∞</a>", "Multi-byte UTF-8 char must be intact")
+
+def _test_xml_cdata_simple():
+    """Test simple CDATA in element text"""
+    test_xml = "<data><![CDATA[This is raw text]]></data>"
+    d = xml.decode(test_xml)
+    testing.assertEqual(d.tag, "data", "CDATA: tag mismatch")
+    testing.assertEqual(d.text, "This is raw text", "CDATA: text content mismatch")
+
+def _test_xml_cdata_special_chars():
+    """Test CDATA with special characters that would normally need escaping"""
+    test_xml = "<data><![CDATA[<raw> text & symbols > < ]]></data>"
+    d = xml.decode(test_xml)
+    testing.assertEqual(d.text, "<raw> text & symbols > < ", "CDATA: special chars not preserved")
+
+def _test_xml_cdata_mixed():
+    """Test mixed text and CDATA nodes"""
+    test_xml = "<mixed>Text before<![CDATA[<cdata content>]]>Text after</mixed>"
+    d = xml.decode(test_xml)
+    testing.assertEqual(d.text, "Text before<cdata content>Text after", "CDATA: mixed content failed")
+
+def _test_xml_cdata_multiple():
+    """Test multiple CDATA sections"""
+    test_xml = "<multi><![CDATA[First]]> middle <![CDATA[Second]]></multi>"
+    d = xml.decode(test_xml)
+    testing.assertEqual(d.text, "First middle Second", "CDATA: multiple sections failed")
+
+def _test_xml_cdata_utf8():
+    """Test CDATA with UTF-8 character"""
+    test_xml = "<data>100 <![CDATA[㏀]]></data>"
+    d = xml.decode(test_xml)
+    testing.assertEqual(d.text, "100 ㏀", "CDATA: UTF-8 decode failed")
+
+def _test_xml_cdata_roundtrip():
+    """Test roundtrip - CDATA content should be preserved (though may not be re-encoded as CDATA)"""
+    test_xml = "<data><![CDATA[<special> & chars]]></data>"
+    d = xml.decode(test_xml)
+    e = xml.encode(d)
+    # The content should be preserved, but is entity-encoded instead of CDATA
+    testing.assertEqual(e, "<data>&lt;special> &amp; chars</data>")
+    d2 = xml.decode(e)
+    testing.assertEqual(d2.text, "<special> & chars", "CDATA: roundtrip content not preserved")
