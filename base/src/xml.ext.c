@@ -20,7 +20,7 @@ xmlQ_Node $NodePtr2Node(xmlNodePtr node) {
     }
     if (node->type != XML_ELEMENT_NODE) {
         char *errmsg = NULL;
-        $RAISE(((B_BaseException)B_RuntimeErrorG_new($FORMAT("Unexpected nodetype %d, content is %s", node->type, node->content))));
+        RAISE(xmlQ_XmlParseError, $FORMAT("Unexpected nodetype %d, content is %s", node->type, node->content), NULL, NULL);
     }
 
     B_list nsdefs = B_listG_new(NULL, NULL);
@@ -74,7 +74,17 @@ xmlQ_Node xmlQ_decode(B_str data) {
     if (!doc) {
         xmlErrorPtr err = xmlGetLastError();
         B_str errmsg;
+        B_int line = NULL;
+        B_int column = NULL;
+
         if (err && err->message) {
+            if (err->line > 0) {
+                line = to$int(err->line);
+            }
+            if (err->int2 > 0) {  // int2 contains the column in libxml2
+                column = to$int(err->int2);
+            }
+
             // Strip trailing whitespace from error message if needed
             int orig_len = strlen(err->message);
             int len = orig_len;
@@ -87,15 +97,15 @@ xmlQ_Node xmlQ_decode(B_str data) {
                 char msg_clean[len + 1];
                 strncpy(msg_clean, err->message, len);
                 msg_clean[len] = '\0';
-                errmsg = $FORMAT("XML parse error: %s", msg_clean);
+                errmsg = to$str(msg_clean);
             } else {
                 // Use original message as-is
-                errmsg = $FORMAT("XML parse error: %s", err->message);
+                errmsg = to$str(err->message);
             }
         } else {
             errmsg = to$str("XML parse error");
         }
-        $RAISE(((B_BaseException)B_RuntimeErrorG_new(errmsg)));
+        RAISE(xmlQ_XmlParseError, errmsg, line, column);
     }
     xmlNodePtr root = xmlDocGetRootElement(doc);
     xmlQ_Node t = $NodePtr2Node(root);
