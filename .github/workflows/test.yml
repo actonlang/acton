@@ -84,7 +84,7 @@ jobs:
           sudo sysctl kern.corefile=core.%P
           ulimit -c unlimited
       - name: "Check out repository code"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: "Cache stuff"
         if: matrix.cache == true
         uses: actions/cache@v4
@@ -181,7 +181,7 @@ jobs:
         run: |
           echo "BUILD_RELEASE=1" >> $GITHUB_ENV
       - name: "Check out repository code"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: "Cache stuff"
         if: matrix.cache == true
         uses: actions/cache@v4
@@ -268,7 +268,7 @@ jobs:
           apt-get install -qy bzip2 curl g++ haskell-stack libtinfo-dev make procps zlib1g-dev
           apt-get install -qy bash-completion build-essential debhelper devscripts
       - name: "Check out repository code"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: "Cache stuff"
         uses: actions/cache@v4
         with:
@@ -444,7 +444,7 @@ jobs:
     runs-on: [self-hosted, linux, X64]
     steps:
       - name: "Check out repository code"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: "Remove any currently install Acton to ensure clean slate"
         run: |
           sudo apt-get purge -qy acton
@@ -504,7 +504,7 @@ jobs:
           apt install -y ./deb/acton_*.deb
           acton version
       - name: "Clone Telemetrify and check out acton-next branch"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: telemetrify-collector/telemetrify
           path: telemetrify
@@ -590,7 +590,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: "Check out repository code"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: "Download artifacts for Macos aarch64, built on macos-14"
         uses: actions/download-artifact@v5
         with:
@@ -670,7 +670,7 @@ jobs:
     needs: [test-macos, test-linux, build-debs]
     steps:
       - name: "Check out repository code"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: "Download artifacts for Macos, built on macos-13"
         uses: actions/download-artifact@v5
         with:
@@ -723,7 +723,7 @@ jobs:
         with:
           gpg_private_key: ${{ secrets.APT_GPG_PRIVATE_KEY }}
       - name: Check out code of apt.acton-lang.io repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: actonlang/apt.acton-lang.io
           path: apt
@@ -772,7 +772,7 @@ jobs:
           apt-get install -qy -t experimental reprepro
           apt-get install -qy git gnupg
       - name: Check out code of aptip.acton-lang.io repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: actonlang/aptip.acton-lang.io
           path: apt
@@ -813,7 +813,7 @@ jobs:
     needs: [test-macos, test-linux, build-debs]
     steps:
       - name: "Check out code of main acton repo"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: "Get the version from version.mk"
         id: get_version
         run: |
@@ -833,7 +833,7 @@ jobs:
           echo "sum=$CHECKSUM" >> $GITHUB_OUTPUT
           echo "Checksum: $CHECKSUM"
       - name: "Check out code of our brew repo"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: actonlang/homebrew-acton
           path: homebrew-acton
