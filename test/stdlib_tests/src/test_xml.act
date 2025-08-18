@@ -19,7 +19,8 @@ def _test_xml_roundtrip():
         """<a>\n    <b1>hej</b1>\n    <b2>test</b2>\n</a>""",
         """<a xmlns="http://foo"><b>2</b></a>""",
         """<a xmlns:ns="http://foo"><ns:b>2</ns:b></a>""",
-        """<data><l>čaw</l><baw></baw></data>"""
+        """<data><l>čaw</l><baw></baw></data>""",
+        """<a>100 ㏀</a>""",
     ]
     for s in test_xml:
         #print(s)
@@ -104,10 +105,13 @@ def _test_xml_entity_escaping_single_quotes():
     node = xml.Node("a", attributes=[("attr", "it's fine")])
     testing.assertEqual(xml.encode(node), """<a attr="it's fine"></a>""", "Single quotes should not be escaped")
 
-def _test_xml_cdata():
-    """Test CDATA section handling"""
+def _test_xml_entity_escaping_utf8():
+    """Test that encoding leaves UTF-8 multi-byte characters intact"""
+    node = xml.Node("a", text="100 ㏀ < ∞")
+    testing.assertEqual(xml.encode(node), "<a>100 ㏀ &lt; ∞</a>", "Multi-byte UTF-8 char must be intact")
 
-    # Test simple CDATA in element text
+def _test_xml_cdata_simple():
+    """Test simple CDATA in element text"""
     test_xml = "<data><![CDATA[This is raw text]]></data>"
     d = xml.decode(test_xml)
     testing.assertEqual(d.tag, "data", "CDATA: tag mismatch")
@@ -131,7 +135,14 @@ def _test_xml_cdata_multiple():
     d = xml.decode(test_xml)
     testing.assertEqual(d.text, "First middle Second", "CDATA: multiple sections failed")
 
-    # Test roundtrip - CDATA content should be preserved (though may not be re-encoded as CDATA)
+def _test_xml_cdata_utf8():
+    """Test CDATA with UTF-8 character"""
+    test_xml = "<data>100 <![CDATA[㏀]]></data>"
+    d = xml.decode(test_xml)
+    testing.assertEqual(d.text, "100 ㏀", "CDATA: UTF-8 decode failed")
+
+def _test_xml_cdata_roundtrip():
+    """Test roundtrip - CDATA content should be preserved (though may not be re-encoded as CDATA)"""
     test_xml = "<data><![CDATA[<special> & chars]]></data>"
     d = xml.decode(test_xml)
     e = xml.encode(d)
