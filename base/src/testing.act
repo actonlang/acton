@@ -33,6 +33,9 @@ class NotEqualError[T](AssertionError):
             msg += "\n" + ds
         return msg
 
+    def __repr__(self):
+        return f"{self._name()}({repr(self.a)}, {repr(self.b)}, {repr(self.error_message)}, {repr(self.print_vals)}, {repr(self.diff_str)})"
+
 class EqualError[T](AssertionError):
     a: ?T
     b: ?T
@@ -50,6 +53,9 @@ class EqualError[T](AssertionError):
             msg += f" B: {self.b}"
         return msg
 
+    def __repr__(self):
+        return f"{self._name()}({repr(self.a)}, {repr(self.b)}, {repr(self.error_message)}, {repr(self.print_vals)})"
+
 class NotTrueError[T](AssertionError):
     a: ?T
 
@@ -63,6 +69,9 @@ class NotTrueError[T](AssertionError):
         if self.print_vals:
             msg += f", value: {self.a}"
         return msg
+
+    def __repr__(self):
+        return f"{self._name()}({repr(self.a)}, {repr(self.error_message)}, {repr(self.print_vals)})"
 
 class NotFalseError[T](AssertionError):
     a: ?T
@@ -78,6 +87,9 @@ class NotFalseError[T](AssertionError):
             msg += f", value: {self.a}"
         return msg
 
+    def __repr__(self):
+        return f"{self._name()}({repr(self.a)}, {repr(self.error_message)}, {repr(self.print_vals)})"
+
 class NotNoneError[T](AssertionError):
     a: ?T
 
@@ -91,6 +103,9 @@ class NotNoneError[T](AssertionError):
         if self.print_vals:
             msg += f", value: {self.a}"
         return msg
+
+    def __repr__(self):
+        return f"{self._name()}({repr(self.a)}, {repr(self.error_message)}, {repr(self.print_vals)})"
 
 class NoneError[T](AssertionError):
     a: ?T
@@ -106,6 +121,9 @@ class NoneError[T](AssertionError):
             a = self.a
             msg += f", value: {a}"
         return msg
+
+    def __repr__(self):
+        return f"{self._name()}({repr(self.a)}, {repr(self.error_message)}, {repr(self.print_vals)})"
 
 class NotInError[T,U](AssertionError):
     a: ?T
@@ -124,6 +142,9 @@ class NotInError[T,U](AssertionError):
             msg += f", container: {self.b}"
         return msg
 
+    def __repr__(self):
+        return f"{self._name()}({repr(self.a)}, {repr(self.b)}, {repr(self.error_message)}, {repr(self.print_vals)})"
+
 class InError[T,U](AssertionError):
     a: ?T
     b: ?U
@@ -140,6 +161,9 @@ class InError[T,U](AssertionError):
             msg += f", element: {self.a}"
             msg += f", container: {self.b}"
         return msg
+
+    def __repr__(self):
+        return f"{self._name()}({repr(self.a)}, {repr(self.b)}, {repr(self.error_message)}, {repr(self.print_vals)})"
 
 class NotIsError[T](AssertionError):
     a: T
@@ -158,6 +182,9 @@ class NotIsError[T](AssertionError):
             msg += f" B: {str(self.b)}"
         return msg
 
+    def __repr__(self):
+        return f"{self._name()}({repr(self.a)}, {repr(self.b)}, {repr(self.error_message)}, {repr(self.print_vals)})"
+
 class IsError[T](AssertionError):
     a: T
     b: T
@@ -175,10 +202,16 @@ class IsError[T](AssertionError):
             msg += f" B: {str(self.b)}"
         return msg
 
+    def __repr__(self):
+        return f"{self._name()}({repr(self.a)}, {repr(self.b)}, {repr(self.error_message)}, {repr(self.print_vals)})"
+
 class NotRaisesError(AssertionError):
     def __init__(self, msg: ?str=None, print_vals: bool=True):
         self.error_message = msg if msg is not None else "Expected exception not raised"
         self.print_vals = print_vals
+
+    def __repr__(self):
+        return f"{self._name()}({repr(self.error_message)}, {repr(self.print_vals)})"
 
 class IsInstanceError[T](AssertionError):
     a: ?T
@@ -190,6 +223,9 @@ class IsInstanceError[T](AssertionError):
         self.error_message = msg if msg is not None else "expected type of specific instance"
         self.print_vals = print_vals
 
+    def __repr__(self):
+        return f"{self._name()}({repr(self.a)}, {repr(self.t)}, {repr(self.error_message)}, {repr(self.print_vals)})"
+
 class NotIsInstanceError[T](AssertionError):
     a: ?T
     t: str
@@ -198,6 +234,10 @@ class NotIsInstanceError[T](AssertionError):
         self.a = a
         self.t = t
         self.error_message = msg if msg is not None else "expected type of specific instance"
+        self.print_vals = print_vals
+
+    def __repr__(self):
+        return f"{self._name()}({repr(self.a)}, {repr(self.t)}, {repr(self.error_message)}, {repr(self.print_vals)})"
 
 
 def assertEqual[T(Eq)](a: ?T, b: ?T, msg: ?str, print_vals: bool=True, print_diff: bool=True):
