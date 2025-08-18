@@ -34,7 +34,11 @@ B_str B_tupleD___str__(B_tuple self) {
     B_SequenceD_list wit = B_SequenceD_listG_witness;
     for (int i=0; i< self->size; i++) {
         B_value elem = (B_value)self->components[i];
-        wit->$class->append(wit,s2,elem->$class->__repr__(elem));
+        if (elem == NULL) {
+            wit->$class->append(wit,s2,to$str("None"));
+        } else {
+            wit->$class->append(wit,s2,elem->$class->__repr__(elem));
+        }
     }
     return B_strD_join_par('(',s2,')');
 }
