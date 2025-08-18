@@ -23,6 +23,32 @@ n.text and c.tail for all children of n.
     def encode(self) -> str:
         NotImplemented
 
+class XmlParseError(ValueError):
+    """Exception raised for XML parsing errors
+
+    Attributes:
+        line: The line number where the error occurred (if available)
+        column: The column number where the error occurred (if available)
+    """
+    line: ?int
+    column: ?int
+
+    def __init__(self, msg: ?str, line: ?int=None, column: ?int=None):
+        self.error_message = msg if msg is not None else ""
+        self.line = line
+        self.column = column
+
+    def __str__(self):
+        context = ""
+        if self.line is not None:
+            context += ":{self.line}"
+        if self.column is not None:
+            context += ":{self.column}"
+        return "{self._name()}{context}: {self.error_message}"
+
+    def __repr__(self):
+        return "{self._name()}({repr(self.error_message)}, {repr(self.line)}, {repr(self.column)})"
+
 def decode(data : str) -> Node:
     NotImplemented
 

@@ -52,3 +52,12 @@ def _test_xml_skip_comment_first():
     d = xml.decode(test_xml)
     e = xml.encode(d)
     testing.assertEqual(e, "<a>woo</a>", "XML str -> data -> XML str (remove comment first)")
+
+def _test_xml_parse_error():
+    test_xml = "<a>garbage"
+    try:
+        xml.decode(test_xml)
+    except xml.XmlParseError as e:
+        testing.assertEqual(e.error_message, "Premature end of data in tag a line 1")
+    else:
+        testing.error("Expected exception on parsing error")
