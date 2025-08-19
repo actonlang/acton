@@ -150,3 +150,31 @@ def _test_xml_cdata_roundtrip():
     testing.assertEqual(e, "<data>&lt;special> &amp; chars</data>")
     d2 = xml.decode(e)
     testing.assertEqual(d2.text, "<special> & chars", "CDATA: roundtrip content not preserved")
+
+def _test_xml_namespace_attributes_defined():
+    """Test defined namespace prefix on attributes (with xmlns declaration)"""
+    test_xml = """<a xmlns:ns="http://foo" ns:operation="remove"><ns:b ns:type="element">text</ns:b></a>"""
+    d = xml.decode(test_xml)
+    attr = d.attributes[0]
+    testing.assertEqual(attr.0, 'ns:operation', "Defined namespace: attribute not preserved")
+    # Check child node's namespace attribute
+    child = d.children[0]
+    child_attr = child.attributes[0]
+    testing.assertEqual(child_attr.0, 'ns:type', "Defined namespace: child attribute not preserved")
+    testing.assertEqual(child_attr.1, 'element', "Defined namespace: child attribute value not preserved")
+    e = xml.encode(d)
+    testing.assertEqual(e, test_xml, "Defined namespace: roundtrip failed")
+
+def _test_xml_namespace_attributes_undefined():
+    """Test undefined namespace prefix on attributes (no xmlns declaration)"""
+    test_xml = """<a undef:attr="value"><b other:attr="child">text</b></a>"""
+    d = xml.decode(test_xml)
+    attr = d.attributes[0]
+    testing.assertEqual(attr.0, 'undef:attr', "Undefined namespace: attribute not preserved")
+    # Check child node's undefined namespace attribute
+    child = d.children[0]
+    child_attr = child.attributes[0]
+    testing.assertEqual(child_attr.0, 'other:attr', "Undefined namespace: child attribute not preserved")
+    testing.assertEqual(child_attr.1, 'child', "Undefined namespace: child attribute value not preserved")
+    e = xml.encode(d)
+    testing.assertEqual(e, test_xml, "Undefined namespace: roundtrip failed")
