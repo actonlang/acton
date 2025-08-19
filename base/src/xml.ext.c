@@ -136,7 +136,20 @@ xmlQ_Node $NodePtr2Node(xmlNodePtr node) {
     B_list attributes = B_listG_new(NULL, NULL);
     xmlAttrPtr attr = node->properties;
     while (attr) {
-        wit->$class->append(wit,attributes, $NEWTUPLE(2, to$str((char *)attr->name), to$str((char *)xmlGetProp(node, attr->name))));
+        B_str attr_name;
+        // libxml2 handles namespace prefixes in two ways:
+        // 1. Defined namespaces: attr->ns is set, attr->name has local name only
+        //    e.g., xmlns:ns="http://foo" ns:op="x" -> attr->ns->prefix="ns", attr->name="op"
+        // 2. Undefined namespaces: attr->ns is NULL, attr->name contains the full prefixed name
+        //    e.g., ns:op="x" (no xmlns:ns) -> attr->ns=NULL, attr->name="ns:op"
+        if (attr->ns && attr->ns->prefix) {
+            // Reconstruct prefixed name for defined namespace
+            attr_name = $FORMAT("%s:%s", attr->ns->prefix, attr->name);
+        } else {
+            // Use name as-is (either unprefixed or undefined prefix already in name)
+            attr_name = to$str((char *)attr->name);
+        }
+        wit->$class->append(wit,attributes, $NEWTUPLE(2, attr_name, to$str((char *)xmlGetProp(node, attr->name))));
         attr = attr->next;
     }
 
