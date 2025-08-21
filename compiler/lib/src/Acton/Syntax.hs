@@ -213,7 +213,12 @@ data Kind       = KType | KProto | KFX | PRow | KRow | KFun [Kind] Kind | KUni I
 
 data TSchema    = TSchema { scloc::SrcLoc, scbind::QBinds, sctype::Type } deriving (Show,Read,Generic,NFData)
 
-data TVar       = TV { tvkind::Kind, tvname::Name } deriving (Show,Read,Generic,NFData) -- the Name is an uppercase letter, optionally followed by digits.
+data TVar       = TV { tvkind::Kind, tvname::Name } -- the Name is an uppercase letter, optionally followed by digits.
+
+{- data TUni -} | UV { tvkind::Kind, uvid::Int }
+                deriving (Show,Read,Generic,NFData)
+
+type TUni       = TVar      -- temporary
 
 data TCon       = TC { tcname::QName, tcargs::[Type] } deriving (Eq,Show,Read,Generic,NFData)
 
@@ -226,11 +231,10 @@ type QBinds     = [QBind]
 type PCon       = TCon
 type CCon       = TCon
 
-type TUni       = TVar      -- temporary
-
 type KUni       = Int
 
-data Type       = TVar      { tloc::SrcLoc, tvar::TVar }
+data Type       = TUni      { tloc::SrcLoc, tuni::TUni }
+                | TVar      { tloc::SrcLoc, tvar::TVar }
                 | TCon      { tloc::SrcLoc, tcon::TCon }
                 | TFun      { tloc::SrcLoc, effect::TFX, posrow::PosRow, kwdrow::KwdRow, restype::Type }
                 | TTuple    { tloc::SrcLoc, posrow::PosRow, kwdrow::KwdRow }
@@ -485,6 +489,7 @@ instance Leaves TSchema where
 instance Leaves Type where
     leaves t@TCon{}         = [t]
     leaves t@TVar{}         = [t]
+    leaves t@TUni{}         = [t]
     leaves t@TFX{}          = [t]
     leaves (TFun _ x p k t) = leaves [x,p,k,t]
     leaves (TTuple _ p k)   = leaves [p,k]
@@ -744,6 +749,7 @@ instance Ord TVar where
     TV _ v1             <= TV _ v2              = v1 <= v2
 
 instance Eq Type where
+    TUni _ u1           == TUni _ u2            = u1 == u2
     TVar _ v1           == TVar _ v2            = v1 == v2
     TCon _ c1           == TCon _ c2            = c1 == c2
     TFun _ e1 p1 r1 t1  == TFun _ e2 p2 r2 t2   = e1 == e2 && p1 == p2 && r1 == r2 && t1 == t2

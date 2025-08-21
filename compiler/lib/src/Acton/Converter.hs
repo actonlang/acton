@@ -206,9 +206,9 @@ convProto (TC n ts)                     = TC n (tSelf' : convSelf tSelf' ts)
 
 instProto t (TC n ts)                   = TC n (t : convSelf t ts)
 
-tvSelf'                                 = TV KType (Internal Typevar "S" 0)
-tSelf'                                  = tVar tvSelf'
-qSelf'                                  = Quant tvSelf' []
+selfpar                                 = TV KType g_self
+tSelf'                                  = tVar selfpar
+qSelf'                                  = Quant selfpar []
 selfKW'                                 = Internal Witness "self" 0
 thisKW'                                 = Internal Witness "this" 0
 
