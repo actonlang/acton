@@ -35,7 +35,7 @@ transform_data(d: bar.Data, f: (str) -> str) -> bar.Data
         bar.combine_data: For combining multiple data objects
     
 
-analyze_multiple(data_list: list[bar.Data]) -> dict[str, int]
+analyze_multiple(data_list: list[bar.Data]) -> dict[str, i64]
   Analyze multiple data objects
 
     Args:
