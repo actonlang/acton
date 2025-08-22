@@ -979,7 +979,8 @@ refine env cs te eq
 
         solve_cs                        = [ c | c <- cs, noQual c ]
 
-        noQual (Impl _ _ (TVar _ v) p)
+        noQual (Impl _ _ (TVar _ v) p)          -- CHANGE
+--        noQual (Impl _ _ (TUni _ u) p)
           | univar v                    = False
         noQual c                        = True
 

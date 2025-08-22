@@ -92,14 +92,16 @@ newWitness                              = Internal Witness "" <$> newUnique
 
 newTmp                                  = Internal Tempvar "" <$> newUnique
 
-newUnivarOfKind k                       = TVar NoLoc <$> TV k <$> Internal Typevar (str k) <$> newUnique
+newUnivarOfKind k                       = TVar NoLoc <$> TV k <$> Internal Typevar (str k) <$> newUnique        -- CHANGE
+--newUnivarOfKind k                       = TUni NoLoc <$> UV k <$> newUnique
   where str KType                       = ""
         str KFX                         = "x"
         str PRow                        = "p"
         str KRow                        = "k"
         str _                           = ""
 
-newUnivarToken n                        = TVar NoLoc $ TV KWild $ Internal Typevar "z" n
+newUnivarToken n                        = TVar NoLoc $ TV KWild $ Internal Typevar "z" n                        -- CHANGE
+--newUnivarToken n                        = TUni NoLoc $ UV KWild (-n)              -- A negative id can never clash with an existing TUni
 
 newUnivars ks                           = mapM newUnivarOfKind ks
 
@@ -110,8 +112,8 @@ newUnivar                               = newUnivarOfKind KType
 data TypeError                      = TypeError SrcLoc String
                                     | SelfParamError SrcLoc
                                     | RigidVariable TVar
-                                    | InfiniteType TVar
-                                    | ConflictingRow TVar
+                                    | InfiniteType TVar                 -- TUni?
+                                    | ConflictingRow TVar               -- TUni?
                                     | KwdNotFound ErrInfo Name
                                     | KwdUnexpected ErrInfo Name
                                     | PosElemNotFound ErrInfo String

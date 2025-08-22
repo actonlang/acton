@@ -70,10 +70,12 @@ unify' info (TStar _ k1 r1) (TStar _ k2 r2)
 unify' info (TVar _ tv1) (TVar _ tv2)
   | tv1 == tv2                              = return ()
 
-unify' info (TVar _ tv) t2
+unify' info (TVar _ tv) t2                  -- CHANGE
+--unify' info (TUni _ uv) t2
   | univar tv                               = do when (tv `elem` ufree t2) (infiniteType tv)
                                                  usubstitute tv t2
-unify' info t1 (TVar _ tv)
+unify' info t1 (TVar _ tv)                  -- CHANGE
+--unify' info t1 (TUni _ uv)
   | univar tv                               = do when (tv `elem` ufree t1) (infiniteType tv)
                                                  usubstitute tv t1
 

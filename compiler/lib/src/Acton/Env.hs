@@ -605,6 +605,7 @@ isAlias n env               = case lookup n (names env) of
                                 _ -> False
 
 kindOf env (TVar _ tv)      = tvkind tv
+kindOf env (TUni _ uv)      = uvkind uv
 kindOf env (TCon _ tc)      = tconKind (tcname tc) env
 kindOf env TFun{}           = KType
 kindOf env TTuple{}         = KType
@@ -837,8 +838,8 @@ allProtos env               = reverse locals ++ concat [ protos m (lookupMod m e
 allConAttr                  :: EnvF x -> Name -> [Type]
 allConAttr env n            = [ tCon tc | tc <- allCons env, n `elem` allAttrs' env tc ]
 
-allConAttrFree              :: EnvF x -> Name -> [TUni]
-allConAttrFree env n        = concat [ ufree $ fst $ findAttr' env tc n | tc <- allCons env, n `elem` allAttrs' env tc ]
+allConAttrUFree             :: EnvF x -> Name -> [TUni]
+allConAttrUFree env n       = concat [ ufree $ fst $ findAttr' env tc n | tc <- allCons env, n `elem` allAttrs' env tc ]
 
 allProtoAttr                :: EnvF x -> Name -> [Type]
 allProtoAttr env n          = [ tCon p | p <- allProtos env, n `elem` allAttrs' env p ]
@@ -968,8 +969,10 @@ glb env t1 (TWild _)                    = pure t1
 
 glb env t1@TVar{} t2@TVar{}
   | t1 == t2                            = pure t1
-glb env (TVar _ v) _ | univar v         = pure tWild
-glb env _ (TVar _ v) | univar v         = pure tWild
+glb env (TVar _ v) _ | univar v         = pure tWild            -- REMOVE
+glb env _ (TVar _ v) | univar v         = pure tWild            -- REMOVE
+glb env (TUni _ u) _                    = pure tWild
+glb env _ (TUni _ u)                    = pure tWild
 
 glb env (TCon _ c1) (TCon _ c2)
   | tcname c1 == tcname c2              = pure $ tCon c1
@@ -1048,8 +1051,10 @@ lub env t1 (TWild _)                    = pure t1
 
 lub env t1@TVar{} t2@TVar{}
   | t1 == t2                            = pure t1
-lub env (TVar _ v) _ | univar v         = pure tWild
-lub env _ (TVar _ v) | univar v         = pure tWild
+lub env (TVar _ v) _ | univar v         = pure tWild        -- REMOVE
+lub env _ (TVar _ v) | univar v         = pure tWild        -- REMOVE
+lub env (TUni _ u) _                    = pure tWild
+lub env _ (TUni _ u)                    = pure tWild
 
 lub env t (TVar _ v)                    = lub env t (tCon $ findTVBound env v)
 lub env (TVar _ v) t                    = lub env (tCon $ findTVBound env v) t
@@ -1251,7 +1256,7 @@ importWits m te env         = foldl addWit env ws
 
 
 
-
+-- REPLACE
 headvar (Impl _ w (TVar _ v) p)     = v
 
 headvar (Cast _ (TVar _ v) (TVar _ v'))
@@ -1270,6 +1275,23 @@ headvar (Mut _ (TVar _ v) n t)      = v
 
 headvar (Seal _ (TVar _ v))         = v
 
+{-
+headvar (Impl _ w (TUni _ u) p)     = u
+
+headvar (Cast _ TVar{} (TUni _ u))  = u
+headvar (Cast _ (TUni _ u) t)       = u
+headvar (Cast _ t (TUni _ u))       = u     -- ?
+
+headvar (Sub _ w TVar{} (TUni _ u)) = u
+headvar (Sub _ w (TUni _ u) t)      = u
+headvar (Sub _ w t (TUni _ u))      = u     -- ?
+
+headvar (Sel _ w (TUni _ u) n t)    = u
+
+headvar (Mut _ (TUni _ u) n t)      = u
+
+headvar (Seal _ (TUni _ u))         = u
+-}
 
 -- Error handling ----------------------------------------------------------------------------------------------------
 

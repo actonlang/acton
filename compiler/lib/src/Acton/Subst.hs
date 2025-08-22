@@ -98,7 +98,7 @@ instance VFree Constraint where
 
 instance VFree Type where
     vfree (TVar _ v)
-      | not (univar v)              = [v]
+      | not (univar v)              = [v]                                                   -- CHANGE
       | otherwise                   = []
     vfree (TCon _ c)                = vfree c
     vfree (TFun _ fx p k t)         = vfree fx ++ vfree p ++ vfree k ++ vfree t
@@ -257,6 +257,7 @@ instance VSubst Type where
     vsubst s (TVar l v)             = case lookup v s of
                                         Just t ->  t
                                         Nothing -> TVar l v
+    vsubst s (TUni l u)             = TUni l u
     vsubst s (TCon l c)             = TCon l (vsubst s c)
     vsubst s (TFun l fx p k t)      = TFun l (vsubst s fx) (vsubst s p) (vsubst s k) (vsubst s t)
     vsubst s (TTuple l p k)         = TTuple l (vsubst s p) (vsubst s k)
@@ -462,8 +463,9 @@ instance UFree QBind where
 
 instance UFree Type where
     ufree (TVar _ v)
-      | univar v                    = [v]
+      | univar v                    = [v]                           -- CHANGE
       | otherwise                   = []
+    ufree (TUni _ u)                = [] -- u                       -- CHANGE
     ufree (TCon _ c)                = ufree c
     ufree (TFun _ fx p k t)         = ufree fx ++ ufree p ++ ufree k ++ ufree t
     ufree (TTuple _ p k)            = ufree p ++ ufree k
@@ -608,10 +610,14 @@ instance USubst QBind where
     usubst (Quant v cs)             = Quant <$> usubst v <*> usubst cs
 
 instance USubst Type where
-    usubst (TVar l v)               = do s <- usubstitution
+    usubst (TVar l v)               = do s <- usubstitution                             -- CHANGE
                                          case Map.lookup v s of
                                             Just t ->  usubst t
                                             Nothing -> return (TVar l v)
+    usubst (TUni l u)               = do s <- usubstitution
+                                         case Nothing of -- Map.lookup u s of           -- CHANGE
+--                                            Just t ->  usubst t
+                                            Nothing -> return (TUni l u)
     usubst (TCon l c)               = TCon l <$> usubst c
     usubst (TFun l fx p k t)        = TFun l <$> usubst fx <*> usubst p <*> usubst k <*> usubst t
     usubst (TTuple l p k)           = TTuple l <$> usubst p <*> usubst k
@@ -758,6 +764,7 @@ polneg (p,n)                        = (n,p)
 
 instance Polarity Type where
     polvars (TVar _ v)              = ([v],[])
+--    polvars (TUni _ u)              = ([u],[])                        -- CHANGE
     polvars (TCon _ c)              = polvars c
     polvars (TFun _ fx p k t)       = polvars fx `polcat` polvars t `polcat` polneg (polvars p `polcat` polvars k)
     polvars (TTuple _ p k)          = polvars p `polcat` polvars k
@@ -823,8 +830,10 @@ instance Tailvars Type where
     tailvars (TCon _ c)             = tailvars c
     tailvars (TFun _ fx p k t)      = tailvars fx ++ tailvars' p ++ tailvars' k ++ tailvars t
     tailvars (TTuple _ p k)
-      | TVar{} <- p, TNil{} <- k    = []    -- Exclude open * tuples
-      | TNil{} <- p, TVar{} <- k    = []    -- Exclude open ** tuples
+      | TVar{} <- p, TNil{} <- k    = []    -- Exclude open * tuples            REMOVE
+      | TNil{} <- p, TVar{} <- k    = []    -- Exclude open ** tuples           REMOVE
+      | TUni{} <- p, TNil{} <- k    = []    -- Exclude open * tuples
+      | TNil{} <- p, TUni{} <- k    = []    -- Exclude open ** tuples
       | otherwise                   = tailvars' p ++ tailvars' k
     tailvars (TOpt _ t)             = tailvars t
     tailvars _                      = []
@@ -832,7 +841,8 @@ instance Tailvars Type where
 tailvars' (TRow _ _ _ t r)          = tailvars t ++ tailvars' r
 tailvars' (TStar _ _ r)             = tailvars r
 tailvars' (TNil _ _)                = []
-tailvars' (TVar _ v)                = [v]
+--tailvars' (TUni _ u)                = [u]                 -- CHANGE
+tailvars' (TVar _ v)                = [v]                   -- CHANGE
 
 instance Tailvars TCon where
     tailvars (TC c ts)              = tailvars ts
@@ -892,6 +902,7 @@ instance UWild TCon where
 
 instance UWild Type where
     uwild (TVar l v) | univar v     = tWild
+    uwild (TUni l u)                = tWild
     uwild (TCon l c)                = TCon l (uwild c)
     uwild (TFun l fx p k t)         = TFun l fx (uwild p) (uwild k) (uwild t)
     uwild (TTuple l p k)            = TTuple l (uwild p) (uwild k)

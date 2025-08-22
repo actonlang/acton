@@ -61,7 +61,7 @@ swapXVars                           :: QBinds -> KindM QBinds
 swapXVars q                         = state $ \st -> (xvars st, st{ xvars = q })
 
 newWildvar                          = do k <- newKUni
-                                         n <- Internal Typevar "w" <$> newUnique
+                                         n <- Internal Typevar "w" <$> newUnique        -- CHANGE
                                          return $ TV k n
 
 newKUni                             = KUni <$> newUnique
@@ -150,7 +150,8 @@ class ConvTWild a where
     convTWild                       :: a -> KindM a
 
 instance ConvTWild Type where
-    convTWild (TWild l)             = TVar l <$> newWildvar
+    convTWild (TWild l)             = TVar l <$> newWildvar                 -- REPLACE
+--    convTWild (TWild l)             = TUni l <$> newWildvar
     convTWild (TFun l e p k t)      = TFun l <$> convTWild e <*> convTWild p <*> convTWild k <*> convTWild t
     convTWild (TTuple l p k)        = TTuple l <$> convTWild p <*> convTWild k
     convTWild (TOpt l t)            = TOpt l <$> convTWild t
@@ -500,8 +501,10 @@ envBound _                          = True
 instance KInfer Type where
     kinfer env (TWild l)            = err1 l "Illegal wildcard type"
     kinfer env (TVar l v)           = do (k,v) <- kinfer env v
-                                         when (envBound v) $ kunify l k (tvKind v env)     -- Internal tyvars are not in the environment
+                                         when (envBound v) $ kunify l k (tvKind v env)      -- REMOVE CONDITION
                                          return (k, TVar l v)
+    kinfer env (TUni l u)           = do (k,u) <- kinfer env u                              -- Internal tyvars are not in the environment
+                                         return (k, TUni l u)
     kinfer env (TCon l c)           = do c <- kexp KType env c
                                          return (KType, TCon l c)
     kinfer env (TFun l fx p k t)    = do fx <- kfx env fx
@@ -524,8 +527,8 @@ instance KInfer Type where
                                          return (k, TStar l k r)
     kinfer env (TFX l fx)           = return (KFX, TFX l fx)
 
-kfx env (TVar _ tv)
-  | not $ univar tv                 = variableFX tv
+kfx env (TVar _ tv)                 -- = variableFX tv
+  | not $ univar tv                 = variableFX tv                                         -- REMOVE
 kfx env t                           = kexp KFX env t
 
 kexp k env t                        = do (k',t') <- kinfer env t
@@ -593,6 +596,7 @@ instance KSubst QBind where
 
 instance KSubst Type where
     ksubst g (TVar l v)             = TVar l <$> ksubst g v
+    ksubst g (TUni l u)             = TUni l <$> ksubst g u
     ksubst g (TCon l c)             = TCon l <$> ksubst g c
     ksubst g (TFun l fx p k t)      = TFun l <$> ksubst g fx <*> ksubst g p <*> ksubst g k<*> ksubst g t
     ksubst g (TTuple l p k)         = TTuple l <$> ksubst g p <*> ksubst g k

@@ -76,8 +76,8 @@ groupCs env cs                              = do st <- currentState
         group m c                           = do tvs <- (filter univar . ufree) <$> usubst c
                                                  let tv = case tvs of [] -> tv0; tv:_ -> tv
                                                  return $ Map.insertWith (++) tv [c] m
-        attrfree c@(Sel _ _ _ n _)          = allConAttrFree env n
-        attrfree c@(Mut _ _ n _)            = allConAttrFree env n
+        attrfree c@(Sel _ _ _ n _)          = allConAttrUFree env n
+        attrfree c@(Mut _ _ n _)            = allConAttrUFree env n
         attrfree _                          = []
         TVar _ tv0                          = newUnivarToken 0
 
@@ -612,7 +612,7 @@ matchWit w w'               = matchExactly (wtype w) (proto w) w'
 
 matching ts vs ts'          = isJust $ matches vs ts ts'    -- there is a substitution s with domain vs such that ts == vsubst s ts'
 
-unifying info t w           = runTypeM $ tryUnify `catchError` const (return False)
+unifying info t w           = runTypeM $ tryUnify `catchError` const (return False)     -- WATCH OUT: instantiate TVars to TUnis first?
   where tryUnify            = do unify info t (wtype w)
                                  return True
 

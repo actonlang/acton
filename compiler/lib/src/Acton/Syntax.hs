@@ -215,7 +215,7 @@ data TSchema    = TSchema { scloc::SrcLoc, scbind::QBinds, sctype::Type } derivi
 
 data TVar       = TV { tvkind::Kind, tvname::Name } -- the Name is an uppercase letter, optionally followed by digits.
 
-{- data TUni -} | UV { tvkind::Kind, uvid::Int }
+{- data TUni -} | UV { uvkind::Kind, uvid::Int }
                 deriving (Show,Read,Generic,NFData)
 
 type TUni       = TVar      -- temporary
