@@ -835,7 +835,7 @@ $R deactQ_mainD___init__ (deactQ_main self, $Cont C_cont, B_Env env) {
 }
 $R deactQ_mainD_myprocG_local (deactQ_main self, $Cont C_cont, B_int i) {
     ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(2, to$str("myproc"), i), B_None, B_None, B_None, B_None);
-    if (ORD_B_int__eq__(i, to$int(2))) {
+    if (ORD_B_int__eq__(((B_int)i), ((B_int)to$int(2)))) {
         ((B_Msg (*) (B_Env, B_int))self->env->$class->exit)(self->env, to$int(0));
     }
     return $R_CONT(C_cont, i);
