@@ -170,7 +170,8 @@ solve' env select hist te tt eq cs
         group (r:rs)                        = (r : rs1) : group rs2
           where (rs1,rs2)                   = partition (==r) rs
         rnks                                = map (rank env) solve_cs
-        tryAlts st t@(TVar _ tv) []        = do  --traceM ("### FAIL " ++ prstr tv ++ ":\n" ++ render (nest 4 $ vcat $ map pretty cs))
+        tryAlts st t@(TVar _ tv) []
+          | univar tv                       = do  --traceM ("### FAIL " ++ prstr tv ++ ":\n" ++ render (nest 4 $ vcat $ map pretty cs))
                                                  let ts = map (\n -> tCon (TC (noQ ('t':show n)) [])) [0..]
                                                      vs = filter (\v -> length (filter (\c -> v `elem` ufree c) cs) > 1) (nub (ufree cs))
                                                      cs' = if length cs == 1 then cs else filter (not . useless vs) cs
@@ -194,7 +195,7 @@ solve' env select hist te tt eq cs
                                                  proceed (t:hist) cs
           where attrs                       = sortBy (\a b -> compare (nstr a) (nstr b)) $ nub [ n | Sel _ _ t n _ <- solve_cs, t == t0 ]
         tryAlt t0@(TVar _ tv) t
-          | tvkind tv == KFX                = do t <- instwild env (kindOf env t0) t
+          | univar tv, tvkind tv == KFX     = do t <- instwild env (kindOf env t0) t
                                                  --traceM ("  # trying " ++ prstr t0 ++ " = " ++ prstr t)
                                                  unify (DfltInfo NoLoc 5 Nothing []) t0 t
                                                  (cs,eq) <- quicksimp env eq cs
@@ -213,7 +214,7 @@ solve' env select hist te tt eq cs
         condense (RRed c : rs)              = RRed c
         condense (RSealed t : rs)           = RSealed t
         condense (RTry t as r : rs)
-          | TVar{} <- t                     = RTry t (if rev' then subrev ts' else ts') rev'
+          | TVar _ v <- t, univar v         = RTry t (if rev' then subrev ts' else ts') rev'
           | otherwise                       = RTry t ts r
           where ts                          = foldr intersect as $ map alts rs
                 ts'                         = if tvar t `elem` optvs then ts \\ [tOpt tWild] else ts
@@ -233,7 +234,8 @@ solve' env select hist te tt eq cs
 
         deco (RRed cs)                      = (0, 0, 0, 0)
         deco (RSealed t)                    = (2, 0, 0, 0)
-        deco (RTry (TVar _ v) as r)         = (w, length $ filter (==v) embvs, length as, length $ filter (==v) univs)
+        deco (RTry (TVar _ v) as r)
+          | univar v                        = (w, length $ filter (==v) embvs, length as, length $ filter (==v) univs)
           where w | wildTuple `elem` as     =  3
                   | otherwise               =  4
         deco (RTry t as r)                  = (5, 0, length as, 0)
@@ -268,11 +270,13 @@ rank env (Cast _ t1 t2@TVar{})
 
 rank env c@(Impl _ _ t p)
   | schematic t `elem` ts                   = ROvl t
-  | not $ null $ ufree t                   = RTry t ts False
+  | not $ null $ ufree t                    = RTry t ts False
   where ts                                  = allExtProto env t p
 
-rank env (Sel _ _ t@TVar{} n _)             = RTry t (allConAttr env n ++ allProtoAttr env n ++ allExtProtoAttr env n ++ [wildTuple]) False
-rank env (Mut _ t@TVar{} n _)               = RTry t (allConAttr env n) False
+rank env (Sel _ _ t@TVar{} n _)
+  | univar (tvar t)                         = RTry t (allConAttr env n ++ allProtoAttr env n ++ allExtProtoAttr env n ++ [wildTuple]) False
+rank env (Mut _ t@TVar{} n _)
+  | univar (tvar t)                         = RTry t (allConAttr env n) False
 
 rank env (Seal _ t@TVar{})
   | tvkind (tvar t) == KFX                  = RSealed t
@@ -299,7 +303,8 @@ instance OptVars Constraint where
     optvars (Seal _ t)                  = optvars t
 
 instance OptVars Type where
-    optvars (TOpt _ (TVar _ v))         = [v]
+    optvars (TOpt _ (TVar _ v))
+      | univar v                        = [v]
     optvars (TOpt _ t)                  = optvars t
     optvars (TCon _ c)                  = optvars c
     optvars (TFun _ fx p k t)           = optvars [p, k, t]
@@ -360,7 +365,8 @@ allAbove env (TFX _ FXPure)             = [fxProc, fxMut, fxPure]
 allAbove env (TFX _ FXAction)           = [fxProc, fxAction]
 
 allBelow env (TCon _ tc)                = map tCon $ schematic' tc : allDescendants env tc
-allBelow env (TVar _ tv)                = [tVar tv]
+allBelow env (TVar _ tv)
+  | not $ univar tv                     = [tVar tv]
 allBelow env (TOpt _ t)                 = tOpt tWild : allBelow env t ++ [tNone]
 allBelow env (TNone _)                  = [tNone]
 allBelow env (TFun _ _ _ _ _)           = [tFun tWild tWild tWild tWild]
@@ -460,7 +466,7 @@ reduce' env eq c@(Sel _ w (TCon _ tc) n _)
 
 
 reduce' env eq c@(Sel info w t1@(TTuple _ _ r) n t2)
-  | TVar _ tv <- r                          = do defer [c]; return eq
+  | TVar _ tv <- r, univar tv               = do defer [c]; return eq
   | n `elem` valueKWs                       = do let e = eLambda [(px0,t1)] (eDot (eVar px0) n)
                                                  return (Eqn w (wFun t1 t2) e : eq)
   | otherwise                               = do --traceM ("### Sel " ++ prstr c)
@@ -654,9 +660,11 @@ cast' env info (TTuple _ p1 k1) (TTuple _ p2 k2)
 cast' env info (TOpt _ t1@TOpt{}) t2        = cast env info t1 t2
 cast' env info t1 (TOpt _ t2@TOpt{})        = cast env info t1 t2
 cast' env info (TOpt _ t1) (TOpt _ t2)      = cast env info t1 t2
-cast' env info (TVar _ tv) t2@TNone{}       = do usubstitute tv tNone
+cast' env info (TVar _ tv) t2@TNone{}
+  | univar tv                               = do usubstitute tv tNone
                                                  cast env info tNone t2
-cast' env info t1@TOpt{} (TVar _ tv)        = do t2 <- instwild env KType $ tOpt tWild      -- What if tv is in t1???
+cast' env info t1@TOpt{} (TVar _ tv)
+  | univar tv                               = do t2 <- instwild env KType $ tOpt tWild      -- What if tv is in t1???
                                                  usubstitute tv t2
                                                  cast env info t1 t2
 cast' env info t1 (TOpt _ t2)
@@ -679,10 +687,10 @@ cast' env info t1@(TFX _ fx1) t2@(TFX _ fx2)
 cast' env _ (TNil _ k1) (TNil _ k2)
   | k1 == k2                                = return ()
 cast' env info (TVar _ tv) r2@(TNil _ k)
-  | tvkind tv == k                          = do usubstitute tv (tNil k)
+  | univar tv, tvkind tv == k               = do usubstitute tv (tNil k)
                                                  cast env info (tNil k) r2
 cast' env info r1@(TNil _ k) (TVar _ tv)
-  | k == tvkind tv                          = do usubstitute tv (tNil k)
+  | univar tv, k == tvkind tv               = do usubstitute tv (tNil k)
                                                  cast env info r1 (tNil k)
 cast' env info (TRow _ k1 n1 t1 r1) (TRow _ k2 n2 t2 r2)
   | k1 == k2 && n1 == n2                    = do cast env info t1 t2
@@ -694,19 +702,19 @@ cast' env info r1@(TRow _ _ n _ _) r2@(TNil _ _)
 cast' env info (TStar _ k1 r1) (TStar _ k2 r2)
   | k1 == k2                                = cast env info r1 r2
 cast' env info (TVar _ tv) r2@(TRow _ k n _ _)
-  | tvkind tv == k                          = do r1 <- instwild env k $ tRow k n tWild tWild
+  | univar tv, tvkind tv == k               = do r1 <- instwild env k $ tRow k n tWild tWild
                                                  usubstitute tv r1
                                                  cast env info r1 r2
 cast' env info r1@(TRow _ k n _ _) (TVar _ tv)
-  | k == tvkind tv                          = do r2 <- instwild env k $ tRow k n tWild tWild
+  | univar tv, k == tvkind tv               = do r2 <- instwild env k $ tRow k n tWild tWild
                                                  usubstitute tv r2
                                                  cast env info r1 r2
 cast' env info (TVar _ tv) r2@(TStar _ k _)
-  | tvkind tv == k                          = do r1 <- instwild env k $ tStar k tWild
+  | univar tv, tvkind tv == k               = do r1 <- instwild env k $ tStar k tWild
                                                  usubstitute tv r2
                                                  cast env info r1 r2
 cast' env info r1@(TStar _ k _) (TVar _ tv)
-  | k == tvkind tv                          = do r2 <- instwild env k $ tStar k tWild
+  | univar tv, k == tvkind tv               = do r2 <- instwild env k $ tStar k tWild
                                                  usubstitute tv r1
                                                  cast env info r1 r2
 
@@ -729,10 +737,12 @@ cast' env info t1@(TVar _ tv) t2
   | univar tv                               = defer [Cast info t1 t2]
 cast' env info t1 t2@(TVar _ tv)
   | univar tv                               = defer [Cast info t1 t2]
-cast' env info t1@(TVar _ tv) t2            = cast' env info (tCon tc) t2
+cast' env info t1@(TVar _ tv) t2
+  | not $ univar tv                         = cast' env info (tCon tc) t2
   where tc                                  = findTVBound env tv
 
-cast' env info t1 t2@(TVar _ tv)            = noRed0 env (Cast info t1 t2)
+cast' env info t1 t2@(TVar _ tv)
+  | univar tv                               = noRed0 env (Cast info t1 t2)
 
 cast' env info t1 (TOpt _ t2)               = cast env info t1 t2                -- Only matches when t1 is NOT a variable
 
@@ -864,14 +874,14 @@ rowShape r                                  = return r
 subpos                                      :: Env -> ErrInfo -> (Int -> Expr) -> Int -> PosRow -> PosRow -> TypeM (Constraints, PosArg, [(Expr,Type)])
 subpos env info f i TVar{}         TVar{}   = error "INTERNAL ERROR: subpos"
 subpos env info f i (TVar _ tv)     r2
-  | tv `elem` ufree r2                     = conflictingRow tv                     -- use rowTail?
-  | otherwise                               = do r1 <- rowShape r2
+  | tv `elem` ufree r2                      = conflictingRow tv                     -- use rowTail?
+  | univar tv                               = do r1 <- rowShape r2
                                                  --traceM (" ## subpos L " ++ prstr tv ++ " ~ " ++ prstr r1)
                                                  usubstitute tv r1
                                                  subpos env info f i r1 r2
 subpos env info f i r1             (TVar _ tv)
-  | tv `elem` ufree r1                     = conflictingRow tv                     -- use rowTail?
-  | otherwise                               = do r2 <- rowShape r1
+  | tv `elem` ufree r1                      = conflictingRow tv                     -- use rowTail?
+  | univar tv                               = do r2 <- rowShape r1
                                                  --traceM (" ## subpos R " ++ prstr r2 ++ " ~ " ++ prstr tv)
                                                  usubstitute tv r2
                                                  subpos env info f i r1 r2
@@ -922,7 +932,8 @@ subkwd0 env info f ((e,t1):es) r1 (TRow _ _ n t2 r2)
 subkwd0 env info f ((e,t1):es) r1 r2        = posElemNotFound0 env False (Cast info r1 r2) nWild
 
 subkwd                                      :: Env -> ErrInfo -> (Name -> Expr) -> [Name] -> KwdRow -> KwdRow -> TypeM (Constraints, KwdArg)
-subkwd env info f seen r1 (TVar _ tv)       = do unif f seen r1
+subkwd env info f seen r1 (TVar _ tv)
+  | univar tv                               = do unif f seen r1
                                                  r2 <- usubst (tVar tv)
                                                  subkwd env info f seen r1 r2
   where unif f seen TVar{}                  = error "INTERNAL ERROR: subkwd"
@@ -950,8 +961,8 @@ subkwd env info f seen r1 (TRow _ _ n2 t2 r2)
                                                  (cs2,as) <- subkwd env info f (n2:seen) r1 r2
                                                  return (cs1++cs2, KwdArg n2 e as)
   where pick f seen (TVar _ tv)
-          | tv `elem` ufree r2             = conflictingRow tv                     -- use rowTail?
-          | otherwise                       = do --traceM (" ## subkwd Var - Row: " ++ prstr (tVar tv) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tRow KRow n2 t2 r2))
+          | tv `elem` ufree r2              = conflictingRow tv                     -- use rowTail?
+          | univar tv                       = do --traceM (" ## subkwd Var - Row: " ++ prstr (tVar tv) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tRow KRow n2 t2 r2))
                                                  r1 <- tRow KRow n2 t2 <$> newUnivarOfKind KRow
                                                  unify info (tVar tv) r1
                                                  pick f seen r1
@@ -972,8 +983,8 @@ subkwd env info f seen r1 (TRow _ _ n2 t2 r2)
 subkwd env info f seen r1 (TStar _ _ r2)    = do (cs,e) <- match f seen r1
                                                  return (cs, KwdStar e)
   where match f seen (TVar _ tv)
-          | tv `elem` ufree r2             = conflictingRow tv                     -- use rowTail?
-          | otherwise                       = do --traceM (" ## subkwd Var - Star: " ++ prstr (tVar tv) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tStar KRow r2))
+          | tv `elem` ufree r2              = conflictingRow tv                     -- use rowTail?
+          | univar tv                       = do --traceM (" ## subkwd Var - Star: " ++ prstr (tVar tv) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tStar KRow r2))
                                                  r1 <- tStar KRow <$> newUnivarOfKind KRow
                                                  unify info (tVar tv) r1
                                                  match f seen r1
@@ -984,10 +995,11 @@ subkwd env info f seen r1 (TStar _ _ r2)    = do (cs,e) <- match f seen r1
                                                  (cs,as) <- subkwd env info f seen r1 r2
                                                  return (cs, eTupleK as)
         match f seen r1@(TStar _ _ r)
-          | TVar{} <- r, TVar{} <- r2       = do --traceM (" ## subkwd StarVar - StarVar: " ++ prstr (tStar KRow r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tStar KRow r2))
+          | TVar _ v <- r, univar v,
+            TVar _ v2 <- r2, univar v2      = do --traceM (" ## subkwd StarVar - StarVar: " ++ prstr (tStar KRow r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tStar KRow r2))
                                                  unify info r r2
                                                  return ([], f attrKW)
-          | TVar{} <- r                     = do --traceM (" ## subkwd StarVar - Star: " ++ prstr (tStar KRow r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tStar KRow r2))
+          | TVar _ v <- r, univar v         = do --traceM (" ## subkwd StarVar - Star: " ++ prstr (tStar KRow r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tStar KRow r2))
                                                  (cs,as) <- subkwd env info f seen r1 r2
                                                  return (cs, eTupleK as)
           | otherwise                       = do --traceM (" ## subkwd Star - Star: " ++ prstr (tStar KRow r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tStar KRow r2))
@@ -996,8 +1008,9 @@ subkwd env info f seen r1 (TStar _ _ r2)    = do (cs,e) <- match f seen r1
                                                  (cs,as) <- subkwd env info f seen r1 r2
                                                  return (cs, eTupleK as)
 
-subkwd env info f seen r1 TNil{}                = term f seen r1
-  where term f seen (TVar _ tv)             = do --traceM (" ## subkwd Var - Nil: " ++ prstr (tVar tv) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tNil KRow))
+subkwd env info f seen r1 TNil{}            = term f seen r1
+  where term f seen (TVar _ tv)
+          | univar tv                       = do --traceM (" ## subkwd Var - Nil: " ++ prstr (tVar tv) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tNil KRow))
                                                  r1 <- pure $ tNil KRow
                                                  unify info (tVar tv) r1
                                                  term f seen (tNil KRow)
@@ -1487,7 +1500,8 @@ noLOpt v vi                             = not $ any optCon $ lookup' v (lbounds 
         optCon _                        = False
 
 unOpt []                                = []
-unOpt (TOpt _ TVar{} : ts)              = unOpt ts
+unOpt (TOpt _ (TVar _ tv) : ts)
+  | univar tv                           = unOpt ts
 unOpt (TOpt _ t : ts)                   = t : unOpt ts
 unOpt (t : ts)                          = t : unOpt ts
 
@@ -1496,26 +1510,29 @@ replace ub lb c@(Cast _ (TVar _ v1) (TVar _ v2))
 replace ub lb c@(Cast _ (TVar _ v1) (TOpt _ (TVar _ v2)))
   | univar v1, univar v2                = c
 replace ub lb (Cast info (TVar _ v) t)
-  | Just t' <- lookup v ub              = Cast info t' t
+  | univar v, Just t' <- lookup v ub    = Cast info t' t
 replace ub lb (Cast info t (TVar _ v))
-  | Just t' <- lookup v lb              = Cast info t t'
+  | univar v, Just t' <- lookup v lb    = Cast info t t'
 replace ub lb c@(Sub _ _ (TVar _ v1) (TVar _ v2))
   | univar v1, univar v2                = c
 replace ub lb c@(Sub _ _ (TVar _ v1) (TOpt _ (TVar _ v2)))
   | univar v1, univar v2                = c
 replace ub lb (Sub info w (TVar _ v) t)
-  | Just t' <- lookup v ub              = Sub info w t' t
+  | univar v, Just t' <- lookup v ub    = Sub info w t' t
 replace ub lb (Sub info w t (TVar _ v))
-  | Just t' <- lookup v lb              = Sub info w t t'
+  | univar v, Just t' <- lookup v lb    = Sub info w t t'
 replace ub lb c                         = c
 
 solveDots env mutC selC selP cs         = do (eqs,css) <- unzip <$> mapM solveDot cs
                                              return (concat eqs, concat css)
   where solveDot c@(Mut _ (TVar _ v) n _)
-          | Just w <- lookup (v,n) mutC = solveMutAttr env w c >> return ([], [])
+          | univar v,
+            Just w <- lookup (v,n) mutC = solveMutAttr env w c >> return ([], [])
         solveDot c@(Sel _ _ (TVar _ v) n _)
-          | Just w <- lookup (v,n) selC = solveSelAttr env w c
-          | Just w <- lookup (v,n) selP = solveSelWit env w c
+          | univar v,
+            Just w <- lookup (v,n) selC = solveSelAttr env w c
+          | univar v,
+            Just w <- lookup (v,n) selP = solveSelWit env w c
         solveDot c                      = return ([], [c])
 
 ctxtReduce env vi multiPBnds            = (concat eqs, concat css)
