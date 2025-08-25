@@ -268,9 +268,7 @@ rank env (Cast _ t1@TVar{} t2)
 rank env (Cast _ t1 t2@TVar{})
   | univar (tvar t2)                        = RTry t2 (allAbove env t1) True
 
-rank env c@(Impl _ _ t p)
-  | schematic t `elem` ts                   = ROvl t
-  | not $ null $ ufree t                    = RTry t ts False
+rank env c@(Impl _ _ t p)                   = RTry t ts False
   where ts                                  = allExtProto env t p
 
 rank env (Sel _ _ t@TVar{} n _)
@@ -415,7 +413,6 @@ reduce' env eq c@(Impl _ w t@(TVar _ tv) p)
   | univar tv                               = do defer [c]; return eq
   | [wit] <- witSearch                      = do (eq',cs) <- solveImpl env wit w t p
                                                  reduce env (eq'++eq) cs
-  | not $ null witSearch                    = do defer [c]; return eq
   | [wit] <- witSearch'                     = do (eq',cs) <- solveImpl env wit w (tCon tc) p
                                                  reduce env (eq'++eq) cs
   where witSearch                           = findWitness env t p
@@ -428,13 +425,11 @@ reduce' env eq c@(Impl _ w t@(TCon _ tc) p)
                                                  return (Eqn w (impl2type t p) e : eq)
   | [wit] <- witSearch                      = do (eq',cs) <- solveImpl env wit w t p
                                                  reduce env (eq'++eq) cs
-  | not $ null witSearch                    = do defer [c]; return eq
   where witSearch                           = findWitness env t p
 
 reduce' env eq c@(Impl _ w t@(TFX _ tc) p)
   | [wit] <- witSearch                      = do (eq',cs) <- solveImpl env wit w t p
                                                  reduce env (eq'++eq) cs
-  | not $ null witSearch                    = do defer [c]; return eq
   where witSearch                           = findWitness env t p
 
 reduce' env eq c@(Impl info w t@(TOpt _ t') p)
@@ -558,9 +553,7 @@ solveMutAttr env (wf,sc,dec) c@(Mut info t1 n t2)
 ----------------------------------------------------------------------------------------------------------------------
 
 findWitness                 :: Env -> Type -> PCon -> [Witness]
-findWitness env t p         = all_ws
-  where elimSelf wc         = wc{ proto = vsubst [(tvSelf,wtype wc)] (proto wc) }
-        all_ws              = reverse $ filter (matchCoarse t p) $ map elimSelf $ witsByPName env $ tcname p
+findWitness env t p         = reverse $ filter (eqhead t . wtype) $ witsByPName env $ tcname p
 
 findProtoByAttr env cn n    = case filter hasAttr $ witsByTName env cn of
                                 [] -> Nothing
@@ -576,19 +569,19 @@ hasWitness env (TCon _ c) p
 hasWitness env t p          =  not $ null $ findWitness env t p
 
 allExtProto                 :: Env -> Type -> PCon -> [Type]
-allExtProto env t p         = reverse [ schematic (wtype w) | w <- witsByPName env (tcname p), matchCoarse t p w ]
+allExtProto env t p         = reverse [ schematic (wtype w) | w <- witsByPName env (tcname p), eqhead t (wtype w) ]
 
 allExtProtoAttr             :: Env -> Name -> [Type]
 allExtProtoAttr env n       = [ tCon tc | tc <- allCons env, any ((n `elem`) . allAttrs' env . proto) (witsByTName env $ tcname tc) ]
 
-matchCoarse t p w           = eqhead (uwild t) (wtype w) && (isJust $ matches (qbound $ binds w) (tcargs $ uwild p) (tcargs (proto w)))
-  where eqhead (TWild _)  _             = True
-        eqhead _          (TWild _)     = True
-        eqhead (TCon _ c) (TCon _ c')   = tcname c == tcname c'
-        eqhead (TFX _ fx) (TFX _ fx')   = fx == fx'
-        eqhead (TVar _ v) (TVar _ v')   = v == v'
-        eqhead _          _             = False
-        -- matching against uwild t (p) also accepts witnesses that would instantiate t (p)
+eqhead (TCon _ c) (TCon _ c')   = tcname c == tcname c'
+eqhead (TFX _ fx) (TFX _ fx')   = fx == fx'
+eqhead (TVar _ v) _
+  | univar v                    = True
+eqhead _ (TVar _ v')
+  | univar v'                   = True
+eqhead (TVar _ v) (TVar _ v')   = v == v'
+eqhead _          _             = False
 
 
 ----------------------------------------------------------------------------------------------------------------------
