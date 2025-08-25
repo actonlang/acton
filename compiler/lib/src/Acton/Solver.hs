@@ -558,27 +558,9 @@ solveMutAttr env (wf,sc,dec) c@(Mut info t1 n t2)
 ----------------------------------------------------------------------------------------------------------------------
 
 findWitness                 :: Env -> Type -> PCon -> [Witness]
-findWitness env t p
-  | length all_ws <= 1      = all_ws
-  | otherwise               = --trace ("## findWitness " ++ prstr t ++ " (" ++ prstr p ++ "), all_ws: " ++ prstrs all_ws) $
-                              case elim [] match_ws of
-                                [w] | null uni_ws  -> {-trace (" # best: " ++ prstr w) $ -}[w]
-                                w:u | force        -> {-trace (" # best forced: " ++ prstrs (w:u)) $ -}[w]
-                                _   | force        -> {-trace (" # first forced: " ++ prstr (head all_ws)) $ -}[head all_ws]
-                                    | otherwise    -> {-trace (" # all") $ -}all_ws
-  where t_                  = uwild t                   -- matching against uwild t also accepts witnesses that would instantiate t
-        p_                  = uwild p                   -- matching against uwild p also accepts witnesses that would instantiate p
-        force               = isForced env
-        t'                  = if force then t_ else t   -- allow instantiation only when in forced mode
-        elimSelf wc         = wc{ proto = vsubst [(tvSelf,wtype wc)] (proto wc) }
-        all_ws              = reverse $ filter (matchCoarse t_ p_) $ map elimSelf $ witsByPName env $ tcname p -- all witnesses that could be used
-        (match_ws, rest_ws) = partition (matchFine t') all_ws                                                  -- only those that match t exactly
-        uni_ws              = filter (unifying (DfltInfo (loc t) 11 Nothing []) t) rest_ws
-        elim ws' []         = reverse ws'
-        elim ws' (w:ws)
-          | covered         = elim ws' ws
-          | otherwise       = elim (w:ws') ws
-          where covered     = or [ matchWit w' w && not (matchWit w w') | w' <- ws'++ws ]
+findWitness env t p         = all_ws
+  where elimSelf wc         = wc{ proto = vsubst [(tvSelf,wtype wc)] (proto wc) }
+        all_ws              = reverse $ filter (matchCoarse t p) $ map elimSelf $ witsByPName env $ tcname p
 
 findProtoByAttr env cn n    = case filter hasAttr $ witsByTName env cn of
                                 [] -> Nothing
@@ -594,33 +576,19 @@ hasWitness env (TCon _ c) p
 hasWitness env t p          =  not $ null $ findWitness env t p
 
 allExtProto                 :: Env -> Type -> PCon -> [Type]
-allExtProto env t p         = reverse [ schematic (wtype w) | w <- witsByPName env (tcname p), matchCoarse t_ p_ w ]
-  where t_                  = uwild t                   -- matching against uwild t also accepts witnesses that would instantiate t
-        p_                  = uwild p                   -- matching against uwild p also accepts witnesses that would instantiate p
+allExtProto env t p         = reverse [ schematic (wtype w) | w <- witsByPName env (tcname p), matchCoarse t p w ]
 
 allExtProtoAttr             :: Env -> Name -> [Type]
 allExtProtoAttr env n       = [ tCon tc | tc <- allCons env, any ((n `elem`) . allAttrs' env . proto) (witsByTName env $ tcname tc) ]
 
-matchCoarse t p w           = match_p && eqhead t (wtype w)
-  where match_p             = matching (tcargs p) (qbound $ binds w) (tcargs (proto w))
-        eqhead (TWild _)  _             = True
+matchCoarse t p w           = eqhead (uwild t) (wtype w) && (isJust $ matches (qbound $ binds w) (tcargs $ uwild p) (tcargs (proto w)))
+  where eqhead (TWild _)  _             = True
         eqhead _          (TWild _)     = True
         eqhead (TCon _ c) (TCon _ c')   = tcname c == tcname c'
         eqhead (TFX _ fx) (TFX _ fx')   = fx == fx'
         eqhead (TVar _ v) (TVar _ v')   = v == v'
         eqhead _          _             = False
-
-matchFine t w               = matching [t] (qbound $ binds w) [wtype w]
-
-matchExactly t p w          = matching (t : tcargs p) (qbound $ binds w) (wtype w : tcargs (proto w))
-
-matchWit w w'               = matchExactly (wtype w) (proto w) w'
-
-matching ts vs ts'          = isJust $ matches vs ts ts'    -- there is a substitution s with domain vs such that ts == vsubst s ts'
-
-unifying info t w           = runTypeM $ tryUnify `catchError` const (return False)     -- WATCH OUT: instantiate TVars to TUnis first?
-  where tryUnify            = do unify info t (wtype w)
-                                 return True
+        -- matching against uwild t (p) also accepts witnesses that would instantiate t (p)
 
 
 ----------------------------------------------------------------------------------------------------------------------
