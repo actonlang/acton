@@ -981,12 +981,13 @@ class ProjectTestResults(object):
 
     def __init__(self, perf_data: str, perf_mode: bool=False):
         self.results = {}
-        self.last_results = self.parse_perf_data(perf_data)
         self.sw = time.Stopwatch()
         self.expected_modules = set([''])
         self.printed_lines = 0
         self.up_to_date = False
         self.perf_mode = perf_mode
+        self.last_results = {}
+        self.last_results = self.parse_perf_data(perf_data)
 
     def parse_perf_data(self, perf_data: str) -> dict[str, dict[str, TestInfo]]:
         """Parse performance data from a file

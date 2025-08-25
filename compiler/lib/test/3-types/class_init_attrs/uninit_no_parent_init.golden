@@ -1,0 +1,7 @@
+[error Compilation error]: Abstract attribute not selectable by class
+     +--> uninit_no_parent_init.act@6:9-6:28
+     |
+   6 |         Base.__init__(self)
+     :         ^------------------
+     :         `- Abstract attribute not selectable by class
+-----+

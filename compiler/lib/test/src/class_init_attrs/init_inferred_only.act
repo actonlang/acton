@@ -1,0 +1,7 @@
+class TestClass(object):
+    def __init__(self):
+        self.x = 1
+
+actor main(env):
+    t = TestClass()
+    env.exit(0)

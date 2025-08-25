@@ -1,0 +1,26 @@
+# Test case: function calls should be allowed in __init__
+
+def compute_value(x: int) -> int:
+    return x * 2 + 10
+
+class TestClass(object):
+    x: int
+    y: int
+    z: int
+    
+    def __init__(self, base: int):
+        # Call to function should be allowed
+        self.x = 3 + compute_value(compute_value(base))
+        
+        result = compute_value(5)
+        self.y = result
+        
+        # Multiple calls
+        self.z = compute_value(self.x) + compute_value(self.y)
+
+actor main(env):
+    t = TestClass(10)
+    print(t.x)  # Should be 30
+    print(t.y)  # Should be 20
+    print(t.z)  # Should be 80
+    env.exit(0)

@@ -1,0 +1,16 @@
+class BaseA:
+    x: int
+    def __init__(self):
+        self.x = 1
+
+class BaseB(BaseA):
+    y: int
+
+class TestClass(BaseB):
+    def __init__(self):
+        BaseA.__init__(self)
+        self.y = 1
+
+actor main(env):
+    t = TestClass()
+    env.exit(0)

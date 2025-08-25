@@ -1,0 +1,21 @@
+# Test case: Method calls on self should stop scanning. We are in the
+# constructor, so `self` is not initialized yet and we can't track down what the
+# method is doing exactly.
+
+class TestClass(object):
+    x: int
+    y: int
+    counter: int
+
+    def __init__(self):
+        self.counter = 0
+        self.x = 1
+        self.helper()  # Method call on self - scanner should stop here
+        self.y = 2  # Not reached by scanner
+
+    mut def helper(self):
+        self.counter += 1
+
+actor main(env):
+    t = TestClass()
+    env.exit(0)

@@ -180,6 +180,8 @@ class ZigDependency(Dependency):
         self.url = url
         self.hash = hash
         self.path = path
+        self.repo_url = None
+        self.repo_ref = None
         self.options = options
         self.artifacts = artifacts
 
