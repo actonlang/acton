@@ -412,7 +412,9 @@ instance Pretty TVar where
     pretty (TV k n)                 = pretty n -- <> parens (colon <> pretty k)
 
 instance Pretty TUni where
-    pretty (UV k i)                 = text "T_" <> pretty i -- <> parens (colon <> pretty k)
+    pretty (UV k i)
+      | i < 0                       = text "T_" <> pretty (-i) <> text "w"
+      | otherwise                   = text "T_" <> pretty i
 
 instance Pretty TCon where
     pretty (TC n [])                = pretty n
