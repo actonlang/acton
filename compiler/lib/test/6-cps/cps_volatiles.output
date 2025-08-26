@@ -4,20 +4,20 @@ proc def force_cps (C_cont : proc(__builtin__.int) -> $R, arg : __builtin__.int)
 
 proc def compute (C_cont : proc(__builtin__.int) -> $R, aa : __builtin__.int) -> $R:
     aa: $Box[__builtin__.int] = $Box@[__builtin__.int](aa)
+    W_21: __builtin__.Plus[__builtin__.int] = __builtin__.IntegralD_int()
     W_6: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
-    W_14: __builtin__.Plus[__builtin__.int] = __builtin__.IntegralD_int()
     xx: $Box[__builtin__.int] = $Box@[__builtin__.int](W_6.__fromatom__(1))
     proc def C_3cont (C_4res : None) -> $R:
-        N_1tmp: __builtin__.int = W_14.__add__(xx.val, aa.val)
+        N_1tmp: __builtin__.int = W_21.__add__(xx.val, aa.val)
         return $R_CONTc@[__builtin__.int](C_cont, N_1tmp)
     proc def C_5try (C_6res : __builtin__.bool) -> $R:
         if C_6res:
             proc def C_7cont (C_8res : __builtin__.int) -> $R:
                 C_1pre: __builtin__.int = C_8res
-                xx.val = W_14.__iadd__(xx.val, C_1pre)
+                xx.val = W_21.__iadd__(xx.val, C_1pre)
                 proc def C_9cont (C_10res : __builtin__.int) -> $R:
                     C_2pre: __builtin__.int = C_10res
-                    aa.val = W_14.__iadd__(aa.val, C_2pre)
+                    aa.val = W_21.__iadd__(aa.val, C_2pre)
                     $DROP_C()
                     return $R_CONTc@[None](C_3cont, None)
                 return force_cps(C_9cont, W_6.__fromatom__(1))
