@@ -170,7 +170,7 @@ solve' env select hist te tt eq cs
         group (r:rs)                        = (r : rs1) : group rs2
           where (rs1,rs2)                   = partition (==r) rs
         rnks                                = map (rank env) solve_cs
-        tryAlts st t@(TUni _ tv) []         = do traceM ("### FAIL " ++ prstr tv ++ ":\n" ++ render (nest 4 $ vcat $ map pretty cs))
+        tryAlts st t@(TUni _ tv) []         = do --traceM ("### FAIL " ++ prstr tv ++ ":\n" ++ render (nest 4 $ vcat $ map pretty cs))
                                                  let ts = map (\n -> tCon (TC (noQ ('t':show n)) [])) [0..]
                                                      vs = filter (\v -> length (filter (\c -> v `elem` ufree c) cs) > 1) (nub (ufree cs))
                                                      cs' = if length cs == 1 then cs else filter (not . useless vs) cs
