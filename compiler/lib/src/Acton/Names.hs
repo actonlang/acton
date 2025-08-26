@@ -392,6 +392,9 @@ instance Vars TSchema where
 instance Vars TVar where
     free (TV k v)                   = []
 
+instance Vars TUni where
+    free (UV k v)                   = []
+
 instance Vars TCon where
     free (TC n ts)                  = free n ++ free ts
 

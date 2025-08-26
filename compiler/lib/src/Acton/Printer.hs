@@ -411,6 +411,9 @@ prettyQual q                        = pretty q <+> text "=>"
 instance Pretty TVar where
     pretty (TV k n)                 = pretty n -- <> parens (colon <> pretty k)
 
+instance Pretty TUni where
+    pretty (UV k i)                 = text "T_" <> pretty i -- <> parens (colon <> pretty k)
+
 instance Pretty TCon where
     pretty (TC n [])                = pretty n
 --    pretty (TC n [t])

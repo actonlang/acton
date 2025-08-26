@@ -130,7 +130,7 @@ infTopStmts env (s : ss)                = do (cs,te1,s) <- infEnv env s
                                              te1 <- defaultTE env te1
                                              --traceM ("===========\n" ++ render (nest 4 $ vcat $ map pretty te1))
                                              ss1 <- termred <$> usubst (pushEqns eq [s])
---                                             defaultVars (ufree ss1)
+                                             defaultVars (ufree ss1)
                                              ss1 <- usubst ss1
 
                                              (te2,ss2) <- infTopStmts (define te1 env) ss
@@ -138,8 +138,8 @@ infTopStmts env (s : ss)                = do (cs,te1,s) <- infEnv env s
 
   where defaultTE env te                = do defaultVars (ufree te)
                                              usubst te
-        defaultVars tvs                 = do tvs' <- (filter univar . ufree) <$> usubst (map tVar tvs)
-                                             sequence [ usubstitute tv (dflt (tvkind tv)) | tv <- tvs' ]
+        defaultVars tvs                 = do tvs' <- ufree <$> usubst (map tUni tvs)
+                                             sequence [ usubstitute tv (dflt (uvkind tv)) | tv <- tvs' ]
         dflt KType                      = tNone
         dflt KFX                        = fxPure
         dflt PRow                       = posNil
@@ -659,14 +659,15 @@ solveScoped env vs te tt cs             = do --traceM ("\n\n### solveScoped: " +
                                              (cs,eq) <- simplify env te tt cs
                                              solve env (any (`elem` vs) . vfree) te tt eq cs
 
-checkNoEscape _ env []                  = return ()
-checkNoEscape l env vs                  = do fvs <- ufree <$> usubst env
-                                             let escaped = vs `intersect` fvs
-                                             when (not $ null escaped) $ do
-                                                 env1 <- usubst env
-                                                 traceM ("####### env:\n" ++ prstr env1)
-                                                 traceM ("#### ufree env: " ++ prstrs fvs)
-                                                 err l ("Escaping type variables: " ++ prstrs escaped)
+-- To be replaced by the quantifier escape check of the new implication constraint solver
+checkNoEscape l env vs                  = return ()
+--                                          do fvs <- ufree <$> usubst env
+--                                             let escaped = vs `intersect` fvs
+--                                             when (not $ null escaped) $ do
+--                                                 env1 <- usubst env
+--                                                 traceM ("####### env:\n" ++ prstr env1)
+--                                                 traceM ("#### ufree env: " ++ prstrs fvs)
+--                                                 err l ("Escaping type variables: " ++ prstrs escaped)
 
 
 wellformed                              :: (WellFormed a) => Env -> a -> TypeM ()
@@ -841,7 +842,6 @@ instance Check Decl where
                                              wellformed env1 q
                                              wellformed env1 a
                                              when (inClass env) $
-                                              --   tryUnify (DfltInfo l 600 Nothing []) tSelf $ selfType p k dec
                                                  tryUnify (Simple l "Type of first parameter of class method does not unify with Self") tSelf $ selfType p k dec
                                              checkSelfInActor env (Just n) (Just p) (Just k)
                                              (csp,te0,p') <- infEnv env1 p
@@ -966,7 +966,7 @@ refine env cs te eq
   | not $ null ambig_vs                 = do --traceM ("  #defaulting: " ++ prstrs ambig_vs)
                                              (cs',eq') <- solve env isAmbig te tNone eq cs
                                              refineAgain cs' eq'
-  | not $ null tail_vs                  = do sequence [ tryUnify (Simple NoLoc "internal") (tVar v) (tNil $ tvkind v) | v <- tail_vs ]
+  | not $ null tail_vs                  = do sequence [ tryUnify (Simple NoLoc "internal") (tUni v) (tNil $ uvkind v) | v <- tail_vs ]
                                              refineAgain cs eq
   | otherwise                           = do eq <- usubst eq
                                              return (gen_vs, cs, te, eq)
@@ -979,12 +979,10 @@ refine env cs te eq
 
         solve_cs                        = [ c | c <- cs, noQual c ]
 
-        noQual (Impl _ _ (TVar _ v) p)          -- CHANGE
---        noQual (Impl _ _ (TUni _ u) p)
-          | univar v                    = False
+        noQual (Impl _ _ (TUni _ u) p)  = False
         noQual c                        = True
 
-        canGen tv                       = tvkind tv /= KFX
+        canGen tv                       = uvkind tv /= KFX
 
         isAmbig c                       = any (`elem` ambig_vs) (ufree c)
 
@@ -993,7 +991,7 @@ refine env cs te eq
                                              env <- usubst env
                                              refine env cs1 te (eq1++eq)
 
-fxfree te                               = [ tv | tv <- ufree te, tvkind tv == KFX ]
+fxfree te                               = [ tv | tv <- ufree te, uvkind tv == KFX ]
 
 genEnv                                  :: Env -> Constraints -> TEnv -> [Decl] -> TypeM (Constraints,TEnv,Equations,[Decl])
 genEnv env cs te ds

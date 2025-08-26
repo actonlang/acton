@@ -42,10 +42,7 @@ initTypeState s                         = TypeState { nextint = 1, effectstack =
 type TypeM a                            = ExceptT TypeError (State TypeState) a
 
 runTypeM                                :: TypeM a -> a
-runTypeM m                              = runTypeM' [] m
-
-runTypeM'                               :: Substitution -> TypeM a -> a
-runTypeM' s m                           = case evalState (runExceptT m) (initTypeState $ Map.fromList s) of
+runTypeM m                              = case evalState (runExceptT m) (initTypeState Map.empty) of
                                             Right x  -> x
                                             Left err -> error ("Unhandled TypeM exception: " ++ prstr loc ++ ": " ++ prstr str)
                                               where (loc,str) : _ = typeError err
@@ -92,28 +89,27 @@ newWitness                              = Internal Witness "" <$> newUnique
 
 newTmp                                  = Internal Tempvar "" <$> newUnique
 
-newUnivarOfKind k                       = TVar NoLoc <$> TV k <$> Internal Typevar (str k) <$> newUnique        -- CHANGE
---newUnivarOfKind k                       = TUni NoLoc <$> UV k <$> newUnique
+newUnivarOfKind k                       = TUni NoLoc <$> univar k <$> newUnique
   where str KType                       = ""
         str KFX                         = "x"
         str PRow                        = "p"
         str KRow                        = "k"
         str _                           = ""
 
-newUnivarToken n                        = TVar NoLoc $ TV KWild $ Internal Typevar "z" n                        -- CHANGE
---newUnivarToken n                        = TUni NoLoc $ UV KWild (-n)              -- A negative id can never clash with an existing TUni
+newUnivarToken n                        = TUni NoLoc $ unitoken n
 
 newUnivars ks                           = mapM newUnivarOfKind ks
 
 newUnivar                               = newUnivarOfKind KType
+
 
 -- Type errors ---------------------------------------------------------------------------------------------------------------------
 
 data TypeError                      = TypeError SrcLoc String
                                     | SelfParamError SrcLoc
                                     | RigidVariable TVar
-                                    | InfiniteType TVar                 -- TUni?
-                                    | ConflictingRow TVar               -- TUni?
+                                    | InfiniteType TUni Type
+                                    | ConflictingRow TUni
                                     | KwdNotFound ErrInfo Name
                                     | KwdUnexpected ErrInfo Name
                                     | PosElemNotFound ErrInfo String
@@ -136,7 +132,7 @@ instance HasLoc TypeError where
     loc (TypeError l str)           = l
     loc (SelfParamError l)          = l
     loc (RigidVariable tv)          = loc tv
-    loc (InfiniteType tv)           = loc tv
+    loc (InfiniteType tv t)         = loc t
     loc (ConflictingRow tv)         = loc tv
     loc (KwdNotFound _ n)           = loc n
     loc (KwdUnexpected _ n)         = loc n
@@ -196,7 +192,7 @@ useless vs c                           = case c of
                                              Sel _ _ t n t0 -> f t || f t0
                                              Mut _ t1 n t2 -> True   -- TODO
                                              Seal _ _ -> True        -- TODO
-     where f (TVar _ v) = notElem v (tvSelf : vs)
+     where f (TUni _ v) = notElem v vs
            f _          = False
 
 --typeReport :: TypeError -> Report
@@ -205,8 +201,8 @@ typeReport (SelfParamError l) filename src          = Err Nothing msg [(locToPos
                                                       where msg = "'self' cannot be used as a parameter name in actors."
 typeReport (RigidVariable tv) filename src          = Err Nothing msg [(locToPosition (loc tv) filename src, This msg)] []
                                                       where msg = render (text "Type" <+> pretty tv <+> text "is rigid")
-typeReport (InfiniteType tv) filename src           = Err Nothing msg [(locToPosition (loc tv) filename src, This msg)] []
-                                                      where msg = render (text "Type" <+> pretty tv <+> text "is infinite")
+typeReport (InfiniteType tv t) filename src         = Err Nothing msg [(locToPosition (loc t) filename src, This msg)] []
+                                                      where msg = render (text "Type" <+> pretty tv <+> text "~" <+> pretty t <+> text "is infinite")
 typeReport (ConflictingRow tv) filename src         = Err Nothing msg [(locToPosition (loc tv) filename src, This msg)] []
                                                       where msg = render (text "Type" <+> pretty tv <+> text "has conflicting extensions")
 typeReport (KwdNotFound info n) filename src        = Err Nothing "Keyword argument missing" [(locToPosition (loc n) filename src, This msg)] []
@@ -306,7 +302,7 @@ typeError                           :: TypeError -> [(SrcLoc, String)]
 typeError (TypeError l str)          = [(l, str)]
 typeError (SelfParamError l)         = [(l, "'self' cannot be used as a parameter name in actors.")]
 typeError (RigidVariable tv)         = [(loc tv, render (text "Type" <+> pretty tv <+> text "is rigid"))]
-typeError (InfiniteType tv)          = [(loc tv, render (text "Type" <+> pretty tv <+> text "is infinite"))]
+typeError (InfiniteType tv t)        = [(loc tv, render (text "Type" <+> pretty tv <+> text "~" <+> pretty t <+> text "is infinite"))]
 typeError (ConflictingRow tv)        = [(loc tv, render (text "Type" <+> pretty tv <+> text "has conflicting extensions"))]
 typeError (KwdNotFound _ n)          = [(loc n, render (text "Keyword element" <+> quotes (pretty n) <+> text "is not found"))]
 typeError (KwdUnexpected _ n)        = [(loc n, render (text "Keyword element" <+> quotes (pretty n) <+> text "is not expected"))]
@@ -347,7 +343,7 @@ tyerr x s                           = throwError $ TypeError (loc x) (s ++ " " +
 tyerrs xs s                         = throwError $ TypeError (loc $ head xs) (s ++ " " ++ prstrs xs)
 selfParamError l                    = Control.Exception.throw $ SelfParamError l
 rigidVariable tv                    = throwError $ RigidVariable tv
-infiniteType tv                     = throwError $ InfiniteType tv
+infiniteType tv t                   = throwError $ InfiniteType tv t
 conflictingRow tv                   = throwError $ ConflictingRow tv
 kwdNotFound info n                  = throwError $ incompatError info (render(text ("keyword " ++ elemSpec info) <+> quotes (pretty n) <+> text ("is missing" ++ elemSuffix info)))
 kwdUnexpected info n                = throwError $ KwdUnexpected info n

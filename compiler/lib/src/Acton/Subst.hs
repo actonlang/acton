@@ -97,9 +97,7 @@ instance VFree Constraint where
     vfree (Seal info t)             = vfree t
 
 instance VFree Type where
-    vfree (TVar _ v)
-      | not (univar v)              = [v]                                                   -- CHANGE
-      | otherwise                   = []
+    vfree (TVar _ v)                = [v]
     vfree (TCon _ c)                = vfree c
     vfree (TFun _ fx p k t)         = vfree fx ++ vfree p ++ vfree k ++ vfree t
     vfree (TTuple _ p k)            = vfree p ++ vfree k
@@ -453,7 +451,7 @@ instance UFree TSchema where
     ufree (TSchema _ q t)           = ufree q ++ ufree t
 
 instance UFree TVar where
-    ufree v                         = [v]
+    ufree v                         = []
         
 instance UFree TCon where
     ufree (TC n ts)                 = ufree ts
@@ -462,10 +460,8 @@ instance UFree QBind where
     ufree (Quant v cs)              = ufree cs
 
 instance UFree Type where
-    ufree (TVar _ v)
-      | univar v                    = [v]                           -- CHANGE
-      | otherwise                   = []
-    ufree (TUni _ u)                = [] -- u                       -- CHANGE
+    ufree (TUni _ u)                = [u]
+    ufree (TVar _ v)                = []
     ufree (TCon _ c)                = ufree c
     ufree (TFun _ fx p k t)         = ufree fx ++ ufree p ++ ufree k ++ ufree t
     ufree (TTuple _ p k)            = ufree p ++ ufree k
@@ -486,6 +482,33 @@ instance UFree KwdPar where
     ufree (KwdPar n t e p)          = ufree t ++ ufree p
     ufree (KwdSTAR n t)             = ufree t
     ufree KwdNIL                    = []
+
+instance UFree Decl where
+    ufree (Def _ n q p k a ss de fx _)  = ufree q ++ ufree p ++ ufree k ++ ufree a ++ ufree ss ++ ufree fx
+    ufree (Actor _ n q p k ss _)        = ufree q ++ ufree p ++ ufree k ++ ufree ss
+    ufree (Class _ n q bs ss _)         = ufree q ++ ufree bs ++ ufree ss
+    ufree (Protocol _ n q bs ss _)      = ufree q ++ ufree bs ++ ufree ss
+    ufree (Extension _ q c bs ss _)     = ufree q ++ ufree c ++ ufree bs ++ ufree ss
+
+instance UFree Stmt where
+    ufree (Expr _ e)                = ufree e
+    ufree (Assign _ ps e)           = ufree ps ++ ufree e
+    ufree (MutAssign _ t e)         = ufree t ++ ufree e
+    ufree (AugAssign _ t op e)      = ufree t ++ ufree e
+    ufree (Assert _ e mbe)          = ufree e ++ ufree mbe
+    ufree (Delete _ t)              = ufree t
+    ufree (Return _ mbe)            = ufree mbe
+    ufree (Raise _ e)               = ufree e
+    ufree (If _ bs els)             = ufree bs ++ ufree els
+    ufree (While _ e b els)         = ufree e ++ ufree b ++ ufree els
+    ufree (For _ p e b els)         = ufree p ++ ufree e ++ ufree b ++ ufree els
+    ufree (Try _ b hs els fin)      = ufree b ++ ufree hs ++ ufree els ++ ufree fin
+    ufree (With _ is b)             = ufree is ++ ufree b
+    ufree (VarAssign _ ps e)        = ufree ps ++ ufree e
+    ufree (After _ e e')            = ufree e ++ ufree e'
+    ufree (Decl _ ds)               = ufree ds
+    ufree (Signature _ ns tsc d)    = ufree tsc
+    ufree s                         = []
 
 instance UFree Expr where
     ufree (Call l e p k)            = ufree e ++ ufree p ++ ufree k
@@ -532,6 +555,15 @@ instance UFree KwdPat where
     ufree (KwdPat n p kp)           = ufree p ++ ufree kp
     ufree (KwdPatStar p)            = ufree p
     ufree KwdPatNil                 = []
+
+instance UFree Branch where
+    ufree (Branch e b)              = ufree e ++ ufree b
+
+instance UFree Handler where
+    ufree (Handler ex b)            = ufree b
+
+instance UFree WithItem where
+    ufree (WithItem e p)            = ufree e ++ ufree p
 
 instance UFree PosArg where
     ufree (PosArg e p)              = ufree e ++ ufree p
@@ -610,14 +642,11 @@ instance USubst QBind where
     usubst (Quant v cs)             = Quant <$> usubst v <*> usubst cs
 
 instance USubst Type where
-    usubst (TVar l v)               = do s <- usubstitution                             -- CHANGE
-                                         case Map.lookup v s of
-                                            Just t ->  usubst t
-                                            Nothing -> return (TVar l v)
     usubst (TUni l u)               = do s <- usubstitution
-                                         case Nothing of -- Map.lookup u s of           -- CHANGE
---                                            Just t ->  usubst t
+                                         case Map.lookup u s of
+                                            Just t  -> usubst t
                                             Nothing -> return (TUni l u)
+    usubst (TVar l v)               = return $ TVar l v
     usubst (TCon l c)               = TCon l <$> usubst c
     usubst (TFun l fx p k t)        = TFun l <$> usubst fx <*> usubst p <*> usubst k <*> usubst t
     usubst (TTuple l p k)           = TTuple l <$> usubst p <*> usubst k
@@ -695,9 +724,6 @@ instance USubst Expr where
     usubst (Paren l e)              = Paren l <$> usubst e
     usubst e                        = return e
 
-instance USubst Branch where
-    usubst (Branch e b)             = Branch <$> usubst e <*> usubst b
-
 instance USubst Pattern where
     usubst (PWild l t)              = PWild l <$> usubst t
     usubst (PVar l n t)             = PVar l n <$> usubst t
@@ -714,6 +740,9 @@ instance USubst KwdPat where
     usubst (KwdPat n p kp)          = KwdPat n <$> usubst p <*> usubst kp
     usubst (KwdPatStar p)           = KwdPatStar <$> usubst p
     usubst KwdPatNil                = return KwdPatNil
+
+instance USubst Branch where
+    usubst (Branch e b)             = Branch <$> usubst e <*> usubst b
 
 instance USubst Handler where
     usubst (Handler ex b)           = Handler ex <$> usubst b
@@ -763,8 +792,8 @@ polneg (p,n)                        = (n,p)
 (p,n) `polminus` vs                 = (p\\vs, n\\vs)
 
 instance Polarity Type where
-    polvars (TVar _ v)              = ([v],[])
---    polvars (TUni _ u)              = ([u],[])                        -- CHANGE
+    polvars (TUni _ u)              = ([u],[])
+    polvars (TVar _ v)              = ([],[])
     polvars (TCon _ c)              = polvars c
     polvars (TFun _ fx p k t)       = polvars fx `polcat` polvars t `polcat` polneg (polvars p `polcat` polvars k)
     polvars (TTuple _ p k)          = polvars p `polcat` polvars k
@@ -788,7 +817,7 @@ instance Polarity TCon where
       where vs                      = ufree ts
 
 instance Polarity QBind where
-    polvars (Quant v cs)            = (vs,vs) where vs = v : ufree cs
+    polvars (Quant v cs)            = (vs,vs) where vs = ufree cs
 
 instance Polarity TSchema where
     polvars (TSchema _ q t)         = polvars q `polcat` polvars t
@@ -830,8 +859,6 @@ instance Tailvars Type where
     tailvars (TCon _ c)             = tailvars c
     tailvars (TFun _ fx p k t)      = tailvars fx ++ tailvars' p ++ tailvars' k ++ tailvars t
     tailvars (TTuple _ p k)
-      | TVar{} <- p, TNil{} <- k    = []    -- Exclude open * tuples            REMOVE
-      | TNil{} <- p, TVar{} <- k    = []    -- Exclude open ** tuples           REMOVE
       | TUni{} <- p, TNil{} <- k    = []    -- Exclude open * tuples
       | TNil{} <- p, TUni{} <- k    = []    -- Exclude open ** tuples
       | otherwise                   = tailvars' p ++ tailvars' k
@@ -841,8 +868,7 @@ instance Tailvars Type where
 tailvars' (TRow _ _ _ t r)          = tailvars t ++ tailvars' r
 tailvars' (TStar _ _ r)             = tailvars r
 tailvars' (TNil _ _)                = []
---tailvars' (TUni _ u)                = [u]                 -- CHANGE
-tailvars' (TVar _ v)                = [v]                   -- CHANGE
+tailvars' (TUni _ u)                = [u]
 
 instance Tailvars TCon where
     tailvars (TC c ts)              = tailvars ts
@@ -901,7 +927,6 @@ instance UWild TCon where
     uwild (TC n ts)                 = TC n (uwild ts)
 
 instance UWild Type where
-    uwild (TVar l v) | univar v     = tWild
     uwild (TUni l u)                = tWild
     uwild (TCon l c)                = TCon l (uwild c)
     uwild (TFun l fx p k t)         = TFun l fx (uwild p) (uwild k) (uwild t)
