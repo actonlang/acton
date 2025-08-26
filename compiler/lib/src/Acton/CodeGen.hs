@@ -170,7 +170,7 @@ constub env t n r b
   | otherwise                       = empty
   where ns                          = abstractAttrs env (NoQ n)
 
-fields env c                        = map field (subst [(tvSelf,tCon c)] te)
+fields env c                        = map field (vsubst [(tvSelf,tCon c)] te)
   where te                          = fullAttrEnv env c
         field (n, NDef sc Static _) = funsig env n (sctype sc) <> semi
         field (n, NDef sc NoDec _)  = methsig env c n (sctype sc) <> semi
@@ -339,7 +339,7 @@ declDecl env (Class _ n q as b ddoc)
                                       declCleanup env1 n sup_c $+$
                                       declCon env1 n q b $+$
                                       text "struct" <+> classname env n <+> methodtable env n <> semi
-  where b'                          = subst [(tvSelf, tCon c)] b
+  where b'                          = vsubst [(tvSelf, tCon c)] b
         c                           = TC (NoQ n) (map tVar $ qbound q)
         env1                        = defineTVars q env
         props                       = [ n | (n, NSig sc Property _) <- fullAttrEnv env c ]
@@ -410,7 +410,7 @@ initClassBase env c q as hasCDef    = methodtable env c <> dot <> gen env gcinfo
                                       methodtable env c <> dot <> gen env superclassKW <+> equals <+> super <> semi $+$
                                       vcat [ inherit c' n | (c',n) <- inheritedAttrs env (NoQ c) ]
   where super                       = if null as then text "NULL" else parens (gen env qnSuperClass) <> text "&" <> methodtable' env (tcname $ head as)
-        selfsubst                   = subst [(tvSelf, tCon tc)]
+        selfsubst                   = vsubst [(tvSelf, tCon tc)]
         tc                          = TC (NoQ c) [ tVar v | Quant v _ <- q ]
         inherit c' n
           | hasCDef                 = methodtable env c <> dot <> gen env n <+> equals <+> genTopName env (methodname c n) <> semi
@@ -696,7 +696,7 @@ dotCast env ent ts e n
                                          TVar _ tv -> splitTC env (findTVBound env tv)
                                          TTuple{}  -> ([], cValue)
         (sc, dec)                   = findAttr' env c0 n
-        t                           = subst fullsubst $ if ent then addSelf t1 dec else t1
+        t                           = vsubst fullsubst $ if ent then addSelf t1 dec else t1
         t1                          = exposeMsg' (sctype sc)
         fullsubst                   = (tvSelf,t0) : (qbound (scbind sc) `zip` ts) ++ argsubst
         gen_t                       = gen env t
@@ -705,7 +705,7 @@ classCast env ts x q n              = parens . (parens (gen env t) <>)
   where (ts0,ts1)                   = splitAt (length q) ts
         tc                          = TC x ts0
         (sc, dec)                   = findAttr' env tc n
-        t                           = subst fullsubst $ addSelf (sctype sc) dec
+        t                           = vsubst fullsubst $ addSelf (sctype sc) dec
         fullsubst                   = (tvSelf,tCon tc) : (qbound (scbind sc) `zip` ts1)
 
 genNew env n p                      = newcon' env n <> parens (gen env p)

@@ -25,6 +25,8 @@ self                                = Name NoLoc "self"
 localName n                         = Derived n suffixLocal
 newactName n                        = Derived n suffixNewact
 
+g_self                              = globalName "self"
+
 g_act                               = globalName "act"
 g_skip                              = globalName "skip"
 
@@ -390,6 +392,9 @@ instance Vars TSchema where
 instance Vars TVar where
     free (TV k v)                   = []
 
+instance Vars TUni where
+    free (UV k v)                   = []
+
 instance Vars TCon where
     free (TC n ts)                  = free n ++ free ts
 
@@ -398,6 +403,7 @@ instance Vars QBind where
 
 instance Vars Type where
     free (TVar _ v)                 = free v
+    free (TUni _ u)                 = free u
     free (TFun _ es p k t)          = free es ++ free p ++ free k ++ free t
     free (TTuple _ p k)             = free p ++ free k
     free (TOpt _ t)                 = free t

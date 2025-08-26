@@ -177,8 +177,33 @@ instance (USubst x) => USubst (EnvF x) where
                                      we <- usubst (witnesses env)
                                      ex <- usubst (envX env)
                                      return env{ names = ne, witnesses = we, envX = ex }
-    ufree env                   = tvarScope0 env ++ ufree (names env) ++ ufree (witnesses env) ++ ufree (envX env)
 
+instance (UFree x) => UFree (EnvF x) where
+    ufree env                   = ufree (names env) ++ ufree (witnesses env) ++ ufree (envX env)
+
+
+-- VFree ----------------------------------------------------------------------------------------
+
+instance VFree NameInfo where
+    vfree (NVar t)              = vfree t
+    vfree (NSVar t)             = vfree t
+    vfree (NDef t d _)          = vfree t
+    vfree (NSig t d _)          = vfree t
+    vfree (NAct q p k te _)     = (vfree q ++ vfree p ++ vfree k ++ vfree te) \\ (tvSelf : qbound q)
+    vfree (NClass q us te _)    = (vfree q ++ vfree us ++ vfree te) \\ (tvSelf : qbound q)
+    vfree (NProto q us te _)    = (vfree q ++ vfree us ++ vfree te) \\ (tvSelf : qbound q)
+    vfree (NExt q c ps te _)    = (vfree q ++ vfree c ++ vfree ps ++ vfree te) \\ (tvSelf : qbound q)
+    vfree (NTVar k c)           = vfree c
+    vfree (NAlias qn)           = []
+    vfree (NMAlias qn)          = []
+    vfree (NModule te doc)      = []        -- actually vfree te, but a module has no free variables on the top level
+    vfree NReserved             = []
+
+instance VFree WTCon where
+    vfree (w,u)                 = vfree u
+
+
+-- VSubst ---------------------------------------------------------------------------------------
 
 instance VSubst NameInfo where
     vsubst s (NVar t)           = NVar (vsubst s t)
@@ -199,6 +224,45 @@ instance VSubst WTCon where
     vsubst s (w,u)              = (w, vsubst s u)
 
 
+-- UFree ----------------------------------------------------------------------------------------
+
+instance UFree NameInfo where
+    ufree (NVar t)              = ufree t
+    ufree (NSVar t)             = ufree t
+    ufree (NDef t d _)          = ufree t
+    ufree (NSig t d _)          = ufree t
+    ufree (NAct q p k te _)     = ufree q ++ ufree p ++ ufree k ++ ufree te
+    ufree (NClass q us te _)    = ufree q ++ ufree us ++ ufree te
+    ufree (NProto q us te _)    = ufree q ++ ufree us ++ ufree te
+    ufree (NExt q c ps te _)    = ufree q ++ ufree c ++ ufree ps ++ ufree te
+    ufree (NTVar k c)           = ufree c
+    ufree (NAlias qn)           = []
+    ufree (NMAlias qn)          = []
+    ufree (NModule te doc)      = []        -- actually ufree te, but a module has no free variables on the top level
+    ufree NReserved             = []
+
+instance UFree WTCon where
+    ufree (w,u)                 = ufree u
+
+instance UFree Witness where
+    ufree w@WClass{}            = []
+    ufree w@WInst{}             = ufree (wtype w) ++ ufree (proto w)
+
+instance Polarity NameInfo where
+    polvars (NVar t)            = polvars t
+    polvars (NSVar t)           = invvars t
+    polvars (NDef t d _)        = polvars t
+    polvars (NSig t d _)        = polvars t
+    polvars (NAct q p k te _)   = polvars q `polcat` polneg (polvars p `polcat` polvars k) `polcat` polvars te
+    polvars (NClass q us te _)  = polvars q `polcat` polvars us `polcat` polvars te
+    polvars (NProto q us te _)  = polvars q `polcat` polvars us `polcat` polvars te
+    polvars (NExt q c ps te _)  = polvars q `polcat` polvars c `polcat` polvars ps `polcat` polvars te
+    polvars (NTVar k c)         = polvars c
+    polvars _                   = ([],[])
+
+
+-- USubst ---------------------------------------------------------------------------------------
+
 instance USubst NameInfo where
     usubst (NVar t)             = NVar <$> usubst t
     usubst (NSVar t)            = NSVar <$> usubst t
@@ -214,50 +278,17 @@ instance USubst NameInfo where
     usubst (NModule te doc)     = NModule <$> return te <*> return doc     -- actually usubst te, but te has no free variables (top-level)
     usubst NReserved            = return NReserved
 
-    ufree (NVar t)              = ufree t
-    ufree (NSVar t)             = ufree t
-    ufree (NDef t d _)          = ufree t
-    ufree (NSig t d _)          = ufree t
-    ufree (NAct q p k te _)     = (ufree q ++ ufree p ++ ufree k ++ ufree te) \\ (tvSelf : qbound q)
-    ufree (NClass q us te _)    = (ufree q ++ ufree us ++ ufree te) \\ (tvSelf : qbound q)
-    ufree (NProto q us te _)    = (ufree q ++ ufree us ++ ufree te) \\ (tvSelf : qbound q)
-    ufree (NExt q c ps te _)    = (ufree q ++ ufree c ++ ufree ps ++ ufree te) \\ (tvSelf : qbound q)
-    ufree (NTVar k c)           = ufree c
-    ufree (NAlias qn)           = []
-    ufree (NMAlias qn)          = []
-    ufree (NModule te doc)      = []        -- actually ufree te, but a module has no free variables on the top level
-    ufree NReserved             = []
-
---instance Subst Witness where
---    subst s w@WClass{}          = w                             -- A WClass (i.e., an extension) can't have any free type variables
---    subst s w@WInst{}           = w{ wtype = subst s (wtype w), proto = subst s (proto w) }
-
 instance USubst Witness where
     usubst w@WClass{}           = return w                      -- A WClass (i.e., an extension) can't have any free type variables
     usubst w@WInst{}            = do t <- usubst (wtype w)
                                      p <- usubst (proto w)
                                      return w{ wtype  = t, proto = p }
 
-    ufree w@WClass{}            = []
-    ufree w@WInst{}             = (ufree (wtype w) ++ ufree (proto w)) \\ qbound (binds w)
-
-
 instance USubst WTCon where
     usubst (w,u)                = (,) <$> return w <*> usubst u
 
-    ufree (w,u)                 = ufree u
 
-instance Polarity NameInfo where
-    polvars (NVar t)                = polvars t
-    polvars (NSVar t)               = invvars t
-    polvars (NDef t d _)            = polvars t
-    polvars (NSig t d _)            = polvars t
-    polvars (NAct q p k te _)       = (polvars q `polcat` polneg (polvars p `polcat` polvars k) `polcat` polvars te) `polminus` (tvSelf : qbound q)
-    polvars (NClass q us te _)      = (polvars q `polcat` polvars us `polcat` polvars te) `polminus` (tvSelf : qbound q)
-    polvars (NProto q us te _)      = (polvars q `polcat` polvars us `polcat` polvars te) `polminus` (tvSelf : qbound q)
-    polvars (NExt q c ps te _)      = (polvars q `polcat` polvars c `polcat` polvars ps `polcat` polvars te) `polminus` (tvSelf : qbound q)
-    polvars (NTVar k c)             = polvars c
-    polvars _                       = ([],[])
+-- Polarity -------------------------------------------------------------------------------------
 
 instance Polarity WTCon where
     polvars (w, c)                  = polvars c
@@ -265,11 +296,8 @@ instance Polarity WTCon where
 instance Polarity (Name,NameInfo) where
     polvars (n, i)                  = polvars i
 
-negself te                          = concat $ map nself te
-  where nself (_, NSig t NoDec _)   = filter (==tvSelf) (snd $ polvars t)
-        nself (_, NDef t NoDec _)   = filter (==tvSelf) (snd $ polvars t)
-        nself (_, _)                = []
 
+-- Tailvars -------------------------------------------------------------------------------------
 
 instance Tailvars (Name, NameInfo) where
     tailvars (n, NVar t)            = tailvars t
@@ -277,7 +305,8 @@ instance Tailvars (Name, NameInfo) where
     tailvars (n, NDef sc _ _)       = tailvars sc
     tailvars _                      = []
 
--------------------------------------------------------------------------------------------------------------------
+
+-- Unalias --------------------------------------------------------------------------------------
 
 class Unalias a where
     unalias                         :: EnvF x -> a -> a
@@ -355,6 +384,7 @@ instance Unalias WTCon where
 instance Unalias (Either QName QName) where
     unalias env (Left n)            = Left $ unalias env n
     unalias env (Right n)           = Right $ unalias env n
+
 
 -- TEnv filters --------------------------------------------------------------------------------------------------------
 
@@ -576,6 +606,7 @@ isAlias n env               = case lookup n (names env) of
                                 _ -> False
 
 kindOf env (TVar _ tv)      = tvkind tv
+kindOf env (TUni _ uv)      = uvkind uv
 kindOf env (TCon _ tc)      = tconKind (tcname tc) env
 kindOf env TFun{}           = KType
 kindOf env TTuple{}         = KType
@@ -695,7 +726,7 @@ allDescendants env tc       = [ schematic' c | c <- allCons env, hasAncestor' en
 findCon                     :: EnvF x -> TCon -> ([WTCon],TEnv)
 findCon env (TC n ts)
   | map tVar tvs == ts      = (us, te)
-  | otherwise               = (subst s us, subst s te)
+  | otherwise               = (vsubst s us, vsubst s te)
   where (q,us,te)           = findConName n env
         tvs                 = qbound q
         s                   = tvs `zip` ts
@@ -808,8 +839,8 @@ allProtos env               = reverse locals ++ concat [ protos m (lookupMod m e
 allConAttr                  :: EnvF x -> Name -> [Type]
 allConAttr env n            = [ tCon tc | tc <- allCons env, n `elem` allAttrs' env tc ]
 
-allConAttrFree              :: EnvF x -> Name -> [TUni]
-allConAttrFree env n        = concat [ ufree $ fst $ findAttr' env tc n | tc <- allCons env, n `elem` allAttrs' env tc ]
+allConAttrUFree             :: EnvF x -> Name -> [TUni]
+allConAttrUFree env n       = concat [ ufree $ fst $ findAttr' env tc n | tc <- allCons env, n `elem` allAttrs' env tc ]
 
 allProtoAttr                :: EnvF x -> Name -> [Type]
 allProtoAttr env n          = [ tCon p | p <- allProtos env, n `elem` allAttrs' env p ]
@@ -939,8 +970,8 @@ glb env t1 (TWild _)                    = pure t1
 
 glb env t1@TVar{} t2@TVar{}
   | t1 == t2                            = pure t1
-glb env (TVar _ v) _ | univar v         = pure tWild
-glb env _ (TVar _ v) | univar v         = pure tWild
+glb env (TUni _ u) _                    = pure tWild
+glb env _ (TUni _ u)                    = pure tWild
 
 glb env (TCon _ c1) (TCon _ c2)
   | tcname c1 == tcname c2              = pure $ tCon c1
@@ -1019,11 +1050,11 @@ lub env t1 (TWild _)                    = pure t1
 
 lub env t1@TVar{} t2@TVar{}
   | t1 == t2                            = pure t1
-lub env (TVar _ v) _ | univar v         = pure tWild
-lub env _ (TVar _ v) | univar v         = pure tWild
-
 lub env t (TVar _ v)                    = lub env t (tCon $ findTVBound env v)
 lub env (TVar _ v) t                    = lub env (tCon $ findTVBound env v) t
+
+lub env (TUni _ u) _                    = pure tWild
+lub env _ (TUni _ u)                    = pure tWild
 
 lub env (TCon _ c1) (TCon _ c2)
   | tcname c1 == tcname c2              = pure $ tCon c1
@@ -1222,24 +1253,21 @@ importWits m te env         = foldl addWit env ws
 
 
 
+headvar (Impl _ w (TUni _ u) p)     = u
 
-headvar (Impl _ w (TVar _ v) p)     = v
+headvar (Cast _ TVar{} (TUni _ u))  = u
+headvar (Cast _ (TUni _ u) t)       = u
+headvar (Cast _ t (TUni _ u))       = u     -- ?
 
-headvar (Cast _ (TVar _ v) (TVar _ v'))
-  | not $ univar v                  = v'
-headvar (Cast _ (TVar _ v) t)       = v
-headvar (Cast _ t (TVar _ v))       = v     -- ?
+headvar (Sub _ w TVar{} (TUni _ u)) = u
+headvar (Sub _ w (TUni _ u) t)      = u
+headvar (Sub _ w t (TUni _ u))      = u     -- ?
 
-headvar (Sub _ w (TVar _ v) (TVar _ v'))
-  | not $ univar v                  = v'
-headvar (Sub _ w (TVar _ v) t)      = v
-headvar (Sub _ w t (TVar _ v))      = v     -- ?
+headvar (Sel _ w (TUni _ u) n t)    = u
 
-headvar (Sel _ w (TVar _ v) n t)    = v
+headvar (Mut _ (TUni _ u) n t)      = u
 
-headvar (Mut _ (TVar _ v) n t)      = v
-
-headvar (Seal _ (TVar _ v))         = v
+headvar (Seal _ (TUni _ u))         = u
 
 
 -- Error handling ----------------------------------------------------------------------------------------------------
@@ -1358,20 +1386,16 @@ instance (Simp a) => Simp [a] where
     simp env                        = map (simp env)
 
 instance Simp TSchema where
-    simp env (TSchema l q t)        = TSchema l q' (subst s $ simp env' t)
-      where (q', s)                 = simpQuant env (simp env' q) (ufree t)
+    simp env (TSchema l q t)        = TSchema l q' (vsubst s $ simp env' t)
+      where (q', s)                 = simpQuant env (simp env' q) (vfree t)
             env'                    = defineTVars (stripQual q) env
 
-simpQuant env q vs0                 = (subst s [ Quant v ps | Quant v ps <- q2, not $ null ps ], s)
+simpQuant env q vs0                 = (vsubst s [ Quant v ps | Quant v ps <- q2, not $ null ps ], s)
   where (q1,q2)                     = partition isEX q
         isEX (Quant v [p])          = length (filter (==v) vs) == 1
         isEX _                      = False
-        vs                          = concat [ ufree ps | Quant v ps <- q ] ++ vs0
-        s                           = s1 ++ s2
-        s1                          = [ (v, tCon p) | Quant v [p] <- q1 ]                       -- Inline existentials
-        s2                          = univars `zip` beautyvars                                  -- Beautify univars
-        univars                     = filter univar $ qbound q2
-        beautyvars                  = map tVar $ tvarSupply \\ tvarScope env
+        vs                          = concat [ vfree ps | Quant v ps <- q ] ++ vs0
+        s                           = [ (v, tCon p) | Quant v [p] <- q1 ]                       -- Inline existentials
 
 instance Simp QBind where
     simp env (Quant v ps)           = Quant v (simp env ps)
@@ -1388,8 +1412,8 @@ instance Simp (Name, NameInfo) where
       where env'                    = defineTVars (stripQual q) env
     simp env (n, NProto q us te doc)= (n, NProto (simp env' q) (simp env' us) (simp env' te) doc)
       where env'                    = defineTVars (stripQual q) env
-    simp env (n, NExt q c us te doc)= (n, NExt q' (subst s $ simp env' c) (subst s $ simp env' us) (subst s $ simp env' te) doc)
-      where (q', s)                 = simpQuant env (simp env' q) (ufree c ++ ufree us ++ ufree te)
+    simp env (n, NExt q c us te doc)= (n, NExt q' (vsubst s $ simp env' c) (vsubst s $ simp env' us) (vsubst s $ simp env' te) doc)
+      where (q', s)                 = simpQuant env (simp env' q) (vfree c ++ vfree us ++ vfree te)
             env'                    = defineTVars (stripQual q) env
     simp env (n, NAct q p k te doc) = (n, NAct (simp env' q) (simp env' p) (simp env' k) (simp env' te) doc)
       where env'                    = defineTVars (stripQual q) env
@@ -1405,14 +1429,14 @@ instance Simp Type where
     simp env t                      = t
 
 instance Simp TCon where
-    simp env (TC n ts)              = TC (simp env n) (simp env ts)
+    simp env (TC n ts)              = TC (simp env n) (simp env ts)                             -- Simplify constructor names
 
 instance Simp QName where
     simp env (GName m n)
-      | inBuiltin env               = NoQ n
-      | Just m == thismod env       = NoQ n
+      | inBuiltin env               = NoQ n                                                     -- Restore builtins
+      | Just m == thismod env       = NoQ n                                                     -- Restore locals
     simp env n
-      | not $ null aliases          = NoQ $ head aliases
+      | not $ null aliases          = NoQ $ head aliases                                        -- Restore aliases
       | otherwise                   = n
       where aliases                 = [ n1 | (n1, NAlias n2) <- names env, n2 == n ]
 

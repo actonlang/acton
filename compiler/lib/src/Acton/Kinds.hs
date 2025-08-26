@@ -61,8 +61,8 @@ swapXVars                           :: QBinds -> KindM QBinds
 swapXVars q                         = state $ \st -> (xvars st, st{ xvars = q })
 
 newWildvar                          = do k <- newKUni
-                                         n <- Internal Typevar "w" <$> newUnique
-                                         return $ TV k n
+                                         i <- newUnique
+                                         return $ uniwild k i
 
 newKUni                             = KUni <$> newUnique
 
@@ -95,14 +95,14 @@ instance Pretty (Name,Kind) where
 
 
 autoQuantS env (TSchema l q t)      = TSchema l (q ++ auto_q) t
-  where auto_q                      = map quant $ nub (ufree q ++ ufree t) \\ (tvSelf : qbound q ++ tvars env)
+  where auto_q                      = map quant $ nub (vfree q ++ vfree t) \\ (tvSelf : qbound q ++ tvars env)
 
 autoQuantD env (Def l n q p k t b d x doc)
                                     = Def l n (q ++ auto_q) p k t b d x doc
-  where auto_q                      = map quant $ nub (ufree q ++ ufree p ++ ufree k ++ ufree t) \\ (tvSelf : qbound q ++ tvars env)
+  where auto_q                      = map quant $ nub (vfree q ++ vfree p ++ vfree k ++ vfree t) \\ (tvSelf : qbound q ++ tvars env)
 autoQuantD env (Extension l q c ps b doc)
                                     = Extension l (q ++ auto_q) c ps b doc
-  where auto_q                      = map quant $ nub (ufree q ++ ufree c ++ ufree ps) \\ (tvSelf : qbound q ++ tvars env)
+  where auto_q                      = map quant $ nub (vfree q ++ vfree c ++ vfree ps) \\ (tvSelf : qbound q ++ tvars env)
 autoQuantD env d                    = d
 
 
@@ -135,7 +135,11 @@ instance InstKWild TSchema where
 
 instance InstKWild TVar where
     instKWild (TV KWild n)          = TV <$> newKUni <*> return n
-    instKWild v                     = return v
+    instKWild tv                    = return tv
+
+instance InstKWild TUni where
+    instKWild (UV KWild i)          = UV <$> newKUni <*> return i
+    instKWild uv                    = return uv
 
 instance InstKWild (Maybe Type) where
     instKWild (Just (TVar l v))     = Just <$> TVar l <$> instKWild v
@@ -150,7 +154,7 @@ class ConvTWild a where
     convTWild                       :: a -> KindM a
 
 instance ConvTWild Type where
-    convTWild (TWild l)             = TVar l <$> newWildvar
+    convTWild (TWild l)             = TUni l <$> newWildvar
     convTWild (TFun l e p k t)      = TFun l <$> convTWild e <*> convTWild p <*> convTWild k <*> convTWild t
     convTWild (TTuple l p k)        = TTuple l <$> convTWild p <*> convTWild k
     convTWild (TOpt l t)            = TOpt l <$> convTWild t
@@ -300,13 +304,15 @@ instance KCheck Decl where
                                          k <- convPExist env =<< convTWild k
                                          t <- convPExist env =<< convTWild t
                                          x <- convPExist env =<< convTWild x
-                                         q' <- swapXVars tmp
+                                         q <- (q++) <$> swapXVars tmp
                                          env1 <- extvars (qbound q) env
-                                         q <- kchkQBinds env1 (q++q')
-                                         Def l n q <$> kchk env1 p <*> kchk env1 k <*> kexp KType env1 t <*> kchkSuite env1 b <*> pure d <*> kfx env1 x <*> pure doc
-      where ambig                   = qualbound q \\ closeDepVarsQ (ufree p ++ ufree k ++ ufree t ++ ufree x) q
-    kchk env (Actor l n q p k b doc)= do p <- convPExist env =<< convTWild p
+                                         Def l n <$> kchkQBinds env1 q <*> kchk env1 p <*> kchk env1 k <*> kexp KType env1 t <*> kchkSuite env1 b <*> 
+                                                     pure d <*> kfx env1 x <*> pure doc
+      where ambig                   = qualbound q \\ closeDepVarsQ (vfree p ++ vfree k ++ vfree t ++ vfree x) q
+    kchk env (Actor l n q p k b doc)= do tmp <- swapXVars []
+                                         p <- convPExist env =<< convTWild p
                                          k <- convPExist env =<< convTWild k
+                                         q <- (q++) <$> swapXVars tmp
                                          env1 <- extvars (qbound q) env
                                          Actor l n <$> kchkQBinds env1 q <*> kchk env1 p <*> kchk env1 k <*> kchkSuite env1 b <*> pure doc
     kchk env (Class l n q us b doc) = do env1 <- extvars (tvSelf : qbound q) env
@@ -321,12 +327,12 @@ instance KCheck Decl where
                                          q <- convPExist env q
                                          c <- convPExist env c
                                          us <- convPExist env us
-                                         q' <- swapXVars tmp
+                                         q <- (q++) <$> swapXVars tmp
                                          env1 <- extvars (tvSelf : qbound q) env
-                                         Extension l <$> kchkQBinds env1 (q++q') <*> kexp KType env1 c <*> kchkPBounds env1 us <*> kchkSuite env1 b <*> pure doc
+                                         Extension l <$> kchkQBinds env1 q <*> kexp KType env1 c <*> kchkPBounds env1 us <*> kchkSuite env1 b <*> pure doc
       where ambig                   = qualbound q \\ vs
-            undet                   = ufree us \\ (tvSelf : vs)
-            vs                      = closeDepVarsQ (ufree c) q
+            undet                   = vfree us \\ (tvSelf : vs)
+            vs                      = closeDepVarsQ (vfree c) q
 
 instance KCheck Expr where
     kchk env (Var l n)              = return $ Var l n
@@ -450,10 +456,10 @@ instance KCheck TSchema where
       | otherwise                   = do tmp <- swapXVars []
                                          q <- convPExist env q
                                          t <- convPExist env t
-                                         q' <- swapXVars tmp
+                                         q <- (q++) <$> swapXVars tmp
                                          env1 <- extvars (qbound q) env
-                                         TSchema l <$> kchkQBinds env1 (q++q') <*> kexp KType env1 t
-      where ambig                   = qualbound q \\ closeDepVarsQ (ufree t) q
+                                         TSchema l <$> kchkQBinds env1 q <*> kexp KType env1 t
+      where ambig                   = qualbound q \\ closeDepVarsQ (vfree t) q
 
 kchkQBinds env []                   = return []
 kchkQBinds env (Quant v us : q)     = do us <- kchkBounds env us
@@ -485,6 +491,10 @@ instance KInfer TVar where
     kinfer env tv                   = do tv <- instKWild tv
                                          return (tvkind tv, tv)
 
+instance KInfer TUni where
+    kinfer env uv                   = do uv <- instKWild uv
+                                         return (uvkind uv, uv)
+
 instance KInfer TCon where
     kinfer env (TC n [])            = return (tcKind n env, TC (unalias env n) [])
     kinfer env (TC n ts)            = do let kn = tcKind n env
@@ -500,8 +510,10 @@ envBound _                          = True
 instance KInfer Type where
     kinfer env (TWild l)            = err1 l "Illegal wildcard type"
     kinfer env (TVar l v)           = do (k,v) <- kinfer env v
-                                         when (envBound v) $ kunify l k (tvKind v env)     -- Internal tyvars are not in the environment
+                                         kunify l k (tvKind v env)
                                          return (k, TVar l v)
+    kinfer env (TUni l u)           = do (k,u) <- kinfer env u                              -- Internal tyvars are not in the environment
+                                         return (k, TUni l u)
     kinfer env (TCon l c)           = do c <- kexp KType env c
                                          return (KType, TCon l c)
     kinfer env (TFun l fx p k t)    = do fx <- kfx env fx
@@ -524,8 +536,7 @@ instance KInfer Type where
                                          return (k, TStar l k r)
     kinfer env (TFX l fx)           = return (KFX, TFX l fx)
 
-kfx env (TVar _ tv)
-  | not $ univar tv                 = variableFX tv
+kfx env (TVar _ tv)                 = variableFX tv
 kfx env t                           = kexp KFX env t
 
 kexp k env t                        = do (k',t') <- kinfer env t
@@ -585,6 +596,9 @@ instance KSubst TSchema where
 instance KSubst TVar where
     ksubst g (TV k n)               = TV <$> ksubst g k <*> return n
 
+instance KSubst TUni where
+    ksubst g (UV k i)               = UV <$> ksubst g k <*> return i
+
 instance KSubst TCon where
     ksubst g (TC n ts)              = TC n <$> ksubst g ts
 
@@ -593,6 +607,7 @@ instance KSubst QBind where
 
 instance KSubst Type where
     ksubst g (TVar l v)             = TVar l <$> ksubst g v
+    ksubst g (TUni l u)             = TUni l <$> ksubst g u
     ksubst g (TCon l c)             = TCon l <$> ksubst g c
     ksubst g (TFun l fx p k t)      = TFun l <$> ksubst g fx <*> ksubst g p <*> ksubst g k<*> ksubst g t
     ksubst g (TTuple l p k)         = TTuple l <$> ksubst g p <*> ksubst g k

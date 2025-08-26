@@ -3,10 +3,10 @@ import logging
 import testing
 
 actor MathTester ():
-    T_8w def add (a : T_2w, b : T_4w) -> T_6w:
+    T_17w def add (a : T_5w, b : T_9w) -> T_13w:
         return a + b
 
-T_10w def _test_foo () -> None:
+T_21w def _test_foo () -> None:
     pass
 
 # recursive group:
@@ -26,23 +26,23 @@ actor _SyncTesterCore ():
     testing.assertEqual(m.add(1, 2), 3, "1 + 2 = 3")
 # (recursive group)
 
-T_18w def _test_simple_sync () -> T_16w:
+T_37w def _test_simple_sync () -> T_33w:
     s = _SyncTesterCore()
 
-T_23w def _test_sync (t : testing.SyncT) -> T_21w:
+T_47w def _test_sync (t : testing.SyncT) -> T_43w:
     m = MathTester()
     return str(m.add(1, 2))
 
 # recursive group:
 actor AsyncTester (t : testing.AsyncT):
     log = logging.Logger(t.log_handler)
-    T_29w def test () -> T_27w:
+    T_59w def test () -> T_55w:
         log.info("AsyncTester.test()", {"data": "test"})
         t.success()
     after 0: test()
 actor EnvTester (t : testing.EnvT):
     log = logging.Logger(t.log_handler)
-    T_34w def test () -> T_32w:
+    T_69w def test () -> T_65w:
         log.info("EnvTester.test() wthreads:", {"nr_wthreads": t.env.nr_wthreads})
         print("EnvTester.test() wthreads:", t.env.nr_wthreads)
         t.success()

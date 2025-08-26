@@ -1,26 +1,26 @@
 
 # recursive group:
 actor Apa ():
-    T_6w def setup (cb : T_2w) -> T_4w:
+    T_13w def setup (cb : T_5w) -> T_9w:
         print("setup")
         cb(0)
-    T_12w def compute (cb : T_8w) -> T_10w:
+    T_25w def compute (cb : T_17w) -> T_21w:
         print("compute")
         v = cb(1)
         m = (async cb)(2)
         return v * 10
-    T_20w def notice (i : T_16w) -> T_18w:
+    T_41w def notice (i : T_33w) -> T_37w:
         print("notice")
         return i + 1
     setup(notice)
     print("Apa")
 actor Bepa ():
-    T_26w def callback (i : T_22w) -> T_24w:
+    T_53w def callback (i : T_45w) -> T_49w:
         print("callback", i)
         return i + 1
     print("Bepa")
-actor main (env : T_28w):
-    T_34w def myproc (i : T_30w) -> T_32w:
+actor main (env : T_57w):
+    T_69w def myproc (i : T_61w) -> T_65w:
         print("myproc", i)
         if i == 2:
             env.exit(0)
