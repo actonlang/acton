@@ -90,7 +90,6 @@ data Rank                                   = RRed { cstr :: Constraint }
                                             | RSealed { tgt :: Type }
                                             | RTry { tgt :: Type, alts :: [Type], rev :: Bool }
                                             | RVar { tgt :: Type, alts :: [Type] }
-                                            | ROvl { tgt :: Type }
                                             | RSkip
                                             deriving (Show)
 
@@ -99,7 +98,6 @@ instance Eq Rank where
     RSealed t1  == RSealed t2               = t1 == t2
     RTry t1 _ _ == RTry t2 _ _              = t1 == t2
     RVar t1 _   == RVar t2 _                = t1 == t2
-    ROvl t1     == ROvl t2                  = True
     RSkip       == RSkip                    = True
     _           == _                        = False
 
@@ -108,7 +106,6 @@ instance Pretty Rank where
     pretty (RSealed t)                      = pretty t <+> text "sealed"
     pretty (RTry t ts rev)                  = pretty t <+> braces (commaSep pretty ts) Pretty.<> (if rev then char '\'' else empty)
     pretty (RVar t ts)                      = pretty t <+> char '~' <+> commaSep pretty ts
-    pretty (ROvl t)                         = pretty t <+> text "..."
     pretty RSkip                            = text "<skip>"
 
 solve                                       :: (Polarity a, Pretty a, Show a) => Env -> (Constraint -> Bool) ->
@@ -153,13 +150,6 @@ solve' env select hist te tt eq cs
                                                     RVar t alts -> do
                                                         --traceM ("### var goal " ++ prstr t ++ ", unifying with " ++ prstrs alts)
                                                         unifyM (DfltInfo (loc t) 3 Nothing []) alts (repeat t) >> proceed hist cs
-                                                    ROvl t -> do
-                                                        --traceM ("### ovl goal " ++ prstr t ++ ", defaulting remaining constraints")
-                                                        (cs,eq) <- simplify' (useForce env) te tt eq cs
-                                                        te <- usubst te
-                                                        tt <- usubst tt
-                                                        hist <- usubst hist
-                                                        solve' env select hist te tt eq cs
                                                     RSkip ->
                                                         return (keep_cs, eq)
 
@@ -212,14 +202,11 @@ solve' env select hist te tt eq cs
 
         condense (RRed c : rs)              = RRed c
         condense (RSealed t : rs)           = RSealed t
-        condense (RTry t as r : rs)
-          | TUni _ v <- t                   = RTry t (if rev' then subrev ts' else ts') rev'
-          | otherwise                       = RTry t ts r
+        condense (RTry t as r : rs)         = RTry t (if rev' then subrev ts' else ts') rev'
           where ts                          = foldr intersect as $ map alts rs
                 ts'                         = if uvar t `elem` optvs then ts \\ [tOpt tWild] else ts
                 rev'                        = (or $ r : map rev rs) || uvar t `elem` posvs
         condense (RVar t as : rs)           = RVar t (foldr union as $ map alts rs)
-        condense (ROvl t : rs)              = ROvl t
         condense (RSkip : rs)               = RSkip
         condense rs                         = error ("### condense " ++ show rs)
 
@@ -232,14 +219,12 @@ solve' env select hist te tt eq cs
         isVar _                             = False
 
         deco (RRed cs)                      = (0, 0, 0, 0)
-        deco (RSealed t)                    = (2, 0, 0, 0)
+        deco (RSealed t)                    = (1, 0, 0, 0)
         deco (RTry (TUni _ v) as r)         = (w, length $ filter (==v) embvs, length as, length $ filter (==v) univs)
-          where w | wildTuple `elem` as     =  3
-                  | otherwise               =  4
-        deco (RTry t as r)                  = (5, 0, length as, 0)
-        deco (RVar t as)                    = (6, 0, length as, 0)
-        deco (ROvl t)                       = (7, 0, 0, 0)
-        deco (RSkip)                        = (8, 0, 0, 0)
+          where w | wildTuple `elem` as     =  2
+                  | otherwise               =  3
+        deco (RVar t as)                    = (4, 0, length as, 0)
+        deco (RSkip)                        = (5, 0, 0, 0)
 
         subrev []                           = []
         subrev (t:ts)                       = subrev ts1 ++ t : subrev ts2
@@ -262,8 +247,8 @@ rank env (Cast _ TNone{} t2@TUni{})         = RTry t2 [tOpt tWild, tNone] True
 rank env (Cast _ t1@TUni{} t2)              = RTry t1 (allBelow env t2) False
 rank env (Cast _ t1 t2@TUni{})              = RTry t2 (allAbove env t1) True
 
-rank env c@(Impl _ _ t p)                   = RTry t ts False
-  where ts                                  = allExtProto env t p
+rank env (Impl _ _ t@TUni{} p)              = RTry t ts False
+  where ts                                  = allExtProto env p
 
 rank env (Sel _ _ t@TUni{} n _)             = RTry t (allConAttr env n ++ allProtoAttr env n ++ allExtProtoAttr env n ++ [wildTuple]) False
 rank env (Mut _ t@TUni{} n _)               = RTry t (allConAttr env n) False
@@ -541,6 +526,10 @@ solveMutAttr env (wf,sc,dec) c@(Mut info t1 n t2)
 
 findWitness                 :: Env -> Type -> PCon -> [Witness]
 findWitness env t p         = reverse $ filter (eqhead t . wtype) $ witsByPName env $ tcname p
+  where eqhead (TCon _ c) (TCon _ c')   = tcname c == tcname c'
+        eqhead (TFX _ fx) (TFX _ fx')   = fx == fx'
+        eqhead (TVar _ v) (TVar _ v')   = v == v'
+        eqhead _          _             = False
 
 findProtoByAttr env cn n    = case filter hasAttr $ witsByTName env cn of
                                 [] -> Nothing
@@ -554,18 +543,11 @@ hasWitness env (TCon _ c) p
     tcname p == qnIdentity  = True
 hasWitness env t p          =  not $ null $ findWitness env t p
 
-allExtProto                 :: Env -> Type -> PCon -> [Type]
-allExtProto env t p         = reverse [ schematic (wtype w) | w <- witsByPName env (tcname p), eqhead t (wtype w) ]
+allExtProto                 :: Env -> PCon -> [Type]
+allExtProto env p           = reverse [ schematic (wtype w) | w <- witsByPName env (tcname p) ]
 
 allExtProtoAttr             :: Env -> Name -> [Type]
 allExtProtoAttr env n       = [ tCon tc | tc <- allCons env, any ((n `elem`) . allAttrs' env . proto) (witsByTName env $ tcname tc) ]
-
-eqhead (TCon _ c) (TCon _ c')   = tcname c == tcname c'
-eqhead (TFX _ fx) (TFX _ fx')   = fx == fx'
-eqhead (TUni _ v) _             = True
-eqhead _ (TUni _ v')            = True
-eqhead (TVar _ v) (TVar _ v')   = v == v'
-eqhead _          _             = False
 
 
 ----------------------------------------------------------------------------------------------------------------------
