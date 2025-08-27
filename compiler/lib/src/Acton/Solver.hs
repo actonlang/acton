@@ -87,25 +87,25 @@ groupCs env cs                              = do st <- currentState
 ----------------------------------------------------------------------------------------------------------------------
 
 data Rank                                   = RRed { cstr :: Constraint }
-                                            | RSealed { tgt :: Type }
-                                            | RTry { tgt :: Type, alts :: [Type], rev :: Bool }
-                                            | RVar { tgt :: Type, alts :: [Type] }
+                                            | RSealed { tgt :: TUni }
+                                            | RTry { tgt :: TUni, alts :: [Type], rev :: Bool }
+                                            | RVar { tgt :: TUni, alts :: [Type] }
                                             | RSkip
                                             deriving (Show)
 
 instance Eq Rank where
     RRed _      == RRed _                   = True
-    RSealed t1  == RSealed t2               = t1 == t2
-    RTry t1 _ _ == RTry t2 _ _              = t1 == t2
-    RVar t1 _   == RVar t2 _                = t1 == t2
+    RSealed v1  == RSealed v2               = v1 == v2
+    RTry v1 _ _ == RTry v2 _ _              = v1 == v2
+    RVar v1 _   == RVar v2 _                = v1 == v2
     RSkip       == RSkip                    = True
     _           == _                        = False
 
 instance Pretty Rank where
     pretty (RRed c)                         = text "<reduce>" <+> pretty c
-    pretty (RSealed t)                      = pretty t <+> text "sealed"
-    pretty (RTry t ts rev)                  = pretty t <+> braces (commaSep pretty ts) Pretty.<> (if rev then char '\'' else empty)
-    pretty (RVar t ts)                      = pretty t <+> char '~' <+> commaSep pretty ts
+    pretty (RSealed v)                      = pretty v <+> text "sealed"
+    pretty (RTry v ts rev)                  = pretty v <+> braces (commaSep pretty ts) Pretty.<> (if rev then char '\'' else empty)
+    pretty (RVar v ts)                      = pretty v <+> char '~' <+> commaSep pretty ts
     pretty RSkip                            = text "<skip>"
 
 solve                                       :: (Polarity a, Pretty a, Show a) => Env -> (Constraint -> Bool) ->
@@ -126,7 +126,7 @@ solveGroups env select te tt (cs:css)       = do --traceM ("\n\n######### solveG
 solve' env select hist te tt eq cs
   | not $ null vargoals                     = do --traceM (unlines [ "### var goal " ++ prstr t ++ " ~ " ++ prstrs alts | RVar t alts <- vargoals ])
                                                  --traceM ("### var goals: " ++ show (sum [ length alts | RVar t alts <- vargoals ]))
-                                                 sequence [ unify (DfltInfo (loc t) 2 Nothing []) t t' | RVar t alts <- vargoals, t' <- alts ]
+                                                 sequence [ unify (DfltInfo NoLoc 2 Nothing []) (tUni v) t | RVar v alts <- vargoals, t <- alts ]
                                                  proceed hist cs
   | any not keep_evidence                   = noSolve0 env Nothing [] keep_cs
   | null solve_cs || null goals             = return (keep_cs, eq)
@@ -141,15 +141,15 @@ solve' env select hist te tt eq cs
                                                     RRed c -> do
                                                         --traceM ("### reduce " ++ prstr c)
                                                         proceed hist cs
-                                                    RSealed t -> do
+                                                    RSealed v -> do
                                                         --traceM ("### try goal " ++ prstr t ++ ", candidates: " ++ prstrs [fxAction, fxPure])
-                                                        tryAlts st t [fxAction, fxPure]
-                                                    RTry t alts r -> do
+                                                        tryAlts st v [fxAction, fxPure]
+                                                    RTry v alts r -> do
                                                         --traceM ("### try goal " ++ prstr t ++ ", candidates: " ++ prstrs alts ++ if r then " (rev)" else "")
-                                                        tryAlts st t alts
-                                                    RVar t alts -> do
+                                                        tryAlts st v alts
+                                                    RVar v alts -> do
                                                         --traceM ("### var goal " ++ prstr t ++ ", unifying with " ++ prstrs alts)
-                                                        unifyM (DfltInfo (loc t) 3 Nothing []) alts (repeat t) >> proceed hist cs
+                                                        unifyM (DfltInfo NoLoc 3 Nothing []) alts (repeat $ tUni v) >> proceed hist cs
                                                     RSkip ->
                                                         return (keep_cs, eq)
 
@@ -160,39 +160,38 @@ solve' env select hist te tt eq cs
         group (r:rs)                        = (r : rs1) : group rs2
           where (rs1,rs2)                   = partition (==r) rs
         rnks                                = map (rank env) solve_cs
-        tryAlts st t@(TUni _ tv) []         = do --traceM ("### FAIL " ++ prstr tv ++ ":\n" ++ render (nest 4 $ vcat $ map pretty cs))
+        tryAlts st tv []                    = do --traceM ("### FAIL " ++ prstr tv ++ ":\n" ++ render (nest 4 $ vcat $ map pretty cs))
                                                  let ts = map (\n -> tCon (TC (noQ ('t':show n)) [])) [0..]
                                                      vs = filter (\v -> length (filter (\c -> v `elem` ufree c) cs) > 1) (nub (ufree cs))
                                                      cs' = if length cs == 1 then cs else filter (not . useless vs) cs
                                                      vs' = filter (\v -> length (filter (\c -> v `elem` ufree c) cs') > 1) (nub (ufree cs'))
                                                  sequence [ usubstitute uv t | (uv,t) <- vs' `zip` ts ]
                                                  cs' <- usubst cs'
-                                                 noSolve0 env (Just t) (take (length vs') ts) cs'
-        tryAlts st _ []                     = noSolve0 env Nothing [] cs
-        tryAlts st t0 (t:ts)                = tryAlt t0 t `catchError` const (
+                                                 noSolve0 env (Just $ tUni tv) (take (length vs') ts) cs'
+        tryAlts st tv (t:ts)                = tryAlt tv t `catchError` const (
                                                     do --traceM ("=== ROLLBACK " ++ prstr t0)
-                                                       rollbackState st >> tryAlts st t0 ts)
-        tryAlt t0 (TCon _ c)
+                                                       rollbackState st >> tryAlts st tv ts)
+        tryAlt v (TCon _ c)
           | isProto env (tcname c)          = do p <- instwildcon env c
                                                  w <- newWitness
-                                                 --traceM ("  # trying " ++ prstr t0 ++ " (" ++ prstr p ++ ")")
-                                                 proceed hist (Impl (DfltInfo NoLoc 4 Nothing []) w t0 p : cs)
-        tryAlt t0 (TTuple _ _ _)
+                                                 --traceM ("  # trying " ++ prstr v ++ " (" ++ prstr p ++ ")")
+                                                 proceed hist (Impl (DfltInfo NoLoc 4 Nothing []) w (tUni v) p : cs)
+        tryAlt v (TTuple _ _ _)
           | not $ null attrs                = do t <- instwild env KType (tTupleK $ foldr (\n -> kwdRow n tWild) tWild attrs)
-                                                 --traceM ("  # trying tuple " ++ prstr t0 ++ " = " ++ prstr t)
-                                                 unify (DfltInfo NoLoc 5 Nothing []) t0 t
+                                                 --traceM ("  # trying tuple " ++ prstr v ++ " = " ++ prstr t)
+                                                 unify (DfltInfo NoLoc 5 Nothing []) (tUni v) t
                                                  proceed (t:hist) cs
-          where attrs                       = sortBy (\a b -> compare (nstr a) (nstr b)) $ nub [ n | Sel _ _ t n _ <- solve_cs, t == t0 ]
-        tryAlt t0@(TUni _ tv) t
-          | uvkind tv == KFX                = do t <- instwild env (kindOf env t0) t
-                                                 --traceM ("  # trying " ++ prstr t0 ++ " = " ++ prstr t)
-                                                 unify (DfltInfo NoLoc 5 Nothing []) t0 t
+          where attrs                       = sortBy (\a b -> compare (nstr a) (nstr b)) $ nub [ n | Sel _ _ (TUni _ v') n _ <- solve_cs, v' == v ]
+        tryAlt v t
+          | uvkind v == KFX                 = do t <- instwild env (uvkind v) t
+                                                 --traceM ("  # trying " ++ prstr v ++ " = " ++ prstr t)
+                                                 unify (DfltInfo NoLoc 5 Nothing []) (tUni v) t
                                                  (cs,eq) <- quicksimp env eq cs
                                                  hist <- usubst hist
                                                  solve' env select hist te tt eq cs
-        tryAlt t0 t                         = do t <- instwild env (kindOf env t0) t
-                                                 --traceM ("  # trying " ++ prstr t0 ++ " = " ++ prstr t)
-                                                 unify (DfltInfo NoLoc 5 Nothing []) t0 t
+        tryAlt v t                          = do t <- instwild env (uvkind v) t
+                                                 --traceM ("  # trying " ++ prstr v ++ " = " ++ prstr t)
+                                                 unify (DfltInfo NoLoc 5 Nothing []) (tUni v) t
                                                  proceed (t:hist) cs
         proceed hist cs                     = do te <- usubst te
                                                  tt <- usubst tt
@@ -201,12 +200,12 @@ solve' env select hist te tt eq cs
                                                  solve' env select hist te tt eq cs
 
         condense (RRed c : rs)              = RRed c
-        condense (RSealed t : rs)           = RSealed t
-        condense (RTry t as r : rs)         = RTry t (if rev' then subrev ts' else ts') rev'
+        condense (RSealed v : rs)           = RSealed v
+        condense (RTry v as r : rs)         = RTry v (if rev' then subrev ts' else ts') rev'
           where ts                          = foldr intersect as $ map alts rs
-                ts'                         = if uvar t `elem` optvs then ts \\ [tOpt tWild] else ts
-                rev'                        = (or $ r : map rev rs) || uvar t `elem` posvs
-        condense (RVar t as : rs)           = RVar t (foldr union as $ map alts rs)
+                ts'                         = if v `elem` optvs then ts \\ [tOpt tWild] else ts
+                rev'                        = (or $ r : map rev rs) || v `elem` posvs
+        condense (RVar v as : rs)           = RVar v (foldr union as $ map alts rs)
         condense (RSkip : rs)               = RSkip
         condense rs                         = error ("### condense " ++ show rs)
 
@@ -219,11 +218,11 @@ solve' env select hist te tt eq cs
         isVar _                             = False
 
         deco (RRed cs)                      = (0, 0, 0, 0)
-        deco (RSealed t)                    = (1, 0, 0, 0)
-        deco (RTry (TUni _ v) as r)         = (w, length $ filter (==v) embvs, length as, length $ filter (==v) univs)
+        deco (RSealed v)                    = (1, 0, 0, 0)
+        deco (RTry v as r)                  = (w, length $ filter (==v) embvs, length as, length $ filter (==v) univs)
           where w | wildTuple `elem` as     =  2
                   | otherwise               =  3
-        deco (RVar t as)                    = (4, 0, length as, 0)
+        deco (RVar v as)                    = (4, 0, length as, 0)
         deco (RSkip)                        = (5, 0, 0, 0)
 
         subrev []                           = []
@@ -238,23 +237,22 @@ solve' env select hist te tt eq cs
 rank                                        :: Env -> Constraint -> Rank
 rank env (Sub info _ t1 t2)                 = rank env (Cast info t1 t2)
 
-rank env (Cast _ t1@(TUni _ v1) t2@(TUni _ v2))
-                                            = RVar t1 [t2]
-rank env (Cast _ t1@TUni{} (TOpt _ t2@TUni{}))
-                                            = RVar t1 [t2]
-rank env (Cast _ t1@TUni{} (TOpt _ t2))     = RTry t1 ([tOpt tWild, tNone] ++ allBelow env t2) False
-rank env (Cast _ TNone{} t2@TUni{})         = RTry t2 [tOpt tWild, tNone] True
-rank env (Cast _ t1@TUni{} t2)              = RTry t1 (allBelow env t2) False
-rank env (Cast _ t1 t2@TUni{})              = RTry t2 (allAbove env t1) True
+rank env (Cast _ (TUni _ v) t2@TUni{})      = RVar v [t2]
+rank env (Cast _ (TUni _ v) (TOpt _ t2@TUni{}))
+                                            = RVar v [t2]
+rank env (Cast _ (TUni _ v) (TOpt _ t2))    = RTry v ([tOpt tWild, tNone] ++ allBelow env t2) False
+rank env (Cast _ TNone{} (TUni _ v))        = RTry v [tOpt tWild, tNone] True
+rank env (Cast _ (TUni _ v) t2)             = RTry v (allBelow env t2) False
+rank env (Cast _ t1 (TUni _ v))             = RTry v (allAbove env t1) True
 
-rank env (Impl _ _ t@TUni{} p)              = RTry t ts False
+rank env (Impl _ _ (TUni _ v) p)            = RTry v ts False
   where ts                                  = allExtProto env p
 
-rank env (Sel _ _ t@TUni{} n _)             = RTry t (allConAttr env n ++ allProtoAttr env n ++ allExtProtoAttr env n ++ [wildTuple]) False
-rank env (Mut _ t@TUni{} n _)               = RTry t (allConAttr env n) False
+rank env (Sel _ _ (TUni _ v) n _)           = RTry v (allConAttr env n ++ allProtoAttr env n ++ allExtProtoAttr env n ++ [wildTuple]) False
+rank env (Mut _ (TUni _ v) n _)             = RTry v (allConAttr env n) False
 
-rank env (Seal _ t@(TUni _ v))
-  | uvkind v == KFX                         = RSealed t
+rank env (Seal _ (TUni _ v))
+  | uvkind v == KFX                         = RSealed v
   | otherwise                               = RSkip
 
 rank env c                                  = RRed c
