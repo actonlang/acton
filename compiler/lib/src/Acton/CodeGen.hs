@@ -318,7 +318,7 @@ declModule env (s : ss)             = vcat [ genTypeDecl env n t <+> genTopName 
 
 
 declDecl env (Def _ n q p KwdNIL (Just t) b d fx ddoc)
-  | hasNotImpl b                    = gen env t <+> genTopName env n <+> parens (gen env p) <> semi $+$
+  | hasNotImpl b                    = genTypeDecl env n t1 <+> genTopName env n <+> parens (gen env p) <> semi $+$
                                       text "/*" $+$
                                       decl $+$
                                       text "*/"
@@ -840,9 +840,10 @@ instance Gen Expr where
     gen env (UnBox _ e@(Call _ (Dot _ (Var _ w) op) (PosArg x (PosArg y PosNil)) KwdNil))  -- use macro for int (in)equality tests
                                     = case findQName w env of
                                         NVar (TCon _ (TC p [TCon _ (TC t [])]))
-                                          | (p==qnOrd || p==qnEq) && elem t [qnInt, qnI64] ->
-                                             text "ORD_" <> genQName env t <> text (nstr op) <> parens(gen env x <> comma <+> gen env y)
+                                          | (p==qnOrd || p==qnEq) &&  t == qnInt ->
+                                             text "ORD_" <> tname <> text (nstr op) <> parens(parens (parens tname <> gen env x) <> comma <+> parens (parens tname <> gen env y))
                                         _ -> genBool env e <> text "->val"
+      where tname                   = genQName env qnInt
 
     gen env (UnBox _ (IsInstance _ e c))
                                     = gen env primISINSTANCE0 <> parens(gen env e <> comma <+> genQName env c)
@@ -850,8 +851,8 @@ instance Gen Expr where
     gen env (UnBox _ (Float _ x s)) = text s
     gen env (UnBox _ v@(Var _ (NoQ n)))
        | isUnboxed n                = gen env v
-    gen env (UnBox _ e@Var{})       = gen env e <> text "->val"
-    gen env (UnBox _ e)             = parens (gen env e) <> text "->val"
+    gen env (UnBox t e)             = parens (parens (gen env t) <> gen env e) <> text "->val"
+--    gen env (UnBox t e)             = parens (gen env e) <> text "->val"
     gen env e                       = error ("CodeGen.gen for Expr: e = " ++ show e)
 
 gencFunCall env nm []               = text nm <> parens empty
