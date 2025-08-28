@@ -23,6 +23,9 @@ n.text and c.tail for all children of n.
     def encode(self) -> str:
         NotImplemented
 
+    def __str__(self):
+        return self.encode()
+
     def __repr__(self):
         # Build the arguments to xml.Node() and skip arguments where our value
         # equals the default. We do this with appending to a string because that
