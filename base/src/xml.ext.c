@@ -69,13 +69,14 @@ static unsigned char* copy_with_xml_escape(unsigned char *dst, B_str src, int es
 }
 
 // Helper function to collect text from consecutive TEXT and CDATA nodes
-// Returns the combined string and updates the node pointer to the first non-text node
+// Returns the combined string (or NULL if there is no text/CDATA content) and
+// updates the node pointer to the first non-text node
 // Note: cur_ptr is passed by reference (pointer to pointer) so we can update the caller's pointer
 //       to skip past all consumed text/CDATA nodes
 static B_str collect_text_cdata_nodes(xmlNodePtr *cur_ptr) {
     xmlNodePtr cur = *cur_ptr;
     if (!cur || (cur->type != XML_TEXT_NODE && cur->type != XML_CDATA_SECTION_NODE)) {
-        return to$str("");
+        return NULL;
     }
 
     // Count total length of combined text and CDATA nodes
@@ -106,7 +107,7 @@ static B_str collect_text_cdata_nodes(xmlNodePtr *cur_ptr) {
     }
 
     *cur_ptr = cur;
-    return to$str("");
+    return NULL;
 }
 
 xmlQ_Node $NodePtr2Node(xmlNodePtr node) {
