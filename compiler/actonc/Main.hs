@@ -45,7 +45,7 @@ import qualified InterfaceFiles
 import Control.Applicative
 import Control.Concurrent.Async
 import Control.Concurrent.MVar
-import Control.Exception (throw,catch,displayException,IOException,ErrorCall)
+import Control.Exception (throw,catch,displayException,IOException,ErrorCall,try,SomeException)
 import Control.Exception (bracketOnError)
 import Control.Concurrent (forkIO)
 import Control.Monad
@@ -810,17 +810,17 @@ doTask gopts opts paths env t@(ActonTask mn src m) = do
     timeStart <- getTime Monotonic
 
     let outFiles = [tyFile, hFile, cFile]
-    ok <- checkUptoDate gopts opts paths actFile outFiles (importsOf t)
-    if C.only_build opts || (ok && not (mn == (modName paths) && (forceCompilation opts)))
-      then do
-        timeBeforeTy <- getTime Monotonic
-        (_,nmod) <- InterfaceFiles.readFile tyFile
+    timeBeforeCheck <- getTime Monotonic
+    uptoDateResult <- checkUptoDate gopts opts paths actFile outFiles (importsOf t)
+    timeAfterCheck <- getTime Monotonic
+    iff (C.timing gopts) $ putStrLn("   Check up-to-date & read .ty file: " ++ fmtTime(timeAfterCheck - timeBeforeCheck))
+    case uptoDateResult of
+      Just (ms, nmod) | C.only_build opts || not (mn == (modName paths) && (forceCompilation opts)) -> do
         timeEnd <- getTime Monotonic
-        iff (C.timing gopts) $ putStrLn("   Read .ty file " ++ makeRelative (projPath paths) tyFile ++ ": " ++ fmtTime(timeEnd - timeBeforeTy))
         iff (not (quiet gopts opts)) $ putStrLn("   Already up to date, in   " ++ fmtTime(timeEnd - timeStart))
         let A.NModule te mdoc = nmod
         return (Acton.Env.addMod mn te mdoc env)
-      else do
+      _ -> do
         createDirectoryIfMissing True (getModPath (projTypes paths) mn)
         env' <- runRestPasses gopts opts paths env m
           `catch` handle gopts opts "Compilation error" generalError src paths mn
@@ -839,7 +839,18 @@ doTask gopts opts paths env t@(ActonTask mn src m) = do
                                 || (C.norm args) || (C.deact args) || (C.cps args) || (C.llift args) || (C.hgen args) ||(C.cgen args)
 
 
-checkUptoDate :: C.GlobalOptions -> C.CompileOptions -> Paths -> FilePath -> [FilePath] -> [A.ModName] -> IO Bool
+-- | Check if a module is up-to-date and return its type interface if it is.
+-- Returns Nothing if the module needs recompilation (not up-to-date or .ty file unreadable).
+-- Returns Just (imports, nameInfo) if the module is up-to-date with a valid .ty file.
+--
+-- The function checks:
+-- 1. All output files exist
+-- 2. Output files are newer than source files
+-- 3. Import dependencies are up-to-date
+-- 4. The .ty file (first in outFiles) can be successfully read. Torn writes
+--    (actonc was killed while working) or compiler updates can cause .ty files
+--    to be unreadable and thus we should consider it out-of-date and recompile
+checkUptoDate :: C.GlobalOptions -> C.CompileOptions -> Paths -> FilePath -> [FilePath] -> [A.ModName] -> IO (Maybe ([A.ModName], A.NameInfo))
 checkUptoDate gopts opts paths actFile outFiles imps = do
     iff (C.verbose gopts) (putStrLn ("    Checking " ++ makeRelative (srcDir paths) actFile ++ " is up to date..."))
     -- get the path to the actonc binary, i.e. ourself
@@ -853,13 +864,26 @@ checkUptoDate gopts opts paths actFile outFiles imps = do
     if not (and outExists)
         then do
             iff (C.verbose gopts) (putStrLn ("    Missing output files: " ++ show outExists ++ " for " ++ show outFiles))
-            return False
+            return Nothing
         else do
             -- get the time of the last modified source file
             srcTime  <- head <$> sortBy (comparing Down) <$> mapM System.Directory.getModificationTime srcFiles
             outTiming <- mapM System.Directory.getModificationTime outFiles
             impsOK   <- mapM (impOK (head outTiming)) imps
-            return (all (srcTime <) outTiming && and impsOK)
+            if not (all (srcTime <) outTiming && and impsOK)
+                then do
+                    iff (C.verbose gopts) (putStrLn ("    Source files are newer than output files"))
+                    return Nothing
+                else do
+                    -- All timestamps check out, now verify the .ty file is readable
+                    -- The .ty file is always the first in outFiles
+                    let tyFile = head outFiles
+                    tyResult <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readFile tyFile
+                    case tyResult of
+                        Left e -> do
+                            iff (C.verbose gopts) (putStrLn ("    .ty file is unreadable: " ++ displayException e))
+                            return Nothing
+                        Right contents -> return (Just contents)
   where
         srcBase         = joinPath [takeDirectory actFile, takeBaseName actFile]
         srcCFile        = srcBase ++ ".c"
