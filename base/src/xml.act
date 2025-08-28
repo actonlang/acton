@@ -23,6 +23,30 @@ n.text and c.tail for all children of n.
     def encode(self) -> str:
         NotImplemented
 
+    def __str__(self):
+        return self.encode()
+
+    def __repr__(self):
+        # Build the arguments to xml.Node() and skip arguments where our value
+        # equals the default. We do this with appending to a string because that
+        # does not leak the *mut* effect, unlike appending to a list.
+        args = repr(self.tag)
+        if len(self.nsdefs) != 0:
+            args += ", nsdefs={repr(self.nsdefs)}"
+        if self.prefix is not None:
+            args += ", prefix={repr(self.prefix)}"
+        if len(self.attributes) != 0:
+            args += ", attributes={repr(self.attributes)}"
+        if len(self.children) != 0:
+            args += ", children={repr(self.children)}"
+        if self.text is not None:
+            args += ", text={repr(self.text)}"
+        if self.tail is not None:
+            args += ", tail={repr(self.tail)}"
+
+        return "xml.Node({args})"
+
+
 class XmlParseError(ValueError):
     """Exception raised for XML parsing errors
 
