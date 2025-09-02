@@ -780,10 +780,14 @@ genCall env ts e0@(Dot _ e n) p     = genDotCall env ts (snd $ schemaOf env e0) 
 genCall env ts e p                  = gen env e <> parens (gen env p)
 
 instCast env [] e                   = id
-instCast env ts (Var _ x)
+instCast env ts e@(Var _ x)
+  | x == primUGetItem               = case typeInstOf env ts e of
+                                         TFun _ fx (TRow _ _ _ t1 (TRow _ _ _ t2 _)) _ r ->
+                                             parens . (parens (gen env r <+> parens (char '*') <+> parens (gen env t1 <> comma <+> text (unboxed_c_type t2))) <>)
+                                         t -> error("Interal error: unexpected typecast for list indexing")
   | GName m _ <- x, m == mPrim      = id
 instCast env ts e                   = parens . (parens (gen env t) <>)
-  where t                           = typeInstOf env ts e
+  where t                           = typeInstOf env ts e  
 
 targetType env (Dot _ e n)          = sctype sc
   where t0                          = typeOf env e
@@ -946,7 +950,7 @@ instance Gen Expr where
     gen env (UnBox _ e@(Call _ (Var _ f) p KwdNil))
         | f == primISNOTNONE        = genCall env [] (Var NoLoc primISNOTNONE0) p
         | f == primISNONE           = genCall env [] (Var NoLoc primISNONE0) p
-        | f `elem` [primPUSH,primPUSHF]
+         | f `elem` [primPUSH,primPUSHF]
                                     = gen env f <> parens(empty)
         | f `elem` B.mathfuns       = genCall env [] e p
         | tCon (TC (gBuiltin (noq f)) []) `elem` B.integralTypes   -- f is the constructor for an integer type, so check if argument e is a literal
