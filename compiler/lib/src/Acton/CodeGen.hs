@@ -318,7 +318,7 @@ declModule env (s : ss)             = vcat [ genTypeDecl env n t <+> genTopName 
 
 
 declDecl env (Def _ n q p KwdNIL (Just t) b d fx ddoc)
-  | hasNotImpl b                    = gen env t <+> genTopName env n <+> parens (gen env p) <> semi $+$
+  | hasNotImpl b                    = genTypeDecl env n t1 <+> genTopName env n <+> parens (gen env p) <> semi $+$
                                       text "/*" $+$
                                       decl $+$
                                       text "*/"
@@ -672,10 +672,14 @@ genCall env ts e0@(Dot _ e n) p     = genDotCall env ts (snd $ schemaOf env e0) 
 genCall env ts e p                  = gen env e <> parens (gen env p)
 
 instCast env [] e                   = id
-instCast env ts (Var _ x)
+instCast env ts e@(Var _ x)
+  | x == primUGetItem               = case typeInstOf env ts e of
+                                         TFun _ fx (TRow _ _ _ t1 (TRow _ _ _ t2 _)) _ r ->
+                                             parens . (parens (gen env r <+> parens (char '*') <+> parens (gen env t1 <> comma <+> text (unboxed_c_type t2))) <>)
+                                         t -> error("Interal error: unexpected typecast for list indexing")
   | GName m _ <- x, m == mPrim      = id
 instCast env ts e                   = parens . (parens (gen env t) <>)
-  where t                           = typeInstOf env ts e
+  where t                           = typeInstOf env ts e  
 
 targetType env (Dot _ e n)          = sctype sc
   where t0                          = typeOf env e
@@ -832,7 +836,7 @@ instance Gen Expr where
     gen env (UnBox _ e@(Call _ (Var _ f) p KwdNil))
         | f == primISNOTNONE        = genCall env [] (Var NoLoc primISNOTNONE0) p
         | f == primISNONE           = genCall env [] (Var NoLoc primISNONE0) p
-        | f `elem` [primPUSH,primPUSHF]
+         | f `elem` [primPUSH,primPUSHF]
                                     = gen env f <> parens(empty)
         | f `elem` B.mathfuns       = genCall env [] e p
         | tCon (TC (gBuiltin (noq f)) []) `elem` B.integralTypes   -- f is the constructor for an integer type, so check if argument e is a literal
@@ -840,9 +844,10 @@ instance Gen Expr where
     gen env (UnBox _ e@(Call _ (Dot _ (Var _ w) op) (PosArg x (PosArg y PosNil)) KwdNil))  -- use macro for int (in)equality tests
                                     = case findQName w env of
                                         NVar (TCon _ (TC p [TCon _ (TC t [])]))
-                                          | (p==qnOrd || p==qnEq) && elem t [qnInt, qnI64] ->
-                                             text "ORD_" <> genQName env t <> text (nstr op) <> parens(gen env x <> comma <+> gen env y)
+                                          | (p==qnOrd || p==qnEq) &&  t == qnInt ->
+                                             text "ORD_" <> tname <> text (nstr op) <> parens(parens (parens tname <> gen env x) <> comma <+> parens (parens tname <> gen env y))
                                         _ -> genBool env e <> text "->val"
+      where tname                   = genQName env qnInt
 
     gen env (UnBox _ (IsInstance _ e c))
                                     = gen env primISINSTANCE0 <> parens(gen env e <> comma <+> genQName env c)
@@ -850,8 +855,8 @@ instance Gen Expr where
     gen env (UnBox _ (Float _ x s)) = text s
     gen env (UnBox _ v@(Var _ (NoQ n)))
        | isUnboxed n                = gen env v
-    gen env (UnBox _ e@Var{})       = gen env e <> text "->val"
-    gen env (UnBox _ e)             = parens (gen env e) <> text "->val"
+    gen env (UnBox t e)             = parens (parens (gen env t) <> gen env e) <> text "->val"
+--    gen env (UnBox t e)             = parens (gen env e) <> text "->val"
     gen env e                       = error ("CodeGen.gen for Expr: e = " ++ show e)
 
 gencFunCall env nm []               = text nm <> parens empty
