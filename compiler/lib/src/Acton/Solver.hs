@@ -142,13 +142,13 @@ solve' env select hist te tt eq cs
                                                         --traceM ("### reduce " ++ prstr c)
                                                         proceed hist cs
                                                     RSealed v -> do
-                                                        --traceM ("### try goal " ++ prstr t ++ ", candidates: " ++ prstrs [fxAction, fxPure])
+                                                        --traceM ("### try goal " ++ prstr v ++ ", candidates: " ++ prstrs [fxAction, fxPure])
                                                         tryAlts st v [fxAction, fxPure]
                                                     RTry v alts r -> do
-                                                        --traceM ("### try goal " ++ prstr t ++ ", candidates: " ++ prstrs alts ++ if r then " (rev)" else "")
+                                                        --traceM ("### try goal " ++ prstr v ++ ", candidates: " ++ prstrs alts ++ if r then " (rev)" else "")
                                                         tryAlts st v alts
                                                     RVar v alts -> do
-                                                        --traceM ("### var goal " ++ prstr t ++ ", unifying with " ++ prstrs alts)
+                                                        --traceM ("### var goal " ++ prstr v ++ ", unifying with " ++ prstrs alts)
                                                         unifyM (DfltInfo NoLoc 3 Nothing []) alts (repeat $ tUni v) >> proceed hist cs
                                                     RSkip ->
                                                         return (keep_cs, eq)
@@ -169,7 +169,7 @@ solve' env select hist te tt eq cs
                                                  cs' <- usubst cs'
                                                  noSolve0 env (Just $ tUni tv) (take (length vs') ts) cs'
         tryAlts st tv (t:ts)                = tryAlt tv t `catchError` const (
-                                                    do --traceM ("=== ROLLBACK " ++ prstr t0)
+                                                    do --traceM ("=== ROLLBACK " ++ prstr tv)
                                                        rollbackState st >> tryAlts st tv ts)
         tryAlt v (TCon _ c)
           | isProto env (tcname c)          = do p <- instwildcon env c
@@ -1439,11 +1439,11 @@ ctxtReduce env vi multiPBnds            = (concat eqs, concat css)
   where (eqs,css)                       = unzip $ map ctxtRed multiPBnds
         ctxtRed (v,wps)                 = imp v [] [] [] wps
         imp v eq uni wps ((w,p):wps')
-          | (w',wf,p1,p'):_ <- hits     = --trace ("  *" ++ prstr p ++ " covered by " ++ prstr p1) $
-                                          imp v (Eqn w (impl2type (tUni v) p) (wf (eVar w')) : eq) ((tcargs p `zip` tcargs p') ++ uni) wps wps'
+          | (e,p'):_ <- hits            = --trace ("  *" ++ prstr p ++ " covered by " ++ prstr p') $
+                                          imp v (Eqn w (impl2type (tUni v) p) e : eq) ((tcargs p `zip` tcargs p') ++ uni) wps wps'
           | otherwise                   = --trace ("   (Not covered: " ++ prstr p ++ " in context " ++ prstrs (map snd (wps++wps')) ++ ")") $
                                           imp v eq uni ((w,p):wps) wps'
-          where hits                    = [ (w',wf,p0,vsubst s p') | (w',p0) <- wps++wps', w'/=w, Just (wf,p') <- [findAncestor env p0 (tcname p)] ]
+          where hits                    = [ (wf $ eVar w', vsubst s p') | (w',p0) <- wps++wps', w'/=w, Just (wf,p') <- [findAncestor env p0 (tcname p)] ]
                 s                       = [(tvSelf,tUni v)]
         imp v eq uni wps []             = (eq, uni)
   -- TODO: also check that an mro exists (?)
