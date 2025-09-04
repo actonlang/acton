@@ -220,8 +220,8 @@ solve' env select hist te tt eq cs
         deco (RRed cs)                      = (0, 0, 0, 0)
         deco (RSealed v)                    = (1, 0, 0, 0)
         deco (RTry v as r)                  = (w, length $ filter (==v) embvs, length as, length $ filter (==v) univs)
-          where w | wildTuple `elem` as     =  2
-                  | otherwise               =  3
+          where w | uvkind v /= KFX         =  2    -- types and rows, normal search
+                  | otherwise               =  3    -- effects, never qualified, last to be searched
         deco (RVar v as)                    = (4, 0, length as, 0)
         deco (RSkip)                        = (5, 0, 0, 0)
 
