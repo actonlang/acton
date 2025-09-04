@@ -1434,6 +1434,9 @@ solveDots env mutC selC selP cs         = do (eqs,css) <- unzip <$> mapM solveDo
           | Just w <- lookup (v,n) selP = solveSelWit env w c
         solveDot c                      = return ([], [c])
 
+instance Pretty (TUni,Name) where
+    pretty (v,n)                        = pretty v Pretty.<> text "." Pretty.<> pretty n
+
 ctxtReduce                              :: Env -> VInfo -> [(TUni, [(Name, PCon)])] -> (Equations, [(Type,Type)])
 ctxtReduce env vi multiPBnds            = (concat eqs, concat css)
   where (eqs,css)                       = unzip $ map ctxtRed multiPBnds
