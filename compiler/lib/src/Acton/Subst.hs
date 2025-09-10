@@ -42,35 +42,6 @@ selfType p k NoDec
   | TRow _ _ _ t _ <- krowOf k          = t
 selfType _ _ _                          = tSelf
 
-closeDepVars vs cs
-  | null vs'                        = nub vs
-  | otherwise                       = closeDepVars (vs'++vs) cs
-  where vs'                         = concat [ deps c \\ vs | c <- cs, all (`elem` vs) (heads c) ]
-
-        heads (Impl _ w t _)        = ufree t
-        heads (Cast _ t _)          = ufree t
-        heads (Sub _ w t _)         = ufree t
-        heads (Sel _ w t n _)       = ufree t
-        heads (Mut _ t n _)         = ufree t
-        heads (Seal _ t)            = ufree t
-
-        deps (Impl _ w _ p)         = ufree p
-        deps (Cast _ _ t)           = typarams t
-        deps (Sub _ w _ t)          = typarams t
-        deps (Sel _ w _ n t)        = ufree t
-        deps (Mut _ _ n t)          = ufree t
-        deps (Seal _ _)             = []
-
-        typarams (TOpt _ t)         = typarams t
-        typarams (TCon _ c)         = ufree c
-        typarams _                  = []
-
-
-closeDepVarsQ vs q
-  | null vs'                        = nub vs
-  | otherwise                       = closeDepVarsQ (vs'++vs) q
-  where vs'                         = concat [ vfree us \\ vs | Quant v us <- q, v `elem` vs ]
-
 qualbound q                         = [ v | Quant v ps <- q, not $ null ps ]
 
 
@@ -787,23 +758,27 @@ class (USubst a, UFree a) => Polarity a where
 
 (p,n) `polcat` (p',n')              = (p++p', n++n')
 
+polnil                              = ([], [])
+
+polnull (p,n)                       = null p && null n
+
 polneg (p,n)                        = (n,p)
 
-(p,n) `polminus` vs                 = (p\\vs, n\\vs)
+(p,n) `polminus` (p',n')            = (p\\p', n\\n')
 
 instance Polarity Type where
     polvars (TUni _ u)              = ([u],[])
-    polvars (TVar _ v)              = ([],[])
+    polvars (TVar _ v)              = polnil
     polvars (TCon _ c)              = polvars c
     polvars (TFun _ fx p k t)       = polvars fx `polcat` polvars t `polcat` polneg (polvars p `polcat` polvars k)
     polvars (TTuple _ p k)          = polvars p `polcat` polvars k
     polvars (TOpt _ t)              = polvars t
-    polvars (TNone _)               = ([],[])
-    polvars (TWild _)               = ([],[])
-    polvars (TNil _ _)              = ([],[])
+    polvars (TNone _)               = polnil
+    polvars (TWild _)               = polnil
+    polvars (TNil _ _)              = polnil
     polvars (TRow _ _ _ t r)        = polvars t `polcat` polvars r
     polvars (TStar _ _ r)           = polvars r
-    polvars (TFX l fx)              = ([],[])
+    polvars (TFX l fx)              = polnil
 
 invvars x                           = (vs, vs)
   where vs                          = ufree x
@@ -823,10 +798,35 @@ instance Polarity TSchema where
     polvars (TSchema _ q t)         = polvars q `polcat` polvars t
 
 instance (Polarity a) => Polarity (Maybe a) where
-    polvars                         = maybe ([],[]) polvars
+    polvars                         = maybe polnil polvars
 
 instance (Polarity a) => Polarity [a] where
-    polvars                         = foldr polcat ([],[]) . map polvars
+    polvars                         = foldr polcat polnil . map polvars
+
+
+closePolVars                            :: ([TUni],[TUni]) -> Constraints -> ([TUni],[TUni])
+closePolVars pvs cs
+  | polnull (pvs' `polminus` pvs)       = pvs'
+  | otherwise                           = closePolVars pvs' cs'
+  where
+    (pvs',cs')                          = boundvs pvs cs
+
+    boundvs pn []                        = (pn, [])
+    boundvs pn (Cast _ t (TUni _ v) : cs)
+      | v `elem` fst pn                 = boundvs (polvars t `polcat` pn) cs
+    boundvs pn (Sub _ _ t (TUni _ v) : cs)
+      | v `elem` fst pn                 = boundvs (polvars t `polcat` pn) cs
+    boundvs pn (Cast _ (TUni _ v) t : cs)
+      | v `elem` snd pn                 = boundvs (polneg (polvars t) `polcat` pn) cs
+    boundvs pn (Sub _ _ (TUni _ v) t : cs)
+      | v `elem` snd pn                 = boundvs (polneg (polvars t) `polcat` pn) cs
+    boundvs pn (Impl _ _ (TUni _ v) p : cs)
+      | v `elem` snd pn                 = boundvs (polneg (polvars p) `polcat` pn) cs
+    boundvs pn (Sel _ _ (TUni _ v) _ t : cs)
+      | v `elem` snd pn                 = boundvs (polneg (polvars t) `polcat` pn) cs
+    boundvsboundvs pn (Mut _ (TUni _ v) _ t : cs)
+      | v `elem` (fst pn ++ snd pn)     = boundvs (invvars t `polcat` pn) cs
+    bnds pn (c : cs)                    = let (pn',cs') = boundvs pn cs in (pn', c:cs')
 
 
 -- Does Self occur positively?
@@ -895,6 +895,36 @@ instance Tailvars Constraint where
 
 
 -- Misc. ---------------------------------------------------------------------------------------------
+
+
+closeDepVars vs cs
+  | null vs'                        = nub vs
+  | otherwise                       = closeDepVars (vs'++vs) cs
+  where vs'                         = concat [ deps c \\ vs | c <- cs, all (`elem` vs) (heads c) ]
+
+        heads (Impl _ w t _)        = ufree t
+        heads (Cast _ t _)          = ufree t
+        heads (Sub _ w t _)         = ufree t
+        heads (Sel _ w t n _)       = ufree t
+        heads (Mut _ t n _)         = ufree t
+        heads (Seal _ t)            = ufree t
+
+        deps (Impl _ w _ p)         = ufree p
+        deps (Cast _ _ t)           = typarams t
+        deps (Sub _ w _ t)          = typarams t
+        deps (Sel _ w _ n t)        = ufree t
+        deps (Mut _ _ n t)          = ufree t
+        deps (Seal _ _)             = []
+
+        typarams (TOpt _ t)         = typarams t
+        typarams (TCon _ c)         = ufree c
+        typarams _                  = []
+
+
+closeDepVarsQ vs q
+  | null vs'                        = nub vs
+  | otherwise                       = closeDepVarsQ (vs'++vs) q
+  where vs'                         = concat [ vfree us \\ vs | Quant v us <- q, v `elem` vs ]
 
 schematic (TCon _ tc)               = tCon (schematic' tc)
 schematic (TFun _ _ _ _ _)          = tFun tWild tWild tWild tWild
