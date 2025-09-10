@@ -1253,7 +1253,7 @@ importWits m te env         = foldl addWit env ws
 
 
 
-headvar (Impl _ w (TUni _ u) p)     = u
+headvar (Proto _ w (TUni _ u) p)    = u
 
 headvar (Cast _ TVar{} (TUni _ u))  = u
 headvar (Cast _ (TUni _ u) t)       = u

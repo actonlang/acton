@@ -62,7 +62,7 @@ instance VFree a => VFree (Name,a) where
 instance VFree Constraint where
     vfree (Cast info t1 t2)         = vfree t1 ++ vfree t2
     vfree (Sub info w t1 t2)        = vfree t1 ++ vfree t2
-    vfree (Impl info w t p)         = vfree t ++ vfree p
+    vfree (Proto info w t p)        = vfree t ++ vfree p
     vfree (Sel info w t1 n t2)      = vfree t1 ++ vfree t2
     vfree (Mut info t1 n t2)        = vfree t1 ++ vfree t2
     vfree (Seal info t)             = vfree t
@@ -408,7 +408,7 @@ instance UFree a => UFree (Maybe a) where
 instance UFree Constraint where
     ufree (Cast info t1 t2)         = ufree info ++ ufree t1 ++ ufree t2
     ufree (Sub info w t1 t2)        = ufree info ++ ufree t1 ++ ufree t2
-    ufree (Impl info w t p)         = ufree info ++ ufree t ++ ufree p
+    ufree (Proto info w t p)        = ufree info ++ ufree t ++ ufree p
     ufree (Sel info w t1 n t2)      = ufree info ++ ufree t1 ++ ufree t2
     ufree (Mut info t1 n t2)        = ufree info ++ ufree t1 ++ ufree t2
     ufree (Seal info t)             = ufree info ++ ufree t
@@ -586,7 +586,7 @@ instance USubst a => USubst (Maybe a) where
 instance USubst Constraint where
     usubst (Cast info t1 t2)        = Cast <$> usubst info <*> usubst t1 <*> usubst t2
     usubst (Sub info w t1 t2)       = Sub <$> usubst info <*> return w <*> usubst t1 <*> usubst t2
-    usubst (Impl info w t p)        = Impl <$> usubst info <*> return w <*>usubst t <*> usubst p
+    usubst (Proto info w t p)       = Proto <$> usubst info <*> return w <*>usubst t <*> usubst p
     usubst (Sel info w t1 n t2)     = Sel <$> usubst info <*> return w <*>usubst t1 <*> return n <*> usubst t2
     usubst (Mut info t1 n t2)       = Mut <$> usubst info <*> usubst t1 <*> return n <*> usubst t2
     usubst (Seal info t)            = Seal <$> usubst info <*> usubst t
@@ -820,7 +820,7 @@ closePolVars pvs cs
       | v `elem` snd pn                 = boundvs (polneg (polvars t) `polcat` pn) cs
     boundvs pn (Sub _ _ (TUni _ v) t : cs)
       | v `elem` snd pn                 = boundvs (polneg (polvars t) `polcat` pn) cs
-    boundvs pn (Impl _ _ (TUni _ v) p : cs)
+    boundvs pn (Proto _ _ (TUni _ v) p : cs)
       | v `elem` snd pn                 = boundvs (polneg (polvars p) `polcat` pn) cs
     boundvs pn (Sel _ _ (TUni _ v) _ t : cs)
       | v `elem` snd pn                 = boundvs (polneg (polvars t) `polcat` pn) cs
@@ -888,7 +888,7 @@ instance (Tailvars a) => Tailvars [a] where
 instance Tailvars Constraint where
     tailvars (Cast _ t1 t2)         = tailvars t1 ++ tailvars t2
     tailvars (Sub _ w t1 t2)        = tailvars t1 ++ tailvars t2
-    tailvars (Impl _ w t p)         = tailvars t ++ tailvars p
+    tailvars (Proto _ w t p)        = tailvars t ++ tailvars p
     tailvars (Sel _ w t1 n t2)      = tailvars t1 ++ tailvars t2
     tailvars (Mut _ t1 n t2)        = tailvars t1 ++ tailvars t2
     tailvars (Seal _ t)             = tailvars t
@@ -902,14 +902,14 @@ closeDepVars vs cs
   | otherwise                       = closeDepVars (vs'++vs) cs
   where vs'                         = concat [ deps c \\ vs | c <- cs, all (`elem` vs) (heads c) ]
 
-        heads (Impl _ w t _)        = ufree t
+        heads (Proto _ w t _)       = ufree t
         heads (Cast _ t _)          = ufree t
         heads (Sub _ w t _)         = ufree t
         heads (Sel _ w t n _)       = ufree t
         heads (Mut _ t n _)         = ufree t
         heads (Seal _ t)            = ufree t
 
-        deps (Impl _ w _ p)         = ufree p
+        deps (Proto _ w _ p)        = ufree p
         deps (Cast _ _ t)           = typarams t
         deps (Sub _ w _ t)          = typarams t
         deps (Sel _ w _ n t)        = ufree t
@@ -975,7 +975,7 @@ instance UWild QBind where
 instance UWild Constraint where
     uwild (Cast info t1 t2)         = Cast (uwild info) (uwild t1) (uwild t2)
     uwild (Sub info w t1 t2)        = Sub (uwild info) w (uwild t1) (uwild t2)
-    uwild (Impl info w t p)         = Impl (uwild info) w (uwild t) (uwild p)
+    uwild (Proto info w t p)        = Proto (uwild info) w (uwild t) (uwild p)
     uwild (Sel info w t1 n t2)      = Sel (uwild info) w (uwild t1) n (uwild t2)
     uwild (Mut info t1 n t2)        = Mut (uwild info) (uwild t1) n (uwild t2)
     uwild (Seal info t)             = Seal (uwild info) (uwild t)

@@ -246,7 +246,7 @@ fxUnwrap env t                          = t
 wrap t@TFun{}                           = do tvx <- newUnivarOfKind KFX
                                              tvy <- newUnivarOfKind KFX
                                              w <- newWitness
-                                             return (Impl (DfltInfo (loc t) 28 Nothing []) w tvx (pWrapped (effect t) tvy), t{ effect = tvx })
+                                             return (Proto (DfltInfo (loc t) 28 Nothing []) w tvx (pWrapped (effect t) tvy), t{ effect = tvx })
 
 wrapped l kw env cs ts args             = do tvx <- newUnivarOfKind KFX
                                              tvy <- newUnivarOfKind KFX
@@ -260,7 +260,7 @@ wrapped l kw env cs ts args             = do tvx <- newUnivarOfKind KFX
                                              w <- newWitness
                                              (cs0,_) <- simplify env [] t' [Cast (DfltInfo l 30 Nothing []) t1 t2]
                                              t' <- usubst t'
-                                             cs1 <- usubst (Impl (DfltInfo l 29 Nothing []) w fx p : cs)
+                                             cs1 <- usubst (Proto (DfltInfo l 29 Nothing []) w fx p : cs)
                                              return (cs0++cs1, t', eCall (tApp (Dot l0 (eVar w) kw) tvs) args)
 
 --------------------------------------------------------------------------------------------------------------------------
@@ -316,7 +316,7 @@ instance InfEnv Stmt where
                                              (cs3,te1,b') <- infSuiteEnv (define te env) b
                                              (cs4,te2,els') <- infSuiteEnv env els
                                              w <- newWitness
-                                             return (Impl (DfltInfo (loc e) 33 (Just e) []) w t2 (pIterable t1) :
+                                             return (Proto (DfltInfo (loc e) 33 (Just e) []) w t2 (pIterable t1) :
                                                      cs1++cs2++cs3++cs4, [], For l p' (eCall (eDot (eVar w) iterKW) [e']) b' els')
     infEnv env (Try l b hs els fin)     = do (cs1,te,b') <- infLiveEnv env b
                                              (cs2,te',els') <- infLiveEnv (maybe id define te $ env) els
@@ -373,11 +373,11 @@ instance InfEnv Stmt where
                                              (cs,ix) <- inferSub env ti ix
                                              t <- newUnivar
                                              w <- newWitness
-                                             return ( Impl (DfltInfo l 36 Nothing []) w t0 (pIndexed ti t) : cs, sExpr $ dotCall w delitemKW [e0, ix] )
+                                             return ( Proto (DfltInfo l 36 Nothing []) w t0 (pIndexed ti t) : cs, sExpr $ dotCall w delitemKW [e0, ix] )
             del t0 e0 (TgSlice sl)      = do (cs,sl) <- inferSlice env sl
                                              t <- newUnivar
                                              w <- newWitness
-                                             return ( Impl (DfltInfo l 37 Nothing []) w t0 (pSliceable t) : cs, sExpr $ dotCall w delsliceKW [e0, sliz2exp sl] )
+                                             return ( Proto (DfltInfo l 37 Nothing []) w t0 (pSliceable t) : cs, sExpr $ dotCall w delsliceKW [e0, sliz2exp sl] )
             del t0 e0 (TgDot n)         = do t <- newUnivar
                                              return ( Mut (DfltInfo l 38 Nothing []) t0 n t : Cast (DfltInfo l 39 Nothing []) tNone t : [], sMutAssign (eDot e0 n) eNone )
 
@@ -391,13 +391,13 @@ instance InfEnv Stmt where
             asgn t0 t e0 e (TgIndex ix) = do ti <- newUnivar
                                              (cs,ix) <- inferSub env ti ix
                                              w <- newWitness
-                                             return ( Impl (DfltInfo l 41 Nothing []) w t0 (pIndexed ti t) : cs, sExpr $ dotCall w setitemKW [e0, ix, e] )
+                                             return ( Proto (DfltInfo l 41 Nothing []) w t0 (pIndexed ti t) : cs, sExpr $ dotCall w setitemKW [e0, ix, e] )
             asgn t0 t e0 e (TgSlice sl) = do (cs,sl) <- inferSlice env sl
                                              t' <- newUnivar
                                              w <- newWitness
                                              w' <- newWitness
-                                             return ( Impl (DfltInfo l 42 Nothing []) w t0 (pSliceable t') :
-                                                      Impl (DfltInfo l 43 Nothing []) w' t (pIterable t') :
+                                             return ( Proto (DfltInfo l 42 Nothing []) w t0 (pSliceable t') :
+                                                      Proto (DfltInfo l 43 Nothing []) w' t (pIterable t') :
                                                       cs, sExpr $ eCall (tApp (eDot (eVar w) setsliceKW) [t]) [e0, eVar w', sliz2exp sl, e] )
             asgn t0 t e0 e (TgDot n)    = do return ( Mut (DfltInfo l 44 Nothing []) t0 n t : [], sMutAssign (eDot e0 n) e )
 
@@ -409,7 +409,7 @@ instance InfEnv Stmt where
                                              w <- newWitness
                                              (ss,x) <- mkvar t0 e0
                                              (cs2,stmt) <- aug t0 t x (dotCall w kw) e tg
-                                             return ( Impl (DfltInfo l 45 Nothing []) w t proto : cs0++cs1++cs2, [], withLocal ss stmt )
+                                             return ( Proto (DfltInfo l 45 Nothing []) w t proto : cs0++cs1++cs2, [], withLocal ss stmt )
       where oper t MultA                = (pTimes t,  imulKW)
             oper t DivA                 = (pDiv t,    itruedivKW)
             oper _ PlusA                = (pPlus,     iaddKW)
@@ -428,7 +428,7 @@ instance InfEnv Stmt where
             aug t0 t x f e (TgIndex ix) = do ti <- newUnivar
                                              (cs,ix) <- inferSub env ti ix
                                              w <- newWitness
-                                             return ( Impl (DfltInfo l 47 Nothing []) w t0 (pIndexed ti t) :
+                                             return ( Proto (DfltInfo l 47 Nothing []) w t0 (pIndexed ti t) :
                                                       cs, sExpr $ dotCall w setitemKW [eVar x, ix, f [dotCall w getitemKW [eVar x, ix], e]])
             aug t0 t x f e (TgSlice sl) = do tryUnify (DfltInfo l 1115 Nothing []) t0 t
                                              (cs,sl) <- inferSlice env sl
@@ -436,8 +436,8 @@ instance InfEnv Stmt where
                                              w <- newWitness
                                              w' <- newWitness
                                              let e1 = f [dotCall w getsliceKW [eVar x, sliz2exp sl], e]
-                                             return ( Impl (DfltInfo l 48 Nothing []) w t (pSliceable t') :
-                                                      Impl (DfltInfo l 49 Nothing []) w' t (pIterable t') :
+                                             return ( Proto (DfltInfo l 48 Nothing []) w t (pSliceable t') :
+                                                      Proto (DfltInfo l 49 Nothing []) w' t (pIterable t') :
                                                       cs, sExpr $ eCall (tApp (eDot (eVar w) setsliceKW) [t]) [eVar x, eVar w', sliz2exp sl, e1] )
             aug t0 t x f e (TgDot n)    = do return ( Mut (DfltInfo l 50 Nothing []) t0 n t : [], sMutAssign (eDot (eVar x) n) $ f [eDot (eVar x) n, e])
 
@@ -1410,7 +1410,7 @@ refine env cs te eq
 
         solve_cs                        = [ c | c <- cs, noQual c ]
 
-        noQual (Impl _ _ (TUni _ u) p)  = False
+        noQual (Proto _ _ (TUni _ u) p) = False
         noQual c                        = True
 
         canGen tv                       = uvkind tv /= KFX
@@ -1459,8 +1459,8 @@ genEnv env cs te ds
     qualify vs cs                       = (q, concat wss)
       where (q,wss)                     = unzip $ map qbind vs
             qbind v                     = (Quant v bounds, wits)
-              where bounds              = [ p | Impl _ w (TVar _ v') p <- cs, v == v' ]
-                    wits                = [ (w, impl2type t p) | Impl _ w t@(TVar _ v') p <- cs, v == v' ]
+              where bounds              = [ p | Proto _ w (TVar _ v') p <- cs, v == v' ]
+                    wits                = [ (w, impl2type t p) | Proto _ w t@(TVar _ v') p <- cs, v == v' ]
 
     generalize q (n, NDef (TSchema l [] t) d doc)
                                         = (n, NDef (TSchema l q t) d doc)
@@ -1521,13 +1521,13 @@ instance InfEnv Branch where
 instance InfEnv WithItem where
     infEnv env (WithItem e Nothing)     = do (cs,t,e') <- infer env e
                                              w <- newWitness
-                                             return (Impl (DfltInfo (loc e) 66 (Just e) []) w t pContextManager :
+                                             return (Proto (DfltInfo (loc e) 66 (Just e) []) w t pContextManager :
                                                      cs, [], WithItem e' Nothing)           -- TODO: translate using w
     infEnv env (WithItem e (Just p))    = do (cs1,t1,e') <- infer env e
                                              (cs2,te,t2,p') <- infEnvT env p
                                              w <- newWitness
                                              return (Cast (DfltInfo (loc e) 67 (Just e) []) t1 t2 :
-                                                     Impl (DfltInfo (loc e) 68 (Just e) []) w t1 pContextManager :
+                                                     Proto (DfltInfo (loc e) 68 (Just e) []) w t1 pContextManager :
                                                      cs1++cs2, te, WithItem e' (Just p'))         -- TODO: translate using w
 
 instance InfEnv Handler where
@@ -1578,10 +1578,10 @@ instance Infer Expr where
 
     infer env e@(Int _ val s)           = do t <- newUnivar
                                              w <- newWitness
-                                             return ([Impl (DfltInfo (loc e) 72 (Just e) []) w t pNumber], t, eCall (eDot (eVar w) fromatomKW) [e])
+                                             return ([Proto (DfltInfo (loc e) 72 (Just e) []) w t pNumber], t, eCall (eDot (eVar w) fromatomKW) [e])
     infer env e@(Float _ val s)         = do t <- newUnivar
                                              w <- newWitness
-                                             return ([Impl (DfltInfo (loc e) 73 (Just e) []) w t pRealFloat], t, eCall (eDot (eVar w) fromatomKW) [e])
+                                             return ([Proto (DfltInfo (loc e) 73 (Just e) []) w t pRealFloat], t, eCall (eDot (eVar w) fromatomKW) [e])
     infer env e@Imaginary{}             = notYetExpr e
     infer env e@(Bool _ val)            = return ([], tBool, e)
     infer env e@(None _)                = return ([], tNone, e)
@@ -1608,13 +1608,13 @@ instance Infer Expr where
                                              t0 <- newUnivar
                                              w <- newWitness
                                              (cs2,t,e') <- infer env e
-                                             return (Impl (DfltInfo (loc e) 76 (Just e) []) w t (pIndexed ti t0) :
+                                             return (Proto (DfltInfo (loc e) 76 (Just e) []) w t (pIndexed ti t0) :
                                                      cs1++cs2, t0, eCall (eDot (eVar w) getitemKW) [e', ix'])
     infer env (Slice l e sl)            = do (cs1,sl') <- inferSlice env sl
                                              (cs2,t,e') <- infer env e
                                              t0 <- newUnivar
                                              w <- newWitness
-                                             return (Impl (DfltInfo (loc e) 77 (Just e) []) w t (pSliceable t0) :
+                                             return (Proto (DfltInfo (loc e) 77 (Just e) []) w t (pSliceable t0) :
                                                      cs1++cs2, t, eCall (eDot (eVar w) getsliceKW) [e', sliz2exp sl'])
     infer env (Cond l e1 e e2)          = do t0 <- newUnivar
                                              (cs0,env',s,_,e') <- inferTest env e
@@ -1671,20 +1671,20 @@ instance Infer Expr where
                                              (cs1,e1') <- inferSub env t e1
                                              (cs2,e2') <- inferSub env t' e2
                                              w <- newWitness
-                                             return (Impl (DfltInfo l 79 (Just e) []) w t (pTimes t') :
+                                             return (Proto (DfltInfo l 79 (Just e) []) w t (pTimes t') :
                                                      cs1++cs2, t, eCall (eDot (eVar w) mulKW) [e1',e2'])
       | op == Div                       = do t <- newUnivar
                                              t' <- newUnivar
                                              (cs1,e1') <- inferSub env t e1
                                              (cs2,e2') <- inferSub env t e2
                                              w <- newWitness
-                                             return (Impl (DfltInfo l 80 (Just e) []) w t (pDiv t') :
+                                             return (Proto (DfltInfo l 80 (Just e) []) w t (pDiv t') :
                                                      cs1++cs2, t', eCall (eDot (eVar w) truedivKW) [e1',e2'])
       | otherwise                       = do t <- newUnivar
                                              (cs1,e1') <- inferSub env t e1
                                              (cs2,e2') <- inferSub env (rtype op t) e2
                                              w <- newWitness
-                                             return (Impl (DfltInfo (loc e) 81 (Just e) []) w t (protocol op) :
+                                             return (Proto (DfltInfo (loc e) 81 (Just e) []) w t (protocol op) :
                                                      cs1++cs2, t, eCall (eDot (eVar w) (method op)) [e1',e2'])
       where protocol Plus               = pPlus
             protocol Minus              = pMinus
@@ -1716,7 +1716,7 @@ instance Infer Expr where
                                              return (cs, tBool, UnOp l op e')
       | otherwise                       = do (cs,t,e') <- infer env e
                                              w <- newWitness
-                                             return (Impl (DfltInfo (loc e) 82 (Just e) []) w t (protocol op) :
+                                             return (Proto (DfltInfo (loc e) 82 (Just e) []) w t (protocol op) :
                                                      cs, t, eCall (eDot (eVar w) (method op)) [e'])
       where protocol UPlus              = pNumber
             protocol UMinus             = pNumber
@@ -1730,13 +1730,13 @@ instance Infer Expr where
                                              t2 <- newUnivar
                                              (cs2,e2') <- inferSub env t2 e2
                                              w <- newWitness
-                                             return (Impl (DfltInfo (loc e1) 83 (Just e) []) w t2 (pContainer t1) :
+                                             return (Proto (DfltInfo (loc e1) 83 (Just e) []) w t2 (pContainer t1) :
                                                      cs1++cs2, tBool, eCall (eDot (eVar w) (method op)) [e2', e1'])
       | otherwise                       = do t <- newUnivar
                                              (cs1,e1') <- inferSub env t e1
                                              (cs2,e2') <- inferSub env t e2
                                              w <- newWitness
-                                             return (Impl (DfltInfo l 84 (Just e) []) w t (protocol op) :
+                                             return (Proto (DfltInfo l 84 (Just e) []) w t (protocol op) :
                                                      cs1++cs2, tBool, eCall (eDot (eVar w) (method op)) [e1',e2'])
                                              -- TODO: This gives misleading error msg; it says that "e1 op e2 must implement protocol op"
       where protocol Eq                 = pEq
@@ -1790,7 +1790,7 @@ instance Infer Expr where
                                                     t0 <- newUnivar
                                                     let t' = vsubst [(tvSelf,t0)] $ addSelf t dec
                                                     w <- newWitness
-                                                    return (Impl (DfltInfo l 85 Nothing []) w t0 tc :
+                                                    return (Proto (DfltInfo l 85 Nothing []) w t0 tc :
                                                             cs1, t', app t' (tApp (Dot l (wf $ eVar w) n) tvs) $ witsOf cs1)
                                                 Nothing -> err1 l "Attribute not found"
       where c'                          = unalias env c
@@ -1853,7 +1853,7 @@ instance Infer Expr where
     infer env (Set l es)                = do t0 <- newUnivar
                                              (cs,es')  <- infElems env es t0
                                              w <- newWitness
-                                             return (Impl (DfltInfo l 87 Nothing []) w t0 pHashable : cs, tSet t0, eCall (tApp (eQVar primMkSet) [t0]) [eVar w,Set l es'])
+                                             return (Proto (DfltInfo l 87 Nothing []) w t0 pHashable : cs, tSet t0, eCall (tApp (eQVar primMkSet) [t0]) [eVar w,Set l es'])
     infer env (SetComp l e co)
       | nodup co                        = do (cs1,env',co') <- infComp env co
                                              t0 <- newUnivar
@@ -1861,12 +1861,12 @@ instance Infer Expr where
                                              w <- newWitness
                                              let Elem v = head es
                                                  e' = Elem (annot (tHashableW t0) (eVar w) t0 v)
-                                             return (Impl (DfltInfo l 89 Nothing []) w t0 pHashable : cs1++cs2, tSet t0, SetComp l e' co')
+                                             return (Proto (DfltInfo l 89 Nothing []) w t0 pHashable : cs1++cs2, tSet t0, SetComp l e' co')
     infer env (Dict l as)               = do tk <- newUnivar
                                              tv <- newUnivar
                                              (cs,as') <- infAssocs env as tk tv
                                              w <- newWitness
-                                             return (Impl (DfltInfo l 88 Nothing []) w tk pHashable : cs, tDict tk tv, eCall (tApp (eQVar primMkDict) [tk, tv]) [eVar w,Dict l as'])
+                                             return (Proto (DfltInfo l 88 Nothing []) w tk pHashable : cs, tDict tk tv, eCall (tApp (eQVar primMkDict) [tk, tv]) [eVar w,Dict l as'])
     infer env (DictComp l a co)
       | nodup co                        = do (cs1,env',co') <- infComp env co
                                              tk <- newUnivar
@@ -1875,7 +1875,7 @@ instance Infer Expr where
                                              w <- newWitness
                                              let Assoc k v = head as
                                                  a' = Assoc (annot (tHashableW tk) (eVar w) tk k) v
-                                             return (Impl (DfltInfo l 90 Nothing []) w tk pHashable : cs1++cs2, tDict tk tv, DictComp l a' co')
+                                             return (Proto (DfltInfo l 90 Nothing []) w tk pHashable : cs1++cs2, tDict tk tv, DictComp l a' co')
 
     infer env (Paren l e)               = do (cs,t,e') <- infer env e
                                              return (cs, t, Paren l e')
@@ -1915,7 +1915,7 @@ infElems env (Star e : es) t0           = do t1 <- newUnivar
                                              (cs1,e') <- inferSub env t1 e
                                              (cs2,es') <- infElems env es t0
                                              w <- newWitness
-                                             return (Impl (DfltInfo (loc e) 89 (Just e) []) w t1 (pIterable t0) :
+                                             return (Proto (DfltInfo (loc e) 89 (Just e) []) w t1 (pIterable t0) :
                                                      cs1++cs2, Star e' : es')
 
 
@@ -1929,7 +1929,7 @@ infAssocs env (StarStar e : as) tk tv   = do t1 <- newUnivar
                                              (cs1,e') <- inferSub env t1 e
                                              (cs2,as') <- infAssocs env as tk tv
                                              w <- newWitness
-                                             return (Impl (DfltInfo (loc e) 90 (Just e) []) w t1 (pIterable $ tTupleP $ posRow tk $ posRow tv posNil) :
+                                             return (Proto (DfltInfo (loc e) 90 (Just e) []) w t1 (pIterable $ tTupleP $ posRow tk $ posRow tv posNil) :
 --                                                     cs1++cs2, Star e' : as')
                                                      cs1++cs2, StarStar e' : as')
 
@@ -2090,7 +2090,7 @@ infComp env (CompFor l p e c)           = do (cs1,te1,t1,p') <- infEnvT (reserve
                                              (cs2,e') <- inferSub env t2 e
                                              (cs3,env',c') <- infComp (define te1 env) c
                                              w <- newWitness
-                                             return (Impl (DfltInfo (loc e) 101 (Just e) []) w t2 (pIterable t1) :
+                                             return (Proto (DfltInfo (loc e) 101 (Just e) []) w t2 (pIterable t1) :
                                                      cs1++cs2++cs3, env', CompFor l p' (eCall (eDot (eVar w) iterKW) [e']) c')
 
 instance InfEnvT PosPat where
@@ -2150,7 +2150,7 @@ instance InfEnvT Pattern where
     infEnvT env (PList l ps p)          = do (cs1,te1,t1,ps') <- infEnvT env ps
                                              (cs2,te2,t2,p') <- infEnvT (define te1 env) p
                                              w <- newWitness
-                                             return (Impl (DfltInfo l 108 Nothing []) w t2 (pSequence t1) :
+                                             return (Proto (DfltInfo l 108 Nothing []) w t2 (pSequence t1) :
                                                      cs1++cs2, te1++te2, t2, PList l ps' p')
     infEnvT env (PParen l p)            = do (cs,te,t,p') <- infEnvT env p
                                              return (cs, te, t, PParen l p')

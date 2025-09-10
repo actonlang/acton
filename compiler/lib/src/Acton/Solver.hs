@@ -125,7 +125,7 @@ newrank env pol (Cast _ (TUni _ v) t)
   | otherwise                               = R_amb v alts
   where (pos, neg)                          = (v `elem` fst pol, v `elem` snd pol)
         alts                                = allBelow env t
-newrank env pol (Impl _ _ (TUni _ v) p)                                                     -- Impl behaves as an upper typ bound
+newrank env pol (Proto _ _ (TUni _ v) p)                                                     -- Proto behaves as an upper typ bound
   | neg && pos                              = R_ret
   | neg                                     = R_neg v alts
   | otherwise                               = R_amb v alts
@@ -253,7 +253,7 @@ solve' env select hist te tt eq cs
                                                         return (keep_cs, eq)
 
   where (solve_cs, keep_cs)                 = partition select cs
-        keep_evidence                       = [ hasWitness env t p | Impl _ _ t p <- keep_cs ]
+        keep_evidence                       = [ hasWitness env t p | Proto _ _ t p <- keep_cs ]
         (vargoals, goals)                   = span isVar $ sortOn deco $ map condense $ group rnks
         group []                            = []
         group (r:rs)                        = (r : rs1) : group rs2
@@ -274,7 +274,7 @@ solve' env select hist te tt eq cs
           | isProto env (tcname c)          = do p <- instwildcon env c
                                                  w <- newWitness
                                                  --traceM ("  # trying " ++ prstr v ++ " (" ++ prstr p ++ ")")
-                                                 proceed hist (Impl (DfltInfo NoLoc 4 Nothing []) w (tUni v) p : cs)
+                                                 proceed hist (Proto (DfltInfo NoLoc 4 Nothing []) w (tUni v) p : cs)
         tryAlt v (TTuple _ _ _)
           | not $ null attrs                = do t <- instwild env KType (tTupleK $ foldr (\n -> kwdRow n tWild) tWild attrs)
                                                  --traceM ("  # trying tuple " ++ prstr v ++ " = " ++ prstr t)
@@ -344,7 +344,7 @@ rank env (Cast _ TNone{} (TUni _ v))        = RTry v [tOpt tWild, tNone] True
 rank env (Cast _ (TUni _ v) t2)             = RTry v (allBelow env t2) False
 rank env (Cast _ t1 (TUni _ v))             = RTry v (allAbove env t1) True
 
-rank env (Impl _ _ (TUni _ v) p)            = RTry v ts False
+rank env (Proto _ _ (TUni _ v) p)           = RTry v ts False
   where ts                                  = allExtProto env p
 
 rank env (Sel _ _ (TUni _ v) n _)           = RTry v (allConAttr env n ++ allProtoAttr env n ++ allExtProtoAttr env n ++ [wildTuple]) False
@@ -370,7 +370,7 @@ instance (OptVars a) => OptVars [a] where
 instance OptVars Constraint where
     optvars (Cast _ t1 t2)              = optvars [t1, t2]
     optvars (Sub _ w t1 t2)             = optvars [t1, t2]
-    optvars (Impl _ w t p)              = optvars t ++ optvars p
+    optvars (Proto _ w t p)             = optvars t ++ optvars p
     optvars (Sel _ w t1 n t2)           = optvars [t1, t2]
     optvars (Mut _ t1 n t2)             = optvars [t1, t2]
     optvars (Seal _ t)                  = optvars t
@@ -397,8 +397,8 @@ embvars cs                              = concat $ map emb cs
                                         = []
         emb (Sub _ _ (TUni _ v) t)      = ufree t
         emb (Sub _ _ t (TUni _ v))      = ufree t
-        emb (Impl _ _ (TUni _ v) p)     = ufree p
-        emb (Impl _ _ (TCon _ c) p)     = ufree c ++ ufree p
+        emb (Proto _ _ (TUni _ v) p)    = ufree p
+        emb (Proto _ _ (TCon _ c) p)    = ufree c ++ ufree p
         emb (Sel _ _ (TUni _ v) n t)    = ufree t
         emb (Mut _ (TUni _ v) n t)      = ufree t
         emb _                           = []
@@ -473,36 +473,36 @@ reduce' env eq c@(Cast i t1 t2)             = do cast' env i t1 t2
 
 reduce' env eq c@(Sub i w t1 t2)            = sub' env i eq w t1 t2
 
-reduce' env eq c@(Impl _ w TUni{} p)        = do defer [c]; return eq
+reduce' env eq c@(Proto _ w TUni{} p)       = do defer [c]; return eq
 
-reduce' env eq c@(Impl _ w t@(TVar _ tv) p)
-  | [wit] <- witSearch                      = do (eq',cs) <- solveImpl env wit w t p
+reduce' env eq c@(Proto _ w t@(TVar _ tv) p)
+  | [wit] <- witSearch                      = do (eq',cs) <- solveProto env wit w t p
                                                  reduce env (eq'++eq) cs
-  | [wit] <- witSearch'                     = do (eq',cs) <- solveImpl env wit w (tCon tc) p
+  | [wit] <- witSearch'                     = do (eq',cs) <- solveProto env wit w (tCon tc) p
                                                  reduce env (eq'++eq) cs
   where witSearch                           = findWitness env t p
         tc                                  = findTVBound env tv
         witSearch'                          = findWitness env (tCon tc) p
 
-reduce' env eq c@(Impl _ w t@(TCon _ tc) p)
+reduce' env eq c@(Proto _ w t@(TCon _ tc) p)
   | tcname p == qnIdentity,
     isActor env (tcname tc)                 = do let e = eCall (eQVar primIdentityActor) []
                                                  return (Eqn w (impl2type t p) e : eq)
-  | [wit] <- witSearch                      = do (eq',cs) <- solveImpl env wit w t p
+  | [wit] <- witSearch                      = do (eq',cs) <- solveProto env wit w t p
                                                  reduce env (eq'++eq) cs
   where witSearch                           = findWitness env t p
 
-reduce' env eq c@(Impl _ w t@(TFX _ tc) p)
-  | [wit] <- witSearch                      = do (eq',cs) <- solveImpl env wit w t p
+reduce' env eq c@(Proto _ w t@(TFX _ tc) p)
+  | [wit] <- witSearch                      = do (eq',cs) <- solveProto env wit w t p
                                                  reduce env (eq'++eq) cs
   where witSearch                           = findWitness env t p
 
-reduce' env eq c@(Impl info w t@(TOpt _ t') p)
+reduce' env eq c@(Proto info w t@(TOpt _ t') p)
   | tcname p == qnEq                        = do w' <- newWitness
                                                  let e = eCall (tApp (eQVar primEqOpt) [t']) [eVar w']
-                                                 reduce env (Eqn w (impl2type t p) e : eq) [Impl info w' t' p]
+                                                 reduce env (Eqn w (impl2type t p) e : eq) [Proto info w' t' p]
 
-reduce' env eq c@(Impl _ w t@(TNone _) p)
+reduce' env eq c@(Proto _ w t@(TNone _) p)
   | tcname p == qnEq                        = return (Eqn w (impl2type t p) (eQVar primWEqNone) : eq)
 
 reduce' env eq c@(Sel _ w TUni{} n _)       = do defer [c]; return eq
@@ -577,7 +577,7 @@ reduce' env eq (Seal info t)                = reduce env eq (map (Seal info) ts)
 reduce' env eq c                            = noRed0 env c
 
 
-solveImpl env wit w t p                     = do (cs,t',we) <- instWitness env p wit
+solveProto env wit w t p                    = do (cs,t',we) <- instWitness env p wit
                                                  unify (DfltInfo NoLoc 7 Nothing []) t t'
                                                  return ([Eqn w (impl2type t p) we], cs)
 
@@ -601,7 +601,7 @@ solveSelAttr env (wf,sc,d) (Sel info w t1 n t2)
 solveSelProto env pn c@(Sel info w t1 n t2) = do p <- instwildcon env pn
                                                  w' <- newWitness
                                                  (eq,cs) <- solveSelWit env (p, eVar w') c
-                                                 return (eq, Impl info w' t1 p : cs)
+                                                 return (eq, Proto info w' t1 p : cs)
 
 solveSelWit env (p,we) c0@(Sel info w t1 n t2)
                                             = do let Just (wf,sc,d) = findAttr env p n
@@ -1299,8 +1299,8 @@ varinfo cs                                  = f cs (VInfo [] [] [] Map.empty Map
       | otherwise                           = f cs . varvar v1 v2
     f (Sub _ _ (TUni _ v) t : cs)           = f cs . ubound v t . embed (ufree t)
     f (Sub _ _ t (TUni _ v) : cs)           = f cs . lbound v t . embed (ufree t)
-    f (Impl _ w (TUni _ v) p : cs)          = f cs . pbound v w p . embed (ufree p)
-    f (Impl _ w t p : cs)
+    f (Proto _ w (TUni _ v) p : cs)         = f cs . pbound v w p . embed (ufree p)
+    f (Proto _ w t p : cs)
       | not $ null vs                       = f cs . embed (vs ++ ufree p)
       where vs                              = nub $ ufree t
     f (Mut _ (TUni _ v) n t : cs)           = f cs . mutattr v n . embed (ufree t)
@@ -1389,8 +1389,8 @@ mkLUB env (v,ts)
 --  S-minimal (constrained vars are invariant)
 --  just single upper/lower bounds
 --  no closed upper/lower bounds
---  no redundant Impl
---  no Sel/Mut covered by Cast/Sub/Impl bounds
+--  no redundant Proto
+--  no Sel/Mut covered by Cast/Sub/Proto bounds
 
 
 improve                                 :: (Polarity a, Pretty a) => Env -> TEnv -> a -> Equations -> Constraints -> TypeM (Constraints,Equations)
@@ -1552,7 +1552,7 @@ ctxtReduce env vi multiPBnds            = (concat eqs, concat css)
 
 
 remove ws []                            = []
-remove ws (Impl _ w t p : cs)
+remove ws (Proto _ w t p : cs)
   | w `elem` ws                         = remove ws cs
 remove ws (c : cs)                      = c : remove ws cs
 

@@ -98,7 +98,7 @@ instance WellFormed TCon where
                                 NReserved -> nameReserved n
                                 i -> err1 n ("wf: Class or protocol name expected, got " ++ show i)
             s               = qbound q `zip` ts
-            constr u t      = if isProto env (tcname u) then Impl (DfltInfo NoLoc 20 Nothing []) nWild t u else Cast (DfltInfo NoLoc 21 Nothing []) t (tCon u)
+            constr u t      = if isProto env (tcname u) then Proto (DfltInfo NoLoc 20 Nothing []) nWild t u else Cast (DfltInfo NoLoc 21 Nothing []) t (tCon u)
 
 wfProto                     :: EnvF x -> TCon -> TypeM (Constraints, Constraints)
 wfProto env (TC n ts)       = do cs <- instQuals env q ts
@@ -156,11 +156,11 @@ instQuals                   :: EnvF x -> QBinds -> [Type] -> TypeM Constraints
 instQuals env q ts          = do let s = qbound q `zip` ts
                                  sequence [ constr (vsubst s (tVar v)) (vsubst s u) | Quant v us <- q, u <- us ]
   where constr t u@(TC n _)
-          | isProto env n   = do w <- newWitness; return $ Impl (DfltInfo NoLoc 24 Nothing []) w t u
+          | isProto env n   = do w <- newWitness; return $ Proto (DfltInfo NoLoc 24 Nothing []) w t u
           | otherwise       = return $ Cast (DfltInfo NoLoc 25 Nothing []) t (tCon u)
 
 wvars                       :: Constraints -> [Expr]
-wvars cs                    = [ eVar v | Impl _ v _ _ <- cs ]
+wvars cs                    = [ eVar v | Proto _ v _ _ <- cs ]
 
 
 -- Misc. ---------------------------------------------------------------------------------------------------------------------------
@@ -190,7 +190,7 @@ var2arg xs                              = \p -> foldr f p xs
 
 exp2arg es                              = \p -> foldr PosArg p es
 
-witsOf cs                               = [ eVar w | Impl _ w t p <- cs ]
+witsOf cs                               = [ eVar w | Proto _ w t p <- cs ]
 
 qualWPar env q                          = wit2par (qualWits env q)
 
@@ -199,6 +199,6 @@ qualWRow env q                          = wit2row (qualWits env q)
 qualWits env q                          = [ (tvarWit tv p, impl2type (tVar tv) p) | Quant tv ps <- q, p <- ps, isProto env (tcname p) ]
 
 witSubst env q cs                       = [ Eqn w0 t (eVar w) | ((w,t),w0) <- ws `zip` ws0 ]
-  where ws                              = [ (w, impl2type t p) | Impl _ w t p <- cs ]
+  where ws                              = [ (w, impl2type t p) | Proto _ w t p <- cs ]
         ws0                             = [ tvarWit tv p | Quant tv ps <- q, p <- ps, isProto env (tcname p) ]
 
