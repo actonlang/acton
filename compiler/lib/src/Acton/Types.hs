@@ -497,7 +497,7 @@ matchDefAssumption env cs def
         q1                              = qbinds def
         fx | inAct env                  = dfx def
            | otherwise                  = effect t2
-        env0                            = defineTVars q1 $ defineTVars q0 env
+        env0                            = defineTVars q0 env
         (pos0,kwd0)                     = qual env dec (pos def) (kwd def) (qualWPar env q0)
 
         match env cs eq0 def            = do --traceM ("## matchDefAssumption " ++ prstr (dname def) ++ ": [" ++ prstrs q1 ++ "] => " ++ prstr (Cast info t1 t2))
