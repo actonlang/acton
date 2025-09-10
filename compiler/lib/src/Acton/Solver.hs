@@ -85,6 +85,105 @@ groupCs env cs                              = do st <- currentState
 ----------------------------------------------------------------------------------------------------------------------
 -- solve
 ----------------------------------------------------------------------------------------------------------------------
+-- ###################################################################################################################
+
+data Newrank                                = R_red
+                                            | R_pos TUni [Type]
+                                            | R_low TUni [Type]
+                                            | R_neg TUni [Type]
+                                            | R_amb TUni [Type]
+                                            | R_var TUni TUni
+                                            | R_ret
+                                            deriving (Show)
+
+weight R_red{}                              = 0
+weight R_pos{}                              = 1
+weight R_low{}                              = 2
+weight R_neg{}                              = 3
+weight R_amb{}                              = 4
+weight R_var{}                              = 5
+weight R_ret{}                              = 6
+
+instance Eq Newrank where
+    a == b                                  = weight a == weight b
+
+instance Ord Newrank where
+    a <= b                                  = weight a <= weight b
+
+
+newrank env pol (Sub info _ t1 t2)          = newrank env pol (Cast info t1 t2)
+newrank env pol (Cast _ (TUni _ v) (TUni _ v'))
+                                            = R_var v v'
+newrank env pol (Cast _ t (TUni _ v))
+  | neg && not pos                          = R_pos v alts
+  | otherwise                               = R_low v alts
+  where (pos, neg)                          = (v `elem` fst pol, v `elem` snd pol)
+        alts                                = allAbove env t
+newrank env pol (Cast _ (TUni _ v) t)
+  | neg && pos                              = R_ret
+  | neg                                     = R_neg v alts
+  | otherwise                               = R_amb v alts
+  where (pos, neg)                          = (v `elem` fst pol, v `elem` snd pol)
+        alts                                = allBelow env t
+newrank env pol (Impl _ _ (TUni _ v) p)                                                     -- Impl behaves as an upper typ bound
+  | neg && pos                              = R_ret
+  | neg                                     = R_neg v alts
+  | otherwise                               = R_amb v alts
+  where (pos, neg)                          = (v `elem` fst pol, v `elem` snd pol)
+        alts                                = allExtProto env p
+newrank env pol (Sel _ _ (TUni _ v) n _)                                                    -- Sel behaves as an upper
+  | neg && pos                              = R_ret
+  | neg                                     = R_neg v alts
+  | otherwise                               = R_amb v alts
+  where (pos, neg)                          = (v `elem` fst pol, v `elem` snd pol)
+        alts                                = allConAttr env n ++ allProtoAttr env n ++ allExtProtoAttr env n ++ [wildTuple]
+newrank env pol (Mut _ (TUni _ v) n _)      = R_amb v alts
+  where alts                                = allConAttr env n
+newrank env pol (Seal _ (TUni _ v))
+  | uvkind v == KFX                         = R_amb v [fxAction, fxPure]
+newrank env pol c                           = R_red
+
+
+info0 = DfltInfo NoLoc 0 Nothing []
+
+newsolve env te eq cs = do
+    te <- usubst te
+    cs <- usubst cs
+    newsolve' env te eq cs
+
+newsolve' env te eq [] =                                        -- done
+    return ([], eq)
+newsolve' env te eq cs = do
+    let pol = closePolVars (polvars te) cs
+    st <- currentState
+    case head $ sort $ map (newrank env pol) cs of
+        R_red -> do                                             -- reducible
+            eq <- reduce env eq cs
+            cs <- collectDeferred
+            newsolve env te eq cs
+        R_pos v ts ->                                           -- positive lower con
+            newtry env st te eq cs v ts
+        R_low v ts ->                                           -- general lower con
+            newtry env st te eq cs v ts
+        R_neg v ts ->                                           -- negative upper con
+            newtry env st te eq cs v ts
+        R_amb v ts ->                                           -- must solve upper con
+            newtry env st te eq cs v ts
+        R_var v v' -> do                                        -- var-var
+            unify info0 (tUni v) (tUni v')
+            newsolve env te eq cs
+        R_ret ->                                                -- general upper con
+            --coalesce env cs
+            return (cs, eq)
+
+newtry env st te eq cs v [] =
+    noSolve0 env (Just $ tUni v) [] cs
+newtry env st te eq cs v (t:ts) =
+    (unify info0 (tUni v) t >> newsolve env te eq cs)
+    `catchError`
+    const (rollbackState st >> newtry env st te eq cs v ts)
+
+-- ###################################################################################################################
 
 data Rank                                   = RRed { cstr :: Constraint }
                                             | RSealed { tgt :: TUni }
