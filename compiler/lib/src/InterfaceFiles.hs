@@ -14,27 +14,40 @@
 module InterfaceFiles where
 
 import Data.Binary
+import qualified Data.ByteString
 import qualified Data.ByteString.Lazy
 import Codec.Compression.Zlib
 import qualified System.Exit
 import qualified Acton.Syntax
 import System.IO
+import System.Directory (renameFile)
+import System.Posix.Process (getProcessID)
 
-writeFile :: FilePath -> [Acton.Syntax.ModName] -> Acton.Syntax.NameInfo -> IO ()
-writeFile f ms nmod = do
-    h <- openFile f WriteMode
-    Data.ByteString.Lazy.hPut h (compress (encode (Acton.Syntax.version, (ms,nmod))))
-    hClose h
+-- Write interface file with source content hash using atomic write
+-- We use temp file + rename as atomic write to avoid other readers seeing partially written output.
+writeFile :: FilePath -> [Acton.Syntax.ModName] -> Acton.Syntax.NameInfo -> Data.ByteString.ByteString -> IO ()
+writeFile f ms nmod srcHash = do
+    -- Use PID for unique temp file name
+    pid <- getProcessID
+    let tmpFile = f ++ "." ++ show pid
+    Data.ByteString.Lazy.writeFile tmpFile (compress (encode (Acton.Syntax.version, ms, nmod, srcHash)))
+    -- Atomically rename to final location
+    -- This is atomic on POSIX systems and prevents partial writes or conflicts
+    renameFile tmpFile f
 
-readFile :: FilePath -> IO ([Acton.Syntax.ModName], Acton.Syntax.NameInfo)
+-- Read interface file, returning imports, name info, and source hash
+readFile :: FilePath -> IO ([Acton.Syntax.ModName], Acton.Syntax.NameInfo, Data.ByteString.ByteString)
 readFile f = do
-    h <- openFile f ReadMode
-    bs <- Data.ByteString.Lazy.hGetContents h
-    let (vs,(ms,nmod)) = decode (decompress bs)
+    h <- openBinaryFile f ReadMode
+    -- We minimize the time we keep the file open by reading it all at once. We
+    -- always want the full content anyway
+    size <- hFileSize h
+    bs <- Data.ByteString.hGet h (fromIntegral size)
+    hClose h
+    let bsLazy = Data.ByteString.Lazy.fromStrict bs
+    let (vs, ms, nmod, srcHash) = decode (decompress bsLazy)
     if vs == Acton.Syntax.version
-      then do
-        hClose h
-        return (ms,nmod)
+      then return (ms, nmod, srcHash)
       else do
         putStrLn ("Interface file has version " ++ show vs ++ "; current version is " ++ show Acton.Syntax.version)
         System.Exit.exitFailure

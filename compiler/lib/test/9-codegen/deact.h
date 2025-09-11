@@ -1,3 +1,4 @@
+/* Acton source hash: test-hash */
 #pragma once
 #include "builtin/builtin.h"
 #include "rts/rts.h"

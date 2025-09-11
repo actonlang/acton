@@ -33,12 +33,13 @@ import Prelude hiding ((<>))
 import System.FilePath.Posix
 import Numeric
 
-generate                            :: Acton.Env.Env0 -> FilePath -> Module -> IO (String,String,String)
-generate env srcbase m              = do return (n, h, c)
+generate                            :: Acton.Env.Env0 -> FilePath -> Module -> String -> IO (String,String,String)
+generate env srcbase m hash         = do return (n, h, c)
 
   where n                           = concat (Data.List.intersperse "." (modPath (modname m))) --render $ quotes $ gen env0 (modname m)
-        h                           = render $ hModule env0 m
-        c                           = render $ cModule env0 srcbase m
+        hashComment                 = text "/* Acton source hash:" <+> text hash <+> text "*/"
+        h                           = render $ hashComment $+$ hModule env0 m
+        c                           = render $ hashComment $+$ cModule env0 srcbase m
         env0                        = genEnv $ setMod (modname m) env
 
 genRoot                            :: Acton.Env.Env0 -> QName -> IO String

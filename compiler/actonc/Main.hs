@@ -83,6 +83,8 @@ import qualified Paths_actonc
 import Text.Printf
 
 import qualified Data.ByteString.Char8 as B
+import qualified Data.ByteString.Base16 as Base16
+import qualified Crypto.Hash.SHA256 as SHA256
 
 main = do
     hSetBuffering stdout LineBuffering
@@ -132,7 +134,6 @@ tryLock lockPath = do
         Nothing -> return Nothing  -- Lock failed
         Just lock -> return $ Just (lock, lockPath)
 
--- The rest of your code can stay the same
 -- Try locks sequentially until one succeeds or all fail
 findAvailableScratch :: FilePath -> IO (Maybe (FileLock, FilePath))
 findAvailableScratch basePath = go [0..31]  -- 32 possible scratch directories
@@ -822,7 +823,7 @@ doTask gopts opts paths env t@(ActonTask mn src m) = do
         return (Acton.Env.addMod mn te mdoc env)
       _ -> do
         createDirectoryIfMissing True (getModPath (projTypes paths) mn)
-        env' <- runRestPasses gopts opts paths env m
+        env' <- runRestPasses gopts opts paths env m src
           `catch` handle gopts opts "Compilation error" generalError src paths mn
           `catch` handle gopts opts "Compilation error" Acton.Env.compilationError src paths mn
           `catch` handleTypeError gopts opts "Type error" Acton.Types.typeError src paths mn
@@ -845,11 +846,14 @@ doTask gopts opts paths env t@(ActonTask mn src m) = do
 --
 -- The function checks:
 -- 1. All output files exist
--- 2. Output files are newer than source files
--- 3. Import dependencies are up-to-date
--- 4. The .ty file (first in outFiles) can be successfully read. Torn writes
+-- 2. Output files are newer than source files (fast path)
+-- 3. If source appears newer, check content hash to detect false positives
+-- 4. Import dependencies are up-to-date
+-- 5. The .ty file (first in outFiles) can be successfully read. Torn writes
 --    (actonc was killed while working) or compiler updates can cause .ty files
---    to be unreadable and thus we should consider it out-of-date and recompile
+--    to be unreadable and thus we should consider it out-of-date and recompile.
+--    These days torn writes should be very unlikely since we do atomic write
+--    with write to tmp + rename
 checkUptoDate :: C.GlobalOptions -> C.CompileOptions -> Paths -> FilePath -> [FilePath] -> [A.ModName] -> IO (Maybe ([A.ModName], A.NameInfo))
 checkUptoDate gopts opts paths actFile outFiles imps = do
     iff (C.verbose gopts) (putStrLn ("    Checking " ++ makeRelative (srcDir paths) actFile ++ " is up to date..."))
@@ -870,20 +874,41 @@ checkUptoDate gopts opts paths actFile outFiles imps = do
             srcTime  <- head <$> sortBy (comparing Down) <$> mapM System.Directory.getModificationTime srcFiles
             outTiming <- mapM System.Directory.getModificationTime outFiles
             impsOK   <- mapM (impOK (head outTiming)) imps
-            if not (all (srcTime <) outTiming && and impsOK)
+
+            if all (srcTime <) outTiming && and impsOK
                 then do
-                    iff (C.verbose gopts) (putStrLn ("    Source files are newer than output files"))
-                    return Nothing
-                else do
-                    -- All timestamps check out, now verify the .ty file is readable
-                    -- The .ty file is always the first in outFiles
+                    -- Fast path: if output files are newer and imports are OK
+                    -- All timestamps check out, read the .ty file to ensure it is readable
                     let tyFile = head outFiles
                     tyResult <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readFile tyFile
                     case tyResult of
                         Left e -> do
-                            iff (C.verbose gopts) (putStrLn ("    .ty file is unreadable: " ++ displayException e))
+                            iff (C.verbose gopts) (putStrLn ("    .ty file is unreadable (will recompile): " ++ displayException e))
                             return Nothing
-                        Right contents -> return (Just contents)
+                        Right (ms, nmod, _) -> return (Just (ms, nmod))
+                else if not (and impsOK)
+                    then do
+                        iff (C.verbose gopts) (putStrLn ("    Import dependencies are newer than output files"))
+                        return Nothing
+                    else do
+                        -- Source appears newer - check content hash to be sure
+                        let tyFile = head outFiles
+                        tyResult <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readFile tyFile
+                        case tyResult of
+                            Left e -> do
+                                iff (C.verbose gopts) (putStrLn ("    .ty file is unreadable: " ++ displayException e))
+                                return Nothing
+                            Right (ms, nmod, storedHash) -> do
+                                -- Compute current source file hash
+                                currentSrcContent <- B.readFile actFile
+                                let currentHash = SHA256.hash currentSrcContent
+                                if currentHash == storedHash
+                                    then do
+                                        iff (C.verbose gopts) (putStrLn ("    Source file unchanged (hash match), using cached compilation"))
+                                        return (Just (ms, nmod))
+                                    else do
+                                        iff (C.verbose gopts) (putStrLn ("    Source file content changed (hash mismatch)"))
+                                        return Nothing
   where
         srcBase         = joinPath [takeDirectory actFile, takeBaseName actFile]
         srcCFile        = srcBase ++ ".c"
@@ -921,8 +946,8 @@ isGitAvailable = do
 altOutput opts =
   (C.parse opts) || (C.kinds opts) || (C.types opts) || (C.sigs opts) || (C.norm opts) || (C.deact opts) || (C.cps opts) || (C.llift opts) || (C.box opts) || (C.hgen opts) || (C.cgen opts)
 
-runRestPasses :: C.GlobalOptions -> C.CompileOptions -> Paths -> Acton.Env.Env0 -> A.Module -> IO Acton.Env.Env0
-runRestPasses gopts opts paths env0 parsed = do
+runRestPasses :: C.GlobalOptions -> C.CompileOptions -> Paths -> Acton.Env.Env0 -> A.Module -> String -> IO Acton.Env.Env0
+runRestPasses gopts opts paths env0 parsed srcContent = do
                       let mn = A.modname parsed
                       let outbase = outBase paths mn
                       let absSrcBase = srcBase paths mn
@@ -943,7 +968,9 @@ runRestPasses gopts opts paths env0 parsed = do
                       iff (C.timing gopts) $ putStrLn("    Pass: Kinds check     : " ++ fmtTime (timeKindsCheck - timeEnv))
 
                       (nmod,tchecked,typeEnv,mrefs) <- Acton.Types.reconstruct env kchecked
-                      InterfaceFiles.writeFile (outbase ++ ".ty") mrefs nmod
+                      -- Compute hash of source content. TODO: ideally replace with hash of AST, not .act content
+                      let srcHash = SHA256.hash (B.pack srcContent)
+                      InterfaceFiles.writeFile (outbase ++ ".ty") mrefs nmod srcHash
 
                       let A.NModule iface mdoc = nmod
                       iff (C.types opts && mn == (modName paths)) $ dump mn "types" (Pretty.print tchecked)
@@ -1007,7 +1034,9 @@ runRestPasses gopts opts paths env0 parsed = do
                       timeBoxing <- getTime Monotonic
                       iff (C.timing gopts) $ putStrLn("    Pass: Boxing :          " ++ fmtTime (timeBoxing - timeLLift))
 
-                      (n,h,c) <- Acton.CodeGen.generate liftEnv relSrcBase boxed
+                      -- Convert hash to hex string for comment
+                      let hexHash = B.unpack $ Base16.encode srcHash
+                      (n,h,c) <- Acton.CodeGen.generate liftEnv relSrcBase boxed hexHash
                       timeCodeGen <- getTime Monotonic
                       iff (C.timing gopts) $ putStrLn("    Pass: Generating code : " ++ fmtTime (timeCodeGen - timeBoxing))
 

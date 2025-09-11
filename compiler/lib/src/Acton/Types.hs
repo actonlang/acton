@@ -89,7 +89,7 @@ reconstruct env0 (Module m i ss)         = do --traceM ("#################### or
         ss1T' = __name__assign : ss1T
 
 
-showTyFile env0 m fname         = do (ms,nmod) <- InterfaceFiles.readFile fname
+showTyFile env0 m fname         = do (ms,nmod,_) <- InterfaceFiles.readFile fname
                                      putStrLn ("\n#################################### Interface:")
                                      let NModule te mdoc = nmod
                                      forM_ mdoc $ \docstring ->

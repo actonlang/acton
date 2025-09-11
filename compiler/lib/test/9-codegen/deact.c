@@ -1,3 +1,4 @@
+/* Acton source hash: test-hash */
 #include "rts/common.h"
 #include "out/types/deact.h"
 B_Times deactQ_W_223;

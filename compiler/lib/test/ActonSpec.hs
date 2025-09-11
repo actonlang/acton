@@ -730,7 +730,7 @@ testCodeGen env0 modulePaths = do
           (cpstyled, cpsEnv) <- Acton.CPS.convert deactEnv deacted
           (lifted,liftEnv) <- Acton.LambdaLifter.liftModule cpsEnv cpstyled
           boxed <- Acton.Boxing.doBoxing liftEnv lifted
-          (n,h,c) <- Acton.CodeGen.generate liftEnv "" boxed
+          (n,h,c) <- Acton.CodeGen.generate liftEnv "" boxed "test-hash"
           let newAccEnv = Acton.Env.addMod (S.modname parsed) tenv mdoc accEnv
           return (newAccEnv, accModules ++ [(takeFileName modulePath, boxed, n, h, c)])
 
