@@ -108,11 +108,12 @@ def build_response(version: bytes, status: int, headers: dict[str, str], body: s
         status_line += b" " + responses[status]
 
     r = [ status_line ]
-    if "server" not in headers:
+    header_keys = [k.lower() for k in headers.keys()]
+    if "server" not in header_keys:
         headers["Server"] = "Acton HTTP Server"
-    if "content-type" not in headers:
-        headers["Content-type"] = "text/html; charset=utf-8"
-    if "date" not in headers:
+    if "content-type" not in header_keys:
+        headers["Content-Type"] = "text/html; charset=utf-8"
+    if "date" not in header_keys:
         headers["Date"] = time.now().str_rfc1123()
 
     for k, v in headers.items():
