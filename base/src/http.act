@@ -108,11 +108,12 @@ def build_response(version: bytes, status: int, headers: dict[str, str], body: s
         status_line += b" " + responses[status]
 
     r = [ status_line ]
-    if "server" not in headers:
+    header_keys = [k.lower() for k in headers.keys()]
+    if "server" not in header_keys:
         headers["Server"] = "Acton HTTP Server"
-    if "content-type" not in headers:
-        headers["Content-type"] = "text/html; charset=utf-8"
-    if "date" not in headers:
+    if "content-type" not in header_keys:
+        headers["Content-Type"] = "text/html; charset=utf-8"
+    if "date" not in header_keys:
         headers["Date"] = time.now().str_rfc1123()
 
     for k, v in headers.items():
@@ -382,7 +383,7 @@ actor Server(conn: net.TCPListenConnection, on_accept: action(Server) -> None, l
                 if query_count == response_count + 1:
                     # In order, send response immediately
                     _log.trace("Sending response immediately", None)
-                    send_response(status_code, body)
+                    send_response(status_code, headers, body)
                     response_count += 1
                 else:
                     # Buffer up response
@@ -406,9 +407,9 @@ actor Server(conn: net.TCPListenConnection, on_accept: action(Server) -> None, l
     def close():
         conn.close()
 
-    def send_response(status_code: int, data: str):
+    def send_response(status_code: int, headers: dict[str, str], data: str):
         if version is not None:
-            res = build_response(version, status_code, {}, data)
+            res = build_response(version, status_code, headers, data)
             conn.write(res)
 
         if close_connection:
