@@ -557,7 +557,7 @@ instance InfEnv Decl where
                                                  te0 <- infProperties env as' b
                                                  (cs,te,b1) <- infEnv env1 b
                                                  popFX
-                                                 (cs1,eq1) <- solveScoped env1 (tvSelf:qbound q) te tNone cs
+                                                 when (not $ null cs) $ err (loc n) "Deprecated class syntax"
                                                  checkNoEscape l env (qbound q)
                                                  checkClassAttributesInitialized n l env as' te0 b
                                                  (nterms,asigs,_) <- checkAttributes [] te' te
@@ -565,7 +565,7 @@ instance InfEnv Decl where
                                                      te2 = te ++ te1
                                                      b2 = addImpl te1 b1
                                                      docstring = extractDocstring b
-                                                 return (cs1, [(n, NClass q as' (te0++te2) docstring)], Class l n q us (bindWits eq1 ++ props te0 ++ b2) ddoc)
+                                                 return ([], [(n, NClass q as' (te0++te2) docstring)], Class l n q us (props te0 ++ b2) ddoc)
                                              _ -> illegalRedef n
       where env1                        = define (exclude (toSigs te') [initKW]) $ reserve (assigned b) $ defineSelfOpaque $ defineTVars (stripQual q) $ setInClass env
             (as,ps)                     = mro2 env us
@@ -580,7 +580,7 @@ instance InfEnv Decl where
                                                  pushFX fxPure tNone
                                                  (cs,te,b') <- infEnv env1 b
                                                  popFX
-                                                 (cs1,eq1) <- solveScoped env1 (tvSelf:qbound q) te tNone cs
+                                                 when (not $ null cs) $ err (loc n) "Deprecated protocol syntax"
                                                  checkNoEscape l env (qbound q)
                                                  (nterms,_,sigs) <- checkAttributes [] te' te
                                                  let noself = [ n | (n, NSig sc Static _) <- te, tvSelf `notElem` vfree sc ]
@@ -589,7 +589,7 @@ instance InfEnv Decl where
                                                  when (initKW `elem` sigs) $ err2 (filter (==initKW) sigs) "A protocol cannot define __init__"
                                                  when (not $ null noself) $ err2 noself "A static protocol signature must mention Self"
                                                  let docstring = extractDocstring b
-                                                 return (cs1, [(n, NProto q ps te docstring)], Protocol l n q us (bindWits eq1 ++ b') ddoc)
+                                                 return ([], [(n, NProto q ps te docstring)], Protocol l n q us b' ddoc)
                                              _ -> illegalRedef n
       where env1                        = define (toSigs te') $ reserve (assigned b) $ defineSelfOpaque $ defineTVars (stripQual q) $ setInClass env
             ps                          = mro1 env us
@@ -603,7 +603,7 @@ instance InfEnv Decl where
                                              pushFX fxPure tNone
                                              (cs,te,b1) <- infEnv env1 b
                                              popFX
-                                             (cs1,eq1) <- solveScoped env1 (qbound q) te tNone cs
+                                             when (not $ null cs) $ err (loc n) "Deprecated extension syntax"
                                              checkNoEscape l env (qbound q)
                                              (nterms,asigs,sigs) <- checkAttributes final te' te
                                              when (not $ null nterms) $ err2 (dom nterms) "Method/attribute not in listed protocols:"
@@ -613,7 +613,7 @@ instance InfEnv Decl where
                                                  te2 = te ++ te1
                                                  b2 = addImpl te1 b1
                                              let docstring = extractDocstring b
-                                             return (cs1, [(extensionName us c, NExt q c ps te2 docstring)], Extension l q c us (bindWits eq1 ++ b2) ddoc)
+                                             return ([], [(extensionName us c, NExt q c ps te2 docstring)], Extension l q c us b2 ddoc)
       where TC n ts                     = c
             env1                        = define (toSigs te') $ reserve (assigned b) $ defineSelfOpaque $ defineTVars (stripQual q) $ setInClass env
             witsearch                   = findWitness env (tCon c) u
