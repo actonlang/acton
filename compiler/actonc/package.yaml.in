@@ -20,9 +20,11 @@ dependencies:
   - acton
   - async
   - base >= 4.7 && < 5
+  - base16-bytestring
   - bytestring
   - clock
   - containers
+  - cryptohash-sha256
   - data-default-class
   - diagnose
   - dir-traverse
