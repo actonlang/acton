@@ -786,10 +786,10 @@ matchActorAssumption env n0 p k te      = do --traceM ("## matchActorAssumption 
                                              (c0,t') <- wrap t
                                              let c1 = Cast (DfltInfo (loc n) 63 Nothing []) t' (sctype sc0)
                                                  cs1 = map (Seal (DfltInfo  (loc n) 115 Nothing [])) (leaves sc0)
-                                                 q = scbind sc
+                                                 q0 = scbind sc0
                                              --traceM ("## matchActorAssumption for method " ++ prstr n ++ ": " ++ prstr c1)
-                                             (cs2,eq) <- solveScoped (defineTVars q env) (qbound q) obs tNone (c0:c1:cs0++cs1)
-                                             checkNoEscape (loc n) env (qbound q)
+                                             (cs2,eq) <- solveScoped (defineTVars q0 env) (qbound q0) obs tNone (c0:c1:cs0++cs1)
+                                             checkNoEscape (loc n) env (qbound q0)
                                              return (cs2, eq)
           where Just (NDef sc _ _)      = lookup n te1
         check1 (n, i)                   = return ([], [])
