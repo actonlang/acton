@@ -66,6 +66,7 @@ instance VFree Constraint where
     vfree (Sel info w t1 n t2)      = vfree t1 ++ vfree t2
     vfree (Mut info t1 n t2)        = vfree t1 ++ vfree t2
     vfree (Seal info t)             = vfree t
+    vfree (Imply info q cs)         = (vfree q ++ vfree cs) \\ qbound q
 
 instance VFree Type where
     vfree (TVar _ v)                = [v]
@@ -412,6 +413,7 @@ instance UFree Constraint where
     ufree (Sel info w t1 n t2)      = ufree info ++ ufree t1 ++ ufree t2
     ufree (Mut info t1 n t2)        = ufree info ++ ufree t1 ++ ufree t2
     ufree (Seal info t)             = ufree info ++ ufree t
+    ufree (Imply info q cs)         = ufree q ++ ufree cs
 
 instance UFree ErrInfo where
     ufree (DfltInfo l n mbe ts)     = ufree mbe ++ ufree ts
@@ -590,6 +592,7 @@ instance USubst Constraint where
     usubst (Sel info w t1 n t2)     = Sel <$> usubst info <*> return w <*>usubst t1 <*> return n <*> usubst t2
     usubst (Mut info t1 n t2)       = Mut <$> usubst info <*> usubst t1 <*> return n <*> usubst t2
     usubst (Seal info t)            = Seal <$> usubst info <*> usubst t
+    usubst (Imply info q cs)        = Imply <$> usubst info <*> usubst q <*> usubst cs
 
 instance USubst ErrInfo where
     usubst (DfltInfo l n mbe ts)    = DfltInfo l n <$> usubst mbe <*> usubst ts
@@ -892,6 +895,7 @@ instance Tailvars Constraint where
     tailvars (Sel _ w t1 n t2)      = tailvars t1 ++ tailvars t2
     tailvars (Mut _ t1 n t2)        = tailvars t1 ++ tailvars t2
     tailvars (Seal _ t)             = tailvars t
+    tailvars (Imply _ q cs)         = tailvars q ++ tailvars cs
 
 
 -- Misc. ---------------------------------------------------------------------------------------------
@@ -908,6 +912,7 @@ closeDepVars vs cs
         heads (Sel _ w t n _)       = ufree t
         heads (Mut _ t n _)         = ufree t
         heads (Seal _ t)            = ufree t
+        heads (Imply _ q cs)        = []
 
         deps (Proto _ w _ p)        = ufree p
         deps (Cast _ _ t)           = typarams t
@@ -915,6 +920,7 @@ closeDepVars vs cs
         deps (Sel _ w _ n t)        = ufree t
         deps (Mut _ _ n t)          = ufree t
         deps (Seal _ _)             = []
+        deps (Imply _ q cs)         = []
 
         typarams (TOpt _ t)         = typarams t
         typarams (TCon _ c)         = ufree c
@@ -979,6 +985,7 @@ instance UWild Constraint where
     uwild (Sel info w t1 n t2)      = Sel (uwild info) w (uwild t1) n (uwild t2)
     uwild (Mut info t1 n t2)        = Mut (uwild info) (uwild t1) n (uwild t2)
     uwild (Seal info t)             = Seal (uwild info) (uwild t)
+    uwild (Imply info q cs)         = Imply (uwild info) (uwild q) (uwild cs)
 
 instance UWild ErrInfo where
     uwild (DfltInfo l n mbe ts)     = DfltInfo l n mbe (uwild ts)

@@ -238,3 +238,4 @@ instance Relabel Constraint where
     relabel (Sel info w t1 n t2) = Sel info w <$> relabel t1 <*> relabel n <*> relabel t2
     relabel (Mut info t1 n t2) = Mut info <$> relabel t1 <*> relabel n <*> relabel t2
     relabel (Seal info t) = Seal info <$> relabel t
+    relabel (Imply info q cs) = Imply info <$> relabel q <*> relabel cs

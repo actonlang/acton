@@ -516,6 +516,7 @@ instance Pretty Constraint where
     pretty (Sel _ w t1 n t2)        = pretty w <+> colon <+> pretty t1 <> text "." <> pretty n <+> text "<" <+> pretty t2
     pretty (Mut _ t1 n t2)          = pretty t1 <+> text "." <> pretty n <+> text ">" <+> pretty t2
     pretty (Seal _ t)               = text "$Seal" <+> pretty t
+    pretty (Imply _ q cs)           = pretty q <+> text "=>" <+> parens (commaSep pretty cs)
 
 
 instance Pretty (TVar,TVar) where           -- CHANGE

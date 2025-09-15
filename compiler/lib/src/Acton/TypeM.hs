@@ -195,6 +195,7 @@ useless vs c                           = case c of
                                              Sel _ _ t n t0 -> f t || f t0
                                              Mut _ t1 n t2 -> True   -- TODO
                                              Seal _ _ -> True        -- TODO
+                                             Imply _ _ _ -> True     -- TODO
      where f (TUni _ v) = notElem v vs
            f _          = False
 
