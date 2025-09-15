@@ -499,7 +499,7 @@ matchDefAssumption env cs def
         (pos0,kwd0)                     = qual env dec (pos def) (kwd def) (qualWPar env q0)
 
         match env cs eq0 def            = do --traceM ("## matchDefAssumption " ++ prstr (dname def) ++ ": [" ++ prstrs q1 ++ "] => " ++ prstr (Cast info t1 t2))
-                                             (cs2,eq1) <- solveScoped (defineTVars q0 env) (qbound q0) [] t1 (Cast info t1 t2 : cs)
+                                             (cs2,eq1) <- solveScoped env q0 [] t1 (Cast info t1 t2 : cs)
                                              cs2 <- usubst cs2
                                              return (cs2, def{ qbinds = noqual env q0, pos = pos0, kwd = kwd0,
                                                                dbody = bindWits (eq0++eq1) ++ dbody def, dfx = fx })
@@ -655,11 +655,13 @@ solveAll env te cs                      = do --traceM ("\n\n### solveAll " ++ pr
                                              (cs,eq) <- solve env (const True) te tNone eq cs
                                              return eq
 
-solveScoped env vs te tt []             = return ([], [])
+solveScoped env q te tt []              = return ([], [])
 solveScoped env [] te tt cs             = simplify env te tt cs
-solveScoped env vs te tt cs             = do --traceM ("\n\n### solveScoped: " ++ prstrs cs)
-                                             (cs,eq) <- simplify env te tt cs
-                                             solve env (any (`elem` vs) . vfree) te tt eq cs
+solveScoped env q te tt cs              = do --traceM ("\n\n### solveScoped: " ++ prstrs cs)
+                                             (cs,eq) <- simplify env1 te tt cs
+                                             solve env1 (any (`elem` vs) . vfree) te tt eq cs
+  where env1                            = defineTVars q env
+        vs                              = qbound q
 
 -- To be replaced by the quantifier escape check of the new implication constraint solver
 --checkNoEscape l env vs                  = do fvs <- ufree <$> usubst env
@@ -784,7 +786,7 @@ matchActorAssumption env n0 p k te      = do --traceM ("## matchActorAssumption 
                                                  cs1 = map (Seal (DfltInfo  (loc n) 115 Nothing [])) (leaves sc0)
                                                  q0 = scbind sc0
                                              --traceM ("## matchActorAssumption for method " ++ prstr n ++ ": " ++ prstr c1)
-                                             (cs2,eq) <- solveScoped (defineTVars q0 env) (qbound q0) obs tNone (c0:c1:cs0++cs1)
+                                             (cs2,eq) <- solveScoped env q0 obs tNone (c0:c1:cs0++cs1)
                                              return (cs2, eq)
           where Just (NDef sc _ _)      = lookup n te1
         check1 (n, i)                   = return ([], [])
@@ -1276,7 +1278,7 @@ instance Check Decl where
                                              popFX
                                              let cst = if fallsthru b then [Cast (DfltInfo l 65 Nothing []) tNone t] else []
                                                  t1 = tFun fx' (prowOf p') (krowOf k') t
-                                             (cs1,eq1) <- solveScoped env1 (qbound q) [] t1 (csp++csk++csb++cst)
+                                             (cs1,eq1) <- solveScoped env q [] t1 (csp++csk++csb++cst)
                                              -- At this point, n has the type given by its def annotations.
                                              -- Now check that this type is no less general than its recursion assumption in env.
                                              let body = bindWits eq1 ++ defaultsP p' ++ defaultsK k' ++ b'
@@ -1299,7 +1301,7 @@ instance Check Decl where
                                              -- direct assumptions on its methods because actor interfaces are sealed).
                                              (cs0,eq0) <- matchActorAssumption env1 n p' k' te
                                              popFX
-                                             (cs1,eq1) <- solveScoped env1 (tvSelf:qbound q) te tNone (csp++csk++csb++cs0)
+                                             (cs1,eq1) <- solveScoped env q te tNone (csp++csk++csb++cs0)
                                              let body = bindWits (eq1++eq0) ++ defaultsP p' ++ defaultsK k' ++ b'
                                                  act = Actor l n (noqual env q) (qualWPar env q p') k' body ddoc
                                              return (cs1, act{ pos = noDefaultsP (pos act), kwd = noDefaultsK (kwd act) })
@@ -1314,7 +1316,7 @@ instance Check Decl where
                                              wellformed env1 us
                                              (csb,b') <- checkEnv (define te' env1) b
                                              popFX
-                                             (cs1,eq1) <- solveScoped env1 (qbound q') te tNone csb
+                                             (cs1,eq1) <- solveScoped env q' te tNone csb
                                              return (cs1, [Class l n (noqual env q) (map snd as) (abstractDefs env q eq1 b') ddoc])
       where env1                        = defineTVars q' $ setInClass env
             NClass _ as te _            = findName n env
@@ -1329,7 +1331,7 @@ instance Check Decl where
                                              (csu,wmap) <- wellformedProtos env1 us
                                              (csb,b') <- checkEnv (define te env1) b
                                              popFX
-                                             (cs1,eq1) <- solveScoped env1 (qbound q') te tNone (csu++csb)
+                                             (cs1,eq1) <- solveScoped env q' te tNone (csu++csb)
                                              b' <- usubst b'
                                              return (cs1, convProtocol env n q ps eq1 wmap b')
       where env1                        = defineTVars q' $ setInClass env
@@ -1347,7 +1349,7 @@ instance Check Decl where
                                              (csu,wmap) <- wellformedProtos env1 us
                                              (csb,b') <- checkEnv (define te' env1) b
                                              popFX
-                                             (cs1,eq1) <- solveScoped env1 (qbound q') te tNone (csu++csb)
+                                             (cs1,eq1) <- solveScoped env q' te tNone (csu++csb)
                                              b' <- usubst b'
                                              return (cs1, convExtension env n' c q ps eq1 wmap b')
       where env1                        = defineInst c ps thisKW' $ defineTVars q' $ setInClass env
