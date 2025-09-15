@@ -563,11 +563,13 @@ instance InfEnv Decl where
                                                      docstring = extractDocstring b
                                                  return ([], [(n, NClass q as' (te0++te2) docstring)], Class l n q us (props te0 ++ b2) ddoc)
                                              _ -> illegalRedef n
-      where env1                        = define (exclude (toSigs te') [initKW]) $ reserve (assigned b) $ defineSelfOpaque $ defineTVars (stripQual q) $ setInClass env
+      where env1                        = define (exclude (toSigs te') [initKW]) $ reserve (assigned b) $ defineTVars (stripQual q') $ setInClass env
             (as,ps)                     = mro2 env us
             as'                         = if null as && not (inBuiltin env && n == nValue) then leftpath [cValue] else as
             te'                         = parentTEnv env as'
+            q'                          = selfQuant (NoQ n) q
             props te0                   = [ Signature l0 [n] sc Property | (n,NSig sc Property _) <- te0 ]
+            tc                          = TC (NoQ n) (map tVar $ qbound q)
 
     infEnv env (Protocol l n q us b ddoc)
                                         = case findName n env of
@@ -586,9 +588,10 @@ instance InfEnv Decl where
                                                  let docstring = extractDocstring b
                                                  return ([], [(n, NProto q ps te docstring)], Protocol l n q us b' ddoc)
                                              _ -> illegalRedef n
-      where env1                        = define (toSigs te') $ reserve (assigned b) $ defineSelfOpaque $ defineTVars (stripQual q) $ setInClass env
+      where env1                        = define (toSigs te') $ reserve (assigned b) $ defineTVars (stripQual q') $ setInClass env
             ps                          = mro1 env us
             te'                         = parentTEnv env ps
+            q'                          = selfQuant (NoQ n) q
 
     infEnv env (Extension l q c us b ddoc)
       | length us == 0                  = err (loc n) "Extension lacks a protocol"
@@ -603,19 +606,19 @@ instance InfEnv Decl where
                                              when (not $ null nterms) $ err2 (dom nterms) "Method/attribute not in listed protocols:"
                                              when (not $ null sigs) $ err2 sigs "Extension with new methods/attributes not supported"
                                              when (not (null asigs || notImplBody b)) $ err3 l (dom asigs) "Protocol method/attribute lacks implementation:"
-                                             let te1 = unSig $ vsubst selfsubst asigs
+                                             let te1 = unSig $ selfSubst n q asigs
                                                  te2 = te ++ te1
                                                  b2 = addImpl te1 b1
                                              let docstring = extractDocstring b
                                              return ([], [(extensionName us c, NExt q c ps te2 docstring)], Extension l q c us b2 ddoc)
       where TC n ts                     = c
-            env1                        = define (toSigs te') $ reserve (assigned b) $ defineSelfOpaque $ defineTVars (stripQual q) $ setInClass env
+            env1                        = define (toSigs te') $ reserve (assigned b) $ defineTVars (stripQual q') $ setInClass env
             witsearch                   = findWitness env (tCon c) u
             u                           = head us
-            ps                          = vsubst selfsubst $ mro1 env us -- TODO: check that ps doesn't contradict any previous extension mro for c
+            ps                          = selfSubst n q $ mro1 env us -- TODO: check that ps doesn't contradict any previous extension mro for c
             final                       = concat [ conAttrs env (tcname p) | (_,p) <- tail ps, hasWitness env (tCon c) p ]
             te'                         = parentTEnv env ps
-            selfsubst                   = [(tvSelf, tCon c)]
+            q'                          = selfQuant n q
 
 --------------------------------------------------------------------------------------------------------------------------
 
@@ -1300,22 +1303,24 @@ instance Check Decl where
                                              let body = bindWits (eq1++eq0) ++ defaultsP p' ++ defaultsK k' ++ b'
                                                  act = Actor l n (noqual env q) (qualWPar env q p') k' body ddoc
                                              return (cs1, act{ pos = noDefaultsP (pos act), kwd = noDefaultsK (kwd act) })
-      where env1                        = reserve (bound (p,k) ++ assigned b) $ defineTVars q $
-                                          define [(selfKW, NVar t0)] $ setInAct env
-            t0                          = tCon $ TC (NoQ n) (map tVar $ qbound q)
+      where env1                        = reserve (bound (p,k) ++ assigned b) $ define [(selfKW, NVar (tCon tc))] $
+                                          defineTVars q $ setInAct env
+            tc                          = TC (NoQ n) (map tVar $ qbound q)
 
     checkEnv' env (Class l n q us b ddoc)
                                         = do --traceM ("## checkEnv class " ++ prstr n)
                                              pushFX fxPure tNone
                                              wellformed env1 q
                                              wellformed env1 us
-                                             (csb,b') <- checkEnv (define (vsubst selfsubst te) env1) b
+                                             (csb,b') <- checkEnv (define te' env1) b
                                              popFX
-                                             (cs1,eq1) <- solveScoped env1 (tvSelf:qbound q) te tNone csb
+                                             (cs1,eq1) <- solveScoped env1 (qbound q') te tNone csb
                                              return (cs1, [Class l n (noqual env q) (map snd as) (abstractDefs env q eq1 b') ddoc])
-      where env1                        = defineSelf (NoQ n) q $ defineTVars q $ setInClass env
+      where env1                        = defineTVars q' $ setInClass env
             NClass _ as te _            = findName n env
-            selfsubst                   = [(tvSelf, tCon (TC (NoQ n) (map tVar $ qbound q)))]
+            te'                         = selfSubst n' q te
+            q'                          = selfQuant n' q
+            n'                          = NoQ n
 
     checkEnv' env (Protocol l n q us b ddoc)
                                         = do --traceM ("## checkEnv protocol " ++ prstr n)
@@ -1324,11 +1329,14 @@ instance Check Decl where
                                              (csu,wmap) <- wellformedProtos env1 us
                                              (csb,b') <- checkEnv (define te env1) b
                                              popFX
-                                             (cs1,eq1) <- solveScoped env1 (tvSelf:qbound q) te tNone (csu++csb)
+                                             (cs1,eq1) <- solveScoped env1 (qbound q') te tNone (csu++csb)
                                              b' <- usubst b'
                                              return (cs1, convProtocol env n q ps eq1 wmap b')
-      where env1                        = defineSelf (NoQ n) q $ defineTVars q $ setInClass env
+      where env1                        = defineTVars q' $ setInClass env
             NProto _ ps te _            = findName n env
+            te'                         = selfSubst n' q te
+            q'                          = selfQuant n' q
+            n'                          = NoQ n
 
     checkEnv' env (Extension l q c us b ddoc)
       | isActor env n                   = notYet (loc n) "Extension of an actor"
@@ -1337,16 +1345,18 @@ instance Check Decl where
                                              pushFX fxPure tNone
                                              wellformed env1 q
                                              (csu,wmap) <- wellformedProtos env1 us
-                                             (csb,b') <- checkEnv (define (vsubst selfsubst te) env1) b
+                                             (csb,b') <- checkEnv (define te' env1) b
                                              popFX
-                                             (cs1,eq1) <- solveScoped env1 (tvSelf:qbound q) te tNone (csu++csb)
+                                             (cs1,eq1) <- solveScoped env1 (qbound q') te tNone (csu++csb)
                                              b' <- usubst b'
                                              return (cs1, convExtension env n' c q ps eq1 wmap b')
-      where env1                        = defineInst c ps thisKW' $ defineSelf n q $ defineTVars q $ setInClass env
+      where env1                        = defineInst c ps thisKW' $ defineTVars q' $ setInClass env
             n                           = tcname c
             n'                          = extensionName us c
             NExt _ _ ps te _            = findName n' env
-            selfsubst                   = [(tvSelf, tCon $ TC n (map tVar $ qbound q))]
+            te'                         = selfSubst n q te
+            q'                          = selfQuant n q
+            tc                          = TC n (map tVar $ qbound q)
 
     checkEnv' env x                     = do (cs,x') <- checkEnv env x
                                              return (cs, [x'])

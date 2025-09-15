@@ -481,12 +481,11 @@ defineTVars q env           = foldr f env q
           where (c,ps)      = case mro2 env us of ([],_) -> (cValue, us); _ -> (head us, tail us)   -- Just check that the mro exists, don't store it
                 wits        = [ WInst [] (tVar tv) p (NoQ $ tvarWit tv p0) wchain | p0 <- ps, (wchain,p) <- findAncestry env p0 ]
 
-defineSelfOpaque            :: EnvF x -> EnvF x
-defineSelfOpaque env        = defineTVars [Quant tvSelf []] env
+selfSubst n q               = vsubst [(tvSelf, tCon tc)]
+  where tc                  = TC n (map tVar $ qbound q)
 
-defineSelf                  :: QName -> QBinds -> EnvF x -> EnvF x
-defineSelf qn q env         = defineTVars [Quant tvSelf [tc]] env
-  where tc                  = TC (unalias env qn) [ tVar tv | Quant tv _ <- q ]
+selfQuant n q               = Quant tvSelf [tc] : q
+  where tc                  = TC n (map tVar $ qbound q)
 
 defineInst                  :: TCon -> [WTCon] -> Name -> EnvF x -> EnvF x
 defineInst c ps w env       = foldl addWit env wits
@@ -525,8 +524,8 @@ tvarScope env               = tvarScope0 env \\ [tvSelf]
 quantScope                  :: EnvF x -> QBinds
 quantScope env              = [ Quant (TV k n) (if c==cValue then [] else [c]) | (n, NTVar k c) <- names env, n /= nSelf ]
 
-selfSubst                   :: EnvF x -> Substitution
-selfSubst env               = [ (TV k n, tCon c) | (n, NTVar k c) <- names env, n == nSelf ]
+selfScopeSubst              :: EnvF x -> Substitution
+selfScopeSubst env          = [ (TV k n, tCon c) | (n, NTVar k c) <- names env, n == nSelf ]
 
 
 -- Name queries -------------------------------------------------------------------------------------------------------------------

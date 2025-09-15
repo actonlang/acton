@@ -178,7 +178,7 @@ instance Deact Decl where
 
     deact env (Class l n q u b ddoc)
                                     = Class l n q u <$> deactSuite env1 b <*> pure ddoc
-      where env1                    = defineSelf (NoQ n) q $ defineTVars q env
+      where env1                    = defineTVars (selfQuant (NoQ n) q) env
 
     deact env d                     = error ("deact unexpected decl: " ++ prstr d)
 

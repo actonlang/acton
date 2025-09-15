@@ -181,7 +181,7 @@ llSuite env (Decl l ds : ss)
   | ctxt env == InDef                   = do ns <- zip fs <$> mapM (newName . nstr) (bound ds)
                                              let env1 = extNames ns env'
                                              ds1 <- ll env1 ds
-                                             liftToTop (vsubst (selfSubst env) ds1)
+                                             liftToTop (vsubst (selfScopeSubst env) ds1)
                                              llSuite env1 ss
   | ctxt env == InClass                 = do ds' <- ll env1 ds
                                              ss' <- llSuite env1 ss
@@ -238,7 +238,7 @@ instance Lift Decl where
             vts                         = extraArgs env n
     ll env (Class l n q cs b doc)       = do b' <- llSuite (setCtxt InClass env1) b
                                              return $ Class l n q (conv cs) b' doc
-      where env1                        = defineSelf (NoQ n) q $ defineTVars q env
+      where env1                        = defineTVars (selfQuant (NoQ n) q) env
     ll env d                            = error ("ll unexpected: " ++ prstr d)
 
 instance Lift Branch where
@@ -261,7 +261,7 @@ closureConvert env lambda t0 vts0 es    = do n <- newName (nstr $ noq basename)
                                              liftToTop [Class l0 n q bases body Nothing]
                                              return $ eCall (tApp (eVar n) (map tVar $ tvarScope env)) es
   where q                               = quantScope env
-        s                               = selfSubst env
+        s                               = selfScopeSubst env
         Lambda _ p _ e fx               = vsubst s lambda
         t1                              = vsubst s t0
         cBase                           = conv $ closureCon fx (prowOf p) t1

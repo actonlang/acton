@@ -411,8 +411,7 @@ initClassBase env c q as hasCDef    = methodtable env c <> dot <> gen env gcinfo
                                       methodtable env c <> dot <> gen env superclassKW <+> equals <+> super <> semi $+$
                                       vcat [ inherit c' n | (c',n) <- inheritedAttrs env (NoQ c) ]
   where super                       = if null as then text "NULL" else parens (gen env qnSuperClass) <> text "&" <> methodtable' env (tcname $ head as)
-        selfsubst                   = vsubst [(tvSelf, tCon tc)]
-        tc                          = TC (NoQ c) [ tVar v | Quant v _ <- q ]
+        selfsubst                   = selfSubst (NoQ c) q
         inherit c' n
           | hasCDef                 = methodtable env c <> dot <> gen env n <+> equals <+> genTopName env (methodname c n) <> semi
           | otherwise               = methodtable env c <> dot <> gen env n <+> equals <+> cast (fromJust $ lookup n te) <> methodtable' env c' <> dot <> gen env n <> semi
