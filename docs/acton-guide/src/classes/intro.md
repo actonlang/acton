@@ -6,8 +6,6 @@ A class is defined using the `class` keyword followed by the name of the class. 
 
 ```python
 class Circle(object):
-    radius: float
-
     def __init__(self, radius):
         self.radius = radius
 
@@ -16,11 +14,23 @@ class Circle(object):
 ```
 
 
-*Attributes* are variables that hold data for an object of a particular class and *methods* are functions that operate on that data. In the above example, `radius` is an attribute of the `Circle` class and `diameter()` is a method that returns the diameter.
+*Attributes* are variables that hold data for an object and *methods* are functions that operate on that data. In the `Circle` example above, `radius` is an attribute and `diameter()` is a method.
 
-Class methods must have `self` as the first argument, which refers to the object instance of the class that the method is called on.
+Attributes are typically inferred from assignments to attributes on `self` in `__init__`, as shown with `radius` above. They can also be explicitly declared with type annotations in the class body and you can mix freely between inferred and explicitly typed:
 
-## Creating an object 
+```python
+class Person(object):
+    name: str  # Explicit declaration
+
+    def __init__(self, name: str, age: int):
+        self.name = name
+        self.age = age        # Inferred from assignment
+        self.id = generate_id()  # Also inferred
+```
+
+Class methods must have `self` as the first argument, which refers to the object instance being operated on.
+
+## Creating an object
 
 A Class is like a blueprint and an object is an instance of such a blueprint. To create an object, or "instantiate", we use the "blueprint" (class), like so:
 
