@@ -1,0 +1,24 @@
+[error Type error]: Attribute 'y' is not initialized in TestClass.__init__
+     +--> uninit_self_reference.act@14:5-23:1
+     |
+   9 |    class TestClass(object):
+     :    ^-----------------------
+     :    `- In class TestClass
+     :
+  11 |        y: int
+     :        ^ 
+     :        `- Attribute 'y' is defined here
+     :
+  14 | +>     def __init__(self):
+  15 | |          self.x = 1
+  16 | |          
+  17 | |          # This should stop scanning because we're passing self
+  18 | |          result = external_func(self)  
+  19 | |          
+  20 | |          # These won't be scanned, so z will be reported as uninitialized
+  21 | |          self.y = result
+  22 | |          self.z = 3
+  23 | |> 
+     : | 
+     : `- Attribute 'y' is not initialized in __init__
+-----+

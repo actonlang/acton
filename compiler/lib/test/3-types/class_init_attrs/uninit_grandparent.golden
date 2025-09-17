@@ -1,0 +1,19 @@
+[error Type error]: Attribute 'x' is not initialized in TestClass.__init__
+     +--> uninit_grandparent.act@8:5-10:1
+     |
+   1 |    class BaseA:
+     :          ^-----
+     :          `- Attribute inherited from BaseA
+   2 |        x: int
+     :        ^ 
+     :        `- Attribute 'x' is defined here
+     :
+   7 |    class TestClass(BaseB):
+     :    ^----------------------
+     :    `- In class TestClass
+   8 | +>     def __init__(self):
+   9 | |          self.y = 1
+  10 | |> 
+     : | 
+     : `- Attribute 'x' is not initialized in __init__
+-----+

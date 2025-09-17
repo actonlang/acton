@@ -1,0 +1,12 @@
+# Test case: Accessing uninitialized attribute should fail
+class TestClass(object):
+    x: int
+    y: int
+    
+    def __init__(self):
+        self.x = self.y * 2  # ERROR: y is not initialized yet!
+        self.y = 10
+
+actor main(env):
+    t = TestClass()
+    env.exit(0)

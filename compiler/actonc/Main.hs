@@ -826,11 +826,12 @@ doTask gopts opts paths env t@(ActonTask mn src m) = do
         env' <- runRestPasses gopts opts paths env m src
           `catch` handle gopts opts "Compilation error" generalError src paths mn
           `catch` handle gopts opts "Compilation error" Acton.Env.compilationError src paths mn
-          `catch` handleTypeError gopts opts "Type error" Acton.Types.typeError src paths mn
+          `catch` (\err -> handleDiagnostic gopts opts paths (modName paths) $ mkErrorDiagnostic filename src $ Acton.TypeM.typeReport err filename src)
         timeEnd <- getTime Monotonic
         iff (not (quiet gopts opts)) $ putStrLn("   Finished compilation in  " ++ fmtTime(timeEnd - timeStart))
         return env'
   where actFile             = srcFile paths mn
+        filename            = modNameToFilename mn
         outbase             = outBase paths mn
         tyFile              = outbase ++ ".ty"
         hFile               = outbase ++ ".h"
@@ -1071,11 +1072,10 @@ handle gopts opts errKind f src paths mn ex = do
         [] -> do
             -- Fallback if no error location
             putStrLn ("\nERROR: Error when compiling " ++ (prstr mn) ++ " module: " ++ errKind)
-            handleCleanup paths mn
         ((loc, msg):_) -> do
             let diagnostic = Diag.actErrToDiagnostic errKind actFile src loc msg
             printDiag gopts opts diagnostic
-            handleCleanup paths mn
+    handleCleanup paths mn
 
 modNameToFilename :: A.ModName -> String
 modNameToFilename mn = joinPath (map nameToString names) ++ ".act"
@@ -1089,10 +1089,6 @@ modNameToFilename mn = joinPath (map nameToString names) ++ ".act"
 handleDiagnostic :: C.GlobalOptions -> C.CompileOptions -> Paths -> A.ModName -> Diagnostic String -> IO a
 handleDiagnostic gopts opts paths mn diagnostic = do
     printDiag gopts opts diagnostic
-    handleCleanup paths mn
-
-handleTypeError gopts opts errKind f src paths mn ex = do
-    printDiag gopts opts $ mkErrorDiagnostic (modNameToFilename mn) src (typeReport ex (modNameToFilename mn) src)
     handleCleanup paths mn
 
 handleCleanup paths mn = do
@@ -1145,10 +1141,10 @@ writeRootC env gopts opts paths binTask = do
                         createDirectoryIfMissing True (takeDirectory rootFile)
                         writeFile rootFile c
                         return (Just binTask)
-                    | otherwise -> handle gopts opts "Type error" Acton.Types.typeError "" paths m
-                        (Acton.Types.TypeError NoLoc ("Illegal type "++ prstr t ++ " of parameter to root actor " ++ prstr qn))
-                Just t -> handleTypeError gopts opts "Type error" Acton.Types.typeError "" paths m
-                    (Acton.Types.TypeError NoLoc (prstr qn ++ " has not actor type."))
+                    | otherwise -> handleDiagnostic gopts opts paths (modName paths) $ mkErrorDiagnostic "" "" $ typeReport
+                        (Acton.TypeM.TypeError NoLoc ("Illegal type "++ prstr t ++ " of parameter to root actor " ++ prstr qn)) "" ""
+                Just t -> handleDiagnostic gopts opts paths (modName paths) $ mkErrorDiagnostic "" "" $ typeReport
+                    (Acton.TypeM.TypeError NoLoc (prstr qn ++ " has not actor type.")) "" ""
                 Nothing -> return Nothing
 
 modNameToString :: A.ModName -> String

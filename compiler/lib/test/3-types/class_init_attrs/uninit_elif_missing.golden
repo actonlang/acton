@@ -1,0 +1,20 @@
+[error Type error]: Attribute 'x' is not initialized in TestClass.__init__
+     +--> uninit_elif_missing.act@5:5-11:1
+     |
+   2 |    class TestClass(object):
+     :    ^-----------------------
+     :    `- In class TestClass
+   3 |        x: int
+     :        ^ 
+     :        `- Attribute 'x' is defined here
+     :
+   5 | +>     def __init__(self, mode: int):
+   6 | |          if mode == 1:
+   7 | |              self.x = 1
+   8 | |          elif mode == 2:
+   9 | |              self.x = 2
+  10 | |          # No else - x not initialized for other values
+  11 | |> 
+     : | 
+     : `- Attribute 'x' is not initialized in __init__
+-----+

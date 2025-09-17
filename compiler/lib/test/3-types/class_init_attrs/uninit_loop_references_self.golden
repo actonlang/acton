@@ -1,0 +1,22 @@
+[error Type error]: Attribute 'x' is not initialized in TestClass.__init__
+     +--> uninit_loop_references_self.act@6:5-14:1
+     |
+   2 |    class TestClass(object):
+     :    ^-----------------------
+     :    `- In class TestClass
+   3 |        x: int
+     :        ^ 
+     :        `- Attribute 'x' is defined here
+     :
+   6 | +>     def __init__(self):
+   7 | |          # Loop that references self - not safe to continue
+   8 | |          for i in range(10):
+   9 | |              process(self)  # Leaks self reference!
+  10 | |          # These assignments are after the loop but we can't reach them
+  11 | |          # because the loop leaked self
+  12 | |          self.x = 1
+  13 | |          self.y = 2
+  14 | |> 
+     : | 
+     : `- Attribute 'x' is not initialized in __init__
+-----+

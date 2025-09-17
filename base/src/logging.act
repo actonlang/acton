@@ -127,12 +127,14 @@ class Message():
     def __init__(self, level: int, path: list[str], name: ?str, msg: ?str, data: ?dict[str, ?value]):
         self.ts = time.now()
         self.level = level
-        self.actor_class = self._get_actor_class()
-        self.actor_id = self._get_actor_id()
         self.name = name
         self.path = path
         self.msg = msg
         self.data = data
+        self.actor_class = ""
+        self.actor_id = 0
+        self.actor_class = self._get_actor_class()
+        self.actor_id = self._get_actor_id()
 
     def _get_actor_class(self) -> str:
         NotImplemented

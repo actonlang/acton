@@ -1,0 +1,39 @@
+# Test case: Complex try/except/finally with mixed initialization
+class TestClass(object):
+    a: int
+    b: int
+    c: int
+    d: int
+    e: int
+    
+    def __init__(self, mode: int):
+        # Initialize before try
+        self.a = 1
+        
+        try:
+            if mode > 0:
+                self.b = 10
+                self.c = risky_op(mode)
+            else:
+                self.b = 11
+                self.c = 12
+        except:
+            # Exception handler must also init b and c
+            self.b = 0
+            self.c = 0
+        finally:
+            # Finally always runs
+            self.d = 100
+        
+        # After try/finally
+        self.e = self.a + self.b + self.c + self.d
+
+def risky_op(x: int) -> int:
+    if x > 100:
+        raise ValueError("Too big!")
+    return x * 2
+
+actor main(env):
+    t1 = TestClass(5)
+    print("Normal:", t1.a, t1.b, t1.c, t1.d, t1.e)
+    env.exit(0)

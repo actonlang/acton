@@ -1,0 +1,15 @@
+# Test case: Early return doesn't excuse initialization
+class TestClass(object):
+    x: int
+    y: int
+    
+    def __init__(self, quick_exit: bool):
+        if quick_exit:
+            self.x = 0
+            return  # Early return - but y is still uninitialized!
+        else:
+            self.x = 1
+            self.y = 2
+
+actor main(env):
+    env.exit(0)

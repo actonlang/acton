@@ -1,0 +1,28 @@
+# Test case: Using initialized attributes in complex expressions
+class TestClass(object):
+    items: list[int]
+    total: int
+    average: float
+    description: str
+    
+    def __init__(self):
+        self.items = [1, 2, 3, 4, 5]
+        self.total = sum(self.items)  # OK: items is initialized
+        self.average = float(self.total) / float(len(self.items))  # OK: total and items initialized
+        self.description = "Average is: " + str(self.average)  # OK: average is initialized
+
+def sum(items: list[int]) -> int:
+    total = 0
+    for i in items:
+        total = total + i
+    return total
+
+def float(x: int) -> float:
+    NotImplemented
+
+def len(items: list[int]) -> int:
+    NotImplemented
+
+actor main(env):
+    t = TestClass()
+    env.exit(0)

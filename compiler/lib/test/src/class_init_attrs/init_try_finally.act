@@ -1,0 +1,20 @@
+# Test case: Finally block always executes so assignments there count
+class TestClass(object):
+    x: int
+    y: int
+    
+    def __init__(self):
+        try:
+            self.x = risky_operation()
+            self.y = 1
+        finally:
+            self.x = 1
+            self.y = 2
+
+def risky_operation() -> int:
+    return 42
+
+actor main(env):
+    t = TestClass()
+    print("x =", t.x, "y =", t.y)
+    env.exit(0)

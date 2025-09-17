@@ -1,0 +1,8 @@
+class TestClass(object):
+    x: int
+    def __init__(self, cond: bool=True):
+        self.x = 1 if cond else 0
+
+actor main(env):
+    t = TestClass()
+    env.exit(0)

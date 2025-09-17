@@ -1,0 +1,26 @@
+[error Type error]: Attribute 'y' is not initialized in TestClass.__init__
+     +--> uninit_nested_if.act@6:5-17:1
+     |
+   2 |    class TestClass(object):
+     :    ^-----------------------
+     :    `- In class TestClass
+     :
+   4 |        y: int
+     :        ^ 
+     :        `- Attribute 'y' is defined here
+     :
+   6 | +>     def __init__(self, a: bool, b: bool):
+   7 | |          if a:
+   8 | |              if b:
+   9 | |                  self.x = 1
+  10 | |                  self.y = 1
+  11 | |              else:
+  12 | |                  self.x = 2
+  13 | |                  # Missing y in this path
+  14 | |          else:
+  15 | |              self.x = 3
+  16 | |              self.y = 3
+  17 | |> 
+     : | 
+     : `- Attribute 'y' is not initialized in __init__
+-----+

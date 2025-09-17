@@ -1,0 +1,29 @@
+# Test case: continue statement in loop shouldn't stop initialization scanning
+class TestClass(object):
+    skipped: list[int]
+    processed: list[int]
+    total: int
+    
+    def __init__(self):
+        self.skipped = []
+        self.processed = []
+        
+        # Loop with continue shouldn't stop scanning
+        for i in range(10):
+            if i % 2 == 0:
+                self.skipped.append(i)
+                continue  # This should NOT stop constructor scanning
+            self.processed.append(i)
+        
+        # This should still be recognized as part of constructor
+        self.total = len(self.processed) + len(self.skipped)
+
+def range(n: int) -> list[int]:
+    NotImplemented
+
+def len(x: list[int]) -> int:
+    NotImplemented
+
+actor main(env):
+    t = TestClass()
+    env.exit(0)

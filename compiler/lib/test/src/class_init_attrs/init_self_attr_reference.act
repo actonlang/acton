@@ -1,0 +1,31 @@
+# Test case: References to self.attr should be allowed when attr is initialized
+
+def compute(x: int) -> int:
+    return x * 2 + 10
+
+class TestClass(object):
+    x: int
+    y: int
+    z: int
+    w: int
+    
+    def __init__(self):
+        # Initialize x first
+        self.x = 5
+        
+        # This should be allowed - self.x is already initialized
+        self.y = compute(self.x)
+        
+        # Multiple references to initialized attributes
+        self.z = self.x + self.y
+        
+        # Even in complex expressions
+        self.w = compute(self.x) + compute(self.y) + self.z
+
+actor main(env):
+    t = TestClass()
+    print(t.x)  # 5
+    print(t.y)  # 20
+    print(t.z)  # 25
+    print(t.w)  # 65
+    env.exit(0)

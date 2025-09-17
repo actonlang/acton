@@ -1,0 +1,23 @@
+# Test case: Self references in data structures should stop scanning
+
+def do_something(l):
+    return 1
+
+class TestClass(object):
+    x: int
+    y: int
+
+    def __init__(self):
+        self.x = 1
+        
+        # Direct reference to self - stop scanning here
+        # We don't actually know if objects how objects is used or if it even is
+        # used, but that is untractable to analyze, so we stop analyzing at any
+        # point where self is referenced.
+        objects = [self, self]
+        # This won't be scanned, so y will be considered uninitialized
+        self.y = do_something(objects)
+
+actor main(env):
+    t = TestClass()
+    env.exit(0)

@@ -1,0 +1,22 @@
+[error Type error]: Attribute 'y' is not initialized in TestClass.__init__
+     +--> uninit_try_except.act@6:5-13:1
+     |
+   2 |    class TestClass(object):
+     :    ^-----------------------
+     :    `- In class TestClass
+     :
+   4 |        y: int
+     :        ^ 
+     :        `- Attribute 'y' is defined here
+     :
+   6 | +>     def __init__(self):
+   7 | |          try:
+   8 | |              self.x = risky_operation()
+   9 | |              self.y = 1
+  10 | |          except:
+  11 | |              self.x = 0
+  12 | |              # y not initialized in except block
+  13 | |> 
+     : | 
+     : `- Attribute 'y' is not initialized in __init__
+-----+

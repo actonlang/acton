@@ -1,0 +1,8 @@
+class TestClass(object):
+    def __init__(self):
+        if False:
+            self.x = 1  # Should fail - x not initialized before use
+
+actor main(env):
+    t = TestClass()
+    env.exit(0)

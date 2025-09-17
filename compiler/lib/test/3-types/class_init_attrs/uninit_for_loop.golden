@@ -1,0 +1,21 @@
+[error Type error]: Attribute 'y' is not initialized in TestClass.__init__
+     +--> uninit_for_loop.act@6:5-12:1
+     |
+   2 |    class TestClass(object):
+     :    ^-----------------------
+     :    `- In class TestClass
+     :
+   4 |        y: int
+     :        ^ 
+     :        `- Attribute 'y' is defined here
+     :
+   6 | +>     def __init__(self, items: list[int]):
+   7 | |          self.x = 1
+   8 | |          for item in items:
+   9 | |              if item == 0:
+  10 | |                  break
+  11 | |              self.y = item  # Might not execute if we break early or items is empty
+  12 | |> 
+     : | 
+     : `- Attribute 'y' is not initialized in __init__
+-----+

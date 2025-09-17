@@ -1,0 +1,25 @@
+[error Type error]: Attribute 'result' is not initialized in TestClass.__init__
+     +--> uninit_nested_function_with_self.act@6:5-16:1
+     |
+   2 |    class TestClass(object):
+     :    ^-----------------------
+     :    `- In class TestClass
+     :
+   4 |        result: int
+     :        ^----- 
+     :        `- Attribute 'result' is defined here
+     :
+   6 | +>     def __init__(self, x: int):
+   7 | |          self.value = x
+   8 | |          
+   9 | |          # Nested function that captures self - stops scanning
+  10 | |          def get_value() -> int:
+  11 | |              return self.value  # References self (even though value is initialized)
+  12 | |          
+  13 | |          # The nested function captured self, so we conservatively stop scanning
+  14 | |          # This will NOT be seen as initialized
+  15 | |          self.result = 42
+  16 | |> 
+     : | 
+     : `- Attribute 'result' is not initialized in __init__
+-----+

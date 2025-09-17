@@ -1,0 +1,19 @@
+# Test case: Nested if statements
+class TestClass(object):
+    x: int
+    y: int
+    
+    def __init__(self, a: bool, b: bool):
+        if a:
+            if b:
+                self.x = 1
+                self.y = 1
+            else:
+                self.x = 2
+                # Missing y in this path
+        else:
+            self.x = 3
+            self.y = 3
+
+actor main(env):
+    env.exit(0)

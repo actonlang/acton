@@ -1,0 +1,16 @@
+[error Type error]: Attribute 'y' is not initialized in TestClass.__init__
+     +--> uninit_partial.act@4:5-6:1
+     |
+   1 |    class TestClass(object):
+     :    ^-----------------------
+     :    `- In class TestClass
+     :
+   3 |        y: str
+     :        ^ 
+     :        `- Attribute 'y' is defined here
+   4 | +>     def __init__(self):
+   5 | |          self.x = 1
+   6 | |> 
+     : | 
+     : `- Attribute 'y' is not initialized in __init__
+-----+

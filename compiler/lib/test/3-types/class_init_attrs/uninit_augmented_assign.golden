@@ -1,0 +1,15 @@
+[error Type error]: Attribute 'x' is not initialized in TestClass.__init__
+     +--> uninit_augmented_assign.act@4:5-5:1
+     |
+   1 |    class TestClass(object):
+     :    ^-----------------------
+     :    `- In class TestClass
+   2 |        x: int
+     :        ^ 
+     :        `- Attribute 'x' is defined here
+     :
+   4 | +>     def __init__(self):
+   5 | |>         self.x += 1  # Should fail - x not initialized before augmented assignment
+     : | 
+     : `- Attribute 'x' is not initialized in __init__
+-----+

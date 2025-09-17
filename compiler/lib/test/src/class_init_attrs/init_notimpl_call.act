@@ -1,0 +1,18 @@
+# Test case: Calling self methods with NotImplemented body is allowed
+class TestClass(object):
+    x: int
+    y: int
+
+    def __init__(self):
+        # Calling a NotImplemented method on self should be allowed since it's
+        # implemented in C and thus trusted to do the right thing.
+        self.setup()
+        self.x = 1
+        self.y = 2
+
+    def setup(self):
+        NotImplemented
+
+actor main(env):
+    t = TestClass()
+    env.exit(0)

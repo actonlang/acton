@@ -1,0 +1,15 @@
+[error Type error]: Attribute 'x' is not initialized in TestClass.__init__
+     +--> uninit_basic_inferred.act@2:5-5:1
+     |
+   1 |    class TestClass(object):
+     :    ^-----------------------
+     :    `- In class TestClass
+   2 | +>     def __init__(self):
+   3 | |          if False:
+   4 | |              self.x = 1  # Should fail - x not initialized before use
+     : |                   ^ 
+     : |                   `- Attribute 'x' inferred from use
+   5 | |> 
+     : | 
+     : `- Attribute 'x' is not initialized in __init__
+-----+
