@@ -585,7 +585,7 @@ solveSelAttr env (wf,sc,d) (Sel info w t1 n t2)
                                             = do (cs,tvs,t) <- instantiate env sc
                                                  when (negself t) (tyerr n "Contravariant Self attribute not selectable by instance")
                                                  w' <- newWitness
-                                                 let e = eLambda [(px0,t1)] (eCallVar w' [app t (tApp (eDot (wf $ eVar px0) n) tvs) $ witsOf cs])
+                                                 let e = eLambda [(px0,t1)] (eCallVar w' [app t (tApp (eDot (wf $ eVar px0) n) tvs) $ protoWitsOf cs])
                                                      c = Sub (DfltInfo (loc info) 8 Nothing []) w' (vsubst [(tvSelf,t1)] t) t2
                                                  return ([Eqn w (wFun t1 t2) e], c:cs)
 
@@ -608,7 +608,7 @@ solveSelWit env (p,we) c0@(Sel info w t1 n t2)
                                                  (cs,tvs,t) <- instantiate env sc
                                                  when (negself t) (tyerr n "Contravariant Self attribute not selectable by instance")
                                                  w' <- newWitness
-                                                 let e = eLambda [(px0,t1)] (eCallVar w' [app t (tApp (eDot (wf we) n) tvs) $ eVar px0 : witsOf cs])
+                                                 let e = eLambda [(px0,t1)] (eCallVar w' [app t (tApp (eDot (wf we) n) tvs) $ eVar px0 : protoWitsOf cs])
                                                      c = Sub (DfltInfo NoLoc 9 Nothing []) w' (vsubst [(tvSelf,t1)] t) t2
                                                  return ([Eqn w (wFun t1 t2) e], c:cs)
 

@@ -190,7 +190,7 @@ var2arg xs                              = \p -> foldr f p xs
 
 exp2arg es                              = \p -> foldr PosArg p es
 
-witsOf cs                               = [ eVar w | Proto _ w t p <- cs ]
+protoWitsOf cs                          = [ eVar w | Proto _ w t p <- cs ]
 
 qualWPar env q                          = wit2par (qualWits env q)
 

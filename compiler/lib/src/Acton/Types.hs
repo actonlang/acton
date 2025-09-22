@@ -358,11 +358,11 @@ instance InfEnv Stmt where
       | inDecl env && nodup ds          = do (cs1,te1,ds1) <- infEnv env ds
                                              return (cs1, te1, Decl l ds1)
       | nodup ds                        = do --traceM ("######## decls: " ++ prstrs (declnames ds))
-                                             (cs1,te1,ds1) <- infEnv (setInDecl env) ds
+                                             (_,te1,ds1) <- infEnv (setInDecl env) ds
                                              (cs2,ds2) <- checkEnv (define te1 env) ds1
                                              (cs3,te2,eq,ds3) <- genEnv env cs2 te1 ds2
                                              --traceM ("-------- done: " ++ prstrs (declnames ds))
-                                             return (cs1++cs3, te2, withLocal (bindWits eq) $ Decl l ds3)
+                                             return (cs3, te2, withLocal (bindWits eq) $ Decl l ds3)
 
     infEnv env (Delete l targ)          = do (cs0,t0,e0,tg) <- infTarg env targ
                                              (cs1,stmt) <- del t0 e0 tg
@@ -729,7 +729,7 @@ wellformed env x                        = do _ <- solveAll env [] cs
 wellformedProtos                        :: Env -> [PCon] -> TypeM (Constraints, [(QName,[Expr])])
 wellformedProtos env ps                 = do (css0, css1) <- unzip <$> mapM (wfProto env) ps
                                              _ <- solveAll env [] (concat css0)
-                                             return (concat css1, [ (tcname p, witsOf cs) | (p,cs) <- ps `zip` css1 ])
+                                             return (concat css1, [ (tcname p, protoWitsOf cs) | (p,cs) <- ps `zip` css1 ])
 
 
 --------------------------------------------------------------------------------------------------------------------------
@@ -1548,7 +1548,7 @@ instance Infer Expr where
                                                 return ([Cast (Simple l ("State variable may only be accessed in a proc")) fxProc fx], t, x)
                                             NDef sc d _ -> do
                                                 (cs,tvs,t) <- instantiate env sc
-                                                let e = app t (tApp x tvs) $ witsOf cs
+                                                let e = app t (tApp x tvs) $ protoWitsOf cs
                                                     cs1 = map (addTyping env n sc t) cs
                                                 --traceM ("## type of " ++ prstr n ++ " = " ++ prstr t ++ ", cs = " ++ render(commaList cs))
                                                 if actorSelf env
@@ -1564,11 +1564,11 @@ instance Infer Expr where
                                                         (cs1,tvs,t) <- instantiate env sc
                                                         let t0 = tCon $ TC (unalias env n) ts
                                                             t' = vsubst [(tvSelf,t0)] t{ restype = tSelf }
-                                                        return (cs0++cs1, t', app t' (tApp x (ts++tvs)) $ witsOf (cs0++cs1))
+                                                        return (cs0++cs1, t', app t' (tApp x (ts++tvs)) $ protoWitsOf (cs0++cs1))
                                             NAct q p k _ _ -> do
 --                                                when (abstractActor env n) (err1 n "Abstract actor cannot be instantiated:")
                                                 (cs,tvs,t) <- instantiate env (tSchema q (tFun fxProc p k (tCon0 (unalias env n) q)))
-                                                return (cs, t, app t (tApp x tvs) $ witsOf cs)
+                                                return (cs, t, app t (tApp x tvs) $ protoWitsOf cs)
                                             NSig _ _ _ -> nameReserved n
                                             NReserved -> nameReserved n
                                             _ -> nameUnexpected n
@@ -1768,7 +1768,7 @@ instance Infer Expr where
                                                   | otherwise -> do
                                                       (cs1,tvs,t) <- instantiate env sc
                                                       let t' = vsubst [(tvSelf,tCon tc)] $ addSelf t dec
-                                                      return (cs0++cs1, t', app2nd dec t' (tApp (Dot l x n) (ts++tvs)) $ witsOf (cs0++cs1))
+                                                      return (cs0++cs1, t', app2nd dec t' (tApp (Dot l x n) (ts++tvs)) $ protoWitsOf (cs0++cs1))
                                                 Nothing ->
                                                     case findProtoByAttr env c' n of
                                                         Just p -> do
@@ -1777,7 +1777,7 @@ instance Infer Expr where
                                                             let Just (wf,sc,dec) = findAttr env p n
                                                             (cs2,tvs,t) <- instantiate env sc
                                                             let t' = vsubst [(tvSelf,tCon tc)] $ addSelf t dec
-                                                            return (cs2, t', app t' (tApp (eDot (wf we) n) tvs) $ witsOf cs2)
+                                                            return (cs2, t', app t' (tApp (eDot (wf we) n) tvs) $ protoWitsOf cs2)
                                                         Nothing -> err1 l "Attribute not found"
       | NProto q us te _ <- cinfo       = do (_,ts) <- instQBinds env q
                                              let tc = TC c' ts
@@ -1788,7 +1788,7 @@ instance Infer Expr where
                                                     let t' = vsubst [(tvSelf,t0)] $ addSelf t dec
                                                     w <- newWitness
                                                     return (Proto (DfltInfo l 85 Nothing []) w t0 tc :
-                                                            cs1, t', app t' (tApp (Dot l (wf $ eVar w) n) tvs) $ witsOf cs1)
+                                                            cs1, t', app t' (tApp (Dot l (wf $ eVar w) n) tvs) $ protoWitsOf cs1)
                                                 Nothing -> err1 l "Attribute not found"
       where c'                          = unalias env c
             cinfo                       = findQName c' env
