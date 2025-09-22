@@ -20,6 +20,16 @@ import Acton.Builtin
 import Debug.Trace
 
 
+isWitness (Internal Witness _ _)    = True
+isWitness _                         = False
+
+isInternal (Internal _ _ _)         = True
+isInternal _                        = False
+
+isUnboxed (Internal BoxPass _ _)    = True
+isUnboxed _                         = False
+
+
 self                                = Name NoLoc "self"
 
 localName n                         = Derived n suffixLocal

@@ -65,16 +65,6 @@ integralTypes                      = [tInt, tI64, tI32, tI16, tI64, tU32, tU16]
 numericTypes                       = integralTypes ++ [tFloat]
 unboxableTypes                     = tail numericTypes
 
-
-isWitness (Internal Witness _ _)   = True
-isWitness _                        = False
-
-isInternal (Internal _ _ _)        = True
-isInternal _                       = False
-
-isUnboxed (Internal BoxPass _ _)    = True
-isUnboxed _                         = False
-
 isUnboxable t                      = t `elem` unboxableTypes
 
 prims = [primISINSTANCE, primISNOTNONE, primISNONE]

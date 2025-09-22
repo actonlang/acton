@@ -513,9 +513,6 @@ genSuite env (s:ss)                 = (c $+$ cs, vs' ++ (vs `intersect` defined 
     where (cs,vs)                   = genSuite (ldefine (envOf s) env) ss
           (c,vs')                   = genStmt (setVolVars vs env) s
 
-isUnboxed (Internal BoxPass _ _)    = True
-isUnboxed _                         = False
-
 genTypeDecl env n t                 =  (if isVolVar n env then text "volatile" else empty) <+>
                                        if isUnboxed n && B.isUnboxable t then text (unboxed_c_type t) else gen env t
 
@@ -523,7 +520,7 @@ genTypeDecl env n t                 =  (if isVolVar n env then text "volatile" e
 genStmt env (Decl _ ds)             = (empty, [])
 genStmt env (Assign _ [PVar _ n (Just t)] e)
   | n `notElem` defined env         = (genTypeDecl env n t <+> gen env n <+> equals <+> rhs <> semi, [])
-  where rhs                         = if B.isWitness n
+  where rhs                         = if isWitness n
                                       then case staticWitnessName e of
                                            (Just nm,as) ->
                                                foldr (\x y -> y <> text "->" <> myPretty x) (parens (myPretty (tcname (tcon t))) <> myPretty (witName nm)) as
