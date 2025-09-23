@@ -52,7 +52,8 @@ trfind n env                            = case lookup n (trsubst env) of
 instance Pretty (Name,Expr) where
     pretty (n,e)                        = pretty n <+> text "~" <+> pretty e
 
-wtrans env (Assign l p@[PVar _ n (Just t)] e : ss)
+wtrans env (s@(Assign l p@[PVar _ n (Just t)] e) : ss)
+  | not (isWitness n)                   = trans env s : wtrans env ss
   | Lambda{} <- e                       = wtrans (extsubst [(n,e1)] env) ss
   | TApp _ Var{} _ <- e                 = wtrans (extsubst [(n,e1)] env) ss
   | Var{} <- e                          = wtrans (extsubst [(n,e1)] env) ss
