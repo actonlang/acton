@@ -291,6 +291,9 @@ def parse_request(i: bytes, log: logging.Logger) -> (?Request, bytes):
     msg, rest = parse_message(i, log)
     if msg is not None:
         slparts = msg.start_line.split(b" ", None)
+        if len(slparts) != 3:
+            # HTTP request must have exactly 3 parts: METHOD PATH HTTP/VERSION
+            return None, b""
         method = slparts[0].decode()
         path = slparts[1].decode()
         verparts = slparts[2].split(b"/", 1)
@@ -309,6 +312,9 @@ def parse_response(i: bytes, log: logging.Logger) -> (?Response, bytes):
     msg, rest = parse_message(i, log)
     if msg is not None:
         slparts = msg.start_line.split(b" ", None)
+        if len(slparts) < 2:
+            # HTTP response must have at least 2 parts: HTTP/VERSION STATUS_CODE [REASON_PHRASE]
+            return None, b""
         verparts = slparts[0].split(b"/", 1)
         if len(verparts) != 2:
             # invalid request
