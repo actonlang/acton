@@ -95,13 +95,15 @@ B_str to$str(char *str) {
     int nchars = 0;
     bool isascii = true;
     unsigned char *p = (unsigned char*)str;
-    while (*p++ != 0)
+    while (*p != 0) {
         if (*p >= 0x80) {
             isascii = false;
             break;
         }
+        p++;
+    }
     if (isascii) {
-        nbytes = p - (unsigned char*)str - 1;
+        nbytes = p - (unsigned char*)str;
         NEW_UNFILLED_STR(res, nbytes, nbytes);
         memcpy(res->str, str, nbytes);
         return res;
@@ -135,11 +137,13 @@ B_str to_str_noc(char *str) {
 
     bool isascii = true;
     unsigned char *p = (unsigned char*)str;
-    while (*p++ != 0)
+    while (*p != 0) {
         if (*p >= 0x80) {
             isascii = false;
             break;
         }
+        p++;
+    }
     p = (unsigned char*)str;
     int cp, cpnbytes;
     if (!isascii) {

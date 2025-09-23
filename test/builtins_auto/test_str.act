@@ -1,3 +1,4 @@
+
 def test_str_find():
     s = "hello, world!"
     print("Testing str.find()")
@@ -264,6 +265,30 @@ def test_strip_list_str():
     a = ["".strip()]
     return str(a) == "['']"
 
+def test_decode_invalid_utf8_continuation():
+    try:
+        # \xe8 expects continuation bytes (10xxxxxx) but \x03 is not
+        s = b"\xe8\x03".decode()
+        return False
+    except ValueError:
+        return True
+
+def test_decode_invalid_utf8_start():
+    try:
+        # \xff is not a valid UTF-8 start byte
+        s = b"\xff\xfe".decode()
+        return False
+    except ValueError:
+        return True
+
+def test_decode_invalid_utf8_mid():
+    try:
+        # Random invalid UTF-8 found while fuzzing HTTP server
+        s = b"Host: loca\xe8\x03o-Length".decode()
+        return False
+    except ValueError:
+        return True
+
 tests = {
     "test_str_find": test_str_find,
     "test_empty_str_capitalize": test_empty_str_capitalize,
@@ -313,6 +338,9 @@ tests = {
     "test_limdef": test_limdef,
     "test_encode_decode": test_encode_decode,
     "test_strip_list_str": test_strip_list_str,
+    "test_decode_invalid_utf8_continuation": test_decode_invalid_utf8_continuation,
+    "test_decode_invalid_utf8_start": test_decode_invalid_utf8_start,
+    "test_decode_invalid_utf8_mid": test_decode_invalid_utf8_mid,
 }
 
 actor main(env):
