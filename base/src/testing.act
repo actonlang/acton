@@ -1309,7 +1309,7 @@ actor test_runner(env: Env,
             acton.rts.start_gc_performance_measurement(env.syscap)
 
         test_concurrency = 1 if config.perf_mode else env.nr_wthreads
-        test_timeout = 3.0
+        test_timeout = max([3.0, config.max_time])
 
         test_name = args.get_str("name")
         if test_name not in all_tests:
