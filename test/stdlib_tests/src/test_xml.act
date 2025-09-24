@@ -178,3 +178,8 @@ def _test_xml_namespace_attributes_undefined():
     testing.assertEqual(child_attr.1, 'child', "Undefined namespace: child attribute value not preserved")
     e = xml.encode(d)
     testing.assertEqual(e, test_xml, "Undefined namespace: roundtrip failed")
+
+def _test_xml_repr():
+    test_xml = """<data xmlns="http://default"><a xmlns:ns="http://foo" ns:operation="remove"><ns:b ns:type="element">text</ns:b></a></data>"""
+    d = xml.decode(test_xml)
+    testing.assertEqual(repr(d), "xml.Node(tag='data', nsdefs=[(None, 'http://default')], children=[xml.Node(tag='a', nsdefs=[('ns', 'http://foo')], attributes=[('ns:operation', 'remove')], children=[xml.Node(tag='b', prefix='ns', attributes=[('ns:type', 'element')], text='text')])])")
