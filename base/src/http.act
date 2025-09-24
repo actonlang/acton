@@ -207,8 +207,12 @@ def parse_message(i: bytes, log: logging.Logger) -> (?Message, bytes):
                 # TODO: silently ignore or explicitly throw error or something?
                 pass
             else:
-                hname = hv[0].decode().strip(" ").lower()
-                headers[hname] = hv[1].decode().strip(" ")
+                try:
+                    hname = hv[0].decode().strip(" ").lower()
+                    headers[hname] = hv[1].decode().strip(" ")
+                except ValueError:
+                    log.debug("Invalid header")
+                    return None, i
 
         # TODO: why do we have to init body & rest here? seems we segfault otherwise...
         body = b""
@@ -240,15 +244,19 @@ def parse_message(i: bytes, log: logging.Logger) -> (?Message, bytes):
                         return None, i
                     elif len(maybe_chunk) == 2:
                         chunk_header = maybe_chunk[0].strip(b"\r\n")
-                        rest = maybe_chunk[1]
-                        header_preview = chunk_header.decode()[:20]
-                        log.trace(f"Chunk header: {header_preview}", None)
                         if chunk_header == b"":
                             log.trace("Empty chunk header", None)
                             return None, i
+                        try:
+                            chunk_header_str = chunk_header.decode()
+                        except ValueError:
+                            log.debug("Invalid chunk header")
+                            return None, i
                         else:
+                            rest = maybe_chunk[1]
+                            log.trace(f"Chunk header: {chunk_header[:20]}", None)
                             try:
-                                clen = int(chunk_header.decode(), 16)
+                                clen = int(chunk_header_str, 16)
                                 log.trace(f"Chunk length: {clen}", None)
                             except ValueError:
                                 log.trace("Chunk header not a length", None)
@@ -294,18 +302,23 @@ def parse_request(i: bytes, log: logging.Logger) -> (?Request, bytes):
         if len(slparts) != 3:
             # HTTP request must have exactly 3 parts: METHOD PATH HTTP/VERSION
             return None, b""
-        method = slparts[0].decode()
-        path = slparts[1].decode()
-        verparts = slparts[2].split(b"/", 1)
-        if len(verparts) != 2:
-            # invalid request
-            # TODO: actually HTTP 0.9 might only have 2 parts, but we don't support that
+        try:
+            method = slparts[0].decode()
+            path = slparts[1].decode()
+        except ValueError:
+            log.debug("Invalid method/path")
             return None, b""
-        version = verparts[1]
-        if version != b"1.1" and version != b"1.0":
-            return None, b""
-        req = Request(method, path, version, msg.headers, msg.body)
-        return req, rest
+        else:
+            verparts = slparts[2].split(b"/", 1)
+            if len(verparts) != 2:
+                # invalid request
+                # TODO: actually HTTP 0.9 might only have 2 parts, but we don't support that
+                return None, b""
+            version = verparts[1]
+            if version != b"1.1" and version != b"1.0":
+                return None, b""
+            req = Request(method, path, version, msg.headers, msg.body)
+            return req, rest
     return None, i
 
 def parse_response(i: bytes, log: logging.Logger) -> (?Response, bytes):
@@ -325,9 +338,14 @@ def parse_response(i: bytes, log: logging.Logger) -> (?Response, bytes):
             log.trace("Invalid HTTP version", None)
             return None, b""
 
-        status = int(slparts[1].decode())
-        resp = Response(version, status, msg.headers, msg.body)
-        return resp, b""
+        try:
+            status = int(slparts[1].decode())
+        except ValueError:
+            log.debug("Invalid status")
+            return None, b""
+        else:
+            resp = Response(version, status, msg.headers, msg.body)
+            return resp, b""
     return None, i
 
 
