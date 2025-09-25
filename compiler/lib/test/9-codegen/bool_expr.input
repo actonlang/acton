@@ -1,0 +1,46 @@
+
+pure def t () -> None:
+    W_44: __builtin__.Hashable[__builtin__.str] = __builtin__.HashableD_str()
+    W_61: __builtin__.Hashable[__builtin__.int] = __builtin__.HashableD_int()
+    my_int: __builtin__.int = 1337
+    b_int: __builtin__.atom = (BOX __builtin__.bool ((UNBOX __builtin__.int True) and (UNBOX __builtin__.int my_int)))
+    my_str: __builtin__.str = "\"hello\""
+    b_str: __builtin__.atom = (BOX __builtin__.bool ((UNBOX __builtin__.str True) and (UNBOX __builtin__.str my_str)))
+    my_bytes: __builtin__.bytes =  b"data"
+    b_bytes: __builtin__.value = (BOX __builtin__.bool ((UNBOX __builtin__.bytes True) and (UNBOX __builtin__.bytes my_bytes)))
+    my_list: __builtin__.list[__builtin__.int] = [1, 2, 3]
+    b_list: __builtin__.value = (BOX __builtin__.bool ((UNBOX __builtin__.list[__builtin__.int] True) and (UNBOX __builtin__.list[__builtin__.int] my_list)))
+    my_dict: __builtin__.dict[__builtin__.str, __builtin__.int] = $mkDict@[__builtin__.str, __builtin__.int](W_44, {"\"key\"": 42})
+    b_dict: __builtin__.value = (BOX __builtin__.bool ((UNBOX __builtin__.dict[__builtin__.str, __builtin__.int] True) and (UNBOX __builtin__.dict[__builtin__.str, __builtin__.int] my_dict)))
+    my_set: __builtin__.set[__builtin__.int] = $mkSet@[__builtin__.int](W_61, {1, 2, 3})
+    b_set: __builtin__.value = (BOX __builtin__.bool ((UNBOX __builtin__.set[__builtin__.int] True) and (UNBOX __builtin__.set[__builtin__.int] my_set)))
+    U_my_i64: __builtin__.i64 = (UNBOX __builtin__.i64 i64(64, None))
+    b_i64: __builtin__.atom = (BOX __builtin__.bool ((UNBOX __builtin__.i64 True) and U_my_i64))
+    U_1my_i32: __builtin__.i32 = (UNBOX __builtin__.i32 i32(32, None))
+    b_i32: __builtin__.atom = (BOX __builtin__.bool ((UNBOX __builtin__.i32 True) and U_1my_i32))
+    U_2my_i16: __builtin__.i16 = (UNBOX __builtin__.i16 i16(16, None))
+    b_i16: __builtin__.atom = (BOX __builtin__.bool ((UNBOX __builtin__.i16 True) and U_2my_i16))
+    my_u64: __builtin__.u64 = u64(64, None)
+    b_u64: __builtin__.atom = (BOX __builtin__.bool ((UNBOX __builtin__.u64 True) and (UNBOX __builtin__.u64 my_u64)))
+    U_3my_u32: __builtin__.u32 = (UNBOX __builtin__.u32 u32(32, None))
+    b_u32: __builtin__.atom = (BOX __builtin__.bool ((UNBOX __builtin__.u32 True) and U_3my_u32))
+    U_4my_u16: __builtin__.u16 = (UNBOX __builtin__.u16 u16(16, None))
+    b_u16: __builtin__.atom = (BOX __builtin__.bool ((UNBOX __builtin__.u16 True) and U_4my_u16))
+    U_5my_float: __builtin__.float = (UNBOX __builtin__.float 3.14)
+    b_float: __builtin__.atom = (BOX __builtin__.bool ((UNBOX __builtin__.float True) and U_5my_float))
+    or_int: __builtin__.atom = (BOX __builtin__.bool ((UNBOX __builtin__.int False) or (UNBOX __builtin__.int my_int)))
+    or_str: __builtin__.atom = (BOX __builtin__.bool ((UNBOX __builtin__.str False) or (UNBOX __builtin__.str my_str)))
+    or_i32: __builtin__.atom = (BOX __builtin__.bool ((UNBOX __builtin__.i32 False) or U_1my_i32))
+    or_float: __builtin__.atom = (BOX __builtin__.bool ((UNBOX __builtin__.float False) or U_5my_float))
+    t: __builtin__.bool = True
+    tc1: __builtin__.bool = (BOX __builtin__.bool ((UNBOX __builtin__.bool False) or (UNBOX __builtin__.bool t)))
+    f: __builtin__.bool = False
+    tc2: __builtin__.bool = (BOX __builtin__.bool ((UNBOX __builtin__.bool True) and (UNBOX __builtin__.bool f)))
+    not_int: __builtin__.bool = not my_int.__bool__()
+    not_str: __builtin__.bool = not my_str.__bool__()
+    not_list: __builtin__.bool = not my_list.__bool__()
+    not_i32: __builtin__.bool = not (BOX __builtin__.i32 U_1my_i32).__bool__()
+    not_float: __builtin__.bool = not (BOX __builtin__.float U_5my_float).__bool__()
+    not_bool: __builtin__.bool = not t
+    mixed_chain: __builtin__.atom = (BOX __builtin__.bool (((UNBOX __builtin__.i32 my_int) and U_1my_i32) and (UNBOX __builtin__.u64 my_u64)))
+    return None
