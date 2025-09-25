@@ -476,7 +476,7 @@ addImport                   :: ModName -> EnvF x -> EnvF x
 addImport m env             = env{ imports = m : imports env }
 
 defineTVars                 :: QBinds -> EnvF x -> EnvF x
-defineTVars q env           = foldr f env q
+defineTVars q env           = foldr f env (unalias env q)
   where f (Quant tv us) env = foldl addWit env{ names = (tvname tv, NTVar (tvkind tv) c) : names env } wits
           where (c,ps)      = case mro2 env us of ([],_) -> (cValue, us); _ -> (head us, tail us)   -- Just check that the mro exists, don't store it
                 wits        = [ WInst [] (tVar tv) p (NoQ $ tvarWit tv p0) wchain | p0 <- ps, (wchain,p) <- findAncestry env p0 ]
