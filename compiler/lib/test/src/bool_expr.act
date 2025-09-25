@@ -1,0 +1,76 @@
+# Test boolean evaluation of all builtin types. Every type in Acton can be
+# evaluated in a boolean context. The code generation must handle the
+# distinction between boxed types with __bool__ methods and unboxed types that
+# map directly to C types.
+
+def t():
+    # Arbitrary precision integers and collection types are boxed objects with
+    # __bool__ methods that determine their truthiness.
+
+    my_int: int = 1337
+    b_int = True and my_int
+
+    my_str: str = "hello"
+    b_str = True and my_str
+
+    my_bytes: bytes = b"data"
+    b_bytes = True and my_bytes
+
+    my_list: list[int] = [1, 2, 3]
+    b_list = True and my_list
+
+    my_dict: dict[str, int] = {"key": 42}
+    b_dict = True and my_dict
+
+    my_set: set[int] = {1, 2, 3}
+    b_set = True and my_set
+
+    # Fixed-size numeric types are unboxed and map directly to C primitive types.
+    # Their boolean evaluation follows C semantics where zero is false and
+    # non-zero is true, so codegen should directly work on the unboxed variable.
+
+    my_i64: i64 = i64(64)
+    b_i64 = True and my_i64
+
+    my_i32: i32 = i32(32)
+    b_i32 = True and my_i32
+
+    my_i16: i16 = i16(16)
+    b_i16 = True and my_i16
+
+    my_u64: u64 = u64(64)
+    b_u64 = True and my_u64
+
+    my_u32: u32 = u32(32)
+    b_u32 = True and my_u32
+
+    my_u16: u16 = u16(16)
+    b_u16 = True and my_u16
+
+    my_float: float = 3.14
+    b_float = True and my_float
+
+    # OR..
+    or_int = False or my_int
+    or_str = False or my_str
+    or_i32 = False or my_i32
+    or_float = False or my_float
+
+    # No need to convert bools but check that it combines properly and without
+    # extra bool()
+
+    t = True
+    tc1 = False or t
+    f = False
+    tc2 = True and f
+
+    # NOT..
+    not_int = not my_int
+    not_str = not my_str
+    not_list = not my_list
+    not_i32 = not my_i32
+    not_float = not my_float
+    not_bool = not t
+
+    # Mixed chain...
+    mixed_chain = my_int and my_i32 and my_u64
