@@ -170,10 +170,13 @@ data Equation                           = Eqn Name Type Expr
 
 type Equations                          = [Equation]
 
+instance Pretty Equations where
+    pretty eqs                          = vcat $ map pretty eqs
+
 instance Pretty Equation where
     pretty (Eqn n t e)                  = pretty n <+> colon <+> pretty t <+> equals <+> pretty e
     pretty (QEqn n q eqs)               = pretty n <+> colon <+> pretty q <+> text "=>" $+$
-                                          nest 4 (vcat $ map pretty eqs)
+                                          nest 4 (pretty eqs)
 
 bindWits eqs                            = [ Assign l0 [PVar l0 w (Just t)] e | Eqn w t e <- eqs ]
 

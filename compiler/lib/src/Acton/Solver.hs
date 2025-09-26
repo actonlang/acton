@@ -446,17 +446,19 @@ allBelow env (TFX _ FXAction)           = [fxAction]
 ----------------------------------------------------------------------------------------------------------------------
 
 instance USubst Equation where
-    usubst (Eqn w t e)                      = do t <- usubst t
-                                                 e <- usubst e
-                                                 return (Eqn w t e)
+    usubst (Eqn w t e)                  = Eqn w <$> usubst t <*> usubst e
+    usubst (QEqn n q eqs)               = QEqn n <$> usubst q <*> usubst eqs
     
 instance UFree Equation where
-    ufree (Eqn w t e)                       = ufree t ++ ufree e
+    ufree (Eqn w t e)                   = ufree t ++ ufree e
+    ufree (QEqn n q eqs)                = ufree q ++ ufree eqs
 
 instance Vars Equation where
-    free (Eqn w t e)                     = free e
+    free (Eqn w t e)                    = free e
+    free (QEqn n q eqs)                 = free q ++ (free eqs \\ bound q)
 
-    bound (Eqn w t e)                    = [w]
+    bound (Eqn w t e)                   = [w]
+    bound (QEqn n q eqs)                = [ tvarWit tv p | Quant tv ps <- q, p <- ps ] ++ bound eqs
 
 
 
