@@ -61,7 +61,7 @@ isInClass env                      = inClassX $ envX env
 
 -- Auxiliaries ---------------------------------------------------------------------------------------------------
 
-integralTypes                      = [tInt, tI64, tI32, tI16, tI64, tU32, tU16]
+integralTypes                      = [tInt, tI64, tI32, tI16, tU64, tU32, tU16]
 numericTypes                       = integralTypes ++ [tFloat]
 unboxableTypes                     = tail numericTypes
 
