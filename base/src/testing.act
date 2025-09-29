@@ -866,10 +866,10 @@ class TestRunnerConfig(object):
     def __init__(self, perf_mode: bool, args):
         self.perf_mode = perf_mode
         self.output_enabled = False if args.get_bool("no_output") else True
-        self.max_iter = args.get_int("max-iter")
         self.min_iter = args.get_int("min-iter")
-        self.max_time = float(args.get_int("max-time")) / 1000.0
+        self.max_iter = max([args.get_int("max-iter"), self.min_iter])
         self.min_time = float(args.get_int("min-time")) / 1000.0
+        self.max_time = max([float(args.get_int("max-time")) / 1000.0, self.min_time])
 
 class TimeoutError(Exception):
     pass
@@ -1308,7 +1308,7 @@ actor test_runner(env: Env,
             acton.rts.start_gc_performance_measurement(env.syscap)
 
         test_concurrency = 1 if config.perf_mode else env.nr_wthreads
-        test_timeout = 3.0
+        test_timeout = max([config.max_time, 2.0]) + 1.0
 
         test_name = args.get_str("name")
         if test_name not in all_tests:
