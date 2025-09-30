@@ -239,7 +239,7 @@ instance Norm Stmt where
     norm env (Raise l e)            = do e' <- norm env e
                                          return $ Expr l $ eCall (eQVar primRAISE) [e']
     norm env (If l bs els)          = If l <$> norm env bs <*> normSuite env els
-    norm env (While l e b els)      = While l <$> normBool env e <*> normSuite (pushMark LOOP env) b <*> normSuite env els
+    norm env (While l e b els)      = While l (eBool True) <$> normSuite (pushMark LOOP env) (sIf1 e [sPass] (els++[sBreak]) : b) <*> return []
     norm env (Data l mbp ss)        = Data l <$> norm env mbp <*> norm env ss
     norm env (VarAssign l ps e)     = VarAssign l <$> norm env ps <*> norm env e
     norm env (After l e e')         = After l <$> norm env e <*> norm env e'
