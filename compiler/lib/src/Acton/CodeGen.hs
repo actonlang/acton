@@ -829,7 +829,7 @@ instance Gen Expr where
             opstr Mod               = "MOD"
             opstr EuDiv             = "FLOORDIV"
     gen env (CompOp _ e [a])        = gen env e <+> gen env a
-    gen env (UnOp _ Not e)          = gen env primNOT <> parens (gen env t <> comma <+> genBool env e)
+    gen env (UnOp _ Not e)          = gen env primNOT <> parens (gen env t <> comma <+> gen env e)
       where t                       = typeOf env e
     gen env (Cond _ e1 e e2)        = parens (parens (gen env (B.unbox tBool e)) <+> text "?" <+> gen env e1 <+> text ":" <+> gen env e2)
     gen env (Paren _ e)             = parens (gen env e)
@@ -869,8 +869,8 @@ genUnboxedInt env _ c               = parens (gen env c) <> text "->val"
 instance Gen OpArg where
     gen env (OpArg  op e)           = compPretty op <+> gen env e
 
-compPretty Is                       = text "=="
-compPretty IsNot                    = text "!="
+-- compPretty Is                       = text "=="
+-- compPretty IsNot                    = text "!="
 compPretty op                       = pretty op
 
 binPretty And                       = text "&&"
@@ -926,4 +926,3 @@ unboxed_c_type t
     | t == tU16 = "uint16_t"
     | t == tFloat = "double"
     | otherwise = error ("Internal error: trying to find unboxed type for " ++ show t)
-

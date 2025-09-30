@@ -93,6 +93,7 @@ isKW                                = name "__is__"
 isnotKW                             = name "__isnot__"
 
 compareKWs                          = [eqKW, neKW, ltKW, leKW, gtKW, geKW, isKW, isnotKW]
+eqordKWs                            = [eqKW, neKW, ltKW, leKW, gtKW, geKW] 
 
 nBuiltin                            = name "__builtin__"
 mBuiltin                            = ModName [nBuiltin]
