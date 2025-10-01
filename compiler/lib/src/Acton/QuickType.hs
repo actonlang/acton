@@ -138,7 +138,7 @@ instance QType Expr where
     qType env f (Await l e)         = case t of
                                         TCon _ (TC c [t]) | c == qnMsg -> (t, fxProc, Await l e')
       where (t, fx, e')             = qType env f e
-    qType env f (BinOp l e1 op e2)  = (t, fxPure, BinOp l (qMatch f t1 t e1') op (qMatch f t2 t e2'))  --fxPure?
+    qType env f (BinOp l e1 op e2)  = (t, fx, BinOp l (qMatch f t1 t e1') op (qMatch f t2 t e2'))
       where (t1, fx1, e1')          = qType env f e1
             (t2, fx2, e2')          = qType env f e2
             t                       = upbound env [t1,t2]
