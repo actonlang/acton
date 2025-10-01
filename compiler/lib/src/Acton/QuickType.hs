@@ -138,7 +138,13 @@ instance QType Expr where
     qType env f (Await l e)         = case t of
                                         TCon _ (TC c [t]) | c == qnMsg -> (t, fxProc, Await l e')
       where (t, fx, e')             = qType env f e
-    qType env f (BinOp l e1 op e2)  = (t, fxPure, BinOp l (qMatch f t1 t e1') op (qMatch f t2 t e2'))
+    qType env f (BinOp l e1 op e2)  = (t, fx, BinOp l (qMatch f t1 t e1') op (qMatch f t2 t e2'))
+      where (t1, fx1, e1')          = qType env f e1
+            (t2, fx2, e2')          = qType env f e2
+            t                       = upbound env [t1,t2]
+            fx                      = upbound env [fx1,fx2]
+    qType env f (CompOp l e1 [OpArg op e2])
+                                    = (tBool, fx, CompOp l (qMatch f t1 t e1') [OpArg op (qMatch f t2 t e2')])
       where (t1, fx1, e1')          = qType env f e1
             (t2, fx2, e2')          = qType env f e2
             t                       = upbound env [t1,t2]
@@ -195,9 +201,9 @@ instance QType Expr where
       where (ts, fxs, es')          = unzip3 $ map (qType env f) es
     qType env f (Paren l e)         = (t, fx, Paren l e')
       where (t, fx, e')             = qType env f e
-    qType env f (Box t e)           = (t, fx, Box t e)
+    qType env f (Box t e)           = (t, fx, Box t e')
       where (_, fx, e')             = qType env f e
-    qType env f (UnBox t e)         = (t, fx, UnBox t e)
+    qType env f (UnBox t e)         = (t, fx, UnBox t e')
       where (_, fx, e')             = qType env f e
     qType env f e                   = error ("qType, e = " ++ show e)
 
