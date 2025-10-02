@@ -35,6 +35,19 @@ import Acton.TypeEnv
 import Acton.Unify
 
 
+-- Reduce conservatively and remove entailed constraints
+simplifyNew                                 :: Env -> Constraints -> TypeM (Constraints,Equations)
+simplifyNew env cs                          = do css <- groupCs env cs
+                                                 --traceM ("#### SIMPLIFY NEW" ++ prstrs (map length css))
+                                                 --sequence [ traceM ("## long:\n" ++ render (nest 4 $ vcat $ map pretty cs)) | cs <- css, length cs > 500 ]
+                                                 simplifyGroupsNew env css
+
+simplifyGroupsNew env []                    = return ([], [])
+simplifyGroupsNew env (cs:css)              = do --traceM ("\n\n######### simplifyGroup\n" ++ render (nest 4 $ vcat $ map pretty cs))
+                                                 eq1 <- reduce env [] cs `catchError` \err -> Control.Exception.throw err
+                                                 cs1 <- usubst =<< collectDeferred
+                                                 (cs2,eq2) <- simplifyGroupsNew env css
+                                                 return (cs1++cs2, eq1++eq2)
 
 -- Reduce conservatively and remove entailed constraints
 simplify                                    :: (Polarity a, Pretty a) => Env -> TEnv -> a -> Constraints -> TypeM (Constraints,Equations)
@@ -446,19 +459,19 @@ allBelow env (TFX _ FXAction)           = [fxAction]
 ----------------------------------------------------------------------------------------------------------------------
 
 instance USubst Equation where
-    usubst (Eqn w t e)                  = Eqn w <$> usubst t <*> usubst e
-    usubst (QEqn n q eqs)               = QEqn n <$> usubst q <*> usubst eqs
+    usubst (Eqn w t e)                      = Eqn w <$> usubst t <*> usubst e
+    usubst (QEqn n q eqs)                   = QEqn n <$> usubst q <*> usubst eqs
     
 instance UFree Equation where
-    ufree (Eqn w t e)                   = ufree t ++ ufree e
-    ufree (QEqn n q eqs)                = ufree q ++ ufree eqs
+    ufree (Eqn w t e)                       = ufree t ++ ufree e
+    ufree (QEqn n q eqs)                    = ufree q ++ ufree eqs
 
 instance Vars Equation where
-    free (Eqn w t e)                    = free e
-    free (QEqn n q eqs)                 = free q ++ (free eqs \\ bound q)
+    free (Eqn w t e)                        = free e
+    free (QEqn n q eqs)                     = free q ++ (free eqs \\ bound q)
 
-    bound (Eqn w t e)                   = [w]
-    bound (QEqn n q eqs)                = [ tvarWit tv p | Quant tv ps <- q, p <- ps ] ++ bound eqs
+    bound (Eqn w t e)                       = [w]
+    bound (QEqn n q eqs)                    = [ tvarWit tv p | Quant tv ps <- q, p <- ps ] ++ bound eqs
 
 
 
@@ -489,7 +502,7 @@ reduce' env eq c@(Proto _ w t@(TVar _ tv) p)
 reduce' env eq c@(Proto _ w t@(TCon _ tc) p)
   | tcname p == qnIdentity,
     isActor env (tcname tc)                 = do let e = eCall (eQVar primIdentityActor) []
-                                                 return (Eqn w (impl2type t p) e : eq)
+                                                 return (Eqn w (proto2type t p) e : eq)
   | [wit] <- witSearch                      = do (eq',cs) <- solveProto env wit w t p
                                                  reduce env (eq'++eq) cs
   where witSearch                           = findWitness env t p
@@ -502,10 +515,10 @@ reduce' env eq c@(Proto _ w t@(TFX _ tc) p)
 reduce' env eq c@(Proto info w t@(TOpt _ t') p)
   | tcname p == qnEq                        = do w' <- newWitness
                                                  let e = eCall (tApp (eQVar primEqOpt) [t']) [eVar w']
-                                                 reduce env (Eqn w (impl2type t p) e : eq) [Proto info w' t' p]
+                                                 reduce env (Eqn w (proto2type t p) e : eq) [Proto info w' t' p]
 
 reduce' env eq c@(Proto _ w t@(TNone _) p)
-  | tcname p == qnEq                        = return (Eqn w (impl2type t p) (eQVar primWEqNone) : eq)
+  | tcname p == qnEq                        = return (Eqn w (proto2type t p) (eQVar primWEqNone) : eq)
 
 reduce' env eq c@(Sel _ w TUni{} n _)       = do defer [c]; return eq
 
@@ -581,7 +594,7 @@ reduce' env eq c                            = noRed0 env c
 
 solveProto env wit w t p                    = do (cs,t',we) <- instWitness env p wit
                                                  unify (DfltInfo NoLoc 7 Nothing []) t t'
-                                                 return ([Eqn w (impl2type t p) we], cs)
+                                                 return ([Eqn w (proto2type t p) we], cs)
 
 solveSelAttr env (wf,sc,d) (Sel info w t1 n t2)
                                             = do (cs,tvs,t) <- instantiate env sc
@@ -1544,7 +1557,7 @@ ctxtReduce env vi multiPBnds            = (concat eqs, concat css)
         ctxtRed (v,wps)                 = imp v [] [] [] wps
         imp v eq uni wps ((w,p):wps')
           | (e,p'):_ <- hits            = --trace ("  *" ++ prstr p ++ " covered by " ++ prstr p') $
-                                          imp v (Eqn w (impl2type (tUni v) p) e : eq) ((tcargs p `zip` tcargs p') ++ uni) wps wps'
+                                          imp v (Eqn w (proto2type (tUni v) p) e : eq) ((tcargs p `zip` tcargs p') ++ uni) wps wps'
           | otherwise                   = --trace ("   (Not covered: " ++ prstr p ++ " in context " ++ prstrs (map snd (wps++wps')) ++ ")") $
                                           imp v eq uni ((w,p):wps) wps'
           where hits                    = [ (wf $ eVar w', vsubst s p') | (w',p0) <- wps++wps', w'/=w, Just (wf,p') <- [findAncestor env p0 (tcname p)] ]

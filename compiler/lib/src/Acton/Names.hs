@@ -430,4 +430,4 @@ instance Vars Constraint where
     free (Sel _ w t1 n t2)          = free t1 ++ free t2
     free (Mut _ t1 n t2)            = free t1 ++ free t2
     free (Seal _ t)                 = free t
-    free (Imply _ q cs)             = free q ++ free cs
+    free (Imply _ w q cs)           = free q ++ free cs

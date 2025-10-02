@@ -151,8 +151,10 @@ infTopStmts env (s : ss)                = do (cs,te1,s) <- infEnv env s
 
         pushEqns eqs ss                 = push eqns0 ss
           where eqns0                   = [ (eq,ns) | eq <- eqs, let ns = free eq `intersect` bound ss ]
+
         push eqns ss                    = bindWits (map fst eq1) ++ push' eq2 ss
           where (eq1,eq2)               = partition (null . snd) eqns
+
         push' [] ss                     = ss
         push' eqns (s:ss)
           | null eq1                    = s : push eq2 ss
@@ -160,6 +162,7 @@ infTopStmts env (s : ss)                = do (cs,te1,s) <- infEnv env s
           where eq1                     = collect [] (free s) (map fst eqns)
                 eq2                     = [ (eq, ns \\ ns') | (eq,ns) <- eqns ]
                 ns'                     = bound s
+
         inject eqs (Decl l ds)          = Decl l (map inj ds)
           where inj (Class l n q us b ddoc) = Class l n q us (map inj' b) ddoc
                 inj d                   = d{ dbody = bindWits eqs ++ dbody d }
@@ -167,6 +170,7 @@ infTopStmts env (s : ss)                = do (cs,te1,s) <- infEnv env s
                 inj' s                  = s
         inject eqs (With l [] ss)       = With l [] (pushEqns eqs ss)
         inject eqs s                    = error ("# Internal error: cyclic witnesses " ++ prstrs eqs ++ "\n# and statement\n" ++ prstr s)
+
         collect eq0 vs eq
           | null eq1                    = eq0
           | otherwise                   = collect (eq1++eq0) ((free eq1 \\ bound eq1) ++ vs) eq2
@@ -658,10 +662,17 @@ solveAll env te cs                      = do --traceM ("\n\n### solveAll " ++ pr
 solveScoped env q te tt []              = return ([], [])
 solveScoped env [] te tt cs             = simplify env te tt cs
 solveScoped env q te tt cs              = do --traceM ("\n\n### solveScoped: " ++ prstrs cs)
-                                             (cs,eq) <- simplify env1 te tt cs
-                                             solve env1 (any (`elem` vs) . vfree) te tt eq cs
+                                             (cs,eq) <- simplifyNew env1 cs
+                                             w <- newWitness
+                                             let e = eCallP (tApp (eVar w) (map tVar $ qbound q1)) (wit2arg (qualWits' q1) PosNil)
+                                                 q1 = quantScope0 env1
+                                                 eq1 = refEqns e cs ++ eq
+                                                 cs1 = Imply (Simple NoLoc "Implication") w q cs
+                                             if "soon" == "now" then
+                                                 return ([cs1], eq1)
+                                              else
+                                                 solve env1 (any (`elem` (qbound q)) . vfree) te tt eq cs
   where env1                            = defineTVars q env
-        vs                              = qbound q
 
 -- To be replaced by the quantifier escape check of the new implication constraint solver
 --checkNoEscape l env vs                  = do fvs <- ufree <$> usubst env
@@ -1216,7 +1227,7 @@ infInitEnv env self (Expr l e : b)
 infInitEnv env self b                   = infSuiteEnv env b
 
 abstractDefs env q eq b                 = map absDef b
-  where absDef (Decl l ds)               = Decl l (map absDef' ds)
+  where absDef (Decl l ds)              = Decl l (map absDef' ds)
         absDef (If l bs els)            = If l [ Branch e (map absDef ss) | Branch e ss <- bs ] (map absDef els)
         absDef stmt                     = stmt
         absDef' d@Def{}                 = d{ pos = pos1, dbody = bindWits eq ++ dbody d }
@@ -1457,7 +1468,7 @@ genEnv env cs te ds
       where (q,wss)                     = unzip $ map qbind vs
             qbind v                     = (Quant v bounds, wits)
               where bounds              = [ p | Proto _ w (TVar _ v') p <- cs, v == v' ]
-                    wits                = [ (w, impl2type t p) | Proto _ w t@(TVar _ v') p <- cs, v == v' ]
+                    wits                = [ (w, proto2type t p) | Proto _ w t@(TVar _ v') p <- cs, v == v' ]
 
     generalize q (n, NDef (TSchema l [] t) d doc)
                                         = (n, NDef (TSchema l q t) d doc)

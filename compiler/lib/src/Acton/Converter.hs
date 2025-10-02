@@ -90,11 +90,11 @@ convProtocol env n0 q ps0 eq wmap b     = mainClass : sibClasses
                 eq0                     = Eqn (tvarWit tvSelf p0) t0 (eVar w0) : eq
                 eq1                     = Eqn (tvarWit tvSelf p0) t0 (eDot (eVar selfKW') w0) : qcopies' ++ eq
 
-        qsigs                           = [ Signature NoLoc [qualAttr p v n0] (monotype $ impl2type (tVar v) p) Property | (v,p) <- quals env q ]
+        qsigs                           = [ Signature NoLoc [qualAttr p v n0] (monotype $ proto2type (tVar v) p) Property | (v,p) <- quals env q ]
         psigs                           = [ Signature NoLoc [w0] (monotype t0) Property ]
-        qpars                           = [ (tvarWit v p, impl2type (tVar v) p) | (v,p) <- quals env q ]
+        qpars                           = [ (tvarWit v p, proto2type (tVar v) p) | (v,p) <- quals env q ]
         qcopies                         = [ MutAssign NoLoc (eDot (eVar selfKW') $ qualAttr p v n0) (eVar $ tvarWit v p) | (v,p) <- quals env q ]
-        qcopies'                        = [ Eqn (tvarWit v p) (impl2type (tVar v) p) (eDot (eVar selfKW') $ qualAttr p v n0) | (v,p) <- quals env q ]
+        qcopies'                        = [ Eqn (tvarWit v p) (proto2type (tVar v) p) (eDot (eVar selfKW') $ qualAttr p v n0) | (v,p) <- quals env q ]
 
 inherited (Left _ : _)                  = True
 inherited _                             = False
@@ -156,11 +156,11 @@ convExtension env n1 c0 q ps0 eq wmap b = mainClass : sibClasses
         sibArgs []                      = []
         sibArgs ws                      = map eVar (map witAttr $ init ws) ++ [eVar w0]
 
-        qsigs                           = [ Signature NoLoc [qualAttr p v n1] (monotype $ impl2type (tVar v) p) Property | (v,p) <- quals env q ]
-        qpars                           = [ (tvarWit v p, impl2type (tVar v) p) | (v,p) <- quals env q ]
+        qsigs                           = [ Signature NoLoc [qualAttr p v n1] (monotype $ proto2type (tVar v) p) Property | (v,p) <- quals env q ]
+        qpars                           = [ (tvarWit v p, proto2type (tVar v) p) | (v,p) <- quals env q ]
         qargs                           = [ eVar n | (n,p) <- qpars ]
         qcopies                         = [ MutAssign NoLoc (eDot (eVar selfKW') $ qualAttr p v n1) (eVar $ tvarWit v p) | (v,p) <- quals env q ]
-        qcopies'                        = [ Eqn (tvarWit v p) (impl2type (tVar v) p) (eDot (eVar selfKW') $ qualAttr p v n1) | (v,p) <- quals env q ]
+        qcopies'                        = [ Eqn (tvarWit v p) (proto2type (tVar v) p) (eDot (eVar selfKW') $ qualAttr p v n1) | (v,p) <- quals env q ]
 
 
 trim ps0                                = nubBy eqWit [ (catRight ws0, ws0, p) | (ws0,p) <- ps0 ]

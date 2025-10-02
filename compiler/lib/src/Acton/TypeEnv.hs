@@ -180,10 +180,35 @@ instance Pretty Equation where
 
 bindWits eqs                            = [ Assign l0 [PVar l0 w (Just t)] e | Eqn w t e <- eqs ]
 
+bindTopWits eqs0                        = map bind eqs0
+  where bind (Eqn w t e)                = sAssign (pVar w t) e
+        bind (QEqn w q eqs)             = sDecl [Def l0 w q (qualWPar' q PosNIL) KwdNIL ann [stmt] NoDec fxPure Nothing]
+          where ann                     = Just $ foldr krow (tNil KRow) eqs
+                stmt                    = sReturn (eTupleK $ foldr karg KwdNil eqs)
+
+        krow (Eqn w t e) r              = kwdRow w t r
+        krow (QEqn w q eqs) r           = r
+
+        karg (Eqn w t e) a              = KwdArg w e a
+        karg (QEqn _ _ _) a             = a
+
+liftQEqns eqs0                          = concatMap lift eqs0
+  where lift (QEqn w q eqs)             = liftQ w q eqs
+        lift eq                         = [eq]
+
+        liftQ w q eqs                   = QEqn w q [ eq | eq@Eqn{} <- eqs ] : concat [ liftQ w' (q++q') eqs' | QEqn w' q' eqs' <- eqs ]
+
+
+refEqns e []                            = []
+refEqns e (Sub _ w t1 t2 : cs)          = Eqn w (tFun0 [t1] t2) (eDot e w) : refEqns e cs
+refEqns e (Proto _ w t p : cs)          = Eqn w (proto2type t p) (eDot e w) : refEqns e cs
+refEqns e (Sel _ w t1 n t2 : cs)        = Eqn w (tFun0 [t1] t2) (eDot e w) : refEqns e cs
+refEqns e (c : cs)                      = refEqns e cs
+
 
 -- Misc. ---------------------------------------------------------------------------------------------------------------------------
 
-impl2type t (TC n ts)                   = tCon $ TC n (t:ts)
+proto2type t (TC n ts)                   = tCon $ TC n (t:ts)
 
 wit2row ws                              = \p -> foldr f p ws
   where f (w,t)                         = TRow NoLoc PRow nWild t
@@ -205,9 +230,15 @@ qualWPar env q                          = wit2par (qualWits env q)
 
 qualWRow env q                          = wit2row (qualWits env q)
 
-qualWits env q                          = [ (tvarWit tv p, impl2type (tVar tv) p) | Quant tv ps <- q, p <- ps, isProto env (tcname p) ]
+qualWits env q                          = [ (tvarWit tv p, proto2type (tVar tv) p) | Quant tv ps <- q, p <- ps, isProto env (tcname p) ]
+
+qualWPar' q                             = wit2par (qualWits' q)
+
+qualWRow' q                             = wit2row (qualWits' q)
+
+qualWits' q                             = [ (tvarWit tv p, proto2type (tVar tv) p) | Quant tv ps <- q, p <- ps ]
 
 witSubst env q cs                       = [ Eqn w0 t (eVar w) | ((w,t),w0) <- ws `zip` ws0 ]
-  where ws                              = [ (w, impl2type t p) | Proto _ w t p <- cs ]
+  where ws                              = [ (w, proto2type t p) | Proto _ w t p <- cs ]
         ws0                             = [ tvarWit tv p | Quant tv ps <- q, p <- ps, isProto env (tcname p) ]
 

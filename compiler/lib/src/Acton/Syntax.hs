@@ -257,7 +257,7 @@ data Constraint = Cast  {info :: ErrInfo, type1 :: Type, type2 :: Type}
                 | Sel   {info :: ErrInfo, wit :: Name, type1 :: Type, name1 :: Name, type2 :: Type}
                 | Mut   {info :: ErrInfo, type1 :: Type, name1 :: Name, type2 :: Type}
                 | Seal  {info :: ErrInfo, type1 :: Type}
-                | Imply {info :: ErrInfo, binder :: QBinds, scoped :: Constraints}
+                | Imply {info :: ErrInfo, wit :: Name, binder :: QBinds, scoped :: Constraints}
                 deriving (Eq,Show,Read,Generic,NFData)
 
 type Constraints = [Constraint]
@@ -444,7 +444,7 @@ data NameInfo           = NVar      Type
                         | NClass    QBinds [WTCon] TEnv (Maybe String)
                         | NProto    QBinds [WTCon] TEnv (Maybe String)
                         | NExt      QBinds TCon [WTCon] TEnv (Maybe String)
-                        | NTVar     Kind CCon
+                        | NTVar     Kind CCon [PCon]
                         | NAlias    QName
                         | NMAlias   ModName
                         | NModule   TEnv (Maybe String)
@@ -605,7 +605,7 @@ instance HasLoc Constraint where
       loc (Sel info _ t1  n1 t2) = getLoc [loc info, loc t1, loc n1, loc t2]
       loc (Mut info t1  n1 t2) = getLoc [loc info, loc t1, loc n1, loc t2]
       loc (Seal info  t1) =  getLoc [loc info, loc t1]
-      loc (Imply info q cs) =  getLoc [loc info, loc cs]
+      loc (Imply info _ q cs) =  getLoc [loc info, loc cs]
 
 instance HasLoc ErrInfo where
       loc (Simple l _)   = l
