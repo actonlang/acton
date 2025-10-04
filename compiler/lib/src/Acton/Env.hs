@@ -1198,8 +1198,11 @@ moduleRefs env                  = nub $ imports env ++ [ m | (_,NMAlias m) <- na
 moduleRefs1 env                 = moduleRefs env \\ [mPrim, mBuiltin]
 
 subImp spath env []          = return env
-subImp spath env (m:ms)      = do (env',_) <- doImp spath env m
-                                  subImp spath env' ms
+subImp spath env (m:ms)      = do
+                                  -- Ensure transitive imports also contribute their witnesses (extensions)
+                                  (env',te) <- doImp spath env m
+                                  let env'' = importWits m te env'
+                                  subImp spath env'' ms
 
 findTyFile spaths mn = go spaths
   where
@@ -1439,4 +1442,3 @@ instance Simp QName where
       | not $ null aliases          = NoQ $ head aliases                                        -- Restore aliases
       | otherwise                   = n
       where aliases                 = [ n1 | (n1, NAlias n2) <- names env, n2 == n ]
-
