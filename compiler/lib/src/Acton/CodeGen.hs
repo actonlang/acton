@@ -860,6 +860,7 @@ instance Gen Expr where
                                     = gen env primISINSTANCE0 <> parens(gen env e <> comma <+> genQName env c)
     gen env (UnBox _ (Int _ n s))   = text s
     gen env (UnBox _ (Float _ x s)) = text s
+    gen env (UnBox _ (Bool _ b))    = if b then text "true" else text "false"
     gen env (UnBox _ v@(Var _ (NoQ n)))
        | isUnboxed n                = gen env v
     gen env (UnBox t e)             = parens (parens (gen env t) <> gen env e) <> text "->val"
