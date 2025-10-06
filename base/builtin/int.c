@@ -153,7 +153,7 @@ B_int B_IntegralD_intD___round__ (B_IntegralD_int wit, B_int n, B_int p) {
     long nval = n->val;
     if (nval<0)
         return toB_int(-B_IntegralD_intD___round__(wit,toB_int(-nval),p)->val);
-    long pval = p==NULL ? 0 : from$int(p);
+    long pval = p==NULL ? 0 : fromB_int(p);
     if (pval>=0)
         return n;
     long p10 = int_pow(10,-pval);
@@ -196,11 +196,11 @@ B_int B_IntegralD_intD___mod__(B_IntegralD_int wit, B_int a, B_int b) {
 }
 
 B_int B_IntegralD_intD___lshift__(B_IntegralD_int wit,  B_int a, B_int b) {
-    return toB_int(a->val << from$int(b));
+    return toB_int(a->val << fromB_int(b));
 }
 
 B_int B_IntegralD_intD___rshift__(B_IntegralD_int wit,  B_int a, B_int b) {
-    return toB_int(a->val >> from$int(b));
+    return toB_int(a->val >> fromB_int(b));
 }
  
 B_int B_IntegralD_intD___invert__(B_IntegralD_int wit,  B_int a) {

@@ -25,7 +25,7 @@ unsigned int u32_pow(unsigned int a, unsigned int e) {
 // General methods ///////////////////////////////////////////////////////////////////////
 
 B_u32 B_u32G_new(B_atom a, B_int base) {
-    B_int b = B_intG_new(a, base);
+    B_bigint b = B_bigintG_new(a, base);
     long sz = b->val.size;
     if (sz==0) return toB_u32(0);
     unsigned long n = b->val.n[0];
@@ -146,7 +146,7 @@ $WORD B_IntegralD_u32D___ceil__ (B_IntegralD_u32 wit, B_u32 n, B_Integral wit2) 
   
 B_u32 B_IntegralD_u32D___round__ (B_IntegralD_u32 wit, B_u32 n, B_int p) {
     unsigned int nval = n->val;
-    int pval = p==NULL ? 0 : from$int(p);
+    int pval = p==NULL ? 0 : fromB_int(p);
     if (pval>=0)
         return n;
     unsigned int p10 = u32_pow(10,-pval);
@@ -189,11 +189,11 @@ B_u32 B_IntegralD_u32D___mod__(B_IntegralD_u32 wit, B_u32 a, B_u32 b) {
 }
 
 B_u32 B_IntegralD_u32D___lshift__(B_IntegralD_u32 wit,  B_u32 a, B_int b) {
-    return toB_u32(a->val << from$int(b));
+    return toB_u32(a->val << fromB_int(b));
 }
 
 B_u32 B_IntegralD_u32D___rshift__(B_IntegralD_u32 wit,  B_u32 a, B_int b) {
-    return toB_u32(a->val >> from$int(b));
+    return toB_u32(a->val >> fromB_int(b));
 }
  
 B_u32 B_IntegralD_u32D___invert__(B_IntegralD_u32 wit,  B_u32 a) {

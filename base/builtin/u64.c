@@ -25,7 +25,7 @@ uint64_t u64_pow(uint64_t a, uint64_t e) {
 // General methods ///////////////////////////////////////////////////////////////////////
 
 B_u64 B_u64G_new(B_atom a, B_int base) {
-    B_int b = B_intG_new(a, base);
+    B_bigint b = B_bigintG_new(a, base);
     long sz = b->val.size;
     if (sz==0) return toB_u64(0);
     uint64_t n = b->val.n[0];
@@ -146,7 +146,7 @@ $WORD B_IntegralD_u64D___ceil__ (B_IntegralD_u64 wit, B_u64 n, B_Integral wit2) 
   
 B_u64 B_IntegralD_u64D___round__ (B_IntegralD_u64 wit, B_u64 n, B_int p) {
     uint64_t nval = n->val;
-    long pval = p==NULL ? 0 : from$int(p);
+    long pval = p==NULL ? 0 : fromB_int(p);
     if (pval>=0)
         return n;
     uint64_t p10 = u64_pow(10,-pval);
@@ -166,13 +166,13 @@ $WORD B_IntegralD_u64D_denominator (B_IntegralD_u64 wit, B_u64 n, B_Integral wit
   
 B_int B_IntegralD_u64D___int__ (B_IntegralD_u64 wit, B_u64 n) {
     if (n->val > 0x7ffffffffffffffful)
-        $RAISE((B_BaseException)$NEW(B_ZeroDivisionError, to$str("u64 value too large to be converted to i64")));
+        $RAISE((B_BaseException)$NEW(B_ZeroDivisionError, to$str("u64 value too large to be converted to int")));
     return toB_int(n->val);
 }
 
 B_int B_IntegralD_u64D___index__(B_IntegralD_u64 wit, B_u64 n) {
     if (n->val > 0x7ffffffffffffffful)
-        $RAISE((B_BaseException)$NEW(B_ZeroDivisionError, to$str("u64 value too large to be converted to i64")));
+        $RAISE((B_BaseException)$NEW(B_ZeroDivisionError, to$str("u64 value too large to be converted to int")));
     return toB_int(n->val);
 }
 
@@ -193,11 +193,11 @@ B_u64 B_IntegralD_u64D___mod__(B_IntegralD_u64 wit, B_u64 a, B_u64 b) {
 }
 
 B_u64 B_IntegralD_u64D___lshift__(B_IntegralD_u64 wit,  B_u64 a, B_int b) {
-    return toB_u64(a->val << from$int(b));
+    return toB_u64(a->val << fromB_int(b));
 }
 
 B_u64 B_IntegralD_u64D___rshift__(B_IntegralD_u64 wit,  B_u64 a, B_int b) {
-    return toB_u64(a->val >> from$int(b));
+    return toB_u64(a->val >> fromB_int(b));
 }
  
 B_u64 B_IntegralD_u64D___invert__(B_IntegralD_u64 wit,  B_u64 a) {

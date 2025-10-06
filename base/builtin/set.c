@@ -252,11 +252,11 @@ B_str B_setD___repr__(B_set self) {
 void B_setD___serialize__(B_set self, $Serial$state state) {
     B_int prevkey = (B_int)B_dictD_get(state->done,(B_Hashable)B_HashableD_WORDG_witness,self,NULL);
     if (prevkey) {
-        long pk = from$int(prevkey);
+        long pk = fromB_int(prevkey);
         $val_serialize(-SET_ID,&pk,state);
         return;
     }
-    B_dictD_setitem(state->done,(B_Hashable)B_HashableD_WORDG_witness,self,to$int(state->row_no));
+    B_dictD_setitem(state->done,(B_Hashable)B_HashableD_WORDG_witness,self,toB_int(state->row_no));
     $ROW row = $add_header(SET_ID,4,state);
     row->blob[0] = ($WORD)self->numelements;
     row->blob[1] = ($WORD)self->fill;
@@ -264,7 +264,7 @@ void B_setD___serialize__(B_set self, $Serial$state state) {
     row->blob[3] = ($WORD)self->finger;
     for (long i=0; i<=self->mask; i++) {
         B_setentry *entry = &self->table[i];
-        $step_serialize(to$int(entry->hash),state);
+        $step_serialize(toB_int(entry->hash),state);
         $step_serialize(entry->key,state);
     }
 }
@@ -274,11 +274,11 @@ B_set B_setD___deserialize__ (B_set res, $Serial$state state) {
     state->row = this->next;
     state->row_no++;
     if (this->class_id < 0) {
-        return B_dictD_get(state->done,(B_Hashable)B_HashableD_intG_witness,to$int((long)this->blob[0]),NULL);
+        return B_dictD_get(state->done,(B_Hashable)B_HashableD_intG_witness,toB_int((long)this->blob[0]),NULL);
     } else {
         if (!res)
             res = acton_malloc(sizeof(struct B_set));
-        B_dictD_setitem(state->done,(B_Hashable)B_HashableD_intG_witness,to$int(state->row_no-1),res);
+        B_dictD_setitem(state->done,(B_Hashable)B_HashableD_intG_witness,toB_int(state->row_no-1),res);
         res->$class = &B_setG_methods;
         res->numelements = (long)this->blob[0];
         res->fill = (long)this->blob[1];
@@ -288,7 +288,7 @@ B_set B_setD___deserialize__ (B_set res, $Serial$state state) {
         memset(res->table,0,(res->mask+1)*sizeof(B_setentry));
         for (int i=0; i<=res->mask;i++) {
             B_setentry *entry = &res->table[i];
-            entry->hash = from$int((B_int)$step_deserialize(state));
+            entry->hash = fromB_int((B_int)$step_deserialize(state));
             entry->key = $step_deserialize(state);
             if (entry->hash==-1)
                 entry->key = dummy;
@@ -355,14 +355,14 @@ B_str B_IteratorD_set_str(B_IteratorD_set self) {
 
 void B_IteratorD_set_serialize(B_IteratorD_set self, $Serial$state state) {
     $step_serialize(self->src,state);
-    $step_serialize(to$int(self->nxt),state);
+    $step_serialize(toB_int(self->nxt),state);
 }
 
 B_IteratorD_set B_IteratorD_setD__deserialize(B_IteratorD_set res, $Serial$state state) {
     if (!res)
         res = $DNEW(B_IteratorD_set,state);
     res->src = (B_set)$step_deserialize(state);
-    res->nxt = from$int((B_int)$step_deserialize(state));
+    res->nxt = fromB_int((B_int)$step_deserialize(state));
     return res;
 }
 

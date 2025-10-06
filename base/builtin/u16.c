@@ -25,7 +25,7 @@ unsigned short u16_pow(unsigned short a, unsigned short e) {
 // General methods ///////////////////////////////////////////////////////////////////////
 
 B_u16 B_u16G_new(B_atom a, B_int base) {
-    B_int b = B_intG_new(a, base);
+    B_bigint b = B_bigintG_new(a, base);
     long sz = b->val.size;
     if (sz==0) return toB_u16(0);
     unsigned long n = b->val.n[0];
@@ -146,7 +146,7 @@ $WORD B_IntegralD_u16D___ceil__ (B_IntegralD_u16 wit, B_u16 n, B_Integral wit2) 
   
 B_u16 B_IntegralD_u16D___round__ (B_IntegralD_u16 wit, B_u16 n, B_int p) {
     unsigned short nval = n->val;
-    short pval = p==NULL ? 0 : from$int(p);
+    short pval = p==NULL ? 0 : fromB_int(p);
     if (pval>=0)
         return n;
     unsigned short p10 = u16_pow(10,-pval);
@@ -189,11 +189,11 @@ B_u16 B_IntegralD_u16D___mod__(B_IntegralD_u16 wit, B_u16 a, B_u16 b) {
 }
 
 B_u16 B_IntegralD_u16D___lshift__(B_IntegralD_u16 wit,  B_u16 a, B_int b) {
-    return toB_u16(a->val << from$int(b));
+    return toB_u16(a->val << fromB_int(b));
 }
 
 B_u16 B_IntegralD_u16D___rshift__(B_IntegralD_u16 wit,  B_u16 a, B_int b) {
-    return toB_u16(a->val >> from$int(b));
+    return toB_u16(a->val >> fromB_int(b));
 }
  
 B_u16 B_IntegralD_u16D___invert__(B_IntegralD_u16 wit,  B_u16 a) {

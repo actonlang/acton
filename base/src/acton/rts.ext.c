@@ -71,6 +71,10 @@ uint64_t actonQ_rtsQ_U_3get_rss (B_SysCap cap) {
     return rsm;
 }
 
+int64_t actonQ_rtsQ_U_6rss (B_SysCap cap) {
+    return 0;
+}
+
 B_NoneType actonQ_rtsQ_U_4sleep (B_SysCap cap, double sleep_time) {
     double st = sleep_time;
     struct timespec ts;
@@ -96,12 +100,6 @@ B_NoneType actonQ_rtsQ_U_4sleep (B_SysCap cap, double sleep_time) {
     uv_sleep((uint64_t)ts.tv_sec * 1000 + ts.tv_nsec / 1000000);
 #endif
     return B_None;
-}
-
-B_int actonQ_rtsQ_rss (B_SysCap cap) {
-    size_t rsm;
-    int r = uv_resident_set_memory(&rsm);
-    return to$int(rsm);
 }
 
 struct actonQ_rtsQ_io_handles_walk_res {
@@ -180,6 +178,6 @@ B_dict actonQ_rtsQ_rts_stats (B_SysCap cap) {
 }
 
 $R actonQ_rtsQ_WThreadMonitorD__initG_local (actonQ_rtsQ_WThreadMonitor self, $Cont C_cont) {
-    set_actor_affinity(from$int(self->wthread_id));
+    set_actor_affinity(fromB_int(self->wthread_id));
     return $R_CONT(C_cont, B_None);
 }
