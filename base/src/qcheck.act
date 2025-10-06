@@ -1,11 +1,11 @@
 from random import *
 
-def qcheck_i64_1(name: str, prop: (i64) -> bool, verbose = False)->int:
+def qcheck_int_1(name: str, prop: (int) -> bool, verbose = False)->int:
     print("Testing",name)
-    i: i64 = 1
+    i: int = 1
     while i <= 100:
         m = i*i
-        a = randi64(-m,m)
+        a = randint(-m,m)
         if not prop(a):
             print("   ",name,"failed after",i,"tests:\n",a,"\n")
             return 1
@@ -16,13 +16,13 @@ def qcheck_i64_1(name: str, prop: (i64) -> bool, verbose = False)->int:
     print("   OK,",name,"passed 100 tests\n")
     return 0
 
-def qcheck_i64_2(name: str, prop: (i64, i64) -> bool, verbose = False)->int:
+def qcheck_int_2(name: str, prop: (int, int) -> bool, verbose = False)->int:
     print("Testing",name)
-    i: i64 = 1
+    i: int = 1
     while i <= 100:
         m = i*i
-        a = randi64(-m,m)
-        b = randi64(-m,m)
+        a = randint(-m,m)
+        b = randint(-m,m)
         if not prop(a,b):
             print("   ",name,"failed after",i,"tests:\n",a,"\n",b)
             return 1
@@ -33,7 +33,7 @@ def qcheck_i64_2(name: str, prop: (i64, i64) -> bool, verbose = False)->int:
     print("   OK,",name,"passed 100 tests\n")
     return 0
 
-def qcheck_int_1(name: str, prop: (int) -> bool, verbose = False)->int:
+def qcheck_bigint_1(name: str, prop: (bigint) -> bool, verbose = False)->int:
     print("Testing",name)
     i= 1
     while i <= 100:
@@ -49,7 +49,7 @@ def qcheck_int_1(name: str, prop: (int) -> bool, verbose = False)->int:
     print("   OK,",name,"passed 100 tests\n")
     return 0
 
-def qcheck_int_2(name: str, prop: (int, int) -> bool, verbose = False)->int:
+def qcheck_bigint_2(name: str, prop: (bigint, bigint) -> bool, verbose = False)->int:
     print("Testing",name)
     i= 1
     while i <= 100:
@@ -65,12 +65,12 @@ def qcheck_int_2(name: str, prop: (int, int) -> bool, verbose = False)->int:
     print("   OK,",name,"passed 100 tests\n")
     return 0
 
-def qcheck_int_i64(name: str, prop: (int, i64) -> bool, verbose = False)->int:
+def qcheck_int_i64(name: str, prop: (bigint, int) -> bool, verbose = False)->int:
     print("Testing",name)
     i= 1
     while i <= 100:
-        a = rand_bigint(randint(2,int(i)+2))
-        b = randi64(-i*i,i*i)
+        a = rand_bigint(randint(2,i+2))
+        b = randint(-i*i,i*i)
         if not prop(a,b):
             print("   ",name,"failed after",i,"tests:\n",a,"\n",b)
             return 1

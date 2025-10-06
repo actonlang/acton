@@ -4,7 +4,6 @@ struct B_range {
     int64_t nxt;
     int64_t step;
     int64_t remaining;
-    $WORD(* box)(int64_t);
 };
 
 int64_t $rangeD_U__next__(B_range);

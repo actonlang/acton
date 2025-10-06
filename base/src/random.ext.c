@@ -39,10 +39,7 @@ long randlong (long min, long max) {
     return min + r%range;
 }
 
-int64_t randomQ_U_randi64(int64_t min, int64_t max) {
+int64_t randomQ_U_randint(int64_t min, int64_t max) {
     return randlong(min,max);
 }
 
-B_int randomQ_randint (B_int min, B_int max) {
-    return to$int(randlong(from$int(min),from$int(max)));
-}

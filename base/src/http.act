@@ -4,7 +4,7 @@ import logging
 import net
 import time
 
-responses : dict[i64,bytes] = {
+responses : dict[int,bytes] = {
     100: b"Continue",
     101: b"Switching Protocols",
     102: b"Processing",
@@ -100,7 +100,7 @@ def build_request(host: str, method: bytes, path: bytes, version: bytes, headers
     return res
 
 
-def build_response(version: bytes, status: i64, headers: dict[str, str], body: str):
+def build_response(version: bytes, status: int, headers: dict[str, str], body: str):
     b = body.encode()
     # TODO: Add Connection?
     status_line: bytes = b"HTTP/" + version + b" " + str(status).encode()
@@ -169,13 +169,13 @@ class Response(object):
     @property
     version: bytes
     @property
-    status: i64
+    status: int
     @property
     headers: dict[str, str]
     @property
     body: bytes
 
-    def __init__(self, version: bytes, status: i64, headers: dict[str, str], body: bytes) -> None:
+    def __init__(self, version: bytes, status: int, headers: dict[str, str], body: bytes) -> None:
         self.version = version
         self.status = status
         self.headers = headers
@@ -218,7 +218,7 @@ def parse_message(i: bytes, log: logging.Logger) -> (?Message, bytes):
         body = b""
         rest = b""
         if "content-length" in headers:
-            clen = i64(headers["content-length"].strip(" "))
+            clen = int(headers["content-length"].strip(" "))
             log.trace(f"Got content-length in headers, expecting {clen} bytes", None)
             if len(rs[1]) >= clen:
                 body = rs[1][:clen]
@@ -256,7 +256,7 @@ def parse_message(i: bytes, log: logging.Logger) -> (?Message, bytes):
                             rest = maybe_chunk[1]
                             log.trace(f"Chunk header: {chunk_header[:20]}", None)
                             try:
-                                clen = i64(chunk_header_str, 16)
+                                clen = int(chunk_header_str, 16)
                                 log.trace(f"Chunk length: {clen}", None)
                             except ValueError:
                                 log.trace("Chunk header not a length", None)
@@ -339,7 +339,7 @@ def parse_response(i: bytes, log: logging.Logger) -> (?Response, bytes):
             return None, b""
 
         try:
-            status = i64(slparts[1].decode())
+            status = int(slparts[1].decode())
         except ValueError:
             log.debug("Invalid status")
             return None, b""
@@ -352,7 +352,7 @@ def parse_response(i: bytes, log: logging.Logger) -> (?Response, bytes):
 actor Server(conn: net.TCPListenConnection, on_accept: action(Server) -> None, log_handler: ?logging.Handler):
     """Server serves a single client connection"""
     _log = logging.Logger(None)
-    var on_request_cb: ?action(Server, Request, action(i64, dict[str, str], str) -> None) -> None = None
+    var on_request_cb: ?action(Server, Request, action(int, dict[str, str], str) -> None) -> None = None
     var on_error_cb: ?action(Server, str) -> None = None
     var version: ?bytes = None
     var buf = b""
@@ -361,7 +361,7 @@ actor Server(conn: net.TCPListenConnection, on_accept: action(Server) -> None, l
     var response_count: u64 = 0
     var outstanding_requests: dict[u64, Response] = {}
 
-    def cb_install(new_on_request: action(Server, Request, action(i64, dict[str, str], str) -> None) -> None, new_on_error: action(Server, str) -> None):
+    def cb_install(new_on_request: action(Server, Request, action(int, dict[str, str], str) -> None) -> None, new_on_error: action(Server, str) -> None):
         on_request_cb = new_on_request
         on_error_cb = new_on_error
         if buf != b"":
@@ -402,7 +402,7 @@ actor Server(conn: net.TCPListenConnection, on_accept: action(Server) -> None, l
                     close_connection = False
 
             query_count += 1
-            def respond(status_code: i64, headers: dict[str, str], body: str):
+            def respond(status_code: int, headers: dict[str, str], body: str):
                 _log.trace("Going to respond with query id", {"query_count": query_count})
                 if query_count == response_count + 1:
                     # In order, send response immediately
@@ -431,7 +431,7 @@ actor Server(conn: net.TCPListenConnection, on_accept: action(Server) -> None, l
     def close():
         conn.close()
 
-    def send_response(status_code: i64, headers: dict[str, str], data: str):
+    def send_response(status_code: int, headers: dict[str, str], data: str):
         if version is not None:
             res = build_response(version, status_code, headers, data)
             conn.write(res)

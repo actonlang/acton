@@ -67,23 +67,23 @@ extern B_DivD_i32 B_DivD_i32G_witness;
 extern B_LogicalD_IntegralD_i32 B_LogicalD_IntegralD_i32G_witness;
 extern B_MinusD_IntegralD_i32 B_MinusD_IntegralD_i32G_witness;
 extern B_IntegralD_i32 B_IntegralD_i32G_witness;
-extern B_HashableD_i64 B_HashableD_i64G_witness;
-extern B_OrdD_i64 B_OrdD_i64G_witness;
-extern B_DivD_i64 B_DivD_i64G_witness;
-extern B_LogicalD_IntegralD_i64 B_LogicalD_IntegralD_i64G_witness;
-extern B_MinusD_IntegralD_i64 B_MinusD_IntegralD_i64G_witness;
-extern B_IntegralD_i64 B_IntegralD_i64G_witness;
 extern B_HashableD_int B_HashableD_intG_witness;
 extern B_OrdD_int B_OrdD_intG_witness;
 extern B_DivD_int B_DivD_intG_witness;
 extern B_LogicalD_IntegralD_int B_LogicalD_IntegralD_intG_witness;
 extern B_MinusD_IntegralD_int B_MinusD_IntegralD_intG_witness;
 extern B_IntegralD_int B_IntegralD_intG_witness;
+extern B_HashableD_bigint B_HashableD_bigintG_witness;
+extern B_OrdD_bigint B_OrdD_bigintG_witness;
+extern B_DivD_bigint B_DivD_bigintG_witness;
+extern B_LogicalD_IntegralD_bigint B_LogicalD_IntegralD_bigintG_witness;
+extern B_MinusD_IntegralD_bigint B_MinusD_IntegralD_bigintG_witness;
+extern B_IntegralD_bigint B_IntegralD_bigintG_witness;
 extern B_HashableD_bool B_HashableD_boolG_witness;
 
 extern B_OrdD_list  B_OrdD_listD_bytesG_witness;
 extern B_MappingD_dict B_MappingD_dictD_strG_witness;
-extern B_MappingD_dict B_MappingD_dictD_intG_witness;
+extern B_MappingD_dict B_MappingD_dictD_bigintG_witness;
  
 #define $SequenceD_listG_witness B_SequenceD_listG_witness
 #define $CollectionD_listG_witness B_CollectionD_SequenceD_listG_witness

@@ -1033,7 +1033,7 @@ instance Gen Type where
     gen env (TNil _ _)              = empty
 
 unboxed_c_type t
-    | t == tI64 = "int64_t"
+    | t == tInt = "int64_t"
     | t == tU64 = "uint64_t"
     | t == tI32 = "int32_t"
     | t == tU32 = "uint32_t"
