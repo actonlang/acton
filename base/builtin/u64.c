@@ -165,17 +165,15 @@ $WORD B_IntegralD_u64D_denominator (B_IntegralD_u64 wit, B_u64 n, B_Integral wit
 }
   
 B_int B_IntegralD_u64D___int__ (B_IntegralD_u64 wit, B_u64 n) {
-    return B_intG_new((B_atom)n,NULL);
-}
-
-B_i64 B_IntegralD_u64D___i64__ (B_IntegralD_u64 wit, B_u64 n) {
     if (n->val > 0x7ffffffffffffffful)
         $RAISE((B_BaseException)$NEW(B_ZeroDivisionError, to$str("u64 value too large to be converted to i64")));
-    return toB_i64(n->val);
+    return toB_int(n->val);
 }
 
 B_int B_IntegralD_u64D___index__(B_IntegralD_u64 wit, B_u64 n) {
-    return B_intG_new((B_atom)n,NULL);
+    if (n->val > 0x7ffffffffffffffful)
+        $RAISE((B_BaseException)$NEW(B_ZeroDivisionError, to$str("u64 value too large to be converted to i64")));
+    return toB_int(n->val);
 }
 
 B_tuple B_IntegralD_u64D___divmod__(B_IntegralD_u64 wit, B_u64 a, B_u64 b) {

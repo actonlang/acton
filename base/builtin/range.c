@@ -12,22 +12,22 @@
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-B_range B_rangeG_new(B_Integral wit, $WORD start, $WORD stop, $WORD step) {
+B_range B_rangeG_new(B_Integral wit, B_int start, B_int stop, B_int step) {
     return $NEW(B_range, wit, start, stop, step);
 }
 
 
-B_NoneType B_rangeD___init__(B_range self, B_Integral wit, $WORD start, $WORD stop, $WORD step) {
+B_NoneType B_rangeD___init__(B_range self, B_Integral wit, B_int start, B_int stop, B_int step) {
     int64_t ustart, ustop, ustep;
     if (stop) {
-        ustart = wit->$class->__i64__(wit,start)->val;
-        ustop = wit->$class->__i64__(wit,stop)->val;
+        ustart = start->val;
+        ustop = stop->val;
     } else {
         ustart = 0;
-        ustop = wit->$class->__i64__(wit,start)->val;
+        ustop = start->val;
     }
     if (step) {
-        int stp = wit->$class->__i64__(wit,step)->val;
+        int64_t stp = step->val;
         if (stp == 0) {
             $RAISE((B_BaseException)$NEW(B_ValueError, to$str("range() step size must not be zero")));
         } else {
@@ -36,18 +36,10 @@ B_NoneType B_rangeD___init__(B_range self, B_Integral wit, $WORD start, $WORD st
     } else {
         ustep = 1;
     }
-    int64_t stp = self->step = ustep;
+    stp = self->step = ustep;
     int64_t r = ustop - ustart;
     self->nxt = ustart - stp;
     self->remaining = r/stp + (r%stp != 0);
-    if ($ISINSTANCE0(start,B_int)) {
-        self->box = ($WORD (*)(int64_t))to$int;
-    }
-    else if ($ISINSTANCE0(start,B_i64)) {
-        self->box = ($WORD (*)(int64_t))toB_i64;
-    }
-    else
-        printf("no type found\n");
     return B_None;
 }
 

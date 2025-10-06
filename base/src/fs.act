@@ -36,7 +36,7 @@ def glob(pattern: str, path: str, path_separator: ?str=None) -> bool:
     separator = path_separator if path_separator is not None else sep
     return _glob_recursive(pattern, 0, path, 0, separator)
 
-def _glob_recursive(pattern: str, p_idx: i64, path: str, s_idx: i64, separator: str) -> bool:
+def _glob_recursive(pattern: str, p_idx: int, path: str, s_idx: int, separator: str) -> bool:
     """
     Recursive helper function for pattern matching.
 

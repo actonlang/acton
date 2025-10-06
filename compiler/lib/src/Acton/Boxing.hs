@@ -61,7 +61,7 @@ isInClass env                      = inClassX $ envX env
 
 -- Auxiliaries ---------------------------------------------------------------------------------------------------
 
-integralTypes                      = [tInt, tI64, tI32, tI16, tU64, tU32, tU16]
+integralTypes                      = [tBigint, tInt, tI32, tI16, tU64, tU32, tU16]
 numericTypes                       = integralTypes ++ [tFloat]
 unboxableTypes                     = tail numericTypes
 
@@ -181,7 +181,7 @@ instance Boxing Expr where
                                     = return ([], Box (last ts) (unbox (head ts) x))
       boxingFromAtom w ts es        = return ([n], eCall (eDot (eQVar w) fromatomKW) es)
       boxingGetItem w (t0:t:t1:_) es@[a, k]       
-        | t == tI64 && tn == qnList = return ([], eCall (tApp (eQVar primUGetItem) [t1]) [a, unbox t k])  -- only list indexing optimized. TODO: str indexing
+        | t == tInt && tn == qnList = return ([], eCall (tApp (eQVar primUGetItem) [t1]) [a, unbox t k])  -- only list indexing optimized. TODO: str indexing
         | otherwise                 = return ([n], eCall (eDot (eQVar w) attr) es)
         where TCon _ (TC tn _)      = t0
    --   boxingNext w ts []
