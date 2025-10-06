@@ -267,8 +267,8 @@ primROOT                            = gPrim "ROOT"
 primROOTINIT                        = gPrim "ROOTINIT"
 primRegister                        = gPrim "register"
 
-primToInt                           = name "to$int"
-primToInt2                          = name "to$int2"
+primToInt                           = name "toB_int"
+primToBigInt2                       = name "toB_bigint2"
 primToFloat                         = name "to$float"
 primToStr                           = name "to$str"
 primToBytearray                     = name "to$bytearray"
@@ -619,14 +619,14 @@ castLit env (Strings l ss) p        = format (concat ss) p
           | f `elem` "#0- +"        = flags s p
         flags s p                   = width s p
         width ('*':s) (PosArg e p)  = comma <+> parens (text "int") <> expr <> dot s p
-          where expr                = text "from$int" <> parens (gen env e)
+          where expr                = text "fromB_int" <> parens (gen env e)
         width (n:s) p
           | n `elem` "123456789"    = let (n',s') = span (`elem` "0123456789") s in dot s' p
         width s p                   = dot s p
         dot ('.':s) p               = prec s p
         dot s p                     = len s p
         prec ('*':s) (PosArg e p)   = comma <+> parens (text "int") <> expr <> len s p
-          where expr                = text "from$int" <> parens (gen env e)  --parens (parens (gen env tInt) <> gen env e) <> text "->val"
+          where expr                = text "fromB_int" <> parens (gen env e)  --parens (parens (gen env tInt) <> gen env e) <> text "->val"
         prec (n:s) p
           | n `elem` "0123456789"   = let (n',s') = span (`elem` "0123456789") s in len s' p
         prec s p                    = len s p
@@ -635,7 +635,7 @@ castLit env (Strings l ss) p        = format (concat ss) p
         len s p                     = conv s p
         conv (t:s) (PosArg e p)
           | t `elem` "diouxXc"      = comma <+> expr <> format s p
-          where expr                = text "from$int" <> parens (gen env e) --parens (parens (gen env tInt) <> gen env e) <> text "->val"
+          where expr                = text "fromB_int" <> parens (gen env e) --parens (parens (gen env tInt) <> gen env e) <> text "->val"
         conv (t:s) (PosArg e p)
           | t `elem` "eEfFgG"       = comma <+> expr <> format s p
           where expr                = parens (parens (gen env tFloat) <> gen env e) <> text "->val"
@@ -794,7 +794,7 @@ instance Gen Expr where
       | otherwise                   = genQName env n
     gen env (Int _ i str)
         |i <= 9223372036854775807   = gen env primToInt <> parens (text str) -- literal is 2^63-1
-        | otherwise                 = gen env primToInt2 <> parens (doubleQuotes $ text str)
+        | otherwise                 = gen env primToBigInt2 <> parens (doubleQuotes $ text str)
     gen env (Float _ _ str)         = gen env primToFloat <> parens (text str)
     gen env (Bool _ True)           = gen env qnTrue
     gen env (Bool _ False)          = gen env qnFalse

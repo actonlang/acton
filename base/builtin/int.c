@@ -25,7 +25,7 @@ long int_pow(long a, long e) {
 // General methods ///////////////////////////////////////////////////////////////////////
 
 B_int B_intG_new(B_atom a, B_int base) {
-    B_int b = B_intG_new(a, base);
+    B_bigint b = B_bigintG_new(a, base);
     unsigned long n = b->val.n[0];
     long sz = b->val.size;
     if (labs(sz) > 1 || (sz==1 && n > 0x7ffffffffffffffful) || sz == -1 && n > 0x8000000000000000ul) {
@@ -149,7 +149,7 @@ B_int B_IntegralD_intD___round__ (B_IntegralD_int wit, B_int n, B_int p) {
     long nval = n->val;
     if (nval<0)
         return toB_int(-B_IntegralD_intD___round__(wit,toB_int(-nval),p)->val);
-    long pval = p==NULL ? 0 : from$int(p);
+    long pval = p==NULL ? 0 : fromB_int(p);
     if (pval>=0)
         return n;
     long p10 = int_pow(10,-pval);
@@ -192,11 +192,11 @@ B_int B_IntegralD_intD___mod__(B_IntegralD_int wit, B_int a, B_int b) {
 }
 
 B_int B_IntegralD_intD___lshift__(B_IntegralD_int wit,  B_int a, B_int b) {
-    return toB_int(a->val << from$int(b));
+    return toB_int(a->val << fromB_int(b));
 }
 
 B_int B_IntegralD_intD___rshift__(B_IntegralD_int wit,  B_int a, B_int b) {
-    return toB_int(a->val >> from$int(b));
+    return toB_int(a->val >> fromB_int(b));
 }
  
 B_int B_IntegralD_intD___invert__(B_IntegralD_int wit,  B_int a) {

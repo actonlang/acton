@@ -34,7 +34,7 @@ void zz_malloc_fit(zz_ptr res, len_t m) {
     res->alloc = m;
 }
 
-B_bigint B_IntegralD_bigintD___lshift__(B_IntegralD_bigint wit,  B_bigint a, B_bigint b);
+B_bigint B_IntegralD_bigintD___lshift__(B_IntegralD_bigint wit,  B_bigint a, B_int b);
 
 B_bigint B_bigintG_new(B_atom a, B_int base) {
     if (base) {
@@ -50,8 +50,8 @@ B_bigint B_bigintG_new(B_atom a, B_int base) {
         }
     }
     if ($ISINSTANCE0(a,B_bigint)) return (B_bigint)a;
-    if ($ISINSTANCE0(a,B_i64)) {
-        return toB_bigint(((B_i64)a)->val);
+    if ($ISINSTANCE0(a,B_int)) {
+        return toB_bigint(((B_int)a)->val);
     }
     if ($ISINSTANCE0(a,B_i32)) {
         return toB_bigint((long)((B_i32)a)->val);
@@ -98,8 +98,8 @@ B_bigint B_bigintG_new(B_atom a, B_int base) {
         double m = frexp(aval,&e);
         if (e>52) {
             B_bigint c = toB_bigint((long)(m*4503599627370496.0)); // (1<< 52); 
-            B_bigint d = toB_bigint(e-52);
-            return  B_IntegralD_intD___lshift__(NULL,c,d);
+            B_int d = toB_int(e-52);
+            return  B_IntegralD_bigintD___lshift__(NULL,c,d);
         } else {
             long al = (long)aval;
             B_bigint res = toB_bigint(al);
@@ -117,7 +117,7 @@ B_bigint B_bigintG_new(B_atom a, B_int base) {
     exit(-1);
 }
 
-B_NoneType B_bigintD___init__(B_bigint self, B_atom a, B_bigint base){
+B_NoneType B_bigintD___init__(B_bigint self, B_atom a, B_int base){
     self->val = B_bigintG_new(a,base)->val;
     return B_None;
 }
@@ -275,7 +275,7 @@ $WORD B_IntegralD_bigintD___ceil__ (B_IntegralD_bigint wit, B_bigint n, B_Integr
 
 B_bigint B_IntegralD_bigintD___floordiv__(B_IntegralD_bigint wit, B_bigint a, B_bigint b);
 
-B_bigint B_IntegralD_bigintD___round__ (B_IntegralD_bigint wit, B_bigint n, B_bigint p) {
+B_bigint B_IntegralD_bigintD___round__ (B_IntegralD_bigint wit, B_bigint n, B_int p) {
     zz_struct nval = n->val;
     if (nval.size < 0) { 
         B_bigint n1 = malloc_bigint();
@@ -284,15 +284,10 @@ B_bigint B_IntegralD_bigintD___round__ (B_IntegralD_bigint wit, B_bigint n, B_bi
         zz_neg(&res->val,&res->val);
         return res;
     }
-    if (labs(p->val.size) >1) {
-        char errmsg[1024];
-        snprintf(errmsg, sizeof(errmsg), "int.__round__(): precision out of range: %s", get_str(&p->val));
-        $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
-    }
-    long pval = fromB_bigint(p);
+    long pval = fromB_int(p);
     if (pval>=0)
         return n;
-    B_bigint p10 = B_IntegralD_bigintD___pow__(NULL,toB_bigint(10), B_IntegralD_bigintD___neg__(NULL,p));
+    B_bigint p10 = B_IntegralD_bigintD___pow__(NULL,toB_bigint(10), B_IntegralD_bigintD___neg__(NULL,toB_bigint(p->val)));
     B_bigint p10half = B_IntegralD_bigintD___floordiv__(NULL, p10,toB_bigint(2));
     B_bigint n1 = B_IntegralD_bigintD___floordiv__(NULL,B_IntegralD_bigintD___add__(NULL,n,p10half),p10);
     return B_IntegralD_bigintD___mul__(NULL,n1,p10);
@@ -307,8 +302,15 @@ $WORD B_IntegralD_bigintD_denominator (B_IntegralD_bigint wit, B_bigint n, B_Int
     return wit2->$class->__fromatom__(wit2,(B_atom)res);
 }
   
-B_bigint B_IntegralD_bigintD___bigint__ (B_IntegralD_bigint wit, B_bigint n) {
-    return n;
+B_int B_IntegralD_bigintD___int__ (B_IntegralD_bigint wit, B_bigint n) {
+    unsigned long k = n->val.n[0];
+    long sz = n->val.size;
+    if (labs(sz) > 1 || (sz==1 && k > 0x7ffffffffffffffful) || sz == -1 && k > 0x8000000000000000ul) {
+        char errmsg[1024];
+        snprintf(errmsg, sizeof(errmsg), "bigint.__int__: value %s out of range for type int",get_str(&n->val));
+        $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
+    }
+    return toB_int(k*sz);
 }
 
 B_int B_IntegralD_bigintD___index__ (B_IntegralD_bigint wit, B_bigint n) {
@@ -316,10 +318,10 @@ B_int B_IntegralD_bigintD___index__ (B_IntegralD_bigint wit, B_bigint n) {
     long sz = n->val.size;
     if (labs(sz) > 1 || (sz==1 && k > 0x7ffffffffffffffful) || sz == -1 && k > 0x8000000000000000ul) {
         char errmsg[1024];
-        snprintf(errmsg, sizeof(errmsg), "i64(): value %s out of range for type i64",get_str(&n->val));
+        snprintf(errmsg, sizeof(errmsg), "bigint.__index__: value %s out of range for type int",get_str(&n->val));
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
     }
-    return toB_i64(k*sz);
+    return toB_int(k*sz);
 }
 
 B_tuple B_IntegralD_bigintD___divmod__(B_IntegralD_bigint wit, B_bigint a, B_bigint b) {
@@ -350,10 +352,10 @@ B_bigint B_IntegralD_bigintD___mod__(B_IntegralD_bigint wit, B_bigint a, B_bigin
     return t->components[1];
 }
 
-B_bigint B_IntegralD_bigintD___lshift__(B_IntegralD_bigint wit,  B_bigint a, B_bigint b) {
+B_bigint B_IntegralD_bigintD___lshift__(B_IntegralD_bigint wit,  B_bigint a, B_int b) {
     zz_struct aval = a->val;
     long ma = aval.size;
-    long bval = fromB_bigint(b);
+    long bval = fromB_int(b);
     if (ma==0 || bval==0)
         return a;
     if (bval<0) {
@@ -381,10 +383,10 @@ B_bigint B_IntegralD_bigintD___lshift__(B_IntegralD_bigint wit,  B_bigint a, B_b
     return res; 
 }
 
-B_bigint B_IntegralD_bigintD___rshift__(B_IntegralD_bigint wit,  B_bigint a, B_bigint b) {
+B_bigint B_IntegralD_bigintD___rshift__(B_IntegralD_bigint wit,  B_bigint a, B_int b) {
     zz_struct aval = a->val;
     long ma = aval.size;
-    long bval = fromB_bigint(b);
+    long bval = fromB_int(b);
     if (ma==0 || bval==0)
         return a;
     if (bval<0)  {

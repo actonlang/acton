@@ -25,7 +25,7 @@ short i16_pow(short a, short e) {
 // General methods ///////////////////////////////////////////////////////////////////////
 
 B_i16 B_i16G_new(B_atom a, B_int base) {
-    B_int b = B_intG_new(a, base);
+    B_bigint b = B_bigintG_new(a, base);
     unsigned long n = b->val.n[0];
     long sz = b->val.size;
     if (labs(sz) > 1 || (sz==1 && n > 0x7ffful) || sz == -1 && n > 0x8000ul) {
@@ -149,7 +149,7 @@ B_i16 B_IntegralD_i16D___round__ (B_IntegralD_i16 wit, B_i16 n, B_int p) {
     short nval = n->val;
     if (nval<0)
         return toB_i16(-B_IntegralD_i16D___round__(wit,toB_i16(-nval),p)->val);
-    short pval = p==NULL ? 0 : from$int(p);
+    short pval = p==NULL ? 0 : fromB_int(p);
     if (pval>=0)
         return n;
     short p10 = i16_pow(10,-pval);
@@ -194,11 +194,11 @@ B_i16 B_IntegralD_i16D___mod__(B_IntegralD_i16 wit, B_i16 a, B_i16 b) {
 }
 
 B_i16 B_IntegralD_i16D___lshift__(B_IntegralD_i16 wit,  B_i16 a, B_int b) {
-    return toB_i16(a->val << from$int(b));
+    return toB_i16(a->val << fromB_int(b));
 }
 
 B_i16 B_IntegralD_i16D___rshift__(B_IntegralD_i16 wit,  B_i16 a, B_int b) {
-    return toB_i16(a->val >> from$int(b));
+    return toB_i16(a->val >> fromB_int(b));
 }
  
 B_i16 B_IntegralD_i16D___invert__(B_IntegralD_i16 wit,  B_i16 a) {

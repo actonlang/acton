@@ -90,9 +90,9 @@ B_NoneType B_print(B_tuple t, B_str sep_arg, B_str end_arg, B_bool stderr_arg, B
 
 // enumerate //////////////////////////////////////////////////////////////////////////
 
-void B_IteratorD_enumerate_init(B_IteratorD_enumerate self, B_Iterator it, B_i64 n) {
+void B_IteratorD_enumerate_init(B_IteratorD_enumerate self, B_Iterator it, B_int n) {
     self->it = it;
-    self->nxt = fromB_i64(n);
+    self->nxt = fromB_int(n);
 }
 
 B_bool B_IteratorD_enumerate_bool(B_IteratorD_enumerate self) {
@@ -105,20 +105,20 @@ B_str B_IteratorD_enumerate_str(B_IteratorD_enumerate self) {
 
 void B_IteratorD_enumerate_serialize(B_IteratorD_enumerate self,$Serial$state state) {
     $step_serialize(self->it,state);
-    $step_serialize(toB_i64(self->nxt),state);
+    $step_serialize(toB_int(self->nxt),state);
 }
 
 B_IteratorD_enumerate B_IteratorD_enumerate$_deserialize(B_IteratorD_enumerate res,$Serial$state state) {
     if (!res)
         res = $DNEW(B_IteratorD_enumerate,state);
     res->it = $step_deserialize(state);
-    res->nxt = fromB_i64((B_i64)$step_deserialize(state));
+    res->nxt = fromB_int((B_int)$step_deserialize(state));
     return res;
 }
 
 $WORD B_IteratorD_enumerate_next(B_IteratorD_enumerate it) {
     $WORD w = it->it->$class->__next__(it->it);
-    return $NEWTUPLE(2,toB_i64(it->nxt++),w);
+    return $NEWTUPLE(2,toB_int(it->nxt++),w);
 }
 
 struct B_IteratorD_enumerateG_class B_IteratorD_enumerateG_methods = {"B_IteratorD_enumerate",UNASSIGNED,($SuperG_class)&B_IteratorG_methods,B_IteratorD_enumerate_init,
@@ -126,14 +126,14 @@ struct B_IteratorD_enumerateG_class B_IteratorD_enumerateG_methods = {"B_Iterato
                                                                 B_IteratorD_enumerate_bool,B_IteratorD_enumerate_str,B_IteratorD_enumerate_str, B_IteratorD_enumerate_next};
 
 
-B_IteratorD_enumerate B_IteratorD_enumerateG_new(B_Iterator it, B_i64 n) {
+B_IteratorD_enumerate B_IteratorD_enumerateG_new(B_Iterator it, B_int n) {
     return $NEW(B_IteratorD_enumerate, it, n);
 }
 
-B_Iterator B_enumerate(B_Iterable wit, $WORD iter, B_i64 start) {
+B_Iterator B_enumerate(B_Iterable wit, $WORD iter, B_int start) {
     B_Iterator it = wit->$class->__iter__(wit,iter);
     if (!start)
-        start = toB_i64(0);
+        start = toB_int(0);
     return (B_Iterator)B_IteratorD_enumerateG_new(it,start); 
 }
 

@@ -245,16 +245,16 @@ struct B_OrdD_list B_OrdD_listD_bytesG_instance = {&B_OrdD_listG_methods, (B_Ord
 B_OrdD_list B_OrdD_listD_bytesG_witness = &B_OrdD_listD_bytesG_instance;
 
 struct B_IndexedD_MappingD_dict B_IndexedD_MappingD_dictD_strG_instance;
-struct B_IndexedD_MappingD_dict B_IndexedD_MappingD_dictD_bigintG_instance;
+struct B_IndexedD_MappingD_dict B_IndexedD_MappingD_dictD_intG_instance;
 struct B_MappingD_dict B_MappingD_dictD_strG_instance = {&B_MappingD_dictG_methods, (B_Eq)&B_HashableD_strG_instance, (B_Eq)&B_HashableD_strG_instance,
                                                          (B_Indexed)&B_IndexedD_MappingD_dictD_strG_instance, (B_Hashable)&B_HashableD_strG_instance};
-struct B_MappingD_dict B_MappingD_dictD_bigintG_instance = {&B_MappingD_dictG_methods, (B_Eq)&B_HashableD_bigintG_instance, (B_Eq)&B_HashableD_bigintG_instance,
-                                                         (B_Indexed)&B_IndexedD_MappingD_dictD_bigintG_instance, (B_Hashable)&B_HashableD_bigintG_instance};
+struct B_MappingD_dict B_MappingD_dictD_intG_instance = {&B_MappingD_dictG_methods, (B_Eq)&B_HashableD_intG_instance, (B_Eq)&B_HashableD_intG_instance,
+                                                         (B_Indexed)&B_IndexedD_MappingD_dictD_intG_instance, (B_Hashable)&B_HashableD_intG_instance};
 
 struct B_IndexedD_MappingD_dict B_IndexedD_MappingD_dictD_strG_instance =  {&B_IndexedD_MappingD_dictG_methods, (B_Eq)&B_HashableD_strG_instance, (B_Eq)&B_HashableD_strG_instance,
                                                          (B_Mapping)&B_MappingD_dictD_strG_instance, (B_Hashable)&B_HashableD_strG_instance};
-struct B_IndexedD_MappingD_dict B_IndexedD_MappingD_dictD_bigintG_instance =  {&B_IndexedD_MappingD_dictG_methods, (B_Eq)&B_HashableD_bigintG_instance, (B_Eq)&B_HashableD_bigintG_instance,
-                                                         (B_Mapping)&B_MappingD_dictD_bigintG_instance, (B_Hashable)&B_HashableD_bigintG_instance};
+struct B_IndexedD_MappingD_dict B_IndexedD_MappingD_dictD_intG_instance =  {&B_IndexedD_MappingD_dictG_methods, (B_Eq)&B_HashableD_intG_instance, (B_Eq)&B_HashableD_intG_instance,
+                                                         (B_Mapping)&B_MappingD_dictD_intG_instance, (B_Hashable)&B_HashableD_intG_instance};
 
 B_MappingD_dict B_MappingD_dictD_strG_witness = &B_MappingD_dictD_strG_instance;
-B_MappingD_dict B_MappingD_dictD_bigintG_witness = &B_MappingD_dictD_bigintG_instance;
+B_MappingD_dict B_MappingD_dictD_intG_witness = &B_MappingD_dictD_intG_instance;
