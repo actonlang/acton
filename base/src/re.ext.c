@@ -152,5 +152,5 @@ reQ_Match reQ_U__match (B_str arg_pattern, B_str arg_text, int64_t arg_start_pos
     pcre2_match_data_free(match_data);
     pcre2_code_free(re);
 
-    return reQ_MatchG_new(arg_pattern, arg_text, toB_i64(match_start), toB_i64(match_end), groups, named_groups);
+    return reQ_MatchG_new(arg_pattern, arg_text, toB_int(match_start), toB_int(match_end), groups, named_groups);
 }

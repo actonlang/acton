@@ -12,13 +12,13 @@
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-B_range B_rangeG_new(B_Integral wit, B_int start, B_int stop, B_int step) {
-    return $NEW(B_range, wit, start, stop, step);
+B_range B_rangeG_new(B_int start, B_int stop, B_int step) {
+    return $NEW(B_range, start, stop, step);
 }
 
 
-B_NoneType B_rangeD___init__(B_range self, B_Integral wit, B_int start, B_int stop, B_int step) {
-    int64_t ustart, ustop, ustep;
+B_NoneType B_rangeD___init__(B_range self, B_int start, B_int stop, B_int step) {
+    int64_t ustart, ustop, ustep, stp;
     if (stop) {
         ustart = start->val;
         ustop = stop->val;
@@ -27,7 +27,7 @@ B_NoneType B_rangeD___init__(B_range self, B_Integral wit, B_int start, B_int st
         ustop = start->val;
     }
     if (step) {
-        int64_t stp = step->val;
+        stp = step->val;
         if (stp == 0) {
             $RAISE((B_BaseException)$NEW(B_ValueError, to$str("range() step size must not be zero")));
         } else {
@@ -82,8 +82,8 @@ int64_t rangeD_U__next__(B_range self) {
     return self->nxt += self->step;
 }
 
-$WORD B_rangeD___next__(B_range self, B_Integral wit) {
-    return (self->box)(rangeD_U__next__(self));
+B_int B_rangeD___next__(B_range self) {
+    return toB_int(rangeD_U__next__(self));
 }
 /*
 void B_IteratorD_rangeD_init(B_IteratorD_range self, B_range rng) {
@@ -109,16 +109,16 @@ B_str B_rangeD___str__(B_range self) {
 }
 
 void B_rangeD___serialize__(B_range self, $Serial$state state) {
-    $step_serialize(to$int(self->nxt),state);
-    $step_serialize(to$int(self->step),state);
-    $step_serialize(to$int(self->remaining),state);
+    $step_serialize(toB_int(self->nxt),state);
+    $step_serialize(toB_int(self->step),state);
+    $step_serialize(toB_int(self->remaining),state);
 }
 
 B_range B_rangeD___deserialize__(B_range self, $Serial$state state) {
     B_range res = $DNEW(B_range,state);
-    res->nxt = from$int((B_int)$step_deserialize(state));
-    res->step = from$int((B_int)$step_deserialize(state));
-    res->remaining = from$int((B_int)$step_deserialize(state));
+    res->nxt = fromB_int((B_int)$step_deserialize(state));
+    res->step = fromB_int((B_int)$step_deserialize(state));
+    res->remaining = fromB_int((B_int)$step_deserialize(state));
     return res;
 }
 /*
