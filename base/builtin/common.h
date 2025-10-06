@@ -22,7 +22,7 @@ void $default__init__($WORD);
 
 #define $DNEW($T, $state)   ({ $T $t = acton_malloc(sizeof(struct $T)); \
                                $t->$class = &$T ## G_methods;                                     \
-                               B_dictD_setitem($state->done,(B_Hashable)B_HashableD_intG_witness,to$int($state->row_no-1),$t); \
+                               B_dictD_setitem($state->done,(B_Hashable)B_HashableD_intG_witness,toB_bigint($state->row_no-1),$t); \
                                $t; })
 
 #define $AND(T, a, b)       ({ T $a = (a); ($a && ((B_value)$a)->$class->__bool__((B_value)$a)->val) ? (b) : $a; })

@@ -1036,10 +1036,10 @@ def sum [A(Plus)] (iter: Iterable[A], start: ?A) -> A:
 def zip (a: Iterable[A], b: Iterable[B]) -> Iterator[(A,B)]:
     NotImplemented
 
-def gcd(a : int, b : int) -> int:
+def gcd(a : bigint, b :bigint) -> bigint:
     NotImplemented
 
-def xgcd(a : int, b : int) -> (int, int, int):
+def xgcd(a : bigint, b : bigint) -> (bigint, bigint, bigint):
     NotImplemented
 
 def type(a: ?value) -> str:
@@ -1063,7 +1063,7 @@ actor StringDecoder(cb_out: action(str) -> None, encoding: ?str="utf-8", on_erro
     UTF-8 is used. The decoder is stateful in order to buffer incomplete multi-
     byte characters.
     """
-    MAX_UNICODE_CHAR_SIZE = 4
+    MAX_UNICODE_CHAR_SIZE: int = 4
     var buf: bytes = b""
 
     if encoding is not None:

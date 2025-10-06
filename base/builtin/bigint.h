@@ -8,8 +8,8 @@ struct B_bigint {
 // B_int zz$to$int(zz_ptr val);
 
 long fromB_bigint(B_bigint n);
-B_int toB_bigint(long n);
-B_int toB_bigint2(char *str);
+B_bigint toB_bigint(long n);
+B_bigint toB_bigint2(char *str);
 
 char *get_str(zz_ptr n);
 

@@ -269,7 +269,7 @@ static int get_index(int i, int nchars) {
         if (i >= -nchars)
             return nchars+i;
     }
-    $RAISE((B_BaseException)$NEW(B_IndexError, to$int(i), to$str("index outside str")));
+    $RAISE((B_BaseException)$NEW(B_IndexError, toB_int(i), to$str("index outside str")));
     return 0;
 }
 
@@ -1410,7 +1410,7 @@ B_NoneType B_IteratorB_strD_init(B_IteratorB_str self, B_str str) {
 
 void B_IteratorB_strD_serialize(B_IteratorB_str self,$Serial$state state) {
     $step_serialize(self->src,state);
-    $step_serialize(to$int(self->nxt),state);
+    $step_serialize(toB_int(self->nxt),state);
 }
 
 
@@ -1418,7 +1418,7 @@ B_IteratorB_str B_IteratorB_str$_deserialize(B_IteratorB_str res, $Serial$state 
     if (!res)
         res = $DNEW(B_IteratorB_str,state);
     res->src = (B_str)$step_deserialize(state);
-    res->nxt = from$int((B_int)$step_deserialize(state));
+    res->nxt = fromB_int((B_int)$step_deserialize(state));
     return res;
 }
 
@@ -2359,7 +2359,7 @@ B_bool B_OrdD_bytearrayD___ge__ (B_OrdD_bytearray wit, B_bytearray a, B_bytearra
 static B_int B_IteratorB_bytearrayD_next(B_IteratorB_bytearray self) {
     if (self->nxt >= self->src->nbytes)
         $RAISE ((B_BaseException)$NEW(B_StopIteration, to$str("bytearray iterator terminated")));
-    return to$int(self->src->str[self->nxt++]);
+    return toB_int(self->src->str[self->nxt++]);
 }
 
 B_NoneType B_IteratorB_bytearrayD_init(B_IteratorB_bytearray self, B_bytearray b) {
@@ -2378,14 +2378,14 @@ B_str B_IteratorB_bytearrayD_str(B_IteratorB_bytearray self) {
 
 void B_IteratorB_bytearrayD_serialize(B_IteratorB_bytearray self,$Serial$state state) {
     $step_serialize(self->src,state);
-    $step_serialize(to$int(self->nxt),state);
+    $step_serialize(toB_int(self->nxt),state);
 }
 
 B_IteratorB_bytearray B_IteratorB_bytearray$_deserialize(B_IteratorB_bytearray res, $Serial$state state) {
     if(!res)
         res = $DNEW(B_IteratorB_bytearray,state);
     res->src = (B_bytearray)$step_deserialize(state);
-    res->nxt = from$int((B_int)$step_deserialize(state));
+    res->nxt = fromB_int((B_int)$step_deserialize(state));
     return res;
 }
 
@@ -2417,7 +2417,7 @@ B_int B_ContainerD_bytearrayD___len__ (B_ContainerD_bytearray wit, B_bytearray s
 B_bool B_ContainerD_bytearrayD___contains__(B_ContainerD_bytearray wit, B_bytearray self, B_int n) {
     long res = 0;
     for (int i=0; i < self->nbytes; i++) {
-        if (self->str[i] == (unsigned char)from$int(n)) {
+        if (self->str[i] == (unsigned char)fromB_int(n)) {
             res = 1;
             break;
         }
@@ -2435,16 +2435,16 @@ B_int B_SequenceD_bytearrayD___getitem__ (B_SequenceD_bytearray wit, B_bytearray
     int64_t ix = fromB_int(n);
     int64_t ix0 = ix < 0 ? self->nbytes + ix : ix;
     if (ix0<0 || ix0 >= self->nbytes)
-        $RAISE((B_BaseException)$NEW(B_IndexError, to$int(ix0), to$str("getitem: index outside bytearray")));
-    return to$int((long)self->str[ix0]);
+        $RAISE((B_BaseException)$NEW(B_IndexError, toB_int(ix0), to$str("getitem: index outside bytearray")));
+    return toB_int((long)self->str[ix0]);
 }
 
 B_NoneType B_SequenceD_bytearrayD___setitem__ (B_SequenceD_bytearray wit, B_bytearray self, B_int n, B_int v) {
     int64_t ix = fromB_int(n);
     int64_t ix0 = ix < 0 ? self->nbytes + ix : ix;
-   long val = from$int(v);
+   long val = fromB_int(v);
     if (ix0<0 || ix0 >= self->nbytes)
-        $RAISE((B_BaseException)$NEW(B_IndexError, to$int(ix0), to$str("setitem: index outside bytearray")));
+        $RAISE((B_BaseException)$NEW(B_IndexError, toB_int(ix0), to$str("setitem: index outside bytearray")));
     if (val<0 || val>255)
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("setitem for bytearray: value outside [0..255]")));
     self->str[ix0] = (unsigned char)val;
@@ -2456,7 +2456,7 @@ B_NoneType B_SequenceD_bytearrayD___delitem__ (B_SequenceD_bytearray wit, B_byte
     int64_t ix0 = ix < 0 ? self->nbytes + ix : ix;
     int len = self->nbytes;
     if (ix0 < 0 || ix0 >= len)
-        $RAISE((B_BaseException)$NEW(B_IndexError, to$int(ix0), to$str("delitem: index outside bytearray")));
+        $RAISE((B_BaseException)$NEW(B_IndexError, toB_int(ix0), to$str("delitem: index outside bytearray")));
     memmove(self->str + ix0,self->str + (ix0 + 1),len-(ix0+1));
     self->nbytes--;
     return B_None;
@@ -2470,14 +2470,14 @@ B_NoneType B_SequenceD_bytearrayD_insert(B_SequenceD_bytearray wit, B_bytearray 
     memmove(self->str + (ix0 + 1),
             self->str + ix0 ,
             len - ix0 + 1); // +1 to move also terminating '\0'
-    self->str[ix0] = (unsigned char)from$int(elem) & 0xff;
+    self->str[ix0] = (unsigned char)fromB_int(elem) & 0xff;
     self->nbytes++;
     return B_None;
 }
 
 B_NoneType B_SequenceD_bytearrayD_append(B_SequenceD_bytearray wit, B_bytearray self, B_int elem) {
     expand_bytearray(self,1);
-    self->str[self->nbytes++] = (unsigned char)from$int(elem) & 0xff;
+    self->str[self->nbytes++] = (unsigned char)fromB_int(elem) & 0xff;
     self->str[self->nbytes] = '\0';
     return B_None;
 }
@@ -2701,7 +2701,7 @@ B_NoneType B_bytesD___init__(B_bytes self, B_Iterable wit, $WORD iter) {
     self->str = acton_malloc_atomic(len+1);
     self->str[len] = 0;
     for (int i=0; i< len; i++) {
-        int n = from$int((B_int)lst->data[i]);
+        int n = fromB_int((B_int)lst->data[i]);
         if (0<=n && n <= 255)
             self->str[i] = n;
         else
@@ -3503,7 +3503,7 @@ B_NoneType B_IteratorB_bytesD_init(B_IteratorB_bytes self, B_bytes str) {
 
 void B_IteratorB_bytesD_serialize(B_IteratorB_bytes self,$Serial$state state) {
     $step_serialize(self->src,state);
-    $step_serialize(to$int(self->nxt),state);
+    $step_serialize(toB_int(self->nxt),state);
 }
 
 
@@ -3511,7 +3511,7 @@ B_IteratorB_bytes B_IteratorB_bytes$_deserialize(B_IteratorB_bytes res, $Serial$
     if (!res)
         res = $DNEW(B_IteratorB_bytes,state);
     res->src = (B_bytes)$step_deserialize(state);
-    res->nxt = from$int((B_int)$step_deserialize(state));
+    res->nxt = fromB_int((B_int)$step_deserialize(state));
     return res;
 }
 
@@ -3527,7 +3527,7 @@ B_str B_IteratorB_bytesD_str(B_IteratorB_bytes self) {
 static B_int B_IteratorB_bytesD_next(B_IteratorB_bytes self) {
     if (self->nxt >= self->src->nbytes)
         $RAISE ((B_BaseException)$NEW(B_StopIteration, to$str("bytes iterator terminated")));
-    return to$int(self->src->str[self->nxt++]);
+    return toB_int(self->src->str[self->nxt++]);
 }
 
 struct B_IteratorB_bytesG_class B_IteratorB_bytesG_methods = {"B_IteratorB_bytes",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, B_IteratorB_bytesD_init,
@@ -3549,7 +3549,7 @@ B_int B_ContainerD_bytesD___len__ (B_ContainerD_bytes wit, B_bytes str) {
 B_bool B_ContainerD_bytesD___contains__ (B_ContainerD_bytes wit, B_bytes str, B_int n) {
     long res = 0;
     for (int i=0; i < str->nbytes; i++) {
-        if (str->str[i] == (unsigned char)from$int(n)) {
+        if (str->str[i] == (unsigned char)fromB_int(n)) {
             res = 1;
             break;
         }
@@ -3567,8 +3567,8 @@ B_int B_SliceableD_bytesD___getitem__ (B_SliceableD_bytes wit, B_bytes str, B_in
     long ix = fromB_int(n);
     long ix0 = ix < 0 ? str->nbytes + ix : ix;
     if (ix0<0 || ix0 >= str->nbytes)
-        $RAISE((B_BaseException)$NEW(B_IndexError, to$int(ix0), to$str("getitem: index outside bytesarray")));
-    return to$int((long)str->str[ix0]);
+        $RAISE((B_BaseException)$NEW(B_IndexError, toB_int(ix0), to$str("getitem: index outside bytesarray")));
+    return toB_int((long)str->str[ix0]);
 }
 
 B_NoneType B_SliceableD_bytesD___setitem__ (B_SliceableD_bytes wit, B_bytes str, B_int i, B_int val) {
@@ -3677,7 +3677,7 @@ B_str B_ascii(B_value v) {
 }
 
 B_str B_bin(B_Integral wit, $WORD n) {
-    long v = from$int(wit->$class->__int__(wit,n));
+    long v = fromB_int(wit->$class->__int__(wit,n));
     int sign = v<0;
     int nbits = 1;
     unsigned long u = labs(v);
@@ -3716,7 +3716,7 @@ B_str B_bin(B_Integral wit, $WORD n) {
 }
 
 B_str B_chr(B_Integral wit, $WORD n) {
-    long v = from$int(wit->$class->__int__(wit,n));
+    long v = fromB_int(wit->$class->__int__(wit,n));
     if (v >=  0x110000)
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("chr: argument is not a valid Unicode code point")));
     unsigned char code[4];
@@ -3732,7 +3732,7 @@ B_str B_chr(B_Integral wit, $WORD n) {
 
 B_str B_hex(B_Integral wit, $WORD n) {
     unsigned char *hexdigits = (unsigned char *)"0123456789abcdef";
-    long v =  from$int(wit->$class->__int__(wit,n));
+    long v =  fromB_int(wit->$class->__int__(wit,n));
     int sign = v<0;
     int nhexs = 1;
     unsigned long u = labs(v);
@@ -3764,14 +3764,14 @@ B_str B_hex(B_Integral wit, $WORD n) {
     return res;
 }
 
-B_int B_ord(B_str c) {
+int64_t B_U_6ord(B_str c) {
     if(c->nchars != 1)
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("ord: argument is not a single Unicode char")));
     int cp;
     int cpnbytes = utf8proc_iterate(c->str,-1,&cp);
     if (cpnbytes < 0)
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("ord: argument is not a single Unicode char")));
-    return to$int(cp);
+    return (int64_t)cp;
 }
 
 // Auxiliary function used in __str__ for collections ////////////////////////////

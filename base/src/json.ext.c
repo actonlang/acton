@@ -36,7 +36,7 @@ void jsonQ_encode_dict(yyjson_mut_doc *doc, yyjson_mut_val *node, B_dict data) {
         if (v) {
             switch (v->$class->$class_id) {
                 case INT_ID:;
-                    yyjson_mut_obj_add_int(doc, node, key, from$int((B_int)v));
+                    yyjson_mut_obj_add_int(doc, node, key, fromB_int((B_int)v));
                     break;
                 case FLOAT_ID:;
                     yyjson_mut_obj_add_real(doc, node, key, fromB_float((B_float)v));
@@ -103,7 +103,7 @@ void jsonQ_encode_list_into(yyjson_mut_doc *doc, yyjson_mut_val *node, B_list da
         if (v) {
             switch (v->$class->$class_id) {
                 case INT_ID:;
-                    yyjson_mut_arr_add_int(doc, node, from$int((B_int)v));
+                    yyjson_mut_arr_add_int(doc, node, fromB_int((B_int)v));
                     break;
                 case FLOAT_ID:;
                     yyjson_mut_arr_add_real(doc, node, fromB_float((B_float)v));
@@ -194,10 +194,10 @@ B_dict jsonQ_decode_obj(yyjson_val *obj) {
             case YYJSON_TYPE_NUM:;
                 switch (yyjson_get_subtype(val)) {
                     case YYJSON_SUBTYPE_UINT:;
-                        B_dictD_setitem(res, wit, to$str(yyjson_get_str(key)), to$int(yyjson_get_int(val)));
+                        B_dictD_setitem(res, wit, to$str(yyjson_get_str(key)), toB_int(yyjson_get_int(val)));
                         break;
                     case YYJSON_SUBTYPE_SINT:;
-                        B_dictD_setitem(res, wit, to$str(yyjson_get_str(key)), to$int(yyjson_get_int(val)));
+                        B_dictD_setitem(res, wit, to$str(yyjson_get_str(key)), toB_int(yyjson_get_int(val)));
                         break;
                     case YYJSON_SUBTYPE_REAL:;
                         B_dictD_setitem(res, wit, to$str(yyjson_get_str(key)), to$float(yyjson_get_real(val)));
@@ -242,10 +242,10 @@ B_list jsonQ_decode_arr(yyjson_val *arr) {
             case YYJSON_TYPE_NUM:;
                 switch (yyjson_get_subtype(val)) {
                     case YYJSON_SUBTYPE_UINT:;
-                        wit->$class->append(wit, res, to$int(yyjson_get_int(val)));
+                        wit->$class->append(wit, res, toB_int(yyjson_get_int(val)));
                         break;
                     case YYJSON_SUBTYPE_SINT:;
-                        wit->$class->append(wit, res, to$int(yyjson_get_int(val)));
+                        wit->$class->append(wit, res, toB_int(yyjson_get_int(val)));
                         break;
                     case YYJSON_SUBTYPE_REAL:;
                         wit->$class->append(wit, res, to$float(yyjson_get_real(val)));
