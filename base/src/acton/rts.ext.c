@@ -72,7 +72,9 @@ uint64_t actonQ_rtsQ_U_3get_rss (B_SysCap cap) {
 }
 
 int64_t actonQ_rtsQ_U_6rss (B_SysCap cap) {
-    return 0;
+    int64_t rsm;
+    int r = uv_resident_set_memory(&rsm);
+    return rsm;
 }
 
 B_NoneType actonQ_rtsQ_U_4sleep (B_SysCap cap, double sleep_time) {
