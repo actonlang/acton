@@ -451,7 +451,8 @@ initEnv path False         = do (_,nmod,_) <- InterfaceFiles.readFile (joinPath 
                                                  witnesses = primWits,
                                                  thismod = Nothing,
                                                  envX = () }
-                                    env = importAll mBuiltin envBuiltin $ importWits mBuiltin envBuiltin $ env0
+                                -- Pass empty search path for builtin since it has no dependencies
+                                env <- importAll mBuiltin envBuiltin <$> importWits [] mBuiltin envBuiltin env0
                                 return env
 
 withModulesFrom             :: EnvF x -> EnvF x -> EnvF x
@@ -1183,13 +1184,16 @@ impModule spath env (Import _ ms)
         imp env (ModuleItem m as : is)
                                 = do (env1,te) <- doImp spath env m
                                      let env2 = maybe (addImport m) (\n->define [(n, NMAlias m)]) as env1
-                                     imp (importWits m te env2) is
+                                     env3 <- importWits spath m te env2
+                                     imp env3 is
 impModule spath env (FromImport _ (ModRef (0,Just m)) items)
                                 = do (env1,te) <- doImp spath env m
-                                     return $ importSome items m te $ importWits m te $ env1
+                                     env2 <- importWits spath m te env1
+                                     return $ importSome items m te env2
 impModule spath env (FromImportAll _ (ModRef (0,Just m)))
                                 = do (env1,te) <- doImp spath env m
-                                     return $ importAll m te $ importWits m te $ env1
+                                     env2 <- importWits spath m te env1
+                                     return $ importAll m te env2
 impModule _ _ i                 = illegalImport (loc i)
 
 
@@ -1247,9 +1251,33 @@ impNames m te               = mapMaybe imp te
     imp (n, NDef t d _)       = Just (n, NAlias (GName m n))
     imp _                   = Nothing                               -- cannot happen
 
-importWits                  :: ModName -> TEnv -> EnvF x -> EnvF x
-importWits m te env         = foldl addWit env ws
-  where ws                  = [ WClass q (tCon c) p (GName m n) ws | (n, NExt q c ps te' _) <- te, (ws,p) <- ps ]
+-- Import witnesses from a module and all its transitive dependencies
+importWits :: [FilePath] -> ModName -> TEnv -> EnvF x -> IO (EnvF x)
+importWits spath m te env = do
+    -- First import witnesses from the module itself
+    let env' = importWitsFromModule m te env
+
+    -- Then import witnesses from its dependencies
+    tyFile <- findTyFile spath m
+    case tyFile of
+        Nothing -> return env'  -- No search paths provided (for builtin) or .ty file not found (weird!?)
+        Just tyF -> do
+            (deps, _, _) <- InterfaceFiles.readFile tyF
+            -- Recursively import witnesses from each dependency
+            foldM importDepWits env' deps
+  where
+    importDepWits envAcc dep = case lookupMod dep envAcc of
+        Just depTe -> return $ importWitsFromModule dep depTe envAcc
+        Nothing -> return envAcc  -- Dependency not loaded yet, skip it
+
+    -- Extract and import witnesses from a single module's TEnv
+    importWitsFromModule mod modTe modEnv = foldl addWit modEnv ws
+      where
+        ws = [ WClass q (tCon $ qualifyTCon mod c) p (GName mod n) ws | (n, NExt q c ps te' _) <- modTe, (ws,p) <- ps ]
+        -- Ensure the type constructor is properly qualified with the module name
+        qualifyTCon md (TC n ts) = TC (qualifyName md n) ts
+        qualifyName md (NoQ n) = GName md n
+        qualifyName md qn = qn
 
 
 
