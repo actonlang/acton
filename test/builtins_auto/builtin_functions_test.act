@@ -16,7 +16,7 @@ actor main(env):
         print("max")
         env.exit(1)
     if hex(65536*65536) != "0x100000000":
-        print("hex")
+        print("hex result =", hex(65536*65536))
         env.exit(1)
     if chr(8707) != '∃':
         print("chr")

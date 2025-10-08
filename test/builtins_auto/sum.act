@@ -6,9 +6,9 @@
 # - i16, i32, i64, u16, u32, u64
 actor main(env):
 
-    s_int = sum([1, 2, 3])
-    if s_int != 6:
-        print("Error: sum([1, 2, 3]) != 6", s_int)
+    s_bigint = sum([1, 2, 3])
+    if s_bigint != 6:
+        print("Error: sum([1, 2, 3]) != 6", s_bigint)
         env.exit(1)
 
     s_str = sum(["a", "b", "c"])
@@ -36,9 +36,9 @@ actor main(env):
         print("Error: sum([i32(1), i32(2), i32(3)]) != i32(6)", s_i32)
         env.exit(1)
 
-    s_i64 = sum([i64(1), i64(2), i64(3)])
-    if s_i64 != i64(6):
-        print("Error: sum([i64(1), i64(2), i64(3)]) != i64(6)", s_i64)
+    s_int = sum([int(1), int(2), int(3)])
+    if s_int != int(6):
+        print("Error: sum([int(1), int(2), int(3)]) != int(6)", s_int)
         env.exit(1)
 
     s_u16 = sum([u16(1), u16(2), u16(3)])

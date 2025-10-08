@@ -5,7 +5,7 @@ Building file test/typeerrors/ex20.act using temporary scratch directory
      |
    1 |    f : (str,str) -> str
      :    ^ 
-     :    `- Type incompatibility between signature for and definition of f (__builtin__.str must be a subclass of __builtin__.i64)
+     :    `- Type incompatibility between signature for and definition of f (__builtin__.str must be a subclass of __builtin__.int)
      :
    3 | +> def f(s : str, a):
    4 | |>     return s * a

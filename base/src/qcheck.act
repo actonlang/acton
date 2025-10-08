@@ -65,7 +65,7 @@ def qcheck_bigint_2(name: str, prop: (bigint, bigint) -> bool, verbose = False)-
     print("   OK,",name,"passed 100 tests\n")
     return 0
 
-def qcheck_int_i64(name: str, prop: (bigint, int) -> bool, verbose = False)->int:
+def qcheck_bigint_int(name: str, prop: (bigint, int) -> bool, verbose = False)->int:
     print("Testing",name)
     i= 1
     while i <= 100:

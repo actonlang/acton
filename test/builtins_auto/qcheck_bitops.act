@@ -1,74 +1,75 @@
 import qcheck
 
-def prop_int_xor_i64(a: i64, b: i64):
-    return a ^ b == i64(int(a) ^ int(b))
+def prop_bigint_xor_int(a: int, b: int):
+    return a ^ b == int(bigint(a) ^ bigint(b))
 
-def prop_int_and_i64(a: i64, b: i64):
-    return a & b == i64(int(a) & int(b))
+def prop_bigint_and_int(a: int, b: int):
+    return a & b == int(bigint(a) & bigint(b))
 
-def prop_int_or_i64(a: i64, b: i64):
-    return a | b == i64(int(a) | int(b))
+def prop_bigint_or_int(a: int, b: int):
+    return a | b == int(bigint(a) | bigint(b))
 
-def prop_int_xor_invert(a: int, b: int):
+def prop_bigint_xor_invert(a: bigint, b: bigint):
     return a ^ b == ~a ^ ~b 
 
-def prop_int_deMorgan1(a: int, b: int):
+def prop_bigint_deMorgan1(a: bigint, b: bigint):
     return a & b == ~(~a | ~b)
 
-def prop_int_and_comm(a: int, b: int):
+def prop_bigint_and_comm(a: bigint, b: bigint):
     return a & b == b & a
 
-def prop_int_or_comm(a: int, b: int):
+def prop_bigint_or_comm(a: bigint, b: bigint):
     return a | b == b | a
 
-def prop_int_xor_comm(a: int, b: int):
+def prop_bigint_xor_comm(a: bigint, b: bigint):
     return a ^ b == b ^ a
 
-def prop_int_and_unit(a: int):
-    return a & (-1) == a
+def prop_bigint_and_unit(a: bigint):
+    print(a,  a & bigint(-1))
+    return a & bigint(-1) == a
 
-def prop_int_or_unit(a: int):
+def prop_bigint_or_unit(a: bigint):
     return a | 0 == a
   
-def prop_int_xor_inv(a: int):
+def prop_bigint_xor_inv(a: bigint):
     return a ^ a == 0
 
-a = 12345676543456787654567898765456787654345676654
-b = 34567545676545676567656765
+a : bigint = 12345676543456787654567898765456787654345676654
+b : bigint = 34567545676545676567656765
 
-def prop_int_xor_val():
+def prop_bigint_xor_val():
     return (a ^ b == 12345676543456787654562548137012669056432139859
         and a ^ (-b) == -12345676543456787654562548137012669056432139859
         and (-a) ^ b == -12345676543456787654562548137012669056432139857
         and (-a) ^ (-b) == 12345676543456787654562548137012669056432139857)
 
-def prop_int_or_val():
+def prop_bigint_or_val():
     return (a | b == 12345676543456787654582507224073001193672736639
         and a | (-b) == -14608458616213539327059985
         and (-a) | b == -12345676543456787654547939678396455517105079873
         and (-a) | (-b) == -19959087060332137240596781)
 
-def prop_int_and_val():
+def prop_bigint_and_val():
     return (a & b == 19959087060332137240596780
         and a & (-b) == 12345676543456787654547939678396455517105079874
         and (-a) & b == 14608458616213539327059984
         and (-a) & (-b) == -12345676543456787654582507224073001193672736638)
  
 actor main(env):
-    t1 = qcheck.qcheck_i64_2("int_xor_64",prop_int_xor_i64)
-    t2 = qcheck.qcheck_i64_2("int_or_64",prop_int_or_i64)
-    t3 = qcheck.qcheck_i64_2("int_and_64",prop_int_and_i64)
-    t4 = qcheck.qcheck_int_2("int_xor_invert",prop_int_xor_invert)
-    t5 = qcheck.qcheck_int_2("int_deMorgan1",prop_int_deMorgan1)
-    t6 = qcheck.qcheck_int_1("int_and_unit",prop_int_and_unit)
-    t7 = qcheck.qcheck_int_1("int_or_unit",prop_int_or_unit)
-    t8 = qcheck.qcheck_int_1("int_xor_inv",prop_int_xor_inv)
-    t9 = qcheck.qcheck_int_2("int_and_comm",prop_int_and_comm)
-    t10 = qcheck.qcheck_int_2("int_or_comm",prop_int_or_comm)
-    t11 = qcheck.qcheck_int_2("int_xor_comm",prop_int_xor_comm)
-    t12 = qcheck.qcheck_0("int_xor_val",prop_int_xor_val)
-    t13 = qcheck.qcheck_0("int_or_val",prop_int_or_val)
-    t14 = qcheck.qcheck_0("int_and_val",prop_int_and_val)
+    t1 = qcheck.qcheck_int_2("bigint_xor_64",prop_bigint_xor_int)
+    t2 = qcheck.qcheck_int_2("bigint_or_64",prop_bigint_or_int)
+    t3 = qcheck.qcheck_int_2("bigint_and_64",prop_bigint_and_int)
+    t4 = qcheck.qcheck_bigint_2("bigint_xor_invert",prop_bigint_xor_invert)
+    t5 = qcheck.qcheck_bigint_2("bigint_deMorgan1",prop_bigint_deMorgan1)
+    t6 = qcheck.qcheck_bigint_1("bigint_and_unit",prop_bigint_and_unit)
+    t7 = qcheck.qcheck_bigint_1("bigint_or_unit",prop_bigint_or_unit)
+    t8 = qcheck.qcheck_bigint_1("bigint_xor_inv",prop_bigint_xor_inv)
+    t9 = qcheck.qcheck_bigint_2("bigint_and_comm",prop_bigint_and_comm)
+    t10 = qcheck.qcheck_bigint_2("bigint_or_comm",prop_bigint_or_comm)
+    t11 = qcheck.qcheck_bigint_2("bigint_xor_comm",prop_bigint_xor_comm)
+    t12 = qcheck.qcheck_0("bigint_xor_val",prop_bigint_xor_val)
+    t13 = qcheck.qcheck_0("bigint_or_val",prop_bigint_or_val)
+    t14 = qcheck.qcheck_0("bigint_and_val",prop_bigint_and_val)
     
     env.exit (t1 | t2 | t3 | t4 | t5 | t6 | t7 | t8 | t9 | t10 | t11 | t12 | t13 | t14)
 

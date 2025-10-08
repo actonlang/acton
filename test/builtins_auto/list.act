@@ -64,7 +64,8 @@ actor main(env):
         print("Unexpected result of list.insert(2, 37):", l)
         await async env.exit(1)
 
-    if l.index(37) != 2:
+    v: int = 37
+    if l.index(v) != 2:
         print("Unexpected result of list.index(37):", l)
         await async env.exit(1)
 

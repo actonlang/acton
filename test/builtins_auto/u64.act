@@ -14,7 +14,7 @@ actor main(env):
 #    print(b/2*2)
     assert_eq(u64("18446744073700000000"),18446744073700000000)
     assert_eq(a-50,18446744073709551603)                    # underflow
-    c : i64 = 7
+    c : int = 7
     d = {a:c, 3:1}
     assert_eq(a ^ 14, 43)
     assert_eq(a | 14, 47)

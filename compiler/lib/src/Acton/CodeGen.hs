@@ -34,7 +34,7 @@ import System.FilePath.Posix
 import Numeric
 
 generate                            :: Acton.Env.Env0 -> FilePath -> Module -> String -> IO (String,String,String)
-generate env srcbase m hash         = do return (n, h, c)
+generate env srcbase m hash         = return (n, h, c)
 
   where n                           = concat (Data.List.intersperse "." (modPath (modname m))) --render $ quotes $ gen env0 (modname m)
         hashComment                 = text "/* Acton source hash:" <+> text hash <+> text "*/"
@@ -268,6 +268,7 @@ primROOTINIT                        = gPrim "ROOTINIT"
 primRegister                        = gPrim "register"
 
 primToInt                           = name "toB_int"
+primToBigInt                        = name "toB_bigint"
 primToBigInt2                       = name "toB_bigint2"
 primToFloat                         = name "to$float"
 primToStr                           = name "to$str"
@@ -567,8 +568,9 @@ instance Gen Stmt where
     genV env (While _ e b [])       = genBranch env "while" (Branch e b)
     genV env _                      = (empty, [])
 
-genBranch env kw (Branch e b)       = ((text kw <+> parens (gen env (B.unbox tBool e)) <+> char '{') $+$ nest 4 b' $+$ char '}', vs)
+genBranch env kw (Branch e b)       = ((text kw <+> parens(genBool env (B.unbox t e)) <+> char '{') $+$ nest 4 b' $+$ char '}', vs)
    where (b',vs)                    = genSuite env b
+         t                          = typeOf env e
 
 genElse env []                      = (empty, [])
 genElse env b                       = ((text "else" <+> char '{') $+$ nest 4 b' $+$ char '}', vs)
@@ -793,7 +795,7 @@ instance Gen Expr where
       | NClass{} <- findQName n env = newcon' env n
       | otherwise                   = genQName env n
     gen env (Int _ i str)
-        |i <= 9223372036854775807   = gen env primToInt <> parens (text str) -- literal is 2^63-1
+        |i <= 9223372036854775807   = gen env primToBigInt <> parens (text (str++"UL")) -- literal is 2^63-1
         | otherwise                 = gen env primToBigInt2 <> parens (doubleQuotes $ text str)
     gen env (Float _ _ str)         = gen env primToFloat <> parens (text str)
     gen env (Bool _ True)           = gen env qnTrue
@@ -843,7 +845,7 @@ instance Gen Expr where
     gen env (UnBox _ e@(Call _ (Var _ f) p KwdNil))
         | f == primISNOTNONE        = genCall env [] (Var NoLoc primISNOTNONE0) p
         | f == primISNONE           = genCall env [] (Var NoLoc primISNONE0) p
-         | f `elem` [primPUSH,primPUSHF]
+        | f `elem` [primPUSH,primPUSHF]
                                     = gen env f <> parens(empty)
         | f `elem` B.mathfuns       = genCall env [] e p
         | tCon (TC (gBuiltin (noq f)) []) `elem` B.integralTypes   -- f is the constructor for an integer type, so check if argument e is a literal
@@ -851,14 +853,19 @@ instance Gen Expr where
     gen env (UnBox _ e@(Call _ (Dot _ (Var _ w) op) (PosArg x (PosArg y PosNil)) KwdNil))  -- use macro for int (in)equality tests
                                     = case findQName w env of
                                         NVar (TCon _ (TC p [TCon _ (TC t [])]))
-                                          | (p==qnOrd || p==qnEq) &&  t == qnInt ->
+                                          | (p==qnOrd || p==qnEq) &&  t == qnBigint ->
                                              text "ORD_" <> tname <> text (nstr op) <> parens(parens (parens tname <> gen env x) <> comma <+> parens (parens tname <> gen env y))
                                         _ -> genBool env e <> text "->val"
-      where tname                   = genQName env qnInt
+      where tname                   = genQName env qnBigint 
 
     gen env (UnBox _ (IsInstance _ e c))
                                     = gen env primISINSTANCE0 <> parens(gen env e <> comma <+> genQName env c)
-    gen env (UnBox _ (Int _ n s))   = text s
+    gen env (UnBox t (Int _ n s))   = text (s++ suffix t)
+       where suffix t
+               | t == tInt          = "LL"
+               | t == tU64          = "UL"
+               | otherwise          = ""
+             
     gen env (UnBox _ (Float _ x s)) = text s
     gen env (UnBox _ (Bool _ b))    = if b then text "true" else text "false"
     gen env (UnBox _ v@(Var _ (NoQ n)))
