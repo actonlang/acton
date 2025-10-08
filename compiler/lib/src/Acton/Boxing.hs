@@ -174,7 +174,7 @@ instance Boxing Expr where
              vFree (TCon _ (TC _ _))= True
              vFree _                = False
       boxingFromAtom w ts [i@Int{}]
-        | t == tInt                 = return ([], i)
+        | t == tBigint                 = return ([], i)
         | t `elem` numericTypes     = return ([], Box (last ts) (unbox t i))
         where t = head ts
       boxingFromAtom w ts [x@Float{}]
