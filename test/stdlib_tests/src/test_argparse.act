@@ -65,6 +65,13 @@ def _test_posarg_nargs2():
     testing.assertEqual(args.get_str("infile"), "in1")
     testing.assertEqual(args.get_strlist("outfile"), ["out1", "out2"])
 
+def _test_posarg_nargs_default():
+    p = argparse.Parser()
+    p.add_arg("infile", "input file", False, "+")
+
+    args = p.parse(["./app"])
+    testing.assertEqual(args.get_strlist("infile"), [])
+
 def _test_posarg_nargs_invalid():
     p = argparse.Parser()
     p.add_arg("infile", "input file", True, "+")
