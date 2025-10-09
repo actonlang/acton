@@ -175,8 +175,9 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
     lock_file = None
     remaining_deps = {}
     zig_global_cache_dir = get_zig_global_cache_dir(file.FileCap(env.cap))
-    if len(files) > 1:
-        raise NotImplementedError("Multiple files not supported yet")
+    # For multi-file compilation
+    files_to_compile = list(files)
+    all_outputs = []
 
     def parse_dep_path_overrides(args) -> dict[str, str]:
         overrides = {}
@@ -205,6 +206,34 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
 
     def _on_actonc_failure(error: str):
         on_build_failure(-999, -999, error)
+
+    def _compile_next_file(cmd_base):
+        if len(files_to_compile) == 0:
+            combined_output = "\n".join(all_outputs)
+            on_build_success(combined_output)
+            return
+
+        def _on_this_file_exit(exit_code, term_signal, std_out_buf, std_err_buf):
+            if exit_code == 0:
+                all_outputs.append(std_out_buf.decode())
+                # Compile next file
+                _compile_next_file(cmd_base)
+            else:
+                on_build_failure(exit_code, term_signal, std_out_buf.decode() + std_err_buf.decode())
+
+        def _on_this_file_failure(error: str):
+            on_build_failure(-999, -999, error)
+
+        filename = files_to_compile.pop(0)
+        cr = CompilerRunner(
+            process_cap,
+            env,
+            cmd_base + [filename],
+            None,
+            _on_this_file_exit,
+            _on_this_file_failure,
+            print_output=not build_tests
+        )
 
     def build_project():
         search_paths = []
@@ -242,21 +271,25 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
         cmdargs = []
         if files == []:
             cmdargs.extend(["build"])
-        else:
-            cmdargs.extend([files[0]])
         cmdargs.extend(build_cmd_args(args))
         if build_tests:
             cmdargs.append("--test")
         cmd = cmdargs + search_path_arg
-        cr = CompilerRunner(
-            process_cap,
-            env,
-            cmd,
-            None,
-            _on_actonc_exit,
-            _on_actonc_failure,
-            print_output=not build_tests
-        )
+
+        # Handle multiple files or single file/project build
+        if files == []:
+            # Building entire project
+            cr = CompilerRunner(
+                process_cap,
+                env,
+                cmd,
+                None,
+                _on_actonc_exit,
+                _on_actonc_failure,
+                print_output=not build_tests
+            )
+        else:
+            _compile_next_file(cmdargs + search_path_arg)
 
     def _on_dep_actonc_exit(dep_name, exit_code, term_signal, std_out_buf, std_err_buf):
         if exit_code == 0:
@@ -777,6 +810,7 @@ def build_cmd_args(args):
             "cgen",
             "cps",
             "cpu",
+            "db",
             "deact",
             "dep",
             "hgen",
@@ -1390,7 +1424,9 @@ actor main(env):
         def on_build_failure(exit_code: int,  term_signal: int, std_err_buf: str):
             env.exit(1)
 
-        BuildProject(process_cap, env, args, on_build_success, on_build_failure, build_tests=False)
+        files = args.get_strlist("files")
+
+        BuildProject(process_cap, env, args, on_build_success, on_build_failure, build_tests=False, files=files)
 
     def _cmd_doc(args):
         """Run actonc doc command"""
@@ -1482,6 +1518,7 @@ actor main(env):
     def _parse_args():
         p = argparse.Parser()
         p.add_bool("always-build", "Always build")
+        p.add_bool("db", "Enable database backend")
         p.add_bool("parse", "Show parsing result")
         p.add_bool("kinds", "Show results after kind checking")
         p.add_bool("types", "Show inferred expression types")
@@ -1510,6 +1547,7 @@ actor main(env):
         p.add_arg("file", ".act file to compile, or .ty to show", False, "?")
 
         p_build = p.add_cmd("build", "Build", _cmd_build)
+        p_build.add_arg("files", "Specific .act file(s) to build", required=False, nargs="+")
 
         p_fetch = p.add_cmd("fetch", "Fetch all the things for offline work", _cmd_fetch)
 
