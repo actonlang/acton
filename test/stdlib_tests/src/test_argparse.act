@@ -1,0 +1,413 @@
+import argparse
+
+import testing
+
+def _test_opts():
+    p = argparse.Parser()
+    p.add_bool("verbose", "verbose mode")
+    p.add_option("num", "int", "?", 1337, "number field")
+    p.add_option("text", "str", "?", "Hello", "text field")
+
+    args = p.parse(["./app"])
+    testing.assertEqual(args.get_bool("verbose"), False)
+    testing.assertEqual(args.get_int("num"), 1337)
+    testing.assertEqual(args.get_str("text"), "Hello")
+
+    args = p.parse(["./app", "--verbose", "--num", "123", "--text", "foo"])
+    testing.assertEqual(args.get_bool("verbose"), True)
+    testing.assertEqual(args.get_int("num"), 123)
+    testing.assertEqual(args.get_str("text"), "foo")
+
+def _test_opts_dupe():
+    p = argparse.Parser()
+    p.add_option("text", "str", "?", "Hello", "Text field")
+
+    try:
+        p.add_option("text", "str", "?", "Hello", "Text field")
+    except argparse.ArgumentError:
+        pass
+    else:
+        raise ValueError("Expected ArgumentError due to duplicate option")
+
+def _test_opts_nargs():
+    p = argparse.Parser()
+    p.add_bool("verbose", "Enable verbose output")
+    p.add_option("text", "strlist", "+", [], "Text field")
+
+    args = p.parse(["./app", "--text", "A", "--verbose", "--text", "B"])
+    testing.assertEqual(args.get_strlist("text"), ["A", "B"])
+    testing.assertEqual(args.get_bool("verbose"), True)
+
+def _test_posarg():
+    p = argparse.Parser()
+    p.add_arg("infile", "input file", True, "?")
+    p.add_arg("outfile", "output file", True, "?")
+
+    args = p.parse(["./app", "foo", "bar"])
+    testing.assertEqual(args.get_str("infile"), "foo")
+    testing.assertEqual(args.get_str("outfile"), "bar")
+
+def _test_posarg_nargs1():
+    p = argparse.Parser()
+    p.add_arg("infile", "input file", True, "+")
+    p.add_arg("outfile", "output file", True, "?")
+
+    args = p.parse(["./app", "in1", "in2", "bar"])
+    testing.assertEqual(args.get_strlist("infile"), ["in1", "in2"])
+    testing.assertEqual(args.get_str("outfile"), "bar")
+
+def _test_posarg_nargs2():
+    p = argparse.Parser()
+    p.add_arg("infile", "input file", True, "?")
+    p.add_arg("outfile", "output file", True, "+")
+
+    args = p.parse(["./app", "in1", "out1", "out2"])
+    testing.assertEqual(args.get_str("infile"), "in1")
+    testing.assertEqual(args.get_strlist("outfile"), ["out1", "out2"])
+
+def _test_posarg_nargs_default():
+    p = argparse.Parser()
+    p.add_arg("infile", "input file", False, "+")
+
+    args = p.parse(["./app"])
+    testing.assertEqual(args.get_strlist("infile"), [])
+
+def _test_posarg_nargs_invalid():
+    p = argparse.Parser()
+    p.add_arg("infile", "input file", True, "+")
+
+    try:
+        p.add_arg("outfile", "output file", True, "+")
+    except argparse.ArgumentError:
+        pass
+    else:
+        raise ValueError("Expected ArgumentError since multiple nargs=+ args is invalid (ambiguous)")
+
+def _test_posarg_missing():
+    p = argparse.Parser()
+    p.add_arg("infile", "input file", True, "?")
+
+    try:
+        p.parse(["./app"])
+    except argparse.ArgumentError:
+        pass
+    else:
+        raise ValueError("Expected ArgumentError since positional argument is missing")
+
+def _test_posarg_not_required1():
+    p = argparse.Parser()
+    p.add_arg("infile", "input file", False, "?")
+    p.add_arg("outfile", "output file", False, "?")
+
+    args = p.parse(["./app", "foo", "bar"])
+    testing.assertEqual(args.get_str("infile"), "foo")
+    testing.assertEqual(args.get_str("outfile"), "bar")
+
+def _test_posarg_not_required2():
+    p = argparse.Parser()
+    p.add_arg("infile", "input file", False, "?")
+
+    args = p.parse(["./app"])
+
+    try:
+        args.get_str("infile")
+    except argparse.ArgumentError:
+        pass
+    else:
+        raise ValueError("Expected ArgumentError since optional positional argument is missing")
+
+def _test_posarg_dashdash():
+    p = argparse.Parser()
+    p.add_arg("infile", "input file", True, "?")
+    p.add_arg("outfile", "output file", True, "?")
+
+    args = p.parse(["./app", "--", "foo", "--bar"])
+    testing.assertEqual(args.get_str("infile"), "foo")
+    testing.assertEqual(args.get_str("outfile"), "--bar")
+
+actor Foo():
+    def foo():
+        return "foo"
+
+def _test_cmd():
+    proc def _build(args):
+        # make sure we can actually call an action here
+        f = Foo()
+        f.foo()
+
+    p = argparse.Parser()
+    p.add_bool("verbose", "Enable verbose output")
+    p.add_arg("infile", "input file", True, "?")
+    pb = p.add_cmd("build", "Build stuff", _build)
+    pb.add_bool("dev", "Enable dev mode")
+    pb.add_option("sigs", "str", help="Show signatures of file")
+
+    _args = p.parse(["./app", "--verbose", "foo", "build", "--dev", "--sigs", "bar.ty"])
+    _cmd = _args.cmd
+    testing.assertNotNone(_cmd)
+    testing.assertEqual(_args.get_bool("verbose"), True)
+    testing.assertEqual(_args.get_str("infile"), "foo")
+    testing.assertEqual(_args.get_bool("dev"), True)
+    testing.assertEqual(_args.get_str("sigs"), "bar.ty")
+
+def _test_cmd_strlist():
+    proc def _build(args):
+        pass
+
+    p = argparse.Parser()
+    p.add_bool("verbose", "Enable verbose output")
+    p.add_arg("infile", "input file", True, "?")
+    pb = p.add_cmd("build", "Build stuff", _build)
+    pb.add_bool("dev", "Enable dev mode")
+    pb.add_option("text", "strlist", "+", [], "Text field")
+
+    _args = p.parse(["./app", "--verbose", "foo", "build", "--dev", "--text", "A", "--text", "B"])
+    _cmd = _args.cmd
+    testing.assertNotNone(_cmd)
+    testing.assertEqual(_args.get_bool("verbose"), True)
+    testing.assertEqual(_args.get_str("infile"), "foo")
+    testing.assertEqual(_args.get_bool("dev"), True)
+    testing.assertEqual(_args.get_strlist("text"), ["A", "B"])
+
+def _test_cmd_nested():
+    proc def _build(args):
+        pass
+
+    proc def _build_and_run(args):
+        pass
+
+    p = argparse.Parser()
+    p.add_bool("verbose", "Enable verbose output")
+    pb = p.add_cmd("build", "Build stuf", _build)
+    pb.add_bool("dev", "Enable dev mode")
+    pbr = pb.add_cmd("run", "build and run stuff", _build_and_run)
+    pbr.add_bool("foo", "FOO")
+
+    _args = p.parse(["./app", "--verbose", "build", "--dev", "run", "--foo"])
+    _cmd = _args.cmd
+    testing.assertNotNone(_cmd)
+    testing.assertEqual(_args.get_bool("verbose"), True)
+    testing.assertEqual(_args.get_bool("dev"), True)
+    testing.assertEqual(_args.get_bool("foo"), True)
+
+def _test_cmd_nested2():
+    proc def _build(args):
+        pass
+
+    proc def _build_and_run(args):
+        pass
+
+    p = argparse.Parser()
+    p.add_bool("verbose", "Enable verbose output")
+    p.add_bool("some-flag", "Some flag")
+    pb = p.add_cmd("build", "Build stuf", _build)
+    pb.add_bool("dev", "Enable dev mode")
+    pbr = pb.add_cmd("run", "build and run stuff", _build_and_run)
+    pbr.add_bool("foo", "FOO")
+
+    _args = p.parse(["./app", "--verbose", "build", "--dev", "run", "--foo", "--some-flag"])
+    _cmd = _args.cmd
+    testing.assertNotNone(_cmd)
+    testing.assertEqual(_args.get_bool("verbose"), True)
+    testing.assertEqual(_args.get_bool("dev"), True)
+    testing.assertEqual(_args.get_bool("foo"), True)
+    testing.assertEqual(_args.get_bool("some-flag"), True)
+
+def _test_cmd_optional_argument():
+    proc def _new(args):
+        pass
+
+    p = argparse.Parser()
+    p.add_arg("infile", "input file", False)
+    pb = p.add_cmd("new", "New", _new)
+    pb.add_arg("dirname")
+
+    _args = p.parse(["./app", "new", "foobar", "foo"])
+    _cmd = _args.cmd
+    testing.assertNotNone(_cmd)
+    testing.assertEqual(_args.get_str("dirname"), "foobar")
+    testing.assertEqual(_args.get_str("infile"), "foo")
+
+def _test_help():
+    p = argparse.Parser()
+
+    try:
+        p.parse(["./app", "--help"])
+    except argparse.PrintUsage:
+        pass
+    else:
+        raise ValueError("Expected PrintUsage")
+
+def _test_help_subcmd():
+    def _cmd_build(args):
+        pass
+
+    p = argparse.Parser()
+    p.add_bool("verbose", "Enable verbose output")
+    pb = p.add_cmd("build", "Build stuff", _cmd_build)
+    pb.add_bool("dev", "Enable dev mode")
+    pb.add_option("haxx", "str", help="HAXX")
+
+    try:
+        args = p.parse(["./app", "build", "--help"])
+        raise ValueError("Expected PrintUsage")
+    except argparse.PrintUsage as e:
+        # We want to see the help for the build command
+        if "HAXX" not in e.error_message:
+            raise ValueError("Expected help for build command to contain HAXX, got:\n" + e.error_message)
+
+def _test_short_bool():
+    p = argparse.Parser()
+    p.add_bool("verbose", "Enable verbose output", short="v")
+    p.add_bool("debug", "Enable debug mode", short="d")
+
+    # Test short option
+    args = p.parse(["./app", "-v"])
+    testing.assertEqual(args.get_bool("verbose"), True)
+    testing.assertEqual(args.get_bool("debug"), False)
+
+    # Test long option still works
+    args = p.parse(["./app", "--verbose"])
+    testing.assertEqual(args.get_bool("verbose"), True)
+
+def _test_short_option_with_value():
+    p = argparse.Parser()
+    p.add_option("output", "str", default="out.txt", help="Output file", short="o")
+    p.add_option("count", "int", default=1, help="Number of times", short="n")
+
+    # Test short option with value
+    args = p.parse(["./app", "-o", "result.txt"])
+    testing.assertEqual(args.get_str("output"), "result.txt")
+
+    # Test short option with int value
+    args = p.parse(["./app", "-n", "42"])
+    testing.assertEqual(args.get_int("count"), 42)
+
+    # Test long options still work
+    args = p.parse(["./app", "--output", "final.txt", "--count", "100"])
+    testing.assertEqual(args.get_str("output"), "final.txt")
+    testing.assertEqual(args.get_int("count"), 100)
+
+def _test_short_grouped():
+    p = argparse.Parser()
+    p.add_bool("verbose", "Enable verbose output", short="v")
+    p.add_bool("debug", "Enable debug mode", short="d")
+    p.add_bool("force", "Force operation", short="f")
+
+    # Test grouped short options
+    args = p.parse(["./app", "-vdf"])
+    testing.assertEqual(args.get_bool("verbose"), True)
+    testing.assertEqual(args.get_bool("debug"), True)
+    testing.assertEqual(args.get_bool("force"), True)
+
+def _test_short_mixed_with_long():
+    p = argparse.Parser()
+    p.add_bool("verbose", "Enable verbose output", short="v")
+    p.add_option("output", "str", default="out.txt", help="Output file", short="o")
+    p.add_bool("debug", "Enable debug mode")  # No short option
+
+    args = p.parse(["./app", "-v", "--debug", "-o", "test.txt"])
+    testing.assertEqual(args.get_bool("verbose"), True)
+    testing.assertEqual(args.get_bool("debug"), True)
+    testing.assertEqual(args.get_str("output"), "test.txt")
+
+def _test_short_option_conflicts():
+    p = argparse.Parser()
+    p.add_bool("verbose", "Enable verbose output", short="v")
+
+    try:
+        p.add_bool("version", "Show version", short="v")
+    except argparse.ArgumentError:
+        pass
+    else:
+        raise ValueError("Expected ArgumentError for conflicting short options")
+
+def _test_short_invalid_chars():
+    p = argparse.Parser()
+
+    # Too long
+    try:
+        p.add_bool("verbose", "Enable verbose output", short="ab")
+    except argparse.ArgumentError:
+        pass
+    else:
+        raise ValueError("Expected ArgumentError for multi-char short option")
+
+    # Empty
+    try:
+        p2 = argparse.Parser()
+        p2.add_bool("debug", "Enable debug", short="")
+    except argparse.ArgumentError:
+        pass
+    else:
+        raise ValueError("Expected ArgumentError for empty short option")
+
+    # Invalid char: dash
+    try:
+        p3 = argparse.Parser()
+        p3.add_bool("force", "Force operation", short="-")
+    except argparse.ArgumentError:
+        pass
+    else:
+        raise ValueError("Expected ArgumentError for invalid character")
+
+    # Invalid char: equals
+    try:
+        p4 = argparse.Parser()
+        p4.add_bool("quiet", "Quiet mode", short="=")
+    except argparse.ArgumentError:
+        pass
+    else:
+        raise ValueError("Expected ArgumentError for invalid character")
+
+def _test_short_inline_values():
+    p = argparse.Parser()
+    p.add_option("output", "str", help="Output file", short="o")
+    p.add_option("count", "int", help="Number", short="n")
+
+    # Test inline string value
+    args = p.parse(["./app", "-otest.txt"])
+    testing.assertEqual(args.get_str("output"), "test.txt")
+
+    # Test inline int value
+    args = p.parse(["./app", "-n42"])
+    testing.assertEqual(args.get_int("count"), 42)
+
+def _test_short_ambiguous_grouping():
+    p = argparse.Parser()
+    p.add_bool("verbose", "Enable verbose", short="v")
+    p.add_option("output", "str", help="Output file", short="o")
+
+    # This should be treated as -o with value "verbose.txt"
+    args = p.parse(["./app", "-overbose.txt"])
+    testing.assertEqual(args.get_str("output"), "verbose.txt")
+
+    # But this should fail: non-bool option in middle of group
+    try:
+        p.parse(["./app", "-vov"])  # -v -o -v but -o needs value
+    except argparse.ArgumentError:
+        pass
+    else:
+        raise ValueError("Expected error for non-bool option in middle of group")
+
+def _test_short_options_with_subcommands():
+    def _cmd_build(args):
+        pass
+
+    p = argparse.Parser()
+    p.add_bool("verbose", "Enable verbose output", short="v")
+
+    build_cmd = p.add_cmd("build", "Build project", _cmd_build)
+    build_cmd.add_bool("dev", "Development mode", short="d")
+    build_cmd.add_option("output", "str", help="Output file", short="o")
+
+    # Test short option on main parser
+    args = p.parse(["./app", "-v", "build", "-d", "-o", "result.txt"])
+    testing.assertEqual(args.get_bool("verbose"), True)
+    testing.assertEqual(args.get_bool("dev"), True)
+    testing.assertEqual(args.get_str("output"), "result.txt")
+
+    # Test grouped short options on sub-command
+    args = p.parse(["./app", "build", "-do", "test.txt"])
+    testing.assertEqual(args.get_bool("dev"), True)
+    testing.assertEqual(args.get_str("output"), "test.txt")

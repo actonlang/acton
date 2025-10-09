@@ -435,6 +435,10 @@ class Parser(object):
             defval = aspec.default
             if defval is not None:
                 res.options[akey] = ("type"=aspec.type, "value"=defval)
+        for arg in self.args:
+            if not arg.required:
+                if arg.nargs == "+":
+                    res.options[arg.name] = ("type"="strlist", "value"=[])
 
         skip = 0
         for i in range(len(argv)):
