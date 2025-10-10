@@ -127,7 +127,7 @@ $R fileQ_FSD_homedirG_local (fileQ_FS self, $Cont C_cont) {
 $R fileQ_FSD_mkdirG_local (fileQ_FS self, $Cont C_cont, B_str filename) {
     uv_fs_t *req = (uv_fs_t *)acton_malloc(sizeof(uv_fs_t));
     int r = uv_fs_mkdir(get_uv_loop(), req, (char *)fromB_str(filename), 0777, NULL);
-    if (r < 0) {
+    if (r < 0 && r != UV_EEXIST) {
         char errmsg[1024] = "Error creating directory: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
@@ -192,7 +192,7 @@ $R fileQ_FSD_lstatG_local (fileQ_FS self, $Cont C_cont, B_str filename) {
 $R fileQ_FSD_rmdirG_local (fileQ_FS self, $Cont C_cont, B_str dirname) {
     uv_fs_t *req = (uv_fs_t *)acton_malloc(sizeof(uv_fs_t));
     int r = uv_fs_rmdir(get_uv_loop(), req, (char *)fromB_str(dirname), NULL);
-    if (r < 0) {
+    if (r < 0 && r != UV_ENOENT) {
         char errmsg[1024] = "Error removing directory: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
