@@ -24,60 +24,90 @@ def base_path(file_cap: file.FileCap):
     fs = file.FS(file_cap)
     return fs.exepath()[0:-len("/bin/acton")]
 
-def warn_on_large_zig_global_cache(cap: file.FileCap):
+def check_cache_is_empty(cap: file.FileCap, cache_dir: str) -> bool:
+    """Quick check if a cache directory is empty by just listing its contents"""
     fs = file.FS(cap)
-    last_warn_file = file.join_path([get_zig_global_cache_dir(cap), "last_warn"])
-    warn_level: int = 10 # start to warn at 10GB
     try:
-        last_warn = int(file.ReadFile(file.ReadFileCap(cap), last_warn_file).read().decode())
-        warn_level = last_warn + 1 # warn in 1GB increments
+        contents = fs.listdir(cache_dir)
+        return len(contents) == 0
     except:
+        # Directory doesn't exist, so it's effectively empty
+        return True
+
+actor CacheSizeChecker(cap: file.FileCap):
+    """Background actor to check cache sizes in parallel with compilation"""
+    var local_cache_size = 0
+    var global_cache_size = 0
+    var should_check = False
+    var last_global_warn_size = 0
+    var last_local_warn_size = 0
+    var counter = -1
+
+    def check_caches():
+        (should_check, last_global_warn_size, last_local_warn_size, counter) = _should_run_check()
+
+        if not should_check:
+            # Skip the expensive cache size checks this time
+            return
+
         try:
-            f = file.WriteFile(file.WriteFileCap(cap), last_warn_file)
-            f.write(str(warn_level).encode())
-            f.close()
-        except:
-            # The cache dir probably doesn't exist, just ignore
+            global_cache_size = _check_cache_size(get_zig_global_cache_dir(cap))
+        except Exception as e:
             pass
 
-    cache_dir = get_zig_global_cache_dir(cap)
-    total_size: int = 0
-    for f in fs.walk(cache_dir):
-        total_size += int(f.size)
-    gb = 1024 * 1024 * 1024
-    if total_size > warn_level * gb:
-        print("WARN: The global cache has grown to %dMB" % (total_size // (1024*1024)))
-        print("HINT: You can clear the cache with with: rm -rf %s" % cache_dir)
-        print("INFO: Do NOT clear the cache if you are offline or have a slow connection.")
-        print("INFO: The global cache stores downloaded package dependencies as well as")
-        print("INFO: compiled artifacts for common libraries, like libc.")
-        print("INFO: Another warning will be issued when the cache grows by another 1GB.")
-        print("")
-        # write new warn level
         try:
-            f = file.WriteFile(file.WriteFileCap(cap), last_warn_file)
-            f.write(str(total_size // gb).encode())
-            f.close()
+            local_cache_size = _check_cache_size(get_zig_local_cache_dir(cap))
         except Exception as e:
-            print("WARN: Could not write new warn level to", last_warn_file)
-            print(e)
-    if total_size == 0:
-        print("INFO: Acton global cache is empty: rebuilding common libraries (e.g. libc) which will take some time...")
+            pass
 
-def clean_zig_local_cache(cap: file.FileCap):
-    fs = file.FS(cap)
-    cache_dir = get_zig_local_cache_dir(cap)
-    total_size = 0
-    for f in fs.walk(cache_dir):
-        total_size += f.size
-    gb = 1024 * 1024 * 1024
-    limit = 5 * gb
-    if total_size > limit:
-        print("Build cache (", total_size // (1024*1024), "MB) over %dGB, cleaning it up." % (int(limit // gb)))
-        await async fs.rmtree(cache_dir)
-        total_size = 0
-    if total_size == 0:
-        print("INFO: Acton local cache is empty: rebuilding Acton base which will take some time...")
+    def _should_run_check() -> (bool, int, int, int):
+        fs = file.FS(cap)
+        state_file = file.join_path([fs.homedir(), ".cache", "acton", "check_state"])
+        check_interval = 50
+        gb = 1024 * 1024 * 1024
+
+        counter = check_interval
+        last_global = 10 * gb  # Start warning at 10GB
+        last_local = 10 * gb   # Start warning at 10GB
+        try:
+            content = file.ReadFile(file.ReadFileCap(cap), state_file).read().decode()
+            lines = content.strip().split("\n")
+            if len(lines) >= 1:
+                counter = int(lines[0])
+            if len(lines) >= 2:
+                last_global = int(lines[1])
+            if len(lines) >= 3:
+                last_local = int(lines[2])
+        except:
+            # First time run or corrupted file - use defaults
+            pass
+
+        counter -= 1
+        should_check = (counter <= 0)
+        if should_check:
+            counter = check_interval
+
+        try:
+            f = file.WriteFile(file.WriteFileCap(cap), state_file)
+            f.write((str(counter) + "\n" + str(last_global) + "\n" + str(last_local)).encode())
+            f.close()
+        except:
+            pass
+
+        return (should_check, last_global, last_local, counter)
+
+    def _check_cache_size(cache_dir: str) -> int:
+        fs = file.FS(cap)
+        total_size: int = 0
+        for f in fs.walk(cache_dir):
+            total_size += int(f.size)
+
+        return total_size
+
+    def get_cache_state() -> (int, int, bool, int, int, int):
+        return (local_cache_size, global_cache_size, should_check, last_global_warn_size, last_local_warn_size, counter)
+
+    check_caches()
 
 def write_buildzig(file_cap, build_config: BuildConfig):
     fs = file.FS(file_cap)
@@ -179,6 +209,15 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
     files_to_compile = list(files)
     all_outputs = []
 
+    # Quick check if caches are empty at startup (before building starts)
+    local_cache_was_empty = check_cache_is_empty(fcap, get_zig_local_cache_dir(fcap))
+    global_cache_was_empty = check_cache_is_empty(fcap, get_zig_global_cache_dir(fcap))
+
+    # Start background cache size checking only in interactive sessions
+    cache_checker: ?CacheSizeChecker = None
+    if env.is_tty():
+        cache_checker = CacheSizeChecker(file.FileCap(env.cap))
+
     def parse_dep_path_overrides(args) -> dict[str, str]:
         overrides = {}
         for dep_arg in args.get_strlist("dep"):
@@ -198,13 +237,55 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
 
     var build_config = BuildConfig()
 
+    def _report_cache_warnings():
+        if cache_checker is not None:
+            (local_size, global_size, did_check, last_global_warn, last_local_warn, counter) = cache_checker.get_cache_state()
+
+            if not did_check:
+                return
+
+            gb = 1024 * 1024 * 1024
+            growth_threshold = 1 * gb
+
+            need_update = False
+            new_global_warn = last_global_warn
+            new_local_warn = last_local_warn
+
+            if global_size > last_global_warn + growth_threshold:
+                print("WARN: The global cache has grown to %.2fGB" % (global_size / gb), err=True)
+                print("HINT: You can clear the cache with: rm -rf %s" % get_zig_global_cache_dir(fcap), err=True)
+                print("INFO: Do NOT clear the cache if you are offline or have a slow connection.", err=True)
+                print("INFO: The global cache stores downloaded package dependencies as well as", err=True)
+                print("INFO: compiled artifacts for common libraries, like libc.", err=True)
+                print("", err=True)
+                new_global_warn = global_size
+                need_update = True
+
+            if local_size > last_local_warn + growth_threshold:
+                print("WARN: The local cache has grown to %.2fGB" % (local_size / gb), err=True)
+                print("HINT: You can clear the cache with: rm -rf %s" % get_zig_local_cache_dir(fcap), err=True)
+                print("", err=True)
+                new_local_warn = local_size
+                need_update = True
+
+            if need_update:
+                try:
+                    state_file = file.join_path([fs.homedir(), ".cache", "acton", "check_state"])
+                    f = file.WriteFile(file.WriteFileCap(fcap), state_file)
+                    f.write((str(counter) + "\n" + str(new_global_warn) + "\n" + str(new_local_warn)).encode())
+                    f.close()
+                except:
+                    pass
+
     def _on_actonc_exit(exit_code, term_signal, std_out_buf, std_err_buf):
+        _report_cache_warnings()
         if exit_code == 0:
             on_build_success(std_out_buf.decode())
         else:
             on_build_failure(exit_code, term_signal, std_out_buf.decode() + std_err_buf.decode())
 
     def _on_actonc_failure(error: str):
+        _report_cache_warnings()
         on_build_failure(-999, -999, error)
 
     def _compile_next_file(cmd_base):
@@ -430,6 +511,12 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
         """
         try:
             lock_file = file.WriteFile(file.WriteFileCap(fcap), ".acton.lock", lock=True)
+            if env.is_tty():
+                if global_cache_was_empty:
+                    print("INFO: Acton global cache is empty: rebuilding common libraries (e.g. libc) which will take some time...")
+                if local_cache_was_empty:
+                    print("INFO: Acton local cache is empty: rebuilding Acton base which will take some time...")
+
             check_for_buildconfig()
         except OSError:
             # Only warn if we are an interactive session, chances are otherwise
@@ -443,17 +530,6 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
                 print("Build lock exists, trying again soon...")
             after 1: get_lock()
 
-    if env.is_tty():
-        # Check cache size and warn or clean if necessary... but only if we are
-        # attached to a TTY, i.e. running interactively so there is a user to
-        # see the warning. Similarly, for cleaning we want to avoid cleaning if
-        # there are multiple concurrent builds happening. Having a TTY is a
-        # reasonable proxy for "user is probably just interactively running one
-        # acton invokation right now". In contrast, if we are triggered as a
-        # sub-compilation task to build a dependency project, we don't want to
-        # clean the cache.
-        warn_on_large_zig_global_cache(file.FileCap(env.cap))
-        clean_zig_local_cache(file.FileCap(env.cap))
     # and off we go! Start by grabbing the project build lock
     get_lock()
 
