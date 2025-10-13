@@ -1614,6 +1614,7 @@ actor main(env):
         p.add_bool("no-threads", "Don't use threads")
         p.add_bool("only-build", "Only perform final build of .c files, do not compile .act files")
         p.add_bool("skip-build", "Skip final build of .c files")
+        p.add_bool("tty", "Controlling terminal is interactive")
         p.add_option("root", "str", "?", "", "Set root actor")
         p.add_option("tempdir", "str", "?", "", "Directory for temporary build files")
         p.add_option("syspath", "str", "?", "", "syspath")
