@@ -774,7 +774,9 @@ adjust TNone{} t' e                 = e
 adjust t t'@TVar{} e                = e
 adjust (TCon _ c) (TCon _ c') e
   | tcname c == tcname c'           = e
-adjust t t' e                       = typecast t t' e
+adjust t t' e
+   | B.isUnboxable t'               = e
+   | otherwise                      = typecast t t' e
 
 genExp env t' e                     = gen env (adjust t t' e')
   where (t, fx, e')                 = qType env adjust e
