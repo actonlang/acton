@@ -663,6 +663,8 @@ instance Gen Stmt where
     genV env (Return _ (Just e))    = (text "return" <+> genExp env (ret env) e <> semi, [])
     genV env (Break _)              = (text "break" <> semi, [])
     genV env (Continue _)           = (text "continue" <> semi, [])
+    genV _ (If _ (Branch (Bool _ True) [Pass _] : _) _)
+                                    = (empty, [])
     genV env (If  _ [b@(Branch e ss)] fin)
       | isPUSH e                    = (b' $+$ fin', v1 ++ v2 ++ volatiles)
       where (b',v1)                 = genBranch env "if" b
