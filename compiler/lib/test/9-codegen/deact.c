@@ -897,12 +897,6 @@ int deactQ_done$ = 0;
 void deactQ___init__ () {
     if (deactQ_done$) return;
     deactQ_done$ = 1;
-    B_Times W_223 = (B_Times)B_IntegralD_intG_witness;
-    deactQ_W_223 = W_223;
-    B_Plus W_586 = (B_Plus)B_IntegralD_intG_witness;
-    deactQ_W_586 = W_586;
-    B_Eq W_761 = (B_Eq)B_OrdD_intG_witness;
-    deactQ_W_761 = W_761;
     {
         deactQ_L_2ContG_methods.$GCINFO = "deactQ_L_2Cont";
         deactQ_L_2ContG_methods.$superclass = ($SuperG_class)&$ContG_methods;
@@ -1208,4 +1202,10 @@ void deactQ___init__ () {
         deactQ_mainG_methods.__deserialize__ = deactQ_mainD___deserialize__;
         $register(&deactQ_mainG_methods);
     }
+    B_Times W_223 = (B_Times)B_IntegralD_intG_witness;
+    deactQ_W_223 = W_223;
+    B_Plus W_586 = (B_Plus)B_IntegralD_intG_witness;
+    deactQ_W_586 = W_586;
+    B_Eq W_761 = (B_Eq)B_OrdD_intG_witness;
+    deactQ_W_761 = W_761;
 }

@@ -2,9 +2,6 @@
 #pragma once
 #include "builtin/builtin.h"
 #include "rts/rts.h"
-extern B_Times deactQ_W_223;
-extern B_Plus deactQ_W_586;
-extern B_Eq deactQ_W_761;
 struct deactQ_L_2Cont;
 struct deactQ_L_4action;
 struct deactQ_L_6Cont;
@@ -550,4 +547,7 @@ extern struct deactQ_BepaG_class deactQ_BepaG_methods;
 $R deactQ_BepaG_new($Cont);
 extern struct deactQ_mainG_class deactQ_mainG_methods;
 $R deactQ_mainG_new($Cont, B_Env);
+extern B_Times deactQ_W_223;
+extern B_Plus deactQ_W_586;
+extern B_Eq deactQ_W_761;
 void deactQ___init__ ();
