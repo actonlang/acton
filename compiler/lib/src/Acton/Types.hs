@@ -1215,6 +1215,15 @@ infInitEnv env self (Expr l e : b)
                                              return (cs1++cs2, te, Expr l e' : b')
 infInitEnv env self b                   = infSuiteEnv env b
 
+abstractDefs env q b                    = map absDef b
+  where absDef (Decl l ds)              = Decl l (map absDef' ds)
+        absDef (If l bs els)            = If l [ Branch e (map absDef ss) | Branch e ss <- bs ] (map absDef els)
+        absDef stmt                     = stmt
+        absDef' d@Def{}                 = d{ pos = pos1 }
+          where pos1                    = case pos d of
+                                            PosPar nSelf t e p | deco d /= Static ->
+                                                PosPar nSelf t e $ qualWPar env q p
+                                            p -> qualWPar env q p
 
 -- Check actor-specific restrictions on 'self' usage
 -- Can check a name, parameters, or both
@@ -1310,7 +1319,7 @@ instance Check Decl where
                                              popFX
                                              (cs1,eq1) <- solveScoped env1 tvs te tNone csb
                                              checkNoEscape l env tvs
-                                             return (cs1, [Class l n (noqual env q) (map snd as) (bindWits eq1 ++ b') ddoc])
+                                             return (cs1, [Class l n (noqual env q) (map snd as) (bindWits eq1 ++ abstractDefs env q b') ddoc])
       where env1                        = defineSelf (NoQ n) q $ defineTVars q $ setInClass env
             tvs                         = tvSelf : qbound q
             NClass _ as te _            = findName n env
