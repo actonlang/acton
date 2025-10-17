@@ -1729,6 +1729,8 @@ instance Infer Expr where
                                              w <- newWitness
                                              return (Impl (DfltInfo (loc e1) 83 (Just e) []) w t2 (pContainer t1) :
                                                      cs1++cs2, tBool, eCall (eDot (eVar w) (method op)) [e2', e1'])
+      | op `elem` [Is,IsNot], e2==eNone = do (cs,_,_,t,e') <- inferTest env e
+                                             return (cs, t, e')
       | otherwise                       = do t <- newUnivar
                                              (cs1,e1') <- inferSub env t e1
                                              (cs2,e2') <- inferSub env t e2
@@ -1960,15 +1962,6 @@ inferTest env (CompOp l e [OpArg Is None{}])
                                         = do t <- newUnivar
                                              (cs1,e') <- inferSub env (tOpt t) e
                                              return (cs1, env, [], tBool, eCall (tApp (eQVar primISNONE) [t]) [e'])
-{-
-inferTest env (CompOp l e1 [OpArg op e2])
-  | Just n <- isNotNone e1 op e2        = do t <- newUnivar
-                                             (cs1,e') <- inferSub env (tOpt t) (eVar n)
-                                             return (cs1, define [(n,NVar t)] env, sCast n (tOpt t) t, tBool, eCall (tApp (eQVar primISNOTNONE) [t]) [e'])
-  | Just n <- isNone e1 op e2           = do t <- newUnivar
-                                             (cs1,e') <- inferSub env (tOpt t) (eVar n)
-                                             return (cs1, env, [], tBool, eCall (tApp (eQVar primISNONE) [t]) [e'])
--}
 inferTest env (IsInstance l e@(Var _ (NoQ n)) c)
                                         = case findQName c env of
                                              NClass q _ _ _ -> do
@@ -1981,19 +1974,6 @@ inferTest env (Paren l e)               = do (cs,env',s,t,e') <- inferTest env e
                                              return (cs, env', s, t, Paren l e')
 inferTest env e                         = do (cs,t,e') <- infer env e
                                              return (cs, env, [], t, e')
-
-
-isNotNone (Var _ (NoQ n)) IsNot None{}  = Just n
-isNotNone (Var _ (NoQ n)) NEq None{}    = Just n
-isNotNone None{} IsNot (Var _ (NoQ n))  = Just n
-isNotNone None{} NEq (Var _ (NoQ n))    = Just n
-isNotNone e op e'                       = Nothing
-
-isNone (Var _ (NoQ n)) Is None{}        = Just n
-isNone (Var _ (NoQ n)) Eq None{}        = Just n
-isNone None{} Is (Var _ (NoQ n))        = Just n
-isNone None{} Eq (Var _ (NoQ n))        = Just n
-isNone e op e'                          = Nothing
 
 
 sCast n t t'                            = [(n, eCAST t t' (eVar n))]
