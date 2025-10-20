@@ -287,6 +287,12 @@ main = do
         describe "Basic string errors" $ do
           testModuleParseError "unclosed_string" "a = \"hello"
           testModuleParseError "unclosed_string_triple" "z = 1\na = \"\"\"hello\nb = 3\ndef foo():\n    pass"
+          testModuleParseError "unclosed_raw_string" "a = r\"hello"
+          testModuleParseError "unclosed_bytes_string" "a = b\"hello"
+          testModuleParseError "unclosed_raw_bytes_string" "a = rb\"hello"
+          testModuleParseError "unclosed_raw_string_single" "a = r'hello"
+          testModuleParseError "unclosed_bytes_string_single" "a = b'hello"
+          testModuleParseError "unclosed_raw_bytes_string_single" "a = rb'hello"
 
         describe "Triple quote errors (6+ quotes)" $ do
           testModuleParseError "six_double_quotes" "a = \"\"\"\"\"\"test\"\"\"\"\"\""  -- 6 quotes each side
