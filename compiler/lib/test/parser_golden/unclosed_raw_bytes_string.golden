@@ -1,9 +1,9 @@
 ERROR: [error Syntax error]: Missing closing "
-     ╭──▶ test@2:2-2:8
+     ╭──▶ test.act@1:7-1:13
      │
-   2 │ {"inner
-     •  ┬─────
-     •  ╰╸ Missing closing "
+   1 │ a = rb"hello
+     •       ┬─────
+     •       ╰╸ Missing closing "
      •
      │ Hint: Add a closing quote (") to match the opening one
 ─────╯
