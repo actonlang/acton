@@ -22,9 +22,15 @@ executables:
     dependencies:
       - acton
       - base >= 4.7 && < 5
+      - mtl
+      - megaparsec
+      - aeson
+      - unordered-containers
+      - diagnose
       - lsp >= 2.7
       - lsp-types
       - text
+      - time
     when:
     - condition: os(linux)
       ld-options:
