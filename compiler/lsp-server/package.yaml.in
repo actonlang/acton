@@ -1,4 +1,4 @@
-name:                acton-lsp-server
+name:                lsp-server-acton
 version: BUILD_VERSION
 # github:              "/simple"
 license:             BSD3
@@ -16,7 +16,7 @@ copyright:           "Data Ductus, Deutsche Telekom"
 description:         Please see the README on Github at <https://github.com/githubuser/simple#readme>
 
 executables:
-  acton-lsp-server:
+  lsp-server-acton:
     main:                Main.hs
     source-dirs:         .
     dependencies:
