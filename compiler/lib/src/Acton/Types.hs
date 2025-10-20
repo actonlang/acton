@@ -161,25 +161,31 @@ infTopStmts env (s : ss)                = do (cs,te1,s) <- infEnv env s
         dflt PRow                       = posNil
         dflt KRow                       = kwdNil
 
-        pushEqns eqs ss                 = push eqns0 ss
-          where eqns0                   = [ (eq,ns) | eq <- eqs, let ns = free eq `intersect` bound ss ]
-        push eqns ss                    = bindWits (map fst eq1) ++ push' eq2 ss
-          where (eq1,eq2)               = partition (null . snd) eqns
-        push' [] ss                     = ss
-        push' eqns (s:ss)
-          | null eq1                    = s : push eq2 ss
-          | otherwise                   = inject eq1 s : push eq2 ss
-          where eq1                     = collect [] (free s) (map fst eqns)
-                eq2                     = [ (eq, ns \\ ns') | (eq,ns) <- eqns ]
-                ns'                     = bound s
-        inject eqs (Decl l ds)          = Decl l (map inj ds)
-          where inj d                   = d{ dbody = bindWits eqs ++ dbody d }
+        pushEqns eqs []                 = []
+        pushEqns eqs (s:ss)
+          | null backward               = s : pushEqns eqs ss
+          | null residue                = bindWits pre ++ inject inj s : ss
+          | otherwise                   = error ("# Internal error: unresolved " ++ prstrs residue ++ "\n# in cyclic witnesses "
+                                                 ++ prstrs inj ++ "\n# and statement\n" ++ prstr s)
+          where backward                = free s `intersect` bound eqs
+                residue                 = free inj \\ bound s
+                (pre,inj)               = split [] [] (bound ss) eqs
+                split pre inj bvs []    = (reverse pre, reverse inj)
+                split pre inj bvs (eq:eqs)
+                  | null forward        = split (eq:pre) inj bvs eqs
+                  | otherwise           = split pre (eq:inj) (bound eq ++ bvs) eqs
+                  where forward         = free eq `intersect` bvs
+
+        inject [] s                     = s
+        inject eqs (Decl l ds)          = Decl l [ d{ dbody = prune [] (free d) reveqs ++ dbody d } | d <- ds ]
+          where reveqs                  = reverse eqs
+                prune inj fvs []        = bindWits inj
+                prune inj fvs (eq:eqs)
+                  | null needed         = prune inj fvs eqs
+                  | otherwise           = prune (eq:inj) (free eq ++ fvs) eqs
+                  where needed          = bound eq `intersect` fvs
         inject eqs (With l [] ss)       = With l [] (pushEqns eqs ss)
         inject eqs s                    = error ("# Internal error: cyclic witnesses " ++ prstrs eqs ++ "\n# and statement\n" ++ prstr s)
-        collect eq0 vs eq
-          | null eq1                    = eq0
-          | otherwise                   = collect (eq1++eq0) ((free eq1 \\ bound eq1) ++ vs) eq2
-          where (eq1,eq2)               = partition (any (`elem` vs) . bound) eq
 
 
 class Infer a where
