@@ -818,10 +818,6 @@ matchActorAssumption env n0 p k te      = do --traceM ("## matchActorAssumption 
 -- Find __init__ method in class body, return self parameter, body and location
 findInitMethod :: Suite -> Maybe (Name, Suite, SrcLoc)
 findInitMethod b                        = listToMaybe [ (x, dbody d, loc d) | Decl _ ds <- b, d <- ds, dname d == initKW, Just x <- [selfPar d] ]
-  where
-    selfPar Def{pos=PosPar x _ _ _}     = Just x
-    selfPar Def{kwd=KwdPar x _ _ _}     = Just x
-    selfPar _                           = Nothing
 
 -- Scan __init__ for "self.x = ..." to find which attributes are definitely
 -- assigned before any references to `self` escape externally. We allow most

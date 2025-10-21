@@ -61,7 +61,13 @@ getComps                            = state (\(n,ts) -> (ts, (n,[])))
 
 type NormEnv                        = EnvF NormX
 
-data NormX                          = NormX { contextX :: [ContextMark], rtypeX :: Maybe Type, lambdavarsX :: PosPar }
+data NormX                          = NormX {
+                                        contextX :: [ContextMark],
+                                        rtypeX :: Maybe Type,
+                                        lambdavarsX :: PosPar,
+                                        classattrsX :: [Name],
+                                        selfparamX :: Maybe Name
+                                      }
 
 data ContextMark                    = DROP | LOOP | FINAL deriving (Eq,Show)
 
@@ -82,7 +88,16 @@ addLambdavars p env                 = modX env $ \x -> x{ lambdavarsX = joinP (l
 
 getLambdavars env                   = lambdavarsX $ envX env
 
-normEnv env0                        = setX env0 NormX{ contextX = [], rtypeX = Nothing, lambdavarsX = PosNIL }
+classattrs env                      = classattrsX $ envX env
+
+selfparam env                       = selfparamX $ envX env
+
+setClassAttrs ns env                = modX env $ \x -> x{ classattrsX = ns }
+
+setSelfParam n env                  = modX env $ \x -> x{ selfparamX = Just n }
+
+normEnv env0                        = setX env0 NormX{ contextX = [], rtypeX = Nothing, lambdavarsX = PosNIL, classattrsX = [], selfparamX = Nothing }
+
 
 -- Normalize terms ---------------------------------------------------------------------------------------
 
@@ -344,7 +359,12 @@ instance Norm Decl where
                                          b' <- normSuite env1 b
                                          return $ Def l n q p' KwdNIL (conv t) (ret b') d x doc
       where env1                    = setContext [] $ setRet t $ define (envOf p ++ envOf k) env0
-            env0                    = defineTVars q env
+            env0                    = defineTVars q env00
+            env00                   = case p of
+                                        PosPar self _ _ _ | not $ null $ classattrs env, d /= Static ->
+                                            setSelfParam self env
+                                        _ ->
+                                            env
             ret b | fallsthru b     = b ++ [sReturn eNone]
                   | otherwise       = b
     norm env (Actor l n q p k b doc)
@@ -354,10 +374,37 @@ instance Norm Decl where
       where env1                    = setContext [] $ define (envOf p ++ envOf k) env0
             env0                    = define [(selfKW, NVar t0)] $ defineTVars q env
             t0                      = tCon $ TC (NoQ n) (map tVar $ qbound q)
-    norm env (Class l n q as b doc) = Class l n q as <$> norm env1 b <*> return doc
-      where env1                    = defineSelf (NoQ n) q $ defineTVars q env
+    norm env (Class l n q as b doc) = Class l n q as <$> norm env1 b1 <*> return doc
+      where env1                    = defineSelf (NoQ n) q $ defineTVars q env0
+            env0                    = setClassAttrs ws env
+            (ws,b1)                 = fixupClassAttrs n b
     norm env d                      = error ("norm unexpected: " ++ prstr d)
 
+
+fixupClassAttrs n0 b
+  | null eqs                        = ([], b)
+  | otherwise                       = trace ("### Fixup attrs " ++ prstrs (bound props) ++ " in class " ++ prstr n0) $
+                                      (bound props, props ++ map initS b1)
+  where (eqs, b1)                   = split [] [] b
+
+        split eqs defs []           = (reverse eqs, reverse defs)
+        split eqs defs (s:ss)       = case s of
+                                        Assign _ [PVar _ w@(Internal Witness _ _) (Just t)] e -> 
+                                            split ((w,t,e):eqs) defs ss
+                                        _ ->
+                                            split eqs (s:defs) ss
+
+        initS (Decl l ds)           = Decl l (map initD ds)
+        initS s                     = s
+
+        initD d@Def{}
+          | dname d == initKW,
+            Just self <- selfPar d  = d{ dbody = inits (eVar self) ++ dbody d }
+        initD d                     = d
+
+        inits e0                    = [ sMutAssign (eDot e0 w) e | (w,t,e) <- eqs ]
+
+        props                       = [ Signature NoLoc [w] (monotype t) Property | (w,t,e) <- eqs ]
 
 
 catStrings ss                       = map (quote . escape '"') ss
@@ -379,6 +426,9 @@ normBool env e
   where t                           = typeOf env e
 
 instance Norm Expr where
+    norm env (Var l (NoQ n))
+      | n `elem` classattrs env,
+        Just self <- selfparam env  = return $ eDot (eVar self) n
     norm env (Var l nm)             = return $ Var l nm
     norm env (Int l i s)            = Int l <$> return i <*> return s
     norm env (Float l f s)          = Float l <$> return f <*> return s
