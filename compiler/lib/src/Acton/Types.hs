@@ -139,18 +139,20 @@ infTop env ss                           = do --traceM ("\n## infEnv top")
                                              return (te, ss)
 
 infTopStmts env []                      = return ([], [])
-infTopStmts env (s : ss)                = do (cs,te1,s) <- infEnv env s
+infTopStmts env (s : ss)                = do (te1, ss1) <- infTopStmt env s
+                                             (te2, ss2) <- infTopStmts (define te1 env) ss
+                                             return (te1++te2, ss1++ss2)
+
+infTopStmt env s                        = do (cs,te1,s1) <- infEnv env s
                                              --traceM ("###########\n" ++ render (nest 4 $ vcat $ map pretty te1))
                                              --traceM ("-----------\n" ++ render (nest 4 $ vcat $ map pretty cs))
                                              eq <- solveAll (posdefine (filter typeDecl te1) env) te1 cs
                                              te1 <- defaultTE env te1
                                              --traceM ("===========\n" ++ render (nest 4 $ vcat $ map pretty te1))
-                                             ss1 <- termred <$> usubst (pushEqns eq [s])
+                                             ss1 <- termred <$> usubst (pushEqns eq [s1])
                                              defaultVars (ufree ss1)
                                              ss1 <- usubst ss1
-
-                                             (te2,ss2) <- infTopStmts (define te1 env) ss
-                                             return (te1++te2, ss1++ss2)
+                                             return (te1, ss1)
 
   where defaultTE env te                = do defaultVars (ufree te)
                                              usubst te
@@ -177,12 +179,13 @@ infTopStmts env (s : ss)                = do (cs,te1,s) <- infEnv env s
                   where forward         = free eq `intersect` bvs
 
         inject [] s                     = s
-        inject eqs (Decl l ds)          = Decl l [ d{ dbody = prune [] (free d) reveqs ++ dbody d } | d <- ds ]
+        inject eqs (Decl l ds)          = Decl l [ d{ dbody = prune (dname d) [] (free d) reveqs ++ dbody d } | d <- ds ]
           where reveqs                  = reverse eqs
-                prune inj fvs []        = bindWits inj
-                prune inj fvs (eq:eqs)
-                  | null needed         = prune inj fvs eqs
-                  | otherwise           = prune (eq:inj) (free eq ++ fvs) eqs
+                prune n inj fvs []      = trace ("### Injecting " ++ prstrs (bound inj) ++ " into " ++ prstr n) $
+                                          bindWits inj
+                prune n inj fvs (eq:eqs)
+                  | null needed         = prune n inj fvs eqs
+                  | otherwise           = prune n (eq:inj) (free eq ++ fvs) eqs
                   where needed          = bound eq `intersect` fvs
         inject eqs (With l [] ss)       = With l [] (pushEqns eqs ss)
         inject eqs s                    = error ("# Internal error: cyclic witnesses " ++ prstrs eqs ++ "\n# and statement\n" ++ prstr s)
