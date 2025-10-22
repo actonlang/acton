@@ -36,12 +36,11 @@ import Numeric
 generate                            :: Acton.Env.Env0 -> FilePath -> Module -> String -> IO (String,String,String)
 generate env srcbase m hash         = do return (n, h, c)
 
-  where m1                          = liftDeclWits m
-        n                           = concat (Data.List.intersperse "." (modPath (modname m1))) --render $ quotes $ gen env0 (modname m1)
+  where n                           = concat (Data.List.intersperse "." (modPath (modname m))) --render $ quotes $ gen env0 (modname m1)
         hashComment                 = text "/* Acton source hash:" <+> text hash <+> text "*/"
-        h                           = render $ hashComment $+$ hModule env0 m1
-        c                           = render $ hashComment $+$ cModule env0 srcbase m1
-        env0                        = genEnv $ setMod (modname m1) env
+        h                           = render $ hashComment $+$ hModule env0 m
+        c                           = render $ hashComment $+$ cModule env0 srcbase m
+        env0                        = genEnv $ setMod (modname m) env
 
 genRoot                            :: Acton.Env.Env0 -> QName -> IO String
 genRoot env0 qn@(GName m n)         = do return $ render (cInclude $+$ cIncludeMods $+$ cInit $+$ cRoot)
@@ -54,52 +53,6 @@ genRoot env0 qn@(GName m n)         = do return $ render (cInclude $+$ cIncludeM
         cRoot                       = (gen env tActor <+> gen env primROOT <+> parens empty <+> char '{') $+$
                                        nest 4 (text "return" <+> parens (gen env tActor) <> gen env primNEWACTOR <> parens (gen env qn) <> semi) $+$
                                        char '}'
-
--- Witnesses defined on the top level of the classes we currently support are an anomaly. On the
--- one hand they aren't in the scope of any function parameters so they could just as well be
--- considered to be global variable assignments. On the other hand it's quite common that witness
--- terms requested by a set of class declarations contain references to the very same class names
--- inside their type annotations. The latter stops the idea of simply prefixing the class
--- declarations with the witness assignments, since assignments in Acton can't contain any forward 
--- references whatsoever.
--- We have previously solved the dilemma by moving such witness assignments into every method
--- definition in the affected classes instead. This has been on the grounds that the top level of
--- a class is operationally nothing more than the program top level, for which we have no
--- implementation technique that supports forward references in general.
--- The drawbacks of this approach are easily spotted, though: obfuscated code with lots of 
--- duplication in the type-checker's output, repeated witness constructions at every method call
--- even when there are no method parameter dependencies, and occasional examples of witness terms
--- being constructed in methods that don't even need them.
--- The current commit switches to a new approach where witnesses that mutually depend on classes
--- are indeed injected on the top level of thoses classes. This solves the listed problems, in a
--- way that also respects the Acton scoping rules in the program representations that are passed
--- along between the compiler passes. And forward references in assignments, that so far have
--- disqualified this otherwise obvious approach, turn out to be a rather mild problem considering
--- this insight: the class names that witnesses might reference before they are defined already
--- have a module-wide scope in the C code that we generate! In C, classes correspond to various
--- struct declarations that are all defined using stubs that allow arbitrary cyclic dependencies.
--- Witnesses can thus safely depend on those structs in their type annotations even if they occur
--- on the top of the generated C file.
--- So this is what the code generator now does, concretely by calling the following function
--- to rewrite the compiled module right before generating its corresponding .h and .c files.
-
-liftDeclWits (Module m imps stmts)  = Module m imps (liftS stmts)
-  where
-    liftS (s@Decl{} : ss)
-      | not $ null wits       = wits ++ s{decls=ds} : liftS ss
-      where (witss, ds)         = unzip $ map liftD (decls s)
-            wits                = concat witss
-    liftS (s : ss)              = s : liftS ss
-    liftS []                    = []
-
-    liftD d@Class{}
-      | not $ null wits         = (wits, d{dbody=stmts})
-      where (wits,stmts)        = partition witAssign (dbody d)
-    liftD d                     = ([], d)
-
-    witAssign (Assign _ [PVar _ (Internal Witness _ _) _] _)
-                                = True
-    witAssign s                 = False
 
 
 myPretty (GName m n)
