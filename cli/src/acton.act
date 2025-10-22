@@ -891,6 +891,7 @@ def build_cmd_args(args):
             "cgen",
             "cps",
             "cpu",
+            "dbg-no-lines",
             "db",
             "deact",
             "dep",
@@ -1603,6 +1604,7 @@ actor main(env):
         p.add_bool("ccmd", "Show CC / LD command lines")
         p.add_bool("timing", "Show timing information")
         p.add_bool("cpedantic", "Pedantic C compilation")
+        p.add_bool("dbg-no-lines", "Disable emission of C #line directives (for debugging)")
         p.add_bool("quiet", "Be quiet")
         p.add_bool("verbose", "Verbose output")
         p.add_option("optimize", "str", "?", "Debug", "Optimization mode (Debug, ReleaseSafe, ReleaseSmall, ReleaseFast)")
