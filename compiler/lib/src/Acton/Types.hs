@@ -144,9 +144,11 @@ infTopStmts env (s : ss)                = do (te1, ss1) <- infTopStmt env s
                                              return (te1++te2, ss1++ss2)
 
 infTopStmt env s                        = do (cs,te1,s1) <- infEnv env s
-                                             --traceM ("###########\n" ++ render (nest 4 $ vcat $ map pretty te1))
+                                             --traceM ("###########\n" ++ render (nest 4 $ pretty s1))
+                                             --traceM (":::::::::::\n" ++ render (nest 4 $ vcat $ map pretty te1))
                                              --traceM ("-----------\n" ++ render (nest 4 $ vcat $ map pretty cs))
                                              eq <- solveAll (posdefine (filter typeDecl te1) env) te1 cs
+                                             --traceM ("+++++++++++\n" ++ render (nest 4 $ vcat $ map pretty eq))
                                              te1 <- defaultTE env te1
                                              --traceM ("===========\n" ++ render (nest 4 $ vcat $ map pretty te1))
                                              ss1 <- termred <$> usubst (pushEqns eq [s1])
@@ -167,11 +169,10 @@ infTopStmt env s                        = do (cs,te1,s1) <- infEnv env s
         pushEqns eqs (s:ss)
           | null backward               = s : pushEqns eqs ss
           | null residue                = bindWits pre ++ inject inj s : ss
-          | otherwise                   = error ("# Internal error: unresolved " ++ prstrs residue ++ "\n# in cyclic witnesses "
-                                                 ++ prstrs inj ++ "\n# and statement\n" ++ prstr s)
+          | otherwise                   = error ("\n\n# Internal error: witness forward dependency: " ++ prstrs residue)
           where backward                = free s `intersect` bound eqs
-                residue                 = free inj \\ bound s
-                (pre,inj)               = split [] [] (bound ss) eqs
+                residue                 = free inj `intersect` bound ss
+                (pre,inj)               = split [] [] (bound (s:ss)) eqs
                 split pre inj bvs []    = (reverse pre, reverse inj)
                 split pre inj bvs (eq:eqs)
                   | null forward        = split (eq:pre) inj bvs eqs
