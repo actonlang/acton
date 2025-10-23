@@ -370,45 +370,63 @@ normDecl env ns d                   = do d <- norm env d
                                          return ([], d)
 
 
+-- The type-checker may leave witness bindings on the level of classes, even though our class
+-- syntax does not yet support this in the same way as is does for actors. But the creation and
+-- reduction of witnesses that mutually depend on classes becomes so much easier if we allow
+-- ourselves to make use of this planned feature already today. The code below thus implements
+-- class level bindings, albeit limited to witnesses, by transforming them into either global
+-- binding prefixes (if the circular class dependencies actually got eliminated during witness
+-- reduction), __init__ method locals (if they are only referenced during initialization) or
+-- proper instance attributes (in the general case).
+
 fixupClassAttrs n ns b
   | null eqs                        = ([], [], b)
-  | null eqs1                       = trace ("### Lift out attrs " ++ prstrs (bound pre) ++ " in class " ++ prstr n) $
-                                      (pre, [], b1)
-  | null eqs0                       = trace ("### Fixup attrs " ++ prstrs (dom te) ++ " in class " ++ prstr n) $
-                                      ([], te, map initS b1)
-  | otherwise                       = trace ("### Fixup attrs " ++ prstrs (dom te) ++ " in class " ++ prstr n) $
-                                      trace ("### Lift out attrs " ++ prstrs (bound pre) ++ " in class " ++ prstr n) $
-                                      (pre, te, map initS b1)
-  where (eqs, b1)                   = splitA [] [] b
+  | null attr                       = --trace ("### Lift out attrs " ++ prstrs (bound pre) ++ " in class " ++ prstr n) $
+                                      (pre, [], defs)
+  | null te                         = --trace ("### Init attrs " ++ prstrs (dom te) ++ " in class " ++ prstr n) $
+                                      ([], [], map initS defs)
+  | null pre                        = --trace ("### Dynamic attrs " ++ prstrs (dom te) ++ " in class " ++ prstr n) $
+                                      ([], te, map initS defs)
+  | otherwise                       = --trace ("### Fixup wits " ++ prstrs (bound eqs) ++ " in class " ++ prstr n) $
+                                      (pre, te, map initS defs)
+  where (eqs, defs)                 = splitA [] [] b
 
         splitA eqs defs []          = (reverse eqs, reverse defs)
         splitA eqs defs (s:ss)      = case s of
-                                        Assign _ [PVar _ w@(Internal Witness _ _) (Just t)] e ->
-                                            splitA ((w,t,e):eqs) defs ss
+                                        Assign _ [PVar _ (Internal Witness _ _) (Just _)] _ ->
+                                            splitA (s:eqs) defs ss
                                         _ ->
                                             splitA eqs (s:defs) ss
 
-        (eqs0, eqs1)                = splitG ns [] [] eqs
+        (dyn, par)                  = dvars [] [] $ concat [ ds | Decl _ ds <- defs ]
 
-        splitG ns eqs0 eqs1 []      = (reverse eqs0, reverse eqs1)
-        splitG ns eqs0 eqs1 (eq@(w,t,e):eqs)
-          | null fvs                = splitG ns (eq:eqs0) eqs1 eqs
-          | otherwise               = splitG (bound e ++ ns) eqs0 (eq:eqs1) eqs
-          where fvs                 = free e `intersect` ns
+        dvars dyn par []            = (dyn, par)
+        dvars dyn par (d:ds)
+          | dname d == initKW       = dvars dyn ([ n | n@(Internal Witness _ _) <- bound (pos d) ] ++ par) ds
+          | otherwise               = dvars (free d ++ dyn) par ds
+
+        (pre, attr)                 = splitG ns [] [] eqs
+
+        splitG ns pre attr []       = (reverse pre, reverse attr)
+        splitG ns pre attr (eq:eqs)
+          | null fvs                = splitG ns (eq:pre) attr eqs
+          | otherwise               = splitG (bound eq ++ ns) pre (eq:attr) eqs
+          where fvs                 = free (expr eq) `intersect` (par++ns)
 
         initS (Decl l ds)           = Decl l (map initD ds)
         initS s                     = s
 
         initD d@Def{}
           | dname d == initKW,
-            Just self <- selfPar d  = d{ dbody = inits (eVar self) ++ dbody d }
+            Just self <- selfPar d  = d{ dbody = map (initA $ eVar self) attr ++ dbody d }
         initD d                     = d
 
-        inits e0                    = [ sMutAssign (eDot e0 w) e | (w,_,e) <- eqs1 ]
+        initA self (Assign _ [PVar _ w _] e)
+          | w `elem` dyn            = sMutAssign (eDot self w) e
+        initA self s                = s
 
-        te                          = [ (w, NVar t) | (w,t,_) <- eqs1 ]
+        te                          = [ (w, NVar t) | Assign _ [PVar _ w (Just t)] _ <- attr, w `elem` dyn ]
 
-        pre                         = [ sAssign (pVar w t) e | (w,t,e) <- eqs0 ]
 
 instance Norm Decl where
     norm env (Def l n q p k t b d x doc)

@@ -181,7 +181,7 @@ infTopStmt env s                        = do (cs,te1,s1) <- infEnv env s
         inject [] s                     = s
         inject eqs (Decl l ds)          = Decl l [ d{ dbody = prune (dname d) [] (free d) reveqs ++ dbody d } | d <- ds ]
           where reveqs                  = reverse eqs
-                prune n inj fvs []      = trace ("### Injecting " ++ prstrs (bound inj) ++ " into " ++ prstr n) $
+                prune n inj fvs []      = --trace ("### Injecting " ++ prstrs (bound inj) ++ " into " ++ prstr n) $
                                           bindWits inj
                 prune n inj fvs (eq:eqs)
                   | null needed         = prune n inj fvs eqs
