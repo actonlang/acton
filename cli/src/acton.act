@@ -110,6 +110,7 @@ actor CacheSizeChecker(cap: file.FileCap):
     check_caches()
 
 def write_buildzig(file_cap, build_config: BuildConfig):
+    """Unconditionally write build.zig and build.zig.zon files for the project"""
     fs = file.FS(file_cap)
 
     def get_build_zig_templates():
@@ -120,6 +121,11 @@ def write_buildzig(file_cap, build_config: BuildConfig):
         build_zig_zon_template = file.ReadFile(
             file.ReadFileCap(file_cap),
             file.join_path([base_path(file_cap), "builder", "build.zig.zon"])).read().decode()
+
+        # Replace SYSPATH with the relative path to the Acton system installation (Zig requires relative paths)
+        syspath = file.get_relative_path(base_path(file_cap), fs.cwd())
+        build_zig_zon_template = build_zig_zon_template.replace("SYSPATH", syspath)
+
         return build_zig_template, build_zig_zon_template
 
     build_zig_tpl, build_zig_zon_tpl = get_build_zig_templates()
@@ -170,7 +176,7 @@ actor CompilerRunner(process_cap, env, args, wdir=None, on_exit: ?action(int, in
             on_exit(exit_code, term_signal, std_out_buf, std_err_buf)
         else:
             if exit_code != 0:
-                print("actonc exited with code: ", exit_code, " terminated with signal:", term_signal)
+                print("{exe} exited with code: ", exit_code, " terminated with signal:", term_signal)
             env.exit(exit_code)
 
     def on_actonc_error(p, error: str):
@@ -187,6 +193,8 @@ actor CompilerRunner(process_cap, env, args, wdir=None, on_exit: ?action(int, in
     cmd = [fs.exepath() + ("c" if exe == "actonc" else "")] + args
     if env.is_tty():
         cmd.append("--tty")
+    if exe == "actonc": # run actonc as a sub-compiler
+        cmd.append("--sub")
     p = process.Process(process_cap, cmd, on_actonc_std_out, on_actonc_std_err, on_actonc_exit, on_actonc_error, wdir)
 
     def stop():
