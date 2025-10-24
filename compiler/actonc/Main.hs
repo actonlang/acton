@@ -1201,7 +1201,6 @@ zigBuild env gopts opts paths tasks binTasks = do
     iff (not (quiet gopts opts)) $ putStrLn("  Final compilation step")
     timeStart <- getTime Monotonic
 
-    -- custom build.zig ?
     homeDir <- getHomeDirectory
     let local_cache_dir = joinPath [ homeDir, ".cache", "acton", "zig-local-cache" ]
         global_cache_dir = joinPath [ homeDir, ".cache", "acton", "zig-global-cache" ]
@@ -1217,27 +1216,22 @@ zigBuild env gopts opts paths tasks binTasks = do
                            ("aarch64":"linux":_)   -> " -Dcpu=cortex_a72 "
                            ("x86_64":_:_)          -> " -Dcpu=westmere "
                            (_:_:_)                 -> defCpu
-        buildZigPath = joinPath [projPath paths, "build.zig"]
-        buildZonPath = joinPath [projPath paths, "build.zig.zon"]
 
-    buildZigExists <- doesFileExist buildZigPath
-    buildZonExists <- doesFileExist buildZonPath
-    -- Compute relative path from current directory (projPath paths)
-    let relativeSysPath = makeAlwaysRelative (projPath paths) (sysPath paths)
-    iff (not buildZigExists) $ do
-      let distBuildZigPath = joinPath [(sysPath paths), "builder", "build.zig"]
-      copyFile distBuildZigPath buildZigPath
-    if buildZonExists
-      then do
-        curBuildZon <- readFile buildZonPath
-        let newBuildZon = replace "SYSPATH" relativeSysPath curBuildZon
-        removeFile buildZonPath
-          `catch` handleNotExists
-        writeFile buildZonPath newBuildZon
-      else do
+
+    -- If actonc runs as a standalone compiler (not a sub-compiler from Acton CLI),
+    -- then we may need to generate build.zig and build.zig.zon
+    iff (not (C.sub gopts)) $ do
+        let buildZigPath     = joinPath [projPath paths, "build.zig"]
+            buildZonPath     = joinPath [projPath paths, "build.zig.zon"]
+            -- Compute relative path from current directory (projPath paths), since zig likes relative paths
+            relativeSysPath  = makeAlwaysRelative (projPath paths) (sysPath paths)
+            distBuildZigPath = joinPath [(sysPath paths), "builder", "build.zig"]
+
+        buildZonExists <- doesFileExist buildZonPath
+        copyFile distBuildZigPath buildZigPath
         let distBuildZonPath = joinPath [(sysPath paths), "builder", "build.zig.zon"]
         distBuildZon <- readFile distBuildZonPath
-        let buildZon = replace "SYSPATH" relativeSysPath distBuildZon
+        let buildZon = replace "{{syspath}}" relativeSysPath distBuildZon
         writeFile buildZonPath buildZon
 
     let zigCmdBase = zig paths ++ " build " ++ " --cache-dir " ++ local_cache_dir ++

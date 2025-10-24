@@ -111,6 +111,7 @@ actor CacheSizeChecker(cap: file.FileCap):
 
 def write_buildzig(file_cap, build_config: BuildConfig):
     fs = file.FS(file_cap)
+    relative_syspath = file.get_relative_path(base_path(file_cap), fs.cwd())
 
     def get_build_zig_templates():
         # Read the build.zig template
@@ -125,13 +126,13 @@ def write_buildzig(file_cap, build_config: BuildConfig):
     build_zig_tpl, build_zig_zon_tpl = get_build_zig_templates()
     # Write build.zig
     b_file = file.WriteFile(file.WriteFileCap(file_cap), "build.zig")
-    await async b_file.write(gen_buildzig(build_zig_tpl, build_config).encode())
-    await async b_file.close()
+    b_file.write(gen_buildzig(build_zig_tpl, build_config).encode())
     # Write build.zig.zon
     bzz_file = file.WriteFile(file.WriteFileCap(file_cap), "build.zig.zon")
     deps_path = file.get_relative_path(file.join_path([fs.homedir(), ".cache", "acton", "deps"]), fs.cwd())
 
-    await async bzz_file.write(gen_buildzigzon(build_zig_zon_tpl, build_config, deps_path).encode())
+    bzz_file.write(gen_buildzigzon(build_zig_zon_tpl, build_config, relative_syspath, deps_path).encode())
+    await async b_file.close()
     await async bzz_file.close()
 
 
@@ -170,7 +171,7 @@ actor CompilerRunner(process_cap, env, args, wdir=None, on_exit: ?action(int, in
             on_exit(exit_code, term_signal, std_out_buf, std_err_buf)
         else:
             if exit_code != 0:
-                print("actonc exited with code: ", exit_code, " terminated with signal:", term_signal)
+                print("{exe} exited with code: ", exit_code, " terminated with signal:", term_signal)
             env.exit(exit_code)
 
     def on_actonc_error(p, error: str):
@@ -351,7 +352,7 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
             search_path_arg.extend(["--searchpath", sp])
         cmdargs = []
         if files == []:
-            cmdargs.extend(["build"])
+            cmdargs.extend(["build", "--sub"])
         cmdargs.extend(build_cmd_args(args))
         if build_tests:
             cmdargs.append("--test")
