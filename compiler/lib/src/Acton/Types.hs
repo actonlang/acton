@@ -139,9 +139,9 @@ infTop env ss                           = do --traceM ("\n## infEnv top")
                                              return (te, ss)
 
 infTopStmts env []                      = return ([], [])
-infTopStmts env (s : ss)                = do (te1, ss1) <- infTopStmt env s
+infTopStmts env (s : ss)                = do (te1, s1) <- infTopStmt env s
                                              (te2, ss2) <- infTopStmts (define te1 env) ss
-                                             return (te1++te2, ss1++ss2)
+                                             return (te1++te2, s1:ss2)
 
 infTopStmt env s                        = do (cs,te1,s1) <- infEnv env s
                                              --traceM ("###########\n" ++ render (nest 4 $ pretty s1))
@@ -151,10 +151,10 @@ infTopStmt env s                        = do (cs,te1,s1) <- infEnv env s
                                              --traceM ("+++++++++++\n" ++ render (nest 4 $ vcat $ map pretty eq))
                                              te1 <- defaultTE env te1
                                              --traceM ("===========\n" ++ render (nest 4 $ vcat $ map pretty te1))
-                                             ss1 <- termred <$> usubst (pushEqns eq [s1])
-                                             defaultVars (ufree ss1)
-                                             ss1 <- usubst ss1
-                                             return (te1, ss1)
+                                             s1 <- termred <$> usubst (pushEqns eq s1)
+                                             defaultVars (ufree s1)
+                                             s1 <- usubst s1
+                                             return (te1, s1)
 
   where defaultTE env te                = do defaultVars (ufree te)
                                              usubst te
@@ -165,31 +165,32 @@ infTopStmt env s                        = do (cs,te1,s1) <- infEnv env s
         dflt PRow                       = posNil
         dflt KRow                       = kwdNil
 
-        pushEqns eqs []                 = []
-        pushEqns eqs (s:ss)
-          | null backward               = s : pushEqns eqs ss
-          | null residue                = bindWits pre ++ inject inj s : ss
-          | otherwise                   = error ("\n\n# Internal error: witness forward dependency: " ++ prstrs residue)
-          where backward                = free s `intersect` bound eqs
-                residue                 = free inj `intersect` bound ss
-                (pre,inj)               = split [] [] (bound (s:ss)) eqs
-                split pre inj bvs []    = (reverse pre, reverse inj)
-                split pre inj bvs (eq:eqs)
-                  | null forward        = split (eq:pre) inj bvs eqs
-                  | otherwise           = split pre (eq:inj) (bound eq ++ bvs) eqs
-                  where forward         = free eq `intersect` bvs
 
-        inject [] s                     = s
-        inject eqs (Decl l ds)          = Decl l [ d{ dbody = prune (dname d) [] (free d) reveqs ++ dbody d } | d <- ds ]
-          where reveqs                  = reverse eqs
-                prune n inj fvs []      = --trace ("### Injecting " ++ prstrs (bound inj) ++ " into " ++ prstr n) $
+pushEqns [] s                           = s
+pushEqns eqs s
+  | null pre                            = inject inj s
+  | otherwise                           = withLocal (bindWits pre) $ inject inj s
+  where backward                        = free s `intersect` bound eqs
+        (pre,inj)                       = split [] [] (bound s) eqs
+        split pre inj bvs []            = (reverse pre, reverse inj)
+        split pre inj bvs (eq:eqs)
+          | null forward                = split (eq:pre) inj bvs eqs
+          | otherwise                   = split pre (eq:inj) (bound eq ++ bvs) eqs
+          where forward                 = free eq `intersect` bvs
+
+inject [] s                             = s
+inject eqs (Decl l ds)                  = Decl l [ d{ dbody = prune (dname d) [] (free d) reveqs ++ dbody d } | d <- ds ]
+  where reveqs                          = reverse eqs
+        prune n inj fvs []              = --trace ("### Injecting " ++ prstrs (bound inj) ++ " into " ++ prstr n) $
                                           bindWits inj
-                prune n inj fvs (eq:eqs)
-                  | null needed         = prune n inj fvs eqs
-                  | otherwise           = prune n (eq:inj) (free eq ++ fvs) eqs
-                  where needed          = bound eq `intersect` fvs
-        inject eqs (With l [] ss)       = With l [] (pushEqns eqs ss)
-        inject eqs s                    = error ("# Internal error: cyclic witnesses " ++ prstrs eqs ++ "\n# and statement\n" ++ prstr s)
+        prune n inj fvs (eq:eqs)
+          | null needed                 = prune n inj fvs eqs
+          | otherwise                   = prune n (eq:inj) (free eq ++ fvs) eqs
+          where needed                  = bound eq `intersect` fvs
+inject eqs (With l [] ss)               = With l [] (injlast eqs ss)
+  where injlast eqs [s]                 = [inject eqs s]
+        injlast eqs (s:ss)              = s : injlast eqs ss
+inject eqs s                            = error ("# Internal error: cyclic witnesses " ++ prstrs eqs ++ "\n# and statement\n" ++ prstr s)
 
 
 class Infer a where
@@ -382,7 +383,7 @@ instance InfEnv Stmt where
                                              (cs2,ds2) <- checkEnv (define te1 env) ds1
                                              (cs3,te2,eq,ds3) <- genEnv env cs2 te1 ds2
                                              --traceM ("-------- done: " ++ prstrs (declnames ds))
-                                             return (cs1++cs3, te2, withLocal (bindWits eq) $ Decl l ds3)
+                                             return (cs1++cs3, te2, pushEqns eq $ Decl l ds3)
 
     infEnv env (Delete l targ)          = do (cs0,t0,e0,tg) <- infTarg env targ
                                              (cs1,stmt) <- del t0 e0 tg

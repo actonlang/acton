@@ -341,10 +341,10 @@ instance Norm Stmt where
                                          v <- newName "val"
                                          x <- newName "exc"
                                          (e,mbp,ss) <- normItem env i
-                                         b' <- norm env1 (ss ++ b)
+                                         b' <- normSuite env1 (ss ++ b)
                                          return undefined
       where env1                    = define (envOf i) env
-    norm' env (With l [] b)         = norm env b
+    norm' env (With l [] b)         = normSuite env b
     norm' env s                     = do s' <- norm env s
                                          return [s']
 
