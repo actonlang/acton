@@ -127,18 +127,22 @@ infTop env ss                           = do --traceM ("\n## infEnv top")
                                              return (te, ss)
 
 infTopStmts env []                      = return ([], [])
-infTopStmts env (s : ss)                = do (cs,te1,s) <- infEnv env s
-                                             --traceM ("###########\n" ++ render (nest 4 $ vcat $ map pretty te1))
+infTopStmts env (s : ss)                = do (te1, ss1) <- infTopStmt env s
+                                             (te2, ss2) <- infTopStmts (define te1 env) ss
+                                             return (te1++te2, ss1++ss2)
+
+infTopStmt env s                        = do (cs,te1,s1) <- infEnv env s
+                                             --traceM ("###########\n" ++ render (nest 4 $ pretty s1))
+                                             --traceM (":::::::::::\n" ++ render (nest 4 $ vcat $ map pretty te1))
                                              --traceM ("-----------\n" ++ render (nest 4 $ vcat $ map pretty cs))
                                              eq <- solveAll (posdefine (filter typeDecl te1) env) te1 cs
+                                             --traceM ("+++++++++++\n" ++ render (nest 4 $ vcat $ map pretty eq))
                                              te1 <- defaultTE env te1
                                              --traceM ("===========\n" ++ render (nest 4 $ vcat $ map pretty te1))
-                                             ss1 <- termred <$> usubst (pushEqns eq [s])
+                                             ss1 <- termred <$> usubst (pushEqns eq [s1])
                                              defaultVars (ufree ss1)
                                              ss1 <- usubst ss1
-
-                                             (te2,ss2) <- infTopStmts (define te1 env) ss
-                                             return (te1++te2, ss1++ss2)
+                                             return (te1, ss1)
 
   where defaultTE env te                = do defaultVars (ufree te)
                                              usubst te
@@ -149,25 +153,31 @@ infTopStmts env (s : ss)                = do (cs,te1,s) <- infEnv env s
         dflt PRow                       = posNil
         dflt KRow                       = kwdNil
 
-        pushEqns eqs ss                 = push eqns0 ss
-          where eqns0                   = [ (eq,ns) | eq <- eqs, let ns = free eq `intersect` bound ss ]
-        push eqns ss                    = bindWits (map fst eq1) ++ push' eq2 ss
-          where (eq1,eq2)               = partition (null . snd) eqns
-        push' [] ss                     = ss
-        push' eqns (s:ss)
-          | null eq1                    = s : push eq2 ss
-          | otherwise                   = inject eq1 s : push eq2 ss
-          where eq1                     = collect [] (free s) (map fst eqns)
-                eq2                     = [ (eq, ns \\ ns') | (eq,ns) <- eqns ]
-                ns'                     = bound s
-        inject eqs (Decl l ds)          = Decl l (map inj ds)
-          where inj d                   = d{ dbody = bindWits eqs ++ dbody d }
+        pushEqns eqs []                 = []
+        pushEqns eqs (s:ss)
+          | null backward               = s : pushEqns eqs ss
+          | null residue                = bindWits pre ++ inject inj s : ss
+          | otherwise                   = error ("\n\n# Internal error: witness forward dependency: " ++ prstrs residue)
+          where backward                = free s `intersect` bound eqs
+                residue                 = free inj `intersect` bound ss
+                (pre,inj)               = split [] [] (bound (s:ss)) eqs
+                split pre inj bvs []    = (reverse pre, reverse inj)
+                split pre inj bvs (eq:eqs)
+                  | null forward        = split (eq:pre) inj bvs eqs
+                  | otherwise           = split pre (eq:inj) (bound eq ++ bvs) eqs
+                  where forward         = free eq `intersect` bvs
+
+        inject [] s                     = s
+        inject eqs (Decl l ds)          = Decl l [ d{ dbody = prune (dname d) [] (free d) reveqs ++ dbody d } | d <- ds ]
+          where reveqs                  = reverse eqs
+                prune n inj fvs []      = --trace ("### Injecting " ++ prstrs (bound inj) ++ " into " ++ prstr n) $
+                                          bindWits inj
+                prune n inj fvs (eq:eqs)
+                  | null needed         = prune n inj fvs eqs
+                  | otherwise           = prune n (eq:inj) (free eq ++ fvs) eqs
+                  where needed          = bound eq `intersect` fvs
         inject eqs (With l [] ss)       = With l [] (pushEqns eqs ss)
         inject eqs s                    = error ("# Internal error: cyclic witnesses " ++ prstrs eqs ++ "\n# and statement\n" ++ prstr s)
-        collect eq0 vs eq
-          | null eq1                    = eq0
-          | otherwise                   = collect (eq1++eq0) ((free eq1 \\ bound eq1) ++ vs) eq2
-          where (eq1,eq2)               = partition (any (`elem` vs) . bound) eq
 
 
 class Infer a where
@@ -800,10 +810,6 @@ matchActorAssumption env n0 p k te      = do --traceM ("## matchActorAssumption 
 -- Find __init__ method in class body, return self parameter, body and location
 findInitMethod :: Suite -> Maybe (Name, Suite, SrcLoc)
 findInitMethod b                        = listToMaybe [ (x, dbody d, loc d) | Decl _ ds <- b, d <- ds, dname d == initKW, Just x <- [selfPar d] ]
-  where
-    selfPar Def{pos=PosPar x _ _ _}     = Just x
-    selfPar Def{kwd=KwdPar x _ _ _}     = Just x
-    selfPar _                           = Nothing
 
 -- Scan __init__ for "self.x = ..." to find which attributes are definitely
 -- assigned before any references to `self` escape externally. We allow most
