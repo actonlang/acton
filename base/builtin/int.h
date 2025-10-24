@@ -18,7 +18,7 @@ B_int B_intG_new(B_atom a, B_int base);
 B_int $gcd(B_int, B_int);
 B_tuple $xgcd(B_int, B_int);
 
-extern struct B_int B_int_strs[256];
+extern struct B_int B_int_strs[384];
 
 #define ORD_B_int__eq__(a,b)  (zz_equal(&a->val,&b->val))
 #define ORD_B_int__ne__(a,b)  (1-zz_equal(&a->val,&b->val))
