@@ -418,7 +418,7 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
                 else:
                     raise ValueError("Dependency %s has no path or hash" % dep_name)
                 print(" -", dep_name)
-                cmd = ["build"] + dep_build_cmd_args(args) + dep_args
+                cmd = ["build", "--skip-build"] + dep_build_cmd_args(args) + dep_args
                 cr = CompilerRunner(
                     process_cap,
                     env,
