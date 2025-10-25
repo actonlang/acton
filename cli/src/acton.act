@@ -111,7 +111,9 @@ actor CacheSizeChecker(cap: file.FileCap):
 
 def write_buildzig(file_cap, build_config: BuildConfig):
     fs = file.FS(file_cap)
-    relative_syspath = file.get_relative_path(base_path(file_cap), fs.cwd())
+    # We want predictable deterministic paths. Zig wants relative paths. Get
+    # relative path to / and then from there to satisfy both.
+    relative_syspath = file.get_relative_path("/", fs.cwd()) + base_path(file_cap)
 
     def get_build_zig_templates():
         # Read the build.zig template
@@ -494,8 +496,10 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
         for dep_name, dep in build_config.dependencies.items():
             if dep_name in dep_path_overrides:
                 dep_path = dep_path_overrides[dep_name]
-                # Zig wants relative paths
-                rel_path = file.get_relative_path(dep_path, fs.cwd())
+                # We want predictable deterministic paths. Zig wants relative
+                # paths. Get relative path to / and then from there to satisfy
+                # both.
+                rel_path = file.join_path([file.get_relative_path("/", fs.cwd()), file.get_relative_path(dep_path, "/")])
                 dep.path = rel_path
                 print("INFO: Using dependency path %s for %s" % (rel_path, dep.name), err=True)
             else:
