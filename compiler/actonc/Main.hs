@@ -886,7 +886,7 @@ checkUptoDate gopts opts paths actFile outFiles imps = do
                         Left e -> do
                             iff (C.verbose gopts) (putStrLn ("    .ty file is unreadable (will recompile): " ++ displayException e))
                             return Nothing
-                        Right (ms, nmod, _) -> return (Just (ms, nmod))
+                        Right (ms, nmod, _, _) -> return (Just (ms, nmod))
                 else if not (and impsOK)
                     then do
                         iff (C.verbose gopts) (putStrLn ("    Import dependencies are newer than output files"))
@@ -899,7 +899,7 @@ checkUptoDate gopts opts paths actFile outFiles imps = do
                             Left e -> do
                                 iff (C.verbose gopts) (putStrLn ("    .ty file is unreadable: " ++ displayException e))
                                 return Nothing
-                            Right (ms, nmod, storedHash) -> do
+                            Right (ms, nmod, _, storedHash) -> do
                                 -- Compute current source file hash
                                 currentSrcContent <- B.readFile actFile
                                 let currentHash = SHA256.hash currentSrcContent
@@ -971,7 +971,7 @@ runRestPasses gopts opts paths env0 parsed srcContent = do
                       (nmod,tchecked,typeEnv,mrefs) <- Acton.Types.reconstruct env kchecked
                       -- Compute hash of source content. TODO: ideally replace with hash of AST, not .act content
                       let srcHash = SHA256.hash (B.pack srcContent)
-                      InterfaceFiles.writeFile (outbase ++ ".ty") mrefs nmod srcHash
+                      InterfaceFiles.writeFile (outbase ++ ".ty") mrefs nmod tchecked srcHash
 
                       let A.NModule iface mdoc = nmod
                       iff (C.types opts && mn == (modName paths)) $ dump mn "types" (Pretty.print tchecked)
