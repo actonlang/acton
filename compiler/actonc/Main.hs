@@ -535,7 +535,7 @@ compileFiles gopts opts srcFiles = do
     -- remove files in out that do not have corresponding source files!
     removeOrphanFiles (projTypes paths)
 
-    tasks <- mapM (parseActFile gopts opts paths) srcFiles
+    tasks <- mapM (prepareTaskFromFile gopts opts paths) srcFiles
     iff (C.listimports opts) $ do
         let module_imports = map (\t -> concat [ modNameToString (name t), ": ", (concat $ intersperse " " (map (modNameToString) (importsOf t))) ] ) tasks
         let output = concat $ intersperse "\n" module_imports
@@ -555,11 +555,14 @@ compileFiles gopts opts srcFiles = do
           | otherwise        = [binTask]
         preTestBinTasks = map (\t -> BinTask True (modNameToString (name t)) (A.GName (name t) (A.name "__test_main")) True) tasks
     env <- compileTasks gopts opts paths tasks
-    -- Generate project documentation index
-    unless (C.skip_build opts || isTmp paths) $ do
+    -- Generate project documentation index (skip in --only-build)
+    unless (C.skip_build opts || C.only_build opts || isTmp paths) $ do
         let docDir = joinPath [projPath paths, "out", "doc"]
         createDirectoryIfMissing True docDir
-        DocP.generateDocIndex docDir (map (\t -> (name t, src t, atree t, False)) tasks)
+        let toEntry t = case t of
+                          ActonTask mn src m -> (mn, src, m, False)
+                          TyTask mn _ _ tmod -> (mn, "", tmod, False)
+        DocP.generateDocIndex docDir (map toEntry tasks)
     if C.skip_build opts
       then
         putStrLn "  Skipping final build step"
@@ -673,34 +676,57 @@ filterActFile file =
         _ -> Nothing
   where (fileBody, fileExt) = splitExtension $ takeFileName file
 
-parseActFile :: C.GlobalOptions -> C.CompileOptions -> Paths -> String -> IO CompileTask
-parseActFile gopts opts paths actFile = do
+prepareTaskFromFile :: C.GlobalOptions -> C.CompileOptions -> Paths -> String -> IO CompileTask
+prepareTaskFromFile gopts opts projPaths actFile = do
                     timeStart <- getTime Monotonic
-                    paths <- findPaths actFile opts
-                    srcContent <- readFile actFile
-                    timeRead <- getTime Monotonic
-                    iff (C.timing gopts) $ putStrLn("Reading file " ++ makeRelative (srcDir paths) actFile
-                                                   ++ ": " ++ fmtTime(timeRead - timeStart))
-                    m <- Acton.Parser.parseModule (modName paths) actFile srcContent
-                      -- Parse errors from MegaParsec
-                      `catch` handleParseError srcContent
-                      -- Custom parse errors from Acton.Parser, thrown directly by parseException
-                      `catch` (\err -> handleDiagnostic gopts opts paths (modName paths) $ Diag.customParseExceptionToDiagnostic actFile srcContent err)
-                      `catch` handle gopts opts "Context error" Acton.Parser.contextError srcContent paths (modName paths)
-                      `catch` handle gopts opts "Indentation error" Acton.Parser.indentationError srcContent paths (modName paths)
-                    iff (C.parse opts) $ dump (modName paths) "parse" (Pretty.print m)
-                    timeParse <- getTime Monotonic
-                    iff (C.timing gopts) $ putStrLn("Parsing file " ++ makeRelative (srcDir paths) actFile
-                                                                   ++ ": " ++ fmtTime(timeParse - timeRead))
-                    return $ ActonTask (modName paths) srcContent m
-    where handleParseError :: String -> ParseErrorBundle String CustomParseError -> IO A.Module
-          handleParseError srcContent bundle =
-                    handleDiagnostic gopts opts paths (modName paths) $ Diag.parseDiagnosticFromBundle actFile srcContent bundle
+                    p <- findPaths actFile opts
+                    let mn = modName p
+                        outbase = outBase projPaths mn
+                        tyFile = outbase ++ ".ty"
+                        hFile  = outbase ++ ".h"
+                        cFile  = outbase ++ ".c"
+                    -- Early up-to-date check: prefer .ty if valid
+                    early <- tryLoadTyIfFresh gopts opts projPaths actFile [tyFile, hFile, cFile]
+                    case early of
+                      Just (ms, nmod, tmod)
+                        | C.only_build opts || not (mn == (modName projPaths) && forceCompilation opts)
+                        -> do
+                             timeEnd <- getTime Monotonic
+                             let compact s = filter (/= ' ') s
+                             iff (not (quiet gopts opts)) $
+                               putStrLn ("  Loaded " ++ modNameToString mn ++ " in " ++ compact (fmtTime (timeEnd - timeStart)) ++ " (from up-to-date .ty)")
+                             return $ TyTask mn nmod ms tmod
+                      _ -> do
+                        srcContent <- readFile actFile
+                        timeRead <- getTime Monotonic
+                        iff (C.timing gopts) $ putStrLn("Reading file " ++ makeRelative (srcDir projPaths) actFile
+                                                       ++ ": " ++ fmtTime(timeRead - timeStart))
+                        m <- Acton.Parser.parseModule mn actFile srcContent
+                          -- Parse errors from MegaParsec
+                          `catch` handleParseError srcContent projPaths mn
+                          -- Custom parse errors from Acton.Parser, thrown directly by parseException
+                          `catch` (\err -> handleDiagnostic gopts opts projPaths mn $ Diag.customParseExceptionToDiagnostic actFile srcContent err)
+                          `catch` handle gopts opts "Context error" Acton.Parser.contextError srcContent projPaths mn
+                          `catch` handle gopts opts "Indentation error" Acton.Parser.indentationError srcContent projPaths mn
+                        iff (C.parse opts) $ dump mn "parse" (Pretty.print m)
+                        timeParse <- getTime Monotonic
+                        iff (C.timing gopts) $ putStrLn("Parsing file " ++ makeRelative (srcDir projPaths) actFile
+                                                                       ++ ": " ++ fmtTime(timeParse - timeRead))
+                        return $ ActonTask mn srcContent m
+    where handleParseError :: String -> Paths -> A.ModName -> ParseErrorBundle String CustomParseError -> IO A.Module
+          handleParseError srcContent paths mn bundle =
+                    handleDiagnostic gopts opts paths mn $ Diag.parseDiagnosticFromBundle actFile srcContent bundle
+
+          forceCompilation :: C.CompileOptions -> Bool
+          forceCompilation args = (C.alwaysbuild args) || (C.parse args) || (C.kinds args) || (C.types args) || (C.sigs args)
+                                  || (C.norm args) || (C.deact args) || (C.cps args) || (C.llift args) || (C.hgen args) || (C.cgen args)
 
 
 -- Compilation tasks, chasing imported modules, compilation and building executables -------------------------------------------
 
-data CompileTask        = ActonTask { name :: A.ModName, src :: String, atree:: A.Module } deriving (Show)
+data CompileTask        = ActonTask { name :: A.ModName, src :: String, atree:: A.Module }
+                        | TyTask    { name :: A.ModName, iface :: A.NameInfo, tyImports :: [A.ModName], typed :: A.Module }
+                        deriving (Show)
 -- TODO: replace binName String type with ModName just like for CompileTask.
 -- ModName is a array so a hierarchy with submodules is represented, we can then
 -- get it use joinPath (modPath) to get a path or modName to get a string
@@ -726,7 +752,8 @@ filterMainActor env opts paths binTask
         (sc,_)              = Acton.QuickType.schemaOf env (A.eQVar qn)
 
 importsOf :: CompileTask -> [A.ModName]
-importsOf t = A.importsOf (atree t)
+importsOf (ActonTask _ _ m) = A.importsOf m
+importsOf (TyTask _ _ ms _) = ms
 
 compileTasks :: C.GlobalOptions -> C.CompileOptions -> Paths -> [CompileTask] -> IO Acton.Env.Env0
 compileTasks gopts opts paths tasks
@@ -780,7 +807,7 @@ chaseImportedFiles gopts opts paths itasks
                                  Nothing -> do let actFile = srcFile paths mn
                                                ok <- System.Directory.doesFileExist actFile
                                                if ok then do
-                                                   task <- parseActFile gopts opts paths actFile
+                                                   task <- prepareTaskFromFile gopts opts paths actFile
                                                    return $ Just task
                                                  else return Nothing
 
@@ -804,41 +831,34 @@ quiet :: C.GlobalOptions -> C.CompileOptions -> Bool
 quiet gopts opts = C.quiet gopts || altOutput opts
 
 doTask :: C.GlobalOptions -> C.CompileOptions -> Paths -> Acton.Env.Env0 -> CompileTask -> IO Acton.Env.Env0
+doTask gopts opts paths env (TyTask mn nmod _ms _tmod) = do
+    let A.NModule te mdoc = nmod
+    return (Acton.Env.addMod mn te mdoc env)
 doTask gopts opts paths env t@(ActonTask mn src m) = do
-    iff (not (quiet gopts opts))  (putStrLn("  Compiling " ++ makeRelative (srcDir paths) actFile
+    -- In --only-build mode, do not run compilation passes or write files.
+    if C.only_build opts then do
+        iff (not (quiet gopts opts)) (putStrLn ("  Skipping compilation of " ++ makeRelative (srcDir paths) actFile ++ " (--only-build)"))
+        return env
+    else do
+      iff (not (quiet gopts opts))  (putStrLn("  Compiling " ++ makeRelative (srcDir paths) actFile
               ++ " with " ++ show (C.optimize opts)))
 
-    timeStart <- getTime Monotonic
+      timeStart <- getTime Monotonic
 
-    let outFiles = [tyFile, hFile, cFile]
-    timeBeforeCheck <- getTime Monotonic
-    uptoDateResult <- checkUptoDate gopts opts paths actFile outFiles (importsOf t)
-    timeAfterCheck <- getTime Monotonic
-    iff (C.timing gopts) $ putStrLn("   Check up-to-date & read .ty file: " ++ fmtTime(timeAfterCheck - timeBeforeCheck))
-    case uptoDateResult of
-      Just (ms, nmod) | C.only_build opts || not (mn == (modName paths) && (forceCompilation opts)) -> do
-        timeEnd <- getTime Monotonic
-        iff (not (quiet gopts opts)) $ putStrLn("   Already up to date, in   " ++ fmtTime(timeEnd - timeStart))
-        let A.NModule te mdoc = nmod
-        return (Acton.Env.addMod mn te mdoc env)
-      _ -> do
-        createDirectoryIfMissing True (getModPath (projTypes paths) mn)
-        env' <- runRestPasses gopts opts paths env m src
-          `catch` handle gopts opts "Compilation error" generalError src paths mn
-          `catch` handle gopts opts "Compilation error" Acton.Env.compilationError src paths mn
-          `catch` (\err -> handleDiagnostic gopts opts paths (modName paths) $ mkErrorDiagnostic filename src $ Acton.TypeM.typeReport err filename src)
-        timeEnd <- getTime Monotonic
-        iff (not (quiet gopts opts)) $ putStrLn("   Finished compilation in  " ++ fmtTime(timeEnd - timeStart))
-        return env'
+      createDirectoryIfMissing True (getModPath (projTypes paths) mn)
+      env' <- runRestPasses gopts opts paths env m src
+        `catch` handle gopts opts "Compilation error" generalError src paths mn
+        `catch` handle gopts opts "Compilation error" Acton.Env.compilationError src paths mn
+        `catch` (\err -> handleDiagnostic gopts opts paths (modName paths) $ mkErrorDiagnostic filename src $ Acton.TypeM.typeReport err filename src)
+      timeEnd <- getTime Monotonic
+      iff (not (quiet gopts opts)) $ putStrLn("   Finished compilation in  " ++ fmtTime(timeEnd - timeStart))
+      return env'
   where actFile             = srcFile paths mn
         filename            = modNameToFilename mn
         outbase             = outBase paths mn
         tyFile              = outbase ++ ".ty"
         hFile               = outbase ++ ".h"
         cFile               = outbase ++ ".c"
-        forceCompilation :: C.CompileOptions -> Bool
-        forceCompilation args = (C.alwaysbuild args) || (C.parse args) || (C.kinds args) || (C.types args) || (C.sigs args)
-                                || (C.norm args) || (C.deact args) || (C.cps args) || (C.llift args) || (C.hgen args) ||(C.cgen args)
 
 
 -- | Check if a module is up-to-date and return its type interface if it is.
@@ -855,87 +875,58 @@ doTask gopts opts paths env t@(ActonTask mn src m) = do
 --    to be unreadable and thus we should consider it out-of-date and recompile.
 --    These days torn writes should be very unlikely since we do atomic write
 --    with write to tmp + rename
-checkUptoDate :: C.GlobalOptions -> C.CompileOptions -> Paths -> FilePath -> [FilePath] -> [A.ModName] -> IO (Maybe ([A.ModName], A.NameInfo))
-checkUptoDate gopts opts paths actFile outFiles imps = do
-    iff (C.verbose gopts) (putStrLn ("    Checking " ++ makeRelative (srcDir paths) actFile ++ " is up to date..."))
-    -- get the path to the actonc binary, i.e. ourself
+
+-- Early up-to-date check based on .ty file contents. Reads imports from .ty and
+-- returns them together with the module interface and typed module when valid.
+tryLoadTyIfFresh :: C.GlobalOptions -> C.CompileOptions -> Paths -> FilePath -> [FilePath] -> IO (Maybe ([A.ModName], A.NameInfo, A.Module))
+tryLoadTyIfFresh gopts opts paths actFile outFiles = do
+    iff (C.verbose gopts) (putStrLn ("    Checking (early) " ++ makeRelative (srcDir paths) actFile ++ " is up to date..."))
     actoncBin <- System.Environment.getExecutablePath
-    -- get path to `acton` which is the actonc binary without the `c` at the end
     let actonBin = take (length actoncBin - 1) actoncBin
-    let potSrcFiles     = [actonBin, actoncBin, actFile, extCFile, srcCFile, srcHFile]
+        potSrcFiles = [actonBin, actoncBin, actFile, extCFile, srcCFile, srcHFile]
     srcFiles  <- filterM System.Directory.doesFileExist potSrcFiles
     outExists <- mapM System.Directory.doesFileExist outFiles
-
     if not (and outExists)
-        then do
-            iff (C.verbose gopts) (putStrLn ("    Missing output files: " ++ show outExists ++ " for " ++ show outFiles))
+      then do
+        iff (C.verbose gopts) (putStrLn ("    Missing output files: " ++ show outExists ++ " for " ++ show outFiles))
+        return Nothing
+      else do
+        srcTime  <- head <$> sortBy (comparing Down) <$> mapM System.Directory.getModificationTime srcFiles
+        outTiming <- mapM System.Directory.getModificationTime outFiles
+        let tyFile = head outFiles
+        tyResult <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readFile tyFile
+        case tyResult of
+          Left e -> do
+            iff (C.verbose gopts) (putStrLn ("    .ty file is unreadable (will recompile): " ++ displayException e))
             return Nothing
-        else do
-            -- get the time of the last modified source file
-            srcTime  <- head <$> sortBy (comparing Down) <$> mapM System.Directory.getModificationTime srcFiles
-            outTiming <- mapM System.Directory.getModificationTime outFiles
-            impsOK   <- mapM (impOK (head outTiming)) imps
-
+          Right (ms, nmod, tmod, storedHash) -> do
+            impsOK <- mapM (impOK (head outTiming)) ms
             if all (srcTime <) outTiming && and impsOK
-                then do
-                    -- Fast path: if output files are newer and imports are OK
-                    -- All timestamps check out, read the .ty file to ensure it is readable
-                    let tyFile = head outFiles
-                    tyResult <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readFile tyFile
-                    case tyResult of
-                        Left e -> do
-                            iff (C.verbose gopts) (putStrLn ("    .ty file is unreadable (will recompile): " ++ displayException e))
-                            return Nothing
-                        Right (ms, nmod, _) -> return (Just (ms, nmod))
-                else if not (and impsOK)
-                    then do
-                        iff (C.verbose gopts) (putStrLn ("    Import dependencies are newer than output files"))
-                        return Nothing
-                    else do
-                        -- Source appears newer - check content hash to be sure
-                        let tyFile = head outFiles
-                        tyResult <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readFile tyFile
-                        case tyResult of
-                            Left e -> do
-                                iff (C.verbose gopts) (putStrLn ("    .ty file is unreadable: " ++ displayException e))
-                                return Nothing
-                            Right (ms, nmod, storedHash) -> do
-                                -- Compute current source file hash
-                                currentSrcContent <- B.readFile actFile
-                                let currentHash = SHA256.hash currentSrcContent
-                                if currentHash == storedHash
-                                    then do
-                                        iff (C.verbose gopts) (putStrLn ("    Source file unchanged (hash match), using cached compilation"))
-                                        return (Just (ms, nmod))
-                                    else do
-                                        iff (C.verbose gopts) (putStrLn ("    Source file content changed (hash mismatch)"))
-                                        return Nothing
+              then return (Just (ms, nmod, tmod))
+              else if not (and impsOK) then do
+                iff (C.verbose gopts) (putStrLn ("    Import dependencies are newer than output files"))
+                return Nothing
+              else do
+                currentSrcContent <- B.readFile actFile
+                let currentHash = SHA256.hash currentSrcContent
+                if currentHash == storedHash then do
+                  iff (C.verbose gopts) (putStrLn ("    Source file unchanged (hash match), using cached compilation"))
+                  return (Just (ms, nmod, tmod))
+                else do
+                  iff (C.verbose gopts) (putStrLn ("    Source file content changed (hash mismatch)"))
+                  return Nothing
   where
-        srcBase         = joinPath [takeDirectory actFile, takeBaseName actFile]
-        srcCFile        = srcBase ++ ".c"
-        srcHFile        = srcBase ++ ".h"
-        extCFile        = srcBase ++ ".ext.c"
-        -- except for actFile, these are *potential* source files which might
-        -- not actually exist...
-        impOK iTime mn  = do
-                             impFile <- findTyFile (searchPath paths) mn
-                             case impFile of
-                               Nothing -> return False
-                               Just impFile -> do
-                                 impfileTime <- System.Directory.getModificationTime impFile
-                                 return (impfileTime < iTime)
-        -- find .ty file by looking both in local project and in stdlib
-        findTy paths mn = do
-                             let localImpName = outBase paths mn ++ ".ty"
-                                 stdlibImpName = joinPath (sysTypes paths : A.modPath mn) ++ ".ty"
-                             projExist <- System.Directory.doesFileExist localImpName
-                             stdlibExist <- System.Directory.doesFileExist stdlibImpName
-                             let filePath = case (projExist, stdlibExist) of
-                                   (True, True) -> localImpName
-                                   (True, False) -> localImpName
-                                   (False, True) -> stdlibImpName
-                                   (False, False) -> error("ERROR: Unable to find interface file")
-                             return filePath
+    srcBase         = joinPath [takeDirectory actFile, takeBaseName actFile]
+    srcCFile        = srcBase ++ ".c"
+    srcHFile        = srcBase ++ ".h"
+    extCFile        = srcBase ++ ".ext.c"
+    impOK iTime mn  = do
+                         impFile <- findTyFile (searchPath paths) mn
+                         case impFile of
+                           Nothing -> return False
+                           Just impFile -> do
+                             impfileTime <- System.Directory.getModificationTime impFile
+                             return (impfileTime < iTime)
 
 isGitAvailable :: IO Bool
 isGitAvailable = do
@@ -971,7 +962,7 @@ runRestPasses gopts opts paths env0 parsed srcContent = do
                       (nmod,tchecked,typeEnv,mrefs) <- Acton.Types.reconstruct env kchecked
                       -- Compute hash of source content. TODO: ideally replace with hash of AST, not .act content
                       let srcHash = SHA256.hash (B.pack srcContent)
-                      InterfaceFiles.writeFile (outbase ++ ".ty") mrefs nmod srcHash
+                      InterfaceFiles.writeFile (outbase ++ ".ty") mrefs nmod tchecked srcHash
 
                       let A.NModule iface mdoc = nmod
                       iff (C.types opts && mn == (modName paths)) $ dump mn "types" (Pretty.print tchecked)
@@ -1126,11 +1117,13 @@ printDiag gopts opts d = do
 
 writeRootC :: Acton.Env.Env0 -> C.GlobalOptions -> C.CompileOptions -> Paths -> BinTask -> IO (Maybe BinTask)
 writeRootC env gopts opts paths binTask = do
-    let qn@(A.GName m n) = rootActor binTask
-        mn = A.mname qn
-        outbase = outBase paths mn
-        rootFile = if (isTest binTask) then outbase ++ ".test_root.c" else outbase ++ ".root.c"
-    case Acton.Env.lookupMod m env of
+    -- In --only-build mode, don't generate or touch any files; re-use existing artifacts.
+    if C.only_build opts then return (Just binTask) else do
+      let qn@(A.GName m n) = rootActor binTask
+          mn = A.mname qn
+          outbase = outBase paths mn
+          rootFile = if (isTest binTask) then outbase ++ ".test_root.c" else outbase ++ ".root.c"
+      case Acton.Env.lookupMod m env of
         Nothing -> return Nothing  -- Handle the case where module lookup fails
         Just modEnv ->
             case lookup n modEnv of

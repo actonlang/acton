@@ -25,12 +25,12 @@ import Prelude hiding((<>))
 version :: [Int]
 version = [0,3]
 
-data Module     = Module        { modname::ModName, imps::[Import], mbody::Suite } deriving (Eq,Show)
+data Module     = Module        { modname::ModName, imps::[Import], mbody::Suite } deriving (Eq,Show,Generic,NFData)
 
 data Import     = Import        { iloc::SrcLoc, moduls::[ModuleItem] }
                 | FromImport    { iloc::SrcLoc, modul::ModRef, items::[ImportItem] }
                 | FromImportAll { iloc::SrcLoc, modul::ModRef }
-                deriving (Show)
+                deriving (Show,Read,NFData,Generic)
 
 type Suite      = [Stmt]
 
@@ -544,6 +544,11 @@ instance Data.Binary.Binary Unary
 instance Data.Binary.Binary Binary
 instance Data.Binary.Binary Aug
 instance Data.Binary.Binary Comparison
+instance Data.Binary.Binary Module
+instance Data.Binary.Binary Import
+instance Data.Binary.Binary ModuleItem
+instance Data.Binary.Binary ImportItem
+instance Data.Binary.Binary ModRef
 
 
 -- Locations ----------------

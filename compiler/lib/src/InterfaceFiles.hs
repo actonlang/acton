@@ -25,18 +25,18 @@ import System.Posix.Process (getProcessID)
 
 -- Write interface file with source content hash using atomic write
 -- We use temp file + rename as atomic write to avoid other readers seeing partially written output.
-writeFile :: FilePath -> [Acton.Syntax.ModName] -> Acton.Syntax.NameInfo -> Data.ByteString.ByteString -> IO ()
-writeFile f ms nmod srcHash = do
+writeFile :: FilePath -> [Acton.Syntax.ModName] -> Acton.Syntax.NameInfo -> Acton.Syntax.Module -> Data.ByteString.ByteString -> IO ()
+writeFile f ms nmod tchecked srcHash = do
     -- Use PID for unique temp file name
     pid <- getProcessID
     let tmpFile = f ++ "." ++ show pid
-    Data.ByteString.Lazy.writeFile tmpFile (compress (encode (Acton.Syntax.version, ms, nmod, srcHash)))
+    Data.ByteString.Lazy.writeFile tmpFile (compress (encode (Acton.Syntax.version, ms, nmod, tchecked, srcHash)))
     -- Atomically rename to final location
     -- This is atomic on POSIX systems and prevents partial writes or conflicts
     renameFile tmpFile f
 
--- Read interface file, returning imports, name info, and source hash
-readFile :: FilePath -> IO ([Acton.Syntax.ModName], Acton.Syntax.NameInfo, Data.ByteString.ByteString)
+-- Read interface file, returning (imports, name info, typed module, source hash)
+readFile :: FilePath -> IO ([Acton.Syntax.ModName], Acton.Syntax.NameInfo, Acton.Syntax.Module, Data.ByteString.ByteString)
 readFile f = do
     h <- openBinaryFile f ReadMode
     -- We minimize the time we keep the file open by reading it all at once. We
@@ -45,9 +45,9 @@ readFile f = do
     bs <- Data.ByteString.hGet h (fromIntegral size)
     hClose h
     let bsLazy = Data.ByteString.Lazy.fromStrict bs
-    let (vs, ms, nmod, srcHash) = decode (decompress bsLazy)
+    let (vs, ms, nmod, tmod, srcHash) = decode (decompress bsLazy)
     if vs == Acton.Syntax.version
-      then return (ms, nmod, srcHash)
+      then return (ms, nmod, tmod, srcHash)
       else do
         putStrLn ("Interface file has version " ++ show vs ++ "; current version is " ++ show Acton.Syntax.version)
         System.Exit.exitFailure
