@@ -16,7 +16,6 @@ module InterfaceFiles where
 import Data.Binary
 import qualified Data.ByteString
 import qualified Data.ByteString.Lazy
-import Codec.Compression.Zlib
 import qualified System.Exit
 import qualified Acton.Syntax
 import System.IO
@@ -30,7 +29,7 @@ writeFile f ms nmod tchecked srcHash = do
     -- Use PID for unique temp file name
     pid <- getProcessID
     let tmpFile = f ++ "." ++ show pid
-    Data.ByteString.Lazy.writeFile tmpFile (compress (encode (Acton.Syntax.version, ms, nmod, tchecked, srcHash)))
+    Data.ByteString.Lazy.writeFile tmpFile (encode (Acton.Syntax.version, ms, nmod, tchecked, srcHash))
     -- Atomically rename to final location
     -- This is atomic on POSIX systems and prevents partial writes or conflicts
     renameFile tmpFile f
@@ -45,7 +44,7 @@ readFile f = do
     bs <- Data.ByteString.hGet h (fromIntegral size)
     hClose h
     let bsLazy = Data.ByteString.Lazy.fromStrict bs
-    let (vs, ms, nmod, tmod, srcHash) = decode (decompress bsLazy)
+    let (vs, ms, nmod, tmod, srcHash) = decode bsLazy
     if vs == Acton.Syntax.version
       then return (ms, nmod, tmod, srcHash)
       else do

@@ -41,7 +41,6 @@ dependencies:
   - transformers
   - unix
   - utf8-string
-  - zlib
 
 library:
   source-dirs: src
