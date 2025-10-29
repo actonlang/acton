@@ -334,6 +334,10 @@ posargs (PosStar e)
                 = [e]
 posargs PosNil  = []
 
+selfPar Def{pos=PosPar x _ _ _} = Just x
+selfPar Def{kwd=KwdPar x _ _ _} = Just x
+selfPar _                       = Nothing
+
 pVar n t        = PVar NoLoc n (Just t)
 pVar' n         = PVar NoLoc n Nothing
 
