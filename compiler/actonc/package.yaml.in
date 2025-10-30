@@ -21,6 +21,7 @@ dependencies:
   - async
   - base >= 4.7 && < 5
   - base16-bytestring
+  - binary
   - bytestring
   - clock
   - containers

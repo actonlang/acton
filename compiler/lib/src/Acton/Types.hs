@@ -96,18 +96,16 @@ reconstruct env0 (Module m i ss)         = do --traceM ("#################### or
 
 
 showTyFile env0 m fname         = do
-                                     -- Print header-only info first
-                                     (hash, imps, roots, mdocH) <- InterfaceFiles.readHeader fname
+                                     (ms,nmod,_,srcH,ifaceH,imps,roots,mdocH) <- InterfaceFiles.readFile fname
                                      putStrLn ("\n############### Header ###############")
-                                     putStrLn ("Imports: " ++ (show (map prstr imps)))
+                                     putStrLn ("Imports: " ++ (show [ (prstr mn, take 16 (B.unpack $ Base16.encode h)) | (mn,h) <- imps ]))
                                      putStrLn ("Roots  : " ++ (show (map prstr roots)))
                                      case mdocH of
                                        Just ds -> putStrLn ("Doc    : \"\"\"" ++ ds ++ "\"\"\"")
                                        Nothing -> return ()
-                                     putStrLn ("Hash   : 0x" ++ (B.unpack $ Base16.encode hash))
+                                     putStrLn ("SrcHash: 0x" ++ (B.unpack $ Base16.encode srcH))
+                                     putStrLn ("Iface  : 0x" ++ (B.unpack $ Base16.encode ifaceH))
 
-                                     -- Then print interface (full read)
-                                     (ms,nmod,_,_) <- InterfaceFiles.readFile fname
                                      putStrLn ("\n############### Interface ############")
                                      let NModule te mdoc = nmod
                                      forM_ mdoc $ \docstring ->

@@ -23,7 +23,7 @@ import Control.DeepSeq
 import Prelude hiding((<>))
 
 version :: [Int]
-version = [0,4]
+version = [0,5]
 
 data Module     = Module        { modname::ModName, imps::[Import], mbody::Suite } deriving (Eq,Show,Generic,NFData)
 
@@ -449,6 +449,22 @@ data NameInfo           = NVar      Type
                         | NModule   TEnv (Maybe String)
                         | NReserved
                         deriving (Eq,Show,Read,Generic)
+
+-- | Strip all docstrings from NameInfo (and nested environments).
+-- This is used when computing a public-interface hash so that
+-- documentation-only edits do not cause dependents to rebuild.
+stripDocsNI :: NameInfo -> NameInfo
+stripDocsNI ni = case ni of
+  NModule te _        -> NModule (map stripBind te) Nothing
+  NAct q p k te _     -> NAct q p k (map stripBind te) Nothing
+  NClass q cs te _    -> NClass q cs (map stripBind te) Nothing
+  NProto q ps te _    -> NProto q ps (map stripBind te) Nothing
+  NExt q c ps te _    -> NExt q c ps (map stripBind te) Nothing
+  NDef sc dec _       -> NDef sc dec Nothing
+  NSig sc dec _       -> NSig sc dec Nothing
+  other               -> other
+  where
+    stripBind (n, info) = (n, stripDocsNI info)
 
 data Witness            = WClass    { binds::QBinds, wtype::Type, proto::PCon, wname::QName, wsteps::WPath }
                         | WInst     { binds::QBinds, wtype::Type, proto::PCon, wname::QName, wsteps::WPath }

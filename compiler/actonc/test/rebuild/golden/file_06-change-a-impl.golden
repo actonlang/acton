@@ -1,5 +1,7 @@
 Building file src/c.act in project .
-  Fresh a: using cached .ty
+  Stale a: source changed
+  Compiling a.act with Debug
+   Finished compilation in   0.000 s
   Fresh b: using cached .ty
   Fresh c: using cached .ty
   Final compilation step
