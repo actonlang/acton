@@ -271,6 +271,8 @@ buildProject gopts opts = do
                       allFiles <- getFilesRecursive (srcDir paths)
                       let srcFiles = catMaybes $ map filterActFile allFiles
                       compileFiles gopts opts srcFiles
+                      -- After a project build, (re)generate the documentation index
+                      generateProjectDocIndex gopts opts paths srcFiles
 
 buildFile :: C.GlobalOptions -> C.CompileOptions -> FilePath -> IO ()
 buildFile gopts opts file = do
@@ -635,18 +637,6 @@ compileFiles gopts opts srcFiles = do
           | otherwise        = [binTask]
         preTestBinTasks = map (\t -> BinTask True (modNameToString (name t)) (A.GName (name t) (A.name "__test_main")) True) tasks
     env <- compileTasks gopts opts paths tasks
-    -- Generate project documentation index
-    unless (C.skip_build opts || C.only_build opts || isTmp paths) $ do
-        let docDir = joinPath [projPath paths, "out", "doc"]
-        createDirectoryIfMissing True docDir
-        entries <- forM tasks $ \t -> case t of
-                          ActonTask mn _src m -> return (mn, DocP.extractDocstring (A.mbody m))
-                          TyTask { name = mn } -> do
-                            mty <- Acton.Env.findTyFile (searchPath paths) mn
-                            case mty of
-                              Just ty -> do (_,_,_,mdoc) <- InterfaceFiles.readHeader ty; return (mn, mdoc)
-                              Nothing -> return (mn, Nothing)
-        DocP.generateDocIndex docDir entries
     if C.skip_build opts
       then
         putStrLn "  Skipping final build step"
@@ -982,6 +972,21 @@ compileBins gopts opts paths env tasks binTasks = do
     iff (not (altOutput opts)) $ do
       zigBuild env gopts opts paths tasks binTasks
     return ()
+
+
+-- Generate documentation index for a project build by reading module docstrings
+-- from the current tasks. Uses TyTask header docs when available to avoid
+-- parsing/decoding; falls back to extracting from ActonTask ASTs.
+generateProjectDocIndex :: C.GlobalOptions -> C.CompileOptions -> Paths -> [String] -> IO ()
+generateProjectDocIndex gopts opts paths srcFiles = do
+    unless (C.skip_build opts || C.only_build opts || isTmp paths) $ do
+        let docDir = joinPath [projPath paths, "out", "doc"]
+        createDirectoryIfMissing True docDir
+        tasks <- mapM (readModuleTask gopts opts paths) srcFiles
+        entries <- forM tasks $ \t -> case t of
+                          ActonTask mn _src m -> return (mn, DocP.extractDocstring (A.mbody m))
+                          TyTask { name = mn, tyDoc = mdoc } -> return (mn, mdoc)
+        DocP.generateDocIndex docDir entries
 
 
 -- Expand the set of tasks by reading project-local imports recursively.
