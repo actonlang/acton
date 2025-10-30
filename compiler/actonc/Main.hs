@@ -131,8 +131,6 @@ optimizeModeToZig C.ReleaseFast  = "ReleaseFast"
 zig :: Paths -> FilePath
 zig paths = sysPath paths ++ "/zig/zig"
 
-cc :: Paths -> C.CompileOptions -> FilePath
-cc paths opts = zig paths ++ " cc -target " ++ C.target opts
 
 dump mn h txt      = putStrLn ("\n\n== " ++ h ++ ": " ++ modNameToString mn ++ " ================================\n" ++ txt
                       ++'\n':replicate (38 + length h + length (modNameToString mn)) '=' ++ "\n")
@@ -688,11 +686,6 @@ outBase paths mn        = joinPath (projTypes paths : A.modPath mn)
 srcBase                 :: Paths -> A.ModName -> FilePath
 srcBase paths mn        = joinPath (srcDir paths : A.modPath mn)
 
-searchPaths :: C.CompileOptions -> [FilePath] -> IO [FilePath]
-searchPaths opts deps = do
-  -- append /out/types to each dep
-  let deps_paths = map (\d -> joinPath [d, "out", "types"]) deps
-  return $ deps_paths
 
 findProjectDir :: FilePath -> IO (Maybe FilePath)
 findProjectDir path = do
