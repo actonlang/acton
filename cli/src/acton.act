@@ -1540,16 +1540,6 @@ actor main(env):
         else:
             cmdargs.extend(["--color", "never"])
 
-        # Pass through global options
-        if args.get_bool("verbose"):
-            cmdargs.append("--verbose")
-        if args.get_bool("verbose-zig"):
-            cmdargs.append("--verbose-zig")
-        if args.get_bool("quiet"):
-            cmdargs.append("--quiet")
-        if args.get_bool("timing"):
-            cmdargs.append("--timing")
-
         # Custom exit handler (suppress CompilerRunner's default message)
         def on_doc_exit(exit_code: int, term_signal: int, std_out_buf: bytes, std_err_buf: bytes):
             env.exit(exit_code)

@@ -3508,10 +3508,10 @@ modNameToString :: ModName -> String
 modNameToString (ModName names) = intercalate "." (map nstr names)
 
 -- | Generate HTML documentation index for a list of modules
-generateDocIndex :: FilePath -> [(ModName, String, Module, Bool)] -> IO ()
+generateDocIndex :: FilePath -> [(ModName, Maybe String)] -> IO ()
 generateDocIndex docDir tasks = do
     let indexFile = docDir </> "index.html"
-        sortedTasks = sortBy (comparing (\(mn,_,_,_) -> modNameToString mn)) tasks
+        sortedTasks = sortBy (comparing (\(mn,_) -> modNameToString mn)) tasks
         moduleEntries = concatMap generateModuleEntry sortedTasks
         indexHtml = unlines $
             [ "<!DOCTYPE html>"
@@ -3537,16 +3537,14 @@ generateDocIndex docDir tasks = do
             ]
     writeFile indexFile indexHtml
   where
-    generateModuleEntry :: (ModName, String, Module, Bool) -> [String]
-    generateModuleEntry (mn, _, Module _ _ stmts, _) =
+    generateModuleEntry :: (ModName, Maybe String) -> [String]
+    generateModuleEntry (mn, mDoc) =
         let modPaths = modPath mn  -- Use different name to avoid shadowing
             modName = modNameToString mn
             htmlFile = if null modPaths
                        then "unnamed.html"
                        else joinPath (init modPaths) </> last modPaths <.> "html"
-            docString = case extractDocstring stmts of
-                        Just ds -> takeWhile (/= '\n') ds
-                        Nothing -> ""
+            docString = maybe "" (takeWhile (/= '\n')) mDoc
         in [ "      <li class=\"module-item\">"
            , "        <a href=\"" ++ htmlFile ++ "\" class=\"module-link\">"
            , "          <span class=\"module-path\">" ++ modName ++ "</span>"
@@ -3554,4 +3552,3 @@ generateDocIndex docDir tasks = do
            , "        </a>"
            , "      </li>"
            ]
-
