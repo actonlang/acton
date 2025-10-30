@@ -75,6 +75,13 @@ packages:
   original:
     hackage: process-1.6.19.0
 - completed:
+    hackage: tasty-1.5.3@sha256:6b5dda3f16db1274a0b3e6c4073ac57172a1e96b1dca05666c5cbd1183639412,2923
+    pantry-tree:
+      sha256: 55cabcd98ff0f5c671a93fb138b8b8cb1cf223497b0fbf9207e6c519fd54a9e9
+      size: 1944
+  original:
+    hackage: tasty-1.5.3
+- completed:
     hackage: text-2.0@sha256:f2207a6a51a8320c44dbd8b462723a8e39e2bfceda67e15f52fc12922259cbb0,8093
     pantry-tree:
       sha256: 1e4e5785f3302f6641899f5549963cbc478f4221096426162bf151e5bdb28127
