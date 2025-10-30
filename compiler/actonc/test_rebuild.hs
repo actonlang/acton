@@ -42,7 +42,7 @@ actoncExe = ".." </> ".." </> ".." </> ".." </> "dist" </> "bin" </> "actonc"
 -- Utils ----------------------------------------------------------------------
 
 sanitize :: T.Text -> LBS.ByteString
-sanitize = LBS.fromStrict . TE.encodeUtf8 . T.unlines . map redact . dropPaths . filter (not . isVolatile) . T.lines
+sanitize = LBS.fromStrict . TE.encodeUtf8 . T.unlines . map (padZero . redact) . dropPaths . filter (not . isVolatile) . T.lines
   where
     isVolatile :: T.Text -> Bool
     isVolatile t =
@@ -68,6 +68,18 @@ sanitize = LBS.fromStrict . TE.encodeUtf8 . T.unlines . map redact . dropPaths .
                          restAfter = T.drop 2 rest2 -- drop " s"
                       in leftPre <> "0.000 s" <> go restAfter
                    else pre <> "." <> go afterDot
+
+    -- Normalize padding before the canonicalized duration "0.000 s"
+    -- to avoid platform-specific spacing differences. Force exactly
+    -- three spaces before 0.000 s (i.e. "   0.000 s").
+    padZero :: T.Text -> T.Text
+    padZero t =
+      case T.breakOn "0.000 s" t of
+        (pre, rest) | T.null rest -> t
+        (pre, rest) ->
+          let pre' = T.dropWhileEnd (== ' ') pre
+              rest' = T.drop (T.length "0.000 s") rest
+          in pre' <> "   0.000 s" <> rest'
 
     -- Remove the verbose Paths: block (and its per-field lines) to avoid
     -- machine-specific absolute paths in goldens.
