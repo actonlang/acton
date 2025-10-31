@@ -20,6 +20,7 @@ dependencies:
   - base
   - binary
   - bytestring
+  - base16-bytestring
   - containers
   - deepseq
   - diagnose
@@ -41,7 +42,6 @@ dependencies:
   - transformers
   - unix
   - utf8-string
-  - zlib
 
 library:
   source-dirs: src

@@ -533,7 +533,7 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
             # TODO: perhaps we should have a better signal than tty-check though
             if env.is_tty():
                 print("Build lock exists, trying again soon...")
-            after 1: get_lock()
+            after 0.1: get_lock()
 
     # and off we go! Start by grabbing the project build lock
     get_lock()
@@ -1539,16 +1539,6 @@ actor main(env):
             cmdargs.extend(["--color", "always"])
         else:
             cmdargs.extend(["--color", "never"])
-
-        # Pass through global options
-        if args.get_bool("verbose"):
-            cmdargs.append("--verbose")
-        if args.get_bool("verbose-zig"):
-            cmdargs.append("--verbose-zig")
-        if args.get_bool("quiet"):
-            cmdargs.append("--quiet")
-        if args.get_bool("timing"):
-            cmdargs.append("--timing")
 
         # Custom exit handler (suppress CompilerRunner's default message)
         def on_doc_exit(exit_code: int, term_signal: int, std_out_buf: bytes, std_err_buf: bytes):

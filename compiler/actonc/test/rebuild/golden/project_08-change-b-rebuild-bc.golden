@@ -1,0 +1,8 @@
+    Fresh a: using cached .ty
+    Stale c: stale deps: b
+  Compiling b.act with Debug
+   Finished compilation in   0.000 s
+  Compiling c.act with Debug
+   Finished compilation in   0.000 s
+  Final compilation step
+   Finished final compilation step in   0.000 s

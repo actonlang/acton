@@ -36,10 +36,12 @@ dependencies:
   - process
   - split
   - system-filepath
+  - sydtest
   - tasty
   - tasty-expected-failure
   - tasty-golden
   - tasty-hunit
+  - text
   - temporary
   - time
   - timeit
@@ -57,6 +59,13 @@ executables:
 tests:
   test_actonc:
     main:                test.hs
+    source-dirs:         .
+    ghc-options:
+      - -threaded
+      - -rtsopts
+      - -with-rtsopts=-N
+  rebuild:
+    main:                test_rebuild.hs
     source-dirs:         .
     ghc-options:
       - -threaded

@@ -311,6 +311,13 @@ test-compiler:
 test-cross-compile:
 	cd compiler && stack test actonc --ta '-p "cross-compilation"'
 
+test-rebuild: dist/bin/actonc
+	cd compiler && stack test actonc:rebuild
+
+.PHONY: test-rebuild-accept
+test-rebuild-accept: dist/bin/actonc
+	cd compiler && stack test actonc:rebuild --ta "--accept"
+
 test-syntaxerrors:
 	cd compiler && stack test actonc --ta '-p "syntax errors"'
 

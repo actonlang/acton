@@ -34,6 +34,8 @@ import Acton.Converter
 import Acton.TypeM
 import Acton.TypeEnv
 import qualified InterfaceFiles
+import qualified Data.ByteString.Char8 as B
+import qualified Data.ByteString.Base16 as Base16
 import qualified Data.Map
 import Data.List (intersperse, isPrefixOf, partition)
 import Data.Maybe (mapMaybe)
@@ -93,8 +95,20 @@ reconstruct env0 (Module m i ss)         = do --traceM ("#################### or
         ss1T' = __name__assign : ss1T
 
 
-showTyFile env0 m fname         = do (ms,nmod,_,_) <- InterfaceFiles.readFile fname
-                                     putStrLn ("\n#################################### Interface:")
+showTyFile env0 m fname         = do
+                                     -- Print header-only info first
+                                     (hash, imps, roots, mdocH) <- InterfaceFiles.readHeader fname
+                                     putStrLn ("\n############### Header ###############")
+                                     putStrLn ("Imports: " ++ (show (map prstr imps)))
+                                     putStrLn ("Roots  : " ++ (show (map prstr roots)))
+                                     case mdocH of
+                                       Just ds -> putStrLn ("Doc    : \"\"\"" ++ ds ++ "\"\"\"")
+                                       Nothing -> return ()
+                                     putStrLn ("Hash   : 0x" ++ (B.unpack $ Base16.encode hash))
+
+                                     -- Then print interface (full read)
+                                     (ms,nmod,_,_) <- InterfaceFiles.readFile fname
+                                     putStrLn ("\n############### Interface ############")
                                      let NModule te mdoc = nmod
                                      forM_ mdoc $ \docstring ->
                                        putStrLn $ "\"\"\"" ++ docstring ++ "\"\"\""
