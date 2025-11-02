@@ -59,7 +59,6 @@ import Data.String.Utils (replace)
 import Data.Version (showVersion)
 import qualified Data.List
 import qualified Data.Map as M
-import qualified Data.Set
 import Error.Diagnose
 import Error.Diagnose.Style (defaultStyle)
 import qualified Filesystem.Path.CurrentOS as Fsco
@@ -490,38 +489,31 @@ findTyFile spaths mn = go spaths
         then return (Just fullPath)
         else go ps
 
-removeOrphanFiles :: FilePath -> IO ()
-removeOrphanFiles dir = do
-    -- Recursively get all files in the "out" directory.
+-- Remove orphaned files in out/types.
+-- Non-root files are removed if their module isn’t part of this build (i.e.
+-- no corresponding source .act in this build). The 'roots' argument lists the
+-- exact set of root stub files (*.root.c, *.test_root.c) to keep; others are
+-- removed.
+removeOrphanFiles :: Paths -> [CompileTask] -> [FilePath] -> IO ()
+removeOrphanFiles paths tasks roots = do
+    let dir = projTypes paths
     absOutFiles <- getFilesRecursive dir
-    let outFiles = map (makeRelative dir) absOutFiles
-
-    -- Map over each file.
-    forM_ outFiles $ \file -> do
-        -- Remove the file ending.
-        let fileNoExt = dropExtension (dropExtension file)
-            srcFile = ("src" </> fileNoExt <.> "act")
-
-        -- If the file is a .root.c file, always remove it and generate a new
-        -- one later, if necessary. Only an .act file with a root actor should
-        -- have a .root.c file but we cannot judge from here if the .act file
-        -- actually has a root actor, so the only safe choice is to remove the
-        -- file and let it be recreated if necessary. Should be very cheap
-        -- anyway since the file is so small. So check if filename ends with
-        -- ".root.c" and remove it!
-        if takeExtension file == ".c" && takeExtension (takeBaseName file) == ".root"
-          then do
-            removeIfExists (dir </> file)
-          else do
-            -- Check if there is a corresponding .act file in the "src" directory.
-            srcExists <- doesFileExist srcFile
-            -- If the .act file doesn't exist, remove the file in the "out" directory.
-            when (not srcExists) $ removeFile (dir </> file)
-              `catch` handleNotExists
+    let allowedBases = [ outBase paths (name t) | t <- tasks ]
+    forM_ absOutFiles $ \absFile -> do
+        let isC  = takeExtension absFile == ".c"
+            isH  = takeExtension absFile == ".h"
+            isTy = takeExtension absFile == ".ty"
+            bext = takeExtension (takeBaseName absFile)
+            isRootStub = isC && (bext == ".root" || bext == ".test_root")
+        if isRootStub
+          then when (not (absFile `elem` roots)) (removeIfExists absFile)
+          else when (isC || isH || isTy) $ do
+                 let base = dropExtension absFile
+                 unless (base `elem` allowedBases) (removeIfExists absFile)
   where
-        removeIfExists f = removeFile f `catch` handleNotExists
-        handleNotExists :: IOException -> IO ()
-        handleNotExists _ = return ()
+    removeIfExists f = removeFile f `catch` handleNotExists
+    handleNotExists :: IOException -> IO ()
+    handleNotExists _ = return ()
 
 
 
@@ -546,10 +538,7 @@ Terminology
   full TyTask where all module content is available.
 
 High-level Steps
-1) Orphan cleanup
-   - Remove stale files in out/ that don’t have corresponding source files.
-
-2) Discover and read tasks using header-first strategy (readModuleTask)
+1) Discover and read tasks using header-first strategy (readModuleTask)
    - For each module, try to use its .ty header to avoid parsing:
      - If .ty is missing/unreadable → parse .act to obtain imports (ActonTask).
      - If .ty exists and .act mtime <= .ty mtime → trust .ty header imports and
@@ -557,18 +546,18 @@ High-level Steps
      - If .act appears newer than .ty → verify by content hash:
        – If stored srcHash == current srcHash → header is still valid (TyTask)
        – Else → parse .act now to get accurate imports (ActonTask)
-   - This amounts to ensuring that the .ty is up to date with the .act source
-     file and reading from the .ty file header to get module imports etc, which
-     is much faster than parsing the .act file.
+   - This ensures that .ty is up to date with the .act source and lets us
+     read module imports/roots/docstring from the header, which is much faster
+     than parsing the .act file.
 
-3) Expand to include transitive project imports (readImports)
+2) Expand to include transitive project imports (readImports)
    - For project builds, we enumerate all modules under src/ upfront, so chasing
      is typically a no-op.
    - For single-file builds (or partial sets), we chase imports from the seeded
      tasks to ensure all project-local dependencies are included. We prefer .ty
      headers to avoid parsing; we parse only when a .ty is missing/unreadable.
 
-4) Decide freshness bottom-up (planModuleTasks)
+3) Decide freshness bottom-up (planModuleTasks)
    - Build the dependency graph using importsOf from tasks (TyTask uses header
      imports; ActonTask uses parsed AST imports). Compute a topological order.
    - For each module in order, fresh means: all project imports are already
@@ -577,12 +566,13 @@ High-level Steps
      sections. Stale modules become ActonTask (if not already) by parsing now.
    - With --verbose, we report which imports caused the staleness for clarity.
 
-5) Compile and build
-   - planModuleTasks returns modules in dependency (topological) order. compileTasks
-     trusts this order and compiles only ActonTask items (TyTask are cached).
-   - TyTask items remain lazy; code that needs only small bits (e.g., writeRootC)
-     reads roots from the header instead of forcing heavy loads.
-   - Final Zig link step executes unless --skip-build.
+4) Compile and build
+   - compileTasks compiles only ActonTask items (TyTask are cached).
+   - writeRootC writes per-binary root stubs (.root.c / .test_root.c) based on
+     the module’s .ty header roots.
+   - Right before invoking Zig, we prune root stubs using removeOrphanFiles so
+     only the discovered roots remain. After this point, removed stubs are NOT
+     regenerated in this build.
 
 ================================================================================
 -}
@@ -604,9 +594,6 @@ compileFiles gopts opts srcFiles = do
         putStrLn ("    binDir   : " ++ binDir paths)
         putStrLn ("    srcDir   : " ++ srcDir paths)
         iff (length srcFiles == 1) (putStrLn ("    modName  : " ++ prstr (modName paths)))
-
-    -- remove files in out that do not have corresponding source files!
-    removeOrphanFiles (projTypes paths)
 
     -- Build initial tasks using .ty headers when possible; parse only if .ty missing
     tasks0 <- mapM (readModuleTask gopts opts paths) srcFiles
@@ -1328,6 +1315,12 @@ zigBuild :: Acton.Env.Env0 -> C.GlobalOptions -> C.CompileOptions -> Paths -> [C
 zigBuild env gopts opts paths tasks binTasks = do
     allBinTasks <- mapM (writeRootC env gopts opts paths tasks) binTasks
     let realBinTasks = catMaybes allBinTasks
+    -- Clean out/types: drop stray root stubs and outputs that don’t belong
+    -- to the modules built in this run
+    let roots = [ if isTest bt then outBase paths (A.mname (rootActor bt)) ++ ".test_root.c"
+                                else outBase paths (A.mname (rootActor bt)) ++ ".root.c"
+                | bt <- realBinTasks ]
+    removeOrphanFiles paths tasks roots
     iff (not (quiet gopts opts)) $ putStrLn("  Final compilation step")
     timeStart <- getTime Monotonic
 
