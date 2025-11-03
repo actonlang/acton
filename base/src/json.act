@@ -13,8 +13,14 @@ actor Json():
     action def decode(data: str) -> dict[str, ?value]:
         return decode(data)
 
+    action def decode_list(data: str) -> list[?value]:
+        return decode_list(data)
+
     action def encode(data: dict[str, ?value]) -> str:
         return encode(data)
+
+    action def encode_list(data: list[?value], pretty=False) -> str:
+        return encode_list(data, pretty)
 
 
 def decode(data: str) -> dict[str, ?value]:
@@ -22,7 +28,17 @@ def decode(data: str) -> dict[str, ?value]:
     """
     NotImplemented
 
+def decode_list(data: str) -> list[?value]:
+    """Decode a JSON string (containing an array) into a list of values
+    """
+    NotImplemented
+
 def encode(data: dict[str, ?value], pretty=False) -> str:
     """Encode a dictionary into a JSON string
+    """
+    NotImplemented
+
+def encode_list(data: list[?value], pretty=False) -> str:
+    """Encode a list into a JSON array string
     """
     NotImplemented
