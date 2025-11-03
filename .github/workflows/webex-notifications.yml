@@ -37,19 +37,21 @@ jobs:
         WEBEX_TOKEN: ${{ secrets.WEBEX_TOKEN }}
         WEBEX_ROOM_ID: ${{ secrets.WEBEX_ROOM_ID }}
       run: |
-        MESSAGE='${{ steps.message.outputs.message }}'
+        set -euo pipefail
 
-        # Escape the message for JSON
-        ESCAPED_MESSAGE=$(echo "$MESSAGE" | jq -Rs .)
+        # Write the prepared message to a file verbatim to avoid shell quoting issues
+        cat > message.txt <<'__WEBEX_MSG__'
+        ${{ steps.message.outputs.message }}
+        __WEBEX_MSG__
 
-        # Build JSON payload
+        # Build JSON payload safely; jq will handle JSON escaping
         JSON_PAYLOAD=$(jq -n \
           --arg roomId "$WEBEX_ROOM_ID" \
-          --argjson markdown "$ESCAPED_MESSAGE" \
+          --rawfile markdown message.txt \
           '{roomId: $roomId, markdown: $markdown}')
 
         # Send message to Webex room using direct API call
-        RESPONSE=$(curl -s -X POST "https://webexapis.com/v1/messages" \
+        RESPONSE=$(curl -sS -X POST "https://webexapis.com/v1/messages" \
           -H "Authorization: Bearer $WEBEX_TOKEN" \
           -H "Content-Type: application/json" \
           -d "$JSON_PAYLOAD" \
