@@ -22,3 +22,18 @@ def _test_json():
         testing.assertNotNone(e, "Failed to encode to JSON")
         testing.assertEqual(s, e, "Input output via JSON round trip does not match")
 
+def _test_json_list_decode():
+    test_arrays = [
+        r"""[1,2,3]""",
+        r"""[true,false,null]""",
+        r"""["a","b","c"]""",
+        r"""[[1,2],[3,4]]""",
+        r"""[{"a":1},{"b":2}]""",
+        r"""["x",null,10,3.14,{"k":"v"},[5]]""",
+    ]
+    for s in test_arrays:
+        l = json.decode_list(s)
+        testing.assertNotNone(l, "json.decode_list() returned None")
+        e = json.encode_list(l)
+        testing.assertNotNone(e, "json.encode_list() returned None")
+        testing.assertEqual(s, e, "JSON array roundtrip does not match")
