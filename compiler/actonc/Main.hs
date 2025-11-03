@@ -1421,11 +1421,16 @@ zigBuild :: Acton.Env.Env0 -> C.GlobalOptions -> C.CompileOptions -> Paths -> [C
 zigBuild env gopts opts paths tasks binTasks = do
     allBinTasks <- mapM (writeRootC env gopts opts paths tasks) binTasks
     let realBinTasks = catMaybes allBinTasks
-    -- Clean out/types: drop stray root stubs and outputs that don’t belong
-    -- to the modules built in this run
-    let roots = [ if isTest bt then outBase paths (A.mname (rootActor bt)) ++ ".test_root.c"
-                                else outBase paths (A.mname (rootActor bt)) ++ ".root.c"
-                | bt <- realBinTasks ]
+    -- Clean out/types: drop stray outputs but preserve all root stubs so that
+    -- switching between `acton build` and `acton test` never deletes the other
+    -- mode’s executables. We preserve every existing *.root.c and *.test_root.c
+    -- under out/types regardless of whether this run produced them.
+    absOutFiles <- getFilesRecursive (projTypes paths)
+    let isRootStub f =
+            let ext  = takeExtension f
+                bext = takeExtension (takeBaseName f)
+            in ext == ".c" && (bext == ".root" || bext == ".test_root")
+        roots = filter isRootStub absOutFiles
     removeOrphanFiles paths tasks roots
     iff (not (quiet gopts opts)) $ putStrLn("  Final compilation step")
     -- Remove orphaned executables, i.e. .act files that used to have a root
