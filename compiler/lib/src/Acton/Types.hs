@@ -33,6 +33,7 @@ import Acton.Transform
 import Acton.Converter
 import Acton.TypeM
 import Acton.TypeEnv
+import Acton.WitKnots
 import qualified InterfaceFiles
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Base16 as Base16
@@ -154,7 +155,7 @@ infTopStmt env s                        = do (cs,te1,s1) <- infEnv env s
                                              s1 <- termred <$> usubst (pushEqns eq s1)
                                              defaultVars (ufree s1)
                                              s1 <- usubst s1
-                                             return (te1, s1)
+                                             tieWitKnots te1 s1
 
   where defaultTE env te                = do defaultVars (ufree te)
                                              usubst te
