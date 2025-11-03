@@ -443,7 +443,7 @@ initEnv path True          = return $ EnvF{ names = [(nPrim,NMAlias mPrim)],
                                             witnesses = primWits,
                                             thismod = Nothing,
                                             envX = () }
-initEnv path False         = do (_,nmod,_,_) <- InterfaceFiles.readFile (joinPath [path,"__builtin__.ty"])
+initEnv path False         = do (_,nmod,_,_,_,_,_,_) <- InterfaceFiles.readFile (joinPath [path,"__builtin__.ty"])
                                 let NModule envBuiltin builtinDocstring = nmod
                                     env0 = EnvF{ names = [(nPrim,NMAlias mPrim), (nBuiltin,NMAlias mBuiltin)],
                                                  imports = [mPrim,mBuiltin],
@@ -1219,7 +1219,7 @@ doImp spath env m            = case lookupMod m env of
                                         case tyFile of
                                           Nothing -> fileNotFound m
                                           Just tyF -> do
-                                            (ms,nmod,_,_) <- InterfaceFiles.readFile tyF
+                                            (ms,nmod,_,_,_,_,_,_) <- InterfaceFiles.readFile tyF
                                             env' <- subImp spath env ms
                                             let NModule te mdoc = nmod
                                             return (addMod m te mdoc env', te)

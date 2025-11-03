@@ -1,9 +1,9 @@
-    Stale b: stale deps: a
-    Stale c: stale deps: b
-  Compiling a.act with Debug
-   Finished compilation in   0.000 s
+Building file src/c.act in project .
+  Fresh a: using cached .ty
+  Stale b: source changed
   Compiling b.act with Debug
    Finished compilation in   0.000 s
+  Stale c: iface changes in b 4ed61e7a → d1422048
   Compiling c.act with Debug
    Finished compilation in   0.000 s
   Final compilation step

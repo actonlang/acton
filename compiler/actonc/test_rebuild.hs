@@ -72,6 +72,8 @@ sanitize = LBS.fromStrict . TE.encodeUtf8 . T.unlines . map (padZero . redact) .
     -- Normalize padding before the canonicalized duration "0.000 s"
     -- to avoid platform-specific spacing differences. Force exactly
     -- three spaces before 0.000 s (i.e. "   0.000 s").
+    -- It is super weird that this is even needed, but it seems we get build
+    -- failures on Macos 13 otherwise...
     padZero :: T.Text -> T.Text
     padZero t =
       case T.breakOn "0.000 s" t of
@@ -142,6 +144,13 @@ runIn cwd cmd = do
   (ec,out,err) <- readCreateProcessWithExitCode (shell cmd){ cwd = Just cwd } ""
   pure (ec, T.pack out <> T.pack err)
 
+-- Run a project build and return full (unsanitized) output as Text
+buildOut :: IO T.Text
+buildOut = do
+  let cmd = actoncExe ++ " build --color never --verbose"
+  (_ec,out) <- runIn projDir cmd
+  pure out
+
 goldenBuild :: IO LBS.ByteString
 goldenBuild = do
   let cmd = actoncExe ++ " build --color never --verbose"
@@ -153,6 +162,13 @@ goldenBuildFile = do
   let cmd = actoncExe ++ " src/c.act --color never --verbose"
   (_ec,out) <- runIn projDir cmd
   pure (sanitize out)
+
+-- Run a single-file build and return unsanitized output as Text
+buildOutFile :: IO T.Text
+buildOutFile = do
+  let cmd = actoncExe ++ " src/c.act --color never --verbose"
+  (_ec,out) <- runIn projDir cmd
+  pure out
 
 buildProject :: IO ()
 buildProject = do
@@ -182,6 +198,11 @@ p01_init = testCase "01-init" $ do
     [ "import a"
     , "def baa():"
     , "    return a.aaa + 3"
+    , ""
+    , "class DocInfo:"
+    , "    def get(self) -> int:"
+    , "        \"get value\""
+    , "        return 1"
     ]
   writeFileUtf8 (srcDir </> "c.act") $ T.unlines
     [ "import b"
@@ -207,29 +228,87 @@ p05_run_126 = testCase "05-run 126" $ do
   out <- runBinary "c"
   out @?= "126\n"
 
-p06_change_a_rebuild_all :: TestTree
-p06_change_a_rebuild_all = goldenVsString "06-change-a-rebuild-all.golden" (goldenDir </> "project_06-change-a-rebuild-all.golden") $ do
+p06_change_a_impl :: TestTree
+p06_change_a_impl = goldenVsString "06-change-a-impl.golden" (goldenDir </> "project_06-change-a-impl.golden") $ do
   writeFileUtf8 (srcDir </> "a.act") "aaa = 124\n"
-  goldenBuild
+  out <- buildOut
+  -- Expect only a.act to compile
+  assertBool "expected a.act to compile" (T.isInfixOf "Compiling a.act" out)
+  assertBool "did not expect b.act to compile" (not (T.isInfixOf "Compiling b.act" out))
+  assertBool "did not expect c.act to compile" (not (T.isInfixOf "Compiling c.act" out))
+  pure (sanitize out)
 
 p07_run_127 :: TestTree
 p07_run_127 = testCase "07-run 127" $ do
   out <- runBinary "c"
   out @?= "127\n"
 
-p08_change_b_rebuild_bc :: TestTree
-p08_change_b_rebuild_bc = goldenVsString "08-change-b-rebuild-bc.golden" (goldenDir </> "project_08-change-b-rebuild-bc.golden") $ do
+p08_change_b_impl :: TestTree
+p08_change_b_impl = goldenVsString "08-change-b-impl.golden" (goldenDir </> "project_08-change-b-impl.golden") $ do
   writeFileUtf8 (srcDir </> "b.act") $ T.unlines
     [ "import a"
     , "def baa():"
     , "    return a.aaa + 10"
+    , ""
+    , "class DocInfo:"
+    , "    def get(self) -> int:"
+    , "        \"get value\""
+    , "        return 1"
     ]
-  goldenBuild
+  out <- buildOut
+  -- Expect b.act to compile, but not a.act or c.act in project build
+  assertBool "did not expect a.act to compile" (not (T.isInfixOf "Compiling a.act" out))
+  assertBool "expected b.act to compile" (T.isInfixOf "Compiling b.act" out)
+  assertBool "did not expect c.act to compile" (not (T.isInfixOf "Compiling c.act" out))
+  pure (sanitize out)
 
 p09_run_134 :: TestTree
 p09_run_134 = testCase "09-run 134" $ do
   out <- runBinary "c"
   out @?= "134\n"
+
+-- Interface-hash behavior tests --------------------------------------------
+
+-- Changing public interface of an import should rebuild dependents that use it
+p10_change_a_iface :: TestTree
+p10_change_a_iface =
+  goldenVsString "10-change-a-iface.golden"
+                 (goldenDir </> "project_10-change-a-iface.golden") $ do
+    -- Add aab constant in a.act (interface change)
+    writeFileUtf8 (srcDir </> "a.act") $ T.unlines
+      [ "aaa = 125"
+      , "aab = 200"
+      ]
+    out <- buildOut
+    -- Should rebuild a.act and b.act; with import-augmented iface hashing, b's
+    -- interface hash changes when a's interface changes
+    assertBool "expected a.act to compile" (T.isInfixOf "Compiling a.act" out)
+    assertBool "expected b.act to compile" (T.isInfixOf "Compiling b.act" out)
+    -- c should rebuild too, since it imports b which has now changed since its import a changed..
+    assertBool "expected c.act to compile" (T.isInfixOf "Compiling c.act" out)
+    pure (sanitize out)
+
+-- Docstring-only change in an imported module should not rebuild dependents
+p11_change_b_doc :: TestTree
+p11_change_b_doc =
+  goldenVsString "11-change-b-doc.golden"
+                 (goldenDir </> "project_11-change-b-doc.golden") $ do
+    -- Change only the docstring of a method in b.act; this should recompile b
+    -- (source changed) but not its dependent c (iface hash is doc-free).
+    writeFileUtf8 (srcDir </> "b.act") $ T.unlines
+      [ "import a"
+      , "def baa():"
+      , "    return a.aab + 10"
+      , ""
+      , "class DocInfo:"
+      , "    def get(self) -> int:"
+      , "        \"GET VALUE v2\""
+      , "        return 1"
+      ]
+    out <- buildOut
+    assertBool "expected b.act to compile" (T.isInfixOf "Compiling b.act" out)
+    assertBool "did not expect c.act to compile" (not (T.isInfixOf "Compiling c.act" out))
+    pure (sanitize out)
 
 f01_init :: TestTree
 f01_init = testCase "01-init" $ do
@@ -264,24 +343,40 @@ f05_run_126 = testCase "05-run 126" $ do
   out <- runBinary "c"
   out @?= "126\n"
 
-f06_change_a_rebuild_all :: TestTree
-f06_change_a_rebuild_all = goldenVsString "06-change-a-rebuild-all.golden" (goldenDir </> "file_06-change-a-rebuild-all.golden") $ do
+f06_change_a_impl :: TestTree
+f06_change_a_impl = goldenVsString "06-change-a-impl.golden" (goldenDir </> "file_06-change-a-impl.golden") $ do
   writeFileUtf8 (srcDir </> "a.act") "aaa = 124\n"
-  goldenBuildFile
+  out <- buildOutFile
+  -- Expect only a.act to compile in single-file build
+  assertBool "expected a.act to compile" (T.isInfixOf "Compiling a.act" out)
+  assertBool "did not expect b.act to compile" (not (T.isInfixOf "Compiling b.act" out))
+  assertBool "did not expect c.act to compile" (not (T.isInfixOf "Compiling c.act" out))
+  pure (sanitize out)
 
 f07_run_127 :: TestTree
 f07_run_127 = testCase "07-run 127" $ do
   out <- runBinary "c"
   out @?= "127\n"
 
-f08_change_b_rebuild_bc :: TestTree
-f08_change_b_rebuild_bc = goldenVsString "08-change-b-rebuild-bc.golden" (goldenDir </> "file_08-change-b-rebuild-bc.golden") $ do
+f08_change_b_impl :: TestTree
+f08_change_b_impl = goldenVsString "08-change-b-impl.golden" (goldenDir </> "file_08-change-b-impl.golden") $ do
   writeFileUtf8 (srcDir </> "b.act") $ T.unlines
     [ "import a"
     , "def baa():"
     , "    return a.aaa + 10"
+    , ""
+    , "class DocInfo:"
+    , "    def get(self) -> int:"
+    , "        \"get value\""
+    , "        return 1"
     ]
-  goldenBuildFile
+  out <- buildOutFile
+  -- Expect b.act to compile; c.act may compile if its view of b's iface changes
+  assertBool "did not expect a.act to compile" (not (T.isInfixOf "Compiling a.act" out))
+  assertBool "expected b.act to compile" (T.isInfixOf "Compiling b.act" out)
+  -- In file build, c usually recompiles due to dependency ordering
+  assertBool "expected c.act to compile" (T.isInfixOf "Compiling c.act" out)
+  pure (sanitize out)
 
 f09_run_134 :: TestTree
 f09_run_134 = testCase "09-run 134" $ do
@@ -298,20 +393,22 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "rebuild"
       , p03_up_to_date
       , p04_touch_no_rebuild
       , p05_run_126
-      , p06_change_a_rebuild_all
+      , p06_change_a_impl
       , p07_run_127
-      , p08_change_b_rebuild_bc
+      , p08_change_b_impl
       , p09_run_134
-      ]
+      , p10_change_a_iface
+      , p11_change_b_doc
+  ]
   , sequentialTestGroup "rebuild-file" AllSucceed
       [ f01_init
       , f02_initial_build
       , f03_up_to_date
       , f04_touch_no_rebuild
       , f05_run_126
-      , f06_change_a_rebuild_all
+      , f06_change_a_impl
       , f07_run_127
-      , f08_change_b_rebuild_bc
-      , f09_run_134
-      ]
+      , f08_change_b_impl
+  , f09_run_134
+  ]
   ]

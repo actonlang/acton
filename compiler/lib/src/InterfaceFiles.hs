@@ -20,13 +20,15 @@
 --   treat the module as out-of-date and recompile from source.
 --
 -- On-disk layout (Binary, in this exact order)
---   1) version      :: [Int]          -- Acton.Syntax.version
---   2) srcHash      :: ByteString     -- SHA-256 of the source bytes (raw)
---   3) imports      :: [A.ModName]    -- imported modules
---   4) roots        :: [A.Name]       -- root actors (e.g., main or __test_main)
---   5) docstring    :: Maybe String   -- module docstring
---   6) nameInfo     :: A.NameInfo     -- type/name environment
---   7) typedModule  :: A.Module       -- typed module
+--   1) version      :: [Int]                       -- Acton.Syntax.version
+--   2) srcHash      :: ByteString                  -- SHA-256 of the source bytes (raw)
+--   3) ifaceHash    :: ByteString                  -- SHA-256 of public NameInfo (doc-free)
+--                                                 -- augmented with imports' iface hashes
+--   4) imports      :: [(A.ModName, ByteString)]   -- imported module and iface hash used
+--   5) roots        :: [A.Name]                    -- root actors (e.g., main or __test_main)
+--   6) docstring    :: Maybe String                -- module docstring
+--   7) nameInfo     :: A.NameInfo                  -- type/name environment
+--   8) typedModule  :: A.Module                    -- typed module
 --
 -- Rationale for ordering
 -- - Put small, fixed/cheap fields up front (version, srcHash) to enable fast
@@ -51,28 +53,28 @@ import System.Posix.Process (getProcessID)
 
 -- Write interface file with source content hash using atomic write
 -- We use temp file + rename as atomic write to avoid other readers seeing partially written output.
-writeFile :: FilePath -> BS.ByteString -> [A.ModName] -> [A.Name] -> Maybe String -> A.NameInfo -> A.Module -> IO ()
-writeFile f srcHash ms roots mdoc nmod tchecked = do
+writeFile :: FilePath -> BS.ByteString -> BS.ByteString -> [(A.ModName, BS.ByteString)] -> [A.Name] -> Maybe String -> A.NameInfo -> A.Module -> IO ()
+writeFile f srcHash ifaceHash imps roots mdoc nmod tchecked = do
     -- Use PID for unique temp file name
     pid <- getProcessID
     let tmpFile = f ++ "." ++ show pid
-    BL.writeFile tmpFile (encode (A.version, srcHash, ms, roots, mdoc, nmod, tchecked))
+    BL.writeFile tmpFile (encode (A.version, srcHash, ifaceHash, imps, roots, mdoc, nmod, tchecked))
     -- Atomically rename to final location
     -- This is atomic on POSIX systems and prevents partial writes or conflicts
     renameFile tmpFile f
 
 -- Read complete interface file
-readFile :: FilePath -> IO ([A.ModName], A.NameInfo, A.Module, BS.ByteString)
+readFile :: FilePath -> IO ([A.ModName], A.NameInfo, A.Module, BS.ByteString, BS.ByteString, [(A.ModName, BS.ByteString)], [A.Name], Maybe String)
 readFile f = do
     h <- openBinaryFile f ReadMode
     size <- hFileSize h
     bs <- BS.hGet h (fromIntegral size)
     hClose h
     let bsLazy = BL.fromStrict bs
-    let (vs, srcHash, ms, _roots, _mdoc, nmod, tmod)
-          = decode bsLazy :: ([Int], BS.ByteString, [A.ModName], [A.Name], Maybe String, A.NameInfo, A.Module)
+    let (vs, srcHash, ifaceHash, imps, roots, mdoc, nmod, tmod)
+          = decode bsLazy :: ([Int], BS.ByteString, BS.ByteString, [(A.ModName, BS.ByteString)], [A.Name], Maybe String, A.NameInfo, A.Module)
     if vs == A.version
-      then return (ms, nmod, tmod, srcHash)
+      then return (map fst imps, nmod, tmod, srcHash, ifaceHash, imps, roots, mdoc)
       else do
         putStrLn ("Interface file has version " ++ show vs ++ "; current version is " ++ show A.version)
         System.Exit.exitFailure
@@ -80,23 +82,24 @@ readFile f = do
 -- Read only small header fields from .ty: (hash, imports, roots, docstring)
 -- This avoids loading large fields and is much faster than readFile which
 -- decodes everything.
-readHeader :: FilePath -> IO (BS.ByteString, [A.ModName], [A.Name], Maybe String)
+readHeader :: FilePath -> IO (BS.ByteString, BS.ByteString, [(A.ModName, BS.ByteString)], [A.Name], Maybe String)
 readHeader f = do
     h <- openBinaryFile f ReadMode
     size <- hFileSize h
     bs <- BS.hGet h (fromIntegral size)
     hClose h
     let bsLazy = BL.fromStrict bs
-        getHdr :: BinaryGet.Get ([Int], BS.ByteString, [A.ModName], [A.Name], Maybe String)
+        getHdr :: BinaryGet.Get ([Int], BS.ByteString, BS.ByteString, [(A.ModName, BS.ByteString)], [A.Name], Maybe String)
         getHdr = do
           vs    <- get :: BinaryGet.Get [Int]
           hash  <- get :: BinaryGet.Get BS.ByteString
-          imps  <- get :: BinaryGet.Get [A.ModName]
+          ihash <- get :: BinaryGet.Get BS.ByteString
+          imps  <- get :: BinaryGet.Get [(A.ModName, BS.ByteString)]
           roots <- get :: BinaryGet.Get [A.Name]
           doc   <- get :: BinaryGet.Get (Maybe String)
-          return (vs, hash, imps, roots, doc)
+          return (vs, hash, ihash, imps, roots, doc)
     case BinaryGet.runGetOrFail getHdr bsLazy of
       Left _ -> ioError (userError "Failed to decode .ty header")
-      Right (_, _, (vs, hash, imps, roots, doc)) ->
-        if vs == A.version then return (hash, imps, roots, doc)
+      Right (_, _, (vs, hash, ihash, imps, roots, doc)) ->
+        if vs == A.version then return (hash, ihash, imps, roots, doc)
         else ioError (userError (".ty version mismatch: file has " ++ show vs ++ ", expected " ++ show A.version))

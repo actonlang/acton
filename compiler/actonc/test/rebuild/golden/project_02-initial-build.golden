@@ -1,7 +1,10 @@
+  Stale a: source changed
   Compiling a.act with Debug
    Finished compilation in   0.000 s
+  Stale b: source changed
   Compiling b.act with Debug
    Finished compilation in   0.000 s
+  Stale c: source changed
   Compiling c.act with Debug
    Finished compilation in   0.000 s
   Final compilation step

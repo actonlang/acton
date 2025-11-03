@@ -59,6 +59,7 @@ import Data.String.Utils (replace)
 import Data.Version (showVersion)
 import qualified Data.List
 import qualified Data.Map as M
+import qualified Data.Set
 import Error.Diagnose
 import Error.Diagnose.Style (defaultStyle)
 import qualified Filesystem.Path.CurrentOS as Fsco
@@ -84,6 +85,8 @@ import qualified Paths_actonc
 import Text.Printf
 
 import qualified Data.ByteString.Char8 as B
+import qualified Data.ByteString.Lazy as BL
+import Data.Binary (encode)
 import qualified Data.ByteString.Base16 as Base16
 import qualified Crypto.Hash.SHA256 as SHA256
 
@@ -396,12 +399,11 @@ printDocs gopts opts = do
                 Acton.Types.showTyFile env0 (modName paths) filename
 
             ".act" -> do
-                src <- readFile filename
                 let modname = A.modName $ map (replace ".act" "") $ splitOn "/" $ fileBody
-                parsed <- Acton.Parser.parseModule modname filename src
+                paths <- findPaths filename defaultOpts
+                (_src, parsed) <- parseActFile gopts defaultOpts paths modname filename
 
                 -- Run compiler passes to get type information
-                paths <- findPaths filename defaultOpts
                 env0 <- Acton.Env.initEnv (sysTypes paths) False
                 env <- Acton.Env.mkEnv (searchPath paths) env0 parsed
                 kchecked <- Acton.Kinds.check env parsed
@@ -515,6 +517,19 @@ removeOrphanFiles paths tasks roots = do
     handleNotExists :: IOException -> IO ()
     handleNotExists _ = return ()
 
+parseActSource :: C.GlobalOptions -> C.CompileOptions -> Paths -> A.ModName -> FilePath -> String -> IO A.Module
+parseActSource gopts opts projPaths mn actFile srcContent = do
+  Acton.Parser.parseModule mn actFile srcContent
+    `catch` (\bundle -> handleDiagnostic gopts opts projPaths mn $ Diag.parseDiagnosticFromBundle actFile srcContent bundle)
+    `catch` (\err -> handleDiagnostic gopts opts projPaths mn $ Diag.customParseExceptionToDiagnostic actFile srcContent err)
+    `catch` handle gopts opts "Context error" Acton.Parser.contextError srcContent projPaths mn
+    `catch` handle gopts opts "Indentation error" Acton.Parser.indentationError srcContent projPaths mn
+
+parseActFile :: C.GlobalOptions -> C.CompileOptions -> Paths -> A.ModName -> FilePath -> IO (String, A.Module)
+parseActFile gopts opts projPaths mn actFile = do
+  srcContent <- readFile actFile
+  m <- parseActSource gopts opts projPaths mn actFile srcContent
+  return (srcContent, m)
 
 
 {-
@@ -523,13 +538,18 @@ Build Pipeline Overview
 ================================================================================
 
 We want the compiler to be fast. The primary principle by which to achieve this
-is through the realization that the best optimization is to avoid unnecessary
-work altogether. Practically, this happens by caching information in .ty files
-and only selectively reading what we need. We do not eagerly load whole .ty
-files but rather read in "header information" such as which imports, the hash of
-the source code, which root actors and docstring. This way we can
-quickly determine what needs to be recompiled and what can be reused from
-previous compilations.
+is to avoid doing unnecessary work. Practically, this happens by caching
+information in .ty files and only selectively reading what we need. We do not
+eagerly load whole .ty files but rather read in "header information" such as
+which imports, the hash of the source code, which root actors and docstring.
+This way we can quickly determine what needs to be recompiled and what can be
+reused from previous compilations. We also use content hashing of the public
+interface and imports to make rebuild decisions precise and transitive:
+- Public interface hash is computed from the doc-free NameInfo, so doc-only
+  edits never cause dependents to rebuild.
+- The interface hash is augmented with the interface hashes of the module’s
+  imports (sorted). If an import’s interface changes, this module’s interface
+  hash changes too, which cleanly propagates rebuilds.
 
 Terminology
 - ActonTask: a module parsed from source (.act) and that needs to be compiled
@@ -557,22 +577,22 @@ High-level Steps
      tasks to ensure all project-local dependencies are included. We prefer .ty
      headers to avoid parsing; we parse only when a .ty is missing/unreadable.
 
-3) Decide freshness bottom-up (planModuleTasks)
-   - Build the dependency graph using importsOf from tasks (TyTask uses header
-     imports; ActonTask uses parsed AST imports). Compute a topological order.
-   - For each module in order, fresh means: all project imports are already
-     classified fresh. If any project import is stale, this module is stale.
-   - Fresh modules keep their TyTask header-only stubs; we don’t re-decode heavy
-     sections. Stale modules become ActonTask (if not already) by parsing now.
-   - With --verbose, we report which imports caused the staleness for clarity.
-
-4) Compile and build
-   - compileTasks compiles only ActonTask items (TyTask are cached).
-   - writeRootC writes per-binary root stubs (.root.c / .test_root.c) based on
-     the module’s .ty header roots.
-   - Right before invoking Zig, we prune root stubs using removeOrphanFiles so
-     only the discovered roots remain. After this point, removed stubs are NOT
-     regenerated in this build.
+3) Compile and build
+   - compileTasks orders modules in dependency (topological) order and decides
+     rebuilds as it goes:
+     - Source changed (ActonTask) → compile now
+     - Otherwise, compare each project import’s recorded interface hash from the
+       dependent’s .ty header with the provider’s current interface hash. The
+       current hash comes directly from the compile result for modules built in
+       this run, or from a fresh provider’s .ty header. Only if a hash differs
+       do we rebuild the dependent.
+   - We maintain an ifaceMap while walking modules in topological order. After a
+     module compiles, we insert its freshly computed interface hash; when a
+     module is fresh (TyTask), we insert the recorded header hash. Dependents
+     then consult ifaceMap to detect interface deltas among their imports.
+   - TyTask items remain lazy; code that needs only small bits (e.g., writeRootC)
+     reads roots/doc from the header instead of forcing heavy loads.
+   - Final Zig C compilation...
 
 ================================================================================
 -}
@@ -601,8 +621,8 @@ compileFiles gopts opts srcFiles = do
     -- builds, this usually amounts to a no-op since all source files were in
     -- the initial set (srcFiles).
     tasks1 <- readImports gopts opts paths tasks0
-    -- Then order tasks bottom-up and possibly invalidate stale modules due to imports
-    tasks <- planModuleTasks gopts opts paths tasks1
+    -- Then order tasks in dependency (topological) order
+    let tasks = tasks1
     iff (C.listimports opts) $ do
         let module_imports = map (\t -> concat [ modNameToString (name t), ": ", (concat $ intersperse " " (map (modNameToString) (importsOf t))) ] ) tasks
         let output = concat $ intersperse "\n" module_imports
@@ -748,11 +768,11 @@ readModuleTask gopts opts projPaths actFile = do
     if not tyExists
       then parseForImports mn
       else do
-        -- .ty exists: read header for imports/hash and compare timestamps
+        -- .ty exists: read header for hashes/imports and compare timestamps
         hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader tyFile
         case hdrE of
           Left _ -> parseForImports mn
-          Right (hash, imps, roots, mdoc) -> do
+          Right (hash, ihash, imps, roots, mdoc) -> do
             actTime <- System.Directory.getModificationTime actFile
             tyTime  <- System.Directory.getModificationTime tyFile
             if actTime <= tyTime
@@ -761,6 +781,7 @@ readModuleTask gopts opts projPaths actFile = do
                     tmodStub = A.Module mn [] []
                 return $ TyTask { name      = mn
                                 , tyHash    = hash
+                                , tyIfaceHash = ihash
                                 , tyImports = imps
                                 , tyRoots   = roots
                                 , tyDoc     = mdoc
@@ -776,6 +797,7 @@ readModuleTask gopts opts projPaths actFile = do
                         tmodStub = A.Module mn [] []
                     return $ TyTask { name      = mn
                                     , tyHash    = hash
+                                    , tyIfaceHash = ihash
                                     , tyImports = imps
                                     , tyRoots   = roots
                                     , tyDoc     = mdoc
@@ -784,12 +806,7 @@ readModuleTask gopts opts projPaths actFile = do
                   else parseForImports mn
   where
     parseForImports mn = do
-      srcContent <- readFile actFile
-      m <- Acton.Parser.parseModule mn actFile srcContent
-              `catch` (\bundle -> handleDiagnostic gopts opts projPaths mn $ Diag.parseDiagnosticFromBundle actFile srcContent bundle)
-              `catch` (\err -> handleDiagnostic gopts opts projPaths mn $ Diag.customParseExceptionToDiagnostic actFile srcContent err)
-              `catch` handle gopts opts "Context error" Acton.Parser.contextError srcContent projPaths mn
-              `catch` handle gopts opts "Indentation error" Acton.Parser.indentationError srcContent projPaths mn
+      (srcContent, m) <- parseActFile gopts opts projPaths mn actFile
       return $ ActonTask mn srcContent m
 
 
@@ -797,102 +814,15 @@ readModuleTask gopts opts projPaths actFile = do
 
 data CompileTask        = ActonTask { name :: A.ModName, src :: String, atree:: A.Module }
                         | TyTask    { name :: A.ModName
-                                    , tyHash :: B.ByteString
-                                    , tyImports :: [A.ModName]
+                                    , tyHash :: B.ByteString               -- source content hash
+                                    , tyIfaceHash :: B.ByteString          -- public interface hash
+                                    , tyImports :: [(A.ModName, B.ByteString)] -- imports with iface hash used
                                     , tyRoots :: [A.Name]
                                     , tyDoc :: Maybe String
                                     , iface :: A.NameInfo
                                     , typed :: A.Module
                                     }
                         deriving (Show)
-
--- Decide which modules are fresh (can use .ty) vs stale (need compile),
--- in bottom-up dependency order. Returns a mixed list of TyTask/ActonTask.
-{-
-planModuleTasks — classify modules as fresh or stale in dependency order
------------------------------------------------------------------------
-The tasks0 input is a mixed list of tasks produced by readModuleTask.
-Each entry is either:
-- TyTask: a lightweight header-only stub, when the .ty is up-to-date
-- ActonTask: a parsed AST (created when .ty was missing/unreadable or the
-             header hash didn’t match at seeding time).
-
-This function does:
-1) Build the project dependency graph using importsOf from each task. For
-   TyTask this means using header imports; for ActonTask we use parsed AST
-   imports. Compute a topological (bottom‑up) order over project modules.
-
-2) Walk modules in bottom‑up order and decide freshness for each module M by:
-   a) Self outputs exist: .ty, .h and .c files exist for M
-   b) .ty header decodes and stored srcHash matches current src bytes
-   c) All project imports of M were already classified fresh
-   d) For external imports (not in this project), no external .ty is newer than
-      M’s outputs
-   If any of these checks fail, M is stale; otherwise M is fresh.
-
-3) Produce the final task list in dependency (topological) order:
-   - Fresh → keep TyTask as a header-only stub (hash/imports/roots/docstring).
-   - Stale → parse the source now and output an ActonTask for compilation
-     (even if the seeding step provided a TyTask stub). This is the common case
-     where an initial TyTask becomes an ActonTask because a dependency was
-     found stale. Initial ActonTasks remain ActonTask.
--}
-planModuleTasks :: C.GlobalOptions -> C.CompileOptions -> Paths -> [CompileTask] -> IO [CompileTask]
-planModuleTasks gopts opts paths tasks0 = do
-  let allTasks = tasks0
-      projMap  = M.fromList [ (name t, t) | t <- allTasks ]
-      -- Graph over project modules (use importsOf for both ActonTask/TyTask)
-      nodes    = [ (t, name t, [ m | m <- importsOf t, M.member m projMap ]) | t <- allTasks ]
-      sccs     = stronglyConnComp nodes
-      cycles   = [ ts | ts@(CyclicSCC _) <- sccs ]
-      order    = [ t | AcyclicSCC t <- sccs ]
-  -- Fail fast on cycles; planModuleTasks is responsible for producing a
-  -- dependency-ordered list, so cycles are an error here.
-  unless (null cycles) $ do
-    let showTaskGraph (CyclicSCC ts) = "\n" ++ concatMap (\t-> concat (intersperse "." (A.modPath (name t))) ++ " ") ts
-    printErrorAndCleanAndExit ("Cyclic imports: " ++ concatMap showTaskGraph cycles) gopts opts paths
-
-  -- Propagate freshness bottom-up using the topo order
-  status <- go projMap M.empty order
-
-  -- Return tasks in dependency (topological) order. Fresh modules keep TyTask
-  -- header-only stubs; stale modules become ActonTask (parse now if needed).
-  forM order $ \t -> do
-    let mn = name t
-    case M.lookup mn status of
-      Just True -> return t -- should be TyTask already
-      _ -> case t of
-             ActonTask{} -> return t
-             TyTask{}    -> do
-               let actFile = srcFile paths mn
-               srcContent <- readFile actFile
-               m <- Acton.Parser.parseModule mn actFile srcContent
-                      `catch` (\bundle -> handleDiagnostic gopts opts paths mn $ Diag.parseDiagnosticFromBundle actFile srcContent bundle)
-                      `catch` (\err -> handleDiagnostic gopts opts paths mn $ Diag.customParseExceptionToDiagnostic actFile srcContent err)
-                      `catch` handle gopts opts "Context error" Acton.Parser.contextError srcContent paths mn
-                      `catch` handle gopts opts "Indentation error" Acton.Parser.indentationError srcContent paths mn
-               return $ ActonTask mn srcContent m
-  where
-    go pmap stMap [] = return stMap
-    go pmap stMap (t:ts) = do
-      isFresh <- moduleFresh pmap stMap t
-      go pmap (M.insert (name t) isFresh stMap) ts
-
-    moduleFresh pmap stMap t = do
-      let mn = name t
-          importsAll = importsOf t
-          projImports = [ m | m <- importsAll, M.member m pmap ]
-      case t of
-        ActonTask{} -> return False
-        TyTask{} -> do
-          -- If any project import is stale, this module is stale. Otherwise fresh.
-          let staleDeps = [ m | m <- projImports, Just False <- [M.lookup m stMap] ]
-          if not (null staleDeps) then do
-            when (C.verbose gopts) $ putStrLn ("    Stale " ++ modNameToString mn ++ ": stale deps: " ++ Data.List.intercalate ", " (map modNameToString staleDeps))
-            return False
-          else do
-            when (C.verbose gopts) $ putStrLn ("    Fresh " ++ modNameToString mn ++ ": using cached .ty")
-            return True
 
 -- TODO: replace binName String type with ModName just like for CompileTask.
 -- ModName is a array so a hierarchy with submodules is represented, we can then
@@ -917,35 +847,153 @@ filterMainActor env paths binTask = do
       Just ty -> do
         hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader ty
         case hdrE of
-          Right (_, _, roots, _) | n `elem` roots -> return (Just binTask)
+          Right (_, _, _, roots, _) | n `elem` roots -> return (Just binTask)
           _ -> checkEnv
       Nothing -> checkEnv
   where
 
 importsOf :: CompileTask -> [A.ModName]
 importsOf (ActonTask _ _ m) = A.importsOf m
-importsOf (TyTask { tyImports = ms }) = ms
+importsOf (TyTask { tyImports = ms }) = map fst ms
 
+-- compileTasks
+--
+-- Build and compile the given module tasks in dependency order. This is the
+-- core driver for a project or single-file build once tasks have been read by
+-- readModuleTask and (if needed) imports expanded by readImports.
+--
+-- Inputs
+--   - tasks: a mixed list of ActonTask (source needs compiling) and TyTask
+--     (up-to-date .ty header available). The list may be in any order.
+--
+-- Responsibilities
+--   1) Construct a project-local dependency graph from the tasks and compute a
+--      topological order. Dependencies outside the project (stdlib/deps) are
+--      ignored for ordering and staleness propagation.
+--   2) Optionally compile __builtin__ first if it is part of the project.
+--   3) Walk modules in topological order, deciding per module whether to
+--      compile or reuse the cached .ty, and update the environment.
+--   4) Track interface-hash changes for project modules and propagate
+--      staleness only when an imported module’s interface hash differs from
+--      the hash that was recorded when the dependent was last compiled.
+--
+-- Key ideas
+--   - TyTask carries only a lightweight header read from the module’s .ty
+--     file: the source hash, the interface hash, its imports annotated with
+--     the interface hash that was used, roots and docstring. TyTask avoids
+--     decoding heavy sections.
+--   - ActonTask carries parsed source and must be compiled.
+--   - We maintain ifaceMap :: Map ModName ByteString during the fold. For any
+--     project module that has been compiled in this run (or confirmed fresh),
+--     ifaceMap holds the interface hash that downstream modules should compare
+--     against. If a dependent TyTask recorded a different hash for an import,
+--     it is deemed stale and compiled.
+--   - When a TyTask is deemed stale (e.g., any imported module’s interface hash
+--     differs from the recorded one) stepModule first converts it to an
+--     ActonTask by parsing the source (parseActFile), then compiles it via
+--     doTask. For fresh TyTasks we do not parse or compile; we simply reuse the
+--     cached .ty and carry forward its recorded interface hash.
+--   - The fold is the “inner loop”: foldM (stepModule projMods) (env0, startIface)
+--     otherOrder. stepModule decides compile vs reuse, updates the environment
+--     and propagates new interface hashes for already-processed modules.
 compileTasks :: C.GlobalOptions -> C.CompileOptions -> Paths -> [CompileTask] -> IO Acton.Env.Env0
 compileTasks gopts opts paths tasks = do
-    -- tasks are expected to be in dependency (topological) order already
-    -- from planModuleTasks. We keep a special case for __builtin__.
+    -- 1) Build project-local graph and compute topological order
+    let allTasks = tasks
+        projMap  = M.fromList [ (name t, t) | t <- allTasks ]
+        nodes    = [ (t, name t, [ m | m <- importsOf t, M.member m projMap ]) | t <- allTasks ]
+        sccs     = stronglyConnComp nodes
+        cycles   = [ ts | ts@(CyclicSCC _) <- sccs ]
+        order    = [ t | AcyclicSCC t <- sccs ]
+    unless (null cycles) $ do
+      let showTaskGraph (CyclicSCC ts) = "\n" ++ concatMap (\t-> concat (intersperse "." (A.modPath (name t))) ++ " ") ts
+      printErrorAndCleanAndExit ("Cyclic imports: " ++ concatMap showTaskGraph cycles) gopts opts paths
     let isBuiltin t = name t == (A.modName ["__builtin__"])
-        (builtinTs, otherTs) = partition isBuiltin tasks
+        (builtinOrder, otherOrder) = partition isBuiltin order
+        projMods = Data.Set.fromList (map name otherOrder)
 
     -- Compile __builtin__ first if provided by the project (only for base proj)
-    case builtinTs of
+    case builtinOrder of
       [t] -> do
         builtinEnv0 <- Acton.Env.initEnv (sysTypes paths) True
-        _ <- doTask gopts opts paths builtinEnv0 t
+        void (doTask gopts opts paths builtinEnv0 t)
         return ()
       _ -> return ()
 
     -- Initialize env for remaining modules. If builtin was part of the project,
     -- read it from the project out/types; otherwise from system types.
-    let builtinPath = if null builtinTs then sysTypes paths else projTypes paths
+    let builtinPath = if null builtinOrder then sysTypes paths else projTypes paths
     env0 <- Acton.Env.initEnv builtinPath False
-    foldM (doTask gopts opts paths) env0 otherTs
+    -- ifaceMap tracks the latest known interface hash for each processed
+    -- project module. It starts empty and is updated by stepModule after a
+    -- module is compiled or confirmed fresh.
+    let startIface = M.empty :: M.Map A.ModName B.ByteString
+    -- 3) Process modules in dependency order. The fold carries the evolving
+    -- environment and the interface-hash map across modules.
+    (envFinal, _) <- foldM (stepModule projMods) (env0, startIface) otherOrder
+    return envFinal
+  where
+    -- stepModule
+    --
+    -- Decide whether a single module needs compilation and update both the
+    -- environment and the interface-hash map accordingly.
+    --
+    -- Inputs
+    --   - projMods: set of project modules (used to ignore external imports
+    --     when checking interface-hash deltas)
+    --   - (envAcc, ifaceMap): current compiler environment and the latest
+    --     interface hash for already processed project modules
+    --   - t: current module task in topological order
+    --
+    -- Logic
+    --   - If t is ActonTask, it must be compiled (needBySource = True).
+    --   - If t is TyTask, compare the recorded interface hashes for each
+    --     project import against ifaceMap. Any difference implies the import
+    --     changed its public interface in this run, so t must be recompiled
+    --     (needByImports = True).
+    --   - On compile, TyTask is first upgraded to ActonTask by parsing the
+    --     .act file; then doTask performs the compilation and writes .ty.
+    --   - After compile, obtain the new interface hash directly from the
+    --     compilation pipeline (runRestPasses via doTask) and update ifaceMap
+    --     with our ifaceHash for downstream modules
+    stepModule projMods (envAcc, ifaceMap) t = do
+      let mn = name t
+          needBySource = case t of { ActonTask{} -> True; _ -> False }
+          (needByImports, deltas) = case t of
+                            TyTask{ tyImports = imps } ->
+                              let diffs = [ (m, recorded, curr)
+                                          | (m, recorded) <- imps
+                                          , Data.Set.member m projMods
+                                          , Just curr <- [M.lookup m ifaceMap]
+                                          , curr /= recorded
+                                          ]
+                              in (not (null diffs), diffs)
+                            _ -> (False, [])
+          needCompile = needBySource || needByImports
+      if needCompile
+        then do
+          when (C.verbose gopts) $ do
+            if needBySource
+              then putStrLn ("  Stale " ++ modNameToString mn ++ ": source changed")
+              else do
+                let fmt (m, old, new) = modNameToString m ++ " " ++ short old ++ " → " ++ short new
+                putStrLn ("  Stale " ++ modNameToString mn ++ ": iface changes in " ++ Data.List.intercalate ", " (map fmt deltas))
+          t' <- case t of
+                  ActonTask{} -> return t
+                  TyTask{}    -> do
+                    let mn' = name t
+                        actFile = srcFile paths mn'
+                    (srcContent, m) <- parseActFile gopts opts paths mn' actFile
+                    return $ ActonTask mn' srcContent m
+          (env', ih) <- doTask gopts opts paths envAcc t'
+          let ifaceMap' = M.insert mn ih ifaceMap
+          return (env', ifaceMap')
+        else do
+          when (C.verbose gopts) $ putStrLn ("  Fresh " ++ modNameToString mn ++ ": using cached .ty")
+          (env', ih) <- doTask gopts opts paths envAcc t
+          let ifaceMap' = M.insert mn ih ifaceMap
+          return (env', ifaceMap')
+    short bs = take 8 (B.unpack $ Base16.encode bs)
 
 compileBins:: C.GlobalOptions -> C.CompileOptions -> Paths -> Acton.Env.Env0 -> [CompileTask] -> [BinTask] -> IO ()
 compileBins gopts opts paths env tasks binTasks = do
@@ -1011,15 +1059,28 @@ readImports gopts opts paths itasks
 quiet :: C.GlobalOptions -> C.CompileOptions -> Bool
 quiet gopts opts = C.quiet gopts || altOutput opts
 
-doTask :: C.GlobalOptions -> C.CompileOptions -> Paths -> Acton.Env.Env0 -> CompileTask -> IO Acton.Env.Env0
-doTask gopts opts paths env TyTask{} = do
-    -- Avoid eagerly adding cached modules to env; they'll be loaded on-demand later, like from mkEnv
-    return env
+doTask :: C.GlobalOptions -> C.CompileOptions -> Paths -> Acton.Env.Env0 -> CompileTask -> IO (Acton.Env.Env0, B.ByteString)
+doTask gopts opts paths env TyTask{ tyIfaceHash = h } = do
+    -- Cached module: no work here; return the recorded interface hash so the
+    -- caller can uniformly update ifaceMap without peeking into the task.
+    -- We still avoid eagerly loading into env; it will be read on-demand.
+    return (env, h)
 doTask gopts opts paths env t@(ActonTask mn src m) = do
     -- In --only-build mode, do not run compilation passes or write files.
     if C.only_build opts then do
         iff (not (quiet gopts opts)) (putStrLn ("  Skipping compilation of " ++ makeRelative (srcDir paths) actFile ++ " (--only-build)"))
-        return env
+        -- For a stale module in --only-build, return the currently recorded
+        -- interface hash from its existing .ty (if present), so dependents do
+        -- not observe spurious interface deltas in this mode.
+        mty <- Acton.Env.findTyFile (searchPath paths) mn
+        ih <- case mty of
+                Just ty -> do
+                  hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader ty
+                  case hdrE of
+                    Right (_srcH, ihash, _impsH, _rootsH, _docH) -> return ihash
+                    _ -> return B.empty
+                Nothing -> return B.empty
+        return (env, ih)
     else do
       iff (not (quiet gopts opts))  (putStrLn("  Compiling " ++ makeRelative (srcDir paths) actFile
               ++ " with " ++ show (C.optimize opts)))
@@ -1027,13 +1088,13 @@ doTask gopts opts paths env t@(ActonTask mn src m) = do
       timeStart <- getTime Monotonic
 
       createDirectoryIfMissing True (getModPath (projTypes paths) mn)
-      env' <- runRestPasses gopts opts paths env m src
+      (env', ifaceHash) <- runRestPasses gopts opts paths env m src
         `catch` handle gopts opts "Compilation error" generalError src paths mn
         `catch` handle gopts opts "Compilation error" Acton.Env.compilationError src paths mn
         `catch` (\err -> handleDiagnostic gopts opts paths (modName paths) $ mkErrorDiagnostic filename src $ Acton.TypeM.typeReport err filename src)
       timeEnd <- getTime Monotonic
       iff (not (quiet gopts opts)) $ putStrLn("   Finished compilation in  " ++ fmtTime(timeEnd - timeStart))
-      return env'
+      return (env', ifaceHash)
   where actFile             = srcFile paths mn
         filename            = modNameToFilename mn
         outbase             = outBase paths mn
@@ -1052,7 +1113,7 @@ isGitAvailable = do
 altOutput opts =
   (C.parse opts) || (C.kinds opts) || (C.types opts) || (C.sigs opts) || (C.norm opts) || (C.deact opts) || (C.cps opts) || (C.llift opts) || (C.box opts) || (C.hgen opts) || (C.cgen opts)
 
-runRestPasses :: C.GlobalOptions -> C.CompileOptions -> Paths -> Acton.Env.Env0 -> A.Module -> String -> IO Acton.Env.Env0
+runRestPasses :: C.GlobalOptions -> C.CompileOptions -> Paths -> Acton.Env.Env0 -> A.Module -> String -> IO (Acton.Env.Env0, B.ByteString)
 runRestPasses gopts opts paths env0 parsed srcContent = do
                       let mn = A.modname parsed
                       let outbase = outBase paths mn
@@ -1082,7 +1143,25 @@ runRestPasses gopts opts paths env0 parsed srcContent = do
                                      A.NModule te _ -> [ n | (n,i) <- te, rootEligible i ]
                                      _              -> []
                       let mdoc = case nmod of A.NModule _ d -> d; _ -> Nothing
-                      InterfaceFiles.writeFile (outbase ++ ".ty") srcHash mrefs roots mdoc nmod tchecked
+                      -- Resolve import interface hashes from headers when available
+                      impsWithHash <- forM mrefs $ \mref -> do
+                        mty <- Acton.Env.findTyFile (searchPath paths) mref
+                        case mty of
+                          Just ty -> do
+                            hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader ty
+                            case hdrE of
+                              Right (_srcH, ih, _impsH, _rootsH, _docH) -> return (mref, ih)
+                              _ -> return (mref, B.empty)
+                          Nothing -> return (mref, B.empty)
+                      -- Compute interface hash over doc-free NameInfo,
+                      -- augmented with current imports' interface hashes. This ensures that
+                      -- changes in a dependency's public interface are reflected in this
+                      -- module's interface hash, propagating rebuilds transitively.
+                      let selfIfaceBytes  = BL.toStrict $ encode (A.stripDocsNI nmod)
+                          depHashesSorted = map snd $ Data.List.sortOn (modNameToString . fst) impsWithHash
+                          depBytes        = BL.toStrict $ encode depHashesSorted
+                          ifaceHash       = SHA256.hash (B.append selfIfaceBytes depBytes)
+                      InterfaceFiles.writeFile (outbase ++ ".ty") srcHash ifaceHash impsWithHash roots mdoc nmod tchecked
 
                       let A.NModule iface mdoc = nmod
                       iff (C.types opts && mn == (modName paths)) $ dump mn "types" (Pretty.print tchecked)
@@ -1173,7 +1252,8 @@ runRestPasses gopts opts paths env0 parsed srcContent = do
                           iff (C.timing gopts) $ putStrLn("    Pass: Writing code    : " ++ fmtTime (timeCodeWrite - timeCodeGen))
                                                            )
 
-                      return $ Acton.Env.addMod mn iface mdoc (env0 `Acton.Env.withModulesFrom` env)
+                      return ( Acton.Env.addMod mn iface mdoc (env0 `Acton.Env.withModulesFrom` env)
+                             , ifaceHash )
 
 handle gopts opts errKind f src paths mn ex = do
     let actFile = modNameToFilename mn
@@ -1245,16 +1325,13 @@ writeRootC env gopts opts paths tasks binTask = do
             mn = A.mname qn
             outbase = outBase paths mn
             rootFile = if (isTest binTask) then outbase ++ ".test_root.c" else outbase ++ ".root.c"
-        -- Fast path: consult .ty header for root-eligible actors to avoid loading full NameInfo
-        -- Prefer header roots from preloaded TyTasks to avoid I/O
-        let mbTask = find (\t -> name t == m) tasks
-        rootsHeader <- case mbTask of
-                         Just TyTask{ tyRoots = rootsHdr } -> return rootsHdr
-                         _ -> do
-                           tyPath <- Acton.Env.findTyFile (searchPath paths) m
-                           case tyPath of
-                             Just ty -> do (_, _, roots, _) <- InterfaceFiles.readHeader ty; return roots
-                             Nothing -> return []
+        -- Read the up-to-date roots from the on-disk .ty header (post-compile)
+        -- Avoid using preloaded TyTask roots, which may be stale if the module
+        -- was rebuilt during this run.
+        tyPath <- Acton.Env.findTyFile (searchPath paths) m
+        rootsHeader <- case tyPath of
+                         Just ty -> do (_, _, _, roots, _) <- InterfaceFiles.readHeader ty; return roots
+                         Nothing -> return []
         if n `elem` rootsHeader then do
           c <- Acton.CodeGen.genRoot env qn
           createDirectoryIfMissing True (takeDirectory rootFile)
