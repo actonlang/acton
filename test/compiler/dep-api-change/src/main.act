@@ -1,0 +1,6 @@
+import libfoo
+
+actor main(env):
+    result = libfoo.calculate(21)
+    print("Result: %d" % result)
+    env.exit(0)

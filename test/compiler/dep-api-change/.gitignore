@@ -1,0 +1,7 @@
+.acton.lock
+.actonc.lock
+build.sh
+build.zig*
+out
+zig-cache
+zig-out
