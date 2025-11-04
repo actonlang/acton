@@ -48,7 +48,7 @@ tieWitKnots te (Decl l ds)
                                          traceM ("#### Instantiated cycles (ignored for now):\n" ++ render (nest 4 $ vcat $ map pretty insts))
                                          traceM ("")
                                      let ds' = map (tieknots cycledeps) ds
-                                         te' = map (addknots cycledeps) te
+                                         te' = map (addopts cycledeps) te
                                      return (te', Decl l ds')
   where ws                      = [ n | (n,NExt{}) <- te ]
         wexts                   = [ d | d <- ds, dname d `elem` ws ]
@@ -154,10 +154,11 @@ depsof w cycledeps              = case lookup w cycledeps of
                                     _ -> []
 
 
-addknots cycledeps (n, NExt q c us te doc {--})
-                                = (n, NExt q c us te doc {- deps -})
-  where deps                    = depsof n cycledeps
-addknots cycledeps ni           = ni
+addopts cycledeps (n, NExt q c us te _ doc)
+                                = trace ("#### Extending " ++ prstr n ++ " with opts " ++ prstrs opts) $ 
+                                  (n, NExt q c us te opts doc)
+  where opts                    = depsof n cycledeps
+addopts cycledeps ni            = ni
 
 
 tieknots cycledeps dec          = dec{ dbody = map tie (dbody dec) }
@@ -165,8 +166,8 @@ tieknots cycledeps dec          = dec{ dbody = map tie (dbody dec) }
     me                          = dname dec
     mydeps                      = depsof me cycledeps
     generics                    = qbound (qbinds dec)
-
     cyclic                      = (`elem` (dom cycledeps))
+
     tie (Decl l ds)             = Decl l (map tieI ds)
     tie s@Assign{}              = s{ expr = tieE (expr s) }
     tie s                       = s

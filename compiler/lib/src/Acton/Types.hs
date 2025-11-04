@@ -634,7 +634,7 @@ instance InfEnv Decl where
                                                  te2 = te ++ te1
                                                  b2 = addImpl te1 b1
                                              let docstring = extractDocstring b
-                                             return (cs1, [(extensionName us c, NExt q c ps te2 docstring)], Extension l q c us (bindWits eq1 ++ b2) ddoc)
+                                             return (cs1, [(extensionName us c, NExt q c ps te2 [] docstring)], Extension l q c us (bindWits eq1 ++ b2) ddoc)
       where TC n ts                     = c
             env1                        = define (toSigs te') $ reserve (assigned b) $ defineSelfOpaque $ defineTVars (stripQual q) $ setInClass env
             witsearch                   = findWitness env (tCon c) u
@@ -1331,7 +1331,7 @@ instance Check Decl where
             NAct _ _ _ te0 _            = findName n env
 
     checkEnv' env (Class l n q us b ddoc)
-                                        = do --traceM ("## checkEnv class " ++ prstr n)
+                                        = do traceM ("## checkEnv class " ++ prstr n)
                                              pushFX fxPure tNone
                                              wellformed env1 q
                                              wellformed env1 us
@@ -1346,7 +1346,7 @@ instance Check Decl where
             selfsubst                   = [(tvSelf, tCon (TC (NoQ n) (map tVar $ qbound q)))]
 
     checkEnv' env (Protocol l n q us b ddoc)
-                                        = do --traceM ("## checkEnv protocol " ++ prstr n)
+                                        = do traceM ("## checkEnv protocol " ++ prstr n)
                                              pushFX fxPure tNone
                                              wellformed env1 q
                                              (csu,wmap) <- wellformedProtos env1 us
@@ -1363,7 +1363,7 @@ instance Check Decl where
     checkEnv' env (Extension l q c us b ddoc)
       | isActor env n                   = notYet (loc n) "Extension of an actor"
       | isProto env n                   = notYet (loc n) "Extension of a protocol"
-      | otherwise                       = do --traceM ("## checkEnv extension " ++ prstr n ++ "(" ++ prstrs us ++ ")")
+      | otherwise                       = do traceM ("## checkEnv extension " ++ prstr n ++ "(" ++ prstrs us ++ ")")
                                              pushFX fxPure tNone
                                              wellformed env1 q
                                              (csu,wmap) <- wellformedProtos env1 us
@@ -1372,12 +1372,12 @@ instance Check Decl where
                                              (cs1,eq1) <- solveScoped env1 tvs te tNone (csu++csb)
                                              checkNoEscape l env tvs
                                              b' <- usubst b'
-                                             return (cs1, convExtension env n' c q ps eq1 wmap b')
+                                             return (cs1, convExtension env n' c q ps eq1 wmap b' [])
       where env1                        = defineInst c ps thisKW' $ defineSelf n q $ defineTVars q $ setInClass env
             tvs                         = tvSelf : qbound q
             n                           = tcname c
             n'                          = extensionName us c
-            NExt _ _ ps te _            = findName n' env
+            NExt _ _ ps te _ _          = findName n' env
             selfsubst                   = [(tvSelf, tCon $ TC n (map tVar $ qbound q))]
 
     checkEnv' env x                     = do (cs,x') <- checkEnv env x

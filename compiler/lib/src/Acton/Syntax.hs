@@ -446,7 +446,7 @@ data NameInfo           = NVar      Type
                         | NAct      QBinds PosRow KwdRow TEnv (Maybe String)
                         | NClass    QBinds [WTCon] TEnv (Maybe String)
                         | NProto    QBinds [WTCon] TEnv (Maybe String)
-                        | NExt      QBinds TCon [WTCon] TEnv (Maybe String)
+                        | NExt      QBinds TCon [WTCon] TEnv [Name] (Maybe String)
                         | NTVar     Kind CCon
                         | NAlias    QName
                         | NMAlias   ModName
@@ -493,7 +493,7 @@ instance Leaves NameInfo where
     leaves (NClass q cs te _) = leaves q ++ leaves cs ++ leaves te
     leaves (NProto q ps te _) = leaves q ++ leaves ps ++ leaves te
     leaves (NAct q p k te _)  = leaves q ++ leaves [p,k] ++ leaves te
-    leaves (NExt q c ps te _) = leaves q ++ leaves c ++ leaves ps ++ leaves te
+    leaves (NExt q c ps te _ _) = leaves q ++ leaves c ++ leaves ps ++ leaves te
     leaves (NDef sc dec _)    = leaves sc
     leaves _                  = []
 

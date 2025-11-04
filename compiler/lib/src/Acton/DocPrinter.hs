@@ -99,7 +99,7 @@ extractNameDocstring (NSig _ _ mdoc) = mdoc
 extractNameDocstring (NAct _ _ _ _ mdoc) = mdoc
 extractNameDocstring (NClass _ _ _ mdoc) = mdoc
 extractNameDocstring (NProto _ _ _ mdoc) = mdoc
-extractNameDocstring (NExt _ _ _ _ mdoc) = mdoc
+extractNameDocstring (NExt _ _ _ _ _ mdoc) = mdoc
 extractNameDocstring (NModule _ mdoc) = mdoc
 extractNameDocstring _ = Nothing
 
