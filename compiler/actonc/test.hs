@@ -126,11 +126,10 @@ compilerTests =
         let modifiedContent = "# Modified version\ndef calculate(x: int, y: int) -> int:\n    return x * y\n"
         writeFile depSrc modifiedContent
 
-        -- Build again WITHOUT cleaning - compiler should detect API change via hash
-        runActon "build" ExitSuccess False testDir
-
-        -- Restore original content for future test runs
-        writeFile depSrc originalContent
+        -- Build again - compiler should detect API change via hash and
+        -- recompile main, which now rightfully fails type checking due to the
+        -- API change in the dependency.
+        runActon "build" (ExitFailure 1) False testDir
   ]
 
 actoncProjTests =
