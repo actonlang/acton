@@ -125,6 +125,21 @@ actoncProjTests =
         (returnCode, cmdOut, cmdErr) <- buildThing "--root main" "test/project/qualified_root"
         assertEqual "actonc should error out" (ExitFailure 1) returnCode
         assertEqual "actonc should report error" "actonc: Project build requires a qualified root actor name, like foo.main\n" cmdErr
+  , testCase "executable pruning" $ do
+        let proj = "test/project/prune_executables"
+        _ <- readCreateProcessWithExitCode (shell $ "rm -rf " ++ proj ++ "/out") ""
+        testBuild "" ExitSuccess False proj
+        let binFoo = proj </> "out/bin/foo"
+            binBar = proj </> "out/bin/bar"
+        fooExists <- doesFileExist binFoo
+        barExists <- doesFileExist binBar
+        assertBool "foo binary should exist after build" fooExists
+        assertBool "bar binary should exist after build" barExists
+        runActon "test" ExitSuccess False proj
+        fooStill <- doesFileExist binFoo
+        barStill <- doesFileExist binBar
+        assertBool "foo binary should exist after acton test" fooStill
+        assertBool "bar binary should exist after acton test" barStill
   ]
 
 actoncRootArgTests =

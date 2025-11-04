@@ -306,8 +306,6 @@ buildFile gopts opts file = do
               putStrLn("Building file " ++ file ++ " using temporary directory " ++ C.tempdir opts)
             compileFiles gopts opts [file]
           else do
-            iff (not(C.quiet gopts)) $ do
-              putStrLn("Building file " ++ file ++ " using temporary scratch directory")
             home <- getHomeDirectory
             let basePath = joinPath [home, ".cache", "acton", "scratch"]
             createDirectoryIfMissing True basePath
@@ -316,6 +314,9 @@ buildFile gopts opts file = do
               Nothing -> error "Could not acquire any scratch directory lock"
               Just (lock, lockPath) -> do
                 let scratchDir = dropExtension lockPath
+                iff (not(C.quiet gopts)) $ do
+                  let scratch_dir = if (C.verbose gopts) then " " ++ scratchDir else ""
+                  putStrLn("Building file " ++ file ++ " using temporary scratch directory" ++ scratch_dir)
                 removeDirectoryRecursive scratchDir `catch` handleNotExists
                 compileFiles gopts (opts { C.tempdir = scratchDir }) [file]
                 unlockFile lock
@@ -655,6 +656,34 @@ compileFiles gopts opts srcFiles = do
           else do
             compileBins gopts opts paths env tasks preBinTasks
     return ()
+
+-- Remove executables that no longer have corresponding root actors
+removeOrphanExecutables :: FilePath -> FilePath -> [BinTask] -> IO ()
+removeOrphanExecutables binDir projTypes binTasks = do
+    -- Get all executables in bin directory
+    binDirExists <- doesDirectoryExist binDir
+    when binDirExists $ do
+        binFiles <- listDirectory binDir
+        forM_ binFiles $ \exeFile -> do
+            -- Convert executable name back to module path format
+            let exeName = takeBaseName exeFile  -- Remove .exe if present
+                modPath = map (\c -> if c == '.' then '/' else c) exeName
+                rootCFile = projTypes </> modPath <.> "root.c"
+                testRootCFile = projTypes </> modPath <.> "test_root.c"
+
+            -- Check if this executable is in the current binTasks
+            let isCurrentBin = any (\t -> binName t == exeName) binTasks
+
+            -- If not in current binTasks and no root.c file exists, remove the executable
+            rootExists <- doesFileExist rootCFile
+            testRootExists <- doesFileExist testRootCFile
+            when (not isCurrentBin && not rootExists && not testRootExists) $ do
+              let file_name = binDir </> exeFile
+              removeFile (file_name)
+                  `catch` handleNotExists
+  where
+        handleNotExists :: IOException -> IO ()
+        handleNotExists _ = return ()
 
 
 -- Paths handling -------------------------------------------------------------------------------------
@@ -1392,13 +1421,22 @@ zigBuild :: Acton.Env.Env0 -> C.GlobalOptions -> C.CompileOptions -> Paths -> [C
 zigBuild env gopts opts paths tasks binTasks = do
     allBinTasks <- mapM (writeRootC env gopts opts paths tasks) binTasks
     let realBinTasks = catMaybes allBinTasks
-    -- Clean out/types: drop stray root stubs and outputs that don’t belong
-    -- to the modules built in this run
-    let roots = [ if isTest bt then outBase paths (A.mname (rootActor bt)) ++ ".test_root.c"
-                                else outBase paths (A.mname (rootActor bt)) ++ ".root.c"
-                | bt <- realBinTasks ]
+    -- Clean out/types: drop stray outputs but preserve all root stubs so that
+    -- switching between `acton build` and `acton test` never deletes the other
+    -- mode’s executables. We preserve every existing *.root.c and *.test_root.c
+    -- under out/types regardless of whether this run produced them.
+    absOutFiles <- getFilesRecursive (projTypes paths)
+    let isRootStub f =
+            let ext  = takeExtension f
+                bext = takeExtension (takeBaseName f)
+            in ext == ".c" && (bext == ".root" || bext == ".test_root")
+        roots = filter isRootStub absOutFiles
     removeOrphanFiles paths tasks roots
     iff (not (quiet gopts opts)) $ putStrLn("  Final compilation step")
+    -- Remove orphaned executables, i.e. .act files that used to have a root
+    -- actor and thus outputted a binary executable but no longer has a root
+    -- actor. We only do this for projects, not temp / scratch dir builds.
+    iff (not (isTmp paths)) $ removeOrphanExecutables (binDir paths) (projTypes paths) realBinTasks
     timeStart <- getTime Monotonic
 
     homeDir <- getHomeDirectory
