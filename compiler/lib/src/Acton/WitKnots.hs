@@ -48,7 +48,8 @@ tieWitKnots te (Decl l ds)
                                          traceM ("#### Instantiated cycles (ignored for now):\n" ++ render (nest 4 $ vcat $ map pretty insts))
                                          traceM ("")
                                      let ds' = map (tieknots cycledeps) ds
-                                     return (te, Decl l ds')
+                                         te' = map (addknots cycledeps) te
+                                     return (te', Decl l ds')
   where ws                      = [ n | (n,NExt{}) <- te ]
         wexts                   = [ d | d <- ds, dname d `elem` ws ]
         wdeps                   = map (witDeps ws) wexts
@@ -148,15 +149,21 @@ analyze ws chains               = [ (n, chainOrigins n) | n <- ws ]
 --              if d is in mydeps:
 --                  Prefix the rhs with  W_d if W_d is not None else ...
 
+depsof w cycledeps              = case lookup w cycledeps of
+                                    Just deps -> deps
+                                    _ -> []
 
-tieknots                        :: [(Name,[Name])] -> Decl -> Decl
+
+addknots cycledeps (n, NExt q c us te doc {--})
+                                = (n, NExt q c us te doc {- deps -})
+  where deps                    = depsof n cycledeps
+addknots cycledeps ni           = ni
+
+
 tieknots cycledeps dec          = dec{ dbody = map tie (dbody dec) }
   where
-    depsof w                    = concat [ deps | (w',deps) <- cycledeps, w' == w ]
-
     me                          = dname dec
-    mydeps                      :: [Name]
-    mydeps                      = depsof me
+    mydeps                      = depsof me cycledeps
     generics                    = qbound (qbinds dec)
 
     cyclic                      = (`elem` (dom cycledeps))
@@ -182,7 +189,7 @@ tieknots cycledeps dec          = dec{ dbody = map tie (dbody dec) }
       | otherwise               = e'
       where e'                  = e{ pargs = ap (pargs e)}
             ap (PosArg e p)     = PosArg e (ap p)
-            ap (PosNil)         = foldr extra PosNil (depsof n)
+            ap (PosNil)         = foldr extra PosNil (depsof n cycledeps)
             extra x
               | x == me         = PosArg (eVar selfKW')
               | x `elem` mydeps = PosArg (eVar $ depVar x)
@@ -197,7 +204,6 @@ tieknots cycledeps dec          = dec{ dbody = map tie (dbody dec) }
       where t                   = depType n
             n'                  = depVar n
 
-    depKnot                     :: Name -> Expr -> Expr
     depKnot n                   = eCond (eCAST (tOpt t) t $ eVar n') (eCall (tApp (eQVar primISNOTNONE) [t]) [eVar n'])
       where t                   = depType n
             n'                  = depVar n

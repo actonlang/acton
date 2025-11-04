@@ -105,7 +105,7 @@ mapModules f env            = walk env0 [] mods
 -}
 
 instance Pretty Witness where
-    pretty (WClass q t p w ws)  = text "WClass" <+> prettyQual q <+> pretty t <+> parens (pretty p) <+>
+    pretty (WClass q t p w ws _) = text "WClass" <+> prettyQual q <+> pretty t <+> parens (pretty p) <+>
                                       equals <+> pretty (wexpr ws (eCall (eQVar w) []))
     pretty (WInst q t p w ws)   = text "WInst" <+> prettyQual q <+> pretty t <+> parens (pretty p) <+>
                                       equals <+> pretty (wexpr ws (eQVar w))
@@ -469,7 +469,7 @@ reserve xs env              = env{ names = [ (x, NReserved) | x <- nub xs ] ++ n
 define                      :: TEnv -> EnvF x -> EnvF x
 define te env               = foldl addWit env1 ws
   where env1                = env{ names = reverse te ++ names env }
-        ws                  = [ WClass q (tCon c) p (NoQ w) ws | (w, NExt q c ps te' _) <- te, (ws,p) <- ps ]
+        ws                  = [ WClass q (tCon c) p (NoQ w) ws 0 | (w, NExt q c ps te' _) <- te, (ws,p) <- ps ]
 
 
 addImport                   :: ModName -> EnvF x -> EnvF x
@@ -1249,7 +1249,7 @@ impNames m te               = mapMaybe imp te
 
 importWits                  :: ModName -> TEnv -> EnvF x -> EnvF x
 importWits m te env         = foldl addWit env ws
-  where ws                  = [ WClass q (tCon c) p (GName m n) ws | (n, NExt q c ps te' _) <- te, (ws,p) <- ps ]
+  where ws                  = [ WClass q (tCon c) p (GName m n) ws 0 | (n, NExt q c ps te' _) <- te, (ws,p) <- ps ]
 
 
 

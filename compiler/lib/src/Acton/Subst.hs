@@ -911,7 +911,7 @@ wildargs i                          = [ tWild | _ <- nbinds i ]
     nbinds (NAct q _ _ _ _)         = q
     nbinds (NClass q _ _ _)         = q
     nbinds (NProto q _ _ _)         = q
-    nbinds (NExt q _ _ _ _)         = q
+    nbinds (NExt q _ _ _ _)       = q
 
 
 class UWild a where

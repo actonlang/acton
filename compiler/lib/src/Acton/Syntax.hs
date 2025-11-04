@@ -470,7 +470,7 @@ stripDocsNI ni = case ni of
   where
     stripBind (n, info) = (n, stripDocsNI info)
 
-data Witness            = WClass    { binds::QBinds, wtype::Type, proto::PCon, wname::QName, wsteps::WPath }
+data Witness            = WClass    { binds::QBinds, wtype::Type, proto::PCon, wname::QName, wsteps::WPath, wopts::Int }
                         | WInst     { binds::QBinds, wtype::Type, proto::PCon, wname::QName, wsteps::WPath }
                         deriving (Show)
 

@@ -138,13 +138,13 @@ instQBinds env q            = do ts <- newUnivars [ tvkind v | Quant v _ <- q ]
 
 instWitness                 :: EnvF x -> PCon -> Witness -> TypeM (Constraints,Type,Expr)
 instWitness env p0 wit      = case wit of
-                                 WClass q t p w ws -> do
+                                 WClass q t p w ws opts -> do
                                     (cs,tvs) <- instQBinds env q
                                     let s = (tvSelf,t) : qbound q `zip` tvs
                                     unifyM (DfltInfo (loc p0) 22 Nothing []) (tcargs p0) (tcargs $ vsubst s p)
                                     t <- usubst (vsubst s t)
                                     cs <- usubst cs
-                                    return (cs, t, wexpr ws (eCall (tApp (eQVar w) tvs) $ wvars cs))
+                                    return (cs, t, wexpr ws (eCall (tApp (eQVar w) tvs) (wvars cs ++ replicate opts eNone)))
                                  WInst q t p w ws -> do
                                     (cs,tvs) <- instQBinds env q
                                     let s = (tvSelf,t) : qbound q `zip` tvs
