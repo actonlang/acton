@@ -39,14 +39,10 @@ tieWitKnots te (Decl l ds)
   | null cycledeps              = return (te, Decl l ds)
   | not $ null insts            = error ("INTERNAL: #### Witness cycles with instantiations, not yet handled:\n" ++ 
                                          render (nest 4 $ vcat $ map pretty insts))
-  | otherwise                   = do traceM ("#### Local witness deps:\n" ++ render (nest 4 $ vcat $ map pretty wdeps))
+  | otherwise                   = do --traceM ("#### Local witness deps:\n" ++ render (nest 4 $ vcat $ map pretty wdeps))
                                      --traceM ("#### Chains:\n" ++ render (nest 4 $ vcat $ map pretty wchains))
-                                     traceM ("#### Cycles:\n" ++ render (nest 4 $ vcat $ map pretty cycles))
-                                     traceM ("#### Cycle dependencies:\n" ++ render (nest 4 $ vcat $ map pretty cycledeps ))
-                                     traceM ("")
-                                     when (not $ null insts) $ do
-                                         traceM ("#### Instantiated cycles (ignored for now):\n" ++ render (nest 4 $ vcat $ map pretty insts))
-                                         traceM ("")
+                                     --traceM ("#### Cycles:\n" ++ render (nest 4 $ vcat $ map pretty cycles))
+                                     --traceM ("#### Cycle dependencies:\n" ++ render (nest 4 $ vcat $ map pretty cycledeps ))
                                      let ds' = map (tieknots cycledeps) ds
                                          te' = map (addopts cycledeps) te
                                      return (te', Decl l ds')

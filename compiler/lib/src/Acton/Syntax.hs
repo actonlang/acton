@@ -463,7 +463,7 @@ stripDocsNI ni = case ni of
   NAct q p k te _     -> NAct q p k (map stripBind te) Nothing
   NClass q cs te _    -> NClass q cs (map stripBind te) Nothing
   NProto q ps te _    -> NProto q ps (map stripBind te) Nothing
-  NExt q c ps te _    -> NExt q c ps (map stripBind te) Nothing
+  NExt q c ps te o _  -> NExt q c ps (map stripBind te) o Nothing
   NDef sc dec _       -> NDef sc dec Nothing
   NSig sc dec _       -> NSig sc dec Nothing
   other               -> other

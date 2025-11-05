@@ -1331,7 +1331,7 @@ instance Check Decl where
             NAct _ _ _ te0 _            = findName n env
 
     checkEnv' env (Class l n q us b ddoc)
-                                        = do traceM ("## checkEnv class " ++ prstr n)
+                                        = do --traceM ("## checkEnv class " ++ prstr n)
                                              pushFX fxPure tNone
                                              wellformed env1 q
                                              wellformed env1 us
@@ -1346,7 +1346,7 @@ instance Check Decl where
             selfsubst                   = [(tvSelf, tCon (TC (NoQ n) (map tVar $ qbound q)))]
 
     checkEnv' env (Protocol l n q us b ddoc)
-                                        = do traceM ("## checkEnv protocol " ++ prstr n)
+                                        = do --traceM ("## checkEnv protocol " ++ prstr n)
                                              pushFX fxPure tNone
                                              wellformed env1 q
                                              (csu,wmap) <- wellformedProtos env1 us
@@ -1363,7 +1363,7 @@ instance Check Decl where
     checkEnv' env (Extension l q c us b ddoc)
       | isActor env n                   = notYet (loc n) "Extension of an actor"
       | isProto env n                   = notYet (loc n) "Extension of a protocol"
-      | otherwise                       = do traceM ("## checkEnv extension " ++ prstr n ++ "(" ++ prstrs us ++ ")")
+      | otherwise                       = do --traceM ("## checkEnv extension " ++ prstr n ++ "(" ++ prstrs us ++ ")")
                                              pushFX fxPure tNone
                                              wellformed env1 q
                                              (csu,wmap) <- wellformedProtos env1 us
