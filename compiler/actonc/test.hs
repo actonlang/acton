@@ -105,6 +105,31 @@ compilerTests =
         (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../../test/compiler/test_deps/deps/a/build.zig*") ""
         (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../../test/compiler/test_deps/deps/a/out") ""
         runActon "build" ExitSuccess False "../../test/compiler/test_deps/"
+  , testCase "dependency API change triggers rebuild" $ do
+        let testDir = "../../test/compiler/dep-api-change/"
+        let depSrc = testDir ++ "deps/libfoo/src/libfoo.act"
+
+        -- Write initial content to dependency
+        let originalContent = "# Initial version\ndef calculate(x: int) -> int:\n    return x * 2\n"
+        writeFile depSrc originalContent
+
+        -- Clean all build artifacts initially
+        (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf " ++ testDir ++ "build.zig*") ""
+        (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf " ++ testDir ++ "out") ""
+        (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf " ++ testDir ++ "deps/libfoo/build.zig*") ""
+        (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf " ++ testDir ++ "deps/libfoo/out") ""
+
+        -- Initial build
+        runActon "build" ExitSuccess False testDir
+
+        -- Now modify the dependency's public API (change function signature)
+        let modifiedContent = "# Modified version\ndef calculate(x: int, y: int) -> int:\n    return x * y\n"
+        writeFile depSrc modifiedContent
+
+        -- Build again - compiler should detect API change via hash and
+        -- recompile main, which now rightfully fails type checking due to the
+        -- API change in the dependency.
+        runActon "build" (ExitFailure 1) False testDir
   ]
 
 actoncProjTests =

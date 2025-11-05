@@ -977,9 +977,10 @@ compileTasks gopts opts paths tasks = do
     -- Logic
     --   - If t is ActonTask, it must be compiled (needBySource = True).
     --   - If t is TyTask, compare the recorded interface hashes for each
-    --     project import against ifaceMap. Any difference implies the import
-    --     changed its public interface in this run, so t must be recompiled
-    --     (needByImports = True).
+    --     project import against ifaceMap or by finding, on the search path,
+    --     and loading the .ty header. Any difference implies the import changed
+    --     its public interface in this run, so t must be recompiled
+    --     (needByImports = True). Missing imports is an error.
     --   - On compile, TyTask is first upgraded to ActonTask by parsing the
     --     .act file; then doTask performs the compilation and writes .ty.
     --   - After compile, obtain the new interface hash directly from the
@@ -987,18 +988,34 @@ compileTasks gopts opts paths tasks = do
     --     with our ifaceHash for downstream modules
     stepModule projMods (envAcc, ifaceMap) t = do
       let mn = name t
-          needBySource = case t of { ActonTask{} -> True; _ -> False }
-          (needByImports, deltas) = case t of
-                            TyTask{ tyImports = imps } ->
+      let needBySource = case t of { ActonTask{} -> True; _ -> False }
+      needByImportsWithDeltas <- case t of
+                            TyTask{ tyImports = imps } -> do
+                              -- Obtain current interface hash for every import:
+                              -- from ifaceMap (project modules processed earlier)
+                              -- or by reading the provider's .ty header on the search paths.
+                              -- Missing entries are a hard error.
+                              pairs <- forM imps $ \(m, recorded) -> do
+                                curr <- case M.lookup m ifaceMap of
+                                          Just h  -> return h
+                                          Nothing -> do
+                                            mty <- Acton.Env.findTyFile (searchPath paths) m
+                                            case mty of
+                                              Just ty -> do
+                                                hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader ty
+                                                case hdrE of
+                                                  Right (_srcH, ih, _impsH, _rootsH, _docH) -> return ih
+                                                  _ -> printErrorAndCleanAndExit ("Type interface file not readable for " ++ modNameToString m) gopts opts paths
+                                              Nothing -> printErrorAndCleanAndExit ("Type interface file not found for " ++ modNameToString m) gopts opts paths
+                                return (m, recorded, curr)
                               let diffs = [ (m, recorded, curr)
-                                          | (m, recorded) <- imps
-                                          , Data.Set.member m projMods
-                                          , Just curr <- [M.lookup m ifaceMap]
+                                          | (m, recorded, curr) <- pairs
                                           , curr /= recorded
                                           ]
-                              in (not (null diffs), diffs)
-                            _ -> (False, [])
-          needCompile = needBySource || needByImports
+                              return (not (null diffs), diffs)
+                            _ -> return (False, [])
+      let (needByImports, deltas) = needByImportsWithDeltas
+      let needCompile = needBySource || needByImports
       if needCompile
         then do
           when (C.verbose gopts) $ do
@@ -1172,7 +1189,7 @@ runRestPasses gopts opts paths env0 parsed srcContent = do
                                      A.NModule te _ -> [ n | (n,i) <- te, rootEligible i ]
                                      _              -> []
                       let mdoc = case nmod of A.NModule _ d -> d; _ -> Nothing
-                      -- Resolve import interface hashes from headers when available
+                      -- Resolve import interface hashes from headers; missing entries are hard errors
                       impsWithHash <- forM mrefs $ \mref -> do
                         mty <- Acton.Env.findTyFile (searchPath paths) mref
                         case mty of
@@ -1180,8 +1197,8 @@ runRestPasses gopts opts paths env0 parsed srcContent = do
                             hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader ty
                             case hdrE of
                               Right (_srcH, ih, _impsH, _rootsH, _docH) -> return (mref, ih)
-                              _ -> return (mref, B.empty)
-                          Nothing -> return (mref, B.empty)
+                              _ -> printErrorAndCleanAndExit ("Type interface file not readable for " ++ modNameToString mref) gopts opts paths
+                          Nothing -> printErrorAndCleanAndExit ("Type interface file not found for " ++ modNameToString mref) gopts opts paths
                       -- Compute interface hash over doc-free NameInfo,
                       -- augmented with current imports' interface hashes. This ensures that
                       -- changes in a dependency's public interface are reflected in this
