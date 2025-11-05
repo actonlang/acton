@@ -61,46 +61,26 @@ with:
     # (recursive group)
 
 proc def _test_SimpleSyncTester_wrapper () -> None:
-    s: _test_SimpleSyncTester = _test_SimpleSyncTester()
+    s = _test_SimpleSyncTester()
 
 proc def _test__SyncTester (t : testing.SyncT) -> None:
-    s: _SyncTester = _SyncTester(t = t)
+    s = _SyncTester(t)
 
 proc def _test_AsyncTester (t : testing.AsyncT) -> None:
-    s: AsyncTester = AsyncTester(t = t)
+    s = AsyncTester(t)
 
 proc def _test_EnvTester (t : testing.EnvT) -> None:
-    s: EnvTester = EnvTester(t = t)
-
-with:
-    W_1087: __builtin__.Hashable[__builtin__.str] = __builtin__.HashableD_str()
-    __unit_tests: __builtin__.dict[__builtin__.str, testing.UnitTest] = $mkDict@[__builtin__.str, testing.UnitTest](W_1087, {})
-
-with:
-    W_1091: __builtin__.Hashable[__builtin__.str] = __builtin__.HashableD_str()
-    __simple_sync_tests: __builtin__.dict[__builtin__.str, testing.SimpleSyncTest] = $mkDict@[__builtin__.str, testing.SimpleSyncTest](W_1091, {})
-
-with:
-    W_1095: __builtin__.Hashable[__builtin__.str] = __builtin__.HashableD_str()
-    __sync_tests: __builtin__.dict[__builtin__.str, testing.SyncTest] = $mkDict@[__builtin__.str, testing.SyncTest](W_1095, {})
-
-with:
-    W_1099: __builtin__.Hashable[__builtin__.str] = __builtin__.HashableD_str()
-    __async_tests: __builtin__.dict[__builtin__.str, testing.AsyncTest] = $mkDict@[__builtin__.str, testing.AsyncTest](W_1099, {})
-
-with:
-    W_1103: __builtin__.Hashable[__builtin__.str] = __builtin__.HashableD_str()
-    __env_tests: __builtin__.dict[__builtin__.str, testing.EnvTest] = $mkDict@[__builtin__.str, testing.EnvTest](W_1103, {})
+    s = EnvTester(t)
 
 __unit_tests: __builtin__.dict[__builtin__.str, testing.UnitTest] = $mkDict@[__builtin__.str, testing.UnitTest](__builtin__.HashableD_str(), {"_test_foo": testing.UnitTest(_test_foo, "_test_foo", "", "test_discovery")})
 
-__simple_sync_tests: __builtin__.dict[__builtin__.str, testing.SimpleSyncTest] = $mkDict@[__builtin__.str, testing.SimpleSyncTest](__builtin__.HashableD_str(), {"_test_simple_sync": testing.SimpleSyncTest(_test_simple_sync, "_test_simple_sync", "", "test_discovery"), "_test_SimpleSyncTester_wrapper": testing.SimpleSyncTest(_test_SimpleSyncTester_wrapper, "_test_SimpleSyncTester_wrapper", "", "test_discovery")})
+__simple_sync_tests: __builtin__.dict[__builtin__.str, testing.SimpleSyncTest] = $mkDict@[__builtin__.str, testing.SimpleSyncTest](__builtin__.HashableD_str(), {"_test_simple_sync": testing.SimpleSyncTest(_test_simple_sync, "_test_simple_sync", "", "test_discovery")})
 
-__sync_tests: __builtin__.dict[__builtin__.str, testing.SyncTest] = $mkDict@[__builtin__.str, testing.SyncTest](__builtin__.HashableD_str(), {"_test_sync": testing.SyncTest(_test_sync, "_test_sync", "", "test_discovery"), "_test__SyncTester": testing.SyncTest(_test__SyncTester, "_test__SyncTester", "", "test_discovery")})
+__sync_tests: __builtin__.dict[__builtin__.str, testing.SyncTest] = $mkDict@[__builtin__.str, testing.SyncTest](__builtin__.HashableD_str(), {"_test_sync": testing.SyncTest(_test_sync, "_test_sync", "", "test_discovery")})
 
-__async_tests: __builtin__.dict[__builtin__.str, testing.AsyncTest] = $mkDict@[__builtin__.str, testing.AsyncTest](__builtin__.HashableD_str(), {"_test_AsyncTester": testing.AsyncTest(_test_AsyncTester, "_test_AsyncTester", "", "test_discovery")})
+__async_tests: __builtin__.dict[__builtin__.str, testing.AsyncTest] = $mkDict@[__builtin__.str, testing.AsyncTest](__builtin__.HashableD_str(), {})
 
-__env_tests: __builtin__.dict[__builtin__.str, testing.EnvTest] = $mkDict@[__builtin__.str, testing.EnvTest](__builtin__.HashableD_str(), {"_test_EnvTester": testing.EnvTest(_test_EnvTester, "_test_EnvTester", "", "test_discovery")})
+__env_tests: __builtin__.dict[__builtin__.str, testing.EnvTest] = $mkDict@[__builtin__.str, testing.EnvTest](__builtin__.HashableD_str(), {})
 
 actor __test_main (env : __builtin__.Env):
     testing.test_runner(env, __unit_tests, __simple_sync_tests, __sync_tests, __async_tests, __env_tests)

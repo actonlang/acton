@@ -68,15 +68,16 @@ reconstruct env0 (Module m i ss)         = do --traceM ("#################### or
                                              let nmod = NModule iface moduleDocstring
                                              --traceM ("#################### converted env0:")
                                              --traceM (render (pretty env0'))
-                                             return (nmod, Module m i ss1T, env0', mrefs)
+                                             return (nmod, Module m i ssT, env0', mrefs)
 
   where moduleDocstring                 = extractDocstring ss
-        ssT                             = if hasTesting i then genTestActorWrappers env0 ss ++ testStmts (emptyDict,emptyDict,emptyDict,emptyDict,emptyDict) else ss
-        ss1T                            = if hasTesting i then rmTests ss1 ++ finalStmts env2 (modNameStr m) ss1 else ss1
-        env1                            = reserve (assigned ssT) (typeX env0)
-        (te,ss1)                        = runTypeM $ infTop env1 ssT
+        env1                            = reserve (assigned ss) (typeX env0)
+        (te,ss1)                        = runTypeM $ infTop env1 ss
         env2                            = define te (setMod m env0)
-        iface                           = unalias env2 te
+
+        (teT,ssT)                       = if hasTesting i then (te ++ testEnv, ss1 ++ testStmts env2 (modNameStr m) ss1) else (te, ss1)
+        iface                           = unalias env2 teT
+
         mrefs                           = moduleRefs1 env0
         env0'                           = convEnvProtos env0
         hasTesting i                    = Import NoLoc [ModuleItem (ModName [name "testing"]) Nothing] `elem` i
@@ -93,7 +94,7 @@ reconstruct env0 (Module m i ss)         = do --traceM ("#################### or
 
         -- Inject __name__ variable
         __name__assign = Assign NoLoc [PVar NoLoc (name "__name__") Nothing] (Strings NoLoc [modNameStr m])
-        ss1T' = __name__assign : ss1T
+        ssT' = __name__assign : ssT
 
 
 showTyFile env0 m fname         = do
@@ -2175,21 +2176,24 @@ instance InfEnvT [Pattern] where
 tEnv                                    = tCon (TC (gname [name "__builtin__"] (name "Env")) [])
 emptyDict                               = Dict NoLoc []
 
-testStmts (uts, ssts, sts, ats, ets) = [dictAssign "__unit_tests" "UnitTest" uts,
-                                           dictAssign "__simple_sync_tests" "SimpleSyncTest" ssts,
-                                           dictAssign "__sync_tests" "SyncTest" sts,
-                                           dictAssign "__async_tests" "AsyncTest" ats,
-                                           dictAssign "__env_tests" "EnvTest" ets,
-                                           testActor]
+testDicts                               = [ ("__unit_tests",        "UnitTest"),
+                                            ("__simple_sync_tests", "SimpleSyncTest"),
+                                            ("__sync_tests",        "SyncTest"),
+                                            ("__async_tests",       "AsyncTest"),
+                                            ("__env_tests",         "EnvTest") ]
 
-finalStmts env m ss =
-    let (uts, ssts, sts, ats, ets) = testFuns env m ss
-    in testStmts (mkDict "UnitTest" uts, mkDict "SimpleSyncTest" ssts, mkDict "SyncTest" sts, mkDict "AsyncTest" ats, mkDict "EnvTest" ets)
+testStmts env m ss                      = genTestActorWrappers env ss ++
+                                          [ dictAssign n cl assoc | ((n,cl), assoc) <- testDicts `zip` assocs ] ++
+                                          [ testActor ]
+  where assocs                          = testFuns env m ss
+
+testEnv                                 = [ (name n, NVar (tDict tStr (testing cl))) | (n,cl) <- testDicts ] ++
+                                          [ (name "__test_main", NAct [] posNil (kwdRow (name "env") tEnv kwdNil) [] Nothing) ]
 
 gname ns n                              = GName (ModName ns) n
 dername a b                             = Derived (name a) (name b)
 
-dictAssign dictname cl dict             = sAssign (pVar (name dictname) (tDict tStr (testing cl))) dict
+dictAssign dictname cl dict             = sAssign (pVar (name dictname) (tDict tStr (testing cl))) (mkDict cl dict)
 
 testing tstr                            = tCon (TC (gname [name "testing"] (name tstr)) [])
 
@@ -2227,29 +2231,29 @@ mkAssocActor (Actor _ n _ _ _ body _) testType modName =
         comment _ = Strings NoLoc [""]
 
 
-testFuns :: Env0 -> String -> Suite -> ([Assoc],[Assoc],[Assoc],[Assoc],[Assoc])
-testFuns env modName ss = tF ss ss [] [] [] [] []
+testFuns :: Env0 -> String -> Suite -> [[Assoc]]
+testFuns env modName ss = tF ss [] [] [] [] []
   where
-    tF origSuite (With _ _ ss' : ss) uts ssts sts ats ets = tF origSuite (ss' ++ ss) uts ssts sts ats ets
-    tF origSuite (Decl l (d@Def{}:ds) : ss) uts ssts sts ats ets
+    tF (With _ _ ss' : ss) uts ssts sts ats ets = tF (ss' ++ ss) uts ssts sts ats ets
+    tF (Decl l (d@Def{}:ds) : ss) uts ssts sts ats ets
       | isTestName (dname d) =
           case testType (findQName (NoQ (dname d)) env) of
             Just UnitTest ->
-              tF origSuite (Decl l ds : ss) (mkAssoc d (name "UnitTest") modName : uts) ssts sts ats ets
+              tF (Decl l ds : ss) (mkAssoc d (name "UnitTest") modName : uts) ssts sts ats ets
             Just SimpleSyncTest ->
-              tF origSuite (Decl l ds : ss) uts (mkAssoc d (name "SimpleSyncTest") modName : ssts) sts ats ets
+              tF (Decl l ds : ss) uts (mkAssoc d (name "SimpleSyncTest") modName : ssts) sts ats ets
             Just SyncTest ->
-              tF origSuite (Decl l ds : ss) uts ssts (mkAssoc d (name "SyncTest") modName : sts) ats ets
+              tF (Decl l ds : ss) uts ssts (mkAssoc d (name "SyncTest") modName : sts) ats ets
             Just AsyncTest ->
-              tF origSuite (Decl l ds : ss) uts ssts sts (mkAssoc d (name "AsyncTest") modName : ats) ets
+              tF (Decl l ds : ss) uts ssts sts (mkAssoc d (name "AsyncTest") modName : ats) ets
             Just EnvTest ->
-              tF origSuite (Decl l ds : ss) uts ssts sts ats (mkAssoc d (name "EnvTest") modName : ets)
-            Nothing -> tF origSuite (Decl l ds : ss) uts ssts sts ats ets
+              tF (Decl l ds : ss) uts ssts sts ats (mkAssoc d (name "EnvTest") modName : ets)
+            Nothing -> tF (Decl l ds : ss) uts ssts sts ats ets
     -- Don't discover actors here - they're handled via wrapper generation
-    tF origSuite (Decl l (_:ds) : ss) uts ssts sts ats ets = tF origSuite (Decl l ds : ss) uts ssts sts ats ets
-    tF origSuite (Decl _ [] : ss) uts ssts sts ats ets = tF origSuite ss uts ssts sts ats ets
-    tF origSuite (_ : ss) uts ssts sts ats ets = tF origSuite ss uts ssts sts ats ets
-    tF _ [] uts ssts sts ats ets = (reverse uts, reverse ssts, reverse sts, reverse ats, reverse ets)
+    tF (Decl l (_:ds) : ss) uts ssts sts ats ets = tF (Decl l ds : ss) uts ssts sts ats ets
+    tF (Decl _ [] : ss) uts ssts sts ats ets = tF ss uts ssts sts ats ets
+    tF (_ : ss) uts ssts sts ats ets = tF ss uts ssts sts ats ets
+    tF [] uts ssts sts ats ets = [reverse uts, reverse ssts, reverse sts, reverse ats, reverse ets]
 
 isTestName n                             = take 6 (nstr n) == "_test_"
 
@@ -2259,7 +2263,7 @@ genTestActorWrappers env ss =
     let testActors = findTestActors ss
         existingFunctions = collectFunctionNames ss
         wrappers = mapMaybe (genWrapper existingFunctions) testActors
-    in ss ++ wrappers
+    in wrappers
   where
     -- Find actors that are test actors (either with testing params or _test_ prefix)
     findTestActors :: Suite -> [Decl]
@@ -2268,6 +2272,8 @@ genTestActorWrappers env ss =
         go actors [] = actors
         go actors (Decl _ ds : rest) =
             go (actors ++ filter isTestActor ds) rest
+        go actors (With _ [] ss : rest) =
+            go actors (ss ++ rest)
         go actors (_ : rest) = go actors rest
 
     isTestActor (Actor _ n _ ppar kpar _ _) =
