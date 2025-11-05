@@ -41,14 +41,14 @@ jobs:
         if: github.event_name != 'schedule'
         id: setmatrix_pr
         run: |
-          MATRIX_JSON='{\"include\":[{\"os\":\"macos\",\"version\":\"13\",\"arch\":\"x86_64\",\"cache\":true},{\"os\":\"macos\",\"version\":\"14\",\"arch\":\"aarch64\",\"cache\":true}]}'
+          MATRIX_JSON='{\"include\":[{\"os\":\"macos\",\"version\":\"14\",\"arch\":\"aarch64\",\"cache\":true},{\"os\":\"macos\",\"version\":\"15\",\"arch\":\"aarch64\",\"cache\":true},{\"os\":\"macos\",\"version\":\"15\",\"arch\":\"x86_64\",\"cache\":true}]}'
           echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
 
       - name: "Set Matrix for nightly run"
         if: github.event_name == 'schedule'
         id: setmatrix_cron
         run: |
-          MATRIX_JSON='{\"include\":[{\"os\":\"macos\",\"version\":\"13\",\"arch\":\"x86_64\",\"cache\":true},{\"os\":\"macos\",\"version\":\"14\",\"arch\":\"aarch64\",\"cache\":true},{\"os\":\"macos\",\"version\":\"15\",\"arch\":\"aarch64\",\"cache\":false}]}'
+          MATRIX_JSON='{\"include\":[{\"os\":\"macos\",\"version\":\"14\",\"arch\":\"aarch64\",\"cache\":true},{\"os\":\"macos\",\"version\":\"15\",\"arch\":\"aarch64\",\"cache\":true},{\"os\":\"macos\",\"version\":\"15\",\"arch\":\"x86_64\",\"cache\":true}]}'
           echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
 
       - name: "Set final matrix output"
@@ -71,7 +71,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.matrix_maker_macos.outputs.matrix) }}
-    runs-on: ${{ matrix.os }}-${{ matrix.version }}
+    runs-on: ${{ (matrix.version == '15' && matrix.arch == 'x86_64') && 'macos-15-intel' || format('{0}-{1}', matrix.os, matrix.version) }}
     steps:
       - name: "Show env"
         run: env
@@ -317,23 +317,28 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-13, macos-14, macos-15]
+        os: [macos-14, macos-15, macos-15-intel]
     runs-on: ${{ matrix.os }}
     steps:
       - name: "Machine info"
         run: |
           uname -a
           system_profiler SPHardwareDataType
-      - name: "Download artifacts for Macos x86_64, built on macos-13"
-        if: ${{ matrix.os == 'macos-13' }}
+      - name: "Download artifacts for Macos arm64, built on macos-15 (for macos-14 runner)"
+        if: ${{ matrix.os == 'macos-14' }}
         uses: actions/download-artifact@v6
         with:
-          name: acton-macos-13-x86_64
-      - name: "Download artifacts for Macos arm64, built on macos-14"
-        if: ${{ matrix.os == 'macos-14' || matrix.os == 'macos-15' }}
+          name: acton-macos-15-aarch64
+      - name: "Download artifacts for Macos arm64, built on macos-15"
+        if: ${{ matrix.os == 'macos-15' }}
         uses: actions/download-artifact@v6
         with:
-          name: acton-macos-14-aarch64
+          name: acton-macos-15-aarch64
+      - name: "Download artifacts for Macos x86_64, built on macos-15"
+        if: ${{ matrix.os == 'macos-15-intel' }}
+        uses: actions/download-artifact@v6
+        with:
+          name: acton-macos-15-x86_64
       - name: "Extract acton"
         run: |
           tar Jxf $(ls acton-macos-*.tar.xz | tail -n1)
@@ -591,14 +596,14 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: "Check out repository code"
         uses: actions/checkout@v5
-      - name: "Download artifacts for Macos aarch64, built on macos-14"
+      - name: "Download artifacts for Macos aarch64, built on macos-15"
         uses: actions/download-artifact@v6
         with:
-          name: acton-macos-14-aarch64
-      - name: "Download artifacts for Macos x86_64, built on macos-13"
+          name: acton-macos-15-aarch64
+      - name: "Download artifacts for Macos x86_64, built on macos-15"
         uses: actions/download-artifact@v6
         with:
-          name: acton-macos-13-x86_64
+          name: acton-macos-15-x86_64
       - name: "Download artifacts for Linux x86_64, built on Debian:12"
         uses: actions/download-artifact@v6
         with:
@@ -671,10 +676,14 @@ jobs:
     steps:
       - name: "Check out repository code"
         uses: actions/checkout@v5
-      - name: "Download artifacts for Macos, built on macos-13"
+      - name: "Download artifacts for Macos aarch64, built on macos-15"
         uses: actions/download-artifact@v6
         with:
-          name: acton-macos-13-x86_64
+          name: acton-macos-15-aarch64
+      - name: "Download artifacts for Macos x86_64, built on macos-15"
+        uses: actions/download-artifact@v6
+        with:
+          name: acton-macos-15-x86_64
       - name: "Download artifacts for Linux x86_64, built on Debian:12"
         uses: actions/download-artifact@v6
         with:
