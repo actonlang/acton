@@ -1015,7 +1015,11 @@ compileTasks gopts opts paths tasks = do
                               return (not (null diffs), diffs)
                             _ -> return (False, [])
       let (needByImports, deltas) = needByImportsWithDeltas
-      let needCompile = needBySource || needByImports
+      -- Force compilation when alternative output is requested (e.g.,
+      -- --types/--cps), so we can print the requested intermediate form even if
+      -- everything is up to date (since it's not saved, we have to recompile)
+      let forceAlt = altOutput opts && mn == (modName paths)
+      let needCompile = needBySource || needByImports || forceAlt
       if needCompile
         then do
           when (C.verbose gopts) $ do

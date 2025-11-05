@@ -383,6 +383,22 @@ f09_run_134 = testCase "09-run 134" $ do
   out <- runBinary "c"
   out @?= "134\n"
 
+-- Alt-output behavior --------------------------------------------------------
+
+-- When requesting alternative output (e.g., --types), ensure the compiler runs
+-- the relevant passes and prints the output even if the file is otherwise
+-- up-to-date.
+f10_alt_output :: TestTree
+f10_alt_output = testCase "10-alt output" $ do
+  -- Run build an extra time to make sure we are up to date
+  _ <- buildOutFile
+
+  -- Now request alternative output on the same file without modifying sources
+  let cmd = actoncExe ++ " src/c.act --color never --types"
+  (_ec,out) <- runIn projDir cmd
+  -- Expect a types dump header for module c
+  assertBool "expected types dump for module c" (T.isInfixOf "== types: c" out)
+
 -- Main -----------------------------------------------------------------------
 
 main :: IO ()
@@ -409,6 +425,7 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "rebuild"
       , f06_change_a_impl
       , f07_run_127
       , f08_change_b_impl
-  , f09_run_134
-  ]
+      , f09_run_134
+      , f10_alt_output
+      ]
   ]
