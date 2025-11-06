@@ -2182,10 +2182,11 @@ testDicts                               = [ ("__unit_tests",        "UnitTest"),
                                             ("__async_tests",       "AsyncTest"),
                                             ("__env_tests",         "EnvTest") ]
 
-testStmts env m ss                      = genTestActorWrappers env ss ++
+testStmts env m ss                      = ss' ++
                                           [ dictAssign n cl assoc | ((n,cl), assoc) <- testDicts `zip` assocs ] ++
                                           [ testActor ]
-  where assocs                          = testFuns env m ss
+  where assocs                          = testFuns (define te env) m (ss++ss')
+        (te, ss')                       = genTestActorWrappers ss
 
 testEnv                                 = [ (name n, NVar (tDict tStr (testing cl))) | (n,cl) <- testDicts ] ++
                                           [ (name "__test_main", NAct [] posNil (kwdRow (name "env") tEnv kwdNil) [] Nothing) ]
@@ -2258,12 +2259,12 @@ testFuns env modName ss = tF ss [] [] [] [] []
 isTestName n                             = take 6 (nstr n) == "_test_"
 
 -- Generate wrapper functions for test actors
-genTestActorWrappers :: Env0 -> Suite -> Suite
-genTestActorWrappers env ss =
+genTestActorWrappers :: Suite -> (TEnv, Suite)
+genTestActorWrappers ss =
     let testActors = findTestActors ss
         existingFunctions = collectFunctionNames ss
         wrappers = mapMaybe (genWrapper existingFunctions) testActors
-    in wrappers
+    in unzip wrappers
   where
     -- Find actors that are test actors (either with testing params or _test_ prefix)
     findTestActors :: Suite -> [Decl]
@@ -2301,7 +2302,7 @@ genTestActorWrappers env ss =
         getFuncName _ = Nothing
 
     -- Generate a wrapper function for a test actor if needed
-    genWrapper :: [Name] -> Decl -> Maybe Stmt
+    genWrapper :: [Name] -> Decl -> Maybe ((Name,NameInfo), Stmt)
     genWrapper existingFuncs (Actor _ actorName _ ppar kpar _ _) =
         let tParam = name "t"
             paramType = getActorParamType ppar kpar
@@ -2318,26 +2319,28 @@ genTestActorWrappers env ss =
            then Nothing  -- Wrapper / test function already exists, don't generate
            else case paramType of
                 Just pType ->
-                    Just $ sDecl [Def NoLoc wrapperName []  -- Wrapper function with positional param
+                    Just $ ((wrapperName, NDef (monotype $ tFun fxProc (posRow pType posNil) kwdNil tNone) NoDec Nothing),
+                            sDecl [Def NoLoc wrapperName []  -- Wrapper function with positional param
                                         (PosPar tParam (Just pType) Nothing PosNIL)
                                         KwdNIL
                                         (Just (TNone NoLoc))
                                         [Expr NoLoc (eCall (eVar actorName) [eVar tParam])]  -- Call original actor, passing parameters
                                         NoDec
                                         fxProc
-                                        Nothing]
+                                        Nothing])
                 Nothing ->
                     -- SimpleSyncTest actor - no parameters
                     if isTestName actorName && ppar == PosNIL && kpar == KwdNIL
                     then
-                        Just $ sDecl [Def NoLoc wrapperName []
+                        Just $ ((wrapperName, NDef (monotype $ tFun fxProc posNil kwdNil tNone) NoDec Nothing),
+                                sDecl [Def NoLoc wrapperName []
                                         PosNIL
                                         KwdNIL
                                         (Just (TNone NoLoc))
                                         [Expr NoLoc (eCall (eVar actorName) [])]  -- Call original actor
                                         NoDec
                                         fxProc
-                                        Nothing]
+                                        Nothing])
                     else Nothing
     genWrapper _ _ = Nothing
 
