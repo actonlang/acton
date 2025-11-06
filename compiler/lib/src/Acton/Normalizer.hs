@@ -23,7 +23,7 @@ import Acton.Builtin
 import Data.List
 import Pretty
 import Utils
-import Control.Monad.State.Lazy
+import Control.Monad.State.Strict
 import Debug.Trace
 
 normalize                           :: Env0 -> Module -> IO (Module, Env0)
@@ -61,7 +61,13 @@ getComps                            = state (\(n,ts) -> (ts, (n,[])))
 
 type NormEnv                        = EnvF NormX
 
-data NormX                          = NormX { contextX :: [ContextMark], rtypeX :: Maybe Type, lambdavarsX :: PosPar }
+data NormX                          = NormX {
+                                        contextX :: [ContextMark],
+                                        rtypeX :: Maybe Type,
+                                        lambdavarsX :: PosPar,
+                                        classattrsX :: [Name],
+                                        selfparamX :: Maybe Name
+                                      }
 
 data ContextMark                    = DROP | LOOP | FINAL deriving (Eq,Show)
 
@@ -82,7 +88,16 @@ addLambdavars p env                 = modX env $ \x -> x{ lambdavarsX = joinP (l
 
 getLambdavars env                   = lambdavarsX $ envX env
 
-normEnv env0                        = setX env0 NormX{ contextX = [], rtypeX = Nothing, lambdavarsX = PosNIL }
+classattrs env                      = classattrsX $ envX env
+
+selfparam env                       = selfparamX $ envX env
+
+setClassAttrs ns env                = modX env $ \x -> x{ classattrsX = ns }
+
+setSelfParam n env                  = modX env $ \x -> x{ selfparamX = Just n }
+
+normEnv env0                        = setX env0 NormX{ contextX = [], rtypeX = Nothing, lambdavarsX = PosNIL, classattrsX = [], selfparamX = Nothing }
+
 
 -- Normalize terms ---------------------------------------------------------------------------------------
 
@@ -91,7 +106,7 @@ normSuite env (s : ss)              = do s' <- norm' env s
                                          comps <- getComps
                                          ss' <- normSuite (define (envOf s) env) ss
                                          defs <- mapM mkCompFun comps
-                                         return (defs ++ s' ++ ss')
+                                         return (concat defs ++ s' ++ ss')
   where mkCompFun (f,lambound,comp) = do w <- newName "w"
                                          r <- newName "res"
                                          let env0 = define (envOf lambound) env
@@ -101,7 +116,7 @@ normSuite env (s : ss)              = do s' <- norm' env s
                                                     sAssign (pVar r tr) e0 :
                                                     stmt :
                                                     sReturn (eVar r) : []
-                                         norm env (sDef f lambound tr body fx)
+                                         norm' env (sDef f lambound tr body fx)
 
         transComp env w r (ListComp _ (Elem e) co)
                                     = (tw, w1, tr, e0, compStmt co e1)
@@ -243,10 +258,11 @@ instance Norm Stmt where
     norm env (Data l mbp ss)        = Data l <$> norm env mbp <*> norm env ss
     norm env (VarAssign l ps e)     = VarAssign l <$> norm env ps <*> norm env e
     norm env (After l e e')         = After l <$> norm env e <*> norm env e'
-    norm env (Decl l ds)            = Decl l <$> norm env1 ds
-      where env1                    = define (envOf ds) env
     norm env (Signature l ns t d)   = return $ Signature l ns (conv t) d
     norm env s                      = error ("norm unexpected stmt: " ++ prstr s)
+
+    norm' env (Decl l ds)           = do (eqs,ds) <- normDecls env ds
+                                         return $ eqs ++ [Decl l ds]
 
     norm' env (Try l b [] els [])   = norm env (b ++ els)
     norm' env (Try l b hs els [])   = do b <- norm (pushMark DROP env) b
@@ -325,10 +341,10 @@ instance Norm Stmt where
                                          v <- newName "val"
                                          x <- newName "exc"
                                          (e,mbp,ss) <- normItem env i
-                                         b' <- norm env1 (ss ++ b)
+                                         b' <- normSuite env1 (ss ++ b)
                                          return undefined
       where env1                    = define (envOf i) env
-    norm' env (With l [] b)         = norm env b
+    norm' env (With l [] b)         = normSuite env b
     norm' env s                     = do s' <- norm env s
                                          return [s']
 
@@ -338,13 +354,92 @@ normItem env (WithItem e (Just p))  = do e' <- norm env e
                                          (p',ss) <- normPat env p
                                          return (e', Just p', ss)
 
+normDecls env ds                    = do (pres, ds) <- unzip <$> mapM (normDecl env1 ns) ds
+                                         pre <- norm env (concat pres)
+                                         return (pre, ds)
+      where env1                    = define (envOf ds) env
+            ns                      = bound ds
+
+normDecl env ns d@Class{}           = do d <- norm env1 d{ dbody = props ++ b }
+                                         pre <- norm env pre
+                                         return (pre, d)
+      where (pre,te,b)              = fixupClassAttrs (dname d) ns (dbody d)
+            env1                    = define (envOf pre ++ te) $ setClassAttrs (dom te) env
+            props                   = [ Signature NoLoc [w] (monotype t) Property | (w,NVar t) <- te ]
+normDecl env ns d                   = do d <- norm env d
+                                         return ([], d)
+
+
+-- The type-checker may leave witness bindings on the level of classes, even though our class
+-- syntax does not yet support this in the same way as is does for actors. But the creation and
+-- reduction of witnesses that mutually depend on classes becomes so much easier if we allow
+-- ourselves to make use of this planned feature already today. The code below thus implements
+-- class level bindings, albeit limited to witnesses, by transforming them into either global
+-- binding prefixes (if the circular class dependencies actually got eliminated during witness
+-- reduction), __init__ method locals (if they are only referenced during initialization) or
+-- proper instance attributes (in the general case).
+
+fixupClassAttrs n ns b
+  | null eqs                        = ([], [], b)
+  | null attr                       = --trace ("### Lift out attrs " ++ prstrs (bound pre) ++ " in class " ++ prstr n) $
+                                      (pre, [], defs)
+  | null te                         = --trace ("### Init attrs " ++ prstrs (dom te) ++ " in class " ++ prstr n) $
+                                      ([], [], map initS defs)
+  | null pre                        = --trace ("### Dynamic attrs " ++ prstrs (dom te) ++ " in class " ++ prstr n) $
+                                      ([], te, map initS defs)
+  | otherwise                       = --trace ("### Fixup wits " ++ prstrs (bound eqs) ++ " in class " ++ prstr n) $
+                                      (pre, te, map initS defs)
+  where (eqs, defs)                 = splitA [] [] b
+
+        splitA eqs defs []          = (reverse eqs, reverse defs)
+        splitA eqs defs (s:ss)      = case s of
+                                        Assign _ [PVar _ (Internal Witness _ _) (Just _)] _ ->
+                                            splitA (s:eqs) defs ss
+                                        _ ->
+                                            splitA eqs (s:defs) ss
+
+        (dyn, par)                  = dvars [] [] $ concat [ ds | Decl _ ds <- defs ]
+
+        dvars dyn par []            = (dyn, par)
+        dvars dyn par (d:ds)
+          | dname d == initKW       = dvars dyn ([ n | n@(Internal Witness _ _) <- bound (pos d) ] ++ par) ds
+          | otherwise               = dvars (free d ++ dyn) par ds
+
+        (pre, attr)                 = splitG ns [] [] eqs
+
+        splitG ns pre attr []       = (reverse pre, reverse attr)
+        splitG ns pre attr (eq:eqs)
+          | null fvs                = splitG ns (eq:pre) attr eqs
+          | otherwise               = splitG (bound eq ++ ns) pre (eq:attr) eqs
+          where fvs                 = free (expr eq) `intersect` (par++ns)
+
+        initS (Decl l ds)           = Decl l (map initD ds)
+        initS s                     = s
+
+        initD d@Def{}
+          | dname d == initKW,
+            Just self <- selfPar d  = d{ dbody = map (initA $ eVar self) attr ++ dbody d }
+        initD d                     = d
+
+        initA self (Assign _ [PVar _ w _] e)
+          | w `elem` dyn            = sMutAssign (eDot self w) e
+        initA self s                = s
+
+        te                          = [ (w, NVar t) | Assign _ [PVar _ w (Just t)] _ <- attr, w `elem` dyn ]
+
+
 instance Norm Decl where
     norm env (Def l n q p k t b d x doc)
                                     = do p' <- joinPar <$> norm env0 p <*> norm (define (envOf p) env0) k
                                          b' <- normSuite env1 b
                                          return $ Def l n q p' KwdNIL (conv t) (ret b') d x doc
       where env1                    = setContext [] $ setRet t $ define (envOf p ++ envOf k) env0
-            env0                    = defineTVars q env
+            env0                    = defineTVars q env00
+            env00                   = case p of
+                                        PosPar self _ _ _ | not $ null $ classattrs env, d /= Static ->
+                                            setSelfParam self env
+                                        _ ->
+                                            env
             ret b | fallsthru b     = b ++ [sReturn eNone]
                   | otherwise       = b
     norm env (Actor l n q p k b doc)
@@ -357,7 +452,6 @@ instance Norm Decl where
     norm env (Class l n q as b doc) = Class l n q as <$> norm env1 b <*> return doc
       where env1                    = defineSelf (NoQ n) q $ defineTVars q env
     norm env d                      = error ("norm unexpected: " ++ prstr d)
-
 
 
 catStrings ss                       = map (quote . escape '"') ss
@@ -379,6 +473,9 @@ normBool env e
   where t                           = typeOf env e
 
 instance Norm Expr where
+    norm env (Var l (NoQ n))
+      | n `elem` classattrs env,
+        Just self <- selfparam env  = return $ eDot (eVar self) n
     norm env (Var l nm)             = return $ Var l nm
     norm env (Int l i s)            = Int l <$> return i <*> return s
     norm env (Float l f s)          = Float l <$> return f <*> return s

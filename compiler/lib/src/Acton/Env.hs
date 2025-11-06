@@ -105,7 +105,7 @@ mapModules f env            = walk env0 [] mods
 -}
 
 instance Pretty Witness where
-    pretty (WClass q t p w ws)  = text "WClass" <+> prettyQual q <+> pretty t <+> parens (pretty p) <+>
+    pretty (WClass q t p w ws _) = text "WClass" <+> prettyQual q <+> pretty t <+> parens (pretty p) <+>
                                       equals <+> pretty (wexpr ws (eCall (eQVar w) []))
     pretty (WInst q t p w ws)   = text "WInst" <+> prettyQual q <+> pretty t <+> parens (pretty p) <+>
                                       equals <+> pretty (wexpr ws (eQVar w))
@@ -143,11 +143,11 @@ instance Pretty (Name,NameInfo) where
     pretty (n, NProto q us te doc)
                                 = text "protocol" <+> pretty n <> nonEmpty brackets commaList q <+>
                                   nonEmpty parens commaList us <> colon $+$ nest 4 (prettyDocstring doc) $+$ (nest 4 $ prettyOrPass te)
-    pretty (w, NExt [] c ps te doc)
+    pretty (w, NExt [] c ps te opts doc)
                                 = {-pretty w  <+> colon <+> -}
                                   text "extension" <+> pretty c <+> parens (commaList ps) <>
                                   colon $+$ nest 4 (prettyDocstring doc) $+$ (nest 4 $ prettyOrPass te)
-    pretty (w, NExt q c ps te doc)
+    pretty (w, NExt q c ps te opts doc)
                                 = {-pretty w  <+> colon <+> -}
                                   text "extension" <+> pretty q <+> text "=>" <+> pretty c <+> parens (commaList ps) <>
                                   colon $+$ nest 4 (prettyDocstring doc) $+$ (nest 4 $ prettyOrPass te)
@@ -192,7 +192,7 @@ instance VFree NameInfo where
     vfree (NAct q p k te _)     = (vfree q ++ vfree p ++ vfree k ++ vfree te) \\ (tvSelf : qbound q)
     vfree (NClass q us te _)    = (vfree q ++ vfree us ++ vfree te) \\ (tvSelf : qbound q)
     vfree (NProto q us te _)    = (vfree q ++ vfree us ++ vfree te) \\ (tvSelf : qbound q)
-    vfree (NExt q c ps te _)    = (vfree q ++ vfree c ++ vfree ps ++ vfree te) \\ (tvSelf : qbound q)
+    vfree (NExt q c ps te _ _)  = (vfree q ++ vfree c ++ vfree ps ++ vfree te) \\ (tvSelf : qbound q)
     vfree (NTVar k c)           = vfree c
     vfree (NAlias qn)           = []
     vfree (NMAlias qn)          = []
@@ -213,7 +213,7 @@ instance VSubst NameInfo where
     vsubst s (NAct q p k te x)  = NAct (vsubst s q) (vsubst s p) (vsubst s k) (vsubst s te) x
     vsubst s (NClass q us te x) = NClass (vsubst s q) (vsubst s us) (vsubst s te) x
     vsubst s (NProto q us te x) = NProto (vsubst s q) (vsubst s us) (vsubst s te) x
-    vsubst s (NExt q c ps te x) = NExt (vsubst s q) (vsubst s c) (vsubst s ps) (vsubst s te) x
+    vsubst s (NExt q c ps te opts x) = NExt (vsubst s q) (vsubst s c) (vsubst s ps) (vsubst s te) opts x
     vsubst s (NTVar k c)        = NTVar k (vsubst s c)
     vsubst s (NAlias qn)        = NAlias qn
     vsubst s (NMAlias m)        = NMAlias m
@@ -234,7 +234,7 @@ instance UFree NameInfo where
     ufree (NAct q p k te _)     = ufree q ++ ufree p ++ ufree k ++ ufree te
     ufree (NClass q us te _)    = ufree q ++ ufree us ++ ufree te
     ufree (NProto q us te _)    = ufree q ++ ufree us ++ ufree te
-    ufree (NExt q c ps te _)    = ufree q ++ ufree c ++ ufree ps ++ ufree te
+    ufree (NExt q c ps te _ _)  = ufree q ++ ufree c ++ ufree ps ++ ufree te
     ufree (NTVar k c)           = ufree c
     ufree (NAlias qn)           = []
     ufree (NMAlias qn)          = []
@@ -256,7 +256,7 @@ instance Polarity NameInfo where
     polvars (NAct q p k te _)   = polvars q `polcat` polneg (polvars p `polcat` polvars k) `polcat` polvars te
     polvars (NClass q us te _)  = polvars q `polcat` polvars us `polcat` polvars te
     polvars (NProto q us te _)  = polvars q `polcat` polvars us `polcat` polvars te
-    polvars (NExt q c ps te _)  = polvars q `polcat` polvars c `polcat` polvars ps `polcat` polvars te
+    polvars (NExt q c ps te _ _) = polvars q `polcat` polvars c `polcat` polvars ps `polcat` polvars te
     polvars (NTVar k c)         = polvars c
     polvars _                   = ([],[])
 
@@ -271,7 +271,7 @@ instance USubst NameInfo where
     usubst (NAct q p k te doc)  = NAct <$> usubst q <*> usubst p <*> usubst k <*> usubst te <*> return doc
     usubst (NClass q us te doc) = NClass <$> usubst q <*> usubst us <*> usubst te <*> return doc
     usubst (NProto q us te doc) = NProto <$> usubst q <*> usubst us <*> usubst te <*> return doc
-    usubst (NExt q c ps te doc) = NExt <$> usubst q <*> usubst c <*> usubst ps <*> usubst te <*> return doc
+    usubst (NExt q c ps te opts doc) = NExt <$> usubst q <*> usubst c <*> usubst ps <*> usubst te <*> return opts <*> return doc
     usubst (NTVar k c)          = NTVar k <$> usubst c
     usubst (NAlias qn)          = NAlias <$> return qn
     usubst (NMAlias m)          = NMAlias <$> return m
@@ -368,7 +368,7 @@ instance Unalias NameInfo where
     unalias env (NAct q p k te doc) = NAct (unalias env q) (unalias env p) (unalias env k) (unalias env te) doc
     unalias env (NClass q us te doc)= NClass (unalias env q) (unalias env us) (unalias env te) doc
     unalias env (NProto q us te doc)= NProto (unalias env q) (unalias env us) (unalias env te) doc
-    unalias env (NExt q c ps te doc)= NExt (unalias env q) (unalias env c) (unalias env ps) (unalias env te) doc
+    unalias env (NExt q c ps te opts doc)= NExt (unalias env q) (unalias env c) (unalias env ps) (unalias env te) opts doc
     unalias env (NTVar k c)         = NTVar k (unalias env c)
     unalias env (NAlias qn)         = NAlias (unalias env qn)
     unalias env (NMAlias m)         = NMAlias (unalias env m)
@@ -469,7 +469,7 @@ reserve xs env              = env{ names = [ (x, NReserved) | x <- nub xs ] ++ n
 define                      :: TEnv -> EnvF x -> EnvF x
 define te env               = foldl addWit env1 ws
   where env1                = env{ names = reverse te ++ names env }
-        ws                  = [ WClass q (tCon c) p (NoQ w) ws | (w, NExt q c ps te' _) <- te, (ws,p) <- ps ]
+        ws                  = [ WClass q (tCon c) p (NoQ w) ws (length opts) | (w, NExt q c ps te' opts _) <- te, (ws,p) <- ps ]
 
 
 addImport                   :: ModName -> EnvF x -> EnvF x
@@ -735,7 +735,7 @@ findConName n env           = case findQName n env of
                                 NAct q p k te _  -> (q,[],te)
                                 NClass q us te _ -> (q,us,te)
                                 NProto q us te _ -> (q,us,te)
-                                NExt q c us te _ -> (q,us,te)
+                                NExt q c us te _ _ -> (q,us,te)
                                 NReserved -> nameReserved n
                                 i -> err1 n ("findConName: Class or protocol name expected, got " ++ show i ++ " --- ")
 
@@ -1241,7 +1241,7 @@ impNames m te               = mapMaybe imp te
     imp (n, NAct _ _ _ _ _)   = Just (n, NAlias (GName m n))
     imp (n, NClass _ _ _ _)   = Just (n, NAlias (GName m n))
     imp (n, NProto _ _ _ _)   = Just (n, NAlias (GName m n))
-    imp (n, NExt _ _ _ _ _)   = Nothing
+    imp (n, NExt _ _ _ _ _ _) = Nothing
     imp (n, NAlias _)       = Just (n, NAlias (GName m n))
     imp (n, NVar t)         = Just (n, NAlias (GName m n))
     imp (n, NDef t d _)       = Just (n, NAlias (GName m n))
@@ -1249,7 +1249,7 @@ impNames m te               = mapMaybe imp te
 
 importWits                  :: ModName -> TEnv -> EnvF x -> EnvF x
 importWits m te env         = foldl addWit env ws
-  where ws                  = [ WClass q (tCon c) p (GName m n) ws | (n, NExt q c ps te' _) <- te, (ws,p) <- ps ]
+  where ws                  = [ WClass q (tCon c) p (GName m n) ws (length opts) | (n, NExt q c ps te' opts _) <- te, (ws,p) <- ps ]
 
 
 
@@ -1412,7 +1412,8 @@ instance Simp (Name, NameInfo) where
       where env'                    = defineTVars (stripQual q) env
     simp env (n, NProto q us te doc)= (n, NProto (simp env' q) (simp env' us) (simp env' te) doc)
       where env'                    = defineTVars (stripQual q) env
-    simp env (n, NExt q c us te doc)= (n, NExt q' (vsubst s $ simp env' c) (vsubst s $ simp env' us) (vsubst s $ simp env' te) doc)
+    simp env (n, NExt q c us te opts doc)
+                                    = (n, NExt q' (vsubst s $ simp env' c) (vsubst s $ simp env' us) (vsubst s $ simp env' te) opts doc)
       where (q', s)                 = simpQuant env (simp env' q) (vfree c ++ vfree us ++ vfree te)
             env'                    = defineTVars (stripQual q) env
     simp env (n, NAct q p k te doc) = (n, NAct (simp env' q) (simp env' p) (simp env' k) (simp env' te) doc)

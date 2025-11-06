@@ -33,6 +33,7 @@ import Acton.Transform
 import Acton.Converter
 import Acton.TypeM
 import Acton.TypeEnv
+import Acton.WitKnots
 import qualified InterfaceFiles
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Base16 as Base16
@@ -67,15 +68,16 @@ reconstruct env0 (Module m i ss)         = do --traceM ("#################### or
                                              let nmod = NModule iface moduleDocstring
                                              --traceM ("#################### converted env0:")
                                              --traceM (render (pretty env0'))
-                                             return (nmod, Module m i ss1T, env0', mrefs)
+                                             return (nmod, Module m i ssT, env0', mrefs)
 
   where moduleDocstring                 = extractDocstring ss
-        ssT                             = if hasTesting i then genTestActorWrappers env0 ss ++ testStmts (emptyDict,emptyDict,emptyDict,emptyDict,emptyDict) else ss
-        ss1T                            = if hasTesting i then rmTests ss1 ++ finalStmts env2 (modNameStr m) ss1 else ss1
-        env1                            = reserve (assigned ssT) (typeX env0)
-        (te,ss1)                        = runTypeM $ infTop env1 ssT
+        env1                            = reserve (assigned ss) (typeX env0)
+        (te,ss1)                        = runTypeM $ infTop env1 ss
         env2                            = define te (setMod m env0)
-        iface                           = unalias env2 te
+
+        (teT,ssT)                       = if hasTesting i then (te ++ testEnv, ss1 ++ testStmts env2 (modNameStr m) ss1) else (te, ss1)
+        iface                           = unalias env2 teT
+
         mrefs                           = moduleRefs1 env0
         env0'                           = convEnvProtos env0
         hasTesting i                    = Import NoLoc [ModuleItem (ModName [name "testing"]) Nothing] `elem` i
@@ -92,7 +94,7 @@ reconstruct env0 (Module m i ss)         = do --traceM ("#################### or
 
         -- Inject __name__ variable
         __name__assign = Assign NoLoc [PVar NoLoc (name "__name__") Nothing] (Strings NoLoc [modNameStr m])
-        ss1T' = __name__assign : ss1T
+        ssT' = __name__assign : ssT
 
 
 showTyFile env0 m fname         = do
@@ -139,18 +141,22 @@ infTop env ss                           = do --traceM ("\n## infEnv top")
                                              return (te, ss)
 
 infTopStmts env []                      = return ([], [])
-infTopStmts env (s : ss)                = do (cs,te1,s) <- infEnv env s
-                                             --traceM ("###########\n" ++ render (nest 4 $ vcat $ map pretty te1))
+infTopStmts env (s : ss)                = do (te1, s1) <- infTopStmt env s
+                                             (te2, ss2) <- infTopStmts (define te1 env) ss
+                                             return (te1++te2, s1++ss2)
+
+infTopStmt env s                        = do (cs,te1,s1) <- infEnv env s
+                                             --traceM ("###########\n" ++ render (nest 4 $ pretty s1))
+                                             --traceM (":::::::::::\n" ++ render (nest 4 $ vcat $ map pretty te1))
                                              --traceM ("-----------\n" ++ render (nest 4 $ vcat $ map pretty cs))
                                              eq <- solveAll (posdefine (filter typeDecl te1) env) te1 cs
+                                             --traceM ("+++++++++++\n" ++ render (nest 4 $ vcat $ map pretty eq))
                                              te1 <- defaultTE env te1
                                              --traceM ("===========\n" ++ render (nest 4 $ vcat $ map pretty te1))
-                                             ss1 <- termred <$> usubst (pushEqns eq [s])
-                                             defaultVars (ufree ss1)
-                                             ss1 <- usubst ss1
-
-                                             (te2,ss2) <- infTopStmts (define te1 env) ss
-                                             return (te1++te2, ss1++ss2)
+                                             s1 <- termred <$> usubst (pushEqns eq s1)
+                                             defaultVars (ufree s1)
+                                             s1 <- usubst s1
+                                             tieWitKnots te1 [s1]
 
   where defaultTE env te                = do defaultVars (ufree te)
                                              usubst te
@@ -161,25 +167,32 @@ infTopStmts env (s : ss)                = do (cs,te1,s) <- infEnv env s
         dflt PRow                       = posNil
         dflt KRow                       = kwdNil
 
-        pushEqns eqs ss                 = push eqns0 ss
-          where eqns0                   = [ (eq,ns) | eq <- eqs, let ns = free eq `intersect` bound ss ]
-        push eqns ss                    = bindWits (map fst eq1) ++ push' eq2 ss
-          where (eq1,eq2)               = partition (null . snd) eqns
-        push' [] ss                     = ss
-        push' eqns (s:ss)
-          | null eq1                    = s : push eq2 ss
-          | otherwise                   = inject eq1 s : push eq2 ss
-          where eq1                     = collect [] (free s) (map fst eqns)
-                eq2                     = [ (eq, ns \\ ns') | (eq,ns) <- eqns ]
-                ns'                     = bound s
-        inject eqs (Decl l ds)          = Decl l (map inj ds)
-          where inj d                   = d{ dbody = bindWits eqs ++ dbody d }
-        inject eqs (With l [] ss)       = With l [] (pushEqns eqs ss)
-        inject eqs s                    = error ("# Internal error: cyclic witnesses " ++ prstrs eqs ++ "\n# and statement\n" ++ prstr s)
-        collect eq0 vs eq
-          | null eq1                    = eq0
-          | otherwise                   = collect (eq1++eq0) ((free eq1 \\ bound eq1) ++ vs) eq2
-          where (eq1,eq2)               = partition (any (`elem` vs) . bound) eq
+
+pushEqns [] s                           = s
+pushEqns eqs s
+  | null pre                            = inject inj s
+  | otherwise                           = withLocal (bindWits pre) $ inject inj s
+  where backward                        = free s `intersect` bound eqs
+        (pre,inj)                       = split [] [] (bound s) eqs
+        split pre inj bvs []            = (reverse pre, reverse inj)
+        split pre inj bvs (eq:eqs)
+          | null forward                = split (eq:pre) inj bvs eqs
+          | otherwise                   = split pre (eq:inj) (bound eq ++ bvs) eqs
+          where forward                 = free eq `intersect` bvs
+
+inject [] s                             = s
+inject eqs (Decl l ds)                  = Decl l [ d{ dbody = prune (dname d) [] (free d) reveqs ++ dbody d } | d <- ds ]
+  where reveqs                          = reverse eqs
+        prune n inj fvs []              = --trace ("### Injecting " ++ prstrs (bound inj) ++ " into " ++ prstr n) $
+                                          bindWits inj
+        prune n inj fvs (eq:eqs)
+          | null needed                 = prune n inj fvs eqs
+          | otherwise                   = prune n (eq:inj) (free eq ++ fvs) eqs
+          where needed                  = bound eq `intersect` fvs
+inject eqs (With l [] ss)               = With l [] (injlast eqs ss)
+  where injlast eqs [s]                 = [inject eqs s]
+        injlast eqs (s:ss)              = s : injlast eqs ss
+inject eqs s                            = error ("# Internal error: cyclic witnesses " ++ prstrs eqs ++ "\n# and statement\n" ++ prstr s)
 
 
 class Infer a where
@@ -372,7 +385,7 @@ instance InfEnv Stmt where
                                              (cs2,ds2) <- checkEnv (define te1 env) ds1
                                              (cs3,te2,eq,ds3) <- genEnv env cs2 te1 ds2
                                              --traceM ("-------- done: " ++ prstrs (declnames ds))
-                                             return (cs1++cs3, te2, withLocal (bindWits eq) $ Decl l ds3)
+                                             return (cs1++cs3, te2, pushEqns eq $ Decl l ds3)
 
     infEnv env (Delete l targ)          = do (cs0,t0,e0,tg) <- infTarg env targ
                                              (cs1,stmt) <- del t0 e0 tg
@@ -622,7 +635,7 @@ instance InfEnv Decl where
                                                  te2 = te ++ te1
                                                  b2 = addImpl te1 b1
                                              let docstring = extractDocstring b
-                                             return (cs1, [(extensionName us c, NExt q c ps te2 docstring)], Extension l q c us (bindWits eq1 ++ b2) ddoc)
+                                             return (cs1, [(extensionName us c, NExt q c ps te2 [] docstring)], Extension l q c us (bindWits eq1 ++ b2) ddoc)
       where TC n ts                     = c
             env1                        = define (toSigs te') $ reserve (assigned b) $ defineSelfOpaque $ defineTVars (stripQual q) $ setInClass env
             witsearch                   = findWitness env (tCon c) u
@@ -812,10 +825,6 @@ matchActorAssumption env n0 p k te      = do --traceM ("## matchActorAssumption 
 -- Find __init__ method in class body, return self parameter, body and location
 findInitMethod :: Suite -> Maybe (Name, Suite, SrcLoc)
 findInitMethod b                        = listToMaybe [ (x, dbody d, loc d) | Decl _ ds <- b, d <- ds, dname d == initKW, Just x <- [selfPar d] ]
-  where
-    selfPar Def{pos=PosPar x _ _ _}     = Just x
-    selfPar Def{kwd=KwdPar x _ _ _}     = Just x
-    selfPar _                           = Nothing
 
 -- Scan __init__ for "self.x = ..." to find which attributes are definitely
 -- assigned before any references to `self` escape externally. We allow most
@@ -1364,12 +1373,12 @@ instance Check Decl where
                                              (cs1,eq1) <- solveScoped env1 tvs te tNone (csu++csb)
                                              checkNoEscape l env tvs
                                              b' <- usubst b'
-                                             return (cs1, convExtension env n' c q ps eq1 wmap b')
+                                             return (cs1, convExtension env n' c q ps eq1 wmap b' [])
       where env1                        = defineInst c ps thisKW' $ defineSelf n q $ defineTVars q $ setInClass env
             tvs                         = tvSelf : qbound q
             n                           = tcname c
             n'                          = extensionName us c
-            NExt _ _ ps te _            = findName n' env
+            NExt _ _ ps te _ _          = findName n' env
             selfsubst                   = [(tvSelf, tCon $ TC n (map tVar $ qbound q))]
 
     checkEnv' env x                     = do (cs,x') <- checkEnv env x
@@ -2167,21 +2176,24 @@ instance InfEnvT [Pattern] where
 tEnv                                    = tCon (TC (gname [name "__builtin__"] (name "Env")) [])
 emptyDict                               = Dict NoLoc []
 
-testStmts (uts, ssts, sts, ats, ets) = [dictAssign "__unit_tests" "UnitTest" uts,
-                                           dictAssign "__simple_sync_tests" "SimpleSyncTest" ssts,
-                                           dictAssign "__sync_tests" "SyncTest" sts,
-                                           dictAssign "__async_tests" "AsyncTest" ats,
-                                           dictAssign "__env_tests" "EnvTest" ets,
-                                           testActor]
+testDicts                               = [ ("__unit_tests",        "UnitTest"),
+                                            ("__simple_sync_tests", "SimpleSyncTest"),
+                                            ("__sync_tests",        "SyncTest"),
+                                            ("__async_tests",       "AsyncTest"),
+                                            ("__env_tests",         "EnvTest") ]
 
-finalStmts env m ss =
-    let (uts, ssts, sts, ats, ets) = testFuns env m ss
-    in testStmts (mkDict "UnitTest" uts, mkDict "SimpleSyncTest" ssts, mkDict "SyncTest" sts, mkDict "AsyncTest" ats, mkDict "EnvTest" ets)
+testStmts env m ss                      = genTestActorWrappers env ss ++
+                                          [ dictAssign n cl assoc | ((n,cl), assoc) <- testDicts `zip` assocs ] ++
+                                          [ testActor ]
+  where assocs                          = testFuns env m ss
+
+testEnv                                 = [ (name n, NVar (tDict tStr (testing cl))) | (n,cl) <- testDicts ] ++
+                                          [ (name "__test_main", NAct [] posNil (kwdRow (name "env") tEnv kwdNil) [] Nothing) ]
 
 gname ns n                              = GName (ModName ns) n
 dername a b                             = Derived (name a) (name b)
 
-dictAssign dictname cl dict             = sAssign (pVar (name dictname) (tDict tStr (testing cl))) dict
+dictAssign dictname cl dict             = sAssign (pVar (name dictname) (tDict tStr (testing cl))) (mkDict cl dict)
 
 testing tstr                            = tCon (TC (gname [name "testing"] (name tstr)) [])
 
@@ -2219,29 +2231,29 @@ mkAssocActor (Actor _ n _ _ _ body _) testType modName =
         comment _ = Strings NoLoc [""]
 
 
-testFuns :: Env0 -> String -> Suite -> ([Assoc],[Assoc],[Assoc],[Assoc],[Assoc])
-testFuns env modName ss = tF ss ss [] [] [] [] []
+testFuns :: Env0 -> String -> Suite -> [[Assoc]]
+testFuns env modName ss = tF ss [] [] [] [] []
   where
-    tF origSuite (With _ _ ss' : ss) uts ssts sts ats ets = tF origSuite (ss' ++ ss) uts ssts sts ats ets
-    tF origSuite (Decl l (d@Def{}:ds) : ss) uts ssts sts ats ets
+    tF (With _ _ ss' : ss) uts ssts sts ats ets = tF (ss' ++ ss) uts ssts sts ats ets
+    tF (Decl l (d@Def{}:ds) : ss) uts ssts sts ats ets
       | isTestName (dname d) =
           case testType (findQName (NoQ (dname d)) env) of
             Just UnitTest ->
-              tF origSuite (Decl l ds : ss) (mkAssoc d (name "UnitTest") modName : uts) ssts sts ats ets
+              tF (Decl l ds : ss) (mkAssoc d (name "UnitTest") modName : uts) ssts sts ats ets
             Just SimpleSyncTest ->
-              tF origSuite (Decl l ds : ss) uts (mkAssoc d (name "SimpleSyncTest") modName : ssts) sts ats ets
+              tF (Decl l ds : ss) uts (mkAssoc d (name "SimpleSyncTest") modName : ssts) sts ats ets
             Just SyncTest ->
-              tF origSuite (Decl l ds : ss) uts ssts (mkAssoc d (name "SyncTest") modName : sts) ats ets
+              tF (Decl l ds : ss) uts ssts (mkAssoc d (name "SyncTest") modName : sts) ats ets
             Just AsyncTest ->
-              tF origSuite (Decl l ds : ss) uts ssts sts (mkAssoc d (name "AsyncTest") modName : ats) ets
+              tF (Decl l ds : ss) uts ssts sts (mkAssoc d (name "AsyncTest") modName : ats) ets
             Just EnvTest ->
-              tF origSuite (Decl l ds : ss) uts ssts sts ats (mkAssoc d (name "EnvTest") modName : ets)
-            Nothing -> tF origSuite (Decl l ds : ss) uts ssts sts ats ets
+              tF (Decl l ds : ss) uts ssts sts ats (mkAssoc d (name "EnvTest") modName : ets)
+            Nothing -> tF (Decl l ds : ss) uts ssts sts ats ets
     -- Don't discover actors here - they're handled via wrapper generation
-    tF origSuite (Decl l (_:ds) : ss) uts ssts sts ats ets = tF origSuite (Decl l ds : ss) uts ssts sts ats ets
-    tF origSuite (Decl _ [] : ss) uts ssts sts ats ets = tF origSuite ss uts ssts sts ats ets
-    tF origSuite (_ : ss) uts ssts sts ats ets = tF origSuite ss uts ssts sts ats ets
-    tF _ [] uts ssts sts ats ets = (reverse uts, reverse ssts, reverse sts, reverse ats, reverse ets)
+    tF (Decl l (_:ds) : ss) uts ssts sts ats ets = tF (Decl l ds : ss) uts ssts sts ats ets
+    tF (Decl _ [] : ss) uts ssts sts ats ets = tF ss uts ssts sts ats ets
+    tF (_ : ss) uts ssts sts ats ets = tF ss uts ssts sts ats ets
+    tF [] uts ssts sts ats ets = [reverse uts, reverse ssts, reverse sts, reverse ats, reverse ets]
 
 isTestName n                             = take 6 (nstr n) == "_test_"
 
@@ -2251,7 +2263,7 @@ genTestActorWrappers env ss =
     let testActors = findTestActors ss
         existingFunctions = collectFunctionNames ss
         wrappers = mapMaybe (genWrapper existingFunctions) testActors
-    in ss ++ wrappers
+    in wrappers
   where
     -- Find actors that are test actors (either with testing params or _test_ prefix)
     findTestActors :: Suite -> [Decl]
@@ -2260,6 +2272,8 @@ genTestActorWrappers env ss =
         go actors [] = actors
         go actors (Decl _ ds : rest) =
             go (actors ++ filter isTestActor ds) rest
+        go actors (With _ [] ss : rest) =
+            go actors (ss ++ rest)
         go actors (_ : rest) = go actors rest
 
     isTestActor (Actor _ n _ ppar kpar _ _) =
@@ -2290,7 +2304,6 @@ genTestActorWrappers env ss =
     genWrapper :: [Name] -> Decl -> Maybe Stmt
     genWrapper existingFuncs (Actor _ actorName _ ppar kpar _ _) =
         let tParam = name "t"
-            sVar = name "s"
             paramType = getActorParamType ppar kpar
             -- actor Foo(t: testing.AsyncT)           -> _test_Foo
             -- actor _test_Foo(t: testing.AsyncT)     -> _test_Foo_wrapper
@@ -2309,7 +2322,7 @@ genTestActorWrappers env ss =
                                         (PosPar tParam (Just pType) Nothing PosNIL)
                                         KwdNIL
                                         (Just (TNone NoLoc))
-                                        [Assign NoLoc [pVar' sVar] (eCall (eVar actorName) [eVar tParam])]  -- Call original actor, passing parameters
+                                        [Expr NoLoc (eCall (eVar actorName) [eVar tParam])]  -- Call original actor, passing parameters
                                         NoDec
                                         fxProc
                                         Nothing]
@@ -2321,7 +2334,7 @@ genTestActorWrappers env ss =
                                         PosNIL
                                         KwdNIL
                                         (Just (TNone NoLoc))
-                                        [Assign NoLoc [pVar' sVar] (eCall (eVar actorName) [])]  -- Call original actor
+                                        [Expr NoLoc (eCall (eVar actorName) [])]  -- Call original actor
                                         NoDec
                                         fxProc
                                         Nothing]

@@ -112,7 +112,8 @@ wheads (Left w:ws)                      = w : wheads ws
 groupBranch ([],_) m                    = m
 groupBranch p@(w:_,_) m                 = Map.insertWith (++) w [p] m
 
-convExtension env n1 c0 q ps0 eq wmap b = mainClass : sibClasses
+convExtension env n1 c0 q ps0 eq wmap b opts
+                                        = mainClass : sibClasses
   where pss                             = Map.elems $ foldr groupBranch Map.empty ps0
         ps                              = trim ps0
         q1                              = noqual env q
@@ -129,7 +130,8 @@ convExtension env n1 c0 q ps0 eq wmap b = mainClass : sibClasses
                                           Class NoLoc n1 q1 bases mainClassBody Nothing
           where mainClassBody           = qsigs ++ bindWits eq ++ Decl NoLoc [mainInit] : convStmts t0 eq1 (pruneBody env (tcname main) b)
                 mainInit                = Def NoLoc initKW [] mainParams KwdNIL (Just tNone) (mkBody mainInitBody) NoDec fxPure Nothing
-                mainParams              = wit2par ((selfKW',tSelf) : qpars) PosNIL
+                mainParams              = wit2par ((selfKW',tSelf) : qpars ++ optpars) PosNIL
+                optpars                 = [ (witAttr (NoQ n), tCon (TC (NoQ n) (map tVar $ qbound q1))) | n <- opts ]
                 mainInitBody            = bindWits eq0 ++ initCall ts (witArgs (tcname main) wmap ++ sibSubs []) main ++ qcopies
                 eq0                     = Eqn thisKW' (tCon main) (eVar selfKW') : []
                 eq1                     = Eqn thisKW' (tCon main) (eVar selfKW') : qcopies'
@@ -209,8 +211,6 @@ instProto t (TC n ts)                   = TC n (t : convSelf t ts)
 selfpar                                 = TV KType g_self
 tSelf'                                  = tVar selfpar
 qSelf'                                  = Quant selfpar []
-selfKW'                                 = Internal Witness "self" 0
-thisKW'                                 = Internal Witness "this" 0
 
 convSelf t0 t                           = vsubst [(tvSelf, t0)] t
 
@@ -236,8 +236,8 @@ convEnvProtos env                       = mapModules conv env
     conv env1 m (n, NAct q p k te doc)  = [(n, NAct (noqual env q) (qualWRow env q p) k (concat $ map (conv env m) te) doc)]
     conv env1 m ni@(n, NProto q us te doc)
                                         = map (fromClass env) $ convProtocol (define [ni] env) n q us [] [] (fromTEnv te)
-    conv env1 m ni@(n, NExt q c us te doc)
-                                        = map (fromClass env) $ convExtension (define [ni] env) n c q us [] [] (fromTEnv te)
+    conv env1 m ni@(n, NExt q c us te opts doc)
+                                        = map (fromClass env) $ convExtension (define [ni] env) n c q us [] [] (fromTEnv te) opts
     conv env1 m (n, NClass q us te doc) = [(n, NClass (noqual env q) us (convClassTEnv env q te) doc)]
     conv env1 m ni                      = [ni]
     convS (TSchema l q t)               = TSchema l (noqual env q) (convT q t)

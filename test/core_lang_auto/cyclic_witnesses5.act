@@ -1,0 +1,45 @@
+class Apa ():
+    def __init__(self, bepas: list[Bepa]):
+        self.bepas = bepas
+
+class Bepa ():
+    def __init__(self, cepas: list[Cepa]):
+        self.cepas = cepas
+
+class Cepa ():
+    def __init__(self, apas: list[Apa]):
+        self.apas = apas
+    
+extension Apa (Ord):
+    def __eq__(x, y):
+        return x.bepas == y.bepas
+    def __lt__(x, y):
+        return x.bepas < y.bepas
+
+extension Bepa (Ord):
+    def __eq__(x, y):
+        return x.cepas == y.cepas
+    def __lt__(x, y):
+        return x.cepas < y.cepas
+
+extension Cepa (Ord):
+    def __eq__(x, y):
+        return x.apas == y.apas
+    def __lt__(x, y):
+        return x.apas < y.apas
+
+bepa1 = Bepa([Cepa([])])
+bepa2 = Bepa([])
+
+apa1 = Apa([bepa1])
+apa2 = Apa([bepa1,bepa2])
+
+cepa1 = Cepa([Apa([Bepa([])])])
+
+actor main(env):
+    if apa1 == apa1 and apa1 != apa2 and bepa1 == bepa1 and cepa1 == cepa1:
+        print("Ok")
+        env.exit(0)
+    else:
+        print("Error")
+        env.exit(1)

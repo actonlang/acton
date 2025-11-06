@@ -334,6 +334,10 @@ posargs (PosStar e)
                 = [e]
 posargs PosNil  = []
 
+selfPar Def{pos=PosPar x _ _ _} = Just x
+selfPar Def{kwd=KwdPar x _ _ _} = Just x
+selfPar _                       = Nothing
+
 pVar n t        = PVar NoLoc n (Just t)
 pVar' n         = PVar NoLoc n Nothing
 
@@ -442,7 +446,7 @@ data NameInfo           = NVar      Type
                         | NAct      QBinds PosRow KwdRow TEnv (Maybe String)
                         | NClass    QBinds [WTCon] TEnv (Maybe String)
                         | NProto    QBinds [WTCon] TEnv (Maybe String)
-                        | NExt      QBinds TCon [WTCon] TEnv (Maybe String)
+                        | NExt      QBinds TCon [WTCon] TEnv [Name] (Maybe String)
                         | NTVar     Kind CCon
                         | NAlias    QName
                         | NMAlias   ModName
@@ -459,14 +463,14 @@ stripDocsNI ni = case ni of
   NAct q p k te _     -> NAct q p k (map stripBind te) Nothing
   NClass q cs te _    -> NClass q cs (map stripBind te) Nothing
   NProto q ps te _    -> NProto q ps (map stripBind te) Nothing
-  NExt q c ps te _    -> NExt q c ps (map stripBind te) Nothing
+  NExt q c ps te o _  -> NExt q c ps (map stripBind te) o Nothing
   NDef sc dec _       -> NDef sc dec Nothing
   NSig sc dec _       -> NSig sc dec Nothing
   other               -> other
   where
     stripBind (n, info) = (n, stripDocsNI info)
 
-data Witness            = WClass    { binds::QBinds, wtype::Type, proto::PCon, wname::QName, wsteps::WPath }
+data Witness            = WClass    { binds::QBinds, wtype::Type, proto::PCon, wname::QName, wsteps::WPath, wopts::Int }
                         | WInst     { binds::QBinds, wtype::Type, proto::PCon, wname::QName, wsteps::WPath }
                         deriving (Show)
 
@@ -489,7 +493,7 @@ instance Leaves NameInfo where
     leaves (NClass q cs te _) = leaves q ++ leaves cs ++ leaves te
     leaves (NProto q ps te _) = leaves q ++ leaves ps ++ leaves te
     leaves (NAct q p k te _)  = leaves q ++ leaves [p,k] ++ leaves te
-    leaves (NExt q c ps te _) = leaves q ++ leaves c ++ leaves ps ++ leaves te
+    leaves (NExt q c ps te _ _) = leaves q ++ leaves c ++ leaves ps ++ leaves te
     leaves (NDef sc dec _)    = leaves sc
     leaves _                  = []
 
