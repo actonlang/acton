@@ -49,10 +49,10 @@ tieDeclKnots te ds
   | null cycledeps              = (te, ds)
   | not $ null insts            = error ("INTERNAL: #### Witness cycles with instantiations, not yet handled:\n" ++ 
                                          render (nest 4 $ vcat $ map pretty insts))
-  | otherwise                   = do --traceM ("#### Local witness deps:\n" ++ render (nest 4 $ vcat $ map pretty wdeps))
-                                     --traceM ("#### Chains:\n" ++ render (nest 4 $ vcat $ map pretty wchains))
-                                     --traceM ("#### Cycles:\n" ++ render (nest 4 $ vcat $ map pretty cycles))
-                                     --traceM ("#### Cycle dependencies:\n" ++ render (nest 4 $ vcat $ map pretty cycledeps ))
+  | otherwise                   = do --trace ("#### Local witness deps:\n" ++ render (nest 4 $ vcat $ map pretty wdeps)) $
+                                     --trace ("#### Chains:\n" ++ render (nest 4 $ vcat $ map pretty wchains)) $
+                                     --trace ("#### Cycles:\n" ++ render (nest 4 $ vcat $ map pretty cycles)) $
+                                     --trace ("#### Cycle dependencies:\n" ++ render (nest 4 $ vcat $ map pretty cycledeps )) $
                                      let ds' = map (tieknots cycledeps) ds
                                          te' = map (addopts cycledeps) te
                                      (te', ds')
@@ -62,8 +62,6 @@ tieDeclKnots te ds
         wchains                 = [ ch | dep <- wdeps, ch <- witChains wdeps (absToApp dep) ]
         (cycles, insts)         = collect [] [] wchains
         cycledeps               = analyze ws cycles
-
-
 
 
 
@@ -157,7 +155,7 @@ depsof w cycledeps              = case lookup w cycledeps of
 
 
 addopts cycledeps (n, NExt q c us te _ doc)
-                                = trace ("#### Extending " ++ prstr n ++ " with opts " ++ prstrs opts) $ 
+                                = --trace ("#### Extending " ++ prstr n ++ " with opts " ++ prstrs opts) $
                                   (n, NExt q c us te opts doc)
   where opts                    = depsof n cycledeps
 addopts cycledeps ni            = ni
