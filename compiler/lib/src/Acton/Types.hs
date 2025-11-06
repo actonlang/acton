@@ -2304,7 +2304,6 @@ genTestActorWrappers env ss =
     genWrapper :: [Name] -> Decl -> Maybe Stmt
     genWrapper existingFuncs (Actor _ actorName _ ppar kpar _ _) =
         let tParam = name "t"
-            sVar = name "s"
             paramType = getActorParamType ppar kpar
             -- actor Foo(t: testing.AsyncT)           -> _test_Foo
             -- actor _test_Foo(t: testing.AsyncT)     -> _test_Foo_wrapper
@@ -2323,7 +2322,7 @@ genTestActorWrappers env ss =
                                         (PosPar tParam (Just pType) Nothing PosNIL)
                                         KwdNIL
                                         (Just (TNone NoLoc))
-                                        [Assign NoLoc [pVar' sVar] (eCall (eVar actorName) [eVar tParam])]  -- Call original actor, passing parameters
+                                        [Expr NoLoc (eCall (eVar actorName) [eVar tParam])]  -- Call original actor, passing parameters
                                         NoDec
                                         fxProc
                                         Nothing]
@@ -2335,7 +2334,7 @@ genTestActorWrappers env ss =
                                         PosNIL
                                         KwdNIL
                                         (Just (TNone NoLoc))
-                                        [Assign NoLoc [pVar' sVar] (eCall (eVar actorName) [])]  -- Call original actor
+                                        [Expr NoLoc (eCall (eVar actorName) [])]  -- Call original actor
                                         NoDec
                                         fxProc
                                         Nothing]

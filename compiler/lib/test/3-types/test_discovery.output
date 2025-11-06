@@ -61,16 +61,16 @@ actor EnvTester (t : testing.EnvT):
 # (recursive group)
 
 proc def _test_SimpleSyncTester_wrapper () -> None:
-    s = _test_SimpleSyncTester()
+    _test_SimpleSyncTester()
 
 proc def _test__SyncTester (t : testing.SyncT) -> None:
-    s = _SyncTester(t)
+    _SyncTester(t)
 
 proc def _test_AsyncTester (t : testing.AsyncT) -> None:
-    s = AsyncTester(t)
+    AsyncTester(t)
 
 proc def _test_EnvTester (t : testing.EnvT) -> None:
-    s = EnvTester(t)
+    EnvTester(t)
 
 __unit_tests: __builtin__.dict[__builtin__.str, testing.UnitTest] = $mkDict@[__builtin__.str, testing.UnitTest](__builtin__.HashableD_str(), {"_test_foo": testing.UnitTest(_test_foo, "_test_foo", "", "test_discovery")})
 
