@@ -32,11 +32,21 @@ import Acton.TypeM
 import Acton.TypeEnv
 import Prelude hiding ((<>))
 
-tieWitKnots te (Decl l ds)
-  | null ws                     = return (te, Decl l ds)
-  | null wdeps                  = return (te, Decl l ds)
-  | null cycles                 = return (te, Decl l ds)
-  | null cycledeps              = return (te, Decl l ds)
+
+tieWitKnots te (Decl l ds : ss) = return (te', Decl l ds' : ss)
+  where (te',ds')               = tieDeclKnots te ds
+tieWitKnots te (With _ [] b : ss)
+                                = tieWitKnots te (b ++ ss)
+tieWitKnots te (s : ss)         = do (te', ss') <- tieWitKnots te ss
+                                     return (te', s:ss')
+tieWitKnots te []               = return (te, [])
+
+
+tieDeclKnots te ds
+  | null ws                     = (te, ds)
+  | null wdeps                  = (te, ds)
+  | null cycles                 = (te, ds)
+  | null cycledeps              = (te, ds)
   | not $ null insts            = error ("INTERNAL: #### Witness cycles with instantiations, not yet handled:\n" ++ 
                                          render (nest 4 $ vcat $ map pretty insts))
   | otherwise                   = do --traceM ("#### Local witness deps:\n" ++ render (nest 4 $ vcat $ map pretty wdeps))
@@ -45,21 +55,17 @@ tieWitKnots te (Decl l ds)
                                      --traceM ("#### Cycle dependencies:\n" ++ render (nest 4 $ vcat $ map pretty cycledeps ))
                                      let ds' = map (tieknots cycledeps) ds
                                          te' = map (addopts cycledeps) te
-                                     return (te', Decl l ds')
+                                     (te', ds')
   where ws                      = [ n | (n,NExt{}) <- te ]
         wexts                   = [ d | d <- ds, dname d `elem` ws ]
         wdeps                   = map (witDeps ws) wexts
         wchains                 = [ ch | dep <- wdeps, ch <- witChains wdeps (absToApp dep) ]
         (cycles, insts)         = collect [] [] wchains
         cycledeps               = analyze ws cycles
-tieWitKnots te (With l [] ss)   = do (te, ss) <- tieDecl ss
-                                     return (te, With l [] ss)
-  where tieDecl (s@Decl{} : ss) = do (te, s) <- tieWitKnots te s
-                                     return (te, s:ss)
-        tieDecl (s : ss)        = do (te, ss) <- tieDecl ss
-                                     return (te, s:ss)
-        tieDecl []              = return (te, [])
-tieWitKnots te s                = return (te, s)
+
+
+
+
 
 data WAbs                       = WAbs [TVar] [Name] [WApp] deriving Eq
 data WApp                       = WApp Name [Type] [Expr] deriving Eq

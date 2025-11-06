@@ -143,7 +143,7 @@ infTop env ss                           = do --traceM ("\n## infEnv top")
 infTopStmts env []                      = return ([], [])
 infTopStmts env (s : ss)                = do (te1, s1) <- infTopStmt env s
                                              (te2, ss2) <- infTopStmts (define te1 env) ss
-                                             return (te1++te2, s1:ss2)
+                                             return (te1++te2, s1++ss2)
 
 infTopStmt env s                        = do (cs,te1,s1) <- infEnv env s
                                              --traceM ("###########\n" ++ render (nest 4 $ pretty s1))
@@ -156,7 +156,7 @@ infTopStmt env s                        = do (cs,te1,s1) <- infEnv env s
                                              s1 <- termred <$> usubst (pushEqns eq s1)
                                              defaultVars (ufree s1)
                                              s1 <- usubst s1
-                                             tieWitKnots te1 s1
+                                             tieWitKnots te1 [s1]
 
   where defaultTE env te                = do defaultVars (ufree te)
                                              usubst te
