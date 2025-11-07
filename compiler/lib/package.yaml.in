@@ -42,6 +42,7 @@ dependencies:
   - transformers
   - unix
   - utf8-string
+  - unordered-containers
 
 library:
   source-dirs: src
