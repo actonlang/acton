@@ -17,6 +17,8 @@ module Acton.Syntax where
 import Utils
 import qualified Data.Binary
 import qualified Data.Set
+import qualified Data.HashMap.Strict as M
+import qualified Data.Hashable
 import Data.Char
 import GHC.Generics (Generic)
 import Control.DeepSeq
@@ -453,6 +455,74 @@ data NameInfo           = NVar      Type
                         | NModule   TEnv (Maybe String)
                         | NReserved
                         deriving (Eq,Show,Read,Generic)
+
+type HTEnv            =  M.HashMap Name HNameInfo
+
+data HNameInfo          = HNVar      Type
+                        | HNSVar     Type
+                        | HNDef      TSchema Deco (Maybe String)
+                        | HNSig      TSchema Deco (Maybe String)
+                        | HNAct      QBinds PosRow KwdRow TEnv (Maybe String)
+                        | HNClass    QBinds [WTCon] TEnv (Maybe String)
+                        | HNProto    QBinds [WTCon] TEnv (Maybe String)
+                        | HNExt      QBinds TCon [WTCon] TEnv [Name] (Maybe String)
+                        | HNTVar     Kind CCon
+                        | HNAlias    QName
+                        | HNMAlias   ModName
+                        | HNModule   HTEnv (Maybe String)
+                        | HNReserved
+                        deriving (Eq, Show, Read, Generic)
+
+
+instance Data.Hashable.Hashable Name where
+    hashWithSalt s (Name _ nstr)    = Data.Hashable.hashWithSalt s nstr
+    hashWithSalt s (Derived  n1 n2) = Data.Hashable.hashWithSalt s (n1,n2)
+    hashWithSalt s (Internal pre str n) = Data.Hashable.hashWithSalt s (show pre,str,n)
+
+--data TEnvs              = TEnvs { nmod::NameInfo, tchecked::NameInfo, normalized::NameInfo, deactorized:: NameInfo, cpsconverted:: NameInfo, llifted:: NameInfo }
+--                        deriving (Eq,Show,Read,Generic)
+
+convNameInfo2HNameInfo               :: NameInfo -> HNameInfo
+convNameInfo2HNameInfo (NModule te mdoc)      = HNModule (convTEnv2HTEnv te) mdoc
+convNameInfo2HNameInfo (NVar t)               = HNVar t
+convNameInfo2HNameInfo (NSVar t)              = HNSVar t
+convNameInfo2HNameInfo (NDef sc dec mdoc)     = HNDef sc dec mdoc
+convNameInfo2HNameInfo (NSig sc dec mdoc)     = HNSig sc dec mdoc
+convNameInfo2HNameInfo (NAct q p k te mdoc)   = HNAct q p k te mdoc
+convNameInfo2HNameInfo (NClass q ws te mdoc)  = HNClass q ws te mdoc
+convNameInfo2HNameInfo (NProto q ws te mdoc)  = HNProto q ws te mdoc
+convNameInfo2HNameInfo (NExt q tc ws te ns mdoc) = HNExt q tc ws te ns mdoc
+convNameInfo2HNameInfo (NTVar k cc)           = HNTVar k cc
+convNameInfo2HNameInfo (NAlias qn)            = HNAlias qn
+convNameInfo2HNameInfo (NMAlias mn)           = HNMAlias mn
+convNameInfo2HNameInfo (NReserved)            = HNReserved
+
+convHNameInfo2NameInfo               :: HNameInfo -> NameInfo
+convHNameInfo2NameInfo (HNModule te mdoc)      = NModule (convHTEnv2TEnv te) mdoc
+convHNameInfo2NameInfo (HNVar t)               = NVar t
+convHNameInfo2NameInfo (HNSVar t)              = NSVar t
+convHNameInfo2NameInfo (HNDef sc dec mdoc)     = NDef sc dec mdoc
+convHNameInfo2NameInfo (HNSig sc dec mdoc)     = NSig sc dec mdoc
+convHNameInfo2NameInfo (HNAct q p k te mdoc)   = NAct q p k te mdoc
+convHNameInfo2NameInfo (HNClass q ws te mdoc)  = NClass q ws te mdoc
+convHNameInfo2NameInfo (HNProto q ws te mdoc)  = NProto q ws te mdoc
+convHNameInfo2NameInfo (HNExt q tc ws te ns mdoc) = NExt q tc ws te ns mdoc
+convHNameInfo2NameInfo (HNTVar k cc)           = NTVar k cc
+convHNameInfo2NameInfo (HNAlias qn)            = NAlias qn
+convHNameInfo2NameInfo (HNMAlias mn)           = NMAlias mn
+convHNameInfo2NameInfo (HNReserved)            = NReserved
+
+convTEnv2HTEnv                       :: TEnv -> HTEnv
+convTEnv2HTEnv te                     = M.fromList (map convPair te)
+  where
+     convPair (n, ni)      = (n, convNameInfo2HNameInfo ni)
+
+convHTEnv2TEnv                       :: HTEnv -> TEnv
+convHTEnv2TEnv te                     = map convPair (M.toList te)
+  where
+     convPair (n, hni)      = (n, convHNameInfo2NameInfo hni)
+
+
 
 -- | Strip all docstrings from NameInfo (and nested environments).
 -- This is used when computing a public-interface hash so that

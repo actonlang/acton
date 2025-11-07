@@ -47,7 +47,8 @@ dependencies:
   - time
   - timeit
   - unix
-
+  - unordered-containers
+  
 executables:
   actonc:
     main:                Main.hs

@@ -23,6 +23,7 @@ import System.Directory (doesFileExist)
 import System.Environment (getExecutablePath)
 import Control.Monad
 import Control.Monad.Except
+import qualified Data.HashMap.Strict as M
 
 import Acton.Syntax
 import Acton.Builtin
@@ -49,6 +50,7 @@ data EnvF x                 = EnvF {
                                 names      :: TEnv,
                                 imports    :: [ModName],
                                 modules    :: TEnv,
+                                hmodules   :: HTEnv,
                                 witnesses  :: [Witness],
                                 thismod    :: Maybe ModName,
                                 envX       :: x }
@@ -58,7 +60,7 @@ type Env0                   = EnvF ()
 
 setX                        :: EnvF y -> x -> EnvF x
 setX env x                  = EnvF { names = names env, imports = imports env, modules = modules env,
-                                     witnesses = witnesses env, thismod = thismod env,
+                                     hmodules = hmodules env, witnesses = witnesses env, thismod = thismod env,
                                      envX = x }
 
 modX                        :: EnvF x -> (x -> x) -> EnvF x
@@ -69,8 +71,9 @@ mapModules1                 :: ((Name,NameInfo) -> (Name,NameInfo)) -> Env0 -> E
 mapModules1 f env           = mapModules (\_ _ ni -> [f ni]) env
 
 mapModules                  :: (Env0 -> ModName -> (Name,NameInfo) -> TEnv) -> Env0 -> Env0
-mapModules f env            = walk env0 [] mods
-  where env0                = env{ modules = [prim] }
+mapModules f env            = env1 { hmodules = convTEnv2HTEnv (modules env1) }
+  where env1                =  walk env0 [] mods
+        env0                = env{ modules = [prim] }
         prim : mods         = modules env
 
         walk env ns []      = env
@@ -326,9 +329,9 @@ instance Unalias ModName where
                                         Nothing | m `elem` imports env  -> m
                                         _ -> noModule m
 instance Unalias QName where
-    unalias env (QName m n)         = case findMod m env of
-                                        Just te -> case lookup n te of
-                                                      Just (NAlias qn) -> qn
+    unalias env (QName m n)         = case findHMod m env of
+                                        Just te -> case M.lookup n te of
+                                                      Just (HNAlias qn) -> qn
                                                       Just _ -> GName m' n
                                                       _ -> noItem m n
                                         Nothing -> error ("#### unalias fails for " ++ prstr (QName m n))
@@ -440,6 +443,7 @@ initEnv                    :: FilePath -> Bool -> IO Env0
 initEnv path True          = return $ EnvF{ names = [(nPrim,NMAlias mPrim)],
                                             imports = [mPrim],
                                             modules = [(nPrim,NModule primEnv Nothing)],
+                                            hmodules = M.empty, 
                                             witnesses = primWits,
                                             thismod = Nothing,
                                             envX = () }
@@ -448,6 +452,7 @@ initEnv path False         = do (_,nmod,_,_,_,_,_,_) <- InterfaceFiles.readFile 
                                     env0 = EnvF{ names = [(nPrim,NMAlias mPrim), (nBuiltin,NMAlias mBuiltin)],
                                                  imports = [mPrim,mBuiltin],
                                                  modules = [(nPrim,NModule primEnv Nothing), (nBuiltin,NModule envBuiltin builtinDocstring)],
+                                                 hmodules = M.empty,
                                                  witnesses = primWits,
                                                  thismod = Nothing,
                                                  envX = () }
@@ -533,25 +538,26 @@ selfSubst env               = [ (TV k n, tCon c) | (n, NTVar k c) <- names env, 
 
 findQName                   :: QName -> EnvF x -> NameInfo
 findQName n env             = case tryQName n env of
-                                 Just i -> i
+                                 Just i -> convHNameInfo2NameInfo i
                                  Nothing -> nameNotFound (noq n)
 
-tryQName                    :: QName -> EnvF x -> Maybe NameInfo
-tryQName (QName m n) env    = case findMod m env of
-                                Just te -> case lookup n te of
-                                    Just (NAlias qn) -> tryQName qn env
+tryQName                    :: QName -> EnvF x -> Maybe HNameInfo
+tryQName (QName m n) env    = case findHMod m env of
+                                Just te -> case M.lookup n te of
+                                    Just (HNAlias qn) -> tryQName qn env
                                     Just i -> Just i
                                     _ -> noItem m n
                                 _ -> noModule m
 tryQName (NoQ n) env        = case lookup n (names env) of
                                 Just (NAlias qn) -> tryQName qn env
-                                res -> res
+                                Just ni -> Just (convNameInfo2HNameInfo ni)
+                                Nothing -> Nothing
 tryQName (GName m n) env
   | Just m == thismod env   = tryQName (NoQ n) env
   | inBuiltin env,
     m==mBuiltin             = tryQName (NoQ n) env
-  | otherwise               = case lookupMod m env of
-                                Just te -> case lookup n te of
+  | otherwise               = case lookupHMod m env of
+                                Just te -> case M.lookup n te of
                                     Just i -> Just i
                                     Nothing -> noItem m n -- error ("## Failed lookup of " ++ prstr n ++ " in module " ++ prstr m)
                                 Nothing -> noModule m -- error ("## Failed lookup of module " ++ prstr m)
@@ -574,15 +580,29 @@ lookupVar n env             = case lookup n (names env) of
                                 Just (NVar t) -> Just t
                                 _ -> Nothing
 
-findMod                     :: ModName -> EnvF x -> Maybe TEnv
-findMod m env | inBuiltin env, m==mBuiltin
-                            = Just (names env)
-findMod m@(ModName ns) env  = case lookup (head ns) (names env) of
-                                Just (NMAlias m') -> lookupMod m' env
-                                Nothing | m `elem` imports env  -> lookupMod m env
+findHMod                    :: ModName -> EnvF x -> Maybe HTEnv  -- m is modname part of a QName, so we must check for aliasing
+findHMod m env | inBuiltin env, m==mBuiltin
+                            = Just (convTEnv2HTEnv (names env))
+findHMod m@(ModName ns) env = case lookup (head ns) (names env) of
+                                Just (NMAlias m') -> lookupHMod m' env
+                                Nothing | m `elem` imports env  -> lookupHMod m env
                                 _ -> Nothing
 
-lookupMod                   :: ModName -> EnvF x -> Maybe TEnv
+lookupHMod                  :: ModName -> EnvF x -> Maybe HTEnv -- m is modname part of a GName, so search directly for module
+lookupHMod m env | inBuiltin env, m==mBuiltin
+                            = Just (convTEnv2HTEnv (names env))
+lookupHMod (ModName ns) env = f ns (hmodules env)
+  where f [] te
+          | not (all isHNModule (M.toList te)) = Just te
+          | otherwise              = Nothing
+        f (n:ns) te         = case M.lookup n te of
+                                Just (HNModule te' _) -> f ns te'
+                                Just (HNMAlias (ModName m)) -> lookupHMod (ModName $ m++ns) env
+                                _ -> Nothing
+        isHNModule (_, HNModule{}) = True
+        isHNModule _               = False
+
+lookupMod                  :: ModName -> EnvF x -> Maybe TEnv 
 lookupMod m env | inBuiltin env, m==mBuiltin
                             = Just (names env)
 lookupMod (ModName ns) env  = f ns (modules env)
@@ -593,12 +613,12 @@ lookupMod (ModName ns) env  = f ns (modules env)
                                 Just (NModule te' _) -> f ns te'
                                 Just (NMAlias (ModName m)) -> lookupMod (ModName $ m++ns) env
                                 _ -> Nothing
-        isNModule (_, NModule{}) = True
-        isNModule _         = False
+        isNModule (_, NModule{})  = True
+        isNModule _               = False
 
 
 isMod                       :: EnvF x -> [Name] -> Bool
-isMod env ns                = maybe False (const True) (findMod (ModName ns) env)
+isMod env ns                = maybe False (const True) (findHMod (ModName ns) env)
 
 isAlias                     :: Name -> EnvF x -> Bool
 isAlias n env               = case lookup n (names env) of
@@ -643,28 +663,28 @@ actorMethod env n0          = walk [] (names env)
 
 isDef                       :: EnvF x -> QName -> Bool
 isDef env n                 = case tryQName n env of
-                                Just NDef{} -> True
+                                Just HNDef{} -> True
                                 _ -> False
 
 isActor                     :: EnvF x -> QName -> Bool
 isActor env n               = case tryQName n env of
-                                Just NAct{} -> True
+                                Just HNAct{} -> True
                                 _ -> False
 
 isClass                     :: EnvF x -> QName -> Bool
 isClass env n               = case tryQName n env of
-                                Just NClass{} -> True
+                                Just HNClass{} -> True
                                 _ -> False
 
 isProto                     :: EnvF x -> QName -> Bool
 isProto env n               = case tryQName n env of
-                                Just NProto{} -> True
+                                Just HNProto{} -> True
                                 _ -> False
 
 isDefOrClass                :: EnvF x -> QName -> Bool
 isDefOrClass env n          = case tryQName n env of
-                                Just NDef{} -> True
-                                Just NClass{} -> True
+                                Just HNDef{} -> True
+                                Just HNClass{} -> True
                                 _ -> False
 
 witsByPName                 :: EnvF x -> QName -> [Witness]
@@ -1171,7 +1191,7 @@ instance Flows Handler where
 -- Import handling (local definitions only) ----------------------------------------------
 
 --getImps                         :: [FilePath] -> EnvF x -> [Import] -> IO (EnvF x)
-getImps spath env []         = return env
+getImps spath env []         = return env { hmodules = convTEnv2HTEnv (modules env) }
 getImps spath env (i:is)     = do env' <- impModule spath env i
                                   getImps spath env' is
 
@@ -1212,6 +1232,7 @@ findTyFile spaths mn = go spaths
         then return (Just fullPath)
         else go ps
 
+doImp                        :: [FilePath] -> EnvF x -> ModName -> IO (EnvF x, TEnv)
 doImp spath env m            = case lookupMod m env of
                                     Just te -> return (env, te)
                                     Nothing -> do
