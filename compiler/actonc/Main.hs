@@ -1402,9 +1402,10 @@ isWindowsOS targetTriple = case splitOn "-" targetTriple of
     (_:os:_) -> os == "windows"
     _        -> False
 
-runZig gopts opts zigCmd paths wd = do
-    iff (C.ccmd opts) $ putStrLn zigCmd
-    (returnCode, zigStdout, zigStderr) <- readCreateProcessWithExitCode (shell $ zigCmd){ cwd = wd } ""
+runZig gopts opts zigExe zigArgs paths wd = do
+    let display = showCommandForUser zigExe zigArgs
+    iff (C.ccmd opts || C.verbose gopts) $ putStrLn ("zigCmd: " ++ display)
+    (returnCode, zigStdout, zigStderr) <- readCreateProcessWithExitCode (proc zigExe zigArgs){ cwd = wd } ""
     case returnCode of
         ExitSuccess -> do
           iff (C.verboseZig gopts) $ putStrLn zigStderr
@@ -1427,13 +1428,13 @@ makeAlwaysRelative base target =
 
 -- TODO: replace all of this with generic+crypto?!
 #if defined(darwin_HOST_OS) && defined(aarch64_HOST_ARCH)
-defCpu = " -Dcpu=apple_a15 "
+defCpuFlag = ["-Dcpu=apple_a15"]
 #elif defined(darwin_HOST_OS) && defined(x86_64_HOST_ARCH)
-defCpu = ""
+defCpuFlag = []
 #elif defined(linux_HOST_OS) && defined(aarch64_HOST_ARCH)
-defCpu = " -Dcpu=cortex_a72 "
+defCpuFlag = ["-Dcpu=cortex_a72"]
 #elif defined(linux_HOST_OS) && defined(x86_64_HOST_ARCH)
-defCpu = ""
+defCpuFlag = []
 #else
 #error "Unsupported platform"
 #endif
@@ -1464,17 +1465,6 @@ zigBuild env gopts opts paths tasks binTasks = do
     let local_cache_dir = joinPath [ homeDir, ".cache", "acton", "zig-local-cache" ]
         global_cache_dir = joinPath [ homeDir, ".cache", "acton", "zig-global-cache" ]
         no_threads = if isWindowsOS (C.target opts) then True else C.no_threads opts
-        target_cpu = if (C.cpu opts /= "")
-                       then " -Dcpu=" ++ C.cpu opts
-                       else
-                         case (splitOn "-" (C.target opts)) of
-                           ("native":_)            -> defCpu
-                           ("aarch64":"macos":_)   -> " -Dcpu=apple_a15 "
-    -- TODO: how do we do better here? Windows presumably runs on many CPUs that are not aarch64. We really just want to enable AES
-                           ("aarch64":"windows":_) -> " -Dcpu=apple_a15 "
-                           ("aarch64":"linux":_)   -> " -Dcpu=cortex_a72 "
-                           ("x86_64":_:_)          -> " -Dcpu=westmere "
-                           (_:_:_)                 -> defCpu
 
 
     -- If actonc runs as a standalone compiler (not a sub-compiler from Acton CLI),
@@ -1493,21 +1483,30 @@ zigBuild env gopts opts paths tasks binTasks = do
         let buildZon = replace "{{syspath}}" relativeSysPath distBuildZon
         writeFile buildZonPath buildZon
 
-    let zigCmdBase = zig paths ++ " build " ++ " --cache-dir " ++ local_cache_dir ++
-                 " --global-cache-dir " ++ global_cache_dir ++
-                 (if (C.verboseZig gopts) then " --verbose " else "")
-    let zigCmd = zigCmdBase ++
-                 " --prefix " ++ projOut paths ++ " --prefix-exe-dir 'bin'" ++
-                 (if (C.verboseZig gopts) then " --verbose " else "") ++
-                 " -Dtarget=" ++ (C.target opts) ++
-                 target_cpu ++
-                 " -Doptimize=" ++ optimizeModeToZig (C.optimize opts) ++
-                 (if (C.db opts) then " -Ddb " else "") ++
-                 (if no_threads then " -Dno_threads " else "") ++
-                 (if (C.cpedantic opts) then " -Dcpedantic " else "")
+    let zigExe = zig paths
+        baseArgs = ["build","--cache-dir", local_cache_dir,
+                            "--global-cache-dir", global_cache_dir] ++
+                   (if (C.verboseZig gopts) then ["--verbose"] else [])
+        prefixArgs = ["--prefix", projOut paths, "--prefix-exe-dir", "bin"] ++
+                     (if (C.verboseZig gopts) then ["--verbose"] else [])
+        targetArgs = ["-Dtarget=" ++ C.target opts]
+        cpuArgs =
+            if (C.cpu opts /= "") then ["-Dcpu=" ++ C.cpu opts]
+            else case (splitOn "-" (C.target opts)) of
+                   ("native":_)            -> defCpuFlag
+                   ("aarch64":"macos":_)   -> ["-Dcpu=apple_a15"]
+                   ("aarch64":"windows":_) -> ["-Dcpu=apple_a15"]
+                   ("aarch64":"linux":_)   -> ["-Dcpu=cortex_a72"]
+                   ("x86_64":_:_)          -> ["-Dcpu=westmere"]
+                   (_:_:_)                 -> defCpuFlag
+        optArgs = ["-Doptimize=" ++ optimizeModeToZig (C.optimize opts)]
+        featureArgs = concat [ if C.db opts then ["-Ddb"] else []
+                             , if no_threads then ["-Dno_threads"] else []
+                             , if C.cpedantic opts then ["-Dcpedantic"] else []
+                             ]
+        zigArgs = baseArgs ++ prefixArgs ++ targetArgs ++ cpuArgs ++ optArgs ++ featureArgs
 
-    iff (C.verbose gopts) $ putStrLn ("zigCmd: " ++ zigCmd)
-    runZig gopts opts zigCmd paths (Just (projPath paths))
+    runZig gopts opts zigExe zigArgs paths (Just (projPath paths))
     -- if we are in a temp acton project, copy the outputted binary next to the source file
     if (isTmp paths && not (null realBinTasks))
       then do

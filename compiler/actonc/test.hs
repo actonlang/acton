@@ -370,8 +370,7 @@ runThing opts thing = do
     projBinPath <- canonicalizePath $ thing ++ "/out/bin"
     let wd = if isProj then projBinPath else twd
     let exe = if isProj then binName else fileBody
-    let cmd = "./" ++ exe ++ " " ++ opts
-    (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ cmd){ cwd = Just wd } ""
+    (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc ("./" ++ exe) (words opts)){ cwd = Just wd } ""
     return (returnCode, cmdOut, cmdErr)
   where (fileBody, fileExt) = splitExtension $ takeFileName thing
         fileParts = splitOn "__" fileBody
@@ -392,16 +391,16 @@ buildThing opts thing = do
     projPath <- canonicalizePath thing
     curDir <- getCurrentDirectory
     let wd = if proj then projPath else curDir
-    let actCmd    = (id actonc) ++ " " ++ (if proj then "build " else thing) ++ " --always-build " ++ opts
-    (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ actCmd){ cwd = Just wd } ""
+        args0 = if proj then ["build"] else [thing]
+        args  = args0 ++ ["--always-build"] ++ words opts
+    (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc actonc args){ cwd = Just wd } ""
     return (returnCode, cmdOut, cmdErr)
 
 
 runActon opts expRet expFail proj = do
     actonExe <- canonicalizePath "../../dist/bin/acton"
     projPath <- canonicalizePath proj
-    let actCmd    = (id actonExe) ++ " " ++ opts
-    (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ actCmd){ cwd = Just projPath } ""
+    (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc actonExe (words opts)){ cwd = Just projPath } ""
     iff (expFail == False && returnCode /= expRet) (
         putStrLn("\nERROR: when running acton " ++ opts ++ ", acton returned code (" ++ (show returnCode) ++ ") not as expected (" ++ (show expRet) ++ ")\nSTDOUT:\n" ++ cmdOut ++ "STDERR:\n" ++ cmdErr)
         )
