@@ -84,6 +84,7 @@ linesQ_L_4action linesQ_L_4actionG_new(linesQ_Apa G_1) {
 }
 struct linesQ_L_4actionG_class linesQ_L_4actionG_methods;
 $R linesQ_L_5C_3cont ($action cb, $Cont C_cont, B_int C_4res) {
+    #line 9 "test/src/lines.act"
     B_int v = C_4res;
     #line 10 "test/src/lines.act"
     B_Msg m = ((B_Msg)((B_Msg (*) ($action, B_int))cb->$class->__asyn__)(cb, to$int(2)));
@@ -414,6 +415,7 @@ linesQ_L_20proc linesQ_L_20procG_new(linesQ_main G_1) {
 }
 struct linesQ_L_20procG_class linesQ_L_20procG_methods;
 $R linesQ_L_17C_9cont (linesQ_main self, B_Iterable W_1909, B_Number W_2124, $Cont C_cont, B_int C_10res) {
+    #line 38 "test/src/lines.act"
     self->r = C_10res;
     #line 39 "test/src/lines.act"
     ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(2, to$str("r ="), self->r), B_None, B_None, B_None, B_None);
@@ -591,6 +593,7 @@ linesQ_L_21Cont linesQ_L_21ContG_new(linesQ_main G_1, B_Iterable G_2, B_Number G
 }
 struct linesQ_L_21ContG_class linesQ_L_21ContG_methods;
 $R linesQ_L_12C_7cont (linesQ_main self, B_Iterable W_1909, B_Number W_2124, $Cont C_cont, linesQ_Bepa C_8res) {
+    #line 34 "test/src/lines.act"
     self->b = C_8res;
     #line 35 "test/src/lines.act"
     ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, to$str("-----")), B_None, B_None, B_None, B_None);
@@ -643,6 +646,7 @@ linesQ_L_22Cont linesQ_L_22ContG_new(linesQ_main G_1, B_Iterable G_2, B_Number G
 }
 struct linesQ_L_22ContG_class linesQ_L_22ContG_methods;
 $R linesQ_L_11C_5cont (linesQ_main self, B_Iterable W_1909, B_Number W_2124, $Cont C_cont, linesQ_Apa C_6res) {
+    #line 33 "test/src/lines.act"
     self->a = C_6res;
     return linesQ_BepaG_newact((($Cont)linesQ_L_22ContG_new(self, W_1909, W_2124, C_cont)));
 }
