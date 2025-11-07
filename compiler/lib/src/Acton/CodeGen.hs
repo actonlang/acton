@@ -32,14 +32,16 @@ import Control.Monad.State.Lazy
 import Prelude hiding ((<>))
 import System.FilePath.Posix
 import Numeric
+-- For fast SrcLoc offset->line lookup when emitting #line
+import qualified Data.IntMap.Strict as IM
 
-generate                            :: Acton.Env.Env0 -> FilePath -> Module -> String -> IO (String,String,String)
-generate env srcbase m hash         = do return (n, h, c)
+generate                            :: Acton.Env.Env0 -> FilePath -> String -> Bool -> Module -> String -> IO (String,String,String)
+generate env srcbase srcText emitLines m hash = do return (n, h, c)
 
-  where n                           = concat (Data.List.intersperse "." (modPath (modname m))) --render $ quotes $ gen env0 (modname m1)
+  where n                           = concat (Data.List.intersperse "." (modPath (modname m))) --render $ quotes $ gen env0 (modname m)
         hashComment                 = text "/* Acton source hash:" <+> text hash <+> text "*/"
         h                           = render $ hashComment $+$ hModule env0 m
-        c                           = render $ hashComment $+$ cModule env0 srcbase m
+        c                           = render $ hashComment $+$ cModule env0 srcbase srcText emitLines m
         env0                        = genEnv $ setMod (modname m) env
 
 genRoot                            :: Acton.Env.Env0 -> QName -> IO String
@@ -53,6 +55,8 @@ genRoot env0 qn@(GName m n)         = do return $ render (cInclude $+$ cIncludeM
         cRoot                       = (gen env tActor <+> gen env primROOT <+> parens empty <+> char '{') $+$
                                        nest 4 (text "return" <+> parens (gen env tActor) <> gen env primNEWACTOR <> parens (gen env qn) <> semi) $+$
                                        char '}'
+
+
 
 
 myPretty (GName m n)
@@ -82,11 +86,16 @@ staticWitnessName _                 = (Nothing, [])
 
 -- Environment --------------------------------------------------------------------------------------
 
-genEnv env0                         = setX env0 GenX{ globalX = [], localX = [], retX = tNone, volVarsX = []}
+genEnv env0                         = setX env0 GenX{ globalX = [], localX = [], retX = tNone, volVarsX = [], lineEmitX = Nothing }
 
 type GenEnv                         = EnvF GenX
 
-data GenX                           = GenX { globalX :: [Name], localX :: [Name], retX :: Type , volVarsX :: [Name]}
+data GenX                           = GenX { globalX :: [Name]
+                                           , localX :: [Name]
+                                           , retX :: Type
+                                           , volVarsX :: [Name]
+                                           , lineEmitX :: Maybe (SrcLoc -> Doc)
+                                           }
 
 gdefine te env                      = modX env1 $ \x -> x{ globalX = dom te ++ globalX x }
   where env1                        = define te env
@@ -107,6 +116,15 @@ ret env                             = retX $ envX env
 setVolVars as env                   = modX env $ \x -> x{ volVarsX = as }
 
 isVolVar a env                      = a `elem` volVarsX (envX env)
+
+-- Line emission helpers
+setLineEmit :: (SrcLoc -> Doc) -> GenEnv -> GenEnv
+setLineEmit f env                   = modX env $ \x -> x{ lineEmitX = Just f }
+
+getLineEmit :: GenEnv -> (SrcLoc -> Doc)
+getLineEmit env                     = case lineEmitX (envX env) of
+                                        Just f  -> f
+                                        Nothing -> const empty
 
 -- Helpers ------------------------------------------------------------------------------------------
 
@@ -292,12 +310,12 @@ primNEWTUPLE0                       = gPrim "NEWTUPLE0"
 
 -- Implementation -----------------------------------------------------------------------------------
 
-cModule env srcbase (Module m imps stmts)
+cModule env srcbase srcText emitLines (Module m imps stmts)
                                     = (if inBuiltin env then text "#include \"builtin/builtin.c\"" else empty) $+$
                                       text "#include \"rts/common.h\"" $+$
                                       include env (if inBuiltin env then "" else "out/types") m $+$
                                       ext_include $+$
-                                      declModule env1 stmts $+$
+                                      declModule envWithLine stmts $+$
                                       text "int" <+> genTopName env initFlag <+> equals <+> text "0" <> semi $+$
                                       (text "void" <+> genTopName env initKW <+> parens empty <+> char '{') $+$
                                       nest 4 (text "if" <+> parens (genTopName env initFlag) <+> text "return" <> semi $+$
@@ -313,6 +331,23 @@ cModule env srcbase (Module m imps stmts)
         ext_init                    = if notImpl then genTopName env (name "__ext_init__") <+> parens empty <> semi else empty
         notImpl                     = hasNotImpl stmts
         env1                        = classdefine stmts env
+        -- Emit a C #line directive for a given Acton SrcLoc if available
+        actFile                     = srcbase ++ ".act"
+        -- Our AST source locations (SrcLoc) carry byte offsets (start,end), not (row,col).
+        -- C's #line requires a 1-based line number, so we convert offsets -> line numbers.
+        -- We precompute line start offsets and use an IntMap + lookupLE for O(log n) mapping.
+        lineStarts :: [Int]
+        lineStarts                  = 0 : [ i+1 | (i,c) <- zip ([0..] :: [Int]) srcText, c == '\n' ]
+        lineMap    :: IM.IntMap Int
+        lineMap                     = IM.fromList (zip lineStarts ([1..] :: [Int]))
+        offsetToLine :: Int -> Int
+        offsetToLine off            = case IM.lookupLE off lineMap of
+                                         Just (_, ln) -> ln
+                                         Nothing      -> 1
+        emitLine NoLoc              = empty
+        emitLine (Loc startOffset _) =
+            text "#line" <+> pretty (offsetToLine startOffset) <+> doubleQuotes (text actFile)
+        envWithLine                 = if emitLines then setLineEmit emitLine env1 else env1
 
 
 declModule env []                   = empty
@@ -327,18 +362,20 @@ declModule env (s : ss)             = vcat [ genTypeDecl env n t <+> genTopName 
         env1                        = gdefine te env
 
 
-declDecl env (Def _ n q p KwdNIL (Just t) b d fx ddoc)
+declDecl env (Def dloc n q p KwdNIL (Just t) b d fx ddoc)
   | hasNotImpl b                    = gen env t <+> genTopName env n <+> parens (gen env p) <> semi $+$
                                       text "/*" $+$
                                       decl $+$
                                       text "*/"
   | otherwise                       = decl
   where (ss',vs)                    = genSuite env1 b
-        decl                        = (genTypeDecl env n t1 <+> genTopName env n <+> parens (gen (setVolVars vs env) p) <+> char '{') $+$
+        decl                        = emit dloc $+$
+                                      (genTypeDecl env n t1 <+> genTopName env n <+> parens (gen (setVolVars vs env) p) <+> char '{') $+$
                                       nest 4 ss' $+$
                                       char '}'
         env1                        = setRet t1 $ ldefine (envOf p) $ defineTVars q env
         t1                          = exposeMsg fx t
+        emit                        = getLineEmit env
 
 declDecl env (Class _ n q as b ddoc)
     | cDefinedClass                 = vcat [ declDecl env1 d{ dname = methodname n (dname d) } | Decl _ ds <- b', d@Def{} <- ds ] $+$
@@ -577,10 +614,12 @@ preEscape str                       = "A_" ++ str
 
 word                                = text "$WORD"
 
+genSuite :: GenEnv -> Suite -> (Doc,[Name])
 genSuite env []                     = (empty,[])
-genSuite env (s:ss)                 = (c $+$ cs, vs' ++ (vs `intersect` defined env))
+genSuite env (s:ss)                 = ((emit (sloc s) $+$ c) $+$ cs, vs' ++ (vs `intersect` defined env))
     where (cs,vs)                   = genSuite (ldefine (envOf s) env) ss
           (c,vs')                   = genStmt (setVolVars vs env) s
+          emit                      = getLineEmit env
 
 isUnboxed (Internal BoxPass _ _)    = True
 isUnboxed _                         = False

@@ -1,0 +1,95 @@
+actor Apa():
+    apa = 2001
+    def setup(cb):
+        print("setup")
+        cb(0)
+    apb = 2002
+    def compute(cb):
+        print("compute")
+        v = cb(1)
+        m = async cb(2)
+        return v*10
+    def notice(i):
+        print("notice")
+        return i+1
+
+    y = 123
+    setup(notice)
+    z = 1
+    print("Apa")
+
+actor Bepa():
+    def callback(i):
+        print("callback", i)
+        return i+1
+    print("Bepa")
+
+actor main(env):
+    def myproc(i):
+        print("myproc", i)
+        if i == 2:
+            env.exit(0)
+        return i
+    a = Apa()
+    b = Bepa()
+    print("-----")
+    a.setup(a.notice)
+    x = async a.compute(b.callback)
+    r = await x
+    print("r =", r)
+    a.compute(myproc)
+    print("main")
+
+    # If/elif/else nested blocks
+    v = 0
+    if v == 0:
+        print("if branch")
+        if v < 1:
+            print("nested if")
+        elif v == -1:
+            print("nested elif")
+        else:
+            print("nested else")
+    elif v == 1:
+        print("outer elif")
+    else:
+        print("outer else")
+
+    # While with else, break/continue
+    i = 0
+    while i < 3:
+        i = i + 1
+        if i == 1:
+            print("continue path")
+            continue
+        if i == 2:
+            print("break path")
+            break
+        print("loop body", i)
+    else:
+        print("while else")
+
+    # For loop over literal list
+    for j in [1, 2, 3]:
+        if j == 2:
+            continue
+        print("for j", j)
+
+    # Try / except / finally
+    try:
+        if v == 0:
+            raise ValueError("boom")
+        print("unreached")
+    except ValueError as e:
+        print("caught", "ValueError")
+    finally:
+        print("finally")
+
+    # After scheduling (not executed in tests, but exercises codegen)
+    after 1: myproc(0)
+
+    # pass statement and return None path in a local
+    def nop():
+        pass
+        return None
+    nop()

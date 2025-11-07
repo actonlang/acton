@@ -65,6 +65,7 @@ data CompileOptions   = CompileOptions {
                          ccmd        :: Bool,
                          ty          :: Bool,
                          cpedantic   :: Bool,
+                         dbg_no_lines:: Bool,
                          optimize    :: OptimizeMode,
                          listimports :: Bool,
                          only_build  :: Bool,
@@ -169,6 +170,7 @@ compileOptions = CompileOptions
         <*> switch (long "ccmd"         <> help "Show CC / LD commands")
         <*> switch (long "ty"           <> help "Write .ty file to src file directory")
         <*> switch (long "cpedantic"    <> help "Pedantic C compilation with -Werror")
+        <*> switch (long "dbg-no-lines" <> help "Disable emission of C #line directives (for debugging codegen)")
         <*> optimizeOption
         <*> switch (long "list-imports" <> help "List module imports")
         <*> switch (long "only-build"   <> help "Only perform final build of .c files, do not compile .act files")

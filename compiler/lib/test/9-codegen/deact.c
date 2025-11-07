@@ -5,6 +5,7 @@ B_Times deactQ_W_223;
 B_Plus deactQ_W_586;
 B_Eq deactQ_W_761;
 $R deactQ_L_1C_1cont ($Cont C_cont, B_NoneType C_2res) {
+    #line 15 "test/src/deact.act"
     ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, to$str("Apa")), B_None, B_None, B_None, B_None);
     return $R_CONT(C_cont, B_None);
 }
@@ -75,7 +76,9 @@ deactQ_L_4action deactQ_L_4actionG_new(deactQ_Apa G_1) {
 }
 struct deactQ_L_4actionG_class deactQ_L_4actionG_methods;
 $R deactQ_L_5C_3cont ($action cb, $Cont C_cont, B_int C_4res) {
+    #line 7 "test/src/deact.act"
     B_int v = C_4res;
+    #line 8 "test/src/deact.act"
     B_Msg m = ((B_Msg)((B_Msg (*) ($action, B_int))cb->$class->__asyn__)(cb, to$int(2)));
     B_int N_tmp = ((B_int (*) (B_Times, B_int, B_int))deactQ_W_223->$class->__mul__)(deactQ_W_223, v, to$int(10));
     return $R_CONT(C_cont, N_tmp);
@@ -371,9 +374,13 @@ deactQ_L_19action deactQ_L_19actionG_new(deactQ_main G_1) {
 }
 struct deactQ_L_19actionG_class deactQ_L_19actionG_methods;
 $R deactQ_L_17C_9cont (deactQ_main self, $Cont C_cont, B_int C_10res) {
+    #line 34 "test/src/deact.act"
     self->r = C_10res;
+    #line 35 "test/src/deact.act"
     ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(2, to$str("r ="), self->r), B_None, B_None, B_None, B_None);
+    #line 36 "test/src/deact.act"
     ((B_Msg (*) (deactQ_Apa, $action))self->a->$class->compute)(self->a, (($action)deactQ_L_19actionG_new(self)));
+    #line 37 "test/src/deact.act"
     ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, to$str("main")), B_None, B_None, B_None, B_None);
     return $R_CONT(C_cont, B_None);
 }
@@ -412,9 +419,13 @@ deactQ_L_20Cont deactQ_L_20ContG_new(deactQ_main G_1, $Cont G_2) {
 }
 struct deactQ_L_20ContG_class deactQ_L_20ContG_methods;
 $R deactQ_L_12C_7cont (deactQ_main self, $Cont C_cont, deactQ_Bepa C_8res) {
+    #line 30 "test/src/deact.act"
     self->b = C_8res;
+    #line 31 "test/src/deact.act"
     ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, to$str("-----")), B_None, B_None, B_None, B_None);
+    #line 32 "test/src/deact.act"
     ((B_Msg (*) (deactQ_Apa, $action))self->a->$class->setup)(self->a, (($action)deactQ_L_14actionG_new(self->a)));
+    #line 33 "test/src/deact.act"
     self->x = ((B_Msg (*) (deactQ_Apa, $action))self->a->$class->compute)(self->a, (($action)deactQ_L_16actionG_new(self->b)));
     return $AWAIT((($Cont)deactQ_L_20ContG_new(self, C_cont)), self->x);
 }
@@ -453,6 +464,7 @@ deactQ_L_21Cont deactQ_L_21ContG_new(deactQ_main G_1, $Cont G_2) {
 }
 struct deactQ_L_21ContG_class deactQ_L_21ContG_methods;
 $R deactQ_L_11C_5cont (deactQ_main self, $Cont C_cont, deactQ_Apa C_6res) {
+    #line 29 "test/src/deact.act"
     self->a = C_6res;
     return deactQ_BepaG_newact((($Cont)deactQ_L_21ContG_new(self, C_cont)));
 }
@@ -744,16 +756,23 @@ struct deactQ_L_32procG_class deactQ_L_32procG_methods;
 $R deactQ_ApaD___init__ (deactQ_Apa self, $Cont C_cont) {
     return (($R (*) (deactQ_Apa, $Cont, $action))self->$class->setupG_local)(self, (($Cont)deactQ_L_2ContG_new(C_cont)), (($action)deactQ_L_4actionG_new(self)));
 }
+#line 2 "test/src/deact.act"
 $R deactQ_ApaD_setupG_local (deactQ_Apa self, $Cont C_cont, $action cb) {
+    #line 3 "test/src/deact.act"
     ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, to$str("setup")), B_None, B_None, B_None, B_None);
+    #line 4 "test/src/deact.act"
     ((B_Msg (*) ($action, B_int))cb->$class->__asyn__)(cb, to$int(0));
     return $R_CONT(C_cont, B_None);
 }
+#line 5 "test/src/deact.act"
 $R deactQ_ApaD_computeG_local (deactQ_Apa self, $Cont C_cont, $action cb) {
+    #line 6 "test/src/deact.act"
     ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, to$str("compute")), B_None, B_None, B_None, B_None);
     return $AWAIT((($Cont)deactQ_L_6ContG_new(cb, C_cont)), ((B_Msg)((B_Msg (*) ($action, B_int))cb->$class->__asyn__)(cb, to$int(1))));
 }
+#line 10 "test/src/deact.act"
 $R deactQ_ApaD_noticeG_local (deactQ_Apa self, $Cont C_cont, B_int i) {
+    #line 11 "test/src/deact.act"
     ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, to$str("notice")), B_None, B_None, B_None, B_None);
     B_int N_1tmp = ((B_int (*) (B_Plus, B_int, B_int))deactQ_W_586->$class->__add__)(deactQ_W_586, i, to$int(1));
     return $R_CONT(C_cont, N_1tmp);
@@ -793,10 +812,13 @@ $R deactQ_ApaG_new($Cont G_1) {
 }
 struct deactQ_ApaG_class deactQ_ApaG_methods;
 $R deactQ_BepaD___init__ (deactQ_Bepa self, $Cont C_cont) {
+    #line 21 "test/src/deact.act"
     ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, to$str("Bepa")), B_None, B_None, B_None, B_None);
     return $R_CONT(C_cont, B_None);
 }
+#line 18 "test/src/deact.act"
 $R deactQ_BepaD_callbackG_local (deactQ_Bepa self, $Cont C_cont, B_int i) {
+    #line 19 "test/src/deact.act"
     ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(2, to$str("callback"), i), B_None, B_None, B_None, B_None);
     B_int N_2tmp = ((B_int (*) (B_Plus, B_int, B_int))deactQ_W_586->$class->__add__)(deactQ_W_586, i, to$int(1));
     return $R_CONT(C_cont, N_2tmp);
@@ -833,9 +855,13 @@ $R deactQ_mainD___init__ (deactQ_main self, $Cont C_cont, B_Env env) {
     self->env = env;
     return deactQ_ApaG_newact((($Cont)deactQ_L_22ContG_new(self, C_cont)));
 }
+#line 24 "test/src/deact.act"
 $R deactQ_mainD_myprocG_local (deactQ_main self, $Cont C_cont, B_int i) {
+    #line 25 "test/src/deact.act"
     ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(2, to$str("myproc"), i), B_None, B_None, B_None, B_None);
+    #line 26 "test/src/deact.act"
     if (ORD_B_int__eq__(i, to$int(2))) {
+        #line 27 "test/src/deact.act"
         ((B_Msg (*) (B_Env, B_int))self->env->$class->exit)(self->env, to$int(0));
     }
     return $R_CONT(C_cont, i);

@@ -114,7 +114,7 @@ main = do
                                      _ -> printErrorAndExit ("Unknown filetype: " ++ head nms)
 
 defaultOpts   = C.CompileOptions False False False False False False False False False False False False
-                                 False False False False C.Debug False False False False
+                                 False False False False False C.Debug False False False False
                                  "" "" "" C.defTarget "" False []
 
 -- Apply global options to compile options
@@ -1277,7 +1277,8 @@ runRestPasses gopts opts paths env0 parsed srcContent = do
 
                       -- Convert hash to hex string for comment
                       let hexHash = B.unpack $ Base16.encode srcHash
-                      (n,h,c) <- Acton.CodeGen.generate liftEnv relSrcBase boxed hexHash
+                      let emitLines = not (C.dbg_no_lines opts)
+                      (n,h,c) <- Acton.CodeGen.generate liftEnv relSrcBase srcContent emitLines boxed hexHash
                       timeCodeGen <- getTime Monotonic
                       iff (C.timing gopts) $ putStrLn("    Pass: Generating code : " ++ fmtTime (timeCodeGen - timeBoxing))
 

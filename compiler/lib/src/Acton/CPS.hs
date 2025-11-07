@@ -151,20 +151,20 @@ instance CPS [Stmt] where
       where t                           = typeOf env e
             nts                         = extraBinds env ss
 
-    cps env ss0@(Assign _ [p] e : ss)
+    cps env ss0@(Assign l [p] e : ss)
       | contCall env e                  = do k <- newName "cont"
                                              x <- newName "res"
-                                             ss' <- cps (define [(x,NVar t)] env) (sAssign p (eVar x) : ss)
+                                             ss' <- cps (define [(x,NVar t)] env) (Assign l [p] (eVar x) : ss)
                                              --traceM ("## kDef Assign " ++ prstr k ++ ", updates: " ++ prstrs nts)
                                              return $ kDef env k nts x t ss' :
                                                       sReturn (addContArg env (conv env e) (kRef k (dom nts) x t)) : []
       where t                           = typeOf env e
             nts                         = extraBinds env ss0
 
-    cps env (MutAssign _ tg e : ss)
+    cps env (MutAssign l tg e : ss)
       | contCall env e                  = do k <- newName "cont"
                                              x <- newName "res"
-                                             ss' <- cps env (sMutAssign tg (eVar x) : ss)
+                                             ss' <- cps env (MutAssign l tg (eVar x) : ss)
                                              --traceM ("## kDef MutAssign " ++ prstr k ++ ", updates: " ++ prstrs nts)
                                              return $ kDef env k nts x t ss' :
                                                       sReturn (addContArg env (conv env e) (kRef k (dom nts) x t)) : []
