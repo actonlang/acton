@@ -20,6 +20,16 @@ import Acton.Builtin
 import Debug.Trace
 
 
+isWitness (Internal Witness _ _)    = True
+isWitness _                         = False
+
+isInternal (Internal _ _ _)         = True
+isInternal _                        = False
+
+isUnboxed (Internal BoxPass _ _)    = True
+isUnboxed _                         = False
+
+
 self                                = Name NoLoc "self"
 
 localName n                         = Derived n suffixLocal
@@ -422,7 +432,8 @@ instance Vars Type where
 instance Vars Constraint where
     free (Cast _ t1 t2)             = free t1 ++ free t2
     free (Sub _ w t1 t2)            = free t1 ++ free t2
-    free (Impl _ w t p)             = free t ++ free p
+    free (Proto _ w t p)            = free t ++ free p
     free (Sel _ w t1 n t2)          = free t1 ++ free t2
     free (Mut _ t1 n t2)            = free t1 ++ free t2
     free (Seal _ t)                 = free t
+    free (Imply _ w q cs)           = free q ++ free cs

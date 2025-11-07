@@ -465,8 +465,7 @@ initClassBase env c q as hasCDef    = methodtable env c <> dot <> gen env gcinfo
                                       methodtable env c <> dot <> gen env superclassKW <+> equals <+> super <> semi $+$
                                       vcat [ inherit c' n | (c',n) <- inheritedAttrs env (NoQ c) ]
   where super                       = if null as then text "NULL" else parens (gen env qnSuperClass) <> text "&" <> methodtable' env (tcname $ head as)
-        selfsubst                   = vsubst [(tvSelf, tCon tc)]
-        tc                          = TC (NoQ c) [ tVar v | Quant v _ <- q ]
+        selfsubst                   = selfSubst (NoQ c) q
         inherit c' n
           | hasCDef                 = methodtable env c <> dot <> gen env n <+> equals <+> genTopName env (methodname c n) <> semi
           | otherwise               = methodtable env c <> dot <> gen env n <+> equals <+> cast (fromJust $ lookup n te) <> methodtable' env c' <> dot <> gen env n <> semi
@@ -630,7 +629,7 @@ genTypeDecl env n t                 =  (if isVolVar n env then text "volatile" e
 genStmt env (Decl _ ds)             = (empty, [])
 genStmt env (Assign _ [PVar _ n (Just t)] e)
   | n `notElem` defined env         = (genTypeDecl env n t <+> gen env n <+> equals <+> rhs <> semi, [])
-  where rhs                         = if B.isWitness n
+  where rhs                         = if isWitness n
                                       then case staticWitnessName e of
                                            (Just nm,as) ->
                                                foldr (\x y -> y <> text "->" <> myPretty x) (parens (myPretty (tcname (tcon t))) <> myPretty (witName nm)) as

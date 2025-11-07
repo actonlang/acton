@@ -230,7 +230,7 @@ volatileVars env stmts                  = nub $ vols env stmts
 instance CPS Decl where
     cps env (Class l n q cs b ddoc)     = do b' <- cps env1 b
                                              return $ Class l n (conv env q) (conv env cs) b' ddoc
-      where env1                        = defineSelf (NoQ n) q $ defineTVars q $ clearCtxt $ setInClass env
+      where env1                        = defineTVars (selfQuant (NoQ n) q) $ clearCtxt $ setInClass env
 
     cps env (Def l n q p KwdNIL (Just t) b dec fx ddoc)
       | contFX fx                       = do --traceM ("#### Converting " ++ prstr n)
@@ -382,7 +382,7 @@ instance PreCPS Stmt where
 
 instance PreCPS Decl where
     pre env (Class l n q cs b ddoc)     = Class l n q cs <$> pre env1 b <*> pure ddoc
-      where env1                        = defineSelf (NoQ n) q $ defineTVars q env
+      where env1                        = defineTVars (selfQuant (NoQ n) q) env
     pre env (Def l n q p _k a b d fx ddoc)
                                         = Def l n q p _k a <$> preSuite env1 b <*> pure d <*> pure fx <*> pure ddoc
       where env1                        = define (envOf p) $ defineTVars q env

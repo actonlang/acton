@@ -72,7 +72,7 @@ type KindEnv                        = EnvF ()
 
 kindEnv env0                        = env0
 
-tvars env                           = [ TV k n | (n, NTVar k _) <- names env ]
+tvars env                           = [ TV k n | (n, NTVar k _ _) <- names env ]
 
 extcons ke env                      = define ke env
 
@@ -82,7 +82,7 @@ extvars vs env
   | otherwise                       = return $ define (map mkTVar vs) env
   where clash                       = vs `intersect` tvars env
         dups                        = duplicates vs
-        mkTVar tv                   = (tvname tv, NTVar (tvkind tv) cValue)
+        mkTVar tv                   = (tvname tv, NTVar (tvkind tv) cValue [])
 
 tcKind qn env                       = tconKind qn env
 

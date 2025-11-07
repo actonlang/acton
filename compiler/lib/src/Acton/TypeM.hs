@@ -164,7 +164,7 @@ explainViolation c                   = case info c of
                                                (case c of
                                                   Cast _ t1 t2  -> intro t1 mbe <+> text "is not a subclass of" <+> pretty t2
                                                   Sub _ _ t1 t2 -> intro t1 mbe <+> text "is not a subtype of" <+> pretty t2
-                                                  Impl _ _ t p -> intro  t mbe <+> text "does not implement" <+> pretty p
+                                                  Proto _ _ t p -> intro  t mbe <+> text "does not implement" <+> pretty p
                                                   Sel _ _ t n t0 -> intro t mbe <+> text "does not have an attribute" <+> pretty n <+> text "with type" <+> pretty t0
                                                   _ -> pretty c <+> text "does not hold")
                                           DeclInfo _ _ n sc msg -> text msg  -- $+$ pretty n <+> text "is inferred to have type"<+> pretty sc
@@ -180,7 +180,7 @@ explainRequirement c                = case info c of
                                                (case c of
                                                    Cast _ t1 t2 -> intro t1 mbe <+> text "must be a subclass of" <+> pretty t2
                                                    Sub i _ t1 t2 -> intro t1 mbe <+> text "must be a subtype of" <+> pretty t2
-                                                   Impl _ _ t p -> intro t mbe <+> text "must implement" <+> pretty p
+                                                   Proto _ _ t p -> intro t mbe <+> text "must implement" <+> pretty p
                                                    Sel _ _ t n t0 -> intro t mbe <+> text "must have an attribute" <+> pretty n <+> text "with type" <+> pretty t0
                                                                           Pretty.<> text "; no such type is known."
                                                    _ -> pretty c <+> text "must hold")
@@ -191,10 +191,11 @@ explainRequirement c                = case info c of
 useless vs c                           = case c of
                                              Cast _ t1 t2 -> f t1 || f t2
                                              Sub _ _ t1 t2 -> f t1 || f t2
-                                             Impl _ _ t p -> f t
+                                             Proto _ _ t p -> f t
                                              Sel _ _ t n t0 -> f t || f t0
                                              Mut _ t1 n t2 -> True   -- TODO
                                              Seal _ _ -> True        -- TODO
+                                             Imply _ _ _ _ -> True   -- TODO
      where f (TUni _ v) = notElem v vs
            f _          = False
 

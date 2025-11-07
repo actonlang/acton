@@ -180,7 +180,7 @@ instance Pretty (Name,NameInfo) where
                                 = {-pretty w  <+> colon <+> -}
                                   text "extension" <+> pretty q <+> text "=>" <+> pretty c <+> parens (commaList ps) <>
                                   colon $+$ nest 4 (prettyDocstring doc) $+$ (nest 4 $ prettyOrPass te)
-    pretty (n, NTVar k c)       = pretty n <> parens (pretty c)
+    pretty (n, NTVar k c ps)    = pretty n <> parens (commaList (c:ps))
     pretty (n, NAlias qn)       = text "alias" <+> pretty n <+> equals <+> pretty qn
     pretty (n, NMAlias m)       = text "module" <+> pretty n <+> equals <+> pretty m
     pretty (n, NModule te doc)  = text "module" <+> pretty n <> colon $+$ nest 4 (prettyDocstring doc) $+$ nest 4 (pretty te)
@@ -222,7 +222,7 @@ instance VFree NameInfo where
     vfree (NClass q us te _)    = (vfree q ++ vfree us ++ vfree te) \\ (tvSelf : qbound q)
     vfree (NProto q us te _)    = (vfree q ++ vfree us ++ vfree te) \\ (tvSelf : qbound q)
     vfree (NExt q c ps te _ _)  = (vfree q ++ vfree c ++ vfree ps ++ vfree te) \\ (tvSelf : qbound q)
-    vfree (NTVar k c)           = vfree c
+    vfree (NTVar k c ps)        = vfree c ++ vfree ps
     vfree (NAlias qn)           = []
     vfree (NMAlias qn)          = []
     vfree (NModule te doc)      = []        -- actually vfree te, but a module has no free variables on the top level
@@ -243,7 +243,7 @@ instance VSubst NameInfo where
     vsubst s (NClass q us te x) = NClass (vsubst s q) (vsubst s us) (vsubst s te) x
     vsubst s (NProto q us te x) = NProto (vsubst s q) (vsubst s us) (vsubst s te) x
     vsubst s (NExt q c ps te opts x) = NExt (vsubst s q) (vsubst s c) (vsubst s ps) (vsubst s te) opts x
-    vsubst s (NTVar k c)        = NTVar k (vsubst s c)
+    vsubst s (NTVar k c ps)        = NTVar k (vsubst s c) (vsubst s ps)
     vsubst s (NAlias qn)        = NAlias qn
     vsubst s (NMAlias m)        = NMAlias m
     vsubst s (NModule te x)     = NModule te x          -- actually vsubst s te, but te has no free variables (top-level)
@@ -264,7 +264,7 @@ instance UFree NameInfo where
     ufree (NClass q us te _)    = ufree q ++ ufree us ++ ufree te
     ufree (NProto q us te _)    = ufree q ++ ufree us ++ ufree te
     ufree (NExt q c ps te _ _)  = ufree q ++ ufree c ++ ufree ps ++ ufree te
-    ufree (NTVar k c)           = ufree c
+    ufree (NTVar k c ps)        = ufree c ++ ufree ps
     ufree (NAlias qn)           = []
     ufree (NMAlias qn)          = []
     ufree (NModule te doc)      = []        -- actually ufree te, but a module has no free variables on the top level
@@ -286,7 +286,7 @@ instance Polarity NameInfo where
     polvars (NClass q us te _)  = polvars q `polcat` polvars us `polcat` polvars te
     polvars (NProto q us te _)  = polvars q `polcat` polvars us `polcat` polvars te
     polvars (NExt q c ps te _ _) = polvars q `polcat` polvars c `polcat` polvars ps `polcat` polvars te
-    polvars (NTVar k c)         = polvars c
+    polvars (NTVar k c ps)      = polvars c `polcat` polvars ps
     polvars _                   = ([],[])
 
 
@@ -301,7 +301,7 @@ instance USubst NameInfo where
     usubst (NClass q us te doc) = NClass <$> usubst q <*> usubst us <*> usubst te <*> return doc
     usubst (NProto q us te doc) = NProto <$> usubst q <*> usubst us <*> usubst te <*> return doc
     usubst (NExt q c ps te opts doc) = NExt <$> usubst q <*> usubst c <*> usubst ps <*> usubst te <*> return opts <*> return doc
-    usubst (NTVar k c)          = NTVar k <$> usubst c
+    usubst (NTVar k c ps)       = NTVar k <$> usubst c <*> usubst ps
     usubst (NAlias qn)          = NAlias <$> return qn
     usubst (NMAlias m)          = NMAlias <$> return m
     usubst (NModule te doc)     = NModule <$> return te <*> return doc     -- actually usubst te, but te has no free variables (top-level)
@@ -398,7 +398,7 @@ instance Unalias NameInfo where
     unalias env (NClass q us te doc)= NClass (unalias env q) (unalias env us) (unalias env te) doc
     unalias env (NProto q us te doc)= NProto (unalias env q) (unalias env us) (unalias env te) doc
     unalias env (NExt q c ps te opts doc)= NExt (unalias env q) (unalias env c) (unalias env ps) (unalias env te) opts doc
-    unalias env (NTVar k c)         = NTVar k (unalias env c)
+    unalias env (NTVar k c ps)      = NTVar k (unalias env c) (unalias env ps)
     unalias env (NAlias qn)         = NAlias (unalias env qn)
     unalias env (NMAlias m)         = NMAlias (unalias env m)
     unalias env (NModule te doc)    = NModule (unalias env te) doc
@@ -515,17 +515,16 @@ addImport                   :: ModName -> EnvF x -> EnvF x
 addImport m env             = env{ imports = m : imports env }
 
 defineTVars                 :: QBinds -> EnvF x -> EnvF x
-defineTVars q env           = foldr f env q
-  where f (Quant tv us) env = foldl addWit env{ names = (tvname tv, NTVar (tvkind tv) c) : names env } wits
+defineTVars q env           = foldr f env (unalias env q)
+  where f (Quant tv us) env = foldl addWit env{ names = (tvname tv, NTVar (tvkind tv) c ps) : names env } wits
           where (c,ps)      = case mro2 env us of ([],_) -> (cValue, us); _ -> (head us, tail us)   -- Just check that the mro exists, don't store it
                 wits        = [ WInst [] (tVar tv) p (NoQ $ tvarWit tv p0) wchain | p0 <- ps, (wchain,p) <- findAncestry env p0 ]
 
-defineSelfOpaque            :: EnvF x -> EnvF x
-defineSelfOpaque env        = defineTVars [Quant tvSelf []] env
+selfSubst n q               = vsubst [(tvSelf, tCon tc)]
+  where tc                  = TC n (map tVar $ qbound q)
 
-defineSelf                  :: QName -> QBinds -> EnvF x -> EnvF x
-defineSelf qn q env         = defineTVars [Quant tvSelf [tc]] env
-  where tc                  = TC (unalias env qn) [ tVar tv | Quant tv _ <- q ]
+selfQuant n q               = Quant tvSelf [tc] : q
+  where tc                  = TC n (map tVar $ qbound q)
 
 defineInst                  :: TCon -> [WTCon] -> Name -> EnvF x -> EnvF x
 defineInst c ps w env       = foldl addWit env wits
@@ -556,16 +555,19 @@ stateScope                  :: EnvF x -> [Name]
 stateScope env              = [ z | (z, NSVar _) <- names env ]
 
 tvarScope0                  :: EnvF x -> [TVar]
-tvarScope0 env              = [ TV k n | (n, NTVar k _) <- names env ]
+tvarScope0 env              = [ TV k n | (n, NTVar k _ _) <- names env ]
 
 tvarScope                   :: EnvF x -> [TVar]
 tvarScope env               = tvarScope0 env \\ [tvSelf]
 
-quantScope                  :: EnvF x -> QBinds
-quantScope env              = [ Quant (TV k n) (if c==cValue then [] else [c]) | (n, NTVar k c) <- names env, n /= nSelf ]
+quantScope0                 :: EnvF x -> QBinds
+quantScope0 env             = [ Quant (TV k n) (if c==cValue then ps else (c:ps)) | (n, NTVar k c ps) <- names env ]
 
-selfSubst                   :: EnvF x -> Substitution
-selfSubst env               = [ (TV k n, tCon c) | (n, NTVar k c) <- names env, n == nSelf ]
+quantScope                  :: EnvF x -> QBinds
+quantScope env              = [ q | q@(Quant tv _) <- quantScope0 env, tv /= tvSelf ]
+
+selfScopeSubst              :: EnvF x -> Substitution
+selfScopeSubst env          = [ (TV k n, tCon c) | (n, NTVar k c ps) <- names env, n == nSelf ]
 
 
 -- Name queries -------------------------------------------------------------------------------------------------------------------
@@ -910,11 +912,11 @@ wexpr (Right n : w) e       = wexpr w $ eDot e (witAttr n)
 
 findSelf                    :: EnvF x -> TCon
 findSelf env                = case findName (tvname tvSelf) env of
-                                NTVar _ c -> c
+                                NTVar _ c ps -> c
 
 findTVBound                 :: EnvF x -> TVar -> CCon
 findTVBound env tv          = case findName (tvname tv) env of
-                                NTVar _ c -> c
+                                NTVar _ c ps -> c
                                 _ -> err1 tv "Unknown type variable"
 
 findTVAttr                  :: EnvF x -> TVar -> Name -> Maybe (Expr->Expr, TSchema, Maybe Deco)
@@ -1308,7 +1310,7 @@ importWits m te env         = foldl addWit env ws
 
 
 
-headvar (Impl _ w (TUni _ u) p)     = u
+headvar (Proto _ w (TUni _ u) p)    = u
 
 headvar (Cast _ TVar{} (TUni _ u))  = u
 headvar (Cast _ (TUni _ u) t)       = u
@@ -1431,7 +1433,7 @@ err3 l xs s                         = err l (s ++ " " ++ prstrs xs)
 
 notYetExpr e                        = notYet (loc e) e
 
-stripQual q                             = [ Quant v [] | Quant v us <- q ]
+stripQual q                         = [ Quant v [] | Quant v us <- q ]
 
 
 class Simp a where

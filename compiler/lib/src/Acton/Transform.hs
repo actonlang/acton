@@ -33,9 +33,13 @@ termsubst s x                           = trans (extsubst s env0) x
 class Transform a where
     trans                               :: TransEnv -> a -> a
 
-data TransEnv                           = TransEnv { trsubst :: [(Name,Maybe Expr)], witscope :: [(Name,Type,Expr)] }
+data TransEnv                           = TransEnv {
+                                            trsubst  :: [(Name,Maybe Expr)],        -- Inlineable assignments in scope
+                                            qwits    :: [(Name,[Stmt])],            -- Quantified witness defs in scope, paired with their local witness assignments
+                                            witscope :: [(Name,Type,Expr)]          -- Preserved witness bindings in scope, for the purpose of duplicate removals
+                                          }
 
-env0                                    = TransEnv{ trsubst = [], witscope = [] }
+env0                                    = TransEnv{ trsubst = [], qwits = [], witscope = [] }
 
 blockscope ns env                       = env{ trsubst = (ns `zip` repeat Nothing) ++ trsubst env }
 
@@ -43,24 +47,68 @@ extsubst ns env                         = env{ trsubst = [ (n,Just e) | (n,e) <-
 
 limsubst ns env                         = env{ trsubst = trsubst env `exclude` ns }
 
-extscope n t e env                      = env{ witscope = (n,t,e) : witscope env }
-
 trfind n env                            = case lookup n (trsubst env) of
                                             Just (Just e) -> Just e
                                             _ -> Nothing
 
+-- Assumed invariants: if a def defines a witness, it is of the form
+--
+--    def w [Ts] (ws: ps):
+--        v1 = a1
+--        ...
+--        vm = am
+--        w1 = b1
+--        ...
+--        wn = bn
+--        return (w1=w1, ..., wn=wn)
+--
+-- where the wi and vj are witnesses.
+
+-- Moreover, all calls to such a w are type-correct and appear only in sequences
+-- of the following form:
+--
+--    w1 = w@[Ts](ws).w1
+--    ...
+--    wn = w@[Ts](ws).wn
+--
+-- where wi, the Ts and the ws are identical to the corresponding binders for w.
+--
+-- A consequence of these assumptions is that such a sequence can be safely reduced to
+--
+--    v1 = a1
+--    ...
+--    vm = am
+--    w1 = b1
+--    ...
+--    wn = bn
+
+extqwits n ss env                       = env{ qwits = (n, [s | s@Assign{} <- ss]) : qwits env }
+
+qwitcall env (Assign _ _ (Dot _ (Call _ (TApp _ (Var _ (NoQ w)) _) _ _) _))
+  | isWitness w                         = lookup w (qwits env)
+qwitcall env e                          = Nothing
+
+
+extscope n t e env                      = env{ witscope = (n,t,e) : witscope env }
+
+equalwit env e t                        = listToMaybe [ eVar w | (w,t',e') <- witscope env, e' == e, t' == t ]
+
+
 instance Pretty (Name,Expr) where
     pretty (n,e)                        = pretty n <+> text "~" <+> pretty e
 
-wtrans env (Assign l p@[PVar _ n (Just t)] e : ss)
-  | Lambda{} <- e                       = wtrans (extsubst [(n,e1)] env) ss
-  | TApp _ Var{} _ <- e                 = wtrans (extsubst [(n,e1)] env) ss
-  | Var{} <- e                          = wtrans (extsubst [(n,e1)] env) ss
-  | Dot _ Var{} _ <- e                  = wtrans (extsubst [(n,e1)] env) ss
-  | not $ null hits                     = wtrans (extsubst [(n,head hits)] env) ss
-  | Internal Witness _ _ <- n           = Assign l p e1 : wtrans (extscope n t e1 env) ss
-  where hits                            = [ eVar n' | (n',t',e') <- witscope env, e' == e1, t' == t ]
-        e1                              = trans env e
+wtrans env (s@(Assign l p@[PVar _ w (Just t)] e) : ss)
+  | not (isWitness w)                   = trans env s : wtrans env ss
+  | Lambda{} <- e                       = wtrans (extsubst [(w,e1)] env) ss
+  | TApp _ Var{} _ <- e                 = wtrans (extsubst [(w,e1)] env) ss
+  | Var{} <- e                          = wtrans (extsubst [(w,e1)] env) ss
+  | Dot _ Var{} _ <- e                  = wtrans (extsubst [(w,e1)] env) ss
+  | Just e' <- equalwit env e t         = wtrans (extsubst [(w,e')] env) ss
+  | Just ss' <- qwitcall env s          = wtrans env (ss' ++ dropWhile (isJust . qwitcall env) ss)
+  | otherwise                           = Assign l p e1 : wtrans (extscope w t e1 env) ss
+  where e1                              = trans env e
+wtrans env (Decl l [d@Def{dname=w}] : ss)
+  | isWitness w                         = wtrans (extqwits w (dbody d) env) ss
 wtrans env (s:ss)                       = trans env s : wtrans env ss
 wtrans env []                           = []
 

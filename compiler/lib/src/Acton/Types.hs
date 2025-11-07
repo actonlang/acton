@@ -145,18 +145,22 @@ infTopStmts env (s : ss)                = do (te1, s1) <- infTopStmt env s
                                              (te2, ss2) <- infTopStmts (define te1 env) ss
                                              return (te1++te2, s1++ss2)
 
-infTopStmt env s                        = do (cs,te1,s1) <- infEnv env s
-                                             --traceM ("###########\n" ++ render (nest 4 $ pretty s1))
-                                             --traceM (":::::::::::\n" ++ render (nest 4 $ vcat $ map pretty te1))
-                                             --traceM ("-----------\n" ++ render (nest 4 $ vcat $ map pretty cs))
-                                             eq <- solveAll (posdefine (filter typeDecl te1) env) te1 cs
-                                             --traceM ("+++++++++++\n" ++ render (nest 4 $ vcat $ map pretty eq))
-                                             te1 <- defaultTE env te1
-                                             --traceM ("===========\n" ++ render (nest 4 $ vcat $ map pretty te1))
-                                             s1 <- termred <$> usubst (pushEqns eq s1)
-                                             defaultVars (ufree s1)
-                                             s1 <- usubst s1
-                                             tieWitKnots te1 [s1]
+infTopStmt env s                        = do (cs,te,s) <- infEnv env s
+                                             traceM ("\n\n\n############\n" ++ render (nest 4 $ vcat $ map pretty te))
+                                             traceM ("------------\n" ++ render (nest 4 $ pretty s))
+                                             traceM ("\\\\\\\\\\\\\n" ++ render (nest 4 $ vcat $ map pretty cs))
+
+                                             (te,eq,s) <- genEnv env cs te s
+                                             traceM ("============\n" ++ render (nest 4 $ vcat $ map pretty eq))
+
+                                             te <- defaultTE env te
+                                             traceM ("===========\n" ++ render (nest 4 $ vcat $ map pretty te))
+                                             traceM ("............\n")
+
+                                             s <- termred <$> usubst (pushEqns eq s)
+                                             defaultVars (ufree s)
+                                             s <- usubst s
+                                             tieWitKnots te [s]
 
   where defaultTE env te                = do defaultVars (ufree te)
                                              usubst te
@@ -171,7 +175,7 @@ infTopStmt env s                        = do (cs,te1,s1) <- infEnv env s
 pushEqns [] s                           = s
 pushEqns eqs s
   | null pre                            = inject inj s
-  | otherwise                           = withLocal (bindWits pre) $ inject inj s
+  | otherwise                           = withLocal (bindTopWits env "push" (bound s) pre) $ inject inj s
   where backward                        = free s `intersect` bound eqs
         (pre,inj)                       = split [] [] (bound s) eqs
         split pre inj bvs []            = (reverse pre, reverse inj)
@@ -184,7 +188,7 @@ inject [] s                             = s
 inject eqs (Decl l ds)                  = Decl l [ d{ dbody = prune (dname d) [] (free d) reveqs ++ dbody d } | d <- ds ]
   where reveqs                          = reverse eqs
         prune n inj fvs []              = --trace ("### Injecting " ++ prstrs (bound inj) ++ " into " ++ prstr n) $
-                                          bindWits inj
+                                          bindTopWits env ("inj because of " ++ prstrs fvs) [n] inj
         prune n inj fvs (eq:eqs)
           | null needed                 = prune n inj fvs eqs
           | otherwise                   = prune n (eq:inj) (free eq ++ fvs) eqs
@@ -194,6 +198,131 @@ inject eqs (With l [] ss)               = With l [] (injlast eqs ss)
         injlast eqs (s:ss)              = s : injlast eqs ss
 inject eqs s                            = error ("# Internal error: cyclic witnesses " ++ prstrs eqs ++ "\n# and statement\n" ++ prstr s)
 
+
+genEnv                                  :: Env -> Constraints -> TEnv -> Stmt -> TypeM (TEnv,Equations,Stmt)
+genEnv env cs te (Decl l ds)
+  | any typeDecl te                     = do te <- usubst te
+                                             --traceM ("## genEnv types 1\n" ++ render (nest 6 $ pretty te))
+                                             --traceM ("   where\n" ++ render (nest 6 $ vcat $ map pretty cs))
+                                             eq <- solveAll (posdefine (filter typeDecl te) env) te cs
+                                             te <- usubst te
+                                             --traceM ("## genEnv types 2\n" ++ render (nest 6 $ pretty te))
+                                             --traceM ("   where\n" ++ render (nest 6 $ vcat $ map pretty cs))
+                                             return (te, eq, Decl l ds)
+  | otherwise                           = do te <- usubst te
+                                             --traceM ("## genEnv defs 1\n" ++ render (nest 6 $ pretty te))
+                                             --traceM ("   where\n" ++ render (nest 6 $ vcat $ map pretty cs))
+                                             (cs,eq) <- simplify env te tNone cs
+                                             te <- usubst te
+                                             (gen_us, gen_cs, te, eq) <- refine env cs te eq
+                                             let gen_vs = take (length gen_us) tvarSupply
+                                             sequence [ usubstitute uv (tVar tv) | (uv,tv) <- gen_us `zip` gen_vs ]
+                                             te <- usubst te
+                                             gen_cs <- usubst gen_cs
+                                             --traceM ("## genEnv defs 2 [" ++ prstrs gen_vs ++ "]\n" ++ render (nest 6 $ pretty te))
+                                             --traceM ("   where\n" ++ render (nest 6 $ vcat $ map pretty gen_cs))
+                                             let (q,ws) = qualify gen_vs gen_cs
+                                                 te1 = map (generalize q) te
+                                                 (eq1,eq2) = splitEqs (dom ws) eq
+                                                 ds1 = map (abstract q ds ws eq1) ds
+                                             --traceM ("## genEnv defs 3 [" ++ prstrs q ++ "]\n" ++ render (nest 6 $ pretty te1))
+                                             return (te1, eq2, Decl l ds1)
+  where
+    qualify vs cs                       = (q, concat wss)
+      where (q,wss)                     = unzip $ map qbind vs
+            qbind v                     = (Quant v bounds, wits)
+              where bounds              = [ p | Proto _ w (TVar _ v') p <- cs, v == v' ]
+                    wits                = [ (w, proto2type t p) | Proto _ w t@(TVar _ v') p <- cs, v == v' ]
+
+    generalize q (n, NDef (TSchema l [] t) d doc)
+                                        = (n, NDef (TSchema l q t) d doc)
+    generalize q (n, i)                 = (n, i)
+
+
+    abstract q ds ws eq d@Def{}
+      | null $ qbinds d                 = d{ qbinds = noqual env q,
+                                             pos = wit2par ws (pos d),
+                                             dbody = bindWits ("gen defA " ++ prstr (dname d)) eq ++ wsubst ds q ws (dbody d) }
+      | otherwise                       = d{ dbody = bindWits ("gen defB " ++ prstr (dname d)) eq ++ wsubst ds q ws (dbody d) }
+
+    wsubst ds [] []                     = id
+    wsubst ds q ws                      = termsubst s
+      where s                           = [ (n, Lambda l0 p k (Call l0 (tApp (eVar n) tvs) (wit2arg ws (pArg p)) (kArg k)) fx)
+                                            | Def _ n [] p k _ _ _ fx _ <- ds ]
+            tvs                         = map tVar $ qbound q
+
+    splitEqs ws eq
+      | null eq1                        = ([], eq)
+      | otherwise                       = (eq1++eq1', eq2')
+      where (eq1,eq2)                   = partition (any (`elem` ws) . free) eq
+            (eq1',eq2')                 = splitEqs (bound eq1 ++ ws) eq2
+
+    refine env cs te eq
+      | not $ null solve_cs             = do --traceM ("  #solving: " ++ prstrs solve_cs)
+                                             (cs',eq') <- solve env noQual te tNone eq cs
+                                             refineAgain cs' eq'
+      | not $ null ambig_vs             = do --traceM ("  #defaulting: " ++ prstrs ambig_vs)
+                                             (cs',eq') <- solve env isAmbig te tNone eq cs
+                                             refineAgain cs' eq'
+      | not $ null tail_vs              = do sequence [ tryUnify (Simple NoLoc "internal") (tUni v) (tNil $ uvkind v) | v <- tail_vs ]
+                                             refineAgain cs eq
+      | otherwise                       = do eq <- usubst eq
+                                             return (gen_vs, cs, te, eq)
+      where ambig_vs                    = ufree cs \\ closeDepVars (safe_vs) cs
+            tail_vs                     = gen_vs `intersect` (tailvars te ++ tailvars cs)
+
+            safe_vs                     = if null def_vss then [] else nub $ foldr1 intersect def_vss
+            def_vss                     = [ nub $ filter canGen $ ufree sc | (_, NDef sc _ _) <- te, null $ scbind sc ]
+            gen_vs                      = nub (foldr union (ufree cs) def_vss)
+
+            isAmbig c                   = any (`elem` ambig_vs) (ufree c)
+
+            refineAgain cs eq           = do (cs1,eq1) <- simplify env te tNone cs
+                                             te <- usubst te
+--                                             env <- usubst env
+                                             refine env cs1 te (eq1++eq)
+
+            solve_cs                    = [ c | c <- cs, noQual c ]
+
+            noQual (Proto _ _ (TUni _ u) p)
+                                        = False
+            noQual c                    = True
+
+            canGen tv                   = uvkind tv /= KFX
+
+genEnv env cs te s                      = do eq <- solveAll env te cs
+                                             return (te, eq, s)
+
+
+solveScoped env n q te tt []            = do traceM ("\n### Nothing to pass along for " ++ prstr n)
+                                             return ([], [])
+solveScoped env n [] te tt cs           = do traceM ("\n### Pass along for " ++ prstr n ++ ":\n" ++ render (nest 4 $ vcat $ map pretty cs))
+                                             simplify env te tt cs
+solveScoped env n q te tt cs            = do --traceM ("\n\n### solveScoped: " ++ prstrs cs)
+                                             (cs,eq) <- simplifyNew env1 cs
+                                             w <- newWitness
+                                             let (cs_imp, cs_plain) = splitImply cs
+                                                 eq1 = qwitRefs env1 w cs_plain ++ eq
+                                                 cs1 = Imply (Simple NoLoc "Implication") w q cs_plain :
+                                                       [ Imply i w (q++q') cs' | Imply i w q' cs' <- cs_imp ]
+                                             if null cs then
+                                                 return (cs, eq)
+                                              else if True then do
+                                                 traceM ("\n\n### Defer scoped for " ++ prstr n ++ " (" ++ prstrs (dom te) ++ "):   " ++ prstr w ++ ": " ++ prstr q ++ " =>\n" ++ render (nest 4 $ vcat $ map pretty cs))
+                                                 return (cs1, eq1)
+                                              else do
+                                                 traceM ("\n\n### Solve scoped for " ++ prstr n ++ " (" ++ prstrs (dom te) ++ "):   " ++ prstr w ++ ": " ++ prstr q ++ " =>\n" ++ render (nest 4 $ vcat $ map pretty cs))
+                                                 solve env1 (any (`elem` (qbound q)) . vfree) te tt eq cs
+  where env1                            = defineTVars q env
+
+solveAll env te []                      = return []
+solveAll env te cs                      = do --traceM ("\n\n### solveAll " ++ prstrs cs)
+                                             (cs,eq) <- simplify env te tNone cs
+                                             (cs,eq) <- solve env (const True) te tNone eq cs
+                                             return eq
+
+
+--------------------------------------------------------------------------------------------------------------------------
 
 class Infer a where
     infer                               :: Env -> a -> TypeM (Constraints,Type,a)
@@ -268,7 +397,7 @@ fxUnwrap env t                          = t
 wrap t@TFun{}                           = do tvx <- newUnivarOfKind KFX
                                              tvy <- newUnivarOfKind KFX
                                              w <- newWitness
-                                             return (Impl (DfltInfo (loc t) 28 Nothing []) w tvx (pWrapped (effect t) tvy), t{ effect = tvx })
+                                             return (Proto (DfltInfo (loc t) 28 Nothing []) w tvx (pWrapped (effect t) tvy), t{ effect = tvx })
 
 wrapped l kw env cs ts args             = do tvx <- newUnivarOfKind KFX
                                              tvy <- newUnivarOfKind KFX
@@ -282,7 +411,7 @@ wrapped l kw env cs ts args             = do tvx <- newUnivarOfKind KFX
                                              w <- newWitness
                                              (cs0,_) <- simplify env [] t' [Cast (DfltInfo l 30 Nothing []) t1 t2]
                                              t' <- usubst t'
-                                             cs1 <- usubst (Impl (DfltInfo l 29 Nothing []) w fx p : cs)
+                                             cs1 <- usubst (Proto (DfltInfo l 29 Nothing []) w fx p : cs)
                                              return (cs0++cs1, t', eCall (tApp (Dot l0 (eVar w) kw) tvs) args)
 
 --------------------------------------------------------------------------------------------------------------------------
@@ -292,7 +421,6 @@ instance (InfEnv a) => InfEnv [a] where
     infEnv env (s : ss)                 = do (cs1,te1,s1) <- infEnv env s
                                              let te1' = if inDecl env then noDefs te1 else te1      -- TODO: also stop class instantiation!
                                                  env' = define te1' env
-                                             -- NOTE: constraints in cs1 are *not* seen when solving local constraints of 'ss'! Must fix!!!
                                              (cs2,te2,ss2) <- infEnv env' ss
                                              return (cs1++cs2, te1++te2, s1:ss2)
 
@@ -338,7 +466,7 @@ instance InfEnv Stmt where
                                              (cs3,te1,b') <- infSuiteEnv (define te env) b
                                              (cs4,te2,els') <- infSuiteEnv env els
                                              w <- newWitness
-                                             return (Impl (DfltInfo (loc e) 33 (Just e) []) w t2 (pIterable t1) :
+                                             return (Proto (DfltInfo (loc e) 33 (Just e) []) w t2 (pIterable t1) :
                                                      cs1++cs2++cs3++cs4, [], For l p' (eCall (eDot (eVar w) iterKW) [e']) b' els')
     infEnv env (Try l b hs els fin)     = do (cs1,te,b') <- infLiveEnv env b
                                              (cs2,te',els') <- infLiveEnv (maybe id define te $ env) els
@@ -381,11 +509,10 @@ instance InfEnv Stmt where
       | inDecl env && nodup ds          = do (cs1,te1,ds1) <- infEnv env ds
                                              return (cs1, te1, Decl l ds1)
       | nodup ds                        = do --traceM ("######## decls: " ++ prstrs (declnames ds))
-                                             (cs1,te1,ds1) <- infEnv (setInDecl env) ds
+                                             (_,te1,ds1) <- infEnv (setInDecl env) ds
                                              (cs2,ds2) <- checkEnv (define te1 env) ds1
-                                             (cs3,te2,eq,ds3) <- genEnv env cs2 te1 ds2
                                              --traceM ("-------- done: " ++ prstrs (declnames ds))
-                                             return (cs1++cs3, te2, pushEqns eq $ Decl l ds3)
+                                             return (cs2, te1, Decl l ds2)
 
     infEnv env (Delete l targ)          = do (cs0,t0,e0,tg) <- infTarg env targ
                                              (cs1,stmt) <- del t0 e0 tg
@@ -395,11 +522,11 @@ instance InfEnv Stmt where
                                              (cs,ix) <- inferSub env ti ix
                                              t <- newUnivar
                                              w <- newWitness
-                                             return ( Impl (DfltInfo l 36 Nothing []) w t0 (pIndexed ti t) : cs, sExpr $ dotCall w delitemKW [e0, ix] )
+                                             return ( Proto (DfltInfo l 36 Nothing []) w t0 (pIndexed ti t) : cs, sExpr $ dotCall w delitemKW [e0, ix] )
             del t0 e0 (TgSlice sl)      = do (cs,sl) <- inferSlice env sl
                                              t <- newUnivar
                                              w <- newWitness
-                                             return ( Impl (DfltInfo l 37 Nothing []) w t0 (pSliceable t) : cs, sExpr $ dotCall w delsliceKW [e0, sliz2exp sl] )
+                                             return ( Proto (DfltInfo l 37 Nothing []) w t0 (pSliceable t) : cs, sExpr $ dotCall w delsliceKW [e0, sliz2exp sl] )
             del t0 e0 (TgDot n)         = do t <- newUnivar
                                              return ( Mut (DfltInfo l 38 Nothing []) t0 n t : Cast (DfltInfo l 39 Nothing []) tNone t : [], sMutAssign (eDot e0 n) eNone )
 
@@ -413,13 +540,13 @@ instance InfEnv Stmt where
             asgn t0 t e0 e (TgIndex ix) = do ti <- newUnivar
                                              (cs,ix) <- inferSub env ti ix
                                              w <- newWitness
-                                             return ( Impl (DfltInfo l 41 Nothing []) w t0 (pIndexed ti t) : cs, sExpr $ dotCall w setitemKW [e0, ix, e] )
+                                             return ( Proto (DfltInfo l 41 Nothing []) w t0 (pIndexed ti t) : cs, sExpr $ dotCall w setitemKW [e0, ix, e] )
             asgn t0 t e0 e (TgSlice sl) = do (cs,sl) <- inferSlice env sl
                                              t' <- newUnivar
                                              w <- newWitness
                                              w' <- newWitness
-                                             return ( Impl (DfltInfo l 42 Nothing []) w t0 (pSliceable t') :
-                                                      Impl (DfltInfo l 43 Nothing []) w' t (pIterable t') :
+                                             return ( Proto (DfltInfo l 42 Nothing []) w t0 (pSliceable t') :
+                                                      Proto (DfltInfo l 43 Nothing []) w' t (pIterable t') :
                                                       cs, sExpr $ eCall (tApp (eDot (eVar w) setsliceKW) [t]) [e0, eVar w', sliz2exp sl, e] )
             asgn t0 t e0 e (TgDot n)    = do return ( Mut (DfltInfo l 44 Nothing []) t0 n t : [], sMutAssign (eDot e0 n) e )
 
@@ -431,7 +558,7 @@ instance InfEnv Stmt where
                                              w <- newWitness
                                              (ss,x) <- mkvar t0 e0
                                              (cs2,stmt) <- aug t0 t x (dotCall w kw) e tg
-                                             return ( Impl (DfltInfo l 45 Nothing []) w t proto : cs0++cs1++cs2, [], withLocal ss stmt )
+                                             return ( Proto (DfltInfo l 45 Nothing []) w t proto : cs0++cs1++cs2, [], withLocal ss stmt )
       where oper t MultA                = (pTimes t,  imulKW)
             oper t DivA                 = (pDiv t,    itruedivKW)
             oper _ PlusA                = (pPlus,     iaddKW)
@@ -450,7 +577,7 @@ instance InfEnv Stmt where
             aug t0 t x f e (TgIndex ix) = do ti <- newUnivar
                                              (cs,ix) <- inferSub env ti ix
                                              w <- newWitness
-                                             return ( Impl (DfltInfo l 47 Nothing []) w t0 (pIndexed ti t) :
+                                             return ( Proto (DfltInfo l 47 Nothing []) w t0 (pIndexed ti t) :
                                                       cs, sExpr $ dotCall w setitemKW [eVar x, ix, f [dotCall w getitemKW [eVar x, ix], e]])
             aug t0 t x f e (TgSlice sl) = do tryUnify (DfltInfo l 1115 Nothing []) t0 t
                                              (cs,sl) <- inferSlice env sl
@@ -458,8 +585,8 @@ instance InfEnv Stmt where
                                              w <- newWitness
                                              w' <- newWitness
                                              let e1 = f [dotCall w getsliceKW [eVar x, sliz2exp sl], e]
-                                             return ( Impl (DfltInfo l 48 Nothing []) w t (pSliceable t') :
-                                                      Impl (DfltInfo l 49 Nothing []) w' t (pIterable t') :
+                                             return ( Proto (DfltInfo l 48 Nothing []) w t (pSliceable t') :
+                                                      Proto (DfltInfo l 49 Nothing []) w' t (pIterable t') :
                                                       cs, sExpr $ eCall (tApp (eDot (eVar w) setsliceKW) [t]) [eVar x, eVar w', sliz2exp sl, e1] )
             aug t0 t x f e (TgDot n)    = do return ( Mut (DfltInfo l 50 Nothing []) t0 n t : [], sMutAssign (eDot (eVar x) n) $ f [eDot (eVar x) n, e])
 
@@ -506,28 +633,26 @@ matchingDec n sc dec dec'
   | dec == dec'                         = True
   | otherwise                           = decorationMismatch n sc dec
 
-matchDefAssumption env cs def
-  | q0 == q1                            = match env cs [] def
-  | otherwise                           = do (cs1, uvs) <- instQBinds env q1
-                                             let eq0 = witSubst env q1 cs1
+matchDefAssumption env def
+  | q0 == q1                            = match env [] [] def
+  | otherwise                           = do (cs, uvs) <- instQBinds env q1
+                                             let eq0 = witSubst env q1 cs
                                                  s = qbound q1 `zip` uvs
                                                  def' = vsubst s def{ qbinds = [] }
-                                             match env (cs ++ cs1) eq0 def'
+                                             match env cs eq0 def'
   where NDef (TSchema _ q0 t0) dec _    = findName (dname def) env
         t2 | inClass env                = addSelf t0 (Just dec)
            | otherwise                  = t0
         q1                              = qbinds def
         fx | inAct env                  = dfx def
            | otherwise                  = effect t2
-        env0                            = defineTVars q1 $ defineTVars q0 env
         (pos0,kwd0)                     = qual env dec (pos def) (kwd def) (qualWPar env q0)
 
         match env cs eq0 def            = do --traceM ("## matchDefAssumption " ++ prstr (dname def) ++ ": [" ++ prstrs q1 ++ "] => " ++ prstr (Cast info t1 t2))
-                                             (cs2,eq1) <- solveScoped env0 (qbound q0) [] t1 (Cast info t1 t2 : cs)
-                                             checkNoEscape (loc def) env (qbound q0)
+                                             (cs2,eq1) <- solveScoped env (dname def) q0 [] t1 (Cast info t1 t2 : cs)
                                              cs2 <- usubst cs2
                                              return (cs2, def{ qbinds = noqual env q0, pos = pos0, kwd = kwd0,
-                                                               dbody = bindWits (eq0++eq1) ++ dbody def, dfx = fx })
+                                                               dbody = bindWits ("match def " ++ prstr (dname def)) (eq0++eq1) ++ dbody def, dfx = fx })
            where t1                     = tFun (dfx def) (prowOf $ pos def) (krowOf $ kwd def) (fromJust $ ann def)
                  sc1                    = TSchema NoLoc q1 t1
                  mbl                    = findSigLoc (dname def) env
@@ -579,21 +704,22 @@ instance InfEnv Decl where
                                                  te0 <- infProperties env as' b
                                                  (cs,te,b1) <- infEnv env1 b
                                                  popFX
-                                                 (cs1,eq1) <- solveScoped env1 (tvSelf:qbound q) te tNone cs
-                                                 checkNoEscape l env (qbound q)
+                                                 when (not $ null cs) $ err (loc n) "Deprecated class syntax"
                                                  checkClassAttributesInitialized n l env as' te0 b
                                                  (nterms,asigs,_) <- checkAttributes [] te' te
                                                  let te1 = if notImplBody b then unSig asigs else []
                                                      te2 = te ++ te1
                                                      b2 = addImpl te1 b1
                                                      docstring = extractDocstring b
-                                                 return (cs1, [(n, NClass q as' (te0++te2) docstring)], Class l n q us (bindWits eq1 ++ props te0 ++ b2) ddoc)
+                                                 return ([], [(n, NClass q as' (te0++te2) docstring)], Class l n q us (props te0 ++ b2) ddoc)
                                              _ -> illegalRedef n
-      where env1                        = define (exclude (toSigs te') [initKW]) $ reserve (assigned b) $ defineSelfOpaque $ defineTVars (stripQual q) $ setInClass env
+      where env1                        = define (exclude (toSigs te') [initKW]) $ reserve (assigned b) $ defineTVars (stripQual q') $ setInClass env
             (as,ps)                     = mro2 env us
             as'                         = if null as && not (inBuiltin env && n == nValue) then leftpath [cValue] else as
             te'                         = parentTEnv env as'
+            q'                          = selfQuant (NoQ n) q
             props te0                   = [ Signature l0 [n] sc Property | (n,NSig sc Property _) <- te0 ]
+            tc                          = TC (NoQ n) (map tVar $ qbound q)
 
     infEnv env (Protocol l n q us b ddoc)
                                         = case findName n env of
@@ -602,8 +728,7 @@ instance InfEnv Decl where
                                                  pushFX fxPure tNone
                                                  (cs,te,b') <- infEnv env1 b
                                                  popFX
-                                                 (cs1,eq1) <- solveScoped env1 (tvSelf:qbound q) te tNone cs
-                                                 checkNoEscape l env (qbound q)
+                                                 when (not $ null cs) $ err (loc n) "Deprecated protocol syntax"
                                                  (nterms,_,sigs) <- checkAttributes [] te' te
                                                  let noself = [ n | (n, NSig sc Static _) <- te, tvSelf `notElem` vfree sc ]
                                                  when (notImplBody b) $ err0 (notImpls b) "A protocol body cannot be NotImplemented"
@@ -611,11 +736,12 @@ instance InfEnv Decl where
                                                  when (initKW `elem` sigs) $ err2 (filter (==initKW) sigs) "A protocol cannot define __init__"
                                                  when (not $ null noself) $ err2 noself "A static protocol signature must mention Self"
                                                  let docstring = extractDocstring b
-                                                 return (cs1, [(n, NProto q ps te docstring)], Protocol l n q us (bindWits eq1 ++ b') ddoc)
+                                                 return ([], [(n, NProto q ps te docstring)], Protocol l n q us b' ddoc)
                                              _ -> illegalRedef n
-      where env1                        = define (toSigs te') $ reserve (assigned b) $ defineSelfOpaque $ defineTVars (stripQual q) $ setInClass env
+      where env1                        = define (toSigs te') $ reserve (assigned b) $ defineTVars (stripQual q') $ setInClass env
             ps                          = mro1 env us
             te'                         = parentTEnv env ps
+            q'                          = selfQuant (NoQ n) q
 
     infEnv env (Extension l q c us b ddoc)
       | length us == 0                  = err (loc n) "Extension lacks a protocol"
@@ -625,25 +751,24 @@ instance InfEnv Decl where
                                              pushFX fxPure tNone
                                              (cs,te,b1) <- infEnv env1 b
                                              popFX
-                                             (cs1,eq1) <- solveScoped env1 (qbound q) te tNone cs
-                                             checkNoEscape l env (qbound q)
+                                             when (not $ null cs) $ err (loc n) "Deprecated extension syntax"
                                              (nterms,asigs,sigs) <- checkAttributes final te' te
                                              when (not $ null nterms) $ err2 (dom nterms) "Method/attribute not in listed protocols:"
                                              when (not $ null sigs) $ err2 sigs "Extension with new methods/attributes not supported"
                                              when (not (null asigs || notImplBody b)) $ err3 l (dom asigs) "Protocol method/attribute lacks implementation:"
-                                             let te1 = unSig $ vsubst selfsubst asigs
+                                             let te1 = unSig $ selfSubst n q asigs
                                                  te2 = te ++ te1
                                                  b2 = addImpl te1 b1
                                              let docstring = extractDocstring b
-                                             return (cs1, [(extensionName us c, NExt q c ps te2 [] docstring)], Extension l q c us (bindWits eq1 ++ b2) ddoc)
+                                             return ([], [(extensionName us c, NExt q c ps te2 [] docstring)], Extension l q c us (bindWits eq1 ++ b2) ddoc)
       where TC n ts                     = c
-            env1                        = define (toSigs te') $ reserve (assigned b) $ defineSelfOpaque $ defineTVars (stripQual q) $ setInClass env
+            env1                        = define (toSigs te') $ reserve (assigned b) $ defineTVars (stripQual q') $ setInClass env
             witsearch                   = findWitness env (tCon c) u
             u                           = head us
-            ps                          = vsubst selfsubst $ mro1 env us -- TODO: check that ps doesn't contradict any previous extension mro for c
+            ps                          = selfSubst n q $ mro1 env us -- TODO: check that ps doesn't contradict any previous extension mro for c
             final                       = concat [ conAttrs env (tcname p) | (_,p) <- tail ps, hasWitness env (tCon c) p ]
             te'                         = parentTEnv env ps
-            selfsubst                   = [(tvSelf, tCon c)]
+            q'                          = selfQuant n q
 
 --------------------------------------------------------------------------------------------------------------------------
 
@@ -674,21 +799,8 @@ toSigs te                               = map makeSig te
 
 --------------------------------------------------------------------------------------------------------------------------
 
-solveAll env te []                      = return []
-solveAll env te cs                      = do --traceM ("\n\n### solveAll " ++ prstrs cs)
-                                             (cs,eq) <- simplify env te tNone cs
-                                             (cs,eq) <- solve env (const True) te tNone eq cs
-                                             return eq
-
-solveScoped env vs te tt []             = return ([], [])
-solveScoped env [] te tt cs             = simplify env te tt cs
-solveScoped env vs te tt cs             = do --traceM ("\n\n### solveScoped: " ++ prstrs cs)
-                                             (cs,eq) <- simplify env te tt cs
-                                             solve env (any (`elem` vs) . vfree) te tt eq cs
-
 -- To be replaced by the quantifier escape check of the new implication constraint solver
-checkNoEscape l env vs                  = return ()
---                                          do fvs <- ufree <$> usubst env
+--checkNoEscape l env vs                  = do fvs <- ufree <$> usubst env
 --                                             let escaped = vs `intersect` fvs
 --                                             when (not $ null escaped) $ do
 --                                                 env1 <- usubst env
@@ -753,7 +865,7 @@ wellformed env x                        = do _ <- solveAll env [] cs
 wellformedProtos                        :: Env -> [PCon] -> TypeM (Constraints, [(QName,[Expr])])
 wellformedProtos env ps                 = do (css0, css1) <- unzip <$> mapM (wfProto env) ps
                                              _ <- solveAll env [] (concat css0)
-                                             return (concat css1, [ (tcname p, witsOf cs) | (p,cs) <- ps `zip` css1 ])
+                                             return (concat css1, [ (tcname p, protoWitsOf cs) | (p,cs) <- ps `zip` css1 ])
 
 
 --------------------------------------------------------------------------------------------------------------------------
@@ -808,10 +920,9 @@ matchActorAssumption env n0 p k te      = do --traceM ("## matchActorAssumption 
                                              (c0,t') <- wrap t
                                              let c1 = Cast (DfltInfo (loc n) 63 Nothing []) t' (sctype sc0)
                                                  cs1 = map (Seal (DfltInfo  (loc n) 115 Nothing [])) (leaves sc0)
-                                                 q = scbind sc
+                                                 q0 = scbind sc0
                                              --traceM ("## matchActorAssumption for method " ++ prstr n ++ ": " ++ prstr c1)
-                                             (cs2,eq) <- solveScoped (defineTVars q env) (qbound q) obs tNone (c0:c1:cs0++cs1)
-                                             checkNoEscape (loc n) env (qbound q)
+                                             (cs2,eq) <- solveScoped env n0 q0 obs tNone (c0:c1:cs0++cs1)
                                              return (cs2, eq)
           where Just (NDef sc _ _)      = lookup n te1
         check1 (n, i)                   = return ([], [])
@@ -1263,15 +1374,13 @@ instance Check Decl where
                                              popFX
                                              let cst = if fallsthru b then [Cast (DfltInfo l 65 Nothing []) tNone t] else []
                                                  t1 = tFun fx' (prowOf p') (krowOf k') t
-                                             (cs1,eq1) <- solveScoped env1 tvs [] t1 (csp++csk++csb++cst)
-                                             checkNoEscape l env tvs
+                                             (cs0,eq1) <- solveScoped env n q [] t1 (csp++csk++csb++cst)
                                              -- At this point, n has the type given by its def annotations.
                                              -- Now check that this type is no less general than its recursion assumption in env.
-                                             let body = bindWits eq1 ++ defaultsP p' ++ defaultsK k' ++ b'
-                                             (cs,def) <- matchDefAssumption env cs1 (Def l n q p' k' (Just t) body dec fx' ddoc)
-                                             return (cs, def{ pos = noDefaultsP (pos def), kwd = noDefaultsK (kwd def) })
+                                             let body = bindWits ("check def " ++ prstr n) eq1 ++ defaultsP p' ++ defaultsK k' ++ b'
+                                             (cs1,def) <- matchDefAssumption env (Def l n q p' k' (Just t) body dec fx' ddoc)
+                                             return (cs1++cs0, def{ pos = noDefaultsP (pos def), kwd = noDefaultsK (kwd def) })
       where env1                        = reserve (bound (p,k) ++ assigned b \\ stateScope env) $ defineTVars q env
-            tvs                         = qbound q
             fx'                         = fxUnwrap env fx
 
     checkEnv env (Actor l n q p k b ddoc)
@@ -1281,33 +1390,34 @@ instance Check Decl where
                                              (csp,te1,p') <- infEnv env1 p
                                              (csk,te2,k') <- infEnv (define te1 env1) k
                                              (csb,te,b') <- infSuiteEnv (define te2 $ define te1 env1) b
+                                             -- At this point, each name defined in b has the type given by its annotations
+                                             -- and possible type signatures. Now check that these types are no less general
+                                             -- than the recursion assumption on actor n itself (which is distinct from any
+                                             -- direct assumptions on its methods because actor interfaces are sealed).
                                              (cs0,eq0) <- matchActorAssumption env1 n p' k' te
                                              popFX
-                                             (cs1,eq1) <- solveScoped env1 (tvSelf:tvs) te tNone (csp++csk++csb++cs0)
-                                             checkNoEscape l env (tvSelf:tvs)
-                                             let body = bindWits (eq1++eq0) ++ defaultsP p' ++ defaultsK k' ++ b'
+                                             (cs1,eq1) <- solveScoped env n q te tNone (csp++csk++csb++cs0)
+                                             let body = bindWits ("check actor " ++ prstr n) (eq1++eq0) ++ defaultsP p' ++ defaultsK k' ++ b'
                                                  act = Actor l n (noqual env q) (qualWPar env q p') k' body ddoc
                                              return (cs1, act{ pos = noDefaultsP (pos act), kwd = noDefaultsK (kwd act) })
-      where env1                        = reserve (bound (p,k) ++ assigned b) $ defineTVars q $
-                                          setInAct $ define [(selfKW, NVar t0)] env
-            t0                          = tCon $ TC (NoQ n) (map tVar tvs)
-            tvs                         = qbound q
-            NAct _ _ _ te0 _            = findName n env
+      where env1                        = reserve (bound (p,k) ++ assigned b) $ setInAct $
+                                          define [(selfKW, NVar (tCon tc))] $ defineTVars q env
+            tc                          = TC (NoQ n) (map tVar $ qbound q)
 
     checkEnv' env (Class l n q us b ddoc)
                                         = do --traceM ("## checkEnv class " ++ prstr n)
                                              pushFX fxPure tNone
                                              wellformed env1 q
                                              wellformed env1 us
-                                             (csb,b') <- checkEnv (define (vsubst selfsubst te) env1) b
+                                             (csb,b') <- checkEnv (define te' env1) b
                                              popFX
-                                             (cs1,eq1) <- solveScoped env1 tvs te tNone csb
-                                             checkNoEscape l env tvs
-                                             return (cs1, [Class l n (noqual env q) (map snd as) (bindWits eq1 ++ abstractDefs env q b') ddoc])
-      where env1                        = defineSelf (NoQ n) q $ defineTVars q $ setInClass env
-            tvs                         = tvSelf : qbound q
+                                             (cs1,eq1) <- solveScoped env n q' te tNone csb
+                                             return (cs1, [Class l n (noqual env q) (map snd as) (bindWits ("check class " ++ prstr n) eq1 ++ abstractDefs env q b') ddoc])
+      where env1                        = defineTVars q' $ setInClass env
             NClass _ as te _            = findName n env
-            selfsubst                   = [(tvSelf, tCon (TC (NoQ n) (map tVar $ qbound q)))]
+            te'                         = selfSubst n' q te
+            q'                          = selfQuant n' q
+            n'                          = NoQ n
 
     checkEnv' env (Protocol l n q us b ddoc)
                                         = do --traceM ("## checkEnv protocol " ++ prstr n)
@@ -1316,13 +1426,14 @@ instance Check Decl where
                                              (csu,wmap) <- wellformedProtos env1 us
                                              (csb,b') <- checkEnv (define te env1) b
                                              popFX
-                                             (cs1,eq1) <- solveScoped env1 tvs te tNone (csu++csb)
-                                             checkNoEscape l env tvs
+                                             (cs1,eq1) <- solveScoped env n q' te tNone (csu++csb)
                                              b' <- usubst b'
                                              return (cs1, convProtocol env n q ps eq1 wmap b')
-      where env1                        = defineSelf (NoQ n) q $ defineTVars q $ setInClass env
-            tvs                         = tvSelf : qbound q
+      where env1                        = defineTVars q' $ setInClass env
             NProto _ ps te _            = findName n env
+            te'                         = selfSubst n' q te
+            q'                          = selfQuant n' q
+            n'                          = NoQ n
 
     checkEnv' env (Extension l q c us b ddoc)
       | isActor env n                   = notYet (loc n) "Extension of an actor"
@@ -1331,18 +1442,18 @@ instance Check Decl where
                                              pushFX fxPure tNone
                                              wellformed env1 q
                                              (csu,wmap) <- wellformedProtos env1 us
-                                             (csb,b') <- checkEnv (define (vsubst selfsubst te) env1) b
+                                             (csb,b') <- checkEnv (define te' env1) b
                                              popFX
-                                             (cs1,eq1) <- solveScoped env1 tvs te tNone (csu++csb)
-                                             checkNoEscape l env tvs
+                                             (cs1,eq1) <- solveScoped env n' q' te tNone (csu++csb)
                                              b' <- usubst b'
                                              return (cs1, convExtension env n' c q ps eq1 wmap b' [])
-      where env1                        = defineInst c ps thisKW' $ defineSelf n q $ defineTVars q $ setInClass env
-            tvs                         = tvSelf : qbound q
+      where env1                        = defineInst c ps thisKW' $ defineTVars q' $ setInClass env
             n                           = tcname c
             n'                          = extensionName us c
             NExt _ _ ps te _ _          = findName n' env
-            selfsubst                   = [(tvSelf, tCon $ TC n (map tVar $ qbound q))]
+            te'                         = selfSubst n q te
+            q'                          = selfQuant n q
+            tc                          = TC n (map tVar $ qbound q)
 
     checkEnv' env x                     = do (cs,x') <- checkEnv env x
                                              return (cs, [x'])
@@ -1370,101 +1481,6 @@ instance Check Branch where
 
 --------------------------------------------------------------------------------------------------------------------------
 
-refine                                  :: Env -> Constraints -> TEnv -> Equations -> TypeM ([TUni], Constraints, TEnv, Equations)
-refine env cs te eq
-  | not $ null solve_cs                 = do --traceM ("  #solving: " ++ prstrs solve_cs)
-                                             (cs',eq') <- solve env noQual te tNone eq cs
-                                             refineAgain cs' eq'
-  | not $ null ambig_vs                 = do --traceM ("  #defaulting: " ++ prstrs ambig_vs)
-                                             (cs',eq') <- solve env isAmbig te tNone eq cs
-                                             refineAgain cs' eq'
-  | not $ null tail_vs                  = do sequence [ tryUnify (Simple NoLoc "internal") (tUni v) (tNil $ uvkind v) | v <- tail_vs ]
-                                             refineAgain cs eq
-  | otherwise                           = do eq <- usubst eq
-                                             return (gen_vs, cs, te, eq)
-  where ambig_vs                        = ufree cs \\ closeDepVars (safe_vs) cs
-        tail_vs                         = gen_vs `intersect` (tailvars te ++ tailvars cs)
-
-        safe_vs                         = if null def_vss then [] else nub $ foldr1 intersect def_vss
-        def_vss                         = [ nub $ filter canGen $ ufree sc | (_, NDef sc _ _) <- te, null $ scbind sc ]
-        gen_vs                          = nub (foldr union (ufree cs) def_vss)
-
-        solve_cs                        = [ c | c <- cs, noQual c ]
-
-        noQual (Impl _ _ (TUni _ u) p)  = False
-        noQual c                        = True
-
-        canGen tv                       = uvkind tv /= KFX
-
-        isAmbig c                       = any (`elem` ambig_vs) (ufree c)
-
-        refineAgain cs eq               = do (cs1,eq1) <- simplify env te tNone cs
-                                             te <- usubst te
-                                             env <- usubst env
-                                             refine env cs1 te (eq1++eq)
-
-fxfree te                               = [ tv | tv <- ufree te, uvkind tv == KFX ]
-
-genEnv                                  :: Env -> Constraints -> TEnv -> [Decl] -> TypeM (Constraints,TEnv,Equations,[Decl])
-genEnv env cs te ds
-  | any typeDecl te                     = do te <- usubst te
-                                             --traceM ("## genEnv types 1\n" ++ render (nest 6 $ pretty te))
-                                             --traceM ("   where\n" ++ render (nest 6 $ vcat $ map pretty cs))
-                                             (cs,eq) <- simplify (posdefine te env) te tNone cs
-                                             te <- usubst te
-                                             --traceM ("## genEnv types 2\n" ++ render (nest 6 $ pretty te))
-                                             --traceM ("   where\n" ++ render (nest 6 $ vcat $ map pretty cs))
-                                             return (cs, te, eq, ds)
-  | onTop env                           = do te <- usubst te
-                                             --traceM ("## genEnv defs 1\n" ++ render (nest 6 $ pretty te))
-                                             --traceM ("   where\n" ++ render (nest 6 $ vcat $ map pretty cs))
-                                             (cs,eq) <- simplify env te tNone cs
-                                             te <- usubst te
-                                             (gen_us, gen_cs, te, eq) <- refine env cs te eq
-                                             let gen_vs = take (length gen_us) tvarSupply
-                                             sequence [ usubstitute uv (tVar tv) | (uv,tv) <- gen_us `zip` gen_vs ]
-                                             te <- usubst te
-                                             gen_cs <- usubst gen_cs
-                                             --traceM ("## genEnv defs 2 [" ++ prstrs gen_vs ++ "]\n" ++ render (nest 6 $ pretty te))
-                                             --traceM ("   where\n" ++ render (nest 6 $ vcat $ map pretty gen_cs))
-                                             let (q,ws) = qualify gen_vs gen_cs
-                                                 te1 = map (generalize q) te
-                                                 (eq1,eq2) = splitEqs (dom ws) eq
-                                                 ds1 = map (abstract q ds ws eq1) ds
-                                             --traceM ("## genEnv defs 3 [" ++ prstrs q ++ "]\n" ++ render (nest 6 $ pretty te1))
-                                             return ([], te1, eq2, ds1)
-  | otherwise                           = do --traceM ("## genEnv local\n" ++ render (nest 6 $ pretty te))
-                                             --traceM ("## genEnv local cs:\n" ++ render (nest 4 $ vcat $ map pretty cs))
-                                             return (cs, te, [], ds)
-  where
-    qualify vs cs                       = (q, concat wss)
-      where (q,wss)                     = unzip $ map qbind vs
-            qbind v                     = (Quant v bounds, wits)
-              where bounds              = [ p | Impl _ w (TVar _ v') p <- cs, v == v' ]
-                    wits                = [ (w, impl2type t p) | Impl _ w t@(TVar _ v') p <- cs, v == v' ]
-
-    generalize q (n, NDef (TSchema l [] t) d doc)
-                                        = (n, NDef (TSchema l q t) d doc)
-    generalize q (n, i)                 = (n, i)
-
-
-    abstract q ds ws eq d@Def{}
-      | null $ qbinds d                 = d{ qbinds = noqual env q,
-                                             pos = wit2par ws (pos d),
-                                             dbody = bindWits eq ++ wsubst ds q ws (dbody d) }
-      | otherwise                       = d{ dbody = bindWits eq ++ wsubst ds q ws (dbody d) }
-
-    wsubst ds [] []                     = id
-    wsubst ds q ws                      = termsubst s
-      where s                           = [ (n, Lambda l0 p k (Call l0 (tApp (eVar n) tvs) (wit2arg ws (pArg p)) (kArg k)) fx)
-                                            | Def _ n [] p k _ _ _ fx _ <- ds ]
-            tvs                         = map tVar $ qbound q
-
-    splitEqs ws eq
-      | null eq1                        = ([], eq)
-      | otherwise                       = (eq1++eq1', eq2')
-      where (eq1,eq2)                   = partition (any (`elem` ws) . free) eq
-            (eq1',eq2')                 = splitEqs (bound eq1 ++ ws) eq2
 
 
 defaultsP (PosPar n (Just t) (Just e) p)
@@ -1502,13 +1518,13 @@ instance InfEnv Branch where
 instance InfEnv WithItem where
     infEnv env (WithItem e Nothing)     = do (cs,t,e') <- infer env e
                                              w <- newWitness
-                                             return (Impl (DfltInfo (loc e) 66 (Just e) []) w t pContextManager :
+                                             return (Proto (DfltInfo (loc e) 66 (Just e) []) w t pContextManager :
                                                      cs, [], WithItem e' Nothing)           -- TODO: translate using w
     infEnv env (WithItem e (Just p))    = do (cs1,t1,e') <- infer env e
                                              (cs2,te,t2,p') <- infEnvT env p
                                              w <- newWitness
                                              return (Cast (DfltInfo (loc e) 67 (Just e) []) t1 t2 :
-                                                     Impl (DfltInfo (loc e) 68 (Just e) []) w t1 pContextManager :
+                                                     Proto (DfltInfo (loc e) 68 (Just e) []) w t1 pContextManager :
                                                      cs1++cs2, te, WithItem e' (Just p'))         -- TODO: translate using w
 
 instance InfEnv Handler where
@@ -1531,7 +1547,7 @@ instance Infer Expr where
                                                 return ([Cast (Simple l ("State variable may only be accessed in a proc")) fxProc fx], t, x)
                                             NDef sc d _ -> do
                                                 (cs,tvs,t) <- instantiate env sc
-                                                let e = app t (tApp x tvs) $ witsOf cs
+                                                let e = app t (tApp x tvs) $ protoWitsOf cs
                                                     cs1 = map (addTyping env n sc t) cs
                                                 --traceM ("## type of " ++ prstr n ++ " = " ++ prstr t ++ ", cs = " ++ render(commaList cs))
                                                 if actorSelf env
@@ -1547,11 +1563,11 @@ instance Infer Expr where
                                                         (cs1,tvs,t) <- instantiate env sc
                                                         let t0 = tCon $ TC (unalias env n) ts
                                                             t' = vsubst [(tvSelf,t0)] t{ restype = tSelf }
-                                                        return (cs0++cs1, t', app t' (tApp x (ts++tvs)) $ witsOf (cs0++cs1))
+                                                        return (cs0++cs1, t', app t' (tApp x (ts++tvs)) $ protoWitsOf (cs0++cs1))
                                             NAct q p k _ _ -> do
 --                                                when (abstractActor env n) (err1 n "Abstract actor cannot be instantiated:")
                                                 (cs,tvs,t) <- instantiate env (tSchema q (tFun fxProc p k (tCon0 (unalias env n) q)))
-                                                return (cs, t, app t (tApp x tvs) $ witsOf cs)
+                                                return (cs, t, app t (tApp x tvs) $ protoWitsOf cs)
                                             NSig _ _ _ -> nameReserved n
                                             NReserved -> nameReserved n
                                             _ -> nameUnexpected n
@@ -1562,10 +1578,10 @@ instance Infer Expr where
        | val > 9223372036854775807      = return ([], tU64, e)    -- between i64 max and u64 max ⇒ u64
        | otherwise                      = do t <- newUnivar
                                              w <- newWitness
-                                             return ([Impl (DfltInfo (loc e) 72 (Just e) []) w t pNumber], t, eCall (eDot (eVar w) fromatomKW) [e])
+                                             return ([Proto (DfltInfo (loc e) 72 (Just e) []) w t pNumber], t, eCall (eDot (eVar w) fromatomKW) [e])
     infer env e@(Float _ val s)         = do t <- newUnivar
                                              w <- newWitness
-                                             return ([Impl (DfltInfo (loc e) 73 (Just e) []) w t pRealFloat], t, eCall (eDot (eVar w) fromatomKW) [e])
+                                             return ([Proto (DfltInfo (loc e) 73 (Just e) []) w t pRealFloat], t, eCall (eDot (eVar w) fromatomKW) [e])
     infer env e@Imaginary{}             = notYetExpr e
     infer env e@(Bool _ val)            = return ([], tBool, e)
     infer env e@(None _)                = return ([], tNone, e)
@@ -1592,13 +1608,13 @@ instance Infer Expr where
                                              t0 <- newUnivar
                                              w <- newWitness
                                              (cs2,t,e') <- infer env e
-                                             return (Impl (DfltInfo (loc e) 76 (Just e) []) w t (pIndexed ti t0) :
+                                             return (Proto (DfltInfo (loc e) 76 (Just e) []) w t (pIndexed ti t0) :
                                                      cs1++cs2, t0, eCall (eDot (eVar w) getitemKW) [e', ix'])
     infer env (Slice l e sl)            = do (cs1,sl') <- inferSlice env sl
                                              (cs2,t,e') <- infer env e
                                              t0 <- newUnivar
                                              w <- newWitness
-                                             return (Impl (DfltInfo (loc e) 77 (Just e) []) w t (pSliceable t0) :
+                                             return (Proto (DfltInfo (loc e) 77 (Just e) []) w t (pSliceable t0) :
                                                      cs1++cs2, t, eCall (eDot (eVar w) getsliceKW) [e', sliz2exp sl'])
     infer env (Cond l e1 e e2)          = do t0 <- newUnivar
                                              (cs0,env',s,_,e') <- inferTest env e
@@ -1655,20 +1671,20 @@ instance Infer Expr where
                                              (cs1,e1') <- inferSub env t e1
                                              (cs2,e2') <- inferSub env t' e2
                                              w <- newWitness
-                                             return (Impl (DfltInfo l 79 (Just e) []) w t (pTimes t') :
+                                             return (Proto (DfltInfo l 79 (Just e) []) w t (pTimes t') :
                                                      cs1++cs2, t, eCall (eDot (eVar w) mulKW) [e1',e2'])
       | op == Div                       = do t <- newUnivar
                                              t' <- newUnivar
                                              (cs1,e1') <- inferSub env t e1
                                              (cs2,e2') <- inferSub env t e2
                                              w <- newWitness
-                                             return (Impl (DfltInfo l 80 (Just e) []) w t (pDiv t') :
+                                             return (Proto (DfltInfo l 80 (Just e) []) w t (pDiv t') :
                                                      cs1++cs2, t', eCall (eDot (eVar w) truedivKW) [e1',e2'])
       | otherwise                       = do t <- newUnivar
                                              (cs1,e1') <- inferSub env t e1
                                              (cs2,e2') <- inferSub env (rtype op t) e2
                                              w <- newWitness
-                                             return (Impl (DfltInfo (loc e) 81 (Just e) []) w t (protocol op) :
+                                             return (Proto (DfltInfo (loc e) 81 (Just e) []) w t (protocol op) :
                                                      cs1++cs2, t, eCall (eDot (eVar w) (method op)) [e1',e2'])
       where protocol Plus               = pPlus
             protocol Minus              = pMinus
@@ -1700,7 +1716,7 @@ instance Infer Expr where
                                              return (cs, tBool, UnOp l op e')
       | otherwise                       = do (cs,t,e') <- infer env e
                                              w <- newWitness
-                                             return (Impl (DfltInfo (loc e) 82 (Just e) []) w t (protocol op) :
+                                             return (Proto (DfltInfo (loc e) 82 (Just e) []) w t (protocol op) :
                                                      cs, t, eCall (eDot (eVar w) (method op)) [e'])
       where protocol UPlus              = pNumber
             protocol UMinus             = pNumber
@@ -1714,7 +1730,7 @@ instance Infer Expr where
                                              t2 <- newUnivar
                                              (cs2,e2') <- inferSub env t2 e2
                                              w <- newWitness
-                                             return (Impl (DfltInfo (loc e1) 83 (Just e) []) w t2 (pContainer t1) :
+                                             return (Proto (DfltInfo (loc e1) 83 (Just e) []) w t2 (pContainer t1) :
                                                      cs1++cs2, tBool, eCall (eDot (eVar w) (method op)) [e2', e1'])
       | op `elem` [Is,IsNot], e2==eNone = do (cs,_,_,t,e') <- inferTest env e
                                              return (cs, t, e')
@@ -1722,7 +1738,7 @@ instance Infer Expr where
                                              (cs1,e1') <- inferSub env t e1
                                              (cs2,e2') <- inferSub env t e2
                                              w <- newWitness
-                                             return (Impl (DfltInfo l 84 (Just e) []) w t (protocol op) :
+                                             return (Proto (DfltInfo l 84 (Just e) []) w t (protocol op) :
                                                      cs1++cs2, tBool, eCall (eDot (eVar w) (method op)) [e1',e2'])
                                              -- TODO: This gives misleading error msg; it says that "e1 op e2 must implement protocol op"
       where protocol Eq                 = pEq
@@ -1757,7 +1773,7 @@ instance Infer Expr where
                                                   | otherwise -> do
                                                       (cs1,tvs,t) <- instantiate env sc
                                                       let t' = vsubst [(tvSelf,tCon tc)] $ addSelf t dec
-                                                      return (cs0++cs1, t', app2nd dec t' (tApp (Dot l x n) (ts++tvs)) $ witsOf (cs0++cs1))
+                                                      return (cs0++cs1, t', app2nd dec t' (tApp (Dot l x n) (ts++tvs)) $ protoWitsOf (cs0++cs1))
                                                 Nothing ->
                                                     case findProtoByAttr env c' n of
                                                         Just p -> do
@@ -1766,7 +1782,7 @@ instance Infer Expr where
                                                             let Just (wf,sc,dec) = findAttr env p n
                                                             (cs2,tvs,t) <- instantiate env sc
                                                             let t' = vsubst [(tvSelf,tCon tc)] $ addSelf t dec
-                                                            return (cs2, t', app t' (tApp (eDot (wf we) n) tvs) $ witsOf cs2)
+                                                            return (cs2, t', app t' (tApp (eDot (wf we) n) tvs) $ protoWitsOf cs2)
                                                         Nothing -> err1 l "Attribute not found"
       | NProto q us te _ <- cinfo       = do (_,ts) <- instQBinds env q
                                              let tc = TC c' ts
@@ -1776,8 +1792,8 @@ instance Infer Expr where
                                                     t0 <- newUnivar
                                                     let t' = vsubst [(tvSelf,t0)] $ addSelf t dec
                                                     w <- newWitness
-                                                    return (Impl (DfltInfo l 85 Nothing []) w t0 tc :
-                                                            cs1, t', app t' (tApp (Dot l (wf $ eVar w) n) tvs) $ witsOf cs1)
+                                                    return (Proto (DfltInfo l 85 Nothing []) w t0 tc :
+                                                            cs1, t', app t' (tApp (Dot l (wf $ eVar w) n) tvs) $ protoWitsOf cs1)
                                                 Nothing -> err1 l "Attribute not found"
       where c'                          = unalias env c
             cinfo                       = findQName c' env
@@ -1838,7 +1854,7 @@ instance Infer Expr where
     infer env (Set l es)                = do t0 <- newUnivar
                                              (cs,es')  <- infElems env es t0
                                              w <- newWitness
-                                             return (Impl (DfltInfo l 87 Nothing []) w t0 pHashable : cs, tSet t0, eCall (tApp (eQVar primMkSet) [t0]) [eVar w,Set l es'])
+                                             return (Proto (DfltInfo l 87 Nothing []) w t0 pHashable : cs, tSet t0, eCall (tApp (eQVar primMkSet) [t0]) [eVar w,Set l es'])
     infer env (SetComp l e co)
       | nodup co                        = do (cs1,env',co') <- infComp env co
                                              t0 <- newUnivar
@@ -1846,12 +1862,12 @@ instance Infer Expr where
                                              w <- newWitness
                                              let Elem v = head es
                                                  e' = Elem (annot (tHashableW t0) (eVar w) t0 v)
-                                             return (Impl (DfltInfo l 89 Nothing []) w t0 pHashable : cs1++cs2, tSet t0, SetComp l e' co')
+                                             return (Proto (DfltInfo l 89 Nothing []) w t0 pHashable : cs1++cs2, tSet t0, SetComp l e' co')
     infer env (Dict l as)               = do tk <- newUnivar
                                              tv <- newUnivar
                                              (cs,as') <- infAssocs env as tk tv
                                              w <- newWitness
-                                             return (Impl (DfltInfo l 88 Nothing []) w tk pHashable : cs, tDict tk tv, eCall (tApp (eQVar primMkDict) [tk, tv]) [eVar w,Dict l as'])
+                                             return (Proto (DfltInfo l 88 Nothing []) w tk pHashable : cs, tDict tk tv, eCall (tApp (eQVar primMkDict) [tk, tv]) [eVar w,Dict l as'])
     infer env (DictComp l a co)
       | nodup co                        = do (cs1,env',co') <- infComp env co
                                              tk <- newUnivar
@@ -1860,7 +1876,7 @@ instance Infer Expr where
                                              w <- newWitness
                                              let Assoc k v = head as
                                                  a' = Assoc (annot (tHashableW tk) (eVar w) tk k) v
-                                             return (Impl (DfltInfo l 90 Nothing []) w tk pHashable : cs1++cs2, tDict tk tv, DictComp l a' co')
+                                             return (Proto (DfltInfo l 90 Nothing []) w tk pHashable : cs1++cs2, tDict tk tv, DictComp l a' co')
 
     infer env (Paren l e)               = do (cs,t,e') <- infer env e
                                              return (cs, t, Paren l e')
@@ -1900,7 +1916,7 @@ infElems env (Star e : es) t0           = do t1 <- newUnivar
                                              (cs1,e') <- inferSub env t1 e
                                              (cs2,es') <- infElems env es t0
                                              w <- newWitness
-                                             return (Impl (DfltInfo (loc e) 89 (Just e) []) w t1 (pIterable t0) :
+                                             return (Proto (DfltInfo (loc e) 89 (Just e) []) w t1 (pIterable t0) :
                                                      cs1++cs2, Star e' : es')
 
 
@@ -1914,7 +1930,7 @@ infAssocs env (StarStar e : as) tk tv   = do t1 <- newUnivar
                                              (cs1,e') <- inferSub env t1 e
                                              (cs2,as') <- infAssocs env as tk tv
                                              w <- newWitness
-                                             return (Impl (DfltInfo (loc e) 90 (Just e) []) w t1 (pIterable $ tTupleP $ posRow tk $ posRow tv posNil) :
+                                             return (Proto (DfltInfo (loc e) 90 (Just e) []) w t1 (pIterable $ tTupleP $ posRow tk $ posRow tv posNil) :
 --                                                     cs1++cs2, Star e' : as')
                                                      cs1++cs2, StarStar e' : as')
 
@@ -2053,7 +2069,7 @@ infComp env (CompFor l p e c)           = do (cs1,te1,t1,p') <- infEnvT (reserve
                                              (cs2,e') <- inferSub env t2 e
                                              (cs3,env',c') <- infComp (define te1 env) c
                                              w <- newWitness
-                                             return (Impl (DfltInfo (loc e) 101 (Just e) []) w t2 (pIterable t1) :
+                                             return (Proto (DfltInfo (loc e) 101 (Just e) []) w t2 (pIterable t1) :
                                                      cs1++cs2++cs3, env', CompFor l p' (eCall (eDot (eVar w) iterKW) [e']) c')
 
 instance InfEnvT PosPat where
@@ -2112,7 +2128,7 @@ instance InfEnvT Pattern where
     infEnvT env (PList l ps p)          = do (cs1,te1,t1,ps') <- infEnvT env ps
                                              (cs2,te2,t2,p') <- infEnvT (define te1 env) p
                                              w <- newWitness
-                                             return (Impl (DfltInfo l 108 Nothing []) w t2 (pSequence t1) :
+                                             return (Proto (DfltInfo l 108 Nothing []) w t2 (pSequence t1) :
                                                      cs1++cs2, te1++te2, t2, PList l ps' p')
     infEnvT env (PParen l p)            = do (cs,te,t,p') <- infEnvT env p
                                              return (cs, te, t, PParen l p')

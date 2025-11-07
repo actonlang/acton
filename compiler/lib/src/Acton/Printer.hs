@@ -512,10 +512,11 @@ instance Pretty Kind where
 instance Pretty Constraint where
     pretty (Cast _ t1 t2)           = pretty t1 <+> text "<" <+> pretty t2
     pretty (Sub _ w t1 t2)          = pretty w <+> colon <+> pretty t1 <+> text "<" <+> pretty t2
-    pretty (Impl _ w t u)           = pretty w <+> colon <+> pretty t <+> parens (pretty u)
+    pretty (Proto _ w t u)          = pretty w <+> colon <+> pretty t <+> parens (pretty u)
     pretty (Sel _ w t1 n t2)        = pretty w <+> colon <+> pretty t1 <> text "." <> pretty n <+> text "<" <+> pretty t2
     pretty (Mut _ t1 n t2)          = pretty t1 <+> text "." <> pretty n <+> text ">" <+> pretty t2
     pretty (Seal _ t)               = text "$Seal" <+> pretty t
+    pretty (Imply _ w q cs)         = pretty w <+> colon <+> pretty q <+> text "=>" <+> braces (commaSep pretty cs)
 
 
 instance Pretty (TVar,TVar) where           -- CHANGE

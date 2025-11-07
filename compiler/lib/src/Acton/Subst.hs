@@ -42,35 +42,6 @@ selfType p k NoDec
   | TRow _ _ _ t _ <- krowOf k          = t
 selfType _ _ _                          = tSelf
 
-closeDepVars vs cs
-  | null vs'                        = nub vs
-  | otherwise                       = closeDepVars (vs'++vs) cs
-  where vs'                         = concat [ deps c \\ vs | c <- cs, all (`elem` vs) (heads c) ]
-
-        heads (Impl _ w t _)        = ufree t
-        heads (Cast _ t _)          = ufree t
-        heads (Sub _ w t _)         = ufree t
-        heads (Sel _ w t n _)       = ufree t
-        heads (Mut _ t n _)         = ufree t
-        heads (Seal _ t)            = ufree t
-
-        deps (Impl _ w _ p)         = ufree p
-        deps (Cast _ _ t)           = typarams t
-        deps (Sub _ w _ t)          = typarams t
-        deps (Sel _ w _ n t)        = ufree t
-        deps (Mut _ _ n t)          = ufree t
-        deps (Seal _ _)             = []
-
-        typarams (TOpt _ t)         = typarams t
-        typarams (TCon _ c)         = ufree c
-        typarams _                  = []
-
-
-closeDepVarsQ vs q
-  | null vs'                        = nub vs
-  | otherwise                       = closeDepVarsQ (vs'++vs) q
-  where vs'                         = concat [ vfree us \\ vs | Quant v us <- q, v `elem` vs ]
-
 qualbound q                         = [ v | Quant v ps <- q, not $ null ps ]
 
 
@@ -91,10 +62,11 @@ instance VFree a => VFree (Name,a) where
 instance VFree Constraint where
     vfree (Cast info t1 t2)         = vfree t1 ++ vfree t2
     vfree (Sub info w t1 t2)        = vfree t1 ++ vfree t2
-    vfree (Impl info w t p)         = vfree t ++ vfree p
+    vfree (Proto info w t p)        = vfree t ++ vfree p
     vfree (Sel info w t1 n t2)      = vfree t1 ++ vfree t2
     vfree (Mut info t1 n t2)        = vfree t1 ++ vfree t2
     vfree (Seal info t)             = vfree t
+    vfree (Imply info w q cs)       = (vfree q ++ vfree cs) \\ qbound q
 
 instance VFree Type where
     vfree (TVar _ v)                = [v]
@@ -437,10 +409,11 @@ instance UFree a => UFree (Maybe a) where
 instance UFree Constraint where
     ufree (Cast info t1 t2)         = ufree info ++ ufree t1 ++ ufree t2
     ufree (Sub info w t1 t2)        = ufree info ++ ufree t1 ++ ufree t2
-    ufree (Impl info w t p)         = ufree info ++ ufree t ++ ufree p
+    ufree (Proto info w t p)        = ufree info ++ ufree t ++ ufree p
     ufree (Sel info w t1 n t2)      = ufree info ++ ufree t1 ++ ufree t2
     ufree (Mut info t1 n t2)        = ufree info ++ ufree t1 ++ ufree t2
     ufree (Seal info t)             = ufree info ++ ufree t
+    ufree (Imply info w q cs)       = ufree info ++ ufree q ++ ufree cs
 
 instance UFree ErrInfo where
     ufree (DfltInfo l n mbe ts)     = ufree mbe ++ ufree ts
@@ -615,10 +588,11 @@ instance USubst a => USubst (Maybe a) where
 instance USubst Constraint where
     usubst (Cast info t1 t2)        = Cast <$> usubst info <*> usubst t1 <*> usubst t2
     usubst (Sub info w t1 t2)       = Sub <$> usubst info <*> return w <*> usubst t1 <*> usubst t2
-    usubst (Impl info w t p)        = Impl <$> usubst info <*> return w <*>usubst t <*> usubst p
+    usubst (Proto info w t p)       = Proto <$> usubst info <*> return w <*>usubst t <*> usubst p
     usubst (Sel info w t1 n t2)     = Sel <$> usubst info <*> return w <*>usubst t1 <*> return n <*> usubst t2
     usubst (Mut info t1 n t2)       = Mut <$> usubst info <*> usubst t1 <*> return n <*> usubst t2
     usubst (Seal info t)            = Seal <$> usubst info <*> usubst t
+    usubst (Imply info w q cs)      = Imply <$> usubst info <*> return w <*> usubst q <*> usubst cs
 
 instance USubst ErrInfo where
     usubst (DfltInfo l n mbe ts)    = DfltInfo l n <$> usubst mbe <*> usubst ts
@@ -787,23 +761,27 @@ class (USubst a, UFree a) => Polarity a where
 
 (p,n) `polcat` (p',n')              = (p++p', n++n')
 
+polnil                              = ([], [])
+
+polnull (p,n)                       = null p && null n
+
 polneg (p,n)                        = (n,p)
 
-(p,n) `polminus` vs                 = (p\\vs, n\\vs)
+(p,n) `polminus` (p',n')            = (p\\p', n\\n')
 
 instance Polarity Type where
     polvars (TUni _ u)              = ([u],[])
-    polvars (TVar _ v)              = ([],[])
+    polvars (TVar _ v)              = polnil
     polvars (TCon _ c)              = polvars c
     polvars (TFun _ fx p k t)       = polvars fx `polcat` polvars t `polcat` polneg (polvars p `polcat` polvars k)
     polvars (TTuple _ p k)          = polvars p `polcat` polvars k
     polvars (TOpt _ t)              = polvars t
-    polvars (TNone _)               = ([],[])
-    polvars (TWild _)               = ([],[])
-    polvars (TNil _ _)              = ([],[])
+    polvars (TNone _)               = polnil
+    polvars (TWild _)               = polnil
+    polvars (TNil _ _)              = polnil
     polvars (TRow _ _ _ t r)        = polvars t `polcat` polvars r
     polvars (TStar _ _ r)           = polvars r
-    polvars (TFX l fx)              = ([],[])
+    polvars (TFX l fx)              = polnil
 
 invvars x                           = (vs, vs)
   where vs                          = ufree x
@@ -823,10 +801,35 @@ instance Polarity TSchema where
     polvars (TSchema _ q t)         = polvars q `polcat` polvars t
 
 instance (Polarity a) => Polarity (Maybe a) where
-    polvars                         = maybe ([],[]) polvars
+    polvars                         = maybe polnil polvars
 
 instance (Polarity a) => Polarity [a] where
-    polvars                         = foldr polcat ([],[]) . map polvars
+    polvars                         = foldr polcat polnil . map polvars
+
+
+closePolVars                            :: ([TUni],[TUni]) -> Constraints -> ([TUni],[TUni])
+closePolVars pvs cs
+  | polnull (pvs' `polminus` pvs)       = pvs'
+  | otherwise                           = closePolVars pvs' cs'
+  where
+    (pvs',cs')                          = boundvs pvs cs
+
+    boundvs pn []                        = (pn, [])
+    boundvs pn (Cast _ t (TUni _ v) : cs)
+      | v `elem` fst pn                 = boundvs (polvars t `polcat` pn) cs
+    boundvs pn (Sub _ _ t (TUni _ v) : cs)
+      | v `elem` fst pn                 = boundvs (polvars t `polcat` pn) cs
+    boundvs pn (Cast _ (TUni _ v) t : cs)
+      | v `elem` snd pn                 = boundvs (polneg (polvars t) `polcat` pn) cs
+    boundvs pn (Sub _ _ (TUni _ v) t : cs)
+      | v `elem` snd pn                 = boundvs (polneg (polvars t) `polcat` pn) cs
+    boundvs pn (Proto _ _ (TUni _ v) p : cs)
+      | v `elem` snd pn                 = boundvs (polneg (polvars p) `polcat` pn) cs
+    boundvs pn (Sel _ _ (TUni _ v) _ t : cs)
+      | v `elem` snd pn                 = boundvs (polneg (polvars t) `polcat` pn) cs
+    boundvsboundvs pn (Mut _ (TUni _ v) _ t : cs)
+      | v `elem` (fst pn ++ snd pn)     = boundvs (invvars t `polcat` pn) cs
+    bnds pn (c : cs)                    = let (pn',cs') = boundvs pn cs in (pn', c:cs')
 
 
 -- Does Self occur positively?
@@ -888,13 +891,46 @@ instance (Tailvars a) => Tailvars [a] where
 instance Tailvars Constraint where
     tailvars (Cast _ t1 t2)         = tailvars t1 ++ tailvars t2
     tailvars (Sub _ w t1 t2)        = tailvars t1 ++ tailvars t2
-    tailvars (Impl _ w t p)         = tailvars t ++ tailvars p
+    tailvars (Proto _ w t p)        = tailvars t ++ tailvars p
     tailvars (Sel _ w t1 n t2)      = tailvars t1 ++ tailvars t2
     tailvars (Mut _ t1 n t2)        = tailvars t1 ++ tailvars t2
     tailvars (Seal _ t)             = tailvars t
+    tailvars (Imply _ w q cs)       = tailvars q ++ tailvars cs
 
 
 -- Misc. ---------------------------------------------------------------------------------------------
+
+
+closeDepVars vs cs
+  | null vs'                        = nub vs
+  | otherwise                       = closeDepVars (vs'++vs) cs
+  where vs'                         = concat [ deps c \\ vs | c <- cs, all (`elem` vs) (heads c) ]
+
+        heads (Proto _ w t _)       = ufree t
+        heads (Cast _ t _)          = ufree t
+        heads (Sub _ w t _)         = ufree t
+        heads (Sel _ w t n _)       = ufree t
+        heads (Mut _ t n _)         = ufree t
+        heads (Seal _ t)            = ufree t
+        heads (Imply _ w q cs)      = []
+
+        deps (Proto _ w _ p)        = ufree p
+        deps (Cast _ _ t)           = typarams t
+        deps (Sub _ w _ t)          = typarams t
+        deps (Sel _ w _ n t)        = ufree t
+        deps (Mut _ _ n t)          = ufree t
+        deps (Seal _ _)             = []
+        deps (Imply _ w q cs)       = []
+
+        typarams (TOpt _ t)         = typarams t
+        typarams (TCon _ c)         = ufree c
+        typarams _                  = []
+
+
+closeDepVarsQ vs q
+  | null vs'                        = nub vs
+  | otherwise                       = closeDepVarsQ (vs'++vs) q
+  where vs'                         = concat [ vfree us \\ vs | Quant v us <- q, v `elem` vs ]
 
 schematic (TCon _ tc)               = tCon (schematic' tc)
 schematic (TFun _ _ _ _ _)          = tFun tWild tWild tWild tWild
@@ -945,10 +981,11 @@ instance UWild QBind where
 instance UWild Constraint where
     uwild (Cast info t1 t2)         = Cast (uwild info) (uwild t1) (uwild t2)
     uwild (Sub info w t1 t2)        = Sub (uwild info) w (uwild t1) (uwild t2)
-    uwild (Impl info w t p)         = Impl (uwild info) w (uwild t) (uwild p)
+    uwild (Proto info w t p)        = Proto (uwild info) w (uwild t) (uwild p)
     uwild (Sel info w t1 n t2)      = Sel (uwild info) w (uwild t1) n (uwild t2)
     uwild (Mut info t1 n t2)        = Mut (uwild info) (uwild t1) n (uwild t2)
     uwild (Seal info t)             = Seal (uwild info) (uwild t)
+    uwild (Imply info w q cs)       = Imply (uwild info) w (uwild q) (uwild cs)
 
 instance UWild ErrInfo where
     uwild (DfltInfo l n mbe ts)     = DfltInfo l n mbe (uwild ts)

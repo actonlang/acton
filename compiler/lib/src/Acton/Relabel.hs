@@ -234,7 +234,8 @@ instance Relabel Type where
 instance Relabel Constraint where
     relabel (Cast info t1 t2) = Cast info <$> relabel t1 <*> relabel t2
     relabel (Sub info w t1 t2) = Sub info <$> relabel w <*> relabel t1 <*> relabel t1
-    relabel (Impl info w t p) = Impl info <$> relabel w <*> relabel t <*> relabel p
+    relabel (Proto info w t p) = Proto info <$> relabel w <*> relabel t <*> relabel p
     relabel (Sel info w t1 n t2) = Sel info w <$> relabel t1 <*> relabel n <*> relabel t2
     relabel (Mut info t1 n t2) = Mut info <$> relabel t1 <*> relabel n <*> relabel t2
     relabel (Seal info t) = Seal info <$> relabel t
+    relabel (Imply info w q cs) = Imply info w <$> relabel q <*> relabel cs

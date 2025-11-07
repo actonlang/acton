@@ -454,7 +454,7 @@ instance Norm Decl where
             env0                    = define [(selfKW, NVar t0)] $ defineTVars q env
             t0                      = tCon $ TC (NoQ n) (map tVar $ qbound q)
     norm env (Class l n q as b doc) = Class l n q as <$> norm env1 b <*> return doc
-      where env1                    = defineSelf (NoQ n) q $ defineTVars q env
+      where env1                    = defineTVars (selfQuant (NoQ n) q) env
     norm env d                      = error ("norm unexpected: " ++ prstr d)
 
 

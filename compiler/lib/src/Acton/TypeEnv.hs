@@ -25,6 +25,7 @@ import Acton.Builtin
 import Acton.Subst
 import Acton.Unify
 
+
 data TypeX                      = TypeX {
                                     posnames   :: [Name],
                                     indecl     :: Bool,
@@ -81,7 +82,7 @@ instance WellFormed TCon where
                                 NReserved -> nameReserved n
                                 i -> err1 n ("wf: Class or protocol name expected, got " ++ show i)
             s               = qbound q `zip` ts
-            constr u t      = if isProto env (tcname u) then Impl (DfltInfo NoLoc 20 Nothing []) nWild t u else Cast (DfltInfo NoLoc 21 Nothing []) t (tCon u)
+            constr u t      = if isProto env (tcname u) then Proto (DfltInfo NoLoc 20 Nothing []) nWild t u else Cast (DfltInfo NoLoc 21 Nothing []) t (tCon u)
 
 wfProto                     :: EnvF x -> TCon -> TypeM (Constraints, Constraints)
 wfProto env (TC n ts)       = do cs <- instQuals env q ts
@@ -139,25 +140,72 @@ instQuals                   :: EnvF x -> QBinds -> [Type] -> TypeM Constraints
 instQuals env q ts          = do let s = qbound q `zip` ts
                                  sequence [ constr (vsubst s (tVar v)) (vsubst s u) | Quant v us <- q, u <- us ]
   where constr t u@(TC n _)
-          | isProto env n   = do w <- newWitness; return $ Impl (DfltInfo NoLoc 24 Nothing []) w t u
+          | isProto env n   = do w <- newWitness; return $ Proto (DfltInfo NoLoc 24 Nothing []) w t u
           | otherwise       = return $ Cast (DfltInfo NoLoc 25 Nothing []) t (tCon u)
 
 wvars                       :: Constraints -> [Expr]
-wvars cs                    = [ eVar v | Impl _ v _ _ <- cs ]
+wvars cs                    = [ eVar v | Proto _ v _ _ <- cs ]
+
+
+-- Equations -----------------------------------------------------------------------------------------------------------------------
+
+data Equation                           = Eqn Name Type Expr
+                                        | QEqn Name QBinds Equations
+
+type Equations                          = [Equation]
+
+eqwit (Eqn w _ _)                       = w
+eqwit (QEqn w _ _)                      = w
+
+eqwits eqs                              = map eqwit eqs
+
+instance Pretty Equations where
+    pretty eqs                          = vcat $ map pretty eqs
+
+instance Pretty Equation where
+    pretty (Eqn n t e)                  = pretty n <+> colon <+> pretty t <+> equals <+> pretty e
+    pretty (QEqn n q eqs)               = pretty n <+> colon <+> pretty q <+> text "=>" $+$
+                                          nest 4 (pretty eqs)
+
+bindWits x eqs                          = trace ("#### bindWits " ++ x ++ ": " ++ prstrs (eqwits eqs)) $
+                                          [ sAssign (pVar w t) e | Eqn w t e <- eqs ]
+
+
+-- The following two functions generate quantified witness definitions and calls, respectively.
+-- See Transform.hs for the invariants that apply to these constructs.
+bindTopWits env x ns eqs0               = trace ("#### BINDTOPWITS " ++ x ++ " FOR " ++ prstrs ns  ++ ": " ++ prstrs (eqwits eqs0)) $
+                                          map bind eqs0
+  where bind (Eqn w t e)                = sAssign (pVar w t) e
+        bind (QEqn w q eqs)             = sDecl [Def l0 w (stripQual q) (qualWPar env q PosNIL) KwdNIL ann body NoDec fxPure Nothing]
+          where ann                     = Just $ tTupleK $ foldr krow (tNil KRow) eqs
+                body                    = bindWits ("top " ++ prstr w ++ ":") eqs ++ [sReturn (eTupleK $ foldr karg KwdNil eqs)]
+
+        krow (Eqn w t e) r              = kwdRow w t r
+        krow (QEqn w q eqs) r           = r
+
+        karg (Eqn w t _) a              = KwdArg w (eVar w) a
+        karg (QEqn _ _ _) a             = a
+
+qwitRefs env w0 cs                      = refs cs
+  where refs []                         = []
+        refs (Sub _ w t1 t2 : cs)       = Eqn w (tFun0 [t1] t2) (eDot e w) : refs cs
+        refs (Proto _ w t p : cs)       = Eqn w (proto2type t p) (eDot e w) : refs cs
+        refs (Sel _ w t1 n t2 : cs)     = Eqn w (tFun0 [t1] t2) (eDot e w) : refs cs
+        refs (c : cs)                   = refs cs
+        e                               = eCallP (tApp (eVar w0) (map tVar $ qbound q_tot)) (wit2arg (qualWits env q_tot) PosNil)
+        q_tot                           = quantScope0 env
+
+
+--insertOrMerge (QEqn _ _ []) eqs        = eqs
+insertOrMerge qe@(QEqn w q eq) (QEqn w' q' eq' : eqs)
+  | w == w'                             = QEqn w q (eq++eq') : eqs
+insertOrMerge qe (qe' : eqs)            = qe' : insertOrMerge qe eqs
+insertOrMerge qe []                     = [qe]
 
 
 -- Misc. ---------------------------------------------------------------------------------------------------------------------------
 
-data Equation                           = Eqn Name Type Expr
-
-type Equations                          = [Equation]
-
-instance Pretty Equation where
-    pretty (Eqn n t e)                  = pretty n <+> colon <+> pretty t <+> equals <+> pretty e
-
-bindWits eqs                            = [ Assign l0 [PVar l0 w (Just t)] e | Eqn w t e <- eqs ]
-
-impl2type t (TC n ts)                   = tCon $ TC n (t:ts)
+proto2type t (TC n ts)                   = tCon $ TC n (t:ts)
 
 wit2row ws                              = \p -> foldr f p ws
   where f (w,t)                         = TRow NoLoc PRow nWild t
@@ -173,15 +221,15 @@ var2arg xs                              = \p -> foldr f p xs
 
 exp2arg es                              = \p -> foldr PosArg p es
 
-witsOf cs                               = [ eVar w | Impl _ w t p <- cs ]
+protoWitsOf cs                          = [ eVar w | Proto _ w t p <- cs ]
 
 qualWPar env q                          = wit2par (qualWits env q)
 
 qualWRow env q                          = wit2row (qualWits env q)
 
-qualWits env q                          = [ (tvarWit tv p, impl2type (tVar tv) p) | Quant tv ps <- q, p <- ps, isProto env (tcname p) ]
+qualWits env q                          = [ (tvarWit tv p, proto2type (tVar tv) p) | Quant tv ps <- q, p <- ps, isProto env (tcname p) ]
 
 witSubst env q cs                       = [ Eqn w0 t (eVar w) | ((w,t),w0) <- ws `zip` ws0 ]
-  where ws                              = [ (w, impl2type t p) | Impl _ w t p <- cs ]
+  where ws                              = [ (w, proto2type t p) | Proto _ w t p <- cs ]
         ws0                             = [ tvarWit tv p | Quant tv ps <- q, p <- ps, isProto env (tcname p) ]
 
