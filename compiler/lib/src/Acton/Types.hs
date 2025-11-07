@@ -157,7 +157,7 @@ infTopStmt env s                        = do (cs,te,s) <- infEnv env s
                                              traceM ("===========\n" ++ render (nest 4 $ vcat $ map pretty te))
                                              traceM ("............\n")
 
-                                             s <- termred <$> usubst (pushEqns eq s)
+                                             s <- termred <$> usubst (pushEqns env eq s)
                                              defaultVars (ufree s)
                                              s <- usubst s
                                              tieWitKnots te [s]
@@ -172,10 +172,11 @@ infTopStmt env s                        = do (cs,te,s) <- infEnv env s
         dflt KRow                       = kwdNil
 
 
-pushEqns [] s                           = s
-pushEqns eqs s
-  | null pre                            = inject inj s
-  | otherwise                           = withLocal (bindTopWits env "push" (bound s) pre) $ inject inj s
+pushEqns                                :: Env -> Equations -> Stmt -> Stmt
+pushEqns env [] s                       = s
+pushEqns env eqs s
+  | null pre                            = inject env inj s
+  | otherwise                           = withLocal (bindTopWits env "push" (bound s) pre) $ inject env inj s
   where backward                        = free s `intersect` bound eqs
         (pre,inj)                       = split [] [] (bound s) eqs
         split pre inj bvs []            = (reverse pre, reverse inj)
@@ -184,8 +185,8 @@ pushEqns eqs s
           | otherwise                   = split pre (eq:inj) (bound eq ++ bvs) eqs
           where forward                 = free eq `intersect` bvs
 
-inject [] s                             = s
-inject eqs (Decl l ds)                  = Decl l [ d{ dbody = prune (dname d) [] (free d) reveqs ++ dbody d } | d <- ds ]
+inject env [] s                         = s
+inject env eqs (Decl l ds)              = Decl l [ d{ dbody = prune (dname d) [] (free d) reveqs ++ dbody d } | d <- ds ]
   where reveqs                          = reverse eqs
         prune n inj fvs []              = --trace ("### Injecting " ++ prstrs (bound inj) ++ " into " ++ prstr n) $
                                           bindTopWits env ("inj because of " ++ prstrs fvs) [n] inj
@@ -193,10 +194,10 @@ inject eqs (Decl l ds)                  = Decl l [ d{ dbody = prune (dname d) []
           | null needed                 = prune n inj fvs eqs
           | otherwise                   = prune n (eq:inj) (free eq ++ fvs) eqs
           where needed                  = bound eq `intersect` fvs
-inject eqs (With l [] ss)               = With l [] (injlast eqs ss)
-  where injlast eqs [s]                 = [inject eqs s]
+inject env eqs (With l [] ss)           = With l [] (injlast eqs ss)
+  where injlast eqs [s]                 = [inject env eqs s]
         injlast eqs (s:ss)              = s : injlast eqs ss
-inject eqs s                            = error ("# Internal error: cyclic witnesses " ++ prstrs eqs ++ "\n# and statement\n" ++ prstr s)
+inject env eqs s                        = error ("# Internal error: cyclic witnesses " ++ prstrs eqs ++ "\n# and statement\n" ++ prstr s)
 
 
 genEnv                                  :: Env -> Constraints -> TEnv -> Stmt -> TypeM (TEnv,Equations,Stmt)
@@ -760,7 +761,7 @@ instance InfEnv Decl where
                                                  te2 = te ++ te1
                                                  b2 = addImpl te1 b1
                                              let docstring = extractDocstring b
-                                             return ([], [(extensionName us c, NExt q c ps te2 [] docstring)], Extension l q c us (bindWits eq1 ++ b2) ddoc)
+                                             return ([], [(extensionName us c, NExt q c ps te2 [] docstring)], Extension l q c us b2 ddoc)
       where TC n ts                     = c
             env1                        = define (toSigs te') $ reserve (assigned b) $ defineTVars (stripQual q') $ setInClass env
             witsearch                   = findWitness env (tCon c) u
