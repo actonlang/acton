@@ -223,58 +223,142 @@ xmlQ_Node xmlQ_decode(B_str data) {
 }
 
 
-B_str xmlQ_node2str(B_str tag, B_str nsdefs, B_str prefix, B_str attrs, B_str cont, B_str text, B_str tail) {
+static B_str xmlQ_encode_nsdefs(B_list nsdefs);
+static B_str xmlQ_encode_attrs(B_list attrs);
+
+
+B_str xmlQ_node2str(xmlQ_Node node, bool pretty, int depth) {
+    B_str nsdefs = xmlQ_encode_nsdefs(node->nsdefs);
+    B_str attrs = xmlQ_encode_attrs(node->attributes);
+
+    // Is this an empty element (no text, no children), then use self-closing tag
+    bool is_empty = !node->text && node->children->length == 0;
+
+
+    // Encode the child nodes to a single string (pretty-printed)
+    bool has_children = node->children->length > 0;
+    B_str nul = to$str("");
+    B_str children_str;
+
+    if (has_children) {
+        B_list children = B_listD_new(node->children->length);
+        children->length = node->children->length;
+        for (int i = 0; i < node->children->length; i++) {
+            xmlQ_Node ch = (xmlQ_Node)node->children->data[i];
+            children->data[i] = xmlQ_node2str(ch, pretty, depth + 1);
+        }
+
+        if (pretty) {
+            // Join with newlines
+            B_str separator = to$str("\n");
+            children_str = separator->$class->join(separator, B_SequenceD_listG_witness->W_Collection, children);
+        } else {
+            // Join with empty string
+            children_str = nul->$class->join(nul, B_SequenceD_listG_witness->W_Collection, children);
+        }
+    } else {
+      children_str = nul;
+    }
+
     // Calculate extra bytes needed for escaping text and tail
-    int text_extra = text ? count_xml_escape_extra(text, 0) : 0;
-    int tail_extra = tail ? count_xml_escape_extra(tail, 0) : 0;
+    int text_extra = node->text ? count_xml_escape_extra(node->text, 0) : 0;
+    int tail_extra = node->tail ? count_xml_escape_extra(node->tail, 0) : 0;
 
-    int res_bytes = 2*tag->nbytes + 2*(prefix ? prefix->nbytes+1:0) + nsdefs->nbytes + attrs->nbytes +
-                    (text ? text->nbytes + text_extra : 0) + cont->nbytes +
-                    (tail ? tail->nbytes + tail_extra : 0) + 5; // 5 = len("<" + ">" + "</" + ">")
-    int res_chars = 2*tag->nchars + 2*(prefix ? prefix->nchars+1:0) + nsdefs->nchars + attrs->nchars +
-                    (text ? text->nchars + text_extra : 0) + cont->nchars +
-                    (tail ? tail->nchars + tail_extra : 0) + 5;
+    int indent_size = pretty ? depth * 2 : 0;
 
+    // Calculate total size
+    int res_bytes = indent_size +
+                    (is_empty ? 1 : 2) * (node->tag->nbytes + (node->prefix ? node->prefix->nbytes + 1 : 0)) +
+                    nsdefs->nbytes + attrs->nbytes +
+                    (is_empty ? 0 : (node->text ? node->text->nbytes + text_extra : 0)) +
+                    (is_empty ? 0 : (has_children && pretty ? 1 : 0)) + // newline before children
+                    (is_empty ? 0 : children_str->nbytes) +
+                    (is_empty ? 0 : (has_children && pretty ? 1 + indent_size : 0)) + // newline + indent before closing
+                    (node->tail ? node->tail->nbytes + tail_extra : 0) +
+                    (is_empty ? 3 : 5); // self-closing tag - 3 bytes (< / >); open+close tag - 5 bytes (< > < / >)
+
+    int res_chars = indent_size +
+                    (is_empty ? 1 : 2) * (node->tag->nchars + (node->prefix ? node->prefix->nchars + 1 : 0)) +
+                    nsdefs->nchars + attrs->nchars +
+                    (is_empty ? 0 : (node->text ? node->text->nchars + text_extra : 0)) +
+                    (is_empty ? 0 : (has_children && pretty ? 1 : 0)) +
+                    (is_empty ? 0 : children_str->nchars) +
+                    (is_empty ? 0 : (has_children && pretty ? 1 + indent_size : 0)) +
+                    (node->tail ? node->tail->nchars + tail_extra : 0) +
+                    (is_empty ? 3 : 5);
+
+    // Build the result string
     B_str res;
     NEW_UNFILLED_STR(res, res_chars, res_bytes);
     unsigned char *p = res->str;
+
+    // Write initial indentation
+    for (int i = 0; i < indent_size; i++) {
+        *p++ = ' ';
+    }
+
+    // Write opening tag
     *p++ = '<';
-    if (prefix) {
-        memcpy(p, prefix->str, prefix->nbytes); p += prefix->nbytes;
+    if (node->prefix) {
+        memcpy(p, node->prefix->str, node->prefix->nbytes);
+        p += node->prefix->nbytes;
         *p++ = ':';
     }
-    memcpy(p, tag->str, tag->nbytes); p += tag->nbytes;
-    memcpy(p, nsdefs->str, nsdefs->nbytes); p += nsdefs->nbytes;
-    memcpy(p, attrs->str, attrs->nbytes); p += attrs->nbytes;
-    *p++ = '>';
-    if (text) {
-        p = copy_with_xml_escape(p, text, 0);
+    memcpy(p, node->tag->str, node->tag->nbytes);
+    p += node->tag->nbytes;
+    memcpy(p, nsdefs->str, nsdefs->nbytes);
+    p += nsdefs->nbytes;
+    memcpy(p, attrs->str, attrs->nbytes);
+    p += attrs->nbytes;
+
+    // Write self-closing tag or children followed by explicit close tag
+    if (is_empty) {
+        *p++ = '/';
+        *p++ = '>';
+    } else {
+        *p++ = '>';
+
+        // Write text content
+        if (node->text) {
+            p = copy_with_xml_escape(p, node->text, 0);
+        }
+
+        if (has_children) {
+            // Write newline after opening tag, write children
+            if (pretty) {
+                *p++ = '\n';
+            }
+            memcpy(p, children_str->str, children_str->nbytes);
+            p += children_str->nbytes;
+
+            // Write newline and indent before closing tag if needed
+            if (pretty) {
+                *p++ = '\n';
+                for (int i = 0; i < indent_size; i++) {
+                    *p++ = ' ';
+                }
+            }
+        }
+
+        // Write closing tag
+        *p++ = '<';
+        *p++ = '/';
+        if (node->prefix) {
+            memcpy(p, node->prefix->str, node->prefix->nbytes);
+            p += node->prefix->nbytes;
+            *p++ = ':';
+        }
+        memcpy(p, node->tag->str, node->tag->nbytes);
+        p += node->tag->nbytes;
+        *p++ = '>';
     }
-    memcpy(p, cont->str, cont->nbytes); p += cont->nbytes;
-    *p++ = '<';
-    *p++ = '/';
-    if (prefix) {
-        memcpy(p, prefix->str, prefix->nbytes); p += prefix->nbytes;
-        *p++ = ':';
+
+    // Write tail
+    if (node->tail) {
+        p = copy_with_xml_escape(p, node->tail, 0);
     }
-    memcpy(p, tag->str, tag->nbytes); p += tag->nbytes;
-    *p++ = '>';
-    if (tail) {
-        p = copy_with_xml_escape(p, tail, 0);
-    }
+
     return res;
-}
-
-B_str xmlQ_encode(xmlQ_Node node);
-
-static B_list xmlQ_encode_nodes(B_list nodes) {
-    B_list strs = B_listD_new(nodes->length);
-    strs->length = nodes->length;
-    for (int i=0; i< nodes->length; i++) {
-        xmlQ_Node ch = (xmlQ_Node)nodes->data[i];
-        strs->data[i] = ch->$class->encode(ch);
-    }
-    return strs;
 }
 
 static B_str xmlQ_encode_nsdefs(B_list nsdefs) {
@@ -346,14 +430,9 @@ static B_str xmlQ_encode_attrs(B_list attrs) {
     return res;
 }
 
-B_str xmlQ_NodeD_encode(xmlQ_Node self) {
-    B_str nul = to$str("");
-    B_Iterable wit = ((B_Iterable)((B_Collection)B_SequenceD_listG_new()->W_Collection));
-    B_list children = xmlQ_encode_nodes(self->children);
-    B_str s = nul->$class->join(nul, wit, children);
-    B_str nsdefs = xmlQ_encode_nsdefs(self->nsdefs);
-    B_str attrs = xmlQ_encode_attrs(self->attributes);
-    return xmlQ_node2str(self->tag, nsdefs, self->prefix, attrs, s, self->text, self->tail);
+B_str xmlQ_NodeD_encode(xmlQ_Node self, B_bool pretty) {
+    // Use the internal function with depth 0 for the root node
+    return xmlQ_node2str(self, pretty ? pretty->val != 0 : false, 0);
 }
 
 void xmlQ___ext_init__() {

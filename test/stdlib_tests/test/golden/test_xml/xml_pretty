@@ -1,0 +1,11 @@
+<document xmlns:ns="http://example.com" version="1.0">
+  <header>Document Title</header>
+  <empty/>
+  <section id="main">
+    <paragraph>Some text</paragraph>
+    <nested>
+      <ns:deep>Namespaced content</ns:deep>
+      <another/>
+    </nested>
+  </section>
+</document>
