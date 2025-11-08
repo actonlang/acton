@@ -38,7 +38,7 @@ def test_list_index_errs():
                     except ValueError:
                         return
     raise testing.NotRaisesError("expected ValueError for l.index(...)")
-
+    return
 
 actor main(env):
     try:
@@ -130,8 +130,8 @@ actor main(env):
         print("Unexpected result of sorted(l):", sorted(l))
         await async env.exit(1)
 
-    if bool([]):
-        print("Unexpected result of bool([]):", l)
+    if [].__bool__():
+        print("Unexpected result of [].__bool__():", l)
         await async env.exit(1)
 
 #shrinking

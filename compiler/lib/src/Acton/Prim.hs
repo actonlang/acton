@@ -145,6 +145,9 @@ primMkSet           = gPrim "mkSet"
 primMkDict          = gPrim "mkDict"
 primAnnot           = gPrim "annot"
 
+primUGetItem        = gPrim "listD_U__getitem__"
+primUNext           = gPrim "rangeD_U__next__"
+
 annot t_ann ann t e = eCall (tApp (eQVar primAnnot) [t_ann, t]) [ann, e]
 
 unAnnot t_ann (Call _ (TApp _ (Var _ n) [t,_]) (PosArg w (PosArg e PosNil)) KwdNil)
@@ -229,7 +232,9 @@ primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec Nothing)
 
                             (noq primMkSet,         NDef scMkSet NoDec Nothing),
                             (noq primMkDict,        NDef scMkDict NoDec Nothing),
-                            (noq primAnnot,         NDef scAnnot NoDec Nothing)
+                            (noq primAnnot,         NDef scAnnot NoDec Nothing),
+                            (noq primUGetItem,      NDef scUGetItem NoDec Nothing),
+                            (noq primUNext,         NDef scUNext NoDec Nothing)
                       ]
 
 --  class $Cont[T] (value): pass
@@ -548,6 +553,16 @@ scAnnot             = tSchema [quant a, quant b] tAnnot
         a           = TV KType $ name "A"
         b           = TV KType $ name "B"
 
+-- $listD_U__getitem__ : [A] => (list[A], i64) -> A
+scUGetItem          = tSchema [quant a] tUGetItem
+  where tUGetItem   = tFun fxPure (posRow (tList (tVar a)) (posRow tI64 posNil)) kwdNil (tVar a)
+        a           = TV KType $ name "A"
+
+-- $rangeD_U__next__ : [A] => (Iterator[A]) -> A   will only be used to replace B_IteratorD_range.__next__
+scUNext             = tSchema [quant a] tUNext
+  where tUNext      = tFun fxMut (posRow (tIterator (tVar a)) posNil) kwdNil tI64
+        a           = TV KType $ name "A" 
+        
 --  $WRAP           : [A,B,C] => ($Actor, proc(*A,**B)->C) -> action(*A,**B)->C
 scWRAP              = tSchema [quant a, quant b, quant c] tWRAP
   where tWRAP       = tFun0 [tActor, abcFun fxProc] (abcFun fxAction)

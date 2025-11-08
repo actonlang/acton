@@ -393,12 +393,12 @@ class DateTime(object):
         # TODO: heh, lol, actually convert to GMT first
         # web servers want rfc1123 and it should always be in GMT, but I suppose there are other uses of rfc1123
         return "%s, %02d %s %04d %02d:%02d:%02d GMT" % (
-            WKDAYS[self.weekday], self.day, MNTHS[self.month-1], self.year,
+            WKDAYS[i64(self.weekday)], self.day, MNTHS[i64(self.month-1)], self.year,
             self.hour, self.minute, self.second)
 
     def str_asctime(self):
         return "%s %s %2d %02d:%02d:%02d %04d" % (
-            WEEKDAYS[self.weekday][0:3], MONTHS[self.month][0:3], self.day,
+            WEEKDAYS[i64(self.weekday)][0:3], MONTHS[i64(self.month)][0:3], self.day,
             self.hour, self.minute, self.second, self.year)
 
 
