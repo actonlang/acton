@@ -20,7 +20,7 @@ n.text and c.tail for all children of n.
         self.text = text
         self.tail = tail
 
-    def encode(self) -> str:
+    def encode(self, pretty=False) -> str:
         NotImplemented
 
 class XmlParseError(ValueError):
@@ -52,9 +52,8 @@ class XmlParseError(ValueError):
 def decode(data : str) -> Node:
     NotImplemented
 
-# TODO: add arg to pretty-print, default=True
-def encode(node : Node) -> str:
-    return node.encode()
+def encode(node: Node, pretty=False) -> str:
+    return node.encode(pretty)
 
 def toplevel_text(node):
      """Returns the toplevel text in node, as if all subelements were replaced by sep"""
@@ -68,3 +67,7 @@ def toplevel_text(node):
          if tl is not None:
              chunks.append(tl)
      return sep.join(chunks)
+
+def encode_nodes(nodes: list[Node], pretty=False) -> str:
+    sep = "\n" if pretty else ""
+    return sep.join([node.encode(pretty) for node in nodes])

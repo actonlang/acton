@@ -41,14 +41,14 @@ jobs:
         if: github.event_name != 'schedule'
         id: setmatrix_pr
         run: |
-          MATRIX_JSON='{\"include\":[{\"os\":\"macos\",\"version\":\"13\",\"arch\":\"x86_64\",\"cache\":true},{\"os\":\"macos\",\"version\":\"14\",\"arch\":\"aarch64\",\"cache\":true}]}'
+          MATRIX_JSON='{\"include\":[{\"os\":\"macos\",\"version\":\"14\",\"arch\":\"aarch64\",\"cache\":true},{\"os\":\"macos\",\"version\":\"15\",\"arch\":\"aarch64\",\"cache\":true},{\"os\":\"macos\",\"version\":\"15\",\"arch\":\"x86_64\",\"cache\":true}]}'
           echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
 
       - name: "Set Matrix for nightly run"
         if: github.event_name == 'schedule'
         id: setmatrix_cron
         run: |
-          MATRIX_JSON='{\"include\":[{\"os\":\"macos\",\"version\":\"13\",\"arch\":\"x86_64\",\"cache\":true},{\"os\":\"macos\",\"version\":\"14\",\"arch\":\"aarch64\",\"cache\":true},{\"os\":\"macos\",\"version\":\"15\",\"arch\":\"aarch64\",\"cache\":false}]}'
+          MATRIX_JSON='{\"include\":[{\"os\":\"macos\",\"version\":\"14\",\"arch\":\"aarch64\",\"cache\":true},{\"os\":\"macos\",\"version\":\"15\",\"arch\":\"aarch64\",\"cache\":true},{\"os\":\"macos\",\"version\":\"15\",\"arch\":\"x86_64\",\"cache\":true}]}'
           echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
 
       - name: "Set final matrix output"
@@ -71,7 +71,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.matrix_maker_macos.outputs.matrix) }}
-    runs-on: ${{ matrix.os }}-${{ matrix.version }}
+    runs-on: ${{ (matrix.version == '15' && matrix.arch == 'x86_64') && 'macos-15-intel' || format('{0}-{1}', matrix.os, matrix.version) }}
     steps:
       - name: "Show env"
         run: env
@@ -84,7 +84,7 @@ jobs:
           sudo sysctl kern.corefile=core.%P
           ulimit -c unlimited
       - name: "Check out repository code"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: "Cache stuff"
         if: matrix.cache == true
         uses: actions/cache@v4
@@ -107,7 +107,7 @@ jobs:
       - name: "Build a release"
         run: make -C ${{ github.workspace }} release
       - name: "Upload artifact"
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: acton-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}
           path: ${{ github.workspace }}/acton-*
@@ -118,7 +118,7 @@ jobs:
           make -C ${{ github.workspace }} test
       - name: "Upload whole test dir as artifact on test failure"
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: test-debug-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}-${{ github.run_id }}.zip
           path: |
@@ -181,7 +181,7 @@ jobs:
         run: |
           echo "BUILD_RELEASE=1" >> $GITHUB_ENV
       - name: "Check out repository code"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: "Cache stuff"
         if: matrix.cache == true
         uses: actions/cache@v4
@@ -223,7 +223,7 @@ jobs:
       - name: "Build a release"
         run: make -C ${GITHUB_WORKSPACE} release
       - name: "Upload artifact"
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: acton-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}
           path: ${{ github.workspace }}/acton-*
@@ -234,7 +234,7 @@ jobs:
           make -C ${GITHUB_WORKSPACE} test
       - name: "Upload whole test dir as artifact on test failure"
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: test-debug-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}-${{ github.run_id }}.zip
           path: |
@@ -268,7 +268,7 @@ jobs:
           apt-get install -qy bzip2 curl g++ haskell-stack libtinfo-dev make procps zlib1g-dev
           apt-get install -qy bash-completion build-essential debhelper devscripts
       - name: "Check out repository code"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: "Cache stuff"
         uses: actions/cache@v4
         with:
@@ -303,7 +303,7 @@ jobs:
           ls ${{ steps.vars.outputs.debdir }}/../
           mv ${{ steps.vars.outputs.debdir }}/../acton_* ${{ steps.vars.outputs.debdir }}/
       - name: "Upload artifact"
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: acton-debs-${{ matrix.arch }}
           # Using a wildcard and then deb here to force the entire directory to
@@ -317,23 +317,28 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-13, macos-14, macos-15]
+        os: [macos-14, macos-15, macos-15-intel]
     runs-on: ${{ matrix.os }}
     steps:
       - name: "Machine info"
         run: |
           uname -a
           system_profiler SPHardwareDataType
-      - name: "Download artifacts for Macos x86_64, built on macos-13"
-        if: ${{ matrix.os == 'macos-13' }}
-        uses: actions/download-artifact@v5
+      - name: "Download artifacts for Macos arm64, built on macos-15 (for macos-14 runner)"
+        if: ${{ matrix.os == 'macos-14' }}
+        uses: actions/download-artifact@v6
         with:
-          name: acton-macos-13-x86_64
-      - name: "Download artifacts for Macos arm64, built on macos-14"
-        if: ${{ matrix.os == 'macos-14' || matrix.os == 'macos-15' }}
-        uses: actions/download-artifact@v5
+          name: acton-macos-15-aarch64
+      - name: "Download artifacts for Macos arm64, built on macos-15"
+        if: ${{ matrix.os == 'macos-15' }}
+        uses: actions/download-artifact@v6
         with:
-          name: acton-macos-14-aarch64
+          name: acton-macos-15-aarch64
+      - name: "Download artifacts for Macos x86_64, built on macos-15"
+        if: ${{ matrix.os == 'macos-15-intel' }}
+        uses: actions/download-artifact@v6
+        with:
+          name: acton-macos-15-x86_64
       - name: "Extract acton"
         run: |
           tar Jxf $(ls acton-macos-*.tar.xz | tail -n1)
@@ -398,7 +403,7 @@ jobs:
           env
           cat /proc/cpuinfo
       - name: "Download .deb files"
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v6
         with:
           name: acton-debs-${{ matrix.arch }}
       - name: "Install acton from .deb"
@@ -432,7 +437,7 @@ jobs:
           mv /tmp/core* .
       - name: "Upload core file & binaries as artifacts on test failure"
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: coredumps-${{ matrix.os }}-${{ matrix.version }}-${{ github.run_id }}.zip
           path: |
@@ -444,7 +449,7 @@ jobs:
     runs-on: [self-hosted, linux, X64]
     steps:
       - name: "Check out repository code"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: "Remove any currently install Acton to ensure clean slate"
         run: |
           sudo apt-get purge -qy acton
@@ -463,7 +468,7 @@ jobs:
           cd ../perf
           acton test perf --record
       - name: "Download .deb files"
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v6
         with:
           name: acton-debs-amd64
       - name: "Install acton from .deb"
@@ -494,7 +499,7 @@ jobs:
             ~/.cache/acton/
           key: test-telemetrify
       - name: "Download .deb files"
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v6
         with:
           name: acton-debs-amd64
       - name: "Install acton from .deb"
@@ -504,7 +509,7 @@ jobs:
           apt install -y ./deb/acton_*.deb
           acton version
       - name: "Clone Telemetrify and check out acton-next branch"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: telemetrify-collector/telemetrify
           path: telemetrify
@@ -590,25 +595,25 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: "Check out repository code"
-        uses: actions/checkout@v4
-      - name: "Download artifacts for Macos aarch64, built on macos-14"
-        uses: actions/download-artifact@v5
+        uses: actions/checkout@v5
+      - name: "Download artifacts for Macos aarch64, built on macos-15"
+        uses: actions/download-artifact@v6
         with:
-          name: acton-macos-14-aarch64
-      - name: "Download artifacts for Macos x86_64, built on macos-13"
-        uses: actions/download-artifact@v5
+          name: acton-macos-15-aarch64
+      - name: "Download artifacts for Macos x86_64, built on macos-15"
+        uses: actions/download-artifact@v6
         with:
-          name: acton-macos-13-x86_64
+          name: acton-macos-15-x86_64
       - name: "Download artifacts for Linux x86_64, built on Debian:12"
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v6
         with:
           name: acton-debian-12-x86_64
       - name: "Download artifacts for Linux arm64, built on Ubuntu:24.04"
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v6
         with:
           name: acton-ubuntu-24.04-arm64v8
       - name: "Download artifacts for Debian Linux on amd64 (x86_64) & arm64 (aarch64)"
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v6
         with:
           pattern: acton-debs-*
           merge-multiple: true
@@ -670,21 +675,25 @@ jobs:
     needs: [test-macos, test-linux, build-debs]
     steps:
       - name: "Check out repository code"
-        uses: actions/checkout@v4
-      - name: "Download artifacts for Macos, built on macos-13"
-        uses: actions/download-artifact@v5
+        uses: actions/checkout@v5
+      - name: "Download artifacts for Macos aarch64, built on macos-15"
+        uses: actions/download-artifact@v6
         with:
-          name: acton-macos-13-x86_64
+          name: acton-macos-15-aarch64
+      - name: "Download artifacts for Macos x86_64, built on macos-15"
+        uses: actions/download-artifact@v6
+        with:
+          name: acton-macos-15-x86_64
       - name: "Download artifacts for Linux x86_64, built on Debian:12"
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v6
         with:
           name: acton-debian-12-x86_64
       - name: "Download artifacts for Linux arm64, built on Ubuntu:24.04"
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v6
         with:
           name: acton-ubuntu-24.04-arm64v8
       - name: "Download artifacts for Debian Linux"
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v6
         with:
           pattern: acton-debs-*
           merge-multiple: true
@@ -723,13 +732,13 @@ jobs:
         with:
           gpg_private_key: ${{ secrets.APT_GPG_PRIVATE_KEY }}
       - name: Check out code of apt.acton-lang.io repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: actonlang/apt.acton-lang.io
           path: apt
           ssh-key: ${{ secrets.APT_DEPLOY_KEY }}
       - name: "Download artifacts for Debian Linux"
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v6
         with:
           path: .
           pattern: acton-debs-*
@@ -772,13 +781,13 @@ jobs:
           apt-get install -qy -t experimental reprepro
           apt-get install -qy git gnupg
       - name: Check out code of aptip.acton-lang.io repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: actonlang/aptip.acton-lang.io
           path: apt
           ssh-key: ${{ secrets.APT_TIP_DEPLOY_KEY }}
       - name: "Download artifacts for Debian Linux"
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v6
         with:
           path: .
           pattern: acton-debs-*
@@ -813,7 +822,7 @@ jobs:
     needs: [test-macos, test-linux, build-debs]
     steps:
       - name: "Check out code of main acton repo"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: "Get the version from version.mk"
         id: get_version
         run: |
@@ -833,7 +842,7 @@ jobs:
           echo "sum=$CHECKSUM" >> $GITHUB_OUTPUT
           echo "Checksum: $CHECKSUM"
       - name: "Check out code of our brew repo"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: actonlang/homebrew-acton
           path: homebrew-acton

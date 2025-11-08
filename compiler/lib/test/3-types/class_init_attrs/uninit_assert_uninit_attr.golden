@@ -1,0 +1,23 @@
+[error Type error]: Attribute 'result' is not initialized in TestClass.__init__
+     +--> uninit_assert_uninit_attr.act@6:5-14:1
+     |
+   2 |    class TestClass(object):
+     :    ^-----------------------
+     :    `- In class TestClass
+     :
+   4 |        result: int
+     :        ^----- 
+     :        `- Attribute 'result' is defined here
+     :
+   6 | +>     def __init__(self, x: int):
+   7 | |          self.value = x
+   8 | |          
+   9 | |          # Assert that references uninitialized self.result - should fail!
+  10 | |          assert self.result > 0, "result must be positive"
+  11 | |          
+  12 | |          # This should NOT be recognized as initialized
+  13 | |          self.result = 42
+  14 | |> 
+     : | 
+     : `- Attribute 'result' is not initialized in __init__
+-----+

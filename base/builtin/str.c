@@ -95,13 +95,15 @@ B_str to$str(char *str) {
     int nchars = 0;
     bool isascii = true;
     unsigned char *p = (unsigned char*)str;
-    while (*p++ != 0)
+    while (*p != 0) {
         if (*p >= 0x80) {
             isascii = false;
             break;
         }
+        p++;
+    }
     if (isascii) {
-        nbytes = p - (unsigned char*)str - 1;
+        nbytes = p - (unsigned char*)str;
         NEW_UNFILLED_STR(res, nbytes, nbytes);
         memcpy(res->str, str, nbytes);
         return res;
@@ -135,11 +137,13 @@ B_str to_str_noc(char *str) {
 
     bool isascii = true;
     unsigned char *p = (unsigned char*)str;
-    while (*p++ != 0)
+    while (*p != 0) {
         if (*p >= 0x80) {
             isascii = false;
             break;
         }
+        p++;
+    }
     p = (unsigned char*)str;
     int cp, cpnbytes;
     if (!isascii) {
@@ -2220,7 +2224,7 @@ B_list B_bytearrayD_split(B_bytearray s, B_bytearray sep, B_i64 maxsplit) {
             $RAISE((B_BaseException)$NEW(B_ValueError,to$str("split for bytearray: separator is empty string")));
         }
         if (s->nbytes==0) { // for some unfathomable reason, this is the behaviour of the Python method
-            wit->$class->append(wit,res,null_str);
+            wit->$class->append(wit,res,toB_bytearray(""));
             return res;
         }
         B_bytearray ls, rs, ssep;
@@ -3341,7 +3345,7 @@ B_list B_bytesD_split(B_bytes s, B_bytes sep, B_i64 maxsplit) {
             $RAISE((B_BaseException)$NEW(B_ValueError,to$str("split for bytes: separator is empty string")));
         }
         if (s->nbytes==0) { // for some unfathomable reason, this is the behaviour of the Python method
-            wit->$class->append(wit,res,null_str);
+            wit->$class->append(wit,res,null_bytes);
             return res;
         }
         B_bytes ls, rs, ssep;

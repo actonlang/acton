@@ -32,13 +32,16 @@ import Control.Monad.State.Lazy
 import Prelude hiding ((<>))
 import System.FilePath.Posix
 import Numeric
+-- For fast SrcLoc offset->line lookup when emitting #line
+import qualified Data.IntMap.Strict as IM
 
-generate                            :: Acton.Env.Env0 -> FilePath -> Module -> IO (String,String,String)
-generate env srcbase m              = do return (n, h, c)
+generate                            :: Acton.Env.Env0 -> FilePath -> String -> Bool -> Module -> String -> IO (String,String,String)
+generate env srcbase srcText emitLines m hash = do return (n, h, c)
 
   where n                           = concat (Data.List.intersperse "." (modPath (modname m))) --render $ quotes $ gen env0 (modname m)
-        h                           = render $ hModule env0 m
-        c                           = render $ cModule env0 srcbase m
+        hashComment                 = text "/* Acton source hash:" <+> text hash <+> text "*/"
+        h                           = render $ hashComment $+$ hModule env0 m
+        c                           = render $ hashComment $+$ cModule env0 srcbase srcText emitLines m
         env0                        = genEnv $ setMod (modname m) env
 
 genRoot                            :: Acton.Env.Env0 -> QName -> IO String
@@ -52,6 +55,9 @@ genRoot env0 qn@(GName m n)         = do return $ render (cInclude $+$ cIncludeM
         cRoot                       = (gen env tActor <+> gen env primROOT <+> parens empty <+> char '{') $+$
                                        nest 4 (text "return" <+> parens (gen env tActor) <> gen env primNEWACTOR <> parens (gen env qn) <> semi) $+$
                                        char '}'
+
+
+
 
 myPretty (GName m n)
       | m == mBuiltin               = text ("B_" ++ nstr n)
@@ -80,17 +86,24 @@ staticWitnessName _                 = (Nothing, [])
 
 -- Environment --------------------------------------------------------------------------------------
 
-genEnv env0                         = setX env0 GenX{ globalX = [], localX = [], retX = tNone, volVarsX = []}
+genEnv env0                         = setX env0 GenX{ globalX = [], localX = [], retX = tNone, volVarsX = [], lineEmitX = Nothing }
 
 type GenEnv                         = EnvF GenX
 
-data GenX                           = GenX { globalX :: [Name], localX :: [Name], retX :: Type , volVarsX :: [Name]}
+data GenX                           = GenX { globalX :: [Name]
+                                           , localX :: [Name]
+                                           , retX :: Type
+                                           , volVarsX :: [Name]
+                                           , lineEmitX :: Maybe (SrcLoc -> Doc)
+                                           }
 
 gdefine te env                      = modX env1 $ \x -> x{ globalX = dom te ++ globalX x }
   where env1                        = define te env
 
 ldefine te env                      = modX env1 $ \x -> x{ localX = dom te ++ localX x }
   where env1                        = define te env
+
+classdefine stmts env               = gdefine [ (n,i) | (n,i@NClass{}) <- envOf stmts ] env
 
 setRet t env                        = modX env $ \x -> x{ retX = t }
 
@@ -103,6 +116,15 @@ ret env                             = retX $ envX env
 setVolVars as env                   = modX env $ \x -> x{ volVarsX = as }
 
 isVolVar a env                      = a `elem` volVarsX (envX env)
+
+-- Line emission helpers
+setLineEmit :: (SrcLoc -> Doc) -> GenEnv -> GenEnv
+setLineEmit f env                   = modX env $ \x -> x{ lineEmitX = Just f }
+
+getLineEmit :: GenEnv -> (SrcLoc -> Doc)
+getLineEmit env                     = case lineEmitX (envX env) of
+                                        Just f  -> f
+                                        Nothing -> const empty
 
 -- Helpers ------------------------------------------------------------------------------------------
 
@@ -125,19 +147,22 @@ hModule env (Module m imps stmts)   = text "#pragma" <+> text "once" $+$
                                        else text "#include \"builtin/builtin.h\"" $+$ -- TODO: can we include out/types/__builtin__.h instead?
                                             include env "rts" (modName ["rts"])) $+$
                                       vcat (map (include env "out/types") $ modNames imps) $+$
-                                      hSuite env stmts $+$
+                                      hSuite 1 env1 stmts $+$
+                                      hSuite 2 env1 stmts $+$
                                       text "void" <+> genTopName env initKW <+> parens empty <> semi
+  where env1                        = classdefine stmts env
 
 
-hSuite env []                       = empty
-hSuite env (s:ss)                   = hStmt env s $+$ hSuite (gdefine (envOf s) env) ss
+hSuite phase env []                 = empty
+hSuite phase env (s:ss)             = hStmt phase env s $+$ hSuite phase (gdefine (envOf s) env) ss
 
-hStmt env (Decl _ ds)               = vmap (declstub env1) ds $+$
+hStmt 1 env (Decl _ ds)             = vmap (declstub env1) ds $+$
                                       vmap (typedef env1) ds $+$
                                       vmap (decl env1) ds $+$
                                       vmap (methstub env1) ds
   where env1                        = gdefine (envOf ds) env
-hStmt env s                         = vcat [ text "extern" <+> genTypeDecl env n t <+> genTopName env n <> semi | (n,NVar t) <- envOf s]
+hStmt 2 env s                       = vcat [ text "extern" <+> genTypeDecl env n t <+> genTopName env n <> semi | (n,NVar t) <- envOf s]
+hStmt _ env s                       = empty
 
 declstub env (Class _ n q a b ddoc) = text "struct" <+> genTopName env n <> semi
 declstub env Def{}                  = empty
@@ -285,24 +310,44 @@ primNEWTUPLE0                       = gPrim "NEWTUPLE0"
 
 -- Implementation -----------------------------------------------------------------------------------
 
-cModule env srcbase (Module m imps stmts)
+cModule env srcbase srcText emitLines (Module m imps stmts)
                                     = (if inBuiltin env then text "#include \"builtin/builtin.c\"" else empty) $+$
                                       text "#include \"rts/common.h\"" $+$
                                       include env (if inBuiltin env then "" else "out/types") m $+$
                                       ext_include $+$
-                                      declModule env stmts $+$
+                                      declModule envWithLine stmts $+$
                                       text "int" <+> genTopName env initFlag <+> equals <+> text "0" <> semi $+$
                                       (text "void" <+> genTopName env initKW <+> parens empty <+> char '{') $+$
                                       nest 4 (text "if" <+> parens (genTopName env initFlag) <+> text "return" <> semi $+$
                                               genTopName env initFlag <+> equals <+> text "1" <> semi $+$
                                               ext_init $+$
                                               initImports $+$
-                                              initModule env stmts) $+$
+                                              initTables env1 stmts $+$
+                                              initGlobals env1 stmts) $+$
                                       char '}'
   where initImports                 = vcat [ gen env (GName m initKW) <> parens empty <> semi | m <- modNames imps ]
-        external                    = hasNotImpl stmts && not (inBuiltin env)
-        ext_include                 = if hasNotImpl stmts then text "#include" <+> doubleQuotes (text srcbase <> text ".ext.c") else empty
-        ext_init                    = if hasNotImpl stmts then genTopName env (name "__ext_init__") <+> parens empty <> semi else empty
+        external                    = notImpl && not (inBuiltin env)
+        ext_include                 = if notImpl then text "#include" <+> doubleQuotes (text srcbase <> text ".ext.c") else empty
+        ext_init                    = if notImpl then genTopName env (name "__ext_init__") <+> parens empty <> semi else empty
+        notImpl                     = hasNotImpl stmts
+        env1                        = classdefine stmts env
+        -- Emit a C #line directive for a given Acton SrcLoc if available
+        actFile                     = srcbase ++ ".act"
+        -- Our AST source locations (SrcLoc) carry byte offsets (start,end), not (row,col).
+        -- C's #line requires a 1-based line number, so we convert offsets -> line numbers.
+        -- We precompute line start offsets and use an IntMap + lookupLE for O(log n) mapping.
+        lineStarts :: [Int]
+        lineStarts                  = 0 : [ i+1 | (i,c) <- zip ([0..] :: [Int]) srcText, c == '\n' ]
+        lineMap    :: IM.IntMap Int
+        lineMap                     = IM.fromList (zip lineStarts ([1..] :: [Int]))
+        offsetToLine :: Int -> Int
+        offsetToLine off            = case IM.lookupLE off lineMap of
+                                         Just (_, ln) -> ln
+                                         Nothing      -> 1
+        emitLine NoLoc              = empty
+        emitLine (Loc startOffset _) =
+            text "#line" <+> pretty (offsetToLine startOffset) <+> doubleQuotes (text actFile)
+        envWithLine                 = if emitLines then setLineEmit emitLine env1 else env1
 
 
 declModule env []                   = empty
@@ -317,18 +362,20 @@ declModule env (s : ss)             = vcat [ genTypeDecl env n t <+> genTopName 
         env1                        = gdefine te env
 
 
-declDecl env (Def _ n q p KwdNIL (Just t) b d fx ddoc)
-  | hasNotImpl b                    = genTypeDecl env n t1 <+> genTopName env n <+> parens (gen env p) <> semi $+$
+declDecl env (Def dloc n q p KwdNIL (Just t) b d fx ddoc)
+  | hasNotImpl b                    = gen env t <+> genTopName env n <+> parens (gen env p) <> semi $+$
                                       text "/*" $+$
                                       decl $+$
                                       text "*/"
   | otherwise                       = decl
   where (ss',vs)                    = genSuite env1 b
-        decl                        = (genTypeDecl env n t1 <+> genTopName env n <+> parens (gen (setVolVars vs env) p) <+> char '{') $+$
+        decl                        = emit dloc $+$
+                                      (genTypeDecl env n t1 <+> genTopName env n <+> parens (gen (setVolVars vs env) p) <+> char '{') $+$
                                       nest 4 ss' $+$
                                       char '}'
         env1                        = setRet t1 $ ldefine (envOf p) $ defineTVars q env
         t1                          = exposeMsg fx t
+        emit                        = getLineEmit env
 
 declDecl env (Class _ n q as b ddoc)
     | cDefinedClass                 = vcat [ declDecl env1 d{ dname = methodname n (dname d) } | Decl _ ds <- b', d@Def{} <- ds ] $+$
@@ -393,16 +440,22 @@ declDeserialize env n c props sup_c = (gen env (tCon c) <+> genTopName env (meth
         ret                         = text "return" <+> gen env self <> semi
 
 
-initModule env []                   = empty
-initModule env (Decl _ ds : ss)     = vcat [ char '{' $+$ nest 4 (initClassBase env1 n q as hC $+$ initClass env1 n b hC) $+$ char '}' | Class _ n q as b ddoc <- ds, let hC = hasCDef b ] $+$
-                                      initModule env1 ss
+initTables env []                   = empty
+initTables env (Decl _ ds : ss)     = vcat [ char '{' $+$ nest 4 (initClassBase env1 n q as hC $+$ initClass env1 n b hC) $+$ char '}' | Class _ n q as b ddoc <- ds, let hC = hasCDef b ] $+$
+                                      initTables env1 ss
   where env1                        = gdefine (envOf ds) env
         hasCDef b                   = inBuiltin env && any hasNotImpl [b' | Decl _ ds <- b, Def{dname=n',dbody=b'} <- ds, n' == initKW ]
 
-initModule env (Signature{} : ss)   = initModule env ss
-initModule env (s : ss)             = genStmt1 env s $+$
+initTables env (s : ss)             = initTables env ss
+
+
+initGlobals env []                  = empty
+initGlobals env (Decl _ ds : ss)    = initGlobals env1 ss
+  where env1                        = gdefine (envOf ds) env
+initGlobals env (Signature{} : ss)  = initGlobals env ss
+initGlobals env (s : ss)            = genStmt1 env s $+$
                                       vcat [ genTopName env n <+> equals <+> gen env n <> semi | (n,_) <- te ] $+$
-                                      initModule env1 ss
+                                      initGlobals env1 ss
   where te                          = envOf s `exclude` defined env
         env1                        = gdefine te env
 
@@ -494,12 +547,65 @@ unCkeyword str
   | str `Data.Set.member` rws       = preEscape str
   | otherwise                       = str
   where rws                         = Data.Set.fromDistinctAscList [
-                                        "auto",     "break",    "case",     "char",     "const",    "continue",
-                                        "default",  "do",       "double",   "else",     "enum",     "extern",
-                                        "float",    "for",      "goto",     "if",       "int",      "long",
-                                        "register", "return",   "short",    "signed",   "sizeof",   "static",
-                                        "struct",   "switch",   "typedef",  "union",    "unsigned", "void",
-                                        "volatile", "while"
+                                        "alignas",
+                                        "alignof",
+                                        "auto",
+                                        "bool",
+                                        "break",
+                                        "case",
+                                        "char",
+                                        "const",
+                                        "constexpr",
+                                        "continue",
+                                        "default",
+                                        "do",
+                                        "double",
+                                        "else",
+                                        "enum",
+                                        "extern",
+                                        "false",
+                                        "float",
+                                        "for",
+                                        "goto",
+                                        "if",
+                                        "inline",
+                                        "int",
+                                        "long",
+                                        "nullptr",
+                                        "register",
+                                        "restrict",
+                                        "return",
+                                        "short",
+                                        "signed",
+                                        "sizeof",
+                                        "static",
+                                        "static_assert",
+                                        "struct",
+                                        "switch",
+                                        "thread_local",
+                                        "true",
+                                        "typedef",
+                                        "typeof",
+                                        "typeof_unequal",
+                                        "union",
+                                        "unsigned",
+                                        "void",
+                                        "volatile",
+                                        "while",
+                                        "_Alignas",
+                                        "_Alignof",
+                                        "_Atomic",
+                                        "_BitInt",
+                                        "_Bool",
+                                        "_Complex",
+                                        "_Decimal128",
+                                        "_Decimal32",
+                                        "_Decimal64",
+                                        "_Generic",
+                                        "_Imaginary",
+                                        "_Noreturn",
+                                        "_Static_assert",
+                                        "_Thread_local"
                                       ]
 
 
@@ -508,10 +614,12 @@ preEscape str                       = "A_" ++ str
 
 word                                = text "$WORD"
 
+genSuite :: GenEnv -> Suite -> (Doc,[Name])
 genSuite env []                     = (empty,[])
-genSuite env (s:ss)                 = (c $+$ cs, vs' ++ (vs `intersect` defined env))
+genSuite env (s:ss)                 = ((emit (sloc s) $+$ c) $+$ cs, vs' ++ (vs `intersect` defined env))
     where (cs,vs)                   = genSuite (ldefine (envOf s) env) ss
           (c,vs')                   = genStmt (setVolVars vs env) s
+          emit                      = getLineEmit env
 
 isUnboxed (Internal BoxPass _ _)    = True
 isUnboxed _                         = False
@@ -777,7 +885,9 @@ adjust TNone{} t' e                 = e
 adjust t t'@TVar{} e                = e
 adjust (TCon _ c) (TCon _ c') e
   | tcname c == tcname c'           = e
-adjust t t' e                       = typecast t t' e
+adjust t t' e
+   | B.isUnboxable t'               = e
+   | otherwise                      = typecast t t' e
 
 genExp env t' e                     = gen env (adjust t t' e')
   where (t, fx, e')                 = qType env adjust e
@@ -816,6 +926,10 @@ instance Gen Expr where
        | otherwise                  = gen env primNEWTUPLE <> parens (text (show n) <> comma' (gen env p))
        where n                      = nargs p
     gen env (List _ es)             = text "B_mk_list" <> parens (pretty (length es) <> hsep [comma <+> gen env e | e <- es])
+    gen env (BinOp _ e1 And e2)     = gen env primAND <> parens (gen env t <> comma <+> gen env e1 <> comma <+> gen env e2)
+      where t                       = typeOf env e1
+    gen env (BinOp _ e1 Or e2)      = gen env primOR <> parens (gen env t <> comma <+> gen env e1 <> comma <+> gen env e2)
+      where t                       = typeOf env e1
     gen env (BinOp _ e1 op e2)
             | op == Div && t /= tFloat
              || op `elem` [Pow, Mod, EuDiv]     -- Pow since there is no C operator, the others since they need to check for division by zero
@@ -828,7 +942,7 @@ instance Gen Expr where
             opstr Mod               = "MOD"
             opstr EuDiv             = "FLOORDIV"
     gen env (CompOp _ e [a])        = gen env e <+> gen env a
-    gen env (UnOp _ Not e)          = gen env primNOT <> parens (gen env t <> comma <+> genBool env e)
+    gen env (UnOp _ Not e)          = gen env primNOT <> parens (gen env t <> comma <+> gen env e)
       where t                       = typeOf env e
     gen env (Cond _ e1 e e2)        = parens (parens (gen env (B.unbox tBool e)) <+> text "?" <+> gen env e1 <+> text ":" <+> gen env e2)
     gen env (Paren _ e)             = parens (gen env e)
@@ -869,8 +983,8 @@ genUnboxedInt env _ c               = parens (gen env c) <> text "->val"
 instance Gen OpArg where
     gen env (OpArg  op e)           = compPretty op <+> gen env e
 
-compPretty Is                       = text "=="
-compPretty IsNot                    = text "!="
+-- compPretty Is                       = text "=="
+-- compPretty IsNot                    = text "!="
 compPretty op                       = pretty op
 
 binPretty And                       = text "&&"
@@ -926,4 +1040,3 @@ unboxed_c_type t
     | t == tU16 = "uint16_t"
     | t == tFloat = "double"
     | otherwise = error ("Internal error: trying to find unboxed type for " ++ show t)
-

@@ -519,10 +519,11 @@ buildFormatString (ExprPart _ fmt : rest) = "%" ++ fmt ++ buildFormatString rest
 -- | Parse a string with optional interpolation expressions
 -- Both regular strings and f-strings support interpolation in Acton
 -- i.e. "{foo}" and f"{foo}" are equivalent
-parseInterpolatedString :: String -> String -> Parser StringPart -> Parser S.Expr
+parseInterpolatedString :: String -> String -> (Int -> Parser StringPart) -> Parser S.Expr
 parseInterpolatedString startQuote endQuote textPartParser = lexeme $ do
   startLoc <- getOffset
   try $ string startQuote
+  let startQuoteCharOffset = startLoc + (length startQuote - length endQuote)
   let stringPart = choice [
           -- Escaped braces - handle these BEFORE expression parsing
           try (string "{{" >> return (TextPart "{")),
@@ -530,7 +531,7 @@ parseInterpolatedString startQuote endQuote textPartParser = lexeme $ do
           -- Expression parts (now without the notFollowedBy check)
           try exprPart,
           -- Regular text
-          textPartParser
+          textPartParser startQuoteCharOffset
         ]
   parts <- many stringPart
   string endQuote <|> do
@@ -566,8 +567,8 @@ parseInterpolatedString startQuote endQuote textPartParser = lexeme $ do
       return result
 
 -- | Create a text part parser for given quote style
-parseTextPart :: String -> Bool -> Bool -> Parser StringPart
-parseTextPart quoteStr isTriple handleNewlines = do
+parseTextPart :: String -> Bool -> Bool -> Int -> Parser StringPart
+parseTextPart quoteStr isTriple handleNewlines startOfString = do
   chunks <- some $ choice [
       -- Use existing escape sequence parsers with better error handling
       try (char '\\' >> choice [
@@ -625,7 +626,7 @@ parseTextPart quoteStr isTriple handleNewlines = do
           case nextChar of
             Just _ -> do
               pos <- getOffset
-              parseException (Loc (pos - 1) pos) $ MissingClosingQuote quoteStr
+              parseException (Loc startOfString pos) $ MissingClosingQuote quoteStr
             Nothing -> do
               (loc, c) <- withLoc $ noneOf ("{}" ++ quoteStr ++ "\n")
               return [c]
@@ -937,7 +938,19 @@ stringTempl :: String -> Parser String -> Parser String -> String -> Parser [Str
 stringTempl q single esc prefix = do
     startLoc <- getOffset
     _ <- string (prefix++q)
-    content <- manyTillEsc single esc (string q <?> closingQuoteError startLoc q)
+    -- For single-quoted strings, guard against newline before closing quote
+    let startQuoteOffset = startLoc + length prefix
+        guardedSingle = if length q == 1
+                        then do
+                          -- If the next char is a newline, treat as unclosed string
+                          mb <- lookAhead (optional anySingle)
+                          case mb of
+                            Just '\n' -> do
+                              pos <- getOffset
+                              parseException (Loc startQuoteOffset pos) (MissingClosingQuote q)
+                            _ -> single
+                        else single
+    content <- manyTillEsc guardedSingle esc (string q <?> closingQuoteError startLoc q)
     currSC  -- Apply lexeme whitespace consumption
     return $ hexSplitString . concat $ content
   where

@@ -1,0 +1,25 @@
+[error Type error]: Attribute 'y' is not initialized in TestClass.__init__
+     +--> uninit_self_in_list.act@10:5-20:1
+     |
+   6 |    class TestClass(object):
+     :    ^-----------------------
+     :    `- In class TestClass
+     :
+   8 |        y: int
+     :        ^ 
+     :        `- Attribute 'y' is defined here
+     :
+  10 | +>     def __init__(self):
+  11 | |          self.x = 1
+  12 | |          
+  13 | |          # Direct reference to self - stop scanning here
+  14 | |          # We don't actually know if objects how objects is used or if it even is
+  15 | |          # used, but that is untractable to analyze, so we stop analyzing at any
+  16 | |          # point where self is referenced.
+  17 | |          objects = [self, self]
+  18 | |          # This won't be scanned, so y will be considered uninitialized
+  19 | |          self.y = do_something(objects)
+  20 | |> 
+     : | 
+     : `- Attribute 'y' is not initialized in __init__
+-----+

@@ -3,6 +3,21 @@ import file
 import logging
 import testing
 
+actor _test_mkdir_idempotent(t: testing.EnvT):
+    fc = file.FileCap(t.env.cap)
+    fs = file.FS(fc)
+    tmpdir = fs.mktmpdir()
+    fs.mkdir(tmpdir + "/foo")
+    fs.mkdir(tmpdir + "/foo")
+    t.success()
+
+actor _test_rmdir_idempotent(t: testing.EnvT):
+    fc = file.FileCap(t.env.cap)
+    fs = file.FS(fc)
+    tmpdir = fs.mktmpdir()
+    fs.rmdir(tmpdir + "/foo")
+    t.success()
+
 def _test_file_walk(report_result: action(?bool, ?Exception) -> None, env: Env, log_handler: logging.Handler) -> None:
     try:
         fc = file.FileCap(env.cap)

@@ -10,6 +10,7 @@
 **/*.hi
 **/*.o
 **/a.out
+**/build.zig*
 **/core
 **/build-cache
 **/zig-cache
@@ -36,9 +37,11 @@ builder/build_runner.zig
 builder/zig-cache
 
 compiler/package.yaml
+compiler/actonc/actonc.cabal
 compiler/actonc/package.yaml
 compiler/lib/package.yaml
 compiler/lsp-server/package.yaml
+compiler/lsp-server/lsp-server-acton.cabal
 test/package.yaml
 
 debian/.debhelper

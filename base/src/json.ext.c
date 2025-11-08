@@ -24,7 +24,7 @@ void jsonQ___ext_init__() {
     acton_alc.free = my_free;
 }
 
-void jsonQ_encode_list(yyjson_mut_doc *doc, yyjson_mut_val *node, B_list data);
+void jsonQ_encode_list_into(yyjson_mut_doc *doc, yyjson_mut_val *node, B_list data);
 void jsonQ_encode_dict(yyjson_mut_doc *doc, yyjson_mut_val *node, B_dict data) {
     B_IteratorD_dict_items iter = $NEW(B_IteratorD_dict_items, data);
     B_tuple item;
@@ -50,7 +50,7 @@ void jsonQ_encode_dict(yyjson_mut_doc *doc, yyjson_mut_val *node, B_dict data) {
                 case LIST_ID:;
                     yyjson_mut_val *l = yyjson_mut_arr(doc);
                     yyjson_mut_obj_add_val(doc, node, key, l);
-                    jsonQ_encode_list(doc, l, (B_list)v);
+                    jsonQ_encode_list_into(doc, l, (B_list)v);
                     break;
                 case DICT_ID:;
                     yyjson_mut_val *d = yyjson_mut_obj(doc);
@@ -70,7 +70,7 @@ void jsonQ_encode_dict(yyjson_mut_doc *doc, yyjson_mut_val *node, B_dict data) {
     }
 }
 
-void jsonQ_encode_list(yyjson_mut_doc *doc, yyjson_mut_val *node, B_list data) {
+void jsonQ_encode_list_into(yyjson_mut_doc *doc, yyjson_mut_val *node, B_list data) {
     for (int i = 0; i < data->length; i++) {
         B_value v = data->data[i];
         if (v) {
@@ -90,7 +90,7 @@ void jsonQ_encode_list(yyjson_mut_doc *doc, yyjson_mut_val *node, B_list data) {
                 case LIST_ID:;
                     yyjson_mut_val *l = yyjson_mut_arr_add_arr(doc, node);
                     if (l) {
-                        jsonQ_encode_list(doc, l, (B_list)v);
+                        jsonQ_encode_list_into(doc, l, (B_list)v);
                     } else {
                         // TODO: raise exception
                     }
@@ -238,6 +238,27 @@ B_dict jsonQ_decode (B_str data) {
     return res;
 }
 
+B_list jsonQ_decode_list (B_str data) {
+    // Read JSON and get root
+    yyjson_read_err err;
+    yyjson_doc *doc = yyjson_read_opts(fromB_str(data), strlen(fromB_str(data)), 0, &acton_alc, &err);
+    if (!doc) {
+        char errmsg[1024];
+        snprintf(errmsg, sizeof(errmsg), "JSON parsing error: %s (%u) at position %ld", err.msg, err.code, err.pos);
+        $RAISE((B_BaseException)$NEW(B_ValueError, to$str(errmsg)));
+    }
+
+    yyjson_val *root = yyjson_doc_get_root(doc);
+    if (yyjson_get_type(root) != YYJSON_TYPE_ARR) {
+        yyjson_doc_free(doc);
+        $RAISE(((B_BaseException)B_ValueErrorG_new(to$str("JSON root is not an array"))));
+    }
+
+    B_list res = jsonQ_decode_arr(root);
+    yyjson_doc_free(doc);
+    return res;
+}
+
 B_str jsonQ_encode (B_dict data, B_bool pretty) {
     if (pretty == NULL)
         pretty = B_False;
@@ -248,6 +269,27 @@ B_str jsonQ_encode (B_dict data, B_bool pretty) {
     yyjson_mut_doc_set_root(doc, root);
 
     jsonQ_encode_dict(doc, root, data);
+
+    yyjson_write_err err;
+    int flags = 0;
+    if (pretty == B_True)
+        flags += YYJSON_WRITE_PRETTY;
+
+    char *json = yyjson_mut_write_opts(doc, flags, &acton_alc, NULL, &err);
+    //yyjson_doc_free(doc);
+    return to$str(json);
+}
+
+B_str jsonQ_encode_list (B_list data, B_bool pretty) {
+    if (pretty == NULL)
+        pretty = B_False;
+
+    // Create JSON document
+    yyjson_mut_doc *doc = yyjson_mut_doc_new(&acton_alc);
+    yyjson_mut_val *root = yyjson_mut_arr(doc);
+    yyjson_mut_doc_set_root(doc, root);
+
+    jsonQ_encode_list_into(doc, root, data);
 
     yyjson_write_err err;
     int flags = 0;

@@ -1,0 +1,17 @@
+# Test case: Assignments after a while loop that doesn't reference self
+class TestClass(object):
+    x: int
+    y: int
+
+    def __init__(self):
+        count = 0
+        # While loop that doesn't reference self
+        while count < 5:
+            count = count + 1
+        # These assignments happen after the loop
+        self.x = 1
+        self.y = 2
+
+actor main(env):
+    t = TestClass()
+    env.exit(0)

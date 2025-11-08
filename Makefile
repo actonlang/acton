@@ -1,5 +1,5 @@
 include version.mk
-TD:=$(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
+TD := $(CURDIR)
 CHANGELOG_VERSION=$(shell grep '^\#\# \[[0-9]' CHANGELOG.md | sed 's/\#\# \[\([^]]\{1,\}\)].*/\1/' | head -n1)
 GIT_VERSION_TAG=$(shell git tag --points-at HEAD 2>/dev/null | grep "v[0-9]" | sed -e 's/^v//')
 
@@ -101,7 +101,7 @@ endif
 
 BUILTIN_HFILES=$(wildcard base/builtin/*.h)
 
-DIST_BINS=$(ACTONC) dist/bin/actondb dist/bin/runacton
+DIST_BINS=$(ACTONC) dist/bin/actondb dist/bin/runacton dist/bin/lsp-server-acton
 DIST_ZIG=dist/zig
 
 .PHONY: test-backend
@@ -115,16 +115,20 @@ test-backend: $(BACKEND_TESTS)
 
 # /compiler ----------------------------------------------
 ACTONC_HS=$(wildcard compiler/lib/src/*.hs compiler/lib/src/*/*.hs compiler/actonc/Main.hs)
+ACTONLSP_HS=$(wildcard compiler/lsp-server/*.hs)
 # NOTE: we're unsetting CC & CXX to avoid using zig cc & zig c++ for stack /
 # ghc, which doesn't seem to work properly
-dist/bin/actonc: compiler/lib/package.yaml.in compiler/actonc/package.yaml.in compiler/lsp-server/package.yaml.in compiler/stack.yaml $(ACTONC_HS) version.mk
+dist/bin/actonc: compiler/lib/package.yaml.in compiler/actonc/package.yaml.in compiler/lsp-server/package.yaml.in compiler/stack.yaml $(ACTONC_HS) $(ACTONLSP_HS) version.mk
 	mkdir -p dist/bin
 	cd compiler && sed 's,^version: BUILD_VERSION,version: "$(VERSION)",' < lib/package.yaml.in > lib/package.yaml
-	cd compiler && unset CC && unset CXX && unset CFLAGS && stack build actonc --dry-run 2>&1 | grep "Nothing to build" || \
+	cd compiler && unset CC && unset CXX && unset CFLAGS && stack build actonc lsp-server-acton --dry-run 2>&1 | grep "Nothing to build" || \
 		(sed 's,^version: BUILD_VERSION,version: "$(VERSION_INFO)",' < actonc/package.yaml.in > actonc/package.yaml \
 		&& sed 's,^version: BUILD_VERSION,version: "$(VERSION_INFO)",' < lsp-server/package.yaml.in > lsp-server/package.yaml \
-		&& stack build actonc $(STACK_OPTS) --ghc-options='-j4 $(ACTC_GHC_OPTS)')
-	cd compiler && unset CC && unset CXX && unset CFLAGS && stack --local-bin-path=../dist/bin install actonc
+		&& stack build actonc lsp-server-acton $(STACK_OPTS) --ghc-options='-j4 $(ACTC_GHC_OPTS)')
+	cd compiler && unset CC && unset CXX && unset CFLAGS && stack --local-bin-path=../dist/bin install actonc lsp-server-acton
+
+dist/bin/lsp-server-acton: dist/bin/actonc
+	@true
 
 .PHONY: clean-compiler
 clean-compiler:
@@ -159,10 +163,10 @@ deps-download/$(LIBARGP_REF).tar.gz:
 	curl -f -L -o $@ https://github.com/actonlang/argp-standalone/archive/$(LIBARGP_REF).tar.gz
 
 dist/deps/libargp: deps-download/$(LIBARGP_REF).tar.gz
-	mkdir -p $@
-	cd $@ && tar zx --strip-components=1 -f $(TD)/$<
-	rm -rf $@/testsuite
-	touch $(TD)/$@
+	mkdir -p "$@"
+	cd "$@" && tar zx --strip-components=1 -f "$(TD)/$<"
+	rm -rf "$@/testsuite"
+	touch "$(TD)/$@"
 
 # /deps/libbsdnt --------------------------------------------
 LIBBSDNT_REF=282f774e1e664ea7c23cc0bb9f313c1054874a97
@@ -171,9 +175,9 @@ deps-download/$(LIBBSDNT_REF).tar.gz:
 	curl -f -L -o $@ https://github.com/actonlang/bsdnt/archive/$(LIBBSDNT_REF).tar.gz
 
 dist/deps/libbsdnt: deps-download/$(LIBBSDNT_REF).tar.gz
-	mkdir -p $@
-	cd $@ && tar zx --strip-components=1 -f $(TD)/$<
-	touch $(TD)/$@
+	mkdir -p "$@"
+	cd "$@" && tar zx --strip-components=1 -f "$(TD)/$<"
+	touch "$(TD)/$@"
 
 # /deps/libgc --------------------------------------------
 LIBGC_REF=0a23b211b558137de7ee654c5527a54113142517
@@ -182,10 +186,10 @@ deps-download/$(LIBGC_REF).tar.gz:
 	curl -f -L -o $@ https://github.com/actonlang/bdwgc/archive/$(LIBGC_REF).tar.gz
 
 dist/deps/libgc: deps-download/$(LIBGC_REF).tar.gz
-	mkdir -p $@
-	cd $@ && tar zx --strip-components=1 -f $(TD)/$<
-	rm -rf $@/tests $@/tools
-	touch $(TD)/$@
+	mkdir -p "$@"
+	cd "$@" && tar zx --strip-components=1 -f "$(TD)/$<"
+	rm -rf "$@/tests" "$@/tools"
+	touch "$(TD)/$@"
 
 # /deps/libmbedtls --------------------------------------------
 LIBMBEDTLS_REF=e72756f2312f04b659fdeaba2fbba7b1f5fd3927
@@ -194,9 +198,9 @@ deps-download/$(LIBMBEDTLS_REF).tar.gz:
 	curl -f -L -o $@ https://github.com/actonlang/mbedtls/archive/$(LIBMBEDTLS_REF).tar.gz
 
 dist/deps/mbedtls: deps-download/$(LIBMBEDTLS_REF).tar.gz
-	mkdir -p $@
-	cd $@ && tar zx --strip-components=1 -f $(TD)/$<
-	touch $(TD)/$@
+	mkdir -p "$@"
+	cd "$@" && tar zx --strip-components=1 -f "$(TD)/$<"
+	touch "$(TD)/$@"
 
 # /deps/libprotobuf_c --------------------------------------------
 LIBPROTOBUF_C_REF=4e4bfc7ec44e6ac746b05f3251f59610822bc95c
@@ -205,9 +209,9 @@ deps-download/$(LIBPROTOBUF_C_REF).tar.gz:
 	curl -f -L -o $@ https://github.com/actonlang/protobuf-c/archive/$(LIBPROTOBUF_C_REF).tar.gz
 
 dist/deps/libprotobuf_c: deps-download/$(LIBPROTOBUF_C_REF).tar.gz
-	mkdir -p $@
-	cd $@ && tar zx --strip-components=1 -f $(TD)/$<
-	touch $(TD)/$@
+	mkdir -p "$@"
+	cd "$@" && tar zx --strip-components=1 -f "$(TD)/$<"
+	touch "$(TD)/$@"
 
 # /deps/tlsuv ---------------------------------------------
 TLSUV_REF=6232c3fae39a7820b5f99a0f4ccd054735473668
@@ -216,9 +220,9 @@ deps-download/$(TLSUV_REF).tar.gz:
 	curl -f -L -o $@ https://github.com/actonlang/tlsuv/archive/$(TLSUV_REF).tar.gz
 
 dist/deps/tlsuv: deps-download/$(TLSUV_REF).tar.gz dist/deps/libuv dist/deps/mbedtls
-	mkdir -p $@
-	cd $@ && tar zx --strip-components=1 -f $(TD)/$<
-	touch $(TD)/$@
+	mkdir -p "$@"
+	cd "$@" && tar zx --strip-components=1 -f "$(TD)/$<"
+	touch "$(TD)/$@"
 
 # /deps/libutf8proc --------------------------------------
 LIBUTF8PROC_REF=e914c63b43d5f283090a63a307fccd25acbe37f0
@@ -227,14 +231,14 @@ deps-download/$(LIBUTF8PROC_REF).tar.gz:
 	curl -f -L -o $@ https://github.com/actonlang/utf8proc/archive/$(LIBUTF8PROC_REF).tar.gz
 
 dist/deps/libutf8proc: deps-download/$(LIBUTF8PROC_REF).tar.gz
-	mkdir -p $@
-	cd $@ && tar zx --strip-components=1 -f $(TD)/$<
-	touch $(TD)/$@
+	mkdir -p "$@"
+	cd "$@" && tar zx --strip-components=1 -f "$(TD)/$<"
+	touch "$(TD)/$@"
 
 # /deps/libuuid ------------------------------------------
 dist/deps/libuuid: deps/libuuid
-	mkdir -p $(TD)/$@
-	cp -a $</* $(TD)/$@
+	mkdir -p "$(TD)/$@"
+	cp -a "$</"* "$(TD)/$@"
 
 # /deps/libuv --------------------------------------------
 LIBUV_REF=f20620733fb8fb5fb261699bbb858887ac6ec0bb
@@ -243,9 +247,9 @@ deps-download/$(LIBUV_REF).tar.gz:
 	curl -f -L -o $@ https://github.com/actonlang/libuv/archive/$(LIBUV_REF).tar.gz
 
 dist/deps/libuv: deps-download/$(LIBUV_REF).tar.gz
-	mkdir -p $@
-	cd $@ && tar zx --strip-components=1 -f $(TD)/$< libuv-$(LIBUV_REF)/build.zig libuv-$(LIBUV_REF)/include libuv-$(LIBUV_REF)/src
-	touch $(TD)/$@
+	mkdir -p "$@"
+	cd "$@" && tar zx --strip-components=1 -f "$(TD)/$<" "libuv-$(LIBUV_REF)/build.zig" "libuv-$(LIBUV_REF)/include" "libuv-$(LIBUV_REF)/src"
+	touch "$(TD)/$@"
 
 # /deps/libxml2 ------------------------------------------
 LIBXML2_REF=56e4e62c077b2c5285b0eec4d6d4497f9b2e6e8f
@@ -254,10 +258,10 @@ deps-download/$(LIBXML2_REF).tar.gz:
 	curl -f -L -o $@ https://github.com/actonlang/libxml2/archive/$(LIBXML2_REF).tar.gz
 
 dist/deps/libxml2: deps-download/$(LIBXML2_REF).tar.gz
-	mkdir -p $@
-	cd $@ && tar zx --strip-components=1 -f $(TD)/$<
-	rm -rf $@/doc $@/example $@/fuzz $@/os400 $@/python $@/test*
-	touch $(TD)/$@
+	mkdir -p "$@"
+	cd "$@" && tar zx --strip-components=1 -f "$(TD)/$<"
+	rm -rf "$@/doc" "$@/example" "$@/fuzz" "$@/os400" "$@/python" $@/test*
+	touch "$(TD)/$@"
 
 # /deps/pcre2 --------------------------------------------
 LIBPCRE2_REF=2afc8e2c87e53204e08e5e1333a8e14ecbf5e3a2
@@ -266,9 +270,9 @@ deps-download/$(LIBPCRE2_REF).tar.gz:
 	curl -f -L -o $@ https://github.com/actonlang/pcre2/archive/$(LIBPCRE2_REF).tar.gz
 
 dist/deps/pcre2: deps-download/$(LIBPCRE2_REF).tar.gz
-	mkdir -p $@
-	cd $@ && tar zx --strip-components=1 -f $(TD)/$<
-	touch $(TD)/$@
+	mkdir -p "$@"
+	cd "$@" && tar zx --strip-components=1 -f "$(TD)/$<"
+	touch "$(TD)/$@"
 
 # /deps/libsnappy_c --------------------------------------------
 LIBSNAPPY_C_REF=3f5b95957558a35c2becbe6b628c8219477dd5a4
@@ -277,17 +281,17 @@ deps-download/$(LIBSNAPPY_C_REF).tar.gz:
 	curl -f -L -o $@ https://github.com/actonlang/snappy/archive/$(LIBSNAPPY_C_REF).tar.gz
 
 dist/deps/libsnappy_c: deps-download/$(LIBSNAPPY_C_REF).tar.gz
-	mkdir -p $@
-	cd $@ && tar zx --strip-components=1 -f $(TD)/$<
-	touch $(TD)/$@
+	mkdir -p "$@"
+	cd "$@" && tar zx --strip-components=1 -f "$(TD)/$<"
+	touch "$(TD)/$@"
 
 dist/deps/libnetstring: deps/libnetstring $(DIST_ZIG)
-	mkdir -p $(TD)/$@
-	cp -a $</* $(TD)/$@
+	mkdir -p "$(TD)/$@"
+	cp -a "$</"* "$(TD)/$@"
 
 dist/deps/libyyjson: deps/libyyjson $(DIST_ZIG)
-	mkdir -p $(TD)/$@
-	cp -a $</* $(TD)/$@
+	mkdir -p "$(TD)/$@"
+	cp -a "$</"* "$(TD)/$@"
 
 # top level targets
 .PHONY: test test-builtins test-compiler test-db test-examples test-lang test-regressions test-rts test-stdlib
@@ -306,6 +310,13 @@ test-compiler:
 
 test-cross-compile:
 	cd compiler && stack test actonc --ta '-p "cross-compilation"'
+
+test-rebuild: dist/bin/actonc
+	cd compiler && stack test actonc:rebuild
+
+.PHONY: test-rebuild-accept
+test-rebuild-accept: dist/bin/actonc
+	cd compiler && stack test actonc:rebuild --ta "--accept"
 
 test-syntaxerrors:
 	cd compiler && stack test actonc --ta '-p "syntax errors"'
@@ -339,7 +350,7 @@ test-rts-db:
 
 test-stdlib: dist/bin/acton
 	cd compiler && stack test actonc --ta '-p "stdlib"'
-	cd test/stdlib_tests && $(ACTON) test
+	cd test/stdlib_tests && "$(ACTON)" test
 
 
 .PHONY: clean clean-all clean-base
@@ -355,7 +366,7 @@ clean-base:
 	rm -rf base/out
 
 cli/out/bin/acton: distribution1
-	cd cli && rm -f build.zig build.zig.zon && $(ACTC) build $(ACTONC_TARGET)
+	cd cli && rm -f build.zig build.zig.zon && "$(ACTC)" build $(ACTONC_TARGET)
 
 # == DIST ==
 #
@@ -363,14 +374,14 @@ cli/out/bin/acton: distribution1
 BACKEND_FILES = backend/build.zig backend/build.zig.zon $(wildcard backend/*.c backend/*.h backend/failure_detector/*.c backend/failure_detector/*.h)
 DIST_BACKEND_FILES = $(addprefix dist/,$(BACKEND_FILES)) dist/backend/deps dist/bin/actondb
 dist/backend%: backend/%
-	mkdir -p $(dir $@)
-	cp -a $< $@
+	mkdir -p "$(dir $@)"
+	cp -a "$<" "$@"
 
 .PHONY: dist/base
 dist/base: base base/.build base/__root.zig base/acton.zig base/build.zig base/build.zig.zon base/acton.zig dist/bin/actonc $(DEPS)
-	mkdir -p $@ $@/.build $@/out
+	mkdir -p "$@" "$@/.build" "$@/out"
 	cp -a base/__root.zig base/Acton.toml base/acton.zig base/build.zig base/build.zig.zon base/builtin base/rts base/src dist/base/
-	cd dist/base && ../bin/actonc build && rm -rf .build
+	cd dist/base && ../bin/actonc build --skip-build && rm -rf .build
 
 # This does a little hack, first copying and then moving the file in place. This
 # is to avoid an error if the executable is currently running. cp tries to open
@@ -384,7 +395,7 @@ dist/bin/acton: cli/out/bin/acton
 
 dist/bin/actondb: $(DIST_ZIG) $(DEPS)
 	@mkdir -p $(dir $@)
-	cd dist/backend && $(ZIG) build -Donly_actondb --prefix $(TD)/dist
+	cd dist/backend && "$(ZIG)" build -Donly_actondb --prefix "$(TD)/dist"
 
 dist/bin/runacton: bin/runacton
 	@mkdir -p $(dir $@)
@@ -392,22 +403,22 @@ dist/bin/runacton: bin/runacton
 	mv $@.tmp $@
 
 dist/builder: builder/build.zig builder/build.zig.zon
-	@mkdir -p $@
-	cp -a $^ $@/
+	@mkdir -p "$@"
+	cp -a $^ "$@/"
 
 dist/deps/%: deps/% $(DEPS)
-	@mkdir -p $(dir $@)
-	cp -a $< $@
+	@mkdir -p "$(dir $@)"
+	cp -a "$<" "$@"
 
 dist/completion/acton.bash-completion: completion/acton.bash-completion
-	mkdir -p $(dir $@)
-	cp $< $@
+	mkdir -p "$(dir $@)"
+	cp "$<" "$@"
 
 dist/zig: deps-download/zig-$(OS)-$(ARCH)-$(ZIG_VERSION).tar.xz
-	mkdir -p $@
-	cd $@ && tar Jx --strip-components=1 -f ../../$^
-	rm -rf $@/doc
-	cp -a deps/zig-extras/* $@
+	mkdir -p "$@"
+	cd "$@" && tar Jx --strip-components=1 -f "../../$^"
+	rm -rf "$@/doc"
+	cp -a deps/zig-extras/* "$@"
 
 
 # Check if ZIG_VERSION contains -dev, in which case we pull down a nightly,
@@ -444,7 +455,7 @@ endif
 ACTONC_VERSION=$(shell $(ACTONC) --numeric-version 2>/dev/null | grep -E "^[0-9.]+$$")
 .PHONY: acton-$(OS)-$(ARCH)-$(ACTONC_VERSION).tar.xz
 acton-$(OS)-$(ARCH)-$(ACTONC_VERSION).tar.xz:
-	tar cv $(TAR_TRANSFORM_OPT) --exclude .gitignore dist | xz -z -0 --threads=0 > $@
+	tar cv $(TAR_TRANSFORM_OPT) --exclude .gitignore dist | xz -z -0 --threads=0 > "$@"
 
 .PHONY: release
 release: distribution
@@ -453,12 +464,13 @@ release: distribution
 # This target is used by the debian packaging
 .PHONY: install
 install:
-	mkdir -p $(DESTDIR)/usr/bin $(DESTDIR)/usr/lib/acton
-	cp -a dist/. $(DESTDIR)/usr/lib/acton/
-	cd $(DESTDIR)/usr/bin && ln -s ../lib/acton/bin/acton
-	cd $(DESTDIR)/usr/bin && ln -s ../lib/acton/bin/actonc
-	cd $(DESTDIR)/usr/bin && ln -s ../lib/acton/bin/actondb
-	cd $(DESTDIR)/usr/bin && ln -s ../lib/acton/bin/runacton
+	mkdir -p "$(DESTDIR)/usr/bin" "$(DESTDIR)/usr/lib/acton"
+	cp -a dist/. "$(DESTDIR)/usr/lib/acton/"
+	cd "$(DESTDIR)/usr/bin" && ln -s ../lib/acton/bin/acton
+	cd "$(DESTDIR)/usr/bin" && ln -s ../lib/acton/bin/actonc
+	cd "$(DESTDIR)/usr/bin" && ln -s ../lib/acton/bin/actondb
+	cd "$(DESTDIR)/usr/bin" && ln -s ../lib/acton/bin/runacton
+	cd "$(DESTDIR)/usr/bin" && ln -s ../lib/acton/bin/lsp-server-acton
 
 .PHONY: debian/changelog
 debian/changelog: debian/changelog.in CHANGELOG.md

@@ -3,6 +3,7 @@ class Hasher(object):
     def __init__(self, seed: u64 = 0):
         """Initialize a new MD5 hashing context
         """
+        self._hasher = 0  # type: u64
         self._init(seed)
 
     def _init(self, seed: u64) -> None:

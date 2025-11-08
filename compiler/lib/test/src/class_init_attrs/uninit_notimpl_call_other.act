@@ -1,0 +1,24 @@
+# Test case: Calling self methods with NotImplemented body is allowed but here
+# we also call .setup2() which is implemented here and it is NOT allowed, thus
+# we expect an error about self.y not being initialized.
+class TestClass(object):
+    x: int
+    y: int
+
+    def __init__(self):
+        # Calling a NotImplemented method on self should be allowed since it's
+        # implemented in C and thus trusted to do the right thing.
+        self.setup()
+        self.x = 1
+        self.setup2()
+        self.y = 2
+
+    def setup(self):
+        NotImplemented
+
+    def setup2(self):
+        pass
+
+actor main(env):
+    t = TestClass()
+    env.exit(0)

@@ -25,6 +25,9 @@ self                                = Name NoLoc "self"
 localName n                         = Derived n suffixLocal
 newactName n                        = Derived n suffixNewact
 
+selfKW'                             = Internal Witness "self" 0
+thisKW'                             = Internal Witness "this" 0
+
 g_self                              = globalName "self"
 
 g_act                               = globalName "act"

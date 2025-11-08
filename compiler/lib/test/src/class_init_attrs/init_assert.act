@@ -1,0 +1,17 @@
+# Test case: assert statement shouldn't stop initialization scanning
+class TestClass(object):
+    value: int
+    result: int
+    
+    def __init__(self, x: int):
+        self.value = x
+        
+        # Assert shouldn't stop scanning if it doesn't reference self
+        assert x > 0, "x must be positive"
+        
+        # This should still be recognized as part of constructor
+        self.result = self.value * 2
+
+actor main(env):
+    t = TestClass(5)
+    env.exit(0)

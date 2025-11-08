@@ -1,0 +1,27 @@
+# Test case: try/else where all paths initialize everything
+class TestClass(object):
+    x: int
+    y: int
+
+    def __init__(self):
+        try:
+            # This doesn't raise, so we continue to else
+            self.x = safe_operation()
+        except ValueError:
+            # Exception path: initialize both
+            self.x = 1
+            self.y = 2
+        else:
+            # No exception path: continues from try
+            # x is already set in try, now set y
+            self.y = 3
+        # Both paths initialize x and y!
+        # Path 1 (no exception): try sets x, else sets y
+        # Path 2 (exception): except sets both x and y
+
+def safe_operation() -> int:
+    return 42
+
+actor main(env):
+    t = TestClass()
+    env.exit(0)

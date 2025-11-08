@@ -1,0 +1,21 @@
+# Test case: Try-except blocks
+class TestClass(object):
+    x: int
+    y: int
+
+    def __init__(self):
+        try:
+            self.x = risky_operation()
+            self.y = 1
+        except ValueError:
+            # We're catching all errors and throwing our own. This will raise an
+            # error, so y will not be initialized but that's OK since we are
+            # terminating and not returning an object.
+            raise ValueError("An error occurred")
+
+def risky_operation() -> int:
+    return 42
+
+actor main(env):
+    t = TestClass()
+    env.exit(0)

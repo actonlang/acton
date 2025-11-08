@@ -1,0 +1,22 @@
+# Test case: try/except nested inside if/else
+class TestClass(object):
+    x: int
+    
+    def __init__(self, mode: int):
+        if mode > 0:
+            try:
+                self.x = 1
+                might_raise()
+            except:
+                self.x = 2
+        else:
+            self.x = 3
+        
+        # All paths through if/else initialize x
+
+def might_raise() -> None:
+    pass
+
+actor main(env):
+    t = TestClass(1)
+    env.exit(0)

@@ -1,0 +1,22 @@
+# Test case: except handler assigns then raises - should succeed
+# The try path completes normally with x initialized
+class TestClass(object):
+    x: int
+    
+    def __init__(self):
+        try:
+            self.x = 1
+            might_raise()
+        except ValueError:
+            self.x = 2
+            raise Exception("After assignment in except")
+        
+        # Paths: try={x}, except exits after assigning
+        # Only try path returns object, and it initializes x
+
+def might_raise() -> None:
+    pass
+
+actor main(env):
+    t = TestClass()
+    env.exit(0)

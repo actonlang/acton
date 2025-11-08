@@ -1,0 +1,19 @@
+# Test case: Using initialized attribute in a loop
+class TestClass(object):
+    multiplier: int
+    values: list[int]
+    
+    def __init__(self):
+        self.multiplier = 2
+        self.values = []
+        
+        # Loop that uses initialized attribute
+        for i in range(5):
+            self.values.append(i * self.multiplier)  # OK: multiplier is initialized
+
+def range(n: int) -> list[int]:
+    NotImplemented
+
+actor main(env):
+    t = TestClass()
+    env.exit(0)

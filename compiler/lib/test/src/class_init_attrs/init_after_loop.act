@@ -1,0 +1,22 @@
+# Test case: Assignments after a loop that doesn't reference self
+class TestClass(object):
+    x: int
+    y: int
+
+    def __init__(self):
+        # Loop that doesn't reference self - safe to continue past it
+        for i in range(10):
+            print(i)
+        # These assignments happen after the loop
+        self.x = 1
+        self.y = 2
+
+def range(n: int) -> list[int]:
+    return []
+
+def print(x: int) -> None:
+    pass
+
+actor main(env):
+    t = TestClass()
+    env.exit(0)

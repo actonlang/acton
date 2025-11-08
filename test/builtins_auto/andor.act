@@ -1,0 +1,22 @@
+def f():
+       d1 = {}
+       d2 = {"1": "2"}
+       d = d1 or d2
+       return d
+
+actor main(env):
+   d = f()
+   if len(d) != 1:
+       print("wrong result in or expression")
+       env.exit(1)
+   lacp = True
+   subinterface = 10
+   x = 1
+   if not lacp and subinterface:
+       x = 0
+   if x != 1:
+       print("wrong result in and expression")
+       env.exit(1)
+   env.exit(0)
+   
+       

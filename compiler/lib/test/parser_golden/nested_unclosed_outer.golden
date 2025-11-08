@@ -1,9 +1,9 @@
 ERROR: [error Syntax error]: Missing closing "
-     ╭──▶ test@1:14-1:15
+     ╭──▶ test@1:9-1:15
      │
    1 │ "outer {"inner
-     •              ┬
-     •              ╰╸ Missing closing "
+     •         ┬─────
+     •         ╰╸ Missing closing "
      •
      │ Hint: Add a closing quote (") to match the opening one
 ─────╯

@@ -1,0 +1,26 @@
+# Test case: break statement in loop shouldn't stop initialization scanning
+class TestClass(object):
+    values: list[int]
+    result: int
+    
+    def __init__(self):
+        self.values = []
+        
+        # Loop with break shouldn't stop scanning
+        for i in range(10):
+            if i > 5:
+                break  # This should NOT stop constructor scanning
+            self.values.append(i)
+        
+        # This should still be recognized as part of constructor
+        self.result = len(self.values)
+
+def range(n: int) -> list[int]:
+    NotImplemented
+
+def len(x: list[int]) -> int:
+    NotImplemented
+
+actor main(env):
+    t = TestClass()
+    env.exit(0)

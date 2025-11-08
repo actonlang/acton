@@ -5,10 +5,10 @@
         // Dependencies from build.act.json
         // base dependencies
         .actondb = .{
-            .path = "SYSPATH/backend/",
+            .path = "{{syspath}}/backend/",
         },
         .base = .{
-            .path = "SYSPATH/base/",
+            .path = "{{syspath}}/base/",
         },
     },
     .paths = .{""},

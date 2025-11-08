@@ -4,8 +4,8 @@ import http
 import logging
 import testing
 
-def _test_http_parser(log_handler: logging.Handler):
-    log = logging.Logger(log_handler)
+def _test_http_parser(st: testing.SyncT):
+    log = logging.Logger(st.log_handler)
     def partializer(testfun, query, parsed) -> bool:
         # Go through query byte by byte, and feed it to the parser one more
         # byte at a time until we get a complete request
@@ -30,12 +30,15 @@ def _test_http_parser(log_handler: logging.Handler):
          expected = http.Request("GET", "/", b"1.1", {"host": "127.0.0.1:8000", "user-agent": "curl/7.85.0", "accept": "*/*", "content-length": "5"}, b"hello")),
         (query = b"GET / HTTP/1.1\r\nHost: 127.0.0.1:8000\r\nUser-Agent: curl/7.85.0\r\nAccept: */*\r\nTransfer-Encoding: chunked\r\n\r\n4\r\nWiki\r\n5\r\npedia\r\nE\r\n in\r\n\r\nchunks.\r\n0\r\n\r\n",
          expected = http.Request("GET", "/", b"1.1", {"host": "127.0.0.1:8000", "user-agent": "curl/7.85.0", "accept": "*/*", "transfer-encoding": "chunked"}, b"Wikipedia in\r\n\r\nchunks.")),
+        (query = b"GET / HTTP/1.1\r\nHost: loca\xe8\x03o-Length\r\n\r\n",
+         expected = None),
     ]
     all_good = True
     for t in tests:
         query = t.query
         expected = t.expected
         # Parse whole request
+        log.debug("== {t.query}")
         parsed, rest = http.parse_request(t.query, log)
         testing.assertEqual(expected, parsed, "Parsed request does not match expected")
 
@@ -46,11 +49,10 @@ def _test_http_parser(log_handler: logging.Handler):
             if req is not None:
                 testing.assertEqual(expected, req, "Parsed request does not match expected")
 
-# TODO: why do we have to have an actor here? all this code would preferably go right in the _test function
-actor _actest_http_client_server(report_result, env, log_handler: logging.Handler):
-    log = logging.Logger(log_handler)
+actor _HttpClientServer(t: testing.EnvT):
+    log = logging.Logger(t.log_handler)
 
-    serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(env.cap)))
+    serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
 
     def _on_http_accept(server):
         server.cb_install(_on_http_server_request, _on_http_server_error)
@@ -67,13 +69,11 @@ actor _actest_http_client_server(report_result, env, log_handler: logging.Handle
         c.get("/", _on_http_receive)
 
     def _on_http_receive(c, data):
-        report_result(True, None)
+        log.debug(str(data))
+        t.success()
 
     def _on_http_error(c, errmsg):
         print(errmsg)
 
-    conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(env.cap)))
+    conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
     client = http.Client(conn_cap, "127.0.0.1", _on_http_connect, _on_http_error, scheme="http", port=8473)
-
-def _test_http_client_server(report_result, env, log_handler: logging.Handler):
-    _actest_http_client_server(report_result, env, log_handler)

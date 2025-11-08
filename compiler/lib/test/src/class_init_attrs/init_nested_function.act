@@ -1,0 +1,18 @@
+# Test case: nested function declarations shouldn't stop initialization
+class TestClass(object):
+    value: int
+    result: int
+    
+    def __init__(self, x: int):
+        self.value = x
+        
+        # Nested function declaration shouldn't stop scanning
+        def helper(n: int) -> int:
+            return n * 2
+        
+        # This should still be recognized as part of constructor
+        self.result = helper(self.value)
+
+actor main(env):
+    t = TestClass(5)
+    env.exit(0)

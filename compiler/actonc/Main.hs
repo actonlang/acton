@@ -45,7 +45,7 @@ import qualified InterfaceFiles
 import Control.Applicative
 import Control.Concurrent.Async
 import Control.Concurrent.MVar
-import Control.Exception (throw,catch,displayException,IOException,ErrorCall)
+import Control.Exception (throw,catch,displayException,IOException,ErrorCall,try,SomeException)
 import Control.Exception (bracketOnError)
 import Control.Concurrent (forkIO)
 import Control.Monad
@@ -58,12 +58,14 @@ import Data.Graph
 import Data.String.Utils (replace)
 import Data.Version (showVersion)
 import qualified Data.List
+import qualified Data.Map as M
 import qualified Data.Set
 import Error.Diagnose
 import Error.Diagnose.Style (defaultStyle)
 import qualified Filesystem.Path.CurrentOS as Fsco
 import Prettyprinter (unAnnotate)
 import Prettyprinter.Render.Text (hPutDoc)
+import Data.List (isPrefixOf, isSuffixOf, find)
 import System.Clock
 import System.Directory
 import System.Directory.Recursive
@@ -83,6 +85,19 @@ import qualified Paths_actonc
 import Text.Printf
 
 import qualified Data.ByteString.Char8 as B
+import qualified Data.ByteString.Lazy as BL
+import Data.Binary (encode)
+import qualified Data.ByteString.Base16 as Base16
+import qualified Crypto.Hash.SHA256 as SHA256
+
+-- Shared predicate: is a NameInfo root-eligible (actor with env/no params)?
+rootEligible :: A.NameInfo -> Bool
+rootEligible (A.NAct [] p k _ _) = case (p,k) of
+                                              (A.TNil{}, A.TRow _ _ _ t A.TNil{}) ->
+                                                prstr t == "Env" || prstr t == "None" ||
+                                                prstr t == "__builtin__.Env" || prstr t == "__builtin__.None"
+                                              _ -> False
+rootEligible _ = False
 
 main = do
     hSetBuffering stdout LineBuffering
@@ -99,7 +114,7 @@ main = do
                                      _ -> printErrorAndExit ("Unknown filetype: " ++ head nms)
 
 defaultOpts   = C.CompileOptions False False False False False False False False False False False False
-                                 False False False False C.Debug False False False False
+                                 False False False False False C.Debug False False False False
                                  "" "" "" C.defTarget "" False []
 
 -- Apply global options to compile options
@@ -118,8 +133,6 @@ optimizeModeToZig C.ReleaseFast  = "ReleaseFast"
 zig :: Paths -> FilePath
 zig paths = sysPath paths ++ "/zig/zig"
 
-cc :: Paths -> C.CompileOptions -> FilePath
-cc paths opts = zig paths ++ " cc -target " ++ C.target opts
 
 dump mn h txt      = putStrLn ("\n\n== " ++ h ++ ": " ++ modNameToString mn ++ " ================================\n" ++ txt
                       ++'\n':replicate (38 + length h + length (modNameToString mn)) '=' ++ "\n")
@@ -132,7 +145,6 @@ tryLock lockPath = do
         Nothing -> return Nothing  -- Lock failed
         Just lock -> return $ Just (lock, lockPath)
 
--- The rest of your code can stay the same
 -- Try locks sequentially until one succeeds or all fail
 findAvailableScratch :: FilePath -> IO (Maybe (FileLock, FilePath))
 findAvailableScratch basePath = go [0..31]  -- 32 possible scratch directories
@@ -259,6 +271,8 @@ buildProject gopts opts = do
                       allFiles <- getFilesRecursive (srcDir paths)
                       let srcFiles = catMaybes $ map filterActFile allFiles
                       compileFiles gopts opts srcFiles
+                      -- After a project build, (re)generate the documentation index
+                      generateProjectDocIndex gopts opts paths srcFiles
 
 buildFile :: C.GlobalOptions -> C.CompileOptions -> FilePath -> IO ()
 buildFile gopts opts file = do
@@ -292,8 +306,6 @@ buildFile gopts opts file = do
               putStrLn("Building file " ++ file ++ " using temporary directory " ++ C.tempdir opts)
             compileFiles gopts opts [file]
           else do
-            iff (not(C.quiet gopts)) $ do
-              putStrLn("Building file " ++ file ++ " using temporary scratch directory")
             home <- getHomeDirectory
             let basePath = joinPath [home, ".cache", "acton", "scratch"]
             createDirectoryIfMissing True basePath
@@ -302,6 +314,9 @@ buildFile gopts opts file = do
               Nothing -> error "Could not acquire any scratch directory lock"
               Just (lock, lockPath) -> do
                 let scratchDir = dropExtension lockPath
+                iff (not(C.quiet gopts)) $ do
+                  let scratch_dir = if (C.verbose gopts) then " " ++ scratchDir else ""
+                  putStrLn("Building file " ++ file ++ " using temporary scratch directory" ++ scratch_dir)
                 removeDirectoryRecursive scratchDir `catch` handleNotExists
                 compileFiles gopts (opts { C.tempdir = scratchDir }) [file]
                 unlockFile lock
@@ -385,12 +400,11 @@ printDocs gopts opts = do
                 Acton.Types.showTyFile env0 (modName paths) filename
 
             ".act" -> do
-                src <- readFile filename
                 let modname = A.modName $ map (replace ".act" "") $ splitOn "/" $ fileBody
-                parsed <- Acton.Parser.parseModule modname filename src
+                paths <- findPaths filename defaultOpts
+                (_src, parsed) <- parseActFile gopts defaultOpts paths modname filename
 
                 -- Run compiler passes to get type information
-                paths <- findPaths filename defaultOpts
                 env0 <- Acton.Env.initEnv (sysTypes paths) False
                 env <- Acton.Env.mkEnv (searchPath paths) env0 parsed
                 kchecked <- Acton.Kinds.check env parsed
@@ -478,40 +492,111 @@ findTyFile spaths mn = go spaths
         then return (Just fullPath)
         else go ps
 
-removeOrphanFiles :: FilePath -> IO ()
-removeOrphanFiles dir = do
-    -- Recursively get all files in the "out" directory.
+-- Remove orphaned files in out/types.
+-- Non-root files are removed if their module isn’t part of this build (i.e.
+-- no corresponding source .act in this build). The 'roots' argument lists the
+-- exact set of root stub files (*.root.c, *.test_root.c) to keep; others are
+-- removed.
+removeOrphanFiles :: Paths -> [CompileTask] -> [FilePath] -> IO ()
+removeOrphanFiles paths tasks roots = do
+    let dir = projTypes paths
     absOutFiles <- getFilesRecursive dir
-    let outFiles = map (makeRelative dir) absOutFiles
-
-    -- Map over each file.
-    forM_ outFiles $ \file -> do
-        -- Remove the file ending.
-        let fileNoExt = dropExtension (dropExtension file)
-            srcFile = ("src" </> fileNoExt <.> "act")
-
-        -- If the file is a .root.c file, always remove it and generate a new
-        -- one later, if necessary. Only an .act file with a root actor should
-        -- have a .root.c file but we cannot judge from here if the .act file
-        -- actually has a root actor, so the only safe choice is to remove the
-        -- file and let it be recreated if necessary. Should be very cheap
-        -- anyway since the file is so small. So check if filename ends with
-        -- ".root.c" and remove it!
-        if takeExtension file == ".c" && takeExtension (takeBaseName file) == ".root"
-          then do
-            removeIfExists (dir </> file)
-          else do
-            -- Check if there is a corresponding .act file in the "src" directory.
-            srcExists <- doesFileExist srcFile
-            -- If the .act file doesn't exist, remove the file in the "out" directory.
-            when (not srcExists) $ removeFile (dir </> file)
-              `catch` handleNotExists
+    let allowedBases = [ outBase paths (name t) | t <- tasks ]
+    forM_ absOutFiles $ \absFile -> do
+        let isC  = takeExtension absFile == ".c"
+            isH  = takeExtension absFile == ".h"
+            isTy = takeExtension absFile == ".ty"
+            bext = takeExtension (takeBaseName absFile)
+            isRootStub = isC && (bext == ".root" || bext == ".test_root")
+        if isRootStub
+          then when (not (absFile `elem` roots)) (removeIfExists absFile)
+          else when (isC || isH || isTy) $ do
+                 let base = dropExtension absFile
+                 unless (base `elem` allowedBases) (removeIfExists absFile)
   where
-        removeIfExists f = removeFile f `catch` handleNotExists
-        handleNotExists :: IOException -> IO ()
-        handleNotExists _ = return ()
+    removeIfExists f = removeFile f `catch` handleNotExists
+    handleNotExists :: IOException -> IO ()
+    handleNotExists _ = return ()
+
+parseActSource :: C.GlobalOptions -> C.CompileOptions -> Paths -> A.ModName -> FilePath -> String -> IO A.Module
+parseActSource gopts opts projPaths mn actFile srcContent = do
+  Acton.Parser.parseModule mn actFile srcContent
+    `catch` (\bundle -> handleDiagnostic gopts opts projPaths mn $ Diag.parseDiagnosticFromBundle actFile srcContent bundle)
+    `catch` (\err -> handleDiagnostic gopts opts projPaths mn $ Diag.customParseExceptionToDiagnostic actFile srcContent err)
+    `catch` handle gopts opts "Context error" Acton.Parser.contextError srcContent projPaths mn
+    `catch` handle gopts opts "Indentation error" Acton.Parser.indentationError srcContent projPaths mn
+
+parseActFile :: C.GlobalOptions -> C.CompileOptions -> Paths -> A.ModName -> FilePath -> IO (String, A.Module)
+parseActFile gopts opts projPaths mn actFile = do
+  srcContent <- readFile actFile
+  m <- parseActSource gopts opts projPaths mn actFile srcContent
+  return (srcContent, m)
 
 
+{-
+================================================================================
+Build Pipeline Overview
+================================================================================
+
+We want the compiler to be fast. The primary principle by which to achieve this
+is to avoid doing unnecessary work. Practically, this happens by caching
+information in .ty files and only selectively reading what we need. We do not
+eagerly load whole .ty files but rather read in "header information" such as
+which imports, the hash of the source code, which root actors and docstring.
+This way we can quickly determine what needs to be recompiled and what can be
+reused from previous compilations. We also use content hashing of the public
+interface and imports to make rebuild decisions precise and transitive:
+- Public interface hash is computed from the doc-free NameInfo, so doc-only
+  edits never cause dependents to rebuild.
+- The interface hash is augmented with the interface hashes of the module’s
+  imports (sorted). If an import’s interface changes, this module’s interface
+  hash changes too, which cleanly propagates rebuilds.
+
+Terminology
+- ActonTask: a module parsed from source (.act) and that needs to be compiled
+- TyTask: a module loaded from the cached .ty file on disk. Note how there are
+  two variants, a stubbed TyTask where only header fields are loaded and the
+  full TyTask where all module content is available.
+
+High-level Steps
+1) Discover and read tasks using header-first strategy (readModuleTask)
+   - For each module, try to use its .ty header to avoid parsing:
+     - If .ty is missing/unreadable → parse .act to obtain imports (ActonTask).
+     - If .ty exists and .act mtime <= .ty mtime → trust .ty header imports and
+       create a TyTask stub (no heavy decode) for graph building.
+     - If .act appears newer than .ty → verify by content hash:
+       – If stored srcHash == current srcHash → header is still valid (TyTask)
+       – Else → parse .act now to get accurate imports (ActonTask)
+   - This ensures that .ty is up to date with the .act source and lets us
+     read module imports/roots/docstring from the header, which is much faster
+     than parsing the .act file.
+
+2) Expand to include transitive project imports (readImports)
+   - For project builds, we enumerate all modules under src/ upfront, so chasing
+     is typically a no-op.
+   - For single-file builds (or partial sets), we chase imports from the seeded
+     tasks to ensure all project-local dependencies are included. We prefer .ty
+     headers to avoid parsing; we parse only when a .ty is missing/unreadable.
+
+3) Compile and build
+   - compileTasks orders modules in dependency (topological) order and decides
+     rebuilds as it goes:
+     - Source changed (ActonTask) → compile now
+     - Otherwise, compare each project import’s recorded interface hash from the
+       dependent’s .ty header with the provider’s current interface hash. The
+       current hash comes directly from the compile result for modules built in
+       this run, or from a fresh provider’s .ty header. Only if a hash differs
+       do we rebuild the dependent.
+   - We maintain an ifaceMap while walking modules in topological order. After a
+     module compiles, we insert its freshly computed interface hash; when a
+     module is fresh (TyTask), we insert the recorded header hash. Dependents
+     then consult ifaceMap to detect interface deltas among their imports.
+   - TyTask items remain lazy; code that needs only small bits (e.g., writeRootC)
+     reads roots/doc from the header instead of forcing heavy loads.
+   - Final Zig C compilation...
+
+================================================================================
+-}
 
 compileFiles :: C.GlobalOptions -> C.CompileOptions -> [String] -> IO ()
 compileFiles gopts opts srcFiles = do
@@ -531,10 +616,14 @@ compileFiles gopts opts srcFiles = do
         putStrLn ("    srcDir   : " ++ srcDir paths)
         iff (length srcFiles == 1) (putStrLn ("    modName  : " ++ prstr (modName paths)))
 
-    -- remove files in out that do not have corresponding source files!
-    removeOrphanFiles (projTypes paths)
-
-    tasks <- mapM (parseActFile gopts opts paths) srcFiles
+    -- Build initial tasks using .ty headers when possible; parse only if .ty missing
+    tasks0 <- mapM (readModuleTask gopts opts paths) srcFiles
+    -- Expand set to include imports starting from the initial set. For project
+    -- builds, this usually amounts to a no-op since all source files were in
+    -- the initial set (srcFiles).
+    tasks1 <- readImports gopts opts paths tasks0
+    -- Then order tasks in dependency (topological) order
+    let tasks = tasks1
     iff (C.listimports opts) $ do
         let module_imports = map (\t -> concat [ modNameToString (name t), ": ", (concat $ intersperse " " (map (modNameToString) (importsOf t))) ] ) tasks
         let output = concat $ intersperse "\n" module_imports
@@ -554,24 +643,47 @@ compileFiles gopts opts srcFiles = do
           | otherwise        = [binTask]
         preTestBinTasks = map (\t -> BinTask True (modNameToString (name t)) (A.GName (name t) (A.name "__test_main")) True) tasks
     env <- compileTasks gopts opts paths tasks
-    -- Generate project documentation index
-    unless (C.skip_build opts || isTmp paths) $ do
-        let docDir = joinPath [projPath paths, "out", "doc"]
-        createDirectoryIfMissing True docDir
-        DocP.generateDocIndex docDir (map (\t -> (name t, src t, atree t, False)) tasks)
     if C.skip_build opts
       then
         putStrLn "  Skipping final build step"
       else
         if C.test opts
           then do
-            testBinTasks <- catMaybes <$> mapM (filterMainActor env opts paths) preTestBinTasks
+            testBinTasks <- catMaybes <$> mapM (filterMainActor env paths) preTestBinTasks
             compileBins gopts opts paths env tasks testBinTasks
             putStrLn "Test executables:"
             mapM_ (\t -> putStrLn (binName t)) testBinTasks
           else do
             compileBins gopts opts paths env tasks preBinTasks
     return ()
+
+-- Remove executables that no longer have corresponding root actors
+removeOrphanExecutables :: FilePath -> FilePath -> [BinTask] -> IO ()
+removeOrphanExecutables binDir projTypes binTasks = do
+    -- Get all executables in bin directory
+    binDirExists <- doesDirectoryExist binDir
+    when binDirExists $ do
+        binFiles <- listDirectory binDir
+        forM_ binFiles $ \exeFile -> do
+            -- Convert executable name back to module path format
+            let exeName = takeBaseName exeFile  -- Remove .exe if present
+                modPath = map (\c -> if c == '.' then '/' else c) exeName
+                rootCFile = projTypes </> modPath <.> "root.c"
+                testRootCFile = projTypes </> modPath <.> "test_root.c"
+
+            -- Check if this executable is in the current binTasks
+            let isCurrentBin = any (\t -> binName t == exeName) binTasks
+
+            -- If not in current binTasks and no root.c file exists, remove the executable
+            rootExists <- doesFileExist rootCFile
+            testRootExists <- doesFileExist testRootCFile
+            when (not isCurrentBin && not rootExists && not testRootExists) $ do
+              let file_name = binDir </> exeFile
+              removeFile (file_name)
+                  `catch` handleNotExists
+  where
+        handleNotExists :: IOException -> IO ()
+        handleNotExists _ = return ()
 
 
 -- Paths handling -------------------------------------------------------------------------------------
@@ -610,11 +722,6 @@ outBase paths mn        = joinPath (projTypes paths : A.modPath mn)
 srcBase                 :: Paths -> A.ModName -> FilePath
 srcBase paths mn        = joinPath (srcDir paths : A.modPath mn)
 
-searchPaths :: C.CompileOptions -> [FilePath] -> IO [FilePath]
-searchPaths opts deps = do
-  -- append /out/types to each dep
-  let deps_paths = map (\d -> joinPath [d, "out", "types"]) deps
-  return $ deps_paths
 
 findProjectDir :: FilePath -> IO (Maybe FilePath)
 findProjectDir path = do
@@ -672,34 +779,80 @@ filterActFile file =
         _ -> Nothing
   where (fileBody, fileExt) = splitExtension $ takeFileName file
 
-parseActFile :: C.GlobalOptions -> C.CompileOptions -> Paths -> String -> IO CompileTask
-parseActFile gopts opts paths actFile = do
-                    timeStart <- getTime Monotonic
-                    paths <- findPaths actFile opts
-                    srcContent <- readFile actFile
-                    timeRead <- getTime Monotonic
-                    iff (C.timing gopts) $ putStrLn("Reading file " ++ makeRelative (srcDir paths) actFile
-                                                   ++ ": " ++ fmtTime(timeRead - timeStart))
-                    m <- Acton.Parser.parseModule (modName paths) actFile srcContent
-                      -- Parse errors from MegaParsec
-                      `catch` handleParseError srcContent
-                      -- Custom parse errors from Acton.Parser, thrown directly by parseException
-                      `catch` (\err -> handleDiagnostic gopts opts paths (modName paths) $ Diag.customParseExceptionToDiagnostic actFile srcContent err)
-                      `catch` handle gopts opts "Context error" Acton.Parser.contextError srcContent paths (modName paths)
-                      `catch` handle gopts opts "Indentation error" Acton.Parser.indentationError srcContent paths (modName paths)
-                    iff (C.parse opts) $ dump (modName paths) "parse" (Pretty.print m)
-                    timeParse <- getTime Monotonic
-                    iff (C.timing gopts) $ putStrLn("Parsing file " ++ makeRelative (srcDir paths) actFile
-                                                                   ++ ": " ++ fmtTime(timeParse - timeRead))
-                    return $ ActonTask (modName paths) srcContent m
-    where handleParseError :: String -> ParseErrorBundle String CustomParseError -> IO A.Module
-          handleParseError srcContent bundle =
-                    handleDiagnostic gopts opts paths (modName paths) $ Diag.parseDiagnosticFromBundle actFile srcContent bundle
+-- Prepare a task for dependency graph construction.
+-- Prefer reading imports from .ty header; if no .ty, parse the source.
+-- Decide how to represent a module for the graph:
+-- 1) If .ty is missing/unreadable -> parse .act to obtain imports (ActonTask).
+-- 2) If .ty exists and .act mtime <= .ty mtime -> trust header imports (TyTask).
+-- 3) If .act appears newer than .ty -> verify by content hash:
+--      - If stored srcHash == current srcHash -> header is still valid (TyTask)
+--      - Else -> parse .act to obtain accurate imports (ActonTask)
+-- Returns either a header-only TyTask stub or an ActonTask; no heavy decoding.
+readModuleTask :: C.GlobalOptions -> C.CompileOptions -> Paths -> String -> IO CompileTask
+readModuleTask gopts opts projPaths actFile = do
+    p <- findPaths actFile opts
+    let mn      = modName p
+        tyFile  = outBase projPaths mn ++ ".ty"
+    tyExists <- System.Directory.doesFileExist tyFile
+    if not tyExists
+      then parseForImports mn
+      else do
+        -- .ty exists: read header for hashes/imports and compare timestamps
+        hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader tyFile
+        case hdrE of
+          Left _ -> parseForImports mn
+          Right (hash, ihash, imps, roots, mdoc) -> do
+            actTime <- System.Directory.getModificationTime actFile
+            tyTime  <- System.Directory.getModificationTime tyFile
+            if actTime <= tyTime
+              then do
+                let nmodStub = A.NModule [] mdoc
+                    tmodStub = A.Module mn [] []
+                return $ TyTask { name      = mn
+                                , tyHash    = hash
+                                , tyIfaceHash = ihash
+                                , tyImports = imps
+                                , tyRoots   = roots
+                                , tyDoc     = mdoc
+                                , iface     = nmodStub
+                                , typed     = tmodStub }
+              else do
+                -- Verify by hash to handle touched-but-unchanged sources
+                srcBytes <- B.readFile actFile
+                let curHash = SHA256.hash srcBytes
+                if curHash == hash
+                  then do
+                    let nmodStub = A.NModule [] mdoc
+                        tmodStub = A.Module mn [] []
+                    return $ TyTask { name      = mn
+                                    , tyHash    = hash
+                                    , tyIfaceHash = ihash
+                                    , tyImports = imps
+                                    , tyRoots   = roots
+                                    , tyDoc     = mdoc
+                                    , iface     = nmodStub
+                                    , typed     = tmodStub }
+                  else parseForImports mn
+  where
+    parseForImports mn = do
+      (srcContent, m) <- parseActFile gopts opts projPaths mn actFile
+      return $ ActonTask mn srcContent m
 
 
 -- Compilation tasks, chasing imported modules, compilation and building executables -------------------------------------------
 
-data CompileTask        = ActonTask { name :: A.ModName, src :: String, atree:: A.Module } deriving (Show)
+data CompileTask        = ActonTask { name :: A.ModName, src :: String, atree:: A.Module }
+                        | TyTask    { name :: A.ModName
+                                    , tyHash :: B.ByteString               -- source content hash
+                                    , tyIfaceHash :: B.ByteString          -- public interface hash
+                                    , tyImports :: [(A.ModName, B.ByteString)] -- imports with iface hash used
+                                    , tyRoots :: [A.Name]
+                                    , tyDoc :: Maybe String
+                                    , iface :: A.NameInfo
+                                    , typed :: A.Module
+                                    }
+                        deriving (Show)
+
 -- TODO: replace binName String type with ModName just like for CompileTask.
 -- ModName is a array so a hierarchy with submodules is represented, we can then
 -- get it use joinPath (modPath) to get a path or modName to get a string
@@ -709,79 +862,233 @@ data CompileTask        = ActonTask { name :: A.ModName, src :: String, atree:: 
 data BinTask            = BinTask { isDefaultRoot :: Bool, binName :: String, rootActor :: A.QName, isTest :: Bool } deriving (Show)
 
 -- return task where the specified root actor exists
-filterMainActor env opts paths binTask
-                         = case Acton.Env.lookupMod m env of
-                             Just te -> case lookup n te of
-                               Just (A.NAct [] A.TNil{} (A.TRow _ _ _ t A.TNil{}) _ _)
-                                   | prstr t == "Env" || prstr t == "None"
-                                      || prstr t == "__builtin__.Env"|| prstr t == "__builtin__.None"-> do   -- TODO: proper check of parameter type
-                                      return (Just binTask)
-                                   | otherwise -> return Nothing
-                               Just t -> return Nothing
-                               Nothing -> return Nothing
-                             Nothing -> return Nothing
-  where mn                  = A.mname qn
-        qn@(A.GName m n)    = rootActor binTask
-        (sc,_)              = Acton.QuickType.schemaOf env (A.eQVar qn)
+filterMainActor :: Acton.Env.Env0 -> Paths -> BinTask -> IO (Maybe BinTask)
+filterMainActor env paths binTask = do
+    -- Prefer .ty header roots; fall back to checking the in-memory env
+    let qn@(A.GName m n) = rootActor binTask
+    let checkEnv = case Acton.Env.lookupMod m env of
+                     Nothing -> return Nothing
+                     Just te -> do
+                       let rootsEnv = [ n' | (n', i) <- te, rootEligible i ]
+                       if n `elem` rootsEnv then return (Just binTask) else return Nothing
+    mty <- Acton.Env.findTyFile (searchPath paths) m
+    case mty of
+      Just ty -> do
+        hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader ty
+        case hdrE of
+          Right (_, _, _, roots, _) | n `elem` roots -> return (Just binTask)
+          _ -> checkEnv
+      Nothing -> checkEnv
+  where
 
 importsOf :: CompileTask -> [A.ModName]
-importsOf t = A.importsOf (atree t)
+importsOf (ActonTask _ _ m) = A.importsOf m
+importsOf (TyTask { tyImports = ms }) = map fst ms
 
+-- compileTasks
+--
+-- Build and compile the given module tasks in dependency order. This is the
+-- core driver for a project or single-file build once tasks have been read by
+-- readModuleTask and (if needed) imports expanded by readImports.
+--
+-- Inputs
+--   - tasks: a mixed list of ActonTask (source needs compiling) and TyTask
+--     (up-to-date .ty header available). The list may be in any order.
+--
+-- Responsibilities
+--   1) Construct a project-local dependency graph from the tasks and compute a
+--      topological order. Dependencies outside the project (stdlib/deps) are
+--      ignored for ordering and staleness propagation.
+--   2) Optionally compile __builtin__ first if it is part of the project.
+--   3) Walk modules in topological order, deciding per module whether to
+--      compile or reuse the cached .ty, and update the environment.
+--   4) Track interface-hash changes for project modules and propagate
+--      staleness only when an imported module’s interface hash differs from
+--      the hash that was recorded when the dependent was last compiled.
+--
+-- Key ideas
+--   - TyTask carries only a lightweight header read from the module’s .ty
+--     file: the source hash, the interface hash, its imports annotated with
+--     the interface hash that was used, roots and docstring. TyTask avoids
+--     decoding heavy sections.
+--   - ActonTask carries parsed source and must be compiled.
+--   - We maintain ifaceMap :: Map ModName ByteString during the fold. For any
+--     project module that has been compiled in this run (or confirmed fresh),
+--     ifaceMap holds the interface hash that downstream modules should compare
+--     against. If a dependent TyTask recorded a different hash for an import,
+--     it is deemed stale and compiled.
+--   - When a TyTask is deemed stale (e.g., any imported module’s interface hash
+--     differs from the recorded one) stepModule first converts it to an
+--     ActonTask by parsing the source (parseActFile), then compiles it via
+--     doTask. For fresh TyTasks we do not parse or compile; we simply reuse the
+--     cached .ty and carry forward its recorded interface hash.
+--   - The fold is the “inner loop”: foldM (stepModule projMods) (env0, startIface)
+--     otherOrder. stepModule decides compile vs reuse, updates the environment
+--     and propagates new interface hashes for already-processed modules.
 compileTasks :: C.GlobalOptions -> C.CompileOptions -> Paths -> [CompileTask] -> IO Acton.Env.Env0
-compileTasks gopts opts paths tasks
-                       = do tasks <- chaseImportedFiles gopts opts paths tasks
-                            -- We sort out the order of imports etc and split
-                            -- out __builtin__, if it's part of the tasks, so we
-                            -- can deal with it first
-                            let sccs = stronglyConnComp  [(t, name t, importsOf t) | t <- tasks]
-                                (builtinSccs, otherSccs) = partition containsBuiltin sccs
-                                (as,cs) = Data.List.partition isAcyclic otherSccs
+compileTasks gopts opts paths tasks = do
+    -- 1) Build project-local graph and compute topological order
+    let allTasks = tasks
+        projMap  = M.fromList [ (name t, t) | t <- allTasks ]
+        nodes    = [ (t, name t, [ m | m <- importsOf t, M.member m projMap ]) | t <- allTasks ]
+        sccs     = stronglyConnComp nodes
+        cycles   = [ ts | ts@(CyclicSCC _) <- sccs ]
+        order    = [ t | AcyclicSCC t <- sccs ]
+    unless (null cycles) $ do
+      let showTaskGraph (CyclicSCC ts) = "\n" ++ concatMap (\t-> concat (intersperse "." (A.modPath (name t))) ++ " ") ts
+      printErrorAndCleanAndExit ("Cyclic imports: " ++ concatMap showTaskGraph cycles) gopts opts paths
+    let isBuiltin t = name t == (A.modName ["__builtin__"])
+        (builtinOrder, otherOrder) = partition isBuiltin order
+        projMods = Data.Set.fromList (map name otherOrder)
 
-                            -- Seprate compile of __builtin__, if it's part of this project
-                            case builtinSccs of
-                                [AcyclicSCC t] -> do
-                                        builtinEnv0 <- Acton.Env.initEnv (sysTypes paths) True
-                                        doTask gopts opts paths builtinEnv0 t
-                                        return ()
-                                _ -> do return ()
-                            let builtinPath = if null builtinSccs then sysTypes paths else projTypes paths
+    -- Compile __builtin__ first if provided by the project (only for base proj)
+    case builtinOrder of
+      [t] -> do
+        builtinEnv0 <- Acton.Env.initEnv (sysTypes paths) True
+        void (doTask gopts opts paths builtinEnv0 t)
+        return ()
+      _ -> return ()
 
-                            -- Compile all the other modules, reinitializing the env from disk
-                            if null cs
-                             then do env0 <- Acton.Env.initEnv builtinPath False
-                                     env1 <- foldM (doTask gopts opts paths) env0 [t | AcyclicSCC t <- as]
-                                     return env1
-                              else printErrorAndCleanAndExit ("Cyclic imports: "++concatMap showTaskGraph cs) gopts opts paths
-  where isAcyclic (AcyclicSCC _) = True
-        isAcyclic _              = False
-        showTaskGraph ts         = "\n"++concatMap (\t-> concat (intersperse "." (A.modPath (name t)))++" ") ts
-        containsBuiltin (AcyclicSCC task) = name task == (A.modName ["__builtin__"])
+    -- Initialize env for remaining modules. If builtin was part of the project,
+    -- read it from the project out/types; otherwise from system types.
+    let builtinPath = if null builtinOrder then sysTypes paths else projTypes paths
+    env0 <- Acton.Env.initEnv builtinPath False
+    -- ifaceMap tracks the latest known interface hash for each processed
+    -- project module. It starts empty and is updated by stepModule after a
+    -- module is compiled or confirmed fresh.
+    let startIface = M.empty :: M.Map A.ModName B.ByteString
+    -- 3) Process modules in dependency order. The fold carries the evolving
+    -- environment and the interface-hash map across modules.
+    (envFinal, _) <- foldM (stepModule projMods) (env0, startIface) otherOrder
+    return envFinal
+  where
+    -- stepModule
+    --
+    -- Decide whether a single module needs compilation and update both the
+    -- environment and the interface-hash map accordingly.
+    --
+    -- Inputs
+    --   - projMods: set of project modules (used to ignore external imports
+    --     when checking interface-hash deltas)
+    --   - (envAcc, ifaceMap): current compiler environment and the latest
+    --     interface hash for already processed project modules
+    --   - t: current module task in topological order
+    --
+    -- Logic
+    --   - If t is ActonTask, it must be compiled (needBySource = True).
+    --   - If t is TyTask, compare the recorded interface hashes for each
+    --     project import against ifaceMap or by finding, on the search path,
+    --     and loading the .ty header. Any difference implies the import changed
+    --     its public interface in this run, so t must be recompiled
+    --     (needByImports = True). Missing imports is an error.
+    --   - On compile, TyTask is first upgraded to ActonTask by parsing the
+    --     .act file; then doTask performs the compilation and writes .ty.
+    --   - After compile, obtain the new interface hash directly from the
+    --     compilation pipeline (runRestPasses via doTask) and update ifaceMap
+    --     with our ifaceHash for downstream modules
+    stepModule projMods (envAcc, ifaceMap) t = do
+      let mn = name t
+      let needBySource = case t of { ActonTask{} -> True; _ -> False }
+      needByImportsWithDeltas <- case t of
+                            TyTask{ tyImports = imps } -> do
+                              -- Obtain current interface hash for every import:
+                              -- from ifaceMap (project modules processed earlier)
+                              -- or by reading the provider's .ty header on the search paths.
+                              -- Missing entries are a hard error.
+                              pairs <- forM imps $ \(m, recorded) -> do
+                                curr <- case M.lookup m ifaceMap of
+                                          Just h  -> return h
+                                          Nothing -> do
+                                            mty <- Acton.Env.findTyFile (searchPath paths) m
+                                            case mty of
+                                              Just ty -> do
+                                                hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader ty
+                                                case hdrE of
+                                                  Right (_srcH, ih, _impsH, _rootsH, _docH) -> return ih
+                                                  _ -> printErrorAndCleanAndExit ("Type interface file not readable for " ++ modNameToString m) gopts opts paths
+                                              Nothing -> printErrorAndCleanAndExit ("Type interface file not found for " ++ modNameToString m) gopts opts paths
+                                return (m, recorded, curr)
+                              let diffs = [ (m, recorded, curr)
+                                          | (m, recorded, curr) <- pairs
+                                          , curr /= recorded
+                                          ]
+                              return (not (null diffs), diffs)
+                            _ -> return (False, [])
+      let (needByImports, deltas) = needByImportsWithDeltas
+      -- Force compilation when alternative output is requested (e.g.,
+      -- --types/--cps), so we can print the requested intermediate form even if
+      -- everything is up to date (since it's not saved, we have to recompile)
+      let forceAlt = altOutput opts && mn == (modName paths)
+      let needCompile = needBySource || needByImports || forceAlt
+      if needCompile
+        then do
+          when (C.verbose gopts) $ do
+            if needBySource
+              then putStrLn ("  Stale " ++ modNameToString mn ++ ": source changed")
+              else do
+                let fmt (m, old, new) = modNameToString m ++ " " ++ short old ++ " → " ++ short new
+                putStrLn ("  Stale " ++ modNameToString mn ++ ": iface changes in " ++ Data.List.intercalate ", " (map fmt deltas))
+          t' <- case t of
+                  ActonTask{} -> return t
+                  TyTask{}    -> do
+                    let mn' = name t
+                        actFile = srcFile paths mn'
+                    (srcContent, m) <- parseActFile gopts opts paths mn' actFile
+                    return $ ActonTask mn' srcContent m
+          (env', ih) <- doTask gopts opts paths envAcc t'
+          let ifaceMap' = M.insert mn ih ifaceMap
+          return (env', ifaceMap')
+        else do
+          when (C.verbose gopts) $ putStrLn ("  Fresh " ++ modNameToString mn ++ ": using cached .ty")
+          (env', ih) <- doTask gopts opts paths envAcc t
+          let ifaceMap' = M.insert mn ih ifaceMap
+          return (env', ifaceMap')
+    short bs = take 8 (B.unpack $ Base16.encode bs)
 
 compileBins:: C.GlobalOptions -> C.CompileOptions -> Paths -> Acton.Env.Env0 -> [CompileTask] -> [BinTask] -> IO ()
 compileBins gopts opts paths env tasks binTasks = do
     iff (not (altOutput opts)) $ do
       zigBuild env gopts opts paths tasks binTasks
     return ()
-  where
-    handleNotExists :: IOException -> IO ()
-    handleNotExists _ = return ()
 
 
-chaseImportedFiles :: C.GlobalOptions -> C.CompileOptions -> Paths -> [CompileTask] -> IO [CompileTask]
-chaseImportedFiles gopts opts paths itasks
+-- Generate documentation index for a project build by reading module docstrings
+-- from the current tasks. Uses TyTask header docs when available to avoid
+-- parsing/decoding; falls back to extracting from ActonTask ASTs.
+generateProjectDocIndex :: C.GlobalOptions -> C.CompileOptions -> Paths -> [String] -> IO ()
+generateProjectDocIndex gopts opts paths srcFiles = do
+    unless (C.skip_build opts || C.only_build opts || isTmp paths) $ do
+        let docDir = joinPath [projPath paths, "out", "doc"]
+        createDirectoryIfMissing True docDir
+        tasks <- mapM (readModuleTask gopts opts paths) srcFiles
+        entries <- forM tasks $ \t -> case t of
+                          ActonTask mn _src m -> return (mn, DocP.extractDocstring (A.mbody m))
+                          TyTask { name = mn, tyDoc = mdoc } -> return (mn, mdoc)
+        DocP.generateDocIndex docDir entries
+
+
+-- Expand the set of tasks by reading project-local imports recursively.
+-- Uses readModuleTask so we always load modules via .ty header (when valid) or
+-- parse .act as needed. For full project builds (all src/), this is typically a
+-- no-op; it matters when specific source files are specified
+readImports :: C.GlobalOptions -> C.CompileOptions -> Paths -> [CompileTask] -> IO [CompileTask]
+readImports gopts opts paths itasks
                             = do
                                  let itasks_imps = concatMap importsOf itasks
                                  newtasks <- catMaybes <$> mapM (readAFile itasks) itasks_imps
                                  chaseRecursively (itasks ++ newtasks) (map name newtasks) (concatMap importsOf newtasks)
 
-  where readAFile tasks mn  = case lookUp mn tasks of    -- read and parse file mn in the project directory, unless it is already in tasks
-                                 Just t -> return Nothing
-                                 Nothing -> do let actFile = srcFile paths mn
-                                               ok <- System.Directory.doesFileExist actFile
-                                               if ok then do
-                                                   task <- parseActFile gopts opts paths actFile
-                                                   return $ Just task
-                                                 else return Nothing
+  where
+        readAFile tasks mn = case lookUp mn tasks of
+          Just _ -> return Nothing
+          Nothing -> do
+            let actFile = srcFile paths mn
+            ok <- System.Directory.doesFileExist actFile
+            if ok
+              then do
+                task <- readModuleTask gopts opts paths actFile
+                return (Just task)
+              else return Nothing
 
         lookUp mn (t : ts)
           | name t == mn     = Just t
@@ -802,90 +1109,49 @@ chaseImportedFiles gopts opts paths itasks
 quiet :: C.GlobalOptions -> C.CompileOptions -> Bool
 quiet gopts opts = C.quiet gopts || altOutput opts
 
-doTask :: C.GlobalOptions -> C.CompileOptions -> Paths -> Acton.Env.Env0 -> CompileTask -> IO Acton.Env.Env0
+doTask :: C.GlobalOptions -> C.CompileOptions -> Paths -> Acton.Env.Env0 -> CompileTask -> IO (Acton.Env.Env0, B.ByteString)
+doTask gopts opts paths env TyTask{ tyIfaceHash = h } = do
+    -- Cached module: no work here; return the recorded interface hash so the
+    -- caller can uniformly update ifaceMap without peeking into the task.
+    -- We still avoid eagerly loading into env; it will be read on-demand.
+    return (env, h)
 doTask gopts opts paths env t@(ActonTask mn src m) = do
-    iff (not (quiet gopts opts))  (putStrLn("  Compiling " ++ makeRelative (srcDir paths) actFile
+    -- In --only-build mode, do not run compilation passes or write files.
+    if C.only_build opts then do
+        iff (not (quiet gopts opts)) (putStrLn ("  Skipping compilation of " ++ makeRelative (srcDir paths) actFile ++ " (--only-build)"))
+        -- For a stale module in --only-build, return the currently recorded
+        -- interface hash from its existing .ty (if present), so dependents do
+        -- not observe spurious interface deltas in this mode.
+        mty <- Acton.Env.findTyFile (searchPath paths) mn
+        ih <- case mty of
+                Just ty -> do
+                  hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader ty
+                  case hdrE of
+                    Right (_srcH, ihash, _impsH, _rootsH, _docH) -> return ihash
+                    _ -> return B.empty
+                Nothing -> return B.empty
+        return (env, ih)
+    else do
+      iff (not (quiet gopts opts))  (putStrLn("  Compiling " ++ makeRelative (srcDir paths) actFile
               ++ " with " ++ show (C.optimize opts)))
 
-    timeStart <- getTime Monotonic
+      timeStart <- getTime Monotonic
 
-    let outFiles = [tyFile, hFile, cFile]
-    ok <- checkUptoDate gopts opts paths actFile outFiles (importsOf t)
-    if C.only_build opts || (ok && not (mn == (modName paths) && (forceCompilation opts)))
-      then do
-        timeBeforeTy <- getTime Monotonic
-        (_,nmod) <- InterfaceFiles.readFile tyFile
-        timeEnd <- getTime Monotonic
-        iff (C.timing gopts) $ putStrLn("   Read .ty file " ++ makeRelative (projPath paths) tyFile ++ ": " ++ fmtTime(timeEnd - timeBeforeTy))
-        iff (not (quiet gopts opts)) $ putStrLn("   Already up to date, in   " ++ fmtTime(timeEnd - timeStart))
-        let A.NModule te mdoc = nmod
-        return (Acton.Env.addMod mn te mdoc env)
-      else do
-        createDirectoryIfMissing True (getModPath (projTypes paths) mn)
-        env' <- runRestPasses gopts opts paths env m
-          `catch` handle gopts opts "Compilation error" generalError src paths mn
-          `catch` handle gopts opts "Compilation error" Acton.Env.compilationError src paths mn
-          `catch` handleTypeError gopts opts "Type error" Acton.Types.typeError src paths mn
-        timeEnd <- getTime Monotonic
-        iff (not (quiet gopts opts)) $ putStrLn("   Finished compilation in  " ++ fmtTime(timeEnd - timeStart))
-        return env'
+      createDirectoryIfMissing True (getModPath (projTypes paths) mn)
+      (env', ifaceHash) <- runRestPasses gopts opts paths env m src
+        `catch` handle gopts opts "Compilation error" generalError src paths mn
+        `catch` handle gopts opts "Compilation error" Acton.Env.compilationError src paths mn
+        `catch` (\err -> handleDiagnostic gopts opts paths (modName paths) $ mkErrorDiagnostic filename src $ Acton.TypeM.typeReport err filename src)
+      timeEnd <- getTime Monotonic
+      iff (not (quiet gopts opts)) $ putStrLn("   Finished compilation in  " ++ fmtTime(timeEnd - timeStart))
+      return (env', ifaceHash)
   where actFile             = srcFile paths mn
+        filename            = modNameToFilename mn
         outbase             = outBase paths mn
         tyFile              = outbase ++ ".ty"
         hFile               = outbase ++ ".h"
         cFile               = outbase ++ ".c"
-        forceCompilation :: C.CompileOptions -> Bool
-        forceCompilation args = (C.alwaysbuild args) || (C.parse args) || (C.kinds args) || (C.types args) || (C.sigs args)
-                                || (C.norm args) || (C.deact args) || (C.cps args) || (C.llift args) || (C.hgen args) ||(C.cgen args)
 
-
-checkUptoDate :: C.GlobalOptions -> C.CompileOptions -> Paths -> FilePath -> [FilePath] -> [A.ModName] -> IO Bool
-checkUptoDate gopts opts paths actFile outFiles imps = do
-    iff (C.verbose gopts) (putStrLn ("    Checking " ++ makeRelative (srcDir paths) actFile ++ " is up to date..."))
-    -- get the path to the actonc binary, i.e. ourself
-    actoncBin <- System.Environment.getExecutablePath
-    -- get path to `acton` which is the actonc binary without the `c` at the end
-    let actonBin = take (length actoncBin - 1) actoncBin
-    let potSrcFiles     = [actonBin, actoncBin, actFile, extCFile, srcCFile, srcHFile]
-    srcFiles  <- filterM System.Directory.doesFileExist potSrcFiles
-    outExists <- mapM System.Directory.doesFileExist outFiles
-
-    if not (and outExists)
-        then do
-            iff (C.verbose gopts) (putStrLn ("    Missing output files: " ++ show outExists ++ " for " ++ show outFiles))
-            return False
-        else do
-            -- get the time of the last modified source file
-            srcTime  <- head <$> sortBy (comparing Down) <$> mapM System.Directory.getModificationTime srcFiles
-            outTiming <- mapM System.Directory.getModificationTime outFiles
-            impsOK   <- mapM (impOK (head outTiming)) imps
-            return (all (srcTime <) outTiming && and impsOK)
-  where
-        srcBase         = joinPath [takeDirectory actFile, takeBaseName actFile]
-        srcCFile        = srcBase ++ ".c"
-        srcHFile        = srcBase ++ ".h"
-        extCFile        = srcBase ++ ".ext.c"
-        -- except for actFile, these are *potential* source files which might
-        -- not actually exist...
-        impOK iTime mn  = do
-                             impFile <- findTyFile (searchPath paths) mn
-                             case impFile of
-                               Nothing -> return False
-                               Just impFile -> do
-                                 impfileTime <- System.Directory.getModificationTime impFile
-                                 return (impfileTime < iTime)
-        -- find .ty file by looking both in local project and in stdlib
-        findTy paths mn = do
-                             let localImpName = outBase paths mn ++ ".ty"
-                                 stdlibImpName = joinPath (sysTypes paths : A.modPath mn) ++ ".ty"
-                             projExist <- System.Directory.doesFileExist localImpName
-                             stdlibExist <- System.Directory.doesFileExist stdlibImpName
-                             let filePath = case (projExist, stdlibExist) of
-                                   (True, True) -> localImpName
-                                   (True, False) -> localImpName
-                                   (False, True) -> stdlibImpName
-                                   (False, False) -> error("ERROR: Unable to find interface file")
-                             return filePath
 
 isGitAvailable :: IO Bool
 isGitAvailable = do
@@ -897,8 +1163,8 @@ isGitAvailable = do
 altOutput opts =
   (C.parse opts) || (C.kinds opts) || (C.types opts) || (C.sigs opts) || (C.norm opts) || (C.deact opts) || (C.cps opts) || (C.llift opts) || (C.box opts) || (C.hgen opts) || (C.cgen opts)
 
-runRestPasses :: C.GlobalOptions -> C.CompileOptions -> Paths -> Acton.Env.Env0 -> A.Module -> IO Acton.Env.Env0
-runRestPasses gopts opts paths env0 parsed = do
+runRestPasses :: C.GlobalOptions -> C.CompileOptions -> Paths -> Acton.Env.Env0 -> A.Module -> String -> IO (Acton.Env.Env0, B.ByteString)
+runRestPasses gopts opts paths env0 parsed srcContent = do
                       let mn = A.modname parsed
                       let outbase = outBase paths mn
                       let absSrcBase = srcBase paths mn
@@ -919,7 +1185,33 @@ runRestPasses gopts opts paths env0 parsed = do
                       iff (C.timing gopts) $ putStrLn("    Pass: Kinds check     : " ++ fmtTime (timeKindsCheck - timeEnv))
 
                       (nmod,tchecked,typeEnv,mrefs) <- Acton.Types.reconstruct env kchecked
-                      InterfaceFiles.writeFile (outbase ++ ".ty") mrefs nmod
+                      -- Compute hash of source content from raw file bytes (stable across encoding)
+                      srcBytes <- B.readFile actFile
+                      let srcHash = SHA256.hash srcBytes
+                      -- Pre-compute list of root-eligible actors and store in .ty header
+                      let roots = case nmod of
+                                     A.NModule te _ -> [ n | (n,i) <- te, rootEligible i ]
+                                     _              -> []
+                      let mdoc = case nmod of A.NModule _ d -> d; _ -> Nothing
+                      -- Resolve import interface hashes from headers; missing entries are hard errors
+                      impsWithHash <- forM mrefs $ \mref -> do
+                        mty <- Acton.Env.findTyFile (searchPath paths) mref
+                        case mty of
+                          Just ty -> do
+                            hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader ty
+                            case hdrE of
+                              Right (_srcH, ih, _impsH, _rootsH, _docH) -> return (mref, ih)
+                              _ -> printErrorAndCleanAndExit ("Type interface file not readable for " ++ modNameToString mref) gopts opts paths
+                          Nothing -> printErrorAndCleanAndExit ("Type interface file not found for " ++ modNameToString mref) gopts opts paths
+                      -- Compute interface hash over doc-free NameInfo,
+                      -- augmented with current imports' interface hashes. This ensures that
+                      -- changes in a dependency's public interface are reflected in this
+                      -- module's interface hash, propagating rebuilds transitively.
+                      let selfIfaceBytes  = BL.toStrict $ encode (A.stripDocsNI nmod)
+                          depHashesSorted = map snd $ Data.List.sortOn (modNameToString . fst) impsWithHash
+                          depBytes        = BL.toStrict $ encode depHashesSorted
+                          ifaceHash       = SHA256.hash (B.append selfIfaceBytes depBytes)
+                      InterfaceFiles.writeFile (outbase ++ ".ty") srcHash ifaceHash impsWithHash roots mdoc nmod tchecked
 
                       let A.NModule iface mdoc = nmod
                       iff (C.types opts && mn == (modName paths)) $ dump mn "types" (Pretty.print tchecked)
@@ -983,7 +1275,10 @@ runRestPasses gopts opts paths env0 parsed = do
                       timeBoxing <- getTime Monotonic
                       iff (C.timing gopts) $ putStrLn("    Pass: Boxing :          " ++ fmtTime (timeBoxing - timeLLift))
 
-                      (n,h,c) <- Acton.CodeGen.generate liftEnv relSrcBase boxed
+                      -- Convert hash to hex string for comment
+                      let hexHash = B.unpack $ Base16.encode srcHash
+                      let emitLines = not (C.dbg_no_lines opts)
+                      (n,h,c) <- Acton.CodeGen.generate liftEnv relSrcBase srcContent emitLines boxed hexHash
                       timeCodeGen <- getTime Monotonic
                       iff (C.timing gopts) $ putStrLn("    Pass: Generating code : " ++ fmtTime (timeCodeGen - timeBoxing))
 
@@ -1008,7 +1303,8 @@ runRestPasses gopts opts paths env0 parsed = do
                           iff (C.timing gopts) $ putStrLn("    Pass: Writing code    : " ++ fmtTime (timeCodeWrite - timeCodeGen))
                                                            )
 
-                      return $ Acton.Env.addMod mn iface mdoc (env0 `Acton.Env.withModulesFrom` env)
+                      return ( Acton.Env.addMod mn iface mdoc (env0 `Acton.Env.withModulesFrom` env)
+                             , ifaceHash )
 
 handle gopts opts errKind f src paths mn ex = do
     let actFile = modNameToFilename mn
@@ -1018,11 +1314,10 @@ handle gopts opts errKind f src paths mn ex = do
         [] -> do
             -- Fallback if no error location
             putStrLn ("\nERROR: Error when compiling " ++ (prstr mn) ++ " module: " ++ errKind)
-            handleCleanup paths mn
         ((loc, msg):_) -> do
             let diagnostic = Diag.actErrToDiagnostic errKind actFile src loc msg
             printDiag gopts opts diagnostic
-            handleCleanup paths mn
+    handleCleanup paths mn
 
 modNameToFilename :: A.ModName -> String
 modNameToFilename mn = joinPath (map nameToString names) ++ ".act"
@@ -1036,10 +1331,6 @@ modNameToFilename mn = joinPath (map nameToString names) ++ ".act"
 handleDiagnostic :: C.GlobalOptions -> C.CompileOptions -> Paths -> A.ModName -> Diagnostic String -> IO a
 handleDiagnostic gopts opts paths mn diagnostic = do
     printDiag gopts opts diagnostic
-    handleCleanup paths mn
-
-handleTypeError gopts opts errKind f src paths mn ex = do
-    printDiag gopts opts $ mkErrorDiagnostic (modNameToFilename mn) src (typeReport ex (modNameToFilename mn) src)
     handleCleanup paths mn
 
 handleCleanup paths mn = do
@@ -1075,28 +1366,31 @@ printDiag gopts opts d = do
       then printDiagnostic stdout WithUnicode (TabSize 4) defaultStyle d
       else hPutDoc stdout $ unAnnotate (prettyDiagnostic WithoutUnicode (TabSize 4) d)
 
-writeRootC :: Acton.Env.Env0 -> C.GlobalOptions -> C.CompileOptions -> Paths -> BinTask -> IO (Maybe BinTask)
-writeRootC env gopts opts paths binTask = do
-    let qn@(A.GName m n) = rootActor binTask
-        mn = A.mname qn
-        outbase = outBase paths mn
-        rootFile = if (isTest binTask) then outbase ++ ".test_root.c" else outbase ++ ".root.c"
-    case Acton.Env.lookupMod m env of
-        Nothing -> return Nothing  -- Handle the case where module lookup fails
-        Just modEnv ->
-            case lookup n modEnv of
-                Just (A.NAct [] A.TNil{} (A.TRow _ _ _ t A.TNil{}) _ _)
-                    | prstr t == "Env" || prstr t == "None"
-                        || prstr t == "__builtin__.Env"|| prstr t == "__builtin__.None" -> do
-                        c <- Acton.CodeGen.genRoot env qn
-                        createDirectoryIfMissing True (takeDirectory rootFile)
-                        writeFile rootFile c
-                        return (Just binTask)
-                    | otherwise -> handle gopts opts "Type error" Acton.Types.typeError "" paths m
-                        (Acton.Types.TypeError NoLoc ("Illegal type "++ prstr t ++ " of parameter to root actor " ++ prstr qn))
-                Just t -> handleTypeError gopts opts "Type error" Acton.Types.typeError "" paths m
-                    (Acton.Types.TypeError NoLoc (prstr qn ++ " has not actor type."))
-                Nothing -> return Nothing
+writeRootC :: Acton.Env.Env0 -> C.GlobalOptions -> C.CompileOptions -> Paths -> [CompileTask] -> BinTask -> IO (Maybe BinTask)
+writeRootC env gopts opts paths tasks binTask = do
+    -- In --only-build mode, don't generate or touch any files; re-use existing artifacts.
+    if C.only_build opts
+      then return (Just binTask)
+      else do
+        let qn@(A.GName m n) = rootActor binTask
+            mn = A.mname qn
+            outbase = outBase paths mn
+            rootFile = if (isTest binTask) then outbase ++ ".test_root.c" else outbase ++ ".root.c"
+        -- Read the up-to-date roots from the on-disk .ty header (post-compile)
+        -- Avoid using preloaded TyTask roots, which may be stale if the module
+        -- was rebuilt during this run.
+        tyPath <- Acton.Env.findTyFile (searchPath paths) m
+        rootsHeader <- case tyPath of
+                         Just ty -> do (_, _, _, roots, _) <- InterfaceFiles.readHeader ty; return roots
+                         Nothing -> return []
+        if n `elem` rootsHeader then do
+          c <- Acton.CodeGen.genRoot env qn
+          createDirectoryIfMissing True (takeDirectory rootFile)
+          writeFile rootFile c
+          return (Just binTask)
+        else do
+          -- No slow fallback: if header does not list the root, skip generating root C for this task
+          return Nothing
 
 modNameToString :: A.ModName -> String
 modNameToString (A.ModName names) = intercalate "." (map nameToString names)
@@ -1109,9 +1403,10 @@ isWindowsOS targetTriple = case splitOn "-" targetTriple of
     (_:os:_) -> os == "windows"
     _        -> False
 
-runZig gopts opts zigCmd paths wd = do
-    iff (C.ccmd opts) $ putStrLn zigCmd
-    (returnCode, zigStdout, zigStderr) <- readCreateProcessWithExitCode (shell $ zigCmd){ cwd = wd } ""
+runZig gopts opts zigExe zigArgs paths wd = do
+    let display = showCommandForUser zigExe zigArgs
+    iff (C.ccmd opts || C.verbose gopts) $ putStrLn ("zigCmd: " ++ display)
+    (returnCode, zigStdout, zigStderr) <- readCreateProcessWithExitCode (proc zigExe zigArgs){ cwd = wd } ""
     case returnCode of
         ExitSuccess -> do
           iff (C.verboseZig gopts) $ putStrLn zigStderr
@@ -1134,78 +1429,85 @@ makeAlwaysRelative base target =
 
 -- TODO: replace all of this with generic+crypto?!
 #if defined(darwin_HOST_OS) && defined(aarch64_HOST_ARCH)
-defCpu = " -Dcpu=apple_a15 "
+defCpuFlag = ["-Dcpu=apple_a15"]
 #elif defined(darwin_HOST_OS) && defined(x86_64_HOST_ARCH)
-defCpu = ""
+defCpuFlag = []
 #elif defined(linux_HOST_OS) && defined(aarch64_HOST_ARCH)
-defCpu = " -Dcpu=cortex_a72 "
+defCpuFlag = ["-Dcpu=cortex_a72"]
 #elif defined(linux_HOST_OS) && defined(x86_64_HOST_ARCH)
-defCpu = ""
+defCpuFlag = []
 #else
 #error "Unsupported platform"
 #endif
 
 zigBuild :: Acton.Env.Env0 -> C.GlobalOptions -> C.CompileOptions -> Paths -> [CompileTask] -> [BinTask] -> IO ()
 zigBuild env gopts opts paths tasks binTasks = do
-    allBinTasks <- mapM (writeRootC env gopts opts paths) binTasks
+    allBinTasks <- mapM (writeRootC env gopts opts paths tasks) binTasks
     let realBinTasks = catMaybes allBinTasks
+    -- Clean out/types: drop stray outputs but preserve all root stubs so that
+    -- switching between `acton build` and `acton test` never deletes the other
+    -- mode’s executables. We preserve every existing *.root.c and *.test_root.c
+    -- under out/types regardless of whether this run produced them.
+    absOutFiles <- getFilesRecursive (projTypes paths)
+    let isRootStub f =
+            let ext  = takeExtension f
+                bext = takeExtension (takeBaseName f)
+            in ext == ".c" && (bext == ".root" || bext == ".test_root")
+        roots = filter isRootStub absOutFiles
+    removeOrphanFiles paths tasks roots
     iff (not (quiet gopts opts)) $ putStrLn("  Final compilation step")
+    -- Remove orphaned executables, i.e. .act files that used to have a root
+    -- actor and thus outputted a binary executable but no longer has a root
+    -- actor. We only do this for projects, not temp / scratch dir builds.
+    iff (not (isTmp paths)) $ removeOrphanExecutables (binDir paths) (projTypes paths) realBinTasks
     timeStart <- getTime Monotonic
 
-    -- custom build.zig ?
     homeDir <- getHomeDirectory
     let local_cache_dir = joinPath [ homeDir, ".cache", "acton", "zig-local-cache" ]
         global_cache_dir = joinPath [ homeDir, ".cache", "acton", "zig-global-cache" ]
         no_threads = if isWindowsOS (C.target opts) then True else C.no_threads opts
-        target_cpu = if (C.cpu opts /= "")
-                       then " -Dcpu=" ++ C.cpu opts
-                       else
-                         case (splitOn "-" (C.target opts)) of
-                           ("native":_)            -> defCpu
-                           ("aarch64":"macos":_)   -> " -Dcpu=apple_a15 "
-    -- TODO: how do we do better here? Windows presumably runs on many CPUs that are not aarch64. We really just want to enable AES
-                           ("aarch64":"windows":_) -> " -Dcpu=apple_a15 "
-                           ("aarch64":"linux":_)   -> " -Dcpu=cortex_a72 "
-                           ("x86_64":_:_)          -> " -Dcpu=westmere "
-                           (_:_:_)                 -> defCpu
-        buildZigPath = joinPath [projPath paths, "build.zig"]
-        buildZonPath = joinPath [projPath paths, "build.zig.zon"]
 
-    buildZigExists <- doesFileExist buildZigPath
-    buildZonExists <- doesFileExist buildZonPath
-    -- Compute relative path from current directory (projPath paths)
-    let relativeSysPath = makeAlwaysRelative (projPath paths) (sysPath paths)
-    iff (not buildZigExists) $ do
-      let distBuildZigPath = joinPath [(sysPath paths), "builder", "build.zig"]
-      copyFile distBuildZigPath buildZigPath
-    if buildZonExists
-      then do
-        curBuildZon <- readFile buildZonPath
-        let newBuildZon = replace "SYSPATH" relativeSysPath curBuildZon
-        removeFile buildZonPath
-          `catch` handleNotExists
-        writeFile buildZonPath newBuildZon
-      else do
+
+    -- If actonc runs as a standalone compiler (not a sub-compiler from Acton CLI),
+    -- then we may need to generate build.zig and build.zig.zon
+    iff (not (C.sub gopts)) $ do
+        let buildZigPath     = joinPath [projPath paths, "build.zig"]
+            buildZonPath     = joinPath [projPath paths, "build.zig.zon"]
+            -- Compute relative path from current directory (projPath paths), since zig likes relative paths
+            relativeSysPath  = makeAlwaysRelative (projPath paths) (sysPath paths)
+            distBuildZigPath = joinPath [(sysPath paths), "builder", "build.zig"]
+
+        buildZonExists <- doesFileExist buildZonPath
+        copyFile distBuildZigPath buildZigPath
         let distBuildZonPath = joinPath [(sysPath paths), "builder", "build.zig.zon"]
         distBuildZon <- readFile distBuildZonPath
-        let buildZon = replace "SYSPATH" relativeSysPath distBuildZon
+        let buildZon = replace "{{syspath}}" relativeSysPath distBuildZon
         writeFile buildZonPath buildZon
 
-    let zigCmdBase = zig paths ++ " build " ++ " --cache-dir " ++ local_cache_dir ++
-                 " --global-cache-dir " ++ global_cache_dir ++
-                 (if (C.verboseZig gopts) then " --verbose " else "")
-    let zigCmd = zigCmdBase ++
-                 " --prefix " ++ projOut paths ++ " --prefix-exe-dir 'bin'" ++
-                 (if (C.verboseZig gopts) then " --verbose " else "") ++
-                 " -Dtarget=" ++ (C.target opts) ++
-                 target_cpu ++
-                 " -Doptimize=" ++ optimizeModeToZig (C.optimize opts) ++
-                 (if (C.db opts) then " -Ddb " else "") ++
-                 (if no_threads then " -Dno_threads " else "") ++
-                 (if (C.cpedantic opts) then " -Dcpedantic " else "")
+    let zigExe = zig paths
+        baseArgs = ["build","--cache-dir", local_cache_dir,
+                            "--global-cache-dir", global_cache_dir] ++
+                   (if (C.verboseZig gopts) then ["--verbose"] else [])
+        prefixArgs = ["--prefix", projOut paths, "--prefix-exe-dir", "bin"] ++
+                     (if (C.verboseZig gopts) then ["--verbose"] else [])
+        targetArgs = ["-Dtarget=" ++ C.target opts]
+        cpuArgs =
+            if (C.cpu opts /= "") then ["-Dcpu=" ++ C.cpu opts]
+            else case (splitOn "-" (C.target opts)) of
+                   ("native":_)            -> defCpuFlag
+                   ("aarch64":"macos":_)   -> ["-Dcpu=apple_a15"]
+                   ("aarch64":"windows":_) -> ["-Dcpu=apple_a15"]
+                   ("aarch64":"linux":_)   -> ["-Dcpu=cortex_a72"]
+                   ("x86_64":_:_)          -> ["-Dcpu=westmere"]
+                   (_:_:_)                 -> defCpuFlag
+        optArgs = ["-Doptimize=" ++ optimizeModeToZig (C.optimize opts)]
+        featureArgs = concat [ if C.db opts then ["-Ddb"] else []
+                             , if no_threads then ["-Dno_threads"] else []
+                             , if C.cpedantic opts then ["-Dcpedantic"] else []
+                             ]
+        zigArgs = baseArgs ++ prefixArgs ++ targetArgs ++ cpuArgs ++ optArgs ++ featureArgs
 
-    iff (C.verbose gopts) $ putStrLn ("zigCmd: " ++ zigCmd)
-    runZig gopts opts zigCmd paths (Just (projPath paths))
+    runZig gopts opts zigExe zigArgs paths (Just (projPath paths))
     -- if we are in a temp acton project, copy the outputted binary next to the source file
     if (isTmp paths && not (null realBinTasks))
       then do
@@ -1219,6 +1521,3 @@ zigBuild env gopts opts paths tasks binTasks = do
     timeEnd <- getTime Monotonic
     iff (not (quiet gopts opts)) $ putStrLn("   Finished final compilation step in  " ++ fmtTime(timeEnd - timeStart))
     return ()
-  where
-    handleNotExists :: IOException -> IO ()
-    handleNotExists _ = return ()

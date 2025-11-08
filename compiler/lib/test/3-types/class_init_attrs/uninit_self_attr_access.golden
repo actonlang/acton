@@ -1,0 +1,17 @@
+[error Type error]: Attribute 'x' is not initialized in TestClass.__init__
+     +--> uninit_self_attr_access.act@6:5-9:1
+     |
+   2 |    class TestClass(object):
+     :    ^-----------------------
+     :    `- In class TestClass
+   3 |        x: int
+     :        ^ 
+     :        `- Attribute 'x' is defined here
+     :
+   6 | +>     def __init__(self):
+   7 | |          self.x = self.y * 2  # ERROR: y is not initialized yet!
+   8 | |          self.y = 10
+   9 | |> 
+     : | 
+     : `- Attribute 'x' is not initialized in __init__
+-----+

@@ -105,6 +105,31 @@ compilerTests =
         (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../../test/compiler/test_deps/deps/a/build.zig*") ""
         (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../../test/compiler/test_deps/deps/a/out") ""
         runActon "build" ExitSuccess False "../../test/compiler/test_deps/"
+  , testCase "dependency API change triggers rebuild" $ do
+        let testDir = "../../test/compiler/dep-api-change/"
+        let depSrc = testDir ++ "deps/libfoo/src/libfoo.act"
+
+        -- Write initial content to dependency
+        let originalContent = "# Initial version\ndef calculate(x: int) -> int:\n    return x * 2\n"
+        writeFile depSrc originalContent
+
+        -- Clean all build artifacts initially
+        (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf " ++ testDir ++ "build.zig*") ""
+        (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf " ++ testDir ++ "out") ""
+        (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf " ++ testDir ++ "deps/libfoo/build.zig*") ""
+        (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf " ++ testDir ++ "deps/libfoo/out") ""
+
+        -- Initial build
+        runActon "build" ExitSuccess False testDir
+
+        -- Now modify the dependency's public API (change function signature)
+        let modifiedContent = "# Modified version\ndef calculate(x: int, y: int) -> int:\n    return x * y\n"
+        writeFile depSrc modifiedContent
+
+        -- Build again - compiler should detect API change via hash and
+        -- recompile main, which now rightfully fails type checking due to the
+        -- API change in the dependency.
+        runActon "build" (ExitFailure 1) False testDir
   ]
 
 actoncProjTests =
@@ -125,6 +150,21 @@ actoncProjTests =
         (returnCode, cmdOut, cmdErr) <- buildThing "--root main" "test/project/qualified_root"
         assertEqual "actonc should error out" (ExitFailure 1) returnCode
         assertEqual "actonc should report error" "actonc: Project build requires a qualified root actor name, like foo.main\n" cmdErr
+  , testCase "executable pruning" $ do
+        let proj = "test/project/prune_executables"
+        _ <- readCreateProcessWithExitCode (shell $ "rm -rf " ++ proj ++ "/out") ""
+        testBuild "" ExitSuccess False proj
+        let binFoo = proj </> "out/bin/foo"
+            binBar = proj </> "out/bin/bar"
+        fooExists <- doesFileExist binFoo
+        barExists <- doesFileExist binBar
+        assertBool "foo binary should exist after build" fooExists
+        assertBool "bar binary should exist after build" barExists
+        runActon "test" ExitSuccess False proj
+        fooStill <- doesFileExist binFoo
+        barStill <- doesFileExist binBar
+        assertBool "foo binary should exist after acton test" fooStill
+        assertBool "bar binary should exist after acton test" barStill
   ]
 
 actoncRootArgTests =
@@ -330,8 +370,7 @@ runThing opts thing = do
     projBinPath <- canonicalizePath $ thing ++ "/out/bin"
     let wd = if isProj then projBinPath else twd
     let exe = if isProj then binName else fileBody
-    let cmd = "./" ++ exe ++ " " ++ opts
-    (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ cmd){ cwd = Just wd } ""
+    (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc ("./" ++ exe) (words opts)){ cwd = Just wd } ""
     return (returnCode, cmdOut, cmdErr)
   where (fileBody, fileExt) = splitExtension $ takeFileName thing
         fileParts = splitOn "__" fileBody
@@ -352,16 +391,16 @@ buildThing opts thing = do
     projPath <- canonicalizePath thing
     curDir <- getCurrentDirectory
     let wd = if proj then projPath else curDir
-    let actCmd    = (id actonc) ++ " " ++ (if proj then "build " else thing) ++ " --always-build " ++ opts
-    (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ actCmd){ cwd = Just wd } ""
+        args0 = if proj then ["build"] else [thing]
+        args  = args0 ++ ["--always-build"] ++ words opts
+    (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc actonc args){ cwd = Just wd } ""
     return (returnCode, cmdOut, cmdErr)
 
 
 runActon opts expRet expFail proj = do
     actonExe <- canonicalizePath "../../dist/bin/acton"
     projPath <- canonicalizePath proj
-    let actCmd    = (id actonExe) ++ " " ++ opts
-    (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ actCmd){ cwd = Just projPath } ""
+    (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc actonExe (words opts)){ cwd = Just projPath } ""
     iff (expFail == False && returnCode /= expRet) (
         putStrLn("\nERROR: when running acton " ++ opts ++ ", acton returned code (" ++ (show returnCode) ++ ") not as expected (" ++ (show expRet) ++ ")\nSTDOUT:\n" ++ cmdOut ++ "STDERR:\n" ++ cmdErr)
         )

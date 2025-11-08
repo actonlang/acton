@@ -1,0 +1,13 @@
+# Test case: if/else with constant condition - both branches initialize
+class TestClass(object):
+    x: int
+
+    def __init__(self):
+        if 1 == 1:  # Always true, but compiler doesn't know
+            self.x = 1
+        else:
+            self.x = 2
+
+actor main(env):
+    t = TestClass()
+    env.exit(0)

@@ -1,0 +1,23 @@
+# Test case: Method calls on self should stop scanning. We are in the
+# constructor, so `self` is not initialized yet, the method has access to self,
+# but we can't track what it is doing exactly.
+# We *could* potentially allow pure methods...
+
+class TestClass(object):
+    pi: int
+    x: int
+    y: int
+    counter: int
+    
+    def __init__(self):
+        self.counter = 0
+        self.x = 1
+        self.pi = self.pure_helper()
+        self.y = 2  # Not reached by scanner
+    
+    def pure_helper(self):
+        return 3.14
+
+actor main(env):
+    t = TestClass()
+    env.exit(0)

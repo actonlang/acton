@@ -24,63 +24,96 @@ def base_path(file_cap: file.FileCap):
     fs = file.FS(file_cap)
     return fs.exepath()[0:-len("/bin/acton")]
 
-def warn_on_large_zig_global_cache(cap: file.FileCap):
+def check_cache_is_empty(cap: file.FileCap, cache_dir: str) -> bool:
+    """Quick check if a cache directory is empty by just listing its contents"""
     fs = file.FS(cap)
-    last_warn_file = file.join_path([get_zig_global_cache_dir(cap), "last_warn"])
-    warn_level: int = 10 # start to warn at 10GB
     try:
-        last_warn = int(file.ReadFile(file.ReadFileCap(cap), last_warn_file).read().decode())
-        warn_level = last_warn + 1 # warn in 1GB increments
+        contents = fs.listdir(cache_dir)
+        return len(contents) == 0
     except:
+        # Directory doesn't exist, so it's effectively empty
+        return True
+
+actor CacheSizeChecker(cap: file.FileCap):
+    """Background actor to check cache sizes in parallel with compilation"""
+    var local_cache_size = 0
+    var global_cache_size = 0
+    var should_check = False
+    var last_global_warn_size = 0
+    var last_local_warn_size = 0
+    var counter = -1
+
+    def check_caches():
+        (should_check, last_global_warn_size, last_local_warn_size, counter) = _should_run_check()
+
+        if not should_check:
+            # Skip the expensive cache size checks this time
+            return
+
         try:
-            f = file.WriteFile(file.WriteFileCap(cap), last_warn_file)
-            f.write(str(warn_level).encode())
-            f.close()
-        except:
-            # The cache dir probably doesn't exist, just ignore
+            global_cache_size = _check_cache_size(get_zig_global_cache_dir(cap))
+        except Exception as e:
             pass
 
-    cache_dir = get_zig_global_cache_dir(cap)
-    total_size: int = 0
-    for f in fs.walk(cache_dir):
-        total_size += int(f.size)
-    gb = 1024 * 1024 * 1024
-    if total_size > warn_level * gb:
-        print("WARN: The global cache has grown to %dMB" % (total_size // (1024*1024)))
-        print("HINT: You can clear the cache with with: rm -rf %s" % cache_dir)
-        print("INFO: Do NOT clear the cache if you are offline or have a slow connection.")
-        print("INFO: The global cache stores downloaded package dependencies as well as")
-        print("INFO: compiled artifacts for common libraries, like libc.")
-        print("INFO: Another warning will be issued when the cache grows by another 1GB.")
-        print("")
-        # write new warn level
         try:
-            f = file.WriteFile(file.WriteFileCap(cap), last_warn_file)
-            f.write(str(total_size // gb).encode())
-            f.close()
+            local_cache_size = _check_cache_size(get_zig_local_cache_dir(cap))
         except Exception as e:
-            print("WARN: Could not write new warn level to", last_warn_file)
-            print(e)
-    if total_size == 0:
-        print("INFO: Acton global cache is empty: rebuilding common libraries (e.g. libc) which will take some time...")
+            pass
 
-def clean_zig_local_cache(cap: file.FileCap):
-    fs = file.FS(cap)
-    cache_dir = get_zig_local_cache_dir(cap)
-    total_size = 0
-    for f in fs.walk(cache_dir):
-        total_size += f.size
-    gb = 1024 * 1024 * 1024
-    limit = 5 * gb
-    if total_size > limit:
-        print("Build cache (", total_size // (1024*1024), "MB) over %dGB, cleaning it up." % (int(limit // gb)))
-        await async fs.rmtree(cache_dir)
-        total_size = 0
-    if total_size == 0:
-        print("INFO: Acton local cache is empty: rebuilding Acton base which will take some time...")
+    def _should_run_check() -> (bool, int, int, int):
+        fs = file.FS(cap)
+        state_file = file.join_path([fs.homedir(), ".cache", "acton", "check_state"])
+        check_interval = 50
+        gb = 1024 * 1024 * 1024
+
+        counter = check_interval
+        last_global = 10 * gb  # Start warning at 10GB
+        last_local = 10 * gb   # Start warning at 10GB
+        try:
+            content = file.ReadFile(file.ReadFileCap(cap), state_file).read().decode()
+            lines = content.strip().split("\n")
+            if len(lines) >= 1:
+                counter = int(lines[0])
+            if len(lines) >= 2:
+                last_global = int(lines[1])
+            if len(lines) >= 3:
+                last_local = int(lines[2])
+        except:
+            # First time run or corrupted file - use defaults
+            pass
+
+        counter -= 1
+        should_check = (counter <= 0)
+        if should_check:
+            counter = check_interval
+
+        try:
+            f = file.WriteFile(file.WriteFileCap(cap), state_file)
+            f.write((str(counter) + "\n" + str(last_global) + "\n" + str(last_local)).encode())
+            f.close()
+        except:
+            pass
+
+        return (should_check, last_global, last_local, counter)
+
+    def _check_cache_size(cache_dir: str) -> int:
+        fs = file.FS(cap)
+        total_size: int = 0
+        for f in fs.walk(cache_dir):
+            total_size += int(f.size)
+
+        return total_size
+
+    def get_cache_state() -> (int, int, bool, int, int, int):
+        return (local_cache_size, global_cache_size, should_check, last_global_warn_size, last_local_warn_size, counter)
+
+    check_caches()
 
 def write_buildzig(file_cap, build_config: BuildConfig):
     fs = file.FS(file_cap)
+    # We want predictable deterministic paths. Zig wants relative paths. Get
+    # relative path to / and then from there to satisfy both.
+    relative_syspath = file.get_relative_path("/", fs.cwd()) + base_path(file_cap)
 
     def get_build_zig_templates():
         # Read the build.zig template
@@ -95,13 +128,13 @@ def write_buildzig(file_cap, build_config: BuildConfig):
     build_zig_tpl, build_zig_zon_tpl = get_build_zig_templates()
     # Write build.zig
     b_file = file.WriteFile(file.WriteFileCap(file_cap), "build.zig")
-    await async b_file.write(gen_buildzig(build_zig_tpl, build_config).encode())
-    await async b_file.close()
+    b_file.write(gen_buildzig(build_zig_tpl, build_config).encode())
     # Write build.zig.zon
     bzz_file = file.WriteFile(file.WriteFileCap(file_cap), "build.zig.zon")
     deps_path = file.get_relative_path(file.join_path([fs.homedir(), ".cache", "acton", "deps"]), fs.cwd())
 
-    await async bzz_file.write(gen_buildzigzon(build_zig_zon_tpl, build_config, deps_path).encode())
+    bzz_file.write(gen_buildzigzon(build_zig_zon_tpl, build_config, relative_syspath, deps_path).encode())
+    await async b_file.close()
     await async bzz_file.close()
 
 
@@ -140,7 +173,7 @@ actor CompilerRunner(process_cap, env, args, wdir=None, on_exit: ?action(int, in
             on_exit(exit_code, term_signal, std_out_buf, std_err_buf)
         else:
             if exit_code != 0:
-                print("actonc exited with code: ", exit_code, " terminated with signal:", term_signal)
+                print("{exe} exited with code: ", exit_code, " terminated with signal:", term_signal)
             env.exit(exit_code)
 
     def on_actonc_error(p, error: str):
@@ -175,8 +208,18 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
     lock_file = None
     remaining_deps = {}
     zig_global_cache_dir = get_zig_global_cache_dir(file.FileCap(env.cap))
-    if len(files) > 1:
-        raise NotImplementedError("Multiple files not supported yet")
+    # For multi-file compilation
+    files_to_compile = list(files)
+    all_outputs = []
+
+    # Quick check if caches are empty at startup (before building starts)
+    local_cache_was_empty = check_cache_is_empty(fcap, get_zig_local_cache_dir(fcap))
+    global_cache_was_empty = check_cache_is_empty(fcap, get_zig_global_cache_dir(fcap))
+
+    # Start background cache size checking only in interactive sessions
+    cache_checker: ?CacheSizeChecker = None
+    if env.is_tty():
+        cache_checker = CacheSizeChecker(file.FileCap(env.cap))
 
     def parse_dep_path_overrides(args) -> dict[str, str]:
         overrides = {}
@@ -197,14 +240,84 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
 
     var build_config = BuildConfig()
 
+    def _report_cache_warnings():
+        if cache_checker is not None:
+            (local_size, global_size, did_check, last_global_warn, last_local_warn, counter) = cache_checker.get_cache_state()
+
+            if not did_check:
+                return
+
+            gb = 1024 * 1024 * 1024
+            growth_threshold = 1 * gb
+
+            need_update = False
+            new_global_warn = last_global_warn
+            new_local_warn = last_local_warn
+
+            if global_size > last_global_warn + growth_threshold:
+                print("WARN: The global cache has grown to %.2fGB" % (global_size / gb), err=True)
+                print("HINT: You can clear the cache with: rm -rf %s" % get_zig_global_cache_dir(fcap), err=True)
+                print("INFO: Do NOT clear the cache if you are offline or have a slow connection.", err=True)
+                print("INFO: The global cache stores downloaded package dependencies as well as", err=True)
+                print("INFO: compiled artifacts for common libraries, like libc.", err=True)
+                print("", err=True)
+                new_global_warn = global_size
+                need_update = True
+
+            if local_size > last_local_warn + growth_threshold:
+                print("WARN: The local cache has grown to %.2fGB" % (local_size / gb), err=True)
+                print("HINT: You can clear the cache with: rm -rf %s" % get_zig_local_cache_dir(fcap), err=True)
+                print("", err=True)
+                new_local_warn = local_size
+                need_update = True
+
+            if need_update:
+                try:
+                    state_file = file.join_path([fs.homedir(), ".cache", "acton", "check_state"])
+                    f = file.WriteFile(file.WriteFileCap(fcap), state_file)
+                    f.write((str(counter) + "\n" + str(new_global_warn) + "\n" + str(new_local_warn)).encode())
+                    f.close()
+                except:
+                    pass
+
     def _on_actonc_exit(exit_code, term_signal, std_out_buf, std_err_buf):
+        _report_cache_warnings()
         if exit_code == 0:
             on_build_success(std_out_buf.decode())
         else:
             on_build_failure(exit_code, term_signal, std_out_buf.decode() + std_err_buf.decode())
 
     def _on_actonc_failure(error: str):
+        _report_cache_warnings()
         on_build_failure(-999, -999, error)
+
+    def _compile_next_file(cmd_base):
+        if len(files_to_compile) == 0:
+            combined_output = "\n".join(all_outputs)
+            on_build_success(combined_output)
+            return
+
+        def _on_this_file_exit(exit_code, term_signal, std_out_buf, std_err_buf):
+            if exit_code == 0:
+                all_outputs.append(std_out_buf.decode())
+                # Compile next file
+                _compile_next_file(cmd_base)
+            else:
+                on_build_failure(exit_code, term_signal, std_out_buf.decode() + std_err_buf.decode())
+
+        def _on_this_file_failure(error: str):
+            on_build_failure(-999, -999, error)
+
+        filename = files_to_compile.pop(0)
+        cr = CompilerRunner(
+            process_cap,
+            env,
+            cmd_base + [filename],
+            None,
+            _on_this_file_exit,
+            _on_this_file_failure,
+            print_output=not build_tests
+        )
 
     def build_project():
         search_paths = []
@@ -241,22 +354,26 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
             search_path_arg.extend(["--searchpath", sp])
         cmdargs = []
         if files == []:
-            cmdargs.extend(["build"])
-        else:
-            cmdargs.extend([files[0]])
+            cmdargs.extend(["build", "--sub"])
         cmdargs.extend(build_cmd_args(args))
         if build_tests:
             cmdargs.append("--test")
         cmd = cmdargs + search_path_arg
-        cr = CompilerRunner(
-            process_cap,
-            env,
-            cmd,
-            None,
-            _on_actonc_exit,
-            _on_actonc_failure,
-            print_output=not build_tests
-        )
+
+        # Handle multiple files or single file/project build
+        if files == []:
+            # Building entire project
+            cr = CompilerRunner(
+                process_cap,
+                env,
+                cmd,
+                None,
+                _on_actonc_exit,
+                _on_actonc_failure,
+                print_output=not build_tests
+            )
+        else:
+            _compile_next_file(cmdargs + search_path_arg)
 
     def _on_dep_actonc_exit(dep_name, exit_code, term_signal, std_out_buf, std_err_buf):
         if exit_code == 0:
@@ -301,7 +418,7 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
                 else:
                     raise ValueError("Dependency %s has no path or hash" % dep_name)
                 print(" -", dep_name)
-                cmd = ["build"] + dep_build_cmd_args(args) + dep_args
+                cmd = ["build", "--skip-build"] + dep_build_cmd_args(args) + dep_args
                 cr = CompilerRunner(
                     process_cap,
                     env,
@@ -379,8 +496,10 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
         for dep_name, dep in build_config.dependencies.items():
             if dep_name in dep_path_overrides:
                 dep_path = dep_path_overrides[dep_name]
-                # Zig wants relative paths
-                rel_path = file.get_relative_path(dep_path, fs.cwd())
+                # We want predictable deterministic paths. Zig wants relative
+                # paths. Get relative path to / and then from there to satisfy
+                # both.
+                rel_path = file.join_path([file.get_relative_path("/", fs.cwd()), file.get_relative_path(dep_path, "/")])
                 dep.path = rel_path
                 print("INFO: Using dependency path %s for %s" % (rel_path, dep.name), err=True)
             else:
@@ -397,6 +516,12 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
         """
         try:
             lock_file = file.WriteFile(file.WriteFileCap(fcap), ".acton.lock", lock=True)
+            if env.is_tty():
+                if global_cache_was_empty:
+                    print("INFO: Acton global cache is empty: rebuilding common libraries (e.g. libc) which will take some time...")
+                if local_cache_was_empty:
+                    print("INFO: Acton local cache is empty: rebuilding Acton base which will take some time...")
+
             check_for_buildconfig()
         except OSError:
             # Only warn if we are an interactive session, chances are otherwise
@@ -408,19 +533,8 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
             # TODO: perhaps we should have a better signal than tty-check though
             if env.is_tty():
                 print("Build lock exists, trying again soon...")
-            after 1: get_lock()
+            after 0.1: get_lock()
 
-    if env.is_tty():
-        # Check cache size and warn or clean if necessary... but only if we are
-        # attached to a TTY, i.e. running interactively so there is a user to
-        # see the warning. Similarly, for cleaning we want to avoid cleaning if
-        # there are multiple concurrent builds happening. Having a TTY is a
-        # reasonable proxy for "user is probably just interactively running one
-        # acton invokation right now". In contrast, if we are triggered as a
-        # sub-compilation task to build a dependency project, we don't want to
-        # clean the cache.
-        warn_on_large_zig_global_cache(file.FileCap(env.cap))
-        clean_zig_local_cache(file.FileCap(env.cap))
     # and off we go! Start by grabbing the project build lock
     get_lock()
 
@@ -777,6 +891,8 @@ def build_cmd_args(args):
             "cgen",
             "cps",
             "cpu",
+            "dbg-no-lines",
+            "db",
             "deact",
             "dep",
             "hgen",
@@ -1390,7 +1506,9 @@ actor main(env):
         def on_build_failure(exit_code: int,  term_signal: int, std_err_buf: str):
             env.exit(1)
 
-        BuildProject(process_cap, env, args, on_build_success, on_build_failure, build_tests=False)
+        files = args.get_strlist("files")
+
+        BuildProject(process_cap, env, args, on_build_success, on_build_failure, build_tests=False, files=files)
 
     def _cmd_doc(args):
         """Run actonc doc command"""
@@ -1422,16 +1540,6 @@ actor main(env):
             cmdargs.extend(["--color", "always"])
         else:
             cmdargs.extend(["--color", "never"])
-
-        # Pass through global options
-        if args.get_bool("verbose"):
-            cmdargs.append("--verbose")
-        if args.get_bool("verbose-zig"):
-            cmdargs.append("--verbose-zig")
-        if args.get_bool("quiet"):
-            cmdargs.append("--quiet")
-        if args.get_bool("timing"):
-            cmdargs.append("--timing")
 
         # Custom exit handler (suppress CompilerRunner's default message)
         def on_doc_exit(exit_code: int, term_signal: int, std_out_buf: bytes, std_err_buf: bytes):
@@ -1482,6 +1590,7 @@ actor main(env):
     def _parse_args():
         p = argparse.Parser()
         p.add_bool("always-build", "Always build")
+        p.add_bool("db", "Enable database backend")
         p.add_bool("parse", "Show parsing result")
         p.add_bool("kinds", "Show results after kind checking")
         p.add_bool("types", "Show inferred expression types")
@@ -1495,12 +1604,14 @@ actor main(env):
         p.add_bool("ccmd", "Show CC / LD command lines")
         p.add_bool("timing", "Show timing information")
         p.add_bool("cpedantic", "Pedantic C compilation")
+        p.add_bool("dbg-no-lines", "Disable emission of C #line directives (for debugging)")
         p.add_bool("quiet", "Be quiet")
         p.add_bool("verbose", "Verbose output")
         p.add_option("optimize", "str", "?", "Debug", "Optimization mode (Debug, ReleaseSafe, ReleaseSmall, ReleaseFast)")
         p.add_bool("no-threads", "Don't use threads")
         p.add_bool("only-build", "Only perform final build of .c files, do not compile .act files")
         p.add_bool("skip-build", "Skip final build of .c files")
+        p.add_bool("tty", "Controlling terminal is interactive")
         p.add_option("root", "str", "?", "", "Set root actor")
         p.add_option("tempdir", "str", "?", "", "Directory for temporary build files")
         p.add_option("syspath", "str", "?", "", "syspath")
@@ -1510,6 +1621,7 @@ actor main(env):
         p.add_arg("file", ".act file to compile, or .ty to show", False, "?")
 
         p_build = p.add_cmd("build", "Build", _cmd_build)
+        p_build.add_arg("files", "Specific .act file(s) to build", required=False, nargs="+")
 
         p_fetch = p.add_cmd("fetch", "Fetch all the things for offline work", _cmd_fetch)
 

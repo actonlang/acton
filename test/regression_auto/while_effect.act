@@ -1,0 +1,26 @@
+class Loop(object):
+    count: int
+
+    def __init__(self, count):
+        self.count = count
+
+    def a(self):
+        while self.b():
+            print("Loop")
+        else:
+            print("End of loop")
+
+    def b(self):
+        print("Running b()")
+        if self.count > 0:
+            self.count -= 1
+            print("Returning True to keep looping")
+            return True
+        print("Returning False to stop looping")
+        return False
+
+actor main(env):
+    f = Loop(2)
+    f.a()
+    print("Done")
+    env.exit(0)

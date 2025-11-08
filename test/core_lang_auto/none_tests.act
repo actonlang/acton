@@ -1,0 +1,16 @@
+def foo(x: ?int):
+    return x is not None
+
+def bar(x: ?int):
+    if x:
+        return True
+    return False
+
+actor main(env):
+    if foo(None) or not foo(7):
+        env.exit(1)
+    if bar(None) or bar(0) or not bar(7):
+        env.exit(1)
+    else:
+        print("Success")
+        env.exit(0)

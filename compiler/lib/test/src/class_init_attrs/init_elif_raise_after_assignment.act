@@ -1,0 +1,19 @@
+# Test case: elif branch assigns then raises - should succeed
+# The if and else branches complete normally with x initialized
+class TestClass(object):
+    x: int
+    
+    def __init__(self, mode: int):
+        if mode == 1:
+            self.x = 1
+        elif mode == 2:
+            raise ValueError("After assignment in elif")
+        else:
+            self.x = 3
+        
+        # Paths: if={x}, elif exits, else={x}
+        # Result: {x}
+
+actor main(env):
+    t = TestClass(1)
+    env.exit(0)

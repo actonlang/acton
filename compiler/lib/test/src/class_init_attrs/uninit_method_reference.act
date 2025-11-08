@@ -1,0 +1,23 @@
+# Test case: Passing self.method as argument should stop initialization scanning
+# This should fails - self._on_event is a bound method that  captures self, so
+# it's considered a leak of self
+class Callback(object):
+    def __init__(self, callback):
+        pass
+
+class TestClass(object):
+    handler: Callback
+    value: int
+    
+    def __init__(self):
+        # This should work - we're just passing a method reference
+        # But currently the compiler sees self._on_event as leaking self
+        self.handler = Callback(self._on_event)
+        self.value = 42  # This won't be seen as initialized
+    
+    def _on_event(self):
+        pass
+
+actor main(env):
+    t = TestClass()
+    env.exit(0)

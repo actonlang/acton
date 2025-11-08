@@ -12,10 +12,14 @@
 --
 
 {-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, FlexibleContexts #-}
-module Acton.Types(reconstruct, showTyFile, prettySigs, typeError, TypeError(..)) where
+module Acton.Types(reconstruct, showTyFile, prettySigs, TypeError(..)) where
 
 import Control.Monad
+import Data.Maybe (isJust)
+import Data.List (nub, intersect)
 import Pretty
+import qualified Control.Exception
+import Debug.Trace
 import Utils
 import Acton.Syntax
 import Acton.Names
@@ -29,7 +33,10 @@ import Acton.Transform
 import Acton.Converter
 import Acton.TypeM
 import Acton.TypeEnv
+import Acton.WitKnots
 import qualified InterfaceFiles
+import qualified Data.ByteString.Char8 as B
+import qualified Data.ByteString.Base16 as Base16
 import qualified Data.Map
 import Data.List (intersperse, isPrefixOf, partition)
 import Data.Maybe (mapMaybe)
@@ -61,15 +68,16 @@ reconstruct env0 (Module m i ss)         = do --traceM ("#################### or
                                              let nmod = NModule iface moduleDocstring
                                              --traceM ("#################### converted env0:")
                                              --traceM (render (pretty env0'))
-                                             return (nmod, Module m i ss1T, env0', mrefs)
+                                             return (nmod, Module m i ssT, env0', mrefs)
 
   where moduleDocstring                 = extractDocstring ss
-        ssT                             = if hasTesting i then genTestActorWrappers env0 ss ++ testStmts (emptyDict,emptyDict,emptyDict,emptyDict,emptyDict) else ss
-        ss1T                            = if hasTesting i then rmTests ss1 ++ finalStmts env2 (modNameStr m) ss1 else ss1
-        env1                            = reserve (assigned ssT) (typeX env0)
-        (te,ss1)                        = runTypeM $ infTop env1 ssT
+        env1                            = reserve (assigned ss) (typeX env0)
+        (te,ss1)                        = runTypeM $ infTop env1 ss
         env2                            = define te (setMod m env0)
-        iface                           = unalias env2 te
+
+        (teT,ssT)                       = if hasTesting i then (te ++ testEnv, ss1 ++ testStmts env2 (modNameStr m) ss1) else (te, ss1)
+        iface                           = unalias env2 teT
+
         mrefs                           = moduleRefs1 env0
         env0'                           = convEnvProtos env0
         hasTesting i                    = Import NoLoc [ModuleItem (ModName [name "testing"]) Nothing] `elem` i
@@ -86,11 +94,21 @@ reconstruct env0 (Module m i ss)         = do --traceM ("#################### or
 
         -- Inject __name__ variable
         __name__assign = Assign NoLoc [PVar NoLoc (name "__name__") Nothing] (Strings NoLoc [modNameStr m])
-        ss1T' = __name__assign : ss1T
+        ssT' = __name__assign : ssT
 
 
-showTyFile env0 m fname         = do (ms,nmod) <- InterfaceFiles.readFile fname
-                                     putStrLn ("\n#################################### Interface:")
+showTyFile env0 m fname         = do
+                                     (ms,nmod,_,srcH,ifaceH,imps,roots,mdocH) <- InterfaceFiles.readFile fname
+                                     putStrLn ("\n############### Header ###############")
+                                     putStrLn ("Imports: " ++ (show [ (prstr mn, take 16 (B.unpack $ Base16.encode h)) | (mn,h) <- imps ]))
+                                     putStrLn ("Roots  : " ++ (show (map prstr roots)))
+                                     case mdocH of
+                                       Just ds -> putStrLn ("Doc    : \"\"\"" ++ ds ++ "\"\"\"")
+                                       Nothing -> return ()
+                                     putStrLn ("SrcHash: 0x" ++ (B.unpack $ Base16.encode srcH))
+                                     putStrLn ("Iface  : 0x" ++ (B.unpack $ Base16.encode ifaceH))
+
+                                     putStrLn ("\n############### Interface ############")
                                      let NModule te mdoc = nmod
                                      forM_ mdoc $ \docstring ->
                                        putStrLn $ "\"\"\"" ++ docstring ++ "\"\"\""
@@ -123,18 +141,22 @@ infTop env ss                           = do --traceM ("\n## infEnv top")
                                              return (te, ss)
 
 infTopStmts env []                      = return ([], [])
-infTopStmts env (s : ss)                = do (cs,te1,s) <- infEnv env s
-                                             --traceM ("###########\n" ++ render (nest 4 $ vcat $ map pretty te1))
+infTopStmts env (s : ss)                = do (te1, s1) <- infTopStmt env s
+                                             (te2, ss2) <- infTopStmts (define te1 env) ss
+                                             return (te1++te2, s1++ss2)
+
+infTopStmt env s                        = do (cs,te1,s1) <- infEnv env s
+                                             --traceM ("###########\n" ++ render (nest 4 $ pretty s1))
+                                             --traceM (":::::::::::\n" ++ render (nest 4 $ vcat $ map pretty te1))
                                              --traceM ("-----------\n" ++ render (nest 4 $ vcat $ map pretty cs))
                                              eq <- solveAll (posdefine (filter typeDecl te1) env) te1 cs
+                                             --traceM ("+++++++++++\n" ++ render (nest 4 $ vcat $ map pretty eq))
                                              te1 <- defaultTE env te1
                                              --traceM ("===========\n" ++ render (nest 4 $ vcat $ map pretty te1))
-                                             ss1 <- termred <$> usubst (pushEqns eq [s])
-                                             defaultVars (ufree ss1)
-                                             ss1 <- usubst ss1
-
-                                             (te2,ss2) <- infTopStmts (define te1 env) ss
-                                             return (te1++te2, ss1++ss2)
+                                             s1 <- termred <$> usubst (pushEqns eq s1)
+                                             defaultVars (ufree s1)
+                                             s1 <- usubst s1
+                                             tieWitKnots te1 [s1]
 
   where defaultTE env te                = do defaultVars (ufree te)
                                              usubst te
@@ -145,28 +167,32 @@ infTopStmts env (s : ss)                = do (cs,te1,s) <- infEnv env s
         dflt PRow                       = posNil
         dflt KRow                       = kwdNil
 
-        pushEqns eqs ss                 = push eqns0 ss
-          where eqns0                   = [ (eq,ns) | eq <- eqs, let ns = free eq `intersect` bound ss ]
-        push eqns ss                    = bindWits (map fst eq1) ++ push' eq2 ss
-          where (eq1,eq2)               = partition (null . snd) eqns
-        push' [] ss                     = ss
-        push' eqns (s:ss)
-          | null eq1                    = s : push eq2 ss
-          | otherwise                   = inject eq1 s : push eq2 ss
-          where eq1                     = collect [] (free s) (map fst eqns)
-                eq2                     = [ (eq, ns \\ ns') | (eq,ns) <- eqns ]
-                ns'                     = bound s
-        inject eqs (Decl l ds)          = Decl l (map inj ds)
-          where inj (Class l n q us b ddoc) = Class l n q us (map inj' b) ddoc
-                inj d                   = d{ dbody = bindWits eqs ++ dbody d }
-                inj' (Decl l ds)        = Decl l (map inj ds)
-                inj' s                  = s
-        inject eqs (With l [] ss)       = With l [] (pushEqns eqs ss)
-        inject eqs s                    = error ("# Internal error: cyclic witnesses " ++ prstrs eqs ++ "\n# and statement\n" ++ prstr s)
-        collect eq0 vs eq
-          | null eq1                    = eq0
-          | otherwise                   = collect (eq1++eq0) ((free eq1 \\ bound eq1) ++ vs) eq2
-          where (eq1,eq2)               = partition (any (`elem` vs) . bound) eq
+
+pushEqns [] s                           = s
+pushEqns eqs s
+  | null pre                            = inject inj s
+  | otherwise                           = withLocal (bindWits pre) $ inject inj s
+  where backward                        = free s `intersect` bound eqs
+        (pre,inj)                       = split [] [] (bound s) eqs
+        split pre inj bvs []            = (reverse pre, reverse inj)
+        split pre inj bvs (eq:eqs)
+          | null forward                = split (eq:pre) inj bvs eqs
+          | otherwise                   = split pre (eq:inj) (bound eq ++ bvs) eqs
+          where forward                 = free eq `intersect` bvs
+
+inject [] s                             = s
+inject eqs (Decl l ds)                  = Decl l [ d{ dbody = prune (dname d) [] (free d) reveqs ++ dbody d } | d <- ds ]
+  where reveqs                          = reverse eqs
+        prune n inj fvs []              = --trace ("### Injecting " ++ prstrs (bound inj) ++ " into " ++ prstr n) $
+                                          bindWits inj
+        prune n inj fvs (eq:eqs)
+          | null needed                 = prune n inj fvs eqs
+          | otherwise                   = prune n (eq:inj) (free eq ++ fvs) eqs
+          where needed                  = bound eq `intersect` fvs
+inject eqs (With l [] ss)               = With l [] (injlast eqs ss)
+  where injlast eqs [s]                 = [inject eqs s]
+        injlast eqs (s:ss)              = s : injlast eqs ss
+inject eqs s                            = error ("# Internal error: cyclic witnesses " ++ prstrs eqs ++ "\n# and statement\n" ++ prstr s)
 
 
 class Infer a where
@@ -359,7 +385,7 @@ instance InfEnv Stmt where
                                              (cs2,ds2) <- checkEnv (define te1 env) ds1
                                              (cs3,te2,eq,ds3) <- genEnv env cs2 te1 ds2
                                              --traceM ("-------- done: " ++ prstrs (declnames ds))
-                                             return (cs1++cs3, te2, withLocal (bindWits eq) $ Decl l ds3)
+                                             return (cs1++cs3, te2, pushEqns eq $ Decl l ds3)
 
     infEnv env (Delete l targ)          = do (cs0,t0,e0,tg) <- infTarg env targ
                                              (cs1,stmt) <- del t0 e0 tg
@@ -555,6 +581,7 @@ instance InfEnv Decl where
                                                  popFX
                                                  (cs1,eq1) <- solveScoped env1 (tvSelf:qbound q) te tNone cs
                                                  checkNoEscape l env (qbound q)
+                                                 checkClassAttributesInitialized n l env as' te0 b
                                                  (nterms,asigs,_) <- checkAttributes [] te' te
                                                  let te1 = if notImplBody b then unSig asigs else []
                                                      te2 = te ++ te1
@@ -608,7 +635,7 @@ instance InfEnv Decl where
                                                  te2 = te ++ te1
                                                  b2 = addImpl te1 b1
                                              let docstring = extractDocstring b
-                                             return (cs1, [(extensionName us c, NExt q c ps te2 docstring)], Extension l q c us (bindWits eq1 ++ b2) ddoc)
+                                             return (cs1, [(extensionName us c, NExt q c ps te2 [] docstring)], Extension l q c us (bindWits eq1 ++ b2) ddoc)
       where TC n ts                     = c
             env1                        = define (toSigs te') $ reserve (assigned b) $ defineSelfOpaque $ defineTVars (stripQual q) $ setInClass env
             witsearch                   = findWitness env (tCon c) u
@@ -668,6 +695,54 @@ checkNoEscape l env vs                  = return ()
 --                                                 traceM ("####### env:\n" ++ prstr env1)
 --                                                 traceM ("#### ufree env: " ++ prstrs fvs)
 --                                                 err l ("Escaping type variables: " ++ prstrs escaped)
+
+checkClassAttributesInitialized         :: Name -> SrcLoc -> Env -> [WTCon] -> TEnv -> Suite -> TypeM ()
+checkClassAttributesInitialized className classLoc env ancestors inferredProps b
+                                        = do -- Only check if the class defines its own __init__. If it doesn't, it uses the parent's
+                                             -- __init__ which already initialized everything (and we check the parent separately)
+                                             case findInitMethod b of
+                                                 Nothing -> return ()  -- No __init__, uses parent's
+                                                 Just (self, initBody, initLoc) ->
+                                                     -- Check if __init__ is implemented in C (body is NotImplemented)
+                                                     if hasNotImpl initBody
+                                                       then return ()  -- Assume all is OK - we can't analyze C implementation
+                                                       else do
+                                                         let inherited = concatMap (getPropertiesFromClass env . tcname . snd) ancestors
+                                                             explicit  = concat [ ns | Signature _ ns sc dec <- b, isProp dec sc ]
+                                                             inferred  = inferClassAttributes env self initBody
+                                                             expected  = nub $ inherited ++ explicit ++ inferred
+                                                             initialized = scanSelfAssigns env self b initBody
+                                                             -- Track which parent __init__ methods are called
+                                                             calledParentInits = getCalledParentInits env initBody
+                                                             -- Get attributes initialized by called parent __init__ methods
+                                                             parentInitialized = nub $ concatMap (getInitializedByParent env) calledParentInits
+                                                             uninitialized = expected \\ (initialized ++ parentInitialized)
+
+                                                         forM_ uninitialized $ \prop ->
+                                                             let parentInfo = findAttributeParent prop
+                                                                 isInferred = prop `elem` inferred && prop `notElem` explicit && prop `notElem` inherited
+                                                             in Control.Exception.throw $ UninitializedAttribute (loc prop) prop isInferred initLoc classLoc className parentInfo
+  where getPropertiesFromClass env qn   = let (_,_,te) = findConName qn env
+                                          in [ n | (n, NSig _ Property _) <- te ]
+
+        -- Helper to look up class location in environment
+        getClassLoc env qname           = case [ className | (className, NClass{}) <- names env, className == noq qname ] of
+                                            (Name classLoc _:_) -> classLoc
+                                            _                   -> NoLoc
+
+        -- Find which parent class (if any) defines the given attribute
+        findAttributeParent attrName    = case [ n | Signature _ ns _ _ <- b, n <- ns, n == attrName ] of
+                                              (_:_) -> Nothing  -- Defined in current class
+                                              []    -> -- Look for it in ancestors
+                                                     case mapMaybe (findInAncestor attrName) ancestors of
+                                                         (result:_) -> Just result
+                                                         []         -> Nothing
+
+        -- Check if a specific ancestor defines the attribute
+        findInAncestor attrName (_, anc)= let ancName = tcname anc
+                                          in if attrName `elem` getPropertiesFromClass env ancName
+                                             then Just (noq ancName, getClassLoc env ancName)
+                                             else Nothing
 
 
 wellformed                              :: (WellFormed a) => Env -> a -> TypeM ()
@@ -747,25 +822,399 @@ matchActorAssumption env n0 p k te      = do --traceM ("## matchActorAssumption 
         kloc (KwdSTAR n _)              = loc n
         kloc _                          = NoLoc
 
+-- Find __init__ method in class body, return self parameter, body and location
+findInitMethod :: Suite -> Maybe (Name, Suite, SrcLoc)
+findInitMethod b                        = listToMaybe [ (x, dbody d, loc d) | Decl _ ds <- b, d <- ds, dname d == initKW, Just x <- [selfPar d] ]
+
+-- Scan __init__ for "self.x = ..." to find which attributes are definitely
+-- assigned before any references to `self` escape externally. We allow most
+-- statements in the constructor as long as `self` does not escape although
+-- there are a few statements that will also be considered the end of the
+-- constructor (this isn't well documented). We are handling if/elif/else as
+-- well as some variations of exception handling and raising. Loops are allowed
+-- but any assignments in a loop does not count to the set of initialized
+-- attributes since we cannot statically determine if the loop executes. The
+-- loop is scanned to ensure `self` does not escape.
+scanSelfAssigns :: Env -> Name -> Suite -> Suite -> [Name]
+scanSelfAssigns env self classBody stmts = scanSuite [] stmts
+  where
+    -- Check if a method in the class has NotImplemented body
+    isNotImplMethod :: Name -> Bool
+    isNotImplMethod methodName          = case [ d | Decl _ ds <- classBody, d@Def{dname=n} <- ds, n == methodName ] of
+                                                (d:_) -> hasNotImpl (dbody d)
+                                                []    -> False
+    -- Check if a statement list ends with an early exit (only raise - not return!)
+    -- Return would give back an uninitialized object, so it doesn't excuse initialization
+    branchExitsEarly :: Suite -> Bool
+    branchExitsEarly []                 = False
+    branchExitsEarly stmts              = case last stmts of
+                                              Raise _ _ -> True  -- Only raise truly prevents object creation
+                                              -- Recursively check nested if/else
+                                              If _ branches elseBranch ->
+                                                  all (\(Branch _ body) -> branchExitsEarly body) branches &&
+                                                  (not (null elseBranch) && branchExitsEarly elseBranch)
+                                              -- Recursively check try/except
+                                              Try _ tryBody handlers elseBranch finallyBlock ->
+                                                  -- If finally block raises, that's an early exit
+                                                  if not (null finallyBlock) && branchExitsEarly finallyBlock
+                                                    then True
+                                                    else -- Otherwise, check if all normal paths exit early
+                                                         branchExitsEarly tryBody &&
+                                                         all (\(Handler _ hbody) -> branchExitsEarly hbody) handlers &&
+                                                         (null elseBranch || branchExitsEarly elseBranch)
+                                              _ -> False
+    scanSuite seen []                   = []
+    -- Handle assignments
+    scanSuite seen (MutAssign _ (Dot _ (Var _ qn) n) e : rest)
+        | noq qn == self                = if checkNoSelfReference self seen e
+                                            then n : scanSuite (n:seen) rest
+                                            else []  -- Stop at self reference
+    scanSuite seen (MutAssign _ _ _ : rest)
+                                        =     -- Continue: local assignment is OK
+                                          scanSuite seen rest
+    scanSuite seen (Assign _ _ e : rest)
+                                        =     -- Continue past local assignments, unless RHS contains self reference
+                                          if checkNoSelfReference self seen e
+                                            then scanSuite seen rest  -- Continue past assignment
+                                            else []  -- Stop at self reference
+    scanSuite seen (AugAssign _ (Dot _ (Var _ qn) n) _ _ : rest)
+        | noq qn == self && n `elem` seen  -- OK: augmenting already-initialized attribute
+                                        = scanSuite seen rest
+        | noq qn == self                = []  -- STOP: can't augment uninitialized attribute
+    scanSuite seen (AugAssign _ _ _ _ : rest)
+                                        =     -- Continue: local augmented assignment is OK
+                                          scanSuite seen rest
+    -- Handle if/elif/else statements. Count assignments that happen in all
+    -- branches as unconditional. Note how we must have an else branch in order
+    -- to consider it exhaustive. Each branch either:
+    --   1. Completes normally and returns an object (must have initialized attributes), or
+    --   2. Exits early via raise (never returns an object, so doesn't constrain initialization)
+    --
+    -- We need the intersection of assignments from all branches. Branches that exit early
+    -- are "compatible" with any assignment set (they contribute the universal set to the
+    -- intersection), so in practice we only intersect the branches that complete normally.
+    --
+    -- Example: if cond:          if cond:          if cond:
+    --            self.x = 1        self.x = 1        raise Error()
+    --          else:             else:             else:
+    --            self.x = 2        raise Error()     self.x = 1
+    --          Result: {x}       Result: {x}       Result: {x}
+    --
+    -- Without an else branch, the if/elif is non-exhaustive - we might skip all branches,
+    -- so we can't guarantee any assignments. (Note: We don't attempt to analyze whether
+    -- the predicates are exhaustive through logical analysis - that's undecidable in general
+    -- and NP-complete even for boolean satisfiability. The else branch is our simple,
+    -- syntactic criterion for exhaustiveness.)
+    scanSuite seen (If _ branches elseBranch : rest)
+                                        =     -- Scan all branches for assignments
+                                          let branchResults = map (\(Branch _ body) ->
+                                                  (scanSuite seen body, branchExitsEarly body)) branches
+                                              elseResult = (scanSuite seen elseBranch, branchExitsEarly elseBranch)
+
+                                              -- Branches that complete normally must be considered
+                                              normalBranches = [assigns | (assigns, exits) <- branchResults, not exits]
+                                              -- Else branch if it completes normally
+                                              normalElse = case elseResult of
+                                                             (assigns, False) -> [assigns]  -- Else completes normally
+                                                             (_, True) -> []  -- Else exits early
+
+                                              -- All normal branches that do not exit early
+                                              allNormalBranches = normalBranches ++ normalElse
+
+                                              -- if we have else, it's exhaustive, otherwise it's not
+                                              newAssigns = case not (null elseBranch) of
+                                                  False -> []  -- No else: not exhaustive, nothing counts
+                                                  True -> case allNormalBranches of
+                                                            [] -> []  -- All branches exit: no object returned
+                                                            branches -> foldl1 intersect branches  -- Require intersection
+                                          in newAssigns ++ scanSuite (newAssigns ++ seen) rest
+    -- Only continue past simple statements
+    scanSuite seen (Pass _ : rest)      = scanSuite seen rest
+    -- Parent init calls are special - they initialize parent attributes
+    scanSuite seen (Expr _ (Call _ (Dot _ (Var _ c) n) _ _) : rest)
+        | isClass env c, n == initKW    = scanSuite seen rest
+    -- Allow calling self methods that have NotImplemented body (C implementations)
+    scanSuite seen (Expr _ (Call _ (Dot _ (Var _ (NoQ x)) methodName) _ _) : rest)
+        | x == self && isNotImplMethod methodName
+                                        = scanSuite seen rest  -- Continue: NotImplemented method on self
+    -- Stop at other self method calls
+    scanSuite seen (Expr _ (Call _ (Dot _ _ _) _ _) : _)
+                                        = []  -- STOP: method call
+    -- Allow expressions without references to `self`
+    scanSuite seen (Expr _ e : rest)
+        | checkNoSelfReference self seen e
+                                        = scanSuite seen rest
+    -- Handle try/except/else/finally
+    --
+    -- The possible execution paths are:
+    --   1. try → else (no exception raised)
+    --   2. handler (exception raised and caught)
+    --   3. exception propagates (not caught - early exit, no object returned)
+    -- Finally always executes regardless of path taken.
+    --
+    -- Since we don't know WHERE in try an exception might occur, we can't count ANY
+    -- assignments from try when considering the exception path. But if try completes
+    -- normally (no exception), we know ALL its assignments happened.
+    --
+    -- Note: else is a CONTINUATION of try (only runs if try completes without exception),
+    -- not an alternative branch like in if/else.
+    --
+    -- Example: try:                  try:                try:
+    --            self.x = 1             self.x = 1           raise Error()
+    --            self.y = 2             raise Error()      except:
+    --          except:               except:                self.x = 1
+    --            self.x = 1             self.x = 1         else:
+    --          else:                 else:                  self.y = 2
+    --            self.z = 3             self.z = 3
+    --
+    --          Normal paths:         Normal paths:       Normal paths:
+    --          - try+else: {x,y,z}   - except: {x}       - except: {x}
+    --          - except: {x}         (try+else exits)    (try exits, else never runs)
+    --          Result: {x}           Result: {x}         Result: {x}
+    --
+    -- If try always exits (raises), we only consider handlers. If a handler exits,
+    -- it doesn't contribute to the intersection (like if/else branches that exit).
+    -- Finally assignments always count since finally always executes.
+    scanSuite seen (Try _ tryBody handlers elseBranch finallyBlock : rest)
+                                        = let -- Finally always executes
+                                              finallyAssigns = scanSuite seen finallyBlock
+                                              seenAfterFinally = finallyAssigns ++ seen
+
+                                              -- Scan all code paths
+                                              tryAssigns = scanSuite seenAfterFinally tryBody
+                                              elseAssigns = scanSuite seenAfterFinally elseBranch
+                                              handlerAssigns = map (\(Handler _ hbody) ->
+                                                  scanSuite seenAfterFinally hbody) handlers
+
+                                              -- Check which paths exit early
+                                              tryExits = branchExitsEarly tryBody
+                                              elseExits = branchExitsEarly elseBranch
+                                              handlerExits = map (\(Handler _ hbody) ->
+                                                  branchExitsEarly hbody) handlers
+
+                                              -- Build list of paths that complete normally:
+                                              -- 1. try+else path (if try doesn't exit)
+                                              -- 2. each handler that doesn't exit
+                                              tryElsePath = if not tryExits
+                                                           then [tryAssigns ++ if elseExits then [] else elseAssigns]
+                                                           else []
+                                              handlerPaths = [assigns | (assigns, exits) <- zip handlerAssigns handlerExits, not exits]
+                                              normalPaths = tryElsePath ++ handlerPaths
+
+                                              -- Intersect all normal paths (or empty if all exit)
+                                              guaranteedFromPaths = case normalPaths of
+                                                  [] -> []
+                                                  paths -> foldl1 intersect paths
+
+                                          in finallyAssigns ++ guaranteedFromPaths ++
+                                             scanSuite (finallyAssigns ++ guaranteedFromPaths ++ seen) rest
+    -- Handle loops - skip over them if they don't leak self references
+    scanSuite seen (While _ cond body elseBranch : rest)
+        | checkNoSelfReference self seen cond &&
+          checkNoSelfReferenceInSuite self seen body &&
+          checkNoSelfReferenceInSuite self seen elseBranch
+                                        = scanSuite seen rest  -- Continue past safe loop
+        | otherwise                     = []  -- STOP: loop references self
+    scanSuite seen (For _ pat expr body elseBranch : rest)
+        | checkNoSelfReference self seen expr &&
+          checkNoSelfReferenceInSuite self seen body &&
+          checkNoSelfReferenceInSuite self seen elseBranch
+                                        = scanSuite seen rest  -- Continue past safe loop
+        | otherwise                     = []  -- STOP: loop references self
+    scanSuite _ (With _ _ _ : _)        = []  -- STOP: with statements not supported
+    -- Handle assert like if & raise - continue if test doesn't reference self
+    scanSuite seen (Assert _ test msg : rest)
+        | checkNoSelfReference self seen test &&
+          maybe True (checkNoSelfReference self seen) msg
+                                        = scanSuite seen rest  -- Continue: assert doesn't leak self
+        | otherwise                     = []  -- STOP: assert references self
+    scanSuite _ (Return _ _ : _)        = []  -- STOP: early exit
+    scanSuite _ (Raise _ _ : _)         = []  -- STOP: raises exception
+    -- Skip past break and continue - they are loop control flow, and we skip loops anyway
+    scanSuite seen (Break _ : rest)     = scanSuite seen rest
+    scanSuite seen (Continue _ : rest)  = scanSuite seen rest
+    scanSuite seen (Delete _ _ : rest)  = scanSuite seen rest
+    scanSuite _ (After _ _ _ : _)       = []  -- STOP: after statement (async)
+    -- Check nested function declarations for self references
+    scanSuite seen (Decl _ decls : rest)
+        | all (checkDeclNoSelfReference self seen) decls
+                                        = scanSuite seen rest  -- Continue: nested functions don't capture self
+        | otherwise                     = []  -- STOP: nested function captures self
+    scanSuite _ (_ : _)                 = []  -- STOP: unhandled statement type (safe default)
+
+
+-- Check if a suite (list of statements) contains disallowed references to self
+checkNoSelfReferenceInSuite :: Name -> [Name] -> Suite -> Bool
+checkNoSelfReferenceInSuite self seen stmts = all checkStmt stmts
+  where
+    checkStmt (Expr _ e)                = checkNoSelfReference self seen e
+    checkStmt (Assign _ _ e)            = checkNoSelfReference self seen e
+    checkStmt (MutAssign _ target e)    = checkNoSelfReference self seen e && checkNoSelfReference self seen target
+    checkStmt (AugAssign _ target _ e)  = checkNoSelfReference self seen e && checkNoSelfReference self seen target
+    checkStmt (Return _ Nothing)        = True
+    checkStmt (Return _ (Just e))       = checkNoSelfReference self seen e
+    checkStmt (If _ branches elseBranch) = all (\(Branch cond body) -> checkNoSelfReference self seen cond && checkNoSelfReferenceInSuite self seen body) branches &&
+                                           checkNoSelfReferenceInSuite self seen elseBranch
+    checkStmt (While _ cond body elseBranch) = checkNoSelfReference self seen cond &&
+                                                checkNoSelfReferenceInSuite self seen body &&
+                                                checkNoSelfReferenceInSuite self seen elseBranch
+    checkStmt (For _ _ expr body elseBranch) = checkNoSelfReference self seen expr &&
+                                                checkNoSelfReferenceInSuite self seen body &&
+                                                checkNoSelfReferenceInSuite self seen elseBranch
+    checkStmt (Try _ tryBody handlers elseBranch finallyBlock) =
+                                           checkNoSelfReferenceInSuite self seen tryBody &&
+                                           all (\(Handler _ hbody) -> checkNoSelfReferenceInSuite self seen hbody) handlers &&
+                                           checkNoSelfReferenceInSuite self seen elseBranch &&
+                                           checkNoSelfReferenceInSuite self seen finallyBlock
+    checkStmt _                          = True  -- Conservative: allow other statements
+
+-- Check if an expression contains disallowed references to self
+-- We allow self.x since it can be seen as just a lone variable, which is valid
+-- as long as it has been previously assigned, but we cannot pass a reference to
+-- the whole `self`
+checkNoSelfReference :: Name -> [Name] -> Expr -> Bool
+checkNoSelfReference self seen expr = checkExpr expr
+  where
+    -- Check if an expression is allowed
+    checkExpr :: Expr -> Bool
+    checkExpr (Await _ _)               = False  -- Await is not allowed
+    checkExpr (Var _ qn) | noq qn == self
+                                        = False  -- Direct reference to self not allowed
+    checkExpr e@(Dot _ (Var _ qn) attr)
+        | noq qn == self                = attr `elem` seen  -- self.attr is OK only if attr is initialized
+    -- For other expressions, recursively check subexpressions
+    checkExpr (Call _ func args kwds)   = checkExpr func && checkPosArgs args && checkKwdArgs kwds
+    checkExpr (BinOp _ e1 _ e2)         = checkExpr e1 && checkExpr e2
+    checkExpr (CompOp _ e1 ops)         = checkExpr e1 && all checkOpArg ops
+      where checkOpArg (OpArg _ e)      = checkExpr e
+    checkExpr (UnOp _ _ e)              = checkExpr e
+    checkExpr (List _ elems)            = all checkElem elems
+    checkExpr (Tuple _ args kwds)       = checkPosArgs args && checkKwdArgs kwds
+    checkExpr (Paren _ e)               = checkExpr e
+    checkExpr (Cond _ cond thenE elseE) = checkExpr cond && checkExpr thenE && checkExpr elseE
+    checkExpr (Index _ base idx)        = checkExpr base && checkExpr idx
+    checkExpr (Slice _ base (Sliz _ start stop step))
+                                        = checkExpr base &&
+                                          maybe True checkExpr start &&
+                                          maybe True checkExpr stop &&
+                                          maybe True checkExpr step
+    checkExpr (Dict _ items)            = all checkItem items
+    checkExpr (Set _ elems)             = all checkElem elems
+    checkExpr (ListComp _ elem comp)    = checkElem elem && checkComp comp
+    checkExpr (DictComp _ (Assoc k v) comp)
+                                        = checkExpr k && checkExpr v && checkComp comp
+    checkExpr (SetComp _ elem comp)     = checkElem elem && checkComp comp
+    checkExpr (Lambda _ _ _ body _)     = checkExpr body
+    checkExpr (Yield _ e)               = maybe True checkExpr e
+    checkExpr (YieldFrom _ e)           = checkExpr e
+    checkExpr (Dot _ e _)               = checkExpr e  -- Check base expression
+    checkExpr (Int _ _ _)               = True  -- Integer literals are OK
+    checkExpr (Float _ _ _)             = True  -- Float literals are OK
+    checkExpr (Strings _ _)             = True  -- String literals are OK
+    checkExpr (BStrings _ _)            = True  -- Byte string literals are OK
+    checkExpr (Bool _ _)                = True  -- Boolean literals are OK
+    checkExpr None{}                    = True  -- None is OK
+    checkExpr _                         = True  -- Other expressions are OK (for now)
+
+    checkPosArgs (PosArg e rest)        = checkExpr e && checkPosArgs rest
+    checkPosArgs (PosStar e)            = checkExpr e
+    checkPosArgs PosNil                 = True
+
+    checkKwdArgs (KwdArg _ e rest)      = checkExpr e && checkKwdArgs rest
+    checkKwdArgs (KwdStar e)            = checkExpr e
+    checkKwdArgs KwdNil                 = True
+
+    checkElem (Elem e)                  = checkExpr e
+    checkElem (Star e)                  = checkExpr e
+
+    checkItem (Assoc k v)               = checkExpr k && checkExpr v
+
+    checkComp (CompFor _ _ iter c)      = checkExpr iter && checkComp c
+    checkComp (CompIf _ test c)         = checkExpr test && checkComp c
+    checkComp NoComp                    = True
+
+
+-- Check if a declaration (nested function) references self
+-- We conservatively stop if ANY nested function references self at all,
+-- even if it only accesses already-initialized attributes
+checkDeclNoSelfReference :: Name -> [Name] -> Decl -> Bool
+checkDeclNoSelfReference self seen decl = case decl of
+    Def _ _ _ _ _ _ body _ _ _ -> checkNoSelfReferenceInSuite self [] body  -- Pass empty list to disallow ANY self reference
+    Actor _ _ _ _ _ body _     -> checkNoSelfReferenceInSuite self [] body  -- Pass empty list to disallow ANY self reference
+    Class _ _ _ _ body _       -> True  -- Nested classes don't capture self by default
+    Protocol _ _ _ _ body _    -> True  -- Nested protocols don't capture self
+    Extension _ _ _ _ body _   -> True  -- Extensions don't capture self
+
+-- Infer all class attributes by scanning the entire __init__ method for any
+-- self.x assignments, regardless of control flow. This is used for attribute
+-- discovery/inference, not for initialization checking.
+inferClassAttributes :: Env -> Name -> Suite -> [Name]
+inferClassAttributes env self stmts = nub $ scanAll stmts
+  where
+    scanAll []                          = []
+    -- Direct assignment to self.attribute
+    scanAll (MutAssign _ (Dot _ (Var _ qn) n) _ : rest)
+        | noq qn == self                = n : scanAll rest
+    -- Scan inside control structures
+    scanAll (If _ branches elseBranch : rest)
+                                        = concatMap (\(Branch _ body) -> scanAll body) branches
+                                          ++ scanAll elseBranch
+                                          ++ scanAll rest
+    scanAll (While _ _ body elseBranch : rest)
+                                        = scanAll body ++ scanAll elseBranch ++ scanAll rest
+    scanAll (For _ _ _ body elseBranch : rest)
+                                        = scanAll body ++ scanAll elseBranch ++ scanAll rest
+    scanAll (Try _ tryBody handlers elseBranch finallyBlock : rest)
+                                        = scanAll tryBody ++
+                                          concatMap (\(Handler _ hbody) -> scanAll hbody) handlers ++
+                                          scanAll elseBranch ++
+                                          scanAll finallyBlock ++
+                                          scanAll rest
+    -- TODO: uh, do what with "with"??
+    scanAll (With _ witems body : rest) = scanAll body ++ scanAll rest
+    scanAll (After _ _ _ : rest)        = scanAll rest  -- After has expressions, not suite
+    -- Skip declarations - we don't scan nested function bodies
+    scanAll (Decl _ _ : rest)           = scanAll rest
+    -- Continue past other statements
+    scanAll (_ : rest)                  = scanAll rest
+
+-- Get all parent classes whose __init__ methods are called
+getCalledParentInits :: Env -> Suite -> [QName]
+getCalledParentInits _ []               = []
+getCalledParentInits env (Expr _ (Call _ (Dot _ (Var _ c) n) _ _) : rest)
+    | isClass env c, n == initKW        = c : getCalledParentInits env rest
+getCalledParentInits env (_ : rest)     = getCalledParentInits env rest
+
+-- Get attributes that would be initialized by calling a parent's __init__
+-- This assumes the parent's __init__ properly initializes all attributes it's
+-- responsible for - we can rely on this since the parent's __init__ in turn
+-- will be checked
+getInitializedByParent :: Env -> QName -> [Name]
+getInitializedByParent env qn           = -- When calling ParentClass.__init__(self), we assume it initializes:
+                                          -- 1. All attributes declared in ParentClass
+                                          -- 2. All attributes ParentClass inherited (since it should call its parent's __init__)
+                                          let (_,ancestors,te) = findConName qn env
+                                              inherited = concatMap (getPropertiesFromClass env . tcname . snd) ancestors
+                                              declared = [ n | (n, NSig _ Property _) <- te ]
+                                          in nub $ inherited ++ declared
+  where getPropertiesFromClass env qn   = let (_,_,te) = findConName qn env
+                                          in [ n | (n, NSig _ Property _) <- te ]
+
+
+
 infProperties env as b
-  | Just (self,ss) <- inits             = infProps self ss
+  | Just (self,ss) <- inits             = forM newProps $ \n -> do
+                                             t <- newUnivarOfKind KType
+                                             return (n, NSig (monotype t) Property Nothing)
   | otherwise                           = return []
   where inherited                       = concat $ map (conAttrs env . tcname . snd) as
         explicit                        = concat [ ns | Signature _ ns sc dec <- b, isProp dec sc ]
-        inits                           = listToMaybe [ (x, dbody d) | Decl _ ds <- b, d <- ds, dname d == initKW, Just x <- [selfPar d] ]
-        infProps self (MutAssign _ (Dot _ (Var _ (NoQ x)) n) _ : b)
-          | x /= self                   = return []
-          | n `notElem` inherited,
-            n `notElem` explicit        = do t <- newUnivar
-                                             te <- infProps self b
-                                             return ((n,NSig (monotype t) Property Nothing) : te)
-          | otherwise                   = infProps self b
-        infProps self (Expr _ (Call _ (Dot _ (Var _ c) n) _ _) : b)
-          | isClass env c, n == initKW  = infProps self b
-        infProps self _                 = return []
-        selfPar Def{pos=PosPar x _ _ _} = Just x
-        selfPar Def{kwd=KwdPar x _ _ _} = Just x
-        selfPar _                       = Nothing
+        inits                           = case findInitMethod b of
+                                              Just (self, body, _) -> Just (self, body)
+                                              Nothing -> Nothing
+        assigned                        = maybe [] (\(self,ss) -> inferClassAttributes env self ss) inits
+        newProps                        = assigned \\ (inherited ++ explicit)
+
 
 infDefBody env n (PosPar x _ _ _) k b
   | inClass env && n == initKW          = infInitEnv (setInDef env) x b
@@ -787,11 +1236,11 @@ infInitEnv env self (Expr l e : b)
                                              return (cs1++cs2, te, Expr l e' : b')
 infInitEnv env self b                   = infSuiteEnv env b
 
-abstractDefs env q eq b                 = map absDef b
-  where absDef (Decl l ds)               = Decl l (map absDef' ds)
+abstractDefs env q b                    = map absDef b
+  where absDef (Decl l ds)              = Decl l (map absDef' ds)
         absDef (If l bs els)            = If l [ Branch e (map absDef ss) | Branch e ss <- bs ] (map absDef els)
         absDef stmt                     = stmt
-        absDef' d@Def{}                 = d{ pos = pos1, dbody = bindWits eq ++ dbody d }
+        absDef' d@Def{}                 = d{ pos = pos1 }
           where pos1                    = case pos d of
                                             PosPar nSelf t e p | deco d /= Static ->
                                                 PosPar nSelf t e $ qualWPar env q p
@@ -891,7 +1340,7 @@ instance Check Decl where
                                              popFX
                                              (cs1,eq1) <- solveScoped env1 tvs te tNone csb
                                              checkNoEscape l env tvs
-                                             return (cs1, [Class l n (noqual env q) (map snd as) (abstractDefs env q eq1 b') ddoc])
+                                             return (cs1, [Class l n (noqual env q) (map snd as) (bindWits eq1 ++ abstractDefs env q b') ddoc])
       where env1                        = defineSelf (NoQ n) q $ defineTVars q $ setInClass env
             tvs                         = tvSelf : qbound q
             NClass _ as te _            = findName n env
@@ -924,12 +1373,12 @@ instance Check Decl where
                                              (cs1,eq1) <- solveScoped env1 tvs te tNone (csu++csb)
                                              checkNoEscape l env tvs
                                              b' <- usubst b'
-                                             return (cs1, convExtension env n' c q ps eq1 wmap b')
+                                             return (cs1, convExtension env n' c q ps eq1 wmap b' [])
       where env1                        = defineInst c ps thisKW' $ defineSelf n q $ defineTVars q $ setInClass env
             tvs                         = tvSelf : qbound q
             n                           = tcname c
             n'                          = extensionName us c
-            NExt _ _ ps te _            = findName n' env
+            NExt _ _ ps te _ _          = findName n' env
             selfsubst                   = [(tvSelf, tCon $ TC n (map tVar $ qbound q))]
 
     checkEnv' env x                     = do (cs,x') <- checkEnv env x
@@ -1301,6 +1750,8 @@ instance Infer Expr where
                                              w <- newWitness
                                              return (Impl (DfltInfo (loc e1) 83 (Just e) []) w t2 (pContainer t1) :
                                                      cs1++cs2, tBool, eCall (eDot (eVar w) (method op)) [e2', e1'])
+      | op `elem` [Is,IsNot], e2==eNone = do (cs,_,_,t,e') <- inferTest env e
+                                             return (cs, t, e')
       | otherwise                       = do t <- newUnivar
                                              (cs1,e1') <- inferSub env t e1
                                              (cs2,e2') <- inferSub env t e2
@@ -1532,15 +1983,6 @@ inferTest env (CompOp l e [OpArg Is None{}])
                                         = do t <- newUnivar
                                              (cs1,e') <- inferSub env (tOpt t) e
                                              return (cs1, env, [], tBool, eCall (tApp (eQVar primISNONE) [t]) [e'])
-{-
-inferTest env (CompOp l e1 [OpArg op e2])
-  | Just n <- isNotNone e1 op e2        = do t <- newUnivar
-                                             (cs1,e') <- inferSub env (tOpt t) (eVar n)
-                                             return (cs1, define [(n,NVar t)] env, sCast n (tOpt t) t, tBool, eCall (tApp (eQVar primISNOTNONE) [t]) [e'])
-  | Just n <- isNone e1 op e2           = do t <- newUnivar
-                                             (cs1,e') <- inferSub env (tOpt t) (eVar n)
-                                             return (cs1, env, [], tBool, eCall (tApp (eQVar primISNONE) [t]) [e'])
--}
 inferTest env (IsInstance l e@(Var _ (NoQ n)) c)
                                         = case findQName c env of
                                              NClass q _ _ _ -> do
@@ -1553,19 +1995,6 @@ inferTest env (Paren l e)               = do (cs,env',s,t,e') <- inferTest env e
                                              return (cs, env', s, t, Paren l e')
 inferTest env e                         = do (cs,t,e') <- infer env e
                                              return (cs, env, [], t, e')
-
-
-isNotNone (Var _ (NoQ n)) IsNot None{}  = Just n
-isNotNone (Var _ (NoQ n)) NEq None{}    = Just n
-isNotNone None{} IsNot (Var _ (NoQ n))  = Just n
-isNotNone None{} NEq (Var _ (NoQ n))    = Just n
-isNotNone e op e'                       = Nothing
-
-isNone (Var _ (NoQ n)) Is None{}        = Just n
-isNone (Var _ (NoQ n)) Eq None{}        = Just n
-isNone None{} Is (Var _ (NoQ n))        = Just n
-isNone None{} Eq (Var _ (NoQ n))        = Just n
-isNone e op e'                          = Nothing
 
 
 sCast n t t'                            = [(n, eCAST t t' (eVar n))]
@@ -1747,21 +2176,25 @@ instance InfEnvT [Pattern] where
 tEnv                                    = tCon (TC (gname [name "__builtin__"] (name "Env")) [])
 emptyDict                               = Dict NoLoc []
 
-testStmts (uts, ssts, sts, ats, ets) = [dictAssign "__unit_tests" "UnitTest" uts,
-                                           dictAssign "__simple_sync_tests" "SimpleSyncTest" ssts,
-                                           dictAssign "__sync_tests" "SyncTest" sts,
-                                           dictAssign "__async_tests" "AsyncTest" ats,
-                                           dictAssign "__env_tests" "EnvTest" ets,
-                                           testActor]
+testDicts                               = [ ("__unit_tests",        "UnitTest"),
+                                            ("__simple_sync_tests", "SimpleSyncTest"),
+                                            ("__sync_tests",        "SyncTest"),
+                                            ("__async_tests",       "AsyncTest"),
+                                            ("__env_tests",         "EnvTest") ]
 
-finalStmts env m ss =
-    let (uts, ssts, sts, ats, ets) = testFuns env m ss
-    in testStmts (mkDict "UnitTest" uts, mkDict "SimpleSyncTest" ssts, mkDict "SyncTest" sts, mkDict "AsyncTest" ats, mkDict "EnvTest" ets)
+testStmts env m ss                      = ss' ++
+                                          [ dictAssign n cl assoc | ((n,cl), assoc) <- testDicts `zip` assocs ] ++
+                                          [ testActor ]
+  where assocs                          = testFuns (define te env) m (ss++ss')
+        (te, ss')                       = genTestActorWrappers ss
+
+testEnv                                 = [ (name n, NVar (tDict tStr (testing cl))) | (n,cl) <- testDicts ] ++
+                                          [ (name "__test_main", NAct [] posNil (kwdRow (name "env") tEnv kwdNil) [] Nothing) ]
 
 gname ns n                              = GName (ModName ns) n
 dername a b                             = Derived (name a) (name b)
 
-dictAssign dictname cl dict             = sAssign (pVar (name dictname) (tDict tStr (testing cl))) dict
+dictAssign dictname cl dict             = sAssign (pVar (name dictname) (tDict tStr (testing cl))) (mkDict cl dict)
 
 testing tstr                            = tCon (TC (gname [name "testing"] (name tstr)) [])
 
@@ -1799,39 +2232,39 @@ mkAssocActor (Actor _ n _ _ _ body _) testType modName =
         comment _ = Strings NoLoc [""]
 
 
-testFuns :: Env0 -> String -> Suite -> ([Assoc],[Assoc],[Assoc],[Assoc],[Assoc])
-testFuns env modName ss = tF ss ss [] [] [] [] []
+testFuns :: Env0 -> String -> Suite -> [[Assoc]]
+testFuns env modName ss = tF ss [] [] [] [] []
   where
-    tF origSuite (With _ _ ss' : ss) uts ssts sts ats ets = tF origSuite (ss' ++ ss) uts ssts sts ats ets
-    tF origSuite (Decl l (d@Def{}:ds) : ss) uts ssts sts ats ets
+    tF (With _ _ ss' : ss) uts ssts sts ats ets = tF (ss' ++ ss) uts ssts sts ats ets
+    tF (Decl l (d@Def{}:ds) : ss) uts ssts sts ats ets
       | isTestName (dname d) =
           case testType (findQName (NoQ (dname d)) env) of
             Just UnitTest ->
-              tF origSuite (Decl l ds : ss) (mkAssoc d (name "UnitTest") modName : uts) ssts sts ats ets
+              tF (Decl l ds : ss) (mkAssoc d (name "UnitTest") modName : uts) ssts sts ats ets
             Just SimpleSyncTest ->
-              tF origSuite (Decl l ds : ss) uts (mkAssoc d (name "SimpleSyncTest") modName : ssts) sts ats ets
+              tF (Decl l ds : ss) uts (mkAssoc d (name "SimpleSyncTest") modName : ssts) sts ats ets
             Just SyncTest ->
-              tF origSuite (Decl l ds : ss) uts ssts (mkAssoc d (name "SyncTest") modName : sts) ats ets
+              tF (Decl l ds : ss) uts ssts (mkAssoc d (name "SyncTest") modName : sts) ats ets
             Just AsyncTest ->
-              tF origSuite (Decl l ds : ss) uts ssts sts (mkAssoc d (name "AsyncTest") modName : ats) ets
+              tF (Decl l ds : ss) uts ssts sts (mkAssoc d (name "AsyncTest") modName : ats) ets
             Just EnvTest ->
-              tF origSuite (Decl l ds : ss) uts ssts sts ats (mkAssoc d (name "EnvTest") modName : ets)
-            Nothing -> tF origSuite (Decl l ds : ss) uts ssts sts ats ets
+              tF (Decl l ds : ss) uts ssts sts ats (mkAssoc d (name "EnvTest") modName : ets)
+            Nothing -> tF (Decl l ds : ss) uts ssts sts ats ets
     -- Don't discover actors here - they're handled via wrapper generation
-    tF origSuite (Decl l (_:ds) : ss) uts ssts sts ats ets = tF origSuite (Decl l ds : ss) uts ssts sts ats ets
-    tF origSuite (Decl _ [] : ss) uts ssts sts ats ets = tF origSuite ss uts ssts sts ats ets
-    tF origSuite (_ : ss) uts ssts sts ats ets = tF origSuite ss uts ssts sts ats ets
-    tF _ [] uts ssts sts ats ets = (reverse uts, reverse ssts, reverse sts, reverse ats, reverse ets)
+    tF (Decl l (_:ds) : ss) uts ssts sts ats ets = tF (Decl l ds : ss) uts ssts sts ats ets
+    tF (Decl _ [] : ss) uts ssts sts ats ets = tF ss uts ssts sts ats ets
+    tF (_ : ss) uts ssts sts ats ets = tF ss uts ssts sts ats ets
+    tF [] uts ssts sts ats ets = [reverse uts, reverse ssts, reverse sts, reverse ats, reverse ets]
 
 isTestName n                             = take 6 (nstr n) == "_test_"
 
 -- Generate wrapper functions for test actors
-genTestActorWrappers :: Env0 -> Suite -> Suite
-genTestActorWrappers env ss =
+genTestActorWrappers :: Suite -> (TEnv, Suite)
+genTestActorWrappers ss =
     let testActors = findTestActors ss
         existingFunctions = collectFunctionNames ss
         wrappers = mapMaybe (genWrapper existingFunctions) testActors
-    in ss ++ wrappers
+    in unzip wrappers
   where
     -- Find actors that are test actors (either with testing params or _test_ prefix)
     findTestActors :: Suite -> [Decl]
@@ -1840,6 +2273,8 @@ genTestActorWrappers env ss =
         go actors [] = actors
         go actors (Decl _ ds : rest) =
             go (actors ++ filter isTestActor ds) rest
+        go actors (With _ [] ss : rest) =
+            go actors (ss ++ rest)
         go actors (_ : rest) = go actors rest
 
     isTestActor (Actor _ n _ ppar kpar _ _) =
@@ -1867,10 +2302,9 @@ genTestActorWrappers env ss =
         getFuncName _ = Nothing
 
     -- Generate a wrapper function for a test actor if needed
-    genWrapper :: [Name] -> Decl -> Maybe Stmt
+    genWrapper :: [Name] -> Decl -> Maybe ((Name,NameInfo), Stmt)
     genWrapper existingFuncs (Actor _ actorName _ ppar kpar _ _) =
         let tParam = name "t"
-            sVar = name "s"
             paramType = getActorParamType ppar kpar
             -- actor Foo(t: testing.AsyncT)           -> _test_Foo
             -- actor _test_Foo(t: testing.AsyncT)     -> _test_Foo_wrapper
@@ -1885,26 +2319,28 @@ genTestActorWrappers env ss =
            then Nothing  -- Wrapper / test function already exists, don't generate
            else case paramType of
                 Just pType ->
-                    Just $ sDecl [Def NoLoc wrapperName []  -- Wrapper function with positional param
+                    Just $ ((wrapperName, NDef (monotype $ tFun fxProc (posRow pType posNil) kwdNil tNone) NoDec Nothing),
+                            sDecl [Def NoLoc wrapperName []  -- Wrapper function with positional param
                                         (PosPar tParam (Just pType) Nothing PosNIL)
                                         KwdNIL
                                         (Just (TNone NoLoc))
-                                        [Assign NoLoc [pVar' sVar] (eCall (eVar actorName) [eVar tParam])]  -- Call original actor, passing parameters
+                                        [Expr NoLoc (eCall (eVar actorName) [eVar tParam])]  -- Call original actor, passing parameters
                                         NoDec
                                         fxProc
-                                        Nothing]
+                                        Nothing])
                 Nothing ->
                     -- SimpleSyncTest actor - no parameters
                     if isTestName actorName && ppar == PosNIL && kpar == KwdNIL
                     then
-                        Just $ sDecl [Def NoLoc wrapperName []
+                        Just $ ((wrapperName, NDef (monotype $ tFun fxProc posNil kwdNil tNone) NoDec Nothing),
+                                sDecl [Def NoLoc wrapperName []
                                         PosNIL
                                         KwdNIL
                                         (Just (TNone NoLoc))
-                                        [Assign NoLoc [pVar' sVar] (eCall (eVar actorName) [])]  -- Call original actor
+                                        [Expr NoLoc (eCall (eVar actorName) [])]  -- Call original actor
                                         NoDec
                                         fxProc
-                                        Nothing]
+                                        Nothing])
                     else Nothing
     genWrapper _ _ = Nothing
 

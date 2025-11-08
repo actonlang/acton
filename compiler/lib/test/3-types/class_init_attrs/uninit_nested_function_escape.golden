@@ -1,0 +1,27 @@
+[error Type error]: Attribute 'result' is not initialized in TestClass.__init__
+     +--> uninit_nested_function_escape.act@6:5-18:1
+     |
+   2 |    class TestClass(object):
+     :    ^-----------------------
+     :    `- In class TestClass
+     :
+   4 |        result: int
+     :        ^----- 
+     :        `- Attribute 'result' is defined here
+     :
+   6 | +>     def __init__(self, x: int):
+   7 | |          self.value = x
+   8 | |          
+   9 | |          # Nested function that captures self with uninitialized attribute
+  10 | |          def get_result() -> int:
+  11 | |              return self.result  # References uninitialized self.result!
+  12 | |          
+  13 | |          # Pass the function externally (self escapes via closure)
+  14 | |          register(get_result)
+  15 | |          
+  16 | |          # This won't be recognized as initialized (self escaped)
+  17 | |          self.result = 42
+  18 | |> 
+     : | 
+     : `- Attribute 'result' is not initialized in __init__
+-----+

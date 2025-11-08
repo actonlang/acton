@@ -1,0 +1,19 @@
+# Test case: Try-except blocks
+class TestClass(object):
+    x: int
+    y: int
+
+    def __init__(self):
+        try:
+            self.x = risky_operation()
+            self.y = 1
+        except:
+            self.x = 0
+            # y not initialized in except block
+
+def risky_operation() -> int:
+    return 42
+
+actor main(env):
+    t = TestClass()
+    env.exit(0)

@@ -1,0 +1,16 @@
+# Test case: both branches initialize, but one raises after
+# This SHOULD be valid - if branch initializes and completes normally
+class TestClass(object):
+    x: int
+
+    def __init__(self):
+        condition = True
+        if condition:
+            self.x = 1
+        else:
+            self.x = 2
+            raise ValueError("After assignment")
+
+actor main(env):
+    t = TestClass()
+    env.exit(0)

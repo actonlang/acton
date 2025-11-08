@@ -1,0 +1,20 @@
+class TestClass(object):
+    x: int
+    
+    def __init__(self):
+        try:
+            self.x = 1
+            might_raise()  # Could raise ValueError or Exception
+        except ValueError:
+            self.x = 2  # Handler 1 initializes x
+        except Exception:
+            self.x = 3  # Handler 2 also initializes x
+        
+        # All paths (try, handler1, handler2) initialize x
+
+def might_raise() -> None:
+    pass
+
+actor main(env):
+    t = TestClass()
+    env.exit(0)

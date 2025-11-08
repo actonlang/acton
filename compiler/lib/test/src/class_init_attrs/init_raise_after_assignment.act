@@ -1,0 +1,16 @@
+# Test case: if/else where else branch has assignment followed by raise
+# This should SUCCEED - the if branch completes normally with x initialized,
+# and the else branch exits early (so it doesn't constrain initialization)
+class TestClass(object):
+    x: int
+
+    def __init__(self):
+        if 1 == 1:  # Always true
+            self.x = 1
+        else:
+            self.x = 2
+            raise ValueError("This comes after assignment")
+
+actor main(env):
+    t = TestClass()
+    env.exit(0)

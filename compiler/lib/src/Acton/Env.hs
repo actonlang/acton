@@ -23,6 +23,7 @@ import System.Directory (doesFileExist)
 import System.Environment (getExecutablePath)
 import Control.Monad
 import Control.Monad.Except
+import qualified Data.HashMap.Strict as M
 
 import Acton.Syntax
 import Acton.Builtin
@@ -49,6 +50,7 @@ data EnvF x                 = EnvF {
                                 names      :: TEnv,
                                 imports    :: [ModName],
                                 modules    :: TEnv,
+                                hmodules   :: HTEnv,
                                 witnesses  :: [Witness],
                                 thismod    :: Maybe ModName,
                                 envX       :: x }
@@ -58,7 +60,7 @@ type Env0                   = EnvF ()
 
 setX                        :: EnvF y -> x -> EnvF x
 setX env x                  = EnvF { names = names env, imports = imports env, modules = modules env,
-                                     witnesses = witnesses env, thismod = thismod env,
+                                     hmodules = hmodules env, witnesses = witnesses env, thismod = thismod env,
                                      envX = x }
 
 modX                        :: EnvF x -> (x -> x) -> EnvF x
@@ -69,8 +71,9 @@ mapModules1                 :: ((Name,NameInfo) -> (Name,NameInfo)) -> Env0 -> E
 mapModules1 f env           = mapModules (\_ _ ni -> [f ni]) env
 
 mapModules                  :: (Env0 -> ModName -> (Name,NameInfo) -> TEnv) -> Env0 -> Env0
-mapModules f env            = walk env0 [] mods
-  where env0                = env{ modules = [prim] }
+mapModules f env            = env1 { hmodules = convTEnv2HTEnv (modules env1) }
+  where env1                =  walk env0 [] mods
+        env0                = env{ modules = [prim] }
         prim : mods         = modules env
 
         walk env ns []      = env
@@ -105,7 +108,7 @@ mapModules f env            = walk env0 [] mods
 -}
 
 instance Pretty Witness where
-    pretty (WClass q t p w ws)  = text "WClass" <+> prettyQual q <+> pretty t <+> parens (pretty p) <+>
+    pretty (WClass q t p w ws _) = text "WClass" <+> prettyQual q <+> pretty t <+> parens (pretty p) <+>
                                       equals <+> pretty (wexpr ws (eCall (eQVar w) []))
     pretty (WInst q t p w ws)   = text "WInst" <+> prettyQual q <+> pretty t <+> parens (pretty p) <+>
                                       equals <+> pretty (wexpr ws (eQVar w))
@@ -143,11 +146,11 @@ instance Pretty (Name,NameInfo) where
     pretty (n, NProto q us te doc)
                                 = text "protocol" <+> pretty n <> nonEmpty brackets commaList q <+>
                                   nonEmpty parens commaList us <> colon $+$ nest 4 (prettyDocstring doc) $+$ (nest 4 $ prettyOrPass te)
-    pretty (w, NExt [] c ps te doc)
+    pretty (w, NExt [] c ps te opts doc)
                                 = {-pretty w  <+> colon <+> -}
                                   text "extension" <+> pretty c <+> parens (commaList ps) <>
                                   colon $+$ nest 4 (prettyDocstring doc) $+$ (nest 4 $ prettyOrPass te)
-    pretty (w, NExt q c ps te doc)
+    pretty (w, NExt q c ps te opts doc)
                                 = {-pretty w  <+> colon <+> -}
                                   text "extension" <+> pretty q <+> text "=>" <+> pretty c <+> parens (commaList ps) <>
                                   colon $+$ nest 4 (prettyDocstring doc) $+$ (nest 4 $ prettyOrPass te)
@@ -192,7 +195,7 @@ instance VFree NameInfo where
     vfree (NAct q p k te _)     = (vfree q ++ vfree p ++ vfree k ++ vfree te) \\ (tvSelf : qbound q)
     vfree (NClass q us te _)    = (vfree q ++ vfree us ++ vfree te) \\ (tvSelf : qbound q)
     vfree (NProto q us te _)    = (vfree q ++ vfree us ++ vfree te) \\ (tvSelf : qbound q)
-    vfree (NExt q c ps te _)    = (vfree q ++ vfree c ++ vfree ps ++ vfree te) \\ (tvSelf : qbound q)
+    vfree (NExt q c ps te _ _)  = (vfree q ++ vfree c ++ vfree ps ++ vfree te) \\ (tvSelf : qbound q)
     vfree (NTVar k c)           = vfree c
     vfree (NAlias qn)           = []
     vfree (NMAlias qn)          = []
@@ -213,7 +216,7 @@ instance VSubst NameInfo where
     vsubst s (NAct q p k te x)  = NAct (vsubst s q) (vsubst s p) (vsubst s k) (vsubst s te) x
     vsubst s (NClass q us te x) = NClass (vsubst s q) (vsubst s us) (vsubst s te) x
     vsubst s (NProto q us te x) = NProto (vsubst s q) (vsubst s us) (vsubst s te) x
-    vsubst s (NExt q c ps te x) = NExt (vsubst s q) (vsubst s c) (vsubst s ps) (vsubst s te) x
+    vsubst s (NExt q c ps te opts x) = NExt (vsubst s q) (vsubst s c) (vsubst s ps) (vsubst s te) opts x
     vsubst s (NTVar k c)        = NTVar k (vsubst s c)
     vsubst s (NAlias qn)        = NAlias qn
     vsubst s (NMAlias m)        = NMAlias m
@@ -234,7 +237,7 @@ instance UFree NameInfo where
     ufree (NAct q p k te _)     = ufree q ++ ufree p ++ ufree k ++ ufree te
     ufree (NClass q us te _)    = ufree q ++ ufree us ++ ufree te
     ufree (NProto q us te _)    = ufree q ++ ufree us ++ ufree te
-    ufree (NExt q c ps te _)    = ufree q ++ ufree c ++ ufree ps ++ ufree te
+    ufree (NExt q c ps te _ _)  = ufree q ++ ufree c ++ ufree ps ++ ufree te
     ufree (NTVar k c)           = ufree c
     ufree (NAlias qn)           = []
     ufree (NMAlias qn)          = []
@@ -256,7 +259,7 @@ instance Polarity NameInfo where
     polvars (NAct q p k te _)   = polvars q `polcat` polneg (polvars p `polcat` polvars k) `polcat` polvars te
     polvars (NClass q us te _)  = polvars q `polcat` polvars us `polcat` polvars te
     polvars (NProto q us te _)  = polvars q `polcat` polvars us `polcat` polvars te
-    polvars (NExt q c ps te _)  = polvars q `polcat` polvars c `polcat` polvars ps `polcat` polvars te
+    polvars (NExt q c ps te _ _) = polvars q `polcat` polvars c `polcat` polvars ps `polcat` polvars te
     polvars (NTVar k c)         = polvars c
     polvars _                   = ([],[])
 
@@ -271,7 +274,7 @@ instance USubst NameInfo where
     usubst (NAct q p k te doc)  = NAct <$> usubst q <*> usubst p <*> usubst k <*> usubst te <*> return doc
     usubst (NClass q us te doc) = NClass <$> usubst q <*> usubst us <*> usubst te <*> return doc
     usubst (NProto q us te doc) = NProto <$> usubst q <*> usubst us <*> usubst te <*> return doc
-    usubst (NExt q c ps te doc) = NExt <$> usubst q <*> usubst c <*> usubst ps <*> usubst te <*> return doc
+    usubst (NExt q c ps te opts doc) = NExt <$> usubst q <*> usubst c <*> usubst ps <*> usubst te <*> return opts <*> return doc
     usubst (NTVar k c)          = NTVar k <$> usubst c
     usubst (NAlias qn)          = NAlias <$> return qn
     usubst (NMAlias m)          = NMAlias <$> return m
@@ -326,9 +329,9 @@ instance Unalias ModName where
                                         Nothing | m `elem` imports env  -> m
                                         _ -> noModule m
 instance Unalias QName where
-    unalias env (QName m n)         = case findMod m env of
-                                        Just te -> case lookup n te of
-                                                      Just (NAlias qn) -> qn
+    unalias env (QName m n)         = case findHMod m env of
+                                        Just te -> case M.lookup n te of
+                                                      Just (HNAlias qn) -> qn
                                                       Just _ -> GName m' n
                                                       _ -> noItem m n
                                         Nothing -> error ("#### unalias fails for " ++ prstr (QName m n))
@@ -368,7 +371,7 @@ instance Unalias NameInfo where
     unalias env (NAct q p k te doc) = NAct (unalias env q) (unalias env p) (unalias env k) (unalias env te) doc
     unalias env (NClass q us te doc)= NClass (unalias env q) (unalias env us) (unalias env te) doc
     unalias env (NProto q us te doc)= NProto (unalias env q) (unalias env us) (unalias env te) doc
-    unalias env (NExt q c ps te doc)= NExt (unalias env q) (unalias env c) (unalias env ps) (unalias env te) doc
+    unalias env (NExt q c ps te opts doc)= NExt (unalias env q) (unalias env c) (unalias env ps) (unalias env te) opts doc
     unalias env (NTVar k c)         = NTVar k (unalias env c)
     unalias env (NAlias qn)         = NAlias (unalias env qn)
     unalias env (NMAlias m)         = NMAlias (unalias env m)
@@ -440,14 +443,16 @@ initEnv                    :: FilePath -> Bool -> IO Env0
 initEnv path True          = return $ EnvF{ names = [(nPrim,NMAlias mPrim)],
                                             imports = [mPrim],
                                             modules = [(nPrim,NModule primEnv Nothing)],
+                                            hmodules = M.empty, 
                                             witnesses = primWits,
                                             thismod = Nothing,
                                             envX = () }
-initEnv path False         = do (_,nmod) <- InterfaceFiles.readFile (joinPath [path,"__builtin__.ty"])
+initEnv path False         = do (_,nmod,_,_,_,_,_,_) <- InterfaceFiles.readFile (joinPath [path,"__builtin__.ty"])
                                 let NModule envBuiltin builtinDocstring = nmod
                                     env0 = EnvF{ names = [(nPrim,NMAlias mPrim), (nBuiltin,NMAlias mBuiltin)],
                                                  imports = [mPrim,mBuiltin],
                                                  modules = [(nPrim,NModule primEnv Nothing), (nBuiltin,NModule envBuiltin builtinDocstring)],
+                                                 hmodules = M.empty,
                                                  witnesses = primWits,
                                                  thismod = Nothing,
                                                  envX = () }
@@ -469,7 +474,7 @@ reserve xs env              = env{ names = [ (x, NReserved) | x <- nub xs ] ++ n
 define                      :: TEnv -> EnvF x -> EnvF x
 define te env               = foldl addWit env1 ws
   where env1                = env{ names = reverse te ++ names env }
-        ws                  = [ WClass q (tCon c) p (NoQ w) ws | (w, NExt q c ps te' _) <- te, (ws,p) <- ps ]
+        ws                  = [ WClass q (tCon c) p (NoQ w) ws (length opts) | (w, NExt q c ps te' opts _) <- te, (ws,p) <- ps ]
 
 
 addImport                   :: ModName -> EnvF x -> EnvF x
@@ -533,25 +538,26 @@ selfSubst env               = [ (TV k n, tCon c) | (n, NTVar k c) <- names env, 
 
 findQName                   :: QName -> EnvF x -> NameInfo
 findQName n env             = case tryQName n env of
-                                 Just i -> i
+                                 Just i -> convHNameInfo2NameInfo i
                                  Nothing -> nameNotFound (noq n)
 
-tryQName                    :: QName -> EnvF x -> Maybe NameInfo
-tryQName (QName m n) env    = case findMod m env of
-                                Just te -> case lookup n te of
-                                    Just (NAlias qn) -> tryQName qn env
+tryQName                    :: QName -> EnvF x -> Maybe HNameInfo
+tryQName (QName m n) env    = case findHMod m env of
+                                Just te -> case M.lookup n te of
+                                    Just (HNAlias qn) -> tryQName qn env
                                     Just i -> Just i
                                     _ -> noItem m n
                                 _ -> noModule m
 tryQName (NoQ n) env        = case lookup n (names env) of
                                 Just (NAlias qn) -> tryQName qn env
-                                res -> res
+                                Just ni -> Just (convNameInfo2HNameInfo ni)
+                                Nothing -> Nothing
 tryQName (GName m n) env
   | Just m == thismod env   = tryQName (NoQ n) env
   | inBuiltin env,
     m==mBuiltin             = tryQName (NoQ n) env
-  | otherwise               = case lookupMod m env of
-                                Just te -> case lookup n te of
+  | otherwise               = case lookupHMod m env of
+                                Just te -> case M.lookup n te of
                                     Just i -> Just i
                                     Nothing -> noItem m n -- error ("## Failed lookup of " ++ prstr n ++ " in module " ++ prstr m)
                                 Nothing -> noModule m -- error ("## Failed lookup of module " ++ prstr m)
@@ -574,15 +580,29 @@ lookupVar n env             = case lookup n (names env) of
                                 Just (NVar t) -> Just t
                                 _ -> Nothing
 
-findMod                     :: ModName -> EnvF x -> Maybe TEnv
-findMod m env | inBuiltin env, m==mBuiltin
-                            = Just (names env)
-findMod m@(ModName ns) env  = case lookup (head ns) (names env) of
-                                Just (NMAlias m') -> lookupMod m' env
-                                Nothing | m `elem` imports env  -> lookupMod m env
+findHMod                    :: ModName -> EnvF x -> Maybe HTEnv  -- m is modname part of a QName, so we must check for aliasing
+findHMod m env | inBuiltin env, m==mBuiltin
+                            = Just (convTEnv2HTEnv (names env))
+findHMod m@(ModName ns) env = case lookup (head ns) (names env) of
+                                Just (NMAlias m') -> lookupHMod m' env
+                                Nothing | m `elem` imports env  -> lookupHMod m env
                                 _ -> Nothing
 
-lookupMod                   :: ModName -> EnvF x -> Maybe TEnv
+lookupHMod                  :: ModName -> EnvF x -> Maybe HTEnv -- m is modname part of a GName, so search directly for module
+lookupHMod m env | inBuiltin env, m==mBuiltin
+                            = Just (convTEnv2HTEnv (names env))
+lookupHMod (ModName ns) env = f ns (hmodules env)
+  where f [] te
+          | not (all isHNModule (M.toList te)) = Just te
+          | otherwise              = Nothing
+        f (n:ns) te         = case M.lookup n te of
+                                Just (HNModule te' _) -> f ns te'
+                                Just (HNMAlias (ModName m)) -> lookupHMod (ModName $ m++ns) env
+                                _ -> Nothing
+        isHNModule (_, HNModule{}) = True
+        isHNModule _               = False
+
+lookupMod                  :: ModName -> EnvF x -> Maybe TEnv 
 lookupMod m env | inBuiltin env, m==mBuiltin
                             = Just (names env)
 lookupMod (ModName ns) env  = f ns (modules env)
@@ -593,12 +613,12 @@ lookupMod (ModName ns) env  = f ns (modules env)
                                 Just (NModule te' _) -> f ns te'
                                 Just (NMAlias (ModName m)) -> lookupMod (ModName $ m++ns) env
                                 _ -> Nothing
-        isNModule (_, NModule{}) = True
-        isNModule _         = False
+        isNModule (_, NModule{})  = True
+        isNModule _               = False
 
 
 isMod                       :: EnvF x -> [Name] -> Bool
-isMod env ns                = maybe False (const True) (findMod (ModName ns) env)
+isMod env ns                = maybe False (const True) (findHMod (ModName ns) env)
 
 isAlias                     :: Name -> EnvF x -> Bool
 isAlias n env               = case lookup n (names env) of
@@ -643,28 +663,28 @@ actorMethod env n0          = walk [] (names env)
 
 isDef                       :: EnvF x -> QName -> Bool
 isDef env n                 = case tryQName n env of
-                                Just NDef{} -> True
+                                Just HNDef{} -> True
                                 _ -> False
 
 isActor                     :: EnvF x -> QName -> Bool
 isActor env n               = case tryQName n env of
-                                Just NAct{} -> True
+                                Just HNAct{} -> True
                                 _ -> False
 
 isClass                     :: EnvF x -> QName -> Bool
 isClass env n               = case tryQName n env of
-                                Just NClass{} -> True
+                                Just HNClass{} -> True
                                 _ -> False
 
 isProto                     :: EnvF x -> QName -> Bool
 isProto env n               = case tryQName n env of
-                                Just NProto{} -> True
+                                Just HNProto{} -> True
                                 _ -> False
 
 isDefOrClass                :: EnvF x -> QName -> Bool
 isDefOrClass env n          = case tryQName n env of
-                                Just NDef{} -> True
-                                Just NClass{} -> True
+                                Just HNDef{} -> True
+                                Just HNClass{} -> True
                                 _ -> False
 
 witsByPName                 :: EnvF x -> QName -> [Witness]
@@ -735,7 +755,7 @@ findConName n env           = case findQName n env of
                                 NAct q p k te _  -> (q,[],te)
                                 NClass q us te _ -> (q,us,te)
                                 NProto q us te _ -> (q,us,te)
-                                NExt q c us te _ -> (q,us,te)
+                                NExt q c us te _ _ -> (q,us,te)
                                 NReserved -> nameReserved n
                                 i -> err1 n ("findConName: Class or protocol name expected, got " ++ show i ++ " --- ")
 
@@ -1171,7 +1191,7 @@ instance Flows Handler where
 -- Import handling (local definitions only) ----------------------------------------------
 
 --getImps                         :: [FilePath] -> EnvF x -> [Import] -> IO (EnvF x)
-getImps spath env []         = return env
+getImps spath env []         = return env { hmodules = convTEnv2HTEnv (modules env) }
 getImps spath env (i:is)     = do env' <- impModule spath env i
                                   getImps spath env' is
 
@@ -1212,6 +1232,7 @@ findTyFile spaths mn = go spaths
         then return (Just fullPath)
         else go ps
 
+doImp                        :: [FilePath] -> EnvF x -> ModName -> IO (EnvF x, TEnv)
 doImp spath env m            = case lookupMod m env of
                                     Just te -> return (env, te)
                                     Nothing -> do
@@ -1219,7 +1240,7 @@ doImp spath env m            = case lookupMod m env of
                                         case tyFile of
                                           Nothing -> fileNotFound m
                                           Just tyF -> do
-                                            (ms,nmod) <- InterfaceFiles.readFile tyF
+                                            (ms,nmod,_,_,_,_,_,_) <- InterfaceFiles.readFile tyF
                                             env' <- subImp spath env ms
                                             let NModule te mdoc = nmod
                                             return (addMod m te mdoc env', te)
@@ -1241,7 +1262,7 @@ impNames m te               = mapMaybe imp te
     imp (n, NAct _ _ _ _ _)   = Just (n, NAlias (GName m n))
     imp (n, NClass _ _ _ _)   = Just (n, NAlias (GName m n))
     imp (n, NProto _ _ _ _)   = Just (n, NAlias (GName m n))
-    imp (n, NExt _ _ _ _ _)   = Nothing
+    imp (n, NExt _ _ _ _ _ _) = Nothing
     imp (n, NAlias _)       = Just (n, NAlias (GName m n))
     imp (n, NVar t)         = Just (n, NAlias (GName m n))
     imp (n, NDef t d _)       = Just (n, NAlias (GName m n))
@@ -1249,7 +1270,7 @@ impNames m te               = mapMaybe imp te
 
 importWits                  :: ModName -> TEnv -> EnvF x -> EnvF x
 importWits m te env         = foldl addWit env ws
-  where ws                  = [ WClass q (tCon c) p (GName m n) ws | (n, NExt q c ps te' _) <- te, (ws,p) <- ps ]
+  where ws                  = [ WClass q (tCon c) p (GName m n) ws (length opts) | (n, NExt q c ps te' opts _) <- te, (ws,p) <- ps ]
 
 
 
@@ -1412,7 +1433,8 @@ instance Simp (Name, NameInfo) where
       where env'                    = defineTVars (stripQual q) env
     simp env (n, NProto q us te doc)= (n, NProto (simp env' q) (simp env' us) (simp env' te) doc)
       where env'                    = defineTVars (stripQual q) env
-    simp env (n, NExt q c us te doc)= (n, NExt q' (vsubst s $ simp env' c) (vsubst s $ simp env' us) (vsubst s $ simp env' te) doc)
+    simp env (n, NExt q c us te opts doc)
+                                    = (n, NExt q' (vsubst s $ simp env' c) (vsubst s $ simp env' us) (vsubst s $ simp env' te) opts doc)
       where (q', s)                 = simpQuant env (simp env' q) (vfree c ++ vfree us ++ vfree te)
             env'                    = defineTVars (stripQual q) env
     simp env (n, NAct q p k te doc) = (n, NAct (simp env' q) (simp env' p) (simp env' k) (simp env' te) doc)
@@ -1439,4 +1461,3 @@ instance Simp QName where
       | not $ null aliases          = NoQ $ head aliases                                        -- Restore aliases
       | otherwise                   = n
       where aliases                 = [ n1 | (n1, NAlias n2) <- names env, n2 == n ]
-

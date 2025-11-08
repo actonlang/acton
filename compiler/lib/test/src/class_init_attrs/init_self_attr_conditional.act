@@ -1,0 +1,20 @@
+# Test case: Using initialized attributes in conditional branches
+class TestClass(object):
+    base: int
+    value: int
+    doubled: int
+    
+    def __init__(self, mode: int):
+        self.base = 10
+        
+        if mode > 0:
+            self.value = self.base * mode  # OK: base is initialized
+        else:
+            self.value = self.base  # OK: base is initialized
+        
+        # At this point, both base and value are guaranteed initialized
+        self.doubled = self.value * 2  # OK: value is initialized from all paths
+
+actor main(env):
+    t = TestClass(5)
+    env.exit(0)
