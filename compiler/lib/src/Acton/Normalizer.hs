@@ -317,7 +317,11 @@ instance Norm Stmt where
       where t@(TCon _ (TC c [t']))  = typeOf env e
             next i                  = eCall (eDot (eVar i) nextKW) []
             handleStop loop els     = Try l [loop] [Handler (Except l0 qnStopIteration) (mkBody els)] [] []
-            body v i                = sAssign (pVar v t') (next i) : sAssign p (eVar v) : b
+            body v i
+               | isPVar p           = sAssign p (next i) : b
+               | otherwise          = sAssign (pVar v t') (next i) : sAssign p (eVar v) : b
+            isPVar PVar{}           = True
+            isPVar _                = False
     {-
     with EXPRESSION as PATTERN:
         SUITE

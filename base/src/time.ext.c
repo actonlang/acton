@@ -102,8 +102,8 @@ void timeQ___ext_init__() {
     time__get_clock_data_cb(NULL);
 }
 
-B_int timeQ__get_incarnation () {
-    return to$int(time__incarnation);
+int64_t timeQ_U__get_incarnation () {
+    return time__incarnation;
 }
 
 
@@ -116,8 +116,8 @@ B_tuple timeQ_get_monotonic () {
         $RAISE(((B_BaseException)B_RuntimeErrorG_new(to$str(errmsg))));
     }
     return $NEWTUPLE(2,
-                     to$int(ts.tv_sec),
-                     to$int(ts.tv_nsec));
+                     toB_int(ts.tv_sec),
+                     toB_int(ts.tv_nsec));
 }
 
 B_tuple timeQ_get_realtime () {
@@ -129,27 +129,27 @@ B_tuple timeQ_get_realtime () {
         $RAISE(((B_BaseException)B_RuntimeErrorG_new(to$str(errmsg))));
     }
     return $NEWTUPLE(2,
-                     to$int(ts.tv_sec),
-                     to$int(ts.tv_nsec));
+                     toB_int(ts.tv_sec),
+                     toB_int(ts.tv_nsec));
 }
 
 
 B_tuple timeQ_get_clock_data () {
 #ifdef _WIN32
     return $NEWTUPLE(3,
-                     to$int(time__realclock_status),
-                     to$int(0),
-                     to$int(0));
+                     toB_int(time__realclock_status),
+                     toB_int(0),
+                     toB_int(0));
 #else
     return $NEWTUPLE(3,
-                     to$int(time__realclock_status),
-                     to$int(time__realclock_tx.offset),
-                     to$int(time__realclock_tx.esterror));
+                     toB_int(time__realclock_status),
+                     toB_int(time__realclock_tx.offset),
+                     toB_int(time__realclock_tx.esterror));
 #endif
 }
 
-B_tuple timeQ_localtime (B_int seconds) {
-    time_t t = from$int(seconds);
+B_tuple timeQ_U_1localtime (int64_t seconds) {
+    time_t t = seconds;
     struct tm tm;
 #ifdef _WIN32
     errno_t result = localtime_s(&tm, &t);
@@ -160,60 +160,60 @@ B_tuple timeQ_localtime (B_int seconds) {
         $RAISE(((B_BaseException)B_RuntimeErrorG_new(to$str(errmsg))));
     }
     return $NEWTUPLE(11,
-                     to$int(tm.tm_year + 1900),
-                     to$int(tm.tm_mon + 1),
-                     to$int(tm.tm_mday),
-                     to$int(tm.tm_hour),
-                     to$int(tm.tm_min),
-                     to$int(tm.tm_sec),
-                     to$int(tm.tm_wday),
-                     to$int(tm.tm_yday),
-                     to$int(tm.tm_isdst),
+                     toB_int(tm.tm_year + 1900),
+                     toB_int(tm.tm_mon + 1),
+                     toB_int(tm.tm_mday),
+                     toB_int(tm.tm_hour),
+                     toB_int(tm.tm_min),
+                     toB_int(tm.tm_sec),
+                     toB_int(tm.tm_wday),
+                     toB_int(tm.tm_yday),
+                     toB_int(tm.tm_isdst),
                      to$str(""),
-                     to$int(0));
+                     toB_int(0));
 #else
     localtime_r(&t, &tm);
     return $NEWTUPLE(11,
-                     to$int(tm.tm_year + 1900),
-                     to$int(tm.tm_mon + 1),
-                     to$int(tm.tm_mday),
-                     to$int(tm.tm_hour),
-                     to$int(tm.tm_min),
-                     to$int(tm.tm_sec),
-                     to$int(tm.tm_wday),
-                     to$int(tm.tm_yday),
-                     to$int(tm.tm_isdst),
+                     toB_int(tm.tm_year + 1900),
+                     toB_int(tm.tm_mon + 1),
+                     toB_int(tm.tm_mday),
+                     toB_int(tm.tm_hour),
+                     toB_int(tm.tm_min),
+                     toB_int(tm.tm_sec),
+                     toB_int(tm.tm_wday),
+                     toB_int(tm.tm_yday),
+                     toB_int(tm.tm_isdst),
                      to$str(tm.tm_zone),
-                     to$int(tm.tm_gmtoff));
+                     toB_int(tm.tm_gmtoff));
 #endif
 }
 
-B_tuple timeQ_gmtime (B_int seconds) {
-    time_t t = from$int(seconds);
+B_tuple timeQ_U_3gmtime (int64_t seconds) {
+    time_t t = seconds;
     struct tm tm;
 #ifdef _WIN32
     // TODO: implement this!
     return $NEWTUPLE(9,
-                     to$int(0),
-                     to$int(0),
-                     to$int(0),
-                     to$int(0),
-                     to$int(0),
-                     to$int(0),
-                     to$int(0),
-                     to$int(0),
-                     to$int(0));
+                     toB_int(0),
+                     toB_int(0),
+                     toB_int(0),
+                     toB_int(0),
+                     toB_int(0),
+                     toB_int(0),
+                     toB_int(0),
+                     toB_int(0),
+                     toB_int(0));
 #else
     gmtime_r(&t, &tm);
     return $NEWTUPLE(9,
-                     to$int(tm.tm_year + 1900),
-                     to$int(tm.tm_mon + 1),
-                     to$int(tm.tm_mday),
-                     to$int(tm.tm_hour),
-                     to$int(tm.tm_min),
-                     to$int(tm.tm_sec),
-                     to$int(tm.tm_wday),
-                     to$int(tm.tm_yday),
-                     to$int(tm.tm_isdst));
+                     toB_int(tm.tm_year + 1900),
+                     toB_int(tm.tm_mon + 1),
+                     toB_int(tm.tm_mday),
+                     toB_int(tm.tm_hour),
+                     toB_int(tm.tm_min),
+                     toB_int(tm.tm_sec),
+                     toB_int(tm.tm_wday),
+                     toB_int(tm.tm_yday),
+                     toB_int(tm.tm_isdst));
 #endif
 }

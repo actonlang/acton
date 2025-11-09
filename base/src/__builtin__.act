@@ -28,11 +28,11 @@ class object (value):
 class atom (value):
     pass
 
-class int (atom):
+class bigint (atom):
     def __init__(self, val: atom, base: ?int) -> None:
         NotImplemented
 
-class i64 (atom):
+class int (atom):
     def __init__(self, val: atom, base: ?int) -> None:
         NotImplemented
 
@@ -64,7 +64,7 @@ class bool (atom):
     def __init__(self, val: value) -> None:
         NotImplemented
 
-class slice (value):
+class slice(value):
     def __init__(self, start: ?int, stop: ?int, step: ?int) -> None:
         NotImplemented
 
@@ -94,7 +94,14 @@ class list[A] (object):
         """
         NotImplemented
 
-class range (value):
+class Iterator[A] (object):
+    __next__     : () -> A
+    
+
+protocol Iterable[A]:
+    __iter__     : () -> Iterator[A]
+
+class range(Iterator[int]):
     """Return an object that produces a sequence of integers from start
     (inclusive) to stop (exclusive) in step sizes as specified by the step
     argument, which is 1 per default. It is possible to call with just a single
@@ -107,12 +114,8 @@ class range (value):
     """
     def __init__(self, start: int, stop: ?int, step: int=1) -> None:
         NotImplemented
-
-class Iterator[A] (object):
-    __next__      : () -> A
-
-protocol Iterable[A]:
-    __iter__     : () -> Iterator[A]
+    def __next__(self)->int:
+        NotImplemented
 
 class str (atom):
     def __init__     (self, val: ?value) -> None:
@@ -662,6 +665,15 @@ protocol Integral (Rational,Logical):
 extension bool (Hashable):
     NotImplemented
 
+extension bigint (Integral):
+    NotImplemented
+extension bigint (Div[float]):
+    NotImplemented
+extension bigint (Ord):
+    NotImplemented
+extension bigint (Hashable):
+    NotImplemented
+
 extension int (Integral):
     NotImplemented
 extension int (Div[float]):
@@ -669,15 +681,6 @@ extension int (Div[float]):
 extension int (Ord):
     NotImplemented
 extension int (Hashable):
-    NotImplemented
-
-extension i64 (Integral):
-    NotImplemented
-extension i64 (Div[float]):
-    NotImplemented
-extension i64 (Ord):
-    NotImplemented
-extension i64 (Hashable):
     NotImplemented
 
 extension i32 (Integral):
@@ -847,8 +850,8 @@ extension set[A(Hashable)] (Set[A]):
 extension Iterator[A](Iterable[A]):
     NotImplemented
 
-extension range (Iterable[int]):
-    NotImplemented
+# extension range[A](Iterable[A]):
+#     NotImplemented
 
 extension str (Ord):
     NotImplemented
@@ -976,7 +979,7 @@ def repr(x: ?value):
         return x.__repr__()
     return "None"
 
-def reversed(seq : Sequence[A]) -> Iterator[A]:
+def reversed[A](seq : Sequence[A]) -> Iterator[A]:
     return seq.__reversed__()
 
 def round [A(Real)] (x : A, n : ?int) -> A:
@@ -991,10 +994,10 @@ def sum [A(Plus)] (iter: Iterable[A], start: ?A) -> A:
 def zip (a: Iterable[A], b: Iterable[B]) -> Iterator[(A,B)]:
     NotImplemented
 
-def gcd(a : int, b : int) -> int:
+def gcd(a : bigint, b :bigint) -> bigint:
     NotImplemented
 
-def xgcd(a : int, b : int) -> (int, int, int):
+def xgcd(a : bigint, b : bigint) -> (bigint, bigint, bigint):
     NotImplemented
 
 def type(a: ?value) -> str:
@@ -1018,7 +1021,7 @@ actor StringDecoder(cb_out: action(str) -> None, encoding: ?str="utf-8", on_erro
     UTF-8 is used. The decoder is stateful in order to buffer incomplete multi-
     byte characters.
     """
-    MAX_UNICODE_CHAR_SIZE = 4
+    MAX_UNICODE_CHAR_SIZE: int = 4
     var buf: bytes = b""
 
     if encoding is not None:

@@ -291,8 +291,9 @@ primROOT                            = gPrim "ROOT"
 primROOTINIT                        = gPrim "ROOTINIT"
 primRegister                        = gPrim "register"
 
-primToInt                           = name "to$int"
-primToInt2                          = name "to$int2"
+primToInt                           = name "toB_int"
+primToBigInt                        = name "toB_bigint"
+primToBigInt2                       = name "toB_bigint2"
 primToFloat                         = name "to$float"
 primToStr                           = name "to$str"
 primToBytearray                     = name "to$bytearray"
@@ -363,7 +364,7 @@ declModule env (s : ss)             = vcat [ genTypeDecl env n t <+> genTopName 
 
 
 declDecl env (Def dloc n q p KwdNIL (Just t) b d fx ddoc)
-  | hasNotImpl b                    = gen env t <+> genTopName env n <+> parens (gen env p) <> semi $+$
+  | hasNotImpl b                    = genTypeDecl env n t1 <+> genTopName env n <+> parens (gen env p) <> semi $+$
                                       text "/*" $+$
                                       decl $+$
                                       text "*/"
@@ -662,6 +663,8 @@ instance Gen Stmt where
     genV env (Return _ (Just e))    = (text "return" <+> genExp env (ret env) e <> semi, [])
     genV env (Break _)              = (text "break" <> semi, [])
     genV env (Continue _)           = (text "continue" <> semi, [])
+    genV _ (If _ (Branch (Bool _ True) [Pass _] : _) _)
+                                    = (empty, [])
     genV env (If  _ [b@(Branch e ss)] fin)
       | isPUSH e                    = (b' $+$ fin', v1 ++ v2 ++ volatiles)
       where (b',v1)                 = genBranch env "if" b
@@ -674,8 +677,9 @@ instance Gen Stmt where
     genV env (While _ e b [])       = genBranch env "while" (Branch e b)
     genV env _                      = (empty, [])
 
-genBranch env kw (Branch e b)       = ((text kw <+> parens (gen env (B.unbox tBool e)) <+> char '{') $+$ nest 4 b' $+$ char '}', vs)
+genBranch env kw (Branch e b)       = ((text kw <+> parens(genBool env (B.unbox t e)) <+> char '{') $+$ nest 4 b' $+$ char '}', vs)
    where (b',vs)                    = genSuite env b
+         t                          = typeOf env e
 
 genElse env []                      = (empty, [])
 genElse env b                       = ((text "else" <+> char '{') $+$ nest 4 b' $+$ char '}', vs)
@@ -726,14 +730,14 @@ castLit env (Strings l ss) p        = format (concat ss) p
           | f `elem` "#0- +"        = flags s p
         flags s p                   = width s p
         width ('*':s) (PosArg e p)  = comma <+> parens (text "int") <> expr <> dot s p
-          where expr                = text "from$int" <> parens (gen env e)
+          where expr                = text "fromB_int" <> parens (gen env e)
         width (n:s) p
           | n `elem` "123456789"    = let (n',s') = span (`elem` "0123456789") s in dot s' p
         width s p                   = dot s p
         dot ('.':s) p               = prec s p
         dot s p                     = len s p
         prec ('*':s) (PosArg e p)   = comma <+> parens (text "int") <> expr <> len s p
-          where expr                = text "from$int" <> parens (gen env e)  --parens (parens (gen env tInt) <> gen env e) <> text "->val"
+          where expr                = text "fromB_int" <> parens (gen env e)  --parens (parens (gen env tInt) <> gen env e) <> text "->val"
         prec (n:s) p
           | n `elem` "0123456789"   = let (n',s') = span (`elem` "0123456789") s in len s' p
         prec s p                    = len s p
@@ -742,7 +746,7 @@ castLit env (Strings l ss) p        = format (concat ss) p
         len s p                     = conv s p
         conv (t:s) (PosArg e p)
           | t `elem` "diouxXc"      = comma <+> expr <> format s p
-          where expr                = text "from$int" <> parens (gen env e) --parens (parens (gen env tInt) <> gen env e) <> text "->val"
+          where expr                = text "fromB_int" <> parens (gen env e) --parens (parens (gen env tInt) <> gen env e) <> text "->val"
         conv (t:s) (PosArg e p)
           | t `elem` "eEfFgG"       = comma <+> expr <> format s p
           where expr                = parens (parens (gen env tFloat) <> gen env e) <> text "->val"
@@ -780,10 +784,14 @@ genCall env ts e0@(Dot _ e n) p     = genDotCall env ts (snd $ schemaOf env e0) 
 genCall env ts e p                  = gen env e <> parens (gen env p)
 
 instCast env [] e                   = id
-instCast env ts (Var _ x)
+instCast env ts e@(Var _ x)
+  | x == primUGetItem               = case typeInstOf env ts e of
+                                         TFun _ fx (TRow _ _ _ t1 (TRow _ _ _ t2 _)) _ r ->
+                                             parens . (parens (gen env r <+> parens (char '*') <+> parens (gen env t1 <> comma <+> text (unboxed_c_type t2))) <>)
+                                         t -> error("Interal error: unexpected typecast for list indexing")
   | GName m _ <- x, m == mPrim      = id
 instCast env ts e                   = parens . (parens (gen env t) <>)
-  where t                           = typeInstOf env ts e
+  where t                           = typeInstOf env ts e  
 
 targetType env (Dot _ e n)          = sctype sc
   where t0                          = typeOf env e
@@ -896,8 +904,8 @@ instance Gen Expr where
       | NClass{} <- findQName n env = newcon' env n
       | otherwise                   = genQName env n
     gen env (Int _ i str)
-        |i <= 9223372036854775807   = gen env primToInt <> parens (text str) -- literal is 2^63-1
-        | otherwise                 = gen env primToInt2 <> parens (doubleQuotes $ text str)
+        |i <= 9223372036854775807   = gen env primToBigInt <> parens (text (str++"UL")) -- literal is 2^63-1
+        | otherwise                 = gen env primToBigInt2 <> parens (doubleQuotes $ text str)
     gen env (Float _ _ str)         = gen env primToFloat <> parens (text str)
     gen env (Bool _ True)           = gen env qnTrue
     gen env (Bool _ False)          = gen env qnFalse
@@ -954,18 +962,25 @@ instance Gen Expr where
     gen env (UnBox _ e@(Call _ (Dot _ (Var _ w) op) (PosArg x (PosArg y PosNil)) KwdNil))  -- use macro for int (in)equality tests
                                     = case findQName w env of
                                         NVar (TCon _ (TC p [TCon _ (TC t [])]))
-                                          | (p==qnOrd || p==qnEq) && elem t [qnInt, qnI64] ->
-                                             text "ORD_" <> genQName env t <> text (nstr op) <> parens(gen env x <> comma <+> gen env y)
+                                          | (p==qnOrd || p==qnEq) &&  t == qnBigint ->
+                                             text "ORD_" <> tname <> text (nstr op) <> parens(parens (parens tname <> gen env x) <> comma <+> parens (parens tname <> gen env y))
                                         _ -> genBool env e <> text "->val"
+      where tname                   = genQName env qnBigint 
 
     gen env (UnBox _ (IsInstance _ e c))
                                     = gen env primISINSTANCE0 <> parens(gen env e <> comma <+> genQName env c)
-    gen env (UnBox _ (Int _ n s))   = text s
+    gen env (UnBox t (Int _ n s))   = text (s++ suffix t)
+       where suffix t
+               | t == tInt          = "LL"
+               | t == tU64          = "UL"
+               | otherwise          = ""
+             
     gen env (UnBox _ (Float _ x s)) = text s
+    gen env (UnBox _ (Bool _ b))    = if b then text "true" else text "false"
     gen env (UnBox _ v@(Var _ (NoQ n)))
        | isUnboxed n                = gen env v
-    gen env (UnBox _ e@Var{})       = gen env e <> text "->val"
-    gen env (UnBox _ e)             = parens (gen env e) <> text "->val"
+    gen env (UnBox t e)             = parens (parens (gen env t) <> gen env e) <> text "->val"
+--    gen env (UnBox t e)             = parens (gen env e) <> text "->val"
     gen env e                       = error ("CodeGen.gen for Expr: e = " ++ show e)
 
 gencFunCall env nm []               = text nm <> parens empty
@@ -1027,7 +1042,7 @@ instance Gen Type where
     gen env (TNil _ _)              = empty
 
 unboxed_c_type t
-    | t == tI64 = "int64_t"
+    | t == tInt = "int64_t"
     | t == tU64 = "uint64_t"
     | t == tI32 = "int32_t"
     | t == tU32 = "uint32_t"

@@ -17,14 +17,14 @@
 // General methods ///////////////////////////////////////////////////////////////////////
 
 B_float B_floatG_new(B_atom a) {
-    if ($ISINSTANCE0(a,B_i64)) return to$float((double)((B_i64)a)->val);
+    if ($ISINSTANCE0(a,B_int)) return to$float((double)((B_int)a)->val);
     if ($ISINSTANCE0(a,B_i32)) return to$float((double)((B_i32)a)->val);
     if ($ISINSTANCE0(a,B_i16)) return to$float((double)((B_i16)a)->val);
     if ($ISINSTANCE0(a,B_u64)) return to$float((double)((B_u64)a)->val);
     if ($ISINSTANCE0(a,B_u32)) return to$float((double)((B_u32)a)->val);
     if ($ISINSTANCE0(a,B_u16)) return to$float((double)((B_u16)a)->val);
-    if ($ISINSTANCE0(a,B_int)) {
-        zz_struct aval = ((B_int)a)->val;
+    if ($ISINSTANCE0(a,B_bigint)) {
+        zz_struct aval = ((B_bigint)a)->val;
         if (aval.size == 0)
             return to$float(0.0);
         if (labs(aval.size) > 16)
@@ -154,19 +154,19 @@ B_float B_RealFloatD_floatD___float__ (B_RealFloatD_float wit, B_float x) {
 }
 
 $WORD B_RealFloatD_floatD___trunc__ (B_RealFloatD_float wit, B_float x, B_Integral wit2) {
-    return wit2->$class->__fromatom__(wit2,(B_atom)to$int((long)trunc(fromB_float(x))));
+    return wit2->$class->__fromatom__(wit2,(B_atom)toB_int((long)trunc(fromB_float(x))));
 }
   
 $WORD B_RealFloatD_floatD___floor__ (B_RealFloatD_float wit, B_float x, B_Integral wit2) {
-    return wit2->$class->__fromatom__(wit2,(B_atom)to$int((long)floor(fromB_float(x))));
+    return wit2->$class->__fromatom__(wit2,(B_atom)toB_int((long)floor(fromB_float(x))));
 }
   
 $WORD B_RealFloatD_floatD___ceil__ (B_RealFloatD_float wit, B_float x, B_Integral wit2) {
-    return wit2->$class->__fromatom__(wit2,(B_atom)to$int((long)ceil(fromB_float(x))));
+    return wit2->$class->__fromatom__(wit2,(B_atom)toB_int((long)ceil(fromB_float(x))));
 }
   
 B_float B_RealFloatD_floatD___round__ (B_RealFloatD_float wit, B_float x, B_int p) {
-    double pval = p==NULL ? 0.0 : (double)from$int(p);
+    double pval = p==NULL ? 0.0 : (double)fromB_int(p);
     double p10 = pow(10.0,pval);
     return to$float(round(x->val * p10)/p10);
 }

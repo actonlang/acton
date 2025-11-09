@@ -21,8 +21,7 @@ B_u64 hashQ_wyhashQ_HasherD_finalize (hashQ_wyhashQ_Hasher self) {
     return result;
 }
 
-B_u64 hashQ_wyhashQ_hash (B_u64 seed, B_bytes data) {
-    uint64_t h = zig_hash_wyhash_hash(fromB_u64(seed), data);
-    B_u64 result = toB_u64(h);
+uint64_t hashQ_wyhashQ_U_hash (uint64_t seed, B_bytes data) {
+    uint64_t result = zig_hash_wyhash_hash(seed, data);
     return result;
 }

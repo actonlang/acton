@@ -39,3 +39,6 @@ B_IteratorD_list B_IteratorD_listG_new(B_list);
 //convenience functions used at various places.
 B_list B_listD_new(int capacity);
 B_list B_listD_copy(B_list lst);
+
+$WORD $listD_U__getitem__(B_list lst, int64_t n);
+B_NoneType listD_U__setitem__(B_list lst, int64_t n, $WORD val);

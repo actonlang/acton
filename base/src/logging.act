@@ -84,6 +84,7 @@ vvvvvvvvvv vvvvvvvvvvvvvvvvvv vv vvvvv
 """
 
 # Log levels
+UNSET, OFF, EMERGENCY, ALERT, CRITICAL, ERR, WARNING, INFO, NOTICE, DEBUG, VERBOSE, TRACE, ALL : int
 UNSET     = -2
 OFF       = -1
 EMERGENCY = 0
