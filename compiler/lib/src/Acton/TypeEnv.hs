@@ -154,10 +154,10 @@ data Equation                           = Eqn Name Type Expr
 
 type Equations                          = [Equation]
 
-eqwit (Eqn w _ _)                       = w
-eqwit (QEqn w _ _)                      = w
+eqnwit (Eqn w _ _)                      = w
+eqnwit (QEqn w _ _)                     = w
 
-eqwits eqs                              = map eqwit eqs
+eqnwits eqs                             = map eqnwit eqs
 
 instance Pretty Equations where
     pretty eqs                          = vcat $ map pretty eqs
@@ -167,18 +167,16 @@ instance Pretty Equation where
     pretty (QEqn n q eqs)               = pretty n <+> colon <+> pretty q <+> text "=>" $+$
                                           nest 4 (pretty eqs)
 
-bindWits x eqs                          = trace ("#### bindWits " ++ x ++ ": " ++ prstrs (eqwits eqs)) $
-                                          [ sAssign (pVar w t) e | Eqn w t e <- eqs ]
+bindWits eqs                            = [ sAssign (pVar w t) e | Eqn w t e <- eqs ]
 
 
 -- The following two functions generate quantified witness definitions and calls, respectively.
 -- See Transform.hs for the invariants that apply to these constructs.
-bindTopWits env x ns eqs0               = trace ("#### BINDTOPWITS " ++ x ++ " FOR " ++ prstrs ns  ++ ": " ++ prstrs (eqwits eqs0)) $
-                                          map bind eqs0
+bindTopWits env eqs0                    = map bind eqs0
   where bind (Eqn w t e)                = sAssign (pVar w t) e
         bind (QEqn w q eqs)             = sDecl [Def l0 w (stripQual q) (qualWPar env q PosNIL) KwdNIL ann body NoDec fxPure Nothing]
           where ann                     = Just $ tTupleK $ foldr krow (tNil KRow) eqs
-                body                    = bindWits ("top " ++ prstr w ++ ":") eqs ++ [sReturn (eTupleK $ foldr karg KwdNil eqs)]
+                body                    = bindWits eqs ++ [sReturn (eTupleK $ foldr karg KwdNil eqs)]
 
         krow (Eqn w t e) r              = kwdRow w t r
         krow (QEqn w q eqs) r           = r
@@ -196,7 +194,7 @@ qwitRefs env w0 cs                      = refs cs
         q_tot                           = quantScope0 env
 
 
---insertOrMerge (QEqn _ _ []) eqs        = eqs
+insertOrMerge (QEqn _ _ []) eqs        = eqs
 insertOrMerge qe@(QEqn w q eq) (QEqn w' q' eq' : eqs)
   | w == w'                             = QEqn w q (eq++eq') : eqs
 insertOrMerge qe (qe' : eqs)            = qe' : insertOrMerge qe eqs

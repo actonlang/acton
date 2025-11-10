@@ -236,12 +236,12 @@ solve' env select hist te tt eq cs
   | not $ null imply_cs                     = let Imply _ w q cs1 : cs2 = imply_cs
                                                   env1 = defineTVars q env
                                               in do
-                                                  traceM ("\n## solve implication for (" ++ prstrs (dom te) ++ "):   " ++ prstr w ++ ": " ++ prstr q ++ " =>\n" ++ render (nest 8 $ vcat $ map pretty cs1))
+                                                  --traceM ("\n## solve implication for (" ++ prstrs (dom te) ++ "):   " ++ prstr w ++ ": " ++ prstr q ++ " =>\n" ++ render (nest 8 $ vcat $ map pretty cs1))
                                                   let allButFXcast (Cast _ (TUni _ v) t2) = uvkind v /= KFX
                                                       allButFXcast (Cast _ t1 (TUni _ v)) = uvkind v /= KFX
                                                       allButFXcast _                      = True
                                                   (cs1',eq') <- solve env1 allButFXcast te tt [] cs1
-                                                  traceM ("\n## done implication for (" ++ prstrs (dom te) ++ ")")
+                                                  --traceM ("\n## done implication for (" ++ prstrs (dom te) ++ ")")
                                                   proceed hist (insertOrMerge (QEqn w q eq') eq) (cs2 ++ cs1' ++ plain_cs)
   | not $ null vargoals                     = do --traceM (unlines [ "### var goal " ++ prstr t ++ " ~ " ++ prstrs alts | RVar t alts <- vargoals ])
                                                  --traceM ("### var goals: " ++ show (sum [ length alts | RVar t alts <- vargoals ]))
@@ -264,7 +264,7 @@ solve' env select hist te tt eq cs
                                                         --traceM ("### try goal " ++ prstr v ++ ", candidates: " ++ prstrs [fxAction, fxPure])
                                                         tryAlts st v [fxAction, fxPure]
                                                     RTry v alts r -> do
-                                                        traceM ("### try goal " ++ prstr v ++ ", candidates: " ++ prstrs alts ++ if r then " (rev)" else "")
+                                                        --traceM ("### try goal " ++ prstr v ++ ", candidates: " ++ prstrs alts ++ if r then " (rev)" else "")
                                                         tryAlts st v alts
                                                     RVar v alts -> do
                                                         --traceM ("### var goal " ++ prstr v ++ ", unifying with " ++ prstrs alts)
@@ -304,7 +304,7 @@ solve' env select hist te tt eq cs
           where attrs                       = sortBy (\a b -> compare (nstr a) (nstr b)) $ nub [ n | Sel _ _ (TUni _ v') n _ <- solve_cs, v' == v ]
         tryAlt v t
           | uvkind v == KFX                 = do t <- instwild env (uvkind v) t
-                                                 traceM ("  # TRYING " ++ prstr v ++ " = " ++ prstr t)
+                                                 --traceM ("  # TRYING " ++ prstr v ++ " = " ++ prstr t)
                                                  unify (DfltInfo NoLoc 5 Nothing []) (tUni v) t
                                                  (cs,eq) <- quicksimp env eq cs
                                                  hist <- usubst hist
@@ -484,20 +484,20 @@ instance Vars Equation where
     free (QEqn n q eqs)                     = free q ++ (free eqs \\ bound q)
 
     bound (Eqn w t e)                       = [w]
-    bound (QEqn n q eqs)                    = [ tvarWit tv p | Quant tv ps <- q, p <- ps ] ++ bound eqs
+    bound (QEqn w q eqs)                    = [w]
 
 
 
 reduce                                      :: Env -> Equations -> Constraints -> TypeM Equations
 reduce env eq []                            = return eq
 reduce env eq (c:cs)                        = do c <- usubst c
-                                                 traceM ("   reduce " ++ prstr c)
+                                                 --traceM ("   reduce " ++ prstr c)
                                                  eq1 <- reduce' env eq c
                                                  reduce env eq1 cs
 
 reduce'                                     :: Env -> Equations -> Constraint -> TypeM Equations
 reduce' env eq c@(Imply i w q cs)           = do cs0 <- collectDeferred
-                                                 traceM ("### reduce implication " ++ prstr w ++ ": " ++ prstr q ++ " =>\n" ++ render (nest 8 $ vcat $ map pretty cs))
+                                                 --traceM ("### reduce implication " ++ prstr w ++ ": " ++ prstr q ++ " =>\n" ++ render (nest 8 $ vcat $ map pretty cs))
                                                  eq' <- reduce env1 [] cs
                                                  cs' <- usubst =<< collectDeferred
                                                  when (not $ null cs') $ defer [Imply i w q cs']

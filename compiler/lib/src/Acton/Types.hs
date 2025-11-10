@@ -146,16 +146,17 @@ infTopStmts env (s : ss)                = do (te1, s1) <- infTopStmt env s
                                              return (te1++te2, s1++ss2)
 
 infTopStmt env s                        = do (cs,te,s) <- infEnv env s
-                                             traceM ("\n\n\n############\n" ++ render (nest 4 $ vcat $ map pretty te))
-                                             traceM ("------------\n" ++ render (nest 4 $ pretty s))
-                                             traceM ("\\\\\\\\\\\\\n" ++ render (nest 4 $ vcat $ map pretty cs))
+                                             --traceM ("\n\n\n############\n" ++ render (nest 4 $ vcat $ map pretty te))
+                                             --traceM ("------------\n" ++ render (nest 4 $ pretty s))
+                                             --traceM ("\\\\\\\\\\\\\n" ++ render (nest 4 $ vcat $ map pretty cs))
 
                                              (te,eq,s) <- genEnv env cs te s
-                                             traceM ("============\n" ++ render (nest 4 $ vcat $ map pretty eq))
+                                             --traceM ("============ push\n" ++ render (nest 4 $ vcat $ map pretty eq))
+                                             --traceM ("------------ onto\n" ++ render (nest 4 $ pretty s))
 
                                              te <- defaultTE env te
-                                             traceM ("===========\n" ++ render (nest 4 $ vcat $ map pretty te))
-                                             traceM ("............\n")
+                                             --traceM ("===========\n" ++ render (nest 4 $ vcat $ map pretty te))
+                                             --traceM ("............\n")
 
                                              s <- termred <$> usubst (pushEqns env eq s)
                                              defaultVars (ufree s)
@@ -176,7 +177,7 @@ pushEqns                                :: Env -> Equations -> Stmt -> Stmt
 pushEqns env [] s                       = s
 pushEqns env eqs s
   | null pre                            = inject env inj s
-  | otherwise                           = withLocal (bindTopWits env "push" (bound s) pre) $ inject env inj s
+  | otherwise                           = withLocal (bindTopWits env pre) $ inject env inj s
   where backward                        = free s `intersect` bound eqs
         (pre,inj)                       = split [] [] (bound s) eqs
         split pre inj bvs []            = (reverse pre, reverse inj)
@@ -186,13 +187,13 @@ pushEqns env eqs s
           where forward                 = free eq `intersect` bvs
 
 inject env [] s                         = s
-inject env eqs (Decl l ds)              = Decl l [ d{ dbody = prune (dname d) [] (free d) reveqs ++ dbody d } | d <- ds ]
+inject env eqs (Decl l ds)              = Decl l [ d{ dbody = prune [] (free d) reveqs ++ dbody d } | d <- ds ]
   where reveqs                          = reverse eqs
-        prune n inj fvs []              = --trace ("### Injecting " ++ prstrs (bound inj) ++ " into " ++ prstr n) $
-                                          bindTopWits env ("inj because of " ++ prstrs fvs) [n] inj
-        prune n inj fvs (eq:eqs)
-          | null needed                 = prune n inj fvs eqs
-          | otherwise                   = prune n (eq:inj) (free eq ++ fvs) eqs
+        prune inj fvs []                = --trace ("### Injecting " ++ prstrs (bound inj) ++ " into " ++ prstr n) $
+                                          bindTopWits env inj
+        prune inj fvs (eq:eqs)
+          | null needed                 = prune inj fvs eqs
+          | otherwise                   = prune (eq:inj) (free eq ++ fvs) eqs
           where needed                  = bound eq `intersect` fvs
 inject env eqs (With l [] ss)           = With l [] (injlast eqs ss)
   where injlast eqs [s]                 = [inject env eqs s]
@@ -243,8 +244,8 @@ genEnv env cs te (Decl l ds)
     abstract q ds ws eq d@Def{}
       | null $ qbinds d                 = d{ qbinds = noqual env q,
                                              pos = wit2par ws (pos d),
-                                             dbody = bindWits ("gen defA " ++ prstr (dname d)) eq ++ wsubst ds q ws (dbody d) }
-      | otherwise                       = d{ dbody = bindWits ("gen defB " ++ prstr (dname d)) eq ++ wsubst ds q ws (dbody d) }
+                                             dbody = bindWits eq ++ wsubst ds q ws (dbody d) }
+      | otherwise                       = d{ dbody = bindWits eq ++ wsubst ds q ws (dbody d) }
 
     wsubst ds [] []                     = id
     wsubst ds q ws                      = termsubst s
@@ -295,25 +296,20 @@ genEnv env cs te s                      = do eq <- solveAll env te cs
                                              return (te, eq, s)
 
 
-solveScoped env n q te tt []            = do traceM ("\n### Nothing to pass along for " ++ prstr n)
-                                             return ([], [])
-solveScoped env n [] te tt cs           = do traceM ("\n### Pass along for " ++ prstr n ++ ":\n" ++ render (nest 4 $ vcat $ map pretty cs))
-                                             simplify env te tt cs
+solveScoped env n q te tt []            = return ([], [])
+solveScoped env n [] te tt cs           = simplify env te tt cs
 solveScoped env n q te tt cs            = do --traceM ("\n\n### solveScoped: " ++ prstrs cs)
                                              (cs,eq) <- simplifyNew env1 cs
-                                             w <- newWitness
-                                             let (cs_imp, cs_plain) = splitImply cs
-                                                 eq1 = qwitRefs env1 w cs_plain ++ eq
-                                                 cs1 = Imply (Simple NoLoc "Implication") w q cs_plain :
-                                                       [ Imply i w (q++q') cs' | Imply i w q' cs' <- cs_imp ]
                                              if null cs then
                                                  return (cs, eq)
-                                              else if True then do
-                                                 traceM ("\n\n### Defer scoped for " ++ prstr n ++ " (" ++ prstrs (dom te) ++ "):   " ++ prstr w ++ ": " ++ prstr q ++ " =>\n" ++ render (nest 4 $ vcat $ map pretty cs))
-                                                 return (cs1, eq1)
                                               else do
-                                                 traceM ("\n\n### Solve scoped for " ++ prstr n ++ " (" ++ prstrs (dom te) ++ "):   " ++ prstr w ++ ": " ++ prstr q ++ " =>\n" ++ render (nest 4 $ vcat $ map pretty cs))
-                                                 solve env1 (any (`elem` (qbound q)) . vfree) te tt eq cs
+                                                 w <- newWitness
+                                                 let (cs_imp, cs_plain) = splitImply cs
+                                                     eq1 = qwitRefs env1 w cs_plain ++ eq
+                                                     cs0 = if null cs_plain then id else (Imply (Simple NoLoc "Implication") w q cs_plain :)
+                                                     cs1 = cs0 [ Imply i w (q++q') cs' | Imply i w q' cs' <- cs_imp ]
+                                                 --traceM ("\n\n### Defer scoped for " ++ prstr n ++ " (" ++ prstrs (dom te) ++ "):   " ++ prstr w ++ ": " ++ prstr q ++ " =>\n" ++ render (nest 4 $ vcat $ map pretty cs))
+                                                 return (cs1, eq1)
   where env1                            = defineTVars q env
 
 solveAll env te []                      = return []
@@ -653,7 +649,7 @@ matchDefAssumption env def
                                              (cs2,eq1) <- solveScoped env (dname def) q0 [] t1 (Cast info t1 t2 : cs)
                                              cs2 <- usubst cs2
                                              return (cs2, def{ qbinds = noqual env q0, pos = pos0, kwd = kwd0,
-                                                               dbody = bindWits ("match def " ++ prstr (dname def)) (eq0++eq1) ++ dbody def, dfx = fx })
+                                                               dbody = bindWits (eq0++eq1) ++ dbody def, dfx = fx })
            where t1                     = tFun (dfx def) (prowOf $ pos def) (krowOf $ kwd def) (fromJust $ ann def)
                  sc1                    = TSchema NoLoc q1 t1
                  mbl                    = findSigLoc (dname def) env
@@ -1378,7 +1374,7 @@ instance Check Decl where
                                              (cs0,eq1) <- solveScoped env n q [] t1 (csp++csk++csb++cst)
                                              -- At this point, n has the type given by its def annotations.
                                              -- Now check that this type is no less general than its recursion assumption in env.
-                                             let body = bindWits ("check def " ++ prstr n) eq1 ++ defaultsP p' ++ defaultsK k' ++ b'
+                                             let body = bindWits eq1 ++ defaultsP p' ++ defaultsK k' ++ b'
                                              (cs1,def) <- matchDefAssumption env (Def l n q p' k' (Just t) body dec fx' ddoc)
                                              return (cs1++cs0, def{ pos = noDefaultsP (pos def), kwd = noDefaultsK (kwd def) })
       where env1                        = reserve (bound (p,k) ++ assigned b \\ stateScope env) $ defineTVars q env
@@ -1398,7 +1394,7 @@ instance Check Decl where
                                              (cs0,eq0) <- matchActorAssumption env1 n p' k' te
                                              popFX
                                              (cs1,eq1) <- solveScoped env n q te tNone (csp++csk++csb++cs0)
-                                             let body = bindWits ("check actor " ++ prstr n) (eq1++eq0) ++ defaultsP p' ++ defaultsK k' ++ b'
+                                             let body = bindWits (eq1++eq0) ++ defaultsP p' ++ defaultsK k' ++ b'
                                                  act = Actor l n (noqual env q) (qualWPar env q p') k' body ddoc
                                              return (cs1, act{ pos = noDefaultsP (pos act), kwd = noDefaultsK (kwd act) })
       where env1                        = reserve (bound (p,k) ++ assigned b) $ setInAct $
@@ -1413,7 +1409,7 @@ instance Check Decl where
                                              (csb,b') <- checkEnv (define te' env1) b
                                              popFX
                                              (cs1,eq1) <- solveScoped env n q' te tNone csb
-                                             return (cs1, [Class l n (noqual env q) (map snd as) (bindWits ("check class " ++ prstr n) eq1 ++ abstractDefs env q b') ddoc])
+                                             return (cs1, [Class l n (noqual env q) (map snd as) (bindWits eq1 ++ abstractDefs env q b') ddoc])
       where env1                        = defineTVars q' $ setInClass env
             NClass _ as te _            = findName n env
             te'                         = selfSubst n' q te
