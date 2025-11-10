@@ -39,7 +39,7 @@ Transform data by applying function to its value
     
 
 
-## `analyze_multiple`(data_list: *list[bar.Data]*) → *dict[str, i64]*
+## `analyze_multiple`(data_list: *list[bar.Data]*) → *dict[str, int]*
 
 Analyze multiple data objects
 

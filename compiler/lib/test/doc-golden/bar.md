@@ -22,7 +22,7 @@ A data container with metadata
 
 - `value`: *str*
 - `label`: *str*
-- `count`: *i64*
+- `count`: *int*
 
 **Methods:**
 
@@ -114,13 +114,13 @@ A generic container that can hold items of any type
             List of transformed items that match predicate
 
         Examples:
-            >>> c = Container[i64]("numbers")
+            >>> c = Container[int]("numbers")
             >>> c.add(1)
             >>> c.add(2)
             >>> c.filter(lambda x: x > 1, lambda x: str(x))
             ["2"]
         
-- `count`(self) → *i64*
+- `count`(self) → *int*
 
   Get number of items in container
 
