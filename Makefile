@@ -436,7 +436,7 @@ endif
 distribution1: dist/base $(DIST_BACKEND_FILES) dist/builder $(DIST_BINS) $(DIST_ZIG)
 	$(MAKE) $(DEPS)
 
-distribution: dist/bin/acton
+distribution: dist/bin/acton dist/lldb/acton.py
 
 clean-distribution:
 	rm -rf dist
@@ -471,6 +471,10 @@ install:
 	cd "$(DESTDIR)/usr/bin" && ln -s ../lib/acton/bin/actondb
 	cd "$(DESTDIR)/usr/bin" && ln -s ../lib/acton/bin/runacton
 	cd "$(DESTDIR)/usr/bin" && ln -s ../lib/acton/bin/lsp-server-acton
+
+dist/lldb/acton.py: utils/lldb/acton.py
+	@mkdir -p dist/lldb
+	cp -a $< $@
 
 .PHONY: debian/changelog
 debian/changelog: debian/changelog.in CHANGELOG.md
