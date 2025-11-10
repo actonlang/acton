@@ -20,7 +20,7 @@ that are used across the application.
   [33mAttributes:[0m
     value: str
     label: str
-    count: i64
+    count: int
 
   [33mMethods:[0m
     [1m__init__[0m(self, value: [32mstr[0m, label: [32mstr[0m)
@@ -99,13 +99,13 @@ that are used across the application.
             List of transformed items that match predicate
 
         Examples:
-            >>> c = Container[i64]("numbers")
+            >>> c = Container[int]("numbers")
             >>> c.add(1)
             >>> c.add(2)
             >>> c.filter(lambda x: x > 1, lambda x: str(x))
             ["2"]
         
-    [1mcount[0m(self) -> [32mi64[0m
+    [1mcount[0m(self) -> [32mint[0m
       Get number of items in container
 
         Returns:

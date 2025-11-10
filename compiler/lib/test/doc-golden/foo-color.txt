@@ -35,7 +35,7 @@ to demonstrate documentation of cross-module references.
         bar.combine_data: For combining multiple data objects
     
 
-[1manalyze_multiple[0m(data_list: [32mlist[bar.Data][0m) -> [32mdict[str, i64][0m
+[1manalyze_multiple[0m(data_list: [32mlist[bar.Data][0m) -> [32mdict[str, int][0m
   Analyze multiple data objects
 
     Args:

@@ -20,7 +20,7 @@ class Data(object)
   Attributes:
     value: str
     label: str
-    count: i64
+    count: int
 
   Methods:
     __init__(self, value: str, label: str)
@@ -99,13 +99,13 @@ class Container[T](object)
             List of transformed items that match predicate
 
         Examples:
-            >>> c = Container[i64]("numbers")
+            >>> c = Container[int]("numbers")
             >>> c.add(1)
             >>> c.add(2)
             >>> c.filter(lambda x: x > 1, lambda x: str(x))
             ["2"]
         
-    count(self) -> i64
+    count(self) -> int
       Get number of items in container
 
         Returns:

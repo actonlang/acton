@@ -1,49 +1,51 @@
 
-W_221: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+W_221: __builtin__.Number[__builtin__.bigint] = __builtin__.IntegralD_bigint()
 
-W_223: __builtin__.Times[__builtin__.int, __builtin__.int] = __builtin__.IntegralD_int()
+W_223: __builtin__.Times[__builtin__.bigint, __builtin__.bigint] = __builtin__.IntegralD_bigint()
 
-W_586: __builtin__.Plus[__builtin__.int] = __builtin__.IntegralD_int()
+W_586: __builtin__.Plus[__builtin__.bigint] = __builtin__.IntegralD_bigint()
 
-W_761: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
+W_761: __builtin__.Eq[__builtin__.bigint] = __builtin__.OrdD_bigint()
+
+W_781: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
 
 # recursive group:
 actor Apa ():
-    proc def setup (cb : action(__builtin__.int) -> __builtin__.int) -> None:
+    proc def setup (cb : action(__builtin__.bigint) -> __builtin__.bigint) -> None:
         print@[(__builtin__.str,)](("\"setup\"",), None, None, None, None)
         cb(W_221.__fromatom__(0))
         return None
-    proc def compute (cb : action(__builtin__.int) -> __builtin__.int) -> __builtin__.int:
+    proc def compute (cb : action(__builtin__.bigint) -> __builtin__.bigint) -> __builtin__.bigint:
         print@[(__builtin__.str,)](("\"compute\"",), None, None, None, None)
-        v: __builtin__.int = cb(W_221.__fromatom__(1))
-        m: __builtin__.Msg[__builtin__.int] = (async cb)(W_221.__fromatom__(2))
-        N_tmp: __builtin__.int = W_223.__mul__(v, W_221.__fromatom__(10))
+        v: __builtin__.bigint = cb(W_221.__fromatom__(1))
+        m: __builtin__.Msg[__builtin__.bigint] = (async cb)(W_221.__fromatom__(2))
+        N_tmp: __builtin__.bigint = W_223.__mul__(v, W_221.__fromatom__(10))
         return N_tmp
-    proc def notice (i : __builtin__.int) -> __builtin__.int:
+    proc def notice (i : __builtin__.bigint) -> __builtin__.bigint:
         print@[(__builtin__.str,)](("\"notice\"",), None, None, None, None)
-        N_1tmp: __builtin__.int = W_586.__add__(i, W_221.__fromatom__(1))
+        N_1tmp: __builtin__.bigint = W_586.__add__(i, W_221.__fromatom__(1))
         return N_1tmp
-    setup($WRAP@[(), (__builtin__.int,), __builtin__.int](self, notice))
+    setup($WRAP@[(), (__builtin__.bigint,), __builtin__.bigint](self, notice))
     print@[(__builtin__.str,)](("\"Apa\"",), None, None, None, None)
 actor Bepa ():
-    proc def callback (i : __builtin__.int) -> __builtin__.int:
-        print@[(__builtin__.str, __builtin__.int)](("\"callback\"", i), None, None, None, None)
-        N_2tmp: __builtin__.int = W_586.__add__(i, W_221.__fromatom__(1))
+    proc def callback (i : __builtin__.bigint) -> __builtin__.bigint:
+        print@[(__builtin__.str, __builtin__.bigint)](("\"callback\"", i), None, None, None, None)
+        N_2tmp: __builtin__.bigint = W_586.__add__(i, W_221.__fromatom__(1))
         return N_2tmp
     print@[(__builtin__.str,)](("\"Bepa\"",), None, None, None, None)
 actor main (env : __builtin__.Env):
-    proc def myproc (i : __builtin__.int) -> __builtin__.int:
-        print@[(__builtin__.str, __builtin__.int)](("\"myproc\"", i), None, None, None, None)
+    proc def myproc (i : __builtin__.bigint) -> __builtin__.bigint:
+        print@[(__builtin__.str, __builtin__.bigint)](("\"myproc\"", i), None, None, None, None)
         if W_761.__eq__(i, W_221.__fromatom__(2)):
-            env.exit(W_221.__fromatom__(0))
+            env.exit(W_781.__fromatom__(0))
         return i
     a: Apa = Apa()
     b: Bepa = Bepa()
     print@[(__builtin__.str,)](("\"-----\"",), None, None, None, None)
     a.setup(a.notice)
-    x: __builtin__.Msg[__builtin__.int] = (async a.compute)(b.callback)
-    r: __builtin__.int = await x
-    print@[(__builtin__.str, __builtin__.int)](("\"r =\"", r), None, None, None, None)
-    a.compute($WRAP@[(), (__builtin__.int,), __builtin__.int](self, myproc))
+    x: __builtin__.Msg[__builtin__.bigint] = (async a.compute)(b.callback)
+    r: __builtin__.bigint = await x
+    print@[(__builtin__.str, __builtin__.bigint)](("\"r =\"", r), None, None, None, None)
+    a.compute($WRAP@[(), (__builtin__.bigint,), __builtin__.bigint](self, myproc))
     print@[(__builtin__.str,)](("\"main\"",), None, None, None, None)
 # (recursive group)

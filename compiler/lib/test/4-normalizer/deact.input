@@ -1,45 +1,47 @@
 
-W_221: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+W_221: __builtin__.Number[__builtin__.bigint] = __builtin__.IntegralD_bigint()
 
-W_223: __builtin__.Times[__builtin__.int, __builtin__.int] = __builtin__.IntegralD_int()
+W_223: __builtin__.Times[__builtin__.bigint, __builtin__.bigint] = __builtin__.IntegralD_bigint()
 
-W_586: __builtin__.Plus[__builtin__.int] = __builtin__.IntegralD_int()
+W_586: __builtin__.Plus[__builtin__.bigint] = __builtin__.IntegralD_bigint()
 
-W_761: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
+W_761: __builtin__.Eq[__builtin__.bigint] = __builtin__.OrdD_bigint()
+
+W_781: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
 
 # recursive group:
 actor Apa ():
-    proc def setup (cb : action(__builtin__.int) -> __builtin__.int) -> None:
+    proc def setup (cb : action(__builtin__.bigint) -> __builtin__.bigint) -> None:
         print@[(__builtin__.str,)](*("setup",), sep = None, end = None, err = None, flush = None)
         cb(W_221.__fromatom__(0))
-    proc def compute (cb : action(__builtin__.int) -> __builtin__.int) -> __builtin__.int:
+    proc def compute (cb : action(__builtin__.bigint) -> __builtin__.bigint) -> __builtin__.bigint:
         print@[(__builtin__.str,)](*("compute",), sep = None, end = None, err = None, flush = None)
-        v: __builtin__.int = cb(W_221.__fromatom__(1))
-        m: __builtin__.Msg[__builtin__.int] = (async cb)(W_221.__fromatom__(2))
+        v: __builtin__.bigint = cb(W_221.__fromatom__(1))
+        m: __builtin__.Msg[__builtin__.bigint] = (async cb)(W_221.__fromatom__(2))
         return W_223.__mul__(v, W_221.__fromatom__(10))
-    proc def notice (i : __builtin__.int) -> __builtin__.int:
+    proc def notice (i : __builtin__.bigint) -> __builtin__.bigint:
         print@[(__builtin__.str,)](*("notice",), sep = None, end = None, err = None, flush = None)
         return W_586.__add__(i, W_221.__fromatom__(1))
-    setup(cb = action lambda (G_1y : __builtin__.int): $WRAP@[(), (i: __builtin__.int), __builtin__.int](self, notice)(i = G_1y))
+    setup(cb = action lambda (G_1y : __builtin__.bigint): $WRAP@[(), (i: __builtin__.bigint), __builtin__.bigint](self, notice)(i = G_1y))
     print@[(__builtin__.str,)](*("Apa",), sep = None, end = None, err = None, flush = None)
 actor Bepa ():
-    proc def callback (i : __builtin__.int) -> __builtin__.int:
-        print@[(__builtin__.str, __builtin__.int)](*("callback", i), sep = None, end = None, err = None, flush = None)
+    proc def callback (i : __builtin__.bigint) -> __builtin__.bigint:
+        print@[(__builtin__.str, __builtin__.bigint)](*("callback", i), sep = None, end = None, err = None, flush = None)
         return W_586.__add__(i, W_221.__fromatom__(1))
     print@[(__builtin__.str,)](*("Bepa",), sep = None, end = None, err = None, flush = None)
 actor main (env : __builtin__.Env):
-    proc def myproc (i : __builtin__.int) -> __builtin__.int:
-        print@[(__builtin__.str, __builtin__.int)](*("myproc", i), sep = None, end = None, err = None, flush = None)
+    proc def myproc (i : __builtin__.bigint) -> __builtin__.bigint:
+        print@[(__builtin__.str, __builtin__.bigint)](*("myproc", i), sep = None, end = None, err = None, flush = None)
         if W_761.__eq__(i, W_221.__fromatom__(2)):
-            env.exit(n = W_221.__fromatom__(0))
+            env.exit(n = W_781.__fromatom__(0))
         return i
     a: Apa = Apa()
     b: Bepa = Bepa()
     print@[(__builtin__.str,)](*("-----",), sep = None, end = None, err = None, flush = None)
-    a.setup(cb = action lambda (G_1y : __builtin__.int): a.notice(i = G_1y))
-    x: __builtin__.Msg[__builtin__.int] = (async action lambda (G_1p : action(__builtin__.int) -> __builtin__.int): a.compute(cb = G_1p))(b.callback)
-    r: __builtin__.int = await x
-    print@[(__builtin__.str, __builtin__.int)](*("r =", r), sep = None, end = None, err = None, flush = None)
-    a.compute(cb = action lambda (G_1y : __builtin__.int): $WRAP@[(), (i: __builtin__.int), __builtin__.int](self, myproc)(i = G_1y))
+    a.setup(cb = action lambda (G_1y : __builtin__.bigint): a.notice(i = G_1y))
+    x: __builtin__.Msg[__builtin__.bigint] = (async action lambda (G_1p : action(__builtin__.bigint) -> __builtin__.bigint): a.compute(cb = G_1p))(b.callback)
+    r: __builtin__.bigint = await x
+    print@[(__builtin__.str, __builtin__.bigint)](*("r =", r), sep = None, end = None, err = None, flush = None)
+    a.compute(cb = action lambda (G_1y : __builtin__.bigint): $WRAP@[(), (i: __builtin__.bigint), __builtin__.bigint](self, myproc)(i = G_1y))
     print@[(__builtin__.str,)](*("main",), sep = None, end = None, err = None, flush = None)
 # (recursive group)
