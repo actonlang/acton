@@ -53,6 +53,10 @@ executables:
   actonc:
     main:                Main.hs
     source-dirs:         .
+    ghc-options:
+      - -threaded
+      - -rtsopts
+      - -with-rtsopts=-N
     when:
     - condition: os(linux)
       ld-options:
