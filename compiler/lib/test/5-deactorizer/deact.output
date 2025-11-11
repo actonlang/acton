@@ -1,9 +1,9 @@
 
-W_221: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+W_311: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+W_313: __builtin__.Plus[__builtin__.int] = __builtin__.IntegralD_int()
 
 W_223: __builtin__.Times[__builtin__.int, __builtin__.int] = __builtin__.IntegralD_int()
-
-W_586: __builtin__.Plus[__builtin__.int] = __builtin__.IntegralD_int()
 
 W_761: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
 
@@ -14,17 +14,17 @@ class Apa ($Actor, __builtin__.value):
         print@[(__builtin__.str,)](("\"Apa\"",), None, None, None, None)
     proc def setupG_local (self : Self, cb : action(__builtin__.int) -> __builtin__.int) -> None:
         print@[(__builtin__.str,)](("\"setup\"",), None, None, None, None)
-        (async cb)(W_221.__fromatom__(0))
+        (async cb)(W_311.__fromatom__(0))
         return None
     proc def computeG_local (self : Self, cb : action(__builtin__.int) -> __builtin__.int) -> __builtin__.int:
         print@[(__builtin__.str,)](("\"compute\"",), None, None, None, None)
-        v: __builtin__.int = $AWAITf@[__builtin__.int]((async cb)(W_221.__fromatom__(1)))
-        m: __builtin__.Msg[__builtin__.int] = (async cb)(W_221.__fromatom__(2))
-        N_tmp: __builtin__.int = W_223.__mul__(v, W_221.__fromatom__(10))
+        v: __builtin__.int = $AWAITf@[__builtin__.int]((async cb)(W_311.__fromatom__(1)))
+        m: __builtin__.Msg[__builtin__.int] = (async cb)(W_311.__fromatom__(2))
+        N_tmp: __builtin__.int = W_223.__mul__(v, W_311.__fromatom__(10))
         return N_tmp
     proc def noticeG_local (self : Self, i : __builtin__.int) -> __builtin__.int:
         print@[(__builtin__.str,)](("\"notice\"",), None, None, None, None)
-        N_1tmp: __builtin__.int = W_586.__add__(i, W_221.__fromatom__(1))
+        N_1tmp: __builtin__.int = W_313.__add__(i, W_311.__fromatom__(1))
         return N_1tmp
     action def setup (self : Self, cb : action(__builtin__.int) -> __builtin__.int) -> None:
         return $ASYNCf@[None](self, proc lambda: self.setupG_local(cb))
@@ -37,7 +37,7 @@ class Bepa ($Actor, __builtin__.value):
         print@[(__builtin__.str,)](("\"Bepa\"",), None, None, None, None)
     proc def callbackG_local (self : Self, i : __builtin__.int) -> __builtin__.int:
         print@[(__builtin__.str, __builtin__.int)](("\"callback\"", i), None, None, None, None)
-        N_2tmp: __builtin__.int = W_586.__add__(i, W_221.__fromatom__(1))
+        N_2tmp: __builtin__.int = W_313.__add__(i, W_311.__fromatom__(1))
         return N_2tmp
     action def callback (self : Self, i : __builtin__.int) -> __builtin__.int:
         return $ASYNCf@[__builtin__.int](self, proc lambda: self.callbackG_local(i))
@@ -65,8 +65,8 @@ class main ($Actor, __builtin__.value):
         print@[(__builtin__.str,)](("\"main\"",), None, None, None, None)
     proc def myprocG_local (self : Self, i : __builtin__.int) -> __builtin__.int:
         print@[(__builtin__.str, __builtin__.int)](("\"myproc\"", i), None, None, None, None)
-        if W_761.__eq__(i, W_221.__fromatom__(2)):
-            (async self.env.exit)(W_221.__fromatom__(0))
+        if W_761.__eq__(i, W_311.__fromatom__(2)):
+            (async self.env.exit)(W_311.__fromatom__(0))
         return i
     action def myproc (self : Self, i : __builtin__.int) -> __builtin__.int:
         return $ASYNCf@[__builtin__.int](self, proc lambda: self.myprocG_local(i))

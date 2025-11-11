@@ -1,9 +1,9 @@
 
-W_221: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+W_311: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+W_313: __builtin__.Plus[__builtin__.int] = __builtin__.IntegralD_int()
 
 W_223: __builtin__.Times[__builtin__.int, __builtin__.int] = __builtin__.IntegralD_int()
-
-W_586: __builtin__.Plus[__builtin__.int] = __builtin__.IntegralD_int()
 
 W_761: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
 
@@ -11,31 +11,31 @@ W_761: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
 actor Apa ():
     proc def setup (cb : action(__builtin__.int) -> __builtin__.int) -> None:
         print@[(__builtin__.str,)](("\"setup\"",), None, None, None, None)
-        cb(W_221.__fromatom__(0))
+        cb(W_311.__fromatom__(0))
         return None
     proc def compute (cb : action(__builtin__.int) -> __builtin__.int) -> __builtin__.int:
         print@[(__builtin__.str,)](("\"compute\"",), None, None, None, None)
-        v: __builtin__.int = cb(W_221.__fromatom__(1))
-        m: __builtin__.Msg[__builtin__.int] = (async cb)(W_221.__fromatom__(2))
-        N_tmp: __builtin__.int = W_223.__mul__(v, W_221.__fromatom__(10))
+        v: __builtin__.int = cb(W_311.__fromatom__(1))
+        m: __builtin__.Msg[__builtin__.int] = (async cb)(W_311.__fromatom__(2))
+        N_tmp: __builtin__.int = W_223.__mul__(v, W_311.__fromatom__(10))
         return N_tmp
     proc def notice (i : __builtin__.int) -> __builtin__.int:
         print@[(__builtin__.str,)](("\"notice\"",), None, None, None, None)
-        N_1tmp: __builtin__.int = W_586.__add__(i, W_221.__fromatom__(1))
+        N_1tmp: __builtin__.int = W_313.__add__(i, W_311.__fromatom__(1))
         return N_1tmp
     setup($WRAP@[(), (__builtin__.int,), __builtin__.int](self, notice))
     print@[(__builtin__.str,)](("\"Apa\"",), None, None, None, None)
 actor Bepa ():
     proc def callback (i : __builtin__.int) -> __builtin__.int:
         print@[(__builtin__.str, __builtin__.int)](("\"callback\"", i), None, None, None, None)
-        N_2tmp: __builtin__.int = W_586.__add__(i, W_221.__fromatom__(1))
+        N_2tmp: __builtin__.int = W_313.__add__(i, W_311.__fromatom__(1))
         return N_2tmp
     print@[(__builtin__.str,)](("\"Bepa\"",), None, None, None, None)
 actor main (env : __builtin__.Env):
     proc def myproc (i : __builtin__.int) -> __builtin__.int:
         print@[(__builtin__.str, __builtin__.int)](("\"myproc\"", i), None, None, None, None)
-        if W_761.__eq__(i, W_221.__fromatom__(2)):
-            env.exit(W_221.__fromatom__(0))
+        if W_761.__eq__(i, W_311.__fromatom__(2)):
+            env.exit(W_311.__fromatom__(0))
         return i
     a: Apa = Apa()
     b: Bepa = Bepa()

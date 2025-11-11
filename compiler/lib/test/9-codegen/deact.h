@@ -549,4 +549,10 @@ extern struct deactQ_BepaG_class deactQ_BepaG_methods;
 $R deactQ_BepaG_new($Cont);
 extern struct deactQ_mainG_class deactQ_mainG_methods;
 $R deactQ_mainG_new($Cont, B_Env);
+<<<<<<< HEAD
+=======
+extern B_Plus deactQ_W_313;
+extern B_Times deactQ_W_223;
+extern B_Eq deactQ_W_761;
+>>>>>>> 31837f3b (Update golden files)
 void deactQ___init__ ();

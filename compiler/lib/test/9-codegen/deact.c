@@ -1,6 +1,12 @@
 /* Acton source hash: test-hash */
 #include "rts/common.h"
 #include "out/types/deact.h"
+<<<<<<< HEAD
+=======
+B_Plus deactQ_W_313;
+B_Times deactQ_W_223;
+B_Eq deactQ_W_761;
+>>>>>>> 31837f3b (Update golden files)
 $R deactQ_L_1C_1cont ($Cont C_cont, B_NoneType C_2res) {
     #line 15 "test/src/deact.act"
     ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, to$str("Apa")), B_None, B_None, B_None, B_None);
@@ -777,8 +783,13 @@ $R deactQ_ApaD_computeG_local (deactQ_Apa self, $Cont C_cont, $action cb) {
 $R deactQ_ApaD_noticeG_local (deactQ_Apa self, $Cont C_cont, B_int i) {
     #line 11 "test/src/deact.act"
     ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, to$str("notice")), B_None, B_None, B_None, B_None);
+<<<<<<< HEAD
     int64_t U_9N_1tmp = (((B_int)i)->val + 1LL);
     return $R_CONT(C_cont, toB_int(U_9N_1tmp));
+=======
+    B_int N_1tmp = ((B_int (*) (B_Plus, B_int, B_int))deactQ_W_313->$class->__add__)(deactQ_W_313, i, to$int(1));
+    return $R_CONT(C_cont, N_1tmp);
+>>>>>>> 31837f3b (Update golden files)
 }
 B_Msg deactQ_ApaD_setup (deactQ_Apa self, $action cb) {
     return $ASYNC((($Actor)self), (($Cont)deactQ_L_7procG_new(self, cb)));
@@ -823,8 +834,13 @@ $R deactQ_BepaD___init__ (deactQ_Bepa self, $Cont C_cont) {
 $R deactQ_BepaD_callbackG_local (deactQ_Bepa self, $Cont C_cont, B_int i) {
     #line 19 "test/src/deact.act"
     ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(2, to$str("callback"), i), B_None, B_None, B_None, B_None);
+<<<<<<< HEAD
     int64_t U_10N_2tmp = (((B_int)i)->val + 1LL);
     return $R_CONT(C_cont, toB_int(U_10N_2tmp));
+=======
+    B_int N_2tmp = ((B_int (*) (B_Plus, B_int, B_int))deactQ_W_313->$class->__add__)(deactQ_W_313, i, to$int(1));
+    return $R_CONT(C_cont, N_2tmp);
+>>>>>>> 31837f3b (Update golden files)
 }
 B_Msg deactQ_BepaD_callback (deactQ_Bepa self, B_int i) {
     return ((B_Msg)$ASYNC((($Actor)self), (($Cont)deactQ_L_10procG_new(self, i))));
@@ -1231,4 +1247,13 @@ void deactQ___init__ () {
         deactQ_mainG_methods.__deserialize__ = deactQ_mainD___deserialize__;
         $register(&deactQ_mainG_methods);
     }
+<<<<<<< HEAD
+=======
+    B_Plus W_313 = (B_Plus)B_IntegralD_intG_witness;
+    deactQ_W_313 = W_313;
+    B_Times W_223 = (B_Times)B_IntegralD_intG_witness;
+    deactQ_W_223 = W_223;
+    B_Eq W_761 = (B_Eq)B_OrdD_intG_witness;
+    deactQ_W_761 = W_761;
+>>>>>>> 31837f3b (Update golden files)
 }
