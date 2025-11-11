@@ -1,9 +1,9 @@
 
-W_221: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+W_311: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+W_313: __builtin__.Plus[__builtin__.int] = __builtin__.IntegralD_int()
 
 W_223: __builtin__.Times[__builtin__.int, __builtin__.int] = __builtin__.IntegralD_int()
-
-W_586: __builtin__.Plus[__builtin__.int] = __builtin__.IntegralD_int()
 
 W_761: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
 
@@ -37,8 +37,8 @@ class L_4action ($action[(__builtin__.int,), __builtin__.int], $proc[(__builtin_
     # (recursive group)
 proc def L_5C_3cont (cb : $action[(__builtin__.int,), __builtin__.int], C_cont : $Cont[__builtin__.int], C_4res : __builtin__.int) -> $R:
     v: __builtin__.int = C_4res
-    m: __builtin__.Msg[__builtin__.int] = cb.__asyn__(W_221.__fromatom__(2))
-    N_tmp: __builtin__.int = W_223.__mul__(v, W_221.__fromatom__(10))
+    m: __builtin__.Msg[__builtin__.int] = cb.__asyn__(W_311.__fromatom__(2))
+    N_tmp: __builtin__.int = W_223.__mul__(v, W_311.__fromatom__(10))
     return $R_CONT@[__builtin__.int](C_cont, N_tmp)
 class L_6Cont ($Cont[__builtin__.int], __builtin__.value):
     @property
@@ -330,14 +330,14 @@ class Apa ($Actor, __builtin__.value):
         return self.setupG_local(L_2Cont(C_cont), L_4action(self))
     proc def setupG_local (self : Self, C_cont : $Cont[None], cb : $action[(__builtin__.int,), __builtin__.int]) -> $R:
         print@[(__builtin__.str,)](("\"setup\"",), None, None, None, None)
-        cb.__asyn__(W_221.__fromatom__(0))
+        cb.__asyn__(W_311.__fromatom__(0))
         return $R_CONT@[None](C_cont, None)
     proc def computeG_local (self : Self, C_cont : $Cont[__builtin__.int], cb : $action[(__builtin__.int,), __builtin__.int]) -> $R:
         print@[(__builtin__.str,)](("\"compute\"",), None, None, None, None)
-        return $AWAIT@[__builtin__.int](L_6Cont(cb, C_cont), cb.__asyn__(W_221.__fromatom__(1)))
+        return $AWAIT@[__builtin__.int](L_6Cont(cb, C_cont), cb.__asyn__(W_311.__fromatom__(1)))
     proc def noticeG_local (self : Self, C_cont : $Cont[__builtin__.int], i : __builtin__.int) -> $R:
         print@[(__builtin__.str,)](("\"notice\"",), None, None, None, None)
-        N_1tmp: __builtin__.int = W_586.__add__(i, W_221.__fromatom__(1))
+        N_1tmp: __builtin__.int = W_313.__add__(i, W_311.__fromatom__(1))
         return $R_CONT@[__builtin__.int](C_cont, N_1tmp)
     action def setup (self : Self, cb : $action[(__builtin__.int,), __builtin__.int]) -> None:
         return $ASYNC@[None](self, L_7proc(self, cb))
@@ -351,7 +351,7 @@ class Bepa ($Actor, __builtin__.value):
         return $R_CONT@[None](C_cont, None)
     proc def callbackG_local (self : Self, C_cont : $Cont[__builtin__.int], i : __builtin__.int) -> $R:
         print@[(__builtin__.str, __builtin__.int)](("\"callback\"", i), None, None, None, None)
-        N_2tmp: __builtin__.int = W_586.__add__(i, W_221.__fromatom__(1))
+        N_2tmp: __builtin__.int = W_313.__add__(i, W_311.__fromatom__(1))
         return $R_CONT@[__builtin__.int](C_cont, N_2tmp)
     action def callback (self : Self, i : __builtin__.int) -> __builtin__.int:
         return $ASYNC@[__builtin__.int](self, L_10proc(self, i))
@@ -371,8 +371,8 @@ class main ($Actor, __builtin__.value):
         return ApaG_newact(L_22Cont(self, C_cont))
     proc def myprocG_local (self : Self, C_cont : $Cont[__builtin__.int], i : __builtin__.int) -> $R:
         print@[(__builtin__.str, __builtin__.int)](("\"myproc\"", i), None, None, None, None)
-        if W_761.__eq__(i, W_221.__fromatom__(2)):
-            (async self.env.exit)(W_221.__fromatom__(0))
+        if W_761.__eq__(i, W_311.__fromatom__(2)):
+            (async self.env.exit)(W_311.__fromatom__(0))
         return $R_CONT@[__builtin__.int](C_cont, i)
     action def myproc (self : Self, i : __builtin__.int) -> __builtin__.int:
         return $ASYNC@[__builtin__.int](self, L_23proc(self, i))

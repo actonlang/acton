@@ -1,4 +1,13 @@
 
+<<<<<<< HEAD
+=======
+W_313: __builtin__.Plus[__builtin__.int] = __builtin__.IntegralD_int()
+
+W_223: __builtin__.Times[__builtin__.int, __builtin__.int] = __builtin__.IntegralD_int()
+
+W_761: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
+
+>>>>>>> 31837f3b (Update golden files)
 # recursive group:
 proc def L_1C_1cont (C_cont : $Cont[None], C_2res : None) -> $R:
     print@[(__builtin__.str,)](("\"Apa\"",), None, None, None, None)
@@ -333,8 +342,13 @@ class Apa ($Actor, __builtin__.value):
         return $AWAIT@[__builtin__.int](L_6Cont(cb, C_cont), cb.__asyn__((BOX __builtin__.int (UNBOX __builtin__.int 1))))
     proc def noticeG_local (self : Apa, C_cont : $Cont[__builtin__.int], i : __builtin__.int) -> $R:
         print@[(__builtin__.str,)](("\"notice\"",), None, None, None, None)
+<<<<<<< HEAD
         U_9N_1tmp: __builtin__.int = ((UNBOX __builtin__.int i) + (UNBOX __builtin__.int 1))
         return $R_CONT@[__builtin__.int](C_cont, (BOX __builtin__.int U_9N_1tmp))
+=======
+        N_1tmp: __builtin__.int = W_313.__add__(i, 1)
+        return $R_CONT@[__builtin__.int](C_cont, N_1tmp)
+>>>>>>> 31837f3b (Update golden files)
     action def setup (self : Apa, cb : $action[(__builtin__.int,), __builtin__.int]) -> None:
         return $ASYNC@[None](self, L_7proc(self, cb))
     action def compute (self : Apa, cb : $action[(__builtin__.int,), __builtin__.int]) -> __builtin__.int:
@@ -347,8 +361,13 @@ class Bepa ($Actor, __builtin__.value):
         return $R_CONT@[None](C_cont, None)
     proc def callbackG_local (self : Bepa, C_cont : $Cont[__builtin__.int], i : __builtin__.int) -> $R:
         print@[(__builtin__.str, __builtin__.int)](("\"callback\"", i), None, None, None, None)
+<<<<<<< HEAD
         U_10N_2tmp: __builtin__.int = ((UNBOX __builtin__.int i) + (UNBOX __builtin__.int 1))
         return $R_CONT@[__builtin__.int](C_cont, (BOX __builtin__.int U_10N_2tmp))
+=======
+        N_2tmp: __builtin__.int = W_313.__add__(i, 1)
+        return $R_CONT@[__builtin__.int](C_cont, N_2tmp)
+>>>>>>> 31837f3b (Update golden files)
     action def callback (self : Bepa, i : __builtin__.int) -> __builtin__.int:
         return $ASYNC@[__builtin__.int](self, L_10proc(self, i))
 class main ($Actor, __builtin__.value):
