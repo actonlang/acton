@@ -219,7 +219,18 @@ B_int B_listD_index(B_list self, B_Eq W_EqD_B, $WORD val, B_int start, B_int sto
     return NULL; //to prevent compiler warning
 }
 
-    
+B_int B_listD_count(B_list self, B_Eq W_EqD_B, $WORD val) {
+    int count = 0;
+    for (int i = 0; i < self->length; i++) {
+        B_value elem = (B_value)self->data[i];
+        B_bool eq = W_EqD_B->$class->__eq__(W_EqD_B, val, elem);
+        if (eq->val)
+            count++;
+    }
+    return to$int(count);
+}
+
+
 
 // B_OrdD_list ////////////////////////////////////////////////////////
 
