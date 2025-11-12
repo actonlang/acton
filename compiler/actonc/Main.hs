@@ -63,9 +63,10 @@ import qualified Data.Set
 import Error.Diagnose
 import Error.Diagnose.Style (defaultStyle)
 import qualified Filesystem.Path.CurrentOS as Fsco
+import GHC.Conc (getNumCapabilities, getNumProcessors, setNumCapabilities, myThreadId, threadCapability)
 import Prettyprinter (unAnnotate)
 import Prettyprinter.Render.Text (hPutDoc)
-import Data.List (isPrefixOf, isSuffixOf, find)
+import Data.List (isPrefixOf, isSuffixOf, find, intersperse, partition, foldl')
 import System.Clock
 import System.Directory
 import System.Directory.Recursive
@@ -76,6 +77,7 @@ import System.FilePath ((</>))
 import System.FilePath.Posix
 import System.IO hiding (readFile, writeFile)
 import System.IO.Temp
+import System.IO.Unsafe (unsafePerformIO)
 import System.Info
 import System.Posix.Files
 import System.Process
@@ -102,6 +104,21 @@ rootEligible _ = False
 main = do
     hSetBuffering stdout LineBuffering
     arg <- C.parseCmdLine
+    -- Ensure enough capabilities: honor --jobs if set, otherwise at least 2 or #procs
+    caps0 <- getNumCapabilities
+    case arg of
+      C.CmdOpt gopts _ -> do
+        let req = C.jobs gopts
+        when (req > 0 && caps0 < req) $ setNumCapabilities req
+        when (req == 0 && caps0 < 2) $ do
+          procs <- getNumProcessors
+          setNumCapabilities (max 2 procs)
+      C.CompileOpt _ gopts _ -> do
+        let req = C.jobs gopts
+        when (req > 0 && caps0 < req) $ setNumCapabilities req
+        when (req == 0 && caps0 < 2) $ do
+          procs <- getNumProcessors
+          setNumCapabilities (max 2 procs)
     case arg of
         C.CmdOpt gopts (C.New opts)   -> createProject (C.file opts)
         C.CmdOpt gopts (C.Build opts) -> buildProject gopts opts
@@ -160,6 +177,56 @@ findAvailableScratch basePath = go [0..31]  -- 32 possible scratch directories
 getModPath :: FilePath -> A.ModName -> FilePath
 getModPath path mn =
      joinPath [path, joinPath $ init $ A.modPath mn]
+
+-- Global caches (process‑wide) to reduce repeated .ty lookups during parallel builds
+--
+-- We deliberately create top‑level MVars via unsafePerformIO and mark them
+-- NOINLINE so their initializer runs exactly once. Without NOINLINE, GHC could
+-- inline or float the initializer, accidentally creating multiple MVars under
+-- optimization. This guarantees a single cache per process.
+--
+-- Thread‑safety: all access goes through modifyMVar/modifyMVar_ so read/modify/
+-- write is atomic. These caches are best‑effort for performance; correctness
+-- does not depend on them. On a miss we fall back to reading .ty headers from
+-- disk. After a successful compile we update ifaceHashCache so dependents in
+-- this process see the new interface hash.
+--
+-- tyPathCache    :: ModName -> absolute .ty path (resolved from searchPath)
+-- ifaceHashCache :: ModName -> current interface hash (from header or compile)
+{-# NOINLINE tyPathCache #-}
+tyPathCache :: MVar (M.Map A.ModName FilePath)
+tyPathCache = unsafePerformIO (newMVar M.empty)
+
+{-# NOINLINE ifaceHashCache #-}
+ifaceHashCache :: MVar (M.Map A.ModName B.ByteString)
+ifaceHashCache = unsafePerformIO (newMVar M.empty)
+
+getTyFileCached :: [FilePath] -> A.ModName -> IO (Maybe FilePath)
+getTyFileCached spaths mn = modifyMVar tyPathCache $ \m -> do
+  case M.lookup mn m of
+    Just p  -> return (m, Just p)
+    Nothing -> do
+      mty <- Acton.Env.findTyFile spaths mn
+      case mty of
+        Just p  -> return (M.insert mn p m, Just p)
+        Nothing -> return (m, Nothing)
+
+getIfaceHashCached :: Paths -> A.ModName -> IO (Maybe B.ByteString)
+getIfaceHashCached paths mn = modifyMVar ifaceHashCache $ \m -> do
+  case M.lookup mn m of
+    Just ih -> return (m, Just ih)
+    Nothing -> do
+      mty <- getTyFileCached (searchPath paths) mn
+      case mty of
+        Just ty -> do
+          hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader ty
+          case hdrE of
+            Right (_srcH, ih, _impsH, _rootsH, _docH) -> return (M.insert mn ih m, Just ih)
+            _ -> return (m, Nothing)
+        Nothing -> return (m, Nothing)
+
+updateIfaceHashCache :: A.ModName -> B.ByteString -> IO ()
+updateIfaceHashCache mn ih = modifyMVar_ ifaceHashCache $ \m -> return (M.insert mn ih m)
 
 
 printErrorAndExit msg = do
@@ -927,123 +994,189 @@ importsOf (TyTask { tyImports = ms }) = map fst ms
 --     and propagates new interface hashes for already-processed modules.
 compileTasks :: C.GlobalOptions -> C.CompileOptions -> Paths -> [CompileTask] -> IO Acton.Env.Env0
 compileTasks gopts opts paths tasks = do
-    -- 1) Build project-local graph and compute topological order
-    let allTasks = tasks
-        projMap  = M.fromList [ (name t, t) | t <- allTasks ]
-        nodes    = [ (t, name t, [ m | m <- importsOf t, M.member m projMap ]) | t <- allTasks ]
-        sccs     = stronglyConnComp nodes
-        cycles   = [ ts | ts@(CyclicSCC _) <- sccs ]
-        order    = [ t | AcyclicSCC t <- sccs ]
-    unless (null cycles) $ do
-      let showTaskGraph (CyclicSCC ts) = "\n" ++ concatMap (\t-> concat (intersperse "." (A.modPath (name t))) ++ " ") ts
-      printErrorAndCleanAndExit ("Cyclic imports: " ++ concatMap showTaskGraph cycles) gopts opts paths
-    let isBuiltin t = name t == (A.modName ["__builtin__"])
-        (builtinOrder, otherOrder) = partition isBuiltin order
-        projMods = Data.Set.fromList (map name otherOrder)
+    -- Reject cycles
+    unless (null cycles) $ printErrorAndCleanAndExit ("Cyclic imports: " ++ concatMap showTaskGraph cycles) gopts opts paths
 
-    -- Compile __builtin__ first if provided by the project (only for base proj)
+    -- Compile __builtin__ first if present in this project
     case builtinOrder of
       [t] -> do
         builtinEnv0 <- Acton.Env.initEnv (sysTypes paths) True
         void (doTask gopts opts paths builtinEnv0 t)
-        return ()
       _ -> return ()
 
-    -- Initialize env for remaining modules. If builtin was part of the project,
-    -- read it from the project out/types; otherwise from system types.
-    let builtinPath = if null builtinOrder then sysTypes paths else projTypes paths
-    env0 <- Acton.Env.initEnv builtinPath False
-    -- ifaceMap tracks the latest known interface hash for each processed
-    -- project module. It starts empty and is updated by stepModule after a
-    -- module is compiled or confirmed fresh.
-    let startIface = M.empty :: M.Map A.ModName B.ByteString
-    -- 3) Process modules in dependency order. The fold carries the evolving
-    -- environment and the interface-hash map across modules.
-    (envFinal, _) <- foldM (stepModule projMods) (env0, startIface) otherOrder
+    baseEnv <- Acton.Env.initEnv builtinPath False
+
+    -- Figure out max concurrency
+    nCaps <- getNumCapabilities
+    let maxParallel = max 1 (if C.jobs gopts > 0 then C.jobs gopts else nCaps)
+
+    -- Actually compile modules, with maximum concurrency
+    envFinal <- loop initialReady [] M.empty indeg pending0 baseEnv maxParallel
     return envFinal
   where
-    -- stepModule
-    --
-    -- Decide whether a single module needs compilation and update both the
-    -- environment and the interface-hash map accordingly.
-    --
-    -- Inputs
-    --   - projMods: set of project modules (used to ignore external imports
-    --     when checking interface-hash deltas)
-    --   - (envAcc, ifaceMap): current compiler environment and the latest
-    --     interface hash for already processed project modules
-    --   - t: current module task in topological order
-    --
-    -- Logic
-    --   - If t is ActonTask, it must be compiled (needBySource = True).
-    --   - If t is TyTask, compare the recorded interface hashes for each
-    --     project import against ifaceMap or by finding, on the search path,
-    --     and loading the .ty header. Any difference implies the import changed
-    --     its public interface in this run, so t must be recompiled
-    --     (needByImports = True). Missing imports is an error.
-    --   - On compile, TyTask is first upgraded to ActonTask by parsing the
-    --     .act file; then doTask performs the compilation and writes .ty.
-    --   - After compile, obtain the new interface hash directly from the
-    --     compilation pipeline (runRestPasses via doTask) and update ifaceMap
-    --     with our ifaceHash for downstream modules
-    stepModule projMods (envAcc, ifaceMap) t = do
-      let mn = name t
-      let needBySource = case t of { ActonTask{} -> True; _ -> False }
-      needByImportsWithDeltas <- case t of
-                            TyTask{ tyImports = imps } -> do
-                              -- Obtain current interface hash for every import:
-                              -- from ifaceMap (project modules processed earlier)
-                              -- or by reading the provider's .ty header on the search paths.
-                              -- Missing entries are a hard error.
-                              pairs <- forM imps $ \(m, recorded) -> do
-                                curr <- case M.lookup m ifaceMap of
-                                          Just h  -> return h
-                                          Nothing -> do
-                                            mty <- Acton.Env.findTyFile (searchPath paths) m
-                                            case mty of
-                                              Just ty -> do
-                                                hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader ty
-                                                case hdrE of
-                                                  Right (_srcH, ih, _impsH, _rootsH, _docH) -> return ih
-                                                  _ -> printErrorAndCleanAndExit ("Type interface file not readable for " ++ modNameToString m) gopts opts paths
-                                              Nothing -> printErrorAndCleanAndExit ("Type interface file not found for " ++ modNameToString m) gopts opts paths
-                                return (m, recorded, curr)
-                              let diffs = [ (m, recorded, curr)
-                                          | (m, recorded, curr) <- pairs
-                                          , curr /= recorded
-                                          ]
-                              return (not (null diffs), diffs)
-                            _ -> return (False, [])
-      let (needByImports, deltas) = needByImportsWithDeltas
-      -- Force compilation when alternative output is requested (e.g.,
-      -- --types/--cps), so we can print the requested intermediate form even if
-      -- everything is up to date (since it's not saved, we have to recompile)
-      let forceAlt = altOutput opts && mn == (modName paths)
-      let needCompile = needBySource || needByImports || forceAlt
+    -- Graph construction --------------------------------------------------
+    allTasks   = tasks
+    projMap    = M.fromList [ (name t, t) | t <- allTasks ]
+    nodes      = [ (t, name t, [ m | m <- importsOf t, M.member m projMap ]) | t <- allTasks ]
+    sccs       = stronglyConnComp nodes
+    cycles     = [ ts | ts@(CyclicSCC _) <- sccs ]
+    order      = [ t | AcyclicSCC t <- sccs ]
+    showTaskGraph (CyclicSCC ts) = "\n" ++ concatMap (\t-> concat (intersperse "." (A.modPath (name t))) ++ " ") ts
+    showTaskGraph _              = ""
+
+    isBuiltin t = name t == (A.modName ["__builtin__"])
+    (builtinOrder, otherOrder) = partition isBuiltin order
+    projMods   = Data.Set.fromList (map name otherOrder)
+    builtinPath = if null builtinOrder then sysTypes paths else projTypes paths
+
+    depMap :: M.Map A.ModName [A.ModName]
+    depMap = M.fromList [ (name t, [ m | m <- importsOf t, Data.Set.member m projMods ]) | t <- otherOrder ]
+    revMap :: M.Map A.ModName [A.ModName]
+    revMap = M.foldlWithKey' (\acc k ds -> foldl' (\a d -> M.insertWith (++) d [k] a) acc ds) M.empty depMap
+    indeg  = M.map length depMap
+    initialReady = [ m | (m,d) <- M.toList indeg, d == 0 ]
+    pending0 = Data.Set.fromList (M.keys indeg)
+
+    getMyCap = do
+      tid <- myThreadId
+      (cap, _) <- threadCapability tid
+      return cap
+
+    -- Scheduler helpers ---------------------------------------------------
+    -- Compile or reuse a single module using a read‑only environment snapshot.
+    -- It decides staleness by comparing recorded interface hashes of imports
+    -- with those of already-finished project modules (ifaceMap) or with header
+    -- hashes for external deps. For stale tasks it may parse the source and
+    -- compile; for fresh tasks it avoids compilation. Returns (module name,
+    -- public interface TEnv, module docstring, interface hash). No shared state
+    -- is mutated here; the compiled output of the module is returned and
+    -- integrated by the coordinator into the accumulated Env.
+    -- Compile or reuse a single module using a read‑only env snapshot.
+    -- Logic:
+    -- - ActonTask always compiles (needBySource = True).
+    -- - TyTask: compare recorded iface hashes for each project import against
+    --   ifaceMap (from already‑processed project modules); for external deps
+    --   read the provider’s .ty header. Any difference → recompile
+    --   (needByImports = True). Missing imports is an error.
+    -- - On compile: upgrade TyTask by parsing .act; doTask runs the pipeline
+    --   and writes .ty; return (iface TEnv, doc, ifaceHash).
+    -- - On fresh TyTask: do not decode .ty here to keep no‑op fast; return
+    --   (Nothing, doc, recorded ifaceHash). Coordinator extends Env only for
+    --   compiled modules; roots codegen lazily loads NameInfo if needed.
+    -- - After compile: update ifaceMap with the new ifaceHash for dependents.
+    doOne :: Acton.Env.Env0 -> M.Map A.ModName B.ByteString -> A.ModName -> IO (A.ModName, [(A.Name, A.NameInfo)], Maybe String, B.ByteString)
+    doOne envSnap ifaceMap mn = do
+      let t = case M.lookup mn projMap of
+                Just x -> x
+                Nothing -> error ("Internal error: missing task for " ++ modNameToString mn)
+          needBySource = case t of { ActonTask{} -> True; _ -> False }
+      (needByImports, deltas) <- case t of
+                         TyTask{ tyImports = imps } -> do
+                           triples <- forM imps $ \(m, recorded) -> do
+                             curr <- if Data.Set.member m projMods
+                                       then case M.lookup m ifaceMap of
+                                              Just h  -> return h
+                                              Nothing -> error ("Internal error: missing iface hash for dep " ++ modNameToString m)
+                                       else do
+                                         mih <- getIfaceHashCached paths m
+                                         case mih of
+                                           Just ih -> return ih
+                                           Nothing -> printErrorAndCleanAndExit ("Type interface file not found or unreadable for " ++ modNameToString m) gopts opts paths
+                             return (m, recorded, curr)
+                           let ds = [ (m, old, new) | (m, old, new) <- triples, old /= new ]
+                           return (not (null ds), ds)
+                         _ -> return (False, [])
+      let forceAlt    = altOutput opts && mn == (modName paths)
+          needCompile = needBySource || needByImports || forceAlt
+          short8 bs   = take 8 (B.unpack $ Base16.encode bs)
       if needCompile
         then do
           when (C.verbose gopts) $ do
             if needBySource
               then putStrLn ("  Stale " ++ modNameToString mn ++ ": source changed")
-              else do
-                let fmt (m, old, new) = modNameToString m ++ " " ++ short old ++ " → " ++ short new
+              else when needByImports $ do
+                let fmt (m, old, new) = modNameToString m ++ " " ++ short8 old ++ " → " ++ short8 new
                 putStrLn ("  Stale " ++ modNameToString mn ++ ": iface changes in " ++ Data.List.intercalate ", " (map fmt deltas))
+            cap <- getMyCap
+            putStrLn ("  Building [cap " ++ show cap ++ "] " ++ modNameToString mn)
           t' <- case t of
                   ActonTask{} -> return t
                   TyTask{}    -> do
-                    let mn' = name t
-                        actFile = srcFile paths mn'
-                    (srcContent, m) <- parseActFile gopts opts paths mn' actFile
-                    return $ ActonTask mn' srcContent m
-          (env', ih) <- doTask gopts opts paths envAcc t'
-          let ifaceMap' = M.insert mn ih ifaceMap
-          return (env', ifaceMap')
+                    let actFile = srcFile paths mn
+                    (srcContent, m) <- parseActFile gopts opts paths mn actFile
+                    return $ ActonTask mn srcContent m
+          (ifaceTE, mdoc, ih) <- doTask gopts opts paths envSnap t'
+          updateIfaceHashCache mn ih
+          return (mn, ifaceTE, mdoc, ih)
         else do
-          when (C.verbose gopts) $ putStrLn ("  Fresh " ++ modNameToString mn ++ ": using cached .ty")
-          (env', ih) <- doTask gopts opts paths envAcc t
-          let ifaceMap' = M.insert mn ih ifaceMap
-          return (env', ifaceMap')
-    short bs = take 8 (B.unpack $ Base16.encode bs)
+          when (C.verbose gopts) $ do
+            putStrLn ("  Fresh " ++ modNameToString mn ++ ": using cached .ty")
+          (ifaceTE, mdoc, ih) <- doTask gopts opts paths envSnap t
+          updateIfaceHashCache mn ih
+          return (mn, ifaceTE, mdoc, ih)
+
+    -- Start up to k modules from the ready list, each as an Async worker using
+    -- the provided environment snapshot. Returns the remaining ready list and
+    -- the extended set of running workers (Async handle paired with its module
+    -- name).
+    scheduleMore :: Int -> [A.ModName]
+                 -> [(Async (A.ModName, [(A.Name, A.NameInfo)], Maybe String, B.ByteString), A.ModName)]
+                 -> M.Map A.ModName B.ByteString -> Acton.Env.Env0
+                 -> IO ([A.ModName]
+                       , [(Async (A.ModName, [(A.Name, A.NameInfo)], Maybe String, B.ByteString), A.ModName)])
+    scheduleMore k rdy running res envSnap = do
+      let (toStart, rdy') = splitAt k rdy
+      new <- forM toStart $ \mn -> do
+                a <- async (doOne envSnap res mn)
+                return (a, mn)
+      return (rdy', new ++ running)
+
+    -- Coordinator loop for the concurrent scheduler. It tops up workers to the
+    -- concurrency budget, waits for one completion, merges the finished
+    -- module’s interface into envAcc, updates indegrees/ready/pending, and
+    -- repeats until all modules are processed. Returns the final Env.
+    loop :: [A.ModName]
+         -> [(Async (A.ModName, [(A.Name, A.NameInfo)], Maybe String, B.ByteString), A.ModName)]
+         -> M.Map A.ModName B.ByteString
+         -> M.Map A.ModName Int
+         -> Data.Set.Set A.ModName
+         -> Acton.Env.Env0
+         -> Int
+         -> IO Acton.Env.Env0
+    loop rdy running res ind pend envAcc maxPar = do
+      -- Top up the running set with as many ready modules as available slots.
+      (rdy1, running1) <- scheduleMore (maxPar - length running) rdy running res envAcc
+      -- If there’s nothing running and nothing ready:
+      if null running1 && null rdy1
+        then if Data.Set.null pend
+               then return envAcc
+               else printErrorAndCleanAndExit "Internal error: scheduler deadlock (non-empty pending with no ready)." gopts opts paths
+        else do
+          -- Wait for one worker to finish, obtain (module, iface TEnv, doc, ifaceHash).
+          (doneA, (mnDone, ifaceTE, mdoc, ih)) <- waitAny $ map fst running1
+          -- Remove the finished worker from the running set.
+          let running2 = filter ((/= doneA) . fst) running1
+              -- Update ifaceMap with the just-computed interface hash.
+              res2     = M.insert mnDone ih res
+              -- Remove mnDone from the pending set.
+              pend2    = Data.Set.delete mnDone pend
+              -- For each dependent of mnDone, decrement indegree by 1.
+              ind2     = case M.lookup mnDone revMap of
+                           Nothing -> ind
+                           Just ds -> foldl' (\m d -> M.adjust (\x -> x-1) d m) ind ds
+              -- Newly ready modules are those whose indegree just dropped to 0, excluding ones
+              -- already in the ready list or currently running.
+              newlyReady = [ m | m <- Data.Set.toList pend2
+                               , M.findWithDefault 0 m ind2 == 0
+                               , not (m `elem` rdy1)
+                               , not (m `elem` map snd running2)
+                               ]
+              -- Extend the ready list with the new wave of ready modules.
+              rdy2 = rdy1 ++ newlyReady
+              -- Extend the accumulated environment with this module’s interface (public TEnv + doc).
+              envAcc' = Acton.Env.addMod mnDone ifaceTE mdoc envAcc
+          -- Tail recurse with updated ready/running/indeg/pending/env state.
+          loop rdy2 running2 res2 ind2 pend2 envAcc' maxPar
 
 compileBins:: C.GlobalOptions -> C.CompileOptions -> Paths -> Acton.Env.Env0 -> [CompileTask] -> [BinTask] -> IO ()
 compileBins gopts opts paths env tasks binTasks = do
@@ -1109,28 +1242,32 @@ readImports gopts opts paths itasks
 quiet :: C.GlobalOptions -> C.CompileOptions -> Bool
 quiet gopts opts = C.quiet gopts || altOutput opts
 
-doTask :: C.GlobalOptions -> C.CompileOptions -> Paths -> Acton.Env.Env0 -> CompileTask -> IO (Acton.Env.Env0, B.ByteString)
-doTask gopts opts paths env TyTask{ tyIfaceHash = h } = do
-    -- Cached module: no work here; return the recorded interface hash so the
-    -- caller can uniformly update ifaceMap without peeking into the task.
-    -- We still avoid eagerly loading into env; it will be read on-demand.
-    return (env, h)
+doTask :: C.GlobalOptions -> C.CompileOptions -> Paths -> Acton.Env.Env0 -> CompileTask -> IO ([(A.Name, A.NameInfo)], Maybe String, B.ByteString)
+doTask gopts opts paths env TyTask{ name = mn, tyIfaceHash = h } = do
+    -- Fresh module: read interface (TEnv + doc) from .ty header to extend Env in coordinator
+    mty <- Acton.Env.findTyFile (searchPath paths) mn
+    case mty of
+      Just tyF -> do
+        (_ms, nmod, _tmod, _si, _ti, _ni, _te, _tm) <- InterfaceFiles.readFile tyF
+        let A.NModule te mdoc = nmod
+        return (te, mdoc, h)
+      Nothing -> printErrorAndCleanAndExit ("Type interface file not found for " ++ modNameToString mn) gopts opts paths
 doTask gopts opts paths env t@(ActonTask mn src m) = do
     -- In --only-build mode, do not run compilation passes or write files.
     if C.only_build opts then do
         iff (not (quiet gopts opts)) (putStrLn ("  Skipping compilation of " ++ makeRelative (srcDir paths) actFile ++ " (--only-build)"))
-        -- For a stale module in --only-build, return the currently recorded
-        -- interface hash from its existing .ty (if present), so dependents do
-        -- not observe spurious interface deltas in this mode.
+        -- Return current interface (TEnv + doc) and iface hash from existing .ty
         mty <- Acton.Env.findTyFile (searchPath paths) mn
-        ih <- case mty of
-                Just ty -> do
-                  hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader ty
-                  case hdrE of
+        case mty of
+          Just tyF -> do
+            (_ms, nmod, _tmod, _si, _ti, _ni, _te, _tm) <- InterfaceFiles.readFile tyF
+            let A.NModule te mdoc = nmod
+            hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader tyF
+            ih <- case hdrE of
                     Right (_srcH, ihash, _impsH, _rootsH, _docH) -> return ihash
                     _ -> return B.empty
-                Nothing -> return B.empty
-        return (env, ih)
+            return (te, mdoc, ih)
+          Nothing -> return ([], Nothing, B.empty)
     else do
       iff (not (quiet gopts opts))  (putStrLn("  Compiling " ++ makeRelative (srcDir paths) actFile
               ++ " with " ++ show (C.optimize opts)))
@@ -1138,13 +1275,13 @@ doTask gopts opts paths env t@(ActonTask mn src m) = do
       timeStart <- getTime Monotonic
 
       createDirectoryIfMissing True (getModPath (projTypes paths) mn)
-      (env', ifaceHash) <- runRestPasses gopts opts paths env m src
+      (_env', ifaceHash, ifaceTE, mdoc) <- runRestPasses gopts opts paths env m src
         `catch` handle gopts opts "Compilation error" generalError src paths mn
         `catch` handle gopts opts "Compilation error" Acton.Env.compilationError src paths mn
         `catch` (\err -> handleDiagnostic gopts opts paths (modName paths) $ mkErrorDiagnostic filename src $ Acton.TypeM.typeReport err filename src)
       timeEnd <- getTime Monotonic
-      iff (not (quiet gopts opts)) $ putStrLn("   Finished compilation in  " ++ fmtTime(timeEnd - timeStart))
-      return (env', ifaceHash)
+      iff (not (quiet gopts opts)) $ putStrLn ("   Finished compilation of " ++ modNameToString mn ++ " in  " ++ fmtTime(timeEnd - timeStart))
+      return (ifaceTE, mdoc, ifaceHash)
   where actFile             = srcFile paths mn
         filename            = modNameToFilename mn
         outbase             = outBase paths mn
@@ -1163,7 +1300,7 @@ isGitAvailable = do
 altOutput opts =
   (C.parse opts) || (C.kinds opts) || (C.types opts) || (C.sigs opts) || (C.norm opts) || (C.deact opts) || (C.cps opts) || (C.llift opts) || (C.box opts) || (C.hgen opts) || (C.cgen opts)
 
-runRestPasses :: C.GlobalOptions -> C.CompileOptions -> Paths -> Acton.Env.Env0 -> A.Module -> String -> IO (Acton.Env.Env0, B.ByteString)
+runRestPasses :: C.GlobalOptions -> C.CompileOptions -> Paths -> Acton.Env.Env0 -> A.Module -> String -> IO (Acton.Env.Env0, B.ByteString, [(A.Name, A.NameInfo)], Maybe String)
 runRestPasses gopts opts paths env0 parsed srcContent = do
                       let mn = A.modname parsed
                       let outbase = outBase paths mn
@@ -1195,14 +1332,10 @@ runRestPasses gopts opts paths env0 parsed srcContent = do
                       let mdoc = case nmod of A.NModule _ d -> d; _ -> Nothing
                       -- Resolve import interface hashes from headers; missing entries are hard errors
                       impsWithHash <- forM mrefs $ \mref -> do
-                        mty <- Acton.Env.findTyFile (searchPath paths) mref
-                        case mty of
-                          Just ty -> do
-                            hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader ty
-                            case hdrE of
-                              Right (_srcH, ih, _impsH, _rootsH, _docH) -> return (mref, ih)
-                              _ -> printErrorAndCleanAndExit ("Type interface file not readable for " ++ modNameToString mref) gopts opts paths
-                          Nothing -> printErrorAndCleanAndExit ("Type interface file not found for " ++ modNameToString mref) gopts opts paths
+                        mih <- getIfaceHashCached paths mref
+                        case mih of
+                          Just ih -> return (mref, ih)
+                          Nothing -> printErrorAndCleanAndExit ("Type interface file not found or unreadable for " ++ modNameToString mref) gopts opts paths
                       -- Compute interface hash over doc-free NameInfo,
                       -- augmented with current imports' interface hashes. This ensures that
                       -- changes in a dependency's public interface are reflected in this
@@ -1304,7 +1437,9 @@ runRestPasses gopts opts paths env0 parsed srcContent = do
                                                            )
 
                       return ( Acton.Env.addMod mn iface mdoc (env0 `Acton.Env.withModulesFrom` env)
-                             , ifaceHash )
+                             , ifaceHash
+                             , iface
+                             , mdoc )
 
 handle gopts opts errKind f src paths mn ex = do
     let actFile = modNameToFilename mn

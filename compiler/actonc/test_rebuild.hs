@@ -47,7 +47,8 @@ sanitize = LBS.fromStrict . TE.encodeUtf8 . T.unlines . map (padZero . redact) .
     isVolatile :: T.Text -> Bool
     isVolatile t =
       T.isInfixOf "zigCmd" t ||
-      T.isInfixOf "Building project in" t
+      T.isInfixOf "Building project in" t ||
+      T.isInfixOf "Building [cap" t
 
     -- Replace occurrences of durations like "0.184 s" with a stable token "0.000 s".
     redact :: T.Text -> T.Text
