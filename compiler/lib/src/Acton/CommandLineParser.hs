@@ -33,7 +33,8 @@ data GlobalOptions = GlobalOptions {
                         timing       :: Bool,
                         tty          :: Bool,
                         verbose      :: Bool,
-                        verboseZig   :: Bool
+                        verboseZig   :: Bool,
+                        jobs         :: Int
                      } deriving Show
 
 data Command        = New NewOptions
@@ -125,6 +126,7 @@ globalOptions = GlobalOptions
     <*> switch (long "tty"         <> help "Act as if run from interactive TTY")
     <*> switch (long "verbose"     <> help "Verbose output")
     <*> switch (long "verbose-zig" <> help "Verbose Zig output")
+    <*> option auto (long "jobs"   <> metavar "N" <> value 0 <> help "Max parallel compiler jobs (0 = auto)")
   where
     colorReader :: ReadM ColorWhen
     colorReader = eitherReader $ \s ->
