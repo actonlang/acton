@@ -231,6 +231,20 @@ env.exit(0)
 
 </td>
 </tr>
+<tr>
+<td>
+Count occurrences of a value
+</td>
+<td>
+
+```python
+n = [1, 2, 3, 2, 2, 4]
+count = n.count(2)
+print("Count of 2:", count)           # Count of 2: 3
+```
+
+</td>
+</tr>
 </table>
 
 <div class="advanced-content">
@@ -242,6 +256,7 @@ env.exit(0)
 - `extend()` - O(k) where k is the length of the added list
 - `reverse()` - O(n) in-place operation
 - `copy()` - O(n) creates new list
+- `count()` - O(n) iterates through all elements
 
 </div>
 

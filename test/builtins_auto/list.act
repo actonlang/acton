@@ -73,10 +73,21 @@ actor main(env):
         print("Unexpected result of list.copy():", l2)
         await async env.exit(1)
 
-#    c = l.count(37, None, None)
-#    if c != 1:
-#        print("Unexpected result of list.count(37):", c)
-#        await async env.exit(1)
+    c = l.count(37)
+    if c != 1:
+        print("Unexpected result of list.count(37):", c)
+        await async env.exit(1)
+
+    c = l.count(999)
+    if c != 0:
+        print("Unexpected result of list.count(999):", c)
+        await async env.exit(1)
+
+    l_multi = [1, 2, 3, 2, 2, 4, 2]
+    c = l_multi.count(2)
+    if c != 4:
+        print("Unexpected result of list.count(2) in", l_multi, ":", c)
+        await async env.exit(1)
 
     l.extend([45, 56])
     if l != [0, 1, 37, 2, 3, 45, 56]:

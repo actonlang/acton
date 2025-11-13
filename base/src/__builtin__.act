@@ -93,6 +93,8 @@ class list[A] (object):
         Raises KeyError if val is not in the searched list / slice.
         """
         NotImplemented
+    def count[B(Eq)](self, val: B) -> int:
+        NotImplemented
 
 class range (value):
     """Return an object that produces a sequence of integers from start
