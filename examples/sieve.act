@@ -3,13 +3,13 @@ import math
 def sieve(n):
     isPrime = [True] * n
     isPrime[0] = False; isPrime[1] = False
-    for i in range(2, i64(math.sqrt(float(n)))+1):
+    for i in range(2, int(math.sqrt(float(n)))+1):
         if isPrime[i]:
             for k in range(i*i,n,i): isPrime[k] = False
 
     return isPrime
 
-count : (list[bool]) -> i64
+count : (list[bool]) -> int
 def count(bs):
     res = 0
     for b in bs:
@@ -27,7 +27,7 @@ def primesTo(n):
 
 actor main(env):
     if (len(env.argv) >= 2) and env.argv[1].isdecimal():
-        print(count(sieve(i64(env.argv[1]))))
+        print(count(sieve(int(env.argv[1]))))
     else:
         print("Usage: sieve <positive integer>")
     env.exit(0)

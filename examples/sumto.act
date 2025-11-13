@@ -1,6 +1,6 @@
 def sumto(n):
     res = 0
-    for i in range(n,None,None):
+    for i in range(n):
         res += i
     return res
     
