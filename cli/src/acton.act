@@ -901,6 +901,7 @@ def build_cmd_args(args):
             "hgen",
             "kinds",
             "llift",
+            "jobs",
             "no-threads",
             "norm",
             "only-build",
