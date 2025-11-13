@@ -5,6 +5,7 @@ struct B_int {
 
  
 B_int toB_int(int64_t n);
+B_int to$int(int64_t n);
 int64_t fromB_int(B_int n);
 
 B_int B_intG_new(B_atom a, B_int base);
