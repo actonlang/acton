@@ -516,7 +516,9 @@ instance Pretty Constraint where
     pretty (Sel _ w t1 n t2)        = pretty w <+> colon <+> pretty t1 <> text "." <> pretty n <+> text "<" <+> pretty t2
     pretty (Mut _ t1 n t2)          = pretty t1 <+> text "." <> pretty n <+> text ">" <+> pretty t2
     pretty (Seal _ t)               = text "$Seal" <+> pretty t
-    pretty (Imply _ w q cs)         = pretty w <+> colon <+> pretty q <+> text "=>" <+> braces (commaSep pretty cs)
+    pretty (Imply _ w q cs)
+      | length cs < 4               = pretty w <+> colon <+> pretty q <+> text "=>" <+> braces (commaSep pretty cs)
+      | otherwise                   = pretty w <+> colon <+> pretty q <+> text "=>" $+$ nest 4 (vcat $ map pretty cs)
 
 
 instance Pretty (TVar,TVar) where           -- CHANGE
