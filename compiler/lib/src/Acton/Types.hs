@@ -146,6 +146,7 @@ infTopStmts env (s : ss)                = do (te1, s1) <- infTopStmt env s
                                              return (te1++te2, s1++ss2)
 
 infTopStmt env s                        = do (cs,te,s) <- infEnv env s
+                                             --traceM ("* infer " ++ prstrs (bound s))
                                              --traceM ("\n\n\n############\n" ++ render (nest 4 $ vcat $ map pretty te))
                                              --traceM ("------------\n" ++ render (nest 4 $ pretty s))
                                              --traceM ("\\\\\\\\\\\\\n" ++ render (nest 4 $ vcat $ map pretty cs))

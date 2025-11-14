@@ -40,10 +40,10 @@ simplifyNew                                 :: Env -> Constraints -> TypeM (Cons
 simplifyNew env cs                          = do css <- groupCs env cs
                                                  --traceM ("#### SIMPLIFY NEW" ++ prstrs (map length css))
                                                  --sequence [ traceM ("## long:\n" ++ render (nest 4 $ vcat $ map pretty cs)) | cs <- css, length cs > 500 ]
-                                                 simplifyGroupsNew env css
+                                                 combineEqs <$> simplifyGroupsNew env css
 
 simplifyGroupsNew env []                    = return ([], [])
-simplifyGroupsNew env (cs:css)              = do --traceM ("\n\n######### simplifyGroup\n" ++ render (nest 4 $ vcat $ map pretty cs))
+simplifyGroupsNew env (cs:css)              = do --traceM ("\n\n######### simplifyNewGroup\n" ++ render (nest 4 $ vcat $ map pretty cs))
                                                  eq1 <- reduce env [] cs `catchError` \err -> Control.Exception.throw err
                                                  cs1 <- usubst =<< collectDeferred
                                                  (cs2,eq2) <- simplifyGroupsNew env css
@@ -54,7 +54,7 @@ simplify                                    :: Env -> TEnv -> Type -> Constraint
 simplify env te tt cs                       = do css <- groupCs env cs
                                                  --traceM ("#### SIMPLIFY " ++ prstrs (map length css))
                                                  --sequence [ traceM ("## long:\n" ++ render (nest 4 $ vcat $ map pretty cs)) | cs <- css, length cs > 500 ]
-                                                 simplifyGroups env te tt css
+                                                 combineEqs <$> simplifyGroups env te tt css
 
 simplifyGroups env te tt []                 = return ([], [])
 simplifyGroups env te tt (cs:css)           = do --traceM ("\n\n######### simplifyGroup\n" ++ render (nest 4 $ vcat $ map pretty cs))
@@ -66,6 +66,7 @@ simplify'                                   :: Env -> TEnv -> Type -> Equations 
 simplify' env te tt eq []                   = return ([], eq)
 simplify' env te tt eq cs                   = do eq <- reduce env eq cs
                                                  cs <- usubst =<< collectDeferred
+                                                 --traceM ("## Improving " ++ show (length cs))
                                                  --traceM ("## Improving:\n" ++ render (nest 8 $ vcat $ map pretty cs))
                                                  env <- usubst env      -- Remove....
                                                  te <- usubst te
@@ -78,13 +79,23 @@ quicksimp env eq cs                         = do eq1 <- reduce env eq cs
                                                  return (cs1, eq1)
 
 groupCs env cs                              = do st <- currentState
-                                                 mapM mark ([1..] `zip` cs)
+                                                 mark 1 cs
                                                  m <- foldM group Map.empty cs
                                                  rollbackState st
-                                                 return $ Map.elems m
-  where mark (n,c)                          = do tvs <- ufree <$> usubst c
+                                                 let css = Map.elems m
+                                                     i = length [ c | c@Imply{} <- cs ]
+                                                     n = length (concat css)
+                                                 --traceM ("#### Grouped " ++ show n ++ " (" ++ show i ++ ")" ++ " constraints into " ++ show (map length css) ++ " groups")
+                                                 return css
+  where mark n []                           = return n
+        mark n (Imply _ _ _ cs' : cs)       = do n' <- mark n cs'
+                                                 mark n' cs
+        mark n (c : cs)                     = do tvs <- ufree <$> usubst c
                                                  tvs' <- ufree <$> usubst (map tUni $ attrfree c)
                                                  sequence [ unify (DfltInfo NoLoc 1 Nothing []) (newUnivarToken n) (tUni tv) | tv <- nub (tvs++tvs') ]
+                                                 mark (n+1) cs
+        group m (Imply i w q cs)            = do m' <- foldM group Map.empty cs
+                                                 return $ Map.foldrWithKey (\tv cs' -> Map.insertWith (++) tv [Imply i w q cs']) m m'
         group m c                           = do tvs <- ufree <$> usubst c
                                                  let tv = case tvs of [] -> tv0; tv:_ -> tv
                                                  return $ Map.insertWith (++) tv [c] m
@@ -92,6 +103,17 @@ groupCs env cs                              = do st <- currentState
         attrfree c@(Mut _ _ n _)            = allConAttrUFree env n
         attrfree _                          = []
         TUni _ tv0                          = newUnivarToken 0
+
+
+combineEqs (cs, eqs)                        = (cs, comb [] eqs)
+  where comb qeqs []                        = qeqs
+        comb qeqs (qe@QEqn{} : eqs)         = comb (join qe qeqs) eqs
+        comb qeqs (eq : eqs)                = eq : comb qeqs eqs
+        join qe []                          = [qe]
+        join qe (qe' : qeqs)
+          | eqnwit qe == eqnwit qe'         = merge qe qe' : qeqs
+          | otherwise                       = qe' : join qe qeqs
+        merge (QEqn w q eq1) (QEqn _ _ eq2) = QEqn w q (eq1++eq2)
 
 
 ----------------------------------------------------------------------------------------------------------------------
@@ -201,6 +223,7 @@ data Rank                                   = RRed { cstr :: Constraint }
                                             | RSealed { tgt :: TUni }
                                             | RTry { tgt :: TUni, alts :: [Type], rev :: Bool }
                                             | RVar { tgt :: TUni, alts :: [Type] }
+                                            | RImp QBinds [Rank]
                                             | RSkip
                                             deriving (Show)
 
@@ -210,6 +233,7 @@ instance Eq Rank where
     RTry v1 _ _ == RTry v2 _ _              = v1 == v2
     RVar v1 _   == RVar v2 _                = v1 == v2
     RSkip       == RSkip                    = True
+    RImp _ _    == RImp _ _                 = False
     _           == _                        = False
 
 instance Pretty Rank where
@@ -217,13 +241,14 @@ instance Pretty Rank where
     pretty (RSealed v)                      = pretty v <+> text "sealed"
     pretty (RTry v ts rev)                  = pretty v <+> braces (commaSep pretty ts) Pretty.<> (if rev then char '\'' else empty)
     pretty (RVar v ts)                      = pretty v <+> char '~' <+> commaSep pretty ts
+    pretty (RImp q rs)                      = prettyQual q <+> braces (commaSep pretty rs)
     pretty RSkip                            = text "<skip>"
 
 solve                                       :: Env -> (Constraint -> Bool) ->
                                                TEnv -> Type -> Equations -> Constraints -> TypeM (Constraints,Equations)
 solve env select te tt eq cs                = do css <- groupCs env cs
                                                  (cs',eq') <- solveGroups env select te tt eq css
-                                                 return (cs', eq')
+                                                 return $ combineEqs (cs', eq')
 
 solveGroups env select te tt eq []          = return ([], eq)
 solveGroups env select te tt eq (cs:css)    = do --traceM ("\n\n######### solveGroup\n" ++ render (nest 4 $ vcat $ map pretty cs))
@@ -233,16 +258,6 @@ solveGroups env select te tt eq (cs:css)    = do --traceM ("\n\n######### solveG
                                                  return (cs1++cs2, eq2)
 
 solve' env select hist te tt eq cs
-  | not $ null imply_cs                     = let Imply _ w q cs1 : cs2 = imply_cs
-                                                  env1 = defineTVars q env
-                                              in do
-                                                  --traceM ("\n## solve implication for (" ++ prstrs (dom te) ++ "):   " ++ prstr w ++ ": " ++ prstr q ++ " =>\n" ++ render (nest 8 $ vcat $ map pretty cs1))
-                                                  let allButFXcast (Cast _ (TUni _ v) t2) = uvkind v /= KFX
-                                                      allButFXcast (Cast _ t1 (TUni _ v)) = uvkind v /= KFX
-                                                      allButFXcast _                      = True
-                                                  (cs1',eq') <- solve env1 allButFXcast te tt [] cs1
-                                                  --traceM ("\n## done implication for (" ++ prstrs (dom te) ++ ")")
-                                                  proceed hist (insertOrMerge (QEqn w q eq') eq) (cs2 ++ cs1' ++ plain_cs)
   | not $ null vargoals                     = do --traceM (unlines [ "### var goal " ++ prstr t ++ " ~ " ++ prstrs alts | RVar t alts <- vargoals ])
                                                  --traceM ("### var goals: " ++ show (sum [ length alts | RVar t alts <- vargoals ]))
                                                  sequence [ unify (DfltInfo NoLoc 2 Nothing []) (tUni v) t | RVar v alts <- vargoals, t <- alts ]
@@ -272,15 +287,19 @@ solve' env select hist te tt eq cs
                                                     RSkip ->
                                                         return (keep_cs, eq)
 
-  where (imply_cs, plain_cs)                = splitImply cs
-        (solve_cs, keep_cs)                 = partition select plain_cs
+  where (solve_cs, keep_cs)                 = partition select cs
         keep_evidence                       = [ hasWitness env t p | Proto _ _ t p <- keep_cs ]
-        (vargoals, goals)                   = span isVar $ sortOn deco $ map condense $ group rnks
-        group []                            = []
-        group (r:rs)                        = (r : rs1) : group rs2
-          where (rs1,rs2)                   = partition (==r) rs
+
+        (vargoals, goals)                   = span isVar $ sortOn deco $ flatten $ condense env rnks
+
+        flatten []                          = []
+        flatten (RImp _ rs' : rs)           = flatten (rs' ++ rs)
+        flatten (r : rs)                    = r : flatten rs
+
         rnks                                = map (rank env) solve_cs
+
         tryAlts st tv []                    = do --traceM ("### FAIL " ++ prstr tv ++ ":\n" ++ render (nest 4 $ vcat $ map pretty cs))
+                                                 cs <- return $ concat $ map (\c -> case c of Imply _ _ q cs -> cs; _ -> [c]) cs
                                                  let ts = map (\n -> tCon (TC (noQ ('t':show n)) [])) [0..]
                                                      vs = filter (\v -> length (filter (\c -> v `elem` ufree c) cs) > 1) (nub (ufree cs))
                                                      cs' = if length cs == 1 then cs else filter (not . useless vs) cs
@@ -319,15 +338,26 @@ solve' env select hist te tt eq cs
                                                  hist <- usubst hist
                                                  solve' env select hist te tt eq cs
 
-        condense (RRed c : rs)              = RRed c
-        condense (RSealed v : rs)           = RSealed v
-        condense (RTry v as r : rs)         = RTry v (if rev' then subrev ts' else ts') rev'
-          where ts                          = foldr intersect as $ map alts rs
-                ts'                         = if v `elem` optvs then ts \\ [tOpt tWild] else ts
-                rev'                        = (or $ r : map rev rs) || v `elem` posvs
-        condense (RVar v as : rs)           = RVar v (foldr union as $ map alts rs)
-        condense (RSkip : rs)               = RSkip
-        condense rs                         = error ("### condense " ++ show rs)
+        condense env rs                     = map cond (group rs)
+          where cond (RRed c : rs)          = RRed c
+                cond (RSealed v : rs)       = RSealed v
+                cond (RTry v as r : rs)     = RTry v (if rev' then subrev ts' else ts') rev'
+                  where ts                  = foldr intersect as $ map alts rs
+                        ts'                 = if v `elem` optvs then ts \\ [tOpt tWild] else ts
+                        rev'                = (or $ r : map rev rs) || v `elem` posvs
+                cond (RVar v as : rs)       = RVar v (foldr union as $ map alts rs)
+                cond [RImp q rs]            = RImp q (condense env1 rs)
+                  where env1                = defineTVars q env
+                cond (RSkip : rs)           = RSkip
+                cond rs                     = error ("### condense " ++ show rs)
+
+                subrev []                   = []
+                subrev (t:ts)               = subrev ts1 ++ t : subrev ts2
+                  where (ts1,ts2)           = partition (\t' -> castable env t' t) ts
+
+                group []                    = []
+                group (r:rs)                = (r : rs1) : group rs2
+                  where (rs1,rs2)           = partition (==r) rs
 
         optvs                               = optvars cs ++ optvars hist
         embvs                               = embvars cs
@@ -345,9 +375,6 @@ solve' env select hist te tt eq cs
         deco (RVar v as)                    = (5, 0, length as, 0)
         deco (RSkip)                        = (6, 0, 0, 0)
 
-        subrev []                           = []
-        subrev (t:ts)                       = subrev ts1 ++ t : subrev ts2
-          where (ts1,ts2)                   = partition (\t' -> castable env t' t) ts
 
 -- subrev [int,Pt,float,CPt,C3Pt]           = [] ++ int : subrev [Pt,float,CPt,C3Pt]
 --                                          = int : subrev [CPt,C3Pt] ++ Pt : subrev [float]
@@ -375,7 +402,8 @@ rank env (Seal _ (TUni _ v))
   | uvkind v == KFX                         = RSealed v
   | otherwise                               = RSkip
 
-rank env (Imply _ w q cs)                   = error ("###### INTERNAL: Imply " ++ prstr q ++ " => " ++ prstrs cs ++ "\n# found in Solver.rank")
+rank env (Imply _ _ q cs)                   = RImp q (map (rank env1) cs)
+  where env1                                = defineTVars q env
 rank env c                                  = RRed c
 
 wildTuple                                   = tTuple tWild tWild
@@ -399,6 +427,7 @@ instance OptVars Constraint where
     optvars (Proto _ w t p)             = optvars t ++ optvars p
     optvars (Sel _ w t1 n t2)           = optvars [t1, t2]
     optvars (Mut _ t1 n t2)             = optvars [t1, t2]
+    optvars (Imply _ _ q cs)            = optvars cs
     optvars (Seal _ t)                  = optvars t
 
 instance OptVars Type where
