@@ -398,6 +398,7 @@ kwdStar'        = kwdStar . maybe tWild tVar
 
 prowOf (PosPar n a d p) = posRow (dflt d $ case a of Just t -> t; _ -> tWild) (prowOf p)
   where dflt Nothing    = id
+        dflt (Just None{}) = id
         dflt (Just e)   = tOpt
 prowOf (PosSTAR n a)    = posStar (case a of Just (TTuple _ r _) -> r; _ -> tWild)
 --prowOf (PosSTAR n a)    = (case a of Just (TTuple _ r _) -> r; _ -> tWild)
@@ -405,6 +406,7 @@ prowOf PosNIL           = posNil
 
 krowOf (KwdPar n a d k) = kwdRow n (dflt d $ case a of Just t -> t; _ -> tWild) (krowOf k)
   where dflt Nothing    = id
+        dflt (Just None{}) = id
         dflt (Just e)   = tOpt
 krowOf (KwdSTAR n a)    = kwdStar (case a of Just (TTuple _ _ r) -> r; _ -> tWild)
 --krowOf (KwdSTAR n a)    = (case a of Just (TTuple _ _ r) -> r; _ -> tWild)
