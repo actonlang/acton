@@ -387,8 +387,8 @@ fixupClassAttrs n ns b
   | null eqs                        = ([], [], b)
   | null attr                       = --trace ("### Lift out attrs " ++ prstrs (bound pre) ++ " in class " ++ prstr n) $
                                       (pre, [], defs)
-  | null te                         = --trace ("### Init attrs " ++ prstrs (dom te) ++ " in class " ++ prstr n) $
-                                      ([], [], map initS defs)
+  | null te                         = --trace ("### Init attrs " ++ prstrs (pre++attr) ++ " in class " ++ prstr n) $
+                                      (pre, [], map initS defs)
   | null pre                        = --trace ("### Dynamic attrs " ++ prstrs (dom te) ++ " in class " ++ prstr n) $
                                       ([], te, map initS defs)
   | otherwise                       = --trace ("### Fixup wits " ++ prstrs (bound eqs) ++ " in class " ++ prstr n) $
