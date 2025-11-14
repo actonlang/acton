@@ -1006,12 +1006,22 @@ compileTasks gopts opts paths tasks = do
 
     baseEnv <- Acton.Env.initEnv builtinPath False
 
+    -- cost(m): cheap proxy for compile effort = size of m.act
+    -- Used by the critical‑path heuristic below to prioritize ready modules.
+    costMap <- fmap M.fromList $ forM otherOrder $ \t -> do
+                  let mn = name t
+                  let p  = srcFile paths mn
+                  ok <- doesFileExist p
+                  sz <- if ok then getFileSize p else return 0
+                  return (mn, sz)
+    let cwMap = computeCriticalWeights costMap
+
     -- Figure out max concurrency
     nCaps <- getNumCapabilities
     let maxParallel = max 1 (if C.jobs gopts > 0 then C.jobs gopts else nCaps)
 
     -- Actually compile modules, with maximum concurrency
-    envFinal <- loop initialReady [] M.empty indeg pending0 baseEnv maxParallel
+    envFinal <- loop initialReady [] M.empty indeg pending0 baseEnv maxParallel cwMap
     return envFinal
   where
     -- Graph construction --------------------------------------------------
@@ -1041,6 +1051,37 @@ compileTasks gopts opts paths tasks = do
       tid <- myThreadId
       (cap, _) <- threadCapability tid
       return cap
+
+    -- Critical‑path weights
+    -- We approximate the remaining work under each module by a critical‑path
+    -- style metric over the project DAG. We want to start the modules that
+    -- unlock the most remaining work as early as possible. Intuitively it is
+    -- better to start with large module, but a small module at the head of a
+    -- long/heavy chain is more urgent than a big ones. That helps avoid a late
+    -- long-tail.
+    --
+    -- How we score each module (cheap, good‑enough heuristic):
+    --   weight(m) = cost(m) + max weight(d) over its dependents d
+    --   where cost(m) ≈ size of m.act (proxy for compile effort).
+    -- This approximates the length of the critical path: how much work must
+    -- follow after m. We then sort the ready set by descending weight so heavy
+    -- chains start early and overall makespan improves.
+    --   - cost(m) is a cheap proxy for the time to compile m (we use .act file size).
+    --   - max weight(d) estimates the heaviest chain that must follow after m
+    --     finishes. Thus weight(m) approximates the longest remaining path
+    --     (a.k.a. the “critical path”) if we were to start m now.
+    -- We then pick among ready modules by descending weight so that long/heavy
+    -- chains are started early, reducing the risk of a late long‑tail where one
+    -- big module finishes much later than the rest.
+    computeCriticalWeights :: M.Map A.ModName Integer -> M.Map A.ModName Integer
+    computeCriticalWeights cm = cwMap
+      where
+        costOf m = M.findWithDefault 0 m cm
+        depsOf m = M.findWithDefault [] m revMap   -- dependents (who imports m)
+        cwMap    = M.fromList [ (m, costOf m + max0 [ weight d | d <- depsOf m ]) | m <- M.keys indeg ]
+        weight m = M.findWithDefault 0 m cwMap
+        max0 []  = 0
+        max0 xs  = maximum xs
 
     -- Scheduler helpers ---------------------------------------------------
     -- Compile or reuse a single module using a read‑only environment snapshot.
@@ -1121,11 +1162,13 @@ compileTasks gopts opts paths tasks = do
     -- name).
     scheduleMore :: Int -> [A.ModName]
                  -> [(Async (A.ModName, [(A.Name, A.NameInfo)], Maybe String, B.ByteString), A.ModName)]
-                 -> M.Map A.ModName B.ByteString -> Acton.Env.Env0
+                 -> M.Map A.ModName B.ByteString -> Acton.Env.Env0 -> M.Map A.ModName Integer
                  -> IO ([A.ModName]
                        , [(Async (A.ModName, [(A.Name, A.NameInfo)], Maybe String, B.ByteString), A.ModName)])
-    scheduleMore k rdy running res envSnap = do
-      let (toStart, rdy') = splitAt k rdy
+    scheduleMore k rdy running res envSnap cw = do
+      let prio m = M.findWithDefault 0 m cw
+          rdySorted = Data.List.sortOn (Data.Ord.Down . prio) rdy
+          (toStart, rdy') = splitAt k rdySorted
       new <- forM toStart $ \mn -> do
                 a <- async (doOne envSnap res mn)
                 return (a, mn)
@@ -1141,11 +1184,11 @@ compileTasks gopts opts paths tasks = do
          -> M.Map A.ModName Int
          -> Data.Set.Set A.ModName
          -> Acton.Env.Env0
-         -> Int
+         -> Int -> M.Map A.ModName Integer
          -> IO Acton.Env.Env0
-    loop rdy running res ind pend envAcc maxPar = do
+    loop rdy running res ind pend envAcc maxPar cw = do
       -- Top up the running set with as many ready modules as available slots.
-      (rdy1, running1) <- scheduleMore (maxPar - length running) rdy running res envAcc
+      (rdy1, running1) <- scheduleMore (maxPar - length running) rdy running res envAcc cw
       -- If there’s nothing running and nothing ready:
       if null running1 && null rdy1
         then if Data.Set.null pend
@@ -1176,7 +1219,7 @@ compileTasks gopts opts paths tasks = do
               -- Extend the accumulated environment with this module’s interface (public TEnv + doc).
               envAcc' = Acton.Env.addMod mnDone ifaceTE mdoc envAcc
           -- Tail recurse with updated ready/running/indeg/pending/env state.
-          loop rdy2 running2 res2 ind2 pend2 envAcc' maxPar
+          loop rdy2 running2 res2 ind2 pend2 envAcc' maxPar cw
 
 compileBins:: C.GlobalOptions -> C.CompileOptions -> Paths -> Acton.Env.Env0 -> [CompileTask] -> [BinTask] -> IO ()
 compileBins gopts opts paths env tasks binTasks = do
