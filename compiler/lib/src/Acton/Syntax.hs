@@ -467,7 +467,7 @@ data HNameInfo          = HNVar      Type
                         | HNClass    QBinds [WTCon] TEnv (Maybe String)
                         | HNProto    QBinds [WTCon] TEnv (Maybe String)
                         | HNExt      QBinds TCon [WTCon] TEnv [Name] (Maybe String)
-                        | HNTVar     Kind CCon
+                        | HNTVar     Kind CCon [PCon]
                         | HNAlias    QName
                         | HNMAlias   ModName
                         | HNModule   HTEnv (Maybe String)
@@ -493,7 +493,7 @@ convNameInfo2HNameInfo (NAct q p k te mdoc)   = HNAct q p k te mdoc
 convNameInfo2HNameInfo (NClass q ws te mdoc)  = HNClass q ws te mdoc
 convNameInfo2HNameInfo (NProto q ws te mdoc)  = HNProto q ws te mdoc
 convNameInfo2HNameInfo (NExt q tc ws te ns mdoc) = HNExt q tc ws te ns mdoc
-convNameInfo2HNameInfo (NTVar k cc)           = HNTVar k cc
+convNameInfo2HNameInfo (NTVar k c ps)         = HNTVar k c ps
 convNameInfo2HNameInfo (NAlias qn)            = HNAlias qn
 convNameInfo2HNameInfo (NMAlias mn)           = HNMAlias mn
 convNameInfo2HNameInfo (NReserved)            = HNReserved
@@ -508,7 +508,7 @@ convHNameInfo2NameInfo (HNAct q p k te mdoc)   = NAct q p k te mdoc
 convHNameInfo2NameInfo (HNClass q ws te mdoc)  = NClass q ws te mdoc
 convHNameInfo2NameInfo (HNProto q ws te mdoc)  = NProto q ws te mdoc
 convHNameInfo2NameInfo (HNExt q tc ws te ns mdoc) = NExt q tc ws te ns mdoc
-convHNameInfo2NameInfo (HNTVar k cc)           = NTVar k cc
+convHNameInfo2NameInfo (HNTVar k c ps)         = NTVar k c ps
 convHNameInfo2NameInfo (HNAlias qn)            = NAlias qn
 convHNameInfo2NameInfo (HNMAlias mn)           = NMAlias mn
 convHNameInfo2NameInfo (HNReserved)            = NReserved
