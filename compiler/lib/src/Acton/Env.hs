@@ -769,7 +769,7 @@ directAncestors env qn      = [ tcname p | (ws,p) <- us, null $ catRight ws ]
   where (q,us,te)           = findConName qn env
 
 allAncestors                :: EnvF x -> TCon -> [TCon]
-allAncestors env tc         = [ schematic' c | (_, c) <- us ]
+allAncestors env tc         = reverse [ schematic' c | (_, c) <- us ]
   where (us,te)             = findCon env tc
 
 allAncestors'               :: EnvF x -> QName -> [QName]
