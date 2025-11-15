@@ -1482,35 +1482,29 @@ instance Check Branch where
 
 
 defaultsP (PosPar n (Just t) (Just e) p)
-  | not $ isNone e                      = set : defaultsP p
+  | e /= eNone                          = set : defaultsP p
   where test                            = eCall (tApp (eQVar primISNONE) [t]) [eVar n]
         set                             = sAssign (pVar n t) (eCond e test (eVar n))
 defaultsP (PosPar n _ _ p)              = defaultsP p
 defaultsP _                             = []
 
 noDefaultsP (PosPar n (Just t) (Just e) p)
-  | isNone e                            = PosPar n (Just t) Nothing (noDefaultsP p)
-  | otherwise                           = PosPar n (Just $ tOpt t) Nothing (noDefaultsP p)
+                                        = PosPar n (Just $ tOpt t) Nothing (noDefaultsP p)
 noDefaultsP (PosPar n t e p)            = PosPar n t e (noDefaultsP p)
 noDefaultsP k                           = k
 
 defaultsK (KwdPar n (Just t) (Just e) k)
-  | not $ isNone e                      = set : defaultsK k
+  | e /= eNone                          = set : defaultsK k
   where test                            = eCall (tApp (eQVar primISNONE) [t]) [eVar n]
         set                             = sAssign (pVar n t) (eCond e test (eVar n))
 defaultsK (KwdPar n _ _ k)              = defaultsK k
 defaultsK _                             = []
 
 noDefaultsK (KwdPar n (Just t) (Just e) k)
-  | isNone e                            = KwdPar n (Just t) Nothing (noDefaultsK k)
-  | otherwise                           = KwdPar n (Just $ tOpt t) Nothing (noDefaultsK k)
+                                        = KwdPar n (Just $ tOpt t) Nothing (noDefaultsK k)
 noDefaultsK (KwdPar n t e k)            = KwdPar n t e (noDefaultsK k)
 noDefaultsK k                           = k
 
-isNone None{}                           = True
-isNone (Call _ (Var _ (NoQ w)) (PosArg None{} PosNil) KwdNil)
-  | isWitness w                         = True
-isNone e                                = False
 
 --------------------------------------------------------------------------------------------------------------------------
 
