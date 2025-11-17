@@ -39,6 +39,7 @@ data GlobalOptions = GlobalOptions {
 
 data Command        = New NewOptions
                     | Build CompileOptions
+                    | BuildSpecCmd BuildSpecCommand
                     | Cloud CloudOptions
                     | Doc DocOptions
                     | Version
@@ -106,6 +107,7 @@ cmdLineParser       :: Parser CmdLineOptions
 cmdLineParser       = hsubparser
                         (  command "new"     (info (CmdOpt <$> globalOptions <*> (New <$> newOptions)) (progDesc "Create a new Acton project"))
                         <> command "build"   (info (CmdOpt <$> globalOptions <*> (Build <$> compileOptions)) (progDesc "Build an Acton project"))
+                        <> command "spec"    (info (CmdOpt <$> globalOptions <*> (BuildSpecCmd <$> buildSpecCommand)) (progDesc "Inspect or update build specification"))
                         <> command "cloud"   (info (CmdOpt <$> globalOptions <*> (Cloud <$> cloudOptions)) (progDesc "Run an Acton project in the cloud"))
                         <> command "doc"     (info (CmdOpt <$> globalOptions <*> (Doc <$> docOptions)) (progDesc "Show type and docstring info"))
                         <> command "version" (info (CmdOpt <$> globalOptions <*> pure Version) (progDesc "Show version"))
@@ -139,11 +141,11 @@ globalOptions = GlobalOptions
 optimizeReader :: ReadM OptimizeMode
 optimizeReader = eitherReader $ \s ->
     case s of
-        "Debug"       -> Right Debug
-        "ReleaseSafe" -> Right ReleaseSafe
+        "Debug"        -> Right Debug
+        "ReleaseSafe"  -> Right ReleaseSafe
         "ReleaseSmall" -> Right ReleaseSmall
-        "ReleaseFast" -> Right ReleaseFast
-        _             -> Left $ "Invalid optimize option: " ++ s ++ " (expected: Debug, ReleaseSafe, ReleaseSmall, ReleaseFast)"
+        "ReleaseFast"  -> Right ReleaseFast
+        _              -> Left $ "Invalid optimize option: " ++ s ++ " (expected: Debug, ReleaseSafe, ReleaseSmall, ReleaseFast)"
 
 
 {-
@@ -218,3 +220,16 @@ descr               = fullDesc <> progDesc "Compilation and management of Acton 
 -- main = do
 --     f <- parseCmdLine
 --     print(f)
+data BuildSpecCommand = BuildSpecDump
+                      | BuildSpecUpdate FilePath
+                      deriving Show
+
+buildSpecCommand :: Parser BuildSpecCommand
+buildSpecCommand = hsubparser
+    (  command "dump"
+          (info (pure BuildSpecDump)
+                (progDesc "Dump build spec as JSON to stdout (prefer Build.act; fallback to build.act.json)"))
+    <> command "update"
+          (info (BuildSpecUpdate <$> argument str (metavar "FILE"))
+                (progDesc "Update Build.act using JSON file; override entries present in JSON only"))
+    )
