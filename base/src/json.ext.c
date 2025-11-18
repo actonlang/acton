@@ -57,6 +57,33 @@ void jsonQ_encode_dict(yyjson_mut_doc *doc, yyjson_mut_val *node, B_dict data) {
                     yyjson_mut_obj_add_val(doc, node, key, d);
                     jsonQ_encode_dict(doc, d, (B_dict)v);
                     break;
+                case I8_ID:;
+                    yyjson_mut_obj_add_int(doc, node, key, ((B_i8)v)->val);
+                    break;
+                case I16_ID:;
+                    yyjson_mut_obj_add_int(doc, node, key, ((B_i16)v)->val);
+                    break;
+                case I32_ID:;
+                    yyjson_mut_obj_add_int(doc, node, key, ((B_i32)v)->val);
+                    break;
+                case I64_ID:;
+                    yyjson_mut_obj_add_int(doc, node, key, ((B_i64)v)->val);
+                    break;
+                case U1_ID:;
+                    yyjson_mut_obj_add_uint(doc, node, key, ((B_u1)v)->val);
+                    break;
+                case U8_ID:;
+                    yyjson_mut_obj_add_uint(doc, node, key, ((B_u8)v)->val);
+                    break;
+                case U16_ID:;
+                    yyjson_mut_obj_add_uint(doc, node, key, ((B_u16)v)->val);
+                    break;
+                case U32_ID:;
+                    yyjson_mut_obj_add_uint(doc, node, key, ((B_u32)v)->val);
+                    break;
+                case U64_ID:;
+                    yyjson_mut_obj_add_uint(doc, node, key, ((B_u64)v)->val);
+                    break;
                 default:;
                     // TODO: hmm, at least handle all builtin types? and that's it,
                     // maybe? like we really shouldn't accept user-defined types
@@ -102,6 +129,33 @@ void jsonQ_encode_list_into(yyjson_mut_doc *doc, yyjson_mut_val *node, B_list da
                     } else {
                         // TODO: raise exception
                     }
+                    break;
+                case I8_ID:;
+                    yyjson_mut_arr_add_int(doc, node, ((B_i8)v)->val);
+                    break;
+                case I16_ID:;
+                    yyjson_mut_arr_add_int(doc, node, ((B_i16)v)->val);
+                    break;
+                case I32_ID:;
+                    yyjson_mut_arr_add_int(doc, node, ((B_i32)v)->val);
+                    break;
+                case I64_ID:;
+                    yyjson_mut_arr_add_int(doc, node, ((B_i64)v)->val);
+                    break;
+                case U1_ID:;
+                    yyjson_mut_arr_add_uint(doc, node, ((B_u1)v)->val);
+                    break;
+                case U8_ID:;
+                    yyjson_mut_arr_add_uint(doc, node, ((B_u8)v)->val);
+                    break;
+                case U16_ID:;
+                    yyjson_mut_arr_add_uint(doc, node, ((B_u16)v)->val);
+                    break;
+                case U32_ID:;
+                    yyjson_mut_arr_add_uint(doc, node, ((B_u32)v)->val);
+                    break;
+                case U64_ID:;
+                    yyjson_mut_arr_add_uint(doc, node, ((B_u64)v)->val);
                     break;
                 default:;
                     // TODO: hmm, at least handle all builtin types? and that's it,
