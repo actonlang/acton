@@ -28,7 +28,7 @@ B_u1 B_u1G_new(B_atom a, B_int base) {
     long sz = b->val.size;
     if (sz > 1 || sz < 0 || n > 1) {
         char errmsg[1024];
-        snprintf(errmsg, sizeof(errmsg), "u8(): value %s out of range for type u8",get_str(&b->val));
+        snprintf(errmsg, sizeof(errmsg), "u1(): value %s out of range for type u1",get_str(&b->val));
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
     }
     return toB_u1(n);
@@ -82,6 +82,10 @@ uint8_t fromB_u1(B_u1 w) {
 B_u1 B_IntegralD_u1D___add__(B_IntegralD_u1 wit,  B_u1 a, B_u1 b) {
     return toB_u1((a->val + b->val)%2);
 }  
+
+B_u1 B_IntegralD_u1D___zero__(B_IntegralD_u1 wit) {
+    return toB_u1(0);
+}
 
 B_complex B_IntegralD_u1D___complex__(B_IntegralD_u1 wit, B_u1 a) {
     return toB_complex((double)a->val);
@@ -264,6 +268,7 @@ B_bool B_HashableD_u1D___ne__(B_HashableD_u1 wit, B_u1 a, B_u1 b) {
     return toB_bool(a->val != b->val);
 }
 
-B_int B_HashableD_u1D___hash__(B_HashableD_u1 wit, B_u1 a) {
-    return to$int(1);
+B_NoneType B_HashableD_u1D_hash(B_HashableD_u1 wit, B_u1 a, B_hasher h) {
+    zig_hash_wyhash_update(h->_hasher, to$bytesD_len((char *)&(a->val),1));
+    return B_None;
 }

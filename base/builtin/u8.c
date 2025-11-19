@@ -85,6 +85,10 @@ B_u8 B_IntegralD_u8D___add__(B_IntegralD_u8 wit,  B_u8 a, B_u8 b) {
     return toB_u8(a->val + b->val);
 }  
 
+B_u8 B_IntegralD_u8D___zero__(B_IntegralD_u8 wit) {
+    return toB_u8(0);
+}
+
 B_complex B_IntegralD_u8D___complex__(B_IntegralD_u8 wit, B_u8 a) {
     return toB_complex((double)a->val);
 }
@@ -266,6 +270,7 @@ B_bool B_HashableD_u8D___ne__(B_HashableD_u8 wit, B_u8 a, B_u8 b) {
     return toB_bool(a->val != b->val);
 }
 
-B_int B_HashableD_u8D___hash__(B_HashableD_u8 wit, B_u8 a) {
-    return to$int(B_i8D_hash((B_i8)a));
+B_NoneType B_HashableD_u8D_hash(B_HashableD_u8 wit, B_u8 a, B_hasher h) {
+    zig_hash_wyhash_update(h->_hasher, to$bytesD_len((char *)&(a->val),1));
+    return B_None;
 }
