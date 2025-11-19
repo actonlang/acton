@@ -68,8 +68,17 @@
 #define CNT_ID 51
 #define RET_ID 52
 
+#define I8_ID 53
+#define I16_ID 54
+#define I32_ID 55
+#define I64_ID 56
+#define U1_ID 57
+#define U8_ID 58
+#define U16_ID 59
+#define U32_ID 60
+#define U64_ID 61
 
-#define PREASSIGNED 53
+#define PREASSIGNED 62
 
 
 /* 

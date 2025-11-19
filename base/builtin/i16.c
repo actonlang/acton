@@ -42,7 +42,7 @@ B_NoneType B_i16D___init__(B_i16 self, B_atom a, B_int base){
 }
 
 void B_i16D___serialize__(B_i16 n, $Serial$state state) {
-    $val_serialize(INT_ID,&n->val,state);
+    $val_serialize(I16_ID,&n->val,state);
 }
 
 B_i16 B_i16D___deserialize__(B_i16 n, $Serial$state state) {
