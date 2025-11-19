@@ -43,7 +43,7 @@ B_NoneType B_u8D___init__(B_u8 self, B_atom a, B_int base){
 }
 
 void B_u8D___serialize__(B_u8 n, $Serial$state state) {
-    $val_serialize(INT_ID,&n->val,state);
+    $val_serialize(U8_ID,&n->val,state);
 }
 
 B_u8 B_u8D___deserialize__(B_u8 n, $Serial$state state) {

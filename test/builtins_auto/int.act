@@ -1,15 +1,29 @@
 import testing
 
 # Test all integer types:
+# - i8
 # - i16
 # - i32
 # - i64
+# - u1
+# - u8
 # - u16
 # - u32
 # - u64
 # - int
 
 # TODO: test that division by zero raises ZeroDivisionError
+
+def test_i8_divzero():
+    n = i8(0)
+    try:
+        i8(3) / n
+    except ZeroDivisionError:
+        try:
+            i8(3) // n
+        except ZeroDivisionError:
+            return
+    raise testing.NotRaisesError("expected ZeroDivisionError for i8")
 
 def test_i16_divzero():
     n = i16(0)
@@ -43,6 +57,28 @@ def test_i64_divzero():
         except ZeroDivisionError:
             return
     raise testing.NotRaisesError("expected ZeroDivisionError for i64")
+
+def test_u1_divzero():
+    n = u1(0)
+    try:
+        u1(1) / n
+    except ZeroDivisionError:
+        try:
+            u1(1) // n
+        except ZeroDivisionError:
+            return
+    raise testing.NotRaisesError("expected ZeroDivisionError for u1")
+
+def test_u8_divzero():
+    n = u8(0)
+    try:
+        u8(3) / n
+    except ZeroDivisionError:
+        try:
+            u8(3) // n
+        except ZeroDivisionError:
+            return
+    raise testing.NotRaisesError("expected ZeroDivisionError for u8")
 
 def test_u16_divzero():
     n = u16(0)
@@ -78,6 +114,29 @@ def test_u64_divzero():
             return
     raise testing.NotRaisesError("expected ZeroDivisionError for u64")
 
+
+def test_i8():
+    test_i8_divzero()
+    x: i8 = 0
+    if (bool(x != 0)):
+       raise ValueError("unexpected: bool(x) != 0")
+    if x != 0:
+       raise ValueError("unexpected: x != 0")
+    if i8("123") != 123:
+        raise ValueError('i8("123") gives wrong result')
+    if i8("0x7f") != 127:
+        raise ValueError('i8("0x7f") gives wrong result')
+    if i8("0o177") != 127:
+        raise ValueError('i8("0o177") gives wrong result')
+    if i8("0b1111111") != 127:
+        raise ValueError('i8("0b1111111") gives wrong result')
+    if i8("123",7) != 66:
+        raise ValueError('i8("123",7) gives wrong result')
+    if int(x) != 0:
+        raise ValueError("unexpected: int(x) != 0")
+    if i8(2**7 - 1) + 1 != -2**7:
+        raise ValueError("i8 wraparound failed")
+    return True
 
 def test_i16():
     test_i16_divzero()
@@ -144,6 +203,46 @@ def test_i64():
         raise ValueError("unexpected: int(x) != 0")
     if i64(2**63-1) + 1 != -2**63:
         raise ValueError("i64 wraparound failed")
+    return True
+
+def test_u1():
+    test_u1_divzero()
+    x: u1 = 0
+    if (bool(x != 0)):
+       raise ValueError("unexpected: bool(x) != 0")
+    if x != 0:
+       raise ValueError("unexpected: x != 0")
+    if u1("1") != 1:
+        raise ValueError('u1("1") gives wrong result')
+    if u1("0", 2) != 0:
+        raise ValueError('u1("0", 2) gives wrong result')
+    if u1(1) + u1(1) != 0:
+        raise ValueError("u1 addition should wrap modulo 2")
+    if int(x) != 0:
+        raise ValueError("unexpected: int(x) != 0")
+    return True
+
+def test_u8():
+    test_u8_divzero()
+    x: u8 = 0
+    if (bool(x != 0)):
+       raise ValueError("unexpected: bool(x) != 0")
+    if x != 0:
+       raise ValueError("unexpected: x != 0")
+    if u8("123") != 123:
+        raise ValueError('u8("123") gives wrong result')
+    if u8("0x12") != 18:
+        raise ValueError('u8("0x12") gives wrong result')
+    if u8("0o123") != 83:
+        raise ValueError('u8("0o123") gives wrong result')
+    if u8("0b11111111") != 255:
+        raise ValueError('u8("0b11111111") gives wrong result')
+    if u8("123",7) != 66:
+        raise ValueError('u8("123",7) gives wrong result')
+    if int(x) != 0:
+        raise ValueError("unexpected: int(x) != 0")
+    if u8(2**8 - 1) + 1 != 0:
+        raise ValueError("u8 wraparound failed")
     return True
 
 def test_u16():
@@ -268,9 +367,12 @@ def test_int():
 actor main(env):
     try:
         test_int()
+        test_i8()
         test_i16()
         test_i32()
         test_i64()
+        test_u1()
+        test_u8()
         test_u16()
         test_u32()
         test_u64()

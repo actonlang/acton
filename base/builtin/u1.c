@@ -41,7 +41,7 @@ B_NoneType B_u1D___init__(B_u1 self, B_atom a, B_int base){
 }
 
 void B_u1D___serialize__(B_u1 n, $Serial$state state) {
-    $val_serialize(INT_ID,&n->val,state);
+    $val_serialize(U1_ID,&n->val,state);
 }
 
 B_u1 B_u1D___deserialize__(B_u1 n, $Serial$state state) {

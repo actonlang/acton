@@ -54,6 +54,9 @@ B_int B_intG_new(B_atom a, B_int base) {
     if ($ISINSTANCE0(a,B_i64)) {
         return to$int(((B_i64)a)->val);
     }
+    if ($ISINSTANCE0(a,B_i8)) {
+        return to$int((long)((B_i8)a)->val);
+    }
     if ($ISINSTANCE0(a,B_i32)) {
         return to$int((long)((B_i32)a)->val);
     }
@@ -68,6 +71,20 @@ B_int B_intG_new(B_atom a, B_int base) {
             B_int res = malloc_int();
             res->val.size=1;
             res->val.n[0] = v;
+            return res;
+        }
+    }
+    if ($ISINSTANCE0(a,B_u1)) {
+        return to$int((long)((B_u1)a)->val);
+    }
+    if ($ISINSTANCE0(a,B_u8)) {
+        unsigned char v = ((B_u8)a)->val;
+        if (v==0)
+            return to$int(0L);
+        else {
+            B_int res = malloc_int();
+            res->val.size=1;
+            res->val.n[0] = (unsigned long)v;
             return res;
         }
     }

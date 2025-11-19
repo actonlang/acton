@@ -43,7 +43,7 @@ B_NoneType B_i32D___init__(B_i32 self, B_atom a, B_int base){
 }
 
 void B_i32D___serialize__(B_i32 n, $Serial$state state) {
-    $val_serialize(INT_ID,&n->val,state);
+    $val_serialize(I32_ID,&n->val,state);
 }
 
 B_i32 B_i32D___deserialize__(B_i32 n, $Serial$state state) {
