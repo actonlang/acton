@@ -54,15 +54,11 @@ B_bool B_i8D___bool__(B_i8 n) {
 }
 
 B_str B_i8D___str__(B_i8 n) {
-    char *s;
-    asprintf(&s,"%d",n->val);
-    return to$str(s);
+    return $FORMAT("%d", n->val);
 }
 
 B_str B_i8D___repr__(B_i8 n) {
-    char *s;
-    asprintf(&s,"%d",n->val);
-    return to$str(s);
+    return $FORMAT("%d", n->val);
 }
 
 B_i8 toB_i8(int8_t i) {
