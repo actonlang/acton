@@ -24,9 +24,10 @@ uint8_t u1_pow(uint8_t a, uint8_t e) {
 
 B_u1 B_u1G_new(B_atom a, B_int base) {
     B_int b = B_intG_new(a, base);
-    unsigned long n = b->val.n[0];
     long sz = b->val.size;
-    if (sz > 1 || sz < 0 || n > 1) {
+    if (sz == 0) return toB_u1(0);
+    unsigned long n = b->val.n[0];
+    if (sz != 1 || n > 1) {
         char errmsg[1024];
         snprintf(errmsg, sizeof(errmsg), "u1(): value %s out of range for type u1",get_str(&b->val));
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
