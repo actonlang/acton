@@ -1,10 +1,10 @@
   Stale a: source changed
   Compiling a.act with Debug
    Finished compilation of a in   0.000 s
-  Stale b: iface changes in a 226d1bb0 → 7d63e422
+  Stale b: iface changes in a df462c35 → 366981bd
   Compiling b.act with Debug
    Finished compilation of b in   0.000 s
-  Stale c: iface changes in b 2c3a417d → e64409e2
+  Stale c: iface changes in b d1422048 → 4bb55265
   Compiling c.act with Debug
    Finished compilation of c in   0.000 s
   Final compilation step
