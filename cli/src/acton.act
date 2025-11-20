@@ -1162,21 +1162,18 @@ actor CmdFetch(env, args):
 
 
 actor CmdPkgAdd(env, args):
-    """Add a package dependency to the project
+    """Add a package dependency to the project.
+
+    Usage:
+      acton pkg add NAME [--url URL] [--repo-url URL --repo-ref REF]
+
+    Exactly one of --url or --repo-url must be provided.
     """
     pcap = process.ProcessCap(env.cap)
     fs = file.FS(file.FileCap(env.cap))
+    tcpc_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(env.cap)))
 
     zig = file.join_path([base_path(file.FileCap(env.cap)), "zig", "zig"])
-
-    # What arguments do we need?
-    # - the name of the dependency (e.g. "foo", used in the build.act.json config file)
-    # - the URL to fetch it from
-
-    # We need to fetch the dependency and get the (content) hash of the fetched
-    # dependency and store it in the build.act.json file. If the dependency is
-    # already in the build.act.json file, we need to check if the hash is the
-    # same as the one we just fetched. If it is, we do nothing. If it is not,
 
     dep_name = args.get_str("name")
     try:
@@ -1184,60 +1181,115 @@ actor CmdPkgAdd(env, args):
     except ValueError as e:
         print("ERROR:", e)
         env.exit(1)
-    dep_url = args.get_str("url")
+
+    url_arg = args.get_str("url")
+    repo_url = args.get_str("repo-url")
+    repo_ref_arg = args.get_str("repo-ref")
 
     var build_config = BuildSpec()
 
-    def on_exit(p, exit_code, term_signal, std_out_buf, std_err_buf):
-        if exit_code == 0:
-            dep_hash = std_out_buf.decode().strip()
+    def _run_zig_fetch(dep_url: str, dep_repo_url: ?str, dep_repo_ref: ?str):
+        def on_exit(p, exit_code, term_signal, std_out_buf, std_err_buf):
+            if exit_code == 0:
+                dep_hash = std_out_buf.decode().strip()
 
-            if dep_name in build_config.dependencies:
-                bc_dep = build_config.dependencies[dep_name]
-                if bc_dep.url != dep_url:
-                    print("Updated existing dependency", dep_name, "with new URL", dep_url, " (old", bc_dep.url, ")")
-                    bc_dep.url = dep_url
-                if bc_dep.hash == dep_hash:
-                    print("Dependency", dep_name, "is already up to date, hash:", dep_hash)
+                if dep_name in build_config.dependencies:
+                    bc_dep = build_config.dependencies[dep_name]
+                    if bc_dep.url != dep_url:
+                        print("Updated existing dependency", dep_name, "with new URL", dep_url, " (old", bc_dep.url, ")")
+                        bc_dep.url = dep_url
+                    if bc_dep.hash == dep_hash:
+                        print("Dependency", dep_name, "is already up to date, hash:", dep_hash)
+                    else:
+                        print("Updated existing dependency", dep_name, "with new hash", dep_hash, " (old", bc_dep.hash, ")")
+                        bc_dep.hash = dep_hash
+                    if dep_repo_url is not None:
+                        bc_dep.repo_url = dep_repo_url
+                        bc_dep.repo_ref = dep_repo_ref
                 else:
-                    print("Updated existing dependency", dep_name, "with new hash", dep_hash, " (old", bc_dep.hash, ")")
-                    bc_dep.hash = dep_hash
-            else:
-                # Add the hash
-                build_config.dependencies[dep_name] = PkgDependency(dep_name, dep_url, dep_hash)
-                print("Added new package dependency", dep_name, "with hash", dep_hash)
+                    # Add the dependency, including repo metadata when available
+                    build_config.dependencies[dep_name] = PkgDependency(dep_name, dep_url, dep_hash, None, dep_repo_url, dep_repo_ref)
+                    print("Added new package dependency", dep_name, "with hash", dep_hash)
 
-            def _on_update_done(err):
-                if err is not None:
-                    print(err, err=True)
-                    env.exit(1)
-                else:
+                def _on_update_done(err):
+                    if err is not None:
+                        print(err, err=True)
+                        env.exit(1)
+                    else:
+                        env.exit(0)
+
+                try:
+                    s = fs.stat("Build.act")
+                    json_doc = build_config.to_json()
+                    UpdateBuildSpec(env, pcap, json_doc, _on_update_done)
+                except:
+                    json_doc = build_config.to_json()
+                    baj_file = file.WriteFile(file.WriteFileCap(file.FileCap(env.cap)), "build.act.json")
+                    baj_file.write(json_doc.encode()+b"\n")
+                    await async baj_file.close()
                     env.exit(0)
+            else:
+                print("Error fetching", std_err_buf.decode())
+                env.exit(1)
 
-            try:
-                s = fs.stat("Build.act")
-                json_doc = build_config.to_json()
-                UpdateBuildSpec(env, pcap, json_doc, _on_update_done)
-            except:
-                json_doc = build_config.to_json()
-                baj_file = file.WriteFile(file.WriteFileCap(file.FileCap(env.cap)), "build.act.json")
-                baj_file.write(json_doc.encode()+b"\n")
-                await async baj_file.close()
-                env.exit(0)
-        else:
-            print("Error fetching", std_err_buf.decode())
+        def on_error(p, error):
+            print("Error fetching", error)
             env.exit(1)
 
-    def on_error(p, error):
-        print("Error fetching", error)
-        env.exit(1)
+        cmd = [zig, "fetch", "--global-cache-dir", get_zig_global_cache_dir(file.FileCap(env.cap)), dep_url]
+        process.RunProcess(
+            pcap,
+            cmd,
+            on_exit,
+            on_error)
 
-    cmd = [zig, "fetch", "--global-cache-dir", get_zig_global_cache_dir(file.FileCap(env.cap)), args.get_str("url")]
-    process.RunProcess(
-        pcap,
-        cmd,
-        on_exit,
-        on_error)
+    def _decide_url_and_fetch():
+        # Decide how to obtain the URL, now that build_config has been loaded.
+        if url_arg != "" and repo_url != "":
+            print("ERROR: Specify either --url or --repo-url, not both.", err=True)
+            env.exit(1)
+        elif url_arg != "":
+            _run_zig_fetch(url_arg, None, None)
+        elif repo_url != "":
+            # Resolve URL from repo-url/repo-ref, like pkg upgrade
+            if not repo_url.startswith("https://github.com"):
+                print("ERROR: Unsupported git forge URL for pkg add:", repo_url, "only https://github.com is supported", err=True)
+                env.exit(1)
+
+            def _on_ref(err: ?Exception, resolved_url: ?str):
+                if err is not None:
+                    print("Error fetching ref for %s:" % dep_name, err.error_message, err=True)
+                    env.exit(1)
+                    return
+                if resolved_url is not None:
+                    repo_ref: ?str = repo_ref_arg if repo_ref_arg != "" else None
+                    _run_zig_fetch(resolved_url, repo_url, repo_ref)
+                    return
+                print("Error: Could not resolve ref for", dep_name, err=True)
+                env.exit(1)
+
+            repo_ref: ?str = repo_ref_arg if repo_ref_arg != "" else None
+            cli_gh.FetchRef(_on_ref, url=repo_url, tcpc_cap=tcpc_cap, ref=repo_ref)
+        else:
+            print("ERROR: Must provide either --url or --repo-url", err=True)
+            env.exit(1)
+
+    def _on_spec_done(error, spec):
+        if error is not None:
+            if "No Build.act or build.act.json found" in error:
+                # No existing spec; start from empty and create new.
+                _decide_url_and_fetch()
+                return
+            print(error, err=True)
+            env.exit(1)
+            return
+
+        build_config = spec
+        _decide_url_and_fetch()
+
+    # Load existing BuildSpec (prefer Build.act, fallback build.act.json),
+    # then decide URL and perform zig fetch / update.
+    ReadBuildSpec(env, pcap, _on_spec_done)
 
 actor ZigFetch(on_dl: action(?str, ?str) -> None, env, dep_name: str, dep_url: str):
     """zig fetch
@@ -1774,8 +1826,10 @@ actor main(env):
         p_pkg = p.add_cmd("pkg", "Manage package dependencies", _cmd_pkg)
 
         p_pkg_add = p_pkg.add_cmd("add", "Add package dependency", _cmd_pkg_add)
-        p_pkg_add.add_arg("url", "URL of dependency", True, "?")
         p_pkg_add.add_arg("name", "Name of dependency", True, "?")
+        p_pkg_add.add_option("url", "str", "?", "", "URL of dependency")
+        p_pkg_add.add_option("repo-url", "str", "?", "", "Git repository URL of dependency")
+        p_pkg_add.add_option("repo-ref", "str", "?", "", "Git ref (branch, tag or SHA) to use")
         p_pkg_add.add_option("hash", "str", "?", "", "Hash of dependency")
 
         p_pkg_rm = p_pkg.add_cmd("remove", "Remove package dependency", _cmd_pkg_rm)
