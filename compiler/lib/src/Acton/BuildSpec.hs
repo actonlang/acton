@@ -115,7 +115,7 @@ instance ToJSON BuildSpec where
     , "zig_dependencies" .= zig
     ]
 
--- Render an Acton build.act file from BuildConfig
+-- Render an Acton Build.act file from BuildSpec
 -- Example:
 -- dependencies = {
 --   "http2": (repo_url="https://github.com/...", hash="..."),

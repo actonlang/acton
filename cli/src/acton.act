@@ -109,7 +109,7 @@ actor CacheSizeChecker(cap: file.FileCap):
 
     check_caches()
 
-def write_buildzig(file_cap, build_config: BuildConfig):
+def write_buildzig(file_cap, build_config):
     fs = file.FS(file_cap)
     # We want predictable deterministic paths. Zig wants relative paths. Get
     # relative path to / and then from there to satisfy both.
@@ -241,7 +241,7 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
 
     dep_path_overrides = parse_dep_path_overrides(args)
 
-    var build_config = BuildConfig()
+    var build_config = BuildSpec()
 
     def _report_cache_warnings():
         if cache_checker is not None:
@@ -487,7 +487,7 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
         If there is no build.act.json file, we will build the project.
         """
         try:
-            build_config = BuildConfig.from_json(file.ReadFile(rfcap, "build.act.json").read().decode())
+            build_config = BuildSpec.from_json(file.ReadFile(rfcap, "build.act.json").read().decode())
         except FileNotFoundError:
             pass
         except ValueError as e:
@@ -495,7 +495,7 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
             env.exit(1)
             return
 
-        build_config_fetchable = BuildConfig()
+        build_config_fetchable = BuildSpec()
         for dep_name, dep in build_config.dependencies.items():
             if dep_name in dep_path_overrides:
                 dep_path = dep_path_overrides[dep_name]
@@ -934,7 +934,7 @@ def build_cmd_args(args):
     return cmdargs
 
 
-actor ZigFetchDeps(env, build_config: BuildConfig, on_done: action(int, int) -> None, on_fetch_error: action(str) -> None, print_output: bool=False):
+actor ZigFetchDeps(env, build_config: BuildSpec, on_done: action(int, int) -> None, on_fetch_error: action(str) -> None, print_output: bool=False):
     """Fetch dependencies and Zig dependencies
     """
     pcap = process.ProcessCap(env.cap)
@@ -1067,7 +1067,7 @@ actor CmdFetch(env, args):
 
     def _read_build_config():
         try:
-            build_config = BuildConfig.from_json(file.ReadFile(rfcap, "build.act.json").read().decode())
+            build_config = BuildSpec.from_json(file.ReadFile(rfcap, "build.act.json").read().decode())
             write_buildzig(file.FileCap(env.cap), build_config)
             zfd = ZigFetchDeps(env, build_config, all_done, on_zig_fetch_error, print_output=True)
         except FileNotFoundError:
@@ -1108,14 +1108,14 @@ actor CmdPkgAdd(env, args):
 
     def get_build_config():
         try:
-            return BuildConfig.from_json(file.ReadFile(file.ReadFileCap(file.FileCap(env.cap)), "build.act.json").read().decode())
+            return BuildSpec.from_json(file.ReadFile(file.ReadFileCap(file.FileCap(env.cap)), "build.act.json").read().decode())
         except FileNotFoundError:
             # Ignore, we create a new file
             pass
         except ValueError as e:
             print("ERROR:", e.error_message)
             await async env.exit(1)
-        return BuildConfig()
+        return BuildSpec()
 
     build_config = get_build_config()
 
@@ -1221,14 +1221,14 @@ actor CmdPkgUpgrade(env, args):
 
     def get_build_config():
         try:
-            return BuildConfig.from_json(file.ReadFile(file.ReadFileCap(file.FileCap(env.cap)), "build.act.json").read().decode())
+            return BuildSpec.from_json(file.ReadFile(file.ReadFileCap(file.FileCap(env.cap)), "build.act.json").read().decode())
         except FileNotFoundError:
             # Ignore, we create a new file
             pass
         except ValueError as e:
             print("ERROR:", e.error_message)
             await async env.exit(1)
-        return BuildConfig()
+        return BuildSpec()
 
     build_config = get_build_config()
 
@@ -1321,14 +1321,14 @@ actor CmdPkgRemove(env, args):
 
     def get_build_config():
         try:
-            return BuildConfig.from_json(file.ReadFile(file.ReadFileCap(file.FileCap(env.cap)), "build.act.json").read().decode())
+            return BuildSpec.from_json(file.ReadFile(file.ReadFileCap(file.FileCap(env.cap)), "build.act.json").read().decode())
         except FileNotFoundError:
             # Ignore, we create a new file
             pass
         except ValueError as e:
             print("ERROR:", e.error_message)
             await async env.exit(1)
-        return BuildConfig()
+        return BuildSpec()
 
     build_config = get_build_config()
 
@@ -1373,14 +1373,14 @@ actor CmdZigPkgAdd(env, args):
 
     def get_build_config():
         try:
-            return BuildConfig.from_json(file.ReadFile(file.ReadFileCap(file.FileCap(env.cap)), "build.act.json").read().decode())
+            return BuildSpec.from_json(file.ReadFile(file.ReadFileCap(file.FileCap(env.cap)), "build.act.json").read().decode())
         except FileNotFoundError:
             # Ignore, we create a new file
             pass
         except ValueError as e:
             print("ERROR:", e.error_message)
             await async env.exit(1)
-        return BuildConfig()
+        return BuildSpec()
 
     build_config = get_build_config()
 
@@ -1441,7 +1441,7 @@ actor CmdZigPkgRemove(env, args):
 
     def _get_build_config():
         try:
-            build_config = BuildConfig.from_json(file.ReadFile(file.ReadFileCap(file.FileCap(env.cap)), "build.act.json").read().decode())
+            build_config = BuildSpec.from_json(file.ReadFile(file.ReadFileCap(file.FileCap(env.cap)), "build.act.json").read().decode())
             _remove_zig_pkg(build_config, dep_name)
         except FileNotFoundError:
             # Ignore, we create a new file

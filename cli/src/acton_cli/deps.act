@@ -18,7 +18,7 @@ def get_deps_recursive(file_cap: file.FileCap, proj_dir: str, fsin: ?file.FS=Non
 
     try:
         bconf_path = file.join_path([proj_dir, "build.act.json"])
-        build_config = BuildConfig.from_json(file.ReadFile(rfile_cap, bconf_path).read().decode())
+        build_config = BuildSpec.from_json(file.ReadFile(rfile_cap, bconf_path).read().decode())
 
         pkg_res: dict[str, PkgDependency] = {}
         zig_res: dict[str, ZigDependency] = {}
