@@ -4,8 +4,10 @@ import file
 import json
 import net
 import process
+import re
 import term
 import testing
+import http
 
 from buildy import *
 
@@ -1185,6 +1187,7 @@ actor CmdPkgAdd(env, args):
     url_arg = args.get_str("url")
     repo_url = args.get_str("repo-url")
     repo_ref_arg = args.get_str("repo-ref")
+    pkg_name_arg = args.get_str("pkg-name")
 
     var build_config = BuildSpec()
 
@@ -1243,6 +1246,81 @@ actor CmdPkgAdd(env, args):
             on_exit,
             on_error)
 
+    def _lookup_repo_url_from_index(pkg_name: str) -> str:
+        """Look up a package by name in the local package index.
+
+        The index is expected at ~/.cache/acton/package-index.json and must
+        contain a top-level dict with a 'packages' key that holds a list of
+        objects, each with at least 'name' and 'repo_url' fields.
+        """
+        index_path = file.join_path([fs.homedir(), ".cache", "acton", "package-index.json"])
+        content = ""
+        try:
+            content = file.ReadFile(file.ReadFileCap(file.FileCap(env.cap)), index_path).read().decode()
+        except FileNotFoundError:
+            print("ERROR: Package index not found at {index_path}", err=True)
+            print("HINT: Run: acton pkg update", err=True)
+            env.exit(1)
+            return ""
+        except Exception as e:
+            print("ERROR: Failed to read package index at {index_path}:", e, err=True)
+            env.exit(1)
+            return ""
+
+        pkgs: list[?value] = []
+        try:
+            jd = json.decode(content)
+            if isinstance(jd, dict):
+                pkgs_any = jd.get("packages")
+                if isinstance(pkgs_any, list):
+                    pkgs = pkgs_any
+        except ValueError as e:
+            print("ERROR: Failed to parse package index JSON:", e.error_message, err=True)
+            env.exit(1)
+            return ""
+
+        if len(pkgs) == 0:
+            print("ERROR: Invalid package index: top-level 'packages' list missing or wrong type", err=True)
+            env.exit(1)
+            return ""
+
+        # Exact name match
+        for pkg in pkgs:
+            if isinstance(pkg, dict):
+                name = pkg.get("name")
+                if isinstance(name, str) and name == pkg_name:
+                    ru = pkg.get("repo_url")
+                    if isinstance(ru, str) and ru != "":
+                        return ru
+                    print("ERROR: Package {pkg_name} in index is missing 'repo_url'", err=True)
+                    env.exit(1)
+                    return ""
+
+        print("ERROR: Package {pkg_name} not found in package index", err=True)
+        env.exit(1)
+        return ""
+
+    def _fetch_from_repo(repo_url_eff: str, repo_ref_arg_eff: str):
+        # Resolve URL from repo-url/repo-ref, like pkg upgrade
+        if not repo_url_eff.startswith("https://github.com"):
+            print("ERROR: Unsupported git forge URL for pkg add:", repo_url_eff, "only https://github.com is supported", err=True)
+            env.exit(1)
+
+        def _on_ref(err: ?Exception, resolved_url: ?str):
+            if err is not None:
+                print("Error fetching ref for {dep_name}:", err.error_message, err=True)
+                env.exit(1)
+                return
+            if resolved_url is not None:
+                repo_ref: ?str = repo_ref_arg_eff if repo_ref_arg_eff != "" else None
+                _run_zig_fetch(resolved_url, repo_url_eff, repo_ref)
+                return
+            print("Error: Could not resolve ref for", dep_name, err=True)
+            env.exit(1)
+
+        repo_ref: ?str = repo_ref_arg_eff if repo_ref_arg_eff != "" else None
+        cli_gh.FetchRef(_on_ref, url=repo_url_eff, tcpc_cap=tcpc_cap, ref=repo_ref)
+
     def _decide_url_and_fetch():
         # Decide how to obtain the URL, now that build_config has been loaded.
         if url_arg != "" and repo_url != "":
@@ -1251,28 +1329,12 @@ actor CmdPkgAdd(env, args):
         elif url_arg != "":
             _run_zig_fetch(url_arg, None, None)
         elif repo_url != "":
-            # Resolve URL from repo-url/repo-ref, like pkg upgrade
-            if not repo_url.startswith("https://github.com"):
-                print("ERROR: Unsupported git forge URL for pkg add:", repo_url, "only https://github.com is supported", err=True)
-                env.exit(1)
-
-            def _on_ref(err: ?Exception, resolved_url: ?str):
-                if err is not None:
-                    print("Error fetching ref for %s:" % dep_name, err.error_message, err=True)
-                    env.exit(1)
-                    return
-                if resolved_url is not None:
-                    repo_ref: ?str = repo_ref_arg if repo_ref_arg != "" else None
-                    _run_zig_fetch(resolved_url, repo_url, repo_ref)
-                    return
-                print("Error: Could not resolve ref for", dep_name, err=True)
-                env.exit(1)
-
-            repo_ref: ?str = repo_ref_arg if repo_ref_arg != "" else None
-            cli_gh.FetchRef(_on_ref, url=repo_url, tcpc_cap=tcpc_cap, ref=repo_ref)
+            _fetch_from_repo(repo_url, repo_ref_arg)
         else:
-            print("ERROR: Must provide either --url or --repo-url", err=True)
-            env.exit(1)
+            # No explicit URL flags; fall back to package index.
+            pkg_name = pkg_name_arg if pkg_name_arg != "" else dep_name
+            repo_url_idx = _lookup_repo_url_from_index(pkg_name)
+            _fetch_from_repo(repo_url_idx, repo_ref_arg)
 
     def _on_spec_done(error, spec):
         if error is not None:
@@ -1417,7 +1479,7 @@ actor CmdPkgUpgrade(env, args):
         if url is not None:
             new_pkg_urls[dep_name] = url
         if err is not None:
-            print("Error fetching ref for %s:" % dep_name, err.error_message)
+            print("Error fetching ref for {dep_name}:", err.error_message)
         if len(remaining_fetch_ref) == 0:
             _zig_fetch()
 
@@ -1513,6 +1575,123 @@ actor CmdPkgRemove(env, args):
 
     ReadBuildSpec(env, pcap, _on_spec_done)
 
+
+actor CmdPkgUpdate(env, args):
+    """Initialize or refresh the local package index.
+
+    Downloads JSON index from:
+      https://actonlang.github.io/package-index/index.json
+
+    and stores it at:
+      ~/.cache/acton/package-index.json
+    """
+    tcpc_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(env.cap)))
+    fs = file.FS(file.FileCap(env.cap))
+
+    index_url = "https://actonlang.github.io/package-index/index.json"
+
+    def _on_done(err: ?str, res: ?http.Response):
+        if err is not None:
+            print("ERROR: Failed to download package index from {index_url}: {err}", err=True)
+            env.exit(1)
+            return
+        if res is None:
+            print("ERROR: No response when downloading package index from {index_url}", err=True)
+            env.exit(1)
+            return
+
+        body = ""
+        if res is not None:
+            body = res.body.decode()
+
+        index_dir = file.join_path([fs.homedir(), ".cache", "acton"])
+        try:
+            fs.mkdir(index_dir)
+        except:
+            pass
+        index_path = file.join_path([index_dir, "package-index.json"])
+        f = file.WriteFile(file.WriteFileCap(file.FileCap(env.cap)), index_path)
+        f.write(body.encode())
+        await async f.close()
+        print("Updated package index at {index_path}")
+        env.exit(0)
+
+    cli_gh.GetQuery(on_done=_on_done, tcpc_cap=tcpc_cap, url=index_url)
+
+
+actor CmdPkgSearch(env, args):
+    """Search for packages in the local package index.
+
+    Usage:
+      acton pkg search TERM [TERM ...]
+
+    Each TERM is a regular expression; all terms must match (AND semantics)
+    somewhere in the package name, description or repo_url.
+    """
+    fs = file.FS(file.FileCap(env.cap))
+
+    terms = args.get_strlist("terms")
+
+    def _load_index() -> list[(name: str, description: str, repo_url: str)]:
+        """Deserialize and validate the package index JSON into a list of packages.
+
+        Each entry has the shape (name: str, description: str, repo_url: str).
+        """
+        pkgs: list[(name: str, description: str, repo_url: str)] = []
+        index_path = file.join_path([fs.homedir(), ".cache", "acton", "package-index.json"])
+        try:
+            content = file.ReadFile(file.ReadFileCap(file.FileCap(env.cap)), index_path).read().decode()
+            jd = json.decode(content)
+            if isinstance(jd, dict):
+                pkgs_val = jd.get("packages")
+                if isinstance(pkgs_val, list):
+                    for raw in pkgs_val:
+                        if isinstance(raw, dict):
+                            name_val = raw.get("name")
+                            desc_val = raw.get("description")
+                            repo_val = raw.get("repo_url")
+                            if isinstance(name_val, str) and isinstance(desc_val, str) and isinstance(repo_val, str):
+                                pkg = (name=name_val, description=desc_val, repo_url=repo_val)
+                                pkgs.append(pkg)
+                    return pkgs
+
+            print("ERROR: Invalid package index: top-level 'packages' list missing or wrong type", err=True)
+        except FileNotFoundError:
+            print("No package index found at %s" % index_path, err=True)
+            print("HINT: Run 'acton pkg update' to create or refresh it.", err=True)
+        except ValueError as e:
+            print("ERROR: Failed to parse package index JSON:", e.error_message, err=True)
+        except Exception as e:
+            print("ERROR: Failed to read package index at %s:" % index_path, e, err=True)
+        env.exit(1)
+        return pkgs
+
+    pkgs = _load_index()
+
+    def _pkg_matches(pkg: (name: str, description: str, repo_url: str), term_list: list[str]) -> bool:
+        haystack = pkg.name + " " + pkg.description + " " + pkg.repo_url
+        for term_pat in term_list:
+            if term_pat == "":
+                continue
+            if re.match(term_pat, haystack) is None:
+                return False
+        return True
+
+    matched_pkgs = {}
+    for pkg in pkgs:
+        if len(terms) == 0 or _pkg_matches(pkg, terms):
+            matched_pkgs[pkg.name] = pkg
+
+    if len(matched_pkgs) == 0:
+        print("No packages matched your search.")
+
+    for name in sorted(matched_pkgs.keys()):
+        pkg = matched_pkgs[name]
+        print(pkg.name)
+        print("  " + pkg.description)
+        print("  " + pkg.repo_url)
+        print("")
+    env.exit(0)
 
 actor CmdZigPkgAdd(env, args):
     """Add a zig package dependency to the project
@@ -1759,6 +1938,12 @@ actor main(env):
     def _cmd_pkg_rm(args):
         c = CmdPkgRemove(env, args)
 
+    def _cmd_pkg_update(args):
+        CmdPkgUpdate(env, args)
+
+    def _cmd_pkg_search(args):
+        CmdPkgSearch(env, args)
+
     def _cmd_new(args):
         cr = CompilerRunner(process_cap, env, ["new", args.get_str("projectdir")])
         env.exit(0)
@@ -1830,6 +2015,7 @@ actor main(env):
         p_pkg_add.add_option("url", "str", "?", "", "URL of dependency")
         p_pkg_add.add_option("repo-url", "str", "?", "", "Git repository URL of dependency")
         p_pkg_add.add_option("repo-ref", "str", "?", "", "Git ref (branch, tag or SHA) to use")
+        p_pkg_add.add_option("pkg-name", "str", "?", "", "Package name in index (defaults to NAME)")
         p_pkg_add.add_option("hash", "str", "?", "", "Hash of dependency")
 
         p_pkg_rm = p_pkg.add_cmd("remove", "Remove package dependency", _cmd_pkg_rm)
@@ -1837,6 +2023,11 @@ actor main(env):
 
         p_pkg_upgrade = p_pkg.add_cmd("upgrade", "Upgrade (or downgrade) package dependency", _cmd_pkg_upgrade)
         #p_pkg_upgrade.add_option("name", "str", "?", help="Dependency name")
+
+        p_pkg_update = p_pkg.add_cmd("update", "Update package index", _cmd_pkg_update)
+
+        p_pkg_search = p_pkg.add_cmd("search", "Search package index", _cmd_pkg_search)
+        p_pkg_search.add_arg("terms", "Search terms (regex, ANDed)", False, "+")
 
         docp = p.add_cmd("doc", "Show documentation", _cmd_doc)
         docp.add_arg("docfile", "Input file (.act or .ty) - optional in projects", False, "?")
