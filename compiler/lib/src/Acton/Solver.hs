@@ -344,7 +344,8 @@ solve' env select hist te tt eq cs
                 cond (RTry v as r : rs)     = RTry v (if rev' then subrev ts' else ts') rev'
                   where ts                  = foldr intersect as $ map alts rs
                         ts'                 = if v `elem` optvs then ts \\ [tOpt tWild] else ts
-                        rev'                = (or $ r : map rev rs) || v `elem` posvs
+--                        rev'                = (or $ r : map rev rs) || v `elem` posvs
+                        rev'                = (and $ r : map rev rs) || v `elem` posvs
                 cond (RVar v as : rs)       = RVar v (foldr union as $ map alts rs)
                 cond [RImp q rs]            = RImp q (condense env1 rs)
                   where env1                = defineTVars q env
