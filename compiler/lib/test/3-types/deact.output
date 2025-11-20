@@ -9,7 +9,7 @@ W_761: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
 
 # recursive group:
 actor Apa ():
-    proc def setup (cb : action(__builtin__.int) -> __builtin__.int) -> None:
+    proc def setup (cb : proc(__builtin__.int) -> __builtin__.int) -> None:
         print@[(__builtin__.str,)](*("setup",), sep = None, end = None, err = None, flush = None)
         cb(W_311.__fromatom__(0))
     proc def compute (cb : action(__builtin__.int) -> __builtin__.int) -> __builtin__.int:
@@ -20,7 +20,7 @@ actor Apa ():
     proc def notice (i : __builtin__.int) -> __builtin__.int:
         print@[(__builtin__.str,)](*("notice",), sep = None, end = None, err = None, flush = None)
         return W_313.__add__(i, W_311.__fromatom__(1))
-    setup(cb = action lambda (G_1y : __builtin__.int): $WRAP@[(), (i: __builtin__.int), __builtin__.int](self, notice)(i = G_1y))
+    setup(cb = proc lambda (G_1y : __builtin__.int): notice(i = G_1y))
     print@[(__builtin__.str,)](*("Apa",), sep = None, end = None, err = None, flush = None)
 actor Bepa ():
     proc def callback (i : __builtin__.int) -> __builtin__.int:
