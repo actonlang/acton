@@ -318,7 +318,9 @@ buildSpecCommand cmd =
       unless exists $ printErrorAndExit "Build.act not found in current directory"
       let actPath = "Build.act"
       content <- readFile actPath
-      json <- BL.readFile jsonPath
+      json <- if jsonPath == "-"
+                then BL.getContents
+                else BL.readFile jsonPath
       case BuildSpec.updateBuildActFromJSON content json of
         Left err      -> printErrorAndExit ("Failed to update Build.act: \n" ++ err)
         Right updated -> writeFile actPath updated >> putStrLn "Updated Build.act"
