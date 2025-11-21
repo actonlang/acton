@@ -2,7 +2,7 @@
 
 void B___ext_init__() {
 
-    B_HashableD_intG_methods.__eq__ = (B_bool (*)(B_HashableD_int, B_int, B_int))B_OrdD_intD___eq__;
+    B_HashableD_bigintG_methods.__eq__ = (B_bool (*)(B_HashableD_bigint, B_bigint, B_bigint))B_OrdD_bigintD___eq__;
     B_HashableD_intG_methods.__eq__ = (B_bool (*)(B_HashableD_int, B_int, B_int))B_OrdD_intD___eq__;
     B_HashableD_i32G_methods.__eq__ = (B_bool (*)(B_HashableD_i32, B_i32, B_i32))B_OrdD_i32D___eq__;
     B_HashableD_i16G_methods.__eq__ = (B_bool (*)(B_HashableD_i16, B_i16, B_i16))B_OrdD_i16D___eq__;

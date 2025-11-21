@@ -5,32 +5,32 @@ class Box(object):
     def __init__(self):
         self.item = 0
 
-proc def funExpr(n:int):
+proc def funExpr(n:bigint):
     call(n)
     n = 1
 
-proc def funAssign(n:int):
+proc def funAssign(n:bigint):
     x = call(n)
     n = 1
 
-proc def funMutAssign(n:int):
+proc def funMutAssign(n:bigint):
     obj = Box()
     obj.item = call(n)
     n = 1
 
-proc def funPUSH(n:int):
+proc def funPUSH(n:bigint):
     try:
         n = 1
     finally:
         return
 
-proc def funWhile(n:int):
+proc def funWhile(n:bigint):
     while n:
         n = 1
         if False:
             return
 
-proc def funSeq(n:int):
+proc def funSeq(n:bigint):
     if True:
         x = 0
     elif n:

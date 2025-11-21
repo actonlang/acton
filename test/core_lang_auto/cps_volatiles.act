@@ -1,7 +1,7 @@
-proc def force_cps(arg: int):
+proc def force_cps(arg: bigint):
     return arg
 
-def compute(aa: int) -> int:
+def compute(aa: bigint) -> bigint:
     xx = 1
     try:
         xx += force_cps(1)

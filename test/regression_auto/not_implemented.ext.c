@@ -2,8 +2,8 @@ void not_implementedQ___ext_init__() {
     // NOP
 }
 
-B_int not_implementedQ_there (B_str x) {
-    return to$int(0);
+int64_t not_implementedQ_U_1there (B_str x) {
+    return 0;
 }
 
 $WORD not_implementedQ_generic (B_Eq W_25, $WORD x) {
