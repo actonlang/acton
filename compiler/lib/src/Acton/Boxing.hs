@@ -113,12 +113,18 @@ instance {-# OVERLAPS #-} Boxing ([Stmt]) where
       where te                        = envOf x
             env1                      = define te env
     boxing env (x@(Assign _ [p@(PVar _ n (Just t))] _) : xs)
-       | isUnboxable t               = do (ws1,x') <- boxing env x
-                                          un <- newName (nstr n)
-                                          (ws2,xs') <- boxing (addUnboxedVars [(n,un)] (define te env)) xs
-                                          let s = sAssign (pVar un t) (unbox t (expr x'))
-                                              ss = if isTopLevel env then [sAssign p (Box t (eVar un))] else []
-                                          return (ws1++ws2, s : ss ++ xs')
+       | isUnboxable t               = do (un,env1) <- maybe (newName (nstr n) >>= \un -> return (un, addUnboxedVars [(n,un)] env)) (\un -> return (un, env)) (lookup n (unboxedVars env))
+                                          (ws1,x') <- boxing env1 x
+                                          (ws2,xs') <- boxing (define te env1) xs
+                                          let ss = if isTopLevel env1 then [sAssign p (Box t (eVar un))] else []
+                                          return (ws1++ws2, x' : ss ++ xs')
+      where te                       = envOf x
+
+    boxing env (x@If{} : xs)         = do ns <- newNames [ n | (n,NVar t) <- te, isUnboxable t ]
+                                          let env1 = addUnboxedVars ns env
+                                          (ws1,x') <- boxing env1 x
+                                          (ws2,xs') <- boxing (define te env1) xs
+                                          return (ws1++ws2, x' : xs')
       where te                       = envOf x
 
     boxing env (x : xs)              = do ps <- if (inClass env) then return [] else newNames [n | (n,NDef (TSchema _ [] (TFun _ _ p _ t)) _ _) <- te, isUnboxable t ||  hasUnboxableType p]
