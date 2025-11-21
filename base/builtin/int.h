@@ -1,28 +1,17 @@
-#include <bsdnt/zz.h>
-
 struct B_int {
     struct B_intG_class *$class;
-    zz_struct val;
+    int64_t val;
 };
 
-B_int zz$to$int(zz_ptr val);
-
-long from$int(B_int n);
-B_int to$int(long n);
-B_int to$int2(char *str);
-
-char *get_str(zz_ptr n);
+ 
+B_int toB_int(int64_t n);
+int64_t fromB_int(B_int n);
 
 B_int B_intG_new(B_atom a, B_int base);
 
-B_int $gcd(B_int, B_int);
-B_tuple $xgcd(B_int, B_int);
+// only called with e>=0.
+long int_pow(long a, long e); // used also for ndarrays
 
-extern struct B_int B_int_strs[384];
-
-#define ORD_B_int__eq__(a,b)  (zz_equal(&a->val,&b->val))
-#define ORD_B_int__ne__(a,b)  (1-zz_equal(&a->val,&b->val))
-#define ORD_B_int__lt__(a,b)  (zz_cmp(&a->val,&b->val) < 0)
-#define ORD_B_int__le__(a,b)  (zz_cmp(&a->val,&b->val) <= 0)
-#define ORD_B_int__gt__(a,b)  (zz_cmp(&a->val,&b->val) > 0)
-#define ORD_B_int__ge__(a,b)  (zz_cmp(&a->val,&b->val) >= 0)
+#define int_DIV(a,b)       ( {if (b==0) $RAISE((B_BaseException)$NEW(B_ZeroDivisionError,to$str("int truediv: division by zero"))); (double)a/(double)b;} )
+#define int_FLOORDIV(a,b)  ( {if (b==0) $RAISE((B_BaseException)$NEW(B_ZeroDivisionError,to$str("int floordiv: division by zero")));  a/b;} )
+#define int_MOD(a,b)       ( {if (b==0) $RAISE((B_BaseException)$NEW(B_ZeroDivisionError,to$str("int mod: division by zero"))); a%b;} )
