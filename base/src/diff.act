@@ -8,7 +8,7 @@ import term
 # minimal, readable diffs.
 # Myers algorithm is documented at: http://blog.robertelder.org/diff-algorithm/
 
-def myers_diff(e: list[str], f: list[str], i: i64 = 0, j: i64 = 0) -> list[Op]:
+def myers_diff(e: list[str], f: list[str], i: int = 0, j: int = 0) -> list[Op]:
     """
     Myers-inspired diff algorithm implementation - finds the minimal edit script between two sequences.
 
@@ -148,7 +148,7 @@ def myers_diff(e: list[str], f: list[str], i: i64 = 0, j: i64 = 0) -> list[Op]:
         unique_lines_f[line].append(idx)
 
     # Find lines that appear exactly once in both sequences
-    anchors: list[(i64, i64)] = []
+    anchors: list[(int, int)] = []
 
     for line, e_indices in unique_lines_e.items():
         if len(e_indices) == 1 and line in unique_lines_f and len(unique_lines_f[line]) == 1:
@@ -234,10 +234,10 @@ class Gap(Op):
 # Keep operation class (for context lines)
 class Keep(Op):
     content: str
-    index_old: i64
-    index_new: i64
+    index_old: int
+    index_new: int
 
-    def __init__(self, content: str, index_old: i64, index_new: i64):
+    def __init__(self, content: str, index_old: int, index_new: int):
         self.content = content
         self.index_old = index_old
         self.index_new = index_new
@@ -251,9 +251,9 @@ class Keep(Op):
 # Delete operation class
 class Delete(Op):
     content: str
-    index_old: i64
+    index_old: int
 
-    def __init__(self, content: str, index_old: i64):
+    def __init__(self, content: str, index_old: int):
         self.content = content
         self.index_old = index_old
 
@@ -266,9 +266,9 @@ class Delete(Op):
 # Insert operation class
 class Insert(Op):
     content: str
-    index_new: i64
+    index_new: int
 
-    def __init__(self, content: str, index_new: i64):
+    def __init__(self, content: str, index_new: int):
         self.content = content
         self.index_new = index_new
 
@@ -278,7 +278,7 @@ class Insert(Op):
     def format_with_color(self) -> str:
         return term.green + str(self) + term.normal
 
-def filter_operations_with_context(operations: list[Op], context_lines: i64) -> list[Op]:
+def filter_operations_with_context(operations: list[Op], context_lines: int) -> list[Op]:
     """
     Filter operations to only include changes and their surrounding context.
 
