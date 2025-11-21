@@ -28,10 +28,6 @@ class object (value):
 class atom (value):
     pass
 
-class bigint (atom):
-    def __init__(self, val: atom, base: ?int) -> None:
-        NotImplemented
-
 class int (atom):
     def __init__(self, val: atom, base: ?int) -> None:
         NotImplemented
@@ -681,15 +677,6 @@ protocol Integral (Rational,Logical):
 
 #extension bool (Eq): pass
 extension bool (Hashable):
-    NotImplemented
-
-extension bigint (Integral):
-    NotImplemented
-extension bigint (Div[float]):
-    NotImplemented
-extension bigint (Ord):
-    NotImplemented
-extension bigint (Hashable):
     NotImplemented
 
 extension int (Integral):
