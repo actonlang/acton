@@ -1,0 +1,4 @@
+actor Test():
+    def ok_method(param):
+        def test_method(first, self):
+            pass

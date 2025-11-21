@@ -497,20 +497,18 @@ addWit env wit
   where same                = [ w | w <- witsByPName env (tcname $ proto wit), wtype w == wtype wit ]
 
 reserve                     :: [Name] -> EnvF x -> EnvF x
-reserve xs env              = env{ names = [ (x, NReserved) | x <- nub xs ] ++ names env }
---reserve xs env
---  | not $ null badSelf      = selfParamError (loc $ head badSelf)
---  | otherwise               = env{ names = [ (x, NReserved) | x <- nub xs ] ++ names env }
---  where badSelf             = if inAct env then xs `intersect` [selfKW] else []
+reserve xs env
+  | not $ null badSelf      = selfParamError (loc $ head badSelf)
+  | otherwise               = env{ names = [ (x, NReserved) | x <- nub xs ] ++ names env }
+  where badSelf             = if inAct env then xs `intersect` [selfKW] else []
 
 define                      :: TEnv -> EnvF x -> EnvF x
-define te env               = foldl addWit env1 ws
---define te env
---  | not $ null badSelf      = selfParamError (loc $ head badSelf)
---  | otherwise               = foldl addWit env1 ws
+define te env
+  | not $ null badSelf      = selfParamError (loc $ head badSelf)
+  | otherwise               = foldl addWit env1 ws
   where env1                = env{ names = reverse te ++ names env }
         ws                  = [ WClass q (tCon c) p (NoQ w) ws (length opts) | (w, NExt q c ps te' opts _) <- te, (ws,p) <- ps ]
---        badSelf             = if inAct env then dom te `intersect` [selfKW] else []
+        badSelf             = if inAct env then dom te `intersect` [selfKW] else []
 
 
 addImport                   :: ModName -> EnvF x -> EnvF x
