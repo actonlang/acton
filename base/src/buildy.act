@@ -22,16 +22,19 @@ class BuildSpec(object):
     """Build configuration, the content of build.act.json
 
     - name is the project name (optional)
+    - description is a human-readable project description (optional)
     - dependencies are dependencies on other Acton projects
     - zig_dependencies are dependencies on Zig projects, which could in turn be
       Zig, C or C++ libraries that get linked in with the project
     """
     name: ?str
+    description: ?str
     dependencies: dict[str, PkgDependency]
     zig_dependencies: dict[str, ZigDependency]
 
-    def __init__(self, name: ?str=None, dependencies: dict[str, PkgDependency]={}, zig_dependencies: dict[str, ZigDependency]={}):
+    def __init__(self, name: ?str=None, description: ?str=None, dependencies: dict[str, PkgDependency]={}, zig_dependencies: dict[str, ZigDependency]={}):
         self.name = name
+        self.description = description
         self.dependencies = dependencies
         self.zig_dependencies = zig_dependencies
 
@@ -39,6 +42,7 @@ class BuildSpec(object):
     def from_json(data: str):
         jd = json.decode(data)
         name = None
+        description = None
         new_dependencies = {}
         new_zig_dependencies = {}
         if isinstance(jd, dict):
@@ -49,6 +53,11 @@ class BuildSpec(object):
                             name = value
                         else:
                             raise ValueError("Invalid build.act.json, name should be a string")
+                    elif key == "description":
+                        if isinstance(value, str):
+                            description = value
+                        else:
+                            raise ValueError("Invalid build.act.json, description should be a string")
                     elif key == "dependencies":
                         if isinstance(value, dict):
                             for dep_name, dep_attrs in value.items():
@@ -74,7 +83,7 @@ class BuildSpec(object):
                 else:
                     raise ValueError("Invalid build.act.json, non-string key found in top level dict")
 
-            return BuildSpec(name, new_dependencies, new_zig_dependencies)
+            return BuildSpec(name, description, new_dependencies, new_zig_dependencies)
         raise ValueError("Invalid build.act.json, top level should be a dict")
 
     def to_json(self) -> str:
@@ -86,6 +95,7 @@ class BuildSpec(object):
             res_zigdeps[dep_name] = dep.to_json()
         res = {
             "name": self.name,
+            "description": self.description,
             "dependencies": res_deps,
             "zig_dependencies": res_zigdeps,
         }

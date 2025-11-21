@@ -427,6 +427,7 @@ main = do
         let buildAct = unlines
               [ "# Canonical Build.act file"
               , "name = \"demo\""
+              , "description = \"Demo project\""
               , ""
               , "# Dependencies section"
               , "dependencies = {"
@@ -459,6 +460,7 @@ main = do
         let buildAct0 = unlines
               [ "# Canonical Build.act file"
               , "name = \"demo\""
+              , "description = \"Demo project\""
               , ""
               , "# Dependencies section (keep my comments)"
               , "dependencies = {"
@@ -481,6 +483,7 @@ main = do
             let expected = unlines
                   [ "# Canonical Build.act file"
                   , "name = \"demo\""
+                  , "description = \"Demo project\""
                   , ""
                   , "# Dependencies section (keep my comments)"
                   , "dependencies = {"

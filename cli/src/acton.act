@@ -584,8 +584,7 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
             for dep_name, dep in build_spec.zig_dependencies.items():
                 build_spec_fetchable.zig_dependencies[dep_name] = dep
 
-            bc = BuildSpec(build_spec.name, build_spec.dependencies, build_spec.zig_dependencies)
-            write_buildzig(file.FileCap(env.cap), bc)
+            write_buildzig(file.FileCap(env.cap), build_spec)
             zfd = ZigFetchDeps(env, build_spec_fetchable, lambda x, y: check_deps(), on_zig_fetch_error)
             return
 
