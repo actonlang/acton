@@ -1246,41 +1246,6 @@ abstractDefs env q b                    = map absDef b
                                                 PosPar nSelf t e $ qualWPar env q p
                                             p -> qualWPar env q p
 
--- Check actor-specific restrictions on 'self' usage
--- Can check a name, parameters, or both
-checkSelfInActor :: Env -> Maybe Name -> Maybe PosPar -> Maybe KwdPar -> TypeM ()
-checkSelfInActor env mName mPosPar mKwdPar
-  | inActorContext                      = checkName >> checkPosParams >> checkKwdParams
-  | otherwise                           = return ()
-  where
-    -- We're in actor context if explicitly in actor OR if self is defined (nested functions)
-    inActorContext = inAct env || isJust (lookup selfKW (names env))
-
-    checkName = case mName of
-      Just n | rawstr n == "self"       -> selfParamError (loc n)
-      _                                 -> return ()
-
-    checkPosParams = case mPosPar of
-      Just p -> checkPos p
-      Nothing -> return ()
-
-    checkKwdParams = case mKwdPar of
-      Just k -> checkKwd k
-      Nothing -> return ()
-
-    checkPos (PosPar n _ _ p)
-      | rawstr n == "self"              = selfParamError (loc n)
-      | otherwise                       = checkPos p
-    checkPos (PosSTAR n _)
-      | rawstr n == "self"              = selfParamError (loc n)
-    checkPos _                          = return ()
-
-    checkKwd (KwdPar n _ _ k)
-      | rawstr n == "self"              = selfParamError (loc n)
-      | otherwise                       = checkKwd k
-    checkKwd (KwdSTAR n _)
-      | rawstr n == "self"              = selfParamError (loc n)
-    checkKwd _                          = return ()
 
 instance Check Decl where
     checkEnv env (Def l n q p k a b dec fx ddoc)
@@ -1292,7 +1257,6 @@ instance Check Decl where
                                              wellformed env1 a
                                              when (inClass env) $
                                                  tryUnify (Simple l "Type of first parameter of class method does not unify with Self") tSelf $ selfType p k dec
-                                             checkSelfInActor env (Just n) (Just p) (Just k)
                                              (csp,te0,p') <- infEnv env1 p
                                              (csk,te1,k') <- infEnv (define te0 env1) k
                                              (csb,_,b') <- infDefBody (define te1 (define te0 env1)) n p' k' b
@@ -1314,7 +1278,6 @@ instance Check Decl where
                                         = do --traceM ("## checkEnv actor " ++ prstr n)
                                              pushFX fxProc tNone
                                              wellformed env1 q
-                                             checkSelfInActor env1 Nothing (Just p) (Just k)
                                              (csp,te1,p') <- infEnv env1 p
                                              (csk,te2,k') <- infEnv (define te1 env1) k
                                              (csb,te,b') <- infSuiteEnv (define te2 $ define te1 env1) b
@@ -1326,7 +1289,7 @@ instance Check Decl where
                                                  act = Actor l n (noqual env q) (qualWPar env q p') k' body ddoc
                                              return (cs1, act{ pos = noDefaultsP (pos act), kwd = noDefaultsK (kwd act) })
       where env1                        = reserve (bound (p,k) ++ assigned b) $ defineTVars q $
-                                          define [(selfKW, NVar t0)] $ setInAct env
+                                          setInAct $ define [(selfKW, NVar t0)] env
             t0                          = tCon $ TC (NoQ n) (map tVar tvs)
             tvs                         = qbound q
             NAct _ _ _ te0 _            = findName n env
@@ -1557,8 +1520,7 @@ instance InfEnv Except where
     infEnv env (ExceptAll l)            = return ([], [], ExceptAll l)
     infEnv env (Except l x)             = return ([Cast (DfltInfo l 69 Nothing []) t tException], [], Except l x)
       where t                           = tCon (TC (unalias env x) [])
-    infEnv env (ExceptAs l x n)         = do checkSelfInActor env (Just n) Nothing Nothing
-                                             return ([Cast (DfltInfo l 70 Nothing []) t tException], [(n, NVar t)], ExceptAs l x n)
+    infEnv env (ExceptAs l x n)         = return ([Cast (DfltInfo l 70 Nothing []) t tException], [(n, NVar t)], ExceptAs l x n)
       where t                           = tCon (TC (unalias env x) [])
 
 instance Infer Expr where
@@ -1845,7 +1807,6 @@ instance Infer Expr where
 
     infer env (Lambda l p k e fx)
       | nodup (p,k)                     = do pushFX fx tNone
-                                             checkSelfInActor env Nothing (Just p) (Just k)
                                              (cs0,te0,p') <- infEnv env1 p
                                              (cs1,te1,k') <- infEnv (define te0 env1) k
                                              let env2 = define te1 $ define te0 env1
@@ -2119,7 +2080,6 @@ instance InfEnvT Pattern where
                                              wellformed env t
                                              return ([], [], t, PWild l (Just t))
     infEnvT env (PVar l n a)            = do t <- maybe newUnivar return a
-                                             checkSelfInActor env (Just n) Nothing Nothing
                                              wellformed env t
                                              case findName n env of
                                                  NReserved -> do

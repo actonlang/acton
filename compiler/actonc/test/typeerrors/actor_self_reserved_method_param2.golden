@@ -1,0 +1,11 @@
+Building file test/typeerrors/actor_self_reserved_method_param2.act using temporary scratch directory
+  Compiling actor_self_reserved_method_param2.act with Debug
+[error]: 'self' cannot be used as a parameter name in actors.
+     +--> actor_self_reserved_method_param2.act@3:32-3:36
+     |
+   3 |         def test_method(first, self):
+     :                                ^--- 
+     :                                `- 'self' cannot be used as a parameter name in actors.
+     :
+     | Hint: In actors, 'self' is reserved and implicitly available as a reference to the own actor that can be passed to other actors.
+-----+

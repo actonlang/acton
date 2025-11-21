@@ -27,15 +27,12 @@ import Acton.Unify
 
 data TypeX                      = TypeX {
                                     posnames   :: [Name],
-                                    context    :: EnvCtx,
                                     indecl     :: Bool,
                                     forced     :: Bool }
 
 type Env                        = EnvF TypeX
 
-data EnvCtx                     = CtxTop | CtxDef | CtxAct | CtxClass deriving (Eq,Show)
-
-typeX env0                      = setX env0 TypeX{ posnames = [], context = CtxTop, indecl = False, forced = False }
+typeX env0                      = setX env0 TypeX{ posnames = [], indecl = False, forced = False }
 
 instance Pretty TypeX where
     pretty _                    = empty
@@ -49,23 +46,9 @@ instance UFree TypeX where
 
 posdefine te env                = modX (define te env) $ \x -> x{ posnames = dom te ++ posnames x }
 
-setInDef env                    = modX env $ \x -> x{ context = CtxDef }
-
-setInAct env                    = modX env $ \x -> x{ context = CtxAct }
-
-setInClass env                  = modX env $ \x -> x{ context = CtxClass }
-
 setInDecl env                   = modX env $ \x -> x{ indecl = True }
 
 useForce env                    = modX env $ \x -> x{ forced = True }
-
-onTop env                       = context (envX env) == CtxTop
-
-inDef env                       = context (envX env) == CtxDef
-
-inAct env                       = context (envX env) == CtxAct
-
-inClass env                     = context (envX env) == CtxClass
 
 inDecl env                      = indecl $ envX env
 

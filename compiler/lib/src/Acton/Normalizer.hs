@@ -62,7 +62,7 @@ getComps                            = state (\(n,ts) -> (ts, (n,[])))
 type NormEnv                        = EnvF NormX
 
 data NormX                          = NormX {
-                                        contextX :: [ContextMark],
+                                        marksX :: [ContextMark],
                                         rtypeX :: Maybe Type,
                                         lambdavarsX :: PosPar,
                                         classattrsX :: [Name],
@@ -71,11 +71,11 @@ data NormX                          = NormX {
 
 data ContextMark                    = DROP | LOOP | FINAL deriving (Eq,Show)
 
-setContext c env                    = modX env $ \x -> x{ contextX = c }
+setMarks c env                      = modX env $ \x -> x{ marksX = c }
 
-pushMark c env                      = modX env $ \x -> x{ contextX = c :  contextX x }
+pushMark c env                      = modX env $ \x -> x{ marksX = c :  marksX x }
 
-context env                         = contextX $ envX env
+marks env                           = marksX $ envX env
 
 setRet t env                        = modX env $ \x -> x{ rtypeX = t }
 
@@ -96,7 +96,7 @@ setClassAttrs ns env                = modX env $ \x -> x{ classattrsX = ns }
 
 setSelfParam n env                  = modX env $ \x -> x{ selfparamX = Just n }
 
-normEnv env0                        = setX env0 NormX{ contextX = [], rtypeX = Nothing, lambdavarsX = PosNIL, classattrsX = [], selfparamX = Nothing }
+normEnv env0                        = setX env0 NormX{ marksX = [], rtypeX = Nothing, lambdavarsX = PosNIL, classattrsX = [], selfparamX = Nothing }
 
 
 -- Normalize terms ---------------------------------------------------------------------------------------
@@ -211,9 +211,9 @@ handle env x hs                     = do bs <- sequence [ branch e b | Handler e
                 t                   = tCon $ TC y []
 
 exitContext env s
-  | DROP:c <- context env           = sDROP : exitContext (setContext c env) s
-  | FINAL:c <- context env          = [sRAISE $ exn s]
-  | LOOP:c <- context env           = if s `elem` [sBreak,sContinue] then [s] else exitContext (setContext c env) s
+  | DROP:c <- marks env             = sDROP : exitContext (setMarks c env) s
+  | FINAL:c <- marks env            = [sRAISE $ exn s]
+  | LOOP:c <- marks env             = if s `elem` [sBreak,sContinue] then [s] else exitContext (setMarks c env) s
   | otherwise                       = [s]
   where exn (Break _)               = eCall (eQVar primBRK) []
         exn (Continue _)            = eCall (eQVar primCNT) []
@@ -433,7 +433,7 @@ instance Norm Decl where
                                     = do p' <- joinPar <$> norm env0 p <*> norm (define (envOf p) env0) k
                                          b' <- normSuite env1 b
                                          return $ Def l n q p' KwdNIL (conv t) (ret b') d x doc
-      where env1                    = setContext [] $ setRet t $ define (envOf p ++ envOf k) env0
+      where env1                    = setMarks [] $ setRet t $ define (envOf p ++ envOf k) env0
             env0                    = defineTVars q env00
             env00                   = case p of
                                         PosPar self _ _ _ | not $ null $ classattrs env, d /= Static ->
@@ -446,7 +446,7 @@ instance Norm Decl where
                                     = do p' <- joinPar <$> norm env0 p <*> norm (define (envOf p) env0) k
                                          b' <- normSuite env1 b
                                          return $ Actor l n q p' KwdNIL b' doc
-      where env1                    = setContext [] $ define (envOf p ++ envOf k) env0
+      where env1                    = setMarks [] $ define (envOf p ++ envOf k) env0
             env0                    = define [(selfKW, NVar t0)] $ defineTVars q env
             t0                      = tCon $ TC (NoQ n) (map tVar $ qbound q)
     norm env (Class l n q as b doc) = Class l n q as <$> norm env1 b <*> return doc
