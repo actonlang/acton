@@ -53,6 +53,7 @@ data EnvF x                 = EnvF {
                                 hmodules   :: HTEnv,
                                 witnesses  :: [Witness],
                                 thismod    :: Maybe ModName,
+                                context    :: [EnvCtx],
                                 envX       :: x }
 
 type Env0                   = EnvF ()
@@ -61,10 +62,35 @@ type Env0                   = EnvF ()
 setX                        :: EnvF y -> x -> EnvF x
 setX env x                  = EnvF { names = names env, imports = imports env, modules = modules env,
                                      hmodules = hmodules env, witnesses = witnesses env, thismod = thismod env,
-                                     envX = x }
+                                     context = context env, envX = x }
 
 modX                        :: EnvF x -> (x -> x) -> EnvF x
 modX env f                  = env{ envX = f (envX env) }
+
+
+data EnvCtx                 = CtxDef | CtxAct | CtxClass | CtxLoop deriving (Eq,Show)
+
+setInAct env                = env{ context = CtxAct : context env  }
+
+setInDef env                = env{ context = CtxDef : context env }
+
+setInClass env              = env{ context = CtxClass : context env  }
+
+setInLoop env               = env{ context = CtxLoop : context env  }
+
+onTop env                   = context env == []
+
+contextIs env ctx           = case context env of c:_ -> c == ctx; _ -> False
+
+contextHas env ctx          = ctx `elem` context env
+
+inAct env                   = contextHas env CtxAct
+
+inDef env                   = contextIs env CtxDef
+
+inClass env                 = contextIs env CtxClass
+
+inLoop env                  = contextIs env CtxLoop
 
 
 mapModules1                 :: ((Name,NameInfo) -> (Name,NameInfo)) -> Env0 -> Env0
@@ -446,6 +472,7 @@ initEnv path True          = return $ EnvF{ names = [(nPrim,NMAlias mPrim)],
                                             hmodules = M.empty, 
                                             witnesses = primWits,
                                             thismod = Nothing,
+                                            context = [],
                                             envX = () }
 initEnv path False         = do (_,nmod,_,_,_,_,_,_) <- InterfaceFiles.readFile (joinPath [path,"__builtin__.ty"])
                                 let NModule envBuiltin builtinDocstring = nmod
@@ -455,6 +482,7 @@ initEnv path False         = do (_,nmod,_,_,_,_,_,_) <- InterfaceFiles.readFile 
                                                  hmodules = M.empty,
                                                  witnesses = primWits,
                                                  thismod = Nothing,
+                                                 context = [],
                                                  envX = () }
                                     env = importAll mBuiltin envBuiltin $ importWits mBuiltin envBuiltin $ env0
                                 return env
@@ -470,11 +498,19 @@ addWit env wit
 
 reserve                     :: [Name] -> EnvF x -> EnvF x
 reserve xs env              = env{ names = [ (x, NReserved) | x <- nub xs ] ++ names env }
+--reserve xs env
+--  | not $ null badSelf      = selfParamError (loc $ head badSelf)
+--  | otherwise               = env{ names = [ (x, NReserved) | x <- nub xs ] ++ names env }
+--  where badSelf             = if inAct env then xs `intersect` [selfKW] else []
 
 define                      :: TEnv -> EnvF x -> EnvF x
 define te env               = foldl addWit env1 ws
+--define te env
+--  | not $ null badSelf      = selfParamError (loc $ head badSelf)
+--  | otherwise               = foldl addWit env1 ws
   where env1                = env{ names = reverse te ++ names env }
         ws                  = [ WClass q (tCon c) p (NoQ w) ws (length opts) | (w, NExt q c ps te' opts _) <- te, (ws,p) <- ps ]
+--        badSelf             = if inAct env then dom te `intersect` [selfKW] else []
 
 
 addImport                   :: ModName -> EnvF x -> EnvF x
