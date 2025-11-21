@@ -104,7 +104,7 @@ primIdentityActor   = gPrim "IdentityActor"
 primWEqNone         = gPrim "wEqNone"
 
 witIntegralInt      = GName mPrim $ Derived (deriveQ qnIntegral) $ Derived (deriveQ qnInt) suffixWitness
-witIntegralI64      = GName mPrim $ Derived (deriveQ qnIntegral) $ Derived (deriveQ qnI64) suffixWitness
+witIntegralBigint  = GName mPrim $ Derived (deriveQ qnIntegral) $ Derived (deriveQ qnBigint) suffixWitness
 
 primISNOTNONE       = gPrim "ISNOTNONE"
 primISNOTNONE0      = gPrim "ISNOTNONE0"
@@ -505,8 +505,8 @@ tEqNone             = tCon $ TC qnEq [tNone]
 --  $Integral$Int$witness : Integral[int]
 tIntegralInt        = tCon $ TC qnIntegral [tInt]
 
---  $Integral$I64$witness : Integral[i64]
-tIntegralI64        = tCon $ TC qnIntegral [tI64]
+--  $Integral$Bigint$witness : Integral[bigint]
+tIntegralBigint     = tCon $ TC qnIntegral [tBigint]
 
 
 --  $ISNOTNONE      : [A] => pure (?A) -> bool
@@ -553,15 +553,14 @@ scAnnot             = tSchema [quant a, quant b] tAnnot
         a           = TV KType $ name "A"
         b           = TV KType $ name "B"
 
--- $listD_U__getitem__ : [A] => (list[A], i64) -> A
+-- $listD_U__getitem__ : [A] => (list[A], int) -> A
 scUGetItem          = tSchema [quant a] tUGetItem
-  where tUGetItem   = tFun fxPure (posRow (tList (tVar a)) (posRow tI64 posNil)) kwdNil (tVar a)
+  where tUGetItem   = tFun fxPure (posRow (tList (tVar a)) (posRow tInt posNil)) kwdNil (tVar a)
         a           = TV KType $ name "A"
 
 -- $rangeD_U__next__ : [A] => (Iterator[A]) -> A   will only be used to replace B_IteratorD_range.__next__
-scUNext             = tSchema [quant a] tUNext
-  where tUNext      = tFun fxMut (posRow (tIterator (tVar a)) posNil) kwdNil tI64
-        a           = TV KType $ name "A" 
+scUNext             = tSchema [] tUNext
+  where tUNext      = tFun fxMut (posRow (tIterator (tInt)) posNil) kwdNil tInt
         
 --  $WRAP           : [A,B,C] => ($Actor, proc(*A,**B)->C) -> action(*A,**B)->C
 scWRAP              = tSchema [quant a, quant b, quant c] tWRAP

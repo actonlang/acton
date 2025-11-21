@@ -173,13 +173,13 @@ B_NoneType B_listD_extend(B_list lst, B_list other) {
     return B_None;
 }
 
-$WORD B_listD_pop(B_list lst, B_i64 i) {
+$WORD B_listD_pop(B_list lst, B_int i) {
     long ix;
     int len =lst->length;
     if (!i)
         ix = len-1;
     else
-        ix = fromB_i64(i);
+        ix = fromB_int(i);
     long ix0 = ix < 0 ? len + ix : ix;
     if (ix0 < 0 || ix0 >= len) {
         $RAISE((B_BaseException)$NEW(B_IndexError, to$int(ix0), to$str("pop: index outside list")));
@@ -300,9 +300,9 @@ B_list B_TimesD_SequenceD_listD___zero__ (B_TimesD_SequenceD_list wit) {
     return B_listD_new(0);
 }
 
-B_list B_TimesD_SequenceD_listD___mul__ (B_TimesD_SequenceD_list wit, B_list lst, B_i64 n) {
+B_list B_TimesD_SequenceD_listD___mul__ (B_TimesD_SequenceD_list wit, B_list lst, B_int n) {
     int lstlen = lst->length;
-    long n64 =  fromB_i64(n);
+    long n64 =  fromB_int(n);
     if (lstlen == 0 || n64 <= 0)
         return B_listD_new(0);
     else {
@@ -378,8 +378,8 @@ B_list B_CollectionD_SequenceD_listD___fromiter__ (B_CollectionD_SequenceD_list 
     */
 }
 
-B_i64 B_CollectionD_SequenceD_listD___len__(B_CollectionD_SequenceD_list wit, B_list self) {
-    return toB_i64(self->length);
+B_int B_CollectionD_SequenceD_listD___len__(B_CollectionD_SequenceD_list wit, B_list self) {
+    return toB_int(self->length);
 }
 
 //  B_SequenceD_list //////////////////////////////////////////////////////////////////
@@ -393,8 +393,8 @@ $WORD $listD_U__getitem__(B_list lst, int64_t n) {
     return lst->data[ix0];
 }
 
-$WORD B_SequenceD_listD___getitem__(B_SequenceD_list wit, B_list lst, B_i64 n) {
-    return  $listD_U__getitem__(lst, fromB_i64(n));
+$WORD B_SequenceD_listD___getitem__(B_SequenceD_list wit, B_list lst, B_int n) {
+    return  $listD_U__getitem__(lst, fromB_int(n));
 }
 
 B_NoneType listD_U__setitem__(B_list lst, int64_t n, $WORD val) {
@@ -407,13 +407,13 @@ B_NoneType listD_U__setitem__(B_list lst, int64_t n, $WORD val) {
     return B_None;
 }
 
-B_NoneType B_SequenceD_listD___setitem__(B_SequenceD_list wit, B_list lst, B_i64 n, $WORD val) {
-    return  listD_U__setitem__(lst, fromB_i64(n), val);
+B_NoneType B_SequenceD_listD___setitem__(B_SequenceD_list wit, B_list lst, B_int n, $WORD val) {
+    return  listD_U__setitem__(lst, fromB_int(n), val);
 }
 
-B_NoneType B_SequenceD_listD___delitem__(B_SequenceD_list wit, B_list lst, B_i64 n) {
+B_NoneType B_SequenceD_listD___delitem__(B_SequenceD_list wit, B_list lst, B_int n) {
     int len = lst->length;
-    int64_t ix = fromB_i64(n);
+    int64_t ix = fromB_int(n);
     int ix0 = ix < 0 ? len + ix : ix;
     if(ix0 < 0 || ix0 >= len) {
         return B_None;
@@ -529,9 +529,9 @@ B_Iterator B_SequenceD_listD___reversed__(B_SequenceD_list wit, B_list lst) {
     return B_CollectionD_SequenceD_listD___iter__((B_CollectionD_SequenceD_list)wit->W_Collection, copy);
 }
 
-B_NoneType B_SequenceD_listD_insert(B_SequenceD_list wit, B_list lst, B_i64 n, $WORD elem) {
+B_NoneType B_SequenceD_listD_insert(B_SequenceD_list wit, B_list lst, B_int n, $WORD elem) {
     int len = lst->length;
-    long ix = fromB_i64(n);
+    long ix = fromB_int(n);
     expand(lst,1);
     long ix0 = ix < 0 ? (len+ix < 0 ? 0 : len+ix) : (ix < len ? ix : len);
     memmove(lst->data + (ix0 + 1),

@@ -54,24 +54,24 @@ void normalize_slice(B_slice slc, int64_t len, int64_t *slen, int64_t *start, in
         *slen = (*stop-*start)/ *step + ((*stop-*start)%*step != 0);
 }
 
-B_slice B_sliceG_new(B_i64 start, B_i64 stop, B_i64 step) {
+B_slice B_sliceG_new(B_int start, B_int stop, B_int step) {
     return $NEW(B_slice,start,stop,step);
 }
 
-B_NoneType B_sliceD___init__(B_slice s, B_i64 start, B_i64 stop, B_i64 step) {
+B_NoneType B_sliceD___init__(B_slice s, B_int start, B_int stop, B_int step) {
     if (start) {
         s->start = acton_malloc(sizeof(int64_t));
-        *s->start = fromB_i64(start);
+        *s->start = fromB_int(start);
     } else
         s->start = NULL;
     if (stop) {
         s->stop = acton_malloc(sizeof(int64_t));
-        *s->stop = fromB_i64(stop);
+        *s->stop = fromB_int(stop);
     } else
         s->stop = NULL;
     if (step) {
         s->step = acton_malloc(sizeof(int64_t));
-        *s->step = fromB_i64(step);
+        *s->step = fromB_int(step);
     } else
         s->step = NULL;
     return B_None;
