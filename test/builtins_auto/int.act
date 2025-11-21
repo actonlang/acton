@@ -288,7 +288,8 @@ def test_u32():
         raise ValueError('u32("1234",7) gives wrong result')
     if int(x) != 0:
         raise ValueError("unexpected: int(x) != 0")
-    if u32(2**32-1) + 1 != 0:
+    u32max: u32 = 2**32 - 1
+    if u32max + 1 != 0:
         raise ValueError("u32 wraparound failed")
     return True
 
@@ -311,7 +312,8 @@ def test_u64():
         raise ValueError('u64("1234",7) gives wrong result')
     if int(x) != 0:
         raise ValueError("unexpected: int(x) != 0")
-    if u64(2**64-1) + 1 != 0:
+    u64max: u64 = 2**64 - 1
+    if u64max + 1 != 0:
         raise ValueError("u64 wraparound failed")
     return True
 
@@ -327,7 +329,7 @@ def test_bigint():
     g: bigint = 1234567890000000
     h: bigint = 10**500
     i: bigint = 70014629019847787457594182942686257989
-    K: bigint = 1505279714924572685646656049328765658872190236487877560661160764208141566553212677331651
+    k: bigint = 1505279714924572685646656049328765658872190236487877560661160764208141566553212677331651
     if (a << 12) != b:
         raise ValueError("left shift of positive int broken")
     if (-a << 12) != -b:
