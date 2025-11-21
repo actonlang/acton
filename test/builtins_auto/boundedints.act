@@ -6,7 +6,7 @@ actor main(env):
     k = m*m
     print(u16(n-1))
     print(u32(m-1))
-    print(u64(k-1))
+#    print(u64(k-1))
     print(i16(n//2-1))
     print(i16(-n//2))
     print(i32(m//2-1))

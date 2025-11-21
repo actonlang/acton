@@ -23,7 +23,7 @@ uint8_t u1_pow(uint8_t a, uint8_t e) {
 // General methods ///////////////////////////////////////////////////////////////////////
 
 B_u1 B_u1G_new(B_atom a, B_int base) {
-    B_int b = B_intG_new(a, base);
+    B_bigint b = B_bigintG_new(a, base);
     long sz = b->val.size;
     if (sz == 0) return toB_u1(0);
     unsigned long n = b->val.n[0];
@@ -144,7 +144,7 @@ $WORD B_IntegralD_u1D___ceil__ (B_IntegralD_u1 wit, B_u1 n, B_Integral wit2) {
   
 B_u1 B_IntegralD_u1D___round__ (B_IntegralD_u1 wit, B_u1 n, B_int p) {
     uint8_t nval = n->val;
-    long pval = p==NULL ? 0 : from$int(p);
+    long pval = p==NULL ? 0 : fromB_int(p);
     if (pval>=0)
         return n;
     uint8_t p10 = u1_pow(10,-pval);
@@ -187,11 +187,11 @@ B_u1 B_IntegralD_u1D___mod__(B_IntegralD_u1 wit, B_u1 a, B_u1 b) {
 }
 
 B_u1 B_IntegralD_u1D___lshift__(B_IntegralD_u1 wit,  B_u1 a, B_int b) {
-    return toB_u1(a->val << from$int(b));
+    return toB_u1(a->val << fromB_int(b));
 }
 
 B_u1 B_IntegralD_u1D___rshift__(B_IntegralD_u1 wit,  B_u1 a, B_int b) {
-    return toB_u1(a->val >> from$int(b));
+    return toB_u1(a->val >> fromB_int(b));
 }
  
 B_u1 B_IntegralD_u1D___invert__(B_IntegralD_u1 wit,  B_u1 a) {

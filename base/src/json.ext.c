@@ -67,7 +67,7 @@ void jsonQ_encode_dict(yyjson_mut_doc *doc, yyjson_mut_val *node, B_dict data) {
                     yyjson_mut_obj_add_int(doc, node, key, ((B_i32)v)->val);
                     break;
                 case I64_ID:;
-                    yyjson_mut_obj_add_int(doc, node, key, ((B_i64)v)->val);
+                    yyjson_mut_obj_add_int(doc, node, key, ((B_int)v)->val);
                     break;
                 case U1_ID:;
                     yyjson_mut_obj_add_uint(doc, node, key, ((B_u1)v)->val);
@@ -140,7 +140,7 @@ void jsonQ_encode_list_into(yyjson_mut_doc *doc, yyjson_mut_val *node, B_list da
                     yyjson_mut_arr_add_int(doc, node, ((B_i32)v)->val);
                     break;
                 case I64_ID:;
-                    yyjson_mut_arr_add_int(doc, node, ((B_i64)v)->val);
+                    yyjson_mut_arr_add_int(doc, node, ((B_int)v)->val);
                     break;
                 case U1_ID:;
                     yyjson_mut_arr_add_uint(doc, node, ((B_u1)v)->val);

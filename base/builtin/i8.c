@@ -25,7 +25,7 @@ int8_t i8_pow(int8_t a, int8_t e) {
 // General methods ///////////////////////////////////////////////////////////////////////
 
 B_i8 B_i8G_new(B_atom a, B_int base) {
-    B_int b = B_intG_new(a, base);
+    B_bigint b = B_bigintG_new(a, base);
     unsigned long n = b->val.n[0];
     long sz = b->val.size;
     if (labs(sz) > 1 || (sz==1 && n > SCHAR_MAX) || sz == -1 && n > labs(SCHAR_MIN)) {
@@ -149,7 +149,7 @@ B_i8 B_IntegralD_i8D___round__ (B_IntegralD_i8 wit, B_i8 n, B_int p) {
     int8_t nval = n->val;
     if (nval<0)
         return toB_i8(-B_IntegralD_i8D___round__(wit,toB_i8(-nval),p)->val);
-    long pval = p==NULL ? 0 : from$int(p);
+    long pval = p==NULL ? 0 : fromB_int(p);
     if (pval>=0)
         return n;
     int8_t p10 = i8_pow(10,-pval);
@@ -194,11 +194,11 @@ B_i8 B_IntegralD_i8D___mod__(B_IntegralD_i8 wit, B_i8 a, B_i8 b) {
 }
 
 B_i8 B_IntegralD_i8D___lshift__(B_IntegralD_i8 wit,  B_i8 a, B_int b) {
-    return toB_i8(a->val << from$int(b));
+    return toB_i8(a->val << fromB_int(b));
 }
 
 B_i8 B_IntegralD_i8D___rshift__(B_IntegralD_i8 wit,  B_i8 a, B_int b) {
-    return toB_i8(a->val >> from$int(b));
+    return toB_i8(a->val >> fromB_int(b));
 }
  
 B_i8 B_IntegralD_i8D___invert__(B_IntegralD_i8 wit,  B_i8 a) {
