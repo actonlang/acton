@@ -15,7 +15,7 @@ import Control.Monad.State.Strict
 import Control.Monad.Except
 
 doBoxing                           :: Acton.Env.Env0 -> Module -> IO Module
-doBoxing env m                     = return m{mbody = ss}
+doBoxing env m                     = do return m{mbody = ss}
    where (_,ss)                    = runBoxM (boxing (boxEnv env) (mbody m))
 
 -- Boxing monad  ---------------------------------------------------------------------------------------------------
@@ -316,7 +316,7 @@ instance Boxing Stmt where
                 vFree (TCon _ (TC _ _))= True
                 vFree _            = False
                 t                  = typeOf env e
-         boxingincrBinop pt w attr es@[x1,x2] ts
+         boxingincrBinop pt w attr es@[x1,x2] ts    
           | isUnboxable t          = return ([], AugAssign NoLoc (unbox t x1) op (unbox t x2))
              where t               = head ts
                    op              = bin2Aug attr
@@ -330,6 +330,8 @@ instance Boxing Stmt where
     boxing env (Assign l ps e)     = do (ws1,ps1) <- boxing env ps
                                         (ws2,e2) <- boxing env e
                                         return (ws1++ws2, Assign l ps1 e2)
+{-  This does not work. It may cause mutable updates to integer-typed varibles.                                   
+
     boxing env (MutAssign l tg@Dot{}  e@(Call _ (Dot _ (Var _ w@(NoQ n)) attr) p KwdNil))
       | isWitness n                 = do (ws1,p1) <- boxing env p
                                          (ws2,s2) <- boxingWitness env w attr p1
@@ -352,6 +354,7 @@ instance Boxing Stmt where
              where t                = head ts
                    op               = bin2Aug attr
          boxingincrBinop w attr es _ = return ([n],  MutAssign l tg (eCall (eDot (eQVar w) attr) es))
+-}
     boxing env (MutAssign l t e)    = do (ws1,e1) <- boxing env e
                                          return (ws1, MutAssign l t e1)
     boxing env (AugAssign l t aop e)= do (ws1,e1) <- boxing env e
