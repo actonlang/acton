@@ -8,7 +8,7 @@ that are used across the application.
 VERSION: str = "1.0.0"
 """Current version of the bar module"""
 
-MAX_ITEMS: i64 = 1000
+MAX_ITEMS: int = 1000
 """Maximum number of items allowed in a container"""
 
 # Basic data class
@@ -25,7 +25,7 @@ class Data(object):
     """
     value: str
     label: str
-    count: i64
+    count: int
 
     def __init__(self, value: str, label: str):
         """Initialize data with value and label
@@ -121,7 +121,7 @@ class Container[T](object):
             List of transformed items that match predicate
 
         Examples:
-            >>> c = Container[i64]("numbers")
+            >>> c = Container[int]("numbers")
             >>> c.add(1)
             >>> c.add(2)
             >>> c.filter(lambda x: x > 1, lambda x: str(x))
@@ -133,7 +133,7 @@ class Container[T](object):
                 result.append(transform(item))
         return result
 
-    def count(self) -> i64:
+    def count(self) -> int:
         """Get number of items in container
 
         Returns:
@@ -178,7 +178,7 @@ actor DataProcessor():
     and processes them asynchronously.
     """
     var queue: list[Data] = []
-    var processed_count: i64 = 0
+    var processed_count: int = 0
 
     def enqueue(d: Data):
         """Add data to processing queue
@@ -203,7 +203,7 @@ actor DataProcessor():
             return d
         return None
 
-    def get_stats() -> dict[str, i64]:
+    def get_stats() -> dict[str, int]:
         """Get processing statistics
 
         Returns:
