@@ -1718,69 +1718,76 @@ actor CmdZigPkgAdd(env, args):
     dep_url = args.get_str("url")
     dep_artifacts = args.get_strlist("artifact")
 
-    def get_build_spec():
-        try:
-            return BuildSpec.from_json(file.ReadFile(file.ReadFileCap(file.FileCap(env.cap)), "build.act.json").read().decode())
-        except FileNotFoundError:
-            # Ignore, we create a new file
-            pass
-        except ValueError as e:
-            print("ERROR:", e.error_message)
-            await async env.exit(1)
-        return BuildSpec()
+    var build_spec = BuildSpec()
 
-    build_spec = get_build_spec()
+    def _run_zig_fetch():
+        def on_exit(p, exit_code, term_signal, std_out_buf, std_err_buf):
+            if exit_code == 0:
+                dep_hash = std_out_buf.decode().strip()
 
-    def on_exit(p, exit_code, term_signal, std_out_buf, std_err_buf):
-        if exit_code == 0:
-            dep_hash = std_out_buf.decode().strip()
+                if dep_name in build_spec.zig_dependencies:
+                    if build_spec.zig_dependencies[dep_name].url != dep_url:
+                        print("Updated existing dependency", dep_name, "with new URL", dep_url, " (old", build_spec.zig_dependencies[dep_name].url, ")")
+                        build_spec.zig_dependencies[dep_name].url = dep_url
 
-            if dep_name in build_spec.zig_dependencies:
-                if build_spec.zig_dependencies[dep_name].url != dep_url:
-                    print("Updated existing dependency", dep_name, "with new URL", dep_url, " (old", build_spec.zig_dependencies[dep_name].url, ")")
-                    build_spec.zig_dependencies[dep_name].url = dep_url
-
-                if build_spec.zig_dependencies[dep_name].hash == dep_hash:
-                    print("Dependency", dep_name, "is already up to date, hash:", dep_hash)
+                    if build_spec.zig_dependencies[dep_name].hash == dep_hash:
+                        print("Dependency", dep_name, "is already up to date, hash:", dep_hash)
+                    else:
+                        print("Updated existing dependency", dep_name, "with new hash", dep_hash, " (old", build_spec.zig_dependencies[dep_name].hash, ")")
+                        build_spec.zig_dependencies[dep_name].hash = dep_hash
                 else:
-                    print("Updated existing dependency", dep_name, "with new hash", dep_hash, " (old", build_spec.zig_dependencies[dep_name].hash, ")")
-                    build_spec.zig_dependencies[dep_name].hash = dep_hash
-            else:
-                # Add the hash
-                build_spec.zig_dependencies[dep_name] = ZigDependency(dep_name, dep_url, dep_hash, None, {}, dep_artifacts)
-                print("Added new Zig package dependency", dep_name, "with hash", dep_hash)
+                    # Add the hash
+                    build_spec.zig_dependencies[dep_name] = ZigDependency(dep_name, dep_url, dep_hash, None, {}, dep_artifacts)
+                    print("Added new Zig package dependency", dep_name, "with hash", dep_hash)
 
-            def _on_update_done(err):
-                if err is not None:
-                    print(err, err=True)
-                    env.exit(1)
-                else:
+                def _on_update_done(err):
+                    if err is not None:
+                        print(err, err=True)
+                        env.exit(1)
+                    else:
+                        env.exit(0)
+
+                try:
+                    s = fs.stat("Build.act")
+                    json_doc = build_spec.to_json()
+                    UpdateBuildSpec(env, pcap, json_doc, _on_update_done)
+                except:
+                    json_doc = build_spec.to_json()
+                    baj_file = file.WriteFile(file.WriteFileCap(file.FileCap(env.cap)), "build.act.json")
+                    baj_file.write(json_doc.encode()+b"\n")
+                    await async baj_file.close()
                     env.exit(0)
+            else:
+                print("Error fetching", std_err_buf.decode())
+                env.exit(1)
 
-            try:
-                s = fs.stat("Build.act")
-                json_doc = build_spec.to_json()
-                UpdateBuildSpec(env, pcap, json_doc, _on_update_done)
-            except:
-                json_doc = build_spec.to_json()
-                baj_file = file.WriteFile(file.WriteFileCap(file.FileCap(env.cap)), "build.act.json")
-                baj_file.write(json_doc.encode()+b"\n")
-                await async baj_file.close()
-                env.exit(0)
-        else:
-            print("Error fetching", std_err_buf.decode())
+        def on_error(p, error):
+            print("Error fetching", error)
             env.exit(1)
 
-    def on_error(p, error):
-        print("Error fetching", error)
-        env.exit(1)
+        cmd = [zig, "fetch", "--global-cache-dir", get_zig_global_cache_dir(file.FileCap(env.cap)), dep_url]
+        process.RunProcess(
+            pcap,
+            cmd,
+            on_exit,
+            on_error)
 
-    cmd = [zig, "fetch", "--global-cache-dir", get_zig_global_cache_dir(file.FileCap(env.cap)), args.get_str("url")]
-    process.RunProcess(
-        pcap,
-        cmd,
-        on_exit,
-        on_error)
+    def _on_spec_done(error, spec):
+        if error is not None:
+            if "No Build.act or build.act.json found" in error:
+                # No existing spec; start from empty and create new.
+                _run_zig_fetch()
+                return
+            print(error, err=True)
+            env.exit(1)
+            return
+
+        build_spec = spec
+        _run_zig_fetch()
+
+    # Load existing BuildSpec (prefer Build.act, fallback build.act.json),
+    # then perform zig fetch and update.
+    ReadBuildSpec(env, pcap, _on_spec_done)
 
 
 actor CmdZigPkgRemove(env, args):
@@ -1798,24 +1805,16 @@ actor CmdZigPkgRemove(env, args):
         print("ERROR:", e)
         env.exit(1)
 
-    def _get_build_spec():
-        try:
-            build_spec = BuildSpec.from_json(file.ReadFile(file.ReadFileCap(file.FileCap(env.cap)), "build.act.json").read().decode())
-            _remove_zig_pkg(build_spec, dep_name)
-        except FileNotFoundError:
-            # Ignore, we create a new file
-            print("No build.act.json file found, nothing to do.")
-            env.exit(0)
-        except ValueError as e:
-            print("ERROR:", e.error_message)
-            env.exit(1)
+    var build_spec = BuildSpec()
 
-    def _remove_zig_pkg(build_spec, dep_name):
+    def _apply_remove():
         if dep_name in build_spec.zig_dependencies:
             print("Removed Zig package dependency", dep_name)
             del build_spec.zig_dependencies[dep_name]
         else:
-            print("Zig dependency", dep_name, "not found in build.act.json. Nothing to do.")
+            print("Zig dependency", dep_name, "not found in build configuration. Nothing to do.")
+            env.exit(0)
+            return
 
         json_doc = build_spec.to_json()
 
@@ -1835,7 +1834,20 @@ actor CmdZigPkgRemove(env, args):
             await async baj_file.close()
             env.exit(0)
 
-    _get_build_spec()
+    def _on_spec_done(error, spec):
+        if error is not None:
+            if "No Build.act or build.act.json found" in error:
+                print("No Build.act or build.act.json file found, nothing to do.")
+                env.exit(0)
+                return
+            print(error, err=True)
+            env.exit(1)
+            return
+
+        build_spec = spec
+        _apply_remove()
+
+    ReadBuildSpec(env, pcap, _on_spec_done)
 
 
 actor main(env):
