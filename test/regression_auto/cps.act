@@ -2,6 +2,8 @@ proc def call(n):
     return n
 
 class Box(object):
+    @property
+    item: bigint
     def __init__(self):
         self.item = 0
 
