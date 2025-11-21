@@ -34,7 +34,6 @@
 #include "u16.c"
 #include "u8.c"
 #include "u1.c"
-#include "int.c"
 #include "bigint.c"
 #include "float.c"
 #include "bool.c"

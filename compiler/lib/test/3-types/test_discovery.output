@@ -2,41 +2,41 @@ import logging
 
 import testing
 
-W_6: __builtin__.Plus[__builtin__.bigint] = __builtin__.IntegralD_bigint()
+W_6: __builtin__.Plus[__builtin__.int] = __builtin__.IntegralD_int()
 
 actor MathTester ():
-    proc def add (a : __builtin__.bigint, b : __builtin__.bigint) -> __builtin__.bigint:
+    proc def add (a : __builtin__.int, b : __builtin__.int) -> __builtin__.int:
         return W_6.__add__(a, b)
 
 pure def _test_foo () -> None:
     pass
 
-W_104: __builtin__.Eq[__builtin__.bigint] = __builtin__.OrdD_bigint()
+W_104: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
 
-W_194: __builtin__.Number[__builtin__.bigint] = __builtin__.IntegralD_bigint()
+W_194: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
 
 # recursive group:
 actor _test_SimpleSyncTester ():
     m: MathTester = MathTester()
     print@[(__builtin__.str,)](*("SimpleSyncTester.test()",), sep = None, end = None, err = None, flush = None)
-    testing.assertEqual@[__builtin__.bigint](W_104, a = m.add(a = W_194.__fromatom__(1), b = W_194.__fromatom__(2)), b = W_194.__fromatom__(3), msg = "1 + 2 = 3", print_vals = None, print_diff = None)
+    testing.assertEqual@[__builtin__.int](W_104, a = m.add(a = W_194.__fromatom__(1), b = W_194.__fromatom__(2)), b = W_194.__fromatom__(3), msg = "1 + 2 = 3", print_vals = None, print_diff = None)
 actor _SyncTester (t : testing.SyncT):
     log: logging.Logger = logging.Logger(handler = t.log_handler)
     m: MathTester = MathTester()
     log.info(msg = "SyncTester.test()", data = None)
     print@[(__builtin__.str,)](*("SyncTester.test()",), sep = None, end = None, err = None, flush = None)
-    testing.assertEqual@[__builtin__.bigint](W_104, a = m.add(a = W_194.__fromatom__(1), b = W_194.__fromatom__(2)), b = W_194.__fromatom__(3), msg = "1 + 2 = 3", print_vals = None, print_diff = None)
+    testing.assertEqual@[__builtin__.int](W_104, a = m.add(a = W_194.__fromatom__(1), b = W_194.__fromatom__(2)), b = W_194.__fromatom__(3), msg = "1 + 2 = 3", print_vals = None, print_diff = None)
 actor _SyncTesterCore ():
     m: MathTester = MathTester()
     print@[(__builtin__.str,)](*("SimpleSyncTester.test()",), sep = None, end = None, err = None, flush = None)
-    testing.assertEqual@[__builtin__.bigint](W_104, a = m.add(a = W_194.__fromatom__(1), b = W_194.__fromatom__(2)), b = W_194.__fromatom__(3), msg = "1 + 2 = 3", print_vals = None, print_diff = None)
+    testing.assertEqual@[__builtin__.int](W_104, a = m.add(a = W_194.__fromatom__(1), b = W_194.__fromatom__(2)), b = W_194.__fromatom__(3), msg = "1 + 2 = 3", print_vals = None, print_diff = None)
 # (recursive group)
 
 proc def _test_simple_sync () -> None:
     s: _SyncTesterCore = _SyncTesterCore()
 
 proc def _test_sync (t : testing.SyncT) -> __builtin__.str:
-    W_689: __builtin__.Number[__builtin__.bigint] = __builtin__.IntegralD_bigint()
+    W_689: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
     m: MathTester = MathTester()
     return str(val = m.add(a = W_689.__fromatom__(1), b = W_689.__fromatom__(2)))
 
