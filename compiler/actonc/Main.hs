@@ -35,6 +35,7 @@ import qualified Acton.Deactorizer
 import qualified Acton.LambdaLifter
 import qualified Acton.Boxing
 import qualified Acton.CodeGen
+import qualified Acton.BuildSpec as BuildSpec
 import qualified Acton.Builtin
 import qualified Acton.DocPrinter as DocP
 import qualified Acton.Diagnostics as Diag
@@ -92,15 +93,6 @@ import Data.Binary (encode)
 import qualified Data.ByteString.Base16 as Base16
 import qualified Crypto.Hash.SHA256 as SHA256
 
--- Shared predicate: is a NameInfo root-eligible (actor with env/no params)?
-rootEligible :: A.NameInfo -> Bool
-rootEligible (A.NAct [] p k _ _) = case (p,k) of
-                                              (A.TNil{}, A.TRow _ _ _ t A.TNil{}) ->
-                                                prstr t == "Env" || prstr t == "None" ||
-                                                prstr t == "__builtin__.Env" || prstr t == "__builtin__.None"
-                                              _ -> False
-rootEligible _ = False
-
 main = do
     hSetBuffering stdout LineBuffering
     arg <- C.parseCmdLine
@@ -120,15 +112,16 @@ main = do
           procs <- getNumProcessors
           setNumCapabilities (max 2 procs)
     case arg of
-        C.CmdOpt gopts (C.New opts)   -> createProject (C.file opts)
-        C.CmdOpt gopts (C.Build opts) -> buildProject gopts opts
-        C.CmdOpt gopts (C.Cloud opts) -> undefined
-        C.CmdOpt gopts (C.Doc opts)   -> printDocs gopts opts
-        C.CmdOpt gopts C.Version      -> printVersion
-        C.CompileOpt nms gopts opts   -> case takeExtension (head nms) of
-                                     ".act" -> buildFile gopts (applyGlobalOpts gopts opts) (head nms)
-                                     ".ty" -> printDocs gopts (C.DocOptions (head nms) (Just C.AsciiFormat) Nothing)
-                                     _ -> printErrorAndExit ("Unknown filetype: " ++ head nms)
+        C.CmdOpt gopts (C.New opts)         -> createProject (C.file opts)
+        C.CmdOpt gopts (C.Build opts)       -> buildProject gopts opts
+        C.CmdOpt gopts (C.BuildSpecCmd o)   -> buildSpecCommand o
+        C.CmdOpt gopts (C.Cloud opts)       -> undefined
+        C.CmdOpt gopts (C.Doc opts)         -> printDocs gopts opts
+        C.CmdOpt gopts C.Version            -> printVersion
+        C.CompileOpt nms gopts opts         -> case takeExtension (head nms) of
+                                                 ".act" -> buildFile gopts (applyGlobalOpts gopts opts) (head nms)
+                                                 ".ty" -> printDocs gopts (C.DocOptions (head nms) (Just C.AsciiFormat) Nothing)
+                                                 _ -> printErrorAndExit ("Unknown filetype: " ++ head nms)
 
 defaultOpts   = C.CompileOptions False False False False False False False False False False False False
                                  False False False False False C.Debug False False False False
@@ -315,6 +308,36 @@ createProject name = do
         callProcess "git" ["init"]
         callProcess "git" ["add", "."]
         setCurrentDirectory curDir
+
+-- BuildSpec -----------------------------------------------------------------------------------------------------
+buildSpecCommand :: C.BuildSpecCommand -> IO ()
+buildSpecCommand cmd =
+  case cmd of
+    C.BuildSpecUpdate jsonPath -> do
+      exists <- doesFileExist "Build.act"
+      unless exists $ printErrorAndExit "Build.act not found in current directory"
+      let actPath = "Build.act"
+      content <- readFile actPath
+      json <- if jsonPath == "-"
+                then BL.getContents
+                else BL.readFile jsonPath
+      case BuildSpec.updateBuildActFromJSON content json of
+        Left err      -> printErrorAndExit ("Failed to update Build.act: \n" ++ err)
+        Right updated -> writeFile actPath updated >> putStrLn "Updated Build.act"
+    C.BuildSpecDump -> do
+      -- Dump JSON: prefer Build.act, fallback to build.act.json
+      existsBuild <- doesFileExist "Build.act"
+      if existsBuild
+        then do
+          content <- readFile "Build.act"
+          case BuildSpec.parseBuildAct content of
+            Left err        -> printErrorAndExit ("Failed to parse Build.act:\n" ++ err)
+            Right (spec,_,_) -> BL.putStr (BuildSpec.encodeBuildSpecJSON spec)
+        else do
+          jsonExists <- doesFileExist "build.act.json"
+          if jsonExists
+            then BL.readFile "build.act.json" >>= BL.putStr
+            else printErrorAndExit "No Build.act or build.act.json found"
 
 -- Build a project -----------------------------------------------------------------------------------------------
 
@@ -825,7 +848,7 @@ findPaths actFile opts  = do execDir <- takeDirectory <$> System.Environment.get
 
         analyze "/" ds  = do tmp <- canonicalizePath (C.tempdir opts)
                              return (True, tmp, [])
-        analyze pre ds  = do let projectFiles = ["Acton.toml", "build.act", "build.act.json"]
+        analyze pre ds  = do let projectFiles = ["Acton.toml", "Build.act", "build.act.json"]
                              hasProjectFile <- or <$> mapM (\file -> doesFileExist (joinPath [pre, file])) projectFiles
                              hasSrcDir <- doesDirectoryExist (joinPath [pre, "src"])
                              if hasProjectFile && hasSrcDir
@@ -927,6 +950,16 @@ data CompileTask        = ActonTask { name :: A.ModName, src :: String, atree:: 
 -- would be more robust to use that type rather than a hacky character
 -- replacement (replaceDot in genBuildZigExe)
 data BinTask            = BinTask { isDefaultRoot :: Bool, binName :: String, rootActor :: A.QName, isTest :: Bool } deriving (Show)
+
+
+-- Shared predicate: is a NameInfo root-eligible (actor with env/no params)?
+rootEligible :: A.NameInfo -> Bool
+rootEligible (A.NAct [] p k _ _) = case (p,k) of
+                                              (A.TNil{}, A.TRow _ _ _ t A.TNil{}) ->
+                                                prstr t == "Env" || prstr t == "None" ||
+                                                prstr t == "__builtin__.Env" || prstr t == "__builtin__.None"
+                                              _ -> False
+rootEligible _ = False
 
 -- return task where the specified root actor exists
 filterMainActor :: Acton.Env.Env0 -> Paths -> BinTask -> IO (Maybe BinTask)

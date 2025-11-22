@@ -4,8 +4,10 @@ import file
 import json
 import net
 import process
+import re
 import term
 import testing
+import http
 
 from buildy import *
 
@@ -109,7 +111,7 @@ actor CacheSizeChecker(cap: file.FileCap):
 
     check_caches()
 
-def write_buildzig(file_cap, build_config: BuildConfig):
+def write_buildzig(file_cap, build_spec):
     fs = file.FS(file_cap)
     # We want predictable deterministic paths. Zig wants relative paths. Get
     # relative path to / and then from there to satisfy both.
@@ -128,17 +130,17 @@ def write_buildzig(file_cap, build_config: BuildConfig):
     build_zig_tpl, build_zig_zon_tpl = get_build_zig_templates()
     # Write build.zig
     b_file = file.WriteFile(file.WriteFileCap(file_cap), "build.zig")
-    b_file.write(gen_buildzig(build_zig_tpl, build_config).encode())
+    b_file.write(gen_buildzig(build_zig_tpl, build_spec).encode())
     # Write build.zig.zon
     bzz_file = file.WriteFile(file.WriteFileCap(file_cap), "build.zig.zon")
     deps_path = file.get_relative_path(file.join_path([fs.homedir(), ".cache", "acton", "deps"]), fs.cwd())
 
-    bzz_file.write(gen_buildzigzon(build_zig_zon_tpl, build_config, relative_syspath, deps_path).encode())
+    bzz_file.write(gen_buildzigzon(build_zig_zon_tpl, build_spec, relative_syspath, deps_path).encode())
     await async b_file.close()
     await async bzz_file.close()
 
 
-actor CompilerRunner(process_cap, env, args, wdir=None, on_exit: ?action(int, int, bytes, bytes) -> None=None, on_error: ?action(str) -> None=None, print_output: bool=True, exe="actonc"):
+actor CompilerRunner(process_cap, env, args, wdir=None, on_exit: ?action(int, int, bytes, bytes) -> None=None, on_error: ?action(str) -> None=None, print_output: bool=True, exe="actonc", stdin_data: ?bytes=None):
     """Run the actonc compiler
 
     Will run actonc with the provided command and arguments. It is possible to
@@ -195,8 +197,79 @@ actor CompilerRunner(process_cap, env, args, wdir=None, on_exit: ?action(int, in
         cmd.append("--tty")
     p = process.Process(process_cap, cmd, on_actonc_std_out, on_actonc_std_err, on_actonc_exit, on_actonc_error, wdir)
 
+    if stdin_data is not None:
+        p.write(stdin_data)
+        p.done_writing()
+
     def stop():
         p.stop()
+
+
+actor ReadBuildSpec(env, process_cap, on_done):
+    """Read BuildSpec by invoking `actonc spec dump`.
+
+    - Prefers Build.act, falls back to build.act.json.
+    - on_done(error, spec):
+        * error != None: error from actonc (including \"No Build.act or build.act.json found\")
+        * error == None: successfully parsed BuildSpec in spec
+    """
+
+    var spec = BuildSpec()
+
+    def _on_exit(exit_code, term_signal, std_out_buf, std_err_buf):
+        msg = std_out_buf.decode() + std_err_buf.decode()
+        if exit_code != 0:
+            on_done(msg, BuildSpec())
+            return
+
+        try:
+            spec = BuildSpec.from_json(std_out_buf.decode())
+        except ValueError as e:
+            on_done("ERROR: " + e.error_message, BuildSpec())
+            return
+
+        on_done(None, spec)
+
+    def _on_error(error: str):
+        on_done("Error running actonc spec: " + error, BuildSpec())
+
+    CompilerRunner(
+        process_cap,
+        env,
+        ["spec", "dump"],
+        None,
+        _on_exit,
+        _on_error,
+        print_output=False
+    )
+
+
+actor UpdateBuildSpec(env, process_cap, json_doc: str, on_done):
+    """Update Build.act using `actonc spec update`.
+
+    Expects json_path to point to a JSON file with the build spec (typically build.act.json).
+    """
+
+    def _on_exit(exit_code, term_signal, std_out_buf, std_err_buf):
+        msg = std_out_buf.decode() + std_err_buf.decode()
+        if exit_code != 0:
+            on_done(msg)
+            return
+        on_done(None)
+
+    def _on_error(error: str):
+        on_done("Error running actonc spec update: " + error)
+
+    CompilerRunner(
+        process_cap,
+        env,
+        ["spec", "update", "-"],
+        None,
+        _on_exit,
+        _on_error,
+        print_output=False,
+        stdin_data=json_doc.encode()
+    )
 
 actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None, on_build_failure: action(int, int, str) -> None, build_tests: bool=False, files: list[str]=[]):
     """Build the project including dependencies
@@ -241,7 +314,7 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
 
     dep_path_overrides = parse_dep_path_overrides(args)
 
-    var build_config = BuildConfig()
+    var build_spec = BuildSpec()
 
     def _report_cache_warnings():
         if cache_checker is not None:
@@ -329,12 +402,12 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
         # Add transitive dependencies to write new build.zig(.zon), but don't
         # override existing ones, including local overrides
         for dep_name, dep in all_deps.pkg_deps.items():
-            build_config.dependencies.setdefault(dep_name, dep)
+            build_spec.dependencies.setdefault(dep_name, dep)
         for dep_name, dep in all_deps.zig_deps.items():
-            build_config.zig_dependencies.setdefault(dep_name, dep)
-        write_buildzig(file.FileCap(env.cap), build_config)
+            build_spec.zig_dependencies.setdefault(dep_name, dep)
+        write_buildzig(file.FileCap(env.cap), build_spec)
 
-        for dep_name, dep in build_config.dependencies.items():
+        for dep_name, dep in build_spec.dependencies.items():
             dep_hash = dep.hash
             dep_path = dep.path
             if dep_path is not None:
@@ -402,7 +475,7 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
 
     def build_deps():
         # Find dependencies and compile them first
-        if len(build_config.dependencies) == 0:
+        if len(build_spec.dependencies) == 0:
             build_project()
         else:
             print("Building dependencies:")
@@ -410,7 +483,7 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
             for dep_name, dep_path in dep_path_overrides.items():
                 dep_args.extend(["--dep", dep_name + "=" + dep_path])
 
-            for dep_name, dep in build_config.dependencies.items():
+            for dep_name, dep in build_spec.dependencies.items():
                 dep_hash = dep.hash
                 dep_path = dep.path
                 path = ""
@@ -452,7 +525,7 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
         except OSError:
             pass
 
-        for dep_name, dep in build_config.dependencies.items():
+        for dep_name, dep in build_spec.dependencies.items():
             # Does deps/X exist?
             dep_hash = dep.hash
             dep_path = dep.path
@@ -478,41 +551,44 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
         env.exit(1)
 
     def check_for_buildconfig():
-        """Check if build.act.json exists
+        """Check for Build.act / build.act.json and prepare dependencies.
 
-        If there is a build.act.json file, we will read it and check if the
-        dependencies also exist locally. If not, we will download them and
-        proceed to build the dependencies and then build the project.
-
-        If there is no build.act.json file, we will build the project.
+        Prefer Build.act via `actonc spec dump`; fall back to build.act.json.
+        If neither exists, build the project directly without fetching deps.
         """
-        try:
-            build_config = BuildConfig.from_json(file.ReadFile(rfcap, "build.act.json").read().decode())
-        except FileNotFoundError:
-            pass
-        except ValueError as e:
-            print("ERROR:", e.error_message)
-            env.exit(1)
+
+        def _on_spec_done(error, spec):
+            if error is not None:
+                if "No Build.act or build.act.json found" in error:
+                    # No build spec; just build the project without dependency fetch.
+                    build_project()
+                    return
+                print(error, err=True)
+                env.exit(1)
+                return
+
+            build_spec = spec
+            build_spec_fetchable = BuildSpec()
+            for dep_name, dep in build_spec.dependencies.items():
+                if dep_name in dep_path_overrides:
+                    dep_path = dep_path_overrides[dep_name]
+                    # We want predictable deterministic paths. Zig wants relative
+                    # paths. Get relative path to / and then from there to satisfy
+                    # both.
+                    rel_path = file.join_path([file.get_relative_path("/", fs.cwd()), file.get_relative_path(dep_path, "/")])
+                    dep.path = rel_path
+                    print("INFO: Using dependency path %s for %s" % (rel_path, dep.name), err=True)
+                else:
+                    build_spec_fetchable.dependencies[dep_name] = dep
+
+            for dep_name, dep in build_spec.zig_dependencies.items():
+                build_spec_fetchable.zig_dependencies[dep_name] = dep
+
+            write_buildzig(file.FileCap(env.cap), build_spec)
+            zfd = ZigFetchDeps(env, build_spec_fetchable, lambda x, y: check_deps(), on_zig_fetch_error)
             return
 
-        build_config_fetchable = BuildConfig()
-        for dep_name, dep in build_config.dependencies.items():
-            if dep_name in dep_path_overrides:
-                dep_path = dep_path_overrides[dep_name]
-                # We want predictable deterministic paths. Zig wants relative
-                # paths. Get relative path to / and then from there to satisfy
-                # both.
-                rel_path = file.join_path([file.get_relative_path("/", fs.cwd()), file.get_relative_path(dep_path, "/")])
-                dep.path = rel_path
-                print("INFO: Using dependency path %s for %s" % (rel_path, dep.name), err=True)
-            else:
-                build_config_fetchable.dependencies[dep_name] = dep
-
-        for dep_name, dep in build_config.zig_dependencies.items():
-            build_config_fetchable.zig_dependencies[dep_name] = dep
-
-        write_buildzig(file.FileCap(env.cap), build_config)
-        zfd = ZigFetchDeps(env, build_config_fetchable, lambda x, y: check_deps(), on_zig_fetch_error)
+        ReadBuildSpec(env, process_cap, _on_spec_done)
 
     def get_lock():
         """Try to get the build lock for the project
@@ -934,7 +1010,7 @@ def build_cmd_args(args):
     return cmdargs
 
 
-actor ZigFetchDeps(env, build_config: BuildConfig, on_done: action(int, int) -> None, on_fetch_error: action(str) -> None, print_output: bool=False):
+actor ZigFetchDeps(env, build_spec: BuildSpec, on_done: action(int, int) -> None, on_fetch_error: action(str) -> None, print_output: bool=False):
     """Fetch dependencies and Zig dependencies
     """
     pcap = process.ProcessCap(env.cap)
@@ -979,7 +1055,7 @@ actor ZigFetchDeps(env, build_config: BuildConfig, on_done: action(int, int) -> 
         on_fetch_error(error)
 
     zig_global_cache_dir = get_zig_global_cache_dir(file.FileCap(env.cap))
-    for dep_name, dep in build_config.dependencies.items():
+    for dep_name, dep in build_spec.dependencies.items():
         total += 1
         dep_path = dep.path
         if dep_path is not None:
@@ -1008,7 +1084,7 @@ actor ZigFetchDeps(env, build_config: BuildConfig, on_done: action(int, int) -> 
                 lambda p, error: _on_error(dep, p, error))
             dep_processes[dep.name] = p
 
-    for dep_name, dep in build_config.zig_dependencies.items():
+    for dep_name, dep in build_spec.zig_dependencies.items():
         total += 1
         dep_path = dep.path
         if dep_path is not None:
@@ -1065,38 +1141,40 @@ actor CmdFetch(env, args):
         print(errmsg, err=True)
         env.exit(1)
 
-    def _read_build_config():
-        try:
-            build_config = BuildConfig.from_json(file.ReadFile(rfcap, "build.act.json").read().decode())
-            write_buildzig(file.FileCap(env.cap), build_config)
-            zfd = ZigFetchDeps(env, build_config, all_done, on_zig_fetch_error, print_output=True)
-        except FileNotFoundError:
-            print("No build.act.json file found, nothing to do.")
-            env.exit(0)
+    def _read_build_spec():
+        def _on_spec_done(error, spec):
+            if error is not None:
+                if "No Build.act or build.act.json found" in error:
+                    print("No Build.act or build.act.json file found, nothing to do.")
+                    env.exit(0)
+                    return
+                print(error, err=True)
+                env.exit(1)
+                return
+
+            build_spec = spec
+            write_buildzig(file.FileCap(env.cap), build_spec)
+            zfd = ZigFetchDeps(env, build_spec, all_done, on_zig_fetch_error, print_output=True)
             return
-        except ValueError as e:
-            print("ERROR:", e.error_message)
-            env.exit(1)
-            return
-    _read_build_config()
+
+        ReadBuildSpec(env, pcap, _on_spec_done)
+
+    _read_build_spec()
 
 
 actor CmdPkgAdd(env, args):
-    """Add a package dependency to the project
+    """Add a package dependency to the project.
+
+    Usage:
+      acton pkg add NAME [--url URL] [--repo-url URL --repo-ref REF]
+
+    Exactly one of --url or --repo-url must be provided.
     """
     pcap = process.ProcessCap(env.cap)
     fs = file.FS(file.FileCap(env.cap))
+    tcpc_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(env.cap)))
 
     zig = file.join_path([base_path(file.FileCap(env.cap)), "zig", "zig"])
-
-    # What arguments do we need?
-    # - the name of the dependency (e.g. "foo", used in the build.act.json config file)
-    # - the URL to fetch it from
-
-    # We need to fetch the dependency and get the (content) hash of the fetched
-    # dependency and store it in the build.act.json file. If the dependency is
-    # already in the build.act.json file, we need to check if the hash is the
-    # same as the one we just fetched. If it is, we do nothing. If it is not,
 
     dep_name = args.get_str("name")
     try:
@@ -1104,59 +1182,175 @@ actor CmdPkgAdd(env, args):
     except ValueError as e:
         print("ERROR:", e)
         env.exit(1)
-    dep_url = args.get_str("url")
 
-    def get_build_config():
-        try:
-            return BuildConfig.from_json(file.ReadFile(file.ReadFileCap(file.FileCap(env.cap)), "build.act.json").read().decode())
-        except FileNotFoundError:
-            # Ignore, we create a new file
-            pass
-        except ValueError as e:
-            print("ERROR:", e.error_message)
-            await async env.exit(1)
-        return BuildConfig()
+    url_arg = args.get_str("url")
+    repo_url = args.get_str("repo-url")
+    repo_ref_arg = args.get_str("repo-ref")
+    pkg_name_arg = args.get_str("pkg-name")
 
-    build_config = get_build_config()
+    var build_spec = BuildSpec()
 
-    def on_exit(p, exit_code, term_signal, std_out_buf, std_err_buf):
-        if exit_code == 0:
-            dep_hash = std_out_buf.decode().strip()
+    def _run_zig_fetch(dep_url: str, dep_repo_url: ?str, dep_repo_ref: ?str):
+        def on_exit(p, exit_code, term_signal, std_out_buf, std_err_buf):
+            if exit_code == 0:
+                dep_hash = std_out_buf.decode().strip()
 
-            if dep_name in build_config.dependencies:
-                bc_dep = build_config.dependencies[dep_name]
-                if bc_dep.url != dep_url:
-                    print("Updated existing dependency", dep_name, "with new URL", dep_url, " (old", bc_dep.url, ")")
-                    bc_dep.url = dep_url
-                if bc_dep.hash == dep_hash:
-                    print("Dependency", dep_name, "is already up to date, hash:", dep_hash)
+                if dep_name in build_spec.dependencies:
+                    bc_dep = build_spec.dependencies[dep_name]
+                    if bc_dep.url != dep_url:
+                        print("Updated existing dependency", dep_name, "with new URL", dep_url, " (old", bc_dep.url, ")")
+                        bc_dep.url = dep_url
+                    if bc_dep.hash == dep_hash:
+                        print("Dependency", dep_name, "is already up to date, hash:", dep_hash)
+                    else:
+                        print("Updated existing dependency", dep_name, "with new hash", dep_hash, " (old", bc_dep.hash, ")")
+                        bc_dep.hash = dep_hash
+                    if dep_repo_url is not None:
+                        bc_dep.repo_url = dep_repo_url
+                        bc_dep.repo_ref = dep_repo_ref
                 else:
-                    print("Updated existing dependency", dep_name, "with new hash", dep_hash, " (old", bc_dep.hash, ")")
-                    bc_dep.hash = dep_hash
+                    # Add the dependency, including repo metadata when available
+                    build_spec.dependencies[dep_name] = PkgDependency(dep_name, dep_url, dep_hash, None, dep_repo_url, dep_repo_ref)
+                    print("Added new package dependency", dep_name, "with hash", dep_hash)
+
+                def _on_update_done(err):
+                    if err is not None:
+                        print(err, err=True)
+                        env.exit(1)
+                    else:
+                        env.exit(0)
+
+                try:
+                    s = fs.stat("Build.act")
+                    json_doc = build_spec.to_json()
+                    UpdateBuildSpec(env, pcap, json_doc, _on_update_done)
+                except:
+                    json_doc = build_spec.to_json()
+                    baj_file = file.WriteFile(file.WriteFileCap(file.FileCap(env.cap)), "build.act.json")
+                    baj_file.write(json_doc.encode()+b"\n")
+                    await async baj_file.close()
+                    env.exit(0)
             else:
-                # Add the hash
-                build_config.dependencies[dep_name] = PkgDependency(dep_name, dep_url, dep_hash)
-                print("Added new package dependency", dep_name, "with hash", dep_hash)
+                print("Error fetching", std_err_buf.decode())
+                env.exit(1)
 
-            baj_file = file.WriteFile(file.WriteFileCap(file.FileCap(env.cap)), "build.act.json")
-            baj_file.write(build_config.to_json().encode()+b"\n")
-            await async baj_file.close()
-
-            env.exit(0)
-        else:
-            print("Error fetching", std_err_buf.decode())
+        def on_error(p, error):
+            print("Error fetching", error)
             env.exit(1)
 
-    def on_error(p, error):
-        print("Error fetching", error)
-        env.exit(1)
+        cmd = [zig, "fetch", "--global-cache-dir", get_zig_global_cache_dir(file.FileCap(env.cap)), dep_url]
+        process.RunProcess(
+            pcap,
+            cmd,
+            on_exit,
+            on_error)
 
-    cmd = [zig, "fetch", "--global-cache-dir", get_zig_global_cache_dir(file.FileCap(env.cap)), args.get_str("url")]
-    process.RunProcess(
-        pcap,
-        cmd,
-        on_exit,
-        on_error)
+    def _lookup_repo_url_from_index(pkg_name: str) -> str:
+        """Look up a package by name in the local package index.
+
+        The index is expected at ~/.cache/acton/package-index.json and must
+        contain a top-level dict with a 'packages' key that holds a list of
+        objects, each with at least 'name' and 'repo_url' fields.
+        """
+        index_path = file.join_path([fs.homedir(), ".cache", "acton", "package-index.json"])
+        content = ""
+        try:
+            content = file.ReadFile(file.ReadFileCap(file.FileCap(env.cap)), index_path).read().decode()
+        except FileNotFoundError:
+            print("ERROR: Package index not found at {index_path}", err=True)
+            print("HINT: Run: acton pkg update", err=True)
+            env.exit(1)
+            return ""
+        except Exception as e:
+            print("ERROR: Failed to read package index at {index_path}:", e, err=True)
+            env.exit(1)
+            return ""
+
+        pkgs: list[?value] = []
+        try:
+            jd = json.decode(content)
+            if isinstance(jd, dict):
+                pkgs_any = jd.get("packages")
+                if isinstance(pkgs_any, list):
+                    pkgs = pkgs_any
+        except ValueError as e:
+            print("ERROR: Failed to parse package index JSON:", e.error_message, err=True)
+            env.exit(1)
+            return ""
+
+        if len(pkgs) == 0:
+            print("ERROR: Invalid package index: top-level 'packages' list missing or wrong type", err=True)
+            env.exit(1)
+            return ""
+
+        # Exact name match
+        for pkg in pkgs:
+            if isinstance(pkg, dict):
+                name = pkg.get("name")
+                if isinstance(name, str) and name == pkg_name:
+                    ru = pkg.get("repo_url")
+                    if isinstance(ru, str) and ru != "":
+                        return ru
+                    print("ERROR: Package {pkg_name} in index is missing 'repo_url'", err=True)
+                    env.exit(1)
+                    return ""
+
+        print("ERROR: Package {pkg_name} not found in package index", err=True)
+        env.exit(1)
+        return ""
+
+    def _fetch_from_repo(repo_url_eff: str, repo_ref_arg_eff: str):
+        # Resolve URL from repo-url/repo-ref, like pkg upgrade
+        if not repo_url_eff.startswith("https://github.com"):
+            print("ERROR: Unsupported git forge URL for pkg add:", repo_url_eff, "only https://github.com is supported", err=True)
+            env.exit(1)
+
+        def _on_ref(err: ?Exception, resolved_url: ?str):
+            if err is not None:
+                print("Error fetching ref for {dep_name}:", err.error_message, err=True)
+                env.exit(1)
+                return
+            if resolved_url is not None:
+                repo_ref: ?str = repo_ref_arg_eff if repo_ref_arg_eff != "" else None
+                _run_zig_fetch(resolved_url, repo_url_eff, repo_ref)
+                return
+            print("Error: Could not resolve ref for", dep_name, err=True)
+            env.exit(1)
+
+        repo_ref: ?str = repo_ref_arg_eff if repo_ref_arg_eff != "" else None
+        cli_gh.FetchRef(_on_ref, url=repo_url_eff, tcpc_cap=tcpc_cap, ref=repo_ref)
+
+    def _decide_url_and_fetch():
+        # Decide how to obtain the URL, now that build_spec has been loaded.
+        if url_arg != "" and repo_url != "":
+            print("ERROR: Specify either --url or --repo-url, not both.", err=True)
+            env.exit(1)
+        elif url_arg != "":
+            _run_zig_fetch(url_arg, None, None)
+        elif repo_url != "":
+            _fetch_from_repo(repo_url, repo_ref_arg)
+        else:
+            # No explicit URL flags; fall back to package index.
+            pkg_name = pkg_name_arg if pkg_name_arg != "" else dep_name
+            repo_url_idx = _lookup_repo_url_from_index(pkg_name)
+            _fetch_from_repo(repo_url_idx, repo_ref_arg)
+
+    def _on_spec_done(error, spec):
+        if error is not None:
+            if "No Build.act or build.act.json found" in error:
+                # No existing spec; start from empty and create new.
+                _decide_url_and_fetch()
+                return
+            print(error, err=True)
+            env.exit(1)
+            return
+
+        build_spec = spec
+        _decide_url_and_fetch()
+
+    # Load existing BuildSpec (prefer Build.act, fallback build.act.json),
+    # then decide URL and perform zig fetch / update.
+    ReadBuildSpec(env, pcap, _on_spec_done)
 
 actor ZigFetch(on_dl: action(?str, ?str) -> None, env, dep_name: str, dep_url: str):
     """zig fetch
@@ -1215,22 +1409,11 @@ actor CmdPkgUpgrade(env, args):
     # - the URL to fetch it from
 
     # We need to fetch the dependency and get the (content) hash of the fetched
-    # dependency and store it in the build.act.json file. If the dependency is
-    # already in the build.act.json file, we need to check if the hash is the
-    # same as the one we just fetched. If it is, we do nothing. If it is not,
+    # dependency and store it in the build configuration. If the dependency is
+    # already in the config, we need to check if the hash is the same as the
+    # one we just fetched. If it is, we do nothing. If it is not, we update.
 
-    def get_build_config():
-        try:
-            return BuildConfig.from_json(file.ReadFile(file.ReadFileCap(file.FileCap(env.cap)), "build.act.json").read().decode())
-        except FileNotFoundError:
-            # Ignore, we create a new file
-            pass
-        except ValueError as e:
-            print("ERROR:", e.error_message)
-            await async env.exit(1)
-        return BuildConfig()
-
-    build_config = get_build_config()
+    var build_spec = BuildSpec()
 
     remaining_fetch_ref = {}
     remaining_zig_fetch = {}
@@ -1244,11 +1427,11 @@ actor CmdPkgUpgrade(env, args):
         if err is not None:
             print("Error fetching updated hash for", dep_name, err)
         if len(remaining_zig_fetch) == 0:
-            _update_build_config()
+            _update_build_spec()
 
     def _zig_fetch():
         for dep_name, new_url in new_pkg_urls.items():
-            bc_dep = build_config.dependencies[dep_name]
+            bc_dep = build_spec.dependencies[dep_name]
             if bc_dep.url != new_url:
                 remaining_zig_fetch[dep_name] = True
                 ZigFetch(lambda x, y: _on_zig_fetch(dep_name, x, y), env, dep_name, new_url)
@@ -1256,9 +1439,9 @@ actor CmdPkgUpgrade(env, args):
             print("No dependencies to upgrade")
             env.exit(0)
 
-    def _update_build_config():
+    def _update_build_spec():
         updated = False
-        for dep_name, dep in build_config.dependencies.items():
+        for dep_name, dep in build_spec.dependencies.items():
             new_url = new_pkg_urls.get(dep_name)
             new_hash = new_pkg_hashes.get(dep_name)
             if new_url is not None and new_hash is not None and (new_url != dep.url or new_hash != dep.hash):
@@ -1268,25 +1451,39 @@ actor CmdPkgUpgrade(env, args):
                 updated = True
 
         if updated:
-            baj_file = file.WriteFile(file.WriteFileCap(file.FileCap(env.cap)), "build.act.json")
-            baj_file.write(build_config.to_json().encode()+b"\n")
-            await async baj_file.close()
+            json_doc = build_spec.to_json()
             print("Wrote changes to build.act.json")
+
+            def _on_update_done(err):
+                if err is not None:
+                    print(err, err=True)
+                    env.exit(1)
+                else:
+                    env.exit(0)
+
+            try:
+                s = fs.stat("Build.act")
+                UpdateBuildSpec(env, pcap, json_doc, _on_update_done)
+            except:
+                baj_file = file.WriteFile(file.WriteFileCap(file.FileCap(env.cap)), "build.act.json")
+                baj_file.write(json_doc.encode()+b"\n")
+                await async baj_file.close()
+                env.exit(0)
         else:
             print("No changes to build.act.json")
-        env.exit(0)
+            env.exit(0)
 
     def _onPkgFetchRef(dep_name: str, err: ?Exception, url: ?str):
         del remaining_fetch_ref[dep_name]
         if url is not None:
             new_pkg_urls[dep_name] = url
         if err is not None:
-            print("Error fetching ref for %s:" % dep_name, err.error_message)
+            print("Error fetching ref for {dep_name}:", err.error_message)
         if len(remaining_fetch_ref) == 0:
             _zig_fetch()
 
     def _go():
-        for dep_name, dep in build_config.dependencies.items():
+        for dep_name, dep in build_spec.dependencies.items():
             dep_repo_url = dep.repo_url
             if dep_repo_url is not None:
                 if dep_repo_url.startswith("https://github.com"):
@@ -1301,7 +1498,21 @@ actor CmdPkgUpgrade(env, args):
         if len(remaining_fetch_ref) == 0:
             print("No dependencies to upgrade")
             env.exit(0)
-    _go()
+
+    def _on_spec_done(error, spec):
+        if error is not None:
+            if "No Build.act or build.act.json found" in error:
+                print("No Build.act or build.act.json file found, nothing to upgrade.")
+                env.exit(0)
+                return
+            print(error, err=True)
+            env.exit(1)
+            return
+
+        build_spec = spec
+        _go()
+
+    ReadBuildSpec(env, pcap, _on_spec_done)
 
 
 actor CmdPkgRemove(env, args):
@@ -1319,31 +1530,167 @@ actor CmdPkgRemove(env, args):
         print("ERROR:", e)
         env.exit(1)
 
-    def get_build_config():
+    var build_spec = BuildSpec()
+
+    def _apply_remove():
+        if dep_name in build_spec.dependencies:
+            print("Removed package dependency", dep_name)
+            del build_spec.dependencies[dep_name]
+        else:
+            print("Dependency", dep_name, "not found in build configuration. Nothing to do.")
+            env.exit(0)
+            return
+
+        json_doc = build_spec.to_json()
+
+        def _on_update_done(err):
+            if err is not None:
+                print(err, err=True)
+                env.exit(1)
+            else:
+                env.exit(0)
+
         try:
-            return BuildConfig.from_json(file.ReadFile(file.ReadFileCap(file.FileCap(env.cap)), "build.act.json").read().decode())
-        except FileNotFoundError:
-            # Ignore, we create a new file
+            s = fs.stat("Build.act")
+            UpdateBuildSpec(env, pcap, json_doc, _on_update_done)
+        except:
+            baj_file = file.WriteFile(file.WriteFileCap(file.FileCap(env.cap)), "build.act.json")
+            baj_file.write(json_doc.encode()+b"\n")
+            await async baj_file.close()
+            env.exit(0)
+
+    def _on_spec_done(error, spec):
+        if error is not None:
+            if "No Build.act or build.act.json found" in error:
+                print("No Build.act or build.act.json file found, nothing to do.")
+                env.exit(0)
+                return
+            print(error, err=True)
+            env.exit(1)
+            return
+
+        build_spec = spec
+        _apply_remove()
+
+    ReadBuildSpec(env, pcap, _on_spec_done)
+
+
+actor CmdPkgUpdate(env, args):
+    """Initialize or refresh the local package index.
+
+    Downloads JSON index from:
+      https://actonlang.github.io/package-index/index.json
+
+    and stores it at:
+      ~/.cache/acton/package-index.json
+    """
+    tcpc_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(env.cap)))
+    fs = file.FS(file.FileCap(env.cap))
+
+    index_url = "https://actonlang.github.io/package-index/index.json"
+
+    def _on_done(err: ?str, res: ?http.Response):
+        if err is not None:
+            print("ERROR: Failed to download package index from {index_url}: {err}", err=True)
+            env.exit(1)
+            return
+        if res is None:
+            print("ERROR: No response when downloading package index from {index_url}", err=True)
+            env.exit(1)
+            return
+
+        body = ""
+        if res is not None:
+            body = res.body.decode()
+
+        index_dir = file.join_path([fs.homedir(), ".cache", "acton"])
+        try:
+            fs.mkdir(index_dir)
+        except:
             pass
+        index_path = file.join_path([index_dir, "package-index.json"])
+        f = file.WriteFile(file.WriteFileCap(file.FileCap(env.cap)), index_path)
+        f.write(body.encode())
+        await async f.close()
+        print("Updated package index at {index_path}")
+        env.exit(0)
+
+    cli_gh.GetQuery(on_done=_on_done, tcpc_cap=tcpc_cap, url=index_url)
+
+
+actor CmdPkgSearch(env, args):
+    """Search for packages in the local package index.
+
+    Usage:
+      acton pkg search TERM [TERM ...]
+
+    Each TERM is a regular expression; all terms must match (AND semantics)
+    somewhere in the package name, description or repo_url.
+    """
+    fs = file.FS(file.FileCap(env.cap))
+
+    terms = args.get_strlist("terms")
+
+    def _load_index() -> list[(name: str, description: str, repo_url: str)]:
+        """Deserialize and validate the package index JSON into a list of packages.
+
+        Each entry has the shape (name: str, description: str, repo_url: str).
+        """
+        pkgs: list[(name: str, description: str, repo_url: str)] = []
+        index_path = file.join_path([fs.homedir(), ".cache", "acton", "package-index.json"])
+        try:
+            content = file.ReadFile(file.ReadFileCap(file.FileCap(env.cap)), index_path).read().decode()
+            jd = json.decode(content)
+            if isinstance(jd, dict):
+                pkgs_val = jd.get("packages")
+                if isinstance(pkgs_val, list):
+                    for raw in pkgs_val:
+                        if isinstance(raw, dict):
+                            name_val = raw.get("name")
+                            desc_val = raw.get("description")
+                            repo_val = raw.get("repo_url")
+                            if isinstance(name_val, str) and isinstance(desc_val, str) and isinstance(repo_val, str):
+                                pkg = (name=name_val, description=desc_val, repo_url=repo_val)
+                                pkgs.append(pkg)
+                    return pkgs
+
+            print("ERROR: Invalid package index: top-level 'packages' list missing or wrong type", err=True)
+        except FileNotFoundError:
+            print("No package index found at %s" % index_path, err=True)
+            print("HINT: Run 'acton pkg update' to create or refresh it.", err=True)
         except ValueError as e:
-            print("ERROR:", e.error_message)
-            await async env.exit(1)
-        return BuildConfig()
+            print("ERROR: Failed to parse package index JSON:", e.error_message, err=True)
+        except Exception as e:
+            print("ERROR: Failed to read package index at %s:" % index_path, e, err=True)
+        env.exit(1)
+        return pkgs
 
-    build_config = get_build_config()
+    pkgs = _load_index()
 
-    if dep_name in build_config.dependencies:
-        print("Removed package dependency", dep_name)
-        del build_config.dependencies[dep_name]
-    else:
-        print("Dependency", dep_name, "not found in build.act.json. Nothing to do.")
+    def _pkg_matches(pkg: (name: str, description: str, repo_url: str), term_list: list[str]) -> bool:
+        haystack = pkg.name + " " + pkg.description + " " + pkg.repo_url
+        for term_pat in term_list:
+            if term_pat == "":
+                continue
+            if re.match(term_pat, haystack) is None:
+                return False
+        return True
 
-    baj_file = file.WriteFile(file.WriteFileCap(file.FileCap(env.cap)), "build.act.json")
-    baj_file.write(build_config.to_json().encode()+b"\n")
-    await async baj_file.close()
+    matched_pkgs = {}
+    for pkg in pkgs:
+        if len(terms) == 0 or _pkg_matches(pkg, terms):
+            matched_pkgs[pkg.name] = pkg
 
+    if len(matched_pkgs) == 0:
+        print("No packages matched your search.")
+
+    for name in sorted(matched_pkgs.keys()):
+        pkg = matched_pkgs[name]
+        print(pkg.name)
+        print("  " + pkg.description)
+        print("  " + pkg.repo_url)
+        print("")
     env.exit(0)
-
 
 actor CmdZigPkgAdd(env, args):
     """Add a zig package dependency to the project
@@ -1371,57 +1718,76 @@ actor CmdZigPkgAdd(env, args):
     dep_url = args.get_str("url")
     dep_artifacts = args.get_strlist("artifact")
 
-    def get_build_config():
-        try:
-            return BuildConfig.from_json(file.ReadFile(file.ReadFileCap(file.FileCap(env.cap)), "build.act.json").read().decode())
-        except FileNotFoundError:
-            # Ignore, we create a new file
-            pass
-        except ValueError as e:
-            print("ERROR:", e.error_message)
-            await async env.exit(1)
-        return BuildConfig()
+    var build_spec = BuildSpec()
 
-    build_config = get_build_config()
+    def _run_zig_fetch():
+        def on_exit(p, exit_code, term_signal, std_out_buf, std_err_buf):
+            if exit_code == 0:
+                dep_hash = std_out_buf.decode().strip()
 
-    def on_exit(p, exit_code, term_signal, std_out_buf, std_err_buf):
-        if exit_code == 0:
-            dep_hash = std_out_buf.decode().strip()
+                if dep_name in build_spec.zig_dependencies:
+                    if build_spec.zig_dependencies[dep_name].url != dep_url:
+                        print("Updated existing dependency", dep_name, "with new URL", dep_url, " (old", build_spec.zig_dependencies[dep_name].url, ")")
+                        build_spec.zig_dependencies[dep_name].url = dep_url
 
-            if dep_name in build_config.zig_dependencies:
-                if build_config.zig_dependencies[dep_name].url != dep_url:
-                    print("Updated existing dependency", dep_name, "with new URL", dep_url, " (old", build_config.zig_dependencies[dep_name].url, ")")
-                    build_config.zig_dependencies[dep_name].url = dep_url
-
-                if build_config.zig_dependencies[dep_name].hash == dep_hash:
-                    print("Dependency", dep_name, "is already up to date, hash:", dep_hash)
+                    if build_spec.zig_dependencies[dep_name].hash == dep_hash:
+                        print("Dependency", dep_name, "is already up to date, hash:", dep_hash)
+                    else:
+                        print("Updated existing dependency", dep_name, "with new hash", dep_hash, " (old", build_spec.zig_dependencies[dep_name].hash, ")")
+                        build_spec.zig_dependencies[dep_name].hash = dep_hash
                 else:
-                    print("Updated existing dependency", dep_name, "with new hash", dep_hash, " (old", build_config.zig_dependencies[dep_name].hash, ")")
-                    build_config.zig_dependencies[dep_name].hash = dep_hash
+                    # Add the hash
+                    build_spec.zig_dependencies[dep_name] = ZigDependency(dep_name, dep_url, dep_hash, None, {}, dep_artifacts)
+                    print("Added new Zig package dependency", dep_name, "with hash", dep_hash)
+
+                def _on_update_done(err):
+                    if err is not None:
+                        print(err, err=True)
+                        env.exit(1)
+                    else:
+                        env.exit(0)
+
+                try:
+                    s = fs.stat("Build.act")
+                    json_doc = build_spec.to_json()
+                    UpdateBuildSpec(env, pcap, json_doc, _on_update_done)
+                except:
+                    json_doc = build_spec.to_json()
+                    baj_file = file.WriteFile(file.WriteFileCap(file.FileCap(env.cap)), "build.act.json")
+                    baj_file.write(json_doc.encode()+b"\n")
+                    await async baj_file.close()
+                    env.exit(0)
             else:
-                # Add the hash
-                build_config.zig_dependencies[dep_name] = ZigDependency(dep_name, dep_url, dep_hash, None, {}, dep_artifacts)
-                print("Added new Zig package dependency", dep_name, "with hash", dep_hash)
+                print("Error fetching", std_err_buf.decode())
+                env.exit(1)
 
-            baj_file = file.WriteFile(file.WriteFileCap(file.FileCap(env.cap)), "build.act.json")
-            baj_file.write(build_config.to_json().encode()+b"\n")
-            await async baj_file.close()
-
-            env.exit(0)
-        else:
-            print("Error fetching", std_err_buf.decode())
+        def on_error(p, error):
+            print("Error fetching", error)
             env.exit(1)
 
-    def on_error(p, error):
-        print("Error fetching", error)
-        env.exit(1)
+        cmd = [zig, "fetch", "--global-cache-dir", get_zig_global_cache_dir(file.FileCap(env.cap)), dep_url]
+        process.RunProcess(
+            pcap,
+            cmd,
+            on_exit,
+            on_error)
 
-    cmd = [zig, "fetch", "--global-cache-dir", get_zig_global_cache_dir(file.FileCap(env.cap)), args.get_str("url")]
-    process.RunProcess(
-        pcap,
-        cmd,
-        on_exit,
-        on_error)
+    def _on_spec_done(error, spec):
+        if error is not None:
+            if "No Build.act or build.act.json found" in error:
+                # No existing spec; start from empty and create new.
+                _run_zig_fetch()
+                return
+            print(error, err=True)
+            env.exit(1)
+            return
+
+        build_spec = spec
+        _run_zig_fetch()
+
+    # Load existing BuildSpec (prefer Build.act, fallback build.act.json),
+    # then perform zig fetch and update.
+    ReadBuildSpec(env, pcap, _on_spec_done)
 
 
 actor CmdZigPkgRemove(env, args):
@@ -1439,32 +1805,49 @@ actor CmdZigPkgRemove(env, args):
         print("ERROR:", e)
         env.exit(1)
 
-    def _get_build_config():
-        try:
-            build_config = BuildConfig.from_json(file.ReadFile(file.ReadFileCap(file.FileCap(env.cap)), "build.act.json").read().decode())
-            _remove_zig_pkg(build_config, dep_name)
-        except FileNotFoundError:
-            # Ignore, we create a new file
-            print("No build.act.json file found, nothing to do.")
-            env.exit(0)
-        except ValueError as e:
-            print("ERROR:", e.error_message)
-            env.exit(1)
+    var build_spec = BuildSpec()
 
-    def _remove_zig_pkg(build_config, dep_name):
-        if dep_name in build_config.zig_dependencies:
+    def _apply_remove():
+        if dep_name in build_spec.zig_dependencies:
             print("Removed Zig package dependency", dep_name)
-            del build_config.zig_dependencies[dep_name]
+            del build_spec.zig_dependencies[dep_name]
         else:
-            print("Zig dependency", dep_name, "not found in build.act.json. Nothing to do.")
+            print("Zig dependency", dep_name, "not found in build configuration. Nothing to do.")
+            env.exit(0)
+            return
 
-        baj_file = file.WriteFile(file.WriteFileCap(file.FileCap(env.cap)), "build.act.json")
-        baj_file.write(build_config.to_json().encode()+b"\n")
-        await async baj_file.close()
+        json_doc = build_spec.to_json()
 
-        env.exit(0)
+        def _on_update_done(err):
+            if err is not None:
+                print(err, err=True)
+                env.exit(1)
+            else:
+                env.exit(0)
 
-    _get_build_config()
+        try:
+            s = fs.stat("Build.act")
+            UpdateBuildSpec(env, pcap, json_doc, _on_update_done)
+        except:
+            baj_file = file.WriteFile(file.WriteFileCap(file.FileCap(env.cap)), "build.act.json")
+            baj_file.write(json_doc.encode()+b"\n")
+            await async baj_file.close()
+            env.exit(0)
+
+    def _on_spec_done(error, spec):
+        if error is not None:
+            if "No Build.act or build.act.json found" in error:
+                print("No Build.act or build.act.json file found, nothing to do.")
+                env.exit(0)
+                return
+            print(error, err=True)
+            env.exit(1)
+            return
+
+        build_spec = spec
+        _apply_remove()
+
+    ReadBuildSpec(env, pcap, _on_spec_done)
 
 
 actor main(env):
@@ -1566,6 +1949,12 @@ actor main(env):
     def _cmd_pkg_rm(args):
         c = CmdPkgRemove(env, args)
 
+    def _cmd_pkg_update(args):
+        CmdPkgUpdate(env, args)
+
+    def _cmd_pkg_search(args):
+        CmdPkgSearch(env, args)
+
     def _cmd_new(args):
         cr = CompilerRunner(process_cap, env, ["new", args.get_str("projectdir")])
         env.exit(0)
@@ -1633,8 +2022,11 @@ actor main(env):
         p_pkg = p.add_cmd("pkg", "Manage package dependencies", _cmd_pkg)
 
         p_pkg_add = p_pkg.add_cmd("add", "Add package dependency", _cmd_pkg_add)
-        p_pkg_add.add_arg("url", "URL of dependency", True, "?")
         p_pkg_add.add_arg("name", "Name of dependency", True, "?")
+        p_pkg_add.add_option("url", "str", "?", "", "URL of dependency")
+        p_pkg_add.add_option("repo-url", "str", "?", "", "Git repository URL of dependency")
+        p_pkg_add.add_option("repo-ref", "str", "?", "", "Git ref (branch, tag or SHA) to use")
+        p_pkg_add.add_option("pkg-name", "str", "?", "", "Package name in index (defaults to NAME)")
         p_pkg_add.add_option("hash", "str", "?", "", "Hash of dependency")
 
         p_pkg_rm = p_pkg.add_cmd("remove", "Remove package dependency", _cmd_pkg_rm)
@@ -1642,6 +2034,11 @@ actor main(env):
 
         p_pkg_upgrade = p_pkg.add_cmd("upgrade", "Upgrade (or downgrade) package dependency", _cmd_pkg_upgrade)
         #p_pkg_upgrade.add_option("name", "str", "?", help="Dependency name")
+
+        p_pkg_update = p_pkg.add_cmd("update", "Update package index", _cmd_pkg_update)
+
+        p_pkg_search = p_pkg.add_cmd("search", "Search package index", _cmd_pkg_search)
+        p_pkg_search.add_arg("terms", "Search terms (regex, ANDed)", False, "+")
 
         docp = p.add_cmd("doc", "Show documentation", _cmd_doc)
         docp.add_arg("docfile", "Input file (.act or .ty) - optional in projects", False, "?")

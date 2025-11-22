@@ -39,6 +39,9 @@ import System.Directory (getCurrentDirectory, setCurrentDirectory)
 import Control.Monad (forM_, when, foldM)
 import qualified Control.Exception as E
 import Utils (SrcLoc(..), loc, prstr)
+import qualified Acton.BuildSpec as BuildSpec
+import qualified Data.ByteString.Lazy as BL
+import qualified Data.ByteString.Char8 as B8
 import qualified System.IO.Unsafe
 
 
@@ -418,6 +421,311 @@ main = do
       testCodeGen env0 ["deact"]
       testCodeGen env0 ["lines"]
 
+    -- BuildSpec: parsing and update-in-place of Build.act (canonical layout)
+    describe "BuildSpec" $ do
+      it "parses canonical Build.act and dumps JSON" $ do
+        let buildAct = unlines
+              [ "# Canonical Build.act file"
+              , "name = \"demo\""
+              , "description = \"Demo project\""
+              , ""
+              , "# Dependencies section"
+              , "dependencies = {"
+              , "  \"a\": (path=\"deps/a\")"
+              , "}"
+              , ""
+              , "# Zig dependencies section"
+              , "zig_dependencies = {"
+              , "  \"z\": ("
+              , "        url=\"https://z\","
+              , "        hash=\"abcd\","
+              , "        artifacts=[\"z\"]"
+              , "    )"
+              , "}"
+              , ""
+              , "# bla bla bla"
+              , "actor main(env: Env):"
+              , "    pass"
+              , ""
+              ]
+        case BuildSpec.parseBuildAct buildAct of
+          Left err -> expectationFailure err
+          Right (spec,_,_) -> do
+            let json = BuildSpec.encodeBuildSpecJSON spec
+            case BuildSpec.parseBuildSpecJSON json of
+              Left err2 -> expectationFailure err2
+              Right spec2 -> spec2 `shouldBe` spec
+
+      it "updates Build.act in-place, preserving comments and main actor" $ do
+        let buildAct0 = unlines
+              [ "# Canonical Build.act file"
+              , "name = \"demo\""
+              , "description = \"Demo project\""
+              , ""
+              , "# Dependencies section (keep my comments)"
+              , "dependencies = {"
+              , "  \"a\": (path=\"deps/a\")"
+              , "}"
+              , ""
+              , "# Zig dependencies section"
+              , "zig_dependencies = {"
+              , "}"
+              , ""
+              , "# bla bla bla"
+              , "actor main(env: Env):"
+              , "    pass"
+              , ""
+              ]
+        let newJson = "{\n  \"dependencies\": {\n    \"a\": {\"path\": \"deps/aa\"},\n    \"b\": {\"url\": \"u\", \"hash\": \"h\"}\n  },\n  \"zig_dependencies\": {\n    \"z\": {\"url\": \"zu\", \"hash\": \"zh\", \"artifacts\": [\"z\"]}\n  }\n}\n"
+        case BuildSpec.updateBuildActFromJSON buildAct0 (BL.fromStrict (B8.pack newJson)) of
+          Left err -> expectationFailure err
+          Right buildAct1 -> do
+            let expected = unlines
+                  [ "# Canonical Build.act file"
+                  , "name = \"demo\""
+                  , "description = \"Demo project\""
+                  , ""
+                  , "# Dependencies section (keep my comments)"
+                  , "dependencies = {"
+                  , "    \"a\": ("
+                  , "        path=\"deps/aa\""
+                  , "    ),"
+                  , "    \"b\": ("
+                  , "        url=\"u\","
+                  , "        hash=\"h\""
+                  , "    )"
+                  , "}"
+                  , ""
+                  , "# Zig dependencies section"
+                  , "zig_dependencies = {"
+                  , "    \"z\": ("
+                  , "        url=\"zu\","
+                  , "        hash=\"zh\","
+                  , "        artifacts=[\"z\"]"
+                  , "    )"
+                  , "}"
+                  , ""
+                  , "# bla bla bla"
+                  , "actor main(env: Env):"
+                  , "    pass"
+                  , ""
+                  ]
+            buildAct1 `shouldBe` expected
+
+      it "parses Build.act with only dependencies (zig deps missing)" $ do
+        let buildAct = unlines
+              [ "# Only dependencies"
+              , "dependencies = {"
+              , "    \"a\": (path=\"deps/a\")"
+              , "}"
+              , ""
+              , "actor main(env: Env):"
+              , "    pass"
+              , ""
+              ]
+        case BuildSpec.parseBuildAct buildAct of
+          Left err -> expectationFailure err
+          Right (spec,_,_) -> do
+            -- deps present, zig deps empty
+            BuildSpec.dependencies spec `shouldSatisfy` (not . null)
+            BuildSpec.zig_dependencies spec `shouldSatisfy` null
+
+      it "parses Build.act with only zig_dependencies (deps missing)" $ do
+        let buildAct = unlines
+              [ "# Only zig deps"
+              , "zig_dependencies = {"
+              , "    \"z\": ("
+              , "        url=\"zu\","
+              , "        hash=\"zh\","
+              , "        artifacts=[\"z\"]"
+              , "    )"
+              , "}"
+              , ""
+              , "actor main(env: Env):"
+              , "    pass"
+              , ""
+              ]
+        case BuildSpec.parseBuildAct buildAct of
+          Left err -> expectationFailure err
+          Right (spec,_,_) -> do
+            -- zig present, deps empty
+            BuildSpec.zig_dependencies spec `shouldSatisfy` (not . null)
+            BuildSpec.dependencies spec `shouldSatisfy` null
+
+      it "parses Build.act with no spec blocks (both optional)" $ do
+        let buildAct = unlines
+              [ "# No deps here"
+              , "name = \"demo\""
+              , ""
+              , "actor main(env: Env):"
+              , "    pass"
+              , ""
+              ]
+        case BuildSpec.parseBuildAct buildAct of
+          Left err -> expectationFailure err
+          Right (spec,_,_) -> do
+            BuildSpec.dependencies spec `shouldSatisfy` null
+            BuildSpec.zig_dependencies spec `shouldSatisfy` null
+
+      it "appends missing zig_dependencies block when absent" $ do
+        let buildAct0 = unlines
+              [ "# Build with only dependencies"
+              , "dependencies = {"
+              , "    \"a\": (path=\"deps/a\")"
+              , "}"
+              , ""
+              , "actor main(env: Env):"
+              , "    pass"
+              , ""
+              ]
+        let newJson = "{\n  \"zig_dependencies\": {\n    \"z\": {\"url\": \"zu\", \"hash\": \"zh\", \"artifacts\": [\"z\"]}\n  }\n}\n"
+        case BuildSpec.updateBuildActFromJSON buildAct0 (BL.fromStrict (B8.pack newJson)) of
+          Left err -> expectationFailure err
+          Right buildAct1 -> do
+            -- Original dependencies remain
+            buildAct1 `shouldSatisfy` (isInfixOf $ unlines
+              [ "    \"a\": ("
+              , "        path=\"deps/a\""
+              , "    )"
+              ])
+            -- Missing zig_dependencies appended with expected formatting
+            buildAct1 `shouldSatisfy` (isInfixOf $ unlines
+              [ "zig_dependencies = {"
+              , "  \"z\": ("
+              , "        url=\"zu\","
+              , "        hash=\"zh\","
+              , "        artifacts=[\"z\"]"
+              , "    )"
+              , "}"
+              ])
+
+      it "appends missing dependencies block when absent" $ do
+        let buildAct0 = unlines
+              [ "# Build with only zig deps"
+              , "zig_dependencies = {"
+              , "    \"z\": (url=\"zu\", hash=\"zh\", artifacts=[\"z\"])"
+              , "}"
+              , ""
+              , "actor main(env: Env):"
+              , "    pass"
+              , ""
+              ]
+        let newJson = "{\n  \"dependencies\": {\n    \"a\": {\"path\": \"deps/a\"}\n  }\n}\n"
+        case BuildSpec.updateBuildActFromJSON buildAct0 (BL.fromStrict (B8.pack newJson)) of
+          Left err -> expectationFailure err
+          Right buildAct1 -> do
+            -- Original zig deps remain
+            buildAct1 `shouldSatisfy` (isInfixOf $ unlines
+              [ "    \"z\": ("
+              , "        url=\"zu\","
+              , "        hash=\"zh\","
+              , "        artifacts=[\"z\"]"
+              , "    )"
+              ])
+            -- Missing dependencies appended with expected formatting
+            buildAct1 `shouldSatisfy` (isInfixOf $ unlines
+              [ "dependencies = {"
+              , "  \"a\": ("
+              , "        path=\"deps/a\""
+              , "    )"
+              , "}"
+              ])
+
+      it "updates dependencies block with non-canonical whitespace, preserving outer line" $ do
+        let buildAct0 = unlines
+              [ "# Whitespace variant Build.act"
+              , "dependencies  =   {"
+              , ""
+              , "  \"a\"  :  ( path = \"deps/a\" )"
+              , "}"
+              , ""
+              , "actor main(env: Env):"
+              , "    pass"
+              , ""
+              ]
+        let newJson = "{\n  \"dependencies\": {\n    \"a\": {\"path\": \"deps/aa\"}\n  }\n}\n"
+        case BuildSpec.updateBuildActFromJSON buildAct0 (BL.fromStrict (B8.pack newJson)) of
+          Left err -> expectationFailure err
+          Right buildAct1 -> do
+            -- Outer label line (with extra spaces) is preserved
+            buildAct1 `shouldSatisfy` (isInfixOf "dependencies  =   {")
+            -- Inner body is canonicalised and updated
+            buildAct1 `shouldSatisfy` (isInfixOf $ unlines
+              [ "    \"a\": ("
+              , "        path=\"deps/aa\""
+              , "    )"
+              ])
+
+      it "updates only the overlaid dependency entry, preserving others" $ do
+        let buildAct0 = unlines
+              [ "# Multiple dependencies"
+              , "dependencies = {"
+              , "    \"a\": (path=\"deps/a\"),"
+              , "    \"b\": (path=\"deps/b\")"
+              , "}"
+              , ""
+              , "actor main(env: Env):"
+              , "    pass"
+              , ""
+              ]
+        let newJson = "{\n  \"dependencies\": {\n    \"b\": {\"path\": \"deps/bb\"}\n  }\n}\n"
+        case BuildSpec.updateBuildActFromJSON buildAct0 (BL.fromStrict (B8.pack newJson)) of
+          Left err -> expectationFailure err
+          Right buildAct1 -> do
+            -- JSON dependencies is treated as full set: only "b" remains, with updated path.
+            buildAct1 `shouldSatisfy` (not . isInfixOf "    \"a\": (path=\"deps/a\"),")
+            buildAct1 `shouldSatisfy` (isInfixOf $ unlines
+              [ "    \"b\": ("
+              , "        path=\"deps/bb\""
+              , "    )"
+              ])
+
+      it "removes all dependencies and zig deps when new spec objects are empty" $ do
+        let buildAct0 = unlines
+              [ "# Canonical Build.act file"
+              , "name = \"demo\""
+              , ""
+              , "# Dependencies section (keep my comments)"
+              , "dependencies = {"
+              , "    \"a\": (path=\"deps/a\")"
+              , "}"
+              , ""
+              , "# Zig dependencies section"
+              , "zig_dependencies = {"
+              , "    \"z\": ("
+              , "        url=\"zu\","
+              , "        hash=\"zh\","
+              , "        artifacts=[\"z\"]"
+              , "    )"
+              , "}"
+              , ""
+              , "# bla bla bla"
+              , "actor main(env: Env):"
+              , "    pass"
+              , ""
+              ]
+        let newJson = "{\n  \"dependencies\": {},\n  \"zig_dependencies\": {}\n}\n"
+        case BuildSpec.updateBuildActFromJSON buildAct0 (BL.fromStrict (B8.pack newJson)) of
+          Left err -> expectationFailure err
+          Right buildAct1 -> do
+            let expected = unlines
+                  [ "# Canonical Build.act file"
+                  , "name = \"demo\""
+                  , ""
+                  , "# Dependencies section (keep my comments)"
+                  , "dependencies = {"
+                  , "}"
+                  , ""
+                  , "# Zig dependencies section"
+                  , "zig_dependencies = {"
+                  , "}"
+                  , ""
+                  , "# bla bla bla"
+                  , "actor main(env: Env):"
+                  , "    pass"
+                  , ""
+                  ]
+            buildAct1 `shouldBe` expected
 
 
 -- Helper function to format custom parse errors consistently
@@ -767,6 +1075,7 @@ testCodeGen env0 modulePaths = do
         goldenTextFile h_golden $ return $ T.pack $ Pretty.print h
       it ("Check " ++ pass_name ++ " .c output") $ do
         goldenTextFile c_golden $ return $ T.pack $ Pretty.print c
+
 
 testDocstrings :: Acton.Env.Env0 -> String -> Spec
 testDocstrings env0 testname = do

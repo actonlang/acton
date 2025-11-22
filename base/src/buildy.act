@@ -8,39 +8,57 @@ Our projects have a built.act and it collides with this module if it would be
 called just 'build', so it's buildy for buildy stuff.
 """
 
-class BuildConfigError(ValueError):
+class BuildSpecError(ValueError):
     pass
 
 def zig_safe_name(name: str) -> str:
     m = re.match(r"^[a-zA-Z][a-zA-Z0-9_]*$", name)
     if m is None:
-        raise BuildConfigError(f"Invalid dependency name '{name}', must start with a letter and only contain letters, numbers and underscores")
+        raise BuildSpecError(f"Invalid dependency name '{name}', must start with a letter and only contain letters, numbers and underscores")
     return name
 
 
-class BuildConfig(object):
+class BuildSpec(object):
     """Build configuration, the content of build.act.json
 
+    - name is the project name (optional)
+    - description is a human-readable project description (optional)
     - dependencies are dependencies on other Acton projects
     - zig_dependencies are dependencies on Zig projects, which could in turn be
       Zig, C or C++ libraries that get linked in with the project
     """
+    name: ?str
+    description: ?str
     dependencies: dict[str, PkgDependency]
     zig_dependencies: dict[str, ZigDependency]
 
-    def __init__(self, dependencies: dict[str, PkgDependency]={}, zig_dependencies: dict[str, ZigDependency]={}):
+    def __init__(self, name: ?str=None, description: ?str=None, dependencies: dict[str, PkgDependency]={}, zig_dependencies: dict[str, ZigDependency]={}):
+        self.name = name
+        self.description = description
         self.dependencies = dependencies
         self.zig_dependencies = zig_dependencies
 
     @staticmethod
     def from_json(data: str):
         jd = json.decode(data)
+        name = None
+        description = None
         new_dependencies = {}
         new_zig_dependencies = {}
         if isinstance(jd, dict):
             for key, value in jd.items():
                 if isinstance(key, str):
-                    if key == "dependencies":
+                    if key == "name":
+                        if isinstance(value, str):
+                            name = value
+                        else:
+                            raise ValueError("Invalid build.act.json, name should be a string")
+                    elif key == "description":
+                        if isinstance(value, str):
+                            description = value
+                        else:
+                            raise ValueError("Invalid build.act.json, description should be a string")
+                    elif key == "dependencies":
                         if isinstance(value, dict):
                             for dep_name, dep_attrs in value.items():
                                 if isinstance(dep_name, str) and isinstance(dep_attrs, dict):
@@ -65,20 +83,24 @@ class BuildConfig(object):
                 else:
                     raise ValueError("Invalid build.act.json, non-string key found in top level dict")
 
-
-            return BuildConfig(new_dependencies, new_zig_dependencies)
+            return BuildSpec(name, description, new_dependencies, new_zig_dependencies)
         raise ValueError("Invalid build.act.json, top level should be a dict")
 
     def to_json(self) -> str:
-        res = {
-            "dependencies": {},
-            "zig_dependencies": {},
-        }
+        res_deps = {}
+        res_zigdeps = {}
         for dep_name, dep in self.dependencies.items():
-            res["dependencies"][dep_name] = dep.to_json()
+            res_deps[dep_name] = dep.to_json()
         for dep_name, dep in self.zig_dependencies.items():
-            res["zig_dependencies"][dep_name] = dep.to_json()
+            res_zigdeps[dep_name] = dep.to_json()
+        res = {
+            "name": self.name,
+            "description": self.description,
+            "dependencies": res_deps,
+            "zig_dependencies": res_zigdeps,
+        }
         return json.encode(res, pretty=True)
+
 
 class Dependency(object):
     name: str
@@ -263,7 +285,7 @@ class ZigDependency(Dependency):
             hash if hash is not None else "",
         )
 
-def gen_buildzig(template: str, build_config: BuildConfig) -> str:
+def gen_buildzig(template: str, build_config: BuildSpec) -> str:
     deps_defs = ""
     liblink_lines = ""
     exelink_lines = ""
@@ -305,7 +327,7 @@ def gen_buildzig(template: str, build_config: BuildConfig) -> str:
 
     return "\n".join(res)
 
-def gen_buildzigzon(template: str, build_config: BuildConfig, relative_syspath: str, deps_path: str) -> str:
+def gen_buildzigzon(template: str, build_config: BuildSpec, relative_syspath: str, deps_path: str) -> str:
     deps = ""
     for dep_name, dep in build_config.dependencies.items():
         deps += dep.to_zon(deps_path)
