@@ -346,11 +346,11 @@ renderExpr e = Pr.render (Pr.pretty e)
 renderPkgTuple :: PkgDep -> String
 renderPkgTuple (PkgDep u h p ru rr) =
   let fields = catMaybes
-        [ fmap (\x -> ("url", mkStr x)) u
+        [ fmap (\x -> ("repo_url", mkStr x)) ru
+        , fmap (\x -> ("repo_ref", mkStr x)) rr
+        , fmap (\x -> ("url", mkStr x)) u
         , fmap (\x -> ("hash", mkStr x)) h
         , fmap (\x -> ("path", mkStr x)) p
-        , fmap (\x -> ("repo_url", mkStr x)) ru
-        , fmap (\x -> ("repo_ref", mkStr x)) rr
         ]
   in case fields of
        [] -> "()"
