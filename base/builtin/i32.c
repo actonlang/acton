@@ -25,7 +25,7 @@ int i32_pow(int a, int e) {
 // General methods ///////////////////////////////////////////////////////////////////////
 
 B_i32 B_i32G_new(B_atom a, B_int base) {
-    B_int b = B_intG_new(a, base);
+    B_bigint b = B_bigintG_new(a, base);
     unsigned long n = b->val.n[0];
     long sz = b->val.size;
     if (labs(sz) > 1 || (sz==1 && n > 0x7ffffffful) || sz == -1 && n > 0x80000000ul) {
@@ -150,7 +150,7 @@ B_i32 B_IntegralD_i32D___round__ (B_IntegralD_i32 wit, B_i32 n, B_int p) {
     int nval = n->val;
     if (nval<0)
         return toB_i32(-B_IntegralD_i32D___round__(wit,toB_i32(-nval),p)->val);
-    int pval = p==NULL ? 0 : from$int(p);
+    int pval = p==NULL ? 0 : fromB_int(p);
     if (pval>=0)
         return n;
     int p10 = i32_pow(10,-pval);
@@ -193,11 +193,11 @@ B_i32 B_IntegralD_i32D___mod__(B_IntegralD_i32 wit, B_i32 a, B_i32 b) {
 }
 
 B_i32 B_IntegralD_i32D___lshift__(B_IntegralD_i32 wit,  B_i32 a, B_int b) {
-    return toB_i32(a->val << from$int(b));
+    return toB_i32(a->val << fromB_int(b));
 }
 
 B_i32 B_IntegralD_i32D___rshift__(B_IntegralD_i32 wit,  B_i32 a, B_int b) {
-    return toB_i32(a->val >> from$int(b));
+    return toB_i32(a->val >> fromB_int(b));
 }
  
 B_i32 B_IntegralD_i32D___invert__(B_IntegralD_i32 wit,  B_i32 a) {

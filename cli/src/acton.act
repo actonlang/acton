@@ -872,7 +872,7 @@ actor CmdTest(env: Env, args, perf_mode: bool=False):
                 lambda rmt, x, std_out_buf, std_err_buf: _on_json_output(rmt, test_info.definition, x, std_out_buf, std_err_buf),
                 lambda x, y, z: _on_test_error(test_info.definition, x, y, z))
             running_tests[test_info.definition] = t
-            if len(running_tests) < concurrency:
+            if int(len(running_tests)) < concurrency:
                 _run_test()
         except IndexError:
             pass

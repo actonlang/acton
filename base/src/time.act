@@ -415,10 +415,8 @@ class Instant(object):
     Which gives a range of ±292 billion years with a precision down to
     atto-second (2^10-18).
     """
-    # TODO: use i64 instead of int
     @property
     second: int
-    # TODO: use u64 instead of int
     @property
     attosecond: int
     @property

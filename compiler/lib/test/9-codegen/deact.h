@@ -83,6 +83,7 @@ struct deactQ_L_4action {
     struct deactQ_L_4actionG_class *$class;
     deactQ_Apa L_3obj;
 };
+$R deactQ_U_L_5C_3cont ($action, $Cont, int64_t);
 $R deactQ_L_5C_3cont ($action, $Cont, B_int);
 struct deactQ_L_6ContG_class {
     char *$GCINFO;
@@ -227,6 +228,7 @@ struct deactQ_L_19action {
     struct deactQ_L_19actionG_class *$class;
     deactQ_main L_18obj;
 };
+$R deactQ_U_1L_17C_9cont (deactQ_main, $Cont, int64_t);
 $R deactQ_L_17C_9cont (deactQ_main, $Cont, B_int);
 struct deactQ_L_20ContG_class {
     char *$GCINFO;
@@ -547,7 +549,4 @@ extern struct deactQ_BepaG_class deactQ_BepaG_methods;
 $R deactQ_BepaG_new($Cont);
 extern struct deactQ_mainG_class deactQ_mainG_methods;
 $R deactQ_mainG_new($Cont, B_Env);
-extern B_Times deactQ_W_223;
-extern B_Plus deactQ_W_586;
-extern B_Eq deactQ_W_761;
 void deactQ___init__ ();

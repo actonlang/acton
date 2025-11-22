@@ -188,10 +188,10 @@ xmlQ_Node xmlQ_decode(B_str data) {
 
         if (err && err->message) {
             if (err->line > 0) {
-                line = to$int(err->line);
+                line = toB_int(err->line);
             }
             if (err->int2 > 0) {  // int2 contains the column in libxml2
-                column = to$int(err->int2);
+                column = toB_int(err->int2);
             }
 
             // Strip trailing whitespace from error message if needed

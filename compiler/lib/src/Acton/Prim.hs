@@ -104,7 +104,7 @@ primIdentityActor   = gPrim "IdentityActor"
 primWEqNone         = gPrim "wEqNone"
 
 witIntegralInt      = GName mPrim $ Derived (deriveQ qnIntegral) $ Derived (deriveQ qnInt) suffixWitness
-witIntegralI64      = GName mPrim $ Derived (deriveQ qnIntegral) $ Derived (deriveQ qnI64) suffixWitness
+witIntegralBigint  = GName mPrim $ Derived (deriveQ qnIntegral) $ Derived (deriveQ qnBigint) suffixWitness
 
 primISNOTNONE       = gPrim "ISNOTNONE"
 primISNOTNONE0      = gPrim "ISNOTNONE0"
@@ -144,6 +144,9 @@ primWRAP            = gPrim "WRAP"
 primMkSet           = gPrim "mkSet"
 primMkDict          = gPrim "mkDict"
 primAnnot           = gPrim "annot"
+
+primUGetItem        = gPrim "listD_U__getitem__"
+primUNext           = gPrim "rangeD_U__next__"
 
 annot t_ann ann t e = eCall (tApp (eQVar primAnnot) [t_ann, t]) [ann, e]
 
@@ -229,7 +232,9 @@ primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec Nothing)
 
                             (noq primMkSet,         NDef scMkSet NoDec Nothing),
                             (noq primMkDict,        NDef scMkDict NoDec Nothing),
-                            (noq primAnnot,         NDef scAnnot NoDec Nothing)
+                            (noq primAnnot,         NDef scAnnot NoDec Nothing),
+                            (noq primUGetItem,      NDef scUGetItem NoDec Nothing),
+                            (noq primUNext,         NDef scUNext NoDec Nothing)
                       ]
 
 --  class $Cont[T] (value): pass
@@ -500,8 +505,8 @@ tEqNone             = tCon $ TC qnEq [tNone]
 --  $Integral$Int$witness : Integral[int]
 tIntegralInt        = tCon $ TC qnIntegral [tInt]
 
---  $Integral$I64$witness : Integral[i64]
-tIntegralI64        = tCon $ TC qnIntegral [tI64]
+--  $Integral$Bigint$witness : Integral[bigint]
+tIntegralBigint     = tCon $ TC qnIntegral [tBigint]
 
 
 --  $ISNOTNONE      : [A] => pure (?A) -> bool
@@ -548,6 +553,15 @@ scAnnot             = tSchema [quant a, quant b] tAnnot
         a           = TV KType $ name "A"
         b           = TV KType $ name "B"
 
+-- $listD_U__getitem__ : [A] => (list[A], int) -> A
+scUGetItem          = tSchema [quant a] tUGetItem
+  where tUGetItem   = tFun fxPure (posRow (tList (tVar a)) (posRow tInt posNil)) kwdNil (tVar a)
+        a           = TV KType $ name "A"
+
+-- $rangeD_U__next__ : [A] => (Iterator[A]) -> A   will only be used to replace B_IteratorD_range.__next__
+scUNext             = tSchema [] tUNext
+  where tUNext      = tFun fxMut (posRow (tIterator (tInt)) posNil) kwdNil tInt
+        
 --  $WRAP           : [A,B,C] => ($Actor, proc(*A,**B)->C) -> action(*A,**B)->C
 scWRAP              = tSchema [quant a, quant b, quant c] tWRAP
   where tWRAP       = tFun0 [tActor, abcFun fxProc] (abcFun fxAction)

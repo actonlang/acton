@@ -1,0 +1,1225 @@
+/*
+ * Copyright (C) 2019-2021 Data Ductus AB
+ *
+ * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
+ *
+ * 3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
+#define GC_THREADS 1
+#include "gc.h"
+
+// General methods ///////////////////////////////////////////////////////////////////////
+
+int set_str(zz_ptr a, unsigned char *str, B_int intbase);
+
+B_bigint malloc_bigint() {
+    B_bigint res = acton_malloc(sizeof(struct B_bigint));
+    res->$class = &B_bigintG_methods;
+    res->val.n = acton_malloc_atomic(sizeof(unsigned long));
+    res->val.size = 0;
+    res->val.alloc = 1;
+    return res;
+}
+
+void zz_malloc_fit(zz_ptr res, len_t m) {
+    res->n = acton_malloc_atomic(sizeof(unsigned long) * m);
+    res->size = 0;
+    res->alloc = m;
+}
+
+B_bigint B_IntegralD_bigintD___lshift__(B_IntegralD_bigint wit,  B_bigint a, B_int b);
+
+B_bigint B_bigintG_new(B_atom a, B_int base) {
+    if (base) {
+        if ($ISINSTANCE0(a,B_str)) {
+            B_bigint res = malloc_bigint();
+            res->$class = &B_bigintG_methods;
+            set_str(&res->val, ((B_str)a)->str, base);
+            return res;
+        } else {
+            char errmsg[1024];
+            snprintf(errmsg, sizeof(errmsg), "integer type constructor: base argument is only allowed when converting from a str");
+            $RAISE($NEW(B_BaseException,to$str(errmsg)));
+        }
+    }
+    if ($ISINSTANCE0(a,B_bigint)) return (B_bigint)a;
+    if ($ISINSTANCE0(a,B_int)) {
+        return toB_bigint(((B_int)a)->val);
+    }
+    if ($ISINSTANCE0(a,B_i32)) {
+        return toB_bigint((long)((B_i32)a)->val);
+    }
+    if ($ISINSTANCE0(a,B_i16)) {
+        return toB_bigint((long)((B_i16)a)->val);
+    }
+    if ($ISINSTANCE0(a,B_i8)) {
+        return toB_bigint((long)((B_i8)a)->val);
+    }
+    if ($ISINSTANCE0(a,B_u64)) {
+        unsigned long v = ((B_u64)a)->val;
+        if (v==0) 
+            return toB_bigint(0L);
+        else {
+            B_bigint res = malloc_bigint();
+            res->val.size=1;
+            res->val.n[0] = v;
+            return res;
+        }
+    }
+    if ($ISINSTANCE0(a,B_u32)) {
+        unsigned int v = ((B_u32)a)->val;
+        if (v==0) 
+            return toB_bigint(0L);
+        else {
+            B_bigint res = malloc_bigint();
+            res->val.size=1;
+            res->val.n[0] = (unsigned long)v;
+            return res;
+        }
+    }
+    if ($ISINSTANCE0(a,B_u16)) {
+        unsigned short v = ((B_u16)a)->val;
+        if (v==0) 
+            return toB_bigint(0L);
+        else {
+            B_bigint res = malloc_bigint();
+            res->val.size=1;
+            res->val.n[0] = (unsigned long)v;
+            return res;
+        }
+    }
+    if ($ISINSTANCE0(a,B_u8)) {
+        unsigned char v = ((B_u8)a)->val;
+        if (v==0) 
+            return toB_bigint(0L);
+        else {
+            B_bigint res = malloc_bigint();
+            res->val.size=1;
+            res->val.n[0] = (unsigned long)v;
+            return res;
+        }
+    }
+    if ($ISINSTANCE0(a,B_u1)) {
+        unsigned char v = ((B_u8)a)->val;
+        if (v==0) 
+            return toB_bigint(0L);
+        else {
+            B_bigint res = malloc_bigint();
+            res->val.size=1;
+            res->val.n[0] = (unsigned long)v;
+            return res;
+        }
+    }
+    if ($ISINSTANCE0(a,B_float)) {
+        double aval = ((B_float)a)->val;
+        int e;
+        double m = frexp(aval,&e);
+        if (e>52) {
+            B_bigint c = toB_bigint((long)(m*4503599627370496.0)); // (1<< 52); 
+            B_int d = toB_int(e-52);
+            return  B_IntegralD_bigintD___lshift__(NULL,c,d);
+        } else {
+            long al = (long)aval;
+            B_bigint res = toB_bigint(al);
+            return res;
+        }
+    }
+    if ($ISINSTANCE0(a,B_bool)) return toB_bigint(((B_bool)a)->val);
+    if ($ISINSTANCE0(a,B_str)) {
+        B_bigint res = malloc_bigint();
+        res->$class = &B_bigintG_methods;
+        set_str(&res->val, ((B_str)a)->str, base);
+        return res;
+    }
+    fprintf(stderr,"internal error: B_bigintG_new: argument not of atomic type\n");
+    exit(-1);
+}
+
+B_NoneType B_bigintD___init__(B_bigint self, B_atom a, B_int base){
+    self->val = B_bigintG_new(a,base)->val;
+    return B_None;
+}
+
+void B_bigintD___serialize__(B_bigint self,$Serial$state state) {
+    B_bigint prevkey = (B_bigint)B_dictD_get(state->done,(B_Hashable)B_HashableD_WORDG_witness,self,NULL);
+    if (prevkey) {
+        long pk = fromB_bigint(prevkey);
+        $val_serialize(-INT_ID,&pk,state);
+        return;
+    }
+    B_dictD_setitem(state->done,(B_Hashable)B_HashableD_WORDG_witness,self,toB_bigint(state->row_no));
+    int blobsize = 1 + labs(self->val.size);
+    $ROW row = $add_header(INT_ID,blobsize,state);
+    row->blob[0] = ($WORD)self->val.size;
+    memcpy(&row->blob[1],self->val.n,labs(self->val.size)*sizeof(long));
+}
+
+B_bigint B_bigintD___deserialize__(B_bigint res,$Serial$state state) {
+    $ROW this = state->row;
+    state->row = this->next;
+    state->row_no++;
+    if (this->class_id < 0) {
+        return (B_bigint)B_dictD_get(state->done,(B_Hashable)B_HashableD_intG_witness,toB_bigint((long)this->blob[0]),NULL);
+    } else {
+        if (!res)
+            res = malloc_bigint();
+        res->val.size = (long)this->blob[0];
+        res->val.alloc = labs(res->val.size);
+        res->val.n = acton_malloc(res->val.alloc*sizeof(long));
+        memcpy(res->val.n,&this->blob[1],res->val.alloc*sizeof(long));
+        B_dictD_setitem(state->done,(B_Hashable)B_HashableD_intG_witness,toB_bigint(state->row_no-1),res);
+        res->$class = &B_bigintG_methods;
+        return res;
+    }
+}
+
+B_bool B_bigintD___bool__(B_bigint n) {
+    return toB_bool(zz_cmpi(&n->val,0));
+}
+
+B_str B_bigintD___str__(B_bigint n) {
+    return to_str_noc(get_str(&n->val));
+}
+
+B_str B_bigintD___repr__(B_bigint n) {
+    return to_str_noc(get_str(&n->val));
+}
+
+/*
+B_bigint zz$toB_bigint(zz_ptr n) {
+    B_bigint res = malloc_bigint();
+    res->$class = &B_bigintG_methods;
+    res->val.n = n->n;
+    res->val.size = n->size;
+    res->val.alloc = n->alloc;
+    return res;
+}
+*/
+
+// B_IntegralD_bigint /////////////////////////////////////////////////////////////////////////
+
+ 
+B_bigint B_IntegralD_bigintD___add__(B_IntegralD_bigint wit,  B_bigint a, B_bigint b) {
+    B_bigint res = malloc_bigint();
+    zz_add(&res->val,&a->val,&b->val);
+    return res;
+}
+
+B_bigint B_IntegralD_bigintD___zero__(B_IntegralD_bigint wit) {
+    return toB_bigint(0);
+}
+
+B_complex B_IntegralD_bigintD___complex__(B_IntegralD_bigint wit, B_bigint a) {
+    $RAISE((B_BaseException)$NEW(B_NotImplementedError, to$str("Number.__complex__ not implemented for int")));
+    return NULL; // This is just to silence compiler warning, above RAISE will longjmp from here anyway
+}
+
+B_bigint B_IntegralD_bigintD___fromatom__(B_IntegralD_bigint wit, B_atom a) {
+    return B_bigintG_new(a,NULL);
+}
+
+B_bigint B_IntegralD_bigintD___mul__(B_IntegralD_bigint wit,  B_bigint a, B_bigint b) {
+    B_bigint res = malloc_bigint();
+    zz_mul(&res->val,&a->val,&b->val);
+    return res;
+}  
+  
+B_bigint B_IntegralD_bigintD___pow__(B_IntegralD_bigint wit, B_bigint a, B_bigint b) {
+    zz_ptr val_b = &b->val;
+    if (zz_cmpi(val_b,0) < 0) {
+        char errmsg[1024];
+        snprintf(errmsg, sizeof(errmsg), "int.__pow__(): negative exponent: %s", get_str(val_b));
+        $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
+    }
+    if (zz_cmpi(val_b,LONG_MAX) > 0) {
+        char errmsg[1024];
+        snprintf(errmsg, sizeof(errmsg), "int.__pow__(): exponent out of range (>LONG_MAX):  %s", get_str(val_b));
+        $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
+    }
+    B_bigint res = malloc_bigint();
+    if (val_b->size == 0)
+         zz_seti(&res->val, 1);
+     else     
+         zz_powi(&res->val,&a->val,val_b->n[0]); // __pow__ should have an int64 exponent in the Acton protocol
+    return res;
+}
+
+B_bigint B_IntegralD_bigintD___neg__(B_IntegralD_bigint wit,  B_bigint a) {
+    B_bigint res = malloc_bigint();
+    zz_neg(&res->val,&a->val);
+    return res;
+}
+
+B_bigint B_IntegralD_bigintD___pos__(B_IntegralD_bigint wit,  B_bigint a) {
+    return a;
+}
+
+$WORD B_IntegralD_bigintD_real(B_IntegralD_bigint wit, B_bigint a, B_Real wit2) {
+    $RAISE((B_BaseException)$NEW(B_NotImplementedError,to$str("Number.__real__ not implemented for int")));
+    return NULL; // This is just to silence compiler warning, above RAISE will longjmp from here anyway
+}
+
+$WORD B_IntegralD_bigintD_imag(B_IntegralD_bigint wit, B_bigint a, B_Real wit2) {
+    $RAISE((B_BaseException)$NEW(B_NotImplementedError,to$str("Number.__imag__ not implemented for int")));
+    return NULL; // This is just to silence compiler warning, above RAISE will longjmp from here anyway
+}
+
+$WORD B_IntegralD_bigintD___abs__(B_IntegralD_bigint wit, B_bigint a, B_Real wit2) {
+    B_bigint res = malloc_bigint();
+    zz_set(&res->val,&a->val);
+    res->val.size = labs(a->val.size);
+    return wit2->$class->__fromatom__(wit2,(B_atom)res);
+}
+
+B_bigint B_IntegralD_bigintD_conjugate(B_IntegralD_bigint wit,  B_bigint a) {
+    return a;
+}
+
+B_float B_IntegralD_bigintD___float__ (B_IntegralD_bigint wit, B_bigint n) {
+    return B_floatG_new((B_atom)n);
+}
+
+$WORD B_IntegralD_bigintD___trunc__ (B_IntegralD_bigint wit, B_bigint n, B_Integral wit2) {
+    return wit2->$class->__fromatom__(wit2,(B_atom)n);
+}
+  
+$WORD B_IntegralD_bigintD___floor__ (B_IntegralD_bigint wit, B_bigint n, B_Integral wit2) {
+    return wit2->$class->__fromatom__(wit2,(B_atom)n);
+}
+  
+$WORD B_IntegralD_bigintD___ceil__ (B_IntegralD_bigint wit, B_bigint n, B_Integral wit2) {
+    return wit2->$class->__fromatom__(wit2,(B_atom)n);
+}
+
+B_bigint B_IntegralD_bigintD___floordiv__(B_IntegralD_bigint wit, B_bigint a, B_bigint b);
+
+B_bigint B_IntegralD_bigintD___round__ (B_IntegralD_bigint wit, B_bigint n, B_int p) {
+    zz_struct nval = n->val;
+    if (nval.size < 0) { 
+        B_bigint n1 = malloc_bigint();
+        zz_neg(&n1->val,&nval);
+        B_bigint res = B_IntegralD_bigintD___round__(wit,n1,p);
+        zz_neg(&res->val,&res->val);
+        return res;
+    }
+    long pval = fromB_int(p);
+    if (pval>=0)
+        return n;
+    B_bigint p10 = B_IntegralD_bigintD___pow__(NULL,toB_bigint(10), B_IntegralD_bigintD___neg__(NULL,toB_bigint(p->val)));
+    B_bigint p10half = B_IntegralD_bigintD___floordiv__(NULL, p10,toB_bigint(2));
+    B_bigint n1 = B_IntegralD_bigintD___floordiv__(NULL,B_IntegralD_bigintD___add__(NULL,n,p10half),p10);
+    return B_IntegralD_bigintD___mul__(NULL,n1,p10);
+}
+  
+$WORD B_IntegralD_bigintD_numerator (B_IntegralD_bigint wit, B_bigint n, B_Integral wit2) {
+    return wit2->$class->__fromatom__(wit2,(B_atom)n);
+}
+  
+$WORD B_IntegralD_bigintD_denominator (B_IntegralD_bigint wit, B_bigint n, B_Integral wit2) {
+    B_bigint res = toB_bigint(1L);
+    return wit2->$class->__fromatom__(wit2,(B_atom)res);
+}
+  
+B_int B_IntegralD_bigintD___int__ (B_IntegralD_bigint wit, B_bigint n) {
+    unsigned long k = n->val.n[0];
+    long sz = n->val.size;
+    if (labs(sz) > 1 || (sz==1 && k > 0x7ffffffffffffffful) || sz == -1 && k > 0x8000000000000000ul) {
+        char errmsg[1024];
+        snprintf(errmsg, sizeof(errmsg), "bigint.__int__: value %s out of range for type int",get_str(&n->val));
+        $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
+    }
+    return toB_int(k*sz);
+}
+
+B_int B_IntegralD_bigintD___index__ (B_IntegralD_bigint wit, B_bigint n) {
+    unsigned long k = n->val.n[0];
+    long sz = n->val.size;
+    if (labs(sz) > 1 || (sz==1 && k > 0x7ffffffffffffffful) || sz == -1 && k > 0x8000000000000000ul) {
+        char errmsg[1024];
+        snprintf(errmsg, sizeof(errmsg), "bigint.__index__: value %s out of range for type int",get_str(&n->val));
+        $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
+    }
+    return toB_int(k*sz);
+}
+
+B_tuple B_IntegralD_bigintD___divmod__(B_IntegralD_bigint wit, B_bigint a, B_bigint b) {
+    if (b->val.size == 0){
+        char errmsg[1024];
+        snprintf(errmsg, sizeof(errmsg), "integer divmod: divisor is zero");
+        $RAISE((B_BaseException)$NEW(B_ZeroDivisionError,to$str(errmsg)));
+    }
+    B_bigint q = malloc_bigint();
+    B_bigint r = malloc_bigint();
+    zz_divrem(&q->val,&r->val,&a->val,&b->val);
+    return $NEWTUPLE(2, q, r);
+}
+
+B_bigint B_IntegralD_bigintD___floordiv__(B_IntegralD_bigint wit, B_bigint a, B_bigint b) {
+    if (b->val.size == 0){
+        char errmsg[1024];
+        snprintf(errmsg, sizeof(errmsg), "integer floordiv: divisor is zero");
+        $RAISE((B_BaseException)$NEW(B_ZeroDivisionError,to$str(errmsg)));
+    }
+     B_bigint res = malloc_bigint();
+    zz_div(&res->val,&a->val,&b->val);
+    return res;
+}
+
+B_bigint B_IntegralD_bigintD___mod__(B_IntegralD_bigint wit, B_bigint a, B_bigint b) {
+    B_tuple t = B_IntegralD_bigintD___divmod__(wit,a,b);
+    return t->components[1];
+}
+
+B_bigint B_IntegralD_bigintD___lshift__(B_IntegralD_bigint wit,  B_bigint a, B_int b) {
+    zz_struct aval = a->val;
+    long ma = aval.size;
+    long bval = fromB_int(b);
+    if (ma==0 || bval==0)
+        return a;
+    if (bval<0) {
+        char errmsg[1024];
+        snprintf(errmsg, sizeof(errmsg), "bigint.__lshift__: negative shift count: %ld", bval);
+        $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
+    }
+    long shw = bval/64;
+    long shb = bval%64;
+    long mres = labs(ma) + shw + (shb > 0);
+    B_bigint res = malloc_bigint();
+    zz_ptr rval = &res->val;
+    zz_malloc_fit(rval,mres);
+    word_t ci = nn_shl(rval->n, aval.n, labs(ma), shb);
+    rval->n[labs(ma)] = ci;
+    if (shw>0) {
+        for (int i = labs(ma)-1+(shb>0); i >= 0; i--)
+            rval->n[i+shw] = rval->n[i];
+        for (int i = 0; i < shw; i++)
+            rval->n[i] = 0;
+    }
+    mres = mres - (rval->n[mres-1]==0);
+    mres = ma<0? -mres:mres;
+    rval->size = mres;
+    return res; 
+}
+
+B_bigint B_IntegralD_bigintD___rshift__(B_IntegralD_bigint wit,  B_bigint a, B_int b) {
+    zz_struct aval = a->val;
+    long ma = aval.size;
+    long bval = fromB_int(b);
+    if (ma==0 || bval==0)
+        return a;
+    if (bval<0)  {
+        char errmsg[1024];
+        snprintf(errmsg, sizeof(errmsg), "bigint.__rshift__: negative shift count: %ld", bval);
+        $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
+    }
+    B_bigint res = malloc_bigint();
+    zz_ptr rval = &res->val;
+    long shw = bval/64;
+    long shb = bval%64;
+    long mres = labs(ma) - shw;
+    zz_malloc_fit(rval,mres);
+    unsigned long tmp[mres];
+    for (int i = 0; i < mres; i++)
+        tmp[i] = aval.n[i+shw];
+    word_t ci = nn_shr(rval->n, tmp, mres, shb);
+    mres = mres - (rval->n[mres-1]==0);
+    mres = ma<0?-mres:mres;
+    res->val.size = mres;
+    return res; 
+}
+ 
+B_bigint B_IntegralD_bigintD___invert__(B_IntegralD_bigint wit,  B_bigint a) {
+    B_bigint res0 = malloc_bigint();
+    B_bigint res = malloc_bigint();
+    B_bigint one = toB_bigint(1);
+    zz_neg(&res0->val,&a->val);
+    zz_sub(&res->val,&res0->val,&one->val);
+    return res;
+}
+
+
+// LogicalB_bigint  ////////////////////////////////////////////////////////////////////////////////////////
+
+// Converts src (which must be non-zero), to two's complement form, stored in dst.
+// src and dst may be the same address.
+void twocompl(unsigned long *dst, unsigned long *src, long len) {
+    unsigned long carry = 1;
+    for (int i = 0; i < len; i++) {
+        unsigned long t = src[i] ^ ULONG_MAX;
+        if (t < ULONG_MAX || carry == 0) {
+            dst[i] = t + carry;
+            carry = 0;
+        } else {
+            dst[i] = 0;
+        }
+    }
+}
+
+B_bigint B_LogicalD_IntegralD_bigintD___and__(B_LogicalD_IntegralD_bigint wit,  B_bigint a, B_bigint b) {
+    long aneg = a->val.size < 0;
+    long bneg = b->val.size < 0;
+    long asize = labs(a->val.size);
+    long bsize = labs(b->val.size);
+    if (bsize==0) return toB_bigint(0);
+    if (asize==0) return toB_bigint(0);
+    unsigned long  *a1, *b1;
+    if (aneg) {
+        a1 = acton_malloc(asize*sizeof(long));
+        twocompl(a1, a->val.n, asize);
+    } else
+        a1 = a->val.n;
+    if (bneg) {
+        b1 = acton_malloc(bsize*sizeof(long));
+        twocompl(b1, b->val.n, bsize);
+    } else
+        b1 = b->val.n;
+    long rneg = aneg & bneg;
+    if (asize < bsize) {
+        unsigned long *t = a1; a1 = b1; b1 = t;
+        long tsize = asize; asize = bsize; bsize = tsize;
+        long tneg = aneg; aneg = bneg; bneg = tneg;
+    }
+    B_bigint res = malloc_bigint();
+    // if both are positive, rsize = bsize
+    // if one is positive, use that size
+    // if both are negative, rsize = asize
+    zz_malloc_fit(&res->val,bneg ? asize : bsize);
+    res->val.size = 0;
+    if (bneg) {
+        for (int i = asize-1; i >= bsize; i--) {
+            res->val.n[i] = a1[i];
+            if (res->val.size == 0 && res->val.n[i] != 0L)
+                res->val.size = i+1;
+        }
+    }
+    for (int i = bsize-1; i >= 0; i--) {
+        res->val.n[i] = a1[i] & b1[i];
+        if (res->val.size == 0 && res->val.n[i] != 0L)
+            res->val.size = i+1;
+    }
+    if (rneg) {
+        twocompl(res->val.n, res->val.n, res->val.size);
+        res->val.size = -res->val.size;
+    }
+    return res;
+}     
+
+                                                 
+B_bigint B_LogicalD_IntegralD_bigintD___or__(B_LogicalD_IntegralD_bigint wit,  B_bigint a, B_bigint b) {
+    long aneg = a->val.size < 0;
+    long bneg = b->val.size < 0;
+    long asize = labs(a->val.size);
+    long bsize = labs(b->val.size);
+    if (bsize==0) return a;
+    if (asize==0) return b;
+    unsigned long  *a1, *b1;
+    if (aneg) {
+        a1 = acton_malloc(asize*sizeof(long));
+        twocompl(a1, a->val.n, asize);
+    } else
+        a1 = a->val.n;
+    if (bneg) {
+        b1 = acton_malloc(bsize*sizeof(long));
+        twocompl(b1, b->val.n, bsize);
+    } else
+        b1 = b->val.n;
+    long rneg = aneg | bneg;
+    if (asize < bsize) {
+        unsigned long *t = a1; a1 = b1; b1 = t;
+        long tsize = asize; asize = bsize; bsize = tsize;
+        long tneg = aneg; aneg = bneg; bneg = tneg;
+    }
+    B_bigint res = malloc_bigint();
+    zz_malloc_fit(&res->val,bneg ? bsize : asize);
+    res->val.size = 0;
+    if (!bneg) {
+        for (int i = asize-1; i >= bsize; i--) {
+            res->val.n[i] = a1[i];
+            if (res->val.size == 0 && res->val.n[i] != 0L)
+                res->val.size = i+1;
+        }
+    }
+    for (int i = bsize-1; i >= 0; i--) {
+        res->val.n[i] = a1[i] | b1[i];
+        if (res->val.size == 0 && res->val.n[i] != 0L)
+            res->val.size = i+1;
+    }
+    if (rneg) {
+        twocompl(res->val.n, res->val.n, res->val.size);
+        res->val.size = -res->val.size;
+    }
+    return res;
+}     
+
+
+B_bigint B_LogicalD_IntegralD_bigintD___xor__(B_LogicalD_IntegralD_bigint wit,  B_bigint a, B_bigint b) {
+    long aneg = a->val.size < 0;
+    long bneg = b->val.size < 0;
+    long asize = labs(a->val.size);
+    long bsize = labs(b->val.size);
+    if (bsize==0) return a;
+    if (asize==0) return b;
+    unsigned long  *a1, *b1;
+    if (aneg) {
+        a1 = acton_malloc(asize*sizeof(long));
+        twocompl(a1, a->val.n, asize);
+    } else
+        a1 = a->val.n;
+    if (bneg) {
+        b1 = acton_malloc(bsize*sizeof(long));
+        twocompl(b1, b->val.n, bsize);
+    } else
+        b1 = b->val.n;
+    long rneg = aneg ^ bneg;
+    if (asize < bsize) {
+        unsigned long *t = a1; a1 = b1; b1 = t;
+        long tsize = asize; asize = bsize; bsize = tsize;
+        long tneg = aneg; aneg = bneg; bneg = tneg;
+    }
+    B_bigint res = malloc_bigint();
+    zz_malloc_fit(&res->val,asize);
+    res->val.size = 0;
+    for (int i = asize-1; i >= bsize; i--) {
+        res->val.n[i] = bneg ? (~a1[i]) : a1[i];
+        if (res->val.size == 0 && res->val.n[i] != 0L)
+            res->val.size = i+1;
+     }
+    for (int i = bsize-1; i >= 0; i--) {
+        res->val.n[i] = a1[i] ^ b1[i];
+        if (res->val.size == 0 && res->val.n[i] != 0L)
+            res->val.size = i+1;
+    }
+    if (rneg) {
+        twocompl(res->val.n, res->val.n, res->val.size);
+        res->val.size = -res->val.size;
+    }
+    return res;
+}     
+ 
+// B_MinusD_IntegralD_bigint  ////////////////////////////////////////////////////////////////////////////////////////
+
+B_bigint B_MinusD_IntegralD_bigintD___sub__(B_MinusD_IntegralD_bigint wit,  B_bigint a, B_bigint b) {
+    B_bigint res = malloc_bigint();
+    zz_sub(&res->val,&a->val,&b->val);
+    return res;
+}
+
+
+// B_DivD_bigint  ////////////////////////////////////////////////////////////////////////////////////////
+
+B_float B_DivD_bigintD___truediv__ (B_DivD_bigint wit, B_bigint a, B_bigint b) {
+    if (zz_equal(&b->val, &toB_bigint(0)->val))
+        $RAISE((B_BaseException)$NEW(B_ZeroDivisionError, to$str("division by zero")));
+    zz_ptr aval = &a->val;
+    zz_ptr bval = &b->val;
+    B_bigint ared = malloc_bigint();
+    B_bigint bred = malloc_bigint();
+    B_bigint q = malloc_bigint();
+    B_bigint r = malloc_bigint();
+    B_bigint g = malloc_bigint();
+    zz_gcd(&g->val,aval,bval);
+    zz_div(&ared->val,aval,&g->val);
+    zz_div(&bred->val,bval,&g->val);
+    zz_divrem(&q->val,&r->val,&ared->val,&bred->val);
+    return to$float(B_floatG_new((B_atom)q)->val +  B_floatG_new((B_atom)r)->val/ B_floatG_new((B_atom)bred)->val);
+}
+
+// B_OrdD_bigint  ////////////////////////////////////////////////////////////////////////////////////////
+
+B_bool B_OrdD_bigintD___eq__ (B_OrdD_bigint wit, B_bigint a, B_bigint b) {
+    return toB_bool(zz_equal(&a->val,&b->val));
+}
+
+B_bool B_OrdD_bigintD___ne__ (B_OrdD_bigint wit, B_bigint a, B_bigint b) {
+    return toB_bool(1-zz_equal(&a->val,&b->val));
+}
+
+B_bool B_OrdD_bigintD___lt__ (B_OrdD_bigint wit, B_bigint a, B_bigint b) {
+    return toB_bool(zz_cmp(&a->val,&b->val) < 0);
+}
+
+B_bool B_OrdD_bigintD___le__ (B_OrdD_bigint wit, B_bigint a, B_bigint b) {
+    return toB_bool(zz_cmp(&a->val,&b->val) <= 0);
+}
+
+B_bool B_OrdD_bigintD___gt__ (B_OrdD_bigint wit, B_bigint a, B_bigint b) {
+    return toB_bool(zz_cmp(&a->val,&b->val) > 0);
+}
+
+B_bool B_OrdD_bigintD___ge__ (B_OrdD_bigint wit, B_bigint a, B_bigint b) {
+    return toB_bool(zz_cmp(&a->val,&b->val) >= 0);
+}
+
+// B_HashableD_bigint ///////////////////////////////////////////////////////////////////////////////////////////////////////
+
+B_bool B_HashableD_bigintD___eq__(B_HashableD_bigint wit, B_bigint a, B_bigint b) {
+    return toB_bool(zz_equal(&a->val,&b->val));
+}
+
+B_bool B_HashableD_bigintD___ne__(B_HashableD_bigint wit, B_bigint a, B_bigint b) {
+    return toB_bool(1-zz_equal(&a->val,&b->val));
+}
+
+B_NoneType B_HashableD_bigintD_hash(B_HashableD_bigint wit, B_bigint a, B_hasher h) {
+    long sz = a->val.size;
+    unsigned long data;
+    if (sz==0)
+        data = 0UL;
+    else
+        data = (long)a->val.n[0];
+    zig_hash_wyhash_update(h->_hasher,to$bytesD_len((char *)&data,8));
+    return B_None;
+}
+
+long fromB_bigint(B_bigint n) { 
+    long sz = n->val.size;
+    if (sz==0) return 0;
+    unsigned long res = n->val.n[0];
+    if (res > LONG_MAX || labs(sz) > 1) {
+        fprintf(stderr,"internal error: overflow in converting int to bounded int\n");
+        exit(1);
+    }
+    return sz<0 ? -res : res;
+}
+            
+B_bigint toB_bigint(long n) {
+    if (n >= 0 && n < 256)
+        return &B_bigint_strs[n];
+    else {
+        B_bigint res = malloc_bigint();
+        res->val.n[0] = n > 0 ? n : (n == LONG_MIN ? 9223372036854775808UL : -n);
+        res->val.size = n < 0 ? -1 : n > 0;
+        return res;
+    }
+}
+
+B_bigint toB_bigint2(char *str) {
+    B_bigint res = malloc_bigint();
+    res->$class = &B_bigintG_methods;
+    set_str(&res->val, (unsigned char *)str, NULL);
+    return res;
+}
+
+
+// Conversion to strings /////////////////////////////////////////////////////////////////////////////
+
+// These four constants must be changed for a 32 bit machine
+int WORDSIZE = 64;
+int POW10INWORD = 18; // Largest power of 10 that fits in a signed long 
+unsigned char POWINWORD[37] = {0,0,62,39,31,27,24,22,20,19,18,18,17,17,16,16,15,15,15,14,14,14,14,13,13,13,13,13,13,12,12,12,12,12,12,12,12};
+//POWINWORD[b] is largest power of b that fits in a signed word
+double CCCC = 9.805415291306852e-2;  // log2(WORDSIZE) - log2 (POW10INWORD) - log2 (log2(10))
+
+// n is a valid digit in base b iff digvalue[n] < b.
+unsigned char digvalue[256] = {
+    99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99,
+    99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99,
+    99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99,
+     0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 99, 99, 99, 99, 99, 99,
+    99, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+    25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 99, 99, 99, 99, 99,
+    99, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+    25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 99, 99, 99, 99, 99,
+    99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99,
+    99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99,
+    99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99,
+    99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99,
+    99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99,
+    99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99,
+    99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99,
+    99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99,
+};
+
+
+int get_str0(bool ishead, zz_ptr n, zz_ptr dens[], int d, unsigned char *res, int pos) {
+    if (d >= 0) {
+        zz_ptr hi = acton_malloc(sizeof(zz_struct));
+        zz_ptr lo = acton_malloc(sizeof(zz_struct));
+        zz_init_fit(hi,dens[d]->size);
+        zz_init_fit(lo,dens[d]->size);
+        zz_divrem(hi, lo, n, dens[d]);
+        if (hi->size==0 && ishead) {
+            return get_str0(ishead, lo, dens, d-1, res, pos);
+        } else {
+            int newpos = get_str0(ishead, hi, dens, d-1, res, pos);
+            return get_str0(false, lo, dens, d-1, res, newpos);
+        }
+    } else {
+        char buf[POW10INWORD + 1];
+        sprintf(buf, "%lu", (unsigned long)n->n[0]);
+        int len = strlen(buf);
+        if (ishead) {
+            memcpy(&res[pos], buf, len);
+            return pos + len;
+        } else {
+            memcpy(&res[pos + POW10INWORD - len], buf, len);
+            return pos + POW10INWORD;
+        }
+    }
+}
+
+
+char * get_str(zz_ptr nval) {
+    if (nval->size == 0)
+        return "0";
+    long nlen = BSDNT_ABS(nval->size);
+    zz_ptr npos = acton_malloc(sizeof(zz_struct));
+    zz_init_fit(npos,nlen);
+    nn_copy(npos->n, nval->n, nlen);
+    npos->size = nlen;
+    int is_neg_n = nval->size < 0;
+    int d;
+    zz_ptr *dens;
+    if (nlen == 1) {
+        d = 0;
+        dens = NULL;
+    } else {
+        d = ceil(log2((double)nlen) + CCCC);  //number of squarings
+        dens = acton_malloc(d * sizeof(zz_ptr));
+        dens[0] = acton_malloc(sizeof(zz_struct));
+        zz_init_fit(dens[0], 1);
+        zz_seti(dens[0], 10); 
+        zz_powi(dens[0], dens[0], POW10INWORD);
+        for (int i=1; i < d; i++) {
+            dens[i] = acton_malloc(sizeof(zz_struct));
+            zz_init_fit(dens[i], 2 * dens[i-1]->size);
+            zz_mul(dens[i], dens[i-1], dens[i-1]);
+        }
+    }
+    // strlen is for most n one more than necessary; this is a precaution for values of n where
+    // the double value ... in ceil(...) is very close to an integer. So we often waste one byte.
+    int strlen = ceil(log10((float)npos->n[nlen - 1]) + (nlen - 1) * WORD_BITS * log10(2) + is_neg_n) + 2;
+    char *res = acton_malloc_atomic(strlen);
+    memset(res,'0', strlen);
+    int pos = 0;
+    if (is_neg_n) {
+        res[0] = '-';
+        pos++;
+    }
+    int newpos = get_str0(true, npos, dens, d-1, (unsigned char *)res, pos);
+    res[newpos] = '\0';
+    return res;
+}
+
+
+int set_str0(zz_ptr a, unsigned char *nstr, unsigned char base, int parts) {
+    // assert(parts > 0);
+    if (parts == 1) {
+        unsigned long val = 0;
+        int i = 0;
+        while (i < POWINWORD[base])
+            val = val * base + digvalue[nstr[i++]];
+        zz_seti(a, val);
+        return POWINWORD[base];
+    } else {
+        int hi = parts/2;
+        int lo = parts - hi;
+        zz_ptr hires = acton_malloc(sizeof(zz_struct));
+        zz_ptr lores = acton_malloc(sizeof(zz_struct));
+        zz_init(hires);
+        zz_init(lores);
+        int hidigs = set_str0(hires, nstr, base, hi);
+        int lodigs = set_str0(lores, &nstr[hi * POWINWORD[base]], base, lo);
+        zz_seti(a, base);
+        zz_powi(a, a, POWINWORD[base] * lo);
+        zz_mul(a, a, hires);
+        zz_add(a, a, lores);
+        return hidigs + lodigs;
+    }
+}
+
+
+int set_str(zz_ptr a, unsigned char *nstr, B_int intbase) {
+    int pre = 0;
+    int sgn = 1;
+    while(isspace(nstr[pre])) pre++;   // should leading spaces be allowed?
+    if(nstr[pre]=='+')
+        pre++;
+    else if (nstr[pre]=='-') {
+        sgn = -1;
+        pre++;
+    }
+    int len = 0;
+    int pre_len = pre;
+    unsigned char basefromstr = 0;
+    if (nstr[pre]=='0') {
+        pre++; 
+        if (nstr[pre]=='x' || nstr[pre]=='X') {
+            basefromstr = 16; pre++; pre_len += 2;
+        } else if (nstr[pre]=='o' || nstr[pre]=='O') {
+            basefromstr = 8; pre++; pre_len += 2;
+        } else if (nstr[pre]=='b' || nstr[pre]=='B') {
+            basefromstr = 2; pre++; pre_len += 2;
+        } else
+            len++;
+    }
+    unsigned char basefrompar = 0;
+    if (!intbase)
+        basefrompar = 0;
+    else {
+        long baseval = fromB_int(intbase);
+        if (baseval < 2 || baseval > 36) {
+            char errmsg[1024];
+            snprintf(errmsg, sizeof(errmsg), "integer type constructor: base parameter %ld is out of range (must be between 2 and 36, inclusive)", baseval);
+            $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
+        } else
+            basefrompar = (unsigned char)baseval;
+    }
+    unsigned char base;
+    if (basefrompar==0) 
+        base = basefromstr ? basefromstr : 10;
+    else if (basefromstr==0) 
+        base = basefrompar;
+    else if (basefromstr != basefrompar) {
+        char errmsg[1024];
+        snprintf(errmsg, sizeof(errmsg), "integer type constructor: base specified in str (%d) is in conflict with base in parameter base (%d)", basefromstr, basefrompar);
+        $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
+    } else
+        base = basefromstr; // which is equal to basefrompar
+    while (digvalue[nstr[pre]] < base) {
+        len++;
+        pre++;
+    }
+    if (len == 0 || nstr[pre] != 0) {
+        char errmsg[1024];
+        snprintf(errmsg, sizeof(errmsg), "integer type constructor: string \"%s\" cannot be interpreted as an int in base %d", nstr,base);
+        $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
+    }
+    nstr += pre_len;
+    
+    int parts = len / POWINWORD[base];
+    int offset =  len % POWINWORD[base];
+    
+    if (offset == 0) {
+        return set_str0(a, nstr, base, parts);
+        a->size *= sgn;
+    } else {
+        unsigned long headval = 0;
+        int partdigits = 0;
+        int i = 0;
+        while (i < offset)
+            headval = headval * base + digvalue[nstr[i++]];
+        if (parts > 0) {
+            zz_ptr res0 = acton_malloc(sizeof(zz_struct));
+            zz_init(res0);
+            partdigits = set_str0(res0, &nstr[offset], base, parts);
+            zz_seti(a, base);
+            zz_powi(a, a, POWINWORD[base] * parts);
+            zz_muli(a, a, headval);
+            zz_add(a, a, res0);
+        } else {
+            zz_seti(a, headval);
+        }
+        a->size *= sgn;
+        return pre; // we shouldn't return chars consumed since we throw exception if whole string not consumed.
+    } 
+}
+
+
+// gcd functions from BSDNT //////////////////////////////////
+B_bigint $gcd(B_bigint a, B_bigint b) {
+    B_bigint res = malloc_bigint();
+    zz_gcd(&res->val, &a->val, &b->val);
+    return res;
+}
+
+B_tuple $xgcd(B_bigint a, B_bigint b) {
+    B_bigint d = malloc_bigint();
+    B_bigint s = malloc_bigint();
+    B_bigint t = malloc_bigint();
+    zz_xgcd(&d->val, &s->val, &t->val, &a->val, &b->val);
+    return $NEWTUPLE(3, d, s, t);
+}
+    
+unsigned long B_bigint_longs[256] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
+                                   10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+                                   20, 21, 22, 23, 24, 25, 26, 27, 28, 29,
+                                   30, 31, 32, 33, 34, 35, 36, 37, 38, 39,
+                                   40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
+                                   50, 51, 52, 53, 54, 55, 56, 57, 58, 59,
+                                   60, 61, 62, 63, 64, 65, 66, 67, 68, 69,
+                                   70, 71, 72, 73, 74, 75, 76, 77, 78, 79,
+                                   80, 81, 82, 83, 84, 85, 86, 87, 88, 89,
+                                   90, 91, 92, 93, 94, 95, 96, 97, 98, 99,
+                                   100, 101, 102, 103, 104, 105, 106, 107, 108, 109,
+                                   110, 111, 112, 113, 114, 115, 116, 117, 118, 119,
+                                   120, 121, 122, 123, 124, 125, 126, 127, 128, 129,
+                                   130, 131, 132, 133, 134, 135, 136, 137, 138, 139,
+                                   140, 141, 142, 143, 144, 145, 146, 147, 148, 149,
+                                   150, 151, 152, 153, 154, 155, 156, 157, 158, 159,
+                                   160, 161, 162, 163, 164, 165, 166, 167, 168, 169,
+                                   170, 171, 172, 173, 174, 175, 176, 177, 178, 179,
+                                   180, 181, 182, 183, 184, 185, 186, 187, 188, 189,
+                                   190, 191, 192, 193, 194, 195, 196, 197, 198, 199,
+                                   200, 201, 202, 203, 204, 205, 206, 207, 208, 209,
+                                   210, 211, 212, 213, 214, 215, 216, 217, 218, 219,
+                                   220, 221, 222, 223, 224, 225, 226, 227, 228, 229,
+                                   230, 231, 232, 233, 234, 235, 236, 237, 238, 239,
+                                   240, 241, 242, 243, 244, 245, 246, 247, 248, 249,
+                                   250, 251, 252, 253, 254, 255 };
+
+                           
+struct B_bigint B_bigint_strs[256] =
+                        {{&B_bigintG_methods, B_bigint_longs, 0, 1},
+                         {&B_bigintG_methods, B_bigint_longs+1, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+2, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+3, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+4, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+5, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+6, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+7, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+8, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+9, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+10, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+11, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+12, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+13, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+14, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+15, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+16, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+17, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+18, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+19, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+20, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+21, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+22, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+23, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+24, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+25, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+26, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+27, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+28, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+29, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+30, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+31, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+32, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+33, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+34, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+35, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+36, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+37, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+38, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+39, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+40, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+41, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+42, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+43, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+44, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+45, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+46, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+47, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+48, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+49, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+50, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+51, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+52, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+53, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+54, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+55, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+56, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+57, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+58, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+59, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+60, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+61, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+62, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+63, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+64, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+65, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+66, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+67, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+68, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+69, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+70, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+71, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+72, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+73, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+74, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+75, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+76, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+77, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+78, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+79, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+80, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+81, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+82, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+83, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+84, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+85, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+86, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+87, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+88, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+89, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+90, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+91, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+92, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+93, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+94, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+95, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+96, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+97, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+98, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+99, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+100, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+101, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+102, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+103, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+104, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+105, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+106, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+107, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+108, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+109, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+110, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+111, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+112, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+113, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+114, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+115, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+116, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+117, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+118, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+119, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+120, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+121, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+122, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+123, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+124, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+125, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+126, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+127, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+128, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+129, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+130, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+131, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+132, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+133, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+134, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+135, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+136, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+137, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+138, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+139, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+140, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+141, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+142, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+143, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+144, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+145, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+146, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+147, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+148, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+149, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+150, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+151, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+152, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+153, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+154, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+155, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+156, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+157, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+158, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+159, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+160, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+161, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+162, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+163, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+164, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+165, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+166, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+167, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+168, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+169, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+170, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+171, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+172, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+173, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+174, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+175, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+176, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+177, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+178, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+179, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+180, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+181, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+182, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+183, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+184, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+185, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+186, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+187, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+188, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+189, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+190, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+191, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+192, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+193, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+194, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+195, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+196, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+197, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+198, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+199, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+200, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+201, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+202, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+203, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+204, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+205, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+206, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+207, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+208, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+209, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+210, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+211, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+212, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+213, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+214, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+215, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+216, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+217, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+218, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+219, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+220, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+221, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+222, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+223, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+224, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+225, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+226, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+227, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+228, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+229, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+230, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+231, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+232, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+233, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+234, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+235, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+236, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+237, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+238, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+239, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+240, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+241, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+242, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+243, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+244, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+245, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+246, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+247, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+248, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+249, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+250, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+251, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+252, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+253, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+254, 1, 1},
+                         {&B_bigintG_methods, B_bigint_longs+255, 1, 1}};
