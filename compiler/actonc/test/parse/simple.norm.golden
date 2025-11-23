@@ -1,0 +1,9 @@
+
+
+== norm: simple ================================
+
+pure def main () -> None:
+    print@[(__builtin__.str,)](("\"Hello parse!\"",), None, None, None, None)
+    return None
+================================================
+

@@ -60,6 +60,7 @@ main = do
       , stdlibAutoTests
       , syntaxErrorAutoTests
       , typeErrorAutoTests
+      , parseFlagTests
       , crossCompileTests
       ]
   where timeout :: Timeout
@@ -131,6 +132,34 @@ compilerTests =
         -- API change in the dependency.
         runActon "build" (ExitFailure 1) False testDir
   ]
+
+parseFlagTests =
+  testGroup "actonc compiler flags"
+  [
+    flagGolden "parse flag prints AST" "test/parse/simple.golden" ["--quiet", "--parse"]
+  , flagGolden "kinds flag prints kinds" "test/parse/simple.kinds.golden" ["--quiet", "--kinds"]
+  , flagGolden "types flag prints types" "test/parse/simple.types.golden" ["--quiet", "--types"]
+  , flagGolden "sigs flag prints signatures" "test/parse/simple.sigs.golden" ["--quiet", "--sigs"]
+  , flagGolden "norm flag prints normalized" "test/parse/simple.norm.golden" ["--quiet", "--norm"]
+  , flagGolden "deact flag prints deactorized" "test/parse/simple.deact.golden" ["--quiet", "--deact"]
+  , flagGolden "cps flag prints CPS" "test/parse/simple.cps.golden" ["--quiet", "--cps"]
+  , flagGolden "llift flag prints lifted" "test/parse/simple.llift.golden" ["--quiet", "--llift"]
+  , flagGolden "box flag prints boxing" "test/parse/simple.box.golden" ["--quiet", "--box"]
+  -- Avoid #line directives (absolute paths) so hgen/cgen goldens stay stable across machines
+  , flagGolden "hgen flag prints header" "test/parse/simple.hgen.golden" ["--quiet", "--dbg-no-lines", "--hgen"]
+  , flagGolden "cgen flag prints c" "test/parse/simple.cgen.golden" ["--quiet", "--dbg-no-lines", "--cgen"]
+  , flagGolden "all flags combined" "test/parse/simple.all.golden"
+        ["--quiet", "--parse", "--kinds", "--types", "--sigs", "--norm", "--deact", "--cps", "--llift", "--box", "--dbg-no-lines", "--hgen"]
+  ]
+  where
+    flagGolden label golden flags =
+      goldenVsString label golden $ do
+        actonc <- canonicalizePath "../../dist/bin/actonc"
+        sample <- canonicalizePath "test/parse/simple.act"
+        (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc actonc (flags ++ [sample])) ""
+        assertEqual ("actonc " ++ unwords flags ++ " should succeed") ExitSuccess returnCode
+        assertEqual ("actonc " ++ unwords flags ++ " stderr") "" cmdErr
+        return (LBS.pack cmdOut)
 
 actoncProjTests =
   testGroup "compiler project tests"

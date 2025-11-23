@@ -1,0 +1,6 @@
+/* Acton source hash: edf7a8606ab5a020a50470ea11bfb860f71abc60e965dc11b69f41603de190fb */
+#pragma once
+#include "builtin/builtin.h"
+#include "rts/rts.h"
+B_NoneType simpleQ_main ();
+void simpleQ___init__ ();
