@@ -1,0 +1,4 @@
+import b
+
+def answer_a() -> int:
+    return b.answer()
