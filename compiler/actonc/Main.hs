@@ -53,7 +53,7 @@ import Control.Concurrent (forkIO)
 import Control.Monad
 import Data.Default.Class (def)
 import Data.List.Split
-import Data.Maybe (isJust)
+import Data.Maybe (catMaybes, isJust)
 import Data.Monoid ((<>))
 import Data.Ord
 import Data.Graph
@@ -68,7 +68,7 @@ import qualified Filesystem.Path.CurrentOS as Fsco
 import GHC.Conc (getNumCapabilities, getNumProcessors, setNumCapabilities, myThreadId, threadCapability)
 import Prettyprinter (unAnnotate)
 import Prettyprinter.Render.Text (hPutDoc)
-import Data.List (isPrefixOf, isSuffixOf, find, intersperse, partition, foldl')
+import Data.List (isPrefixOf, isSuffixOf, find, intersperse, partition, foldl', nub)
 import System.Clock
 import System.Directory
 import System.Directory.Recursive
@@ -361,7 +361,7 @@ buildProject gopts opts = do
                     withFileLock (joinPath [projPath paths, ".actonc.lock"]) Exclusive $ \_ -> do
                       allFiles <- getFilesRecursive (srcDir paths)
                       let srcFiles = catMaybes $ map filterActFile allFiles
-                      compileFiles gopts opts srcFiles
+                      compileFiles gopts opts srcFiles True
                       -- After a project build, (re)generate the documentation index
                       generateProjectDocIndex gopts opts paths srcFiles
 
@@ -382,12 +382,12 @@ buildFile gopts opts file = do
           putStrLn("Building file " ++ file ++ " in project " ++ relProj)
         if (C.sub gopts)
           then do
-            compileFiles gopts opts [file]
+            compileFiles gopts opts [file] False
           else do
             -- grab project lock
             let lock_file = joinPath [proj, ".actonc.lock"]
             withFileLock lock_file Exclusive $ \_ -> do
-              compileFiles gopts opts [file]
+              compileFiles gopts opts [file] False
       Nothing -> do
         -- Not in a project, use scratch directory for compilation unless
         -- --tempdir is provided - then use that
@@ -395,7 +395,7 @@ buildFile gopts opts file = do
           then do
             iff (not(C.quiet gopts)) $ do
               putStrLn("Building file " ++ file ++ " using temporary directory " ++ C.tempdir opts)
-            compileFiles gopts opts [file]
+            compileFiles gopts opts [file] False
           else do
             home <- getHomeDirectory
             let basePath = joinPath [home, ".cache", "acton", "scratch"]
@@ -409,7 +409,7 @@ buildFile gopts opts file = do
                   let scratch_dir = if (C.verbose gopts) then " " ++ scratchDir else ""
                   putStrLn("Building file " ++ file ++ " using temporary scratch directory" ++ scratch_dir)
                 removeDirectoryRecursive scratchDir `catch` handleNotExists
-                compileFiles gopts (opts { C.tempdir = scratchDir }) [file]
+                compileFiles gopts (opts { C.tempdir = scratchDir }) [file] False
                 unlockFile lock
   where
     handleNotExists :: IOException -> IO ()
@@ -599,15 +599,44 @@ removeOrphanFiles paths tasks roots = do
             isTy = takeExtension absFile == ".ty"
             bext = takeExtension (takeBaseName absFile)
             isRootStub = isC && (bext == ".root" || bext == ".test_root")
+            base = dropExtension absFile
+            modBase = if isRootStub then dropExtension base else base
         if isRootStub
-          then when (not (absFile `elem` roots)) (removeIfExists absFile)
+          then when (not (absFile `elem` roots) || not (modBase `elem` allowedBases)) (removeIfExists absFile)
           else when (isC || isH || isTy) $ do
-                 let base = dropExtension absFile
                  unless (base `elem` allowedBases) (removeIfExists absFile)
   where
     removeIfExists f = removeFile f `catch` handleNotExists
     handleNotExists :: IOException -> IO ()
     handleNotExists _ = return ()
+
+-- Determine which root stub files should be preserved for the current build.
+-- We read the freshly written .ty headers (post-compile) for each task to keep
+-- whichever roots are still declared. This lets us drop stale root stubs when
+-- a module loses its root actor while still retaining stubs that belong to
+-- other build modes (e.g. keeping .root.c when running `acton test`).
+expectedRootStubs :: Paths -> [CompileTask] -> IO [FilePath]
+expectedRootStubs paths tasks = do
+    roots <- forM tasks $ \t -> do
+        let mn     = name t
+            outbase = outBase paths mn
+            tyPath = outbase ++ ".ty"
+        hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader tyPath
+        case hdrE of
+          Right (_, _, _, rs, _) -> return (map (mkStub outbase) rs)
+          _ -> return []
+    return (concat roots)
+  where
+    mkStub outbase n =
+      if nameToString n == "__test_main"
+        then outbase ++ ".test_root.c"
+        else outbase ++ ".root.c"
+
+binTaskRoot :: Paths -> BinTask -> FilePath
+binTaskRoot paths binTask =
+    let A.GName m _ = rootActor binTask
+        outbase = outBase paths m
+    in if isTest binTask then outbase ++ ".test_root.c" else outbase ++ ".root.c"
 
 parseActSource :: C.GlobalOptions -> C.CompileOptions -> Paths -> A.ModName -> FilePath -> String -> IO A.Module
 parseActSource gopts opts projPaths mn actFile srcContent = do
@@ -689,8 +718,8 @@ High-level Steps
 ================================================================================
 -}
 
-compileFiles :: C.GlobalOptions -> C.CompileOptions -> [String] -> IO ()
-compileFiles gopts opts srcFiles = do
+compileFiles :: C.GlobalOptions -> C.CompileOptions -> [String] -> Bool -> IO ()
+compileFiles gopts opts srcFiles allowPrune = do
     -- it is ok to get paths from just the first file here since at this point
     -- we only care about project level path stuff and all source files are
     -- known to be in the same project
@@ -741,11 +770,11 @@ compileFiles gopts opts srcFiles = do
         if C.test opts
           then do
             testBinTasks <- catMaybes <$> mapM (filterMainActor env paths) preTestBinTasks
-            compileBins gopts opts paths env tasks testBinTasks
+            compileBins gopts opts paths env tasks testBinTasks allowPrune
             putStrLn "Test executables:"
             mapM_ (\t -> putStrLn (binName t)) testBinTasks
           else do
-            compileBins gopts opts paths env tasks preBinTasks
+            compileBins gopts opts paths env tasks preBinTasks allowPrune
     return ()
 
 -- Remove executables that no longer have corresponding root actors
@@ -1255,10 +1284,10 @@ compileTasks gopts opts paths tasks = do
           -- Tail recurse with updated ready/running/indeg/pending/env state.
           loop rdy2 running2 res2 ind2 pend2 envAcc' maxPar cw
 
-compileBins:: C.GlobalOptions -> C.CompileOptions -> Paths -> Acton.Env.Env0 -> [CompileTask] -> [BinTask] -> IO ()
-compileBins gopts opts paths env tasks binTasks = do
+compileBins:: C.GlobalOptions -> C.CompileOptions -> Paths -> Acton.Env.Env0 -> [CompileTask] -> [BinTask] -> Bool -> IO ()
+compileBins gopts opts paths env tasks binTasks allowPrune = do
     iff (not (altOutput opts)) $ do
-      zigBuild env gopts opts paths tasks binTasks
+      zigBuild env gopts opts paths tasks binTasks allowPrune
     return ()
 
 
@@ -1597,14 +1626,20 @@ writeRootC env gopts opts paths tasks binTask = do
         rootsHeader <- case tyPath of
                          Just ty -> do (_, _, _, roots, _) <- InterfaceFiles.readHeader ty; return roots
                          Nothing -> return []
-        if n `elem` rootsHeader then do
-          c <- Acton.CodeGen.genRoot env qn
-          createDirectoryIfMissing True (takeDirectory rootFile)
-          writeFile rootFile c
-          return (Just binTask)
-        else do
-          -- No slow fallback: if header does not list the root, skip generating root C for this task
-          return Nothing
+        let rootsEnv = case Acton.Env.lookupMod m env of
+                         Nothing -> []
+                         Just te -> [ n' | (n', i) <- te, rootEligible i ]
+            shouldGen = n `elem` rootsHeader || n `elem` rootsEnv
+        if shouldGen
+          then do
+            res <- (try :: IO a -> IO (Either SomeException a)) $ do
+              c <- Acton.CodeGen.genRoot env qn
+              createDirectoryIfMissing True (takeDirectory rootFile)
+              writeFile rootFile c
+            case res of
+              Right _ -> return (Just binTask)
+              Left _  -> return Nothing
+          else return Nothing
 
 modNameToString :: A.ModName -> String
 modNameToString (A.ModName names) = intercalate "." (map nameToString names)
@@ -1654,26 +1689,25 @@ defCpuFlag = []
 #error "Unsupported platform"
 #endif
 
-zigBuild :: Acton.Env.Env0 -> C.GlobalOptions -> C.CompileOptions -> Paths -> [CompileTask] -> [BinTask] -> IO ()
-zigBuild env gopts opts paths tasks binTasks = do
+zigBuild :: Acton.Env.Env0 -> C.GlobalOptions -> C.CompileOptions -> Paths -> [CompileTask] -> [BinTask] -> Bool -> IO ()
+zigBuild env gopts opts paths tasks binTasks allowPrune = do
     allBinTasks <- mapM (writeRootC env gopts opts paths tasks) binTasks
     let realBinTasks = catMaybes allBinTasks
-    -- Clean out/types: drop stray outputs but preserve all root stubs so that
-    -- switching between `acton build` and `acton test` never deletes the other
-    -- mode’s executables. We preserve every existing *.root.c and *.test_root.c
-    -- under out/types regardless of whether this run produced them.
-    absOutFiles <- getFilesRecursive (projTypes paths)
-    let isRootStub f =
-            let ext  = takeExtension f
-                bext = takeExtension (takeBaseName f)
-            in ext == ".c" && (bext == ".root" || bext == ".test_root")
-        roots = filter isRootStub absOutFiles
-    removeOrphanFiles paths tasks roots
+
+    let pruningAllowed = allowPrune && not (C.only_build opts)
+    when pruningAllowed $ do
+      -- Clean out/types: drop stray outputs and stale root stubs based on the
+      -- current headers. Also keep the roots we attempted to build in this run
+      -- so they survive even if a header failed to list them (defensive).
+      let requestedRoots = map (binTaskRoot paths) realBinTasks
+      headerRoots <- expectedRootStubs paths tasks
+      let roots = nub (headerRoots ++ requestedRoots)
+      removeOrphanFiles paths tasks roots
+      unless (isTmp paths) $
+        -- Clean old binaries from out/bin
+        removeOrphanExecutables (binDir paths) (projTypes paths) realBinTasks
+
     iff (not (quiet gopts opts)) $ putStrLn("  Final compilation step")
-    -- Remove orphaned executables, i.e. .act files that used to have a root
-    -- actor and thus outputted a binary executable but no longer has a root
-    -- actor. We only do this for projects, not temp / scratch dir builds.
-    iff (not (isTmp paths)) $ removeOrphanExecutables (binDir paths) (projTypes paths) realBinTasks
     timeStart <- getTime Monotonic
 
     homeDir <- getHomeDirectory
