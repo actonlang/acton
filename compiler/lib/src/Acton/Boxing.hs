@@ -55,9 +55,6 @@ setDelayedUnbox b env              = modX env $ \x -> x{delayedUnboxX = b}
 
 isDelayedUnbox env                 = delayedUnboxX $ envX env
 
-setInClass b env                   = modX env $ \x -> x{inClassX = b}
-
-isInClass env                      = inClassX $ envX env
 
 -- Auxiliaries ---------------------------------------------------------------------------------------------------
 
@@ -124,7 +121,7 @@ instance {-# OVERLAPS #-} Boxing ([Stmt]) where
                                           return (ws1++ws2, s : ss ++ xs')
       where te                       = envOf x
 
-    boxing env (x : xs)              = do ps <- if (isInClass env) then return [] else newNames [n | (n,NDef (TSchema _ [] (TFun _ _ p _ t)) _ _) <- te, isUnboxable t ||  hasUnboxableType p]
+    boxing env (x : xs)              = do ps <- if (inClass env) then return [] else newNames [n | (n,NDef (TSchema _ [] (TFun _ _ p _ t)) _ _) <- te, isUnboxable t ||  hasUnboxableType p]
                                           (ws1,x') <- boxing (addUnboxedVars ps env) x
                                           (ws2,xs') <- boxing (addUnboxedVars ps env1) xs
                                           return (ws1++ws2, x' : xs')
@@ -385,7 +382,7 @@ instance Boxing Stmt where
             env1                    = setTopLevel False $ define te env
 
 instance {-# OVERLAPS #-} Boxing [Decl] where
-    boxing env (c@Class{} : ds)     = do (ws1,c1) <- boxing (setInClass True env) c
+    boxing env (c@Class{} : ds)     = do (ws1,c1) <- boxing (setInClass env) c
                                          (ws2,ds2) <- boxing env ds
                                          return (ws1++ws2,c1:ds2)
     boxing env (d@Def{} : ds)
@@ -419,7 +416,7 @@ instance Boxing Decl where
               c                     = TC (NoQ n) (map tVar $ qbound q)
               env1                  = defineTVars q env
     boxing env (Def l n q p KwdNIL t ss dec fx ddoc)
-                                    = do ps <- if (isInClass env || not (isUnboxed n)) then return [] else newNames [n | (n,NVar t) <- te, isUnboxable t]
+                                    = do ps <- if (inClass env || not (isUnboxed n)) then return [] else newNames [n | (n,NVar t) <- te, isUnboxable t]
                                          let env2 = addUnboxedVars ps $ env1
                                          (ws1,p1) <- boxing env2 p
                                          (ws2,ss1) <- boxing env2 ss
