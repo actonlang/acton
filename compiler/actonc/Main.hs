@@ -59,6 +59,7 @@ import Data.Ord
 import Data.Graph
 import Data.String.Utils (replace)
 import Data.Version (showVersion)
+import Data.Char (isAlpha, toLower)
 import qualified Data.List
 import qualified Data.Map as M
 import qualified Data.Set
@@ -869,7 +870,8 @@ findPaths actFile opts  = do execDir <- takeDirectory <$> System.Environment.get
                                  binDir  = if isTmp then srcDir else joinPath [projOut, "bin"]
                                  modName = A.modName $ dirInSrc ++ [fileBody]
                              -- join the search paths from command line options with the ones found in the deps directory
-                             let sPaths = [projTypes] ++ (C.searchpath opts) ++ [sysTypes]
+                             depTypePaths <- if isTmp then return [] else collectDepTypePaths projPath
+                             let sPaths = [projTypes] ++ depTypePaths ++ (C.searchpath opts) ++ [sysTypes]
                              --putStrLn ("Search paths: " ++ show sPaths)
                              createDirectoryIfMissing True binDir
                              createDirectoryIfMissing True projOut
@@ -891,6 +893,221 @@ findPaths actFile opts  = do execDir <- takeDirectory <$> System.Environment.get
                                     _ -> error ("************* Source file is not in a valid project directory: " ++ joinPath ds)
                                 else analyze (takeDirectory pre) (takeFileName pre : ds)
 
+
+-- Load BuildSpec from Build.act (preferred) or build.act.json if present
+loadBuildSpec :: FilePath -> IO (Maybe BuildSpec.BuildSpec)
+loadBuildSpec dir = do
+    let actPath  = joinPath [dir, "Build.act"]
+        jsonPath = joinPath [dir, "build.act.json"]
+    actExists <- doesFileExist actPath
+    if actExists
+      then do
+        content <- readFile actPath
+        case BuildSpec.parseBuildAct content of
+          Left err -> printErrorAndExit ("Failed to parse Build.act in " ++ dir ++ ":\n" ++ err)
+          Right (spec, _, _) -> return (Just spec)
+      else do
+        jsonExists <- doesFileExist jsonPath
+        if jsonExists
+          then do
+            json <- BL.readFile jsonPath
+            case BuildSpec.parseBuildSpecJSON json of
+              Left err   -> printErrorAndExit ("Failed to parse build.act.json in " ++ dir ++ ":\n" ++ err)
+              Right spec -> return (Just spec)
+          else return Nothing
+
+-- Treat drive-letter paths as absolute too (for Windows hosts)
+isAbsolutePath :: FilePath -> Bool
+isAbsolutePath p =
+    isAbsolute p ||
+    case p of
+      (c:':':_) -> isAlpha c
+      _         -> False
+
+-- Normalize a path without failing if it does not exist
+normalizePathSafe :: FilePath -> IO FilePath
+normalizePathSafe p = do
+    res <- try (canonicalizePath p) :: IO (Either IOException FilePath)
+    return $ either (const (normalise p)) id res
+
+-- Collapse "." / ".." segments without touching leading ".." for relative paths
+-- e.g. "a/b/../c/./d" -> "a/c/d"
+collapseDots :: FilePath -> FilePath
+collapseDots p =
+    let parts = splitDirectories p
+        (root, rest) = case parts of
+                         (r:xs) | isRoot r -> (Just r, xs)
+                         xs                -> (Nothing, xs)
+        (revAcc, ups) = foldl step ([], 0) rest
+        cleaned = replicate ups ".." ++ reverse revAcc
+        prefix = maybe [] (\r -> [r]) root
+    in joinPath (prefix ++ cleaned)
+  where
+    isRoot r = r == "/" || (length r >= 2 && r !! 1 == ':')
+    step (acc, ups) comp =
+      case comp of
+        ""  -> (acc, ups)
+        "." -> (acc, ups)
+        ".." -> case acc of
+                  (x:xs) | x /= ".." -> (xs, ups)
+                  _                  -> (acc, ups + 1)
+        _   -> (comp:acc, ups)
+
+-- Rebase a relative path against a directory and normalize it
+rebasePath :: FilePath -> FilePath -> FilePath
+rebasePath base p
+  | isAbsolutePath p = normalise p
+  | otherwise        = normalise (joinPath [base, p])
+
+-- Prefer a relative path when possible; otherwise keep the absolute target
+makeRelativeOrAbsolute :: FilePath -> FilePath -> FilePath
+makeRelativeOrAbsolute base target =
+    let (bDriveRaw, bPath) = splitDrive (normalise base)
+        (tDriveRaw, tPath) = splitDrive (normalise target)
+        bDrive = map toLower bDriveRaw
+        tDrive = map toLower tDriveRaw
+        bParts = cleanParts bPath
+        tParts = cleanParts tPath
+        common = length (takeWhile (uncurry (==)) (zip bParts tParts))
+        ups = replicate (length bParts - common) ".."
+        relParts = ups ++ drop common tParts
+        rel = if null relParts then "." else joinPath relParts
+    in if bDrive /= tDrive && (not (null bDrive) || not (null tDrive))
+          -- Different drives: fall back to relative from base root
+          then joinPath (replicate (length bParts) ".." ++ (tDriveRaw : tParts))
+          else rel
+  where
+    cleanParts = filter (\c -> not (null c) && c /= "/") . splitDirectories
+
+-- Produce a relative path that first walks to the filesystem root and then
+-- descends to the absolute target. This avoids embedding absolute paths while
+-- still resolving to the same location.
+relativeViaRoot :: FilePath -> FilePath -> FilePath
+relativeViaRoot baseAbs targetAbs
+  | not (isAbsolutePath targetAbs) = targetAbs
+  | otherwise =
+      let (bDriveRaw, bPath) = splitDrive (normalise baseAbs)
+          (tDriveRaw, tPath) = splitDrive (normalise targetAbs)
+          bDrive = map toLower bDriveRaw
+          tDrive = map toLower tDriveRaw
+      in if bDrive /= tDrive && (not (null bDrive) || not (null tDrive))
+           then makeRelativeOrAbsolute baseAbs targetAbs  -- fall back if drives differ
+           else
+             let ups = replicate (length (cleanParts bPath)) ".."
+                 tParts = cleanParts tPath
+             in joinPath (ups ++ tParts)
+  where
+    cleanParts = filter (\c -> not (null c) && c /= "/") . splitDirectories
+
+-- Resolve dependency base directory from PkgDep, preferring path then cache/hash
+resolveDepBase :: FilePath -> String -> BuildSpec.PkgDep -> IO FilePath
+resolveDepBase base name dep =
+    case BuildSpec.path dep of
+      Just p | not (null p) -> normalizePathSafe (rebasePath base p)
+      _ -> case BuildSpec.hash dep of
+             Just h -> do
+               home <- getHomeDirectory
+               normalizePathSafe (joinPath [home, ".cache", "acton", "deps", name ++ "-" ++ h])
+             Nothing -> printErrorAndExit ("Dependency " ++ name ++ " has no path or hash")
+
+-- Recursively collect out/types paths for all dependencies declared in Build.act/build.act.json
+collectDepTypePaths :: FilePath -> IO [FilePath]
+collectDepTypePaths projDir = do
+  root <- normalizePathSafe projDir
+  snd <$> go Data.Set.empty root
+  where
+    go seen dir = do
+      mspec <- loadBuildSpec dir
+      case mspec of
+        Nothing   -> return (seen, [])
+        Just spec -> foldM (step dir) (seen, []) (M.toList (BuildSpec.dependencies spec))
+
+    step base (seen, acc) (depName, dep) = do
+      depBase <- resolveDepBase base depName dep
+      let seen' = Data.Set.insert depBase seen
+          typesDir = joinPath [depBase, "out", "types"]
+      if Data.Set.member depBase seen
+        then return (seen', acc)
+        else do
+          (seenNext, sub) <- go seen' depBase
+          return (seenNext, acc ++ [typesDir] ++ sub)
+
+-- Collect package and zig dependencies recursively, keeping existing entries on conflict
+collectDepsRecursive :: FilePath -> IO (M.Map String BuildSpec.PkgDep, M.Map String BuildSpec.ZigDep)
+collectDepsRecursive projDir = do
+  root <- normalizePathSafe projDir
+  (\(_, pkgs, zigs) -> (pkgs, zigs)) <$> go root Data.Set.empty root
+  where
+    go root seen dir = do
+      mspec <- loadBuildSpec dir
+      case mspec of
+        Nothing   -> return (seen, M.empty, M.empty)
+        Just spec -> do
+          let depsHere = BuildSpec.dependencies spec
+              zigsHere = M.map (rebaseZig root dir) (BuildSpec.zig_dependencies spec)
+          foldM (step root dir) (seen, M.empty, zigsHere) (M.toList depsHere)
+
+    step root base (seen, pkgAcc, zigAcc) (depName, dep) = do
+      depBase <- resolveDepBase base depName dep
+      let seen' = Data.Set.insert depBase seen
+          -- Rebase dep path to project root and collapse redundant segments
+          rebasePkgPath d =
+            case BuildSpec.path d of
+              Just p | not (null p) ->
+                let absP = rebasePath base p
+                    relP = makeRelativeOrAbsolute root absP
+                in d { BuildSpec.path = Just (collapseDots relP) }
+              _ -> d
+          rebaseZigPath d =
+            case BuildSpec.zpath d of
+              Just p | not (null p) ->
+                let absP = rebasePath base p
+                    relP = makeRelativeOrAbsolute root absP
+                in d { BuildSpec.zpath = Just (collapseDots relP) }
+              _ -> d
+          dep' = rebasePkgPath dep
+      if Data.Set.member depBase seen
+        then return (seen', pkgAcc, zigAcc)
+        else do
+          (seenNext, subPkgs, subZigs) <- go root seen' depBase
+          let pkgAcc' = M.insertWith (\_ old -> old) depName dep' pkgAcc
+          return (seenNext, pkgAcc' `M.union` subPkgs, zigAcc `M.union` subZigs)
+
+    rebaseZig root base dep =
+      case BuildSpec.zpath dep of
+        Just p | not (null p) ->
+          let absP = rebasePath base p
+              relP = makeRelativeOrAbsolute root absP
+          in dep { BuildSpec.zpath = Just (collapseDots relP) }
+        _ -> dep
+
+-- Normalize direct dependency paths in Build.act/build.act.json relative to a base directory.
+normalizeSpecPaths :: FilePath -> BuildSpec.BuildSpec -> IO BuildSpec.BuildSpec
+normalizeSpecPaths base spec = do
+    deps <- normalizePkgDeps base (BuildSpec.dependencies spec)
+    zigs <- normalizeZigDeps base (BuildSpec.zig_dependencies spec)
+    return spec { BuildSpec.dependencies = deps
+                , BuildSpec.zig_dependencies = zigs }
+  where
+    normalizePkgDeps b = fmap M.fromList . mapM (\(k,v) -> do v' <- normalizePkgDep b v; return (k,v')) . M.toList
+    normalizePkgDep b dep =
+      case BuildSpec.path dep of
+        Just p | not (null p) -> do
+          if isAbsolutePath p
+            then do p' <- normalizePathSafe p
+                    return dep { BuildSpec.path = Just p' }
+            else return dep { BuildSpec.path = Just (collapseDots (normalise p)) }
+        _ -> return dep
+
+    normalizeZigDeps b = fmap M.fromList . mapM (\(k,v) -> do v' <- normalizeZigDep b v; return (k,v')) . M.toList
+    normalizeZigDep b dep =
+      case BuildSpec.zpath dep of
+        Just p | not (null p) -> do
+          if isAbsolutePath p
+            then do p' <- normalizePathSafe p
+                    return dep { BuildSpec.zpath = Just p' }
+            else return dep { BuildSpec.zpath = Just (collapseDots (normalise p)) }
+        _ -> return dep
 
 -- Handling Acton files -----------------------------------------------------------------------------
 
@@ -1672,14 +1889,123 @@ runZig gopts opts zigExe zigArgs paths wd = do
           cleanup gopts opts paths
           System.Exit.exitFailure
 
-makeAlwaysRelative :: FilePath -> FilePath -> FilePath
-makeAlwaysRelative base target =
-    case makeRelative base target of
-        path | isAbsolute path ->  -- Still an absolute path, so no overlap found
-               let baseCount = length $ filter (/= "./") $ splitPath base
-                   targetPath = dropDrive path  -- Remove the drive part of the absolute path
-               in joinPath (replicate baseCount "..") </> targetPath
-            | otherwise -> path  -- makeRelative found overlap, use its result
+-- Render build.zig and build.zig.zon from templates and BuildSpec
+genBuildZigFiles :: Paths -> IO ()
+genBuildZigFiles paths = do
+    let proj = projPath paths
+    projAbs <- canonicalizePath proj
+    let sys              = sysPath paths
+        buildZigPath     = joinPath [proj, "build.zig"]
+        buildZonPath     = joinPath [proj, "build.zig.zon"]
+        distBuildZigPath = joinPath [sys, "builder", "build.zig"]
+        distBuildZonPath = joinPath [sys, "builder", "build.zig.zon"]
+    buildZigTemplate <- readFile distBuildZigPath
+    buildZonTemplate <- readFile distBuildZonPath
+    spec <- loadBuildSpec proj
+    (transPkgs, transZigs) <- collectDepsRecursive proj
+    absSys <- canonicalizePath sys
+    let relSys = relativeViaRoot projAbs absSys
+    homeDir <- getHomeDirectory
+    depsRootAbs <- normalizePathSafe (joinPath [homeDir, ".cache", "acton", "deps"])
+    normalizedSpec <- traverse (normalizeSpecPaths proj) spec
+    let mergedSpec = fmap (\s -> s { BuildSpec.dependencies     = BuildSpec.dependencies s `M.union` transPkgs
+                                   , BuildSpec.zig_dependencies = BuildSpec.zig_dependencies s `M.union` transZigs }) normalizedSpec
+    case mergedSpec of
+      Nothing -> do
+        writeFile buildZigPath buildZigTemplate
+        writeFile buildZonPath (replace "{{syspath}}" relSys buildZonTemplate)
+      Just s -> do
+        writeFile buildZigPath (genBuildZig buildZigTemplate s)
+        writeFile buildZonPath (genBuildZigZon buildZonTemplate relSys depsRootAbs projAbs s)
+
+genBuildZig :: String -> BuildSpec.BuildSpec -> String
+genBuildZig template spec =
+    let depsDefs = concatMap pkgDepDef (M.toList (BuildSpec.dependencies spec))
+        zigDefs  = concatMap zigDepDef (M.toList (BuildSpec.zig_dependencies spec))
+        depsAll  = depsDefs ++ zigDefs
+        libLinks = concatMap pkgLibLink (M.toList (BuildSpec.dependencies spec))
+                ++ concatMap zigLibLink (M.toList (BuildSpec.zig_dependencies spec))
+        exeLinks = concatMap pkgExeLink (M.toList (BuildSpec.dependencies spec))
+                ++ concatMap zigExeLink (M.toList (BuildSpec.zig_dependencies spec))
+        header = [ "// AUTOMATICALLY GENERATED BY ACTON BUILD SYSTEM"
+                 , "// DO NOT EDIT, CHANGES WILL BE OVERWRITTEN!!!!!"
+                 , ""
+                 ]
+        inject line =
+          let sline = dropWhile (== ' ') line
+          in [line]
+             ++ (if sline == "// Dependencies from build.act.json" then [depsAll] else [])
+             ++ (if sline == "// lib: link with dependencies / get headers from build.act.json" then [libLinks] else [])
+             ++ (if sline == "// exe: link with dependencies / get headers from build.act.json" then [exeLinks] else [])
+    in unlines $ header ++ concatMap inject (lines template)
+  where
+    pkgDepDef (name, _) = unlines [ "    const actdep_" ++ name ++ " = b.dependency(\"" ++ name ++ "\", .{"
+                                  , "        .target = target,"
+                                  , "        .optimize = optimize,"
+                                  , "    });"
+                                  ]
+    pkgLibLink (name, _) = "    libActonProject.linkLibrary(actdep_" ++ name ++ ".artifact(\"ActonProject\"));\n"
+    pkgExeLink (name, _) = "            executable.linkLibrary(actdep_" ++ name ++ ".artifact(\"ActonProject\"));\n"
+
+    zigDepDef (name, dep)
+      | null (BuildSpec.artifacts dep) = ""
+      | otherwise =
+          let opts = concat [ "        ." ++ k ++ " = " ++ v ++ ",\n" | (k, v) <- M.toList (BuildSpec.options dep) ]
+          in unlines [ "    const dep_" ++ name ++ " = b.dependency(\"" ++ name ++ "\", .{"
+                     , "        .target = target,"
+                     , "        .optimize = optimize,"
+                     , opts ++ "    });"
+                     ]
+    zigLibLink (name, dep) = concat [ "    libActonProject.linkLibrary(dep_" ++ name ++ ".artifact(\"" ++ art ++ "\"));\n"
+                                    | art <- BuildSpec.artifacts dep ]
+    zigExeLink (name, dep) = concat [ "            executable.linkLibrary(dep_" ++ name ++ ".artifact(\"" ++ art ++ "\"));\n"
+                                    | art <- BuildSpec.artifacts dep ]
+
+genBuildZigZon :: String -> String -> FilePath -> FilePath -> BuildSpec.BuildSpec -> String
+genBuildZigZon template relSys depsRootAbs projAbs spec =
+    let pkgDeps = concatMap (pkgToZon depsRootAbs) (M.toList (BuildSpec.dependencies spec))
+        zigDeps = concatMap zigToZon (M.toList (BuildSpec.zig_dependencies spec))
+        deps = pkgDeps ++ zigDeps
+        replaced = map (replace "{{syspath}}" relSys) (lines template)
+        header = [ "// AUTOMATICALLY GENERATED BY ACTON BUILD SYSTEM"
+                 , "// DO NOT EDIT, CHANGES WILL BE OVERWRITTEN!!!!!"
+                 , ""
+                 ]
+        inject line =
+          let sline = dropWhile (== ' ') line
+          in [line] ++ (if sline == "// Dependencies from build.act.json" then [deps] else [])
+    in unlines $ header ++ concatMap inject replaced
+  where
+    pkgToZon depsRoot (name, dep) =
+      let rawPath = case BuildSpec.path dep of
+                      Just p | not (null p) -> p
+                      _ -> case BuildSpec.hash dep of
+                             Just h -> joinPath [depsRoot, name ++ "-" ++ h]
+                             Nothing -> errorWithoutStackTrace ("Dependency " ++ name ++ " has no path or hash")
+          path = if isAbsolutePath rawPath
+                   then relativeViaRoot projAbs (collapseDots (normalise rawPath))
+                   else collapseDots (normalise rawPath)
+      in unlines [ "        ." ++ name ++ " = .{"
+                 , "            .path = \"" ++ path ++ "\","
+                 , "        },"
+                 ]
+    zigToZon (name, dep) =
+      case BuildSpec.zpath dep of
+        Just p ->
+          let relPath = if isAbsolutePath p
+                          then relativeViaRoot projAbs (collapseDots (normalise p))
+                          else collapseDots (normalise p)
+          in unlines [ "        ." ++ name ++ " = .{"
+                     , "            .path = \"" ++ relPath ++ "\","
+                     , "        },"
+                     ]
+        Nothing -> unlines [ "        ." ++ name ++ " = .{"
+                           , "            .url = \"" ++ maybeEmpty (BuildSpec.zurl dep) ++ "\","
+                           , "            .hash = \"" ++ maybeEmpty (BuildSpec.zhash dep) ++ "\","
+                           , "        },"
+                           ]
+    maybeEmpty (Just s) = s
+    maybeEmpty Nothing  = ""
 
 -- TODO: replace all of this with generic+crypto?!
 #if defined(darwin_HOST_OS) && defined(aarch64_HOST_ARCH)
@@ -1722,20 +2048,8 @@ zigBuild env gopts opts paths tasks binTasks allowPrune = do
 
 
     -- If actonc runs as a standalone compiler (not a sub-compiler from Acton CLI),
-    -- then we may need to generate build.zig and build.zig.zon
-    iff (not (C.sub gopts)) $ do
-        let buildZigPath     = joinPath [projPath paths, "build.zig"]
-            buildZonPath     = joinPath [projPath paths, "build.zig.zon"]
-            -- Compute relative path from current directory (projPath paths), since zig likes relative paths
-            relativeSysPath  = makeAlwaysRelative (projPath paths) (sysPath paths)
-            distBuildZigPath = joinPath [(sysPath paths), "builder", "build.zig"]
-
-        buildZonExists <- doesFileExist buildZonPath
-        copyFile distBuildZigPath buildZigPath
-        let distBuildZonPath = joinPath [(sysPath paths), "builder", "build.zig.zon"]
-        distBuildZon <- readFile distBuildZonPath
-        let buildZon = replace "{{syspath}}" relativeSysPath distBuildZon
-        writeFile buildZonPath buildZon
+    -- generate build.zig and build.zig.zon directly from Build.act/build.act.json
+    iff (not (C.sub gopts)) $ genBuildZigFiles paths
 
     let zigExe = zig paths
         baseArgs = ["build","--cache-dir", local_cache_dir,

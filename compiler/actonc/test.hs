@@ -182,6 +182,24 @@ actoncProjTests =
         assertEqual "actonc should error out" (ExitFailure 1) returnCode
         assertEqual "actonc should report error" "actonc: Project build requires a qualified root actor name, like foo.main\n" cmdErr
 
+  , testCase "project with nested path deps" $ do
+        let proj = "../../test/compiler/actonc_proj_deps"
+            depA = proj </> "deps/dep_a"
+            depB = proj </> "deps/dep_b"
+            wipe p = void $ readCreateProcessWithExitCode (shell $ "rm -rf " ++ p ++ "/build.zig " ++ p ++ "/build.zig.zon " ++ p ++ "/out") ""
+        mapM_ wipe [proj, depA, depB]
+        -- Build dependencies explicitly so their out/types exist
+        testBuild "" ExitSuccess False depB
+        testBuild "" ExitSuccess False depA
+        -- Build main project via actonc, relying on generated build.zig(.zon)
+        testBuild "" ExitSuccess False proj
+        -- Run produced binary
+        (cRun, _outRun, _errRun) <- readCreateProcessWithExitCode (shell "./out/bin/main"){ cwd = Just proj } ""
+        assertEqual "project binary should run" ExitSuccess cRun
+        zon <- readFile (proj </> "build.zig.zon")
+        assertBool "build.zig.zon should declare dep_a" (".dep_a" `isInfixOf` zon)
+        assertBool "build.zig.zon should declare dep_b" (".dep_b" `isInfixOf` zon)
+
   -- Verify pruning keeps binaries for modules that still have roots across build / test runs.
   , testCase "executable pruning" $ do
         let proj = "test/project/prune_executables"
