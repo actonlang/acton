@@ -21,6 +21,7 @@ import qualified Acton.Syntax as A
 import Text.Megaparsec.Error (ParseErrorBundle)
 import Acton.Parser (CustomParseError)
 import qualified Acton.CommandLineParser as C
+import Acton.Printer ()
 import qualified Acton.Relabel
 import qualified Acton.Env
 import Acton.Env (simp, define, setMod)
@@ -1385,6 +1386,8 @@ runRestPasses gopts opts paths env0 parsed srcContent = do
                       let actFile = absSrcBase ++ ".act"
 
                       timeStart <- getTime Monotonic
+                      when (C.parse opts && mn == (modName paths)) $
+                        dump mn "parse" (Pretty.print parsed)
 
                       env <- Acton.Env.mkEnv (searchPath paths) env0 parsed
                       --traceM ("#################### initial env0:")

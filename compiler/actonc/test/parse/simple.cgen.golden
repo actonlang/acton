@@ -1,0 +1,12 @@
+/* Acton source hash: edf7a8606ab5a020a50470ea11bfb860f71abc60e965dc11b69f41603de190fb */
+#include "rts/common.h"
+#include "out/types/simple.h"
+B_NoneType simpleQ_main () {
+    ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, to$str("Hello parse!")), B_None, B_None, B_None, B_None);
+    return B_None;
+}
+int simpleQ_done$ = 0;
+void simpleQ___init__ () {
+    if (simpleQ_done$) return;
+    simpleQ_done$ = 1;
+}

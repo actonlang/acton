@@ -1,0 +1,82 @@
+
+
+== parse: simple ================================
+
+def main ():
+    print("Hello parse!")
+=================================================
+
+
+
+== kinds: simple ================================
+
+T_9w def main () -> T_5w:
+    print("Hello parse!")
+=================================================
+
+
+
+== types: simple ================================
+
+pure def main () -> None:
+    print@[(__builtin__.str,)](*("Hello parse!",), sep = None, end = None, err = None, flush = None)
+=================================================
+
+
+
+== sigs: simple ================================
+
+main : () -> None
+================================================
+
+
+
+== norm: simple ================================
+
+pure def main () -> None:
+    print@[(__builtin__.str,)](("\"Hello parse!\"",), None, None, None, None)
+    return None
+================================================
+
+
+
+== deact: simple ================================
+
+pure def main () -> None:
+    print@[(__builtin__.str,)](("\"Hello parse!\"",), None, None, None, None)
+    return None
+=================================================
+
+
+
+== cps: simple ================================
+
+pure def main () -> None:
+    print@[(__builtin__.str,)](("\"Hello parse!\"",), None, None, None, None)
+    return None
+===============================================
+
+
+
+== llift: simple ================================
+
+pure def main () -> None:
+    print@[(__builtin__.str,)](("\"Hello parse!\"",), None, None, None, None)
+    return None
+=================================================
+
+
+
+== box: simple ================================
+
+pure def main () -> None:
+    print@[(__builtin__.str,)](("\"Hello parse!\"",), None, None, None, None)
+    return None
+===============================================
+
+/* Acton source hash: edf7a8606ab5a020a50470ea11bfb860f71abc60e965dc11b69f41603de190fb */
+#pragma once
+#include "builtin/builtin.h"
+#include "rts/rts.h"
+B_NoneType simpleQ_main ();
+void simpleQ___init__ ();

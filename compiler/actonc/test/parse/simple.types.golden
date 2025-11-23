@@ -1,0 +1,8 @@
+
+
+== types: simple ================================
+
+pure def main () -> None:
+    print@[(__builtin__.str,)](*("Hello parse!",), sep = None, end = None, err = None, flush = None)
+=================================================
+
