@@ -54,6 +54,7 @@ data CompileOptions   = CompileOptions {
                          alwaysbuild :: Bool,
                          db          :: Bool,
                          parse       :: Bool,
+                         parse_ast   :: Bool,
                          kinds       :: Bool,
                          types       :: Bool,
                          sigs        :: Bool,
@@ -161,6 +162,7 @@ compileOptions = CompileOptions
         <$> switch (long "always-build" <> help "Show the result of parsing")
         <*> switch (long "db"           <> help "Enable DB backend")
         <*> switch (long "parse"        <> help "Show the result of parsing")
+        <*> switch (long "parse-ast"    <> help "Show the raw AST (Haskell Show)")
         <*> switch (long "kinds"        <> help "Show all the result after kind-checking")
         <*> switch (long "types"        <> help "Show all inferred expression types")
         <*> switch (long "sigs"         <> help "Show the inferred type signatures")

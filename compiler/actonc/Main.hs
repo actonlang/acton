@@ -78,6 +78,8 @@ import System.FileLock
 import System.FilePath ((</>))
 import System.FilePath.Posix
 import System.IO hiding (readFile, writeFile)
+import Text.PrettyPrint (renderStyle, style, Style(..), Mode(PageMode))
+import Text.Show.Pretty (ppDoc)
 import System.IO.Temp
 import System.IO.Unsafe (unsafePerformIO)
 import System.Info
@@ -124,7 +126,7 @@ main = do
                                                  ".ty" -> printDocs gopts (C.DocOptions (head nms) (Just C.AsciiFormat) Nothing)
                                                  _ -> printErrorAndExit ("Unknown filetype: " ++ head nms)
 
-defaultOpts   = C.CompileOptions False False False False False False False False False False False False
+defaultOpts   = C.CompileOptions False False False False False False False False False False False False False
                                  False False False False False C.Debug False False False False
                                  "" "" "" C.defTarget "" False []
 
@@ -1404,7 +1406,7 @@ isGitAvailable = do
 
 -- Check if any other non-standard output is enabled, like --cgen or --sigs
 altOutput opts =
-  (C.parse opts) || (C.kinds opts) || (C.types opts) || (C.sigs opts) || (C.norm opts) || (C.deact opts) || (C.cps opts) || (C.llift opts) || (C.box opts) || (C.hgen opts) || (C.cgen opts)
+  (C.parse opts) || (C.parse_ast opts) || (C.kinds opts) || (C.types opts) || (C.sigs opts) || (C.norm opts) || (C.deact opts) || (C.cps opts) || (C.llift opts) || (C.box opts) || (C.hgen opts) || (C.cgen opts)
 
 runRestPasses :: C.GlobalOptions -> C.CompileOptions -> Paths -> Acton.Env.Env0 -> A.Module -> String -> IO (Acton.Env.Env0, B.ByteString, [(A.Name, A.NameInfo)], Maybe String)
 runRestPasses gopts opts paths env0 parsed srcContent = do
@@ -1413,10 +1415,13 @@ runRestPasses gopts opts paths env0 parsed srcContent = do
                       let absSrcBase = srcBase paths mn
                       let relSrcBase = makeRelative (projPath paths) (srcBase paths mn)
                       let actFile = absSrcBase ++ ".act"
+                      let prettyAstStyle = style { mode = PageMode, lineLength = 120, ribbonsPerLine = 1.0 }
 
                       timeStart <- getTime Monotonic
                       when (C.parse opts && mn == (modName paths)) $
                         dump mn "parse" (Pretty.print parsed)
+                      when (C.parse_ast opts && mn == (modName paths)) $
+                        dump mn "parse-ast" (renderStyle prettyAstStyle (ppDoc parsed))
 
                       env <- Acton.Env.mkEnv (searchPath paths) env0 parsed
                       --traceM ("#################### initial env0:")
