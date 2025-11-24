@@ -14,7 +14,7 @@ jobs:
       - run: |
           echo The PR was merged
       - name: "Check out repository code"
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           ssh-key: ${{ secrets.ACTONBOT_DEPLOY_KEY }}
       - name: "Get the version"
