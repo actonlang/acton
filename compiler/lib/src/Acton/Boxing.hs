@@ -334,15 +334,16 @@ instance Boxing Stmt where
 {-  This does not work. It may cause mutable updates to integer-typed varibles.                                   
 
     boxing env (MutAssign l tg@Dot{}  e@(Call _ (Dot _ (Var _ w@(NoQ n)) attr) p KwdNil))
-      | isWitness n                 = do (ws1,p1) <- boxing env p
-                                         (ws2,s2) <- boxingWitness env w attr p1
+      | isWitness n                 = do (ws0,tg1) <- boxing env tg
+                                         (ws1,p1) <- boxing env p
+                                         (ws2,s2) <- boxingWitness env tg1 w attr p1
                                          return (ws1++ws2,s2)
       where
          t                          = typeOf env tg
-         boxingWitness env w attr p = case findQName w env of
+         boxingWitness env tg w attr p = case findQName w env of
                                             NVar (TCon _ (TC _ ts))
                                               | any (not . vFree) ts     -> return ([n], MutAssign l tg (eCallP (eDot (eQVar w) attr) p))
-                                              | attr `elem` incrBinopKWs -> boxingincrBinop w attr es ts
+                                              | attr `elem` incrBinopKWs -> boxingincrBinop tg w attr es ts
                                             _                            -> do (ws,e') <- boxing env e
                                                                                return (ws, if isUnboxable t
                                                                                            then MutAssign l tg e'
@@ -350,16 +351,19 @@ instance Boxing Stmt where
           where es                 = posargs p
                 vFree (TCon _ (TC _ _))= True
                 vFree _            = False
-         boxingincrBinop w attr es@[x1,x2] ts
+         boxingincrBinop tg w attr es@[x1,x2] ts
           | isUnboxable t           = return ([], AugAssign NoLoc (unbox t x1) op (unbox t x2))
              where t                = head ts
                    op               = bin2Aug attr
+<<<<<<< HEAD
          boxingincrBinop w attr es _ = return ([n],  MutAssign l tg (eCall (eDot (eQVar w) attr) es))
 -}
-    boxing env (MutAssign l t e)    = do (ws1,e1) <- boxing env e
-                                         return (ws1, MutAssign l t e1)
-    boxing env (AugAssign l t aop e)= do (ws1,e1) <- boxing env e
-                                         return (ws1, AugAssign l t aop e1)
+    boxing env (MutAssign l t e)    = do (ws0,t1) <- boxing env t
+                                         (ws1,e1) <- boxing env e
+                                         return (ws0++ws1, MutAssign l t1 e1)
+    boxing env (AugAssign l t aop e)= do (ws0,t1) <- boxing env t
+                                         (ws1,e1) <- boxing env e
+                                         return (ws0++ws1, AugAssign l t aop e1)
     boxing env (Assert l e mbe)     = do (ws1,e1) <- boxing env e
                                          (ws2,mbe1) <- boxing env mbe
                                          return (ws1++ws2, Assert l e1 mbe1)
