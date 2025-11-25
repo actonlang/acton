@@ -160,7 +160,7 @@ normPat _ (PWild l a)               = do n <- newName "ignore"
 normPat _ (PVar l n a)              = return (PVar l n $ conv a,[])
 normPat env (PParen _ p)            = normPat env p
 normPat env p@(PTuple _ pp kp)      = do v <- newName "tup"
-                                         ss <- norm (define [(v, NVar t)] env) $ normPP v 0 pp ++ normKP v [] kp
+                                         ss <- normSuite (define [(v, NVar t)] env) $ normPP v 0 pp ++ normKP v [] kp
                                          return (pVar v $ conv t, ss)
   where normPP v n (PosPat p pp)    = Assign NoLoc [p] (DotI NoLoc (eVar v) n) : normPP v (n+1) pp
         normPP v n (PosPatStar p)   = [Assign NoLoc [p] (foldl (RestI NoLoc) (eVar v) [0..n-1])]
@@ -170,7 +170,7 @@ normPat env p@(PTuple _ pp kp)      = do v <- newName "tup"
         normKP _ _ KwdPatNil        = []
         t                           = typeOf env p
 normPat env p@(PList _ ps pt)       = do v <- newName "lst"
-                                         ss <- norm env $ normList v 0 ps pt
+                                         ss <- normSuite env $ normList v 0 ps pt
                                          return (pVar v $ conv t, ss)
   where normList v n (p:ps) pt      = s : normList v (n+1) ps pt
           where s                   = Assign NoLoc [p] (eCall (eDot (eQVar qnIndexed) getitemKW)
@@ -203,9 +203,9 @@ instance Norm Module where
 
 handle env x hs                     = do bs <- sequence [ branch e b | Handler e b <- hs ]
                                          return $ [sIf bs [sExpr $ eCall (eQVar primRAISE) [eVar x]]]
-  where branch (ExceptAll _) b      = Branch (eBool True) <$> norm env b
-        branch (Except _ y) b       = Branch (eIsInstance x y) <$> norm env b
-        branch (ExceptAs _ y z) b   = Branch (eIsInstance x y) <$> (bind:) <$> norm env' b
+  where branch (ExceptAll _) b      = Branch (eBool True) <$> normSuite env b
+        branch (Except _ y) b       = Branch (eIsInstance x y) <$> normSuite env b
+        branch (ExceptAs _ y z) b   = Branch (eIsInstance x y) <$> (bind:) <$> normSuite env' b
           where env'                = define [(z,NVar t)] env
                 bind                = sAssign (pVar z $ conv t) (eVar x)
                 t                   = tCon $ TC y []
@@ -255,7 +255,7 @@ instance Norm Stmt where
                                          return $ Expr l $ eCall (eQVar primRAISE) [e']
     norm env (If l bs els)          = If l <$> norm env bs <*> normSuite env els
     norm env (While l e b els)      = While l (eBool True) <$> normSuite (pushMark LOOP env) (sIf1 e [sPass] (els++[sBreak]) : b) <*> return []
-    norm env (Data l mbp ss)        = Data l <$> norm env mbp <*> norm env ss
+    norm env (Data l mbp ss)        = Data l <$> norm env mbp <*> normSuite env ss
     norm env (VarAssign l ps e)     = VarAssign l <$> norm env ps <*> norm env e
     norm env (After l e e')         = After l <$> norm env e <*> norm env e'
     norm env (Signature l ns t d)   = return $ Signature l ns (conv t) d
@@ -264,16 +264,16 @@ instance Norm Stmt where
     norm' env (Decl l ds)           = do (eqs,ds) <- normDecls env ds
                                          return $ eqs ++ [Decl l ds]
 
-    norm' env (Try l b [] els [])   = norm env (b ++ els)
-    norm' env (Try l b hs els [])   = do b <- norm (pushMark DROP env) b
-                                         els <- norm (define (envOf b) env) els
+    norm' env (Try l b [] els [])   = normSuite env (b ++ els)
+    norm' env (Try l b hs els [])   = do b <- normSuite (pushMark DROP env) b
+                                         els <- normSuite (define (envOf b) env) els
                                          x <- newName "x"
                                          hdl <- handle env x hs
                                          return [sIf [Branch ePUSH (b ++ sDROP : els)] (sPOP x : hdl)]
       where ePUSH                   = eCall (eQVar primPUSH) []
     norm' env (Try l b hs els fin)  = do ss <- norm' (pushMark FINAL env) try0
                                          x <- newName "xx"
-                                         fin <- norm (define [(x,NVar tBaseException)] env) fin
+                                         fin <- normSuite (define [(x,NVar tBaseException)] env) fin
                                          return [sIf [Branch ePUSHF (ss++mbseq)] (sPOP x : fin ++ relays x)]
       where try0                    = Try l b hs els []
             relays x                = iff [ Branch (eIsInstance x n) s | (n,s) <- map (relay x) ctrl, valid s] [sRAISE $ eVar x]
@@ -312,8 +312,8 @@ instance Norm Stmt where
       where t                       = typeOf env e
     norm' env s@(For l p e b els)   = do i <- newName "iter"
                                          v <- newName "val"
-                                         norm env [sAssign (pVar i $ conv t) e,
-                                                   handleStop (While l (eBool True) (body v i) []) els]
+                                         normSuite env [sAssign (pVar i $ conv t) e,
+                                                        handleStop (While l (eBool True) (body v i) []) els]
       where t@(TCon _ (TC c [t']))  = typeOf env e
             next i                  = eCall (eDot (eVar i) nextKW) []
             handleStop loop els     = Try l [loop] [Handler (Except l0 qnStopIteration) (mkBody els)] [] []
@@ -359,15 +359,15 @@ normItem env (WithItem e (Just p))  = do e' <- norm env e
                                          return (e', Just p', ss)
 
 normDecls env ds                    = do (pres, ds) <- unzip <$> mapM (normDecl env1 ns) ds
-                                         pre <- norm env (concat pres)
+                                         pre <- normSuite env (concat pres)
                                          return (pre, ds)
       where env1                    = define (envOf ds) env
             ns                      = bound ds
 
-normDecl env ns d@Class{}           = do d <- norm env1 d{ dbody = props ++ b }
-                                         pre <- norm env pre
+normDecl env ns d@Class{}           = do d <- norm env1 d{ dbody = props ++ body }
+                                         pre <- normSuite env pre
                                          return (pre, d)
-      where (pre,te,b)              = fixupClassAttrs (dname d) ns (dbody d)
+      where (pre,te,body)           = fixupClassAttrs ns d
             env1                    = define (envOf pre ++ te) $ setClassAttrs (dom te) env
             props                   = [ Signature NoLoc [w] (monotype t) Property | (w,NVar t) <- te ]
 normDecl env ns d                   = do d <- norm env d
@@ -383,17 +383,19 @@ normDecl env ns d                   = do d <- norm env d
 -- reduction), __init__ method locals (if they are only referenced during initialization) or
 -- proper instance attributes (in the general case).
 
-fixupClassAttrs n ns b
-  | null eqs                        = ([], [], b)
+fixupClassAttrs ns d0
+  | null eqs                        = ([], [], defs)
   | null attr                       = --trace ("### Lift out attrs " ++ prstrs (bound pre) ++ " in class " ++ prstr n) $
                                       (pre, [], defs)
   | null te                         = --trace ("### Init attrs " ++ prstrs (pre++attr) ++ " in class " ++ prstr n) $
-                                      (pre, [], map initS defs)
+                                      (pre, [], defs1)
   | null pre                        = --trace ("### Dynamic attrs " ++ prstrs (dom te) ++ " in class " ++ prstr n) $
-                                      ([], te, map initS defs)
+                                      ([], te, defs1)
   | otherwise                       = --trace ("### Fixup wits " ++ prstrs (bound eqs) ++ " in class " ++ prstr n) $
-                                      (pre, te, map initS defs)
-  where (eqs, defs)                 = splitA [] [] b
+                                      (pre, te, defs1)
+  where (eqs, defs)                 = splitA [] [] (dbody d0)
+
+        haveInit                    = initKW `elem` bound defs
 
         splitA eqs defs []          = (reverse eqs, reverse defs)
         splitA eqs defs (s:ss)      = case s of
@@ -417,6 +419,9 @@ fixupClassAttrs n ns b
           | otherwise               = splitG (bound eq ++ ns) pre (eq:attr) eqs
           where fvs                 = free (expr eq) `intersect` (par++ns)
 
+        defs1 | haveInit            = map initS defs
+              | otherwise           = altI : defs
+
         initS (Decl l ds)           = Decl l (map initD ds)
         initS s                     = s
 
@@ -428,6 +433,8 @@ fixupClassAttrs n ns b
         initA self (Assign _ [PVar _ w _] e)
           | w `elem` dyn            = sMutAssign (eDot self w) e
         initA self s                = s
+
+        altI                        = sDef altInit (pospar [(selfKW,tSelf)]) tNone (map (initA $ eVar selfKW) attr) fxPure
 
         te                          = [ (w, NVar t) | Assign _ [PVar _ w (Just t)] _ <- attr, w `elem` dyn ]
 
@@ -453,7 +460,7 @@ instance Norm Decl where
       where env1                    = setMarks [] $ define (envOf p ++ envOf k) env0
             env0                    = define [(selfKW, NVar t0)] $ defineTVars q env
             t0                      = tCon $ TC (NoQ n) (map tVar $ qbound q)
-    norm env (Class l n q as b doc) = Class l n q as <$> norm env1 b <*> return doc
+    norm env (Class l n q as b doc) = Class l n q as <$> normSuite env1 b <*> return doc
       where env1                    = defineTVars (selfQuant (NoQ n) q) env
     norm env d                      = error ("norm unexpected: " ++ prstr d)
 

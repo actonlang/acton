@@ -43,6 +43,8 @@ g_self                              = globalName "self"
 g_act                               = globalName "act"
 g_skip                              = globalName "skip"
 
+altInit                             = globalName "init"
+
 suffixLocal                         = globalName "local"
 suffixNewact                        = globalName "newact"
 suffixClass                         = globalName "class"
