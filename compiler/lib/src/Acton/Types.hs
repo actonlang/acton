@@ -1556,7 +1556,9 @@ instance Infer Expr where
                                             NReserved -> nameReserved n
                                             _ -> nameUnexpected n
 
-    infer env e@(Int _ val s)           = do t <- newUnivar
+    infer env e@(Int _ val s)
+       | val >  9223372036854775807     = return ([], tBigint, e) -- literal is 2^63-1, i.e. maximal value in int. (!!!!!!! Some bigger literals would fit in u64)
+       | otherwise                      = do t <- newUnivar
                                              w <- newWitness
                                              return ([Impl (DfltInfo (loc e) 72 (Just e) []) w t pNumber], t, eCall (eDot (eVar w) fromatomKW) [e])
     infer env e@(Float _ val s)         = do t <- newUnivar
