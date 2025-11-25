@@ -1,0 +1,3 @@
+actor main(env):
+    print("bar")
+    env.exit(0)

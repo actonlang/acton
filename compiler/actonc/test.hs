@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 import Control.Monad
 import Data.List
 import Data.List.Split
@@ -7,6 +8,7 @@ import Data.Ord
 import Data.Time.Clock.POSIX
 import qualified Data.ByteString.Lazy.Char8 as LBS
 
+import Control.Exception (catch, finally, IOException)
 import System.Directory
 import System.Directory.Recursive
 import System.Exit
@@ -179,21 +181,70 @@ actoncProjTests =
         (returnCode, cmdOut, cmdErr) <- buildThing "--root main" "test/project/qualified_root"
         assertEqual "actonc should error out" (ExitFailure 1) returnCode
         assertEqual "actonc should report error" "actonc: Project build requires a qualified root actor name, like foo.main\n" cmdErr
+
+  -- Verify pruning keeps binaries for modules that still have roots across build / test runs.
   , testCase "executable pruning" $ do
         let proj = "test/project/prune_executables"
-        _ <- readCreateProcessWithExitCode (shell $ "rm -rf " ++ proj ++ "/out") ""
+        cleanOut proj
+        -- Build once, then run tests: binaries should stay and both build/test
+        -- root .c stubs should coexist.
         testBuild "" ExitSuccess False proj
         let binFoo = proj </> "out/bin/foo"
             binBar = proj </> "out/bin/bar"
-        fooExists <- doesFileExist binFoo
-        barExists <- doesFileExist binBar
-        assertBool "foo binary should exist after build" fooExists
-        assertBool "bar binary should exist after build" barExists
+            testRoot = proj </> "out/types/tests/simple.test_root.c"
+            buildRoot = proj </> "out/types/foo.root.c"
+        assertBool "foo binary should exist after build" =<< doesFileExist binFoo
+        assertBool "bar binary should exist after build" =<< doesFileExist binBar
         runActon "test" ExitSuccess False proj
-        fooStill <- doesFileExist binFoo
-        barStill <- doesFileExist binBar
-        assertBool "foo binary should exist after acton test" fooStill
-        assertBool "bar binary should exist after acton test" barStill
+        assertBool "foo binary should exist after acton test" =<< doesFileExist binFoo
+        assertBool "bar binary should exist after acton test" =<< doesFileExist binBar
+        assertBool "build root.c should exist after acton test" =<< doesFileExist buildRoot
+        assertBool "test_root.c should exist after acton test"  =<< doesFileExist testRoot
+
+  -- Partial single-file rebuild must not prune other modules' outputs.
+  , testCase "partial build leaves unrelated outputs" $ do
+        let proj = "test/project/prune_partials"
+            srcDir = proj </> "src"
+            fooAct = srcDir </> "foo.act"
+            barAct = srcDir </> "bar.act"
+            fooContent = "actor main(env):\n    print(\"foo\")\n    env.exit(0)\n"
+            barContent = "actor main(env):\n    print(\"bar\")\n    env.exit(0)\n"
+            barC    = proj </> "out/types/bar.c"
+            barH    = proj </> "out/types/bar.h"
+            barTy   = proj </> "out/types/bar.ty"
+        createDirectoryIfMissing True srcDir
+        writeFile fooAct fooContent
+        writeFile barAct barContent
+        cleanOut proj
+        -- Full build first to create bar artifacts.
+        testBuild "" ExitSuccess False proj
+        actonc <- canonicalizePath "../../dist/bin/actonc"
+        -- Single-file build of foo must not prune outputs from other moduels
+        -- since we don't have full visibility, so bar should remain
+        (returnCode, _, _) <- readCreateProcessWithExitCode (proc actonc ["--skip-build", "--always-build", "src/foo.act"]){ cwd = Just proj } ""
+        assertEqual "actonc single-file build should succeed" ExitSuccess returnCode
+        mapM_ (\p -> doesFileExist p >>= assertBool (p ++ " should exist")) [barC, barH, barTy]
+
+  -- Full rebuild should prune roots / bins when the source module is removed.
+  , testCase "full build prunes stale roots and bins" $ do
+        let proj = "test/project/prune_roots"
+            barAct = proj </> "src/bar.act"
+            barContent = "#\n# removed in test to trigger pruning\n\nactor main(env):\n    print(\"bar\")\n    env.exit(0)\n"
+            barRoot = proj </> "out/types/bar.root.c"
+            barBin  = proj </> "out/bin/bar"
+        -- Start from a clean slate and write bar.act to ensure it exists
+        cleanOut proj
+        writeFile barAct barContent
+        -- Initial build should emit bar root & bin.
+        testBuild "" ExitSuccess False proj
+        assertBool "bar root stub should exist after initial build" =<< doesFileExist barRoot
+        assertBool "bar binary should exist after initial build" =<< doesFileExist barBin
+        -- Delete source; full build should prune root/bin.
+        removeFile barAct `catch` (\(_ :: IOException) -> return ())
+        testBuild "" ExitSuccess False proj
+        assertBool "bar root stub should be removed after source deletion" . not =<< doesFileExist barRoot
+        assertBool "bar binary should be removed after source deletion" . not =<< doesFileExist barBin
+
   ]
 
 actoncRootArgTests =
@@ -355,6 +406,9 @@ failWrap testFunc thing False =
 testWrap testFunc thing =
     testCase fileBody $ testFunc thing
   where (fileBody, fileExt) = splitExtension $ takeFileName thing
+
+cleanOut :: FilePath -> IO ()
+cleanOut proj = removePathForcibly (proj </> "out") `catch` (\(_ :: IOException) -> return ())
 
 -- Actual test functions
 -- expRet refers to the return code of actonc
