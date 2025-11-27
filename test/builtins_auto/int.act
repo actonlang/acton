@@ -320,32 +320,23 @@ def test_u64():
 
 
 def test_bigint():
-    a: bigint = 141234567898765434567654345678765456787654
-    b: bigint = 578496790113343219989112199900223311002230784
-    c: bigint = 34481095678409529923743736737979847848
-    d: bigint = 123457665434567898765434567876545678765456789876587678767876789876578456787645676543456765435
-    e: bigint = 97390925711186052433660104097118587966803147032967724376831828 
-    f: bigint = 1234567889999999836491654725378050829066454385249330908721879362956247951768828819773169753596449374655959952724750267483926250851143576906326291251200
-    g: bigint = 1234567890000000
-    h: bigint = 10**500
-    i: bigint = 70014629019847787457594182942686257989
-    k: bigint = 1505279714924572685646656049328765658872190236487877560661160764208141566553212677331651
-    if (a << 12) != b:
-        raise ValueError("left shift of positive int broken")
-    if (-a << 12) != -b:
-        raise ValueError("left shift of negative int broken")
-    if (a >> 12) != c:
-        raise ValueError("right shift of positive int broken")
-    if (-a >> 12) != -c:
-        raise ValueError("right shift of negative int broken")
-    if (d >> 100) != e:
-        raise ValueError("right shift of positive int broken")
-    if bigint(1.23456789e15) != g:
-        raise ValueError("int() of float e15 not working")
-    if bigint(1.23456789e150) != f:
-        raise ValueError("int() of float e150 not working")
-#    if abs (h/h - 1) > 1e-100:
-#        raise ValueError("10**500/10**500 != 1")
+    if (141234567898765434567654345678765456787654 << 12) != 578496790113343219989112199900223311002230784:
+        raise ValueError("left shift of positive bigint broken")
+    if (-141234567898765434567654345678765456787654 << 12) != -578496790113343219989112199900223311002230784:
+        raise ValueError("left shift of negative bigint broken")
+    if (141234567898765434567654345678765456787654 >> 12) != 34481095678409529923743736737979847848:
+        raise ValueError("right shift of positive bigint broken")
+    if (-141234567898765434567654345678765456787654 >> 12) != -34481095678409529923743736737979847848:
+        raise ValueError("right shift of negative bigint broken")
+    if (123457665434567898765434567876545678765456789876587678767876789876578456787645676543456765435 >> 100) != 97390925711186052433660104097118587966803147032967724376831828:
+        raise ValueError("right shift of positive bigint broken")
+    if bigint(1.23456789e15) != 1234567890000000:
+        raise ValueError("bigint() of float e15 not working")
+    if bigint(1.23456789e150) != 1234567889999999836491654725378050829066454385249330908721879362956247951768828819773169753596449374655959952724750267483926250851143576906326291251200:
+        raise ValueError("bigint() of float e150 not working")
+    c: bigint = 10**500
+    if abs (c/c - 1) > 1e-100:
+        raise ValueError("10**500/10**500 != 1")
     if (round(123456789, 10)) != 1.23456789e8:
         raise ValueError("round(123456789, 10) != 1.23456789e8")
     if round(123456789, -4) != 123460000:
@@ -366,9 +357,9 @@ def test_bigint():
         raise ValueError('bigint("0b1111") gives wrong result')
     if bigint("1234",7) != 466:
         raise ValueError('bigint("1234",7) gives wrong result')
-    if bigint(" -0x34ac53ba0976ae3345A4E8765CCD2345",16) != -i:
+    if bigint(" -0x34ac53ba0976ae3345A4E8765CCD2345",16) != -70014629019847787457594182942686257989:
         raise ValueError('bigint(" -0x34ac53ba0976ae3345A4E8765CCD2345",16) gives wrong result')
-    if bigint("123rtgvhu7654erfghjuyt54567ujhgfrtyujhgvfc3456ytyhgt54edf",36) != k:
+    if bigint("123rtgvhu7654erfghjuyt54567ujhgfrtyujhgvfc3456ytyhgt54edf",36) != 1505279714924572685646656049328765658872190236487877560661160764208141566553212677331651:
         raise ValueError('bigint("123rtgvhu7654erfghjuyt54567ujhgfrtyujhgvfc3456ytyhgt54edf",36) gives wrong result')
     if bigint("0") != 0:
         raise ValueError('bigint("0")  gives wrong result')
@@ -377,6 +368,7 @@ def test_bigint():
     if bigint('1'* 10000,2) != 2**10000 - 1:
         raise ValueError("bigint('1'* 10000,2) gives wrong result")
 
+ 
 actor main(env):
     try:
         test_int()
