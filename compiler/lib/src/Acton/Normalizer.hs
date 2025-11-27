@@ -395,8 +395,6 @@ fixupClassAttrs ns d0
                                       (pre, te, defs1)
   where (eqs, defs)                 = splitA [] [] (dbody d0)
 
-        haveInit                    = initKW `elem` bound defs
-
         splitA eqs defs []          = (reverse eqs, reverse defs)
         splitA eqs defs (s:ss)      = case s of
                                         Assign _ [PVar _ (Internal Witness _ _) (Just _)] _ ->
@@ -419,22 +417,21 @@ fixupClassAttrs ns d0
           | otherwise               = splitG (bound eq ++ ns) pre (eq:attr) eqs
           where fvs                 = free (expr eq) `intersect` (par++ns)
 
-        defs1 | haveInit            = map initS defs
-              | otherwise           = altI : defs
+        initMeth                    = initKW -- if altInit `elem` bound defs then altInit else initKW
 
-        initS (Decl l ds)           = Decl l (map initD ds)
-        initS s                     = s
+        defs1                       = map (initS initMeth) defs
 
-        initD d@Def{}
-          | dname d == initKW,
+        initS n (Decl l ds)         = Decl l $ map (initD n) ds
+        initS n s                   = s
+
+        initD n d@Def{}
+          | dname d == n,
             Just self <- selfPar d  = d{ dbody = map (initA $ eVar self) attr ++ dbody d }
-        initD d                     = d
+        initD n d                   = d
 
         initA self (Assign _ [PVar _ w _] e)
           | w `elem` dyn            = sMutAssign (eDot self w) e
         initA self s                = s
-
-        altI                        = sDef altInit (pospar [(selfKW,tSelf)]) tNone (map (initA $ eVar selfKW) attr) fxPure
 
         te                          = [ (w, NVar t) | Assign _ [PVar _ w (Just t)] _ <- attr, w `elem` dyn ]
 
