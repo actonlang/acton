@@ -3,7 +3,7 @@ Building file src/c.act in project .
   Stale b: source changed
   Compiling b.act with Debug
    Finished compilation of b in   0.000 s
-  Stale c: iface changes in b 4ed61e7a → d1422048
+  Stale c: iface changes in b 4ed61e7a → 5648a43c
   Compiling c.act with Debug
    Finished compilation of c in   0.000 s
   Final compilation step

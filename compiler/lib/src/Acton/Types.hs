@@ -662,6 +662,22 @@ qual env Static p k qf                  = (qf p, k)
 qual env dec PosNIL (KwdPar n t e k) qf = (PosPar n t e (qf PosNIL), k)
 qual env dec (PosPar n t e p) k qf      = (PosPar n t e (qf p), k)
 
+
+initComplement env n q as body
+-- | True                                = body
+  | inBuiltin env || null as            = body
+  | otherwise                           = defAltInit : body
+  where defAltInit
+          | baseHasAltInit              = --trace ("### Connecting altInit chain to " ++ prstr base) $
+                                          mkInit (sExpr (eCall (eDot (eQVar basename) altInit) [eVar selfKW]))
+          | otherwise                   = --trace ("### Stopping altInit chain before " ++ prstr base) $
+                                          mkInit sPass
+        base                            = snd $ head as
+        basename                        = tcname base
+        baseHasAltInit                  = isJust $ findAttr env base altInit
+        mkInit stmt                     = sDef altInit (pospar [(selfKW,tSelf)]) tNone [stmt] fxPure
+
+
 --------------------------------------------------------------------------------------------------------------------------
 
 instance InfEnv Decl where
@@ -700,7 +716,7 @@ instance InfEnv Decl where
                                                  --traceM ("\n## infEnv class " ++ prstr n)
                                                  pushFX fxPure tNone
                                                  te0 <- infProperties env as' b
-                                                 (cs,te,b1) <- infEnv env1 b
+                                                 (cs,te,b1) <- infEnv env1 b0
                                                  popFX
                                                  when (not $ null cs) $ err (loc n) "Deprecated class syntax"
                                                  checkClassAttributesInitialized n l env as' te0 b
@@ -711,13 +727,14 @@ instance InfEnv Decl where
                                                      docstring = extractDocstring b
                                                  return ([], [(n, NClass q as' (te0++te2) docstring)], Class l n q us (props te0 ++ b2) ddoc)
                                              _ -> illegalRedef n
-      where env1                        = define (exclude (toSigs te') [initKW]) $ reserve (assigned b) $ defineTVars (stripQual q') $ setInClass env
+      where env1                        = define (exclude (toSigs te') [initKW]) $ reserve (assigned b0) $ defineTVars (stripQual q') $ setInClass env
             (as,ps)                     = mro2 env us
             as'                         = if null as && not (inBuiltin env && n == nValue) then leftpath [cValue] else as
             te'                         = parentTEnv env as'
             q'                          = selfQuant (NoQ n) q
             props te0                   = [ Signature l0 [n] sc Property | (n,NSig sc Property _) <- te0 ]
             tc                          = TC (NoQ n) (map tVar $ qbound q)
+            b0                          = initComplement env n q as' b
 
     infEnv env (Protocol l n q us b ddoc)
                                         = case findName n env of
