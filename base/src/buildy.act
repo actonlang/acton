@@ -49,17 +49,23 @@ class BuildSpec(object):
             for key, value in jd.items():
                 if isinstance(key, str):
                     if key == "name":
-                        if isinstance(value, str):
+                        if value is None:
+                            name = None
+                        elif isinstance(value, str):
                             name = value
                         else:
                             raise ValueError("Invalid build.act.json, name should be a string")
                     elif key == "description":
-                        if isinstance(value, str):
+                        if value is None:
+                            description = None
+                        elif isinstance(value, str):
                             description = value
                         else:
                             raise ValueError("Invalid build.act.json, description should be a string")
                     elif key == "dependencies":
-                        if isinstance(value, dict):
+                        if value is None:
+                            new_dependencies = {}
+                        elif isinstance(value, dict):
                             for dep_name, dep_attrs in value.items():
                                 if isinstance(dep_name, str) and isinstance(dep_attrs, dict):
                                     dep = PkgDependency.from_json(dep_name, dep_attrs)
@@ -69,7 +75,9 @@ class BuildSpec(object):
                         else:
                             raise ValueError("Invalid build.act.json, dependencies should be a dict")
                     elif key == "zig_dependencies":
-                        if isinstance(value, dict):
+                        if value is None:
+                            new_zig_dependencies = {}
+                        elif isinstance(value, dict):
                             for dep_name, dep_attrs in value.items():
                                 if isinstance(dep_name, str) and isinstance(dep_attrs, dict):
                                     dep = ZigDependency.from_json(dep_name, dep_attrs)
@@ -94,11 +102,15 @@ class BuildSpec(object):
         for dep_name, dep in self.zig_dependencies.items():
             res_zigdeps[dep_name] = dep.to_json()
         res = {
-            "name": self.name,
-            "description": self.description,
             "dependencies": res_deps,
             "zig_dependencies": res_zigdeps,
         }
+        name = self.name
+        if name is not None:
+            res["name"] = name
+        description = self.description
+        if description is not None:
+            res["description"] = description
         return json.encode(res, pretty=True)
 
 
