@@ -264,7 +264,7 @@ dist/deps/libxml2: deps-download/$(LIBXML2_REF).tar.gz
 	touch "$(TD)/$@"
 
 # /deps/pcre2 --------------------------------------------
-LIBPCRE2_REF=2afc8e2c87e53204e08e5e1333a8e14ecbf5e3a2
+LIBPCRE2_REF=e9967bee566dedc213d467660bc25ed495bb693b
 deps-download/$(LIBPCRE2_REF).tar.gz:
 	mkdir -p deps-download
 	curl -f -L -o $@ https://github.com/actonlang/pcre2/archive/$(LIBPCRE2_REF).tar.gz
