@@ -191,8 +191,8 @@ instance Boxing Expr where
       boxingFromAtom w ts es        = return ([n], eCall (eDot (eQVar w) fromatomKW) es)
       boxingGetItem w (t0:t:t1:_) es@[a, k]       
         | t == tInt && tn == qnList = return ([], eCall (tApp (eQVar primUGetItem) [t1]) [a, unbox t k])  -- only list indexing optimized. TODO: str indexing
-        | otherwise                 = return ([n], eCall (eDot (eQVar w) attr) es)
         where TCon _ (TC tn _)      = t0
+      boxingGetItem w ts es         = return ([n], eCall (eDot (eQVar w) attr) es)
    --   boxingNext w ts []
       boxingBinop w attr es@[x1, x2] ts
         | isUnboxable t            =  return ([], Box (last ts) $ Paren NoLoc $ BinOp NoLoc (unbox t x1) op (unbox t x2))
