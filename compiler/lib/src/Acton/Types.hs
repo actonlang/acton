@@ -1557,7 +1557,8 @@ instance Infer Expr where
                                             _ -> nameUnexpected n
 
     infer env e@(Int _ val s)
-       | val >  9223372036854775807     = return ([], tBigint, e) -- literal is 2^63-1, i.e. maximal value in int. (!!!!!!! Some bigger literals would fit in u64)
+       | val > 18446744073709551615     = return ([], tBigint, e) -- literal is 2^64-1, so these literals can only live in bigint
+       | val > 9223372036854775807      = return ([], tU64, e)    -- literal is 2^63-1, i.e. maximal value in int. So, this is a wart; we force these into u64, while they really should be able also to have type bigint 
        | otherwise                      = do t <- newUnivar
                                              w <- newWitness
                                              return ([Impl (DfltInfo (loc e) 72 (Just e) []) w t pNumber], t, eCall (eDot (eVar w) fromatomKW) [e])

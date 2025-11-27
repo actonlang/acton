@@ -13,10 +13,10 @@ def fun1() -> bigint:
 #    finally:
 #        return a
 
-#actor main(env):
-#    out1 = fun1()
-#    if out1 != 1:
-#        print("Bad 1:", out1)
-#        env.exit(1)
+actor main(env):
+    out1 = fun1()
+    if out1 != 1:
+        print("Bad 1:", out1)
+        env.exit(1)
 
-#    env.exit(0)
+    env.exit(0)
