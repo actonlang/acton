@@ -827,7 +827,7 @@ declCon env n q b
   | null abstr || hasNotImpl b      = (gen env tRes <+> newcon env n <> parens (gen env pars) <+> char '{') $+$
                                       nest 4 (gen env tObj <+> gen env tmpV <+> equals <+> acton_malloc env (gname env n) <> semi $+$
                                               gen env tmpV <> text "->" <> gen env1 classKW <+> equals <+> char '&' <> methodtable env1 n <> semi $+$
---                                              altcall $+$
+                                              altcall $+$
                                               initcall) $+$
                                       char '}'
   | otherwise                       = empty
@@ -840,7 +840,7 @@ declCon env n q b
         altcall
           | Just (_,sc,_) <- alt    = let i = arity $ posrow $ sctype sc
                                           args' = pArg (chop i pars)
-                                      in methodtable env n <> dot <> gen env altInit <> parens (gen env tmpV <> comma' (gen env args')) <> semi
+                                      in methodtable env n <> dot <> gen env altInit <> parens (gen env1 tmpV <> comma' (gen env1 args')) <> semi
           | otherwise               = empty
           where alt                 = findAttr env tc altInit
         initcall

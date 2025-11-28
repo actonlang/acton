@@ -417,7 +417,7 @@ fixupClassAttrs ns d0
           | otherwise               = splitG (bound eq ++ ns) pre (eq:attr) eqs
           where fvs                 = free (expr eq) `intersect` (par++ns)
 
-        initMeth                    = initKW -- if altInit `elem` bound defs then altInit else initKW
+        initMeth                    = if altInit `elem` bound defs then altInit else initKW
 
         defs1                       = map (initS initMeth) defs
 
