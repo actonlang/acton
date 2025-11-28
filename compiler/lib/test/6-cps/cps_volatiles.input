@@ -36,7 +36,7 @@ class main ($Actor, __builtin__.value):
             (async env.exit)(W_180.__fromatom__(1))
 proc def mainG_newact (env : __builtin__.Env) -> main:
     G_act: main = $NEWACTOR@[main]()
-    $GCfinalizer@[main](G_act)
+    $InstallFinalizer@[main](G_act)
     $AWAITf@[None]($ASYNCf@[None](G_act, proc lambda: G_act.__init__(env)))
     return G_act
 # (recursive group)

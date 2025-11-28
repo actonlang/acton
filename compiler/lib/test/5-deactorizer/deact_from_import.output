@@ -35,12 +35,12 @@ class main ($Actor, __builtin__.value):
         (async env.exit)(W_184.__fromatom__(0))
 proc def ManagerG_newact () -> Manager:
     G_act: Manager = $NEWACTOR@[Manager]()
-    $GCfinalizer@[Manager](G_act)
+    $InstallFinalizer@[Manager](G_act)
     $AWAITf@[None]($ASYNCf@[None](G_act, proc lambda: G_act.__init__()))
     return G_act
 proc def mainG_newact (env : __builtin__.Env) -> main:
     G_act: main = $NEWACTOR@[main]()
-    $GCfinalizer@[main](G_act)
+    $InstallFinalizer@[main](G_act)
     $AWAITf@[None]($ASYNCf@[None](G_act, proc lambda: G_act.__init__(env)))
     return G_act
 # (recursive group)

@@ -127,7 +127,7 @@ nloc _          = NoLoc
 
 nstr (Name _ s)             = esc s
   where esc (c:'_':s)
-          | isUpper c       = c {- : 'U' -} : '_' : esc s
+          | isUpper c       = c : 'X' : '_' : esc s
         esc (c:s)           = c : esc s
         esc ""              = ""
 nstr (Derived n s)
@@ -417,6 +417,13 @@ pArg PosNIL             = PosNil
 kArg (KwdPar n a _ p)   = KwdArg n (eVar n) (kArg p)
 kArg (KwdSTAR n a)      = KwdStar (eVar n)
 kArg KwdNIL             = KwdNil
+
+chop 0 _                = PosNIL
+chop i (PosPar n a d p) = PosPar n a d (chop (i-1) p)
+chop _ p                = p
+
+arity (TRow _ _ _ _ r)  = 1 + arity r
+arity _                 = 0
 
 pPar ns (TRow _ PRow n t p)
                         = PosPar (head ns) (Just t) Nothing (pPar (tail ns) p)

@@ -81,7 +81,9 @@ tRET                = tCon $ TC primRET []
 
 primASSERT          = gPrim "ASSERT"
 primNEWACTOR        = gPrim "NEWACTOR"
-primGCfinalizer     = gPrim "GCfinalizer"
+primInstallFinalizer = gPrim "InstallFinalizer"
+
+attr_finalizer      = name "GCfinalizer"
 
 primISINSTANCE      = gPrim "ISINSTANCE"
 primISINSTANCE0     = gPrim "ISINSTANCE0"
@@ -185,7 +187,7 @@ primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec Nothing)
 
                             (noq primASSERT,        NDef scASSERT NoDec Nothing),
                             (noq primNEWACTOR,      NDef scNEWACTOR NoDec Nothing),
-                            (noq primGCfinalizer,   NDef scGCfinalizer NoDec Nothing),
+                            (noq primInstallFinalizer, NDef scGCfinalizer NoDec Nothing),
 
                             (noq primISINSTANCE,    NDef scISINSTANCE NoDec Nothing),
                             (noq primISINSTANCE0,   NDef scISINSTANCE NoDec Nothing),
