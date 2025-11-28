@@ -969,7 +969,7 @@ deactQ_Apa deactQ_ApaD___deserialize__ (deactQ_Apa self, $Serial$state state) {
     $ActorG_methods.__deserialize__(($Actor)self, state);
     return self;
 }
-void deactQ_ApaD__GC_finalizer (void *obj, void *cdata) {
+void deactQ_ApaD_GCfinalizer (void *obj, void *cdata) {
     deactQ_Apa self = (deactQ_Apa)obj;
     self->$class->__cleanup__(self);
 }
@@ -1014,7 +1014,7 @@ deactQ_Bepa deactQ_BepaD___deserialize__ (deactQ_Bepa self, $Serial$state state)
     $ActorG_methods.__deserialize__(($Actor)self, state);
     return self;
 }
-void deactQ_BepaD__GC_finalizer (void *obj, void *cdata) {
+void deactQ_BepaD_GCfinalizer (void *obj, void *cdata) {
     deactQ_Bepa self = (deactQ_Bepa)obj;
     self->$class->__cleanup__(self);
 }
@@ -1067,7 +1067,7 @@ deactQ_main deactQ_mainD___deserialize__ (deactQ_main self, $Serial$state state)
     self->r = $step_deserialize(state);
     return self;
 }
-void deactQ_mainD__GC_finalizer (void *obj, void *cdata) {
+void deactQ_mainD_GCfinalizer (void *obj, void *cdata) {
     deactQ_main self = (deactQ_main)obj;
     self->$class->__cleanup__(self);
 }
@@ -1079,17 +1079,17 @@ $R deactQ_mainG_new($Cont G_1, B_Env G_2) {
 struct deactQ_mainG_class deactQ_mainG_methods;
 $R deactQ_ApaG_newact ($Cont C_cont) {
     deactQ_Apa G_act = $NEWACTOR(deactQ_Apa);
-    if ((void*)G_act->$class->__cleanup__ != (void*)$ActorD___cleanup__) $GCfinalizer(G_act, deactQ_ApaD__GC_finalizer);
+    if ((void*)G_act->$class->__cleanup__ != (void*)$ActorD___cleanup__) $InstallFinalizer(G_act, deactQ_ApaD_GCfinalizer);
     return $AWAIT((($Cont)deactQ_L_27ContG_new(C_cont, G_act)), $ASYNC((($Actor)G_act), (($Cont)deactQ_L_28procG_new(G_act))));
 }
 $R deactQ_BepaG_newact ($Cont C_cont) {
     deactQ_Bepa G_act = $NEWACTOR(deactQ_Bepa);
-    if ((void*)G_act->$class->__cleanup__ != (void*)$ActorD___cleanup__) $GCfinalizer(G_act, deactQ_BepaD__GC_finalizer);
+    if ((void*)G_act->$class->__cleanup__ != (void*)$ActorD___cleanup__) $InstallFinalizer(G_act, deactQ_BepaD_GCfinalizer);
     return $AWAIT((($Cont)deactQ_L_30ContG_new(C_cont, G_act)), $ASYNC((($Actor)G_act), (($Cont)deactQ_L_31procG_new(G_act))));
 }
 $R deactQ_mainG_newact ($Cont C_cont, B_Env env) {
     deactQ_main G_act = $NEWACTOR(deactQ_main);
-    if ((void*)G_act->$class->__cleanup__ != (void*)$ActorD___cleanup__) $GCfinalizer(G_act, deactQ_mainD__GC_finalizer);
+    if ((void*)G_act->$class->__cleanup__ != (void*)$ActorD___cleanup__) $InstallFinalizer(G_act, deactQ_mainD_GCfinalizer);
     return $AWAIT((($Cont)deactQ_L_33ContG_new(C_cont, G_act)), $ASYNC((($Actor)G_act), (($Cont)deactQ_L_34procG_new(G_act, env))));
 }
 int deactQ_done$ = 0;

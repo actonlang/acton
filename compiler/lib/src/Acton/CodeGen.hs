@@ -298,7 +298,7 @@ primToBigInt2                       = name "toB_bigint2"
 primToFloat                         = name "to$float"
 primToStr                           = name "to$str"
 primToBytearray                     = name "to$bytearray"
-primToBytes                         = name "to$bytesD_len"
+primToBytes                         = Derived (name "to$bytes") (name "len")
 
 tmpV                                = primKW "tmp"
 
@@ -399,7 +399,7 @@ declDecl env (Class _ n q as b ddoc)
 declCleanup env n sup_c
   -- TODO: only match if this is an actor, or even better if this actor has a __cleanup__ method defined (not empty!?)
   | not (null sup_c)                = -- Only for actors
-                                      text "void" <+> genTopName env (methodname n (name "_GC_finalizer")) <+> parens (text "void *obj, void *cdata") <+> char '{' $+$
+                                      text "void" <+> genTopName env (methodname n attr_finalizer) <+> parens (text "void *obj, void *cdata") <+> char '{' $+$
                                       -- t_cleanupQ_Foo self = (t_cleanupQ_Foo)obj;
                                       -- self->$class->__cleanup__(self);
                                       nest 4 ((genTopName env n) <+> gen env self <+> equals <+> parens (genTopName env n) <> text "obj" <> semi $+$
@@ -766,12 +766,12 @@ genCall env [row] (Var _ n) (PosArg s@Strings{} (PosArg tup PosNil))
         flatten e                   = foldr PosArg PosNil $ map (DotI l0 e) [0..]
 genCall env [t] (Var _ n) PosNil
   | n == primNEWACTOR               = gen env n <> parens (gen env t)
--- Only install GC_finalizer if one is defined, i.e. we don't have the default
+-- Only install GCfinalizer if one is defined, i.e. we don't have the default
 -- $ActorD___cleanup__
 -- TODO: would be even better to determine this in the compiler and not emit
 -- this line rather than inspect the method table at run time
 genCall env [TCon _ tc] (Var _ n) p
-  | n == primGCfinalizer            = text "if" <+> parens (text "(void*)" <> gen env p <> text "->" <> gen env classKW <> text "->" <> gen env cleanupKW <+> text "!= (void*)$ActorD___cleanup__") <+> gen env n <> parens (gen env p <> comma <+> genTopName env (methodname (noq $ tcname tc) (name "_GC_finalizer")))
+  | n == primInstallFinalizer       = text "if" <+> parens (text "(void*)" <> gen env p <> text "->" <> gen env classKW <> text "->" <> gen env cleanupKW <+> text "!= (void*)$ActorD___cleanup__") <+> gen env n <> parens (gen env p <> comma <+> genTopName env (methodname (noq $ tcname tc) attr_finalizer))
 genCall env ts e@(Var _ n) p
   | NClass{} <- info                = genNew env n p
   | NDef{} <- info                  = (instCast env ts e $ gen env e) <> parens (gen env p)
@@ -827,16 +827,25 @@ declCon env n q b
   | null abstr || hasNotImpl b      = (gen env tRes <+> newcon env n <> parens (gen env pars) <+> char '{') $+$
                                       nest 4 (gen env tObj <+> gen env tmpV <+> equals <+> acton_malloc env (gname env n) <> semi $+$
                                               gen env tmpV <> text "->" <> gen env1 classKW <+> equals <+> char '&' <> methodtable env1 n <> semi $+$
-                                              initcall env1) $+$
+--                                              altcall $+$
+                                              initcall) $+$
                                       char '}'
   | otherwise                       = empty
   where TFun _ fx r _ t             = sctype $ fst $ schemaOf env (eVar n)
-        tObj                        = tCon $ TC (NoQ n) (map tVar $ qbound q)
+        tc                          = TC (NoQ n) (map tVar $ qbound q)
+        tObj                        = tCon tc
         tRes                        = if t == tR then tR else tObj
         pars                        = pPar paramNames r
         args                        = pArg pars
-        initcall env | t == tR      = text "return" <+> methodtable env n <> dot <> gen env initKW <> parens (gen env tmpV <> comma <+> gen env (retobj args)) <> semi
-                     | otherwise    = methodtable env n <> dot <> gen env initKW <> parens (gen env tmpV <> comma' (gen env args)) <> semi $+$
+        altcall
+          | Just (_,sc,_) <- alt    = let i = arity $ posrow $ sctype sc
+                                          args' = pArg (chop i pars)
+                                      in methodtable env n <> dot <> gen env altInit <> parens (gen env tmpV <> comma' (gen env args')) <> semi
+          | otherwise               = empty
+          where alt                 = findAttr env tc altInit
+        initcall
+          | t == tR                 = text "return" <+> methodtable env n <> dot <> gen env initKW <> parens (gen env1 tmpV <> comma <+> gen env1 (retobj args)) <> semi
+          | otherwise               = methodtable env n <> dot <> gen env initKW <> parens (gen env1 tmpV <> comma' (gen env1 args)) <> semi $+$
                                       text "return" <+> gen env tmpV <> semi
         retobj (PosArg e p)         = PosArg (eCall (tApp (eQVar primCONSTCONT) [tObj]) [eVar tmpV, e]) p
         env1                        = ldefine ((tmpV, NVar tObj) : envOf pars) env

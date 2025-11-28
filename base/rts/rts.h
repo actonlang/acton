@@ -228,7 +228,7 @@ void serialize_state_shortcut($Actor);
                                REGISTER_ACTOR($t->$globkey); \
                                $t; })
 
-#define $GCfinalizer(act, fn) GC_register_finalizer(act, fn, NULL, NULL, NULL)
+#define $InstallFinalizer(act, fn) GC_register_finalizer(act, fn, NULL, NULL, NULL)
 
 #ifdef ACTON_THREADS
 #define GET_SELF() ($Actor)pthread_getspecific(self_key)

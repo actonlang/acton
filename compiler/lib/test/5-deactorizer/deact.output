@@ -72,17 +72,17 @@ class main ($Actor, __builtin__.value):
         return $ASYNCf@[__builtin__.int](self, proc lambda: self.myprocG_local(i))
 proc def ApaG_newact () -> Apa:
     G_act: Apa = $NEWACTOR@[Apa]()
-    $GCfinalizer@[Apa](G_act)
+    $InstallFinalizer@[Apa](G_act)
     $AWAITf@[None]($ASYNCf@[None](G_act, proc lambda: G_act.__init__()))
     return G_act
 proc def BepaG_newact () -> Bepa:
     G_act: Bepa = $NEWACTOR@[Bepa]()
-    $GCfinalizer@[Bepa](G_act)
+    $InstallFinalizer@[Bepa](G_act)
     $AWAITf@[None]($ASYNCf@[None](G_act, proc lambda: G_act.__init__()))
     return G_act
 proc def mainG_newact (env : __builtin__.Env) -> main:
     G_act: main = $NEWACTOR@[main]()
-    $GCfinalizer@[main](G_act)
+    $InstallFinalizer@[main](G_act)
     $AWAITf@[None]($ASYNCf@[None](G_act, proc lambda: G_act.__init__(env)))
     return G_act
 # (recursive group)

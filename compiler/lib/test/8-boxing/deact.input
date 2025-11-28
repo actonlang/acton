@@ -386,14 +386,14 @@ class main ($Actor, __builtin__.value):
         return $ASYNC@[__builtin__.int](self, L_25proc(self, i))
 proc def ApaG_newact (C_cont : $Cont[Apa]) -> $R:
     G_act: Apa = $NEWACTOR@[Apa]()
-    $GCfinalizer@[Apa](G_act)
+    $InstallFinalizer@[Apa](G_act)
     return $AWAIT@[None](L_27Cont(C_cont, G_act), $ASYNC@[None](G_act, L_28proc(G_act)))
 proc def BepaG_newact (C_cont : $Cont[Bepa]) -> $R:
     G_act: Bepa = $NEWACTOR@[Bepa]()
-    $GCfinalizer@[Bepa](G_act)
+    $InstallFinalizer@[Bepa](G_act)
     return $AWAIT@[None](L_30Cont(C_cont, G_act), $ASYNC@[None](G_act, L_31proc(G_act)))
 proc def mainG_newact (C_cont : $Cont[main], env : __builtin__.Env) -> $R:
     G_act: main = $NEWACTOR@[main]()
-    $GCfinalizer@[main](G_act)
+    $InstallFinalizer@[main](G_act)
     return $AWAIT@[None](L_33Cont(C_cont, G_act), $ASYNC@[None](G_act, L_34proc(G_act, env)))
 # (recursive group)

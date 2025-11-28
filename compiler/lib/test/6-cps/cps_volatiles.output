@@ -51,7 +51,7 @@ class main ($Actor, __builtin__.value):
         return compute(C_11cont, W_180.__fromatom__(10))
 proc def mainG_newact (C_cont : proc(main) -> $R, env : __builtin__.Env) -> $R:
     G_act: main = $NEWACTOR@[main]()
-    $GCfinalizer@[main](G_act)
+    $InstallFinalizer@[main](G_act)
     proc def C_13cont (C_14res : None) -> $R:
         return $R_CONTc@[main](C_cont, G_act)
     return $AWAITc@[None](C_13cont, $ASYNCc@[None](G_act, proc lambda (C_cont : proc(None) -> $R): G_act.__init__(C_cont, env)))
