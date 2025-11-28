@@ -292,6 +292,7 @@ primROOTINIT                        = gPrim "ROOTINIT"
 primRegister                        = gPrim "register"
 
 primToInt                           = name "toB_int"
+primToU64                           = name "toB_u64"
 primToBigInt                        = name "toB_bigint"
 primToBigInt2                       = name "toB_bigint2"
 primToFloat                         = name "to$float"
@@ -905,6 +906,7 @@ instance Gen Expr where
       | otherwise                   = genQName env n
     gen env (Int _ i str)
         |i <= 9223372036854775807   = gen env primToBigInt <> parens (text (str++"UL")) -- literal is 2^63-1
+        |i <= 18446744073709551615  = gen env primToU64 <>  parens (text (str++"UL")) -- literal is 2^64-1
         | otherwise                 = gen env primToBigInt2 <> parens (doubleQuotes $ text str)
     gen env (Float _ _ str)         = gen env primToFloat <> parens (text str)
     gen env (Bool _ True)           = gen env qnTrue
