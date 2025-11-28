@@ -184,7 +184,7 @@ decl env (Class _ n q a b ddoc)     = (text "struct" <+> classname env n <+> cha
         initNotImpl                 = any hasNotImpl [ b' | Decl _ ds <- b, Def{dname=n',dbody=b'} <- ds, n' == initKW ]
 decl env (Def _ n q p _ (Just t) _ _ fx ddoc)
                                     = genTypeDecl env n (exposeMsg fx t) <+> genTopName env n <+> parens (par env $ prowOf p) <> semi
-  where par                         = if isUnboxed n then uparams else params
+  where par                         = if B.isUnboxed n then uparams else params
 methstub env (Class _ n q a b ddoc) = text "extern" <+> text "struct" <+> classname env n <+> methodtable env n <> semi $+$
                                       constub env t n r b
   where TFun _ _ r _ t              = sctype $ fst $ schemaOf env (eVar n)
@@ -623,11 +623,8 @@ genSuite env (s:ss)                 = ((emit (sloc s) $+$ c) $+$ cs, vs' ++ (vs 
           (c,vs')                   = genStmt (setVolVars vs env) s
           emit                      = getLineEmit env
 
-isUnboxed (Internal BoxPass _ _)    = True
-isUnboxed _                         = False
-
 genTypeDecl env n t                 =  (if isVolVar n env then text "volatile" else empty) <+>
-                                       if isUnboxed n && B.isUnboxable t then text (unboxed_c_type t) else gen env t
+                                       if B.isUnboxed n && B.isUnboxable t then text (unboxed_c_type t) else gen env t
 
 
 genStmt env (Decl _ ds)             = (empty, [])
@@ -655,7 +652,7 @@ instance Gen Stmt where
         | otherwise                 = (gen env p <+> equals <+> genExp env t e <> semi, [])
 
       where t                       = typeOf env p
-    genV env (AugAssign _ tg op e)  = (genTarget env tg <+> pretty op <+> genExp env t e <> semi, [])
+    genV env (AugAssign _ tg op e)  = (genTarget env tg <+> augPretty op <+> genExp env t e <> semi, [])
       where t                       = targetType env tg
     genV env (MutAssign _ tg e)     = (genTarget env tg <+> equals <+> genExp env t e <> semi, [])
       where t                       = targetType env tg
@@ -980,7 +977,7 @@ instance Gen Expr where
     gen env (UnBox _ (Float _ x s)) = text s
     gen env (UnBox _ (Bool _ b))    = if b then text "true" else text "false"
     gen env (UnBox _ v@(Var _ (NoQ n)))
-       | isUnboxed n                = gen env v
+       | B.isUnboxed n              = gen env v
     gen env (UnBox t e)             = parens (parens (gen env t) <> gen env e) <> text "->val"
 --    gen env (UnBox t e)             = parens (gen env e) <> text "->val"
     gen env e                       = error ("CodeGen.gen for Expr: e = " ++ show e)
@@ -1003,6 +1000,9 @@ binPretty And                       = text "&&"
 binPretty Or                        = text "||"
 binPretty EuDiv                     = text "/"
 binPretty op                        = pretty op
+
+augPretty EuDivA                    = text "/="
+augPretty op                        = pretty op
 
 genStr env s                        = text $ head $ sval s
 

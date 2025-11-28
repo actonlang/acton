@@ -61,6 +61,12 @@ closedType env (TApp _ e _)         = closedType env e
 closedType env (Async _ e)          = closedType env e
 closedType env _                    = True
 
+isUnboxedExpr (UnBox _ _)           = True
+isUnboxedExpr (Var _ (NoQ (Internal BoxPass _ _)))
+                                    = True
+isUnboxedExpr (BinOp _ l _ r)       = isUnboxedExpr l || isUnboxedExpr r
+isUnboxedExpr _                     = False
+
 
 qSchema                             :: EnvF x -> Checker -> Expr -> (TSchema, Type, Maybe Deco, Expr)
 qSchema env f e@(Var _ n)           = case findQName n env of
@@ -138,7 +144,9 @@ instance QType Expr where
     qType env f (Await l e)         = case t of
                                         TCon _ (TC c [t]) | c == qnMsg -> (t, fxProc, Await l e')
       where (t, fx, e')             = qType env f e
-    qType env f (BinOp l e1 op e2)  = (t, fx, BinOp l (qMatch f t1 t e1') op (qMatch f t2 t e2'))
+    qType env f e@(BinOp l e1 op e2)
+       | isUnboxedExpr e            = (t, fx, BinOp l e1' op e2')
+       | otherwise                  = (t, fx, BinOp l (qMatch f t1 t e1') op (qMatch f t2 t e2'))
       where (t1, fx1, e1')          = qType env f e1
             (t2, fx2, e2')          = qType env f e2
             t                       = upbound env [t1,t2]

@@ -58,21 +58,22 @@ isDelayedUnbox env                 = delayedUnboxX $ envX env
 
 -- Auxiliaries ---------------------------------------------------------------------------------------------------
 
+-- unboxing
+
 integralTypes                      = [tBigint, tInt, tI32, tI16, tU64, tU32, tU16]
 numericTypes                       = integralTypes ++ [tFloat]
 unboxableTypes                     = tail numericTypes
 
+isUnboxable t                      = t `elem` unboxableTypes
+
+isUnboxed (Internal BoxPass _ _)    = True
+isUnboxed _                         = False
 
 isWitness (Internal Witness _ _)   = True
 isWitness _                        = False
 
 isInternal (Internal _ _ _)        = True
 isInternal _                       = False
-
-isUnboxed (Internal BoxPass _ _)    = True
-isUnboxed _                         = False
-
-isUnboxable t                      = t `elem` unboxableTypes
 
 prims = [primISINSTANCE, primISNOTNONE, primISNONE]
 
