@@ -1,7 +1,7 @@
 import qcheck
 
 actor main(env):
-    n = 65536
+    n: bigint= 65536
     m = n*n
     k = m*m
     print(u16(n-1))
@@ -11,8 +11,8 @@ actor main(env):
     print(i16(-n//2))
     print(i32(m//2-1))
     print(i32(-m//2))
-    print(i64(k//2-1))
-    print(i64(-k//2))
+    print(int(k//2-1))
+    print(int(-k//2))
     try:
         a = u16(n)
     except ValueError:

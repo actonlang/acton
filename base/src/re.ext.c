@@ -23,8 +23,8 @@ void reQ___ext_init__() {
 
 
 // TODO: use u64 instead of int for arg_start_pos
-reQ_Match reQ__match (B_str arg_pattern, B_str arg_text, B_int arg_start_pos) {
-    B_Hashable hwit = B_HashableD_strG_witness;
+reQ_Match reQ_U__match (B_str arg_pattern, B_str arg_text, int64_t arg_start_pos) {
+    B_Hashable hwit = (B_Hashable)B_HashableD_strG_witness;
     B_SequenceD_list swit = B_SequenceD_listG_witness;
     B_list groups = B_listG_new(NULL, NULL);
     B_dict named_groups = $NEW(B_dict, hwit, NULL, NULL);
@@ -35,7 +35,7 @@ reQ_Match reQ__match (B_str arg_pattern, B_str arg_text, B_int arg_start_pos) {
     // TODO: use u64 instead of int to eradicate possibility of < 0
 
     // Validate start_pos
-    long start_offset = from$int(arg_start_pos);
+    long start_offset = arg_start_pos;
     if (start_offset < 0) {
         $RAISE(((B_BaseException)B_ValueErrorG_new(to_str_noc("PCRE2 matching failed: negative start_pos"))));
     }
@@ -152,5 +152,5 @@ reQ_Match reQ__match (B_str arg_pattern, B_str arg_text, B_int arg_start_pos) {
     pcre2_match_data_free(match_data);
     pcre2_code_free(re);
 
-    return reQ_MatchG_new(arg_pattern, arg_text, to$int(match_start), to$int(match_end), groups, named_groups);
+    return reQ_MatchG_new(arg_pattern, arg_text, toB_int(match_start), toB_int(match_end), groups, named_groups);
 }

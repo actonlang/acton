@@ -2,9 +2,6 @@
 def randint(min: int, max: int) -> int:
     NotImplemented
 
-def randi64(min: i64, max: i64) -> i64:
-    NotImplemented
-
 def randstr(length: int) -> str:
     char_set = list("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789")
     res = ""
@@ -62,7 +59,7 @@ def rand_bigint(size):
     digits = [choice(["","-"])]
     for i in range(size):
         digits.append(choice(["0","1","2","3","4","5","6","7","8","9"]))
-    return int("".join(digits))
+    return bigint("".join(digits))
 
 def rand_list(size)->list[int]:
     """

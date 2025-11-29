@@ -415,10 +415,8 @@ class Instant(object):
     Which gives a range of ±292 billion years with a precision down to
     atto-second (2^10-18).
     """
-    # TODO: use i64 instead of int
     @property
     second: int
-    # TODO: use u64 instead of int
     @property
     attosecond: int
     @property
@@ -465,8 +463,12 @@ class Instant(object):
         return Instant(self.second + duration.second + attosecond_sum // 10**18, attosecond_sum % 10**18, self.clock)
 
     def sub(self, duration: Duration) -> Instant:
-        attosecond_diff = self.attosecond - duration.attosecond
-        return Instant(self.second - duration.second + attosecond_diff // 10**18, attosecond_diff % 10**18, self.clock)
+        result_attoseconds = self.attosecond - duration.attosecond
+        result_seconds = self.second - duration.second
+        if result_attoseconds < 0:
+            result_seconds -= 1
+            result_attoseconds += 10**18  # 1 second = 10^18 attoseconds
+        return Instant(result_seconds, result_attoseconds, self.clock)
 
     def since(self, other: Instant) -> Duration:
         """Return the duration since this instant.

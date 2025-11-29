@@ -273,8 +273,9 @@ actor main(env):
         print()
     if len(failed) == 0:
         print("All {len(tests)} tests OK!")
+        env.exit(0)
     else:
         print("\n{len(failed)} of {len(tests)} tests failed:")
         for name in failed:
             print(" - {name}")
-    env.exit(max([0, min([len(failed), 1])]))
+        env.exit(1)

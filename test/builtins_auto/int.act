@@ -7,10 +7,11 @@ import testing
 # - i64
 # - u1
 # - u8
+# - int
 # - u16
 # - u32
 # - u64
-# - int
+# - bigint
 
 # TODO: test that division by zero raises ZeroDivisionError
 
@@ -47,16 +48,16 @@ def test_i32_divzero():
             return
     raise testing.NotRaisesError("expected ZeroDivisionError for i32")
 
-def test_i64_divzero():
-    n = i64(0)
+def test_int_divzero():
+    n = int(0)
     try:
-        i64(3) / n
+        int(3) / n
     except ZeroDivisionError:
         try:
-            i64(3) // n
+            int(3) // n
         except ZeroDivisionError:
             return
-    raise testing.NotRaisesError("expected ZeroDivisionError for i64")
+    raise testing.NotRaisesError("expected ZeroDivisionError for int")
 
 def test_u1_divzero():
     n = u1(0)
@@ -182,27 +183,27 @@ def test_i32():
         raise ValueError("i32 wraparound failed")
     return True
 
-def test_i64():
-    test_i64_divzero()
-    x: i64 = 0
+def test_int():
+    test_int_divzero()
+    x: int = 0
     if (bool(x != 0)):
        raise ValueError("unexpected: bool(x) != 0")
     if x != 0:
        raise ValueError("unexpected: x != 0")
-    if i64("1234") != 1234:
-        raise ValueError('i64("1234") gives wrong result')
-    if i64("0x1234") != 4660:
-        raise ValueError('i64("0x1234") gives wrong result')
-    if i64("0o1234") != 668:
-        raise ValueError('i64("0o1234") gives wrong result')
-    if i64("0b1111") != 15:
-        raise ValueError('i64("0b1111") gives wrong result')
-    if i64("1234", 7) != 466:
-        raise ValueError('i64("1234",7) gives wrong result')
+    if int("1234") != 1234:
+        raise ValueError('int("1234") gives wrong result')
+    if int("0x1234") != 4660:
+        raise ValueError('int("0x1234") gives wrong result')
+    if int("0o1234") != 668:
+        raise ValueError('int("0o1234") gives wrong result')
+    if int("0b1111") != 15:
+        raise ValueError('int("0b1111") gives wrong result')
+    if int("1234", 7) != 466:
+        raise ValueError('int("1234",7) gives wrong result')
     if int(x) != 0:
         raise ValueError("unexpected: int(x) != 0")
-    if i64(2**63-1) + 1 != -2**63:
-        raise ValueError("i64 wraparound failed")
+    if int(2**63-1) + 1 != -2**63:
+        raise ValueError("int wraparound failed")
     return True
 
 def test_u1():
@@ -287,7 +288,8 @@ def test_u32():
         raise ValueError('u32("1234",7) gives wrong result')
     if int(x) != 0:
         raise ValueError("unexpected: int(x) != 0")
-    if u32(2**32-1) + 1 != 0:
+    u32max: u32 = 2**32 - 1
+    if u32max + 1 != 0:
         raise ValueError("u32 wraparound failed")
     return True
 
@@ -310,28 +312,30 @@ def test_u64():
         raise ValueError('u64("1234",7) gives wrong result')
     if int(x) != 0:
         raise ValueError("unexpected: int(x) != 0")
-    if u64(2**64-1) + 1 != 0:
+    u64max: u64 = 2**64 - 1
+    if u64max + 1 != 0:
         raise ValueError("u64 wraparound failed")
     return True
 
 
 
-def test_int():
+def test_bigint():
     if (141234567898765434567654345678765456787654 << 12) != 578496790113343219989112199900223311002230784:
-        raise ValueError("left shift of positive int broken")
+        raise ValueError("left shift of positive bigint broken")
     if (-141234567898765434567654345678765456787654 << 12) != -578496790113343219989112199900223311002230784:
-        raise ValueError("left shift of negative int broken")
+        raise ValueError("left shift of negative bigint broken")
     if (141234567898765434567654345678765456787654 >> 12) != 34481095678409529923743736737979847848:
-        raise ValueError("right shift of positive int broken")
+        raise ValueError("right shift of positive bigint broken")
     if (-141234567898765434567654345678765456787654 >> 12) != -34481095678409529923743736737979847848:
-        raise ValueError("right shift of negative int broken")
+        raise ValueError("right shift of negative bigint broken")
     if (123457665434567898765434567876545678765456789876587678767876789876578456787645676543456765435 >> 100) != 97390925711186052433660104097118587966803147032967724376831828:
-        raise ValueError("right shift of positive int broken")
-    if int(1.23456789e15) != 1234567890000000:
-        raise ValueError("int() of float e15 not working")
-    if int(1.23456789e150) != 1234567889999999836491654725378050829066454385249330908721879362956247951768828819773169753596449374655959952724750267483926250851143576906326291251200:
-        raise ValueError("int() of float e150 not working")
-    if abs (10**500/10**500 - 1) > 1e-100:
+        raise ValueError("right shift of positive bigint broken")
+    if bigint(1.23456789e15) != 1234567890000000:
+        raise ValueError("bigint() of float e15 not working")
+    if bigint(1.23456789e150) != 1234567889999999836491654725378050829066454385249330908721879362956247951768828819773169753596449374655959952724750267483926250851143576906326291251200:
+        raise ValueError("bigint() of float e150 not working")
+    c: bigint = 10**500
+    if abs (c/c - 1) > 1e-100:
         raise ValueError("10**500/10**500 != 1")
     if (round(123456789, 10)) != 1.23456789e8:
         raise ValueError("round(123456789, 10) != 1.23456789e8")
@@ -339,43 +343,44 @@ def test_int():
         raise ValueError("round(123456789, -10) != 1234567890000000000")
     if round(-123456789, -4) != -123460000:
         raise ValueError("round(-123456789, -10) != -1234567890000000000")
-    if int('123') != 123:
-        raise ValueError("int('123') != 123")
+    if bigint('123') != 123:
+        raise ValueError("bigint('123') != 123")
 #    if hash(2**131) >= 2**64:        Hash values now has type u64, so 2**64 == 0 !
 #        raise ValueError("hash(2**131) too big")
-    if int("1234") != 1234:
-        raise ValueError('int("1234") gives wrong result')
-    if int("0x1234") != 4660:
-        raise ValueError('int("0x1234") gives wrong result')
-    if int("0o1234") != 668:
-        raise ValueError('int("0o1234") gives wrong result')
-    if int("0b1111") != 15:
-        raise ValueError('int("0b1111") gives wrong result')
-    if int("1234",7) != 466:
-        raise ValueError('int("1234",7) gives wrong result')
-    if int(" -0x34ac53ba0976ae3345A4E8765CCD2345",16) != -70014629019847787457594182942686257989:
-        raise ValueError('int(" -0x34ac53ba0976ae3345A4E8765CCD2345",16) gives wrong result')
-    if int("123rtgvhu7654erfghjuyt54567ujhgfrtyujhgvfc3456ytyhgt54edf",36) != 1505279714924572685646656049328765658872190236487877560661160764208141566553212677331651:
-        raise ValueError('int("123rtgvhu7654erfghjuyt54567ujhgfrtyujhgvfc3456ytyhgt54edf",36) gives wrong result')
-    if int("0") != 0:
-        raise ValueError('int("0")  gives wrong result')
-    if int("1234567890abcdef" * 100,16) != 0x1234567890abcdef * (2**6400)//(2**64-1):
-        raise ValueError('int("1234567890abcdef" * 100,16) gives wrong result')
-    if int('1'* 10000,2) != 2**10000 - 1:
-        raise ValueError("int('1'* 10000,2) gives wrong result")
+    if bigint("1234") != 1234:
+        raise ValueError('bigint("1234") gives wrong result')
+    if bigint("0x1234") != 4660:
+        raise ValueError('bigint("0x1234") gives wrong result')
+    if bigint("0o1234") != 668:
+        raise ValueError('bigint("0o1234") gives wrong result')
+    if bigint("0b1111") != 15:
+        raise ValueError('bigint("0b1111") gives wrong result')
+    if bigint("1234",7) != 466:
+        raise ValueError('bigint("1234",7) gives wrong result')
+    if bigint(" -0x34ac53ba0976ae3345A4E8765CCD2345",16) != -70014629019847787457594182942686257989:
+        raise ValueError('bigint(" -0x34ac53ba0976ae3345A4E8765CCD2345",16) gives wrong result')
+    if bigint("123rtgvhu7654erfghjuyt54567ujhgfrtyujhgvfc3456ytyhgt54edf",36) != 1505279714924572685646656049328765658872190236487877560661160764208141566553212677331651:
+        raise ValueError('bigint("123rtgvhu7654erfghjuyt54567ujhgfrtyujhgvfc3456ytyhgt54edf",36) gives wrong result')
+    if bigint("0") != 0:
+        raise ValueError('bigint("0")  gives wrong result')
+    if bigint("1234567890abcdef" * 100,16) != 0x1234567890abcdef * (2**6400)//(2**64-1):
+        raise ValueError('bigint("1234567890abcdef" * 100,16) gives wrong result')
+    if bigint('1'* 10000,2) != 2**10000 - 1:
+        raise ValueError("bigint('1'* 10000,2) gives wrong result")
 
+ 
 actor main(env):
     try:
         test_int()
         test_i8()
         test_i16()
         test_i32()
-        test_i64()
         test_u1()
         test_u8()
         test_u16()
         test_u32()
         test_u64()
+        test_bigint()
         env.exit(0)
     except Exception as e:
         print(e)

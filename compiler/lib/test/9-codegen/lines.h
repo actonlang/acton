@@ -88,6 +88,7 @@ struct linesQ_L_4action {
     struct linesQ_L_4actionG_class *$class;
     linesQ_Apa L_3obj;
 };
+$R linesQ_U_L_5C_3cont ($action, $Cont, int64_t);
 $R linesQ_L_5C_3cont ($action, $Cont, B_int);
 struct linesQ_L_6ContG_class {
     char *$GCINFO;
@@ -249,6 +250,7 @@ struct linesQ_L_20proc {
     struct linesQ_L_20procG_class *$class;
     linesQ_main self;
 };
+$R linesQ_U_1L_17C_9cont (linesQ_main, B_Iterable, B_Number, $Cont, int64_t);
 $R linesQ_L_17C_9cont (linesQ_main, B_Iterable, B_Number, $Cont, B_int);
 struct linesQ_L_21ContG_class {
     char *$GCINFO;
@@ -605,8 +607,4 @@ $R linesQ_BepaG_new($Cont);
 extern struct linesQ_mainG_class linesQ_mainG_methods;
 $R linesQ_mainG_new($Cont, B_Env);
 extern B_Number linesQ_W_19;
-extern B_Times linesQ_W_238;
-extern B_Plus linesQ_W_609;
-extern B_Eq linesQ_W_784;
-extern B_Ord linesQ_W_1216;
 void linesQ___init__ ();

@@ -547,7 +547,6 @@ data Witness            = WClass    { binds::QBinds, wtype::Type, proto::PCon, w
 typeDecl (_,NDef{})     = False
 typeDecl _              = True
 
-
 -- Finding type leaves -----
 
 class Leaves a where

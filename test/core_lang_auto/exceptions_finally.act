@@ -1,7 +1,7 @@
 
 
-def fun1() -> int:
-    dummy: list[int] = []
+def fun1() -> bigint:
+    dummy: list[bigint] = []
     try:
         a = dummy[0]
     except IndexError:
