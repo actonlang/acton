@@ -982,6 +982,7 @@ def build_cmd_args(args):
             "norm",
             "only-build",
             "parse",
+            "parse-ast",
             "root",
             "sigs",
             "skip-build",
@@ -1985,6 +1986,7 @@ actor main(env):
         p.add_bool("always-build", "Always build")
         p.add_bool("db", "Enable database backend")
         p.add_bool("parse", "Show parsing result")
+        p.add_bool("parse-ast", "Show the raw AST")
         p.add_bool("kinds", "Show results after kind checking")
         p.add_bool("types", "Show inferred expression types")
         p.add_bool("sigs", "Show inferred type signatures")

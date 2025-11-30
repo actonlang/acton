@@ -25,6 +25,7 @@ dependencies:
   - bytestring
   - clock
   - containers
+  - pretty
   - cryptohash-sha256
   - data-default-class
   - diagnose
@@ -34,6 +35,7 @@ dependencies:
   - filepath
   - megaparsec
   - prettyprinter
+  - pretty-show
   - process
   - split
   - system-filepath
