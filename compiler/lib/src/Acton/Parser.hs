@@ -1577,8 +1577,16 @@ binary name op = InfixL $ do
                 return $ \e1 e2 ->  S.BinOp (S.eloc e1 `upto` S.eloc e2) e1 op e2
 
 unop name op = do
-                name
-                return $ \e -> S.UnOp (S.eloc e) op e
+                (lop, _) <- withLoc name
+                return $ \e ->
+                  case (op, e) of
+                    (S.UMinus, i@S.Int{}) ->
+                      let el = lop `upto` S.eloc i
+                      in i{ S.eloc = el
+                          , S.ival = negate (S.ival i)
+                          , S.lexeme = '-' : S.lexeme i }
+                    -- TODO: should loc cover operator + operand here??
+                    _ -> S.UnOp (S.eloc e) op e
 
 prefix name op = Prefix (unop name op)
 
