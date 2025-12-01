@@ -383,57 +383,74 @@ normDecl env ns d                   = do d <- norm env d
 -- reduction), __init__ method locals (if they are only referenced during initialization) or
 -- proper instance attributes (in the general case).
 
-fixupClassAttrs ns d0
+
+--                    dbody
+--                   /     \
+--                  /       \
+--               eqs         defs
+--              /   \       /    \
+--             /     \   inits   dynamic
+--           pre     dep
+--                  /   \
+--                 /     \
+--               attr    local
+fixupClassAttrs ns d0@Class{dname=n}
   | null eqs                        = ([], [], defs)
-  | null attr                       = --trace ("### Lift out attrs " ++ prstrs (bound pre) ++ " in class " ++ prstr n) $
-                                      (pre, [], defs)
-  | null te                         = --trace ("### Init attrs " ++ prstrs (pre++attr) ++ " in class " ++ prstr n) $
-                                      (pre, [], defs1)
-  | null pre                        = --trace ("### Dynamic attrs " ++ prstrs (dom te) ++ " in class " ++ prstr n) $
-                                      ([], te, defs1)
-  | otherwise                       = --trace ("### Fixup wits " ++ prstrs (bound eqs) ++ " in class " ++ prstr n) $
+  | otherwise                       = --trace ("### Fixup class " ++ prstr n ++ ":") $
+                                      --trace ("  # pre: " ++ prstrs (bound pre)) $
+                                      --trace ("  # attr: " ++ prstrs (bound attr)) $
+                                      --trace ("  # local: " ++ prstrs (bound local)) $
+                                      --trace ("  # defs:\n" ++ render (nest 4 $ vcat [ pretty d | Decl _ ds <- defs1, d <- ds, dname d `elem` [initKW, altInit]])) $
                                       (pre, te, defs1)
-  where (eqs, defs)                 = splitA [] [] (dbody d0)
-
-        splitA eqs defs []          = (reverse eqs, reverse defs)
-        splitA eqs defs (s:ss)      = case s of
+  where (eqs, defs)                 = split [] [] (dbody d0)
+          where
+            split eqs defs []       = (reverse eqs, reverse defs)
+            split eqs defs (s:ss)   = case s of
                                         Assign _ [PVar _ (Internal Witness _ _) (Just _)] _ ->
-                                            splitA (s:eqs) defs ss
+                                            split(s:eqs) defs ss
                                         _ ->
-                                            splitA eqs (s:defs) ss
+                                            split eqs (s:defs) ss
 
-        (dyn, par)                  = dvars [] [] $ concat [ ds | Decl _ ds <- defs ]
+        (dynref, initpar)           = dvars [] [] $ concat [ ds | Decl _ ds <- defs ]
+          where
+            dvars dyn ini []        = (dyn `intersect` bound eqs, ini)
+            dvars dyn ini (d:ds)
+              | dname d == initKW   = dvars dyn ([ n | n@(Internal Witness _ _) <- bound (pos d) ] ++ ini) ds
+              | otherwise           = dvars (free d ++ dyn) ini ds
 
-        dvars dyn par []            = (dyn, par)
-        dvars dyn par (d:ds)
-          | dname d == initKW       = dvars dyn ([ n | n@(Internal Witness _ _) <- bound (pos d) ] ++ par) ds
-          | otherwise               = dvars (free d ++ dyn) par ds
+        (pre, dep)                  = split ns [] [] eqs
+          where
+            split ns pre dep []     = (reverse pre, reverse dep)
+            split ns pre dep (eq:eqs)
+              | null fvs            = split ns (eq:pre) dep eqs
+              | otherwise           = split (bound eq ++ ns) pre (eq:dep) eqs
+              where fvs             = free (expr eq) `intersect` (initpar++ns)
 
-        (pre, attr)                 = splitG ns [] [] eqs
-
-        splitG ns pre attr []       = (reverse pre, reverse attr)
-        splitG ns pre attr (eq:eqs)
-          | null fvs                = splitG ns (eq:pre) attr eqs
-          | otherwise               = splitG (bound eq ++ ns) pre (eq:attr) eqs
-          where fvs                 = free (expr eq) `intersect` (par++ns)
+        (attr, local)               = split [] [] dep
+          where
+            split attr local []     = (reverse attr, reverse local)
+            split attr local (eq:eqs)
+              | null fvs            = split attr (eq:local) eqs
+              | otherwise           = split (eq:attr) local eqs
+              where fvs             = bound eq `intersect` (dynref++free eqs)
 
         initMeth                    = if altInit `elem` bound defs then altInit else initKW
 
         defs1                       = map (initS initMeth) defs
+          where
+            initS n (Decl l ds)     = Decl l $ map (initL . initD n) ds
+            initS n s               = s
 
-        initS n (Decl l ds)         = Decl l $ map (initD n) ds
-        initS n s                   = s
+            initD n d@Def{}
+              | dname d == n, Just self <- selfPar d
+                                    = d{ dbody = [ sMutAssign (eDot (eVar self) w) e | Assign _ [PVar _ w _] e <- attr ] ++ dbody d }
+            initD n d               = d
 
-        initD n d@Def{}
-          | dname d == n,
-            Just self <- selfPar d  = d{ dbody = map (initA $ eVar self) attr ++ dbody d }
-        initD n d                   = d
+            initL d@Def{}
+              | dname d == initKW   = d{ dbody = local ++ dbody d }
+            initL d                 = d
 
-        initA self (Assign _ [PVar _ w _] e)
-          | w `elem` dyn            = sMutAssign (eDot self w) e
-        initA self s                = s
-
-        te                          = [ (w, NVar t) | Assign _ [PVar _ w (Just t)] _ <- attr, w `elem` dyn ]
+        te                          = [ (w, NVar t) | Assign _ [PVar _ w (Just t)] _ <- attr ]
 
 
 instance Norm Decl where
