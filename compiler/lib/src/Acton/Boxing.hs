@@ -66,15 +66,6 @@ unboxableTypes                     = tail numericTypes
 
 isUnboxable t                      = t `elem` unboxableTypes
 
-isUnboxed (Internal BoxPass _ _)   = True
-isUnboxed _                        = False
-
-isWitness (Internal Witness _ _)   = True
-isWitness _                        = False
-
-isInternal (Internal _ _ _)        = True
-isInternal _                       = False
-
 prims = [primISINSTANCE, primISNOTNONE, primISNONE]
 
 unboxedPrim p
