@@ -184,7 +184,7 @@ decl env (Class _ n q a b ddoc)     = (text "struct" <+> classname env n <+> cha
         initNotImpl                 = any hasNotImpl [ b' | Decl _ ds <- b, Def{dname=n',dbody=b'} <- ds, n' == initKW ]
 decl env (Def _ n q p _ (Just t) _ _ fx ddoc)
                                     = genTypeDecl env n (exposeMsg fx t) <+> genTopName env n <+> parens (par env $ prowOf p) <> semi
-  where par                         = if B.isUnboxed n then uparams else params
+  where par                         = if isUnboxed n then uparams else params
 methstub env (Class _ n q a b ddoc) = text "extern" <+> text "struct" <+> classname env n <+> methodtable env n <> semi $+$
                                       constub env t n r b
   where TFun _ _ r _ t              = sctype $ fst $ schemaOf env (eVar n)
@@ -623,7 +623,7 @@ genSuite env (s:ss)                 = ((emit (sloc s) $+$ c) $+$ cs, vs' ++ (vs 
           emit                      = getLineEmit env
 
 genTypeDecl env n t                 =  (if isVolVar n env then text "volatile" else empty) <+>
-                                       if B.isUnboxed n && B.isUnboxable t then text (unboxed_c_type t) else gen env t
+                                       if isUnboxed n && B.isUnboxable t then text (unboxed_c_type t) else gen env t
 
 
 genStmt env (Decl _ ds)             = (empty, [])
@@ -986,7 +986,7 @@ instance Gen Expr where
     gen env (UnBox _ (Float _ x s)) = text s
     gen env (UnBox _ (Bool _ b))    = if b then text "true" else text "false"
     gen env (UnBox _ v@(Var _ (NoQ n)))
-       | B.isUnboxed n              = gen env v
+       | isUnboxed n                = gen env v
     gen env (UnBox t e)             = parens (parens (gen env t) <> gen env e) <> text "->val"
 --    gen env (UnBox t e)             = parens (gen env e) <> text "->val"
     gen env e                       = error ("CodeGen.gen for Expr: e = " ++ show e)
