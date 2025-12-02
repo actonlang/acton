@@ -84,12 +84,8 @@ struct deactQ_L_4proc {
     struct deactQ_L_4procG_class *$class;
     deactQ_Apa L_3obj;
 };
-<<<<<<< HEAD
-$R deactQ_U_L_5C_3cont ($action, $Cont, int64_t);
-$R deactQ_L_5C_3cont ($action, $Cont, B_int);
-=======
+$R deactQ_U_L_5C_3cont ($Cont, int64_t);
 $R deactQ_L_5C_3cont ($Cont, B_int);
->>>>>>> ebe2c02f (Golden updates, mostly just new numbers but also some *internal* effects that become proc instead of action)
 struct deactQ_L_6ContG_class {
     char *$GCINFO;
     int $class_id;
@@ -106,6 +102,7 @@ struct deactQ_L_6Cont {
     struct deactQ_L_6ContG_class *$class;
     $Cont C_cont;
 };
+$R deactQ_U_1L_7C_5cont ($action, $Cont, int64_t);
 $R deactQ_L_7C_5cont ($action, $Cont, B_int);
 struct deactQ_L_8ContG_class {
     char *$GCINFO;
@@ -232,13 +229,7 @@ struct deactQ_L_18action {
     struct deactQ_L_18actionG_class *$class;
     deactQ_Bepa L_17obj;
 };
-<<<<<<< HEAD
-$R deactQ_U_1L_17C_9cont (deactQ_main, $Cont, int64_t);
-$R deactQ_L_17C_9cont (deactQ_main, $Cont, B_int);
-struct deactQ_L_20ContG_class {
-=======
 struct deactQ_L_21actionG_class {
->>>>>>> ebe2c02f (Golden updates, mostly just new numbers but also some *internal* effects that become proc instead of action)
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
@@ -256,6 +247,7 @@ struct deactQ_L_21action {
     struct deactQ_L_21actionG_class *$class;
     deactQ_main L_20obj;
 };
+$R deactQ_U_2L_19C_11cont (deactQ_main, $Cont, int64_t);
 $R deactQ_L_19C_11cont (deactQ_main, $Cont, B_int);
 struct deactQ_L_22ContG_class {
     char *$GCINFO;
@@ -578,10 +570,4 @@ extern struct deactQ_BepaG_class deactQ_BepaG_methods;
 $R deactQ_BepaG_new($Cont);
 extern struct deactQ_mainG_class deactQ_mainG_methods;
 $R deactQ_mainG_new($Cont, B_Env);
-<<<<<<< HEAD
-=======
-extern B_Plus deactQ_W_313;
-extern B_Times deactQ_W_223;
-extern B_Eq deactQ_W_761;
->>>>>>> 31837f3b (Update golden files)
 void deactQ___init__ ();
