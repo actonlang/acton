@@ -127,7 +127,7 @@ nloc _          = NoLoc
 
 nstr (Name _ s)             = esc s
   where esc (c:'_':s)
-          | isUpper c       = c : 'X' : '_' : esc s
+          | isUpper c       = c : {- 'X' : -} '_' : esc s
         esc (c:s)           = c : esc s
         esc ""              = ""
 nstr (Derived n s)
