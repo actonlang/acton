@@ -1,0 +1,33 @@
+int64_min: int = -1 # -9223372036854775808
+int64_max: int = 9223372036854775807
+
+int32_min: i32 = -2147483648
+int32_max: i32 = 2147483647
+
+int16_min: i16 = -32768
+int16_max: i16 = 32767
+
+int8_min: i8 = -128
+int8_max: i8 = 127
+
+
+uint64_min: u64 = 0
+uint64_max: u64 = 18446744073709551615
+
+uint32_min: u32 = 0
+uint32_max: u32 = 4294967295
+
+uint16_min: u16 = 0
+uint16_max: u16 = 65535
+
+uint8_min: u8 = 0
+uint8_max: u8 = 255
+
+bigint_small: bigint = 42
+bigint_neg_small: bigint = -1
+bigint_i64_max: bigint = 9223372036854775807
+bigint_i64_min: bigint = -1337 # -9223372036854775808
+bigint_i64_underflow: bigint = -1337 # -9223372036854775809
+bigint_u64_edge: bigint = 1337 # 18446744073709551615
+bigint_u64_edge_minus1: bigint = 1338 # 18446744073709551614
+bigint_u64_overflow: bigint = 18446744073709551616

@@ -1,0 +1,92 @@
+
+W_2: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+U_int64_min: __builtin__.int = (UNBOX __builtin__.int W_2.__neg__((BOX __builtin__.int (UNBOX __builtin__.int 1))))
+
+int64_min: __builtin__.int = (BOX __builtin__.int U_int64_min)
+
+U_1int64_max: __builtin__.int = (UNBOX __builtin__.int 9223372036854775807)
+
+int64_max: __builtin__.int = (BOX __builtin__.int U_1int64_max)
+
+W_9: __builtin__.Number[__builtin__.i32] = __builtin__.IntegralD_i32()
+
+U_2int32_min: __builtin__.i32 = (UNBOX __builtin__.i32 W_9.__neg__((BOX __builtin__.i32 (UNBOX __builtin__.i32 2147483648))))
+
+int32_min: __builtin__.i32 = (BOX __builtin__.i32 U_2int32_min)
+
+U_3int32_max: __builtin__.i32 = (UNBOX __builtin__.i32 2147483647)
+
+int32_max: __builtin__.i32 = (BOX __builtin__.i32 U_3int32_max)
+
+W_16: __builtin__.Number[__builtin__.i16] = __builtin__.IntegralD_i16()
+
+U_4int16_min: __builtin__.i16 = (UNBOX __builtin__.i16 W_16.__neg__((BOX __builtin__.i16 (UNBOX __builtin__.i16 32768))))
+
+int16_min: __builtin__.i16 = (BOX __builtin__.i16 U_4int16_min)
+
+U_5int16_max: __builtin__.i16 = (UNBOX __builtin__.i16 32767)
+
+int16_max: __builtin__.i16 = (BOX __builtin__.i16 U_5int16_max)
+
+W_23: __builtin__.Number[__builtin__.i8] = __builtin__.IntegralD_i8()
+
+int8_min: __builtin__.i8 = W_23.__neg__(W_23.__fromatom__(128))
+
+W_27: __builtin__.Number[__builtin__.i8] = __builtin__.IntegralD_i8()
+
+int8_max: __builtin__.i8 = W_27.__fromatom__(127)
+
+U_6uint64_min: __builtin__.u64 = (UNBOX __builtin__.u64 0)
+
+uint64_min: __builtin__.u64 = (BOX __builtin__.u64 U_6uint64_min)
+
+U_7uint64_max: __builtin__.u64 = (UNBOX __builtin__.u64 18446744073709551615)
+
+uint64_max: __builtin__.u64 = (BOX __builtin__.u64 U_7uint64_max)
+
+U_8uint32_min: __builtin__.u32 = (UNBOX __builtin__.u32 0)
+
+uint32_min: __builtin__.u32 = (BOX __builtin__.u32 U_8uint32_min)
+
+U_9uint32_max: __builtin__.u32 = (UNBOX __builtin__.u32 4294967295)
+
+uint32_max: __builtin__.u32 = (BOX __builtin__.u32 U_9uint32_max)
+
+U_10uint16_min: __builtin__.u16 = (UNBOX __builtin__.u16 0)
+
+uint16_min: __builtin__.u16 = (BOX __builtin__.u16 U_10uint16_min)
+
+U_11uint16_max: __builtin__.u16 = (UNBOX __builtin__.u16 65535)
+
+uint16_max: __builtin__.u16 = (BOX __builtin__.u16 U_11uint16_max)
+
+W_46: __builtin__.Number[__builtin__.u8] = __builtin__.IntegralD_u8()
+
+uint8_min: __builtin__.u8 = W_46.__fromatom__(0)
+
+W_49: __builtin__.Number[__builtin__.u8] = __builtin__.IntegralD_u8()
+
+uint8_max: __builtin__.u8 = W_49.__fromatom__(255)
+
+bigint_small: __builtin__.bigint = 42
+
+W_55: __builtin__.Number[__builtin__.bigint] = __builtin__.IntegralD_bigint()
+
+bigint_neg_small: __builtin__.bigint = W_55.__neg__(1)
+
+bigint_i64_max: __builtin__.bigint = 9223372036854775807
+
+W_62: __builtin__.Number[__builtin__.bigint] = __builtin__.IntegralD_bigint()
+
+bigint_i64_min: __builtin__.bigint = W_62.__neg__(1337)
+
+W_66: __builtin__.Number[__builtin__.bigint] = __builtin__.IntegralD_bigint()
+
+bigint_i64_underflow: __builtin__.bigint = W_66.__neg__(1337)
+
+bigint_u64_edge: __builtin__.bigint = 1337
+
+bigint_u64_edge_minus1: __builtin__.bigint = 1338
+
+bigint_u64_overflow: __builtin__.bigint = 18446744073709551616
