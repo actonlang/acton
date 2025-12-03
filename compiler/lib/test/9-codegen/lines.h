@@ -267,8 +267,8 @@ struct linesQ_L_21ContG_class {
 struct linesQ_L_21Cont {
     struct linesQ_L_21ContG_class *$class;
     linesQ_main self;
-    B_Iterable W_1909;
-    B_Number W_2124;
+    B_Iterable W_1908;
+    B_Number W_2123;
     $Cont C_cont;
 };
 $R linesQ_L_12C_7cont (linesQ_main, B_Iterable, B_Number, $Cont, linesQ_Bepa);
@@ -287,8 +287,8 @@ struct linesQ_L_22ContG_class {
 struct linesQ_L_22Cont {
     struct linesQ_L_22ContG_class *$class;
     linesQ_main self;
-    B_Iterable W_1909;
-    B_Number W_2124;
+    B_Iterable W_1908;
+    B_Number W_2123;
     $Cont C_cont;
 };
 $R linesQ_L_11C_5cont (linesQ_main, B_Iterable, B_Number, $Cont, linesQ_Apa);
@@ -307,8 +307,8 @@ struct linesQ_L_23ContG_class {
 struct linesQ_L_23Cont {
     struct linesQ_L_23ContG_class *$class;
     linesQ_main self;
-    B_Iterable W_1909;
-    B_Number W_2124;
+    B_Iterable W_1908;
+    B_Number W_2123;
     $Cont C_cont;
 };
 struct linesQ_L_24procG_class {
@@ -606,5 +606,4 @@ extern struct linesQ_BepaG_class linesQ_BepaG_methods;
 $R linesQ_BepaG_new($Cont);
 extern struct linesQ_mainG_class linesQ_mainG_methods;
 $R linesQ_mainG_new($Cont, B_Env);
-extern B_Number linesQ_W_19;
 void linesQ___init__ ();
