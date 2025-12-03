@@ -1021,8 +1021,8 @@ castable env t1 t2                          = False
 -- GLB
 ----------------------------------------------------------------------------------------------------------------------
 
-glb env (TWild _) t2                    = pure t2
-glb env t1 (TWild _)                    = pure t1
+glb env (TWild _) t2                    = pure tWild
+glb env t1 (TWild _)                    = pure tWild
 
 glb env t1@TVar{} t2@TVar{}
   | t1 == t2                            = pure t1
@@ -1093,16 +1093,17 @@ glb2 env p1 k1 p2 k2                    = do p <- glb env p1 p2
                                              return (p, k)
 
 
-glbfold env []                          = pure tWild
-glbfold env (t:ts)                      = foldM (glb env) t ts
+glbfold env ts                          = case filter (/= tWild) ts of
+                                            [] -> pure tWild
+                                            t:ts -> foldM (glb env) t ts
 
 
 ----------------------------------------------------------------------------------------------------------------------
 -- LUB
 ----------------------------------------------------------------------------------------------------------------------
 
-lub env (TWild _) t2                    = pure t2
-lub env t1 (TWild _)                    = pure t1
+lub env (TWild _) t2                    = pure tWild
+lub env t1 (TWild _)                    = pure tWild
 
 lub env t1@TVar{} t2@TVar{}
   | t1 == t2                            = pure t1
@@ -1180,8 +1181,9 @@ lub2 env p1 k1 p2 k2                    = do p <- lub env p1 p2
                                              return (p, k)
 
 
-lubfold env []                          = pure tWild
-lubfold env (t:ts)                      = foldM (lub env) t ts
+lubfold env ts                          = case filter (/= tWild) ts of
+                                            [] -> pure tWild
+                                            t:ts -> foldM (lub env) t ts
 
 
 -- Control flow --------------------
