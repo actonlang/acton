@@ -45,7 +45,7 @@ int intsQ_done$ = 0;
 void intsQ___init__ () {
     if (intsQ_done$) return;
     intsQ_done$ = 1;
-    int64_t U_int64_min = -1LL;
+    int64_t U_int64_min = -9223372036854775808LL;
     intsQ_U_int64_min = U_int64_min;
     B_int int64_min = toB_int(intsQ_U_int64_min);
     intsQ_int64_min = int64_min;

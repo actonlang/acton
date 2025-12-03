@@ -1,5 +1,5 @@
 
-U_int64_min: __builtin__.int = (UNBOX __builtin__.int -1)
+U_int64_min: __builtin__.int = (UNBOX __builtin__.int -9223372036854775808)
 
 int64_min: __builtin__.int = (BOX __builtin__.int U_int64_min)
 
