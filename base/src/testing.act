@@ -1164,7 +1164,7 @@ class ProjectTestResults(object):
                 if self.perf_mode and perf_mem:
                     indent = " " * 10
                     diffs = tinfo.diff(last_tinfo)
-                    print(f"{indent}Memory usag      : {tinfo.mem_usage_delta_avg // 1024:6d}KB {diffs.mem_usage_delta_avg}")
+                    print(f"{indent}Memory usage     : {tinfo.mem_usage_delta_avg // 1024:6d}KB {diffs.mem_usage_delta_avg}")
                     print(f"{indent}non-GC usage     : {tinfo.non_gc_mem_usage_delta_avg // 1024:6d}KB {diffs.non_gc_mem_usage_delta_avg}")
                     print(indent + "non-GC usage > 0 : %d%% (%d out of %d)" % ((tinfo.non_gc_mem_inc_count * 100 // tinfo.num_iterations) if tinfo.num_iterations > 0 else 0,
                                                                         tinfo.non_gc_mem_inc_count,
