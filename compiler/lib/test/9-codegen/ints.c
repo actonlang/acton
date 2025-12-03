@@ -41,8 +41,7 @@ B_bigint intsQ_bigint_i64_underflow;
 B_bigint intsQ_bigint_u64_edge;
 B_bigint intsQ_bigint_u64_edge_minus1;
 B_bigint intsQ_bigint_u64_overflow;
-int64_t intsQ_U_12xint_i64_min_minus1;
-B_int intsQ_xint_i64_min_minus1;
+B_bigint intsQ_xint_i64_min_minus1;
 int intsQ_done$ = 0;
 void intsQ___init__ () {
     if (intsQ_done$) return;
@@ -127,8 +126,6 @@ void intsQ___init__ () {
     intsQ_bigint_u64_edge_minus1 = bigint_u64_edge_minus1;
     B_bigint bigint_u64_overflow = ((B_bigint)toB_bigint2("18446744073709551616"));
     intsQ_bigint_u64_overflow = bigint_u64_overflow;
-    int64_t U_12xint_i64_min_minus1 = -9223372036854775809LL;
-    intsQ_U_12xint_i64_min_minus1 = U_12xint_i64_min_minus1;
-    B_int xint_i64_min_minus1 = toB_int(intsQ_U_12xint_i64_min_minus1);
+    B_bigint xint_i64_min_minus1 = ((B_bigint)toB_bigint2("-9223372036854775809"));
     intsQ_xint_i64_min_minus1 = xint_i64_min_minus1;
 }

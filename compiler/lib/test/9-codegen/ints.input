@@ -79,6 +79,4 @@ bigint_u64_edge_minus1: __builtin__.bigint = bigint(18446744073709551614, None)
 
 bigint_u64_overflow: __builtin__.bigint = 18446744073709551616
 
-U_12xint_i64_min_minus1: __builtin__.int = (UNBOX __builtin__.int -9223372036854775809)
-
-xint_i64_min_minus1: __builtin__.int = (BOX __builtin__.int U_12xint_i64_min_minus1)
+xint_i64_min_minus1: __builtin__.bigint = -9223372036854775809
