@@ -31,3 +31,5 @@ bigint_i64_underflow: bigint = -9223372036854775809
 bigint_u64_edge: bigint = bigint(18446744073709551615)
 bigint_u64_edge_minus1: bigint = bigint(18446744073709551614)
 bigint_u64_overflow: bigint = 18446744073709551616
+
+xint_i64_min_minus1 = -9223372036854775809

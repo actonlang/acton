@@ -42,4 +42,6 @@ extern B_bigint intsQ_bigint_i64_underflow;
 extern B_bigint intsQ_bigint_u64_edge;
 extern B_bigint intsQ_bigint_u64_edge_minus1;
 extern B_bigint intsQ_bigint_u64_overflow;
+extern int64_t intsQ_U_12xint_i64_min_minus1;
+extern B_int intsQ_xint_i64_min_minus1;
 void intsQ___init__ ();
