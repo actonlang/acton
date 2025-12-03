@@ -902,9 +902,10 @@ instance Gen Expr where
       | NClass{} <- findQName n env = newcon' env n
       | otherwise                   = genQName env n
     gen env (Int _ i str)
-        |i <= 9223372036854775807   = gen env primToBigInt <> parens (text (str++"UL")) -- literal is 2^63-1
-        |i <= 18446744073709551615  = gen env primToU64 <>  parens (text (str++"UL")) -- literal is 2^64-1
-        | otherwise                 = gen env primToBigInt2 <> parens (doubleQuotes $ text str)
+        | i < 0                     = gen env primToBigInt2 <> parens (doubleQuotes $ text str)       -- negative → string
+        | i <= 9223372036854775807  = gen env primToBigInt  <> parens (text (str++"UL"))             -- fits i64 → toB_bigint
+        | i <= 18446744073709551615 = gen env primToU64     <> parens (text (str++"UL"))             -- fits u64  → toB_u64
+        | otherwise                 = gen env primToBigInt2 <> parens (doubleQuotes $ text str)       -- large → string
     gen env (Float _ _ str)         = gen env primToFloat <> parens (text str)
     gen env (Bool _ True)           = gen env qnTrue
     gen env (Bool _ False)          = gen env qnFalse

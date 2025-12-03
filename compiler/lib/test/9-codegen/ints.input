@@ -69,12 +69,12 @@ bigint_neg_small: __builtin__.bigint = -1
 
 bigint_i64_max: __builtin__.bigint = 9223372036854775807
 
-bigint_i64_min: __builtin__.bigint = -1337
+bigint_i64_min: __builtin__.bigint = -9223372036854775808
 
-bigint_i64_underflow: __builtin__.bigint = -1337
+bigint_i64_underflow: __builtin__.bigint = -9223372036854775809
 
-bigint_u64_edge: __builtin__.bigint = 1337
+bigint_u64_edge: __builtin__.bigint = bigint(18446744073709551615, None)
 
-bigint_u64_edge_minus1: __builtin__.bigint = 1338
+bigint_u64_edge_minus1: __builtin__.bigint = bigint(18446744073709551614, None)
 
 bigint_u64_overflow: __builtin__.bigint = 18446744073709551616
