@@ -564,6 +564,12 @@ jobs:
     with:
       repo_url: "orchestron-orchestrator/acton-yang"
 
+  test-app-actmf:
+    needs: build-debs
+    uses: "./.github/workflows/test-app.yml"
+    with:
+      repo_url: "orchestron-orchestrator/actmf"
+
   test-app-zlib:
     needs: build-debs
     uses: "./.github/workflows/test-app.yml"
