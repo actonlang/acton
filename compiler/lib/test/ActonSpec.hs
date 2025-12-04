@@ -88,6 +88,53 @@ main = do
           testModuleParseError "module_func_before_import" "def foo():\n    pass\nimport math\n"
           testModuleParseError "module_actor_before_import" "actor Foo():\n    pass\nimport math\n"
 
+      describe "Numeric literals" $ do
+        it "parses INT64_MIN as a single literal" $ do
+          case parseStmtAst "a = -9223372036854775808" of
+            Left err -> expectationFailure $ "Parse failed: " ++ err
+            Right [S.Assign _ _ expr] -> case expr of
+              S.Int _ ival lexeme -> do
+                ival `shouldBe` (-9223372036854775808)
+                lexeme `shouldBe` "-9223372036854775808"
+              other -> expectationFailure $ "Expected Int literal, got " ++ show other
+            Right other -> expectationFailure $ "Unexpected AST: " ++ show other
+
+        it "keeps unary minus above exponentiation for -1**2" $ do
+          case parseExprAst "-1**2" of
+            Left err -> expectationFailure $ "Parse failed: " ++ err
+            Right (S.UnOp _ S.UMinus inner) -> case inner of
+              S.BinOp _ lhs op rhs -> do
+                op `shouldBe` S.Pow
+                case lhs of
+                  S.Int _ ival lexeme -> do
+                    ival `shouldBe` 1
+                    lexeme `shouldBe` "1"
+                  other -> expectationFailure $ "Expected left int literal, got " ++ show other
+                case rhs of
+                  S.Int _ ival lexeme -> do
+                    ival `shouldBe` 2
+                    lexeme `shouldBe` "2"
+                  other -> expectationFailure $ "Expected right int literal, got " ++ show other
+              other -> expectationFailure $ "Expected power expression, got " ++ show other
+            Right other -> expectationFailure $ "Expected unary minus, got " ++ show other
+
+        it "respects parentheses for (-1)**2" $ do
+          case parseExprAst "(-1)**2" of
+            Left err -> expectationFailure $ "Parse failed: " ++ err
+            Right (S.BinOp _ lhs op rhs) -> do
+              op `shouldBe` S.Pow
+              case lhs of
+                S.Paren _ (S.Int _ ival lexeme) -> do
+                  ival `shouldBe` (-1)
+                  lexeme `shouldBe` "-1"
+                other -> expectationFailure $ "Expected parenthesized negative literal, got " ++ show other
+              case rhs of
+                S.Int _ ival lexeme -> do
+                  ival `shouldBe` 2
+                  lexeme `shouldBe` "2"
+                other -> expectationFailure $ "Expected right int literal, got " ++ show other
+            Right other -> expectationFailure $ "Expected power expression, got " ++ show other
+
       describe "String Interpolation" $ do
         -- Note: In these tests, we use Haskell string literals which require escaping.
         -- The test format is: testParseOutput <Haskell literal> <expected parser output>
@@ -418,6 +465,7 @@ main = do
       testBoxing env0 ["deact"]
 
     describe "Pass 9: CodeGen" $ do
+      testCodeGen env0 ["ints"]
       testCodeGen env0 ["deact"]
       testCodeGen env0 ["lines"]
 
@@ -736,6 +784,12 @@ formatCustomParseError filename input loc err =
       layout = layoutPretty defaultLayoutOptions (unAnnotate doc)
   in T.unpack $ renderStrict layout
 
+withTrailingNewline :: String -> String
+withTrailingNewline s
+  | null s = s
+  | last s == '\n' = s
+  | otherwise = s ++ "\n"
+
 parseActon :: String -> Either String String
 parseActon input =
   System.IO.Unsafe.unsafePerformIO $
@@ -745,7 +799,7 @@ parseActon input =
         Right result -> Right $ concatMap (Pretty.print) result)
       handleCustomParseException
   where
-    inputWithNewline = if last input == '\n' then input else input ++ "\n"
+    inputWithNewline = withTrailingNewline input
     handleCustomParseException :: P.CustomParseException -> IO (Either String String)
     renderDiagnostic err =
       let diagnostic = Diag.parseDiagnosticFromBundle "test" inputWithNewline err
@@ -765,7 +819,7 @@ parseModuleTest input =
         Right (imports, suite) -> Right $ "Module parsed successfully")
       handleCustomParseException
   where
-    inputWithNewline = if null input || last input == '\n' then input else input ++ "\n"
+    inputWithNewline = withTrailingNewline input
     renderDiagnostic err =
       let diagnostic = Diag.parseDiagnosticFromBundle "test.act" inputWithNewline err
           doc = prettyDiagnostic WithUnicode (TabSize 4) diagnostic
@@ -774,6 +828,44 @@ parseModuleTest input =
     handleCustomParseException :: P.CustomParseException -> IO (Either String String)
     handleCustomParseException (P.CustomParseException loc err) =
       return $ Left $ formatCustomParseError "test.act" inputWithNewline loc err
+
+parseStmtAst :: String -> Either String [S.Stmt]
+parseStmtAst input =
+  System.IO.Unsafe.unsafePerformIO $
+    E.catch
+      (E.evaluate $ case runParser (St.evalStateT P.stmt P.initState) "" inputWithNewline of
+        Left err -> Left $ renderDiagnostic err
+        Right result -> Right result)
+      handleCustomParseException
+  where
+    inputWithNewline = withTrailingNewline input
+    renderDiagnostic err =
+      let diagnostic = Diag.parseDiagnosticFromBundle "test" inputWithNewline err
+          doc = prettyDiagnostic WithUnicode (TabSize 4) diagnostic
+          layout = layoutPretty defaultLayoutOptions (unAnnotate doc)
+      in T.unpack $ renderStrict layout
+    handleCustomParseException :: P.CustomParseException -> IO (Either String [S.Stmt])
+    handleCustomParseException (P.CustomParseException loc err) =
+      return $ Left $ formatCustomParseError "test" inputWithNewline loc err
+
+parseExprAst :: String -> Either String S.Expr
+parseExprAst input =
+  System.IO.Unsafe.unsafePerformIO $
+    E.catch
+      (E.evaluate $ case runParser (St.evalStateT P.expr P.initState) "" inputWithNewline of
+        Left err -> Left $ renderDiagnostic err
+        Right result -> Right result)
+      handleCustomParseException
+  where
+    inputWithNewline = withTrailingNewline input
+    renderDiagnostic err =
+      let diagnostic = Diag.parseDiagnosticFromBundle "test" inputWithNewline err
+          doc = prettyDiagnostic WithUnicode (TabSize 4) diagnostic
+          layout = layoutPretty defaultLayoutOptions (unAnnotate doc)
+      in T.unpack $ renderStrict layout
+    handleCustomParseException :: P.CustomParseException -> IO (Either String S.Expr)
+    handleCustomParseException (P.CustomParseException loc err) =
+      return $ Left $ formatCustomParseError "test" inputWithNewline loc err
 
 -- Helper function to test module-level parser errors with golden files
 testModuleParseError :: String -> String -> Spec
