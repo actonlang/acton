@@ -71,7 +71,7 @@ simplify' env te tt eq cs                   = do eq <- reduce env eq cs
                                                  env <- usubst env      -- Remove....
                                                  te <- usubst te
                                                  tt <- usubst tt
-                                                 qimprove env te tt eq cs
+                                                 improve env te tt eq cs
 
 quicksimp env eq []                         = return ([], eq)
 quicksimp env eq cs                         = do eq1 <- reduce env eq cs
@@ -1373,6 +1373,7 @@ varinfo cs                                  = f cs (VInfo [] [] [] Map.empty Map
     f (Mut _ (TUni _ v) n t : cs)           = f cs . mutattr v n . embed (ufree t)
     f (Sel _ _ (TUni _ v) n t : cs)         = f cs . selattr v n . embed (ufree t)
     f (Seal _ (TUni _ v) : cs)              = f cs . seal v
+    f (Imply _ _ _ cs' : cs)                = f (cs'++cs)
     f []                                    = Just
     f (_ : cs)                              = \_ -> Nothing
 
@@ -1462,17 +1463,6 @@ mkLUB env (v,ts)
 instance Pretty (TUni, Type) where
     pretty (uv, t)                      = pretty uv <+> text "~" <+> pretty t
 
-
-qimprove                                :: Env -> TEnv -> Type -> Equations -> Constraints -> TypeM (Constraints,Equations)
-qimprove env te tt eq cs                = do (plain_cs,eq) <- improve env te tt eq plain_cs
-                                             (imply_cs,eq) <- impq eq imply_cs
-                                             return (plain_cs++imply_cs, eq)
-  where (imply_cs, plain_cs)            = splitImply cs
-        impq eq []                      = return ([], eq)
-        impq eq (Imply i w q cs' : cs)  = do (cs',eq') <- improve (defineTVars q env) te tt [] cs'
-                                             (cs,eq) <- impq (insertOrMerge (QEqn w q eq') eq) cs
-                                             return (if null cs' then cs else Imply i w q cs' : cs, eq)
-
 improve                                 :: Env -> TEnv -> Type -> Equations -> Constraints -> TypeM (Constraints,Equations)
 improve env te tt eq []                 = return ([], eq)
 improve env te tt eq cs
@@ -1491,9 +1481,7 @@ improve env te tt eq cs
                                              lb <- mapM (mkLUB env) multiLBnd   -- LUB of the lower bounds
                                              --traceM ("  *GLB " ++ prstrs ub)
                                              --traceM ("  *LUB " ++ prstrs lb)
-                                             let cs' = [ Cast (DfltInfo NoLoc 14 Nothing []) (tUni v) t | (v,t) <- ub ] ++ 
-                                                       [ Cast (DfltInfo NoLoc 110 Nothing []) t (tUni v) | (v,t) <- lb ]
-                                             simplify' env te tt eq (cs' ++ map (replace ub lb) cs)
+                                             simplify' env te tt eq (replace ub lb cs)
   | not $ null posLBnd                  = do --traceM ("  *S-simplify (dn) " ++ prstrs posLBnd)
                                              --traceM ("   posnames "  ++ prstrs (posnames $ envX env))
                                              sequence [ unify (DfltInfo NoLoc 15 Nothing []) (tUni v) t | (v,t) <- posLBnd ]
@@ -1524,11 +1512,11 @@ improve env te tt eq cs
         Right vclosed                   = closure
         (vvsL,vvsU)                     = unzip vclosed
         gsimple                         = gsimp vi vclosed obsvars (varvars vi)
-        multiUBnd                       = [ (v,us) | (v,ts) <- Map.assocs (ubounds vi), v `notElem` embedded vi, let us = unOpt ts, length us > 1, noLOpt v vi ]
-        multiLBnd                       = [ (v,ts) | (v,ts) <- Map.assocs (lbounds vi), v `notElem` embedded vi, length ts > 1 ]
+        multiUBnd                       = [ (v,ts) | (v,ts) <- multiUBounds cs, noEmbed v, noLOpt v ]
+        multiLBnd                       = [ (v,ts) | (v,ts) <- multiLBounds cs, noEmbed v ]
         multiPBnd                       = [ (v,ps) | (v,ps) <- Map.assocs (pbounds vi), length ps > 1 ]
-        lowerBnd                        = [ (v,t) | (v,[t]) <- Map.assocs (lbounds vi), v `notElem` embedded vi ]
-        upperBnd                        = [ (v,t) | (v,[t]) <- Map.assocs (ubounds vi), v `notElem` embedded vi ]
+        lowerBnd                        = [ (v,t) | (v,[t]) <- Map.assocs (lbounds vi), noEmbed v ]
+        upperBnd                        = [ (v,t) | (v,[t]) <- Map.assocs (ubounds vi), noEmbed v ]
         posLBnd                         = [ (v,t) | (v,t) <- lowerBnd, v `notElem` negvars, implAll env (lookup' v $ pbounds vi) t ]
         negUBnd                         = [ (v,t) | (v,t) <- upperBnd, v `notElem` posvars, implAll env (lookup' v $ pbounds vi) t, noDots env vi v ]
         closLBnd                        = [ (v,t) | (v, [t]) <- Map.assocs (lbounds vi), upClosed env t, implAll env (lookup' v $ pbounds vi) t ]
@@ -1548,6 +1536,37 @@ improve env te tt eq cs
         cyclic                          = if null (boundvars\\boundprot) then [ c | c <- cs, headvar c `elem` boundvars ] else []
         redSeal                         = sealed vi \\ (posvars ++ negvars ++ embedded vi ++ Map.keys (ubounds vi) ++ Map.keys (lbounds vi)
                                           ++ Map.keys (pbounds vi) ++ Map.keys (mutattrs vi) ++ Map.keys (selattrs vi))
+        noEmbed v                       = v `notElem` embedded vi
+        noLOpt v                        = not $ any optCon $ lookup' v (lbounds vi)
+          where optCon TNone{}                  = True
+                optCon TOpt{}                   = True
+                optCon _                        = False
+
+
+multiUBounds cs                         = Map.assocs $ f cs Map.empty
+  where
+    f []                                = Map.filter ((>1) . length)
+    f (Cast _ TUni{} TUni{} : cs)       = f cs
+    f (Cast _ (TUni _ v) t : cs)        = unOpt v t cs
+    f (Sub _ _ TUni{} TUni{} : cs)      = f cs
+    f (Sub _ _ (TUni _ v) t : cs)       = unOpt v t cs
+    f (Imply _ _ _ cs' : cs)            = Map.union (f cs' Map.empty) . f cs
+    f (_ : cs)                          = f cs
+
+    unOpt v (TOpt _ TUni{}) cs          = f cs
+    unOpt v (TOpt _ t) cs               = f cs . Map.insertWith (++) v [t]
+    unOpt v t cs                        = f cs . Map.insertWith (++) v [t]
+
+multiLBounds cs                         = Map.assocs $ f cs Map.empty
+  where
+    f []                                = Map.filter ((>1) . length)
+    f (Cast _ TUni{} TUni{} : cs)       = f cs
+    f (Cast _ t (TUni _ v) : cs)        = f cs . Map.insertWith (++) v [t]
+    f (Sub _ _ TUni{} TUni{} : cs)      = f cs
+    f (Sub _ _ t (TUni _ v) : cs)       = f cs . Map.insertWith (++) v [t]
+    f (Imply _ _ _ cs' : cs)            = Map.union (f cs' Map.empty) . f cs
+    f (_ : cs)                          = f cs
+
 
 dnClosed env (TCon _ c)                 = isActor env (tcname c)
 dnClosed env (TFX _ FXPure)             = True
@@ -1576,41 +1595,39 @@ implAll env ps t                        = False
 
 noDots env vi v                         = null (lookup' v $ selattrs vi) && null (lookup' v $ mutattrs vi)
 
-noLOpt v vi                             = not $ any optCon $ lookup' v (lbounds vi)
-  where optCon TNone{}                  = True
-        optCon TOpt{}                   = True
-        optCon _                        = False
+replace ub lb cs                        = ubs ++ lbs ++ cs'
+  where
+    (vss,cs')                           = unzip $ map repl cs
+    vs                                  = nub (concat vss)
+    ubs                                 = [ Cast info (tUni v) t | v <- vs, Just t <- [lookup v ub] ]
+    lbs                                 = [ Cast info t (tUni v) | v <- vs, Just t <- [lookup v lb] ]
+    info                                = DfltInfo NoLoc 14 Nothing []
 
-unOpt []                                = []
-unOpt (TOpt _ (TUni _ tv) : ts)         = unOpt ts
-unOpt (TOpt _ t : ts)                   = t : unOpt ts
-unOpt (t : ts)                          = t : unOpt ts
+    repl c@(Cast _ TUni{} TUni{})           = ([], c)
+    repl c@(Cast _ TUni{} (TOpt _ TUni{}))  = ([], c)
+    repl (Cast info (TUni _ v) t)
+      | Just t' <- lookup v ub              = ([v], Cast info t' t)
+    repl (Cast info t (TUni _ v))
+      | Just t' <- lookup v lb              = ([v], Cast info t t')
+    repl c@(Sub _ _ TUni{} TUni{})          = ([], c)
+    repl c@(Sub _ _ TUni{} (TOpt _ TUni{})) = ([], c)
+    repl (Sub info w (TUni _ v) t)
+      | Just t' <- lookup v ub              = ([v], Sub info w t' t)
+    repl (Sub info w t (TUni _ v))
+      | Just t' <- lookup v lb              = ([v], Sub info w t t')
+    repl (Imply info w q cs)                = ([], Imply info w q $ replace ub lb cs)
+    repl c                                  = ([], c)
 
-replace ub lb c@(Cast _ (TUni _ v1) (TUni _ v2))
-                                        = c
-replace ub lb c@(Cast _ (TUni _ v1) (TOpt _ (TUni _ v2)))
-                                        = c
-replace ub lb (Cast info (TUni _ v) t)
-  | Just t' <- lookup v ub              = Cast info t' t
-replace ub lb (Cast info t (TUni _ v))
-  | Just t' <- lookup v lb              = Cast info t t'
-replace ub lb c@(Sub _ _ (TUni _ v1) (TUni _ v2))
-                                        = c
-replace ub lb c@(Sub _ _ (TUni _ v1) (TOpt _ (TUni _ v2)))
-                                        = c
-replace ub lb (Sub info w (TUni _ v) t)
-  | Just t' <- lookup v ub              = Sub info w t' t
-replace ub lb (Sub info w t (TUni _ v))
-  | Just t' <- lookup v lb              = Sub info w t t'
-replace ub lb c                         = c
 
 solveDots env mutC selC selP cs         = do (eqs,css) <- unzip <$> mapM solveDot cs
-                                             return (concat eqs, concat css)
+                                             return (foldr insertOrMerge [] (concat eqs), concat css)
   where solveDot c@(Mut _ (TUni _ v) n _)
           | Just w <- lookup (v,n) mutC = solveMutAttr env w c >> return ([], [])
         solveDot c@(Sel _ _ (TUni _ v) n _)
           | Just w <- lookup (v,n) selC = solveSelAttr env w c
           | Just w <- lookup (v,n) selP = solveSelWit env w c
+        solveDot (Imply i w q cs)       = do (eq,cs) <- solveDots (defineTVars q env) mutC selC selP cs
+                                             return (if null eq then [] else [QEqn w q eq], if null cs then [] else [Imply i w q cs])
         solveDot c                      = return ([], [c])
 
 instance Pretty (TUni,Name) where
@@ -1634,6 +1651,10 @@ ctxtReduce env vi multiPBnds            = (concat eqs, concat css)
 remove ws []                            = []
 remove ws (Proto _ w t p : cs)
   | w `elem` ws                         = remove ws cs
+remove ws (Imply i w q cs0 : cs)
+  | null cs1                            = remove ws cs
+  | otherwise                           = Imply i w q cs1 : remove ws cs
+  where cs1                             = remove ws cs0
 remove ws (c : cs)                      = c : remove ws cs
 
 
