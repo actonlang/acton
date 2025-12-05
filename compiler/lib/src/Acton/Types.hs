@@ -173,7 +173,6 @@ infTopStmt env s                        = do (cs,te,s) <- infEnv env s
         dflt PRow                       = posNil
         dflt KRow                       = kwdNil
 
-
 pushEqns                                :: Env -> Equations -> Stmt -> Stmt
 pushEqns env [] s                       = s
 pushEqns env eqs s
