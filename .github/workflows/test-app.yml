@@ -27,7 +27,7 @@ jobs:
           sudo apt install -y ./deb/acton_*.deb
           acton version
       - name: "Clone app repo"
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           repository: ${{ inputs.repo_url }}
           path: app
