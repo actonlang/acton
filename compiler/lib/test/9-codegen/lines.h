@@ -89,12 +89,8 @@ struct linesQ_L_4proc {
     struct linesQ_L_4procG_class *$class;
     linesQ_Apa L_3obj;
 };
-<<<<<<< HEAD
-$R linesQ_U_L_5C_3cont ($action, $Cont, int64_t);
-$R linesQ_L_5C_3cont ($action, $Cont, B_int);
-=======
+$R linesQ_U_L_5C_3cont ($Cont, int64_t);
 $R linesQ_L_5C_3cont ($Cont, B_int);
->>>>>>> ebe2c02f (Golden updates, mostly just new numbers but also some *internal* effects that become proc instead of action)
 struct linesQ_L_6ContG_class {
     char *$GCINFO;
     int $class_id;
@@ -111,6 +107,7 @@ struct linesQ_L_6Cont {
     struct linesQ_L_6ContG_class *$class;
     $Cont C_cont;
 };
+$R linesQ_U_1L_7C_5cont ($action, $Cont, int64_t);
 $R linesQ_L_7C_5cont ($action, $Cont, B_int);
 struct linesQ_L_8ContG_class {
     char *$GCINFO;
@@ -272,52 +269,8 @@ struct linesQ_L_22proc {
     struct linesQ_L_22procG_class *$class;
     linesQ_main self;
 };
-<<<<<<< HEAD
-$R linesQ_U_1L_17C_9cont (linesQ_main, B_Iterable, B_Number, $Cont, int64_t);
-$R linesQ_L_17C_9cont (linesQ_main, B_Iterable, B_Number, $Cont, B_int);
-struct linesQ_L_21ContG_class {
-    char *$GCINFO;
-    int $class_id;
-    $SuperG_class $superclass;
-    B_NoneType (*__init__) (linesQ_L_21Cont, linesQ_main, B_Iterable, B_Number, $Cont);
-    void (*__serialize__) (linesQ_L_21Cont, $Serial$state);
-    linesQ_L_21Cont (*__deserialize__) (linesQ_L_21Cont, $Serial$state);
-    B_bool (*__bool__) (linesQ_L_21Cont);
-    B_str (*__str__) (linesQ_L_21Cont);
-    B_str (*__repr__) (linesQ_L_21Cont);
-    $R (*__call__) (linesQ_L_21Cont, B_int);
-};
-struct linesQ_L_21Cont {
-    struct linesQ_L_21ContG_class *$class;
-    linesQ_main self;
-    B_Iterable W_1908;
-    B_Number W_2123;
-    $Cont C_cont;
-};
-$R linesQ_L_12C_7cont (linesQ_main, B_Iterable, B_Number, $Cont, linesQ_Bepa);
-struct linesQ_L_22ContG_class {
-    char *$GCINFO;
-    int $class_id;
-    $SuperG_class $superclass;
-    B_NoneType (*__init__) (linesQ_L_22Cont, linesQ_main, B_Iterable, B_Number, $Cont);
-    void (*__serialize__) (linesQ_L_22Cont, $Serial$state);
-    linesQ_L_22Cont (*__deserialize__) (linesQ_L_22Cont, $Serial$state);
-    B_bool (*__bool__) (linesQ_L_22Cont);
-    B_str (*__str__) (linesQ_L_22Cont);
-    B_str (*__repr__) (linesQ_L_22Cont);
-    $R (*__call__) (linesQ_L_22Cont, linesQ_Bepa);
-};
-struct linesQ_L_22Cont {
-    struct linesQ_L_22ContG_class *$class;
-    linesQ_main self;
-    B_Iterable W_1908;
-    B_Number W_2123;
-    $Cont C_cont;
-};
-$R linesQ_L_11C_5cont (linesQ_main, B_Iterable, B_Number, $Cont, linesQ_Apa);
-=======
+$R linesQ_U_2L_19C_11cont (linesQ_main, B_Iterable, B_Number, $Cont, int64_t);
 $R linesQ_L_19C_11cont (linesQ_main, B_Iterable, B_Number, $Cont, B_int);
->>>>>>> ebe2c02f (Golden updates, mostly just new numbers but also some *internal* effects that become proc instead of action)
 struct linesQ_L_23ContG_class {
     char *$GCINFO;
     int $class_id;
@@ -353,8 +306,8 @@ struct linesQ_L_24ContG_class {
 struct linesQ_L_24Cont {
     struct linesQ_L_24ContG_class *$class;
     linesQ_main self;
-    B_Iterable W_1909;
-    B_Number W_2124;
+    B_Iterable W_1908;
+    B_Number W_2123;
     $Cont C_cont;
 };
 $R linesQ_L_13C_7cont (linesQ_main, B_Iterable, B_Number, $Cont, linesQ_Apa);
@@ -373,8 +326,8 @@ struct linesQ_L_25ContG_class {
 struct linesQ_L_25Cont {
     struct linesQ_L_25ContG_class *$class;
     linesQ_main self;
-    B_Iterable W_1909;
-    B_Number W_2124;
+    B_Iterable W_1908;
+    B_Number W_2123;
     $Cont C_cont;
 };
 struct linesQ_L_26procG_class {
