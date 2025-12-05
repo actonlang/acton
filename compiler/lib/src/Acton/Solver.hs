@@ -532,7 +532,7 @@ reduce' env eq c@(Imply i w q cs)           = do cs0 <- collectDeferred
                                                  cs' <- usubst =<< collectDeferred
                                                  when (not $ null cs') $ defer [Imply i w q cs']
                                                  defer cs0
-                                                 return $ insertOrMerge (QEqn w q eq') eq
+                                                 return $ insertOrMerge [QEqn w q eq'] eq
   where env1                                = defineTVars q env
 
 reduce' env eq c@(Cast i t1 t2)             = do cast' env i t1 t2
@@ -1460,6 +1460,7 @@ mkLUB env (v,ts)
 --  no redundant Proto
 --  no Sel/Mut covered by Cast/Sub/Proto bounds
 
+
 instance Pretty (TUni, Type) where
     pretty (uv, t)                      = pretty uv <+> text "~" <+> pretty t
 
@@ -1496,9 +1497,9 @@ improve env te tt eq cs
   | not $ null closLBnd                 = do --traceM ("  *Simplify lower closed bound " ++ prstrs closLBnd)
                                              sequence [ unify (DfltInfo NoLoc 18 Nothing []) (tUni v) t | (v,t) <- closLBnd ]
                                              simplify' env te tt eq cs
-  | not $ null redEq                    = do --traceM ("  *(Context red) " ++ prstrs [ w | Eqn w _ _ <- redEq ])
+  | not $ null redEq                    = do --traceM ("  *(Context red) " ++ prstrs (deepwits redEq))
                                              sequence [ unify (DfltInfo NoLoc 19 Nothing []) t1 t2 | (t1,t2) <- redUni ]
-                                             simplify' env te tt (redEq++eq) (remove [ w | Eqn w _ _ <- redEq ] cs)
+                                             simplify' env te tt (insertOrMerge redEq eq) (remove (deepwits redEq) cs)
   | not $ null dots                     = do --traceM ("  *Implied mutation/selection solutions " ++ prstrs dots)
                                              (eq',cs') <- solveDots env mutC selC selP cs
                                              simplify' env te tt (eq'++eq) cs'
@@ -1514,14 +1515,13 @@ improve env te tt eq cs
         gsimple                         = gsimp vi vclosed obsvars (varvars vi)
         multiUBnd                       = [ (v,ts) | (v,ts) <- multiUBounds cs, noEmbed v, noLOpt v ]
         multiLBnd                       = [ (v,ts) | (v,ts) <- multiLBounds cs, noEmbed v ]
-        multiPBnd                       = [ (v,ps) | (v,ps) <- Map.assocs (pbounds vi), length ps > 1 ]
         lowerBnd                        = [ (v,t) | (v,[t]) <- Map.assocs (lbounds vi), noEmbed v ]
         upperBnd                        = [ (v,t) | (v,[t]) <- Map.assocs (ubounds vi), noEmbed v ]
         posLBnd                         = [ (v,t) | (v,t) <- lowerBnd, v `notElem` negvars, implAll env (lookup' v $ pbounds vi) t ]
         negUBnd                         = [ (v,t) | (v,t) <- upperBnd, v `notElem` posvars, implAll env (lookup' v $ pbounds vi) t, noDots env vi v ]
         closLBnd                        = [ (v,t) | (v, [t]) <- Map.assocs (lbounds vi), upClosed env t, implAll env (lookup' v $ pbounds vi) t ]
         closUBnd                        = [ (v,t) | (v, [t]) <- Map.assocs (ubounds vi), dnClosed env t, implAll env (lookup' v $ pbounds vi) t, noDots env vi v ]
-        (redEq,redUni)                  = ctxtReduce env vi multiPBnd
+        (redEq,redUni)                  = ctxtReduce env cs
         mutC                            = findBoundAttrs env (mutattrs vi) (ubounds vi)
         selC                            = findBoundAttrs env (selattrs vi) (ubounds vi)
         selP                            = findWitAttrs env (selattrs vi) (pbounds vi)
@@ -1541,7 +1541,6 @@ improve env te tt eq cs
           where optCon TNone{}                  = True
                 optCon TOpt{}                   = True
                 optCon _                        = False
-
 
 multiUBounds cs                         = Map.assocs $ f cs Map.empty
   where
@@ -1620,7 +1619,7 @@ replace ub lb cs                        = ubs ++ lbs ++ cs'
 
 
 solveDots env mutC selC selP cs         = do (eqs,css) <- unzip <$> mapM solveDot cs
-                                             return (foldr insertOrMerge [] (concat eqs), concat css)
+                                             return (insertOrMerge (concat eqs) [], concat css)
   where solveDot c@(Mut _ (TUni _ v) n _)
           | Just w <- lookup (v,n) mutC = solveMutAttr env w c >> return ([], [])
         solveDot c@(Sel _ _ (TUni _ v) n _)
@@ -1633,18 +1632,37 @@ solveDots env mutC selC selP cs         = do (eqs,css) <- unzip <$> mapM solveDo
 instance Pretty (TUni,Name) where
     pretty (v,n)                        = pretty v Pretty.<> text "." Pretty.<> pretty n
 
-ctxtReduce                              :: Env -> VInfo -> [(TUni, [(Name, PCon)])] -> (Equations, [(Type,Type)])
-ctxtReduce env vi multiPBnds            = (concat eqs, concat css)
-  where (eqs,css)                       = unzip $ map ctxtRed multiPBnds
+ctxtReduce                              :: Env -> Constraints -> (Equations, [(Type,Type)])
+ctxtReduce env cs                       = (eq0, uni0) -- foldr combine (eq0,uni0) qreds
+  where (eq0,uni0)                      = ctxtRed env (multiPBounds cs)
+        qreds                           = [ qualeq w q $ ctxtRed env (multiPBounds cs') | Imply i w q cs' <- cs ]
+        qualeq w q (eq,uni)             = (if null eq then [] else [QEqn w q eq], uni)
+        combine (qe,uni) (eq0,ini0)     = (insertOrMerge qe eq0, uni++uni0)
+
+instance Pretty (TUni, [(Name,PCon)]) where
+    pretty (tv, wps)                    = pretty tv <+> parens (commaSep pretty wps)
+
+instance Pretty (Name,PCon) where
+    pretty (w,p)                        = pretty w <+> colon <+> pretty p
+
+multiPBounds cs                         = Map.assocs $ f cs Map.empty
+  where
+    f []                                = Map.filter ((>1) . length)
+    f (Proto _ w (TUni _ v) p : cs)     = f cs . Map.insertWith (++) v [(w,p)]
+    f (_ : cs)                          = f cs
+
+ctxtRed                                 :: Env -> [(TUni, [(Name, PCon)])] -> (Equations, [(Type,Type)])
+ctxtRed env multiPBnds                  = (concat eqs, concat unis)
+  where (eqs,unis)                      = unzip $ map ctxtRed multiPBnds
         ctxtRed (v,wps)                 = imp v [] [] [] wps
         imp v eq uni wps ((w,p):wps')
-          | (e,p'):_ <- hits            = --trace ("  *" ++ prstr p ++ " covered by " ++ prstr p') $
+          | (e,p'):_ <- hits            = --trace ("  *" ++ prstr w ++ " covered by " ++ prstr e) $
                                           imp v (Eqn w (proto2type (tUni v) p) e : eq) ((tcargs p `zip` tcargs p') ++ uni) wps wps'
-          | otherwise                   = --trace ("   (Not covered: " ++ prstr p ++ " in context " ++ prstrs (map snd (wps++wps')) ++ ")") $
+          | otherwise                   = --trace ("   (Not covered: " ++ prstr p ++ " in context " ++ prstrs (map fst (wps++wps')) ++ ")") $
                                           imp v eq uni ((w,p):wps) wps'
           where hits                    = [ (wf $ eVar w', vsubst s p') | (w',p0) <- wps++wps', w'/=w, Just (wf,p') <- [findAncestor env p0 (tcname p)] ]
                 s                       = [(tvSelf,tUni v)]
-        imp v eq uni wps []             = (eq, uni)
+        imp v eq uni wps []             = (reverse eq, uni)
   -- TODO: also check that an mro exists (?)
 
 
