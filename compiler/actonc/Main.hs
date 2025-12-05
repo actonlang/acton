@@ -76,7 +76,7 @@ import System.Directory.Recursive
 import System.Environment (lookupEnv)
 import System.Exit
 import System.FileLock
-import System.FilePath ((</>))
+import System.FilePath ((</>), addTrailingPathSeparator)
 import System.FilePath.Posix
 import System.IO hiding (readFile, writeFile)
 import Text.PrettyPrint (renderStyle, style, Style(..), Mode(PageMode))
@@ -739,6 +739,17 @@ compileFiles gopts opts srcFiles allowPrune = do
         putStrLn ("    srcDir   : " ++ srcDir paths)
         iff (length srcFiles == 1) (putStrLn ("    modName  : " ++ prstr (modName paths)))
 
+    -- Build dependencies first when acting as a top-level compiler (not --sub)
+    projAbs <- normalizePathSafe (projPath paths)
+    sysAbs  <- normalizePathSafe (sysPath paths)
+    let sysRoot   = addTrailingPathSeparator sysAbs
+        isSysProj = projAbs == sysAbs || sysRoot `isPrefixOf` projAbs
+
+    when (not (C.sub gopts) && not (isTmp paths) && not isSysProj) $ do
+        buildDependencies gopts opts paths
+        when (not (altOutput opts)) $
+          genBuildZigFiles paths
+
     -- Build initial tasks using .ty headers when possible; parse only if .ty missing
     tasks0 <- mapM (readModuleTask gopts opts paths) srcFiles
     -- Expand set to include imports starting from the initial set. For project
@@ -1108,6 +1119,76 @@ normalizeSpecPaths base spec = do
                     return dep { BuildSpec.zpath = Just p' }
             else return dep { BuildSpec.zpath = Just (collapseDots (normalise p)) }
         _ -> return dep
+
+-- Build dependencies by invoking actonc recursively with --skip-build.
+-- Runs only in top-level compilers (not --sub) for the current project, but
+-- each spawned actonc will in turn build its own deps.
+buildDependencies :: C.GlobalOptions -> C.CompileOptions -> Paths -> IO ()
+buildDependencies gopts opts paths = do
+    when (not (C.sub gopts) && not (isTmp paths)) $ do
+        mspec <- loadBuildSpec (projPath paths)
+        case mspec of
+          Nothing   -> return ()
+          Just spec -> do
+            let deps = M.toList (BuildSpec.dependencies spec)
+            unless (null deps) $ do
+              actoncExe <- canonicalizePath =<< System.Environment.getExecutablePath
+              projAbs   <- normalizePathSafe (projPath paths)
+              sysAbs    <- normalizePathSafe (sysPath paths)
+              let baseArgs = depBuildArgs gopts opts paths
+              depInfos <- fmap catMaybes $ mapM (resolveDep projAbs sysAbs) deps
+              -- Deduplicate by absolute path to avoid rebuilding the same dep twice
+              let uniq = M.elems $ M.fromListWith (\_ old -> old) [ (p, (n,p)) | (n,p) <- depInfos ]
+              mapConcurrently_ (buildOne actoncExe baseArgs) uniq
+              return ()
+  where
+    resolveDep projAbs sysAbs (depName, dep) = do
+      depBase <- resolveDepBase (projPath paths) depName dep
+      depAbs  <- normalizePathSafe depBase
+      let sysRoot = addTrailingPathSeparator sysAbs
+          skipSys = depAbs == sysAbs || sysRoot `isPrefixOf` depAbs
+      if depAbs == projAbs || skipSys
+        then return Nothing
+        else do
+          exists <- doesDirectoryExist depAbs
+          unless exists $
+            printErrorAndExit ("Dependency " ++ depName ++ " path does not exist: " ++ depAbs)
+          return (Just (depName, depAbs))
+
+    buildOne exe baseArgs (depName, depAbs) = do
+      unless (C.quiet gopts) $
+        putStrLn ("Building dependency " ++ depName ++ " in " ++ depAbs)
+      (code, out, err) <- readCreateProcessWithExitCode (proc exe baseArgs){ cwd = Just depAbs } ""
+      case code of
+        ExitSuccess -> return ()
+        ExitFailure rc -> do
+          putStrLn ("actonc: Failed to build dependency " ++ depName ++ " (exit code " ++ show rc ++ ")")
+          unless (null out) $ putStrLn ("stdout:\n" ++ out)
+          unless (null err) $ putStrLn ("stderr:\n" ++ err)
+          System.Exit.exitFailure
+
+-- Render command line arguments for building a dependency.
+depBuildArgs :: C.GlobalOptions -> C.CompileOptions -> Paths -> [String]
+depBuildArgs gopts opts paths =
+    globalArgs ++ ["build", "--skip-build"] ++ compileArgs
+  where
+    globalArgs =
+      concat [ ["--quiet"]        | C.quiet gopts ] ++
+      concat [ ["--verbose"]      | C.verbose gopts ] ++
+      concat [ ["--verbose-zig"]  | C.verboseZig gopts ] ++
+      concat [ ["--jobs", show j] | let j = C.jobs gopts, j > 0 ] ++
+      concat [ ["--timing"]       | C.timing gopts ]
+
+    compileArgs =
+      concat [ ["--always-build"] | C.alwaysbuild opts ] ++
+      concat [ ["--db"]           | C.db opts ] ++
+      concat [ ["--no-threads"]   | C.no_threads opts ] ++
+      concat [ ["--dbg-no-lines"] | C.dbg_no_lines opts ] ++
+      concat [ ["--cpedantic"]    | C.cpedantic opts ] ++
+      ["--optimize", show (C.optimize opts)] ++
+      ["--target",   C.target opts] ++
+      concat [ ["--cpu", cpu]     | let cpu = C.cpu opts, not (null cpu) ] ++
+      concat [ ["--syspath", sys] | let sys = sysPath paths, not (null sys) ]
 
 -- Handling Acton files -----------------------------------------------------------------------------
 
@@ -2045,11 +2126,14 @@ zigBuild env gopts opts paths tasks binTasks allowPrune = do
     let local_cache_dir = joinPath [ homeDir, ".cache", "acton", "zig-local-cache" ]
         global_cache_dir = joinPath [ homeDir, ".cache", "acton", "zig-global-cache" ]
         no_threads = if isWindowsOS (C.target opts) then True else C.no_threads opts
-
+    projAbs <- normalizePathSafe (projPath paths)
+    sysAbs  <- normalizePathSafe (sysPath paths)
+    let sysRoot   = addTrailingPathSeparator sysAbs
+        isSysProj = projAbs == sysAbs || sysRoot `isPrefixOf` projAbs
 
     -- If actonc runs as a standalone compiler (not a sub-compiler from Acton CLI),
     -- generate build.zig and build.zig.zon directly from Build.act/build.act.json
-    iff (not (C.sub gopts)) $ genBuildZigFiles paths
+    iff (not (C.sub gopts) && not isSysProj) $ genBuildZigFiles paths
 
     let zigExe = zig paths
         baseArgs = ["build","--cache-dir", local_cache_dir,

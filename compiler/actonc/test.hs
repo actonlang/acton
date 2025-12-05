@@ -188,10 +188,7 @@ actoncProjTests =
             depB = proj </> "deps/dep_b"
             wipe p = void $ readCreateProcessWithExitCode (shell $ "rm -rf " ++ p ++ "/build.zig " ++ p ++ "/build.zig.zon " ++ p ++ "/out") ""
         mapM_ wipe [proj, depA, depB]
-        -- Build dependencies explicitly so their out/types exist
-        testBuild "" ExitSuccess False depB
-        testBuild "" ExitSuccess False depA
-        -- Build main project via actonc, relying on generated build.zig(.zon)
+        -- Build main project via actonc; dependencies should be built automatically
         testBuild "" ExitSuccess False proj
         -- Run produced binary
         (cRun, _outRun, _errRun) <- readCreateProcessWithExitCode (shell "./out/bin/main"){ cwd = Just proj } ""
