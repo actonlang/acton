@@ -1,0 +1,5 @@
+import a
+
+actor main(env):
+    print(str(a.answer_a()))
+    env.exit(0)
