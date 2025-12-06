@@ -2779,6 +2779,13 @@ enrichKwdParamsHtmlModule curMod generics constraints classNames kwdRow (KwdPar 
 -- | Enrich positional parameters with types from row and add scope
 enrichPosParamsHtmlModuleAndScope :: ModName -> Set Name -> QBinds -> Set Name -> String -> PosRow -> PosPar -> Doc
 enrichPosParamsHtmlModuleAndScope _ _ _ _ _ _ PosNIL = empty
+enrichPosParamsHtmlModuleAndScope curMod generics constraints classNames scope posRow (PosSTAR n t) =
+    let inferredType = extractParamTypeFromRow (nstr n) posRow
+        paramType = case inferredType of
+            Just it -> Just it
+            Nothing -> t
+    in text "*<span class=\"param-name\">" <> pretty n <> text "</span>" <>
+       formatTypeHtmlModuleAndScope curMod generics constraints classNames scope paramType
 enrichPosParamsHtmlModuleAndScope curMod generics constraints classNames scope posRow (PosPar n t e p) =
     -- Skip witness parameters
     if isWitnessParam n
@@ -2799,6 +2806,13 @@ enrichPosParamsHtmlModuleAndScope curMod generics constraints classNames scope p
 -- | Enrich keyword parameters with types from row and add scope
 enrichKwdParamsHtmlModuleAndScope :: ModName -> Set Name -> QBinds -> Set Name -> String -> KwdRow -> KwdPar -> Doc
 enrichKwdParamsHtmlModuleAndScope _ _ _ _ _ _ KwdNIL = empty
+enrichKwdParamsHtmlModuleAndScope curMod generics constraints classNames scope kwdRow (KwdSTAR n t) =
+    let inferredType = extractParamTypeFromKwdRow (nstr n) kwdRow
+        paramType = case inferredType of
+            Just it -> Just it
+            Nothing -> t
+    in text "**<span class=\"param-name\">" <> pretty n <> text "</span>" <>
+       formatTypeHtmlModuleAndScope curMod generics constraints classNames scope paramType
 enrichKwdParamsHtmlModuleAndScope curMod generics constraints classNames scope kwdRow (KwdPar n t e k) =
     let inferredType = extractParamTypeFromKwdRow (nstr n) kwdRow
         paramType = case inferredType of

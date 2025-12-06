@@ -53,7 +53,7 @@ import Control.Concurrent (forkIO)
 import Control.Monad
 import Data.Default.Class (def)
 import Data.List.Split
-import Data.Maybe (catMaybes, isJust)
+import Data.Maybe (catMaybes, isJust, listToMaybe)
 import Data.Monoid ((<>))
 import Data.Ord
 import Data.Graph
@@ -652,7 +652,9 @@ parseActSource gopts opts projPaths mn actFile srcContent = do
 parseActFile :: C.GlobalOptions -> C.CompileOptions -> Paths -> A.ModName -> FilePath -> IO (String, A.Module)
 parseActFile gopts opts projPaths mn actFile = do
   srcContent <- readFile actFile
-  m <- parseActSource gopts opts projPaths mn actFile srcContent
+  cwd <- getCurrentDirectory
+  let displayFile = makeRelative cwd actFile
+  m <- parseActSource gopts opts projPaths mn displayFile srcContent
   return (srcContent, m)
 
 
@@ -721,75 +723,402 @@ High-level Steps
 ================================================================================
 -}
 
+-- Resolve imports to in-graph providers using project search order and module index.
+resolveProviders :: [FilePath] -> M.Map FilePath (Data.Set.Set A.ModName) -> [A.ModName] -> M.Map A.ModName TaskKey
+resolveProviders order modSets imps =
+    M.fromList $ catMaybes $ map (\mn -> fmap (\p -> (mn, TaskKey p mn)) (findProvider mn)) imps
+  where
+    findProvider mn = listToMaybe [ p | p <- order, maybe False (Data.Set.member mn) (M.lookup p modSets) ]
+
+-- Build GlobalTask list for all discovered projects. Also returns a module index per project.
+buildGlobalTasks :: C.GlobalOptions
+                 -> C.CompileOptions
+                 -> M.Map FilePath ProjCtx
+                 -> Maybe [String]                  -- optional seed source files; Nothing = all modules
+                 -> IO ([GlobalTask], M.Map FilePath (Data.Set.Set A.ModName))
+buildGlobalTasks gopts opts projMap mSeeds = do
+    perProj <- forM (M.elems projMap) $ \ctx -> do
+                  mods <- enumerateProjectModules ctx
+                  return (ctx, mods)
+    let modMaps = M.fromList [ (projRoot ctx, M.fromList [ (mn, actFile) | (actFile, mn) <- mods ]) | (ctx, mods) <- perProj ]
+        modSets = M.map Data.Set.fromList (M.map M.keys modMaps)
+        orderCache = M.fromList [ (projRoot ctx, projRoot ctx : projDepClosure projMap (projRoot ctx)) | (ctx, _) <- perProj ]
+        allKeys = [ TaskKey (projRoot ctx) mn | (ctx, mods) <- perProj, (_, mn) <- mods ]
+    seedKeys <- case mSeeds of
+                  Nothing -> return allKeys
+                  Just files -> do
+                    absFiles <- mapM canonicalizePath files
+                    let pathIndex = M.fromList [ (actFile, TaskKey (projRoot ctx) mn) | (ctx, mods) <- perProj, (actFile, mn) <- mods ]
+                        found = mapMaybe (`M.lookup` pathIndex) absFiles
+                    return (if null found then allKeys else found)
+    tasks <- go modMaps modSets orderCache Data.Set.empty seedKeys []
+    return (reverse tasks, modSets)
+  where
+    go modMaps modSets orderCache seen [] acc = return acc
+    go modMaps modSets orderCache seen (k:qs) acc
+      | Data.Set.member k seen = go modMaps modSets orderCache seen qs acc
+      | otherwise =
+          case M.lookup (tkProj k) modMaps >>= M.lookup (tkMod k) of
+            Nothing -> go modMaps modSets orderCache (Data.Set.insert k seen) qs acc
+            Just actFile -> do
+              let ctx = projMap M.! tkProj k
+              paths <- pathsForModule opts projMap ctx (tkMod k)
+              task  <- readModuleTask gopts opts paths actFile
+              let order = M.findWithDefault [tkProj k] (tkProj k) orderCache
+                  providers = resolveProviders order modSets (importsOf task)
+                  newKeys = M.elems providers
+                  acc' = GlobalTask { gtKey = k
+                                    , gtPaths = paths
+                                    , gtTask = task
+                                    , gtImportProviders = providers
+                                    } : acc
+              go modMaps modSets orderCache (Data.Set.insert k seen) (qs ++ newKeys) acc'
+
+
 compileFiles :: C.GlobalOptions -> C.CompileOptions -> [String] -> Bool -> IO ()
 compileFiles gopts opts srcFiles allowPrune = do
-    -- it is ok to get paths from just the first file here since at this point
-    -- we only care about project level path stuff and all source files are
-    -- known to be in the same project
-    paths <- findPaths (head srcFiles) opts
-
-    when (C.verbose gopts) $ do
-        putStrLn ("  Paths:")
-        putStrLn ("    sysPath  : " ++ sysPath paths)
-        putStrLn ("    sysTypes : " ++ sysTypes paths)
-        putStrLn ("    projPath : " ++ projPath paths)
-        putStrLn ("    projOut  : " ++ projOut paths)
-        putStrLn ("    projTypes: " ++ projTypes paths)
-        putStrLn ("    binDir   : " ++ binDir paths)
-        putStrLn ("    srcDir   : " ++ srcDir paths)
-        iff (length srcFiles == 1) (putStrLn ("    modName  : " ++ prstr (modName paths)))
-
-    -- Build dependencies first when acting as a top-level compiler (not --sub)
-    projAbs <- normalizePathSafe (projPath paths)
-    sysAbs  <- normalizePathSafe (sysPath paths)
-    let sysRoot   = addTrailingPathSeparator sysAbs
-        isSysProj = projAbs == sysAbs || sysRoot `isPrefixOf` projAbs
-
-    when (not (C.sub gopts) && not (isTmp paths) && not isSysProj) $ do
-        buildDependencies gopts opts paths
-        when (not (altOutput opts)) $
-          genBuildZigFiles paths
-
-    -- Build initial tasks using .ty headers when possible; parse only if .ty missing
-    tasks0 <- mapM (readModuleTask gopts opts paths) srcFiles
-    -- Expand set to include imports starting from the initial set. For project
-    -- builds, this usually amounts to a no-op since all source files were in
-    -- the initial set (srcFiles).
-    tasks1 <- readImports gopts opts paths tasks0
-    -- Then order tasks in dependency (topological) order
-    let tasks = tasks1
+    pathsRoot <- findPaths (head srcFiles) opts
+    rootProj  <- normalizePathSafe (projPath pathsRoot)
+    sysAbs    <- normalizePathSafe (sysPath pathsRoot)
+    projMap   <- if isTmp pathsRoot
+                   then do
+                     let ctx = ProjCtx { projRoot = rootProj
+                                       , projOutDir = projOut pathsRoot
+                                       , projTypesDir = projTypes pathsRoot
+                                       , projSrcDir = srcDir pathsRoot
+                                       , projSysPath = sysAbs
+                                       , projSysTypes = joinPath [sysAbs, "base", "out", "types"]
+                                       , projBuildSpec = Nothing
+                                       , projLocks = joinPath [projPath pathsRoot, ".actonc.lock"]
+                                       , projDeps = []
+                                       }
+                     return (M.singleton rootProj ctx)
+                   else discoverProjects sysAbs rootProj
+    let sysRoot = addTrailingPathSeparator sysAbs
+    let lookupTaskKey ts f = do
+          absF <- canonicalizePath f
+          let byPath = listToMaybe [ gtKey t
+                                   | t <- ts
+                                   , let k = gtKey t
+                                         pths = gtPaths t
+                                   , srcFile pths (tkMod k) == absF
+                                   ]
+          case byPath of
+            Just k -> return (Just k)
+            Nothing -> do
+              mn <- moduleNameFromFile (srcDir pathsRoot) absF
+              return $ listToMaybe [ gtKey t
+                                   | t <- ts
+                                   , tkProj (gtKey t) == rootProj
+                                   , tkMod (gtKey t) == mn
+                                   ]
+    (globalTasks, _) <- buildGlobalTasks gopts opts projMap (if allowPrune then Nothing else Just srcFiles)
+    requestedKeys <- catMaybes <$> mapM (lookupTaskKey globalTasks) srcFiles
+    let wantedNames   = map takeFileName srcFiles
+        requestedKeys' = if null requestedKeys
+                           then [ gtKey t
+                                | t <- globalTasks
+                                , takeFileName (srcFile (gtPaths t) (tkMod (gtKey t))) `elem` wantedNames
+                                ]
+                           else requestedKeys
+        builtinKeys = [ gtKey t | t <- globalTasks, tkMod (gtKey t) == A.modName ["__builtin__"] ]
+        startKeys   = if null requestedKeys' then map gtKey globalTasks else requestedKeys' ++ builtinKeys
+        depMapSet   = M.fromList [ (gtKey t, Data.Set.fromList (M.elems (gtImportProviders t))) | t <- globalTasks ]
+        neededKeys  = reachable depMapSet (Data.Set.fromList startKeys)
+        neededTasks = [ t | t <- globalTasks, Data.Set.member (gtKey t) neededKeys ]
+        rootTasks   = [ gtTask t | t <- neededTasks, tkProj (gtKey t) == rootProj ]
     iff (C.listimports opts) $ do
-        let module_imports = map (\t -> concat [ modNameToString (name t), ": ", (concat $ intersperse " " (map (modNameToString) (importsOf t))) ] ) tasks
-        let output = concat $ intersperse "\n" module_imports
+        let module_imports = map (\t -> concat [ modNameToString (name t), ": "
+                                               , (concat $ intersperse " " (map modNameToString (importsOf t))) ]) rootTasks
+            output = concat $ intersperse "\n" module_imports
         putStrLn output
         System.Exit.exitSuccess
-
-    -- figure out binTasks, if --root is provided, use that, otherwise
-    -- presumptuously use all non-stub source compile tasks, which get filtered
-    -- out later on (after we parsed the project source files) in case they
-    -- don't have a main actor, see filterMainActor
+    env <- compileTasks gopts opts pathsRoot rootProj neededTasks
     let rootParts = splitOn "." (C.root opts)
         rootMod   = init rootParts
-        guessMod  = if length rootParts == 1 then modName paths else A.modName rootMod
+        guessMod  = if length rootParts == 1 then modName pathsRoot else A.modName rootMod
         binTask   = BinTask False (prstr guessMod) (A.GName guessMod (A.name $ last rootParts)) False
         preBinTasks
-          | null (C.root opts) = map (\t -> BinTask True (modNameToString (name t)) (A.GName (name t) (A.name "main")) False) tasks
+          | null (C.root opts) = map (\t -> BinTask True (modNameToString (name t)) (A.GName (name t) (A.name "main")) False) rootTasks
           | otherwise        = [binTask]
-        preTestBinTasks = map (\t -> BinTask True (modNameToString (name t)) (A.GName (name t) (A.name "__test_main")) True) tasks
-    env <- compileTasks gopts opts paths tasks
+        preTestBinTasks = map (\t -> BinTask True (modNameToString (name t)) (A.GName (name t) (A.name "__test_main")) True) rootTasks
+    -- Generate build.zig(.zon) for dependencies too, to satisfy Zig builder links.
+    let projKeys = Data.Set.fromList (map (tkProj . gtKey) globalTasks)
+    forM_ (Data.Set.toList projKeys) $ \p -> do
+      let isRootProj = p == rootProj
+          isSysProj  = p == sysAbs || sysRoot `isPrefixOf` p
+      unless (isRootProj || isSysProj) $
+        case M.lookup p projMap of
+          Just ctx -> do
+            when (C.verbose gopts) $
+              putStrLn ("Generating build.zig for dependency project " ++ p)
+            dummyPaths <- pathsForModule opts projMap ctx (A.modName ["__gen_build__"])
+            genBuildZigFiles dummyPaths
+          Nothing -> return ()
     if C.skip_build opts
       then
         putStrLn "  Skipping final build step"
       else
         if C.test opts
           then do
-            testBinTasks <- catMaybes <$> mapM (filterMainActor env paths) preTestBinTasks
-            compileBins gopts opts paths env tasks testBinTasks allowPrune
+            testBinTasks <- catMaybes <$> mapM (filterMainActor env pathsRoot) preTestBinTasks
+            compileBins gopts opts pathsRoot env rootTasks testBinTasks allowPrune
             putStrLn "Test executables:"
             mapM_ (\t -> putStrLn (binName t)) testBinTasks
           else do
-            compileBins gopts opts paths env tasks preBinTasks allowPrune
-    return ()
+            compileBins gopts opts pathsRoot env rootTasks preBinTasks allowPrune
+  where
+    reachable depMap start = go (Data.Set.toList start) Data.Set.empty
+      where
+        go [] seen = seen
+        go (k:ks) seen =
+          if Data.Set.member k seen
+            then go ks seen
+            else
+              let deps = Data.Set.toList (M.findWithDefault Data.Set.empty k depMap)
+              in go (deps ++ ks) (Data.Set.insert k seen)
+
+-- Total build graph scheduler: this compiles all tasks across all projects,
+-- i.e. dependencies of the main project are also compiled here, as well as
+-- their dependencies, etc. We construct a large DAG of all modules to be
+-- compiled and then compile in topological order using concurrent async
+-- workers.
+--
+-- What we build the graph from:
+--   - Input is a list of GlobalTask. Each carries a CompileTask (ActonTask or
+--     TyTask), its Paths, and a pre-resolved provider map (gtImportProviders ::
+--     Map ModName TaskKey) telling us which in-graph node satisfies a given
+--     import. TaskKey is (projectRoot, modName).
+--   - We always read an initial set of modules (either all src/ files in the
+--     root project for a project build or the user-specified files). From those
+--     keys we chase imports via gtImportProviders to pull in exactly the
+--     reachable dependencies across projects. __builtin__ is compiled first if
+--     present, i.e. we are building the base lib.
+--
+--   1) Construct a dependency graph over non-builtin tasks and topologically order it.
+--   2) Compile __builtin__ first if present.
+--   3) Walk modules in topo order, deciding per module whether to compile or reuse cached .ty,
+--      and update the shared environment.
+--   4) Track interface-hash changes and only rebuild when an imported module’s interface hash
+--      differs from what the dependent recorded.
+--
+-- Key ideas (ActonTask vs TyTask caching):
+--   - TyTask is lightweight, read from the .ty header: source hash, interface hash, imports
+--     annotated with the iface hash that was used, roots, docstring. It avoids decoding heavy
+--     sections.
+--   - ActonTask carries parsed source and must be compiled.
+--   - ifaceMap :: Map TaskKey ByteString is maintained during the run. For any already-processed
+--     module (compiled or confirmed fresh) it holds the current interface hash. TyTask compares
+--     its recorded import hashes against ifaceMap for in-graph deps, or against cached .ty headers
+--     for external deps; any delta forces a recompile. altOutput on the root module also forces.
+--   - When a TyTask is deemed stale (iface delta or altOutput root) we convert it to an ActonTask
+--     by parsing the .act file, and then compile from there as normal; when it is fresh we do not
+--     parse or compile, we just reuse the header and carry forward its recorded iface hash.
+--
+-- Scheduling:
+--   - Critical-path heuristic (file size proxy) picks among ready tasks; runs up to job cap.
+--   - Each worker uses an env snapshot; coordinator merges the resulting interface/doc and
+--     updates indegrees/ready sets. Dependents receive iface hashes via ifaceMap.
+--   - Non-root projects are compiled with depOpts (skip_build/test) while the root keeps user opts.
+compileTasks :: C.GlobalOptions
+             -> C.CompileOptions
+             -> Paths                     -- root project paths (for alt output root selection)
+             -> FilePath                  -- root project path
+             -> [GlobalTask]
+             -> IO Acton.Env.Env0
+compileTasks gopts opts rootPaths rootProj tasks = do
+    -- Reject cycles
+    unless (null cycles) $
+      printErrorAndCleanAndExit ("Cyclic imports: " ++ concatMap showTaskGraph cycles) gopts opts rootPaths
+
+    -- Compile __builtin__ first if present anywhere in the graph
+    case builtinOrder of
+      [t] -> do
+        let bPaths = gtPaths t
+        builtinEnv0 <- Acton.Env.initEnv (projTypes bPaths) True
+        let optsBuiltin = optsFor (gtKey t)
+        void (doTask gopts optsBuiltin bPaths builtinEnv0 (gtTask t))
+      _ -> return ()
+
+    baseEnv <- Acton.Env.initEnv builtinPath False
+
+    costMap <- fmap M.fromList $ forM otherOrder $ \t -> do
+                  let mn = name (gtTask t)
+                      pth = gtPaths t
+                      fp  = srcFile pth mn
+                  ok <- doesFileExist fp
+                  sz <- if ok then getFileSize fp else return 0
+                  return (gtKey t, sz)
+    let cwMap = computeCriticalWeights costMap
+
+    nCaps <- getNumCapabilities
+    let maxParallel = max 1 (if C.jobs gopts > 0 then C.jobs gopts else nCaps)
+
+    envFinal <- loop initialReady [] M.empty indeg pending0 baseEnv maxParallel cwMap
+    return envFinal
+  where
+    -- Basic maps/sets ----------------------------------------------------
+    taskMap = M.fromList [ (gtKey t, t) | t <- tasks ]
+    isBuiltinKey k = tkMod k == A.modName ["__builtin__"]
+    builtinOrder = [ t | t <- tasks, isBuiltinKey (gtKey t) ]
+    nonBuiltinTasks = [ t | t <- tasks, not (isBuiltinKey (gtKey t)) ]
+    nonBuiltinKeys = Data.Set.fromList [ gtKey t | t <- nonBuiltinTasks ]
+    depsOf t = nub [ d | d <- M.elems (gtImportProviders t), Data.Set.member d nonBuiltinKeys ]
+    nodes    = [ (t, gtKey t, depsOf t) | t <- nonBuiltinTasks ]
+    sccs     = stronglyConnComp nodes
+    cycles   = [ ts | ts@(CyclicSCC _) <- sccs ]
+    order    = [ t | AcyclicSCC t <- sccs ]
+    showTaskGraph (CyclicSCC ts) = "\n" ++ concatMap fmt ts
+    showTaskGraph _              = ""
+    fmt t = tkProj (gtKey t) ++ ":" ++ modNameToString (name (gtTask t)) ++ " "
+
+    otherOrder = order
+    revMap :: M.Map TaskKey [TaskKey]
+    revMap = foldl' (\acc (k, ds) -> foldl' (\a d -> M.insertWith (++) d [k] a) acc ds) M.empty (M.toList depMap)
+    depMap :: M.Map TaskKey [TaskKey]
+    depMap = M.fromList [ (gtKey t, depsOf t) | t <- order ]
+    indeg  = M.map length depMap
+    initialReady = [ k | (k,d) <- M.toList indeg, d == 0 ]
+    pending0 = Data.Set.fromList (M.keys indeg)
+
+    depOpts = opts { C.skip_build = True, C.test = False }
+    optsFor k = if tkProj k == rootProj then opts else depOpts
+    rootAlt = modName rootPaths
+
+    builtinPath =
+      case builtinOrder of
+        (t:_) -> projTypes (gtPaths t)
+        _     -> sysTypes rootPaths
+
+    getMyCap = do
+      tid <- myThreadId
+      (cap, _) <- threadCapability tid
+      return cap
+
+    computeCriticalWeights :: M.Map TaskKey Integer -> M.Map TaskKey Integer
+    computeCriticalWeights cm = cwMap
+      where
+        costOf m = M.findWithDefault 0 m cm
+        depsOfK m = M.findWithDefault [] m revMap
+        cwMap    = M.fromList [ (m, costOf m + max0 [ weight d | d <- depsOfK m ]) | m <- M.keys indeg ]
+        weight m = M.findWithDefault 0 m cwMap
+        max0 []  = 0
+        max0 xs  = maximum xs
+
+    -- One module ---------------------------------------------------------
+    doOne :: Acton.Env.Env0 -> M.Map TaskKey B.ByteString -> TaskKey -> IO (TaskKey, [(A.Name, A.NameInfo)], Maybe String, B.ByteString)
+    doOne envSnap ifaceMap key = do
+      t <- case M.lookup key taskMap of
+             Just x -> return x
+             Nothing -> error ("Internal error: missing task for key " ++ show key)
+      let paths = gtPaths t
+          mn    = name (gtTask t)
+          optsT = optsFor key
+          needBySource = case gtTask t of { ActonTask{} -> True; _ -> False }
+          providers = gtImportProviders t
+      (needByImports, deltas) <- case gtTask t of
+                         TyTask{ tyImports = imps } -> do
+                           triples <- forM imps $ \(m, recorded) -> do
+                             curr <- case M.lookup m providers of
+                                       Just depKey ->
+                                         case M.lookup depKey ifaceMap of
+                                           Just h  -> return h
+                                           Nothing -> error ("Internal error: missing iface hash for dep " ++ modNameToString m)
+                                       Nothing -> do
+                                         mih <- getIfaceHashCached paths m
+                                         case mih of
+                                           Just ih -> return ih
+                                           Nothing -> printErrorAndCleanAndExit ("Type interface file not found or unreadable for " ++ modNameToString m) gopts optsT paths
+                             return (m, recorded, curr)
+                           let ds = [ (m, old, new) | (m, old, new) <- triples, old /= new ]
+                           return (not (null ds), ds)
+                         _ -> return (False, [])
+      let forceAlt    = altOutput optsT && mn == rootAlt
+          needCompile = needBySource || needByImports || forceAlt
+          short8 bs   = take 8 (B.unpack $ Base16.encode bs)
+      if needCompile
+        then do
+          when (C.verbose gopts) $ do
+            if needBySource
+              then putStrLn ("  Stale " ++ modNameToString mn ++ ": source changed")
+              else when needByImports $ do
+                let fmtDelta (m, old, new) = modNameToString m ++ " " ++ short8 old ++ " → " ++ short8 new
+                putStrLn ("  Stale " ++ modNameToString mn ++ ": iface changes in " ++ Data.List.intercalate ", " (map fmtDelta deltas))
+            cap <- getMyCap
+            putStrLn ("  Building [cap " ++ show cap ++ "] " ++ modNameToString mn ++ " (" ++ tkProj key ++ ")")
+          t' <- case gtTask t of
+                  ActonTask{} -> return (gtTask t)
+                  TyTask{}    -> do
+                    let actFile = srcFile paths mn
+                    (srcContent, m) <- parseActFile gopts optsT paths mn actFile
+                    return $ ActonTask mn srcContent m
+          (ifaceTE, mdoc, ih) <- doTask gopts optsT paths envSnap t'
+          updateIfaceHashCache mn ih
+          return (key, ifaceTE, mdoc, ih)
+        else do
+          when (C.verbose gopts) $
+            putStrLn ("  Fresh " ++ modNameToString mn ++ ": using cached .ty")
+          (ifaceTE, mdoc, ih) <- doTask gopts optsT paths envSnap (gtTask t)
+          updateIfaceHashCache mn ih
+          return (key, ifaceTE, mdoc, ih)
+
+    scheduleMore :: Int -> [TaskKey]
+                 -> [(Async (TaskKey, [(A.Name, A.NameInfo)], Maybe String, B.ByteString), TaskKey)]
+                 -> M.Map TaskKey B.ByteString -> Acton.Env.Env0 -> M.Map TaskKey Integer
+                 -> IO ([TaskKey]
+                       , [(Async (TaskKey, [(A.Name, A.NameInfo)], Maybe String, B.ByteString), TaskKey)])
+    scheduleMore k rdy running res envSnap cw = do
+      let prio m = M.findWithDefault 0 m cw
+          rdySorted = Data.List.sortOn (Data.Ord.Down . prio) rdy
+          (toStart, rdy') = splitAt k rdySorted
+      new <- forM toStart $ \mn -> do
+                a <- async (doOne envSnap res mn)
+                return (a, mn)
+      return (rdy', new ++ running)
+
+    loop :: [TaskKey]
+         -> [(Async (TaskKey, [(A.Name, A.NameInfo)], Maybe String, B.ByteString), TaskKey)]
+         -> M.Map TaskKey B.ByteString
+         -> M.Map TaskKey Int
+         -> Data.Set.Set TaskKey
+         -> Acton.Env.Env0
+         -> Int -> M.Map TaskKey Integer
+         -> IO Acton.Env.Env0
+    loop rdy running res ind pend envAcc maxPar cw = do
+      (rdy1, running1) <- scheduleMore (maxPar - length running) rdy running res envAcc cw
+      if null running1 && null rdy1
+        then if Data.Set.null pend
+               then return envAcc
+               else printErrorAndCleanAndExit "Internal error: scheduler deadlock (non-empty pending with no ready)." gopts opts rootPaths
+        else do
+          (doneA, (mnDone, ifaceTE, mdoc, ih)) <- waitAny $ map fst running1
+          let running2 = filter ((/= doneA) . fst) running1
+              res2     = M.insert mnDone ih res
+              pend2    = Data.Set.delete mnDone pend
+              ind2     = case M.lookup mnDone revMap of
+                           Nothing -> ind
+                           Just ds -> foldl' (\m d -> M.adjust (\x -> x-1) d m) ind ds
+              newlyReady = [ m | m <- Data.Set.toList pend2
+                               , M.findWithDefault 0 m ind2 == 0
+                               , not (m `elem` rdy1)
+                               , not (m `elem` map snd running2)
+                               ]
+              rdy2 = rdy1 ++ newlyReady
+              envAcc' = Acton.Env.addMod (tkMod mnDone) ifaceTE mdoc envAcc
+          loop rdy2 running2 res2 ind2 pend2 envAcc' maxPar cw
+
+-- Topologically order projects so dependencies come first.
+topoProjects :: FilePath -> M.Map FilePath ProjCtx -> [FilePath]
+topoProjects root ctxs = reverse (dfs Data.Set.empty [] root)
+  where
+    depsOf p = maybe [] (map snd . projDeps) (M.lookup p ctxs)
+
+    dfs seen acc node
+      | Data.Set.member node seen = acc
+      | otherwise =
+          let seen' = Data.Set.insert node seen
+              acc'  = foldl' (\a n -> dfs seen' a n) acc (depsOf node)
+          in node : acc'
 
 -- Remove executables that no longer have corresponding root actors
 removeOrphanExecutables :: FilePath -> FilePath -> [BinTask] -> IO ()
@@ -835,6 +1164,60 @@ data Paths      = Paths {
                     fileExt     :: String,
                     modName     :: A.ModName
                   }
+
+-- Per-project context used for multi-project orchestration.
+-- Identified by projRoot (absolute path). Keeps directories and BuildSpec if present.
+data ProjCtx = ProjCtx {
+                     projRoot    :: FilePath,
+                     projOutDir  :: FilePath,
+                     projTypesDir:: FilePath,
+                     projSrcDir  :: FilePath,
+                     projSysPath :: FilePath,
+                     projSysTypes:: FilePath,
+                     projBuildSpec :: Maybe BuildSpec.BuildSpec,
+                     projLocks    :: FilePath,
+                     projDeps     :: [(String, FilePath)]          -- resolved dependency roots (abs paths)
+                   } deriving (Show)
+
+-- Discover all projects reachable from a root project by following Build.act/build.act.json dependencies.
+-- Returns a map from project root to ProjCtx; skips duplicates.
+discoverProjects :: FilePath -> FilePath -> IO (M.Map FilePath ProjCtx)
+discoverProjects sysAbs rootProj = do
+    rootAbs <- normalizePathSafe rootProj
+    go Data.Set.empty M.empty rootAbs
+  where
+    go seen acc dir = do
+      dirAbs <- normalizePathSafe dir
+      if Data.Set.member dirAbs seen
+        then return acc
+        else do
+          mspec <- loadBuildSpec dirAbs
+          deps <- case mspec of
+                    Nothing -> return []
+                    Just spec -> forM (M.toList (BuildSpec.dependencies spec)) $ \(depName, dep) -> do
+                                   depBase <- resolveDepBase dirAbs depName dep
+                                   depAbs  <- normalizePathSafe depBase
+                                   return (depName, depAbs)
+          let outDir   = joinPath [dirAbs, "out"]
+              typesDir = joinPath [outDir, "types"]
+              srcDir'  = joinPath [dirAbs, "src"]
+              lockPath = joinPath [dirAbs, ".actonc.lock"]
+              ctx = ProjCtx { projRoot = dirAbs
+                            , projOutDir = outDir
+                            , projTypesDir = typesDir
+                            , projSrcDir = srcDir'
+                            , projSysPath = sysAbs
+                            , projSysTypes = joinPath [sysAbs, "base", "out", "types"]
+                            , projBuildSpec = mspec
+                            , projLocks = lockPath
+                            , projDeps = deps
+                            }
+              acc' = M.insert dirAbs ctx acc
+              seen' = Data.Set.insert dirAbs seen
+          foldM (step seen') acc' deps
+
+    step seen acc (_, depBase) =
+      go seen acc depBase
 
 -- Given a FILE and optionally --syspath PATH:
 -- 'sysPath' is the path to the system directory as given by PATH, defaulting to the actonc executable directory.
@@ -903,6 +1286,44 @@ findPaths actFile opts  = do execDir <- takeDirectory <$> System.Environment.get
                                     "out":"types":dirs -> return $ (False, pre, dirs)
                                     _ -> error ("************* Source file is not in a valid project directory: " ++ joinPath ds)
                                 else analyze (takeDirectory pre) (takeFileName pre : ds)
+
+-- Module helpers for multi-project builds ---------------------------------------------------------
+
+moduleNameFromFile :: FilePath -> FilePath -> IO A.ModName
+moduleNameFromFile srcBase actFile = do
+    base <- normalizePathSafe srcBase
+    file <- normalizePathSafe actFile
+    let rel = dropExtension (makeRelative base file)
+    return $ A.modName (splitDirectories rel)
+
+enumerateProjectModules :: ProjCtx -> IO [(FilePath, A.ModName)]
+enumerateProjectModules ctx = do
+    exists <- doesDirectoryExist (projSrcDir ctx)
+    if not exists
+      then return []
+      else do
+        files <- getFilesRecursive (projSrcDir ctx)
+        let actFiles = filter (\f -> takeExtension f == ".act") files
+        forM actFiles $ \f -> do
+          mn <- moduleNameFromFile (projSrcDir ctx) f
+          return (f, mn)
+
+searchPathForProject :: C.CompileOptions -> M.Map FilePath ProjCtx -> ProjCtx -> [FilePath]
+searchPathForProject opts projMap ctx =
+    let deps = depTypePathsFromMap projMap (projRoot ctx)
+    in [projTypesDir ctx] ++ deps ++ (C.searchpath opts) ++ [projSysTypes ctx]
+
+pathsForModule :: C.CompileOptions -> M.Map FilePath ProjCtx -> ProjCtx -> A.ModName -> IO Paths
+pathsForModule opts projMap ctx mn = do
+    let sPaths = searchPathForProject opts projMap ctx
+        bin = joinPath [projOutDir ctx, "bin"]
+        src = projSrcDir ctx
+        p = Paths sPaths (projSysPath ctx) (projSysTypes ctx) (projRoot ctx) (projOutDir ctx) (projTypesDir ctx) bin src False ".act" mn
+    createDirectoryIfMissing True bin
+    createDirectoryIfMissing True (projOutDir ctx)
+    createDirectoryIfMissing True (projTypesDir ctx)
+    createDirectoryIfMissing True (getModPath (projTypesDir ctx) mn)
+    return p
 
 
 -- Load BuildSpec from Build.act (preferred) or build.act.json if present
@@ -1009,6 +1430,45 @@ relativeViaRoot baseAbs targetAbs
              in joinPath (ups ++ tParts)
   where
     cleanParts = filter (\c -> not (null c) && c /= "/") . splitDirectories
+
+-- Compute dependency closure (pre-order) for a project using already discovered ProjCtx entries.
+-- Returns dependency roots in a deterministic order, skipping duplicates.
+projDepClosure :: M.Map FilePath ProjCtx -> FilePath -> [FilePath]
+projDepClosure ctxs root = snd (go Data.Set.empty root)
+  where
+    go seen node =
+      case M.lookup node ctxs of
+        Nothing  -> (seen, [])
+        Just ctx ->
+          foldl' step (Data.Set.insert node seen, []) (projDeps ctx)
+    step (seen, acc) (_, depRoot) =
+      if Data.Set.member depRoot seen
+        then (seen, acc)
+        else
+          let seen' = Data.Set.insert depRoot seen
+              (seenNext, sub) = go seen' depRoot
+          in (seenNext, acc ++ [depRoot] ++ sub)
+
+-- Collect dependency type directories recursively using already-discovered ProjCtx map.
+depTypePathsFromMap :: M.Map FilePath ProjCtx -> FilePath -> [FilePath]
+depTypePathsFromMap ctxs root = snd (go Data.Set.empty root)
+  where
+    go seen node =
+      case M.lookup node ctxs of
+        Nothing  -> (seen, [])
+        Just ctx ->
+          foldl' step (Data.Set.insert node seen, []) (projDeps ctx)
+
+    step (seen, acc) (_, depRoot) =
+      case M.lookup depRoot ctxs of
+        Nothing -> (Data.Set.insert depRoot seen, acc)
+        Just depCtx ->
+          if Data.Set.member depRoot seen
+            then (seen, acc)
+            else
+              let seen' = Data.Set.insert depRoot seen
+                  (seenNext, sub) = go seen' depRoot
+              in (seenNext, acc ++ [projTypesDir depCtx] ++ sub)
 
 -- Resolve dependency base directory from PkgDep, preferring path then cache/hash
 resolveDepBase :: FilePath -> String -> BuildSpec.PkgDep -> IO FilePath
@@ -1120,76 +1580,6 @@ normalizeSpecPaths base spec = do
             else return dep { BuildSpec.zpath = Just (collapseDots (normalise p)) }
         _ -> return dep
 
--- Build dependencies by invoking actonc recursively with --skip-build.
--- Runs only in top-level compilers (not --sub) for the current project, but
--- each spawned actonc will in turn build its own deps.
-buildDependencies :: C.GlobalOptions -> C.CompileOptions -> Paths -> IO ()
-buildDependencies gopts opts paths = do
-    when (not (C.sub gopts) && not (isTmp paths)) $ do
-        mspec <- loadBuildSpec (projPath paths)
-        case mspec of
-          Nothing   -> return ()
-          Just spec -> do
-            let deps = M.toList (BuildSpec.dependencies spec)
-            unless (null deps) $ do
-              actoncExe <- canonicalizePath =<< System.Environment.getExecutablePath
-              projAbs   <- normalizePathSafe (projPath paths)
-              sysAbs    <- normalizePathSafe (sysPath paths)
-              let baseArgs = depBuildArgs gopts opts paths
-              depInfos <- fmap catMaybes $ mapM (resolveDep projAbs sysAbs) deps
-              -- Deduplicate by absolute path to avoid rebuilding the same dep twice
-              let uniq = M.elems $ M.fromListWith (\_ old -> old) [ (p, (n,p)) | (n,p) <- depInfos ]
-              mapConcurrently_ (buildOne actoncExe baseArgs) uniq
-              return ()
-  where
-    resolveDep projAbs sysAbs (depName, dep) = do
-      depBase <- resolveDepBase (projPath paths) depName dep
-      depAbs  <- normalizePathSafe depBase
-      let sysRoot = addTrailingPathSeparator sysAbs
-          skipSys = depAbs == sysAbs || sysRoot `isPrefixOf` depAbs
-      if depAbs == projAbs || skipSys
-        then return Nothing
-        else do
-          exists <- doesDirectoryExist depAbs
-          unless exists $
-            printErrorAndExit ("Dependency " ++ depName ++ " path does not exist: " ++ depAbs)
-          return (Just (depName, depAbs))
-
-    buildOne exe baseArgs (depName, depAbs) = do
-      unless (C.quiet gopts) $
-        putStrLn ("Building dependency " ++ depName ++ " in " ++ depAbs)
-      (code, out, err) <- readCreateProcessWithExitCode (proc exe baseArgs){ cwd = Just depAbs } ""
-      case code of
-        ExitSuccess -> return ()
-        ExitFailure rc -> do
-          putStrLn ("actonc: Failed to build dependency " ++ depName ++ " (exit code " ++ show rc ++ ")")
-          unless (null out) $ putStrLn ("stdout:\n" ++ out)
-          unless (null err) $ putStrLn ("stderr:\n" ++ err)
-          System.Exit.exitFailure
-
--- Render command line arguments for building a dependency.
-depBuildArgs :: C.GlobalOptions -> C.CompileOptions -> Paths -> [String]
-depBuildArgs gopts opts paths =
-    globalArgs ++ ["build", "--skip-build"] ++ compileArgs
-  where
-    globalArgs =
-      concat [ ["--quiet"]        | C.quiet gopts ] ++
-      concat [ ["--verbose"]      | C.verbose gopts ] ++
-      concat [ ["--verbose-zig"]  | C.verboseZig gopts ] ++
-      concat [ ["--jobs", show j] | let j = C.jobs gopts, j > 0 ] ++
-      concat [ ["--timing"]       | C.timing gopts ]
-
-    compileArgs =
-      concat [ ["--always-build"] | C.alwaysbuild opts ] ++
-      concat [ ["--db"]           | C.db opts ] ++
-      concat [ ["--no-threads"]   | C.no_threads opts ] ++
-      concat [ ["--dbg-no-lines"] | C.dbg_no_lines opts ] ++
-      concat [ ["--cpedantic"]    | C.cpedantic opts ] ++
-      ["--optimize", show (C.optimize opts)] ++
-      ["--target",   C.target opts] ++
-      concat [ ["--cpu", cpu]     | let cpu = C.cpu opts, not (null cpu) ] ++
-      concat [ ["--syspath", sys] | let sys = sysPath paths, not (null sys) ]
-
 -- Handling Acton files -----------------------------------------------------------------------------
 
 filterActFile :: FilePath -> Maybe FilePath
@@ -1209,10 +1599,9 @@ filterActFile file =
 --      - Else -> parse .act to obtain accurate imports (ActonTask)
 -- Returns either a header-only TyTask stub or an ActonTask; no heavy decoding.
 readModuleTask :: C.GlobalOptions -> C.CompileOptions -> Paths -> String -> IO CompileTask
-readModuleTask gopts opts projPaths actFile = do
-    p <- findPaths actFile opts
-    let mn      = modName p
-        tyFile  = outBase projPaths mn ++ ".ty"
+readModuleTask gopts opts paths actFile = do
+    let mn      = modName paths
+        tyFile  = outBase paths mn ++ ".ty"
     tyExists <- System.Directory.doesFileExist tyFile
     if not tyExists
       then parseForImports mn
@@ -1255,7 +1644,7 @@ readModuleTask gopts opts projPaths actFile = do
                   else parseForImports mn
   where
     parseForImports mn = do
-      (srcContent, m) <- parseActFile gopts opts projPaths mn actFile
+      (srcContent, m) <- parseActFile gopts opts paths mn actFile
       return $ ActonTask mn srcContent m
 
 
@@ -1280,6 +1669,16 @@ data CompileTask        = ActonTask { name :: A.ModName, src :: String, atree:: 
 -- would be more robust to use that type rather than a hacky character
 -- replacement (replaceDot in genBuildZigExe)
 data BinTask            = BinTask { isDefaultRoot :: Bool, binName :: String, rootActor :: A.QName, isTest :: Bool } deriving (Show)
+
+-- Global multi-project task identity and payload
+data TaskKey = TaskKey { tkProj :: FilePath, tkMod :: A.ModName } deriving (Eq, Ord, Show)
+
+data GlobalTask = GlobalTask
+  { gtKey             :: TaskKey
+  , gtPaths           :: Paths
+  , gtTask            :: CompileTask
+  , gtImportProviders :: M.Map A.ModName TaskKey   -- resolved in-graph providers (if any) for imports
+  }
 
 
 -- Shared predicate: is a NameInfo root-eligible (actor with env/no params)?
@@ -1314,276 +1713,6 @@ filterMainActor env paths binTask = do
 importsOf :: CompileTask -> [A.ModName]
 importsOf (ActonTask _ _ m) = A.importsOf m
 importsOf (TyTask { tyImports = ms }) = map fst ms
-
--- compileTasks
---
--- Build and compile the given module tasks in dependency order. This is the
--- core driver for a project or single-file build once tasks have been read by
--- readModuleTask and (if needed) imports expanded by readImports.
---
--- Inputs
---   - tasks: a mixed list of ActonTask (source needs compiling) and TyTask
---     (up-to-date .ty header available). The list may be in any order.
---
--- Responsibilities
---   1) Construct a project-local dependency graph from the tasks and compute a
---      topological order. Dependencies outside the project (stdlib/deps) are
---      ignored for ordering and staleness propagation.
---   2) Optionally compile __builtin__ first if it is part of the project.
---   3) Walk modules in topological order, deciding per module whether to
---      compile or reuse the cached .ty, and update the environment.
---   4) Track interface-hash changes for project modules and propagate
---      staleness only when an imported module’s interface hash differs from
---      the hash that was recorded when the dependent was last compiled.
---
--- Key ideas
---   - TyTask carries only a lightweight header read from the module’s .ty
---     file: the source hash, the interface hash, its imports annotated with
---     the interface hash that was used, roots and docstring. TyTask avoids
---     decoding heavy sections.
---   - ActonTask carries parsed source and must be compiled.
---   - We maintain ifaceMap :: Map ModName ByteString during the fold. For any
---     project module that has been compiled in this run (or confirmed fresh),
---     ifaceMap holds the interface hash that downstream modules should compare
---     against. If a dependent TyTask recorded a different hash for an import,
---     it is deemed stale and compiled.
---   - When a TyTask is deemed stale (e.g., any imported module’s interface hash
---     differs from the recorded one) stepModule first converts it to an
---     ActonTask by parsing the source (parseActFile), then compiles it via
---     doTask. For fresh TyTasks we do not parse or compile; we simply reuse the
---     cached .ty and carry forward its recorded interface hash.
---   - The fold is the “inner loop”: foldM (stepModule projMods) (env0, startIface)
---     otherOrder. stepModule decides compile vs reuse, updates the environment
---     and propagates new interface hashes for already-processed modules.
-compileTasks :: C.GlobalOptions -> C.CompileOptions -> Paths -> [CompileTask] -> IO Acton.Env.Env0
-compileTasks gopts opts paths tasks = do
-    -- Reject cycles
-    unless (null cycles) $ printErrorAndCleanAndExit ("Cyclic imports: " ++ concatMap showTaskGraph cycles) gopts opts paths
-
-    -- Compile __builtin__ first if present in this project
-    case builtinOrder of
-      [t] -> do
-        builtinEnv0 <- Acton.Env.initEnv (sysTypes paths) True
-        void (doTask gopts opts paths builtinEnv0 t)
-      _ -> return ()
-
-    baseEnv <- Acton.Env.initEnv builtinPath False
-
-    -- cost(m): cheap proxy for compile effort = size of m.act
-    -- Used by the critical‑path heuristic below to prioritize ready modules.
-    costMap <- fmap M.fromList $ forM otherOrder $ \t -> do
-                  let mn = name t
-                  let p  = srcFile paths mn
-                  ok <- doesFileExist p
-                  sz <- if ok then getFileSize p else return 0
-                  return (mn, sz)
-    let cwMap = computeCriticalWeights costMap
-
-    -- Figure out max concurrency
-    nCaps <- getNumCapabilities
-    let maxParallel = max 1 (if C.jobs gopts > 0 then C.jobs gopts else nCaps)
-
-    -- Actually compile modules, with maximum concurrency
-    envFinal <- loop initialReady [] M.empty indeg pending0 baseEnv maxParallel cwMap
-    return envFinal
-  where
-    -- Graph construction --------------------------------------------------
-    allTasks   = tasks
-    projMap    = M.fromList [ (name t, t) | t <- allTasks ]
-    nodes      = [ (t, name t, [ m | m <- importsOf t, M.member m projMap ]) | t <- allTasks ]
-    sccs       = stronglyConnComp nodes
-    cycles     = [ ts | ts@(CyclicSCC _) <- sccs ]
-    order      = [ t | AcyclicSCC t <- sccs ]
-    showTaskGraph (CyclicSCC ts) = "\n" ++ concatMap (\t-> concat (intersperse "." (A.modPath (name t))) ++ " ") ts
-    showTaskGraph _              = ""
-
-    isBuiltin t = name t == (A.modName ["__builtin__"])
-    (builtinOrder, otherOrder) = partition isBuiltin order
-    projMods   = Data.Set.fromList (map name otherOrder)
-    builtinPath = if null builtinOrder then sysTypes paths else projTypes paths
-
-    depMap :: M.Map A.ModName [A.ModName]
-    depMap = M.fromList [ (name t, [ m | m <- importsOf t, Data.Set.member m projMods ]) | t <- otherOrder ]
-    revMap :: M.Map A.ModName [A.ModName]
-    revMap = M.foldlWithKey' (\acc k ds -> foldl' (\a d -> M.insertWith (++) d [k] a) acc ds) M.empty depMap
-    indeg  = M.map length depMap
-    initialReady = [ m | (m,d) <- M.toList indeg, d == 0 ]
-    pending0 = Data.Set.fromList (M.keys indeg)
-
-    getMyCap = do
-      tid <- myThreadId
-      (cap, _) <- threadCapability tid
-      return cap
-
-    -- Critical‑path weights
-    -- We approximate the remaining work under each module by a critical‑path
-    -- style metric over the project DAG. We want to start the modules that
-    -- unlock the most remaining work as early as possible. Intuitively it is
-    -- better to start with large module, but a small module at the head of a
-    -- long/heavy chain is more urgent than a big ones. That helps avoid a late
-    -- long-tail.
-    --
-    -- How we score each module (cheap, good‑enough heuristic):
-    --   weight(m) = cost(m) + max weight(d) over its dependents d
-    --   where cost(m) ≈ size of m.act (proxy for compile effort).
-    -- This approximates the length of the critical path: how much work must
-    -- follow after m. We then sort the ready set by descending weight so heavy
-    -- chains start early and overall makespan improves.
-    --   - cost(m) is a cheap proxy for the time to compile m (we use .act file size).
-    --   - max weight(d) estimates the heaviest chain that must follow after m
-    --     finishes. Thus weight(m) approximates the longest remaining path
-    --     (a.k.a. the “critical path”) if we were to start m now.
-    -- We then pick among ready modules by descending weight so that long/heavy
-    -- chains are started early, reducing the risk of a late long‑tail where one
-    -- big module finishes much later than the rest.
-    computeCriticalWeights :: M.Map A.ModName Integer -> M.Map A.ModName Integer
-    computeCriticalWeights cm = cwMap
-      where
-        costOf m = M.findWithDefault 0 m cm
-        depsOf m = M.findWithDefault [] m revMap   -- dependents (who imports m)
-        cwMap    = M.fromList [ (m, costOf m + max0 [ weight d | d <- depsOf m ]) | m <- M.keys indeg ]
-        weight m = M.findWithDefault 0 m cwMap
-        max0 []  = 0
-        max0 xs  = maximum xs
-
-    -- Scheduler helpers ---------------------------------------------------
-    -- Compile or reuse a single module using a read‑only environment snapshot.
-    -- It decides staleness by comparing recorded interface hashes of imports
-    -- with those of already-finished project modules (ifaceMap) or with header
-    -- hashes for external deps. For stale tasks it may parse the source and
-    -- compile; for fresh tasks it avoids compilation. Returns (module name,
-    -- public interface TEnv, module docstring, interface hash). No shared state
-    -- is mutated here; the compiled output of the module is returned and
-    -- integrated by the coordinator into the accumulated Env.
-    -- Compile or reuse a single module using a read‑only env snapshot.
-    -- Logic:
-    -- - ActonTask always compiles (needBySource = True).
-    -- - TyTask: compare recorded iface hashes for each project import against
-    --   ifaceMap (from already‑processed project modules); for external deps
-    --   read the provider’s .ty header. Any difference → recompile
-    --   (needByImports = True). Missing imports is an error.
-    -- - On compile: upgrade TyTask by parsing .act; doTask runs the pipeline
-    --   and writes .ty; return (iface TEnv, doc, ifaceHash).
-    -- - On fresh TyTask: do not decode .ty here to keep no‑op fast; return
-    --   (Nothing, doc, recorded ifaceHash). Coordinator extends Env only for
-    --   compiled modules; roots codegen lazily loads NameInfo if needed.
-    -- - After compile: update ifaceMap with the new ifaceHash for dependents.
-    doOne :: Acton.Env.Env0 -> M.Map A.ModName B.ByteString -> A.ModName -> IO (A.ModName, [(A.Name, A.NameInfo)], Maybe String, B.ByteString)
-    doOne envSnap ifaceMap mn = do
-      let t = case M.lookup mn projMap of
-                Just x -> x
-                Nothing -> error ("Internal error: missing task for " ++ modNameToString mn)
-          needBySource = case t of { ActonTask{} -> True; _ -> False }
-      (needByImports, deltas) <- case t of
-                         TyTask{ tyImports = imps } -> do
-                           triples <- forM imps $ \(m, recorded) -> do
-                             curr <- if Data.Set.member m projMods
-                                       then case M.lookup m ifaceMap of
-                                              Just h  -> return h
-                                              Nothing -> error ("Internal error: missing iface hash for dep " ++ modNameToString m)
-                                       else do
-                                         mih <- getIfaceHashCached paths m
-                                         case mih of
-                                           Just ih -> return ih
-                                           Nothing -> printErrorAndCleanAndExit ("Type interface file not found or unreadable for " ++ modNameToString m) gopts opts paths
-                             return (m, recorded, curr)
-                           let ds = [ (m, old, new) | (m, old, new) <- triples, old /= new ]
-                           return (not (null ds), ds)
-                         _ -> return (False, [])
-      let forceAlt    = altOutput opts && mn == (modName paths)
-          needCompile = needBySource || needByImports || forceAlt
-          short8 bs   = take 8 (B.unpack $ Base16.encode bs)
-      if needCompile
-        then do
-          when (C.verbose gopts) $ do
-            if needBySource
-              then putStrLn ("  Stale " ++ modNameToString mn ++ ": source changed")
-              else when needByImports $ do
-                let fmt (m, old, new) = modNameToString m ++ " " ++ short8 old ++ " → " ++ short8 new
-                putStrLn ("  Stale " ++ modNameToString mn ++ ": iface changes in " ++ Data.List.intercalate ", " (map fmt deltas))
-            cap <- getMyCap
-            putStrLn ("  Building [cap " ++ show cap ++ "] " ++ modNameToString mn)
-          t' <- case t of
-                  ActonTask{} -> return t
-                  TyTask{}    -> do
-                    let actFile = srcFile paths mn
-                    (srcContent, m) <- parseActFile gopts opts paths mn actFile
-                    return $ ActonTask mn srcContent m
-          (ifaceTE, mdoc, ih) <- doTask gopts opts paths envSnap t'
-          updateIfaceHashCache mn ih
-          return (mn, ifaceTE, mdoc, ih)
-        else do
-          when (C.verbose gopts) $ do
-            putStrLn ("  Fresh " ++ modNameToString mn ++ ": using cached .ty")
-          (ifaceTE, mdoc, ih) <- doTask gopts opts paths envSnap t
-          updateIfaceHashCache mn ih
-          return (mn, ifaceTE, mdoc, ih)
-
-    -- Start up to k modules from the ready list, each as an Async worker using
-    -- the provided environment snapshot. Returns the remaining ready list and
-    -- the extended set of running workers (Async handle paired with its module
-    -- name).
-    scheduleMore :: Int -> [A.ModName]
-                 -> [(Async (A.ModName, [(A.Name, A.NameInfo)], Maybe String, B.ByteString), A.ModName)]
-                 -> M.Map A.ModName B.ByteString -> Acton.Env.Env0 -> M.Map A.ModName Integer
-                 -> IO ([A.ModName]
-                       , [(Async (A.ModName, [(A.Name, A.NameInfo)], Maybe String, B.ByteString), A.ModName)])
-    scheduleMore k rdy running res envSnap cw = do
-      let prio m = M.findWithDefault 0 m cw
-          rdySorted = Data.List.sortOn (Data.Ord.Down . prio) rdy
-          (toStart, rdy') = splitAt k rdySorted
-      new <- forM toStart $ \mn -> do
-                a <- async (doOne envSnap res mn)
-                return (a, mn)
-      return (rdy', new ++ running)
-
-    -- Coordinator loop for the concurrent scheduler. It tops up workers to the
-    -- concurrency budget, waits for one completion, merges the finished
-    -- module’s interface into envAcc, updates indegrees/ready/pending, and
-    -- repeats until all modules are processed. Returns the final Env.
-    loop :: [A.ModName]
-         -> [(Async (A.ModName, [(A.Name, A.NameInfo)], Maybe String, B.ByteString), A.ModName)]
-         -> M.Map A.ModName B.ByteString
-         -> M.Map A.ModName Int
-         -> Data.Set.Set A.ModName
-         -> Acton.Env.Env0
-         -> Int -> M.Map A.ModName Integer
-         -> IO Acton.Env.Env0
-    loop rdy running res ind pend envAcc maxPar cw = do
-      -- Top up the running set with as many ready modules as available slots.
-      (rdy1, running1) <- scheduleMore (maxPar - length running) rdy running res envAcc cw
-      -- If there’s nothing running and nothing ready:
-      if null running1 && null rdy1
-        then if Data.Set.null pend
-               then return envAcc
-               else printErrorAndCleanAndExit "Internal error: scheduler deadlock (non-empty pending with no ready)." gopts opts paths
-        else do
-          -- Wait for one worker to finish, obtain (module, iface TEnv, doc, ifaceHash).
-          (doneA, (mnDone, ifaceTE, mdoc, ih)) <- waitAny $ map fst running1
-          -- Remove the finished worker from the running set.
-          let running2 = filter ((/= doneA) . fst) running1
-              -- Update ifaceMap with the just-computed interface hash.
-              res2     = M.insert mnDone ih res
-              -- Remove mnDone from the pending set.
-              pend2    = Data.Set.delete mnDone pend
-              -- For each dependent of mnDone, decrement indegree by 1.
-              ind2     = case M.lookup mnDone revMap of
-                           Nothing -> ind
-                           Just ds -> foldl' (\m d -> M.adjust (\x -> x-1) d m) ind ds
-              -- Newly ready modules are those whose indegree just dropped to 0, excluding ones
-              -- already in the ready list or currently running.
-              newlyReady = [ m | m <- Data.Set.toList pend2
-                               , M.findWithDefault 0 m ind2 == 0
-                               , not (m `elem` rdy1)
-                               , not (m `elem` map snd running2)
-                               ]
-              -- Extend the ready list with the new wave of ready modules.
-              rdy2 = rdy1 ++ newlyReady
-              -- Extend the accumulated environment with this module’s interface (public TEnv + doc).
-              envAcc' = Acton.Env.addMod mnDone ifaceTE mdoc envAcc
-          -- Tail recurse with updated ready/running/indeg/pending/env state.
-          loop rdy2 running2 res2 ind2 pend2 envAcc' maxPar cw
-
 compileBins:: C.GlobalOptions -> C.CompileOptions -> Paths -> Acton.Env.Env0 -> [CompileTask] -> [BinTask] -> Bool -> IO ()
 compileBins gopts opts paths env tasks binTasks allowPrune = do
     iff (not (altOutput opts)) $ do
@@ -1599,7 +1728,7 @@ generateProjectDocIndex gopts opts paths srcFiles = do
     unless (C.skip_build opts || C.only_build opts || isTmp paths) $ do
         let docDir = joinPath [projPath paths, "out", "doc"]
         createDirectoryIfMissing True docDir
-        tasks <- mapM (readModuleTask gopts opts paths) srcFiles
+        tasks <- mapM (\f -> findPaths f opts >>= \p -> readModuleTask gopts opts p f) srcFiles
         entries <- forM tasks $ \t -> case t of
                           ActonTask mn _src m -> return (mn, DocP.extractDocstring (A.mbody m))
                           TyTask { name = mn, tyDoc = mdoc } -> return (mn, mdoc)
@@ -1625,7 +1754,8 @@ readImports gopts opts paths itasks
             ok <- System.Directory.doesFileExist actFile
             if ok
               then do
-                task <- readModuleTask gopts opts paths actFile
+                p <- findPaths actFile opts
+                task <- readModuleTask gopts opts p actFile
                 return (Just task)
               else return Nothing
 
@@ -1675,8 +1805,8 @@ doTask gopts opts paths env t@(ActonTask mn src m) = do
             return (te, mdoc, ih)
           Nothing -> return ([], Nothing, B.empty)
     else do
-      iff (not (quiet gopts opts))  (putStrLn("  Compiling " ++ makeRelative (srcDir paths) actFile
-              ++ " with " ++ show (C.optimize opts)))
+      let compileMsg = makeRelative (srcDir paths) actFile
+      iff (not (quiet gopts opts))  (putStrLn("  Compiling " ++ compileMsg ++ " with " ++ show (C.optimize opts)))
 
       timeStart <- getTime Monotonic
 
@@ -1689,6 +1819,7 @@ doTask gopts opts paths env t@(ActonTask mn src m) = do
       iff (not (quiet gopts opts)) $ putStrLn ("   Finished compilation of " ++ modNameToString mn ++ " in  " ++ fmtTime(timeEnd - timeStart))
       return (ifaceTE, mdoc, ifaceHash)
   where actFile             = srcFile paths mn
+        relAct              = makeRelative (srcDir paths) actFile
         filename            = modNameToFilename mn
         outbase             = outBase paths mn
         tyFile              = outbase ++ ".ty"
