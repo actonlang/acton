@@ -1,0 +1,5 @@
+name = "dep_a"
+
+dependencies = {
+  "dep_b": (path="../dep_b")
+}
