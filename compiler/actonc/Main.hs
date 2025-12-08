@@ -59,7 +59,7 @@ import Data.Ord
 import Data.Graph
 import Data.String.Utils (replace)
 import Data.Version (showVersion)
-import Data.Char (isAlpha, toLower)
+import Data.Char (isAlpha, toLower, isSpace)
 import qualified Data.List
 import qualified Data.Map as M
 import qualified Data.Set
@@ -118,6 +118,7 @@ main = do
     case arg of
         C.CmdOpt gopts (C.New opts)         -> createProject (C.file opts)
         C.CmdOpt gopts (C.Build opts)       -> buildProject gopts opts
+        C.CmdOpt gopts C.Fetch             -> fetchCommand gopts
         C.CmdOpt gopts (C.BuildSpecCmd o)   -> buildSpecCommand o
         C.CmdOpt gopts (C.Cloud opts)       -> undefined
         C.CmdOpt gopts (C.Doc opts)         -> printDocs gopts opts
@@ -417,6 +418,22 @@ buildFile gopts opts file = do
   where
     handleNotExists :: IOException -> IO ()
     handleNotExists _ = return ()
+
+-- Fetch dependencies only (no compilation), mirroring `acton fetch`
+fetchCommand :: C.GlobalOptions -> IO ()
+fetchCommand gopts = do
+    curDir <- getCurrentDirectory
+    let actPath = joinPath [curDir, "Acton.toml"]
+    actExists <- doesFileExist actPath
+    unless actExists $
+      printErrorAndExit "Acton.toml not found in current directory"
+    srcExists <- doesDirectoryExist (joinPath [curDir, "src"])
+    unless srcExists $
+      printErrorAndExit "Missing src/ directory"
+    paths <- findPaths actPath defaultOpts
+    fetchDependencies gopts paths
+    unless (C.quiet gopts) $
+      putStrLn "Dependencies fetched"
 
 -- Print documentation -------------------------------------------------------------------------------------------
 
@@ -780,6 +797,7 @@ compileFiles gopts opts srcFiles allowPrune = do
     pathsRoot <- findPaths (head srcFiles) opts
     rootProj  <- normalizePathSafe (projPath pathsRoot)
     sysAbs    <- normalizePathSafe (sysPath pathsRoot)
+    fetchDependencies gopts pathsRoot
     projMap   <- if isTmp pathsRoot
                    then do
                      let ctx = ProjCtx { projRoot = rootProj
@@ -1598,6 +1616,109 @@ collectDepsRecursive projDir pins = do
               relP = makeRelativeOrAbsolute root absP
           in dep { BuildSpec.zpath = Just (collapseDots relP) }
         _ -> dep
+
+-- Fetch dependencies (pkg + zig) into Zig global cache and materialize pkg deps
+-- into ~/.cache/acton/deps/<name>-<hash> when using URL-based dependencies.
+fetchDependencies :: C.GlobalOptions -> Paths -> IO ()
+fetchDependencies gopts paths = do
+    when (isTmp paths) $ return ()
+    mspec <- loadBuildSpec (projPath paths)
+    case mspec of
+      Nothing -> return ()
+      Just spec -> do
+        unless (C.quiet gopts) $
+          putStrLn "Resolving dependencies (fetching if missing)..."
+        home <- getHomeDirectory
+        let zigExe      = joinPath [sysPath paths, "zig", "zig"]
+            globalCache = joinPath [home, ".cache", "acton", "zig-global-cache"]
+            depsCache   = joinPath [home, ".cache", "acton", "deps"]
+            cacheDir h  = joinPath [globalCache, "p", h]
+        createDirectoryIfMissing True globalCache
+        createDirectoryIfMissing True depsCache
+
+        let pkgFetches = catMaybes $
+                [ mkPkgFetch name dep | (name, dep) <- M.toList (BuildSpec.dependencies spec) ]
+            zigFetches = catMaybes $
+                [ mkZigFetch name dep | (name, dep) <- M.toList (BuildSpec.zig_dependencies spec) ]
+
+            mkPkgFetch name dep =
+              case BuildSpec.path dep of
+                Just p | not (null p) -> Nothing
+                _ -> case (BuildSpec.url dep, BuildSpec.hash dep) of
+                       (Just u, Just h) ->
+                         Just (fetchOne "pkg" name u (Just h) cacheDir zigExe globalCache)
+                       (Just _, Nothing) ->
+                         Just (return (Left ("Dependency " ++ name ++ " is missing hash")))
+                       _ -> Nothing
+
+            mkZigFetch name dep =
+              case BuildSpec.zpath dep of
+                Just p | not (null p) -> Nothing
+                _ -> case (BuildSpec.zurl dep, BuildSpec.zhash dep) of
+                       (Just u, Just h) ->
+                         Just (fetchOne "zig" name u (Just h) cacheDir zigExe globalCache)
+                       (Just _, Nothing) ->
+                         Just (return (Left ("Zig dependency " ++ name ++ " is missing hash")))
+                       _ -> Nothing
+
+        results <- mapConcurrently id (pkgFetches ++ zigFetches)
+        let errs = [ e | Left e <- results ]
+        unless (null errs) $ printErrorAndExit (unlines errs)
+
+        -- Copy fetched pkg deps into ~/.cache/acton/deps/<name>-<hash> for discovery/build.
+        forM_ (M.toList (BuildSpec.dependencies spec)) $ \(name, dep) -> do
+          case BuildSpec.path dep of
+            Just p | not (null p) -> return ()
+            _ -> case BuildSpec.hash dep of
+                   Nothing -> return ()
+                   Just h -> do
+                     let src = cacheDir h
+                         dst = joinPath [depsCache, name ++ "-" ++ h]
+                     exists <- doesDirectoryExist dst
+                     unless exists $ do
+                       srcOk <- doesDirectoryExist src
+                       unless srcOk $
+                         printErrorAndExit ("Dependency " ++ name ++ " not present in Zig cache after fetch: " ++ src)
+                       when (C.verbose gopts) $
+                         putStrLn ("Copying dependency " ++ name ++ " (" ++ h ++ ") from Zig cache")
+                       copyTree src dst
+          return ()
+  where
+    fetchOne kind name url mh cacheDir zigExe globalCache = do
+      case mh of
+        Just h -> do
+          present <- doesDirectoryExist (cacheDir h)
+          if present
+            then do
+              putStrLn ("Using cached " ++ kind ++ " dependency " ++ name ++ " (" ++ h ++ ")")
+              return (Right h)
+            else runFetch kind name url mh cacheDir zigExe globalCache
+        Nothing ->
+          runFetch kind name url mh cacheDir zigExe globalCache
+
+    runFetch kind name url mh cacheDir zigExe globalCache = do
+      putStrLn ("Fetching " ++ kind ++ " dependency " ++ name ++ " from " ++ url)
+      let cmd = proc zigExe ["fetch", "--global-cache-dir", globalCache, url]
+      res <- try (readCreateProcessWithExitCode cmd "") :: IO (Either SomeException (ExitCode, String, String))
+      case res of
+        Left ex -> return (Left ("Failed to fetch dependency " ++ name ++ ": " ++ displayException ex))
+        Right (code, out, err) ->
+          case code of
+            ExitSuccess -> do
+              let fetched = trim out
+              case mh of
+                 Just h | h /= fetched ->
+                   return (Left ("Hash mismatch for " ++ name ++ ": expected " ++ h ++ " got " ++ fetched))
+                 _ -> do
+                   let dir = cacheDir fetched
+                   dirExists <- doesDirectoryExist dir
+                   if dirExists
+                     then do
+                       putStrLn ("Fetched " ++ kind ++ " dependency " ++ name ++ " (" ++ fetched ++ ")")
+                       return (Right fetched)
+                     else return (Left ("zig fetch reported hash " ++ fetched ++ " but cache dir missing: " ++ dir))
+            ExitFailure rc ->
+              return (Left ("Failed to fetch dependency " ++ name ++ " (exit " ++ show rc ++ ")\n" ++ err ++ out))
 
 -- Normalize direct dependency paths in Build.act/build.act.json relative to a base directory.
 normalizeSpecPaths :: FilePath -> BuildSpec.BuildSpec -> IO BuildSpec.BuildSpec
