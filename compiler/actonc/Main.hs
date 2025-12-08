@@ -827,6 +827,7 @@ compileFiles gopts opts srcFiles allowPrune = do
         neededKeys  = reachable depMapSet (Data.Set.fromList startKeys)
         neededTasks = [ t | t <- globalTasks, Data.Set.member (gtKey t) neededKeys ]
         rootTasks   = [ gtTask t | t <- neededTasks, tkProj (gtKey t) == rootProj ]
+        rootPins    = maybe M.empty BuildSpec.dependencies (projBuildSpec =<< M.lookup rootProj projMap)
     iff (C.listimports opts) $ do
         let module_imports = map (\t -> concat [ modNameToString (name t), ": "
                                                , (concat $ intersperse " " (map modNameToString (importsOf t))) ]) rootTasks
@@ -853,7 +854,7 @@ compileFiles gopts opts srcFiles allowPrune = do
             when (C.verbose gopts) $
               putStrLn ("Generating build.zig for dependency project " ++ p)
             dummyPaths <- pathsForModule opts projMap ctx (A.modName ["__gen_build__"])
-            genBuildZigFiles dummyPaths
+            genBuildZigFiles rootPins dummyPaths
           Nothing -> return ()
     if C.skip_build opts
       then
@@ -1184,9 +1185,11 @@ data ProjCtx = ProjCtx {
 discoverProjects :: FilePath -> FilePath -> IO (M.Map FilePath ProjCtx)
 discoverProjects sysAbs rootProj = do
     rootAbs <- normalizePathSafe rootProj
-    go Data.Set.empty M.empty rootAbs
+    rootSpec <- loadBuildSpec rootAbs
+    let rootPins = maybe M.empty BuildSpec.dependencies rootSpec
+    go Data.Set.empty M.empty rootPins rootAbs
   where
-    go seen acc dir = do
+    go seen acc pins dir = do
       dirAbs <- normalizePathSafe dir
       if Data.Set.member dirAbs seen
         then return acc
@@ -1195,7 +1198,17 @@ discoverProjects sysAbs rootProj = do
           deps <- case mspec of
                     Nothing -> return []
                     Just spec -> forM (M.toList (BuildSpec.dependencies spec)) $ \(depName, dep) -> do
-                                   depBase <- resolveDepBase dirAbs depName dep
+                                   let (chosenDep, conflict) =
+                                         case M.lookup depName pins of
+                                           Nothing -> (dep, Nothing)
+                                           Just pinDep ->
+                                             if pinDep == dep
+                                               then (dep, Nothing)
+                                               else (pinDep, Just dep)
+                                   when (isJust conflict) $
+                                     putStrLn ("Warning: dependency '" ++ depName ++ "' in " ++ dirAbs
+                                               ++ " overridden by root pin")
+                                   depBase <- resolveDepBase dirAbs depName chosenDep
                                    depAbs  <- normalizePathSafe depBase
                                    return (depName, depAbs)
           let outDir   = joinPath [dirAbs, "out"]
@@ -1214,10 +1227,10 @@ discoverProjects sysAbs rootProj = do
                             }
               acc' = M.insert dirAbs ctx acc
               seen' = Data.Set.insert dirAbs seen
-          foldM (step seen') acc' deps
+          foldM (step seen' pins) acc' deps
 
-    step seen acc (_, depBase) =
-      go seen acc depBase
+    step seen pins acc (_, depBase) =
+      go seen acc pins depBase
 
 -- Given a FILE and optionally --syspath PATH:
 -- 'sysPath' is the path to the system directory as given by PATH, defaulting to the actonc executable directory.
@@ -1362,6 +1375,26 @@ normalizePathSafe p = do
     res <- try (canonicalizePath p) :: IO (Either IOException FilePath)
     return $ either (const (normalise p)) id res
 
+trim :: String -> String
+trim = f . f
+  where f = reverse . dropWhile isSpace
+
+copyTree :: FilePath -> FilePath -> IO ()
+copyTree src dst = do
+    exists <- doesDirectoryExist src
+    unless exists $ printErrorAndExit ("Source path for copyTree does not exist: " ++ src)
+    createDirectoryIfMissing True dst
+    entries <- listDirectory src
+    forM_ entries $ \e -> do
+      let s = src </> e
+          d = dst </> e
+      isDir <- doesDirectoryExist s
+      if isDir
+        then copyTree s d
+        else do
+          createDirectoryIfMissing True (takeDirectory d)
+          copyFile s d
+
 -- Collapse "." / ".." segments without touching leading ".." for relative paths
 -- e.g. "a/b/../c/./d" -> "a/c/d"
 collapseDots :: FilePath -> FilePath
@@ -1481,6 +1514,17 @@ resolveDepBase base name dep =
                normalizePathSafe (joinPath [home, ".cache", "acton", "deps", name ++ "-" ++ h])
              Nothing -> printErrorAndExit ("Dependency " ++ name ++ " has no path or hash")
 
+showPkgDep :: BuildSpec.PkgDep -> String
+showPkgDep dep =
+  let fields = catMaybes
+                 [ fmap (\p -> "path=" ++ p) (BuildSpec.path dep)
+                 , fmap (\h -> "hash=" ++ h) (BuildSpec.hash dep)
+                 , fmap (\u -> "url="  ++ u) (BuildSpec.url dep)
+                 , fmap (\u -> "repo_url=" ++ u) (BuildSpec.repo_url dep)
+                 , fmap (\r -> "repo_ref=" ++ r) (BuildSpec.repo_ref dep)
+                 ]
+  in "{" ++ Data.List.intercalate "," fields ++ "}"
+
 -- Recursively collect out/types paths for all dependencies declared in Build.act/build.act.json
 collectDepTypePaths :: FilePath -> IO [FilePath]
 collectDepTypePaths projDir = do
@@ -1504,8 +1548,8 @@ collectDepTypePaths projDir = do
           return (seenNext, acc ++ [typesDir] ++ sub)
 
 -- Collect package and zig dependencies recursively, keeping existing entries on conflict
-collectDepsRecursive :: FilePath -> IO (M.Map String BuildSpec.PkgDep, M.Map String BuildSpec.ZigDep)
-collectDepsRecursive projDir = do
+collectDepsRecursive :: FilePath -> M.Map String BuildSpec.PkgDep -> IO (M.Map String BuildSpec.PkgDep, M.Map String BuildSpec.ZigDep)
+collectDepsRecursive projDir pins = do
   root <- normalizePathSafe projDir
   (\(_, pkgs, zigs) -> (pkgs, zigs)) <$> go root Data.Set.empty root
   where
@@ -1519,7 +1563,10 @@ collectDepsRecursive projDir = do
           foldM (step root dir) (seen, M.empty, zigsHere) (M.toList depsHere)
 
     step root base (seen, pkgAcc, zigAcc) (depName, dep) = do
-      depBase <- resolveDepBase base depName dep
+      let depChosen = case M.lookup depName pins of
+                        Nothing   -> dep
+                        Just pdep -> pdep
+      depBase <- resolveDepBase base depName depChosen
       let seen' = Data.Set.insert depBase seen
           -- Rebase dep path to project root and collapse redundant segments
           rebasePkgPath d =
@@ -1536,7 +1583,7 @@ collectDepsRecursive projDir = do
                     relP = makeRelativeOrAbsolute root absP
                 in d { BuildSpec.zpath = Just (collapseDots relP) }
               _ -> d
-          dep' = rebasePkgPath dep
+          dep' = rebasePkgPath depChosen
       if Data.Set.member depBase seen
         then return (seen', pkgAcc, zigAcc)
         else do
@@ -2102,8 +2149,9 @@ runZig gopts opts zigExe zigArgs paths wd = do
           System.Exit.exitFailure
 
 -- Render build.zig and build.zig.zon from templates and BuildSpec
-genBuildZigFiles :: Paths -> IO ()
-genBuildZigFiles paths = do
+-- rootPins: dependency pins from the main project (applied to all deps, including transitive)
+genBuildZigFiles :: M.Map String BuildSpec.PkgDep -> Paths -> IO ()
+genBuildZigFiles rootPins paths = do
     let proj = projPath paths
     projAbs <- canonicalizePath proj
     let sys              = sysPath paths
@@ -2114,13 +2162,14 @@ genBuildZigFiles paths = do
     buildZigTemplate <- readFile distBuildZigPath
     buildZonTemplate <- readFile distBuildZonPath
     spec <- loadBuildSpec proj
-    (transPkgs, transZigs) <- collectDepsRecursive proj
+    (transPkgs, transZigs) <- collectDepsRecursive proj rootPins
     absSys <- canonicalizePath sys
     let relSys = relativeViaRoot projAbs absSys
     homeDir <- getHomeDirectory
     depsRootAbs <- normalizePathSafe (joinPath [homeDir, ".cache", "acton", "deps"])
     normalizedSpec <- traverse (normalizeSpecPaths proj) spec
-    let mergedSpec = fmap (\s -> s { BuildSpec.dependencies     = BuildSpec.dependencies s `M.union` transPkgs
+    let applyPins deps = M.mapWithKey (\n d -> M.findWithDefault d n rootPins) deps
+        mergedSpec = fmap (\s -> s { BuildSpec.dependencies     = applyPins (BuildSpec.dependencies s) `M.union` transPkgs
                                    , BuildSpec.zig_dependencies = BuildSpec.zig_dependencies s `M.union` transZigs }) normalizedSpec
     case mergedSpec of
       Nothing -> do
@@ -2264,7 +2313,9 @@ zigBuild env gopts opts paths tasks binTasks allowPrune = do
 
     -- If actonc runs as a standalone compiler (not a sub-compiler from Acton CLI),
     -- generate build.zig and build.zig.zon directly from Build.act/build.act.json
-    iff (not (C.sub gopts) && not isSysProj) $ genBuildZigFiles paths
+    iff (not (C.sub gopts) && not isSysProj) $ do
+      pins <- maybe M.empty BuildSpec.dependencies <$> loadBuildSpec (projPath paths)
+      genBuildZigFiles pins paths
 
     let zigExe = zig paths
         baseArgs = ["build","--cache-dir", local_cache_dir,
