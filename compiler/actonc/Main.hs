@@ -119,6 +119,7 @@ main = do
         C.CmdOpt gopts (C.New opts)         -> createProject (C.file opts)
         C.CmdOpt gopts (C.Build opts)       -> buildProject gopts opts
         C.CmdOpt gopts C.Fetch             -> fetchCommand gopts
+        C.CmdOpt gopts C.PkgShow           -> pkgShow gopts
         C.CmdOpt gopts (C.BuildSpecCmd o)   -> buildSpecCommand o
         C.CmdOpt gopts (C.Cloud opts)       -> undefined
         C.CmdOpt gopts (C.Doc opts)         -> printDocs gopts opts
@@ -434,6 +435,47 @@ fetchCommand gopts = do
     fetchDependencies gopts paths
     unless (C.quiet gopts) $
       putStrLn "Dependencies fetched"
+
+-- Show dependency tree with overrides applied from root pins
+pkgShow :: C.GlobalOptions -> IO ()
+pkgShow gopts = do
+    curDir <- getCurrentDirectory
+    let actPath = joinPath [curDir, "Acton.toml"]
+    actExists <- doesFileExist actPath
+    unless actExists $
+      printErrorAndExit "Acton.toml not found in current directory"
+    mspec <- loadBuildSpec curDir
+    case mspec of
+      Nothing -> printErrorAndExit "No Build.act/build.act.json found"
+      Just spec -> do
+        let rootPins = BuildSpec.dependencies spec
+        unless (C.quiet gopts) $
+          putStrLn "Dependency tree (hash overrides shown):"
+        showTree rootPins curDir spec 0
+  where
+    describeDep dep =
+      case BuildSpec.hash dep of
+        Just h -> "hash=" ++ h
+        Nothing -> case BuildSpec.path dep of
+                     Just p | not (null p) -> "path=" ++ p
+                     _ -> "unversioned"
+
+    showTree pins dir spec depth = do
+      let deps = M.toList (BuildSpec.dependencies spec)
+      forM_ deps $ \(depName, dep) -> do
+        let (chosen, conflict) =
+              case M.lookup depName pins of
+                Nothing -> (dep, False)
+                Just pinDep -> if pinDep == dep then (dep, False) else (pinDep, True)
+            prefix = replicate (2*depth) ' ' ++ "- "
+            line = prefix ++ depName ++ " (" ++ describeDep dep ++
+                   (if conflict then " overridden -> " ++ describeDep chosen else "") ++ ")"
+        putStrLn line
+        depBase <- resolveDepBase dir depName chosen
+        mspec <- loadBuildSpec depBase
+        case mspec of
+          Nothing -> return ()
+          Just spec' -> showTree pins depBase spec' (depth + 1)
 
 -- Print documentation -------------------------------------------------------------------------------------------
 

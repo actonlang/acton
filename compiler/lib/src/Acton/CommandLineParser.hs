@@ -40,6 +40,7 @@ data GlobalOptions = GlobalOptions {
 data Command        = New NewOptions
                     | Build CompileOptions
                     | Fetch
+                    | PkgShow
                     | BuildSpecCmd BuildSpecCommand
                     | Cloud CloudOptions
                     | Doc DocOptions
@@ -110,6 +111,7 @@ cmdLineParser       = hsubparser
                         (  command "new"     (info (CmdOpt <$> globalOptions <*> (New <$> newOptions)) (progDesc "Create a new Acton project"))
                         <> command "build"   (info (CmdOpt <$> globalOptions <*> (Build <$> compileOptions)) (progDesc "Build an Acton project"))
                         <> command "fetch"   (info (CmdOpt <$> globalOptions <*> pure Fetch) (progDesc "Fetch project dependencies (offline prep)"))
+                        <> command "pkg"     (info (CmdOpt <$> globalOptions <*> pkgSubcommands) (progDesc "Package/dependency commands"))
                         <> command "spec"    (info (CmdOpt <$> globalOptions <*> (BuildSpecCmd <$> buildSpecCommand)) (progDesc "Inspect or update build specification"))
                         <> command "cloud"   (info (CmdOpt <$> globalOptions <*> (Cloud <$> cloudOptions)) (progDesc "Run an Acton project in the cloud"))
                         <> command "doc"     (info (CmdOpt <$> globalOptions <*> (Doc <$> docOptions)) (progDesc "Show type and docstring info"))
@@ -191,6 +193,11 @@ compileOptions = CompileOptions
         <*> strOption (long "cpu"       <> metavar "CPU" <> value "" <> help "CPU, e.g. skylake")
         <*> switch (long "test"         <> help "Build tests")
         <*> many (strOption (long "searchpath" <> metavar "DIR" <> help "Add search path"))
+
+pkgSubcommands :: Parser Command
+pkgSubcommands = hsubparser
+  (  command "show" (info (pure PkgShow) (progDesc "Show dependency tree with overrides"))
+  )
 
 cloudOptions = CloudOptions
         <$> switch (long "run"          <> help "Help run!")
