@@ -48,7 +48,7 @@ reQ_Match reQ_U__match (B_str arg_pattern, B_str arg_text, int64_t arg_start_pos
     pcre2_code *re = pcre2_compile(
         pattern,
         PCRE2_ZERO_TERMINATED,
-        0,
+        PCRE2_UTF,
         &errornumber,
         &erroroffset,
         compile_context

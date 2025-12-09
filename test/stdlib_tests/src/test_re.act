@@ -8,6 +8,10 @@ def _test_match_basic():
     m = re.match("foo[a-z]+", "åbc123 foobar åbc123")
     testing.assertNotNone(m, "basic regexp matching failed")
 
+def _test_match_unicode_escapes():
+    m = re.match(r"[\x{0000}-\x{10FFFF}]", "x")
+    testing.assertNotNone(m, "unicode \\x{{}} regexp matching failed")
+
 def _test_match_group():
     """Regexp matching with groups
     """
