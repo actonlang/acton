@@ -271,7 +271,7 @@ actor UpdateBuildSpec(env, process_cap, json_doc: str, on_done):
         stdin_data=json_doc.encode()
     )
 
-actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None, on_build_failure: action(int, int, str) -> None, build_tests: bool=False, files: list[str]=[]):
+actor OldBuildProject(process_cap, env, args, on_build_success: action(str) -> None, on_build_failure: action(int, int, str) -> None, build_tests: bool=False, files: list[str]=[]):
     """Build the project including dependencies
 
     - check for build.act.json, if found, download dependencies
@@ -617,6 +617,32 @@ actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None
     # and off we go! Start by grabbing the project build lock
     get_lock()
 
+actor BuildProject(process_cap, env, args, on_build_success: action(str) -> None, on_build_failure: action(int, int, str) -> None, build_tests: bool=False, files: list[str]=[]):
+    """Build an Acton project
+
+    Delegates to actonc build per default. --old-build uses legacy pipeline.
+    """
+    def _run_actonc_build():
+        cmdargs = build_cmd_args(args)
+        if build_tests:
+            cmdargs.append("--test")
+        if files == []:
+            cmd = ["build"] + cmdargs
+        else:
+            cmd = cmdargs + files
+        def _on_exit(exit_code, term_signal, std_out_buf, std_err_buf):
+            if exit_code == 0:
+                on_build_success(std_out_buf.decode())
+            else:
+                on_build_failure(exit_code, term_signal, std_out_buf.decode() + std_err_buf.decode())
+        def _on_failure(error: str):
+            on_build_failure(-999, -999, error)
+        CompilerRunner(process_cap, env, cmd, None, _on_exit, _on_failure, print_output=not build_tests)
+
+    if args.get_bool("old-build"):
+        OldBuildProject(process_cap, env, args, on_build_success, on_build_failure, build_tests, files)
+    else:
+        _run_actonc_build()
 
 actor RunModuleTest(process_cap, modname, test_cmd, on_json_output, on_test_error):
     var captured_std_out = b""
@@ -2002,6 +2028,7 @@ actor main(env):
         p.add_bool("dbg-no-lines", "Disable emission of C #line directives (for debugging)")
         p.add_bool("quiet", "Be quiet")
         p.add_bool("verbose", "Verbose output")
+        p.add_bool("old-build", "Use old acton-side build pipeline instead of calling actonc directly")
         p.add_option("optimize", "str", "?", "Debug", "Optimization mode (Debug, ReleaseSafe, ReleaseSmall, ReleaseFast)")
         p.add_bool("no-threads", "Don't use threads")
         p.add_bool("only-build", "Only perform final build of .c files, do not compile .act files")
