@@ -1967,6 +1967,9 @@ actor main(env):
     def _cmd_pkg(args):
         env.exit(0)
 
+    def _cmd_pkg_show(args):
+        CompilerRunner(process_cap, env, ["pkg", "show"])
+
     def _cmd_pkg_add(args):
         c = CmdPkgAdd(env, args)
 
@@ -2049,6 +2052,8 @@ actor main(env):
         p_fetch = p.add_cmd("fetch", "Fetch all the things for offline work", _cmd_fetch)
 
         p_pkg = p.add_cmd("pkg", "Manage package dependencies", _cmd_pkg)
+
+        p_pkg_show = p_pkg.add_cmd("show", "Show dependency tree (actonc pkg show)", _cmd_pkg_show)
 
         p_pkg_add = p_pkg.add_cmd("add", "Add package dependency", _cmd_pkg_add)
         p_pkg_add.add_arg("name", "Name of dependency", True, "?")
