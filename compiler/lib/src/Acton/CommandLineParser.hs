@@ -82,7 +82,8 @@ data CompileOptions   = CompileOptions {
                          target      :: String,
                          cpu         :: String,
                          test        :: Bool,
-                         searchpath  :: [String]
+                         searchpath  :: [String],
+                         dep_overrides :: [(String,String)]
                      } deriving Show
 
 
@@ -193,6 +194,10 @@ compileOptions = CompileOptions
         <*> strOption (long "cpu"       <> metavar "CPU" <> value "" <> help "CPU, e.g. skylake")
         <*> switch (long "test"         <> help "Build tests")
         <*> many (strOption (long "searchpath" <> metavar "DIR" <> help "Add search path"))
+        <*> many (option depOverrideReader
+               (long "dep"
+                <> metavar "NAME=PATH"
+                <> help "Override dependency NAME with local PATH"))
 
 pkgSubcommands :: Parser Command
 pkgSubcommands = hsubparser
@@ -224,6 +229,12 @@ optimizeOption = option optimizeReader
      <> value Debug
      <> help "Optimization mode (Debug, ReleaseSafe, ReleaseSmall, ReleaseFast)"
     )
+
+depOverrideReader :: ReadM (String,String)
+depOverrideReader = eitherReader $ \s ->
+  case break (== '=') s of
+    (name, '=':path) | not (null name) && not (null path) -> Right (name, path)
+    _ -> Left "Expected NAME=PATH"
 
 descr               = fullDesc <> progDesc "Compilation and management of Acton source code and projects"
                       <> header "actonc - the Acton compiler"

@@ -131,7 +131,7 @@ main = do
 
 defaultOpts   = C.CompileOptions False False False False False False False False False False False False False
                                  False False False False False C.Debug False False False False
-                                 "" "" "" C.defTarget "" False []
+                                 "" "" "" C.defTarget "" False [] []
 
 -- Apply global options to compile options
 applyGlobalOpts :: C.GlobalOptions -> C.CompileOptions -> C.CompileOptions
@@ -432,7 +432,7 @@ fetchCommand gopts = do
     unless srcExists $
       printErrorAndExit "Missing src/ directory"
     paths <- findPaths actPath defaultOpts
-    fetchDependencies gopts paths
+    fetchDependencies gopts paths []
     unless (C.quiet gopts) $
       putStrLn "Dependencies fetched"
 
@@ -836,10 +836,15 @@ buildGlobalTasks gopts opts projMap mSeeds = do
 
 compileFiles :: C.GlobalOptions -> C.CompileOptions -> [String] -> Bool -> IO ()
 compileFiles gopts opts srcFiles allowPrune = do
-    pathsRoot <- findPaths (head srcFiles) opts
+    cwd <- getCurrentDirectory
+    maybeRoot <- findProjectDir (takeDirectory (head srcFiles))
+    let baseForOverrides = maybe cwd id maybeRoot
+    depOverrides <- normalizeDepOverrides baseForOverrides (C.dep_overrides opts)
+    let opts' = opts { C.dep_overrides = depOverrides }
+    pathsRoot <- findPaths (head srcFiles) opts'
     rootProj  <- normalizePathSafe (projPath pathsRoot)
     sysAbs    <- normalizePathSafe (sysPath pathsRoot)
-    fetchDependencies gopts pathsRoot
+    fetchDependencies gopts pathsRoot depOverrides
     projMap   <- if isTmp pathsRoot
                    then do
                      let ctx = ProjCtx { projRoot = rootProj
@@ -853,7 +858,7 @@ compileFiles gopts opts srcFiles allowPrune = do
                                        , projDeps = []
                                        }
                      return (M.singleton rootProj ctx)
-                   else discoverProjects sysAbs rootProj
+                   else discoverProjects sysAbs rootProj depOverrides
     let sysRoot = addTrailingPathSeparator sysAbs
     let lookupTaskKey ts f = do
           absF <- canonicalizePath f
@@ -872,7 +877,7 @@ compileFiles gopts opts srcFiles allowPrune = do
                                    , tkProj (gtKey t) == rootProj
                                    , tkMod (gtKey t) == mn
                                    ]
-    (globalTasks, _) <- buildGlobalTasks gopts opts projMap (if allowPrune then Nothing else Just srcFiles)
+    (globalTasks, _) <- buildGlobalTasks gopts opts' projMap (if allowPrune then Nothing else Just srcFiles)
     requestedKeys <- catMaybes <$> mapM (lookupTaskKey globalTasks) srcFiles
     let wantedNames   = map takeFileName srcFiles
         requestedKeys' = if null requestedKeys
@@ -888,19 +893,19 @@ compileFiles gopts opts srcFiles allowPrune = do
         neededTasks = [ t | t <- globalTasks, Data.Set.member (gtKey t) neededKeys ]
         rootTasks   = [ gtTask t | t <- neededTasks, tkProj (gtKey t) == rootProj ]
         rootPins    = maybe M.empty BuildSpec.dependencies (projBuildSpec =<< M.lookup rootProj projMap)
-    iff (C.listimports opts) $ do
+    iff (C.listimports opts') $ do
         let module_imports = map (\t -> concat [ modNameToString (name t), ": "
                                                , (concat $ intersperse " " (map modNameToString (importsOf t))) ]) rootTasks
             output = concat $ intersperse "\n" module_imports
         putStrLn output
         System.Exit.exitSuccess
-    env <- compileTasks gopts opts pathsRoot rootProj neededTasks
-    let rootParts = splitOn "." (C.root opts)
+    env <- compileTasks gopts opts' pathsRoot rootProj neededTasks
+    let rootParts = splitOn "." (C.root opts')
         rootMod   = init rootParts
         guessMod  = if length rootParts == 1 then modName pathsRoot else A.modName rootMod
         binTask   = BinTask False (prstr guessMod) (A.GName guessMod (A.name $ last rootParts)) False
         preBinTasks
-          | null (C.root opts) = map (\t -> BinTask True (modNameToString (name t)) (A.GName (name t) (A.name "main")) False) rootTasks
+          | null (C.root opts') = map (\t -> BinTask True (modNameToString (name t)) (A.GName (name t) (A.name "main")) False) rootTasks
           | otherwise        = [binTask]
         preTestBinTasks = map (\t -> BinTask True (modNameToString (name t)) (A.GName (name t) (A.name "__test_main")) True) rootTasks
     -- Generate build.zig(.zon) for dependencies too, to satisfy Zig builder links.
@@ -913,21 +918,21 @@ compileFiles gopts opts srcFiles allowPrune = do
           Just ctx -> do
             when (C.verbose gopts) $
               putStrLn ("Generating build.zig for dependency project " ++ p)
-            dummyPaths <- pathsForModule opts projMap ctx (A.modName ["__gen_build__"])
-            genBuildZigFiles rootPins dummyPaths
+            dummyPaths <- pathsForModule opts' projMap ctx (A.modName ["__gen_build__"])
+            genBuildZigFiles rootPins depOverrides dummyPaths
           Nothing -> return ()
-    if C.skip_build opts
+    if C.skip_build opts'
       then
         putStrLn "  Skipping final build step"
       else
-        if C.test opts
+        if C.test opts'
           then do
             testBinTasks <- catMaybes <$> mapM (filterMainActor env pathsRoot) preTestBinTasks
-            compileBins gopts opts pathsRoot env rootTasks testBinTasks allowPrune
+            compileBins gopts opts' pathsRoot env rootTasks testBinTasks allowPrune
             putStrLn "Test executables:"
             mapM_ (\t -> putStrLn (binName t)) testBinTasks
           else do
-            compileBins gopts opts pathsRoot env rootTasks preBinTasks allowPrune
+            compileBins gopts opts' pathsRoot env rootTasks preBinTasks allowPrune
   where
     reachable depMap start = go (Data.Set.toList start) Data.Set.empty
       where
@@ -1242,19 +1247,23 @@ data ProjCtx = ProjCtx {
 
 -- Discover all projects reachable from a root project by following Build.act/build.act.json dependencies.
 -- Returns a map from project root to ProjCtx; skips duplicates.
-discoverProjects :: FilePath -> FilePath -> IO (M.Map FilePath ProjCtx)
-discoverProjects sysAbs rootProj = do
+discoverProjects :: FilePath -> FilePath -> [(String, FilePath)] -> IO (M.Map FilePath ProjCtx)
+discoverProjects sysAbs rootProj depOverrides = do
     rootAbs <- normalizePathSafe rootProj
-    rootSpec <- loadBuildSpec rootAbs
+    rootSpec0 <- loadBuildSpec rootAbs
+    rootSpec  <- traverse (applyDepOverrides rootAbs depOverrides) rootSpec0
     let rootPins = maybe M.empty BuildSpec.dependencies rootSpec
-    go Data.Set.empty M.empty rootPins rootAbs
+    go rootAbs Data.Set.empty M.empty rootPins rootAbs rootSpec
   where
-    go seen acc pins dir = do
+    go root seen acc pins dir mSpec = do
       dirAbs <- normalizePathSafe dir
       if Data.Set.member dirAbs seen
         then return acc
         else do
-          mspec <- loadBuildSpec dirAbs
+          rawSpec <- case mSpec of
+                       Just s | dirAbs == root -> return (Just s)
+                       _ -> loadBuildSpec dirAbs
+          mspec <- traverse (applyDepOverrides dirAbs depOverrides) rawSpec
           deps <- case mspec of
                     Nothing -> return []
                     Just spec -> forM (M.toList (BuildSpec.dependencies spec)) $ \(depName, dep) -> do
@@ -1287,10 +1296,10 @@ discoverProjects sysAbs rootProj = do
                             }
               acc' = M.insert dirAbs ctx acc
               seen' = Data.Set.insert dirAbs seen
-          foldM (step seen' pins) acc' deps
+          foldM (step root seen' pins) acc' deps
 
-    step seen pins acc (_, depBase) =
-      go seen acc pins depBase
+    step root seen pins acc (_, depBase) =
+      go root seen acc pins depBase Nothing
 
 -- Given a FILE and optionally --syspath PATH:
 -- 'sysPath' is the path to the system directory as given by PATH, defaulting to the actonc executable directory.
@@ -1337,9 +1346,8 @@ findPaths actFile opts  = do execDir <- takeDirectory <$> System.Environment.get
                                  binDir  = if isTmp then srcDir else joinPath [projOut, "bin"]
                                  modName = A.modName $ dirInSrc ++ [fileBody]
                              -- join the search paths from command line options with the ones found in the deps directory
-                             depTypePaths <- if isTmp then return [] else collectDepTypePaths projPath
+                             depTypePaths <- if isTmp then return [] else collectDepTypePaths projPath (C.dep_overrides opts)
                              let sPaths = [projTypes] ++ depTypePaths ++ (C.searchpath opts) ++ [sysTypes]
-                             --putStrLn ("Search paths: " ++ show sPaths)
                              createDirectoryIfMissing True binDir
                              createDirectoryIfMissing True projOut
                              createDirectoryIfMissing True projTypes
@@ -1586,14 +1594,17 @@ showPkgDep dep =
   in "{" ++ Data.List.intercalate "," fields ++ "}"
 
 -- Recursively collect out/types paths for all dependencies declared in Build.act/build.act.json
-collectDepTypePaths :: FilePath -> IO [FilePath]
-collectDepTypePaths projDir = do
+collectDepTypePaths :: FilePath -> [(String, FilePath)] -> IO [FilePath]
+collectDepTypePaths projDir overrides = do
   root <- normalizePathSafe projDir
-  snd <$> go Data.Set.empty root
+  snd <$> go Data.Set.empty root Nothing
   where
-    go seen dir = do
-      mspec <- loadBuildSpec dir
-      case mspec of
+    go seen dir mSpec = do
+      mspec <- case mSpec of
+                 Just s -> return (Just s)
+                 Nothing -> loadBuildSpec dir
+      mspec' <- traverse (applyDepOverrides dir overrides) mspec
+      case mspec' of
         Nothing   -> return (seen, [])
         Just spec -> foldM (step dir) (seen, []) (M.toList (BuildSpec.dependencies spec))
 
@@ -1604,18 +1615,21 @@ collectDepTypePaths projDir = do
       if Data.Set.member depBase seen
         then return (seen', acc)
         else do
-          (seenNext, sub) <- go seen' depBase
+          (seenNext, sub) <- go seen' depBase Nothing
           return (seenNext, acc ++ [typesDir] ++ sub)
 
 -- Collect package and zig dependencies recursively, keeping existing entries on conflict
-collectDepsRecursive :: FilePath -> M.Map String BuildSpec.PkgDep -> IO (M.Map String BuildSpec.PkgDep, M.Map String BuildSpec.ZigDep)
-collectDepsRecursive projDir pins = do
+collectDepsRecursive :: FilePath -> M.Map String BuildSpec.PkgDep -> [(String, FilePath)] -> IO (M.Map String BuildSpec.PkgDep, M.Map String BuildSpec.ZigDep)
+collectDepsRecursive projDir pins overrides = do
   root <- normalizePathSafe projDir
-  (\(_, pkgs, zigs) -> (pkgs, zigs)) <$> go root Data.Set.empty root
+  (\(_, pkgs, zigs) -> (pkgs, zigs)) <$> go root Data.Set.empty root Nothing
   where
-    go root seen dir = do
-      mspec <- loadBuildSpec dir
-      case mspec of
+    go root seen dir mSpec = do
+      mspec <- case mSpec of
+                 Just s -> return (Just s)
+                 Nothing -> loadBuildSpec dir
+      mspec' <- traverse (applyDepOverrides dir overrides) mspec
+      case mspec' of
         Nothing   -> return (seen, M.empty, M.empty)
         Just spec -> do
           let depsHere = BuildSpec.dependencies spec
@@ -1647,7 +1661,7 @@ collectDepsRecursive projDir pins = do
       if Data.Set.member depBase seen
         then return (seen', pkgAcc, zigAcc)
         else do
-          (seenNext, subPkgs, subZigs) <- go root seen' depBase
+          (seenNext, subPkgs, subZigs) <- go root seen' depBase Nothing
           let pkgAcc' = M.insertWith (\_ old -> old) depName dep' pkgAcc
           return (seenNext, pkgAcc' `M.union` subPkgs, zigAcc `M.union` subZigs)
 
@@ -1661,13 +1675,15 @@ collectDepsRecursive projDir pins = do
 
 -- Fetch dependencies (pkg + zig) into Zig global cache and materialize pkg deps
 -- into ~/.cache/acton/deps/<name>-<hash> when using URL-based dependencies.
-fetchDependencies :: C.GlobalOptions -> Paths -> IO ()
-fetchDependencies gopts paths = do
+-- depOverrides: optional path overrides for direct dependencies (NAME=PATH).
+fetchDependencies :: C.GlobalOptions -> Paths -> [(String, FilePath)] -> IO ()
+fetchDependencies gopts paths depOverrides = do
     when (isTmp paths) $ return ()
     mspec <- loadBuildSpec (projPath paths)
     case mspec of
       Nothing -> return ()
-      Just spec -> do
+      Just spec0 -> do
+        spec <- applyDepOverrides (projPath paths) depOverrides spec0
         unless (C.quiet gopts) $
           putStrLn "Resolving dependencies (fetching if missing)..."
         home <- getHomeDirectory
@@ -1781,14 +1797,42 @@ normalizeSpecPaths base spec = do
         _ -> return dep
 
     normalizeZigDeps b = fmap M.fromList . mapM (\(k,v) -> do v' <- normalizeZigDep b v; return (k,v')) . M.toList
-    normalizeZigDep b dep =
-      case BuildSpec.zpath dep of
-        Just p | not (null p) -> do
-          if isAbsolutePath p
-            then do p' <- normalizePathSafe p
-                    return dep { BuildSpec.zpath = Just p' }
-            else return dep { BuildSpec.zpath = Just (collapseDots (normalise p)) }
-        _ -> return dep
+normalizeZigDep b dep =
+  case BuildSpec.zpath dep of
+    Just p | not (null p) -> do
+      if isAbsolutePath p
+        then do p' <- normalizePathSafe p
+                return dep { BuildSpec.zpath = Just p' }
+        else return dep { BuildSpec.zpath = Just (collapseDots (normalise p)) }
+    _ -> return dep
+
+-- Resolve --dep overrides relative to a base directory, returning absolute
+-- normalized paths. If an override path is already absolute we just normalize it.
+normalizeDepOverrides :: FilePath -> [(String, FilePath)] -> IO [(String, FilePath)]
+normalizeDepOverrides base overrides =
+  mapM (\(n,p) -> do
+           let absP0 = if isAbsolutePath p then p else joinPath [base, p]
+           p' <- normalizePathSafe absP0
+           return (n, p'))
+       overrides
+
+-- Apply --dep overrides (NAME=PATH) to a BuildSpec by forcing path on matching deps.
+-- Paths are resolved relative to the given base directory when not absolute.
+applyDepOverrides :: FilePath -> [(String, FilePath)] -> BuildSpec.BuildSpec -> IO BuildSpec.BuildSpec
+applyDepOverrides base overrides spec = do
+    deps' <- foldM applyOne (BuildSpec.dependencies spec) overrides
+    return spec { BuildSpec.dependencies = deps' }
+  where
+    applyOne depsMap (depName, depPath) =
+      case M.lookup depName depsMap of
+        Nothing -> do
+          putStrLn ("Warning: --dep override for '" ++ depName ++ "' ignored (not declared)")
+          return depsMap
+        Just dep -> do
+          let absP0 = if isAbsolutePath depPath then depPath else joinPath [base, depPath]
+          absP <- normalizePathSafe absP0
+          let dep' = dep { BuildSpec.path = Just absP }
+          return (M.insert depName dep' depsMap)
 
 -- Handling Acton files -----------------------------------------------------------------------------
 
@@ -2313,8 +2357,8 @@ runZig gopts opts zigExe zigArgs paths wd = do
 
 -- Render build.zig and build.zig.zon from templates and BuildSpec
 -- rootPins: dependency pins from the main project (applied to all deps, including transitive)
-genBuildZigFiles :: M.Map String BuildSpec.PkgDep -> Paths -> IO ()
-genBuildZigFiles rootPins paths = do
+genBuildZigFiles :: M.Map String BuildSpec.PkgDep -> [(String, FilePath)] -> Paths -> IO ()
+genBuildZigFiles rootPins depOverrides paths = do
     let proj = projPath paths
     projAbs <- canonicalizePath proj
     let sys              = sysPath paths
@@ -2324,15 +2368,18 @@ genBuildZigFiles rootPins paths = do
         distBuildZonPath = joinPath [sys, "builder", "build.zig.zon"]
     buildZigTemplate <- readFile distBuildZigPath
     buildZonTemplate <- readFile distBuildZonPath
-    spec <- loadBuildSpec proj
-    (transPkgs, transZigs) <- collectDepsRecursive proj rootPins
+    spec0 <- loadBuildSpec proj
+    spec  <- traverse (applyDepOverrides proj depOverrides) spec0
+    (transPkgs, transZigs) <- collectDepsRecursive proj rootPins depOverrides
     absSys <- canonicalizePath sys
     let relSys = relativeViaRoot projAbs absSys
     homeDir <- getHomeDirectory
     depsRootAbs <- normalizePathSafe (joinPath [homeDir, ".cache", "acton", "deps"])
     normalizedSpec <- traverse (normalizeSpecPaths proj) spec
-    let applyPins deps = M.mapWithKey (\n d -> M.findWithDefault d n rootPins) deps
-        mergedSpec = fmap (\s -> s { BuildSpec.dependencies     = applyPins (BuildSpec.dependencies s) `M.union` transPkgs
+    let overrideDeps = M.fromList [ (n, BuildSpec.PkgDep Nothing Nothing (Just (collapseDots (normalise p))) Nothing Nothing)
+                                  | (n,p) <- depOverrides ]
+        applyPins deps = M.mapWithKey (\n d -> M.findWithDefault d n rootPins) deps
+        mergedSpec = fmap (\s -> s { BuildSpec.dependencies     = overrideDeps `M.union` (applyPins (BuildSpec.dependencies s) `M.union` transPkgs)
                                    , BuildSpec.zig_dependencies = BuildSpec.zig_dependencies s `M.union` transZigs }) normalizedSpec
     case mergedSpec of
       Nothing -> do
@@ -2478,7 +2525,7 @@ zigBuild env gopts opts paths tasks binTasks allowPrune = do
     -- generate build.zig and build.zig.zon directly from Build.act/build.act.json
     iff (not (C.sub gopts) && not isSysProj) $ do
       pins <- maybe M.empty BuildSpec.dependencies <$> loadBuildSpec (projPath paths)
-      genBuildZigFiles pins paths
+      genBuildZigFiles pins (C.dep_overrides opts) paths
 
     let zigExe = zig paths
         baseArgs = ["build","--cache-dir", local_cache_dir,
