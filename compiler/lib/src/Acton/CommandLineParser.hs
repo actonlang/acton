@@ -39,6 +39,8 @@ data GlobalOptions = GlobalOptions {
 
 data Command        = New NewOptions
                     | Build CompileOptions
+                    | Fetch
+                    | PkgShow
                     | BuildSpecCmd BuildSpecCommand
                     | Cloud CloudOptions
                     | Doc DocOptions
@@ -80,7 +82,8 @@ data CompileOptions   = CompileOptions {
                          target      :: String,
                          cpu         :: String,
                          test        :: Bool,
-                         searchpath  :: [String]
+                         searchpath  :: [String],
+                         dep_overrides :: [(String,String)]
                      } deriving Show
 
 
@@ -108,6 +111,8 @@ cmdLineParser       :: Parser CmdLineOptions
 cmdLineParser       = hsubparser
                         (  command "new"     (info (CmdOpt <$> globalOptions <*> (New <$> newOptions)) (progDesc "Create a new Acton project"))
                         <> command "build"   (info (CmdOpt <$> globalOptions <*> (Build <$> compileOptions)) (progDesc "Build an Acton project"))
+                        <> command "fetch"   (info (CmdOpt <$> globalOptions <*> pure Fetch) (progDesc "Fetch project dependencies (offline prep)"))
+                        <> command "pkg"     (info (CmdOpt <$> globalOptions <*> pkgSubcommands) (progDesc "Package/dependency commands"))
                         <> command "spec"    (info (CmdOpt <$> globalOptions <*> (BuildSpecCmd <$> buildSpecCommand)) (progDesc "Inspect or update build specification"))
                         <> command "cloud"   (info (CmdOpt <$> globalOptions <*> (Cloud <$> cloudOptions)) (progDesc "Run an Acton project in the cloud"))
                         <> command "doc"     (info (CmdOpt <$> globalOptions <*> (Doc <$> docOptions)) (progDesc "Show type and docstring info"))
@@ -189,6 +194,15 @@ compileOptions = CompileOptions
         <*> strOption (long "cpu"       <> metavar "CPU" <> value "" <> help "CPU, e.g. skylake")
         <*> switch (long "test"         <> help "Build tests")
         <*> many (strOption (long "searchpath" <> metavar "DIR" <> help "Add search path"))
+        <*> many (option depOverrideReader
+               (long "dep"
+                <> metavar "NAME=PATH"
+                <> help "Override dependency NAME with local PATH"))
+
+pkgSubcommands :: Parser Command
+pkgSubcommands = hsubparser
+  (  command "show" (info (pure PkgShow) (progDesc "Show dependency tree with overrides"))
+  )
 
 cloudOptions = CloudOptions
         <$> switch (long "run"          <> help "Help run!")
@@ -215,6 +229,12 @@ optimizeOption = option optimizeReader
      <> value Debug
      <> help "Optimization mode (Debug, ReleaseSafe, ReleaseSmall, ReleaseFast)"
     )
+
+depOverrideReader :: ReadM (String,String)
+depOverrideReader = eitherReader $ \s ->
+  case break (== '=') s of
+    (name, '=':path) | not (null name) && not (null path) -> Right (name, path)
+    _ -> Left "Expected NAME=PATH"
 
 descr               = fullDesc <> progDesc "Compilation and management of Acton source code and projects"
                       <> header "actonc - the Acton compiler"
