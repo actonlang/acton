@@ -1033,6 +1033,11 @@ def build_cmd_args(args):
             if args.get_int(argname) != 0:
                 cmdargs.append("--" + argname)
                 cmdargs.append(str(args.get_int(argname)))
+        elif arg.type == "strlist":
+            list_args = args.get_strlist(argname)
+            for larg in list_args:
+                cmdargs.append("--" + argname)
+                cmdargs.append(larg)
 
     return cmdargs
 
