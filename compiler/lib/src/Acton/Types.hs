@@ -297,15 +297,21 @@ genEnv env cs te s                      = do eq <- solveAll env te cs
 
 
 solveScoped env n q te tt []            = return ([], [])
+
+-- Should remove this simplify call too, but doing so exposes our (still) insufficient handling of classes that mutually
+-- depend on witnesses. See base/src/buildy.act, where the indexed assignment to 'new_dependencies' in class BuildSpec
+-- depends on an Indexed witness parametererized on PkgDepency (i.e., one of the classes in the same Decl group as BuildSpec).
+-- And since the surrounding method is *static* it doesn't help that the witness has been made available as a BuildSpec
+-- instance attribute. Some fundamental fix is required...
 solveScoped env n [] te tt cs           = simplify env te tt cs
-solveScoped env n q te tt cs            = do --traceM ("\n\n### solveScoped: " ++ prstrs cs)
-                                             (cs,eq) <- simplifyNew env1 cs
+
+solveScoped env n q te tt cs            = do --traceM ("\n\n### solveScoped for " ++ prstr n ++ ": " ++ prstrs cs)
                                              if null cs then
-                                                 return (cs, eq)
+                                                 return (cs, [])
                                               else do
                                                  w <- newWitness
                                                  let (cs_imp, cs_plain) = splitImply cs
-                                                     eq1 = qwitRefs env1 w cs_plain ++ eq
+                                                     eq1 = qwitRefs env1 w cs_plain
                                                      cs0 = if null cs_plain then id else (Imply (Simple NoLoc "Implication") w q cs_plain :)
                                                      cs1 = cs0 [ Imply i w (q++q') cs' | Imply i w q' cs' <- cs_imp ]
                                                  --traceM ("\n\n### Defer scoped for " ++ prstr n ++ " (" ++ prstrs (dom te) ++ "):   " ++ prstr w ++ ": " ++ prstr q ++ " =>\n" ++ render (nest 4 $ vcat $ map pretty cs))

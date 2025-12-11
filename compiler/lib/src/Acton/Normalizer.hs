@@ -397,6 +397,7 @@ normDecl env ns d                   = do d <- norm env d
 fixupClassAttrs ns d0@Class{dname=n}
   | null eqs                        = ([], [], defs)
   | otherwise                       = --trace ("### Fixup class " ++ prstr n ++ ":") $
+                                      --trace ("  # te:\n" ++ render (nest 8 $ vcat $ map pretty te)) $
                                       --trace ("  # pre: " ++ prstrs (bound pre)) $
                                       --trace ("  # attr: " ++ prstrs (bound attr)) $
                                       --trace ("  # local: " ++ prstrs (bound local)) $
