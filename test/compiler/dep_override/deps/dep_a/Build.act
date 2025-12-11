@@ -1,0 +1,6 @@
+name = "dep_a"
+
+dependencies = {
+  "dep_b": (path="../dep_b_missing")
+  , "dep_c": (path="../dep_c")
+}

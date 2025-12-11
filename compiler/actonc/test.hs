@@ -196,6 +196,32 @@ actoncProjTests =
         zon <- readFile (proj </> "build.zig.zon")
         assertBool "build.zig.zon should declare dep_a" (".dep_a" `isInfixOf` zon)
         assertBool "build.zig.zon should declare dep_b" (".dep_b" `isInfixOf` zon)
+  , testCase "dep overrides propagate to build.zig.zon" $ do
+        let proj = "../../test/compiler/dep_override"
+            depA = proj </> "deps/dep_a"
+            depB = proj </> "deps/dep_b"
+            depC = proj </> "deps/dep_c"
+            wipe p = void $ readCreateProcessWithExitCode (shell $ "rm -rf " ++ p ++ "/build.zig " ++ p ++ "/build.zig.zon " ++ p ++ "/out") ""
+            expect needle hay msg = assertBool msg (needle `isInfixOf` hay)
+            expectAny needles hay msg = assertBool msg (any (`isInfixOf` hay) needles)
+        mapM_ wipe [proj, depA, depB, depC]
+        runActon "build --dep dep_a=deps/dep_a --dep dep_b=deps/dep_b --dep ghost=deps/ghost" ExitSuccess False proj
+        rootZon <- readFile (proj </> "build.zig.zon")
+        depAZon <- readFile (depA </> "build.zig.zon")
+        expect ".dep_a = .{" rootZon "root build.zig.zon should declare dep_a"
+        expectAny ["dep_override/deps/dep_a", "dep_override\\deps\\dep_a"] rootZon "root build.zig.zon should use dep_a override path"
+        expect ".dep_b = .{" rootZon "root build.zig.zon should declare dep_b"
+        expectAny ["dep_override/deps/dep_b", "dep_override\\deps\\dep_b"] rootZon "root build.zig.zon should use dep_b override path transitively"
+        assertBool "root build.zig.zon should not use cached dep_b hash path" (not ("dep_b-" `isInfixOf` rootZon))
+        expect ".dep_c = .{" rootZon "root build.zig.zon should declare dep_c (non-overridden) transitively"
+        expectAny ["dep_override/deps/dep_c", "dep_override\\deps\\dep_c"] rootZon "root build.zig.zon should keep dep_c path"
+        assertBool "root build.zig.zon should not include undeclared ghost override" (not ("ghost" `isInfixOf` rootZon))
+        expect ".dep_b = .{" depAZon "dep_a build.zig.zon should declare dep_b"
+        expectAny ["dep_override/deps/dep_b", "dep_override\\deps\\dep_b", "../dep_b", "..\\dep_b"] depAZon "dep_a build.zig.zon should use dep_b override path"
+        assertBool "dep_a build.zig.zon should not use cached dep_b hash path" (not ("dep_b-" `isInfixOf` depAZon))
+        expect ".dep_c = .{" depAZon "dep_a build.zig.zon should declare dep_c"
+        expectAny ["dep_override/deps/dep_c", "dep_override\\deps\\dep_c", "../dep_c", "..\\dep_c"] depAZon "dep_a build.zig.zon should keep dep_c path"
+        assertBool "dep_a build.zig.zon should not include undeclared ghost override" (not ("ghost" `isInfixOf` depAZon))
 
   -- Verify pruning keeps binaries for modules that still have roots across build / test runs.
   , testCase "executable pruning" $ do
