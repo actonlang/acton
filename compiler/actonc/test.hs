@@ -196,6 +196,15 @@ actoncProjTests =
         zon <- readFile (proj </> "build.zig.zon")
         assertBool "build.zig.zon should declare dep_a" (".dep_a" `isInfixOf` zon)
         assertBool "build.zig.zon should declare dep_b" (".dep_b" `isInfixOf` zon)
+  , testCase "builds dependencies even if unused in imports" $ do
+        let proj = "../../test/compiler/unused_dep"
+            depU = proj </> "deps/dep_unused"
+            wipe p = void $ readCreateProcessWithExitCode (shell $ "rm -rf " ++ p ++ "/build.zig " ++ p ++ "/build.zig.zon " ++ p ++ "/out") ""
+        mapM_ wipe [proj, depU]
+        testBuild "" ExitSuccess False proj
+        let depObj = depU </> "out/types/acton_empty.c"
+        exists <- doesFileExist depObj
+        assertBool "dependency output should be generated even if unused (dummy allowed)" exists
   , testCase "dep overrides propagate to build.zig.zon" $ do
         let proj = "../../test/compiler/dep_override"
             depA = proj </> "deps/dep_a"
