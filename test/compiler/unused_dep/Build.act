@@ -1,0 +1,5 @@
+name = "unused_dep_proj"
+
+dependencies = {
+  "dep_unused": (path="deps/dep_unused")
+}

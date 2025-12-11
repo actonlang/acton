@@ -126,6 +126,29 @@ pub fn build(b: *std.Build) void {
         }
     }
 
+    if (c_files.items.len == 0) {
+        const dummy_rel = "out/types/acton_empty.c";
+        const dummy_abs = joinPath(b.allocator, buildroot_path, dummy_rel);
+        b.build_root.handle.makePath("out/types") catch |err| {
+            std.log.err("Error creating out/types directory: {}", .{err});
+            std.posix.exit(1);
+        };
+        const dummy_file = b.build_root.handle.createFile(dummy_rel, .{}) catch |err| {
+            std.log.err("Error creating dummy C file: {}", .{err});
+            std.posix.exit(1);
+        };
+        dummy_file.writeAll("int acton_empty(void) { return 0; }\n") catch |err| {
+            std.log.err("Error writing dummy C file: {}", .{err});
+            std.posix.exit(1);
+        };
+        dummy_file.close();
+        c_files.append(dummy_abs) catch |err| {
+            std.log.err("Error appending dummy C file path: {}", .{err});
+            std.posix.exit(1);
+        };
+        std.log.info("No generated C sources; added dummy {s}", .{dummy_abs});
+    }
+
     const libActonProject = b.addStaticLibrary(.{
         .name = "ActonProject",
         .target = target,
