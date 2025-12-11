@@ -1825,9 +1825,7 @@ applyDepOverrides base overrides spec = do
   where
     applyOne depsMap (depName, depPath) =
       case M.lookup depName depsMap of
-        Nothing -> do
-          putStrLn ("Warning: --dep override for '" ++ depName ++ "' ignored (not declared)")
-          return depsMap
+        Nothing -> return depsMap
         Just dep -> do
           let absP0 = if isAbsolutePath depPath then depPath else joinPath [base, depPath]
           absP <- normalizePathSafe absP0
@@ -2376,10 +2374,8 @@ genBuildZigFiles rootPins depOverrides paths = do
     homeDir <- getHomeDirectory
     depsRootAbs <- normalizePathSafe (joinPath [homeDir, ".cache", "acton", "deps"])
     normalizedSpec <- traverse (normalizeSpecPaths proj) spec
-    let overrideDeps = M.fromList [ (n, BuildSpec.PkgDep Nothing Nothing (Just (collapseDots (normalise p))) Nothing Nothing)
-                                  | (n,p) <- depOverrides ]
-        applyPins deps = M.mapWithKey (\n d -> M.findWithDefault d n rootPins) deps
-        mergedSpec = fmap (\s -> s { BuildSpec.dependencies     = overrideDeps `M.union` (applyPins (BuildSpec.dependencies s) `M.union` transPkgs)
+    let applyPins deps = M.mapWithKey (\n d -> M.findWithDefault d n rootPins) deps
+        mergedSpec = fmap (\s -> s { BuildSpec.dependencies     = applyPins (BuildSpec.dependencies s) `M.union` transPkgs
                                    , BuildSpec.zig_dependencies = BuildSpec.zig_dependencies s `M.union` transZigs }) normalizedSpec
     case mergedSpec of
       Nothing -> do
@@ -2434,7 +2430,7 @@ genBuildZig template spec =
 
 genBuildZigZon :: String -> String -> FilePath -> FilePath -> BuildSpec.BuildSpec -> String
 genBuildZigZon template relSys depsRootAbs projAbs spec =
-    let pkgDeps = concatMap (pkgToZon depsRootAbs) (M.toList (BuildSpec.dependencies spec))
+    let pkgDeps = concatMap (pkgToZon projAbs depsRootAbs) (M.toList (BuildSpec.dependencies spec))
         zigDeps = concatMap zigToZon (M.toList (BuildSpec.zig_dependencies spec))
         deps = pkgDeps ++ zigDeps
         replaced = map (replace "{{syspath}}" relSys) (lines template)
@@ -2447,15 +2443,17 @@ genBuildZigZon template relSys depsRootAbs projAbs spec =
           in [line] ++ (if sline == "// Dependencies from build.act.json" then [deps] else [])
     in unlines $ header ++ concatMap inject replaced
   where
-    pkgToZon depsRoot (name, dep) =
+    pkgToZon projRoot depsRoot (name, dep) =
       let rawPath = case BuildSpec.path dep of
                       Just p | not (null p) -> p
                       _ -> case BuildSpec.hash dep of
                              Just h -> joinPath [depsRoot, name ++ "-" ++ h]
                              Nothing -> errorWithoutStackTrace ("Dependency " ++ name ++ " has no path or hash")
-          path = if isAbsolutePath rawPath
-                   then relativeViaRoot projAbs (collapseDots (normalise rawPath))
-                   else collapseDots (normalise rawPath)
+          pathAbs = collapseDots $
+                      if isAbsolutePath rawPath
+                        then normalise rawPath
+                        else normalise (rebasePath projRoot rawPath)
+          path = relativeViaRoot projRoot pathAbs
       in unlines [ "        ." ++ name ++ " = .{"
                  , "            .path = \"" ++ path ++ "\","
                  , "        },"
@@ -2463,9 +2461,11 @@ genBuildZigZon template relSys depsRootAbs projAbs spec =
     zigToZon (name, dep) =
       case BuildSpec.zpath dep of
         Just p ->
-          let relPath = if isAbsolutePath p
-                          then relativeViaRoot projAbs (collapseDots (normalise p))
-                          else collapseDots (normalise p)
+          let absPath = collapseDots $
+                          if isAbsolutePath p
+                            then normalise p
+                            else normalise (rebasePath projAbs p)
+              relPath = relativeViaRoot projAbs absPath
           in unlines [ "        ." ++ name ++ " = .{"
                      , "            .path = \"" ++ relPath ++ "\","
                      , "        },"
@@ -2524,7 +2524,9 @@ zigBuild env gopts opts paths tasks binTasks allowPrune = do
     -- If actonc runs as a standalone compiler (not a sub-compiler from Acton CLI),
     -- generate build.zig and build.zig.zon directly from Build.act/build.act.json
     iff (not (C.sub gopts) && not isSysProj) $ do
-      pins <- maybe M.empty BuildSpec.dependencies <$> loadBuildSpec (projPath paths)
+      pinsSpec0 <- loadBuildSpec (projPath paths)
+      pinsSpec  <- traverse (applyDepOverrides (projPath paths) (C.dep_overrides opts)) pinsSpec0
+      let pins = maybe M.empty BuildSpec.dependencies pinsSpec
       genBuildZigFiles pins (C.dep_overrides opts) paths
 
     let zigExe = zig paths

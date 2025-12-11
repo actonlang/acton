@@ -1,0 +1,5 @@
+name = "dep_override"
+
+dependencies = {
+  "dep_a": (path="deps/dep_a_missing")
+}
