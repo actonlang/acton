@@ -40,7 +40,7 @@ simplifyNew                                 :: Env -> Constraints -> TypeM (Cons
 simplifyNew env cs                          = do css <- groupCs env cs
                                                  --traceM ("#### SIMPLIFY NEW" ++ prstrs (map length css))
                                                  --sequence [ traceM ("## long:\n" ++ render (nest 4 $ vcat $ map pretty cs)) | cs <- css, length cs > 500 ]
-                                                 combineEqs <$> simplifyGroupsNew env css
+                                                 combine <$> simplifyGroupsNew env css
 
 simplifyGroupsNew env []                    = return ([], [])
 simplifyGroupsNew env (cs:css)              = do --traceM ("\n\n######### simplifyNewGroup\n" ++ render (nest 4 $ vcat $ map pretty cs))
@@ -52,9 +52,11 @@ simplifyGroupsNew env (cs:css)              = do --traceM ("\n\n######### simpli
 -- Reduce conservatively and remove entailed constraints
 simplify                                    :: Env -> TEnv -> Type -> Constraints -> TypeM (Constraints,Equations)
 simplify env te tt cs                       = do css <- groupCs env cs
+                                                 te <- usubst te
+                                                 tt <- usubst tt
                                                  --traceM ("#### SIMPLIFY " ++ prstrs (map length css))
                                                  --sequence [ traceM ("## long:\n" ++ render (nest 4 $ vcat $ map pretty cs)) | cs <- css, length cs > 500 ]
-                                                 combineEqs <$> simplifyGroups env te tt css
+                                                 combine <$> simplifyGroups env te tt css
 
 simplifyGroups env te tt []                 = return ([], [])
 simplifyGroups env te tt (cs:css)           = do --traceM ("\n\n######### simplifyGroup\n" ++ render (nest 4 $ vcat $ map pretty cs))
@@ -105,15 +107,14 @@ groupCs env cs                              = do st <- currentState
         TUni _ tv0                          = newUnivarToken 0
 
 
-combineEqs (cs, eqs)                        = (cs, comb [] eqs)
-  where comb qeqs []                        = qeqs
-        comb qeqs (qe@QEqn{} : eqs)         = comb (join qe qeqs) eqs
-        comb qeqs (eq : eqs)                = eq : comb qeqs eqs
-        join qe []                          = [qe]
-        join qe (qe' : qeqs)
-          | eqnwit qe == eqnwit qe'         = merge qe qe' : qeqs
-          | otherwise                       = qe' : join qe qeqs
-        merge (QEqn w q eq1) (QEqn _ _ eq2) = QEqn w q (eq1++eq2)
+combine (cs, eqs)                           = (comb [] cs, insertOrMerge eqs [])
+  where comb cs1 []                         = cs1
+        comb cs1 (c@Imply{} : cs)           = comb (join c cs1) cs
+        comb cs1 (c : cs)                   = c : comb cs1 cs
+        join c []                           = [c]
+        join c@Imply{wit=w} (c'@Imply{wit=w'} : cs)
+          | w == w'                         = c{ scoped = scoped c ++ scoped c' } : cs
+          | otherwise                       = c' : join c cs
 
 
 ----------------------------------------------------------------------------------------------------------------------
@@ -247,8 +248,10 @@ instance Pretty Rank where
 solve                                       :: Env -> (Constraint -> Bool) ->
                                                TEnv -> Type -> Equations -> Constraints -> TypeM (Constraints,Equations)
 solve env select te tt eq cs                = do css <- groupCs env cs
+                                                 te <- usubst te
+                                                 tt <- usubst tt
                                                  (cs',eq') <- solveGroups env select te tt eq css
-                                                 return $ combineEqs (cs', eq')
+                                                 return $ combine (cs', eq')
 
 solveGroups env select te tt eq []          = return ([], eq)
 solveGroups env select te tt eq (cs:css)    = do --traceM ("\n\n######### solveGroup\n" ++ render (nest 4 $ vcat $ map pretty cs))

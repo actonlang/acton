@@ -196,7 +196,7 @@ qwitRefs env w0 cs                      = refs cs
         q_tot                           = quantScope0 env
 
 insertOrMerge [] eqs0                   = eqs0
-insertOrMerge (eq@Eqn{}:eqs) eqs0       = insertOrMerge eqs (eq:eqs0)
+insertOrMerge (eq@Eqn{}:eqs) eqs0       = eq : insertOrMerge eqs eqs0
 insertOrMerge ((QEqn _ _ []):eqs) eqs0  = insertOrMerge eqs eqs0
 insertOrMerge (qe:eqs) eqs0             = insertOrMerge eqs (ins qe eqs0)
   where ins (QEqn w q eq) (QEqn w' _ eq' : eqs0)

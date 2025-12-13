@@ -297,15 +297,21 @@ genEnv env cs te s                      = do eq <- solveAll env te cs
 
 
 solveScoped env n q te tt []            = return ([], [])
+
+-- Should remove this simplify call too, but doing so exposes our (still) insufficient handling of classes that mutually
+-- depend on witnesses. See base/src/buildy.act, where the indexed assignment to 'new_dependencies' in class BuildSpec
+-- depends on an Indexed witness parametererized on PkgDepency (i.e., one of the classes in the same Decl group as BuildSpec).
+-- And since the surrounding method is *static* it doesn't help that the witness has been made available as a BuildSpec
+-- instance attribute. Some fundamental fix is required...
 solveScoped env n [] te tt cs           = simplify env te tt cs
-solveScoped env n q te tt cs            = do --traceM ("\n\n### solveScoped: " ++ prstrs cs)
-                                             (cs,eq) <- simplifyNew env1 cs
+
+solveScoped env n q te tt cs            = do --traceM ("\n\n### solveScoped for " ++ prstr n ++ ": " ++ prstrs cs)
                                              if null cs then
-                                                 return (cs, eq)
+                                                 return (cs, [])
                                               else do
                                                  w <- newWitness
                                                  let (cs_imp, cs_plain) = splitImply cs
-                                                     eq1 = qwitRefs env1 w cs_plain ++ eq
+                                                     eq1 = qwitRefs env1 w cs_plain
                                                      cs0 = if null cs_plain then id else (Imply (Simple NoLoc "Implication") w q cs_plain :)
                                                      cs1 = cs0 [ Imply i w (q++q') cs' | Imply i w q' cs' <- cs_imp ]
                                                  --traceM ("\n\n### Defer scoped for " ++ prstr n ++ " (" ++ prstrs (dom te) ++ "):   " ++ prstr w ++ ": " ++ prstr q ++ " =>\n" ++ render (nest 4 $ vcat $ map pretty cs))
@@ -630,13 +636,13 @@ matchingDec n sc dec dec'
   | dec == dec'                         = True
   | otherwise                           = decorationMismatch n sc dec
 
-matchDefAssumption env def
-  | q0 == q1                            = match env [] [] def
+matchDefAssumption env cs0 def
+  | q0 == q1                            = match env cs0 [] def
   | otherwise                           = do (cs, uvs) <- instQBinds env q1
                                              let eq0 = witSubst env q1 cs
                                                  s = qbound q1 `zip` uvs
                                                  def' = vsubst s def{ qbinds = [] }
-                                             match env cs eq0 def'
+                                             match env (cs++cs0) eq0 def'
   where NDef (TSchema _ q0 t0) dec _    = findName (dname def) env
         t2 | inClass env                = addSelf t0 (Just dec)
            | otherwise                  = t0
@@ -645,7 +651,8 @@ matchDefAssumption env def
            | otherwise                  = effect t2
         (pos0,kwd0)                     = qual env dec (pos def) (kwd def) (qualWPar env q0)
 
-        match env cs eq0 def            = do --traceM ("## matchDefAssumption " ++ prstr (dname def) ++ ": [" ++ prstrs q1 ++ "] => " ++ prstr (Cast info t1 t2))
+        match env cs eq0 def            = do --traceM ("## matchDefAssumption " ++ prstr (dname def) ++ ": [" ++ prstrs q0 ++ "] => ")
+                                             --traceM (render (nest 4 $ vcat $ map pretty $ Cast info t1 t2 : cs))
                                              (cs2,eq1) <- solveScoped env (dname def) q0 [] t1 (Cast info t1 t2 : cs)
                                              cs2 <- usubst cs2
                                              return (cs2, def{ qbinds = noqual env q0, pos = pos0, kwd = kwd0,
@@ -1392,8 +1399,8 @@ instance Check Decl where
                                              -- At this point, n has the type given by its def annotations.
                                              -- Now check that this type is no less general than its recursion assumption in env.
                                              let body = bindWits eq1 ++ defaultsP p' ++ defaultsK k' ++ b'
-                                             (cs1,def) <- matchDefAssumption env (Def l n q p' k' (Just t) body dec fx' ddoc)
-                                             return (cs1++cs0, def{ pos = noDefaultsP (pos def), kwd = noDefaultsK (kwd def) })
+                                             (cs1,def) <- matchDefAssumption env cs0 (Def l n q p' k' (Just t) body dec fx' ddoc)
+                                             return (cs1, def{ pos = noDefaultsP (pos def), kwd = noDefaultsK (kwd def) })
       where env1                        = reserve (bound (p,k) ++ assigned b \\ stateScope env) $ defineTVars q env
             fx'                         = fxUnwrap env fx
 
