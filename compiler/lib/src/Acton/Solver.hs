@@ -52,6 +52,8 @@ simplifyGroupsNew env (cs:css)              = do --traceM ("\n\n######### simpli
 -- Reduce conservatively and remove entailed constraints
 simplify                                    :: Env -> TEnv -> Type -> Constraints -> TypeM (Constraints,Equations)
 simplify env te tt cs                       = do css <- groupCs env cs
+                                                 te <- usubst te
+                                                 tt <- usubst tt
                                                  --traceM ("#### SIMPLIFY " ++ prstrs (map length css))
                                                  --sequence [ traceM ("## long:\n" ++ render (nest 4 $ vcat $ map pretty cs)) | cs <- css, length cs > 500 ]
                                                  combine <$> simplifyGroups env te tt css
@@ -246,6 +248,8 @@ instance Pretty Rank where
 solve                                       :: Env -> (Constraint -> Bool) ->
                                                TEnv -> Type -> Equations -> Constraints -> TypeM (Constraints,Equations)
 solve env select te tt eq cs                = do css <- groupCs env cs
+                                                 te <- usubst te
+                                                 tt <- usubst tt
                                                  (cs',eq') <- solveGroups env select te tt eq css
                                                  return $ combine (cs', eq')
 
