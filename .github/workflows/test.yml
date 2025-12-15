@@ -861,7 +861,7 @@ jobs:
           echo "Updated formula to version ${VERSION} with checksum ${{ steps.shasum.outputs.sum }}"
           cat homebrew-acton/Formula/acton.rb | grep -A 1 "^ *url"
       - name: "Create Pull Request"
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v8
         with:
           path: homebrew-acton
           token: ${{ secrets.ACTBOT_PAT }}
