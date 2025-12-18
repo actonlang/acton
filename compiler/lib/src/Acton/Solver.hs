@@ -323,7 +323,8 @@ solve' env select hist te tt eq cs
                                                  --traceM ("  # trying tuple " ++ prstr v ++ " = " ++ prstr t)
                                                  unify (DfltInfo NoLoc 5 Nothing []) (tUni v) t
                                                  proceed (t:hist) eq cs
-          where attrs                       = sortBy (\a b -> compare (nstr a) (nstr b)) $ nub [ n | Sel _ _ (TUni _ v') n _ <- solve_cs, v' == v ]
+          where selsOf cs                   = sortBy (\a b -> compare (nstr a) (nstr b)) $ nub [ n | Sel _ _ (TUni _ v') n _ <- cs, v' == v ]
+                attrs                       = nub $ selsOf solve_cs ++ concat [ selsOf cs | Imply _ _ _ cs <- solve_cs ]
         tryAlt v t
           | uvkind v == KFX                 = do t <- instwild env (uvkind v) t
                                                  --traceM ("  # TRYING " ++ prstr v ++ " = " ++ prstr t)
