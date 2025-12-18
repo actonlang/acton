@@ -1476,6 +1476,8 @@ varinfo cs                                  = f cs (VInfo [] [] [] Map.empty Map
       where vs                              = nub $ ufree t
     f (Mut _ (TUni _ v) n t : cs)           = f cs . mutattr v n . embed (ufree t)
     f (Sel _ _ (TUni _ v) n t : cs)         = f cs . selattr v n . embed (ufree t)
+    f (Sel _ _ (TTuple _ _ TUni{}) _ _ : cs)
+                                            = f cs
     f (Seal _ (TUni _ v) : cs)              = f cs . seal v
     f (Imply _ _ _ cs' : cs)                = f (cs'++cs)
     f []                                    = Just
@@ -1565,6 +1567,12 @@ mkLUB env (v,ts)
 --  no Sel/Mut covered by Cast/Sub/Proto bounds
 
 
+instance Pretty (TUni, [Type]) where
+    pretty (uv, ts)                     = pretty uv <+> text "<" <+> pretty ts
+
+instance Pretty [Type] where
+    pretty ts                           = brackets (commaSep pretty ts)
+
 instance Pretty (TUni, Type) where
     pretty (uv, t)                      = pretty uv <+> text "~" <+> pretty t
 
@@ -1617,8 +1625,8 @@ improve env te tt eq cs
         Right vclosed                   = closure
         (vvsL,vvsU)                     = unzip vclosed
         gsimple                         = gsimp vi vclosed obsvars (varvars vi)
-        multiUBnd                       = [ (v,ts) | (v,ts) <- multiUBounds cs, noEmbed v, noLOpt v ]
-        multiLBnd                       = [ (v,ts) | (v,ts) <- multiLBounds cs, noEmbed v ]
+        multiUBnd                       = [ (v,ts) | (v,ts) <- multiUBounds cs, length (nub ts) > 1, noEmbed v, noLOpt v ]
+        multiLBnd                       = [ (v,ts) | (v,ts) <- multiLBounds cs, length (nub ts) > 1, noEmbed v ]
         lowerBnd                        = [ (v,t) | (v,[t]) <- Map.assocs (lbounds vi), noEmbed v ]
         upperBnd                        = [ (v,t) | (v,[t]) <- Map.assocs (ubounds vi), noEmbed v ]
         posLBnd                         = [ (v,t) | (v,t) <- lowerBnd, v `notElem` negvars, implAll env (lookup' v $ pbounds vi) t ]
@@ -1648,12 +1656,12 @@ improve env te tt eq cs
 
 multiUBounds cs                         = Map.assocs $ f cs Map.empty
   where
-    f []                                = Map.filter ((>1) . length)
+    f []                                = id
     f (Cast _ TUni{} TUni{} : cs)       = f cs
     f (Cast _ (TUni _ v) t : cs)        = unOpt v t cs
     f (Sub _ _ TUni{} TUni{} : cs)      = f cs
     f (Sub _ _ (TUni _ v) t : cs)       = unOpt v t cs
-    f (Imply _ _ _ cs' : cs)            = Map.union (f cs' Map.empty) . f cs
+    f (Imply _ _ _ cs' : cs)            = Map.unionWith (++) (f cs' Map.empty) . f cs
     f (_ : cs)                          = f cs
 
     unOpt v (TOpt _ TUni{}) cs          = f cs
@@ -1662,12 +1670,12 @@ multiUBounds cs                         = Map.assocs $ f cs Map.empty
 
 multiLBounds cs                         = Map.assocs $ f cs Map.empty
   where
-    f []                                = Map.filter ((>1) . length)
+    f []                                = id
     f (Cast _ TUni{} TUni{} : cs)       = f cs
     f (Cast _ t (TUni _ v) : cs)        = f cs . Map.insertWith (++) v [t]
     f (Sub _ _ TUni{} TUni{} : cs)      = f cs
     f (Sub _ _ t (TUni _ v) : cs)       = f cs . Map.insertWith (++) v [t]
-    f (Imply _ _ _ cs' : cs)            = Map.union (f cs' Map.empty) . f cs
+    f (Imply _ _ _ cs' : cs)            = Map.unionWith (++) (f cs' Map.empty) . f cs
     f (_ : cs)                          = f cs
 
 
