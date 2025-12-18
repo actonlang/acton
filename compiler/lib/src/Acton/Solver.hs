@@ -712,7 +712,9 @@ hasWitness env (TCon _ c) p
 hasWitness env t p          =  not $ null $ findWitness env t p
 
 allExtProto                 :: Env -> PCon -> [Type]
-allExtProto env p           = reverse [ schematic (wtype w) | w <- witsByPName env (tcname p) ]
+allExtProto env p
+  | p == pIdentity          = [ tCon tc | tc <- allCons env, isActor env (tcname tc) ]
+  | otherwise               = reverse [ schematic (wtype w) | w <- witsByPName env (tcname p) ]
 
 allExtProtoAttr             :: Env -> Name -> [Type]
 allExtProtoAttr env n       = [ tCon tc | tc <- allCons env, any ((n `elem`) . allAttrs' env . proto) (witsByTName env $ tcname tc) ]
