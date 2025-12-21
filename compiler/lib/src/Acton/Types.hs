@@ -298,11 +298,9 @@ genEnv env cs te s                      = do eq <- solveAll env te cs
 
 solveScoped env n q te tt []            = return ([], [])
 
--- Should remove this simplify call too, but doing so exposes our (still) insufficient handling of classes that mutually
--- depend on witnesses. See base/src/buildy.act, where the indexed assignment to 'new_dependencies' in class BuildSpec
--- depends on an Indexed witness parametererized on PkgDepency (i.e., one of the classes in the same Decl group as BuildSpec).
--- And since the surrounding method is *static* it doesn't help that the witness has been made available as a BuildSpec
--- instance attribute. Some fundamental fix is required...
+-- Should remove this simplify call too, but doing so destroys performance of our current inferior constraint-solver (see module yang.schema in acton-yang).
+
+--solveScoped env n [] te tt cs           = return (cs, [])
 solveScoped env n [] te tt cs           = simplify env te tt cs
 
 solveScoped env n q te tt cs            = do --traceM ("\n\n### solveScoped for " ++ prstr n ++ ": " ++ prstrs cs)
