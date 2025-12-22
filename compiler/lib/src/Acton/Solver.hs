@@ -1626,8 +1626,8 @@ improve env te tt eq cs
         Right vclosed                   = closure
         (vvsL,vvsU)                     = unzip vclosed
         gsimple                         = gsimp vi vclosed obsvars (varvars vi)
-        multiUBnd                       = [ (v,ts) | (v,ts) <- multiUBounds cs, length (nub ts) > 1, noEmbed v, noLOpt v ]
-        multiLBnd                       = [ (v,ts) | (v,ts) <- multiLBounds cs, length (nub ts) > 1, noEmbed v ]
+        multiUBnd                       = [ (v,ts) | (v,ts) <- multiUBounds cs, noEmbed v, noLOpt v ]
+        multiLBnd                       = [ (v,ts) | (v,ts) <- multiLBounds cs, noEmbed v ]
         lowerBnd                        = [ (v,t) | (v,[t]) <- Map.assocs (lbounds vi), noEmbed v ]
         upperBnd                        = [ (v,t) | (v,[t]) <- Map.assocs (ubounds vi), noEmbed v ]
         posLBnd                         = [ (v,t) | (v,t) <- lowerBnd, v `notElem` negvars, implAll env (lookup' v $ pbounds vi) t ]
@@ -1655,29 +1655,45 @@ improve env te tt eq cs
                 optCon TOpt{}                   = True
                 optCon _                        = False
 
-multiUBounds cs                         = Map.assocs $ f cs Map.empty
+multiUBounds cs                         = Map.assocs $ Map.filter ((>1) . length) $ foldr (Map.unionWith app1) Map.empty maps
   where
-    f []                                = id
-    f (Cast _ TUni{} TUni{} : cs)       = f cs
-    f (Cast _ (TUni _ v) t : cs)        = unOpt v t cs
-    f (Sub _ _ TUni{} TUni{} : cs)      = f cs
-    f (Sub _ _ (TUni _ v) t : cs)       = unOpt v t cs
-    f (Imply _ _ _ cs' : cs)            = Map.unionWith (++) (f cs' Map.empty) . f cs
-    f (_ : cs)                          = f cs
+    maps                                = bnds cs : imps cs
 
-    unOpt v (TOpt _ TUni{}) cs          = f cs
-    unOpt v (TOpt _ t) cs               = f cs . Map.insertWith (++) v [t]
-    unOpt v t cs                        = f cs . Map.insertWith (++) v [t]
+    bnds []                             = Map.empty
+    bnds (Cast _ TUni{} TUni{} : cs)    = bnds cs
+    bnds (Cast _ (TUni _ v) t : cs)     = unOpt v t cs
+    bnds (Sub _ _ TUni{} TUni{} : cs)   = bnds cs
+    bnds (Sub _ _ (TUni _ v) t : cs)    = unOpt v t cs
+    bnds (_ : cs)                       = bnds cs
 
-multiLBounds cs                         = Map.assocs $ f cs Map.empty
+    imps []                             = []
+    imps (Imply _ _ _ cs' : cs)         = bnds cs' : imps cs
+    imps (_ : cs)                       = imps cs
+
+    app1 [x] [y] | x == y               = [x]
+    app1 xs ys                          = xs ++ ys
+
+    unOpt v (TOpt _ TUni{}) cs          = bnds cs
+    unOpt v (TOpt _ t) cs               = Map.insertWith (++) v [t] $ bnds cs
+    unOpt v t cs                        = Map.insertWith (++) v [t] $ bnds cs
+
+multiLBounds cs                         = Map.assocs $ Map.filter ((>1) . length) $ foldr (Map.unionWith app1) Map.empty maps
   where
-    f []                                = id
-    f (Cast _ TUni{} TUni{} : cs)       = f cs
-    f (Cast _ t (TUni _ v) : cs)        = f cs . Map.insertWith (++) v [t]
-    f (Sub _ _ TUni{} TUni{} : cs)      = f cs
-    f (Sub _ _ t (TUni _ v) : cs)       = f cs . Map.insertWith (++) v [t]
-    f (Imply _ _ _ cs' : cs)            = Map.unionWith (++) (f cs' Map.empty) . f cs
-    f (_ : cs)                          = f cs
+    maps                                = bnds cs : imps cs
+
+    bnds []                             = Map.empty
+    bnds (Cast _ TUni{} TUni{} : cs)    = bnds cs
+    bnds (Cast _ t (TUni _ v) : cs)     = Map.insertWith (++) v [t] $ bnds cs
+    bnds (Sub _ _ TUni{} TUni{} : cs)   = bnds cs
+    bnds (Sub _ _ t (TUni _ v) : cs)    = Map.insertWith (++) v [t] $ bnds cs
+    bnds (_ : cs)                       = bnds cs
+
+    imps []                             = []
+    imps (Imply _ _ _ cs' : cs)         = bnds cs' : imps cs
+    imps (_ : cs)                       = imps cs
+
+    app1 [x] [y] | x == y               = [x]
+    app1 xs ys                          = xs ++ ys
 
 
 dnClosed env (TCon _ c)                 = isActor env (tcname c)
