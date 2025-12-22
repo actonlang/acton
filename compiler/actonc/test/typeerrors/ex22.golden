@@ -5,7 +5,7 @@ Building file test/typeerrors/ex22.act using temporary scratch directory
      |
    1 |    f : [A(Plus)] => (A) -> A
      :    ^ 
-     :    `- too few argument(s) in call to f
+     :    `- keyword argument(s) 'y' is missing in call to f
      :
    3 | +> def f(x,y):
    4 | |>     return x
