@@ -323,7 +323,8 @@ solve' env select hist te tt eq cs
                                                  --traceM ("  # trying tuple " ++ prstr v ++ " = " ++ prstr t)
                                                  unify (DfltInfo NoLoc 5 Nothing []) (tUni v) t
                                                  proceed (t:hist) eq cs
-          where attrs                       = sortBy (\a b -> compare (nstr a) (nstr b)) $ nub [ n | Sel _ _ (TUni _ v') n _ <- solve_cs, v' == v ]
+          where selsOf cs                   = sortBy (\a b -> compare (nstr a) (nstr b)) $ nub [ n | Sel _ _ (TUni _ v') n _ <- cs, v' == v ]
+                attrs                       = nub $ selsOf solve_cs ++ concat [ selsOf cs | Imply _ _ _ cs <- solve_cs ]
         tryAlt v t
           | uvkind v == KFX                 = do t <- instwild env (uvkind v) t
                                                  --traceM ("  # TRYING " ++ prstr v ++ " = " ++ prstr t)
@@ -711,7 +712,10 @@ hasWitness env (TCon _ c) p
 hasWitness env t p          =  not $ null $ findWitness env t p
 
 allExtProto                 :: Env -> PCon -> [Type]
-allExtProto env p           = reverse [ schematic (wtype w) | w <- witsByPName env (tcname p) ]
+allExtProto env p
+  | p == pIdentity          = ts ++ [ schematic $ tCon tc | tc <- allCons env, isActor env (tcname tc) ]
+  | otherwise               = ts
+  where ts                  = reverse [ schematic (wtype w) | w <- witsByPName env (tcname p) ]
 
 allExtProtoAttr             :: Env -> Name -> [Type]
 allExtProtoAttr env n       = [ tCon tc | tc <- allCons env, any ((n `elem`) . allAttrs' env . proto) (witsByTName env $ tcname tc) ]
@@ -741,15 +745,33 @@ cast' env info (TCon _ c1) (TCon _ c2)
                                                   unifyM info (tcargs c') (tcargs c2)
   where search                              = findAncestor env c1 (tcname c2)
 
-cast' env info f1@(TFun _ fx1 p1 k1 t1) f2@(TFun _ fx2 p2 k2 t2)
-                                            = do cast env info fx1 fx2
-                                                 k2 <- castPos env info p2 p1 k2 k1
-                                                 cast env info k2 k1
-                                                 cast env info t1 t2
+--                 as declared               as called
+--                 existing                  expected
+cast' env info t1@(TFun _ fx1 p1 k1 t1') t2@(TFun _ fx2 p2 k2 t2')
+  | varTails [p1,p2] || varTails [k1,k2]    = do --traceM ("## Unifying funs: " ++ prstr t1 ++ " ~ " ++ prstr t2)
+                                                 unify info t1 t2
+                                                 return ()
+  | otherwise                               = do --traceM ("### Aligning fun " ++ prstr t1 ++ " < " ++ prstr t2)
+                                                 (cs1,ts) <- castpos env info p2 p1
+                                                 cs2 <- castkwd0 env info ts k2 k1
+                                                 t1 <- usubst t1
+                                                 t2 <- usubst t2
+                                                 let (TFun _ fx1 p1 k1 t1', TFun _ fx2 p2 k2 t2') = (t1, t2)
+                                                 reduce env [] (Cast info fx1 fx2 : Cast info t1' t2' : cs1 ++ cs2)
+                                                 return ()
 
-cast' env info (TTuple _ p1 k1) (TTuple _ p2 k2)
-                                            = do k1 <- castPos env info p1 p2 k1 k2
-                                                 cast env info k1 k2
+cast' env info t1@(TTuple _ p1 k1) t2@(TTuple _ p2 k2)
+  | varTails [p1,p2] || varTails [k1,k2]    = do --traceM ("### Unifying tuples: " ++ prstr t1 ++ " ~ " ++ prstr t2)
+                                                 unify info t1 t2
+                                                 return ()
+  | otherwise                               = do --traceM ("### Aligning tuple " ++ prstr t1 ++ " < " ++ prstr t2)
+                                                 (cs1,ts) <- castpos env info p1 p2
+                                                 cs2 <- castkwd0 env info ts k1 k2
+                                                 t1 <- usubst t1
+                                                 t2 <- usubst t2
+                                                 let (TTuple _ p1 k1, TTuple _ p2 k2) = (t1, t2)
+                                                 reduce env [] (cs1 ++ cs2)
+                                                 return ()
 
 cast' env info (TOpt _ t1@TOpt{}) t2        = cast env info t1 t2
 cast' env info t1 (TOpt _ t2@TOpt{})        = cast env info t1 t2
@@ -775,40 +797,6 @@ cast' env info t1@(TFX _ fx1) t2@(TFX _ fx2)
         castFX FXAction FXAction            = True
         castFX FXAction FXProc              = True
         castFX _        _                   = False
-
-cast' env _ (TNil _ k1) (TNil _ k2)
-  | k1 == k2                                = return ()
-cast' env info (TUni _ tv) r2@(TNil _ k)
-  | uvkind tv == k                          = do usubstitute tv (tNil k)
-                                                 cast env info (tNil k) r2
-cast' env info r1@(TNil _ k) (TUni _ tv)
-  | k == uvkind tv                          = do usubstitute tv (tNil k)
-                                                 cast env info r1 (tNil k)
-cast' env info (TRow _ k1 n1 t1 r1) (TRow _ k2 n2 t2 r2)
-  | k1 == k2 && n1 == n2                    = do cast env info t1 t2
-                                                 cast env info r1 r2
-cast' env info r1@(TNil _ _) r2@(TRow _ _ n _ _)
-                                            = posElemNotFound0 env True (Cast info r1 r2) n
-cast' env info r1@(TRow _ _ n _ _) r2@(TNil _ _)
-                                            = surplusRow r1
-cast' env info (TStar _ k1 r1) (TStar _ k2 r2)
-  | k1 == k2                                = cast env info r1 r2
-cast' env info (TUni _ tv) r2@(TRow _ k n _ _)
-  | uvkind tv == k                          = do r1 <- instwild env k $ tRow k n tWild tWild
-                                                 usubstitute tv r1
-                                                 cast env info r1 r2
-cast' env info r1@(TRow _ k n _ _) (TUni _ tv)
-  | k == uvkind tv                          = do r2 <- instwild env k $ tRow k n tWild tWild
-                                                 usubstitute tv r2
-                                                 cast env info r1 r2
-cast' env info (TUni _ tv) r2@(TStar _ k _)
-  | uvkind tv == k                          = do r1 <- instwild env k $ tStar k tWild
-                                                 usubstitute tv r2
-                                                 cast env info r1 r2
-cast' env info r1@(TStar _ k _) (TUni _ tv)
-  | k == uvkind tv                          = do r2 <- instwild env k $ tStar k tWild
-                                                 usubstitute tv r1
-                                                 cast env info r1 r2
 
 cast' env info (TUni _ tv) t2@TFun{}
   | uvkind tv == KType                      = do t1 <- instwild env KType $ tFun tWild tWild tWild tWild
@@ -840,6 +828,131 @@ cast' env info t1 (TOpt _ t2)               = cast env info t1 t2               
 cast' env info t1 t2                        = noRed0 env (Cast info t1 t2)
 
 
+castpos                                     :: Env -> ErrInfo -> PosRow -> PosRow -> TypeM (Constraints, [Type])
+castpos env info TUni{}         TUni{}      = error "INTERNAL ERROR: castpos"
+castpos env info (TUni _ tv)     r2
+  | tv `elem` ufree r2                      = conflictingRow tv                     -- use rowTail?
+  | otherwise                               = do r1 <- rowShape r2
+                                                 --traceM (" ## castpos L " ++ prstr tv ++ " ~ " ++ prstr r1)
+                                                 usubstitute tv r1
+                                                 castpos env info r1 r2
+castpos env info r1             (TUni _ tv)
+  | tv `elem` ufree r1                      = conflictingRow tv                     -- use rowTail?
+  | otherwise                               = do r2 <- rowShape r1
+                                                 --traceM (" ## castpos R " ++ prstr r2 ++ " ~ " ++ prstr tv)
+                                                 usubstitute tv r2
+                                                 castpos env info r1 r2
+
+castpos env info (TRow _ _ _ t1 r1) (TRow _ _ _ t2 r2)
+                                            = do --traceM (" ## castpos A " ++ prstr t1 ++ " < " ++ prstr t2)
+                                                 (cs,ts) <- castpos env info r1 r2
+                                                 return (Cast info t1 t2 : cs, ts)
+castpos env info (TStar _ _ r1)     (TStar _ _ r2)
+                                            = do --traceM (" ## castpos B " ++ prstr (tTupleP r1) ++ " < " ++ prstr (tTupleP r2))
+                                                 return ([Cast info (tTupleP r1) (tTupleP r2)], [])
+castpos env info TNil{}             TNil{}
+                                            = do --traceM (" ## castpos C ")
+                                                 return ([], [])
+
+castpos env info (TStar _ _ r1)     r2      = do --traceM (" ## castpos D " ++ prstr r1 ++ " ~ " ++ prstr r2)
+                                                 castpos env info r1 r2
+castpos env info r1                 (TStar _ _ r2)
+                                            = do --traceM (" ## castpos E " ++ prstr r1 ++ " ~ " ++ prstr r2)
+                                                 castpos env info r1 r2
+
+castpos env info r1@TNil{}          r@(TRow _ _ _ t2 r2)
+  | TOpt{} <- t2                            = do --traceM (" ## castpos F Opt ~ " ++ prstr t2)
+                                                 castpos env info r1 r2
+  | otherwise                               = do --traceM (" ## castpos G Nil ~ " ++ prstr r)
+                                                 posElemNotFound0 env True (Cast info r1 r) nWild
+castpos env info (TRow _ _ _ t1 r1) r2@TNil{}
+                                            = do --traceM (" ## castpos H " ++ prstr t1)
+                                                 (cs,ts) <- castpos env info r1 r2
+                                                 return (cs, t1 : ts)
+
+
+castkwd0                                    :: Env -> ErrInfo -> [Type] -> KwdRow -> KwdRow -> TypeM Constraints
+castkwd0 env info [] r1 r2                  = castkwd env info r1 r2
+castkwd0 env info (t1:ts) r1 (TRow _ _ n t2 r2)
+                                            = do --traceM (" ## castkwd0 extra pos for " ++ prstr n ++ ": " ++ prstr t1 ++ " < " ++ prstr t2)
+                                                 cs <- castkwd0 env info ts r1 r2
+                                                 return (Cast info t1 t2 : cs)
+castkwd0 env info ts r1 r2                  = posElemNotFound0 env False (Cast info r1 r2) nWild
+
+castkwd                                     :: Env -> ErrInfo -> KwdRow -> KwdRow -> TypeM Constraints
+castkwd env info r1 (TUni _ tv)             = do unif r1
+                                                 r2 <- usubst (tUni tv)
+                                                 castkwd env info r1 r2
+  where unif TUni{}                         = error "INTERNAL ERROR: castkwd"
+        unif (TRow _ _ n t r)
+          | tv `elem` ufree r               = conflictingRow tv                     -- use rowTail?
+          | otherwise                       = do --traceM (" ## castkwd Row - Var: " ++ prstr (tRow KRow n t r) ++ " = " ++ prstr tv)
+                                                 t2 <- newUnivar
+                                                 r2 <- tRow KRow n t2 <$> newUnivarOfKind KRow
+                                                 unify info (tUni tv) r2
+        unif (TStar _ _ r)
+          | tv `elem` ufree r               = conflictingRow tv                     -- use rowTail?
+          | otherwise                       = do --traceM (" ## castkwd Star - Var: " ++ prstr (tStar KRow r) ++ " = " ++ prstr tv)
+                                                 r2 <- tStar KRow <$> newUnivarOfKind KRow
+                                                 unify info (tUni tv) r2
+        unif TNil{}                         = do --traceM (" ## castkwd Nil - Var: " ++ prstr (tNil KRow) ++ " = " ++ prstr tv)
+                                                 r2 <- pure $ tNil KRow
+                                                 unify info (tUni tv) r2
+
+castkwd env info r1 (TRow _ _ n2 t2 r2)     = do (t1,r1') <- pick r1
+                                                 r2 <- usubst r2
+                                                 cs <- castkwd env info r1' r2
+                                                 return (Cast info t1 t2 : cs)
+  where pick (TUni _ tv)
+          | tv `elem` ufree r2              = conflictingRow tv                     -- use rowTail?
+          | otherwise                       = do --traceM (" ## castkwd Var - Row: " ++ prstr (tUni tv) ++ " = " ++ prstr (tRow KRow n2 t2 r2))
+                                                 r1 <- tRow KRow n2 t2 <$> newUnivarOfKind KRow
+                                                 unify info (tUni tv) r1
+                                                 pick r1
+        pick (TRow _ _ n t r)
+          | n == n2                         = do --traceM (" ## castkwd Row - Row: " ++ prstr (tRow KRow n t r) ++ " = " ++ prstr (tRow KRow n2 t2 r2))
+                                                 return (t, r)
+          | otherwise                       = do --traceM (" ## castkwd Row - Row: " ++ prstr (tRow KRow n t r) ++ " ≠ " ++ prstr (tRow KRow n2 t2 r2))
+                                                 kwdNotFound0 env info n2
+        pick (TStar _ _ r)                  = do --traceM (" ## castkwd Star - Row: " ++ prstr (tStar KRow r) ++ " ≠ " ++ prstr (tRow KRow n2 t2 r2))
+                                                 kwdNotFound0 env info n2
+        pick TNil{}                         = do --traceM (" ## castkwd None - Row: " ++ prstr (tNil KRow) ++ " ≠ " ++ prstr (tRow KRow n2 t2 r2))
+                                                 kwdNotFound0 env info n2
+
+castkwd env info r1 (TStar _ _ r2)          = match r1
+  where match (TUni _ tv)
+          | tv `elem` ufree r2              = conflictingRow tv                     -- use rowTail?
+          | otherwise                       = do --traceM (" ## castkwd Var - Star: " ++ prstr (tUni tv) ++ " = " ++ prstr (tStar KRow r2))
+                                                 r1 <- tStar KRow <$> newUnivarOfKind KRow
+                                                 unify info (tUni tv) r1
+                                                 match r1
+        match (TRow _ _ n t r)              = do --traceM (" ## castkwd Row - Star: " ++ prstr (tRow KRow n t r) ++ " ≠ " ++ prstr (tStar KRow r2))
+                                                 kwdUnexpected info n
+        match r1@(TStar _ _ r)
+          | TUni _ v <- r, TUni _ v2 <- r2  = do --traceM (" ## castkwd StarVar - StarVar: " ++ prstr (tStar KRow r) ++ " = " ++ prstr (tStar KRow r2))
+                                                 unify info r r2
+                                                 return []
+          | TUni _ v <- r                   = do --traceM (" ## castkwd StarVar - Star: " ++ prstr (tStar KRow r) ++ " = " ++ prstr (tStar KRow r2))
+                                                 castkwd env info r1 r2
+          | otherwise                       = do --traceM (" ## castkwd Star - Star: " ++ prstr (tStar KRow r) ++ " = " ++ prstr (tStar KRow r2))
+                                                 castkwd env info r r2
+        match r1@TNil{}                     = do --traceM (" ## castkwd Nil - Star: " ++ prstr (tNil KRow) ++ " ≠ " ++ prstr (tStar KRow r2))
+                                                 noRed0 env (Cast info r1 r2)
+
+castkwd env info r1 r2@TNil{}               = term r1
+  where term (TUni _ tv)                    = do --traceM (" ## castkwd Var - Nil: " ++ prstr (tUni tv) ++ " = " ++ prstr (tNil KRow))
+                                                 r1 <- pure $ tNil KRow
+                                                 unify info (tUni tv) r1
+                                                 term (tNil KRow)
+        term (TNil _ _)                     = do --traceM (" ## castkwd Nil - Nil: " ++ prstr (tNil KRow) ++ " = " ++ prstr (tNil KRow))
+                                                 return []
+        term (TRow _ _ n t r)               = do --traceM (" ## castkwd Row - Nil: " ++ prstr (tRow KRow n t r) ++ " ≠ " ++ prstr (tNil KRow))
+                                                 kwdUnexpected info n
+        term (TStar _ _ r)                  = do --traceM (" ## castkwd Star - Nil: " ++ prstr (tStar KRow r) ++ " ≠ " ++ prstr (tNil KRow))
+                                                 noRed0 env (Cast info r1 r2)
+
+
+
 simpInfo env info                           = case info of
                                                  DeclInfo l1 l2 n sc msg -> DeclInfo l1 l2 n (simp env sc) msg
                                               --   SelInfo l1 l2 n t msg -> SelInfo l1 l2 n (simp env t) msg
@@ -858,15 +971,6 @@ posElemNotFound0 env b c n                  = do c <- uwild <$> usubst c
 kwdNotFound0 env info n                     = do i <- uwild <$> usubst info
                                                  kwdNotFound (simpInfo env i) n
 
-castPos env info p1 p2 k1 k2                = (do cast env info p1 p2; return k1) `catchError` handler
-  where handler (SurplusRow p)              = do --traceM ("## Shifting row " ++ prstr p ++ " into " ++ prstr k2)
-                                                 shift p (labels k2)
-        handler ex                          = throwError ex
-        shift (TRow l k _ t r) (n:ns)       = TRow l KRow n t <$> shift r ns
-        shift TNil{} ns                     = return k1
-        shift _ _                           = noRed (Cast info (tTuple p1 k1) (tTuple p2 k2))
-        labels (TRow _ _ n _ r)             = n : labels r
-        labels _                            = []
 
 ----------------------------------------------------------------------------------------------------------------------
 -- sub
@@ -1009,8 +1113,6 @@ subkwd0 env info f ((e,t1):es) r1 (TRow _ _ n t2 r2)
                                                  (cs,as) <- subkwd0 env info f es r1 r2
                                                  w <- newWitness
                                                  return (Sub info w t1 t2 : cs, KwdArg n (eCallVar w [e]) as)
-  where labels (TRow _ _ n _ r)             = n : labels r
-        labels _                            = []
 subkwd0 env info f ((e,t1):es) r1 r2        = posElemNotFound0 env False (Cast info r1 r2) nWild
 
 subkwd                                      :: Env -> ErrInfo -> (Name -> Expr) -> [Name] -> KwdRow -> KwdRow -> TypeM (Constraints, KwdArg)
@@ -1021,13 +1123,13 @@ subkwd env info f seen r1 (TUni _ tv)       = do unif f seen r1
         unif f seen (TRow _ _ n t r)
           | n `elem` seen                   = do --traceM (" ## subkwd (Row) - Var: " ++ prstr (tRow KRow n t r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr tv)
                                                  unif f (seen\\[n]) r
-          | tv `elem` ufree r              = conflictingRow tv                     -- use rowTail?
+          | tv `elem` ufree r               = conflictingRow tv                     -- use rowTail?
           | otherwise                       = do --traceM (" ## subkwd Row - Var: " ++ prstr (tRow KRow n t r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr tv)
                                                  t2 <- newUnivar
                                                  r2 <- tRow KRow n t2 <$> newUnivarOfKind KRow
                                                  unify info (tUni tv) r2
         unif f seen (TStar _ _ r)
-          | tv `elem` ufree r              = conflictingRow tv                     -- use rowTail?
+          | tv `elem` ufree r               = conflictingRow tv                     -- use rowTail?
           | otherwise                       = do --traceM (" ## subkwd Star - Var: " ++ prstr (tStar KRow r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr tv)
                                                  r2 <- tStar KRow <$> newUnivarOfKind KRow
                                                  unify info (tUni tv) r2
@@ -1375,6 +1477,8 @@ varinfo cs                                  = f cs (VInfo [] [] [] Map.empty Map
       where vs                              = nub $ ufree t
     f (Mut _ (TUni _ v) n t : cs)           = f cs . mutattr v n . embed (ufree t)
     f (Sel _ _ (TUni _ v) n t : cs)         = f cs . selattr v n . embed (ufree t)
+    f (Sel _ _ (TTuple _ _ TUni{}) _ _ : cs)
+                                            = f cs
     f (Seal _ (TUni _ v) : cs)              = f cs . seal v
     f (Imply _ _ _ cs' : cs)                = f (cs'++cs)
     f []                                    = Just
@@ -1464,6 +1568,12 @@ mkLUB env (v,ts)
 --  no Sel/Mut covered by Cast/Sub/Proto bounds
 
 
+instance Pretty (TUni, [Type]) where
+    pretty (uv, ts)                     = pretty uv <+> text "<" <+> pretty ts
+
+instance Pretty [Type] where
+    pretty ts                           = brackets (commaSep pretty ts)
+
 instance Pretty (TUni, Type) where
     pretty (uv, t)                      = pretty uv <+> text "~" <+> pretty t
 
@@ -1545,29 +1655,45 @@ improve env te tt eq cs
                 optCon TOpt{}                   = True
                 optCon _                        = False
 
-multiUBounds cs                         = Map.assocs $ f cs Map.empty
+multiUBounds cs                         = Map.assocs $ Map.filter ((>1) . length) $ foldr (Map.unionWith app1) Map.empty maps
   where
-    f []                                = Map.filter ((>1) . length)
-    f (Cast _ TUni{} TUni{} : cs)       = f cs
-    f (Cast _ (TUni _ v) t : cs)        = unOpt v t cs
-    f (Sub _ _ TUni{} TUni{} : cs)      = f cs
-    f (Sub _ _ (TUni _ v) t : cs)       = unOpt v t cs
-    f (Imply _ _ _ cs' : cs)            = Map.union (f cs' Map.empty) . f cs
-    f (_ : cs)                          = f cs
+    maps                                = bnds cs : imps cs
 
-    unOpt v (TOpt _ TUni{}) cs          = f cs
-    unOpt v (TOpt _ t) cs               = f cs . Map.insertWith (++) v [t]
-    unOpt v t cs                        = f cs . Map.insertWith (++) v [t]
+    bnds []                             = Map.empty
+    bnds (Cast _ TUni{} TUni{} : cs)    = bnds cs
+    bnds (Cast _ (TUni _ v) t : cs)     = unOpt v t cs
+    bnds (Sub _ _ TUni{} TUni{} : cs)   = bnds cs
+    bnds (Sub _ _ (TUni _ v) t : cs)    = unOpt v t cs
+    bnds (_ : cs)                       = bnds cs
 
-multiLBounds cs                         = Map.assocs $ f cs Map.empty
+    imps []                             = []
+    imps (Imply _ _ _ cs' : cs)         = bnds cs' : imps cs
+    imps (_ : cs)                       = imps cs
+
+    app1 [x] [y] | x == y               = [x]
+    app1 xs ys                          = xs ++ ys
+
+    unOpt v (TOpt _ TUni{}) cs          = bnds cs
+    unOpt v (TOpt _ t) cs               = Map.insertWith (++) v [t] $ bnds cs
+    unOpt v t cs                        = Map.insertWith (++) v [t] $ bnds cs
+
+multiLBounds cs                         = Map.assocs $ Map.filter ((>1) . length) $ foldr (Map.unionWith app1) Map.empty maps
   where
-    f []                                = Map.filter ((>1) . length)
-    f (Cast _ TUni{} TUni{} : cs)       = f cs
-    f (Cast _ t (TUni _ v) : cs)        = f cs . Map.insertWith (++) v [t]
-    f (Sub _ _ TUni{} TUni{} : cs)      = f cs
-    f (Sub _ _ t (TUni _ v) : cs)       = f cs . Map.insertWith (++) v [t]
-    f (Imply _ _ _ cs' : cs)            = Map.union (f cs' Map.empty) . f cs
-    f (_ : cs)                          = f cs
+    maps                                = bnds cs : imps cs
+
+    bnds []                             = Map.empty
+    bnds (Cast _ TUni{} TUni{} : cs)    = bnds cs
+    bnds (Cast _ t (TUni _ v) : cs)     = Map.insertWith (++) v [t] $ bnds cs
+    bnds (Sub _ _ TUni{} TUni{} : cs)   = bnds cs
+    bnds (Sub _ _ t (TUni _ v) : cs)    = Map.insertWith (++) v [t] $ bnds cs
+    bnds (_ : cs)                       = bnds cs
+
+    imps []                             = []
+    imps (Imply _ _ _ cs' : cs)         = bnds cs' : imps cs
+    imps (_ : cs)                       = imps cs
+
+    app1 [x] [y] | x == y               = [x]
+    app1 xs ys                          = xs ++ ys
 
 
 dnClosed env (TCon _ c)                 = isActor env (tcname c)

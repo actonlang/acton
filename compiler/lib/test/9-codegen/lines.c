@@ -42,54 +42,65 @@ linesQ_L_2Cont linesQ_L_2ContG_new(linesQ_Apa G_1, $Cont G_2) {
     return $tmp;
 }
 struct linesQ_L_2ContG_class linesQ_L_2ContG_methods;
-B_NoneType linesQ_L_4procD___init__ (linesQ_L_4proc L_self, linesQ_Apa L_3obj) {
+B_NoneType linesQ_L_4actionD___init__ (linesQ_L_4action L_self, linesQ_Apa L_3obj) {
     L_self->L_3obj = L_3obj;
     return B_None;
 }
-$R linesQ_L_4procD___call__ (linesQ_L_4proc L_self, $Cont G_1, B_int G_2) {
+$R linesQ_L_4actionD___call__ (linesQ_L_4action L_self, $Cont L_cont, B_int G_1) {
+    return $AWAIT(L_cont, ((B_Msg)((B_Msg (*) (linesQ_L_4action, B_int))L_self->$class->__asyn__)(L_self, G_1)));
+}
+$R linesQ_L_4actionD___exec__ (linesQ_L_4action L_self, $Cont L_cont, B_int G_1) {
+    return $R_CONT(L_cont, ((B_value)((B_Msg (*) (linesQ_L_4action, B_int))L_self->$class->__asyn__)(L_self, G_1)));
+}
+B_Msg linesQ_L_4actionD___asyn__ (linesQ_L_4action L_self, B_int G_1) {
     linesQ_Apa L_3obj = L_self->L_3obj;
-    return (($R (*) (linesQ_Apa, $Cont, B_int))L_3obj->$class->noticeG_local)(L_3obj, G_1, G_2);
+    return ((B_Msg)((B_Msg (*) (linesQ_Apa, B_int))L_3obj->$class->notice)(L_3obj, G_1));
 }
-$R linesQ_L_4procD___exec__ (linesQ_L_4proc L_self, $Cont G_1, B_int G_2) {
-    return (($R (*) (linesQ_L_4proc, $Cont, B_int))L_self->$class->__call__)(L_self, G_1, G_2);
-}
-void linesQ_L_4procD___serialize__ (linesQ_L_4proc self, $Serial$state state) {
+void linesQ_L_4actionD___serialize__ (linesQ_L_4action self, $Serial$state state) {
     $step_serialize(self->L_3obj, state);
 }
-linesQ_L_4proc linesQ_L_4procD___deserialize__ (linesQ_L_4proc self, $Serial$state state) {
+linesQ_L_4action linesQ_L_4actionD___deserialize__ (linesQ_L_4action self, $Serial$state state) {
     if (!self) {
         if (!state) {
-            self = acton_malloc(sizeof(struct linesQ_L_4proc));
-            self->$class = &linesQ_L_4procG_methods;
+            self = acton_malloc(sizeof(struct linesQ_L_4action));
+            self->$class = &linesQ_L_4actionG_methods;
             return self;
         }
-        self = $DNEW(linesQ_L_4proc, state);
+        self = $DNEW(linesQ_L_4action, state);
     }
     self->L_3obj = $step_deserialize(state);
     return self;
 }
-linesQ_L_4proc linesQ_L_4procG_new(linesQ_Apa G_1) {
-    linesQ_L_4proc $tmp = acton_malloc(sizeof(struct linesQ_L_4proc));
-    $tmp->$class = &linesQ_L_4procG_methods;
-    linesQ_L_4procG_methods.__init__($tmp, G_1);
+linesQ_L_4action linesQ_L_4actionG_new(linesQ_Apa G_1) {
+    linesQ_L_4action $tmp = acton_malloc(sizeof(struct linesQ_L_4action));
+    $tmp->$class = &linesQ_L_4actionG_methods;
+    linesQ_L_4actionG_methods.__init__($tmp, G_1);
     return $tmp;
 }
-struct linesQ_L_4procG_class linesQ_L_4procG_methods;
-$R linesQ_U_L_5C_3cont ($Cont C_cont, int64_t U_3C_4res) {
-    return $R_CONT(C_cont, B_None);
+struct linesQ_L_4actionG_class linesQ_L_4actionG_methods;
+$R linesQ_U_L_5C_3cont ($action cb, $Cont C_cont, int64_t U_2C_4res) {
+    #line 9 "test/src/lines.act"
+    int64_t U_3v = U_2C_4res;
+    #line 10 "test/src/lines.act"
+    B_Msg m = ((B_Msg)((B_Msg (*) ($action, B_int))cb->$class->__asyn__)(cb, toB_int(2LL)));
+    int64_t U_4N_tmp = (U_3v * 10LL);
+    return $R_CONT(C_cont, toB_int(U_4N_tmp));
 }
-$R linesQ_L_5C_3cont ($Cont C_cont, B_int C_4res) {
-    return linesQ_U_L_5C_3cont(C_cont, ((B_int)C_4res)->val);
+$R linesQ_L_5C_3cont ($action cb, $Cont C_cont, B_int C_4res) {
+    return linesQ_U_L_5C_3cont(cb, C_cont, ((B_int)C_4res)->val);
 }
-B_NoneType linesQ_L_6ContD___init__ (linesQ_L_6Cont L_self, $Cont C_cont) {
+B_NoneType linesQ_L_6ContD___init__ (linesQ_L_6Cont L_self, $action cb, $Cont C_cont) {
+    L_self->cb = cb;
     L_self->C_cont = C_cont;
     return B_None;
 }
 $R linesQ_L_6ContD___call__ (linesQ_L_6Cont L_self, B_int G_1) {
+    $action cb = L_self->cb;
     $Cont C_cont = L_self->C_cont;
-    return linesQ_L_5C_3cont(C_cont, G_1);
+    return linesQ_L_5C_3cont(cb, C_cont, G_1);
 }
 void linesQ_L_6ContD___serialize__ (linesQ_L_6Cont self, $Serial$state state) {
+    $step_serialize(self->cb, state);
     $step_serialize(self->C_cont, state);
 }
 linesQ_L_6Cont linesQ_L_6ContD___deserialize__ (linesQ_L_6Cont self, $Serial$state state) {
@@ -101,77 +112,107 @@ linesQ_L_6Cont linesQ_L_6ContD___deserialize__ (linesQ_L_6Cont self, $Serial$sta
         }
         self = $DNEW(linesQ_L_6Cont, state);
     }
-    self->C_cont = $step_deserialize(state);
-    return self;
-}
-linesQ_L_6Cont linesQ_L_6ContG_new($Cont G_1) {
-    linesQ_L_6Cont $tmp = acton_malloc(sizeof(struct linesQ_L_6Cont));
-    $tmp->$class = &linesQ_L_6ContG_methods;
-    linesQ_L_6ContG_methods.__init__($tmp, G_1);
-    return $tmp;
-}
-struct linesQ_L_6ContG_class linesQ_L_6ContG_methods;
-$R linesQ_U_1L_7C_5cont ($action cb, $Cont C_cont, int64_t U_4C_6res) {
-    #line 9 "test/src/lines.act"
-    int64_t U_5v = U_4C_6res;
-    #line 10 "test/src/lines.act"
-    B_Msg m = ((B_Msg)((B_Msg (*) ($action, B_int))cb->$class->__asyn__)(cb, toB_int(2LL)));
-    int64_t U_6N_tmp = (U_5v * 10LL);
-    return $R_CONT(C_cont, toB_int(U_6N_tmp));
-}
-$R linesQ_L_7C_5cont ($action cb, $Cont C_cont, B_int C_6res) {
-    return linesQ_U_1L_7C_5cont(cb, C_cont, ((B_int)C_6res)->val);
-}
-B_NoneType linesQ_L_8ContD___init__ (linesQ_L_8Cont L_self, $action cb, $Cont C_cont) {
-    L_self->cb = cb;
-    L_self->C_cont = C_cont;
-    return B_None;
-}
-$R linesQ_L_8ContD___call__ (linesQ_L_8Cont L_self, B_int G_1) {
-    $action cb = L_self->cb;
-    $Cont C_cont = L_self->C_cont;
-    return linesQ_L_7C_5cont(cb, C_cont, G_1);
-}
-void linesQ_L_8ContD___serialize__ (linesQ_L_8Cont self, $Serial$state state) {
-    $step_serialize(self->cb, state);
-    $step_serialize(self->C_cont, state);
-}
-linesQ_L_8Cont linesQ_L_8ContD___deserialize__ (linesQ_L_8Cont self, $Serial$state state) {
-    if (!self) {
-        if (!state) {
-            self = acton_malloc(sizeof(struct linesQ_L_8Cont));
-            self->$class = &linesQ_L_8ContG_methods;
-            return self;
-        }
-        self = $DNEW(linesQ_L_8Cont, state);
-    }
     self->cb = $step_deserialize(state);
     self->C_cont = $step_deserialize(state);
     return self;
 }
-linesQ_L_8Cont linesQ_L_8ContG_new($action G_1, $Cont G_2) {
-    linesQ_L_8Cont $tmp = acton_malloc(sizeof(struct linesQ_L_8Cont));
-    $tmp->$class = &linesQ_L_8ContG_methods;
-    linesQ_L_8ContG_methods.__init__($tmp, G_1, G_2);
+linesQ_L_6Cont linesQ_L_6ContG_new($action G_1, $Cont G_2) {
+    linesQ_L_6Cont $tmp = acton_malloc(sizeof(struct linesQ_L_6Cont));
+    $tmp->$class = &linesQ_L_6ContG_methods;
+    linesQ_L_6ContG_methods.__init__($tmp, G_1, G_2);
     return $tmp;
 }
-struct linesQ_L_8ContG_class linesQ_L_8ContG_methods;
-B_NoneType linesQ_L_9procD___init__ (linesQ_L_9proc L_self, linesQ_Apa self, $proc cb) {
+struct linesQ_L_6ContG_class linesQ_L_6ContG_methods;
+B_NoneType linesQ_L_7procD___init__ (linesQ_L_7proc L_self, linesQ_Apa self, $action cb) {
     L_self->self = self;
     L_self->cb = cb;
     return B_None;
 }
+$R linesQ_L_7procD___call__ (linesQ_L_7proc L_self, $Cont C_cont) {
+    linesQ_Apa self = L_self->self;
+    $action cb = L_self->cb;
+    return (($R (*) (linesQ_Apa, $Cont, $action))self->$class->setupG_local)(self, C_cont, cb);
+}
+$R linesQ_L_7procD___exec__ (linesQ_L_7proc L_self, $Cont C_cont) {
+    return (($R (*) (linesQ_L_7proc, $Cont))L_self->$class->__call__)(L_self, C_cont);
+}
+void linesQ_L_7procD___serialize__ (linesQ_L_7proc self, $Serial$state state) {
+    $step_serialize(self->self, state);
+    $step_serialize(self->cb, state);
+}
+linesQ_L_7proc linesQ_L_7procD___deserialize__ (linesQ_L_7proc self, $Serial$state state) {
+    if (!self) {
+        if (!state) {
+            self = acton_malloc(sizeof(struct linesQ_L_7proc));
+            self->$class = &linesQ_L_7procG_methods;
+            return self;
+        }
+        self = $DNEW(linesQ_L_7proc, state);
+    }
+    self->self = $step_deserialize(state);
+    self->cb = $step_deserialize(state);
+    return self;
+}
+linesQ_L_7proc linesQ_L_7procG_new(linesQ_Apa G_1, $action G_2) {
+    linesQ_L_7proc $tmp = acton_malloc(sizeof(struct linesQ_L_7proc));
+    $tmp->$class = &linesQ_L_7procG_methods;
+    linesQ_L_7procG_methods.__init__($tmp, G_1, G_2);
+    return $tmp;
+}
+struct linesQ_L_7procG_class linesQ_L_7procG_methods;
+B_NoneType linesQ_L_8procD___init__ (linesQ_L_8proc L_self, linesQ_Apa self, $action cb) {
+    L_self->self = self;
+    L_self->cb = cb;
+    return B_None;
+}
+$R linesQ_L_8procD___call__ (linesQ_L_8proc L_self, $Cont C_cont) {
+    linesQ_Apa self = L_self->self;
+    $action cb = L_self->cb;
+    return (($R (*) (linesQ_Apa, $Cont, $action))self->$class->computeG_local)(self, C_cont, cb);
+}
+$R linesQ_L_8procD___exec__ (linesQ_L_8proc L_self, $Cont C_cont) {
+    return (($R (*) (linesQ_L_8proc, $Cont))L_self->$class->__call__)(L_self, C_cont);
+}
+void linesQ_L_8procD___serialize__ (linesQ_L_8proc self, $Serial$state state) {
+    $step_serialize(self->self, state);
+    $step_serialize(self->cb, state);
+}
+linesQ_L_8proc linesQ_L_8procD___deserialize__ (linesQ_L_8proc self, $Serial$state state) {
+    if (!self) {
+        if (!state) {
+            self = acton_malloc(sizeof(struct linesQ_L_8proc));
+            self->$class = &linesQ_L_8procG_methods;
+            return self;
+        }
+        self = $DNEW(linesQ_L_8proc, state);
+    }
+    self->self = $step_deserialize(state);
+    self->cb = $step_deserialize(state);
+    return self;
+}
+linesQ_L_8proc linesQ_L_8procG_new(linesQ_Apa G_1, $action G_2) {
+    linesQ_L_8proc $tmp = acton_malloc(sizeof(struct linesQ_L_8proc));
+    $tmp->$class = &linesQ_L_8procG_methods;
+    linesQ_L_8procG_methods.__init__($tmp, G_1, G_2);
+    return $tmp;
+}
+struct linesQ_L_8procG_class linesQ_L_8procG_methods;
+B_NoneType linesQ_L_9procD___init__ (linesQ_L_9proc L_self, linesQ_Apa self, B_int i) {
+    L_self->self = self;
+    L_self->i = i;
+    return B_None;
+}
 $R linesQ_L_9procD___call__ (linesQ_L_9proc L_self, $Cont C_cont) {
     linesQ_Apa self = L_self->self;
-    $proc cb = L_self->cb;
-    return (($R (*) (linesQ_Apa, $Cont, $proc))self->$class->setupG_local)(self, C_cont, cb);
+    int64_t U_5i = ((B_int)L_self->i)->val;
+    return (($R (*) (linesQ_Apa, $Cont, B_int))self->$class->noticeG_local)(self, C_cont, toB_int(U_5i));
 }
 $R linesQ_L_9procD___exec__ (linesQ_L_9proc L_self, $Cont C_cont) {
     return (($R (*) (linesQ_L_9proc, $Cont))L_self->$class->__call__)(L_self, C_cont);
 }
 void linesQ_L_9procD___serialize__ (linesQ_L_9proc self, $Serial$state state) {
     $step_serialize(self->self, state);
-    $step_serialize(self->cb, state);
+    $step_serialize(self->i, state);
 }
 linesQ_L_9proc linesQ_L_9procD___deserialize__ (linesQ_L_9proc self, $Serial$state state) {
     if (!self) {
@@ -183,32 +224,32 @@ linesQ_L_9proc linesQ_L_9procD___deserialize__ (linesQ_L_9proc self, $Serial$sta
         self = $DNEW(linesQ_L_9proc, state);
     }
     self->self = $step_deserialize(state);
-    self->cb = $step_deserialize(state);
+    self->i = $step_deserialize(state);
     return self;
 }
-linesQ_L_9proc linesQ_L_9procG_new(linesQ_Apa G_1, $proc G_2) {
+linesQ_L_9proc linesQ_L_9procG_new(linesQ_Apa G_1, B_int G_2) {
     linesQ_L_9proc $tmp = acton_malloc(sizeof(struct linesQ_L_9proc));
     $tmp->$class = &linesQ_L_9procG_methods;
     linesQ_L_9procG_methods.__init__($tmp, G_1, G_2);
     return $tmp;
 }
 struct linesQ_L_9procG_class linesQ_L_9procG_methods;
-B_NoneType linesQ_L_10procD___init__ (linesQ_L_10proc L_self, linesQ_Apa self, $action cb) {
+B_NoneType linesQ_L_10procD___init__ (linesQ_L_10proc L_self, linesQ_Bepa self, B_int i) {
     L_self->self = self;
-    L_self->cb = cb;
+    L_self->i = i;
     return B_None;
 }
 $R linesQ_L_10procD___call__ (linesQ_L_10proc L_self, $Cont C_cont) {
-    linesQ_Apa self = L_self->self;
-    $action cb = L_self->cb;
-    return (($R (*) (linesQ_Apa, $Cont, $action))self->$class->computeG_local)(self, C_cont, cb);
+    linesQ_Bepa self = L_self->self;
+    int64_t U_6i = ((B_int)L_self->i)->val;
+    return (($R (*) (linesQ_Bepa, $Cont, B_int))self->$class->callbackG_local)(self, C_cont, toB_int(U_6i));
 }
 $R linesQ_L_10procD___exec__ (linesQ_L_10proc L_self, $Cont C_cont) {
     return (($R (*) (linesQ_L_10proc, $Cont))L_self->$class->__call__)(L_self, C_cont);
 }
 void linesQ_L_10procD___serialize__ (linesQ_L_10proc self, $Serial$state state) {
     $step_serialize(self->self, state);
-    $step_serialize(self->cb, state);
+    $step_serialize(self->i, state);
 }
 linesQ_L_10proc linesQ_L_10procD___deserialize__ (linesQ_L_10proc self, $Serial$state state) {
     if (!self) {
@@ -220,91 +261,53 @@ linesQ_L_10proc linesQ_L_10procD___deserialize__ (linesQ_L_10proc self, $Serial$
         self = $DNEW(linesQ_L_10proc, state);
     }
     self->self = $step_deserialize(state);
-    self->cb = $step_deserialize(state);
+    self->i = $step_deserialize(state);
     return self;
 }
-linesQ_L_10proc linesQ_L_10procG_new(linesQ_Apa G_1, $action G_2) {
+linesQ_L_10proc linesQ_L_10procG_new(linesQ_Bepa G_1, B_int G_2) {
     linesQ_L_10proc $tmp = acton_malloc(sizeof(struct linesQ_L_10proc));
     $tmp->$class = &linesQ_L_10procG_methods;
     linesQ_L_10procG_methods.__init__($tmp, G_1, G_2);
     return $tmp;
 }
 struct linesQ_L_10procG_class linesQ_L_10procG_methods;
-B_NoneType linesQ_L_11procD___init__ (linesQ_L_11proc L_self, linesQ_Apa self, B_int i) {
-    L_self->self = self;
-    L_self->i = i;
+B_NoneType linesQ_L_14actionD___init__ (linesQ_L_14action L_self, linesQ_Apa L_13obj) {
+    L_self->L_13obj = L_13obj;
     return B_None;
 }
-$R linesQ_L_11procD___call__ (linesQ_L_11proc L_self, $Cont C_cont) {
-    linesQ_Apa self = L_self->self;
-    int64_t U_7i = ((B_int)L_self->i)->val;
-    return (($R (*) (linesQ_Apa, $Cont, B_int))self->$class->noticeG_local)(self, C_cont, toB_int(U_7i));
+$R linesQ_L_14actionD___call__ (linesQ_L_14action L_self, $Cont L_cont, B_int G_1) {
+    return $AWAIT(L_cont, ((B_Msg)((B_Msg (*) (linesQ_L_14action, B_int))L_self->$class->__asyn__)(L_self, G_1)));
 }
-$R linesQ_L_11procD___exec__ (linesQ_L_11proc L_self, $Cont C_cont) {
-    return (($R (*) (linesQ_L_11proc, $Cont))L_self->$class->__call__)(L_self, C_cont);
+$R linesQ_L_14actionD___exec__ (linesQ_L_14action L_self, $Cont L_cont, B_int G_1) {
+    return $R_CONT(L_cont, ((B_value)((B_Msg (*) (linesQ_L_14action, B_int))L_self->$class->__asyn__)(L_self, G_1)));
 }
-void linesQ_L_11procD___serialize__ (linesQ_L_11proc self, $Serial$state state) {
-    $step_serialize(self->self, state);
-    $step_serialize(self->i, state);
+B_Msg linesQ_L_14actionD___asyn__ (linesQ_L_14action L_self, B_int G_1) {
+    linesQ_Apa L_13obj = L_self->L_13obj;
+    return ((B_Msg)((B_Msg (*) (linesQ_Apa, B_int))L_13obj->$class->notice)(L_13obj, G_1));
 }
-linesQ_L_11proc linesQ_L_11procD___deserialize__ (linesQ_L_11proc self, $Serial$state state) {
+void linesQ_L_14actionD___serialize__ (linesQ_L_14action self, $Serial$state state) {
+    $step_serialize(self->L_13obj, state);
+}
+linesQ_L_14action linesQ_L_14actionD___deserialize__ (linesQ_L_14action self, $Serial$state state) {
     if (!self) {
         if (!state) {
-            self = acton_malloc(sizeof(struct linesQ_L_11proc));
-            self->$class = &linesQ_L_11procG_methods;
+            self = acton_malloc(sizeof(struct linesQ_L_14action));
+            self->$class = &linesQ_L_14actionG_methods;
             return self;
         }
-        self = $DNEW(linesQ_L_11proc, state);
+        self = $DNEW(linesQ_L_14action, state);
     }
-    self->self = $step_deserialize(state);
-    self->i = $step_deserialize(state);
+    self->L_13obj = $step_deserialize(state);
     return self;
 }
-linesQ_L_11proc linesQ_L_11procG_new(linesQ_Apa G_1, B_int G_2) {
-    linesQ_L_11proc $tmp = acton_malloc(sizeof(struct linesQ_L_11proc));
-    $tmp->$class = &linesQ_L_11procG_methods;
-    linesQ_L_11procG_methods.__init__($tmp, G_1, G_2);
+linesQ_L_14action linesQ_L_14actionG_new(linesQ_Apa G_1) {
+    linesQ_L_14action $tmp = acton_malloc(sizeof(struct linesQ_L_14action));
+    $tmp->$class = &linesQ_L_14actionG_methods;
+    linesQ_L_14actionG_methods.__init__($tmp, G_1);
     return $tmp;
 }
-struct linesQ_L_11procG_class linesQ_L_11procG_methods;
-B_NoneType linesQ_L_12procD___init__ (linesQ_L_12proc L_self, linesQ_Bepa self, B_int i) {
-    L_self->self = self;
-    L_self->i = i;
-    return B_None;
-}
-$R linesQ_L_12procD___call__ (linesQ_L_12proc L_self, $Cont C_cont) {
-    linesQ_Bepa self = L_self->self;
-    int64_t U_8i = ((B_int)L_self->i)->val;
-    return (($R (*) (linesQ_Bepa, $Cont, B_int))self->$class->callbackG_local)(self, C_cont, toB_int(U_8i));
-}
-$R linesQ_L_12procD___exec__ (linesQ_L_12proc L_self, $Cont C_cont) {
-    return (($R (*) (linesQ_L_12proc, $Cont))L_self->$class->__call__)(L_self, C_cont);
-}
-void linesQ_L_12procD___serialize__ (linesQ_L_12proc self, $Serial$state state) {
-    $step_serialize(self->self, state);
-    $step_serialize(self->i, state);
-}
-linesQ_L_12proc linesQ_L_12procD___deserialize__ (linesQ_L_12proc self, $Serial$state state) {
-    if (!self) {
-        if (!state) {
-            self = acton_malloc(sizeof(struct linesQ_L_12proc));
-            self->$class = &linesQ_L_12procG_methods;
-            return self;
-        }
-        self = $DNEW(linesQ_L_12proc, state);
-    }
-    self->self = $step_deserialize(state);
-    self->i = $step_deserialize(state);
-    return self;
-}
-linesQ_L_12proc linesQ_L_12procG_new(linesQ_Bepa G_1, B_int G_2) {
-    linesQ_L_12proc $tmp = acton_malloc(sizeof(struct linesQ_L_12proc));
-    $tmp->$class = &linesQ_L_12procG_methods;
-    linesQ_L_12procG_methods.__init__($tmp, G_1, G_2);
-    return $tmp;
-}
-struct linesQ_L_12procG_class linesQ_L_12procG_methods;
-B_NoneType linesQ_L_16actionD___init__ (linesQ_L_16action L_self, linesQ_Apa L_15obj) {
+struct linesQ_L_14actionG_class linesQ_L_14actionG_methods;
+B_NoneType linesQ_L_16actionD___init__ (linesQ_L_16action L_self, linesQ_Bepa L_15obj) {
     L_self->L_15obj = L_15obj;
     return B_None;
 }
@@ -315,8 +318,8 @@ $R linesQ_L_16actionD___exec__ (linesQ_L_16action L_self, $Cont L_cont, B_int G_
     return $R_CONT(L_cont, ((B_value)((B_Msg (*) (linesQ_L_16action, B_int))L_self->$class->__asyn__)(L_self, G_1)));
 }
 B_Msg linesQ_L_16actionD___asyn__ (linesQ_L_16action L_self, B_int G_1) {
-    linesQ_Apa L_15obj = L_self->L_15obj;
-    return ((B_Msg)((B_Msg (*) (linesQ_Apa, B_int))L_15obj->$class->notice)(L_15obj, G_1));
+    linesQ_Bepa L_15obj = L_self->L_15obj;
+    return ((B_Msg)((B_Msg (*) (linesQ_Bepa, B_int))L_15obj->$class->callback)(L_15obj, G_1));
 }
 void linesQ_L_16actionD___serialize__ (linesQ_L_16action self, $Serial$state state) {
     $step_serialize(self->L_15obj, state);
@@ -333,125 +336,89 @@ linesQ_L_16action linesQ_L_16actionD___deserialize__ (linesQ_L_16action self, $S
     self->L_15obj = $step_deserialize(state);
     return self;
 }
-linesQ_L_16action linesQ_L_16actionG_new(linesQ_Apa G_1) {
+linesQ_L_16action linesQ_L_16actionG_new(linesQ_Bepa G_1) {
     linesQ_L_16action $tmp = acton_malloc(sizeof(struct linesQ_L_16action));
     $tmp->$class = &linesQ_L_16actionG_methods;
     linesQ_L_16actionG_methods.__init__($tmp, G_1);
     return $tmp;
 }
 struct linesQ_L_16actionG_class linesQ_L_16actionG_methods;
-B_NoneType linesQ_L_18actionD___init__ (linesQ_L_18action L_self, linesQ_Bepa L_17obj) {
-    L_self->L_17obj = L_17obj;
+B_NoneType linesQ_L_19actionD___init__ (linesQ_L_19action L_self, linesQ_main L_18obj) {
+    L_self->L_18obj = L_18obj;
     return B_None;
 }
-$R linesQ_L_18actionD___call__ (linesQ_L_18action L_self, $Cont L_cont, B_int G_1) {
-    return $AWAIT(L_cont, ((B_Msg)((B_Msg (*) (linesQ_L_18action, B_int))L_self->$class->__asyn__)(L_self, G_1)));
+$R linesQ_L_19actionD___call__ (linesQ_L_19action L_self, $Cont L_cont, B_int G_1) {
+    return $AWAIT(L_cont, ((B_Msg)((B_Msg (*) (linesQ_L_19action, B_int))L_self->$class->__asyn__)(L_self, G_1)));
 }
-$R linesQ_L_18actionD___exec__ (linesQ_L_18action L_self, $Cont L_cont, B_int G_1) {
-    return $R_CONT(L_cont, ((B_value)((B_Msg (*) (linesQ_L_18action, B_int))L_self->$class->__asyn__)(L_self, G_1)));
+$R linesQ_L_19actionD___exec__ (linesQ_L_19action L_self, $Cont L_cont, B_int G_1) {
+    return $R_CONT(L_cont, ((B_value)((B_Msg (*) (linesQ_L_19action, B_int))L_self->$class->__asyn__)(L_self, G_1)));
 }
-B_Msg linesQ_L_18actionD___asyn__ (linesQ_L_18action L_self, B_int G_1) {
-    linesQ_Bepa L_17obj = L_self->L_17obj;
-    return ((B_Msg)((B_Msg (*) (linesQ_Bepa, B_int))L_17obj->$class->callback)(L_17obj, G_1));
+B_Msg linesQ_L_19actionD___asyn__ (linesQ_L_19action L_self, B_int G_1) {
+    linesQ_main L_18obj = L_self->L_18obj;
+    return ((B_Msg)((B_Msg (*) (linesQ_main, B_int))L_18obj->$class->myproc)(L_18obj, G_1));
 }
-void linesQ_L_18actionD___serialize__ (linesQ_L_18action self, $Serial$state state) {
-    $step_serialize(self->L_17obj, state);
+void linesQ_L_19actionD___serialize__ (linesQ_L_19action self, $Serial$state state) {
+    $step_serialize(self->L_18obj, state);
 }
-linesQ_L_18action linesQ_L_18actionD___deserialize__ (linesQ_L_18action self, $Serial$state state) {
+linesQ_L_19action linesQ_L_19actionD___deserialize__ (linesQ_L_19action self, $Serial$state state) {
     if (!self) {
         if (!state) {
-            self = acton_malloc(sizeof(struct linesQ_L_18action));
-            self->$class = &linesQ_L_18actionG_methods;
+            self = acton_malloc(sizeof(struct linesQ_L_19action));
+            self->$class = &linesQ_L_19actionG_methods;
             return self;
         }
-        self = $DNEW(linesQ_L_18action, state);
+        self = $DNEW(linesQ_L_19action, state);
     }
-    self->L_17obj = $step_deserialize(state);
+    self->L_18obj = $step_deserialize(state);
     return self;
 }
-linesQ_L_18action linesQ_L_18actionG_new(linesQ_Bepa G_1) {
-    linesQ_L_18action $tmp = acton_malloc(sizeof(struct linesQ_L_18action));
-    $tmp->$class = &linesQ_L_18actionG_methods;
-    linesQ_L_18actionG_methods.__init__($tmp, G_1);
+linesQ_L_19action linesQ_L_19actionG_new(linesQ_main G_1) {
+    linesQ_L_19action $tmp = acton_malloc(sizeof(struct linesQ_L_19action));
+    $tmp->$class = &linesQ_L_19actionG_methods;
+    linesQ_L_19actionG_methods.__init__($tmp, G_1);
     return $tmp;
 }
-struct linesQ_L_18actionG_class linesQ_L_18actionG_methods;
-B_NoneType linesQ_L_21actionD___init__ (linesQ_L_21action L_self, linesQ_main L_20obj) {
-    L_self->L_20obj = L_20obj;
-    return B_None;
-}
-$R linesQ_L_21actionD___call__ (linesQ_L_21action L_self, $Cont L_cont, B_int G_1) {
-    return $AWAIT(L_cont, ((B_Msg)((B_Msg (*) (linesQ_L_21action, B_int))L_self->$class->__asyn__)(L_self, G_1)));
-}
-$R linesQ_L_21actionD___exec__ (linesQ_L_21action L_self, $Cont L_cont, B_int G_1) {
-    return $R_CONT(L_cont, ((B_value)((B_Msg (*) (linesQ_L_21action, B_int))L_self->$class->__asyn__)(L_self, G_1)));
-}
-B_Msg linesQ_L_21actionD___asyn__ (linesQ_L_21action L_self, B_int G_1) {
-    linesQ_main L_20obj = L_self->L_20obj;
-    return ((B_Msg)((B_Msg (*) (linesQ_main, B_int))L_20obj->$class->myproc)(L_20obj, G_1));
-}
-void linesQ_L_21actionD___serialize__ (linesQ_L_21action self, $Serial$state state) {
-    $step_serialize(self->L_20obj, state);
-}
-linesQ_L_21action linesQ_L_21actionD___deserialize__ (linesQ_L_21action self, $Serial$state state) {
-    if (!self) {
-        if (!state) {
-            self = acton_malloc(sizeof(struct linesQ_L_21action));
-            self->$class = &linesQ_L_21actionG_methods;
-            return self;
-        }
-        self = $DNEW(linesQ_L_21action, state);
-    }
-    self->L_20obj = $step_deserialize(state);
-    return self;
-}
-linesQ_L_21action linesQ_L_21actionG_new(linesQ_main G_1) {
-    linesQ_L_21action $tmp = acton_malloc(sizeof(struct linesQ_L_21action));
-    $tmp->$class = &linesQ_L_21actionG_methods;
-    linesQ_L_21actionG_methods.__init__($tmp, G_1);
-    return $tmp;
-}
-struct linesQ_L_21actionG_class linesQ_L_21actionG_methods;
-B_NoneType linesQ_L_22procD___init__ (linesQ_L_22proc L_self, linesQ_main self) {
+struct linesQ_L_19actionG_class linesQ_L_19actionG_methods;
+B_NoneType linesQ_L_20procD___init__ (linesQ_L_20proc L_self, linesQ_main self) {
     L_self->self = self;
     return B_None;
 }
-$R linesQ_L_22procD___call__ (linesQ_L_22proc L_self, $Cont C_cont) {
+$R linesQ_L_20procD___call__ (linesQ_L_20proc L_self, $Cont C_cont) {
     linesQ_main self = L_self->self;
     return (($R (*) (linesQ_main, $Cont, B_int))self->$class->myprocG_local)(self, C_cont, toB_int(0LL));
 }
-$R linesQ_L_22procD___exec__ (linesQ_L_22proc L_self, $Cont C_cont) {
-    return (($R (*) (linesQ_L_22proc, $Cont))L_self->$class->__call__)(L_self, C_cont);
+$R linesQ_L_20procD___exec__ (linesQ_L_20proc L_self, $Cont C_cont) {
+    return (($R (*) (linesQ_L_20proc, $Cont))L_self->$class->__call__)(L_self, C_cont);
 }
-void linesQ_L_22procD___serialize__ (linesQ_L_22proc self, $Serial$state state) {
+void linesQ_L_20procD___serialize__ (linesQ_L_20proc self, $Serial$state state) {
     $step_serialize(self->self, state);
 }
-linesQ_L_22proc linesQ_L_22procD___deserialize__ (linesQ_L_22proc self, $Serial$state state) {
+linesQ_L_20proc linesQ_L_20procD___deserialize__ (linesQ_L_20proc self, $Serial$state state) {
     if (!self) {
         if (!state) {
-            self = acton_malloc(sizeof(struct linesQ_L_22proc));
-            self->$class = &linesQ_L_22procG_methods;
+            self = acton_malloc(sizeof(struct linesQ_L_20proc));
+            self->$class = &linesQ_L_20procG_methods;
             return self;
         }
-        self = $DNEW(linesQ_L_22proc, state);
+        self = $DNEW(linesQ_L_20proc, state);
     }
     self->self = $step_deserialize(state);
     return self;
 }
-linesQ_L_22proc linesQ_L_22procG_new(linesQ_main G_1) {
-    linesQ_L_22proc $tmp = acton_malloc(sizeof(struct linesQ_L_22proc));
-    $tmp->$class = &linesQ_L_22procG_methods;
-    linesQ_L_22procG_methods.__init__($tmp, G_1);
+linesQ_L_20proc linesQ_L_20procG_new(linesQ_main G_1) {
+    linesQ_L_20proc $tmp = acton_malloc(sizeof(struct linesQ_L_20proc));
+    $tmp->$class = &linesQ_L_20procG_methods;
+    linesQ_L_20procG_methods.__init__($tmp, G_1);
     return $tmp;
 }
-struct linesQ_L_22procG_class linesQ_L_22procG_methods;
-$R linesQ_U_2L_19C_11cont (linesQ_main self, B_Iterable W_1908, B_Number W_2123, $Cont C_cont, int64_t U_9C_12res) {
+struct linesQ_L_20procG_class linesQ_L_20procG_methods;
+$R linesQ_U_1L_17C_9cont (linesQ_main self, B_Iterable W_1191, B_Number W_1319, $Cont C_cont, int64_t U_7C_10res) {
     #line 38 "test/src/lines.act"
-    self->r = toB_int(U_9C_12res);
+    self->r = toB_int(U_7C_10res);
     #line 39 "test/src/lines.act"
     ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(2, to$str("r ="), self->r), B_None, B_None, B_None, B_None);
     #line 40 "test/src/lines.act"
-    ((B_Msg (*) (linesQ_Apa, $action))self->a->$class->compute)(self->a, (($action)linesQ_L_21actionG_new(self)));
+    ((B_Msg (*) (linesQ_Apa, $action))self->a->$class->compute)(self->a, (($action)linesQ_L_19actionG_new(self)));
     #line 41 "test/src/lines.act"
     ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, to$str("main")), B_None, B_None, B_None, B_None);
     #line 44 "test/src/lines.act"
@@ -512,18 +479,18 @@ $R linesQ_U_2L_19C_11cont (linesQ_main self, B_Iterable W_1908, B_Number W_2123,
         #line 68 "test/src/lines.act"
         ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(2, to$str("loop body"), self->i), B_None, B_None, B_None, B_None);
     }
-    B_Iterator N_3iter = ((B_Iterator (*) (B_Iterable, B_list))W_1908->$class->__iter__)(W_1908, B_mk_list(3, toB_int(1LL) , toB_int(2LL) , toB_int(3LL)));
+    B_Iterator N_3iter = ((B_Iterator (*) (B_Iterable, B_list))W_1191->$class->__iter__)(W_1191, B_mk_list(3, toB_int(1LL) , toB_int(2LL) , toB_int(3LL)));
     if ($PUSH()) {
         #line 73 "test/src/lines.act"
         while (true) {
-            int64_t U_10j = ((B_int)((B_int (*) (B_Iterator))N_3iter->$class->__next__)(N_3iter))->val;
+            int64_t U_8j = ((B_int)((B_int (*) (B_Iterator))N_3iter->$class->__next__)(N_3iter))->val;
             #line 74 "test/src/lines.act"
-            if ((U_10j == 2LL)) {
+            if ((U_8j == 2LL)) {
                 #line 75 "test/src/lines.act"
                 continue;
             }
             #line 76 "test/src/lines.act"
-            ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(2, to$str("for j"), toB_int(U_10j)), B_None, B_None, B_None, B_None);
+            ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(2, to$str("for j"), toB_int(U_8j)), B_None, B_None, B_None, B_None);
         }
         $DROP();
     }
@@ -572,30 +539,130 @@ $R linesQ_U_2L_19C_11cont (linesQ_main self, B_Iterable W_1908, B_Number W_2123,
         }
     }
     #line 89 "test/src/lines.act"
-    $AFTER(toB_float(1), (($Cont)linesQ_L_22procG_new(self)));
+    $AFTER(toB_float(1), (($Cont)linesQ_L_20procG_new(self)));
     return (($R (*) (linesQ_main, $Cont))self->$class->nopG_local)(self, C_cont);
 }
-$R linesQ_L_19C_11cont (linesQ_main self, B_Iterable W_1908, B_Number W_2123, $Cont C_cont, B_int C_12res) {
-    return linesQ_U_2L_19C_11cont(self, W_1908, W_2123, C_cont, ((B_int)C_12res)->val);
+$R linesQ_L_17C_9cont (linesQ_main self, B_Iterable W_1191, B_Number W_1319, $Cont C_cont, B_int C_10res) {
+    return linesQ_U_1L_17C_9cont(self, W_1191, W_1319, C_cont, ((B_int)C_10res)->val);
 }
-B_NoneType linesQ_L_23ContD___init__ (linesQ_L_23Cont L_self, linesQ_main self, B_Iterable W_1908, B_Number W_2123, $Cont C_cont) {
+B_NoneType linesQ_L_21ContD___init__ (linesQ_L_21Cont L_self, linesQ_main self, B_Iterable W_1191, B_Number W_1319, $Cont C_cont) {
     L_self->self = self;
-    L_self->W_1908 = W_1908;
-    L_self->W_2123 = W_2123;
+    L_self->W_1191 = W_1191;
+    L_self->W_1319 = W_1319;
     L_self->C_cont = C_cont;
     return B_None;
 }
-$R linesQ_L_23ContD___call__ (linesQ_L_23Cont L_self, B_int G_1) {
+$R linesQ_L_21ContD___call__ (linesQ_L_21Cont L_self, B_int G_1) {
     linesQ_main self = L_self->self;
-    B_Iterable W_1908 = L_self->W_1908;
-    B_Number W_2123 = L_self->W_2123;
+    B_Iterable W_1191 = L_self->W_1191;
+    B_Number W_1319 = L_self->W_1319;
     $Cont C_cont = L_self->C_cont;
-    return linesQ_L_19C_11cont(self, W_1908, W_2123, C_cont, G_1);
+    return linesQ_L_17C_9cont(self, W_1191, W_1319, C_cont, G_1);
+}
+void linesQ_L_21ContD___serialize__ (linesQ_L_21Cont self, $Serial$state state) {
+    $step_serialize(self->self, state);
+    $step_serialize(self->W_1191, state);
+    $step_serialize(self->W_1319, state);
+    $step_serialize(self->C_cont, state);
+}
+linesQ_L_21Cont linesQ_L_21ContD___deserialize__ (linesQ_L_21Cont self, $Serial$state state) {
+    if (!self) {
+        if (!state) {
+            self = acton_malloc(sizeof(struct linesQ_L_21Cont));
+            self->$class = &linesQ_L_21ContG_methods;
+            return self;
+        }
+        self = $DNEW(linesQ_L_21Cont, state);
+    }
+    self->self = $step_deserialize(state);
+    self->W_1191 = $step_deserialize(state);
+    self->W_1319 = $step_deserialize(state);
+    self->C_cont = $step_deserialize(state);
+    return self;
+}
+linesQ_L_21Cont linesQ_L_21ContG_new(linesQ_main G_1, B_Iterable G_2, B_Number G_3, $Cont G_4) {
+    linesQ_L_21Cont $tmp = acton_malloc(sizeof(struct linesQ_L_21Cont));
+    $tmp->$class = &linesQ_L_21ContG_methods;
+    linesQ_L_21ContG_methods.__init__($tmp, G_1, G_2, G_3, G_4);
+    return $tmp;
+}
+struct linesQ_L_21ContG_class linesQ_L_21ContG_methods;
+$R linesQ_L_12C_7cont (linesQ_main self, B_Iterable W_1191, B_Number W_1319, $Cont C_cont, linesQ_Bepa C_8res) {
+    #line 34 "test/src/lines.act"
+    self->b = C_8res;
+    #line 35 "test/src/lines.act"
+    ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, to$str("-----")), B_None, B_None, B_None, B_None);
+    #line 36 "test/src/lines.act"
+    ((B_Msg (*) (linesQ_Apa, $action))self->a->$class->setup)(self->a, (($action)linesQ_L_14actionG_new(self->a)));
+    #line 37 "test/src/lines.act"
+    self->x = ((B_Msg (*) (linesQ_Apa, $action))self->a->$class->compute)(self->a, (($action)linesQ_L_16actionG_new(self->b)));
+    return $AWAIT((($Cont)linesQ_L_21ContG_new(self, W_1191, W_1319, C_cont)), self->x);
+}
+B_NoneType linesQ_L_22ContD___init__ (linesQ_L_22Cont L_self, linesQ_main self, B_Iterable W_1191, B_Number W_1319, $Cont C_cont) {
+    L_self->self = self;
+    L_self->W_1191 = W_1191;
+    L_self->W_1319 = W_1319;
+    L_self->C_cont = C_cont;
+    return B_None;
+}
+$R linesQ_L_22ContD___call__ (linesQ_L_22Cont L_self, linesQ_Bepa G_1) {
+    linesQ_main self = L_self->self;
+    B_Iterable W_1191 = L_self->W_1191;
+    B_Number W_1319 = L_self->W_1319;
+    $Cont C_cont = L_self->C_cont;
+    return linesQ_L_12C_7cont(self, W_1191, W_1319, C_cont, G_1);
+}
+void linesQ_L_22ContD___serialize__ (linesQ_L_22Cont self, $Serial$state state) {
+    $step_serialize(self->self, state);
+    $step_serialize(self->W_1191, state);
+    $step_serialize(self->W_1319, state);
+    $step_serialize(self->C_cont, state);
+}
+linesQ_L_22Cont linesQ_L_22ContD___deserialize__ (linesQ_L_22Cont self, $Serial$state state) {
+    if (!self) {
+        if (!state) {
+            self = acton_malloc(sizeof(struct linesQ_L_22Cont));
+            self->$class = &linesQ_L_22ContG_methods;
+            return self;
+        }
+        self = $DNEW(linesQ_L_22Cont, state);
+    }
+    self->self = $step_deserialize(state);
+    self->W_1191 = $step_deserialize(state);
+    self->W_1319 = $step_deserialize(state);
+    self->C_cont = $step_deserialize(state);
+    return self;
+}
+linesQ_L_22Cont linesQ_L_22ContG_new(linesQ_main G_1, B_Iterable G_2, B_Number G_3, $Cont G_4) {
+    linesQ_L_22Cont $tmp = acton_malloc(sizeof(struct linesQ_L_22Cont));
+    $tmp->$class = &linesQ_L_22ContG_methods;
+    linesQ_L_22ContG_methods.__init__($tmp, G_1, G_2, G_3, G_4);
+    return $tmp;
+}
+struct linesQ_L_22ContG_class linesQ_L_22ContG_methods;
+$R linesQ_L_11C_5cont (linesQ_main self, B_Iterable W_1191, B_Number W_1319, $Cont C_cont, linesQ_Apa C_6res) {
+    #line 33 "test/src/lines.act"
+    self->a = C_6res;
+    return linesQ_BepaG_newact((($Cont)linesQ_L_22ContG_new(self, W_1191, W_1319, C_cont)));
+}
+B_NoneType linesQ_L_23ContD___init__ (linesQ_L_23Cont L_self, linesQ_main self, B_Iterable W_1191, B_Number W_1319, $Cont C_cont) {
+    L_self->self = self;
+    L_self->W_1191 = W_1191;
+    L_self->W_1319 = W_1319;
+    L_self->C_cont = C_cont;
+    return B_None;
+}
+$R linesQ_L_23ContD___call__ (linesQ_L_23Cont L_self, linesQ_Apa G_1) {
+    linesQ_main self = L_self->self;
+    B_Iterable W_1191 = L_self->W_1191;
+    B_Number W_1319 = L_self->W_1319;
+    $Cont C_cont = L_self->C_cont;
+    return linesQ_L_11C_5cont(self, W_1191, W_1319, C_cont, G_1);
 }
 void linesQ_L_23ContD___serialize__ (linesQ_L_23Cont self, $Serial$state state) {
     $step_serialize(self->self, state);
-    $step_serialize(self->W_1908, state);
-    $step_serialize(self->W_2123, state);
+    $step_serialize(self->W_1191, state);
+    $step_serialize(self->W_1319, state);
     $step_serialize(self->C_cont, state);
 }
 linesQ_L_23Cont linesQ_L_23ContD___deserialize__ (linesQ_L_23Cont self, $Serial$state state) {
@@ -608,8 +675,8 @@ linesQ_L_23Cont linesQ_L_23ContD___deserialize__ (linesQ_L_23Cont self, $Serial$
         self = $DNEW(linesQ_L_23Cont, state);
     }
     self->self = $step_deserialize(state);
-    self->W_1908 = $step_deserialize(state);
-    self->W_2123 = $step_deserialize(state);
+    self->W_1191 = $step_deserialize(state);
+    self->W_1319 = $step_deserialize(state);
     self->C_cont = $step_deserialize(state);
     return self;
 }
@@ -620,390 +687,290 @@ linesQ_L_23Cont linesQ_L_23ContG_new(linesQ_main G_1, B_Iterable G_2, B_Number G
     return $tmp;
 }
 struct linesQ_L_23ContG_class linesQ_L_23ContG_methods;
-$R linesQ_L_14C_9cont (linesQ_main self, B_Iterable W_1908, B_Number W_2123, $Cont C_cont, linesQ_Bepa C_10res) {
-    #line 34 "test/src/lines.act"
-    self->b = C_10res;
-    #line 35 "test/src/lines.act"
-    ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, to$str("-----")), B_None, B_None, B_None, B_None);
-    #line 36 "test/src/lines.act"
-    ((B_Msg (*) (linesQ_Apa, $proc))self->a->$class->setup)(self->a, (($proc)linesQ_L_16actionG_new(self->a)));
-    #line 37 "test/src/lines.act"
-    self->x = ((B_Msg (*) (linesQ_Apa, $action))self->a->$class->compute)(self->a, (($action)linesQ_L_18actionG_new(self->b)));
-    return $AWAIT((($Cont)linesQ_L_23ContG_new(self, W_1908, W_2123, C_cont)), self->x);
-}
-B_NoneType linesQ_L_24ContD___init__ (linesQ_L_24Cont L_self, linesQ_main self, B_Iterable W_1908, B_Number W_2123, $Cont C_cont) {
-    L_self->self = self;
-    L_self->W_1908 = W_1908;
-    L_self->W_2123 = W_2123;
-    L_self->C_cont = C_cont;
-    return B_None;
-}
-$R linesQ_L_24ContD___call__ (linesQ_L_24Cont L_self, linesQ_Bepa G_1) {
-    linesQ_main self = L_self->self;
-    B_Iterable W_1908 = L_self->W_1908;
-    B_Number W_2123 = L_self->W_2123;
-    $Cont C_cont = L_self->C_cont;
-    return linesQ_L_14C_9cont(self, W_1908, W_2123, C_cont, G_1);
-}
-void linesQ_L_24ContD___serialize__ (linesQ_L_24Cont self, $Serial$state state) {
-    $step_serialize(self->self, state);
-    $step_serialize(self->W_1908, state);
-    $step_serialize(self->W_2123, state);
-    $step_serialize(self->C_cont, state);
-}
-linesQ_L_24Cont linesQ_L_24ContD___deserialize__ (linesQ_L_24Cont self, $Serial$state state) {
-    if (!self) {
-        if (!state) {
-            self = acton_malloc(sizeof(struct linesQ_L_24Cont));
-            self->$class = &linesQ_L_24ContG_methods;
-            return self;
-        }
-        self = $DNEW(linesQ_L_24Cont, state);
-    }
-    self->self = $step_deserialize(state);
-    self->W_1908 = $step_deserialize(state);
-    self->W_2123 = $step_deserialize(state);
-    self->C_cont = $step_deserialize(state);
-    return self;
-}
-linesQ_L_24Cont linesQ_L_24ContG_new(linesQ_main G_1, B_Iterable G_2, B_Number G_3, $Cont G_4) {
-    linesQ_L_24Cont $tmp = acton_malloc(sizeof(struct linesQ_L_24Cont));
-    $tmp->$class = &linesQ_L_24ContG_methods;
-    linesQ_L_24ContG_methods.__init__($tmp, G_1, G_2, G_3, G_4);
-    return $tmp;
-}
-struct linesQ_L_24ContG_class linesQ_L_24ContG_methods;
-$R linesQ_L_13C_7cont (linesQ_main self, B_Iterable W_1908, B_Number W_2123, $Cont C_cont, linesQ_Apa C_8res) {
-    #line 33 "test/src/lines.act"
-    self->a = C_8res;
-    return linesQ_BepaG_newact((($Cont)linesQ_L_24ContG_new(self, W_1908, W_2123, C_cont)));
-}
-B_NoneType linesQ_L_25ContD___init__ (linesQ_L_25Cont L_self, linesQ_main self, B_Iterable W_1908, B_Number W_2123, $Cont C_cont) {
-    L_self->self = self;
-    L_self->W_1908 = W_1908;
-    L_self->W_2123 = W_2123;
-    L_self->C_cont = C_cont;
-    return B_None;
-}
-$R linesQ_L_25ContD___call__ (linesQ_L_25Cont L_self, linesQ_Apa G_1) {
-    linesQ_main self = L_self->self;
-    B_Iterable W_1908 = L_self->W_1908;
-    B_Number W_2123 = L_self->W_2123;
-    $Cont C_cont = L_self->C_cont;
-    return linesQ_L_13C_7cont(self, W_1908, W_2123, C_cont, G_1);
-}
-void linesQ_L_25ContD___serialize__ (linesQ_L_25Cont self, $Serial$state state) {
-    $step_serialize(self->self, state);
-    $step_serialize(self->W_1908, state);
-    $step_serialize(self->W_2123, state);
-    $step_serialize(self->C_cont, state);
-}
-linesQ_L_25Cont linesQ_L_25ContD___deserialize__ (linesQ_L_25Cont self, $Serial$state state) {
-    if (!self) {
-        if (!state) {
-            self = acton_malloc(sizeof(struct linesQ_L_25Cont));
-            self->$class = &linesQ_L_25ContG_methods;
-            return self;
-        }
-        self = $DNEW(linesQ_L_25Cont, state);
-    }
-    self->self = $step_deserialize(state);
-    self->W_1908 = $step_deserialize(state);
-    self->W_2123 = $step_deserialize(state);
-    self->C_cont = $step_deserialize(state);
-    return self;
-}
-linesQ_L_25Cont linesQ_L_25ContG_new(linesQ_main G_1, B_Iterable G_2, B_Number G_3, $Cont G_4) {
-    linesQ_L_25Cont $tmp = acton_malloc(sizeof(struct linesQ_L_25Cont));
-    $tmp->$class = &linesQ_L_25ContG_methods;
-    linesQ_L_25ContG_methods.__init__($tmp, G_1, G_2, G_3, G_4);
-    return $tmp;
-}
-struct linesQ_L_25ContG_class linesQ_L_25ContG_methods;
-B_NoneType linesQ_L_26procD___init__ (linesQ_L_26proc L_self, linesQ_main self, B_int i) {
+B_NoneType linesQ_L_24procD___init__ (linesQ_L_24proc L_self, linesQ_main self, B_int i) {
     L_self->self = self;
     L_self->i = i;
     return B_None;
 }
-$R linesQ_L_26procD___call__ (linesQ_L_26proc L_self, $Cont C_cont) {
+$R linesQ_L_24procD___call__ (linesQ_L_24proc L_self, $Cont C_cont) {
     linesQ_main self = L_self->self;
-    int64_t U_11i = ((B_int)L_self->i)->val;
-    return (($R (*) (linesQ_main, $Cont, B_int))self->$class->myprocG_local)(self, C_cont, toB_int(U_11i));
+    int64_t U_9i = ((B_int)L_self->i)->val;
+    return (($R (*) (linesQ_main, $Cont, B_int))self->$class->myprocG_local)(self, C_cont, toB_int(U_9i));
 }
-$R linesQ_L_26procD___exec__ (linesQ_L_26proc L_self, $Cont C_cont) {
-    return (($R (*) (linesQ_L_26proc, $Cont))L_self->$class->__call__)(L_self, C_cont);
+$R linesQ_L_24procD___exec__ (linesQ_L_24proc L_self, $Cont C_cont) {
+    return (($R (*) (linesQ_L_24proc, $Cont))L_self->$class->__call__)(L_self, C_cont);
 }
-void linesQ_L_26procD___serialize__ (linesQ_L_26proc self, $Serial$state state) {
+void linesQ_L_24procD___serialize__ (linesQ_L_24proc self, $Serial$state state) {
     $step_serialize(self->self, state);
     $step_serialize(self->i, state);
 }
-linesQ_L_26proc linesQ_L_26procD___deserialize__ (linesQ_L_26proc self, $Serial$state state) {
+linesQ_L_24proc linesQ_L_24procD___deserialize__ (linesQ_L_24proc self, $Serial$state state) {
     if (!self) {
         if (!state) {
-            self = acton_malloc(sizeof(struct linesQ_L_26proc));
-            self->$class = &linesQ_L_26procG_methods;
+            self = acton_malloc(sizeof(struct linesQ_L_24proc));
+            self->$class = &linesQ_L_24procG_methods;
             return self;
         }
-        self = $DNEW(linesQ_L_26proc, state);
+        self = $DNEW(linesQ_L_24proc, state);
     }
     self->self = $step_deserialize(state);
     self->i = $step_deserialize(state);
     return self;
 }
-linesQ_L_26proc linesQ_L_26procG_new(linesQ_main G_1, B_int G_2) {
-    linesQ_L_26proc $tmp = acton_malloc(sizeof(struct linesQ_L_26proc));
-    $tmp->$class = &linesQ_L_26procG_methods;
-    linesQ_L_26procG_methods.__init__($tmp, G_1, G_2);
+linesQ_L_24proc linesQ_L_24procG_new(linesQ_main G_1, B_int G_2) {
+    linesQ_L_24proc $tmp = acton_malloc(sizeof(struct linesQ_L_24proc));
+    $tmp->$class = &linesQ_L_24procG_methods;
+    linesQ_L_24procG_methods.__init__($tmp, G_1, G_2);
     return $tmp;
 }
-struct linesQ_L_26procG_class linesQ_L_26procG_methods;
-B_NoneType linesQ_L_27procD___init__ (linesQ_L_27proc L_self, linesQ_main self) {
+struct linesQ_L_24procG_class linesQ_L_24procG_methods;
+B_NoneType linesQ_L_25procD___init__ (linesQ_L_25proc L_self, linesQ_main self) {
     L_self->self = self;
     return B_None;
 }
-$R linesQ_L_27procD___call__ (linesQ_L_27proc L_self, $Cont C_cont) {
+$R linesQ_L_25procD___call__ (linesQ_L_25proc L_self, $Cont C_cont) {
     linesQ_main self = L_self->self;
     return (($R (*) (linesQ_main, $Cont))self->$class->nopG_local)(self, C_cont);
 }
-$R linesQ_L_27procD___exec__ (linesQ_L_27proc L_self, $Cont C_cont) {
-    return (($R (*) (linesQ_L_27proc, $Cont))L_self->$class->__call__)(L_self, C_cont);
+$R linesQ_L_25procD___exec__ (linesQ_L_25proc L_self, $Cont C_cont) {
+    return (($R (*) (linesQ_L_25proc, $Cont))L_self->$class->__call__)(L_self, C_cont);
 }
-void linesQ_L_27procD___serialize__ (linesQ_L_27proc self, $Serial$state state) {
+void linesQ_L_25procD___serialize__ (linesQ_L_25proc self, $Serial$state state) {
     $step_serialize(self->self, state);
 }
-linesQ_L_27proc linesQ_L_27procD___deserialize__ (linesQ_L_27proc self, $Serial$state state) {
+linesQ_L_25proc linesQ_L_25procD___deserialize__ (linesQ_L_25proc self, $Serial$state state) {
     if (!self) {
         if (!state) {
-            self = acton_malloc(sizeof(struct linesQ_L_27proc));
-            self->$class = &linesQ_L_27procG_methods;
+            self = acton_malloc(sizeof(struct linesQ_L_25proc));
+            self->$class = &linesQ_L_25procG_methods;
             return self;
         }
-        self = $DNEW(linesQ_L_27proc, state);
+        self = $DNEW(linesQ_L_25proc, state);
     }
     self->self = $step_deserialize(state);
     return self;
 }
-linesQ_L_27proc linesQ_L_27procG_new(linesQ_main G_1) {
-    linesQ_L_27proc $tmp = acton_malloc(sizeof(struct linesQ_L_27proc));
-    $tmp->$class = &linesQ_L_27procG_methods;
-    linesQ_L_27procG_methods.__init__($tmp, G_1);
+linesQ_L_25proc linesQ_L_25procG_new(linesQ_main G_1) {
+    linesQ_L_25proc $tmp = acton_malloc(sizeof(struct linesQ_L_25proc));
+    $tmp->$class = &linesQ_L_25procG_methods;
+    linesQ_L_25procG_methods.__init__($tmp, G_1);
     return $tmp;
 }
-struct linesQ_L_27procG_class linesQ_L_27procG_methods;
-$R linesQ_L_28C_13cont ($Cont C_cont, linesQ_Apa G_act, B_NoneType C_14res) {
+struct linesQ_L_25procG_class linesQ_L_25procG_methods;
+$R linesQ_L_26C_11cont ($Cont C_cont, linesQ_Apa G_act, B_NoneType C_12res) {
     return $R_CONT(C_cont, G_act);
 }
-B_NoneType linesQ_L_29ContD___init__ (linesQ_L_29Cont L_self, $Cont C_cont, linesQ_Apa G_act) {
+B_NoneType linesQ_L_27ContD___init__ (linesQ_L_27Cont L_self, $Cont C_cont, linesQ_Apa G_act) {
     L_self->C_cont = C_cont;
     L_self->G_act = G_act;
     return B_None;
 }
-$R linesQ_L_29ContD___call__ (linesQ_L_29Cont L_self, B_NoneType G_1) {
+$R linesQ_L_27ContD___call__ (linesQ_L_27Cont L_self, B_NoneType G_1) {
     $Cont C_cont = L_self->C_cont;
     linesQ_Apa G_act = L_self->G_act;
-    return linesQ_L_28C_13cont(C_cont, G_act, G_1);
+    return linesQ_L_26C_11cont(C_cont, G_act, G_1);
 }
-void linesQ_L_29ContD___serialize__ (linesQ_L_29Cont self, $Serial$state state) {
+void linesQ_L_27ContD___serialize__ (linesQ_L_27Cont self, $Serial$state state) {
     $step_serialize(self->C_cont, state);
     $step_serialize(self->G_act, state);
 }
-linesQ_L_29Cont linesQ_L_29ContD___deserialize__ (linesQ_L_29Cont self, $Serial$state state) {
+linesQ_L_27Cont linesQ_L_27ContD___deserialize__ (linesQ_L_27Cont self, $Serial$state state) {
     if (!self) {
         if (!state) {
-            self = acton_malloc(sizeof(struct linesQ_L_29Cont));
-            self->$class = &linesQ_L_29ContG_methods;
+            self = acton_malloc(sizeof(struct linesQ_L_27Cont));
+            self->$class = &linesQ_L_27ContG_methods;
             return self;
         }
-        self = $DNEW(linesQ_L_29Cont, state);
+        self = $DNEW(linesQ_L_27Cont, state);
     }
     self->C_cont = $step_deserialize(state);
     self->G_act = $step_deserialize(state);
     return self;
 }
-linesQ_L_29Cont linesQ_L_29ContG_new($Cont G_1, linesQ_Apa G_2) {
-    linesQ_L_29Cont $tmp = acton_malloc(sizeof(struct linesQ_L_29Cont));
-    $tmp->$class = &linesQ_L_29ContG_methods;
-    linesQ_L_29ContG_methods.__init__($tmp, G_1, G_2);
+linesQ_L_27Cont linesQ_L_27ContG_new($Cont G_1, linesQ_Apa G_2) {
+    linesQ_L_27Cont $tmp = acton_malloc(sizeof(struct linesQ_L_27Cont));
+    $tmp->$class = &linesQ_L_27ContG_methods;
+    linesQ_L_27ContG_methods.__init__($tmp, G_1, G_2);
     return $tmp;
 }
-struct linesQ_L_29ContG_class linesQ_L_29ContG_methods;
-B_NoneType linesQ_L_30procD___init__ (linesQ_L_30proc L_self, linesQ_Apa G_act) {
+struct linesQ_L_27ContG_class linesQ_L_27ContG_methods;
+B_NoneType linesQ_L_28procD___init__ (linesQ_L_28proc L_self, linesQ_Apa G_act) {
     L_self->G_act = G_act;
     return B_None;
 }
-$R linesQ_L_30procD___call__ (linesQ_L_30proc L_self, $Cont C_cont) {
+$R linesQ_L_28procD___call__ (linesQ_L_28proc L_self, $Cont C_cont) {
     linesQ_Apa G_act = L_self->G_act;
     return (($R (*) (linesQ_Apa, $Cont))G_act->$class->__init__)(G_act, C_cont);
 }
-$R linesQ_L_30procD___exec__ (linesQ_L_30proc L_self, $Cont C_cont) {
-    return (($R (*) (linesQ_L_30proc, $Cont))L_self->$class->__call__)(L_self, C_cont);
+$R linesQ_L_28procD___exec__ (linesQ_L_28proc L_self, $Cont C_cont) {
+    return (($R (*) (linesQ_L_28proc, $Cont))L_self->$class->__call__)(L_self, C_cont);
 }
-void linesQ_L_30procD___serialize__ (linesQ_L_30proc self, $Serial$state state) {
+void linesQ_L_28procD___serialize__ (linesQ_L_28proc self, $Serial$state state) {
     $step_serialize(self->G_act, state);
 }
-linesQ_L_30proc linesQ_L_30procD___deserialize__ (linesQ_L_30proc self, $Serial$state state) {
+linesQ_L_28proc linesQ_L_28procD___deserialize__ (linesQ_L_28proc self, $Serial$state state) {
     if (!self) {
         if (!state) {
-            self = acton_malloc(sizeof(struct linesQ_L_30proc));
-            self->$class = &linesQ_L_30procG_methods;
+            self = acton_malloc(sizeof(struct linesQ_L_28proc));
+            self->$class = &linesQ_L_28procG_methods;
             return self;
         }
-        self = $DNEW(linesQ_L_30proc, state);
+        self = $DNEW(linesQ_L_28proc, state);
     }
     self->G_act = $step_deserialize(state);
     return self;
 }
-linesQ_L_30proc linesQ_L_30procG_new(linesQ_Apa G_1) {
-    linesQ_L_30proc $tmp = acton_malloc(sizeof(struct linesQ_L_30proc));
-    $tmp->$class = &linesQ_L_30procG_methods;
-    linesQ_L_30procG_methods.__init__($tmp, G_1);
+linesQ_L_28proc linesQ_L_28procG_new(linesQ_Apa G_1) {
+    linesQ_L_28proc $tmp = acton_malloc(sizeof(struct linesQ_L_28proc));
+    $tmp->$class = &linesQ_L_28procG_methods;
+    linesQ_L_28procG_methods.__init__($tmp, G_1);
     return $tmp;
 }
-struct linesQ_L_30procG_class linesQ_L_30procG_methods;
-$R linesQ_L_31C_15cont ($Cont C_cont, linesQ_Bepa G_act, B_NoneType C_16res) {
+struct linesQ_L_28procG_class linesQ_L_28procG_methods;
+$R linesQ_L_29C_13cont ($Cont C_cont, linesQ_Bepa G_act, B_NoneType C_14res) {
     return $R_CONT(C_cont, G_act);
 }
-B_NoneType linesQ_L_32ContD___init__ (linesQ_L_32Cont L_self, $Cont C_cont, linesQ_Bepa G_act) {
+B_NoneType linesQ_L_30ContD___init__ (linesQ_L_30Cont L_self, $Cont C_cont, linesQ_Bepa G_act) {
     L_self->C_cont = C_cont;
     L_self->G_act = G_act;
     return B_None;
 }
-$R linesQ_L_32ContD___call__ (linesQ_L_32Cont L_self, B_NoneType G_1) {
+$R linesQ_L_30ContD___call__ (linesQ_L_30Cont L_self, B_NoneType G_1) {
     $Cont C_cont = L_self->C_cont;
     linesQ_Bepa G_act = L_self->G_act;
-    return linesQ_L_31C_15cont(C_cont, G_act, G_1);
+    return linesQ_L_29C_13cont(C_cont, G_act, G_1);
 }
-void linesQ_L_32ContD___serialize__ (linesQ_L_32Cont self, $Serial$state state) {
+void linesQ_L_30ContD___serialize__ (linesQ_L_30Cont self, $Serial$state state) {
     $step_serialize(self->C_cont, state);
     $step_serialize(self->G_act, state);
 }
-linesQ_L_32Cont linesQ_L_32ContD___deserialize__ (linesQ_L_32Cont self, $Serial$state state) {
+linesQ_L_30Cont linesQ_L_30ContD___deserialize__ (linesQ_L_30Cont self, $Serial$state state) {
     if (!self) {
         if (!state) {
-            self = acton_malloc(sizeof(struct linesQ_L_32Cont));
-            self->$class = &linesQ_L_32ContG_methods;
+            self = acton_malloc(sizeof(struct linesQ_L_30Cont));
+            self->$class = &linesQ_L_30ContG_methods;
             return self;
         }
-        self = $DNEW(linesQ_L_32Cont, state);
+        self = $DNEW(linesQ_L_30Cont, state);
     }
     self->C_cont = $step_deserialize(state);
     self->G_act = $step_deserialize(state);
     return self;
 }
-linesQ_L_32Cont linesQ_L_32ContG_new($Cont G_1, linesQ_Bepa G_2) {
-    linesQ_L_32Cont $tmp = acton_malloc(sizeof(struct linesQ_L_32Cont));
-    $tmp->$class = &linesQ_L_32ContG_methods;
-    linesQ_L_32ContG_methods.__init__($tmp, G_1, G_2);
+linesQ_L_30Cont linesQ_L_30ContG_new($Cont G_1, linesQ_Bepa G_2) {
+    linesQ_L_30Cont $tmp = acton_malloc(sizeof(struct linesQ_L_30Cont));
+    $tmp->$class = &linesQ_L_30ContG_methods;
+    linesQ_L_30ContG_methods.__init__($tmp, G_1, G_2);
     return $tmp;
 }
-struct linesQ_L_32ContG_class linesQ_L_32ContG_methods;
-B_NoneType linesQ_L_33procD___init__ (linesQ_L_33proc L_self, linesQ_Bepa G_act) {
+struct linesQ_L_30ContG_class linesQ_L_30ContG_methods;
+B_NoneType linesQ_L_31procD___init__ (linesQ_L_31proc L_self, linesQ_Bepa G_act) {
     L_self->G_act = G_act;
     return B_None;
 }
-$R linesQ_L_33procD___call__ (linesQ_L_33proc L_self, $Cont C_cont) {
+$R linesQ_L_31procD___call__ (linesQ_L_31proc L_self, $Cont C_cont) {
     linesQ_Bepa G_act = L_self->G_act;
     return (($R (*) (linesQ_Bepa, $Cont))G_act->$class->__init__)(G_act, C_cont);
 }
-$R linesQ_L_33procD___exec__ (linesQ_L_33proc L_self, $Cont C_cont) {
-    return (($R (*) (linesQ_L_33proc, $Cont))L_self->$class->__call__)(L_self, C_cont);
+$R linesQ_L_31procD___exec__ (linesQ_L_31proc L_self, $Cont C_cont) {
+    return (($R (*) (linesQ_L_31proc, $Cont))L_self->$class->__call__)(L_self, C_cont);
 }
-void linesQ_L_33procD___serialize__ (linesQ_L_33proc self, $Serial$state state) {
+void linesQ_L_31procD___serialize__ (linesQ_L_31proc self, $Serial$state state) {
     $step_serialize(self->G_act, state);
 }
-linesQ_L_33proc linesQ_L_33procD___deserialize__ (linesQ_L_33proc self, $Serial$state state) {
+linesQ_L_31proc linesQ_L_31procD___deserialize__ (linesQ_L_31proc self, $Serial$state state) {
     if (!self) {
         if (!state) {
-            self = acton_malloc(sizeof(struct linesQ_L_33proc));
-            self->$class = &linesQ_L_33procG_methods;
+            self = acton_malloc(sizeof(struct linesQ_L_31proc));
+            self->$class = &linesQ_L_31procG_methods;
             return self;
         }
-        self = $DNEW(linesQ_L_33proc, state);
+        self = $DNEW(linesQ_L_31proc, state);
     }
     self->G_act = $step_deserialize(state);
     return self;
 }
-linesQ_L_33proc linesQ_L_33procG_new(linesQ_Bepa G_1) {
-    linesQ_L_33proc $tmp = acton_malloc(sizeof(struct linesQ_L_33proc));
-    $tmp->$class = &linesQ_L_33procG_methods;
-    linesQ_L_33procG_methods.__init__($tmp, G_1);
+linesQ_L_31proc linesQ_L_31procG_new(linesQ_Bepa G_1) {
+    linesQ_L_31proc $tmp = acton_malloc(sizeof(struct linesQ_L_31proc));
+    $tmp->$class = &linesQ_L_31procG_methods;
+    linesQ_L_31procG_methods.__init__($tmp, G_1);
     return $tmp;
 }
-struct linesQ_L_33procG_class linesQ_L_33procG_methods;
-$R linesQ_L_34C_17cont ($Cont C_cont, linesQ_main G_act, B_NoneType C_18res) {
+struct linesQ_L_31procG_class linesQ_L_31procG_methods;
+$R linesQ_L_32C_15cont ($Cont C_cont, linesQ_main G_act, B_NoneType C_16res) {
     return $R_CONT(C_cont, G_act);
 }
-B_NoneType linesQ_L_35ContD___init__ (linesQ_L_35Cont L_self, $Cont C_cont, linesQ_main G_act) {
+B_NoneType linesQ_L_33ContD___init__ (linesQ_L_33Cont L_self, $Cont C_cont, linesQ_main G_act) {
     L_self->C_cont = C_cont;
     L_self->G_act = G_act;
     return B_None;
 }
-$R linesQ_L_35ContD___call__ (linesQ_L_35Cont L_self, B_NoneType G_1) {
+$R linesQ_L_33ContD___call__ (linesQ_L_33Cont L_self, B_NoneType G_1) {
     $Cont C_cont = L_self->C_cont;
     linesQ_main G_act = L_self->G_act;
-    return linesQ_L_34C_17cont(C_cont, G_act, G_1);
+    return linesQ_L_32C_15cont(C_cont, G_act, G_1);
 }
-void linesQ_L_35ContD___serialize__ (linesQ_L_35Cont self, $Serial$state state) {
+void linesQ_L_33ContD___serialize__ (linesQ_L_33Cont self, $Serial$state state) {
     $step_serialize(self->C_cont, state);
     $step_serialize(self->G_act, state);
 }
-linesQ_L_35Cont linesQ_L_35ContD___deserialize__ (linesQ_L_35Cont self, $Serial$state state) {
+linesQ_L_33Cont linesQ_L_33ContD___deserialize__ (linesQ_L_33Cont self, $Serial$state state) {
     if (!self) {
         if (!state) {
-            self = acton_malloc(sizeof(struct linesQ_L_35Cont));
-            self->$class = &linesQ_L_35ContG_methods;
+            self = acton_malloc(sizeof(struct linesQ_L_33Cont));
+            self->$class = &linesQ_L_33ContG_methods;
             return self;
         }
-        self = $DNEW(linesQ_L_35Cont, state);
+        self = $DNEW(linesQ_L_33Cont, state);
     }
     self->C_cont = $step_deserialize(state);
     self->G_act = $step_deserialize(state);
     return self;
 }
-linesQ_L_35Cont linesQ_L_35ContG_new($Cont G_1, linesQ_main G_2) {
-    linesQ_L_35Cont $tmp = acton_malloc(sizeof(struct linesQ_L_35Cont));
-    $tmp->$class = &linesQ_L_35ContG_methods;
-    linesQ_L_35ContG_methods.__init__($tmp, G_1, G_2);
+linesQ_L_33Cont linesQ_L_33ContG_new($Cont G_1, linesQ_main G_2) {
+    linesQ_L_33Cont $tmp = acton_malloc(sizeof(struct linesQ_L_33Cont));
+    $tmp->$class = &linesQ_L_33ContG_methods;
+    linesQ_L_33ContG_methods.__init__($tmp, G_1, G_2);
     return $tmp;
 }
-struct linesQ_L_35ContG_class linesQ_L_35ContG_methods;
-B_NoneType linesQ_L_36procD___init__ (linesQ_L_36proc L_self, linesQ_main G_act, B_Env env) {
+struct linesQ_L_33ContG_class linesQ_L_33ContG_methods;
+B_NoneType linesQ_L_34procD___init__ (linesQ_L_34proc L_self, linesQ_main G_act, B_Env env) {
     L_self->G_act = G_act;
     L_self->env = env;
     return B_None;
 }
-$R linesQ_L_36procD___call__ (linesQ_L_36proc L_self, $Cont C_cont) {
+$R linesQ_L_34procD___call__ (linesQ_L_34proc L_self, $Cont C_cont) {
     linesQ_main G_act = L_self->G_act;
     B_Env env = L_self->env;
     return (($R (*) (linesQ_main, $Cont, B_Env))G_act->$class->__init__)(G_act, C_cont, env);
 }
-$R linesQ_L_36procD___exec__ (linesQ_L_36proc L_self, $Cont C_cont) {
-    return (($R (*) (linesQ_L_36proc, $Cont))L_self->$class->__call__)(L_self, C_cont);
+$R linesQ_L_34procD___exec__ (linesQ_L_34proc L_self, $Cont C_cont) {
+    return (($R (*) (linesQ_L_34proc, $Cont))L_self->$class->__call__)(L_self, C_cont);
 }
-void linesQ_L_36procD___serialize__ (linesQ_L_36proc self, $Serial$state state) {
+void linesQ_L_34procD___serialize__ (linesQ_L_34proc self, $Serial$state state) {
     $step_serialize(self->G_act, state);
     $step_serialize(self->env, state);
 }
-linesQ_L_36proc linesQ_L_36procD___deserialize__ (linesQ_L_36proc self, $Serial$state state) {
+linesQ_L_34proc linesQ_L_34procD___deserialize__ (linesQ_L_34proc self, $Serial$state state) {
     if (!self) {
         if (!state) {
-            self = acton_malloc(sizeof(struct linesQ_L_36proc));
-            self->$class = &linesQ_L_36procG_methods;
+            self = acton_malloc(sizeof(struct linesQ_L_34proc));
+            self->$class = &linesQ_L_34procG_methods;
             return self;
         }
-        self = $DNEW(linesQ_L_36proc, state);
+        self = $DNEW(linesQ_L_34proc, state);
     }
     self->G_act = $step_deserialize(state);
     self->env = $step_deserialize(state);
     return self;
 }
-linesQ_L_36proc linesQ_L_36procG_new(linesQ_main G_1, B_Env G_2) {
-    linesQ_L_36proc $tmp = acton_malloc(sizeof(struct linesQ_L_36proc));
-    $tmp->$class = &linesQ_L_36procG_methods;
-    linesQ_L_36procG_methods.__init__($tmp, G_1, G_2);
+linesQ_L_34proc linesQ_L_34procG_new(linesQ_main G_1, B_Env G_2) {
+    linesQ_L_34proc $tmp = acton_malloc(sizeof(struct linesQ_L_34proc));
+    $tmp->$class = &linesQ_L_34procG_methods;
+    linesQ_L_34procG_methods.__init__($tmp, G_1, G_2);
     return $tmp;
 }
-struct linesQ_L_36procG_class linesQ_L_36procG_methods;
+struct linesQ_L_34procG_class linesQ_L_34procG_methods;
 $R linesQ_ApaD___init__ (linesQ_Apa self, $Cont C_cont) {
     #line 2 "test/src/lines.act"
     self->apa = toB_int(2001LL);
@@ -1011,35 +978,37 @@ $R linesQ_ApaD___init__ (linesQ_Apa self, $Cont C_cont) {
     self->apb = toB_int(2002LL);
     #line 16 "test/src/lines.act"
     self->y = toB_int(123LL);
-    return (($R (*) (linesQ_Apa, $Cont, $proc))self->$class->setupG_local)(self, (($Cont)linesQ_L_2ContG_new(self, C_cont)), (($proc)linesQ_L_4procG_new(self)));
+    return (($R (*) (linesQ_Apa, $Cont, $action))self->$class->setupG_local)(self, (($Cont)linesQ_L_2ContG_new(self, C_cont)), (($action)linesQ_L_4actionG_new(self)));
 }
 #line 3 "test/src/lines.act"
-$R linesQ_ApaD_setupG_local (linesQ_Apa self, $Cont C_cont, $proc cb) {
+$R linesQ_ApaD_setupG_local (linesQ_Apa self, $Cont C_cont, $action cb) {
     #line 4 "test/src/lines.act"
     ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, to$str("setup")), B_None, B_None, B_None, B_None);
-    return (($R (*) ($proc, B_value, B_int))cb->$class->__exec__)(cb, ((B_value)linesQ_L_6ContG_new(C_cont)), toB_int(0LL));
+    #line 5 "test/src/lines.act"
+    ((B_Msg (*) ($action, B_int))cb->$class->__asyn__)(cb, toB_int(0LL));
+    return $R_CONT(C_cont, B_None);
 }
 #line 7 "test/src/lines.act"
 $R linesQ_ApaD_computeG_local (linesQ_Apa self, $Cont C_cont, $action cb) {
     #line 8 "test/src/lines.act"
     ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, to$str("compute")), B_None, B_None, B_None, B_None);
-    return $AWAIT((($Cont)linesQ_L_8ContG_new(cb, C_cont)), ((B_Msg)((B_Msg (*) ($action, B_int))cb->$class->__asyn__)(cb, toB_int(1LL))));
+    return $AWAIT((($Cont)linesQ_L_6ContG_new(cb, C_cont)), ((B_Msg)((B_Msg (*) ($action, B_int))cb->$class->__asyn__)(cb, toB_int(1LL))));
 }
 #line 12 "test/src/lines.act"
 $R linesQ_ApaD_noticeG_local (linesQ_Apa self, $Cont C_cont, B_int i) {
     #line 13 "test/src/lines.act"
     ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, to$str("notice")), B_None, B_None, B_None, B_None);
-    int64_t U_12N_1tmp = (((B_int)i)->val + 1LL);
-    return $R_CONT(C_cont, toB_int(U_12N_1tmp));
+    int64_t U_10N_1tmp = (((B_int)i)->val + 1LL);
+    return $R_CONT(C_cont, toB_int(U_10N_1tmp));
 }
-B_Msg linesQ_ApaD_setup (linesQ_Apa self, $proc cb) {
-    return $ASYNC((($Actor)self), (($Cont)linesQ_L_9procG_new(self, cb)));
+B_Msg linesQ_ApaD_setup (linesQ_Apa self, $action cb) {
+    return $ASYNC((($Actor)self), (($Cont)linesQ_L_7procG_new(self, cb)));
 }
 B_Msg linesQ_ApaD_compute (linesQ_Apa self, $action cb) {
-    return ((B_Msg)$ASYNC((($Actor)self), (($Cont)linesQ_L_10procG_new(self, cb))));
+    return ((B_Msg)$ASYNC((($Actor)self), (($Cont)linesQ_L_8procG_new(self, cb))));
 }
 B_Msg linesQ_ApaD_notice (linesQ_Apa self, B_int i) {
-    return ((B_Msg)$ASYNC((($Actor)self), (($Cont)linesQ_L_11procG_new(self, i))));
+    return ((B_Msg)$ASYNC((($Actor)self), (($Cont)linesQ_L_9procG_new(self, i))));
 }
 void linesQ_ApaD___serialize__ (linesQ_Apa self, $Serial$state state) {
     $ActorG_methods.__serialize__(($Actor)self, state);
@@ -1083,11 +1052,11 @@ $R linesQ_BepaD___init__ (linesQ_Bepa self, $Cont C_cont) {
 $R linesQ_BepaD_callbackG_local (linesQ_Bepa self, $Cont C_cont, B_int i) {
     #line 23 "test/src/lines.act"
     ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(2, to$str("callback"), i), B_None, B_None, B_None, B_None);
-    int64_t U_13N_2tmp = (((B_int)i)->val + 1LL);
-    return $R_CONT(C_cont, toB_int(U_13N_2tmp));
+    int64_t U_11N_2tmp = (((B_int)i)->val + 1LL);
+    return $R_CONT(C_cont, toB_int(U_11N_2tmp));
 }
 B_Msg linesQ_BepaD_callback (linesQ_Bepa self, B_int i) {
-    return ((B_Msg)$ASYNC((($Actor)self), (($Cont)linesQ_L_12procG_new(self, i))));
+    return ((B_Msg)$ASYNC((($Actor)self), (($Cont)linesQ_L_10procG_new(self, i))));
 }
 void linesQ_BepaD___serialize__ (linesQ_Bepa self, $Serial$state state) {
     $ActorG_methods.__serialize__(($Actor)self, state);
@@ -1116,9 +1085,9 @@ $R linesQ_BepaG_new($Cont G_1) {
 struct linesQ_BepaG_class linesQ_BepaG_methods;
 $R linesQ_mainD___init__ (linesQ_main self, $Cont C_cont, B_Env env) {
     self->env = env;
-    B_Iterable W_1908 = (B_Iterable)B_SequenceD_listG_witness->W_Collection;
-    B_Number W_2123 = (B_Number)B_RealFloatD_floatG_witness;
-    return linesQ_ApaG_newact((($Cont)linesQ_L_25ContG_new(self, W_1908, W_2123, C_cont)));
+    B_Iterable W_1191 = (B_Iterable)B_SequenceD_listG_witness->W_Collection;
+    B_Number W_1319 = (B_Number)B_RealFloatD_floatG_witness;
+    return linesQ_ApaG_newact((($Cont)linesQ_L_23ContG_new(self, W_1191, W_1319, C_cont)));
 }
 #line 28 "test/src/lines.act"
 $R linesQ_mainD_myprocG_local (linesQ_main self, $Cont C_cont, B_int i) {
@@ -1137,10 +1106,10 @@ $R linesQ_mainD_nopG_local (linesQ_main self, $Cont C_cont) {
     return $R_CONT(C_cont, B_None);
 }
 B_Msg linesQ_mainD_myproc (linesQ_main self, B_int i) {
-    return ((B_Msg)$ASYNC((($Actor)self), (($Cont)linesQ_L_26procG_new(self, i))));
+    return ((B_Msg)$ASYNC((($Actor)self), (($Cont)linesQ_L_24procG_new(self, i))));
 }
 B_Msg linesQ_mainD_nop (linesQ_main self) {
-    return $ASYNC((($Actor)self), (($Cont)linesQ_L_27procG_new(self)));
+    return $ASYNC((($Actor)self), (($Cont)linesQ_L_25procG_new(self)));
 }
 void linesQ_mainD___serialize__ (linesQ_main self, $Serial$state state) {
     $ActorG_methods.__serialize__(($Actor)self, state);
@@ -1184,17 +1153,17 @@ struct linesQ_mainG_class linesQ_mainG_methods;
 $R linesQ_ApaG_newact ($Cont C_cont) {
     linesQ_Apa G_act = $NEWACTOR(linesQ_Apa);
     if ((void*)G_act->$class->__cleanup__ != (void*)$ActorD___cleanup__) $InstallFinalizer(G_act, linesQ_ApaD_GCfinalizer);
-    return $AWAIT((($Cont)linesQ_L_29ContG_new(C_cont, G_act)), $ASYNC((($Actor)G_act), (($Cont)linesQ_L_30procG_new(G_act))));
+    return $AWAIT((($Cont)linesQ_L_27ContG_new(C_cont, G_act)), $ASYNC((($Actor)G_act), (($Cont)linesQ_L_28procG_new(G_act))));
 }
 $R linesQ_BepaG_newact ($Cont C_cont) {
     linesQ_Bepa G_act = $NEWACTOR(linesQ_Bepa);
     if ((void*)G_act->$class->__cleanup__ != (void*)$ActorD___cleanup__) $InstallFinalizer(G_act, linesQ_BepaD_GCfinalizer);
-    return $AWAIT((($Cont)linesQ_L_32ContG_new(C_cont, G_act)), $ASYNC((($Actor)G_act), (($Cont)linesQ_L_33procG_new(G_act))));
+    return $AWAIT((($Cont)linesQ_L_30ContG_new(C_cont, G_act)), $ASYNC((($Actor)G_act), (($Cont)linesQ_L_31procG_new(G_act))));
 }
 $R linesQ_mainG_newact ($Cont C_cont, B_Env env) {
     linesQ_main G_act = $NEWACTOR(linesQ_main);
     if ((void*)G_act->$class->__cleanup__ != (void*)$ActorD___cleanup__) $InstallFinalizer(G_act, linesQ_mainD_GCfinalizer);
-    return $AWAIT((($Cont)linesQ_L_35ContG_new(C_cont, G_act)), $ASYNC((($Actor)G_act), (($Cont)linesQ_L_36procG_new(G_act, env))));
+    return $AWAIT((($Cont)linesQ_L_33ContG_new(C_cont, G_act)), $ASYNC((($Actor)G_act), (($Cont)linesQ_L_34procG_new(G_act, env))));
 }
 int linesQ_done$ = 0;
 void linesQ___init__ () {
@@ -1213,17 +1182,18 @@ void linesQ___init__ () {
         $register(&linesQ_L_2ContG_methods);
     }
     {
-        linesQ_L_4procG_methods.$GCINFO = "linesQ_L_4proc";
-        linesQ_L_4procG_methods.$superclass = ($SuperG_class)&$procG_methods;
-        linesQ_L_4procG_methods.__bool__ = (B_bool (*) (linesQ_L_4proc))B_valueG_methods.__bool__;
-        linesQ_L_4procG_methods.__str__ = (B_str (*) (linesQ_L_4proc))B_valueG_methods.__str__;
-        linesQ_L_4procG_methods.__repr__ = (B_str (*) (linesQ_L_4proc))B_valueG_methods.__repr__;
-        linesQ_L_4procG_methods.__init__ = linesQ_L_4procD___init__;
-        linesQ_L_4procG_methods.__call__ = linesQ_L_4procD___call__;
-        linesQ_L_4procG_methods.__exec__ = linesQ_L_4procD___exec__;
-        linesQ_L_4procG_methods.__serialize__ = linesQ_L_4procD___serialize__;
-        linesQ_L_4procG_methods.__deserialize__ = linesQ_L_4procD___deserialize__;
-        $register(&linesQ_L_4procG_methods);
+        linesQ_L_4actionG_methods.$GCINFO = "linesQ_L_4action";
+        linesQ_L_4actionG_methods.$superclass = ($SuperG_class)&$actionG_methods;
+        linesQ_L_4actionG_methods.__bool__ = (B_bool (*) (linesQ_L_4action))B_valueG_methods.__bool__;
+        linesQ_L_4actionG_methods.__str__ = (B_str (*) (linesQ_L_4action))B_valueG_methods.__str__;
+        linesQ_L_4actionG_methods.__repr__ = (B_str (*) (linesQ_L_4action))B_valueG_methods.__repr__;
+        linesQ_L_4actionG_methods.__init__ = linesQ_L_4actionD___init__;
+        linesQ_L_4actionG_methods.__call__ = linesQ_L_4actionD___call__;
+        linesQ_L_4actionG_methods.__exec__ = linesQ_L_4actionD___exec__;
+        linesQ_L_4actionG_methods.__asyn__ = linesQ_L_4actionD___asyn__;
+        linesQ_L_4actionG_methods.__serialize__ = linesQ_L_4actionD___serialize__;
+        linesQ_L_4actionG_methods.__deserialize__ = linesQ_L_4actionD___deserialize__;
+        $register(&linesQ_L_4actionG_methods);
     }
     {
         linesQ_L_6ContG_methods.$GCINFO = "linesQ_L_6Cont";
@@ -1238,16 +1208,30 @@ void linesQ___init__ () {
         $register(&linesQ_L_6ContG_methods);
     }
     {
-        linesQ_L_8ContG_methods.$GCINFO = "linesQ_L_8Cont";
-        linesQ_L_8ContG_methods.$superclass = ($SuperG_class)&$ContG_methods;
-        linesQ_L_8ContG_methods.__bool__ = (B_bool (*) (linesQ_L_8Cont))B_valueG_methods.__bool__;
-        linesQ_L_8ContG_methods.__str__ = (B_str (*) (linesQ_L_8Cont))B_valueG_methods.__str__;
-        linesQ_L_8ContG_methods.__repr__ = (B_str (*) (linesQ_L_8Cont))B_valueG_methods.__repr__;
-        linesQ_L_8ContG_methods.__init__ = linesQ_L_8ContD___init__;
-        linesQ_L_8ContG_methods.__call__ = linesQ_L_8ContD___call__;
-        linesQ_L_8ContG_methods.__serialize__ = linesQ_L_8ContD___serialize__;
-        linesQ_L_8ContG_methods.__deserialize__ = linesQ_L_8ContD___deserialize__;
-        $register(&linesQ_L_8ContG_methods);
+        linesQ_L_7procG_methods.$GCINFO = "linesQ_L_7proc";
+        linesQ_L_7procG_methods.$superclass = ($SuperG_class)&$procG_methods;
+        linesQ_L_7procG_methods.__bool__ = (B_bool (*) (linesQ_L_7proc))B_valueG_methods.__bool__;
+        linesQ_L_7procG_methods.__str__ = (B_str (*) (linesQ_L_7proc))B_valueG_methods.__str__;
+        linesQ_L_7procG_methods.__repr__ = (B_str (*) (linesQ_L_7proc))B_valueG_methods.__repr__;
+        linesQ_L_7procG_methods.__init__ = linesQ_L_7procD___init__;
+        linesQ_L_7procG_methods.__call__ = linesQ_L_7procD___call__;
+        linesQ_L_7procG_methods.__exec__ = linesQ_L_7procD___exec__;
+        linesQ_L_7procG_methods.__serialize__ = linesQ_L_7procD___serialize__;
+        linesQ_L_7procG_methods.__deserialize__ = linesQ_L_7procD___deserialize__;
+        $register(&linesQ_L_7procG_methods);
+    }
+    {
+        linesQ_L_8procG_methods.$GCINFO = "linesQ_L_8proc";
+        linesQ_L_8procG_methods.$superclass = ($SuperG_class)&$procG_methods;
+        linesQ_L_8procG_methods.__bool__ = (B_bool (*) (linesQ_L_8proc))B_valueG_methods.__bool__;
+        linesQ_L_8procG_methods.__str__ = (B_str (*) (linesQ_L_8proc))B_valueG_methods.__str__;
+        linesQ_L_8procG_methods.__repr__ = (B_str (*) (linesQ_L_8proc))B_valueG_methods.__repr__;
+        linesQ_L_8procG_methods.__init__ = linesQ_L_8procD___init__;
+        linesQ_L_8procG_methods.__call__ = linesQ_L_8procD___call__;
+        linesQ_L_8procG_methods.__exec__ = linesQ_L_8procD___exec__;
+        linesQ_L_8procG_methods.__serialize__ = linesQ_L_8procD___serialize__;
+        linesQ_L_8procG_methods.__deserialize__ = linesQ_L_8procD___deserialize__;
+        $register(&linesQ_L_8procG_methods);
     }
     {
         linesQ_L_9procG_methods.$GCINFO = "linesQ_L_9proc";
@@ -1276,30 +1260,18 @@ void linesQ___init__ () {
         $register(&linesQ_L_10procG_methods);
     }
     {
-        linesQ_L_11procG_methods.$GCINFO = "linesQ_L_11proc";
-        linesQ_L_11procG_methods.$superclass = ($SuperG_class)&$procG_methods;
-        linesQ_L_11procG_methods.__bool__ = (B_bool (*) (linesQ_L_11proc))B_valueG_methods.__bool__;
-        linesQ_L_11procG_methods.__str__ = (B_str (*) (linesQ_L_11proc))B_valueG_methods.__str__;
-        linesQ_L_11procG_methods.__repr__ = (B_str (*) (linesQ_L_11proc))B_valueG_methods.__repr__;
-        linesQ_L_11procG_methods.__init__ = linesQ_L_11procD___init__;
-        linesQ_L_11procG_methods.__call__ = linesQ_L_11procD___call__;
-        linesQ_L_11procG_methods.__exec__ = linesQ_L_11procD___exec__;
-        linesQ_L_11procG_methods.__serialize__ = linesQ_L_11procD___serialize__;
-        linesQ_L_11procG_methods.__deserialize__ = linesQ_L_11procD___deserialize__;
-        $register(&linesQ_L_11procG_methods);
-    }
-    {
-        linesQ_L_12procG_methods.$GCINFO = "linesQ_L_12proc";
-        linesQ_L_12procG_methods.$superclass = ($SuperG_class)&$procG_methods;
-        linesQ_L_12procG_methods.__bool__ = (B_bool (*) (linesQ_L_12proc))B_valueG_methods.__bool__;
-        linesQ_L_12procG_methods.__str__ = (B_str (*) (linesQ_L_12proc))B_valueG_methods.__str__;
-        linesQ_L_12procG_methods.__repr__ = (B_str (*) (linesQ_L_12proc))B_valueG_methods.__repr__;
-        linesQ_L_12procG_methods.__init__ = linesQ_L_12procD___init__;
-        linesQ_L_12procG_methods.__call__ = linesQ_L_12procD___call__;
-        linesQ_L_12procG_methods.__exec__ = linesQ_L_12procD___exec__;
-        linesQ_L_12procG_methods.__serialize__ = linesQ_L_12procD___serialize__;
-        linesQ_L_12procG_methods.__deserialize__ = linesQ_L_12procD___deserialize__;
-        $register(&linesQ_L_12procG_methods);
+        linesQ_L_14actionG_methods.$GCINFO = "linesQ_L_14action";
+        linesQ_L_14actionG_methods.$superclass = ($SuperG_class)&$actionG_methods;
+        linesQ_L_14actionG_methods.__bool__ = (B_bool (*) (linesQ_L_14action))B_valueG_methods.__bool__;
+        linesQ_L_14actionG_methods.__str__ = (B_str (*) (linesQ_L_14action))B_valueG_methods.__str__;
+        linesQ_L_14actionG_methods.__repr__ = (B_str (*) (linesQ_L_14action))B_valueG_methods.__repr__;
+        linesQ_L_14actionG_methods.__init__ = linesQ_L_14actionD___init__;
+        linesQ_L_14actionG_methods.__call__ = linesQ_L_14actionD___call__;
+        linesQ_L_14actionG_methods.__exec__ = linesQ_L_14actionD___exec__;
+        linesQ_L_14actionG_methods.__asyn__ = linesQ_L_14actionD___asyn__;
+        linesQ_L_14actionG_methods.__serialize__ = linesQ_L_14actionD___serialize__;
+        linesQ_L_14actionG_methods.__deserialize__ = linesQ_L_14actionD___deserialize__;
+        $register(&linesQ_L_14actionG_methods);
     }
     {
         linesQ_L_16actionG_methods.$GCINFO = "linesQ_L_16action";
@@ -1316,45 +1288,55 @@ void linesQ___init__ () {
         $register(&linesQ_L_16actionG_methods);
     }
     {
-        linesQ_L_18actionG_methods.$GCINFO = "linesQ_L_18action";
-        linesQ_L_18actionG_methods.$superclass = ($SuperG_class)&$actionG_methods;
-        linesQ_L_18actionG_methods.__bool__ = (B_bool (*) (linesQ_L_18action))B_valueG_methods.__bool__;
-        linesQ_L_18actionG_methods.__str__ = (B_str (*) (linesQ_L_18action))B_valueG_methods.__str__;
-        linesQ_L_18actionG_methods.__repr__ = (B_str (*) (linesQ_L_18action))B_valueG_methods.__repr__;
-        linesQ_L_18actionG_methods.__init__ = linesQ_L_18actionD___init__;
-        linesQ_L_18actionG_methods.__call__ = linesQ_L_18actionD___call__;
-        linesQ_L_18actionG_methods.__exec__ = linesQ_L_18actionD___exec__;
-        linesQ_L_18actionG_methods.__asyn__ = linesQ_L_18actionD___asyn__;
-        linesQ_L_18actionG_methods.__serialize__ = linesQ_L_18actionD___serialize__;
-        linesQ_L_18actionG_methods.__deserialize__ = linesQ_L_18actionD___deserialize__;
-        $register(&linesQ_L_18actionG_methods);
+        linesQ_L_19actionG_methods.$GCINFO = "linesQ_L_19action";
+        linesQ_L_19actionG_methods.$superclass = ($SuperG_class)&$actionG_methods;
+        linesQ_L_19actionG_methods.__bool__ = (B_bool (*) (linesQ_L_19action))B_valueG_methods.__bool__;
+        linesQ_L_19actionG_methods.__str__ = (B_str (*) (linesQ_L_19action))B_valueG_methods.__str__;
+        linesQ_L_19actionG_methods.__repr__ = (B_str (*) (linesQ_L_19action))B_valueG_methods.__repr__;
+        linesQ_L_19actionG_methods.__init__ = linesQ_L_19actionD___init__;
+        linesQ_L_19actionG_methods.__call__ = linesQ_L_19actionD___call__;
+        linesQ_L_19actionG_methods.__exec__ = linesQ_L_19actionD___exec__;
+        linesQ_L_19actionG_methods.__asyn__ = linesQ_L_19actionD___asyn__;
+        linesQ_L_19actionG_methods.__serialize__ = linesQ_L_19actionD___serialize__;
+        linesQ_L_19actionG_methods.__deserialize__ = linesQ_L_19actionD___deserialize__;
+        $register(&linesQ_L_19actionG_methods);
     }
     {
-        linesQ_L_21actionG_methods.$GCINFO = "linesQ_L_21action";
-        linesQ_L_21actionG_methods.$superclass = ($SuperG_class)&$actionG_methods;
-        linesQ_L_21actionG_methods.__bool__ = (B_bool (*) (linesQ_L_21action))B_valueG_methods.__bool__;
-        linesQ_L_21actionG_methods.__str__ = (B_str (*) (linesQ_L_21action))B_valueG_methods.__str__;
-        linesQ_L_21actionG_methods.__repr__ = (B_str (*) (linesQ_L_21action))B_valueG_methods.__repr__;
-        linesQ_L_21actionG_methods.__init__ = linesQ_L_21actionD___init__;
-        linesQ_L_21actionG_methods.__call__ = linesQ_L_21actionD___call__;
-        linesQ_L_21actionG_methods.__exec__ = linesQ_L_21actionD___exec__;
-        linesQ_L_21actionG_methods.__asyn__ = linesQ_L_21actionD___asyn__;
-        linesQ_L_21actionG_methods.__serialize__ = linesQ_L_21actionD___serialize__;
-        linesQ_L_21actionG_methods.__deserialize__ = linesQ_L_21actionD___deserialize__;
-        $register(&linesQ_L_21actionG_methods);
+        linesQ_L_20procG_methods.$GCINFO = "linesQ_L_20proc";
+        linesQ_L_20procG_methods.$superclass = ($SuperG_class)&$procG_methods;
+        linesQ_L_20procG_methods.__bool__ = (B_bool (*) (linesQ_L_20proc))B_valueG_methods.__bool__;
+        linesQ_L_20procG_methods.__str__ = (B_str (*) (linesQ_L_20proc))B_valueG_methods.__str__;
+        linesQ_L_20procG_methods.__repr__ = (B_str (*) (linesQ_L_20proc))B_valueG_methods.__repr__;
+        linesQ_L_20procG_methods.__init__ = linesQ_L_20procD___init__;
+        linesQ_L_20procG_methods.__call__ = linesQ_L_20procD___call__;
+        linesQ_L_20procG_methods.__exec__ = linesQ_L_20procD___exec__;
+        linesQ_L_20procG_methods.__serialize__ = linesQ_L_20procD___serialize__;
+        linesQ_L_20procG_methods.__deserialize__ = linesQ_L_20procD___deserialize__;
+        $register(&linesQ_L_20procG_methods);
     }
     {
-        linesQ_L_22procG_methods.$GCINFO = "linesQ_L_22proc";
-        linesQ_L_22procG_methods.$superclass = ($SuperG_class)&$procG_methods;
-        linesQ_L_22procG_methods.__bool__ = (B_bool (*) (linesQ_L_22proc))B_valueG_methods.__bool__;
-        linesQ_L_22procG_methods.__str__ = (B_str (*) (linesQ_L_22proc))B_valueG_methods.__str__;
-        linesQ_L_22procG_methods.__repr__ = (B_str (*) (linesQ_L_22proc))B_valueG_methods.__repr__;
-        linesQ_L_22procG_methods.__init__ = linesQ_L_22procD___init__;
-        linesQ_L_22procG_methods.__call__ = linesQ_L_22procD___call__;
-        linesQ_L_22procG_methods.__exec__ = linesQ_L_22procD___exec__;
-        linesQ_L_22procG_methods.__serialize__ = linesQ_L_22procD___serialize__;
-        linesQ_L_22procG_methods.__deserialize__ = linesQ_L_22procD___deserialize__;
-        $register(&linesQ_L_22procG_methods);
+        linesQ_L_21ContG_methods.$GCINFO = "linesQ_L_21Cont";
+        linesQ_L_21ContG_methods.$superclass = ($SuperG_class)&$ContG_methods;
+        linesQ_L_21ContG_methods.__bool__ = (B_bool (*) (linesQ_L_21Cont))B_valueG_methods.__bool__;
+        linesQ_L_21ContG_methods.__str__ = (B_str (*) (linesQ_L_21Cont))B_valueG_methods.__str__;
+        linesQ_L_21ContG_methods.__repr__ = (B_str (*) (linesQ_L_21Cont))B_valueG_methods.__repr__;
+        linesQ_L_21ContG_methods.__init__ = linesQ_L_21ContD___init__;
+        linesQ_L_21ContG_methods.__call__ = linesQ_L_21ContD___call__;
+        linesQ_L_21ContG_methods.__serialize__ = linesQ_L_21ContD___serialize__;
+        linesQ_L_21ContG_methods.__deserialize__ = linesQ_L_21ContD___deserialize__;
+        $register(&linesQ_L_21ContG_methods);
+    }
+    {
+        linesQ_L_22ContG_methods.$GCINFO = "linesQ_L_22Cont";
+        linesQ_L_22ContG_methods.$superclass = ($SuperG_class)&$ContG_methods;
+        linesQ_L_22ContG_methods.__bool__ = (B_bool (*) (linesQ_L_22Cont))B_valueG_methods.__bool__;
+        linesQ_L_22ContG_methods.__str__ = (B_str (*) (linesQ_L_22Cont))B_valueG_methods.__str__;
+        linesQ_L_22ContG_methods.__repr__ = (B_str (*) (linesQ_L_22Cont))B_valueG_methods.__repr__;
+        linesQ_L_22ContG_methods.__init__ = linesQ_L_22ContD___init__;
+        linesQ_L_22ContG_methods.__call__ = linesQ_L_22ContD___call__;
+        linesQ_L_22ContG_methods.__serialize__ = linesQ_L_22ContD___serialize__;
+        linesQ_L_22ContG_methods.__deserialize__ = linesQ_L_22ContD___deserialize__;
+        $register(&linesQ_L_22ContG_methods);
     }
     {
         linesQ_L_23ContG_methods.$GCINFO = "linesQ_L_23Cont";
@@ -1369,129 +1351,105 @@ void linesQ___init__ () {
         $register(&linesQ_L_23ContG_methods);
     }
     {
-        linesQ_L_24ContG_methods.$GCINFO = "linesQ_L_24Cont";
-        linesQ_L_24ContG_methods.$superclass = ($SuperG_class)&$ContG_methods;
-        linesQ_L_24ContG_methods.__bool__ = (B_bool (*) (linesQ_L_24Cont))B_valueG_methods.__bool__;
-        linesQ_L_24ContG_methods.__str__ = (B_str (*) (linesQ_L_24Cont))B_valueG_methods.__str__;
-        linesQ_L_24ContG_methods.__repr__ = (B_str (*) (linesQ_L_24Cont))B_valueG_methods.__repr__;
-        linesQ_L_24ContG_methods.__init__ = linesQ_L_24ContD___init__;
-        linesQ_L_24ContG_methods.__call__ = linesQ_L_24ContD___call__;
-        linesQ_L_24ContG_methods.__serialize__ = linesQ_L_24ContD___serialize__;
-        linesQ_L_24ContG_methods.__deserialize__ = linesQ_L_24ContD___deserialize__;
-        $register(&linesQ_L_24ContG_methods);
+        linesQ_L_24procG_methods.$GCINFO = "linesQ_L_24proc";
+        linesQ_L_24procG_methods.$superclass = ($SuperG_class)&$procG_methods;
+        linesQ_L_24procG_methods.__bool__ = (B_bool (*) (linesQ_L_24proc))B_valueG_methods.__bool__;
+        linesQ_L_24procG_methods.__str__ = (B_str (*) (linesQ_L_24proc))B_valueG_methods.__str__;
+        linesQ_L_24procG_methods.__repr__ = (B_str (*) (linesQ_L_24proc))B_valueG_methods.__repr__;
+        linesQ_L_24procG_methods.__init__ = linesQ_L_24procD___init__;
+        linesQ_L_24procG_methods.__call__ = linesQ_L_24procD___call__;
+        linesQ_L_24procG_methods.__exec__ = linesQ_L_24procD___exec__;
+        linesQ_L_24procG_methods.__serialize__ = linesQ_L_24procD___serialize__;
+        linesQ_L_24procG_methods.__deserialize__ = linesQ_L_24procD___deserialize__;
+        $register(&linesQ_L_24procG_methods);
     }
     {
-        linesQ_L_25ContG_methods.$GCINFO = "linesQ_L_25Cont";
-        linesQ_L_25ContG_methods.$superclass = ($SuperG_class)&$ContG_methods;
-        linesQ_L_25ContG_methods.__bool__ = (B_bool (*) (linesQ_L_25Cont))B_valueG_methods.__bool__;
-        linesQ_L_25ContG_methods.__str__ = (B_str (*) (linesQ_L_25Cont))B_valueG_methods.__str__;
-        linesQ_L_25ContG_methods.__repr__ = (B_str (*) (linesQ_L_25Cont))B_valueG_methods.__repr__;
-        linesQ_L_25ContG_methods.__init__ = linesQ_L_25ContD___init__;
-        linesQ_L_25ContG_methods.__call__ = linesQ_L_25ContD___call__;
-        linesQ_L_25ContG_methods.__serialize__ = linesQ_L_25ContD___serialize__;
-        linesQ_L_25ContG_methods.__deserialize__ = linesQ_L_25ContD___deserialize__;
-        $register(&linesQ_L_25ContG_methods);
+        linesQ_L_25procG_methods.$GCINFO = "linesQ_L_25proc";
+        linesQ_L_25procG_methods.$superclass = ($SuperG_class)&$procG_methods;
+        linesQ_L_25procG_methods.__bool__ = (B_bool (*) (linesQ_L_25proc))B_valueG_methods.__bool__;
+        linesQ_L_25procG_methods.__str__ = (B_str (*) (linesQ_L_25proc))B_valueG_methods.__str__;
+        linesQ_L_25procG_methods.__repr__ = (B_str (*) (linesQ_L_25proc))B_valueG_methods.__repr__;
+        linesQ_L_25procG_methods.__init__ = linesQ_L_25procD___init__;
+        linesQ_L_25procG_methods.__call__ = linesQ_L_25procD___call__;
+        linesQ_L_25procG_methods.__exec__ = linesQ_L_25procD___exec__;
+        linesQ_L_25procG_methods.__serialize__ = linesQ_L_25procD___serialize__;
+        linesQ_L_25procG_methods.__deserialize__ = linesQ_L_25procD___deserialize__;
+        $register(&linesQ_L_25procG_methods);
     }
     {
-        linesQ_L_26procG_methods.$GCINFO = "linesQ_L_26proc";
-        linesQ_L_26procG_methods.$superclass = ($SuperG_class)&$procG_methods;
-        linesQ_L_26procG_methods.__bool__ = (B_bool (*) (linesQ_L_26proc))B_valueG_methods.__bool__;
-        linesQ_L_26procG_methods.__str__ = (B_str (*) (linesQ_L_26proc))B_valueG_methods.__str__;
-        linesQ_L_26procG_methods.__repr__ = (B_str (*) (linesQ_L_26proc))B_valueG_methods.__repr__;
-        linesQ_L_26procG_methods.__init__ = linesQ_L_26procD___init__;
-        linesQ_L_26procG_methods.__call__ = linesQ_L_26procD___call__;
-        linesQ_L_26procG_methods.__exec__ = linesQ_L_26procD___exec__;
-        linesQ_L_26procG_methods.__serialize__ = linesQ_L_26procD___serialize__;
-        linesQ_L_26procG_methods.__deserialize__ = linesQ_L_26procD___deserialize__;
-        $register(&linesQ_L_26procG_methods);
+        linesQ_L_27ContG_methods.$GCINFO = "linesQ_L_27Cont";
+        linesQ_L_27ContG_methods.$superclass = ($SuperG_class)&$ContG_methods;
+        linesQ_L_27ContG_methods.__bool__ = (B_bool (*) (linesQ_L_27Cont))B_valueG_methods.__bool__;
+        linesQ_L_27ContG_methods.__str__ = (B_str (*) (linesQ_L_27Cont))B_valueG_methods.__str__;
+        linesQ_L_27ContG_methods.__repr__ = (B_str (*) (linesQ_L_27Cont))B_valueG_methods.__repr__;
+        linesQ_L_27ContG_methods.__init__ = linesQ_L_27ContD___init__;
+        linesQ_L_27ContG_methods.__call__ = linesQ_L_27ContD___call__;
+        linesQ_L_27ContG_methods.__serialize__ = linesQ_L_27ContD___serialize__;
+        linesQ_L_27ContG_methods.__deserialize__ = linesQ_L_27ContD___deserialize__;
+        $register(&linesQ_L_27ContG_methods);
     }
     {
-        linesQ_L_27procG_methods.$GCINFO = "linesQ_L_27proc";
-        linesQ_L_27procG_methods.$superclass = ($SuperG_class)&$procG_methods;
-        linesQ_L_27procG_methods.__bool__ = (B_bool (*) (linesQ_L_27proc))B_valueG_methods.__bool__;
-        linesQ_L_27procG_methods.__str__ = (B_str (*) (linesQ_L_27proc))B_valueG_methods.__str__;
-        linesQ_L_27procG_methods.__repr__ = (B_str (*) (linesQ_L_27proc))B_valueG_methods.__repr__;
-        linesQ_L_27procG_methods.__init__ = linesQ_L_27procD___init__;
-        linesQ_L_27procG_methods.__call__ = linesQ_L_27procD___call__;
-        linesQ_L_27procG_methods.__exec__ = linesQ_L_27procD___exec__;
-        linesQ_L_27procG_methods.__serialize__ = linesQ_L_27procD___serialize__;
-        linesQ_L_27procG_methods.__deserialize__ = linesQ_L_27procD___deserialize__;
-        $register(&linesQ_L_27procG_methods);
+        linesQ_L_28procG_methods.$GCINFO = "linesQ_L_28proc";
+        linesQ_L_28procG_methods.$superclass = ($SuperG_class)&$procG_methods;
+        linesQ_L_28procG_methods.__bool__ = (B_bool (*) (linesQ_L_28proc))B_valueG_methods.__bool__;
+        linesQ_L_28procG_methods.__str__ = (B_str (*) (linesQ_L_28proc))B_valueG_methods.__str__;
+        linesQ_L_28procG_methods.__repr__ = (B_str (*) (linesQ_L_28proc))B_valueG_methods.__repr__;
+        linesQ_L_28procG_methods.__init__ = linesQ_L_28procD___init__;
+        linesQ_L_28procG_methods.__call__ = linesQ_L_28procD___call__;
+        linesQ_L_28procG_methods.__exec__ = linesQ_L_28procD___exec__;
+        linesQ_L_28procG_methods.__serialize__ = linesQ_L_28procD___serialize__;
+        linesQ_L_28procG_methods.__deserialize__ = linesQ_L_28procD___deserialize__;
+        $register(&linesQ_L_28procG_methods);
     }
     {
-        linesQ_L_29ContG_methods.$GCINFO = "linesQ_L_29Cont";
-        linesQ_L_29ContG_methods.$superclass = ($SuperG_class)&$ContG_methods;
-        linesQ_L_29ContG_methods.__bool__ = (B_bool (*) (linesQ_L_29Cont))B_valueG_methods.__bool__;
-        linesQ_L_29ContG_methods.__str__ = (B_str (*) (linesQ_L_29Cont))B_valueG_methods.__str__;
-        linesQ_L_29ContG_methods.__repr__ = (B_str (*) (linesQ_L_29Cont))B_valueG_methods.__repr__;
-        linesQ_L_29ContG_methods.__init__ = linesQ_L_29ContD___init__;
-        linesQ_L_29ContG_methods.__call__ = linesQ_L_29ContD___call__;
-        linesQ_L_29ContG_methods.__serialize__ = linesQ_L_29ContD___serialize__;
-        linesQ_L_29ContG_methods.__deserialize__ = linesQ_L_29ContD___deserialize__;
-        $register(&linesQ_L_29ContG_methods);
+        linesQ_L_30ContG_methods.$GCINFO = "linesQ_L_30Cont";
+        linesQ_L_30ContG_methods.$superclass = ($SuperG_class)&$ContG_methods;
+        linesQ_L_30ContG_methods.__bool__ = (B_bool (*) (linesQ_L_30Cont))B_valueG_methods.__bool__;
+        linesQ_L_30ContG_methods.__str__ = (B_str (*) (linesQ_L_30Cont))B_valueG_methods.__str__;
+        linesQ_L_30ContG_methods.__repr__ = (B_str (*) (linesQ_L_30Cont))B_valueG_methods.__repr__;
+        linesQ_L_30ContG_methods.__init__ = linesQ_L_30ContD___init__;
+        linesQ_L_30ContG_methods.__call__ = linesQ_L_30ContD___call__;
+        linesQ_L_30ContG_methods.__serialize__ = linesQ_L_30ContD___serialize__;
+        linesQ_L_30ContG_methods.__deserialize__ = linesQ_L_30ContD___deserialize__;
+        $register(&linesQ_L_30ContG_methods);
     }
     {
-        linesQ_L_30procG_methods.$GCINFO = "linesQ_L_30proc";
-        linesQ_L_30procG_methods.$superclass = ($SuperG_class)&$procG_methods;
-        linesQ_L_30procG_methods.__bool__ = (B_bool (*) (linesQ_L_30proc))B_valueG_methods.__bool__;
-        linesQ_L_30procG_methods.__str__ = (B_str (*) (linesQ_L_30proc))B_valueG_methods.__str__;
-        linesQ_L_30procG_methods.__repr__ = (B_str (*) (linesQ_L_30proc))B_valueG_methods.__repr__;
-        linesQ_L_30procG_methods.__init__ = linesQ_L_30procD___init__;
-        linesQ_L_30procG_methods.__call__ = linesQ_L_30procD___call__;
-        linesQ_L_30procG_methods.__exec__ = linesQ_L_30procD___exec__;
-        linesQ_L_30procG_methods.__serialize__ = linesQ_L_30procD___serialize__;
-        linesQ_L_30procG_methods.__deserialize__ = linesQ_L_30procD___deserialize__;
-        $register(&linesQ_L_30procG_methods);
+        linesQ_L_31procG_methods.$GCINFO = "linesQ_L_31proc";
+        linesQ_L_31procG_methods.$superclass = ($SuperG_class)&$procG_methods;
+        linesQ_L_31procG_methods.__bool__ = (B_bool (*) (linesQ_L_31proc))B_valueG_methods.__bool__;
+        linesQ_L_31procG_methods.__str__ = (B_str (*) (linesQ_L_31proc))B_valueG_methods.__str__;
+        linesQ_L_31procG_methods.__repr__ = (B_str (*) (linesQ_L_31proc))B_valueG_methods.__repr__;
+        linesQ_L_31procG_methods.__init__ = linesQ_L_31procD___init__;
+        linesQ_L_31procG_methods.__call__ = linesQ_L_31procD___call__;
+        linesQ_L_31procG_methods.__exec__ = linesQ_L_31procD___exec__;
+        linesQ_L_31procG_methods.__serialize__ = linesQ_L_31procD___serialize__;
+        linesQ_L_31procG_methods.__deserialize__ = linesQ_L_31procD___deserialize__;
+        $register(&linesQ_L_31procG_methods);
     }
     {
-        linesQ_L_32ContG_methods.$GCINFO = "linesQ_L_32Cont";
-        linesQ_L_32ContG_methods.$superclass = ($SuperG_class)&$ContG_methods;
-        linesQ_L_32ContG_methods.__bool__ = (B_bool (*) (linesQ_L_32Cont))B_valueG_methods.__bool__;
-        linesQ_L_32ContG_methods.__str__ = (B_str (*) (linesQ_L_32Cont))B_valueG_methods.__str__;
-        linesQ_L_32ContG_methods.__repr__ = (B_str (*) (linesQ_L_32Cont))B_valueG_methods.__repr__;
-        linesQ_L_32ContG_methods.__init__ = linesQ_L_32ContD___init__;
-        linesQ_L_32ContG_methods.__call__ = linesQ_L_32ContD___call__;
-        linesQ_L_32ContG_methods.__serialize__ = linesQ_L_32ContD___serialize__;
-        linesQ_L_32ContG_methods.__deserialize__ = linesQ_L_32ContD___deserialize__;
-        $register(&linesQ_L_32ContG_methods);
+        linesQ_L_33ContG_methods.$GCINFO = "linesQ_L_33Cont";
+        linesQ_L_33ContG_methods.$superclass = ($SuperG_class)&$ContG_methods;
+        linesQ_L_33ContG_methods.__bool__ = (B_bool (*) (linesQ_L_33Cont))B_valueG_methods.__bool__;
+        linesQ_L_33ContG_methods.__str__ = (B_str (*) (linesQ_L_33Cont))B_valueG_methods.__str__;
+        linesQ_L_33ContG_methods.__repr__ = (B_str (*) (linesQ_L_33Cont))B_valueG_methods.__repr__;
+        linesQ_L_33ContG_methods.__init__ = linesQ_L_33ContD___init__;
+        linesQ_L_33ContG_methods.__call__ = linesQ_L_33ContD___call__;
+        linesQ_L_33ContG_methods.__serialize__ = linesQ_L_33ContD___serialize__;
+        linesQ_L_33ContG_methods.__deserialize__ = linesQ_L_33ContD___deserialize__;
+        $register(&linesQ_L_33ContG_methods);
     }
     {
-        linesQ_L_33procG_methods.$GCINFO = "linesQ_L_33proc";
-        linesQ_L_33procG_methods.$superclass = ($SuperG_class)&$procG_methods;
-        linesQ_L_33procG_methods.__bool__ = (B_bool (*) (linesQ_L_33proc))B_valueG_methods.__bool__;
-        linesQ_L_33procG_methods.__str__ = (B_str (*) (linesQ_L_33proc))B_valueG_methods.__str__;
-        linesQ_L_33procG_methods.__repr__ = (B_str (*) (linesQ_L_33proc))B_valueG_methods.__repr__;
-        linesQ_L_33procG_methods.__init__ = linesQ_L_33procD___init__;
-        linesQ_L_33procG_methods.__call__ = linesQ_L_33procD___call__;
-        linesQ_L_33procG_methods.__exec__ = linesQ_L_33procD___exec__;
-        linesQ_L_33procG_methods.__serialize__ = linesQ_L_33procD___serialize__;
-        linesQ_L_33procG_methods.__deserialize__ = linesQ_L_33procD___deserialize__;
-        $register(&linesQ_L_33procG_methods);
-    }
-    {
-        linesQ_L_35ContG_methods.$GCINFO = "linesQ_L_35Cont";
-        linesQ_L_35ContG_methods.$superclass = ($SuperG_class)&$ContG_methods;
-        linesQ_L_35ContG_methods.__bool__ = (B_bool (*) (linesQ_L_35Cont))B_valueG_methods.__bool__;
-        linesQ_L_35ContG_methods.__str__ = (B_str (*) (linesQ_L_35Cont))B_valueG_methods.__str__;
-        linesQ_L_35ContG_methods.__repr__ = (B_str (*) (linesQ_L_35Cont))B_valueG_methods.__repr__;
-        linesQ_L_35ContG_methods.__init__ = linesQ_L_35ContD___init__;
-        linesQ_L_35ContG_methods.__call__ = linesQ_L_35ContD___call__;
-        linesQ_L_35ContG_methods.__serialize__ = linesQ_L_35ContD___serialize__;
-        linesQ_L_35ContG_methods.__deserialize__ = linesQ_L_35ContD___deserialize__;
-        $register(&linesQ_L_35ContG_methods);
-    }
-    {
-        linesQ_L_36procG_methods.$GCINFO = "linesQ_L_36proc";
-        linesQ_L_36procG_methods.$superclass = ($SuperG_class)&$procG_methods;
-        linesQ_L_36procG_methods.__bool__ = (B_bool (*) (linesQ_L_36proc))B_valueG_methods.__bool__;
-        linesQ_L_36procG_methods.__str__ = (B_str (*) (linesQ_L_36proc))B_valueG_methods.__str__;
-        linesQ_L_36procG_methods.__repr__ = (B_str (*) (linesQ_L_36proc))B_valueG_methods.__repr__;
-        linesQ_L_36procG_methods.__init__ = linesQ_L_36procD___init__;
-        linesQ_L_36procG_methods.__call__ = linesQ_L_36procD___call__;
-        linesQ_L_36procG_methods.__exec__ = linesQ_L_36procD___exec__;
-        linesQ_L_36procG_methods.__serialize__ = linesQ_L_36procD___serialize__;
-        linesQ_L_36procG_methods.__deserialize__ = linesQ_L_36procD___deserialize__;
-        $register(&linesQ_L_36procG_methods);
+        linesQ_L_34procG_methods.$GCINFO = "linesQ_L_34proc";
+        linesQ_L_34procG_methods.$superclass = ($SuperG_class)&$procG_methods;
+        linesQ_L_34procG_methods.__bool__ = (B_bool (*) (linesQ_L_34proc))B_valueG_methods.__bool__;
+        linesQ_L_34procG_methods.__str__ = (B_str (*) (linesQ_L_34proc))B_valueG_methods.__str__;
+        linesQ_L_34procG_methods.__repr__ = (B_str (*) (linesQ_L_34proc))B_valueG_methods.__repr__;
+        linesQ_L_34procG_methods.__init__ = linesQ_L_34procD___init__;
+        linesQ_L_34procG_methods.__call__ = linesQ_L_34procD___call__;
+        linesQ_L_34procG_methods.__exec__ = linesQ_L_34procD___exec__;
+        linesQ_L_34procG_methods.__serialize__ = linesQ_L_34procD___serialize__;
+        linesQ_L_34procG_methods.__deserialize__ = linesQ_L_34procD___deserialize__;
+        $register(&linesQ_L_34procG_methods);
     }
     {
         linesQ_ApaG_methods.$GCINFO = "linesQ_Apa";

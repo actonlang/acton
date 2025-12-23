@@ -3,50 +3,48 @@
 #include "builtin/builtin.h"
 #include "rts/rts.h"
 struct deactQ_L_2Cont;
-struct deactQ_L_4proc;
+struct deactQ_L_4action;
 struct deactQ_L_6Cont;
-struct deactQ_L_8Cont;
+struct deactQ_L_7proc;
+struct deactQ_L_8proc;
 struct deactQ_L_9proc;
 struct deactQ_L_10proc;
-struct deactQ_L_11proc;
-struct deactQ_L_12proc;
+struct deactQ_L_14action;
 struct deactQ_L_16action;
-struct deactQ_L_18action;
-struct deactQ_L_21action;
+struct deactQ_L_19action;
+struct deactQ_L_20Cont;
+struct deactQ_L_21Cont;
 struct deactQ_L_22Cont;
-struct deactQ_L_23Cont;
-struct deactQ_L_24Cont;
-struct deactQ_L_25proc;
-struct deactQ_L_27Cont;
-struct deactQ_L_28proc;
-struct deactQ_L_30Cont;
-struct deactQ_L_31proc;
-struct deactQ_L_33Cont;
-struct deactQ_L_34proc;
+struct deactQ_L_23proc;
+struct deactQ_L_25Cont;
+struct deactQ_L_26proc;
+struct deactQ_L_28Cont;
+struct deactQ_L_29proc;
+struct deactQ_L_31Cont;
+struct deactQ_L_32proc;
 struct deactQ_Apa;
 struct deactQ_Bepa;
 struct deactQ_main;
 typedef struct deactQ_L_2Cont *deactQ_L_2Cont;
-typedef struct deactQ_L_4proc *deactQ_L_4proc;
+typedef struct deactQ_L_4action *deactQ_L_4action;
 typedef struct deactQ_L_6Cont *deactQ_L_6Cont;
-typedef struct deactQ_L_8Cont *deactQ_L_8Cont;
+typedef struct deactQ_L_7proc *deactQ_L_7proc;
+typedef struct deactQ_L_8proc *deactQ_L_8proc;
 typedef struct deactQ_L_9proc *deactQ_L_9proc;
 typedef struct deactQ_L_10proc *deactQ_L_10proc;
-typedef struct deactQ_L_11proc *deactQ_L_11proc;
-typedef struct deactQ_L_12proc *deactQ_L_12proc;
+typedef struct deactQ_L_14action *deactQ_L_14action;
 typedef struct deactQ_L_16action *deactQ_L_16action;
-typedef struct deactQ_L_18action *deactQ_L_18action;
-typedef struct deactQ_L_21action *deactQ_L_21action;
+typedef struct deactQ_L_19action *deactQ_L_19action;
+typedef struct deactQ_L_20Cont *deactQ_L_20Cont;
+typedef struct deactQ_L_21Cont *deactQ_L_21Cont;
 typedef struct deactQ_L_22Cont *deactQ_L_22Cont;
-typedef struct deactQ_L_23Cont *deactQ_L_23Cont;
-typedef struct deactQ_L_24Cont *deactQ_L_24Cont;
-typedef struct deactQ_L_25proc *deactQ_L_25proc;
-typedef struct deactQ_L_27Cont *deactQ_L_27Cont;
-typedef struct deactQ_L_28proc *deactQ_L_28proc;
-typedef struct deactQ_L_30Cont *deactQ_L_30Cont;
-typedef struct deactQ_L_31proc *deactQ_L_31proc;
-typedef struct deactQ_L_33Cont *deactQ_L_33Cont;
-typedef struct deactQ_L_34proc *deactQ_L_34proc;
+typedef struct deactQ_L_23proc *deactQ_L_23proc;
+typedef struct deactQ_L_25Cont *deactQ_L_25Cont;
+typedef struct deactQ_L_26proc *deactQ_L_26proc;
+typedef struct deactQ_L_28Cont *deactQ_L_28Cont;
+typedef struct deactQ_L_29proc *deactQ_L_29proc;
+typedef struct deactQ_L_31Cont *deactQ_L_31Cont;
+typedef struct deactQ_L_32proc *deactQ_L_32proc;
 typedef struct deactQ_Apa *deactQ_Apa;
 typedef struct deactQ_Bepa *deactQ_Bepa;
 typedef struct deactQ_main *deactQ_main;
@@ -67,30 +65,31 @@ struct deactQ_L_2Cont {
     struct deactQ_L_2ContG_class *$class;
     $Cont C_cont;
 };
-struct deactQ_L_4procG_class {
+struct deactQ_L_4actionG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    B_NoneType (*__init__) (deactQ_L_4proc, deactQ_Apa);
-    void (*__serialize__) (deactQ_L_4proc, $Serial$state);
-    deactQ_L_4proc (*__deserialize__) (deactQ_L_4proc, $Serial$state);
-    B_bool (*__bool__) (deactQ_L_4proc);
-    B_str (*__str__) (deactQ_L_4proc);
-    B_str (*__repr__) (deactQ_L_4proc);
-    $R (*__call__) (deactQ_L_4proc, $Cont, B_int);
-    $R (*__exec__) (deactQ_L_4proc, $Cont, B_int);
+    B_NoneType (*__init__) (deactQ_L_4action, deactQ_Apa);
+    void (*__serialize__) (deactQ_L_4action, $Serial$state);
+    deactQ_L_4action (*__deserialize__) (deactQ_L_4action, $Serial$state);
+    B_bool (*__bool__) (deactQ_L_4action);
+    B_str (*__str__) (deactQ_L_4action);
+    B_str (*__repr__) (deactQ_L_4action);
+    $R (*__call__) (deactQ_L_4action, $Cont, B_int);
+    $R (*__exec__) (deactQ_L_4action, $Cont, B_int);
+    B_Msg (*__asyn__) (deactQ_L_4action, B_int);
 };
-struct deactQ_L_4proc {
-    struct deactQ_L_4procG_class *$class;
+struct deactQ_L_4action {
+    struct deactQ_L_4actionG_class *$class;
     deactQ_Apa L_3obj;
 };
-$R deactQ_U_L_5C_3cont ($Cont, int64_t);
-$R deactQ_L_5C_3cont ($Cont, B_int);
+$R deactQ_U_L_5C_3cont ($action, $Cont, int64_t);
+$R deactQ_L_5C_3cont ($action, $Cont, B_int);
 struct deactQ_L_6ContG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    B_NoneType (*__init__) (deactQ_L_6Cont, $Cont);
+    B_NoneType (*__init__) (deactQ_L_6Cont, $action, $Cont);
     void (*__serialize__) (deactQ_L_6Cont, $Serial$state);
     deactQ_L_6Cont (*__deserialize__) (deactQ_L_6Cont, $Serial$state);
     B_bool (*__bool__) (deactQ_L_6Cont);
@@ -100,32 +99,50 @@ struct deactQ_L_6ContG_class {
 };
 struct deactQ_L_6Cont {
     struct deactQ_L_6ContG_class *$class;
+    $action cb;
     $Cont C_cont;
 };
-$R deactQ_U_1L_7C_5cont ($action, $Cont, int64_t);
-$R deactQ_L_7C_5cont ($action, $Cont, B_int);
-struct deactQ_L_8ContG_class {
+struct deactQ_L_7procG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    B_NoneType (*__init__) (deactQ_L_8Cont, $action, $Cont);
-    void (*__serialize__) (deactQ_L_8Cont, $Serial$state);
-    deactQ_L_8Cont (*__deserialize__) (deactQ_L_8Cont, $Serial$state);
-    B_bool (*__bool__) (deactQ_L_8Cont);
-    B_str (*__str__) (deactQ_L_8Cont);
-    B_str (*__repr__) (deactQ_L_8Cont);
-    $R (*__call__) (deactQ_L_8Cont, B_int);
+    B_NoneType (*__init__) (deactQ_L_7proc, deactQ_Apa, $action);
+    void (*__serialize__) (deactQ_L_7proc, $Serial$state);
+    deactQ_L_7proc (*__deserialize__) (deactQ_L_7proc, $Serial$state);
+    B_bool (*__bool__) (deactQ_L_7proc);
+    B_str (*__str__) (deactQ_L_7proc);
+    B_str (*__repr__) (deactQ_L_7proc);
+    $R (*__call__) (deactQ_L_7proc, $Cont);
+    $R (*__exec__) (deactQ_L_7proc, $Cont);
 };
-struct deactQ_L_8Cont {
-    struct deactQ_L_8ContG_class *$class;
+struct deactQ_L_7proc {
+    struct deactQ_L_7procG_class *$class;
+    deactQ_Apa self;
     $action cb;
-    $Cont C_cont;
+};
+struct deactQ_L_8procG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (deactQ_L_8proc, deactQ_Apa, $action);
+    void (*__serialize__) (deactQ_L_8proc, $Serial$state);
+    deactQ_L_8proc (*__deserialize__) (deactQ_L_8proc, $Serial$state);
+    B_bool (*__bool__) (deactQ_L_8proc);
+    B_str (*__str__) (deactQ_L_8proc);
+    B_str (*__repr__) (deactQ_L_8proc);
+    $R (*__call__) (deactQ_L_8proc, $Cont);
+    $R (*__exec__) (deactQ_L_8proc, $Cont);
+};
+struct deactQ_L_8proc {
+    struct deactQ_L_8procG_class *$class;
+    deactQ_Apa self;
+    $action cb;
 };
 struct deactQ_L_9procG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    B_NoneType (*__init__) (deactQ_L_9proc, deactQ_Apa, $proc);
+    B_NoneType (*__init__) (deactQ_L_9proc, deactQ_Apa, B_int);
     void (*__serialize__) (deactQ_L_9proc, $Serial$state);
     deactQ_L_9proc (*__deserialize__) (deactQ_L_9proc, $Serial$state);
     B_bool (*__bool__) (deactQ_L_9proc);
@@ -137,13 +154,13 @@ struct deactQ_L_9procG_class {
 struct deactQ_L_9proc {
     struct deactQ_L_9procG_class *$class;
     deactQ_Apa self;
-    $proc cb;
+    B_int i;
 };
 struct deactQ_L_10procG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    B_NoneType (*__init__) (deactQ_L_10proc, deactQ_Apa, $action);
+    B_NoneType (*__init__) (deactQ_L_10proc, deactQ_Bepa, B_int);
     void (*__serialize__) (deactQ_L_10proc, $Serial$state);
     deactQ_L_10proc (*__deserialize__) (deactQ_L_10proc, $Serial$state);
     B_bool (*__bool__) (deactQ_L_10proc);
@@ -154,50 +171,32 @@ struct deactQ_L_10procG_class {
 };
 struct deactQ_L_10proc {
     struct deactQ_L_10procG_class *$class;
-    deactQ_Apa self;
-    $action cb;
-};
-struct deactQ_L_11procG_class {
-    char *$GCINFO;
-    int $class_id;
-    $SuperG_class $superclass;
-    B_NoneType (*__init__) (deactQ_L_11proc, deactQ_Apa, B_int);
-    void (*__serialize__) (deactQ_L_11proc, $Serial$state);
-    deactQ_L_11proc (*__deserialize__) (deactQ_L_11proc, $Serial$state);
-    B_bool (*__bool__) (deactQ_L_11proc);
-    B_str (*__str__) (deactQ_L_11proc);
-    B_str (*__repr__) (deactQ_L_11proc);
-    $R (*__call__) (deactQ_L_11proc, $Cont);
-    $R (*__exec__) (deactQ_L_11proc, $Cont);
-};
-struct deactQ_L_11proc {
-    struct deactQ_L_11procG_class *$class;
-    deactQ_Apa self;
-    B_int i;
-};
-struct deactQ_L_12procG_class {
-    char *$GCINFO;
-    int $class_id;
-    $SuperG_class $superclass;
-    B_NoneType (*__init__) (deactQ_L_12proc, deactQ_Bepa, B_int);
-    void (*__serialize__) (deactQ_L_12proc, $Serial$state);
-    deactQ_L_12proc (*__deserialize__) (deactQ_L_12proc, $Serial$state);
-    B_bool (*__bool__) (deactQ_L_12proc);
-    B_str (*__str__) (deactQ_L_12proc);
-    B_str (*__repr__) (deactQ_L_12proc);
-    $R (*__call__) (deactQ_L_12proc, $Cont);
-    $R (*__exec__) (deactQ_L_12proc, $Cont);
-};
-struct deactQ_L_12proc {
-    struct deactQ_L_12procG_class *$class;
     deactQ_Bepa self;
     B_int i;
+};
+struct deactQ_L_14actionG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (deactQ_L_14action, deactQ_Apa);
+    void (*__serialize__) (deactQ_L_14action, $Serial$state);
+    deactQ_L_14action (*__deserialize__) (deactQ_L_14action, $Serial$state);
+    B_bool (*__bool__) (deactQ_L_14action);
+    B_str (*__str__) (deactQ_L_14action);
+    B_str (*__repr__) (deactQ_L_14action);
+    $R (*__call__) (deactQ_L_14action, $Cont, B_int);
+    $R (*__exec__) (deactQ_L_14action, $Cont, B_int);
+    B_Msg (*__asyn__) (deactQ_L_14action, B_int);
+};
+struct deactQ_L_14action {
+    struct deactQ_L_14actionG_class *$class;
+    deactQ_Apa L_13obj;
 };
 struct deactQ_L_16actionG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    B_NoneType (*__init__) (deactQ_L_16action, deactQ_Apa);
+    B_NoneType (*__init__) (deactQ_L_16action, deactQ_Bepa);
     void (*__serialize__) (deactQ_L_16action, $Serial$state);
     deactQ_L_16action (*__deserialize__) (deactQ_L_16action, $Serial$state);
     B_bool (*__bool__) (deactQ_L_16action);
@@ -209,46 +208,64 @@ struct deactQ_L_16actionG_class {
 };
 struct deactQ_L_16action {
     struct deactQ_L_16actionG_class *$class;
-    deactQ_Apa L_15obj;
+    deactQ_Bepa L_15obj;
 };
-struct deactQ_L_18actionG_class {
+struct deactQ_L_19actionG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    B_NoneType (*__init__) (deactQ_L_18action, deactQ_Bepa);
-    void (*__serialize__) (deactQ_L_18action, $Serial$state);
-    deactQ_L_18action (*__deserialize__) (deactQ_L_18action, $Serial$state);
-    B_bool (*__bool__) (deactQ_L_18action);
-    B_str (*__str__) (deactQ_L_18action);
-    B_str (*__repr__) (deactQ_L_18action);
-    $R (*__call__) (deactQ_L_18action, $Cont, B_int);
-    $R (*__exec__) (deactQ_L_18action, $Cont, B_int);
-    B_Msg (*__asyn__) (deactQ_L_18action, B_int);
+    B_NoneType (*__init__) (deactQ_L_19action, deactQ_main);
+    void (*__serialize__) (deactQ_L_19action, $Serial$state);
+    deactQ_L_19action (*__deserialize__) (deactQ_L_19action, $Serial$state);
+    B_bool (*__bool__) (deactQ_L_19action);
+    B_str (*__str__) (deactQ_L_19action);
+    B_str (*__repr__) (deactQ_L_19action);
+    $R (*__call__) (deactQ_L_19action, $Cont, B_int);
+    $R (*__exec__) (deactQ_L_19action, $Cont, B_int);
+    B_Msg (*__asyn__) (deactQ_L_19action, B_int);
 };
-struct deactQ_L_18action {
-    struct deactQ_L_18actionG_class *$class;
-    deactQ_Bepa L_17obj;
+struct deactQ_L_19action {
+    struct deactQ_L_19actionG_class *$class;
+    deactQ_main L_18obj;
 };
-struct deactQ_L_21actionG_class {
+$R deactQ_U_1L_17C_9cont (deactQ_main, $Cont, int64_t);
+$R deactQ_L_17C_9cont (deactQ_main, $Cont, B_int);
+struct deactQ_L_20ContG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    B_NoneType (*__init__) (deactQ_L_21action, deactQ_main);
-    void (*__serialize__) (deactQ_L_21action, $Serial$state);
-    deactQ_L_21action (*__deserialize__) (deactQ_L_21action, $Serial$state);
-    B_bool (*__bool__) (deactQ_L_21action);
-    B_str (*__str__) (deactQ_L_21action);
-    B_str (*__repr__) (deactQ_L_21action);
-    $R (*__call__) (deactQ_L_21action, $Cont, B_int);
-    $R (*__exec__) (deactQ_L_21action, $Cont, B_int);
-    B_Msg (*__asyn__) (deactQ_L_21action, B_int);
+    B_NoneType (*__init__) (deactQ_L_20Cont, deactQ_main, $Cont);
+    void (*__serialize__) (deactQ_L_20Cont, $Serial$state);
+    deactQ_L_20Cont (*__deserialize__) (deactQ_L_20Cont, $Serial$state);
+    B_bool (*__bool__) (deactQ_L_20Cont);
+    B_str (*__str__) (deactQ_L_20Cont);
+    B_str (*__repr__) (deactQ_L_20Cont);
+    $R (*__call__) (deactQ_L_20Cont, B_int);
 };
-struct deactQ_L_21action {
-    struct deactQ_L_21actionG_class *$class;
-    deactQ_main L_20obj;
+struct deactQ_L_20Cont {
+    struct deactQ_L_20ContG_class *$class;
+    deactQ_main self;
+    $Cont C_cont;
 };
-$R deactQ_U_2L_19C_11cont (deactQ_main, $Cont, int64_t);
-$R deactQ_L_19C_11cont (deactQ_main, $Cont, B_int);
+$R deactQ_L_12C_7cont (deactQ_main, $Cont, deactQ_Bepa);
+struct deactQ_L_21ContG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (deactQ_L_21Cont, deactQ_main, $Cont);
+    void (*__serialize__) (deactQ_L_21Cont, $Serial$state);
+    deactQ_L_21Cont (*__deserialize__) (deactQ_L_21Cont, $Serial$state);
+    B_bool (*__bool__) (deactQ_L_21Cont);
+    B_str (*__str__) (deactQ_L_21Cont);
+    B_str (*__repr__) (deactQ_L_21Cont);
+    $R (*__call__) (deactQ_L_21Cont, deactQ_Bepa);
+};
+struct deactQ_L_21Cont {
+    struct deactQ_L_21ContG_class *$class;
+    deactQ_main self;
+    $Cont C_cont;
+};
+$R deactQ_L_11C_5cont (deactQ_main, $Cont, deactQ_Apa);
 struct deactQ_L_22ContG_class {
     char *$GCINFO;
     int $class_id;
@@ -259,170 +276,134 @@ struct deactQ_L_22ContG_class {
     B_bool (*__bool__) (deactQ_L_22Cont);
     B_str (*__str__) (deactQ_L_22Cont);
     B_str (*__repr__) (deactQ_L_22Cont);
-    $R (*__call__) (deactQ_L_22Cont, B_int);
+    $R (*__call__) (deactQ_L_22Cont, deactQ_Apa);
 };
 struct deactQ_L_22Cont {
     struct deactQ_L_22ContG_class *$class;
     deactQ_main self;
     $Cont C_cont;
 };
-$R deactQ_L_14C_9cont (deactQ_main, $Cont, deactQ_Bepa);
-struct deactQ_L_23ContG_class {
+struct deactQ_L_23procG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    B_NoneType (*__init__) (deactQ_L_23Cont, deactQ_main, $Cont);
-    void (*__serialize__) (deactQ_L_23Cont, $Serial$state);
-    deactQ_L_23Cont (*__deserialize__) (deactQ_L_23Cont, $Serial$state);
-    B_bool (*__bool__) (deactQ_L_23Cont);
-    B_str (*__str__) (deactQ_L_23Cont);
-    B_str (*__repr__) (deactQ_L_23Cont);
-    $R (*__call__) (deactQ_L_23Cont, deactQ_Bepa);
+    B_NoneType (*__init__) (deactQ_L_23proc, deactQ_main, B_int);
+    void (*__serialize__) (deactQ_L_23proc, $Serial$state);
+    deactQ_L_23proc (*__deserialize__) (deactQ_L_23proc, $Serial$state);
+    B_bool (*__bool__) (deactQ_L_23proc);
+    B_str (*__str__) (deactQ_L_23proc);
+    B_str (*__repr__) (deactQ_L_23proc);
+    $R (*__call__) (deactQ_L_23proc, $Cont);
+    $R (*__exec__) (deactQ_L_23proc, $Cont);
 };
-struct deactQ_L_23Cont {
-    struct deactQ_L_23ContG_class *$class;
-    deactQ_main self;
-    $Cont C_cont;
-};
-$R deactQ_L_13C_7cont (deactQ_main, $Cont, deactQ_Apa);
-struct deactQ_L_24ContG_class {
-    char *$GCINFO;
-    int $class_id;
-    $SuperG_class $superclass;
-    B_NoneType (*__init__) (deactQ_L_24Cont, deactQ_main, $Cont);
-    void (*__serialize__) (deactQ_L_24Cont, $Serial$state);
-    deactQ_L_24Cont (*__deserialize__) (deactQ_L_24Cont, $Serial$state);
-    B_bool (*__bool__) (deactQ_L_24Cont);
-    B_str (*__str__) (deactQ_L_24Cont);
-    B_str (*__repr__) (deactQ_L_24Cont);
-    $R (*__call__) (deactQ_L_24Cont, deactQ_Apa);
-};
-struct deactQ_L_24Cont {
-    struct deactQ_L_24ContG_class *$class;
-    deactQ_main self;
-    $Cont C_cont;
-};
-struct deactQ_L_25procG_class {
-    char *$GCINFO;
-    int $class_id;
-    $SuperG_class $superclass;
-    B_NoneType (*__init__) (deactQ_L_25proc, deactQ_main, B_int);
-    void (*__serialize__) (deactQ_L_25proc, $Serial$state);
-    deactQ_L_25proc (*__deserialize__) (deactQ_L_25proc, $Serial$state);
-    B_bool (*__bool__) (deactQ_L_25proc);
-    B_str (*__str__) (deactQ_L_25proc);
-    B_str (*__repr__) (deactQ_L_25proc);
-    $R (*__call__) (deactQ_L_25proc, $Cont);
-    $R (*__exec__) (deactQ_L_25proc, $Cont);
-};
-struct deactQ_L_25proc {
-    struct deactQ_L_25procG_class *$class;
+struct deactQ_L_23proc {
+    struct deactQ_L_23procG_class *$class;
     deactQ_main self;
     B_int i;
 };
-$R deactQ_L_26C_13cont ($Cont, deactQ_Apa, B_NoneType);
-struct deactQ_L_27ContG_class {
+$R deactQ_L_24C_11cont ($Cont, deactQ_Apa, B_NoneType);
+struct deactQ_L_25ContG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    B_NoneType (*__init__) (deactQ_L_27Cont, $Cont, deactQ_Apa);
-    void (*__serialize__) (deactQ_L_27Cont, $Serial$state);
-    deactQ_L_27Cont (*__deserialize__) (deactQ_L_27Cont, $Serial$state);
-    B_bool (*__bool__) (deactQ_L_27Cont);
-    B_str (*__str__) (deactQ_L_27Cont);
-    B_str (*__repr__) (deactQ_L_27Cont);
-    $R (*__call__) (deactQ_L_27Cont, B_NoneType);
+    B_NoneType (*__init__) (deactQ_L_25Cont, $Cont, deactQ_Apa);
+    void (*__serialize__) (deactQ_L_25Cont, $Serial$state);
+    deactQ_L_25Cont (*__deserialize__) (deactQ_L_25Cont, $Serial$state);
+    B_bool (*__bool__) (deactQ_L_25Cont);
+    B_str (*__str__) (deactQ_L_25Cont);
+    B_str (*__repr__) (deactQ_L_25Cont);
+    $R (*__call__) (deactQ_L_25Cont, B_NoneType);
 };
-struct deactQ_L_27Cont {
-    struct deactQ_L_27ContG_class *$class;
+struct deactQ_L_25Cont {
+    struct deactQ_L_25ContG_class *$class;
     $Cont C_cont;
     deactQ_Apa G_act;
 };
-struct deactQ_L_28procG_class {
+struct deactQ_L_26procG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    B_NoneType (*__init__) (deactQ_L_28proc, deactQ_Apa);
-    void (*__serialize__) (deactQ_L_28proc, $Serial$state);
-    deactQ_L_28proc (*__deserialize__) (deactQ_L_28proc, $Serial$state);
-    B_bool (*__bool__) (deactQ_L_28proc);
-    B_str (*__str__) (deactQ_L_28proc);
-    B_str (*__repr__) (deactQ_L_28proc);
-    $R (*__call__) (deactQ_L_28proc, $Cont);
-    $R (*__exec__) (deactQ_L_28proc, $Cont);
+    B_NoneType (*__init__) (deactQ_L_26proc, deactQ_Apa);
+    void (*__serialize__) (deactQ_L_26proc, $Serial$state);
+    deactQ_L_26proc (*__deserialize__) (deactQ_L_26proc, $Serial$state);
+    B_bool (*__bool__) (deactQ_L_26proc);
+    B_str (*__str__) (deactQ_L_26proc);
+    B_str (*__repr__) (deactQ_L_26proc);
+    $R (*__call__) (deactQ_L_26proc, $Cont);
+    $R (*__exec__) (deactQ_L_26proc, $Cont);
 };
-struct deactQ_L_28proc {
-    struct deactQ_L_28procG_class *$class;
+struct deactQ_L_26proc {
+    struct deactQ_L_26procG_class *$class;
     deactQ_Apa G_act;
 };
-$R deactQ_L_29C_15cont ($Cont, deactQ_Bepa, B_NoneType);
-struct deactQ_L_30ContG_class {
+$R deactQ_L_27C_13cont ($Cont, deactQ_Bepa, B_NoneType);
+struct deactQ_L_28ContG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    B_NoneType (*__init__) (deactQ_L_30Cont, $Cont, deactQ_Bepa);
-    void (*__serialize__) (deactQ_L_30Cont, $Serial$state);
-    deactQ_L_30Cont (*__deserialize__) (deactQ_L_30Cont, $Serial$state);
-    B_bool (*__bool__) (deactQ_L_30Cont);
-    B_str (*__str__) (deactQ_L_30Cont);
-    B_str (*__repr__) (deactQ_L_30Cont);
-    $R (*__call__) (deactQ_L_30Cont, B_NoneType);
+    B_NoneType (*__init__) (deactQ_L_28Cont, $Cont, deactQ_Bepa);
+    void (*__serialize__) (deactQ_L_28Cont, $Serial$state);
+    deactQ_L_28Cont (*__deserialize__) (deactQ_L_28Cont, $Serial$state);
+    B_bool (*__bool__) (deactQ_L_28Cont);
+    B_str (*__str__) (deactQ_L_28Cont);
+    B_str (*__repr__) (deactQ_L_28Cont);
+    $R (*__call__) (deactQ_L_28Cont, B_NoneType);
 };
-struct deactQ_L_30Cont {
-    struct deactQ_L_30ContG_class *$class;
+struct deactQ_L_28Cont {
+    struct deactQ_L_28ContG_class *$class;
     $Cont C_cont;
     deactQ_Bepa G_act;
 };
-struct deactQ_L_31procG_class {
+struct deactQ_L_29procG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    B_NoneType (*__init__) (deactQ_L_31proc, deactQ_Bepa);
-    void (*__serialize__) (deactQ_L_31proc, $Serial$state);
-    deactQ_L_31proc (*__deserialize__) (deactQ_L_31proc, $Serial$state);
-    B_bool (*__bool__) (deactQ_L_31proc);
-    B_str (*__str__) (deactQ_L_31proc);
-    B_str (*__repr__) (deactQ_L_31proc);
-    $R (*__call__) (deactQ_L_31proc, $Cont);
-    $R (*__exec__) (deactQ_L_31proc, $Cont);
+    B_NoneType (*__init__) (deactQ_L_29proc, deactQ_Bepa);
+    void (*__serialize__) (deactQ_L_29proc, $Serial$state);
+    deactQ_L_29proc (*__deserialize__) (deactQ_L_29proc, $Serial$state);
+    B_bool (*__bool__) (deactQ_L_29proc);
+    B_str (*__str__) (deactQ_L_29proc);
+    B_str (*__repr__) (deactQ_L_29proc);
+    $R (*__call__) (deactQ_L_29proc, $Cont);
+    $R (*__exec__) (deactQ_L_29proc, $Cont);
 };
-struct deactQ_L_31proc {
-    struct deactQ_L_31procG_class *$class;
+struct deactQ_L_29proc {
+    struct deactQ_L_29procG_class *$class;
     deactQ_Bepa G_act;
 };
-$R deactQ_L_32C_17cont ($Cont, deactQ_main, B_NoneType);
-struct deactQ_L_33ContG_class {
+$R deactQ_L_30C_15cont ($Cont, deactQ_main, B_NoneType);
+struct deactQ_L_31ContG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    B_NoneType (*__init__) (deactQ_L_33Cont, $Cont, deactQ_main);
-    void (*__serialize__) (deactQ_L_33Cont, $Serial$state);
-    deactQ_L_33Cont (*__deserialize__) (deactQ_L_33Cont, $Serial$state);
-    B_bool (*__bool__) (deactQ_L_33Cont);
-    B_str (*__str__) (deactQ_L_33Cont);
-    B_str (*__repr__) (deactQ_L_33Cont);
-    $R (*__call__) (deactQ_L_33Cont, B_NoneType);
+    B_NoneType (*__init__) (deactQ_L_31Cont, $Cont, deactQ_main);
+    void (*__serialize__) (deactQ_L_31Cont, $Serial$state);
+    deactQ_L_31Cont (*__deserialize__) (deactQ_L_31Cont, $Serial$state);
+    B_bool (*__bool__) (deactQ_L_31Cont);
+    B_str (*__str__) (deactQ_L_31Cont);
+    B_str (*__repr__) (deactQ_L_31Cont);
+    $R (*__call__) (deactQ_L_31Cont, B_NoneType);
 };
-struct deactQ_L_33Cont {
-    struct deactQ_L_33ContG_class *$class;
+struct deactQ_L_31Cont {
+    struct deactQ_L_31ContG_class *$class;
     $Cont C_cont;
     deactQ_main G_act;
 };
-struct deactQ_L_34procG_class {
+struct deactQ_L_32procG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    B_NoneType (*__init__) (deactQ_L_34proc, deactQ_main, B_Env);
-    void (*__serialize__) (deactQ_L_34proc, $Serial$state);
-    deactQ_L_34proc (*__deserialize__) (deactQ_L_34proc, $Serial$state);
-    B_bool (*__bool__) (deactQ_L_34proc);
-    B_str (*__str__) (deactQ_L_34proc);
-    B_str (*__repr__) (deactQ_L_34proc);
-    $R (*__call__) (deactQ_L_34proc, $Cont);
-    $R (*__exec__) (deactQ_L_34proc, $Cont);
+    B_NoneType (*__init__) (deactQ_L_32proc, deactQ_main, B_Env);
+    void (*__serialize__) (deactQ_L_32proc, $Serial$state);
+    deactQ_L_32proc (*__deserialize__) (deactQ_L_32proc, $Serial$state);
+    B_bool (*__bool__) (deactQ_L_32proc);
+    B_str (*__str__) (deactQ_L_32proc);
+    B_str (*__repr__) (deactQ_L_32proc);
+    $R (*__call__) (deactQ_L_32proc, $Cont);
+    $R (*__exec__) (deactQ_L_32proc, $Cont);
 };
-struct deactQ_L_34proc {
-    struct deactQ_L_34procG_class *$class;
+struct deactQ_L_32proc {
+    struct deactQ_L_32procG_class *$class;
     deactQ_main G_act;
     B_Env env;
 };
@@ -438,10 +419,10 @@ struct deactQ_ApaG_class {
     B_str (*__repr__) (deactQ_Apa);
     B_NoneType (*__resume__) (deactQ_Apa);
     B_NoneType (*__cleanup__) (deactQ_Apa);
-    $R (*setupG_local) (deactQ_Apa, $Cont, $proc);
+    $R (*setupG_local) (deactQ_Apa, $Cont, $action);
     $R (*computeG_local) (deactQ_Apa, $Cont, $action);
     $R (*noticeG_local) (deactQ_Apa, $Cont, B_int);
-    B_Msg (*setup) (deactQ_Apa, $proc);
+    B_Msg (*setup) (deactQ_Apa, $action);
     B_Msg (*compute) (deactQ_Apa, $action);
     B_Msg (*notice) (deactQ_Apa, B_int);
 };
@@ -524,46 +505,44 @@ $R deactQ_BepaG_newact ($Cont);
 $R deactQ_mainG_newact ($Cont, B_Env);
 extern struct deactQ_L_2ContG_class deactQ_L_2ContG_methods;
 deactQ_L_2Cont deactQ_L_2ContG_new($Cont);
-extern struct deactQ_L_4procG_class deactQ_L_4procG_methods;
-deactQ_L_4proc deactQ_L_4procG_new(deactQ_Apa);
+extern struct deactQ_L_4actionG_class deactQ_L_4actionG_methods;
+deactQ_L_4action deactQ_L_4actionG_new(deactQ_Apa);
 extern struct deactQ_L_6ContG_class deactQ_L_6ContG_methods;
-deactQ_L_6Cont deactQ_L_6ContG_new($Cont);
-extern struct deactQ_L_8ContG_class deactQ_L_8ContG_methods;
-deactQ_L_8Cont deactQ_L_8ContG_new($action, $Cont);
+deactQ_L_6Cont deactQ_L_6ContG_new($action, $Cont);
+extern struct deactQ_L_7procG_class deactQ_L_7procG_methods;
+deactQ_L_7proc deactQ_L_7procG_new(deactQ_Apa, $action);
+extern struct deactQ_L_8procG_class deactQ_L_8procG_methods;
+deactQ_L_8proc deactQ_L_8procG_new(deactQ_Apa, $action);
 extern struct deactQ_L_9procG_class deactQ_L_9procG_methods;
-deactQ_L_9proc deactQ_L_9procG_new(deactQ_Apa, $proc);
+deactQ_L_9proc deactQ_L_9procG_new(deactQ_Apa, B_int);
 extern struct deactQ_L_10procG_class deactQ_L_10procG_methods;
-deactQ_L_10proc deactQ_L_10procG_new(deactQ_Apa, $action);
-extern struct deactQ_L_11procG_class deactQ_L_11procG_methods;
-deactQ_L_11proc deactQ_L_11procG_new(deactQ_Apa, B_int);
-extern struct deactQ_L_12procG_class deactQ_L_12procG_methods;
-deactQ_L_12proc deactQ_L_12procG_new(deactQ_Bepa, B_int);
+deactQ_L_10proc deactQ_L_10procG_new(deactQ_Bepa, B_int);
+extern struct deactQ_L_14actionG_class deactQ_L_14actionG_methods;
+deactQ_L_14action deactQ_L_14actionG_new(deactQ_Apa);
 extern struct deactQ_L_16actionG_class deactQ_L_16actionG_methods;
-deactQ_L_16action deactQ_L_16actionG_new(deactQ_Apa);
-extern struct deactQ_L_18actionG_class deactQ_L_18actionG_methods;
-deactQ_L_18action deactQ_L_18actionG_new(deactQ_Bepa);
-extern struct deactQ_L_21actionG_class deactQ_L_21actionG_methods;
-deactQ_L_21action deactQ_L_21actionG_new(deactQ_main);
+deactQ_L_16action deactQ_L_16actionG_new(deactQ_Bepa);
+extern struct deactQ_L_19actionG_class deactQ_L_19actionG_methods;
+deactQ_L_19action deactQ_L_19actionG_new(deactQ_main);
+extern struct deactQ_L_20ContG_class deactQ_L_20ContG_methods;
+deactQ_L_20Cont deactQ_L_20ContG_new(deactQ_main, $Cont);
+extern struct deactQ_L_21ContG_class deactQ_L_21ContG_methods;
+deactQ_L_21Cont deactQ_L_21ContG_new(deactQ_main, $Cont);
 extern struct deactQ_L_22ContG_class deactQ_L_22ContG_methods;
 deactQ_L_22Cont deactQ_L_22ContG_new(deactQ_main, $Cont);
-extern struct deactQ_L_23ContG_class deactQ_L_23ContG_methods;
-deactQ_L_23Cont deactQ_L_23ContG_new(deactQ_main, $Cont);
-extern struct deactQ_L_24ContG_class deactQ_L_24ContG_methods;
-deactQ_L_24Cont deactQ_L_24ContG_new(deactQ_main, $Cont);
-extern struct deactQ_L_25procG_class deactQ_L_25procG_methods;
-deactQ_L_25proc deactQ_L_25procG_new(deactQ_main, B_int);
-extern struct deactQ_L_27ContG_class deactQ_L_27ContG_methods;
-deactQ_L_27Cont deactQ_L_27ContG_new($Cont, deactQ_Apa);
-extern struct deactQ_L_28procG_class deactQ_L_28procG_methods;
-deactQ_L_28proc deactQ_L_28procG_new(deactQ_Apa);
-extern struct deactQ_L_30ContG_class deactQ_L_30ContG_methods;
-deactQ_L_30Cont deactQ_L_30ContG_new($Cont, deactQ_Bepa);
-extern struct deactQ_L_31procG_class deactQ_L_31procG_methods;
-deactQ_L_31proc deactQ_L_31procG_new(deactQ_Bepa);
-extern struct deactQ_L_33ContG_class deactQ_L_33ContG_methods;
-deactQ_L_33Cont deactQ_L_33ContG_new($Cont, deactQ_main);
-extern struct deactQ_L_34procG_class deactQ_L_34procG_methods;
-deactQ_L_34proc deactQ_L_34procG_new(deactQ_main, B_Env);
+extern struct deactQ_L_23procG_class deactQ_L_23procG_methods;
+deactQ_L_23proc deactQ_L_23procG_new(deactQ_main, B_int);
+extern struct deactQ_L_25ContG_class deactQ_L_25ContG_methods;
+deactQ_L_25Cont deactQ_L_25ContG_new($Cont, deactQ_Apa);
+extern struct deactQ_L_26procG_class deactQ_L_26procG_methods;
+deactQ_L_26proc deactQ_L_26procG_new(deactQ_Apa);
+extern struct deactQ_L_28ContG_class deactQ_L_28ContG_methods;
+deactQ_L_28Cont deactQ_L_28ContG_new($Cont, deactQ_Bepa);
+extern struct deactQ_L_29procG_class deactQ_L_29procG_methods;
+deactQ_L_29proc deactQ_L_29procG_new(deactQ_Bepa);
+extern struct deactQ_L_31ContG_class deactQ_L_31ContG_methods;
+deactQ_L_31Cont deactQ_L_31ContG_new($Cont, deactQ_main);
+extern struct deactQ_L_32procG_class deactQ_L_32procG_methods;
+deactQ_L_32proc deactQ_L_32procG_new(deactQ_main, B_Env);
 extern struct deactQ_ApaG_class deactQ_ApaG_methods;
 $R deactQ_ApaG_new($Cont);
 extern struct deactQ_BepaG_class deactQ_BepaG_methods;

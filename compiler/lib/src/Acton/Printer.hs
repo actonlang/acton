@@ -414,7 +414,11 @@ instance Pretty TVar where
 instance Pretty TUni where
     pretty (UV k i)
       | i < 0                       = text "T_" <> pretty (-i) <> text "w"
-      | otherwise                   = text "T_" <> pretty i
+      | otherwise                   = text "T_" <> pretty i <> prk k
+      where prk PRow                = text "p"
+            prk KRow                = text "k"
+            prk KFX                 = text "x"
+            prk _                   = empty
 
 instance Pretty TCon where
     pretty (TC n [])                = pretty n

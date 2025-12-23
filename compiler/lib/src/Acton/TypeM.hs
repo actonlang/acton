@@ -91,11 +91,6 @@ newWitness                              = Internal Witness "" <$> newUnique
 newTmp                                  = Internal Tempvar "" <$> newUnique
 
 newUnivarOfKind k                       = TUni NoLoc <$> univar k <$> newUnique
-  where str KType                       = ""
-        str KFX                         = "x"
-        str PRow                        = "p"
-        str KRow                        = "k"
-        str _                           = ""
 
 newUnivarToken n                        = TUni NoLoc $ unitoken n
 

@@ -1,6 +1,6 @@
 from deact import Apa
 
-W_184: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+W_163: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
 
 # recursive group:
 class Manager ($Actor, __builtin__.value):
@@ -32,7 +32,7 @@ class main ($Actor, __builtin__.value):
         self.mgr = ManagerG_newact()
         self.decoder = $AWAITf@[__builtin__.StringDecoder]((async self.mgr.create_decoder)())
         self.apa = $AWAITf@[deact.Apa]((async self.mgr.create_apa)())
-        (async env.exit)(W_184.__fromatom__(0))
+        (async env.exit)(W_163.__fromatom__(0))
 proc def ManagerG_newact () -> Manager:
     G_act: Manager = $NEWACTOR@[Manager]()
     $InstallFinalizer@[Manager](G_act)

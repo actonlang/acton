@@ -3,54 +3,52 @@
 #include "builtin/builtin.h"
 #include "rts/rts.h"
 struct linesQ_L_2Cont;
-struct linesQ_L_4proc;
+struct linesQ_L_4action;
 struct linesQ_L_6Cont;
-struct linesQ_L_8Cont;
+struct linesQ_L_7proc;
+struct linesQ_L_8proc;
 struct linesQ_L_9proc;
 struct linesQ_L_10proc;
-struct linesQ_L_11proc;
-struct linesQ_L_12proc;
+struct linesQ_L_14action;
 struct linesQ_L_16action;
-struct linesQ_L_18action;
-struct linesQ_L_21action;
-struct linesQ_L_22proc;
+struct linesQ_L_19action;
+struct linesQ_L_20proc;
+struct linesQ_L_21Cont;
+struct linesQ_L_22Cont;
 struct linesQ_L_23Cont;
-struct linesQ_L_24Cont;
-struct linesQ_L_25Cont;
-struct linesQ_L_26proc;
-struct linesQ_L_27proc;
-struct linesQ_L_29Cont;
-struct linesQ_L_30proc;
-struct linesQ_L_32Cont;
-struct linesQ_L_33proc;
-struct linesQ_L_35Cont;
-struct linesQ_L_36proc;
+struct linesQ_L_24proc;
+struct linesQ_L_25proc;
+struct linesQ_L_27Cont;
+struct linesQ_L_28proc;
+struct linesQ_L_30Cont;
+struct linesQ_L_31proc;
+struct linesQ_L_33Cont;
+struct linesQ_L_34proc;
 struct linesQ_Apa;
 struct linesQ_Bepa;
 struct linesQ_main;
 typedef struct linesQ_L_2Cont *linesQ_L_2Cont;
-typedef struct linesQ_L_4proc *linesQ_L_4proc;
+typedef struct linesQ_L_4action *linesQ_L_4action;
 typedef struct linesQ_L_6Cont *linesQ_L_6Cont;
-typedef struct linesQ_L_8Cont *linesQ_L_8Cont;
+typedef struct linesQ_L_7proc *linesQ_L_7proc;
+typedef struct linesQ_L_8proc *linesQ_L_8proc;
 typedef struct linesQ_L_9proc *linesQ_L_9proc;
 typedef struct linesQ_L_10proc *linesQ_L_10proc;
-typedef struct linesQ_L_11proc *linesQ_L_11proc;
-typedef struct linesQ_L_12proc *linesQ_L_12proc;
+typedef struct linesQ_L_14action *linesQ_L_14action;
 typedef struct linesQ_L_16action *linesQ_L_16action;
-typedef struct linesQ_L_18action *linesQ_L_18action;
-typedef struct linesQ_L_21action *linesQ_L_21action;
-typedef struct linesQ_L_22proc *linesQ_L_22proc;
+typedef struct linesQ_L_19action *linesQ_L_19action;
+typedef struct linesQ_L_20proc *linesQ_L_20proc;
+typedef struct linesQ_L_21Cont *linesQ_L_21Cont;
+typedef struct linesQ_L_22Cont *linesQ_L_22Cont;
 typedef struct linesQ_L_23Cont *linesQ_L_23Cont;
-typedef struct linesQ_L_24Cont *linesQ_L_24Cont;
-typedef struct linesQ_L_25Cont *linesQ_L_25Cont;
-typedef struct linesQ_L_26proc *linesQ_L_26proc;
-typedef struct linesQ_L_27proc *linesQ_L_27proc;
-typedef struct linesQ_L_29Cont *linesQ_L_29Cont;
-typedef struct linesQ_L_30proc *linesQ_L_30proc;
-typedef struct linesQ_L_32Cont *linesQ_L_32Cont;
-typedef struct linesQ_L_33proc *linesQ_L_33proc;
-typedef struct linesQ_L_35Cont *linesQ_L_35Cont;
-typedef struct linesQ_L_36proc *linesQ_L_36proc;
+typedef struct linesQ_L_24proc *linesQ_L_24proc;
+typedef struct linesQ_L_25proc *linesQ_L_25proc;
+typedef struct linesQ_L_27Cont *linesQ_L_27Cont;
+typedef struct linesQ_L_28proc *linesQ_L_28proc;
+typedef struct linesQ_L_30Cont *linesQ_L_30Cont;
+typedef struct linesQ_L_31proc *linesQ_L_31proc;
+typedef struct linesQ_L_33Cont *linesQ_L_33Cont;
+typedef struct linesQ_L_34proc *linesQ_L_34proc;
 typedef struct linesQ_Apa *linesQ_Apa;
 typedef struct linesQ_Bepa *linesQ_Bepa;
 typedef struct linesQ_main *linesQ_main;
@@ -72,30 +70,31 @@ struct linesQ_L_2Cont {
     linesQ_Apa self;
     $Cont C_cont;
 };
-struct linesQ_L_4procG_class {
+struct linesQ_L_4actionG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    B_NoneType (*__init__) (linesQ_L_4proc, linesQ_Apa);
-    void (*__serialize__) (linesQ_L_4proc, $Serial$state);
-    linesQ_L_4proc (*__deserialize__) (linesQ_L_4proc, $Serial$state);
-    B_bool (*__bool__) (linesQ_L_4proc);
-    B_str (*__str__) (linesQ_L_4proc);
-    B_str (*__repr__) (linesQ_L_4proc);
-    $R (*__call__) (linesQ_L_4proc, $Cont, B_int);
-    $R (*__exec__) (linesQ_L_4proc, $Cont, B_int);
+    B_NoneType (*__init__) (linesQ_L_4action, linesQ_Apa);
+    void (*__serialize__) (linesQ_L_4action, $Serial$state);
+    linesQ_L_4action (*__deserialize__) (linesQ_L_4action, $Serial$state);
+    B_bool (*__bool__) (linesQ_L_4action);
+    B_str (*__str__) (linesQ_L_4action);
+    B_str (*__repr__) (linesQ_L_4action);
+    $R (*__call__) (linesQ_L_4action, $Cont, B_int);
+    $R (*__exec__) (linesQ_L_4action, $Cont, B_int);
+    B_Msg (*__asyn__) (linesQ_L_4action, B_int);
 };
-struct linesQ_L_4proc {
-    struct linesQ_L_4procG_class *$class;
+struct linesQ_L_4action {
+    struct linesQ_L_4actionG_class *$class;
     linesQ_Apa L_3obj;
 };
-$R linesQ_U_L_5C_3cont ($Cont, int64_t);
-$R linesQ_L_5C_3cont ($Cont, B_int);
+$R linesQ_U_L_5C_3cont ($action, $Cont, int64_t);
+$R linesQ_L_5C_3cont ($action, $Cont, B_int);
 struct linesQ_L_6ContG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    B_NoneType (*__init__) (linesQ_L_6Cont, $Cont);
+    B_NoneType (*__init__) (linesQ_L_6Cont, $action, $Cont);
     void (*__serialize__) (linesQ_L_6Cont, $Serial$state);
     linesQ_L_6Cont (*__deserialize__) (linesQ_L_6Cont, $Serial$state);
     B_bool (*__bool__) (linesQ_L_6Cont);
@@ -105,32 +104,50 @@ struct linesQ_L_6ContG_class {
 };
 struct linesQ_L_6Cont {
     struct linesQ_L_6ContG_class *$class;
+    $action cb;
     $Cont C_cont;
 };
-$R linesQ_U_1L_7C_5cont ($action, $Cont, int64_t);
-$R linesQ_L_7C_5cont ($action, $Cont, B_int);
-struct linesQ_L_8ContG_class {
+struct linesQ_L_7procG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    B_NoneType (*__init__) (linesQ_L_8Cont, $action, $Cont);
-    void (*__serialize__) (linesQ_L_8Cont, $Serial$state);
-    linesQ_L_8Cont (*__deserialize__) (linesQ_L_8Cont, $Serial$state);
-    B_bool (*__bool__) (linesQ_L_8Cont);
-    B_str (*__str__) (linesQ_L_8Cont);
-    B_str (*__repr__) (linesQ_L_8Cont);
-    $R (*__call__) (linesQ_L_8Cont, B_int);
+    B_NoneType (*__init__) (linesQ_L_7proc, linesQ_Apa, $action);
+    void (*__serialize__) (linesQ_L_7proc, $Serial$state);
+    linesQ_L_7proc (*__deserialize__) (linesQ_L_7proc, $Serial$state);
+    B_bool (*__bool__) (linesQ_L_7proc);
+    B_str (*__str__) (linesQ_L_7proc);
+    B_str (*__repr__) (linesQ_L_7proc);
+    $R (*__call__) (linesQ_L_7proc, $Cont);
+    $R (*__exec__) (linesQ_L_7proc, $Cont);
 };
-struct linesQ_L_8Cont {
-    struct linesQ_L_8ContG_class *$class;
+struct linesQ_L_7proc {
+    struct linesQ_L_7procG_class *$class;
+    linesQ_Apa self;
     $action cb;
-    $Cont C_cont;
+};
+struct linesQ_L_8procG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (linesQ_L_8proc, linesQ_Apa, $action);
+    void (*__serialize__) (linesQ_L_8proc, $Serial$state);
+    linesQ_L_8proc (*__deserialize__) (linesQ_L_8proc, $Serial$state);
+    B_bool (*__bool__) (linesQ_L_8proc);
+    B_str (*__str__) (linesQ_L_8proc);
+    B_str (*__repr__) (linesQ_L_8proc);
+    $R (*__call__) (linesQ_L_8proc, $Cont);
+    $R (*__exec__) (linesQ_L_8proc, $Cont);
+};
+struct linesQ_L_8proc {
+    struct linesQ_L_8procG_class *$class;
+    linesQ_Apa self;
+    $action cb;
 };
 struct linesQ_L_9procG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    B_NoneType (*__init__) (linesQ_L_9proc, linesQ_Apa, $proc);
+    B_NoneType (*__init__) (linesQ_L_9proc, linesQ_Apa, B_int);
     void (*__serialize__) (linesQ_L_9proc, $Serial$state);
     linesQ_L_9proc (*__deserialize__) (linesQ_L_9proc, $Serial$state);
     B_bool (*__bool__) (linesQ_L_9proc);
@@ -142,13 +159,13 @@ struct linesQ_L_9procG_class {
 struct linesQ_L_9proc {
     struct linesQ_L_9procG_class *$class;
     linesQ_Apa self;
-    $proc cb;
+    B_int i;
 };
 struct linesQ_L_10procG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    B_NoneType (*__init__) (linesQ_L_10proc, linesQ_Apa, $action);
+    B_NoneType (*__init__) (linesQ_L_10proc, linesQ_Bepa, B_int);
     void (*__serialize__) (linesQ_L_10proc, $Serial$state);
     linesQ_L_10proc (*__deserialize__) (linesQ_L_10proc, $Serial$state);
     B_bool (*__bool__) (linesQ_L_10proc);
@@ -159,50 +176,32 @@ struct linesQ_L_10procG_class {
 };
 struct linesQ_L_10proc {
     struct linesQ_L_10procG_class *$class;
-    linesQ_Apa self;
-    $action cb;
-};
-struct linesQ_L_11procG_class {
-    char *$GCINFO;
-    int $class_id;
-    $SuperG_class $superclass;
-    B_NoneType (*__init__) (linesQ_L_11proc, linesQ_Apa, B_int);
-    void (*__serialize__) (linesQ_L_11proc, $Serial$state);
-    linesQ_L_11proc (*__deserialize__) (linesQ_L_11proc, $Serial$state);
-    B_bool (*__bool__) (linesQ_L_11proc);
-    B_str (*__str__) (linesQ_L_11proc);
-    B_str (*__repr__) (linesQ_L_11proc);
-    $R (*__call__) (linesQ_L_11proc, $Cont);
-    $R (*__exec__) (linesQ_L_11proc, $Cont);
-};
-struct linesQ_L_11proc {
-    struct linesQ_L_11procG_class *$class;
-    linesQ_Apa self;
-    B_int i;
-};
-struct linesQ_L_12procG_class {
-    char *$GCINFO;
-    int $class_id;
-    $SuperG_class $superclass;
-    B_NoneType (*__init__) (linesQ_L_12proc, linesQ_Bepa, B_int);
-    void (*__serialize__) (linesQ_L_12proc, $Serial$state);
-    linesQ_L_12proc (*__deserialize__) (linesQ_L_12proc, $Serial$state);
-    B_bool (*__bool__) (linesQ_L_12proc);
-    B_str (*__str__) (linesQ_L_12proc);
-    B_str (*__repr__) (linesQ_L_12proc);
-    $R (*__call__) (linesQ_L_12proc, $Cont);
-    $R (*__exec__) (linesQ_L_12proc, $Cont);
-};
-struct linesQ_L_12proc {
-    struct linesQ_L_12procG_class *$class;
     linesQ_Bepa self;
     B_int i;
+};
+struct linesQ_L_14actionG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (linesQ_L_14action, linesQ_Apa);
+    void (*__serialize__) (linesQ_L_14action, $Serial$state);
+    linesQ_L_14action (*__deserialize__) (linesQ_L_14action, $Serial$state);
+    B_bool (*__bool__) (linesQ_L_14action);
+    B_str (*__str__) (linesQ_L_14action);
+    B_str (*__repr__) (linesQ_L_14action);
+    $R (*__call__) (linesQ_L_14action, $Cont, B_int);
+    $R (*__exec__) (linesQ_L_14action, $Cont, B_int);
+    B_Msg (*__asyn__) (linesQ_L_14action, B_int);
+};
+struct linesQ_L_14action {
+    struct linesQ_L_14actionG_class *$class;
+    linesQ_Apa L_13obj;
 };
 struct linesQ_L_16actionG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    B_NoneType (*__init__) (linesQ_L_16action, linesQ_Apa);
+    B_NoneType (*__init__) (linesQ_L_16action, linesQ_Bepa);
     void (*__serialize__) (linesQ_L_16action, $Serial$state);
     linesQ_L_16action (*__deserialize__) (linesQ_L_16action, $Serial$state);
     B_bool (*__bool__) (linesQ_L_16action);
@@ -214,63 +213,85 @@ struct linesQ_L_16actionG_class {
 };
 struct linesQ_L_16action {
     struct linesQ_L_16actionG_class *$class;
-    linesQ_Apa L_15obj;
+    linesQ_Bepa L_15obj;
 };
-struct linesQ_L_18actionG_class {
+struct linesQ_L_19actionG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    B_NoneType (*__init__) (linesQ_L_18action, linesQ_Bepa);
-    void (*__serialize__) (linesQ_L_18action, $Serial$state);
-    linesQ_L_18action (*__deserialize__) (linesQ_L_18action, $Serial$state);
-    B_bool (*__bool__) (linesQ_L_18action);
-    B_str (*__str__) (linesQ_L_18action);
-    B_str (*__repr__) (linesQ_L_18action);
-    $R (*__call__) (linesQ_L_18action, $Cont, B_int);
-    $R (*__exec__) (linesQ_L_18action, $Cont, B_int);
-    B_Msg (*__asyn__) (linesQ_L_18action, B_int);
+    B_NoneType (*__init__) (linesQ_L_19action, linesQ_main);
+    void (*__serialize__) (linesQ_L_19action, $Serial$state);
+    linesQ_L_19action (*__deserialize__) (linesQ_L_19action, $Serial$state);
+    B_bool (*__bool__) (linesQ_L_19action);
+    B_str (*__str__) (linesQ_L_19action);
+    B_str (*__repr__) (linesQ_L_19action);
+    $R (*__call__) (linesQ_L_19action, $Cont, B_int);
+    $R (*__exec__) (linesQ_L_19action, $Cont, B_int);
+    B_Msg (*__asyn__) (linesQ_L_19action, B_int);
 };
-struct linesQ_L_18action {
-    struct linesQ_L_18actionG_class *$class;
-    linesQ_Bepa L_17obj;
+struct linesQ_L_19action {
+    struct linesQ_L_19actionG_class *$class;
+    linesQ_main L_18obj;
 };
-struct linesQ_L_21actionG_class {
+struct linesQ_L_20procG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    B_NoneType (*__init__) (linesQ_L_21action, linesQ_main);
-    void (*__serialize__) (linesQ_L_21action, $Serial$state);
-    linesQ_L_21action (*__deserialize__) (linesQ_L_21action, $Serial$state);
-    B_bool (*__bool__) (linesQ_L_21action);
-    B_str (*__str__) (linesQ_L_21action);
-    B_str (*__repr__) (linesQ_L_21action);
-    $R (*__call__) (linesQ_L_21action, $Cont, B_int);
-    $R (*__exec__) (linesQ_L_21action, $Cont, B_int);
-    B_Msg (*__asyn__) (linesQ_L_21action, B_int);
+    B_NoneType (*__init__) (linesQ_L_20proc, linesQ_main);
+    void (*__serialize__) (linesQ_L_20proc, $Serial$state);
+    linesQ_L_20proc (*__deserialize__) (linesQ_L_20proc, $Serial$state);
+    B_bool (*__bool__) (linesQ_L_20proc);
+    B_str (*__str__) (linesQ_L_20proc);
+    B_str (*__repr__) (linesQ_L_20proc);
+    $R (*__call__) (linesQ_L_20proc, $Cont);
+    $R (*__exec__) (linesQ_L_20proc, $Cont);
 };
-struct linesQ_L_21action {
-    struct linesQ_L_21actionG_class *$class;
-    linesQ_main L_20obj;
-};
-struct linesQ_L_22procG_class {
-    char *$GCINFO;
-    int $class_id;
-    $SuperG_class $superclass;
-    B_NoneType (*__init__) (linesQ_L_22proc, linesQ_main);
-    void (*__serialize__) (linesQ_L_22proc, $Serial$state);
-    linesQ_L_22proc (*__deserialize__) (linesQ_L_22proc, $Serial$state);
-    B_bool (*__bool__) (linesQ_L_22proc);
-    B_str (*__str__) (linesQ_L_22proc);
-    B_str (*__repr__) (linesQ_L_22proc);
-    $R (*__call__) (linesQ_L_22proc, $Cont);
-    $R (*__exec__) (linesQ_L_22proc, $Cont);
-};
-struct linesQ_L_22proc {
-    struct linesQ_L_22procG_class *$class;
+struct linesQ_L_20proc {
+    struct linesQ_L_20procG_class *$class;
     linesQ_main self;
 };
-$R linesQ_U_2L_19C_11cont (linesQ_main, B_Iterable, B_Number, $Cont, int64_t);
-$R linesQ_L_19C_11cont (linesQ_main, B_Iterable, B_Number, $Cont, B_int);
+$R linesQ_U_1L_17C_9cont (linesQ_main, B_Iterable, B_Number, $Cont, int64_t);
+$R linesQ_L_17C_9cont (linesQ_main, B_Iterable, B_Number, $Cont, B_int);
+struct linesQ_L_21ContG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (linesQ_L_21Cont, linesQ_main, B_Iterable, B_Number, $Cont);
+    void (*__serialize__) (linesQ_L_21Cont, $Serial$state);
+    linesQ_L_21Cont (*__deserialize__) (linesQ_L_21Cont, $Serial$state);
+    B_bool (*__bool__) (linesQ_L_21Cont);
+    B_str (*__str__) (linesQ_L_21Cont);
+    B_str (*__repr__) (linesQ_L_21Cont);
+    $R (*__call__) (linesQ_L_21Cont, B_int);
+};
+struct linesQ_L_21Cont {
+    struct linesQ_L_21ContG_class *$class;
+    linesQ_main self;
+    B_Iterable W_1191;
+    B_Number W_1319;
+    $Cont C_cont;
+};
+$R linesQ_L_12C_7cont (linesQ_main, B_Iterable, B_Number, $Cont, linesQ_Bepa);
+struct linesQ_L_22ContG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (linesQ_L_22Cont, linesQ_main, B_Iterable, B_Number, $Cont);
+    void (*__serialize__) (linesQ_L_22Cont, $Serial$state);
+    linesQ_L_22Cont (*__deserialize__) (linesQ_L_22Cont, $Serial$state);
+    B_bool (*__bool__) (linesQ_L_22Cont);
+    B_str (*__str__) (linesQ_L_22Cont);
+    B_str (*__repr__) (linesQ_L_22Cont);
+    $R (*__call__) (linesQ_L_22Cont, linesQ_Bepa);
+};
+struct linesQ_L_22Cont {
+    struct linesQ_L_22ContG_class *$class;
+    linesQ_main self;
+    B_Iterable W_1191;
+    B_Number W_1319;
+    $Cont C_cont;
+};
+$R linesQ_L_11C_5cont (linesQ_main, B_Iterable, B_Number, $Cont, linesQ_Apa);
 struct linesQ_L_23ContG_class {
     char *$GCINFO;
     int $class_id;
@@ -281,193 +302,153 @@ struct linesQ_L_23ContG_class {
     B_bool (*__bool__) (linesQ_L_23Cont);
     B_str (*__str__) (linesQ_L_23Cont);
     B_str (*__repr__) (linesQ_L_23Cont);
-    $R (*__call__) (linesQ_L_23Cont, B_int);
+    $R (*__call__) (linesQ_L_23Cont, linesQ_Apa);
 };
 struct linesQ_L_23Cont {
     struct linesQ_L_23ContG_class *$class;
     linesQ_main self;
-    B_Iterable W_1908;
-    B_Number W_2123;
+    B_Iterable W_1191;
+    B_Number W_1319;
     $Cont C_cont;
 };
-$R linesQ_L_14C_9cont (linesQ_main, B_Iterable, B_Number, $Cont, linesQ_Bepa);
-struct linesQ_L_24ContG_class {
+struct linesQ_L_24procG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    B_NoneType (*__init__) (linesQ_L_24Cont, linesQ_main, B_Iterable, B_Number, $Cont);
-    void (*__serialize__) (linesQ_L_24Cont, $Serial$state);
-    linesQ_L_24Cont (*__deserialize__) (linesQ_L_24Cont, $Serial$state);
-    B_bool (*__bool__) (linesQ_L_24Cont);
-    B_str (*__str__) (linesQ_L_24Cont);
-    B_str (*__repr__) (linesQ_L_24Cont);
-    $R (*__call__) (linesQ_L_24Cont, linesQ_Bepa);
+    B_NoneType (*__init__) (linesQ_L_24proc, linesQ_main, B_int);
+    void (*__serialize__) (linesQ_L_24proc, $Serial$state);
+    linesQ_L_24proc (*__deserialize__) (linesQ_L_24proc, $Serial$state);
+    B_bool (*__bool__) (linesQ_L_24proc);
+    B_str (*__str__) (linesQ_L_24proc);
+    B_str (*__repr__) (linesQ_L_24proc);
+    $R (*__call__) (linesQ_L_24proc, $Cont);
+    $R (*__exec__) (linesQ_L_24proc, $Cont);
 };
-struct linesQ_L_24Cont {
-    struct linesQ_L_24ContG_class *$class;
-    linesQ_main self;
-    B_Iterable W_1908;
-    B_Number W_2123;
-    $Cont C_cont;
-};
-$R linesQ_L_13C_7cont (linesQ_main, B_Iterable, B_Number, $Cont, linesQ_Apa);
-struct linesQ_L_25ContG_class {
-    char *$GCINFO;
-    int $class_id;
-    $SuperG_class $superclass;
-    B_NoneType (*__init__) (linesQ_L_25Cont, linesQ_main, B_Iterable, B_Number, $Cont);
-    void (*__serialize__) (linesQ_L_25Cont, $Serial$state);
-    linesQ_L_25Cont (*__deserialize__) (linesQ_L_25Cont, $Serial$state);
-    B_bool (*__bool__) (linesQ_L_25Cont);
-    B_str (*__str__) (linesQ_L_25Cont);
-    B_str (*__repr__) (linesQ_L_25Cont);
-    $R (*__call__) (linesQ_L_25Cont, linesQ_Apa);
-};
-struct linesQ_L_25Cont {
-    struct linesQ_L_25ContG_class *$class;
-    linesQ_main self;
-    B_Iterable W_1908;
-    B_Number W_2123;
-    $Cont C_cont;
-};
-struct linesQ_L_26procG_class {
-    char *$GCINFO;
-    int $class_id;
-    $SuperG_class $superclass;
-    B_NoneType (*__init__) (linesQ_L_26proc, linesQ_main, B_int);
-    void (*__serialize__) (linesQ_L_26proc, $Serial$state);
-    linesQ_L_26proc (*__deserialize__) (linesQ_L_26proc, $Serial$state);
-    B_bool (*__bool__) (linesQ_L_26proc);
-    B_str (*__str__) (linesQ_L_26proc);
-    B_str (*__repr__) (linesQ_L_26proc);
-    $R (*__call__) (linesQ_L_26proc, $Cont);
-    $R (*__exec__) (linesQ_L_26proc, $Cont);
-};
-struct linesQ_L_26proc {
-    struct linesQ_L_26procG_class *$class;
+struct linesQ_L_24proc {
+    struct linesQ_L_24procG_class *$class;
     linesQ_main self;
     B_int i;
 };
-struct linesQ_L_27procG_class {
+struct linesQ_L_25procG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    B_NoneType (*__init__) (linesQ_L_27proc, linesQ_main);
-    void (*__serialize__) (linesQ_L_27proc, $Serial$state);
-    linesQ_L_27proc (*__deserialize__) (linesQ_L_27proc, $Serial$state);
-    B_bool (*__bool__) (linesQ_L_27proc);
-    B_str (*__str__) (linesQ_L_27proc);
-    B_str (*__repr__) (linesQ_L_27proc);
-    $R (*__call__) (linesQ_L_27proc, $Cont);
-    $R (*__exec__) (linesQ_L_27proc, $Cont);
+    B_NoneType (*__init__) (linesQ_L_25proc, linesQ_main);
+    void (*__serialize__) (linesQ_L_25proc, $Serial$state);
+    linesQ_L_25proc (*__deserialize__) (linesQ_L_25proc, $Serial$state);
+    B_bool (*__bool__) (linesQ_L_25proc);
+    B_str (*__str__) (linesQ_L_25proc);
+    B_str (*__repr__) (linesQ_L_25proc);
+    $R (*__call__) (linesQ_L_25proc, $Cont);
+    $R (*__exec__) (linesQ_L_25proc, $Cont);
 };
-struct linesQ_L_27proc {
-    struct linesQ_L_27procG_class *$class;
+struct linesQ_L_25proc {
+    struct linesQ_L_25procG_class *$class;
     linesQ_main self;
 };
-$R linesQ_L_28C_13cont ($Cont, linesQ_Apa, B_NoneType);
-struct linesQ_L_29ContG_class {
+$R linesQ_L_26C_11cont ($Cont, linesQ_Apa, B_NoneType);
+struct linesQ_L_27ContG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    B_NoneType (*__init__) (linesQ_L_29Cont, $Cont, linesQ_Apa);
-    void (*__serialize__) (linesQ_L_29Cont, $Serial$state);
-    linesQ_L_29Cont (*__deserialize__) (linesQ_L_29Cont, $Serial$state);
-    B_bool (*__bool__) (linesQ_L_29Cont);
-    B_str (*__str__) (linesQ_L_29Cont);
-    B_str (*__repr__) (linesQ_L_29Cont);
-    $R (*__call__) (linesQ_L_29Cont, B_NoneType);
+    B_NoneType (*__init__) (linesQ_L_27Cont, $Cont, linesQ_Apa);
+    void (*__serialize__) (linesQ_L_27Cont, $Serial$state);
+    linesQ_L_27Cont (*__deserialize__) (linesQ_L_27Cont, $Serial$state);
+    B_bool (*__bool__) (linesQ_L_27Cont);
+    B_str (*__str__) (linesQ_L_27Cont);
+    B_str (*__repr__) (linesQ_L_27Cont);
+    $R (*__call__) (linesQ_L_27Cont, B_NoneType);
 };
-struct linesQ_L_29Cont {
-    struct linesQ_L_29ContG_class *$class;
+struct linesQ_L_27Cont {
+    struct linesQ_L_27ContG_class *$class;
     $Cont C_cont;
     linesQ_Apa G_act;
 };
-struct linesQ_L_30procG_class {
+struct linesQ_L_28procG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    B_NoneType (*__init__) (linesQ_L_30proc, linesQ_Apa);
-    void (*__serialize__) (linesQ_L_30proc, $Serial$state);
-    linesQ_L_30proc (*__deserialize__) (linesQ_L_30proc, $Serial$state);
-    B_bool (*__bool__) (linesQ_L_30proc);
-    B_str (*__str__) (linesQ_L_30proc);
-    B_str (*__repr__) (linesQ_L_30proc);
-    $R (*__call__) (linesQ_L_30proc, $Cont);
-    $R (*__exec__) (linesQ_L_30proc, $Cont);
+    B_NoneType (*__init__) (linesQ_L_28proc, linesQ_Apa);
+    void (*__serialize__) (linesQ_L_28proc, $Serial$state);
+    linesQ_L_28proc (*__deserialize__) (linesQ_L_28proc, $Serial$state);
+    B_bool (*__bool__) (linesQ_L_28proc);
+    B_str (*__str__) (linesQ_L_28proc);
+    B_str (*__repr__) (linesQ_L_28proc);
+    $R (*__call__) (linesQ_L_28proc, $Cont);
+    $R (*__exec__) (linesQ_L_28proc, $Cont);
 };
-struct linesQ_L_30proc {
-    struct linesQ_L_30procG_class *$class;
+struct linesQ_L_28proc {
+    struct linesQ_L_28procG_class *$class;
     linesQ_Apa G_act;
 };
-$R linesQ_L_31C_15cont ($Cont, linesQ_Bepa, B_NoneType);
-struct linesQ_L_32ContG_class {
+$R linesQ_L_29C_13cont ($Cont, linesQ_Bepa, B_NoneType);
+struct linesQ_L_30ContG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    B_NoneType (*__init__) (linesQ_L_32Cont, $Cont, linesQ_Bepa);
-    void (*__serialize__) (linesQ_L_32Cont, $Serial$state);
-    linesQ_L_32Cont (*__deserialize__) (linesQ_L_32Cont, $Serial$state);
-    B_bool (*__bool__) (linesQ_L_32Cont);
-    B_str (*__str__) (linesQ_L_32Cont);
-    B_str (*__repr__) (linesQ_L_32Cont);
-    $R (*__call__) (linesQ_L_32Cont, B_NoneType);
+    B_NoneType (*__init__) (linesQ_L_30Cont, $Cont, linesQ_Bepa);
+    void (*__serialize__) (linesQ_L_30Cont, $Serial$state);
+    linesQ_L_30Cont (*__deserialize__) (linesQ_L_30Cont, $Serial$state);
+    B_bool (*__bool__) (linesQ_L_30Cont);
+    B_str (*__str__) (linesQ_L_30Cont);
+    B_str (*__repr__) (linesQ_L_30Cont);
+    $R (*__call__) (linesQ_L_30Cont, B_NoneType);
 };
-struct linesQ_L_32Cont {
-    struct linesQ_L_32ContG_class *$class;
+struct linesQ_L_30Cont {
+    struct linesQ_L_30ContG_class *$class;
     $Cont C_cont;
     linesQ_Bepa G_act;
 };
-struct linesQ_L_33procG_class {
+struct linesQ_L_31procG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    B_NoneType (*__init__) (linesQ_L_33proc, linesQ_Bepa);
-    void (*__serialize__) (linesQ_L_33proc, $Serial$state);
-    linesQ_L_33proc (*__deserialize__) (linesQ_L_33proc, $Serial$state);
-    B_bool (*__bool__) (linesQ_L_33proc);
-    B_str (*__str__) (linesQ_L_33proc);
-    B_str (*__repr__) (linesQ_L_33proc);
-    $R (*__call__) (linesQ_L_33proc, $Cont);
-    $R (*__exec__) (linesQ_L_33proc, $Cont);
+    B_NoneType (*__init__) (linesQ_L_31proc, linesQ_Bepa);
+    void (*__serialize__) (linesQ_L_31proc, $Serial$state);
+    linesQ_L_31proc (*__deserialize__) (linesQ_L_31proc, $Serial$state);
+    B_bool (*__bool__) (linesQ_L_31proc);
+    B_str (*__str__) (linesQ_L_31proc);
+    B_str (*__repr__) (linesQ_L_31proc);
+    $R (*__call__) (linesQ_L_31proc, $Cont);
+    $R (*__exec__) (linesQ_L_31proc, $Cont);
 };
-struct linesQ_L_33proc {
-    struct linesQ_L_33procG_class *$class;
+struct linesQ_L_31proc {
+    struct linesQ_L_31procG_class *$class;
     linesQ_Bepa G_act;
 };
-$R linesQ_L_34C_17cont ($Cont, linesQ_main, B_NoneType);
-struct linesQ_L_35ContG_class {
+$R linesQ_L_32C_15cont ($Cont, linesQ_main, B_NoneType);
+struct linesQ_L_33ContG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    B_NoneType (*__init__) (linesQ_L_35Cont, $Cont, linesQ_main);
-    void (*__serialize__) (linesQ_L_35Cont, $Serial$state);
-    linesQ_L_35Cont (*__deserialize__) (linesQ_L_35Cont, $Serial$state);
-    B_bool (*__bool__) (linesQ_L_35Cont);
-    B_str (*__str__) (linesQ_L_35Cont);
-    B_str (*__repr__) (linesQ_L_35Cont);
-    $R (*__call__) (linesQ_L_35Cont, B_NoneType);
+    B_NoneType (*__init__) (linesQ_L_33Cont, $Cont, linesQ_main);
+    void (*__serialize__) (linesQ_L_33Cont, $Serial$state);
+    linesQ_L_33Cont (*__deserialize__) (linesQ_L_33Cont, $Serial$state);
+    B_bool (*__bool__) (linesQ_L_33Cont);
+    B_str (*__str__) (linesQ_L_33Cont);
+    B_str (*__repr__) (linesQ_L_33Cont);
+    $R (*__call__) (linesQ_L_33Cont, B_NoneType);
 };
-struct linesQ_L_35Cont {
-    struct linesQ_L_35ContG_class *$class;
+struct linesQ_L_33Cont {
+    struct linesQ_L_33ContG_class *$class;
     $Cont C_cont;
     linesQ_main G_act;
 };
-struct linesQ_L_36procG_class {
+struct linesQ_L_34procG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    B_NoneType (*__init__) (linesQ_L_36proc, linesQ_main, B_Env);
-    void (*__serialize__) (linesQ_L_36proc, $Serial$state);
-    linesQ_L_36proc (*__deserialize__) (linesQ_L_36proc, $Serial$state);
-    B_bool (*__bool__) (linesQ_L_36proc);
-    B_str (*__str__) (linesQ_L_36proc);
-    B_str (*__repr__) (linesQ_L_36proc);
-    $R (*__call__) (linesQ_L_36proc, $Cont);
-    $R (*__exec__) (linesQ_L_36proc, $Cont);
+    B_NoneType (*__init__) (linesQ_L_34proc, linesQ_main, B_Env);
+    void (*__serialize__) (linesQ_L_34proc, $Serial$state);
+    linesQ_L_34proc (*__deserialize__) (linesQ_L_34proc, $Serial$state);
+    B_bool (*__bool__) (linesQ_L_34proc);
+    B_str (*__str__) (linesQ_L_34proc);
+    B_str (*__repr__) (linesQ_L_34proc);
+    $R (*__call__) (linesQ_L_34proc, $Cont);
+    $R (*__exec__) (linesQ_L_34proc, $Cont);
 };
-struct linesQ_L_36proc {
-    struct linesQ_L_36procG_class *$class;
+struct linesQ_L_34proc {
+    struct linesQ_L_34procG_class *$class;
     linesQ_main G_act;
     B_Env env;
 };
@@ -483,10 +464,10 @@ struct linesQ_ApaG_class {
     B_str (*__repr__) (linesQ_Apa);
     B_NoneType (*__resume__) (linesQ_Apa);
     B_NoneType (*__cleanup__) (linesQ_Apa);
-    $R (*setupG_local) (linesQ_Apa, $Cont, $proc);
+    $R (*setupG_local) (linesQ_Apa, $Cont, $action);
     $R (*computeG_local) (linesQ_Apa, $Cont, $action);
     $R (*noticeG_local) (linesQ_Apa, $Cont, B_int);
-    B_Msg (*setup) (linesQ_Apa, $proc);
+    B_Msg (*setup) (linesQ_Apa, $action);
     B_Msg (*compute) (linesQ_Apa, $action);
     B_Msg (*notice) (linesQ_Apa, B_int);
 };
@@ -577,50 +558,48 @@ $R linesQ_BepaG_newact ($Cont);
 $R linesQ_mainG_newact ($Cont, B_Env);
 extern struct linesQ_L_2ContG_class linesQ_L_2ContG_methods;
 linesQ_L_2Cont linesQ_L_2ContG_new(linesQ_Apa, $Cont);
-extern struct linesQ_L_4procG_class linesQ_L_4procG_methods;
-linesQ_L_4proc linesQ_L_4procG_new(linesQ_Apa);
+extern struct linesQ_L_4actionG_class linesQ_L_4actionG_methods;
+linesQ_L_4action linesQ_L_4actionG_new(linesQ_Apa);
 extern struct linesQ_L_6ContG_class linesQ_L_6ContG_methods;
-linesQ_L_6Cont linesQ_L_6ContG_new($Cont);
-extern struct linesQ_L_8ContG_class linesQ_L_8ContG_methods;
-linesQ_L_8Cont linesQ_L_8ContG_new($action, $Cont);
+linesQ_L_6Cont linesQ_L_6ContG_new($action, $Cont);
+extern struct linesQ_L_7procG_class linesQ_L_7procG_methods;
+linesQ_L_7proc linesQ_L_7procG_new(linesQ_Apa, $action);
+extern struct linesQ_L_8procG_class linesQ_L_8procG_methods;
+linesQ_L_8proc linesQ_L_8procG_new(linesQ_Apa, $action);
 extern struct linesQ_L_9procG_class linesQ_L_9procG_methods;
-linesQ_L_9proc linesQ_L_9procG_new(linesQ_Apa, $proc);
+linesQ_L_9proc linesQ_L_9procG_new(linesQ_Apa, B_int);
 extern struct linesQ_L_10procG_class linesQ_L_10procG_methods;
-linesQ_L_10proc linesQ_L_10procG_new(linesQ_Apa, $action);
-extern struct linesQ_L_11procG_class linesQ_L_11procG_methods;
-linesQ_L_11proc linesQ_L_11procG_new(linesQ_Apa, B_int);
-extern struct linesQ_L_12procG_class linesQ_L_12procG_methods;
-linesQ_L_12proc linesQ_L_12procG_new(linesQ_Bepa, B_int);
+linesQ_L_10proc linesQ_L_10procG_new(linesQ_Bepa, B_int);
+extern struct linesQ_L_14actionG_class linesQ_L_14actionG_methods;
+linesQ_L_14action linesQ_L_14actionG_new(linesQ_Apa);
 extern struct linesQ_L_16actionG_class linesQ_L_16actionG_methods;
-linesQ_L_16action linesQ_L_16actionG_new(linesQ_Apa);
-extern struct linesQ_L_18actionG_class linesQ_L_18actionG_methods;
-linesQ_L_18action linesQ_L_18actionG_new(linesQ_Bepa);
-extern struct linesQ_L_21actionG_class linesQ_L_21actionG_methods;
-linesQ_L_21action linesQ_L_21actionG_new(linesQ_main);
-extern struct linesQ_L_22procG_class linesQ_L_22procG_methods;
-linesQ_L_22proc linesQ_L_22procG_new(linesQ_main);
+linesQ_L_16action linesQ_L_16actionG_new(linesQ_Bepa);
+extern struct linesQ_L_19actionG_class linesQ_L_19actionG_methods;
+linesQ_L_19action linesQ_L_19actionG_new(linesQ_main);
+extern struct linesQ_L_20procG_class linesQ_L_20procG_methods;
+linesQ_L_20proc linesQ_L_20procG_new(linesQ_main);
+extern struct linesQ_L_21ContG_class linesQ_L_21ContG_methods;
+linesQ_L_21Cont linesQ_L_21ContG_new(linesQ_main, B_Iterable, B_Number, $Cont);
+extern struct linesQ_L_22ContG_class linesQ_L_22ContG_methods;
+linesQ_L_22Cont linesQ_L_22ContG_new(linesQ_main, B_Iterable, B_Number, $Cont);
 extern struct linesQ_L_23ContG_class linesQ_L_23ContG_methods;
 linesQ_L_23Cont linesQ_L_23ContG_new(linesQ_main, B_Iterable, B_Number, $Cont);
-extern struct linesQ_L_24ContG_class linesQ_L_24ContG_methods;
-linesQ_L_24Cont linesQ_L_24ContG_new(linesQ_main, B_Iterable, B_Number, $Cont);
-extern struct linesQ_L_25ContG_class linesQ_L_25ContG_methods;
-linesQ_L_25Cont linesQ_L_25ContG_new(linesQ_main, B_Iterable, B_Number, $Cont);
-extern struct linesQ_L_26procG_class linesQ_L_26procG_methods;
-linesQ_L_26proc linesQ_L_26procG_new(linesQ_main, B_int);
-extern struct linesQ_L_27procG_class linesQ_L_27procG_methods;
-linesQ_L_27proc linesQ_L_27procG_new(linesQ_main);
-extern struct linesQ_L_29ContG_class linesQ_L_29ContG_methods;
-linesQ_L_29Cont linesQ_L_29ContG_new($Cont, linesQ_Apa);
-extern struct linesQ_L_30procG_class linesQ_L_30procG_methods;
-linesQ_L_30proc linesQ_L_30procG_new(linesQ_Apa);
-extern struct linesQ_L_32ContG_class linesQ_L_32ContG_methods;
-linesQ_L_32Cont linesQ_L_32ContG_new($Cont, linesQ_Bepa);
-extern struct linesQ_L_33procG_class linesQ_L_33procG_methods;
-linesQ_L_33proc linesQ_L_33procG_new(linesQ_Bepa);
-extern struct linesQ_L_35ContG_class linesQ_L_35ContG_methods;
-linesQ_L_35Cont linesQ_L_35ContG_new($Cont, linesQ_main);
-extern struct linesQ_L_36procG_class linesQ_L_36procG_methods;
-linesQ_L_36proc linesQ_L_36procG_new(linesQ_main, B_Env);
+extern struct linesQ_L_24procG_class linesQ_L_24procG_methods;
+linesQ_L_24proc linesQ_L_24procG_new(linesQ_main, B_int);
+extern struct linesQ_L_25procG_class linesQ_L_25procG_methods;
+linesQ_L_25proc linesQ_L_25procG_new(linesQ_main);
+extern struct linesQ_L_27ContG_class linesQ_L_27ContG_methods;
+linesQ_L_27Cont linesQ_L_27ContG_new($Cont, linesQ_Apa);
+extern struct linesQ_L_28procG_class linesQ_L_28procG_methods;
+linesQ_L_28proc linesQ_L_28procG_new(linesQ_Apa);
+extern struct linesQ_L_30ContG_class linesQ_L_30ContG_methods;
+linesQ_L_30Cont linesQ_L_30ContG_new($Cont, linesQ_Bepa);
+extern struct linesQ_L_31procG_class linesQ_L_31procG_methods;
+linesQ_L_31proc linesQ_L_31procG_new(linesQ_Bepa);
+extern struct linesQ_L_33ContG_class linesQ_L_33ContG_methods;
+linesQ_L_33Cont linesQ_L_33ContG_new($Cont, linesQ_main);
+extern struct linesQ_L_34procG_class linesQ_L_34procG_methods;
+linesQ_L_34proc linesQ_L_34procG_new(linesQ_main, B_Env);
 extern struct linesQ_ApaG_class linesQ_ApaG_methods;
 $R linesQ_ApaG_new($Cont);
 extern struct linesQ_BepaG_class linesQ_BepaG_methods;

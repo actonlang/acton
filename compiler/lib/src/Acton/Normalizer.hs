@@ -445,6 +445,7 @@ fixupClassAttrs ns d0@Class{dname=n}
             initD n d@Def{}
               | dname d == n, Just self <- selfPar d
                                     = d{ dbody = [ sMutAssign (eDot (eVar self) w) e | Assign _ [PVar _ w _] e <- attr ] ++ dbody d }
+              | deco d == Static    = d{ dbody = attr ++ dbody d }
             initD n d               = d
 
             initL d@Def{}
