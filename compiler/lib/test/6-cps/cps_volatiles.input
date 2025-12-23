@@ -19,21 +19,21 @@ proc def compute (aa : __builtin__.int) -> __builtin__.int:
     N_1tmp: __builtin__.int = W_21.__add__(xx, aa)
     return N_1tmp
 
-W_180: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+W_146: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
 
-W_75: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
+W_69: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
 
 # recursive group:
 class main ($Actor, __builtin__.value):
     @property
     v : __builtin__.int
     proc def __init__ (self : Self, env : __builtin__.Env) -> None:
-        self.v = compute(W_180.__fromatom__(10))
-        if W_75.__eq__(self.v, W_180.__fromatom__(13)):
-            (async env.exit)(W_180.__fromatom__(0))
+        self.v = compute(W_146.__fromatom__(10))
+        if W_69.__eq__(self.v, W_146.__fromatom__(13)):
+            (async env.exit)(W_146.__fromatom__(0))
         else:
             print@[(__builtin__.str, __builtin__.int)](("\"Excpected 13, got\"", self.v), None, None, None, None)
-            (async env.exit)(W_180.__fromatom__(1))
+            (async env.exit)(W_146.__fromatom__(1))
 proc def mainG_newact (env : __builtin__.Env) -> main:
     G_act: main = $NEWACTOR@[main]()
     $InstallFinalizer@[main](G_act)
