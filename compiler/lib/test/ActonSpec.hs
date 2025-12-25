@@ -1194,7 +1194,9 @@ testDocstrings env0 testname = do
     -- Basic functionality tests
     it "extracts module docstrings" $ do
       case mdoc of
-        Just doc -> doc `shouldContain` "Test module"
+        Just doc -> do
+          doc `shouldContain` "Test module"
+          doc `shouldContain` "{braces}"
         Nothing -> expectationFailure "Module docstring not extracted"
 
     it "extracts function docstrings" $ do
@@ -1249,6 +1251,12 @@ testDocstrings env0 testname = do
         Just Nothing -> expectationFailure "Function should have docstring"
         Nothing -> expectationFailure "Function not found"
 
+    it "does not treat f-prefixed strings as docstrings" $ do
+      case lookup "function_with_f_prefix_docstring" docstrings of
+        Just Nothing -> return ()
+        Just (Just _) -> expectationFailure "f-prefixed string should not be docstring"
+        Nothing -> expectationFailure "Function not found"
+
     it "handles single quote docstrings" $ do
       case lookup "function_with_single_quotes" docstrings of
         Just (Just doc) -> doc `shouldContain` "Single quote"
@@ -1264,6 +1272,12 @@ testDocstrings env0 testname = do
     it "handles mixed quotes in docstrings" $ do
       case lookup "function_with_mixed_quotes" docstrings of
         Just (Just doc) -> doc `shouldContain` "Mixed 'quotes'"
+        Just Nothing -> expectationFailure "Function should have docstring"
+        Nothing -> expectationFailure "Function not found"
+
+    it "does not interpolate docstrings" $ do
+      case lookup "function_with_braces_docstring" docstrings of
+        Just (Just doc) -> doc `shouldContain` "{braces}"
         Just Nothing -> expectationFailure "Function should have docstring"
         Nothing -> expectationFailure "Function not found"
 
