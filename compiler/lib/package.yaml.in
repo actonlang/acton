@@ -40,6 +40,7 @@ dependencies:
   - sydtest
   - sydtest-discover
   - text
+  - time
   - transformers
   - unix
   - utf8-string
@@ -66,6 +67,7 @@ library:
     - Acton.QuickType
     - Acton.Relabel
     - Acton.Solver
+    - Acton.SourceProvider
     - Acton.Syntax
     - Acton.Types
     - Acton.TypeM
