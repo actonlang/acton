@@ -43,7 +43,7 @@ import Data.Maybe (mapMaybe)
 
 -- | Extract docstring from the first statement of a Suite if it's a string expression
 extractDocstring :: Suite -> Maybe String
-extractDocstring (Expr _ (Strings _ [s]) : _) = Just (unescapeString $ stripQuotes s)
+extractDocstring (Expr _ (Strings _ ss) : _) = Just (unescapeString $ stripQuotes (concat ss))
   where
     stripQuotes ('"':'"':'"':xs) | take 3 (reverse xs) == "\"\"\"" = take (length xs - 3) xs
     stripQuotes ('\'':'\'':'\'':xs) | take 3 (reverse xs) == "'''" = take (length xs - 3) xs

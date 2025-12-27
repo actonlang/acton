@@ -439,6 +439,17 @@ bytesLiteralCombo = plainbytesLiteral <|> rawbytesLiteral <?> "bytes literal"
 rawStringLiteral :: Parser S.Expr
 rawStringLiteral = S.Strings NoLoc . concat <$> some rawstrLiteral <?> "string literal"
 
+-- Docstring parser - parses strings with normal escape handling but no interpolation
+docstringLiteral :: Parser S.Expr
+docstringLiteral = (do
+    parts <- some docstringPlainLiteral
+    return $ S.Strings NoLoc [concat (concat parts)]
+  ) <?> "docstring"
+  where
+    docstringPlainLiteral =
+          plainstrLiteral
+      <|> rawstrLiteral
+
 -- Explicit f-string syntax (f"...") - kept for compatibility
 -- Note: Regular strings ("...") also support interpolation via the unified parser
 fstringLiteral :: Parser S.Expr
@@ -1049,7 +1060,7 @@ braces p = withCtx PAR (L.symbol sc2 "{" *> p <* (char '}' <?> "closing '}'")) <
 -- Parse a docstring statement (just a string literal as an expression statement)
 docstring_stmt :: Parser S.Stmt
 docstring_stmt = addLoc $ do
-    e <- strings
+    e <- docstringLiteral
     return (S.Expr NoLoc e)
 
 file_input :: Parser ([S.Import], S.Suite)
@@ -1489,8 +1500,8 @@ data_stmt = addLoc $
 
 suiteWithDocstring :: CTX -> Pos -> Parser (S.Suite, Maybe String)
 suiteWithDocstring c p = do
-    stmts <- suite c p
-    return $ extractAndRemoveDocstring stmts
+    withCtx c colon
+    withCtx c (indentSuiteWithDocstring p <|> simple_stmt_with_docstring)
 
 suite :: CTX -> Pos -> Parser S.Suite
 suite c p = do
@@ -1501,25 +1512,58 @@ suite c p = do
   where indentSuite p = do
           newline1
           p1 <- L.indentGuard sc1 GT p
-          concat <$> some (do
-             p2 <- L.indentLevel
-             case compare p1 p2 of
-                LT -> do o <- getOffset
-                         Control.Exception.throw $ IndentationError (Loc o o) --L.incorrectIndent LT p1 p2
-                EQ -> stmt
-                GT -> L.incorrectIndent GT p2 p1)
+          concat <$> some (stmtAtIndent p1)
 
+indentSuiteWithDocstring :: Pos -> Parser (S.Suite, Maybe String)
+indentSuiteWithDocstring p = do
+    newline1
+    p1 <- L.indentGuard sc1 GT p
+    (firstStmts, mbDoc) <- stmtAtIndentWithDocstring p1
+    rest <- concat <$> many (stmtAtIndent p1)
+    return (firstStmts ++ rest, mbDoc)
 
--- Extract docstring from the first statement of a Suite if it's a string expression
-extractAndRemoveDocstring :: S.Suite -> (S.Suite, Maybe String)
-extractAndRemoveDocstring ss@(S.Expr _ (S.Strings _ [s]) : rest) = (rest, Just (unescapeString $ stripQuotes s))
-  where
-    stripQuotes ('"':'"':'"':xs) | take 3 (reverse xs) == "\"\"\"" = take (length xs - 3) xs
-    stripQuotes ('\'':'\'':'\'':xs) | take 3 (reverse xs) == "'''" = take (length xs - 3) xs
-    stripQuotes ('\'':xs) | last xs == '\'' = init xs
-    stripQuotes ('"':xs) | last xs == '"' = init xs
-    stripQuotes s = s
-extractAndRemoveDocstring ss = (ss, Nothing)
+stmtAtIndentWithDocstring :: Pos -> Parser (S.Suite, Maybe String)
+stmtAtIndentWithDocstring p1 = do
+    p2 <- L.indentLevel
+    case compare p1 p2 of
+        LT -> do o <- getOffset
+                 Control.Exception.throw $ IndentationError (Loc o o)
+        EQ -> stmtWithDocstring
+        GT -> L.incorrectIndent GT p2 p1
+
+stmtAtIndent :: Pos -> Parser S.Suite
+stmtAtIndent p1 = do
+    p2 <- L.indentLevel
+    case compare p1 p2 of
+        LT -> do o <- getOffset
+                 Control.Exception.throw $ IndentationError (Loc o o)
+        EQ -> stmt
+        GT -> L.incorrectIndent GT p2 p1
+
+stmtWithDocstring :: Parser (S.Suite, Maybe String)
+stmtWithDocstring = (
+    ((\s -> ([s], Nothing)) <$> compound_stmt)
+    <|> try ((\s -> ([s], Nothing)) <$> (signature <* newline1))
+    <|> ((\s -> (s, Nothing)) <$> decl_group)
+    <|> simple_stmt_with_docstring
+  ) <?> "statement"
+
+simple_stmt_with_docstring :: Parser (S.Suite, Maybe String)
+simple_stmt_with_docstring = (
+    do
+      (mbDoc, firstStmts) <- try docstringSmallStmt <|> ((\s -> (Nothing, [s])) <$> small_stmt)
+      rest <- many (try (semicolon *> small_stmt))
+      _ <- optional semicolon
+      newline1
+      return (firstStmts ++ rest, mbDoc)
+  ) <?> "simple statement"
+
+docstringSmallStmt :: Parser (Maybe String, S.Suite)
+docstringSmallStmt = do
+    S.Strings _ ss <- addLoc docstringLiteral
+    _ <- lookAhead (void (char ';') <|> void eol <|> eof)
+    return (Just (unescapeString (concat ss)), [])
+
 
 unescapeString :: String -> String
 unescapeString [] = []

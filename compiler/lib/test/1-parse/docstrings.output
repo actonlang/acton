@@ -1,6 +1,6 @@
 import math
 
-"Test module for docstring functionality."
+"Test module for docstring functionality with {braces}."
 
 def test_function (x : int) -> int:
     """Test function with docstring."""
@@ -36,6 +36,10 @@ def function_with_multiple_strings (x : int) -> int:
     "Second string is not"
     return x
 
+def function_with_f_prefix_docstring () -> int:
+    "Not a docstring %s" % str(1)
+    return 1
+
 def function_with_single_quotes (x : int) -> int:
     """Single quote docstring"""
     return x
@@ -47,6 +51,10 @@ def function_with_triple_single_quotes (x : int) -> int:
 def function_with_mixed_quotes (x : int) -> int:
     """Mixed 'quotes' in docstring"""
     return x
+
+def function_with_braces_docstring ():
+    """Docstring with {braces} should not interpolate."""
+    pass
 
 def function_empty_docstring ():
     """"""
