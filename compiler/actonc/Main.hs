@@ -61,6 +61,7 @@ import Data.String.Utils (replace)
 import Data.Version (showVersion)
 import Data.Char (isAlpha, toLower, isSpace)
 import qualified Data.List
+import Data.Either (partitionEithers)
 import qualified Data.Map as M
 import qualified Data.Set
 import Error.Diagnose
@@ -555,7 +556,12 @@ printDocs gopts opts = do
             ".act" -> do
                 let modname = A.modName $ map (replace ".act" "") $ splitOn "/" $ fileBody
                 paths <- findPaths filename defaultOpts
-                (_src, parsed) <- parseActFile gopts defaultOpts paths modname filename
+                parsedRes <- parseActFile modname filename
+                (_srcContent, parsed) <- case parsedRes of
+                  Left diags -> do
+                    printDiagnostics gopts defaultOpts diags
+                    System.Exit.exitFailure
+                  Right res -> return res
 
                 -- Run compiler passes to get type information
                 env0 <- Acton.Env.initEnv (sysTypes paths) False
@@ -700,21 +706,46 @@ binTaskRoot paths binTask =
         outbase = outBase paths m
     in if isTest binTask then outbase ++ ".test_root.c" else outbase ++ ".root.c"
 
-parseActSource :: C.GlobalOptions -> C.CompileOptions -> Paths -> A.ModName -> FilePath -> String -> IO A.Module
-parseActSource gopts opts projPaths mn actFile srcContent = do
-  Acton.Parser.parseModule mn actFile srcContent
-    `catch` (\bundle -> handleDiagnostic gopts opts projPaths mn $ Diag.parseDiagnosticFromBundle actFile srcContent bundle)
-    `catch` (\err -> handleDiagnostic gopts opts projPaths mn $ Diag.customParseExceptionToDiagnostic actFile srcContent err)
-    `catch` handle gopts opts "Context error" Acton.Parser.contextError srcContent projPaths mn
-    `catch` handle gopts opts "Indentation error" Acton.Parser.indentationError srcContent projPaths mn
+errsToDiagnostics :: String -> FilePath -> String -> [(SrcLoc, String)] -> [Diagnostic String]
+errsToDiagnostics errKind filename src errs =
+    [ Diag.actErrToDiagnostic errKind filename src loc msg | (loc, msg) <- errs ]
 
-parseActFile :: C.GlobalOptions -> C.CompileOptions -> Paths -> A.ModName -> FilePath -> IO (String, A.Module)
-parseActFile gopts opts projPaths mn actFile = do
+missingIfaceDiagnostics :: A.ModName -> String -> A.ModName -> [Diagnostic String]
+missingIfaceDiagnostics ownerMn src missingMn =
+    errsToDiagnostics "Compilation error" (modNameToFilename ownerMn) src
+      [(NoLoc, "Type interface file not found or unreadable for " ++ modNameToString missingMn)]
+
+parseActSource :: A.ModName -> FilePath -> String -> IO (Either [Diagnostic String] A.Module)
+parseActSource mn actFile srcContent = do
+  (Right <$> Acton.Parser.parseModule mn actFile srcContent)
+    `catch` handleParseBundle
+    `catch` handleCustomParse
+    `catch` handleContextError
+    `catch` handleIndentationError
+  where
+    handleParseBundle :: ParseErrorBundle String CustomParseError -> IO (Either [Diagnostic String] A.Module)
+    handleParseBundle bundle =
+      return $ Left [Diag.parseDiagnosticFromBundle actFile srcContent bundle]
+
+    handleCustomParse :: Acton.Parser.CustomParseException -> IO (Either [Diagnostic String] A.Module)
+    handleCustomParse err =
+      return $ Left [Diag.customParseExceptionToDiagnostic actFile srcContent err]
+
+    handleContextError :: Acton.Parser.ContextError -> IO (Either [Diagnostic String] A.Module)
+    handleContextError err =
+      return $ Left (errsToDiagnostics "Context error" (modNameToFilename mn) srcContent (Acton.Parser.contextError err))
+
+    handleIndentationError :: Acton.Parser.IndentationError -> IO (Either [Diagnostic String] A.Module)
+    handleIndentationError err =
+      return $ Left (errsToDiagnostics "Indentation error" (modNameToFilename mn) srcContent (Acton.Parser.indentationError err))
+
+parseActFile :: A.ModName -> FilePath -> IO (Either [Diagnostic String] (String, A.Module))
+parseActFile mn actFile = do
   srcContent <- readFile actFile
   cwd <- getCurrentDirectory
   let displayFile = makeRelative cwd actFile
-  m <- parseActSource gopts opts projPaths mn displayFile srcContent
-  return (srcContent, m)
+  emod <- parseActSource mn displayFile srcContent
+  return $ fmap (\m -> (srcContent, m)) emod
 
 
 {-
@@ -900,7 +931,10 @@ compileFiles gopts opts srcFiles allowPrune = do
             output = concat $ intersperse "\n" module_imports
         putStrLn output
         System.Exit.exitSuccess
-    env <- compileTasks gopts opts' pathsRoot rootProj neededTasks
+    (env, hadErrors) <- compileTasks gopts opts' pathsRoot rootProj neededTasks
+    when hadErrors $ do
+      cleanup gopts opts' pathsRoot
+      System.Exit.exitFailure
     let rootParts = splitOn "." (C.root opts')
         rootMod   = init rootParts
         guessMod  = if length rootParts == 1 then modName pathsRoot else A.modName rootMod
@@ -992,7 +1026,7 @@ compileTasks :: C.GlobalOptions
              -> Paths                     -- root project paths (for alt output root selection)
              -> FilePath                  -- root project path
              -> [GlobalTask]
-             -> IO Acton.Env.Env0
+             -> IO (Acton.Env.Env0, Bool)
 compileTasks gopts opts rootPaths rootProj tasks = do
     -- Reject cycles
     unless (null cycles) $
@@ -1000,11 +1034,7 @@ compileTasks gopts opts rootPaths rootProj tasks = do
 
     -- Compile __builtin__ first if present anywhere in the graph
     case builtinOrder of
-      [t] -> do
-        let bPaths = gtPaths t
-        builtinEnv0 <- Acton.Env.initEnv (projTypes bPaths) True
-        let optsBuiltin = optsFor (gtKey t)
-        void (doTask gopts optsBuiltin bPaths builtinEnv0 (gtTask t))
+      [t] -> compileBuiltin t
       _ -> return ()
 
     baseEnv <- Acton.Env.initEnv builtinPath False
@@ -1021,8 +1051,10 @@ compileTasks gopts opts rootPaths rootProj tasks = do
     nCaps <- getNumCapabilities
     let maxParallel = max 1 (if C.jobs gopts > 0 then C.jobs gopts else nCaps)
 
-    envFinal <- loop initialReady [] M.empty indeg pending0 baseEnv maxParallel cwMap
-    return envFinal
+    (envFinal, hadErrors, backJobs) <- loop initialReady [] M.empty indeg pending0 baseEnv [] False maxParallel cwMap
+    when (not (null backJobs) && not (C.only_build opts)) $
+      runBackJobs gopts (orderBackJobs backJobs) maxParallel
+    return (envFinal, hadErrors)
   where
     -- Basic maps/sets ----------------------------------------------------
     taskMap = M.fromList [ (gtKey t, t) | t <- tasks ]
@@ -1072,8 +1104,53 @@ compileTasks gopts opts rootPaths rootProj tasks = do
         max0 []  = 0
         max0 xs  = maximum xs
 
+    dependentClosure :: TaskKey -> Data.Set.Set TaskKey
+    dependentClosure k = go Data.Set.empty [k]
+      where
+        go seen [] = seen
+        go seen (x:xs) =
+          let ds = M.findWithDefault [] x revMap
+              new = filter (`Data.Set.notMember` seen) ds
+              seen' = foldl' (flip Data.Set.insert) seen new
+          in go seen' (new ++ xs)
+
+    compileBuiltin :: GlobalTask -> IO ()
+    compileBuiltin t = do
+      let bPaths = gtPaths t
+          mn = name (gtTask t)
+          optsBuiltin = optsFor (gtKey t)
+          actFile = srcFile bPaths mn
+          compileMsg = makeRelative (srcDir bPaths) actFile
+      unless (C.only_build optsBuiltin) $
+        case gtTask t of
+          ParseErrorTask{ parseDiagnostics = diags } -> do
+            printDiagnostics gopts optsBuiltin diags
+            cleanup gopts optsBuiltin bPaths
+            System.Exit.exitFailure
+          TyTask{} -> return ()
+          ActonTask{ src = srcContent, atree = m } -> do
+            iff (not (quiet gopts optsBuiltin)) $
+              putStrLn ("  Compiling " ++ compileMsg ++ " with " ++ show (C.optimize optsBuiltin))
+            builtinEnv0 <- Acton.Env.initEnv (projTypes bPaths) True
+            res <- runFrontPasses gopts optsBuiltin bPaths builtinEnv0 m srcContent (getIfaceHashCached bPaths)
+            case res of
+              Left diags -> do
+                printDiagnostics gopts optsBuiltin diags
+                cleanup gopts optsBuiltin bPaths
+                System.Exit.exitFailure
+              Right fr ->
+                do
+                  case frFrontDone fr of
+                    Just line -> putStrLn line
+                    Nothing -> pure ()
+                  forM_ (frBackJob fr) $ \job -> do
+                    finish <- runBackPasses gopts (bjOpts job) (bjPaths job) (bjInput job)
+                    case finish of
+                      Just line -> putStrLn line
+                      Nothing -> pure ()
+
     -- One module ---------------------------------------------------------
-    doOne :: Acton.Env.Env0 -> M.Map TaskKey B.ByteString -> TaskKey -> IO (TaskKey, [(A.Name, A.NameInfo)], Maybe String, B.ByteString)
+    doOne :: Acton.Env.Env0 -> M.Map TaskKey B.ByteString -> TaskKey -> IO (TaskKey, Either [Diagnostic String] FrontResult)
     doOne envSnap ifaceMap key = do
       t <- case M.lookup key taskMap of
              Just x -> return x
@@ -1081,59 +1158,115 @@ compileTasks gopts opts rootPaths rootProj tasks = do
       let paths = gtPaths t
           mn    = name (gtTask t)
           optsT = optsFor key
-          needBySource = case gtTask t of { ActonTask{} -> True; _ -> False }
           providers = gtImportProviders t
-      (needByImports, deltas) <- case gtTask t of
-                         TyTask{ tyImports = imps } -> do
-                           triples <- forM imps $ \(m, recorded) -> do
-                             curr <- case M.lookup m providers of
-                                       Just depKey ->
-                                         case M.lookup depKey ifaceMap of
-                                           Just h  -> return h
-                                           Nothing -> error ("Internal error: missing iface hash for dep " ++ modNameToString m)
-                                       Nothing -> do
-                                         mih <- getIfaceHashCached paths m
-                                         case mih of
-                                           Just ih -> return ih
-                                           Nothing -> printErrorAndCleanAndExit ("Type interface file not found or unreadable for " ++ modNameToString m) gopts optsT paths
-                             return (m, recorded, curr)
-                           let ds = [ (m, old, new) | (m, old, new) <- triples, old /= new ]
-                           return (not (null ds), ds)
-                         _ -> return (False, [])
-      let forceAlt    = altOutput optsT && mn == rootAlt
-          needCompile = needBySource || needByImports || forceAlt
+          actFile = srcFile paths mn
+          compileMsg = makeRelative (srcDir paths) actFile
           short8 bs   = take 8 (B.unpack $ Base16.encode bs)
-      if needCompile
-        then do
-          when (C.verbose gopts) $ do
-            if needBySource
-              then putStrLn ("  Stale " ++ modNameToString mn ++ ": source changed")
-              else when needByImports $ do
-                let fmtDelta (m, old, new) = modNameToString m ++ " " ++ short8 old ++ " → " ++ short8 new
-                putStrLn ("  Stale " ++ modNameToString mn ++ ": iface changes in " ++ Data.List.intercalate ", " (map fmtDelta deltas))
-            cap <- getMyCap
-            putStrLn ("  Building [cap " ++ show cap ++ "] " ++ modNameToString mn ++ " (" ++ tkProj key ++ ")")
-          t' <- case gtTask t of
-                  ActonTask{} -> return (gtTask t)
-                  TyTask{}    -> do
-                    let actFile = srcFile paths mn
-                    (srcContent, m) <- parseActFile gopts optsT paths mn actFile
-                    return $ ActonTask mn srcContent m
-          (ifaceTE, mdoc, ih) <- doTask gopts optsT paths envSnap t'
-          updateIfaceHashCache mn ih
-          return (key, ifaceTE, mdoc, ih)
-        else do
-          when (C.verbose gopts) $
-            putStrLn ("  Fresh " ++ modNameToString mn ++ ": using cached .ty")
-          (ifaceTE, mdoc, ih) <- doTask gopts optsT paths envSnap (gtTask t)
-          updateIfaceHashCache mn ih
-          return (key, ifaceTE, mdoc, ih)
+
+          resolveImportHash m =
+            case M.lookup m providers of
+              Just depKey ->
+                case M.lookup depKey ifaceMap of
+                  Just h  -> return (Just h)
+                  Nothing -> error ("Internal error: missing iface hash for dep " ++ modNameToString m)
+              Nothing -> getIfaceHashCached paths m
+
+      case gtTask t of
+        ParseErrorTask{ parseDiagnostics = diags } -> return (key, Left diags)
+        _ | C.only_build optsT -> do
+              ifaceRes <- case gtTask t of
+                            TyTask{ tyIfaceHash = h } -> readIfaceFromTy paths mn "" (Just h)
+                            ActonTask{ src = srcContent } -> readIfaceFromTy paths mn srcContent Nothing
+              case ifaceRes of
+                Right (ifaceTE, mdoc, ih) -> do
+                  updateIfaceHashCache mn ih
+                  return (key, Right FrontResult { frIfaceTE = ifaceTE
+                                                 , frDoc = mdoc
+                                                 , frIfaceHash = ih
+                                                 , frFrontDone = Nothing
+                                                 , frBackJob = Nothing
+                                                 })
+                Left _ ->
+                  return (key, Right FrontResult { frIfaceTE = []
+                                                 , frDoc = Nothing
+                                                 , frIfaceHash = B.empty
+                                                 , frFrontDone = Nothing
+                                                 , frBackJob = Nothing
+                                                 })
+        _ -> do
+          needByImportsRes <- case gtTask t of
+            TyTask{ tyImports = imps } -> do
+              triples <- forM imps $ \(m, recorded) -> do
+                curr <- resolveImportHash m
+                case curr of
+                  Just ih -> return (Right (m, recorded, ih))
+                  Nothing -> return (Left (missingIfaceDiagnostics mn "" m))
+              let (errs, resolved) = partitionEithers triples
+              if null errs
+                then do
+                  let ds = [ (m, old, new) | (m, old, new) <- resolved, old /= new ]
+                  return (Right (not (null ds), ds))
+                else return (Left (concat errs))
+            _ -> return (Right (False, []))
+
+          case needByImportsRes of
+            Left diags -> return (key, Left diags)
+            Right (needByImports, deltas) -> do
+              let needBySource = case gtTask t of { ActonTask{} -> True; _ -> False }
+                  forceAlt    = altOutput optsT && mn == rootAlt
+                  forceAlways = C.alwaysbuild optsT
+                  needCompile = needBySource || needByImports || forceAlt || forceAlways
+              if needCompile
+                then do
+                  when (C.verbose gopts) $ do
+                    if needBySource
+                      then putStrLn ("  Stale " ++ modNameToString mn ++ ": source changed")
+                      else when needByImports $ do
+                        let fmtDelta (m, old, new) = modNameToString m ++ " " ++ short8 old ++ " → " ++ short8 new
+                        putStrLn ("  Stale " ++ modNameToString mn ++ ": iface changes in " ++ Data.List.intercalate ", " (map fmtDelta deltas))
+                    cap <- getMyCap
+                    putStrLn ("  Building [cap " ++ show cap ++ "] " ++ modNameToString mn ++ " (" ++ tkProj key ++ ")")
+                  iff (not (quiet gopts optsT)) $
+                    putStrLn ("  Compiling " ++ compileMsg ++ " with " ++ show (C.optimize optsT))
+                  t' <- case gtTask t of
+                          ActonTask{} -> return (gtTask t)
+                          TyTask{}    -> do
+                            parsedRes <- parseActFile mn actFile
+                            case parsedRes of
+                              Left diags -> return (ParseErrorTask mn diags)
+                              Right (srcContent, m) -> return $ ActonTask mn srcContent m
+                  case t' of
+                    ParseErrorTask{ parseDiagnostics = diags } -> return (key, Left diags)
+                    ActonTask{ src = srcContent, atree = m } -> do
+                      res <- runFrontPasses gopts optsT paths envSnap m srcContent resolveImportHash
+                      case res of
+                        Left diags -> return (key, Left diags)
+                        Right fr -> do
+                          updateIfaceHashCache mn (frIfaceHash fr)
+                          return (key, Right fr)
+                    _ -> error ("Internal error: unexpected task " ++ show t')
+                else do
+                  when (C.verbose gopts) $
+                    putStrLn ("  Fresh " ++ modNameToString mn ++ ": using cached .ty")
+                  ifaceRes <- case gtTask t of
+                                TyTask{ tyIfaceHash = h } -> readIfaceFromTy paths mn "" (Just h)
+                                _ -> readIfaceFromTy paths mn "" Nothing
+                  case ifaceRes of
+                    Left diags -> return (key, Left diags)
+                    Right (ifaceTE, mdoc, ih) -> do
+                      updateIfaceHashCache mn ih
+                      return (key, Right FrontResult { frIfaceTE = ifaceTE
+                                                     , frDoc = mdoc
+                                                     , frIfaceHash = ih
+                                                     , frFrontDone = Nothing
+                                                     , frBackJob = Nothing
+                                                     })
 
     scheduleMore :: Int -> [TaskKey]
-                 -> [(Async (TaskKey, [(A.Name, A.NameInfo)], Maybe String, B.ByteString), TaskKey)]
+                 -> [(Async (TaskKey, Either [Diagnostic String] FrontResult), TaskKey)]
                  -> M.Map TaskKey B.ByteString -> Acton.Env.Env0 -> M.Map TaskKey Integer
                  -> IO ([TaskKey]
-                       , [(Async (TaskKey, [(A.Name, A.NameInfo)], Maybe String, B.ByteString), TaskKey)])
+                       , [(Async (TaskKey, Either [Diagnostic String] FrontResult), TaskKey)])
     scheduleMore k rdy running res envSnap cw = do
       let prio m = M.findWithDefault 0 m cw
           rdySorted = Data.List.sortOn (Data.Ord.Down . prio) rdy
@@ -1144,35 +1277,93 @@ compileTasks gopts opts rootPaths rootProj tasks = do
       return (rdy', new ++ running)
 
     loop :: [TaskKey]
-         -> [(Async (TaskKey, [(A.Name, A.NameInfo)], Maybe String, B.ByteString), TaskKey)]
+         -> [(Async (TaskKey, Either [Diagnostic String] FrontResult), TaskKey)]
          -> M.Map TaskKey B.ByteString
          -> M.Map TaskKey Int
          -> Data.Set.Set TaskKey
          -> Acton.Env.Env0
-         -> Int -> M.Map TaskKey Integer
-         -> IO Acton.Env.Env0
-    loop rdy running res ind pend envAcc maxPar cw = do
+         -> [BackJob]
+         -> Bool
+         -> Int
+         -> M.Map TaskKey Integer
+         -> IO (Acton.Env.Env0, Bool, [BackJob])
+    loop rdy running res ind pend envAcc backJobs hadErrors maxPar cw = do
       (rdy1, running1) <- scheduleMore (maxPar - length running) rdy running res envAcc cw
       if null running1 && null rdy1
         then if Data.Set.null pend
-               then return envAcc
+               then return (envAcc, hadErrors, backJobs)
                else printErrorAndCleanAndExit "Internal error: scheduler deadlock (non-empty pending with no ready)." gopts opts rootPaths
         else do
-          (doneA, (mnDone, ifaceTE, mdoc, ih)) <- waitAny $ map fst running1
+          (doneA, (mnDone, outcome)) <- waitAny $ map fst running1
           let running2 = filter ((/= doneA) . fst) running1
-              res2     = M.insert mnDone ih res
-              pend2    = Data.Set.delete mnDone pend
-              ind2     = case M.lookup mnDone revMap of
-                           Nothing -> ind
-                           Just ds -> foldl' (\m d -> M.adjust (\x -> x-1) d m) ind ds
-              newlyReady = [ m | m <- Data.Set.toList pend2
-                               , M.findWithDefault 0 m ind2 == 0
-                               , not (m `elem` rdy1)
-                               , not (m `elem` map snd running2)
-                               ]
-              rdy2 = rdy1 ++ newlyReady
-              envAcc' = Acton.Env.addMod (tkMod mnDone) ifaceTE mdoc envAcc
-          loop rdy2 running2 res2 ind2 pend2 envAcc' maxPar cw
+          case outcome of
+            Left diags -> do
+              printDiagnostics gopts (optsFor mnDone) diags
+              let blocked = dependentClosure mnDone
+                  pend2 = Data.Set.delete mnDone (pend `Data.Set.difference` blocked)
+                  rdy2 = filter (`Data.Set.notMember` blocked) rdy1
+              loop rdy2 running2 res ind pend2 envAcc backJobs True maxPar cw
+            Right fr -> do
+              case frFrontDone fr of
+                Just line -> putStrLn line
+                Nothing -> pure ()
+              let res2  = M.insert mnDone (frIfaceHash fr) res
+                  pend2 = Data.Set.delete mnDone pend
+                  ind2  = case M.lookup mnDone revMap of
+                            Nothing -> ind
+                            Just ds -> foldl' (\m d -> M.adjust (\x -> x-1) d m) ind ds
+                  newlyReady = [ m | m <- Data.Set.toList pend2
+                                   , M.findWithDefault 0 m ind2 == 0
+                                   , not (m `elem` rdy1)
+                                   , not (m `elem` map snd running2)
+                                   ]
+                  rdy2 = rdy1 ++ newlyReady
+                  envAcc' = Acton.Env.addMod (tkMod mnDone) (frIfaceTE fr) (frDoc fr) envAcc
+                  backJobs' = maybe backJobs (:backJobs) (frBackJob fr)
+              loop rdy2 running2 res2 ind2 pend2 envAcc' backJobs' hadErrors maxPar cw
+
+    backJobKey :: BackJob -> TaskKey
+    backJobKey job =
+      TaskKey (projPath (bjPaths job)) (A.modname (biTypedMod (bjInput job)))
+
+    orderBackJobs :: [BackJob] -> [BackJob]
+    orderBackJobs jobs =
+      Data.List.sortOn backJobKey jobs
+
+    runBackJobs :: C.GlobalOptions -> [BackJob] -> Int -> IO ()
+    runBackJobs _ [] _ = return ()
+    runBackJobs gopts jobs maxPar = loopBack indexed [] M.empty 0
+      where
+        indexed = zip [0..] jobs
+
+        loopBack pending running results nextIx = do
+          let capacity = maxPar - length running
+              (toStart, pending') = splitAt capacity pending
+          new <- forM toStart $ \(ix, job) ->
+                   async $ do
+                     res <- runBackPasses gopts (bjOpts job) (bjPaths job) (bjInput job)
+                     return (ix, res)
+          let running' = running ++ new
+          if null running' && null pending'
+            then do
+              (_, _) <- flushReady results nextIx
+              return ()
+            else do
+              (doneA, (ix, res)) <- waitAny running'
+              let running'' = filter (/= doneA) running'
+                  results' = M.insert ix res results
+              (results'', nextIx') <- flushReady results' nextIx
+              loopBack pending' running'' results'' nextIx'
+
+        flushReady :: M.Map Int (Maybe String) -> Int -> IO (M.Map Int (Maybe String), Int)
+        flushReady res ix =
+          case M.lookup ix res of
+            Nothing -> return (res, ix)
+            Just mline -> do
+              case mline of
+                Just line -> putStrLn line
+                Nothing -> pure ()
+              flushReady (M.delete ix res) (ix + 1)
 
 -- Topologically order projects so dependencies come first.
 topoProjects :: FilePath -> M.Map FilePath ProjCtx -> [FilePath]
@@ -1854,7 +2045,7 @@ filterActFile file =
 --      - Else -> parse .act to obtain accurate imports (ActonTask)
 -- Returns either a header-only TyTask stub or an ActonTask; no heavy decoding.
 readModuleTask :: C.GlobalOptions -> C.CompileOptions -> Paths -> String -> IO CompileTask
-readModuleTask gopts opts paths actFile = do
+readModuleTask _gopts _opts paths actFile = do
     let mn      = modName paths
         tyFile  = outBase paths mn ++ ".ty"
     tyExists <- System.Directory.doesFileExist tyFile
@@ -1910,11 +2101,35 @@ readModuleTask gopts opts paths actFile = do
                     else parseForImports mn
   where
     parseForImports mn = do
-      (srcContent, m) <- parseActFile gopts opts paths mn actFile
-      return $ ActonTask mn srcContent m
+      parsedRes <- parseActFile mn actFile
+      case parsedRes of
+        Left diags -> return $ ParseErrorTask mn diags
+        Right (srcContent, m) -> return $ ActonTask mn srcContent m
 
 
 -- Compilation tasks, chasing imported modules, compilation and building executables -------------------------------------------
+
+data BackInput = BackInput
+  { biTypeEnv   :: Acton.Env.Env0
+  , biTypedMod  :: A.Module
+  , biSrc       :: String
+  , biSrcHash   :: B.ByteString
+  , biFrontTime :: TimeSpec
+  }
+
+data BackJob = BackJob
+  { bjPaths :: Paths
+  , bjOpts  :: C.CompileOptions
+  , bjInput :: BackInput
+  }
+
+data FrontResult = FrontResult
+  { frIfaceTE  :: [(A.Name, A.NameInfo)]
+  , frDoc      :: Maybe String
+  , frIfaceHash :: B.ByteString
+  , frFrontDone :: Maybe String
+  , frBackJob  :: Maybe BackJob
+  }
 
 data CompileTask        = ActonTask { name :: A.ModName, src :: String, atree:: A.Module }
                         | TyTask    { name :: A.ModName
@@ -1926,7 +2141,13 @@ data CompileTask        = ActonTask { name :: A.ModName, src :: String, atree:: 
                                     , iface :: A.NameInfo
                                     , typed :: A.Module
                                     }
-                        deriving (Show)
+                        | ParseErrorTask { name :: A.ModName, parseDiagnostics :: [Diagnostic String] }
+
+instance Show CompileTask where
+  show ActonTask{ name = mn } = "ActonTask " ++ modNameToString mn
+  show TyTask{ name = mn } = "TyTask " ++ modNameToString mn
+  show ParseErrorTask{ name = mn, parseDiagnostics = ds } =
+    "ParseErrorTask " ++ modNameToString mn ++ " (" ++ show (length ds) ++ " diagnostics)"
 
 -- TODO: replace binName String type with ModName just like for CompileTask.
 -- ModName is a array so a hierarchy with submodules is represented, we can then
@@ -1979,6 +2200,7 @@ filterMainActor env paths binTask = do
 importsOf :: CompileTask -> [A.ModName]
 importsOf (ActonTask _ _ m) = A.importsOf m
 importsOf (TyTask { tyImports = ms }) = map fst ms
+importsOf ParseErrorTask{} = []
 compileBins:: C.GlobalOptions -> C.CompileOptions -> Paths -> Acton.Env.Env0 -> [CompileTask] -> [BinTask] -> Bool -> IO ()
 compileBins gopts opts paths env tasks binTasks allowPrune = do
     iff (not (altOutput opts)) $ do
@@ -1995,9 +2217,10 @@ generateProjectDocIndex gopts opts paths srcFiles = do
         let docDir = joinPath [projPath paths, "out", "doc"]
         createDirectoryIfMissing True docDir
         tasks <- mapM (\f -> findPaths f opts >>= \p -> readModuleTask gopts opts p f) srcFiles
-        entries <- forM tasks $ \t -> case t of
-                          ActonTask mn _src m -> return (mn, DocP.extractDocstring (A.mbody m))
-                          TyTask { name = mn, tyDoc = mdoc } -> return (mn, mdoc)
+        entries <- catMaybes <$> forM tasks (\t -> case t of
+                          ActonTask mn _src m -> return (Just (mn, DocP.extractDocstring (A.mbody m)))
+                          TyTask { name = mn, tyDoc = mdoc } -> return (Just (mn, mdoc))
+                          ParseErrorTask{} -> return Nothing)
         DocP.generateDocIndex docDir entries
 
 
@@ -2044,53 +2267,225 @@ readImports gopts opts paths itasks
 quiet :: C.GlobalOptions -> C.CompileOptions -> Bool
 quiet gopts opts = C.quiet gopts || altOutput opts
 
-doTask :: C.GlobalOptions -> C.CompileOptions -> Paths -> Acton.Env.Env0 -> CompileTask -> IO ([(A.Name, A.NameInfo)], Maybe String, B.ByteString)
-doTask gopts opts paths env TyTask{ name = mn, tyIfaceHash = h } = do
-    -- Fresh module: read interface (TEnv + doc) from .ty header to extend Env in coordinator
+readIfaceFromTy :: Paths -> A.ModName -> String -> Maybe B.ByteString -> IO (Either [Diagnostic String] ([(A.Name, A.NameInfo)], Maybe String, B.ByteString))
+readIfaceFromTy paths mn src mHash = do
     mty <- Acton.Env.findTyFile (searchPath paths) mn
     case mty of
+      Nothing -> return $ Left (missingIfaceDiagnostics mn src mn)
       Just tyF -> do
-        (_ms, nmod, _tmod, _si, _ti, _ni, _te, _tm) <- InterfaceFiles.readFile tyF
-        let A.NModule te mdoc = nmod
-        return (te, mdoc, h)
-      Nothing -> printErrorAndCleanAndExit ("Type interface file not found for " ++ modNameToString mn) gopts opts paths
-doTask gopts opts paths env t@(ActonTask mn src m) = do
-    -- In --only-build mode, do not run compilation passes or write files.
-    if C.only_build opts then do
-        iff (not (quiet gopts opts)) (putStrLn ("  Skipping compilation of " ++ makeRelative (srcDir paths) actFile ++ " (--only-build)"))
-        -- Return current interface (TEnv + doc) and iface hash from existing .ty
-        mty <- Acton.Env.findTyFile (searchPath paths) mn
-        case mty of
-          Just tyF -> do
-            (_ms, nmod, _tmod, _si, _ti, _ni, _te, _tm) <- InterfaceFiles.readFile tyF
+        fileRes <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readFile tyF
+        case fileRes of
+          Left _ -> return $ Left (missingIfaceDiagnostics mn src mn)
+          Right (_ms, nmod, _tmod, _si, _ti, _ni, _te, _tm) -> do
             let A.NModule te mdoc = nmod
-            hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader tyF
-            ih <- case hdrE of
-                    Right (_srcH, ihash, _impsH, _rootsH, _docH) -> return ihash
-                    _ -> return B.empty
-            return (te, mdoc, ih)
-          Nothing -> return ([], Nothing, B.empty)
-    else do
-      let compileMsg = makeRelative (srcDir paths) actFile
-      iff (not (quiet gopts opts))  (putStrLn("  Compiling " ++ compileMsg ++ " with " ++ show (C.optimize opts)))
+            ih <- case mHash of
+                    Just h -> return h
+                    Nothing -> do
+                      hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader tyF
+                      case hdrE of
+                        Right (_srcH, ihash, _impsH, _rootsH, _docH) -> return ihash
+                        _ -> return B.empty
+            return $ Right (te, mdoc, ih)
 
+runFrontPasses :: C.GlobalOptions
+               -> C.CompileOptions
+               -> Paths
+               -> Acton.Env.Env0
+               -> A.Module
+               -> String
+               -> (A.ModName -> IO (Maybe B.ByteString))
+               -> IO (Either [Diagnostic String] FrontResult)
+runFrontPasses gopts opts paths env0 parsed srcContent resolveImportHash = do
+  createDirectoryIfMissing True (getModPath (projTypes paths) mn)
+  core
+    `catch` handleGeneral
+    `catch` handleCompilation
+    `catch` handleTypeError
+  where
+    mn = A.modname parsed
+    filename = modNameToFilename mn
+    outbase = outBase paths mn
+    absSrcBase = srcBase paths mn
+    actFile = absSrcBase ++ ".act"
+    prettyAstStyle = style { mode = PageMode, lineLength = 120, ribbonsPerLine = 1.0 }
+
+    handleGeneral :: GeneralError -> IO (Either [Diagnostic String] FrontResult)
+    handleGeneral err =
+      return $ Left (errsToDiagnostics "Compilation error" filename srcContent (generalError err))
+
+    handleCompilation :: Acton.Env.CompilationError -> IO (Either [Diagnostic String] FrontResult)
+    handleCompilation err =
+      return $ Left (errsToDiagnostics "Compilation error" filename srcContent (Acton.Env.compilationError err))
+
+    handleTypeError :: TypeError -> IO (Either [Diagnostic String] FrontResult)
+    handleTypeError err =
+      return $ Left [mkErrorDiagnostic filename srcContent (Acton.TypeM.typeReport err filename srcContent)]
+
+    resolveImportHashes :: [A.ModName] -> IO (Either [Diagnostic String] [(A.ModName, B.ByteString)])
+    resolveImportHashes mrefs = do
+      resolved <- forM mrefs $ \mref -> do
+        mh <- resolveImportHash mref
+        case mh of
+          Just ih -> return (Right (mref, ih))
+          Nothing -> return (Left (missingIfaceDiagnostics mn srcContent mref))
+      let (errs, vals) = partitionEithers resolved
+      if null errs
+        then return (Right vals)
+        else return (Left (concat errs))
+
+    core = do
+      timeStart <- getTime Monotonic
+      when (C.parse opts && mn == (modName paths)) $
+        dump mn "parse" (Pretty.print parsed)
+      when (C.parse_ast opts && mn == (modName paths)) $
+        dump mn "parse-ast" (renderStyle prettyAstStyle (ppDoc parsed))
+
+      env <- Acton.Env.mkEnv (searchPath paths) env0 parsed
+      timeEnv <- getTime Monotonic
+      iff (C.timing gopts) $ putStrLn("    Pass: Make environment: " ++ fmtTime (timeEnv - timeStart))
+
+      kchecked <- Acton.Kinds.check env parsed
+      iff (C.kinds opts && mn == (modName paths)) $ dump mn "kinds" (Pretty.print kchecked)
+      timeKindsCheck <- getTime Monotonic
+      iff (C.timing gopts) $ putStrLn("    Pass: Kinds check     : " ++ fmtTime (timeKindsCheck - timeEnv))
+
+      (nmod,tchecked,typeEnv,mrefs) <- Acton.Types.reconstruct env kchecked
+      -- Compute hash of source content from raw file bytes (stable across encoding)
+      srcBytes <- B.readFile actFile
+      let srcHash = SHA256.hash srcBytes
+      -- Pre-compute list of root-eligible actors and store in .ty header
+      let roots = case nmod of
+                     A.NModule te _ -> [ n | (n,i) <- te, rootEligible i ]
+                     _              -> []
+      let mdoc = case nmod of A.NModule _ d -> d; _ -> Nothing
+      impsRes <- resolveImportHashes mrefs
+      case impsRes of
+        Left diags -> return (Left diags)
+        Right impsWithHash -> do
+          -- Compute interface hash over doc-free NameInfo,
+          -- augmented with current imports' interface hashes. This ensures that
+          -- changes in a dependency's public interface are reflected in this
+          -- module's interface hash, propagating rebuilds transitively.
+          let selfIfaceBytes  = BL.toStrict $ encode (A.stripDocsNI nmod)
+              depHashesSorted = map snd $ Data.List.sortOn (modNameToString . fst) impsWithHash
+              depBytes        = BL.toStrict $ encode depHashesSorted
+              ifaceHash       = SHA256.hash (B.append selfIfaceBytes depBytes)
+          InterfaceFiles.writeFile (outbase ++ ".ty") srcHash ifaceHash impsWithHash roots mdoc nmod tchecked
+
+          let A.NModule iface mdoc = nmod
+          iff (C.types opts && mn == (modName paths)) $ dump mn "types" (Pretty.print tchecked)
+          iff (C.sigs opts && mn == (modName paths)) $ dump mn "sigs" (Acton.Types.prettySigs env mn iface)
+
+          -- Generate documentation, if building for a project
+          when (not (C.skip_build opts) && not (isTmp paths)) $ do
+              let docDir = joinPath [projPath paths, "out", "doc"]
+                  modPathList = A.modPath mn
+                  docFile = if null modPathList
+                            then docDir </> "unnamed" <.> "html"
+                            else joinPath (docDir : init modPathList) </> last modPathList <.> "html"
+                  docFileDir = takeDirectory docFile
+                  -- Get the type environment for this module
+                  modTypeEnv = case Acton.Env.lookupMod mn typeEnv of
+                      Just te -> te
+                      Nothing -> iface
+                  -- Apply the same simplification as --sigs uses
+                  env1 = define iface $ setMod mn env
+                  simplifiedTypeEnv = simp env1 modTypeEnv
+              createDirectoryIfMissing True docFileDir
+              -- Use parsed (original AST) to preserve docstrings
+              let htmlDoc = DocP.printHtmlDoc (A.NModule simplifiedTypeEnv mdoc) parsed
+              writeFile docFile htmlDoc
+
+          timeTypeCheck <- getTime Monotonic
+          iff (C.timing gopts) $ putStrLn("    Pass: Type check      : " ++ fmtTime (timeTypeCheck - timeKindsCheck))
+
+          timeFrontEnd <- getTime Monotonic
+          let frontTime = timeFrontEnd - timeStart
+              frontDone = if not (quiet gopts opts)
+                            then Just ("   Finished typecheck of " ++ modNameToString mn ++ " in  " ++ fmtTime frontTime)
+                            else Nothing
+              backJob = if C.only_build opts
+                          then Nothing
+                          else Just BackJob { bjPaths = paths
+                                             , bjOpts = opts
+                                             , bjInput = BackInput { biTypeEnv = typeEnv
+                                                                  , biTypedMod = tchecked
+                                                                  , biSrc = srcContent
+                                                                  , biSrcHash = srcHash
+                                                                  , biFrontTime = frontTime
+                                                                  }
+                                             }
+          return $ Right FrontResult { frIfaceTE = iface
+                                     , frDoc = mdoc
+                                     , frIfaceHash = ifaceHash
+                                     , frFrontDone = frontDone
+                                     , frBackJob = backJob
+                                     }
+
+runBackPasses :: C.GlobalOptions -> C.CompileOptions -> Paths -> BackInput -> IO (Maybe String)
+runBackPasses gopts opts paths backInput = do
+      let mn = A.modname (biTypedMod backInput)
+          outbase = outBase paths mn
+          relSrcBase = makeRelative (projPath paths) (srcBase paths mn)
       timeStart <- getTime Monotonic
 
-      createDirectoryIfMissing True (getModPath (projTypes paths) mn)
-      (_env', ifaceHash, ifaceTE, mdoc) <- runRestPasses gopts opts paths env m src
-        `catch` handle gopts opts "Compilation error" generalError src paths mn
-        `catch` handle gopts opts "Compilation error" Acton.Env.compilationError src paths mn
-        `catch` (\err -> handleDiagnostic gopts opts paths (modName paths) $ mkErrorDiagnostic filename src $ Acton.TypeM.typeReport err filename src)
+      (normalized, normEnv) <- Acton.Normalizer.normalize (biTypeEnv backInput) (biTypedMod backInput)
+      iff (C.norm opts && mn == (modName paths)) $ dump mn "norm" (Pretty.print normalized)
+      timeNormalized <- getTime Monotonic
+      iff (C.timing gopts) $ putStrLn("    Pass: Normalizer      : " ++ fmtTime (timeNormalized - timeStart))
+
+      (deacted,deactEnv) <- Acton.Deactorizer.deactorize normEnv normalized
+      iff (C.deact opts && mn == (modName paths)) $ dump mn "deact" (Pretty.print deacted)
+      timeDeactorizer <- getTime Monotonic
+      iff (C.timing gopts) $ putStrLn("    Pass: Deactorizer     : " ++ fmtTime (timeDeactorizer - timeNormalized))
+
+      (cpstyled,cpsEnv) <- Acton.CPS.convert deactEnv deacted
+      iff (C.cps opts && mn == (modName paths)) $ dump mn "cps" (Pretty.print cpstyled)
+      timeCPS <- getTime Monotonic
+      iff (C.timing gopts) $ putStrLn("    Pass: CPS             : " ++ fmtTime (timeCPS - timeDeactorizer))
+
+      (lifted,liftEnv) <- Acton.LambdaLifter.liftModule cpsEnv cpstyled
+      iff (C.llift opts && mn == (modName paths)) $ dump mn "llift" (Pretty.print lifted)
+      timeLLift <- getTime Monotonic
+      iff (C.timing gopts) $ putStrLn("    Pass: Lambda Lifting  : " ++ fmtTime (timeLLift - timeCPS))
+
+      boxed <- Acton.Boxing.doBoxing liftEnv lifted
+      iff (C.box opts && mn == (modName paths)) $ dump mn "box" (Pretty.print boxed)
+      timeBoxing <- getTime Monotonic
+      iff (C.timing gopts) $ putStrLn("    Pass: Boxing :          " ++ fmtTime (timeBoxing - timeLLift))
+
+      let hexHash = B.unpack $ Base16.encode (biSrcHash backInput)
+          emitLines = not (C.dbg_no_lines opts)
+      (n,h,c) <- Acton.CodeGen.generate liftEnv relSrcBase (biSrc backInput) emitLines boxed hexHash
+      timeCodeGen <- getTime Monotonic
+      iff (C.timing gopts) $ putStrLn("    Pass: Generating code : " ++ fmtTime (timeCodeGen - timeBoxing))
+
+      iff (C.hgen opts) $ do
+          putStrLn(h)
+          System.Exit.exitSuccess
+      iff (C.cgen opts) $ do
+          putStrLn(c)
+          System.Exit.exitSuccess
+
+      iff (not (altOutput opts)) (do
+          let cFile = outbase ++ ".c"
+              hFile = outbase ++ ".h"
+
+          writeFile hFile h
+          writeFile cFile c
+          let tyFileName = modNameToString(modName paths) ++ ".ty"
+          iff (C.ty opts) $
+               copyFileWithMetadata (joinPath [projTypes paths, tyFileName]) (joinPath [srcDir paths, tyFileName])
+
+          timeCodeWrite <- getTime Monotonic
+          iff (C.timing gopts) $ putStrLn("    Pass: Writing code    : " ++ fmtTime (timeCodeWrite - timeCodeGen))
+                               )
+
       timeEnd <- getTime Monotonic
-      iff (not (quiet gopts opts)) $ putStrLn ("   Finished compilation of " ++ modNameToString mn ++ " in  " ++ fmtTime(timeEnd - timeStart))
-      return (ifaceTE, mdoc, ifaceHash)
-  where actFile             = srcFile paths mn
-        relAct              = makeRelative (srcDir paths) actFile
-        filename            = modNameToFilename mn
-        outbase             = outBase paths mn
-        tyFile              = outbase ++ ".ty"
-        hFile               = outbase ++ ".h"
-        cFile               = outbase ++ ".c"
+      let totalTime = biFrontTime backInput + (timeEnd - timeStart)
+      if not (quiet gopts opts)
+        then return (Just ("   Finished compilation of " ++ modNameToString mn ++ " in  " ++ fmtTime totalTime))
+        else return Nothing
 
 
 isGitAvailable :: IO Bool
@@ -2103,186 +2498,10 @@ isGitAvailable = do
 altOutput opts =
   (C.parse opts) || (C.parse_ast opts) || (C.kinds opts) || (C.types opts) || (C.sigs opts) || (C.norm opts) || (C.deact opts) || (C.cps opts) || (C.llift opts) || (C.box opts) || (C.hgen opts) || (C.cgen opts)
 
-runRestPasses :: C.GlobalOptions -> C.CompileOptions -> Paths -> Acton.Env.Env0 -> A.Module -> String -> IO (Acton.Env.Env0, B.ByteString, [(A.Name, A.NameInfo)], Maybe String)
-runRestPasses gopts opts paths env0 parsed srcContent = do
-                      let mn = A.modname parsed
-                      let outbase = outBase paths mn
-                      let absSrcBase = srcBase paths mn
-                      let relSrcBase = makeRelative (projPath paths) (srcBase paths mn)
-                      let actFile = absSrcBase ++ ".act"
-                      let prettyAstStyle = style { mode = PageMode, lineLength = 120, ribbonsPerLine = 1.0 }
-
-                      timeStart <- getTime Monotonic
-                      when (C.parse opts && mn == (modName paths)) $
-                        dump mn "parse" (Pretty.print parsed)
-                      when (C.parse_ast opts && mn == (modName paths)) $
-                        dump mn "parse-ast" (renderStyle prettyAstStyle (ppDoc parsed))
-
-                      env <- Acton.Env.mkEnv (searchPath paths) env0 parsed
-                      --traceM ("#################### initial env0:")
-                      --traceM (Pretty.render (Pretty.pretty env))
-                      timeEnv <- getTime Monotonic
-                      iff (C.timing gopts) $ putStrLn("    Pass: Make environment: " ++ fmtTime (timeEnv - timeStart))
-
-                      kchecked <- Acton.Kinds.check env parsed
-                      iff (C.kinds opts && mn == (modName paths)) $ dump mn "kinds" (Pretty.print kchecked)
-                      timeKindsCheck <- getTime Monotonic
-                      iff (C.timing gopts) $ putStrLn("    Pass: Kinds check     : " ++ fmtTime (timeKindsCheck - timeEnv))
-
-                      (nmod,tchecked,typeEnv,mrefs) <- Acton.Types.reconstruct env kchecked
-                      -- Compute hash of source content from raw file bytes (stable across encoding)
-                      srcBytes <- B.readFile actFile
-                      let srcHash = SHA256.hash srcBytes
-                      -- Pre-compute list of root-eligible actors and store in .ty header
-                      let roots = case nmod of
-                                     A.NModule te _ -> [ n | (n,i) <- te, rootEligible i ]
-                                     _              -> []
-                      let mdoc = case nmod of A.NModule _ d -> d; _ -> Nothing
-                      -- Resolve import interface hashes from headers; missing entries are hard errors
-                      impsWithHash <- forM mrefs $ \mref -> do
-                        mih <- getIfaceHashCached paths mref
-                        case mih of
-                          Just ih -> return (mref, ih)
-                          Nothing -> printErrorAndCleanAndExit ("Type interface file not found or unreadable for " ++ modNameToString mref) gopts opts paths
-                      -- Compute interface hash over doc-free NameInfo,
-                      -- augmented with current imports' interface hashes. This ensures that
-                      -- changes in a dependency's public interface are reflected in this
-                      -- module's interface hash, propagating rebuilds transitively.
-                      let selfIfaceBytes  = BL.toStrict $ encode (A.stripDocsNI nmod)
-                          depHashesSorted = map snd $ Data.List.sortOn (modNameToString . fst) impsWithHash
-                          depBytes        = BL.toStrict $ encode depHashesSorted
-                          ifaceHash       = SHA256.hash (B.append selfIfaceBytes depBytes)
-                      InterfaceFiles.writeFile (outbase ++ ".ty") srcHash ifaceHash impsWithHash roots mdoc nmod tchecked
-
-                      let A.NModule iface mdoc = nmod
-                      iff (C.types opts && mn == (modName paths)) $ dump mn "types" (Pretty.print tchecked)
-                      iff (C.sigs opts && mn == (modName paths)) $ dump mn "sigs" (Acton.Types.prettySigs env mn iface)
-
-                      -- Generate documentation, if building for a project
-                      when (not (C.skip_build opts) && not (isTmp paths)) $ do
-                          let docDir = joinPath [projPath paths, "out", "doc"]
-                              modPathList = A.modPath mn
-                              docFile = if null modPathList
-                                        then docDir </> "unnamed" <.> "html"
-                                        else joinPath (docDir : init modPathList) </> last modPathList <.> "html"
-                              docFileDir = takeDirectory docFile
-                              -- Get the type environment for this module
-                              modTypeEnv = case Acton.Env.lookupMod mn typeEnv of
-                                  Just te -> te
-                                  Nothing -> iface
-                              -- Apply the same simplification as --sigs uses
-                              env1 = define iface $ setMod mn env
-                              simplifiedTypeEnv = simp env1 modTypeEnv
-                          createDirectoryIfMissing True docFileDir
-                          -- Use parsed (original AST) to preserve docstrings
-                          let htmlDoc = DocP.printHtmlDoc (A.NModule simplifiedTypeEnv mdoc) parsed
-                          writeFile docFile htmlDoc
-
-                      --traceM ("#################### typed env0:")
-                      --traceM (Pretty.render (Pretty.pretty typeEnv))
-                      timeTypeCheck <- getTime Monotonic
-                      iff (C.timing gopts) $ putStrLn("    Pass: Type check      : " ++ fmtTime (timeTypeCheck - timeKindsCheck))
-
-                      (normalized, normEnv) <- Acton.Normalizer.normalize typeEnv tchecked
-                      iff (C.norm opts && mn == (modName paths)) $ dump mn "norm" (Pretty.print normalized)
-                      --traceM ("#################### normalized env0:")
-                      --traceM (Pretty.render (Pretty.pretty normEnv))
-                      timeNormalized <- getTime Monotonic
-                      iff (C.timing gopts) $ putStrLn("    Pass: Normalizer      : " ++ fmtTime (timeNormalized - timeTypeCheck))
-
-                      (deacted,deactEnv) <- Acton.Deactorizer.deactorize normEnv normalized
-                      iff (C.deact opts && mn == (modName paths)) $ dump mn "deact" (Pretty.print deacted)
-                      --traceM ("#################### deacted env0:")
-                      --traceM (Pretty.render (Pretty.pretty deactEnv))
-                      timeDeactorizer <- getTime Monotonic
-                      iff (C.timing gopts) $ putStrLn("    Pass: Deactorizer     : " ++ fmtTime (timeDeactorizer - timeNormalized))
-
-                      (cpstyled,cpsEnv) <- Acton.CPS.convert deactEnv deacted
-                      iff (C.cps opts && mn == (modName paths)) $ dump mn "cps" (Pretty.print cpstyled)
-                      --traceM ("#################### cps'ed env0:")
-                      --traceM (Pretty.render (Pretty.pretty cpsEnv))
-                      timeCPS <- getTime Monotonic
-                      iff (C.timing gopts) $ putStrLn("    Pass: CPS             : " ++ fmtTime (timeCPS - timeDeactorizer))
-
-                      (lifted,liftEnv) <- Acton.LambdaLifter.liftModule cpsEnv cpstyled
-                      iff (C.llift opts && mn == (modName paths)) $ dump mn "llift" (Pretty.print lifted)
-                      --traceM ("#################### lifteded env0:")
-                      --traceM (Pretty.render (Pretty.pretty liftEnv))
-                      timeLLift <- getTime Monotonic
-                      iff (C.timing gopts) $ putStrLn("    Pass: Lambda Lifting  : " ++ fmtTime (timeLLift - timeCPS))
-
-                      boxed <- Acton.Boxing.doBoxing liftEnv lifted
-                      iff (C.box opts && mn == (modName paths)) $ dump mn "box" (Pretty.print boxed)
-                      timeBoxing <- getTime Monotonic
-                      iff (C.timing gopts) $ putStrLn("    Pass: Boxing :          " ++ fmtTime (timeBoxing - timeLLift))
-
-                      -- Convert hash to hex string for comment
-                      let hexHash = B.unpack $ Base16.encode srcHash
-                      let emitLines = not (C.dbg_no_lines opts)
-                      (n,h,c) <- Acton.CodeGen.generate liftEnv relSrcBase srcContent emitLines boxed hexHash
-                      timeCodeGen <- getTime Monotonic
-                      iff (C.timing gopts) $ putStrLn("    Pass: Generating code : " ++ fmtTime (timeCodeGen - timeBoxing))
-
-                      iff (C.hgen opts) $ do
-                          putStrLn(h)
-                          System.Exit.exitSuccess
-                      iff (C.cgen opts) $ do
-                          putStrLn(c)
-                          System.Exit.exitSuccess
-
-                      iff (not (altOutput opts)) (do
-                          let cFile = outbase ++ ".c"
-                              hFile = outbase ++ ".h"
-
-                          writeFile hFile h
-                          writeFile cFile c
-                          let tyFileName = modNameToString(modName paths) ++ ".ty"
-                          iff (C.ty opts) $
-                               copyFileWithMetadata (joinPath [projTypes paths, tyFileName]) (joinPath [srcDir paths, tyFileName])
-
-                          timeCodeWrite <- getTime Monotonic
-                          iff (C.timing gopts) $ putStrLn("    Pass: Writing code    : " ++ fmtTime (timeCodeWrite - timeCodeGen))
-                                                           )
-
-                      return ( Acton.Env.addMod mn iface mdoc (env0 `Acton.Env.withModulesFrom` env)
-                             , ifaceHash
-                             , iface
-                             , mdoc )
-
-handle gopts opts errKind f src paths mn ex = do
-    let actFile = modNameToFilename mn
-    let errors = f ex
-    -- Convert the first error to a diagnostic
-    case errors of
-        [] -> do
-            -- Fallback if no error location
-            putStrLn ("\nERROR: Error when compiling " ++ (prstr mn) ++ " module: " ++ errKind)
-        ((loc, msg):_) -> do
-            let diagnostic = Diag.actErrToDiagnostic errKind actFile src loc msg
-            printDiag gopts opts diagnostic
-    handleCleanup paths mn
-
 modNameToFilename :: A.ModName -> String
 modNameToFilename mn = joinPath (map nameToString names) ++ ".act"
   where
     A.ModName names = mn
-
--- | Handle errors by converting them to diagnostics and printing them
--- This is meant to eventually replace the `handle` function by being a more
--- modern alternative that natively works with the Diagnose library we use to
--- print errors
-handleDiagnostic :: C.GlobalOptions -> C.CompileOptions -> Paths -> A.ModName -> Diagnostic String -> IO a
-handleDiagnostic gopts opts paths mn diagnostic = do
-    printDiag gopts opts diagnostic
-    handleCleanup paths mn
-
-handleCleanup paths mn = do
-    removeIfExists (outbase++".ty")
-    System.Exit.exitFailure
-  where outbase        = outBase paths mn
-        removeIfExists f = removeFile f `catch` handleNotExists
-        handleNotExists :: IOException -> IO ()
-        handleNotExists _ = return ()
 
 -- Determine if we should use color output
 useColor :: C.GlobalOptions -> IO Bool
@@ -2308,6 +2527,10 @@ printDiag gopts opts d = do
     if shouldColor
       then printDiagnostic stdout WithUnicode (TabSize 4) defaultStyle d
       else hPutDoc stdout $ unAnnotate (prettyDiagnostic WithoutUnicode (TabSize 4) d)
+
+printDiagnostics :: C.GlobalOptions -> C.CompileOptions -> [Diagnostic String] -> IO ()
+printDiagnostics gopts opts diags =
+    mapM_ (printDiag gopts opts) diags
 
 writeRootC :: Acton.Env.Env0 -> C.GlobalOptions -> C.CompileOptions -> Paths -> [CompileTask] -> BinTask -> IO (Maybe BinTask)
 writeRootC env gopts opts paths tasks binTask = do
