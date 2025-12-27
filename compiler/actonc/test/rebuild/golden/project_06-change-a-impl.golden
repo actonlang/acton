@@ -1,7 +1,8 @@
   Stale a: source changed
   Compiling a.act with Debug
-   Finished compilation of a in   0.000 s
+   Finished typecheck of a in   0.000 s
   Fresh b: using cached .ty
   Fresh c: using cached .ty
+   Finished compilation of a in   0.000 s
   Final compilation step
    Finished final compilation step in   0.000 s

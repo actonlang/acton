@@ -1,11 +1,14 @@
   Stale a: source changed
   Compiling a.act with Debug
-   Finished compilation of a in   0.000 s
+   Finished typecheck of a in   0.000 s
   Stale b: source changed
   Compiling b.act with Debug
-   Finished compilation of b in   0.000 s
+   Finished typecheck of b in   0.000 s
   Stale c: source changed
   Compiling c.act with Debug
+   Finished typecheck of c in   0.000 s
+   Finished compilation of a in   0.000 s
+   Finished compilation of b in   0.000 s
    Finished compilation of c in   0.000 s
   Final compilation step
    Finished final compilation step in   0.000 s
