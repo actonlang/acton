@@ -1,0 +1,114 @@
+/* Custom table styling for side-by-side documentation */
+.content table.side-by-side-code {
+    display: table;
+    width: 100%;
+    margin: 0;
+    border-collapse: collapse;
+    border: none;
+    background: none;
+    table-layout: fixed;
+}
+
+/* Dark theme support */
+.rust.light-theme .content table.side-by-side-code td:last-child {
+    background: var(--quote-bg);
+}
+
+.rust.dark-theme .content table.side-by-side-code td:last-child {
+    background: var(--quote-bg);
+}
+
+/* Ensure button contrast in both themes */
+.rust.light-theme .content table.side-by-side-code .buttons {
+    background: var(--bg);
+    color: var(--fg);
+}
+
+.rust.dark-theme .content table.side-by-side-code .buttons {
+    background: var(--bg);
+    color: var(--fg);
+}
+
+/* Remove default mdBook table styling */
+.content table.side-by-side-code tbody tr {
+    background: none !important;
+    border: none;
+}
+
+.content table.side-by-side-code td {
+    border: none;
+    padding: 0.5rem;
+    vertical-align: top;
+}
+
+/* Left column (prose) styling */
+.content table.side-by-side-code td:first-child {
+    width: 35%;
+    padding-right: 1.5rem;
+    color: var(--fg);
+}
+
+/* Right column (code) styling */
+.content table.side-by-side-code td:last-child {
+    width: 65%;
+    background: var(--quote-bg);
+    border-radius: 0;
+}
+
+/* Round only the top corners of the first row's code cell */
+.content table.side-by-side-code tr:first-child td:last-child {
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+}
+
+/* Round only the bottom corners of the last row's code cell */
+.content table.side-by-side-code tr:last-child td:last-child {
+    border-bottom-left-radius: 4px;
+    border-bottom-right-radius: 4px;
+}
+
+/* Hide mdBook's default copy buttons in our special tables */
+.content table.side-by-side-code pre > .buttons {
+    display: none !important;
+}
+
+/* Code block styling */
+.content table.side-by-side-code td pre {
+    margin: 0;
+    padding: 0.5rem;
+    background: none;
+}
+
+.content table.side-by-side-code td code {
+    background: none;
+    padding: 0;
+}
+
+/* Ensure continuous code blocks */
+.content table.side-by-side-code tr + tr td:last-child {
+    padding-top: 0;
+}
+
+/* Hide empty prose cells */
+.content table.side-by-side-code td:first-child:empty {
+    padding: 0;
+    border: none;
+}
+
+/* Position the buttons container */
+.content table.side-by-side-code td:last-child {
+    position: relative;
+}
+
+/* Keep original mdBook button styling for our custom button */
+.content table.side-by-side-code .buttons {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.content table.side-by-side-code:hover .buttons {
+    opacity: 1;
+}

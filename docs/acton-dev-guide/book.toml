@@ -1,0 +1,35 @@
+[book]
+title = "Acton Developer Guide"
+authors = []
+language = "en"
+multilingual = false
+preferred-dark-theme = "ayu"
+src = "src"
+site-url = "/learn/acton-dev-guide/"
+git-repository-url = "https://github.com/actonlang/acton"
+git-repository-icon = "fa-github"
+edit-url-template = "https://github.com/actonlang/acton/edit/master/docs/acton-dev-guide/{path}"
+
+[preprocessor.tabs]
+
+[preprocessor.svgbob]
+text_width = 8.0
+text_height = 16.0
+class = "bob"
+font_family = "arial"
+font_size = 14
+stroke_width = 2.0
+# there's using css-variables from theme:
+stroke_color = "var(--fg)" # see default theme / variables.css
+background_color = "transparent" # also useful `var(--bg)`
+
+[preprocessor.admonish]
+command = "mdbook-admonish"
+assets_version = "3.0.2" # do not edit: managed by `mdbook-admonish install`
+
+[output.html]
+additional-css = ["svgbob.css", "theme/tabs.css", "./mdbook-admonish.css", "theme/sbscode.css", "theme/skill-slider.css", "theme/content-width.css"]
+additional-js = ["theme/tabs.js", "theme/sbscode_copy.js", "theme/skill-slider.js"]
+
+[output.html.fold]
+enable = true

@@ -1,0 +1,216 @@
+/* Skill Slider Styles for Acton Guide */
+
+/* Skill control widget in menu bar */
+.skill-control-menu {
+    display: inline-flex;
+    align-items: center;
+    margin-right: 10px;
+}
+
+.skill-slider-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.skill-control-menu .skill-slider {
+    width: 60px;
+    -webkit-appearance: none;
+    height: 3px;
+    border-radius: 2px;
+    background: var(--scrollbar);
+    outline: none;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+    cursor: pointer;
+}
+
+.skill-control-menu .skill-slider:hover {
+    opacity: 1;
+}
+
+.skill-control-menu .skill-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--icons);
+    cursor: pointer;
+}
+
+.skill-control-menu .skill-slider::-moz-range-thumb {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--icons);
+    cursor: pointer;
+    border: none;
+}
+
+.skill-control-menu .skill-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    opacity: 0.8;
+    white-space: nowrap;
+    color: var(--icons);
+}
+
+/* Hide on very small screens */
+@media (max-width: 600px) {
+    .skill-control-menu {
+        display: none;
+    }
+}
+
+/* Content visibility based on skill level */
+.beginner-content,
+.advanced-content {
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition: max-height 0.8s ease-out, opacity 0.6s ease-out, margin 0.6s ease-out;
+    margin: 0;
+}
+
+/* Beginner: show beginner extras */
+body[data-skill="1"] .beginner-content { 
+    max-height: 2000px; /* Large enough for most content */
+    opacity: 1;
+    margin: 15px 0;
+}
+
+/* Standard: default, no extras */
+
+/* Advanced: show advanced extras */
+body[data-skill="3"] .advanced-content { 
+    max-height: 2000px; /* Large enough for most content */
+    opacity: 1;
+    margin: 15px 0;
+}
+
+/* Inline skill content */
+.beginner-inline,
+.advanced-inline {
+    opacity: 0;
+    font-size: 0;
+    transition: opacity 0.5s ease-out, font-size 0.5s ease-out;
+}
+
+body[data-skill="1"] .beginner-inline { 
+    opacity: 1;
+    font-size: inherit;
+}
+body[data-skill="3"] .advanced-inline { 
+    opacity: 1;
+    font-size: inherit;
+}
+
+/* Visual indicators for skill content blocks */
+.beginner-content {
+    background: rgba(76, 175, 80, 0.1);
+    border-left: 4px solid #4caf50;
+    padding: 15px;
+    margin: 15px 0;
+    border-radius: 0 4px 4px 0;
+}
+
+
+.advanced-content {
+    background: rgba(33, 150, 243, 0.1);
+    border-left: 4px solid #2196f3;
+    padding: 15px;
+    margin: 15px 0;
+    border-radius: 0 4px 4px 0;
+}
+
+/* Skill level indicators in content */
+.beginner-content::before {
+    content: "🌱 Beginner";
+    display: block;
+    font-weight: bold;
+    margin-bottom: 10px;
+    color: #4caf50;
+}
+
+
+.advanced-content::before {
+    content: "🚀 Advanced";
+    display: block;
+    font-weight: bold;
+    margin-bottom: 10px;
+    color: #2196f3;
+}
+
+/* Enhanced side-by-side code table */
+.side-by-side-code {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 25px 0;
+    background: transparent;
+    border-radius: 0;
+    overflow: visible;
+    box-shadow: none;
+}
+
+.side-by-side-code td {
+    padding: 20px;
+    vertical-align: top;
+    border-bottom: 1px solid var(--table-border-color);
+}
+
+.side-by-side-code tr:last-child td {
+    border-bottom: none;
+}
+
+.side-by-side-code td:first-child {
+    width: 35%;
+    background: var(--sidebar-bg);
+    border-right: 1px solid var(--table-border-color);
+    font-size: 0.95em;
+    line-height: 1.7;
+    color: var(--fg);
+}
+
+.side-by-side-code td:last-child {
+    width: 65%;
+    background: var(--code-bg);
+}
+
+/* Remove extra margins in code blocks inside tables */
+.side-by-side-code pre {
+    margin: 0;
+    background: transparent;
+    padding: 0;
+}
+
+.side-by-side-code code {
+    font-size: 0.9em;
+}
+
+/* On smaller screens, stack the cells */
+@media (max-width: 768px) {
+    .side-by-side-code td {
+        display: block;
+        width: 100% !important;
+    }
+    
+    .side-by-side-code td:first-child {
+        border-right: none;
+        border-bottom: 1px solid var(--table-border-color);
+    }
+    
+    .side-by-side-code tr:last-child td:first-child {
+        border-bottom: 1px solid var(--table-border-color);
+    }
+}
+
+/* Dark theme adjustments */
+
+.ayu .side-by-side-code td:first-child,
+.coal .side-by-side-code td:first-child,
+.navy .side-by-side-code td:first-child {
+    background: rgba(0, 0, 0, 0.2);
+}
+
