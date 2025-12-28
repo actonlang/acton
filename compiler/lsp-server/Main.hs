@@ -2,109 +2,233 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
+import Control.Exception (try)
+import Control.Monad (void, when)
 import Control.Monad.IO.Class
-import qualified Control.Exception as E
-import qualified Control.Monad.State.Strict as St
-import qualified Data.List.NonEmpty as NE
-import Data.List (last)
-import Data.Maybe (fromMaybe)
-import Data.Aeson (toJSON, Value(..))
-import qualified Data.Aeson.KeyMap as KM
 import Data.IORef
 import qualified Data.HashMap.Strict as HM
-import Data.Time.Clock.POSIX (getPOSIXTime, POSIXTime)
-import System.IO.Unsafe (unsafePerformIO)
+import qualified Data.Map as M
+import Data.Maybe (fromMaybe, listToMaybe)
 import qualified Data.Text as T
+import qualified Data.Text.Encoding as TE
+import GHC.Conc (getNumCapabilities)
+import System.FilePath.Posix (joinPath)
+import System.IO.Unsafe (unsafePerformIO)
+
 import Language.LSP.Protocol.Message
-import Language.LSP.Protocol.Types
+import Language.LSP.Protocol.Types hiding (Diagnostic, Position)
+import qualified Language.LSP.Protocol.Types as LSP
 import Language.LSP.Server
-import Text.Megaparsec (runParser, PosState(..), reachOffset)
-import Text.Megaparsec.Error (ParseErrorBundle(..), ParseError, errorOffset, bundleErrors, parseErrorTextPretty)
-import Text.Megaparsec.Pos (SourcePos(..), mkPos, unPos)
 
-import qualified Acton.Syntax as S
-import qualified Acton.Parser as P
-import Utils (SrcLoc(..))
-import qualified Acton.Diagnostics as AD
-import Error.Diagnose.Report (Note(..))
+import qualified Acton.Compile as Compile
+import qualified Acton.CommandLineParser as C
+import qualified Acton.SourceProvider as Source
 
--- Convert a Megaparsec error offset into a 0-based LSP Range (single char)
-mkRangeFromOffset :: Int -> String -> Range
-mkRangeFromOffset off src =
-  let initial = PosState { pstateInput = src
-                         , pstateOffset = 0
-                         , pstateSourcePos = SourcePos "" (mkPos 1) (mkPos 1)
-                         , pstateTabWidth = mkPos 8
-                         , pstateLinePrefix = ""
-                         }
-      (_, st) = reachOffset off initial
-      sp = pstateSourcePos st
-      l0 = max 0 (unPos (sourceLine sp) - 1)
-      c0 = max 0 (unPos (sourceColumn sp) - 1)
-  in mkRange (fromIntegral l0) (fromIntegral c0) (fromIntegral l0) (fromIntegral (c0 + 1))
+import Error.Diagnose (Diagnostic)
+import Error.Diagnose.Diagnostic (reportsOf)
+import Error.Diagnose.Report (Marker(..), Note(..), Report(Warn, Err))
+import Error.Diagnose.Position (Position(..))
 
--- Create a range from a SrcLoc (start,end offsets)
-rangeFromLoc :: SrcLoc -> String -> Range
-rangeFromLoc NoLoc src = mkRangeFromOffset 0 src
-rangeFromLoc (Loc startOff endOff) src =
-  let initial = PosState { pstateInput = src
-                         , pstateOffset = 0
-                         , pstateSourcePos = SourcePos "" (mkPos 1) (mkPos 1)
-                         , pstateTabWidth = mkPos 8
-                         , pstateLinePrefix = ""
-                         }
-      (_, stS) = reachOffset startOff initial
-      (_, stE) = reachOffset endOff initial
-      sPos = pstateSourcePos stS
-      ePos = pstateSourcePos stE
-      l0 = max 0 (unPos (sourceLine sPos) - 1)
-      c0 = max 0 (unPos (sourceColumn sPos) - 1)
-      l1 = max 0 (unPos (sourceLine ePos) - 1)
-      c1 = max 0 (unPos (sourceColumn ePos) - 1)
-  in mkRange (fromIntegral l0) (fromIntegral c0) (fromIntegral l1) (fromIntegral (max c1 (c0 + 1)))
 
-diagFromParseError :: String -> ParseError String P.CustomParseError -> Diagnostic
-diagFromParseError src perr =
-  let msg = T.pack (parseErrorTextPretty perr)
-      off = errorOffset perr
-      rng = mkRangeFromOffset off src
-  in Diagnostic { _range = rng
-                , _severity = Just DiagnosticSeverity_Error
-                , _code = Nothing
-                , _codeDescription = Nothing
-                , _source = Nothing
-                , _message = msg
-                , _tags = Nothing
-                , _relatedInformation = Nothing
-                , _data_ = Nothing
-                }
+type OverlayMap = HM.HashMap FilePath Source.SourceSnapshot
+type UriMap = HM.HashMap FilePath Uri
 
-publishParseDiagnostics :: Uri -> String -> LspM () ()
-publishParseDiagnostics uri src = do
-  let fname = T.unpack (case uri of Uri u -> u)
-      contentWithNewline = if null src || last src == '\n' then src else src ++ "\n"
-      parsed = runParser (St.evalStateT P.file_input P.initState) fname contentWithNewline
-  -- Evaluate in IO to catch CustomParseException thrown from the parser
-  eres <- liftIO $ (E.try (E.evaluate parsed) :: IO (Either P.CustomParseException (Either (ParseErrorBundle String P.CustomParseError) ([S.Import], S.Suite))))
-  case eres of
-    Left (P.CustomParseException loc customErr) -> do
-      let rng = rangeFromLoc loc contentWithNewline
-          (msg0, notes) = AD.customParseErrorToDiagnostic customErr
-          notesTxt = case notes of
-                       [] -> ""
-                       ns -> "\n" ++ unlines (map noteLine ns)
-          fullMsg = T.pack ("Syntax error: " ++ msg0 ++ notesTxt)
-          diag = Diagnostic rng (Just DiagnosticSeverity_Error) Nothing Nothing Nothing fullMsg Nothing Nothing Nothing
-      sendNotification SMethod_TextDocumentPublishDiagnostics (PublishDiagnosticsParams uri Nothing [diag])
-    Right (Left bundle) -> do
-      let diags = fmap (diagFromParseError contentWithNewline) (NE.toList (bundleErrors bundle))
-      sendNotification SMethod_TextDocumentPublishDiagnostics (PublishDiagnosticsParams uri Nothing diags)
-    Right (Right _) -> do
-      sendNotification SMethod_TextDocumentPublishDiagnostics (PublishDiagnosticsParams uri Nothing [])
+debounceMicros :: Int
+debounceMicros = 200000
 
+{-# NOINLINE overlaysRef #-}
+overlaysRef :: IORef OverlayMap
+overlaysRef = unsafePerformIO (newIORef HM.empty)
+
+{-# NOINLINE uriByPathRef #-}
+-- | Map canonical paths to the client-provided URIs for diagnostics.
+uriByPathRef :: IORef UriMap
+uriByPathRef = unsafePerformIO (newIORef HM.empty)
+
+{-# NOINLINE compileScheduler #-}
+compileScheduler :: Compile.CompileScheduler
+compileScheduler = unsafePerformIO $ do
+  nCaps <- getNumCapabilities
+  let maxParallel = max 1 (if C.jobs lspGlobalOpts > 0 then C.jobs lspGlobalOpts else nCaps)
+  Compile.newCompileScheduler lspGlobalOpts maxParallel
+
+lspGlobalOpts :: C.GlobalOptions
+lspGlobalOpts =
+  C.GlobalOptions
+    { color = C.Never
+    , quiet = True
+    , sub = False
+    , timing = False
+    , tty = False
+    , verbose = False
+    , verboseZig = False
+    , jobs = 0
+    }
+
+lspCompileOpts :: C.CompileOptions
+lspCompileOpts =
+  Compile.defaultCompileOptions
+    { C.skip_build = True
+    , C.only_build = False
+    , C.test = False
+    }
+
+
+overlaySourceProvider :: IORef OverlayMap -> Source.SourceProvider
+overlaySourceProvider ref =
+  let disk = Source.diskSourceProvider
+  in Source.SourceProvider
+       { Source.spReadOverlay = \path -> HM.lookup path <$> readIORef ref
+       , Source.spReadFile = Source.spReadFile disk
+       , Source.spGetModTime = Source.spGetModTime disk
+       }
+
+updateOverlay :: FilePath -> T.Text -> IO ()
+updateOverlay path txt =
+  let snap = Source.SourceSnapshot
+        { Source.ssText = T.unpack txt
+        , Source.ssBytes = TE.encodeUtf8 txt
+        , Source.ssIsOverlay = True
+        }
+  in atomicModifyIORef' overlaysRef $ \m -> (HM.insert path snap m, ())
+
+removeOverlay :: FilePath -> IO ()
+removeOverlay path =
+  atomicModifyIORef' overlaysRef $ \m -> (HM.delete path m, ())
+
+publishDiagnosticsFor :: FilePath -> [LSP.Diagnostic] -> LspM () ()
+publishDiagnosticsFor path diags = do
+  uri <- liftIO $ lookupUri path
+  sendNotification SMethod_TextDocumentPublishDiagnostics (PublishDiagnosticsParams uri Nothing diags)
+rememberUri :: FilePath -> Uri -> IO ()
+rememberUri path uri =
+  atomicModifyIORef' uriByPathRef $ \m -> (HM.insert path uri m, ())
+
+forgetUri :: FilePath -> IO ()
+forgetUri path =
+  atomicModifyIORef' uriByPathRef $ \m -> (HM.delete path m, ())
+
+lookupUri :: FilePath -> IO Uri
+lookupUri path = do
+  m <- readIORef uriByPathRef
+  return (fromMaybe (filePathToUri path) (HM.lookup path m))
+-- | Run an action only if the compile generation is current.
+whenCurrentGen :: Int -> LspM () () -> LspM () ()
+whenCurrentGen gen action = do
+  current <- liftIO $ readIORef (Compile.csGenRef compileScheduler)
+  when (current == gen) action
+
+reportRange :: Position -> Range
+reportRange (Position (bl, bc) (el, ec) _) =
+  let l0 = max 0 (bl - 1)
+      c0 = max 0 (bc - 1)
+      l1 = max 0 (el - 1)
+      c1 = max 0 (ec - 1)
+      endC = max c1 (c0 + 1)
+  in mkRange (fromIntegral l0) (fromIntegral c0) (fromIntegral l1) (fromIntegral endC)
+
+pickPosition :: [(Position, Marker msg)] -> Maybe Position
+pickPosition markers =
+  case [pos | (pos, This _) <- markers] of
+    (p:_) -> Just p
+    [] -> fmap fst (listToMaybe markers)
+
+notesText :: [Note String] -> String
+notesText [] = ""
+notesText ns = "\n" ++ unlines (map noteLine ns)
   where
     noteLine (Hint h) = "Hint: " ++ h
     noteLine (Note n) = "Note: " ++ n
+
+reportToLsp :: Report String -> LSP.Diagnostic
+reportToLsp rep =
+  let (sev, msg, markers, notes) = case rep of
+        Err _ m ms ns -> (DiagnosticSeverity_Error, m, ms, ns)
+        Warn _ m ms ns -> (DiagnosticSeverity_Warning, m, ms, ns)
+      pos = pickPosition markers
+      range = maybe (mkRange 0 0 0 0) reportRange pos
+      fullMsg = T.pack (msg ++ notesText notes)
+  in LSP.Diagnostic
+       { _range = range
+       , _severity = Just sev
+       , _code = Nothing
+       , _codeDescription = Nothing
+       , _source = Just "acton"
+       , _message = fullMsg
+       , _tags = Nothing
+       , _relatedInformation = Nothing
+       , _data_ = Nothing
+       }
+
+lspDiagnosticsFrom :: [Diagnostic String] -> [LSP.Diagnostic]
+lspDiagnosticsFrom diags = concatMap (map reportToLsp . reportsOf) diags
+
+runCompile :: Int -> FilePath -> LspM () ()
+runCompile gen path = do
+  let gopts = lspGlobalOpts
+      opts = lspCompileOpts
+      sp = overlaySourceProvider overlaysRef
+  res <- liftIO $ (try $ do
+    pathsRoot <- Compile.findPaths path opts
+    rootProj <- Compile.normalizePathSafe (Compile.projPath pathsRoot)
+    sysAbs <- Compile.normalizePathSafe (Compile.sysPath pathsRoot)
+    projMap <- if Compile.isTmp pathsRoot
+      then do
+        let ctx = Compile.ProjCtx
+              { Compile.projRoot = rootProj
+              , Compile.projOutDir = Compile.projOut pathsRoot
+              , Compile.projTypesDir = Compile.projTypes pathsRoot
+              , Compile.projSrcDir = Compile.srcDir pathsRoot
+              , Compile.projSysPath = sysAbs
+              , Compile.projSysTypes = joinPath [sysAbs, "base", "out", "types"]
+              , Compile.projBuildSpec = Nothing
+              , Compile.projLocks = joinPath [Compile.projPath pathsRoot, ".actonc.lock"]
+              , Compile.projDeps = []
+              }
+        return (M.singleton rootProj ctx)
+      else Compile.discoverProjects sysAbs rootProj (C.dep_overrides opts)
+    (globalTasks, _) <- Compile.buildGlobalTasks sp gopts opts projMap (Just [path])
+    neededTasks <- Compile.selectNeededTasks pathsRoot rootProj globalTasks [path]
+    return (pathsRoot, rootProj, neededTasks)
+    ) :: LspM () (Either Compile.ProjectError (Compile.Paths, FilePath, [Compile.GlobalTask]))
+  case res of
+    Left (Compile.ProjectError msg) ->
+      whenCurrentGen gen $
+        sendNotification SMethod_WindowShowMessage (ShowMessageParams MessageType_Error (T.pack msg))
+    Right (pathsRoot, rootProj, neededTasks) -> do
+      env <- getLspEnv
+      let callbacks = Compile.defaultCompileCallbacks
+            { Compile.ccOnDiagnostics = \t _ diags ->
+                runLspT env $ whenCurrentGen gen $ do
+                  let filePath = Compile.srcFile (Compile.gtPaths t) (Compile.tkMod (Compile.gtKey t))
+                  publishDiagnosticsFor filePath (lspDiagnosticsFrom diags)
+            , Compile.ccOnFrontResult = \t _ _ ->
+                runLspT env $ whenCurrentGen gen $ do
+                  let filePath = Compile.srcFile (Compile.gtPaths t) (Compile.tkMod (Compile.gtKey t))
+                  publishDiagnosticsFor filePath []
+            , Compile.ccOnBackJob = \job -> do
+                let bq = Compile.csBackQueue compileScheduler
+                _ <- Compile.backQueueEnqueue bq gen job Compile.defaultBackJobCallbacks
+                return ()
+            , Compile.ccOnInfo = \_ -> return ()
+            }
+      compileRes <- liftIO $ Compile.compileTasks sp gopts opts pathsRoot rootProj neededTasks callbacks
+      case compileRes of
+        Left err -> whenCurrentGen gen $
+          sendNotification SMethod_WindowShowMessage (ShowMessageParams MessageType_Error (T.pack (Compile.compileFailureMessage err)))
+        Right _ -> return ()
+
+scheduleCompile :: Int -> FilePath -> LspM () ()
+scheduleCompile delay path = do
+  env <- getLspEnv
+  void $ liftIO $ Compile.startCompile compileScheduler delay $ \gen ->
+    runLspT env (runCompile gen path)
+
+resolvePath :: Uri -> LspM () (Maybe FilePath)
+resolvePath uri =
+  case uriToFilePath uri of
+    Nothing -> return Nothing
+    Just path -> liftIO $ Just <$> Compile.normalizePathSafe path
 
 handlers :: Handlers (LspM ())
 handlers =
@@ -113,31 +237,38 @@ handlers =
     , notificationHandler SMethod_WorkspaceDidChangeConfiguration $ \_ -> pure ()
     , notificationHandler SMethod_TextDocumentDidOpen $ \(TNotificationMessage _ _ (DidOpenTextDocumentParams doc)) -> do
         let TextDocumentItem{_uri=uri,_text=txt} = doc
-        publishParseDiagnostics uri (T.unpack txt)
+        resolvePath uri >>= \case
+          Nothing -> pure ()
+          Just path -> do
+            liftIO $ rememberUri path uri
+            liftIO $ updateOverlay path txt
+            scheduleCompile 0 path
     , notificationHandler SMethod_TextDocumentDidChange $ \(TNotificationMessage _ _ (DidChangeTextDocumentParams vdoc changes)) -> do
         let VersionedTextDocumentIdentifier{_uri=uri} = vdoc
-        case changes of
-          [] -> pure ()
-          cs -> do
-            let txt = case toJSON (last cs) of
-                        Object o -> case KM.lookup "text" o of
-                                      Just (String t) -> t
-                                      _ -> ""
-                        _ -> ""
-            if T.null txt
-              then pure ()
-              else do
-                ok <- shouldParseNow uri
-                if ok then publishParseDiagnostics uri (T.unpack txt) else pure ()
+        resolvePath uri >>= \case
+          Nothing -> pure ()
+          Just path ->
+            case changes of
+              [] -> pure ()
+              cs -> do
+                let TextDocumentContentChangeEvent change = last cs
+                    txt = case change of
+                      InL TextDocumentContentChangePartial{_text=txt'} -> txt'
+                      InR TextDocumentContentChangeWholeDocument{_text=txt'} -> txt'
+                liftIO $ rememberUri path uri
+                liftIO $ updateOverlay path txt
+                scheduleCompile debounceMicros path
     , notificationHandler SMethod_TextDocumentDidClose $ \(TNotificationMessage _ _ (DidCloseTextDocumentParams (TextDocumentIdentifier uri))) -> do
-        -- Clear diagnostics when a document is closed
-        sendNotification SMethod_TextDocumentPublishDiagnostics (PublishDiagnosticsParams uri Nothing [])
-        -- Remove from debounce map
-        liftIO $ atomicModifyIORef' lastParseRef $ \m -> (HM.delete (case uri of Uri u -> u) m, ())
+        resolvePath uri >>= \case
+          Nothing -> pure ()
+          Just path -> do
+            liftIO $ removeOverlay path
+            publishDiagnosticsFor path []
+            liftIO $ forgetUri path
     ]
 
 main :: IO Int
-main =
+main = do
   runServer $
     ServerDefinition
       { parseConfig = const $ const $ Right ()
@@ -149,7 +280,6 @@ main =
       , interpretHandler = \env -> Iso (runLspT env) liftIO
       , options = defaultOptions { optTextDocumentSync = Just syncOptions }
       }
-
   where
     syncOptions = TextDocumentSyncOptions
       { _openClose = Just True
@@ -158,23 +288,3 @@ main =
       , _willSaveWaitUntil = Nothing
       , _save = Nothing
       }
-
--- Simple time-based gate to avoid parsing on every single keystroke.
--- If changes arrive within debounceMs, we skip until a later event.
-{-# NOINLINE lastParseRef #-}
-lastParseRef :: IORef (HM.HashMap T.Text POSIXTime)
-lastParseRef = unsafePerformIO (newIORef HM.empty)
-
-debounceMs :: POSIXTime
-debounceMs = 0.20  -- 200 ms
-
-shouldParseNow :: Uri -> LspM () Bool
-shouldParseNow (Uri u) = do
-  now <- liftIO getPOSIXTime
-  liftIO $ atomicModifyIORef' lastParseRef $ \m ->
-    let prev = HM.lookup u m
-    in case prev of
-         Nothing -> (HM.insert u now m, True)
-         Just t  -> if now - t >= debounceMs
-                      then (HM.insert u now m, True)
-                      else (m, False)
