@@ -22,6 +22,7 @@ module Acton.Compile
   , readImports
   , buildGlobalTasks
   , selectNeededTasks
+  , selectAffectedTasks
   , compileTasks
   , runFrontPasses
   , runBackPasses
@@ -90,13 +91,14 @@ import qualified InterfaceFiles
 import Control.Concurrent.Async
 import Control.Concurrent.MVar
 import Control.Concurrent (myThreadId, threadCapability)
-import Control.Exception (Exception, IOException, SomeException, catch, throwIO, try)
+import Control.Exception (Exception, IOException, SomeException, catch, finally, mask_, throwIO, try)
 import Control.Monad
 import Data.Char (isAlpha, isSpace)
 import Data.Either (partitionEithers)
 import Data.Graph
 import Data.List (find, foldl', intercalate, intersperse, nub)
 import qualified Data.List
+import Data.IORef
 import Data.Maybe (catMaybes, isJust, listToMaybe)
 import qualified Data.Map as M
 import Data.Ord (Down(..))
@@ -161,7 +163,7 @@ defaultCompileCallbacks = CompileCallbacks
 defaultCompileOptions :: C.CompileOptions
 defaultCompileOptions =
   C.CompileOptions False False False False False False False False False False False False False
-                   False False False False False C.Debug False False False False
+                   False False False False False C.Debug False False False False False
                    "" "" "" C.defTarget "" False [] []
 
 
@@ -441,6 +443,45 @@ selectNeededTasks pathsRoot rootProj globalTasks srcFiles = do
             else
               let deps = Data.Set.toList (M.findWithDefault Data.Set.empty k depMap)
               in go (deps ++ ks) (Data.Set.insert k seen)
+
+selectAffectedTasks :: [GlobalTask] -> [FilePath] -> IO [GlobalTask]
+selectAffectedTasks globalTasks changedFiles = do
+    if null changedFiles
+      then return globalTasks
+      else do
+        absChanged <- mapM normalizePathSafe changedFiles
+        taskPaths <- forM globalTasks $ \t -> do
+          let k = gtKey t
+              pths = gtPaths t
+          p <- normalizePathSafe (srcFile pths (tkMod k))
+          return (p, k)
+        let pathIndex = M.fromList taskPaths
+            changedKeys = catMaybes [ M.lookup p pathIndex | p <- absChanged ]
+        if null changedKeys
+          then return globalTasks
+          else do
+            let taskKeys = Data.Set.fromList (map gtKey globalTasks)
+                depMap = M.fromList
+                  [ (gtKey t, filter (`Data.Set.member` taskKeys) (M.elems (gtImportProviders t)))
+                  | t <- globalTasks
+                  ]
+                revMap = foldl' (\acc (k, ds) ->
+                                  foldl' (\a d -> M.insertWith (++) d [k] a) acc ds)
+                                M.empty
+                                (M.toList depMap)
+                affected = reverseClosure revMap (Data.Set.fromList changedKeys)
+                keepProviders t =
+                  t { gtImportProviders = M.filter (`Data.Set.member` affected) (gtImportProviders t) }
+            return [ keepProviders t | t <- globalTasks, Data.Set.member (gtKey t) affected ]
+  where
+    reverseClosure revMap start = go start (Data.Set.toList start)
+      where
+        go seen [] = seen
+        go seen (k:ks) =
+          let ds = M.findWithDefault [] k revMap
+              new = filter (`Data.Set.notMember` seen) ds
+              seen' = foldl' (flip Data.Set.insert) seen new
+          in go seen' (ks ++ new)
 
 
 -- Prepare a task for dependency graph construction.
@@ -816,20 +857,24 @@ compileTasks :: Source.SourceProvider
              -> CompileCallbacks
              -> IO (Either CompileFailure (Acton.Env.Env0, Bool))
 compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
-    -- Reject cycles
-    if not (null cycles)
-      then return $ Left (CompileCycleFailure ("Cyclic imports: " ++ concatMap showTaskGraph cycles))
-      else do
-        -- Compile __builtin__ first if present anywhere in the graph
-        case builtinOrder of
-          [t] -> do
-            res <- compileBuiltin t
-            case res of
-              Left err -> return (Left err)
-              Right () -> continue
-          _ -> continue
+    runningRef <- newIORef []
+    let cancelRunning = readIORef runningRef >>= mapM_ cancel
+    let compileMain = do
+          -- Reject cycles
+          if not (null cycles)
+            then return $ Left (CompileCycleFailure ("Cyclic imports: " ++ concatMap showTaskGraph cycles))
+            else do
+              -- Compile __builtin__ first if present anywhere in the graph
+              case builtinOrder of
+                [t] -> do
+                  res <- compileBuiltin t
+                  case res of
+                    Left err -> return (Left err)
+                    Right () -> continue runningRef
+                _ -> continue runningRef
+    compileMain `finally` cancelRunning
   where
-    continue = do
+    continue runningRef = do
       baseEnv <- Acton.Env.initEnv builtinPath False
 
       costMap <- fmap M.fromList $ forM otherOrder $ \t -> do
@@ -844,7 +889,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
       nCaps <- getNumCapabilities
       let maxParallel = max 1 (if C.jobs gopts > 0 then C.jobs gopts else nCaps)
 
-      (envFinal, hadErrors) <- loop initialReady [] M.empty indeg pending0 baseEnv False maxParallel cwMap
+      (envFinal, hadErrors) <- loop runningRef initialReady [] M.empty indeg pending0 baseEnv False maxParallel cwMap
       return (Right (envFinal, hadErrors))
 
     -- Basic maps/sets ----------------------------------------------------
@@ -1060,7 +1105,8 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
                 return (a, mn)
       return (rdy', new ++ running)
 
-    loop :: [TaskKey]
+    loop :: IORef [Async (TaskKey, Either [Diagnostic String] FrontResult)]
+         -> [TaskKey]
          -> [(Async (TaskKey, Either [Diagnostic String] FrontResult), TaskKey)]
          -> M.Map TaskKey B.ByteString
          -> M.Map TaskKey Int
@@ -1070,15 +1116,21 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
          -> Int
          -> M.Map TaskKey Integer
          -> IO (Acton.Env.Env0, Bool)
-    loop rdy running res ind pend envAcc hadErrors maxPar cw = do
-      (rdy1, running1) <- scheduleMore (maxPar - length running) rdy running res envAcc cw
+    loop runningRef rdy running res ind pend envAcc hadErrors maxPar cw = do
+      (rdy1, running1) <- mask_ $ do
+        res@(rdy1', running1') <- scheduleMore (maxPar - length running) rdy running res envAcc cw
+        writeIORef runningRef (map fst running1')
+        return res
       if null running1 && null rdy1
         then if Data.Set.null pend
-               then return (envAcc, hadErrors)
+               then do
+                 writeIORef runningRef []
+                 return (envAcc, hadErrors)
                else return (envAcc, True)
         else do
           (doneA, (mnDone, outcome)) <- waitAny $ map fst running1
           let running2 = filter ((/= doneA) . fst) running1
+          writeIORef runningRef (map fst running2)
           case outcome of
             Left diags -> do
               let t = taskMap M.! mnDone
@@ -1086,7 +1138,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
               let blocked = dependentClosure mnDone
                   pend2 = Data.Set.delete mnDone (pend `Data.Set.difference` blocked)
                   rdy2 = filter (`Data.Set.notMember` blocked) rdy1
-              loop rdy2 running2 res ind pend2 envAcc True maxPar cw
+              loop runningRef rdy2 running2 res ind pend2 envAcc True maxPar cw
             Right fr -> do
               let t = taskMap M.! mnDone
               ccOnFrontResult callbacks t (optsFor mnDone) fr
@@ -1103,12 +1155,16 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
                                    ]
                   rdy2 = rdy1 ++ newlyReady
                   envAcc' = Acton.Env.addMod (tkMod mnDone) (frIfaceTE fr) (frDoc fr) envAcc
-              loop rdy2 running2 res2 ind2 pend2 envAcc' hadErrors maxPar cw
+              loop runningRef rdy2 running2 res2 ind2 pend2 envAcc' hadErrors maxPar cw
 
 
 runBackJobs :: C.GlobalOptions -> Int -> (Maybe String -> IO ()) -> [BackJob] -> IO ()
 runBackJobs _ _ _ [] = return ()
-runBackJobs gopts maxPar onDone jobs = loopBack indexed [] M.empty 0
+runBackJobs gopts maxPar onDone jobs = do
+  runningRef <- newIORef []
+  let cancelRunning = readIORef runningRef >>= mapM_ cancel
+  let runMain = loopBack runningRef indexed [] M.empty 0
+  runMain `finally` cancelRunning
   where
     indexed = zip [0..] (orderBackJobs jobs)
 
@@ -1119,14 +1175,17 @@ runBackJobs gopts maxPar onDone jobs = loopBack indexed [] M.empty 0
     orderBackJobs :: [BackJob] -> [BackJob]
     orderBackJobs js = Data.List.sortOn backJobKey js
 
-    loopBack pending running results nextIx = do
+    loopBack runningRef pending running results nextIx = do
       let capacity = maxPar - length running
           (toStart, pending') = splitAt capacity pending
-      new <- forM toStart $ \(ix, job) ->
-               async $ do
-                 res <- runBackPasses gopts (bjOpts job) (bjPaths job) (bjInput job)
-                 return (ix, res)
-      let running' = running ++ new
+      running' <- mask_ $ do
+        new <- forM toStart $ \(ix, job) ->
+                 async $ do
+                   res <- runBackPasses gopts (bjOpts job) (bjPaths job) (bjInput job)
+                   return (ix, res)
+        let running' = running ++ new
+        writeIORef runningRef running'
+        return running'
       if null running' && null pending'
         then do
           (_, _) <- flushReady results nextIx
@@ -1135,8 +1194,9 @@ runBackJobs gopts maxPar onDone jobs = loopBack indexed [] M.empty 0
           (doneA, (ix, res)) <- waitAny running'
           let running'' = filter (/= doneA) running'
               results' = M.insert ix res results
+          writeIORef runningRef running''
           (results'', nextIx') <- flushReady results' nextIx
-          loopBack pending' running'' results'' nextIx'
+          loopBack runningRef pending' running'' results'' nextIx'
 
     flushReady :: M.Map Int (Maybe String) -> Int -> IO (M.Map Int (Maybe String), Int)
     flushReady res ix =

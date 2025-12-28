@@ -76,6 +76,7 @@ data CompileOptions   = CompileOptions {
                          listimports :: Bool,
                          only_build  :: Bool,
                          skip_build  :: Bool,
+                         watch       :: Bool,
                          no_threads  :: Bool,
                          root        :: String,
                          tempdir     :: String,
@@ -188,6 +189,7 @@ compileOptions = CompileOptions
         <*> switch (long "list-imports" <> help "List module imports")
         <*> switch (long "only-build"   <> help "Only perform final build of .c files, do not compile .act files")
         <*> switch (long "skip-build"   <> help "Skip final bulid of .c files")
+        <*> switch (long "watch"        <> help "Rebuild on file changes")
         <*> switch (long "no-threads"   <> help "Don't use threads")
         <*> strOption (long "root"      <> metavar "ROOTACTOR" <> value "" <> help "Set root actor")
         <*> strOption (long "tempdir"   <> metavar "TEMPDIR" <> value "" <> help "Set directory for build files")
