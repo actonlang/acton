@@ -129,7 +129,7 @@ main = do
                                                  ".ty" -> printDocs gopts (C.DocOptions (head nms) (Just C.AsciiFormat) Nothing)
                                                  _ -> printErrorAndExit ("Unknown filetype: " ++ head nms)
 
-defaultOpts   = C.CompileOptions False False False False False False False False False False False False False
+defaultOpts   = C.CompileOptions False False False False False False False False False False False False False False
                                  False False False False False C.Debug False False False False
                                  "" "" "" C.defTarget "" False [] []
 
@@ -746,8 +746,9 @@ High-level Steps
 1) Discover and read tasks using header-first strategy (readModuleTask)
    - For each module, try to use its .ty header to avoid parsing:
      - If .ty is missing/unreadable → parse .act to obtain imports (ActonTask).
-     - If .ty exists and .act mtime <= .ty mtime → trust .ty header imports and
-       create a TyTask stub (no heavy decode) for graph building.
+     - If .ty exists and both .act and actonc mtime <= .ty mtime → trust .ty
+       header imports and create a TyTask stub (no heavy decode) for graph
+       building. Use --ignore-compiler-mtime to skip the actonc part.
      - If .act appears newer than .ty → verify by content hash:
        – If stored srcHash == current srcHash → header is still valid (TyTask)
        – Else → parse .act now to get accurate imports (ActonTask)
@@ -1845,8 +1846,10 @@ filterActFile file =
 -- Prefer reading imports from .ty header; if no .ty, parse the source.
 -- Decide how to represent a module for the graph:
 -- 1) If .ty is missing/unreadable -> parse .act to obtain imports (ActonTask).
--- 2) If .ty exists and .act mtime <= .ty mtime -> trust header imports (TyTask).
--- 3) If .act appears newer than .ty -> verify by content hash:
+-- 2) If .ty exists and both .act and actonc mtime <= .ty mtime -> trust header imports (TyTask).
+--    (Use --ignore-compiler-mtime to skip the actonc check.)
+-- 3) If actonc is newer than .ty -> recompile from source (ActonTask).
+-- 4) If .act appears newer than .ty -> verify by content hash:
 --      - If stored srcHash == current srcHash -> header is still valid (TyTask)
 --      - Else -> parse .act to obtain accurate imports (ActonTask)
 -- Returns either a header-only TyTask stub or an ActonTask; no heavy decoding.
@@ -1865,7 +1868,16 @@ readModuleTask gopts opts paths actFile = do
           Right (hash, ihash, imps, roots, mdoc) -> do
             actTime <- System.Directory.getModificationTime actFile
             tyTime  <- System.Directory.getModificationTime tyFile
-            if actTime <= tyTime
+            actoncTime <- if C.ignore_compiler_mtime opts
+              then return Nothing
+              else do
+                actoncTimeE <- (try :: IO a -> IO (Either SomeException a)) $ do
+                                 exe <- System.Environment.getExecutablePath
+                                 System.Directory.getModificationTime exe
+                return (either (const Nothing) Just actoncTimeE)
+            let srcTime = maybe actTime (max actTime) actoncTime
+                compilerNewer = maybe False (> tyTime) actoncTime
+            if srcTime <= tyTime
               then do
                 let nmodStub = A.NModule [] mdoc
                     tmodStub = A.Module mn [] []
@@ -1877,23 +1889,25 @@ readModuleTask gopts opts paths actFile = do
                                 , tyDoc     = mdoc
                                 , iface     = nmodStub
                                 , typed     = tmodStub }
-              else do
-                -- Verify by hash to handle touched-but-unchanged sources
-                srcBytes <- B.readFile actFile
-                let curHash = SHA256.hash srcBytes
-                if curHash == hash
-                  then do
-                    let nmodStub = A.NModule [] mdoc
-                        tmodStub = A.Module mn [] []
-                    return $ TyTask { name      = mn
-                                    , tyHash    = hash
-                                    , tyIfaceHash = ihash
-                                    , tyImports = imps
-                                    , tyRoots   = roots
-                                    , tyDoc     = mdoc
-                                    , iface     = nmodStub
-                                    , typed     = tmodStub }
-                  else parseForImports mn
+              else if compilerNewer
+                then parseForImports mn
+                else do
+                  -- Verify by hash to handle touched-but-unchanged sources
+                  srcBytes <- B.readFile actFile
+                  let curHash = SHA256.hash srcBytes
+                  if curHash == hash
+                    then do
+                      let nmodStub = A.NModule [] mdoc
+                          tmodStub = A.Module mn [] []
+                      return $ TyTask { name      = mn
+                                      , tyHash    = hash
+                                      , tyIfaceHash = ihash
+                                      , tyImports = imps
+                                      , tyRoots   = roots
+                                      , tyDoc     = mdoc
+                                      , iface     = nmodStub
+                                      , typed     = tmodStub }
+                    else parseForImports mn
   where
     parseForImports mn = do
       (srcContent, m) <- parseActFile gopts opts paths mn actFile
