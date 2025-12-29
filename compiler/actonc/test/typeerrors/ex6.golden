@@ -1,5 +1,4 @@
 Building file test/typeerrors/ex6.act using temporary scratch directory
-  Compiling ex6.act with Debug
 [error]: Incompatible types
      +--> ex6.act@1:9-1:16
      |

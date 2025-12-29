@@ -1,14 +1,10 @@
   Stale a: source changed
-  Compiling a.act with Debug
-   Finished typecheck of a in   0.000 s
+   Finished type check of  rebuild/a in   0.000 s
   Stale b: iface changes in a df462c35 → 366981bd
-  Compiling b.act with Debug
-   Finished typecheck of b in   0.000 s
+   Finished type check of  rebuild/b in   0.000 s
   Stale c: iface changes in b 5648a43c → f371c709
-  Compiling c.act with Debug
-   Finished typecheck of c in   0.000 s
-   Finished compilation of a in   0.000 s
-   Finished compilation of b in   0.000 s
-   Finished compilation of c in   0.000 s
-  Final compilation step
+   Finished type check of  rebuild/c in   0.000 s
+   Finished compilation of rebuild/a in   0.000 s
+   Finished compilation of rebuild/b in   0.000 s
+   Finished compilation of rebuild/c in   0.000 s
    Finished final compilation step in   0.000 s

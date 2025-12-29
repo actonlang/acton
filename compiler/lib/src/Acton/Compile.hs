@@ -159,6 +159,8 @@ compileFailureMessage (CompileInternalFailure msg) = msg
 data CompileCallbacks = CompileCallbacks
   { ccOnDiagnostics :: GlobalTask -> C.CompileOptions -> [Diagnostic String] -> IO ()
   , ccOnFrontResult :: GlobalTask -> C.CompileOptions -> FrontResult -> IO ()
+  , ccOnFrontStart :: GlobalTask -> C.CompileOptions -> IO ()
+  , ccOnFrontDone :: GlobalTask -> C.CompileOptions -> IO ()
   , ccOnBackJob :: BackJob -> IO ()
   , ccOnInfo :: String -> IO ()
   }
@@ -167,6 +169,8 @@ defaultCompileCallbacks :: CompileCallbacks
 defaultCompileCallbacks = CompileCallbacks
   { ccOnDiagnostics = \_ _ _ -> return ()
   , ccOnFrontResult = \_ _ _ -> return ()
+  , ccOnFrontStart = \_ _ -> return ()
+  , ccOnFrontDone = \_ _ -> return ()
   , ccOnBackJob = \_ -> return ()
   , ccOnInfo = \_ -> return ()
   }
@@ -425,7 +429,7 @@ data FrontResult = FrontResult
   { frIfaceTE  :: [(A.Name, A.NameInfo)]
   , frDoc      :: Maybe String
   , frIfaceHash :: B.ByteString
-  , frFrontDone :: Maybe String
+  , frFrontTime :: Maybe TimeSpec
   , frBackJob  :: Maybe BackJob
   }
 
@@ -858,9 +862,9 @@ runFrontPasses gopts opts paths env0 parsed srcContent srcBytes resolveImportHas
 
           timeFrontEnd <- getTime Monotonic
           let frontTime = timeFrontEnd - timeStart
-              frontDone = if not (quiet gopts opts)
-                            then Just ("   Finished typecheck of " ++ modNameToString mn ++ " in  " ++ fmtTime frontTime)
-                            else Nothing
+              frontTimeMaybe = if not (quiet gopts opts)
+                                 then Just frontTime
+                                 else Nothing
               backJob = Just BackJob { bjPaths = paths
                                      , bjOpts = opts
                                      , bjInput = BackInput { biTypeEnv = typeEnv
@@ -873,7 +877,7 @@ runFrontPasses gopts opts paths env0 parsed srcContent srcBytes resolveImportHas
           return $ Right FrontResult { frIfaceTE = iface
                                      , frDoc = mdoc
                                      , frIfaceHash = ifaceHash
-                                     , frFrontDone = frontDone
+                                     , frFrontTime = frontTimeMaybe
                                      , frBackJob = backJob
                                      }
 
@@ -945,7 +949,7 @@ runBackPasses gopts opts paths backInput shouldWrite = do
       timeEnd <- getTime Monotonic
       let totalTime = biFrontTime backInput + (timeEnd - timeStart)
       if not (quiet gopts opts)
-        then return (Just ("   Finished compilation of " ++ modNameToString mn ++ " in  " ++ fmtTime totalTime))
+        then return (Just totalTime)
         else return Nothing
 
 
@@ -1068,11 +1072,6 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
         (t:_) -> projTypes (gtPaths t)
         _     -> sysTypes rootPaths
 
-    getMyCap = do
-      tid <- myThreadId
-      (cap, _) <- threadCapability tid
-      return cap
-
     computeCriticalWeights :: M.Map TaskKey Integer -> M.Map TaskKey Integer
     computeCriticalWeights cm = cwMap
       where
@@ -1099,7 +1098,6 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
           mn = name (gtTask t)
           optsBuiltin = optsFor (gtKey t)
           actFile = srcFile bPaths mn
-          compileMsg = makeRelative (srcDir bPaths) actFile
       if C.only_build optsBuiltin
         then return (Right ())
         else case gtTask t of
@@ -1108,15 +1106,16 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
             return (Left CompileBuiltinFailure)
           TyTask{} -> return (Right ())
           ActonTask{ src = srcContent, srcBytes = srcBytes, atree = m } -> do
-            iff (not (quiet gopts optsBuiltin)) $
-              ccOnInfo callbacks ("  Compiling " ++ compileMsg ++ " with " ++ show (C.optimize optsBuiltin))
+            ccOnFrontStart callbacks t optsBuiltin
             builtinEnv0 <- Acton.Env.initEnv (projTypes bPaths) True
             res <- runFrontPasses gopts optsBuiltin bPaths builtinEnv0 m srcContent srcBytes (getIfaceHashCached bPaths)
             case res of
               Left diags -> do
+                ccOnFrontDone callbacks t optsBuiltin
                 ccOnDiagnostics callbacks t optsBuiltin diags
                 return (Left CompileBuiltinFailure)
               Right fr -> do
+                ccOnFrontDone callbacks t optsBuiltin
                 ccOnFrontResult callbacks t optsBuiltin fr
                 forM_ (frBackJob fr) $ ccOnBackJob callbacks
                 return (Right ())
@@ -1132,7 +1131,6 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
           optsT = optsFor key
           providers = gtImportProviders t
           actFile = srcFile paths mn
-          compileMsg = makeRelative (srcDir paths) actFile
           short8 bs   = take 8 (B.unpack $ Base16.encode bs)
 
           resolveImportHash m =
@@ -1155,14 +1153,14 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
                   return (key, Right FrontResult { frIfaceTE = ifaceTE
                                                  , frDoc = mdoc
                                                  , frIfaceHash = ih
-                                                 , frFrontDone = Nothing
+                                                 , frFrontTime = Nothing
                                                  , frBackJob = Nothing
                                                  })
                 Left _ ->
                   return (key, Right FrontResult { frIfaceTE = []
                                                  , frDoc = Nothing
                                                  , frIfaceHash = B.empty
-                                                 , frFrontDone = Nothing
+                                                 , frFrontTime = Nothing
                                                  , frBackJob = Nothing
                                                  })
         _ -> do
@@ -1196,10 +1194,6 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
                       else when needByImports $ do
                         let fmtDelta (m, old, new) = modNameToString m ++ " " ++ short8 old ++ " → " ++ short8 new
                         ccOnInfo callbacks ("  Stale " ++ modNameToString mn ++ ": iface changes in " ++ Data.List.intercalate ", " (map fmtDelta deltas))
-                    cap <- getMyCap
-                    ccOnInfo callbacks ("  Building [cap " ++ show cap ++ "] " ++ modNameToString mn ++ " (" ++ tkProj key ++ ")")
-                  iff (not (quiet gopts optsT)) $
-                    ccOnInfo callbacks ("  Compiling " ++ compileMsg ++ " with " ++ show (C.optimize optsT))
                   t' <- case gtTask t of
                           ActonTask{} -> return (gtTask t)
                           TyTask{}    -> do
@@ -1230,7 +1224,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
                       return (key, Right FrontResult { frIfaceTE = ifaceTE
                                                      , frDoc = mdoc
                                                      , frIfaceHash = ih
-                                                     , frFrontDone = Nothing
+                                                     , frFrontTime = Nothing
                                                      , frBackJob = Nothing
                                                      })
 
@@ -1244,6 +1238,9 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
           rdySorted = Data.List.sortOn (Down . prio) rdy
           (toStart, rdy') = splitAt k rdySorted
       new <- forM toStart $ \mn -> do
+                case M.lookup mn taskMap of
+                  Just t -> ccOnFrontStart callbacks t (optsFor mn)
+                  Nothing -> return ()
                 a <- async (doOne envSnap res mn)
                 return (a, mn)
       return (rdy', new ++ running)
@@ -1274,17 +1271,18 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
           (doneA, (mnDone, outcome)) <- waitAny $ map fst running1
           let running2 = filter ((/= doneA) . fst) running1
           writeIORef runningRef (map fst running2)
+          let tDone = taskMap M.! mnDone
+              optsDone = optsFor mnDone
+          ccOnFrontDone callbacks tDone optsDone
           case outcome of
             Left diags -> do
-              let t = taskMap M.! mnDone
-              ccOnDiagnostics callbacks t (optsFor mnDone) diags
+              ccOnDiagnostics callbacks tDone optsDone diags
               let blocked = dependentClosure mnDone
                   pend2 = Data.Set.delete mnDone (pend `Data.Set.difference` blocked)
                   rdy2 = filter (`Data.Set.notMember` blocked) rdy1
               loop runningRef rdy2 running2 res ind pend2 envAcc True maxPar cw
             Right fr -> do
-              let t = taskMap M.! mnDone
-              ccOnFrontResult callbacks t (optsFor mnDone) fr
+              ccOnFrontResult callbacks tDone optsDone fr
               forM_ (frBackJob fr) $ ccOnBackJob callbacks
               let res2  = M.insert mnDone (frIfaceHash fr) res
                   pend2 = Data.Set.delete mnDone pend

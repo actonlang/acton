@@ -1,9 +1,7 @@
 Building file src/c.act in project .
   Stale a: source changed
-  Compiling a.act with Debug
-   Finished typecheck of a in   0.000 s
+   Finished type check of  rebuild/a in   0.000 s
   Fresh b: using cached .ty
   Fresh c: using cached .ty
-   Finished compilation of a in   0.000 s
-  Final compilation step
+   Finished compilation of rebuild/a in   0.000 s
    Finished final compilation step in   0.000 s

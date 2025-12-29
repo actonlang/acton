@@ -171,6 +171,10 @@ buildOutFile = do
   (_ec,out) <- runIn projDir cmd
   pure out
 
+typechecked :: T.Text -> T.Text -> Bool
+typechecked out modName =
+  any (\line -> "Finished type check of" `T.isInfixOf` line && modName `T.isInfixOf` line) (T.lines out)
+
 buildProject :: IO ()
 buildProject = do
   let cmd = actoncExe ++ " build --color never"
@@ -234,9 +238,9 @@ p06_change_a_impl = goldenVsString "06-change-a-impl.golden" (goldenDir </> "pro
   writeFileUtf8 (srcDir </> "a.act") "aaa = 124\n"
   out <- buildOut
   -- Expect only a.act to compile
-  assertBool "expected a.act to compile" (T.isInfixOf "Compiling a.act" out)
-  assertBool "did not expect b.act to compile" (not (T.isInfixOf "Compiling b.act" out))
-  assertBool "did not expect c.act to compile" (not (T.isInfixOf "Compiling c.act" out))
+  assertBool "expected a.act to compile" (typechecked out "rebuild/a")
+  assertBool "did not expect b.act to compile" (not (typechecked out "rebuild/b"))
+  assertBool "did not expect c.act to compile" (not (typechecked out "rebuild/c"))
   pure (sanitize out)
 
 p07_run_127 :: TestTree
@@ -258,9 +262,9 @@ p08_change_b_impl = goldenVsString "08-change-b-impl.golden" (goldenDir </> "pro
     ]
   out <- buildOut
   -- Expect b.act to compile, but not a.act or c.act in project build
-  assertBool "did not expect a.act to compile" (not (T.isInfixOf "Compiling a.act" out))
-  assertBool "expected b.act to compile" (T.isInfixOf "Compiling b.act" out)
-  assertBool "did not expect c.act to compile" (not (T.isInfixOf "Compiling c.act" out))
+  assertBool "did not expect a.act to compile" (not (typechecked out "rebuild/a"))
+  assertBool "expected b.act to compile" (typechecked out "rebuild/b")
+  assertBool "did not expect c.act to compile" (not (typechecked out "rebuild/c"))
   pure (sanitize out)
 
 p09_run_134 :: TestTree
@@ -283,10 +287,10 @@ p10_change_a_iface =
     out <- buildOut
     -- Should rebuild a.act and b.act; with import-augmented iface hashing, b's
     -- interface hash changes when a's interface changes
-    assertBool "expected a.act to compile" (T.isInfixOf "Compiling a.act" out)
-    assertBool "expected b.act to compile" (T.isInfixOf "Compiling b.act" out)
+    assertBool "expected a.act to compile" (typechecked out "rebuild/a")
+    assertBool "expected b.act to compile" (typechecked out "rebuild/b")
     -- c should rebuild too, since it imports b which has now changed since its import a changed..
-    assertBool "expected c.act to compile" (T.isInfixOf "Compiling c.act" out)
+    assertBool "expected c.act to compile" (typechecked out "rebuild/c")
     pure (sanitize out)
 
 -- Docstring-only change in an imported module should not rebuild dependents
@@ -307,8 +311,8 @@ p11_change_b_doc =
       , "        return 1"
       ]
     out <- buildOut
-    assertBool "expected b.act to compile" (T.isInfixOf "Compiling b.act" out)
-    assertBool "did not expect c.act to compile" (not (T.isInfixOf "Compiling c.act" out))
+    assertBool "expected b.act to compile" (typechecked out "rebuild/b")
+    assertBool "did not expect c.act to compile" (not (typechecked out "rebuild/c"))
     pure (sanitize out)
 
 f01_init :: TestTree
@@ -349,9 +353,9 @@ f06_change_a_impl = goldenVsString "06-change-a-impl.golden" (goldenDir </> "fil
   writeFileUtf8 (srcDir </> "a.act") "aaa = 124\n"
   out <- buildOutFile
   -- Expect only a.act to compile in single-file build
-  assertBool "expected a.act to compile" (T.isInfixOf "Compiling a.act" out)
-  assertBool "did not expect b.act to compile" (not (T.isInfixOf "Compiling b.act" out))
-  assertBool "did not expect c.act to compile" (not (T.isInfixOf "Compiling c.act" out))
+  assertBool "expected a.act to compile" (typechecked out "rebuild/a")
+  assertBool "did not expect b.act to compile" (not (typechecked out "rebuild/b"))
+  assertBool "did not expect c.act to compile" (not (typechecked out "rebuild/c"))
   pure (sanitize out)
 
 f07_run_127 :: TestTree
@@ -373,10 +377,10 @@ f08_change_b_impl = goldenVsString "08-change-b-impl.golden" (goldenDir </> "fil
     ]
   out <- buildOutFile
   -- Expect b.act to compile; c.act may compile if its view of b's iface changes
-  assertBool "did not expect a.act to compile" (not (T.isInfixOf "Compiling a.act" out))
-  assertBool "expected b.act to compile" (T.isInfixOf "Compiling b.act" out)
+  assertBool "did not expect a.act to compile" (not (typechecked out "rebuild/a"))
+  assertBool "expected b.act to compile" (typechecked out "rebuild/b")
   -- In file build, c usually recompiles due to dependency ordering
-  assertBool "expected c.act to compile" (T.isInfixOf "Compiling c.act" out)
+  assertBool "expected c.act to compile" (typechecked out "rebuild/c")
   pure (sanitize out)
 
 f09_run_134 :: TestTree
