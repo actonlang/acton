@@ -25,7 +25,7 @@
 --   3) ifaceHash    :: ByteString                  -- SHA-256 of public NameInfo (doc-free)
 --                                                 -- augmented with imports' iface hashes
 --   4) imports      :: [(A.ModName, ByteString)]   -- imported module and iface hash used
---   5) roots        :: [A.Name]                    -- root actors (e.g., main or __test_main)
+--   5) roots        :: [A.Name]                    -- root actors (e.g., main or test_main)
 --   6) docstring    :: Maybe String                -- module docstring
 --   7) nameInfo     :: A.NameInfo                  -- type/name environment
 --   8) typedModule  :: A.Module                    -- typed module

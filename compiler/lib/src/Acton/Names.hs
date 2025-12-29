@@ -149,6 +149,14 @@ isHidden _                          = True
 
 notHidden                           = filter (not . isHidden)
 
+isPrivateName                       :: Name -> Bool
+isPrivateName n                     = case nstr n of
+                                        ('_':_) -> True
+                                        _       -> False
+
+isPublicName                        :: Name -> Bool
+isPublicName                        = not . isPrivateName
+
 
 -- Free and bound names ------------
 

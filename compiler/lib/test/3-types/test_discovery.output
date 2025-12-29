@@ -82,5 +82,5 @@ __async_tests: __builtin__.dict[__builtin__.str, testing.AsyncTest] = $mkDict@[_
 
 __env_tests: __builtin__.dict[__builtin__.str, testing.EnvTest] = $mkDict@[__builtin__.str, testing.EnvTest](__builtin__.HashableD_str(), {"_test_EnvTester": testing.EnvTest(_test_EnvTester, "_test_EnvTester", "", "test_discovery")})
 
-actor __test_main (env : __builtin__.Env):
+actor test_main (env : __builtin__.Env):
     testing.test_runner(env, __unit_tests, __simple_sync_tests, __sync_tests, __async_tests, __env_tests)

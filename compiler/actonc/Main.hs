@@ -690,7 +690,7 @@ expectedRootStubs paths tasks = do
     return (concat roots)
   where
     mkStub outbase n =
-      if nameToString n == "__test_main"
+      if nameToString n == "test_main"
         then outbase ++ ".test_root.c"
         else outbase ++ ".root.c"
 
@@ -908,7 +908,7 @@ compileFiles gopts opts srcFiles allowPrune = do
         preBinTasks
           | null (C.root opts') = map (\t -> BinTask True (modNameToString (name t)) (A.GName (name t) (A.name "main")) False) rootTasks
           | otherwise        = [binTask]
-        preTestBinTasks = map (\t -> BinTask True (modNameToString (name t)) (A.GName (name t) (A.name "__test_main")) True) rootTasks
+        preTestBinTasks = map (\t -> BinTask True (modNameToString (name t)) (A.GName (name t) (A.name "test_main")) True) rootTasks
     -- Generate build.zig(.zon) for dependencies too, to satisfy Zig builder links.
     let projKeys = Data.Set.fromList (map (tkProj . gtKey) globalTasks)
     forM_ (Data.Set.toList projKeys) $ \p -> do
