@@ -18,6 +18,7 @@ description:         Please see the README on Github at <https://github.com/gith
 dependencies:
   - MissingH
   - acton
+  - aeson
   - async
   - base >= 4.7 && < 5
   - base16-bytestring
