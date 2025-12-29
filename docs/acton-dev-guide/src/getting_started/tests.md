@@ -40,6 +40,27 @@ make test-typeerrors-accept
 
 `test-rebuild*` requires `dist/bin/actonc` (it is built automatically by the target).
 
+## Project tests with actonc
+
+Run tests for the current Acton project (expects a `Build.act` in the cwd):
+
+```sh
+actonc test
+```
+
+Example output:
+
+```text
+$ actonc test
+Building project in /path/to/project
+  Final compilation step
+   Finished final compilation step in   0.462 s
+Test results:
+  c.bar:                 OK:  445 runs in 50.160ms
+  c.foo:                 OK:  444 runs in 50.188ms
+All 2 tests passed ( 0.528 s)
+```
+
 ## Tips
 
 - Prefer `make test-compiler` when iterating on Haskell changes.

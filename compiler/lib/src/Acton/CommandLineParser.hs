@@ -39,6 +39,7 @@ data GlobalOptions = GlobalOptions {
 
 data Command        = New NewOptions
                     | Build CompileOptions
+                    | Test TestCommand
                     | Fetch
                     | PkgShow
                     | BuildSpecCmd BuildSpecCommand
@@ -84,6 +85,7 @@ data CompileOptions   = CompileOptions {
                          target      :: String,
                          cpu         :: String,
                          test        :: Bool,
+                         print_test_bins :: Bool,
                          searchpath  :: [String],
                          dep_overrides :: [(String,String)]
                      } deriving Show
@@ -106,6 +108,26 @@ data DocOptions     = DocOptions {
 
 data DocFormat = AsciiFormat | MarkdownFormat | HtmlFormat deriving (Show, Eq)
 
+data TestCommand
+    = TestRun TestOptions
+    | TestList TestOptions
+    | TestPerf TestOptions
+    deriving Show
+
+data TestOptions = TestOptions
+    { testCompile      :: CompileOptions
+    , testShowLog      :: Bool
+    , testRecord       :: Bool
+    , testGoldenUpdate :: Bool
+    , testIter         :: Int
+    , testMaxIter      :: Int
+    , testMinIter      :: Int
+    , testMaxTime      :: Int
+    , testMinTime      :: Int
+    , testModules      :: [String]
+    , testNames        :: [String]
+    } deriving Show
+
 --------------------------------------------------------------------
 -- Internal stuff
 
@@ -113,6 +135,7 @@ cmdLineParser       :: Parser CmdLineOptions
 cmdLineParser       = hsubparser
                         (  command "new"     (info (CmdOpt <$> globalOptions <*> (New <$> newOptions)) (progDesc "Create a new Acton project"))
                         <> command "build"   (info (CmdOpt <$> globalOptions <*> (Build <$> compileOptions)) (progDesc "Build an Acton project"))
+                        <> command "test"    (info (CmdOpt <$> globalOptions <*> (Test <$> testCommand)) (progDesc "Build and run project tests"))
                         <> command "fetch"   (info (CmdOpt <$> globalOptions <*> pure Fetch) (progDesc "Fetch project dependencies (offline prep)"))
                         <> command "pkg"     (info (CmdOpt <$> globalOptions <*> pkgSubcommands) (progDesc "Package/dependency commands"))
                         <> command "spec"    (info (CmdOpt <$> globalOptions <*> (BuildSpecCmd <$> buildSpecCommand)) (progDesc "Inspect or update build specification"))
@@ -197,6 +220,7 @@ compileOptions = CompileOptions
         <*> strOption (long "target"    <> metavar "TARGET" <> value defTarget <> help "Target, e.g. x86_64-linux-gnu.2.28")
         <*> strOption (long "cpu"       <> metavar "CPU" <> value "" <> help "CPU, e.g. skylake")
         <*> switch (long "test"         <> help "Build tests")
+        <*> pure True
         <*> many (strOption (long "searchpath" <> metavar "DIR" <> help "Add search path"))
         <*> many (option depOverrideReader
                (long "dep"
@@ -233,6 +257,41 @@ optimizeOption = option optimizeReader
      <> value Debug
      <> help "Optimization mode (Debug, ReleaseSafe, ReleaseSmall, ReleaseFast)"
     )
+
+data TestModeTag = ModeList | ModePerf deriving Show
+
+testCommand :: Parser TestCommand
+testCommand =
+    toCmd
+      <$> optional (argument testModeReader (metavar "MODE" <> help "list | perf"))
+      <*> testOptions
+  where
+    toCmd mMode opts =
+      case mMode of
+        Just ModeList -> TestList opts
+        Just ModePerf -> TestPerf opts
+        Nothing -> TestRun opts
+
+testModeReader :: ReadM TestModeTag
+testModeReader = eitherReader $ \s ->
+    case s of
+      "list" -> Right ModeList
+      "perf" -> Right ModePerf
+      _      -> Left "Expected 'list' or 'perf'"
+
+testOptions :: Parser TestOptions
+testOptions = TestOptions
+    <$> compileOptions
+    <*> switch (long "show-log"      <> help "Show test log output")
+    <*> switch (long "record"        <> help "Record test performance results")
+    <*> switch (long "golden-update" <> help "Update expected golden values based on current values")
+    <*> option auto (long "iter"     <> metavar "N" <> value (-1) <> help "Number of iterations to run a test")
+    <*> option auto (long "max-iter" <> metavar "N" <> value (10^6) <> help "Maximum number of iterations to run a test")
+    <*> option auto (long "min-iter" <> metavar "N" <> value 3 <> help "Minimum number of iterations to run a test")
+    <*> option auto (long "max-time" <> metavar "MS" <> value 1000 <> help "Maximum time to run a test in milliseconds")
+    <*> option auto (long "min-time" <> metavar "MS" <> value 50 <> help "Minimum time to run a test in milliseconds")
+    <*> many (strOption (long "module" <> metavar "MODULE" <> help "Filter on test module name"))
+    <*> many (strOption (long "name" <> metavar "NAME" <> help "Filter on test name"))
 
 depOverrideReader :: ReadM (String,String)
 depOverrideReader = eitherReader $ \s ->

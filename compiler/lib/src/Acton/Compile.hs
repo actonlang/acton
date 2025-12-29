@@ -164,7 +164,7 @@ defaultCompileOptions :: C.CompileOptions
 defaultCompileOptions =
   C.CompileOptions False False False False False False False False False False False False False
                    False False False False False C.Debug False False False False False
-                   "" "" "" C.defTarget "" False [] []
+                   "" "" "" C.defTarget "" False True [] []
 
 
 dump :: A.ModName -> String -> String -> IO ()

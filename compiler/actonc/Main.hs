@@ -49,9 +49,10 @@ import qualified InterfaceFiles
 import Control.Applicative
 import Control.Concurrent.Async
 import Control.Concurrent.MVar
-import Control.Exception (throw,catch,displayException,finally,IOException,ErrorCall,try,SomeException,bracket,onException,evaluate)
+import Control.Exception (throw,catch,displayException,finally,IOException,ErrorCall,try,SomeException,bracket,bracket_,onException,evaluate)
 import Control.Exception (bracketOnError)
 import Control.Concurrent (forkIO, threadDelay)
+import Control.Concurrent.Chan (Chan, newChan, writeChan, readChan)
 import Control.Monad
 import Data.Default.Class (def)
 import Data.List.Split
@@ -101,6 +102,11 @@ import qualified Data.ByteString.Lazy as BL
 import Data.Binary (encode)
 import qualified Data.ByteString.Base16 as Base16
 import qualified Crypto.Hash.SHA256 as SHA256
+import qualified Data.Aeson as Aeson
+import qualified Data.Aeson.Types as AesonTypes
+import qualified Data.Aeson.Key as AesonKey
+import qualified Data.Aeson.KeyMap as AesonKM
+import Control.Concurrent.QSem (newQSem, waitQSem, signalQSem)
 
 main = do
     hSetBuffering stdout LineBuffering
@@ -123,6 +129,7 @@ main = do
     let run = case arg of
           C.CmdOpt gopts (C.New opts)         -> createProject (C.file opts)
           C.CmdOpt gopts (C.Build opts)       -> buildProject gopts opts
+          C.CmdOpt gopts (C.Test tcmd)        -> runTests gopts tcmd
           C.CmdOpt gopts C.Fetch             -> fetchCommand gopts
           C.CmdOpt gopts C.PkgShow           -> pkgShow gopts
           C.CmdOpt gopts (C.BuildSpecCmd o)   -> buildSpecCommand o
@@ -318,6 +325,487 @@ buildProjectOnce gopts opts = do
                       compileFiles sp gopts opts srcFiles True
                       generateProjectDocIndex sp gopts opts paths srcFiles
 
+-- Test runner -------------------------------------------------------------------------------------------------
+
+data TestMode = TestModeRun | TestModeList | TestModePerf deriving (Eq, Show)
+
+data TestResult = TestResult
+  { trModule       :: String
+  , trName         :: String
+  , trComplete     :: Bool
+  , trSuccess      :: Maybe Bool
+  , trException    :: Maybe String
+  , trOutput       :: Maybe String
+  , trStdOut       :: Maybe String
+  , trStdErr       :: Maybe String
+  , trFlaky        :: Bool
+  , trNumFailures  :: Int
+  , trNumErrors    :: Int
+  , trNumIterations :: Int
+  , trTestDuration :: Double
+  , trRaw          :: Aeson.Value
+  } deriving (Show)
+
+runTests :: C.GlobalOptions -> C.TestCommand -> IO ()
+runTests gopts cmd = do
+    let (mode, topts) =
+          case cmd of
+            C.TestRun opts  -> (TestModeRun, opts)
+            C.TestList opts -> (TestModeList, opts)
+            C.TestPerf opts -> (TestModePerf, opts)
+        opts0 = C.testCompile topts
+    let opts = opts0
+          { C.test = True
+          , C.print_test_bins = False
+          , C.skip_build = False
+          , C.only_build = False
+          }
+    curDir <- getCurrentDirectory
+    paths <- findPaths (joinPath [ curDir, "Acton.toml" ]) opts
+    when (isTmp paths) $
+      printErrorAndExit "Acton.toml not found in current directory"
+    if C.watch opts0
+      then case mode of
+             TestModeList -> runTestsOnce gopts opts topts mode paths
+             _ -> runTestsWatch gopts opts topts mode paths
+      else runTestsOnce gopts opts topts mode paths
+
+runTestsOnce :: C.GlobalOptions -> C.CompileOptions -> C.TestOptions -> TestMode -> Paths -> IO ()
+runTestsOnce gopts opts topts mode paths = do
+    buildProjectOnce gopts opts
+    modules <- listTestModules opts paths
+    case mode of
+      TestModeList -> listProjectTests opts paths topts modules
+      _ -> do
+        maxParallel <- testMaxParallel gopts
+        exitCode <- runProjectTests opts paths topts mode modules maxParallel
+        exitWithTestCode exitCode
+
+runTestsWatch :: C.GlobalOptions -> C.CompileOptions -> C.TestOptions -> TestMode -> Paths -> IO ()
+runTestsWatch gopts opts topts mode paths = do
+    let sp = Source.diskSourceProvider
+        projDir = projPath paths
+        srcRoot = srcDir paths
+    maxParallel <- testMaxParallel gopts
+    hashesRef <- newIORef M.empty
+    let runOnce mChanged = do
+          iff (not (C.quiet gopts)) $
+            putStrLn ("Building project in " ++ projDir)
+          withFileLock (joinPath [projDir, ".actonc.lock"]) Exclusive $ \_ -> do
+            allFiles <- getFilesRecursive srcRoot
+            let srcFiles = catMaybes $ map filterActFile allFiles
+            hadErrors <- compileFilesChanged sp gopts opts srcFiles True mChanged
+            oldHashes <- readIORef hashesRef
+            newHashes <- moduleHashesFromFiles paths srcFiles
+            writeIORef hashesRef newHashes
+            unless hadErrors $ do
+              let changedModules = diffModuleHashes oldHashes newHashes
+              testModules <- listTestModules opts paths
+              let modulesToTest = filter (`elem` testModules) changedModules
+              unless (null modulesToTest) $ do
+                _ <- runProjectTests opts paths topts mode modulesToTest maxParallel
+                return ()
+    runWatchProject gopts projDir srcRoot runOnce
+
+testMaxParallel :: C.GlobalOptions -> IO Int
+testMaxParallel gopts = do
+    nCaps <- getNumCapabilities
+    return (max 1 (if C.jobs gopts > 0 then C.jobs gopts else max 1 (nCaps `div` 2)))
+
+exitWithTestCode :: Int -> IO ()
+exitWithTestCode code
+  | code <= 0 = System.Exit.exitSuccess
+  | otherwise = System.Exit.exitWith (ExitFailure code)
+
+listTestModules :: C.CompileOptions -> Paths -> IO [String]
+listTestModules opts paths = do
+    let dir = binDir paths
+    exists <- doesDirectoryExist dir
+    if not exists
+      then return []
+      else do
+        entries <- listDirectory dir
+        mods <- forM entries $ \entry -> do
+          let base = stripExe entry
+          if ".test_" `isPrefixOf` base
+            then do
+              let full = dir </> entry
+              isFile <- doesFileExist full
+              if isFile
+                then return (Just (drop (length ".test_") base))
+                else return Nothing
+            else return Nothing
+        return (Data.List.sort (catMaybes mods))
+  where
+    stripExe name
+      | isWindowsOS (C.target opts) && takeExtension name == ".exe" = dropExtension name
+      | otherwise = name
+
+testBinaryPath :: C.CompileOptions -> Paths -> String -> FilePath
+testBinaryPath opts paths modName =
+    let base = ".test_" ++ modName
+        exe  = if isWindowsOS (C.target opts) then base <.> "exe" else base
+    in binDir paths </> exe
+
+listProjectTests :: C.CompileOptions -> Paths -> C.TestOptions -> [String] -> IO ()
+listProjectTests opts paths topts modules = do
+    let wantedModules = Data.List.sort (filterModules (C.testModules topts) modules)
+    tests <- forM wantedModules $ \modName -> do
+      names <- listModuleTests opts paths modName
+      return (modName, names)
+    if null tests
+      then do
+        putStrLn "No tests found"
+        System.Exit.exitSuccess
+      else do
+        forM_ (Data.List.sortOn fst tests) $ \(modName, names) -> do
+          when (not (null names)) $ do
+            putStrLn ("Module " ++ modName ++ ":")
+            forM_ (Data.List.sort names) $ \name -> do
+              let display = displayTestName name
+              if display /= name
+                then putStrLn ("  " ++ display ++ " (" ++ name ++ ")")
+                else putStrLn ("  " ++ display)
+            putStrLn ""
+        System.Exit.exitSuccess
+
+runProjectTests :: C.CompileOptions -> Paths -> C.TestOptions -> TestMode -> [String] -> Int -> IO Int
+runProjectTests opts paths topts mode modules maxParallel = do
+    timeStart <- getTime Monotonic
+    let wantedModules = Data.List.sort (filterModules (C.testModules topts) modules)
+    testsByModule <- forM wantedModules $ \modName -> do
+      names <- listModuleTests opts paths modName
+      let wantedNames = Data.List.sort (filterTests (C.testNames topts) names)
+      return (modName, wantedNames)
+    let allTests = concatMap (\(m, names) -> map (\name -> (m, name)) names) testsByModule
+    if null allTests
+      then do
+        putStrLn "Nothing to test"
+        return 0
+      else do
+        putStrLn "Test results:"
+        let displayNames = [ formatTestName modName testName | (modName, testName) <- allTests ]
+            maxNameLen = maximum (map length displayNames)
+            nameWidth = max 20 maxNameLen + 5
+        resultChan <- newChan
+        printer <- async (printTestResults mode nameWidth (C.testShowLog topts) resultChan)
+        results <- runWithLimit maxParallel allTests $ \(modName, testName) -> do
+          res <- runModuleTest opts paths topts mode modName testName
+          writeChan resultChan (Just res)
+          return res
+        writeChan resultChan Nothing
+        _ <- wait printer
+        timeEnd <- getTime Monotonic
+        when (C.testGoldenUpdate topts) $
+          updateGoldenFiles paths results
+        when (C.testRecord topts) $
+          writePerfData paths results
+        printTestSummary (timeEnd - timeStart) (C.testShowLog topts) results
+
+filterModules :: [String] -> [String] -> [String]
+filterModules [] mods = mods
+filterModules wanted mods = filter (`elem` wanted) mods
+
+filterTests :: [String] -> [String] -> [String]
+filterTests [] names = names
+filterTests wanted names =
+    filter (\name -> name `elem` wanted || displayTestName name `elem` wanted) names
+
+runWithLimit :: Int -> [a] -> (a -> IO b) -> IO [b]
+runWithLimit limit items action = do
+    sem <- newQSem (max 1 limit)
+    forConcurrently items $ \item ->
+      bracket_ (waitQSem sem) (signalQSem sem) (action item)
+
+listModuleTests :: C.CompileOptions -> Paths -> String -> IO [String]
+listModuleTests opts paths modName = do
+    let binPath = testBinaryPath opts paths modName
+    exists <- doesFileExist binPath
+    if not exists
+      then return []
+      else do
+        let args = ["list", "--json"]
+        (exitCode, _out, err) <- readProcessWithExitCodeCancelable (proc binPath args){ cwd = Just (projPath paths) }
+        case exitCode of
+          ExitSuccess -> do
+            let values = parseJsonLines err
+            return (extractTestList values)
+          ExitFailure code ->
+            printErrorAndExit ("Listing tests failed for module " ++ modName ++ " (exit " ++ show code ++ ")")
+
+runModuleTest :: C.CompileOptions -> Paths -> C.TestOptions -> TestMode -> String -> String -> IO TestResult
+runModuleTest opts paths topts mode modName testName = do
+    let binPath = testBinaryPath opts paths modName
+        cmd = ["test", testName] ++ (if mode == TestModePerf then ["perf"] else []) ++ testCmdArgs topts
+    (exitCode, _out, err) <- readProcessWithExitCodeCancelable (proc binPath cmd){ cwd = Just (projPath paths) }
+    let values = parseJsonLines err
+        infos = extractTestInfo values
+    case pickFinalTestInfo infos of
+      Just res -> do
+        case exitCode of
+          ExitSuccess -> return res
+          ExitFailure code ->
+            return res { trException = Just ("Test process exited with code " ++ show code) }
+      Nothing -> do
+        let fallback = TestResult
+              { trModule = modName
+              , trName = testName
+              , trComplete = False
+              , trSuccess = Nothing
+              , trException = Just "No test result received"
+              , trOutput = Nothing
+              , trStdOut = Nothing
+              , trStdErr = Nothing
+              , trFlaky = False
+              , trNumFailures = 0
+              , trNumErrors = 1
+              , trNumIterations = 0
+              , trTestDuration = 0
+              , trRaw = Aeson.Null
+              }
+        return fallback
+
+testCmdArgs :: C.TestOptions -> [String]
+testCmdArgs topts =
+    let iter = C.testIter topts
+    in if iter > 0
+         then ["--max-iter", show iter, "--min-iter", show iter, "--max-time", show (10^6), "--min-time", "1"]
+         else [ "--max-iter", show (C.testMaxIter topts)
+              , "--min-iter", show (C.testMinIter topts)
+              , "--max-time", show (C.testMaxTime topts)
+              , "--min-time", show (C.testMinTime topts)
+              ]
+
+displayTestName :: String -> String
+displayTestName name =
+    let withoutPrefix =
+          if "_test_" `isPrefixOf` name
+            then drop 6 name
+            else name
+    in if "_wrapper" `isSuffixOf` withoutPrefix
+         then take (length withoutPrefix - length "_wrapper") withoutPrefix
+         else withoutPrefix
+
+type ModuleHashMap = M.Map String B.ByteString
+
+moduleHashesFromFiles :: Paths -> [FilePath] -> IO ModuleHashMap
+moduleHashesFromFiles paths files = do
+    pairs <- forM files $ \file -> do
+      mn <- moduleNameFromFile (srcDir paths) file
+      mhash <- readModuleHash paths mn
+      return (fmap (\h -> (modNameToString mn, h)) mhash)
+    return (M.fromList (catMaybes pairs))
+
+readModuleHash :: Paths -> A.ModName -> IO (Maybe B.ByteString)
+readModuleHash paths mn = do
+    let tyFile = outBase paths mn ++ ".ty"
+    exists <- doesFileExist tyFile
+    if not exists
+      then return Nothing
+      else do
+        hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader tyFile
+        case hdrE of
+          Left _ -> return Nothing
+          Right (hash, _ih, _imps, _roots, _doc) -> return (Just hash)
+
+diffModuleHashes :: ModuleHashMap -> ModuleHashMap -> [String]
+diffModuleHashes old new =
+    [ modName | (modName, h) <- M.toList new, M.lookup modName old /= Just h ]
+
+formatTestName :: String -> String -> String
+formatTestName moduleName testName =
+    let display = displayTestName testName
+    in if null moduleName
+         then display
+         else moduleName ++ "." ++ display
+
+formatTestStatus :: TestResult -> String
+formatTestStatus res
+  | trSuccess res == Just True && trException res == Nothing = "OK"
+  | otherwise =
+      let base
+            | trNumErrors res > 0 && trNumFailures res > 0 = "ERR/FAIL"
+            | trNumErrors res > 0 = "ERR"
+            | trNumFailures res > 0 = "FAIL"
+            | trSuccess res == Just False = "FAIL"
+            | otherwise = "ERR"
+          prefix = if trFlaky res then "FLAKY " else ""
+      in prefix ++ base
+
+formatTestLine :: TestMode -> Int -> TestResult -> String
+formatTestLine _ nameWidth res =
+    let name = formatTestName (trModule res) (trName res)
+        prefix0 = "  " ++ name ++ ": "
+        padding = replicate (max 0 (nameWidth - length prefix0)) ' '
+        status = formatTestStatus res
+        runs = printf "%4d runs in %3.3fms" (trNumIterations res) (trTestDuration res)
+    in prefix0 ++ padding ++ status ++ ": " ++ runs
+
+printTestResults :: TestMode -> Int -> Bool -> Chan (Maybe TestResult) -> IO ()
+printTestResults mode nameWidth showLog chan = go
+  where
+    go = do
+      evt <- readChan chan
+      case evt of
+        Nothing -> return ()
+        Just res -> do
+          putStrLn (formatTestLine mode nameWidth res)
+          let ok = trSuccess res == Just True && trException res == Nothing
+          unless (ok || showLog) $
+            forM_ (trException res) $ \exc ->
+              mapM_ (\line -> putStrLn ("    " ++ line)) (lines exc)
+          go
+
+parseJsonLines :: String -> [Aeson.Value]
+parseJsonLines txt =
+    [ v
+    | line <- lines txt
+    , let trimmed = dropWhile isSpace line
+    , not (null trimmed)
+    , Just v <- [Aeson.decodeStrict' (B.pack trimmed)]
+    ]
+
+extractTestList :: [Aeson.Value] -> [String]
+extractTestList values =
+    case listToMaybe [ obj | Aeson.Object obj <- values, AesonKM.member (AesonKey.fromString "tests") obj ] of
+      Just obj ->
+        case AesonKM.lookup (AesonKey.fromString "tests") obj of
+          Just (Aeson.Object testsObj) -> map AesonKey.toString (AesonKM.keys testsObj)
+          _ -> []
+      Nothing -> []
+
+extractTestInfo :: [Aeson.Value] -> [TestResult]
+extractTestInfo values =
+    catMaybes (map parseTestInfo values)
+
+parseTestInfo :: Aeson.Value -> Maybe TestResult
+parseTestInfo val =
+    case val of
+      Aeson.Object obj ->
+        case AesonKM.lookup (AesonKey.fromString "test_info") obj of
+          Just infoVal -> AesonTypes.parseMaybe parseTestInfoValue infoVal
+          Nothing -> Nothing
+      _ -> Nothing
+
+parseTestInfoValue :: Aeson.Value -> AesonTypes.Parser TestResult
+parseTestInfoValue = Aeson.withObject "TestInfo" $ \o -> do
+    def <- o Aeson..: AesonKey.fromString "definition"
+    moduleName <- def Aeson..: AesonKey.fromString "module"
+    name <- def Aeson..: AesonKey.fromString "name"
+    complete <- o Aeson..: AesonKey.fromString "complete"
+    success <- o Aeson..:? AesonKey.fromString "success"
+    exception <- o Aeson..:? AesonKey.fromString "exception"
+    output <- o Aeson..:? AesonKey.fromString "output"
+    stdOut <- o Aeson..:? AesonKey.fromString "std_out"
+    stdErr <- o Aeson..:? AesonKey.fromString "std_err"
+    flaky <- o Aeson..:? AesonKey.fromString "flaky" Aeson..!= False
+    numFailures <- o Aeson..:? AesonKey.fromString "num_failures" Aeson..!= 0
+    numErrors <- o Aeson..:? AesonKey.fromString "num_errors" Aeson..!= 0
+    numIterations <- o Aeson..:? AesonKey.fromString "num_iterations" Aeson..!= 0
+    testDuration <- o Aeson..:? AesonKey.fromString "test_duration" Aeson..!= 0
+    return TestResult
+      { trModule = moduleName
+      , trName = name
+      , trComplete = complete
+      , trSuccess = success
+      , trException = exception
+      , trOutput = output
+      , trStdOut = stdOut
+      , trStdErr = stdErr
+      , trFlaky = flaky
+      , trNumFailures = numFailures
+      , trNumErrors = numErrors
+      , trNumIterations = numIterations
+      , trTestDuration = testDuration
+      , trRaw = Aeson.Object o
+      }
+
+pickFinalTestInfo :: [TestResult] -> Maybe TestResult
+pickFinalTestInfo infos =
+    case reverse infos of
+      [] -> Nothing
+      xs ->
+        case listToMaybe [i | i <- xs, trComplete i] of
+          Just i -> Just i
+          Nothing -> Just (head xs)
+
+printTestSummary :: TimeSpec -> Bool -> [TestResult] -> IO Int
+printTestSummary elapsed showLog results = do
+    let total = length results
+        failures = length [ r | r <- results, trSuccess r == Just False ]
+        errors = length [ r | r <- results, trSuccess r == Nothing ]
+    case total of
+      0 -> do
+        putStrLn "Nothing to test"
+        return 0
+      _ -> do
+        if errors > 0 && failures > 0
+          then putStrLn (show errors ++ " error and " ++ show failures ++ " failure out of " ++ show total ++ " tests (" ++ fmtTime elapsed ++ ")")
+          else if errors > 0
+            then putStrLn (show errors ++ " out of " ++ show total ++ " tests errored (" ++ fmtTime elapsed ++ ")")
+            else if failures > 0
+              then putStrLn (show failures ++ " out of " ++ show total ++ " tests failed (" ++ fmtTime elapsed ++ ")")
+              else putStrLn ("All " ++ show total ++ " tests passed (" ++ fmtTime elapsed ++ ")")
+        when showLog $
+          printTestDetails showLog results
+        if errors > 0
+          then return 2
+          else if failures > 0
+            then return 1
+            else return 0
+
+printTestDetails :: Bool -> [TestResult] -> IO ()
+printTestDetails showLog results = do
+    forM_ results $ \res -> do
+      let status = case trSuccess res of
+                     Just True -> "OK"
+                     Just False -> "FAIL"
+                     Nothing -> "ERR"
+          display = displayTestName (trName res)
+      when (showLog || status /= "OK") $ do
+        putStrLn ("Test " ++ trModule res ++ "." ++ display ++ ": " ++ status)
+        case trException res of
+          Just exc -> putStrLn ("  " ++ exc)
+          Nothing -> return ()
+        when (showLog || status /= "OK") $ do
+          case trOutput res of
+            Just out | not (null out) -> putStrLn ("  Output:\n" ++ out)
+            _ -> return ()
+          case trStdOut res of
+            Just out | not (null out) -> putStrLn ("  Stdout:\n" ++ out)
+            _ -> return ()
+          case trStdErr res of
+            Just out | not (null out) -> putStrLn ("  Stderr:\n" ++ out)
+            _ -> return ()
+
+updateGoldenFiles :: Paths -> [TestResult] -> IO ()
+updateGoldenFiles paths results =
+    forM_ results $ \res -> do
+      case (trException res, trOutput res) of
+        (Just exc, Just out)
+          | "testing.NotEqualError: Test output does not match expected golden value" `isPrefixOf` exc -> do
+              let fileName = displayTestName (trName res)
+                  goldenDir = joinPath [projPath paths, "test", "golden", trModule res]
+              createDirectoryIfMissing True goldenDir
+              writeFile (goldenDir </> fileName) out
+        _ -> return ()
+
+writePerfData :: Paths -> [TestResult] -> IO ()
+writePerfData paths results = do
+    let addTest acc res =
+          let modKey = AesonKey.fromString (trModule res)
+              testKey = AesonKey.fromString (trName res)
+              entry = case AesonKM.lookup modKey acc of
+                        Just (Aeson.Object obj) -> obj
+                        _ -> AesonKM.empty
+              entry' = AesonKM.insert testKey (trRaw res) entry
+              acc' = AesonKM.insert modKey (Aeson.Object entry') acc
+          in acc'
+        modulesObj = foldl' addTest AesonKM.empty results
+        outVal = Aeson.Object modulesObj
+        outPath = joinPath [projPath paths, "perf_data"]
+    BL.writeFile outPath (Aeson.encode outVal)
+
 watchProjectAt :: C.GlobalOptions -> C.CompileOptions -> FilePath -> IO ()
 watchProjectAt gopts opts projDir = do
                 let sp = Source.diskSourceProvider
@@ -332,7 +820,7 @@ watchProjectAt gopts opts projDir = do
                           withFileLock (joinPath [projPath paths, ".actonc.lock"]) Exclusive $ \_ -> do
                             allFiles <- getFilesRecursive (srcDir paths)
                             let srcFiles = catMaybes $ map filterActFile allFiles
-                            compileFilesChanged sp gopts opts srcFiles True mChanged
+                            void $ compileFilesChanged sp gopts opts srcFiles True mChanged
                             when (isNothing mChanged) $
                               generateProjectDocIndex sp gopts opts paths srcFiles
                     runWatchProject gopts (projPath paths) (srcDir paths) runOnce
@@ -403,7 +891,7 @@ watchFile gopts opts file = do
         let sp = Source.diskSourceProvider
         if (C.tempdir opts /= "")
           then do
-            let runOnce mChanged = compileFilesChanged sp gopts opts [absFile] False mChanged
+            let runOnce mChanged = void $ compileFilesChanged sp gopts opts [absFile] False mChanged
             runWatchFile gopts absFile runOnce
           else do
             home <- getHomeDirectory
@@ -416,7 +904,7 @@ watchFile gopts opts file = do
                 let scratchDir = dropExtension lockPath
                     opts' = opts { C.tempdir = scratchDir }
                 removeDirectoryRecursive scratchDir `catch` handleNotExists
-                let runOnce mChanged = compileFilesChanged sp gopts opts' [absFile] False mChanged
+                let runOnce mChanged = void $ compileFilesChanged sp gopts opts' [absFile] False mChanged
                 runWatchFile gopts absFile runOnce `finally` unlockFile lock
   where
     handleNotExists :: IOException -> IO ()
@@ -743,9 +1231,9 @@ printDocs gopts opts = do
 
 compileFiles :: Source.SourceProvider -> C.GlobalOptions -> C.CompileOptions -> [String] -> Bool -> IO ()
 compileFiles sp gopts opts srcFiles allowPrune =
-    compileFilesChanged sp gopts opts srcFiles allowPrune Nothing
+    void $ compileFilesChanged sp gopts opts srcFiles allowPrune Nothing
 
-compileFilesChanged :: Source.SourceProvider -> C.GlobalOptions -> C.CompileOptions -> [String] -> Bool -> Maybe [FilePath] -> IO ()
+compileFilesChanged :: Source.SourceProvider -> C.GlobalOptions -> C.CompileOptions -> [String] -> Bool -> Maybe [FilePath] -> IO Bool
 compileFilesChanged sp gopts opts srcFiles allowPrune mChangedPaths = do
     cwd <- getCurrentDirectory
     maybeRoot <- findProjectDir (takeDirectory (head srcFiles))
@@ -800,6 +1288,7 @@ compileFilesChanged sp gopts opts srcFiles allowPrune mChangedPaths = do
         if watchMode
           then putStrLn (compileFailureMessage err)
           else printErrorAndExit (compileFailureMessage err)
+        return True
       Right (env, hadErrors) -> do
         backJobs <- reverse <$> readIORef backJobsRef
         when (not (null backJobs) && not (C.only_build opts')) $ do
@@ -810,6 +1299,7 @@ compileFilesChanged sp gopts opts srcFiles allowPrune mChangedPaths = do
           then do
             cleanup gopts opts' pathsRoot
             unless watchMode System.Exit.exitFailure
+            return True
           else do
             let rootParts = splitOn "." (C.root opts')
                 rootMod   = init rootParts
@@ -840,10 +1330,12 @@ compileFilesChanged sp gopts opts srcFiles allowPrune mChangedPaths = do
                   then do
                     testBinTasks <- catMaybes <$> mapM (filterMainActor env pathsRoot) preTestBinTasks
                     compileBins gopts opts' pathsRoot env rootTasks testBinTasks allowPrune'
-                    putStrLn "Test executables:"
-                    mapM_ (\t -> putStrLn (binName t)) testBinTasks
+                    when (C.print_test_bins opts') $ do
+                      putStrLn "Test executables:"
+                      mapM_ (\t -> putStrLn (binName t)) testBinTasks
                   else do
                     compileBins gopts opts' pathsRoot env rootTasks preBinTasks allowPrune'
+            return False
 -- Generate documentation index for a project build by reading module docstrings
 -- from the current tasks. Uses TyTask header docs when available to avoid
 -- parsing/decoding; falls back to extracting from ActonTask ASTs.
