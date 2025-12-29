@@ -103,8 +103,8 @@ startBackWorker = void $ forkIO $ forever $ do
   (gen, job) <- readChan backQueue
   current <- readIORef compileGenRef
   when (gen == current) $ do
-    _ <- (try $ Compile.runBackPasses lspGlobalOpts (Compile.bjOpts job) (Compile.bjPaths job) (Compile.bjInput job))
-            :: IO (Either SomeException (Maybe String))
+    _ <- (try $ void $ Compile.runBackPasses lspGlobalOpts (Compile.bjOpts job) (Compile.bjPaths job) (Compile.bjInput job))
+            :: IO (Either SomeException ())
     return ()
 
 whenCurrentGen :: Int -> LspM () () -> LspM () ()

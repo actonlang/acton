@@ -148,6 +148,8 @@ compileFailureMessage (CompileInternalFailure msg) = msg
 data CompileCallbacks = CompileCallbacks
   { ccOnDiagnostics :: GlobalTask -> C.CompileOptions -> [Diagnostic String] -> IO ()
   , ccOnFrontResult :: GlobalTask -> C.CompileOptions -> FrontResult -> IO ()
+  , ccOnFrontStart :: GlobalTask -> C.CompileOptions -> IO ()
+  , ccOnFrontDone :: GlobalTask -> C.CompileOptions -> IO ()
   , ccOnBackJob :: BackJob -> IO ()
   , ccOnInfo :: String -> IO ()
   }
@@ -156,6 +158,8 @@ defaultCompileCallbacks :: CompileCallbacks
 defaultCompileCallbacks = CompileCallbacks
   { ccOnDiagnostics = \_ _ _ -> return ()
   , ccOnFrontResult = \_ _ _ -> return ()
+  , ccOnFrontStart = \_ _ -> return ()
+  , ccOnFrontDone = \_ _ -> return ()
   , ccOnBackJob = \_ -> return ()
   , ccOnInfo = \_ -> return ()
   }
@@ -302,7 +306,7 @@ data FrontResult = FrontResult
   { frIfaceTE  :: [(A.Name, A.NameInfo)]
   , frDoc      :: Maybe String
   , frIfaceHash :: B.ByteString
-  , frFrontDone :: Maybe String
+  , frFrontTime :: Maybe TimeSpec
   , frBackJob  :: Maybe BackJob
   }
 
@@ -720,9 +724,9 @@ runFrontPasses gopts opts paths env0 parsed srcContent srcBytes resolveImportHas
 
           timeFrontEnd <- getTime Monotonic
           let frontTime = timeFrontEnd - timeStart
-              frontDone = if not (quiet gopts opts)
-                            then Just ("   Finished typecheck of " ++ modNameToString mn ++ " in  " ++ fmtTime frontTime)
-                            else Nothing
+              frontTimeMaybe = if not (quiet gopts opts)
+                                 then Just frontTime
+                                 else Nothing
               backJob = Just BackJob { bjPaths = paths
                                      , bjOpts = opts
                                      , bjInput = BackInput { biTypeEnv = typeEnv
@@ -735,12 +739,12 @@ runFrontPasses gopts opts paths env0 parsed srcContent srcBytes resolveImportHas
           return $ Right FrontResult { frIfaceTE = iface
                                      , frDoc = mdoc
                                      , frIfaceHash = ifaceHash
-                                     , frFrontDone = frontDone
+                                     , frFrontTime = frontTimeMaybe
                                      , frBackJob = backJob
                                      }
 
 
-runBackPasses :: C.GlobalOptions -> C.CompileOptions -> Paths -> BackInput -> IO (Maybe String)
+runBackPasses :: C.GlobalOptions -> C.CompileOptions -> Paths -> BackInput -> IO (Maybe TimeSpec)
 runBackPasses gopts opts paths backInput = do
       let mn = A.modname (biTypedMod backInput)
           outbase = outBase paths mn
@@ -802,7 +806,7 @@ runBackPasses gopts opts paths backInput = do
       timeEnd <- getTime Monotonic
       let totalTime = biFrontTime backInput + (timeEnd - timeStart)
       if not (quiet gopts opts)
-        then return (Just ("   Finished compilation of " ++ modNameToString mn ++ " in  " ++ fmtTime totalTime))
+        then return (Just totalTime)
         else return Nothing
 
 
@@ -965,15 +969,18 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
             return (Left CompileBuiltinFailure)
           TyTask{} -> return (Right ())
           ActonTask{ src = srcContent, srcBytes = srcBytes, atree = m } -> do
+            ccOnFrontStart callbacks t optsBuiltin
             iff (not (quiet gopts optsBuiltin)) $
               ccOnInfo callbacks ("  Compiling " ++ compileMsg ++ " with " ++ show (C.optimize optsBuiltin))
             builtinEnv0 <- Acton.Env.initEnv (projTypes bPaths) True
             res <- runFrontPasses gopts optsBuiltin bPaths builtinEnv0 m srcContent srcBytes (getIfaceHashCached bPaths)
             case res of
               Left diags -> do
+                ccOnFrontDone callbacks t optsBuiltin
                 ccOnDiagnostics callbacks t optsBuiltin diags
                 return (Left CompileBuiltinFailure)
               Right fr -> do
+                ccOnFrontDone callbacks t optsBuiltin
                 ccOnFrontResult callbacks t optsBuiltin fr
                 forM_ (frBackJob fr) $ ccOnBackJob callbacks
                 return (Right ())
@@ -1012,14 +1019,14 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
                   return (key, Right FrontResult { frIfaceTE = ifaceTE
                                                  , frDoc = mdoc
                                                  , frIfaceHash = ih
-                                                 , frFrontDone = Nothing
+                                                 , frFrontTime = Nothing
                                                  , frBackJob = Nothing
                                                  })
                 Left _ ->
                   return (key, Right FrontResult { frIfaceTE = []
                                                  , frDoc = Nothing
                                                  , frIfaceHash = B.empty
-                                                 , frFrontDone = Nothing
+                                                 , frFrontTime = Nothing
                                                  , frBackJob = Nothing
                                                  })
         _ -> do
@@ -1087,7 +1094,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
                       return (key, Right FrontResult { frIfaceTE = ifaceTE
                                                      , frDoc = mdoc
                                                      , frIfaceHash = ih
-                                                     , frFrontDone = Nothing
+                                                     , frFrontTime = Nothing
                                                      , frBackJob = Nothing
                                                      })
 
@@ -1101,6 +1108,9 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
           rdySorted = Data.List.sortOn (Down . prio) rdy
           (toStart, rdy') = splitAt k rdySorted
       new <- forM toStart $ \mn -> do
+                case M.lookup mn taskMap of
+                  Just t -> ccOnFrontStart callbacks t (optsFor mn)
+                  Nothing -> return ()
                 a <- async (doOne envSnap res mn)
                 return (a, mn)
       return (rdy', new ++ running)
@@ -1131,17 +1141,18 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
           (doneA, (mnDone, outcome)) <- waitAny $ map fst running1
           let running2 = filter ((/= doneA) . fst) running1
           writeIORef runningRef (map fst running2)
+          let tDone = taskMap M.! mnDone
+              optsDone = optsFor mnDone
+          ccOnFrontDone callbacks tDone optsDone
           case outcome of
             Left diags -> do
-              let t = taskMap M.! mnDone
-              ccOnDiagnostics callbacks t (optsFor mnDone) diags
+              ccOnDiagnostics callbacks tDone optsDone diags
               let blocked = dependentClosure mnDone
                   pend2 = Data.Set.delete mnDone (pend `Data.Set.difference` blocked)
                   rdy2 = filter (`Data.Set.notMember` blocked) rdy1
               loop runningRef rdy2 running2 res ind pend2 envAcc True maxPar cw
             Right fr -> do
-              let t = taskMap M.! mnDone
-              ccOnFrontResult callbacks t (optsFor mnDone) fr
+              ccOnFrontResult callbacks tDone optsDone fr
               forM_ (frBackJob fr) $ ccOnBackJob callbacks
               let res2  = M.insert mnDone (frIfaceHash fr) res
                   pend2 = Data.Set.delete mnDone pend
@@ -1158,9 +1169,9 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
               loop runningRef rdy2 running2 res2 ind2 pend2 envAcc' hadErrors maxPar cw
 
 
-runBackJobs :: C.GlobalOptions -> Int -> (Maybe String -> IO ()) -> [BackJob] -> IO ()
-runBackJobs _ _ _ [] = return ()
-runBackJobs gopts maxPar onDone jobs = do
+runBackJobs :: C.GlobalOptions -> Int -> (BackJob -> IO ()) -> (BackJob -> Maybe TimeSpec -> IO ()) -> [BackJob] -> IO ()
+runBackJobs _ _ _ _ [] = return ()
+runBackJobs gopts maxPar onStart onDone jobs = do
   runningRef <- newIORef []
   let cancelRunning = readIORef runningRef >>= mapM_ cancel
   let runMain = loopBack runningRef indexed [] M.empty 0
@@ -1181,8 +1192,9 @@ runBackJobs gopts maxPar onDone jobs = do
       running' <- mask_ $ do
         new <- forM toStart $ \(ix, job) ->
                  async $ do
+                   onStart job
                    res <- runBackPasses gopts (bjOpts job) (bjPaths job) (bjInput job)
-                   return (ix, res)
+                   return (ix, job, res)
         let running' = running ++ new
         writeIORef runningRef running'
         return running'
@@ -1191,19 +1203,19 @@ runBackJobs gopts maxPar onDone jobs = do
           (_, _) <- flushReady results nextIx
           return ()
         else do
-          (doneA, (ix, res)) <- waitAny running'
+          (doneA, (ix, job, res)) <- waitAny running'
           let running'' = filter (/= doneA) running'
-              results' = M.insert ix res results
+              results' = M.insert ix (job, res) results
           writeIORef runningRef running''
           (results'', nextIx') <- flushReady results' nextIx
           loopBack runningRef pending' running'' results'' nextIx'
 
-    flushReady :: M.Map Int (Maybe String) -> Int -> IO (M.Map Int (Maybe String), Int)
+    flushReady :: M.Map Int (BackJob, Maybe TimeSpec) -> Int -> IO (M.Map Int (BackJob, Maybe TimeSpec), Int)
     flushReady res ix =
       case M.lookup ix res of
         Nothing -> return (res, ix)
-        Just mline -> do
-          onDone mline
+        Just (job, mline) -> do
+          onDone job mline
           flushReady (M.delete ix res) (ix + 1)
 
 

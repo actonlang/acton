@@ -1,5 +1,4 @@
 Building file test/typeerrors/ex15.act using temporary scratch directory
-  Compiling ex15.act with Debug
 [error]: Cannot satisfy the following simultaneous constraints for the unknown types
      +--> ex15.act@2:9-2:10
      |

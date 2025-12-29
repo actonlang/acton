@@ -1,5 +1,4 @@
 Building file test/typeerrors/ex22.act using temporary scratch directory
-  Compiling ex22.act with Debug
 [error]: Incompatible types
      +--> ex22.act@1:1-1:2
      |

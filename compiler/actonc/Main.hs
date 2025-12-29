@@ -51,7 +51,7 @@ import Control.Concurrent.Async
 import Control.Concurrent.MVar
 import Control.Exception (throw,catch,displayException,finally,IOException,ErrorCall,try,SomeException,bracket,bracket_,onException,evaluate)
 import Control.Exception (bracketOnError)
-import Control.Concurrent (forkIO, threadDelay)
+import Control.Concurrent (ThreadId, forkIO, killThread, threadDelay)
 import Control.Concurrent.Chan (Chan, newChan, writeChan, readChan)
 import Control.Monad
 import Data.Default.Class (def)
@@ -216,6 +216,14 @@ fmtTime t =
   where
     secs :: Float
     secs = (fromIntegral(sec t)) + (fromIntegral (nsec t) / 1000000000)
+
+padRight :: Int -> String -> String
+padRight width s
+    | len >= width' = s
+    | otherwise = s ++ replicate (width' - len) ' '
+  where
+    width' = max 0 width
+    len = length s
 
 -- Version handling ------------------------------------------------------------------------------------------
 
@@ -1243,6 +1251,19 @@ compileFilesChanged sp gopts opts srcFiles allowPrune mChangedPaths = do
         watchMode = C.watch opts'
         incremental = isJust mChangedPaths
         allowPrune' = allowPrune && not incremental
+    nCaps <- getNumCapabilities
+    let maxParallel = max 1 (if C.jobs gopts > 0 then C.jobs gopts else nCaps)
+    progressUI <- initProgressUI gopts maxParallel
+    frontState <- newProgressState
+    let logLine = progressLogLine progressUI
+        logDiagnostics optsT diags =
+          progressWithLog progressUI (printDiagnostics gopts optsT diags)
+        shouldLogInfo msg =
+          not (any (`isPrefixOf` msg) [ "  Compiling "
+                                      , "  Building [cap "
+                                      , "  Stale "
+                                      , "  Fresh "
+                                      ])
     pathsRoot <- findPaths (head srcFiles) opts'
     rootProj  <- normalizePathSafe (projPath pathsRoot)
     sysAbs    <- normalizePathSafe (sysPath pathsRoot)
@@ -1266,7 +1287,27 @@ compileFilesChanged sp gopts opts srcFiles allowPrune mChangedPaths = do
     neededTasks <- case mChangedPaths of
                      Nothing -> selectNeededTasks pathsRoot rootProj globalTasks srcFiles
                      Just changed -> selectAffectedTasks globalTasks changed
-    let rootTasks   = [ gtTask t | t <- neededTasks, tkProj (gtKey t) == rootProj ]
+    let modWidth = maximum (0 : [ length (modNameToString (tkMod (gtKey t))) | t <- neededTasks ])
+        padMod mn = padRight modWidth (modNameToString mn)
+        spinnerPrefixWidth = 3
+        frontPrefix = "   Finished typecheck of "
+        backPrefix = "   Finished compilation of "
+        phaseFront = "Running front passes:"
+        phaseBack = "Running back passes:"
+        phaseWidth = max (length phaseFront) (length phaseBack)
+        projWidth = maximum (0 : [ length (projectLabel rootProj (tkProj (gtKey t))) | t <- neededTasks ])
+        prefixWidth = maximum [ length frontPrefix
+                              , length backPrefix
+                              , spinnerPrefixWidth + phaseWidth + 1
+                              ]
+        progressPrefixWidth = max 0 (prefixWidth - spinnerPrefixWidth)
+        padProgressPrefix phase = padRight progressPrefixWidth (padRight phaseWidth phase ++ " ")
+        projPart proj = padRight projWidth (projectLabel rootProj proj) ++ "/"
+        completionPrefix prefix proj = padRight prefixWidth prefix ++ projPart proj
+        frontDoneLine proj mn t = completionPrefix frontPrefix proj ++ padMod mn ++ " in  " ++ fmtTime t
+        backDoneLine proj mn t = completionPrefix backPrefix proj ++ padMod mn ++ " in  " ++ fmtTime t
+        progressLine phase proj mn = padProgressPrefix phase ++ projPart proj ++ modNameToString mn
+        rootTasks   = [ gtTask t | t <- neededTasks, tkProj (gtKey t) == rootProj ]
         rootPins    = maybe M.empty BuildSpec.dependencies (projBuildSpec =<< M.lookup rootProj projMap)
     iff (C.listimports opts') $ do
         let module_imports = map (\t -> concat [ modNameToString (name t), ": "
@@ -1276,25 +1317,44 @@ compileFilesChanged sp gopts opts srcFiles allowPrune mChangedPaths = do
         System.Exit.exitSuccess
     backJobsRef <- newIORef []
     let callbacks = defaultCompileCallbacks
-          { ccOnDiagnostics = \t optsT diags -> printDiagnostics gopts optsT diags
-          , ccOnFrontResult = \_ _ fr -> forM_ (frFrontDone fr) putStrLn
+          { ccOnDiagnostics = \_ optsT diags -> logDiagnostics optsT diags
+          , ccOnFrontResult = \t _ fr -> forM_ (frFrontTime fr) (\tFront ->
+              logLine (frontDoneLine (tkProj (gtKey t)) (tkMod (gtKey t)) tFront))
+          , ccOnFrontStart = \t _ ->
+              let key = gtKey t
+                  proj = tkProj key
+                  mn = tkMod key
+              in progressStartTask progressUI frontState key (progressLine phaseFront proj mn)
+          , ccOnFrontDone = \t _ -> progressDoneTask progressUI frontState (gtKey t)
           , ccOnBackJob = \job -> modifyIORef' backJobsRef (job :)
-          , ccOnInfo = putStrLn
+          , ccOnInfo = \msg -> when (shouldLogInfo msg) (logLine msg)
           }
     compileRes <- compileTasks sp gopts opts' pathsRoot rootProj neededTasks callbacks
+    progressSetLines progressUI []
     case compileRes of
       Left err -> do
         cleanup gopts opts' pathsRoot
         if watchMode
-          then putStrLn (compileFailureMessage err)
+          then logLine (compileFailureMessage err)
           else printErrorAndExit (compileFailureMessage err)
         return True
       Right (env, hadErrors) -> do
         backJobs <- reverse <$> readIORef backJobsRef
         when (not (null backJobs) && not (C.only_build opts')) $ do
-          nCaps <- getNumCapabilities
-          let maxParallel = max 1 (if C.jobs gopts > 0 then C.jobs gopts else nCaps)
-          runBackJobs gopts maxParallel (\mline -> maybe (return ()) putStrLn mline) backJobs
+          backState <- newProgressState
+          let backJobKey job =
+                TaskKey (projPath (bjPaths job)) (A.modname (biTypedMod (bjInput job)))
+              backJobLine job =
+                let proj = projPath (bjPaths job)
+                    mn = A.modname (biTypedMod (bjInput job))
+                in progressLine phaseBack proj mn
+              onBackStart job = progressStartTask progressUI backState (backJobKey job) (backJobLine job)
+              onBackDone job mtime = do
+                progressDoneTask progressUI backState (backJobKey job)
+                forM_ mtime (\tBack ->
+                  logLine (backDoneLine (projPath (bjPaths job)) (A.modname (biTypedMod (bjInput job))) tBack))
+          runBackJobs gopts maxParallel onBackStart onBackDone backJobs
+          progressSetLines progressUI []
         if hadErrors
           then do
             cleanup gopts opts' pathsRoot
@@ -1324,15 +1384,15 @@ compileFilesChanged sp gopts opts srcFiles allowPrune mChangedPaths = do
                   Nothing -> return ()
             if C.skip_build opts'
               then
-                putStrLn "  Skipping final build step"
+                logLine "  Skipping final build step"
               else
                 if C.test opts'
                   then do
                     testBinTasks <- catMaybes <$> mapM (filterMainActor env pathsRoot) preTestBinTasks
                     compileBins gopts opts' pathsRoot env rootTasks testBinTasks allowPrune'
                     when (C.print_test_bins opts') $ do
-                      putStrLn "Test executables:"
-                      mapM_ (\t -> putStrLn (binName t)) testBinTasks
+                      logLine "Test executables:"
+                      mapM_ (\t -> logLine (binName t)) testBinTasks
                   else do
                     compileBins gopts opts' pathsRoot env rootTasks preBinTasks allowPrune'
             return False
@@ -2003,3 +2063,183 @@ useColor gopts = do
                 C.Auto   -> do
                     tty <- hIsTerminalDevice stdout
                     return (tty || C.tty gopts)
+
+data ProgressUI = ProgressUI
+  { puEnabled :: Bool
+  , puMaxLines :: Int
+  , puLinesRef :: IORef [String]
+  , puVisibleRef :: IORef Int
+  , puSpinnerRef :: IORef Int
+  , puCursorHiddenRef :: IORef Bool
+  , puTickerRef :: IORef (Maybe ThreadId)
+  , puLock :: MVar ()
+  }
+
+data ProgressState = ProgressState
+  { psActive :: IORef (M.Map TaskKey String)
+  , psOrder :: IORef [TaskKey]
+  }
+
+initProgressUI :: C.GlobalOptions -> Int -> IO ProgressUI
+initProgressUI gopts maxLines = do
+    tty <- hIsTerminalDevice stdout
+    let enabled = (tty || C.tty gopts) && not (C.quiet gopts)
+    linesRef <- newIORef []
+    visibleRef <- newIORef 0
+    spinnerRef <- newIORef 0
+    cursorHiddenRef <- newIORef False
+    tickerRef <- newIORef Nothing
+    lock <- newMVar ()
+    return ProgressUI
+      { puEnabled = enabled
+      , puMaxLines = max 1 maxLines
+      , puLinesRef = linesRef
+      , puVisibleRef = visibleRef
+      , puSpinnerRef = spinnerRef
+      , puCursorHiddenRef = cursorHiddenRef
+      , puTickerRef = tickerRef
+      , puLock = lock
+      }
+
+newProgressState :: IO ProgressState
+newProgressState = do
+    active <- newIORef M.empty
+    order <- newIORef []
+    return ProgressState { psActive = active, psOrder = order }
+
+withProgressLock :: ProgressUI -> IO a -> IO a
+withProgressLock ui action =
+    if not (puEnabled ui)
+      then action
+      else withMVar (puLock ui) (\_ -> action)
+
+progressWithLog :: ProgressUI -> IO () -> IO ()
+progressWithLog ui action = withProgressLock ui $ do
+    if not (puEnabled ui)
+      then action
+      else do
+        progressClearUnlocked ui
+        action
+        progressRenderUnlocked ui
+
+progressLogLine :: ProgressUI -> String -> IO ()
+progressLogLine ui msg = progressWithLog ui (putStrLn msg)
+
+progressClearUnlocked :: ProgressUI -> IO ()
+progressClearUnlocked ui = do
+    visible <- readIORef (puVisibleRef ui)
+    when (visible > 0) $ do
+      replicateM_ visible $ do
+        putStr "\ESC[1A"
+        putStr "\r\ESC[2K"
+      hFlush stdout
+    writeIORef (puVisibleRef ui) 0
+
+spinnerChars :: [Char]
+spinnerChars = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+
+spinnerTickMicros :: Int
+spinnerTickMicros = 100000
+
+setCursorHidden :: ProgressUI -> Bool -> IO ()
+setCursorHidden ui hidden =
+    when (puEnabled ui) $ do
+      cur <- readIORef (puCursorHiddenRef ui)
+      when (cur /= hidden) $ do
+        putStr (if hidden then "\ESC[?25l" else "\ESC[?25h")
+        writeIORef (puCursorHiddenRef ui) hidden
+
+progressRenderUnlocked :: ProgressUI -> IO ()
+progressRenderUnlocked ui = do
+    lines <- take (puMaxLines ui) <$> readIORef (puLinesRef ui)
+    prevVisible <- readIORef (puVisibleRef ui)
+    let newVisible = length lines
+        total = max prevVisible newVisible
+    if newVisible == 0
+      then do
+        setCursorHidden ui False
+        progressClearUnlocked ui
+      else do
+        when (prevVisible > 0) $
+          replicateM_ prevVisible (putStr "\ESC[1A")
+        ix <- readIORef (puSpinnerRef ui)
+        let spinner = spinnerChars !! (ix `mod` length spinnerChars)
+            prefix line = ' ' : spinner : ' ' : line
+            renderLine i = do
+              putStr "\r\ESC[2K"
+              when (i < newVisible) $
+                putStr (prefix (lines !! i))
+              putStr "\n"
+        setCursorHidden ui True
+        mapM_ renderLine [0 .. total - 1]
+        hFlush stdout
+        writeIORef (puVisibleRef ui) total
+
+startSpinnerTicker :: ProgressUI -> IO ()
+startSpinnerTicker ui =
+    when (puEnabled ui) $ do
+      m <- readIORef (puTickerRef ui)
+      case m of
+        Just _ -> return ()
+        Nothing -> do
+          tid <- forkIO (spinnerLoop ui)
+          writeIORef (puTickerRef ui) (Just tid)
+
+stopSpinnerTicker :: ProgressUI -> IO ()
+stopSpinnerTicker ui = do
+    m <- atomicModifyIORef' (puTickerRef ui) (\cur -> (Nothing, cur))
+    forM_ m killThread
+
+spinnerLoop :: ProgressUI -> IO ()
+spinnerLoop ui = do
+    tid <- myThreadId
+    let loop = do
+          threadDelay spinnerTickMicros
+          keep <- withProgressLock ui $ do
+            lines <- readIORef (puLinesRef ui)
+            if null lines || not (puEnabled ui)
+              then return False
+              else do
+                modifyIORef' (puSpinnerRef ui) (+ 1)
+                progressRenderUnlocked ui
+                return True
+          when keep loop
+    loop
+    atomicModifyIORef' (puTickerRef ui) $ \cur ->
+      if cur == Just tid then (Nothing, ()) else (cur, ())
+
+progressSetLines :: ProgressUI -> [String] -> IO ()
+progressSetLines ui lines = withProgressLock ui $ do
+    when (puEnabled ui) $ do
+      writeIORef (puLinesRef ui) (take (puMaxLines ui) lines)
+      if null lines then stopSpinnerTicker ui else startSpinnerTicker ui
+      progressRenderUnlocked ui
+
+progressStartTask :: ProgressUI -> ProgressState -> TaskKey -> String -> IO ()
+progressStartTask ui st key line = withProgressLock ui $ do
+    modifyIORef' (psActive st) (M.insert key line)
+    modifyIORef' (psOrder st) (\xs -> if key `elem` xs then xs else xs ++ [key])
+    progressRefreshUnlocked ui st
+
+progressDoneTask :: ProgressUI -> ProgressState -> TaskKey -> IO ()
+progressDoneTask ui st key = withProgressLock ui $ do
+    modifyIORef' (psActive st) (M.delete key)
+    modifyIORef' (psOrder st) (filter (/= key))
+    progressRefreshUnlocked ui st
+
+progressRefreshUnlocked :: ProgressUI -> ProgressState -> IO ()
+progressRefreshUnlocked ui st = do
+    active <- readIORef (psActive st)
+    order <- readIORef (psOrder st)
+    let lines = [ line | key <- order, Just line <- [M.lookup key active] ]
+    when (puEnabled ui) $ do
+      writeIORef (puLinesRef ui) (take (puMaxLines ui) lines)
+      if null lines then stopSpinnerTicker ui else startSpinnerTicker ui
+      progressRenderUnlocked ui
+
+projectLabel :: FilePath -> FilePath -> String
+projectLabel root proj =
+    let rel = makeRelative root proj
+    in if rel == "." || ".." `isPrefixOf` rel
+         then takeFileName proj
+         else rel

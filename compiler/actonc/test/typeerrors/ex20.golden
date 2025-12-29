@@ -1,5 +1,4 @@
 Building file test/typeerrors/ex20.act using temporary scratch directory
-  Compiling ex20.act with Debug
 [error]: Constraint violation
      +--> ex20.act@1:1-1:2
      |

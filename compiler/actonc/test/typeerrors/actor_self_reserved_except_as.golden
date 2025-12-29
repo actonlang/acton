@@ -1,5 +1,4 @@
 Building file test/typeerrors/actor_self_reserved_except_as.act using temporary scratch directory
-  Compiling actor_self_reserved_except_as.act with Debug
 [error]: 'self' cannot be used as a parameter name in actors.
      +--> actor_self_reserved_except_as.act@4:26-4:30
      |
