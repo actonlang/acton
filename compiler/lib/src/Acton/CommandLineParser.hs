@@ -54,6 +54,7 @@ data NewOptions     = NewOptions {
 
 data CompileOptions   = CompileOptions {
                          alwaysbuild :: Bool,
+                         ignore_compiler_mtime :: Bool,
                          db          :: Bool,
                          parse       :: Bool,
                          parse_ast   :: Bool,
@@ -165,6 +166,7 @@ newOptions = NewOptions <$> argument (str :: ReadM String) (metavar "PROJECTDIR"
 
 compileOptions = CompileOptions
         <$> switch (long "always-build" <> help "Show the result of parsing")
+        <*> switch (long "ignore-compiler-mtime" <> help "Ignore actonc mtime when checking .ty freshness")
         <*> switch (long "db"           <> help "Enable DB backend")
         <*> switch (long "parse"        <> help "Show the result of parsing")
         <*> switch (long "parse-ast"    <> help "Show the raw AST (Haskell Show)")
