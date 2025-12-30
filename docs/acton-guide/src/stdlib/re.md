@@ -12,8 +12,10 @@ actor main(env):
     env.exit(0)
 ```
 
+`re.match` also accepts an optional `start_pos` to begin scanning at a
+specific index (defaults to 0).
+
 Output:
 ```sh
 Got a match: foobar
 ```
-

@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- `re.match()` now accepts an optional `start_pos` to begin scanning at an offset.
 - Add `acton doc` command for generating documentation [#2292]
   - Supports multiple output formats (text, markdown, HTML)
   - Default is to open browser into HTML docs when window environment is

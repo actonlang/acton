@@ -43,11 +43,12 @@ class Match:
 def _match(pattern: str, string: str, start_pos: int) -> ?Match:
     NotImplemented
 
-def match(pattern: str, string: str) -> ?Match:
+def match(pattern: str, string: str, start_pos: int=0) -> ?Match:
     """Scan through string looking for a match to the pattern, returning
-    a match object, or None if no match was found.
+    a match object, or None if no match was found. start_pos sets the
+    index to begin scanning at.
     """
-    return _match(pattern, string, 0)
+    return _match(pattern, string, start_pos)
 
 def matches(pattern: str, string: str) -> list[Match]:
     """Find all non-overlapping matches in string

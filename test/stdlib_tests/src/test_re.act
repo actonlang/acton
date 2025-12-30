@@ -92,6 +92,25 @@ def _test_match_positions():
         # Also verify the substring matches what we expect
         testing.assertEqual(m.string[m.start_pos:m.end_pos], "def")
 
+def _test_match_start_pos():
+    """Test that start_pos controls where the search begins."""
+    s = "def def"
+
+    m1 = re.match("def", s)
+    testing.assertNotNone(m1, "Should have matched first 'def'")
+    if m1 is not None:
+        testing.assertEqual(m1.start_pos, 0)
+        testing.assertEqual(m1.end_pos, 3)
+
+    m2 = re.match("def", s, start_pos=4)
+    testing.assertNotNone(m2, "Should have matched second 'def' starting at index 4")
+    if m2 is not None:
+        testing.assertEqual(m2.start_pos, 4)
+        testing.assertEqual(m2.end_pos, 7)
+
+    m3 = re.match("def", s, start_pos=5)
+    testing.assertNone(m3, "start_pos should skip earlier matches")
+
 def _test_split_no_match():
     """Split: pattern does not match anywhere"""
     res = re.split("xyz", "abc def ghi")
