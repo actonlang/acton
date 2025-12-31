@@ -1,0 +1,6 @@
+from import_private_a import *
+
+actor main(env):
+    print(__foo)
+    print(public_value)
+    env.exit(0)

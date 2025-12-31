@@ -38,6 +38,7 @@ import System.FilePath ((</>), joinPath, takeFileName, takeBaseName, takeDirecto
 import System.Directory (getCurrentDirectory, setCurrentDirectory)
 import Control.Monad (forM_, when, foldM)
 import qualified Control.Exception as E
+import Control.DeepSeq (rnf)
 import Utils (SrcLoc(..), loc, prstr)
 import qualified Acton.BuildSpec as BuildSpec
 import qualified Data.ByteString.Lazy as BL
@@ -448,6 +449,45 @@ main = do
       testTypes env0 ["test_discovery"]
 
       testAttributesInitialization env0
+
+    describe "Import Semantics" $ do
+      it "omits private names from the public interface" $ do
+        (envA, parsedA) <- parseAct env0 "import_private_a"
+        kcheckedA <- liftIO $ Acton.Kinds.check envA parsedA
+        (nmodA, _, _, _) <- liftIO $ Acton.Types.reconstruct envA kcheckedA
+        let S.NModule tenvA mdocA = nmodA
+            env1 = Acton.Env.addMod (S.modname parsedA) tenvA mdocA env0
+
+        (envB, _) <- parseAct env1 "import_private"
+        let namesB = Acton.Env.names envB
+
+        case lookup (S.name "__foo") namesB of
+          Nothing -> pure ()
+          Just _ -> expectationFailure "from import * should skip __foo"
+
+        case lookup (S.name "public_value") namesB of
+          Just (S.NAlias _) -> pure ()
+          _ -> expectationFailure "from import * should include public_value"
+
+      it "blocks qualified access to private names" $ do
+        (envA, parsedA) <- parseAct env0 "import_private_a"
+        kcheckedA <- liftIO $ Acton.Kinds.check envA parsedA
+        (nmodA, _, _, _) <- liftIO $ Acton.Types.reconstruct envA kcheckedA
+        let S.NModule tenvA mdocA = nmodA
+            env1 = Acton.Env.addMod (S.modname parsedA) tenvA mdocA env0
+
+        (envB, parsedB) <- parseAct env1 "import_private_qualified"
+        kcheckedB <- liftIO $ Acton.Kinds.check envB parsedB
+        result <- liftIO $ (E.try (do
+          (_, tcheckedB, _, _) <- Acton.Types.reconstruct envB kcheckedB
+          _ <- E.evaluate (rnf tcheckedB)
+          pure ()
+          ) :: IO (Either CompilationError ()))
+
+        case result of
+          Left NoItem{} -> pure ()
+          Left err -> expectationFailure $ "Expected NoItem error, got " ++ show err
+          Right _ -> expectationFailure "Expected type check failure for private name access"
 
     describe "Pass 4: Normalizer" $ do
       testNorm env0 ["deact"]

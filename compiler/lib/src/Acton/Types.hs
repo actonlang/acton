@@ -76,16 +76,17 @@ reconstruct env0 (Module m i ss)         = do --traceM ("#################### or
         env2                            = define te (setMod m env0)
 
         (teT,ssT)                       = if hasTesting i then (te ++ testEnv, ss1 ++ testStmts env2 (modNameStr m) ss1) else (te, ss1)
-        iface                           = unalias env2 teT
+        iface                           = filterIface (unalias env2 teT)
 
         mrefs                           = moduleRefs1 env0
         env0'                           = convEnvProtos env0
         hasTesting i                    = Import NoLoc [ModuleItem (ModName [name "testing"]) Nothing] `elem` i
+        filterIface                     = filter (isPublicName . fst)
         rmTests (Assign _ [PVar _ n _] _ : ss)
           | nstr n `elem` ["__unit_tests","__simple_sync_tests","__sync_tests","__async_tests","__env_tests"]
                                         = rmTests ss
         rmTests (Decl _ [Actor _ n _ _ _ _ _] : ss)
-          | nstr n == "__test_main"     = rmTests ss
+          | nstr n == "test_main"       = rmTests ss
         rmTests (s : ss)                = s : rmTests ss
         rmTests []                      = []
 
@@ -2188,7 +2189,7 @@ testStmts env m ss                      = ss' ++
         (te, ss')                       = genTestActorWrappers ss
 
 testEnv                                 = [ (name n, NVar (tDict tStr (testing cl))) | (n,cl) <- testDicts ] ++
-                                          [ (name "__test_main", NAct [] posNil (kwdRow (name "env") tEnv kwdNil) [] Nothing) ]
+                                          [ (name "test_main", NAct [] posNil (kwdRow (name "env") tEnv kwdNil) [] Nothing) ]
 
 gname ns n                              = GName (ModName ns) n
 dername a b                             = Derived (name a) (name b)
@@ -2200,7 +2201,7 @@ testing tstr                            = tCon (TC (gname [name "testing"] (name
 mkDict cl as                            = eCall (tApp (eQVar primMkDict) [tStr, testing cl]) [w,Dict NoLoc as]
     where w                             = eCall (eQVar (gname [name "__builtin__"] (dername "Hashable" "str"))) []
 
-testActor                               = sDecl [Actor NoLoc (name "__test_main") []
+testActor                               = sDecl [Actor NoLoc (name "test_main") []
                                                  PosNIL (KwdPar (name "env")  (Just tEnv) Nothing KwdNIL)
                                              [sExpr (eCall (eQVar (gname [name "testing"] (name "test_runner")))
                                                            (map (eVar . name) ["env","__unit_tests","__simple_sync_tests","__sync_tests","__async_tests","__env_tests"]))] Nothing]

@@ -309,6 +309,9 @@ test-compiler:
 	cd compiler && stack test acton
 	cd compiler && stack test actonc --ta '-p "compiler"'
 
+test-compiler-accept:
+	cd compiler && stack test acton --test-arguments "--golden-start --golden-reset"
+
 test-cross-compile:
 	cd compiler && stack test actonc --ta '-p "cross-compilation"'
 

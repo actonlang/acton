@@ -1,0 +1,5 @@
+import import_private_a
+
+actor main(env):
+    print(import_private_a.__foo)
+    env.exit(0)
