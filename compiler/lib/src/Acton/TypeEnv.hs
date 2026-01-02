@@ -82,7 +82,7 @@ instance WellFormed TCon where
                                 NReserved -> nameReserved n
                                 i -> err1 n ("wf: Class or protocol name expected, got " ++ show i)
             s               = qbound q `zip` ts
-            constr u t      = if isProto env (tcname u) then Proto (DfltInfo NoLoc 20 Nothing []) nWild t u else Cast (DfltInfo NoLoc 21 Nothing []) t (tCon u)
+            constr u t      = if isProto env (tcname u) then Proto (DfltInfo NoLoc 20 Nothing []) nWild [] t u else Cast (DfltInfo NoLoc 21 Nothing []) [] t (tCon u)
 
 wfProto                     :: EnvF x -> TCon -> TypeM (Constraints, Constraints)
 wfProto env (TC n ts)       = do cs <- instQuals env q ts
@@ -140,11 +140,11 @@ instQuals                   :: EnvF x -> QBinds -> [Type] -> TypeM Constraints
 instQuals env q ts          = do let s = qbound q `zip` ts
                                  sequence [ constr (vsubst s (tVar v)) (vsubst s u) | Quant v us <- q, u <- us ]
   where constr t u@(TC n _)
-          | isProto env n   = do w <- newWitness; return $ Proto (DfltInfo NoLoc 24 Nothing []) w t u
-          | otherwise       = return $ Cast (DfltInfo NoLoc 25 Nothing []) t (tCon u)
+          | isProto env n   = do w <- newWitness; return $ Proto (DfltInfo NoLoc 24 Nothing []) w [] t u
+          | otherwise       = return $ Cast (DfltInfo NoLoc 25 Nothing []) [] t (tCon u)
 
 wvars                       :: Constraints -> [Expr]
-wvars cs                    = [ eVar v | Proto _ v _ _ <- cs ]
+wvars cs                    = [ eVar v | Proto _ v _ _ _ <- cs ]
 
 
 -- Equations -----------------------------------------------------------------------------------------------------------------------
@@ -188,9 +188,9 @@ bindTopWits env eqs0                    = map bind eqs0
 
 qwitRefs env w0 cs                      = refs cs
   where refs []                         = []
-        refs (Sub _ w t1 t2 : cs)       = Eqn w (tFun0 [t1] t2) (eDot e w) : refs cs
-        refs (Proto _ w t p : cs)       = Eqn w (proto2type t p) (eDot e w) : refs cs
-        refs (Sel _ w t1 n t2 : cs)     = Eqn w (tFun0 [t1] t2) (eDot e w) : refs cs
+        refs (Sub _ w q t1 t2 : cs)     = Eqn w (tFun0 [t1] t2) (eDot e w) : refs cs
+        refs (Proto _ w q t p : cs)     = Eqn w (proto2type t p) (eDot e w) : refs cs
+        refs (Sel _ w q t1 n t2 : cs)   = Eqn w (tFun0 [t1] t2) (eDot e w) : refs cs
         refs (c : cs)                   = refs cs
         e                               = eCallP (tApp (eVar w0) (map tVar $ qbound q_tot)) (wit2arg (qualWits env q_tot) PosNil)
         q_tot                           = quantScope0 env
@@ -223,7 +223,7 @@ var2arg xs                              = \p -> foldr f p xs
 
 exp2arg es                              = \p -> foldr PosArg p es
 
-protoWitsOf cs                          = [ eVar w | Proto _ w t p <- cs ]
+protoWitsOf cs                          = [ eVar w | Proto _ w q t p <- cs ]
 
 qualWPar env q                          = wit2par (qualWits env q)
 
@@ -232,6 +232,6 @@ qualWRow env q                          = wit2row (qualWits env q)
 qualWits env q                          = [ (tvarWit tv p, proto2type (tVar tv) p) | Quant tv ps <- q, p <- ps, isProto env (tcname p) ]
 
 witSubst env q cs                       = [ Eqn w0 t (eVar w) | ((w,t),w0) <- ws `zip` ws0 ]
-  where ws                              = [ (w, proto2type t p) | Proto _ w t p <- cs ]
+  where ws                              = [ (w, proto2type t p) | Proto _ w q t p <- cs ]
         ws0                             = [ tvarWit tv p | Quant tv ps <- q, p <- ps, isProto env (tcname p) ]
 

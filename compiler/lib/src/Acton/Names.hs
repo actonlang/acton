@@ -432,10 +432,10 @@ instance Vars Type where
 
 
 instance Vars Constraint where
-    free (Cast _ t1 t2)             = free t1 ++ free t2
-    free (Sub _ w t1 t2)            = free t1 ++ free t2
-    free (Proto _ w t p)            = free t ++ free p
-    free (Sel _ w t1 n t2)          = free t1 ++ free t2
-    free (Mut _ t1 n t2)            = free t1 ++ free t2
-    free (Seal _ t)                 = free t
+    free (Cast _ q t1 t2)           = free q ++ free t1 ++ free t2
+    free (Sub _ w q t1 t2)          = free q ++ free t1 ++ free t2
+    free (Proto _ w q t p)          = free q ++ free t ++ free p
+    free (Sel _ w q t1 n t2)        = free q ++ free t1 ++ free t2
+    free (Mut _ q t1 n t2)          = free q ++ free t1 ++ free t2
+    free (Seal _ q t)               = free q ++ free t
     free (Imply _ w q cs)           = free q ++ free cs
