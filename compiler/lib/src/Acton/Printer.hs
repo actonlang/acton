@@ -514,12 +514,12 @@ instance Pretty Kind where
     pretty KWild                    = text "_"
 
 instance Pretty Constraint where
-    pretty (Cast _ t1 t2)           = pretty t1 <+> text "<" <+> pretty t2
-    pretty (Sub _ w t1 t2)          = pretty w <+> colon <+> pretty t1 <+> text "<" <+> pretty t2
-    pretty (Proto _ w t u)          = pretty w <+> colon <+> pretty t <+> parens (pretty u)
-    pretty (Sel _ w t1 n t2)        = pretty w <+> colon <+> pretty t1 <> text "." <> pretty n <+> text "<" <+> pretty t2
-    pretty (Mut _ t1 n t2)          = pretty t1 <+> text "." <> pretty n <+> text ">" <+> pretty t2
-    pretty (Seal _ t)               = text "$Seal" <+> pretty t
+    pretty (Cast _ q t1 t2)         = prettyQual q <+> pretty t1 <+> text "<" <+> pretty t2
+    pretty (Sub _ w q t1 t2)        = pretty w <+> colon <+> prettyQual q <+> pretty t1 <+> text "<" <+> pretty t2
+    pretty (Proto _ w q t u)        = pretty w <+> colon <+> prettyQual q <+> pretty t <+> parens (pretty u)
+    pretty (Sel _ w q t1 n t2)      = pretty w <+> colon <+> prettyQual q <+> pretty t1 <> text "." <> pretty n <+> text "<" <+> pretty t2
+    pretty (Mut _ q t1 n t2)        = prettyQual q <+> pretty t1 <+> text "." <> pretty n <+> text ">" <+> pretty t2
+    pretty (Seal _ q t)             = prettyQual q <+> text "$Seal" <+> pretty t
     pretty (Imply _ w q cs)
       | length cs < 4               = pretty w <+> colon <+> pretty q <+> text "=>" <+> braces (commaSep pretty cs)
       | otherwise                   = pretty w <+> colon <+> pretty q <+> text "=>" $+$ nest 4 (vcat $ map pretty cs)

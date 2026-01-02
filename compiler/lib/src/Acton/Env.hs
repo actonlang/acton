@@ -1312,21 +1312,21 @@ importWits m te env         = foldl addWit env ws
 
 
 
-headvar (Proto _ w (TUni _ u) p)    = u
+headvar (Proto _ w q (TUni _ u) p)    = u
 
-headvar (Cast _ TVar{} (TUni _ u))  = u
-headvar (Cast _ (TUni _ u) t)       = u
-headvar (Cast _ t (TUni _ u))       = u     -- ?
+headvar (Cast _ q TVar{} (TUni _ u))  = u
+headvar (Cast _ q (TUni _ u) t)       = u
+headvar (Cast _ q t (TUni _ u))       = u     -- ?
 
-headvar (Sub _ w TVar{} (TUni _ u)) = u
-headvar (Sub _ w (TUni _ u) t)      = u
-headvar (Sub _ w t (TUni _ u))      = u     -- ?
+headvar (Sub _ w q TVar{} (TUni _ u)) = u
+headvar (Sub _ w q (TUni _ u) t)      = u
+headvar (Sub _ w q t (TUni _ u))      = u     -- ?
 
-headvar (Sel _ w (TUni _ u) n t)    = u
+headvar (Sel _ w q (TUni _ u) n t)    = u
 
-headvar (Mut _ (TUni _ u) n t)      = u
+headvar (Mut _ q (TUni _ u) n t)      = u
 
-headvar (Seal _ (TUni _ u))         = u
+headvar (Seal _ q (TUni _ u))         = u
 
 
 -- Error handling ----------------------------------------------------------------------------------------------------

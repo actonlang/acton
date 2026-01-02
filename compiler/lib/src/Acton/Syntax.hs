@@ -253,12 +253,12 @@ type PosRow     = Type
 type KwdRow     = Type
 type TRow       = Type
 
-data Constraint = Cast  {info :: ErrInfo, type1 :: Type, type2 :: Type}
-                | Sub   {info :: ErrInfo, wit :: Name, type1 :: Type, type2 :: Type}
-                | Proto {info :: ErrInfo, wit :: Name, type1 :: Type, proto1 :: PCon}
-                | Sel   {info :: ErrInfo, wit :: Name, type1 :: Type, name1 :: Name, type2 :: Type}
-                | Mut   {info :: ErrInfo, type1 :: Type, name1 :: Name, type2 :: Type}
-                | Seal  {info :: ErrInfo, type1 :: Type}
+data Constraint = Cast  {info :: ErrInfo, qual :: QBinds, type1 :: Type, type2 :: Type}
+                | Sub   {info :: ErrInfo, wit :: Name, qual :: QBinds, type1 :: Type, type2 :: Type}
+                | Proto {info :: ErrInfo, wit :: Name, qual :: QBinds, type1 :: Type, proto1 :: PCon}
+                | Sel   {info :: ErrInfo, wit :: Name, qual :: QBinds, type1 :: Type, name1 :: Name, type2 :: Type}
+                | Mut   {info :: ErrInfo, qual :: QBinds, type1 :: Type, name1 :: Name, type2 :: Type}
+                | Seal  {info :: ErrInfo, qual :: QBinds, type1 :: Type}
                 | Imply {info :: ErrInfo, wit :: Name, binder :: QBinds, scoped :: Constraints}
                 deriving (Eq,Show,Read,Generic,NFData)
 
@@ -700,12 +700,12 @@ instance HasLoc Type where
     loc                 = tloc
 
 instance HasLoc Constraint where
-      loc (Cast info t1 t2) = getLoc [loc info, loc t1, loc t2]
-      loc (Sub info _ t1 t2) = getLoc [loc info, loc t1, loc t2]
-      loc (Proto info _ t1 _) = getLoc [loc info, loc t1]
-      loc (Sel info _ t1  n1 t2) = getLoc [loc info, loc t1, loc n1, loc t2]
-      loc (Mut info t1  n1 t2) = getLoc [loc info, loc t1, loc n1, loc t2]
-      loc (Seal info  t1) =  getLoc [loc info, loc t1]
+      loc (Cast info q t1 t2) = getLoc [loc info, loc t1, loc t2]
+      loc (Sub info _ q t1 t2) = getLoc [loc info, loc t1, loc t2]
+      loc (Proto info _ q t1 _) = getLoc [loc info, loc t1]
+      loc (Sel info _ q t1  n1 t2) = getLoc [loc info, loc t1, loc n1, loc t2]
+      loc (Mut info q t1  n1 t2) = getLoc [loc info, loc t1, loc n1, loc t2]
+      loc (Seal info q t1) = getLoc [loc info, loc t1]
       loc (Imply info _ q cs) =  getLoc [loc info, loc cs]
 
 instance HasLoc ErrInfo where
