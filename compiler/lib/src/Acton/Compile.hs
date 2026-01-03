@@ -289,9 +289,42 @@ whenCurrentGen sched gen action = do
 -- when no command-line flags are present.
 defaultCompileOptions :: C.CompileOptions
 defaultCompileOptions =
-  C.CompileOptions False False False False False False False False False False False False False
-                   False False False False False C.Debug False False False False False
-                   "" "" "" C.defTarget "" False True [] []
+  C.CompileOptions
+    { C.alwaysbuild = False
+    , C.ignore_compiler_mtime = False
+    , C.db = False
+    , C.parse = False
+    , C.parse_ast = False
+    , C.kinds = False
+    , C.types = False
+    , C.sigs = False
+    , C.norm = False
+    , C.deact = False
+    , C.cps = False
+    , C.llift = False
+    , C.box = False
+    , C.hgen = False
+    , C.cgen = False
+    , C.ccmd = False
+    , C.ty = False
+    , C.cpedantic = False
+    , C.dbg_no_lines = False
+    , C.optimize = C.Debug
+    , C.listimports = False
+    , C.only_build = False
+    , C.skip_build = False
+    , C.watch = False
+    , C.no_threads = False
+    , C.root = ""
+    , C.tempdir = ""
+    , C.syspath = ""
+    , C.target = C.defTarget
+    , C.cpu = ""
+    , C.test = False
+    , C.print_test_bins = True
+    , C.searchpath = []
+    , C.dep_overrides = []
+    }
 
 
 dump :: A.ModName -> String -> String -> IO ()
