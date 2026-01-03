@@ -1,5 +1,4 @@
 Building file test/typeerrors/ex11.act using temporary scratch directory
-  Compiling ex11.act with Debug
 [error]: Constraint violation
      +--> ex11.act@4:5-4:11
      |

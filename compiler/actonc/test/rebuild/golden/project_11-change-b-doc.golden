@@ -1,7 +1,4 @@
-  Fresh a: using cached .ty
-  Stale b: source changed
-  Compiling b.act with Debug
-   Finished compilation of b in   0.000 s
-  Fresh c: using cached .ty
+   Finished typecheck of  rebuild/b in   0.000 s
+   Finished compilation of rebuild/b in   0.000 s
   Final compilation step
    Finished final compilation step in   0.000 s
