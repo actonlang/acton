@@ -1,7 +1,6 @@
-# TLS client test using a local mbedtls server.
-
 import net
 import process
+import testing
 
 
 actor TLSClient(env: Env, host: str, port: int, on_success, on_failure):
@@ -37,9 +36,9 @@ actor TLSClient(env: Env, host: str, port: int, on_success, on_failure):
     client = net.TLSConnection(connect_cap, host, port, on_connect, on_receive, on_error, on_remote_close, False)
 
 
-actor main(env):
-    pc = process.ProcessCap(env.cap)
-    server_bin = "test/stdlib/tls_test_server"
+actor _TLSClientServer(t: testing.EnvT):
+    pc = process.ProcessCap(t.env.cap)
+    server_bin = "../stdlib/tls_test_server"
 
     var done = False
     var server_proc: ?process.Process = None
@@ -52,7 +51,7 @@ actor main(env):
         done = True
         if server_proc is not None:
             server_proc.stop()
-        await async env.exit(0)
+        t.success()
 
     def _finish_failure(msg: str):
         if done:
@@ -60,8 +59,15 @@ actor main(env):
         done = True
         if server_proc is not None:
             server_proc.stop()
-        print("TLS test failed:", msg)
-        await async env.exit(1)
+        t.failure(AssertionError(msg))
+
+    def _finish_error(msg: str):
+        if done:
+            return
+        done = True
+        if server_proc is not None:
+            server_proc.stop()
+        t.error(Exception(msg))
 
     def _on_client_success():
         _finish_success()
@@ -70,7 +76,7 @@ actor main(env):
         _finish_failure(msg)
 
     def _start_client(port: int):
-        TLSClient(env, "127.0.0.1", port, _on_client_success, _on_client_failure)
+        TLSClient(t.env, "127.0.0.1", port, _on_client_success, _on_client_failure)
 
     def _handle_server_stdout(data: bytes):
         if started:
@@ -93,15 +99,15 @@ actor main(env):
     def _on_server_exit(p, exit_code, term_signal):
         if done:
             return
-        _finish_failure("TLS server exited (code %d, signal %d)" % (exit_code, term_signal))
+        _finish_error("TLS server exited (code %d, signal %d)" % (exit_code, term_signal))
 
     def _on_server_error(p, error):
         if done:
             return
-        _finish_failure("TLS server error: " + error)
+        _finish_error("TLS server error: " + error)
 
     def _timeout():
-        _finish_failure("timeout")
+        _finish_error("timeout")
 
     server_proc = process.Process(
         pc,
@@ -112,3 +118,7 @@ actor main(env):
         _on_server_error
     )
     after 10: _timeout()
+
+
+def _test_net_tls(t: testing.EnvT):
+    _TLSClientServer(t)
