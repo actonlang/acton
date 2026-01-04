@@ -1,4 +1,82 @@
 {-# LANGUAGE CPP #-}
+{-|
+Overview
+
+This module implements the shared Acton compilation pipeline that both the
+actonc CLI and the LSP server drive. It builds a dependency graph across
+projects, runs the front passes (parse, kinds, types) to produce .ty interface
+files and diagnostics, and then emits the back passes (normalizer through
+codegen) as separate jobs.
+
+The design is intentionally incremental and event-friendly. While the compiler
+scheduler is running and actively compiling modules, we can receive a new event
+about a modified module, cancel running tasks and restart compilation of that
+module from that point. This is used by watch mode and LSP where updates to
+files or in-editor buffers trigger recompilation. Dependencies are considered so
+that updates to a module only cause the affected part of the subgraph, i.e. the
+modified module and downstream dependencies to be recompiled. Cached .ty headers
+are reused when public module interfaces are unchanged. Inter-module
+dependencies only depend on the front passes completion, which is why they are
+separated from back jobs. As soon as the front passes of a module have
+completed, dependent modules can start compilation while the back pass job is
+scheduled in the background. This maximizes parallelism. It is only the front
+passes that can generate user facing errors, which means that the LSP server can
+return with feedback to the user (module type checked successfully) immediately
+after the front passes are done while the back passes can be run asynchronously
+in the background. This maximizes responsiveness of the LSP server.
+
+The CLI/LSP layers handle progress UI, file watching, and event sources; this
+module focuses on deterministic compilation and structured callbacks.
+
+Call flow:
+  - Shared pipeline (actonc build, actonc watch, LSP):
+    1) prepareCompilePlan (via prepareCompileContext, readModuleTask/
+       buildGlobalTasks/readImports, and selectNeededTasks/selectAffectedTasks)
+       builds a CompilePlan for the requested subgraph. Parsing is performed
+       through parseActSource/parseActSnapshot/parseActFile so SourceProvider
+       overlays can supply unsaved buffers.
+    2) runCompilePlan drives compileTasks. As each module finishes its front
+       passes, the CompileHooks callbacks (for example chOnFrontResult)
+       enqueue a BackJob into the scheduler's
+       BackQueue, so back passes begin as soon as they are ready and can overlap
+       remaining front passes.
+    3) Callers either wait for backQueueWait (CLI builds) or let back jobs run
+       in the background. CLI builds wait before invoking Zig.
+    4) runBackJobs/runBackPasses can be used for standalone back-pass execution
+       when a caller already has BackJobs to run.
+  - Triggering:
+    - actonc build runs the pipeline once for the requested files/project.
+    - actonc watch and LSP call startCompile on each event; callers can gate
+      output with generation checks (e.g. whenCurrentGen), and BackQueue ignores
+      back jobs for stale generations.
+    - Callers may supply a delay (debounce) before startCompile runs.
+  - Finalization:
+    - CLI waits on backQueueWait before running Zig build
+    - LSP does not implicitly run the Zig build, it is only run explicitly when
+      the user asks to build / run a module
+
+State and orchestration:
+  - Acton.Compile holds only small in-process caches (tyPathCache and
+    ifaceHashCache) to speed up .ty lookups; all orchestration state is owned
+    by the caller.
+  - Callers allocate and hold a CompileScheduler from this module. The
+    scheduler encapsulates mutable state (generation id, cancelable async
+    handle, build-spec stamp, and a shared back-queue); callers pass it into
+    startCompile and backQueueEnqueue rather than mutating it directly.
+  - LSP additionally keeps overlaysRef for in-memory buffers and builds an
+    overlay-aware SourceProvider on top of disk reads. actonc watch reads
+    directly from disk.
+  - Each event bumps the generation via startCompile; callers may pass a delay
+    (LSP uses debounceMicros, actonc watch uses 0). Back jobs are filtered by
+    generation inside BackQueue; front-pass diagnostics should be gated by the
+    caller if needed.
+  - CLI builds share the same pipeline and enqueue back jobs as soon as front
+    passes finish, overlapping work without needing a watch event source.
+
+TODO:
+  - Make generation invalidation more precise so unrelated in-flight modules
+    (e.g. long-running B) are not discarded when A changes.
+-}
 module Acton.Compile
   ( Paths(..)
   , ProjCtx(..)
@@ -140,6 +218,8 @@ newtype ProjectError = ProjectError String deriving (Show)
 
 instance Exception ProjectError
 
+-- | Raise a ProjectError for library callers.
+-- Used by project discovery and path helpers to stop on unrecoverable errors.
 throwProjectError :: String -> IO a
 throwProjectError msg = throwIO (ProjectError msg)
 
@@ -150,6 +230,8 @@ data CompileFailure
   | CompileInternalFailure String
   deriving (Eq, Show)
 
+-- | Render internal compile failures as user-facing messages.
+-- Centralizes wording so CLI output and tests stay consistent.
 compileFailureMessage :: CompileFailure -> String
 compileFailureMessage (CompileCycleFailure msg) = msg
 compileFailureMessage CompileBuiltinFailure = "Builtin compilation failed"
@@ -165,6 +247,8 @@ data CompileCallbacks = CompileCallbacks
   , ccOnInfo :: String -> IO ()
   }
 
+-- | Default no-op callbacks for the compilation pipeline.
+-- Callers can start from this and override only the events they care about.
 defaultCompileCallbacks :: CompileCallbacks
 defaultCompileCallbacks = CompileCallbacks
   { ccOnDiagnostics = \_ _ _ -> return ()
@@ -283,7 +367,6 @@ whenCurrentGen :: CompileScheduler -> Int -> IO () -> IO ()
 whenCurrentGen sched gen action = do
   current <- readIORef (csGenRef sched)
   when (current == gen) action
-
 -- | Baseline compile options for internal helpers and tests.
 -- This mirrors CLI defaults so path discovery and parsing behave predictably
 -- when no command-line flags are present.
@@ -326,12 +409,16 @@ defaultCompileOptions =
     , C.dep_overrides = []
     }
 
-
+-- | Debug helper for pass dumps.
+-- Prints a header and footer around the given text so pass output is easy to
+-- spot in verbose logs.
 dump :: A.ModName -> String -> String -> IO ()
 dump mn h txt =
   putStrLn ("\n\n== " ++ h ++ ": " ++ modNameToString mn ++ " ================================\n" ++ txt
             ++ '\n' : replicate (38 + length h + length (modNameToString mn)) '=' ++ "\n")
 
+-- | Compute the subdirectory for a module within a types root.
+-- Used when creating directories before writing .ty files.
 getModPath :: FilePath -> A.ModName -> FilePath
 getModPath path mn =
   joinPath [path, joinPath $ init $ A.modPath mn]
@@ -359,6 +446,8 @@ tyPathCache = unsafePerformIO (newMVar M.empty)
 ifaceHashCache :: MVar (M.Map A.ModName B.ByteString)
 ifaceHashCache = unsafePerformIO (newMVar M.empty)
 
+-- | Resolve the on-disk .ty path for a module, using a process-wide cache.
+-- Avoids repeated filesystem walks when many modules share dependencies.
 getTyFileCached :: [FilePath] -> A.ModName -> IO (Maybe FilePath)
 getTyFileCached spaths mn = modifyMVar tyPathCache $ \m -> do
   case M.lookup mn m of
@@ -369,6 +458,8 @@ getTyFileCached spaths mn = modifyMVar tyPathCache $ \m -> do
         Just p  -> return (M.insert mn p m, Just p)
         Nothing -> return (m, Nothing)
 
+-- | Read a module's interface hash using the cache and .ty header.
+-- This drives dependency invalidation when an imported interface changes.
 getIfaceHashCached :: Paths -> A.ModName -> IO (Maybe B.ByteString)
 getIfaceHashCached paths mn = modifyMVar ifaceHashCache $ \m -> do
   case M.lookup mn m of
@@ -383,12 +474,16 @@ getIfaceHashCached paths mn = modifyMVar ifaceHashCache $ \m -> do
             _ -> return (m, Nothing)
         Nothing -> return (m, Nothing)
 
+-- | Update the interface-hash cache after a successful compile.
+-- Keeps in-process dependency checks consistent for later modules.
 updateIfaceHashCache :: A.ModName -> B.ByteString -> IO ()
 updateIfaceHashCache mn ih = modifyMVar_ ifaceHashCache $ \m -> return (M.insert mn ih m)
 
 
 -- Handling Acton files -----------------------------------------------------------------------------
 
+-- | Keep only .act files when scanning directories.
+-- Returns Just the file path for Acton sources and Nothing otherwise.
 filterActFile :: FilePath -> Maybe FilePath
 filterActFile file =
     case fileExt of
@@ -396,15 +491,21 @@ filterActFile file =
         _ -> Nothing
   where (fileBody, fileExt) = splitExtension $ takeFileName file
 
+-- | Turn a list of (location, message) pairs into diagnostics.
+-- Used to normalize errors from different compiler subsystems.
 errsToDiagnostics :: String -> FilePath -> String -> [(SrcLoc, String)] -> [Diagnostic String]
 errsToDiagnostics errKind filename src errs =
     [ Diag.actErrToDiagnostic errKind filename src loc msg | (loc, msg) <- errs ]
 
+-- | Emit diagnostics when a dependency .ty file is missing or unreadable.
+-- Anchors the error to the owning module's filename for consistent reporting.
 missingIfaceDiagnostics :: A.ModName -> String -> A.ModName -> [Diagnostic String]
 missingIfaceDiagnostics ownerMn src missingMn =
     errsToDiagnostics "Compilation error" (modNameToFilename ownerMn) src
       [(NoLoc, "Type interface file not found or unreadable for " ++ modNameToString missingMn)]
 
+-- | Parse a module from source text, returning diagnostics on failure.
+-- Wraps parser, context, and indentation errors into a uniform format.
 parseActSource :: A.ModName -> FilePath -> String -> IO (Either [Diagnostic String] A.Module)
 parseActSource mn actFile srcContent = do
   (Right <$> Acton.Parser.parseModule mn actFile srcContent)
@@ -429,12 +530,16 @@ parseActSource mn actFile srcContent = do
     handleIndentationError err =
       return $ Left (errsToDiagnostics "Indentation error" (modNameToFilename mn) srcContent (Acton.Parser.indentationError err))
 
+-- | Parse a SourceSnapshot with a display path relative to cwd.
+-- Keeps diagnostics stable regardless of absolute paths or overlays.
 parseActSnapshot :: A.ModName -> FilePath -> Source.SourceSnapshot -> IO (Either [Diagnostic String] A.Module)
 parseActSnapshot mn actFile snap = do
   cwd <- getCurrentDirectory
   let displayFile = makeRelative cwd actFile
   parseActSource mn displayFile (Source.ssText snap)
 
+-- | Read and parse a source file via SourceProvider (overlay-aware).
+-- Returns both the snapshot and the parsed AST for reuse by callers.
 parseActFile :: Source.SourceProvider -> A.ModName -> FilePath -> IO (Either [Diagnostic String] (Source.SourceSnapshot, A.Module))
 parseActFile sp mn actFile = do
   snap <- Source.readSource sp actFile
@@ -500,13 +605,18 @@ data GlobalTask = GlobalTask
   , gtImportProviders :: M.Map A.ModName TaskKey   -- resolved in-graph providers (if any) for imports
   }
 
+-- | Extract imported module names from a CompileTask.
+-- TyTask uses header imports, ActonTask uses the parsed AST, and parse errors
+-- yield no imports.
 importsOf :: CompileTask -> [A.ModName]
 importsOf (ActonTask _ _ _ m) = A.importsOf m
 importsOf (TyTask { tyImports = ms }) = map fst ms
 importsOf (ParseErrorTask _ _) = []
 
 
--- Resolve imports to in-graph providers using project search order and module index.
+-- | Resolve imports to in-graph providers using project search order.
+-- This chooses the first project in the search order that declares the module,
+-- producing TaskKeys for dependency edges.
 resolveProviders :: [FilePath] -> M.Map FilePath (Data.Set.Set A.ModName) -> [A.ModName] -> M.Map A.ModName TaskKey
 resolveProviders order modSets imps =
     M.fromList $ catMaybes $ map (\mn -> fmap (\p -> (mn, TaskKey p mn)) (findProvider mn)) imps
@@ -514,7 +624,9 @@ resolveProviders order modSets imps =
     findProvider mn = listToMaybe [ p | p <- order, maybe False (Data.Set.member mn) (M.lookup p modSets) ]
 
 
--- Build GlobalTask list for all discovered projects. Also returns a module index per project.
+-- | Build GlobalTasks for all discovered projects.
+-- Crawls project sources, resolves provider edges, and optionally limits the
+-- seed set to specific files to keep the DAG small for incremental builds.
 buildGlobalTasks :: Source.SourceProvider
                  -> C.GlobalOptions
                  -> C.CompileOptions
@@ -560,6 +672,9 @@ buildGlobalTasks sp gopts opts projMap mSeeds = do
               go modMaps modSets orderCache (Data.Set.insert k seen) (qs ++ newKeys) acc'
 
 
+-- | Select the subgraph needed for a given build request.
+-- Maps file paths to TaskKeys, adds __builtin__, and computes the reachable
+-- dependency closure.
 selectNeededTasks :: Paths -> FilePath -> [GlobalTask] -> [FilePath] -> IO [GlobalTask]
 selectNeededTasks pathsRoot rootProj globalTasks srcFiles = do
     requestedKeys <- catMaybes <$> mapM (lookupTaskKey globalTasks) srcFiles
@@ -604,6 +719,9 @@ selectNeededTasks pathsRoot rootProj globalTasks srcFiles = do
               let deps = Data.Set.toList (M.findWithDefault Data.Set.empty k depMap)
               in go (deps ++ ks) (Data.Set.insert k seen)
 
+-- | Select the minimal subgraph affected by a set of changed files.
+-- Computes reverse dependencies so we rebuild dependents while keeping
+-- unrelated modules untouched.
 selectAffectedTasks :: [GlobalTask] -> [FilePath] -> IO [GlobalTask]
 selectAffectedTasks globalTasks changedFiles = do
     if null changedFiles
@@ -644,7 +762,7 @@ selectAffectedTasks globalTasks changedFiles = do
           in go seen' (ks ++ new)
 
 
--- Prepare a task for dependency graph construction.
+-- | Prepare a task for dependency graph construction.
 -- Prefer reading imports from .ty header; if no .ty, parse the source.
 -- Decide how to represent a module for the graph:
 -- 1) If .ty is missing/unreadable -> parse .act to obtain imports (ActonTask).
@@ -654,6 +772,10 @@ selectAffectedTasks globalTasks changedFiles = do
 --      - If stored srcHash == current srcHash -> header is still valid (TyTask)
 --      - Else -> parse .act to obtain accurate imports (ActonTask)
 -- Returns either a header-only TyTask stub or an ActonTask; no heavy decoding.
+--
+-- This is the core of incremental graph construction: it avoids parsing when
+-- cached interfaces are reliable, while still falling back to parsing when
+-- source changes are detected.
 readModuleTask :: Source.SourceProvider -> C.GlobalOptions -> C.CompileOptions -> Paths -> String -> IO CompileTask
 readModuleTask sp gopts _opts paths actFile = do
     let mn      = modName paths
@@ -725,6 +847,9 @@ readModuleTask sp gopts _opts paths actFile = do
         else parseFromSnapshot mn snap
 
 
+-- | Recursively read imports for a set of tasks within the same project.
+-- Any missing module is added by parsing or reading its .ty header via
+-- readModuleTask, yielding a self-contained task list.
 readImports :: Source.SourceProvider -> C.GlobalOptions -> C.CompileOptions -> Paths -> [CompileTask] -> IO [CompileTask]
 readImports sp gopts opts paths tasks = do
     let tasks' = filter (\t -> name t /= modName paths) tasks
@@ -757,9 +882,13 @@ readImports sp gopts opts paths tasks = do
                            (imns ++ concatMap importsOf (maybe [] (:[]) t))
 
 
+-- | Decide whether to suppress per-module timing/log output.
+-- We also treat any alternate output mode (parse/sigs/cgen/etc) as quiet.
 quiet :: C.GlobalOptions -> C.CompileOptions -> Bool
 quiet gopts opts = C.quiet gopts || altOutput opts
 
+-- | Read an interface from a .ty file and return its NameInfo and hash.
+-- This is used when a module is deemed fresh and we want to avoid reparsing.
 readIfaceFromTy :: Paths -> A.ModName -> String -> Maybe B.ByteString -> IO (Either [Diagnostic String] ([(A.Name, A.NameInfo)], Maybe String, B.ByteString))
 readIfaceFromTy paths mn src mHash = do
     mty <- Acton.Env.findTyFile (searchPath paths) mn
@@ -781,6 +910,10 @@ readIfaceFromTy paths mn src mHash = do
             return $ Right (te, mdoc, ih)
 
 
+-- | Run the front passes for a single module.
+-- Builds the environment, runs kinds/types, computes the interface hash, and
+-- writes the .ty header. Returns the front result plus a BackJob for later
+-- passes when compilation is needed.
 runFrontPasses :: C.GlobalOptions
                -> C.CompileOptions
                -> Paths
@@ -986,6 +1119,10 @@ runBackPasses gopts opts paths backInput shouldWrite = do
         else return Nothing
 
 
+-- | Compile a set of GlobalTasks using a parallel, dependency-aware scheduler.
+-- This drives front passes, emits diagnostics via callbacks, and collects
+-- back-pass jobs for later execution.
+--
 -- Total build graph scheduler: this compiles all tasks across all projects,
 -- i.e. dependencies of the main project are also compiled here, as well as
 -- their dependencies, etc. We construct a large DAG of all modules to be
@@ -1332,6 +1469,9 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
               loop runningRef rdy2 running2 res2 ind2 pend2 envAcc' hadErrors maxPar cw
 
 
+-- | Execute back-pass jobs in parallel while keeping output order stable.
+-- Jobs are started up to the concurrency limit, then completions are buffered
+-- and flushed in job order so logs are deterministic.
 runBackJobs :: C.GlobalOptions -> Int -> (BackJob -> IO ()) -> (BackJob -> Maybe TimeSpec -> IO ()) -> [BackJob] -> IO ()
 runBackJobs _ _ _ _ [] = return ()
 runBackJobs gopts maxPar onStart onDone jobs = do
@@ -1412,8 +1552,9 @@ data ProjCtx = ProjCtx {
                      projDeps     :: [(String, FilePath)]          -- resolved dependency roots (abs paths)
                    } deriving (Show)
 
--- Discover all projects reachable from a root project by following Build.act/build.act.json dependencies.
--- Returns a map from project root to ProjCtx; skips duplicates.
+-- | Discover all projects reachable from a root project.
+-- Follows Build.act/build.act.json dependencies, applies overrides/pins, and
+-- returns a map from project root to ProjCtx while skipping duplicates.
 discoverProjects :: FilePath -> FilePath -> [(String, FilePath)] -> IO (M.Map FilePath ProjCtx)
 discoverProjects sysAbs rootProj depOverrides = do
     rootAbs <- normalizePathSafe rootProj
@@ -1479,16 +1620,24 @@ discoverProjects sysAbs rootProj depOverrides = do
 -- 'fileExt' is file suffix of FILE.
 -- 'modName' is the module name of FILE (its path after 'src' except 'fileExt', split at every '/')
 
+-- | Compute the source file path for a module under its project src dir.
 srcFile                 :: Paths -> A.ModName -> FilePath
 srcFile paths mn        = joinPath (srcDir paths : A.modPath mn) ++ ".act"
 
+-- | Compute the output base path (without extension) for a module.
+-- Used to locate .ty/.c/.h output under the project's types directory.
 outBase                 :: Paths -> A.ModName -> FilePath
 outBase paths mn        = joinPath (projTypes paths : A.modPath mn)
 
+-- | Compute the module path without extension under the project's src dir.
+-- Used to derive the .act path or related per-module files.
 srcBase                 :: Paths -> A.ModName -> FilePath
 srcBase paths mn        = joinPath (srcDir paths : A.modPath mn)
 
 
+-- | Walk upward from a path to find a project root.
+-- A project root is identified by Acton.toml/Build.act/build.act.json plus a
+-- src/ directory; returns Nothing if we reach filesystem root.
 findProjectDir :: FilePath -> IO (Maybe FilePath)
 findProjectDir path = do
     let projectFiles = ["Acton.toml", "Build.act", "build.act.json"]
@@ -1501,6 +1650,9 @@ findProjectDir path = do
             else findProjectDir (takeDirectory path)
 
 
+-- | Compute Paths for a given source file and compile options.
+-- Resolves the project root (or temp root), output dirs, and search path,
+-- creating required directories along the way.
 findPaths               :: FilePath -> C.CompileOptions -> IO Paths
 findPaths actFile opts  = do execDir <- takeDirectory <$> getExecutablePath
                              sysPath <- canonicalizePath (if null $ C.syspath opts then execDir ++ "/.." else C.syspath opts)
@@ -1537,6 +1689,8 @@ findPaths actFile opts  = do execDir <- takeDirectory <$> getExecutablePath
 
 -- Module helpers for multi-project builds ---------------------------------------------------------
 
+-- | Derive a module name from a file path under a project's src root.
+-- The result uses path segments and strips the .act extension.
 moduleNameFromFile :: FilePath -> FilePath -> IO A.ModName
 moduleNameFromFile srcBase actFile = do
     base <- normalizePathSafe srcBase
@@ -1544,6 +1698,8 @@ moduleNameFromFile srcBase actFile = do
     let rel = dropExtension (makeRelative base file)
     return $ A.modName (splitDirectories rel)
 
+-- | Enumerate all .act files in a project and pair them with module names.
+-- Used to seed the project module index for graph construction.
 enumerateProjectModules :: ProjCtx -> IO [(FilePath, A.ModName)]
 enumerateProjectModules ctx = do
     exists <- doesDirectoryExist (projSrcDir ctx)
@@ -1556,11 +1712,16 @@ enumerateProjectModules ctx = do
           mn <- moduleNameFromFile (projSrcDir ctx) f
           return (f, mn)
 
+-- | Build a search path for module interfaces for a project.
+-- Includes the project's types dir, dependency types, user searchpath, and
+-- the system types directory.
 searchPathForProject :: C.CompileOptions -> M.Map FilePath ProjCtx -> ProjCtx -> [FilePath]
 searchPathForProject opts projMap ctx =
     let deps = depTypePathsFromMap projMap (projRoot ctx)
     in [projTypesDir ctx] ++ deps ++ (C.searchpath opts) ++ [projSysTypes ctx]
 
+-- | Construct a Paths record for a module within a project context.
+-- Creates output directories and ensures the types directory exists.
 pathsForModule :: C.CompileOptions -> M.Map FilePath ProjCtx -> ProjCtx -> A.ModName -> IO Paths
 pathsForModule opts projMap ctx mn = do
     let sPaths = searchPathForProject opts projMap ctx
@@ -1574,7 +1735,8 @@ pathsForModule opts projMap ctx mn = do
     return p
 
 
--- Load BuildSpec from Build.act (preferred) or build.act.json if present
+-- | Load a BuildSpec from Build.act (preferred) or build.act.json.
+-- Throws ProjectError on parse failure to keep callers in a single error path.
 loadBuildSpec :: FilePath -> IO (Maybe BuildSpec.BuildSpec)
 loadBuildSpec dir = do
     let actPath  = joinPath [dir, "Build.act"]
@@ -1596,7 +1758,8 @@ loadBuildSpec dir = do
               Right spec -> return (Just spec)
           else return Nothing
 
--- Treat drive-letter paths as absolute too (for Windows hosts)
+-- | Treat drive-letter paths as absolute in addition to POSIX roots.
+-- This keeps path normalization consistent on Windows hosts.
 isAbsolutePath :: FilePath -> Bool
 isAbsolutePath p =
     isAbsolute p ||
@@ -1604,18 +1767,21 @@ isAbsolutePath p =
       (c:':':_) -> isAlpha c
       _         -> False
 
--- Normalize a path without failing if it does not exist
+-- | Normalize a path without failing if it does not exist.
+-- Falls back to normalise for non-existent paths (useful for temporary builds).
 normalizePathSafe :: FilePath -> IO FilePath
 normalizePathSafe p = do
     res <- try (canonicalizePath p) :: IO (Either IOException FilePath)
     return $ either (const (normalise p)) id res
 
+-- | Trim leading and trailing whitespace from a string.
+-- Used when parsing or normalizing BuildSpec inputs.
 trim :: String -> String
 trim = f . f
   where f = reverse . dropWhile isSpace
 
--- Collapse "." / ".." segments without touching leading ".." for relative paths
--- e.g. "a/b/../c/./d" -> "a/c/d"
+-- | Collapse "." and ".." segments without dropping leading ".." on relative paths.
+-- Example: "a/b/../c/./d" becomes "a/c/d".
 collapseDots :: FilePath -> FilePath
 collapseDots p =
     let parts = splitDirectories p
@@ -1637,13 +1803,15 @@ collapseDots p =
                   []     -> (acc, ups + 1)
         _    -> (comp:acc, ups)
 
--- Rebase a relative path against a directory and normalize it
+-- | Rebase a path against a base directory and normalize it.
+-- Absolute paths are left as-is; relative paths are joined to the base.
 rebasePath :: FilePath -> FilePath -> FilePath
 rebasePath base p
   | isAbsolutePath p = normalise p
   | otherwise        = normalise (joinPath [base, p])
 
--- normalized paths. If an override path is already absolute we just normalize it.
+-- | Normalize --dep overrides relative to a base directory.
+-- Absolute override paths are kept, relative paths are rebased and normalized.
 normalizeDepOverrides :: FilePath -> [(String, FilePath)] -> IO [(String, FilePath)]
 normalizeDepOverrides base overrides =
   mapM (\(n,p) -> do
@@ -1652,8 +1820,8 @@ normalizeDepOverrides base overrides =
            return (n, p'))
        overrides
 
--- Apply --dep overrides (NAME=PATH) to a BuildSpec by forcing path on matching deps.
--- Paths are resolved relative to the given base directory when not absolute.
+-- | Apply --dep overrides (NAME=PATH) to a BuildSpec.
+-- Resolves override paths relative to the given base directory when needed.
 applyDepOverrides :: FilePath -> [(String, FilePath)] -> BuildSpec.BuildSpec -> IO BuildSpec.BuildSpec
 applyDepOverrides base overrides spec = do
     deps' <- foldM applyOne (BuildSpec.dependencies spec) overrides
@@ -1668,7 +1836,8 @@ applyDepOverrides base overrides spec = do
           let dep' = dep { BuildSpec.path = Just absP }
           return (M.insert depName dep' depsMap)
 
--- Collect dependency type directories recursively using already-discovered ProjCtx map.
+-- | Collect dependency type directories using an existing ProjCtx map.
+-- Traverses dependency edges so downstream lookups can build search paths.
 depTypePathsFromMap :: M.Map FilePath ProjCtx -> FilePath -> [FilePath]
 depTypePathsFromMap ctxs root = snd (go Data.Set.empty root)
   where
@@ -1689,7 +1858,8 @@ depTypePathsFromMap ctxs root = snd (go Data.Set.empty root)
                   (seenNext, sub) = go seen' depRoot
               in (seenNext, acc ++ [projTypesDir depCtx] ++ sub)
 
--- Resolve dependency base directory from PkgDep, preferring path then cache/hash
+-- | Resolve a dependency's base directory from a BuildSpec PkgDep.
+-- Prefers explicit path, otherwise uses the hashed cache location.
 resolveDepBase :: FilePath -> String -> BuildSpec.PkgDep -> IO FilePath
 resolveDepBase base name dep =
     case BuildSpec.path dep of
@@ -1700,7 +1870,8 @@ resolveDepBase base name dep =
                normalizePathSafe (joinPath [home, ".cache", "acton", "deps", name ++ "-" ++ h])
              Nothing -> throwProjectError ("Dependency " ++ name ++ " has no path or hash")
 
--- Recursively collect out/types paths for all dependencies declared in Build.act/build.act.json
+-- | Recursively collect out/types paths for all declared dependencies.
+-- Reads Build.act/build.act.json and follows dependency edges.
 collectDepTypePaths :: FilePath -> [(String, FilePath)] -> IO [FilePath]
 collectDepTypePaths projDir overrides = do
   root <- normalizePathSafe projDir
@@ -1726,18 +1897,24 @@ collectDepTypePaths projDir overrides = do
           return (seenNext, acc ++ [typesDir] ++ sub)
 
 
+-- | Convert a module name to its source filename (path + .act).
+-- This is used for diagnostics and display output.
 modNameToFilename :: A.ModName -> String
 modNameToFilename mn = joinPath (map nameToString names) ++ ".act"
   where
     A.ModName names = mn
 
+-- | Render a module name as a dotted string (foo.bar.baz).
 modNameToString :: A.ModName -> String
 modNameToString (A.ModName names) = intercalate "." (map nameToString names)
 
+-- | Render a name identifier to a plain string.
 nameToString :: A.Name -> String
 nameToString (A.Name _ s) = s
 
 
+-- | Check whether a NameInfo represents a root-eligible actor.
+-- Used to decide which roots to include in .ty headers and root generation.
 rootEligible :: A.NameInfo -> Bool
 rootEligible (A.NAct [] p k _ _) = case (p,k) of
                                       (A.TNil{}, A.TRow _ _ _ t A.TNil{}) ->
@@ -1746,12 +1923,14 @@ rootEligible (A.NAct [] p k _ _) = case (p,k) of
                                       _ -> False
 rootEligible _ = False
 
--- Determine if any other non-standard output is enabled, like --cgen or --sigs
+-- | Determine whether any non-standard output mode is enabled.
+-- Used to suppress normal timing/output when dumping parse/sigs/cgen, etc.
 altOutput :: C.CompileOptions -> Bool
 altOutput opts =
   (C.parse opts) || (C.parse_ast opts) || (C.kinds opts) || (C.types opts) || (C.sigs opts) || (C.norm opts) || (C.deact opts) || (C.cps opts) || (C.llift opts) || (C.box opts) || (C.hgen opts) || (C.cgen opts)
 
--- our own readFile & writeFile with hard-coded utf-8 encoding
+-- | Read a UTF-8 text file with explicit encoding.
+-- Keeps compiler IO consistent across platforms.
 readFile :: FilePath -> IO String
 readFile f = do
     h <- openFile f ReadMode
@@ -1759,6 +1938,8 @@ readFile f = do
     c <- hGetContents h
     return c
 
+-- | Write a UTF-8 text file with explicit encoding.
+-- Used for generated sources and BuildSpec parsing.
 writeFile :: FilePath -> String -> IO ()
 writeFile f c = do
     h <- openFile f WriteMode
@@ -1766,6 +1947,8 @@ writeFile f c = do
     hPutStr h c
     hClose h
 
+-- | Format a TimeSpec as a fixed-width seconds string.
+-- Used for stable logging and golden test output.
 fmtTime :: TimeSpec -> String
 fmtTime t =
     printf "%6.3f s" secs
@@ -1773,7 +1956,8 @@ fmtTime t =
     secs :: Float
     secs = (fromIntegral(sec t)) + (fromIntegral (nsec t) / 1000000000)
 
--- Topologically order projects so dependencies come first.
+-- | Topologically order projects so dependencies come first.
+-- Used to build search paths and providers in dependency order.
 projDepClosure :: M.Map FilePath ProjCtx -> FilePath -> [FilePath]
 projDepClosure ctxs root = reverse (dfs Data.Set.empty [] root)
   where
