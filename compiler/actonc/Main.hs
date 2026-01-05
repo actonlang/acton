@@ -2492,15 +2492,10 @@ genBuildZigZon template relSys depsRootAbs projAbs spec =
     maybeEmpty (Just s) = s
     maybeEmpty Nothing  = ""
 
--- TODO: replace all of this with generic+crypto?!
-#if defined(darwin_HOST_OS) && defined(aarch64_HOST_ARCH)
-defCpuFlag = ["-Dcpu=apple_a15"]
-#elif defined(darwin_HOST_OS) && defined(x86_64_HOST_ARCH)
-defCpuFlag = []
-#elif defined(linux_HOST_OS) && defined(aarch64_HOST_ARCH)
-defCpuFlag = ["-Dcpu=cortex_a72"]
-#elif defined(linux_HOST_OS) && defined(x86_64_HOST_ARCH)
-defCpuFlag = []
+#if defined(aarch64_HOST_ARCH)
+defCpuFlag = ["-Dcpu=generic+crypto"]
+#elif defined(x86_64_HOST_ARCH)
+defCpuFlag = ["-Dcpu=x86_64_v2+aes"]
 #else
 #error "Unsupported platform"
 #endif
@@ -2553,12 +2548,11 @@ zigBuild env gopts opts paths tasks binTasks allowPrune = do
         cpuArgs =
             if (C.cpu opts /= "") then ["-Dcpu=" ++ C.cpu opts]
             else case (splitOn "-" (C.target opts)) of
-                   ("native":_)            -> defCpuFlag
-                   ("aarch64":"macos":_)   -> ["-Dcpu=apple_a15"]
-                   ("aarch64":"windows":_) -> ["-Dcpu=apple_a15"]
-                   ("aarch64":"linux":_)   -> ["-Dcpu=cortex_a72"]
-                   ("x86_64":_:_)          -> ["-Dcpu=westmere"]
-                   (_:_:_)                 -> defCpuFlag
+                   ("native":_)   -> defCpuFlag
+                   ("aarch64":_)  -> ["-Dcpu=generic+crypto"]
+                   ("x86_64":_)   -> ["-Dcpu=x86_64_v2+aes"]
+                   (_:_)          -> defCpuFlag
+                   []             -> defCpuFlag
         optArgs = ["-Doptimize=" ++ optimizeModeToZig (C.optimize opts)]
         featureArgs = concat [ if C.db opts then ["-Ddb"] else []
                              , if no_threads then ["-Dno_threads"] else []
