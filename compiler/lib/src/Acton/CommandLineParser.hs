@@ -166,7 +166,7 @@ newOptions = NewOptions <$> argument (str :: ReadM String) (metavar "PROJECTDIR"
 
 compileOptions = CompileOptions
         <$> switch (long "always-build" <> help "Show the result of parsing")
-        <*> switch (long "ignore-compiler-mtime" <> help "Ignore actonc mtime when checking .ty freshness")
+        <*> switch (long "ignore-compiler-version" <> help "Ignore actonc version when checking .ty freshness")
         <*> switch (long "db"           <> help "Enable DB backend")
         <*> switch (long "parse"        <> help "Show the result of parsing")
         <*> switch (long "parse-ast"    <> help "Show the raw AST (Haskell Show)")

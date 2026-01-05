@@ -748,7 +748,7 @@ High-level Steps
      - If .ty is missing/unreadable → parse .act to obtain imports (ActonTask).
      - If .ty exists and both .act and actonc mtime <= .ty mtime → trust .ty
        header imports and create a TyTask stub (no heavy decode) for graph
-       building. Use --ignore-compiler-mtime to skip the actonc part.
+       building. Use --ignore-compiler-version to skip the actonc part.
      - If .act appears newer than .ty → verify by content hash:
        – If stored srcHash == current srcHash → header is still valid (TyTask)
        – Else → parse .act now to get accurate imports (ActonTask)
@@ -1847,7 +1847,7 @@ filterActFile file =
 -- Decide how to represent a module for the graph:
 -- 1) If .ty is missing/unreadable -> parse .act to obtain imports (ActonTask).
 -- 2) If .ty exists and both .act and actonc mtime <= .ty mtime -> trust header imports (TyTask).
---    (Use --ignore-compiler-mtime to skip the actonc check.)
+--    (Use --ignore-compiler-version to skip the actonc check.)
 -- 3) If actonc is newer than .ty -> recompile from source (ActonTask).
 -- 4) If .act appears newer than .ty -> verify by content hash:
 --      - If stored srcHash == current srcHash -> header is still valid (TyTask)
