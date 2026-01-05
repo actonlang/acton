@@ -1,8 +1,18 @@
 #define GC_THREADS 1
+#ifdef _WIN32
+#include <winsock2.h>
+#endif
 #include <gc.h>
 
+#include <stdint.h>
 #include <tlsuv/tlsuv.h>
 #include <uv.h>
+#include <errno.h>
+#include <stdio.h>
+#include <string.h>
+#ifndef _WIN32
+#include <unistd.h>
+#endif
 #include "../rts/io.h"
 #include "../rts/log.h"
 
@@ -170,7 +180,7 @@ void netQ_TCPConnection__on_receive(uv_stream_t *stream, ssize_t nread, const uv
     if (nread < 0){
         if (nread == UV_EOF) {
             netQ_TCPConnection self = stream->data;
-            if ((long int)stream != -1)
+            if ((intptr_t)stream != -1)
                 uv_close((uv_handle_t *)stream, NULL);
             self->_sock = toB_int(-1);
             self->_sock4 = toB_int(-1);
@@ -226,7 +236,7 @@ $R netQ_TCPConnectionD__connect4G_local (netQ_TCPConnection self, $Cont c$cont, 
     log_debug("TCP connecting over IPv4 to %s", fromB_str(ip_address));
     uv_tcp_t* socket = (uv_tcp_t*)acton_malloc(sizeof(uv_tcp_t));
     uv_tcp_init(get_uv_loop(), socket);
-    self->_sock4 = toB_int((long)socket);
+    self->_sock4 = toB_int((int64_t)(intptr_t)socket);
 
     uv_connect_t* connect_req = (uv_connect_t*)acton_malloc(sizeof(uv_connect_t));
     connect_req->data = (void *)self;
@@ -243,7 +253,7 @@ $R netQ_TCPConnectionD__connect6G_local (netQ_TCPConnection self, $Cont c$cont, 
     log_debug("TCP connecting over IPv6 to %s", fromB_str(ip_address));
     uv_tcp_t* socket = (uv_tcp_t*)acton_malloc(sizeof(uv_tcp_t));
     uv_tcp_init(get_uv_loop(), socket);
-    self->_sock6 = toB_int((long)socket);
+    self->_sock6 = toB_int((int64_t)(intptr_t)socket);
 
     uv_connect_t* connect_req = (uv_connect_t*)acton_malloc(sizeof(uv_connect_t));
     connect_req->data = (void *)self;
@@ -275,7 +285,7 @@ $R netQ_TCPConnectionD__read_startG_local (netQ_TCPConnection self, $Cont c$cont
 $R netQ_TCPConnectionD_writeG_local (netQ_TCPConnection self, $Cont c$cont, B_bytes data) {
     uv_stream_t *stream = (uv_stream_t *)fromB_int(self->_sock);
     // fd == -1 means invalid FD and can happen after __resume__
-    if ((long int)stream == -1)
+    if ((intptr_t)stream == -1)
         return $R_CONT(c$cont, B_None);
 
     uv_write_t *req = (uv_write_t *)acton_malloc(sizeof(uv_write_t));
@@ -319,7 +329,7 @@ static void after_shutdown(uv_shutdown_t* req, int status) {
 $R netQ_TCPConnectionD_closeG_local (netQ_TCPConnection self, $Cont c$cont, $action on_close) {
     uv_stream_t *stream = (uv_stream_t *)fromB_int(self->_sock);
     // fd == -1 means invalid FD and can happen after __resume__
-    if ((long int)stream == -1) {
+    if ((intptr_t)stream == -1) {
         on_close->$class->__asyn__(on_close, self);
         return $R_CONT(c$cont, B_None);
     }
@@ -429,7 +439,7 @@ void on_new_connection(uv_stream_t *server, int status) {
         return;
     }
 
-    self->$class->create_tcp_listen_connection(self, B_None, toB_int((long)client));
+    self->$class->create_tcp_listen_connection(self, B_None, toB_int((int64_t)(intptr_t)client));
     // NOTE: free() here if do manual memory management in I/O one day
 }
 
@@ -449,7 +459,7 @@ $R netQ_TCPListenerD__initG_local (netQ_TCPListener self, $Cont c$cont) {
         r = uv_ip6_addr((const char *)fromB_str(self->address), fromB_int(self->port), &addr6);
     } else {
         B_str errmsg = $FORMAT("Address is not an IPv4 or IPv6 address: %s", fromB_str(self->address));
-        log_warn(fromB_str(errmsg));
+        log_warn((const char *)fromB_str(errmsg));
         $action2 f = ($action2)self->on_listen;
         f->$class->__asyn__(f, self, errmsg);
         // NOTE: free() here if do manual memory management in I/O one day
@@ -507,12 +517,12 @@ $R netQ_TCPListenConnectionD__initG_local (netQ_TCPListenConnection self, $Cont 
     pin_actor_affinity();
 
     uv_stream_t *client = (uv_stream_t *)fromB_int(self->server_client);
-    int fd;
+    uv_os_fd_t fd;
     uv_fileno((uv_handle_t *)client, &fd);
     uv_tcp_t* client_handle = (uv_tcp_t*)acton_malloc(sizeof(uv_tcp_t));
     uv_tcp_init(get_uv_loop(), client_handle);
-    uv_tcp_open(client_handle, fd);
-    self->client = toB_int((long)client_handle);
+    uv_tcp_open(client_handle, (uv_os_sock_t)fd);
+    self->client = toB_int((int64_t)(intptr_t)client_handle);
 
     return $R_CONT(c$cont, B_None);
 }
@@ -521,7 +531,7 @@ void netQ_TCPListenConnection__on_receive(uv_stream_t *stream, ssize_t nread, co
     if (nread < 0){
         if (nread == UV_EOF) {
             netQ_TCPListenConnection self = stream->data;
-            if ((long int)stream != -1)
+            if ((intptr_t)stream != -1)
                 uv_close((uv_handle_t *)stream, NULL);
             self->client = toB_int(-1);
             if (self->on_remote_close) {
@@ -561,7 +571,7 @@ $R netQ_TCPListenConnectionD__read_startG_local (netQ_TCPListenConnection self, 
 $R netQ_TCPListenConnectionD_writeG_local (netQ_TCPListenConnection self, $Cont c$cont, B_bytes data) {
     uv_stream_t *stream = (uv_stream_t *)fromB_int(self->client);
     // fd == -1 means invalid FD and can happen after __resume__
-    if ((long int)stream == -1)
+    if ((intptr_t)stream == -1)
         return $R_CONT(c$cont, B_None);
 
     uv_write_t *req = (uv_write_t *)acton_malloc(sizeof(uv_write_t));
@@ -581,7 +591,7 @@ $R netQ_TCPListenConnectionD_closeG_local (netQ_TCPListenConnection self, $Cont 
     log_debug("Closing TCP connection, affinity=%d", self->$affinity);
     uv_stream_t *client = (uv_stream_t *)fromB_int(self->client);
     // fd == -1 means invalid FD and can happen after __resume__ or if the socket was closed
-    if ((long int)client == -1)
+    if ((intptr_t)client == -1)
         return $R_CONT(c$cont, B_None);
 
     // TODO: shouldn't we call uv_shutdown() first? uv_read_stop() is not needed I think
@@ -596,6 +606,341 @@ $R netQ_TCPListenConnectionD_closeG_local (netQ_TCPListenConnection self, $Cont 
 B_NoneType netQ_TCPListenConnectionD___resume__ (netQ_TCPListenConnection self) {
     self->server_client = toB_int(-1);
     self->client = toB_int(-1);
+    return B_None;
+}
+
+struct tls_listener_conn {
+    netQ_TLSListener listener;
+    tlsuv_stream_t *stream;
+};
+
+static void tls_listener_on_close(uv_handle_t *stream) {
+    log_debug("TLS listener handle closed, stream: %p  stream->data: %p", stream, stream->data);
+}
+
+static void tls_listener_close_stream(tlsuv_stream_t *stream) {
+    tlsuv_stream_close(stream, tls_listener_on_close);
+}
+
+static void tls_listener_on_connect(uv_connect_t *creq, int status) {
+    struct tls_listener_conn *conn = (struct tls_listener_conn *)creq->data;
+    netQ_TLSListener listener = conn->listener;
+    tlsuv_stream_t *stream = conn->stream;
+
+    if (status != 0) {
+        char errmsg[1024] = "TLS handshake failed: ";
+        uv_strerror_r(status, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        log_warn(errmsg);
+        $action2 f = ($action2)listener->on_listen;
+        f->$class->__asyn__(f, listener, to$str(errmsg));
+        tls_listener_close_stream(stream);
+        return;
+    }
+
+    listener->$class->create_tls_listen_connection(listener, B_None, toB_int((int64_t)(intptr_t)stream));
+}
+
+static void tls_listener_on_receive(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
+    netQ_TLSListenConnection self = ((tlsuv_stream_t *)stream)->data;
+    if (nread > 0) {
+        if (stream->data) {
+            $action2 f = ($action2)self->on_receive;
+            B_bytes data = to$bytesD_len(buf->base, nread);
+            f->$class->__asyn__(f, self, data);
+        }
+    } else if (nread == UV_EOF) {
+        log_debug("TLS listen connection closed %p", stream);
+        tls_listener_close_stream((tlsuv_stream_t *)stream);
+        self->_stream = toB_int(-1);
+        if (self->on_remote_close) {
+            $action f = ($action)self->on_remote_close;
+            f->$class->__asyn__(f, self);
+        }
+    } else if (nread < 0) {
+        log_debug("TLS listen read error %ld: %s", nread, uv_strerror((int)nread));
+        tls_listener_close_stream((tlsuv_stream_t *)stream);
+        if (stream->data) {
+            self->_stream = toB_int(-1);
+        }
+    }
+}
+
+static void tls_listener_write_cb(uv_write_t *wreq, int status) {
+    if (status < 0) {
+        char errmsg[1024] = "Failed to write to TLS listen socket: ";
+        uv_strerror_r(status, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        log_warn(errmsg);
+        netQ_TLSListenConnection self = (netQ_TLSListenConnection)wreq->data;
+        $action2 on_error = ($action2)self->on_error;
+        on_error->$class->__asyn__(on_error, self, to$str(errmsg));
+        tls_listener_close_stream((tlsuv_stream_t *)wreq->handle);
+    }
+}
+
+static void on_new_tls_connection(uv_stream_t *server, int status) {
+    netQ_TLSListener self = (netQ_TLSListener)server->data;
+
+    if (status != 0) {
+        char errmsg[1024] = "Error on new TLS client connection: ";
+        uv_strerror_r(status, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        log_warn(errmsg);
+        $action2 f = ($action2)self->on_listen;
+        f->$class->__asyn__(f, self, to$str(errmsg));
+        return;
+    }
+
+    uv_tcp_t *client = (uv_tcp_t *)acton_malloc(sizeof(uv_tcp_t));
+    uv_tcp_init(get_uv_loop(), client);
+    int r = uv_accept(server, (uv_stream_t *)client);
+    if (r != 0) {
+        char errmsg[1024] = "Error in accepting TLS client connection: ";
+        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        log_warn(errmsg);
+        $action2 f = ($action2)self->on_listen;
+        f->$class->__asyn__(f, self, to$str(errmsg));
+        return;
+    }
+
+    uv_os_fd_t fd;
+    r = uv_fileno((uv_handle_t *)client, &fd);
+    if (r != 0) {
+        char errmsg[1024] = "Error getting TLS client socket fd: ";
+        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        log_warn(errmsg);
+        $action2 f = ($action2)self->on_listen;
+        f->$class->__asyn__(f, self, to$str(errmsg));
+        return;
+    }
+
+#ifdef _WIN32
+    // NOTE: Windows socket duplication path is untested.
+    SOCKET orig_sock = (SOCKET)fd;
+    WSAPROTOCOL_INFOA dup_info;
+    if (WSADuplicateSocket(orig_sock, GetCurrentProcessId(), &dup_info) != 0) {
+        char errmsg[1024] = "Error duplicating TLS client socket: ";
+        snprintf(errmsg + strlen(errmsg), sizeof(errmsg) - strlen(errmsg), "WSA error %d", WSAGetLastError());
+        log_warn(errmsg);
+        $action2 f = ($action2)self->on_listen;
+        f->$class->__asyn__(f, self, to$str(errmsg));
+        uv_close((uv_handle_t *)client, NULL);
+        return;
+    }
+    SOCKET dup_sock = WSASocket(FROM_PROTOCOL_INFO, FROM_PROTOCOL_INFO, FROM_PROTOCOL_INFO,
+                                &dup_info, 0, WSA_FLAG_OVERLAPPED);
+    uv_close((uv_handle_t *)client, NULL);
+    if (dup_sock == INVALID_SOCKET) {
+        char errmsg[1024] = "Error duplicating TLS client socket: ";
+        snprintf(errmsg + strlen(errmsg), sizeof(errmsg) - strlen(errmsg), "WSA error %d", WSAGetLastError());
+        log_warn(errmsg);
+        $action2 f = ($action2)self->on_listen;
+        f->$class->__asyn__(f, self, to$str(errmsg));
+        return;
+    }
+    uv_os_sock_t sock = (uv_os_sock_t)dup_sock;
+#else
+    int dup_fd = dup((int)fd);
+    uv_close((uv_handle_t *)client, NULL);
+    if (dup_fd < 0) {
+        char errmsg[1024] = "Error duplicating TLS client socket: ";
+        snprintf(errmsg + strlen(errmsg), sizeof(errmsg) - strlen(errmsg), "%s", strerror(errno));
+        log_warn(errmsg);
+        $action2 f = ($action2)self->on_listen;
+        f->$class->__asyn__(f, self, to$str(errmsg));
+        return;
+    }
+    uv_os_sock_t sock = (uv_os_sock_t)dup_fd;
+#endif
+
+    tls_context *tls = (tls_context *)fromB_int(self->_tls_ctx);
+    tlsuv_stream_t *stream = (tlsuv_stream_t *)acton_malloc(sizeof(tlsuv_stream_t));
+    tlsuv_stream_init(get_uv_loop(), stream, tls);
+    tlsuv_stream_set_server(stream, 1);
+    stream->authmode = 0;
+
+    struct tls_listener_conn *conn = (struct tls_listener_conn *)acton_malloc(sizeof(*conn));
+    conn->listener = self;
+    conn->stream = stream;
+
+    uv_connect_t *connect_req = (uv_connect_t *)acton_calloc(1, sizeof(uv_connect_t));
+    connect_req->data = conn;
+
+    r = tlsuv_stream_open(connect_req, stream, sock, tls_listener_on_connect);
+    if (r != 0) {
+        char errmsg[1024] = "Failed to start TLS handshake: ";
+        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        log_warn(errmsg);
+        $action2 f = ($action2)self->on_listen;
+        f->$class->__asyn__(f, self, to$str(errmsg));
+        tls_listener_close_stream(stream);
+        return;
+    }
+}
+
+$R netQ_TLSListenerD__initG_local (netQ_TLSListener self, $Cont c$cont) {
+    pin_actor_affinity();
+
+    tls_context *tls = default_tls_context(NULL, 0);
+    if (tls == NULL) {
+        $action2 f = ($action2)self->on_listen;
+        f->$class->__asyn__(f, self, to$str("Failed to initialize TLS context"));
+        return $R_CONT(c$cont, B_None);
+    }
+
+    tlsuv_private_key_t key = NULL;
+    tlsuv_certificate_t cert = NULL;
+    int rc = tls->load_key(&key, (const char *)self->key_pem->str, self->key_pem->nbytes);
+    if (rc != 0) {
+        const char *err = tls->strerror(rc);
+        B_str errmsg = $FORMAT("Failed to load TLS key: %s", err);
+        log_warn((const char *)fromB_str(errmsg));
+        $action2 f = ($action2)self->on_listen;
+        f->$class->__asyn__(f, self, errmsg);
+        return $R_CONT(c$cont, B_None);
+    }
+
+    rc = tls->load_cert(&cert, (const char *)self->cert_pem->str, self->cert_pem->nbytes);
+    if (rc != 0) {
+        const char *err = tls->strerror(rc);
+        B_str errmsg = $FORMAT("Failed to load TLS cert: %s", err);
+        log_warn((const char *)fromB_str(errmsg));
+        $action2 f = ($action2)self->on_listen;
+        f->$class->__asyn__(f, self, errmsg);
+        return $R_CONT(c$cont, B_None);
+    }
+
+    rc = tls->set_own_cert(tls, key, cert);
+    if (rc != 0) {
+        $action2 f = ($action2)self->on_listen;
+        f->$class->__asyn__(f, self, to$str("Failed to set TLS certificate"));
+        return $R_CONT(c$cont, B_None);
+    }
+
+    self->_tls_ctx = toB_int((int64_t)(intptr_t)tls);
+
+    uv_tcp_t *server = (uv_tcp_t *)acton_malloc(sizeof(uv_tcp_t));
+    uv_tcp_init(get_uv_loop(), server);
+    server->data = (void *)self;
+    int r;
+    struct sockaddr_in addr4;
+    struct sockaddr_in6 addr6;
+    if (inet_pton(AF_INET, (const char *)fromB_str(self->address), &(addr4.sin_addr)) == 1) {
+        r = uv_ip4_addr((const char *)fromB_str(self->address), fromB_int(self->port), &addr4);
+    } else if (inet_pton(AF_INET6, (const char *)fromB_str(self->address), &(addr6.sin6_addr)) == 1) {
+        r = uv_ip6_addr((const char *)fromB_str(self->address), fromB_int(self->port), &addr6);
+    } else {
+        B_str errmsg = $FORMAT("Address is not an IPv4 or IPv6 address: %s", fromB_str(self->address));
+        log_warn((const char *)fromB_str(errmsg));
+        $action2 f = ($action2)self->on_listen;
+        f->$class->__asyn__(f, self, errmsg);
+        return $R_CONT(c$cont, B_None);
+    }
+    if (r != 0) {
+        char errmsg[1024] = "Unable to parse address: ";
+        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        log_warn(errmsg);
+        $action2 f = ($action2)self->on_listen;
+        f->$class->__asyn__(f, self, to$str(errmsg));
+        return $R_CONT(c$cont, B_None);
+    }
+
+    if (inet_pton(AF_INET, (const char *)fromB_str(self->address), &(addr4.sin_addr)) == 1) {
+        r = uv_tcp_bind(server, (const struct sockaddr *)&addr4, 0);
+    } else if (inet_pton(AF_INET6, (const char *)fromB_str(self->address), &(addr6.sin6_addr)) == 1) {
+        r = uv_tcp_bind(server, (const struct sockaddr *)&addr6, 0);
+    }
+    if (r != 0) {
+        char errmsg[1024] = "Error in TLS bind: ";
+        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        log_warn(errmsg);
+        $action2 f = ($action2)self->on_listen;
+        f->$class->__asyn__(f, self, to$str(errmsg));
+        return $R_CONT(c$cont, B_None);
+    }
+
+    r = uv_listen((uv_stream_t *)server, 1024, on_new_tls_connection);
+    if (r != 0) {
+        char errmsg[1024] = "Error in TLS listen: ";
+        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        log_warn(errmsg);
+        $action2 f = ($action2)self->on_listen;
+        f->$class->__asyn__(f, self, to$str(errmsg));
+        return $R_CONT(c$cont, B_None);
+    }
+
+    self->_stream = toB_int((int64_t)(intptr_t)server);
+    $action2 f = ($action2)self->on_listen;
+    f->$class->__asyn__(f, self, B_None);
+    return $R_CONT(c$cont, B_None);
+}
+
+B_NoneType netQ_TLSListenerD___resume__ (netQ_TLSListener self) {
+    self->_stream = toB_int(-1);
+    self->_tls_ctx = toB_int(-1);
+    $action2 f = ($action2)self->on_listen;
+    f->$class->__asyn__(f, self, to$str("resume"));
+    return B_None;
+}
+
+$R netQ_TLSListenConnectionD__initG_local (netQ_TLSListenConnection self, $Cont c$cont) {
+    pin_actor_affinity();
+
+    tlsuv_stream_t *stream = (tlsuv_stream_t *)fromB_int(self->server_stream);
+    stream->data = self;
+    self->_stream = toB_int((int64_t)(intptr_t)stream);
+
+    return $R_CONT(c$cont, B_None);
+}
+
+$R netQ_TLSListenConnectionD__read_startG_local (netQ_TLSListenConnection self, $Cont c$cont) {
+    tlsuv_stream_t *stream = (tlsuv_stream_t *)fromB_int(self->_stream);
+    if ((intptr_t)stream == -1)
+        return $R_CONT(c$cont, B_None);
+
+    int r = tlsuv_stream_read_start(stream, alloc_buffer, tls_listener_on_receive);
+    if (r < 0) {
+        char errmsg[1024] = "Failed to start reading from TLS listen socket: ";
+        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        log_warn(errmsg);
+        $action2 f = ($action2)self->on_error;
+        f->$class->__asyn__(f, self, to$str(errmsg));
+        return $R_CONT(c$cont, B_None);
+    }
+
+    return $R_CONT(c$cont, B_None);
+}
+
+$R netQ_TLSListenConnectionD_writeG_local (netQ_TLSListenConnection self, $Cont c$cont, B_bytes data) {
+    tlsuv_stream_t *stream = (tlsuv_stream_t *)fromB_int(self->_stream);
+    if ((intptr_t)stream == -1)
+        return $R_CONT(c$cont, B_None);
+
+    uv_write_t *wreq = (uv_write_t *)acton_malloc(sizeof(uv_write_t));
+    wreq->data = self;
+    uv_buf_t buf = uv_buf_init((char *)data->str, data->nbytes);
+    int r = tlsuv_stream_write(wreq, stream, &buf, tls_listener_write_cb);
+    if (r < 0) {
+        char errmsg[1024] = "Failed to write to TLS listen socket: ";
+        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        log_warn(errmsg);
+        $action2 f = ($action2)self->on_error;
+        f->$class->__asyn__(f, self, to$str(errmsg));
+    }
+    return $R_CONT(c$cont, B_None);
+}
+
+$R netQ_TLSListenConnectionD_closeG_local (netQ_TLSListenConnection self, $Cont c$cont) {
+    tlsuv_stream_t *stream = (tlsuv_stream_t *)fromB_int(self->_stream);
+    if ((intptr_t)stream == -1)
+        return $R_CONT(c$cont, B_None);
+
+    tls_listener_close_stream(stream);
+    self->_stream = toB_int(-1);
+    return $R_CONT(c$cont, B_None);
+}
+
+B_NoneType netQ_TLSListenConnectionD___resume__ (netQ_TLSListenConnection self) {
+    self->server_stream = toB_int(-1);
+    self->_stream = toB_int(-1);
     return B_None;
 }
 
@@ -657,7 +1002,7 @@ void tls_write_cb(uv_write_t *wreq, int status) {
 $R netQ_TLSConnectionD_closeG_local (netQ_TLSConnection self, $Cont c$cont, $action on_close) {
     uv_stream_t *stream = (uv_stream_t *)fromB_int(self->_stream);
     // fd == -1 means invalid FD and can happen after __resume__
-    if ((long int)stream == -1)
+    if ((intptr_t)stream == -1)
         return $R_CONT(c$cont, B_None);
 
     self->_on_close = on_close;
@@ -673,7 +1018,7 @@ $R netQ_TLSConnectionD_closeG_local (netQ_TLSConnection self, $Cont c$cont, $act
 $R netQ_TLSConnectionD_writeG_local (netQ_TLSConnection self, $Cont c$cont, B_bytes data) {
     tlsuv_stream_t *stream = (tlsuv_stream_t *)fromB_int(self->_stream);
     // fd == -1 means invalid FD and can happen after __resume__
-    if ((long int)stream == -1)
+    if ((intptr_t)stream == -1)
         return $R_CONT(c$cont, B_None);
 
     uv_write_t *wreq = (uv_write_t *)acton_malloc(sizeof(uv_write_t));
@@ -751,10 +1096,10 @@ $R netQ_TLSConnectionD__connect_tlsG_local (netQ_TLSConnection self, $Cont c$con
     int num_protocols = self->protocols->length;
 
     if (num_protocols > 0) {
-        char **protocols = (char **)acton_calloc(num_protocols, sizeof(char*));
+        const char **protocols = (const char **)acton_calloc(num_protocols, sizeof(char*));
 
         for(int i = 0; i < num_protocols; ++i) {
-            protocols[i] = fromB_str(self->protocols->data[i]);
+            protocols[i] = (const char *)fromB_str(self->protocols->data[i]);
         }
         tlsuv_stream_set_protocols(stream, num_protocols, protocols);
     }
@@ -764,7 +1109,7 @@ $R netQ_TLSConnectionD__connect_tlsG_local (netQ_TLSConnection self, $Cont c$con
     stream->data = (void *)self;
 
     tlsuv_stream_connect(connect_req, stream, (const char *)fromB_str(self->address), fromB_int(self->port), tls_on_connect);
-    self->_stream = toB_int((long)stream);
+    self->_stream = toB_int((int64_t)(intptr_t)stream);
 
     return $R_CONT(c$cont, B_None);
 }

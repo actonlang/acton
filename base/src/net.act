@@ -292,6 +292,60 @@ actor TCPListener(cap: TCPListenCap, address: str, port: int, on_listen: action(
         NotImplemented
     _init()
 
+actor TLSListenConnection(cap: _TCPListenConnectCap, server_stream: int):
+    """TLS Listener Connection"""
+    var _stream = -1
+    var on_receive: ?action(TLSListenConnection, bytes) -> None = None
+    var on_error: ?action(TLSListenConnection, str) -> None = None
+    var on_remote_close: ?action(TLSListenConnection) -> None = None
+    var _initialized = False
+
+    proc def _read_start():
+        """Implementation internal"""
+        NotImplemented
+
+    action def cb_install(new_on_receive: action(TLSListenConnection, bytes) -> None, new_on_error: action(TLSListenConnection, str) -> None, new_on_remote_close: ?action(TLSListenConnection) -> None) -> None:
+        """Install callback handlers"""
+        on_receive = new_on_receive
+        on_error = new_on_error
+        on_remote_close = new_on_remote_close
+        if not _initialized:
+            _read_start()
+            _initialized = True
+
+    action def close() -> None:
+        """Close connection"""
+        NotImplemented
+
+    action def write(data: bytes) -> None:
+        """Write data to remote"""
+        NotImplemented
+
+    mut def __resume__() -> None:
+        NotImplemented
+
+    proc def _init() -> None:
+        """Implementation internal"""
+        NotImplemented
+    _init()
+
+actor TLSListener(cap: TCPListenCap, address: str, port: int, cert_pem: bytes, key_pem: bytes, on_listen: action(TLSListener, ?str) -> None, on_accept: action(TLSListenConnection) -> None):
+    """TLS Listener"""
+    _stream = -1
+    _tls_ctx = -1
+    def create_tls_listen_connection(cap: _TCPListenConnectCap, stream: int):
+        """Implementation internal"""
+        c = TLSListenConnection(cap, stream)
+        on_accept(c)
+
+    mut def __resume__() -> None:
+        NotImplemented
+
+    proc def _init():
+        """Implementation internal"""
+        NotImplemented
+    _init()
+
 actor TLSConnection(cap: TCPConnectCap, address: str, port: int, on_connect: action(TLSConnection) -> None, on_receive: action(TLSConnection, bytes) -> None, on_error: action(TLSConnection, str) -> None, on_remote_close: ?action(TLSConnection) -> None, verify_tls: bool=True, protocols: list[str]=[]):
     # TODO: support hostname/CN mismatch, good when connecting with IP address?
     # TODO: do DNS lookup in Acton
