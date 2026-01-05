@@ -1,6 +1,6 @@
   Stale a: source changed
-   Finished type check of  rebuild/a in   0.000 s
+   Finished type check of     rebuild/a     0.000 s
   Fresh b: using cached .ty
   Fresh c: using cached .ty
-   Finished compilation of rebuild/a in   0.000 s
-   Finished final compilation step in   0.000 s
+   Finished compilation of    rebuild/a     0.000 s
+   Finished final compilation               0.000 s

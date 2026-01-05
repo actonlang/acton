@@ -8,6 +8,7 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import qualified Data.Text.Encoding as TE
 import           Data.Char (isDigit)
+import           Data.List (partition, sort)
 import           System.Directory
 import           System.Exit
 import           System.FilePath
@@ -39,10 +40,20 @@ goldenDir = projDir </> "golden"
 actoncExe :: FilePath
 actoncExe = ".." </> ".." </> ".." </> ".." </> "dist" </> "bin" </> "actonc"
 
+actoncCmd :: String -> String
+actoncCmd args = actoncExe ++ " " ++ args ++ " --jobs 1"
+
 -- Utils ----------------------------------------------------------------------
 
 sanitize :: T.Text -> LBS.ByteString
-sanitize = LBS.fromStrict . TE.encodeUtf8 . T.unlines . map (padZero . redact) . dropPaths . filter (not . isVolatile) . T.lines
+sanitize = LBS.fromStrict
+        . TE.encodeUtf8
+        . T.unlines
+        . reorderBackLines
+        . map redact
+        . dropPaths
+        . filter (not . isVolatile)
+        . T.lines
   where
     isVolatile :: T.Text -> Bool
     isVolatile t =
@@ -70,20 +81,6 @@ sanitize = LBS.fromStrict . TE.encodeUtf8 . T.unlines . map (padZero . redact) .
                       in leftPre <> "0.000 s" <> go restAfter
                    else pre <> "." <> go afterDot
 
-    -- Normalize padding before the canonicalized duration "0.000 s"
-    -- to avoid platform-specific spacing differences. Force exactly
-    -- three spaces before 0.000 s (i.e. "   0.000 s").
-    -- It is super weird that this is even needed, but it seems we get build
-    -- failures on Macos 13 otherwise...
-    padZero :: T.Text -> T.Text
-    padZero t =
-      case T.breakOn "0.000 s" t of
-        (pre, rest) | T.null rest -> t
-        (pre, rest) ->
-          let pre' = T.dropWhileEnd (== ' ') pre
-              rest' = T.drop (T.length "0.000 s") rest
-          in pre' <> "   0.000 s" <> rest'
-
     -- Remove the verbose Paths: block (and its per-field lines) to avoid
     -- machine-specific absolute paths in goldens.
     dropPaths :: [T.Text] -> [T.Text]
@@ -103,6 +100,18 @@ sanitize = LBS.fromStrict . TE.encodeUtf8 . T.unlines . map (padZero . redact) .
                           , "srcDir"
                           , "modName"
                           ]
+
+    reorderBackLines :: [T.Text] -> [T.Text]
+    reorderBackLines ls =
+      let (backLines, otherLines) = partition (T.isPrefixOf backPrefix) ls
+          (pre, post) = break isFinalLine otherLines
+      in pre ++ sort backLines ++ post
+      where
+        backPrefix = "   Finished compilation of"
+        isFinalLine t =
+          T.isPrefixOf "   Finished final compilation" t ||
+          T.isPrefixOf "   Finished final compilation step" t ||
+          T.isPrefixOf "  Skipping final build step" t
 
 writeFileUtf8 :: FilePath -> T.Text -> IO ()
 writeFileUtf8 p t = do
@@ -148,26 +157,26 @@ runIn cwd cmd = do
 -- Run a project build and return full (unsanitized) output as Text
 buildOut :: IO T.Text
 buildOut = do
-  let cmd = actoncExe ++ " build --color never --verbose"
+  let cmd = actoncCmd "build --color never --verbose"
   (_ec,out) <- runIn projDir cmd
   pure out
 
 goldenBuild :: IO LBS.ByteString
 goldenBuild = do
-  let cmd = actoncExe ++ " build --color never --verbose"
+  let cmd = actoncCmd "build --color never --verbose"
   (_ec,out) <- runIn projDir cmd
   pure (sanitize out)
 
 goldenBuildFile :: IO LBS.ByteString
 goldenBuildFile = do
-  let cmd = actoncExe ++ " src/c.act --color never --verbose"
+  let cmd = actoncCmd "src/c.act --color never --verbose"
   (_ec,out) <- runIn projDir cmd
   pure (sanitize out)
 
 -- Run a single-file build and return unsanitized output as Text
 buildOutFile :: IO T.Text
 buildOutFile = do
-  let cmd = actoncExe ++ " src/c.act --color never --verbose"
+  let cmd = actoncCmd "src/c.act --color never --verbose"
   (_ec,out) <- runIn projDir cmd
   pure out
 
@@ -177,7 +186,7 @@ typechecked out modName =
 
 buildProject :: IO ()
 buildProject = do
-  let cmd = actoncExe ++ " build --color never"
+  let cmd = actoncCmd "build --color never"
   (ec,out) <- runIn projDir cmd
   case ec of
     ExitSuccess -> pure ()
@@ -399,7 +408,7 @@ f10_alt_output = testCase "10-alt output" $ do
   _ <- buildOutFile
 
   -- Now request alternative output on the same file without modifying sources
-  let cmd = actoncExe ++ " src/c.act --color never --types"
+  let cmd = actoncCmd "src/c.act --color never --types"
   (_ec,out) <- runIn projDir cmd
   -- Expect a types dump header for module c
   assertBool "expected types dump for module c" (T.isInfixOf "== types: c" out)

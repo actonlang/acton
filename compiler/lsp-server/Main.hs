@@ -33,10 +33,12 @@ import Error.Diagnose.Position (Position(..))
 type OverlayMap = HM.HashMap FilePath Source.SourceSnapshot
 type UriMap = HM.HashMap FilePath Uri
 
+-- | Debounce delay (microseconds) before recompiling on edits.
 debounceMicros :: Int
 debounceMicros = 200000
 
 {-# NOINLINE overlaysRef #-}
+-- | Global in-memory buffer map used as a source overlay.
 overlaysRef :: IORef OverlayMap
 overlaysRef = unsafePerformIO (newIORef HM.empty)
 
@@ -46,18 +48,19 @@ uriByPathRef :: IORef UriMap
 uriByPathRef = unsafePerformIO (newIORef HM.empty)
 
 {-# NOINLINE compileScheduler #-}
+-- | Shared compile scheduler for LSP events and back jobs.
 compileScheduler :: Compile.CompileScheduler
 compileScheduler = unsafePerformIO $ do
   nCaps <- getNumCapabilities
   let maxParallel = max 1 (if C.jobs lspGlobalOpts > 0 then C.jobs lspGlobalOpts else nCaps)
   Compile.newCompileScheduler lspGlobalOpts maxParallel
 
+-- | Global compiler options for the LSP server (quiet, no color).
 lspGlobalOpts :: C.GlobalOptions
 lspGlobalOpts =
   C.GlobalOptions
     { color = C.Never
     , quiet = True
-    , sub = False
     , timing = False
     , tty = False
     , verbose = False
@@ -65,6 +68,7 @@ lspGlobalOpts =
     , jobs = 0
     }
 
+-- | Compile options for LSP runs (front passes only, no final build).
 lspCompileOpts :: C.CompileOptions
 lspCompileOpts =
   Compile.defaultCompileOptions
@@ -74,6 +78,7 @@ lspCompileOpts =
     }
 
 
+-- | SourceProvider that reads overlays first, then falls back to disk.
 overlaySourceProvider :: IORef OverlayMap -> Source.SourceProvider
 overlaySourceProvider ref =
   let disk = Source.diskSourceProvider
@@ -83,6 +88,7 @@ overlaySourceProvider ref =
        , Source.spGetModTime = Source.spGetModTime disk
        }
 
+-- | Update the in-memory overlay for a document.
 updateOverlay :: FilePath -> T.Text -> IO ()
 updateOverlay path txt =
   let snap = Source.SourceSnapshot
@@ -92,10 +98,12 @@ updateOverlay path txt =
         }
   in atomicModifyIORef' overlaysRef $ \m -> (HM.insert path snap m, ())
 
+-- | Remove a document overlay when it closes.
 removeOverlay :: FilePath -> IO ()
 removeOverlay path =
   atomicModifyIORef' overlaysRef $ \m -> (HM.delete path m, ())
 
+-- | Publish diagnostics for a file to the LSP client.
 publishDiagnosticsFor :: FilePath -> [LSP.Diagnostic] -> LspM () ()
 publishDiagnosticsFor path diags = do
   uri <- liftIO $ lookupUri path
@@ -118,6 +126,7 @@ whenCurrentGen gen action = do
   current <- liftIO $ readIORef (Compile.csGenRef compileScheduler)
   when (current == gen) action
 
+-- | Convert Acton positions to LSP ranges with zero-based offsets.
 reportRange :: Position -> Range
 reportRange (Position (bl, bc) (el, ec) _) =
   let l0 = max 0 (bl - 1)
@@ -127,12 +136,14 @@ reportRange (Position (bl, bc) (el, ec) _) =
       endC = max c1 (c0 + 1)
   in mkRange (fromIntegral l0) (fromIntegral c0) (fromIntegral l1) (fromIntegral endC)
 
+-- | Select a primary marker position for a diagnostic.
 pickPosition :: [(Position, Marker msg)] -> Maybe Position
 pickPosition markers =
   case [pos | (pos, This _) <- markers] of
     (p:_) -> Just p
     [] -> fmap fst (listToMaybe markers)
 
+-- | Render notes and hints into a diagnostic message.
 notesText :: [Note String] -> String
 notesText [] = ""
 notesText ns = "\n" ++ unlines (map noteLine ns)
@@ -140,6 +151,7 @@ notesText ns = "\n" ++ unlines (map noteLine ns)
     noteLine (Hint h) = "Hint: " ++ h
     noteLine (Note n) = "Note: " ++ n
 
+-- | Translate an Acton report into an LSP diagnostic.
 reportToLsp :: Report String -> LSP.Diagnostic
 reportToLsp rep =
   let (sev, msg, markers, notes) = case rep of
@@ -160,21 +172,18 @@ reportToLsp rep =
        , _data_ = Nothing
        }
 
+-- | Convert Diagnose diagnostics to LSP diagnostics.
 lspDiagnosticsFrom :: [Diagnostic String] -> [LSP.Diagnostic]
 lspDiagnosticsFrom diags = concatMap (map reportToLsp . reportsOf) diags
 
+-- | Prepare a compile plan for a file, run it, and publish diagnostics.
 runCompile :: Int -> FilePath -> LspM () ()
 runCompile gen path = do
   let gopts = lspGlobalOpts
       opts = lspCompileOpts
       sp = overlaySourceProvider overlaysRef
   res <- liftIO $ (try $ do
-    ctx <- Compile.prepareCompileContext opts [path]
-    specChanged <- Compile.checkBuildSpecChange compileScheduler (Compile.ccBuildStamp ctx)
-    when specChanged $
-      Compile.fetchDependencies gopts (Compile.ccPathsRoot ctx) (Compile.ccDepOverrides ctx)
-    let mChanged = if specChanged then Nothing else Just [path]
-    Compile.prepareCompilePlan sp gopts ctx [path] False mChanged
+    Compile.prepareCompilePlan sp gopts compileScheduler opts [path] False (Just [path])
     ) :: LspM () (Either Compile.ProjectError Compile.CompilePlan)
   case res of
     Left (Compile.ProjectError msg) ->
@@ -199,18 +208,21 @@ runCompile gen path = do
           sendNotification SMethod_WindowShowMessage (ShowMessageParams MessageType_Error (T.pack (Compile.compileFailureMessage err)))
         Right _ -> return ()
 
+-- | Schedule a compile run with a debounce delay.
 scheduleCompile :: Int -> FilePath -> LspM () ()
 scheduleCompile delay path = do
   env <- getLspEnv
   void $ liftIO $ Compile.startCompile compileScheduler delay $ \gen ->
     runLspT env (runCompile gen path)
 
+-- | Resolve and normalize a document URI to a file path.
 resolvePath :: Uri -> LspM () (Maybe FilePath)
 resolvePath uri =
   case uriToFilePath uri of
     Nothing -> return Nothing
     Just path -> liftIO $ Just <$> Compile.normalizePathSafe path
 
+-- | LSP notification handlers for open/change/close events.
 handlers :: Handlers (LspM ())
 handlers =
   mconcat
@@ -248,6 +260,7 @@ handlers =
             liftIO $ forgetUri path
     ]
 
+-- | Start the Acton LSP server with the configured handlers.
 main :: IO Int
 main = do
   runServer $

@@ -29,7 +29,6 @@ data OptimizeMode = Debug | ReleaseSafe | ReleaseSmall | ReleaseFast deriving (S
 data GlobalOptions = GlobalOptions {
                         color        :: ColorWhen,
                         quiet        :: Bool,
-                        sub          :: Bool,
                         timing       :: Bool,
                         tty          :: Bool,
                         verbose      :: Bool,
@@ -74,7 +73,6 @@ data CompileOptions   = CompileOptions {
                          cpedantic   :: Bool,
                          dbg_no_lines:: Bool,
                          optimize    :: OptimizeMode,
-                         listimports :: Bool,
                          only_build  :: Bool,
                          skip_build  :: Bool,
                          watch       :: Bool,
@@ -154,7 +152,6 @@ globalOptions = GlobalOptions
          <> help "Use colored output (WHEN: auto, always, never)"
         )
     <*> switch (long "quiet"       <> help "Don't print stuff")
-    <*> switch (long "sub")
     <*> switch (long "timing"      <> help "Print timing information")
     <*> switch (long "tty"         <> help "Act as if run from interactive TTY")
     <*> switch (long "verbose"     <> help "Verbose output")
@@ -209,7 +206,6 @@ compileOptions = CompileOptions
         <*> switch (long "cpedantic"    <> help "Pedantic C compilation with -Werror")
         <*> switch (long "dbg-no-lines" <> help "Disable emission of C #line directives (for debugging codegen)")
         <*> optimizeOption
-        <*> switch (long "list-imports" <> help "List module imports")
         <*> switch (long "only-build"   <> help "Only perform final build of .c files, do not compile .act files")
         <*> switch (long "skip-build"   <> help "Skip final bulid of .c files")
         <*> switch (long "watch"        <> help "Rebuild on file changes")

@@ -430,7 +430,7 @@ actor OldBuildProject(process_cap, env, args, on_build_success: action(str) -> N
             search_path_arg.extend(["--searchpath", sp])
         cmdargs = []
         if files == []:
-            cmdargs.extend(["build", "--sub"])
+            cmdargs.append("build")
         cmdargs.extend(build_cmd_args(args))
         if build_tests:
             cmdargs.append("--test")
@@ -603,12 +603,9 @@ actor OldBuildProject(process_cap, env, args, on_build_success: action(str) -> N
 
             check_for_buildconfig()
         except OSError:
-            # Only warn if we are an interactive session, chances are otherwise
-            # that we are running as a sub-compiler for building a dependency
-            # and there's a risk of racing for diamond shaped dependencies. It's
-            # normal though and will resolve itself, once the other sub-compiler
-            # is done, it will be our turn and the up-to-date check will run in
-            # ~0 time and then we're done.
+            # Only warn if we are an interactive session. Otherwise this may be
+            # another build process racing on the same project lock (e.g. for a
+            # dependency), and it will resolve once the other build completes.
             # TODO: perhaps we should have a better signal than tty-check though
             if env.is_tty():
                 print("Build lock exists, trying again soon...")

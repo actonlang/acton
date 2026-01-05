@@ -49,7 +49,8 @@ Call flow:
     - actonc watch and LSP call startCompile on each event; callers can gate
       output with generation checks (e.g. whenCurrentGen), and BackQueue ignores
       back jobs for stale generations.
-    - Callers may supply a delay (debounce) before startCompile runs.
+    - Callers may supply a delay (debounce) before startCompile runs (LSP uses
+      debounceMicros on change events; actonc watch uses 0).
   - Finalization:
     - CLI waits on backQueueWait before running Zig build
     - LSP does not implicitly run the Zig build, it is only run explicitly when
@@ -105,6 +106,7 @@ module Acton.Compile
   , prepareCompileContext
   , CompilePlan(..)
   , prepareCompilePlan
+  , prepareCompilePlanFromContext
   , CompileHooks(..)
   , defaultCompileHooks
   , runCompilePlan
@@ -446,6 +448,23 @@ prepareCompileContext opts srcFiles = do
     , ccBuildStamp = buildStamp
     }
 
+-- | Prepare a compile plan, refreshing dependencies if the build spec changed.
+prepareCompilePlan :: Source.SourceProvider
+                   -> C.GlobalOptions
+                   -> CompileScheduler
+                   -> C.CompileOptions
+                   -> [FilePath]
+                   -> Bool
+                   -> Maybe [FilePath]
+                   -> IO CompilePlan
+prepareCompilePlan sp gopts sched opts srcFiles allowPrune mChangedPaths = do
+  ctx <- prepareCompileContext opts srcFiles
+  specChanged <- checkBuildSpecChange sched (ccBuildStamp ctx)
+  when specChanged $
+    fetchDependencies gopts (ccPathsRoot ctx) (ccDepOverrides ctx)
+  let mChanged = if specChanged then Nothing else mChangedPaths
+  prepareCompilePlanFromContext sp gopts ctx srcFiles allowPrune mChanged
+
 data CompilePlan = CompilePlan
   { cpContext :: CompileContext
   , cpProjMap :: M.Map FilePath ProjCtx
@@ -459,14 +478,14 @@ data CompilePlan = CompilePlan
   , cpSrcFiles :: [FilePath]
   }
 
-prepareCompilePlan :: Source.SourceProvider
-                   -> C.GlobalOptions
-                   -> CompileContext
-                   -> [FilePath]
-                   -> Bool
-                   -> Maybe [FilePath]
-                   -> IO CompilePlan
-prepareCompilePlan sp gopts ctx srcFiles allowPrune mChangedPaths = do
+prepareCompilePlanFromContext :: Source.SourceProvider
+                              -> C.GlobalOptions
+                              -> CompileContext
+                              -> [FilePath]
+                              -> Bool
+                              -> Maybe [FilePath]
+                              -> IO CompilePlan
+prepareCompilePlanFromContext sp gopts ctx srcFiles allowPrune mChangedPaths = do
   let opts' = ccOpts ctx
       depOverrides = ccDepOverrides ctx
       pathsRoot = ccPathsRoot ctx
@@ -588,7 +607,6 @@ defaultCompileOptions =
     , C.cpedantic = False
     , C.dbg_no_lines = False
     , C.optimize = C.Debug
-    , C.listimports = False
     , C.only_build = False
     , C.skip_build = False
     , C.watch = False
@@ -749,7 +767,6 @@ data BackInput = BackInput
   , biTypedMod  :: A.Module
   , biSrc       :: String
   , biSrcHash   :: B.ByteString
-  , biFrontTime :: TimeSpec
   }
 
 data BackJob = BackJob
@@ -1232,7 +1249,6 @@ runFrontPasses gopts opts paths env0 parsed srcContent srcBytes resolveImportHas
                                                           , biTypedMod = tchecked
                                                           , biSrc = srcContent
                                                           , biSrcHash = srcHash
-                                                          , biFrontTime = frontTime
                                                           }
                                      }
           return $ Right FrontResult { frIfaceTE = iface
@@ -1308,9 +1324,9 @@ runBackPasses gopts opts paths backInput shouldWrite = do
                                )
 
       timeEnd <- getTime Monotonic
-      let totalTime = biFrontTime backInput + (timeEnd - timeStart)
+      let backTime = timeEnd - timeStart
       if not (quiet gopts opts)
-        then return (Just totalTime)
+        then return (Just backTime)
         else return Nothing
 
 
@@ -2123,9 +2139,9 @@ fetchDependencies gopts paths depOverrides = do
                   return (Left ("Hash mismatch for dependency " ++ name ++ " (expected " ++ h ++ ", got " ++ hashVal ++ ")"))
                 _ -> do
                   exists <- doesDirectoryExist (cacheDir hashVal)
-                  unless exists $
-                    return (Left ("Dependency " ++ name ++ " not present in Zig cache after fetch: " ++ cacheDir hashVal))
-                  return (Right hashVal)
+                  if exists
+                    then return (Right hashVal)
+                    else return (Left ("Dependency " ++ name ++ " not present in Zig cache after fetch: " ++ cacheDir hashVal))
             ExitFailure _ ->
               return (Left ("Failed to fetch dependency " ++ name ++ ":\n" ++ err))
 

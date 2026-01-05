@@ -1,10 +1,10 @@
   Stale a: source changed
-   Finished type check of  rebuild/a in   0.000 s
+   Finished type check of     rebuild/a     0.000 s
   Stale b: iface changes in a df462c35 → 366981bd
-   Finished type check of  rebuild/b in   0.000 s
+   Finished type check of     rebuild/b     0.000 s
   Stale c: iface changes in b 5648a43c → f371c709
-   Finished type check of  rebuild/c in   0.000 s
-   Finished compilation of rebuild/a in   0.000 s
-   Finished compilation of rebuild/b in   0.000 s
-   Finished compilation of rebuild/c in   0.000 s
-   Finished final compilation step in   0.000 s
+   Finished type check of     rebuild/c     0.000 s
+   Finished compilation of    rebuild/a     0.000 s
+   Finished compilation of    rebuild/b     0.000 s
+   Finished compilation of    rebuild/c     0.000 s
+   Finished final compilation               0.000 s
