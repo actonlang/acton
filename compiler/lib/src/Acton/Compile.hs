@@ -98,11 +98,22 @@ module Acton.Compile
   , newCompileScheduler
   , startCompile
   , whenCurrentGen
+  , BuildSpecStamp(..)
+  , readBuildSpecStamp
+  , checkBuildSpecChange
+  , CompileContext(..)
+  , prepareCompileContext
+  , CompilePlan(..)
+  , prepareCompilePlan
+  , CompileHooks(..)
+  , defaultCompileHooks
+  , runCompilePlan
   , CompileFailure(..)
   , compileFailureMessage
   , defaultCompileOptions
   , ProjectError(..)
   , throwProjectError
+  , fetchDependencies
   , parseActSource
   , parseActSnapshot
   , parseActFile
@@ -180,7 +191,7 @@ import Control.Concurrent.Async
 import Control.Concurrent.MVar
 import Control.Concurrent (forkIO, myThreadId, threadCapability, threadDelay)
 import Control.Concurrent.STM (TChan, TVar, atomically, check, modifyTVar', newTChanIO, newTVarIO, readTChan, readTVar, writeTChan)
-import Control.Exception (Exception, IOException, SomeException, catch, finally, mask_, throwIO, try)
+import Control.Exception (Exception, IOException, SomeException, catch, displayException, finally, mask_, throwIO, try)
 import Control.Monad
 import Data.Char (isAlpha, isSpace)
 import Data.Either (partitionEithers)
@@ -192,6 +203,7 @@ import Data.Maybe (catMaybes, isJust, listToMaybe)
 import qualified Data.Map as M
 import Data.Ord (Down(..))
 import qualified Data.Set
+import Data.Time.Clock (UTCTime)
 import Error.Diagnose (Diagnostic)
 import GHC.Conc (getNumCapabilities)
 import System.Clock
@@ -200,9 +212,11 @@ import System.Directory.Recursive
 import System.Environment (getExecutablePath)
 import System.FilePath ((</>))
 import System.FilePath.Posix
+import System.Exit (ExitCode(..))
 import qualified System.Exit
 import System.IO hiding (readFile, writeFile)
 import System.IO.Unsafe (unsafePerformIO)
+import System.Process (readCreateProcessWithExitCode, proc)
 import Text.PrettyPrint (renderStyle, style, Style(..), Mode(PageMode))
 import Text.Show.Pretty (ppDoc)
 import Text.Printf
@@ -277,6 +291,36 @@ data BackQueue = BackQueue
   , backQueueWait :: Int -> IO ()
   }
 
+data BuildSpecStamp = BuildSpecStamp
+  { bssActonToml :: Maybe UTCTime
+  , bssBuildAct :: Maybe UTCTime
+  , bssBuildJson :: Maybe UTCTime
+  } deriving (Eq, Show)
+
+readBuildSpecStamp :: FilePath -> IO BuildSpecStamp
+readBuildSpecStamp projDir = do
+  actonToml <- stampFor "Acton.toml"
+  buildAct <- stampFor "Build.act"
+  buildJson <- stampFor "build.act.json"
+  return BuildSpecStamp
+    { bssActonToml = actonToml
+    , bssBuildAct = buildAct
+    , bssBuildJson = buildJson
+    }
+  where
+    stampFor name = do
+      let path = projDir </> name
+      exists <- doesFileExist path
+      if exists
+        then Just <$> getModificationTime path
+        else return Nothing
+
+checkBuildSpecChange :: CompileScheduler -> BuildSpecStamp -> IO Bool
+checkBuildSpecChange sched stamp =
+  atomicModifyIORef' (csBuildStampRef sched) $ \prev ->
+    let changed = prev /= Just stamp
+    in (Just stamp, changed)
+
 -- | Create a concurrent back-pass queue gated by a generation counter.
 -- Each job is tagged with a generation id; stale jobs are skipped.
 newBackQueue :: IORef Int -> C.GlobalOptions -> Int -> IO BackQueue
@@ -334,6 +378,7 @@ data CompileScheduler = CompileScheduler
   { csGenRef :: IORef Int
   , csAsyncRef :: MVar (Maybe (Async ()))
   , csBackQueue :: BackQueue
+  , csBuildStampRef :: IORef (Maybe BuildSpecStamp)
   }
 
 -- | Create a scheduler with generation tracking and a shared back queue.
@@ -342,10 +387,12 @@ newCompileScheduler gopts maxPar = do
   genRef <- newIORef 0
   asyncRef <- newMVar Nothing
   backQueue <- newBackQueue genRef gopts maxPar
+  buildStampRef <- newIORef Nothing
   return CompileScheduler
     { csGenRef = genRef
     , csAsyncRef = asyncRef
     , csBackQueue = backQueue
+    , csBuildStampRef = buildStampRef
     }
 
 -- | Start a new compile action, canceling any in-flight run.
@@ -367,6 +414,154 @@ whenCurrentGen :: CompileScheduler -> Int -> IO () -> IO ()
 whenCurrentGen sched gen action = do
   current <- readIORef (csGenRef sched)
   when (current == gen) action
+
+data CompileContext = CompileContext
+  { ccOpts :: C.CompileOptions
+  , ccDepOverrides :: [(String, FilePath)]
+  , ccPathsRoot :: Paths
+  , ccRootProj :: FilePath
+  , ccSysAbs :: FilePath
+  , ccBuildStamp :: BuildSpecStamp
+  }
+
+prepareCompileContext :: C.CompileOptions -> [FilePath] -> IO CompileContext
+prepareCompileContext opts srcFiles = do
+  when (null srcFiles) $
+    throwProjectError "No source files found"
+  cwd <- getCurrentDirectory
+  maybeRoot <- findProjectDir (takeDirectory (head srcFiles))
+  let baseForOverrides = maybe cwd id maybeRoot
+  depOverrides <- normalizeDepOverrides baseForOverrides (C.dep_overrides opts)
+  let opts' = opts { C.dep_overrides = depOverrides }
+  pathsRoot <- findPaths (head srcFiles) opts'
+  rootProj <- normalizePathSafe (projPath pathsRoot)
+  sysAbs <- normalizePathSafe (sysPath pathsRoot)
+  buildStamp <- readBuildSpecStamp (projPath pathsRoot)
+  return CompileContext
+    { ccOpts = opts'
+    , ccDepOverrides = depOverrides
+    , ccPathsRoot = pathsRoot
+    , ccRootProj = rootProj
+    , ccSysAbs = sysAbs
+    , ccBuildStamp = buildStamp
+    }
+
+data CompilePlan = CompilePlan
+  { cpContext :: CompileContext
+  , cpProjMap :: M.Map FilePath ProjCtx
+  , cpGlobalTasks :: [GlobalTask]
+  , cpNeededTasks :: [GlobalTask]
+  , cpRootTasks :: [CompileTask]
+  , cpRootPins :: M.Map String BuildSpec.PkgDep
+  , cpIncremental :: Bool
+  , cpAllowPrune :: Bool
+  , cpChangedPaths :: Maybe [FilePath]
+  , cpSrcFiles :: [FilePath]
+  }
+
+prepareCompilePlan :: Source.SourceProvider
+                   -> C.GlobalOptions
+                   -> CompileContext
+                   -> [FilePath]
+                   -> Bool
+                   -> Maybe [FilePath]
+                   -> IO CompilePlan
+prepareCompilePlan sp gopts ctx srcFiles allowPrune mChangedPaths = do
+  let opts' = ccOpts ctx
+      depOverrides = ccDepOverrides ctx
+      pathsRoot = ccPathsRoot ctx
+      rootProj = ccRootProj ctx
+      sysAbs = ccSysAbs ctx
+      incremental = isJust mChangedPaths
+      allowPrune' = allowPrune && not incremental
+  projMap <- if isTmp pathsRoot
+    then do
+      let ctx' = ProjCtx
+            { projRoot = rootProj
+            , projOutDir = projOut pathsRoot
+            , projTypesDir = projTypes pathsRoot
+            , projSrcDir = srcDir pathsRoot
+            , projSysPath = sysAbs
+            , projSysTypes = joinPath [sysAbs, "base", "out", "types"]
+            , projBuildSpec = Nothing
+            , projLocks = joinPath [projPath pathsRoot, ".actonc.lock"]
+            , projDeps = []
+            }
+      return (M.singleton rootProj ctx')
+    else discoverProjects sysAbs rootProj depOverrides
+  (globalTasks, _) <- buildGlobalTasks sp gopts opts' projMap
+    (if incremental || allowPrune then Nothing else Just srcFiles)
+  neededTasks <- case mChangedPaths of
+    Nothing -> selectNeededTasks pathsRoot rootProj globalTasks srcFiles
+    Just changed -> selectAffectedTasks globalTasks changed
+  let rootTasks = [ gtTask t | t <- neededTasks, tkProj (gtKey t) == rootProj ]
+      rootPins = maybe M.empty BuildSpec.dependencies (projBuildSpec =<< M.lookup rootProj projMap)
+  return CompilePlan
+    { cpContext = ctx
+    , cpProjMap = projMap
+    , cpGlobalTasks = globalTasks
+    , cpNeededTasks = neededTasks
+    , cpRootTasks = rootTasks
+    , cpRootPins = rootPins
+    , cpIncremental = incremental
+    , cpAllowPrune = allowPrune'
+    , cpChangedPaths = mChangedPaths
+    , cpSrcFiles = srcFiles
+    }
+
+data CompileHooks = CompileHooks
+  { chOnDiagnostics :: GlobalTask -> C.CompileOptions -> [Diagnostic String] -> IO ()
+  , chOnFrontStart :: GlobalTask -> IO ()
+  , chOnFrontDone :: GlobalTask -> IO ()
+  , chOnFrontResult :: GlobalTask -> FrontResult -> IO ()
+  , chOnBackQueued :: TaskKey -> Bool -> IO ()
+  , chOnBackStart :: BackJob -> IO ()
+  , chOnBackDone :: BackJob -> Maybe TimeSpec -> IO ()
+  , chOnInfo :: String -> IO ()
+  }
+
+defaultCompileHooks :: CompileHooks
+defaultCompileHooks =
+  CompileHooks
+    { chOnDiagnostics = \_ _ _ -> return ()
+    , chOnFrontStart = \_ -> return ()
+    , chOnFrontDone = \_ -> return ()
+    , chOnFrontResult = \_ _ -> return ()
+    , chOnBackQueued = \_ _ -> return ()
+    , chOnBackStart = \_ -> return ()
+    , chOnBackDone = \_ _ -> return ()
+    , chOnInfo = \_ -> return ()
+    }
+
+runCompilePlan :: Source.SourceProvider
+               -> C.GlobalOptions
+               -> CompilePlan
+               -> CompileScheduler
+               -> Int
+               -> CompileHooks
+               -> IO (Either CompileFailure (Acton.Env.Env0, Bool))
+runCompilePlan sp gopts plan sched gen hooks = do
+  let ctx = cpContext plan
+      opts' = ccOpts ctx
+      pathsRoot = ccPathsRoot ctx
+      rootProj = ccRootProj ctx
+      backQueue = csBackQueue sched
+      backCallbacks = BackJobCallbacks
+        { bjcOnStart = chOnBackStart hooks
+        , bjcOnDone = chOnBackDone hooks
+        }
+      callbacks = defaultCompileCallbacks
+        { ccOnDiagnostics = \t optsT diags -> chOnDiagnostics hooks t optsT diags
+        , ccOnFrontResult = \t _ fr -> chOnFrontResult hooks t fr
+        , ccOnFrontStart = \t _ -> chOnFrontStart hooks t
+        , ccOnFrontDone = \t _ -> chOnFrontDone hooks t
+        , ccOnBackJob = \job -> do
+            let key = TaskKey (projPath (bjPaths job)) (A.modname (biTypedMod (bjInput job)))
+            enqueued <- backQueueEnqueue backQueue gen job backCallbacks
+            chOnBackQueued hooks key enqueued
+        , ccOnInfo = chOnInfo hooks
+        }
+  compileTasks sp gopts opts' pathsRoot rootProj (cpNeededTasks plan) callbacks
 -- | Baseline compile options for internal helpers and tests.
 -- This mirrors CLI defaults so path discovery and parsing behave predictably
 -- when no command-line flags are present.
@@ -1835,6 +2030,120 @@ applyDepOverrides base overrides spec = do
           absP <- normalizePathSafe absP0
           let dep' = dep { BuildSpec.path = Just absP }
           return (M.insert depName dep' depsMap)
+
+fetchDependencies :: C.GlobalOptions -> Paths -> [(String, FilePath)] -> IO ()
+fetchDependencies gopts paths depOverrides = do
+    when (isTmp paths) $ return ()
+    mspec <- loadBuildSpec (projPath paths)
+    case mspec of
+      Nothing -> return ()
+      Just spec0 -> do
+        spec <- applyDepOverrides (projPath paths) depOverrides spec0
+        unless (C.quiet gopts) $
+          putStrLn "Resolving dependencies (fetching if missing)..."
+        home <- getHomeDirectory
+        let zigExe      = joinPath [sysPath paths, "zig", "zig"]
+            globalCache = joinPath [home, ".cache", "acton", "zig-global-cache"]
+            depsCache   = joinPath [home, ".cache", "acton", "deps"]
+            cacheDir h  = joinPath [globalCache, "p", h]
+        createDirectoryIfMissing True globalCache
+        createDirectoryIfMissing True depsCache
+
+        let pkgFetches = catMaybes
+              [ mkPkgFetch name dep | (name, dep) <- M.toList (BuildSpec.dependencies spec) ]
+            zigFetches = catMaybes
+              [ mkZigFetch name dep | (name, dep) <- M.toList (BuildSpec.zig_dependencies spec) ]
+
+            mkPkgFetch name dep =
+              case BuildSpec.path dep of
+                Just p | not (null p) -> Nothing
+                _ -> case (BuildSpec.url dep, BuildSpec.hash dep) of
+                       (Just u, Just h) ->
+                         Just (fetchOne "pkg" name u (Just h) cacheDir zigExe globalCache)
+                       (Just _, Nothing) ->
+                         Just (return (Left ("Dependency " ++ name ++ " is missing hash")))
+                       _ -> Nothing
+
+            mkZigFetch name dep =
+              case BuildSpec.zpath dep of
+                Just p | not (null p) -> Nothing
+                _ -> case (BuildSpec.zurl dep, BuildSpec.zhash dep) of
+                       (Just u, Just h) ->
+                         Just (fetchOne "zig" name u (Just h) cacheDir zigExe globalCache)
+                       (Just _, Nothing) ->
+                         Just (return (Left ("Zig dependency " ++ name ++ " is missing hash")))
+                       _ -> Nothing
+
+        results <- mapConcurrently id (pkgFetches ++ zigFetches)
+        let errs = [ e | Left e <- results ]
+        unless (null errs) $ throwProjectError (unlines errs)
+
+        forM_ (M.toList (BuildSpec.dependencies spec)) $ \(name, dep) -> do
+          case BuildSpec.path dep of
+            Just p | not (null p) -> return ()
+            _ -> case BuildSpec.hash dep of
+                   Nothing -> return ()
+                   Just h -> do
+                     let src = cacheDir h
+                         dst = joinPath [depsCache, name ++ "-" ++ h]
+                     exists <- doesDirectoryExist dst
+                     unless exists $ do
+                       srcOk <- doesDirectoryExist src
+                       unless srcOk $
+                         throwProjectError ("Dependency " ++ name ++ " not present in Zig cache after fetch: " ++ src)
+                       when (C.verbose gopts) $
+                         putStrLn ("Copying dependency " ++ name ++ " (" ++ h ++ ") from Zig cache")
+                       copyTree src dst
+          return ()
+  where
+    fetchOne kind name url mh cacheDir zigExe globalCache = do
+      case mh of
+        Just h -> do
+          present <- doesDirectoryExist (cacheDir h)
+          if present
+            then do
+              putStrLn ("Using cached " ++ kind ++ " dependency " ++ name ++ " (" ++ h ++ ")")
+              return (Right h)
+            else runFetch kind name url mh cacheDir zigExe globalCache
+        Nothing ->
+          runFetch kind name url mh cacheDir zigExe globalCache
+
+    runFetch kind name url mh cacheDir zigExe globalCache = do
+      putStrLn ("Fetching " ++ kind ++ " dependency " ++ name ++ " from " ++ url)
+      let cmd = proc zigExe ["fetch", "--global-cache-dir", globalCache, url]
+      res <- try (readCreateProcessWithExitCode cmd "") :: IO (Either SomeException (ExitCode, String, String))
+      case res of
+        Left ex -> return (Left ("Failed to fetch dependency " ++ name ++ ": " ++ displayException ex))
+        Right (code, out, err) ->
+          case code of
+            ExitSuccess -> do
+              let hashVal = trim out
+              case mh of
+                Just h | h /= hashVal ->
+                  return (Left ("Hash mismatch for dependency " ++ name ++ " (expected " ++ h ++ ", got " ++ hashVal ++ ")"))
+                _ -> do
+                  exists <- doesDirectoryExist (cacheDir hashVal)
+                  unless exists $
+                    return (Left ("Dependency " ++ name ++ " not present in Zig cache after fetch: " ++ cacheDir hashVal))
+                  return (Right hashVal)
+            ExitFailure _ ->
+              return (Left ("Failed to fetch dependency " ++ name ++ ":\n" ++ err))
+
+    copyTree :: FilePath -> FilePath -> IO ()
+    copyTree src dst = do
+      exists <- doesDirectoryExist src
+      unless exists $ throwProjectError ("Source path for copyTree does not exist: " ++ src)
+      createDirectoryIfMissing True dst
+      entries <- listDirectory src
+      forM_ entries $ \e -> do
+        let s = src </> e
+            d = dst </> e
+        isDir <- doesDirectoryExist s
+        if isDir
+          then copyTree s d
+          else do
+            createDirectoryIfMissing True (takeDirectory d)
+            copyFile s d
 
 -- | Collect dependency type directories using an existing ProjCtx map.
 -- Traverses dependency edges so downstream lookups can build search paths.
