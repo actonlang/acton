@@ -193,7 +193,7 @@ dist/deps/libgc: deps-download/$(LIBGC_REF).tar.gz
 	touch "$(TD)/$@"
 
 # /deps/libmbedtls --------------------------------------------
-LIBMBEDTLS_REF=e72756f2312f04b659fdeaba2fbba7b1f5fd3927
+LIBMBEDTLS_REF=737c3d8e8a9f52c4adaecadb2ecdec3ccab4255d
 deps-download/$(LIBMBEDTLS_REF).tar.gz:
 	mkdir -p deps-download
 	$(CURL) -o $@ https://github.com/actonlang/mbedtls/archive/$(LIBMBEDTLS_REF).tar.gz
@@ -354,6 +354,7 @@ test-rts-db:
 
 test-stdlib: dist/bin/acton
 	cd compiler && stack test actonc --ta '-p "stdlib"'
+	$(MAKE) -C test tls-test-server
 	cd test/stdlib_tests && "$(ACTON)" test
 
 
