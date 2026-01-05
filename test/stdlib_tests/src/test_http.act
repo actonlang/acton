@@ -2,7 +2,59 @@
 import net
 import http
 import logging
+import random
 import testing
+
+CERT_PEM = """-----BEGIN CERTIFICATE-----
+MIIDNzCCAh+gAwIBAgIBAjANBgkqhkiG9w0BAQsFADA7MQswCQYDVQQGEwJOTDER
+MA8GA1UECgwIUG9sYXJTU0wxGTAXBgNVBAMMEFBvbGFyU1NMIFRlc3QgQ0EwHhcN
+MTkwMjEwMTQ0NDA2WhcNMjkwMjEwMTQ0NDA2WjA0MQswCQYDVQQGEwJOTDERMA8G
+A1UECgwIUG9sYXJTU0wxEjAQBgNVBAMMCWxvY2FsaG9zdDCCASIwDQYJKoZIhvcN
+AQEBBQADggEPADCCAQoCggEBAMFNo93nzR3RBNdJcriZrA545Do8Ss86ExbQWuTN
+owCIp+4ea5anUrSQ7y1yej4kmvy2NKwk9XfgJmSMnLAofaHa6ozmyRyWvP7BBFKz
+NtSj+uGxdtiQwWG0ZlI2oiZTqqt0Xgd9GYLbKtgfoNkNHC1JZvdbJXNG6AuKT2kM
+tQCQ4dqCEGZ9rlQri2V5kaHiYcPNQEkI7mgM8YuG0ka/0LiqEQMef1aoGh5EGA8P
+hYvai0Re4hjGYi/HZo36Xdh98yeJKQHFkA4/J/EwyEoO79bex8cna8cFPXrEAjya
+HT4P6DSYW8tzS1KW2BGiLICIaTla0w+w3lkvEcf36hIBMJcCAwEAAaNNMEswCQYD
+VR0TBAIwADAdBgNVHQ4EFgQUpQXoZLjc32APUBJNYKhkr02LQ5MwHwYDVR0jBBgw
+FoAUtFrkpbPe0lL2udWmlQ/rPrzH/f8wDQYJKoZIhvcNAQELBQADggEBAC465FJh
+Pqel7zJngHIHJrqj/wVAxGAFOTF396XKATGAp+HRCqJ81Ry60CNK1jDzk8dv6M6U
+HoS7RIFiM/9rXQCbJfiPD5xMTejZp5n5UYHAmxsxDaazfA5FuBhkfokKK6jD4Eq9
+1C94xGKb6X4/VkaPF7cqoBBw/bHxawXc0UEPjqayiBpCYU/rJoVZgLqFVP7Px3sv
+a1nOrNx8rPPI1hJ+ZOg8maiPTxHZnBVLakSSLQy/sWeWyazO1RnrbxjrbgQtYKz0
+e3nwGpu1w13vfckFmUSBhHXH7AAS/HpKC4IH7G2GAk3+n8iSSN71sZzpxonQwVbo
+pMZqLmbBm/7WPLc=
+-----END CERTIFICATE-----
+"""
+
+KEY_PEM = """-----BEGIN RSA PRIVATE KEY-----
+MIIEpAIBAAKCAQEAwU2j3efNHdEE10lyuJmsDnjkOjxKzzoTFtBa5M2jAIin7h5r
+lqdStJDvLXJ6PiSa/LY0rCT1d+AmZIycsCh9odrqjObJHJa8/sEEUrM21KP64bF2
+2JDBYbRmUjaiJlOqq3ReB30Zgtsq2B+g2Q0cLUlm91slc0boC4pPaQy1AJDh2oIQ
+Zn2uVCuLZXmRoeJhw81ASQjuaAzxi4bSRr/QuKoRAx5/VqgaHkQYDw+Fi9qLRF7i
+GMZiL8dmjfpd2H3zJ4kpAcWQDj8n8TDISg7v1t7HxydrxwU9esQCPJodPg/oNJhb
+y3NLUpbYEaIsgIhpOVrTD7DeWS8Rx/fqEgEwlwIDAQABAoIBAQCXR0S8EIHFGORZ
+++AtOg6eENxD+xVs0f1IeGz57Tjo3QnXX7VBZNdj+p1ECvhCE/G7XnkgU5hLZX+G
+Z0jkz/tqJOI0vRSdLBbipHnWouyBQ4e/A1yIJdlBtqXxJ1KE/ituHRbNc4j4kL8Z
+/r6pvwnTI0PSx2Eqs048YdS92LT6qAv4flbNDxMn2uY7s4ycS4Q8w1JXnCeaAnYm
+WYI5wxO+bvRELR2Mcz5DmVnL8jRyml6l6582bSv5oufReFIbyPZbQWlXgYnpu6He
+GTc7E1zKYQGG/9+DQUl/1vQuCPqQwny0tQoX2w5tdYpdMdVm+zkLtbajzdTviJJa
+TWzL6lt5AoGBAN86+SVeJDcmQJcv4Eq6UhtRr4QGMiQMz0Sod6ettYxYzMgxtw28
+CIrgpozCc+UaZJLo7UxvC6an85r1b2nKPCLQFaggJ0H4Q0J/sZOhBIXaoBzWxveK
+nupceKdVxGsFi8CDy86DBfiyFivfBj+47BbaQzPBj7C4rK7UlLjab2rDAoGBAN2u
+AM2gchoFiu4v1HFL8D7lweEpi6ZnMJjnEu/dEgGQJFjwdpLnPbsj4c75odQ4Gz8g
+sw9lao9VVzbusoRE/JGI4aTdO0pATXyG7eG1Qu+5Yc1YGXcCrliA2xM9xx+d7f+s
+mPzN+WIEg5GJDYZDjAzHG5BNvi/FfM1C9dOtjv2dAoGAF0t5KmwbjWHBhcVqO4Ic
+BVvN3BIlc1ue2YRXEDlxY5b0r8N4XceMgKmW18OHApZxfl8uPDauWZLXOgl4uepv
+whZC3EuWrSyyICNhLY21Ah7hbIEBPF3L3ZsOwC+UErL+dXWLdB56Jgy3gZaBeW7b
+vDrEnocJbqCm7IukhXHOBK8CgYEAwqdHB0hqyNSzIOGY7v9abzB6pUdA3BZiQvEs
+3LjHVd4HPJ2x0N8CgrBIWOE0q8+0hSMmeE96WW/7jD3fPWwCR5zlXknxBQsfv0gP
+3BC5PR0Qdypz+d+9zfMf625kyit4T/hzwhDveZUzHnk1Cf+IG7Q+TOEnLnWAWBED
+ISOWmrUCgYAFEmRxgwAc/u+D6t0syCwAYh6POtscq9Y0i9GyWk89NzgC4NdwwbBH
+4AgahOxIxXx2gxJnq3yfkJfIjwf0s2DyP0kY2y6Ua1OeomPeY9mrIS4tCuDQ6LrE
+TB6l9VGoxJL4fyHnZb8L5gGvnB1bbD8cL6YPaDiOhcRseC9vBiEuVg==
+-----END RSA PRIVATE KEY-----
+"""
 
 def _test_http_parser(st: testing.SyncT):
     log = logging.Logger(st.log_handler)
@@ -49,7 +101,8 @@ def _test_http_parser(st: testing.SyncT):
             if req is not None:
                 testing.assertEqual(expected, req, "Parsed request does not match expected")
 
-actor _HttpClientServer(t: testing.EnvT):
+actor _test_HttpClientServer(t: testing.EnvT):
+    """HTTP client/server roundtrip over TCP"""
     log = logging.Logger(t.log_handler)
 
     serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
@@ -77,3 +130,78 @@ actor _HttpClientServer(t: testing.EnvT):
 
     conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
     client = http.Client(conn_cap, "127.0.0.1", _on_http_connect, _on_http_error, scheme="http", port=8473)
+
+
+actor _test_HttpsClientServer(t: testing.EnvT):
+    """HTTPS client/server roundtrip over TLS"""
+    log = logging.Logger(t.log_handler)
+    var done = False
+    var attempts = 0
+    var port = 0
+    var server = None
+    listen_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
+    conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
+
+    def _finish_success():
+        if done:
+            return
+        done = True
+        t.success()
+
+    def _finish_failure(msg: str):
+        if done:
+            return
+        done = True
+        t.failure(AssertionError(msg))
+
+    def _finish_error(msg: str):
+        if done:
+            return
+        done = True
+        t.error(Exception(msg))
+
+    def _on_https_accept(server):
+        server.cb_install(_on_https_request, _on_https_error)
+
+    def _on_https_request(server, request, respond):
+        respond(200, {"content-type": "text/plain"}, "Hello, TLS!")
+
+    def _on_https_error(server, error):
+        _finish_error("HTTPS server error: " + error)
+
+    def _on_https_connect(c):
+        c.get("/", _on_https_receive)
+
+    def _on_https_receive(c, data):
+        if data.status != 200:
+            _finish_failure("Unexpected status: " + str(data.status))
+            return
+        if data.body != b"Hello, TLS!":
+            _finish_failure("Unexpected body: " + str(data.body))
+            return
+        _finish_success()
+
+    def _on_https_error_client(c, errmsg):
+        if attempts < 5:
+            attempts += 1
+            after 0.1: _start_client()
+        else:
+            _finish_failure("HTTPS client error: " + errmsg)
+
+    def _start_client():
+        http.Client(conn_cap, "127.0.0.1", _on_https_connect, _on_https_error_client, scheme="https", port=port, tls_verify=False)
+
+    def _timeout():
+        _finish_error("timeout")
+
+    port = random.randint(20000, 45000)
+    server = http.TLSListener(
+        listen_cap,
+        "127.0.0.1",
+        port,
+        CERT_PEM.encode(),
+        KEY_PEM.encode(),
+        _on_https_accept
+    )
+    after 0.05: _start_client()
+    after 10: _timeout()
