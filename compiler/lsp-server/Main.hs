@@ -169,50 +169,31 @@ runCompile gen path = do
       opts = lspCompileOpts
       sp = overlaySourceProvider overlaysRef
   res <- liftIO $ (try $ do
-    pathsRoot <- Compile.findPaths path opts
-    rootProj <- Compile.normalizePathSafe (Compile.projPath pathsRoot)
-    sysAbs <- Compile.normalizePathSafe (Compile.sysPath pathsRoot)
-    projMap <- if Compile.isTmp pathsRoot
-      then do
-        let ctx = Compile.ProjCtx
-              { Compile.projRoot = rootProj
-              , Compile.projOutDir = Compile.projOut pathsRoot
-              , Compile.projTypesDir = Compile.projTypes pathsRoot
-              , Compile.projSrcDir = Compile.srcDir pathsRoot
-              , Compile.projSysPath = sysAbs
-              , Compile.projSysTypes = joinPath [sysAbs, "base", "out", "types"]
-              , Compile.projBuildSpec = Nothing
-              , Compile.projLocks = joinPath [Compile.projPath pathsRoot, ".actonc.lock"]
-              , Compile.projDeps = []
-              }
-        return (M.singleton rootProj ctx)
-      else Compile.discoverProjects sysAbs rootProj (C.dep_overrides opts)
-    (globalTasks, _) <- Compile.buildGlobalTasks sp gopts opts projMap (Just [path])
-    neededTasks <- Compile.selectNeededTasks pathsRoot rootProj globalTasks [path]
-    return (pathsRoot, rootProj, neededTasks)
-    ) :: LspM () (Either Compile.ProjectError (Compile.Paths, FilePath, [Compile.GlobalTask]))
+    ctx <- Compile.prepareCompileContext opts [path]
+    specChanged <- Compile.checkBuildSpecChange compileScheduler (Compile.ccBuildStamp ctx)
+    when specChanged $
+      Compile.fetchDependencies gopts (Compile.ccPathsRoot ctx) (Compile.ccDepOverrides ctx)
+    let mChanged = if specChanged then Nothing else Just [path]
+    Compile.prepareCompilePlan sp gopts ctx [path] False mChanged
+    ) :: LspM () (Either Compile.ProjectError Compile.CompilePlan)
   case res of
     Left (Compile.ProjectError msg) ->
       whenCurrentGen gen $
         sendNotification SMethod_WindowShowMessage (ShowMessageParams MessageType_Error (T.pack msg))
-    Right (pathsRoot, rootProj, neededTasks) -> do
+    Right plan -> do
       env <- getLspEnv
-      let callbacks = Compile.defaultCompileCallbacks
-            { Compile.ccOnDiagnostics = \t _ diags ->
+      let hooks = Compile.defaultCompileHooks
+            { Compile.chOnDiagnostics = \t _ diags ->
                 runLspT env $ whenCurrentGen gen $ do
                   let filePath = Compile.srcFile (Compile.gtPaths t) (Compile.tkMod (Compile.gtKey t))
                   publishDiagnosticsFor filePath (lspDiagnosticsFrom diags)
-            , Compile.ccOnFrontResult = \t _ _ ->
+            , Compile.chOnFrontResult = \t _ ->
                 runLspT env $ whenCurrentGen gen $ do
                   let filePath = Compile.srcFile (Compile.gtPaths t) (Compile.tkMod (Compile.gtKey t))
                   publishDiagnosticsFor filePath []
-            , Compile.ccOnBackJob = \job -> do
-                let bq = Compile.csBackQueue compileScheduler
-                _ <- Compile.backQueueEnqueue bq gen job Compile.defaultBackJobCallbacks
-                return ()
-            , Compile.ccOnInfo = \_ -> return ()
+            , Compile.chOnInfo = \_ -> return ()
             }
-      compileRes <- liftIO $ Compile.compileTasks sp gopts opts pathsRoot rootProj neededTasks callbacks
+      compileRes <- liftIO $ Compile.runCompilePlan sp gopts plan compileScheduler gen hooks
       case compileRes of
         Left err -> whenCurrentGen gen $
           sendNotification SMethod_WindowShowMessage (ShowMessageParams MessageType_Error (T.pack (Compile.compileFailureMessage err)))

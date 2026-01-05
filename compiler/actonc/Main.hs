@@ -1381,8 +1381,9 @@ compileFilesChanged sp gopts opts srcFiles allowPrune mChangedPaths mSched mProg
     let cleanupProgress = whenCurrentGen sched gen (progressReset progressUI progressState)
     cleanupProgress
     let runCompile = do
+          sp' <- overlayChangedPaths sp mChangedPaths
           planRes <- try $
-            prepareCompilePlan sp gopts sched opts srcFiles allowPrune mChangedPaths
+            prepareCompilePlan sp' gopts sched opts srcFiles allowPrune mChangedPaths
           case planRes of
             Left (ProjectError msg) -> do
               if C.watch opts
@@ -1417,6 +1418,28 @@ compileFilesChanged sp gopts opts srcFiles allowPrune mChangedPaths mSched mProg
                       whenCurrentGen sched gen (runCliPostCompile cliHooks gopts plan env)
                       return False
     runCompile `finally` cleanupProgress
+
+overlayChangedPaths :: Source.SourceProvider -> Maybe [FilePath] -> IO Source.SourceProvider
+overlayChangedPaths sp mPaths = do
+    case mPaths of
+      Nothing -> return sp
+      Just paths -> do
+        overlays <- catMaybes <$> mapM readOverlay paths
+        let overlayMap = M.fromList overlays
+        return sp
+          { Source.spReadOverlay = \path -> do
+              existing <- Source.spReadOverlay sp path
+              case existing of
+                Just snap -> return (Just snap)
+                Nothing -> return (M.lookup (normalise path) overlayMap)
+          }
+  where
+    readOverlay path = do
+      res <- (try :: IO a -> IO (Either SomeException a)) (Source.spReadFile sp path)
+      case res of
+        Left _ -> return Nothing
+        Right snap ->
+          return (Just (normalise path, snap { Source.ssIsOverlay = True }))
 
 data CliCompileHooks = CliCompileHooks
   { cchHooks :: CompileHooks
