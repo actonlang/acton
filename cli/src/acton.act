@@ -970,7 +970,7 @@ def dep_build_cmd_args(args):
     """
     cmdargs = []
     for argname, arg in args.options.items():
-        if argname in {"always-build", "ignore-compiler-mtime", "cpu", "dep", "target"}:
+        if argname in {"always-build", "ignore-compiler-version", "cpu", "dep", "target"}:
             if arg.type == "bool":
                 if args.get_bool(argname):
                     cmdargs.append("--" + argname)
@@ -1001,7 +1001,7 @@ def build_cmd_args(args):
             "deact",
             "dep",
             "hgen",
-            "ignore-compiler-mtime",
+            "ignore-compiler-version",
             "kinds",
             "llift",
             "jobs",
@@ -2035,7 +2035,7 @@ actor main(env):
         p.add_bool("timing", "Show timing information")
         p.add_bool("cpedantic", "Pedantic C compilation")
         p.add_bool("dbg-no-lines", "Disable emission of C #line directives (for debugging)")
-        p.add_bool("ignore-compiler-mtime", "Ignore actonc mtime when checking .ty freshness")
+        p.add_bool("ignore-compiler-version", "Ignore actonc version when checking .ty freshness")
         p.add_bool("quiet", "Be quiet")
         p.add_bool("verbose", "Verbose output")
         p.add_bool("old-build", "Use old acton-side build pipeline instead of calling actonc directly")
