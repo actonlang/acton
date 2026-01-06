@@ -367,7 +367,7 @@ actor Server(conn: net.TCPListenConnection, on_accept: action(Server) -> None, l
         if buf != b"":
             req, buf = parse_request(buf, _log)
 
-    def on_tcp_receive(tcp_conn, data: bytes) -> None:
+    def on_conn_receive(conn_obj, data: bytes) -> None:
         # TODO: do we really need a buf?
         if on_request_cb is None:
             buf += data
@@ -424,7 +424,98 @@ actor Server(conn: net.TCPListenConnection, on_accept: action(Server) -> None, l
             else:
                 _log.notice("No on_request callback set", None)
 
-    def on_tcp_error(conn, error):
+    def on_conn_error(conn, error):
+        # TODO: the conn should really be in here, but type error!?
+        _log.trace(f"There was an error: {str(error)} from: {str("")}", None)
+
+    def close():
+        conn.close()
+
+    def send_response(status_code: int, headers: dict[str, str], data: str):
+        if version is not None:
+            res = build_response(version, status_code, headers, data)
+            conn.write(res)
+
+        if close_connection:
+            conn.close()
+
+
+actor TLSServer(conn: net.TLSListenConnection, on_accept: action(TLSServer) -> None, log_handler: ?logging.Handler):
+    """Server serves a single TLS client connection"""
+    _log = logging.Logger(None)
+    var on_request_cb: ?action(TLSServer, Request, action(int, dict[str, str], str) -> None) -> None = None
+    var on_error_cb: ?action(TLSServer, str) -> None = None
+    var version: ?bytes = None
+    var buf = b""
+    var close_connection: bool = True
+    var query_count: u64 = 0
+    var response_count: u64 = 0
+    var outstanding_requests: dict[u64, Response] = {}
+
+    def cb_install(new_on_request: action(TLSServer, Request, action(int, dict[str, str], str) -> None) -> None, new_on_error: action(TLSServer, str) -> None):
+        on_request_cb = new_on_request
+        on_error_cb = new_on_error
+        if buf != b"":
+            req, buf = parse_request(buf, _log)
+
+    def on_conn_receive(conn_obj, data: bytes) -> None:
+        # TODO: do we really need a buf?
+        if on_request_cb is None:
+            buf += data
+            return None
+        else:
+            if buf != b"":
+                data = buf + data
+
+        req, buf = parse_request(data, _log)
+        if req is not None:
+            if version is None:
+                version = req.version
+            elif version is not None and version != req.version:
+                _log.debug("Version mismatch", None)
+                conn.close()
+
+            if version is not None and version == b"1.0":
+                if "connection" in req.headers:
+                    if req.headers["connection"] == "close":
+                        _log.debug("HTTP 1.0 with connection: close, closing connection...", None)
+                        close_connection = True
+                    else:
+                        _log.debug("HTTP 1.0 with connection header, not closing connection...", None)
+                        _log.trace("connection header", {"connection": req.headers["connection"]})
+                else:
+                    close_connection = True
+            elif version is not None and version == b"1.1":
+                if "connection" in req.headers and req.headers["connection"] == "close":
+                    _log.debug("HTTP 1.1, closing connection...", None)
+                    close_connection = True
+                else:
+                    close_connection = False
+
+            query_count += 1
+            def respond(status_code: int, headers: dict[str, str], body: str):
+                _log.trace("Going to respond with query id", {"query_count": query_count})
+                if query_count == response_count + 1:
+                    # In order, send response immediately
+                    _log.trace("Sending response immediately", None)
+                    send_response(status_code, headers, body)
+                    response_count += 1
+                else:
+                    # Buffer up response
+                    _log.trace("Buffering response", None)
+                    # TODO: actually implement buffering?
+                    #outstanding_requests[query_count] = Response("GABBA", version, status_code, headers, body.encode())
+
+            if on_request_cb is not None:
+                response = on_request_cb(self, req, respond)
+                if response is not None:
+                    _log.trace("Sending response immediately", None)
+                else:
+                    _log.trace("Async response", None)
+            else:
+                _log.notice("No on_request callback set", None)
+
+    def on_conn_error(conn, error):
         # TODO: the conn should really be in here, but type error!?
         _log.trace(f"There was an error: {str(error)} from: {str("")}", None)
 
@@ -443,27 +534,45 @@ actor Server(conn: net.TCPListenConnection, on_accept: action(Server) -> None, l
 # TODO: change port to u16, when u16 has a sub-type relationship to int
 # TODO: the on_listen_error default should be some action that just automatically retries with a backoff
 # TODO: add restart method to restart the listener
-actor Listener(cap: net.TCPListenCap, address: str, port: int, on_accept: action(Server) -> None, on_listen_error: ?action(net.TCPListener, str) -> None, log_handler: ?logging.Handler):
-    """HTTP Server Listener
-
-    The Listener binds to a listening socket and instantiates a http.Server
-    actor instance per incoming connection.
-
-    Plain TCP is the currently only supported transport.
-    """
+actor Listener(cap: net.TCPListenCap, address: str, port: int, on_accept: action(Server) -> None, on_listen_error: ?action(net.TCPListener, str) -> None = None, log_handler: ?logging.Handler = None):
+    """HTTP Server Listener"""
     _log = logging.Logger(log_handler)
     var bufs = []
 
-    def on_tcp_listen(listener, error):
+    def on_conn_listen(listener, error):
         if error is not None:
-            _log.notice("There was an error with the TCPListener socket", {"error": error})
+            _log.notice("There was an error with the listener socket", {"error": error})
+            if on_listen_error is not None:
+                on_listen_error(listener, error)
 
-    def on_tcp_listener_accept(conn):
+    def on_listener_accept(conn):
         s = Server(conn, on_accept, log_handler)
         await async on_accept(s)
-        await async conn.cb_install(s.on_tcp_receive, s.on_tcp_error)
+        await async conn.cb_install(s.on_conn_receive, s.on_conn_error, None)
 
-    l = net.TCPListener(cap, address, port, on_tcp_listen, on_tcp_listener_accept)
+    var _listener = net.TCPListener(cap, address, port, on_conn_listen, on_listener_accept)
+
+
+# TODO: change port to u16, when u16 has a sub-type relationship to int
+# TODO: the on_listen_error default should be some action that just automatically retries with a backoff
+# TODO: add restart method to restart the listener
+actor TLSListener(cap: net.TCPListenCap, address: str, port: int, cert_pem: bytes, key_pem: bytes, on_accept: action(TLSServer) -> None, on_listen_error: ?action(net.TLSListener, str) -> None = None, log_handler: ?logging.Handler = None):
+    """HTTPS Server Listener"""
+    _log = logging.Logger(log_handler)
+    var bufs = []
+
+    def on_conn_listen(listener, error):
+        if error is not None:
+            _log.notice("There was an error with the listener socket", {"error": error})
+            if on_listen_error is not None:
+                on_listen_error(listener, error)
+
+    def on_listener_accept(conn):
+        s = TLSServer(conn, on_accept, log_handler)
+        await async on_accept(s)
+        await async conn.cb_install(s.on_conn_receive, s.on_conn_error, None)
+
+    var _listener = net.TLSListener(cap, address, port, cert_pem, key_pem, on_conn_listen, on_listener_accept)
 
 
 # TODO: change port to u16, when u16 has a sub-type relationship to int

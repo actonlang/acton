@@ -1,9 +1,8 @@
-# TLS client/server test using local TLSListener.
-
 import net
-import random
+import http
+import logging
 
-
+# PolarSSL/mbedTLS self-signed test certificate
 CERT_PEM = """-----BEGIN CERTIFICATE-----
 MIIDNzCCAh+gAwIBAgIBAjANBgkqhkiG9w0BAQsFADA7MQswCQYDVQQGEwJOTDER
 MA8GA1UECgwIUG9sYXJTU0wxGTAXBgNVBAMMEFBvbGFyU1NMIFRlc3QgQ0EwHhcN
@@ -56,114 +55,27 @@ TB6l9VGoxJL4fyHnZb8L5gGvnB1bbD8cL6YPaDiOhcRseC9vBiEuVg==
 """
 
 
-actor TLSClient(env: Env, host: str, port: int, on_success, on_failure):
-    var done = False
-
-    def _finish_success():
-        if not done:
-            done = True
-            on_success()
-
-    def _finish_failure(msg: str):
-        if not done:
-            done = True
-            on_failure(msg)
-
-    def on_connect(c):
-        await async c.write(b"PING")
-
-    def on_receive(c, data):
-        if data == b"PONG":
-            _finish_success()
-            c.close(lambda c: None)
-        else:
-            _finish_failure("Unexpected response: " + str(data))
-
-    def on_error(c, msg):
-        _finish_failure("TLS client error: " + msg)
-
-    def on_remote_close(c):
-        _finish_failure("TLS server closed before response")
-
-    connect_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(env.cap)))
-    client = net.TLSConnection(connect_cap, host, port, on_connect, on_receive, on_error, on_remote_close, False)
-
-
 actor main(env):
-    var done = False
-    var started = False
-    var port = 0
-    var attempts = 0
-    var listener = None
-    var client = None
+    log = logging.Logger(None)
     listen_cap = net.TCPListenCap(net.TCPCap(net.NetCap(env.cap)))
 
-    def _finish_success():
-        if done:
-            return
-        done = True
-        await async env.exit(0)
+    def on_accept(server):
+        server.cb_install(on_request, on_error)
 
-    def _finish_failure(msg: str):
-        if done:
-            return
-        done = True
-        print("TLS test failed:", msg)
-        await async env.exit(1)
+    def on_request(server, request, respond):
+        respond(200, {"Content-Type": "text/plain"}, "Hello from the Acton HTTPS server")
 
-    def _on_client_success():
-        _finish_success()
+    def on_error(server, error):
+        print("HTTPS server error:", error)
 
-    def _on_client_failure(msg: str):
-        _finish_failure(msg)
+    http.TLSListener(
+        listen_cap,
+        "127.0.0.1",
+        8443,
+        CERT_PEM.encode(),
+        KEY_PEM.encode(),
+        on_accept,
+        log_handler=None
+    )
+    print("HTTPS server listening on https://127.0.0.1:8443")
 
-    def _start_client(port: int):
-        client = TLSClient(env, "127.0.0.1", port, _on_client_success, _on_client_failure)
-
-    def _on_server_receive(c, data):
-        if data == b"PING":
-            await async c.write(b"PONG")
-            c.close()
-        else:
-            _finish_failure("Unexpected request: " + str(data))
-
-    def _on_server_error(c, error):
-        _finish_failure("TLS server error: " + error)
-
-    def _on_server_close(c):
-        if not done:
-            _finish_failure("TLS server closed before response")
-
-    def _on_accept(c):
-        c.cb_install(_on_server_receive, _on_server_error, _on_server_close)
-
-    def _on_listen(listener, err):
-        if err is not None:
-            if attempts < 10:
-                attempts += 1
-                _start_listener()
-            else:
-                _finish_failure("TLS listen failed: " + err)
-            return
-        if started:
-            return
-        started = True
-        _start_client(port)
-
-    def _timeout():
-        _finish_failure("timeout")
-
-    def _start_listener():
-        port = random.randint(20000, 45000)
-        listener = net.TLSListener(
-            listen_cap,
-            "127.0.0.1",
-            port,
-            CERT_PEM.encode(),
-            KEY_PEM.encode(),
-            _on_listen,
-            _on_accept
-        )
-
-    _start_listener()
-    after 10: _timeout()

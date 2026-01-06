@@ -3,6 +3,9 @@
 #include <stdlib.h>
 
 #define GC_THREADS 1
+#ifdef _WIN32
+#include <winsock2.h>
+#endif
 #include <gc.h>
 
 typedef void *(*acton_malloc_func)(size_t size);

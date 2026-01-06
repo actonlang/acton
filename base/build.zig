@@ -191,6 +191,8 @@ pub fn build(b: *std.Build) void {
     file_prefix_map.appendSlice(file_prefix_path_path) catch unreachable;
     file_prefix_map.appendSlice("/=") catch unreachable;
     flags.append(file_prefix_map.items) catch unreachable;
+    flags.append("-Wno-error=parentheses-equality") catch unreachable;
+    flags.append("-Wno-parentheses-equality") catch unreachable;
     if (cpedantic) {
         flags.append("-Werror") catch unreachable;
     }
@@ -275,6 +277,7 @@ pub fn build(b: *std.Build) void {
     libActon.installHeader(b.path("rts/log.h"), "rts/log.h");
 
     libActon.addIncludePath(.{ .cwd_relative = buildroot_path });
+    libActon.addIncludePath(dep_libtlsuv.path("include"));
 
     if (use_db) {
         const libactondb_dep = b.dependency("actondb", .{
