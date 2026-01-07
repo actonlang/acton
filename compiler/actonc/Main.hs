@@ -1531,14 +1531,23 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
         phaseBack = "Running back passes:"
         phaseFinal = "Running final compilation:"
         phaseWidth = maximum [length phaseFront, length phaseBack, length phaseFinal]
-        projWidth = maximum (0 : [ length (projectLabel rootProj (tkProj (gtKey t))) | t <- neededTasks ])
+        projMap = cpProjMap plan
+        depNameMap =
+          let rootDeps = maybe [] projDeps (M.lookup rootProj projMap)
+              otherDeps = concatMap projDeps (M.elems projMap)
+          in M.fromListWith (\_ old -> old) [ (p, n) | (n, p) <- rootDeps ++ otherDeps ]
+        projectLabelFor proj =
+          case M.lookup proj depNameMap of
+            Just name -> name
+            Nothing -> projectLabel rootProj proj
+        projWidth = maximum (0 : [ length (projectLabelFor (tkProj (gtKey t))) | t <- neededTasks ])
         prefixWidth = maximum [ length frontPrefix
                               , length backPrefix
                               , spinnerPrefixWidth + phaseWidth + 1
                               ]
         progressPrefixWidth = max 0 (prefixWidth - spinnerPrefixWidth)
         padProgressPrefix phase = padRight progressPrefixWidth (padRight phaseWidth phase ++ " ")
-        projPart proj = padRight projWidth (projectLabel rootProj proj) ++ "/"
+        projPart proj = padRight projWidth (projectLabelFor proj) ++ "/"
         completionPrefix prefix proj = padRight prefixWidth prefix ++ projPart proj
         frontDoneLine proj mn t = completionPrefix frontPrefix proj ++ padMod mn ++ " in  " ++ fmtTime t
         backDoneLine proj mn t = completionPrefix backPrefix proj ++ padMod mn ++ " in  " ++ fmtTime t
