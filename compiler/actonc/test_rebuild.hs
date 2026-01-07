@@ -61,25 +61,25 @@ sanitize = LBS.fromStrict
       T.isInfixOf "Building project in" t ||
       T.isInfixOf "Building [cap" t
 
-    -- Replace occurrences of durations like "0.184 s" with a stable token "0.000 s".
+    -- Replace trailing durations like "12.345 s" with a stable token "0.000 s",
+    -- preserving the original field width for alignment.
     redact :: T.Text -> T.Text
-    redact = go
-      where
-        go t =
-          case T.breakOn "." t of
-            (pre, rest) | T.null rest -> pre
-            (pre, rest) ->
-              let afterDot = T.drop 1 rest
-                  (digits, rest2) = T.span isDigit afterDot
-                  intDigits = T.takeWhileEnd isDigit pre
-              in if not (T.null intDigits)
-                    && T.length digits == 3
-                    && T.isPrefixOf " s" rest2
-                   then
-                     let leftPre = T.dropEnd (T.length intDigits) pre
-                         restAfter = T.drop 2 rest2 -- drop " s"
-                      in leftPre <> "0.000 s" <> go restAfter
-                   else pre <> "." <> go afterDot
+    redact t =
+      case T.stripSuffix " s" t of
+        Nothing -> t
+        Just pre ->
+          let field = T.takeWhileEnd (\c -> isDigit c || c == '.') pre
+              pre' = T.dropEnd (T.length field) pre
+          in case T.splitOn "." field of
+               [intPart, frac]
+                 | not (T.null intPart)
+                   && T.length frac == 3
+                   && T.all isDigit intPart
+                   && T.all isDigit frac ->
+                     let base = "0.000"
+                         padding = T.replicate (max 0 (T.length field - T.length base)) " "
+                     in pre' <> padding <> base <> " s"
+               _ -> t
 
     -- Remove the verbose Paths: block (and its per-field lines) to avoid
     -- machine-specific absolute paths in goldens.

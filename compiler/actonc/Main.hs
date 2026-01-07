@@ -1527,6 +1527,7 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
         spinnerPrefixWidth = 3
         frontPrefix = "   Finished type check of"
         backPrefix = "   Finished compilation of "
+        finalPrefix = "   Finished final compilation"
         phaseFront = "Running front passes:"
         phaseBack = "Running back passes:"
         phaseFinal = "Running final compilation:"
@@ -1543,17 +1544,31 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
         projWidth = maximum (0 : [ length (projectLabelFor (tkProj (gtKey t))) | t <- neededTasks ])
         prefixWidth = maximum [ length frontPrefix
                               , length backPrefix
+                              , length finalPrefix
                               , spinnerPrefixWidth + phaseWidth + 1
                               ]
         progressPrefixWidth = max 0 (prefixWidth - spinnerPrefixWidth)
         padProgressPrefix phase = padRight progressPrefixWidth (padRight phaseWidth phase ++ " ")
         projPart proj = padRight projWidth (projectLabelFor proj) ++ "/"
         completionPrefix prefix proj = padRight prefixWidth prefix ++ projPart proj
-        frontDoneLine proj mn t = completionPrefix frontPrefix proj ++ padMod mn ++ " in  " ++ fmtTime t
-        backDoneLine proj mn t = completionPrefix backPrefix proj ++ padMod mn ++ " in  " ++ fmtTime t
-        progressLine phase proj mn = padProgressPrefix phase ++ projPart proj ++ modNameToString mn
+        timeSep = "    "
+        nameWidth = prefixWidth + projWidth + 1 + modWidth
+        timePadWidth = nameWidth + length timeSep
+        progressTimePadWidth = max 0 (timePadWidth - spinnerPrefixWidth)
+        frontDoneLine proj mn t =
+          let base = completionPrefix frontPrefix proj ++ padMod mn
+          in padRight timePadWidth base ++ fmtTime t
+        backDoneLine proj mn t =
+          let base = completionPrefix backPrefix proj ++ padMod mn
+          in padRight timePadWidth base ++ fmtTime t
+        finalDoneLine t =
+          padRight timePadWidth finalPrefix ++ fmtTime t
+        progressLine phase proj mn =
+          let base = padProgressPrefix phase ++ projPart proj ++ padMod mn
+          in padRight progressTimePadWidth base
+        progressFinalLine =
+          padRight progressTimePadWidth (padProgressPrefix phaseFinal)
         finalKey = TaskKey rootProj (A.modName ["__final__"])
-        finalLine = padProgressPrefix phaseFinal
     let backJobKey job =
           TaskKey (projPath (bjPaths job)) (A.modname (biTypedMod (bjInput job)))
         onBackStart job =
@@ -1583,12 +1598,12 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
           , chOnInfo = logLine
           }
         onFinalStart =
-          gate (progressStartTask progressUI progressState finalKey finalLine)
+          gate (progressStartTask progressUI progressState finalKey progressFinalLine)
         onFinalDone mtime = do
           gate (progressDoneTask progressUI progressState finalKey)
           forM_ mtime $ \tFinal ->
             when (not (quiet gopts optsPlan)) $
-              logLine ("   Finished final compilation step in  " ++ fmtTime tFinal)
+              logLine (finalDoneLine tFinal)
     return CliCompileHooks
       { cchHooks = hooks
       , cchLogLine = logLine
@@ -2284,8 +2299,13 @@ data ProgressUI = ProgressUI
   }
 
 data ProgressState = ProgressState
-  { psActive :: IORef (M.Map TaskKey String)
+  { psActive :: IORef (M.Map TaskKey ProgressTask)
   , psOrder :: IORef [TaskKey]
+  }
+
+data ProgressTask = ProgressTask
+  { ptLine :: String
+  , ptStart :: TimeSpec
   }
 
 -- | Initialize terminal progress UI state and enablement.
@@ -2394,14 +2414,14 @@ progressRenderUnlocked ui = do
         writeIORef (puVisibleRef ui) total
 
 -- | Start the spinner update thread when needed.
-startSpinnerTicker :: ProgressUI -> IO ()
-startSpinnerTicker ui =
+startSpinnerTicker :: ProgressUI -> ProgressState -> IO ()
+startSpinnerTicker ui st =
     when (puEnabled ui) $ do
       m <- readIORef (puTickerRef ui)
       case m of
         Just _ -> return ()
         Nothing -> do
-          tid <- forkIO (spinnerLoop ui)
+          tid <- forkIO (spinnerLoop ui st)
           writeIORef (puTickerRef ui) (Just tid)
 
 -- | Stop the spinner update thread.
@@ -2411,18 +2431,18 @@ stopSpinnerTicker ui = do
     forM_ m killThread
 
 -- | Spinner loop that ticks and redraws at a fixed cadence.
-spinnerLoop :: ProgressUI -> IO ()
-spinnerLoop ui = do
+spinnerLoop :: ProgressUI -> ProgressState -> IO ()
+spinnerLoop ui st = do
     tid <- myThreadId
     let loop = do
           threadDelay spinnerTickMicros
           keep <- withProgressLock ui $ do
-            lines <- readIORef (puLinesRef ui)
-            if null lines || not (puEnabled ui)
+            active <- readIORef (psActive st)
+            if M.null active || not (puEnabled ui)
               then return False
               else do
                 modifyIORef' (puSpinnerRef ui) (+ 1)
-                progressRenderUnlocked ui
+                progressRefreshUnlocked ui st
                 return True
           when keep loop
     loop
@@ -2430,11 +2450,11 @@ spinnerLoop ui = do
       if cur == Just tid then (Nothing, ()) else (cur, ())
 
 -- | Replace progress lines and redraw the UI.
-progressSetLines :: ProgressUI -> [String] -> IO ()
-progressSetLines ui lines = withProgressLock ui $ do
+progressSetLines :: ProgressUI -> ProgressState -> [String] -> IO ()
+progressSetLines ui st lines = withProgressLock ui $ do
     when (puEnabled ui) $ do
       writeIORef (puLinesRef ui) (take (puMaxLines ui) lines)
-      if null lines then stopSpinnerTicker ui else startSpinnerTicker ui
+      if null lines then stopSpinnerTicker ui else startSpinnerTicker ui st
       progressRenderUnlocked ui
 
 -- | Clear active task state and remove any rendered progress lines.
@@ -2450,7 +2470,8 @@ progressReset ui st = withProgressLock ui $ do
 -- | Mark a task as active in the progress UI.
 progressStartTask :: ProgressUI -> ProgressState -> TaskKey -> String -> IO ()
 progressStartTask ui st key line = withProgressLock ui $ do
-    modifyIORef' (psActive st) (M.insert key line)
+    now <- getTime Monotonic
+    modifyIORef' (psActive st) (M.insert key (ProgressTask line now))
     modifyIORef' (psOrder st) (\xs -> if key `elem` xs then xs else xs ++ [key])
     progressRefreshUnlocked ui st
 
@@ -2466,10 +2487,13 @@ progressRefreshUnlocked :: ProgressUI -> ProgressState -> IO ()
 progressRefreshUnlocked ui st = do
     active <- readIORef (psActive st)
     order <- readIORef (psOrder st)
-    let lines = [ line | key <- order, Just line <- [M.lookup key active] ]
+    now <- getTime Monotonic
+    let formatLine task =
+          ptLine task ++ fmtTime (diffTimeSpec now (ptStart task))
+        lines = [ formatLine task | key <- order, Just task <- [M.lookup key active] ]
     when (puEnabled ui) $ do
       writeIORef (puLinesRef ui) (take (puMaxLines ui) lines)
-      if null lines then stopSpinnerTicker ui else startSpinnerTicker ui
+      if null lines then stopSpinnerTicker ui else startSpinnerTicker ui st
       progressRenderUnlocked ui
 
 -- | Format project labels relative to the root for logs.
