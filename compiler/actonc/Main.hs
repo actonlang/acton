@@ -168,6 +168,29 @@ tryLock lockPath = do
         Nothing -> return Nothing  -- Lock failed
         Just lock -> return $ Just (lock, lockPath)
 
+compileOwnerLockPath :: FilePath -> FilePath
+compileOwnerLockPath projDir =
+    joinPath [projDir, ".acton.compile.lock"]
+
+tryCompileOwnerLock :: FilePath -> IO (Maybe (FileLock, FilePath))
+tryCompileOwnerLock projDir = do
+    let lockPath = compileOwnerLockPath projDir
+    mlock <- tryLockFile lockPath Exclusive
+    return ((\lock -> (lock, lockPath)) <$> mlock)
+
+releaseCompileOwnerLock :: (FileLock, FilePath) -> IO ()
+releaseCompileOwnerLock (lock, lockPath) = do
+    unlockFile lock
+    mlock <- tryLockFile lockPath Exclusive
+    case mlock of
+      Nothing -> return ()
+      Just lock2 -> do
+        removeFile lockPath `catch` handleNotExists
+        unlockFile lock2
+  where
+    handleNotExists :: IOException -> IO ()
+    handleNotExists _ = return ()
+
 -- Try locks sequentially until one succeeds or all fail
 findAvailableScratch :: FilePath -> IO (Maybe (FileLock, FilePath))
 findAvailableScratch basePath = go [0..31]  -- 32 possible scratch directories
@@ -333,11 +356,24 @@ buildProjectOnce gopts opts = do
                   else do
                     iff (not(C.quiet gopts)) $ do
                       putStrLn("Building project in " ++ projPath paths)
-                    withFileLock (joinPath [projPath paths, ".actonc.lock"]) Exclusive $ \_ -> do
-                      allFiles <- getFilesRecursive (srcDir paths)
-                      let srcFiles = catMaybes $ map filterActFile allFiles
-                      compileFiles sp gopts opts srcFiles True
-                      generateProjectDocIndex sp gopts opts paths srcFiles
+                    ownerLock <- tryCompileOwnerLock (projPath paths)
+                    case ownerLock of
+                      Just lock -> do
+                        let runBuild = withFileLock (joinPath [projPath paths, ".actonc.lock"]) Exclusive $ \_ -> do
+                              allFiles <- getFilesRecursive (srcDir paths)
+                              let srcFiles = catMaybes $ map filterActFile allFiles
+                              compileFiles sp gopts opts srcFiles True
+                              generateProjectDocIndex sp gopts opts paths srcFiles
+                        runBuild `finally` releaseCompileOwnerLock lock
+                      Nothing -> do
+                        unless (C.quiet gopts) $
+                          putStrLn "Compiler already running; running final build only."
+                        let opts' = opts { C.only_build = True }
+                        withFileLock (joinPath [projPath paths, ".actonc.lock"]) Exclusive $ \_ -> do
+                          allFiles <- getFilesRecursive (srcDir paths)
+                          let srcFiles = catMaybes $ map filterActFile allFiles
+                          compileFiles sp gopts opts' srcFiles True
+                          generateProjectDocIndex sp gopts opts' paths srcFiles
 
 -- Test runner -------------------------------------------------------------------------------------------------
 
@@ -430,7 +466,12 @@ runTestsWatch gopts opts topts mode paths = do
                   unless (null modulesToTest) $ do
                     _ <- runProjectTests opts paths topts mode modulesToTest testParallel
                     return ()
-    runWatchProject gopts projDir srcRoot sched runOnce
+    ownerLock <- tryCompileOwnerLock projDir
+    case ownerLock of
+      Nothing -> printErrorAndExit "Another compiler is running; cannot start test watch."
+      Just lock ->
+        runWatchProject gopts projDir srcRoot sched runOnce
+          `finally` releaseCompileOwnerLock lock
 
 -- | Compute parallelism for test runs from jobs or core count.
 testMaxParallel :: C.GlobalOptions -> IO Int
@@ -882,24 +923,29 @@ watchProjectAt gopts opts projDir = do
                 if not srcDirExists
                   then printErrorAndExit "Missing src/ directory"
                   else do
-                    maxParallel <- compileMaxParallel gopts
-                    sched <- newCompileScheduler gopts maxParallel
-                    progressUI <- initProgressUI gopts maxParallel
-                    progressState <- newProgressState
-                    let logLine = progressLogLine progressUI
-                    let runOnce gen mChanged = do
-                          whenCurrentGen sched gen $
-                            withFileLock (joinPath [projPath paths, ".actonc.lock"]) Exclusive $ \_ -> do
-                              whenCurrentGen sched gen $ do
-                                iff (not(C.quiet gopts)) $ do
-                                  progressReset progressUI progressState
-                                  logLine("Building project in " ++ projPath paths)
-                                allFiles <- getFilesRecursive (srcDir paths)
-                                let srcFiles = catMaybes $ map filterActFile allFiles
-                                void $ compileFilesChanged sp gopts opts srcFiles True mChanged (Just (sched, gen)) (Just (progressUI, progressState))
-                                when (isNothing mChanged) $
-                                  generateProjectDocIndex sp gopts opts paths srcFiles
-                    runWatchProject gopts (projPath paths) (srcDir paths) sched runOnce
+                    ownerLock <- tryCompileOwnerLock (projPath paths)
+                    case ownerLock of
+                      Nothing -> printErrorAndExit "Another compiler is running; cannot start watch."
+                      Just lock -> do
+                        maxParallel <- compileMaxParallel gopts
+                        sched <- newCompileScheduler gopts maxParallel
+                        progressUI <- initProgressUI gopts maxParallel
+                        progressState <- newProgressState
+                        let logLine = progressLogLine progressUI
+                        let runOnce gen mChanged = do
+                              whenCurrentGen sched gen $
+                                withFileLock (joinPath [projPath paths, ".actonc.lock"]) Exclusive $ \_ -> do
+                                  whenCurrentGen sched gen $ do
+                                    iff (not(C.quiet gopts)) $ do
+                                      progressReset progressUI progressState
+                                      logLine("Building project in " ++ projPath paths)
+                                    allFiles <- getFilesRecursive (srcDir paths)
+                                    let srcFiles = catMaybes $ map filterActFile allFiles
+                                    void $ compileFilesChanged sp gopts opts srcFiles True mChanged (Just (sched, gen)) (Just (progressUI, progressState))
+                                    when (isNothing mChanged) $
+                                      generateProjectDocIndex sp gopts opts paths srcFiles
+                        runWatchProject gopts (projPath paths) (srcDir paths) sched runOnce
+                          `finally` releaseCompileOwnerLock lock
 
 -- | Build a single file, optionally running in watch mode.
 buildFile :: C.GlobalOptions -> C.CompileOptions -> FilePath -> IO ()
@@ -921,9 +967,20 @@ buildFileOnce gopts opts file = do
         -- In a project, use project directory for compilation.
         iff (not(C.quiet gopts)) $ do
           putStrLn("Building file " ++ file ++ " in project " ++ relProj)
-        let lock_file = joinPath [proj, ".actonc.lock"]
-        withFileLock lock_file Exclusive $ \_ -> do
-          compileFiles sp gopts opts [file] False
+        ownerLock <- tryCompileOwnerLock proj
+        case ownerLock of
+          Just lock -> do
+            let lock_file = joinPath [proj, ".actonc.lock"]
+            let runBuild = withFileLock lock_file Exclusive $ \_ -> do
+                  compileFiles sp gopts opts [file] False
+            runBuild `finally` releaseCompileOwnerLock lock
+          Nothing -> do
+            unless (C.quiet gopts) $
+              putStrLn "Compiler already running; running final build only."
+            let lock_file = joinPath [proj, ".actonc.lock"]
+                opts' = opts { C.only_build = True }
+            withFileLock lock_file Exclusive $ \_ -> do
+              compileFiles sp gopts opts' [file] False
       Nothing -> do
         -- Not in a project, use scratch directory for compilation unless
         -- --tempdir is provided - then use that
@@ -1747,14 +1804,15 @@ printDiagnostics gopts opts diags =
 -- | Generate a root actor C file when a root is still declared.
 writeRootC :: Acton.Env.Env0 -> C.GlobalOptions -> C.CompileOptions -> Paths -> [CompileTask] -> BinTask -> IO (Maybe BinTask)
 writeRootC env gopts opts paths tasks binTask = do
-    -- In --only-build mode, don't generate or touch any files; re-use existing artifacts.
-    if C.only_build opts
+    let qn@(A.GName m n) = rootActor binTask
+        mn = A.mname qn
+        outbase = outBase paths mn
+        rootFile = if (isTest binTask) then outbase ++ ".test_root.c" else outbase ++ ".root.c"
+    -- In --only-build mode, reuse existing root stubs; generate only if missing.
+    existing <- if C.only_build opts then doesFileExist rootFile else return False
+    if C.only_build opts && existing
       then return (Just binTask)
       else do
-        let qn@(A.GName m n) = rootActor binTask
-            mn = A.mname qn
-            outbase = outBase paths mn
-            rootFile = if (isTest binTask) then outbase ++ ".test_root.c" else outbase ++ ".root.c"
         -- Read the up-to-date roots from the on-disk .ty header (post-compile)
         -- Avoid using preloaded TyTask roots, which may be stale if the module
         -- was rebuilt during this run.

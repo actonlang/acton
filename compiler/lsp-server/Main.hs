@@ -2,8 +2,8 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-import Control.Exception (try)
-import Control.Monad (void, when)
+import Control.Exception (try, catch, finally, IOException)
+import Control.Monad (void, when, forM_)
 import Control.Monad.IO.Class
 import Data.IORef
 import qualified Data.HashMap.Strict as HM
@@ -12,8 +12,10 @@ import Data.Maybe (fromMaybe, listToMaybe)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import GHC.Conc (getNumCapabilities)
+import System.Directory (removeFile)
 import System.FilePath.Posix (joinPath)
 import System.IO.Unsafe (unsafePerformIO)
+import System.FileLock (FileLock, SharedExclusive(Exclusive), tryLockFile, unlockFile)
 
 import Language.LSP.Protocol.Message
 import Language.LSP.Protocol.Types hiding (Diagnostic, Position)
@@ -32,6 +34,8 @@ import Error.Diagnose.Position (Position(..))
 
 type OverlayMap = HM.HashMap FilePath Source.SourceSnapshot
 type UriMap = HM.HashMap FilePath Uri
+type CompileOwnerMap = HM.HashMap FilePath (FileLock, FilePath)
+type CompileOwnerWarned = HM.HashMap FilePath ()
 
 -- | Debounce delay (microseconds) before recompiling on edits.
 debounceMicros :: Int
@@ -46,6 +50,16 @@ overlaysRef = unsafePerformIO (newIORef HM.empty)
 -- | Map canonical paths to the client-provided URIs for diagnostics.
 uriByPathRef :: IORef UriMap
 uriByPathRef = unsafePerformIO (newIORef HM.empty)
+
+{-# NOINLINE compileOwnerLocksRef #-}
+-- | Map project roots to held compile-owner locks.
+compileOwnerLocksRef :: IORef CompileOwnerMap
+compileOwnerLocksRef = unsafePerformIO (newIORef HM.empty)
+
+{-# NOINLINE compileOwnerWarnedRef #-}
+-- | Remember which projects have already warned about an active compiler.
+compileOwnerWarnedRef :: IORef CompileOwnerWarned
+compileOwnerWarnedRef = unsafePerformIO (newIORef HM.empty)
 
 {-# NOINLINE compileScheduler #-}
 -- | Shared compile scheduler for LSP events and back jobs.
@@ -120,6 +134,49 @@ lookupUri :: FilePath -> IO Uri
 lookupUri path = do
   m <- readIORef uriByPathRef
   return (fromMaybe (filePathToUri path) (HM.lookup path m))
+
+ensureCompileOwnerLock :: FilePath -> IO Bool
+ensureCompileOwnerLock projRoot = do
+  locks <- readIORef compileOwnerLocksRef
+  case HM.lookup projRoot locks of
+    Just _ -> return True
+    Nothing -> do
+      let lockPath = joinPath [projRoot, ".acton.compile.lock"]
+      mlock <- tryLockFile lockPath Exclusive
+      case mlock of
+        Nothing -> return False
+        Just lock -> do
+          atomicModifyIORef' compileOwnerLocksRef $ \m -> (HM.insert projRoot (lock, lockPath) m, ())
+          atomicModifyIORef' compileOwnerWarnedRef $ \m -> (HM.delete projRoot m, ())
+          return True
+
+releaseCompileOwnerLocks :: IO ()
+releaseCompileOwnerLocks = do
+  locks <- readIORef compileOwnerLocksRef
+  forM_ (HM.elems locks) $ \(lock, lockPath) -> do
+    unlockFile lock
+    mlock <- tryLockFile lockPath Exclusive
+    case mlock of
+      Nothing -> return ()
+      Just lock2 -> do
+        removeFile lockPath `catch` handleNotExists
+        unlockFile lock2
+  writeIORef compileOwnerLocksRef HM.empty
+  where
+    handleNotExists :: IOException -> IO ()
+    handleNotExists _ = return ()
+
+warnCompileOwnerLocked :: FilePath -> LspM () ()
+warnCompileOwnerLocked projRoot = do
+  first <- liftIO $ atomicModifyIORef' compileOwnerWarnedRef $ \m ->
+    if HM.member projRoot m
+      then (m, False)
+      else (HM.insert projRoot () m, True)
+  when first $
+    sendNotification SMethod_WindowShowMessage
+      (ShowMessageParams MessageType_Warning
+        (T.pack ("Another Acton compiler is already running in " ++ projRoot ++
+                 "; LSP compilation is disabled until it exits.")))
 -- | Run an action only if the compile generation is current.
 whenCurrentGen :: Int -> LspM () () -> LspM () ()
 whenCurrentGen gen action = do
@@ -190,23 +247,28 @@ runCompile gen path = do
       whenCurrentGen gen $
         sendNotification SMethod_WindowShowMessage (ShowMessageParams MessageType_Error (T.pack msg))
     Right plan -> do
-      env <- getLspEnv
-      let hooks = Compile.defaultCompileHooks
-            { Compile.chOnDiagnostics = \t _ diags ->
-                runLspT env $ whenCurrentGen gen $ do
-                  let filePath = Compile.srcFile (Compile.gtPaths t) (Compile.tkMod (Compile.gtKey t))
-                  publishDiagnosticsFor filePath (lspDiagnosticsFrom diags)
-            , Compile.chOnFrontResult = \t _ ->
-                runLspT env $ whenCurrentGen gen $ do
-                  let filePath = Compile.srcFile (Compile.gtPaths t) (Compile.tkMod (Compile.gtKey t))
-                  publishDiagnosticsFor filePath []
-            , Compile.chOnInfo = \_ -> return ()
-            }
-      compileRes <- liftIO $ Compile.runCompilePlan sp gopts plan compileScheduler gen hooks
-      case compileRes of
-        Left err -> whenCurrentGen gen $
-          sendNotification SMethod_WindowShowMessage (ShowMessageParams MessageType_Error (T.pack (Compile.compileFailureMessage err)))
-        Right _ -> return ()
+      let rootProj = Compile.ccRootProj (Compile.cpContext plan)
+      lockOk <- liftIO $ ensureCompileOwnerLock rootProj
+      if not lockOk
+        then whenCurrentGen gen $ warnCompileOwnerLocked rootProj
+        else do
+          env <- getLspEnv
+          let hooks = Compile.defaultCompileHooks
+                { Compile.chOnDiagnostics = \t _ diags ->
+                    runLspT env $ whenCurrentGen gen $ do
+                      let filePath = Compile.srcFile (Compile.gtPaths t) (Compile.tkMod (Compile.gtKey t))
+                      publishDiagnosticsFor filePath (lspDiagnosticsFrom diags)
+                , Compile.chOnFrontResult = \t _ ->
+                    runLspT env $ whenCurrentGen gen $ do
+                      let filePath = Compile.srcFile (Compile.gtPaths t) (Compile.tkMod (Compile.gtKey t))
+                      publishDiagnosticsFor filePath []
+                , Compile.chOnInfo = \_ -> return ()
+                }
+          compileRes <- liftIO $ Compile.runCompilePlan sp gopts plan compileScheduler gen hooks
+          case compileRes of
+            Left err -> whenCurrentGen gen $
+              sendNotification SMethod_WindowShowMessage (ShowMessageParams MessageType_Error (T.pack (Compile.compileFailureMessage err)))
+            Right _ -> return ()
 
 -- | Schedule a compile run with a debounce delay.
 scheduleCompile :: Int -> FilePath -> LspM () ()
@@ -262,19 +324,20 @@ handlers =
 
 -- | Start the Acton LSP server with the configured handlers.
 main :: IO Int
-main = do
-  runServer $
-    ServerDefinition
-      { parseConfig = const $ const $ Right ()
-      , onConfigChange = const $ pure ()
-      , defaultConfig = ()
-      , configSection = "acton"
-      , doInitialize = \env _req -> pure $ Right env
-      , staticHandlers = \_caps -> handlers
-      , interpretHandler = \env -> Iso (runLspT env) liftIO
-      , options = defaultOptions { optTextDocumentSync = Just syncOptions }
-      }
+main =
+  runServer serverDef `finally` releaseCompileOwnerLocks
   where
+    serverDef =
+      ServerDefinition
+        { parseConfig = const $ const $ Right ()
+        , onConfigChange = const $ pure ()
+        , defaultConfig = ()
+        , configSection = "acton"
+        , doInitialize = \env _req -> pure $ Right env
+        , staticHandlers = \_caps -> handlers
+        , interpretHandler = \env -> Iso (runLspT env) liftIO
+        , options = defaultOptions { optTextDocumentSync = Just syncOptions }
+        }
     syncOptions = TextDocumentSyncOptions
       { _openClose = Just True
       , _change = Just TextDocumentSyncKind_Full
