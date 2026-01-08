@@ -17,12 +17,15 @@ description:         Please see the README on Github at <https://github.com/gith
 
 dependencies:
   - array
+  - async
   - base
   - aeson
   - binary
   - bytestring
   - base16-bytestring
+  - clock
   - containers
+  - cryptohash-sha256
   - deepseq
   - diagnose
   - dir-traverse
@@ -35,11 +38,15 @@ dependencies:
   - optparse-applicative
   - parser-combinators
   - pretty
+  - pretty-show
   - prettyprinter
+  - process
   - scientific
   - sydtest
   - sydtest-discover
+  - stm
   - text
+  - time
   - transformers
   - unix
   - utf8-string
@@ -53,6 +60,7 @@ library:
     - Acton.Builtin
     - Acton.CPS
     - Acton.CodeGen
+    - Acton.Compile
     - Acton.CommandLineParser
     - Acton.Deactorizer
     - Acton.Diagnostics
@@ -66,6 +74,7 @@ library:
     - Acton.QuickType
     - Acton.Relabel
     - Acton.Solver
+    - Acton.SourceProvider
     - Acton.Syntax
     - Acton.Types
     - Acton.TypeM

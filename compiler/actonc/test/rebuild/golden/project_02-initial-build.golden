@@ -1,11 +1,10 @@
   Stale a: source changed
-  Compiling a.act with Debug
-   Finished compilation of a in   0.000 s
+   Finished type check of     rebuild/a     0.000 s
   Stale b: source changed
-  Compiling b.act with Debug
-   Finished compilation of b in   0.000 s
+   Finished type check of     rebuild/b     0.000 s
   Stale c: source changed
-  Compiling c.act with Debug
-   Finished compilation of c in   0.000 s
-  Final compilation step
-   Finished final compilation step in   0.000 s
+   Finished type check of     rebuild/c     0.000 s
+   Finished compilation of    rebuild/a     0.000 s
+   Finished compilation of    rebuild/b     0.000 s
+   Finished compilation of    rebuild/c     0.000 s
+   Finished final compilation               0.000 s

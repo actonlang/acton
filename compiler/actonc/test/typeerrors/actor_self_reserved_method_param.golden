@@ -1,5 +1,4 @@
 Building file test/typeerrors/actor_self_reserved_method_param.act using temporary scratch directory
-  Compiling actor_self_reserved_method_param.act with Debug
 [error]: 'self' cannot be used as a parameter name in actors.
      +--> actor_self_reserved_method_param.act@2:28-2:32
      |

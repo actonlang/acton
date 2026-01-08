@@ -8,6 +8,7 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import qualified Data.Text.Encoding as TE
 import           Data.Char (isDigit)
+import           Data.List (partition, sort)
 import           System.Directory
 import           System.Exit
 import           System.FilePath
@@ -39,10 +40,20 @@ goldenDir = projDir </> "golden"
 actoncExe :: FilePath
 actoncExe = ".." </> ".." </> ".." </> ".." </> "dist" </> "bin" </> "actonc"
 
+actoncCmd :: String -> String
+actoncCmd args = actoncExe ++ " " ++ args ++ " --jobs 1"
+
 -- Utils ----------------------------------------------------------------------
 
 sanitize :: T.Text -> LBS.ByteString
-sanitize = LBS.fromStrict . TE.encodeUtf8 . T.unlines . map (padZero . redact) . dropPaths . filter (not . isVolatile) . T.lines
+sanitize = LBS.fromStrict
+        . TE.encodeUtf8
+        . T.unlines
+        . reorderBackLines
+        . map redact
+        . dropPaths
+        . filter (not . isVolatile)
+        . T.lines
   where
     isVolatile :: T.Text -> Bool
     isVolatile t =
@@ -50,39 +61,25 @@ sanitize = LBS.fromStrict . TE.encodeUtf8 . T.unlines . map (padZero . redact) .
       T.isInfixOf "Building project in" t ||
       T.isInfixOf "Building [cap" t
 
-    -- Replace occurrences of durations like "0.184 s" with a stable token "0.000 s".
+    -- Replace trailing durations like "12.345 s" with a stable token "0.000 s",
+    -- preserving the original field width for alignment.
     redact :: T.Text -> T.Text
-    redact = go
-      where
-        go t =
-          case T.breakOn "." t of
-            (pre, rest) | T.null rest -> pre
-            (pre, rest) ->
-              let afterDot = T.drop 1 rest
-                  (digits, rest2) = T.span isDigit afterDot
-                  intDigits = T.takeWhileEnd isDigit pre
-              in if not (T.null intDigits)
-                    && T.length digits == 3
-                    && T.isPrefixOf " s" rest2
-                   then
-                     let leftPre = T.dropEnd (T.length intDigits) pre
-                         restAfter = T.drop 2 rest2 -- drop " s"
-                      in leftPre <> "0.000 s" <> go restAfter
-                   else pre <> "." <> go afterDot
-
-    -- Normalize padding before the canonicalized duration "0.000 s"
-    -- to avoid platform-specific spacing differences. Force exactly
-    -- three spaces before 0.000 s (i.e. "   0.000 s").
-    -- It is super weird that this is even needed, but it seems we get build
-    -- failures on Macos 13 otherwise...
-    padZero :: T.Text -> T.Text
-    padZero t =
-      case T.breakOn "0.000 s" t of
-        (pre, rest) | T.null rest -> t
-        (pre, rest) ->
-          let pre' = T.dropWhileEnd (== ' ') pre
-              rest' = T.drop (T.length "0.000 s") rest
-          in pre' <> "   0.000 s" <> rest'
+    redact t =
+      case T.stripSuffix " s" t of
+        Nothing -> t
+        Just pre ->
+          let field = T.takeWhileEnd (\c -> isDigit c || c == '.') pre
+              pre' = T.dropEnd (T.length field) pre
+          in case T.splitOn "." field of
+               [intPart, frac]
+                 | not (T.null intPart)
+                   && T.length frac == 3
+                   && T.all isDigit intPart
+                   && T.all isDigit frac ->
+                     let base = "0.000"
+                         padding = T.replicate (max 0 (T.length field - T.length base)) " "
+                     in pre' <> padding <> base <> " s"
+               _ -> t
 
     -- Remove the verbose Paths: block (and its per-field lines) to avoid
     -- machine-specific absolute paths in goldens.
@@ -103,6 +100,18 @@ sanitize = LBS.fromStrict . TE.encodeUtf8 . T.unlines . map (padZero . redact) .
                           , "srcDir"
                           , "modName"
                           ]
+
+    reorderBackLines :: [T.Text] -> [T.Text]
+    reorderBackLines ls =
+      let (backLines, otherLines) = partition (T.isPrefixOf backPrefix) ls
+          (pre, post) = break isFinalLine otherLines
+      in pre ++ sort backLines ++ post
+      where
+        backPrefix = "   Finished compilation of"
+        isFinalLine t =
+          T.isPrefixOf "   Finished final compilation" t ||
+          T.isPrefixOf "   Finished final compilation step" t ||
+          T.isPrefixOf "  Skipping final build step" t
 
 writeFileUtf8 :: FilePath -> T.Text -> IO ()
 writeFileUtf8 p t = do
@@ -148,32 +157,36 @@ runIn cwd cmd = do
 -- Run a project build and return full (unsanitized) output as Text
 buildOut :: IO T.Text
 buildOut = do
-  let cmd = actoncExe ++ " build --color never --verbose"
+  let cmd = actoncCmd "build --color never --verbose"
   (_ec,out) <- runIn projDir cmd
   pure out
 
 goldenBuild :: IO LBS.ByteString
 goldenBuild = do
-  let cmd = actoncExe ++ " build --color never --verbose"
+  let cmd = actoncCmd "build --color never --verbose"
   (_ec,out) <- runIn projDir cmd
   pure (sanitize out)
 
 goldenBuildFile :: IO LBS.ByteString
 goldenBuildFile = do
-  let cmd = actoncExe ++ " src/c.act --color never --verbose"
+  let cmd = actoncCmd "src/c.act --color never --verbose"
   (_ec,out) <- runIn projDir cmd
   pure (sanitize out)
 
 -- Run a single-file build and return unsanitized output as Text
 buildOutFile :: IO T.Text
 buildOutFile = do
-  let cmd = actoncExe ++ " src/c.act --color never --verbose"
+  let cmd = actoncCmd "src/c.act --color never --verbose"
   (_ec,out) <- runIn projDir cmd
   pure out
 
+typechecked :: T.Text -> T.Text -> Bool
+typechecked out modName =
+  any (\line -> "Finished type check of" `T.isInfixOf` line && modName `T.isInfixOf` line) (T.lines out)
+
 buildProject :: IO ()
 buildProject = do
-  let cmd = actoncExe ++ " build --color never"
+  let cmd = actoncCmd "build --color never"
   (ec,out) <- runIn projDir cmd
   case ec of
     ExitSuccess -> pure ()
@@ -234,9 +247,9 @@ p06_change_a_impl = goldenVsString "06-change-a-impl.golden" (goldenDir </> "pro
   writeFileUtf8 (srcDir </> "a.act") "aaa = 124\n"
   out <- buildOut
   -- Expect only a.act to compile
-  assertBool "expected a.act to compile" (T.isInfixOf "Compiling a.act" out)
-  assertBool "did not expect b.act to compile" (not (T.isInfixOf "Compiling b.act" out))
-  assertBool "did not expect c.act to compile" (not (T.isInfixOf "Compiling c.act" out))
+  assertBool "expected a.act to compile" (typechecked out "rebuild/a")
+  assertBool "did not expect b.act to compile" (not (typechecked out "rebuild/b"))
+  assertBool "did not expect c.act to compile" (not (typechecked out "rebuild/c"))
   pure (sanitize out)
 
 p07_run_127 :: TestTree
@@ -258,9 +271,9 @@ p08_change_b_impl = goldenVsString "08-change-b-impl.golden" (goldenDir </> "pro
     ]
   out <- buildOut
   -- Expect b.act to compile, but not a.act or c.act in project build
-  assertBool "did not expect a.act to compile" (not (T.isInfixOf "Compiling a.act" out))
-  assertBool "expected b.act to compile" (T.isInfixOf "Compiling b.act" out)
-  assertBool "did not expect c.act to compile" (not (T.isInfixOf "Compiling c.act" out))
+  assertBool "did not expect a.act to compile" (not (typechecked out "rebuild/a"))
+  assertBool "expected b.act to compile" (typechecked out "rebuild/b")
+  assertBool "did not expect c.act to compile" (not (typechecked out "rebuild/c"))
   pure (sanitize out)
 
 p09_run_134 :: TestTree
@@ -283,10 +296,10 @@ p10_change_a_iface =
     out <- buildOut
     -- Should rebuild a.act and b.act; with import-augmented iface hashing, b's
     -- interface hash changes when a's interface changes
-    assertBool "expected a.act to compile" (T.isInfixOf "Compiling a.act" out)
-    assertBool "expected b.act to compile" (T.isInfixOf "Compiling b.act" out)
+    assertBool "expected a.act to compile" (typechecked out "rebuild/a")
+    assertBool "expected b.act to compile" (typechecked out "rebuild/b")
     -- c should rebuild too, since it imports b which has now changed since its import a changed..
-    assertBool "expected c.act to compile" (T.isInfixOf "Compiling c.act" out)
+    assertBool "expected c.act to compile" (typechecked out "rebuild/c")
     pure (sanitize out)
 
 -- Docstring-only change in an imported module should not rebuild dependents
@@ -307,8 +320,8 @@ p11_change_b_doc =
       , "        return 1"
       ]
     out <- buildOut
-    assertBool "expected b.act to compile" (T.isInfixOf "Compiling b.act" out)
-    assertBool "did not expect c.act to compile" (not (T.isInfixOf "Compiling c.act" out))
+    assertBool "expected b.act to compile" (typechecked out "rebuild/b")
+    assertBool "did not expect c.act to compile" (not (typechecked out "rebuild/c"))
     pure (sanitize out)
 
 f01_init :: TestTree
@@ -349,9 +362,9 @@ f06_change_a_impl = goldenVsString "06-change-a-impl.golden" (goldenDir </> "fil
   writeFileUtf8 (srcDir </> "a.act") "aaa = 124\n"
   out <- buildOutFile
   -- Expect only a.act to compile in single-file build
-  assertBool "expected a.act to compile" (T.isInfixOf "Compiling a.act" out)
-  assertBool "did not expect b.act to compile" (not (T.isInfixOf "Compiling b.act" out))
-  assertBool "did not expect c.act to compile" (not (T.isInfixOf "Compiling c.act" out))
+  assertBool "expected a.act to compile" (typechecked out "rebuild/a")
+  assertBool "did not expect b.act to compile" (not (typechecked out "rebuild/b"))
+  assertBool "did not expect c.act to compile" (not (typechecked out "rebuild/c"))
   pure (sanitize out)
 
 f07_run_127 :: TestTree
@@ -373,10 +386,10 @@ f08_change_b_impl = goldenVsString "08-change-b-impl.golden" (goldenDir </> "fil
     ]
   out <- buildOutFile
   -- Expect b.act to compile; c.act may compile if its view of b's iface changes
-  assertBool "did not expect a.act to compile" (not (T.isInfixOf "Compiling a.act" out))
-  assertBool "expected b.act to compile" (T.isInfixOf "Compiling b.act" out)
+  assertBool "did not expect a.act to compile" (not (typechecked out "rebuild/a"))
+  assertBool "expected b.act to compile" (typechecked out "rebuild/b")
   -- In file build, c usually recompiles due to dependency ordering
-  assertBool "expected c.act to compile" (T.isInfixOf "Compiling c.act" out)
+  assertBool "expected c.act to compile" (typechecked out "rebuild/c")
   pure (sanitize out)
 
 f09_run_134 :: TestTree
@@ -395,7 +408,7 @@ f10_alt_output = testCase "10-alt output" $ do
   _ <- buildOutFile
 
   -- Now request alternative output on the same file without modifying sources
-  let cmd = actoncExe ++ " src/c.act --color never --types"
+  let cmd = actoncCmd "src/c.act --color never --types"
   (_ec,out) <- runIn projDir cmd
   -- Expect a types dump header for module c
   assertBool "expected types dump for module c" (T.isInfixOf "== types: c" out)

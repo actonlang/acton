@@ -1,5 +1,4 @@
 Building file test/typeerrors/funargs1.act using temporary scratch directory
-  Compiling funargs1.act with Debug
 [error]: Unexpected keyword argument
      +--> funargs1.act@4:9-4:10
      |
