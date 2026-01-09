@@ -103,7 +103,13 @@ instance WellFormed Type where
 
 
 instance WellFormed QBind where
-    wf env (Quant v us)     = wf env us
+    wf env (Quant v us)
+      | not $ null ideps    = err2 (head ideps) "Interdependent type variable bounds:"
+      | otherwise           = wf env us
+      where (_,ps)          = mro2 env us
+            ideps           = [ [tcname u, root $ head w] | u <- us, (w,p) <- ps, length w > 1, p == u ]
+            root (Left n)   = n
+            root (Right n)  = n
 
 
 
