@@ -162,41 +162,49 @@ isPublicName                        = not . isPrivateName
 
 class Vars a where
     free                            :: a -> [Name]
+    freeQ                           :: a -> [QName]
     bound                           :: a -> [Name]
 
-    free x                          = []
+    free x                          = free $ freeQ x
+    freeQ x                         = []
     bound x                         = []
+
+qns `diffQ` ns                      = filter f qns
+  where f (NoQ n)                   = n `notElem` ns
+        f _                         = True
 
 instance Vars a => Vars [a] where
     free                            = concatMap free
+    freeQ                           = concatMap freeQ
     bound                           = concatMap bound
 
 instance Vars a => Vars (Maybe a) where
     free                            = maybe [] free
+    freeQ                           = maybe [] freeQ
     bound                           = maybe [] bound
 
 instance Vars Stmt where
-    free (Expr _ e)                 = free e
-    free (Assign _ ps e)            = free ps ++ free e
-    free (MutAssign _ t e)          = free t ++ free e
-    free (AugAssign _ t op e)       = free t ++ free e
-    free (Assert _ e mbe)           = free e ++ free mbe
-    free (Pass _)                   = []
-    free (Delete _ t)               = free t
-    free (Return _ e)               = free e
-    free (Raise _ e)                = free e
-    free (Break _)                  = []
-    free (Continue _)               = []
-    free (If _ branches els)        = free branches ++ free els
-    free (While _ e b els)          = free e ++ free b ++ free els
-    free (For _ p e b els)          = free p ++ free e ++ (free b \\ bound p) ++ free els
-    free (Try _ b hs els fin)       = free b ++ free hs ++ free els ++ free fin
-    free (With _ items b)           = free items ++ (free b \\ bound items)
-    free (Data _ p b)               = free p ++ free b
-    free (VarAssign _ ps e)         = free ps ++ free e
-    free (After _ e e')             = free e ++ free e'
-    free (Decl _ ds)                = free ds
-    free (Signature _ ns t d)       = free t
+    freeQ (Expr _ e)                = freeQ e
+    freeQ (Assign _ ps e)           = freeQ ps ++ freeQ e
+    freeQ (MutAssign _ t e)         = freeQ t ++ freeQ e
+    freeQ (AugAssign _ t op e)      = freeQ t ++ freeQ e
+    freeQ (Assert _ e mbe)          = freeQ e ++ freeQ mbe
+    freeQ (Pass _)                  = []
+    freeQ (Delete _ t)              = freeQ t
+    freeQ (Return _ e)              = freeQ e
+    freeQ (Raise _ e)               = freeQ e
+    freeQ (Break _)                 = []
+    freeQ (Continue _)              = []
+    freeQ (If _ branches els)       = freeQ branches ++ freeQ els
+    freeQ (While _ e b els)         = freeQ e ++ freeQ b ++ freeQ els
+    freeQ (For _ p e b els)         = freeQ p ++ freeQ e ++ (freeQ b `diffQ` bound p) ++ freeQ els
+    freeQ (Try _ b hs els fin)      = freeQ b ++ freeQ hs ++ freeQ els ++ freeQ fin
+    freeQ (With _ items b)          = freeQ items ++ (freeQ b `diffQ` bound items)
+    freeQ (Data _ p b)              = freeQ p ++ freeQ b
+    freeQ (VarAssign _ ps e)        = freeQ ps ++ freeQ e
+    freeQ (After _ e e')            = freeQ e ++ freeQ e'
+    freeQ (Decl _ ds)               = freeQ ds
+    freeQ (Signature _ ns t d)      = freeQ t
 
     bound (Assign _ ps _)           = bound ps
     bound (VarAssign _ ps e)        = bound ps
@@ -220,12 +228,12 @@ assigned stmts                      = concatMap assig stmts
 
 
 instance Vars Decl where
-    free (Def _ n q ps ks t b d fx _)
-                                    = (free ps ++ free ks ++ free b ++ free fx) \\ (n : bound q ++ bound ps ++ bound ks ++ assigned b)
-    free (Actor _ n q ps ks b _)    = (free ps ++ free ks ++ free b) \\ (n : self : bound q ++ bound ps ++ bound ks ++ assigned b)
-    free (Class _ n q cs b _)       = (free cs ++ free b) \\ (n : bound q ++ assigned b)
-    free (Protocol _ n q ps b _)    = (free ps ++ free b) \\ (n : bound q ++ assigned b)
-    free (Extension _ q c ps b _)   = (free c ++ free ps ++ free b) \\ (bound q ++ assigned b)
+    freeQ (Def _ n q ps ks t b d fx _)
+                                    = (freeQ ps ++ freeQ ks ++ freeQ b ++ freeQ fx) `diffQ` (n : bound q ++ bound ps ++ bound ks ++ assigned b)
+    freeQ (Actor _ n q ps ks b _)   = (freeQ ps ++ freeQ ks ++ freeQ b) `diffQ` (n : self : bound q ++ bound ps ++ bound ks ++ assigned b)
+    freeQ (Class _ n q cs b _)      = (freeQ cs ++ freeQ b) `diffQ` (n : bound q ++ assigned b)
+    freeQ (Protocol _ n q ps b _)   = (freeQ ps ++ freeQ b) `diffQ` (n : bound q ++ assigned b)
+    freeQ (Extension _ q c ps b _)  = (freeQ c ++ freeQ ps ++ freeQ b) `diffQ` (bound q ++ assigned b)
 
     bound (Def _ n _ _ _ _ _ _ _ _) = [n]
     bound (Actor _ n _ _ _ _ _)     = [n]
@@ -234,52 +242,52 @@ instance Vars Decl where
     bound (Extension _ _ _ _ _ _)   = []
 
 instance Vars Branch where
-    free (Branch e ss)              = free e ++ free ss
+    freeQ (Branch e ss)             = freeQ e ++ freeQ ss
     bound (Branch e ss)             = bound ss
 
 instance Vars Handler where
-    free (Handler ex ss)            = free ex ++ (free ss \\ bound ex)
+    freeQ (Handler ex ss)           = freeQ ex ++ (freeQ ss `diffQ` bound ex)
     bound (Handler ex ss)           = bound ss ++ bound ex
 
 instance Vars Expr where
-    free (Var _ n)                  = free n
-    free (Int _ _ str)              = []
-    free (Float _ _ str)            = []
-    free (Imaginary _ _ str)        = []
-    free (Bool _ v)                 = []
-    free (None _)                   = []
-    free (NotImplemented _)         = []
-    free (Ellipsis _)               = []
-    free (Strings _ ss)             = []
-    free (BStrings _ ss)            = []
-    free (Call _ e ps ks)           = free e ++ free ps ++ free ks
-    free (TApp _ e ts)              = free e ++ free ts
-    free (Async _ e)                = free e
-    free (Await _ e)                = free e
-    free (Index _ e ix)             = free e ++ free ix
-    free (Slice _ e sl)             = free e ++ free sl
-    free (Cond _ e1 e e2)           = free [e1,e,e2]
-    free (IsInstance _ e c)         = free e ++ free c
-    free (BinOp _ e1 o e2)          = free [e1,e2]
-    free (CompOp _ e ops)           = free e ++ free ops
-    free (UnOp _ o e)               = free e
-    free (Dot _ e n)                = free e
-    free (Rest _ e n)               = free e
-    free (DotI _ e i)               = free e
-    free (RestI _ e i)              = free e
-    free (Lambda _ ps ks e fx)      = free ps ++ free ks ++ (free e \\ (bound ps ++ bound ks))
-    free (Yield _ e)                = free e
-    free (YieldFrom _ e)            = free e
-    free (Tuple _ ps ks)            = free ps ++ free ks
-    free (List _ es)                = free es
-    free (ListComp _ e co)          = (free e \\ bound co) ++ free co
-    free (Dict _ es)                = free es
-    free (DictComp _ e co)          = (free e \\ bound co) ++ free co
-    free (Set _ es)                 = free es
-    free (SetComp _ e co)           = (free e \\ bound co) ++ free co
-    free (Paren _ e)                = free e
-    free (UnBox t e)                = free e
-    free (Box t e)                  = free e
+    freeQ (Var _ n)                 = [n]
+    freeQ (Int _ _ str)             = []
+    freeQ (Float _ _ str)           = []
+    freeQ (Imaginary _ _ str)       = []
+    freeQ (Bool _ v)                = []
+    freeQ (None _)                  = []
+    freeQ (NotImplemented _)        = []
+    freeQ (Ellipsis _)              = []
+    freeQ (Strings _ ss)            = []
+    freeQ (BStrings _ ss)           = []
+    freeQ (Call _ e ps ks)          = freeQ e ++ freeQ ps ++ freeQ ks
+    freeQ (TApp _ e ts)             = freeQ e ++ freeQ ts
+    freeQ (Async _ e)               = freeQ e
+    freeQ (Await _ e)               = freeQ e
+    freeQ (Index _ e ix)            = freeQ e ++ freeQ ix
+    freeQ (Slice _ e sl)            = freeQ e ++ freeQ sl
+    freeQ (Cond _ e1 e e2)          = freeQ [e1,e,e2]
+    freeQ (IsInstance _ e c)        = freeQ e ++ freeQ c
+    freeQ (BinOp _ e1 o e2)         = freeQ [e1,e2]
+    freeQ (CompOp _ e ops)          = freeQ e ++ freeQ ops
+    freeQ (UnOp _ o e)              = freeQ e
+    freeQ (Dot _ e n)               = freeQ e
+    freeQ (Rest _ e n)              = freeQ e
+    freeQ (DotI _ e i)              = freeQ e
+    freeQ (RestI _ e i)             = freeQ e
+    freeQ (Lambda _ ps ks e fx)     = freeQ ps ++ freeQ ks ++ (freeQ e `diffQ` (bound ps ++ bound ks))
+    freeQ (Yield _ e)               = freeQ e
+    freeQ (YieldFrom _ e)           = freeQ e
+    freeQ (Tuple _ ps ks)           = freeQ ps ++ freeQ ks
+    freeQ (List _ es)               = freeQ es
+    freeQ (ListComp _ e co)         = (freeQ e `diffQ` bound co) ++ freeQ co
+    freeQ (Dict _ es)               = freeQ es
+    freeQ (DictComp _ e co)         = (freeQ e `diffQ` bound co) ++ freeQ co
+    freeQ (Set _ es)                = freeQ es
+    freeQ (SetComp _ e co)          = (freeQ e `diffQ` bound co) ++ freeQ co
+    freeQ (Paren _ e)               = freeQ e
+    freeQ (UnBox t e)               = freeQ e
+    freeQ (Box t e)                 = freeQ e
 
 instance Vars Name where
     free n                          = [n]
@@ -291,105 +299,107 @@ instance Vars QName where
     free (QName m n)                = free m
     free (NoQ n)                    = free n
     free (GName m n)                = free m
+    
+    freeQ n                         = [n]
 
 instance Vars Except where
-    free (ExceptAll _)              = []
-    free (Except _ x)               = free x
-    free (ExceptAs _ x n)           = free x
+    freeQ (ExceptAll _)             = []
+    freeQ (Except _ x)              = freeQ x
+    freeQ (ExceptAs _ x n)          = freeQ x
 
     bound (ExceptAll _)             = []
     bound (Except _ x)              = []
     bound (ExceptAs _ x n)          = [n]
 
 instance Vars PosPar where
-    free (PosPar n t e p)           = free t ++ free e ++ free p
-    free (PosSTAR n t)              = free t
-    free PosNIL                     = []
+    freeQ (PosPar n t e p)          = freeQ t ++ freeQ e ++ freeQ p
+    freeQ (PosSTAR n t)             = freeQ t
+    freeQ PosNIL                    = []
 
     bound (PosPar n t e p)          = n : bound p
     bound (PosSTAR n t)             = [n]
     bound PosNIL                    = []
 
 instance Vars KwdPar where
-    free (KwdPar n t e k)           = free t ++ free e ++ free k
-    free (KwdSTAR n t)              = free t
-    free KwdNIL                     = []
+    freeQ (KwdPar n t e k)          = freeQ t ++ freeQ e ++ freeQ k
+    freeQ (KwdSTAR n t)             = freeQ t
+    freeQ KwdNIL                    = []
 
     bound (KwdPar n t e k)          = n : bound k
     bound (KwdSTAR n t)             = [n]
     bound KwdNIL                    = []
 
 instance Vars (PosPar,KwdPar) where
-    free (ppar,kpar)                = free ppar ++ free kpar
+    freeQ (ppar,kpar)               = freeQ ppar ++ freeQ kpar
 
     bound (ppar,kpar)               = bound ppar ++ bound kpar
 
 instance Vars Elem where
-    free (Elem e)                   = free e
-    free (Star e)                   = free e
+    freeQ (Elem e)                  = freeQ e
+    freeQ (Star e)                  = freeQ e
 
     bound (Elem p)                  = bound p
     bound (Star p)                  = bound p
 
 instance Vars Assoc where
-    free (Assoc k v)                = free k ++ free v
-    free (StarStar e)               = free e
+    freeQ (Assoc k v)               = freeQ k ++ freeQ v
+    freeQ (StarStar e)              = freeQ e
 
 instance Vars WithItem where
-    free (WithItem e p)             = free e ++ free p
+    freeQ (WithItem e p)            = freeQ e ++ freeQ p
 
     bound (WithItem e p)            = bound p
 
 instance Vars PosArg where
-    free (PosArg e p)               = free e ++ free p
-    free (PosStar e)                = free e
-    free PosNil                     = []
+    freeQ (PosArg e p)              = freeQ e ++ freeQ p
+    freeQ (PosStar e)               = freeQ e
+    freeQ PosNil                    = []
 
 instance Vars KwdArg where
-    free (KwdArg n e k)             = free e ++ free k
-    free (KwdStar e)                = free e
-    free KwdNil                     = []
+    freeQ (KwdArg n e k)            = freeQ e ++ freeQ k
+    freeQ (KwdStar e)               = freeQ e
+    freeQ KwdNil                    = []
 
 instance Vars OpArg where
-    free (OpArg o e)                = free e
+    freeQ (OpArg o e)               = freeQ e
 
 instance Vars Sliz where
-    free (Sliz _ e1 e2 e3)          = free e1 ++ free e2 ++ free e3
+    freeQ (Sliz _ e1 e2 e3)         = freeQ e1 ++ freeQ e2 ++ freeQ e3
 
 instance Vars Comp where
-    free (CompFor _ pat e c)        = (free e ++ free c) \\ bound pat
-    free (CompIf _ e c)             = free e ++ free c
-    free NoComp                     = []
+    freeQ (CompFor _ pat e c)       = (freeQ e ++ freeQ c) `diffQ` bound pat
+    freeQ (CompIf _ e c)            = freeQ e ++ freeQ c
+    freeQ NoComp                    = []
 
     bound (CompFor _ pat e c)       = bound pat ++ bound c
     bound (CompIf _ e c)            = bound c
     bound NoComp                    = []
 
 instance Vars PosPat where
-    free (PosPat p ps)              = free p ++ free ps
-    free (PosPatStar p)             = free p
-    free PosPatNil                  = []
+    freeQ (PosPat p ps)             = freeQ p ++ freeQ ps
+    freeQ (PosPatStar p)            = freeQ p
+    freeQ PosPatNil                 = []
 
     bound (PosPat p ps)             = bound p ++ bound ps
     bound (PosPatStar p)            = bound p
     bound PosPatNil                 = []
 
 instance Vars KwdPat where
-    free (KwdPat n p ps)            = free p ++ free ps
-    free (KwdPatStar p)             = free p
-    free KwdPatNil                  = []
+    freeQ (KwdPat n p ps)           = freeQ p ++ freeQ ps
+    freeQ (KwdPatStar p)            = freeQ p
+    freeQ KwdPatNil                 = []
 
     bound (KwdPat n p ps)           = bound p ++ bound ps
     bound (KwdPatStar p)            = bound p
     bound KwdPatNil                 = []
 
 instance Vars Pattern where
-    free (PWild _ _)                = []
-    free (PVar _ n a)               = []
-    free (PTuple _ ps ks)           = free ps ++ free ks
-    free (PList _ ps p)             = free ps ++ free p
-    free (PParen _ p)               = free p
-    free (PData _ n ixs)            = free ixs
+    freeQ (PWild _ _)               = []
+    freeQ (PVar _ n a)              = []
+    freeQ (PTuple _ ps ks)          = freeQ ps ++ freeQ ks
+    freeQ (PList _ ps p)            = freeQ ps ++ freeQ p
+    freeQ (PParen _ p)              = freeQ p
+    freeQ (PData _ n ixs)           = freeQ ixs
 
     bound (PWild _ _)               = []
     bound (PVar _ n _)              = [n]
@@ -413,37 +423,37 @@ instance Vars ModRef where
     bound _                         = []
 
 instance Vars TSchema where
-    free (TSchema _ q t)            = free q ++ free t
+    freeQ (TSchema _ q t)           = freeQ q ++ freeQ t
 
 instance Vars TVar where
-    free (TV k v)                   = []
+    freeQ (TV k v)                  = []
 
 instance Vars TUni where
-    free (UV k v)                   = []
+    freeQ (UV k v)                  = []
 
 instance Vars TCon where
-    free (TC n ts)                  = free n ++ free ts
+    freeQ (TC n ts)                 = freeQ n ++ freeQ ts
 
 instance Vars QBind where
-    free (Quant v cs)               = free cs
+    freeQ (Quant v cs)              = freeQ cs
 
 instance Vars Type where
-    free (TVar _ v)                 = free v
-    free (TUni _ u)                 = free u
-    free (TFun _ es p k t)          = free es ++ free p ++ free k ++ free t
-    free (TTuple _ p k)             = free p ++ free k
-    free (TOpt _ t)                 = free t
-    free (TCon  _ c)                = free c
-    free (TRow _ _ _ t r)           = free t ++ free r
-    free (TStar _ _ r)              = free r
-    free _                          = []
+    freeQ (TVar _ v)                = freeQ v
+    freeQ (TUni _ u)                = freeQ u
+    freeQ (TFun _ es p k t)         = freeQ es ++ freeQ p ++ freeQ k ++ freeQ t
+    freeQ (TTuple _ p k)            = freeQ p ++ freeQ k
+    freeQ (TOpt _ t)                = freeQ t
+    freeQ (TCon  _ c)               = freeQ c
+    freeQ (TRow _ _ _ t r)          = freeQ t ++ freeQ r
+    freeQ (TStar _ _ r)             = freeQ r
+    freeQ _                         = []
 
 
 instance Vars Constraint where
-    free (Cast _ q t1 t2)           = free q ++ free t1 ++ free t2
-    free (Sub _ w q t1 t2)          = free q ++ free t1 ++ free t2
-    free (Proto _ w q t p)          = free q ++ free t ++ free p
-    free (Sel _ w q t1 n t2)        = free q ++ free t1 ++ free t2
-    free (Mut _ q t1 n t2)          = free q ++ free t1 ++ free t2
-    free (Seal _ q t)               = free q ++ free t
-    free (Imply _ w q cs)           = free q ++ free cs
+    freeQ (Cast _ q t1 t2)          = freeQ q ++ freeQ t1 ++ freeQ t2
+    freeQ (Sub _ w q t1 t2)         = freeQ q ++ freeQ t1 ++ freeQ t2
+    freeQ (Proto _ w q t p)         = freeQ q ++ freeQ t ++ freeQ p
+    freeQ (Sel _ w q t1 n t2)       = freeQ q ++ freeQ t1 ++ freeQ t2
+    freeQ (Mut _ q t1 n t2)         = freeQ q ++ freeQ t1 ++ freeQ t2
+    freeQ (Seal _ q t)              = freeQ q ++ freeQ t
+    freeQ (Imply _ w q cs)          = freeQ q ++ freeQ cs
