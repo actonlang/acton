@@ -355,9 +355,9 @@ instance Unalias ModName where
                                         Nothing | m `elem` imports env  -> m
                                         _ -> noModule m
 instance Unalias QName where
-    unalias env (QName m n)         = case findHMod m env of
+    unalias env n0@(QName m n)      = case findHMod m env of
                                         Just te -> case M.lookup n te of
-                                                      Just (HNAlias qn) -> qn
+                                                      Just (HNAlias qn) -> setLoc (loc n0) qn
                                                       Just _ -> GName m' n
                                                       _ -> noItem m n
                                         Nothing -> error ("#### unalias fails for " ++ prstr (QName m n))
@@ -365,11 +365,21 @@ instance Unalias QName where
     unalias env (NoQ n)
       | inBuiltin env               = GName mBuiltin n
       | otherwise                   = case lookup n (names env) of
-                                        Just (NAlias qn) -> qn
+                                        Just (NAlias qn) -> setLoc (loc n) qn
                                         _ -> case thismod env of Just m -> GName m n; _ -> NoQ n
     unalias env (GName m n)
 --      | inBuiltin env, m==mBuiltin  = NoQ n
       | otherwise                   = GName m n
+
+setLoc l (QName m n)                = QName (setModLoc l m) (setNameLoc l n)
+setLoc l (GName m n)                = GName (setModLoc l m) (setNameLoc l n)
+setLoc l (NoQ n)                    = NoQ (setNameLoc l n)
+
+setNameLoc l (Name _ s)             = Name l s
+setNameLoc _ n                      = n
+
+setModLoc l (ModName ns)            = ModName (map (setNameLoc l) ns)
+
 
 instance Unalias TSchema where
     unalias env (TSchema l q t)     = TSchema l (unalias env q) (unalias env t)
