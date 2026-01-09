@@ -40,9 +40,11 @@ BUILD_TIME=$(shell date "+%Y%m%d.%-H.%-M.%-S")
 ifdef BUILD_RELEASE
 export VERSION_INFO?=$(VERSION)
 export DEB_DIST=stable
+export CONTAINER_TAG?=$(VERSION)
 else
 export VERSION_INFO?=$(VERSION).$(BUILD_TIME)
 export DEB_DIST=tip
+export CONTAINER_TAG?=tip
 endif
 
 ifdef CPEDANTIC
@@ -488,3 +490,18 @@ debian/changelog: debian/changelog.in CHANGELOG.md
 .PHONY: debs
 debs: debian/changelog
 	debuild --preserve-envvar VERSION_INFO -i -us -uc -nc -b
+
+.PHONY: container-image image image-deb push-image
+container-image: all
+	podman build -f Containerfile -t acton:$(CONTAINER_TAG) --volume $(TD):/src:ro .
+
+image: container-image
+
+# Build container from locally built .deb (useful to mirror CI build path)
+image-deb: debs
+	podman build -f Containerfile.deb -t acton:$(CONTAINER_TAG) --build-arg TARGETARCH=$(ARCH) --volume $(TD):/src:ro .
+
+push-image:
+	@echo "Pushing container image to GitHub Container Registry"
+	podman tag acton:$(CONTAINER_TAG) ghcr.io/actonlang/acton:$(CONTAINER_TAG)
+	podman push ghcr.io/actonlang/acton:$(CONTAINER_TAG)
