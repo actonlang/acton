@@ -449,7 +449,7 @@ class Parser(object):
             start = 0
             end = len(arg)
             if arg == '--':
-                rest = argv[p+1:]
+                rest.extend(argv[p+1:])
                 break
             elif arg.startswith('--'):
                 start = 2
