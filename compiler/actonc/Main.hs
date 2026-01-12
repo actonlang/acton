@@ -1475,18 +1475,19 @@ compileFilesChanged sp gopts opts srcFiles allowPrune mChangedPaths mSched mProg
                     watchMode = C.watch opts'
                 cliHooks <- initCliCompileHooks progressUI progressState gopts sched gen plan
                 let clearProgress = whenCurrentGen sched gen (cchClearProgress cliHooks)
-                    reportCompileError msg = do
+                    finalizeCompile onError = do
                       clearProgress
                       cleanup gopts opts' pathsRoot
-                      if watchMode
-                        then logLine msg
-                        else printErrorAndExit msg
+                      onError
                       return True
-                    reportCompileErrors = do
-                      clearProgress
-                      cleanup gopts opts' pathsRoot
-                      unless watchMode System.Exit.exitFailure
-                      return True
+                    reportCompileError msg =
+                      finalizeCompile $
+                        if watchMode
+                          then logLine msg
+                          else printErrorAndExit msg
+                    reportCompileErrors =
+                      finalizeCompile $
+                        unless watchMode System.Exit.exitFailure
                 compileRes <- runCompilePlan sp gopts plan sched gen (cchHooks cliHooks)
                 case compileRes of
                   Left err ->
