@@ -440,7 +440,6 @@ logProjectBuild gopts progressUI progressState projDir =
     iff (not(C.quiet gopts)) $ do
       progressReset progressUI progressState
       progressLogLine progressUI ("Building project in " ++ projDir)
-
 -- | Run a single project build under lock and generate docs.
 buildProjectOnce :: C.GlobalOptions -> C.CompileOptions -> IO ()
 buildProjectOnce gopts opts = do
@@ -1067,17 +1066,15 @@ buildFileOnce gopts opts file = do
       Nothing -> do
         -- Not in a project, use scratch directory for compilation unless
         -- --tempdir is provided - then use that
-        if (C.tempdir opts /= "")
-          then do
-            iff (not(C.quiet gopts)) $ do
-              putStrLn("Building file " ++ file ++ " using temporary directory " ++ C.tempdir opts)
-            compileFiles sp gopts opts [file] False
-          else do
-            withScratchDirLock $ \scratchDir -> do
-              iff (not(C.quiet gopts)) $ do
-                let scratch_dir = if (C.verbose gopts) then " " ++ scratchDir else ""
+        withTempDirOpts opts $ \opts' usedScratch -> do
+          iff (not(C.quiet gopts)) $ do
+            if usedScratch
+              then do
+                let scratch_dir = if (C.verbose gopts) then " " ++ C.tempdir opts' else ""
                 putStrLn("Building file " ++ file ++ " using temporary scratch directory" ++ scratch_dir)
-              compileFiles sp gopts (opts { C.tempdir = scratchDir }) [file] False
+              else
+                putStrLn("Building file " ++ file ++ " using temporary directory " ++ C.tempdir opts')
+          compileFiles sp gopts opts' [file] False
 
 -- | Watch a single file and rebuild on changes.
 watchFile :: C.GlobalOptions -> C.CompileOptions -> FilePath -> IO ()
@@ -1097,10 +1094,8 @@ watchFile gopts opts file = do
                     whenCurrentGen sched gen $
                       void $ compileFilesChanged sp gopts opts' [absFile] False mChanged (Just (sched, gen)) (Just (progressUI, progressState))
               in runWatchFile gopts absFile sched runOnce
-        if (C.tempdir opts /= "")
-          then runWatch opts
-          else withScratchDirLock $ \scratchDir ->
-                 runWatch opts { C.tempdir = scratchDir }
+        withTempDirOpts opts $ \opts' _ ->
+          runWatch opts'
 
 data WatchTrigger = WatchFull | WatchIncremental FilePath deriving (Eq, Show)
 
