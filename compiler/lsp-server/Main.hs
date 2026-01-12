@@ -170,6 +170,13 @@ whenCurrentGen gen action = do
   current <- liftIO $ readIORef (Compile.csGenRef compileScheduler)
   when (current == gen) action
 
+-- | Notify the client of a compile error for the current generation.
+notifyCompileError :: Int -> String -> LspM () ()
+notifyCompileError gen msg =
+  whenCurrentGen gen $
+    sendNotification SMethod_WindowShowMessage
+      (ShowMessageParams MessageType_Error (T.pack msg))
+
 -- | Convert Acton positions to LSP ranges with zero-based offsets.
 reportRange :: Position -> Range
 reportRange (Position (bl, bc) (el, ec) _) =
@@ -226,36 +233,43 @@ runCompile gen path = do
   let gopts = lspGlobalOpts
       opts = lspCompileOpts
       sp = overlaySourceProvider overlaysRef
-  res <- liftIO $ (try $ do
+  planE <- liftIO $ (try $ do
     Compile.prepareCompilePlan sp gopts compileScheduler opts [path] False (Just [path])
     ) :: LspM () (Either Compile.ProjectError Compile.CompilePlan)
-  case res of
-    Left (Compile.ProjectError msg) ->
-      whenCurrentGen gen $
-        sendNotification SMethod_WindowShowMessage (ShowMessageParams MessageType_Error (T.pack msg))
+  case planE of
+    Left (Compile.ProjectError msg) -> notifyCompileError gen msg
     Right plan -> do
       let rootProj = Compile.ccRootProj (Compile.cpContext plan)
-      lockOk <- liftIO $ ensureCompileOwnerLock rootProj
-      if not lockOk
-        then whenCurrentGen gen $ warnCompileOwnerLocked rootProj
-        else do
-          env <- getLspEnv
-          let hooks = Compile.defaultCompileHooks
-                { Compile.chOnDiagnostics = \t _ diags ->
-                    runLspT env $ whenCurrentGen gen $ do
-                      let filePath = Compile.srcFile (Compile.gtPaths t) (Compile.tkMod (Compile.gtKey t))
-                      publishDiagnosticsFor filePath (lspDiagnosticsFrom diags)
-                , Compile.chOnFrontResult = \t _ ->
-                    runLspT env $ whenCurrentGen gen $ do
-                      let filePath = Compile.srcFile (Compile.gtPaths t) (Compile.tkMod (Compile.gtKey t))
-                      publishDiagnosticsFor filePath []
-                , Compile.chOnInfo = \_ -> return ()
-                }
-          compileRes <- liftIO $ Compile.runCompilePlan sp gopts plan compileScheduler gen hooks
-          case compileRes of
-            Left err -> whenCurrentGen gen $
-              sendNotification SMethod_WindowShowMessage (ShowMessageParams MessageType_Error (T.pack (Compile.compileFailureMessage err)))
-            Right _ -> return ()
+      withCompileOwnerLock gen rootProj $
+        runCompilePlanWithHooks gen sp gopts plan
+
+-- | Run a compile plan after verifying we own the project lock.
+runCompilePlanWithHooks :: Int -> Source.SourceProvider -> C.GlobalOptions -> Compile.CompilePlan -> LspM () ()
+runCompilePlanWithHooks gen sp gopts plan = do
+  env <- getLspEnv
+  let hooks = Compile.defaultCompileHooks
+        { Compile.chOnDiagnostics = \t _ diags ->
+            runLspT env $ whenCurrentGen gen $ do
+              let filePath = Compile.srcFile (Compile.gtPaths t) (Compile.tkMod (Compile.gtKey t))
+              publishDiagnosticsFor filePath (lspDiagnosticsFrom diags)
+        , Compile.chOnFrontResult = \t _ ->
+            runLspT env $ whenCurrentGen gen $ do
+              let filePath = Compile.srcFile (Compile.gtPaths t) (Compile.tkMod (Compile.gtKey t))
+              publishDiagnosticsFor filePath []
+        , Compile.chOnInfo = \_ -> return ()
+        }
+  compileRes <- liftIO $ Compile.runCompilePlan sp gopts plan compileScheduler gen hooks
+  case compileRes of
+    Left err -> notifyCompileError gen (Compile.compileFailureMessage err)
+    Right _ -> return ()
+
+-- | Execute an action only when the compile-owner lock is available.
+withCompileOwnerLock :: Int -> FilePath -> LspM () () -> LspM () ()
+withCompileOwnerLock gen rootProj action = do
+  lockOk <- liftIO $ ensureCompileOwnerLock rootProj
+  if lockOk
+    then action
+    else whenCurrentGen gen $ warnCompileOwnerLocked rootProj
 
 -- | Schedule a compile run with a debounce delay.
 scheduleCompile :: Int -> FilePath -> LspM () ()
