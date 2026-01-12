@@ -1921,39 +1921,41 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
                 Just implHash | canCheckCodegen -> Just <$> codegenStatus paths mn implHash
                 _ -> return Nothing
               let needByCodegen = maybe False (not . codegenUpToDate) mCodegenStatus
-              let runFront = do
-                    prevNameHashes <- if C.verbose gopts
-                      then case gtTask t of
-                        TyTask{ tyNameHashes = nhs } -> return (Just (nameHashMapFromList nhs))
-                        _ -> getNameHashMapCached paths mn
-                      else return Nothing
-                    when (C.verbose gopts) $ do
-                      if needBySource
-                        then ccOnInfo callbacks ("  Stale " ++ modNameToString mn ++ ": source changed")
-                        else when needByPub $ do
-                          let fmtDelta (qn, old, new) = prstr qn ++ " " ++ short8 old ++ " → " ++ short8 new ++ fmtUsers pubUsers qn
-                          ccOnInfo callbacks ("  Stale " ++ modNameToString mn ++ ": pub changes in " ++ Data.List.intercalate ", " (map fmtDelta pubDeltas))
-                    t' <- case gtTask t of
-                            ActonTask{} -> return (gtTask t)
-                            TyTask{}    -> do
-                              parsedRes <- parseActFile sp mn actFile
-                              case parsedRes of
-                                Left diags -> return (ParseErrorTask mn diags)
-                                Right (snap, m) -> return $ ActonTask mn (Source.ssText snap) (Source.ssBytes snap) m
-                    case t' of
-                      ParseErrorTask{ parseDiagnostics = diags } -> return (key, Left diags)
-                      ActonTask{ src = srcContent, srcBytes = srcBytes, atree = m } -> do
-                        res <- runFrontPasses gopts optsT paths envSnap m srcContent srcBytes resolveImportHash resolveNameHashMap'
-                        case res of
-                          Left diags -> return (key, Left diags)
-                          Right fr -> do
-                            when (C.verbose gopts) $
-                              forM_ prevNameHashes $ \prevMap ->
-                                forM_ (nameHashSummary prevMap (frNameHashes fr)) $ \summary ->
-                                  ccOnInfo callbacks ("  Hash deltas " ++ modNameToString mn ++ ": " ++ summary)
-                            cacheFrontResult fr
-                      _ -> error ("Internal error: unexpected task " ++ show t')
-                  runImplRefresh = do
+              if needFront
+                then do
+                  prevNameHashes <- if C.verbose gopts
+                    then case gtTask t of
+                      TyTask{ tyNameHashes = nhs } -> return (Just (nameHashMapFromList nhs))
+                      _ -> getNameHashMapCached paths mn
+                    else return Nothing
+                  when (C.verbose gopts) $ do
+                    if needBySource
+                      then ccOnInfo callbacks ("  Stale " ++ modNameToString mn ++ ": source changed")
+                      else when needByPub $ do
+                        let fmtDelta (qn, old, new) = prstr qn ++ " " ++ short8 old ++ " → " ++ short8 new ++ fmtUsers pubUsers qn
+                        ccOnInfo callbacks ("  Stale " ++ modNameToString mn ++ ": pub changes in " ++ Data.List.intercalate ", " (map fmtDelta pubDeltas))
+                  t' <- case gtTask t of
+                          ActonTask{} -> return (gtTask t)
+                          TyTask{}    -> do
+                            parsedRes <- parseActFile sp mn actFile
+                            case parsedRes of
+                              Left diags -> return (ParseErrorTask mn diags)
+                              Right (snap, m) -> return $ ActonTask mn (Source.ssText snap) (Source.ssBytes snap) m
+                  case t' of
+                    ParseErrorTask{ parseDiagnostics = diags } -> return (key, Left diags)
+                    ActonTask{ src = srcContent, srcBytes = srcBytes, atree = m } -> do
+                      res <- runFrontPasses gopts optsT paths envSnap m srcContent srcBytes resolveImportHash resolveNameHashMap'
+                      case res of
+                        Left diags -> return (key, Left diags)
+                        Right fr -> do
+                          when (C.verbose gopts) $
+                            forM_ prevNameHashes $ \prevMap ->
+                              forM_ (nameHashSummary prevMap (frNameHashes fr)) $ \summary ->
+                                ccOnInfo callbacks ("  Hash deltas " ++ modNameToString mn ++ ": " ++ summary)
+                          cacheFrontResult fr
+                    _ -> error ("Internal error: unexpected task " ++ show t')
+                else if needByImpl
+                  then do
                     when (C.verbose gopts) $ do
                       let fmtDelta (qn, old, new) = prstr qn ++ " " ++ short8 old ++ " → " ++ short8 new ++ fmtUsers implUsers qn
                       ccOnInfo callbacks ("  Stale " ++ modNameToString mn ++ ": impl changes in " ++ Data.List.intercalate ", " (map fmtDelta implDeltas))
@@ -1993,7 +1995,8 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
                                     backJob = Just (mkBackJob env1 tmod (Source.ssText snap) moduleImplHash)
                                     fr = mkFrontResult ifaceTE mdoc modulePubHash updatedNameHashes backJob
                                 cacheFrontResult fr
-                  runCodegenRefresh = do
+                else if needByCodegen
+                  then do
                     when (C.verbose gopts) $ do
                       let suffix = maybe "" formatCodegenDelta mCodegenStatus
                       ccOnInfo callbacks ("  Stale " ++ modNameToString mn ++ ": generated code out of date" ++ suffix)
@@ -2007,25 +2010,20 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
                             backJob = Just (mkBackJob env1 tmod (Source.ssText snap) moduleImplHashStored)
                             fr = mkFrontResult ifaceTE mdoc modulePubHash nameHashes backJob
                         cacheFrontResult fr
-                  runReuse = do
-                    when (C.verbose gopts) $
-                      ccOnInfo callbacks ("  Fresh " ++ modNameToString mn ++ ": using cached .ty")
-                    ifaceRes <- case gtTask t of
-                                  TyTask{ tyPubHash = h } -> readIfaceFromTy paths mn "" (Just h)
-                                  _ -> readIfaceFromTy paths mn "" Nothing
-                    case ifaceRes of
-                      Left diags -> return (key, Left diags)
-                      Right (ifaceTE, mdoc, ih) -> do
-                        let cachedNameHashes = case gtTask t of
-                              TyTask{ tyNameHashes = nhs } -> nhs
-                              _ -> []
-                            fr = mkFrontResult ifaceTE mdoc ih cachedNameHashes Nothing
-                        cacheFrontResult fr
-              case () of
-                _ | needFront -> runFront
-                _ | needByImpl -> runImplRefresh
-                _ | needByCodegen -> runCodegenRefresh
-                _ -> runReuse
+                else do
+                  when (C.verbose gopts) $
+                    ccOnInfo callbacks ("  Fresh " ++ modNameToString mn ++ ": using cached .ty")
+                  ifaceRes <- case gtTask t of
+                                TyTask{ tyPubHash = h } -> readIfaceFromTy paths mn "" (Just h)
+                                _ -> readIfaceFromTy paths mn "" Nothing
+                  case ifaceRes of
+                    Left diags -> return (key, Left diags)
+                    Right (ifaceTE, mdoc, ih) -> do
+                      let cachedNameHashes = case gtTask t of
+                            TyTask{ tyNameHashes = nhs } -> nhs
+                            _ -> []
+                          fr = mkFrontResult ifaceTE mdoc ih cachedNameHashes Nothing
+                      cacheFrontResult fr
 
     scheduleMore :: Int -> [TaskKey]
                  -> [(Async (TaskKey, Either [Diagnostic String] FrontResult), TaskKey)]
