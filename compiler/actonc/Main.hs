@@ -100,7 +100,6 @@ import Text.Printf
 
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy as BL
-import qualified Data.ByteString.Base16 as Base16
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Types as AesonTypes
 import qualified Data.Aeson.Key as AesonKey
@@ -537,11 +536,12 @@ runProjectTests gopts opts paths topts mode modules maxParallel = do
             runContext = mkRunContext opts topts mode
             ctxHash = contextHashBytes runContext
         cache <- readTestCache (testCachePath paths) runContext
-        testHashInfos <- buildTestHashInfos ctxHash testsByModule allTests
+        testHashInfos <- buildTestHashInfos paths ctxHash testsByModule
         let cacheEntries = tcTests cache
         when (C.verbose gopts) $
           putStrLn (formatTestCacheContext ctxHash (testCachePath paths))
-        (cachedResults, testsToRun) <- classifyCachedTests cacheEntries testHashInfos allTests
+        let logCache = if C.verbose gopts then putStrLn else \_ -> return ()
+        (cachedResults, testsToRun) <- classifyCachedTests logCache cacheEntries testHashInfos allTests
         let showCached = C.testShowCached topts
         when (showCached && not (null cachedResults)) $
           putStrLn ("Using cached results for " ++ show (length cachedResults) ++ " tests")
@@ -581,45 +581,6 @@ runProjectTests gopts opts paths topts mode modules maxParallel = do
       , trcMode = show mode'
       , trcArgs = testCmdArgs topts'
       }
-    buildTestHashInfos ctxHash testsByModule' allTests' = do
-      moduleHashes <- forM testsByModule' $ \(modName, _) -> do
-        nameHashes <- readModuleNameHashes paths modName
-        return (modName, nameHashes)
-      let nameHashesByModule = M.fromList moduleHashes
-          seedCache = M.fromList
-            [ (A.modName (splitOn "." modName), nameMap)
-            | (modName, nameMap) <- M.toList nameHashesByModule
-            ]
-      depCacheRef <- newIORef seedCache
-      M.fromList <$> forM allTests' (\(modName, testName) -> do
-        let nameMap = M.findWithDefault M.empty modName nameHashesByModule
-        info <- buildTestHashInfo depCacheRef paths ctxHash nameMap testName
-        return (mkTestKey modName testName, info))
-    classifyCachedTests cacheEntries testHashInfos allTests' = do
-      classified <- forM allTests' $ \(modName, testName) -> do
-        let key = mkTestKey modName testName
-            info = M.findWithDefault (TestHashInfo Nothing Nothing Nothing Nothing) key testHashInfos
-            entry = M.lookup key cacheEntries
-        when (C.verbose gopts) $
-          putStrLn (formatTestCacheLog modName testName info entry)
-        case entry of
-          Just cached
-            | Just runHash <- thiRunHash info
-            , tceRunHash cached == runHash ->
-                return (Left (testResultFromCache modName testName (tceResult cached)))
-          _ -> return (Right (modName, testName))
-      return (partitionEithers classified)
-    updateTestCacheEntry testHashInfos acc res =
-      let key = mkTestKey (trModule res) (trName res)
-          info = M.lookup key testHashInfos
-          runHash = maybe "" (\ti -> maybe "" id (thiRunHash ti)) info
-          implHashHex = info >>= fmap (B.unpack . Base16.encode) . thiImplHash
-          entry = TestCacheEntry
-            { tceRunHash = runHash
-            , tceImplHash = implHashHex
-            , tceResult = cachedResultFromTest res
-            }
-      in M.insert key entry acc
 
 -- | Filter module names based on CLI-provided allow lists.
 filterModules :: [String] -> [String] -> [String]
