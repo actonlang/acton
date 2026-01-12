@@ -72,12 +72,12 @@ library:
     - Acton.Parser
     - Acton.Printer
     - Acton.QuickType
-    - Acton.Relabel
     - Acton.Solver
     - Acton.SourceProvider
     - Acton.Syntax
     - Acton.Types
     - Acton.TypeM
+    - Acton.WitKnots
     - Utils
     - Pretty
     - InterfaceFiles

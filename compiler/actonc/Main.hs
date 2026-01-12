@@ -22,7 +22,6 @@ import Text.Megaparsec.Error (ParseErrorBundle)
 import Acton.Parser (CustomParseError)
 import qualified Acton.CommandLineParser as C
 import Acton.Printer ()
-import qualified Acton.Relabel
 import qualified Acton.Env
 import Acton.Env (simp, define, setMod)
 import qualified Acton.QuickType
