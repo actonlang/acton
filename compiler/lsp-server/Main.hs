@@ -247,15 +247,15 @@ runCompile gen path = do
 runCompilePlanWithHooks :: Int -> Source.SourceProvider -> C.GlobalOptions -> Compile.CompilePlan -> LspM () ()
 runCompilePlanWithHooks gen sp gopts plan = do
   env <- getLspEnv
-  let hooks = Compile.defaultCompileHooks
+  let taskPath t = Compile.srcFile (Compile.gtPaths t) (Compile.tkMod (Compile.gtKey t))
+      publishFor t diags =
+        runLspT env $ whenCurrentGen gen $
+          publishDiagnosticsFor (taskPath t) diags
+      hooks = Compile.defaultCompileHooks
         { Compile.chOnDiagnostics = \t _ diags ->
-            runLspT env $ whenCurrentGen gen $ do
-              let filePath = Compile.srcFile (Compile.gtPaths t) (Compile.tkMod (Compile.gtKey t))
-              publishDiagnosticsFor filePath (lspDiagnosticsFrom diags)
+            publishFor t (lspDiagnosticsFrom diags)
         , Compile.chOnFrontResult = \t _ ->
-            runLspT env $ whenCurrentGen gen $ do
-              let filePath = Compile.srcFile (Compile.gtPaths t) (Compile.tkMod (Compile.gtKey t))
-              publishDiagnosticsFor filePath []
+            publishFor t []
         , Compile.chOnInfo = \_ -> return ()
         }
   compileRes <- liftIO $ Compile.runCompilePlan sp gopts plan compileScheduler gen hooks
