@@ -1298,6 +1298,15 @@ detectGuiEnvironment = do
 --
 -- The command line parser just parses options without making behavior decisions.
 -- All logic is centralized here in printDocs for predictable, intuitive behavior.
+openFileInGui :: FilePath -> IO ()
+openFileInGui path = do
+    let openCmd = case System.Info.os of
+          "darwin" -> "open"
+          "linux" -> "xdg-open"
+          _ -> ""
+    unless (null openCmd) $
+      void $ system $ openCmd ++ " " ++ path
+
 -- | Generate and display documentation based on CLI options and environment.
 printDocs :: C.GlobalOptions -> C.DocOptions -> IO ()
 printDocs gopts opts = do
@@ -1316,13 +1325,7 @@ printDocs gopts opts = do
                     indexExists <- doesFileExist indexFile
                     if indexExists then do
                         -- Open the existing index
-                        let openCmd = case System.Info.os of
-                                "darwin" -> "open"
-                                "linux" -> "xdg-open"
-                                _ -> ""
-                        unless (null openCmd) $ do
-                            _ <- system $ openCmd ++ " " ++ indexFile
-                            return ()
+                        openFileInGui indexFile
                     else
                         printErrorAndExit "No documentation found. Run 'actonc build' first to generate documentation."
                 else
@@ -1412,13 +1415,7 @@ printDocs gopts opts = do
                             putStrLn $ "HTML documentation written to: " ++ outputPath
 
                             -- Open in browser
-                            let openCmd = case System.Info.os of
-                                    "darwin" -> "open"
-                                    "linux" -> "xdg-open"
-                                    _ -> ""
-                            unless (null openCmd) $ do
-                                _ <- system $ openCmd ++ " " ++ outputPath
-                                return ()
+                            openFileInGui outputPath
 
             _ -> printErrorAndExit ("Unknown filetype: " ++ filename)
 
