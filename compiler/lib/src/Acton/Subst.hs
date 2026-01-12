@@ -87,7 +87,7 @@ instance VFree QBind where
 instance VFree Quant where
     vfree (Quant v ps)              = vfree ps
 
-instance VFree (WPath,TCon) where
+instance VFree WTCon where
     vfree (wpath, p)                = vfree p
 
 instance VFree TSchema where

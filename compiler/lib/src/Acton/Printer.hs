@@ -530,33 +530,5 @@ prettyQuant qs                      = brackets (commaSep pretty qs) <+> text "=>
 instance Pretty Quant where
     pretty (Quant tv wps)           = pretty tv <> parens (commaSep pretty wps)
 
-instance Pretty (WPath,TCon) where
+instance Pretty WTCon where
     pretty (wpath, p)               = pretty p
-
-
-instance Pretty (TVar,TVar) where           -- CHANGE
---instance Pretty (TUni,TUni) where
-    pretty (tv,tv')                 = pretty tv <+> text "~" <+> pretty tv'
-
-instance Pretty (TVar,Type) where           -- CHANGE
---instance Pretty (TUni,Type) where
-    pretty (tv,t)                   = pretty tv <+> text "~" <+> pretty t
-
---instance Pretty (TVar,TCon) where         -- CHANGE
---instance Pretty (TUni,TCon) where
---    pretty (tv,tc)                  = pretty tv <+> text "~" <+> pretty tc
-
-instance Pretty (TVar,Either TCon Type) where   -- CHANGE
---instance Pretty (TUni,Either TCon Type) where
-    pretty (tv, Left p)             = pretty tv <+> text "~" <+> text "protocol" <+> pretty p
-    pretty (tv, Right t)            = pretty (tv,t)
-
-instance Pretty (TVar,Name) where           -- CHANGE
---instance Pretty (TUni,Name) where
-    pretty (tv,n)                   = pretty tv <> text "." <> pretty n
-
-instance Pretty Substitution where
-    pretty s                        = commaSep pretty s
-
-instance Pretty (Name,Type) where
-    pretty (n,t)                    = pretty n <> text ":" <+> pretty t
