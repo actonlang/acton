@@ -1932,8 +1932,8 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
                 Just implHash | canCheckCodegen -> Just <$> codegenStatus paths mn implHash
                 _ -> return Nothing
               let needByCodegen = maybe False (not . codegenUpToDate) mCodegenStatus
-              if needFront
-                then do
+              case () of
+                _ | needFront -> do
                   prevNameHashes <- if C.verbose gopts
                     then case gtTask t of
                       TyTask{ tyNameHashes = nhs } -> return (Just (nameHashMapFromList nhs))
@@ -1965,63 +1965,61 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
                                 ccOnInfo callbacks ("  Hash deltas " ++ modNameToString mn ++ ": " ++ summary)
                           cacheFrontResult fr
                     _ -> error ("Internal error: unexpected task " ++ show t')
-                else if needByImpl
-                  then do
-                    when (C.verbose gopts) $ do
-                      let fmtDelta (qn, old, new) = prstr qn ++ " " ++ short8 old ++ " → " ++ short8 new ++ fmtUsers implUsers qn
-                      ccOnInfo callbacks ("  Stale " ++ modNameToString mn ++ ": impl changes in " ++ Data.List.intercalate ", " (map fmtDelta implDeltas))
-                    tyRes <- readTyFile
-                    case tyRes of
-                      Left diags -> return (key, Left diags)
-                      Right (_ms, nmod, tmod, moduleSrcBytesHash, modulePubHash, _moduleImplHash, imps, nameHashes, roots, mdoc) -> do
-                        parsedRes <- parseActFile sp mn actFile
-                        case parsedRes of
-                          Left diags -> return (key, Left diags)
-                          Right (snap, parsedMod) -> do
-                            env1 <- Acton.Env.mkEnv (searchPath paths) envSnap parsedMod
-                            let nameSrcHashes =
-                                  M.fromList [ (InterfaceFiles.nhName nh, InterfaceFiles.nhSrcHash nh)
-                                             | nh <- nameHashes
-                                             ]
-                                nameKeys = M.keysSet nameSrcHashes
-                                nameImplHashes0 = Hashing.nameImplHashesFromItems (Hashing.topLevelItems tmod)
-                                nameImplHashes = M.filterWithKey (\k _ -> Data.Set.member k nameKeys) nameImplHashes0
-                                localNames = nameKeys
-                                implDepsRaw0 = Hashing.implDepsFromItems (Hashing.topLevelItems tmod)
-                                implDepsRaw = M.fromList
-                                  [ (n, M.findWithDefault [] n implDepsRaw0)
-                                  | n <- M.keys nameSrcHashes
-                                  ]
-                                hashEnv = setMod mn env1
-                                (implLocalDeps, implExtDeps) = Hashing.splitDeps mn hashEnv localNames implDepsRaw
-                            implExtRes <- resolveDepHashes InterfaceFiles.nhImplHash implExtDeps
-                            case implExtRes of
-                              Left diags -> return (key, Left diags)
-                              Right implExtHashes -> do
-                                let updatedNameHashes =
-                                      Hashing.refreshImplHashes nameHashes nameImplHashes implLocalDeps implExtHashes
-                                    moduleImplHash = Hashing.moduleImplHashFromNameHashes updatedNameHashes
-                                InterfaceFiles.writeFile tyFile moduleSrcBytesHash modulePubHash moduleImplHash imps updatedNameHashes roots mdoc nmod tmod
-                                let A.NModule ifaceTE _mdoc = nmod
-                                    backJob = Just (mkBackJob env1 tmod (Source.ssText snap) moduleImplHash)
-                                    fr = mkFrontResult ifaceTE mdoc modulePubHash updatedNameHashes backJob
-                                cacheFrontResult fr
-                else if needByCodegen
-                  then do
-                    when (C.verbose gopts) $ do
-                      let suffix = maybe "" formatCodegenDelta mCodegenStatus
-                      ccOnInfo callbacks ("  Stale " ++ modNameToString mn ++ ": generated code out of date" ++ suffix)
-                    tyRes <- readTyFile
-                    case tyRes of
-                      Left diags -> return (key, Left diags)
-                      Right (_ms, nmod, tmod, _moduleSrcBytesHash, modulePubHash, moduleImplHashStored, _imps, nameHashes, _roots, mdoc) -> do
-                        snap <- Source.readSource sp actFile
-                        env1 <- Acton.Env.mkEnv (searchPath paths) envSnap tmod
-                        let A.NModule ifaceTE _mdoc = nmod
-                            backJob = Just (mkBackJob env1 tmod (Source.ssText snap) moduleImplHashStored)
-                            fr = mkFrontResult ifaceTE mdoc modulePubHash nameHashes backJob
-                        cacheFrontResult fr
-                else do
+                _ | needByImpl -> do
+                  when (C.verbose gopts) $ do
+                    let fmtDelta (qn, old, new) = prstr qn ++ " " ++ short8 old ++ " → " ++ short8 new ++ fmtUsers implUsers qn
+                    ccOnInfo callbacks ("  Stale " ++ modNameToString mn ++ ": impl changes in " ++ Data.List.intercalate ", " (map fmtDelta implDeltas))
+                  tyRes <- readTyFile
+                  case tyRes of
+                    Left diags -> return (key, Left diags)
+                    Right (_ms, nmod, tmod, moduleSrcBytesHash, modulePubHash, _moduleImplHash, imps, nameHashes, roots, mdoc) -> do
+                      parsedRes <- parseActFile sp mn actFile
+                      case parsedRes of
+                        Left diags -> return (key, Left diags)
+                        Right (snap, parsedMod) -> do
+                          env1 <- Acton.Env.mkEnv (searchPath paths) envSnap parsedMod
+                          let nameSrcHashes =
+                                M.fromList [ (InterfaceFiles.nhName nh, InterfaceFiles.nhSrcHash nh)
+                                           | nh <- nameHashes
+                                           ]
+                              nameKeys = M.keysSet nameSrcHashes
+                              nameImplHashes0 = Hashing.nameImplHashesFromItems (Hashing.topLevelItems tmod)
+                              nameImplHashes = M.filterWithKey (\k _ -> Data.Set.member k nameKeys) nameImplHashes0
+                              localNames = nameKeys
+                              implDepsRaw0 = Hashing.implDepsFromItems (Hashing.topLevelItems tmod)
+                              implDepsRaw = M.fromList
+                                [ (n, M.findWithDefault [] n implDepsRaw0)
+                                | n <- M.keys nameSrcHashes
+                                ]
+                              hashEnv = setMod mn env1
+                              (implLocalDeps, implExtDeps) = Hashing.splitDeps mn hashEnv localNames implDepsRaw
+                          implExtRes <- resolveDepHashes InterfaceFiles.nhImplHash implExtDeps
+                          case implExtRes of
+                            Left diags -> return (key, Left diags)
+                            Right implExtHashes -> do
+                              let updatedNameHashes =
+                                    Hashing.refreshImplHashes nameHashes nameImplHashes implLocalDeps implExtHashes
+                                  moduleImplHash = Hashing.moduleImplHashFromNameHashes updatedNameHashes
+                              InterfaceFiles.writeFile tyFile moduleSrcBytesHash modulePubHash moduleImplHash imps updatedNameHashes roots mdoc nmod tmod
+                              let A.NModule ifaceTE _mdoc = nmod
+                                  backJob = Just (mkBackJob env1 tmod (Source.ssText snap) moduleImplHash)
+                                  fr = mkFrontResult ifaceTE mdoc modulePubHash updatedNameHashes backJob
+                              cacheFrontResult fr
+                _ | needByCodegen -> do
+                  when (C.verbose gopts) $ do
+                    let suffix = maybe "" formatCodegenDelta mCodegenStatus
+                    ccOnInfo callbacks ("  Stale " ++ modNameToString mn ++ ": generated code out of date" ++ suffix)
+                  tyRes <- readTyFile
+                  case tyRes of
+                    Left diags -> return (key, Left diags)
+                    Right (_ms, nmod, tmod, _moduleSrcBytesHash, modulePubHash, moduleImplHashStored, _imps, nameHashes, _roots, mdoc) -> do
+                      snap <- Source.readSource sp actFile
+                      env1 <- Acton.Env.mkEnv (searchPath paths) envSnap tmod
+                      let A.NModule ifaceTE _mdoc = nmod
+                          backJob = Just (mkBackJob env1 tmod (Source.ssText snap) moduleImplHashStored)
+                          fr = mkFrontResult ifaceTE mdoc modulePubHash nameHashes backJob
+                      cacheFrontResult fr
+                _ -> do
                   when (C.verbose gopts) $
                     ccOnInfo callbacks ("  Fresh " ++ modNameToString mn ++ ": using cached .ty")
                   ifaceRes <- case gtTask t of
