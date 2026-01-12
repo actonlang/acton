@@ -1796,7 +1796,6 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
             in if null errs
                  then Right vals
                  else Left (concat errs)
-          traverseDiags f items = collectDiags <$> mapM f items
 
           depMap getDeps infos =
             M.fromListWith (\a _ -> a) (concatMap getDeps infos)
@@ -1860,19 +1859,31 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
               A.NoQ _ -> return (Left (missingNameHashDiagnostics qn))
 
           resolveDepHashes getHash deps = do
-            resolved <- traverseDiags (\(n, qns) -> do
+            resolved <- forM (M.toList deps) $ \(n, qns) -> do
               let qnsSorted = Data.List.sortOn Hashing.qnameKey (Data.Set.toList (Data.Set.fromList qns))
-              resolvedQns <- traverseDiags (\qn -> do
+              resolvedQns <- forM qnsSorted $ \qn -> do
                 currE <- resolveQNameHash getHash qn
-                return (fmap (\curr -> (qn, curr)) currE)) qnsSorted
-              return (fmap (\vals -> (n, vals)) resolvedQns)) (M.toList deps)
-            return (fmap M.fromList resolved)
+                case currE of
+                  Left diags -> return (Left diags)
+                  Right curr -> return (Right (qn, curr))
+              case collectDiags resolvedQns of
+                Right vals -> return (Right (n, vals))
+                Left diags -> return (Left diags)
+            case collectDiags resolved of
+              Right vals -> return (Right (M.fromList vals))
+              Left diags -> return (Left diags)
 
           checkDeps getHash deps = do
-            resolved <- traverseDiags (\(qn, recorded) -> do
+            resolved <- forM (M.toList deps) $ \(qn, recorded) -> do
               currE <- resolveQNameHash getHash qn
-              return (fmap (\curr -> (qn, recorded, curr)) currE)) (M.toList deps)
-            return (fmap (\triples -> [ (qn, old, new) | (qn, old, new) <- triples, old /= new ]) resolved)
+              case currE of
+                Left diags -> return (Left diags)
+                Right curr -> return (Right (qn, recorded, curr))
+            case collectDiags resolved of
+              Right triples -> do
+                let deltas = [ (qn, old, new) | (qn, old, new) <- triples, old /= new ]
+                return (Right deltas)
+              Left diags -> return (Left diags)
 
       case gtTask t of
         ParseErrorTask{ parseDiagnostics = diags } -> return (key, Left diags)
