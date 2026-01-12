@@ -174,7 +174,7 @@ decl env (Class _ n q a b ddoc)     = (text "struct" <+> classname env n <+> cha
                                       nest 4 (vcat $ stdprefix env ++ initdef : serialize env tc : deserialize env tc : meths) $+$
                                       char '}' <> semi $+$
                                       inst_struct
-  where tc                          = TC (NoQ n) [ tVar v | Quant v _ <- q ]
+  where tc                          = TC (NoQ n) [ tVar v | QBind v _ <- q ]
         initdef : meths             = fields env tc
         properties                  = [ varsig env n (sctype sc) <> semi | (n, NSig sc Property _) <- fullAttrEnv env tc ]
         inst_struct | initNotImpl   = empty
@@ -472,7 +472,7 @@ initClassBase env c q as hasCDef    = methodtable env c <> dot <> gen env gcinfo
         cast (NSig sc dec _)        = parens (gen env (selfsubst $ addSelf (sctype sc) (Just dec)))
         cast (NDef sc dec _)        = parens (gen env (selfsubst $ addSelf (sctype sc) (Just dec)))
         cast (NVar t)               = parens (gen env $ selfsubst t)
-        te                          = fullAttrEnv env $ TC (NoQ c) [ tVar v | Quant v _ <- q ]
+        te                          = fullAttrEnv env $ TC (NoQ c) [ tVar v | QBind v _ <- q ]
 
 initClass env c [] hasCDef          = vcat [ methodtable env c <> dot <> gen env n <+> equals <+> genTopName env (methodname c n) <> semi | n <- [serializeKW,deserializeKW] ] $+$
                                       if hasCDef then empty else gen env primRegister <> parens (char '&' <> methodtable env c) <> semi

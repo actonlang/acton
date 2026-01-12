@@ -435,7 +435,7 @@ instance Vars TCon where
     freeQ (TC n ts)                 = freeQ n ++ freeQ ts
 
 instance Vars QBind where
-    freeQ (Quant v cs)              = freeQ cs
+    freeQ (QBind v cs)              = freeQ cs
 
 instance Vars Type where
     freeQ (TVar _ v)                = freeQ v

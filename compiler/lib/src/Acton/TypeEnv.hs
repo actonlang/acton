@@ -74,7 +74,7 @@ instance (WellFormed a) => WellFormed [a] where
     wf env                  = concatMap (wf env)
 
 instance WellFormed TCon where
-    wf env (TC n ts)        = wf env ts ++ [ constr (vsubst s u) (vsubst s $ tVar v) | Quant v us <- q, u <- us ]
+    wf env (TC n ts)        = wf env ts ++ [ constr (vsubst s u) (vsubst s $ tVar v) | QBind v us <- q, u <- us ]
       where q               = case findQName n env of
                                 NAct q p k te _ -> q
                                 NClass q us te _ -> q
@@ -103,7 +103,7 @@ instance WellFormed Type where
 
 
 instance WellFormed QBind where
-    wf env (Quant v us)
+    wf env (QBind v us)
       | not $ null ideps    = err2 (head ideps) "Interdependent type variable bounds:"
       | otherwise           = wf env us
       where (_,ps)          = mro2 env us
@@ -122,7 +122,7 @@ instantiate env (TSchema _ q t)
                                  return (cs, tvs, vsubst s t)
 
 instQBinds                  :: EnvF x -> QBinds -> TypeM (Constraints, [Type])
-instQBinds env q            = do ts <- newUnivars [ tvkind v | Quant v _ <- q ]
+instQBinds env q            = do ts <- newUnivars [ tvkind v | QBind v _ <- q ]
                                  cs <- instQuals env q ts
                                  return (cs, ts)
 
@@ -144,7 +144,7 @@ instWitness env p0 wit      = case wit of
 
 instQuals                   :: EnvF x -> QBinds -> [Type] -> TypeM Constraints
 instQuals env q ts          = do let s = qbound q `zip` ts
-                                 sequence [ constr (vsubst s (tVar v)) (vsubst s u) | Quant v us <- q, u <- us ]
+                                 sequence [ constr (vsubst s (tVar v)) (vsubst s u) | QBind v us <- q, u <- us ]
   where constr t u@(TC n _)
           | isProto env n   = do w <- newWitness; return $ Proto (DfltInfo NoLoc 24 Nothing []) w [] t u
           | otherwise       = return $ Cast (DfltInfo NoLoc 25 Nothing []) [] t (tCon u)
@@ -235,9 +235,9 @@ qualWPar env q                          = wit2par (qualWits env q)
 
 qualWRow env q                          = wit2row (qualWits env q)
 
-qualWits env q                          = [ (tvarWit tv p, proto2type (tVar tv) p) | Quant tv ps <- q, p <- ps, isProto env (tcname p) ]
+qualWits env q                          = [ (tvarWit tv p, proto2type (tVar tv) p) | QBind tv ps <- q, p <- ps, isProto env (tcname p) ]
 
 witSubst env q cs                       = [ Eqn w0 t (eVar w) | ((w,t),w0) <- ws `zip` ws0 ]
   where ws                              = [ (w, proto2type t p) | Proto _ w q t p <- cs ]
-        ws0                             = [ tvarWit tv p | Quant tv ps <- q, p <- ps, isProto env (tcname p) ]
+        ws0                             = [ tvarWit tv p | QBind tv ps <- q, p <- ps, isProto env (tcname p) ]
 

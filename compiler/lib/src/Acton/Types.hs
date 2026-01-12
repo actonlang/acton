@@ -233,7 +233,7 @@ genEnv env cs te (Decl l ds)
   where
     qualify vs cs                       = (q, concat wss)
       where (q,wss)                     = unzip $ map qbind vs
-            qbind v                     = (Quant v bounds, wits)
+            qbind v                     = (QBind v bounds, wits)
               where bounds              = [ p | Proto _ w _ (TVar _ v') p <- cs, v == v' ]
                     wits                = [ (w, proto2type t p) | Proto _ w _ t@(TVar _ v') p <- cs, v == v' ]
 

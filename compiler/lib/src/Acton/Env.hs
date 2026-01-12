@@ -388,7 +388,7 @@ instance Unalias TCon where
     unalias env (TC qn ts)          = TC (unalias env qn) (unalias env ts)
 
 instance Unalias QBind where
-    unalias env (Quant tv cs)       = Quant tv (unalias env cs)
+    unalias env (QBind tv cs)       = QBind tv (unalias env cs)
 
 instance Unalias Type where
     unalias env (TCon l c)          = TCon l (unalias env c)
@@ -526,14 +526,14 @@ addImport m env             = env{ imports = m : imports env }
 
 defineTVars                 :: QBinds -> EnvF x -> EnvF x
 defineTVars q env           = foldr f env (unalias env q)
-  where f (Quant tv us) env = foldl addWit env{ names = (tvname tv, NTVar (tvkind tv) c ps) : names env } wits
+  where f (QBind tv us) env = foldl addWit env{ names = (tvname tv, NTVar (tvkind tv) c ps) : names env } wits
           where (c,ps)      = case us of u:us' | not $ isProto env (tcname u) -> (u,us); _ -> (cValue,us)
                 wits        = [ WInst [] (tVar tv) p (NoQ $ tvarWit tv p0) wchain | p0 <- ps, (wchain,p) <- findAncestry env p0 ]
 
 selfSubst n q               = vsubst [(tvSelf, tCon tc)]
   where tc                  = TC n (map tVar $ qbound q)
 
-selfQuant n q               = Quant tvSelf [tc] : q
+selfQuant n q               = QBind tvSelf [tc] : q
   where tc                  = TC n (map tVar $ qbound q)
 
 defineInst                  :: TCon -> [WTCon] -> Name -> EnvF x -> EnvF x
@@ -571,10 +571,10 @@ tvarScope                   :: EnvF x -> [TVar]
 tvarScope env               = tvarScope0 env \\ [tvSelf]
 
 quantScope0                 :: EnvF x -> QBinds
-quantScope0 env             = [ Quant (TV k n) (if c==cValue then ps else (c:ps)) | (n, NTVar k c ps) <- names env ]
+quantScope0 env             = [ QBind (TV k n) (if c==cValue then ps else (c:ps)) | (n, NTVar k c ps) <- names env ]
 
 quantScope                  :: EnvF x -> QBinds
-quantScope env              = [ q | q@(Quant tv _) <- quantScope0 env, tv /= tvSelf ]
+quantScope env              = [ q | q@(QBind tv _) <- quantScope0 env, tv /= tvSelf ]
 
 selfScopeSubst              :: EnvF x -> Substitution
 selfScopeSubst env          = [ (TV k n, tCon c) | (n, NTVar k c ps) <- names env, n == nSelf ]
@@ -693,7 +693,7 @@ tconKind n env              = case findQName n env of
                                 NReserved    -> nameReserved n
                                 _            -> notClassOrProto n
   where kind k []           = k
-        kind k q            = KFun [ tvkind v | Quant v _ <- q ] k
+        kind k q            = KFun [ tvkind v | QBind v _ <- q ] k
 
 actorSelf env               = case lookup selfKW (names env) of
                                 Just (NVar (TCon _ tc)) | isActor env (tcname tc) -> True
@@ -834,7 +834,7 @@ attributes' f env qn        = catMaybes [ f wp i n | n <- ns, let Just (wp,i) = 
   where ns                  = nub $ reverse $ dom aenv                                                                                  -- in offset order
         aenv                = [ (n,(wp,i)) | (wp,c) <- ([],tc) : us, let (_,_,te) = findConName (tcname c) env, (n,i) <- reverse te ]   -- in override order
         (q,us,_)            = findConName qn env
-        tc                  = TC qn [ tVar v | Quant v _ <- q ]
+        tc                  = TC qn [ tVar v | QBind v _ <- q ]
 
 inheritedAttrs              :: EnvF x -> QName -> [(QName,Name)]
 inheritedAttrs              = attributes' f
@@ -1445,7 +1445,7 @@ err3 l xs s                         = err l (s ++ " " ++ prstrs xs)
 
 notYetExpr e                        = notYet (loc e) e
 
-stripQual q                         = [ Quant v [] | Quant v us <- q ]
+stripQual q                         = [ QBind v [] | QBind v us <- q ]
 
 
 class Simp a where
@@ -1459,15 +1459,15 @@ instance Simp TSchema where
       where (q', s)                 = simpQuant env (simp env' q) (vfree t)
             env'                    = defineTVars (stripQual q) env
 
-simpQuant env q vs0                 = (vsubst s [ Quant v ps | Quant v ps <- q2, not $ null ps ], s)
+simpQuant env q vs0                 = (vsubst s [ QBind v ps | QBind v ps <- q2, not $ null ps ], s)
   where (q1,q2)                     = partition isEX q
-        isEX (Quant v [p])          = length (filter (==v) vs) == 1
+        isEX (QBind v [p])          = length (filter (==v) vs) == 1
         isEX _                      = False
-        vs                          = concat [ vfree ps | Quant v ps <- q ] ++ vs0
-        s                           = [ (v, tCon p) | Quant v [p] <- q1 ]                       -- Inline existentials
+        vs                          = concat [ vfree ps | QBind v ps <- q ] ++ vs0
+        s                           = [ (v, tCon p) | QBind v [p] <- q1 ]                       -- Inline existentials
 
 instance Simp QBind where
-    simp env (Quant v ps)           = Quant v (simp env ps)
+    simp env (QBind v ps)           = QBind v (simp env ps)
 
 instance Simp WTCon where
     simp env (w, c)                 = (w, simp env c)

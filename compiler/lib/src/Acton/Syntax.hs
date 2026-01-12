@@ -225,7 +225,7 @@ data TCon       = TC { tcname::QName, tcargs::[Type] } deriving (Eq,Show,Read,Ge
 
 data FX         = FXPure | FXMut | FXProc | FXAction deriving (Eq,Show,Read,Generic,NFData)
 
-data QBind      = Quant TVar [TCon] deriving (Eq,Show,Read,Generic,NFData)
+data QBind      = QBind TVar [TCon] deriving (Eq,Show,Read,Generic,NFData)
 
 type QBinds     = [QBind]
 
@@ -347,8 +347,8 @@ pVar' n         = PVar NoLoc n Nothing
 monotype t      = TSchema NoLoc [] t
 tSchema q t     = TSchema NoLoc q t
 
-quant v         = Quant v []
-qbound q        = [ tv | Quant tv _ <- q ]
+quant v         = QBind v []
+qbound q        = [ tv | QBind tv _ <- q ]
 
 tVar v          = TVar NoLoc v
 tUni v          = TUni NoLoc v
@@ -367,7 +367,7 @@ tRow k          = TRow NoLoc k
 tStar k         = TStar NoLoc k
 tTFX fx         = TFX NoLoc fx
 
-tCon0 n q       = tCon $ TC n [ tVar tv | Quant tv _ <- q ]
+tCon0 n q       = tCon $ TC n [ tVar tv | QBind tv _ <- q ]
 
 tFun0 ps t      = tFun fxPure (foldr posRow posNil ps) kwdNil t
 
@@ -575,7 +575,7 @@ instance Leaves NameInfo where
     leaves _                  = []
 
 instance Leaves QBind where
-    leaves (Quant tv ps)    = tVar tv : leaves ps
+    leaves (QBind tv ps)    = tVar tv : leaves ps
 
 instance Leaves (WPath,PCon) where
     leaves (wp,p)           = leaves p

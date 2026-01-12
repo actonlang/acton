@@ -494,7 +494,7 @@ instance Conv TSchema where
     conv env (TSchema l q t)            = TSchema l (conv env q) (conv env t)
 
 instance Conv QBind where
-    conv env (Quant v cs)               = Quant v (conv env cs)
+    conv env (QBind v cs)               = QBind v (conv env cs)
 
 instance Conv Type where
     conv env t0@(TFun l fx p TNil{} t)

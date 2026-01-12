@@ -1423,7 +1423,7 @@ extdef = addLoc $ do
                    return ([], c)
         head3 = do n <- qual_name
                    q <- binds
-                   return (q, S.TC n [ S.tVar v | S.Quant v _ <- q ])
+                   return (q, S.TC n [ S.tVar v | S.QBind v _ <- q ])
 
 -- Compound statements -------------------------------------------------------------------------
 
@@ -1930,7 +1930,7 @@ tvar :: Parser S.TVar
 tvar = S.TV S.KWild <$> try tvarname
 
 qbind :: Parser S.QBind
-qbind = S.Quant <$> tvar <*> optbounds
+qbind = S.QBind <$> tvar <*> optbounds
 
 optbounds :: Parser [S.TCon]
 optbounds = do bounds <- optional (parens (optional ((:) <$> tcon <*> commaList tcon)))

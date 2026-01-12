@@ -433,8 +433,8 @@ instance Pretty QBinds where
     pretty q                        = brackets (commaList q)
 
 instance Pretty QBind where
-    pretty (Quant v [])             = pretty v
-    pretty (Quant v cs)             = pretty v <> parens (commaList cs)
+    pretty (QBind v [])             = pretty v
+    pretty (QBind v cs)             = pretty v <> parens (commaList cs)
 
 prettyPosRow (TRow _ PRow _ t (TNil _ PRow))
                                     = pretty t

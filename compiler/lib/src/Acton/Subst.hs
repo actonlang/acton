@@ -42,7 +42,7 @@ selfType p k NoDec
   | TRow _ _ _ t _ <- krowOf k          = t
 selfType _ _ _                          = tSelf
 
-qualbound q                         = [ v | Quant v ps <- q, not $ null ps ]
+qualbound q                         = [ v | QBind v ps <- q, not $ null ps ]
 
 
 -- VFree ----------------------------------------------------------------------------------------------
@@ -82,7 +82,7 @@ instance VFree TCon where
     vfree (TC n ts)                 = vfree ts
 
 instance VFree QBind where
-    vfree (Quant v cs)              = vfree cs
+    vfree (QBind v cs)              = vfree cs
 
 instance VFree TSchema where
     vfree (TSchema _ q t)           = (vfree q ++ vfree t) \\ qbound q
@@ -260,7 +260,7 @@ quantsubst s q vs                   = alpha ++ pruned
         avoid                       = new ++ vfree q ++ vs
 
 instance VSubst QBind where
-    vsubst s (Quant v ts)           = Quant (vsubst s v) (vsubst s ts)
+    vsubst s (QBind v ts)           = QBind (vsubst s v) (vsubst s ts)
 
 instance VSubst PosPar where
     vsubst s (PosPar n t e p)       = PosPar n (vsubst s t) e (vsubst s p)
@@ -430,7 +430,7 @@ instance UFree TCon where
     ufree (TC n ts)                 = ufree ts
 
 instance UFree QBind where
-    ufree (Quant v cs)              = ufree cs
+    ufree (QBind v cs)              = ufree cs
 
 instance UFree Type where
     ufree (TUni _ u)                = [u]
@@ -613,7 +613,7 @@ instance USubst TCon where
     usubst (TC n ts)                = TC n <$> usubst ts
 
 instance USubst QBind where
-    usubst (Quant v cs)             = Quant <$> usubst v <*> usubst cs
+    usubst (QBind v cs)             = QBind <$> usubst v <*> usubst cs
 
 instance USubst Type where
     usubst (TUni l u)               = do s <- usubstitution
@@ -795,7 +795,7 @@ instance Polarity TCon where
       where vs                      = ufree ts
 
 instance Polarity QBind where
-    polvars (Quant v cs)            = (vs,vs) where vs = ufree cs
+    polvars (QBind v cs)            = (vs,vs) where vs = ufree cs
 
 instance Polarity TSchema where
     polvars (TSchema _ q t)         = polvars q `polcat` polvars t
@@ -877,7 +877,7 @@ instance Tailvars TCon where
     tailvars (TC c ts)              = tailvars ts
 
 instance Tailvars QBind where
-    tailvars (Quant v cs)           = tailvars cs
+    tailvars (QBind v cs)           = tailvars cs
 
 instance Tailvars TSchema where
     tailvars (TSchema _ q t)        = tailvars q ++ tailvars t
@@ -930,7 +930,7 @@ closeDepVars vs cs
 closeDepVarsQ vs q
   | null vs'                        = nub vs
   | otherwise                       = closeDepVarsQ (vs'++vs) q
-  where vs'                         = concat [ vfree us \\ vs | Quant v us <- q, v `elem` vs ]
+  where vs'                         = concat [ vfree us \\ vs | QBind v us <- q, v `elem` vs ]
 
 schematic (TCon _ tc)               = tCon (schematic' tc)
 schematic (TFun _ _ _ _ _)          = tFun tWild tWild tWild tWild
@@ -976,7 +976,7 @@ instance UWild TSchema where
     uwild (TSchema l q t)           = TSchema l (uwild q) (uwild t)
 
 instance UWild QBind where
-    uwild (Quant v cs)              = Quant v (uwild cs)
+    uwild (QBind v cs)              = QBind v (uwild cs)
 
 instance UWild Constraint where
     uwild (Cast info q t1 t2)       = Cast (uwild info) (uwild q) (uwild t1) (uwild t2)

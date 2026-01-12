@@ -444,12 +444,12 @@ scASSERT            = tSchema [] tASSERT
   where tASSERT     = tFun fxPure (posRow tBool $ posRow (tOpt tStr) posNil) kwdNil tNone
 
 --  $NEWACTOR       : [A($Actor)] => pure () -> A
-scNEWACTOR          = tSchema [Quant a [cActor]] tNEWACTOR
+scNEWACTOR          = tSchema [QBind a [cActor]] tNEWACTOR
   where tNEWACTOR   = tFun fxPure posNil kwdNil (tVar a)
         a           = TV KType $ name "A"
 
 --  $GCfinalizer    : [A($Actor)] => pure (A) -> None
-scGCfinalizer       = tSchema [Quant a [cActor]] tGCfin
+scGCfinalizer       = tSchema [QBind a [cActor]] tGCfin
   where tGCfin      = tFun fxPure (posRow (tVar a) posNil) kwdNil tNone
         a           = TV KType $ name "A"
 

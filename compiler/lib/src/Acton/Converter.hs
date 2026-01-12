@@ -186,9 +186,9 @@ witArgs w wmap                          = case lookup w wmap of
                                             Nothing -> []   -- must be 'value'
                                             -- Nothing -> trace ("##### wmap empty for " ++ prstrs ws) []
 
-noqual env q                            = [ Quant v (filter (not . isProto env . tcname) us) | Quant v us <- q ]
+noqual env q                            = [ QBind v (filter (not . isProto env . tcname) us) | QBind v us <- q ]
 
-quals env q                             = [ (v, p) | Quant v ps <- q, p <- ps, isProto env (tcname p) ]
+quals env q                             = [ (v, p) | QBind v ps <- q, p <- ps, isProto env (tcname p) ]
 
 qualAttr p v n                          = Derived (tvarWit v p) n
 
@@ -210,7 +210,7 @@ instProto t (TC n ts)                   = TC n (t : convSelf t ts)
 
 selfpar                                 = TV KType g_self
 tSelf'                                  = tVar selfpar
-qSelf'                                  = Quant selfpar []
+qSelf'                                  = QBind selfpar []
 
 convSelf t0 t                           = vsubst [(tvSelf, t0)] t
 
