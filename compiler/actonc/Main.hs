@@ -345,6 +345,14 @@ withOwnerLockOrOnlyBuild gopts projDir runFull runFallback = do
           putStrLn "Compiler already running; running final build only."
         runFallback
 
+-- | Require the compile-owner lock or abort with a message.
+withOwnerLockOrExit :: FilePath -> String -> IO a -> IO a
+withOwnerLockOrExit projDir msg action = do
+    ownerLock <- tryCompileOwnerLock projDir
+    case ownerLock of
+      Nothing -> printErrorAndExit msg
+      Just lock -> action `finally` releaseCompileOwnerLock lock
+
 -- | Run a single project build under lock and generate docs.
 buildProjectOnce :: C.GlobalOptions -> C.CompileOptions -> IO ()
 buildProjectOnce gopts opts = do
@@ -439,12 +447,8 @@ runTestsWatch gopts opts topts mode paths = do
                   unless (null modulesToTest) $ do
                     _ <- runProjectTests gopts opts paths topts mode modulesToTest testParallel
                     return ()
-    ownerLock <- tryCompileOwnerLock projDir
-    case ownerLock of
-      Nothing -> printErrorAndExit "Another compiler is running; cannot start test watch."
-      Just lock ->
-        runWatchProject gopts projDir srcRoot sched runOnce
-          `finally` releaseCompileOwnerLock lock
+    withOwnerLockOrExit projDir "Another compiler is running; cannot start test watch." $
+      runWatchProject gopts projDir srcRoot sched runOnce
 
 -- | Compute parallelism for test runs from jobs or core count.
 testMaxParallel :: C.GlobalOptions -> IO Int
@@ -978,28 +982,24 @@ watchProjectAt gopts opts projDir = do
                 if not srcDirExists
                   then printErrorAndExit "Missing src/ directory"
                   else do
-                    ownerLock <- tryCompileOwnerLock (projPath paths)
-                    case ownerLock of
-                      Nothing -> printErrorAndExit "Another compiler is running; cannot start watch."
-                      Just lock -> do
-                        maxParallel <- compileMaxParallel gopts
-                        sched <- newCompileScheduler gopts maxParallel
-                        progressUI <- initProgressUI gopts maxParallel
-                        progressState <- newProgressState
-                        let logLine = progressLogLine progressUI
-                        let runOnce gen mChanged = do
-                              whenCurrentGen sched gen $
-                                withProjectCompileLock (projPath paths) $ do
-                                  whenCurrentGen sched gen $ do
-                                    iff (not(C.quiet gopts)) $ do
-                                      progressReset progressUI progressState
-                                      logLine("Building project in " ++ projPath paths)
-                                    srcFiles <- projectSourceFiles paths
-                                    void $ compileFilesChanged sp gopts opts srcFiles True mChanged (Just (sched, gen)) (Just (progressUI, progressState))
-                                    when (isNothing mChanged) $
-                                      generateProjectDocIndex sp gopts opts paths srcFiles
-                        runWatchProject gopts (projPath paths) (srcDir paths) sched runOnce
-                          `finally` releaseCompileOwnerLock lock
+                    withOwnerLockOrExit (projPath paths) "Another compiler is running; cannot start watch." $ do
+                      maxParallel <- compileMaxParallel gopts
+                      sched <- newCompileScheduler gopts maxParallel
+                      progressUI <- initProgressUI gopts maxParallel
+                      progressState <- newProgressState
+                      let logLine = progressLogLine progressUI
+                      let runOnce gen mChanged = do
+                            whenCurrentGen sched gen $
+                              withProjectCompileLock (projPath paths) $ do
+                                whenCurrentGen sched gen $ do
+                                  iff (not(C.quiet gopts)) $ do
+                                    progressReset progressUI progressState
+                                    logLine("Building project in " ++ projPath paths)
+                                  srcFiles <- projectSourceFiles paths
+                                  void $ compileFilesChanged sp gopts opts srcFiles True mChanged (Just (sched, gen)) (Just (progressUI, progressState))
+                                  when (isNothing mChanged) $
+                                    generateProjectDocIndex sp gopts opts paths srcFiles
+                      runWatchProject gopts (projPath paths) (srcDir paths) sched runOnce
 
 -- | Build a single file, optionally running in watch mode.
 buildFile :: C.GlobalOptions -> C.CompileOptions -> FilePath -> IO ()
