@@ -1450,39 +1450,44 @@ compileFilesChanged sp gopts opts srcFiles allowPrune mChangedPaths mSched mProg
           sp' <- overlayChangedPaths sp mChangedPaths
           planRes <- try $
             prepareCompilePlan sp' gopts sched opts srcFiles allowPrune mChangedPaths
-          case planRes of
-            Left (ProjectError msg) -> do
-              if C.watch opts
-                then logLine msg
-                else printErrorAndExit msg
-              return True
-            Right plan -> do
-              let cctx = cpContext plan
-                  opts' = ccOpts cctx
-                  pathsRoot = ccPathsRoot cctx
-                  watchMode = C.watch opts'
-              cliHooks <- initCliCompileHooks progressUI progressState gopts sched gen plan
-              compileRes <- runCompilePlan sp gopts plan sched gen (cchHooks cliHooks)
-              case compileRes of
-                Left err -> do
-                  whenCurrentGen sched gen (cchClearProgress cliHooks)
-                  cleanup gopts opts' pathsRoot
-                  if watchMode
-                    then logLine (compileFailureMessage err)
-                    else printErrorAndExit (compileFailureMessage err)
-                  return True
-                Right (env, hadErrors) -> do
-                  when (not (C.only_build opts')) $
-                    backQueueWait (csBackQueue sched) gen
-                  whenCurrentGen sched gen (cchClearProgress cliHooks)
-                  if hadErrors
-                    then do
+          let reportPlanError (ProjectError msg) = do
+                if C.watch opts
+                  then logLine msg
+                  else printErrorAndExit msg
+                return True
+              runPlan plan = do
+                let cctx = cpContext plan
+                    opts' = ccOpts cctx
+                    pathsRoot = ccPathsRoot cctx
+                    watchMode = C.watch opts'
+                cliHooks <- initCliCompileHooks progressUI progressState gopts sched gen plan
+                let clearProgress = whenCurrentGen sched gen (cchClearProgress cliHooks)
+                    reportCompileError msg = do
+                      clearProgress
+                      cleanup gopts opts' pathsRoot
+                      if watchMode
+                        then logLine msg
+                        else printErrorAndExit msg
+                      return True
+                    reportCompileErrors = do
+                      clearProgress
                       cleanup gopts opts' pathsRoot
                       unless watchMode System.Exit.exitFailure
                       return True
-                    else do
-                      whenCurrentGen sched gen (runCliPostCompile cliHooks gopts plan env)
-                      return False
+                compileRes <- runCompilePlan sp gopts plan sched gen (cchHooks cliHooks)
+                case compileRes of
+                  Left err ->
+                    reportCompileError (compileFailureMessage err)
+                  Right (env, hadErrors) -> do
+                    when (not (C.only_build opts')) $
+                      backQueueWait (csBackQueue sched) gen
+                    clearProgress
+                    if hadErrors
+                      then reportCompileErrors
+                      else do
+                        whenCurrentGen sched gen (runCliPostCompile cliHooks gopts plan env)
+                        return False
+          either reportPlanError runPlan planRes
     runCompile `finally` cleanupProgress
 
 overlayChangedPaths :: Source.SourceProvider -> Maybe [FilePath] -> IO Source.SourceProvider
