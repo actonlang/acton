@@ -420,6 +420,7 @@ withScratchDirLock action = do
         let scratchDir = dropExtension lockPath
         removeDirectoryRecursive scratchDir `catch` ignoreNotExists
         action scratchDir `finally` unlockFile lock
+
 withTempDirOpts :: C.CompileOptions -> (C.CompileOptions -> Bool -> IO a) -> IO a
 withTempDirOpts opts action
   | C.tempdir opts /= "" = action opts False
@@ -475,11 +476,7 @@ runTests gopts cmd = do
           , C.skip_build = False
           , C.only_build = False
           }
-    curDir <- getCurrentDirectory
-    paths <- findPaths (joinPath [ curDir, "Build.act" ]) opts
-    when (isTmp paths) $
-      printErrorAndExit "Project config not found in current directory (expected Build.act)"
-    requireProjectLayout paths
+    paths <- loadProjectPaths opts
     if C.watch opts0
       then case mode of
              TestModeList -> runTestsOnce gopts opts topts mode paths
@@ -519,17 +516,20 @@ runTestsWatch gopts opts topts mode paths = do
             hadErrors <- compileFilesChanged sp gopts opts srcFiles True mChanged (Just (sched, gen)) (Just (progressUI, progressState))
             unless hadErrors $ do
               testModules <- listTestModules opts paths
-              modulesToTest <- case mChanged of
-                Nothing -> return testModules
-                Just changedPaths -> do
-                  changedModules <- changedModulesFromPaths paths changedPaths
-                  affected <- dependentTestModulesFromHeaders paths srcFiles changedModules
-                  return (filter (`elem` testModules) affected)
-              unless (null modulesToTest) $ do
-                _ <- runProjectTests gopts opts paths topts mode modulesToTest testParallel
-                return ()
+              modulesToTest <- selectTestModules paths srcFiles mChanged testModules
+              unless (null modulesToTest) $
+                void $ runProjectTests gopts opts paths topts mode modulesToTest testParallel
     withOwnerLockOrExit projDir "Another compiler is running; cannot start test watch." $
       runWatchProject gopts projDir srcRoot sched runOnce
+
+selectTestModules :: Paths -> [FilePath] -> Maybe [FilePath] -> [String] -> IO [String]
+selectTestModules paths srcFiles mChanged testModules =
+    case mChanged of
+      Nothing -> return testModules
+      Just changedPaths -> do
+        changedModules <- changedModulesFromPaths paths changedPaths
+        affected <- dependentTestModulesFromHeaders paths srcFiles changedModules
+        return (filter (`elem` testModules) affected)
 
 -- | Compute parallelism for test runs from jobs or core count.
 testMaxParallel :: C.GlobalOptions -> IO Int
@@ -1092,19 +1092,15 @@ watchFile gopts opts file = do
         sched <- newCompileScheduler gopts maxParallel
         progressUI <- initProgressUI gopts maxParallel
         progressState <- newProgressState
-        if (C.tempdir opts /= "")
-          then do
-            let runOnce gen mChanged =
-                  whenCurrentGen sched gen $
-                    void $ compileFilesChanged sp gopts opts [absFile] False mChanged (Just (sched, gen)) (Just (progressUI, progressState))
-            runWatchFile gopts absFile sched runOnce
-          else do
-            withScratchDirLock $ \scratchDir -> do
-              let opts' = opts { C.tempdir = scratchDir }
-                  runOnce gen mChanged =
+        let runWatch opts' =
+              let runOnce gen mChanged =
                     whenCurrentGen sched gen $
                       void $ compileFilesChanged sp gopts opts' [absFile] False mChanged (Just (sched, gen)) (Just (progressUI, progressState))
-              runWatchFile gopts absFile sched runOnce
+              in runWatchFile gopts absFile sched runOnce
+        if (C.tempdir opts /= "")
+          then runWatch opts
+          else withScratchDirLock $ \scratchDir ->
+                 runWatch opts { C.tempdir = scratchDir }
 
 data WatchTrigger = WatchFull | WatchIncremental FilePath deriving (Eq, Show)
 
@@ -1239,10 +1235,7 @@ runWatchFile gopts absFile sched runOnce = do
 -- | Fetch dependencies for the current project without compiling.
 fetchCommand :: C.GlobalOptions -> IO ()
 fetchCommand gopts = do
-    curDir <- getCurrentDirectory
-    actPath <- requireProjectConfigPath curDir
-    paths <- findPaths actPath defaultCompileOptions
-    requireProjectLayout paths
+    paths <- loadProjectPaths defaultCompileOptions
     res <- try (fetchDependencies gopts paths []) :: IO (Either ProjectError ())
     case res of
       Left (ProjectError msg) -> printErrorAndExit msg
