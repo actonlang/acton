@@ -40,7 +40,7 @@ generate                            :: Acton.Env.Env0 -> FilePath -> String -> B
 generate env srcbase srcText emitLines m hash = do return (n, h, c)
 
   where n                           = concat (Data.List.intersperse "." (modPath (modname m))) --render $ quotes $ gen env0 (modname m)
-        hashComment                 = text "/* Acton source hash:" <+> text hash <+> text "*/"
+        hashComment                 = text "/* Acton impl hash:" <+> text hash <+> text "*/"
         h                           = render $ hashComment $+$ hModule env0 m
         c                           = render $ hashComment $+$ cModule env0 srcbase srcText emitLines m
         env0                        = genEnv $ setMod (modname m) env

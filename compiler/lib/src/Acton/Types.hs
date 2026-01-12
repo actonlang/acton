@@ -51,6 +51,7 @@ extractDocstring (Expr _ (Strings _ ss) : _) = Just (unescapeString $ stripQuote
     stripQuotes s = s
 extractDocstring _ = Nothing
 
+-- | Unescape a parsed string literal payload.
 unescapeString :: String -> String
 unescapeString [] = []
 unescapeString ('\\':'n':xs) = '\n' : unescapeString xs
@@ -61,6 +62,7 @@ unescapeString ('\\':'"':xs) = '"' : unescapeString xs
 unescapeString ('\\':'\'':xs) = '\'' : unescapeString xs
 unescapeString (x:xs) = x : unescapeString xs
 
+-- | Type-check a module and return its NameInfo, typed module, and env.
 reconstruct                             :: Env0 -> Module -> IO (NameInfo, Module, Env0, [Acton.Syntax.ModName])
 reconstruct env0 (Module m i ss)         = do --traceM ("#################### original env0 for " ++ prstr m ++ ":")
                                              --traceM (render (pretty env0))
@@ -97,16 +99,38 @@ reconstruct env0 (Module m i ss)         = do --traceM ("#################### or
         ssT' = __name__assign : ssT
 
 
-showTyFile env0 m fname         = do
-                                     (ms,nmod,_,srcH,ifaceH,imps,roots,mdocH) <- InterfaceFiles.readFile fname
+-- | Print a .ty file header and interface; include name hashes when verbose.
+showTyFile env0 m fname verbose = do
+                                     (ms,nmod,_,srcH,pubH,implH,imps,nameHashes,roots,mdocH) <- InterfaceFiles.readFile fname
                                      putStrLn ("\n############### Header ###############")
                                      putStrLn ("Imports: " ++ (show [ (prstr mn, take 16 (B.unpack $ Base16.encode h)) | (mn,h) <- imps ]))
                                      putStrLn ("Roots  : " ++ (show (map prstr roots)))
                                      case mdocH of
                                        Just ds -> putStrLn ("Doc    : \"\"\"" ++ ds ++ "\"\"\"")
                                        Nothing -> return ()
-                                     putStrLn ("SrcHash: 0x" ++ (B.unpack $ Base16.encode srcH))
-                                     putStrLn ("Iface  : 0x" ++ (B.unpack $ Base16.encode ifaceH))
+                                     putStrLn ("ModuleSrcBytesHash: 0x" ++ (B.unpack $ Base16.encode srcH))
+                                     putStrLn ("ModulePubHash     : 0x" ++ (B.unpack $ Base16.encode pubH))
+                                     putStrLn ("ModuleImplHash    : 0x" ++ (B.unpack $ Base16.encode implH))
+
+                                     when verbose $ do
+                                       putStrLn ("\n############### Name Hashes ############")
+                                       forM_ nameHashes $ \nh -> do
+                                         let formatHash h =
+                                               if B.null h
+                                                 then ""
+                                                 else "0x" ++ B.unpack (Base16.encode h)
+                                             srcHex = formatHash (InterfaceFiles.nhSrcHash nh)
+                                             pubHex = formatHash (InterfaceFiles.nhPubHash nh)
+                                             implHex = formatHash (InterfaceFiles.nhImplHash nh)
+                                             showDep (qn,h) = (prstr qn, take 16 (B.unpack $ Base16.encode h))
+                                         putStrLn ("Name   : " ++ prstr (InterfaceFiles.nhName nh))
+                                         putStrLn ("  src  : " ++ srcHex)
+                                         putStrLn ("  pub  : " ++ pubHex)
+                                         putStrLn ("  impl : " ++ implHex)
+                                         when (not (null (InterfaceFiles.nhPubDeps nh))) $
+                                           putStrLn ("  pubDeps : " ++ show (map showDep (InterfaceFiles.nhPubDeps nh)))
+                                         when (not (null (InterfaceFiles.nhImplDeps nh))) $
+                                           putStrLn ("  implDeps: " ++ show (map showDep (InterfaceFiles.nhImplDeps nh)))
 
                                      putStrLn ("\n############### Interface ############")
                                      let NModule te mdoc = nmod

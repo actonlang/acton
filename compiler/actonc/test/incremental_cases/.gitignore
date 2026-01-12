@@ -1,0 +1,7 @@
+/Build.act
+/src/
+/deps/
+/out/
+/build.zig*
+/.actonc.lock
+/.acton.lock

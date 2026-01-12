@@ -1,8 +1,11 @@
   Stale a: source changed
+  Hash deltas a: ~aaa{src 8df17e22 -> c7be204e, pub effe126a -> 4d083345, impl b0284109 -> c398dfc8}
    Finished type check of     rebuild/a     0.000 s
-  Stale b: iface changes in a df462c35 → 366981bd
+  Stale b: pub changes in a.aaa effe126a → 4d083345 (used by baa)
+  Hash deltas b: ~baa{pub abea1a6b -> 18d7ab30, impl 6e08189f -> 474f79bc}
    Finished type check of     rebuild/b     0.000 s
-  Stale c: iface changes in b 5648a43c → f371c709
+  Stale c: pub changes in b.baa abea1a6b → 18d7ab30 (used by main)
+  Hash deltas c: ~main{impl adb3b9a2 -> 11307dd5}
    Finished type check of     rebuild/c     0.000 s
    Finished compilation of    rebuild/a     0.000 s
    Finished compilation of    rebuild/b     0.000 s

@@ -75,8 +75,8 @@ tests:
       - -threaded
       - -rtsopts
       - -with-rtsopts=-N
-  rebuild:
-    main:                test_rebuild.hs
+  incremental:
+    main:                test_incremental.hs
     source-dirs:         .
     ghc-options:
       - -threaded

@@ -25,7 +25,7 @@ import Control.DeepSeq
 import Prelude hiding((<>))
 
 version :: [Int]
-version = [0,8]
+version = [0,10]
 
 data Module     = Module        { modname::ModName, imps::[Import], mbody::Suite } deriving (Eq,Show,Generic,NFData)
 
@@ -433,6 +433,13 @@ instance Data.Hashable.Hashable Name where
     hashWithSalt s (Derived  n1 n2) = Data.Hashable.hashWithSalt s (n1,n2)
     hashWithSalt s (Internal pre str n) = Data.Hashable.hashWithSalt s (show pre,str,n)
 
+
+data Witness            = WClass    { binds::QBinds, wtype::Type, proto::PCon, wname::QName, wsteps::WPath, wopts::Int }
+                        | WInst     { binds::QBinds, wtype::Type, proto::PCon, wname::QName, wsteps::WPath }
+                        deriving (Show)
+
+typeDecl (_,NDef{})     = False
+typeDecl _              = True
 
 -- Finding type leaves -----
 

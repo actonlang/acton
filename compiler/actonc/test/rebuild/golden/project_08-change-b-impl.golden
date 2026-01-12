@@ -1,6 +1,8 @@
   Fresh a: using cached .ty
   Stale b: source changed
+  Hash deltas b: ~DocInfo{impl 21b2cfa7 -> e90abbf8}, ~baa{src a5c65622 -> 1bb00ba9, impl 777ec0a7 -> 6e08189f}
    Finished type check of     rebuild/b     0.000 s
-  Fresh c: using cached .ty
+  Stale c: impl changes in b.baa 777ec0a7 → 6e08189f (used by main)
    Finished compilation of    rebuild/b     0.000 s
+   Finished compilation of    rebuild/c     0.000 s
    Finished final compilation               0.000 s

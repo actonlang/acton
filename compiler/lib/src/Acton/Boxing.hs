@@ -347,7 +347,6 @@ instance Boxing Stmt where
           | isUnboxable t           = return ([], AugAssign NoLoc (unbox t x1) op (unbox t x2))
              where t                = head ts
                    op               = bin2Aug attr
-<<<<<<< HEAD
          boxingincrBinop w attr es _ = return ([n],  MutAssign l tg (eCall (eDot (eQVar w) attr) es))
 -}
     boxing env (MutAssign l t e)    = do (ws0,t1) <- boxing env t
@@ -538,4 +537,3 @@ bin2Aug kw
    | kw == iorKW                   = BOrA
    | kw == ixorKW                  = BXorA
    | kw == iandKW                  = BAndA
-

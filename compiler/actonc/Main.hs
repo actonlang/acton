@@ -40,6 +40,7 @@ import qualified Acton.Builtin
 import qualified Acton.DocPrinter as DocP
 import qualified Acton.Diagnostics as Diag
 import qualified Acton.SourceProvider as Source
+import Acton.Testing
 import Acton.Compile
 import Utils
 import qualified Pretty
@@ -56,7 +57,7 @@ import Control.Monad
 import Data.Default.Class (def)
 import Data.List.Split
 import Data.IORef
-import Data.Maybe (catMaybes, isJust, listToMaybe)
+import Data.Maybe (catMaybes, isJust, listToMaybe, fromMaybe)
 import Data.Monoid ((<>))
 import Data.Ord
 import Data.Graph
@@ -74,7 +75,7 @@ import qualified Filesystem.Path.CurrentOS as Fsco
 import GHC.Conc (getNumCapabilities, getNumProcessors, setNumCapabilities, myThreadId, threadCapability)
 import Prettyprinter (unAnnotate)
 import Prettyprinter.Render.Text (hPutDoc)
-import Data.List (isPrefixOf, isSuffixOf, find, partition, foldl', nub)
+import Data.List (isPrefixOf, isSuffixOf, find, partition, foldl', nub, intercalate)
 import System.Clock
 import System.Directory
 import System.Directory.Recursive
@@ -99,9 +100,7 @@ import Text.Printf
 
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy as BL
-import Data.Binary (encode)
 import qualified Data.ByteString.Base16 as Base16
-import qualified Crypto.Hash.SHA256 as SHA256
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Types as AesonTypes
 import qualified Data.Aeson.Key as AesonKey
@@ -378,23 +377,6 @@ buildProjectOnce gopts opts = do
 
 data TestMode = TestModeRun | TestModeList | TestModePerf deriving (Eq, Show)
 
-data TestResult = TestResult
-  { trModule       :: String
-  , trName         :: String
-  , trComplete     :: Bool
-  , trSuccess      :: Maybe Bool
-  , trException    :: Maybe String
-  , trOutput       :: Maybe String
-  , trStdOut       :: Maybe String
-  , trStdErr       :: Maybe String
-  , trFlaky        :: Bool
-  , trNumFailures  :: Int
-  , trNumErrors    :: Int
-  , trNumIterations :: Int
-  , trTestDuration :: Double
-  , trRaw          :: Aeson.Value
-  } deriving (Show)
-
 -- | Entry point for actonc test; configures options and selects mode/watch.
 runTests :: C.GlobalOptions -> C.TestCommand -> IO ()
 runTests gopts cmd = do
@@ -429,7 +411,7 @@ runTestsOnce gopts opts topts mode paths = do
       TestModeList -> listProjectTests opts paths topts modules
       _ -> do
         maxParallel <- testMaxParallel gopts
-        exitCode <- runProjectTests opts paths topts mode modules maxParallel
+        exitCode <- runProjectTests gopts opts paths topts mode modules maxParallel
         exitWithTestCode exitCode
 
 -- | Watch mode for tests that rebuilds incrementally and reruns changed modules.
@@ -463,7 +445,7 @@ runTestsWatch gopts opts topts mode paths = do
                       affected <- dependentTestModulesFromHeaders paths srcFiles changedModules
                       return (filter (`elem` testModules) affected)
                   unless (null modulesToTest) $ do
-                    _ <- runProjectTests opts paths topts mode modulesToTest testParallel
+                    _ <- runProjectTests gopts opts paths topts mode modulesToTest testParallel
                     return ()
     ownerLock <- tryCompileOwnerLock projDir
     case ownerLock of
@@ -540,8 +522,8 @@ listProjectTests opts paths topts modules = do
         System.Exit.exitSuccess
 
 -- | Run selected tests concurrently, stream results, and return an exit code.
-runProjectTests :: C.CompileOptions -> Paths -> C.TestOptions -> TestMode -> [String] -> Int -> IO Int
-runProjectTests opts paths topts mode modules maxParallel = do
+runProjectTests :: C.GlobalOptions -> C.CompileOptions -> Paths -> C.TestOptions -> TestMode -> [String] -> Int -> IO Int
+runProjectTests gopts opts paths topts mode modules maxParallel = do
     timeStart <- getTime Monotonic
     let wantedModules = Data.List.sort (filterModules (C.testModules topts) modules)
     testsByModule <- forM wantedModules $ \modName -> do
@@ -558,9 +540,52 @@ runProjectTests opts paths topts mode modules maxParallel = do
         let displayNames = [ formatTestName modName testName | (modName, testName) <- allTests ]
             maxNameLen = maximum (map length displayNames)
             nameWidth = max 20 maxNameLen + 5
+            runContext = TestRunContext
+              { trcCompilerVersion = getVer
+              , trcTarget = C.target opts
+              , trcOptimize = show (C.optimize opts)
+              , trcMode = show mode
+              , trcArgs = testCmdArgs topts
+              }
+        cache <- readTestCache (testCachePath paths) runContext
+        moduleHashes <- forM testsByModule $ \(modName, _) -> do
+          nameHashes <- readModuleNameHashes paths modName
+          return (modName, nameHashes)
+        let nameHashesByModule = M.fromList moduleHashes
+            ctxHash = contextHashBytes runContext
+            seedCache = M.fromList
+              [ (A.modName (splitOn "." modName), nameMap)
+              | (modName, nameMap) <- M.toList nameHashesByModule
+              ]
+        depCacheRef <- newIORef seedCache
+        testHashInfos <- M.fromList <$> forM allTests (\(modName, testName) -> do
+          let nameMap = M.findWithDefault M.empty modName nameHashesByModule
+          info <- buildTestHashInfo depCacheRef paths ctxHash nameMap testName
+          return (mkTestKey modName testName, info))
+        let cacheEntries = tcTests cache
+        when (C.verbose gopts) $
+          putStrLn (formatTestCacheContext ctxHash (testCachePath paths))
+        classified <- forM allTests $ \(modName, testName) -> do
+          let key = mkTestKey modName testName
+              info = M.findWithDefault (TestHashInfo Nothing Nothing Nothing Nothing) key testHashInfos
+              entry = M.lookup key cacheEntries
+          when (C.verbose gopts) $
+            putStrLn (formatTestCacheLog modName testName info entry)
+          case entry of
+            Just cached
+              | Just runHash <- thiRunHash info
+              , tceRunHash cached == runHash ->
+                  return (Left (testResultFromCache modName testName (tceResult cached)))
+            _ -> return (Right (modName, testName))
+        let (cachedResults, testsToRun) = partitionEithers classified
+            showCached = C.testShowCached topts
+        when (showCached && not (null cachedResults)) $
+          putStrLn ("Using cached results for " ++ show (length cachedResults) ++ " tests")
         resultChan <- newChan
-        printer <- async (printTestResults mode nameWidth (C.testShowLog topts) resultChan)
-        results <- runWithLimit maxParallel allTests $ \(modName, testName) -> do
+        printer <- async (printTestResults mode nameWidth (C.testShowLog topts) showCached resultChan)
+        when showCached $
+          forM_ cachedResults $ \res -> writeChan resultChan (Just res)
+        resultsRun <- runWithLimit maxParallel testsToRun $ \(modName, testName) -> do
           res <- runModuleTest opts paths topts mode modName testName
           writeChan resultChan (Just res)
           return res
@@ -568,10 +593,29 @@ runProjectTests opts paths topts mode modules maxParallel = do
         _ <- wait printer
         timeEnd <- getTime Monotonic
         when (C.testGoldenUpdate topts) $
-          updateGoldenFiles paths results
+          updateGoldenFiles paths resultsRun
         when (C.testRecord topts) $
-          writePerfData paths results
-        printTestSummary (timeEnd - timeStart) (C.testShowLog topts) results
+          writePerfData paths resultsRun
+        let results = cachedResults ++ resultsRun
+            updateEntry acc res =
+              let key = mkTestKey (trModule res) (trName res)
+                  info = M.lookup key testHashInfos
+                  runHash = maybe "" (\ti -> maybe "" id (thiRunHash ti)) info
+                  implHashHex = info >>= fmap (B.unpack . Base16.encode) . thiImplHash
+                  entry = TestCacheEntry
+                    { tceRunHash = runHash
+                    , tceImplHash = implHashHex
+                    , tceResult = cachedResultFromTest res
+                    }
+              in M.insert key entry acc
+            cacheEntries' = foldl' updateEntry cacheEntries resultsRun
+            newCache = TestCache
+              { tcVersion = testCacheVersion
+              , tcContext = runContext
+              , tcTests = cacheEntries'
+              }
+        writeTestCache (testCachePath paths) newCache
+        printTestSummary (timeEnd - timeStart) (C.testShowLog topts) showCached results
 
 -- | Filter module names based on CLI-provided allow lists.
 filterModules :: [String] -> [String] -> [String]
@@ -638,6 +682,7 @@ runModuleTest opts paths topts mode modName testName = do
               , trNumIterations = 0
               , trTestDuration = 0
               , trRaw = Aeson.Null
+              , trCached = False
               }
         return fallback
 
@@ -681,7 +726,7 @@ readModuleImports paths mn = do
         hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader tyFile
         case hdrE of
           Left _ -> return []
-          Right (_hash, _ih, imps, _roots, _doc) -> return (map fst imps)
+          Right (_hash, _ih, _implH, imps, _nameHashes, _roots, _doc) -> return (map fst imps)
 
 dependentTestModulesFromHeaders :: Paths -> [FilePath] -> [String] -> IO [String]
 dependentTestModulesFromHeaders paths srcFiles changedModules = do
@@ -715,17 +760,18 @@ formatTestName moduleName testName =
 
 -- | Compute the status label (OK/FAIL/ERR/FLAKY) for a test.
 formatTestStatus :: TestResult -> String
-formatTestStatus res
-  | trSuccess res == Just True && trException res == Nothing = "OK"
-  | otherwise =
-      let base
-            | trNumErrors res > 0 && trNumFailures res > 0 = "ERR/FAIL"
-            | trNumErrors res > 0 = "ERR"
-            | trNumFailures res > 0 = "FAIL"
-            | trSuccess res == Just False = "FAIL"
-            | otherwise = "ERR"
-          prefix = if trFlaky res then "FLAKY " else ""
-      in prefix ++ base
+formatTestStatus res =
+    let ok = trSuccess res == Just True && trException res == Nothing
+        base
+          | ok = "OK"
+          | trNumErrors res > 0 && trNumFailures res > 0 = "ERR/FAIL"
+          | trNumErrors res > 0 = "ERR"
+          | trNumFailures res > 0 = "FAIL"
+          | trSuccess res == Just False = "FAIL"
+          | otherwise = "ERR"
+        prefix = if not ok && trFlaky res then "FLAKY " else ""
+        cached = if trCached res then "CACHED " else ""
+    in cached ++ prefix ++ base
 
 -- | Format a single test result line with alignment and timing.
 formatTestLine :: TestMode -> Int -> TestResult -> String
@@ -738,19 +784,20 @@ formatTestLine _ nameWidth res =
     in prefix0 ++ padding ++ status ++ ": " ++ runs
 
 -- | Drain test results from the worker channel and print them.
-printTestResults :: TestMode -> Int -> Bool -> Chan (Maybe TestResult) -> IO ()
-printTestResults mode nameWidth showLog chan = go
+printTestResults :: TestMode -> Int -> Bool -> Bool -> Chan (Maybe TestResult) -> IO ()
+printTestResults mode nameWidth showLog showCached chan = go
   where
     go = do
       evt <- readChan chan
       case evt of
         Nothing -> return ()
         Just res -> do
-          putStrLn (formatTestLine mode nameWidth res)
-          let ok = trSuccess res == Just True && trException res == Nothing
-          unless (ok || showLog) $
-            forM_ (trException res) $ \exc ->
-              mapM_ (\line -> putStrLn ("    " ++ line)) (lines exc)
+          when (showCached || not (trCached res)) $ do
+            putStrLn (formatTestLine mode nameWidth res)
+            let ok = trSuccess res == Just True && trException res == Nothing
+            unless (ok || showLog) $
+              forM_ (trException res) $ \exc ->
+                mapM_ (\line -> putStrLn ("    " ++ line)) (lines exc)
           go
 
 -- | Parse newline-delimited JSON emitted by test binaries.
@@ -820,6 +867,7 @@ parseTestInfoValue = Aeson.withObject "TestInfo" $ \o -> do
       , trNumIterations = numIterations
       , trTestDuration = testDuration
       , trRaw = Aeson.Object o
+      , trCached = False
       }
 
 -- | Pick the final or last-seen TestResult from a stream.
@@ -833,16 +881,18 @@ pickFinalTestInfo infos =
           Nothing -> Just (head xs)
 
 -- | Print a summary line and return the failure/error exit code.
-printTestSummary :: TimeSpec -> Bool -> [TestResult] -> IO Int
-printTestSummary elapsed showLog results = do
+printTestSummary :: TimeSpec -> Bool -> Bool -> [TestResult] -> IO Int
+printTestSummary elapsed showLog showCached results = do
     let total = length results
         failures = length [ r | r <- results, trSuccess r == Just False ]
         errors = length [ r | r <- results, trSuccess r == Nothing ]
+        hiddenCachedSuccess = not showCached && any (\r -> trCached r && trSuccess r == Just True) results
     case total of
       0 -> do
         putStrLn "Nothing to test"
         return 0
       _ -> do
+        putStrLn ""
         if errors > 0 && failures > 0
           then putStrLn (show errors ++ " error and " ++ show failures ++ " failure out of " ++ show total ++ " tests (" ++ fmtTime elapsed ++ ")")
           else if errors > 0
@@ -850,8 +900,11 @@ printTestSummary elapsed showLog results = do
             else if failures > 0
               then putStrLn (show failures ++ " out of " ++ show total ++ " tests failed (" ++ fmtTime elapsed ++ ")")
               else putStrLn ("All " ++ show total ++ " tests passed (" ++ fmtTime elapsed ++ ")")
+        putStrLn ""
         when showLog $
-          printTestDetails showLog results
+          printTestDetails showLog showCached results
+        when hiddenCachedSuccess $
+          putStrLn "Showing tests that ran in this invocation; cached successes are hidden. Cached failures/errors are still shown. Use --show-cached to include cached successes."
         if errors > 0
           then return 2
           else if failures > 0
@@ -859,19 +912,22 @@ printTestSummary elapsed showLog results = do
             else return 0
 
 -- | Print per-test failures and optional logs after the summary.
-printTestDetails :: Bool -> [TestResult] -> IO ()
-printTestDetails showLog results = do
+printTestDetails :: Bool -> Bool -> [TestResult] -> IO ()
+printTestDetails showLog showCached results = do
     forM_ results $ \res -> do
       let status = case trSuccess res of
                      Just True -> "OK"
                      Just False -> "FAIL"
                      Nothing -> "ERR"
           display = displayTestName (trName res)
-      when (showLog || status /= "OK") $ do
-        putStrLn ("Test " ++ trModule res ++ "." ++ display ++ ": " ++ status)
-        case trException res of
-          Just exc -> putStrLn ("  " ++ exc)
-          Nothing -> return ()
+          cached = if trCached res then " (cached)" else ""
+      let showResult = showCached || not (trCached res) || status /= "OK"
+      when showResult $ do
+        when (showLog || status /= "OK") $ do
+          putStrLn ("Test " ++ trModule res ++ "." ++ display ++ ": " ++ status ++ cached)
+          case trException res of
+            Just exc -> putStrLn ("  " ++ exc)
+            Nothing -> return ()
         when (showLog || status /= "OK") $ do
           case trOutput res of
             Just out | not (null out) -> putStrLn ("  Output:\n" ++ out)
@@ -1309,7 +1365,7 @@ printDocs gopts opts = do
             ".ty" -> do
                 paths <- findPaths filename defaultCompileOptions
                 env0 <- Acton.Env.initEnv (sysTypes paths) False
-                Acton.Types.showTyFile env0 (modName paths) filename
+                Acton.Types.showTyFile env0 (modName paths) filename (C.verbose gopts)
 
             ".act" -> do
                 let modname = A.modName $ map (replace ".act" "") $ splitOn "/" $ fileBody
@@ -1725,7 +1781,7 @@ expectedRootStubs paths tasks = do
             tyPath = outbase ++ ".ty"
         hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader tyPath
         case hdrE of
-          Right (_, _, _, rs, _) -> return (map (mkStub outbase) rs)
+          Right (_, _, _implH, _imps, _nameHashes, rs, _) -> return (map (mkStub outbase) rs)
           _ -> return []
     return (concat roots)
   where
@@ -1750,16 +1806,21 @@ Build Pipeline Overview
 We want the compiler to be fast. The primary principle by which to achieve this
 is to avoid doing unnecessary work. Practically, this happens by caching
 information in .ty files and only selectively reading what we need. We do not
-eagerly load whole .ty files but rather read in "header information" such as
-which imports, the hash of the source code, which root actors and docstring.
-This way we can quickly determine what needs to be recompiled and what can be
-reused from previous compilations. We also use content hashing of the public
-interface and imports to make rebuild decisions precise and transitive:
-- Public interface hash is computed from the doc-free NameInfo, so doc-only
-  edits never cause dependents to rebuild.
-- The interface hash is augmented with the interface hashes of the module’s
-  imports (sorted). If an import’s interface changes, this module’s interface
-  hash changes too, which cleanly propagates rebuilds.
+eagerly load whole .ty files but rather read the header fields: moduleSrcBytesHash,
+modulePubHash, moduleImplHash, imports, per-name hashes (src/pub/impl + deps),
+roots, and docstrings. This lets us quickly decide which passes to rerun and
+reuse work from previous compilations.
+
+Public hashing: each top-level name gets a pubHash computed from its doc-free
+signature plus the pub hashes of its public dependencies. The modulePubHash is
+then the hash of pubHash values for exported names. Doc-only edits do not affect
+pubHash, and a downstream module only needs front passes when a pubHash changes.
+
+Implementation hashing: each top-level name gets an implHash computed from its
+source hash plus the impl hashes of its dependencies. The moduleImplHash is the
+hash of all per-name impl hashes. We embed moduleImplHash into generated .c/.h
+files so we can skip back passes when codegen is already up to date, and we use
+it (with impl deps) to drive the test cache.
 
 Terminology
 - ActonTask: a module parsed from source (.act) and that needs to be compiled
@@ -1775,7 +1836,7 @@ High-level Steps
        header imports and create a TyTask stub (no heavy decode) for graph
        building. Use --ignore-compiler-version to skip the actonc part.
      - If .act appears newer than .ty → verify by content hash:
-       – If stored srcHash == current srcHash → header is still valid (TyTask)
+       – If stored moduleSrcBytesHash == current bytes hash → header is still valid (TyTask)
        – Else → parse .act now to get accurate imports (ActonTask)
    - This ensures that .ty is up to date with the .act source and lets us
      read module imports/roots/docstring from the header, which is much faster
@@ -1791,16 +1852,19 @@ High-level Steps
 3) Compile and build
    - compileTasks orders modules in dependency (topological) order and decides
      rebuilds as it goes:
-     - Source changed (ActonTask) → compile now
-     - Otherwise, compare each project import’s recorded interface hash from the
-       dependent’s .ty header with the provider’s current interface hash. The
-       current hash comes directly from the compile result for modules built in
-       this run, or from a fresh provider’s .ty header. Only if a hash differs
-       do we rebuild the dependent.
-   - We maintain an ifaceMap while walking modules in topological order. After a
-     module compiles, we insert its freshly computed interface hash; when a
+     - Source changed (ActonTask) → run front passes
+     - Otherwise, compare each used pub dependency hash from the dependent’s
+       .ty header with the provider’s current pub hash. If any differ → front.
+     - Otherwise, compare each used impl dependency hash from the dependent’s
+       .ty header with the provider’s current impl hash. If any differ → refresh
+       impl hashes and run back passes.
+     - Otherwise, if generated .c/.h hashes do not match moduleImplHash → run
+       back passes.
+     - Otherwise → module is fresh (no work).
+   - We maintain a pubMap while walking modules in topological order. After a
+     module compiles, we insert its freshly computed public hash; when a
      module is fresh (TyTask), we insert the recorded header hash. Dependents
-     then consult ifaceMap to detect interface deltas among their imports.
+     then consult pubMap to detect public deltas among their imports.
    - TyTask items remain lazy; code that needs only small bits (e.g., writeRootC)
      reads roots/doc from the header instead of forcing heavy loads.
    - Final Zig C compilation...
@@ -1841,7 +1905,7 @@ writeRootC env gopts opts paths tasks binTask = do
         -- was rebuilt during this run.
         tyPath <- Acton.Env.findTyFile (searchPath paths) m
         rootsHeader <- case tyPath of
-                         Just ty -> do (_, _, _, roots, _) <- InterfaceFiles.readHeader ty; return roots
+                         Just ty -> do (_, _, _implH, _imps, _nameHashes, roots, _) <- InterfaceFiles.readHeader ty; return roots
                          Nothing -> return []
         let rootsEnv = case Acton.Env.lookupMod m env of
                          Nothing -> []
@@ -2262,7 +2326,7 @@ filterMainActor env paths binTask = do
       Just ty -> do
         hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader ty
         case hdrE of
-          Right (_, _, _, roots, _) | n `elem` roots -> return (Just binTask)
+          Right (_, _, _implH, _imps, _nameHashes, roots, _) | n `elem` roots -> return (Just binTask)
           _ -> checkEnv
       Nothing -> checkEnv
 

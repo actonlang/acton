@@ -1,7 +1,5 @@
   Fresh a: using cached .ty
-  Stale b: source changed
-  Hash deltas b: ~DocInfo{src c1e824d9 -> a9b2749d, impl e90abbf8 -> 792f0537}
-   Finished type check of     rebuild/b     0.000 s
+  Stale b: generated code out of date {impl c missing -> 00ae02a0, h missing -> 00ae02a0}
   Fresh c: using cached .ty
    Finished compilation of    rebuild/b     0.000 s
    Finished final compilation               0.000 s

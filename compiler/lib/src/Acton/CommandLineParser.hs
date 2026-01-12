@@ -115,6 +115,7 @@ data TestCommand
 data TestOptions = TestOptions
     { testCompile      :: CompileOptions
     , testShowLog      :: Bool
+    , testShowCached   :: Bool
     , testRecord       :: Bool
     , testGoldenUpdate :: Bool
     , testIter         :: Int
@@ -279,6 +280,7 @@ testOptions :: Parser TestOptions
 testOptions = TestOptions
     <$> compileOptions
     <*> switch (long "show-log"      <> help "Show test log output")
+    <*> switch (long "show-cached"   <> help "Show cached test results")
     <*> switch (long "record"        <> help "Record test performance results")
     <*> switch (long "golden-update" <> long "accept" <> help "Accept current test output as expected golden values")
     <*> option auto (long "iter"     <> metavar "N" <> value (-1) <> help "Number of iterations to run a test")

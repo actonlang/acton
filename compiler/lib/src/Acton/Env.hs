@@ -400,6 +400,7 @@ instance Unalias (Either QName QName) where
 
 -- Env construction and modification -------------------------------------------------------------------------------------------
 
+-- | Initialize the base environment; the builtin mode skips interface loading.
 -- first variant is special case for compiling __builtin__.act
 initEnv                    :: FilePath -> Bool -> IO Env0
 initEnv path True          = return $ EnvF{ names = [(nPrim,NMAlias mPrim)],
@@ -410,7 +411,7 @@ initEnv path True          = return $ EnvF{ names = [(nPrim,NMAlias mPrim)],
                                             thismod = Nothing,
                                             context = [],
                                             envX = () }
-initEnv path False         = do (_,nmod,_,_,_,_,_,_) <- InterfaceFiles.readFile (joinPath [path,"__builtin__.ty"])
+initEnv path False         = do (_,nmod,_,_,_,_,_,_,_,_) <- InterfaceFiles.readFile (joinPath [path,"__builtin__.ty"])
                                 let NModule envBuiltin builtinDocstring = nmod
                                     env0 = EnvF{ names = [(nPrim,NMAlias mPrim), (nBuiltin,NMAlias mBuiltin)],
                                                  imports = [mPrim,mBuiltin],
@@ -1201,6 +1202,7 @@ findTyFile spaths mn = go spaths
         then return (Just fullPath)
         else go ps
 
+-- | Import a module, loading its .ty and extending the environment.
 doImp                        :: [FilePath] -> EnvF x -> ModName -> IO (EnvF x, TEnv)
 doImp spath env m            = case lookupMod m env of
                                     Just te -> return (env, te)
@@ -1209,7 +1211,7 @@ doImp spath env m            = case lookupMod m env of
                                         case tyFile of
                                           Nothing -> fileNotFound m
                                           Just tyF -> do
-                                            (ms,nmod,_,_,_,_,_,_) <- InterfaceFiles.readFile tyF
+                                            (ms,nmod,_,_,_,_,_,_,_,_) <- InterfaceFiles.readFile tyF
                                             env' <- subImp spath env ms
                                             let NModule te mdoc = nmod
                                             return (addMod m te mdoc env', te)
