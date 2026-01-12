@@ -95,14 +95,14 @@ instance Pretty (Name,Kind) where
 
 
 autoQuantS env (TSchema l q t)      = TSchema l (q ++ auto_q) t
-  where auto_q                      = map quant $ nub (vfree q ++ vfree t) \\ (tvSelf : qbound q ++ tvars env)
+  where auto_q                      = map qbind $ nub (vfree q ++ vfree t) \\ (tvSelf : qbound q ++ tvars env)
 
 autoQuantD env (Def l n q p k t b d x doc)
                                     = Def l n (q ++ auto_q) p k t b d x doc
-  where auto_q                      = map quant $ nub (vfree q ++ vfree p ++ vfree k ++ vfree t) \\ (tvSelf : qbound q ++ tvars env)
+  where auto_q                      = map qbind $ nub (vfree q ++ vfree p ++ vfree k ++ vfree t) \\ (tvSelf : qbound q ++ tvars env)
 autoQuantD env (Extension l q c ps b doc)
                                     = Extension l (q ++ auto_q) c ps b doc
-  where auto_q                      = map quant $ nub (vfree q ++ vfree c ++ vfree ps) \\ (tvSelf : qbound q ++ tvars env)
+  where auto_q                      = map qbind $ nub (vfree q ++ vfree c ++ vfree ps) \\ (tvSelf : qbound q ++ tvars env)
 autoQuantD env d                    = d
 
 

@@ -347,7 +347,7 @@ pVar' n         = PVar NoLoc n Nothing
 monotype t      = TSchema NoLoc [] t
 tSchema q t     = TSchema NoLoc q t
 
-quant v         = QBind v []
+qbind v         = QBind v []
 qbound q        = [ tv | QBind tv _ <- q ]
 
 tVar v          = TVar NoLoc v
