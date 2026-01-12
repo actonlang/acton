@@ -164,9 +164,9 @@ ensureCleanAt proj = do
   let handler :: IOError -> IO (); handler _ = pure ()
   E.catch (removeDirectoryRecursive src) handler
   createDirectoryIfMissing True src
-  let toml = proj </> "Acton.toml"
-  exists <- doesFileExist toml
-  unless exists $ writeFileUtf8 toml ""
+  let buildAct = proj </> "Build.act"
+  exists <- doesFileExist buildAct
+  unless exists $ writeFileUtf8 buildAct ""
   -- Remove previous build output if present
   let outDir = proj </> "out"
   outExists <- doesDirectoryExist outDir

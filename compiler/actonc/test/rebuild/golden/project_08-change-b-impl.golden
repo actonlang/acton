@@ -1,3 +1,4 @@
+Resolving dependencies (fetching if missing)...
   Fresh a: using cached .ty
   Stale b: source changed
   Hash deltas b: ~DocInfo{impl 21b2cfa7 -> e90abbf8}, ~baa{src a5c65622 -> 1bb00ba9, impl 777ec0a7 -> 6e08189f}

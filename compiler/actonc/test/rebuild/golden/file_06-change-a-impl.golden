@@ -1,4 +1,5 @@
 Building file src/c.act in project .
+Resolving dependencies (fetching if missing)...
   Stale a: source changed
   Hash deltas a: ~aaa{src b5d455b9 -> 8df17e22, impl a2323499 -> b0284109}
    Finished type check of     rebuild/a     0.000 s

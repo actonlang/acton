@@ -1,3 +1,4 @@
+Resolving dependencies (fetching if missing)...
   Fresh a: using cached .ty
   Stale b: generated code out of date {impl c missing -> 00ae02a0, h missing -> 00ae02a0}
   Fresh c: using cached .ty

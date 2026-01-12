@@ -1,3 +1,4 @@
+Resolving dependencies (fetching if missing)...
   Stale a: source changed
   Hash deltas a: ~aaa{src 8df17e22 -> c7be204e, pub effe126a -> 4d083345, impl b0284109 -> c398dfc8}
    Finished type check of     rebuild/a     0.000 s

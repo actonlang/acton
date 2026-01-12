@@ -247,8 +247,8 @@ createProject name = do
     iff (projDirExists) $
         printErrorAndExit ("Unable to create project " ++ name ++ ", directory already exists.")
     createDirectoryIfMissing True name
-    writeFile (joinPath [ curDir, name, "Acton.toml" ]) ""
-    paths <- findPaths (joinPath [ curDir, name, "Acton.toml" ]) defaultCompileOptions
+    writeFile (joinPath [ curDir, name, "Build.act" ]) ""
+    paths <- findPaths (joinPath [ curDir, name, "Build.act" ]) defaultCompileOptions
     writeFile (joinPath [ curDir, name, ".gitignore" ]) (
       ".actonc.lock\n" ++
       "build.zig\n" ++
@@ -388,7 +388,6 @@ loadProjectPathsForBuild :: C.CompileOptions -> IO Paths
 loadProjectPathsForBuild opts = do
     curDir <- getCurrentDirectory
     loadProjectPathsForBuildAt curDir opts
-
 requireProjectConfigPath :: FilePath -> IO FilePath
 requireProjectConfigPath curDir = do
     let candidates =
@@ -421,7 +420,6 @@ withScratchDirLock action = do
         let scratchDir = dropExtension lockPath
         removeDirectoryRecursive scratchDir `catch` ignoreNotExists
         action scratchDir `finally` unlockFile lock
-
 withTempDirOpts :: C.CompileOptions -> (C.CompileOptions -> Bool -> IO a) -> IO a
 withTempDirOpts opts action
   | C.tempdir opts /= "" = action opts False
@@ -478,9 +476,9 @@ runTests gopts cmd = do
           , C.only_build = False
           }
     curDir <- getCurrentDirectory
-    paths <- findPaths (joinPath [ curDir, "Acton.toml" ]) opts
+    paths <- findPaths (joinPath [ curDir, "Build.act" ]) opts
     when (isTmp paths) $
-      printErrorAndExit "Acton.toml not found in current directory"
+      printErrorAndExit "Project config not found in current directory (expected Build.act)"
     requireProjectLayout paths
     if C.watch opts0
       then case mode of
@@ -1075,23 +1073,11 @@ buildFileOnce gopts opts file = do
               putStrLn("Building file " ++ file ++ " using temporary directory " ++ C.tempdir opts)
             compileFiles sp gopts opts [file] False
           else do
-            home <- getHomeDirectory
-            let basePath = joinPath [home, ".cache", "acton", "scratch"]
-            createDirectoryIfMissing True basePath
-            maybeLockInfo <- findAvailableScratch basePath
-            case maybeLockInfo of
-              Nothing -> error "Could not acquire any scratch directory lock"
-              Just (lock, lockPath) -> do
-                let scratchDir = dropExtension lockPath
-                iff (not(C.quiet gopts)) $ do
-                  let scratch_dir = if (C.verbose gopts) then " " ++ scratchDir else ""
-                  putStrLn("Building file " ++ file ++ " using temporary scratch directory" ++ scratch_dir)
-                removeDirectoryRecursive scratchDir `catch` handleNotExists
-                compileFiles sp gopts (opts { C.tempdir = scratchDir }) [file] False
-                unlockFile lock
-  where
-    handleNotExists :: IOException -> IO ()
-    handleNotExists _ = return ()
+            withScratchDirLock $ \scratchDir -> do
+              iff (not(C.quiet gopts)) $ do
+                let scratch_dir = if (C.verbose gopts) then " " ++ scratchDir else ""
+                putStrLn("Building file " ++ file ++ " using temporary scratch directory" ++ scratch_dir)
+              compileFiles sp gopts (opts { C.tempdir = scratchDir }) [file] False
 
 -- | Watch a single file and rebuild on changes.
 watchFile :: C.GlobalOptions -> C.CompileOptions -> FilePath -> IO ()
@@ -1113,23 +1099,12 @@ watchFile gopts opts file = do
                     void $ compileFilesChanged sp gopts opts [absFile] False mChanged (Just (sched, gen)) (Just (progressUI, progressState))
             runWatchFile gopts absFile sched runOnce
           else do
-            home <- getHomeDirectory
-            let basePath = joinPath [home, ".cache", "acton", "scratch"]
-            createDirectoryIfMissing True basePath
-            maybeLockInfo <- findAvailableScratch basePath
-            case maybeLockInfo of
-              Nothing -> error "Could not acquire any scratch directory lock"
-              Just (lock, lockPath) -> do
-                let scratchDir = dropExtension lockPath
-                    opts' = opts { C.tempdir = scratchDir }
-                removeDirectoryRecursive scratchDir `catch` handleNotExists
-                let runOnce gen mChanged =
-                      whenCurrentGen sched gen $
-                        void $ compileFilesChanged sp gopts opts' [absFile] False mChanged (Just (sched, gen)) (Just (progressUI, progressState))
-                runWatchFile gopts absFile sched runOnce `finally` unlockFile lock
-  where
-    handleNotExists :: IOException -> IO ()
-    handleNotExists _ = return ()
+            withScratchDirLock $ \scratchDir -> do
+              let opts' = opts { C.tempdir = scratchDir }
+                  runOnce gen mChanged =
+                    whenCurrentGen sched gen $
+                      void $ compileFilesChanged sp gopts opts' [absFile] False mChanged (Just (sched, gen)) (Just (progressUI, progressState))
+              runWatchFile gopts absFile sched runOnce
 
 data WatchTrigger = WatchFull | WatchIncremental FilePath deriving (Eq, Show)
 
@@ -1225,7 +1200,7 @@ runWatchProject gopts projDir srcRoot sched runOnce = do
         isActEvent ev = isJust (actWatchTrigger ev)
         isRootEvent ev =
           let name = takeFileName (FS.eventPath ev)
-          in name `elem` ["Acton.toml", "Build.act", "build.act.json"]
+          in name `elem` ["Build.act", "build.act.json", "Acton.toml"]
     FS.withManager $ \mgr -> do
       _ <- FS.watchTree mgr srcRoot isActEvent onAct
       _ <- FS.watchDir mgr projDir isRootEvent onRoot
@@ -1265,7 +1240,7 @@ runWatchFile gopts absFile sched runOnce = do
 fetchCommand :: C.GlobalOptions -> IO ()
 fetchCommand gopts = do
     curDir <- getCurrentDirectory
-    actPath <- requireActonToml curDir
+    actPath <- requireProjectConfigPath curDir
     paths <- findPaths actPath defaultCompileOptions
     requireProjectLayout paths
     res <- try (fetchDependencies gopts paths []) :: IO (Either ProjectError ())
@@ -1279,7 +1254,7 @@ fetchCommand gopts = do
 pkgShow :: C.GlobalOptions -> IO ()
 pkgShow gopts = do
     curDir <- getCurrentDirectory
-    _ <- requireActonToml curDir
+    _ <- requireProjectConfigPath curDir
     mspec <- loadBuildSpec curDir
     case mspec of
       Nothing -> printErrorAndExit "No Build.act/build.act.json found"
