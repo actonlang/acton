@@ -352,6 +352,12 @@ withOwnerLockOrExit projDir msg action = do
       Nothing -> printErrorAndExit msg
       Just lock -> action `finally` releaseCompileOwnerLock lock
 
+withProjectLockForGen :: CompileScheduler -> Int -> FilePath -> IO () -> IO ()
+withProjectLockForGen sched gen projDir action =
+    whenCurrentGen sched gen $
+      withProjectCompileLock projDir $
+        whenCurrentGen sched gen action
+
 -- | Run a single project build under lock and generate docs.
 buildProjectOnce :: C.GlobalOptions -> C.CompileOptions -> IO ()
 buildProjectOnce gopts opts = do
@@ -427,25 +433,23 @@ runTestsWatch gopts opts topts mode paths = do
     let logLine = progressLogLine progressUI
     testParallel <- testMaxParallel gopts
     let runOnce gen mChanged = do
-          whenCurrentGen sched gen $
-            withProjectCompileLock projDir $ do
-              whenCurrentGen sched gen $ do
-                iff (not (C.quiet gopts)) $ do
-                  progressReset progressUI progressState
-                  logLine ("Building project in " ++ projDir)
-                srcFiles <- projectSourceFiles paths
-                hadErrors <- compileFilesChanged sp gopts opts srcFiles True mChanged (Just (sched, gen)) (Just (progressUI, progressState))
-                unless hadErrors $ do
-                  testModules <- listTestModules opts paths
-                  modulesToTest <- case mChanged of
-                    Nothing -> return testModules
-                    Just changedPaths -> do
-                      changedModules <- changedModulesFromPaths paths changedPaths
-                      affected <- dependentTestModulesFromHeaders paths srcFiles changedModules
-                      return (filter (`elem` testModules) affected)
-                  unless (null modulesToTest) $ do
-                    _ <- runProjectTests gopts opts paths topts mode modulesToTest testParallel
-                    return ()
+          withProjectLockForGen sched gen projDir $ do
+            iff (not (C.quiet gopts)) $ do
+              progressReset progressUI progressState
+              logLine ("Building project in " ++ projDir)
+            srcFiles <- projectSourceFiles paths
+            hadErrors <- compileFilesChanged sp gopts opts srcFiles True mChanged (Just (sched, gen)) (Just (progressUI, progressState))
+            unless hadErrors $ do
+              testModules <- listTestModules opts paths
+              modulesToTest <- case mChanged of
+                Nothing -> return testModules
+                Just changedPaths -> do
+                  changedModules <- changedModulesFromPaths paths changedPaths
+                  affected <- dependentTestModulesFromHeaders paths srcFiles changedModules
+                  return (filter (`elem` testModules) affected)
+              unless (null modulesToTest) $ do
+                _ <- runProjectTests gopts opts paths topts mode modulesToTest testParallel
+                return ()
     withOwnerLockOrExit projDir "Another compiler is running; cannot start test watch." $
       runWatchProject gopts projDir srcRoot sched runOnce
 
@@ -949,17 +953,15 @@ watchProjectAt gopts opts projDir = do
                       progressUI <- initProgressUI gopts maxParallel
                       progressState <- newProgressState
                       let logLine = progressLogLine progressUI
-                      let runOnce gen mChanged = do
-                            whenCurrentGen sched gen $
-                              withProjectCompileLock (projPath paths) $ do
-                                whenCurrentGen sched gen $ do
-                                  iff (not(C.quiet gopts)) $ do
-                                    progressReset progressUI progressState
-                                    logLine("Building project in " ++ projPath paths)
-                                  srcFiles <- projectSourceFiles paths
-                                  void $ compileFilesChanged sp gopts opts srcFiles True mChanged (Just (sched, gen)) (Just (progressUI, progressState))
-                                  when (isNothing mChanged) $
-                                    generateProjectDocIndex sp gopts opts paths srcFiles
+                      let runOnce gen mChanged =
+                            withProjectLockForGen sched gen (projPath paths) $ do
+                              iff (not(C.quiet gopts)) $ do
+                                progressReset progressUI progressState
+                                logLine("Building project in " ++ projPath paths)
+                              srcFiles <- projectSourceFiles paths
+                              void $ compileFilesChanged sp gopts opts srcFiles True mChanged (Just (sched, gen)) (Just (progressUI, progressState))
+                              when (isNothing mChanged) $
+                                generateProjectDocIndex sp gopts opts paths srcFiles
                       runWatchProject gopts (projPath paths) (srcDir paths) sched runOnce
 
 -- | Build a single file, optionally running in watch mode.
