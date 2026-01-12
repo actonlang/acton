@@ -253,12 +253,12 @@ type PosRow     = Type
 type KwdRow     = Type
 type TRow       = Type
 
-data Constraint = Cast  {info :: ErrInfo, qual :: QBinds, type1 :: Type, type2 :: Type}
-                | Sub   {info :: ErrInfo, wit :: Name, qual :: QBinds, type1 :: Type, type2 :: Type}
-                | Proto {info :: ErrInfo, wit :: Name, qual :: QBinds, type1 :: Type, proto1 :: PCon}
-                | Sel   {info :: ErrInfo, wit :: Name, qual :: QBinds, type1 :: Type, name1 :: Name, type2 :: Type}
-                | Mut   {info :: ErrInfo, qual :: QBinds, type1 :: Type, name1 :: Name, type2 :: Type}
-                | Seal  {info :: ErrInfo, qual :: QBinds, type1 :: Type}
+data Constraint = Cast  {info :: ErrInfo, scope :: QScope, type1 :: Type, type2 :: Type}
+                | Sub   {info :: ErrInfo, wit :: Name, scope :: QScope, type1 :: Type, type2 :: Type}
+                | Proto {info :: ErrInfo, wit :: Name, scope :: QScope, type1 :: Type, proto1 :: PCon}
+                | Sel   {info :: ErrInfo, wit :: Name, scope :: QScope, type1 :: Type, name1 :: Name, type2 :: Type}
+                | Mut   {info :: ErrInfo, scope :: QScope, type1 :: Type, name1 :: Name, type2 :: Type}
+                | Seal  {info :: ErrInfo, scope :: QScope, type1 :: Type}
                 | Imply {info :: ErrInfo, wit :: Name, binder :: QBinds, scoped :: Constraints}
                 deriving (Eq,Show,Read,Generic,NFData)
 
@@ -272,6 +272,11 @@ data ErrInfo    = DfltInfo {errloc :: SrcLoc, errno :: Int, errexpr :: Maybe Exp
 type WPath      = [Either QName QName]
 
 type WTCon      = (WPath,PCon)
+
+type QScope     = [Quant]
+
+data Quant      = Quant TVar [WTCon] deriving (Eq,Show,Read,Generic,NFData)
+
 
 leftpath tcs    = [ (map Left ns, tc) | (ns,tc) <- nss `zip` tcs ]
   where nss     = tail $ inits $ map tcname tcs
@@ -349,6 +354,8 @@ tSchema q t     = TSchema NoLoc q t
 
 qbind v         = QBind v []
 qbound q        = [ tv | QBind tv _ <- q ]
+
+qscope q        = [ tv | Quant tv _ <- q ]
 
 tVar v          = TVar NoLoc v
 tUni v          = TUni NoLoc v
@@ -617,6 +624,7 @@ instance Data.Binary.Binary Kind
 instance Data.Binary.Binary FX
 instance Data.Binary.Binary ErrInfo
 instance Data.Binary.Binary Constraint
+instance Data.Binary.Binary Quant
 instance Data.Binary.Binary NameInfo
 instance Data.Binary.Binary Expr
 instance Data.Binary.Binary Stmt

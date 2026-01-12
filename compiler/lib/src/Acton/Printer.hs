@@ -514,15 +514,24 @@ instance Pretty Kind where
     pretty KWild                    = text "_"
 
 instance Pretty Constraint where
-    pretty (Cast _ q t1 t2)         = prettyQual q <+> pretty t1 <+> text "<" <+> pretty t2
-    pretty (Sub _ w q t1 t2)        = pretty w <+> colon <+> prettyQual q <+> pretty t1 <+> text "<" <+> pretty t2
-    pretty (Proto _ w q t u)        = pretty w <+> colon <+> prettyQual q <+> pretty t <+> parens (pretty u)
-    pretty (Sel _ w q t1 n t2)      = pretty w <+> colon <+> prettyQual q <+> pretty t1 <> text "." <> pretty n <+> text "<" <+> pretty t2
-    pretty (Mut _ q t1 n t2)        = prettyQual q <+> pretty t1 <+> text "." <> pretty n <+> text ">" <+> pretty t2
-    pretty (Seal _ q t)             = prettyQual q <+> text "$Seal" <+> pretty t
+    pretty (Cast _ q t1 t2)         = prettyQuant q <+> pretty t1 <+> text "<" <+> pretty t2
+    pretty (Sub _ w q t1 t2)        = pretty w <+> colon <+> prettyQuant q <+> pretty t1 <+> text "<" <+> pretty t2
+    pretty (Proto _ w q t u)        = pretty w <+> colon <+> prettyQuant q <+> pretty t <+> parens (pretty u)
+    pretty (Sel _ w q t1 n t2)      = pretty w <+> colon <+> prettyQuant q <+> pretty t1 <> text "." <> pretty n <+> text "<" <+> pretty t2
+    pretty (Mut _ q t1 n t2)        = prettyQuant q <+> pretty t1 <+> text "." <> pretty n <+> text ">" <+> pretty t2
+    pretty (Seal _ q t)             = prettyQuant q <+> text "$Seal" <+> pretty t
     pretty (Imply _ w q cs)
       | length cs < 4               = pretty w <+> colon <+> pretty q <+> text "=>" <+> braces (commaSep pretty cs)
       | otherwise                   = pretty w <+> colon <+> pretty q <+> text "=>" $+$ nest 4 (vcat $ map pretty cs)
+
+prettyQuant []                      = empty
+prettyQuant qs                      = brackets (commaSep pretty qs) <+> text "=>"
+
+instance Pretty Quant where
+    pretty (Quant tv wps)           = pretty tv <> parens (commaSep pretty wps)
+
+instance Pretty (WPath,TCon) where
+    pretty (wpath, p)               = pretty p
 
 
 instance Pretty (TVar,TVar) where           -- CHANGE

@@ -60,12 +60,12 @@ instance VFree a => VFree (Name,a) where
     vfree (n, t)                    = vfree t
 
 instance VFree Constraint where
-    vfree (Cast info q t1 t2)       = (vfree q ++ vfree t1 ++ vfree t2) \\ qbound q
-    vfree (Sub info w q t1 t2)      = (vfree q ++ vfree t1 ++ vfree t2) \\ qbound q
-    vfree (Proto info w q t p)      = (vfree q ++ vfree t ++ vfree p) \\ qbound q
-    vfree (Sel info w q t1 n t2)    = (vfree q ++ vfree t1 ++ vfree t2) \\ qbound q
-    vfree (Mut info q t1 n t2)      = (vfree q ++ vfree t1 ++ vfree t2) \\ qbound q
-    vfree (Seal info q t)           = (vfree q ++ vfree t) \\ qbound q
+    vfree (Cast info q t1 t2)       = (vfree q ++ vfree t1 ++ vfree t2) \\ qscope q
+    vfree (Sub info w q t1 t2)      = (vfree q ++ vfree t1 ++ vfree t2) \\ qscope q
+    vfree (Proto info w q t p)      = (vfree q ++ vfree t ++ vfree p) \\ qscope q
+    vfree (Sel info w q t1 n t2)    = (vfree q ++ vfree t1 ++ vfree t2) \\ qscope q
+    vfree (Mut info q t1 n t2)      = (vfree q ++ vfree t1 ++ vfree t2) \\ qscope q
+    vfree (Seal info q t)           = (vfree q ++ vfree t) \\ qscope q
     vfree (Imply info w q cs)       = (vfree q ++ vfree cs) \\ qbound q
 
 instance VFree Type where
@@ -83,6 +83,12 @@ instance VFree TCon where
 
 instance VFree QBind where
     vfree (QBind v cs)              = vfree cs
+
+instance VFree Quant where
+    vfree (Quant v ps)              = vfree ps
+
+instance VFree (WPath,TCon) where
+    vfree (wpath, p)                = vfree p
 
 instance VFree TSchema where
     vfree (TSchema _ q t)           = (vfree q ++ vfree t) \\ qbound q
@@ -388,6 +394,9 @@ instance VSubst Sliz where
 instance VSubst OpArg where
     vsubst s (OpArg op e)           = OpArg op (vsubst s e)
 
+instance VSubst WTCon where
+    vsubst s (w,u)              = (w, vsubst s u)
+
 
 -- UFree ----------------------------------------------------------------------------------------------
 
@@ -431,6 +440,12 @@ instance UFree TCon where
 
 instance UFree QBind where
     ufree (QBind v cs)              = ufree cs
+
+instance UFree Quant where
+    ufree (Quant v cs)              = ufree cs
+
+instance UFree WTCon where
+    ufree (wpath, p)                = ufree p
 
 instance UFree Type where
     ufree (TUni _ u)                = [u]
@@ -614,6 +629,12 @@ instance USubst TCon where
 
 instance USubst QBind where
     usubst (QBind v cs)             = QBind <$> usubst v <*> usubst cs
+
+instance USubst Quant where
+    usubst (Quant v cs)             = Quant <$> usubst v <*> usubst cs
+
+instance USubst WTCon where
+    usubst (wpath, p)               = do p <- usubst p; return (wpath, p)
 
 instance USubst Type where
     usubst (TUni l u)               = do s <- usubstitution
@@ -879,6 +900,12 @@ instance Tailvars TCon where
 instance Tailvars QBind where
     tailvars (QBind v cs)           = tailvars cs
 
+instance Tailvars Quant where
+    tailvars (Quant v cs)           = tailvars cs
+
+instance Tailvars WTCon where
+    tailvars (wpath, p)             = tailvars p
+
 instance Tailvars TSchema where
     tailvars (TSchema _ q t)        = tailvars q ++ tailvars t
 
@@ -977,6 +1004,12 @@ instance UWild TSchema where
 
 instance UWild QBind where
     uwild (QBind v cs)              = QBind v (uwild cs)
+
+instance UWild Quant where
+    uwild (Quant v cs)              = Quant v (uwild cs)
+
+instance UWild WTCon where
+    uwild (wpath, p)                = (wpath, uwild p)
 
 instance UWild Constraint where
     uwild (Cast info q t1 t2)       = Cast (uwild info) (uwild q) (uwild t1) (uwild t2)

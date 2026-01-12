@@ -195,12 +195,6 @@ prettyDocstring :: Maybe String -> Doc
 prettyDocstring Nothing         = empty
 prettyDocstring (Just docstring) = text "\"\"\"" <> text docstring <> text "\"\"\""
 
-instance Pretty WTCon where
-    pretty (ws,u)               = --dotCat prettyW ws <+> colon <+>
-                                  pretty u
-      where prettyW (Left n)    = text "L"
-            prettyW (Right n)   = text "R"
-
 instance (USubst x) => USubst (EnvF x) where
     usubst env                  = do ne <- usubst (names env)
                                      we <- usubst (witnesses env)
@@ -228,9 +222,6 @@ instance VFree NameInfo where
     vfree (NModule te doc)      = []        -- actually vfree te, but a module has no free variables on the top level
     vfree NReserved             = []
 
-instance VFree WTCon where
-    vfree (w,u)                 = vfree u
-
 
 -- VSubst ---------------------------------------------------------------------------------------
 
@@ -249,9 +240,6 @@ instance VSubst NameInfo where
     vsubst s (NModule te x)     = NModule te x          -- actually vsubst s te, but te has no free variables (top-level)
     vsubst s NReserved          = NReserved
 
-instance VSubst WTCon where
-    vsubst s (w,u)              = (w, vsubst s u)
-
 
 -- UFree ----------------------------------------------------------------------------------------
 
@@ -269,9 +257,6 @@ instance UFree NameInfo where
     ufree (NMAlias qn)          = []
     ufree (NModule te doc)      = []        -- actually ufree te, but a module has no free variables on the top level
     ufree NReserved             = []
-
-instance UFree WTCon where
-    ufree (w,u)                 = ufree u
 
 instance UFree Witness where
     ufree w@WClass{}            = []
@@ -312,9 +297,6 @@ instance USubst Witness where
     usubst w@WInst{}            = do t <- usubst (wtype w)
                                      p <- usubst (proto w)
                                      return w{ wtype  = t, proto = p }
-
-instance USubst WTCon where
-    usubst (w,u)                = (,) <$> return w <*> usubst u
 
 
 -- Polarity -------------------------------------------------------------------------------------

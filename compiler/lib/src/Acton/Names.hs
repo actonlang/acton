@@ -457,3 +457,9 @@ instance Vars Constraint where
     freeQ (Mut _ q t1 n t2)         = freeQ q ++ freeQ t1 ++ freeQ t2
     freeQ (Seal _ q t)              = freeQ q ++ freeQ t
     freeQ (Imply _ w q cs)          = freeQ q ++ freeQ cs
+
+instance Vars Quant where
+    freeQ (Quant tv ps)             = freeQ ps
+
+instance Vars (WPath, TCon) where
+    freeQ (wpath, p)                = freeQ p
