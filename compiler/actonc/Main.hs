@@ -1310,114 +1310,109 @@ openFileInGui path = do
 -- | Generate and display documentation based on CLI options and environment.
 printDocs :: C.GlobalOptions -> C.DocOptions -> IO ()
 printDocs gopts opts = do
-    if null (C.inputFile opts) then do
+    case C.inputFile opts of
+      "" -> do
         -- No file provided - check what to do
         case C.outputFormat opts of
-            Just C.AsciiFormat -> printErrorAndExit "Terminal output requires a specific file. Usage: actonc doc -t <file.act>"
-            Just C.MarkdownFormat -> printErrorAndExit "Markdown output requires a specific file. Usage: actonc doc --md <file.act>"
-            _ -> do
-                -- HTML or auto mode - check if we're in a project
-                curDir <- getCurrentDirectory
-                projDir <- findProjectDir curDir
-                if isJust projDir then do
-                    -- We're in a project - open the documentation index
-                    let indexFile = "out/doc/index.html"
-                    indexExists <- doesFileExist indexFile
-                    if indexExists then do
-                        -- Open the existing index
-                        openFileInGui indexFile
-                    else
-                        printErrorAndExit "No documentation found. Run 'actonc build' first to generate documentation."
-                else
-                    printErrorAndExit "Not in an Acton project. Please specify a file to document."
-    else do
-        let filename = C.inputFile opts
-            (fileBody,fileExt) = splitExtension $ takeFileName filename
+          Just C.AsciiFormat -> printErrorAndExit "Terminal output requires a specific file. Usage: actonc doc -t <file.act>"
+          Just C.MarkdownFormat -> printErrorAndExit "Markdown output requires a specific file. Usage: actonc doc --md <file.act>"
+          _ -> do
+              -- HTML or auto mode - check if we're in a project
+              curDir <- getCurrentDirectory
+              projDir <- findProjectDir curDir
+              case projDir of
+                Just _ -> do
+                  -- We're in a project - open the documentation index
+                  let indexFile = "out/doc/index.html"
+                  indexExists <- doesFileExist indexFile
+                  if indexExists
+                    then openFileInGui indexFile
+                    else printErrorAndExit "No documentation found. Run 'actonc build' first to generate documentation."
+                Nothing ->
+                  printErrorAndExit "Not in an Acton project. Please specify a file to document."
+      filename -> do
+        let (fileBody,fileExt) = splitExtension $ takeFileName filename
 
         case fileExt of
-            ".ty" -> do
-                paths <- findPaths filename defaultCompileOptions
-                env0 <- Acton.Env.initEnv (sysTypes paths) False
-                Acton.Types.showTyFile env0 (modName paths) filename (C.verbose gopts)
+          ".ty" -> do
+            paths <- findPaths filename defaultCompileOptions
+            env0 <- Acton.Env.initEnv (sysTypes paths) False
+            Acton.Types.showTyFile env0 (modName paths) filename (C.verbose gopts)
 
-            ".act" -> do
-                let modname = A.modName $ map (replace ".act" "") $ splitOn "/" $ fileBody
-                paths <- findPaths filename defaultCompileOptions
-                parsedRes <- parseActFile Source.diskSourceProvider modname filename
-                (_snap, parsed) <- case parsedRes of
-                  Left diags -> do
-                    printDiagnostics gopts defaultCompileOptions diags
-                    System.Exit.exitFailure
-                  Right res -> return res
+          ".act" -> do
+            let modname = A.modName $ map (replace ".act" "") $ splitOn "/" $ fileBody
+            paths <- findPaths filename defaultCompileOptions
+            parsedRes <- parseActFile Source.diskSourceProvider modname filename
+            (_snap, parsed) <- case parsedRes of
+              Left diags -> do
+                printDiagnostics gopts defaultCompileOptions diags
+                System.Exit.exitFailure
+              Right res -> return res
 
-                -- Run compiler passes to get type information
-                env0 <- Acton.Env.initEnv (sysTypes paths) False
-                env <- Acton.Env.mkEnv (searchPath paths) env0 parsed
-                kchecked <- Acton.Kinds.check env parsed
-                (nmod, _, env', _) <- Acton.Types.reconstruct env kchecked
-                let I.NModule tenv mdoc = nmod
+            -- Run compiler passes to get type information
+            env0 <- Acton.Env.initEnv (sysTypes paths) False
+            env <- Acton.Env.mkEnv (searchPath paths) env0 parsed
+            kchecked <- Acton.Kinds.check env parsed
+            (nmod, _, env', _) <- Acton.Types.reconstruct env kchecked
+            let I.NModule tenv mdoc = nmod
 
-                -- 1. If format is explicitly set (via -t, --html, --markdown), use it
-                -- 2. Otherwise, check if we're in a GUI environment
-                inGui <- detectGuiEnvironment
-                let format = case C.outputFormat opts of
-                        Just fmt -> fmt
-                        Nothing -> if inGui then C.HtmlFormat else C.AsciiFormat
+            -- 1. If format is explicitly set (via -t, --html, --markdown), use it
+            -- 2. Otherwise, check if we're in a GUI environment
+            inGui <- detectGuiEnvironment
+            let format = case C.outputFormat opts of
+                    Just fmt -> fmt
+                    Nothing -> if inGui then C.HtmlFormat else C.AsciiFormat
 
-                docOutput <- case format of
-                    C.HtmlFormat -> return $ DocP.printHtmlDoc nmod parsed
-                    C.AsciiFormat -> do
-                        shouldColor <- useColor gopts
-                        return $ DocP.printAsciiDoc shouldColor nmod parsed
-                    C.MarkdownFormat -> return $ DocP.printMdDoc nmod parsed
+            docOutput <- case format of
+                C.HtmlFormat -> return $ DocP.printHtmlDoc nmod parsed
+                C.AsciiFormat -> do
+                    shouldColor <- useColor gopts
+                    return $ DocP.printAsciiDoc shouldColor nmod parsed
+                C.MarkdownFormat -> return $ DocP.printMdDoc nmod parsed
 
-                -- Handle output destination
-                case C.outputFile opts of
-                    Just "-" ->
-                        -- Explicit stdout
-                        putStr docOutput
-                    Just outFile -> do
-                        -- Write to specified file
-                        createDirectoryIfMissing True (takeDirectory outFile)
-                        writeFile outFile docOutput
-                        putStrLn $ "Documentation written to: " ++ outFile
-                    Nothing ->
-                        -- No explicit output file
-                        if isJust (C.outputFormat opts) then
-                            -- Format was explicitly set, write to stdout
-                            putStr docOutput
-                        else if format == C.AsciiFormat then
-                            -- Auto-detected ASCII (no DISPLAY), write to stdout
-                            putStr docOutput
-                        else do
-                            -- Auto-detected HTML (DISPLAY set), write to file and open browser
-                            curDir <- getCurrentDirectory
-                            projDir <- findProjectDir curDir
-                            outputPath <- if isJust projDir then do
-                                -- In project: use out/doc/
-                                let modPath = map (replace ".act" "") $ splitOn "/" filename
-                                    cleanPath = case modPath of
-                                        "src":rest -> rest
-                                        path -> path
-                                    docFile = if null cleanPath
-                                              then "out/doc/unnamed.html"
-                                              else joinPath ("out" : "doc" : init cleanPath) </> last cleanPath <.> "html"
-                                return docFile
-                            else do
-                                -- Outside project: use temp file
-                                writeSystemTempFile "acton-doc.html" docOutput
+            -- Handle output destination
+            case C.outputFile opts of
+              Just "-" ->
+                -- Explicit stdout
+                putStr docOutput
+              Just outFile -> do
+                -- Write to specified file
+                createDirectoryIfMissing True (takeDirectory outFile)
+                writeFile outFile docOutput
+                putStrLn $ "Documentation written to: " ++ outFile
+              Nothing
+                | isJust (C.outputFormat opts) || format == C.AsciiFormat ->
+                    -- Explicit format or auto ASCII: write to stdout
+                    putStr docOutput
+                | otherwise -> do
+                    -- Auto-detected HTML (DISPLAY set), write to file and open browser
+                    curDir <- getCurrentDirectory
+                    projDir <- findProjectDir curDir
+                    outputPath <- case projDir of
+                      Just _ -> do
+                        -- In project: use out/doc/
+                        let modPath = map (replace ".act" "") $ splitOn "/" filename
+                            cleanPath = case modPath of
+                                "src":rest -> rest
+                                path -> path
+                            docFile = if null cleanPath
+                                      then "out/doc/unnamed.html"
+                                      else joinPath ("out" : "doc" : init cleanPath) </> last cleanPath <.> "html"
+                        return docFile
+                      Nothing ->
+                        -- Outside project: use temp file
+                        writeSystemTempFile "acton-doc.html" docOutput
 
-                            -- Write the file
-                            when (isJust projDir) $ do
-                                createDirectoryIfMissing True (takeDirectory outputPath)
-                                writeFile outputPath docOutput
+                    case projDir of
+                      Just _ -> do
+                        createDirectoryIfMissing True (takeDirectory outputPath)
+                        writeFile outputPath docOutput
+                      Nothing -> return ()
 
-                            putStrLn $ "HTML documentation written to: " ++ outputPath
+                    putStrLn $ "HTML documentation written to: " ++ outputPath
+                    openFileInGui outputPath
 
-                            -- Open in browser
-                            openFileInGui outputPath
-
-            _ -> printErrorAndExit ("Unknown filetype: " ++ filename)
+          _ -> printErrorAndExit ("Unknown filetype: " ++ filename)
 
 
 -- Compile Acton files ---------------------------------------------------------------------------------------------
