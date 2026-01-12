@@ -358,26 +358,105 @@ withProjectLockForGen sched gen projDir action =
       withProjectCompileLock projDir $
         whenCurrentGen sched gen action
 
+requireProjectLayout :: Paths -> IO ()
+requireProjectLayout paths = do
+    exists <- doesDirectoryExist (srcDir paths)
+    unless exists $
+      printErrorAndExit "Missing src/ directory"
+-- | Strict path resolution: require a project config in the given directory.
+loadProjectPathsAt :: FilePath -> C.CompileOptions -> IO Paths
+loadProjectPathsAt curDir opts = do
+    actPath <- requireProjectConfigPath curDir
+    paths <- findPaths actPath opts
+    requireProjectLayout paths
+    return paths
+
+-- | Lenient path resolution for builds: allow no project config (temp project).
+loadProjectPathsForBuildAt :: FilePath -> C.CompileOptions -> IO Paths
+loadProjectPathsForBuildAt curDir opts = do
+    let actPath = joinPath [curDir, "Build.act"]
+    paths <- findPaths actPath opts
+    requireProjectLayout paths
+    return paths
+
+loadProjectPaths :: C.CompileOptions -> IO Paths
+loadProjectPaths opts = do
+    curDir <- getCurrentDirectory
+    loadProjectPathsAt curDir opts
+
+loadProjectPathsForBuild :: C.CompileOptions -> IO Paths
+loadProjectPathsForBuild opts = do
+    curDir <- getCurrentDirectory
+    loadProjectPathsForBuildAt curDir opts
+
+requireProjectConfigPath :: FilePath -> IO FilePath
+requireProjectConfigPath curDir = do
+    let candidates =
+          [ joinPath [curDir, "Build.act"]
+          , joinPath [curDir, "build.act.json"]
+          , joinPath [curDir, "Acton.toml"]
+          ]
+    mpath <- firstExisting candidates
+    case mpath of
+      Just path -> return path
+      Nothing -> printErrorAndExit "Project config not found in current directory (expected Build.act)"
+  where
+    firstExisting [] = return Nothing
+    firstExisting (p:ps) = do
+      exists <- doesFileExist p
+      if exists then return (Just p) else firstExisting ps
+
+ignoreNotExists :: IOException -> IO ()
+ignoreNotExists _ = return ()
+
+withScratchDirLock :: (FilePath -> IO a) -> IO a
+withScratchDirLock action = do
+    home <- getHomeDirectory
+    let basePath = joinPath [home, ".cache", "acton", "scratch"]
+    createDirectoryIfMissing True basePath
+    maybeLockInfo <- findAvailableScratch basePath
+    case maybeLockInfo of
+      Nothing -> error "Could not acquire any scratch directory lock"
+      Just (lock, lockPath) -> do
+        let scratchDir = dropExtension lockPath
+        removeDirectoryRecursive scratchDir `catch` ignoreNotExists
+        action scratchDir `finally` unlockFile lock
+
+withTempDirOpts :: C.CompileOptions -> (C.CompileOptions -> Bool -> IO a) -> IO a
+withTempDirOpts opts action
+  | C.tempdir opts /= "" = action opts False
+  | otherwise = withScratchDirLock $ \scratchDir ->
+      action opts { C.tempdir = scratchDir } True
+
+initCompileWatchContext :: C.GlobalOptions -> IO (CompileScheduler, ProgressUI, ProgressState)
+initCompileWatchContext gopts = do
+    maxParallel <- compileMaxParallel gopts
+    sched <- newCompileScheduler gopts maxParallel
+    progressUI <- initProgressUI gopts maxParallel
+    progressState <- newProgressState
+    return (sched, progressUI, progressState)
+
+logProjectBuild :: C.GlobalOptions -> ProgressUI -> ProgressState -> FilePath -> IO ()
+logProjectBuild gopts progressUI progressState projDir =
+    iff (not(C.quiet gopts)) $ do
+      progressReset progressUI progressState
+      progressLogLine progressUI ("Building project in " ++ projDir)
+
 -- | Run a single project build under lock and generate docs.
 buildProjectOnce :: C.GlobalOptions -> C.CompileOptions -> IO ()
 buildProjectOnce gopts opts = do
                 let sp = Source.diskSourceProvider
-                curDir <- getCurrentDirectory
-                paths <- findPaths (joinPath [ curDir, "Acton.toml" ]) opts
-                srcDirExists <- doesDirectoryExist (srcDir paths)
-                if not srcDirExists
-                  then printErrorAndExit "Missing src/ directory"
-                  else do
-                    iff (not(C.quiet gopts)) $ do
-                      putStrLn("Building project in " ++ projPath paths)
-                    let projDir = projPath paths
-                        runBuild opts' = withProjectCompileLock projDir $ do
-                          srcFiles <- projectSourceFiles paths
-                          compileFiles sp gopts opts' srcFiles True
-                          generateProjectDocIndex sp gopts opts' paths srcFiles
-                    withOwnerLockOrOnlyBuild gopts projDir
-                      (runBuild opts)
-                      (runBuild opts { C.only_build = True })
+                paths <- loadProjectPathsForBuild opts
+                iff (not(C.quiet gopts)) $ do
+                  putStrLn("Building project in " ++ projPath paths)
+                let projDir = projPath paths
+                    runBuild opts' = withProjectCompileLock projDir $ do
+                      srcFiles <- projectSourceFiles paths
+                      compileFiles sp gopts opts' srcFiles True
+                      generateProjectDocIndex sp gopts opts' paths srcFiles
+                withOwnerLockOrOnlyBuild gopts projDir
+                  (runBuild opts)
+                  (runBuild opts { C.only_build = True })
 
 -- Test runner -------------------------------------------------------------------------------------------------
 
@@ -402,6 +481,7 @@ runTests gopts cmd = do
     paths <- findPaths (joinPath [ curDir, "Acton.toml" ]) opts
     when (isTmp paths) $
       printErrorAndExit "Acton.toml not found in current directory"
+    requireProjectLayout paths
     if C.watch opts0
       then case mode of
              TestModeList -> runTestsOnce gopts opts topts mode paths
@@ -942,27 +1022,23 @@ writePerfData paths results = do
 watchProjectAt :: C.GlobalOptions -> C.CompileOptions -> FilePath -> IO ()
 watchProjectAt gopts opts projDir = do
                 let sp = Source.diskSourceProvider
-                paths <- findPaths (joinPath [ projDir, "Acton.toml" ]) opts
-                srcDirExists <- doesDirectoryExist (srcDir paths)
-                if not srcDirExists
-                  then printErrorAndExit "Missing src/ directory"
-                  else do
-                    withOwnerLockOrExit (projPath paths) "Another compiler is running; cannot start watch." $ do
-                      maxParallel <- compileMaxParallel gopts
-                      sched <- newCompileScheduler gopts maxParallel
-                      progressUI <- initProgressUI gopts maxParallel
-                      progressState <- newProgressState
-                      let logLine = progressLogLine progressUI
-                      let runOnce gen mChanged =
-                            withProjectLockForGen sched gen (projPath paths) $ do
-                              iff (not(C.quiet gopts)) $ do
-                                progressReset progressUI progressState
-                                logLine("Building project in " ++ projPath paths)
-                              srcFiles <- projectSourceFiles paths
-                              void $ compileFilesChanged sp gopts opts srcFiles True mChanged (Just (sched, gen)) (Just (progressUI, progressState))
-                              when (isNothing mChanged) $
-                                generateProjectDocIndex sp gopts opts paths srcFiles
-                      runWatchProject gopts (projPath paths) (srcDir paths) sched runOnce
+                paths <- loadProjectPathsForBuildAt projDir opts
+                withOwnerLockOrExit (projPath paths) "Another compiler is running; cannot start watch." $ do
+                  maxParallel <- compileMaxParallel gopts
+                  sched <- newCompileScheduler gopts maxParallel
+                  progressUI <- initProgressUI gopts maxParallel
+                  progressState <- newProgressState
+                  let logLine = progressLogLine progressUI
+                  let runOnce gen mChanged =
+                        withProjectLockForGen sched gen (projPath paths) $ do
+                          iff (not(C.quiet gopts)) $ do
+                            progressReset progressUI progressState
+                            logLine("Building project in " ++ projPath paths)
+                          srcFiles <- projectSourceFiles paths
+                          void $ compileFilesChanged sp gopts opts srcFiles True mChanged (Just (sched, gen)) (Just (progressUI, progressState))
+                          when (isNothing mChanged) $
+                            generateProjectDocIndex sp gopts opts paths srcFiles
+                  runWatchProject gopts (projPath paths) (srcDir paths) sched runOnce
 
 -- | Build a single file, optionally running in watch mode.
 buildFile :: C.GlobalOptions -> C.CompileOptions -> FilePath -> IO ()
@@ -1189,14 +1265,9 @@ runWatchFile gopts absFile sched runOnce = do
 fetchCommand :: C.GlobalOptions -> IO ()
 fetchCommand gopts = do
     curDir <- getCurrentDirectory
-    let actPath = joinPath [curDir, "Acton.toml"]
-    actExists <- doesFileExist actPath
-    unless actExists $
-      printErrorAndExit "Acton.toml not found in current directory"
-    srcExists <- doesDirectoryExist (joinPath [curDir, "src"])
-    unless srcExists $
-      printErrorAndExit "Missing src/ directory"
+    actPath <- requireActonToml curDir
     paths <- findPaths actPath defaultCompileOptions
+    requireProjectLayout paths
     res <- try (fetchDependencies gopts paths []) :: IO (Either ProjectError ())
     case res of
       Left (ProjectError msg) -> printErrorAndExit msg
@@ -1208,10 +1279,7 @@ fetchCommand gopts = do
 pkgShow :: C.GlobalOptions -> IO ()
 pkgShow gopts = do
     curDir <- getCurrentDirectory
-    let actPath = joinPath [curDir, "Acton.toml"]
-    actExists <- doesFileExist actPath
-    unless actExists $
-      printErrorAndExit "Acton.toml not found in current directory"
+    _ <- requireActonToml curDir
     mspec <- loadBuildSpec curDir
     case mspec of
       Nothing -> printErrorAndExit "No Build.act/build.act.json found"

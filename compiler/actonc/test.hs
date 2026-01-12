@@ -16,6 +16,7 @@ import System.FilePath
 import System.FilePath.Posix
 import System.Process
 import System.TimeIt
+import System.IO.Temp (withSystemTempDirectory)
 
 import Test.Tasty
 import Test.Tasty.ExpectedFailure
@@ -99,6 +100,24 @@ compilerTests =
         (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../../test/compiler/test_deps/deps/a/build.zig*") ""
         (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../../test/compiler/test_deps/deps/a/out") ""
         runActon "build" ExitSuccess False "../../test/compiler/test_deps/"
+  , testCase "build without Build.act" $ do
+        withSystemTempDirectory "acton-build" $ \proj -> do
+            let actFile = proj </> "acton-test.act"
+            writeFile actFile $ unlines
+              [ "#!/usr/bin/env runacton"
+              , "actor main(env):"
+              , "    print(\"Hello, world\")"
+              , "    env.exit(0)"
+              ]
+            perms <- getPermissions actFile
+            setPermissions actFile perms{ executable = True }
+            runActon "build" ExitSuccess False proj
+            let bin = proj </> "out" </> "bin" </> "acton-test"
+            exists <- doesFileExist bin
+            assertBool "binary should exist" exists
+            (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc bin []){ cwd = Just proj } ""
+            assertEqual "binary should run" ExitSuccess returnCode
+            assertEqual "binary output" "Hello, world\n" cmdOut
   ]
 
 parseFlagTests =

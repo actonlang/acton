@@ -298,7 +298,7 @@ dist/deps/libyyjson: deps/libyyjson $(DIST_ZIG)
 
 # top level targets
 .PHONY: test test-builtins test-compiler test-db test-examples test-lang test-regressions test-rts test-stdlib
-test:
+test: dist/bin/acton
 	cd compiler && stack test
 	$(MAKE) test-stdlib
 	$(MAKE) -C backend test
