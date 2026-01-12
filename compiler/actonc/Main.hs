@@ -500,10 +500,7 @@ runTestsWatch gopts opts topts mode paths = do
     let sp = Source.diskSourceProvider
         projDir = projPath paths
         srcRoot = srcDir paths
-    compileParallel <- compileMaxParallel gopts
-    sched <- newCompileScheduler gopts compileParallel
-    progressUI <- initProgressUI gopts compileParallel
-    progressState <- newProgressState
+    (sched, progressUI, progressState) <- initCompileWatchContext gopts
     let logLine = progressLogLine progressUI
     testParallel <- testMaxParallel gopts
     let runOnce gen mChanged = do
@@ -1021,10 +1018,7 @@ watchProjectAt gopts opts projDir = do
                 let sp = Source.diskSourceProvider
                 paths <- loadProjectPathsForBuildAt projDir opts
                 withOwnerLockOrExit (projPath paths) "Another compiler is running; cannot start watch." $ do
-                  maxParallel <- compileMaxParallel gopts
-                  sched <- newCompileScheduler gopts maxParallel
-                  progressUI <- initProgressUI gopts maxParallel
-                  progressState <- newProgressState
+                  (sched, progressUI, progressState) <- initCompileWatchContext gopts
                   let logLine = progressLogLine progressUI
                   let runOnce gen mChanged =
                         withProjectLockForGen sched gen (projPath paths) $ do
@@ -1085,10 +1079,7 @@ watchFile gopts opts file = do
       Just proj -> watchProjectAt gopts opts proj
       Nothing -> do
         let sp = Source.diskSourceProvider
-        maxParallel <- compileMaxParallel gopts
-        sched <- newCompileScheduler gopts maxParallel
-        progressUI <- initProgressUI gopts maxParallel
-        progressState <- newProgressState
+        (sched, progressUI, progressState) <- initCompileWatchContext gopts
         let runWatch opts' =
               let runOnce gen mChanged =
                     whenCurrentGen sched gen $
