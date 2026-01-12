@@ -165,29 +165,6 @@ tryLock lockPath = do
         Nothing -> return Nothing  -- Lock failed
         Just lock -> return $ Just (lock, lockPath)
 
-compileOwnerLockPath :: FilePath -> FilePath
-compileOwnerLockPath projDir =
-    joinPath [projDir, ".acton.compile.lock"]
-
-tryCompileOwnerLock :: FilePath -> IO (Maybe (FileLock, FilePath))
-tryCompileOwnerLock projDir = do
-    let lockPath = compileOwnerLockPath projDir
-    mlock <- tryLockFile lockPath Exclusive
-    return ((\lock -> (lock, lockPath)) <$> mlock)
-
-releaseCompileOwnerLock :: (FileLock, FilePath) -> IO ()
-releaseCompileOwnerLock (lock, lockPath) = do
-    unlockFile lock
-    mlock <- tryLockFile lockPath Exclusive
-    case mlock of
-      Nothing -> return ()
-      Just lock2 -> do
-        removeFile lockPath `catch` handleNotExists
-        unlockFile lock2
-  where
-    handleNotExists :: IOException -> IO ()
-    handleNotExists _ = return ()
-
 -- Try locks sequentially until one succeeds or all fail
 findAvailableScratch :: FilePath -> IO (Maybe (FileLock, FilePath))
 findAvailableScratch basePath = go [0..31]  -- 32 possible scratch directories
@@ -341,6 +318,33 @@ buildProject gopts opts = do
                     watchProjectAt gopts opts curDir
                   else buildProjectOnce gopts opts
 
+-- | Compute the path to the per-project compile lock.
+projectCompileLockPath :: FilePath -> FilePath
+projectCompileLockPath projDir =
+    joinPath [projDir, ".actonc.lock"]
+
+-- | Run an action while holding the per-project compile lock.
+withProjectCompileLock :: FilePath -> IO a -> IO a
+withProjectCompileLock projDir action =
+    withFileLock (projectCompileLockPath projDir) Exclusive (\_ -> action)
+
+-- | Collect all source files in a project's src/ directory.
+projectSourceFiles :: Paths -> IO [FilePath]
+projectSourceFiles paths = do
+    allFiles <- getFilesRecursive (srcDir paths)
+    return (catMaybes (map filterActFile allFiles))
+
+-- | Prefer the compile-owner lock, fallback to only-build when unavailable.
+withOwnerLockOrOnlyBuild :: C.GlobalOptions -> FilePath -> IO a -> IO a -> IO a
+withOwnerLockOrOnlyBuild gopts projDir runFull runFallback = do
+    ownerLock <- tryCompileOwnerLock projDir
+    case ownerLock of
+      Just lock -> runFull `finally` releaseCompileOwnerLock lock
+      Nothing -> do
+        unless (C.quiet gopts) $
+          putStrLn "Compiler already running; running final build only."
+        runFallback
+
 -- | Run a single project build under lock and generate docs.
 buildProjectOnce :: C.GlobalOptions -> C.CompileOptions -> IO ()
 buildProjectOnce gopts opts = do
@@ -353,24 +357,14 @@ buildProjectOnce gopts opts = do
                   else do
                     iff (not(C.quiet gopts)) $ do
                       putStrLn("Building project in " ++ projPath paths)
-                    ownerLock <- tryCompileOwnerLock (projPath paths)
-                    case ownerLock of
-                      Just lock -> do
-                        let runBuild = withFileLock (joinPath [projPath paths, ".actonc.lock"]) Exclusive $ \_ -> do
-                              allFiles <- getFilesRecursive (srcDir paths)
-                              let srcFiles = catMaybes $ map filterActFile allFiles
-                              compileFiles sp gopts opts srcFiles True
-                              generateProjectDocIndex sp gopts opts paths srcFiles
-                        runBuild `finally` releaseCompileOwnerLock lock
-                      Nothing -> do
-                        unless (C.quiet gopts) $
-                          putStrLn "Compiler already running; running final build only."
-                        let opts' = opts { C.only_build = True }
-                        withFileLock (joinPath [projPath paths, ".actonc.lock"]) Exclusive $ \_ -> do
-                          allFiles <- getFilesRecursive (srcDir paths)
-                          let srcFiles = catMaybes $ map filterActFile allFiles
+                    let projDir = projPath paths
+                        runBuild opts' = withProjectCompileLock projDir $ do
+                          srcFiles <- projectSourceFiles paths
                           compileFiles sp gopts opts' srcFiles True
                           generateProjectDocIndex sp gopts opts' paths srcFiles
+                    withOwnerLockOrOnlyBuild gopts projDir
+                      (runBuild opts)
+                      (runBuild opts { C.only_build = True })
 
 -- Test runner -------------------------------------------------------------------------------------------------
 
@@ -427,13 +421,12 @@ runTestsWatch gopts opts topts mode paths = do
     testParallel <- testMaxParallel gopts
     let runOnce gen mChanged = do
           whenCurrentGen sched gen $
-            withFileLock (joinPath [projDir, ".actonc.lock"]) Exclusive $ \_ -> do
+            withProjectCompileLock projDir $ do
               whenCurrentGen sched gen $ do
                 iff (not (C.quiet gopts)) $ do
                   progressReset progressUI progressState
                   logLine ("Building project in " ++ projDir)
-                allFiles <- getFilesRecursive srcRoot
-                let srcFiles = catMaybes $ map filterActFile allFiles
+                srcFiles <- projectSourceFiles paths
                 hadErrors <- compileFilesChanged sp gopts opts srcFiles True mChanged (Just (sched, gen)) (Just (progressUI, progressState))
                 unless hadErrors $ do
                   testModules <- listTestModules opts paths
@@ -996,13 +989,12 @@ watchProjectAt gopts opts projDir = do
                         let logLine = progressLogLine progressUI
                         let runOnce gen mChanged = do
                               whenCurrentGen sched gen $
-                                withFileLock (joinPath [projPath paths, ".actonc.lock"]) Exclusive $ \_ -> do
+                                withProjectCompileLock (projPath paths) $ do
                                   whenCurrentGen sched gen $ do
                                     iff (not(C.quiet gopts)) $ do
                                       progressReset progressUI progressState
                                       logLine("Building project in " ++ projPath paths)
-                                    allFiles <- getFilesRecursive (srcDir paths)
-                                    let srcFiles = catMaybes $ map filterActFile allFiles
+                                    srcFiles <- projectSourceFiles paths
                                     void $ compileFilesChanged sp gopts opts srcFiles True mChanged (Just (sched, gen)) (Just (progressUI, progressState))
                                     when (isNothing mChanged) $
                                       generateProjectDocIndex sp gopts opts paths srcFiles
@@ -1029,20 +1021,12 @@ buildFileOnce gopts opts file = do
         -- In a project, use project directory for compilation.
         iff (not(C.quiet gopts)) $ do
           putStrLn("Building file " ++ file ++ " in project " ++ relProj)
-        ownerLock <- tryCompileOwnerLock proj
-        case ownerLock of
-          Just lock -> do
-            let lock_file = joinPath [proj, ".actonc.lock"]
-            let runBuild = withFileLock lock_file Exclusive $ \_ -> do
-                  compileFiles sp gopts opts [file] False
-            runBuild `finally` releaseCompileOwnerLock lock
-          Nothing -> do
-            unless (C.quiet gopts) $
-              putStrLn "Compiler already running; running final build only."
-            let lock_file = joinPath [proj, ".actonc.lock"]
-                opts' = opts { C.only_build = True }
-            withFileLock lock_file Exclusive $ \_ -> do
-              compileFiles sp gopts opts' [file] False
+        let runBuild opts' =
+              withProjectCompileLock proj $
+                compileFiles sp gopts opts' [file] False
+        withOwnerLockOrOnlyBuild gopts proj
+          (runBuild opts)
+          (runBuild opts { C.only_build = True })
       Nothing -> do
         -- Not in a project, use scratch directory for compilation unless
         -- --tempdir is provided - then use that

@@ -2,7 +2,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-import Control.Exception (try, catch, finally, IOException)
+import Control.Exception (try, finally)
 import Control.Monad (void, when, forM_)
 import Control.Monad.IO.Class
 import Data.IORef
@@ -12,10 +12,8 @@ import Data.Maybe (fromMaybe, listToMaybe)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import GHC.Conc (getNumCapabilities)
-import System.Directory (removeFile)
-import System.FilePath.Posix (joinPath)
 import System.IO.Unsafe (unsafePerformIO)
-import System.FileLock (FileLock, SharedExclusive(Exclusive), tryLockFile, unlockFile)
+import System.FileLock (FileLock)
 
 import Language.LSP.Protocol.Message
 import Language.LSP.Protocol.Types hiding (Diagnostic, Position)
@@ -141,30 +139,19 @@ ensureCompileOwnerLock projRoot = do
   case HM.lookup projRoot locks of
     Just _ -> return True
     Nothing -> do
-      let lockPath = joinPath [projRoot, ".acton.compile.lock"]
-      mlock <- tryLockFile lockPath Exclusive
+      mlock <- Compile.tryCompileOwnerLock projRoot
       case mlock of
         Nothing -> return False
-        Just lock -> do
-          atomicModifyIORef' compileOwnerLocksRef $ \m -> (HM.insert projRoot (lock, lockPath) m, ())
+        Just lockInfo -> do
+          atomicModifyIORef' compileOwnerLocksRef $ \m -> (HM.insert projRoot lockInfo m, ())
           atomicModifyIORef' compileOwnerWarnedRef $ \m -> (HM.delete projRoot m, ())
           return True
 
 releaseCompileOwnerLocks :: IO ()
 releaseCompileOwnerLocks = do
   locks <- readIORef compileOwnerLocksRef
-  forM_ (HM.elems locks) $ \(lock, lockPath) -> do
-    unlockFile lock
-    mlock <- tryLockFile lockPath Exclusive
-    case mlock of
-      Nothing -> return ()
-      Just lock2 -> do
-        removeFile lockPath `catch` handleNotExists
-        unlockFile lock2
+  forM_ (HM.elems locks) Compile.releaseCompileOwnerLock
   writeIORef compileOwnerLocksRef HM.empty
-  where
-    handleNotExists :: IOException -> IO ()
-    handleNotExists _ = return ()
 
 warnCompileOwnerLocked :: FilePath -> LspM () ()
 warnCompileOwnerLocked projRoot = do
