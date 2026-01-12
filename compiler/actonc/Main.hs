@@ -110,21 +110,10 @@ import Control.Concurrent.QSem (newQSem, waitQSem, signalQSem)
 main = do
     hSetBuffering stdout LineBuffering
     arg <- C.parseCmdLine
-    -- Ensure enough capabilities: honor --jobs if set, otherwise at least 2 or #procs
-    caps0 <- getNumCapabilities
-    case arg of
-      C.CmdOpt gopts _ -> do
-        let req = C.jobs gopts
-        when (req > 0 && caps0 < req) $ setNumCapabilities req
-        when (req == 0 && caps0 < 2) $ do
-          procs <- getNumProcessors
-          setNumCapabilities (max 2 procs)
-      C.CompileOpt _ gopts _ -> do
-        let req = C.jobs gopts
-        when (req > 0 && caps0 < req) $ setNumCapabilities req
-        when (req == 0 && caps0 < 2) $ do
-          procs <- getNumProcessors
-          setNumCapabilities (max 2 procs)
+    let gopts = case arg of
+          C.CmdOpt g _ -> g
+          C.CompileOpt _ g _ -> g
+    ensureCapabilities gopts
     let run = case arg of
           C.CmdOpt gopts (C.New opts)         -> createProject (C.file opts)
           C.CmdOpt gopts (C.Build opts)       -> buildProject gopts opts
@@ -144,6 +133,16 @@ main = do
 -- Apply global options to compile options
 applyGlobalOpts :: C.GlobalOptions -> C.CompileOptions -> C.CompileOptions
 applyGlobalOpts gopts opts = opts
+
+-- Ensure enough capabilities: honor --jobs if set, otherwise at least 2 or #procs.
+ensureCapabilities :: C.GlobalOptions -> IO ()
+ensureCapabilities gopts = do
+    caps0 <- getNumCapabilities
+    let req = C.jobs gopts
+    when (req > 0 && caps0 < req) $ setNumCapabilities req
+    when (req == 0 && caps0 < 2) $ do
+      procs <- getNumProcessors
+      setNumCapabilities (max 2 procs)
 
 
 -- Auxiliary functions ---------------------------------------------------------------------------------------
@@ -537,48 +536,16 @@ runProjectTests gopts opts paths topts mode modules maxParallel = do
         return 0
       else do
         putStrLn "Test results:"
-        let displayNames = [ formatTestName modName testName | (modName, testName) <- allTests ]
-            maxNameLen = maximum (map length displayNames)
-            nameWidth = max 20 maxNameLen + 5
-            runContext = TestRunContext
-              { trcCompilerVersion = getVer
-              , trcTarget = C.target opts
-              , trcOptimize = show (C.optimize opts)
-              , trcMode = show mode
-              , trcArgs = testCmdArgs topts
-              }
-        cache <- readTestCache (testCachePath paths) runContext
-        moduleHashes <- forM testsByModule $ \(modName, _) -> do
-          nameHashes <- readModuleNameHashes paths modName
-          return (modName, nameHashes)
-        let nameHashesByModule = M.fromList moduleHashes
+        let nameWidth = testNameWidth allTests
+            runContext = mkRunContext opts topts mode
             ctxHash = contextHashBytes runContext
-            seedCache = M.fromList
-              [ (A.modName (splitOn "." modName), nameMap)
-              | (modName, nameMap) <- M.toList nameHashesByModule
-              ]
-        depCacheRef <- newIORef seedCache
-        testHashInfos <- M.fromList <$> forM allTests (\(modName, testName) -> do
-          let nameMap = M.findWithDefault M.empty modName nameHashesByModule
-          info <- buildTestHashInfo depCacheRef paths ctxHash nameMap testName
-          return (mkTestKey modName testName, info))
+        cache <- readTestCache (testCachePath paths) runContext
+        testHashInfos <- buildTestHashInfos ctxHash testsByModule allTests
         let cacheEntries = tcTests cache
         when (C.verbose gopts) $
           putStrLn (formatTestCacheContext ctxHash (testCachePath paths))
-        classified <- forM allTests $ \(modName, testName) -> do
-          let key = mkTestKey modName testName
-              info = M.findWithDefault (TestHashInfo Nothing Nothing Nothing Nothing) key testHashInfos
-              entry = M.lookup key cacheEntries
-          when (C.verbose gopts) $
-            putStrLn (formatTestCacheLog modName testName info entry)
-          case entry of
-            Just cached
-              | Just runHash <- thiRunHash info
-              , tceRunHash cached == runHash ->
-                  return (Left (testResultFromCache modName testName (tceResult cached)))
-            _ -> return (Right (modName, testName))
-        let (cachedResults, testsToRun) = partitionEithers classified
-            showCached = C.testShowCached topts
+        (cachedResults, testsToRun) <- classifyCachedTests cacheEntries testHashInfos allTests
+        let showCached = C.testShowCached topts
         when (showCached && not (null cachedResults)) $
           putStrLn ("Using cached results for " ++ show (length cachedResults) ++ " tests")
         resultChan <- newChan
@@ -597,18 +564,7 @@ runProjectTests gopts opts paths topts mode modules maxParallel = do
         when (C.testRecord topts) $
           writePerfData paths resultsRun
         let results = cachedResults ++ resultsRun
-            updateEntry acc res =
-              let key = mkTestKey (trModule res) (trName res)
-                  info = M.lookup key testHashInfos
-                  runHash = maybe "" (\ti -> maybe "" id (thiRunHash ti)) info
-                  implHashHex = info >>= fmap (B.unpack . Base16.encode) . thiImplHash
-                  entry = TestCacheEntry
-                    { tceRunHash = runHash
-                    , tceImplHash = implHashHex
-                    , tceResult = cachedResultFromTest res
-                    }
-              in M.insert key entry acc
-            cacheEntries' = foldl' updateEntry cacheEntries resultsRun
+            cacheEntries' = foldl' (updateTestCacheEntry testHashInfos) cacheEntries resultsRun
             newCache = TestCache
               { tcVersion = testCacheVersion
               , tcContext = runContext
@@ -616,6 +572,57 @@ runProjectTests gopts opts paths topts mode modules maxParallel = do
               }
         writeTestCache (testCachePath paths) newCache
         printTestSummary (timeEnd - timeStart) (C.testShowLog topts) showCached results
+  where
+    testNameWidth tests =
+      let displayNames = [ formatTestName modName testName | (modName, testName) <- tests ]
+          maxNameLen = maximum (map length displayNames)
+      in max 20 maxNameLen + 5
+    mkRunContext opts' topts' mode' = TestRunContext
+      { trcCompilerVersion = getVer
+      , trcTarget = C.target opts'
+      , trcOptimize = show (C.optimize opts')
+      , trcMode = show mode'
+      , trcArgs = testCmdArgs topts'
+      }
+    buildTestHashInfos ctxHash testsByModule' allTests' = do
+      moduleHashes <- forM testsByModule' $ \(modName, _) -> do
+        nameHashes <- readModuleNameHashes paths modName
+        return (modName, nameHashes)
+      let nameHashesByModule = M.fromList moduleHashes
+          seedCache = M.fromList
+            [ (A.modName (splitOn "." modName), nameMap)
+            | (modName, nameMap) <- M.toList nameHashesByModule
+            ]
+      depCacheRef <- newIORef seedCache
+      M.fromList <$> forM allTests' (\(modName, testName) -> do
+        let nameMap = M.findWithDefault M.empty modName nameHashesByModule
+        info <- buildTestHashInfo depCacheRef paths ctxHash nameMap testName
+        return (mkTestKey modName testName, info))
+    classifyCachedTests cacheEntries testHashInfos allTests' = do
+      classified <- forM allTests' $ \(modName, testName) -> do
+        let key = mkTestKey modName testName
+            info = M.findWithDefault (TestHashInfo Nothing Nothing Nothing Nothing) key testHashInfos
+            entry = M.lookup key cacheEntries
+        when (C.verbose gopts) $
+          putStrLn (formatTestCacheLog modName testName info entry)
+        case entry of
+          Just cached
+            | Just runHash <- thiRunHash info
+            , tceRunHash cached == runHash ->
+                return (Left (testResultFromCache modName testName (tceResult cached)))
+          _ -> return (Right (modName, testName))
+      return (partitionEithers classified)
+    updateTestCacheEntry testHashInfos acc res =
+      let key = mkTestKey (trModule res) (trName res)
+          info = M.lookup key testHashInfos
+          runHash = maybe "" (\ti -> maybe "" id (thiRunHash ti)) info
+          implHashHex = info >>= fmap (B.unpack . Base16.encode) . thiImplHash
+          entry = TestCacheEntry
+            { tceRunHash = runHash
+            , tceImplHash = implHashHex
+            , tceResult = cachedResultFromTest res
+            }
+      in M.insert key entry acc
 
 -- | Filter module names based on CLI-provided allow lists.
 filterModules :: [String] -> [String] -> [String]
