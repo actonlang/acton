@@ -501,13 +501,10 @@ runTestsWatch gopts opts topts mode paths = do
         projDir = projPath paths
         srcRoot = srcDir paths
     (sched, progressUI, progressState) <- initCompileWatchContext gopts
-    let logLine = progressLogLine progressUI
     testParallel <- testMaxParallel gopts
     let runOnce gen mChanged = do
           withProjectLockForGen sched gen projDir $ do
-            iff (not (C.quiet gopts)) $ do
-              progressReset progressUI progressState
-              logLine ("Building project in " ++ projDir)
+            logProjectBuild gopts progressUI progressState projDir
             srcFiles <- projectSourceFiles paths
             hadErrors <- compileFilesChanged sp gopts opts srcFiles True mChanged (Just (sched, gen)) (Just (progressUI, progressState))
             unless hadErrors $ do
@@ -1019,12 +1016,9 @@ watchProjectAt gopts opts projDir = do
                 paths <- loadProjectPathsForBuildAt projDir opts
                 withOwnerLockOrExit (projPath paths) "Another compiler is running; cannot start watch." $ do
                   (sched, progressUI, progressState) <- initCompileWatchContext gopts
-                  let logLine = progressLogLine progressUI
                   let runOnce gen mChanged =
                         withProjectLockForGen sched gen (projPath paths) $ do
-                          iff (not(C.quiet gopts)) $ do
-                            progressReset progressUI progressState
-                            logLine("Building project in " ++ projPath paths)
+                          logProjectBuild gopts progressUI progressState (projPath paths)
                           srcFiles <- projectSourceFiles paths
                           void $ compileFilesChanged sp gopts opts srcFiles True mChanged (Just (sched, gen)) (Just (progressUI, progressState))
                           when (isNothing mChanged) $
