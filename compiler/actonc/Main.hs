@@ -622,8 +622,7 @@ runProjectTests gopts opts paths topts mode modules maxParallel = do
           putStrLn ("Using cached results for " ++ show (length cachedResults) ++ " tests")
         resultChan <- newChan
         printer <- async (printTestResults mode nameWidth (C.testShowLog topts) showCached resultChan)
-        when showCached $
-          forM_ cachedResults $ \res -> writeChan resultChan (Just res)
+        forM_ cachedResults $ \res -> writeChan resultChan (Just res)
         resultsRun <- runWithLimit maxParallel testsToRun $ \(modName, testName) -> do
           res <- runModuleTest opts paths topts mode modName testName
           writeChan resultChan (Just res)
@@ -832,9 +831,9 @@ printTestResults mode nameWidth showLog showCached chan = go
       case evt of
         Nothing -> return ()
         Just res -> do
-          when (showCached || not (trCached res)) $ do
+          let ok = trSuccess res == Just True && trException res == Nothing
+          when (showCached || not (trCached res) || not ok) $ do
             putStrLn (formatTestLine mode nameWidth res)
-            let ok = trSuccess res == Just True && trException res == Nothing
             unless (ok || showLog) $
               forM_ (trException res) $ \exc ->
                 mapM_ (\line -> putStrLn ("    " ++ line)) (lines exc)
