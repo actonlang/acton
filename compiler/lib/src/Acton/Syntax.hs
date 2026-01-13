@@ -260,14 +260,14 @@ data Constraint = Cast  {info :: ErrInfo, scope :: QScope, type1 :: Type, type2 
                 | Mut   {info :: ErrInfo, scope :: QScope, type1 :: Type, name1 :: Name, type2 :: Type}
                 | Seal  {info :: ErrInfo, scope :: QScope, type1 :: Type}
                 | Imply {info :: ErrInfo, wit :: Name, binder :: QBinds, scoped :: Constraints}
-                deriving (Eq,Show,Read,Generic,NFData)
+                deriving (Eq,Show,Read)
 
 type Constraints = [Constraint]
 
 data ErrInfo    = DfltInfo {errloc :: SrcLoc, errno :: Int, errexpr :: Maybe Expr, errinsts :: [(QName,TSchema,Type)]}
                 | DeclInfo {errloc :: SrcLoc, errloc2 :: SrcLoc, errname :: Name, errschema :: TSchema, errmsg :: String}
                 | Simple {errloc ::SrcLoc, errmsg :: String}
-                deriving (Eq,Show,Read,Generic,NFData)
+                deriving (Eq,Show,Read)
 
 type WPath      = [Either QName QName]
 
@@ -275,7 +275,7 @@ type WTCon      = (WPath,PCon)
 
 type QScope     = [Quant]
 
-data Quant      = Quant TVar [WTCon] deriving (Eq,Show,Read,Generic,NFData)
+data Quant      = Quant TVar [WTCon] deriving (Eq,Show,Read)
 
 
 leftpath tcs    = [ (map Left ns, tc) | (ns,tc) <- nss `zip` tcs ]
@@ -622,9 +622,6 @@ instance Data.Binary.Binary QBind
 instance Data.Binary.Binary Type
 instance Data.Binary.Binary Kind
 instance Data.Binary.Binary FX
-instance Data.Binary.Binary ErrInfo
-instance Data.Binary.Binary Constraint
-instance Data.Binary.Binary Quant
 instance Data.Binary.Binary NameInfo
 instance Data.Binary.Binary Expr
 instance Data.Binary.Binary Stmt
