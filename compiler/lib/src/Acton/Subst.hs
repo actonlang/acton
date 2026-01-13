@@ -59,15 +59,6 @@ instance VFree a => VFree (Maybe a) where
 instance VFree a => VFree (Name,a) where
     vfree (n, t)                    = vfree t
 
-instance VFree Constraint where
-    vfree (Cast info q t1 t2)       = (vfree q ++ vfree t1 ++ vfree t2) \\ qscope q
-    vfree (Sub info w q t1 t2)      = (vfree q ++ vfree t1 ++ vfree t2) \\ qscope q
-    vfree (Proto info w q t p)      = (vfree q ++ vfree t ++ vfree p) \\ qscope q
-    vfree (Sel info w q t1 n t2)    = (vfree q ++ vfree t1 ++ vfree t2) \\ qscope q
-    vfree (Mut info q t1 n t2)      = (vfree q ++ vfree t1 ++ vfree t2) \\ qscope q
-    vfree (Seal info q t)           = (vfree q ++ vfree t) \\ qscope q
-    vfree (Imply info w q cs)       = (vfree q ++ vfree cs) \\ qbound q
-
 instance VFree Type where
     vfree (TVar _ v)                = [v]
     vfree (TCon _ c)                = vfree c
