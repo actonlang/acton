@@ -27,6 +27,7 @@ import           Test.Tasty.HUnit
 import qualified Acton.Compile as Compile
 import qualified Acton.CommandLineParser as C
 import qualified Acton.SourceProvider as Source
+import qualified Acton.NameInfo as I
 import qualified Acton.Syntax as A
 import qualified InterfaceFiles
 import           Utils (prstr)
@@ -811,13 +812,13 @@ p20_add_remove_names = testCase "20-add/remove top-level names" $ do
     , "bar = 2"
     ]
   out1 <- buildOutIn proj
-  let addDelta = "Hash deltas a: +bar"
+  let addDelta = "+bar"
   assertBool "expected +bar hash delta" (addDelta `T.isInfixOf` out1)
   assertBool "did not expect b.act to type check" (not (typechecked out1 modB))
   assertBool "did not expect c.act to type check" (not (typechecked out1 modC))
   writeFileUtf8 (src </> "a.act") "foo = 1\n"
   out2 <- buildOutIn proj
-  let removeDelta = "Hash deltas a: -bar"
+  let removeDelta = "-bar"
   assertBool "expected -bar hash delta" (removeDelta `T.isInfixOf` out2)
   assertBool "did not expect b.act to type check" (not (typechecked out2 modB))
   assertBool "did not expect c.act to type check" (not (typechecked out2 modC))
@@ -1128,10 +1129,10 @@ p28_protocol_extension_deps = testCase "28-protocol/extension deps are recorded 
   assertBool "expected generated protocol sibling name" ("BazProtoD_BarProto" `elem` namesA)
   assertBool "expected generated extension name" ("BarProtoD_Widget" `elem` namesA)
   (_, nmod, _, _, _, _, _, _, _, _) <- InterfaceFiles.readFile tyA
-  let A.NModule iface _ = nmod
+  let I.NModule iface _ = nmod
       extMatch (n, _) = prstr n == "BarProtoD_Widget"
   case find extMatch iface of
-    Just (_, A.NExt _ _ ps _ _ _) -> do
+    Just (_, I.NExt _ _ ps _ _ _) -> do
       let protoNames = sort [ prstr (A.tcname p) | (_, p) <- ps ]
       assertEqual "extension protocol mro" (sort ["a.BarProto", "a.BazProto", "a.FooProto"]) protoNames
     _ -> assertFailure "missing extension NameInfo for BarProtoD_Widget"

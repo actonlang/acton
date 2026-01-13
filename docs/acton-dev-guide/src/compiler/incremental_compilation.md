@@ -40,15 +40,29 @@ local `Name`; external references are stored as `QName` (canonicalized to
 `extensionName`. For now class/actor implementation hashes are coarse and cover
 the entire body; per-method hashing can refine this later.
 
-Each unit has three hashes. **srcHash** is the hash of the parse-normalized AST
-for that name (pretty-printed), and is the earliest signal that a single
-declaration changed. **pubHash** is the hash of the unit's public interface
-(doc-free `NameInfo`) combined with the public hashes of external declarations
-referenced by its type signature. **implHash** is the hash of the unit's
-implementation combined with the implementation hashes of external declarations
-referenced from the body. Because we hash pretty-printed source, docstrings
-currently influence `implHash`; we can tighten the normalization later without
-changing the overall model.
+Each unit has three hashes. **srcHash** is the hash of the kinds-checked AST for
+that name (pretty-printed), and is the earliest signal that a single declaration
+changed. We use the kinds-checked form because it is the first pass that
+normalizes type-level syntax (implicit type arguments, canonical kind structure)
+without paying the cost of full type inference. Hashing the raw parsed AST would
+make equivalent signatures hash differently and trigger needless rebuilds.
+**pubHash** is the hash of the unit's public interface (doc-free `NameInfo`)
+combined with the public hashes of external declarations referenced by its type
+signature. **implHash** is the hash of the unit's implementation combined with
+the implementation hashes of external declarations referenced from the body.
+Because we hash pretty-printed source, docstrings currently influence
+`implHash`; we can tighten the normalization later without changing the overall
+model.
+
+Name hashes depend on `NameInfo`. The type checker environment (`teAll`) is
+authoritative for user-facing declarations, but it does not include compiler-
+generated names (for example, protocol lowering emits classes such as
+`MinusD_Number`). The typed AST does include those generated names, so we derive
+their `NameInfo` with `QuickType.envOf`. Conversely, `envOf` omits `Protocol`
+and `Extension` entries because type inference translates them away. To cover
+both, hashing uses the union of `teAll` and `QuickType.envOf` as its name-info
+map, ensuring generated names appear in `.ty` and still keeping protocol and
+extension hashes intact.
 
 To detect changes without recompiling, each per-name entry in `.ty` stores
 dependency snapshots. **pubDeps** is a list of `(QName, pubHash)` for external

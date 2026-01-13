@@ -202,7 +202,7 @@ import Control.Concurrent.Async
 import Control.Concurrent.MVar
 import Control.Concurrent (forkIO, myThreadId, threadCapability, threadDelay)
 import Control.Concurrent.STM (TChan, TVar, atomically, check, modifyTVar', newTChanIO, newTVarIO, readTChan, readTVar, writeTChan)
-import Control.Exception (Exception, IOException, SomeException, catch, displayException, finally, mask_, throwIO, try)
+import Control.Exception (Exception, IOException, SomeException, catch, displayException, finally, fromException, mask_, throwIO, try)
 import Control.Monad
 import Data.Char (isAlpha, isHexDigit, isSpace)
 import Data.Either (partitionEithers)
@@ -375,7 +375,17 @@ newBackQueue genRef gopts maxPar = do
             currentDone <- readIORef genRef
             when (currentDone == gen) $
               case res of
-                Left _ -> bjcOnDone callbacks job Nothing
+                Left err ->
+                  let isExitSuccess =
+                        case fromException err :: Maybe ExitCode of
+                          Just ExitSuccess -> True
+                          _ -> displayException err == "ExitSuccess"
+                  in if isExitSuccess
+                       then bjcOnDone callbacks job Nothing
+                       else do
+                         unless (quiet gopts (bjOpts job)) $
+                           hPutStrLn stderr ("Back pass failed for " ++ modNameToString (A.modname (biTypedMod (bjInput job))) ++ ": " ++ displayException err)
+                         bjcOnDone callbacks job Nothing
                 Right t -> bjcOnDone callbacks job t
             atomically $ modifyTVar' counts (decPending gen)
   let workers = max 1 maxPar
@@ -1277,15 +1287,15 @@ runFrontPasses gopts opts paths env0 parsed srcContent srcBytes resolveImportHas
         then return (Right vals)
         else return (Left (concat errs))
 
-    missingNameInfoDiagnostics :: [A.Name] -> [Diagnostic String]
-    missingNameInfoDiagnostics ns =
-      errsToDiagnostics "Compilation error" filename srcContent
-        [ (A.nloc n, "Missing type info for top-level name " ++ A.nstr n) | n <- ns ]
-
     missingNameHashDiagnostics :: A.QName -> [Diagnostic String]
     missingNameHashDiagnostics qn =
       errsToDiagnostics "Compilation error" filename srcContent
         [(NoLoc, "Hash info missing for " ++ prstr qn)]
+
+    missingDepHashDiagnostics :: String -> A.Name -> SrcLoc -> A.QName -> [Diagnostic String]
+    missingDepHashDiagnostics label owner loc qn =
+      errsToDiagnostics "Compilation error" filename srcContent
+        [(loc, label ++ " hash missing for " ++ prstr qn ++ " (used by " ++ A.nstr owner ++ ")")]
 
     resolveNameHashMaps :: [A.ModName] -> IO (Either [Diagnostic String] (M.Map A.ModName (M.Map A.Name InterfaceFiles.NameHashInfo)))
     resolveNameHashMaps mrefs = do
@@ -1299,27 +1309,34 @@ runFrontPasses gopts opts paths env0 parsed srcContent srcBytes resolveImportHas
         then return (Right (M.fromList vals))
         else return (Left (concat errs))
 
-    resolveDepHashes :: (InterfaceFiles.NameHashInfo -> B.ByteString)
+    resolveDepHashes :: String
+                     -> (InterfaceFiles.NameHashInfo -> B.ByteString)
                      -> M.Map A.Name [A.QName]
                      -> M.Map A.ModName (M.Map A.Name InterfaceFiles.NameHashInfo)
+                     -> M.Map A.Name SrcLoc
                      -> Either [Diagnostic String] (M.Map A.Name [(A.QName, B.ByteString)])
-    resolveDepHashes getHash deps extMaps =
-      let resolveQName qn = case qn of
-            A.GName m n -> lookupName m n
-            A.QName m n -> lookupName m n
+    resolveDepHashes label getHash deps extMaps nameLocs =
+      let resolveQName owner qn = case qn of
+            A.GName m n -> lookupName owner m n
+            A.QName m n -> lookupName owner m n
             A.NoQ _ -> Left (missingNameHashDiagnostics qn)
-          lookupName m n =
+          lookupName owner m n =
             case M.lookup m extMaps of
               Nothing -> Left (missingIfaceDiagnostics mn srcContent m)
               Just hm ->
                 case M.lookup n hm of
-                  Just info -> Right (A.GName m n, getHash info)
+                  Just info ->
+                    let h = getHash info
+                        loc = M.findWithDefault NoLoc owner nameLocs
+                    in if B.null h
+                         then Left (missingDepHashDiagnostics label owner loc (A.GName m n))
+                         else Right (Just (A.GName m n, h))
                   Nothing -> Left (missingNameHashDiagnostics (A.GName m n))
           resolveForName (n, qns) =
             let qnsSorted = Data.List.sortOn Hashing.qnameKey (Data.Set.toList (Data.Set.fromList qns))
-                resolved = map resolveQName qnsSorted
+                resolved = map (resolveQName n) qnsSorted
                 (errs, vals) = partitionEithers resolved
-            in if null errs then Right (n, vals) else Left (concat errs)
+            in if null errs then Right (n, catMaybes vals) else Left (concat errs)
           (errs, vals) = partitionEithers (map resolveForName (M.toList deps))
       in if null errs then Right (M.fromList vals) else Left (concat errs)
 
@@ -1340,9 +1357,11 @@ runFrontPasses gopts opts paths env0 parsed srcContent srcBytes resolveImportHas
       timeKindsCheck <- getTime Monotonic
       iff (C.timing gopts) $ putStrLn("    Pass: Kinds check     : " ++ fmtTime (timeKindsCheck - timeEnv))
 
+      -- Type-check and return both the typed AST and the interface NameInfo.
       (nmod,tchecked,typeEnv,mrefs) <- Acton.Types.reconstruct env kchecked
       -- Module-level src hash uses raw bytes so any source edit forces re-parse.
       let moduleSrcBytesHash = SHA256.hash srcBytes
+      -- Store roots so later builds can discover entry points without reparse.
       let I.NModule iface mdoc = nmod
       let roots = [ n | (n,i) <- iface, rootEligible i ]
       -- Import hashes are recorded in the .ty header so dep changes can be detected.
@@ -1363,12 +1382,31 @@ runFrontPasses gopts opts paths env0 parsed srcContent srcBytes resolveImportHas
               nameSrcKeys = M.keysSet nameSrcHashes
               nameImplKeys = M.keysSet nameImplHashes
               nameKeys = Data.Set.union nameSrcKeys nameImplKeys
+              nameLocsParsed = M.fromListWith (\a _ -> a)
+                [ (n, A.dloc d) | Hashing.TLDecl n d <- srcItems ] `M.union`
+                M.fromListWith (\a _ -> a)
+                [ (n, A.sloc s) | Hashing.TLStmt n s <- srcItems ]
+              nameLocsTyped = M.fromListWith (\a _ -> a)
+                [ (n, A.dloc d) | Hashing.TLDecl n d <- implItems ] `M.union`
+                M.fromListWith (\a _ -> a)
+                [ (n, A.sloc s) | Hashing.TLStmt n s <- implItems ]
+              nameLocs = M.union nameLocsParsed nameLocsTyped
           -- pubSigDeps: signature-level deps from NameInfo (types only).
-          let pubSigDepsRaw = M.fromList [ (n, Names.freeQ info) | (n, info) <- M.toList nameInfoMap ]
+          let isDerivedName n = case n of
+                A.Derived{} -> True
+                _ -> False
+              isDerivedQName qn = case qn of
+                A.GName _ n -> isDerivedName n
+                A.QName _ n -> isDerivedName n
+                A.NoQ n -> isDerivedName n
+              dropDerived = filter (not . isDerivedQName)
+              pubSigDepsRaw = M.fromList
+                [ (n, dropDerived (Names.freeQ info)) | (n, info) <- M.toList nameInfoMap ]
               -- implDeps: term-level deps from typed bodies.
               implDepsRaw = Hashing.implDepsFromItems implItems
               -- pubDeps include signature deps plus any term-level deps for reuse in pubHash.
-              pubDepsRaw = M.unionWith (++) pubSigDepsRaw implDepsRaw
+              -- Derived names are internal and should never require a pub hash.
+              pubDepsRaw = M.map dropDerived (M.unionWith (++) pubSigDepsRaw implDepsRaw)
               hashEnv = setMod mn env
               -- Split deps into local (same module) vs external (qualified) names.
               (pubSigLocalDeps, pubSigExtDeps) = Hashing.splitDeps mn hashEnv nameKeys pubSigDepsRaw
@@ -1381,9 +1419,9 @@ runFrontPasses gopts opts paths env0 parsed srcContent srcBytes resolveImportHas
             Left diags -> return (Left diags)
             Right extMaps -> do
               -- Resolve external deps to their recorded hashes.
-              let pubSigExtRes = resolveDepHashes "pub" InterfaceFiles.nhPubHash pubSigExtDeps extMaps
-                  pubExtRes = resolveDepHashes "pub" InterfaceFiles.nhPubHash pubExtDeps extMaps
-                  implExtRes = resolveDepHashes "impl" InterfaceFiles.nhImplHash implExtDeps extMaps
+              let pubSigExtRes = resolveDepHashes "pub" InterfaceFiles.nhPubHash pubSigExtDeps extMaps nameLocs
+                  pubExtRes = resolveDepHashes "pub" InterfaceFiles.nhPubHash pubExtDeps extMaps nameLocs
+                  implExtRes = resolveDepHashes "impl" InterfaceFiles.nhImplHash implExtDeps extMaps nameLocs
               case (pubSigExtRes, pubExtRes, implExtRes) of
                 (Left diags, _, _) -> return (Left diags)
                 (_, Left diags, _) -> return (Left diags)
@@ -1431,29 +1469,29 @@ runFrontPasses gopts opts paths env0 parsed srcContent srcBytes resolveImportHas
                     let htmlDoc = DocP.printHtmlDoc (I.NModule simplifiedTypeEnv mdoc) parsed
                     writeFile docFile htmlDoc
 
-                      timeTypeCheck <- getTime Monotonic
-                      iff (C.timing gopts) $ putStrLn("    Pass: Type check      : " ++ fmtTime (timeTypeCheck - timeKindsCheck))
+                  timeTypeCheck <- getTime Monotonic
+                  iff (C.timing gopts) $ putStrLn("    Pass: Type check      : " ++ fmtTime (timeTypeCheck - timeKindsCheck))
 
-                      timeFrontEnd <- getTime Monotonic
-                      let frontTime = timeFrontEnd - timeStart
-                          frontTimeMaybe = if not (quiet gopts opts)
-                                             then Just frontTime
-                                             else Nothing
-                          backJob = Just BackJob { bjPaths = paths
-                                                 , bjOpts = opts
-                                                 , bjInput = BackInput { biTypeEnv = typeEnv
-                                                                      , biTypedMod = tchecked
-                                                                      , biSrc = srcContent
-                                                                      , biImplHash = moduleImplHash
-                                                                      }
-                                                 }
-                      return $ Right FrontResult { frIfaceTE = iface
-                                                 , frDoc = mdoc
-                                                 , frPubHash = modulePubHash
-                                                 , frNameHashes = nameHashes
-                                                 , frFrontTime = frontTimeMaybe
-                                                 , frBackJob = backJob
-                                                 }
+                  timeFrontEnd <- getTime Monotonic
+                  let frontTime = timeFrontEnd - timeStart
+                      frontTimeMaybe = if not (quiet gopts opts)
+                                         then Just frontTime
+                                         else Nothing
+                      backJob = Just BackJob { bjPaths = paths
+                                             , bjOpts = opts
+                                             , bjInput = BackInput { biTypeEnv = typeEnv
+                                                                  , biTypedMod = tchecked
+                                                                  , biSrc = srcContent
+                                                                  , biImplHash = moduleImplHash
+                                                                  }
+                                             }
+                  return $ Right FrontResult { frIfaceTE = iface
+                                             , frDoc = mdoc
+                                             , frPubHash = modulePubHash
+                                             , frNameHashes = nameHashes
+                                             , frFrontTime = frontTimeMaybe
+                                             , frBackJob = backJob
+                                             }
 
 
 -- | Run the back passes for a single module.
@@ -1791,6 +1829,10 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
             errsToDiagnostics "Compilation error" (modNameToFilename mn) ""
               [(NoLoc, "Hash info missing for " ++ prstr qn)]
 
+          missingDepHashDiagnostics label qn users =
+            errsToDiagnostics "Compilation error" (modNameToFilename mn) ""
+              [(NoLoc, label ++ " hash missing for " ++ prstr qn ++ users)]
+
           collectDiags results =
             let (errs, vals) = partitionEithers results
             in if null errs
@@ -1853,24 +1895,40 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
                   Just info -> return (Right info)
                   Nothing -> return (Left (missingNameHashDiagnostics (A.GName m n)))
 
-          resolveQNameHash getHash qn =
+          resolveQNameHash label getHash users qn =
             case qn of
-              A.GName m n -> fmap (fmap getHash) (resolveNameHashInfo m n)
-              A.QName m n -> fmap (fmap getHash) (resolveNameHashInfo m n)
+              A.GName m n -> resolveNameHashInfo m n >>= \res ->
+                return $ case res of
+                  Left diags -> Left diags
+                  Right info ->
+                    let h = getHash info
+                    in if B.null h
+                         then Left (missingDepHashDiagnostics label (A.GName m n) users)
+                         else Right h
+              A.QName m n -> resolveNameHashInfo m n >>= \res ->
+                return $ case res of
+                  Left diags -> Left diags
+                  Right info ->
+                    let h = getHash info
+                    in if B.null h
+                         then Left (missingDepHashDiagnostics label (A.GName m n) users)
+                         else Right h
               A.NoQ _ -> return (Left (missingNameHashDiagnostics qn))
 
-          resolveDepHashes getHash deps = do
+          resolveDepHashes label getHash deps = do
             resolved <- traverseDiags (\(n, qns) -> do
               let qnsSorted = Data.List.sortOn Hashing.qnameKey (Data.Set.toList (Data.Set.fromList qns))
+                  users = " (used by " ++ A.nstr n ++ ")"
               resolvedQns <- traverseDiags (\qn -> do
-                currE <- resolveQNameHash getHash qn
+                currE <- resolveQNameHash label getHash users qn
                 return (fmap (\curr -> (qn, curr)) currE)) qnsSorted
               return (fmap (\vals -> (n, vals)) resolvedQns)) (M.toList deps)
             return (fmap M.fromList resolved)
 
-          checkDeps getHash deps = do
+          checkDeps label getHash users deps = do
             resolved <- traverseDiags (\(qn, recorded) -> do
-              currE <- resolveQNameHash getHash qn
+              let userNote = fmtUsers users qn
+              currE <- resolveQNameHash label getHash userNote qn
               return (fmap (\curr -> (qn, recorded, curr)) currE)) (M.toList deps)
             return (fmap (\triples -> [ (qn, old, new) | (qn, old, new) <- triples, old /= new ]) resolved)
 
@@ -1890,28 +1948,39 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
                 Left _ ->
                   return (key, Right emptyFrontResult)
         _ -> do
+          -- For cached .ty tasks, compare recorded dep hashes against current deps.
+          -- This is the up-to-date check that decides if we can skip work. If
+          -- any implDeps have changed we need to rerun out back passes and if
+          -- any pubDeps have changed we need to rerun front passes (and back
+          -- passes)
           needByDepsRes <- case gtTask t of
             TyTask{ tyNameHashes = nameHashes } -> do
+              -- Build dep maps and reverse "used by" index for logging.
               let pubDeps = depMap InterfaceFiles.nhPubDeps nameHashes
                   implDeps = depMap InterfaceFiles.nhImplDeps nameHashes
                   pubUsers = depUsers InterfaceFiles.nhPubDeps nameHashes
                   implUsers = depUsers InterfaceFiles.nhImplDeps nameHashes
-              pubRes <- checkDeps InterfaceFiles.nhPubHash pubDeps
-              implRes <- checkDeps InterfaceFiles.nhImplHash implDeps
+              -- Resolve current hashes for each dep and report any deltas.
+              pubRes <- checkDeps "pub" InterfaceFiles.nhPubHash pubUsers pubDeps
+              implRes <- checkDeps "impl" InterfaceFiles.nhImplHash implUsers implDeps
               case (pubRes, implRes) of
                 (Left diags, _) -> return (Left diags)
                 (_, Left diags) -> return (Left diags)
-                (Right pubDeltas, Right implDeltas) -> return (Right (pubDeltas, implDeltas, pubUsers, implUsers))
+                (Right pubDeltas, Right implDeltas) ->
+                  return (Right (pubDeltas, implDeltas, pubUsers, implUsers))
+            -- Source tasks always run front passes, so deps are irrelevant.
             _ -> return (Right ([], [], M.empty, M.empty))
 
           case needByDepsRes of
             Left diags -> return (key, Left diags)
             Right (pubDeltas, implDeltas, pubUsers, implUsers) -> do
               let needBySource = case gtTask t of { ActonTask{} -> True; _ -> False }
+                  -- Public deltas require front passes; impl deltas only need back jobs.
                   needByPub = not (null pubDeltas)
                   needByImpl = not (null implDeltas)
                   forceAlt    = altOutput optsT && mn == rootAlt
                   forceAlways = C.alwaysbuild optsT
+                  -- Front passes run on source or API changes, or when forced.
                   needFront = needBySource || needByPub || forceAlt || forceAlways
                   mModuleImplHash = case gtTask t of
                     TyTask{ tyImplHash = implHash } -> Just implHash
@@ -1970,7 +2039,10 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
                                   M.fromList [ (InterfaceFiles.nhName nh, InterfaceFiles.nhSrcHash nh)
                                              | nh <- nameHashes
                                              ]
-                                localNames = Data.Set.fromList (M.keys nameSrcHashes)
+                                nameKeys = M.keysSet nameSrcHashes
+                                nameImplHashes0 = Hashing.nameHashesFromItems (Hashing.topLevelItems tmod)
+                                nameImplHashes = M.filterWithKey (\k _ -> Data.Set.member k nameKeys) nameImplHashes0
+                                localNames = nameKeys
                                 implDepsRaw0 = Hashing.implDepsFromItems (Hashing.topLevelItems tmod)
                                 implDepsRaw = M.fromList
                                   [ (n, M.findWithDefault [] n implDepsRaw0)
@@ -1978,15 +2050,15 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
                                   ]
                                 hashEnv = setMod mn env1
                                 (implLocalDeps, implExtDeps) = Hashing.splitDeps mn hashEnv localNames implDepsRaw
-                            implExtRes <- resolveDepHashes InterfaceFiles.nhImplHash implExtDeps
+                            implExtRes <- resolveDepHashes "impl" InterfaceFiles.nhImplHash implExtDeps
                             case implExtRes of
                               Left diags -> return (key, Left diags)
                               Right implExtHashes -> do
                                 let updatedNameHashes =
-                                      Hashing.refreshImplHashes nameHashes implLocalDeps implExtHashes
+                                      Hashing.refreshImplHashes nameHashes nameImplHashes implLocalDeps implExtHashes
                                     moduleImplHash = Hashing.moduleImplHashFromNameHashes updatedNameHashes
                                 InterfaceFiles.writeFile tyFile moduleSrcBytesHash modulePubHash moduleImplHash imps updatedNameHashes roots mdoc nmod tmod
-                                let A.NModule ifaceTE _mdoc = nmod
+                                let I.NModule ifaceTE _mdoc = nmod
                                     backJob = Just (mkBackJob env1 tmod (Source.ssText snap) moduleImplHash)
                                     fr = mkFrontResult ifaceTE mdoc modulePubHash updatedNameHashes backJob
                                 cacheFrontResult fr
@@ -2000,7 +2072,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
                       Right (_ms, nmod, tmod, _moduleSrcBytesHash, modulePubHash, moduleImplHashStored, _imps, nameHashes, _roots, mdoc) -> do
                         snap <- Source.readSource sp actFile
                         env1 <- Acton.Env.mkEnv (searchPath paths) envSnap tmod
-                        let A.NModule ifaceTE _mdoc = nmod
+                        let I.NModule ifaceTE _mdoc = nmod
                             backJob = Just (mkBackJob env1 tmod (Source.ssText snap) moduleImplHashStored)
                             fr = mkFrontResult ifaceTE mdoc modulePubHash nameHashes backJob
                         cacheFrontResult fr
