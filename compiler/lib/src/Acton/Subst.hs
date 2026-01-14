@@ -767,7 +767,7 @@ instance USubst OpArg where
 
 -- Polarity -------------------------------------------------------------------------------------------
 
-class (USubst a, UFree a) => Polarity a where
+class UFree a => Polarity a where
     polvars                         :: a -> ([TUni],[TUni])
 
 (p,n) `polcat` (p',n')              = (p++p', n++n')
