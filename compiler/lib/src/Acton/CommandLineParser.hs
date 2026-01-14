@@ -280,7 +280,7 @@ testOptions = TestOptions
     <$> compileOptions
     <*> switch (long "show-log"      <> help "Show test log output")
     <*> switch (long "record"        <> help "Record test performance results")
-    <*> switch (long "golden-update" <> help "Update expected golden values based on current values")
+    <*> switch (long "golden-update" <> long "accept" <> help "Accept current test output as expected golden values")
     <*> option auto (long "iter"     <> metavar "N" <> value (-1) <> help "Number of iterations to run a test")
     <*> option auto (long "max-iter" <> metavar "N" <> value (10^6) <> help "Maximum number of iterations to run a test")
     <*> option auto (long "min-iter" <> metavar "N" <> value 3 <> help "Minimum number of iterations to run a test")
