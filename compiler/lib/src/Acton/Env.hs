@@ -31,7 +31,6 @@ import Acton.Prim
 import Acton.Printer
 import Acton.Names
 import Acton.Subst
-import Acton.Unify
 import Acton.TypeM
 import Utils
 import Pretty
@@ -195,16 +194,6 @@ prettyDocstring :: Maybe String -> Doc
 prettyDocstring Nothing         = empty
 prettyDocstring (Just docstring) = text "\"\"\"" <> text docstring <> text "\"\"\""
 
-instance (USubst x) => USubst (EnvF x) where
-    usubst env                  = do ne <- usubst (names env)
-                                     we <- usubst (witnesses env)
-                                     ex <- usubst (envX env)
-                                     return env{ names = ne, witnesses = we, envX = ex }
-
-instance (UFree x) => UFree (EnvF x) where
-    ufree env                   = ufree (names env) ++ ufree (witnesses env) ++ ufree (envX env)
-
-
 -- VFree ----------------------------------------------------------------------------------------
 
 instance VFree NameInfo where
@@ -273,30 +262,6 @@ instance Polarity NameInfo where
     polvars (NExt q c ps te _ _) = polvars q `polcat` polvars c `polcat` polvars ps `polcat` polvars te
     polvars (NTVar k c ps)      = polvars c `polcat` polvars ps
     polvars _                   = ([],[])
-
-
--- USubst ---------------------------------------------------------------------------------------
-
-instance USubst NameInfo where
-    usubst (NVar t)             = NVar <$> usubst t
-    usubst (NSVar t)            = NSVar <$> usubst t
-    usubst (NDef t d doc)       = NDef <$> usubst t <*> return d <*> return doc
-    usubst (NSig t d doc)       = NSig <$> usubst t <*> return d <*> return doc
-    usubst (NAct q p k te doc)  = NAct <$> usubst q <*> usubst p <*> usubst k <*> usubst te <*> return doc
-    usubst (NClass q us te doc) = NClass <$> usubst q <*> usubst us <*> usubst te <*> return doc
-    usubst (NProto q us te doc) = NProto <$> usubst q <*> usubst us <*> usubst te <*> return doc
-    usubst (NExt q c ps te opts doc) = NExt <$> usubst q <*> usubst c <*> usubst ps <*> usubst te <*> return opts <*> return doc
-    usubst (NTVar k c ps)       = NTVar k <$> usubst c <*> usubst ps
-    usubst (NAlias qn)          = NAlias <$> return qn
-    usubst (NMAlias m)          = NMAlias <$> return m
-    usubst (NModule te doc)     = NModule <$> return te <*> return doc     -- actually usubst te, but te has no free variables (top-level)
-    usubst NReserved            = return NReserved
-
-instance USubst Witness where
-    usubst w@WClass{}           = return w                      -- A WClass (i.e., an extension) can't have any free type variables
-    usubst w@WInst{}            = do t <- usubst (wtype w)
-                                     p <- usubst (proto w)
-                                     return w{ wtype  = t, proto = p }
 
 
 -- Polarity -------------------------------------------------------------------------------------
