@@ -30,9 +30,7 @@ import Acton.Names
 import Acton.Prim
 import Acton.Env
 import Acton.Subst
-import Acton.TypeM
 import Acton.TypeEnv
-import Acton.Unify
 
 
 -- Reduce conservatively and remove entailed constraints

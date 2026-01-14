@@ -28,10 +28,8 @@ import Acton.Prim
 import Acton.Env
 import Acton.Solver
 import Acton.Subst
-import Acton.Unify
 import Acton.Transform
 import Acton.Converter
-import Acton.TypeM
 import Acton.TypeEnv
 import Acton.WitKnots
 import qualified InterfaceFiles

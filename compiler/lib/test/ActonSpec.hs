@@ -13,8 +13,7 @@ import qualified Acton.Env
 import Acton.Env (CompilationError(..))
 import qualified Acton.Kinds
 import qualified Acton.Types
-import qualified Acton.TypeM
-import Acton.TypeM (TypeError(..))
+import Acton.Env (TypeError(..))
 import qualified Acton.Normalizer
 import qualified Acton.Deactorizer
 import qualified Acton.CPS
@@ -1456,7 +1455,7 @@ testTypeError env0 path = do
           let diagnostic = case E.fromException e :: Maybe TypeError of
                 Just typeErr ->
                   -- Use the typeReport function to format all TypeError variants with richer diagnostics
-                  let report = Acton.TypeM.typeReport typeErr display_file srcContent
+                  let report = Acton.Env.typeReport typeErr display_file srcContent
                       diag = addReport mempty report
                   in addFile diag display_file srcContent
                 _ -> case E.fromException e :: Maybe CompilationError of

@@ -174,7 +174,6 @@ import qualified Acton.Env
 import Acton.Env (simp, define, setMod)
 import qualified Acton.Kinds
 import qualified Acton.Types
-import Acton.TypeM
 import qualified Acton.Normalizer
 import qualified Acton.CPS
 import qualified Acton.Deactorizer
@@ -1157,9 +1156,9 @@ runFrontPasses gopts opts paths env0 parsed srcContent srcBytes resolveImportHas
     handleCompilation err =
       return $ Left (errsToDiagnostics "Compilation error" filename srcContent (Acton.Env.compilationError err))
 
-    handleTypeError :: TypeError -> IO (Either [Diagnostic String] FrontResult)
+    handleTypeError :: Acton.Env.TypeError -> IO (Either [Diagnostic String] FrontResult)
     handleTypeError err =
-      return $ Left [mkErrorDiagnostic filename srcContent (Acton.TypeM.typeReport err filename srcContent)]
+      return $ Left [Acton.Env.mkErrorDiagnostic filename srcContent (Acton.Env.typeReport err filename srcContent)]
 
     resolveImportHashes :: [A.ModName] -> IO (Either [Diagnostic String] [(A.ModName, B.ByteString)])
     resolveImportHashes mrefs = do

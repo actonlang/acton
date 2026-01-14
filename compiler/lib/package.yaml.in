@@ -76,7 +76,7 @@ library:
     - Acton.SourceProvider
     - Acton.Syntax
     - Acton.Types
-    - Acton.TypeM
+    - Acton.TypeEnv
     - Acton.WitKnots
     - Utils
     - Pretty

@@ -27,7 +27,6 @@ import Acton.Env (simp, define, setMod)
 import qualified Acton.QuickType
 import qualified Acton.Kinds
 import qualified Acton.Types
-import Acton.TypeM
 import qualified Acton.Solver
 import qualified Acton.Normalizer
 import qualified Acton.CPS
