@@ -47,17 +47,18 @@ jobs:
       matrix: ${{ steps.setmatrix.outputs.matrix }}
     steps:
       - name: "Set Matrix for PR or push"
+        # Keep PR matrix minimal; extra entries increase cache pressure and slow PR workflows.
         if: github.event_name != 'schedule'
         id: setmatrix_pr
         run: |
-          MATRIX_JSON='{\"include\":[{\"os\":\"macos\",\"version\":\"14\",\"arch\":\"aarch64\",\"cache\":true},{\"os\":\"macos\",\"version\":\"15\",\"arch\":\"aarch64\",\"cache\":true},{\"os\":\"macos\",\"version\":\"15\",\"arch\":\"x86_64\",\"cache\":true}]}'
+          MATRIX_JSON='{\"include\":[{\"os\":\"macos\",\"version\":\"15\",\"arch\":\"aarch64\",\"cache\":true},{\"os\":\"macos\",\"version\":\"15\",\"arch\":\"x86_64\",\"cache\":true},{\"os\":\"macos\",\"version\":\"26\",\"arch\":\"aarch64\",\"cache\":true}]}'
           echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
 
       - name: "Set Matrix for nightly run"
         if: github.event_name == 'schedule'
         id: setmatrix_cron
         run: |
-          MATRIX_JSON='{\"include\":[{\"os\":\"macos\",\"version\":\"14\",\"arch\":\"aarch64\",\"cache\":true},{\"os\":\"macos\",\"version\":\"15\",\"arch\":\"aarch64\",\"cache\":true},{\"os\":\"macos\",\"version\":\"15\",\"arch\":\"x86_64\",\"cache\":true}]}'
+          MATRIX_JSON='{\"include\":[{\"os\":\"macos\",\"version\":\"15\",\"arch\":\"aarch64\",\"cache\":true},{\"os\":\"macos\",\"version\":\"15\",\"arch\":\"x86_64\",\"cache\":true},{\"os\":\"macos\",\"version\":\"26\",\"arch\":\"aarch64\",\"cache\":true}]}'
           echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
 
       - name: "Set final matrix output"
@@ -142,6 +143,7 @@ jobs:
       matrix: ${{ steps.setmatrix.outputs.matrix }}
     steps:
       - name: "Set Matrix for PR or push"
+        # Keep PR matrix minimal; extra entries increase cache pressure and slow PR workflows.
         if: github.event_name != 'schedule'
         id: setmatrix_pr
         run: |
@@ -331,20 +333,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-14, macos-15, macos-15-intel]
+        os: [macos-15, macos-15-intel, macos-26]
     runs-on: ${{ matrix.os }}
     steps:
       - name: "Machine info"
         run: |
           uname -a
           system_profiler SPHardwareDataType
-      - name: "Download artifacts for Macos arm64, built on macos-15 (for macos-14 runner)"
-        if: ${{ matrix.os == 'macos-14' }}
-        uses: actions/download-artifact@v7
-        with:
-          name: acton-macos-15-aarch64
       - name: "Download artifacts for Macos arm64, built on macos-15"
-        if: ${{ matrix.os == 'macos-15' }}
+        if: ${{ matrix.os == 'macos-15' || matrix.os == 'macos-26' }}
         uses: actions/download-artifact@v7
         with:
           name: acton-macos-15-aarch64

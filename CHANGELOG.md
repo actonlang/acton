@@ -142,6 +142,7 @@ ERROR: [error Syntax error]: Empty format specifier after ':'
   - Recognize test actors without needing wrapper functions
   - Compiler generates wrappers automatically for discovered test actors
   - Remove old test types (sync/async/env test functions)
+- Update macOS CI to include macos-26 arm64 and drop macos-14, keeping the PR matrix small to avoid cache pressure.
 - Test run MUSL executables on Linux [#2355]
 - Test http2, netclics, zlib, netcli applications [#2338, #2331, #2324]
 - Add self name check for actors [#2317]
