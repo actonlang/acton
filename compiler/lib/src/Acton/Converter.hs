@@ -22,7 +22,6 @@ import Acton.Builtin
 import Acton.Prim
 import Acton.Env
 import Acton.Subst
-import Acton.TypeM
 import Acton.TypeEnv
 import qualified Data.Map.Strict as Map
 import Data.Map.Strict (Map)

@@ -17,7 +17,6 @@ module Acton.Printer (module Acton.Printer, module Pretty) where
 import Utils
 import Pretty
 import Acton.Syntax
-import Acton.Builtin
 import Acton.Prim
 import Prelude hiding ((<>))
 

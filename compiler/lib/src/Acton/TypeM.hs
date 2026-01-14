@@ -25,7 +25,6 @@ import Error.Diagnose
 
 import Acton.Syntax
 import Acton.Printer
-import Acton.Names
 import Utils
 import Pretty
 
