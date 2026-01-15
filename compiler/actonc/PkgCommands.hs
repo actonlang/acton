@@ -21,6 +21,7 @@ import qualified Acton.CommandLineParser as C
 import Acton.Compile (loadBuildSpec, throwProjectError)
 
 import Control.Exception (IOException, SomeException, try, displayException, evaluate)
+import Control.Concurrent (threadDelay)
 import Control.Monad (forM_, unless)
 import Data.Char (isSpace)
 import Data.Foldable (toList)
@@ -512,13 +513,37 @@ httpGet manager extraHeaders url = do
     req0 <- parseRequest url
     let headers = ("User-Agent", "actonc") : extraHeaders
         req = req0 { requestHeaders = headers ++ requestHeaders req0 }
-    res <- try (httpLbs req manager) :: IO (Either SomeException (Response BL.ByteString))
-    case res of
-      Left err -> return (Left (displayException err))
-      Right response ->
-        if statusCode (responseStatus response) >= 200 && statusCode (responseStatus response) < 300
-          then return (Right (responseBody response))
-          else return (Left ("HTTP " ++ show (statusCode (responseStatus response))))
+    let maxAttempts = 10
+        baseDelay = 500000
+        maxDelay = 120000000
+    let go attempt delay = do
+          res <- try (httpLbs req manager) :: IO (Either SomeException (Response BL.ByteString))
+          case res of
+            Left err ->
+              retryOrFail attempt delay (displayException err)
+            Right response -> do
+              let status = statusCode (responseStatus response)
+                  body = responseBody response
+              if status >= 200 && status < 300
+                then return (Right body)
+                else
+                  if shouldRetry status
+                    then retryOrFail attempt delay (httpErrorMessage status body)
+                    else return (Left (httpErrorMessage status body))
+        retryOrFail attempt delay errMsg
+          | attempt >= maxAttempts = return (Left errMsg)
+          | otherwise = do
+              threadDelay delay
+              go (attempt + 1) (min maxDelay (delay * 2))
+    go 1 baseDelay
+  where
+    shouldRetry status = status == 403 || status == 429 || status >= 500
+    httpErrorMessage status body =
+      let raw = trim (B.unpack (BL.toStrict body))
+          clipped = take 200 raw
+          suffix = if length raw > length clipped then "..." else ""
+          detail = if null clipped then "" else ": " ++ clipped ++ suffix
+      in "HTTP " ++ show status ++ detail
 
 lookupString :: String -> Aeson.Object -> Maybe String
 lookupString key obj =
@@ -566,11 +591,23 @@ zigFetchHash zigExe depUrl = do
     let globalCache = home </> ".cache" </> "acton" </> "zig-global-cache"
     createDirectoryIfMissing True globalCache
     let cmd = proc zigExe ["fetch", "--global-cache-dir", globalCache, depUrl]
-    res <- try (readCreateProcessWithExitCode cmd "") :: IO (Either SomeException (ExitCode, String, String))
-    case res of
-      Left err -> return (Left ("Error fetching " ++ displayException err))
-      Right (ExitSuccess, out, _) -> return (Right (trim out))
-      Right (ExitFailure _, _, err) -> return (Left ("Error fetching " ++ trim err))
+    let maxAttempts = 10
+        baseDelay = 500000
+        maxDelay = 120000000
+    let go attempt delay = do
+          res <- try (readCreateProcessWithExitCode cmd "") :: IO (Either SomeException (ExitCode, String, String))
+          case res of
+            Left err ->
+              retryOrFail attempt delay ("Error fetching " ++ displayException err)
+            Right (ExitSuccess, out, _) -> return (Right (trim out))
+            Right (ExitFailure _, _, err) ->
+              retryOrFail attempt delay ("Error fetching " ++ trim err)
+        retryOrFail attempt delay errMsg
+          | attempt >= maxAttempts = return (Left errMsg)
+          | otherwise = do
+              threadDelay delay
+              go (attempt + 1) (min maxDelay (delay * 2))
+    go 1 baseDelay
 
 getZigExe :: IO FilePath
 getZigExe = do
