@@ -70,8 +70,8 @@ executables:
       - -with-rtsopts=-A64M
     when:
     - condition: os(linux)
-      ld-options:
-        - -static
+      ghc-options:
+        - -pgml=../tools/ld-wrapper.sh
 
 tests:
   test_actonc:
