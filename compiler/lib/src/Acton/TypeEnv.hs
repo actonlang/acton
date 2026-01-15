@@ -554,20 +554,20 @@ instance USubst Witness where
                                      return w{ wtype  = t, proto = p }
 
 
-instance (USubst x) => USubst (EnvF x) where
+instance USubst Env where
     usubst env                  = do ne <- usubst (names env)
                                      we <- usubst (witnesses env)
                                      ex <- usubst (envX env)
                                      return env{ names = ne, witnesses = we, envX = ex }
 
-instance (UFree x) => UFree (EnvF x) where
+instance UFree Env where
     ufree env                   = ufree (names env) ++ ufree (witnesses env) ++ ufree (envX env)
 
 
 -- Well-formed tycon applications -------------------------------------------------------------------------------------------------
 
 class WellFormed a where
-    wf                      :: EnvF x -> a -> Constraints
+    wf                      :: Env -> a -> Constraints
 
 instance (WellFormed a) => WellFormed (Maybe a) where
     wf env                  = maybe [] (wf env)
@@ -586,7 +586,7 @@ instance WellFormed TCon where
             s               = qbound q `zip` ts
             constr u t      = if isProto env (tcname u) then Proto (DfltInfo NoLoc 20 Nothing []) nWild [] t u else Cast (DfltInfo NoLoc 21 Nothing []) [] t (tCon u)
 
-wfProto                     :: EnvF x -> TCon -> TypeM (Constraints, Constraints)
+wfProto                     :: Env -> TCon -> TypeM (Constraints, Constraints)
 wfProto env (TC n ts)       = do cs <- instQuals env q ts
                                  return (wf env ts, cs)
   where q                   = case findQName n env of
@@ -617,18 +617,18 @@ instance WellFormed QBind where
 
 -- Instantiation -------------------------------------------------------------------------------------------------------------------
 
-instantiate                 :: EnvF x -> TSchema -> TypeM (Constraints, [Type], Type)
+instantiate                 :: Env -> TSchema -> TypeM (Constraints, [Type], Type)
 instantiate env (TSchema _ q t)
                             = do (cs, tvs) <- instQBinds env q
                                  let s = qbound q `zip` tvs
                                  return (cs, tvs, vsubst s t)
 
-instQBinds                  :: EnvF x -> QBinds -> TypeM (Constraints, [Type])
+instQBinds                  :: Env -> QBinds -> TypeM (Constraints, [Type])
 instQBinds env q            = do ts <- newUnivars [ tvkind v | QBind v _ <- q ]
                                  cs <- instQuals env q ts
                                  return (cs, ts)
 
-instWitness                 :: EnvF x -> PCon -> Witness -> TypeM (Constraints,Type,Expr)
+instWitness                 :: Env -> PCon -> Witness -> TypeM (Constraints,Type,Expr)
 instWitness env p0 wit      = case wit of
                                  WClass q t p w ws opts -> do
                                     (cs,tvs) <- instQBinds env q
@@ -644,7 +644,7 @@ instWitness env p0 wit      = case wit of
                                     t <- usubst (vsubst s t)
                                     return (cs, t, wexpr ws (eQVar w))
 
-instQuals                   :: EnvF x -> QBinds -> [Type] -> TypeM Constraints
+instQuals                   :: Env -> QBinds -> [Type] -> TypeM Constraints
 instQuals env q ts          = do let s = qbound q `zip` ts
                                  sequence [ constr (vsubst s (tVar v)) (vsubst s u) | QBind v us <- q, u <- us ]
   where constr t u@(TC n _)
