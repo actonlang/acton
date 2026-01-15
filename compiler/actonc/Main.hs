@@ -40,6 +40,7 @@ import qualified Acton.Builtin
 import qualified Acton.DocPrinter as DocP
 import qualified Acton.Diagnostics as Diag
 import qualified Acton.SourceProvider as Source
+import Acton.Testing
 import Acton.Compile
 import Utils
 import qualified Pretty
@@ -56,7 +57,7 @@ import Control.Monad
 import Data.Default.Class (def)
 import Data.List.Split
 import Data.IORef
-import Data.Maybe (catMaybes, isJust, listToMaybe)
+import Data.Maybe (catMaybes, isJust, listToMaybe, fromMaybe)
 import Data.Monoid ((<>))
 import Data.Ord
 import Data.Graph
@@ -74,7 +75,7 @@ import qualified Filesystem.Path.CurrentOS as Fsco
 import GHC.Conc (getNumCapabilities, getNumProcessors, setNumCapabilities, myThreadId, threadCapability)
 import Prettyprinter (unAnnotate)
 import Prettyprinter.Render.Text (hPutDoc)
-import Data.List (isPrefixOf, isSuffixOf, find, partition, foldl', nub)
+import Data.List (isPrefixOf, isSuffixOf, find, partition, foldl', nub, intercalate)
 import System.Clock
 import System.Directory
 import System.Directory.Recursive
@@ -99,9 +100,6 @@ import Text.Printf
 
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy as BL
-import Data.Binary (encode)
-import qualified Data.ByteString.Base16 as Base16
-import qualified Crypto.Hash.SHA256 as SHA256
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Types as AesonTypes
 import qualified Data.Aeson.Key as AesonKey
@@ -111,21 +109,10 @@ import Control.Concurrent.QSem (newQSem, waitQSem, signalQSem)
 main = do
     hSetBuffering stdout LineBuffering
     arg <- C.parseCmdLine
-    -- Ensure enough capabilities: honor --jobs if set, otherwise at least 2 or #procs
-    caps0 <- getNumCapabilities
-    case arg of
-      C.CmdOpt gopts _ -> do
-        let req = C.jobs gopts
-        when (req > 0 && caps0 < req) $ setNumCapabilities req
-        when (req == 0 && caps0 < 2) $ do
-          procs <- getNumProcessors
-          setNumCapabilities (max 2 procs)
-      C.CompileOpt _ gopts _ -> do
-        let req = C.jobs gopts
-        when (req > 0 && caps0 < req) $ setNumCapabilities req
-        when (req == 0 && caps0 < 2) $ do
-          procs <- getNumProcessors
-          setNumCapabilities (max 2 procs)
+    let gopts = case arg of
+          C.CmdOpt g _ -> g
+          C.CompileOpt _ g _ -> g
+    ensureCapabilities gopts
     let run = case arg of
           C.CmdOpt gopts (C.New opts)         -> createProject (C.file opts)
           C.CmdOpt gopts (C.Build opts)       -> buildProject gopts opts
@@ -145,6 +132,16 @@ main = do
 -- Apply global options to compile options
 applyGlobalOpts :: C.GlobalOptions -> C.CompileOptions -> C.CompileOptions
 applyGlobalOpts gopts opts = opts
+
+-- Ensure enough capabilities: honor --jobs if set, otherwise at least 2 or #procs.
+ensureCapabilities :: C.GlobalOptions -> IO ()
+ensureCapabilities gopts = do
+    caps0 <- getNumCapabilities
+    let req = C.jobs gopts
+    when (req > 0 && caps0 < req) $ setNumCapabilities req
+    when (req == 0 && caps0 < 2) $ do
+      procs <- getNumProcessors
+      setNumCapabilities (max 2 procs)
 
 
 -- Auxiliary functions ---------------------------------------------------------------------------------------
@@ -166,29 +163,6 @@ tryLock lockPath = do
     case maybeLock of
         Nothing -> return Nothing  -- Lock failed
         Just lock -> return $ Just (lock, lockPath)
-
-compileOwnerLockPath :: FilePath -> FilePath
-compileOwnerLockPath projDir =
-    joinPath [projDir, ".acton.compile.lock"]
-
-tryCompileOwnerLock :: FilePath -> IO (Maybe (FileLock, FilePath))
-tryCompileOwnerLock projDir = do
-    let lockPath = compileOwnerLockPath projDir
-    mlock <- tryLockFile lockPath Exclusive
-    return ((\lock -> (lock, lockPath)) <$> mlock)
-
-releaseCompileOwnerLock :: (FileLock, FilePath) -> IO ()
-releaseCompileOwnerLock (lock, lockPath) = do
-    unlockFile lock
-    mlock <- tryLockFile lockPath Exclusive
-    case mlock of
-      Nothing -> return ()
-      Just lock2 -> do
-        removeFile lockPath `catch` handleNotExists
-        unlockFile lock2
-  where
-    handleNotExists :: IOException -> IO ()
-    handleNotExists _ = return ()
 
 -- Try locks sequentially until one succeeds or all fail
 findAvailableScratch :: FilePath -> IO (Maybe (FileLock, FilePath))
@@ -273,8 +247,8 @@ createProject name = do
     iff (projDirExists) $
         printErrorAndExit ("Unable to create project " ++ name ++ ", directory already exists.")
     createDirectoryIfMissing True name
-    writeFile (joinPath [ curDir, name, "Acton.toml" ]) ""
-    paths <- findPaths (joinPath [ curDir, name, "Acton.toml" ]) defaultCompileOptions
+    writeFile (joinPath [ curDir, name, "Build.act" ]) ""
+    paths <- findPaths (joinPath [ curDir, name, "Build.act" ]) defaultCompileOptions
     writeFile (joinPath [ curDir, name, ".gitignore" ]) (
       ".actonc.lock\n" ++
       "build.zig\n" ++
@@ -343,57 +317,148 @@ buildProject gopts opts = do
                     watchProjectAt gopts opts curDir
                   else buildProjectOnce gopts opts
 
+-- | Compute the path to the per-project compile lock.
+projectCompileLockPath :: FilePath -> FilePath
+projectCompileLockPath projDir =
+    joinPath [projDir, ".actonc.lock"]
+
+-- | Run an action while holding the per-project compile lock.
+withProjectCompileLock :: FilePath -> IO a -> IO a
+withProjectCompileLock projDir action =
+    withFileLock (projectCompileLockPath projDir) Exclusive (\_ -> action)
+
+-- | Collect all source files in a project's src/ directory.
+projectSourceFiles :: Paths -> IO [FilePath]
+projectSourceFiles paths = do
+    allFiles <- getFilesRecursive (srcDir paths)
+    return (catMaybes (map filterActFile allFiles))
+
+-- | Prefer the compile-owner lock, fallback to only-build when unavailable.
+withOwnerLockOrOnlyBuild :: C.GlobalOptions -> FilePath -> IO a -> IO a -> IO a
+withOwnerLockOrOnlyBuild gopts projDir runFull runFallback = do
+    ownerLock <- tryCompileOwnerLock projDir
+    case ownerLock of
+      Just lock -> runFull `finally` releaseCompileOwnerLock lock
+      Nothing -> do
+        unless (C.quiet gopts) $
+          putStrLn "Compiler already running; running final build only."
+        runFallback
+
+-- | Require the compile-owner lock or abort with a message.
+withOwnerLockOrExit :: FilePath -> String -> IO a -> IO a
+withOwnerLockOrExit projDir msg action = do
+    ownerLock <- tryCompileOwnerLock projDir
+    case ownerLock of
+      Nothing -> printErrorAndExit msg
+      Just lock -> action `finally` releaseCompileOwnerLock lock
+
+withProjectLockForGen :: CompileScheduler -> Int -> FilePath -> IO () -> IO ()
+withProjectLockForGen sched gen projDir action =
+    whenCurrentGen sched gen $
+      withProjectCompileLock projDir $
+        whenCurrentGen sched gen action
+
+requireProjectLayout :: Paths -> IO ()
+requireProjectLayout paths = do
+    exists <- doesDirectoryExist (srcDir paths)
+    unless exists $
+      printErrorAndExit "Missing src/ directory"
+-- | Strict path resolution: require a project config in the given directory.
+loadProjectPathsAt :: FilePath -> C.CompileOptions -> IO Paths
+loadProjectPathsAt curDir opts = do
+    actPath <- requireProjectConfigPath curDir
+    paths <- findPaths actPath opts
+    requireProjectLayout paths
+    return paths
+
+-- | Lenient path resolution for builds: allow no project config (temp project).
+loadProjectPathsForBuildAt :: FilePath -> C.CompileOptions -> IO Paths
+loadProjectPathsForBuildAt curDir opts = do
+    let actPath = joinPath [curDir, "Build.act"]
+    paths <- findPaths actPath opts
+    requireProjectLayout paths
+    return paths
+
+loadProjectPaths :: C.CompileOptions -> IO Paths
+loadProjectPaths opts = do
+    curDir <- getCurrentDirectory
+    loadProjectPathsAt curDir opts
+
+loadProjectPathsForBuild :: C.CompileOptions -> IO Paths
+loadProjectPathsForBuild opts = do
+    curDir <- getCurrentDirectory
+    loadProjectPathsForBuildAt curDir opts
+requireProjectConfigPath :: FilePath -> IO FilePath
+requireProjectConfigPath curDir = do
+    let candidates =
+          [ joinPath [curDir, "Build.act"]
+          , joinPath [curDir, "build.act.json"]
+          , joinPath [curDir, "Acton.toml"]
+          ]
+    mpath <- firstExisting candidates
+    case mpath of
+      Just path -> return path
+      Nothing -> printErrorAndExit "Project config not found in current directory (expected Build.act)"
+  where
+    firstExisting [] = return Nothing
+    firstExisting (p:ps) = do
+      exists <- doesFileExist p
+      if exists then return (Just p) else firstExisting ps
+
+ignoreNotExists :: IOException -> IO ()
+ignoreNotExists _ = return ()
+
+withScratchDirLock :: (FilePath -> IO a) -> IO a
+withScratchDirLock action = do
+    home <- getHomeDirectory
+    let basePath = joinPath [home, ".cache", "acton", "scratch"]
+    createDirectoryIfMissing True basePath
+    maybeLockInfo <- findAvailableScratch basePath
+    case maybeLockInfo of
+      Nothing -> error "Could not acquire any scratch directory lock"
+      Just (lock, lockPath) -> do
+        let scratchDir = dropExtension lockPath
+        removeDirectoryRecursive scratchDir `catch` ignoreNotExists
+        action scratchDir `finally` unlockFile lock
+
+withTempDirOpts :: C.CompileOptions -> (C.CompileOptions -> Bool -> IO a) -> IO a
+withTempDirOpts opts action
+  | C.tempdir opts /= "" = action opts False
+  | otherwise = withScratchDirLock $ \scratchDir ->
+      action opts { C.tempdir = scratchDir } True
+
+initCompileWatchContext :: C.GlobalOptions -> IO (CompileScheduler, ProgressUI, ProgressState)
+initCompileWatchContext gopts = do
+    maxParallel <- compileMaxParallel gopts
+    sched <- newCompileScheduler gopts maxParallel
+    progressUI <- initProgressUI gopts maxParallel
+    progressState <- newProgressState
+    return (sched, progressUI, progressState)
+
+logProjectBuild :: C.GlobalOptions -> ProgressUI -> ProgressState -> FilePath -> IO ()
+logProjectBuild gopts progressUI progressState projDir =
+    iff (not(C.quiet gopts)) $ do
+      progressReset progressUI progressState
+      progressLogLine progressUI ("Building project in " ++ projDir)
 -- | Run a single project build under lock and generate docs.
 buildProjectOnce :: C.GlobalOptions -> C.CompileOptions -> IO ()
 buildProjectOnce gopts opts = do
                 let sp = Source.diskSourceProvider
-                curDir <- getCurrentDirectory
-                paths <- findPaths (joinPath [ curDir, "Acton.toml" ]) opts
-                srcDirExists <- doesDirectoryExist (srcDir paths)
-                if not srcDirExists
-                  then printErrorAndExit "Missing src/ directory"
-                  else do
-                    iff (not(C.quiet gopts)) $ do
-                      putStrLn("Building project in " ++ projPath paths)
-                    ownerLock <- tryCompileOwnerLock (projPath paths)
-                    case ownerLock of
-                      Just lock -> do
-                        let runBuild = withFileLock (joinPath [projPath paths, ".actonc.lock"]) Exclusive $ \_ -> do
-                              allFiles <- getFilesRecursive (srcDir paths)
-                              let srcFiles = catMaybes $ map filterActFile allFiles
-                              compileFiles sp gopts opts srcFiles True
-                              generateProjectDocIndex sp gopts opts paths srcFiles
-                        runBuild `finally` releaseCompileOwnerLock lock
-                      Nothing -> do
-                        unless (C.quiet gopts) $
-                          putStrLn "Compiler already running; running final build only."
-                        let opts' = opts { C.only_build = True }
-                        withFileLock (joinPath [projPath paths, ".actonc.lock"]) Exclusive $ \_ -> do
-                          allFiles <- getFilesRecursive (srcDir paths)
-                          let srcFiles = catMaybes $ map filterActFile allFiles
-                          compileFiles sp gopts opts' srcFiles True
-                          generateProjectDocIndex sp gopts opts' paths srcFiles
+                paths <- loadProjectPathsForBuild opts
+                iff (not(C.quiet gopts)) $ do
+                  putStrLn("Building project in " ++ projPath paths)
+                let projDir = projPath paths
+                    runBuild opts' = withProjectCompileLock projDir $ do
+                      srcFiles <- projectSourceFiles paths
+                      compileFiles sp gopts opts' srcFiles True
+                      generateProjectDocIndex sp gopts opts' paths srcFiles
+                withOwnerLockOrOnlyBuild gopts projDir
+                  (runBuild opts)
+                  (runBuild opts { C.only_build = True })
 
 -- Test runner -------------------------------------------------------------------------------------------------
 
 data TestMode = TestModeRun | TestModeList | TestModePerf deriving (Eq, Show)
-
-data TestResult = TestResult
-  { trModule       :: String
-  , trName         :: String
-  , trComplete     :: Bool
-  , trSuccess      :: Maybe Bool
-  , trException    :: Maybe String
-  , trOutput       :: Maybe String
-  , trStdOut       :: Maybe String
-  , trStdErr       :: Maybe String
-  , trFlaky        :: Bool
-  , trNumFailures  :: Int
-  , trNumErrors    :: Int
-  , trNumIterations :: Int
-  , trTestDuration :: Double
-  , trRaw          :: Aeson.Value
-  } deriving (Show)
 
 -- | Entry point for actonc test; configures options and selects mode/watch.
 runTests :: C.GlobalOptions -> C.TestCommand -> IO ()
@@ -410,10 +475,7 @@ runTests gopts cmd = do
           , C.skip_build = False
           , C.only_build = False
           }
-    curDir <- getCurrentDirectory
-    paths <- findPaths (joinPath [ curDir, "Acton.toml" ]) opts
-    when (isTmp paths) $
-      printErrorAndExit "Acton.toml not found in current directory"
+    paths <- loadProjectPaths opts
     if C.watch opts0
       then case mode of
              TestModeList -> runTestsOnce gopts opts topts mode paths
@@ -429,7 +491,7 @@ runTestsOnce gopts opts topts mode paths = do
       TestModeList -> listProjectTests opts paths topts modules
       _ -> do
         maxParallel <- testMaxParallel gopts
-        exitCode <- runProjectTests opts paths topts mode modules maxParallel
+        exitCode <- runProjectTests gopts opts paths topts mode modules maxParallel
         exitWithTestCode exitCode
 
 -- | Watch mode for tests that rebuilds incrementally and reruns changed modules.
@@ -438,39 +500,29 @@ runTestsWatch gopts opts topts mode paths = do
     let sp = Source.diskSourceProvider
         projDir = projPath paths
         srcRoot = srcDir paths
-    compileParallel <- compileMaxParallel gopts
-    sched <- newCompileScheduler gopts compileParallel
-    progressUI <- initProgressUI gopts compileParallel
-    progressState <- newProgressState
-    let logLine = progressLogLine progressUI
+    (sched, progressUI, progressState) <- initCompileWatchContext gopts
     testParallel <- testMaxParallel gopts
     let runOnce gen mChanged = do
-          whenCurrentGen sched gen $
-            withFileLock (joinPath [projDir, ".actonc.lock"]) Exclusive $ \_ -> do
-              whenCurrentGen sched gen $ do
-                iff (not (C.quiet gopts)) $ do
-                  progressReset progressUI progressState
-                  logLine ("Building project in " ++ projDir)
-                allFiles <- getFilesRecursive srcRoot
-                let srcFiles = catMaybes $ map filterActFile allFiles
-                hadErrors <- compileFilesChanged sp gopts opts srcFiles True mChanged (Just (sched, gen)) (Just (progressUI, progressState))
-                unless hadErrors $ do
-                  testModules <- listTestModules opts paths
-                  modulesToTest <- case mChanged of
-                    Nothing -> return testModules
-                    Just changedPaths -> do
-                      changedModules <- changedModulesFromPaths paths changedPaths
-                      affected <- dependentTestModulesFromHeaders paths srcFiles changedModules
-                      return (filter (`elem` testModules) affected)
-                  unless (null modulesToTest) $ do
-                    _ <- runProjectTests opts paths topts mode modulesToTest testParallel
-                    return ()
-    ownerLock <- tryCompileOwnerLock projDir
-    case ownerLock of
-      Nothing -> printErrorAndExit "Another compiler is running; cannot start test watch."
-      Just lock ->
-        runWatchProject gopts projDir srcRoot sched runOnce
-          `finally` releaseCompileOwnerLock lock
+          withProjectLockForGen sched gen projDir $ do
+            logProjectBuild gopts progressUI progressState projDir
+            srcFiles <- projectSourceFiles paths
+            hadErrors <- compileFilesChanged sp gopts opts srcFiles True mChanged (Just (sched, gen)) (Just (progressUI, progressState))
+            unless hadErrors $ do
+              testModules <- listTestModules opts paths
+              modulesToTest <- selectTestModules paths srcFiles mChanged testModules
+              unless (null modulesToTest) $
+                void $ runProjectTests gopts opts paths topts mode modulesToTest testParallel
+    withOwnerLockOrExit projDir "Another compiler is running; cannot start test watch." $
+      runWatchProject gopts projDir srcRoot sched runOnce
+
+selectTestModules :: Paths -> [FilePath] -> Maybe [FilePath] -> [String] -> IO [String]
+selectTestModules paths srcFiles mChanged testModules =
+    case mChanged of
+      Nothing -> return testModules
+      Just changedPaths -> do
+        changedModules <- changedModulesFromPaths paths changedPaths
+        affected <- dependentTestModulesFromHeaders paths srcFiles changedModules
+        return (filter (`elem` testModules) affected)
 
 -- | Compute parallelism for test runs from jobs or core count.
 testMaxParallel :: C.GlobalOptions -> IO Int
@@ -540,8 +592,8 @@ listProjectTests opts paths topts modules = do
         System.Exit.exitSuccess
 
 -- | Run selected tests concurrently, stream results, and return an exit code.
-runProjectTests :: C.CompileOptions -> Paths -> C.TestOptions -> TestMode -> [String] -> Int -> IO Int
-runProjectTests opts paths topts mode modules maxParallel = do
+runProjectTests :: C.GlobalOptions -> C.CompileOptions -> Paths -> C.TestOptions -> TestMode -> [String] -> Int -> IO Int
+runProjectTests gopts opts paths topts mode modules maxParallel = do
     timeStart <- getTime Monotonic
     let wantedModules = Data.List.sort (filterModules (C.testModules topts) modules)
     testsByModule <- forM wantedModules $ \modName -> do
@@ -555,12 +607,23 @@ runProjectTests opts paths topts mode modules maxParallel = do
         return 0
       else do
         putStrLn "Test results:"
-        let displayNames = [ formatTestName modName testName | (modName, testName) <- allTests ]
-            maxNameLen = maximum (map length displayNames)
-            nameWidth = max 20 maxNameLen + 5
+        let nameWidth = testNameWidth allTests
+            runContext = mkRunContext opts topts mode
+            ctxHash = contextHashBytes runContext
+        cache <- readTestCache (testCachePath paths) runContext
+        testHashInfos <- buildTestHashInfos paths ctxHash testsByModule
+        let cacheEntries = tcTests cache
+        when (C.verbose gopts) $
+          putStrLn (formatTestCacheContext ctxHash (testCachePath paths))
+        let logCache = if C.verbose gopts then putStrLn else \_ -> return ()
+        (cachedResults, testsToRun) <- classifyCachedTests logCache cacheEntries testHashInfos allTests
+        let showCached = C.testShowCached topts
+        when (showCached && not (null cachedResults)) $
+          putStrLn ("Using cached results for " ++ show (length cachedResults) ++ " tests")
         resultChan <- newChan
-        printer <- async (printTestResults mode nameWidth (C.testShowLog topts) resultChan)
-        results <- runWithLimit maxParallel allTests $ \(modName, testName) -> do
+        printer <- async (printTestResults mode nameWidth (C.testShowLog topts) showCached resultChan)
+        forM_ cachedResults $ \res -> writeChan resultChan (Just res)
+        resultsRun <- runWithLimit maxParallel testsToRun $ \(modName, testName) -> do
           res <- runModuleTest opts paths topts mode modName testName
           writeChan resultChan (Just res)
           return res
@@ -568,10 +631,30 @@ runProjectTests opts paths topts mode modules maxParallel = do
         _ <- wait printer
         timeEnd <- getTime Monotonic
         when (C.testGoldenUpdate topts) $
-          updateGoldenFiles paths results
+          updateGoldenFiles paths resultsRun
         when (C.testRecord topts) $
-          writePerfData paths results
-        printTestSummary (timeEnd - timeStart) (C.testShowLog topts) results
+          writePerfData paths resultsRun
+        let results = cachedResults ++ resultsRun
+            cacheEntries' = foldl' (updateTestCacheEntry testHashInfos) cacheEntries resultsRun
+            newCache = TestCache
+              { tcVersion = testCacheVersion
+              , tcContext = runContext
+              , tcTests = cacheEntries'
+              }
+        writeTestCache (testCachePath paths) newCache
+        printTestSummary (timeEnd - timeStart) (C.testShowLog topts) showCached results
+  where
+    testNameWidth tests =
+      let displayNames = [ formatTestName modName testName | (modName, testName) <- tests ]
+          maxNameLen = maximum (map length displayNames)
+      in max 20 maxNameLen + 5
+    mkRunContext opts' topts' mode' = TestRunContext
+      { trcCompilerVersion = getVer
+      , trcTarget = C.target opts'
+      , trcOptimize = show (C.optimize opts')
+      , trcMode = show mode'
+      , trcArgs = testCmdArgs topts'
+      }
 
 -- | Filter module names based on CLI-provided allow lists.
 filterModules :: [String] -> [String] -> [String]
@@ -638,6 +721,7 @@ runModuleTest opts paths topts mode modName testName = do
               , trNumIterations = 0
               , trTestDuration = 0
               , trRaw = Aeson.Null
+              , trCached = False
               }
         return fallback
 
@@ -681,7 +765,7 @@ readModuleImports paths mn = do
         hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader tyFile
         case hdrE of
           Left _ -> return []
-          Right (_hash, _ih, imps, _roots, _doc) -> return (map fst imps)
+          Right (_hash, _ih, _implH, imps, _nameHashes, _roots, _doc) -> return (map fst imps)
 
 dependentTestModulesFromHeaders :: Paths -> [FilePath] -> [String] -> IO [String]
 dependentTestModulesFromHeaders paths srcFiles changedModules = do
@@ -715,17 +799,18 @@ formatTestName moduleName testName =
 
 -- | Compute the status label (OK/FAIL/ERR/FLAKY) for a test.
 formatTestStatus :: TestResult -> String
-formatTestStatus res
-  | trSuccess res == Just True && trException res == Nothing = "OK"
-  | otherwise =
-      let base
-            | trNumErrors res > 0 && trNumFailures res > 0 = "ERR/FAIL"
-            | trNumErrors res > 0 = "ERR"
-            | trNumFailures res > 0 = "FAIL"
-            | trSuccess res == Just False = "FAIL"
-            | otherwise = "ERR"
-          prefix = if trFlaky res then "FLAKY " else ""
-      in prefix ++ base
+formatTestStatus res =
+    let ok = trSuccess res == Just True && trException res == Nothing
+        base
+          | ok = "OK"
+          | trNumErrors res > 0 && trNumFailures res > 0 = "ERR/FAIL"
+          | trNumErrors res > 0 = "ERR"
+          | trNumFailures res > 0 = "FAIL"
+          | trSuccess res == Just False = "FAIL"
+          | otherwise = "ERR"
+        prefix = if not ok && trFlaky res then "FLAKY " else ""
+        cached = if trCached res then "CACHED " else ""
+    in cached ++ prefix ++ base
 
 -- | Format a single test result line with alignment and timing.
 formatTestLine :: TestMode -> Int -> TestResult -> String
@@ -738,19 +823,20 @@ formatTestLine _ nameWidth res =
     in prefix0 ++ padding ++ status ++ ": " ++ runs
 
 -- | Drain test results from the worker channel and print them.
-printTestResults :: TestMode -> Int -> Bool -> Chan (Maybe TestResult) -> IO ()
-printTestResults mode nameWidth showLog chan = go
+printTestResults :: TestMode -> Int -> Bool -> Bool -> Chan (Maybe TestResult) -> IO ()
+printTestResults mode nameWidth showLog showCached chan = go
   where
     go = do
       evt <- readChan chan
       case evt of
         Nothing -> return ()
         Just res -> do
-          putStrLn (formatTestLine mode nameWidth res)
           let ok = trSuccess res == Just True && trException res == Nothing
-          unless (ok || showLog) $
-            forM_ (trException res) $ \exc ->
-              mapM_ (\line -> putStrLn ("    " ++ line)) (lines exc)
+          when (showCached || not (trCached res) || not ok) $ do
+            putStrLn (formatTestLine mode nameWidth res)
+            unless (ok || showLog) $
+              forM_ (trException res) $ \exc ->
+                mapM_ (\line -> putStrLn ("    " ++ line)) (lines exc)
           go
 
 -- | Parse newline-delimited JSON emitted by test binaries.
@@ -820,6 +906,7 @@ parseTestInfoValue = Aeson.withObject "TestInfo" $ \o -> do
       , trNumIterations = numIterations
       , trTestDuration = testDuration
       , trRaw = Aeson.Object o
+      , trCached = False
       }
 
 -- | Pick the final or last-seen TestResult from a stream.
@@ -833,16 +920,18 @@ pickFinalTestInfo infos =
           Nothing -> Just (head xs)
 
 -- | Print a summary line and return the failure/error exit code.
-printTestSummary :: TimeSpec -> Bool -> [TestResult] -> IO Int
-printTestSummary elapsed showLog results = do
+printTestSummary :: TimeSpec -> Bool -> Bool -> [TestResult] -> IO Int
+printTestSummary elapsed showLog showCached results = do
     let total = length results
         failures = length [ r | r <- results, trSuccess r == Just False ]
         errors = length [ r | r <- results, trSuccess r == Nothing ]
+        hiddenCachedSuccess = not showCached && any (\r -> trCached r && trSuccess r == Just True) results
     case total of
       0 -> do
         putStrLn "Nothing to test"
         return 0
       _ -> do
+        putStrLn ""
         if errors > 0 && failures > 0
           then putStrLn (show errors ++ " error and " ++ show failures ++ " failure out of " ++ show total ++ " tests (" ++ fmtTime elapsed ++ ")")
           else if errors > 0
@@ -850,8 +939,11 @@ printTestSummary elapsed showLog results = do
             else if failures > 0
               then putStrLn (show failures ++ " out of " ++ show total ++ " tests failed (" ++ fmtTime elapsed ++ ")")
               else putStrLn ("All " ++ show total ++ " tests passed (" ++ fmtTime elapsed ++ ")")
+        putStrLn ""
         when showLog $
-          printTestDetails showLog results
+          printTestDetails showLog showCached results
+        when hiddenCachedSuccess $
+          putStrLn "Showing tests that ran in this invocation; cached successes are hidden. Cached failures/errors are still shown. Use --show-cached to include cached successes."
         if errors > 0
           then return 2
           else if failures > 0
@@ -859,19 +951,22 @@ printTestSummary elapsed showLog results = do
             else return 0
 
 -- | Print per-test failures and optional logs after the summary.
-printTestDetails :: Bool -> [TestResult] -> IO ()
-printTestDetails showLog results = do
+printTestDetails :: Bool -> Bool -> [TestResult] -> IO ()
+printTestDetails showLog showCached results = do
     forM_ results $ \res -> do
       let status = case trSuccess res of
                      Just True -> "OK"
                      Just False -> "FAIL"
                      Nothing -> "ERR"
           display = displayTestName (trName res)
-      when (showLog || status /= "OK") $ do
-        putStrLn ("Test " ++ trModule res ++ "." ++ display ++ ": " ++ status)
-        case trException res of
-          Just exc -> putStrLn ("  " ++ exc)
-          Nothing -> return ()
+          cached = if trCached res then " (cached)" else ""
+      let showResult = showCached || not (trCached res) || status /= "OK"
+      when showResult $ do
+        when (showLog || status /= "OK") $ do
+          putStrLn ("Test " ++ trModule res ++ "." ++ display ++ ": " ++ status ++ cached)
+          case trException res of
+            Just exc -> putStrLn ("  " ++ exc)
+            Nothing -> return ()
         when (showLog || status /= "OK") $ do
           case trOutput res of
             Just out | not (null out) -> putStrLn ("  Output:\n" ++ out)
@@ -917,34 +1012,17 @@ writePerfData paths results = do
 watchProjectAt :: C.GlobalOptions -> C.CompileOptions -> FilePath -> IO ()
 watchProjectAt gopts opts projDir = do
                 let sp = Source.diskSourceProvider
-                paths <- findPaths (joinPath [ projDir, "Acton.toml" ]) opts
-                srcDirExists <- doesDirectoryExist (srcDir paths)
-                if not srcDirExists
-                  then printErrorAndExit "Missing src/ directory"
-                  else do
-                    ownerLock <- tryCompileOwnerLock (projPath paths)
-                    case ownerLock of
-                      Nothing -> printErrorAndExit "Another compiler is running; cannot start watch."
-                      Just lock -> do
-                        maxParallel <- compileMaxParallel gopts
-                        sched <- newCompileScheduler gopts maxParallel
-                        progressUI <- initProgressUI gopts maxParallel
-                        progressState <- newProgressState
-                        let logLine = progressLogLine progressUI
-                        let runOnce gen mChanged = do
-                              whenCurrentGen sched gen $
-                                withFileLock (joinPath [projPath paths, ".actonc.lock"]) Exclusive $ \_ -> do
-                                  whenCurrentGen sched gen $ do
-                                    iff (not(C.quiet gopts)) $ do
-                                      progressReset progressUI progressState
-                                      logLine("Building project in " ++ projPath paths)
-                                    allFiles <- getFilesRecursive (srcDir paths)
-                                    let srcFiles = catMaybes $ map filterActFile allFiles
-                                    void $ compileFilesChanged sp gopts opts srcFiles True mChanged (Just (sched, gen)) (Just (progressUI, progressState))
-                                    when (isNothing mChanged) $
-                                      generateProjectDocIndex sp gopts opts paths srcFiles
-                        runWatchProject gopts (projPath paths) (srcDir paths) sched runOnce
-                          `finally` releaseCompileOwnerLock lock
+                paths <- loadProjectPathsForBuildAt projDir opts
+                withOwnerLockOrExit (projPath paths) "Another compiler is running; cannot start watch." $ do
+                  (sched, progressUI, progressState) <- initCompileWatchContext gopts
+                  let runOnce gen mChanged =
+                        withProjectLockForGen sched gen (projPath paths) $ do
+                          logProjectBuild gopts progressUI progressState (projPath paths)
+                          srcFiles <- projectSourceFiles paths
+                          void $ compileFilesChanged sp gopts opts srcFiles True mChanged (Just (sched, gen)) (Just (progressUI, progressState))
+                          when (isNothing mChanged) $
+                            generateProjectDocIndex sp gopts opts paths srcFiles
+                  runWatchProject gopts (projPath paths) (srcDir paths) sched runOnce
 
 -- | Build a single file, optionally running in watch mode.
 buildFile :: C.GlobalOptions -> C.CompileOptions -> FilePath -> IO ()
@@ -966,46 +1044,24 @@ buildFileOnce gopts opts file = do
         -- In a project, use project directory for compilation.
         iff (not(C.quiet gopts)) $ do
           putStrLn("Building file " ++ file ++ " in project " ++ relProj)
-        ownerLock <- tryCompileOwnerLock proj
-        case ownerLock of
-          Just lock -> do
-            let lock_file = joinPath [proj, ".actonc.lock"]
-            let runBuild = withFileLock lock_file Exclusive $ \_ -> do
-                  compileFiles sp gopts opts [file] False
-            runBuild `finally` releaseCompileOwnerLock lock
-          Nothing -> do
-            unless (C.quiet gopts) $
-              putStrLn "Compiler already running; running final build only."
-            let lock_file = joinPath [proj, ".actonc.lock"]
-                opts' = opts { C.only_build = True }
-            withFileLock lock_file Exclusive $ \_ -> do
-              compileFiles sp gopts opts' [file] False
+        let runBuild opts' =
+              withProjectCompileLock proj $
+                compileFiles sp gopts opts' [file] False
+        withOwnerLockOrOnlyBuild gopts proj
+          (runBuild opts)
+          (runBuild opts { C.only_build = True })
       Nothing -> do
         -- Not in a project, use scratch directory for compilation unless
         -- --tempdir is provided - then use that
-        if (C.tempdir opts /= "")
-          then do
-            iff (not(C.quiet gopts)) $ do
-              putStrLn("Building file " ++ file ++ " using temporary directory " ++ C.tempdir opts)
-            compileFiles sp gopts opts [file] False
-          else do
-            home <- getHomeDirectory
-            let basePath = joinPath [home, ".cache", "acton", "scratch"]
-            createDirectoryIfMissing True basePath
-            maybeLockInfo <- findAvailableScratch basePath
-            case maybeLockInfo of
-              Nothing -> error "Could not acquire any scratch directory lock"
-              Just (lock, lockPath) -> do
-                let scratchDir = dropExtension lockPath
-                iff (not(C.quiet gopts)) $ do
-                  let scratch_dir = if (C.verbose gopts) then " " ++ scratchDir else ""
-                  putStrLn("Building file " ++ file ++ " using temporary scratch directory" ++ scratch_dir)
-                removeDirectoryRecursive scratchDir `catch` handleNotExists
-                compileFiles sp gopts (opts { C.tempdir = scratchDir }) [file] False
-                unlockFile lock
-  where
-    handleNotExists :: IOException -> IO ()
-    handleNotExists _ = return ()
+        withTempDirOpts opts $ \opts' usedScratch -> do
+          iff (not(C.quiet gopts)) $ do
+            if usedScratch
+              then do
+                let scratch_dir = if (C.verbose gopts) then " " ++ C.tempdir opts' else ""
+                putStrLn("Building file " ++ file ++ " using temporary scratch directory" ++ scratch_dir)
+              else
+                putStrLn("Building file " ++ file ++ " using temporary directory " ++ C.tempdir opts')
+          compileFiles sp gopts opts' [file] False
 
 -- | Watch a single file and rebuild on changes.
 watchFile :: C.GlobalOptions -> C.CompileOptions -> FilePath -> IO ()
@@ -1016,34 +1072,14 @@ watchFile gopts opts file = do
       Just proj -> watchProjectAt gopts opts proj
       Nothing -> do
         let sp = Source.diskSourceProvider
-        maxParallel <- compileMaxParallel gopts
-        sched <- newCompileScheduler gopts maxParallel
-        progressUI <- initProgressUI gopts maxParallel
-        progressState <- newProgressState
-        if (C.tempdir opts /= "")
-          then do
-            let runOnce gen mChanged =
-                  whenCurrentGen sched gen $
-                    void $ compileFilesChanged sp gopts opts [absFile] False mChanged (Just (sched, gen)) (Just (progressUI, progressState))
-            runWatchFile gopts absFile sched runOnce
-          else do
-            home <- getHomeDirectory
-            let basePath = joinPath [home, ".cache", "acton", "scratch"]
-            createDirectoryIfMissing True basePath
-            maybeLockInfo <- findAvailableScratch basePath
-            case maybeLockInfo of
-              Nothing -> error "Could not acquire any scratch directory lock"
-              Just (lock, lockPath) -> do
-                let scratchDir = dropExtension lockPath
-                    opts' = opts { C.tempdir = scratchDir }
-                removeDirectoryRecursive scratchDir `catch` handleNotExists
-                let runOnce gen mChanged =
-                      whenCurrentGen sched gen $
-                        void $ compileFilesChanged sp gopts opts' [absFile] False mChanged (Just (sched, gen)) (Just (progressUI, progressState))
-                runWatchFile gopts absFile sched runOnce `finally` unlockFile lock
-  where
-    handleNotExists :: IOException -> IO ()
-    handleNotExists _ = return ()
+        (sched, progressUI, progressState) <- initCompileWatchContext gopts
+        let runWatch opts' =
+              let runOnce gen mChanged =
+                    whenCurrentGen sched gen $
+                      void $ compileFilesChanged sp gopts opts' [absFile] False mChanged (Just (sched, gen)) (Just (progressUI, progressState))
+              in runWatchFile gopts absFile sched runOnce
+        withTempDirOpts opts $ \opts' _ ->
+          runWatch opts'
 
 data WatchTrigger = WatchFull | WatchIncremental FilePath deriving (Eq, Show)
 
@@ -1139,7 +1175,7 @@ runWatchProject gopts projDir srcRoot sched runOnce = do
         isActEvent ev = isJust (actWatchTrigger ev)
         isRootEvent ev =
           let name = takeFileName (FS.eventPath ev)
-          in name `elem` ["Acton.toml", "Build.act", "build.act.json"]
+          in name `elem` ["Build.act", "build.act.json", "Acton.toml"]
     FS.withManager $ \mgr -> do
       _ <- FS.watchTree mgr srcRoot isActEvent onAct
       _ <- FS.watchDir mgr projDir isRootEvent onRoot
@@ -1178,15 +1214,7 @@ runWatchFile gopts absFile sched runOnce = do
 -- | Fetch dependencies for the current project without compiling.
 fetchCommand :: C.GlobalOptions -> IO ()
 fetchCommand gopts = do
-    curDir <- getCurrentDirectory
-    let actPath = joinPath [curDir, "Acton.toml"]
-    actExists <- doesFileExist actPath
-    unless actExists $
-      printErrorAndExit "Acton.toml not found in current directory"
-    srcExists <- doesDirectoryExist (joinPath [curDir, "src"])
-    unless srcExists $
-      printErrorAndExit "Missing src/ directory"
-    paths <- findPaths actPath defaultCompileOptions
+    paths <- loadProjectPaths defaultCompileOptions
     res <- try (fetchDependencies gopts paths []) :: IO (Either ProjectError ())
     case res of
       Left (ProjectError msg) -> printErrorAndExit msg
@@ -1198,10 +1226,7 @@ fetchCommand gopts = do
 pkgShow :: C.GlobalOptions -> IO ()
 pkgShow gopts = do
     curDir <- getCurrentDirectory
-    let actPath = joinPath [curDir, "Acton.toml"]
-    actExists <- doesFileExist actPath
-    unless actExists $
-      printErrorAndExit "Acton.toml not found in current directory"
+    _ <- requireProjectConfigPath curDir
     mspec <- loadBuildSpec curDir
     case mspec of
       Nothing -> printErrorAndExit "No Build.act/build.act.json found"
@@ -1272,129 +1297,121 @@ detectGuiEnvironment = do
 --
 -- The command line parser just parses options without making behavior decisions.
 -- All logic is centralized here in printDocs for predictable, intuitive behavior.
+openFileInGui :: FilePath -> IO ()
+openFileInGui path = do
+    let openCmd = case System.Info.os of
+          "darwin" -> "open"
+          "linux" -> "xdg-open"
+          _ -> ""
+    unless (null openCmd) $
+      void $ system $ openCmd ++ " " ++ path
+
 -- | Generate and display documentation based on CLI options and environment.
 printDocs :: C.GlobalOptions -> C.DocOptions -> IO ()
 printDocs gopts opts = do
-    if null (C.inputFile opts) then do
+    case C.inputFile opts of
+      "" -> do
         -- No file provided - check what to do
         case C.outputFormat opts of
-            Just C.AsciiFormat -> printErrorAndExit "Terminal output requires a specific file. Usage: actonc doc -t <file.act>"
-            Just C.MarkdownFormat -> printErrorAndExit "Markdown output requires a specific file. Usage: actonc doc --md <file.act>"
-            _ -> do
-                -- HTML or auto mode - check if we're in a project
-                curDir <- getCurrentDirectory
-                projDir <- findProjectDir curDir
-                if isJust projDir then do
-                    -- We're in a project - open the documentation index
-                    let indexFile = "out/doc/index.html"
-                    indexExists <- doesFileExist indexFile
-                    if indexExists then do
-                        -- Open the existing index
-                        let openCmd = case System.Info.os of
-                                "darwin" -> "open"
-                                "linux" -> "xdg-open"
-                                _ -> ""
-                        unless (null openCmd) $ do
-                            _ <- system $ openCmd ++ " " ++ indexFile
-                            return ()
-                    else
-                        printErrorAndExit "No documentation found. Run 'actonc build' first to generate documentation."
-                else
-                    printErrorAndExit "Not in an Acton project. Please specify a file to document."
-    else do
-        let filename = C.inputFile opts
-            (fileBody,fileExt) = splitExtension $ takeFileName filename
+          Just C.AsciiFormat -> printErrorAndExit "Terminal output requires a specific file. Usage: actonc doc -t <file.act>"
+          Just C.MarkdownFormat -> printErrorAndExit "Markdown output requires a specific file. Usage: actonc doc --md <file.act>"
+          _ -> do
+              -- HTML or auto mode - check if we're in a project
+              curDir <- getCurrentDirectory
+              projDir <- findProjectDir curDir
+              case projDir of
+                Just _ -> do
+                  -- We're in a project - open the documentation index
+                  let indexFile = "out/doc/index.html"
+                  indexExists <- doesFileExist indexFile
+                  if indexExists
+                    then openFileInGui indexFile
+                    else printErrorAndExit "No documentation found. Run 'actonc build' first to generate documentation."
+                Nothing ->
+                  printErrorAndExit "Not in an Acton project. Please specify a file to document."
+      filename -> do
+        let (fileBody,fileExt) = splitExtension $ takeFileName filename
 
         case fileExt of
-            ".ty" -> do
-                paths <- findPaths filename defaultCompileOptions
-                env0 <- Acton.Env.initEnv (sysTypes paths) False
-                Acton.Types.showTyFile env0 (modName paths) filename
+          ".ty" -> do
+            paths <- findPaths filename defaultCompileOptions
+            env0 <- Acton.Env.initEnv (sysTypes paths) False
+            Acton.Types.showTyFile env0 (modName paths) filename (C.verbose gopts)
 
-            ".act" -> do
-                let modname = A.modName $ map (replace ".act" "") $ splitOn "/" $ fileBody
-                paths <- findPaths filename defaultCompileOptions
-                parsedRes <- parseActFile Source.diskSourceProvider modname filename
-                (_snap, parsed) <- case parsedRes of
-                  Left diags -> do
-                    printDiagnostics gopts defaultCompileOptions diags
-                    System.Exit.exitFailure
-                  Right res -> return res
+          ".act" -> do
+            let modname = A.modName $ map (replace ".act" "") $ splitOn "/" $ fileBody
+            paths <- findPaths filename defaultCompileOptions
+            parsedRes <- parseActFile Source.diskSourceProvider modname filename
+            (_snap, parsed) <- case parsedRes of
+              Left diags -> do
+                printDiagnostics gopts defaultCompileOptions diags
+                System.Exit.exitFailure
+              Right res -> return res
 
-                -- Run compiler passes to get type information
-                env0 <- Acton.Env.initEnv (sysTypes paths) False
-                env <- Acton.Env.mkEnv (searchPath paths) env0 parsed
-                kchecked <- Acton.Kinds.check env parsed
-                (nmod, _, env', _) <- Acton.Types.reconstruct env kchecked
-                let I.NModule tenv mdoc = nmod
+            -- Run compiler passes to get type information
+            env0 <- Acton.Env.initEnv (sysTypes paths) False
+            env <- Acton.Env.mkEnv (searchPath paths) env0 parsed
+            kchecked <- Acton.Kinds.check env parsed
+            (nmod, _, env', _) <- Acton.Types.reconstruct env kchecked
+            let I.NModule tenv mdoc = nmod
 
-                -- 1. If format is explicitly set (via -t, --html, --markdown), use it
-                -- 2. Otherwise, check if we're in a GUI environment
-                inGui <- detectGuiEnvironment
-                let format = case C.outputFormat opts of
-                        Just fmt -> fmt
-                        Nothing -> if inGui then C.HtmlFormat else C.AsciiFormat
+            -- 1. If format is explicitly set (via -t, --html, --markdown), use it
+            -- 2. Otherwise, check if we're in a GUI environment
+            inGui <- detectGuiEnvironment
+            let format = case C.outputFormat opts of
+                    Just fmt -> fmt
+                    Nothing -> if inGui then C.HtmlFormat else C.AsciiFormat
 
-                docOutput <- case format of
-                    C.HtmlFormat -> return $ DocP.printHtmlDoc nmod parsed
-                    C.AsciiFormat -> do
-                        shouldColor <- useColor gopts
-                        return $ DocP.printAsciiDoc shouldColor nmod parsed
-                    C.MarkdownFormat -> return $ DocP.printMdDoc nmod parsed
+            docOutput <- case format of
+                C.HtmlFormat -> return $ DocP.printHtmlDoc nmod parsed
+                C.AsciiFormat -> do
+                    shouldColor <- useColor gopts
+                    return $ DocP.printAsciiDoc shouldColor nmod parsed
+                C.MarkdownFormat -> return $ DocP.printMdDoc nmod parsed
 
-                -- Handle output destination
-                case C.outputFile opts of
-                    Just "-" ->
-                        -- Explicit stdout
-                        putStr docOutput
-                    Just outFile -> do
-                        -- Write to specified file
-                        createDirectoryIfMissing True (takeDirectory outFile)
-                        writeFile outFile docOutput
-                        putStrLn $ "Documentation written to: " ++ outFile
-                    Nothing ->
-                        -- No explicit output file
-                        if isJust (C.outputFormat opts) then
-                            -- Format was explicitly set, write to stdout
-                            putStr docOutput
-                        else if format == C.AsciiFormat then
-                            -- Auto-detected ASCII (no DISPLAY), write to stdout
-                            putStr docOutput
-                        else do
-                            -- Auto-detected HTML (DISPLAY set), write to file and open browser
-                            curDir <- getCurrentDirectory
-                            projDir <- findProjectDir curDir
-                            outputPath <- if isJust projDir then do
-                                -- In project: use out/doc/
-                                let modPath = map (replace ".act" "") $ splitOn "/" filename
-                                    cleanPath = case modPath of
-                                        "src":rest -> rest
-                                        path -> path
-                                    docFile = if null cleanPath
-                                              then "out/doc/unnamed.html"
-                                              else joinPath ("out" : "doc" : init cleanPath) </> last cleanPath <.> "html"
-                                return docFile
-                            else do
-                                -- Outside project: use temp file
-                                writeSystemTempFile "acton-doc.html" docOutput
+            -- Handle output destination
+            case C.outputFile opts of
+              Just "-" ->
+                -- Explicit stdout
+                putStr docOutput
+              Just outFile -> do
+                -- Write to specified file
+                createDirectoryIfMissing True (takeDirectory outFile)
+                writeFile outFile docOutput
+                putStrLn $ "Documentation written to: " ++ outFile
+              Nothing
+                | isJust (C.outputFormat opts) || format == C.AsciiFormat ->
+                    -- Explicit format or auto ASCII: write to stdout
+                    putStr docOutput
+                | otherwise -> do
+                    -- Auto-detected HTML (DISPLAY set), write to file and open browser
+                    curDir <- getCurrentDirectory
+                    projDir <- findProjectDir curDir
+                    outputPath <- case projDir of
+                      Just _ -> do
+                        -- In project: use out/doc/
+                        let modPath = map (replace ".act" "") $ splitOn "/" filename
+                            cleanPath = case modPath of
+                                "src":rest -> rest
+                                path -> path
+                            docFile = if null cleanPath
+                                      then "out/doc/unnamed.html"
+                                      else joinPath ("out" : "doc" : init cleanPath) </> last cleanPath <.> "html"
+                        return docFile
+                      Nothing ->
+                        -- Outside project: use temp file
+                        writeSystemTempFile "acton-doc.html" docOutput
 
-                            -- Write the file
-                            when (isJust projDir) $ do
-                                createDirectoryIfMissing True (takeDirectory outputPath)
-                                writeFile outputPath docOutput
+                    case projDir of
+                      Just _ -> do
+                        createDirectoryIfMissing True (takeDirectory outputPath)
+                        writeFile outputPath docOutput
+                      Nothing -> return ()
 
-                            putStrLn $ "HTML documentation written to: " ++ outputPath
+                    putStrLn $ "HTML documentation written to: " ++ outputPath
+                    openFileInGui outputPath
 
-                            -- Open in browser
-                            let openCmd = case System.Info.os of
-                                    "darwin" -> "open"
-                                    "linux" -> "xdg-open"
-                                    _ -> ""
-                            unless (null openCmd) $ do
-                                _ <- system $ openCmd ++ " " ++ outputPath
-                                return ()
-
-            _ -> printErrorAndExit ("Unknown filetype: " ++ filename)
+          _ -> printErrorAndExit ("Unknown filetype: " ++ filename)
 
 
 -- Compile Acton files ---------------------------------------------------------------------------------------------
@@ -1440,39 +1457,45 @@ compileFilesChanged sp gopts opts srcFiles allowPrune mChangedPaths mSched mProg
           sp' <- overlayChangedPaths sp mChangedPaths
           planRes <- try $
             prepareCompilePlan sp' gopts sched opts srcFiles allowPrune mChangedPaths
-          case planRes of
-            Left (ProjectError msg) -> do
-              if C.watch opts
-                then logLine msg
-                else printErrorAndExit msg
-              return True
-            Right plan -> do
-              let cctx = cpContext plan
-                  opts' = ccOpts cctx
-                  pathsRoot = ccPathsRoot cctx
-                  watchMode = C.watch opts'
-              cliHooks <- initCliCompileHooks progressUI progressState gopts sched gen plan
-              compileRes <- runCompilePlan sp gopts plan sched gen (cchHooks cliHooks)
-              case compileRes of
-                Left err -> do
-                  whenCurrentGen sched gen (cchClearProgress cliHooks)
-                  cleanup gopts opts' pathsRoot
-                  if watchMode
-                    then logLine (compileFailureMessage err)
-                    else printErrorAndExit (compileFailureMessage err)
-                  return True
-                Right (env, hadErrors) -> do
-                  when (not (C.only_build opts')) $
-                    backQueueWait (csBackQueue sched) gen
-                  whenCurrentGen sched gen (cchClearProgress cliHooks)
-                  if hadErrors
-                    then do
+          let reportPlanError (ProjectError msg) = do
+                if C.watch opts
+                  then logLine msg
+                  else printErrorAndExit msg
+                return True
+              runPlan plan = do
+                let cctx = cpContext plan
+                    opts' = ccOpts cctx
+                    pathsRoot = ccPathsRoot cctx
+                    watchMode = C.watch opts'
+                cliHooks <- initCliCompileHooks progressUI progressState gopts sched gen plan
+                let clearProgress = whenCurrentGen sched gen (cchClearProgress cliHooks)
+                    finalizeCompile onError = do
+                      clearProgress
                       cleanup gopts opts' pathsRoot
-                      unless watchMode System.Exit.exitFailure
+                      onError
                       return True
-                    else do
-                      whenCurrentGen sched gen (runCliPostCompile cliHooks gopts plan env)
-                      return False
+                    reportCompileError msg =
+                      finalizeCompile $
+                        if watchMode
+                          then logLine msg
+                          else printErrorAndExit msg
+                    reportCompileErrors =
+                      finalizeCompile $
+                        unless watchMode System.Exit.exitFailure
+                compileRes <- runCompilePlan sp gopts plan sched gen (cchHooks cliHooks)
+                case compileRes of
+                  Left err ->
+                    reportCompileError (compileFailureMessage err)
+                  Right (env, hadErrors) -> do
+                    when (not (C.only_build opts')) $
+                      backQueueWait (csBackQueue sched) gen
+                    clearProgress
+                    if hadErrors
+                      then reportCompileErrors
+                      else do
+                        whenCurrentGen sched gen (runCliPostCompile cliHooks gopts plan env)
+                        return False
+          either reportPlanError runPlan planRes
     runCompile `finally` cleanupProgress
 
 overlayChangedPaths :: Source.SourceProvider -> Maybe [FilePath] -> IO Source.SourceProvider
@@ -1725,7 +1748,7 @@ expectedRootStubs paths tasks = do
             tyPath = outbase ++ ".ty"
         hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader tyPath
         case hdrE of
-          Right (_, _, _, rs, _) -> return (map (mkStub outbase) rs)
+          Right (_, _, _implH, _imps, _nameHashes, rs, _) -> return (map (mkStub outbase) rs)
           _ -> return []
     return (concat roots)
   where
@@ -1750,16 +1773,21 @@ Build Pipeline Overview
 We want the compiler to be fast. The primary principle by which to achieve this
 is to avoid doing unnecessary work. Practically, this happens by caching
 information in .ty files and only selectively reading what we need. We do not
-eagerly load whole .ty files but rather read in "header information" such as
-which imports, the hash of the source code, which root actors and docstring.
-This way we can quickly determine what needs to be recompiled and what can be
-reused from previous compilations. We also use content hashing of the public
-interface and imports to make rebuild decisions precise and transitive:
-- Public interface hash is computed from the doc-free NameInfo, so doc-only
-  edits never cause dependents to rebuild.
-- The interface hash is augmented with the interface hashes of the module’s
-  imports (sorted). If an import’s interface changes, this module’s interface
-  hash changes too, which cleanly propagates rebuilds.
+eagerly load whole .ty files but rather read the header fields: moduleSrcBytesHash,
+modulePubHash, moduleImplHash, imports, per-name hashes (src/pub/impl + deps),
+roots, and docstrings. This lets us quickly decide which passes to rerun and
+reuse work from previous compilations.
+
+Public hashing: each top-level name gets a pubHash computed from its doc-free
+signature plus the pub hashes of its public dependencies. The modulePubHash is
+then the hash of pubHash values for exported names. Doc-only edits do not affect
+pubHash, and a downstream module only needs front passes when a pubHash changes.
+
+Implementation hashing: each top-level name gets an implHash computed from its
+source hash plus the impl hashes of its dependencies. The moduleImplHash is the
+hash of all per-name impl hashes. We embed moduleImplHash into generated .c/.h
+files so we can skip back passes when codegen is already up to date, and we use
+it (with impl deps) to drive the test cache.
 
 Terminology
 - ActonTask: a module parsed from source (.act) and that needs to be compiled
@@ -1775,7 +1803,7 @@ High-level Steps
        header imports and create a TyTask stub (no heavy decode) for graph
        building. Use --ignore-compiler-version to skip the actonc part.
      - If .act appears newer than .ty → verify by content hash:
-       – If stored srcHash == current srcHash → header is still valid (TyTask)
+       – If stored moduleSrcBytesHash == current bytes hash → header is still valid (TyTask)
        – Else → parse .act now to get accurate imports (ActonTask)
    - This ensures that .ty is up to date with the .act source and lets us
      read module imports/roots/docstring from the header, which is much faster
@@ -1791,16 +1819,19 @@ High-level Steps
 3) Compile and build
    - compileTasks orders modules in dependency (topological) order and decides
      rebuilds as it goes:
-     - Source changed (ActonTask) → compile now
-     - Otherwise, compare each project import’s recorded interface hash from the
-       dependent’s .ty header with the provider’s current interface hash. The
-       current hash comes directly from the compile result for modules built in
-       this run, or from a fresh provider’s .ty header. Only if a hash differs
-       do we rebuild the dependent.
-   - We maintain an ifaceMap while walking modules in topological order. After a
-     module compiles, we insert its freshly computed interface hash; when a
+     - Source changed (ActonTask) → run front passes
+     - Otherwise, compare each used pub dependency hash from the dependent’s
+       .ty header with the provider’s current pub hash. If any differ → front.
+     - Otherwise, compare each used impl dependency hash from the dependent’s
+       .ty header with the provider’s current impl hash. If any differ → refresh
+       impl hashes and run back passes.
+     - Otherwise, if generated .c/.h hashes do not match moduleImplHash → run
+       back passes.
+     - Otherwise → module is fresh (no work).
+   - We maintain a pubMap while walking modules in topological order. After a
+     module compiles, we insert its freshly computed public hash; when a
      module is fresh (TyTask), we insert the recorded header hash. Dependents
-     then consult ifaceMap to detect interface deltas among their imports.
+     then consult pubMap to detect public deltas among their imports.
    - TyTask items remain lazy; code that needs only small bits (e.g., writeRootC)
      reads roots/doc from the header instead of forcing heavy loads.
    - Final Zig C compilation...
@@ -1841,7 +1872,7 @@ writeRootC env gopts opts paths tasks binTask = do
         -- was rebuilt during this run.
         tyPath <- Acton.Env.findTyFile (searchPath paths) m
         rootsHeader <- case tyPath of
-                         Just ty -> do (_, _, _, roots, _) <- InterfaceFiles.readHeader ty; return roots
+                         Just ty -> do (_, _, _implH, _imps, _nameHashes, roots, _) <- InterfaceFiles.readHeader ty; return roots
                          Nothing -> return []
         let rootsEnv = case Acton.Env.lookupMod m env of
                          Nothing -> []
@@ -2262,7 +2293,7 @@ filterMainActor env paths binTask = do
       Just ty -> do
         hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader ty
         case hdrE of
-          Right (_, _, _, roots, _) | n `elem` roots -> return (Just binTask)
+          Right (_, _, _implH, _imps, _nameHashes, roots, _) | n `elem` roots -> return (Just binTask)
           _ -> checkEnv
       Nothing -> checkEnv
 

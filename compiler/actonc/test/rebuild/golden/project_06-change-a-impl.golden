@@ -1,6 +1,10 @@
+Resolving dependencies (fetching if missing)...
   Stale a: source changed
+  Hash deltas a: ~aaa{src b5d455b9 -> 8df17e22, impl dc32e16d -> ffd0693d}
    Finished type check of     rebuild/a     0.000 s
-  Fresh b: using cached .ty
-  Fresh c: using cached .ty
+  Stale b: impl changes in a.aaa dc32e16d → ffd0693d (used by baa)
+  Stale c: impl changes in b.baa f8c877f7 → 0372700c (used by main)
    Finished compilation of    rebuild/a     0.000 s
+   Finished compilation of    rebuild/b     0.000 s
+   Finished compilation of    rebuild/c     0.000 s
    Finished final compilation               0.000 s

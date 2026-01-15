@@ -353,6 +353,37 @@ instance VSubst WTCon where
 instance Vars WTCon where
     freeQ (wpath, p)    = freeQ p
 
+instance Vars NameInfo where
+    freeQ ni = case ni of
+      NVar t -> freeQ t
+      NSVar t -> freeQ t
+      NDef sc _ _ -> freeQ sc
+      NSig sc _ _ -> freeQ sc
+      NAct q p k te _ -> freeQ q ++ freeQ p ++ freeQ k ++ freeQTEnv te
+      NClass q ws te _ -> freeQ q ++ freeQWTCons ws ++ freeQTEnv te
+      NProto q ws te _ -> freeQ q ++ freeQWTCons ws ++ freeQTEnv te
+      NExt q c ws te _ _ -> freeQ q ++ freeQ c ++ freeQWTCons ws ++ freeQTEnv te
+      NTVar _ c ps -> freeQ c ++ freeQ ps
+      NAlias qn -> freeQ qn
+      NMAlias _ -> []
+      NModule te _ -> freeQTEnv te
+      NReserved -> []
+      where
+        freeQTEnv :: TEnv -> [QName]
+        freeQTEnv tenv = concatMap (freeQ . snd) tenv
+
+        freeQWTCons :: [WTCon] -> [QName]
+        freeQWTCons = concatMap freeQWTCon
+
+        freeQWTCon :: WTCon -> [QName]
+        freeQWTCon (wpath, pcon) = freeQWPath wpath ++ freeQ pcon
+
+        freeQWPath :: WPath -> [QName]
+        freeQWPath = concatMap step
+          where
+            step (Left qn) = freeQ qn
+            step (Right qn) = freeQ qn
+
 instance UWild WTCon where
     uwild (wpath, p)    = (wpath, uwild p)
 

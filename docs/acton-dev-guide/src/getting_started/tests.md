@@ -30,15 +30,16 @@ make test-backend
 Some compiler suites have explicit accept targets that update expected output:
 
 ```sh
-make test-rebuild
-make test-rebuild-accept
+make test-incremental
+make test-incremental-accept
 make test-syntaxerrors
 make test-syntaxerrors-accept
 make test-typeerrors
 make test-typeerrors-accept
 ```
 
-`test-rebuild*` requires `dist/bin/actonc` (it is built automatically by the target).
+`test-incremental*` requires `dist/bin/actonc` (it is built automatically by the target).
+`test-rebuild*` remains as an alias for the incremental suite.
 
 ## Project tests with actonc
 
@@ -60,6 +61,10 @@ Test results:
   c.foo:                 OK:  444 runs in 50.188ms
 All 2 tests passed ( 0.528 s)
 ```
+
+By default, `actonc test` shows only tests that ran in the current invocation;
+cached successes are hidden (cached failures/errors are still shown). Use
+`--show-cached` to include cached successes in the output.
 
 ## Tips
 

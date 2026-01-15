@@ -298,7 +298,7 @@ dist/deps/libyyjson: deps/libyyjson $(DIST_ZIG)
 
 # top level targets
 .PHONY: test test-builtins test-compiler test-db test-examples test-lang test-regressions test-rts test-stdlib
-test:
+test: dist/bin/acton
 	cd compiler && stack test
 	$(MAKE) test-stdlib
 	$(MAKE) -C backend test
@@ -317,12 +317,17 @@ test-compiler-accept:
 test-cross-compile:
 	cd compiler && stack test actonc --ta '-p "cross-compilation"'
 
-test-rebuild: dist/bin/actonc
-	cd compiler && stack test actonc:rebuild
+test-incremental: dist/bin/actonc
+	cd compiler && stack test actonc:incremental
 
-.PHONY: test-rebuild-accept
-test-rebuild-accept: dist/bin/actonc
-	cd compiler && stack test actonc:rebuild --ta "--accept"
+.PHONY: test-incremental-accept
+test-incremental-accept: dist/bin/actonc
+	cd compiler && stack test actonc:incremental --ta "--accept"
+
+.PHONY: test-rebuild test-rebuild-accept
+test-rebuild: test-incremental
+
+test-rebuild-accept: test-incremental-accept
 
 test-syntaxerrors:
 	cd compiler && stack test actonc --ta '-p "syntax errors"'

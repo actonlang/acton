@@ -66,6 +66,7 @@ library:
     - Acton.Diagnostics
     - Acton.DocPrinter
     - Acton.Env
+    - Acton.Hashing
     - Acton.Kinds
     - Acton.LambdaLifter
     - Acton.NameInfo
@@ -76,6 +77,7 @@ library:
     - Acton.Solver
     - Acton.SourceProvider
     - Acton.Syntax
+    - Acton.Testing
     - Acton.Types
     - Acton.TypeEnv
     - Acton.WitKnots

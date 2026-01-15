@@ -16,6 +16,7 @@ import System.FilePath
 import System.FilePath.Posix
 import System.Process
 import System.TimeIt
+import System.IO.Temp (withSystemTempDirectory)
 
 import Test.Tasty
 import Test.Tasty.ExpectedFailure
@@ -85,15 +86,6 @@ compilerTests =
   [
     testCase "target native" $ do
         testBuild "--target native" ExitSuccess False "test/project/simple"
-  , testCase "partial rebuild" $ do
-        (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../../test/compiler/rebuild/out") ""
-        testBuild "" ExitSuccess False "../../test/compiler/rebuild/"
-        (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "touch ../../test/compiler/rebuild/src/rebuild.act") ""
-        testBuild "" ExitSuccess False "../../test/compiler/rebuild/"
-  , testCase "rebuild with stdlib import" $ do
-        (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../../test/compiler/rebuild-import/out") ""
-        testBuild "" ExitSuccess False "../../test/compiler/rebuild-import/"
-        testBuild "" ExitSuccess False "../../test/compiler/rebuild-import/"
   , testCase "mixed dots in qualified name" $ do
         (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../../test/compiler/mixed-dots/out") ""
         testBuild "" ExitSuccess False "../../test/compiler/mixed-dots/"
@@ -108,31 +100,24 @@ compilerTests =
         (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../../test/compiler/test_deps/deps/a/build.zig*") ""
         (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../../test/compiler/test_deps/deps/a/out") ""
         runActon "build" ExitSuccess False "../../test/compiler/test_deps/"
-  , testCase "dependency API change triggers rebuild" $ do
-        let testDir = "../../test/compiler/dep-api-change/"
-        let depSrc = testDir ++ "deps/libfoo/src/libfoo.act"
-
-        -- Write initial content to dependency
-        let originalContent = "# Initial version\ndef calculate(x: int) -> int:\n    return x * 2\n"
-        writeFile depSrc originalContent
-
-        -- Clean all build artifacts initially
-        (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf " ++ testDir ++ "build.zig*") ""
-        (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf " ++ testDir ++ "out") ""
-        (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf " ++ testDir ++ "deps/libfoo/build.zig*") ""
-        (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf " ++ testDir ++ "deps/libfoo/out") ""
-
-        -- Initial build
-        runActon "build" ExitSuccess False testDir
-
-        -- Now modify the dependency's public API (change function signature)
-        let modifiedContent = "# Modified version\ndef calculate(x: int, y: int) -> int:\n    return x * y\n"
-        writeFile depSrc modifiedContent
-
-        -- Build again - compiler should detect API change via hash and
-        -- recompile main, which now rightfully fails type checking due to the
-        -- API change in the dependency.
-        runActon "build" (ExitFailure 1) False testDir
+  , testCase "build without Build.act" $ do
+        withSystemTempDirectory "acton-build" $ \proj -> do
+            let actFile = proj </> "acton-test.act"
+            writeFile actFile $ unlines
+              [ "#!/usr/bin/env runacton"
+              , "actor main(env):"
+              , "    print(\"Hello, world\")"
+              , "    env.exit(0)"
+              ]
+            perms <- getPermissions actFile
+            setPermissions actFile perms{ executable = True }
+            runActon "build" ExitSuccess False proj
+            let bin = proj </> "out" </> "bin" </> "acton-test"
+            exists <- doesFileExist bin
+            assertBool "binary should exist" exists
+            (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc bin []){ cwd = Just proj } ""
+            assertEqual "binary should run" ExitSuccess returnCode
+            assertEqual "binary output" "Hello, world\n" cmdOut
   ]
 
 parseFlagTests =

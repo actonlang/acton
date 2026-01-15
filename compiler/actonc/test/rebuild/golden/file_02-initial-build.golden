@@ -1,4 +1,5 @@
 Building file src/c.act in project .
+Resolving dependencies (fetching if missing)...
   Stale a: source changed
    Finished type check of     rebuild/a     0.000 s
   Stale b: source changed

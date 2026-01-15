@@ -1,4 +1,4 @@
-/* Acton source hash: test-hash */
+/* Acton impl hash: test-hash */
 #include "rts/common.h"
 #include "out/types/deact.h"
 $R deactQ_L_1C_1cont ($Cont C_cont, B_NoneType C_2res) {
