@@ -24,22 +24,22 @@ pkgCliIntegrationTests =
           withSystemTempDirectory "actonc-pkg" $ \proj -> do
             let depName = "foo"
                 repoUrl = "https://github.com/actonlang/foo"
-            (codeAdd, _outAdd, _errAdd) <- runActoncIn proj ["pkg", "add", depName, "--repo-url", repoUrl]
-            assertEqual "pkg add exit" ExitSuccess codeAdd
+            (codeAdd, outAdd, errAdd) <- runActoncIn proj ["pkg", "add", depName, "--repo-url", repoUrl]
+            assertExit "pkg add" ExitSuccess codeAdd outAdd errAdd
             spec1 <- readBuildSpecJSON (proj </> "build.act.json")
             dep1 <- requirePkgDep spec1 depName
             assertEqual "repo_url" (Just repoUrl) (BuildSpec.repo_url dep1)
             assertBool "url set" (hasText (BuildSpec.url dep1))
             assertBool "hash set" (hasText (BuildSpec.hash dep1))
 
-            (codeUp, _outUp, _errUp) <- runActoncIn proj ["pkg", "upgrade"]
-            assertEqual "pkg upgrade exit" ExitSuccess codeUp
+            (codeUp, outUp, errUp) <- runActoncIn proj ["pkg", "upgrade"]
+            assertExit "pkg upgrade" ExitSuccess codeUp outUp errUp
             spec2 <- readBuildSpecJSON (proj </> "build.act.json")
             dep2 <- requirePkgDep spec2 depName
             assertEqual "repo_url after upgrade" (Just repoUrl) (BuildSpec.repo_url dep2)
 
-            (codeRm, _outRm, _errRm) <- runActoncIn proj ["pkg", "remove", depName]
-            assertEqual "pkg remove exit" ExitSuccess codeRm
+            (codeRm, outRm, errRm) <- runActoncIn proj ["pkg", "remove", depName]
+            assertExit "pkg remove" ExitSuccess codeRm outRm errRm
             spec3 <- readBuildSpecJSON (proj </> "build.act.json")
             assertBool "dep removed" (M.notMember depName (BuildSpec.dependencies spec3))
   ]
@@ -58,6 +58,20 @@ runActoncIn :: FilePath -> [String] -> IO (ExitCode, String, String)
 runActoncIn wd args = do
     actonc <- canonicalizePath "../../dist/bin/actonc"
     readCreateProcessWithExitCode (proc actonc args){ cwd = Just wd } ""
+
+assertExit :: String -> ExitCode -> ExitCode -> String -> String -> IO ()
+assertExit label expected actual out err =
+    if actual == expected
+      then return ()
+      else assertFailure $ unlines
+        [ label ++ " exit"
+        , "expected: " ++ show expected
+        , " but got: " ++ show actual
+        , "stdout:"
+        , out
+        , "stderr:"
+        , err
+        ]
 
 readBuildSpecJSON :: FilePath -> IO BuildSpec.BuildSpec
 readBuildSpecJSON path = do

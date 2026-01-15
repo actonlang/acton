@@ -299,7 +299,7 @@ dist/deps/libyyjson: deps/libyyjson $(DIST_ZIG)
 # top level targets
 .PHONY: test test-builtins test-compiler test-db test-examples test-lang test-regressions test-rts test-stdlib online-tests
 test: dist/bin/acton
-	cd compiler && stack test
+	cd compiler && stack test acton actonc:test_actonc actonc:incremental
 	$(MAKE) test-stdlib
 	$(MAKE) -C backend test
 	$(MAKE) test-rts-db
