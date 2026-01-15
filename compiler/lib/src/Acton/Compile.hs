@@ -180,6 +180,7 @@ import Text.Megaparsec.Error (ParseErrorBundle)
 import qualified Acton.CommandLineParser as C
 import Acton.Printer ()
 import qualified Acton.Env
+import qualified Acton.TypeEnv
 import Acton.Env (simp, define, setMod)
 import qualified Acton.Hashing as Hashing
 import qualified Acton.Names as Names
@@ -1299,9 +1300,9 @@ runFrontPasses gopts opts paths env0 parsed srcContent srcBytes resolveImportHas
     handleCompilation err =
       return $ Left (errsToDiagnostics "Compilation error" filename srcContent (Acton.Env.compilationError err))
 
-    handleTypeError :: Acton.Env.TypeError -> IO (Either [Diagnostic String] FrontResult)
+    handleTypeError :: Acton.TypeEnv.TypeError -> IO (Either [Diagnostic String] FrontResult)
     handleTypeError err =
-      return $ Left [Acton.Env.mkErrorDiagnostic filename srcContent (Acton.Env.typeReport err filename srcContent)]
+      return $ Left [Acton.TypeEnv.mkErrorDiagnostic filename srcContent (Acton.TypeEnv.typeReport err filename srcContent)]
 
     resolveImportHashes :: [A.ModName] -> IO (Either [Diagnostic String] [(A.ModName, B.ByteString)])
     resolveImportHashes mrefs = do
