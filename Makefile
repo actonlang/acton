@@ -339,7 +339,7 @@ test-typeerrors:
 	cd compiler && stack test actonc --ta '-p "type errors"'
 
 test-typeerrors-accept:
-	cd compiler/actonc && stack runghc -- test.hs -p "type errors" --accept
+	cd compiler && stack test actonc:test_actonc --ta '-p "type errors" --accept'
 
 test-db:
 	cd compiler && stack test actonc --ta '-p "DB"'
