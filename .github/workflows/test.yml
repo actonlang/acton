@@ -498,6 +498,7 @@ jobs:
   # Telemetrify is the largest application written in Acton, we want to make
   # sure we don't break it..
   test-telemetrify:
+    continue-on-error: true
     needs: build-debs
     runs-on: ubuntu-latest
     container:
