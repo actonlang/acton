@@ -7,7 +7,9 @@ Build-Depends:
  debhelper-compat (= 13),
  g++,
  haskell-stack,
- make
+ libtinfo-dev,
+ make,
+ zlib1g-dev
 Standards-Version: 4.6.0
 Homepage: http://www.acton-lang.org
 Rules-Requires-Root: no
