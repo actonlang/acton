@@ -246,26 +246,32 @@ createProject name = do
     projDirExists <- doesDirectoryExist name
     iff (projDirExists) $
         printErrorAndExit ("Unable to create project " ++ name ++ ", directory already exists.")
-    createDirectoryIfMissing True name
-    writeFile (joinPath [ curDir, name, "Build.act" ]) ""
-    paths <- findPaths (joinPath [ curDir, name, "Build.act" ]) defaultCompileOptions
-    writeFile (joinPath [ curDir, name, ".gitignore" ]) (
+    let projDir = joinPath [curDir, name]
+        srcRoot = joinPath [projDir, "src"]
+        buildActPath = joinPath [projDir, "Build.act"]
+        buildSpec = BuildSpec.BuildSpec
+          { BuildSpec.specName = Just name
+          , BuildSpec.specDescription = Nothing
+          , BuildSpec.dependencies = M.empty
+          , BuildSpec.zig_dependencies = M.empty
+          }
+    createDirectoryIfMissing True srcRoot
+    writeFile buildActPath (BuildSpec.renderBuildAct buildSpec)
+    paths <- findPaths buildActPath defaultCompileOptions
+    writeFile (joinPath [ projDir, ".gitignore" ]) (
       ".actonc.lock\n" ++
       "build.zig\n" ++
       "build.zig.zon\n" ++
       "out\n"
       )
-    writeFile (joinPath [ curDir, name, "README.org" ]) (
-      "* " ++ name ++ "\n" ++ name ++ " is a cool Acton project!\n\n\n"
-      ++ "** Compile\n\n#+BEGIN_SRC shell\nactonc build\n#+END_SRC\n\n\n"
-      ++ "** Run\n\n#+BEGIN_SRC shell\nout/bin/" ++ name ++ "\n#+END_SRC\n\n"
+    writeFile (joinPath [ projDir, "README.md" ]) (
+      "# " ++ name ++ "\n\n"
+      ++ "```sh\nacton build\n./out/bin/" ++ name ++ "\n```\n"
       )
     createDirectoryIfMissing True (srcDir paths)
     writeFile (joinPath [(srcDir paths), name ++ ".act"]) "#\n#\n\nactor main(env):\n    print(\"Hello World!\")\n    env.exit(0)\n"
     putStrLn("Created project " ++ name)
-    putStrLn("Enter your new project directory with:\n  cd " ++ name)
-    putStrLn("Compile:\n  actonc build")
-    putStrLn("Run:\n  ./out/bin/" ++ name)
+    putStrLn("Next: cd " ++ name ++ " && acton build && ./out/bin/" ++ name)
     gitAvailable <- isGitAvailable
     iff (gitAvailable) $ do
         putStrLn("")
