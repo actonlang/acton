@@ -55,7 +55,8 @@ data EnvF x                 = EnvF {
                                 witnesses  :: [Witness],
                                 thismod    :: Maybe ModName,
                                 context    :: [EnvCtx],
-                                envX       :: x }
+                                envX       :: x
+                              } deriving (Show)
 
 type Env0                   = EnvF ()
 

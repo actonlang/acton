@@ -38,7 +38,8 @@ import Acton.Env
 data TypeX                      = TypeX {
                                     posnames   :: [Name],
                                     indecl     :: Bool,
-                                    forced     :: Bool }
+                                    forced     :: Bool
+                                  } deriving (Show)
 
 type Env                        = EnvF TypeX
 
@@ -80,15 +81,11 @@ data Constraint = Cast  {info :: ErrInfo, scope :: QScope, type1 :: Type, type2 
                 | Mut   {info :: ErrInfo, scope :: QScope, type1 :: Type, name1 :: Name, type2 :: Type}
                 | Seal  {info :: ErrInfo, scope :: QScope, type1 :: Type}
                 | Imply {info :: ErrInfo, wit :: Name, binder :: QBinds, scoped :: Constraints}
-                deriving (Show,Read)
+                deriving (Show)
 
 type Constraints = [Constraint]
 
-type QScope     = [Quant]
-
-data Quant      = Quant TVar [WTCon] deriving (Eq,Show,Read)
-
-qscope q        = [ tv | Quant tv _ <- q ]
+type QScope     = [QBind]
 
 instance HasLoc Constraint where
     loc (Cast info q t1 t2)         = getLoc [loc info, loc t1, loc t2]
@@ -113,12 +110,6 @@ instance Pretty Constraint where
 prettyQuant []                      = empty
 prettyQuant qs                      = brackets (commaSep pretty qs) <+> text "=>"
 
-instance Pretty Quant where
-    pretty (Quant tv wps)           = pretty tv <> parens (commaSep pretty wps)
-
-instance VFree Quant where
-    vfree (Quant v ps)              = vfree ps
-
 instance UFree Constraint where
     ufree (Cast info q t1 t2)       = ufree info ++ ufree q ++ ufree t1 ++ ufree t2
     ufree (Sub info w q t1 t2)      = ufree info ++ ufree q ++ ufree t1 ++ ufree t2
@@ -127,12 +118,6 @@ instance UFree Constraint where
     ufree (Mut info q t1 n t2)      = ufree info ++ ufree q ++ ufree t1 ++ ufree t2
     ufree (Seal info q t)           = ufree info ++ ufree q ++ ufree t
     ufree (Imply info w q cs)       = ufree info ++ ufree q ++ ufree cs
-
-instance UFree Quant where
-    ufree (Quant v cs)              = ufree cs
-
-instance Tailvars Quant where
-    tailvars (Quant v cs)           = tailvars cs
 
 instance Tailvars Constraint where
     tailvars (Cast _ q t1 t2)       = tailvars q ++ tailvars t1 ++ tailvars t2
@@ -151,12 +136,6 @@ instance Vars Constraint where
     freeQ (Mut _ q t1 n t2)         = freeQ q ++ freeQ t1 ++ freeQ t2
     freeQ (Seal _ q t)              = freeQ q ++ freeQ t
     freeQ (Imply _ w q cs)          = freeQ q ++ freeQ cs
-
-instance Vars Quant where
-    freeQ (Quant tv ps)             = freeQ ps
-
-instance UWild Quant where
-    uwild (Quant v cs)              = Quant v (uwild cs)
 
 instance UWild Constraint where
     uwild (Cast info q t1 t2)       = Cast (uwild info) (uwild q) (uwild t1) (uwild t2)
@@ -410,9 +389,6 @@ instance USubst TCon where
 
 instance USubst QBind where
     usubst (QBind v cs)             = QBind <$> usubst v <*> usubst cs
-
-instance USubst Quant where
-    usubst (Quant v cs)             = Quant <$> usubst v <*> usubst cs
 
 instance USubst WTCon where
     usubst (wpath, p)               = do p <- usubst p; return (wpath, p)
@@ -793,7 +769,7 @@ data TypeError                      = TypeError SrcLoc String
 data ErrInfo    = DfltInfo {errloc :: SrcLoc, errno :: Int, errexpr :: Maybe Expr, errinsts :: [(QName,TSchema,Type)]}
                 | DeclInfo {errloc :: SrcLoc, errloc2 :: SrcLoc, errname :: Name, errschema :: TSchema, errmsg :: String}
                 | Simple {errloc ::SrcLoc, errmsg :: String}
-                deriving (Eq,Show,Read)
+                deriving (Show)
 
 instance Control.Exception.Exception TypeError
 
