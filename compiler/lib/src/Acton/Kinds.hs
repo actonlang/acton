@@ -25,6 +25,7 @@ import Acton.Syntax
 import Acton.Names
 import Acton.Builtin
 import Acton.Subst
+import Acton.NameInfo
 import Acton.Env
 
 

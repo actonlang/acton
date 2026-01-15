@@ -71,12 +71,6 @@ instance VFree TCon where
 instance VFree QBind where
     vfree (QBind v cs)              = vfree cs
 
-instance VFree Quant where
-    vfree (Quant v ps)              = vfree ps
-
-instance VFree WTCon where
-    vfree (wpath, p)                = vfree p
-
 instance VFree TSchema where
     vfree (TSchema _ q t)           = (vfree q ++ vfree t) \\ qbound q
 
@@ -381,9 +375,6 @@ instance VSubst Sliz where
 instance VSubst OpArg where
     vsubst s (OpArg op e)           = OpArg op (vsubst s e)
 
-instance VSubst WTCon where
-    vsubst s (w,u)              = (w, vsubst s u)
-
 
 -- UFree ----------------------------------------------------------------------------------------------
 
@@ -402,20 +393,6 @@ instance UFree a => UFree [a] where
 instance UFree a => UFree (Maybe a) where
     ufree                           = maybe [] ufree
 
-instance UFree Constraint where
-    ufree (Cast info q t1 t2)       = ufree info ++ ufree q ++ ufree t1 ++ ufree t2
-    ufree (Sub info w q t1 t2)      = ufree info ++ ufree q ++ ufree t1 ++ ufree t2
-    ufree (Proto info w q t p)      = ufree info ++ ufree q ++ ufree t ++ ufree p
-    ufree (Sel info w q t1 n t2)    = ufree info ++ ufree q ++ ufree t1 ++ ufree t2
-    ufree (Mut info q t1 n t2)      = ufree info ++ ufree q ++ ufree t1 ++ ufree t2
-    ufree (Seal info q t)           = ufree info ++ ufree q ++ ufree t
-    ufree (Imply info w q cs)       = ufree info ++ ufree q ++ ufree cs
-
-instance UFree ErrInfo where
-    ufree (DfltInfo l n mbe ts)     = ufree mbe ++ ufree ts
-    ufree (DeclInfo l1 l2 n t msg)  = ufree t
-    ufree _                         = []
-    
 instance UFree TSchema where
     ufree (TSchema _ q t)           = ufree q ++ ufree t
 
@@ -427,12 +404,6 @@ instance UFree TCon where
 
 instance UFree QBind where
     ufree (QBind v cs)              = ufree cs
-
-instance UFree Quant where
-    ufree (Quant v cs)              = ufree cs
-
-instance UFree WTCon where
-    ufree (wpath, p)                = ufree p
 
 instance UFree Type where
     ufree (TUni _ u)                = [u]
@@ -623,31 +594,6 @@ instance (Polarity a) => Polarity [a] where
     polvars                         = foldr polcat polnil . map polvars
 
 
-closePolVars                            :: ([TUni],[TUni]) -> Constraints -> ([TUni],[TUni])
-closePolVars pvs cs
-  | polnull (pvs' `polminus` pvs)       = pvs'
-  | otherwise                           = closePolVars pvs' cs'
-  where
-    (pvs',cs')                          = boundvs pvs cs
-
-    boundvs pn []                        = (pn, [])
-    boundvs pn (Cast _ _ t (TUni _ v) : cs)
-      | v `elem` fst pn                 = boundvs (polvars t `polcat` pn) cs
-    boundvs pn (Sub _ _ _ t (TUni _ v) : cs)
-      | v `elem` fst pn                 = boundvs (polvars t `polcat` pn) cs
-    boundvs pn (Cast _ _ (TUni _ v) t : cs)
-      | v `elem` snd pn                 = boundvs (polneg (polvars t) `polcat` pn) cs
-    boundvs pn (Sub _ _ _ (TUni _ v) t : cs)
-      | v `elem` snd pn                 = boundvs (polneg (polvars t) `polcat` pn) cs
-    boundvs pn (Proto _ _ _ (TUni _ v) p : cs)
-      | v `elem` snd pn                 = boundvs (polneg (polvars p) `polcat` pn) cs
-    boundvs pn (Sel _ _ _ (TUni _ v) _ t : cs)
-      | v `elem` snd pn                 = boundvs (polneg (polvars t) `polcat` pn) cs
-    boundvsboundvs pn (Mut _ _ (TUni _ v) _ t : cs)
-      | v `elem` (fst pn ++ snd pn)     = boundvs (invvars t `polcat` pn) cs
-    bnds pn (c : cs)                    = let (pn',cs') = boundvs pn cs in (pn', c:cs')
-
-
 -- Does Self occur positively?
 posself (TVar _ v)                  = v == tvSelf
 posself (TCon _ c)                  = any posself (tcargs c)
@@ -695,12 +641,6 @@ instance Tailvars TCon where
 instance Tailvars QBind where
     tailvars (QBind v cs)           = tailvars cs
 
-instance Tailvars Quant where
-    tailvars (Quant v cs)           = tailvars cs
-
-instance Tailvars WTCon where
-    tailvars (wpath, p)             = tailvars p
-
 instance Tailvars TSchema where
     tailvars (TSchema _ q t)        = tailvars q ++ tailvars t
 
@@ -709,50 +649,6 @@ instance (Tailvars a) => Tailvars (Maybe a) where
 
 instance (Tailvars a) => Tailvars [a] where
     tailvars                        = concat . map tailvars
-
-instance Tailvars Constraint where
-    tailvars (Cast _ q t1 t2)       = tailvars q ++ tailvars t1 ++ tailvars t2
-    tailvars (Sub _ w q t1 t2)      = tailvars q ++ tailvars t1 ++ tailvars t2
-    tailvars (Proto _ w q t p)      = tailvars q ++ tailvars t ++ tailvars p
-    tailvars (Sel _ w q t1 n t2)    = tailvars q ++ tailvars t1 ++ tailvars t2
-    tailvars (Mut _ q t1 n t2)      = tailvars q ++ tailvars t1 ++ tailvars t2
-    tailvars (Seal _ q t)           = tailvars q ++ tailvars t
-    tailvars (Imply _ w q cs)       = tailvars q ++ tailvars cs
-
-
--- Misc. ---------------------------------------------------------------------------------------------
-
-
-closeDepVars vs cs
-  | null vs'                        = nub vs
-  | otherwise                       = closeDepVars (vs'++vs) cs
-  where vs'                         = concat [ deps c \\ vs | c <- cs, all (`elem` vs) (heads c) ]
-
-        heads (Proto _ w q t _)     = ufree t
-        heads (Cast _ q t _)        = ufree t
-        heads (Sub _ w q t _)       = ufree t
-        heads (Sel _ w q t n _)     = ufree t
-        heads (Mut _ q t n _)       = ufree t
-        heads (Seal _ q t)          = ufree t
-        heads (Imply _ w q cs)      = []
-
-        deps (Proto _ w q _ p)      = ufree p
-        deps (Cast _ q _ t)         = typarams t
-        deps (Sub _ w q _ t)        = typarams t
-        deps (Sel _ w q _ n t)      = ufree t
-        deps (Mut _ q _ n t)        = ufree t
-        deps (Seal _ q _)           = []
-        deps (Imply _ w q cs)       = []
-
-        typarams (TOpt _ t)         = typarams t
-        typarams (TCon _ c)         = ufree c
-        typarams _                  = []
-
-
-closeDepVarsQ vs q
-  | null vs'                        = nub vs
-  | otherwise                       = closeDepVarsQ (vs'++vs) q
-  where vs'                         = concat [ vfree us \\ vs | QBind v us <- q, v `elem` vs ]
 
 schematic (TCon _ tc)               = tCon (schematic' tc)
 schematic (TFun _ _ _ _ _)          = tFun tWild tWild tWild tWild
@@ -763,13 +659,6 @@ schematic (TStar _ k _)             = tStar k tWild
 schematic t                         = t
 
 schematic' (TC n ts)                = TC n [ tWild | _ <- ts ]
-
-wildargs i                          = [ tWild | _ <- nbinds i ]
-  where
-    nbinds (NAct q _ _ _ _)         = q
-    nbinds (NClass q _ _ _)         = q
-    nbinds (NProto q _ _ _)         = q
-    nbinds (NExt q _ _ _ _ _)       = q
 
 
 class UWild a where
@@ -799,26 +688,6 @@ instance UWild TSchema where
 
 instance UWild QBind where
     uwild (QBind v cs)              = QBind v (uwild cs)
-
-instance UWild Quant where
-    uwild (Quant v cs)              = Quant v (uwild cs)
-
-instance UWild WTCon where
-    uwild (wpath, p)                = (wpath, uwild p)
-
-instance UWild Constraint where
-    uwild (Cast info q t1 t2)       = Cast (uwild info) (uwild q) (uwild t1) (uwild t2)
-    uwild (Sub info w q t1 t2)      = Sub (uwild info) w (uwild q) (uwild t1) (uwild t2)
-    uwild (Proto info w q t p)      = Proto (uwild info) w (uwild q) (uwild t) (uwild p)
-    uwild (Sel info w q t1 n t2)    = Sel (uwild info) w (uwild q) (uwild t1) n (uwild t2)
-    uwild (Mut info q t1 n t2)      = Mut (uwild info) (uwild q) (uwild t1) n (uwild t2)
-    uwild (Seal info q t)           = Seal (uwild info) (uwild q) (uwild t)
-    uwild (Imply info w q cs)       = Imply (uwild info) w (uwild q) (uwild cs)
-
-instance UWild ErrInfo where
-    uwild (DfltInfo l n mbe ts)     = DfltInfo l n mbe (uwild ts)
-    uwild (DeclInfo l1 l2 n t msg)  = DeclInfo l1 l2 n (uwild t) msg
-    uwild info                      = info
 
 instance (UWild a, UWild b) => UWild (QName,a,b) where
     uwild (n, t, u)                 = (n, uwild t, uwild u)

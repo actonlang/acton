@@ -33,6 +33,7 @@ import Acton.Prim
 import Acton.Printer
 import Acton.Names
 import Acton.Subst
+import Acton.NameInfo
 import Utils
 import Pretty
 import InterfaceFiles
@@ -45,6 +46,7 @@ import Prelude hiding ((<>))
 mkEnv                       :: [FilePath] -> Env0 -> Module -> IO Env0
 mkEnv spath env m           = getImps spath env (imps m)
 
+-- Full environment -------------------------------------------------------------------------------
 
 data EnvF x                 = EnvF {
                                 names      :: TEnv,
@@ -116,31 +118,182 @@ mapModules f env            = env1 { hmodules = convTEnv2HTEnv (modules env1) }
         app ns [] te'       = te'
 
 
-{-  TEnv principles:
-    -   A TEnv is an association of NameInfo details to a list of names.
-    -   NSig holds the schema of an explicit Signature, while NDef and NVar give schemas and types to names created by Defs and assignments.
-    -   NClass, NProto, NExt and NAct represent class, protocol, extension and actor declarations. They each contain a TEnv of visible local attributes.
-    -   Signatures must appear before the defs/assignments they describe, and every TEnv respects the order of the syntactic constructs binding each name.
-    -   The attribute TEnvs of NClass, NProto, NExt and NAct are searched left-to-right, thus favoring (explicit) NSigs over (inferred) NDefs/NVars.
-    -   The global inference TEnv (names env) is searched right-to-left, thereby prioritizing NDefs/NVars over NSigs, as well as any inner bindings in scope.
-    -   The NameInfo assumption on a (recursive) Def is always an NDef, initialized to the corresponding NSig if present, or a fresh unquantified variable.
-    -   The inferred schema for each def is checked to be no less general than the corresponding NDef assumption.
-    -   Unquantified NDefs are generalized at the close of the outermost recursive declaration in scope.
-    -   An NSig is always fully quantified, not possible to generalize
-    -   To enable method override (and disable method signature override), the NSigs of parent class are inserted into the global env when checking a child class
-    -   For the same reason, NDefs and NVars without an NSig of a parent class are inserted as NSigs when a child class is checked
+-- Constraints -------------------------------------------------------------------------------
+
+data Constraint = Cast  {info :: ErrInfo, scope :: QScope, type1 :: Type, type2 :: Type}
+                | Sub   {info :: ErrInfo, wit :: Name, scope :: QScope, type1 :: Type, type2 :: Type}
+                | Proto {info :: ErrInfo, wit :: Name, scope :: QScope, type1 :: Type, proto1 :: PCon}
+                | Sel   {info :: ErrInfo, wit :: Name, scope :: QScope, type1 :: Type, name1 :: Name, type2 :: Type}
+                | Mut   {info :: ErrInfo, scope :: QScope, type1 :: Type, name1 :: Name, type2 :: Type}
+                | Seal  {info :: ErrInfo, scope :: QScope, type1 :: Type}
+                | Imply {info :: ErrInfo, wit :: Name, binder :: QBinds, scoped :: Constraints}
+                deriving (Eq,Show,Read)
+
+type Constraints = [Constraint]
+
+data ErrInfo    = DfltInfo {errloc :: SrcLoc, errno :: Int, errexpr :: Maybe Expr, errinsts :: [(QName,TSchema,Type)]}
+                | DeclInfo {errloc :: SrcLoc, errloc2 :: SrcLoc, errname :: Name, errschema :: TSchema, errmsg :: String}
+                | Simple {errloc ::SrcLoc, errmsg :: String}
+                deriving (Eq,Show,Read)
+
+type QScope     = [Quant]
+
+data Quant      = Quant TVar [WTCon] deriving (Eq,Show,Read)
+
+qscope q        = [ tv | Quant tv _ <- q ]
+
+instance HasLoc Constraint where
+      loc (Cast info q t1 t2) = getLoc [loc info, loc t1, loc t2]
+      loc (Sub info _ q t1 t2) = getLoc [loc info, loc t1, loc t2]
+      loc (Proto info _ q t1 _) = getLoc [loc info, loc t1]
+      loc (Sel info _ q t1  n1 t2) = getLoc [loc info, loc t1, loc n1, loc t2]
+      loc (Mut info q t1  n1 t2) = getLoc [loc info, loc t1, loc n1, loc t2]
+      loc (Seal info q t1) = getLoc [loc info, loc t1]
+      loc (Imply info _ q cs) =  getLoc [loc info, loc cs]
+
+instance HasLoc ErrInfo where
+      loc (Simple l _)   = l
+      loc (DfltInfo l _ _ _) = l
+      loc (DeclInfo l _ _ _ _) = l
+
+instance Pretty Constraint where
+    pretty (Cast _ q t1 t2)         = prettyQuant q <+> pretty t1 <+> text "<" <+> pretty t2
+    pretty (Sub _ w q t1 t2)        = pretty w <+> colon <+> prettyQuant q <+> pretty t1 <+> text "<" <+> pretty t2
+    pretty (Proto _ w q t u)        = pretty w <+> colon <+> prettyQuant q <+> pretty t <+> parens (pretty u)
+    pretty (Sel _ w q t1 n t2)      = pretty w <+> colon <+> prettyQuant q <+> pretty t1 <> text "." <> pretty n <+> text "<" <+> pretty t2
+    pretty (Mut _ q t1 n t2)        = prettyQuant q <+> pretty t1 <+> text "." <> pretty n <+> text ">" <+> pretty t2
+    pretty (Seal _ q t)             = prettyQuant q <+> text "$Seal" <+> pretty t
+    pretty (Imply _ w q cs)
+      | length cs < 4               = pretty w <+> colon <+> pretty q <+> text "=>" <+> braces (commaSep pretty cs)
+      | otherwise                   = pretty w <+> colon <+> pretty q <+> text "=>" $+$ nest 4 (vcat $ map pretty cs)
+
+prettyQuant []                      = empty
+prettyQuant qs                      = brackets (commaSep pretty qs) <+> text "=>"
+
+instance Pretty Quant where
+    pretty (Quant tv wps)           = pretty tv <> parens (commaSep pretty wps)
+
+instance VFree Quant where
+    vfree (Quant v ps)              = vfree ps
+
+instance UFree Constraint where
+    ufree (Cast info q t1 t2)       = ufree info ++ ufree q ++ ufree t1 ++ ufree t2
+    ufree (Sub info w q t1 t2)      = ufree info ++ ufree q ++ ufree t1 ++ ufree t2
+    ufree (Proto info w q t p)      = ufree info ++ ufree q ++ ufree t ++ ufree p
+    ufree (Sel info w q t1 n t2)    = ufree info ++ ufree q ++ ufree t1 ++ ufree t2
+    ufree (Mut info q t1 n t2)      = ufree info ++ ufree q ++ ufree t1 ++ ufree t2
+    ufree (Seal info q t)           = ufree info ++ ufree q ++ ufree t
+    ufree (Imply info w q cs)       = ufree info ++ ufree q ++ ufree cs
+
+instance UFree ErrInfo where
+    ufree (DfltInfo l n mbe ts)     = ufree mbe ++ ufree ts
+    ufree (DeclInfo l1 l2 n t msg)  = ufree t
+    ufree _                         = []
+    
+instance UFree Quant where
+    ufree (Quant v cs)              = ufree cs
+
+closePolVars                            :: ([TUni],[TUni]) -> Constraints -> ([TUni],[TUni])
+closePolVars pvs cs
+  | polnull (pvs' `polminus` pvs)       = pvs'
+  | otherwise                           = closePolVars pvs' cs'
+  where
+    (pvs',cs')                          = boundvs pvs cs
+
+    boundvs pn []                        = (pn, [])
+    boundvs pn (Cast _ _ t (TUni _ v) : cs)
+      | v `elem` fst pn                 = boundvs (polvars t `polcat` pn) cs
+    boundvs pn (Sub _ _ _ t (TUni _ v) : cs)
+      | v `elem` fst pn                 = boundvs (polvars t `polcat` pn) cs
+    boundvs pn (Cast _ _ (TUni _ v) t : cs)
+      | v `elem` snd pn                 = boundvs (polneg (polvars t) `polcat` pn) cs
+    boundvs pn (Sub _ _ _ (TUni _ v) t : cs)
+      | v `elem` snd pn                 = boundvs (polneg (polvars t) `polcat` pn) cs
+    boundvs pn (Proto _ _ _ (TUni _ v) p : cs)
+      | v `elem` snd pn                 = boundvs (polneg (polvars p) `polcat` pn) cs
+    boundvs pn (Sel _ _ _ (TUni _ v) _ t : cs)
+      | v `elem` snd pn                 = boundvs (polneg (polvars t) `polcat` pn) cs
+    boundvsboundvs pn (Mut _ _ (TUni _ v) _ t : cs)
+      | v `elem` (fst pn ++ snd pn)     = boundvs (invvars t `polcat` pn) cs
+    bnds pn (c : cs)                    = let (pn',cs') = boundvs pn cs in (pn', c:cs')
 
 
--}
+instance Tailvars Quant where
+    tailvars (Quant v cs)           = tailvars cs
 
-instance Pretty Witness where
-    pretty (WClass q t p w ws _) = text "WClass" <+> prettyQual q <+> pretty t <+> parens (pretty p) <+>
-                                      equals <+> pretty (wexpr ws (eCall (eQVar w) []))
-    pretty (WInst q t p w ws)   = text "WInst" <+> prettyQual q <+> pretty t <+> parens (pretty p) <+>
-                                      equals <+> pretty (wexpr ws (eQVar w))
+instance Tailvars Constraint where
+    tailvars (Cast _ q t1 t2)       = tailvars q ++ tailvars t1 ++ tailvars t2
+    tailvars (Sub _ w q t1 t2)      = tailvars q ++ tailvars t1 ++ tailvars t2
+    tailvars (Proto _ w q t p)      = tailvars q ++ tailvars t ++ tailvars p
+    tailvars (Sel _ w q t1 n t2)    = tailvars q ++ tailvars t1 ++ tailvars t2
+    tailvars (Mut _ q t1 n t2)      = tailvars q ++ tailvars t1 ++ tailvars t2
+    tailvars (Seal _ q t)           = tailvars q ++ tailvars t
+    tailvars (Imply _ w q cs)       = tailvars q ++ tailvars cs
 
-instance Pretty TEnv where
-    pretty tenv                 = vcat (map pretty $ normTEnv tenv)
+instance Vars Constraint where
+    freeQ (Cast _ q t1 t2)          = freeQ q ++ freeQ t1 ++ freeQ t2
+    freeQ (Sub _ w q t1 t2)         = freeQ q ++ freeQ t1 ++ freeQ t2
+    freeQ (Proto _ w q t p)         = freeQ q ++ freeQ t ++ freeQ p
+    freeQ (Sel _ w q t1 n t2)       = freeQ q ++ freeQ t1 ++ freeQ t2
+    freeQ (Mut _ q t1 n t2)         = freeQ q ++ freeQ t1 ++ freeQ t2
+    freeQ (Seal _ q t)              = freeQ q ++ freeQ t
+    freeQ (Imply _ w q cs)          = freeQ q ++ freeQ cs
+
+instance Vars Quant where
+    freeQ (Quant tv ps)             = freeQ ps
+
+
+-- Misc. ---------------------------------------------------------------------------------------------
+
+
+closeDepVars vs cs
+  | null vs'                        = nub vs
+  | otherwise                       = closeDepVars (vs'++vs) cs
+  where vs'                         = concat [ deps c \\ vs | c <- cs, all (`elem` vs) (heads c) ]
+
+        heads (Proto _ w q t _)     = ufree t
+        heads (Cast _ q t _)        = ufree t
+        heads (Sub _ w q t _)       = ufree t
+        heads (Sel _ w q t n _)     = ufree t
+        heads (Mut _ q t n _)       = ufree t
+        heads (Seal _ q t)          = ufree t
+        heads (Imply _ w q cs)      = []
+
+        deps (Proto _ w q _ p)      = ufree p
+        deps (Cast _ q _ t)         = typarams t
+        deps (Sub _ w q _ t)        = typarams t
+        deps (Sel _ w q _ n t)      = ufree t
+        deps (Mut _ q _ n t)        = ufree t
+        deps (Seal _ q _)           = []
+        deps (Imply _ w q cs)       = []
+
+        typarams (TOpt _ t)         = typarams t
+        typarams (TCon _ c)         = ufree c
+        typarams _                  = []
+
+
+closeDepVarsQ vs q
+  | null vs'                        = nub vs
+  | otherwise                       = closeDepVarsQ (vs'++vs) q
+  where vs'                         = concat [ vfree us \\ vs | QBind v us <- q, v `elem` vs ]
+
+instance UWild Quant where
+    uwild (Quant v cs)              = Quant v (uwild cs)
+
+instance UWild Constraint where
+    uwild (Cast info q t1 t2)       = Cast (uwild info) (uwild q) (uwild t1) (uwild t2)
+    uwild (Sub info w q t1 t2)      = Sub (uwild info) w (uwild q) (uwild t1) (uwild t2)
+    uwild (Proto info w q t p)      = Proto (uwild info) w (uwild q) (uwild t) (uwild p)
+    uwild (Sel info w q t1 n t2)    = Sel (uwild info) w (uwild q) (uwild t1) n (uwild t2)
+    uwild (Mut info q t1 n t2)      = Mut (uwild info) (uwild q) (uwild t1) n (uwild t2)
+    uwild (Seal info q t)           = Seal (uwild info) (uwild q) (uwild t)
+    uwild (Imply info w q cs)       = Imply (uwild info) w (uwild q) (uwild cs)
+
+instance UWild ErrInfo where
+    uwild (DfltInfo l n mbe ts)     = DfltInfo l n mbe (uwild ts)
+    uwild (DeclInfo l1 l2 n t msg)  = DeclInfo l1 l2 n (uwild t) msg
+    uwild info                      = info
+
 
 instance (Pretty x) => Pretty (EnvF x) where
     pretty env                  = text "--- modules:"  $+$
@@ -154,134 +307,6 @@ instance (Pretty x) => Pretty (EnvF x) where
                                   text "--- extra:"  $+$
                                   pretty (envX env) $+$
                                   text "."
-
-instance Pretty () where
-    pretty ()                   = empty
-
-instance Pretty (Name,NameInfo) where
-    pretty (n, NVar t)          = pretty n <+> colon <+> pretty t
-    pretty (n, NSVar t)         = text "var" <+> pretty n <+> colon <+> pretty t
-    pretty (n, NDef t d doc)    = prettyDec d $ pretty n <+> colon <+> pretty t $+$ nest 4 (prettyDocstring doc)
-    pretty (n, NSig t d doc)    = prettyDec d $ pretty n <+> colon <+> pretty t $+$ nest 4 (prettyDocstring doc)
-    pretty (n, NAct q p k te doc)
-                                = text "actor" <+> pretty n <> nonEmpty brackets commaList q <+>
-                                  parens (prettyFunRow p k) <> colon $+$ nest 4 (prettyDocstring doc) $+$ (nest 4 $ prettyOrPass te)
-    pretty (n, NClass q us te doc)
-                                = text "class" <+> pretty n <> nonEmpty brackets commaList q <+>
-                                  nonEmpty parens commaList us <> colon $+$ nest 4 (prettyDocstring doc) $+$ (nest 4 $ prettyOrPass te)
-    pretty (n, NProto q us te doc)
-                                = text "protocol" <+> pretty n <> nonEmpty brackets commaList q <+>
-                                  nonEmpty parens commaList us <> colon $+$ nest 4 (prettyDocstring doc) $+$ (nest 4 $ prettyOrPass te)
-    pretty (w, NExt [] c ps te opts doc)
-                                = {-pretty w  <+> colon <+> -}
-                                  text "extension" <+> pretty c <+> parens (commaList ps) <>
-                                  colon $+$ nest 4 (prettyDocstring doc) $+$ (nest 4 $ prettyOrPass te)
-    pretty (w, NExt q c ps te opts doc)
-                                = {-pretty w  <+> colon <+> -}
-                                  text "extension" <+> pretty q <+> text "=>" <+> pretty c <+> parens (commaList ps) <>
-                                  colon $+$ nest 4 (prettyDocstring doc) $+$ (nest 4 $ prettyOrPass te)
-    pretty (n, NTVar k c ps)    = pretty n <> parens (commaList (c:ps))
-    pretty (n, NAlias qn)       = text "alias" <+> pretty n <+> equals <+> pretty qn
-    pretty (n, NMAlias m)       = text "module" <+> pretty n <+> equals <+> pretty m
-    pretty (n, NModule te doc)  = text "module" <+> pretty n <> colon $+$ nest 4 (prettyDocstring doc) $+$ nest 4 (pretty te)
-    pretty (n, NReserved)       = pretty n <+> text "(reserved)"
-
-prettyOrPass te
-  | isEmpty doc                 = text "pass"
-  | otherwise                   = doc
-  where doc                     = pretty te
-
-prettyDocstring :: Maybe String -> Doc
-prettyDocstring Nothing         = empty
-prettyDocstring (Just docstring) = text "\"\"\"" <> text docstring <> text "\"\"\""
-
--- VFree ----------------------------------------------------------------------------------------
-
-instance VFree NameInfo where
-    vfree (NVar t)              = vfree t
-    vfree (NSVar t)             = vfree t
-    vfree (NDef t d _)          = vfree t
-    vfree (NSig t d _)          = vfree t
-    vfree (NAct q p k te _)     = (vfree q ++ vfree p ++ vfree k ++ vfree te) \\ (tvSelf : qbound q)
-    vfree (NClass q us te _)    = (vfree q ++ vfree us ++ vfree te) \\ (tvSelf : qbound q)
-    vfree (NProto q us te _)    = (vfree q ++ vfree us ++ vfree te) \\ (tvSelf : qbound q)
-    vfree (NExt q c ps te _ _)  = (vfree q ++ vfree c ++ vfree ps ++ vfree te) \\ (tvSelf : qbound q)
-    vfree (NTVar k c ps)        = vfree c ++ vfree ps
-    vfree (NAlias qn)           = []
-    vfree (NMAlias qn)          = []
-    vfree (NModule te doc)      = []        -- actually vfree te, but a module has no free variables on the top level
-    vfree NReserved             = []
-
-
--- VSubst ---------------------------------------------------------------------------------------
-
-instance VSubst NameInfo where
-    vsubst s (NVar t)           = NVar (vsubst s t)
-    vsubst s (NSVar t)          = NSVar (vsubst s t)
-    vsubst s (NDef t d x)       = NDef (vsubst s t) d x
-    vsubst s (NSig t d x)       = NSig (vsubst s t) d x
-    vsubst s (NAct q p k te x)  = NAct (vsubst s q) (vsubst s p) (vsubst s k) (vsubst s te) x
-    vsubst s (NClass q us te x) = NClass (vsubst s q) (vsubst s us) (vsubst s te) x
-    vsubst s (NProto q us te x) = NProto (vsubst s q) (vsubst s us) (vsubst s te) x
-    vsubst s (NExt q c ps te opts x) = NExt (vsubst s q) (vsubst s c) (vsubst s ps) (vsubst s te) opts x
-    vsubst s (NTVar k c ps)        = NTVar k (vsubst s c) (vsubst s ps)
-    vsubst s (NAlias qn)        = NAlias qn
-    vsubst s (NMAlias m)        = NMAlias m
-    vsubst s (NModule te x)     = NModule te x          -- actually vsubst s te, but te has no free variables (top-level)
-    vsubst s NReserved          = NReserved
-
-
--- UFree ----------------------------------------------------------------------------------------
-
-instance UFree NameInfo where
-    ufree (NVar t)              = ufree t
-    ufree (NSVar t)             = ufree t
-    ufree (NDef t d _)          = ufree t
-    ufree (NSig t d _)          = ufree t
-    ufree (NAct q p k te _)     = ufree q ++ ufree p ++ ufree k ++ ufree te
-    ufree (NClass q us te _)    = ufree q ++ ufree us ++ ufree te
-    ufree (NProto q us te _)    = ufree q ++ ufree us ++ ufree te
-    ufree (NExt q c ps te _ _)  = ufree q ++ ufree c ++ ufree ps ++ ufree te
-    ufree (NTVar k c ps)        = ufree c ++ ufree ps
-    ufree (NAlias qn)           = []
-    ufree (NMAlias qn)          = []
-    ufree (NModule te doc)      = []        -- actually ufree te, but a module has no free variables on the top level
-    ufree NReserved             = []
-
-instance UFree Witness where
-    ufree w@WClass{}            = []
-    ufree w@WInst{}             = ufree (wtype w) ++ ufree (proto w)
-
-instance Polarity NameInfo where
-    polvars (NVar t)            = polvars t
-    polvars (NSVar t)           = invvars t
-    polvars (NDef t d _)        = polvars t
-    polvars (NSig t d _)        = polvars t
-    polvars (NAct q p k te _)   = polvars q `polcat` polneg (polvars p `polcat` polvars k) `polcat` polvars te
-    polvars (NClass q us te _)  = polvars q `polcat` polvars us `polcat` polvars te
-    polvars (NProto q us te _)  = polvars q `polcat` polvars us `polcat` polvars te
-    polvars (NExt q c ps te _ _) = polvars q `polcat` polvars c `polcat` polvars ps `polcat` polvars te
-    polvars (NTVar k c ps)      = polvars c `polcat` polvars ps
-    polvars _                   = ([],[])
-
-
--- Polarity -------------------------------------------------------------------------------------
-
-instance Polarity WTCon where
-    polvars (w, c)                  = polvars c
-
-instance Polarity (Name,NameInfo) where
-    polvars (n, i)                  = polvars i
-
-
--- Tailvars -------------------------------------------------------------------------------------
-
-instance Tailvars (Name, NameInfo) where
-    tailvars (n, NVar t)            = tailvars t
-    tailvars (n, NSVar t)           = tailvars t
-    tailvars (n, NDef sc _ _)       = tailvars sc
-    tailvars _                      = []
-
 
 -- Unalias --------------------------------------------------------------------------------------
 
@@ -373,54 +398,7 @@ instance Unalias (Either QName QName) where
     unalias env (Right n)           = Right $ unalias env n
 
 
--- TEnv filters --------------------------------------------------------------------------------------------------------
-
-nSigs                       :: TEnv -> TEnv
-nSigs te                    = [ (n,i) | (n, i@(NSig sc dec _)) <- te, not $ isProp dec sc ]
-
-propSigs                    :: TEnv -> TEnv
-propSigs te                 = [ (n,i) | (n, i@(NSig sc dec _)) <- te, isProp dec sc ]
-
-isProp                      :: Deco -> TSchema -> Bool
-isProp Property _           = True
-isProp NoDec sc             = case sctype sc of TFun{} -> False; _ -> True
-isProp _ _                  = False
-
-nTerms                      :: TEnv -> TEnv
-nTerms te                   = [ (n,i) | (n,i) <- te, isNTerm i ]
-
-isNTerm NDef{}              = True
-isNTerm NVar{}              = True
-isNTerm _                   = False
-
-sigTerms                    :: TEnv -> (TEnv, TEnv)
-sigTerms te                 = (nSigs te, nTerms te)
-
-noDefs                      :: TEnv -> TEnv
-noDefs te                   = [ (n,i) | (n,i) <- te, keep i ]
-  where keep NDef{}         = False
-        keep NAct{}         = False
-        keep _              = True
-
-normTEnv                    :: TEnv -> TEnv
-normTEnv te                 = f [] te
-  where
-    f ns []                 = []
-    f ns ((n,i):te)
-      | n `elem` ns         = f ns te
-      | otherwise           = (n,i) : f (n:ns) te
-
-unSig                       :: TEnv -> TEnv
-unSig te                    = map f te
-  where f (n, NSig (TSchema _ [] t) Property _) = (n, NVar t)
-        f (n, NSig sc@(TSchema _ _ TFun{}) dec doc)
-                                                = (n, NDef sc dec doc)
-        f (n, NSig (TSchema _ _ t) _ _)         = (n, NVar t)
-        f (n, i)                                = (n, i)
-
-
 -- Env construction and modification -------------------------------------------------------------------------------------------
-
 
 -- first variant is special case for compiling __builtin__.act
 initEnv                    :: FilePath -> Bool -> IO Env0
@@ -860,12 +838,6 @@ allProtoAttr                :: EnvF x -> Name -> [Type]
 allProtoAttr env n          = [ tCon p | p <- allProtos env, n `elem` allAttrs' env p ]
 
 
-wexpr                       :: WPath -> Expr -> Expr
-wexpr [] e                  = e
-wexpr (Left _ : w) e        = wexpr w e
-wexpr (Right n : w) e       = wexpr w $ eDot e (witAttr n)
-
-
 -- TVar queries ------------------------------------------------------------------------------------------------------------------
 
 findSelf                    :: EnvF x -> TCon
@@ -1184,7 +1156,8 @@ instance Flows Handler where
     flows (Handler _ ss)            = flows ss
 
 
--- Import handling (local definitions only) ----------------------------------------------
+
+-- Import handling (local definitions only) -------------------------------------------------------------------------
 
 --getImps                         :: [FilePath] -> EnvF x -> [Import] -> IO (EnvF x)
 getImps spath env []         = return env { hmodules = convTEnv2HTEnv (modules env) }

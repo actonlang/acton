@@ -17,7 +17,6 @@ module Acton.Printer (module Acton.Printer, module Pretty) where
 import Utils
 import Pretty
 import Acton.Syntax
-import Acton.Prim
 import Prelude hiding ((<>))
 
 
@@ -267,7 +266,8 @@ instance Pretty QName where
 --    pretty (NoQ n)                  = char '~' <> pretty n
     pretty (NoQ n)                  = pretty n
     pretty (GName m n)
-      | m == mPrim                  = text ("$" ++ rawstr n)
+--      | m == mPrim                  = text ("$" ++ rawstr n)
+      | ModName [Name _ "$"] <- m   = text ("$" ++ rawstr n)
 --      | m == mBuiltin               = text ("B_" ++ nstr n)
       | otherwise                   = pretty m <> dot <> pretty n
 
@@ -512,22 +512,3 @@ instance Pretty Kind where
     pretty (KUni i)                 = text "K_" <> pretty i
     pretty KWild                    = text "_"
 
-instance Pretty Constraint where
-    pretty (Cast _ q t1 t2)         = prettyQuant q <+> pretty t1 <+> text "<" <+> pretty t2
-    pretty (Sub _ w q t1 t2)        = pretty w <+> colon <+> prettyQuant q <+> pretty t1 <+> text "<" <+> pretty t2
-    pretty (Proto _ w q t u)        = pretty w <+> colon <+> prettyQuant q <+> pretty t <+> parens (pretty u)
-    pretty (Sel _ w q t1 n t2)      = pretty w <+> colon <+> prettyQuant q <+> pretty t1 <> text "." <> pretty n <+> text "<" <+> pretty t2
-    pretty (Mut _ q t1 n t2)        = prettyQuant q <+> pretty t1 <+> text "." <> pretty n <+> text ">" <+> pretty t2
-    pretty (Seal _ q t)             = prettyQuant q <+> text "$Seal" <+> pretty t
-    pretty (Imply _ w q cs)
-      | length cs < 4               = pretty w <+> colon <+> pretty q <+> text "=>" <+> braces (commaSep pretty cs)
-      | otherwise                   = pretty w <+> colon <+> pretty q <+> text "=>" $+$ nest 4 (vcat $ map pretty cs)
-
-prettyQuant []                      = empty
-prettyQuant qs                      = brackets (commaSep pretty qs) <+> text "=>"
-
-instance Pretty Quant where
-    pretty (Quant tv wps)           = pretty tv <> parens (commaSep pretty wps)
-
-instance Pretty WTCon where
-    pretty (wpath, p)               = pretty p

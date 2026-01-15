@@ -68,6 +68,7 @@ library:
     - Acton.Env
     - Acton.Kinds
     - Acton.LambdaLifter
+    - Acton.NameInfo
     - Acton.Normalizer
     - Acton.Parser
     - Acton.Printer

@@ -18,6 +18,7 @@ import Pretty
 import Acton.Syntax
 import Acton.Builtin
 import Acton.Names
+import Acton.NameInfo
 
 nPrim               = name "$"
 mPrim               = ModName [nPrim]

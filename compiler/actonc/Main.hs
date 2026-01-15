@@ -18,6 +18,7 @@ import Prelude hiding (readFile, writeFile)
 
 import qualified Acton.Parser
 import qualified Acton.Syntax as A
+import qualified Acton.NameInfo as I
 import Text.Megaparsec.Error (ParseErrorBundle)
 import Acton.Parser (CustomParseError)
 import qualified Acton.CommandLineParser as C
@@ -1325,7 +1326,7 @@ printDocs gopts opts = do
                 env <- Acton.Env.mkEnv (searchPath paths) env0 parsed
                 kchecked <- Acton.Kinds.check env parsed
                 (nmod, _, env', _) <- Acton.Types.reconstruct env kchecked
-                let A.NModule tenv mdoc = nmod
+                let I.NModule tenv mdoc = nmod
 
                 -- 1. If format is explicitly set (via -t, --html, --markdown), use it
                 -- 2. Otherwise, check if we're in a GUI environment

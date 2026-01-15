@@ -19,6 +19,7 @@ import Acton.Names
 import Acton.Subst
 import Acton.Prim
 import Acton.Builtin
+import Acton.NameInfo
 import Acton.QuickType
 import Acton.Env
 import Acton.Transform

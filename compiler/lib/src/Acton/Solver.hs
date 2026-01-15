@@ -28,6 +28,7 @@ import Acton.Printer
 import Acton.Builtin
 import Acton.Names
 import Acton.Prim
+import Acton.NameInfo
 import Acton.Env
 import Acton.Subst
 import Acton.TypeEnv

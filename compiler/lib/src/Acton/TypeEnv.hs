@@ -24,11 +24,12 @@ import Data.Map.Strict (Map)
 import Pretty
 import Utils
 import Acton.Syntax
-import Acton.Env
+import Acton.Builtin
 import Acton.Printer
 import Acton.Names
-import Acton.Builtin
+import Acton.NameInfo
 import Acton.Subst
+import Acton.Env
 
 
 data TypeX                      = TypeX {

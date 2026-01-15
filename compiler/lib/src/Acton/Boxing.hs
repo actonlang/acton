@@ -3,6 +3,7 @@ module Acton.Boxing where
 
 import Acton.Syntax
 import Acton.Names
+import Acton.NameInfo
 import Acton.Env
 import Acton.QuickType
 import Acton.Prim

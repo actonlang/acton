@@ -447,19 +447,3 @@ instance Vars Type where
     freeQ (TRow _ _ _ t r)          = freeQ t ++ freeQ r
     freeQ (TStar _ _ r)             = freeQ r
     freeQ _                         = []
-
-
-instance Vars Constraint where
-    freeQ (Cast _ q t1 t2)          = freeQ q ++ freeQ t1 ++ freeQ t2
-    freeQ (Sub _ w q t1 t2)         = freeQ q ++ freeQ t1 ++ freeQ t2
-    freeQ (Proto _ w q t p)         = freeQ q ++ freeQ t ++ freeQ p
-    freeQ (Sel _ w q t1 n t2)       = freeQ q ++ freeQ t1 ++ freeQ t2
-    freeQ (Mut _ q t1 n t2)         = freeQ q ++ freeQ t1 ++ freeQ t2
-    freeQ (Seal _ q t)              = freeQ q ++ freeQ t
-    freeQ (Imply _ w q cs)          = freeQ q ++ freeQ cs
-
-instance Vars Quant where
-    freeQ (Quant tv ps)             = freeQ ps
-
-instance Vars (WPath, TCon) where
-    freeQ (wpath, p)                = freeQ p

@@ -28,6 +28,7 @@ import Acton.Printer (Pretty(..), Doc, render, text, (<+>), ($+$), (<>), blank, 
 import Acton.Syntax
 import Acton.Builtin (qnList, qnDict, qnSetT, nBuiltin)
 import Acton.Prim
+import Acton.NameInfo
 import Data.List (nub)
 import Prelude hiding ((<>))
 import Data.List (intercalate, intersperse, sortBy)

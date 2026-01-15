@@ -27,7 +27,7 @@
 --   4) imports      :: [(A.ModName, ByteString)]   -- imported module and iface hash used
 --   5) roots        :: [A.Name]                    -- root actors (e.g., main or test_main)
 --   6) docstring    :: Maybe String                -- module docstring
---   7) nameInfo     :: A.NameInfo                  -- type/name environment
+--   7) nameInfo     :: I.NameInfo                  -- type/name environment
 --   8) typedModule  :: A.Module                    -- typed module
 --
 -- Rationale for ordering
@@ -44,6 +44,7 @@ import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
 import qualified System.Exit
 import qualified Acton.Syntax as A
+import qualified Acton.NameInfo as I
 import System.IO
 import System.Directory (renameFile)
 import System.Posix.Process (getProcessID)
@@ -53,7 +54,7 @@ import System.Posix.Process (getProcessID)
 
 -- Write interface file with source content hash using atomic write
 -- We use temp file + rename as atomic write to avoid other readers seeing partially written output.
-writeFile :: FilePath -> BS.ByteString -> BS.ByteString -> [(A.ModName, BS.ByteString)] -> [A.Name] -> Maybe String -> A.NameInfo -> A.Module -> IO ()
+writeFile :: FilePath -> BS.ByteString -> BS.ByteString -> [(A.ModName, BS.ByteString)] -> [A.Name] -> Maybe String -> I.NameInfo -> A.Module -> IO ()
 writeFile f srcHash ifaceHash imps roots mdoc nmod tchecked = do
     -- Use PID for unique temp file name
     pid <- getProcessID
@@ -64,7 +65,7 @@ writeFile f srcHash ifaceHash imps roots mdoc nmod tchecked = do
     renameFile tmpFile f
 
 -- Read complete interface file
-readFile :: FilePath -> IO ([A.ModName], A.NameInfo, A.Module, BS.ByteString, BS.ByteString, [(A.ModName, BS.ByteString)], [A.Name], Maybe String)
+readFile :: FilePath -> IO ([A.ModName], I.NameInfo, A.Module, BS.ByteString, BS.ByteString, [(A.ModName, BS.ByteString)], [A.Name], Maybe String)
 readFile f = do
     h <- openBinaryFile f ReadMode
     size <- hFileSize h
@@ -72,7 +73,7 @@ readFile f = do
     hClose h
     let bsLazy = BL.fromStrict bs
     let (vs, srcHash, ifaceHash, imps, roots, mdoc, nmod, tmod)
-          = decode bsLazy :: ([Int], BS.ByteString, BS.ByteString, [(A.ModName, BS.ByteString)], [A.Name], Maybe String, A.NameInfo, A.Module)
+          = decode bsLazy :: ([Int], BS.ByteString, BS.ByteString, [(A.ModName, BS.ByteString)], [A.Name], Maybe String, I.NameInfo, A.Module)
     if vs == A.version
       then return (map fst imps, nmod, tmod, srcHash, ifaceHash, imps, roots, mdoc)
       else do
