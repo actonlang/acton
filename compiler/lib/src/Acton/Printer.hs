@@ -17,8 +17,6 @@ module Acton.Printer (module Acton.Printer, module Pretty) where
 import Utils
 import Pretty
 import Acton.Syntax
-import Acton.Builtin
-import Acton.Prim
 import Prelude hiding ((<>))
 
 
@@ -268,7 +266,8 @@ instance Pretty QName where
 --    pretty (NoQ n)                  = char '~' <> pretty n
     pretty (NoQ n)                  = pretty n
     pretty (GName m n)
-      | m == mPrim                  = text ("$" ++ rawstr n)
+--      | m == mPrim                  = text ("$" ++ rawstr n)
+      | ModName [Name _ "$"] <- m   = text ("$" ++ rawstr n)
 --      | m == mBuiltin               = text ("B_" ++ nstr n)
       | otherwise                   = pretty m <> dot <> pretty n
 
@@ -433,8 +432,8 @@ instance Pretty QBinds where
     pretty q                        = brackets (commaList q)
 
 instance Pretty QBind where
-    pretty (Quant v [])             = pretty v
-    pretty (Quant v cs)             = pretty v <> parens (commaList cs)
+    pretty (QBind v [])             = pretty v
+    pretty (QBind v cs)             = pretty v <> parens (commaList cs)
 
 prettyPosRow (TRow _ PRow _ t (TNil _ PRow))
                                     = pretty t
@@ -513,41 +512,3 @@ instance Pretty Kind where
     pretty (KUni i)                 = text "K_" <> pretty i
     pretty KWild                    = text "_"
 
-instance Pretty Constraint where
-    pretty (Cast _ q t1 t2)         = prettyQual q <+> pretty t1 <+> text "<" <+> pretty t2
-    pretty (Sub _ w q t1 t2)        = pretty w <+> colon <+> prettyQual q <+> pretty t1 <+> text "<" <+> pretty t2
-    pretty (Proto _ w q t u)        = pretty w <+> colon <+> prettyQual q <+> pretty t <+> parens (pretty u)
-    pretty (Sel _ w q t1 n t2)      = pretty w <+> colon <+> prettyQual q <+> pretty t1 <> text "." <> pretty n <+> text "<" <+> pretty t2
-    pretty (Mut _ q t1 n t2)        = prettyQual q <+> pretty t1 <+> text "." <> pretty n <+> text ">" <+> pretty t2
-    pretty (Seal _ q t)             = prettyQual q <+> text "$Seal" <+> pretty t
-    pretty (Imply _ w q cs)
-      | length cs < 4               = pretty w <+> colon <+> pretty q <+> text "=>" <+> braces (commaSep pretty cs)
-      | otherwise                   = pretty w <+> colon <+> pretty q <+> text "=>" $+$ nest 4 (vcat $ map pretty cs)
-
-
-instance Pretty (TVar,TVar) where           -- CHANGE
---instance Pretty (TUni,TUni) where
-    pretty (tv,tv')                 = pretty tv <+> text "~" <+> pretty tv'
-
-instance Pretty (TVar,Type) where           -- CHANGE
---instance Pretty (TUni,Type) where
-    pretty (tv,t)                   = pretty tv <+> text "~" <+> pretty t
-
---instance Pretty (TVar,TCon) where         -- CHANGE
---instance Pretty (TUni,TCon) where
---    pretty (tv,tc)                  = pretty tv <+> text "~" <+> pretty tc
-
-instance Pretty (TVar,Either TCon Type) where   -- CHANGE
---instance Pretty (TUni,Either TCon Type) where
-    pretty (tv, Left p)             = pretty tv <+> text "~" <+> text "protocol" <+> pretty p
-    pretty (tv, Right t)            = pretty (tv,t)
-
-instance Pretty (TVar,Name) where           -- CHANGE
---instance Pretty (TUni,Name) where
-    pretty (tv,n)                   = pretty tv <> text "." <> pretty n
-
-instance Pretty Substitution where
-    pretty s                        = commaSep pretty s
-
-instance Pretty (Name,Type) where
-    pretty (n,t)                    = pretty n <> text ":" <+> pretty t

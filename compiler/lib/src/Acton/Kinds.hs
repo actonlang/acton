@@ -25,6 +25,7 @@ import Acton.Syntax
 import Acton.Names
 import Acton.Builtin
 import Acton.Subst
+import Acton.NameInfo
 import Acton.Env
 
 
@@ -55,7 +56,7 @@ usubstitution                       :: KindM (Map KUni Kind)
 usubstitution                       = state $ \st -> (unisubst st, st)
 
 storeXVar                           :: TVar -> TCon -> KindM ()
-storeXVar xv p                      = state $ \st -> ((), st{ xvars = Quant xv [p] : xvars st })
+storeXVar xv p                      = state $ \st -> ((), st{ xvars = QBind xv [p] : xvars st })
 
 swapXVars                           :: QBinds -> KindM QBinds
 swapXVars q                         = state $ \st -> (xvars st, st{ xvars = q })
@@ -95,14 +96,14 @@ instance Pretty (Name,Kind) where
 
 
 autoQuantS env (TSchema l q t)      = TSchema l (q ++ auto_q) t
-  where auto_q                      = map quant $ nub (vfree q ++ vfree t) \\ (tvSelf : qbound q ++ tvars env)
+  where auto_q                      = map qbind $ nub (vfree q ++ vfree t) \\ (tvSelf : qbound q ++ tvars env)
 
 autoQuantD env (Def l n q p k t b d x doc)
                                     = Def l n (q ++ auto_q) p k t b d x doc
-  where auto_q                      = map quant $ nub (vfree q ++ vfree p ++ vfree k ++ vfree t) \\ (tvSelf : qbound q ++ tvars env)
+  where auto_q                      = map qbind $ nub (vfree q ++ vfree p ++ vfree k ++ vfree t) \\ (tvSelf : qbound q ++ tvars env)
 autoQuantD env (Extension l q c ps b doc)
                                     = Extension l (q ++ auto_q) c ps b doc
-  where auto_q                      = map quant $ nub (vfree q ++ vfree c ++ vfree ps) \\ (tvSelf : qbound q ++ tvars env)
+  where auto_q                      = map qbind $ nub (vfree q ++ vfree c ++ vfree ps) \\ (tvSelf : qbound q ++ tvars env)
 autoQuantD env d                    = d
 
 
@@ -128,7 +129,7 @@ instance InstKWild Decl where
     instKWild d                     = do q <- instKWild (qbinds d); return d{ qbinds = q }
 
 instance InstKWild QBind where
-    instKWild (Quant v us)          = Quant <$> instKWild v <*> return us
+    instKWild (QBind v us)          = QBind <$> instKWild v <*> return us
 
 instance InstKWild TSchema where
     instKWild (TSchema l q t)       = TSchema l <$> instKWild q <*> return t
@@ -168,7 +169,7 @@ instance ConvTWild TCon where
 
 instance ConvTWild QBinds where
     convTWild q                     = mapM instq q
-      where instq (Quant v us)      = Quant v <$> mapM convTWild us
+      where instq (QBind v us)      = QBind v <$> mapM convTWild us
 
 instance ConvTWild (Maybe Type) where
     convTWild Nothing               = Just <$> convTWild tWild
@@ -223,7 +224,7 @@ instance ConvPExist TCon where
     convPExist env (TC n ts)        = TC n <$> mapM (convPExist env) ts
 
 instance ConvPExist QBind where
-    convPExist env (Quant v us)     = Quant v <$> convPExist env us
+    convPExist env (QBind v us)     = QBind v <$> convPExist env us
 
 instance (ConvPExist a) => ConvPExist (Maybe a) where
     convPExist env t                = sequence $ fmap (convPExist env) t
@@ -269,7 +270,7 @@ kchkSuite env (Decl l ds : ss)      = do ds <- instKWild (map (autoQuantD env) d
         kinds (Protocol _ n q _ _ _)= [(n, NProto q [] [] Nothing)]
         kinds _                     = []
         kind k []                   = k
-        kind k q                    = KFun [ tvkind v | Quant v _ <- q ] k
+        kind k q                    = KFun [ tvkind v | QBind v _ <- q ] k
 kchkSuite env (s : ss)              = do s <- kchk env s; ss <- kchkSuite env ss; return (s:ss)
 
 instance KCheck Stmt where
@@ -462,9 +463,9 @@ instance KCheck TSchema where
       where ambig                   = qualbound q \\ closeDepVarsQ (vfree t) q
 
 kchkQBinds env []                   = return []
-kchkQBinds env (Quant v us : q)     = do us <- kchkBounds env us
+kchkQBinds env (QBind v us : q)     = do us <- kchkBounds env us
                                          q <- kchkQBinds env q
-                                         return $ Quant v us : q
+                                         return $ QBind v us : q
 
 kchkBounds env []                   = return []
 kchkBounds env (u:us)               = do (k,u) <- kinfer env u
@@ -603,7 +604,7 @@ instance KSubst TCon where
     ksubst g (TC n ts)              = TC n <$> ksubst g ts
 
 instance KSubst QBind where
-    ksubst g (Quant v cs)           = Quant <$> ksubst g v <*> ksubst g cs
+    ksubst g (QBind v cs)           = QBind <$> ksubst g v <*> ksubst g cs
 
 instance KSubst Type where
     ksubst g (TVar l v)             = TVar l <$> ksubst g v

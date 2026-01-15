@@ -24,11 +24,10 @@ import Acton.Syntax
 import Acton.Names
 import Acton.Builtin
 import Acton.Prim
+import Acton.NameInfo
 import Acton.Env
 import Acton.Subst
-import Acton.Unify
 import Acton.Transform
-import Acton.TypeM
 import Acton.TypeEnv
 import Prelude hiding ((<>))
 

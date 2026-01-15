@@ -28,6 +28,7 @@ import Acton.Printer (Pretty(..), Doc, render, text, (<+>), ($+$), (<>), blank, 
 import Acton.Syntax
 import Acton.Builtin (qnList, qnDict, qnSetT, nBuiltin)
 import Acton.Prim
+import Acton.NameInfo
 import Data.List (nub)
 import Prelude hiding ((<>))
 import Data.List (intercalate, intersperse, sortBy)
@@ -282,8 +283,8 @@ docGenericsMarkdown :: QBinds -> Doc
 docGenericsMarkdown [] = empty
 docGenericsMarkdown qbs = brackets $ hcat $ punctuate comma $ map renderQBind qbs
   where
-    renderQBind (Quant tv []) = pretty (tvname tv)
-    renderQBind (Quant tv constraints) =
+    renderQBind (QBind tv []) = pretty (tvname tv)
+    renderQBind (QBind tv constraints) =
         pretty (tvname tv) <> parens (hcat $ punctuate comma $ map pretty constraints)
 
 -- | Document generic constraints in ASCII format (showing type variable names and constraints)
@@ -543,7 +544,7 @@ getQBindsFromSchema (TSchema _ qb _) = qb
 
 -- | Collect all ugly type variable names from QBinds
 collectUglyTypeVars :: QBinds -> [Name]
-collectUglyTypeVars qbs = [tvname tv | Quant tv _ <- qbs, isUglyName (tvname tv)]
+collectUglyTypeVars qbs = [tvname tv | QBind tv _ <- qbs, isUglyName (tvname tv)]
   where
     isUglyName n = let name = nstr n
                    in length name > 2 && elem '_' name && all isDigit (drop 2 name)
@@ -592,10 +593,10 @@ cleanupTypeVars _ t = t
 cleanupQBinds :: [(Name, Name)] -> [QBind] -> [QBind]
 cleanupQBinds mapping = map cleanupQBind
   where
-    cleanupQBind (Quant tv tcons) =
+    cleanupQBind (QBind tv tcons) =
         case lookup (tvname tv) mapping of
-            Just niceName -> Quant (TV (tvkind tv) niceName) (map (cleanupTCon mapping) tcons)
-            Nothing -> Quant tv (map (cleanupTCon mapping) tcons)
+            Just niceName -> QBind (TV (tvkind tv) niceName) (map (cleanupTCon mapping) tcons)
+            Nothing -> QBind tv (map (cleanupTCon mapping) tcons)
 
     cleanupTCon :: [(Name, Name)] -> TCon -> TCon
     cleanupTCon mapping (TC qn ts) = TC qn (map (cleanupTypeVars mapping) ts)
@@ -635,7 +636,7 @@ docDeclUnified useStyle tenv decl@(Def _ n q p k a b d x ddoc) =
         -- Show generics if we have them (either explicit or inferred)
         allGenerics = if null q && not (null typeVarMapping)
                       then map snd typeVarMapping  -- Use the nice names from mapping
-                      else map (\(Quant tv _) -> tvname tv) q
+                      else map (\(QBind tv _) -> tvname tv) q
         genericsDoc = if null allGenerics
                       then empty
                       else brackets $ hcat $ punctuate comma $ map pretty allGenerics
@@ -649,7 +650,7 @@ docDeclUnified useStyle tenv decl@(Def _ n q p k a b d x ddoc) =
   where
     -- Check if a QBind contains ugly type variable names like T_638
     isUglyTypeVar :: QBind -> Bool
-    isUglyTypeVar (Quant tv _) =
+    isUglyTypeVar (QBind tv _) =
         let name = nstr (tvname tv)
         in length name > 2 && elem '_' name && all isDigit (drop 2 name)
 
@@ -1724,7 +1725,7 @@ htmlEscape (x:xs) = x : htmlEscape xs
 
 -- | Extract generic type names from QBinds
 extractGenerics :: QBinds -> Set Name
-extractGenerics binds = Set.fromList [tvname tv | Quant tv _ <- binds]
+extractGenerics binds = Set.fromList [tvname tv | QBind tv _ <- binds]
 
 -- | Check if a parameter name is a witness parameter
 isWitnessParam :: Name -> Bool
@@ -1833,7 +1834,7 @@ renderTypeWithGenericsAndConstraints generics constraints t = renderTypeHtml gen
         | Set.member (tvname tv) gens =
             let nameStr = render (pretty (tvname tv))
                 -- Find constraints for this type variable
-                tvConstraints = [preds | Quant qtv preds <- cons, tvname qtv == tvname tv]
+                tvConstraints = [preds | QBind qtv preds <- cons, tvname qtv == tvname tv]
                 tooltip = case tvConstraints of
                     [] -> "Generic type " ++ nameStr ++ "\n\nThis is a placeholder for any type.\nAll " ++
                           nameStr ++ "s must be the same type."
@@ -1946,7 +1947,7 @@ renderTypeWithGenericsConstraintsAndClassesAndModule currentModule generics cons
         | Set.member (tvname tv) gens =
             let nameStr = render (pretty (tvname tv))
                 -- Find constraints for this type variable
-                tvConstraints = [preds | Quant qtv preds <- cons, tvname qtv == tvname tv]
+                tvConstraints = [preds | QBind qtv preds <- cons, tvname qtv == tvname tv]
                 tooltip = case tvConstraints of
                     [] -> "Generic type " ++ nameStr ++ "\n\nThis is a placeholder for any type.\nAll " ++
                           nameStr ++ "s must be the same type."
@@ -2079,7 +2080,7 @@ renderTypeWithGenericsConstraintsClassesModuleAndScope currentModule generics co
         | Set.member (tvname tv) gens =
             let nameStr = render (pretty (tvname tv))
                 -- Find constraints for this type variable
-                tvConstraints = [preds | Quant qtv preds <- cons, tvname qtv == tvname tv]
+                tvConstraints = [preds | QBind qtv preds <- cons, tvname qtv == tvname tv]
                 tooltip = case tvConstraints of
                     [] -> "Generic type " ++ nameStr ++ "\n\nThis is a placeholder for any type.\nAll " ++
                           nameStr ++ "s must be the same type."
@@ -2212,7 +2213,7 @@ renderTypeWithGenericsConstraintsAndClasses generics constraints classNames t = 
         | Set.member (tvname tv) gens =
             let nameStr = render (pretty (tvname tv))
                 -- Find constraints for this type variable
-                tvConstraints = [preds | Quant qtv preds <- cons, tvname qtv == tvname tv]
+                tvConstraints = [preds | QBind qtv preds <- cons, tvname qtv == tvname tv]
                 tooltip = case tvConstraints of
                     [] -> "Generic type " ++ nameStr ++ "\n\nThis is a placeholder for any type.\nAll " ++
                           nameStr ++ "s must be the same type."
@@ -3086,7 +3087,7 @@ docGenericsHtmlWithHighlight generics q = docGenericsHtmlWithHighlightAndScope g
 docGenericsHtmlWithHighlightAndScope :: Set Name -> String -> QBinds -> Doc
 docGenericsHtmlWithHighlightAndScope _ _ [] = empty
 docGenericsHtmlWithHighlightAndScope generics scope q =
-    let renderGeneric (Quant tv _) =
+    let renderGeneric (QBind tv _) =
             let name = tvname tv
                 nameStr = render (pretty name)
             in if Set.member name generics
@@ -3106,7 +3107,7 @@ docConstraintsHtml generics constraints = docConstraintsHtmlWithScope generics "
 docConstraintsHtmlWithScope :: Set Name -> String -> QBinds -> Doc
 docConstraintsHtmlWithScope _ _ [] = empty
 docConstraintsHtmlWithScope generics scope constraints =
-    let renderConstraint (Quant tv preds) =
+    let renderConstraint (QBind tv preds) =
             let name = tvname tv
                 nameStr = render (pretty name)
                 tooltip = if null preds

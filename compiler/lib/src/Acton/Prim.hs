@@ -18,6 +18,7 @@ import Pretty
 import Acton.Syntax
 import Acton.Builtin
 import Acton.Names
+import Acton.NameInfo
 
 nPrim               = name "$"
 mPrim               = ModName [nPrim]
@@ -241,14 +242,14 @@ primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec Nothing)
 
 --  class $Cont[T] (value): pass
 --      __call__    : proc(T) -> $R
-clCont              = NClass [quant t] (leftpath [cValue]) te Nothing
+clCont              = NClass [qbind t] (leftpath [cValue]) te Nothing
   where te          = [ (attr_call_, NSig (monotype $ tFun fxProc (posRow (tVar t) posNil) kwdNil tR) NoDec Nothing) ]
         t           = TV KType (name "T")
 
 --  class $proc[R,T] (value):
 --      __call__    : proc($Cont[T], *R) -> $R
 --      __exec__    : proc($Cont[value], *R) -> $R
-clProc              = NClass [quant r, quant t] (leftpath [cValue]) te Nothing
+clProc              = NClass [qbind r, qbind t] (leftpath [cValue]) te Nothing
   where te          = [ (attr_call_, NSig (monotype $ tFun fxProc (posRow (tVar t) (tVar r)) kwdNil tR) NoDec Nothing),
                         (attr_exec_, NSig (monotype $ tFun fxProc (posRow tValue (tVar r)) kwdNil tR) NoDec Nothing) ]
         r           = TV PRow (name "R")
@@ -256,7 +257,7 @@ clProc              = NClass [quant r, quant t] (leftpath [cValue]) te Nothing
 
 --  class $action[R,T] ($proc[R,T], value):
 --      __asyn__    : action(*R) -> T
-clAction            = NClass [quant r, quant t] (leftpath [ cProc (tVar r) (tVar t), cValue]) te Nothing
+clAction            = NClass [qbind r, qbind t] (leftpath [ cProc (tVar r) (tVar t), cValue]) te Nothing
   where te          = [ (attr_asyn_, NSig (monotype $ tFun fxAction (tVar r) kwdNil (tVar t)) NoDec Nothing) ]
         r           = TV PRow (name "R")
         t           = TV KType (name "T")
@@ -264,14 +265,14 @@ clAction            = NClass [quant r, quant t] (leftpath [ cProc (tVar r) (tVar
 
 --  class $mut[R,T] ($proc[R,T], value):
 --      __eval__    : mut(*R) -> T
-clMut               = NClass [quant r, quant t] (leftpath [ cProc (tVar r) (tVar t), cValue]) te Nothing
+clMut               = NClass [qbind r, qbind t] (leftpath [ cProc (tVar r) (tVar t), cValue]) te Nothing
   where te          = [ (attr_eval_, NSig (monotype $ tFun fxMut (tVar r) kwdNil (tVar t)) NoDec Nothing) ]
         r           = TV PRow (name "R")
         t           = TV KType (name "T")
 
 --  class $pure[R,T] ($mut[R,T], $proc[R,T], value):
 --      __eval__    : pure(*R) -> T
-clPure              = NClass [quant r, quant t] (leftpath [ cMut (tVar r) (tVar t), cProc (tVar r) (tVar t), cValue]) te Nothing
+clPure              = NClass [qbind r, qbind t] (leftpath [ cMut (tVar r) (tVar t), cProc (tVar r) (tVar t), cValue]) te Nothing
   where te          = [ (attr_eval_, NSig (monotype $ tFun fxPure (tVar r) kwdNil (tVar t)) NoDec Nothing) ]
         r           = TV PRow (name "R")
         t           = TV KType (name "T")
@@ -279,7 +280,7 @@ clPure              = NClass [quant r, quant t] (leftpath [ cMut (tVar r) (tVar 
 --  class $Box[A] (object, value):
 --      ref         : A
 --      __init__    : (A) -> None
-clBox               = NClass [quant a] (leftpath [cObject, cValue]) te Nothing
+clBox               = NClass [qbind a] (leftpath [cObject, cValue]) te Nothing
   where te          = [ (valKW,  NSig (monotype $ tVar a) Property Nothing),
                         (initKW, NDef (monotype $ tFun fxPure (posRow (tVar a) posNil) kwdNil tNone) NoDec Nothing) ]
         a           = TV KType (name "A")
@@ -332,60 +333,60 @@ clRET               = NClass [] (leftpath [cBaseException, cValue]) te Nothing
 clR                 = NClass [] [] [] Nothing
 
 --  $ASYNCf         : [A] => action($Actor, proc()->A) -> A
-scASYNCf            = tSchema [quant a] tASYNC
+scASYNCf            = tSchema [qbind a] tASYNC
   where tASYNC      = tFun fxAction (posRow tActor $ posRow tFun' posNil) kwdNil (tVar a)
         a           = TV KType $ name "A"
         tFun'       = tFun fxProc posNil kwdNil (tVar a)
 
 --  $AFTERf         : [A] => action(int, proc()->A) -> A
-scAFTERf            = tSchema [quant a] tAFTER
+scAFTERf            = tSchema [qbind a] tAFTER
   where tAFTER      = tFun fxAction (posRow tFloat $ posRow tFun' posNil) kwdNil (tVar a)
         a           = TV KType $ name "A"
         tFun'       = tFun fxProc posNil kwdNil (tVar a)
 
 --  $AWAITf         : [A] => proc(Msg[A]) -> A
-scAWAITf            = tSchema [quant a] tAWAIT
+scAWAITf            = tSchema [qbind a] tAWAIT
   where tAWAIT      = tFun fxProc (posRow (tMsg $ tVar a) posNil) kwdNil (tVar a)
         a           = TV KType $ name "T"
 
 
 --  $ASYNCc         : [A] => action($Actor, proc(proc(A)->$R)->$R) -> A
-scASYNCc            = tSchema [quant a] tASYNC
+scASYNCc            = tSchema [qbind a] tASYNC
   where tASYNC      = tFun fxAction (posRow tActor $ posRow tCont' posNil) kwdNil (tVar a)
         a           = TV KType $ name "A"
         tCont'      = tFun fxProc (posRow tCont'' posNil) kwdNil tR
         tCont''     = tFun fxProc (posRow (tVar a) posNil) kwdNil tR
 
 --  $AFTERc         : [A] => action(int, proc(proc(A)->$R)->$R) -> A
-scAFTERc            = tSchema [quant a] tAFTER
+scAFTERc            = tSchema [qbind a] tAFTER
   where tAFTER      = tFun fxAction (posRow tFloat $ posRow tCont' posNil) kwdNil (tVar a)
         a           = TV KType $ name "A"
         tCont'      = tFun fxProc (posRow tCont'' posNil) kwdNil tR
         tCont''     = tFun fxProc (posRow (tVar a) posNil) kwdNil tR
 
 --  $AWAITc         : [A] => proc(proc(A)->$R, Msg[A]) -> $R
-scAWAITc            = tSchema [quant a] tAWAIT
+scAWAITc            = tSchema [qbind a] tAWAIT
   where tAWAIT      = tFun fxProc (posRow tCont' $ posRow (tMsg $ tVar a) posNil) kwdNil tR
         a           = TV KType $ name "A"
         tCont'      = tFun fxProc (posRow (tVar a) posNil) kwdNil tR
 
 
 --  $ASYNC          : [A] => action($Actor, $Cont[$Cont[A]]) -> A
-scASYNC             = tSchema [quant a] tASYNC
+scASYNC             = tSchema [qbind a] tASYNC
   where tASYNC      = tFun fxAction (posRow tActor $ posRow tCont' posNil) kwdNil (tVar a)
         a           = TV KType $ name "A"
         tCont'      = tCont tCont''
         tCont''     = tCont (tVar a)
 
 --  $AFTER          : [A] => action(int, $Cont[$Cont[A]]) -> A
-scAFTER             = tSchema [quant a] tAFTER
+scAFTER             = tSchema [qbind a] tAFTER
   where tAFTER      = tFun fxAction (posRow tFloat $ posRow tCont' posNil) kwdNil (tVar a)
         a           = TV KType $ name "A"
         tCont'      = tCont tCont''
         tCont''     = tCont (tVar a)
 
 --  $AWAIT          : [A] => proc($Cont[A], Msg[A]) -> $R
-scAWAIT             = tSchema [quant a] tAWAIT
+scAWAIT             = tSchema [qbind a] tAWAIT
   where tAWAIT      = tFun fxProc (posRow tCont' $ posRow (tMsg $ tVar a) posNil) kwdNil tR
         a           = TV KType $ name "A"
         tCont'      = tCont (tVar a)
@@ -444,12 +445,12 @@ scASSERT            = tSchema [] tASSERT
   where tASSERT     = tFun fxPure (posRow tBool $ posRow (tOpt tStr) posNil) kwdNil tNone
 
 --  $NEWACTOR       : [A($Actor)] => pure () -> A
-scNEWACTOR          = tSchema [Quant a [cActor]] tNEWACTOR
+scNEWACTOR          = tSchema [QBind a [cActor]] tNEWACTOR
   where tNEWACTOR   = tFun fxPure posNil kwdNil (tVar a)
         a           = TV KType $ name "A"
 
 --  $GCfinalizer    : [A($Actor)] => pure (A) -> None
-scGCfinalizer       = tSchema [Quant a [cActor]] tGCfin
+scGCfinalizer       = tSchema [QBind a [cActor]] tGCfin
   where tGCfin      = tFun fxPure (posRow (tVar a) posNil) kwdNil tNone
         a           = TV KType $ name "A"
 
@@ -458,31 +459,31 @@ scISINSTANCE        = tSchema [] tISINSTANCE
   where tISINSTANCE = tFun fxPure (posRow tValue $ posRow tWild posNil) kwdNil tNone
 
 --  $CAST           : [A, B] => (A) -> B
-scCAST              = tSchema [quant a, quant b] tCAST
+scCAST              = tSchema [qbind a, qbind b] tCAST
   where tCAST       = tFun fxPure (posRow (tVar a) posNil) kwdNil (tVar b)
         a           = TV KType $ name "A"
         b           = TV KType $ name "B"
 
 --  $CONSTCONT      : [A] => (A, $Cont[A]) -> $Cont[tNone]
-scCONSTCONT         = tSchema [quant a] tCONSTCONT
+scCONSTCONT         = tSchema [qbind a] tCONSTCONT
   where tCONSTCONT  = tFun fxPure (posRow (tVar a) $ posRow tCont' posNil) kwdNil tCont''
         tCont'      = tCont (tVar a)
         tCont''     = tCont tNone
         a           = TV KType $ name "A"
 
 --  $FORMAT         : [P] => (str, (*P)) -> str
-scFORMAT            = tSchema [quant p] tFORMAT
+scFORMAT            = tSchema [qbind p] tFORMAT
   where tFORMAT     = tFun fxPure (posRow tStr $ posRow (tTuple (tVar p) kwdNil) posNil) kwdNil tStr
         p           = TV KType $ name "P"
 
 --  $R_CONTc        : [A] => proc(proc(A)->$R, A) -> $R
-scRContc            = tSchema [quant a] tRCont
+scRContc            = tSchema [qbind a] tRCont
   where tRCont      = tFun fxProc (posRow tCont' $ posRow (tVar a) posNil) kwdNil tR
         tCont'      = tFun fxProc (posRow (tVar a) posNil) kwdNil tR
         a           = TV KType $ name "A"
 
 --  $R_CONT         : [A] => proc($Cont[A], A) -> $R
-scRCont             = tSchema [quant a] tRCont
+scRCont             = tSchema [qbind a] tRCont
   where tRCont      = tFun fxProc (posRow tCont' $ posRow (tVar a) posNil) kwdNil tR
         tCont'      = tCont (tVar a)
         a           = TV KType $ name "A"
@@ -493,7 +494,7 @@ scRFail             = tSchema [] tRFail
 
 
 --  class $EqOpt[A] (Eq[?A]): pass
-clEqOpt             = NClass [quant a] (leftpath [TC qnEq [tOpt $ tVar a]]) clTEnv Nothing
+clEqOpt             = NClass [qbind a] (leftpath [TC qnEq [tOpt $ tVar a]]) clTEnv Nothing
   where clTEnv      = [ (initKW, NDef scInit NoDec Nothing) ]
         scInit      = tSchema [] $ tFun fxPure (posRow (tCon $ TC qnEq [tVar a]) posNil) kwdNil tNone
         a           = TV KType (name "A")
@@ -512,24 +513,24 @@ tIntegralBigint     = tCon $ TC qnIntegral [tBigint]
 
 
 --  $ISNOTNONE      : [A] => pure (?A) -> bool
-scISNOTNONE         = tSchema [quant a] tISNOTNONE
+scISNOTNONE         = tSchema [qbind a] tISNOTNONE
   where tISNOTNONE  = tFun fxPure (posRow (tOpt $ tVar a) posNil) kwdNil tBool
         a           = TV KType (name "A")
 
 --  $ISNONE         : [A] => pure (?A) -> bool
-scISNONE            = tSchema [quant a] tISNONE
+scISNONE            = tSchema [qbind a] tISNONE
   where tISNONE     = tFun fxPure (posRow (tOpt $ tVar a) posNil) kwdNil tBool
         a           = TV KType (name "A")
 
 --  $SKIPRESc       : [A] => pure(proc(None)->$R) -> proc(A)->$R
-scSKIPRESc          = tSchema [quant a] tSKIPRES
+scSKIPRESc          = tSchema [qbind a] tSKIPRES
   where tSKIPRES    = tFun fxPure (posRow tCont' posNil) kwdNil tCont''
         tCont'      = tFun fxProc (posRow tNone posNil) kwdNil tR
         tCont''     = tFun fxProc (posRow (tVar a) posNil) kwdNil tR
         a           = TV KType $ name "A"
 
 --  $SKIPRES        : [X,A] => pure($Cont[None]) -> $Cont[A]
-scSKIPRES           = tSchema [quant a] tSKIPRES
+scSKIPRES           = tSchema [qbind a] tSKIPRES
   where tSKIPRES    = tFun fxPure (posRow tCont' posNil) kwdNil tCont''
         tCont'      = tCont tNone
         tCont''     = tCont (tVar a)
@@ -537,26 +538,26 @@ scSKIPRES           = tSchema [quant a] tSKIPRES
 
 
 --  $MkSet          : [A] => (Hashable[A], set[A]) -> set[A]
-scMkSet             = tSchema [quant a] tMkSet
+scMkSet             = tSchema [qbind a] tMkSet
   where tMkSet      = tFun fxPure (posRow tHashableA (posRow (tSet (tVar a)) posNil)) kwdNil (tSet (tVar a))
         tHashableA  = tCon (TC qnHashable [tVar a])
         a           = TV KType $ name "A"
 
 --  $MkDict         : [A] => (Hashable[A], dict[A]) -> dict[A]
-scMkDict            = tSchema [quant a, quant b] tMkDict
+scMkDict            = tSchema [qbind a, qbind b] tMkDict
   where tMkDict     = tFun fxPure (posRow tHashableA (posRow (tDict (tVar a) (tVar b)) posNil)) kwdNil (tDict (tVar a)(tVar b))
         tHashableA  = tCon (TC qnHashable [tVar a])
         a           = TV KType $ name "A"
         b           = TV KType $ name "B"
 
 --  $annot : [A,B] => (A,B) -> B
-scAnnot             = tSchema [quant a, quant b] tAnnot
+scAnnot             = tSchema [qbind a, qbind b] tAnnot
   where tAnnot      = tFun fxPure (posRow (tVar a) (posRow (tVar b) posNil)) kwdNil (tVar b)
         a           = TV KType $ name "A"
         b           = TV KType $ name "B"
 
 -- $listD_U__getitem__ : [A] => (list[A], int) -> A
-scUGetItem          = tSchema [quant a] tUGetItem
+scUGetItem          = tSchema [qbind a] tUGetItem
   where tUGetItem   = tFun fxPure (posRow (tList (tVar a)) (posRow tInt posNil)) kwdNil (tVar a)
         a           = TV KType $ name "A"
 
@@ -565,7 +566,7 @@ scUNext             = tSchema [] tUNext
   where tUNext      = tFun fxMut (posRow (tIterator (tInt)) posNil) kwdNil tInt
         
 --  $WRAP           : [A,B,C] => ($Actor, proc(*A,**B)->C) -> action(*A,**B)->C
-scWRAP              = tSchema [quant a, quant b, quant c] tWRAP
+scWRAP              = tSchema [qbind a, qbind b, qbind c] tWRAP
   where tWRAP       = tFun0 [tActor, abcFun fxProc] (abcFun fxAction)
         abcFun fx   = tFun fx (tVar a) (tVar b) (tVar c)
         a           = TV KType (name "A")
@@ -577,7 +578,7 @@ scWRAP              = tSchema [quant a, quant b, quant c] tWRAP
 --      wrap        : [A,B,C] => ($Actor, X(*A,**B)->C) -> Self(*A,**B)->C
 --      @static
 --      unwrap      : [A,B,C] => (Self(*A,**B)->C) -> Y(*A,**B)->C
-proWrapped          = NProto [quant x, quant y] [] te Nothing
+proWrapped          = NProto [qbind x, qbind y] [] te Nothing
   where te          = [(attrWrap,scWrap), (attrUnwrap,scUnwrap)]
         scWrap      = NSig (tSchema q (tFun0 [tActor, fxFun tX] (fxFun tSelf)))  Static Nothing
         scUnwrap    = NSig (tSchema q (tFun0 [fxFun tSelf] (fxFun tY))) Static Nothing
@@ -585,7 +586,7 @@ proWrapped          = NProto [quant x, quant y] [] te Nothing
         tX          = tVar x
         tY          = tVar y
         tSelf       = tVar fxSelf
-        q           = [quant a, quant b, quant c]
+        q           = [qbind a, qbind b, qbind c]
         x           = TV KFX (name "X")
         y           = TV KFX (name "Y")
         a           = TV PRow (name "A")
@@ -595,7 +596,7 @@ proWrapped          = NProto [quant x, quant y] [] te Nothing
 --  class $WrappedC[S,X,Y]: pass
 --      wrap        : [A,B,C] => ($Actor, X(*A,**B)->C) -> S(*A,**B)->C
 --      unwrap      : [A,B,C] => (S(*A,**B)->C) -> X(*A,**B)->C
-clWrapped           = NClass [quant s, quant x, quant y] [] te Nothing
+clWrapped           = NClass [qbind s, qbind x, qbind y] [] te Nothing
   where te          = [(attrWrap,scWrap), (attrUnwrap,scUnwrap)]
         scWrap      = NDef (tSchema q (tFun0 [tActor, fxFun tX] (fxFun tS))) NoDec Nothing
         scUnwrap    = NDef (tSchema q (tFun0 [fxFun tS] (fxFun tY))) NoDec Nothing
@@ -603,7 +604,7 @@ clWrapped           = NClass [quant s, quant x, quant y] [] te Nothing
         tS          = tVar s
         tX          = tVar x
         tY          = tVar y
-        q           = [quant a, quant b, quant c]
+        q           = [qbind a, qbind b, qbind c]
         s           = TV KFX (name "S")
         x           = TV KFX (name "X")
         y           = TV KFX (name "Y")
@@ -616,7 +617,7 @@ clWrapped           = NClass [quant s, quant x, quant y] [] te Nothing
 primWits            = [ WInst []        fxAction (pWrapped fxProc fxProc)   primWrapAction path,
                         WInst []        fxProc   (pWrapped fxProc fxProc)   primWrapProc path,
                         WInst []        fxMut    (pWrapped fxMut  fxMut)    primWrapMut path,
-                        WInst [quant y] fxPure   (pWrapped fxPure (tVar y)) primWrapPure path
+                        WInst [qbind y] fxPure   (pWrapped fxPure (tVar y)) primWrapPure path
                       ]
   where path        = [Left (noQ "_")]
         y           = TV KFX (name "Y")

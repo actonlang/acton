@@ -68,16 +68,17 @@ library:
     - Acton.Env
     - Acton.Kinds
     - Acton.LambdaLifter
+    - Acton.NameInfo
     - Acton.Normalizer
     - Acton.Parser
     - Acton.Printer
     - Acton.QuickType
-    - Acton.Relabel
     - Acton.Solver
     - Acton.SourceProvider
     - Acton.Syntax
     - Acton.Types
-    - Acton.TypeM
+    - Acton.TypeEnv
+    - Acton.WitKnots
     - Utils
     - Pretty
     - InterfaceFiles

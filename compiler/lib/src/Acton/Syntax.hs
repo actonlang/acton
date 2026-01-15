@@ -225,7 +225,7 @@ data TCon       = TC { tcname::QName, tcargs::[Type] } deriving (Eq,Show,Read,Ge
 
 data FX         = FXPure | FXMut | FXProc | FXAction deriving (Eq,Show,Read,Generic,NFData)
 
-data QBind      = Quant TVar [TCon] deriving (Eq,Show,Read,Generic,NFData)
+data QBind      = QBind TVar [TCon] deriving (Eq,Show,Read,Generic,NFData)
 
 type QBinds     = [QBind]
 
@@ -253,25 +253,6 @@ type PosRow     = Type
 type KwdRow     = Type
 type TRow       = Type
 
-data Constraint = Cast  {info :: ErrInfo, qual :: QBinds, type1 :: Type, type2 :: Type}
-                | Sub   {info :: ErrInfo, wit :: Name, qual :: QBinds, type1 :: Type, type2 :: Type}
-                | Proto {info :: ErrInfo, wit :: Name, qual :: QBinds, type1 :: Type, proto1 :: PCon}
-                | Sel   {info :: ErrInfo, wit :: Name, qual :: QBinds, type1 :: Type, name1 :: Name, type2 :: Type}
-                | Mut   {info :: ErrInfo, qual :: QBinds, type1 :: Type, name1 :: Name, type2 :: Type}
-                | Seal  {info :: ErrInfo, qual :: QBinds, type1 :: Type}
-                | Imply {info :: ErrInfo, wit :: Name, binder :: QBinds, scoped :: Constraints}
-                deriving (Eq,Show,Read,Generic,NFData)
-
-type Constraints = [Constraint]
-
-data ErrInfo    = DfltInfo {errloc :: SrcLoc, errno :: Int, errexpr :: Maybe Expr, errinsts :: [(QName,TSchema,Type)]}
-                | DeclInfo {errloc :: SrcLoc, errloc2 :: SrcLoc, errname :: Name, errschema :: TSchema, errmsg :: String}
-                | Simple {errloc ::SrcLoc, errmsg :: String}
-                deriving (Eq,Show,Read,Generic,NFData)
-
-type WPath      = [Either QName QName]
-
-type WTCon      = (WPath,PCon)
 
 leftpath tcs    = [ (map Left ns, tc) | (ns,tc) <- nss `zip` tcs ]
   where nss     = tail $ inits $ map tcname tcs
@@ -347,8 +328,8 @@ pVar' n         = PVar NoLoc n Nothing
 monotype t      = TSchema NoLoc [] t
 tSchema q t     = TSchema NoLoc q t
 
-quant v         = Quant v []
-qbound q        = [ tv | Quant tv _ <- q ]
+qbind v         = QBind v []
+qbound q        = [ tv | QBind tv _ <- q ]
 
 tVar v          = TVar NoLoc v
 tUni v          = TUni NoLoc v
@@ -367,7 +348,7 @@ tRow k          = TRow NoLoc k
 tStar k         = TStar NoLoc k
 tTFX fx         = TFX NoLoc fx
 
-tCon0 n q       = tCon $ TC n [ tVar tv | Quant tv _ <- q ]
+tCon0 n q       = tCon $ TC n [ tVar tv | QBind tv _ <- q ]
 
 tFun0 ps t      = tFun fxPure (foldr posRow posNil ps) kwdNil t
 
@@ -447,113 +428,11 @@ tvarSupplyMap vs avoid  = map setk (vs `zip` (tvarSupply \\ avoid))
 
 type Substitution       = [(TVar,Type)]
 
-type TEnv               = [(Name, NameInfo)]
-
-data NameInfo           = NVar      Type
-                        | NSVar     Type
-                        | NDef      TSchema Deco (Maybe String)
-                        | NSig      TSchema Deco (Maybe String)
-                        | NAct      QBinds PosRow KwdRow TEnv (Maybe String)
-                        | NClass    QBinds [WTCon] TEnv (Maybe String)
-                        | NProto    QBinds [WTCon] TEnv (Maybe String)
-                        | NExt      QBinds TCon [WTCon] TEnv [Name] (Maybe String)
-                        | NTVar     Kind CCon [PCon]
-                        | NAlias    QName
-                        | NMAlias   ModName
-                        | NModule   TEnv (Maybe String)
-                        | NReserved
-                        deriving (Eq,Show,Read,Generic)
-
-type HTEnv            =  M.HashMap Name HNameInfo
-
-data HNameInfo          = HNVar      Type
-                        | HNSVar     Type
-                        | HNDef      TSchema Deco (Maybe String)
-                        | HNSig      TSchema Deco (Maybe String)
-                        | HNAct      QBinds PosRow KwdRow TEnv (Maybe String)
-                        | HNClass    QBinds [WTCon] TEnv (Maybe String)
-                        | HNProto    QBinds [WTCon] TEnv (Maybe String)
-                        | HNExt      QBinds TCon [WTCon] TEnv [Name] (Maybe String)
-                        | HNTVar     Kind CCon [PCon]
-                        | HNAlias    QName
-                        | HNMAlias   ModName
-                        | HNModule   HTEnv (Maybe String)
-                        | HNReserved
-                        deriving (Eq, Show, Read, Generic)
-
-
 instance Data.Hashable.Hashable Name where
     hashWithSalt s (Name _ nstr)    = Data.Hashable.hashWithSalt s nstr
     hashWithSalt s (Derived  n1 n2) = Data.Hashable.hashWithSalt s (n1,n2)
     hashWithSalt s (Internal pre str n) = Data.Hashable.hashWithSalt s (show pre,str,n)
 
---data TEnvs              = TEnvs { nmod::NameInfo, tchecked::NameInfo, normalized::NameInfo, deactorized:: NameInfo, cpsconverted:: NameInfo, llifted:: NameInfo }
---                        deriving (Eq,Show,Read,Generic)
-
-convNameInfo2HNameInfo               :: NameInfo -> HNameInfo
-convNameInfo2HNameInfo (NModule te mdoc)      = HNModule (convTEnv2HTEnv te) mdoc
-convNameInfo2HNameInfo (NVar t)               = HNVar t
-convNameInfo2HNameInfo (NSVar t)              = HNSVar t
-convNameInfo2HNameInfo (NDef sc dec mdoc)     = HNDef sc dec mdoc
-convNameInfo2HNameInfo (NSig sc dec mdoc)     = HNSig sc dec mdoc
-convNameInfo2HNameInfo (NAct q p k te mdoc)   = HNAct q p k te mdoc
-convNameInfo2HNameInfo (NClass q ws te mdoc)  = HNClass q ws te mdoc
-convNameInfo2HNameInfo (NProto q ws te mdoc)  = HNProto q ws te mdoc
-convNameInfo2HNameInfo (NExt q tc ws te ns mdoc) = HNExt q tc ws te ns mdoc
-convNameInfo2HNameInfo (NTVar k c ps)         = HNTVar k c ps
-convNameInfo2HNameInfo (NAlias qn)            = HNAlias qn
-convNameInfo2HNameInfo (NMAlias mn)           = HNMAlias mn
-convNameInfo2HNameInfo (NReserved)            = HNReserved
-
-convHNameInfo2NameInfo               :: HNameInfo -> NameInfo
-convHNameInfo2NameInfo (HNModule te mdoc)      = NModule (convHTEnv2TEnv te) mdoc
-convHNameInfo2NameInfo (HNVar t)               = NVar t
-convHNameInfo2NameInfo (HNSVar t)              = NSVar t
-convHNameInfo2NameInfo (HNDef sc dec mdoc)     = NDef sc dec mdoc
-convHNameInfo2NameInfo (HNSig sc dec mdoc)     = NSig sc dec mdoc
-convHNameInfo2NameInfo (HNAct q p k te mdoc)   = NAct q p k te mdoc
-convHNameInfo2NameInfo (HNClass q ws te mdoc)  = NClass q ws te mdoc
-convHNameInfo2NameInfo (HNProto q ws te mdoc)  = NProto q ws te mdoc
-convHNameInfo2NameInfo (HNExt q tc ws te ns mdoc) = NExt q tc ws te ns mdoc
-convHNameInfo2NameInfo (HNTVar k c ps)         = NTVar k c ps
-convHNameInfo2NameInfo (HNAlias qn)            = NAlias qn
-convHNameInfo2NameInfo (HNMAlias mn)           = NMAlias mn
-convHNameInfo2NameInfo (HNReserved)            = NReserved
-
-convTEnv2HTEnv                       :: TEnv -> HTEnv
-convTEnv2HTEnv te                     = M.fromList (map convPair te)
-  where
-     convPair (n, ni)      = (n, convNameInfo2HNameInfo ni)
-
-convHTEnv2TEnv                       :: HTEnv -> TEnv
-convHTEnv2TEnv te                     = map convPair (M.toList te)
-  where
-     convPair (n, hni)      = (n, convHNameInfo2NameInfo hni)
-
-
-
--- | Strip all docstrings from NameInfo (and nested environments).
--- This is used when computing a public-interface hash so that
--- documentation-only edits do not cause dependents to rebuild.
-stripDocsNI :: NameInfo -> NameInfo
-stripDocsNI ni = case ni of
-  NModule te _        -> NModule (map stripBind te) Nothing
-  NAct q p k te _     -> NAct q p k (map stripBind te) Nothing
-  NClass q cs te _    -> NClass q cs (map stripBind te) Nothing
-  NProto q ps te _    -> NProto q ps (map stripBind te) Nothing
-  NExt q c ps te o _  -> NExt q c ps (map stripBind te) o Nothing
-  NDef sc dec _       -> NDef sc dec Nothing
-  NSig sc dec _       -> NSig sc dec Nothing
-  other               -> other
-  where
-    stripBind (n, info) = (n, stripDocsNI info)
-
-data Witness            = WClass    { binds::QBinds, wtype::Type, proto::PCon, wname::QName, wsteps::WPath, wopts::Int }
-                        | WInst     { binds::QBinds, wtype::Type, proto::PCon, wname::QName, wsteps::WPath }
-                        deriving (Show)
-
-typeDecl (_,NDef{})     = False
-typeDecl _              = True
 
 -- Finding type leaves -----
 
@@ -566,19 +445,8 @@ instance (Leaves a) => Leaves [a] where
 instance (Leaves a) => Leaves (Name,a) where
     leaves (n,x)            = leaves x
 
-instance Leaves NameInfo where
-    leaves (NClass q cs te _) = leaves q ++ leaves cs ++ leaves te
-    leaves (NProto q ps te _) = leaves q ++ leaves ps ++ leaves te
-    leaves (NAct q p k te _)  = leaves q ++ leaves [p,k] ++ leaves te
-    leaves (NExt q c ps te _ _) = leaves q ++ leaves c ++ leaves ps ++ leaves te
-    leaves (NDef sc dec _)    = leaves sc
-    leaves _                  = []
-
 instance Leaves QBind where
-    leaves (Quant tv ps)    = tVar tv : leaves ps
-
-instance Leaves (WPath,PCon) where
-    leaves (wp,p)           = leaves p
+    leaves (QBind tv ps)    = tVar tv : leaves ps
 
 instance Leaves TSchema where
     leaves (TSchema _ q t)  = leaves q ++ leaves t
@@ -615,9 +483,6 @@ instance Data.Binary.Binary QBind
 instance Data.Binary.Binary Type
 instance Data.Binary.Binary Kind
 instance Data.Binary.Binary FX
-instance Data.Binary.Binary ErrInfo
-instance Data.Binary.Binary Constraint
-instance Data.Binary.Binary NameInfo
 instance Data.Binary.Binary Expr
 instance Data.Binary.Binary Stmt
 instance Data.Binary.Binary Decl
@@ -698,20 +563,6 @@ instance HasLoc TCon where
 
 instance HasLoc Type where
     loc                 = tloc
-
-instance HasLoc Constraint where
-      loc (Cast info q t1 t2) = getLoc [loc info, loc t1, loc t2]
-      loc (Sub info _ q t1 t2) = getLoc [loc info, loc t1, loc t2]
-      loc (Proto info _ q t1 _) = getLoc [loc info, loc t1]
-      loc (Sel info _ q t1  n1 t2) = getLoc [loc info, loc t1, loc n1, loc t2]
-      loc (Mut info q t1  n1 t2) = getLoc [loc info, loc t1, loc n1, loc t2]
-      loc (Seal info q t1) = getLoc [loc info, loc t1]
-      loc (Imply info _ q cs) =  getLoc [loc info, loc cs]
-
-instance HasLoc ErrInfo where
-      loc (Simple l _)   = l
-      loc (DfltInfo l _ _ _) = l
-      loc (DeclInfo l _ _ _ _) = l
 
 instance HasLoc PosArg where
       loc (PosArg e p) = loc e  `upto` loc p

@@ -167,6 +167,7 @@ import Prelude hiding (readFile, writeFile)
 import qualified Acton.Parser
 import Acton.Parser (CustomParseError, CustomParseException, ContextError, IndentationError)
 import qualified Acton.Syntax as A
+import qualified Acton.NameInfo as I
 import Text.Megaparsec.Error (ParseErrorBundle)
 import qualified Acton.CommandLineParser as C
 import Acton.Printer ()
@@ -174,7 +175,6 @@ import qualified Acton.Env
 import Acton.Env (simp, define, setMod)
 import qualified Acton.Kinds
 import qualified Acton.Types
-import Acton.TypeM
 import qualified Acton.Normalizer
 import qualified Acton.CPS
 import qualified Acton.Deactorizer
@@ -776,7 +776,7 @@ data BackJob = BackJob
   }
 
 data FrontResult = FrontResult
-  { frIfaceTE  :: [(A.Name, A.NameInfo)]
+  { frIfaceTE  :: [(A.Name, I.NameInfo)]
   , frDoc      :: Maybe String
   , frIfaceHash :: B.ByteString
   , frFrontTime :: Maybe TimeSpec
@@ -790,7 +790,7 @@ data CompileTask        = ActonTask { name :: A.ModName, src :: String, srcBytes
                                     , tyImports :: [(A.ModName, B.ByteString)] -- imports with iface hash used
                                     , tyRoots :: [A.Name]
                                     , tyDoc :: Maybe String
-                                    , iface :: A.NameInfo
+                                    , iface :: I.NameInfo
                                     , typed :: A.Module
                                     }
                         | ParseErrorTask { name :: A.ModName, parseDiagnostics :: [Diagnostic String] }
@@ -1016,7 +1016,7 @@ readModuleTask sp gopts _opts paths actFile = do
                     verifyOrParse mn snap hash ihash imps roots mdoc
   where
     mkTyTask mn hash ihash imps roots mdoc =
-      let nmodStub = A.NModule [] mdoc
+      let nmodStub = I.NModule [] mdoc
           tmodStub = A.Module mn [] []
       in TyTask { name      = mn
                 , tyHash    = hash
@@ -1101,7 +1101,7 @@ quiet gopts opts = C.quiet gopts || altOutput opts
 
 -- | Read an interface from a .ty file and return its NameInfo and hash.
 -- This is used when a module is deemed fresh and we want to avoid reparsing.
-readIfaceFromTy :: Paths -> A.ModName -> String -> Maybe B.ByteString -> IO (Either [Diagnostic String] ([(A.Name, A.NameInfo)], Maybe String, B.ByteString))
+readIfaceFromTy :: Paths -> A.ModName -> String -> Maybe B.ByteString -> IO (Either [Diagnostic String] ([(A.Name, I.NameInfo)], Maybe String, B.ByteString))
 readIfaceFromTy paths mn src mHash = do
     mty <- Acton.Env.findTyFile (searchPath paths) mn
     case mty of
@@ -1111,7 +1111,7 @@ readIfaceFromTy paths mn src mHash = do
         case fileRes of
           Left _ -> return $ Left (missingIfaceDiagnostics mn src mn)
           Right (_ms, nmod, _tmod, _si, _ti, _ni, _te, _tm) -> do
-            let A.NModule te mdoc = nmod
+            let I.NModule te mdoc = nmod
             ih <- case mHash of
                     Just h -> return h
                     Nothing -> do
@@ -1157,9 +1157,9 @@ runFrontPasses gopts opts paths env0 parsed srcContent srcBytes resolveImportHas
     handleCompilation err =
       return $ Left (errsToDiagnostics "Compilation error" filename srcContent (Acton.Env.compilationError err))
 
-    handleTypeError :: TypeError -> IO (Either [Diagnostic String] FrontResult)
+    handleTypeError :: Acton.Env.TypeError -> IO (Either [Diagnostic String] FrontResult)
     handleTypeError err =
-      return $ Left [mkErrorDiagnostic filename srcContent (Acton.TypeM.typeReport err filename srcContent)]
+      return $ Left [Acton.Env.mkErrorDiagnostic filename srcContent (Acton.Env.typeReport err filename srcContent)]
 
     resolveImportHashes :: [A.ModName] -> IO (Either [Diagnostic String] [(A.ModName, B.ByteString)])
     resolveImportHashes mrefs = do
@@ -1194,9 +1194,9 @@ runFrontPasses gopts opts paths env0 parsed srcContent srcBytes resolveImportHas
       let srcHash = SHA256.hash srcBytes
       -- Pre-compute list of root-eligible actors and store in .ty header
       let roots = case nmod of
-                     A.NModule te _ -> [ n | (n,i) <- te, rootEligible i ]
+                     I.NModule te _ -> [ n | (n,i) <- te, rootEligible i ]
                      _              -> []
-      let mdoc = case nmod of A.NModule _ d -> d; _ -> Nothing
+      let mdoc = case nmod of I.NModule _ d -> d; _ -> Nothing
       impsRes <- resolveImportHashes mrefs
       case impsRes of
         Left diags -> return (Left diags)
@@ -1205,13 +1205,13 @@ runFrontPasses gopts opts paths env0 parsed srcContent srcBytes resolveImportHas
           -- augmented with current imports' interface hashes. This ensures that
           -- changes in a dependency's public interface are reflected in this
           -- module's interface hash, propagating rebuilds transitively.
-          let selfIfaceBytes  = BL.toStrict $ encode (A.stripDocsNI nmod)
+          let selfIfaceBytes  = BL.toStrict $ encode (I.stripDocsNI nmod)
               depHashesSorted = map snd $ Data.List.sortOn (modNameToString . fst) impsWithHash
               depBytes        = BL.toStrict $ encode depHashesSorted
               ifaceHash       = SHA256.hash (B.append selfIfaceBytes depBytes)
           InterfaceFiles.writeFile (outbase ++ ".ty") srcHash ifaceHash impsWithHash roots mdoc nmod tchecked
 
-          let A.NModule iface mdoc = nmod
+          let I.NModule iface mdoc = nmod
           iff (C.types opts && mn == (modName paths)) $ dump mn "types" (Pretty.print tchecked)
           iff (C.sigs opts && mn == (modName paths)) $ dump mn "sigs" (Acton.Types.prettySigs env mn iface)
 
@@ -1232,7 +1232,7 @@ runFrontPasses gopts opts paths env0 parsed srcContent srcBytes resolveImportHas
                   simplifiedTypeEnv = simp env1 modTypeEnv
               createDirectoryIfMissing True docFileDir
               -- Use parsed (original AST) to preserve docstrings
-              let htmlDoc = DocP.printHtmlDoc (A.NModule simplifiedTypeEnv mdoc) parsed
+              let htmlDoc = DocP.printHtmlDoc (I.NModule simplifiedTypeEnv mdoc) parsed
               writeFile docFile htmlDoc
 
           timeTypeCheck <- getTime Monotonic
@@ -2240,8 +2240,8 @@ nameToString (A.Name _ s) = s
 
 -- | Check whether a NameInfo represents a root-eligible actor.
 -- Used to decide which roots to include in .ty headers and root generation.
-rootEligible :: A.NameInfo -> Bool
-rootEligible (A.NAct [] p k _ _) = case (p,k) of
+rootEligible :: I.NameInfo -> Bool
+rootEligible (I.NAct [] p k _ _) = case (p,k) of
                                       (A.TNil{}, A.TRow _ _ _ t A.TNil{}) ->
                                         prstr t == "Env" || prstr t == "None" ||
                                         prstr t == "__builtin__.Env" || prstr t == "__builtin__.None"

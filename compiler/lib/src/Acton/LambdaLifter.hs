@@ -21,6 +21,7 @@ import Acton.Names
 import Acton.Builtin
 import Acton.Prim
 import Acton.Printer
+import Acton.NameInfo
 import Acton.Env
 import Acton.QuickType
 import Acton.Subst
@@ -459,7 +460,7 @@ instance Conv NameInfo where
     conv ni                             = ni
 
 instance Conv QBind where
-    conv (Quant tv cs)                  = Quant tv (conv cs)
+    conv (QBind tv cs)                  = QBind tv (conv cs)
 
 instance Conv WTCon where
     conv (w,c)                          = (w, conv c)
