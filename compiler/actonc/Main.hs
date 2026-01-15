@@ -45,6 +45,7 @@ import Acton.Compile
 import Utils
 import qualified Pretty
 import qualified InterfaceFiles
+import qualified PkgCommands
 
 import Control.Applicative
 import Control.Concurrent.Async
@@ -119,9 +120,16 @@ main = do
           C.CmdOpt gopts (C.Test tcmd)        -> runTests gopts tcmd
           C.CmdOpt gopts C.Fetch             -> fetchCommand gopts
           C.CmdOpt gopts C.PkgShow           -> pkgShow gopts
+          C.CmdOpt gopts (C.PkgAdd opts)     -> PkgCommands.pkgAddCommand gopts opts
+          C.CmdOpt gopts (C.PkgRemove opts)  -> PkgCommands.pkgRemoveCommand gopts opts
+          C.CmdOpt gopts C.PkgUpgrade        -> PkgCommands.pkgUpgradeCommand gopts
+          C.CmdOpt gopts C.PkgUpdate         -> PkgCommands.pkgUpdateCommand gopts
+          C.CmdOpt gopts (C.PkgSearch opts)  -> PkgCommands.pkgSearchCommand gopts opts
           C.CmdOpt gopts (C.BuildSpecCmd o)   -> buildSpecCommand o
           C.CmdOpt gopts (C.Cloud opts)       -> undefined
           C.CmdOpt gopts (C.Doc opts)         -> printDocs gopts opts
+          C.CmdOpt gopts (C.ZigPkgAdd opts)  -> PkgCommands.zigPkgAddCommand gopts opts
+          C.CmdOpt gopts (C.ZigPkgRemove opts) -> PkgCommands.zigPkgRemoveCommand gopts opts
           C.CmdOpt gopts C.Version            -> printVersion
           C.CompileOpt nms gopts opts         -> case takeExtension (head nms) of
                                                    ".act" -> buildFile gopts (applyGlobalOpts gopts opts) (head nms)

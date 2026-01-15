@@ -35,6 +35,9 @@ dependencies:
   - filelock
   - filepath
   - fsnotify
+  - http-client
+  - http-client-tls
+  - http-types
   - megaparsec
   - prettyprinter
   - pretty-show
@@ -52,11 +55,14 @@ dependencies:
   - timeit
   - unix
   - unordered-containers
+  - regex-tdfa
   
 executables:
   actonc:
     main:                Main.hs
     source-dirs:         .
+    other-modules:
+      - PkgCommands
     ghc-options:
       - -threaded
       - -rtsopts
@@ -77,6 +83,13 @@ tests:
       - -with-rtsopts=-N
   incremental:
     main:                test_incremental.hs
+    source-dirs:         .
+    ghc-options:
+      - -threaded
+      - -rtsopts
+      - -with-rtsopts=-N
+  test_actonc_online:
+    main:                test_online.hs
     source-dirs:         .
     ghc-options:
       - -threaded

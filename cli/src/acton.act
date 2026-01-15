@@ -2112,7 +2112,6 @@ actor main(env):
         p_zigpkg_add = p_zigpkg.add_cmd("add", "Add Zig package dependency", _cmd_zigpkg_add)
         p_zigpkg_add.add_arg("url", "URL of dependency", True, "?")
         p_zigpkg_add.add_arg("name", "Name of dependency", True, "?")
-        p_zigpkg_add.add_option("hash", "str", "?", "", "Hash of dependency")
         p_zigpkg_add.add_option("artifact", "strlist", "+", [], "Library artifact to link with")
 
         p_zigpkg_rm = p_zigpkg.add_cmd("remove", "Remove Zig package dependency", _cmd_zigpkg_rm)

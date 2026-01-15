@@ -20,6 +20,7 @@ dependencies:
   - async
   - base
   - aeson
+  - aeson-pretty
   - binary
   - bytestring
   - base16-bytestring
