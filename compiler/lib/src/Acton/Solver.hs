@@ -1617,7 +1617,7 @@ improve env te tt eq cs
                                              (eq',cs') <- solveDots env mutC selC selP cs
                                              simplify' env te tt (eq'++eq) cs'
   | not $ null redSeal                  = do --traceM ("  *removing redundant Seal constraints on: " ++ prstrs redSeal)
-                                             return (cs \\ map (Seal (DfltInfo NoLoc 110 Nothing []) [] . tUni) redSeal, eq)
+                                             return (filterOut redSeal cs, eq)
   | otherwise                           = do --traceM ("  *improvement done " ++ show (length cs))
                                              return (cs, eq)
   where info                            = varinfo cs
@@ -1803,6 +1803,10 @@ remove ws (Imply i w q cs0 : cs)
   | otherwise                           = Imply i w q cs1 : remove ws cs
   where cs1                             = remove ws cs0
 remove ws (c : cs)                      = c : remove ws cs
+
+filterOut vs cs                         = filter preserve cs
+  where preserve (Seal _ _ (TUni _ v))  = v `notElem` vs
+        preserve _                      = True
 
 
 ----------------------------------------------------------------------------------------------------------------------

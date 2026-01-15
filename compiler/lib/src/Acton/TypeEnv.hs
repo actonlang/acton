@@ -80,7 +80,7 @@ data Constraint = Cast  {info :: ErrInfo, scope :: QScope, type1 :: Type, type2 
                 | Mut   {info :: ErrInfo, scope :: QScope, type1 :: Type, name1 :: Name, type2 :: Type}
                 | Seal  {info :: ErrInfo, scope :: QScope, type1 :: Type}
                 | Imply {info :: ErrInfo, wit :: Name, binder :: QBinds, scoped :: Constraints}
-                deriving (Eq,Show,Read)
+                deriving (Show,Read)
 
 type Constraints = [Constraint]
 
@@ -91,13 +91,13 @@ data Quant      = Quant TVar [WTCon] deriving (Eq,Show,Read)
 qscope q        = [ tv | Quant tv _ <- q ]
 
 instance HasLoc Constraint where
-      loc (Cast info q t1 t2) = getLoc [loc info, loc t1, loc t2]
-      loc (Sub info _ q t1 t2) = getLoc [loc info, loc t1, loc t2]
-      loc (Proto info _ q t1 _) = getLoc [loc info, loc t1]
-      loc (Sel info _ q t1  n1 t2) = getLoc [loc info, loc t1, loc n1, loc t2]
-      loc (Mut info q t1  n1 t2) = getLoc [loc info, loc t1, loc n1, loc t2]
-      loc (Seal info q t1) = getLoc [loc info, loc t1]
-      loc (Imply info _ q cs) =  getLoc [loc info, loc cs]
+    loc (Cast info q t1 t2)         = getLoc [loc info, loc t1, loc t2]
+    loc (Sub info _ q t1 t2)        = getLoc [loc info, loc t1, loc t2]
+    loc (Proto info _ q t1 _)       = getLoc [loc info, loc t1]
+    loc (Sel info _ q t1  n1 t2)    = getLoc [loc info, loc t1, loc n1, loc t2]
+    loc (Mut info q t1  n1 t2)      = getLoc [loc info, loc t1, loc n1, loc t2]
+    loc (Seal info q t1)            = getLoc [loc info, loc t1]
+    loc (Imply info _ q cs)         = getLoc [loc info, loc cs]
 
 instance Pretty Constraint where
     pretty (Cast _ q t1 t2)         = prettyQuant q <+> pretty t1 <+> text "<" <+> pretty t2
@@ -131,31 +131,6 @@ instance UFree Constraint where
 instance UFree Quant where
     ufree (Quant v cs)              = ufree cs
 
-closePolVars                            :: ([TUni],[TUni]) -> Constraints -> ([TUni],[TUni])
-closePolVars pvs cs
-  | polnull (pvs' `polminus` pvs)       = pvs'
-  | otherwise                           = closePolVars pvs' cs'
-  where
-    (pvs',cs')                          = boundvs pvs cs
-
-    boundvs pn []                        = (pn, [])
-    boundvs pn (Cast _ _ t (TUni _ v) : cs)
-      | v `elem` fst pn                 = boundvs (polvars t `polcat` pn) cs
-    boundvs pn (Sub _ _ _ t (TUni _ v) : cs)
-      | v `elem` fst pn                 = boundvs (polvars t `polcat` pn) cs
-    boundvs pn (Cast _ _ (TUni _ v) t : cs)
-      | v `elem` snd pn                 = boundvs (polneg (polvars t) `polcat` pn) cs
-    boundvs pn (Sub _ _ _ (TUni _ v) t : cs)
-      | v `elem` snd pn                 = boundvs (polneg (polvars t) `polcat` pn) cs
-    boundvs pn (Proto _ _ _ (TUni _ v) p : cs)
-      | v `elem` snd pn                 = boundvs (polneg (polvars p) `polcat` pn) cs
-    boundvs pn (Sel _ _ _ (TUni _ v) _ t : cs)
-      | v `elem` snd pn                 = boundvs (polneg (polvars t) `polcat` pn) cs
-    boundvsboundvs pn (Mut _ _ (TUni _ v) _ t : cs)
-      | v `elem` (fst pn ++ snd pn)     = boundvs (invvars t `polcat` pn) cs
-    bnds pn (c : cs)                    = let (pn',cs') = boundvs pn cs in (pn', c:cs')
-
-
 instance Tailvars Quant where
     tailvars (Quant v cs)           = tailvars cs
 
@@ -179,6 +154,18 @@ instance Vars Constraint where
 
 instance Vars Quant where
     freeQ (Quant tv ps)             = freeQ ps
+
+instance UWild Quant where
+    uwild (Quant v cs)              = Quant v (uwild cs)
+
+instance UWild Constraint where
+    uwild (Cast info q t1 t2)       = Cast (uwild info) (uwild q) (uwild t1) (uwild t2)
+    uwild (Sub info w q t1 t2)      = Sub (uwild info) w (uwild q) (uwild t1) (uwild t2)
+    uwild (Proto info w q t p)      = Proto (uwild info) w (uwild q) (uwild t) (uwild p)
+    uwild (Sel info w q t1 n t2)    = Sel (uwild info) w (uwild q) (uwild t1) n (uwild t2)
+    uwild (Mut info q t1 n t2)      = Mut (uwild info) (uwild q) (uwild t1) n (uwild t2)
+    uwild (Seal info q t)           = Seal (uwild info) (uwild q) (uwild t)
+    uwild (Imply info w q cs)       = Imply (uwild info) w (uwild q) (uwild cs)
 
 
 closeDepVars vs cs
@@ -207,17 +194,29 @@ closeDepVars vs cs
         typarams _                  = []
 
 
-instance UWild Quant where
-    uwild (Quant v cs)              = Quant v (uwild cs)
+closePolVars                        :: ([TUni],[TUni]) -> Constraints -> ([TUni],[TUni])
+closePolVars pvs cs
+  | polnull (pvs' `polminus` pvs)   = pvs'
+  | otherwise                       = closePolVars pvs' cs'
+  where
+    (pvs',cs')                      = boundvs pvs cs
 
-instance UWild Constraint where
-    uwild (Cast info q t1 t2)       = Cast (uwild info) (uwild q) (uwild t1) (uwild t2)
-    uwild (Sub info w q t1 t2)      = Sub (uwild info) w (uwild q) (uwild t1) (uwild t2)
-    uwild (Proto info w q t p)      = Proto (uwild info) w (uwild q) (uwild t) (uwild p)
-    uwild (Sel info w q t1 n t2)    = Sel (uwild info) w (uwild q) (uwild t1) n (uwild t2)
-    uwild (Mut info q t1 n t2)      = Mut (uwild info) (uwild q) (uwild t1) n (uwild t2)
-    uwild (Seal info q t)           = Seal (uwild info) (uwild q) (uwild t)
-    uwild (Imply info w q cs)       = Imply (uwild info) w (uwild q) (uwild cs)
+    boundvs pn []                   = (pn, [])
+    boundvs pn (Cast _ _ t (TUni _ v) : cs)
+      | v `elem` fst pn             = boundvs (polvars t `polcat` pn) cs
+    boundvs pn (Sub _ _ _ t (TUni _ v) : cs)
+      | v `elem` fst pn             = boundvs (polvars t `polcat` pn) cs
+    boundvs pn (Cast _ _ (TUni _ v) t : cs)
+      | v `elem` snd pn             = boundvs (polneg (polvars t) `polcat` pn) cs
+    boundvs pn (Sub _ _ _ (TUni _ v) t : cs)
+      | v `elem` snd pn             = boundvs (polneg (polvars t) `polcat` pn) cs
+    boundvs pn (Proto _ _ _ (TUni _ v) p : cs)
+      | v `elem` snd pn             = boundvs (polneg (polvars p) `polcat` pn) cs
+    boundvs pn (Sel _ _ _ (TUni _ v) _ t : cs)
+      | v `elem` snd pn             = boundvs (polneg (polvars t) `polcat` pn) cs
+    boundvsboundvs pn (Mut _ _ (TUni _ v) _ t : cs)
+      | v `elem` (fst pn ++ snd pn) = boundvs (invvars t `polcat` pn) cs
+    bnds pn (c : cs)                = let (pn',cs') = boundvs pn cs in (pn', c:cs')
 
 
 headvar (Proto _ w q (TUni _ u) p)    = u
@@ -235,7 +234,6 @@ headvar (Sel _ w q (TUni _ u) n t)    = u
 headvar (Mut _ q (TUni _ u) n t)      = u
 
 headvar (Seal _ q (TUni _ u))         = u
-
 
 
 
