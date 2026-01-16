@@ -41,9 +41,16 @@ data Command        = New NewOptions
                     | Test TestCommand
                     | Fetch
                     | PkgShow
+                    | PkgAdd PkgAddOptions
+                    | PkgRemove PkgRemoveOptions
+                    | PkgUpgrade
+                    | PkgUpdate
+                    | PkgSearch PkgSearchOptions
                     | BuildSpecCmd BuildSpecCommand
                     | Cloud CloudOptions
                     | Doc DocOptions
+                    | ZigPkgAdd ZigPkgAddOptions
+                    | ZigPkgRemove ZigPkgRemoveOptions
                     | Version
                     deriving Show
 
@@ -127,6 +134,33 @@ data TestOptions = TestOptions
     , testNames        :: [String]
     } deriving Show
 
+data PkgAddOptions = PkgAddOptions
+    { pkgAddName     :: String
+    , pkgAddUrl      :: String
+    , pkgAddRepoUrl  :: String
+    , pkgAddRepoRef  :: String
+    , pkgAddPkgName  :: String
+    , pkgAddHash     :: String
+    } deriving Show
+
+data PkgRemoveOptions = PkgRemoveOptions
+    { pkgRemoveName :: String
+    } deriving Show
+
+data PkgSearchOptions = PkgSearchOptions
+    { pkgSearchTerms :: [String]
+    } deriving Show
+
+data ZigPkgAddOptions = ZigPkgAddOptions
+    { zigPkgAddUrl       :: String
+    , zigPkgAddName      :: String
+    , zigPkgAddArtifacts :: [String]
+    } deriving Show
+
+data ZigPkgRemoveOptions = ZigPkgRemoveOptions
+    { zigPkgRemoveName :: String
+    } deriving Show
+
 --------------------------------------------------------------------
 -- Internal stuff
 
@@ -137,6 +171,7 @@ cmdLineParser       = hsubparser
                         <> command "test"    (info (CmdOpt <$> globalOptions <*> (Test <$> testCommand)) (progDesc "Build and run project tests"))
                         <> command "fetch"   (info (CmdOpt <$> globalOptions <*> pure Fetch) (progDesc "Fetch project dependencies (offline prep)"))
                         <> command "pkg"     (info (CmdOpt <$> globalOptions <*> pkgSubcommands) (progDesc "Package/dependency commands"))
+                        <> command "zig-pkg" (info (CmdOpt <$> globalOptions <*> zigPkgSubcommands) (progDesc "Zig package dependency commands"))
                         <> command "spec"    (info (CmdOpt <$> globalOptions <*> (BuildSpecCmd <$> buildSpecCommand)) (progDesc "Inspect or update build specification"))
                         <> command "cloud"   (info (CmdOpt <$> globalOptions <*> (Cloud <$> cloudOptions)) (progDesc "Run an Acton project in the cloud"))
                         <> command "doc"     (info (CmdOpt <$> globalOptions <*> (Doc <$> docOptions)) (progDesc "Show type and docstring info"))
@@ -226,8 +261,46 @@ compileOptions = CompileOptions
 
 pkgSubcommands :: Parser Command
 pkgSubcommands = hsubparser
-  (  command "show" (info (pure PkgShow) (progDesc "Show dependency tree with overrides"))
+  (  command "show"    (info (pure PkgShow) (progDesc "Show dependency tree with overrides"))
+  <> command "add"     (info (PkgAdd <$> pkgAddOptions) (progDesc "Add package dependency"))
+  <> command "remove"  (info (PkgRemove <$> pkgRemoveOptions) (progDesc "Remove package dependency"))
+  <> command "upgrade" (info (pure PkgUpgrade) (progDesc "Upgrade (or downgrade) package dependency"))
+  <> command "update"  (info (pure PkgUpdate) (progDesc "Update package index"))
+  <> command "search"  (info (PkgSearch <$> pkgSearchOptions) (progDesc "Search package index"))
   )
+
+pkgAddOptions :: Parser PkgAddOptions
+pkgAddOptions = PkgAddOptions
+    <$> argument str (metavar "NAME" <> help "Name of dependency")
+    <*> strOption (long "url" <> metavar "URL" <> value "" <> help "URL of dependency")
+    <*> strOption (long "repo-url" <> metavar "URL" <> value "" <> help "Git repository URL of dependency")
+    <*> strOption (long "repo-ref" <> metavar "REF" <> value "" <> help "Git ref (branch, tag or SHA) to use")
+    <*> strOption (long "pkg-name" <> metavar "NAME" <> value "" <> help "Package name in index (defaults to NAME)")
+    <*> strOption (long "hash" <> metavar "HASH" <> value "" <> help "Hash of dependency")
+
+pkgRemoveOptions :: Parser PkgRemoveOptions
+pkgRemoveOptions =
+    PkgRemoveOptions <$> argument str (metavar "NAME" <> help "Name of dependency")
+
+pkgSearchOptions :: Parser PkgSearchOptions
+pkgSearchOptions =
+    PkgSearchOptions <$> many (argument str (metavar "TERM" <> help "Search term (regex, ANDed)"))
+
+zigPkgSubcommands :: Parser Command
+zigPkgSubcommands = hsubparser
+  (  command "add"    (info (ZigPkgAdd <$> zigPkgAddOptions) (progDesc "Add Zig package dependency"))
+  <> command "remove" (info (ZigPkgRemove <$> zigPkgRemoveOptions) (progDesc "Remove Zig package dependency"))
+  )
+
+zigPkgAddOptions :: Parser ZigPkgAddOptions
+zigPkgAddOptions = ZigPkgAddOptions
+    <$> argument str (metavar "URL" <> help "URL of dependency")
+    <*> argument str (metavar "NAME" <> help "Name of dependency")
+    <*> many (strOption (long "artifact" <> metavar "NAME" <> help "Library artifact to link with"))
+
+zigPkgRemoveOptions :: Parser ZigPkgRemoveOptions
+zigPkgRemoveOptions =
+    ZigPkgRemoveOptions <$> argument str (metavar "NAME" <> help "Name of dependency")
 
 cloudOptions = CloudOptions
         <$> switch (long "run"          <> help "Help run!")

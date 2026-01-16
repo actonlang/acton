@@ -44,5 +44,7 @@ executables:
       - -with-rtsopts=-A64M
     when:
     - condition: os(linux)
-      ld-options:
-        - -static
+      ghc-options:
+        - -no-pie
+        - -optl-no-pie
+        - -pgml=../tools/ld-wrapper.sh

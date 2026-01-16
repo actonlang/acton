@@ -3,12 +3,12 @@
 import Control.Monad
 import Data.List
 import Data.List.Split
-import Data.Maybe
+import Data.Maybe (catMaybes)
 import Data.Ord
 import Data.Time.Clock.POSIX
 import qualified Data.ByteString.Lazy.Char8 as LBS
 
-import Control.Exception (catch, finally, IOException)
+import Control.Exception (catch, IOException)
 import System.Directory
 import System.Directory.Recursive
 import System.Exit
@@ -23,6 +23,7 @@ import Test.Tasty.ExpectedFailure
 import Test.Tasty.Golden (goldenVsString)
 import Test.Tasty.HUnit
 
+import qualified PkgCommands
 
 -- The default is to build and run each test program with the expectation that
 -- both compilation and running the program is successful as determined by exit
@@ -65,6 +66,7 @@ main = do
       , typeErrorAutoTests
       , parseFlagTests
       , crossCompileTests
+      , pkgCliTests
       ]
   where timeout :: Timeout
         timeout = mkTimeout (30*60*1000000)
@@ -352,6 +354,30 @@ crossCompileTests =
         runActon "build --target x86_64-linux-musl --db" ExitSuccess False "../../test/compiler/hello/"
   , testCase "build hello --target x86_64-windows-gnu" $ do
         runActon "build --target x86_64-windows-gnu" ExitSuccess False "../../test/compiler/hello/"
+  ]
+
+pkgCliTests =
+  testGroup "pkg CLI"
+  [ testCase "parse github repo url" $ do
+        case PkgCommands.parseGithubRepoUrl "https://github.com/actonlang/foo.git#main" of
+          Left err -> assertFailure err
+          Right info -> do
+            assertEqual "owner" "actonlang" (PkgCommands.repoOwner info)
+            assertEqual "repo" "foo" (PkgCommands.repoName info)
+            assertEqual "ref" (Just "main") (PkgCommands.repoRef info)
+  , testCase "pkg search matches prefix" $ do
+        let pkg = PkgCommands.PackageEntry "foo" "desc" "https://github.com/actonlang/foo"
+        ok <- PkgCommands.matchesAllTerms ["foo"] pkg
+        assertBool "prefix matches" ok
+        ok2 <- PkgCommands.matchesAllTerms ["bar"] pkg
+        assertBool "non-prefix does not match" (not ok2)
+  , testCase "decode package index filters invalid entries" $ do
+        let body = "{\"packages\":[{\"name\":\"foo\",\"description\":\"desc\",\"repo_url\":\"https://github.com/actonlang/foo\"},{\"name\":\"bad\"}]}"
+        case PkgCommands.decodePackageIndex (LBS.pack body) of
+          Left err -> assertFailure err
+          Right pkgs -> do
+            assertEqual "one package" 1 (length pkgs)
+            assertEqual "name" "foo" (PkgCommands.pkgName (head pkgs))
   ]
 
 -- Creates testgroup from .act files found in specified directory
