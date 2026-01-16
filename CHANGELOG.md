@@ -137,7 +137,7 @@ ERROR: [error Syntax error]: Empty format specifier after ':'
 - Add ecosystem lift process documentation
 - Add Hashable protocol documentation to Acton Guide
 
-### Testing/CI
+### Testing / CI
 - Support test discovery of actors [#2337]
   - Recognize test actors without needing wrapper functions
   - Compiler generates wrappers automatically for discovered test actors
@@ -148,6 +148,10 @@ ERROR: [error Syntax error]: Empty format specifier after ':'
 - Add self name check for actors [#2317]
 - Add more parser / syntax error test cases [#2308]
 - Stop testing Debian 10 [#2352]
+- Drop Debian 11 from test-linux CI matrix
+  - this means we do not test / support Debian 11 as a OS dist for developing Acton itself
+  - Debian 11 is still a valid run time target for Acton programs
+    - run-linux still covers compiling & running Acton programs on Debian 11
 - Support multiple files for compiler testing framework [#2363]
   - Accumulate environment from modules to support imports
 
