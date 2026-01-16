@@ -522,84 +522,84 @@ instance Vars Equation where
 
 
 reduce                                      :: Env -> Equations -> Constraints -> TypeM Equations
-reduce env_ eq []                           = return eq
-reduce env_ eq (c:cs)                       = do c <- usubst c
+reduce _ eq []                              = return eq
+reduce env0 eq (c:cs)                       = do c <- usubst c
                                                  --traceM ("   reduce " ++ prstr c)
-                                                 eq1 <- reduce' env_ eq c
-                                                 reduce env_ eq1 cs
+                                                 eq1 <- reduce' env0 eq c
+                                                 reduce env0 eq1 cs
 
 reduce'                                     :: Env -> Equations -> Constraint -> TypeM Equations
-reduce' env_ eq c@(Imply i w q cs)          = do cs0 <- collectDeferred
+reduce' env0 eq c@(Imply i w q cs)          = do cs0 <- collectDeferred
                                                  --traceM ("### reduce implication " ++ prstr w ++ ": " ++ prstr q ++ " =>\n" ++ render (nest 8 $ vcat $ map pretty cs))
                                                  eq' <- reduce env1 [] cs
                                                  cs' <- usubst =<< collectDeferred
                                                  when (not $ null cs') $ defer [Imply i w q cs']
                                                  defer cs0
                                                  return $ insertOrMerge [QEqn w q eq'] eq
-  where env1                                = defineTVars q env_
+  where env1                                = defineTVars q env0
 
 reduce' _ eq c@(Cast i env t1 t2)           = do cast' env i t1 t2
                                                  return eq
 
 reduce' _ eq c@(Sub i env w t1 t2)          = sub' env i eq w t1 t2
 
-reduce' env_ eq c@(Proto _ env w TUni{} p)  = do defer [c]; return eq
+reduce' _ eq c@(Proto _ env w TUni{} p)     = do defer [c]; return eq
 
-reduce' env_ eq c@(Proto _ env w t@(TVar _ tv) p)
-  | [wit] <- witSearch                      = do (eq',cs) <- solveProto env_ wit w t p
-                                                 reduce env_ (eq'++eq) cs
-  | [wit] <- witSearch'                     = do (eq',cs) <- solveProto env_ wit w (tCon tc) p
-                                                 reduce env_ (eq'++eq) cs
-  where witSearch                           = findWitness env_ t p
-        tc                                  = findTVBound env_ tv
-        witSearch'                          = findWitness env_ (tCon tc) p
+reduce' _ eq c@(Proto _ env w t@(TVar _ tv) p)
+  | [wit] <- witSearch                      = do (eq',cs) <- solveProto env wit w t p
+                                                 reduce env (eq'++eq) cs
+  | [wit] <- witSearch'                     = do (eq',cs) <- solveProto env wit w (tCon tc) p
+                                                 reduce env (eq'++eq) cs
+  where witSearch                           = findWitness env t p
+        tc                                  = findTVBound env tv
+        witSearch'                          = findWitness env (tCon tc) p
 
-reduce' env_ eq c@(Proto _ env w t@(TCon _ tc) p)
+reduce' _ eq c@(Proto _ env w t@(TCon _ tc) p)
   | tcname p == qnIdentity,
-    isActor env_ (tcname tc)                = do let e = eCall (eQVar primIdentityActor) []
+    isActor env (tcname tc)                 = do let e = eCall (eQVar primIdentityActor) []
                                                  return (Eqn w (proto2type t p) e : eq)
-  | [wit] <- witSearch                      = do (eq',cs) <- solveProto env_ wit w t p
-                                                 reduce env_ (eq'++eq) cs
-  where witSearch                           = findWitness env_ t p
+  | [wit] <- witSearch                      = do (eq',cs) <- solveProto env wit w t p
+                                                 reduce env (eq'++eq) cs
+  where witSearch                           = findWitness env t p
 
-reduce' env_ eq c@(Proto _ env w t@(TFX _ tc) p)
-  | [wit] <- witSearch                      = do (eq',cs) <- solveProto env_ wit w t p
-                                                 reduce env_ (eq'++eq) cs
-  where witSearch                           = findWitness env_ t p
+reduce' _ eq c@(Proto _ env w t@(TFX _ tc) p)
+  | [wit] <- witSearch                      = do (eq',cs) <- solveProto env wit w t p
+                                                 reduce env (eq'++eq) cs
+  where witSearch                           = findWitness env t p
 
-reduce' env_ eq c@(Proto info env w t@(TOpt _ t') p)
+reduce' _ eq c@(Proto info env w t@(TOpt _ t') p)
   | tcname p == qnEq                        = do w' <- newWitness
                                                  let e = eCall (tApp (eQVar primEqOpt) [t']) [eVar w']
-                                                 reduce env_ (Eqn w (proto2type t p) e : eq) [Proto info env w' t' p]
+                                                 reduce env (Eqn w (proto2type t p) e : eq) [Proto info env w' t' p]
 
-reduce' env_ eq c@(Proto _ env w t@(TNone _) p)
+reduce' _ eq c@(Proto _ env w t@(TNone _) p)
   | tcname p == qnEq                        = return (Eqn w (proto2type t p) (eQVar primWEqNone) : eq)
 
-reduce' env_ eq c@(Sel _ env w TUni{} n _)  = do defer [c]; return eq
+reduce' _ eq c@(Sel _ env w TUni{} n _)     = do defer [c]; return eq
 
-reduce' env_ eq c@(Sel _ env w (TVar _ tv) n _)
-  | Just wsc <- attrSearch                  = do (eq',cs) <- solveSelAttr env_ wsc c
-                                                 reduce env_ (eq'++eq) cs
-  | Just p <- protoSearch                   = do (eq',cs) <- solveSelProto env_ p c
-                                                 reduce env_ (eq'++eq) cs
+reduce' _ eq c@(Sel _ env w (TVar _ tv) n _)
+  | Just wsc <- attrSearch                  = do (eq',cs) <- solveSelAttr env wsc c
+                                                 reduce env (eq'++eq) cs
+  | Just p <- protoSearch                   = do (eq',cs) <- solveSelProto env p c
+                                                 reduce env (eq'++eq) cs
   | otherwise                               = tyerr n "Attribute not found"
-  where attrSearch                          = findTVAttr env_ tv n
-        protoSearch                         = findProtoByAttr env_ (NoQ $ tvname tv) n
+  where attrSearch                          = findTVAttr env tv n
+        protoSearch                         = findProtoByAttr env (NoQ $ tvname tv) n
 
-reduce' env_ eq c@(Sel _ env w (TCon _ tc) n _)
-  | Just wsc <- attrSearch                  = do (eq',cs) <- solveSelAttr env_ wsc c
-                                                 reduce env_ (eq'++eq) cs
-  | Just p <- protoSearch                   = do (eq',cs) <- solveSelProto env_ p c
-                                                 reduce env_ (eq'++eq) cs
+reduce' _ eq c@(Sel _ env w (TCon _ tc) n _)
+  | Just wsc <- attrSearch                  = do (eq',cs) <- solveSelAttr env wsc c
+                                                 reduce env (eq'++eq) cs
+  | Just p <- protoSearch                   = do (eq',cs) <- solveSelProto env p c
+                                                 reduce env (eq'++eq) cs
   | otherwise                               = tyerr n "Attribute not found"
-  where attrSearch                          = findAttr env_ tc n
-        protoSearch                         = findProtoByAttr env_ (tcname tc) n
+  where attrSearch                          = findAttr env tc n
+        protoSearch                         = findProtoByAttr env (tcname tc) n
 
 
-reduce' env_ eq c@(Sel info env w t1@(TTuple _ _ TUni{}) n t2)
+reduce' _ eq c@(Sel info env w t1@(TTuple _ _ TUni{}) n t2)
                                             = do defer [c]; return eq
 
-reduce' env_ eq c@(Sel info env w t1@(TTuple _ _ r) n t2)
+reduce' _ eq c@(Sel info env w t1@(TTuple _ _ r) n t2)
   | n `elem` valueKWs                       = do let e = eLambda [(px0,t1)] (eDot (eVar px0) n)
                                                  return (Eqn w (wFun t1 t2) e : eq)
   | otherwise                               = do --traceM ("### Sel " ++ prstr c)
@@ -607,44 +607,44 @@ reduce' env_ eq c@(Sel info env w t1@(TTuple _ _ r) n t2)
   where select (TRow _ _ n' t r)
           | n == n'                         = do w' <- newWitness
                                                  let e = eLambda [(px0,t1)] (eDot (eCallVar w' [eVar px0]) n)
-                                                 reduce env_ (Eqn w (wFun t1 t2) e : eq) [Sub info env w' t t2]
+                                                 reduce env (Eqn w (wFun t1 t2) e : eq) [Sub info env w' t t2]
           | otherwise                       = select r
         select (TStar _ _ r)                = do w' <- newWitness
                                                  let e = eLambda [(px0,t1)] (eCallVar w' [eDot (eVar px0) attrKW])
-                                                 reduce env_ (Eqn w (wFun t1 t2) e : eq) [Sel info env w' (tTupleK r) n t2]
-        select (TNil _ _)                   = kwdNotFound0 env_ info n
+                                                 reduce env (Eqn w (wFun t1 t2) e : eq) [Sel info env w' (tTupleK r) n t2]
+        select (TNil _ _)                   = kwdNotFound0 env info n
 
 --  lambda (x:(a:int,b:int,**(c:int))): x.b  ==>  lambda x: (b=x.b, a=x.a, KW=x.KW).b            ==>  lambda x: x.b
 --  lambda (x:(a:int,b:int,**(c:int))): x.c  ==>  lambda x: (c=x.KW.x, a=x.a, b=x.b, KW=x.KW).c  ==>  lambda x: x.KW.c
 
-reduce' env_ eq c@(Mut _ env TUni{} n _)    = do defer [c]; return eq
+reduce' _ eq c@(Mut _ env TUni{} n _)       = do defer [c]; return eq
 
-reduce' env_ eq c@(Mut _ env (TVar _ tv) n _)
-  | Just wsc <- attrSearch                  = do solveMutAttr env_ wsc c
+reduce' _ eq c@(Mut _ env (TVar _ tv) n _)
+  | Just wsc <- attrSearch                  = do solveMutAttr env wsc c
                                                  return eq
   | otherwise                               = tyerr n "Attribute not found:"
-  where attrSearch                          = findTVAttr env_ tv n
+  where attrSearch                          = findTVAttr env tv n
 
-reduce' env_ eq c@(Mut _ env (TCon _ tc) n _)
-  | Just wsc <- attrSearch                  = do solveMutAttr env_ wsc c
+reduce' _ eq c@(Mut _ env (TCon _ tc) n _)
+  | Just wsc <- attrSearch                  = do solveMutAttr env wsc c
                                                  return eq
   | otherwise                               = tyerr n "Attribute not found:"
-  where attrSearch                          = findAttr env_ tc n
+  where attrSearch                          = findAttr env tc n
 
-reduce' env_ eq c@(Seal _ env TUni{})         = do defer [c]; return eq
+reduce' _ eq c@(Seal _ env TUni{})          = do defer [c]; return eq
 
-reduce' env_ eq c@(Seal _ env t@(TVar _ tv))  = return eq
-reduce' env_ eq (Seal info env t@(TCon _ tc))
---  | castable env_ t tObject                 = tyerr t "Leaking actor seal:"                       -- when we start prohibit sharing of mutable data
-  | otherwise                               = reduce env_ eq (map (Seal info env) $ tcargs tc)
-reduce' env_ eq (Seal _ env t@(TFX _ fx))
+reduce' _ eq c@(Seal _ env t@(TVar _ tv))   = return eq
+reduce' _ eq (Seal info env t@(TCon _ tc))
+--  | castable env t tObject                  = tyerr t "Leaking actor seal:"                       -- when we start prohibit sharing of mutable data
+  | otherwise                               = reduce env eq (map (Seal info env) $ tcargs tc)
+reduce' _ eq (Seal _ env t@(TFX _ fx))
 --  | fx `elem` [FXMut,FXProc]                = tyerr t "Leaking actor seal:"
 --  | fx `elem` [FXProc]                      = tyerr t "Leaking actor seal:"
   | otherwise                               = return eq
-reduce' env_ eq (Seal info env t)           = reduce env_ eq (map (Seal info env) ts)
+reduce' _ eq (Seal info env t)              = reduce env eq (map (Seal info env) ts)
   where ts                                  = leaves t
 
-reduce' env_ eq c                           = noRed0 env_ c
+reduce' env0 eq c                           = noRed0 env0 c
 
 
 solveProto env wit w t p                    = do (cs,t',we) <- instWitness env p wit
