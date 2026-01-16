@@ -88,21 +88,21 @@ type Constraints = [Constraint]
 type QScope     = Env
 
 instance HasLoc Constraint where
-    loc (Cast info q t1 t2)         = getLoc [loc info, loc t1, loc t2]
-    loc (Sub info _ q t1 t2)        = getLoc [loc info, loc t1, loc t2]
-    loc (Proto info _ q t1 _)       = getLoc [loc info, loc t1]
-    loc (Sel info _ q t1  n1 t2)    = getLoc [loc info, loc t1, loc n1, loc t2]
-    loc (Mut info q t1  n1 t2)      = getLoc [loc info, loc t1, loc n1, loc t2]
-    loc (Seal info q t1)            = getLoc [loc info, loc t1]
+    loc (Cast info env t1 t2)       = getLoc [loc info, loc t1, loc t2]
+    loc (Sub info _ env t1 t2)      = getLoc [loc info, loc t1, loc t2]
+    loc (Proto info _ env t1 _)     = getLoc [loc info, loc t1]
+    loc (Sel info _ env t1  n1 t2)  = getLoc [loc info, loc t1, loc n1, loc t2]
+    loc (Mut info env t1  n1 t2)    = getLoc [loc info, loc t1, loc n1, loc t2]
+    loc (Seal info env t1)          = getLoc [loc info, loc t1]
     loc (Imply info _ q cs)         = getLoc [loc info, loc cs]
 
 instance Pretty Constraint where
-    pretty (Cast _ q t1 t2)         = prettyQuant q <+> pretty t1 <+> text "<" <+> pretty t2
-    pretty (Sub _ w q t1 t2)        = pretty w <+> colon <+> prettyQuant q <+> pretty t1 <+> text "<" <+> pretty t2
-    pretty (Proto _ w q t u)        = pretty w <+> colon <+> prettyQuant q <+> pretty t <+> parens (pretty u)
-    pretty (Sel _ w q t1 n t2)      = pretty w <+> colon <+> prettyQuant q <+> pretty t1 <> text "." <> pretty n <+> text "<" <+> pretty t2
-    pretty (Mut _ q t1 n t2)        = prettyQuant q <+> pretty t1 <+> text "." <> pretty n <+> text ">" <+> pretty t2
-    pretty (Seal _ q t)             = prettyQuant q <+> text "$Seal" <+> pretty t
+    pretty (Cast _ env t1 t2)       = prettyQuant env <+> pretty t1 <+> text "<" <+> pretty t2
+    pretty (Sub _ w env t1 t2)      = pretty w <+> colon <+> prettyQuant env <+> pretty t1 <+> text "<" <+> pretty t2
+    pretty (Proto _ w env t u)      = pretty w <+> colon <+> prettyQuant env <+> pretty t <+> parens (pretty u)
+    pretty (Sel _ w env t1 n t2)    = pretty w <+> colon <+> prettyQuant env <+> pretty t1 <> text "." <> pretty n <+> text "<" <+> pretty t2
+    pretty (Mut _ env t1 n t2)      = prettyQuant env <+> pretty t1 <+> text "." <> pretty n <+> text ">" <+> pretty t2
+    pretty (Seal _ env t)           = prettyQuant env <+> text "$Seal" <+> pretty t
     pretty (Imply _ w q cs)
       | length cs < 4               = pretty w <+> colon <+> pretty q <+> text "=>" <+> braces (commaSep pretty cs)
       | otherwise                   = pretty w <+> colon <+> pretty q <+> text "=>" $+$ nest 4 (vcat $ map pretty cs)
@@ -111,39 +111,39 @@ prettyQuant env                     = brackets (commaSep pretty q) <+> text "=>"
   where q                           = [] :: QBinds      -- ...
 
 instance UFree Constraint where
-    ufree (Cast info q t1 t2)       = ufree t1 ++ ufree t2
-    ufree (Sub info w q t1 t2)      = ufree t1 ++ ufree t2
-    ufree (Proto info w q t p)      = ufree t ++ ufree p
-    ufree (Sel info w q t1 n t2)    = ufree t1 ++ ufree t2
-    ufree (Mut info q t1 n t2)      = ufree t1 ++ ufree t2
-    ufree (Seal info q t)           = ufree t
+    ufree (Cast info env t1 t2)     = ufree t1 ++ ufree t2
+    ufree (Sub info w env t1 t2)    = ufree t1 ++ ufree t2
+    ufree (Proto info w env t p)    = ufree t ++ ufree p
+    ufree (Sel info w env t1 n t2)  = ufree t1 ++ ufree t2
+    ufree (Mut info env t1 n t2)    = ufree t1 ++ ufree t2
+    ufree (Seal info env t)         = ufree t
     ufree (Imply info w q cs)       = ufree cs
 
 instance Tailvars Constraint where
-    tailvars (Cast _ q t1 t2)       = tailvars t1 ++ tailvars t2
-    tailvars (Sub _ w q t1 t2)      = tailvars t1 ++ tailvars t2
-    tailvars (Proto _ w q t p)      = tailvars t ++ tailvars p
-    tailvars (Sel _ w q t1 n t2)    = tailvars t1 ++ tailvars t2
-    tailvars (Mut _ q t1 n t2)      = tailvars t1 ++ tailvars t2
-    tailvars (Seal _ q t)           = tailvars t
+    tailvars (Cast _ env t1 t2)     = tailvars t1 ++ tailvars t2
+    tailvars (Sub _ w env t1 t2)    = tailvars t1 ++ tailvars t2
+    tailvars (Proto _ w env t p)    = tailvars t ++ tailvars p
+    tailvars (Sel _ w env t1 n t2)  = tailvars t1 ++ tailvars t2
+    tailvars (Mut _ env t1 n t2)    = tailvars t1 ++ tailvars t2
+    tailvars (Seal _ env t)         = tailvars t
     tailvars (Imply _ w q cs)       = tailvars cs
 
 instance Vars Constraint where
-    freeQ (Cast _ q t1 t2)          = freeQ t1 ++ freeQ t2
-    freeQ (Sub _ w q t1 t2)         = freeQ t1 ++ freeQ t2
-    freeQ (Proto _ w q t p)         = freeQ t ++ freeQ p
-    freeQ (Sel _ w q t1 n t2)       = freeQ t1 ++ freeQ t2
-    freeQ (Mut _ q t1 n t2)         = freeQ t1 ++ freeQ t2
-    freeQ (Seal _ q t)              = freeQ t
+    freeQ (Cast _ env t1 t2)        = freeQ t1 ++ freeQ t2
+    freeQ (Sub _ w env t1 t2)       = freeQ t1 ++ freeQ t2
+    freeQ (Proto _ w env t p)       = freeQ t ++ freeQ p
+    freeQ (Sel _ w env t1 n t2)     = freeQ t1 ++ freeQ t2
+    freeQ (Mut _ env t1 n t2)       = freeQ t1 ++ freeQ t2
+    freeQ (Seal _ env t)            = freeQ t
     freeQ (Imply _ w q cs)          = freeQ cs
 
 instance UWild Constraint where
-    uwild (Cast info q t1 t2)       = Cast info q (uwild t1) (uwild t2)
-    uwild (Sub info w q t1 t2)      = Sub info w q (uwild t1) (uwild t2)
-    uwild (Proto info w q t p)      = Proto info w q (uwild t) (uwild p)
-    uwild (Sel info w q t1 n t2)    = Sel info w q (uwild t1) n (uwild t2)
-    uwild (Mut info q t1 n t2)      = Mut info q (uwild t1) n (uwild t2)
-    uwild (Seal info q t)           = Seal info q (uwild t)
+    uwild (Cast info env t1 t2)     = Cast info env (uwild t1) (uwild t2)
+    uwild (Sub info w env t1 t2)    = Sub info w env (uwild t1) (uwild t2)
+    uwild (Proto info w env t p)    = Proto info w env (uwild t) (uwild p)
+    uwild (Sel info w env t1 n t2)  = Sel info w env (uwild t1) n (uwild t2)
+    uwild (Mut info env t1 n t2)    = Mut info env (uwild t1) n (uwild t2)
+    uwild (Seal info env t)         = Seal info env (uwild t)
     uwild (Imply info w q cs)       = Imply info w q (uwild cs)
 
 
@@ -152,20 +152,20 @@ closeDepVars vs cs
   | otherwise                       = closeDepVars (vs'++vs) cs
   where vs'                         = concat [ deps c \\ vs | c <- cs, all (`elem` vs) (heads c) ]
 
-        heads (Proto _ w q t _)     = ufree t
-        heads (Cast _ q t _)        = ufree t
-        heads (Sub _ w q t _)       = ufree t
-        heads (Sel _ w q t n _)     = ufree t
-        heads (Mut _ q t n _)       = ufree t
-        heads (Seal _ q t)          = ufree t
+        heads (Proto _ w _ t _)     = ufree t
+        heads (Cast _ _ t _)        = ufree t
+        heads (Sub _ w _ t _)       = ufree t
+        heads (Sel _ w _ t n _)     = ufree t
+        heads (Mut _ _ t n _)       = ufree t
+        heads (Seal _ _ t)          = ufree t
         heads (Imply _ w q cs)      = []
 
-        deps (Proto _ w q _ p)      = ufree p
-        deps (Cast _ q _ t)         = typarams t
-        deps (Sub _ w q _ t)        = typarams t
-        deps (Sel _ w q _ n t)      = ufree t
-        deps (Mut _ q _ n t)        = ufree t
-        deps (Seal _ q _)           = []
+        deps (Proto _ w _ _ p)      = ufree p
+        deps (Cast _ _ _ t)         = typarams t
+        deps (Sub _ w _ _ t)        = typarams t
+        deps (Sel _ w _ _ n t)      = ufree t
+        deps (Mut _ _ _ n t)        = ufree t
+        deps (Seal _ _ _)           = []
         deps (Imply _ w q cs)       = []
 
         typarams (TOpt _ t)         = typarams t
@@ -198,21 +198,21 @@ closePolVars pvs cs
     bnds pn (c : cs)                = let (pn',cs') = boundvs pn cs in (pn', c:cs')
 
 
-headvar (Proto _ w q (TUni _ u) p)    = u
+headvar (Proto _ w _ (TUni _ u) p)    = u
 
-headvar (Cast _ q TVar{} (TUni _ u))  = u
-headvar (Cast _ q (TUni _ u) t)       = u
-headvar (Cast _ q t (TUni _ u))       = u     -- ?
+headvar (Cast _ _ TVar{} (TUni _ u))  = u
+headvar (Cast _ _ (TUni _ u) t)       = u
+headvar (Cast _ _ t (TUni _ u))       = u     -- ?
 
-headvar (Sub _ w q TVar{} (TUni _ u)) = u
-headvar (Sub _ w q (TUni _ u) t)      = u
-headvar (Sub _ w q t (TUni _ u))      = u     -- ?
+headvar (Sub _ w _ TVar{} (TUni _ u)) = u
+headvar (Sub _ w _ (TUni _ u) t)      = u
+headvar (Sub _ w _ t (TUni _ u))      = u     -- ?
 
-headvar (Sel _ w q (TUni _ u) n t)    = u
+headvar (Sel _ w _ (TUni _ u) n t)    = u
 
-headvar (Mut _ q (TUni _ u) n t)      = u
+headvar (Mut _ _ (TUni _ u) n t)      = u
 
-headvar (Seal _ q (TUni _ u))         = u
+headvar (Seal _ _ (TUni _ u))         = u
 
 
 
@@ -361,12 +361,12 @@ instance USubst a => USubst (Maybe a) where
     usubst                          = maybe (return Nothing) (\x -> Just <$> usubst x)
 
 instance USubst Constraint where
-    usubst (Cast info q t1 t2)      = Cast <$> usubst info <*> usubst q <*> usubst t1 <*> usubst t2
-    usubst (Sub info w q t1 t2)     = Sub <$> usubst info <*> return w <*> usubst q <*> usubst t1 <*> usubst t2
-    usubst (Proto info w q t p)     = Proto <$> usubst info <*> return w <*> usubst q <*> usubst t <*> usubst p
-    usubst (Sel info w q t1 n t2)   = Sel <$> usubst info <*> return w <*> usubst q <*>usubst t1 <*> return n <*> usubst t2
-    usubst (Mut info q t1 n t2)     = Mut <$> usubst info <*> usubst q <*> usubst t1 <*> return n <*> usubst t2
-    usubst (Seal info q t)          = Seal <$> usubst info <*> usubst q <*> usubst t
+    usubst (Cast info env t1 t2)    = Cast <$> usubst info <*> return env <*> usubst t1 <*> usubst t2
+    usubst (Sub info w env t1 t2)   = Sub <$> usubst info <*> return w <*> return env <*> usubst t1 <*> usubst t2
+    usubst (Proto info w env t p)   = Proto <$> usubst info <*> return w <*> return env <*> usubst t <*> usubst p
+    usubst (Sel info w env t1 n t2) = Sel <$> usubst info <*> return w <*> return env <*>usubst t1 <*> return n <*> usubst t2
+    usubst (Mut info env t1 n t2)   = Mut <$> usubst info <*> return env <*> usubst t1 <*> return n <*> usubst t2
+    usubst (Seal info env t)        = Seal <$> usubst info <*> return env <*> usubst t
     usubst (Imply info w q cs)      = Imply <$> usubst info <*> return w <*> usubst q <*> usubst cs
 
 instance USubst ErrInfo where
@@ -698,9 +698,9 @@ bindTopWits env eqs0                    = map bind eqs0
 
 qwitRefs env w0 cs                      = refs cs
   where refs []                         = []
-        refs (Sub _ w q t1 t2 : cs)     = Eqn w (tFun0 [t1] t2) (eDot e w) : refs cs
-        refs (Proto _ w q t p : cs)     = Eqn w (proto2type t p) (eDot e w) : refs cs
-        refs (Sel _ w q t1 n t2 : cs)   = Eqn w (tFun0 [t1] t2) (eDot e w) : refs cs
+        refs (Sub _ w _ t1 t2 : cs)     = Eqn w (tFun0 [t1] t2) (eDot e w) : refs cs
+        refs (Proto _ w _ t p : cs)     = Eqn w (proto2type t p) (eDot e w) : refs cs
+        refs (Sel _ w _ t1 n t2 : cs)   = Eqn w (tFun0 [t1] t2) (eDot e w) : refs cs
         refs (c : cs)                   = refs cs
         e                               = eCallP (tApp (eVar w0) (map tVar $ qbound q_tot)) (wit2arg (qualWits env q_tot) PosNil)
         q_tot                           = quantScope0 env
@@ -827,10 +827,10 @@ explainRequirement c                = case info c of
 
                                               else empty) Pretty.<>
                                                (case c of
-                                                   Cast _ q t1 t2 -> intro t1 mbe <+> text "must be a subclass of" <+> pretty t2
-                                                   Sub i _ q t1 t2 -> intro t1 mbe <+> text "must be a subtype of" <+> pretty t2
-                                                   Proto _ _ q t p -> intro t mbe <+> text "must implement" <+> pretty p
-                                                   Sel _ _ q t n t0 -> intro t mbe <+> text "must have an attribute" <+> pretty n <+> text "with type" <+> pretty t0
+                                                   Cast _ _ t1 t2 -> intro t1 mbe <+> text "must be a subclass of" <+> pretty t2
+                                                   Sub i _ _ t1 t2 -> intro t1 mbe <+> text "must be a subtype of" <+> pretty t2
+                                                   Proto _ _ _ t p -> intro t mbe <+> text "must implement" <+> pretty p
+                                                   Sel _ _ _ t n t0 -> intro t mbe <+> text "must have an attribute" <+> pretty n <+> text "with type" <+> pretty t0
                                                                           Pretty.<> text "; no such type is known."
                                                    _ -> pretty c <+> text "must hold")
                                           DeclInfo _ _ n sc msg -> text msg   -- $+$ pretty n <+> text "is inferred to have type"<+> pretty sc
@@ -838,11 +838,11 @@ explainRequirement c                = case info c of
 
 
 useless vs c                           = case c of
-                                             Cast _ q t1 t2 -> f t1 || f t2
-                                             Sub _ _ q t1 t2 -> f t1 || f t2
-                                             Proto _ _ q t p -> f t
-                                             Sel _ _ q t n t0 -> f t || f t0
-                                             Mut _ q t1 n t2 -> True   -- TODO
+                                             Cast _ _ t1 t2 -> f t1 || f t2
+                                             Sub _ _ _ t1 t2 -> f t1 || f t2
+                                             Proto _ _ _ t p -> f t
+                                             Sel _ _ _ t n t0 -> f t || f t0
+                                             Mut _ _ t1 n t2 -> True   -- TODO
                                              Seal _ _ _ -> True        -- TODO
                                              Imply _ _ _ _ -> True   -- TODO
      where f (TUni _ v) = notElem v vs
