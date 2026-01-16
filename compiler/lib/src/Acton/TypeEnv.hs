@@ -85,7 +85,7 @@ data Constraint = Cast  {info :: ErrInfo, scope :: QScope, type1 :: Type, type2 
 
 type Constraints = [Constraint]
 
-type QScope     = [QBind]
+type QScope     = Env
 
 instance HasLoc Constraint where
     loc (Cast info q t1 t2)         = getLoc [loc info, loc t1, loc t2]
@@ -107,44 +107,44 @@ instance Pretty Constraint where
       | length cs < 4               = pretty w <+> colon <+> pretty q <+> text "=>" <+> braces (commaSep pretty cs)
       | otherwise                   = pretty w <+> colon <+> pretty q <+> text "=>" $+$ nest 4 (vcat $ map pretty cs)
 
-prettyQuant []                      = empty
-prettyQuant qs                      = brackets (commaSep pretty qs) <+> text "=>"
+prettyQuant env                     = brackets (commaSep pretty q) <+> text "=>"
+  where q                           = [] :: QBinds      -- ...
 
 instance UFree Constraint where
-    ufree (Cast info q t1 t2)       = ufree info ++ ufree q ++ ufree t1 ++ ufree t2
-    ufree (Sub info w q t1 t2)      = ufree info ++ ufree q ++ ufree t1 ++ ufree t2
-    ufree (Proto info w q t p)      = ufree info ++ ufree q ++ ufree t ++ ufree p
-    ufree (Sel info w q t1 n t2)    = ufree info ++ ufree q ++ ufree t1 ++ ufree t2
-    ufree (Mut info q t1 n t2)      = ufree info ++ ufree q ++ ufree t1 ++ ufree t2
-    ufree (Seal info q t)           = ufree info ++ ufree q ++ ufree t
-    ufree (Imply info w q cs)       = ufree info ++ ufree q ++ ufree cs
+    ufree (Cast info q t1 t2)       = ufree t1 ++ ufree t2
+    ufree (Sub info w q t1 t2)      = ufree t1 ++ ufree t2
+    ufree (Proto info w q t p)      = ufree t ++ ufree p
+    ufree (Sel info w q t1 n t2)    = ufree t1 ++ ufree t2
+    ufree (Mut info q t1 n t2)      = ufree t1 ++ ufree t2
+    ufree (Seal info q t)           = ufree t
+    ufree (Imply info w q cs)       = ufree cs
 
 instance Tailvars Constraint where
-    tailvars (Cast _ q t1 t2)       = tailvars q ++ tailvars t1 ++ tailvars t2
-    tailvars (Sub _ w q t1 t2)      = tailvars q ++ tailvars t1 ++ tailvars t2
-    tailvars (Proto _ w q t p)      = tailvars q ++ tailvars t ++ tailvars p
-    tailvars (Sel _ w q t1 n t2)    = tailvars q ++ tailvars t1 ++ tailvars t2
-    tailvars (Mut _ q t1 n t2)      = tailvars q ++ tailvars t1 ++ tailvars t2
-    tailvars (Seal _ q t)           = tailvars q ++ tailvars t
-    tailvars (Imply _ w q cs)       = tailvars q ++ tailvars cs
+    tailvars (Cast _ q t1 t2)       = tailvars t1 ++ tailvars t2
+    tailvars (Sub _ w q t1 t2)      = tailvars t1 ++ tailvars t2
+    tailvars (Proto _ w q t p)      = tailvars t ++ tailvars p
+    tailvars (Sel _ w q t1 n t2)    = tailvars t1 ++ tailvars t2
+    tailvars (Mut _ q t1 n t2)      = tailvars t1 ++ tailvars t2
+    tailvars (Seal _ q t)           = tailvars t
+    tailvars (Imply _ w q cs)       = tailvars cs
 
 instance Vars Constraint where
-    freeQ (Cast _ q t1 t2)          = freeQ q ++ freeQ t1 ++ freeQ t2
-    freeQ (Sub _ w q t1 t2)         = freeQ q ++ freeQ t1 ++ freeQ t2
-    freeQ (Proto _ w q t p)         = freeQ q ++ freeQ t ++ freeQ p
-    freeQ (Sel _ w q t1 n t2)       = freeQ q ++ freeQ t1 ++ freeQ t2
-    freeQ (Mut _ q t1 n t2)         = freeQ q ++ freeQ t1 ++ freeQ t2
-    freeQ (Seal _ q t)              = freeQ q ++ freeQ t
-    freeQ (Imply _ w q cs)          = freeQ q ++ freeQ cs
+    freeQ (Cast _ q t1 t2)          = freeQ t1 ++ freeQ t2
+    freeQ (Sub _ w q t1 t2)         = freeQ t1 ++ freeQ t2
+    freeQ (Proto _ w q t p)         = freeQ t ++ freeQ p
+    freeQ (Sel _ w q t1 n t2)       = freeQ t1 ++ freeQ t2
+    freeQ (Mut _ q t1 n t2)         = freeQ t1 ++ freeQ t2
+    freeQ (Seal _ q t)              = freeQ t
+    freeQ (Imply _ w q cs)          = freeQ cs
 
 instance UWild Constraint where
-    uwild (Cast info q t1 t2)       = Cast (uwild info) (uwild q) (uwild t1) (uwild t2)
-    uwild (Sub info w q t1 t2)      = Sub (uwild info) w (uwild q) (uwild t1) (uwild t2)
-    uwild (Proto info w q t p)      = Proto (uwild info) w (uwild q) (uwild t) (uwild p)
-    uwild (Sel info w q t1 n t2)    = Sel (uwild info) w (uwild q) (uwild t1) n (uwild t2)
-    uwild (Mut info q t1 n t2)      = Mut (uwild info) (uwild q) (uwild t1) n (uwild t2)
-    uwild (Seal info q t)           = Seal (uwild info) (uwild q) (uwild t)
-    uwild (Imply info w q cs)       = Imply (uwild info) w (uwild q) (uwild cs)
+    uwild (Cast info q t1 t2)       = Cast info q (uwild t1) (uwild t2)
+    uwild (Sub info w q t1 t2)      = Sub info w q (uwild t1) (uwild t2)
+    uwild (Proto info w q t p)      = Proto info w q (uwild t) (uwild p)
+    uwild (Sel info w q t1 n t2)    = Sel info w q (uwild t1) n (uwild t2)
+    uwild (Mut info q t1 n t2)      = Mut info q (uwild t1) n (uwild t2)
+    uwild (Seal info q t)           = Seal info q (uwild t)
+    uwild (Imply info w q cs)       = Imply info w q (uwild cs)
 
 
 closeDepVars vs cs
@@ -584,7 +584,9 @@ instance WellFormed TCon where
                                 NReserved -> nameReserved n
                                 i -> err1 n ("wf: Class or protocol name expected, got " ++ show i)
             s               = qbound q `zip` ts
-            constr u t      = if isProto env (tcname u) then Proto (DfltInfo NoLoc 20 Nothing []) nWild [] t u else Cast (DfltInfo NoLoc 21 Nothing []) [] t (tCon u)
+            constr u t      = if isProto env (tcname u)
+                              then Proto (DfltInfo NoLoc 20 Nothing []) nWild env t u
+                              else Cast (DfltInfo NoLoc 21 Nothing []) env t (tCon u)
 
 wfProto                     :: Env -> TCon -> TypeM (Constraints, Constraints)
 wfProto env (TC n ts)       = do cs <- instQuals env q ts
@@ -648,8 +650,8 @@ instQuals                   :: Env -> QBinds -> [Type] -> TypeM Constraints
 instQuals env q ts          = do let s = qbound q `zip` ts
                                  sequence [ constr (vsubst s (tVar v)) (vsubst s u) | QBind v us <- q, u <- us ]
   where constr t u@(TC n _)
-          | isProto env n   = do w <- newWitness; return $ Proto (DfltInfo NoLoc 24 Nothing []) w [] t u
-          | otherwise       = return $ Cast (DfltInfo NoLoc 25 Nothing []) [] t (tCon u)
+          | isProto env n   = do w <- newWitness; return $ Proto (DfltInfo NoLoc 24 Nothing []) w env t u
+          | otherwise       = return $ Cast (DfltInfo NoLoc 25 Nothing []) env t (tCon u)
 
 wvars                       :: Constraints -> [Expr]
 wvars cs                    = [ eVar v | Proto _ v _ _ _ <- cs ]

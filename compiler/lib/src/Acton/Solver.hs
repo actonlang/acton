@@ -316,7 +316,7 @@ solve' env select hist te tt eq cs
           | isProto env (tcname c)          = do p <- instwildcon env c
                                                  w <- newWitness
                                                  --traceM ("  # trying " ++ prstr v ++ " (" ++ prstr p ++ ")")
-                                                 proceed hist eq (Proto (DfltInfo NoLoc 4 Nothing []) w [] (tUni v) p : cs)
+                                                 proceed hist eq (Proto (DfltInfo NoLoc 4 Nothing []) w env (tUni v) p : cs)
         tryAlt v (TTuple _ _ _)
           | not $ null attrs                = do t <- instwild env KType (tTupleK $ foldr (\n -> kwdRow n tWild) tWild attrs)
                                                  --traceM ("  # trying tuple " ++ prstr v ++ " = " ++ prstr t)
@@ -757,7 +757,7 @@ cast' env info t1@(TFun _ fx1 p1 k1 t1') t2@(TFun _ fx2 p2 k2 t2')
                                                  t1 <- usubst t1
                                                  t2 <- usubst t2
                                                  let (TFun _ fx1 p1 k1 t1', TFun _ fx2 p2 k2 t2') = (t1, t2)
-                                                 reduce env [] (Cast info [] fx1 fx2 : Cast info [] t1' t2' : cs1 ++ cs2)
+                                                 reduce env [] (Cast info env fx1 fx2 : Cast info env t1' t2' : cs1 ++ cs2)
                                                  return ()
 
 cast' env info t1@(TTuple _ p1 k1) t2@(TTuple _ p2 k2)
@@ -817,15 +817,15 @@ cast' env info (TVar _ tv1) (TVar _ tv2)
 cast' env info (TUni _ tv1) (TUni _ tv2)
   | tv1 == tv2                              = return ()
 
-cast' env info t1@(TUni _ tv) t2            = defer [Cast info [] t1 t2]
-cast' env info t1 t2@(TUni _ tv)            = defer [Cast info [] t1 t2]
+cast' env info t1@(TUni _ tv) t2            = defer [Cast info env t1 t2]
+cast' env info t1 t2@(TUni _ tv)            = defer [Cast info env t1 t2]
 
 cast' env info t1@(TVar _ tv) t2            = cast' env info (tCon tc) t2
   where tc                                  = findTVBound env tv
 
 cast' env info t1 (TOpt _ t2)               = cast env info t1 t2                -- Only matches when t1 is NOT a univar
 
-cast' env info t1 t2                        = noRed0 env (Cast info [] t1 t2)
+cast' env info t1 t2                        = noRed0 env (Cast info env t1 t2)
 
 
 castpos                                     :: Env -> ErrInfo -> PosRow -> PosRow -> TypeM (Constraints, [Type])
@@ -846,10 +846,10 @@ castpos env info r1             (TUni _ tv)
 castpos env info (TRow _ _ _ t1 r1) (TRow _ _ _ t2 r2)
                                             = do --traceM (" ## castpos A " ++ prstr t1 ++ " < " ++ prstr t2)
                                                  (cs,ts) <- castpos env info r1 r2
-                                                 return (Cast info [] t1 t2 : cs, ts)
+                                                 return (Cast info env t1 t2 : cs, ts)
 castpos env info (TStar _ _ r1)     (TStar _ _ r2)
                                             = do --traceM (" ## castpos B " ++ prstr (tTupleP r1) ++ " < " ++ prstr (tTupleP r2))
-                                                 return ([Cast info [] (tTupleP r1) (tTupleP r2)], [])
+                                                 return ([Cast info env (tTupleP r1) (tTupleP r2)], [])
 castpos env info TNil{}             TNil{}
                                             = do --traceM (" ## castpos C ")
                                                  return ([], [])
@@ -864,7 +864,7 @@ castpos env info r1@TNil{}          r@(TRow _ _ _ t2 r2)
   | TOpt{} <- t2                            = do --traceM (" ## castpos F Opt ~ " ++ prstr t2)
                                                  castpos env info r1 r2
   | otherwise                               = do --traceM (" ## castpos G Nil ~ " ++ prstr r)
-                                                 posElemNotFound0 env True (Cast info [] r1 r) nWild
+                                                 posElemNotFound0 env True (Cast info env r1 r) nWild
 castpos env info (TRow _ _ _ t1 r1) r2@TNil{}
                                             = do --traceM (" ## castpos H " ++ prstr t1)
                                                  (cs,ts) <- castpos env info r1 r2
@@ -876,8 +876,8 @@ castkwd0 env info [] r1 r2                  = castkwd env info r1 r2
 castkwd0 env info (t1:ts) r1 (TRow _ _ n t2 r2)
                                             = do --traceM (" ## castkwd0 extra pos for " ++ prstr n ++ ": " ++ prstr t1 ++ " < " ++ prstr t2)
                                                  cs <- castkwd0 env info ts r1 r2
-                                                 return (Cast info [] t1 t2 : cs)
-castkwd0 env info ts r1 r2                  = posElemNotFound0 env False (Cast info [] r1 r2) nWild
+                                                 return (Cast info env t1 t2 : cs)
+castkwd0 env info ts r1 r2                  = posElemNotFound0 env False (Cast info env r1 r2) nWild
 
 castkwd                                     :: Env -> ErrInfo -> KwdRow -> KwdRow -> TypeM Constraints
 castkwd env info r1 (TUni _ tv)             = do unif r1
@@ -902,7 +902,7 @@ castkwd env info r1 (TUni _ tv)             = do unif r1
 castkwd env info r1 (TRow _ _ n2 t2 r2)     = do (t1,r1') <- pick r1
                                                  r2 <- usubst r2
                                                  cs <- castkwd env info r1' r2
-                                                 return (Cast info [] t1 t2 : cs)
+                                                 return (Cast info env t1 t2 : cs)
   where pick (TUni _ tv)
           | tv `elem` ufree r2              = conflictingRow tv                     -- use rowTail?
           | otherwise                       = do --traceM (" ## castkwd Var - Row: " ++ prstr (tUni tv) ++ " = " ++ prstr (tRow KRow n2 t2 r2))
@@ -937,7 +937,7 @@ castkwd env info r1 (TStar _ _ r2)          = match r1
           | otherwise                       = do --traceM (" ## castkwd Star - Star: " ++ prstr (tStar KRow r) ++ " = " ++ prstr (tStar KRow r2))
                                                  castkwd env info r r2
         match r1@TNil{}                     = do --traceM (" ## castkwd Nil - Star: " ++ prstr (tNil KRow) ++ " ≠ " ++ prstr (tStar KRow r2))
-                                                 noRed0 env (Cast info [] r1 r2)
+                                                 noRed0 env (Cast info env r1 r2)
 
 castkwd env info r1 r2@TNil{}               = term r1
   where term (TUni _ tv)                    = do --traceM (" ## castkwd Var - Nil: " ++ prstr (tUni tv) ++ " = " ++ prstr (tNil KRow))
@@ -949,7 +949,7 @@ castkwd env info r1 r2@TNil{}               = term r1
         term (TRow _ _ n t r)               = do --traceM (" ## castkwd Row - Nil: " ++ prstr (tRow KRow n t r) ++ " ≠ " ++ prstr (tNil KRow))
                                                  kwdUnexpected info n
         term (TStar _ _ r)                  = do --traceM (" ## castkwd Star - Nil: " ++ prstr (tStar KRow r) ++ " ≠ " ++ prstr (tNil KRow))
-                                                 noRed0 env (Cast info [] r1 r2)
+                                                 noRed0 env (Cast info env r1 r2)
 
 
 
@@ -1002,7 +1002,7 @@ sub' env info eq w t1@(TFun _ fx1 p1 k1 t1') t2@(TFun _ fx2 p2 k2 t2')
                                                  let (TFun _ fx1 p1 k1 t1', TFun _ fx2 p2 k2 t2') = (t1, t2)
                                                      (pp,pk) = (pPar pNames p2, kPar attrKW k2)
                                                      lambda = eLambda [(px0,t1)] $ Lambda l0 pp pk (eCallVar w' [Call l0 (eVar px0) ap ak]) fx1
-                                                 reduce env (Eqn w (wFun t1 t2) lambda : eq) (Cast info [] fx1 fx2 : Sub info w' [] t1' t2':cs1++cs2)
+                                                 reduce env (Eqn w (wFun t1 t2) lambda : eq) (Cast info env fx1 fx2 : Sub info w' env t1' t2':cs1++cs2)
 
 --                     existing            expected
 sub' env info eq w t1@(TTuple _ p1 k1) t2@(TTuple _ p2 k2)
@@ -1030,7 +1030,7 @@ sub' env info eq w (TUni _ tv) t2@TTuple{}  = do t1 <- instwild env KType $ tTup
                                                  sub env info eq w t1 t2
 
 sub' env info eq w t1@TTuple{} t2@(TUni _ tv)
-                                            = do defer [Sub info w [] t1 t2]; return eq        -- Don't let cast solve this by idwit!
+                                            = do defer [Sub info w env t1 t2]; return eq        -- Don't let cast solve this by idwit!
 
 sub' env info eq w t1@(TVar _ tv1) t2@(TVar _ tv2)
   | tv1 == tv2                              = return (idwit env w t1 t2 : eq)
@@ -1039,7 +1039,7 @@ sub' env info eq w t1@(TUni _ tv1) t2@(TUni _ tv2)
   | tv1 == tv2                              = return (idwit env w t1 t2 : eq)
 
 sub' env info eq w t1@(TUni _ tv1) t2@(TUni _ tv2)
-                                            = do defer [Sub info w [] t1 t2]; return eq
+                                            = do defer [Sub info w env t1 t2]; return eq
 
 sub' env info eq w t1 t2                    = do cast env info t1 t2
                                                  return (idwit env w t1 t2 : eq)
@@ -1076,11 +1076,11 @@ subpos env info f i (TRow _ _ _ t1 r1) (TRow _ _ _ t2 r2)
                                             = do --traceM (" ## subpos A " ++ prstr t1 ++ " < " ++ prstr t2)
                                                  (cs,as,es) <- subpos env info f (i+1) r1 r2
                                                  w <- newWitness
-                                                 return (Sub info w [] t1 t2 : cs, PosArg (eCallVar w [f i]) as, es)
+                                                 return (Sub info w env t1 t2 : cs, PosArg (eCallVar w [f i]) as, es)
 subpos env info f i (TStar _ _ r1)     (TStar _ _ r2)
                                             = do --traceM (" ## subpos B " ++ prstr (tTupleP r1) ++ " < " ++ prstr (tTupleP r2))
                                                  w <- newWitness
-                                                 return ([Sub info w [] (tTupleP r1) (tTupleP r2)], PosStar (eCallVar w [f i]), [])
+                                                 return ([Sub info w env (tTupleP r1) (tTupleP r2)], PosStar (eCallVar w [f i]), [])
 subpos env info f i TNil{}             TNil{}
                                             = do --traceM (" ## subpos C ")
                                                  return ([], PosNil, [])
@@ -1097,7 +1097,7 @@ subpos env info f i r1@TNil{}          r@(TRow _ _ _ t2 r2)
                                                  (cs,as,es) <- subpos env info f i r1 r2
                                                  return (cs, PosArg eNone as, es)
   | otherwise                               = do --traceM (" ## subpos G Nil ~ " ++ prstr r)
-                                                 posElemNotFound0 env True (Cast info [] r1 r) nWild
+                                                 posElemNotFound0 env True (Cast info env r1 r) nWild
 subpos env info f i (TRow _ _ _ t1 r1) r2@TNil{}
                                             = do --traceM (" ## subpos H " ++ prstr t1 ++ " = " ++ prstr (f i))
                                                  (cs,as,es) <- subpos env info f (i+1) r1 r2
@@ -1112,8 +1112,8 @@ subkwd0 env info f ((e,t1):es) r1 (TRow _ _ n t2 r2)
                                             = do --traceM (" ## subkwd0 extra pos for " ++ prstr n ++ ": " ++ prstr t1 ++ " < " ++ prstr t2)
                                                  (cs,as) <- subkwd0 env info f es r1 r2
                                                  w <- newWitness
-                                                 return (Sub info w [] t1 t2 : cs, KwdArg n (eCallVar w [e]) as)
-subkwd0 env info f ((e,t1):es) r1 r2        = posElemNotFound0 env False (Cast info [] r1 r2) nWild
+                                                 return (Sub info w env t1 t2 : cs, KwdArg n (eCallVar w [e]) as)
+subkwd0 env info f ((e,t1):es) r1 r2        = posElemNotFound0 env False (Cast info env r1 r2) nWild
 
 subkwd                                      :: Env -> ErrInfo -> (Name -> Expr) -> [Name] -> KwdRow -> KwdRow -> TypeM (Constraints, KwdArg)
 subkwd env info f seen r1 (TUni _ tv)       = do unif f seen r1
@@ -1155,7 +1155,7 @@ subkwd env info f seen r1 (TRow _ _ n2 t2 r2)
           | n /= n2                         = pick f seen r
           | otherwise                       = do --traceM (" ## subkwd Row! - Row: " ++ prstr (tRow KRow n t r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tRow KRow n2 t2 r2))
                                                  w <- newWitness
-                                                 return ([Sub info w [] t t2], eCallVar w [f n])
+                                                 return ([Sub info w env t t2], eCallVar w [f n])
         pick f seen (TStar _ _ r)           = do --traceM (" ## subkwd Star - Row: " ++ prstr (tStar KRow r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tRow KRow n2 t2 r2))
                                                  pick (eDot (f attrKW)) seen r
         pick f seen (TNil _ _)
@@ -1726,24 +1726,24 @@ noDots env vi v                         = null (lookup' v $ selattrs vi) && null
 replace ub lb cs                        = ubs ++ lbs ++ cs'
   where
     (vss,cs')                           = unzip $ map repl cs
-    vs                                  = nub (concat vss)
-    ubs                                 = [ Cast info [] (tUni v) t | v <- vs, Just t <- [lookup v ub] ]
-    lbs                                 = [ Cast info [] t (tUni v) | v <- vs, Just t <- [lookup v lb] ]
+    vs                                  = nubBy (\a b -> fst a == fst b) (concat vss)
+    ubs                                 = [ Cast info env (tUni v) t | (v,env) <- vs, Just t <- [lookup v ub] ]
+    lbs                                 = [ Cast info env t (tUni v) | (v,env) <- vs, Just t <- [lookup v lb] ]
     info                                = DfltInfo NoLoc 14 Nothing []
 
     repl c@(Cast _ _ TUni{} TUni{})           = ([], c)
     repl c@(Cast _ _ TUni{} (TOpt _ TUni{}))  = ([], c)
-    repl (Cast info q (TUni _ v) t)
-      | Just t' <- lookup v ub                = ([v], Cast info q t' t)
-    repl (Cast info q t (TUni _ v))
-      | Just t' <- lookup v lb                = ([v], Cast info q t t')
+    repl (Cast info env (TUni _ v) t)
+      | Just t' <- lookup v ub                = ([(v,env)], Cast info env t' t)
+    repl (Cast info env t (TUni _ v))
+      | Just t' <- lookup v lb                = ([(v,env)], Cast info env t t')
     repl c@(Sub _ _ _ TUni{} TUni{})          = ([], c)
     repl c@(Sub _ _ _ TUni{} (TOpt _ TUni{})) = ([], c)
-    repl (Sub info w q (TUni _ v) t)
-      | Just t' <- lookup v ub                = ([v], Sub info w q t' t)
-    repl (Sub info w q t (TUni _ v))
-      | Just t' <- lookup v lb                = ([v], Sub info w q t t')
-    repl (Imply info w q cs)                  = ([], Imply info w q $ replace ub lb cs)
+    repl (Sub info w env (TUni _ v) t)
+      | Just t' <- lookup v ub                = ([(v,env)], Sub info w env t' t)
+    repl (Sub info w env t (TUni _ v))
+      | Just t' <- lookup v lb                = ([(v,env)], Sub info w env t t')
+    repl (Imply info w env cs)                = ([], Imply info w env $ replace ub lb cs)
     repl c                                    = ([], c)
 
 
