@@ -290,7 +290,7 @@ solve' env select hist te tt eq cs
                                                         return (keep_cs, eq)
 
   where (solve_cs, keep_cs)                 = partition select cs
-        keep_evidence                       = [ hasWitness env t p | Proto _ _ q t p <- keep_cs ]
+        keep_evidence                       = [ hasWitness env t p | Proto _ env _ t p <- keep_cs ]
 
         (vargoals, goals)                   = span isVar $ sortOn deco $ flatten $ condense env rnks
 
@@ -386,29 +386,29 @@ solve' env select hist te tt eq cs
 --                                          = int : C3Pt : CPt : Pt : float
 
 rank                                        :: Env -> Constraint -> Rank
-rank env0 (Sub info env _ t1 t2)            = rank env0 (Cast info env t1 t2)
+rank _ (Sub info env _ t1 t2)               = rank env (Cast info env t1 t2)
 
-rank env0 (Cast _ env (TUni _ v) t2@TUni{}) = RVar v [t2]
-rank env0 (Cast _ env (TUni _ v) (TOpt _ t2@TUni{}))
+rank _ (Cast _ env (TUni _ v) t2@TUni{})    = RVar v [t2]
+rank _ (Cast _ env (TUni _ v) (TOpt _ t2@TUni{}))
                                             = RVar v [t2]
-rank env0 (Cast _ env (TUni _ v) (TOpt _ t2)) = RTry v ([tOpt tWild, tNone] ++ allBelow env0 t2) False
-rank env0 (Cast _ env TNone{} (TUni _ v))   = RTry v [tOpt tWild, tNone] True
-rank env0 (Cast _ env (TUni _ v) t2)        = RTry v (allBelow env0 t2) False
-rank env0 (Cast _ env t1 (TUni _ v))        = RTry v (allAbove env0 t1) True
+rank _ (Cast _ env (TUni _ v) (TOpt _ t2))  = RTry v ([tOpt tWild, tNone] ++ allBelow env t2) False
+rank _ (Cast _ env TNone{} (TUni _ v))      = RTry v [tOpt tWild, tNone] True
+rank _ (Cast _ env (TUni _ v) t2)           = RTry v (allBelow env t2) False
+rank _ (Cast _ env t1 (TUni _ v))           = RTry v (allAbove env t1) True
 
-rank env0 (Proto _ env _ (TUni _ v) p)      = RTry v ts False
-  where ts                                  = allExtProto env0 p
+rank _ (Proto _ env _ (TUni _ v) p)         = RTry v ts False
+  where ts                                  = allExtProto env p
 
-rank env0 (Sel _ env _ (TUni _ v) n _)      = RTry v (allConAttr env0 n ++ allProtoAttr env0 n ++ allExtProtoAttr env0 n ++ [wildTuple]) False
-rank env0 (Mut _ env (TUni _ v) n _)        = RTry v (allConAttr env0 n) False
+rank _ (Sel _ env _ (TUni _ v) n _)         = RTry v (allConAttr env n ++ allProtoAttr env n ++ allExtProtoAttr env n ++ [wildTuple]) False
+rank _ (Mut _ env (TUni _ v) n _)           = RTry v (allConAttr env n) False
 
-rank env0 (Seal _ env (TUni _ v))
+rank _ (Seal _ env (TUni _ v))
   | uvkind v == KFX                         = RSealed v
   | otherwise                               = RSkip
 
 rank env0 (Imply _ _ q cs)                  = RImp q (map (rank env1) cs)
   where env1                                = defineTVars q env0
-rank env c                                  = RRed c
+rank _ c                                    = RRed c
 
 wildTuple                                   = tTuple tWild tWild
 
@@ -538,10 +538,10 @@ reduce' env_ eq c@(Imply i w q cs)          = do cs0 <- collectDeferred
                                                  return $ insertOrMerge [QEqn w q eq'] eq
   where env1                                = defineTVars q env_
 
-reduce' env_ eq c@(Cast i env t1 t2)        = do cast' env_ i t1 t2
+reduce' _ eq c@(Cast i env t1 t2)           = do cast' env i t1 t2
                                                  return eq
 
-reduce' env_ eq c@(Sub i env w t1 t2)       = sub' env_ i eq w t1 t2
+reduce' _ eq c@(Sub i env w t1 t2)          = sub' env i eq w t1 t2
 
 reduce' env_ eq c@(Proto _ env w TUni{} p)  = do defer [c]; return eq
 
