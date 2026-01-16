@@ -55,6 +55,7 @@ data EnvF x                 = EnvF {
                                 witnesses  :: [Witness],
                                 thismod    :: Maybe ModName,
                                 context    :: [EnvCtx],
+                                qlevel     :: Int,
                                 envX       :: x
                               } deriving (Show)
 
@@ -64,7 +65,7 @@ type Env0                   = EnvF ()
 setX                        :: EnvF y -> x -> EnvF x
 setX env x                  = EnvF { names = names env, imports = imports env, modules = modules env,
                                      hmodules = hmodules env, witnesses = witnesses env, thismod = thismod env,
-                                     context = context env, envX = x }
+                                     context = context env, qlevel = qlevel env, envX = x }
 
 modX                        :: EnvF x -> (x -> x) -> EnvF x
 modX env f                  = env{ envX = f (envX env) }
@@ -121,7 +122,7 @@ mapModules f env            = env1 { hmodules = convTEnv2HTEnv (modules env1) }
 instance (Pretty x) => Pretty (EnvF x) where
     pretty env                  = text "--- modules:"  $+$
                                   vcat (map pretty (modules env)) $+$
-                                  text "--- names" <+> pretty (thismod env) <> colon $+$
+                                  text "--- names" <+> pretty (thismod env) <+> parens (text (show (qlevel env))) <> colon $+$
                                   vcat (map pretty (names env)) $+$
                                   text "--- imports" <+> pretty (thismod env) <> colon $+$
                                   vcat (map pretty (imports env)) $+$
@@ -239,6 +240,7 @@ initEnv path True          = return $ EnvF{ names = [(nPrim,NMAlias mPrim)],
                                             witnesses = primWits,
                                             thismod = Nothing,
                                             context = [],
+                                            qlevel = 0,
                                             envX = () }
 initEnv path False         = do (_,nmod,_,_,_,_,_,_,_,_) <- InterfaceFiles.readFile (joinPath [path,"__builtin__.ty"])
                                 let NModule envBuiltin builtinDocstring = nmod
@@ -249,6 +251,7 @@ initEnv path False         = do (_,nmod,_,_,_,_,_,_,_,_) <- InterfaceFiles.readF
                                                  witnesses = primWits,
                                                  thismod = Nothing,
                                                  context = [],
+                                                 qlevel = 0,
                                                  envX = () }
                                     env = importAll mBuiltin envBuiltin $ importWits mBuiltin envBuiltin $ env0
                                 return env
@@ -282,7 +285,7 @@ addImport m env             = env{ imports = m : imports env }
 
 defineTVars                 :: QBinds -> EnvF x -> EnvF x
 defineTVars q env           = foldr f env (unalias env q)
-  where f (QBind tv us) env = foldl addWit env{ names = (tvname tv, NTVar (tvkind tv) c ps) : names env } wits
+  where f (QBind tv us) env = foldl addWit env{ names = (tvname tv, NTVar (tvkind tv) c ps) : names env, qlevel = qlevel env + 1 } wits
           where (c,ps)      = case us of u:us' | not $ isProto env (tcname u) -> (u,us); _ -> (cValue,us)
                 wits        = [ WInst [] (tVar tv) p (NoQ $ tvarWit tv p0) wchain | p0 <- ps, (wchain,p) <- findAncestry env p0 ]
 

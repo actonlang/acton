@@ -107,8 +107,10 @@ instance Pretty Constraint where
       | length cs < 4               = pretty w <+> colon <+> pretty q <+> text "=>" <+> braces (commaSep pretty cs)
       | otherwise                   = pretty w <+> colon <+> pretty q <+> text "=>" $+$ nest 4 (vcat $ map pretty cs)
 
-prettyQuant env                     = brackets (commaSep pretty q) <+> text "=>"
-  where q                           = [] :: QBinds      -- ...
+prettyQuant env
+  | qlevel env > 0                  = brackets (commaSep pretty q) <+> text "=>"
+  | otherwise                       = empty
+  where q                           = [ QBind (TV k tv) (if c == cValue then ps else c:ps) | (tv, NTVar k c ps) <- names env ]
 
 instance UFree Constraint where
     ufree (Cast info env t1 t2)     = ufree t1 ++ ufree t2
