@@ -45,4 +45,6 @@ executables:
     when:
     - condition: os(linux)
       ghc-options:
+        - -no-pie
+        - -optl-no-pie
         - -pgml=../tools/ld-wrapper.sh
