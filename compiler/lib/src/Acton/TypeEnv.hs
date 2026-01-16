@@ -75,9 +75,9 @@ instance Polarity Env where
 -- Constraints -------------------------------------------------------------------------------
 
 data Constraint = Cast  {info :: ErrInfo, scope :: QScope, type1 :: Type, type2 :: Type}
-                | Sub   {info :: ErrInfo, wit :: Name, scope :: QScope, type1 :: Type, type2 :: Type}
-                | Proto {info :: ErrInfo, wit :: Name, scope :: QScope, type1 :: Type, proto1 :: PCon}
-                | Sel   {info :: ErrInfo, wit :: Name, scope :: QScope, type1 :: Type, name1 :: Name, type2 :: Type}
+                | Sub   {info :: ErrInfo, scope :: QScope, wit :: Name, type1 :: Type, type2 :: Type}
+                | Proto {info :: ErrInfo, scope :: QScope, wit :: Name, type1 :: Type, proto1 :: PCon}
+                | Sel   {info :: ErrInfo, scope :: QScope, wit :: Name, type1 :: Type, name1 :: Name, type2 :: Type}
                 | Mut   {info :: ErrInfo, scope :: QScope, type1 :: Type, name1 :: Name, type2 :: Type}
                 | Seal  {info :: ErrInfo, scope :: QScope, type1 :: Type}
                 | Imply {info :: ErrInfo, wit :: Name, binder :: QBinds, scoped :: Constraints}
@@ -89,7 +89,7 @@ type QScope     = Env
 
 instance HasLoc Constraint where
     loc (Cast info env t1 t2)       = getLoc [loc info, loc t1, loc t2]
-    loc (Sub info _ env t1 t2)      = getLoc [loc info, loc t1, loc t2]
+    loc (Sub info env _ t1 t2)      = getLoc [loc info, loc t1, loc t2]
     loc (Proto info _ env t1 _)     = getLoc [loc info, loc t1]
     loc (Sel info _ env t1  n1 t2)  = getLoc [loc info, loc t1, loc n1, loc t2]
     loc (Mut info env t1  n1 t2)    = getLoc [loc info, loc t1, loc n1, loc t2]
@@ -98,9 +98,9 @@ instance HasLoc Constraint where
 
 instance Pretty Constraint where
     pretty (Cast _ env t1 t2)       = prettyQuant env <+> pretty t1 <+> text "<" <+> pretty t2
-    pretty (Sub _ w env t1 t2)      = pretty w <+> colon <+> prettyQuant env <+> pretty t1 <+> text "<" <+> pretty t2
-    pretty (Proto _ w env t u)      = pretty w <+> colon <+> prettyQuant env <+> pretty t <+> parens (pretty u)
-    pretty (Sel _ w env t1 n t2)    = pretty w <+> colon <+> prettyQuant env <+> pretty t1 <> text "." <> pretty n <+> text "<" <+> pretty t2
+    pretty (Sub _ env w t1 t2)      = pretty w <+> colon <+> prettyQuant env <+> pretty t1 <+> text "<" <+> pretty t2
+    pretty (Proto _ env w t u)      = pretty w <+> colon <+> prettyQuant env <+> pretty t <+> parens (pretty u)
+    pretty (Sel _ env w t1 n t2)    = pretty w <+> colon <+> prettyQuant env <+> pretty t1 <> text "." <> pretty n <+> text "<" <+> pretty t2
     pretty (Mut _ env t1 n t2)      = prettyQuant env <+> pretty t1 <+> text "." <> pretty n <+> text ">" <+> pretty t2
     pretty (Seal _ env t)           = prettyQuant env <+> text "$Seal" <+> pretty t
     pretty (Imply _ w q cs)
@@ -112,36 +112,36 @@ prettyQuant env                     = brackets (commaSep pretty q) <+> text "=>"
 
 instance UFree Constraint where
     ufree (Cast info env t1 t2)     = ufree t1 ++ ufree t2
-    ufree (Sub info w env t1 t2)    = ufree t1 ++ ufree t2
-    ufree (Proto info w env t p)    = ufree t ++ ufree p
-    ufree (Sel info w env t1 n t2)  = ufree t1 ++ ufree t2
+    ufree (Sub info env w t1 t2)    = ufree t1 ++ ufree t2
+    ufree (Proto info env w t p)    = ufree t ++ ufree p
+    ufree (Sel info env w t1 n t2)  = ufree t1 ++ ufree t2
     ufree (Mut info env t1 n t2)    = ufree t1 ++ ufree t2
     ufree (Seal info env t)         = ufree t
     ufree (Imply info w q cs)       = ufree cs
 
 instance Tailvars Constraint where
     tailvars (Cast _ env t1 t2)     = tailvars t1 ++ tailvars t2
-    tailvars (Sub _ w env t1 t2)    = tailvars t1 ++ tailvars t2
-    tailvars (Proto _ w env t p)    = tailvars t ++ tailvars p
-    tailvars (Sel _ w env t1 n t2)  = tailvars t1 ++ tailvars t2
+    tailvars (Sub _ env w t1 t2)    = tailvars t1 ++ tailvars t2
+    tailvars (Proto _ env w t p)    = tailvars t ++ tailvars p
+    tailvars (Sel _ env w t1 n t2)  = tailvars t1 ++ tailvars t2
     tailvars (Mut _ env t1 n t2)    = tailvars t1 ++ tailvars t2
     tailvars (Seal _ env t)         = tailvars t
     tailvars (Imply _ w q cs)       = tailvars cs
 
 instance Vars Constraint where
     freeQ (Cast _ env t1 t2)        = freeQ t1 ++ freeQ t2
-    freeQ (Sub _ w env t1 t2)       = freeQ t1 ++ freeQ t2
-    freeQ (Proto _ w env t p)       = freeQ t ++ freeQ p
-    freeQ (Sel _ w env t1 n t2)     = freeQ t1 ++ freeQ t2
+    freeQ (Sub _ env w t1 t2)       = freeQ t1 ++ freeQ t2
+    freeQ (Proto _ env w t p)       = freeQ t ++ freeQ p
+    freeQ (Sel _ env w t1 n t2)     = freeQ t1 ++ freeQ t2
     freeQ (Mut _ env t1 n t2)       = freeQ t1 ++ freeQ t2
     freeQ (Seal _ env t)            = freeQ t
     freeQ (Imply _ w q cs)          = freeQ cs
 
 instance UWild Constraint where
     uwild (Cast info env t1 t2)     = Cast info env (uwild t1) (uwild t2)
-    uwild (Sub info w env t1 t2)    = Sub info w env (uwild t1) (uwild t2)
-    uwild (Proto info w env t p)    = Proto info w env (uwild t) (uwild p)
-    uwild (Sel info w env t1 n t2)  = Sel info w env (uwild t1) n (uwild t2)
+    uwild (Sub info env w t1 t2)    = Sub info env w (uwild t1) (uwild t2)
+    uwild (Proto info env w t p)    = Proto info env w (uwild t) (uwild p)
+    uwild (Sel info env w t1 n t2)  = Sel info env w (uwild t1) n (uwild t2)
     uwild (Mut info env t1 n t2)    = Mut info env (uwild t1) n (uwild t2)
     uwild (Seal info env t)         = Seal info env (uwild t)
     uwild (Imply info w q cs)       = Imply info w q (uwild cs)
@@ -362,9 +362,9 @@ instance USubst a => USubst (Maybe a) where
 
 instance USubst Constraint where
     usubst (Cast info env t1 t2)    = Cast <$> usubst info <*> return env <*> usubst t1 <*> usubst t2
-    usubst (Sub info w env t1 t2)   = Sub <$> usubst info <*> return w <*> return env <*> usubst t1 <*> usubst t2
-    usubst (Proto info w env t p)   = Proto <$> usubst info <*> return w <*> return env <*> usubst t <*> usubst p
-    usubst (Sel info w env t1 n t2) = Sel <$> usubst info <*> return w <*> return env <*>usubst t1 <*> return n <*> usubst t2
+    usubst (Sub info env w t1 t2)   = Sub <$> usubst info <*> return env <*> return w <*> usubst t1 <*> usubst t2
+    usubst (Proto info env w t p)   = Proto <$> usubst info <*> return env <*> return w <*> usubst t <*> usubst p
+    usubst (Sel info env w t1 n t2) = Sel <$> usubst info <*> return env <*> return w <*> usubst t1 <*> return n <*> usubst t2
     usubst (Mut info env t1 n t2)   = Mut <$> usubst info <*> return env <*> usubst t1 <*> return n <*> usubst t2
     usubst (Seal info env t)        = Seal <$> usubst info <*> return env <*> usubst t
     usubst (Imply info w q cs)      = Imply <$> usubst info <*> return w <*> usubst q <*> usubst cs
@@ -585,7 +585,7 @@ instance WellFormed TCon where
                                 i -> err1 n ("wf: Class or protocol name expected, got " ++ show i)
             s               = qbound q `zip` ts
             constr u t      = if isProto env (tcname u)
-                              then Proto (DfltInfo NoLoc 20 Nothing []) nWild env t u
+                              then Proto (DfltInfo NoLoc 20 Nothing []) env nWild t u
                               else Cast (DfltInfo NoLoc 21 Nothing []) env t (tCon u)
 
 wfProto                     :: Env -> TCon -> TypeM (Constraints, Constraints)
@@ -650,11 +650,11 @@ instQuals                   :: Env -> QBinds -> [Type] -> TypeM Constraints
 instQuals env q ts          = do let s = qbound q `zip` ts
                                  sequence [ constr (vsubst s (tVar v)) (vsubst s u) | QBind v us <- q, u <- us ]
   where constr t u@(TC n _)
-          | isProto env n   = do w <- newWitness; return $ Proto (DfltInfo NoLoc 24 Nothing []) w env t u
+          | isProto env n   = do w <- newWitness; return $ Proto (DfltInfo NoLoc 24 Nothing []) env w t u
           | otherwise       = return $ Cast (DfltInfo NoLoc 25 Nothing []) env t (tCon u)
 
 wvars                       :: Constraints -> [Expr]
-wvars cs                    = [ eVar v | Proto _ v _ _ _ <- cs ]
+wvars cs                    = [ eVar v | Proto _ _ v _ _ <- cs ]
 
 
 -- Equations -----------------------------------------------------------------------------------------------------------------------
@@ -698,9 +698,9 @@ bindTopWits env eqs0                    = map bind eqs0
 
 qwitRefs env w0 cs                      = refs cs
   where refs []                         = []
-        refs (Sub _ w _ t1 t2 : cs)     = Eqn w (tFun0 [t1] t2) (eDot e w) : refs cs
-        refs (Proto _ w _ t p : cs)     = Eqn w (proto2type t p) (eDot e w) : refs cs
-        refs (Sel _ w _ t1 n t2 : cs)   = Eqn w (tFun0 [t1] t2) (eDot e w) : refs cs
+        refs (Sub _ _ w t1 t2 : cs)     = Eqn w (tFun0 [t1] t2) (eDot e w) : refs cs
+        refs (Proto _ _ w t p : cs)     = Eqn w (proto2type t p) (eDot e w) : refs cs
+        refs (Sel _ _ w t1 n t2 : cs)   = Eqn w (tFun0 [t1] t2) (eDot e w) : refs cs
         refs (c : cs)                   = refs cs
         e                               = eCallP (tApp (eVar w0) (map tVar $ qbound q_tot)) (wit2arg (qualWits env q_tot) PosNil)
         q_tot                           = quantScope0 env
@@ -733,7 +733,7 @@ var2arg xs                              = \p -> foldr f p xs
 
 exp2arg es                              = \p -> foldr PosArg p es
 
-protoWitsOf cs                          = [ eVar w | Proto _ w q t p <- cs ]
+protoWitsOf cs                          = [ eVar w | Proto _ _ w t p <- cs ]
 
 qualWPar env q                          = wit2par (qualWits env q)
 
@@ -742,7 +742,7 @@ qualWRow env q                          = wit2row (qualWits env q)
 qualWits env q                          = [ (tvarWit tv p, proto2type (tVar tv) p) | QBind tv ps <- q, p <- ps, isProto env (tcname p) ]
 
 witSubst env q cs                       = [ Eqn w0 t (eVar w) | ((w,t),w0) <- ws `zip` ws0 ]
-  where ws                              = [ (w, proto2type t p) | Proto _ w q t p <- cs ]
+  where ws                              = [ (w, proto2type t p) | Proto _ _ w t p <- cs ]
         ws0                             = [ tvarWit tv p | QBind tv ps <- q, p <- ps, isProto env (tcname p) ]
 
 -- Type errors ---------------------------------------------------------------------------------------------------------------------
