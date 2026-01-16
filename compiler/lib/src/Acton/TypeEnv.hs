@@ -585,8 +585,8 @@ instance WellFormed TCon where
                                 i -> err1 n ("wf: Class or protocol name expected, got " ++ show i)
             s               = qbound q `zip` ts
             constr u t      = if isProto env (tcname u)
-                              then Proto (DfltInfo NoLoc 20 Nothing []) env nWild t u
-                              else Cast (DfltInfo NoLoc 21 Nothing []) env t (tCon u)
+                              then Proto (noinfo 20) env nWild t u
+                              else Cast (noinfo 21) env t (tCon u)
 
 wfProto                     :: Env -> TCon -> TypeM (Constraints, Constraints)
 wfProto env (TC n ts)       = do cs <- instQuals env q ts
@@ -635,14 +635,14 @@ instWitness env p0 wit      = case wit of
                                  WClass q t p w ws opts -> do
                                     (cs,tvs) <- instQBinds env q
                                     let s = (tvSelf,t) : qbound q `zip` tvs
-                                    unifyM (DfltInfo (loc p0) 22 Nothing []) (tcargs p0) (tcargs $ vsubst s p)
+                                    unifyM (locinfo p0 22) (tcargs p0) (tcargs $ vsubst s p)
                                     t <- usubst (vsubst s t)
                                     cs <- usubst cs
                                     return (cs, t, wexpr ws (eCall (tApp (eQVar w) tvs) (wvars cs ++ replicate opts eNone)))
                                  WInst q t p w ws -> do
                                     (cs,tvs) <- instQBinds env q
                                     let s = (tvSelf,t) : qbound q `zip` tvs
-                                    unifyM (DfltInfo (loc p0) 23 Nothing []) (tcargs p0) (tcargs $ vsubst s p)
+                                    unifyM (locinfo p0 23) (tcargs p0) (tcargs $ vsubst s p)
                                     t <- usubst (vsubst s t)
                                     return (cs, t, wexpr ws (eQVar w))
 
@@ -650,8 +650,8 @@ instQuals                   :: Env -> QBinds -> [Type] -> TypeM Constraints
 instQuals env q ts          = do let s = qbound q `zip` ts
                                  sequence [ constr (vsubst s (tVar v)) (vsubst s u) | QBind v us <- q, u <- us ]
   where constr t u@(TC n _)
-          | isProto env n   = do w <- newWitness; return $ Proto (DfltInfo NoLoc 24 Nothing []) env w t u
-          | otherwise       = return $ Cast (DfltInfo NoLoc 25 Nothing []) env t (tCon u)
+          | isProto env n   = do w <- newWitness; return $ Proto (noinfo 24) env w t u
+          | otherwise       = return $ Cast (noinfo 25) env t (tCon u)
 
 wvars                       :: Constraints -> [Expr]
 wvars cs                    = [ eVar v | Proto _ _ v _ _ <- cs ]
@@ -772,6 +772,15 @@ data ErrInfo    = DfltInfo {errloc :: SrcLoc, errno :: Int, errexpr :: Maybe Exp
                 | DeclInfo {errloc :: SrcLoc, errloc2 :: SrcLoc, errname :: Name, errschema :: TSchema, errmsg :: String}
                 | Simple {errloc ::SrcLoc, errmsg :: String}
                 deriving (Show)
+
+noinfo n        = DfltInfo NoLoc n Nothing []
+
+locinfo x n     = DfltInfo (loc x) n Nothing []
+
+locinfo' x n e  = DfltInfo (loc x) n (Just e) []
+
+locinfo2 n e    = DfltInfo (loc e) n (Just e) []
+
 
 instance Control.Exception.Exception TypeError
 
@@ -1032,7 +1041,7 @@ elemSuffix _                      = " in tuple"
 -- elemHint DeclInfo{}               = " Hint: The previous definition may have been implicit, using positional notation."
 -- elemHint _                        = ""
 
-dummyInfo                         = DfltInfo NoLoc 0 Nothing []
+dummyInfo                         = noinfo 0
 
 
 --mkErrorDiagnostic :: String -> String -> Report String -> Diagnostic String

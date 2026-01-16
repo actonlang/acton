@@ -93,7 +93,7 @@ groupCs env cs                              = do st <- currentState
                                                  mark n' cs
         mark n (c : cs)                     = do tvs <- ufree <$> usubst c
                                                  tvs' <- ufree <$> usubst (map tUni $ attrfree c)
-                                                 sequence [ unify (DfltInfo NoLoc 1 Nothing []) (newUnivarToken n) (tUni tv) | tv <- nub (tvs++tvs') ]
+                                                 sequence [ unify (noinfo 1) (newUnivarToken n) (tUni tv) | tv <- nub (tvs++tvs') ]
                                                  mark (n+1) cs
         group m (Imply i w q cs)            = do m' <- foldM group Map.empty cs
                                                  return $ Map.foldrWithKey (\tv cs' -> Map.insertWith (++) tv [Imply i w q cs']) m m'
@@ -178,7 +178,7 @@ newrank pol (Seal _ env (TUni _ v))
 newrank pol c                               = R_red
 
 
-info0 = DfltInfo NoLoc 0 Nothing []
+info0 = noinfo 0
 
 newsolve env te eq cs = do
     te <- usubst te
@@ -262,7 +262,7 @@ solveGroups env select te tt eq (cs:css)    = do --traceM ("\n\n######### solveG
 solve' env select hist te tt eq cs
   | not $ null vargoals                     = do --traceM (unlines [ "### var goal " ++ prstr t ++ " ~ " ++ prstrs alts | RVar t alts <- vargoals ])
                                                  --traceM ("### var goals: " ++ show (sum [ length alts | RVar t alts <- vargoals ]))
-                                                 sequence [ unify (DfltInfo NoLoc 2 Nothing []) (tUni v) t | RVar v alts <- vargoals, t <- alts ]
+                                                 sequence [ unify (noinfo 2) (tUni v) t | RVar v alts <- vargoals, t <- alts ]
                                                  proceed hist eq cs
   | any not keep_evidence                   = noSolve0 env Nothing [] keep_cs
   | null solve_cs || null goals             = return (keep_cs, eq)
@@ -285,7 +285,7 @@ solve' env select hist te tt eq cs
                                                         tryAlts st v alts
                                                     RVar v alts -> do
                                                         --traceM ("### var goal " ++ prstr v ++ ", unifying with " ++ prstrs alts)
-                                                        unifyM (DfltInfo NoLoc 3 Nothing []) alts (repeat $ tUni v) >> proceed hist eq cs
+                                                        unifyM (noinfo 3) alts (repeat $ tUni v) >> proceed hist eq cs
                                                     RSkip ->
                                                         return (keep_cs, eq)
 
@@ -316,24 +316,24 @@ solve' env select hist te tt eq cs
           | isProto env (tcname c)          = do p <- instwildcon env c
                                                  w <- newWitness
                                                  --traceM ("  # trying " ++ prstr v ++ " (" ++ prstr p ++ ")")
-                                                 proceed hist eq (Proto (DfltInfo NoLoc 4 Nothing []) env w (tUni v) p : cs)
+                                                 proceed hist eq (Proto (noinfo 4) env w (tUni v) p : cs)
         tryAlt v (TTuple _ _ _)
           | not $ null attrs                = do t <- instwild env KType (tTupleK $ foldr (\n -> kwdRow n tWild) tWild attrs)
                                                  --traceM ("  # trying tuple " ++ prstr v ++ " = " ++ prstr t)
-                                                 unify (DfltInfo NoLoc 5 Nothing []) (tUni v) t
+                                                 unify (noinfo 5) (tUni v) t
                                                  proceed (t:hist) eq cs
           where selsOf cs                   = sortBy (\a b -> compare (nstr a) (nstr b)) $ nub [ n | Sel _ _ _ (TUni _ v') n _ <- cs, v' == v ]
                 attrs                       = nub $ selsOf solve_cs ++ concat [ selsOf cs | Imply _ _ _ cs <- solve_cs ]
         tryAlt v t
           | uvkind v == KFX                 = do t <- instwild env (uvkind v) t
                                                  --traceM ("  # TRYING " ++ prstr v ++ " = " ++ prstr t)
-                                                 unify (DfltInfo NoLoc 5 Nothing []) (tUni v) t
+                                                 unify (noinfo 5) (tUni v) t
                                                  (cs,eq) <- quicksimp env eq cs
                                                  hist <- usubst hist
                                                  solve' env select hist te tt eq cs
         tryAlt v t                          = do t <- instwild env (uvkind v) t
                                                  --traceM ("  # trying " ++ prstr v ++ " = " ++ prstr t)
-                                                 unify (DfltInfo NoLoc 5 Nothing []) (tUni v) t
+                                                 unify (noinfo 5) (tUni v) t
                                                  proceed (t:hist) eq cs
         proceed hist eq cs                  = do te <- usubst te
                                                  tt <- usubst tt
@@ -648,7 +648,7 @@ reduce' env_ eq c                           = noRed0 env_ c
 
 
 solveProto env wit w t p                    = do (cs,t',we) <- instWitness env p wit
-                                                 unify (DfltInfo NoLoc 7 Nothing []) t t'
+                                                 unify (noinfo 7) t t'
                                                  return ([Eqn w (proto2type t p) we], cs)
 
 solveSelAttr env_ (wf,sc,d) (Sel info env w t1 n t2)
@@ -656,7 +656,7 @@ solveSelAttr env_ (wf,sc,d) (Sel info env w t1 n t2)
                                                  when (negself t) (tyerr n "Contravariant Self attribute not selectable by instance")
                                                  w' <- newWitness
                                                  let e = eLambda [(px0,t1)] (eCallVar w' [app t (tApp (eDot (wf $ eVar px0) n) tvs) $ protoWitsOf cs])
-                                                     c = Sub (DfltInfo (loc info) 8 Nothing []) env w' (vsubst [(tvSelf,t1)] t) t2
+                                                     c = Sub (locinfo info 8) env w' (vsubst [(tvSelf,t1)] t) t2
                                                  return ([Eqn w (wFun t1 t2) e], c:cs)
 
 --  e1.__setslice__(sl, e2)
@@ -680,13 +680,13 @@ solveSelWit env_ (p,we) c0@(Sel info env w t1 n t2)
                                                  when (negself t) (tyerr n "Contravariant Self attribute not selectable by instance")
                                                  w' <- newWitness
                                                  let e = eLambda [(px0,t1)] (eCallVar w' [app t (tApp (eDot (wf we) n) tvs) $ eVar px0 : protoWitsOf cs])
-                                                     c = Sub (DfltInfo NoLoc 9 Nothing []) env w' (vsubst [(tvSelf,t1)] t) t2
+                                                     c = Sub (noinfo 9) env w' (vsubst [(tvSelf,t1)] t) t2
                                                  return ([Eqn w (wFun t1 t2) e], c:cs)
 
 solveMutAttr env_ (wf,sc,dec) c@(Mut info env t1 n t2)
                                             = do when (dec /= Just Property) (noMut n)
                                                  let TSchema _ [] t = sc
-                                                 cast env_ (DfltInfo (loc c) 10 Nothing []) t2 (vsubst [(tvSelf,t1)] t)
+                                                 cast env_ (locinfo c 10) t2 (vsubst [(tvSelf,t1)] t)
 
 ----------------------------------------------------------------------------------------------------------------------
 -- witness lookup
@@ -1583,12 +1583,12 @@ improve env te tt eq cs
   | Nothing <- info                     = do --traceM ("  *Resubmit " ++ show (length cs))
                                              simplify' env te tt eq cs
   | Left (v,vs) <- closure              = do --traceM ("  *Unify cycle " ++ prstr v ++ " = " ++ prstrs vs)
-                                             sequence [ unify (DfltInfo NoLoc 12 Nothing []) (tUni v) (tUni v') | v' <- vs ]
+                                             sequence [ unify (noinfo 12) (tUni v) (tUni v') | v' <- vs ]
                                              simplify' env te tt eq cs
   | not $ null gsimple                  = do --traceM ("  *G-simplify " ++ prstrs [ (v,tUni v') | (v,v') <- gsimple ])
                                              --traceM ("  *obsvars: " ++ prstrs obsvars)
                                              --traceM ("  *varvars: " ++ prstrs (varvars vi))
-                                             sequence [ unify (DfltInfo NoLoc 13 Nothing []) (tUni v) (tUni v') | (v,v') <- gsimple ]
+                                             sequence [ unify (noinfo 13) (tUni v) (tUni v') | (v,v') <- gsimple ]
                                              simplify' env te tt eq cs
   | not $ null cyclic                   = tyerrs cyclic ("Cyclic subtyping:")
   | not $ null (multiUBnd++multiLBnd)   = do ub <- mapM (mkGLB env) multiUBnd   -- GLB of the upper bounds
@@ -1598,20 +1598,20 @@ improve env te tt eq cs
                                              simplify' env te tt eq (replace ub lb cs)
   | not $ null posLBnd                  = do --traceM ("  *S-simplify (dn) " ++ prstrs posLBnd)
                                              --traceM ("   posnames "  ++ prstrs (posnames $ envX env))
-                                             sequence [ unify (DfltInfo NoLoc 15 Nothing []) (tUni v) t | (v,t) <- posLBnd ]
+                                             sequence [ unify (noinfo 15) (tUni v) t | (v,t) <- posLBnd ]
                                              simplify' env te tt eq cs
   | not $ null negUBnd                  = do --traceM ("  *S-simplify (up) " ++ prstrs negUBnd)
                                              --traceM ("   posnames "  ++ prstrs (posnames $ envX env))
-                                             sequence [ unify (DfltInfo NoLoc 16 Nothing []) (tUni v) t | (v,t) <- negUBnd ]
+                                             sequence [ unify (noinfo 16) (tUni v) t | (v,t) <- negUBnd ]
                                              simplify' env te tt eq cs
   | not $ null closUBnd                 = do --traceM ("  *Simplify upper closed bound " ++ prstrs closUBnd)
-                                             sequence [ unify (DfltInfo NoLoc 17 Nothing []) (tUni v) t | (v,t) <- closUBnd ]
+                                             sequence [ unify (noinfo 17) (tUni v) t | (v,t) <- closUBnd ]
                                              simplify' env te tt eq cs
   | not $ null closLBnd                 = do --traceM ("  *Simplify lower closed bound " ++ prstrs closLBnd)
-                                             sequence [ unify (DfltInfo NoLoc 18 Nothing []) (tUni v) t | (v,t) <- closLBnd ]
+                                             sequence [ unify (noinfo 18) (tUni v) t | (v,t) <- closLBnd ]
                                              simplify' env te tt eq cs
   | not $ null redEq                    = do --traceM ("  *(Context red) " ++ prstrs (deepwits redEq))
-                                             sequence [ unify (DfltInfo NoLoc 19 Nothing []) t1 t2 | (t1,t2) <- redUni ]
+                                             sequence [ unify (noinfo 19) t1 t2 | (t1,t2) <- redUni ]
                                              simplify' env te tt (insertOrMerge redEq eq) (remove (deepwits redEq) cs)
   | not $ null dots                     = do --traceM ("  *Implied mutation/selection solutions " ++ prstrs dots)
                                              (eq',cs') <- solveDots env mutC selC selP cs
@@ -1729,7 +1729,7 @@ replace ub lb cs                        = ubs ++ lbs ++ cs'
     vs                                  = nubBy (\a b -> fst a == fst b) (concat vss)
     ubs                                 = [ Cast info env (tUni v) t | (v,env) <- vs, Just t <- [lookup v ub] ]
     lbs                                 = [ Cast info env t (tUni v) | (v,env) <- vs, Just t <- [lookup v lb] ]
-    info                                = DfltInfo NoLoc 14 Nothing []
+    info                                = noinfo 14
 
     repl c@(Cast _ _ TUni{} TUni{})           = ([], c)
     repl c@(Cast _ _ TUni{} (TOpt _ TUni{}))  = ([], c)
