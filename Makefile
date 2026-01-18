@@ -297,9 +297,9 @@ dist/deps/libyyjson: deps/libyyjson $(DIST_ZIG)
 	cp -a "$</"* "$(TD)/$@"
 
 # top level targets
-.PHONY: test test-builtins test-compiler test-db test-examples test-lang test-regressions test-rts test-stdlib
+.PHONY: test test-builtins test-compiler test-db test-examples test-lang test-regressions test-rts test-stdlib online-tests
 test: dist/bin/acton
-	cd compiler && stack test
+	cd compiler && stack test acton actonc:test_actonc actonc:incremental
 	$(MAKE) test-stdlib
 	$(MAKE) -C backend test
 	$(MAKE) test-rts-db
@@ -339,7 +339,7 @@ test-typeerrors:
 	cd compiler && stack test actonc --ta '-p "type errors"'
 
 test-typeerrors-accept:
-	cd compiler/actonc && stack runghc -- test.hs -p "type errors" --accept
+	cd compiler && stack test actonc:test_actonc --ta '-p "type errors" --accept'
 
 test-db:
 	cd compiler && stack test actonc --ta '-p "DB"'
@@ -363,6 +363,9 @@ test-stdlib: dist/bin/acton
 	cd compiler && stack test actonc --ta '-p "stdlib"'
 	$(MAKE) -C test tls-test-server
 	cd test/stdlib_tests && "$(ACTON)" test
+
+online-tests: dist/bin/actonc
+	cd compiler && stack test actonc:test_actonc_online
 
 
 .PHONY: clean clean-all clean-base

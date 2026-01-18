@@ -6,6 +6,7 @@ module Acton.BuildSpec
   , BuildSpec(..)
   , parseBuildSpecJSON
   , encodeBuildSpecJSON
+  , encodeBuildSpecJSONPretty
   , renderBuildAct
   , parseBuildAct
   , updateBuildActFromJSON
@@ -14,6 +15,7 @@ module Acton.BuildSpec
 import GHC.Generics (Generic)
 import Data.Aeson (FromJSON(..), ToJSON(..), (.:?), (.=))
 import qualified Data.Aeson as Ae
+import qualified Data.Aeson.Encode.Pretty as Aep
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.Map as Map
 import Data.Map (Map)
@@ -178,6 +180,13 @@ parseBuildSpecJSON = Ae.eitherDecode'
 
 encodeBuildSpecJSON :: BuildSpec -> BL.ByteString
 encodeBuildSpecJSON = Ae.encode
+
+encodeBuildSpecJSONPretty :: BuildSpec -> BL.ByteString
+encodeBuildSpecJSONPretty =
+  Aep.encodePretty' Aep.defConfig
+    { Aep.confIndent = Aep.Spaces 4
+    , Aep.confCompare = compare
+    }
 
 parseBuildAct :: String -> Either String (BuildSpec, Maybe (Int,Int), Maybe (Int,Int))
 parseBuildAct content = do
