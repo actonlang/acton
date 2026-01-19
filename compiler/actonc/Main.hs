@@ -116,7 +116,12 @@ main = do
     ensureCapabilities gopts
     let run = case arg of
           C.CmdOpt gopts (C.New opts)         -> createProject (C.file opts)
-          C.CmdOpt gopts (C.Build opts)       -> buildProject gopts opts
+          C.CmdOpt gopts (C.Build bopts)      ->
+              let opts = C.buildCompile bopts
+                  files = C.buildFiles bopts
+              in if null files
+                 then buildProject gopts opts
+                 else buildFiles gopts opts files
           C.CmdOpt gopts (C.Test tcmd)        -> runTests gopts tcmd
           C.CmdOpt gopts C.Fetch             -> fetchCommand gopts
           C.CmdOpt gopts C.PkgShow           -> pkgShow gopts
@@ -131,15 +136,19 @@ main = do
           C.CmdOpt gopts (C.ZigPkgAdd opts)  -> PkgCommands.zigPkgAddCommand gopts opts
           C.CmdOpt gopts (C.ZigPkgRemove opts) -> PkgCommands.zigPkgRemoveCommand gopts opts
           C.CmdOpt gopts C.Version            -> printVersion
-          C.CompileOpt nms gopts opts         -> case takeExtension (head nms) of
-                                                   ".act" -> buildFile gopts (applyGlobalOpts gopts opts) (head nms)
-                                                   ".ty" -> printDocs gopts (C.DocOptions (head nms) (Just C.AsciiFormat) Nothing)
-                                                   _ -> printErrorAndExit ("Unknown filetype: " ++ head nms)
+          C.CompileOpt nms gopts opts         -> runFile gopts opts (head nms)
     run `catch` \(ProjectError msg) -> printErrorAndExit msg
 
 -- Apply global options to compile options
 applyGlobalOpts :: C.GlobalOptions -> C.CompileOptions -> C.CompileOptions
 applyGlobalOpts gopts opts = opts
+
+runFile :: C.GlobalOptions -> C.CompileOptions -> FilePath -> IO ()
+runFile gopts opts fname =
+    case takeExtension fname of
+      ".act" -> buildFile gopts (applyGlobalOpts gopts opts) fname
+      ".ty" -> printDocs gopts (C.DocOptions fname (Just C.AsciiFormat) Nothing)
+      _ -> printErrorAndExit ("Unknown filetype: " ++ fname)
 
 -- Ensure enough capabilities: honor --jobs if set, otherwise at least 2 or #procs.
 ensureCapabilities :: C.GlobalOptions -> IO ()
@@ -330,6 +339,30 @@ buildProject gopts opts = do
                     curDir <- getCurrentDirectory
                     watchProjectAt gopts opts curDir
                   else buildProjectOnce gopts opts
+
+-- | Handle "actonc build FILE..." by compiling multiple .act files together
+-- when they share a project root; otherwise fall back to per-file handling.
+buildFiles :: C.GlobalOptions -> C.CompileOptions -> [FilePath] -> IO ()
+buildFiles gopts opts files =
+    case files of
+      [single] -> runFile gopts opts single
+      _ -> do
+        when (C.watch opts) $
+          printErrorAndExit "Cannot use --watch with multiple files. Use `actonc build --watch` for projects or `actonc build FILE --watch` (or `actonc FILE --watch`) for a single file."
+        absFiles <- mapM canonicalizePath files
+        let onlyAct = all ((== ".act") . takeExtension) files
+        projDirs <- mapM findProjectDir absFiles
+        let projRoots = nub (catMaybes projDirs)
+        case projRoots of
+          [proj] | onlyAct && all (== Just proj) projDirs -> do
+            let sp = Source.diskSourceProvider
+                runBuild opts' =
+                  withProjectCompileLock proj $
+                    compileFiles sp gopts opts' absFiles False
+            withOwnerLockOrOnlyBuild gopts proj
+              (runBuild opts)
+              (runBuild opts { C.only_build = True })
+          _ -> mapM_ (runFile gopts opts) files
 
 -- | Compute the path to the per-project compile lock.
 projectCompileLockPath :: FilePath -> FilePath
