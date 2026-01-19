@@ -604,7 +604,7 @@ jobs:
       packages: write
     steps:
       - name: "Check out repository code"
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
       - name: "Download deb artifacts"
         uses: actions/download-artifact@v7
         with:
