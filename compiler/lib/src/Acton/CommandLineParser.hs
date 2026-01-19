@@ -37,7 +37,7 @@ data GlobalOptions = GlobalOptions {
                      } deriving Show
 
 data Command        = New NewOptions
-                    | Build CompileOptions
+                    | Build BuildOptions
                     | Test TestCommand
                     | Fetch
                     | PkgShow
@@ -94,6 +94,11 @@ data CompileOptions   = CompileOptions {
                          searchpath  :: [String],
                          dep_overrides :: [(String,String)]
                      } deriving Show
+
+data BuildOptions = BuildOptions
+    { buildCompile :: CompileOptions
+    , buildFiles   :: [String]
+    } deriving Show
 
 
 
@@ -167,7 +172,7 @@ data ZigPkgRemoveOptions = ZigPkgRemoveOptions
 cmdLineParser       :: Parser CmdLineOptions
 cmdLineParser       = hsubparser
                         (  command "new"     (info (CmdOpt <$> globalOptions <*> (New <$> newOptions)) (progDesc "Create a new Acton project"))
-                        <> command "build"   (info (CmdOpt <$> globalOptions <*> (Build <$> compileOptions)) (progDesc "Build an Acton project"))
+                        <> command "build"   (info (CmdOpt <$> globalOptions <*> (Build <$> buildOptions)) (progDesc "Build an Acton project"))
                         <> command "test"    (info (CmdOpt <$> globalOptions <*> (Test <$> testCommand)) (progDesc "Build and run project tests"))
                         <> command "fetch"   (info (CmdOpt <$> globalOptions <*> pure Fetch) (progDesc "Fetch project dependencies (offline prep)"))
                         <> command "pkg"     (info (CmdOpt <$> globalOptions <*> pkgSubcommands) (progDesc "Package/dependency commands"))
@@ -220,6 +225,11 @@ generalOptions         = GeneralOptions <$>
  -}
 
 newOptions = NewOptions <$> argument (str :: ReadM String) (metavar "PROJECTDIR")
+
+buildOptions :: Parser BuildOptions
+buildOptions = BuildOptions
+        <$> compileOptions
+        <*> many (argument str (metavar "ACTONFILE" <> help "Specific .act file(s) to build"))
 
 compileOptions = CompileOptions
         <$> switch (long "always-build" <> help "Show the result of parsing")
