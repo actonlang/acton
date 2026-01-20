@@ -68,6 +68,7 @@ import Data.String.Utils (replace)
 import Data.Version (showVersion)
 import Data.Char (isAlpha, toLower, isSpace)
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Char8 as B
 import qualified Data.List
 import Data.Either (partitionEithers)
 import qualified Data.Map as M
