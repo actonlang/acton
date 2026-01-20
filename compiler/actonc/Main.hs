@@ -99,12 +99,13 @@ import qualified System.Exit
 import qualified Paths_actonc
 import Text.Printf
 
-import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Types as AesonTypes
 import qualified Data.Aeson.Key as AesonKey
 import qualified Data.Aeson.KeyMap as AesonKM
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as TE
 import Control.Concurrent.QSem (newQSem, waitQSem, signalQSem)
 
 main = do
@@ -860,7 +861,7 @@ parseJsonLines txt =
     | line <- lines txt
     , let trimmed = dropWhile isSpace line
     , not (null trimmed)
-    , Just v <- [Aeson.decodeStrict' (B.pack trimmed)]
+    , Just v <- [Aeson.decodeStrict' (TE.encodeUtf8 (T.pack trimmed))]
     ]
 
 -- | Extract test names from a JSON list payload.
