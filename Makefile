@@ -14,7 +14,7 @@ export ZIG_LOCAL_CACHE_DIR
 ACTON=$(TD)/dist/bin/acton
 ACTONC=dist/bin/actonc
 ACTC=$(TD)/dist/bin/actonc
-ZIG_VERSION:=0.13.0
+ZIG_VERSION:=0.14.1
 ZIG=$(TD)/dist/zig/zig
 CURL:=curl --fail --location --retry 5 --retry-delay 2 --retry-max-time 120 --retry-all-errors --retry-connrefused
 AR=$(ZIG) ar
@@ -160,7 +160,7 @@ clean-downloads:
 
 
 # /deps/libargp --------------------------------------------
-LIBARGP_REF=a30e99cda3fabc591727a8df3aee5524c2392e15
+LIBARGP_REF=a6b4bd28410e88a8d5736128ecba0d593f03dfd3
 deps-download/$(LIBARGP_REF).tar.gz:
 	mkdir -p deps-download
 	$(CURL) -o $@ https://github.com/actonlang/argp-standalone/archive/$(LIBARGP_REF).tar.gz
@@ -183,7 +183,7 @@ dist/deps/libbsdnt: deps-download/$(LIBBSDNT_REF).tar.gz
 	touch "$(TD)/$@"
 
 # /deps/libgc --------------------------------------------
-LIBGC_REF=0a23b211b558137de7ee654c5527a54113142517
+LIBGC_REF=b65b95a8e893bdb7256e5a82cb459db24f09577e
 deps-download/$(LIBGC_REF).tar.gz:
 	mkdir -p deps-download
 	$(CURL) -o $@ https://github.com/actonlang/bdwgc/archive/$(LIBGC_REF).tar.gz
@@ -217,7 +217,7 @@ dist/deps/libprotobuf_c: deps-download/$(LIBPROTOBUF_C_REF).tar.gz
 	touch "$(TD)/$@"
 
 # /deps/tlsuv ---------------------------------------------
-TLSUV_REF=8854f5626963e443fd8647793f18173140de6a7e
+TLSUV_REF=246b37003ab3f787020fd473779fd05a5e51a96b
 deps-download/$(TLSUV_REF).tar.gz:
 	mkdir -p deps-download
 	$(CURL) -o $@ https://github.com/actonlang/tlsuv/archive/$(TLSUV_REF).tar.gz
@@ -244,7 +244,7 @@ dist/deps/libuuid: deps/libuuid
 	cp -a "$</"* "$(TD)/$@"
 
 # /deps/libuv --------------------------------------------
-LIBUV_REF=f20620733fb8fb5fb261699bbb858887ac6ec0bb
+LIBUV_REF=0112183b6aa43f27ef5985a143f0aff1689e1e16
 deps-download/$(LIBUV_REF).tar.gz:
 	mkdir -p deps-download
 	$(CURL) -o $@ https://github.com/actonlang/libuv/archive/$(LIBUV_REF).tar.gz
@@ -267,7 +267,7 @@ dist/deps/libxml2: deps-download/$(LIBXML2_REF).tar.gz
 	touch "$(TD)/$@"
 
 # /deps/pcre2 --------------------------------------------
-LIBPCRE2_REF=e9967bee566dedc213d467660bc25ed495bb693b
+LIBPCRE2_REF=2f798e7b2bd9eec36e7ff3ba5eefe66371320e2f
 deps-download/$(LIBPCRE2_REF).tar.gz:
 	mkdir -p deps-download
 	$(CURL) -o $@ https://github.com/actonlang/pcre2/archive/$(LIBPCRE2_REF).tar.gz
@@ -278,7 +278,7 @@ dist/deps/pcre2: deps-download/$(LIBPCRE2_REF).tar.gz
 	touch "$(TD)/$@"
 
 # /deps/libsnappy_c --------------------------------------------
-LIBSNAPPY_C_REF=3f5b95957558a35c2becbe6b628c8219477dd5a4
+LIBSNAPPY_C_REF=8342b6cfb99f861e7768a4255f8a4efe7de83d3b
 deps-download/$(LIBSNAPPY_C_REF).tar.gz:
 	mkdir -p deps-download
 	$(CURL) -o $@ https://github.com/actonlang/snappy/archive/$(LIBSNAPPY_C_REF).tar.gz
@@ -429,7 +429,7 @@ dist/completion/acton.bash-completion: completion/acton.bash-completion
 	mkdir -p "$(dir $@)"
 	cp "$<" "$@"
 
-dist/zig: deps-download/zig-$(OS)-$(ARCH)-$(ZIG_VERSION).tar.xz
+dist/zig: deps-download/zig-$(ARCH)-$(OS)-$(ZIG_VERSION).tar.xz
 	mkdir -p "$@"
 	cd "$@" && tar Jx --strip-components=1 -f "../../$^"
 	rm -rf "$@/doc"
@@ -438,13 +438,13 @@ dist/zig: deps-download/zig-$(OS)-$(ARCH)-$(ZIG_VERSION).tar.xz
 
 # Check if ZIG_VERSION contains -dev, in which case we pull down a nightly,
 # otherwise its a release
-deps-download/zig-$(OS)-$(ARCH)-$(ZIG_VERSION).tar.xz:
+deps-download/zig-$(ARCH)-$(OS)-$(ZIG_VERSION).tar.xz:
 	mkdir -p deps-download
 ifeq ($(findstring -dev,$(ZIG_VERSION)),-dev)
-	$(CURL) -o $@ https://github.com/actonlang/zigballs/raw/main/zig-$(OS)-$(ARCH)-$(ZIG_VERSION).tar.xz
-#	$(CURL) -o $@ https://ziglang.org/builds/zig-$(OS)-$(ARCH)-$(ZIG_VERSION).tar.xz
+	$(CURL) -o $@ https://github.com/actonlang/zigballs/raw/main/zig-$(ARCH)-$(OS)-$(ZIG_VERSION).tar.xz
+#	$(CURL) -o $@ https://ziglang.org/builds/zig-$(ARCH)-$(OS)-$(ZIG_VERSION).tar.xz
 else
-	$(CURL) -o $@ https://ziglang.org/download/$(ZIG_VERSION)/zig-$(OS)-$(ARCH)-$(ZIG_VERSION).tar.xz
+	$(CURL) -o $@ https://ziglang.org/download/$(ZIG_VERSION)/zig-$(ARCH)-$(OS)-$(ZIG_VERSION).tar.xz
 endif
 
 .PHONY: distribution1 distribution clean-distribution

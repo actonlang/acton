@@ -1,6 +1,8 @@
 .{
-    .name = "actonbase",
+    .name = .actonbase,
     .version = "0.0.0",
+    .fingerprint = 0xd50287f7af37f221,
+    .minimum_zig_version = "0.14.1",
     .dependencies = .{
         // Dependencies from build.act.json
         // base dependencies

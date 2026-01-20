@@ -167,7 +167,14 @@ pub fn build(b: *std.Build) void {
                             std.posix.exit(1);
                         };
                     } else {
-                        c_files.append(fPath.full_path) catch |err| {
+                        // Store relative path from build root, not absolute path
+                        const rel_path = b.allocator.alloc(u8, 9 + fPath.file_path.len) catch |err| {
+                            std.log.err("Error allocating relative path: {}", .{err});
+                            std.posix.exit(1);
+                        };
+                        @memcpy(rel_path[0..9], "out/types");
+                        @memcpy(rel_path[9..], fPath.file_path);
+                        c_files.append(rel_path) catch |err| {
                             std.log.err("Error appending to .c files: {}", .{err});
                             std.posix.exit(1);
                         };
@@ -235,7 +242,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     for (c_files.items) |entry| {
-        libActon.addCSourceFile(.{ .file = .{ .cwd_relative = entry }, .flags = flags.items });
+        libActon.addCSourceFile(.{ .file = b.path(entry), .flags = flags.items });
     }
     libActon.installHeadersDirectory(b.path("builtin"), "builtin", .{});
 

@@ -31,12 +31,15 @@ class BuildSpec(object):
     description: ?str
     dependencies: dict[str, PkgDependency]
     zig_dependencies: dict[str, ZigDependency]
+    # Acton-managed package fingerprint (string, e.g. "0x1234abcd...")
+    fingerprint: ?str
 
-    def __init__(self, name: ?str=None, description: ?str=None, dependencies: dict[str, PkgDependency]={}, zig_dependencies: dict[str, ZigDependency]={}):
+    def __init__(self, name: ?str=None, description: ?str=None, dependencies: dict[str, PkgDependency]={}, zig_dependencies: dict[str, ZigDependency]={}, fingerprint: ?str=None):
         self.name = name
         self.description = description
         self.dependencies = dependencies
         self.zig_dependencies = zig_dependencies
+        self.fingerprint = fingerprint
 
     @staticmethod
     def from_json(data: str):
@@ -45,6 +48,7 @@ class BuildSpec(object):
         description = None
         new_dependencies = {}
         new_zig_dependencies = {}
+        new_fingerprint: ?str = None
         if isinstance(jd, dict):
             for key, value in jd.items():
                 if isinstance(key, str):
@@ -86,12 +90,19 @@ class BuildSpec(object):
                                     raise ValueError("Invalid build.act.json, zig_dependencies should be a dict")
                         else:
                             raise ValueError("Invalid build.act.json, zig_dependencies should be a dict")
+                    elif key == "fingerprint":
+                        if value is None:
+                            new_fingerprint = None
+                        elif isinstance(value, str):
+                            new_fingerprint = value
+                        else:
+                            raise ValueError("Invalid build.act.json, fingerprint should be a string like 0xdeadbeef...")
                     else:
                         raise ValueError(f"Invalid build.act.json, unknown key '{key}'")
                 else:
                     raise ValueError("Invalid build.act.json, non-string key found in top level dict")
 
-            return BuildSpec(name, description, new_dependencies, new_zig_dependencies)
+            return BuildSpec(name, description, new_dependencies, new_zig_dependencies, new_fingerprint)
         raise ValueError("Invalid build.act.json, top level should be a dict")
 
     def to_json(self) -> str:
@@ -111,8 +122,20 @@ class BuildSpec(object):
         description = self.description
         if description is not None:
             res["description"] = description
+        if self.fingerprint is not None:
+            res["fingerprint"] = self.fingerprint
         return json.encode(res, pretty=True)
 
+def extract_fingerprint(zon_text: str) -> ?str:
+    for line in zon_text.split("\n"):
+        sline = line.strip()
+        if sline.startswith(".fingerprint"):
+            parts = sline.split("=", 1)
+            if len(parts) == 2:
+                value = parts[1].strip().rstrip(",")
+                if re.match(r"^0x[0-9a-fA-F]+$", value) is not None and value != "0xacedf00dacedf00d":
+                    return value
+    return None
 
 class Dependency(object):
     name: str
@@ -352,7 +375,12 @@ def gen_buildzigzon(template: str, build_config: BuildSpec, relative_syspath: st
         "",
     ]
     for line in template.split("\n"):
-        res.append(line.replace(r"{{syspath}}", relative_syspath))
+        line = line.replace(r"{{syspath}}", relative_syspath)
+        if "{{fingerprint}}" in line:
+            if build_config.fingerprint is None:
+                continue
+            line = line.replace(r"{{fingerprint}}", str(build_config.fingerprint))
+        res.append(line)
         sline = line.strip()
         if sline == "// Dependencies from build.act.json":
             res.append(deps)

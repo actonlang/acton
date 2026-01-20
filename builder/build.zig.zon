@@ -1,6 +1,8 @@
 .{
-    .name = "actonproject",
+    .name = .actonproject,
     .version = "0.0.0",
+    .fingerprint = {{fingerprint}},
+    .minimum_zig_version = "0.14.1",
     .dependencies = .{
         // Dependencies from build.act.json
         // base dependencies

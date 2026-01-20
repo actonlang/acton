@@ -55,16 +55,19 @@ import Control.Exception (bracketOnError)
 import Control.Concurrent (ThreadId, forkIO, killThread, threadDelay)
 import Control.Concurrent.Chan (Chan, newChan, writeChan, readChan)
 import Control.Monad
+import Data.Bits
 import Data.Default.Class (def)
 import Data.List.Split
 import Data.IORef
 import Data.Maybe (catMaybes, isJust, listToMaybe, fromMaybe)
 import Data.Monoid ((<>))
 import Data.Ord
+import Data.Word (Word32, Word64)
 import Data.Graph
 import Data.String.Utils (replace)
 import Data.Version (showVersion)
 import Data.Char (isAlpha, toLower, isSpace)
+import qualified Data.ByteString as BS
 import qualified Data.List
 import Data.Either (partitionEithers)
 import qualified Data.Map as M
@@ -97,7 +100,9 @@ import qualified System.FSNotify as FS
 import qualified System.Environment
 import qualified System.Exit
 import qualified Paths_actonc
+import System.Random (randomRIO)
 import Text.Printf
+import Numeric (showHex)
 
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.Aeson as Aeson
@@ -225,6 +230,28 @@ writeFile f c = do
     hSetEncoding h utf8
     hPutStr h c
     hClose h
+
+ignoreIOException :: IOException -> IO ()
+ignoreIOException _ = return ()
+
+writeFileAtomic :: FilePath -> String -> IO ()
+writeFileAtomic f c = do
+    let dir = takeDirectory f
+    bracketOnError
+      (openTempFile dir ".acton-tmp")
+      (\(tmpPath, tmpHandle) -> do
+          hClose tmpHandle `catch` ignoreIOException
+          removeFile tmpPath `catch` ignoreIOException)
+      (\(tmpPath, tmpHandle) -> do
+          hSetEncoding tmpHandle utf8
+          hPutStr tmpHandle c
+          hClose tmpHandle
+          renameFile tmpPath f `catch` handleRenameError tmpPath)
+  where
+    handleRenameError :: FilePath -> IOException -> IO ()
+    handleRenameError tmpPath _ = do
+        removeFile f `catch` ignoreIOException
+        renameFile tmpPath f
 
 -- | Format a TimeSpec as seconds with millisecond precision.
 fmtTime t =
@@ -1982,6 +2009,30 @@ runZig gopts opts zigExe zigArgs paths wd = do
           cleanup gopts opts paths
           unless (C.watch opts) System.Exit.exitFailure
 
+crc32IsoHdlc :: BS.ByteString -> Word32
+crc32IsoHdlc bs = complement (BS.foldl' update 0xffffffff bs)
+  where
+    update crc byte = go 0 (crc `xor` fromIntegral byte)
+    go 8 crc = crc
+    go n crc =
+        let crc' = if (crc .&. 1) /= 0
+                     then (crc `shiftR` 1) `xor` 0xEDB88320
+                     else crc `shiftR` 1
+        in go (n + 1) crc'
+
+formatFingerprint :: Word64 -> String
+formatFingerprint fp =
+    let hex = showHex fp ""
+        padded = replicate (16 - length hex) '0' ++ hex
+    in "0x" ++ padded
+
+generateFingerprint :: String -> IO String
+generateFingerprint name = do
+    ident <- randomRIO (1, 0xfffffffe :: Word32)
+    let checksum = crc32IsoHdlc (B.pack name)
+        fp = (fromIntegral checksum `shiftL` 32) .|. fromIntegral ident
+    return (formatFingerprint fp)
+
 -- Render build.zig and build.zig.zon from templates and BuildSpec
 -- rootPins: dependency pins from the main project (applied to all deps, including transitive)
 genBuildZigFiles :: M.Map String BuildSpec.PkgDep -> [(String, FilePath)] -> Paths -> IO ()
@@ -1995,6 +2046,7 @@ genBuildZigFiles rootPins depOverrides paths = do
         distBuildZonPath = joinPath [sys, "builder", "build.zig.zon"]
     buildZigTemplate <- readFile distBuildZigPath
     buildZonTemplate <- readFile distBuildZonPath
+    fp <- generateFingerprint "actonproject"
     spec0 <- loadBuildSpec proj
     spec  <- traverse (applyDepOverrides proj depOverrides) spec0
     (transPkgs, transZigs) <- collectDepsRecursive proj rootPins depOverrides
@@ -2006,13 +2058,14 @@ genBuildZigFiles rootPins depOverrides paths = do
     let applyPins deps = M.mapWithKey (\n d -> M.findWithDefault d n rootPins) deps
         mergedSpec = fmap (\s -> s { BuildSpec.dependencies     = applyPins (BuildSpec.dependencies s) `M.union` transPkgs
                                    , BuildSpec.zig_dependencies = BuildSpec.zig_dependencies s `M.union` transZigs }) normalizedSpec
+        zonWithFp = replace "{{fingerprint}}" fp
     case mergedSpec of
       Nothing -> do
         writeFile buildZigPath buildZigTemplate
-        writeFile buildZonPath (replace "{{syspath}}" relSys buildZonTemplate)
+        writeFileAtomic buildZonPath (zonWithFp (replace "{{syspath}}" relSys buildZonTemplate))
       Just s -> do
         writeFile buildZigPath (genBuildZig buildZigTemplate s)
-        writeFile buildZonPath (genBuildZigZon buildZonTemplate relSys depsRootAbs projAbs s)
+        writeFileAtomic buildZonPath (genBuildZigZon buildZonTemplate relSys depsRootAbs projAbs fp s)
 
 genBuildZig :: String -> BuildSpec.BuildSpec -> String
 genBuildZig template spec =
@@ -2057,12 +2110,12 @@ genBuildZig template spec =
     zigExeLink (name, dep) = concat [ "            executable.linkLibrary(dep_" ++ name ++ ".artifact(\"" ++ art ++ "\"));\n"
                                     | art <- BuildSpec.artifacts dep ]
 
-genBuildZigZon :: String -> String -> FilePath -> FilePath -> BuildSpec.BuildSpec -> String
-genBuildZigZon template relSys depsRootAbs projAbs spec =
+genBuildZigZon :: String -> String -> FilePath -> FilePath -> String -> BuildSpec.BuildSpec -> String
+genBuildZigZon template relSys depsRootAbs projAbs fingerprint spec =
     let pkgDeps = concatMap (pkgToZon projAbs depsRootAbs) (M.toList (BuildSpec.dependencies spec))
         zigDeps = concatMap zigToZon (M.toList (BuildSpec.zig_dependencies spec))
         deps = pkgDeps ++ zigDeps
-        replaced = map (replace "{{syspath}}" relSys) (lines template)
+        replaced = map (replace "{{fingerprint}}" fingerprint . replace "{{syspath}}" relSys) (lines template)
         header = [ "// AUTOMATICALLY GENERATED BY ACTON BUILD SYSTEM"
                  , "// DO NOT EDIT, CHANGES WILL BE OVERWRITTEN!!!!!"
                  , ""
@@ -2107,7 +2160,9 @@ genBuildZigZon template relSys depsRootAbs projAbs spec =
     maybeEmpty (Just s) = s
     maybeEmpty Nothing  = ""
 
-#if defined(aarch64_HOST_ARCH)
+#if defined(darwin_HOST_OS) && defined(aarch64_HOST_ARCH)
+defCpuFlag = ["-Dcpu=apple_m1"]
+#elif defined(aarch64_HOST_ARCH)
 defCpuFlag = ["-Dcpu=generic+crypto"]
 #elif defined(x86_64_HOST_ARCH)
 defCpuFlag = ["-Dcpu=x86_64_v2+aes"]
@@ -2162,11 +2217,12 @@ zigBuild env gopts opts paths tasks binTasks allowPrune = do
         cpuArgs =
             if (C.cpu opts /= "") then ["-Dcpu=" ++ C.cpu opts]
             else case (splitOn "-" (C.target opts)) of
-                   ("native":_)   -> defCpuFlag
-                   ("aarch64":_)  -> ["-Dcpu=generic+crypto"]
-                   ("x86_64":_)   -> ["-Dcpu=x86_64_v2+aes"]
-                   (_:_)          -> defCpuFlag
-                   []             -> defCpuFlag
+                   ("native":_)            -> defCpuFlag
+                   ("aarch64":"macos":_)   -> ["-Dcpu=apple_m1"]
+                   ("aarch64":_)           -> ["-Dcpu=generic+crypto"]
+                   ("x86_64":_)            -> ["-Dcpu=x86_64_v2+aes"]
+                   (_:_)                   -> defCpuFlag
+                   []                      -> defCpuFlag
         optArgs = ["-Doptimize=" ++ optimizeModeToZig (C.optimize opts)]
         featureArgs = concat [ if C.db opts then ["-Ddb"] else []
                              , if no_threads then ["-Dno_threads"] else []

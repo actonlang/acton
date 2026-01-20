@@ -114,7 +114,14 @@ pub fn build(b: *std.Build) void {
                             std.posix.exit(1);
                         };
                     } else {
-                        c_files.append(fPath.full_path) catch |err| {
+                        // Store relative path from build root, not absolute path
+                        const rel_path = b.allocator.alloc(u8, 9 + fPath.file_path.len) catch |err| {
+                            std.log.err("Error allocating relative path: {}", .{err});
+                            std.posix.exit(1);
+                        };
+                        @memcpy(rel_path[0..9], "out/types");
+                        @memcpy(rel_path[9..], fPath.file_path);
+                        c_files.append(rel_path) catch |err| {
                             std.log.err("Error appending to .c files: {}", .{err});
                             std.posix.exit(1);
                         };
@@ -142,7 +149,7 @@ pub fn build(b: *std.Build) void {
             std.posix.exit(1);
         };
         dummy_file.close();
-        c_files.append(dummy_abs) catch |err| {
+        c_files.append(dummy_rel) catch |err| {
             std.log.err("Error appending dummy C file path: {}", .{err});
             std.posix.exit(1);
         };
@@ -196,10 +203,10 @@ pub fn build(b: *std.Build) void {
     }) catch unreachable;
 
     for (c_files.items) |entry| {
-        libActonProject.addCSourceFile(.{ .file = .{ .cwd_relative = entry }, .flags = flags.items });
+        libActonProject.addCSourceFile(.{ .file = b.path(entry), .flags = flags.items });
     }
 
-    libActonProject.addIncludePath(.{ .cwd_relative = buildroot_path });
+    libActonProject.addIncludePath(b.path("."));
 
     // lib: link with dependencies / get headers from build.act.json
 
@@ -279,8 +286,12 @@ pub fn build(b: *std.Build) void {
                 .target = target,
                 .optimize = optimize,
             });
-            executable.addCSourceFile(.{ .file = .{ .cwd_relative = entry.full_path }, .flags = flags.items });
-            executable.addIncludePath(.{ .cwd_relative = buildroot_path });
+            // Build relative path for the executable source file
+            const exe_rel_path = b.allocator.alloc(u8, 9 + entry.file_path.len) catch @panic("OOM");
+            @memcpy(exe_rel_path[0..9], "out/types");
+            @memcpy(exe_rel_path[9..], entry.file_path);
+            executable.addCSourceFile(.{ .file = b.path(exe_rel_path), .flags = flags.items });
+            executable.addIncludePath(b.path("."));
             executable.linkLibrary(libActonProject);
 
             executable.linkLibrary(actonbase_dep.artifact("Acton"));

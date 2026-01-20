@@ -91,10 +91,11 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     libactondb.addCSourceFiles(.{
+        .root = b.path("."),
         .files = &libactondb_sources,
         .flags = flags.items
     });
-    libactondb.defineCMacro("LOG_USER_COLOR", "");
+    libactondb.root_module.addCMacro("LOG_USER_COLOR", "");
     libactondb.linkLibrary(dep_libgc.artifact("gc"));
     libactondb.linkLibrary(dep_libprotobuf_c.artifact("protobuf-c"));
     libactondb.linkLibrary(dep_libuuid.artifact("uuid"));
@@ -115,7 +116,6 @@ pub fn build(b: *std.Build) void {
         "-fno-sanitize=undefined",
     }});
     actondb.addCSourceFile(.{ .file = b.path("log.c"), .flags = flags.items });
-    actondb.addLibraryPath(b.path("../lib"));
     actondb.linkLibrary(libactondb);
     actondb.linkLibrary(dep_libargp.artifact("argp"));
     actondb.linkLibrary(dep_libnetstring.artifact("netstring"));

@@ -128,6 +128,19 @@ def write_buildzig(file_cap, build_spec):
         return build_zig_template, build_zig_zon_template
 
     build_zig_tpl, build_zig_zon_tpl = get_build_zig_templates()
+    if build_spec.fingerprint == "0xacedf00dacedf00d":
+        build_spec.fingerprint = None
+    if build_spec.fingerprint is None:
+        try:
+            existing_zon = file.ReadFile(
+                file.ReadFileCap(file_cap), "build.zig.zon").read().decode()
+            fp = extract_fingerprint(existing_zon)
+            if fp is not None:
+                build_spec.fingerprint = fp
+        except FileNotFoundError:
+            pass
+        except:
+            pass
     # Write build.zig
     b_file = file.WriteFile(file.WriteFileCap(file_cap), "build.zig")
     b_file.write(gen_buildzig(build_zig_tpl, build_spec).encode())

@@ -1,6 +1,8 @@
 .{
-    .name = "backend",
+    .name = .actondb,
     .version = "0.0.0",
+    .fingerprint = 0xb1be0c7ca3b92d45,
+    .minimum_zig_version = "0.14.1",
     .dependencies = .{
         .libargp = .{
             .path = "deps/libargp/",

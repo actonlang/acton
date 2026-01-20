@@ -42,6 +42,7 @@ dependencies:
   - prettyprinter
   - pretty-show
   - process
+  - random
   - split
   - system-filepath
   - sydtest
