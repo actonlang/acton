@@ -74,18 +74,16 @@ instance Polarity Env where
 
 -- Constraints -------------------------------------------------------------------------------
 
-data Constraint = Cast  {info :: ErrInfo, scope :: QScope, type1 :: Type, type2 :: Type}
-                | Sub   {info :: ErrInfo, scope :: QScope, wit :: Name, type1 :: Type, type2 :: Type}
-                | Proto {info :: ErrInfo, scope :: QScope, wit :: Name, type1 :: Type, proto1 :: PCon}
-                | Sel   {info :: ErrInfo, scope :: QScope, wit :: Name, type1 :: Type, name1 :: Name, type2 :: Type}
-                | Mut   {info :: ErrInfo, scope :: QScope, type1 :: Type, name1 :: Name, type2 :: Type}
-                | Seal  {info :: ErrInfo, scope :: QScope, type1 :: Type}
+data Constraint = Cast  {info :: ErrInfo, scope :: Env, type1 :: Type, type2 :: Type}
+                | Sub   {info :: ErrInfo, scope :: Env, wit :: Name, type1 :: Type, type2 :: Type}
+                | Proto {info :: ErrInfo, scope :: Env, wit :: Name, type1 :: Type, proto1 :: PCon}
+                | Sel   {info :: ErrInfo, scope :: Env, wit :: Name, type1 :: Type, name1 :: Name, type2 :: Type}
+                | Mut   {info :: ErrInfo, scope :: Env, type1 :: Type, name1 :: Name, type2 :: Type}
+                | Seal  {info :: ErrInfo, scope :: Env, type1 :: Type}
                 | Imply {info :: ErrInfo, wit :: Name, binder :: QBinds, scoped :: Constraints}
                 deriving (Show)
 
 type Constraints = [Constraint]
-
-type QScope     = Env
 
 instance HasLoc Constraint where
     loc (Cast info env t1 t2)       = getLoc [loc info, loc t1, loc t2]
@@ -681,7 +679,11 @@ instance Pretty Equation where
     pretty (QEqn n q eqs)               = pretty n <+> colon <+> pretty q <+> text "=>" $+$
                                           nest 4 (pretty eqs)
 
-bindWits eqs                            = [ sAssign (pVar w t) e | Eqn w t e <- eqs ]
+bindWits eqs
+  | null sigws                          = binds
+  | otherwise                           = Signature NoLoc sigws (monotype tWild) NoDec : binds
+  where sigws                           = [ w | Eqn w _ (NotImplemented _) <- eqs ]
+        binds                           = [ sAssign (pVar w t) e | Eqn w t e <- eqs, w `notElem` sigws ]
 
 
 -- The following two functions generate quantified witness definitions and calls, respectively.
@@ -716,6 +718,20 @@ insertOrMerge (qe:eqs) eqs0             = insertOrMerge eqs (ins qe eqs0)
         ins qe (eq : eqs0)              = eq : ins qe eqs0
         ins qe@(QEqn w _ eq) []         = [qe]
 
+
+scopedWits env0 q cs                    = scoped cs
+  where level1                          = qlevel env0 + length q
+        scoped (Sub _ env w _ _ : cs)
+          | qlevel env == level1        = w : scoped cs
+          | qlevel env < level1         = trace ("### Bad constraint level for " ++ prstr w) $ scoped cs
+        scoped (Proto _ env w _ _ : cs)
+          | qlevel env == level1        = w : scoped cs
+          | qlevel env < level1         = trace ("### Bad constraint level for " ++ prstr w) $ scoped cs
+        scoped (Sel _ env w _ _ _ : cs)
+          | qlevel env == level1        = w : scoped cs
+          | qlevel env < level1         = trace ("### Bad constraint level for " ++ prstr w) $ scoped cs
+        scoped (_ : cs)                 = scoped cs
+        scoped []                       = []
 
 -- Misc. ---------------------------------------------------------------------------------------------------------------------------
 

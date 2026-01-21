@@ -20,6 +20,7 @@ import Acton.Names
 import Acton.Builtin
 import Acton.Prim
 import Acton.Printer
+import Acton.TypeEnv
 
 
 termred                                 :: Stmt -> Stmt
@@ -34,12 +35,13 @@ class Transform a where
     trans                               :: TransEnv -> a -> a
 
 data TransEnv                           = TransEnv {
+                                            eqns     :: Equations,                  -- Top-level constraint solutions
                                             trsubst  :: [(Name,Maybe Expr)],        -- Inlineable assignments in scope
                                             qwits    :: [(Name,[Stmt])],            -- Quantified witness defs in scope, paired with their local witness assignments
                                             witscope :: [(Name,Type,Expr)]          -- Preserved witness bindings in scope, for the purpose of duplicate removals
                                           }
 
-env0                                    = TransEnv{ trsubst = [], qwits = [], witscope = [] }
+env0                                    = TransEnv{ eqns = [], trsubst = [], qwits = [], witscope = [] }
 
 blockscope ns env                       = env{ trsubst = (ns `zip` repeat Nothing) ++ trsubst env }
 
@@ -50,6 +52,12 @@ limsubst ns env                         = env{ trsubst = trsubst env `exclude` n
 trfind n env                            = case lookup n (trsubst env) of
                                             Just (Just e) -> Just e
                                             _ -> Nothing
+
+findeqns [] env                         = []
+findeqns ws env                         = findeqns ws' env ++ match
+  where match                           = [ sAssign (pVar w t) e | eq@(Eqn w t e) <- eqns env, w `elem` ws ]
+        ws'                             = filter isWitness $ free match
+
 
 -- Assumed invariants: if a def defines a witness, it is of the form
 --
@@ -97,6 +105,9 @@ equalwit env e t                        = listToMaybe [ eVar w | (w,t',e') <- wi
 instance Pretty (Name,Expr) where
     pretty (n,e)                        = pretty n <+> text "~" <+> pretty e
 
+wtrans env (Signature _ ws (TSchema _ [] (TWild _)) NoDec : ss)
+                                        = wtrans env (bindings ++ ss)
+  where bindings                        = findeqns ws env
 wtrans env (s@(Assign l p@[PVar _ w (Just t)] e) : ss)
   | not (isWitness w)                   = trans env s : wtrans env ss
   | Lambda{} <- e                       = wtrans (extsubst [(w,e1)] env) ss

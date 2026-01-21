@@ -49,30 +49,28 @@ simplifyGroupsNew env (cs:css)              = do --traceM ("\n\n######### simpli
                                                  return (cs1++cs2, eq1++eq2)
 
 -- Reduce conservatively and remove entailed constraints
-simplify                                    :: Env -> TEnv -> Type -> Constraints -> TypeM (Constraints,Equations)
-simplify env te tt cs                       = do css <- groupCs env cs
+simplify                                    :: Env -> TEnv -> Constraints -> TypeM (Constraints,Equations)
+simplify env te cs                          = do css <- groupCs env cs
                                                  te <- usubst te
-                                                 tt <- usubst tt
                                                  --traceM ("#### SIMPLIFY " ++ prstrs (map length css))
                                                  --sequence [ traceM ("## long:\n" ++ render (nest 4 $ vcat $ map pretty cs)) | cs <- css, length cs > 500 ]
-                                                 combine <$> simplifyGroups env te tt css
+                                                 combine <$> simplifyGroups env te css
 
-simplifyGroups env te tt []                 = return ([], [])
-simplifyGroups env te tt (cs:css)           = do --traceM ("\n\n######### simplifyGroup\n" ++ render (nest 4 $ vcat $ map pretty cs))
-                                                 (cs1,eq1) <- simplify' env te tt [] cs `catchError` \err -> Control.Exception.throw err
-                                                 (cs2,eq2) <- simplifyGroups env te tt css
+simplifyGroups env te []                    = return ([], [])
+simplifyGroups env te (cs:css)              = do --traceM ("\n\n######### simplifyGroup\n" ++ render (nest 4 $ vcat $ map pretty cs))
+                                                 (cs1,eq1) <- simplify' env te [] cs `catchError` \err -> Control.Exception.throw err
+                                                 (cs2,eq2) <- simplifyGroups env te css
                                                  return (cs1++cs2, eq1++eq2)
 
-simplify'                                   :: Env -> TEnv -> Type -> Equations -> Constraints -> TypeM (Constraints,Equations)
-simplify' env te tt eq []                   = return ([], eq)
-simplify' env te tt eq cs                   = do eq <- reduce env eq cs
+simplify'                                   :: Env -> TEnv -> Equations -> Constraints -> TypeM (Constraints,Equations)
+simplify' env te eq []                      = return ([], eq)
+simplify' env te eq cs                      = do eq <- reduce env eq cs
                                                  cs <- usubst =<< collectDeferred
                                                  --traceM ("## Improving " ++ show (length cs))
                                                  --traceM ("## Improving:\n" ++ render (nest 8 $ vcat $ map pretty cs))
                                                  env <- usubst env      -- Remove....
                                                  te <- usubst te
-                                                 tt <- usubst tt
-                                                 improve env te tt eq cs
+                                                 improve env te eq cs
 
 quicksimp env eq []                         = return ([], eq)
 quicksimp env eq cs                         = do eq1 <- reduce env eq cs
@@ -245,21 +243,20 @@ instance Pretty Rank where
     pretty RSkip                            = text "<skip>"
 
 solve                                       :: Env -> (Constraint -> Bool) ->
-                                               TEnv -> Type -> Equations -> Constraints -> TypeM (Constraints,Equations)
-solve env select te tt eq cs                = do css <- groupCs env cs
+                                               TEnv -> Equations -> Constraints -> TypeM (Constraints,Equations)
+solve env select te eq cs                   = do css <- groupCs env cs
                                                  te <- usubst te
-                                                 tt <- usubst tt
-                                                 (cs',eq') <- solveGroups env select te tt eq css
+                                                 (cs',eq') <- solveGroups env select te eq css
                                                  return $ combine (cs', eq')
 
-solveGroups env select te tt eq []          = return ([], eq)
-solveGroups env select te tt eq (cs:css)    = do --traceM ("\n\n######### solveGroup\n" ++ render (nest 4 $ vcat $ map pretty cs))
+solveGroups env select te eq []             = return ([], eq)
+solveGroups env select te eq (cs:css)       = do --traceM ("\n\n######### solveGroup\n" ++ render (nest 4 $ vcat $ map pretty cs))
                                                  --traceM ("  ### te:\n" ++ render (nest 4 $ vcat $ map pretty te))
-                                                 (cs1,eq1) <- solve' env select [] te tt eq cs `catchError` \err -> Control.Exception.throw err
-                                                 (cs2,eq2) <- solveGroups env select te tt eq1 css
+                                                 (cs1,eq1) <- solve' env select [] te eq cs `catchError` \err -> Control.Exception.throw err
+                                                 (cs2,eq2) <- solveGroups env select te eq1 css
                                                  return (cs1++cs2, eq2)
 
-solve' env select hist te tt eq cs
+solve' env select hist te eq cs
   | not $ null vargoals                     = do --traceM (unlines [ "### var goal " ++ prstr t ++ " ~ " ++ prstrs alts | RVar t alts <- vargoals ])
                                                  --traceM ("### var goals: " ++ show (sum [ length alts | RVar t alts <- vargoals ]))
                                                  sequence [ unify (noinfo 2) (tUni v) t | RVar v alts <- vargoals, t <- alts ]
@@ -330,16 +327,15 @@ solve' env select hist te tt eq cs
                                                  unify (noinfo 5) (tUni v) t
                                                  (cs,eq) <- quicksimp env eq cs
                                                  hist <- usubst hist
-                                                 solve' env select hist te tt eq cs
+                                                 solve' env select hist te eq cs
         tryAlt v t                          = do t <- instwild env (uvkind v) t
                                                  --traceM ("  # trying " ++ prstr v ++ " = " ++ prstr t)
                                                  unify (noinfo 5) (tUni v) t
                                                  proceed (t:hist) eq cs
         proceed hist eq cs                  = do te <- usubst te
-                                                 tt <- usubst tt
-                                                 (cs,eq) <- simplify' env te tt eq cs
+                                                 (cs,eq) <- simplify' env te eq cs
                                                  hist <- usubst hist
-                                                 solve' env select hist te tt eq cs
+                                                 solve' env select hist te eq cs
 
         condense env rs                     = map cond (group rs)
           where cond (RRed c : rs)          = RRed c
@@ -366,7 +362,7 @@ solve' env select hist te tt eq cs
         optvs                               = optvars cs ++ optvars hist
         embvs                               = embvars cs
         univs                               = univars cs
-        (posvs, negvs)                      = polvars te `polcat` polvars tt
+        (posvs, negvs)                      = polvars te
 
         isVar RVar{}                        = True
         isVar _                             = False
@@ -1577,45 +1573,45 @@ instance Pretty [Type] where
 instance Pretty (TUni, Type) where
     pretty (uv, t)                      = pretty uv <+> text "~" <+> pretty t
 
-improve                                 :: Env -> TEnv -> Type -> Equations -> Constraints -> TypeM (Constraints,Equations)
-improve env te tt eq []                 = return ([], eq)
-improve env te tt eq cs
+improve                                 :: Env -> TEnv -> Equations -> Constraints -> TypeM (Constraints,Equations)
+improve env te eq []                    = return ([], eq)
+improve env te eq cs
   | Nothing <- info                     = do --traceM ("  *Resubmit " ++ show (length cs))
-                                             simplify' env te tt eq cs
+                                             simplify' env te eq cs
   | Left (v,vs) <- closure              = do --traceM ("  *Unify cycle " ++ prstr v ++ " = " ++ prstrs vs)
                                              sequence [ unify (noinfo 12) (tUni v) (tUni v') | v' <- vs ]
-                                             simplify' env te tt eq cs
+                                             simplify' env te eq cs
   | not $ null gsimple                  = do --traceM ("  *G-simplify " ++ prstrs [ (v,tUni v') | (v,v') <- gsimple ])
                                              --traceM ("  *obsvars: " ++ prstrs obsvars)
                                              --traceM ("  *varvars: " ++ prstrs (varvars vi))
                                              sequence [ unify (noinfo 13) (tUni v) (tUni v') | (v,v') <- gsimple ]
-                                             simplify' env te tt eq cs
+                                             simplify' env te eq cs
   | not $ null cyclic                   = tyerrs cyclic ("Cyclic subtyping:")
   | not $ null (multiUBnd++multiLBnd)   = do ub <- mapM (mkGLB env) multiUBnd   -- GLB of the upper bounds
                                              lb <- mapM (mkLUB env) multiLBnd   -- LUB of the lower bounds
                                              --traceM ("  *GLB " ++ prstrs ub)
                                              --traceM ("  *LUB " ++ prstrs lb)
-                                             simplify' env te tt eq (replace ub lb cs)
+                                             simplify' env te eq (replace ub lb cs)
   | not $ null posLBnd                  = do --traceM ("  *S-simplify (dn) " ++ prstrs posLBnd)
                                              --traceM ("   posnames "  ++ prstrs (posnames $ envX env))
                                              sequence [ unify (noinfo 15) (tUni v) t | (v,t) <- posLBnd ]
-                                             simplify' env te tt eq cs
+                                             simplify' env te eq cs
   | not $ null negUBnd                  = do --traceM ("  *S-simplify (up) " ++ prstrs negUBnd)
                                              --traceM ("   posnames "  ++ prstrs (posnames $ envX env))
                                              sequence [ unify (noinfo 16) (tUni v) t | (v,t) <- negUBnd ]
-                                             simplify' env te tt eq cs
+                                             simplify' env te eq cs
   | not $ null closUBnd                 = do --traceM ("  *Simplify upper closed bound " ++ prstrs closUBnd)
                                              sequence [ unify (noinfo 17) (tUni v) t | (v,t) <- closUBnd ]
-                                             simplify' env te tt eq cs
+                                             simplify' env te eq cs
   | not $ null closLBnd                 = do --traceM ("  *Simplify lower closed bound " ++ prstrs closLBnd)
                                              sequence [ unify (noinfo 18) (tUni v) t | (v,t) <- closLBnd ]
-                                             simplify' env te tt eq cs
+                                             simplify' env te eq cs
   | not $ null redEq                    = do --traceM ("  *(Context red) " ++ prstrs (deepwits redEq))
                                              sequence [ unify (noinfo 19) t1 t2 | (t1,t2) <- redUni ]
-                                             simplify' env te tt (insertOrMerge redEq eq) (remove (deepwits redEq) cs)
+                                             simplify' env te (insertOrMerge redEq eq) (remove (deepwits redEq) cs)
   | not $ null dots                     = do --traceM ("  *Implied mutation/selection solutions " ++ prstrs dots)
                                              (eq',cs') <- solveDots env mutC selC selP cs
-                                             simplify' env te tt (eq'++eq) cs'
+                                             simplify' env te (eq'++eq) cs'
   | not $ null redSeal                  = do --traceM ("  *removing redundant Seal constraints on: " ++ prstrs redSeal)
                                              return (filterOut redSeal cs, eq)
   | otherwise                           = do --traceM ("  *improvement done " ++ show (length cs))
@@ -1641,7 +1637,7 @@ improve env te tt eq cs
         dots                            = dom mutC ++ dom selC ++ dom selP
         pvars                           = Map.keys (pbounds vi) ++ ufree (Map.elems (pbounds vi))
         dotvars                         = Map.keys (selattrs vi) ++ Map.keys (mutattrs vi)
-        (posvars0,negvars0)             = polvars te `polcat` polvars tt `polcat` polvars env
+        (posvars0,negvars0)             = polvars te `polcat` polvars env
         (posvars,negvars)               = (posvars0++vvsL, negvars0++vvsU)
         obsvars                         = posvars0 ++ negvars0 ++ pvars ++ dotvars ++ embedded vi ++ sealed vi
         boundvars                       = Map.keys (ubounds vi) ++ Map.keys (lbounds vi)
