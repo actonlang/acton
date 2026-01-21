@@ -3,7 +3,7 @@ const std = @import("std");
 const acton = @import("acton.zig");
 const gc = @import("rts/gc.zig");
 
-export fn base64Q_encode(data: *acton.bytes) callconv(.C) *acton.bytes {
+export fn base64Q_encode(data: *acton.bytes) callconv(.c) *acton.bytes {
     const alloc = gc.allocator();
     const encoder = std.base64.standard.Encoder;
     // For possible Unicode input, bytes and chars may not be 1:1
@@ -22,7 +22,7 @@ export fn base64Q_encode(data: *acton.bytes) callconv(.C) *acton.bytes {
     return res;
 }
 
-export fn base64Q_decode(data: *acton.bytes) callconv(.C) *acton.bytes {
+export fn base64Q_decode(data: *acton.bytes) callconv(.c) *acton.bytes {
     const alloc = gc.allocator();
     const decoder = std.base64.standard.Decoder;
     // Convert null-terminated string to slice for decoder
@@ -45,7 +45,7 @@ export fn base64Q_decode(data: *acton.bytes) callconv(.C) *acton.bytes {
     return res;
 }
 
-export fn zig_crypto_hash_md5_init() callconv(.C) *std.crypto.hash.Md5 {
+export fn zig_crypto_hash_md5_init() callconv(.c) *std.crypto.hash.Md5 {
     const alloc = gc.allocator();
     const hasher_ptr = alloc.create(std.crypto.hash.Md5) catch {
         unreachable("OOM while allocating Md5 hasher");
@@ -55,19 +55,19 @@ export fn zig_crypto_hash_md5_init() callconv(.C) *std.crypto.hash.Md5 {
     return hasher_ptr;
 }
 
-export fn zig_crypto_hash_md5_update(hasher: *std.crypto.hash.Md5, data: *acton.bytes) callconv(.C) void {
+export fn zig_crypto_hash_md5_update(hasher: *std.crypto.hash.Md5, data: *acton.bytes) callconv(.c) void {
     const len: usize = @intCast(data.nbytes); // destination type from context
     const slice = data.str[0..len];
     hasher.update(slice);
 }
 
-export fn zig_crypto_hash_md5_finalize(hasher: *std.crypto.hash.Md5, output: *acton.bytes) callconv(.C) void {
+export fn zig_crypto_hash_md5_finalize(hasher: *std.crypto.hash.Md5, output: *acton.bytes) callconv(.c) void {
     const digest_len = 16;
     const out_slice: *[16]u8 = @as([*]u8, @ptrCast(@constCast(output.str)))[0..digest_len];
     hasher.final(out_slice);
 }
 
-export fn zig_hash_wyhash_init(seed: u64) callconv(.C) *std.hash.Wyhash {
+export fn zig_hash_wyhash_init(seed: u64) callconv(.c) *std.hash.Wyhash {
     const alloc = gc.allocator();
     const hasher_ptr = alloc.create(std.hash.Wyhash) catch {
         acton.raise_MemoryError("OOM while allocating Wyhash hasher");
@@ -78,17 +78,17 @@ export fn zig_hash_wyhash_init(seed: u64) callconv(.C) *std.hash.Wyhash {
     return hasher_ptr;
 }
 
-export fn zig_hash_wyhash_update(hasher: *std.hash.Wyhash, data: *acton.bytes) callconv(.C) void {
+export fn zig_hash_wyhash_update(hasher: *std.hash.Wyhash, data: *acton.bytes) callconv(.c) void {
     const len: usize = @intCast(data.nbytes); // destination type from context
     const slice = data.str[0..len];
     hasher.update(slice);
 }
 
-export fn zig_hash_wyhash_final(hasher: *std.hash.Wyhash) callconv(.C) u64 {
+export fn zig_hash_wyhash_final(hasher: *std.hash.Wyhash) callconv(.c) u64 {
     return hasher.final();
 }
 
-export fn zig_hash_wyhash_hash(seed: u64, data: *acton.bytes) callconv(.C) u64 {
+export fn zig_hash_wyhash_hash(seed: u64, data: *acton.bytes) callconv(.c) u64 {
     const len: usize = @intCast(data.nbytes); // destination type from context
     const slice = data.str[0..len];
     return std.hash.Wyhash.hash(seed, slice);

@@ -14,7 +14,7 @@ export ZIG_LOCAL_CACHE_DIR
 ACTON=$(TD)/dist/bin/acton
 ACTONC=dist/bin/actonc
 ACTC=$(TD)/dist/bin/actonc
-ZIG_VERSION:=0.14.1
+ZIG_VERSION:=0.15.2
 ZIG=$(TD)/dist/zig/zig
 CURL:=curl --fail --location --retry 5 --retry-delay 2 --retry-max-time 120 --retry-all-errors --retry-connrefused
 AR=$(ZIG) ar
@@ -160,7 +160,7 @@ clean-downloads:
 
 
 # /deps/libargp --------------------------------------------
-LIBARGP_REF=a6b4bd28410e88a8d5736128ecba0d593f03dfd3
+LIBARGP_REF=137154fb257055beb11f3283021d8eccc3c4f470
 deps-download/$(LIBARGP_REF).tar.gz:
 	mkdir -p deps-download
 	$(CURL) -o $@ https://github.com/actonlang/argp-standalone/archive/$(LIBARGP_REF).tar.gz
@@ -172,7 +172,7 @@ dist/deps/libargp: deps-download/$(LIBARGP_REF).tar.gz
 	touch "$(TD)/$@"
 
 # /deps/libbsdnt --------------------------------------------
-LIBBSDNT_REF=282f774e1e664ea7c23cc0bb9f313c1054874a97
+LIBBSDNT_REF=cf7db3414867b8b4a5561bc9aa94a8050d0225c4
 deps-download/$(LIBBSDNT_REF).tar.gz:
 	mkdir -p deps-download
 	$(CURL) -o $@ https://github.com/actonlang/bsdnt/archive/$(LIBBSDNT_REF).tar.gz
@@ -183,7 +183,7 @@ dist/deps/libbsdnt: deps-download/$(LIBBSDNT_REF).tar.gz
 	touch "$(TD)/$@"
 
 # /deps/libgc --------------------------------------------
-LIBGC_REF=b65b95a8e893bdb7256e5a82cb459db24f09577e
+LIBGC_REF=5ef334ab8f9ef9e23d6b9c99fbd2b621bd52789b
 deps-download/$(LIBGC_REF).tar.gz:
 	mkdir -p deps-download
 	$(CURL) -o $@ https://github.com/actonlang/bdwgc/archive/$(LIBGC_REF).tar.gz
@@ -195,7 +195,7 @@ dist/deps/libgc: deps-download/$(LIBGC_REF).tar.gz
 	touch "$(TD)/$@"
 
 # /deps/libmbedtls --------------------------------------------
-LIBMBEDTLS_REF=737c3d8e8a9f52c4adaecadb2ecdec3ccab4255d
+LIBMBEDTLS_REF=c7d83538d3d359b05a9331bb2c9217977b5856ac
 deps-download/$(LIBMBEDTLS_REF).tar.gz:
 	mkdir -p deps-download
 	$(CURL) -o $@ https://github.com/actonlang/mbedtls/archive/$(LIBMBEDTLS_REF).tar.gz
@@ -206,7 +206,7 @@ dist/deps/mbedtls: deps-download/$(LIBMBEDTLS_REF).tar.gz
 	touch "$(TD)/$@"
 
 # /deps/libprotobuf_c --------------------------------------------
-LIBPROTOBUF_C_REF=4e4bfc7ec44e6ac746b05f3251f59610822bc95c
+LIBPROTOBUF_C_REF=faa19a6f6ca393fea01077fb37011a949bc6a3ee
 deps-download/$(LIBPROTOBUF_C_REF).tar.gz:
 	mkdir -p deps-download
 	$(CURL) -o $@ https://github.com/actonlang/protobuf-c/archive/$(LIBPROTOBUF_C_REF).tar.gz
@@ -217,7 +217,7 @@ dist/deps/libprotobuf_c: deps-download/$(LIBPROTOBUF_C_REF).tar.gz
 	touch "$(TD)/$@"
 
 # /deps/tlsuv ---------------------------------------------
-TLSUV_REF=246b37003ab3f787020fd473779fd05a5e51a96b
+TLSUV_REF=5af699b033776ec6a21b32c90e7aa7bf08c9929f
 deps-download/$(TLSUV_REF).tar.gz:
 	mkdir -p deps-download
 	$(CURL) -o $@ https://github.com/actonlang/tlsuv/archive/$(TLSUV_REF).tar.gz
@@ -228,7 +228,7 @@ dist/deps/tlsuv: deps-download/$(TLSUV_REF).tar.gz dist/deps/libuv dist/deps/mbe
 	touch "$(TD)/$@"
 
 # /deps/libutf8proc --------------------------------------
-LIBUTF8PROC_REF=e914c63b43d5f283090a63a307fccd25acbe37f0
+LIBUTF8PROC_REF=a78677e855f0a282e79da6164db4ce1cf0789237
 deps-download/$(LIBUTF8PROC_REF).tar.gz:
 	mkdir -p deps-download
 	$(CURL) -o $@ https://github.com/actonlang/utf8proc/archive/$(LIBUTF8PROC_REF).tar.gz
@@ -244,7 +244,7 @@ dist/deps/libuuid: deps/libuuid
 	cp -a "$</"* "$(TD)/$@"
 
 # /deps/libuv --------------------------------------------
-LIBUV_REF=0112183b6aa43f27ef5985a143f0aff1689e1e16
+LIBUV_REF=d760a3f23511ebe7b1935fe1429147d4fca27bb4
 deps-download/$(LIBUV_REF).tar.gz:
 	mkdir -p deps-download
 	$(CURL) -o $@ https://github.com/actonlang/libuv/archive/$(LIBUV_REF).tar.gz
@@ -255,7 +255,7 @@ dist/deps/libuv: deps-download/$(LIBUV_REF).tar.gz
 	touch "$(TD)/$@"
 
 # /deps/libxml2 ------------------------------------------
-LIBXML2_REF=56e4e62c077b2c5285b0eec4d6d4497f9b2e6e8f
+LIBXML2_REF=358ca4e6e34dd2b386aab1fdeb74a641c54940a0
 deps-download/$(LIBXML2_REF).tar.gz:
 	mkdir -p deps-download
 	$(CURL) -o $@ https://github.com/actonlang/libxml2/archive/$(LIBXML2_REF).tar.gz
@@ -267,7 +267,7 @@ dist/deps/libxml2: deps-download/$(LIBXML2_REF).tar.gz
 	touch "$(TD)/$@"
 
 # /deps/pcre2 --------------------------------------------
-LIBPCRE2_REF=2f798e7b2bd9eec36e7ff3ba5eefe66371320e2f
+LIBPCRE2_REF=b82656c5b28658ce1d75489a1b67ba0de5f531ec
 deps-download/$(LIBPCRE2_REF).tar.gz:
 	mkdir -p deps-download
 	$(CURL) -o $@ https://github.com/actonlang/pcre2/archive/$(LIBPCRE2_REF).tar.gz
@@ -278,7 +278,7 @@ dist/deps/pcre2: deps-download/$(LIBPCRE2_REF).tar.gz
 	touch "$(TD)/$@"
 
 # /deps/libsnappy_c --------------------------------------------
-LIBSNAPPY_C_REF=8342b6cfb99f861e7768a4255f8a4efe7de83d3b
+LIBSNAPPY_C_REF=9d77a3136e271b709eeac4b1db2d27c281b330b2
 deps-download/$(LIBSNAPPY_C_REF).tar.gz:
 	mkdir -p deps-download
 	$(CURL) -o $@ https://github.com/actonlang/snappy/archive/$(LIBSNAPPY_C_REF).tar.gz

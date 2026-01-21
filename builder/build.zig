@@ -59,8 +59,10 @@ pub fn build(b: *std.Build) void {
         std.posix.exit(1);
     };
 
-    var c_files = ArrayList([]const u8).init(b.allocator);
-    var root_c_files = ArrayList(*FilePath).init(b.allocator);
+    var c_files = ArrayList([]const u8).empty;
+    var root_c_files = ArrayList(*FilePath).empty;
+    defer c_files.deinit(b.allocator);
+    defer root_c_files.deinit(b.allocator);
     var walker = iter_dir.walk(b.allocator) catch |err| {
         std.log.err("Error walking dir: {}", .{err});
         std.posix.exit(1);
@@ -103,13 +105,13 @@ pub fn build(b: *std.Build) void {
 
                     if (std.mem.endsWith(u8, entry.basename, ".root.c")) {
                         fPath.test_root = false;
-                        root_c_files.append(fPath) catch |err| {
+                        root_c_files.append(b.allocator, fPath) catch |err| {
                             std.log.err("Error appending to root .c files: {}", .{err});
                             std.posix.exit(1);
                         };
                     } else if (std.mem.endsWith(u8, entry.basename, ".test_root.c")) {
                         fPath.test_root = true;
-                        root_c_files.append(fPath) catch |err| {
+                        root_c_files.append(b.allocator, fPath) catch |err| {
                             std.log.err("Error appending to test_root .c files: {}", .{err});
                             std.posix.exit(1);
                         };
@@ -121,7 +123,7 @@ pub fn build(b: *std.Build) void {
                         };
                         @memcpy(rel_path[0..9], "out/types");
                         @memcpy(rel_path[9..], fPath.file_path);
-                        c_files.append(rel_path) catch |err| {
+                        c_files.append(b.allocator, rel_path) catch |err| {
                             std.log.err("Error appending to .c files: {}", .{err});
                             std.posix.exit(1);
                         };
@@ -149,33 +151,36 @@ pub fn build(b: *std.Build) void {
             std.posix.exit(1);
         };
         dummy_file.close();
-        c_files.append(dummy_rel) catch |err| {
+        c_files.append(b.allocator, dummy_rel) catch |err| {
             std.log.err("Error appending dummy C file path: {}", .{err});
             std.posix.exit(1);
         };
         std.log.info("No generated C sources; added dummy {s}", .{dummy_abs});
     }
 
-    const libActonProject = b.addStaticLibrary(.{
+    const libActonProject = b.addLibrary(.{
         .name = "ActonProject",
-        .target = target,
-        .optimize = optimize,
+        .linkage = .static,
+        .root_module = b.createModule(.{
+            .target = target,
+            .optimize = optimize,
+        }),
     });
-    var flags = std.ArrayList([]const u8).init(b.allocator);
-    defer flags.deinit();
+    var flags = std.ArrayList([]const u8).empty;
+    defer flags.deinit(b.allocator);
 
-    var file_prefix_map = std.ArrayList(u8).init(b.allocator);
-    defer file_prefix_map.deinit();
+    var file_prefix_map = std.ArrayList(u8).empty;
+    defer file_prefix_map.deinit(b.allocator);
     const file_prefix_path = b.build_root.handle.openDir("..", .{}) catch unreachable;
     const file_prefix_path_path = file_prefix_path.realpathAlloc(b.allocator, ".") catch unreachable;
-    file_prefix_map.appendSlice("-ffile-prefix-map=") catch unreachable;
-    file_prefix_map.appendSlice(file_prefix_path_path) catch unreachable;
-    file_prefix_map.appendSlice("/=") catch unreachable;
-    flags.append(file_prefix_map.items) catch unreachable;
+    file_prefix_map.appendSlice(b.allocator, "-ffile-prefix-map=") catch unreachable;
+    file_prefix_map.appendSlice(b.allocator, file_prefix_path_path) catch unreachable;
+    file_prefix_map.appendSlice(b.allocator, "/=") catch unreachable;
+    flags.append(b.allocator, file_prefix_map.items) catch unreachable;
 
     if (optimize == .Debug) {
         print("Debug build\n", .{});
-        flags.appendSlice(&.{
+        flags.appendSlice(b.allocator, &.{
             "-DDEV",
         }) catch |err| {
             std.log.err("Error appending flags: {}", .{err});
@@ -184,13 +189,13 @@ pub fn build(b: *std.Build) void {
     }
 
     if (db)
-        flags.appendSlice(&.{"-DACTON_DB",}) catch unreachable;
+        flags.appendSlice(b.allocator, &.{"-DACTON_DB",}) catch unreachable;
 
     if (no_threads) {
         print("No threads\n", .{});
     } else {
         print("Threads enabled\n", .{});
-        flags.appendSlice(&.{
+        flags.appendSlice(b.allocator, &.{
             "-DACTON_THREADS",
         }) catch |err| {
             std.log.err("Error appending flags: {}", .{err});
@@ -198,7 +203,7 @@ pub fn build(b: *std.Build) void {
         };
     }
 
-    flags.appendSlice(&.{
+    flags.appendSlice(b.allocator, &.{
         "-fno-sanitize=signed-integer-overflow",
     }) catch unreachable;
 
@@ -283,8 +288,10 @@ pub fn build(b: *std.Build) void {
 
             const executable = b.addExecutable(.{
                 .name = binname,
-                .target = target,
-                .optimize = optimize,
+                .root_module = b.createModule(.{
+                    .target = target,
+                    .optimize = optimize,
+                }),
             });
             // Build relative path for the executable source file
             const exe_rel_path = b.allocator.alloc(u8, 9 + entry.file_path.len) catch @panic("OOM");
