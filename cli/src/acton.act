@@ -26,6 +26,19 @@ def base_path(file_cap: file.FileCap):
     fs = file.FS(file_cap)
     return fs.exepath()[0:-len("/bin/acton")]
 
+def resolve_github_token(env, args) -> ?str:
+    token_arg = args.get_str("github-token")
+    if token_arg != "":
+        token_arg = token_arg.strip()
+        if token_arg != "":
+            return token_arg
+    token_env = env.getenv("GITHUB_TOKEN")
+    if token_env is not None:
+        token_env = token_env.strip()
+        if token_env != "":
+            return token_env
+    return None
+
 def check_cache_is_empty(cap: file.FileCap, cache_dir: str) -> bool:
     """Quick check if a cache directory is empty by just listing its contents"""
     fs = file.FS(cap)
@@ -1209,9 +1222,10 @@ actor CmdPkgAdd(env, args):
     """Add a package dependency to the project.
 
     Usage:
-      acton pkg add NAME [--url URL] [--repo-url URL --repo-ref REF]
+      acton pkg add NAME [--url URL] [--repo-url URL --repo-ref REF] [--github-token TOKEN]
 
     Exactly one of --url or --repo-url must be provided.
+    If --github-token is omitted, GITHUB_TOKEN is used when set.
     """
     pcap = process.ProcessCap(env.cap)
     fs = file.FS(file.FileCap(env.cap))
@@ -1220,6 +1234,7 @@ actor CmdPkgAdd(env, args):
     zig = file.join_path([base_path(file.FileCap(env.cap)), "zig", "zig"])
 
     dep_name = args.get_str("name")
+    github_token = resolve_github_token(env, args)
     try:
         zig_safe_name(dep_name)
     except ValueError as e:
@@ -1361,7 +1376,7 @@ actor CmdPkgAdd(env, args):
             env.exit(1)
 
         repo_ref: ?str = repo_ref_arg_eff if repo_ref_arg_eff != "" else None
-        cli_gh.FetchRef(_on_ref, url=repo_url_eff, tcpc_cap=tcpc_cap, ref=repo_ref)
+        cli_gh.FetchRef(_on_ref, url=repo_url_eff, tcpc_cap=tcpc_cap, ref=repo_ref, token=github_token)
 
     def _decide_url_and_fetch():
         # Decide how to obtain the URL, now that build_spec has been loaded.
@@ -1438,6 +1453,7 @@ actor CmdPkgUpgrade(env, args):
     fs = file.FS(file.FileCap(env.cap))
 
     zig = file.join_path([base_path(file.FileCap(env.cap)), "zig", "zig"])
+    github_token = resolve_github_token(env, args)
 
     # GAAH, the TLS lib does DNS lookups which interferes with GC as the malloc
     # / free is asymmetric, we malloc (using GC malloc) while the free happens
@@ -1532,7 +1548,7 @@ actor CmdPkgUpgrade(env, args):
                 if dep_repo_url.startswith("https://github.com"):
                     print(dep_name, "- fetching ref from", dep_repo_url)
                     remaining_fetch_ref[dep_name] = dep
-                    cli_gh.FetchRef(lambda x, y: _onPkgFetchRef(dep_name, x, y), url=dep_repo_url, tcpc_cap=tcpc_cap, ref=dep.repo_ref)
+                    cli_gh.FetchRef(lambda x, y: _onPkgFetchRef(dep_name, x, y), url=dep_repo_url, tcpc_cap=tcpc_cap, ref=dep.repo_ref, token=github_token)
                 else:
                     print(dep_name, "- skipping upgrade: Unsupported git forge URL for", dep_name, ":", dep_repo_url, "only https://github.com is supported", err=True)
             else:
@@ -2079,11 +2095,13 @@ actor main(env):
         p_pkg_add.add_option("repo-ref", "str", "?", "", "Git ref (branch, tag or SHA) to use")
         p_pkg_add.add_option("pkg-name", "str", "?", "", "Package name in index (defaults to NAME)")
         p_pkg_add.add_option("hash", "str", "?", "", "Hash of dependency")
+        p_pkg_add.add_option("github-token", "str", "?", "", "GitHub token for API requests (env: GITHUB_TOKEN)")
 
         p_pkg_rm = p_pkg.add_cmd("remove", "Remove package dependency", _cmd_pkg_rm)
         p_pkg_rm.add_arg("name", "Name of dependency", True, "?")
 
         p_pkg_upgrade = p_pkg.add_cmd("upgrade", "Upgrade (or downgrade) package dependency", _cmd_pkg_upgrade)
+        p_pkg_upgrade.add_option("github-token", "str", "?", "", "GitHub token for API requests (env: GITHUB_TOKEN)")
         #p_pkg_upgrade.add_option("name", "str", "?", help="Dependency name")
 
         p_pkg_update = p_pkg.add_cmd("update", "Update package index", _cmd_pkg_update)

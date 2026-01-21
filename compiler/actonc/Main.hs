@@ -134,7 +134,7 @@ main = do
           C.CmdOpt gopts C.PkgShow           -> pkgShow gopts
           C.CmdOpt gopts (C.PkgAdd opts)     -> PkgCommands.pkgAddCommand gopts opts
           C.CmdOpt gopts (C.PkgRemove opts)  -> PkgCommands.pkgRemoveCommand gopts opts
-          C.CmdOpt gopts C.PkgUpgrade        -> PkgCommands.pkgUpgradeCommand gopts
+          C.CmdOpt gopts (C.PkgUpgrade opts) -> PkgCommands.pkgUpgradeCommand gopts opts
           C.CmdOpt gopts C.PkgUpdate         -> PkgCommands.pkgUpdateCommand gopts
           C.CmdOpt gopts (C.PkgSearch opts)  -> PkgCommands.pkgSearchCommand gopts opts
           C.CmdOpt gopts (C.BuildSpecCmd o)   -> buildSpecCommand o
