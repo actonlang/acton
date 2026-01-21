@@ -43,7 +43,7 @@ data Command        = New NewOptions
                     | PkgShow
                     | PkgAdd PkgAddOptions
                     | PkgRemove PkgRemoveOptions
-                    | PkgUpgrade
+                    | PkgUpgrade PkgUpgradeOptions
                     | PkgUpdate
                     | PkgSearch PkgSearchOptions
                     | BuildSpecCmd BuildSpecCommand
@@ -146,10 +146,15 @@ data PkgAddOptions = PkgAddOptions
     , pkgAddRepoRef  :: String
     , pkgAddPkgName  :: String
     , pkgAddHash     :: String
+    , pkgAddGithubToken :: String
     } deriving Show
 
 data PkgRemoveOptions = PkgRemoveOptions
     { pkgRemoveName :: String
+    } deriving Show
+
+data PkgUpgradeOptions = PkgUpgradeOptions
+    { pkgUpgradeGithubToken :: String
     } deriving Show
 
 data PkgSearchOptions = PkgSearchOptions
@@ -274,10 +279,19 @@ pkgSubcommands = hsubparser
   (  command "show"    (info (pure PkgShow) (progDesc "Show dependency tree with overrides"))
   <> command "add"     (info (PkgAdd <$> pkgAddOptions) (progDesc "Add package dependency"))
   <> command "remove"  (info (PkgRemove <$> pkgRemoveOptions) (progDesc "Remove package dependency"))
-  <> command "upgrade" (info (pure PkgUpgrade) (progDesc "Upgrade (or downgrade) package dependency"))
+  <> command "upgrade" (info (PkgUpgrade <$> pkgUpgradeOptions) (progDesc "Upgrade (or downgrade) package dependency"))
   <> command "update"  (info (pure PkgUpdate) (progDesc "Update package index"))
   <> command "search"  (info (PkgSearch <$> pkgSearchOptions) (progDesc "Search package index"))
   )
+
+githubTokenOption :: Parser String
+githubTokenOption =
+    strOption
+      (  long "github-token"
+      <> metavar "TOKEN"
+      <> value ""
+      <> help "GitHub token for API requests (env: GITHUB_TOKEN)"
+      )
 
 pkgAddOptions :: Parser PkgAddOptions
 pkgAddOptions = PkgAddOptions
@@ -287,10 +301,15 @@ pkgAddOptions = PkgAddOptions
     <*> strOption (long "repo-ref" <> metavar "REF" <> value "" <> help "Git ref (branch, tag or SHA) to use")
     <*> strOption (long "pkg-name" <> metavar "NAME" <> value "" <> help "Package name in index (defaults to NAME)")
     <*> strOption (long "hash" <> metavar "HASH" <> value "" <> help "Hash of dependency")
+    <*> githubTokenOption
 
 pkgRemoveOptions :: Parser PkgRemoveOptions
 pkgRemoveOptions =
     PkgRemoveOptions <$> argument str (metavar "NAME" <> help "Name of dependency")
+
+pkgUpgradeOptions :: Parser PkgUpgradeOptions
+pkgUpgradeOptions =
+    PkgUpgradeOptions <$> githubTokenOption
 
 pkgSearchOptions :: Parser PkgSearchOptions
 pkgSearchOptions =

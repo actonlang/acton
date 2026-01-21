@@ -63,7 +63,7 @@ class RepoUrl(object):
             return self.scheme + "://" + self.host + "/" + self.owner + "/" + self.repo + "/archive/" + self_ref + ".zip"
         raise ValueError("No ref in URL")
 
-actor GetQuery(on_done: action(?str, ?http.Response) -> None, tcpc_cap: net.TCPConnectCap, url: str):
+actor GetQuery(on_done: action(?str, ?http.Response) -> None, tcpc_cap: net.TCPConnectCap, url: str, token: ?str=None):
     def parseUrl(url: str):
         u = uri.URI(url)
         uscheme = u.scheme
@@ -86,7 +86,10 @@ actor GetQuery(on_done: action(?str, ?http.Response) -> None, tcpc_cap: net.TCPC
         on_done(None, res)
 
     def _onHttpConnect(c):
-        c.get(urlp.path, _onHttpReceive, headers={"Accept": "application/vnd.github.v3+json"})
+        headers = {"Accept": "application/vnd.github.v3+json"}
+        if token is not None and token != "":
+            headers["Authorization"] = "Bearer " + token
+        c.get(urlp.path, _onHttpReceive, headers=headers)
 
     def _onHttpError(c, errmsg):
         print(errmsg)
@@ -94,7 +97,7 @@ actor GetQuery(on_done: action(?str, ?http.Response) -> None, tcpc_cap: net.TCPC
     client = http.Client(tcpc_cap, urlp.host, _onHttpConnect, _onHttpError, scheme=urlp.scheme, port=urlp.port)
 
 
-actor FetchDefaultBranch(on_done: action(?str, ?str) -> None, url: str, tcpc_cap: net.TCPConnectCap, ref: ?str=None):
+actor FetchDefaultBranch(on_done: action(?str, ?str) -> None, url: str, tcpc_cap: net.TCPConnectCap, ref: ?str=None, token: ?str=None):
     def _onQueryDone(err: ?str, res: ?http.Response):
         if err is not None:
             on_done(err, None)
@@ -128,9 +131,9 @@ actor FetchDefaultBranch(on_done: action(?str, ?str) -> None, url: str, tcpc_cap
             raise ValueError("Invalid URL")
 
     api_url = computeApiUrl(url)
-    GetQuery(on_done=_onQueryDone, tcpc_cap=tcpc_cap, url=api_url)
+    GetQuery(on_done=_onQueryDone, tcpc_cap=tcpc_cap, url=api_url, token=token)
 
-actor FetchRef(on_done: action(?Exception, ?str) -> None, url: str, tcpc_cap: net.TCPConnectCap, ref: ?str=None):
+actor FetchRef(on_done: action(?Exception, ?str) -> None, url: str, tcpc_cap: net.TCPConnectCap, ref: ?str=None, token: ?str=None):
     """Resolves a git reference, like a branch or tag, to a commit SHA"""
     repo_url = RepoUrl.from_url(url)
 
@@ -183,7 +186,7 @@ actor FetchRef(on_done: action(?Exception, ?str) -> None, url: str, tcpc_cap: ne
 
     def _gotRef(repo_ref: str):
         api_url = computeApiUrl(url)
-        GetQuery(on_done=_onQueryDone, tcpc_cap=tcpc_cap, url=api_url)
+        GetQuery(on_done=_onQueryDone, tcpc_cap=tcpc_cap, url=api_url, token=token)
 
     def _onDefBranch(err: ?str, branch: ?str):
         if branch is not None:
@@ -209,6 +212,6 @@ actor FetchRef(on_done: action(?Exception, ?str) -> None, url: str, tcpc_cap: ne
             if url_ref is not None:
                 _gotRef(url_ref)
             else:
-                FetchDefaultBranch(_onDefBranch, url=url, tcpc_cap=tcpc_cap)
+                FetchDefaultBranch(_onDefBranch, url=url, tcpc_cap=tcpc_cap, token=token)
                 return
     _go()

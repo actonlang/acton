@@ -40,7 +40,7 @@ import Network.HTTP.Client.TLS (newTlsManager)
 import Network.HTTP.Types.Header (Header)
 import Network.HTTP.Types.Status (statusCode)
 import System.Directory (canonicalizePath, createDirectoryIfMissing, doesFileExist, getCurrentDirectory, getHomeDirectory)
-import System.Environment (getExecutablePath)
+import System.Environment (getExecutablePath, lookupEnv)
 import System.Exit (ExitCode(..))
 import System.FilePath ((</>), takeDirectory)
 import System.IO (IOMode(ReadMode, WriteMode), hClose, hGetContents, hPutStr, hPutStrLn, hSetEncoding, openFile, stderr, utf8)
@@ -72,30 +72,31 @@ pkgAddCommand _ opts = do
     cwd <- getCurrentDirectory
     spec0 <- loadSpecOrEmpty cwd
     manager <- newTlsManager
+    token <- resolveGithubToken (normalizeMaybe (C.pkgAddGithubToken opts))
     let urlArg = C.pkgAddUrl opts
         repoUrlArg = C.pkgAddRepoUrl opts
         repoRefArg = normalizeMaybe (C.pkgAddRepoRef opts)
         pkgNameArg = C.pkgAddPkgName opts
-    (depUrl, depRepoUrl, depRepoRef) <- decideUrl manager depName urlArg repoUrlArg repoRefArg pkgNameArg
+    (depUrl, depRepoUrl, depRepoRef) <- decideUrl manager token depName urlArg repoUrlArg repoRefArg pkgNameArg
     zigExe <- getZigExe
     hash <- requireRight =<< zigFetchHash zigExe depUrl
     let (spec1, msgs) = upsertPkgDep spec0 depName depUrl hash depRepoUrl depRepoRef
     mapM_ putStrLn msgs
     writeBuildSpec spec1
   where
-    decideUrl manager depName urlArg repoUrlArg repoRefArg pkgNameArg
+    decideUrl manager token depName urlArg repoUrlArg repoRefArg pkgNameArg
       | not (null urlArg) && not (null repoUrlArg) =
           throwProjectError "ERROR: Specify either --url or --repo-url, not both."
       | not (null urlArg) =
           return (urlArg, Nothing, Nothing)
       | not (null repoUrlArg) = do
           ensureGithubUrl "pkg add" repoUrlArg
-          archive <- requireRight =<< resolveGithubArchiveUrl manager repoUrlArg repoRefArg
+          archive <- requireRight =<< resolveGithubArchiveUrl manager token repoUrlArg repoRefArg
           return (archive, Just repoUrlArg, repoRefArg)
       | otherwise = do
           repoUrl <- lookupRepoUrlFromIndex depName pkgNameArg
           ensureGithubUrl "pkg add" repoUrl
-          archive <- requireRight =<< resolveGithubArchiveUrl manager repoUrl repoRefArg
+          archive <- requireRight =<< resolveGithubArchiveUrl manager token repoUrl repoRefArg
           return (archive, Just repoUrl, repoRefArg)
 
 pkgRemoveCommand :: C.GlobalOptions -> C.PkgRemoveOptions -> IO ()
@@ -115,8 +116,8 @@ pkgRemoveCommand _ opts = do
             writeBuildSpec spec'
           else putStrLn ("Dependency " ++ depName ++ " not found in build configuration. Nothing to do.")
 
-pkgUpgradeCommand :: C.GlobalOptions -> IO ()
-pkgUpgradeCommand _ = do
+pkgUpgradeCommand :: C.GlobalOptions -> C.PkgUpgradeOptions -> IO ()
+pkgUpgradeCommand _ opts = do
     cwd <- getCurrentDirectory
     mspec <- loadBuildSpec cwd
     case mspec of
@@ -124,7 +125,8 @@ pkgUpgradeCommand _ = do
       Just spec -> do
         let deps = BuildSpec.dependencies spec
         manager <- newTlsManager
-        resolved <- mapM (resolveDep manager) (M.toList deps)
+        token <- resolveGithubToken (normalizeMaybe (C.pkgUpgradeGithubToken opts))
+        resolved <- mapM (resolveDep manager token) (M.toList deps)
         let newUrls = M.fromList [ (n,u) | Just (n,u) <- resolved ]
         if M.null newUrls
           then putStrLn "No dependencies to upgrade"
@@ -142,7 +144,7 @@ pkgUpgradeCommand _ = do
                     writeBuildSpec spec'
                   else putStrLn "No changes to build.act.json"
   where
-    resolveDep manager (depName, dep) =
+    resolveDep manager token (depName, dep) =
       case BuildSpec.repo_url dep of
         Nothing -> do
           hPutStrLn stderr (depName ++ " - skipping upgrade: repo_url not set")
@@ -154,7 +156,7 @@ pkgUpgradeCommand _ = do
               return Nothing
             else do
               putStrLn (depName ++ " - fetching ref from " ++ repoUrl)
-              res <- resolveGithubArchiveUrl manager repoUrl (BuildSpec.repo_ref dep)
+              res <- resolveGithubArchiveUrl manager token repoUrl (BuildSpec.repo_ref dep)
               case res of
                 Left err -> do
                   hPutStrLn stderr ("Error fetching ref for " ++ depName ++ ": " ++ err)
@@ -439,22 +441,22 @@ parseGithubRepoUrl url =
     dropGitSuffix s =
       if ".git" `isSuffixOf` s then take (length s - 4) s else s
 
-resolveGithubArchiveUrl :: Manager -> String -> Maybe String -> IO (Either String String)
-resolveGithubArchiveUrl manager repoUrl repoRefArg = do
+resolveGithubArchiveUrl :: Manager -> Maybe String -> String -> Maybe String -> IO (Either String String)
+resolveGithubArchiveUrl manager token repoUrl repoRefArg = do
     case parseGithubRepoUrl repoUrl of
       Left err -> return (Left err)
       Right info -> do
-        ref <- selectRef manager info repoRefArg
+        ref <- selectRef manager token info repoRefArg
         case ref of
           Left err -> return (Left err)
           Right refName -> do
-            sha <- fetchRefSha manager info refName
+            sha <- fetchRefSha manager token info refName
             case sha of
               Left err -> return (Left err)
               Right shaVal ->
                 return (Right ("https://github.com/" ++ repoOwner info ++ "/" ++ repoName info ++ "/archive/" ++ shaVal ++ ".zip"))
   where
-    selectRef manager info refArg =
+    selectRef manager token info refArg =
       case refArg of
         Just refVal ->
           case repoRef info of
@@ -463,12 +465,12 @@ resolveGithubArchiveUrl manager repoUrl repoRefArg = do
         Nothing ->
           case repoRef info of
             Just urlRef -> return (Right urlRef)
-            Nothing -> fetchDefaultBranch manager info
+            Nothing -> fetchDefaultBranch manager token info
 
-fetchDefaultBranch :: Manager -> RepoInfo -> IO (Either String String)
-fetchDefaultBranch manager info = do
+fetchDefaultBranch :: Manager -> Maybe String -> RepoInfo -> IO (Either String String)
+fetchDefaultBranch manager token info = do
     let url = "https://api.github.com/repos/" ++ repoOwner info ++ "/" ++ repoName info
-    obj <- fetchGithubObject manager url
+    obj <- fetchGithubObject manager token url
     case obj of
       Left err -> return (Left err)
       Right o ->
@@ -479,10 +481,10 @@ fetchDefaultBranch manager info = do
               Just branch -> return (Right branch)
               Nothing -> return (Left ("No default branch:" ++ B.unpack (BL.toStrict (Aeson.encode (Aeson.Object o)))))
 
-fetchRefSha :: Manager -> RepoInfo -> String -> IO (Either String String)
-fetchRefSha manager info refName = do
+fetchRefSha :: Manager -> Maybe String -> RepoInfo -> String -> IO (Either String String)
+fetchRefSha manager token info refName = do
     let url = "https://api.github.com/repos/" ++ repoOwner info ++ "/" ++ repoName info ++ "/git/refs/heads/" ++ refName
-    obj <- fetchGithubObject manager url
+    obj <- fetchGithubObject manager token url
     case obj of
       Left err -> return (Left err)
       Right o ->
@@ -496,9 +498,13 @@ fetchRefSha manager info refName = do
                   Nothing -> return (Left "No SHA")
               _ -> return (Left "No object")
 
-fetchGithubObject :: Manager -> String -> IO (Either String Aeson.Object)
-fetchGithubObject manager url = do
-    let headers = [("Accept", "application/vnd.github.v3+json")]
+fetchGithubObject :: Manager -> Maybe String -> String -> IO (Either String Aeson.Object)
+fetchGithubObject manager token url = do
+    let authHeader =
+          case token of
+            Just t -> [("Authorization", B.pack ("Bearer " ++ t))]
+            Nothing -> []
+        headers = ("Accept", "application/vnd.github.v3+json") : authHeader
     body <- httpGet manager headers url
     case body of
       Left err -> return (Left ("Failed to download " ++ url ++ ": " ++ err))
@@ -558,6 +564,18 @@ normalizeMaybe :: String -> Maybe String
 normalizeMaybe s
     | null s = Nothing
     | otherwise = Just s
+
+resolveGithubToken :: Maybe String -> IO (Maybe String)
+resolveGithubToken tokenOpt = do
+    envToken <- lookupEnv "GITHUB_TOKEN"
+    return (selectToken tokenOpt envToken)
+  where
+    normalizeToken Nothing = Nothing
+    normalizeToken (Just s) = normalizeMaybe (trim s)
+    selectToken opt env =
+      case normalizeToken opt of
+        Just token -> Just token
+        Nothing -> normalizeToken env
 
 showMaybe :: Maybe String -> String
 showMaybe = maybe "None" id
