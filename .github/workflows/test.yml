@@ -125,6 +125,9 @@ jobs:
           path: ${{ github.workspace }}/acton-*
           if-no-files-found: error
       - name: "Run tests"
+        env:
+          # Package manager uses token to make authenticated requests to GitHub REST API, avoiding rate limits
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           ulimit -c unlimited
           make -C ${{ github.workspace }} test
