@@ -218,7 +218,7 @@ cleanup gopts opts paths = do
     handleNotExists :: IOException -> IO ()
     handleNotExists _ = return ()
 
--- our own readFile & writeFile with hard-coded utf-8 encoding
+-- our own readFile & writeFile with hard-coded utf-8 encoding (atomic writes)
 readFile f = do
     h <- openFile f ReadMode
     hSetEncoding h utf8
@@ -226,11 +226,7 @@ readFile f = do
     return c
 
 writeFile :: FilePath -> String -> IO ()
-writeFile f c = do
-    h <- openFile f WriteMode
-    hSetEncoding h utf8
-    hPutStr h c
-    hClose h
+writeFile = writeFileUtf8Atomic
 
 ignoreIOException :: IOException -> IO ()
 ignoreIOException _ = return ()
@@ -1563,14 +1559,20 @@ compileFilesChanged sp gopts opts srcFiles allowPrune mChangedPaths mSched mProg
                   Left err ->
                     reportCompileError (compileFailureMessage err)
                   Right (env, hadErrors) -> do
-                    when (not (C.only_build opts')) $
-                      backQueueWait (csBackQueue sched) gen
-                    clearProgress
-                    if hadErrors
-                      then reportCompileErrors
-                      else do
-                        whenCurrentGen sched gen (runCliPostCompile cliHooks gopts plan env)
-                        return False
+                    backFailure <-
+                      if C.only_build opts'
+                        then return Nothing
+                        else backQueueWait (csBackQueue sched) gen
+                    case backFailure of
+                      Just failure ->
+                        reportCompileError (backPassFailureMessage failure)
+                      Nothing ->
+                        if hadErrors
+                          then reportCompileErrors
+                          else do
+                            clearProgress
+                            whenCurrentGen sched gen (runCliPostCompile cliHooks gopts plan env)
+                            return False
           either reportPlanError runPlan planRes
     runCompile `finally` cleanupProgress
 
@@ -1625,6 +1627,7 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
         spinnerPrefixWidth = 3
         frontPrefix = "   Finished type check of"
         backPrefix = "   Finished compilation of "
+        backFailPrefix = "   Failed compilation of "
         finalPrefix = "   Finished final compilation"
         phaseFront = "Running front passes:"
         phaseBack = "Running back passes:"
@@ -1642,6 +1645,7 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
         projWidth = maximum (0 : [ length (projectLabelFor (tkProj (gtKey t))) | t <- neededTasks ])
         prefixWidth = maximum [ length frontPrefix
                               , length backPrefix
+                              , length backFailPrefix
                               , length finalPrefix
                               , spinnerPrefixWidth + phaseWidth + 1
                               ]
@@ -1656,9 +1660,14 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
         frontDoneLine proj mn t =
           let base = completionPrefix frontPrefix proj ++ padMod mn
           in padRight timePadWidth base ++ fmtTime t
-        backDoneLine proj mn t =
+        backDoneLine proj mn mt =
           let base = completionPrefix backPrefix proj ++ padMod mn
-          in padRight timePadWidth base ++ fmtTime t
+          in case mt of
+               Just t -> padRight timePadWidth base ++ fmtTime t
+               Nothing -> base
+        backFailLine proj mn msg =
+          let base = completionPrefix backFailPrefix proj ++ padMod mn
+          in base ++ "    " ++ msg
         finalDoneLine t =
           padRight timePadWidth finalPrefix ++ fmtTime t
         progressLine phase proj mn =
@@ -1672,11 +1681,18 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
         onBackStart job =
           let proj = projPath (bjPaths job)
               mn = A.modname (biTypedMod (bjInput job))
-          in gate (progressStartTask progressUI progressState (backJobKey job) (progressLine phaseBack proj mn))
-        onBackDone job mtime = do
+          in do
+            gate (progressStartTask progressUI progressState (backJobKey job) (progressLine phaseBack proj mn))
+        onBackDone job result = do
           gate (progressDoneTask progressUI progressState (backJobKey job))
-          forM_ mtime (\tBack ->
-            logLine (backDoneLine (projPath (bjPaths job)) (A.modname (biTypedMod (bjInput job))) tBack))
+          when (not (quiet gopts optsPlan)) $
+            case result of
+              BackJobOk mtime ->
+                logLine (backDoneLine (projPath (bjPaths job)) (A.modname (biTypedMod (bjInput job))) mtime)
+              BackJobFailed failure ->
+                logLine (backFailLine (projPath (bjPaths job))
+                                      (A.modname (biTypedMod (bjInput job)))
+                                      (bpfMessage failure))
         hooks = defaultCompileHooks
           { chOnDiagnostics = \t optsT diags -> do
               gate (progressDoneTask progressUI progressState (gtKey t))

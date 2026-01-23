@@ -25,6 +25,10 @@ import SrcLocation
 import Pretty
 import Control.DeepSeq
 import Prelude hiding((<>))
+import System.Directory (renameFile, removeFile)
+import System.FilePath (takeDirectory, takeFileName)
+import System.IO (openTempFile, hSetEncoding, utf8, hPutStr, hClose)
+import System.IO.Error (catchIOError)
 
 data SrcLoc                     = Loc Int Int | NoLoc deriving (Eq,Ord,Show,Read,Generic,NFData)
 
@@ -158,3 +162,20 @@ generalError err                = [(loc err,render (expl err))]
 iff True m                      = m >> return ()
 iff False _                     = return ()
 
+-- | Write a UTF-8 text file atomically (temp file + rename).
+-- Keeps readers from observing partial writes of generated artifacts.
+writeFileUtf8Atomic :: FilePath -> String -> IO ()
+writeFileUtf8Atomic path contents =
+    Control.Exception.bracketOnError
+      (openTempFile dir template)
+      (\(tmp, h) -> do
+          catchIOError (hClose h) (\_ -> return ())
+          catchIOError (removeFile tmp) (\_ -> return ()))
+      (\(tmp, h) -> do
+          hSetEncoding h utf8
+          hPutStr h contents
+          hClose h
+          renameFile tmp path)
+  where
+    dir = takeDirectory path
+    template = takeFileName path ++ ".tmp"
