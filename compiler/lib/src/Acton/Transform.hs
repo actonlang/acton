@@ -23,9 +23,9 @@ import Acton.Printer
 import Acton.TypeEnv
 
 
-termred                                 :: Stmt -> Stmt
-termred s                               = --trace ("### termred:\n" ++ render (nest 4 $ pretty s)) $
-                                          trans env0 s
+termred                                 :: Equations -> Stmt -> Stmt
+termred eq s                            = --trace ("### termred:\n" ++ render (nest 4 $ pretty s)) $
+                                          trans env0{ eqns = eq } s
 
 termsubst                               :: (Transform a) => [(Name,Expr)] -> a -> a
 termsubst [] x                          = x
@@ -52,11 +52,6 @@ limsubst ns env                         = env{ trsubst = trsubst env `exclude` n
 trfind n env                            = case lookup n (trsubst env) of
                                             Just (Just e) -> Just e
                                             _ -> Nothing
-
-findeqns [] env                         = []
-findeqns ws env                         = findeqns ws' env ++ match
-  where match                           = [ sAssign (pVar w t) e | eq@(Eqn w t e) <- eqns env, w `elem` ws ]
-        ws'                             = filter isWitness $ free match
 
 
 -- Assumed invariants: if a def defines a witness, it is of the form
@@ -106,8 +101,8 @@ instance Pretty (Name,Expr) where
     pretty (n,e)                        = pretty n <+> text "~" <+> pretty e
 
 wtrans env (Signature _ ws (TSchema _ [] (TWild _)) NoDec : ss)
-                                        = wtrans env (bindings ++ ss)
-  where bindings                        = findeqns ws env
+                                        = wtrans env (bindWits eq ++ ss)
+  where eq                              = findeqns ws (eqns env)
 wtrans env (s@(Assign l p@[PVar _ w (Just t)] e) : ss)
   | not (isWitness w)                   = trans env s : wtrans env ss
   | Lambda{} <- e                       = wtrans (extsubst [(w,e1)] env) ss

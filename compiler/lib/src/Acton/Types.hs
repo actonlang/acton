@@ -176,14 +176,17 @@ infTopStmt env s                        = do (cs,te,s) <- infEnv env s
                                              --traceM ("\\\\\\\\\\\\\n" ++ render (nest 4 $ vcat $ map pretty cs))
 
                                              (te,eq,s) <- genEnv env cs te s
+                                             let (eq0, eq1) = spliteqns eq
                                              --traceM ("============ push\n" ++ render (nest 4 $ vcat $ map pretty eq))
+                                             --traceM ("~~~~~~~~~~~~ i.e. top:\n" ++ render (nest 4 $ vcat $ map pretty eq0))
+                                             --traceM ("============ and scoped:\n" ++ render (nest 4 $ vcat $ map pretty eq1))
                                              --traceM ("------------ onto\n" ++ render (nest 4 $ pretty s))
 
                                              te <- defaultTE env te
                                              --traceM ("===========\n" ++ render (nest 4 $ vcat $ map pretty te))
                                              --traceM ("............\n")
 
-                                             s <- termred <$> usubst (pushEqns env eq s)
+                                             s <- termred eq1 <$> usubst (pushEqns env eq0 s)
                                              defaultVars (ufree s)
                                              s <- usubst s
                                              tieWitKnots te [s]
@@ -305,7 +308,6 @@ genEnv env cs te (Decl l ds)
 
             refineAgain cs eq           = do (cs1,eq1) <- simplify env te cs
                                              te <- usubst te
---                                             env <- usubst env
                                              refine env cs1 te (eq1++eq)
 
             solve_cs                    = [ c | c <- cs, noQual c ]
@@ -321,31 +323,15 @@ genEnv env cs te s                      = do eq <- solveAll env te cs
 
 
 markScoped env n q te []                = return ([], [])
-
 -- Should remove this simplify call too, but doing so destroys performance of our current inferior constraint-solver (see module yang.schema in acton-yang).
-
 --markScoped env n [] te cs               = return (cs, [])
-markScoped env n [] te cs               =  simplify env te cs
-
-markScoped env n q te cs
-  | True                                = do --traceM ("\n\n### markScoped for " ++ prstr n ++ ": " ++ prstrs cs)
-                                             if null cs then
-                                                 return (cs, [])
-                                              else do
-                                                 w <- newWitness
-                                                 let (cs_imp, cs_plain) = splitImply cs
-                                                     eq1 = qwitRefs env1 w cs_plain
-                                                     cs0 = if null cs_plain then id else (Imply (Simple NoLoc "Implication") w q cs_plain :)
-                                                     cs1 = cs0 [ Imply i w (q++q') cs' | Imply i w q' cs' <- cs_imp ]
-                                                 --traceM ("\n\n### Defer scoped for " ++ prstr n ++ " (" ++ prstrs (dom te) ++ "):   " ++ prstr w ++ ": " ++ prstr q ++ " =>\n" ++ render (nest 4 $ vcat $ map pretty cs))
-                                                 return (cs1, eq1)
-  where env1                            = defineTVars q env
-
+markScoped env n [] te cs               = simplify env te cs
+-- Return the marks in terms of NotImplemented equations for now, so that we can coexist with the need to also run simplify (see above)
 markScoped env n q te cs                = return (cs, eq)
-  where eq                              = [ Eqn w tWild eNotImpl | w <- ws ]
+  where eq                              = [ mkEqn env w tWild eNotImpl | w <- ws ]
         ws                              = scopedWits env q cs
 
-tempGoal t                              = [(name "_", NVar t)]
+tempGoal t                              = [(nWild, NVar t)]
 
 solveAll env te []                      = return []
 solveAll env te cs                      = do --traceM ("\n\n### solveAll " ++ prstrs cs)

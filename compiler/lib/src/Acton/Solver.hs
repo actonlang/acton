@@ -353,7 +353,12 @@ solve' env select hist te eq cs
 
                 subrev []                   = []
                 subrev (t:ts)               = subrev ts1 ++ t : subrev ts2
-                  where (ts1,ts2)           = partition (\t' -> castable env t' t) ts
+                  where (ts1,ts2)           = partition (\t' -> castable' t' t) ts
+
+                -- Interim: the env above is a simplification, it won't necessarily contain all TVars
+                castable' t'@TVar{} t       = True      -- But a TVar is less than any of its bounds anyway
+                castable' t' t@TVar{}       = False     -- And vice versa
+                castable' t' t              = castable env t' t
 
                 group []                    = []
                 group (r:rs)                = (r : rs1) : group rs2
@@ -500,23 +505,6 @@ allBelow env (TFX _ FXAction)           = [fxAction]
 -- reduce
 ----------------------------------------------------------------------------------------------------------------------
 
-instance USubst Equation where
-    usubst (Eqn w t e)                      = Eqn w <$> usubst t <*> usubst e
-    usubst (QEqn n q eqs)                   = QEqn n <$> usubst q <*> usubst eqs
-    
-instance UFree Equation where
-    ufree (Eqn w t e)                       = ufree t ++ ufree e
-    ufree (QEqn n q eqs)                    = ufree q ++ ufree eqs
-
-instance Vars Equation where
-    free (Eqn w t e)                        = free e
-    free (QEqn n q eqs)                     = free q ++ (free eqs \\ bound q)
-
-    bound (Eqn w t e)                       = [w]
-    bound (QEqn w q eqs)                    = [w]
-
-
-
 reduce                                      :: Env -> Equations -> Constraints -> TypeM Equations
 reduce _ eq []                              = return eq
 reduce env0 eq (c:cs)                       = do c <- usubst c
@@ -553,7 +541,7 @@ reduce' _ eq c@(Proto _ env w t@(TVar _ tv) p)
 reduce' _ eq c@(Proto _ env w t@(TCon _ tc) p)
   | tcname p == qnIdentity,
     isActor env (tcname tc)                 = do let e = eCall (eQVar primIdentityActor) []
-                                                 return (Eqn w (proto2type t p) e : eq)
+                                                 return (mkEqn env w (proto2type t p) e : eq)
   | [wit] <- witSearch                      = do (eq',cs) <- solveProto env wit w t p
                                                  reduce env (eq'++eq) cs
   where witSearch                           = findWitness env t p
@@ -566,26 +554,26 @@ reduce' _ eq c@(Proto _ env w t@(TFX _ tc) p)
 reduce' _ eq c@(Proto info env w t@(TOpt _ t') p)
   | tcname p == qnEq                        = do w' <- newWitness
                                                  let e = eCall (tApp (eQVar primEqOpt) [t']) [eVar w']
-                                                 reduce env (Eqn w (proto2type t p) e : eq) [Proto info env w' t' p]
+                                                 reduce env (mkEqn env w (proto2type t p) e : eq) [Proto info env w' t' p]
 
 reduce' _ eq c@(Proto _ env w t@(TNone _) p)
-  | tcname p == qnEq                        = return (Eqn w (proto2type t p) (eQVar primWEqNone) : eq)
+  | tcname p == qnEq                        = return (mkEqn env w (proto2type t p) (eQVar primWEqNone) : eq)
 
 reduce' _ eq c@(Sel _ env w TUni{} n _)     = do defer [c]; return eq
 
 reduce' _ eq c@(Sel _ env w (TVar _ tv) n _)
-  | Just wsc <- attrSearch                  = do (eq',cs) <- solveSelAttr env wsc c
+  | Just wsc <- attrSearch                  = do (eq',cs) <- solveSelAttr wsc c
                                                  reduce env (eq'++eq) cs
-  | Just p <- protoSearch                   = do (eq',cs) <- solveSelProto env p c
+  | Just p <- protoSearch                   = do (eq',cs) <- solveSelProto p c
                                                  reduce env (eq'++eq) cs
   | otherwise                               = tyerr n "Attribute not found"
   where attrSearch                          = findTVAttr env tv n
         protoSearch                         = findProtoByAttr env (NoQ $ tvname tv) n
 
 reduce' _ eq c@(Sel _ env w (TCon _ tc) n _)
-  | Just wsc <- attrSearch                  = do (eq',cs) <- solveSelAttr env wsc c
+  | Just wsc <- attrSearch                  = do (eq',cs) <- solveSelAttr wsc c
                                                  reduce env (eq'++eq) cs
-  | Just p <- protoSearch                   = do (eq',cs) <- solveSelProto env p c
+  | Just p <- protoSearch                   = do (eq',cs) <- solveSelProto p c
                                                  reduce env (eq'++eq) cs
   | otherwise                               = tyerr n "Attribute not found"
   where attrSearch                          = findAttr env tc n
@@ -597,17 +585,17 @@ reduce' _ eq c@(Sel info env w t1@(TTuple _ _ TUni{}) n t2)
 
 reduce' _ eq c@(Sel info env w t1@(TTuple _ _ r) n t2)
   | n `elem` valueKWs                       = do let e = eLambda [(px0,t1)] (eDot (eVar px0) n)
-                                                 return (Eqn w (wFun t1 t2) e : eq)
+                                                 return (mkEqn env w (wFun t1 t2) e : eq)
   | otherwise                               = do --traceM ("### Sel " ++ prstr c)
                                                  select r
   where select (TRow _ _ n' t r)
           | n == n'                         = do w' <- newWitness
                                                  let e = eLambda [(px0,t1)] (eDot (eCallVar w' [eVar px0]) n)
-                                                 reduce env (Eqn w (wFun t1 t2) e : eq) [Sub info env w' t t2]
+                                                 reduce env (mkEqn env w (wFun t1 t2) e : eq) [Sub info env w' t t2]
           | otherwise                       = select r
         select (TStar _ _ r)                = do w' <- newWitness
                                                  let e = eLambda [(px0,t1)] (eCallVar w' [eDot (eVar px0) attrKW])
-                                                 reduce env (Eqn w (wFun t1 t2) e : eq) [Sel info env w' (tTupleK r) n t2]
+                                                 reduce env (mkEqn env w (wFun t1 t2) e : eq) [Sel info env w' (tTupleK r) n t2]
         select (TNil _ _)                   = kwdNotFound0 env info n
 
 --  lambda (x:(a:int,b:int,**(c:int))): x.b  ==>  lambda x: (b=x.b, a=x.a, KW=x.KW).b            ==>  lambda x: x.b
@@ -616,13 +604,13 @@ reduce' _ eq c@(Sel info env w t1@(TTuple _ _ r) n t2)
 reduce' _ eq c@(Mut _ env TUni{} n _)       = do defer [c]; return eq
 
 reduce' _ eq c@(Mut _ env (TVar _ tv) n _)
-  | Just wsc <- attrSearch                  = do solveMutAttr env wsc c
+  | Just wsc <- attrSearch                  = do solveMutAttr wsc c
                                                  return eq
   | otherwise                               = tyerr n "Attribute not found:"
   where attrSearch                          = findTVAttr env tv n
 
 reduce' _ eq c@(Mut _ env (TCon _ tc) n _)
-  | Just wsc <- attrSearch                  = do solveMutAttr env wsc c
+  | Just wsc <- attrSearch                  = do solveMutAttr wsc c
                                                  return eq
   | otherwise                               = tyerr n "Attribute not found:"
   where attrSearch                          = findAttr env tc n
@@ -645,15 +633,15 @@ reduce' env0 eq c                           = noRed0 env0 c
 
 solveProto env wit w t p                    = do (cs,t',we) <- instWitness env p wit
                                                  unify (noinfo 7) t t'
-                                                 return ([Eqn w (proto2type t p) we], cs)
+                                                 return ([mkEqn env w (proto2type t p) we], cs)
 
-solveSelAttr env_ (wf,sc,d) (Sel info env w t1 n t2)
-                                            = do (cs,tvs,t) <- instantiate env_ sc
+solveSelAttr (wf,sc,d) (Sel info env w t1 n t2)
+                                            = do (cs,tvs,t) <- instantiate env sc
                                                  when (negself t) (tyerr n "Contravariant Self attribute not selectable by instance")
                                                  w' <- newWitness
                                                  let e = eLambda [(px0,t1)] (eCallVar w' [app t (tApp (eDot (wf $ eVar px0) n) tvs) $ protoWitsOf cs])
                                                      c = Sub (locinfo info 8) env w' (vsubst [(tvSelf,t1)] t) t2
-                                                 return ([Eqn w (wFun t1 t2) e], c:cs)
+                                                 return ([mkEqn env w (wFun t1 t2) e], c:cs)
 
 --  e1.__setslice__(sl, e2)
 --  e1.__setslice__(w_Iterable, sl, e2)
@@ -664,25 +652,24 @@ solveSelAttr env_ (wf,sc,d) (Sel info env w t1 n t2)
 --  w_Sliceable.__setslice__(x0, w1, sl, e2)                            w1 = w_Iterable
 --  w_Sliceable.__setslice__(e1, w_Iterable, sl, e2)
 
-solveSelProto env_ pn c@(Sel info env w t1 n t2)
-                                            = do p <- instwildcon env_ pn
+solveSelProto pn c@(Sel info env w t1 n t2) = do p <- instwildcon env pn
                                                  w' <- newWitness
-                                                 (eq,cs) <- solveSelWit env_ (p, eVar w') c
+                                                 (eq,cs) <- solveSelWit (p, eVar w') c
                                                  return (eq, Proto info env w' t1 p : cs)
 
-solveSelWit env_ (p,we) c0@(Sel info env w t1 n t2)
-                                            = do let Just (wf,sc,d) = findAttr env_ p n
-                                                 (cs,tvs,t) <- instantiate env_ sc
+solveSelWit (p,we) c0@(Sel info env w t1 n t2)
+                                            = do let Just (wf,sc,d) = findAttr env p n
+                                                 (cs,tvs,t) <- instantiate env sc
                                                  when (negself t) (tyerr n "Contravariant Self attribute not selectable by instance")
                                                  w' <- newWitness
                                                  let e = eLambda [(px0,t1)] (eCallVar w' [app t (tApp (eDot (wf we) n) tvs) $ eVar px0 : protoWitsOf cs])
                                                      c = Sub (noinfo 9) env w' (vsubst [(tvSelf,t1)] t) t2
-                                                 return ([Eqn w (wFun t1 t2) e], c:cs)
+                                                 return ([mkEqn env w (wFun t1 t2) e], c:cs)
 
-solveMutAttr env_ (wf,sc,dec) c@(Mut info env t1 n t2)
+solveMutAttr (wf,sc,dec) c@(Mut info env t1 n t2)
                                             = do when (dec /= Just Property) (noMut n)
                                                  let TSchema _ [] t = sc
-                                                 cast env_ (locinfo c 10) t2 (vsubst [(tvSelf,t1)] t)
+                                                 cast env (locinfo c 10) t2 (vsubst [(tvSelf,t1)] t)
 
 ----------------------------------------------------------------------------------------------------------------------
 -- witness lookup
@@ -998,7 +985,7 @@ sub' env info eq w t1@(TFun _ fx1 p1 k1 t1') t2@(TFun _ fx2 p2 k2 t2')
                                                  let (TFun _ fx1 p1 k1 t1', TFun _ fx2 p2 k2 t2') = (t1, t2)
                                                      (pp,pk) = (pPar pNames p2, kPar attrKW k2)
                                                      lambda = eLambda [(px0,t1)] $ Lambda l0 pp pk (eCallVar w' [Call l0 (eVar px0) ap ak]) fx1
-                                                 reduce env (Eqn w (wFun t1 t2) lambda : eq) (Cast info env fx1 fx2 : Sub info env w' t1' t2':cs1++cs2)
+                                                 reduce env (mkEqn env w (wFun t1 t2) lambda : eq) (Cast info env fx1 fx2 : Sub info env w' t1' t2':cs1++cs2)
 
 --                     existing            expected
 sub' env info eq w t1@(TTuple _ p1 k1) t2@(TTuple _ p2 k2)
@@ -1012,7 +999,7 @@ sub' env info eq w t1@(TTuple _ p1 k1) t2@(TTuple _ p2 k2)
                                                  t2 <- usubst t2
                                                  let (TTuple _ p1 k1, TTuple _ p2 k2) = (t1, t2)
                                                      lambda = eLambda [(px0,t1)] (Paren l0 $ Tuple l0 ap ak)
-                                                 reduce env (Eqn w (wFun t1 t2) lambda : eq) (cs1++cs2)
+                                                 reduce env (mkEqn env w (wFun t1 t2) lambda : eq) (cs1++cs2)
 
 sub' env info eq w (TUni _ tv) t2@TFun{}    = do t1 <- instwild env KType $ tFun tWild tWild tWild tWild
                                                  usubstitute tv t1
@@ -1743,14 +1730,14 @@ replace ub lb cs                        = ubs ++ lbs ++ cs'
     repl c                                    = ([], c)
 
 
-solveDots env_ mutC selC selP cs        = do (eqs,css) <- unzip <$> mapM solveDot cs
+solveDots env_Imply mutC selC selP cs   = do (eqs,css) <- unzip <$> mapM solveDot cs
                                              return (insertOrMerge (concat eqs) [], concat css)
   where solveDot c@(Mut _ env (TUni _ v) n _)
-          | Just w <- lookup (v,n) mutC = solveMutAttr env_ w c >> return ([], [])
+          | Just w <- lookup (v,n) mutC = solveMutAttr w c >> return ([], [])
         solveDot c@(Sel _ _ env (TUni _ v) n _)
-          | Just w <- lookup (v,n) selC = solveSelAttr env_ w c
-          | Just w <- lookup (v,n) selP = solveSelWit env_ w c
-        solveDot (Imply i w q cs)       = do (eq,cs) <- solveDots (defineTVars q env_) mutC selC selP cs
+          | Just w <- lookup (v,n) selC = solveSelAttr w c
+          | Just w <- lookup (v,n) selP = solveSelWit w c
+        solveDot (Imply i w q cs)       = do (eq,cs) <- solveDots (defineTVars q env_Imply) mutC selC selP cs
                                              return (if null eq then [] else [QEqn w q eq], if null cs then [] else [Imply i w q cs])
         solveDot c                      = return ([], [c])
 
@@ -1782,7 +1769,7 @@ ctxtRed env multiPBnds                  = (concat eqs, concat unis)
         ctxtRed (v,wps)                 = imp v [] [] [] wps
         imp v eq uni wps ((w,p):wps')
           | (e,p'):_ <- hits            = --trace ("  *" ++ prstr w ++ " covered by " ++ prstr e) $
-                                          imp v (Eqn w (proto2type (tUni v) p) e : eq) ((tcargs p `zip` tcargs p') ++ uni) wps wps'
+                                          imp v (mkEqn env w (proto2type (tUni v) p) e : eq) ((tcargs p `zip` tcargs p') ++ uni) wps wps'
           | otherwise                   = --trace ("   (Not covered: " ++ prstr p ++ " in context " ++ prstrs (map fst (wps++wps')) ++ ")") $
                                           imp v eq uni ((w,p):wps) wps'
           where hits                    = [ (wf $ eVar w', vsubst s p') | (w',p0) <- wps++wps', w'/=w, Just (wf,p') <- [findAncestor env p0 (tcname p)] ]
@@ -1825,7 +1812,7 @@ app2nd _ tx e es                        = Lambda NoLoc p' k' (Call NoLoc e (PosA
         (p',k')                         = (pPar pNames p, kPar attrKW k)
         PosArg pSelf pArgs              = pArg p'
 
-idwit env w t1 t2                       = Eqn w (wFun t1 t2) (eLambda [(px0,t1)] (eVar px0))
+idwit env w t1 t2                       = mkEqn env w (wFun t1 t2) (eLambda [(px0,t1)] (eVar px0))
 
 rowFun PRow r1 r2                       = tFun fxPure (posRow (tTupleP r1) posNil) kwdNil (tTupleP r2)
 rowFun KRow r1 r2                       = tFun fxPure (posRow (tTupleK r1) posNil) kwdNil (tTupleK r2)

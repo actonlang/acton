@@ -286,7 +286,7 @@ addImport m env             = env{ imports = m : imports env }
 defineTVars                 :: QBinds -> EnvF x -> EnvF x
 defineTVars q env           = foldr f env (unalias env q)
   where f (QBind tv us) env = foldl addWit env{ names = (tvname tv, NTVar (tvkind tv) c ps) : names env, qlevel = qlevel env + 1 } wits
-          where (c,ps)      = case us of u:us' | not $ isProto env (tcname u) -> (u,us); _ -> (cValue,us)
+          where (c,ps)      = case us of u:us' | not $ isProto env (tcname u) -> (u,us'); _ -> (cValue,us)
                 wits        = [ WInst [] (tVar tv) p (NoQ $ tvarWit tv p0) wchain | p0 <- ps, (wchain,p) <- findAncestry env p0 ]
 
 selfSubst n q               = vsubst [(tvSelf, tCon tc)]

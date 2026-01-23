@@ -659,52 +659,65 @@ wvars cs                    = [ eVar v | Proto _ _ v _ _ <- cs ]
 
 -- Equations -----------------------------------------------------------------------------------------------------------------------
 
-data Equation                           = Eqn Name Type Expr
+data Equation                           = Eqn Int Name Type Expr
                                         | QEqn Name QBinds Equations
 
 type Equations                          = [Equation]
 
-eqnwit (Eqn w _ _)                      = w
-eqnwit (QEqn w _ _)                     = w
+mkEqn env                               = Eqn (qlevel env)
 
-eqnwits eqs                             = map eqnwit eqs
-
-deepwits eqs                            = eqnwits eqs ++ concat [ eqnwits eq | QEqn _ _ eq <- eqs ]
+deepwits eqs                            = bound eqs ++ concat [ bound eq | QEqn _ _ eq <- eqs ]
 
 instance Pretty Equations where
     pretty eqs                          = vcat $ map pretty eqs
 
 instance Pretty Equation where
-    pretty (Eqn n t e)                  = pretty n <+> colon <+> pretty t <+> equals <+> pretty e
+    pretty (Eqn i n t e)                = pretty n <+> colon <+> pretty t <+> equals <+> pretty e <+> if i>0 then text ("# "++show i) else empty
     pretty (QEqn n q eqs)               = pretty n <+> colon <+> pretty q <+> text "=>" $+$
                                           nest 4 (pretty eqs)
+
+instance USubst Equation where
+    usubst (Eqn i w t e)                = Eqn i w <$> usubst t <*> usubst e
+    usubst (QEqn n q eqs)               = QEqn n <$> usubst q <*> usubst eqs
+
+instance UFree Equation where
+    ufree (Eqn i w t e)                 = ufree t ++ ufree e
+    ufree (QEqn n q eqs)                = ufree q ++ ufree eqs
+
+instance Vars Equation where
+    free (Eqn i w t e)                  = free e
+    free (QEqn n q eqs)                 = free q ++ (free eqs \\ bound q)
+
+    bound (Eqn i w t e)                 = [w]
+    bound (QEqn w q eqs)                = [w]
+
 
 bindWits eqs
   | null sigws                          = binds
   | otherwise                           = Signature NoLoc sigws (monotype tWild) NoDec : binds
-  where sigws                           = [ w | Eqn w _ (NotImplemented _) <- eqs ]
-        binds                           = [ sAssign (pVar w t) e | Eqn w t e <- eqs, w `notElem` sigws ]
+  where sigws                           = [ w | Eqn _ w _ (NotImplemented _) <- eqs ]
+        binds                           = [ sAssign (pVar w t) e | Eqn _ w t e <- eqs, w `notElem` sigws ]
 
 
 -- The following two functions generate quantified witness definitions and calls, respectively.
 -- See Transform.hs for the invariants that apply to these constructs.
 bindTopWits env eqs0                    = map bind eqs0
-  where bind (Eqn w t e)                = sAssign (pVar w t) e
+  where bind (Eqn _ w t e)              = sAssign (pVar w t) e
         bind (QEqn w q eqs)             = sDecl [Def l0 w (stripQual q) (qualWPar env q PosNIL) KwdNIL ann body NoDec fxPure Nothing]
           where ann                     = Just $ tTupleK $ foldr krow (tNil KRow) eqs
                 body                    = bindWits eqs ++ [sReturn (eTupleK $ foldr karg KwdNil eqs)]
 
-        krow (Eqn w t e) r              = kwdRow w t r
+        krow (Eqn _ w t e) r            = kwdRow w t r
         krow (QEqn w q eqs) r           = r
 
-        karg (Eqn w t _) a              = KwdArg w (eVar w) a
+        karg (Eqn _ w t _) a            = KwdArg w (eVar w) a
         karg (QEqn _ _ _) a             = a
 
 qwitRefs env w0 cs                      = refs cs
   where refs []                         = []
-        refs (Sub _ _ w t1 t2 : cs)     = Eqn w (tFun0 [t1] t2) (eDot e w) : refs cs
-        refs (Proto _ _ w t p : cs)     = Eqn w (proto2type t p) (eDot e w) : refs cs
-        refs (Sel _ _ w t1 n t2 : cs)   = Eqn w (tFun0 [t1] t2) (eDot e w) : refs cs
+        refs (Sub _ _ w t1 t2 : cs)     = mkEqn env w (tFun0 [t1] t2) (eDot e w) : refs cs
+        refs (Proto _ _ w t p : cs)     = mkEqn env w (proto2type t p) (eDot e w) : refs cs
+        refs (Sel _ _ w t1 n t2 : cs)   = mkEqn env w (tFun0 [t1] t2) (eDot e w) : refs cs
         refs (c : cs)                   = refs cs
         e                               = eCallP (tApp (eVar w0) (map tVar $ qbound q_tot)) (wit2arg (qualWits env q_tot) PosNil)
         q_tot                           = quantScope0 env
@@ -733,6 +746,16 @@ scopedWits env0 q cs                    = scoped cs
         scoped (_ : cs)                 = scoped cs
         scoped []                       = []
 
+findeqns [] eqns                        = []
+findeqns ws eqns                        = findeqns ws' eqns ++ match
+  where match                           = [ eq | eq@(Eqn _ w t e) <- eqns, w `elem` ws ]
+        ws'                             = filter isWitness $ free match
+
+spliteqns eqns                          = partition isTop eqns
+  where isTop (Eqn 0 _ _ _)             = True
+        isTop _                         = False
+
+
 -- Misc. ---------------------------------------------------------------------------------------------------------------------------
 
 proto2type t (TC n ts)                   = tCon $ TC n (t:ts)
@@ -759,7 +782,7 @@ qualWRow env q                          = wit2row (qualWits env q)
 
 qualWits env q                          = [ (tvarWit tv p, proto2type (tVar tv) p) | QBind tv ps <- q, p <- ps, isProto env (tcname p) ]
 
-witSubst env q cs                       = [ Eqn w0 t (eVar w) | ((w,t),w0) <- ws `zip` ws0 ]
+witSubst env q cs                       = [ mkEqn env w0 t (eVar w) | ((w,t),w0) <- ws `zip` ws0 ]
   where ws                              = [ (w, proto2type t p) | Proto _ _ w t p <- cs ]
         ws0                             = [ tvarWit tv p | QBind tv ps <- q, p <- ps, isProto env (tcname p) ]
 
