@@ -80,7 +80,6 @@ data Constraint = Cast  {info :: ErrInfo, scope :: Env, type1 :: Type, type2 :: 
                 | Sel   {info :: ErrInfo, scope :: Env, wit :: Name, type1 :: Type, name1 :: Name, type2 :: Type}
                 | Mut   {info :: ErrInfo, scope :: Env, type1 :: Type, name1 :: Name, type2 :: Type}
                 | Seal  {info :: ErrInfo, scope :: Env, type1 :: Type}
-                | Imply {info :: ErrInfo, wit :: Name, binder :: QBinds, scoped :: Constraints}
                 deriving (Show)
 
 type Constraints = [Constraint]
@@ -92,7 +91,6 @@ instance HasLoc Constraint where
     loc (Sel info _ env t1  n1 t2)  = getLoc [loc info, loc t1, loc n1, loc t2]
     loc (Mut info env t1  n1 t2)    = getLoc [loc info, loc t1, loc n1, loc t2]
     loc (Seal info env t1)          = getLoc [loc info, loc t1]
-    loc (Imply info _ q cs)         = getLoc [loc info, loc cs]
 
 instance Pretty Constraint where
     pretty (Cast _ env t1 t2)       = prettyQuant env <+> pretty t1 <+> text "<" <+> pretty t2
@@ -101,9 +99,6 @@ instance Pretty Constraint where
     pretty (Sel _ env w t1 n t2)    = pretty w <+> colon <+> prettyQuant env <+> pretty t1 <> text "." <> pretty n <+> text "<" <+> pretty t2
     pretty (Mut _ env t1 n t2)      = prettyQuant env <+> pretty t1 <+> text "." <> pretty n <+> text ">" <+> pretty t2
     pretty (Seal _ env t)           = prettyQuant env <+> text "$Seal" <+> pretty t
-    pretty (Imply _ w q cs)
-      | length cs < 4               = pretty w <+> colon <+> pretty q <+> text "=>" <+> braces (commaSep pretty cs)
-      | otherwise                   = pretty w <+> colon <+> pretty q <+> text "=>" $+$ nest 4 (vcat $ map pretty cs)
 
 prettyQuant env
   | qlevel env > 0                  = brackets (commaSep pretty q) <+> text "=>"
@@ -117,7 +112,6 @@ instance UFree Constraint where
     ufree (Sel info env w t1 n t2)  = ufree t1 ++ ufree t2
     ufree (Mut info env t1 n t2)    = ufree t1 ++ ufree t2
     ufree (Seal info env t)         = ufree t
-    ufree (Imply info w q cs)       = ufree cs
 
 instance Tailvars Constraint where
     tailvars (Cast _ env t1 t2)     = tailvars t1 ++ tailvars t2
@@ -126,7 +120,6 @@ instance Tailvars Constraint where
     tailvars (Sel _ env w t1 n t2)  = tailvars t1 ++ tailvars t2
     tailvars (Mut _ env t1 n t2)    = tailvars t1 ++ tailvars t2
     tailvars (Seal _ env t)         = tailvars t
-    tailvars (Imply _ w q cs)       = tailvars cs
 
 instance Vars Constraint where
     freeQ (Cast _ env t1 t2)        = freeQ t1 ++ freeQ t2
@@ -135,7 +128,6 @@ instance Vars Constraint where
     freeQ (Sel _ env w t1 n t2)     = freeQ t1 ++ freeQ t2
     freeQ (Mut _ env t1 n t2)       = freeQ t1 ++ freeQ t2
     freeQ (Seal _ env t)            = freeQ t
-    freeQ (Imply _ w q cs)          = freeQ cs
 
 instance UWild Constraint where
     uwild (Cast info env t1 t2)     = Cast info env (uwild t1) (uwild t2)
@@ -144,7 +136,6 @@ instance UWild Constraint where
     uwild (Sel info env w t1 n t2)  = Sel info env w (uwild t1) n (uwild t2)
     uwild (Mut info env t1 n t2)    = Mut info env (uwild t1) n (uwild t2)
     uwild (Seal info env t)         = Seal info env (uwild t)
-    uwild (Imply info w q cs)       = Imply info w q (uwild cs)
 
 
 closeDepVars vs cs
@@ -158,7 +149,6 @@ closeDepVars vs cs
         heads (Sel _ w _ t n _)     = ufree t
         heads (Mut _ _ t n _)       = ufree t
         heads (Seal _ _ t)          = ufree t
-        heads (Imply _ w q cs)      = []
 
         deps (Proto _ w _ _ p)      = ufree p
         deps (Cast _ _ _ t)         = typarams t
@@ -166,7 +156,6 @@ closeDepVars vs cs
         deps (Sel _ w _ _ n t)      = ufree t
         deps (Mut _ _ _ n t)        = ufree t
         deps (Seal _ _ _)           = []
-        deps (Imply _ w q cs)       = []
 
         typarams (TOpt _ t)         = typarams t
         typarams (TCon _ c)         = ufree c
@@ -367,7 +356,6 @@ instance USubst Constraint where
     usubst (Sel info env w t1 n t2) = Sel <$> usubst info <*> return env <*> return w <*> usubst t1 <*> return n <*> usubst t2
     usubst (Mut info env t1 n t2)   = Mut <$> usubst info <*> return env <*> usubst t1 <*> return n <*> usubst t2
     usubst (Seal info env t)        = Seal <$> usubst info <*> return env <*> usubst t
-    usubst (Imply info w q cs)      = Imply <$> usubst info <*> return w <*> usubst q <*> usubst cs
 
 instance USubst ErrInfo where
     usubst (DfltInfo l n mbe ts)    = DfltInfo l n <$> usubst mbe <*> usubst ts
@@ -660,36 +648,27 @@ wvars cs                    = [ eVar v | Proto _ _ v _ _ <- cs ]
 -- Equations -----------------------------------------------------------------------------------------------------------------------
 
 data Equation                           = Eqn Int Name Type Expr
-                                        | QEqn Name QBinds Equations
 
 type Equations                          = [Equation]
 
 mkEqn env                               = Eqn (qlevel env)
-
-deepwits eqs                            = bound eqs ++ concat [ bound eq | QEqn _ _ eq <- eqs ]
 
 instance Pretty Equations where
     pretty eqs                          = vcat $ map pretty eqs
 
 instance Pretty Equation where
     pretty (Eqn i n t e)                = pretty n <+> colon <+> pretty t <+> equals <+> pretty e <+> if i>0 then text ("# "++show i) else empty
-    pretty (QEqn n q eqs)               = pretty n <+> colon <+> pretty q <+> text "=>" $+$
-                                          nest 4 (pretty eqs)
 
 instance USubst Equation where
     usubst (Eqn i w t e)                = Eqn i w <$> usubst t <*> usubst e
-    usubst (QEqn n q eqs)               = QEqn n <$> usubst q <*> usubst eqs
 
 instance UFree Equation where
     ufree (Eqn i w t e)                 = ufree t ++ ufree e
-    ufree (QEqn n q eqs)                = ufree q ++ ufree eqs
 
 instance Vars Equation where
     free (Eqn i w t e)                  = free e
-    free (QEqn n q eqs)                 = free q ++ (free eqs \\ bound q)
 
     bound (Eqn i w t e)                 = [w]
-    bound (QEqn w q eqs)                = [w]
 
 
 bindWits eqs
@@ -703,33 +682,6 @@ bindWits eqs
 -- See Transform.hs for the invariants that apply to these constructs.
 bindTopWits env eqs0                    = map bind eqs0
   where bind (Eqn _ w t e)              = sAssign (pVar w t) e
-        bind (QEqn w q eqs)             = sDecl [Def l0 w (stripQual q) (qualWPar env q PosNIL) KwdNIL ann body NoDec fxPure Nothing]
-          where ann                     = Just $ tTupleK $ foldr krow (tNil KRow) eqs
-                body                    = bindWits eqs ++ [sReturn (eTupleK $ foldr karg KwdNil eqs)]
-
-        krow (Eqn _ w t e) r            = kwdRow w t r
-        krow (QEqn w q eqs) r           = r
-
-        karg (Eqn _ w t _) a            = KwdArg w (eVar w) a
-        karg (QEqn _ _ _) a             = a
-
-qwitRefs env w0 cs                      = refs cs
-  where refs []                         = []
-        refs (Sub _ _ w t1 t2 : cs)     = mkEqn env w (tFun0 [t1] t2) (eDot e w) : refs cs
-        refs (Proto _ _ w t p : cs)     = mkEqn env w (proto2type t p) (eDot e w) : refs cs
-        refs (Sel _ _ w t1 n t2 : cs)   = mkEqn env w (tFun0 [t1] t2) (eDot e w) : refs cs
-        refs (c : cs)                   = refs cs
-        e                               = eCallP (tApp (eVar w0) (map tVar $ qbound q_tot)) (wit2arg (qualWits env q_tot) PosNil)
-        q_tot                           = quantScope0 env
-
-insertOrMerge [] eqs0                   = eqs0
-insertOrMerge (eq@Eqn{}:eqs) eqs0       = eq : insertOrMerge eqs eqs0
-insertOrMerge ((QEqn _ _ []):eqs) eqs0  = insertOrMerge eqs eqs0
-insertOrMerge (qe:eqs) eqs0             = insertOrMerge eqs (ins qe eqs0)
-  where ins (QEqn w q eq) (QEqn w' _ eq' : eqs0)
-          | w == w'                     = QEqn w q (eq++eq') : eqs0
-        ins qe (eq : eqs0)              = eq : ins qe eqs0
-        ins qe@(QEqn w _ eq) []         = [qe]
 
 
 scopedWits env0 q cs                    = scoped cs
@@ -894,7 +846,6 @@ useless vs c                           = case c of
                                              Sel _ _ _ t n t0 -> f t || f t0
                                              Mut _ _ t1 n t2 -> True   -- TODO
                                              Seal _ _ _ -> True        -- TODO
-                                             Imply _ _ _ _ -> True   -- TODO
      where f (TUni _ v) = notElem v vs
            f _          = False
 

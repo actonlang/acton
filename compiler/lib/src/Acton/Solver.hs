@@ -39,7 +39,7 @@ simplifyNew                                 :: Env -> Constraints -> TypeM (Cons
 simplifyNew env cs                          = do css <- groupCs env cs
                                                  --traceM ("#### SIMPLIFY NEW" ++ prstrs (map length css))
                                                  --sequence [ traceM ("## long:\n" ++ render (nest 4 $ vcat $ map pretty cs)) | cs <- css, length cs > 500 ]
-                                                 combine <$> simplifyGroupsNew env css
+                                                 simplifyGroupsNew env css
 
 simplifyGroupsNew env []                    = return ([], [])
 simplifyGroupsNew env (cs:css)              = do --traceM ("\n\n######### simplifyNewGroup\n" ++ render (nest 4 $ vcat $ map pretty cs))
@@ -54,7 +54,7 @@ simplify env te cs                          = do css <- groupCs env cs
                                                  te <- usubst te
                                                  --traceM ("#### SIMPLIFY " ++ prstrs (map length css))
                                                  --sequence [ traceM ("## long:\n" ++ render (nest 4 $ vcat $ map pretty cs)) | cs <- css, length cs > 500 ]
-                                                 combine <$> simplifyGroups env te css
+                                                 simplifyGroups env te css
 
 simplifyGroups env te []                    = return ([], [])
 simplifyGroups env te (cs:css)              = do --traceM ("\n\n######### simplifyGroup\n" ++ render (nest 4 $ vcat $ map pretty cs))
@@ -82,19 +82,14 @@ groupCs env cs                              = do st <- currentState
                                                  m <- foldM group Map.empty cs
                                                  rollbackState st
                                                  let css = Map.elems m
-                                                     i = length [ c | c@Imply{} <- cs ]
                                                      n = length (concat css)
-                                                 --traceM ("#### Grouped " ++ show n ++ " (" ++ show i ++ ")" ++ " constraints into " ++ show (map length css) ++ " groups")
+                                                 --traceM ("#### Grouped " ++ show n ++ " constraints into " ++ show (map length css) ++ " groups")
                                                  return css
   where mark n []                           = return n
-        mark n (Imply _ _ _ cs' : cs)       = do n' <- mark n cs'
-                                                 mark n' cs
         mark n (c : cs)                     = do tvs <- ufree <$> usubst c
                                                  tvs' <- ufree <$> usubst (map tUni $ attrfree c)
                                                  sequence [ unify (noinfo 1) (newUnivarToken n) (tUni tv) | tv <- nub (tvs++tvs') ]
                                                  mark (n+1) cs
-        group m (Imply i w q cs)            = do m' <- foldM group Map.empty cs
-                                                 return $ Map.foldrWithKey (\tv cs' -> Map.insertWith (++) tv [Imply i w q cs']) m m'
         group m c                           = do tvs <- ufree <$> usubst c
                                                  let tv = case tvs of [] -> tv0; tv:_ -> tv
                                                  return $ Map.insertWith (++) tv [c] m
@@ -102,16 +97,6 @@ groupCs env cs                              = do st <- currentState
         attrfree c@(Mut _ _ _ n _)          = allConAttrUFree env n
         attrfree _                          = []
         TUni _ tv0                          = newUnivarToken 0
-
-
-combine (cs, eqs)                           = (comb [] cs, insertOrMerge eqs [])
-  where comb cs1 []                         = cs1
-        comb cs1 (c@Imply{} : cs)           = comb (join c cs1) cs
-        comb cs1 (c : cs)                   = c : comb cs1 cs
-        join c []                           = [c]
-        join c@Imply{wit=w} (c'@Imply{wit=w'} : cs)
-          | w == w'                         = c{ scoped = scoped c ++ scoped c' } : cs
-          | otherwise                       = c' : join c cs
 
 
 ----------------------------------------------------------------------------------------------------------------------
@@ -246,8 +231,7 @@ solve                                       :: Env -> (Constraint -> Bool) ->
                                                TEnv -> Equations -> Constraints -> TypeM (Constraints,Equations)
 solve env select te eq cs                   = do css <- groupCs env cs
                                                  te <- usubst te
-                                                 (cs',eq') <- solveGroups env select te eq css
-                                                 return $ combine (cs', eq')
+                                                 solveGroups env select te eq css
 
 solveGroups env select te eq []             = return ([], eq)
 solveGroups env select te eq (cs:css)       = do --traceM ("\n\n######### solveGroup\n" ++ render (nest 4 $ vcat $ map pretty cs))
@@ -298,7 +282,6 @@ solve' env select hist te eq cs
         rnks                                = map (rank env) solve_cs
 
         tryAlts st tv []                    = do --traceM ("### FAIL " ++ prstr tv ++ ":\n" ++ render (nest 4 $ vcat $ map pretty cs))
-                                                 cs <- return $ concat $ map (\c -> case c of Imply _ _ q cs -> cs; _ -> [c]) cs
                                                  let ts = map (\n -> tCon (TC (noQ ('t':show n)) [])) [0..]
                                                      vs = filter (\v -> length (filter (\c -> v `elem` ufree c) cs) > 1) (nub (ufree cs))
                                                      cs' = if length cs == 1 then cs else filter (not . useless vs) cs
@@ -320,7 +303,7 @@ solve' env select hist te eq cs
                                                  unify (noinfo 5) (tUni v) t
                                                  proceed (t:hist) eq cs
           where selsOf cs                   = sortBy (\a b -> compare (nstr a) (nstr b)) $ nub [ n | Sel _ _ _ (TUni _ v') n _ <- cs, v' == v ]
-                attrs                       = nub $ selsOf solve_cs ++ concat [ selsOf cs | Imply _ _ _ cs <- solve_cs ]
+                attrs                       = nub $ selsOf solve_cs
         tryAlt v t
           | uvkind v == KFX                 = do t <- instwild env (uvkind v) t
                                                  --traceM ("  # TRYING " ++ prstr v ++ " = " ++ prstr t)
@@ -407,15 +390,9 @@ rank _ (Seal _ env (TUni _ v))
   | uvkind v == KFX                         = RSealed v
   | otherwise                               = RSkip
 
-rank env0 (Imply _ _ q cs)                  = RImp q (map (rank env1) cs)
-  where env1                                = defineTVars q env0
 rank _ c                                    = RRed c
 
 wildTuple                                   = tTuple tWild tWild
-
-splitImply cs                               = partition isImply cs
-  where isImply Imply{}                     = True
-        isImply _                           = False
 
 
 -------------------------------------------------------------------------------------------------------------------------
@@ -433,7 +410,6 @@ instance OptVars Constraint where
     optvars (Sel _ w _ t1 n t2)         = optvars [t1, t2]
     optvars (Mut _ _ t1 n t2)           = optvars [t1, t2]
     optvars (Seal _ _ t)                = optvars t
-    optvars (Imply _ _ q cs)            = optvars cs
 
 instance OptVars Type where
     optvars (TOpt _ (TUni _ v))         = [v]
@@ -513,15 +489,6 @@ reduce env0 eq (c:cs)                       = do c <- usubst c
                                                  reduce env0 eq1 cs
 
 reduce'                                     :: Env -> Equations -> Constraint -> TypeM Equations
-reduce' env0 eq c@(Imply i w q cs)          = do cs0 <- collectDeferred
-                                                 --traceM ("### reduce implication " ++ prstr w ++ ": " ++ prstr q ++ " =>\n" ++ render (nest 8 $ vcat $ map pretty cs))
-                                                 eq' <- reduce env1 [] cs
-                                                 cs' <- usubst =<< collectDeferred
-                                                 when (not $ null cs') $ defer [Imply i w q cs']
-                                                 defer cs0
-                                                 return $ insertOrMerge [QEqn w q eq'] eq
-  where env1                                = defineTVars q env0
-
 reduce' _ eq c@(Cast i env t1 t2)           = do cast' env i t1 t2
                                                  return eq
 
@@ -1463,7 +1430,6 @@ varinfo cs                                  = f cs (VInfo [] [] [] Map.empty Map
     f (Sel _ _ _ (TTuple _ _ TUni{}) _ _ : cs)
                                             = f cs
     f (Seal _ _ (TUni _ v) : cs)            = f cs . seal v
-    f (Imply _ _ _ cs' : cs)                = f (cs'++cs)
     f []                                    = Just
     f (_ : cs)                              = \_ -> Nothing
 
@@ -1593,11 +1559,11 @@ improve env te eq cs
   | not $ null closLBnd                 = do --traceM ("  *Simplify lower closed bound " ++ prstrs closLBnd)
                                              sequence [ unify (noinfo 18) (tUni v) t | (v,t) <- closLBnd ]
                                              simplify' env te eq cs
-  | not $ null redEq                    = do --traceM ("  *(Context red) " ++ prstrs (deepwits redEq))
+  | not $ null redEq                    = do --traceM ("  *(Context red) " ++ prstrs (bound redEq))
                                              sequence [ unify (noinfo 19) t1 t2 | (t1,t2) <- redUni ]
-                                             simplify' env te (insertOrMerge redEq eq) (remove (deepwits redEq) cs)
+                                             simplify' env te (redEq++eq) (remove (bound redEq) cs)
   | not $ null dots                     = do --traceM ("  *Implied mutation/selection solutions " ++ prstrs dots)
-                                             (eq',cs') <- solveDots env mutC selC selP cs
+                                             (eq',cs') <- solveDots mutC selC selP cs
                                              simplify' env te (eq'++eq) cs'
   | not $ null redSeal                  = do --traceM ("  *removing redundant Seal constraints on: " ++ prstrs redSeal)
                                              return (filterOut redSeal cs, eq)
@@ -1650,7 +1616,6 @@ multiUBounds cs                         = Map.assocs $ Map.filter ((>1) . length
     bnds (_ : cs)                       = bnds cs
 
     imps []                             = []
-    imps (Imply _ _ _ cs' : cs)         = bnds cs' : imps cs
     imps (_ : cs)                       = imps cs
 
     app1 [x] [y] | x == y               = [x]
@@ -1672,7 +1637,6 @@ multiLBounds cs                         = Map.assocs $ Map.filter ((>1) . length
     bnds (_ : cs)                       = bnds cs
 
     imps []                             = []
-    imps (Imply _ _ _ cs' : cs)         = bnds cs' : imps cs
     imps (_ : cs)                       = imps cs
 
     app1 [x] [y] | x == y               = [x]
@@ -1726,30 +1690,23 @@ replace ub lb cs                        = ubs ++ lbs ++ cs'
       | Just t' <- lookup v ub                = ([(v,env)], Sub info env w t' t)
     repl (Sub info env w t (TUni _ v))
       | Just t' <- lookup v lb                = ([(v,env)], Sub info env w t t')
-    repl (Imply info w q cs)                  = ([], Imply info w q $ replace ub lb cs)
     repl c                                    = ([], c)
 
 
-solveDots env_Imply mutC selC selP cs   = do (eqs,css) <- unzip <$> mapM solveDot cs
-                                             return (insertOrMerge (concat eqs) [], concat css)
+solveDots mutC selC selP cs             = do (eqs,css) <- unzip <$> mapM solveDot cs
+                                             return (concat eqs, concat css)
   where solveDot c@(Mut _ env (TUni _ v) n _)
           | Just w <- lookup (v,n) mutC = solveMutAttr w c >> return ([], [])
         solveDot c@(Sel _ _ env (TUni _ v) n _)
           | Just w <- lookup (v,n) selC = solveSelAttr w c
           | Just w <- lookup (v,n) selP = solveSelWit w c
-        solveDot (Imply i w q cs)       = do (eq,cs) <- solveDots (defineTVars q env_Imply) mutC selC selP cs
-                                             return (if null eq then [] else [QEqn w q eq], if null cs then [] else [Imply i w q cs])
         solveDot c                      = return ([], [c])
 
 instance Pretty (TUni,Name) where
     pretty (v,n)                        = pretty v Pretty.<> text "." Pretty.<> pretty n
 
 ctxtReduce                              :: Env -> Constraints -> (Equations, [(Type,Type)])
-ctxtReduce env cs                       = (eq0, uni0) -- foldr combine (eq0,uni0) qreds
-  where (eq0,uni0)                      = ctxtRed env (multiPBounds cs)
-        qreds                           = [ qualeq w q $ ctxtRed env (multiPBounds cs') | Imply i w q cs' <- cs ]
-        qualeq w q (eq,uni)             = (if null eq then [] else [QEqn w q eq], uni)
-        combine (qe,uni) (eq0,ini0)     = (insertOrMerge qe eq0, uni++uni0)
+ctxtReduce env cs                       = ctxtRed env (multiPBounds cs)
 
 instance Pretty (TUni, [(Name,PCon)]) where
     pretty (tv, wps)                    = pretty tv <+> parens (commaSep pretty wps)
@@ -1765,8 +1722,8 @@ multiPBounds cs                         = Map.assocs $ f cs Map.empty
 
 ctxtRed                                 :: Env -> [(TUni, [(Name, PCon)])] -> (Equations, [(Type,Type)])
 ctxtRed env multiPBnds                  = (concat eqs, concat unis)
-  where (eqs,unis)                      = unzip $ map ctxtRed multiPBnds
-        ctxtRed (v,wps)                 = imp v [] [] [] wps
+  where (eqs,unis)                      = unzip $ map red multiPBnds
+        red (v,wps)                     = imp v [] [] [] wps
         imp v eq uni wps ((w,p):wps')
           | (e,p'):_ <- hits            = --trace ("  *" ++ prstr w ++ " covered by " ++ prstr e) $
                                           imp v (mkEqn env w (proto2type (tUni v) p) e : eq) ((tcargs p `zip` tcargs p') ++ uni) wps wps'
@@ -1781,10 +1738,6 @@ ctxtRed env multiPBnds                  = (concat eqs, concat unis)
 remove ws []                            = []
 remove ws (Proto _ _ w t p : cs)
   | w `elem` ws                         = remove ws cs
-remove ws (Imply i w q cs0 : cs)
-  | null cs1                            = remove ws cs
-  | otherwise                           = Imply i w q cs1 : remove ws cs
-  where cs1                             = remove ws cs0
 remove ws (c : cs)                      = c : remove ws cs
 
 filterOut vs cs                         = filter preserve cs

@@ -204,7 +204,7 @@ pushEqns                                :: Env -> Equations -> Stmt -> Stmt
 pushEqns env [] s                       = s
 pushEqns env eqs s
   | null pre                            = inject env inj s
-  | otherwise                           = withLocal (bindTopWits env pre) $ inject env inj s
+  | otherwise                           = withLocal (bindWits pre) $ inject env inj s
   where backward                        = free s `intersect` bound eqs
         (pre,inj)                       = split [] [] (bound s) eqs
         split pre inj bvs []            = (reverse pre, reverse inj)
@@ -217,7 +217,7 @@ inject env [] s                         = s
 inject env eqs (Decl l ds)              = Decl l [ d{ dbody = prune [] (free d) reveqs ++ dbody d } | d <- ds ]
   where reveqs                          = reverse eqs
         prune inj fvs []                = --trace ("### Injecting " ++ prstrs (bound inj) ++ " into " ++ prstr n) $
-                                          bindTopWits env inj
+                                          bindWits inj
         prune inj fvs (eq:eqs)
           | null needed                 = prune inj fvs eqs
           | otherwise                   = prune (eq:inj) (free eq ++ fvs) eqs
