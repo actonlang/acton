@@ -3550,7 +3550,7 @@ generateDocIndex docDir tasks = do
             , "</body>"
             , "</html>"
             ]
-    writeFile indexFile indexHtml
+    writeFileUtf8Atomic indexFile indexHtml
   where
     generateModuleEntry :: (ModName, Maybe String) -> [String]
     generateModuleEntry (mn, mDoc) =

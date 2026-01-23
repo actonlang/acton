@@ -114,6 +114,9 @@ module Acton.Compile
   , runCompilePlan
   , CompileFailure(..)
   , compileFailureMessage
+  , BackPassFailure(..)
+  , backPassFailureMessage
+  , BackJobResult(..)
   , defaultCompileOptions
   , ProjectError(..)
   , throwProjectError
@@ -202,7 +205,8 @@ import Control.Concurrent.Async
 import Control.Concurrent.MVar
 import Control.Concurrent (forkIO, myThreadId, threadCapability, threadDelay)
 import Control.Concurrent.STM (TChan, TVar, atomically, check, modifyTVar', newTChanIO, newTVarIO, readTChan, readTVar, writeTChan)
-import Control.Exception (Exception, IOException, SomeException, catch, displayException, finally, fromException, mask_, throwIO, try)
+import Control.DeepSeq (rnf)
+import Control.Exception (Exception, IOException, SomeException, catch, displayException, evaluate, finally, mask_, throwIO, try)
 import Control.Monad
 import Data.Char (isAlpha, isHexDigit, isSpace)
 import Data.Either (partitionEithers)
@@ -225,7 +229,6 @@ import System.FileLock (FileLock, SharedExclusive(Exclusive), tryLockFile, unloc
 import System.FilePath ((</>))
 import System.FilePath.Posix
 import System.Exit (ExitCode(..))
-import qualified System.Exit
 import System.IO hiding (readFile, writeFile)
 import System.IO.Unsafe (unsafePerformIO)
 import System.Process (readCreateProcessWithExitCode, proc)
@@ -263,6 +266,21 @@ compileFailureMessage CompileBuiltinFailure = "Builtin compilation failed"
 compileFailureMessage (CompileInternalFailure msg) = msg
 
 
+data BackPassFailure = BackPassFailure
+  { bpfKey :: TaskKey
+  , bpfMessage :: String
+  } deriving (Eq, Show)
+
+backPassFailureMessage :: BackPassFailure -> String
+backPassFailureMessage (BackPassFailure key msg) =
+  "Back pass failed for " ++ tkProj key ++ "/" ++ modNameToString (tkMod key) ++ ": " ++ msg
+
+data BackJobResult
+  = BackJobOk (Maybe TimeSpec)
+  | BackJobFailed BackPassFailure
+  deriving (Eq, Show)
+
+
 data CompileCallbacks = CompileCallbacks
   { ccOnDiagnostics :: GlobalTask -> C.CompileOptions -> [Diagnostic String] -> IO ()
   , ccOnFrontResult :: GlobalTask -> C.CompileOptions -> FrontResult -> IO ()
@@ -286,7 +304,7 @@ defaultCompileCallbacks = CompileCallbacks
 
 data BackJobCallbacks = BackJobCallbacks
   { bjcOnStart :: BackJob -> IO ()
-  , bjcOnDone :: BackJob -> Maybe TimeSpec -> IO ()
+  , bjcOnDone :: BackJob -> BackJobResult -> IO ()
   }
 
 -- | Default no-op callbacks for back-pass execution.
@@ -299,7 +317,7 @@ defaultBackJobCallbacks =
 
 data BackQueue = BackQueue
   { backQueueEnqueue :: Int -> BackJob -> BackJobCallbacks -> IO Bool
-  , backQueueWait :: Int -> IO ()
+  , backQueueWait :: Int -> IO (Maybe BackPassFailure)
   }
 
 data BuildSpecStamp = BuildSpecStamp
@@ -338,6 +356,7 @@ newBackQueue :: IORef Int -> C.GlobalOptions -> Int -> IO BackQueue
 newBackQueue genRef gopts maxPar = do
   queue <- newTChanIO
   counts <- newTVarIO M.empty
+  failures <- newTVarIO M.empty
   let incPending gen = M.insertWith (+) gen 1
       decPending gen m =
         case M.lookup gen m of
@@ -347,6 +366,8 @@ newBackQueue genRef gopts maxPar = do
             in if n' <= 0
                  then M.delete gen m
                  else M.insert gen n' m
+      recordFailure gen failure =
+        M.insertWith (\_ old -> old) gen failure
       enqueue gen job callbacks = do
         current <- readIORef genRef
         if current /= gen
@@ -357,37 +378,44 @@ newBackQueue genRef gopts maxPar = do
               writeTChan queue (gen, job, callbacks)
             return True
       waitDone gen = atomically $ do
-        pending <- readTVar counts
-        let n = M.findWithDefault 0 gen pending
-        check (n == 0)
+        failuresNow <- readTVar failures
+        case M.lookup gen failuresNow of
+          Just failure -> do
+            modifyTVar' failures (M.delete gen)
+            return (Just failure)
+          Nothing -> do
+            pending <- readTVar counts
+            let n = M.findWithDefault 0 gen pending
+            check (n == 0)
+            return Nothing
       worker = forever $ do
         (gen, job, callbacks) <- atomically $ readTChan queue
         current <- readIORef genRef
         if current /= gen
           then atomically $ modifyTVar' counts (decPending gen)
           else do
-            let shouldWrite = do
-                  currentWrite <- readIORef genRef
-                  return (currentWrite == gen)
-            bjcOnStart callbacks job
-            res <- (try $ runBackPasses gopts (bjOpts job) (bjPaths job) (bjInput job) shouldWrite)
-                    :: IO (Either SomeException (Maybe TimeSpec))
-            currentDone <- readIORef genRef
-            when (currentDone == gen) $
-              case res of
-                Left err ->
-                  let isExitSuccess =
-                        case fromException err :: Maybe ExitCode of
-                          Just ExitSuccess -> True
-                          _ -> displayException err == "ExitSuccess"
-                  in if isExitSuccess
-                       then bjcOnDone callbacks job Nothing
-                       else do
-                         unless (quiet gopts (bjOpts job)) $
-                           hPutStrLn stderr ("Back pass failed for " ++ modNameToString (A.modname (biTypedMod (bjInput job))) ++ ": " ++ displayException err)
-                         bjcOnDone callbacks job Nothing
-                Right t -> bjcOnDone callbacks job t
-            atomically $ modifyTVar' counts (decPending gen)
+            failed <- atomically $ do
+              failuresNow <- readTVar failures
+              return (M.member gen failuresNow)
+            if failed
+              then atomically $ modifyTVar' counts (decPending gen)
+              else do
+                let shouldWrite = do
+                      currentWrite <- readIORef genRef
+                      return (currentWrite == gen)
+                bjcOnStart callbacks job
+                res <- (try $ runBackPasses gopts (bjOpts job) (bjPaths job) (bjInput job) shouldWrite)
+                        :: IO (Either SomeException (Maybe TimeSpec))
+                currentDone <- readIORef genRef
+                when (currentDone == gen) $
+                  case res of
+                    Left err -> do
+                      let key = TaskKey (projPath (bjPaths job)) (A.modname (biTypedMod (bjInput job)))
+                          failure = BackPassFailure key (displayException err)
+                      atomically $ modifyTVar' failures (recordFailure gen failure)
+                      bjcOnDone callbacks job (BackJobFailed failure)
+                    Right t -> bjcOnDone callbacks job (BackJobOk t)
+                atomically $ modifyTVar' counts (decPending gen)
   let workers = max 1 maxPar
   replicateM_ workers (forkIO worker)
   return BackQueue
@@ -554,7 +582,7 @@ data CompileHooks = CompileHooks
   , chOnFrontResult :: GlobalTask -> FrontResult -> IO ()
   , chOnBackQueued :: TaskKey -> Bool -> IO ()
   , chOnBackStart :: BackJob -> IO ()
-  , chOnBackDone :: BackJob -> Maybe TimeSpec -> IO ()
+  , chOnBackDone :: BackJob -> BackJobResult -> IO ()
   , chOnInfo :: String -> IO ()
   }
 
@@ -1534,35 +1562,43 @@ runBackPasses gopts opts paths backInput shouldWrite = do
       (n,h,c) <- Acton.CodeGen.generate liftEnv relSrcBase (biSrc backInput) emitLines boxed hexHash
       timeCodeGen <- getTime Monotonic
       iff (C.timing gopts) $ putStrLn("    Pass: Generating code : " ++ fmtTime (timeCodeGen - timeBoxing))
+      let finish = do
+            timeEnd <- getTime Monotonic
+            let backTime = timeEnd - timeStart
+            if not (quiet gopts opts)
+              then return (Just backTime)
+              else return Nothing
+          forceOut s = evaluate (rnf s)
 
-      iff (C.hgen opts) $ do
-          putStrLn(h)
-          System.Exit.exitSuccess
-      iff (C.cgen opts) $ do
-          putStrLn(c)
-          System.Exit.exitSuccess
+      if C.hgen opts
+        then do
+          forceOut h
+          putStrLn h
+          finish
+        else if C.cgen opts
+          then do
+            forceOut c
+            putStrLn c
+            finish
+          else do
+            forceOut h
+            forceOut c
+            iff (not (altOutput opts)) (do
+                ok <- shouldWrite
+                when ok $ do
+                  let cFile = outbase ++ ".c"
+                      hFile = outbase ++ ".h"
 
-      iff (not (altOutput opts)) (do
-          ok <- shouldWrite
-          when ok $ do
-            let cFile = outbase ++ ".c"
-                hFile = outbase ++ ".h"
+                  writeFile hFile h
+                  writeFile cFile c
+                  let tyFileName = modNameToString(modName paths) ++ ".ty"
+                  iff (C.ty opts) $
+                       copyFileWithMetadata (joinPath [projTypes paths, tyFileName]) (joinPath [srcDir paths, tyFileName])
 
-            writeFile hFile h
-            writeFile cFile c
-            let tyFileName = modNameToString(modName paths) ++ ".ty"
-            iff (C.ty opts) $
-                 copyFileWithMetadata (joinPath [projTypes paths, tyFileName]) (joinPath [srcDir paths, tyFileName])
-
-            timeCodeWrite <- getTime Monotonic
-            iff (C.timing gopts) $ putStrLn("    Pass: Writing code    : " ++ fmtTime (timeCodeWrite - timeCodeGen))
-                               )
-
-      timeEnd <- getTime Monotonic
-      let backTime = timeEnd - timeStart
-      if not (quiet gopts opts)
-        then return (Just backTime)
-        else return Nothing
+                  timeCodeWrite <- getTime Monotonic
+                  iff (C.timing gopts) $ putStrLn("    Pass: Writing code    : " ++ fmtTime (timeCodeWrite - timeCodeGen))
+                                     )
+            finish
 
 
 -- | Compile a set of GlobalTasks using a parallel, dependency-aware scheduler.
@@ -2782,14 +2818,10 @@ readFile f = do
     c <- hGetContents h
     return c
 
--- | Write a UTF-8 text file with explicit encoding.
+-- | Write a UTF-8 text file atomically.
 -- Used for generated sources and BuildSpec parsing.
 writeFile :: FilePath -> String -> IO ()
-writeFile f c = do
-    h <- openFile f WriteMode
-    hSetEncoding h utf8
-    hPutStr h c
-    hClose h
+writeFile = writeFileUtf8Atomic
 
 -- | Format a TimeSpec as a fixed-width seconds string.
 -- Used for stable logging and golden test output.
