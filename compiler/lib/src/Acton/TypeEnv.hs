@@ -677,13 +677,6 @@ bindWits eqs
   where sigws                           = [ w | Eqn _ w _ (NotImplemented _) <- eqs ]
         binds                           = [ sAssign (pVar w t) e | Eqn _ w t e <- eqs, w `notElem` sigws ]
 
-
--- The following two functions generate quantified witness definitions and calls, respectively.
--- See Transform.hs for the invariants that apply to these constructs.
-bindTopWits env eqs0                    = map bind eqs0
-  where bind (Eqn _ w t e)              = sAssign (pVar w t) e
-
-
 scopedWits env0 q cs                    = scoped cs
   where level1                          = qlevel env0 + length q
         scoped (Sub _ env w _ _ : cs)
