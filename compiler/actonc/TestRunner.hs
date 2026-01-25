@@ -17,7 +17,7 @@ import Control.Concurrent.Chan (Chan, newChan, readChan, writeChan)
 import Control.Monad
 import Data.IORef
 import Data.Char (isSpace)
-import Data.List (isPrefixOf, isSuffixOf, foldl', isInfixOf)
+import Data.List (isPrefixOf, isSuffixOf, foldl', isInfixOf, intercalate)
 import qualified Data.List
 import Data.Maybe (catMaybes, listToMaybe)
 import qualified Data.Map as M
@@ -288,20 +288,23 @@ outputJsonReport elapsed results = do
               secs = (fromIntegral (sec elapsed)) + (fromIntegral (nsec elapsed) / 1000000000)
           in secs * 1000
         isOk res = trSuccess res == Just True && trException res == Nothing
-        formatOutput mOut =
-          case mOut of
-            Just out | testOutputMeaningful out ->
-              let chunks = dedupTestOutput (trim out)
-                  multi = length chunks > 1
-                  rendered = concatMap (renderChunk multi) chunks
-                  rendered' = stripTrailingBlanks rendered
-                  joined = unlines rendered'
-              in if null (trim joined) then Nothing else Just joined
-            _ -> Nothing
+        formatCombinedOutput mOut mErr =
+          let out = maybe "" id mOut
+              err = maybe "" id mErr
+          in if not (testOutputMeaningful out) && not (testOutputMeaningful err)
+                then Nothing
+                else
+                  let chunks = dedupCombinedOutput out err
+                      multi = length chunks > 1
+                      rendered = concatMap (renderChunk multi) chunks
+                      rendered' = stripTrailingBlanks rendered
+                      joined = unlines rendered'
+                  in if null (trim joined) then Nothing else Just joined
         testObj res =
           let status = formatTestStatus res
               includeOutput = not (isOk res)
               name = displayTestName (trName res)
+              combinedOutput = if includeOutput then formatCombinedOutput (trStdOut res) (trStdErr res) else Nothing
           in Aeson.object
                [ AesonKey.fromString "module" Aeson..= trModule res
                , AesonKey.fromString "name" Aeson..= name
@@ -312,8 +315,7 @@ outputJsonReport elapsed results = do
                , AesonKey.fromString "iterations" Aeson..= trNumIterations res
                , AesonKey.fromString "duration_ms" Aeson..= trTestDuration res
                , AesonKey.fromString "exception" Aeson..= trException res
-               , AesonKey.fromString "stdout" Aeson..= (if includeOutput then formatOutput (trStdOut res) else Nothing)
-               , AesonKey.fromString "stderr" Aeson..= (if includeOutput then formatOutput (trStdErr res) else Nothing)
+               , AesonKey.fromString "output" Aeson..= combinedOutput
                ]
         report = Aeson.object
           [ AesonKey.fromString "summary" Aeson..= Aeson.object
@@ -343,20 +345,46 @@ testOutputMeaningful :: String -> Bool
 testOutputMeaningful msgs =
     any (\line -> not (all isSpace line) && not ("== Running test," `isPrefixOf` line)) (lines msgs)
 
-dedupTestOutput :: String -> [(String, Int)]
-dedupTestOutput buf =
+splitTestOutput :: String -> [String]
+splitTestOutput buf =
     let ls = lines buf
         isMarker line = "== Running test, iteration:" `isInfixOf` stripAnsi (trim line)
-        step (chunks, current) line
+        step (chunks, current, seenMarker) line
           | isMarker line =
-              let chunks' = if null (trim current) then chunks else chunks ++ [trim current]
-              in (chunks', "")
+              if seenMarker
+                then (chunks ++ [trim current], "", True)
+                else (chunks, "", True)
           | otherwise =
               let current' = if null current then line else current ++ "\n" ++ line
-              in (chunks, current')
-        (chunks0, current0) = foldl' step ([], "") ls
-        chunks1 = if null (trim current0) then chunks0 else chunks0 ++ [trim current0]
-        parts = filter (not . null . trim) chunks1
+              in (chunks, current', seenMarker)
+        (chunks0, current0, seenMarker) = foldl' step ([], "", False) ls
+        chunks1 =
+          if seenMarker
+            then chunks0 ++ [trim current0]
+            else if null (trim buf) then [] else [trim buf]
+    in chunks1
+
+renderIterationOutput :: String -> String -> String
+renderIterationOutput out err =
+    let out' = trim out
+        err' = trim err
+        renderSection label content =
+          let body = intercalate "\n" (map ("  " ++) (lines content))
+          in label ++ ":\n" ++ body
+        parts = catMaybes
+          [ if null out' then Nothing else Just (renderSection "STDOUT" out')
+          , if null err' then Nothing else Just (renderSection "STDERR" err')
+          ]
+    in intercalate "\n" parts
+
+dedupCombinedOutput :: String -> String -> [(String, Int)]
+dedupCombinedOutput out err =
+    let outChunks = splitTestOutput out
+        errChunks = splitTestOutput err
+        n = max (length outChunks) (length errChunks)
+        getChunk xs i = if i < length xs then xs !! i else ""
+        combined = [ renderIterationOutput (getChunk outChunks i) (getChunk errChunks i) | i <- [0..n-1] ]
+        parts = filter (not . null . trim) combined
         stepCount (order, acc) chunk =
           let acc' = M.insertWith (+) chunk 1 acc
               order' = if M.member chunk acc then order else order ++ [chunk]

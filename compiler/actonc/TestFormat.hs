@@ -13,11 +13,9 @@ module TestFormat
 
 import Acton.Testing (TestResult(..))
 import Data.Char (isSpace)
-import Data.List (foldl', isPrefixOf)
-import Data.Maybe (isJust)
+import Data.List (foldl', isPrefixOf, isInfixOf, intercalate)
+import Data.Maybe (isJust, catMaybes)
 import qualified Data.Map as M
-import qualified Data.Set as Set
-import Data.List.Split (splitOn)
 import Text.Printf (printf)
 
 -- | Compute the status label (OK/FAIL/ERR/FLAKY) for a test.
@@ -118,56 +116,77 @@ formatTestDetailLines useColor showLog res =
           Nothing -> []
         outputLines =
           if wantDetails
-            then concat
-              [ formatLogLines "STDOUT" (trStdOut res)
-              , formatLogLines "STDERR" (trStdErr res)
-              ]
+            then formatCombinedLogLines (trStdOut res) (trStdErr res)
             else []
     in if wantDetails
          then excLines ++ outputLines
          else []
   where
-    formatLogLines label mOut =
-      case mOut of
-        Just out | testOutputMeaningful out ->
-          let chunks = dedupTestOutput (trim out)
-              multi = length chunks > 1
-              header = ["    " ++ label ++ ":"]
-              body = concatMap (renderChunk multi) chunks
-          in header ++ body
-        _ -> []
-    renderChunk multi (chunk, runs) =
-      let prefix = "      "
-          labelLines =
+    formatCombinedLogLines mOut mErr =
+      let out = maybe "" id mOut
+          err = maybe "" id mErr
+      in if not (testOutputMeaningful out) && not (testOutputMeaningful err)
+           then []
+           else
+             let chunks = dedupCombinedOutput out err
+                 multi = length chunks > 1
+             in concatMap (renderChunk multi) chunks
+    renderChunk multi (chunk, count) =
+      let header =
             if multi
-              then [prefix ++ "== " ++ show (length runs) ++ " test runs with this output:"]
+              then ["    == " ++ show count ++ " test runs with this output:"]
               else []
-          chunkLines = map (prefix ++) (lines chunk)
-      in labelLines ++ chunkLines ++ [""]
+          body = map ("    " ++) (lines chunk)
+      in header ++ body ++ [""]
     testOutputMeaningful msgs =
       any (\line -> not (all isSpace line) && not ("== Running test," `isPrefixOf` line)) (lines msgs)
-    dedupTestOutput buf =
-      let parts = filter (not . null . trim) (splitOn "== Running test, iteration: " buf)
-          step (order, acc) part =
-            let trimmed = trim part
-                (numLine, rest) = break (== '\n') trimmed
-                content = case rest of
-                  [] -> ""
-                  (_:xs) -> trim xs
-            in case readMaybeInt numLine of
-                 Nothing -> (order, acc)
-                 Just n ->
-                   let acc' = M.insertWith Set.union content (Set.singleton n) acc
-                       order' = if M.member content acc then order else order ++ [content]
-                   in (order', acc')
-          (order, acc) = foldl' step ([], M.empty) parts
-      in [ (chunk, Set.toList (M.findWithDefault Set.empty chunk acc)) | chunk <- order ]
+    splitTestOutput buf =
+      let ls = lines buf
+          isMarker line = "== Running test, iteration:" `isInfixOf` stripAnsi (trim line)
+          step (chunks, current, seenMarker) line
+            | isMarker line =
+                if seenMarker
+                  then (chunks ++ [trim current], "", True)
+                  else (chunks, "", True)
+            | otherwise =
+                let current' = if null current then line else current ++ "\n" ++ line
+                in (chunks, current', seenMarker)
+          (chunks0, current0, seenMarker) = foldl' step ([], "", False) ls
+          chunks1 =
+            if seenMarker
+              then chunks0 ++ [trim current0]
+              else if null (trim buf) then [] else [trim buf]
+      in chunks1
+    renderIterationOutput out err =
+      let out' = trim out
+          err' = trim err
+          renderSection label content =
+            label ++ ":\n" ++ unlines (map ("  " ++) (lines content))
+          parts = catMaybes
+            [ if null out' then Nothing else Just (renderSection "STDOUT" out')
+            , if null err' then Nothing else Just (renderSection "STDERR" err')
+            ]
+      in intercalate "\n" parts
+    dedupCombinedOutput out err =
+      let outChunks = splitTestOutput out
+          errChunks = splitTestOutput err
+          n = max (length outChunks) (length errChunks)
+          getChunk xs i = if i < length xs then xs !! i else ""
+          combined = [ renderIterationOutput (getChunk outChunks i) (getChunk errChunks i) | i <- [0..n-1] ]
+          parts = filter (not . null . trim) combined
+          stepCount (order, acc) chunk =
+            let acc' = M.insertWith (+) chunk 1 acc
+                order' = if M.member chunk acc then order else order ++ [chunk]
+            in (order', acc')
+          (order, acc) = foldl' stepCount ([], M.empty) parts
+      in [ (chunk, M.findWithDefault 0 chunk acc) | chunk <- order ]
     trim s =
       let dropEnd = reverse . dropWhile isSpace . reverse
       in dropWhile isSpace (dropEnd s)
-
-readMaybeInt :: String -> Maybe Int
-readMaybeInt s =
-    case reads s of
-      [(n, "")] -> Just n
-      _ -> Nothing
+    stripAnsi [] = []
+    stripAnsi ('\ESC':'[':xs) = stripAnsi (dropAnsi xs)
+    stripAnsi (x:xs) = x : stripAnsi xs
+    dropAnsi [] = []
+    dropAnsi (c:cs)
+      | c == 'm' = cs
+      | otherwise = dropAnsi cs
