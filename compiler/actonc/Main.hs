@@ -529,6 +529,7 @@ runTests gopts cmd = do
             C.TestRun opts  -> (TestModeRun, opts)
             C.TestList opts -> (TestModeList, opts)
             C.TestPerf opts -> (TestModePerf, opts)
+        gopts' = if C.testJson topts then gopts { C.quiet = True } else gopts
         opts0 = C.testCompile topts
     let opts = opts0
           { C.test = True
@@ -539,9 +540,9 @@ runTests gopts cmd = do
     paths <- loadProjectPaths opts
     if C.watch opts0
       then case mode of
-             TestModeList -> runTestsOnce gopts opts topts mode paths
-             _ -> runTestsWatch gopts opts topts mode paths
-      else runTestsOnce gopts opts topts mode paths
+             TestModeList -> runTestsOnce gopts' opts topts mode paths
+             _ -> runTestsWatch gopts' opts topts mode paths
+      else runTestsOnce gopts' opts topts mode paths
 
 -- | Build once and then list/run tests based on the selected mode.
 runTestsOnce :: C.GlobalOptions -> C.CompileOptions -> C.TestOptions -> TestMode -> Paths -> IO ()

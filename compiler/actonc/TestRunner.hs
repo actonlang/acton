@@ -17,7 +17,7 @@ import Control.Concurrent.Chan (Chan, newChan, readChan, writeChan)
 import Control.Monad
 import Data.IORef
 import Data.Char (isSpace)
-import Data.List (isPrefixOf, isSuffixOf, foldl')
+import Data.List (isPrefixOf, isSuffixOf, foldl', isInfixOf)
 import qualified Data.List
 import Data.Maybe (catMaybes, listToMaybe)
 import qualified Data.Map as M
@@ -125,6 +125,7 @@ listProjectTests opts paths topts modules = do
 runProjectTests :: Bool -> C.GlobalOptions -> C.CompileOptions -> Paths -> C.TestOptions -> TestMode -> [String] -> Int -> IO Int
 runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
     timeStart <- getTime Monotonic
+    let emitJson = C.testJson topts
     let wantedModules = Data.List.sort (filterModules (C.testModules topts) modules)
     testsByModule <- forM wantedModules $ \modName -> do
       names <- listModuleTests opts paths modName
@@ -138,8 +139,14 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
         allTests = [ (tsModule spec, tsName spec) | spec <- specs ]
     if null specs
       then do
-        putStrLn "Nothing to test"
-        return 0
+        if emitJson
+          then do
+            timeEnd <- getTime Monotonic
+            outputJsonReport (timeEnd - timeStart) []
+            return 0
+          else do
+            putStrLn "Nothing to test"
+            return 0
       else do
         let maxNameLen = maximum (0 : map (length . tsDisplay) specs)
             nameWidth = max 20 (maxNameLen + 5)
@@ -153,7 +160,7 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
         let logCache = if C.verbose gopts then putStrLn else \_ -> return ()
         (cachedResults, _testsToRun) <- classifyCachedTests logCache cacheEntries testHashInfos allTests
         let showCached = C.testShowCached topts
-        when (showCached && not (null cachedResults)) $
+        when (not emitJson && showCached && not (null cachedResults)) $
           putStrLn ("Using cached results for " ++ show (length cachedResults) ++ " tests")
         ui <- initTestProgressUI gopts nameWidth (C.testShowLog topts) useColorOut
         eventChan <- newChan
@@ -246,9 +253,15 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
               , tcTests = cacheEntries'
               }
         writeTestCache (testCachePath paths) newCache
-        when (not (tpuEnabled ui)) $
-          printTestResultsOrdered (tpuUseColor ui) (tpuShowLog ui) showCached nameWidth specs results
-        printTestSummary (tpuUseColor ui) (timeEnd - timeStart) showCached results
+        if emitJson
+          then do
+            outputJsonReport (timeEnd - timeStart) results
+            return (testExitCode results)
+          else do
+            when (not (tpuEnabled ui)) $
+              printTestResultsOrdered (tpuUseColor ui) (tpuShowLog ui) showCached nameWidth specs results
+            _ <- printTestSummary (tpuUseColor ui) (timeEnd - timeStart) showCached results
+            return (testExitCode results)
   where
     mkRunContext opts' topts' mode' = TestRunContext
       { trcCompilerVersion = getVer
@@ -257,6 +270,115 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
       , trcMode = show mode'
       , trcArgs = testCmdArgs topts'
       }
+
+testExitCode :: [TestResult] -> Int
+testExitCode results =
+    let failures = length [ r | r <- results, trSuccess r == Just False ]
+        errors = length [ r | r <- results, trSuccess r == Nothing ]
+    in if errors > 0 then 2 else if failures > 0 then 1 else 0
+
+outputJsonReport :: TimeSpec -> [TestResult] -> IO ()
+outputJsonReport elapsed results = do
+    let total = length results
+        failures = length [ r | r <- results, trSuccess r == Just False ]
+        errors = length [ r | r <- results, trSuccess r == Nothing ]
+        elapsedMs :: Double
+        elapsedMs =
+          let secs :: Double
+              secs = (fromIntegral (sec elapsed)) + (fromIntegral (nsec elapsed) / 1000000000)
+          in secs * 1000
+        isOk res = trSuccess res == Just True && trException res == Nothing
+        formatOutput mOut =
+          case mOut of
+            Just out | testOutputMeaningful out ->
+              let chunks = dedupTestOutput (trim out)
+                  multi = length chunks > 1
+                  rendered = concatMap (renderChunk multi) chunks
+                  rendered' = stripTrailingBlanks rendered
+                  joined = unlines rendered'
+              in if null (trim joined) then Nothing else Just joined
+            _ -> Nothing
+        testObj res =
+          let status = formatTestStatus res
+              includeOutput = not (isOk res)
+              name = displayTestName (trName res)
+          in Aeson.object
+               [ AesonKey.fromString "module" Aeson..= trModule res
+               , AesonKey.fromString "name" Aeson..= name
+               , AesonKey.fromString "raw_name" Aeson..= trName res
+               , AesonKey.fromString "status" Aeson..= status
+               , AesonKey.fromString "cached" Aeson..= trCached res
+               , AesonKey.fromString "flaky" Aeson..= trFlaky res
+               , AesonKey.fromString "iterations" Aeson..= trNumIterations res
+               , AesonKey.fromString "duration_ms" Aeson..= trTestDuration res
+               , AesonKey.fromString "exception" Aeson..= trException res
+               , AesonKey.fromString "stdout" Aeson..= (if includeOutput then formatOutput (trStdOut res) else Nothing)
+               , AesonKey.fromString "stderr" Aeson..= (if includeOutput then formatOutput (trStdErr res) else Nothing)
+               ]
+        report = Aeson.object
+          [ AesonKey.fromString "summary" Aeson..= Aeson.object
+              [ AesonKey.fromString "total" Aeson..= total
+              , AesonKey.fromString "failures" Aeson..= failures
+              , AesonKey.fromString "errors" Aeson..= errors
+              , AesonKey.fromString "elapsed_ms" Aeson..= elapsedMs
+              ]
+          , AesonKey.fromString "tests" Aeson..= map testObj results
+          ]
+    BL.putStr (Aeson.encode report)
+    putStrLn ""
+
+renderChunk :: Bool -> (String, Int) -> [String]
+renderChunk multi (chunk, count) =
+    let header =
+          if multi
+            then ["== " ++ show count ++ " test runs with this output:"]
+            else []
+        body = lines chunk
+    in header ++ body ++ [""]
+
+stripTrailingBlanks :: [String] -> [String]
+stripTrailingBlanks = reverse . dropWhile null . reverse
+
+testOutputMeaningful :: String -> Bool
+testOutputMeaningful msgs =
+    any (\line -> not (all isSpace line) && not ("== Running test," `isPrefixOf` line)) (lines msgs)
+
+dedupTestOutput :: String -> [(String, Int)]
+dedupTestOutput buf =
+    let ls = lines buf
+        isMarker line = "== Running test, iteration:" `isInfixOf` stripAnsi (trim line)
+        step (chunks, current) line
+          | isMarker line =
+              let chunks' = if null (trim current) then chunks else chunks ++ [trim current]
+              in (chunks', "")
+          | otherwise =
+              let current' = if null current then line else current ++ "\n" ++ line
+              in (chunks, current')
+        (chunks0, current0) = foldl' step ([], "") ls
+        chunks1 = if null (trim current0) then chunks0 else chunks0 ++ [trim current0]
+        parts = filter (not . null . trim) chunks1
+        stepCount (order, acc) chunk =
+          let acc' = M.insertWith (+) chunk 1 acc
+              order' = if M.member chunk acc then order else order ++ [chunk]
+          in (order', acc')
+        (order, acc) = foldl' stepCount ([], M.empty) parts
+    in [ (chunk, M.findWithDefault 0 chunk acc) | chunk <- order ]
+
+trim :: String -> String
+trim s =
+    let dropEnd = reverse . dropWhile isSpace . reverse
+    in dropWhile isSpace (dropEnd s)
+
+stripAnsi :: String -> String
+stripAnsi [] = []
+stripAnsi ('\ESC':'[':xs) = stripAnsi (dropAnsi xs)
+stripAnsi (x:xs) = x : stripAnsi xs
+
+dropAnsi :: String -> String
+dropAnsi [] = []
+dropAnsi (c:cs)
+  | c == 'm' = cs
+  | otherwise = dropAnsi cs
 
 -- | Filter module names based on CLI-provided allow lists.
 filterModules :: [String] -> [String] -> [String]
