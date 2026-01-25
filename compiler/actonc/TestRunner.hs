@@ -95,8 +95,17 @@ listTestModules opts paths = do
 testBinaryPath :: C.CompileOptions -> Paths -> String -> FilePath
 testBinaryPath opts paths modName =
     let base = ".test_" ++ modName
-        exe = if C.target opts == "x86_64-windows-gnu" then base <.> "exe" else base
+        exe = if isWindowsTarget (C.target opts) then base <.> "exe" else base
     in binDir paths </> exe
+
+-- | Check whether a target triple refers to Windows.
+isWindowsTarget :: String -> Bool
+isWindowsTarget targetTriple =
+    case break (== '-') targetTriple of
+      (_, "") -> False
+      (_, '-' : rest) ->
+        let (os, _) = break (== '-') rest
+        in os == "windows"
 
 -- | List tests for selected modules and print them in a stable order.
 listProjectTests :: C.CompileOptions -> Paths -> C.TestOptions -> [String] -> IO ()
