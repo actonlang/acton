@@ -104,22 +104,40 @@ listProjectTests opts paths topts modules = do
     let wantedModules = Data.List.sort (filterModules (C.testModules topts) modules)
     tests <- forM wantedModules $ \modName -> do
       names <- listModuleTests opts paths modName
-      return (modName, names)
-    if null tests
+      return (modName, Data.List.sort names)
+    let nonEmpty = [ (modName, names) | (modName, names) <- tests, not (null names) ]
+    if C.testJson topts
       then do
-        putStrLn "No tests found"
+        let testObj raw =
+              let display = displayTestName raw
+              in Aeson.object
+                   [ AesonKey.fromString "name" Aeson..= display
+                   , AesonKey.fromString "raw_name" Aeson..= raw
+                   ]
+            moduleObj (modName, names) =
+              Aeson.object
+                [ AesonKey.fromString "name" Aeson..= modName
+                , AesonKey.fromString "tests" Aeson..= map testObj names
+                ]
+            report = Aeson.object
+              [ AesonKey.fromString "modules" Aeson..= map moduleObj (Data.List.sortOn fst nonEmpty) ]
+        BL.putStr (Aeson.encode report)
+        putStrLn ""
         exitSuccess
-      else do
-        forM_ (Data.List.sortOn fst tests) $ \(modName, names) -> do
-          when (not (null names)) $ do
+      else if null nonEmpty
+        then do
+          putStrLn "No tests found"
+          exitSuccess
+        else do
+          forM_ (Data.List.sortOn fst nonEmpty) $ \(modName, names) -> do
             putStrLn ("Module " ++ modName ++ ":")
-            forM_ (Data.List.sort names) $ \name -> do
+            forM_ names $ \name -> do
               let display = displayTestName name
               if display /= name
                 then putStrLn ("  " ++ display ++ " (" ++ name ++ ")")
                 else putStrLn ("  " ++ display)
             putStrLn ""
-        exitSuccess
+          exitSuccess
 
 -- | Run selected tests concurrently, stream results, and return an exit code.
 runProjectTests :: Bool -> C.GlobalOptions -> C.CompileOptions -> Paths -> C.TestOptions -> TestMode -> [String] -> Int -> IO Int
