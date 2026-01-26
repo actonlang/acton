@@ -40,15 +40,12 @@ import qualified Acton.Builtin
 import qualified Acton.DocPrinter as DocP
 import qualified Acton.Diagnostics as Diag
 import qualified Acton.SourceProvider as Source
-import Acton.Testing
 import Acton.Compile
 import Utils
 import qualified Pretty
 import qualified InterfaceFiles
 import qualified PkgCommands
 
-import Control.Applicative
-import Control.Concurrent.Async
 import Control.Concurrent.MVar
 import Control.Exception (throw,catch,finally,IOException,try,SomeException,bracket,bracket_,onException,evaluate)
 import Control.Exception (bracketOnError)
@@ -59,14 +56,13 @@ import Data.Bits
 import Data.Default.Class (def)
 import Data.List.Split
 import Data.IORef
-import Data.Maybe (catMaybes, isJust, listToMaybe, fromMaybe)
+import Data.Maybe (catMaybes, isJust)
 import Data.Monoid ((<>))
-import Data.Ord
 import Data.Word (Word32, Word64)
 import Data.Graph
 import Data.String.Utils (replace)
 import Data.Version (showVersion)
-import Data.Char (isAlpha, toLower, isSpace)
+import Data.Char (toLower)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as B
 import qualified Data.List
@@ -106,13 +102,8 @@ import Text.Printf
 import Numeric (showHex)
 
 import qualified Data.ByteString.Lazy as BL
-import qualified Data.Aeson as Aeson
-import qualified Data.Aeson.Types as AesonTypes
-import qualified Data.Aeson.Key as AesonKey
-import qualified Data.Aeson.KeyMap as AesonKM
-import qualified Data.Text as T
-import qualified Data.Text.Encoding as TE
-import Control.Concurrent.QSem (newQSem, waitQSem, signalQSem)
+
+import TestRunner
 
 main = do
     hSetBuffering stdout LineBuffering
@@ -530,8 +521,6 @@ buildProjectOnce gopts opts = do
 
 -- Test runner -------------------------------------------------------------------------------------------------
 
-data TestMode = TestModeRun | TestModeList | TestModePerf deriving (Eq, Show)
-
 -- | Entry point for actonc test; configures options and selects mode/watch.
 runTests :: C.GlobalOptions -> C.TestCommand -> IO ()
 runTests gopts cmd = do
@@ -540,6 +529,7 @@ runTests gopts cmd = do
             C.TestRun opts  -> (TestModeRun, opts)
             C.TestList opts -> (TestModeList, opts)
             C.TestPerf opts -> (TestModePerf, opts)
+        gopts' = if C.testJson topts then gopts { C.quiet = True } else gopts
         opts0 = C.testCompile topts
     let opts = opts0
           { C.test = True
@@ -550,9 +540,9 @@ runTests gopts cmd = do
     paths <- loadProjectPaths opts
     if C.watch opts0
       then case mode of
-             TestModeList -> runTestsOnce gopts opts topts mode paths
-             _ -> runTestsWatch gopts opts topts mode paths
-      else runTestsOnce gopts opts topts mode paths
+             TestModeList -> runTestsOnce gopts' opts topts mode paths
+             _ -> runTestsWatch gopts' opts topts mode paths
+      else runTestsOnce gopts' opts topts mode paths
 
 -- | Build once and then list/run tests based on the selected mode.
 runTestsOnce :: C.GlobalOptions -> C.CompileOptions -> C.TestOptions -> TestMode -> Paths -> IO ()
@@ -563,7 +553,8 @@ runTestsOnce gopts opts topts mode paths = do
       TestModeList -> listProjectTests opts paths topts modules
       _ -> do
         maxParallel <- testMaxParallel gopts
-        exitCode <- runProjectTests gopts opts paths topts mode modules maxParallel
+        useColorOut <- useColor gopts
+        exitCode <- runProjectTests useColorOut gopts opts paths topts mode modules maxParallel
         exitWithTestCode exitCode
 
 -- | Watch mode for tests that rebuilds incrementally and reruns changed modules.
@@ -583,7 +574,9 @@ runTestsWatch gopts opts topts mode paths = do
               testModules <- listTestModules opts paths
               modulesToTest <- selectTestModules paths srcFiles mChanged testModules
               unless (null modulesToTest) $
-                void $ runProjectTests gopts opts paths topts mode modulesToTest testParallel
+                do
+                  useColorOut <- useColor gopts
+                  void $ runProjectTests useColorOut gopts opts paths topts mode modulesToTest testParallel
     withOwnerLockOrExit projDir "Another compiler is running; cannot start test watch." $
       runWatchProject gopts projDir srcRoot sched runOnce
 
@@ -607,218 +600,6 @@ exitWithTestCode :: Int -> IO ()
 exitWithTestCode code
   | code <= 0 = System.Exit.exitSuccess
   | otherwise = System.Exit.exitWith (ExitFailure code)
-
--- | List compiled test modules by scanning the output bin directory.
-listTestModules :: C.CompileOptions -> Paths -> IO [String]
-listTestModules opts paths = do
-    let dir = binDir paths
-    exists <- doesDirectoryExist dir
-    if not exists
-      then return []
-      else do
-        entries <- listDirectory dir
-        mods <- forM entries $ \entry -> do
-          let base = stripExe entry
-          if ".test_" `isPrefixOf` base
-            then do
-              let full = dir </> entry
-              isFile <- doesFileExist full
-              if isFile
-                then return (Just (drop (length ".test_") base))
-                else return Nothing
-            else return Nothing
-        return (Data.List.sort (catMaybes mods))
-  where
-    stripExe name
-      | isWindowsOS (C.target opts) && takeExtension name == ".exe" = dropExtension name
-      | otherwise = name
-
--- | Compute the test binary path for a module and target.
-testBinaryPath :: C.CompileOptions -> Paths -> String -> FilePath
-testBinaryPath opts paths modName =
-    let base = ".test_" ++ modName
-        exe  = if isWindowsOS (C.target opts) then base <.> "exe" else base
-    in binDir paths </> exe
-
--- | List tests for selected modules and print them in a stable order.
-listProjectTests :: C.CompileOptions -> Paths -> C.TestOptions -> [String] -> IO ()
-listProjectTests opts paths topts modules = do
-    let wantedModules = Data.List.sort (filterModules (C.testModules topts) modules)
-    tests <- forM wantedModules $ \modName -> do
-      names <- listModuleTests opts paths modName
-      return (modName, names)
-    if null tests
-      then do
-        putStrLn "No tests found"
-        System.Exit.exitSuccess
-      else do
-        forM_ (Data.List.sortOn fst tests) $ \(modName, names) -> do
-          when (not (null names)) $ do
-            putStrLn ("Module " ++ modName ++ ":")
-            forM_ (Data.List.sort names) $ \name -> do
-              let display = displayTestName name
-              if display /= name
-                then putStrLn ("  " ++ display ++ " (" ++ name ++ ")")
-                else putStrLn ("  " ++ display)
-            putStrLn ""
-        System.Exit.exitSuccess
-
--- | Run selected tests concurrently, stream results, and return an exit code.
-runProjectTests :: C.GlobalOptions -> C.CompileOptions -> Paths -> C.TestOptions -> TestMode -> [String] -> Int -> IO Int
-runProjectTests gopts opts paths topts mode modules maxParallel = do
-    timeStart <- getTime Monotonic
-    let wantedModules = Data.List.sort (filterModules (C.testModules topts) modules)
-    testsByModule <- forM wantedModules $ \modName -> do
-      names <- listModuleTests opts paths modName
-      let wantedNames = Data.List.sort (filterTests (C.testNames topts) names)
-      return (modName, wantedNames)
-    let allTests = concatMap (\(m, names) -> map (\name -> (m, name)) names) testsByModule
-    if null allTests
-      then do
-        putStrLn "Nothing to test"
-        return 0
-      else do
-        putStrLn "Test results:"
-        let nameWidth = testNameWidth allTests
-            runContext = mkRunContext opts topts mode
-            ctxHash = contextHashBytes runContext
-        cache <- readTestCache (testCachePath paths) runContext
-        testHashInfos <- buildTestHashInfos paths ctxHash testsByModule
-        let cacheEntries = tcTests cache
-        when (C.verbose gopts) $
-          putStrLn (formatTestCacheContext ctxHash (testCachePath paths))
-        let logCache = if C.verbose gopts then putStrLn else \_ -> return ()
-        (cachedResults, testsToRun) <- classifyCachedTests logCache cacheEntries testHashInfos allTests
-        let showCached = C.testShowCached topts
-        when (showCached && not (null cachedResults)) $
-          putStrLn ("Using cached results for " ++ show (length cachedResults) ++ " tests")
-        resultChan <- newChan
-        printer <- async (printTestResults mode nameWidth (C.testShowLog topts) showCached resultChan)
-        forM_ cachedResults $ \res -> writeChan resultChan (Just res)
-        resultsRun <- runWithLimit maxParallel testsToRun $ \(modName, testName) -> do
-          res <- runModuleTest opts paths topts mode modName testName
-          writeChan resultChan (Just res)
-          return res
-        writeChan resultChan Nothing
-        _ <- wait printer
-        timeEnd <- getTime Monotonic
-        when (C.testGoldenUpdate topts) $
-          updateGoldenFiles paths resultsRun
-        when (C.testRecord topts) $
-          writePerfData paths resultsRun
-        let results = cachedResults ++ resultsRun
-            cacheEntries' = foldl' (updateTestCacheEntry testHashInfos) cacheEntries resultsRun
-            newCache = TestCache
-              { tcVersion = testCacheVersion
-              , tcContext = runContext
-              , tcTests = cacheEntries'
-              }
-        writeTestCache (testCachePath paths) newCache
-        printTestSummary (timeEnd - timeStart) (C.testShowLog topts) showCached results
-  where
-    testNameWidth tests =
-      let displayNames = [ formatTestName modName testName | (modName, testName) <- tests ]
-          maxNameLen = maximum (map length displayNames)
-      in max 20 maxNameLen + 5
-    mkRunContext opts' topts' mode' = TestRunContext
-      { trcCompilerVersion = getVer
-      , trcTarget = C.target opts'
-      , trcOptimize = show (C.optimize opts')
-      , trcMode = show mode'
-      , trcArgs = testCmdArgs topts'
-      }
-
--- | Filter module names based on CLI-provided allow lists.
-filterModules :: [String] -> [String] -> [String]
-filterModules [] mods = mods
-filterModules wanted mods = filter (`elem` wanted) mods
-
--- | Filter test names, matching raw or display names.
-filterTests :: [String] -> [String] -> [String]
-filterTests [] names = names
-filterTests wanted names =
-    filter (\name -> name `elem` wanted || displayTestName name `elem` wanted) names
-
--- | Run IO actions with a bounded concurrency limit.
-runWithLimit :: Int -> [a] -> (a -> IO b) -> IO [b]
-runWithLimit limit items action = do
-    sem <- newQSem (max 1 limit)
-    forConcurrently items $ \item ->
-      bracket_ (waitQSem sem) (signalQSem sem) (action item)
-
--- | Invoke a module test binary to list tests via JSON output.
-listModuleTests :: C.CompileOptions -> Paths -> String -> IO [String]
-listModuleTests opts paths modName = do
-    let binPath = testBinaryPath opts paths modName
-    exists <- doesFileExist binPath
-    if not exists
-      then return []
-      else do
-        let args = ["list", "--json"]
-        (exitCode, _out, err) <- readProcessWithExitCodeCancelable (proc binPath args){ cwd = Just (projPath paths) }
-        case exitCode of
-          ExitSuccess -> do
-            let values = parseJsonLines err
-            return (extractTestList values)
-          ExitFailure code ->
-            printErrorAndExit ("Listing tests failed for module " ++ modName ++ " (exit " ++ show code ++ ")")
-
--- | Run a single test case and parse its JSON result payload.
-runModuleTest :: C.CompileOptions -> Paths -> C.TestOptions -> TestMode -> String -> String -> IO TestResult
-runModuleTest opts paths topts mode modName testName = do
-    let binPath = testBinaryPath opts paths modName
-        cmd = ["test", testName] ++ (if mode == TestModePerf then ["perf"] else []) ++ testCmdArgs topts
-    (exitCode, _out, err) <- readProcessWithExitCodeCancelable (proc binPath cmd){ cwd = Just (projPath paths) }
-    let values = parseJsonLines err
-        infos = extractTestInfo values
-    case pickFinalTestInfo infos of
-      Just res -> do
-        case exitCode of
-          ExitSuccess -> return res
-          ExitFailure code ->
-            return res { trException = Just ("Test process exited with code " ++ show code) }
-      Nothing -> do
-        let fallback = TestResult
-              { trModule = modName
-              , trName = testName
-              , trComplete = False
-              , trSuccess = Nothing
-              , trException = Just "No test result received"
-              , trOutput = Nothing
-              , trStdOut = Nothing
-              , trStdErr = Nothing
-              , trFlaky = False
-              , trNumFailures = 0
-              , trNumErrors = 1
-              , trNumIterations = 0
-              , trTestDuration = 0
-              , trRaw = Aeson.Null
-              , trCached = False
-              }
-        return fallback
-
--- | Build test runner arguments from TestOptions limits.
-testCmdArgs :: C.TestOptions -> [String]
-testCmdArgs topts =
-    let iter = C.testIter topts
-    in if iter > 0
-         then ["--max-iter", show iter, "--min-iter", show iter, "--max-time", show (10^6), "--min-time", "1"]
-         else [ "--max-iter", show (C.testMaxIter topts)
-              , "--min-iter", show (C.testMinIter topts)
-              , "--max-time", show (C.testMaxTime topts)
-              , "--min-time", show (C.testMinTime topts)
-              ]
-
--- | Normalize test names by stripping prefixes and wrappers.
-displayTestName :: String -> String
-displayTestName name =
-    let withoutPrefix =
-          if "_test_" `isPrefixOf` name
-            then drop 6 name
-            else name
-    in if "_wrapper" `isSuffixOf` withoutPrefix
-         then take (length withoutPrefix - length "_wrapper") withoutPrefix
-         else withoutPrefix
 
 changedModulesFromPaths :: Paths -> [FilePath] -> IO [String]
 changedModulesFromPaths paths files = do
@@ -860,225 +641,6 @@ dependentTestModulesFromHeaders paths srcFiles changedModules = do
               new = filter (`Data.Set.notMember` seen) ds
               seen' = foldl' (flip Data.Set.insert) seen new
           in go seen' (ks ++ new)
-
--- | Format a module/test name for human-readable output.
-formatTestName :: String -> String -> String
-formatTestName moduleName testName =
-    let display = displayTestName testName
-    in if null moduleName
-         then display
-         else moduleName ++ "." ++ display
-
--- | Compute the status label (OK/FAIL/ERR/FLAKY) for a test.
-formatTestStatus :: TestResult -> String
-formatTestStatus res =
-    let ok = trSuccess res == Just True && trException res == Nothing
-        base
-          | ok = "OK"
-          | trNumErrors res > 0 && trNumFailures res > 0 = "ERR/FAIL"
-          | trNumErrors res > 0 = "ERR"
-          | trNumFailures res > 0 = "FAIL"
-          | trSuccess res == Just False = "FAIL"
-          | otherwise = "ERR"
-        prefix = if not ok && trFlaky res then "FLAKY " else ""
-        cached = if trCached res then "CACHED " else ""
-    in cached ++ prefix ++ base
-
--- | Format a single test result line with alignment and timing.
-formatTestLine :: TestMode -> Int -> TestResult -> String
-formatTestLine _ nameWidth res =
-    let name = formatTestName (trModule res) (trName res)
-        prefix0 = "  " ++ name ++ ": "
-        padding = replicate (max 0 (nameWidth - length prefix0)) ' '
-        status = formatTestStatus res
-        runs = printf "%4d runs in %3.3fms" (trNumIterations res) (trTestDuration res)
-    in prefix0 ++ padding ++ status ++ ": " ++ runs
-
--- | Drain test results from the worker channel and print them.
-printTestResults :: TestMode -> Int -> Bool -> Bool -> Chan (Maybe TestResult) -> IO ()
-printTestResults mode nameWidth showLog showCached chan = go
-  where
-    go = do
-      evt <- readChan chan
-      case evt of
-        Nothing -> return ()
-        Just res -> do
-          let ok = trSuccess res == Just True && trException res == Nothing
-          when (showCached || not (trCached res) || not ok) $ do
-            putStrLn (formatTestLine mode nameWidth res)
-            unless (ok || showLog) $
-              forM_ (trException res) $ \exc ->
-                mapM_ (\line -> putStrLn ("    " ++ line)) (lines exc)
-          go
-
--- | Parse newline-delimited JSON emitted by test binaries.
-parseJsonLines :: String -> [Aeson.Value]
-parseJsonLines txt =
-    [ v
-    | line <- lines txt
-    , let trimmed = dropWhile isSpace line
-    , not (null trimmed)
-    , Just v <- [Aeson.decodeStrict' (TE.encodeUtf8 (T.pack trimmed))]
-    ]
-
--- | Extract test names from a JSON list payload.
-extractTestList :: [Aeson.Value] -> [String]
-extractTestList values =
-    case listToMaybe [ obj | Aeson.Object obj <- values, AesonKM.member (AesonKey.fromString "tests") obj ] of
-      Just obj ->
-        case AesonKM.lookup (AesonKey.fromString "tests") obj of
-          Just (Aeson.Object testsObj) -> map AesonKey.toString (AesonKM.keys testsObj)
-          _ -> []
-      Nothing -> []
-
--- | Extract test result payloads from JSON events.
-extractTestInfo :: [Aeson.Value] -> [TestResult]
-extractTestInfo values =
-    catMaybes (map parseTestInfo values)
-
--- | Parse a JSON value into a TestResult when test_info is present.
-parseTestInfo :: Aeson.Value -> Maybe TestResult
-parseTestInfo val =
-    case val of
-      Aeson.Object obj ->
-        case AesonKM.lookup (AesonKey.fromString "test_info") obj of
-          Just infoVal -> AesonTypes.parseMaybe parseTestInfoValue infoVal
-          Nothing -> Nothing
-      _ -> Nothing
-
--- | Aeson parser for the test_info object.
-parseTestInfoValue :: Aeson.Value -> AesonTypes.Parser TestResult
-parseTestInfoValue = Aeson.withObject "TestInfo" $ \o -> do
-    def <- o Aeson..: AesonKey.fromString "definition"
-    moduleName <- def Aeson..: AesonKey.fromString "module"
-    name <- def Aeson..: AesonKey.fromString "name"
-    complete <- o Aeson..: AesonKey.fromString "complete"
-    success <- o Aeson..:? AesonKey.fromString "success"
-    exception <- o Aeson..:? AesonKey.fromString "exception"
-    output <- o Aeson..:? AesonKey.fromString "output"
-    stdOut <- o Aeson..:? AesonKey.fromString "std_out"
-    stdErr <- o Aeson..:? AesonKey.fromString "std_err"
-    flaky <- o Aeson..:? AesonKey.fromString "flaky" Aeson..!= False
-    numFailures <- o Aeson..:? AesonKey.fromString "num_failures" Aeson..!= 0
-    numErrors <- o Aeson..:? AesonKey.fromString "num_errors" Aeson..!= 0
-    numIterations <- o Aeson..:? AesonKey.fromString "num_iterations" Aeson..!= 0
-    testDuration <- o Aeson..:? AesonKey.fromString "test_duration" Aeson..!= 0
-    return TestResult
-      { trModule = moduleName
-      , trName = name
-      , trComplete = complete
-      , trSuccess = success
-      , trException = exception
-      , trOutput = output
-      , trStdOut = stdOut
-      , trStdErr = stdErr
-      , trFlaky = flaky
-      , trNumFailures = numFailures
-      , trNumErrors = numErrors
-      , trNumIterations = numIterations
-      , trTestDuration = testDuration
-      , trRaw = Aeson.Object o
-      , trCached = False
-      }
-
--- | Pick the final or last-seen TestResult from a stream.
-pickFinalTestInfo :: [TestResult] -> Maybe TestResult
-pickFinalTestInfo infos =
-    case reverse infos of
-      [] -> Nothing
-      xs ->
-        case listToMaybe [i | i <- xs, trComplete i] of
-          Just i -> Just i
-          Nothing -> Just (head xs)
-
--- | Print a summary line and return the failure/error exit code.
-printTestSummary :: TimeSpec -> Bool -> Bool -> [TestResult] -> IO Int
-printTestSummary elapsed showLog showCached results = do
-    let total = length results
-        failures = length [ r | r <- results, trSuccess r == Just False ]
-        errors = length [ r | r <- results, trSuccess r == Nothing ]
-        hiddenCachedSuccess = not showCached && any (\r -> trCached r && trSuccess r == Just True) results
-    case total of
-      0 -> do
-        putStrLn "Nothing to test"
-        return 0
-      _ -> do
-        putStrLn ""
-        if errors > 0 && failures > 0
-          then putStrLn (show errors ++ " error and " ++ show failures ++ " failure out of " ++ show total ++ " tests (" ++ fmtTime elapsed ++ ")")
-          else if errors > 0
-            then putStrLn (show errors ++ " out of " ++ show total ++ " tests errored (" ++ fmtTime elapsed ++ ")")
-            else if failures > 0
-              then putStrLn (show failures ++ " out of " ++ show total ++ " tests failed (" ++ fmtTime elapsed ++ ")")
-              else putStrLn ("All " ++ show total ++ " tests passed (" ++ fmtTime elapsed ++ ")")
-        putStrLn ""
-        when showLog $
-          printTestDetails showLog showCached results
-        when hiddenCachedSuccess $
-          putStrLn "Showing tests that ran in this invocation; cached successes are hidden. Cached failures/errors are still shown. Use --show-cached to include cached successes."
-        if errors > 0
-          then return 2
-          else if failures > 0
-            then return 1
-            else return 0
-
--- | Print per-test failures and optional logs after the summary.
-printTestDetails :: Bool -> Bool -> [TestResult] -> IO ()
-printTestDetails showLog showCached results = do
-    forM_ results $ \res -> do
-      let status = case trSuccess res of
-                     Just True -> "OK"
-                     Just False -> "FAIL"
-                     Nothing -> "ERR"
-          display = displayTestName (trName res)
-          cached = if trCached res then " (cached)" else ""
-      let showResult = showCached || not (trCached res) || status /= "OK"
-      when showResult $ do
-        when (showLog || status /= "OK") $ do
-          putStrLn ("Test " ++ trModule res ++ "." ++ display ++ ": " ++ status ++ cached)
-          case trException res of
-            Just exc -> putStrLn ("  " ++ exc)
-            Nothing -> return ()
-        when (showLog || status /= "OK") $ do
-          case trOutput res of
-            Just out | not (null out) -> putStrLn ("  Output:\n" ++ out)
-            _ -> return ()
-          case trStdOut res of
-            Just out | not (null out) -> putStrLn ("  Stdout:\n" ++ out)
-            _ -> return ()
-          case trStdErr res of
-            Just out | not (null out) -> putStrLn ("  Stderr:\n" ++ out)
-            _ -> return ()
-
--- | Update golden files from NotEqualError outputs.
-updateGoldenFiles :: Paths -> [TestResult] -> IO ()
-updateGoldenFiles paths results =
-    forM_ results $ \res -> do
-      case (trException res, trOutput res) of
-        (Just exc, Just out)
-          | "testing.NotEqualError: Test output does not match expected golden value" `isPrefixOf` exc -> do
-              let fileName = displayTestName (trName res)
-                  goldenDir = joinPath [projPath paths, "test", "golden", trModule res]
-              createDirectoryIfMissing True goldenDir
-              writeFile (goldenDir </> fileName) out
-        _ -> return ()
-
--- | Write perf data JSON for the current test run.
-writePerfData :: Paths -> [TestResult] -> IO ()
-writePerfData paths results = do
-    let addTest acc res =
-          let modKey = AesonKey.fromString (trModule res)
-              testKey = AesonKey.fromString (trName res)
-              entry = case AesonKM.lookup modKey acc of
-                        Just (Aeson.Object obj) -> obj
-                        _ -> AesonKM.empty
-              entry' = AesonKM.insert testKey (trRaw res) entry
-              acc' = AesonKM.insert modKey (Aeson.Object entry') acc
-          in acc'
-        modulesObj = foldl' addTest AesonKM.empty results
-        outVal = Aeson.Object modulesObj
-        outPath = joinPath [projPath paths, "perf_data"]
-    BL.writeFile outPath (Aeson.encode outVal)
 
 -- | Watch a project directory and rebuild on source or build spec changes.
 watchProjectAt :: C.GlobalOptions -> C.CompileOptions -> FilePath -> IO ()
@@ -2526,7 +2088,7 @@ spinnerChars = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 
 -- | Spinner update interval in microseconds.
 spinnerTickMicros :: Int
-spinnerTickMicros = 100000
+spinnerTickMicros = 80000
 
 -- | Hide or show the cursor during progress rendering.
 setCursorHidden :: ProgressUI -> Bool -> IO ()
