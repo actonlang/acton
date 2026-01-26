@@ -657,7 +657,7 @@ instance Pretty Equations where
     pretty eqs                          = vcat $ map pretty eqs
 
 instance Pretty Equation where
-    pretty (Eqn i n t e)                = pretty n <+> colon <+> pretty t <+> equals <+> pretty e <+> if i>0 then text ("# "++show i) else empty
+    pretty (Eqn i n t e)                = pretty n <+> colon <+> pretty t <+> equals <+> pretty e <+> text ("# level " ++ show i)
 
 instance USubst Equation where
     usubst (Eqn i w t e)                = Eqn i w <$> usubst t <*> usubst e

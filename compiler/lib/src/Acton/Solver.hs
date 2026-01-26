@@ -1580,9 +1580,9 @@ improve env te eq cs
         lowerBnd                        = [ (v,t) | (v,[t]) <- Map.assocs (lbounds vi), noEmbed v ]
         upperBnd                        = [ (v,t) | (v,[t]) <- Map.assocs (ubounds vi), noEmbed v ]
         posLBnd                         = [ (v,t) | (v,t) <- lowerBnd, v `notElem` negvars, implAll env (lookup' v $ pbounds vi) t ]
-        negUBnd                         = [ (v,t) | (v,t) <- upperBnd, v `notElem` posvars, implAll env (lookup' v $ pbounds vi) t, noDots env vi v ]
+        negUBnd                         = [ (v,t) | (v,t) <- upperBnd, v `notElem` posvars, implAll env (lookup' v $ pbounds vi) t, noDots vi v ]
         closLBnd                        = [ (v,t) | (v, [t]) <- Map.assocs (lbounds vi), upClosed env t, implAll env (lookup' v $ pbounds vi) t ]
-        closUBnd                        = [ (v,t) | (v, [t]) <- Map.assocs (ubounds vi), dnClosed env t, implAll env (lookup' v $ pbounds vi) t, noDots env vi v ]
+        closUBnd                        = [ (v,t) | (v, [t]) <- Map.assocs (ubounds vi), dnClosed env t, implAll env (lookup' v $ pbounds vi) t, noDots vi v ]
         (redEq,redUni)                  = ctxtReduce env cs
         mutC                            = findBoundAttrs env (mutattrs vi) (ubounds vi)
         selC                            = findBoundAttrs env (selattrs vi) (ubounds vi)
@@ -1668,7 +1668,7 @@ implAll env ps t@TFX{}                  = and [ hasWitness env t p | (w,p) <- ps
 implAll env ps t@TOpt{}                 = all ((`elem` [qnIdentity,qnEq]) . tcname . snd) ps
 implAll env ps t                        = False
 
-noDots env vi v                         = null (lookup' v $ selattrs vi) && null (lookup' v $ mutattrs vi)
+noDots vi v                             = null (lookup' v $ selattrs vi) && null (lookup' v $ mutattrs vi)
 
 replace ub lb cs                        = ubs ++ lbs ++ cs'
   where
@@ -1708,31 +1708,24 @@ instance Pretty (TUni,Name) where
 ctxtReduce                              :: Env -> Constraints -> (Equations, [(Type,Type)])
 ctxtReduce env cs                       = ctxtRed env (multiPBounds cs)
 
-instance Pretty (TUni, [(Name,PCon)]) where
-    pretty (tv, wps)                    = pretty tv <+> parens (commaSep pretty wps)
-
-instance Pretty (Name,PCon) where
-    pretty (w,p)                        = pretty w <+> colon <+> pretty p
-
 multiPBounds cs                         = Map.assocs $ f cs Map.empty
   where
     f []                                = Map.filter ((>1) . length)
-    f (Proto _ _ w (TUni _ v) p : cs)   = f cs . Map.insertWith (++) v [(w,p)]
+    f (Proto _ env w (TUni _ v) p : cs) = f cs . Map.insertWith (++) v [(w, p, qlevel env)]
     f (_ : cs)                          = f cs
 
-ctxtRed                                 :: Env -> [(TUni, [(Name, PCon)])] -> (Equations, [(Type,Type)])
+ctxtRed                                 :: Env -> [(TUni, [(Name, PCon, Int)])] -> (Equations, [(Type,Type)])
 ctxtRed env multiPBnds                  = (concat eqs, concat unis)
   where (eqs,unis)                      = unzip $ map red multiPBnds
         red (v,wps)                     = imp v [] [] [] wps
-        imp v eq uni wps ((w,p):wps')
-          | (e,p'):_ <- hits            = --trace ("  *" ++ prstr w ++ " covered by " ++ prstr e) $
-                                          imp v (mkEqn env w (proto2type (tUni v) p) e : eq) ((tcargs p `zip` tcargs p') ++ uni) wps wps'
-          | otherwise                   = --trace ("   (Not covered: " ++ prstr p ++ " in context " ++ prstrs (map fst (wps++wps')) ++ ")") $
-                                          imp v eq uni ((w,p):wps) wps'
-          where hits                    = [ (wf $ eVar w', vsubst s p') | (w',p0) <- wps++wps', w'/=w, Just (wf,p') <- [findAncestor env p0 (tcname p)] ]
+        imp v eq uni wps ((w,p,i):wps')
+          | (e,p',j):_ <- hits          = --trace ("  *" ++ prstr w ++ " (level " ++ show i ++ ") covered by " ++ prstr e ++ " (level " ++ show j ++ ")") $
+                                          imp v (Eqn (min i j) w (proto2type (tUni v) p) e : eq) ((tcargs p `zip` tcargs p') ++ uni) wps wps'
+          | otherwise                   = --trace ("   (Not covered: " ++ prstr p ++ " in context " ++ prstrs [ w | (w,_,_) <- wps++wps' ] ++ ")") $
+                                          imp v eq uni ((w,p,i):wps) wps'
+          where hits                    = [ (wf $ eVar w', vsubst s p', j) | (w',p0,j) <- wps++wps', w'/=w, Just (wf,p') <- [findAncestor env p0 (tcname p)] ]
                 s                       = [(tvSelf,tUni v)]
         imp v eq uni wps []             = (reverse eq, uni)
-  -- TODO: also check that an mro exists (?)
 
 
 remove ws []                            = []

@@ -24,7 +24,8 @@ import Acton.TypeEnv
 
 
 termred                                 :: Equations -> Stmt -> Stmt
-termred eq s                            = --trace ("### termred:\n" ++ render (nest 4 $ pretty s)) $
+termred eq s                            = --trace ("### equations:\n" ++ render (nest 4 $ vcat $ map pretty eq)) $
+                                          --trace ("### termred:\n" ++ render (nest 4 $ pretty s)) $
                                           trans env0{ eqns = eq } s
 
 termsubst                               :: (Transform a) => [(Name,Expr)] -> a -> a
