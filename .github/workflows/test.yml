@@ -207,13 +207,6 @@ jobs:
           path: |
             ~/.stack
           key: test-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}
-      - name: "Cache Acton"
-        if: matrix.cache == true
-        uses: actions/cache@v5
-        with:
-          path: |
-            ~/.cache/acton/
-          key: test-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}-acton
       - name: "chown our home dir to avoid stack complaining"
         run: chown -R root:root /github/home
       - name: "Install build prerequisites"
@@ -509,12 +502,6 @@ jobs:
     container:
       image: debian:experimental
     steps:
-      - name: "Cache stuff"
-        uses: actions/cache@v5
-        with:
-          path: |
-            ~/.cache/acton/
-          key: test-telemetrify
       - name: "Download .deb files"
         uses: actions/download-artifact@v7
         with:
