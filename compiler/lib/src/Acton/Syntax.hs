@@ -574,6 +574,17 @@ instance HasLoc KwdArg where
       loc (KwdStar e)    = loc e
       loc KwdNil         = NoLoc
 
+instance HasLoc PosPar where
+    loc (PosPar n _ _ _) = loc n
+    loc (PosSTAR n _)    = loc n
+    loc _                = NoLoc
+
+instance HasLoc KwdPar where
+    loc (KwdPar n _ _ _) = loc n
+    loc (KwdSTAR n _)    = loc n
+    loc _                = NoLoc
+
+
 -- Eq -------------------------
 
 instance Eq Import where

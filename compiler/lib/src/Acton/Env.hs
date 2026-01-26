@@ -25,7 +25,6 @@ import System.Environment (getExecutablePath)
 import Control.Monad
 import Control.Monad.Except
 import qualified Data.HashMap.Strict as M
-import Error.Diagnose hiding ((<>), err)
 
 import Acton.Syntax
 import Acton.Builtin
@@ -56,7 +55,9 @@ data EnvF x                 = EnvF {
                                 witnesses  :: [Witness],
                                 thismod    :: Maybe ModName,
                                 context    :: [EnvCtx],
-                                envX       :: x }
+                                qlevel     :: Int,
+                                envX       :: x
+                              } deriving (Show)
 
 type Env0                   = EnvF ()
 
@@ -64,7 +65,7 @@ type Env0                   = EnvF ()
 setX                        :: EnvF y -> x -> EnvF x
 setX env x                  = EnvF { names = names env, imports = imports env, modules = modules env,
                                      hmodules = hmodules env, witnesses = witnesses env, thismod = thismod env,
-                                     context = context env, envX = x }
+                                     context = context env, qlevel = qlevel env, envX = x }
 
 modX                        :: EnvF x -> (x -> x) -> EnvF x
 modX env f                  = env{ envX = f (envX env) }
@@ -118,187 +119,10 @@ mapModules f env            = env1 { hmodules = convTEnv2HTEnv (modules env1) }
         app ns [] te'       = te'
 
 
--- Constraints -------------------------------------------------------------------------------
-
-data Constraint = Cast  {info :: ErrInfo, scope :: QScope, type1 :: Type, type2 :: Type}
-                | Sub   {info :: ErrInfo, wit :: Name, scope :: QScope, type1 :: Type, type2 :: Type}
-                | Proto {info :: ErrInfo, wit :: Name, scope :: QScope, type1 :: Type, proto1 :: PCon}
-                | Sel   {info :: ErrInfo, wit :: Name, scope :: QScope, type1 :: Type, name1 :: Name, type2 :: Type}
-                | Mut   {info :: ErrInfo, scope :: QScope, type1 :: Type, name1 :: Name, type2 :: Type}
-                | Seal  {info :: ErrInfo, scope :: QScope, type1 :: Type}
-                | Imply {info :: ErrInfo, wit :: Name, binder :: QBinds, scoped :: Constraints}
-                deriving (Eq,Show,Read)
-
-type Constraints = [Constraint]
-
-data ErrInfo    = DfltInfo {errloc :: SrcLoc, errno :: Int, errexpr :: Maybe Expr, errinsts :: [(QName,TSchema,Type)]}
-                | DeclInfo {errloc :: SrcLoc, errloc2 :: SrcLoc, errname :: Name, errschema :: TSchema, errmsg :: String}
-                | Simple {errloc ::SrcLoc, errmsg :: String}
-                deriving (Eq,Show,Read)
-
-type QScope     = [Quant]
-
-data Quant      = Quant TVar [WTCon] deriving (Eq,Show,Read)
-
-qscope q        = [ tv | Quant tv _ <- q ]
-
-instance HasLoc Constraint where
-      loc (Cast info q t1 t2) = getLoc [loc info, loc t1, loc t2]
-      loc (Sub info _ q t1 t2) = getLoc [loc info, loc t1, loc t2]
-      loc (Proto info _ q t1 _) = getLoc [loc info, loc t1]
-      loc (Sel info _ q t1  n1 t2) = getLoc [loc info, loc t1, loc n1, loc t2]
-      loc (Mut info q t1  n1 t2) = getLoc [loc info, loc t1, loc n1, loc t2]
-      loc (Seal info q t1) = getLoc [loc info, loc t1]
-      loc (Imply info _ q cs) =  getLoc [loc info, loc cs]
-
-instance HasLoc ErrInfo where
-      loc (Simple l _)   = l
-      loc (DfltInfo l _ _ _) = l
-      loc (DeclInfo l _ _ _ _) = l
-
-instance Pretty Constraint where
-    pretty (Cast _ q t1 t2)         = prettyQuant q <+> pretty t1 <+> text "<" <+> pretty t2
-    pretty (Sub _ w q t1 t2)        = pretty w <+> colon <+> prettyQuant q <+> pretty t1 <+> text "<" <+> pretty t2
-    pretty (Proto _ w q t u)        = pretty w <+> colon <+> prettyQuant q <+> pretty t <+> parens (pretty u)
-    pretty (Sel _ w q t1 n t2)      = pretty w <+> colon <+> prettyQuant q <+> pretty t1 <> text "." <> pretty n <+> text "<" <+> pretty t2
-    pretty (Mut _ q t1 n t2)        = prettyQuant q <+> pretty t1 <+> text "." <> pretty n <+> text ">" <+> pretty t2
-    pretty (Seal _ q t)             = prettyQuant q <+> text "$Seal" <+> pretty t
-    pretty (Imply _ w q cs)
-      | length cs < 4               = pretty w <+> colon <+> pretty q <+> text "=>" <+> braces (commaSep pretty cs)
-      | otherwise                   = pretty w <+> colon <+> pretty q <+> text "=>" $+$ nest 4 (vcat $ map pretty cs)
-
-prettyQuant []                      = empty
-prettyQuant qs                      = brackets (commaSep pretty qs) <+> text "=>"
-
-instance Pretty Quant where
-    pretty (Quant tv wps)           = pretty tv <> parens (commaSep pretty wps)
-
-instance VFree Quant where
-    vfree (Quant v ps)              = vfree ps
-
-instance UFree Constraint where
-    ufree (Cast info q t1 t2)       = ufree info ++ ufree q ++ ufree t1 ++ ufree t2
-    ufree (Sub info w q t1 t2)      = ufree info ++ ufree q ++ ufree t1 ++ ufree t2
-    ufree (Proto info w q t p)      = ufree info ++ ufree q ++ ufree t ++ ufree p
-    ufree (Sel info w q t1 n t2)    = ufree info ++ ufree q ++ ufree t1 ++ ufree t2
-    ufree (Mut info q t1 n t2)      = ufree info ++ ufree q ++ ufree t1 ++ ufree t2
-    ufree (Seal info q t)           = ufree info ++ ufree q ++ ufree t
-    ufree (Imply info w q cs)       = ufree info ++ ufree q ++ ufree cs
-
-instance UFree ErrInfo where
-    ufree (DfltInfo l n mbe ts)     = ufree mbe ++ ufree ts
-    ufree (DeclInfo l1 l2 n t msg)  = ufree t
-    ufree _                         = []
-    
-instance UFree Quant where
-    ufree (Quant v cs)              = ufree cs
-
-closePolVars                            :: ([TUni],[TUni]) -> Constraints -> ([TUni],[TUni])
-closePolVars pvs cs
-  | polnull (pvs' `polminus` pvs)       = pvs'
-  | otherwise                           = closePolVars pvs' cs'
-  where
-    (pvs',cs')                          = boundvs pvs cs
-
-    boundvs pn []                        = (pn, [])
-    boundvs pn (Cast _ _ t (TUni _ v) : cs)
-      | v `elem` fst pn                 = boundvs (polvars t `polcat` pn) cs
-    boundvs pn (Sub _ _ _ t (TUni _ v) : cs)
-      | v `elem` fst pn                 = boundvs (polvars t `polcat` pn) cs
-    boundvs pn (Cast _ _ (TUni _ v) t : cs)
-      | v `elem` snd pn                 = boundvs (polneg (polvars t) `polcat` pn) cs
-    boundvs pn (Sub _ _ _ (TUni _ v) t : cs)
-      | v `elem` snd pn                 = boundvs (polneg (polvars t) `polcat` pn) cs
-    boundvs pn (Proto _ _ _ (TUni _ v) p : cs)
-      | v `elem` snd pn                 = boundvs (polneg (polvars p) `polcat` pn) cs
-    boundvs pn (Sel _ _ _ (TUni _ v) _ t : cs)
-      | v `elem` snd pn                 = boundvs (polneg (polvars t) `polcat` pn) cs
-    boundvsboundvs pn (Mut _ _ (TUni _ v) _ t : cs)
-      | v `elem` (fst pn ++ snd pn)     = boundvs (invvars t `polcat` pn) cs
-    bnds pn (c : cs)                    = let (pn',cs') = boundvs pn cs in (pn', c:cs')
-
-
-instance Tailvars Quant where
-    tailvars (Quant v cs)           = tailvars cs
-
-instance Tailvars Constraint where
-    tailvars (Cast _ q t1 t2)       = tailvars q ++ tailvars t1 ++ tailvars t2
-    tailvars (Sub _ w q t1 t2)      = tailvars q ++ tailvars t1 ++ tailvars t2
-    tailvars (Proto _ w q t p)      = tailvars q ++ tailvars t ++ tailvars p
-    tailvars (Sel _ w q t1 n t2)    = tailvars q ++ tailvars t1 ++ tailvars t2
-    tailvars (Mut _ q t1 n t2)      = tailvars q ++ tailvars t1 ++ tailvars t2
-    tailvars (Seal _ q t)           = tailvars q ++ tailvars t
-    tailvars (Imply _ w q cs)       = tailvars q ++ tailvars cs
-
-instance Vars Constraint where
-    freeQ (Cast _ q t1 t2)          = freeQ q ++ freeQ t1 ++ freeQ t2
-    freeQ (Sub _ w q t1 t2)         = freeQ q ++ freeQ t1 ++ freeQ t2
-    freeQ (Proto _ w q t p)         = freeQ q ++ freeQ t ++ freeQ p
-    freeQ (Sel _ w q t1 n t2)       = freeQ q ++ freeQ t1 ++ freeQ t2
-    freeQ (Mut _ q t1 n t2)         = freeQ q ++ freeQ t1 ++ freeQ t2
-    freeQ (Seal _ q t)              = freeQ q ++ freeQ t
-    freeQ (Imply _ w q cs)          = freeQ q ++ freeQ cs
-
-instance Vars Quant where
-    freeQ (Quant tv ps)             = freeQ ps
-
-
--- Misc. ---------------------------------------------------------------------------------------------
-
-
-closeDepVars vs cs
-  | null vs'                        = nub vs
-  | otherwise                       = closeDepVars (vs'++vs) cs
-  where vs'                         = concat [ deps c \\ vs | c <- cs, all (`elem` vs) (heads c) ]
-
-        heads (Proto _ w q t _)     = ufree t
-        heads (Cast _ q t _)        = ufree t
-        heads (Sub _ w q t _)       = ufree t
-        heads (Sel _ w q t n _)     = ufree t
-        heads (Mut _ q t n _)       = ufree t
-        heads (Seal _ q t)          = ufree t
-        heads (Imply _ w q cs)      = []
-
-        deps (Proto _ w q _ p)      = ufree p
-        deps (Cast _ q _ t)         = typarams t
-        deps (Sub _ w q _ t)        = typarams t
-        deps (Sel _ w q _ n t)      = ufree t
-        deps (Mut _ q _ n t)        = ufree t
-        deps (Seal _ q _)           = []
-        deps (Imply _ w q cs)       = []
-
-        typarams (TOpt _ t)         = typarams t
-        typarams (TCon _ c)         = ufree c
-        typarams _                  = []
-
-
-closeDepVarsQ vs q
-  | null vs'                        = nub vs
-  | otherwise                       = closeDepVarsQ (vs'++vs) q
-  where vs'                         = concat [ vfree us \\ vs | QBind v us <- q, v `elem` vs ]
-
-instance UWild Quant where
-    uwild (Quant v cs)              = Quant v (uwild cs)
-
-instance UWild Constraint where
-    uwild (Cast info q t1 t2)       = Cast (uwild info) (uwild q) (uwild t1) (uwild t2)
-    uwild (Sub info w q t1 t2)      = Sub (uwild info) w (uwild q) (uwild t1) (uwild t2)
-    uwild (Proto info w q t p)      = Proto (uwild info) w (uwild q) (uwild t) (uwild p)
-    uwild (Sel info w q t1 n t2)    = Sel (uwild info) w (uwild q) (uwild t1) n (uwild t2)
-    uwild (Mut info q t1 n t2)      = Mut (uwild info) (uwild q) (uwild t1) n (uwild t2)
-    uwild (Seal info q t)           = Seal (uwild info) (uwild q) (uwild t)
-    uwild (Imply info w q cs)       = Imply (uwild info) w (uwild q) (uwild cs)
-
-instance UWild ErrInfo where
-    uwild (DfltInfo l n mbe ts)     = DfltInfo l n mbe (uwild ts)
-    uwild (DeclInfo l1 l2 n t msg)  = DeclInfo l1 l2 n (uwild t) msg
-    uwild info                      = info
-
-
 instance (Pretty x) => Pretty (EnvF x) where
     pretty env                  = text "--- modules:"  $+$
                                   vcat (map pretty (modules env)) $+$
-                                  text "--- names" <+> pretty (thismod env) <> colon $+$
+                                  text "--- names" <+> pretty (thismod env) <+> parens (text (show (qlevel env))) <> colon $+$
                                   vcat (map pretty (names env)) $+$
                                   text "--- imports" <+> pretty (thismod env) <> colon $+$
                                   vcat (map pretty (imports env)) $+$
@@ -307,6 +131,12 @@ instance (Pretty x) => Pretty (EnvF x) where
                                   text "--- extra:"  $+$
                                   pretty (envX env) $+$
                                   text "."
+
+closeDepVarsQ vs q
+  | null vs'                        = nub vs
+  | otherwise                       = closeDepVarsQ (vs'++vs) q
+  where vs'                         = concat [ vfree us \\ vs | QBind v us <- q, v `elem` vs ]
+
 
 -- Unalias --------------------------------------------------------------------------------------
 
@@ -410,6 +240,7 @@ initEnv path True          = return $ EnvF{ names = [(nPrim,NMAlias mPrim)],
                                             witnesses = primWits,
                                             thismod = Nothing,
                                             context = [],
+                                            qlevel = 0,
                                             envX = () }
 initEnv path False         = do (_,nmod,_,_,_,_,_,_,_,_) <- InterfaceFiles.readFile (joinPath [path,"__builtin__.ty"])
                                 let NModule envBuiltin builtinDocstring = nmod
@@ -420,6 +251,7 @@ initEnv path False         = do (_,nmod,_,_,_,_,_,_,_,_) <- InterfaceFiles.readF
                                                  witnesses = primWits,
                                                  thismod = Nothing,
                                                  context = [],
+                                                 qlevel = 0,
                                                  envX = () }
                                     env = importAll mBuiltin envBuiltin $ importWits mBuiltin envBuiltin $ env0
                                 return env
@@ -453,8 +285,8 @@ addImport m env             = env{ imports = m : imports env }
 
 defineTVars                 :: QBinds -> EnvF x -> EnvF x
 defineTVars q env           = foldr f env (unalias env q)
-  where f (QBind tv us) env = foldl addWit env{ names = (tvname tv, NTVar (tvkind tv) c ps) : names env } wits
-          where (c,ps)      = case us of u:us' | not $ isProto env (tcname u) -> (u,us); _ -> (cValue,us)
+  where f (QBind tv us) env = foldl addWit env{ names = (tvname tv, NTVar (tvkind tv) c ps) : names env, qlevel = qlevel env + 1 } wits
+          where (c,ps)      = case us of u:us' | not $ isProto env (tcname u) -> (u,us'); _ -> (cValue,us)
                 wits        = [ WInst [] (tVar tv) p (NoQ $ tvarWit tv p0) wchain | p0 <- ps, (wchain,p) <- findAncestry env p0 ]
 
 selfSubst n q               = vsubst [(tvSelf, tCon tc)]
@@ -1245,23 +1077,6 @@ importWits m te env         = foldl addWit env ws
 
 
 
-headvar (Proto _ w q (TUni _ u) p)    = u
-
-headvar (Cast _ q TVar{} (TUni _ u))  = u
-headvar (Cast _ q (TUni _ u) t)       = u
-headvar (Cast _ q t (TUni _ u))       = u     -- ?
-
-headvar (Sub _ w q TVar{} (TUni _ u)) = u
-headvar (Sub _ w q (TUni _ u) t)      = u
-headvar (Sub _ w q t (TUni _ u))      = u     -- ?
-
-headvar (Sel _ w q (TUni _ u) n t)    = u
-
-headvar (Mut _ q (TUni _ u) n t)      = u
-
-headvar (Seal _ q (TUni _ u))         = u
-
-
 -- Error handling ----------------------------------------------------------------------------------------------------
 
 data CompilationError               = KindError SrcLoc Kind Kind
@@ -1284,6 +1099,7 @@ data CompilationError               = KindError SrcLoc Kind Kind
                                     | NoModule ModName
                                     | NoClassOrProto QName
                                     | DecorationMismatch Name TSchema Deco
+                                    | SelfParamError SrcLoc
                                     | OtherError SrcLoc String
                                     deriving (Show)
 
@@ -1310,6 +1126,7 @@ instance HasLoc CompilationError where
     loc (NoItem m n)                = loc n
     loc (NoClassOrProto n)          = loc n
     loc (DecorationMismatch n t d)  = loc n
+    loc (SelfParamError l)          = l
     loc (OtherError l str)          = l
 
 
@@ -1336,6 +1153,7 @@ compilationError err                = [(loc err, render (expl err))]
     expl (NoItem m n)               = text "Module" <+> pretty m <+> text "does not export" <+> pretty n
     expl (NoClassOrProto n)         = text "Class or protocol name expected, got" <+> pretty n
     expl (DecorationMismatch n t d) = text "Decoration for" <+> pretty n <+> text "does not match signature" <+> pretty d
+    expl (SelfParamError l)         = text "'self' cannot be used as a parameter name in actors."
     expl (OtherError l str)         = text str
 
 
@@ -1359,6 +1177,7 @@ noItem m n                          = Control.Exception.throw $ NoItem m n
 noModule m                          = Control.Exception.throw $ NoModule m
 notClassOrProto n                   = Control.Exception.throw $ NoClassOrProto n
 decorationMismatch n t d            = Control.Exception.throw $ DecorationMismatch n t d
+selfParamError l                    = Control.Exception.throw $ SelfParamError l
 err l s                             = Control.Exception.throw $ OtherError l s
 
 err0 xs s                           = err (loc $ head xs) s
@@ -1432,346 +1251,3 @@ instance Simp QName where
       | not $ null aliases          = NoQ $ head aliases                                        -- Restore aliases
       | otherwise                   = n
       where aliases                 = [ n1 | (n1, NAlias n2) <- names env, n2 == n ]
-
-
--- Type errors ---------------------------------------------------------------------------------------------------------------------
-
-data TypeError                      = TypeError SrcLoc String
-                                    | SelfParamError SrcLoc
-                                    | RigidVariable TVar
-                                    | InfiniteType TUni Type
-                                    | ConflictingRow TUni
-                                    | KwdNotFound ErrInfo Name
-                                    | KwdUnexpected ErrInfo Name
-                                    | PosElemNotFound ErrInfo String
-                                    | IncompatError ErrInfo String
-                                    | EscapingVar [TVar] TSchema
-                                    | NoSelStatic Name TCon
-                                    | NoSelInstByClass Name TCon
-                                    | NoMut Name
-                                    | LackSig Name
-                                    | LackDef Name
-                                    | SurplusRow PosRow
-                                    | NoRed Constraint
-                                    | NoSolve (Maybe Type) [Type] [Constraint]
-                                    | NoUnify ErrInfo Type Type
-                                    | UninitializedAttribute SrcLoc Name Bool SrcLoc SrcLoc Name (Maybe (Name, SrcLoc)) -- attr loc, attr name, is inferred, init loc, class loc, class name, parent class info
-                                    deriving (Show)
-
-instance Control.Exception.Exception TypeError
-
-instance HasLoc TypeError where
-    loc (TypeError l str)           = l
-    loc (SelfParamError l)          = l
-    loc (RigidVariable tv)          = loc tv
-    loc (InfiniteType tv t)         = loc t
-    loc (ConflictingRow tv)         = loc tv
-    loc (KwdNotFound _ n)           = loc n
-    loc (KwdUnexpected _ n)         = loc n
-    loc (PosElemNotFound info s)    = loc info -- NoLoc     -- TODO: supply position
-    loc (EscapingVar tvs t)         = loc tvs
-    loc (NoSelStatic n u)           = loc n
-    loc (NoSelInstByClass n u)      = loc n
-    loc (NoMut n)                   = loc n
-    loc (LackSig n)                 = loc n
-    loc (LackDef n)                 = loc n
-    loc (SurplusRow p)              = NoLoc     -- TODO: supply position
-    loc (NoRed c)                   = loc c
-    loc (NoSolve _ _ _)             = NoLoc
-    loc (NoUnify info t1 t2)        = loc info
-    loc (UninitializedAttribute l _ _ _ _ _ _) = l
-
-intro t mbe                            = case mbe of
-                                             Nothing ->  pretty t
-                                             Just e ->   text "The type of the indicated expression" <+> text "(" Pretty.<>
-                                                           (if isGen t then text "which we call" else text "inferred to be") <+> pretty t Pretty.<> text ")"
-   where isGen (TCon _ (TC (NoQ (Name _ ('t' : ds))) [])) = all isDigit ds
-         isGen _ = False
-
-explainViolation c                   = case info c of
-                                          Simple l s -> text s
-                                          DfltInfo l n mbe ts -> -- text (show n)  $+$
-                                               (case c of
-                                                  Cast _ q t1 t2  -> intro t1 mbe <+> text "is not a subclass of" <+> pretty t2
-                                                  Sub _ _ q t1 t2 -> intro t1 mbe <+> text "is not a subtype of" <+> pretty t2
-                                                  Proto _ _ q t p -> intro  t mbe <+> text "does not implement" <+> pretty p
-                                                  Sel _ _ q t n t0 -> intro t mbe <+> text "does not have an attribute" <+> pretty n <+> text "with type" <+> pretty t0
-                                                  _ -> pretty c <+> text "does not hold")
-                                          DeclInfo _ _ n sc msg -> text msg  -- $+$ pretty n <+> text "is inferred to have type"<+> pretty sc
-
-explainRequirement c                = case info c of
-                                          Simple l s -> text s
-                                          DfltInfo l n mbe ts ->
-                                             (if ts /= []
-                                              then text (concatMap (\(n,s,t) -> Pretty.print n ++ " has had its polymorphic type "
-                                                            ++  Pretty.print s ++ " instantiated to " ++ Pretty.print t) ts++", so ")
-
-                                              else empty) Pretty.<>
-                                               (case c of
-                                                   Cast _ q t1 t2 -> intro t1 mbe <+> text "must be a subclass of" <+> pretty t2
-                                                   Sub i _ q t1 t2 -> intro t1 mbe <+> text "must be a subtype of" <+> pretty t2
-                                                   Proto _ _ q t p -> intro t mbe <+> text "must implement" <+> pretty p
-                                                   Sel _ _ q t n t0 -> intro t mbe <+> text "must have an attribute" <+> pretty n <+> text "with type" <+> pretty t0
-                                                                          Pretty.<> text "; no such type is known."
-                                                   _ -> pretty c <+> text "must hold")
-                                          DeclInfo _ _ n sc msg -> text msg   -- $+$ pretty n <+> text "is inferred to have type"<+> pretty sc
-
-
-
-useless vs c                           = case c of
-                                             Cast _ q t1 t2 -> f t1 || f t2
-                                             Sub _ _ q t1 t2 -> f t1 || f t2
-                                             Proto _ _ q t p -> f t
-                                             Sel _ _ q t n t0 -> f t || f t0
-                                             Mut _ q t1 n t2 -> True   -- TODO
-                                             Seal _ _ _ -> True        -- TODO
-                                             Imply _ _ _ _ -> True   -- TODO
-     where f (TUni _ v) = notElem v vs
-           f _          = False
-
---typeReport :: TypeError -> Report
-typeReport (TypeError l msg) filename src           = Err Nothing msg [(locToPosition l filename src, This msg)] []
-typeReport (SelfParamError l) filename src          = Err Nothing msg [(locToPosition l filename src, This msg)] [Hint "In actors, 'self' is reserved and implicitly available as a reference to the own actor that can be passed to other actors."]
-                                                      where msg = "'self' cannot be used as a parameter name in actors."
-typeReport (RigidVariable tv) filename src          = Err Nothing msg [(locToPosition (loc tv) filename src, This msg)] []
-                                                      where msg = render (text "Type" <+> pretty tv <+> text "is rigid")
-typeReport (InfiniteType tv t) filename src         = Err Nothing msg [(locToPosition (loc t) filename src, This msg)] []
-                                                      where msg = render (text "Type" <+> pretty tv <+> text "~" <+> pretty t <+> text "is infinite")
-typeReport (ConflictingRow tv) filename src         = Err Nothing msg [(locToPosition (loc tv) filename src, This msg)] []
-                                                      where msg = render (text "Type" <+> pretty tv <+> text "has conflicting extensions")
-typeReport (KwdNotFound info n) filename src        = Err Nothing "Keyword argument missing" [(locToPosition (loc n) filename src, This msg)] []
-                                                      where msg = render (text "Keyword element" <+> quotes (pretty n) <+> text "is not found")
-typeReport (KwdUnexpected info n) filename src      = Err Nothing "Unexpected keyword argument" [(locToPosition (loc n) filename src, This msg)] []
-                                                      where msg = render (text "Unexpected keyword argument" <+> quotes (pretty n))
-typeReport (PosElemNotFound info s) filename src    = Err Nothing s [(locToPosition (loc info) filename src, This s)] []
-typeReport (EscapingVar tvs t) filename src         = Err Nothing msg [(locToPosition (loc tvs) filename src, This msg)] []
-                                                      where msg = render (text "Type annotation" <+> pretty t <+> text "is too general, type variable" <+>
-                                                                  pretty (head tvs) <+> text "escapes")
-typeReport (NoSelStatic n u) filename src           = Err Nothing msg [(locToPosition (loc n) filename src, This msg)] []
-                                                      where msg = render (text "Static method" <+> pretty n <+> text "cannot be selected from" <+> pretty u <+> text "instance")
-typeReport (NoSelInstByClass n u) filename src      = Err Nothing msg [(locToPosition (loc n) filename src, This msg)] []
-                                                      where msg = render (text "Instance attribute" <+> pretty n <+> text "cannot be selected from class" <+> pretty u)
-typeReport (NoMut n) filename src                   = Err Nothing msg [(locToPosition (loc n) filename src, This msg)] []
-                                                      where msg = render (text "Non @property attribute" <+> pretty n <+> text "cannot be mutated")
-typeReport (LackSig n) filename src                 = Err Nothing msg [(locToPosition (loc n) filename src, This msg)] []
-                                                      where msg = render (text "Declaration lacks accompanying signature")
-typeReport (LackDef n) filename src                 = Err Nothing msg [(locToPosition (loc n) filename src, This msg)] []
-                                                      where msg = render (text "Signature lacks accompanying definition")
-typeReport (NoRed c) filename src
-    | DeclInfo l1 l2 n _ _ <- info c = Err
-                                         Nothing
-                                         "Constraint violation"
-                                         [ (locToPosition l1 filename src, This (render (explainRequirement c <+> parens (explainRequirement c{info = dummyInfo}))))
-                                         , (locToPosition l2 filename src, Where (Pretty.print n ++ " is defined here"))
-                                         ]
-                                         []
-    | otherwise                      = Err
-                                          Nothing
-                                          "Constraint violation"
-                                          [(locToPosition (loc c) filename src, This (render (explainRequirement c)))]
-                                          []
-
-typeReport (NoSolve mbt vs cs) filename src         =
-    let header = case length cs of
-                    0 -> "Unable to give good error message: please report example"
-                    1 -> "Cannot satisfy the following constraint:"
-                    _ -> "Cannot satisfy the following simultaneous constraints for the unknown " ++
-                         (if length vs == 1
-                          then "type " ++ case head vs of
-                                          TCon _ tc -> nameStr (noq (tcname tc))
-                                          _ -> show (head vs)
-                          else "types")
-        -- Each constraint gets its own complete error message with source line
-        constraint_messages = concatMap (typeError . NoRed) cs
-        -- Filter out empty positions and merge their messages into the first real position
-        (noLocs, withLocs) = partition ((==NoLoc) . fst) constraint_messages
-        withLocsMsgs = case (withLocs, noLocs) of
-            ([], []) -> [(NoLoc, "Error: No location information")]
-            ([], (l,m):_) -> [(l,m)]
-            ((l,m):rest, extras) -> (l, m ++ "\n" ++ concatMap snd extras) : rest
-    in Err
-        Nothing
-        header
-        [(locToPosition l filename src, This m) | (l,m) <- withLocsMsgs]
-        []
-  where
-        nameStr (Name _ str) = str
-
-typeReport (NoUnify (Simple l msg) _ _) filename src = Err Nothing "Type unification error" [(locToPosition l filename src, This msg)] []
-typeReport (NoUnify info t1 t2) filename src        =
-    case (loc t1, loc t2) of
-        (l1@Loc{}, l2@Loc{}) -> Err
-                                 Nothing
-                                 "Type unification error"
-                                 [ (locToPosition l1 filename src, This "First type appears here")
-                                 , (locToPosition l2 filename src, This "Second type appears here")
-                                 ]
-                                 []
-        _                     -> Err
-                                 Nothing
-                                 "Type unification error"
-                                 [(locToPosition (getLoc[loc info, loc t1, loc t2]) filename src, This msg)]
-                                 []
-    where msg = render (text "Incompatible types" <+> pretty t1 <+> text "and" <+> pretty t2)
-
-typeReport (IncompatError info msg) filename src    =
-    case info of
-        DeclInfo l1 l2 n sc msg1    -> Err
-                                         Nothing
-                                         "Incompatible types"
-                                         [ (locToPosition l1 filename src, This msg)
-                                         , (locToPosition l2 filename src, Where (Pretty.print n ++ " is defined here"))
-                                         ]
-                                         []
-        _                           -> Err
-                                         Nothing
-                                         "Incompatible types"
-                                         [(locToPosition (loc info) filename src, This msg)]
-                                         []
-typeReport (SurplusRow p) filename src =
-                                    Err Nothing "Too many arguments supplied" [(locToPosition NoLoc filename src, This (prstr (label p)))] []
-typeReport (UninitializedAttribute attrLoc attrName isInferred initLoc classLoc className parentInfo) filename src =
-                                    Err (Just "Type error") msg
-                                        ([ (locToPosition initLoc filename src, This $ "Attribute '" ++ prstr attrName ++ "' is not initialized in __init__")
-                                         , (locToPosition (makeLineOnlyLoc classLoc src) filename src, Where $ "In class " ++ prstr className)
-                                         ] ++
-                                         (case parentInfo of
-                                             Just (parentName, parentLoc) -> [(locToPosition (makeLineOnlyLoc parentLoc src) filename src, Where $ "Attribute inherited from " ++ prstr parentName)]
-                                             Nothing -> []) ++
-                                         [ (locToPosition attrLoc filename src, Where $ "Attribute '" ++ prstr attrName ++ "' " ++ 
-                                             if isInferred then "inferred from use" else "is defined here")
-                                         ])
-                                        []
-                                    where msg = "Attribute '" ++ prstr attrName ++ "' is not initialized in " ++ prstr className ++ ".__init__"
-
-
-typeError                           :: TypeError -> [(SrcLoc, String)]
-typeError (TypeError l str)          = [(l, str)]
-typeError (SelfParamError l)         = [(l, "'self' cannot be used as a parameter name in actors.")]
-typeError (RigidVariable tv)         = [(loc tv, render (text "Type" <+> pretty tv <+> text "is rigid"))]
-typeError (InfiniteType tv t)        = [(loc tv, render (text "Type" <+> pretty tv <+> text "~" <+> pretty t <+> text "is infinite"))]
-typeError (ConflictingRow tv)        = [(loc tv, render (text "Type" <+> pretty tv <+> text "has conflicting extensions"))]
-typeError (KwdNotFound _ n)          = [(loc n, render (text "Keyword element" <+> quotes (pretty n) <+> text "is not found"))]
-typeError (KwdUnexpected _ n)        = [(loc n, render (text "Keyword element" <+> quotes (pretty n) <+> text "is not expected"))]
-typeError (PosElemNotFound info s)   = [(loc info, s)]
-typeError (EscapingVar tvs t)        = [(loc tvs, render (text "Type annotation" <+> pretty t <+> text "is too general, type variable" <+>
-                                        pretty (head tvs) <+> text "escapes"))]
-typeError (NoSelStatic n u)          = [(loc n, render (text "Static method" <+> pretty n <+> text "cannot be selected from" <+> pretty u <+> text "instance"))]
-typeError (NoSelInstByClass n u)     = [(loc n, render (text "Instance attribute" <+> pretty n <+> text "cannot be selected from class" <+> pretty u))]
-typeError (NoMut n)                  = [(loc n, render (text "Non @property attribute" <+> pretty n <+> text "cannot be mutated"))]
-typeError (LackSig n)                = [(loc n, render (text "Declaration lacks accompanying signature"))]
-typeError (LackDef n)                = [(loc n, render (text "Signature lacks accompanying definition"))]
-typeError (UninitializedAttribute attrLoc attrName isInferred initLoc classLoc className parentInfo) = [(initLoc, "attribute '" ++ prstr attrName ++ "' is not initialized in __init__ of " ++ prstr className)]
-typeError (NoRed c)
-    | DeclInfo l1 l2 _ _ _ <- info c = [(min l1 l2,""), (max l1 l2,render (explainRequirement c <+> parens (explainRequirement c{info = dummyInfo})))]
---    | DfltInfo l n mbe is <- info c  = [(loc c, render (explainRequirement c <+> parens (text ("errcode " ++ show n))))]
-    | otherwise                      = [(loc c, render (explainRequirement c))]
-typeError (NoSolve mbt vs cs)        = case length cs of
-                                           0 -> [(NoLoc, "Unable to give good error message: please report example")]
-                                           1 ->  (NoLoc, "Cannot satisfy the following constraint:\n") : concatMap mkReq cs
-                                           _ ->  (NoLoc, "Cannot satisfy the following simultaneous constraints for the unknown "
-                                                         ++ (if length vs==1 then "type " else "types ") ++ render(commaList vs)  ++":\n")
-                                                : concatMap mkReq cs
-         where mkReq                 = typeError . NoRed
-typeError (NoUnify info t1 t2)       = case (loc t1, loc t2) of
-                                          (l1@Loc{},l2@Loc{}) -> [(l1, ""),(l2,render(text "Incompatible types" <+> pretty t1 <+> text "and" <+> pretty t2))]
-                                          _ ->  [(getLoc[loc info, loc t1, loc t2],render(text "Incompatible types" <+> pretty t1 <+> text "and" <+> pretty t2))]
-typeError (IncompatError info msg)   = case info of
-                                           DeclInfo l1 l2 f sc _ -> [(min l1 l2,""),(max l1 l2,msg)]
-                                           _ -> [(loc info, msg)]
-
-
-
--- Error throwing functions:
--- Most use throwError to stay within the TypeM monad, but selfParamError uses
--- Control.Exception.throw to escape the monad immediately. This is necessary
--- because self-parameter checks happen in contexts (like pattern matching)
--- where we need the error to propagate up through pure code.
-tyerr x s                           = throwError $ TypeError (loc x) (s ++ " " ++ prstr x)
-tyerrs xs s                         = throwError $ TypeError (loc $ head xs) (s ++ " " ++ prstrs xs)
-selfParamError l                    = Control.Exception.throw $ SelfParamError l
-rigidVariable tv                    = throwError $ RigidVariable tv
-infiniteType tv t                   = throwError $ InfiniteType tv t
-conflictingRow tv                   = throwError $ ConflictingRow tv
-kwdNotFound info n                  = throwError $ incompatError info (render(text ("keyword " ++ elemSpec info) <+> quotes (pretty n) <+> text ("is missing" ++ elemSuffix info)))
-kwdUnexpected info n                = throwError $ KwdUnexpected info n
-escapingVar tvs t                   = throwError $ EscapingVar tvs t
-noSelStatic n u                     = throwError $ NoSelStatic n u
-noSelInstByClass n u                = throwError $ NoSelInstByClass n u
-noMut n                             = throwError $ NoMut n
-lackSig ns                          = throwError $ LackSig (head ns)
-lackDef ns                          = throwError $ LackDef (head ns)
-surplusRow p                        = throwError $ SurplusRow p
-noRed c                             = throwError $ NoRed c
-noSolve mbt vs cs                   = throwError $ NoSolve mbt vs cs
-noUnify info t1 t2                  = throwError $ NoUnify info t1 t2
-
-posElemNotFound b c n               = throwError $ incompatError (info c) ("too " ++ (if b then "few " else "many positional ") ++ elemSpec (info c) ++ elemSuffix (info c))
-
-incompatError info msg             = case info of
-                                        DeclInfo l1 l2 f sc msg1 -> IncompatError info (msg ++ Pretty.print f)
-                                        _ -> IncompatError info msg
-
-elemSpec DeclInfo{}               = "argument(s)"
-elemSpec _                        = "component(s)"
-
-elemSuffix DeclInfo{}             = " in call to "
-elemSuffix _                      = " in tuple"
-
--- elemHint DeclInfo{}               = " Hint: The previous definition may have been implicit, using positional notation."
--- elemHint _                        = ""
-
-dummyInfo                         = DfltInfo NoLoc 0 Nothing []
-
-
---mkErrorDiagnostic :: String -> String -> Report String -> Diagnostic String
-mkErrorDiagnostic filename src report =
-  let diag = addFile mempty filename src
-  in addReport (addFile diag filename src) report
-
--- | Convert internal locations to Diagnose positions
-locToPosition :: SrcLoc -> String -> String -> Position
-locToPosition NoLoc _ _ =
-  Position (0,0) (0,0) ""  -- Empty position
-locToPosition (Loc start end) filename src =
-  -- Convert byte offsets to line/col positions by counting in source
-  let startPos = offsetToLineCol start src
-      (endLine, endCol) = offsetToLineCol end src
-      -- For multi-line spans, adjust end line to match original error format
-      finalEndPos = if endLine > fst startPos
-                   then (endLine - 1, endCol)
-                   else (endLine, endCol)
-  in Position startPos finalEndPos filename
-
--- | Helper to convert byte offset to line/col tuple
-offsetToLineCol :: Int -> String -> (Int, Int)
-offsetToLineCol offset src =
-  let beforeOffset = take offset src
-      lines = splitLines beforeOffset
-      lineNum = length lines
-      colNum = if null lines
-               then 1
-               else (length (last lines) + 1)
-  in (lineNum, colNum)
-  where
-    splitLines [] = [""]
-    splitLines s =
-      let (first, rest) = break (=='\n') s
-      in first : case rest of
-                  [] -> []
-                  (_:rest') -> splitLines rest'
-
--- | Make a location that only spans the first line
--- Many of our locations, like for a class definition, span all the lines of the
--- definition. For printing error messages it's commonly more useful to just
--- point to where the definition starts rather than highlighting the whole.
-makeLineOnlyLoc :: SrcLoc -> String -> SrcLoc
-makeLineOnlyLoc NoLoc _ = NoLoc
-makeLineOnlyLoc (Loc start _) src =
-  let endOfLine = findEndOfLine start src
-  in Loc start endOfLine
-  where
-    findEndOfLine pos s =
-      let remaining = drop pos s
-          lineEnd = takeWhile (/= '\n') remaining
-      in pos + length lineEnd

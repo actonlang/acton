@@ -6,7 +6,7 @@ Resolving dependencies (fetching if missing)...
   Hash deltas b: ~baa{pub abea1a6b -> 18d7ab30, impl 3c1bc1bc -> e9429599}
    Finished type check of     rebuild/b     0.000 s
   Stale c: pub changes in b.baa abea1a6b → 18d7ab30 (used by main)
-  Hash deltas c: ~main{impl 425434ae -> 723888cf}
+  Hash deltas c: ~main{impl ea554c85 -> 75e6644a}
    Finished type check of     rebuild/c     0.000 s
    Finished compilation of    rebuild/a     0.000 s
    Finished compilation of    rebuild/b     0.000 s
