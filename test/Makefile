@@ -39,5 +39,5 @@ test_db_resume_tcp_client:
 
 # Expect 9 threads given 7 workers + main process + IO
 rts/wthreads1:
-	$(ACTONC) --root main $@.act
+	$(ACTON) --root main $@.act
 	./$@ --rts-wthreads 7 & PID=$$! && ps -o thcount $${PID} | tail -n1 | awk '{ print $$1 }' | grep "^9$$"
