@@ -7,7 +7,7 @@ Acton is an actor-based programming language with distributed computing capabili
 ### Essential Build Commands
 ```bash
 make                           # Build everything
-make dist/bin/actonc          # Build only the compiler (faster when working on compiler)
+make dist/bin/acton           # Build only the compiler (faster when working on compiler)
 make test                     # Run all tests
 make test-compiler            # Run compiler tests only
 dist/bin/acton build          # Build an Acton project
@@ -15,10 +15,8 @@ dist/bin/acton test           # Test an Acton project
 ```
 
 ### Key Binaries
-- `dist/bin/actonc` - The Acton compiler
-- `dist/bin/acton` - The Acton CLI frontend tool (project management, testing)
-
-Our normal users should use `acton` as the only tool (they don't need to know about actonc).
+- `dist/bin/acton` - The Acton compiler and CLI (project management, testing)
+- `dist/bin/actonc` - Compatibility symlink to `acton`
 
 ## Repository Overview
 
@@ -27,7 +25,6 @@ acton/
 ├── compiler/          # Haskell-based compiler → [See compiler/CLAUDE.md]
 ├── base/             # Standard library & RTS → [See base/CLAUDE.md]
 ├── backend/          # Distributed runtime → [See backend/CLAUDE.md]
-├── cli/              # CLI tool → [See cli/CLAUDE.md]
 ├── ecolift/          # Ecosystem lift process → [See ecolift/CLAUDE.md]
 ├── test/             # Test suites
 ├── docs/             # Documentation (mdBook)
@@ -40,7 +37,6 @@ For detailed information about each component, see:
 - **[compiler/CLAUDE.md](compiler/CLAUDE.md)** - Haskell compiler architecture, compilation pipeline
 - **[base/CLAUDE.md](base/CLAUDE.md)** - Standard library modules, RTS, builtins
 - **[backend/CLAUDE.md](backend/CLAUDE.md)** - Distributed database, actor persistence
-- **[cli/CLAUDE.md](cli/CLAUDE.md)** - CLI commands, package management
 - **[ecolift/CLAUDE.md](ecolift/CLAUDE.md)** - Ecosystem lift process for external repositories
 
 ## Language Concepts

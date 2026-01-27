@@ -59,7 +59,7 @@ dependencies:
   - regex-tdfa
   
 executables:
-  actonc:
+  acton:
     main:                Main.hs
     source-dirs:         .
     other-modules:

@@ -166,8 +166,8 @@ actoncProjTests =
   , after AllFinish "qualified_root" $
     testCase "unqualified --root main" $ do
         (returnCode, cmdOut, cmdErr) <- buildThing "--root main" "test/project/qualified_root"
-        assertEqual "actonc should error out" (ExitFailure 1) returnCode
-        assertEqual "actonc should report error" "actonc: Project build requires a qualified root actor name, like foo.main\n" cmdErr
+        assertEqual "acton should error out" (ExitFailure 1) returnCode
+        assertEqual "acton should report error" "acton: Project build requires a qualified root actor name, like foo.main\n" cmdErr
 
   , testCase "project with nested path deps" $ do
         let proj = "../../test/compiler/actonc_proj_deps"

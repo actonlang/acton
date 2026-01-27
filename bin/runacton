@@ -5,12 +5,12 @@
 #   #!/usr/bin/env runacton
 #
 # And you can execute it directly! Under the hood the .act source file is
-# compiled by actonc into a binary which is then executed. The original
+# compiled by acton into a binary which is then executed. The original
 # arguments are passed through.
 
 set -e
 
-actonc --quiet $1
+acton --quiet $1
 EXEC=$(echo $1 | sed -e 's/\.act$//')
 shift
 exec ${EXEC} "$@"

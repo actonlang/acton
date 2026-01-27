@@ -13,7 +13,6 @@ export ZIG_LOCAL_CACHE_DIR
 
 ACTON=$(TD)/dist/bin/acton
 ACTONC=dist/bin/actonc
-ACTC=$(TD)/dist/bin/actonc
 ZIG_VERSION:=0.15.2
 ZIG=$(TD)/dist/zig/zig
 CURL:=curl --fail --location --retry 5 --retry-delay 2 --retry-max-time 120 --retry-all-errors --retry-connrefused
@@ -121,22 +120,29 @@ ACTONC_HS=$(wildcard compiler/lib/src/*.hs compiler/lib/src/*/*.hs compiler/acto
 ACTONLSP_HS=$(wildcard compiler/lsp-server/*.hs)
 # NOTE: we're unsetting CC & CXX to avoid using zig cc & zig c++ for stack /
 # ghc, which doesn't seem to work properly
-dist/bin/actonc: compiler/lib/package.yaml.in compiler/actonc/package.yaml.in compiler/lsp-server/package.yaml.in compiler/stack.yaml $(ACTONC_HS) $(ACTONLSP_HS) version.mk
+dist/bin/acton: compiler/lib/package.yaml.in compiler/actonc/package.yaml.in compiler/lsp-server/package.yaml.in compiler/stack.yaml $(ACTONC_HS) $(ACTONLSP_HS) version.mk
 	mkdir -p dist/bin
+	rm -f dist/bin/actonc
 	cd compiler && sed 's,^version: BUILD_VERSION,version: "$(VERSION)",' < lib/package.yaml.in > lib/package.yaml
 	cd compiler && unset CC && unset CXX && unset CFLAGS && stack build actonc lsp-server-acton --dry-run 2>&1 | grep "Nothing to build" || \
 		(sed 's,^version: BUILD_VERSION,version: "$(VERSION_INFO)",' < actonc/package.yaml.in > actonc/package.yaml \
 		&& sed 's,^version: BUILD_VERSION,version: "$(VERSION_INFO)",' < lsp-server/package.yaml.in > lsp-server/package.yaml \
 		&& stack build actonc lsp-server-acton $(STACK_OPTS) --ghc-options='-j4 $(ACTC_GHC_OPTS)')
 	cd compiler && unset CC && unset CXX && unset CFLAGS && stack --local-bin-path=../dist/bin install actonc lsp-server-acton
+	# Keep actonc as a symlink for compatibility
+	ln -sf acton dist/bin/actonc
 
-dist/bin/lsp-server-acton: dist/bin/actonc
+dist/bin/actonc: dist/bin/acton
+	@mkdir -p $(dir $@)
+	ln -sf acton $@
+
+dist/bin/lsp-server-acton: dist/bin/acton
 	@true
 
 .PHONY: clean-compiler
 clean-compiler:
 	cd compiler && stack clean >/dev/null 2>&1 || true
-	rm -f dist/bin/actonc compiler/package.yaml compiler/acton.cabal
+	rm -f dist/bin/acton dist/bin/actonc compiler/package.yaml compiler/acton.cabal
 
 # /deps --------------------------------------------------
 DEPS += dist/deps/mbedtls
@@ -369,19 +375,13 @@ online-tests: dist/bin/actonc
 
 
 .PHONY: clean clean-all clean-base
-clean: clean-cli clean-distribution clean-base
-
-clean-cli:
-	rm -rf cli/out
+clean: clean-distribution clean-base
 
 clean-all: clean clean-compiler
 	rm -rf $(ZIG_LOCAL_CACHE_DIR)
 
 clean-base:
 	rm -rf base/out
-
-cli/out/bin/acton: distribution1
-	cd cli && rm -f build.zig build.zig.zon && "$(ACTC)" build $(ACTONC_TARGET)
 
 # == DIST ==
 #
@@ -403,11 +403,6 @@ dist/base: base base/.build base/__root.zig base/acton.zig base/build.zig base/b
 # the file and modify it, which the Linux kernel (and perhaps others?) will
 # prevent if the file to be modified is an executable program that is currently
 # running.  We work around it by moving / renaming the file in place instead!
-dist/bin/acton: cli/out/bin/acton
-	@mkdir -p $(dir $@)
-	cp -a $< $@.tmp
-	mv $@.tmp $@
-
 dist/bin/actondb: $(DIST_ZIG) $(DEPS)
 	@mkdir -p $(dir $@)
 	cd dist/backend && "$(ZIG)" build -Donly_actondb --prefix "$(TD)/dist"
@@ -451,7 +446,7 @@ endif
 distribution1: dist/base $(DIST_BACKEND_FILES) dist/builder $(DIST_BINS) $(DIST_ZIG)
 	$(MAKE) $(DEPS)
 
-distribution: dist/bin/acton dist/lldb/acton.py
+distribution: distribution1 dist/lldb/acton.py
 
 clean-distribution:
 	rm -rf dist
@@ -482,7 +477,7 @@ install:
 	mkdir -p "$(DESTDIR)/usr/bin" "$(DESTDIR)/usr/lib/acton"
 	cp -a dist/. "$(DESTDIR)/usr/lib/acton/"
 	cd "$(DESTDIR)/usr/bin" && ln -s ../lib/acton/bin/acton
-	cd "$(DESTDIR)/usr/bin" && ln -s ../lib/acton/bin/actonc
+	cd "$(DESTDIR)/usr/bin" && ln -s ../lib/acton/bin/acton actonc
 	cd "$(DESTDIR)/usr/bin" && ln -s ../lib/acton/bin/actondb
 	cd "$(DESTDIR)/usr/bin" && ln -s ../lib/acton/bin/runacton
 	cd "$(DESTDIR)/usr/bin" && ln -s ../lib/acton/bin/lsp-server-acton

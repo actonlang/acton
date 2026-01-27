@@ -402,7 +402,7 @@ depOverrideReader = eitherReader $ \s ->
     _ -> Left "Expected NAME=PATH"
 
 descr               = fullDesc <> progDesc "Compilation and management of Acton source code and projects"
-                      <> header "actonc - the Acton compiler"
+                      <> header "acton - the Acton compiler"
 
 -- main = do
 --     f <- parseCmdLine
