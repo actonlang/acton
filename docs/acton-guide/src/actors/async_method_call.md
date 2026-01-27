@@ -39,7 +39,7 @@ actor main(env):
 
 Compile and run:
 ```sh
-actonc async.act
+acton async.act
 ```
 
 Output:

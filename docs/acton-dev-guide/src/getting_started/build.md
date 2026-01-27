@@ -1,6 +1,6 @@
 # Build and run
 
-This repo builds the compiler (Haskell), CLI, runtime, and bundled deps into `dist/`.
+This repo builds the compiler (Haskell), runtime, and bundled deps into `dist/`.
 
 ## Prereqs
 
@@ -11,17 +11,18 @@ This repo builds the compiler (Haskell), CLI, runtime, and bundled deps into `di
 ## Common targets
 
 ```sh
-make                    # build full distribution (compiler, CLI, runtime, deps)
-make dist/bin/actonc    # compiler + lsp-server-acton only (fast for compiler work)
-make dist/bin/acton     # CLI front-end (uses dist/bin/actonc)
+make                    # build full distribution (compiler, runtime, deps)
+make dist/bin/acton     # compiler + lsp-server-acton only (fast for compiler work)
+make dist/bin/actonc    # compatibility symlink to acton
 ```
 
 ## Running local binaries
 
 ```sh
-dist/bin/actonc path/to/file.act
+dist/bin/acton path/to/file.act
 dist/bin/acton build
 dist/bin/acton test
+dist/bin/actonc path/to/file.act   # compatibility alias
 ```
 
 - Prefer `dist/bin/*` to avoid accidentally using a globally installed Acton.

@@ -7,7 +7,7 @@ Acton is an actor-based programming language with distributed computing capabili
 ### Essential Build Commands
 ```bash
 make                           # Build everything
-make dist/bin/actonc          # Build only the compiler (faster when working on compiler)
+make dist/bin/acton           # Build only the compiler (faster when working on compiler)
 make test                     # Run all tests
 make test-compiler            # Run compiler tests only
 dist/bin/acton build          # Build an Acton project
@@ -15,10 +15,8 @@ dist/bin/acton test           # Test an Acton project
 ```
 
 ### Key Binaries
-- `dist/bin/actonc` - The Acton compiler
-- `dist/bin/acton` - The Acton CLI frontend tool (project management, testing)
-
-Our normal users should use `acton` as the only tool (they don't need to know about actonc).
+- `dist/bin/acton` - The Acton compiler and CLI (project management, testing)
+- `dist/bin/actonc` - Compatibility symlink to `acton`
 
 ## Repository Overview
 
@@ -27,7 +25,6 @@ acton/
 ├── compiler/          # Haskell-based compiler → [See compiler/CLAUDE.md]
 ├── base/             # Standard library & RTS → [See base/CLAUDE.md]
 ├── backend/          # Distributed runtime → [See backend/CLAUDE.md]
-├── cli/              # CLI tool → [See cli/CLAUDE.md]
 ├── ecolift/          # Ecosystem lift process → [See ecolift/CLAUDE.md]
 ├── test/             # Test suites
 ├── docs/             # Documentation (mdBook)
@@ -40,7 +37,6 @@ For detailed information about each component, see:
 - **[compiler/CLAUDE.md](compiler/CLAUDE.md)** - Haskell compiler architecture, compilation pipeline
 - **[base/CLAUDE.md](base/CLAUDE.md)** - Standard library modules, RTS, builtins
 - **[backend/CLAUDE.md](backend/CLAUDE.md)** - Distributed database, actor persistence
-- **[cli/CLAUDE.md](cli/CLAUDE.md)** - CLI commands, package management
 - **[ecolift/CLAUDE.md](ecolift/CLAUDE.md)** - Ecosystem lift process for external repositories
 
 ## Language Concepts
@@ -121,13 +117,13 @@ typedef struct actor_state_t {
 ### Adding a Standard Library Module
 1. Create `.act` file in `base/src/`
 2. Add C extension in `.ext.c` if needed
-3. Update `base/Acton.toml`
+3. Update `base/Build.act`
 4. Add module tests
 
 ### Modifying the Compiler
 1. Work in `compiler/lib/src/Acton/`
-2. Run `make dist/bin/actonc` for quick rebuilds
-3. Add test cases in `compiler/actonc/test/`
+2. Run `make dist/bin/acton` for quick rebuilds
+3. Add test cases in `compiler/acton/test/`
 4. Update golden files if error messages change
 
 ## Build System
@@ -135,14 +131,14 @@ typedef struct actor_state_t {
 - Uses Zig build system (`build.zig` files)
 - Integrates Haskell (Stack), C, and Acton compilation
 - Supports cross-compilation
-- Package management via `Acton.toml` files
+- Package management via `Build.act` files
 
 ## Important Files
 
 - `Makefile` - Top-level build orchestration
 - `build.zig` - Main Zig build configuration
 - `compiler/stack.yaml` - Haskell dependencies
-- `*/Acton.toml` - Acton package configurations
+- `*/Build.act` - Acton package configurations
 
 ## Debugging Tips
 

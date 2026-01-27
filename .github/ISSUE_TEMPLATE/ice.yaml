@@ -1,5 +1,5 @@
 name: "\U0001F4A5 Internal Compiler Error"
-description: "Create a report for an Internal Compiler Error (ICE) in actonc."
+description: "Create a report for an Internal Compiler Error (ICE) in acton."
 labels: ["bug", "Compiler"]
 body:
   - type: markdown
@@ -28,15 +28,15 @@ body:
     id: expected
     attributes:
       label: Error output
-      description: Include the full output from compiling using `actonc`
+      description: Include the full output from compiling using `acton`
       placeholder: |
-        $ ../dist/actonc counter_adder.act
+        $ ../dist/acton counter_adder.act
         /home/user/acton/dist/modules/test/counter_adder.c: In function ‘test$counter_adder$$Counter$count$local’:
         /home/user/acton/dist/modules/test/counter_adder.c:224:9: error: conversion to non-scalar type requested
           224 |         return (($R)__self__->i);
               |         ^~~~~~
         ERROR: internal compiler error: compilation of generated C code failed
-        NOTE: this is likely a bug in actonc, please report this at:
+        NOTE: this is likely a bug in acton, please report this at:
         NOTE: https://github.com/actonlang/acton/issues/new?template=ice.md
         NOTE: acton 0.5.2.20210904.7.7.37
         $

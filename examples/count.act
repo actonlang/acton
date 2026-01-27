@@ -10,7 +10,7 @@
 # restart the program and note how it will resume its state from the database
 # before counting further.
 #
-#   kll@Boxy:~/acton/examples$ ../actonc --root main count.act
+#   kll@Boxy:~/acton/examples$ ../acton --root main count.act
 #   kll@Boxy:~/acton/examples$ ./count --rts-ddb-host localhost --rts-verbose
 #   Acton RTS: using distributed database backend (DDB): localhost:32000
 #   Acton RTS: checking for previous actor state in DDB... done

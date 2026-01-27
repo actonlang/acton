@@ -1,0 +1,5 @@
+bins = {
+    "a": "a.main",
+    "b": "b.main",
+    "b2": "b.altroot"
+}

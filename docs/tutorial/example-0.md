@@ -27,7 +27,7 @@ To compile the program, assuming that it is saved in
 `world.act`, the command is
 
 ``` shell
-$ actonc world.act --root main
+$ acton world.act --root main
 ```
 
 This creates an executable file `world` in the same directory,

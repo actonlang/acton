@@ -1,0 +1,107 @@
+name:                acton
+version: BUILD_VERSION
+# github:              "/simple"
+license:             BSD3
+author:              "Johan Nordlander, Björn von Sydow, Kristian Larsson"
+maintainer:          "example@example.com"
+copyright:           "Data Ductus, Deutsche Telekom"
+
+# Metadata used when publishing your package
+# synopsis:            Short description of your package
+# category:            Web
+
+# To avoid duplicated efforts in documentation and dealing with the
+# complications of embedding Haddock markup inside cabal files, it is
+# common to point users to the README.md file.
+description:         Please see the README on Github at <https://github.com/githubuser/simple#readme>
+
+dependencies:
+  - MissingH
+  - libacton
+  - aeson
+  - async
+  - base >= 4.7 && < 5
+  - base16-bytestring
+  - binary
+  - bytestring
+  - clock
+  - containers
+  - pretty
+  - cryptohash-sha256
+  - data-default-class
+  - diagnose
+  - dir-traverse
+  - directory >= 1.3.1
+  - filelock
+  - filepath
+  - fsnotify
+  - http-client
+  - http-client-tls
+  - http-types
+  - megaparsec
+  - prettyprinter
+  - pretty-show
+  - process
+  - random
+  - split
+  - system-filepath
+  - sydtest
+  - tasty
+  - tasty-expected-failure
+  - tasty-golden
+  - tasty-hunit
+  - text
+  - temporary
+  - time
+  - timeit
+  - unix
+  - unordered-containers
+  - regex-tdfa
+  
+executables:
+  acton:
+    main:                Main.hs
+    source-dirs:         .
+    other-modules:
+      - PkgCommands
+      - Paths_acton
+      - TestFormat
+      - TestRunner
+      - TestUI
+    ghc-options:
+      - -threaded
+      - -rtsopts
+      - -with-rtsopts=-N
+      - -with-rtsopts=-A64M
+    when:
+    - condition: os(linux) && arch(aarch64)
+      ghc-options:
+        - -no-pie
+        - -optl-no-pie
+        - -pgml=../tools/ld-wrapper.sh
+    - condition: os(linux) && !arch(aarch64)
+      ld-options:
+        - -static
+
+tests:
+  test_acton:
+    main:                test.hs
+    source-dirs:         .
+    ghc-options:
+      - -threaded
+      - -rtsopts
+      - -with-rtsopts=-N
+  incremental:
+    main:                test_incremental.hs
+    source-dirs:         .
+    ghc-options:
+      - -threaded
+      - -rtsopts
+      - -with-rtsopts=-N
+  test_acton_online:
+    main:                test_online.hs
+    source-dirs:         .
+    ghc-options:
+      - -threaded
+      - -rtsopts
+      - -with-rtsopts=-N

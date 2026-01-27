@@ -17,8 +17,8 @@ if the file is missing one to keep the parser consistent.
 Use compiler flags to inspect the parser output:
 
 ```sh
-actonc --parse path/to/file.act
-actonc --parse-ast path/to/file.act
+acton --parse path/to/file.act
+acton --parse-ast path/to/file.act
 ```
 
 ## Tests

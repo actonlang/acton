@@ -13,7 +13,7 @@ actor main(env):
 
 Compile and run, with argument:
 ```sh
-actonc hello.act
+acton hello.act
 ./hello Johan
 ```
 

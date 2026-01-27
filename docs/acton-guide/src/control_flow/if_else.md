@@ -39,7 +39,7 @@ actor main(env):
 
 Compile and run:
 ```sh
-actonc if_else.act
+acton if_else.act
 ```
 
 Note that the output is random and you could get a different result.

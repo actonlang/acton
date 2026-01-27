@@ -4,7 +4,7 @@
 # the end of the doc is a sort of PITA which this script helps with.
 #
 # Usage:
-# kll@Boxy ~/actonc$ utils/changelog-find-missing-link-defs.py
+# kll@Boxy ~/acton$ utils/changelog-find-missing-link-defs.py
 # Missing link definitions:
 # [#315]: https://github.com/actonlang/acton/pull/315
 # [#431]: https://github.com/actonlang/acton/issues/431

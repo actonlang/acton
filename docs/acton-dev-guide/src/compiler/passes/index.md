@@ -1,7 +1,7 @@
 # Passes
 
 The compiler runs a fixed sequence of AST-to-AST transforms before finally
-generating C. The main entry point is `compiler/actonc/Main.hs`, which wires
+generating C. The main entry point is `compiler/acton/Main.hs`, which wires
 the stages together via the `compiler/lib` modules listed below. All the real
 logic is contained in these modules and is thus accessible and usable as a
 library.
@@ -56,4 +56,4 @@ finish before invoking Zig; the LSP enqueues back jobs in the background and
 does not wait for them or run Zig.
 
 The shared orchestration lives in `compiler/lib/src/Acton/Compile.hs` and is
-used by both `actonc` and the LSP server.
+used by both `acton` and the LSP server.

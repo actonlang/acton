@@ -1,0 +1,5 @@
+dependencies = {
+    "libfoo": (
+        path="deps/libfoo"
+    )
+}

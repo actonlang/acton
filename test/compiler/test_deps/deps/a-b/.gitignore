@@ -1,5 +1,2 @@
 .actonc.lock
-build.sh
 out
-zig-cache
-zig-out

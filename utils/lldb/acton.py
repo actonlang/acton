@@ -1023,7 +1023,7 @@ def cmd_break(debugger: lldb.SBDebugger, command: str, exe_ctx: lldb.SBExecution
       acton break test.act 37
 
     Notes:
-    - Requires DWARF with Acton file paths (actonc --debug recommended)
+    - Requires DWARF with Acton file paths (acton --debug recommended)
     - If it resolves to 0 locations, you may need a source-map.
     """
     s = command.strip()
@@ -1090,5 +1090,5 @@ def cmd_break(debugger: lldb.SBDebugger, command: str, exe_ctx: lldb.SBExecution
                 f"  settings set target.source-map {src_dir} <your-project-root>"
             )
 
-    result.PutCString(f"No locations resolved for {file}:{line}. Ensure the binary has debug info (actonc --debug) and source-map is correct.")
+    result.PutCString(f"No locations resolved for {file}:{line}. Ensure the binary has debug info (acton --debug) and source-map is correct.")
     result.SetStatus(lldb.eReturnStatusFailed)

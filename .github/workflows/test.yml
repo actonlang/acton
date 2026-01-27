@@ -354,7 +354,7 @@ jobs:
       - name: "Compile acton program"
         run: |
           export PATH=$(pwd)/acton/bin:$PATH
-          acton version --full
+          acton version
           echo '#!/usr/bin/env runacton'   > test-runtime.act
           echo 'actor main(env):'          >> test-runtime.act
           echo '    print("Hello, world")' >> test-runtime.act

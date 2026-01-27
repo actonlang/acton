@@ -239,7 +239,7 @@ buildOptions = BuildOptions
 
 compileOptions = CompileOptions
         <$> switch (long "always-build" <> help "Show the result of parsing")
-        <*> switch (long "ignore-compiler-version" <> help "Ignore actonc version when checking .ty freshness")
+        <*> switch (long "ignore-compiler-version" <> help "Ignore acton version when checking .ty freshness")
         <*> switch (long "db"           <> help "Enable DB backend")
         <*> switch (long "parse"        <> help "Show the result of parsing")
         <*> switch (long "parse-ast"    <> help "Show the raw AST (Haskell Show)")
@@ -402,7 +402,7 @@ depOverrideReader = eitherReader $ \s ->
     _ -> Left "Expected NAME=PATH"
 
 descr               = fullDesc <> progDesc "Compilation and management of Acton source code and projects"
-                      <> header "actonc - the Acton compiler"
+                      <> header "acton - the Acton compiler"
 
 -- main = do
 --     f <- parseCmdLine

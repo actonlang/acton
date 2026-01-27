@@ -4,10 +4,9 @@ Top-level directories are grouped by subsystem and build outputs.
 
 | Path | Purpose |
 | --- | --- |
-| `compiler/` | Acton compiler & LSP (`actonc`, `lsp-server-acton`). Written in Haskell. |
+| `compiler/` | Acton compiler & LSP (`acton`, `lsp-server-acton`). Written in Haskell. |
 | `base/` | Builtins, RTS, and standard library sources. |
 | `backend/` | Distributed RTS database backend. |
-| `cli/` | `acton` CLI frontend |
 | `builder/` | Zig build system helper definitions. |
 | `bin/` | Small helper binaries/scripts (e.g. `runacton`). |
 | `completion/` | Shell completion assets. |

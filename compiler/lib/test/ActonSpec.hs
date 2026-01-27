@@ -1434,7 +1434,7 @@ testTypeError env0 path = do
                              _ -> error $ "Invalid test path: " ++ path
       act_file = "test" </> "src" </> path ++ ".act"
       golden_file = "test" </> "3-types" </> path ++ ".golden"
-      -- For error display, use just the basename like actonc does
+      -- For error display, use just the basename like acton does
       display_file = testname ++ ".act"
 
   it testname $ do
@@ -1452,7 +1452,7 @@ testTypeError env0 path = do
 
       case result of
         Left (e :: E.SomeException) -> do
-          -- Format the error like actonc does
+          -- Format the error like acton does
           let diagnostic = case E.fromException e :: Maybe TypeError of
                 Just typeErr ->
                   -- Use the typeReport function to format all TypeError variants with richer diagnostics

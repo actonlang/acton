@@ -33,7 +33,7 @@ actor main(env):
 
 Compile and run:
 ```sh
-actonc concurrency.act
+acton concurrency.act
 ./concurrency
 ```
 

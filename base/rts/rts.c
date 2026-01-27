@@ -2491,7 +2491,7 @@ int main(int argc, char **argv) {
             case 'd':
                 #ifndef DEV
                 fprintf(stderr, "ERROR: RTS debug not supported.\n");
-                fprintf(stderr, "HINT: Recompile this program using: actonc --optimize Debug ...\n");
+                fprintf(stderr, "HINT: Recompile this program using: acton --optimize Debug ...\n");
                 exit(1);
                 #endif
                 log_set_quiet(false);
@@ -2746,7 +2746,7 @@ int main(int argc, char **argv) {
         free(seed_ports);
 #else
         fprintf(stderr, "ERROR: DB support disabled, unable to use provided DB backend host.\n");
-        fprintf(stderr, "HINT: Enable DB backend: actonc --db\n");
+        fprintf(stderr, "HINT: Enable DB backend: acton --db\n");
         exit(1);
 #endif
     }

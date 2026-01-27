@@ -9,11 +9,11 @@ actor main(env):
     env.exit(0)
 ```
 
-The following actonc commands will all produce the same output.
+The following acton commands will all produce the same output.
 ```sh
-actonc hello.act
-actonc hello.act --root main
-actonc hello.act --root hello.main
+acton hello.act
+acton hello.act --root main
+acton hello.act --root hello.main
 ```
 
 The first invocation relies on the default rule of using an actor called `main`. The second invocation explicitly specifies that we want to use `main` as the root actor while the third uses a qualified name which includes both the actor name (`main`) as well as the module name (`hello`). Using qualified names can be particularly useful when building executable binaries in projects.

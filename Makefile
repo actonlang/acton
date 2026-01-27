@@ -13,7 +13,6 @@ export ZIG_LOCAL_CACHE_DIR
 
 ACTON=$(TD)/dist/bin/acton
 ACTONC=dist/bin/actonc
-ACTC=$(TD)/dist/bin/actonc
 ZIG_VERSION:=0.15.2
 ZIG=$(TD)/dist/zig/zig
 CURL:=curl --fail --location --retry 5 --retry-delay 2 --retry-max-time 120 --retry-all-errors --retry-connrefused
@@ -35,7 +34,7 @@ else
 	XARGS := xargs
 endif
 
-# This is the version we will stamp into actonc
+# This is the version we will stamp into acton
 BUILD_TIME=$(shell date "+%Y%m%d.%-H.%-M.%-S")
 ifdef BUILD_RELEASE
 export VERSION_INFO?=$(VERSION)
@@ -117,26 +116,35 @@ test-backend: $(BACKEND_TESTS)
 	./backend/test/skiplist_test
 
 # /compiler ----------------------------------------------
-ACTONC_HS=$(wildcard compiler/lib/src/*.hs compiler/lib/src/*/*.hs compiler/actonc/Main.hs)
+ACTONC_HS=$(wildcard compiler/lib/src/*.hs compiler/lib/src/*/*.hs compiler/acton/Main.hs)
 ACTONLSP_HS=$(wildcard compiler/lsp-server/*.hs)
 # NOTE: we're unsetting CC & CXX to avoid using zig cc & zig c++ for stack /
 # ghc, which doesn't seem to work properly
-dist/bin/actonc: compiler/lib/package.yaml.in compiler/actonc/package.yaml.in compiler/lsp-server/package.yaml.in compiler/stack.yaml $(ACTONC_HS) $(ACTONLSP_HS) version.mk
+dist/bin/acton: compiler/lib/package.yaml.in compiler/acton/package.yaml.in compiler/lsp-server/package.yaml.in compiler/stack.yaml $(ACTONC_HS) $(ACTONLSP_HS) version.mk
 	mkdir -p dist/bin
+	rm -f dist/bin/actonc
 	cd compiler && sed 's,^version: BUILD_VERSION,version: "$(VERSION)",' < lib/package.yaml.in > lib/package.yaml
-	cd compiler && unset CC && unset CXX && unset CFLAGS && stack build actonc lsp-server-acton --dry-run 2>&1 | grep "Nothing to build" || \
-		(sed 's,^version: BUILD_VERSION,version: "$(VERSION_INFO)",' < actonc/package.yaml.in > actonc/package.yaml \
+	cd compiler && unset CC && unset CXX && unset CFLAGS && stack build acton lsp-server-acton --dry-run 2>&1 | grep "Nothing to build" || \
+		(sed 's,^version: BUILD_VERSION,version: "$(VERSION_INFO)",' < acton/package.yaml.in > acton/package.yaml \
 		&& sed 's,^version: BUILD_VERSION,version: "$(VERSION_INFO)",' < lsp-server/package.yaml.in > lsp-server/package.yaml \
-		&& stack build actonc lsp-server-acton $(STACK_OPTS) --ghc-options='-j4 $(ACTC_GHC_OPTS)')
-	cd compiler && unset CC && unset CXX && unset CFLAGS && stack --local-bin-path=../dist/bin install actonc lsp-server-acton
+		&& stack build acton lsp-server-acton $(STACK_OPTS) --ghc-options='-j4 $(ACTC_GHC_OPTS)')
+	cd compiler && unset CC && unset CXX && unset CFLAGS && stack --local-bin-path=../dist/bin install acton lsp-server-acton
+	# Keep actonc as a symlink for compatibility
+	ln -sf acton dist/bin/actonc
 
-dist/bin/lsp-server-acton: dist/bin/actonc
+dist/bin/actonc: dist/bin/acton
+	@mkdir -p $(dir $@)
+	ln -sf acton $@
+
+dist/bin/lsp-server-acton: dist/bin/acton
 	@true
 
 .PHONY: clean-compiler
 clean-compiler:
 	cd compiler && stack clean >/dev/null 2>&1 || true
-	rm -f dist/bin/actonc compiler/package.yaml compiler/acton.cabal
+	rm -f dist/bin/acton dist/bin/actonc compiler/package.yaml compiler/acton.cabal \
+		compiler/acton/package.yaml compiler/acton/acton.cabal \
+		compiler/lib/*.cabal compiler/acton/*.cabal compiler/lsp-server/*.cabal
 
 # /deps --------------------------------------------------
 DEPS += dist/deps/mbedtls
@@ -299,30 +307,30 @@ dist/deps/libyyjson: deps/libyyjson $(DIST_ZIG)
 # top level targets
 .PHONY: test test-builtins test-compiler test-db test-examples test-lang test-regressions test-rts test-stdlib online-tests
 test: dist/bin/acton
-	cd compiler && stack test acton actonc:test_actonc actonc:incremental
+	cd compiler && stack test libacton acton:test_acton acton:incremental
 	$(MAKE) test-stdlib
 	$(MAKE) -C backend test
 	$(MAKE) test-rts-db
 
 test-builtins:
-	cd compiler && stack test actonc --ta '-p "Builtins"'
+	cd compiler && stack test acton --ta '-p "Builtins"'
 
 test-compiler:
-	cd compiler && stack test acton
-	cd compiler && stack test actonc --ta '-p "compiler"'
+	cd compiler && stack test libacton
+	cd compiler && stack test acton --ta '-p "compiler"'
 
 test-compiler-accept:
 	cd compiler && stack test acton --test-arguments "--golden-start --golden-reset"
 
 test-cross-compile:
-	cd compiler && stack test actonc --ta '-p "cross-compilation"'
+	cd compiler && stack test acton --ta '-p "cross-compilation"'
 
 test-incremental: dist/bin/actonc
-	cd compiler && stack test actonc:incremental
+	cd compiler && stack test acton:incremental
 
 .PHONY: test-incremental-accept
 test-incremental-accept: dist/bin/actonc
-	cd compiler && stack test actonc:incremental --ta "--accept"
+	cd compiler && stack test acton:incremental --ta "--accept"
 
 .PHONY: test-rebuild test-rebuild-accept
 test-rebuild: test-incremental
@@ -330,58 +338,52 @@ test-rebuild: test-incremental
 test-rebuild-accept: test-incremental-accept
 
 test-syntaxerrors:
-	cd compiler && stack test actonc --ta '-p "syntax errors"'
+	cd compiler && stack test acton --ta '-p "syntax errors"'
 
 test-syntaxerrors-accept:
-	cd compiler/actonc && stack runghc -- test.hs -p "syntax errors" --accept
+	cd compiler/acton && stack runghc -- test.hs -p "syntax errors" --accept
 
 test-typeerrors:
-	cd compiler && stack test actonc --ta '-p "type errors"'
+	cd compiler && stack test acton --ta '-p "type errors"'
 
 test-typeerrors-accept:
-	cd compiler && stack test actonc:test_actonc --ta '-p "type errors" --accept'
+	cd compiler && stack test acton:test_acton --ta '-p "type errors" --accept'
 
 test-db:
-	cd compiler && stack test actonc --ta '-p "DB"'
+	cd compiler && stack test acton --ta '-p "DB"'
 
 test-examples:
-	cd compiler && stack test actonc --ta '-p "Examples"'
+	cd compiler && stack test acton --ta '-p "Examples"'
 
 test-lang:
-	cd compiler && stack test actonc --ta '-p "Core language"'
+	cd compiler && stack test acton --ta '-p "Core language"'
 
 test-regressions:
-	cd compiler && stack test actonc --ta '-p "Regression"'
+	cd compiler && stack test acton --ta '-p "Regression"'
 
 test-rts:
-	cd compiler && stack test actonc --ta '-p "RTS"'
+	cd compiler && stack test acton --ta '-p "RTS"'
 
 test-rts-db:
 	$(MAKE) -C test
 
 test-stdlib: dist/bin/acton
-	cd compiler && stack test actonc --ta '-p "stdlib"'
+	cd compiler && stack test acton --ta '-p "stdlib"'
 	$(MAKE) -C test tls-test-server
 	cd test/stdlib_tests && "$(ACTON)" test
 
 online-tests: dist/bin/actonc
-	cd compiler && stack test actonc:test_actonc_online
+	cd compiler && stack test acton:test_acton_online
 
 
 .PHONY: clean clean-all clean-base
-clean: clean-cli clean-distribution clean-base
-
-clean-cli:
-	rm -rf cli/out
+clean: clean-distribution clean-base
 
 clean-all: clean clean-compiler
 	rm -rf $(ZIG_LOCAL_CACHE_DIR)
 
 clean-base:
 	rm -rf base/out
-
-cli/out/bin/acton: distribution1
-	cd cli && rm -f build.zig build.zig.zon && "$(ACTC)" build $(ACTONC_TARGET)
 
 # == DIST ==
 #
@@ -395,7 +397,7 @@ dist/backend%: backend/%
 .PHONY: dist/base
 dist/base: base base/.build base/__root.zig base/acton.zig base/build.zig base/build.zig.zon base/acton.zig dist/bin/actonc $(DEPS)
 	mkdir -p "$@" "$@/.build" "$@/out"
-	cp -a base/__root.zig base/Acton.toml base/acton.zig base/build.zig base/build.zig.zon base/builtin base/rts base/src dist/base/
+	cp -a base/__root.zig base/Build.act base/acton.zig base/build.zig base/build.zig.zon base/builtin base/rts base/src dist/base/
 	cd dist/base && ../bin/actonc build --skip-build && rm -rf .build
 
 # This does a little hack, first copying and then moving the file in place. This
@@ -403,11 +405,6 @@ dist/base: base base/.build base/__root.zig base/acton.zig base/build.zig base/b
 # the file and modify it, which the Linux kernel (and perhaps others?) will
 # prevent if the file to be modified is an executable program that is currently
 # running.  We work around it by moving / renaming the file in place instead!
-dist/bin/acton: cli/out/bin/acton
-	@mkdir -p $(dir $@)
-	cp -a $< $@.tmp
-	mv $@.tmp $@
-
 dist/bin/actondb: $(DIST_ZIG) $(DEPS)
 	@mkdir -p $(dir $@)
 	cd dist/backend && "$(ZIG)" build -Donly_actondb --prefix "$(TD)/dist"
@@ -451,7 +448,7 @@ endif
 distribution1: dist/base $(DIST_BACKEND_FILES) dist/builder $(DIST_BINS) $(DIST_ZIG)
 	$(MAKE) $(DEPS)
 
-distribution: dist/bin/acton dist/lldb/acton.py
+distribution: distribution1 dist/lldb/acton.py
 
 clean-distribution:
 	rm -rf dist
@@ -482,7 +479,7 @@ install:
 	mkdir -p "$(DESTDIR)/usr/bin" "$(DESTDIR)/usr/lib/acton"
 	cp -a dist/. "$(DESTDIR)/usr/lib/acton/"
 	cd "$(DESTDIR)/usr/bin" && ln -s ../lib/acton/bin/acton
-	cd "$(DESTDIR)/usr/bin" && ln -s ../lib/acton/bin/actonc
+	cd "$(DESTDIR)/usr/bin" && ln -s ../lib/acton/bin/acton actonc
 	cd "$(DESTDIR)/usr/bin" && ln -s ../lib/acton/bin/actondb
 	cd "$(DESTDIR)/usr/bin" && ln -s ../lib/acton/bin/runacton
 	cd "$(DESTDIR)/usr/bin" && ln -s ../lib/acton/bin/lsp-server-acton

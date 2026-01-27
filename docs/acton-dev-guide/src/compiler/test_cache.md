@@ -2,14 +2,14 @@
 
 Acton caches test results using per-name implementation hashes to decide when a
 test must be rerun. The cache is stored in `out/test/cache.json` and is updated
-after each `actonc test` run.
+after each `acton test` run.
 
 ## Run context hash
 
 Each run computes a context hash that captures inputs that affect test behavior
 without changing source code:
 
-- compiler version (`actonc` version string)
+- compiler version (`acton` version string)
 - target triple
 - optimize mode
 - test mode (run/perf)

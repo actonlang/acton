@@ -22,7 +22,7 @@ To see the inferred types of an Acton program, use the `--sigs` option of the co
 
 Print type signatures with `--sigs`:
 ```sh
-actonc types.act --sigs
+acton types.act --sigs
 ```
 
 Output:

@@ -1,4 +1,4 @@
-name:                acton
+name:                libacton
 version: BUILD_VERSION
 # github:              "/simple"
 license:             BSD3
@@ -91,7 +91,7 @@ tests:
     main: ActonSpec.hs
     source-dirs: test
     dependencies:
-      - acton
+      - libacton
     ghc-options:
       - -threaded
       - -rtsopts

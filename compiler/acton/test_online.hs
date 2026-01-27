@@ -1,0 +1,90 @@
+import Control.Exception (finally)
+import qualified Data.ByteString.Lazy.Char8 as LBS
+import qualified Data.Map as M
+import System.Directory (canonicalizePath)
+import System.Environment (lookupEnv, setEnv, unsetEnv)
+import System.Exit
+import System.FilePath
+import System.IO.Temp (withSystemTempDirectory)
+import System.Process
+
+import Test.Tasty
+import Test.Tasty.HUnit
+
+import qualified Acton.BuildSpec as BuildSpec
+
+main :: IO ()
+main = defaultMain $ testGroup "Online tests" [pkgCliIntegrationTests]
+
+pkgCliIntegrationTests :: TestTree
+pkgCliIntegrationTests =
+  testGroup "pkg CLI integration"
+  [ testCase "pkg add/upgrade/remove (network)" $ do
+        withTempHome $ \_ ->
+          withSystemTempDirectory "acton-pkg" $ \proj -> do
+            let depName = "foo"
+                repoUrl = "https://github.com/actonlang/foo"
+            (codeAdd, outAdd, errAdd) <- runActonIn proj ["pkg", "add", depName, "--repo-url", repoUrl]
+            assertExit "pkg add" ExitSuccess codeAdd outAdd errAdd
+            spec1 <- readBuildSpecJSON (proj </> "build.act.json")
+            dep1 <- requirePkgDep spec1 depName
+            assertEqual "repo_url" (Just repoUrl) (BuildSpec.repo_url dep1)
+            assertBool "url set" (hasText (BuildSpec.url dep1))
+            assertBool "hash set" (hasText (BuildSpec.hash dep1))
+
+            (codeUp, outUp, errUp) <- runActonIn proj ["pkg", "upgrade"]
+            assertExit "pkg upgrade" ExitSuccess codeUp outUp errUp
+            spec2 <- readBuildSpecJSON (proj </> "build.act.json")
+            dep2 <- requirePkgDep spec2 depName
+            assertEqual "repo_url after upgrade" (Just repoUrl) (BuildSpec.repo_url dep2)
+
+            (codeRm, outRm, errRm) <- runActonIn proj ["pkg", "remove", depName]
+            assertExit "pkg remove" ExitSuccess codeRm outRm errRm
+            spec3 <- readBuildSpecJSON (proj </> "build.act.json")
+            assertBool "dep removed" (M.notMember depName (BuildSpec.dependencies spec3))
+  ]
+
+withTempHome :: (FilePath -> IO a) -> IO a
+withTempHome action =
+  withSystemTempDirectory "acton-home" $ \home -> do
+    oldHome <- lookupEnv "HOME"
+    setEnv "HOME" home
+    action home `finally` restoreHome oldHome
+  where
+    restoreHome Nothing = unsetEnv "HOME"
+    restoreHome (Just val) = setEnv "HOME" val
+
+runActonIn :: FilePath -> [String] -> IO (ExitCode, String, String)
+runActonIn wd args = do
+    actonExe <- canonicalizePath "../../dist/bin/acton"
+    readCreateProcessWithExitCode (proc actonExe args){ cwd = Just wd } ""
+
+assertExit :: String -> ExitCode -> ExitCode -> String -> String -> IO ()
+assertExit label expected actual out err =
+    if actual == expected
+      then return ()
+      else assertFailure $ unlines
+        [ label ++ " exit"
+        , "expected: " ++ show expected
+        , " but got: " ++ show actual
+        , "stdout:"
+        , out
+        , "stderr:"
+        , err
+        ]
+
+readBuildSpecJSON :: FilePath -> IO BuildSpec.BuildSpec
+readBuildSpecJSON path = do
+    content <- LBS.readFile path
+    case BuildSpec.parseBuildSpecJSON content of
+      Left err -> assertFailure err >> error "unreachable"
+      Right spec -> return spec
+
+requirePkgDep :: BuildSpec.BuildSpec -> String -> IO BuildSpec.PkgDep
+requirePkgDep spec depName =
+    case M.lookup depName (BuildSpec.dependencies spec) of
+      Nothing -> assertFailure ("Missing dependency " ++ depName) >> error "unreachable"
+      Just dep -> return dep
+
+hasText :: Maybe String -> Bool
+hasText val = maybe False (not . null) val

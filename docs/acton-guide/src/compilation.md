@@ -16,7 +16,7 @@ To compile an executable optimized for portability using musl on x86_64, use `--
 
 A default compiled program is dynamically linked with GNU libc & friends
 ```
-$ actonc helloworld.act
+$ acton helloworld.act
 Building file helloworld.act
   Compiling helloworld.act for release
    Finished compilation in   0.013 s
@@ -35,7 +35,7 @@ $
 A program linked statically towards Musl has no run time dependencies:
 
 ```
-$ actonc helloworld.act --target x86_64-linux-musl
+$ acton helloworld.act --target x86_64-linux-musl
 Building file helloworld.act
   Compiling helloworld.act for release
    Finished compilation in   0.013 s
@@ -54,12 +54,12 @@ MacOS does not support static compilation.
 
 Acton supports cross-compilation, which means that it is possible to run develop on one computer, say a Linux computer with an x86-64 CPU but build an executable binary that can run on a MacOS computer.
 
-Here's such an example. We can see how per default, the output is an ELF binary for x86-64. By setting the `--target` argument, `actonc` will instead produce an executable for a Mac.
+Here's such an example. We can see how per default, the output is an ELF binary for x86-64. By setting the `--target` argument, `acton` will instead produce an executable for a Mac.
 ```
-$ actonc --quiet helloworld.act
+$ acton --quiet helloworld.act
 $ file helloworld
 helloworld: ELF 64-bit LSB executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, for GNU/Linux 2.0.0, with debug_info, not stripped
-$ actonc --quiet helloworld.act --target x86_64-macos-none
+$ acton --quiet helloworld.act --target x86_64-macos-none
 $ file helloworld
 helloworld: Mach-O 64-bit x86_64 executable, flags:<NOUNDEFS|DYLDLINK|TWOLEVEL|PIE>
 ```
@@ -70,7 +70,7 @@ It is not only possible to compile for other operating systems, but also for oth
 
 Acton ships with prebuilt libraries for the local platforms default target, i.e. if you install Acton on a x86-64 Linux machine, it will have libraries prebuilt for x86_64-linux-gnu.2.27. The default target uses these prebuilt libraries which results in a fast build:
 ```
-$ actonc helloworld.act
+$ acton helloworld.act
 Building file helloworld.act
   Compiling helloworld.act for release
    Finished compilation in   0.013 s
@@ -81,7 +81,7 @@ $
 
 When targeting something that is not the default target, the entire Acton system, including builtins, the run time system, the standard library and external library dependencies is built from source and can take a significant amount of time. The build process is highly parallelized and cached. For example, on an AMD 5950X with 16 cores / 32 threads, it takes around 7 seconds to do a complete rebuild for a small Acton program as can be seen here:
 ```
-$ actonc helloworld.act --target aarch64-macos-none
+$ acton helloworld.act --target aarch64-macos-none
 Building file helloworld.act
   Compiling helloworld.act for release
    Finished compilation in   0.012 s
@@ -95,24 +95,24 @@ $
 In an Acton project, there is a build cache, is is stored in a directory called `build-cache` in the project directory. The cache is always used for the project local files. If a non-default `--target` is being used, the built output of the Acton system is also stored in the cache, which means that it is only the first time around that it is slow. Any subsequent build is going to use the cache and run very fast. Like in this example, where the first invocation takes 6.120 seconds and the second one runs in 0.068 seconds.
 
 ```
-$ actonc new hello
+$ acton new hello
 Created project hello
 Enter your new project directory with:
   cd hello
 Compile:
-  actonc build
+  acton build
 Run:
   ./out/bin/hello
 
 Initialized empty Git repository in /home/kll/hello/.git/
 $ cd hello/
-$ actonc build --target native
+$ acton build --target native
 Building project in /home/kll/hello
   Compiling hello.act for release
    Finished compilation in   0.012 s
   Final compilation step
    Finished final compilation step in   6.120 s
-$ actonc build --target native
+$ acton build --target native
 Building project in /home/kll/hello
   Compiling hello.act for release
    Already up to date, in    0.000 s

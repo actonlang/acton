@@ -46,7 +46,7 @@ actor main(env):
 
 Compile and run:
 ```sh
-actonc dicts.act
+acton dicts.act
 ./dicts
 ```
 

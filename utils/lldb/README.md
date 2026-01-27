@@ -35,7 +35,7 @@ Loading
    - `command script import /absolute/path/to/acton/utils/lldb/acton.py`
 
 Source breakpoints (Acton file:line)
-- Requires debug info that references `.act` files (build with `actonc --debug`).
+- Requires debug info that references `.act` files (build with `acton --debug`).
 - Examples:
   - `(lldb) breakpoint set -f stackdemo.act -l 7`
   - `(lldb) acton break stackdemo.act:7`
@@ -77,7 +77,7 @@ Batch usage examples
   - `lldb -o 'command script import utils/lldb/acton.py' -o 'br s -r "stackdemoQ_.*"' -o run -- examples/stackdemo`
 
 Troubleshooting
-- Ensure your binary has debug info pointing at `.act` files (compile with `actonc --debug`).
+- Ensure your binary has debug info pointing at `.act` files (compile with `acton --debug`).
 - If bt/locals do not show Acton files, check source‑map settings.
 - If value printing is slow or too verbose in bt, pass `--no-arg-values`.
 

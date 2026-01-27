@@ -7,7 +7,7 @@ The Acton Run Time System is what sets up the environment in which an Acton prog
 It is possible to configure the RTS through a number of arguments. All arguments to the RTS start with `--rts-`. Use `--rts-help` to see a list of all arguments:
 
 ```sh
-$ actonc examples/helloworld.act
+$ acton examples/helloworld.act
 Building file examples/helloworld.act
   Compiling helloworld.act for release
    Finished compilation in   0.012 s

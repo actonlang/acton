@@ -98,7 +98,7 @@ compare recorded `pubDeps` against current provider hashes; any delta triggers
 re-typechecking. Separately, `implDeps` changes cause back passes and tests to
 rerun even when public hashes are stable. Missing or stale `.c`/`.h` outputs
 also force back passes so codegen can recover. To see the decisions, run
-`actonc build --verbose`; it prints stale reasons and per-name hash deltas. The
+`acton build --verbose`; it prints stale reasons and per-name hash deltas. The
 snippets below abbreviate hashes to 8 hex digits for readability.
 
 **Implementation-only change.** Before:
@@ -128,7 +128,7 @@ Downstream modules keep their public hashes stable, so they do not re-typecheck
 but they do rerun back passes:
 
 ```text
-$ actonc build --verbose
+$ acton build --verbose
 Building project in /path/proj
 Resolving dependencies (fetching if missing)...
   Stale a: source changed
@@ -171,7 +171,7 @@ Here `pubHash(foo)` changes, so `modulePubHash(a)` changes and any dependent
 that recorded `a.foo` in `pubDeps` must re-typecheck:
 
 ```text
-$ actonc build --verbose
+$ acton build --verbose
 Building project in /path/proj
 Resolving dependencies (fetching if missing)...
   Stale a: source changed
@@ -189,7 +189,7 @@ outputs forces codegen to refresh:
 
 ```text
 $ rm out/types/b.c out/types/b.h
-$ actonc build --verbose
+$ acton build --verbose
 Building project in /path/proj
 Resolving dependencies (fetching if missing)...
   Stale b: generated code out of date {impl c missing -> 7aa13f90, h missing -> 7aa13f90}

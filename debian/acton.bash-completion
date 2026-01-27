@@ -1,1 +1,1 @@
-source <(actonc --bash-completion-script `which actonc`)
+source <(acton --bash-completion-script `which acton`)

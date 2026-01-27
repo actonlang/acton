@@ -26,7 +26,7 @@ actor main(env):
 
 Compile and run:
 ```sh
-actonc actors.act
+acton actors.act
 ./actors
 ```
 

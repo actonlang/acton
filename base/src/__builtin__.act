@@ -1047,7 +1047,7 @@ def type(a: ?value) -> str:
 
     Do not use this for meta-programming. Use isinstance().
 
-    This is only meant for development use as an alternative to letting actonc
+    This is only meant for development use as an alternative to letting acton
     print inferred types and similar. It will be removed in a future version
     when there are better ways to debug types.
     """

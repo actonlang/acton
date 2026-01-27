@@ -18,7 +18,7 @@ def foo() -> float:
 
 `foo()` does not take any arguments and returns a float. We provide a short description of the function and write a dummy return statement. This is so that we may generate some boilerplate code.
 
-Run `actonc --cgen stdlib/src/time.act` to generate C code. The `foo()` function will be called `time$$foo` and should look something like (may change with compiler version):
+Run `acton --cgen stdlib/src/time.act` to generate C code. The `foo()` function will be called `time$$foo` and should look something like (may change with compiler version):
 ```c
 $float time$$foo () {
     $RealFloat w$232 = (($RealFloat)$RealFloat$float$new());

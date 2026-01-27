@@ -1,13 +1,13 @@
 # Acton Compiler - Development Guide
 
-The Acton compiler (`actonc`) is written in Haskell and compiled Acton source code into C code that can be compiled and linked with the runtime system.
+The Acton compiler (`acton`) is written in Haskell and compiled Acton source code into C code that can be compiled and linked with the runtime system.
 
 ## Quick Reference
 
 ### Build & Test
 ```bash
 # Build just the compiler (fastest iteration)
-make dist/bin/actonc
+make dist/bin/acton
 
 # Run compiler tests
 make test-compiler
@@ -25,7 +25,7 @@ compiler/
 ├── lib/                    # Main compiler library
 │   ├── src/Acton/         # Core compiler modules
 │   └── test/              # Compiler unit tests
-├── actonc/                # Compiler executable
+├── acton/                 # Compiler executable
 │   ├── Main.hs           # Entry point
 │   └── test/             # Golden tests
 └── lsp-server/           # Language server
@@ -138,7 +138,7 @@ C Code (.c, .h)
 
 5. **Add Tests**
    - Parser tests in `lib/test/`
-   - Type error tests in `actonc/test/typeerrors/`
+   - Type error tests in `acton/test/typeerrors/`
    - Golden tests for code generation
 
 ### Debugging the Compiler
@@ -161,10 +161,10 @@ Documentation generation tests are located in `test/test_doc_printing/`. This di
 
 To test documentation generation:
 ```bash
-actonc doc src/basics.act
+acton doc src/basics.act
 
 # Whole project
-actonc doc
+acton doc
 ```
 
 ### Error Messages
@@ -172,7 +172,7 @@ actonc doc
 Error messages are crucial for user experience. When adding new errors:
 
 1. Create descriptive error in `Diagnostics.hs`
-2. Add golden test in `actonc/test/typeerrors/`
+2. Add golden test in `acton/test/typeerrors/`
 3. Include:
    - Clear description of the problem
    - Source location
@@ -205,7 +205,7 @@ throwError $ TypeError loc $
 - Use sydtest framework
 - Fast, focused tests
 
-### Golden Tests (`actonc/test/`)
+### Golden Tests (`acton/test/`)
 - Compare compiler output against expected
 - Syntax errors: `syntaxerrors/`
 - Type errors: `typeerrors/`

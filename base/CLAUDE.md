@@ -12,7 +12,7 @@ base/
 ├── rts/                 # Runtime system (C/Zig)
 ├── stdlib/              # Additional stdlib components
 ├── build.zig            # Build configuration
-└── Acton.toml          # Package definition
+└── Build.act          # Package definition
 ```
 
 ### Build Commands
@@ -190,7 +190,7 @@ B_int native_function(B_int x) {
 
 ### 3. Update Configuration
 ```toml
-# base/Acton.toml
+# base/Build.act
 [dependencies]
 mymodule = { path = "src/mymodule.act" }
 ```
