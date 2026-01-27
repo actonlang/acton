@@ -1467,9 +1467,9 @@ High-level Steps
 1) Discover and read tasks using header-first strategy (readModuleTask)
    - For each module, try to use its .ty header to avoid parsing:
      - If .ty is missing/unreadable → parse .act to obtain imports (ActonTask).
-     - If .ty exists and both .act and acton mtime <= .ty mtime → trust .ty
-       header imports and create a TyTask stub (no heavy decode) for graph
-       building. Use --ignore-compiler-version to skip the acton part.
+     - If .ty exists and both .act and the acton executable mtime <= .ty mtime
+       → trust .ty header imports and create a TyTask stub (no heavy decode)
+       for graph building. Use --ignore-compiler-version to skip the acton part.
      - If .act appears newer than .ty → verify by content hash:
        – If stored moduleSrcBytesHash == current bytes hash → header is still valid (TyTask)
        – Else → parse .act now to get accurate imports (ActonTask)
