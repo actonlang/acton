@@ -1,0 +1,47 @@
+dependencies = {
+    "actondb": (
+        path="../backend/"
+    )
+}
+
+zig_dependencies = {
+    "libbsdnt": (
+        path="../deps/libbsdnt/"
+    ),
+    "libgc": (
+        path="../deps/libgc/"
+    ),
+    "libmbedtls": (
+        path="../deps/mbedtls/"
+    ),
+    "libnetstring": (
+        path="../deps/libnetstring/"
+    ),
+    "libpcre2": (
+        path="../deps/pcre2/"
+    ),
+    "libprotobuf_c": (
+        path="../deps/libprotobuf_c/"
+    ),
+    "libsnappy": (
+        path="../deps/libsnappy_c/"
+    ),
+    "libtlsuv": (
+        path="../deps/tlsuv/"
+    ),
+    "libutf8proc": (
+        path="../deps/libutf8proc/"
+    ),
+    "libuuid": (
+        path="../deps/libuuid/"
+    ),
+    "libuv": (
+        path="../deps/libuv/"
+    ),
+    "libxml2": (
+        path="../deps/libxml2/"
+    ),
+    "libyyjson": (
+        path="../deps/libyyjson/"
+    )
+}

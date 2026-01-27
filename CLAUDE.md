@@ -117,7 +117,7 @@ typedef struct actor_state_t {
 ### Adding a Standard Library Module
 1. Create `.act` file in `base/src/`
 2. Add C extension in `.ext.c` if needed
-3. Update `base/Acton.toml`
+3. Update `base/Build.act`
 4. Add module tests
 
 ### Modifying the Compiler
@@ -131,14 +131,14 @@ typedef struct actor_state_t {
 - Uses Zig build system (`build.zig` files)
 - Integrates Haskell (Stack), C, and Acton compilation
 - Supports cross-compilation
-- Package management via `Acton.toml` files
+- Package management via `Build.act` files
 
 ## Important Files
 
 - `Makefile` - Top-level build orchestration
 - `build.zig` - Main Zig build configuration
 - `compiler/stack.yaml` - Haskell dependencies
-- `*/Acton.toml` - Acton package configurations
+- `*/Build.act` - Acton package configurations
 
 ## Debugging Tips
 

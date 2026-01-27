@@ -451,7 +451,7 @@ isActProj dir = do
     isDir <- doesDirectoryExist dir
     if isDir
       then do
-          let projectFiles = ["Acton.toml", "Build.act", "build.act.json"]
+          let projectFiles = ["Build.act", "build.act.json", "Acton.toml"]
           hasProjectFile <- or <$> mapM (\file -> doesFileExist $ dir ++ "/" ++ file) projectFiles
           hasSrcDir <- doesDirectoryExist $ dir ++ "/src"
           if hasProjectFile && hasSrcDir

@@ -461,7 +461,7 @@ requireProjectConfigPath curDir = do
     mpath <- firstExisting candidates
     case mpath of
       Just path -> return path
-      Nothing -> printErrorAndExit "Project config not found in current directory (expected Build.act)"
+      Nothing -> printErrorAndExit "Project config not found in current directory (expected Build.act/build.act.json/Acton.toml)"
   where
     firstExisting [] = return Nothing
     firstExisting (p:ps) = do

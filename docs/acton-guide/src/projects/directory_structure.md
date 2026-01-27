@@ -18,7 +18,7 @@ The directory layout of an Acton project follows a certain structure.
     └── foo.act
 ```
 
-An `Build.act` file and the `src/` directory must be present in the project
+A `Build.act` file and the `src/` directory must be present in the project
 root, otherwise it is not considered a project.
 
 `src/` is used for all source files of the project. Use subdirectories to create
@@ -33,4 +33,3 @@ actor `main` in the module `foo` and consequently, the executable name is `foo`.
 `out/types` contain generated code, which is to be considered internal. Don't
 touch it.  All other output files, like object files and archives, are placed
 out-of-tree in the cache directory (`~/.cache/acton/`).
-

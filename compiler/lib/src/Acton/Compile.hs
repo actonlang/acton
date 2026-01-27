@@ -2352,7 +2352,8 @@ discoverProjects sysAbs rootProj depOverrides = do
 -- Given a FILE and optionally --syspath PATH:
 -- 'sysPath' is the path to the system directory as given by PATH, defaulting to the acton executable directory.
 -- 'sysTypes' is directory "types" under 'sysPath'.
--- 'projPath' is the closest parent directory of FILE that contains an 'Acton.toml' file, or a temporary directory in "/tmp" if no such parent exists.
+-- 'projPath' is the closest parent directory of FILE that contains a Build.act
+-- file, or a temporary directory in "/tmp" if no such parent exists.
 -- 'projOut' is directory "out" under 'projPath'.
 -- 'projTypes' is directory "types" under 'projOut'.
 -- 'binDir' is the directory prefix of FILE if 'projPath' is temporary, otherwise it is directory "bin" under 'projOut'
@@ -2376,11 +2377,11 @@ srcBase paths mn        = joinPath (srcDir paths : A.modPath mn)
 
 
 -- | Walk upward from a path to find a project root.
--- A project root is identified by Acton.toml/Build.act/build.act.json plus a
+-- A project root is identified by Build.act/build.act.json/Acton.toml plus a
 -- src/ directory; returns Nothing if we reach filesystem root.
 findProjectDir :: FilePath -> IO (Maybe FilePath)
 findProjectDir path = do
-    let projectFiles = ["Acton.toml", "Build.act", "build.act.json"]
+    let projectFiles = ["Build.act", "build.act.json", "Acton.toml"]
     hasProjectFile <- or <$> mapM (\file -> doesFileExist (path </> file)) projectFiles
     hasSrcDir <- doesDirectoryExist (path </> "src")
     if hasProjectFile && hasSrcDir
@@ -2443,7 +2444,7 @@ findPaths actFile opts  = do execDir <- takeDirectory <$> getExecutablePath
 
         analyze "/" ds  = do tmp <- canonicalizePath (C.tempdir opts)
                              return (True, tmp, [])
-        analyze pre ds  = do let projectFiles = ["Acton.toml", "Build.act", "build.act.json"]
+        analyze pre ds  = do let projectFiles = ["Build.act", "build.act.json", "Acton.toml"]
                              hasProjectFile <- or <$> mapM (\file -> doesFileExist (joinPath [pre, file])) projectFiles
                              hasSrcDir <- doesDirectoryExist (joinPath [pre, "src"])
                              if hasProjectFile && hasSrcDir
