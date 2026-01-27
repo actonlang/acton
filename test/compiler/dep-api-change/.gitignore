@@ -1,8 +1,5 @@
 .acton.lock
 .actonc.lock
-build.sh
 build.zig*
 out
 deps/libfoo/src/libfoo.act
-zig-cache
-zig-out
