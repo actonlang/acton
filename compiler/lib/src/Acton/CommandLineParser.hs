@@ -61,7 +61,7 @@ data NewOptions     = NewOptions {
 
 data CompileOptions   = CompileOptions {
                          alwaysbuild :: Bool,
-                         ignore_compiler_mtime :: Bool,
+                         ignore_compiler_version :: Bool,
                          db          :: Bool,
                          parse       :: Bool,
                          parse_ast   :: Bool,
