@@ -38,7 +38,7 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import Control.Exception (evaluate, onException)
 import Data.Version (showVersion)
-import qualified Paths_actonc
+import qualified Paths_acton
 
 data TestMode = TestModeRun | TestModeList | TestModePerf deriving (Eq, Show)
 
@@ -59,7 +59,7 @@ data TestProgressCallbacks = TestProgressCallbacks
   }
 
 getVer :: String
-getVer = showVersion Paths_actonc.version
+getVer = showVersion Paths_acton.version
 
 printErrorAndExit :: String -> IO a
 printErrorAndExit msg = do

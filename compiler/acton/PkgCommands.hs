@@ -517,7 +517,7 @@ fetchGithubObject manager token url = do
 httpGet :: Manager -> [Header] -> String -> IO (Either String BL.ByteString)
 httpGet manager extraHeaders url = do
     req0 <- parseRequest url
-    let headers = ("User-Agent", "actonc") : extraHeaders
+    let headers = ("User-Agent", "acton") : extraHeaders
         req = req0 { requestHeaders = headers ++ requestHeaders req0 }
     let maxAttempts = 10
         baseDelay = 500000

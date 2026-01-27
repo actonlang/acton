@@ -96,7 +96,7 @@ import System.Process
 import qualified System.FSNotify as FS
 import qualified System.Environment
 import qualified System.Exit
-import qualified Paths_actonc
+import qualified Paths_acton
 import System.Random (randomRIO)
 import Text.Printf
 import Numeric (showHex)
@@ -261,11 +261,11 @@ padRight width s
 
 printVersion = putStrLn getVer
 
-getVer          = showVersion Paths_actonc.version
+getVer          = showVersion Paths_acton.version
 
 printIce errMsg = putStrLn(
                         "ERROR: internal compiler error: " ++ errMsg ++
-                        "\nNOTE: this is likely a bug in actonc, please report this at:" ++
+                        "\nNOTE: this is likely a bug in acton, please report this at:" ++
                         "\nNOTE: https://github.com/actonlang/acton/issues/new?template=ice.yaml" ++
                         "\nNOTE: acton " ++ getVer
                         )
@@ -356,7 +356,7 @@ buildProject gopts opts = do
                     watchProjectAt gopts opts curDir
                   else buildProjectOnce gopts opts
 
--- | Handle "actonc build FILE..." by compiling multiple .act files together
+-- | Handle "acton build FILE..." by compiling multiple .act files together
 -- when they share a project root; otherwise fall back to per-file handling.
 buildFiles :: C.GlobalOptions -> C.CompileOptions -> [FilePath] -> IO ()
 buildFiles gopts opts files =
@@ -364,7 +364,7 @@ buildFiles gopts opts files =
       [single] -> runFile gopts opts single
       _ -> do
         when (C.watch opts) $
-          printErrorAndExit "Cannot use --watch with multiple files. Use `actonc build --watch` for projects or `actonc build FILE --watch` (or `actonc FILE --watch`) for a single file."
+          printErrorAndExit "Cannot use --watch with multiple files. Use `acton build --watch` for projects or `acton build FILE --watch` (or `acton FILE --watch`) for a single file."
         absFiles <- mapM canonicalizePath files
         let onlyAct = all ((== ".act") . takeExtension) files
         projDirs <- mapM findProjectDir absFiles
@@ -521,7 +521,7 @@ buildProjectOnce gopts opts = do
 
 -- Test runner -------------------------------------------------------------------------------------------------
 
--- | Entry point for actonc test; configures options and selects mode/watch.
+-- | Entry point for acton test; configures options and selects mode/watch.
 runTests :: C.GlobalOptions -> C.TestCommand -> IO ()
 runTests gopts cmd = do
     let (mode, topts) =
@@ -947,8 +947,8 @@ printDocs gopts opts = do
       "" -> do
         -- No file provided - check what to do
         case C.outputFormat opts of
-          Just C.AsciiFormat -> printErrorAndExit "Terminal output requires a specific file. Usage: actonc doc -t <file.act>"
-          Just C.MarkdownFormat -> printErrorAndExit "Markdown output requires a specific file. Usage: actonc doc --md <file.act>"
+          Just C.AsciiFormat -> printErrorAndExit "Terminal output requires a specific file. Usage: acton doc -t <file.act>"
+          Just C.MarkdownFormat -> printErrorAndExit "Markdown output requires a specific file. Usage: acton doc --md <file.act>"
           _ -> do
               -- HTML or auto mode - check if we're in a project
               curDir <- getCurrentDirectory
@@ -960,7 +960,7 @@ printDocs gopts opts = do
                   indexExists <- doesFileExist indexFile
                   if indexExists
                     then openFileInGui indexFile
-                    else printErrorAndExit "No documentation found. Run 'actonc build' first to generate documentation."
+                    else printErrorAndExit "No documentation found. Run 'acton build' first to generate documentation."
                 Nothing ->
                   printErrorAndExit "Not in an Acton project. Please specify a file to document."
       filename -> do
@@ -1453,9 +1453,9 @@ High-level Steps
 1) Discover and read tasks using header-first strategy (readModuleTask)
    - For each module, try to use its .ty header to avoid parsing:
      - If .ty is missing/unreadable → parse .act to obtain imports (ActonTask).
-     - If .ty exists and both .act and actonc mtime <= .ty mtime → trust .ty
+     - If .ty exists and both .act and acton mtime <= .ty mtime → trust .ty
        header imports and create a TyTask stub (no heavy decode) for graph
-       building. Use --ignore-compiler-version to skip the actonc part.
+       building. Use --ignore-compiler-version to skip the acton part.
      - If .act appears newer than .ty → verify by content hash:
        – If stored moduleSrcBytesHash == current bytes hash → header is still valid (TyTask)
        – Else → parse .act now to get accurate imports (ActonTask)

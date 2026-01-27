@@ -1,7 +1,7 @@
 # Passes
 
 The compiler runs a fixed sequence of AST-to-AST transforms before finally
-generating C. The main entry point is `compiler/actonc/Main.hs`, which wires
+generating C. The main entry point is `compiler/acton/Main.hs`, which wires
 the stages together via the `compiler/lib` modules listed below. All the real
 logic is contained in these modules and is thus accessible and usable as a
 library.

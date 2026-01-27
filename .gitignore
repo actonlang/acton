@@ -37,8 +37,8 @@ builder/build_runner.zig
 builder/zig-cache
 
 compiler/package.yaml
-compiler/actonc/actonc.cabal
-compiler/actonc/package.yaml
+compiler/acton/acton.cabal
+compiler/acton/package.yaml
 compiler/lib/package.yaml
 compiler/lsp-server/package.yaml
 compiler/lsp-server/lsp-server-acton.cabal
@@ -78,4 +78,4 @@ test/**/*.log
 # tests organized as acton projects; ignore all but source
 test/*/*/out/**
 test/*/*/build.sh
-compiler/actonc/test/project/*/out
+compiler/acton/test/project/*/out

@@ -20,7 +20,7 @@ executables:
     main:                Main.hs
     source-dirs:         .
     dependencies:
-      - acton
+      - libacton
       - async
       - base >= 4.7 && < 5
       - bytestring

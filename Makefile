@@ -34,7 +34,7 @@ else
 	XARGS := xargs
 endif
 
-# This is the version we will stamp into actonc
+# This is the version we will stamp into acton
 BUILD_TIME=$(shell date "+%Y%m%d.%-H.%-M.%-S")
 ifdef BUILD_RELEASE
 export VERSION_INFO?=$(VERSION)
@@ -116,19 +116,19 @@ test-backend: $(BACKEND_TESTS)
 	./backend/test/skiplist_test
 
 # /compiler ----------------------------------------------
-ACTONC_HS=$(wildcard compiler/lib/src/*.hs compiler/lib/src/*/*.hs compiler/actonc/Main.hs)
+ACTONC_HS=$(wildcard compiler/lib/src/*.hs compiler/lib/src/*/*.hs compiler/acton/Main.hs)
 ACTONLSP_HS=$(wildcard compiler/lsp-server/*.hs)
 # NOTE: we're unsetting CC & CXX to avoid using zig cc & zig c++ for stack /
 # ghc, which doesn't seem to work properly
-dist/bin/acton: compiler/lib/package.yaml.in compiler/actonc/package.yaml.in compiler/lsp-server/package.yaml.in compiler/stack.yaml $(ACTONC_HS) $(ACTONLSP_HS) version.mk
+dist/bin/acton: compiler/lib/package.yaml.in compiler/acton/package.yaml.in compiler/lsp-server/package.yaml.in compiler/stack.yaml $(ACTONC_HS) $(ACTONLSP_HS) version.mk
 	mkdir -p dist/bin
 	rm -f dist/bin/actonc
 	cd compiler && sed 's,^version: BUILD_VERSION,version: "$(VERSION)",' < lib/package.yaml.in > lib/package.yaml
-	cd compiler && unset CC && unset CXX && unset CFLAGS && stack build actonc lsp-server-acton --dry-run 2>&1 | grep "Nothing to build" || \
-		(sed 's,^version: BUILD_VERSION,version: "$(VERSION_INFO)",' < actonc/package.yaml.in > actonc/package.yaml \
+	cd compiler && unset CC && unset CXX && unset CFLAGS && stack build acton lsp-server-acton --dry-run 2>&1 | grep "Nothing to build" || \
+		(sed 's,^version: BUILD_VERSION,version: "$(VERSION_INFO)",' < acton/package.yaml.in > acton/package.yaml \
 		&& sed 's,^version: BUILD_VERSION,version: "$(VERSION_INFO)",' < lsp-server/package.yaml.in > lsp-server/package.yaml \
-		&& stack build actonc lsp-server-acton $(STACK_OPTS) --ghc-options='-j4 $(ACTC_GHC_OPTS)')
-	cd compiler && unset CC && unset CXX && unset CFLAGS && stack --local-bin-path=../dist/bin install actonc lsp-server-acton
+		&& stack build acton lsp-server-acton $(STACK_OPTS) --ghc-options='-j4 $(ACTC_GHC_OPTS)')
+	cd compiler && unset CC && unset CXX && unset CFLAGS && stack --local-bin-path=../dist/bin install acton lsp-server-acton
 	# Keep actonc as a symlink for compatibility
 	ln -sf acton dist/bin/actonc
 
@@ -142,7 +142,7 @@ dist/bin/lsp-server-acton: dist/bin/acton
 .PHONY: clean-compiler
 clean-compiler:
 	cd compiler && stack clean >/dev/null 2>&1 || true
-	rm -f dist/bin/acton dist/bin/actonc compiler/package.yaml compiler/acton.cabal
+	rm -f dist/bin/acton dist/bin/actonc compiler/package.yaml compiler/acton.cabal compiler/acton/package.yaml compiler/acton/acton.cabal
 
 # /deps --------------------------------------------------
 DEPS += dist/deps/mbedtls
@@ -305,30 +305,30 @@ dist/deps/libyyjson: deps/libyyjson $(DIST_ZIG)
 # top level targets
 .PHONY: test test-builtins test-compiler test-db test-examples test-lang test-regressions test-rts test-stdlib online-tests
 test: dist/bin/acton
-	cd compiler && stack test acton actonc:test_actonc actonc:incremental
+	cd compiler && stack test libacton acton:test_acton acton:incremental
 	$(MAKE) test-stdlib
 	$(MAKE) -C backend test
 	$(MAKE) test-rts-db
 
 test-builtins:
-	cd compiler && stack test actonc --ta '-p "Builtins"'
+	cd compiler && stack test acton --ta '-p "Builtins"'
 
 test-compiler:
-	cd compiler && stack test acton
-	cd compiler && stack test actonc --ta '-p "compiler"'
+	cd compiler && stack test libacton
+	cd compiler && stack test acton --ta '-p "compiler"'
 
 test-compiler-accept:
 	cd compiler && stack test acton --test-arguments "--golden-start --golden-reset"
 
 test-cross-compile:
-	cd compiler && stack test actonc --ta '-p "cross-compilation"'
+	cd compiler && stack test acton --ta '-p "cross-compilation"'
 
 test-incremental: dist/bin/actonc
-	cd compiler && stack test actonc:incremental
+	cd compiler && stack test acton:incremental
 
 .PHONY: test-incremental-accept
 test-incremental-accept: dist/bin/actonc
-	cd compiler && stack test actonc:incremental --ta "--accept"
+	cd compiler && stack test acton:incremental --ta "--accept"
 
 .PHONY: test-rebuild test-rebuild-accept
 test-rebuild: test-incremental
@@ -336,42 +336,42 @@ test-rebuild: test-incremental
 test-rebuild-accept: test-incremental-accept
 
 test-syntaxerrors:
-	cd compiler && stack test actonc --ta '-p "syntax errors"'
+	cd compiler && stack test acton --ta '-p "syntax errors"'
 
 test-syntaxerrors-accept:
-	cd compiler/actonc && stack runghc -- test.hs -p "syntax errors" --accept
+	cd compiler/acton && stack runghc -- test.hs -p "syntax errors" --accept
 
 test-typeerrors:
-	cd compiler && stack test actonc --ta '-p "type errors"'
+	cd compiler && stack test acton --ta '-p "type errors"'
 
 test-typeerrors-accept:
-	cd compiler && stack test actonc:test_actonc --ta '-p "type errors" --accept'
+	cd compiler && stack test acton:test_acton --ta '-p "type errors" --accept'
 
 test-db:
-	cd compiler && stack test actonc --ta '-p "DB"'
+	cd compiler && stack test acton --ta '-p "DB"'
 
 test-examples:
-	cd compiler && stack test actonc --ta '-p "Examples"'
+	cd compiler && stack test acton --ta '-p "Examples"'
 
 test-lang:
-	cd compiler && stack test actonc --ta '-p "Core language"'
+	cd compiler && stack test acton --ta '-p "Core language"'
 
 test-regressions:
-	cd compiler && stack test actonc --ta '-p "Regression"'
+	cd compiler && stack test acton --ta '-p "Regression"'
 
 test-rts:
-	cd compiler && stack test actonc --ta '-p "RTS"'
+	cd compiler && stack test acton --ta '-p "RTS"'
 
 test-rts-db:
 	$(MAKE) -C test
 
 test-stdlib: dist/bin/acton
-	cd compiler && stack test actonc --ta '-p "stdlib"'
+	cd compiler && stack test acton --ta '-p "stdlib"'
 	$(MAKE) -C test tls-test-server
 	cd test/stdlib_tests && "$(ACTON)" test
 
 online-tests: dist/bin/actonc
-	cd compiler && stack test actonc:test_actonc_online
+	cd compiler && stack test acton:test_acton_online
 
 
 .PHONY: clean clean-all clean-base

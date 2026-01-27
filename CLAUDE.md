@@ -122,8 +122,8 @@ typedef struct actor_state_t {
 
 ### Modifying the Compiler
 1. Work in `compiler/lib/src/Acton/`
-2. Run `make dist/bin/actonc` for quick rebuilds
-3. Add test cases in `compiler/actonc/test/`
+2. Run `make dist/bin/acton` for quick rebuilds
+3. Add test cases in `compiler/acton/test/`
 4. Update golden files if error messages change
 
 ## Build System

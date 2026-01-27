@@ -53,8 +53,8 @@ main = do
       , coreLangTests
       , dbAutoTests
       , compilerTests
-      , actoncProjTests
-      , actoncRootArgTests
+      , actonProjTests
+      , actonRootArgTests
       , exampleTests
       , regressionTests
       , regressionSegfaultTests
@@ -123,7 +123,7 @@ compilerTests =
   ]
 
 parseFlagTests =
-  testGroup "actonc compiler flags"
+  testGroup "acton compiler flags"
   [
     flagGolden "parse flag prints AST" "test/parse/simple.golden" ["--quiet", "--parse"]
   , flagGolden "kinds flag prints kinds" "test/parse/simple.kinds.golden" ["--quiet", "--kinds"]
@@ -143,14 +143,14 @@ parseFlagTests =
   where
     flagGolden label golden flags =
       goldenVsString label golden $ do
-        actonc <- canonicalizePath "../../dist/bin/actonc"
+        acton <- canonicalizePath "../../dist/bin/acton"
         sample <- canonicalizePath "test/parse/simple.act"
-        (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc actonc (flags ++ [sample])) ""
-        assertEqual ("actonc " ++ unwords flags ++ " should succeed") ExitSuccess returnCode
-        assertEqual ("actonc " ++ unwords flags ++ " stderr") "" cmdErr
+        (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc acton (flags ++ [sample])) ""
+        assertEqual ("acton " ++ unwords flags ++ " should succeed") ExitSuccess returnCode
+        assertEqual ("acton " ++ unwords flags ++ " stderr") "" cmdErr
         return (LBS.pack cmdOut)
 
-actoncProjTests =
+actonProjTests =
   testGroup "compiler project tests"
   [ testCase "simple project" $ do
         testBuild "" ExitSuccess False "test/project/simple"
@@ -175,7 +175,7 @@ actoncProjTests =
             depB = proj </> "deps/dep_b"
             wipe p = void $ readCreateProcessWithExitCode (shell $ "rm -rf " ++ p ++ "/build.zig " ++ p ++ "/build.zig.zon " ++ p ++ "/out") ""
         mapM_ wipe [proj, depA, depB]
-        -- Build main project via actonc; dependencies should be built automatically
+        -- Build main project via acton; dependencies should be built automatically
         testBuild "" ExitSuccess False proj
         -- Run produced binary
         (cRun, _outRun, _errRun) <- readCreateProcessWithExitCode (shell "./out/bin/main"){ cwd = Just proj } ""
@@ -255,11 +255,11 @@ actoncProjTests =
         cleanOut proj
         -- Full build first to create bar artifacts.
         testBuild "" ExitSuccess False proj
-        actonc <- canonicalizePath "../../dist/bin/actonc"
+        acton <- canonicalizePath "../../dist/bin/acton"
         -- Single-file build of foo must not prune outputs from other moduels
         -- since we don't have full visibility, so bar should remain
-        (returnCode, _, _) <- readCreateProcessWithExitCode (proc actonc ["--skip-build", "--always-build", "src/foo.act"]){ cwd = Just proj } ""
-        assertEqual "actonc single-file build should succeed" ExitSuccess returnCode
+        (returnCode, _, _) <- readCreateProcessWithExitCode (proc acton ["--skip-build", "--always-build", "src/foo.act"]){ cwd = Just proj } ""
+        assertEqual "acton single-file build should succeed" ExitSuccess returnCode
         mapM_ (\p -> doesFileExist p >>= assertBool (p ++ " should exist")) [barC, barH, barTy]
 
   -- Full rebuild should prune roots / bins when the source module is removed.
@@ -284,8 +284,8 @@ actoncProjTests =
 
   ]
 
-actoncRootArgTests =
-  testGroup "compiler actonc --root tests"
+actonRootArgTests =
+  testGroup "compiler acton --root tests"
   [ testCase "qualified --root test.main" $
         testBuild "--root test.main" ExitSuccess False "test/root/test.act"
   , testCase "unqualified --root main" $
@@ -401,7 +401,7 @@ createAutoTests name dir = do
 createAutoTest file = do
     -- guesstimate how to run this test
     -- no suffix = compile and run test program and expect success (exit 0)
-    -- __bf = build failure, expect actonc to exit 1
+    -- __bf = build failure, expect acton to exit 1
     -- __rf = run failure: compile, run and expect exit 1
     let fileParts = splitOn "__" fileBody
         testExp   = if (length fileParts) == 2
@@ -472,12 +472,12 @@ cleanOut :: FilePath -> IO ()
 cleanOut proj = removePathForcibly (proj </> "out") `catch` (\(_ :: IOException) -> return ())
 
 -- Actual test functions
--- expRet refers to the return code of actonc
+-- expRet refers to the return code of acton
 testBuild opts expRet expFail thing = do
     testBuildThing opts expRet expFail thing
 
 -- expFail & expRet refers to the acton program, we always assume compilation
--- with actonc succeeds
+-- with acton succeeds
 
 testBuildAndRun buildOpts runOpts expRet expFail thing =
     testBuildAndRunRepeat buildOpts runOpts 1 expRet expFail thing
@@ -524,20 +524,20 @@ runThing opts thing = do
 testBuildThing opts expRet expFail thing = do
     (returnCode, cmdOut, cmdErr) <- buildThing opts thing
     iff (expFail == False && returnCode /= expRet) (
-        putStrLn("\nERROR: when building " ++ thing ++ ", actonc returned code (" ++ (show returnCode) ++ ") not as expected (" ++ (show expRet) ++ ")\nSTDOUT:\n" ++ cmdOut ++ "STDERR:\n" ++ cmdErr)
+        putStrLn("\nERROR: when building " ++ thing ++ ", acton returned code (" ++ (show returnCode) ++ ") not as expected (" ++ (show expRet) ++ ")\nSTDOUT:\n" ++ cmdOut ++ "STDERR:\n" ++ cmdErr)
         )
-    assertEqual ("actonc should return " ++ (show expRet)) expRet returnCode
+    assertEqual ("acton should return " ++ (show expRet)) expRet returnCode
 
 
 buildThing opts thing = do
-    actonc <- canonicalizePath "../../dist/bin/actonc"
+    actonExe <- canonicalizePath "../../dist/bin/acton"
     proj <- doesDirectoryExist thing
     projPath <- canonicalizePath thing
     curDir <- getCurrentDirectory
     let wd = if proj then projPath else curDir
         args0 = if proj then ["build"] else [thing]
         args  = args0 ++ ["--always-build"] ++ words opts
-    (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc actonc args){ cwd = Just wd } ""
+    (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc actonExe args){ cwd = Just wd } ""
     return (returnCode, cmdOut, cmdErr)
 
 

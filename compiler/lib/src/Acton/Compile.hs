@@ -3,7 +3,7 @@
 Overview
 
 This module implements the shared Acton compilation pipeline that both the
-actonc CLI and the LSP server drive. It builds a dependency graph across
+acton CLI and the LSP server drive. It builds a dependency graph across
 projects, runs the front passes (parse, kinds, types) to produce .ty interface
 files and diagnostics, and then emits the back passes (normalizer through
 codegen) as separate jobs.
@@ -31,7 +31,7 @@ The CLI/LSP layers handle progress UI, file watching, and event sources; this
 module focuses on deterministic compilation and structured callbacks.
 
 Call flow:
-  - Shared pipeline (actonc build, actonc watch, LSP):
+  - Shared pipeline (acton build, acton watch, LSP):
     1) prepareCompilePlan (via prepareCompileContext, readModuleTask/
        buildGlobalTasks/readImports, and selectNeededTasks/selectAffectedTasks)
        builds a CompilePlan for the requested subgraph. Parsing is performed
@@ -47,12 +47,12 @@ Call flow:
     4) runBackJobs/runBackPasses can be used for standalone back-pass execution
        when a caller already has BackJobs to run.
   - Triggering:
-    - actonc build runs the pipeline once for the requested files/project.
-    - actonc watch and LSP call startCompile on each event; callers can gate
+    - acton build runs the pipeline once for the requested files/project.
+    - acton watch and LSP call startCompile on each event; callers can gate
       output with generation checks (e.g. whenCurrentGen), and BackQueue ignores
       back jobs for stale generations.
     - Callers may supply a delay (debounce) before startCompile runs (LSP uses
-      debounceMicros on change events; actonc watch uses 0).
+      debounceMicros on change events; acton watch uses 0).
   - Finalization:
     - CLI waits on backQueueWait before running Zig build
     - LSP does not implicitly run the Zig build, it is only run explicitly when
@@ -67,10 +67,10 @@ State and orchestration:
     handle, build-spec stamp, and a shared back-queue); callers pass it into
     startCompile and backQueueEnqueue rather than mutating it directly.
   - LSP additionally keeps overlaysRef for in-memory buffers and builds an
-    overlay-aware SourceProvider on top of disk reads. actonc watch reads
+    overlay-aware SourceProvider on top of disk reads. acton watch reads
     directly from disk.
   - Each event bumps the generation via startCompile; callers may pass a delay
-    (LSP uses debounceMicros, actonc watch uses 0). Back jobs are filtered by
+    (LSP uses debounceMicros, acton watch uses 0). Back jobs are filtered by
     generation inside BackQueue; front-pass diagnostics should be gated by the
     caller if needed.
   - CLI builds share the same pipeline and enqueue back jobs as soon as front
@@ -2350,7 +2350,7 @@ discoverProjects sysAbs rootProj depOverrides = do
       go root seen acc pins depBase Nothing
 
 -- Given a FILE and optionally --syspath PATH:
--- 'sysPath' is the path to the system directory as given by PATH, defaulting to the actonc executable directory.
+-- 'sysPath' is the path to the system directory as given by PATH, defaulting to the acton executable directory.
 -- 'sysTypes' is directory "types" under 'sysPath'.
 -- 'projPath' is the closest parent directory of FILE that contains an 'Acton.toml' file, or a temporary directory in "/tmp" if no such parent exists.
 -- 'projOut' is directory "out" under 'projPath'.

@@ -52,14 +52,14 @@ casesSrcDir = casesProjDir </> "src"
 casesProjName :: String
 casesProjName = "incremental_cases"
 
--- When running commands under compiler/actonc/test, the actonc binary at
--- repo-root/dist/bin/actonc is four levels up.
-actoncExe :: FilePath
-actoncExe = ".." </> ".." </> ".." </> ".." </> "dist" </> "bin" </> "actonc"
+-- When running commands under compiler/acton/test, the acton binary at
+-- repo-root/dist/bin/acton is four levels up.
+actonExe :: FilePath
+actonExe = ".." </> ".." </> ".." </> ".." </> "dist" </> "bin" </> "acton"
 
--- | Build an actonc command line with fixed job count.
-actoncCmd :: String -> String
-actoncCmd args = actoncExe ++ " " ++ args ++ " --jobs 1"
+-- | Build an acton command line with fixed job count.
+actonCmd :: String -> String
+actonCmd args = actonExe ++ " " ++ args ++ " --jobs 1"
 
 -- Utils ----------------------------------------------------------------------
 
@@ -186,28 +186,28 @@ runIn cwd cmd = do
 -- | Run a project build and return raw output.
 buildOut :: IO T.Text
 buildOut = do
-  let cmd = actoncCmd "build --color never --verbose"
+  let cmd = actonCmd "build --color never --verbose"
   (_ec,out) <- runIn projDir cmd
   pure out
 
 -- | Run a project build and return sanitized output.
 goldenBuild :: IO LBS.ByteString
 goldenBuild = do
-  let cmd = actoncCmd "build --color never --verbose"
+  let cmd = actonCmd "build --color never --verbose"
   (_ec,out) <- runIn projDir cmd
   pure (sanitize out)
 
 -- | Run a single-file build and return sanitized output.
 goldenBuildFile :: IO LBS.ByteString
 goldenBuildFile = do
-  let cmd = actoncCmd "src/c.act --color never --verbose"
+  let cmd = actonCmd "src/c.act --color never --verbose"
   (_ec,out) <- runIn projDir cmd
   pure (sanitize out)
 
 -- | Run a single-file build and return raw output.
 buildOutFile :: IO T.Text
 buildOutFile = do
-  let cmd = actoncCmd "src/c.act --color never --verbose"
+  let cmd = actonCmd "src/c.act --color never --verbose"
   (_ec,out) <- runIn projDir cmd
   pure out
 
@@ -283,16 +283,16 @@ rewriteFirstLine path newLine = do
   let rest = snd (T.breakOn "\n" content)
   T.writeFile path (T.pack newLine <> rest)
 
--- | Resolve the actonc binary path.
-actoncPath :: IO FilePath
-actoncPath = canonicalizePath (".." </> ".." </> "dist" </> "bin" </> "actonc")
+-- | Resolve the acton binary path.
+actonPath :: IO FilePath
+actonPath = canonicalizePath (".." </> ".." </> "dist" </> "bin" </> "acton")
 
--- | Run actonc in a directory with fixed job count.
-runActoncIn :: FilePath -> [String] -> IO (ExitCode, T.Text)
-runActoncIn cwd args = do
-  actonc <- actoncPath
+-- | Run acton in a directory with fixed job count.
+runActonIn :: FilePath -> [String] -> IO (ExitCode, T.Text)
+runActonIn cwd args = do
+  actonExe <- actonPath
   let args' = args ++ ["--jobs", "1"]
-  (ec,out,err) <- readCreateProcessWithExitCode (proc actonc args'){ cwd = Just cwd } ""
+  (ec,out,err) <- readCreateProcessWithExitCode (proc actonExe args'){ cwd = Just cwd } ""
   pure (ec, T.pack out <> T.pack err)
 
 -- | Assert an exit success and include output on failure.
@@ -316,14 +316,14 @@ assertExitFailure label code (ec, out) =
 -- | Run a verbose build in a project directory and return raw output.
 buildOutIn :: FilePath -> IO T.Text
 buildOutIn proj = do
-  res@(ec, out) <- runActoncIn proj ["build", "--color", "never", "--verbose"]
+  res@(ec, out) <- runActonIn proj ["build", "--color", "never", "--verbose"]
   assertExitSuccess ("build in " ++ proj) res
   pure out
 
 -- | Run a verbose build with extra args and return raw output.
 buildOutInArgs :: FilePath -> [String] -> IO T.Text
 buildOutInArgs proj args = do
-  res@(ec, out) <- runActoncIn proj (["build", "--color", "never", "--verbose"] ++ args)
+  res@(ec, out) <- runActonIn proj (["build", "--color", "never", "--verbose"] ++ args)
   assertExitSuccess ("build in " ++ proj) res
   pure out
 
@@ -334,11 +334,11 @@ modLabel proj mod = T.pack (takeFileName proj ++ "/" ++ mod)
 -- | Build the default rebuild project.
 buildProject :: IO ()
 buildProject = do
-  let cmd = actoncCmd "build --color never"
+  let cmd = actonCmd "build --color never"
   (ec,out) <- runIn projDir cmd
   case ec of
     ExitSuccess -> pure ()
-    ExitFailure c -> assertFailure ("actonc build failed: " ++ show c ++ "\n" ++ T.unpack out)
+    ExitFailure c -> assertFailure ("acton build failed: " ++ show c ++ "\n" ++ T.unpack out)
 
 -- | Read name hashes from a .ty file.
 readTyNameHashes :: FilePath -> IO [InterfaceFiles.NameHashInfo]
@@ -609,7 +609,7 @@ f10_alt_output = testCase "10-alt output" $ do
   _ <- buildOutFile
 
   -- Now request alternative output on the same file without modifying sources
-  let cmd = actoncCmd "src/c.act --color never --types"
+  let cmd = actonCmd "src/c.act --color never --types"
   (_ec,out) <- runIn projDir cmd
   -- Expect a types dump header for module c
   assertBool "expected types dump for module c" (T.isInfixOf "== types: c" out)
@@ -623,10 +623,10 @@ p14_partial_rebuild = testCase "14-partial rebuild" $ do
     [ "actor main(env: Env):"
     , "    env.exit(0)"
     ]
-  res1 <- runActoncIn casesProjDir ["build", "--color", "never"]
+  res1 <- runActonIn casesProjDir ["build", "--color", "never"]
   assertExitSuccess "initial build" res1
   touch (casesSrcDir </> "rebuild.act")
-  res2 <- runActoncIn casesProjDir ["build", "--color", "never"]
+  res2 <- runActonIn casesProjDir ["build", "--color", "never"]
   assertExitSuccess "rebuild after touch" res2
 
 p15_rebuild_import :: TestTree
@@ -638,9 +638,9 @@ p15_rebuild_import = testCase "15-rebuild with stdlib import" $ do
     , "actor main(env: Env):"
     , "    env.exit(0)"
     ]
-  res1 <- runActoncIn casesProjDir ["build", "--color", "never"]
+  res1 <- runActonIn casesProjDir ["build", "--color", "never"]
   assertExitSuccess "initial build" res1
-  res2 <- runActoncIn casesProjDir ["build", "--color", "never"]
+  res2 <- runActonIn casesProjDir ["build", "--color", "never"]
   assertExitSuccess "second build" res2
 
 p16_dep_api_change :: TestTree
@@ -667,10 +667,10 @@ p16_dep_api_change = testCase "16-dependency API change triggers rebuild" $ do
     , "    print(\"Result: %d\" % result)"
     , "    env.exit(0)"
     ]
-  res1 <- runActoncIn casesProjDir ["build", "--color", "never"]
+  res1 <- runActonIn casesProjDir ["build", "--color", "never"]
   assertExitSuccess "initial build" res1
   writeFileUtf8 depSrc modifiedContent
-  res2 <- runActoncIn casesProjDir ["build", "--color", "never"]
+  res2 <- runActonIn casesProjDir ["build", "--color", "never"]
   assertExitFailure "rebuild after API change" 1 res2
 
 p17_dep_impl_change :: TestTree
@@ -698,10 +698,10 @@ p17_dep_impl_change = testCase "17-dependency impl change triggers back job" $ d
     , "    print(\"Result: %d\" % result)"
     , "    env.exit(0)"
     ]
-  res1 <- runActoncIn casesProjDir ["build", "--color", "never"]
+  res1 <- runActonIn casesProjDir ["build", "--color", "never"]
   assertExitSuccess "initial build" res1
   writeFileUtf8 depSrc modifiedContent
-  res2@(ec2, out2) <- runActoncIn casesProjDir ["build", "--color", "never", "--verbose"]
+  res2@(ec2, out2) <- runActonIn casesProjDir ["build", "--color", "never", "--verbose"]
   assertExitSuccess "rebuild after impl change" res2
   assertBool "expected impl change log" (T.isInfixOf "impl changes in libfoo.calculate" out2)
   assertBool "did not expect main to type check" (not (typechecked out2 modMain))
@@ -1249,7 +1249,7 @@ p30_only_build = testCase "30-only-build skips front passes" $ do
     ]
   _ <- buildOutIn proj
   writeFileUtf8 (src </> "a.act") "aaa = 2\n"
-  res2@(ec2, out2) <- runActoncIn proj ["build", "--color", "never", "--verbose", "--only-build"]
+  res2@(ec2, out2) <- runActonIn proj ["build", "--color", "never", "--verbose", "--only-build"]
   assertExitSuccess "only-build" res2
   assertBool "did not expect a.act to type check" (not (typechecked out2 modA))
   assertBool "did not expect b.act to type check" (not (typechecked out2 modB))
@@ -1299,7 +1299,7 @@ p32_project_alt_output = testCase "32-project --types emits output" $ do
     , "    env.exit(0)"
     ]
   _ <- buildOutIn proj
-  res@(ec, out) <- runActoncIn proj ["build", "--color", "never", "--types"]
+  res@(ec, out) <- runActonIn proj ["build", "--color", "never", "--types"]
   assertExitSuccess "project types" res
   assertBool "expected types dump" (T.isInfixOf "== types:" out)
 
