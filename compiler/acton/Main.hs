@@ -437,7 +437,21 @@ loadProjectPathsAt curDir opts = do
 -- | Lenient path resolution for builds: allow no project config (temp project).
 loadProjectPathsForBuildAt :: FilePath -> C.CompileOptions -> IO Paths
 loadProjectPathsForBuildAt curDir opts = do
-    let actPath = joinPath [curDir, "Build.act"]
+    let buildAct = joinPath [curDir, "Build.act"]
+        buildJson = joinPath [curDir, "build.act.json"]
+        actonToml = joinPath [curDir, "Acton.toml"]
+    buildActExists <- doesFileExist buildAct
+    buildJsonExists <- doesFileExist buildJson
+    actonTomlExists <- doesFileExist actonToml
+    when (buildActExists || buildJsonExists || actonTomlExists) $ do
+      srcExists <- doesDirectoryExist (joinPath [curDir, "src"])
+      unless srcExists $
+        printErrorAndExit "Missing src/ directory"
+    let actPath
+          | buildActExists = buildAct
+          | buildJsonExists = buildJson
+          | actonTomlExists = actonToml
+          | otherwise = buildAct
     paths <- findPaths actPath opts
     requireProjectLayout paths
     return paths

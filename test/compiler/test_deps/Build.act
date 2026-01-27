@@ -1,0 +1,5 @@
+dependencies = {
+    "a_b": (
+        path="deps/a-b"
+    )
+}
