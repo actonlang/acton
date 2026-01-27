@@ -142,7 +142,9 @@ dist/bin/lsp-server-acton: dist/bin/acton
 .PHONY: clean-compiler
 clean-compiler:
 	cd compiler && stack clean >/dev/null 2>&1 || true
-	rm -f dist/bin/acton dist/bin/actonc compiler/package.yaml compiler/acton.cabal compiler/acton/package.yaml compiler/acton/acton.cabal
+	rm -f dist/bin/acton dist/bin/actonc compiler/package.yaml compiler/acton.cabal \
+		compiler/acton/package.yaml compiler/acton/acton.cabal \
+		compiler/lib/*.cabal compiler/acton/*.cabal compiler/lsp-server/*.cabal
 
 # /deps --------------------------------------------------
 DEPS += dist/deps/mbedtls
