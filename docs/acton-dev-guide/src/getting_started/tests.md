@@ -38,21 +38,21 @@ make test-typeerrors
 make test-typeerrors-accept
 ```
 
-`test-incremental*` requires `dist/bin/actonc` (it is built automatically by the target).
+`test-incremental*` requires `dist/bin/acton` (it is built automatically by the target).
 `test-rebuild*` remains as an alias for the incremental suite.
 
-## Project tests with actonc
+## Project tests with acton
 
 Run tests for the current Acton project (expects a `Build.act` in the cwd):
 
 ```sh
-actonc test
+acton test
 ```
 
 Example output:
 
 ```text
-$ actonc test
+$ acton test
 Building project in /path/to/project
   Final compilation step
    Finished final compilation step in   0.462 s
@@ -62,7 +62,7 @@ Test results:
 All 2 tests passed ( 0.528 s)
 ```
 
-By default, `actonc test` shows only tests that ran in the current invocation;
+By default, `acton test` shows only tests that ran in the current invocation;
 cached successes are hidden (cached failures/errors are still shown). Use
 `--show-cached` to include cached successes in the output.
 

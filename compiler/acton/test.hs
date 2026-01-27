@@ -170,7 +170,7 @@ actonProjTests =
         assertEqual "acton should report error" "acton: Project build requires a qualified root actor name, like foo.main\n" cmdErr
 
   , testCase "project with nested path deps" $ do
-        let proj = "../../test/compiler/actonc_proj_deps"
+        let proj = "../../test/compiler/acton_proj_deps"
             depA = proj </> "deps/dep_a"
             depB = proj </> "deps/dep_b"
             wipe p = void $ readCreateProcessWithExitCode (shell $ "rm -rf " ++ p ++ "/build.zig " ++ p ++ "/build.zig.zon " ++ p ++ "/out") ""

@@ -37,7 +37,7 @@ actor main(env):
 
 Compile and run:
 ```sh
-actonc after_pace.md
+acton after_pace.md
 ```
 
 Since the output includes time, you will naturally get a slightly different result if you run this.

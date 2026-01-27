@@ -3,7 +3,7 @@ import-class__bf is a cool Acton project!
 
 ** Compile
 #+BEGIN_SRC shell
-actonc build
+acton build
 #+END_SRC
 
 ** Run

@@ -1,4 +1,4 @@
-name = "actonc_proj_deps"
+name = "acton_proj_deps"
 
 dependencies = {
   "dep_a": (path="deps/dep_a")

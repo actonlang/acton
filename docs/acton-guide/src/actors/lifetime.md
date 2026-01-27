@@ -12,7 +12,7 @@ actor main(env):
 
 Compile and run:
 ```sh
-actonc noexit.act
+acton noexit.act
 ```
 
 Output:

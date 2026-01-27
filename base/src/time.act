@@ -196,7 +196,7 @@ class Clock:
     administrator to ensure that clocks on the system(s) running an Acton system
     are synchronized, preferrably using NTP or similar.
     """
-    # TODO: turn into constants? but getting actonc compiler error
+    # TODO: turn into constants? but getting acton compiler error
     @property
     standard: str
     # Which time standard this clock provides
@@ -341,7 +341,7 @@ class DateTime(object):
 #        if self.timezone is not None:
 #            tz_str = self.timezone.str_short()
         # TODO: remove this superfluous t variable and use above code, which
-        # currently actonc borks out on
+        # currently acton borks out on
         t = self.timezone
         if t is not None:
             tz_str = t.str_offset()

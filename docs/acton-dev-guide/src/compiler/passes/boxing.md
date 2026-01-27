@@ -19,7 +19,7 @@ surface semantics.
 ## Debugging
 
 ```sh
-actonc --box path/to/file.act
+acton --box path/to/file.act
 ```
 
 ## Thoughts

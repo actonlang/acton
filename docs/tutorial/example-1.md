@@ -30,7 +30,7 @@ its name is given to the compiler. So to compile and run this program
 (saved to `harmonic.act`) we do:
 
 ```shell
-$ actonc harmonic.act --root harmonicMain
+$ acton harmonic.act --root harmonicMain
 $ ./harmonic 2
 1.5
 $ ./harmonic 10000

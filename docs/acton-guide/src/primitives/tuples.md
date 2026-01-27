@@ -32,7 +32,7 @@ def foo() -> (a: str, b: bool, c: int):
 
 Compile and run:
 ```sh
-actonc sets.act
+acton sets.act
 ./sets
 ```
 

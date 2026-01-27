@@ -1,6 +1,6 @@
 
 actor Foo():
-    # actonc will interpret this type signature to mean the actor is abstract - clearly wrong
+    # acton will interpret this type signature to mean the actor is abstract - clearly wrong
     # If we remove the type signature, this program works
     hello : action() -> None
     def hello():
