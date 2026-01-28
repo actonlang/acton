@@ -289,6 +289,11 @@ jobs:
           set -euo pipefail
           export PATH="/mingw64/bin:$PATH"
           cd "$GITHUB_WORKSPACE"
+          stack setup
+          ghc_bin_win=$(stack path --compiler-bin)
+          ghc_bin=$(cygpath -u "$ghc_bin_win")
+          ghc_root=$(cd "$ghc_bin/.." && pwd)
+          export PATH="$ghc_root/mingw/bin:$PATH"
           make -j2 BUILD_TIME=${BUILD_TIME}
           make release BUILD_TIME=${BUILD_TIME}
           ./dist/bin/acton.exe version
