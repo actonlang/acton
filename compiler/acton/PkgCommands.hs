@@ -336,7 +336,7 @@ loadSpecOrEmpty dir = do
     return (fromMaybe emptySpec mspec)
 
 emptySpec :: BuildSpec.BuildSpec
-emptySpec = BuildSpec.BuildSpec Nothing Nothing M.empty M.empty
+emptySpec = BuildSpec.BuildSpec Nothing Nothing Nothing M.empty M.empty
 
 writeBuildSpec :: BuildSpec.BuildSpec -> IO ()
 writeBuildSpec spec = do

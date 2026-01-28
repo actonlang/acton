@@ -1,6 +1,7 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 import Control.Monad
+import Data.Char (isAlphaNum, isSpace)
 import Data.List
 import Data.List.Split
 import Data.Maybe (catMaybes)
@@ -102,6 +103,31 @@ compilerTests =
         (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../../test/compiler/test_deps/deps/a/build.zig*") ""
         (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../../test/compiler/test_deps/deps/a/out") ""
         runActon "build" ExitSuccess False "../../test/compiler/test_deps/"
+  , testCase "build.zig.zon name capped for long project dir" $ do
+        let prefix = "acton-long-project-name-12345678901234567890-"
+        withSystemTempDirectory prefix $ \proj -> do
+            let actFile = proj </> "acton-test.act"
+            writeFile actFile $ unlines
+              [ "#!/usr/bin/env runacton"
+              , "actor main(env):"
+              , "    print(\"Hello, world\")"
+              , "    env.exit(0)"
+              ]
+            perms <- getPermissions actFile
+            setPermissions actFile perms{ executable = True }
+            runActon "build" ExitSuccess False proj
+            zon <- readFile (proj </> "build.zig.zon")
+            let nameVal =
+                  let isNameLine l = ".name = ." `isPrefixOf` dropWhile isSpace l
+                  in case find isNameLine (lines zon) of
+                       Just line ->
+                         case stripPrefix ".name = ." (dropWhile isSpace line) of
+                           Just rest -> takeWhile (\c -> isAlphaNum c || c == '_') rest
+                           Nothing -> ""
+                       Nothing -> ""
+            assertBool "build.zig.zon name should be non-empty" (not (null nameVal))
+            assertBool "build.zig.zon name should be <= 32 chars" (length nameVal <= 32)
+
   , testCase "build without Build.act" $ do
         withSystemTempDirectory "acton-build" $ \proj -> do
             let actFile = proj </> "acton-test.act"

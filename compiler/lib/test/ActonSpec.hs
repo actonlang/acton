@@ -22,6 +22,8 @@ import qualified Acton.LambdaLifter
 import qualified Acton.Boxing
 import qualified Acton.CodeGen
 import qualified Acton.Diagnostics as Diag
+import qualified Acton.Compile as Compile
+import qualified Acton.Fingerprint as Fingerprint
 import Pretty (print, prettyText)
 import qualified Pretty
 import Test.Syd
@@ -30,12 +32,14 @@ import qualified Control.Monad.Trans.State.Strict as St
 import Text.Megaparsec (runParser, errorBundlePretty, ShowErrorComponent(..))
 import qualified Data.Text as T
 import Data.List (isInfixOf, isPrefixOf)
+import Data.Bits (shiftL, (.|.))
 import Error.Diagnose (printDiagnostic, prettyDiagnostic, WithUnicode(..), TabSize(..), defaultStyle, addReport, addFile)
 import Error.Diagnose.Report (Report(..))
 import Prettyprinter (unAnnotate, layoutPretty, defaultLayoutOptions)
 import Prettyprinter.Render.Text (renderStrict)
 import System.FilePath ((</>), joinPath, takeFileName, takeBaseName, takeDirectory, splitDirectories)
 import System.Directory (getCurrentDirectory, setCurrentDirectory)
+import System.IO.Temp (withSystemTempDirectory)
 import Control.Monad (forM_, when, foldM)
 import qualified Control.Exception as E
 import Control.DeepSeq (rnf)
@@ -516,6 +520,7 @@ main = do
               [ "# Canonical Build.act file"
               , "name = \"demo\""
               , "description = \"Demo project\""
+              , "fingerprint = 0x1234abcd5678ef00"
               , ""
               , "# Dependencies section"
               , "dependencies = {"
@@ -539,10 +544,60 @@ main = do
         case BuildSpec.parseBuildAct buildAct of
           Left err -> expectationFailure err
           Right (spec,_,_) -> do
+            BuildSpec.fingerprint spec `shouldBe` Just "0x1234abcd5678ef00"
             let json = BuildSpec.encodeBuildSpecJSON spec
             case BuildSpec.parseBuildSpecJSON json of
               Left err2 -> expectationFailure err2
               Right spec2 -> spec2 `shouldBe` spec
+
+      it "errors when fingerprint prefix does not match name" $ do
+        withSystemTempDirectory "acton-fp" $ \dir -> do
+          let buildAct = unlines
+                [ "name = \"demo\""
+                , "fingerprint = 0x0000000000000000"
+                , ""
+                ]
+          writeFile (dir </> "Build.act") buildAct
+          res <- (E.try (Compile.loadBuildSpec dir) :: IO (Either Compile.ProjectError (Maybe BuildSpec.BuildSpec)))
+          case res of
+            Left (Compile.ProjectError msg) ->
+              msg `shouldSatisfy` (isInfixOf "Fingerprint mismatch")
+            Right _ ->
+              expectationFailure "Expected fingerprint mismatch error"
+
+      it "accepts matching fingerprint for name" $ do
+        withSystemTempDirectory "acton-fp" $ \dir -> do
+          let prefix = Fingerprint.fingerprintPrefixForName "demo"
+              fp = Fingerprint.formatFingerprint ((fromIntegral prefix `shiftL` 32) .|. 0x1)
+              buildAct = unlines
+                [ "name = \"demo\""
+                , "fingerprint = " ++ fp
+                , ""
+                ]
+          writeFile (dir </> "Build.act") buildAct
+          res <- (E.try (Compile.loadBuildSpec dir) :: IO (Either Compile.ProjectError (Maybe BuildSpec.BuildSpec)))
+          case res of
+            Left (Compile.ProjectError msg) ->
+              expectationFailure ("Unexpected fingerprint error: " ++ msg)
+            Right mspec ->
+              case mspec of
+                Nothing -> expectationFailure "Expected BuildSpec, got Nothing"
+                Just spec -> BuildSpec.fingerprint spec `shouldBe` Just fp
+
+      it "errors when fingerprint is malformed" $ do
+        withSystemTempDirectory "acton-fp" $ \dir -> do
+          let buildAct = unlines
+                [ "name = \"demo\""
+                , "fingerprint = \"not-a-number\""
+                , ""
+                ]
+          writeFile (dir </> "Build.act") buildAct
+          res <- (E.try (Compile.loadBuildSpec dir) :: IO (Either Compile.ProjectError (Maybe BuildSpec.BuildSpec)))
+          case res of
+            Left (Compile.ProjectError msg) ->
+              msg `shouldSatisfy` (isInfixOf "Invalid fingerprint")
+            Right _ ->
+              expectationFailure "Expected invalid fingerprint error"
 
       it "updates Build.act in-place, preserving comments and main actor" $ do
         let buildAct0 = unlines

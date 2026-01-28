@@ -70,6 +70,7 @@
 - [Build System](compilation.md)
   - [Incremental compilation](compilation/incremental.md)
 - [Package Management](package_management.md)
+  - [Fingerprint and Lineage](pkg/fingerprint.md)
   - [Add Dependency](pkg/add_dependency.md)
   - [Local Dependencies](pkg/local_dependencies.md)
   - [Override Dependency](pkg/override_dependency.md)

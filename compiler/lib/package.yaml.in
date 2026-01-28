@@ -67,6 +67,7 @@ library:
     - Acton.Diagnostics
     - Acton.DocPrinter
     - Acton.Env
+    - Acton.Fingerprint
     - Acton.Hashing
     - Acton.Kinds
     - Acton.LambdaLifter
@@ -92,6 +93,7 @@ tests:
     source-dirs: test
     dependencies:
       - libacton
+      - temporary
     ghc-options:
       - -threaded
       - -rtsopts
