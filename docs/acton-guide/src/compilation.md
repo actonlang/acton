@@ -1,6 +1,10 @@
 # Compilation
 
-Acton is a compiled language and as such, outputs binary executables. It is possible to influence the compilation process in various ways.
+Acton is a compiled language and as such, outputs binary executables.
+
+While compiled languages are often associated with long compilation times that slow down development, Acton goes to great lengths to offer a great developer experience. Content hashing is used extensively to carefully invalidate and recompile only necessary parts, see [incremental compilation](compilation/incremental.md) for more details.
+
+It is possible to influence the compilation process and the output in various ways.
 
 ## Optimized for native CPU features
 

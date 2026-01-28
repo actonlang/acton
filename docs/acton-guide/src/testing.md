@@ -46,6 +46,14 @@ There are 4 kinds of tests
   
 When possible, strive to use unit tests rather than actor based tests and strive to avoid env tests.
 
+## Cached test results
+
+The Acton test runner caches test results which means that repeated invokations of `acton test` might not actually (re)run tests. Cached failures and errors are still shown by default, so you never miss a failing test. Cached successes are hidden unless you pass `--show-cached`.
+
+This means that the developer experience for test driven development is great even for project with a very large amount of tests as the content hash driven test runner only recompiles and reruns tests that are actually affected by a change.
+
+Note that test input need to be contained within .act source code files in order for the compiler to consider them part of the content hash. You cannot use external .txt files or similar as input to test functions, since the compiler won't consider those parts of the implementation. Also see [incremental compilation](compilation/incremental.md) for more details on content hashing and how it applies to testing.
+
 ## Module Filtering
 
 You can run tests from specific modules using the `--module` flag:
@@ -55,3 +63,4 @@ acton test --module foo --module bar
 ```
 
 This will only run tests from the `foo` and `bar` modules, skipping all other test modules.
+
