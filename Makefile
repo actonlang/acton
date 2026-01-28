@@ -153,8 +153,8 @@ ACTONLSP_HS=$(wildcard compiler/lsp-server/*.hs)
 # NOTE: we unset CC/CXX on non-Windows to avoid Zig for stack/ghc.
 STACK_ENV_PREFIX := unset CC && unset CXX && unset CFLAGS &&
 ifeq ($(OS),windows)
-STACK_CC ?= /mingw64/bin/gcc
-STACK_CXX ?= /mingw64/bin/g++
+STACK_CC ?= gcc
+STACK_CXX ?= g++
 STACK_CFLAGS ?=
 STACK_ENV_PREFIX := CC=$(STACK_CC) CXX=$(STACK_CXX) CFLAGS=$(STACK_CFLAGS)
 endif

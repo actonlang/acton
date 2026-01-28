@@ -294,6 +294,8 @@ jobs:
           ghc_bin=$(cygpath -u "$ghc_bin_win")
           ghc_root=$(cd "$ghc_bin/.." && pwd)
           export PATH="$ghc_root/mingw/bin:$PATH"
+          export STACK_CC="$ghc_root/mingw/bin/gcc"
+          export STACK_CXX="$ghc_root/mingw/bin/g++"
           make -j2 BUILD_TIME=${BUILD_TIME}
           make release BUILD_TIME=${BUILD_TIME}
           ./dist/bin/acton.exe version
