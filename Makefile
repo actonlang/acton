@@ -156,7 +156,8 @@ ifeq ($(OS),windows)
 STACK_CC ?= gcc
 STACK_CXX ?= g++
 STACK_CFLAGS ?=
-STACK_ENV_PREFIX := CC=$(STACK_CC) CXX=$(STACK_CXX) CFLAGS=$(STACK_CFLAGS)
+STACK_PATH_WIN := $(shell cygpath -w -p "$$PATH")
+STACK_ENV_PREFIX := PATH="$(STACK_PATH_WIN)" CC=$(STACK_CC) CXX=$(STACK_CXX) CFLAGS=$(STACK_CFLAGS)
 endif
 # NOTE: we're unsetting CC & CXX to avoid using zig cc & zig c++ for stack /
 # ghc, which doesn't seem to work properly
