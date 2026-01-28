@@ -636,7 +636,7 @@ defaultCompileOptions :: C.CompileOptions
 defaultCompileOptions =
   C.CompileOptions
     { C.alwaysbuild = False
-    , C.ignore_compiler_mtime = False
+    , C.ignore_compiler_version = False
     , C.db = False
     , C.parse = False
     , C.parse_ast = False
@@ -1060,8 +1060,10 @@ selectAffectedTasks globalTasks changedFiles = do
 -- Prefer reading imports from .ty header; if no .ty, parse the source.
 -- Decide how to represent a module for the graph:
 -- 1) If .ty is missing/unreadable -> parse .act to obtain imports (ActonTask).
--- 2) If .ty exists and .act mtime < .ty mtime -> trust header imports (TyTask).
--- 2b) If an in-memory overlay exists, skip mtime and compare its hash to header.
+-- 2) If .ty exists and .act mtime < .ty mtime (and the acton binary isn't newer
+--    than the .ty unless --ignore-compiler-version is set) -> trust header imports (TyTask).
+-- 2b) If an in-memory overlay exists, skip source mtime and compare its hash to header
+--     (unless the compiler is newer and --ignore-compiler-version is not set).
 -- 3) If .act appears newer than .ty -> verify by content hash:
 --      - If stored moduleSrcBytesHash == current hash -> header is still valid (TyTask)
 --      - Else -> parse .act to obtain accurate imports (ActonTask)
@@ -1071,7 +1073,7 @@ selectAffectedTasks globalTasks changedFiles = do
 -- cached interfaces are reliable, while still falling back to parsing when
 -- source changes are detected.
 readModuleTask :: Source.SourceProvider -> C.GlobalOptions -> C.CompileOptions -> Paths -> String -> IO CompileTask
-readModuleTask sp gopts _opts paths actFile = do
+readModuleTask sp gopts opts paths actFile = do
     let mn      = modName paths
         tyFile  = outBase paths mn ++ ".ty"
     tyExists <- doesFileExist tyFile
@@ -1083,19 +1085,25 @@ readModuleTask sp gopts _opts paths actFile = do
         case hdrE of
           Left _ -> parseForImports mn
           Right (moduleSrcBytesHash, modulePubHash, moduleImplHash, imps, nameHashes, roots, mdoc) -> do
+            tyTime <- getModificationTime tyFile
+            newCompiler <- compilerNewerThan tyTime
             mOverlay <- Source.spReadOverlay sp actFile
             case mOverlay of
-              Just snap -> verifyOrParse mn snap moduleSrcBytesHash modulePubHash moduleImplHash imps nameHashes roots mdoc
+              Just snap ->
+                if newCompiler
+                  then parseFromSnapshot mn snap
+                  else verifyOrParse mn snap moduleSrcBytesHash modulePubHash moduleImplHash imps nameHashes roots mdoc
               Nothing -> do
                 actTime <- Source.spGetModTime sp actFile
-                tyTime  <- getModificationTime tyFile
                 -- Equal mtimes are ambiguous with coarse timestamp resolution,
                 -- so treat them as stale and re-hash the source.
-                if actTime < tyTime
-                  then return (mkTyTask mn moduleSrcBytesHash modulePubHash moduleImplHash imps nameHashes roots mdoc)
-                  else do
-                    snap <- Source.spReadFile sp actFile
-                    verifyOrParse mn snap moduleSrcBytesHash modulePubHash moduleImplHash imps nameHashes roots mdoc
+                if newCompiler
+                  then parseForImports mn
+                  else if actTime < tyTime
+                    then return (mkTyTask mn moduleSrcBytesHash modulePubHash moduleImplHash imps nameHashes roots mdoc)
+                    else do
+                      snap <- Source.spReadFile sp actFile
+                      verifyOrParse mn snap moduleSrcBytesHash modulePubHash moduleImplHash imps nameHashes roots mdoc
   where
     mkTyTask mn moduleSrcBytesHash modulePubHash moduleImplHash imps nameHashes roots mdoc =
       let nmodStub = I.NModule [] mdoc
@@ -1122,6 +1130,18 @@ readModuleTask sp gopts _opts paths actFile = do
       case emod of
         Left diags -> return $ ParseErrorTask mn diags
         Right m -> return $ ActonTask mn (Source.ssText snap) (Source.ssBytes snap) m
+
+    compilerNewerThan tyTime
+      | C.ignore_compiler_version opts = return False
+      | otherwise = do
+          exePathE <- (try getExecutablePath :: IO (Either SomeException FilePath))
+          case exePathE of
+            Left _ -> return False
+            Right exePath -> do
+              exeTimeE <- (try (getModificationTime exePath) :: IO (Either SomeException UTCTime))
+              case exeTimeE of
+                Left _ -> return False
+                Right exeTime -> return (exeTime > tyTime)
 
     verifyOrParse mn snap moduleSrcBytesHash modulePubHash moduleImplHash imps nameHashes roots mdoc = do
       let curHash = SHA256.hash (Source.ssBytes snap)
