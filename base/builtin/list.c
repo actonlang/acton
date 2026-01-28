@@ -107,7 +107,11 @@ B_str B_listD___str__(B_list self) {
     B_SequenceD_list wit2 = B_SequenceD_listG_new();
     for (int i=0; i< self->length; i++) {
         B_value elem = (B_value)self->data[i];
-        wit2->$class->append(wit2, s2, elem->$class->__repr__(elem));
+        if (elem == B_None) {
+            wit2->$class->append(wit2, s2, to$str("None"));
+        } else {
+            wit2->$class->append(wit2, s2, elem->$class->__repr__(elem));
+        }
     }
     return B_strD_join_par('[',s2,']');
 }
