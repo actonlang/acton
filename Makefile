@@ -156,9 +156,13 @@ ifeq ($(OS),windows)
 STACK_CC ?= gcc
 STACK_CXX ?= g++
 STACK_CFLAGS ?=
+STACK_MINGW64_WIN := $(shell cygpath -m /mingw64)
 STACK_PATH_WIN := $(shell cygpath -w -p "$$PATH")
 STACK_ENV_PREFIX := PATH="$(STACK_PATH_WIN)" CC=$(STACK_CC) CXX=$(STACK_CXX) CFLAGS=$(STACK_CFLAGS)
-STACK_OPTS += --skip-msys
+STACK_OPTS += --skip-msys \
+	--extra-include-dirs=$(STACK_MINGW64_WIN)/include \
+	--extra-lib-dirs=$(STACK_MINGW64_WIN)/lib \
+	--extra-lib-dirs=$(STACK_MINGW64_WIN)/bin
 endif
 # NOTE: we're unsetting CC & CXX to avoid using zig cc & zig c++ for stack /
 # ghc, which doesn't seem to work properly
