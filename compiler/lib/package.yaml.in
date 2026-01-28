@@ -54,7 +54,7 @@ when:
   - condition: os(windows)
     dependencies:
       - Win32
-  - condition: !os(windows)
+  - condition: "!os(windows)"
     dependencies:
       - unix
 

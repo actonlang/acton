@@ -53,7 +53,7 @@ dependencies:
   - regex-tdfa
 
 when:
-  - condition: !os(windows)
+  - condition: "!os(windows)"
     dependencies:
       - unix
   
