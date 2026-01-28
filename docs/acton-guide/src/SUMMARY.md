@@ -68,6 +68,7 @@
   - [Performance testing](testing/performance.md)
   - [Perf comparison](testing/perf_record.md)
 - [Build System](compilation.md)
+  - [Incremental compilation](compilation/incremental.md)
 - [Package Management](package_management.md)
   - [Add Dependency](pkg/add_dependency.md)
   - [Local Dependencies](pkg/local_dependencies.md)
