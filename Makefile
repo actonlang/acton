@@ -2,25 +2,15 @@ include version.mk
 TD := $(CURDIR)
 CHANGELOG_VERSION=$(shell grep '^\#\# \[[0-9]' CHANGELOG.md | sed 's/\#\# \[\([^]]\{1,\}\)].*/\1/' | head -n1)
 GIT_VERSION_TAG=$(shell git tag --points-at HEAD 2>/dev/null | grep "v[0-9]" | sed -e 's/^v//')
+UNAME_S := $(shell uname -s)
+UNAME_M := $(shell uname -m)
 
 ifdef HOME
 ZIG_LOCAL_CACHE_DIR ?= $(HOME)/.cache/acton/zig-local-cache
 else
-# TODO: Windows?
 ZIG_LOCAL_CACHE_DIR ?= $(TD)/zig-cache
 endif
 export ZIG_LOCAL_CACHE_DIR
-
-ACTON=$(TD)/dist/bin/acton
-ACTONC=dist/bin/actonc
-ZIG_VERSION:=0.15.2
-ZIG=$(TD)/dist/zig/zig
-CURL:=curl --fail --location --retry 5 --retry-delay 2 --retry-max-time 120 --retry-all-errors --retry-connrefused
-AR=$(ZIG) ar
-CC=$(ZIG) cc
-CXX=$(ZIG) c++
-export CC
-export CXX
 
 # Determine which xargs we have. BSD xargs does not have --no-run-if-empty,
 # rather, it is the default behavior so the argument is superfluous. We check if
@@ -51,28 +41,56 @@ CPEDANTIC=--cpedantic
 endif
 
 # rewrite arm64 to aarch64
-ifeq ($(shell uname -m),arm64)
+ifeq ($(UNAME_M),arm64)
 ARCH:=aarch64
 else
-ARCH:=$(shell uname -m)
+ARCH:=$(UNAME_M)
 endif
 
 # -- Apple Mac OS X ------------------------------------------------------------
-ifeq ($(shell uname -s),Darwin)
+ifeq ($(UNAME_S),Darwin)
 OS:=macos
 endif
 
 # -- Linux ---------------------------------------------------------------------
-ifeq ($(shell uname -s),Linux)
+ifeq ($(UNAME_S),Linux)
 OS:=linux
-ifeq ($(shell uname -m),x86_64)
+ifeq ($(UNAME_M),x86_64)
 ACTONC_TARGET := --target x86_64-linux-gnu.2.27
-else ifeq ($(shell uname -m),aarch64)
+else ifeq ($(UNAME_M),aarch64)
 ACTONC_TARGET := --target aarch64-linux-gnu.2.27
 else
-$(error "Unsupported architecture for Linux?" $(shell uname -m))
+$(error "Unsupported architecture for Linux?" $(UNAME_M))
 endif
 endif # -- END: Linux ----------------------------------------------------------
+
+# -- Windows (MSYS2 / MINGW / Cygwin) ------------------------------------------
+ifneq (,$(filter MINGW% MSYS% CYGWIN%,$(UNAME_S)))
+OS:=windows
+endif
+
+EXEEXT :=
+ifeq ($(OS),windows)
+EXEEXT := .exe
+endif
+
+ACTON_BIN := dist/bin/acton$(EXEEXT)
+ACTONC_BIN := dist/bin/actonc$(EXEEXT)
+LSP_BIN := dist/bin/lsp-server-acton$(EXEEXT)
+ACTONDB_BIN := dist/bin/actondb$(EXEEXT)
+
+ACTON := $(TD)/$(ACTON_BIN)
+ACTONC := $(ACTONC_BIN)
+ACTONC_ABS := $(TD)/$(ACTONC_BIN)
+
+ZIG_VERSION:=0.15.2
+ZIG=$(TD)/dist/zig/zig$(EXEEXT)
+CURL:=curl --fail --location --retry 5 --retry-delay 2 --retry-max-time 120 --retry-all-errors --retry-connrefused
+AR=$(ZIG) ar
+CC=$(ZIG) cc
+CXX=$(ZIG) c++
+export CC
+export CXX
 
 .PHONY: all
 all: version-check
@@ -103,8 +121,22 @@ endif
 
 BUILTIN_HFILES=$(wildcard base/builtin/*.h)
 
-DIST_BINS=$(ACTONC) dist/bin/actondb dist/bin/runacton dist/bin/lsp-server-acton
+DIST_BINS=$(ACTONC_BIN) $(ACTONDB_BIN) dist/bin/runacton $(LSP_BIN)
 DIST_ZIG=dist/zig
+ZIG_ARCHIVE_NAME := zig-$(ARCH)-$(OS)-$(ZIG_VERSION).tar.xz
+ifeq ($(OS),windows)
+ZIG_ARCHIVE_NAME := zig-$(ARCH)-$(OS)-$(ZIG_VERSION).zip
+endif
+ZIG_ARCHIVE_URL := https://ziglang.org/download/$(ZIG_VERSION)/$(ZIG_ARCHIVE_NAME)
+ZIG_ARCHIVE_URL_ALT :=
+ifeq ($(OS),windows)
+ZIG_ARCHIVE_URL_ALT := https://ziglang.org/download/$(ZIG_VERSION)/zig-$(OS)-$(ARCH)-$(ZIG_VERSION).zip
+endif
+ifeq ($(findstring -dev,$(ZIG_VERSION)),-dev)
+ZIG_ARCHIVE_URL := https://github.com/actonlang/zigballs/raw/main/$(ZIG_ARCHIVE_NAME)
+ZIG_ARCHIVE_URL_ALT :=
+endif
+ZIG_ARCHIVE := deps-download/$(ZIG_ARCHIVE_NAME)
 
 .PHONY: test-backend
 test-backend: $(BACKEND_TESTS)
@@ -120,29 +152,31 @@ ACTONC_HS=$(wildcard compiler/lib/src/*.hs compiler/lib/src/*/*.hs compiler/acto
 ACTONLSP_HS=$(wildcard compiler/lsp-server/*.hs)
 # NOTE: we're unsetting CC & CXX to avoid using zig cc & zig c++ for stack /
 # ghc, which doesn't seem to work properly
-dist/bin/acton: compiler/lib/package.yaml.in compiler/acton/package.yaml.in compiler/lsp-server/package.yaml.in compiler/stack.yaml $(ACTONC_HS) $(ACTONLSP_HS) version.mk
+$(ACTON_BIN): compiler/lib/package.yaml.in compiler/acton/package.yaml.in compiler/lsp-server/package.yaml.in compiler/stack.yaml $(ACTONC_HS) $(ACTONLSP_HS) version.mk
 	mkdir -p dist/bin
-	rm -f dist/bin/actonc
+	rm -f $(ACTONC_BIN)
 	cd compiler && sed 's,^version: BUILD_VERSION,version: "$(VERSION)",' < lib/package.yaml.in > lib/package.yaml
 	cd compiler && unset CC && unset CXX && unset CFLAGS && stack build acton lsp-server-acton --dry-run 2>&1 | grep "Nothing to build" || \
 		(sed 's,^version: BUILD_VERSION,version: "$(VERSION_INFO)",' < acton/package.yaml.in > acton/package.yaml \
 		&& sed 's,^version: BUILD_VERSION,version: "$(VERSION_INFO)",' < lsp-server/package.yaml.in > lsp-server/package.yaml \
 		&& stack build acton lsp-server-acton $(STACK_OPTS) --ghc-options='-j4 $(ACTC_GHC_OPTS)')
 	cd compiler && unset CC && unset CXX && unset CFLAGS && stack --local-bin-path=../dist/bin install acton lsp-server-acton
-	# Keep actonc as a symlink for compatibility
-	ln -sf acton dist/bin/actonc
 
-dist/bin/actonc: dist/bin/acton
+$(ACTONC_BIN): $(ACTON_BIN)
 	@mkdir -p $(dir $@)
+ifeq ($(EXEEXT),.exe)
+	cp -a $(ACTON_BIN) $@
+else
 	ln -sf acton $@
+endif
 
-dist/bin/lsp-server-acton: dist/bin/acton
+$(LSP_BIN): $(ACTON_BIN)
 	@true
 
 .PHONY: clean-compiler
 clean-compiler:
 	cd compiler && stack clean >/dev/null 2>&1 || true
-	rm -f dist/bin/acton dist/bin/actonc compiler/package.yaml compiler/acton.cabal \
+	rm -f $(ACTON_BIN) $(ACTONC_BIN) compiler/package.yaml compiler/acton.cabal \
 		compiler/acton/package.yaml compiler/acton/acton.cabal \
 		compiler/lib/*.cabal compiler/acton/*.cabal compiler/lsp-server/*.cabal
 
@@ -306,7 +340,7 @@ dist/deps/libyyjson: deps/libyyjson $(DIST_ZIG)
 
 # top level targets
 .PHONY: test test-builtins test-compiler test-db test-examples test-lang test-regressions test-rts test-stdlib online-tests
-test: dist/bin/acton
+test: $(ACTON_BIN)
 	cd compiler && stack test libacton acton:test_acton acton:incremental
 	$(MAKE) test-stdlib
 	$(MAKE) -C backend test
@@ -325,11 +359,11 @@ test-compiler-accept:
 test-cross-compile:
 	cd compiler && stack test acton --ta '-p "cross-compilation"'
 
-test-incremental: dist/bin/actonc
+test-incremental: $(ACTONC_BIN)
 	cd compiler && stack test acton:incremental
 
 .PHONY: test-incremental-accept
-test-incremental-accept: dist/bin/actonc
+test-incremental-accept: $(ACTONC_BIN)
 	cd compiler && stack test acton:incremental --ta "--accept"
 
 .PHONY: test-rebuild test-rebuild-accept
@@ -367,12 +401,12 @@ test-rts:
 test-rts-db:
 	$(MAKE) -C test
 
-test-stdlib: dist/bin/acton
+test-stdlib: $(ACTON_BIN)
 	cd compiler && stack test acton --ta '-p "stdlib"'
 	$(MAKE) -C test tls-test-server
 	cd test/stdlib_tests && "$(ACTON)" test
 
-online-tests: dist/bin/actonc
+online-tests: $(ACTONC_BIN)
 	cd compiler && stack test acton:test_acton_online
 
 
@@ -389,23 +423,23 @@ clean-base:
 #
 
 BACKEND_FILES = backend/build.zig backend/build.zig.zon $(wildcard backend/*.c backend/*.h backend/failure_detector/*.c backend/failure_detector/*.h)
-DIST_BACKEND_FILES = $(addprefix dist/,$(BACKEND_FILES)) dist/backend/deps dist/bin/actondb
+DIST_BACKEND_FILES = $(addprefix dist/,$(BACKEND_FILES)) dist/backend/deps $(ACTONDB_BIN)
 dist/backend%: backend/%
 	mkdir -p "$(dir $@)"
 	cp -a "$<" "$@"
 
 .PHONY: dist/base
-dist/base: base base/.build base/__root.zig base/acton.zig base/build.zig base/build.zig.zon base/acton.zig dist/bin/actonc $(DEPS)
+dist/base: base base/.build base/__root.zig base/acton.zig base/build.zig base/build.zig.zon base/acton.zig $(ACTONC_BIN) $(DEPS)
 	mkdir -p "$@" "$@/.build" "$@/out"
 	cp -a base/__root.zig base/Build.act base/acton.zig base/build.zig base/build.zig.zon base/builtin base/rts base/src dist/base/
-	cd dist/base && ../bin/actonc build --skip-build && rm -rf .build
+	cd dist/base && "$(ACTONC_ABS)" build --skip-build && rm -rf .build
 
 # This does a little hack, first copying and then moving the file in place. This
 # is to avoid an error if the executable is currently running. cp tries to open
 # the file and modify it, which the Linux kernel (and perhaps others?) will
 # prevent if the file to be modified is an executable program that is currently
 # running.  We work around it by moving / renaming the file in place instead!
-dist/bin/actondb: $(DIST_ZIG) $(DEPS)
+$(ACTONDB_BIN): $(DIST_ZIG) $(DEPS)
 	@mkdir -p $(dir $@)
 	cd dist/backend && "$(ZIG)" build -Donly_actondb --prefix "$(TD)/dist"
 
@@ -426,23 +460,25 @@ dist/completion/acton.bash-completion: completion/acton.bash-completion
 	mkdir -p "$(dir $@)"
 	cp "$<" "$@"
 
-dist/zig: deps-download/zig-$(ARCH)-$(OS)-$(ZIG_VERSION).tar.xz
+dist/zig: $(ZIG_ARCHIVE)
 	mkdir -p "$@"
-	cd "$@" && tar Jx --strip-components=1 -f "../../$^"
+ifeq ($(OS),windows)
+	cd "$@" && unzip -q "../../$<" && \
+		top_dir=$$(ls -d zig-* | head -n1) && \
+		mv "$$top_dir"/* . && rmdir "$$top_dir"
+else
+	cd "$@" && tar Jx --strip-components=1 -f "../../$<"
+endif
 	rm -rf "$@/doc"
 	cp -a deps/zig-extras/* "$@"
 
 
 # Check if ZIG_VERSION contains -dev, in which case we pull down a nightly,
 # otherwise its a release
-deps-download/zig-$(ARCH)-$(OS)-$(ZIG_VERSION).tar.xz:
+$(ZIG_ARCHIVE):
 	mkdir -p deps-download
-ifeq ($(findstring -dev,$(ZIG_VERSION)),-dev)
-	$(CURL) -o $@ https://github.com/actonlang/zigballs/raw/main/zig-$(ARCH)-$(OS)-$(ZIG_VERSION).tar.xz
-#	$(CURL) -o $@ https://ziglang.org/builds/zig-$(ARCH)-$(OS)-$(ZIG_VERSION).tar.xz
-else
-	$(CURL) -o $@ https://ziglang.org/download/$(ZIG_VERSION)/zig-$(ARCH)-$(OS)-$(ZIG_VERSION).tar.xz
-endif
+	$(CURL) -o $@ $(ZIG_ARCHIVE_URL) || \
+		{ if [ -n "$(ZIG_ARCHIVE_URL_ALT)" ]; then $(CURL) -o $@ $(ZIG_ARCHIVE_URL_ALT); else exit 1; fi; }
 
 .PHONY: distribution1 distribution clean-distribution
 distribution1: dist/base $(DIST_BACKEND_FILES) dist/builder $(DIST_BINS) $(DIST_ZIG)
