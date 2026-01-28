@@ -156,10 +156,13 @@ ACTONC_HS=$(wildcard compiler/lib/src/*.hs compiler/lib/src/*/*.hs compiler/acto
 ACTONLSP_HS=$(wildcard compiler/lsp-server/*.hs)
 # NOTE: we unset CC/CXX on non-Windows to avoid Zig for stack/ghc.
 STACK_ENV_PREFIX := unset CC && unset CXX && unset CFLAGS &&
+STACK_GHC_OPTS := -j4 $(ACTC_GHC_OPTS)
 ifeq ($(OS),windows)
 STACK_CC ?= gcc
 STACK_CXX ?= g++
 STACK_CFLAGS ?= -Wno-error -Wno-pragma-pack -Wno-error=pragma-pack
+ACTC_GHC_OPTS += -optc-Wno-error -optc-Wno-pragma-pack -optc-Wno-error=pragma-pack
+STACK_GHC_OPTS := -j4 $(ACTC_GHC_OPTS)
 STACK_MINGW64_WIN := $(shell cygpath -m /mingw64)
 STACK_PATH_WIN := $(shell cygpath -w -p "$$PATH")
 STACK_ENV_PREFIX := PATH="$(STACK_PATH_WIN)" CC=$(STACK_CC) CXX=$(STACK_CXX) CFLAGS=$(STACK_CFLAGS)
@@ -177,8 +180,8 @@ $(ACTON_BIN): compiler/lib/package.yaml.in compiler/acton/package.yaml.in compil
 	cd compiler && $(STACK_ENV_PREFIX) stack build acton lsp-server-acton --dry-run 2>&1 | grep "Nothing to build" || \
 		(sed 's,^version: BUILD_VERSION,version: "$(VERSION_INFO)",' < acton/package.yaml.in > acton/package.yaml \
 		&& sed 's,^version: BUILD_VERSION,version: "$(VERSION_INFO)",' < lsp-server/package.yaml.in > lsp-server/package.yaml \
-		&& stack build acton lsp-server-acton $(STACK_OPTS) --ghc-options='-j4 $(ACTC_GHC_OPTS)')
-	cd compiler && $(STACK_ENV_PREFIX) stack --local-bin-path=../dist/bin install acton lsp-server-acton $(STACK_OPTS)
+		&& stack build acton lsp-server-acton $(STACK_OPTS) --ghc-options='$(STACK_GHC_OPTS)')
+	cd compiler && $(STACK_ENV_PREFIX) stack --local-bin-path=../dist/bin install acton lsp-server-acton $(STACK_OPTS) --ghc-options='$(STACK_GHC_OPTS)'
 
 $(ACTONC_BIN): $(ACTON_BIN)
 	@mkdir -p $(dir $@)
