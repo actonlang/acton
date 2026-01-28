@@ -159,7 +159,7 @@ STACK_ENV_PREFIX := unset CC && unset CXX && unset CFLAGS &&
 ifeq ($(OS),windows)
 STACK_CC ?= gcc
 STACK_CXX ?= g++
-STACK_CFLAGS ?= -Wno-error
+STACK_CFLAGS ?= -Wno-error -Wno-pragma-pack -Wno-error=pragma-pack
 STACK_MINGW64_WIN := $(shell cygpath -m /mingw64)
 STACK_PATH_WIN := $(shell cygpath -w -p "$$PATH")
 STACK_ENV_PREFIX := PATH="$(STACK_PATH_WIN)" CC=$(STACK_CC) CXX=$(STACK_CXX) CFLAGS=$(STACK_CFLAGS)
