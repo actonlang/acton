@@ -281,6 +281,11 @@ jobs:
             mingw-w64-x86_64-toolchain
             unzip
             xz
+      - name: "Set up Haskell (Stack)"
+        uses: haskell-actions/setup@v2
+        with:
+          enable-stack: true
+          stack-version: "latest"
       - name: "Build Acton distribution (Windows)"
         env:
           MSYS: winsymlinks:lnk
