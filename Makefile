@@ -150,17 +150,25 @@ test-backend: $(BACKEND_TESTS)
 # /compiler ----------------------------------------------
 ACTONC_HS=$(wildcard compiler/lib/src/*.hs compiler/lib/src/*/*.hs compiler/acton/Main.hs)
 ACTONLSP_HS=$(wildcard compiler/lsp-server/*.hs)
+# NOTE: we unset CC/CXX on non-Windows to avoid Zig for stack/ghc.
+STACK_ENV_PREFIX := unset CC && unset CXX && unset CFLAGS &&
+ifeq ($(OS),windows)
+STACK_CC ?= /mingw64/bin/gcc
+STACK_CXX ?= /mingw64/bin/g++
+STACK_CFLAGS ?=
+STACK_ENV_PREFIX := CC=$(STACK_CC) CXX=$(STACK_CXX) CFLAGS=$(STACK_CFLAGS)
+endif
 # NOTE: we're unsetting CC & CXX to avoid using zig cc & zig c++ for stack /
 # ghc, which doesn't seem to work properly
 $(ACTON_BIN): compiler/lib/package.yaml.in compiler/acton/package.yaml.in compiler/lsp-server/package.yaml.in compiler/stack.yaml $(ACTONC_HS) $(ACTONLSP_HS) version.mk
 	mkdir -p dist/bin
 	rm -f $(ACTONC_BIN)
 	cd compiler && sed 's,^version: BUILD_VERSION,version: "$(VERSION)",' < lib/package.yaml.in > lib/package.yaml
-	cd compiler && unset CC && unset CXX && unset CFLAGS && stack build acton lsp-server-acton --dry-run 2>&1 | grep "Nothing to build" || \
+	cd compiler && $(STACK_ENV_PREFIX) stack build acton lsp-server-acton --dry-run 2>&1 | grep "Nothing to build" || \
 		(sed 's,^version: BUILD_VERSION,version: "$(VERSION_INFO)",' < acton/package.yaml.in > acton/package.yaml \
 		&& sed 's,^version: BUILD_VERSION,version: "$(VERSION_INFO)",' < lsp-server/package.yaml.in > lsp-server/package.yaml \
 		&& stack build acton lsp-server-acton $(STACK_OPTS) --ghc-options='-j4 $(ACTC_GHC_OPTS)')
-	cd compiler && unset CC && unset CXX && unset CFLAGS && stack --local-bin-path=../dist/bin install acton lsp-server-acton
+	cd compiler && $(STACK_ENV_PREFIX) stack --local-bin-path=../dist/bin install acton lsp-server-acton
 
 $(ACTONC_BIN): $(ACTON_BIN)
 	@mkdir -p $(dir $@)

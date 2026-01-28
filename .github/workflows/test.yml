@@ -277,6 +277,7 @@ jobs:
             base-devel
             curl
             git
+            mingw-w64-x86_64-gcc-libs
             mingw-w64-x86_64-toolchain
             unzip
             xz
