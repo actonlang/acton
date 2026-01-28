@@ -45,18 +45,17 @@ dependencies:
   - random
   - split
   - system-filepath
-  - sydtest
-  - tasty
-  - tasty-expected-failure
-  - tasty-golden
-  - tasty-hunit
   - text
   - temporary
   - time
   - timeit
-  - unix
   - unordered-containers
   - regex-tdfa
+
+when:
+  - condition: !os(windows)
+    dependencies:
+      - unix
   
 executables:
   acton:
@@ -87,6 +86,11 @@ tests:
   test_acton:
     main:                test.hs
     source-dirs:         .
+    dependencies:
+      - tasty
+      - tasty-expected-failure
+      - tasty-golden
+      - tasty-hunit
     ghc-options:
       - -threaded
       - -rtsopts
@@ -94,6 +98,11 @@ tests:
   incremental:
     main:                test_incremental.hs
     source-dirs:         .
+    dependencies:
+      - tasty
+      - tasty-expected-failure
+      - tasty-golden
+      - tasty-hunit
     ghc-options:
       - -threaded
       - -rtsopts
@@ -101,6 +110,11 @@ tests:
   test_acton_online:
     main:                test_online.hs
     source-dirs:         .
+    dependencies:
+      - tasty
+      - tasty-expected-failure
+      - tasty-golden
+      - tasty-hunit
     ghc-options:
       - -threaded
       - -rtsopts

@@ -43,15 +43,20 @@ dependencies:
   - prettyprinter
   - process
   - scientific
-  - sydtest
-  - sydtest-discover
   - stm
   - text
   - time
   - transformers
-  - unix
   - utf8-string
   - unordered-containers
+
+when:
+  - condition: os(windows)
+    dependencies:
+      - Win32
+  - condition: !os(windows)
+    dependencies:
+      - unix
 
 library:
   source-dirs: src
@@ -92,6 +97,8 @@ tests:
     source-dirs: test
     dependencies:
       - libacton
+      - sydtest
+      - sydtest-discover
     ghc-options:
       - -threaded
       - -rtsopts

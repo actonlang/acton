@@ -91,7 +91,6 @@ import Text.Show.Pretty (ppDoc)
 import System.IO.Temp
 import System.IO.Unsafe (unsafePerformIO)
 import System.Info
-import System.Posix.Files
 import System.Process
 import qualified System.FSNotify as FS
 import qualified System.Environment
