@@ -158,6 +158,7 @@ STACK_CXX ?= g++
 STACK_CFLAGS ?=
 STACK_PATH_WIN := $(shell cygpath -w -p "$$PATH")
 STACK_ENV_PREFIX := PATH="$(STACK_PATH_WIN)" CC=$(STACK_CC) CXX=$(STACK_CXX) CFLAGS=$(STACK_CFLAGS)
+STACK_OPTS += --skip-msys
 endif
 # NOTE: we're unsetting CC & CXX to avoid using zig cc & zig c++ for stack /
 # ghc, which doesn't seem to work properly
@@ -169,7 +170,7 @@ $(ACTON_BIN): compiler/lib/package.yaml.in compiler/acton/package.yaml.in compil
 		(sed 's,^version: BUILD_VERSION,version: "$(VERSION_INFO)",' < acton/package.yaml.in > acton/package.yaml \
 		&& sed 's,^version: BUILD_VERSION,version: "$(VERSION_INFO)",' < lsp-server/package.yaml.in > lsp-server/package.yaml \
 		&& stack build acton lsp-server-acton $(STACK_OPTS) --ghc-options='-j4 $(ACTC_GHC_OPTS)')
-	cd compiler && $(STACK_ENV_PREFIX) stack --local-bin-path=../dist/bin install acton lsp-server-acton
+	cd compiler && $(STACK_ENV_PREFIX) stack --local-bin-path=../dist/bin install acton lsp-server-acton $(STACK_OPTS)
 
 $(ACTONC_BIN): $(ACTON_BIN)
 	@mkdir -p $(dir $@)

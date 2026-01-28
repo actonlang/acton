@@ -294,16 +294,34 @@ jobs:
           set -euo pipefail
           export PATH="/mingw64/bin:$PATH"
           cd "$GITHUB_WORKSPACE"
-          stack setup
-          ghc_bin_win=$(stack path --compiler-bin)
-          ghc_bin=$(cygpath -u "$ghc_bin_win")
-          ghc_root=$(cd "$ghc_bin/.." && pwd)
-          export PATH="$ghc_root/mingw/bin:$PATH"
-          export STACK_CC="$ghc_root/mingw/bin/gcc"
-          export STACK_CXX="$ghc_root/mingw/bin/g++"
           make -j2 BUILD_TIME=${BUILD_TIME}
           make release BUILD_TIME=${BUILD_TIME}
           ./dist/bin/acton.exe version
+      - name: "Debug Windows toolchain (on failure)"
+        if: failure()
+        shell: pwsh
+        run: |
+          Write-Host "WIN PATH=$env:PATH"
+          where stack || $true
+          stack --version || $true
+          stack path --compiler-bin || $true
+          stack path --compiler-tools-bin || $true
+          where gcc || $true
+          where g++ || $true
+          where libstdc++-6.dll || $true
+          where libgcc_s_seh-1.dll || $true
+          where libgcc_s.dll || $true
+      - name: "Debug MSYS2 toolchain (on failure)"
+        if: failure()
+        shell: msys2 {0}
+        run: |
+          set -e
+          echo "MSYS PATH=$PATH"
+          command -v gcc || true
+          command -v g++ || true
+          ls -la /mingw64/bin/libstdc++-6.dll || true
+          ls -la /mingw64/bin/libgcc_s_seh-1.dll || true
+          ls -la /mingw64/bin/libgcc_s.dll || true
       - name: "Upload Windows artifacts"
         uses: actions/upload-artifact@v6
         with:
