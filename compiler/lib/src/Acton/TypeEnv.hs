@@ -266,7 +266,7 @@ newWitness                              = Internal Witness "" <$> newUnique
 
 newTmp                                  = Internal Tempvar "" <$> newUnique
 
-newUnivarOfKind k                       = TUni NoLoc <$> univar k <$> newUnique
+newUnivarOfKind k                       = TUni NoLoc <$> univar k 0 <$> newUnique           -- <<<<<<<<<<<<<<<<<
 
 newUnivarToken n                        = TUni NoLoc $ unitoken n
 

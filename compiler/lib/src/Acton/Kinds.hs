@@ -61,9 +61,9 @@ storeXVar xv p                      = state $ \st -> ((), st{ xvars = QBind xv [
 swapXVars                           :: QBinds -> KindM QBinds
 swapXVars q                         = state $ \st -> (xvars st, st{ xvars = q })
 
-newWildvar                          = do k <- newKUni
+newWildvar l                        = do k <- newKUni
                                          i <- newUnique
-                                         return $ uniwild k i
+                                         return $ uniwild k l i
 
 newKUni                             = KUni <$> newUnique
 
@@ -139,7 +139,7 @@ instance InstKWild TVar where
     instKWild tv                    = return tv
 
 instance InstKWild TUni where
-    instKWild (UV KWild i)          = UV <$> newKUni <*> return i
+    instKWild (UV KWild l i)        = do k <- newKUni; return $ UV k l i
     instKWild uv                    = return uv
 
 instance InstKWild (Maybe Type) where
@@ -152,47 +152,49 @@ instance InstKWild (Maybe Type) where
 ----------------------------------------------------------------------------------------------------------------------
 
 class ConvTWild a where
-    convTWild                       :: a -> KindM a
+    convTWild                       :: KindEnv -> a -> KindM a
 
 instance ConvTWild Type where
-    convTWild (TWild l)             = TUni l <$> newWildvar
-    convTWild (TFun l e p k t)      = TFun l <$> convTWild e <*> convTWild p <*> convTWild k <*> convTWild t
-    convTWild (TTuple l p k)        = TTuple l <$> convTWild p <*> convTWild k
-    convTWild (TOpt l t)            = TOpt l <$> convTWild t
-    convTWild (TCon l c)            = TCon l <$> convTWild c
-    convTWild (TRow l k n t r)      = TRow l k n <$> convTWild t <*> convTWild r
-    convTWild (TStar l k r)         = TStar l k <$> convTWild r
-    convTWild t                     = return t
+    convTWild env (TWild l)         = TUni l <$> newWildvar (qlevel env)
+    convTWild env (TFun l e p k t)  = TFun l <$> convTWild env e <*> convTWild env p <*> convTWild env k <*> convTWild env t
+    convTWild env (TTuple l p k)    = TTuple l <$> convTWild env p <*> convTWild env k
+    convTWild env (TOpt l t)        = TOpt l <$> convTWild env t
+    convTWild env (TCon l c)        = TCon l <$> convTWild env c
+    convTWild env (TRow l k n t r)  = TRow l k n <$> convTWild env t <*> convTWild env r
+    convTWild env (TStar l k r)     = TStar l k <$> convTWild env r
+    convTWild env t                 = return t
 
 instance ConvTWild TCon where
-    convTWild (TC n ts)             = TC n <$> mapM convTWild ts
+    convTWild env (TC n ts)         = TC n <$> mapM (convTWild env) ts
 
 instance ConvTWild QBinds where
-    convTWild q                     = mapM instq q
-      where instq (QBind v us)      = QBind v <$> mapM convTWild us
+    convTWild env q                 = mapM instq q
+      where instq (QBind v us)      = QBind v <$> mapM (convTWild env) us
 
 instance ConvTWild (Maybe Type) where
-    convTWild Nothing               = Just <$> convTWild tWild
-    convTWild (Just t)              = Just <$> convTWild t
+    convTWild env Nothing           = Just <$> convTWild env tWild
+    convTWild env (Just t)          = Just <$> convTWild env t
 
-maybeConvTWild Nothing              = return Nothing
-maybeConvTWild x                    = convTWild x
+maybeConvTWild env Nothing          = return Nothing
+maybeConvTWild env x                = convTWild env x
 
 instance ConvTWild PosPar where
-    convTWild (PosPar n t e p)      = PosPar n <$> convTWild t <*> return e <*> convTWild p
-    convTWild (PosSTAR n Nothing)   = PosSTAR n <$> Just <$> (TTuple NoLoc <$> convTWild tWild <*> pure kwdNil)
-    convTWild (PosSTAR n (Just t))
-      | TTuple{} <- t               = PosSTAR n <$> Just <$> convTWild t
+    convTWild env (PosPar n t e p)  = PosPar n <$> convTWild env t <*> return e <*> convTWild env p
+    convTWild env (PosSTAR n Nothing)
+                                    = PosSTAR n <$> Just <$> (TTuple NoLoc <$> convTWild env tWild <*> pure kwdNil)
+    convTWild env (PosSTAR n (Just t))
+      | TTuple{} <- t               = PosSTAR n <$> Just <$> convTWild env t
       | otherwise                   = err1 t "Tuple type expected"
-    convTWild PosNIL                = return PosNIL
+    convTWild env PosNIL            = return PosNIL
 
 instance ConvTWild KwdPar where
-    convTWild (KwdPar n t e k)      = KwdPar n <$> convTWild t <*> return e <*> convTWild k
-    convTWild (KwdSTAR n Nothing)   = KwdSTAR n <$> Just <$> (TTuple NoLoc posNil <$> convTWild tWild)
-    convTWild (KwdSTAR n (Just t))
-      | TTuple{} <- t               = KwdSTAR n <$> Just <$> convTWild t
+    convTWild env (KwdPar n t e k)  = KwdPar n <$> convTWild env t <*> return e <*> convTWild env k
+    convTWild env (KwdSTAR n Nothing)
+                                    = KwdSTAR n <$> Just <$> (TTuple NoLoc posNil <$> convTWild env tWild)
+    convTWild env (KwdSTAR n (Just t))
+      | TTuple{} <- t               = KwdSTAR n <$> Just <$> convTWild env t
       | otherwise                   = err1 t "Tuple type expected"
-    convTWild KwdNIL                = return KwdNIL
+    convTWild env KwdNIL            = return KwdNIL
 
 
 ----------------------------------------------------------------------------------------------------------------------
@@ -300,21 +302,28 @@ instance KCheck Decl where
     kchk env (Def l n q p k t b d x doc)
       | not $ null ambig            = err2 ambig "Ambiguous type variable in annotation:"
       | otherwise                   = do tmp <- swapXVars []
-                                         q <- convPExist env =<< convTWild q
-                                         p <- convPExist env =<< convTWild p
-                                         k <- convPExist env =<< convTWild k
-                                         t <- convPExist env =<< convTWild t
-                                         x <- convPExist env =<< convTWild x
+                                         q <- convPExist env q
+                                         p <- convPExist env p
+                                         k <- convPExist env k
+                                         t <- convPExist env t
+                                         x <- convPExist env x
                                          q <- (q++) <$> swapXVars tmp
                                          env1 <- extvars (qbound q) env
+                                         q <- convTWild env1 q
+                                         p <- convTWild env1 p
+                                         k <- convTWild env1 k
+                                         t <- convTWild env1 t
+                                         x <- convTWild env1 x
                                          Def l n <$> kchkQBinds env1 q <*> kchk env1 p <*> kchk env1 k <*> kexp KType env1 t <*> kchkSuite env1 b <*> 
                                                      pure d <*> kfx env1 x <*> pure doc
       where ambig                   = qualbound q \\ closeDepVarsQ (vfree p ++ vfree k ++ vfree t ++ vfree x) q
     kchk env (Actor l n q p k b doc)= do tmp <- swapXVars []
-                                         p <- convPExist env =<< convTWild p
-                                         k <- convPExist env =<< convTWild k
+                                         p <- convPExist env p
+                                         k <- convPExist env k
                                          q <- (q++) <$> swapXVars tmp
                                          env1 <- extvars (qbound q) env
+                                         p <- convTWild env1 p
+                                         k <- convTWild env1 k
                                          Actor l n <$> kchkQBinds env1 q <*> kchk env1 p <*> kchk env1 k <*> kchkSuite env1 b <*> pure doc
     kchk env (Class l n q us b doc) = do env1 <- extvars (tvSelf : qbound q) env
                                          Class l n <$> kchkQBinds env1 q <*> kchkBounds env1 us <*> kchkSuite env1 b <*> pure doc
@@ -363,8 +372,8 @@ instance KCheck Expr where
     kchk env (Rest l e n)           = Rest l <$> kchk env e <*> return n
     kchk env (DotI l e i)           = DotI l <$> kchk env e <*> return i
     kchk env (RestI l e i)          = RestI l <$> kchk env e <*> return i
-    kchk env (Lambda l p k e x)     = Lambda l <$> (kchk env =<< convTWild p) <*> (kchk env =<< convTWild k) <*>
-                                                   kchk env e <*> (kfx env =<< convTWild x)
+    kchk env (Lambda l p k e x)     = Lambda l <$> (kchk env =<< convTWild env p) <*> (kchk env =<< convTWild env k) <*>
+                                                   kchk env e <*> (kfx env =<< convTWild env x)
     kchk env (Yield l e)            = Yield l <$> kchk env e
     kchk env (YieldFrom l e)        = YieldFrom l <$> kchk env e
     kchk env (Tuple l es ks)        = Tuple l <$> kchk env es <*> kchk env ks
@@ -382,8 +391,8 @@ isModule env e                          = fmap ModName $ mfilter (isMod env) $ f
         dotChain _                      = Nothing
 
 instance KCheck Pattern where
-    kchk env (PWild l t)            = PWild l <$> (kexp KType env =<< maybeConvTWild t)
-    kchk env (PVar l n t)           = PVar l n <$> (kexp KType env =<< maybeConvTWild t)
+    kchk env (PWild l t)            = PWild l <$> (kexp KType env =<< maybeConvTWild env t)
+    kchk env (PVar l n t)           = PVar l n <$> (kexp KType env =<< maybeConvTWild env t)
     kchk env (PTuple l ps ks)       = PTuple l <$> kchk env ps <*> kchk env ks
     kchk env (PList l ps p)         = PList l <$> kchk env ps <*> kchk env p
     kchk env (PParen l p)           = PParen l <$> kchk env p
@@ -598,7 +607,7 @@ instance KSubst TVar where
     ksubst g (TV k n)               = TV <$> ksubst g k <*> return n
 
 instance KSubst TUni where
-    ksubst g (UV k i)               = UV <$> ksubst g k <*> return i
+    ksubst g (UV k l i)             = do k <- ksubst g k; return $ UV k l i
 
 instance KSubst TCon where
     ksubst g (TC n ts)              = TC n <$> ksubst g ts

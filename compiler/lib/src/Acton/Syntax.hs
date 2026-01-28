@@ -214,12 +214,12 @@ data TSchema    = TSchema { scloc::SrcLoc, scbind::QBinds, sctype::Type } derivi
 data TVar       = TV { tvkind::Kind, tvname::Name } -- the Name is an uppercase letter, optionally followed by digits.
                 deriving (Show,Read,Generic,NFData)
 
-data TUni       = UV { uvkind::Kind, uvid::Int }
+data TUni       = UV { uvkind::Kind, uvlevel::Int, uvid::Int }
                 deriving (Show,Read,Generic,NFData)
 
-univar k i      = UV k i
-unitoken i      = UV KWild (-(i*2))
-uniwild k i     = UV k (-(i*2+1))
+univar k l i    = UV k l i
+unitoken i      = UV KWild 0 (-(i*2))
+uniwild k l i   = UV k l (-(i*2+1))
 
 data TCon       = TC { tcname::QName, tcargs::[Type] } deriving (Eq,Show,Read,Generic,NFData)
 
@@ -556,7 +556,7 @@ instance HasLoc TVar where
     loc (TV _ v)        = loc v
 
 instance HasLoc TUni where
-    loc (UV _ v)        = NoLoc
+    loc (UV _ _ v)      = NoLoc
 
 instance HasLoc TCon where
     loc (TC c ts)       = loc c `upto` loc ts
@@ -715,13 +715,13 @@ instance Eq TVar where
     TV k1 v1            == TV k2 v2             = v1 == v2
 
 instance Eq TUni where
-    UV k1 i1            == UV k2 i2             = i1 == i2
+    UV _ _ i1           == UV _ _ i2            = i1 == i2
 
 instance Ord TVar where
     TV _ v1             <= TV _ v2              = v1 <= v2
 
 instance Ord TUni where
-    UV _ i1             <= UV _ i2              = i1 <= i2
+    UV _ _ i1           <= UV _ _ i2            = i1 <= i2
 
 instance Eq Type where
     TUni _ u1           == TUni _ u2            = u1 == u2
