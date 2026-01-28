@@ -122,6 +122,10 @@ endif
 BUILTIN_HFILES=$(wildcard base/builtin/*.h)
 
 DIST_BINS=$(ACTONC_BIN) $(ACTONDB_BIN) dist/bin/runacton $(LSP_BIN)
+ifeq ($(OS),windows)
+# ActonDB deps aren't Windows-ready yet; skip the binary for now.
+DIST_BINS=$(ACTONC_BIN) dist/bin/runacton $(LSP_BIN)
+endif
 DIST_ZIG=dist/zig
 ZIG_ARCHIVE_NAME := zig-$(ARCH)-$(OS)-$(ZIG_VERSION).tar.xz
 ifeq ($(OS),windows)
@@ -155,7 +159,7 @@ STACK_ENV_PREFIX := unset CC && unset CXX && unset CFLAGS &&
 ifeq ($(OS),windows)
 STACK_CC ?= gcc
 STACK_CXX ?= g++
-STACK_CFLAGS ?=
+STACK_CFLAGS ?= -Wno-error
 STACK_MINGW64_WIN := $(shell cygpath -m /mingw64)
 STACK_PATH_WIN := $(shell cygpath -w -p "$$PATH")
 STACK_ENV_PREFIX := PATH="$(STACK_PATH_WIN)" CC=$(STACK_CC) CXX=$(STACK_CXX) CFLAGS=$(STACK_CFLAGS)
@@ -438,6 +442,9 @@ clean-base:
 
 BACKEND_FILES = backend/build.zig backend/build.zig.zon $(wildcard backend/*.c backend/*.h backend/failure_detector/*.c backend/failure_detector/*.h)
 DIST_BACKEND_FILES = $(addprefix dist/,$(BACKEND_FILES)) dist/backend/deps $(ACTONDB_BIN)
+ifeq ($(OS),windows)
+DIST_BACKEND_FILES = $(addprefix dist/,$(BACKEND_FILES)) dist/backend/deps
+endif
 dist/backend%: backend/%
 	mkdir -p "$(dir $@)"
 	cp -a "$<" "$@"
