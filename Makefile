@@ -438,6 +438,14 @@ dist/backend%: backend/%
 	mkdir -p "$(dir $@)"
 	cp -a "$<" "$@"
 
+ifeq ($(OS),windows)
+# Windows tools won't follow MSYS2 .lnk "symlinks", so materialize deps.
+dist/backend/deps: $(DEPS)
+	rm -rf "$@"
+	mkdir -p "$@"
+	cp -a dist/deps/* "$@"
+endif
+
 .PHONY: dist/base
 dist/base: base base/.build base/__root.zig base/acton.zig base/build.zig base/build.zig.zon base/acton.zig $(ACTONC_BIN) $(DEPS)
 	mkdir -p "$@" "$@/.build" "$@/out"

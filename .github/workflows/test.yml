@@ -304,6 +304,7 @@ jobs:
           Write-Host "WIN PATH=$env:PATH"
           where stack || $true
           stack --version || $true
+          stack path || $true
           stack path --compiler-bin || $true
           stack path --compiler-tools-bin || $true
           where gcc || $true
@@ -311,6 +312,12 @@ jobs:
           where libstdc++-6.dll || $true
           where libgcc_s_seh-1.dll || $true
           where libgcc_s.dll || $true
+          Get-ChildItem "$env:LOCALAPPDATA\\Programs\\stack\\x86_64-windows" -Directory -Filter "msys2-*" -ErrorAction SilentlyContinue | ForEach-Object {
+            Write-Host "Stack msys2 dir: $($_.FullName)"
+            Get-ChildItem "$($_.FullName)\\mingw64\\bin" -Filter "libstdc++-6.dll" -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName }
+            Get-ChildItem "$($_.FullName)\\mingw64\\bin" -Filter "libgcc_s_seh-1.dll" -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName }
+            Get-ChildItem "$($_.FullName)\\mingw64\\bin" -Filter "libgcc_s.dll" -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName }
+          }
       - name: "Debug MSYS2 toolchain (on failure)"
         if: failure()
         shell: msys2 {0}
