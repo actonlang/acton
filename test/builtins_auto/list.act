@@ -146,6 +146,11 @@ actor main(env):
         print("Unexpected result of [].__bool__():", l)
         await async env.exit(1)
 
+    opt: list[?str] = ["a", None, "b"]
+    if opt.__str__() != "['a', None, 'b']":
+        print("Unexpected result of list.__str__() with None:", opt)
+        await async env.exit(1)
+
 #shrinking
     l = list(range(30))
     for i in range(20):
