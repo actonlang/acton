@@ -167,7 +167,6 @@ STACK_MINGW64_WIN := $(shell cygpath -m /mingw64)
 STACK_PATH_WIN := $(shell cygpath -w -p "$$PATH")
 STACK_ENV_PREFIX := PATH="$(STACK_PATH_WIN)" CC=$(STACK_CC) CXX=$(STACK_CXX) CFLAGS=$(STACK_CFLAGS)
 STACK_OPTS += --skip-msys \
-	--extra-include-dirs=$(STACK_MINGW64_WIN)/include \
 	--extra-lib-dirs=$(STACK_MINGW64_WIN)/lib \
 	--extra-lib-dirs=$(STACK_MINGW64_WIN)/bin
 endif
