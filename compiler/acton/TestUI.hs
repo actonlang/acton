@@ -159,8 +159,8 @@ testSpinnerLoop ui = do
 renderLiveLine :: Char -> String -> String
 renderLiveLine spinner line =
     case line of
-      ' ':' ':rest -> spinner : ' ' : rest
-      _ -> spinner : ' ' : line
+      ' ':' ':' ':rest -> ' ' : spinner : ' ' : rest
+      _ -> ' ' : spinner : ' ' : line
 
 moduleHeaderLine :: String -> String
 moduleHeaderLine modName
