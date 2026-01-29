@@ -1198,8 +1198,7 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
         rootProj = ccRootProj (cpContext plan)
         optsPlan = ccOpts (cpContext plan)
         neededTasks = cpNeededTasks plan
-        modWidth = maximum (0 : [ length (modNameToString (tkMod (gtKey t))) | t <- neededTasks ])
-        padMod mn = padRight modWidth (modNameToString mn)
+        modLabel mn = modNameToString mn
         spinnerPrefixWidth = 3
         frontPrefix = "   Finished type check of"
         backPrefix = "   Finished compilation of "
@@ -1214,11 +1213,17 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
           let rootDeps = maybe [] projDeps (M.lookup rootProj projMap)
               otherDeps = concatMap projDeps (M.elems projMap)
           in M.fromListWith (\_ old -> old) [ (p, n) | (n, p) <- rootDeps ++ otherDeps ]
-        projectLabelFor proj =
-          case M.lookup proj depNameMap of
-            Just name -> name
-            Nothing -> projectLabel rootProj proj
-        projWidth = maximum (0 : [ length (projectLabelFor (tkProj (gtKey t))) | t <- neededTasks ])
+        projectLabelFor proj
+          | proj == rootProj = ""
+          | otherwise =
+              case M.lookup proj depNameMap of
+                Just name -> name
+                Nothing -> projectLabel rootProj proj
+        projectModuleLabel proj mn =
+          case projectLabelFor proj of
+            "" -> modLabel mn
+            label -> label ++ "." ++ modLabel mn
+        labelWidth = maximum (0 : [ length (projectModuleLabel (tkProj (gtKey t)) (tkMod (gtKey t))) | t <- neededTasks ])
         prefixWidth = maximum [ length frontPrefix
                               , length backPrefix
                               , length backFailPrefix
@@ -1227,27 +1232,26 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
                               ]
         progressPrefixWidth = max 0 (prefixWidth - spinnerPrefixWidth)
         padProgressPrefix phase = padRight progressPrefixWidth (padRight phaseWidth phase ++ " ")
-        projPart proj = padRight projWidth (projectLabelFor proj) ++ "/"
-        completionPrefix prefix proj = padRight prefixWidth prefix ++ projPart proj
+        completionPrefix prefix = padRight prefixWidth prefix
         timeSep = "    "
-        nameWidth = prefixWidth + projWidth + 1 + modWidth
+        nameWidth = prefixWidth + labelWidth
         timePadWidth = nameWidth + length timeSep
         progressTimePadWidth = max 0 (timePadWidth - spinnerPrefixWidth)
         frontDoneLine proj mn t =
-          let base = completionPrefix frontPrefix proj ++ padMod mn
+          let base = completionPrefix frontPrefix ++ padRight labelWidth (projectModuleLabel proj mn)
           in padRight timePadWidth base ++ fmtTime t
         backDoneLine proj mn mt =
-          let base = completionPrefix backPrefix proj ++ padMod mn
+          let base = completionPrefix backPrefix ++ padRight labelWidth (projectModuleLabel proj mn)
           in case mt of
                Just t -> padRight timePadWidth base ++ fmtTime t
                Nothing -> base
         backFailLine proj mn msg =
-          let base = completionPrefix backFailPrefix proj ++ padMod mn
+          let base = completionPrefix backFailPrefix ++ projectModuleLabel proj mn
           in base ++ "    " ++ msg
         finalDoneLine t =
           padRight timePadWidth finalPrefix ++ fmtTime t
         progressLine phase proj mn =
-          let base = padProgressPrefix phase ++ projPart proj ++ padMod mn
+          let base = padProgressPrefix phase ++ padRight labelWidth (projectModuleLabel proj mn)
           in padRight progressTimePadWidth base
         progressFinalLine =
           padRight progressTimePadWidth (padProgressPrefix phaseFinal)

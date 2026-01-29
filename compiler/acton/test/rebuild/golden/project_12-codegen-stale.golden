@@ -2,5 +2,5 @@ Resolving dependencies (fetching if missing)...
   Fresh a: using cached .ty
   Stale b: generated code out of date {impl c missing -> e3352a26, h missing -> e3352a26}
   Fresh c: using cached .ty
-   Finished compilation of    rebuild/b     0.000 s
-   Finished final compilation               0.000 s
+   Finished compilation of    b     0.000 s
+   Finished final compilation       0.000 s

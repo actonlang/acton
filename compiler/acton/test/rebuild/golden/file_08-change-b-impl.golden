@@ -3,8 +3,8 @@ Resolving dependencies (fetching if missing)...
   Fresh a: using cached .ty
   Stale b: source changed
   Hash deltas b: +DocInfo, ~baa{src a5c65622 -> 1bb00ba9, impl 0372700c -> 3c1bc1bc}
-   Finished type check of     rebuild/b     0.000 s
+   Finished type check of     b     0.000 s
   Stale c: impl changes in b.baa 0372700c → 3c1bc1bc (used by main)
-   Finished compilation of    rebuild/b     0.000 s
-   Finished compilation of    rebuild/c     0.000 s
-   Finished final compilation               0.000 s
+   Finished compilation of    b     0.000 s
+   Finished compilation of    c     0.000 s
+   Finished final compilation       0.000 s

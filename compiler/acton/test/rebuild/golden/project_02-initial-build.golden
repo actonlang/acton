@@ -1,11 +1,11 @@
 Resolving dependencies (fetching if missing)...
   Stale a: source changed
-   Finished type check of     rebuild/a     0.000 s
+   Finished type check of     a     0.000 s
   Stale b: source changed
-   Finished type check of     rebuild/b     0.000 s
+   Finished type check of     b     0.000 s
   Stale c: source changed
-   Finished type check of     rebuild/c     0.000 s
-   Finished compilation of    rebuild/a     0.000 s
-   Finished compilation of    rebuild/b     0.000 s
-   Finished compilation of    rebuild/c     0.000 s
-   Finished final compilation               0.000 s
+   Finished type check of     c     0.000 s
+   Finished compilation of    a     0.000 s
+   Finished compilation of    b     0.000 s
+   Finished compilation of    c     0.000 s
+   Finished final compilation       0.000 s

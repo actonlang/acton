@@ -1,14 +1,14 @@
 Resolving dependencies (fetching if missing)...
   Stale a: source changed
   Hash deltas a: -W_3, ~aaa{src 8df17e22 -> c7be204e, pub effe126a -> 4d083345, impl ffd0693d -> 60da3ff8}
-   Finished type check of     rebuild/a     0.000 s
+   Finished type check of     a     0.000 s
   Stale b: pub changes in a.aaa effe126a → 4d083345 (used by baa)
   Hash deltas b: ~baa{pub abea1a6b -> 18d7ab30, impl 3c1bc1bc -> e9429599}
-   Finished type check of     rebuild/b     0.000 s
+   Finished type check of     b     0.000 s
   Stale c: pub changes in b.baa abea1a6b → 18d7ab30 (used by main)
   Hash deltas c: ~main{impl ea554c85 -> 75e6644a}
-   Finished type check of     rebuild/c     0.000 s
-   Finished compilation of    rebuild/a     0.000 s
-   Finished compilation of    rebuild/b     0.000 s
-   Finished compilation of    rebuild/c     0.000 s
-   Finished final compilation               0.000 s
+   Finished type check of     c     0.000 s
+   Finished compilation of    a     0.000 s
+   Finished compilation of    b     0.000 s
+   Finished compilation of    c     0.000 s
+   Finished final compilation       0.000 s
