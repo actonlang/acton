@@ -59,4 +59,4 @@ extra-deps:
 # system-ghc: true
 
 ghc-options:
-  "$everything": -fPIC
+  "$everything": -fPIC -optc-Wno-error -optc-Wno-pragma-pack -optc-Wno-error=pragma-pack
