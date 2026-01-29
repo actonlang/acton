@@ -22,16 +22,18 @@
 --
 -- On-disk layout (Binary, in this exact order)
 --   1) version            :: [Int]                         -- Acton.Syntax.version
---   2) moduleSrcBytesHash :: ByteString                    -- SHA-256 of raw source bytes
---   3) modulePubHash      :: ByteString                    -- SHA-256 of public NameInfo (doc-free)
---                                                         -- augmented with imports' pub hashes
---   4) moduleImplHash     :: ByteString                    -- SHA-256 of per-name impl hashes
---   5) imports            :: [(A.ModName, ByteString)]     -- imported module and pub hash used
---   6) nameHashes         :: [NameHashInfo]                -- per-name src/pub/impl hashes + deps
---   7) roots              :: [A.Name]                      -- root actors (e.g., main or test_main)
---   8) docstring          :: Maybe String                  -- module docstring
---   9) nameInfo           :: I.NameInfo                    -- type/name environment
---  10) typedModule        :: A.Module                      -- typed module
+--   2) moduleHashes       :: (ByteString, ByteString, ByteString)
+--      - moduleSrcBytesHash :: ByteString                  -- SHA-256 of raw source bytes
+--      - modulePubHash      :: ByteString                  -- SHA-256 of public NameInfo (doc-free)
+--                                                       -- augmented with imports' pub hashes
+--      - moduleImplHash     :: ByteString                  -- SHA-256 of per-name impl hashes
+--   3) imports            :: [(A.ModName, ByteString)]     -- imported module and pub hash used
+--   4) nameHashes         :: [NameHashInfo]                -- per-name src/pub/impl hashes + deps
+--   5) roots              :: [A.Name]                      -- root actors (e.g., main or test_main)
+--   6) tests              :: [String]                      -- discovered test names
+--   7) docstring          :: Maybe String                  -- module docstring
+--   8) nameInfo           :: I.NameInfo                    -- type/name environment
+--   9) typedModule        :: A.Module                      -- typed module
 --
 -- Rationale for ordering
 -- - Put small, fixed/cheap fields up front (version, moduleSrcBytesHash) to enable fast
@@ -64,58 +66,57 @@ data NameHashInfo = NameHashInfo
 
 instance Binary NameHashInfo
 
--- Note: tests are deliberately not stored in the header anymore. We only keep
---       imports/name hashes/roots/docstring as the small, frequently accessed header.
+-- Note: tests are stored in the header to support listing without compiling
+--       or executing test binaries.
 
-writeFile :: FilePath -> BS.ByteString -> BS.ByteString -> BS.ByteString -> [(A.ModName, BS.ByteString)] -> [NameHashInfo] -> [A.Name] -> Maybe String -> I.NameInfo -> A.Module -> IO ()
-writeFile f moduleSrcBytesHash modulePubHash moduleImplHash imps nameHashes roots mdoc nmod tchecked = do
+writeFile :: FilePath -> BS.ByteString -> BS.ByteString -> BS.ByteString -> [(A.ModName, BS.ByteString)] -> [NameHashInfo] -> [A.Name] -> [String] -> Maybe String -> I.NameInfo -> A.Module -> IO ()
+writeFile f moduleSrcBytesHash modulePubHash moduleImplHash imps nameHashes roots tests mdoc nmod tchecked = do
     -- Use PID for unique temp file name
     pid <- getProcessID
     let tmpFile = f ++ "." ++ show pid
-    BL.writeFile tmpFile (encode (A.version, moduleSrcBytesHash, modulePubHash, moduleImplHash, imps, nameHashes, roots, mdoc, nmod, tchecked))
+    BL.writeFile tmpFile (encode (A.version, (moduleSrcBytesHash, modulePubHash, moduleImplHash), imps, nameHashes, roots, tests, mdoc, nmod, tchecked))
     -- Atomically rename to final location
     -- This is atomic on POSIX systems and prevents partial writes or conflicts
     renameFile tmpFile f
 
-readFile :: FilePath -> IO ([A.ModName], I.NameInfo, A.Module, BS.ByteString, BS.ByteString, BS.ByteString, [(A.ModName, BS.ByteString)], [NameHashInfo], [A.Name], Maybe String)
+readFile :: FilePath -> IO ([A.ModName], I.NameInfo, A.Module, BS.ByteString, BS.ByteString, BS.ByteString, [(A.ModName, BS.ByteString)], [NameHashInfo], [A.Name], [String], Maybe String)
 readFile f = do
     h <- openBinaryFile f ReadMode
     size <- hFileSize h
     bs <- BS.hGet h (fromIntegral size)
     hClose h
     let bsLazy = BL.fromStrict bs
-    let (vs, moduleSrcBytesHash, modulePubHash, moduleImplHash, imps, nameHashes, roots, mdoc, nmod, tmod)
-          = decode bsLazy :: ([Int], BS.ByteString, BS.ByteString, BS.ByteString, [(A.ModName, BS.ByteString)], [NameHashInfo], [A.Name], Maybe String, I.NameInfo, A.Module)
+    let (vs, (moduleSrcBytesHash, modulePubHash, moduleImplHash), imps, nameHashes, roots, tests, mdoc, nmod, tmod)
+          = decode bsLazy :: ([Int], (BS.ByteString, BS.ByteString, BS.ByteString), [(A.ModName, BS.ByteString)], [NameHashInfo], [A.Name], [String], Maybe String, I.NameInfo, A.Module)
     if vs == A.version
-      then return (map fst imps, nmod, tmod, moduleSrcBytesHash, modulePubHash, moduleImplHash, imps, nameHashes, roots, mdoc)
+      then return (map fst imps, nmod, tmod, moduleSrcBytesHash, modulePubHash, moduleImplHash, imps, nameHashes, roots, tests, mdoc)
       else do
         hPutStrLn stderr ("Interface file has version " ++ show vs ++ "; current version is " ++ show A.version)
         System.Exit.exitFailure
 
 -- Read only small header fields from .ty: (moduleSrcBytesHash, modulePubHash,
--- moduleImplHash, imports, nameHashes, roots, docstring)
+-- moduleImplHash, imports, nameHashes, roots, tests, docstring)
 -- This avoids loading large fields and is much faster than readFile which
 -- decodes everything.
-readHeader :: FilePath -> IO (BS.ByteString, BS.ByteString, BS.ByteString, [(A.ModName, BS.ByteString)], [NameHashInfo], [A.Name], Maybe String)
+readHeader :: FilePath -> IO (BS.ByteString, BS.ByteString, BS.ByteString, [(A.ModName, BS.ByteString)], [NameHashInfo], [A.Name], [String], Maybe String)
 readHeader f = do
     h <- openBinaryFile f ReadMode
     size <- hFileSize h
     bs <- BS.hGet h (fromIntegral size)
     hClose h
     let bsLazy = BL.fromStrict bs
-        getHdr :: BinaryGet.Get ([Int], BS.ByteString, BS.ByteString, BS.ByteString, [(A.ModName, BS.ByteString)], [NameHashInfo], [A.Name], Maybe String)
+        getHdr :: BinaryGet.Get ([Int], (BS.ByteString, BS.ByteString, BS.ByteString), [(A.ModName, BS.ByteString)], [NameHashInfo], [A.Name], [String], Maybe String)
         getHdr = do
           vs    <- get :: BinaryGet.Get [Int]
-          moduleSrcBytesHash <- get :: BinaryGet.Get BS.ByteString
-          modulePubHash <- get :: BinaryGet.Get BS.ByteString
-          moduleImplHash <- get :: BinaryGet.Get BS.ByteString
+          hashes <- get :: BinaryGet.Get (BS.ByteString, BS.ByteString, BS.ByteString)
           imps  <- get :: BinaryGet.Get [(A.ModName, BS.ByteString)]
           nameHashes <- get :: BinaryGet.Get [NameHashInfo]
           roots <- get :: BinaryGet.Get [A.Name]
+          tests <- get :: BinaryGet.Get [String]
           doc   <- get :: BinaryGet.Get (Maybe String)
-          return (vs, moduleSrcBytesHash, modulePubHash, moduleImplHash, imps, nameHashes, roots, doc)
+          return (vs, hashes, imps, nameHashes, roots, tests, doc)
     case BinaryGet.runGetOrFail getHdr bsLazy of
       Left _ -> ioError (userError "Failed to decode .ty header")
-      Right (_, _, (vs, moduleSrcBytesHash, modulePubHash, moduleImplHash, imps, nameHashes, roots, doc)) ->
-        if vs == A.version then return (moduleSrcBytesHash, modulePubHash, moduleImplHash, imps, nameHashes, roots, doc)
+      Right (_, _, (vs, (moduleSrcBytesHash, modulePubHash, moduleImplHash), imps, nameHashes, roots, tests, doc)) ->
+        if vs == A.version then return (moduleSrcBytesHash, modulePubHash, moduleImplHash, imps, nameHashes, roots, tests, doc)
         else ioError (userError (".ty version mismatch: file has " ++ show vs ++ ", expected " ++ show A.version))

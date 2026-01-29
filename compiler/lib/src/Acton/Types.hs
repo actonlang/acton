@@ -16,7 +16,7 @@ module Acton.Types(reconstruct, showTyFile, prettySigs, TypeError(..)) where
 
 import Control.Monad
 import Data.Maybe (isJust)
-import Data.List (nub, intersect)
+import Data.List (nub, intersect, sort)
 import Pretty
 import qualified Control.Exception
 import Debug.Trace
@@ -62,21 +62,25 @@ unescapeString ('\\':'"':xs) = '"' : unescapeString xs
 unescapeString ('\\':'\'':xs) = '\'' : unescapeString xs
 unescapeString (x:xs) = x : unescapeString xs
 
--- | Type-check a module and return its NameInfo, typed module, and env.
-reconstruct                             :: Env0 -> Module -> IO (NameInfo, Module, Env0, [Acton.Syntax.ModName])
+-- | Type-check a module and return its NameInfo, typed module, env, and discovered tests.
+reconstruct                             :: Env0 -> Module -> IO (NameInfo, Module, Env0, [Acton.Syntax.ModName], [String])
 reconstruct env0 (Module m i ss)         = do --traceM ("#################### original env0 for " ++ prstr m ++ ":")
                                              --traceM (render (pretty env0))
                                              let nmod = NModule iface moduleDocstring
                                              --traceM ("#################### converted env0:")
                                              --traceM (render (pretty env0'))
-                                             return (nmod, Module m i ssT, env0', mrefs)
+                                             return (nmod, Module m i ssT, env0', mrefs, tests)
 
   where moduleDocstring                 = extractDocstring ss
         env1                            = reserve (assigned ss) (typeX env0)
         (te,ss1)                        = runTypeM $ infTop env1 ss
         env2                            = define te (setMod m env0)
 
-        (teT,ssT)                       = if hasTesting i then (te ++ testEnv, ss1 ++ testStmts env2 (modNameStr m) ss1) else (te, ss1)
+        (teT,ssT,tests)                 =
+          if hasTesting i
+            then let (testSs, discovered) = testStmts env2 (modNameStr m) ss1
+                 in (te ++ testEnv, ss1 ++ testSs, discovered)
+            else (te, ss1, [])
         iface                           = filterIface (unalias env2 teT)
 
         mrefs                           = moduleRefs1 env0
@@ -101,10 +105,11 @@ reconstruct env0 (Module m i ss)         = do --traceM ("#################### or
 
 -- | Print a .ty file header and interface; include name hashes when verbose.
 showTyFile env0 m fname verbose = do
-                                     (ms,nmod,_,srcH,pubH,implH,imps,nameHashes,roots,mdocH) <- InterfaceFiles.readFile fname
+                                     (ms,nmod,_,srcH,pubH,implH,imps,nameHashes,roots,tests,mdocH) <- InterfaceFiles.readFile fname
                                      putStrLn ("\n############### Header ###############")
                                      putStrLn ("Imports: " ++ (show [ (prstr mn, take 16 (B.unpack $ Base16.encode h)) | (mn,h) <- imps ]))
                                      putStrLn ("Roots  : " ++ (show (map prstr roots)))
+                                     putStrLn ("Tests  : " ++ (show tests))
                                      case mdocH of
                                        Just ds -> putStrLn ("Doc    : \"\"\"" ++ ds ++ "\"\"\"")
                                        Nothing -> return ()
@@ -2213,11 +2218,16 @@ testDicts                               = [ ("__unit_tests",        "UnitTest"),
                                             ("__async_tests",       "AsyncTest"),
                                             ("__env_tests",         "EnvTest") ]
 
-testStmts env m ss                      = ss' ++
-                                          [ dictAssign n cl assoc | ((n,cl), assoc) <- testDicts `zip` assocs ] ++
-                                          [ testActor ]
+testStmts env m ss                      = (stmts, tests)
   where assocs                          = testFuns (define te env) m (ss++ss')
         (te, ss')                       = genTestActorWrappers ss
+        stmts                           = ss' ++
+                                          [ dictAssign n cl assoc | ((n,cl), assoc) <- testDicts `zip` assocs ] ++
+                                          [ testActor ]
+        tests                           = sort (nub (concatMap assocNames assocs))
+        assocNames assocList            = mapMaybe assocName assocList
+        assocName (Assoc (Strings _ ssParts) _) = Just (concat ssParts)
+        assocName _                     = Nothing
 
 testEnv                                 = [ (name n, NVar (tDict tStr (testing cl))) | (n,cl) <- testDicts ] ++
                                           [ (name "test_main", NAct [] posNil (kwdRow (name "env") tEnv kwdNil) [] Nothing) ]

@@ -435,7 +435,7 @@ readModuleNameHashesByModName paths mn = do
         hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader tyFile
         case hdrE of
           Left _ -> return M.empty
-          Right (_srcH, _ih, _implH, _imps, nameHashes, _roots, _doc) ->
+          Right (_srcH, _ih, _implH, _imps, nameHashes, _roots, _tests, _doc) ->
             return $ M.fromList [ (A.nstr (InterfaceFiles.nhName nh), nh) | nh <- nameHashes ]
 
 -- | Cache-aware wrapper for reading name hashes.

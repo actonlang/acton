@@ -551,7 +551,7 @@ runTests gopts cmd = do
     let opts = opts0
           { C.test = True
           , C.print_test_bins = False
-          , C.skip_build = False
+          , C.skip_build = mode == TestModeList
           , C.only_build = False
           }
     paths <- loadProjectPaths opts
@@ -635,7 +635,7 @@ readModuleImports paths mn = do
         hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader tyFile
         case hdrE of
           Left _ -> return []
-          Right (_hash, _ih, _implH, imps, _nameHashes, _roots, _doc) -> return (map fst imps)
+          Right (_hash, _ih, _implH, imps, _nameHashes, _roots, _tests, _doc) -> return (map fst imps)
 
 dependentTestModulesFromHeaders :: Paths -> [FilePath] -> [String] -> IO [String]
 dependentTestModulesFromHeaders paths srcFiles changedModules = do
@@ -1003,7 +1003,7 @@ printDocs gopts opts = do
             env0 <- Acton.Env.initEnv (sysTypes paths) False
             env <- Acton.Env.mkEnv (searchPath paths) env0 parsed
             kchecked <- Acton.Kinds.check env parsed
-            (nmod, _, env', _) <- Acton.Types.reconstruct env kchecked
+            (nmod, _, env', _, _) <- Acton.Types.reconstruct env kchecked
             let I.NModule tenv mdoc = nmod
 
             -- 1. If format is explicitly set (via -t, --html, --markdown), use it
@@ -1496,7 +1496,7 @@ expectedRootStubs paths tasks = do
             tyPath = outbase ++ ".ty"
         hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader tyPath
         case hdrE of
-          Right (_, _, _implH, _imps, _nameHashes, rs, _) -> return (map (mkStub outbase) rs)
+          Right (_, _, _implH, _imps, _nameHashes, rs, _tests, _) -> return (map (mkStub outbase) rs)
           _ -> return []
     return (concat roots)
   where
@@ -1523,7 +1523,7 @@ is to avoid doing unnecessary work. Practically, this happens by caching
 information in .ty files and only selectively reading what we need. We do not
 eagerly load whole .ty files but rather read the header fields: moduleSrcBytesHash,
 modulePubHash, moduleImplHash, imports, per-name hashes (src/pub/impl + deps),
-roots, and docstrings. This lets us quickly decide which passes to rerun and
+roots, tests, and docstrings. This lets us quickly decide which passes to rerun and
 reuse work from previous compilations.
 
 Public hashing: each top-level name gets a pubHash computed from its doc-free
@@ -1620,7 +1620,7 @@ writeRootC env gopts opts paths tasks binTask = do
         -- was rebuilt during this run.
         tyPath <- Acton.Env.findTyFile (searchPath paths) m
         rootsHeader <- case tyPath of
-                         Just ty -> do (_, _, _implH, _imps, _nameHashes, roots, _) <- InterfaceFiles.readHeader ty; return roots
+                         Just ty -> do (_, _, _implH, _imps, _nameHashes, roots, _tests, _) <- InterfaceFiles.readHeader ty; return roots
                          Nothing -> return []
         let rootsEnv = case Acton.Env.lookupMod m env of
                          Nothing -> []
@@ -2112,7 +2112,7 @@ filterMainActor env paths binTask = do
       Just ty -> do
         hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader ty
         case hdrE of
-          Right (_, _, _implH, _imps, _nameHashes, roots, _) | n `elem` roots -> return (Just binTask)
+          Right (_, _, _implH, _imps, _nameHashes, roots, _tests, _) | n `elem` roots -> return (Just binTask)
           _ -> checkEnv
       Nothing -> checkEnv
 

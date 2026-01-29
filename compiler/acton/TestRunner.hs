@@ -8,6 +8,8 @@ module TestRunner
 import qualified Acton.CommandLineParser as C
 import Acton.Testing
 import Acton.Compile
+import qualified Acton.Syntax as A
+import qualified InterfaceFiles
 import TestFormat
 import TestUI
 import Control.Concurrent (forkIO)
@@ -25,7 +27,7 @@ import qualified Data.Set as Set
 import System.Clock
 import System.Directory
 import System.Exit
-import System.FilePath ((</>), (<.>), joinPath)
+import System.FilePath ((</>), (<.>), joinPath, takeExtension)
 import System.IO (hClose, hGetContents, hGetLine, hIsEOF)
 import System.Process
 import Text.Printf
@@ -72,25 +74,15 @@ moduleHeaderLine modName
   | null modName = "Tests"
   | otherwise = "Tests - module " ++ modName ++ ":"
 
--- | List compiled test modules by scanning the output bin directory.
+-- | List test modules by reading discovered tests from .ty headers.
 listTestModules :: C.CompileOptions -> Paths -> IO [String]
-listTestModules opts paths = do
-    let dir = binDir paths
-    exists <- doesDirectoryExist dir
-    if not exists
-      then return []
-      else do
-        entries <- listDirectory dir
-        mods <- forM entries $ \entry -> do
-          let base = stripExe entry
-          if ".test_" `isPrefixOf` base
-            then return (Just (drop (length ".test_") base))
-            else return Nothing
-        return (Data.List.sort (catMaybes mods))
-  where
-    stripExe name
-      | ".exe" `isSuffixOf` name = take (length name - 4) name
-      | otherwise = name
+listTestModules _opts paths = do
+    srcFiles <- listActFilesRecursive (srcDir paths)
+    mods <- forM srcFiles $ \file -> do
+      mn <- moduleNameFromFile (srcDir paths) file
+      tests <- readModuleTests paths mn
+      return $ if null tests then Nothing else Just (modNameToString mn)
+    return (Data.List.sort (catMaybes mods))
 
 -- | Compute the test binary path for a module and target.
 testBinaryPath :: C.CompileOptions -> Paths -> String -> FilePath
@@ -492,22 +484,47 @@ compileTestNameRegexes patterns =
 regexMatches :: TDFA.Regex -> String -> Bool
 regexMatches re text = isJust (TDFA.matchOnceText re text)
 
--- | Invoke a module test binary to list tests via JSON output.
+-- | Read the discovered tests for a module from its .ty header.
 listModuleTests :: C.CompileOptions -> Paths -> String -> IO [String]
-listModuleTests opts paths modName = do
-    let binPath = testBinaryPath opts paths modName
-    exists <- doesFileExist binPath
+listModuleTests _opts paths modName =
+    readModuleTests paths (modNameFromString modName)
+
+-- | Read tests from a module's .ty header, returning [] on any error.
+readModuleTests :: Paths -> A.ModName -> IO [String]
+readModuleTests paths mn = do
+    let tyFile = outBase paths mn ++ ".ty"
+    exists <- doesFileExist tyFile
     if not exists
       then return []
       else do
-        let args = ["list", "--json"]
-        (exitCode, _out, err) <- readProcessWithExitCodeCancelable (proc binPath args){ cwd = Just (projPath paths) }
-        case exitCode of
-          ExitSuccess -> do
-            let values = parseJsonLines err
-            return (extractTestList values)
-          ExitFailure code ->
-            printErrorAndExit ("Listing tests failed for module " ++ modName ++ " (exit " ++ show code ++ ")")
+        hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader tyFile
+        case hdrE of
+          Left _ -> return []
+          Right (_srcH, _ih, _implH, _imps, _nameHashes, _roots, tests, _doc) ->
+            return tests
+
+modNameFromString :: String -> A.ModName
+modNameFromString s = A.modName (splitOnChar '.' s)
+
+splitOnChar :: Char -> String -> [String]
+splitOnChar ch input = case break (== ch) input of
+  (chunk, []) -> [chunk]
+  (chunk, _ : rest) -> chunk : splitOnChar ch rest
+
+listActFilesRecursive :: FilePath -> IO [FilePath]
+listActFilesRecursive dir = do
+    exists <- doesDirectoryExist dir
+    if not exists
+      then return []
+      else do
+        entries <- listDirectory dir
+        paths <- forM entries $ \entry -> do
+          let path = dir </> entry
+          isDir <- doesDirectoryExist path
+          if isDir
+            then listActFilesRecursive path
+            else return [path]
+        return (filter (\f -> takeExtension f == ".act") (concat paths))
 
 -- | Run a single test case and stream JSON updates.
 runModuleTestStreaming :: C.CompileOptions
@@ -644,24 +661,6 @@ parseJsonLine line =
     in if null trimmed
          then Nothing
          else Aeson.decodeStrict' (TE.encodeUtf8 (T.pack trimmed))
-
--- | Parse newline-delimited JSON emitted by test binaries.
-parseJsonLines :: String -> [Aeson.Value]
-parseJsonLines txt =
-    [ v
-    | line <- lines txt
-    , Just v <- [parseJsonLine line]
-    ]
-
--- | Extract test names from a JSON list payload.
-extractTestList :: [Aeson.Value] -> [String]
-extractTestList values =
-    case listToMaybe [ obj | Aeson.Object obj <- values, AesonKM.member (AesonKey.fromString "tests") obj ] of
-      Just obj ->
-        case AesonKM.lookup (AesonKey.fromString "tests") obj of
-          Just (Aeson.Object testsObj) -> map AesonKey.toString (AesonKM.keys testsObj)
-          _ -> []
-      Nothing -> []
 
 -- | Extract test result payloads from JSON events.
 extractTestInfo :: [Aeson.Value] -> [TestResult]
@@ -878,30 +877,6 @@ readProcessWithExitCodeStreaming cp onErrLine = do
                     go (line : acc)
       _ <- forkIO $ readStdout mOut outVar
       _ <- forkIO $ readStderr mErr errVar
-      code <- waitForProcess ph `onException` do
-                terminateProcess ph
-                void (waitForProcess ph)
-      out <- takeMVar outVar
-      err <- takeMVar errVar
-      return (code, out, err)
-
--- | Run a process and capture output, canceling on exceptions.
-readProcessWithExitCodeCancelable :: CreateProcess -> IO (ExitCode, String, String)
-readProcessWithExitCodeCancelable cp = do
-    let cp' = cp { std_in = NoStream, std_out = CreatePipe, std_err = CreatePipe }
-    withCreateProcess cp' $ \_ mOut mErr ph -> do
-      outVar <- newEmptyMVar
-      errVar <- newEmptyMVar
-      let readHandle mH var =
-            case mH of
-              Nothing -> putMVar var ""
-              Just h -> do
-                txt <- hGetContents h
-                _ <- evaluate (length txt)
-                hClose h
-                putMVar var txt
-      _ <- forkIO $ readHandle mOut outVar
-      _ <- forkIO $ readHandle mErr errVar
       code <- waitForProcess ph `onException` do
                 terminateProcess ph
                 void (waitForProcess ph)

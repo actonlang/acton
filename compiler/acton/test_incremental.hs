@@ -421,7 +421,7 @@ buildProject = do
 -- | Read name hashes from a .ty file.
 readTyNameHashes :: FilePath -> IO [InterfaceFiles.NameHashInfo]
 readTyNameHashes tyPath = do
-  (_, _, _, _, _, _, _, nameHashes, _, _) <- InterfaceFiles.readFile tyPath
+  (_, _, _, _, _, _, _, nameHashes, _, _, _) <- InterfaceFiles.readFile tyPath
   pure nameHashes
 
 -- | Read pub/impl dependency names for a binding in a .ty file.
@@ -1206,7 +1206,7 @@ p28_protocol_extension_deps = testCase "28-protocol/extension deps are recorded 
   let namesA = sort (map (prstr . InterfaceFiles.nhName) nameHashesA)
   assertBool "expected generated protocol sibling name" ("BazProtoD_BarProto" `elem` namesA)
   assertBool "expected generated extension name" ("BarProtoD_Widget" `elem` namesA)
-  (_, nmod, _, _, _, _, _, _, _, _) <- InterfaceFiles.readFile tyA
+  (_, nmod, _, _, _, _, _, _, _, _, _) <- InterfaceFiles.readFile tyA
   let I.NModule iface _ = nmod
       extMatch (n, _) = prstr n == "BarProtoD_Widget"
   case find extMatch iface of
