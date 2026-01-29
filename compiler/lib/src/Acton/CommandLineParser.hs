@@ -393,7 +393,7 @@ testOptions = TestOptions
     <*> option auto (long "max-time" <> metavar "MS" <> value 1000 <> help "Maximum time to run a test in milliseconds")
     <*> option auto (long "min-time" <> metavar "MS" <> value 50 <> help "Minimum time to run a test in milliseconds")
     <*> many (strOption (long "module" <> metavar "MODULE" <> help "Filter on test module name"))
-    <*> many (strOption (long "name" <> metavar "NAME" <> help "Filter on test name"))
+    <*> many (strOption (long "name" <> metavar "NAME" <> help "Filter on test name (regex, anchored; use .* for substrings)"))
 
 depOverrideReader :: ReadM (String,String)
 depOverrideReader = eitherReader $ \s ->

@@ -19,7 +19,7 @@ import Data.IORef
 import Data.Char (isSpace)
 import Data.List (isPrefixOf, isSuffixOf, foldl', isInfixOf, intercalate)
 import qualified Data.List
-import Data.Maybe (catMaybes, listToMaybe)
+import Data.Maybe (catMaybes, listToMaybe, isJust)
 import qualified Data.Map as M
 import qualified Data.Set as Set
 import System.Clock
@@ -36,7 +36,8 @@ import qualified Data.Aeson.KeyMap as AesonKM
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
-import Control.Exception (evaluate, onException)
+import Control.Exception (SomeException, displayException, evaluate, onException, try)
+import qualified Text.Regex.TDFA as TDFA
 import Data.Version (showVersion)
 import qualified Paths_acton
 
@@ -111,9 +112,10 @@ isWindowsTarget targetTriple =
 listProjectTests :: C.CompileOptions -> Paths -> C.TestOptions -> [String] -> IO ()
 listProjectTests opts paths topts modules = do
     let wantedModules = Data.List.sort (filterModules (C.testModules topts) modules)
+    nameRegexes <- compileTestNameRegexes (C.testNames topts)
     tests <- forM wantedModules $ \modName -> do
       names <- listModuleTests opts paths modName
-      return (modName, Data.List.sort names)
+      return (modName, Data.List.sort (filterTests nameRegexes names))
     let nonEmpty = [ (modName, names) | (modName, names) <- tests, not (null names) ]
     if C.testJson topts
       then do
@@ -153,10 +155,11 @@ runProjectTests :: Bool -> C.GlobalOptions -> C.CompileOptions -> Paths -> C.Tes
 runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
     timeStart <- getTime Monotonic
     let emitJson = C.testJson topts
+    nameRegexes <- compileTestNameRegexes (C.testNames topts)
     let wantedModules = Data.List.sort (filterModules (C.testModules topts) modules)
     testsByModule <- forM wantedModules $ \modName -> do
       names <- listModuleTests opts paths modName
-      let wantedNames = Data.List.sort (filterTests (C.testNames topts) names)
+      let wantedNames = Data.List.sort (filterTests nameRegexes names)
       return (modName, wantedNames)
     let specs =
           [ TestSpec modName testName (displayTestName testName)
@@ -441,10 +444,28 @@ filterModules [] mods = mods
 filterModules wanted mods = filter (`elem` wanted) mods
 
 -- | Filter test names, matching raw or display names.
-filterTests :: [String] -> [String] -> [String]
+filterTests :: [TDFA.Regex] -> [String] -> [String]
 filterTests [] names = names
-filterTests wanted names =
-    filter (\name -> name `elem` wanted || displayTestName name `elem` wanted) names
+filterTests regexes names =
+    filter matches names
+  where
+    matches name =
+      let display = displayTestName name
+      in any (\re -> regexMatches re name || regexMatches re display) regexes
+
+compileTestNameRegexes :: [String] -> IO [TDFA.Regex]
+compileTestNameRegexes patterns =
+    mapM compileRegex (filter (not . null) patterns)
+  where
+    compileRegex pattern = do
+      let anchored = "^" ++ pattern ++ "$"
+      res <- try (evaluate (TDFA.makeRegex anchored :: TDFA.Regex)) :: IO (Either SomeException TDFA.Regex)
+      case res of
+        Left err -> printErrorAndExit ("ERROR: Invalid regex '" ++ pattern ++ "': " ++ displayException err)
+        Right re -> return re
+
+regexMatches :: TDFA.Regex -> String -> Bool
+regexMatches re text = isJust (TDFA.matchOnceText re text)
 
 -- | Invoke a module test binary to list tests via JSON output.
 listModuleTests :: C.CompileOptions -> Paths -> String -> IO [String]
