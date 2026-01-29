@@ -18,6 +18,7 @@ The Acton RTS reads and consumes the following options and arguments. All
 other parameters are passed verbatim to the Acton application. Option
 arguments can be passed either with --rts-option=ARG or --rts-option ARG
 
+  --rts-bt-dbg                      Interactively debug on SIGILL / SIGSEGV
   --rts-debug                       RTS debug, requires program to be compiled with --optimize Debug
   --rts-ddb-host=HOST               DDB hostname
   --rts-ddb-port=PORT               DDB port [32000]
@@ -47,3 +48,9 @@ Per default, the RTS starts as many worker threads as there are CPU threads avai
 It is possible to specify the number of worker threads with `--rts-wthreads=COUNT`.
 
 Actor method continuations run to completion, which is why it is wise not to set this value too low. Per default a minimum of 4 threads are started even when there are fewer CPU threads available, which means the operating system will switch between the threads inducing context switching overhead.
+
+# Interactive debugging on crashes
+
+If an Acton program crashes, `--rts-bt-dbg` is a convenient option for launching an interactive debugger. It is triggered on `SIGILL` / `SIGSEGV` and launches an interactive GDB session that allows for debugging the running program.
+
+Acton programs do not normally crash with `SIGILL` / `SIGSEGV` but it possible either due to bugs in the compiler / RTS / builtins or more likely, for third party libraries that use C FFI, like for TLS, SSH, zlib or similar where a bug in the library triggers a crash on C level.
