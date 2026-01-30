@@ -130,7 +130,7 @@ data TestOptions = TestOptions
     , testShowCached   :: Bool
     , testJson         :: Bool
     , testRecord       :: Bool
-    , testGoldenUpdate :: Bool
+    , testSnapshotUpdate :: Bool
     , testIter         :: Int
     , testMaxIter      :: Int
     , testMinIter      :: Int
@@ -386,7 +386,7 @@ testOptions = TestOptions
     <*> switch (long "show-cached"   <> help "Show cached test results")
     <*> switch (long "json"          <> help "Output final test results as JSON")
     <*> switch (long "record"        <> help "Record test performance results")
-    <*> switch (long "golden-update" <> long "accept" <> help "Accept current test output as expected golden values")
+    <*> switch (long "snapshot-update" <> long "golden-update" <> long "accept" <> help "Accept current test output as expected snapshot values")
     <*> option auto (long "iter"     <> metavar "N" <> value (-1) <> help "Number of iterations to run a test")
     <*> option auto (long "max-iter" <> metavar "N" <> value (10^6) <> help "Maximum number of iterations to run a test")
     <*> option auto (long "min-iter" <> metavar "N" <> value 3 <> help "Minimum number of iterations to run a test")

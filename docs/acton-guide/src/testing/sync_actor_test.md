@@ -65,4 +65,4 @@ The test discovery system finds synchronous tests through:
 - **Functions**: with names starting with `_test_` and signatures `proc() -> None` or `proc(testing.SyncT) -> None`
 - **Actors**: that take a `testing.SyncT` parameter (the `_test_` prefix is optional) or actors with names starting with `_test_` and no parameters
 
-*Golden testing* can be enabled by returning a *str*. This only works for test *functions*, not test *actors*. Use a wrapping function if you want golden testing. The Acton test framework will take care about recognizing the test as a golden test and comparing its output to the expected *golden value*.
+*Snapshot testing* can be enabled by returning a *str*. This only works for test *functions*, not test *actors*. Use a wrapping function if you want snapshot testing. The Acton test framework will take care about recognizing the test as a snapshot test and comparing its output to the expected *snapshot value*.

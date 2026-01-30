@@ -74,7 +74,7 @@ def _test_diff_mixed_endings():
 # The tests for Myers diff are now covered by the main diff tests
 
 def _test_diff_with_context():
-    """Test diff with context lines using golden testing"""
+    """Test diff with context lines using snapshot testing"""
     text1 = """line1
 line2
 line3
@@ -97,11 +97,11 @@ modified8
 line9
 line10"""
 
-    # Test with context=1 (using golden testing)
+    # Test with context=1 (using snapshot testing)
     return diff(text1, text2, context_lines=1)
 
 def _test_diff_with_headers():
-    """Test diff with context lines and chunk headers using golden testing"""
+    """Test diff with context lines and chunk headers using snapshot testing"""
     text1 = """line1
 line2
 line3
@@ -128,7 +128,7 @@ line10"""
     return diff(text1, text2, context_lines=1)
 
 def _test_diff_with_more_context():
-    """Test diff with more context lines using golden testing"""
+    """Test diff with more context lines using snapshot testing"""
     text1 = """line1
 line2
 line3

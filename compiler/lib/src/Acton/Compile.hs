@@ -2846,7 +2846,7 @@ writeFile :: FilePath -> String -> IO ()
 writeFile = writeFileUtf8Atomic
 
 -- | Format a TimeSpec as a fixed-width seconds string.
--- Used for stable logging and golden test output.
+-- Used for stable logging and snapshot test output.
 fmtTime :: TimeSpec -> String
 fmtTime t =
     printf "%6.3f s" secs

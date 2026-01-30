@@ -23,6 +23,7 @@ formatTestStatus :: TestResult -> String
 formatTestStatus res =
     let ok = trSuccess res == Just True && trException res == Nothing
         base
+          | trSnapshotUpdated res = "UPDATED"
           | ok = "OK"
           | trNumErrors res > 0 && trNumFailures res > 0 = "ERR/FAIL"
           | trNumErrors res > 0 = "ERR"
@@ -35,6 +36,7 @@ formatTestStatus res =
 -- | Compute a live status label for an in-progress test.
 formatTestStatusLive :: TestResult -> String
 formatTestStatusLive res
+  | trSnapshotUpdated res = "UPDATED"
   | isJust (trException res) = "ERR"
   | trFlaky res = "FLAKY"
   | trNumErrors res > 0 && trNumFailures res > 0 = "ERR/FAIL"
@@ -69,6 +71,7 @@ testStatusWidth :: Int
 testStatusWidth = (maximum (map length
   [ "RUN"
   , "OK"
+  , "UPDATED"
   , "FAIL"
   , "ERR"
   , "ERR/FAIL"
@@ -87,6 +90,7 @@ colorizeStatusPart useColor cached statusRaw runs =
         statusColored = case core of
           "RUN" -> testColorApply useColor [testColorYellow] statusRaw
           "OK" -> testColorApply useColor [testColorGreen] statusRaw
+          "UPDATED" -> testColorApply useColor [testColorYellow] statusRaw
           _ -> testColorApply useColor [testColorBold, testColorRed] statusRaw
         star =
           if cached

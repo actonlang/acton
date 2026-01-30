@@ -71,6 +71,7 @@ data TestResult = TestResult
   , trNumIterations :: Int
   , trTestDuration :: Double
   , trRaw          :: Aeson.Value
+  , trSnapshotUpdated :: Bool
   , trCached       :: Bool
   } deriving (Show)
 
@@ -220,6 +221,7 @@ testResultFromCache modName testName res = TestResult
   , trNumIterations = tcrNumIterations res
   , trTestDuration = tcrTestDuration res
   , trRaw = Aeson.Null
+  , trSnapshotUpdated = False
   , trCached = True
   }
 
