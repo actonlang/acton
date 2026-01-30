@@ -97,7 +97,7 @@ colorizeStatusPart useColor cached statusRaw runs =
 -- | Format a single test result line with alignment and timing.
 formatTestLineWith :: Bool -> (TestResult -> String) -> Int -> String -> TestResult -> String
 formatTestLineWith useColor statusFn nameWidth display res =
-    let prefix0 = "  " ++ display ++ ": "
+    let prefix0 = "   " ++ display ++ ": "
         padding = replicate (max 0 (nameWidth - length prefix0)) ' '
         statusRaw = statusFn res
         runs = printf "%4d runs in %3.3fms" (trNumIterations res) (trTestDuration res)
