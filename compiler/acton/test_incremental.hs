@@ -214,12 +214,20 @@ buildOutFile = do
 -- | Check whether build output reports typechecking for a module.
 typechecked :: T.Text -> T.Text -> Bool
 typechecked out modName =
-  any (\line -> "Finished type check of" `T.isInfixOf` line && modName `T.isInfixOf` line) (T.lines out)
+  any (\line -> "Finished type check of" `T.isInfixOf` line && matchesModule line modName) (T.lines out)
 
 -- | Check whether build output reports compilation for a module.
 compiled :: T.Text -> T.Text -> Bool
 compiled out modName =
-  any (\line -> "Finished compilation of" `T.isInfixOf` line && modName `T.isInfixOf` line) (T.lines out)
+  any (\line -> "Finished compilation of" `T.isInfixOf` line && matchesModule line modName) (T.lines out)
+
+-- | Match module labels across legacy "proj/mod" and new "proj.mod" formats.
+matchesModule :: T.Text -> T.Text -> Bool
+matchesModule line modName =
+  let dotName = T.replace "/" "." modName
+      leafName = T.takeWhileEnd (/= '/') modName
+      tokens = T.words line
+  in any (`elem` tokens) [modName, dotName, leafName]
 
 -- | Remove a file if it exists.
 removeIfExists :: FilePath -> IO ()
