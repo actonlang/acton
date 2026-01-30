@@ -891,8 +891,12 @@ actor TestExecutor(syscap, config, t: Test, report_complete, env):
         filename = file.join_path([fs.cwd(), "test", "golden", module, test])
         try:
             exp_file = file.ReadFile(rfcap, filename)
-            exp_data = exp_file.read().decode()
-            return exp_data
+            try:
+                exp_data = exp_file.read().decode()
+                exp_file.close()
+                return exp_data
+            except:
+                exp_file.close()
         except:
             return None
 
