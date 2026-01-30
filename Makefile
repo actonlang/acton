@@ -116,7 +116,7 @@ test-backend: $(BACKEND_TESTS)
 	./backend/test/skiplist_test
 
 # /compiler ----------------------------------------------
-ACTONC_HS=$(wildcard compiler/lib/src/*.hs compiler/lib/src/*/*.hs compiler/acton/Main.hs)
+ACTONC_HS=$(wildcard compiler/lib/src/*.hs compiler/lib/src/*/*.hs compiler/acton/*.hs compiler/acton/*/*.hs)
 ACTONLSP_HS=$(wildcard compiler/lsp-server/*.hs)
 # NOTE: we're unsetting CC & CXX to avoid using zig cc & zig c++ for stack /
 # ghc, which doesn't seem to work properly

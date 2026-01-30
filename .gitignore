@@ -74,6 +74,12 @@ test/**
 !test/**/*.*
 test/**/*.log
 !test/**/*/
+!test/**/snapshots/
+!test/**/snapshots/**/
+!test/**/snapshots/**/*
+test/**/snapshots/output/**
+
+snapshots/output/**
 
 # tests organized as acton projects; ignore all but source
 test/*/*/out/**

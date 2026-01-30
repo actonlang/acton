@@ -887,10 +887,9 @@ actor TestExecutor(syscap, config, t: Test, report_complete, env):
     var test_info = None
     var iteration = 0
 
-    def get_expected(module: str, test: str) -> ?str:
-        filename = file.join_path([fs.cwd(), "test", "golden", module, test])
+    def _read_expected(path: str) -> ?str:
         try:
-            exp_file = file.ReadFile(rfcap, filename)
+            exp_file = file.ReadFile(rfcap, path)
             try:
                 exp_data = exp_file.read().decode()
                 exp_file.close()
@@ -899,6 +898,15 @@ actor TestExecutor(syscap, config, t: Test, report_complete, env):
                 exp_file.close()
         except:
             return None
+
+    def get_expected(module: str, test: str) -> ?str:
+        snapshot_path = file.join_path([fs.cwd(), "snapshots", "expected", module, test])
+        exp_val = _read_expected(snapshot_path)
+        if exp_val is not None:
+            return exp_val
+        # TODO: remove this legacy path once ecosystem is on the new path
+        legacy_path = file.join_path([fs.cwd(), "test", "golden", module, test])
+        return _read_expected(legacy_path)
 
     action def _report_result(test: Test, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, success: ?bool, exception: ?Exception, val: ?str):
         full_dur = sw.elapsed().to_float() * 1000.0
@@ -948,11 +956,11 @@ actor TestExecutor(syscap, config, t: Test, report_complete, env):
         sw = time.Stopwatch()
 
         def repres(s: ?bool, e: ?Exception, val: ?str) -> None:
-            # Compare expected golden value
+            # Compare expected snapshot value
             if val is not None:
                 exp_val = get_expected(t.module, t.display_name())
                 if exp_val is None or exp_val is not None and val != exp_val:
-                    exc = NotEqualError(val, exp_val, f"Test output does not match expected golden value.", diff_str=f"{term.normal}{diff.diff(str(exp_val), val, color=True)}", print_vals=False)
+                    exc = NotEqualError(val, exp_val, f"Test output does not match expected snapshot value.", diff_str=f"{term.normal}{diff.diff(str(exp_val), val, color=True)}", print_vals=False)
                     _report_result(t, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, False, exc, val)
                     return
             _report_result(t, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, s, e, val)

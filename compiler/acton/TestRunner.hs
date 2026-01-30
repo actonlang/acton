@@ -188,7 +188,12 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
         when (C.verbose gopts) $
           putStrLn (formatTestCacheContext ctxHash (testCachePath paths))
         let logCache = if C.verbose gopts then putStrLn else \_ -> return ()
-        (cachedResults, _testsToRun) <- classifyCachedTests logCache cacheEntries testHashInfos allTests
+        (cachedResults0, _testsToRun) <-
+          classifyCachedTests logCache cacheEntries testHashInfos allTests
+        cachedResults <-
+          if C.testSnapshotUpdate topts
+            then mapM (applySnapshotUpdate paths) cachedResults0
+            else return cachedResults0
         let showCached = C.testShowCached topts
         when (not emitJson && showCached && not (null cachedResults)) $
           putStrLn ("Using cached results for " ++ show (length cachedResults) ++ " tests")
@@ -197,7 +202,7 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
         let cachedMap = M.fromList [ (TestKey (trModule res) (trName res), res) | res <- cachedResults ]
             shouldShowCached res =
               let ok = trSuccess res == Just True && trException res == Nothing
-              in showCached || not ok
+              in showCached || not ok || trSnapshotUpdated res
             startSpec spec running results = do
               let key = TestKey (tsModule spec) (tsName spec)
                   display = tsDisplay spec
@@ -236,6 +241,7 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
                             , trNumIterations = 0
                             , trTestDuration = 0
                             , trRaw = Aeson.Null
+                            , trSnapshotUpdated = False
                             , trCached = False
                             }
                           initLine = formatTestLineWith useColorLine formatTestStatusLive nameWidth display initRes
@@ -271,9 +277,11 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
                     TestEventRoom -> loop pending' running' results'
         results <- loop specs 0 []
         timeEnd <- getTime Monotonic
-        let resultsRun = filter (not . trCached) results
-        when (C.testGoldenUpdate topts) $
-          updateGoldenFiles paths resultsRun
+        writeSnapshotOutputs paths results
+        let resultsRun =
+              if C.testSnapshotUpdate topts
+                then filter (\r -> not (trCached r) || trSnapshotUpdated r) results
+                else filter (not . trCached) results
         when (C.testRecord topts) $
           writePerfData paths resultsRun
         let cacheEntries' = foldl' (updateTestCacheEntry testHashInfos) cacheEntries resultsRun
@@ -536,6 +544,7 @@ runModuleTestStreaming opts paths topts mode modName testName allowLive callback
           , trNumIterations = 0
           , trTestDuration = 0
           , trRaw = Aeson.Null
+          , trSnapshotUpdated = False
           , trCached = False
           }
         res0 = maybe fallback id final
@@ -554,13 +563,17 @@ runModuleTestStreaming opts paths topts mode modName testName allowLive callback
                 ExitSuccess -> res1
                 ExitFailure code ->
                   res1 { trException = Just ("Test process exited with code " ++ show code) }
+    res' <-
+      if C.testSnapshotUpdate topts
+        then applySnapshotUpdate paths res
+        else return res
     done <- readIORef lineDoneRef
     if done
-      then tpcOnFinal callbacks res
+      then tpcOnFinal callbacks res'
       else do
-        tpcOnDone callbacks res
-        tpcOnFinal callbacks res
-    return res
+        tpcOnDone callbacks res'
+        tpcOnFinal callbacks res'
+    return res'
 
 testProgressCallbacks :: TestProgressUI -> Chan TestEvent -> TestKey -> String -> TestProgressCallbacks
 testProgressCallbacks ui eventChan key display =
@@ -680,6 +693,7 @@ parseTestInfoValue = Aeson.withObject "TestInfo" $ \o -> do
       , trNumIterations = numIterations
       , trTestDuration = testDuration
       , trRaw = Aeson.Object o
+      , trSnapshotUpdated = False
       , trCached = False
       }
 
@@ -729,7 +743,7 @@ printTestResultsOrdered :: Bool -> Bool -> Bool -> Int -> [TestSpec] -> [TestRes
 printTestResultsOrdered useColor showLog showCached nameWidth specs results = do
     let resMap = M.fromList [ (TestKey (trModule res) (trName res), res) | res <- results ]
         isOk res = trSuccess res == Just True && trException res == Nothing
-        shouldShow res = not (trCached res) || showCached || not (isOk res)
+        shouldShow res = not (trCached res) || showCached || not (isOk res) || trSnapshotUpdated res
         formatLine spec res =
           formatTestLineWith useColor formatTestStatus nameWidth (tsDisplay spec) res
     let go _ _ [] = return ()
@@ -753,18 +767,48 @@ printTestResultsOrdered useColor showLog showCached nameWidth specs results = do
                   go printedMods' True rest
     go Set.empty False specs
 
--- | Update golden files from NotEqualError outputs.
-updateGoldenFiles :: Paths -> [TestResult] -> IO ()
-updateGoldenFiles paths results =
-    forM_ results $ \res -> do
-      case (trException res, trOutput res) of
-        (Just exc, Just out)
-          | "testing.NotEqualError: Test output does not match expected golden value" `isPrefixOf` exc -> do
-              let fileName = displayTestName (trName res)
-                  goldenDir = joinPath [projPath paths, "test", "golden", trModule res]
-              createDirectoryIfMissing True goldenDir
-              writeFile (goldenDir </> fileName) out
-        _ -> return ()
+-- | Write snapshot outputs for all tests that produced output.
+writeSnapshotOutputs :: Paths -> [TestResult] -> IO ()
+writeSnapshotOutputs paths results =
+    mapM_ (writeSnapshotOutput paths) results
+
+writeSnapshotOutput :: Paths -> TestResult -> IO ()
+writeSnapshotOutput paths res =
+    case trOutput res of
+      Just out -> do
+        let fileName = displayTestName (trName res)
+            outDir = joinPath [projPath paths, "snapshots", "output", trModule res]
+        createDirectoryIfMissing True outDir
+        writeFile (outDir </> fileName) out
+      Nothing -> return ()
+
+-- | Update snapshot expected files from NotEqualError outputs.
+applySnapshotUpdate :: Paths -> TestResult -> IO TestResult
+applySnapshotUpdate paths res =
+    case (trException res, trOutput res) of
+      (Just exc, Just out)
+        | isSnapshotMismatch exc -> do
+            let fileName = displayTestName (trName res)
+                snapshotDir = joinPath [projPath paths, "snapshots", "expected", trModule res]
+            createDirectoryIfMissing True snapshotDir
+            writeFile (snapshotDir </> fileName) out
+            return (markSnapshotUpdated res)
+      _ -> return res
+
+snapshotMismatchPrefix :: String
+snapshotMismatchPrefix = "testing.NotEqualError: Test output does not match expected snapshot value"
+
+isSnapshotMismatch :: String -> Bool
+isSnapshotMismatch exc = snapshotMismatchPrefix `isPrefixOf` exc
+
+markSnapshotUpdated :: TestResult -> TestResult
+markSnapshotUpdated res = res
+  { trSnapshotUpdated = True
+  , trSuccess = Just True
+  , trException = Nothing
+  , trNumFailures = 0
+  , trNumErrors = 0
+  }
 
 -- | Write perf data JSON for the current test run.
 writePerfData :: Paths -> [TestResult] -> IO ()

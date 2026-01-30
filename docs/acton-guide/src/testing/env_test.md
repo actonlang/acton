@@ -12,7 +12,7 @@ actor _TestWithEnv(t: testing.EnvT):
     def test():
         log.info("EnvTester.test() running, going to check with the env", {"worker_threads": t.env.nr_wthreads})
         t.success()
-        # Provide output to .success to enable golden testing
+        # Provide output to .success to enable snapshot testing
         #   t.success("some_output")
         # Or if things aren't going well, use .failure or .error
         #   t.failure(ValueError("whopsy"))
@@ -42,4 +42,4 @@ All 1 tests passed (0.689s)
 
 The test discovery system finds environment tests by looking for *actors* that take a `testing.EnvT` parameter.
 
-*Golden testing* can be enabled by providing an output of type *str* to the `.success(output: ?str)` function. The Acton test framework will take care about recognizing the test as a golden test and comparing its output to the expected *golden value*.
+*Snapshot testing* can be enabled by providing an output of type *str* to the `.success(output: ?str)` function. The Acton test framework will take care about recognizing the test as a snapshot test and comparing its output to the expected *snapshot value*.

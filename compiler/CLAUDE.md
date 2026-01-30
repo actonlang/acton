@@ -27,7 +27,7 @@ compiler/
 │   └── test/              # Compiler unit tests
 ├── acton/                 # Compiler executable
 │   ├── Main.hs           # Entry point
-│   └── test/             # Golden tests
+│   └── test/             # Snapshot tests
 └── lsp-server/           # Language server
 ```
 
@@ -139,7 +139,7 @@ C Code (.c, .h)
 5. **Add Tests**
    - Parser tests in `lib/test/`
    - Type error tests in `acton/test/typeerrors/`
-   - Golden tests for code generation
+   - Snapshot tests for code generation
 
 ### Debugging the Compiler
 
@@ -172,7 +172,7 @@ acton doc
 Error messages are crucial for user experience. When adding new errors:
 
 1. Create descriptive error in `Diagnostics.hs`
-2. Add golden test in `acton/test/typeerrors/`
+2. Add snapshot test in `acton/test/typeerrors/`
 3. Include:
    - Clear description of the problem
    - Source location
@@ -205,7 +205,7 @@ throwError $ TypeError loc $
 - Use sydtest framework
 - Fast, focused tests
 
-### Golden Tests (`acton/test/`)
+### Snapshot Tests (`acton/test/`)
 - Compare compiler output against expected
 - Syntax errors: `syntaxerrors/`
 - Type errors: `typeerrors/`
@@ -225,7 +225,7 @@ throwError $ TypeError loc $
 ### Improving Error Messages
 1. Identify error location in type checker
 2. Add case in `Diagnostics.hs`
-3. Create golden test
+3. Create snapshot test
 4. Iterate on message clarity
 
 ### Optimizing Compilation

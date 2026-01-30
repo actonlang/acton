@@ -14,7 +14,7 @@ actor _AsyncTester(t: testing.AsyncT):
     def test():
         log.info("AsyncTester.test() doing its thing")
         t.success()
-        # Provide output to .success to enable golden testing
+        # Provide output to .success to enable snapshot testing
         #   t.success("some_output")
         # Or if things aren't going well, use .failure or .error
         #   t.failure(ValueError("whopsy"))
@@ -46,4 +46,4 @@ If a particular module is written to be called asynchronously, you will need to 
 
 The test discovery system finds asynchronous tests by looking for *actors* that take a `testing.AsyncT` parameter.
 
-*Golden testing* can be enabled by providing an output of type *str* to the `.success(output: ?str)` function. The Acton test framework will take care about recognizing the test as a golden test and comparing its output to the expected *golden value*.
+*Snapshot testing* can be enabled by providing an output of type *str* to the `.success(output: ?str)` function. The Acton test framework will take care about recognizing the test as a snapshot test and comparing its output to the expected *snapshot value*.

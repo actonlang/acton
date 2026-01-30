@@ -25,7 +25,7 @@ make test-rts
 make test-backend
 ```
 
-## Golden / acceptance tests
+## Snapshot / acceptance tests
 
 Some compiler suites have explicit accept targets that update expected output:
 

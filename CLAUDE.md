@@ -102,7 +102,7 @@ typedef struct actor_state_t {
 ## Testing Philosophy
 
 1. **Comprehensive Coverage**: Every feature should have tests
-2. **Golden Tests**: For compiler error messages and output
+2. **Snapshot Tests**: For compiler error messages and output
 3. **Performance Tests**: Track performance regressions
 4. **Integration Tests**: Test distributed features
 
@@ -124,7 +124,7 @@ typedef struct actor_state_t {
 1. Work in `compiler/lib/src/Acton/`
 2. Run `make dist/bin/acton` for quick rebuilds
 3. Add test cases in `compiler/acton/test/`
-4. Update golden files if error messages change
+4. Update snapshot files if error messages change
 
 ## Build System
 

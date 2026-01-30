@@ -65,5 +65,5 @@ failures/errors, iterations, and duration).
 - Cached failures and errors still contribute to the overall test exit code.
 - By default, cached successes are hidden from output; cached failures/errors
   are still shown. Use `--show-cached` to include cached successes.
-- Golden file updates and perf data are written only for tests executed in the
-  current run.
+- Snapshot expected updates are written only for tests executed in the current run.
+- Snapshot outputs are written for reported tests (cached results reuse cached output).
