@@ -11,6 +11,7 @@
 -- THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 --
 
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveGeneric #-}
 -- Acton Interface (.ty) Files
 --
@@ -51,7 +52,11 @@ import qualified Acton.NameInfo as I
 import GHC.Generics (Generic)
 import System.IO
 import System.Directory (renameFile)
+#if defined(mingw32_HOST_OS)
+import qualified System.Win32.Process as Win32
+#else
 import System.Posix.Process (getProcessID)
+#endif
 
 data NameHashInfo = NameHashInfo
   { nhName     :: A.Name
@@ -70,12 +75,19 @@ instance Binary NameHashInfo
 writeFile :: FilePath -> BS.ByteString -> BS.ByteString -> BS.ByteString -> [(A.ModName, BS.ByteString)] -> [NameHashInfo] -> [A.Name] -> Maybe String -> I.NameInfo -> A.Module -> IO ()
 writeFile f moduleSrcBytesHash modulePubHash moduleImplHash imps nameHashes roots mdoc nmod tchecked = do
     -- Use PID for unique temp file name
-    pid <- getProcessID
+    pid <- getPid
     let tmpFile = f ++ "." ++ show pid
     BL.writeFile tmpFile (encode (A.version, moduleSrcBytesHash, modulePubHash, moduleImplHash, imps, nameHashes, roots, mdoc, nmod, tchecked))
     -- Atomically rename to final location
     -- This is atomic on POSIX systems and prevents partial writes or conflicts
     renameFile tmpFile f
+
+getPid :: IO Int
+#if defined(mingw32_HOST_OS)
+getPid = fromIntegral <$> Win32.getCurrentProcessId
+#else
+getPid = fromIntegral <$> getProcessID
+#endif
 
 readFile :: FilePath -> IO ([A.ModName], I.NameInfo, A.Module, BS.ByteString, BS.ByteString, BS.ByteString, [(A.ModName, BS.ByteString)], [NameHashInfo], [A.Name], Maybe String)
 readFile f = do
