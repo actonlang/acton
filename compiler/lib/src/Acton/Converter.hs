@@ -273,12 +273,14 @@ fromTEnv ((n, NVar t) : te)             = sAssign (pVar n t) eNotImpl : fromTEnv
 fromTEnv (_ : te)                       = fromTEnv te
 fromTEnv []                             = []
 
-convClassTEnv env q0 te                 = [ (n, conv i) | (n,i) <- te ]
-  where conv (NSig sc dec doc)          = NSig (convS sc) dec doc
-        conv (NDef sc dec doc)          = NDef (convS sc) dec doc
-        conv i                          = i
-        convS (TSchema l q t)           = TSchema l (noqual env q) (convT q t)
-        convT q (TFun l x p k t)        = TFun l x (qualWRow env (q0++q) p) k t
+convClassTEnv env q0 te                 = [ conv n i | (n,i) <- te ]
+  where conv n (NSig sc dec doc)        = (n, NSig (convS n dec sc) dec doc)
+        conv n (NDef sc dec doc)        = (n, NDef (convS n dec sc) dec doc)
+        conv n i                        = (n, i)
+        convS n dec (TSchema l q t)
+          | n==initKW || dec==Static    = TSchema l (noqual env q) (convT (q0++q) t)
+          | otherwise                   = TSchema l (noqual env q) (convT q t)
+        convT q (TFun l x p k t)        = TFun l x (qualWRow env q p) k t
         convT q t                       = t
 
 

@@ -603,8 +603,9 @@ solveProto env wit w t p                    = do (cs,t',we) <- instWitness env p
                                                  return ([mkEqn env w (proto2type t p) we], cs)
 
 solveSelAttr (wf,sc,d) (Sel info env w t1 n t2)
-                                            = do (cs,tvs,t) <- instantiate env sc
-                                                 when (negself t) (tyerr n "Contravariant Self attribute not selectable by instance")
+  | d == Just Static                        = tyerr n "A static method cannot be selected by instance:"
+  | otherwise                               = do (cs,tvs,t) <- instantiate env sc
+                                                 when (negself t) (tyerr n "A contravariant Self attribute cannot be selected by instance:")
                                                  w' <- newWitness
                                                  let e = eLambda [(px0,t1)] (eCallVar w' [app t (tApp (eDot (wf $ eVar px0) n) tvs) $ protoWitsOf cs])
                                                      c = Sub (locinfo info 8) env w' (vsubst [(tvSelf,t1)] t) t2
@@ -627,7 +628,7 @@ solveSelProto pn c@(Sel info env w t1 n t2) = do p <- instwildcon env pn
 solveSelWit (p,we) c0@(Sel info env w t1 n t2)
                                             = do let Just (wf,sc,d) = findAttr env p n
                                                  (cs,tvs,t) <- instantiate env sc
-                                                 when (negself t) (tyerr n "Contravariant Self attribute not selectable by instance")
+                                                 when (negself t) (tyerr n "A contravariant Self attribute cannot be selected by instance:")
                                                  w' <- newWitness
                                                  let e = eLambda [(px0,t1)] (eCallVar w' [app t (tApp (eDot (wf we) n) tvs) $ eVar px0 : protoWitsOf cs])
                                                      c = Sub (noinfo 9) env w' (vsubst [(tvSelf,t1)] t) t2
