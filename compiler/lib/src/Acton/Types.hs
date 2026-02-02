@@ -668,7 +668,7 @@ matchDefAssumption env cs0 def
         (pos0,kwd0)                     = qualDef env dec (pos def) (kwd def) (qualWPar env q0)
 
         match env cs eq0 def            = do --traceM ("## matchDefAssumption " ++ prstr n ++ ": [" ++ prstrs q0 ++ "] => ")
-                                             --traceM (render (nest 4 $ vcat $ map pretty $ Cast info [] t1 t2 : cs))
+                                             --traceM (render (nest 4 $ vcat $ map pretty $ Cast info env t1 t2 : cs))
                                              (cs2,eq1) <- markScoped env n q0 (tempGoal t1) (Cast info env t1 t2 : cs)
                                              cs2 <- usubst cs2
                                              return (cs2, def{ qbinds = noqual env q0, pos = pos0, kwd = kwd0,
@@ -685,7 +685,7 @@ qualDef env dec PosNIL (KwdPar n t e k) qf = (PosPar n t e (qf PosNIL), k)
 qualDef env dec (PosPar n t e p) k qf      = (PosPar n t e (qf p), k)
 
 
-initComplement env n q as body
+initComplement env n as body
 -- | True                                = body
   | inBuiltin env || null as            = body
   | otherwise                           = defAltInit : body
@@ -743,9 +743,9 @@ instance InfEnv Decl where
                                                  when (not $ null cs) $ err (loc n) "Deprecated class syntax"
                                                  checkClassAttributesInitialized n l env as' te0 b
                                                  (nterms,asigs,_) <- checkAttributes [] te' te
-                                                 let te1 = if notImplBody b then unSig asigs else []
-                                                     te2 = te ++ te1
-                                                     b2 = addImpl te1 b1
+                                                 let (te2,b2) = if notImplBody b then let te1 = unSig asigs in (te++te1, addImpl te1 b1)
+                                                                else if null asigs && initKW `notElem` dom te then relayInit te b1
+                                                                else (te,b1)
                                                      docstring = extractDocstring b
                                                  return ([], [(n, NClass q as' (te0++te2) docstring)], Class l n q us (props te0 ++ b2) ddoc)
                                              _ -> illegalRedef n
@@ -756,7 +756,16 @@ instance InfEnv Decl where
             q'                          = selfQuant (NoQ n) q
             props te0                   = [ Signature l0 [n] sc Property | (n,NSig sc Property _) <- te0 ]
             tc                          = TC (NoQ n) (map tVar $ qbound q)
-            b0                          = initComplement env n q as' b
+            b0                          = initComplement env n as' b
+            relayInit te b              = --trace ("####### Creating relayInit for class " ++ prstr n) $
+                                          case lookup initKW te' of
+                                            Just ni@(NDef sc _ _) ->
+                                                ((initKW,ni):te, sDecl [Def NoLoc initKW [] pp kp Nothing body NoDec fx Nothing]:b)
+                                              where t  = addSelf (sctype sc) (Just NoDec)
+                                                    pp = pPar pNames $ posrow t
+                                                    kp = kPar attrKW $ kwdrow t
+                                                    fx = effect t
+                                                    body = [sExpr $ Call NoLoc (eDot (eQVar $ tcname $ head us) initKW) (pArg pp) (kArg kp)]
 
     infEnv env (Protocol l n q us b ddoc)
                                         = case findName n env of
@@ -1379,15 +1388,22 @@ infInitEnv env self (Expr l e : b)
                                              return (cs1++cs2, te, Expr l e' : b')
 infInitEnv env self b                   = infSuiteEnv env b
 
-abstractDefs env q b                    = map absDef b
-  where absDef (Decl l ds)              = Decl l (map absDef' ds)
+abstractDefs env q b                    = qsigs ++ map absDef b
+  where qsigs                           = [ Signature NoLoc [n] (monotype $ proto2type (tVar v) p) Property | (v,p) <- quals env q, let n = tvarWit v p ]
+        absDef (Decl l ds)              = Decl l (map absDef' ds)
         absDef (If l bs els)            = If l [ Branch e (map absDef ss) | Branch e ss <- bs ] (map absDef els)
         absDef stmt                     = stmt
-        absDef' d@Def{}                 = d{ pos = pos1 }
-          where pos1                    = case pos d of
+        absDef' d@Def{}
+          | deco d == Static            = d{ pos = pos1 }
+          | dname d == initKW           = d{ pos = pos1, dbody = qcopies ++ dbody d }
+          | otherwise                   = d{ dbody = bindWits qcopies' ++ dbody d }
+          where nSelf                   = case pos d of PosPar nSelf _ _ _ -> nSelf
+                pos1                    = case pos d of
                                             PosPar nSelf t e p | deco d /= Static ->
                                                 PosPar nSelf t e $ qualWPar env q p
                                             p -> qualWPar env q p
+                qcopies                 = [ MutAssign NoLoc (eDot (eVar nSelf) n) (eVar n) | (v,p) <- quals env q, let n = tvarWit v p ]
+                qcopies'                = [ mkEqn env n (proto2type (tVar v) p) (eDot (eVar nSelf) n) | (v,p) <- quals env q, let n = tvarWit v p ]
 
 
 instance Check Decl where
@@ -1806,7 +1822,8 @@ instance Infer Expr where
                                                   | otherwise -> do
                                                       (cs1,tvs,t) <- instantiate env sc
                                                       let t' = vsubst [(tvSelf,tCon tc)] $ addSelf t dec
-                                                      return (cs0++cs1, t', app2nd dec t' (tApp (Dot l x n) (ts++tvs)) $ protoWitsOf (cs0++cs1))
+                                                          csq = if dec == Just Static || n == initKW then cs0 else []
+                                                      return (csq++cs1, t', app2nd dec t' (tApp (Dot l x n) (ts++tvs)) $ protoWitsOf (csq++cs1))
                                                 Nothing ->
                                                     case findProtoByAttr env c' n of
                                                         Just p -> do
