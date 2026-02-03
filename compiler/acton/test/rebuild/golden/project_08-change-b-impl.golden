@@ -1,9 +1,9 @@
 Resolving dependencies (fetching if missing)...
   Fresh a: using cached .ty
   Stale b: source changed
-  Hash deltas b: ~DocInfo{impl 670f5ddb -> beff209e}, ~baa{src a5c65622 -> 1bb00ba9, impl 0372700c -> 3c1bc1bc}
+  Hash deltas b: ~DocInfo{impl babab0b9 -> ffbd9ff2}, ~baa{src a5c65622 -> 1bb00ba9, impl e0e86dc8 -> 3efc177c}
    Finished type check of     b     0.000 s
-  Stale c: impl changes in b.baa 0372700c → 3c1bc1bc (used by main)
+  Stale c: impl changes in b.baa e0e86dc8 → 3efc177c (used by main)
    Finished compilation of    b     0.000 s
    Finished compilation of    c     0.000 s
    Finished final compilation       0.000 s
