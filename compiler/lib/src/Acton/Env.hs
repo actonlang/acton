@@ -323,17 +323,14 @@ inBuiltin env               = length (modules env) == 1     -- mPrim only
 stateScope                  :: EnvF x -> [Name]
 stateScope env              = [ z | (z, NSVar _) <- names env ]
 
-tvarScope0                  :: EnvF x -> [TVar]
-tvarScope0 env              = [ TV k n | (n, NTVar k _ _) <- names env ]
-
-tvarScope                   :: EnvF x -> [TVar]
-tvarScope env               = tvarScope0 env \\ [tvSelf]
-
 quantScope0                 :: EnvF x -> QBinds
 quantScope0 env             = [ QBind (TV k n) (if c==cValue then ps else (c:ps)) | (n, NTVar k c ps) <- names env ]
 
 quantScope                  :: EnvF x -> QBinds
 quantScope env              = [ q | q@(QBind tv _) <- quantScope0 env, tv /= tvSelf ]
+
+tvarDescendants             :: EnvF x -> [TCon] -> [TVar]
+tvarDescendants env cs      = [ TV k n | (n, NTVar k c _) <- names env, c `elem` cs ]
 
 selfScopeSubst              :: EnvF x -> Substitution
 selfScopeSubst env          = [ (TV k n, tCon c) | (n, NTVar k c ps) <- names env, n == nSelf ]
@@ -541,10 +538,6 @@ allAncestors                :: EnvF x -> TCon -> [TCon]
 allAncestors env tc         = reverse [ schematic' c | (_, c) <- us ]
   where (us,te)             = findCon env tc
 
-allAncestors'               :: EnvF x -> QName -> [QName]
-allAncestors' env qn        = map (tcname . snd) us
-  where (q,us,te)           = findConName qn env
-
 allDescendants              :: EnvF x -> TCon -> [TCon]
 allDescendants env tc       = [ schematic' c | c <- allCons env, hasAncestor' env (tcname c) (tcname tc) ]
 
@@ -661,14 +654,14 @@ allProtos env               = reverse locals ++ concat [ protos m (lookupMod m e
         proto _             = False
         protos m (Just te)  = [ TC (GName m n) (wildargs i) | (n,i) <- te, proto i ] ++ concat [ protos (modCat m n) (Just te') | (n,NModule te' _) <- te ]
 
-allConAttr                  :: EnvF x -> Name -> [Type]
-allConAttr env n            = [ tCon tc | tc <- allCons env, n `elem` allAttrs' env tc ]
+allConAttr                  :: EnvF x -> Name -> [TCon]
+allConAttr env n            = [ tc | tc <- allCons env, n `elem` allAttrs' env tc ]
 
 allConAttrUFree             :: EnvF x -> Name -> [TUni]
 allConAttrUFree env n       = concat [ ufree $ fst $ findAttr' env tc n | tc <- allCons env, n `elem` allAttrs' env tc ]
 
-allProtoAttr                :: EnvF x -> Name -> [Type]
-allProtoAttr env n          = [ tCon p | p <- allProtos env, n `elem` allAttrs' env p ]
+allPConAttr                 :: EnvF x -> Name -> [PCon]
+allPConAttr env n           = [ p | p <- allProtos env, n `elem` allAttrs' env p ]
 
 
 -- TVar queries ------------------------------------------------------------------------------------------------------------------

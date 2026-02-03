@@ -147,15 +147,15 @@ newrank pol (Proto _ env _ (TUni _ v) p)                                        
   | neg                                     = R_neg v alts
   | otherwise                               = R_amb v alts
   where (pos, neg)                          = (v `elem` fst pol, v `elem` snd pol)
-        alts                                = allExtProto env p
+        alts                                = allBelowProto env p
 newrank pol (Sel _ env _ (TUni _ v) n _)                                                   -- Sel behaves as an upper
   | neg && pos                              = R_ret
   | neg                                     = R_neg v alts
   | otherwise                               = R_amb v alts
   where (pos, neg)                          = (v `elem` fst pol, v `elem` snd pol)
-        alts                                = allConAttr env n ++ allProtoAttr env n ++ allExtProtoAttr env n ++ [wildTuple]
+        alts                                = allClassAttr env n ++ allProtoAttr env n ++ [wildTuple]
 newrank pol (Mut _ env (TUni _ v) n _)      = R_amb v alts
-  where alts                                = allConAttr env n
+  where alts                                = allClassAttr env n
 newrank pol (Seal _ env (TUni _ v))
   | uvkind v == KFX                         = R_amb v [fxAction, fxPure]
 newrank pol c                               = R_red
@@ -381,10 +381,10 @@ rank _ (Cast _ env (TUni _ v) t2)           = RTry v (allBelow env t2) False
 rank _ (Cast _ env t1 (TUni _ v))           = RTry v (allAbove env t1) True
 
 rank _ (Proto _ env _ (TUni _ v) p)         = RTry v ts False
-  where ts                                  = allExtProto env p
+  where ts                                  = allBelowProto env p
 
-rank _ (Sel _ env _ (TUni _ v) n _)         = RTry v (allConAttr env n ++ allProtoAttr env n ++ allExtProtoAttr env n ++ [wildTuple]) False
-rank _ (Mut _ env (TUni _ v) n _)           = RTry v (allConAttr env n) False
+rank _ (Sel _ env _ (TUni _ v) n _)         = RTry v (allClassAttr env n ++ allProtoAttr env n ++ [wildTuple]) False
+rank _ (Mut _ env (TUni _ v) n _)           = RTry v (allClassAttr env n) False
 
 rank _ (Seal _ env (TUni _ v))
   | uvkind v == KFX                         = RSealed v
@@ -446,36 +446,45 @@ univars cs                              = concat $ map uni cs
                                         = [v,v']
         uni _                           = []
 
-allAbove env (TCon _ tc)                = tOpt tWild : map tCon tcons
-  where n                               = tcname tc
-        tcons                           = allAncestors env tc ++ [schematic' tc]
-allAbove env (TVar _ tv)                = [tOpt tWild, tCon tc, tVar tv]
-  where tc                              = schematic' $ findTVBound env tv
-allAbove env (TOpt _ t)                 = [tOpt tWild]
-allAbove env (TNone _)                  = [tOpt tWild, tNone]
-allAbove env (TFun _ _ _ _ _)           = [tOpt tWild, tFun tWild tWild tWild tWild]
-allAbove env (TTuple _ _ _)             = [tOpt tWild, tTuple tWild tWild]
---allAbove env (TRow _ k n _ _)           = [tRow k n tWild tWild]
---allAbove env (TStar _ k r)              = [tStar k tWild]
---allAbove env (TNil _ k)                 = [tNil k]
-allAbove env (TFX _ FXProc)             = [fxProc]
-allAbove env (TFX _ FXMut)              = [fxProc, fxMut]
-allAbove env (TFX _ FXPure)             = [fxProc, fxMut, fxPure]
-allAbove env (TFX _ FXAction)           = [fxProc, fxAction]
+allAbove env (TCon _ tc)            = tOpt tWild : map tCon tcons
+  where n                           = tcname tc
+        tcons                       = allAncestors env tc ++ [schematic' tc]
+allAbove env (TVar _ tv)            = allAbove env (tCon tc) ++ [tVar tv]
+  where tc                          = findTVBound env tv
+allAbove env (TOpt _ t)             = [tOpt tWild]
+allAbove env (TNone _)              = [tOpt tWild, tNone]
+allAbove env (TFun _ _ _ _ _)       = [tOpt tWild, tFun tWild tWild tWild tWild]
+allAbove env (TTuple _ _ _)         = [tOpt tWild, tTuple tWild tWild]
+allAbove env (TFX _ FXProc)         = [fxProc]
+allAbove env (TFX _ FXMut)          = [fxProc, fxMut]
+allAbove env (TFX _ FXPure)         = [fxProc, fxMut, fxPure]
+allAbove env (TFX _ FXAction)       = [fxProc, fxAction]
 
-allBelow env (TCon _ tc)                = map tCon $ schematic' tc : allDescendants env tc
-allBelow env (TVar _ tv)                = [tVar tv]
-allBelow env (TOpt _ t)                 = tOpt tWild : allBelow env t ++ [tNone]
-allBelow env (TNone _)                  = [tNone]
-allBelow env (TFun _ _ _ _ _)           = [tFun tWild tWild tWild tWild]
-allBelow env (TTuple _ _ _)             = [tTuple tWild tWild]
---allBelow env (TRow _ k n _ _)           = [tRow k n tWild tWild]
---allBelow env (TStar _ k r)              = [tStar k tWild]
---allBelow env (TNil _ k)                 = [tNil k]
-allBelow env (TFX _ FXProc)             = [fxProc, fxMut, fxPure, fxAction]
-allBelow env (TFX _ FXMut)              = [fxMut, fxPure]
-allBelow env (TFX _ FXPure)             = [fxPure]
-allBelow env (TFX _ FXAction)           = [fxAction]
+allBelow env (TCon _ tc)            = map tCon tcons ++ map tVar tvars
+  where tcons                       = schematic' tc : allDescendants env tc
+        tvars                       = tvarDescendants env tcons
+allBelow env (TVar _ tv)            = [tVar tv]
+allBelow env (TOpt _ t)             = tOpt tWild : allBelow env t ++ [tNone]
+allBelow env (TNone _)              = [tNone]
+allBelow env (TFun _ _ _ _ _)       = [tFun tWild tWild tWild tWild]
+allBelow env (TTuple _ _ _)         = [tTuple tWild tWild]
+allBelow env (TFX _ FXProc)         = [fxProc, fxMut, fxPure, fxAction]
+allBelow env (TFX _ FXMut)          = [fxMut, fxPure]
+allBelow env (TFX _ FXPure)         = [fxPure]
+allBelow env (TFX _ FXAction)       = [fxAction]
+
+allBelowProto env p
+  | p == pIdentity                  = ts ++ [ schematic $ tCon tc | tc <- allCons env, isActor env (tcname tc) ]
+  | otherwise                       = ts
+  where ts                          = reverse [ schematic (wtype w) | w <- witsByPName env (tcname p) ] -- includes tvars
+
+allClassAttr env n                  = map tCon tcons ++ map tVar tvars
+  where tcons                       = allConAttr env n
+        tvars                       = tvarDescendants env tcons
+
+allProtoAttr env n                  = map tCon pcons ++ concatMap (allBelowProto env) pcons
+  where pcons                       = allPConAttr env n
+
 
 ----------------------------------------------------------------------------------------------------------------------
 -- reduce
@@ -661,15 +670,6 @@ hasWitness env (TCon _ c) p
   | isActor env (tcname c),
     tcname p == qnIdentity  = True
 hasWitness env t p          =  not $ null $ findWitness env t p
-
-allExtProto                 :: Env -> PCon -> [Type]
-allExtProto env p
-  | p == pIdentity          = ts ++ [ schematic $ tCon tc | tc <- allCons env, isActor env (tcname tc) ]
-  | otherwise               = ts
-  where ts                  = reverse [ schematic (wtype w) | w <- witsByPName env (tcname p) ]
-
-allExtProtoAttr             :: Env -> Name -> [Type]
-allExtProtoAttr env n       = [ tCon tc | tc <- allCons env, any ((n `elem`) . allAttrs' env . proto) (witsByTName env $ tcname tc) ]
 
 
 ----------------------------------------------------------------------------------------------------------------------
