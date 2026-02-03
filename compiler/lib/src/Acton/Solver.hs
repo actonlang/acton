@@ -783,13 +783,13 @@ castpos                                     :: Env -> ErrInfo -> PosRow -> PosRo
 castpos env info TUni{}         TUni{}      = error "INTERNAL ERROR: castpos"
 castpos env info (TUni _ tv)     r2
   | tv `elem` ufree r2                      = conflictingRow tv                     -- use rowTail?
-  | otherwise                               = do r1 <- rowShape r2
+  | otherwise                               = do r1 <- rowShape env r2
                                                  --traceM (" ## castpos L " ++ prstr tv ++ " ~ " ++ prstr r1)
                                                  usubstitute tv r1
                                                  castpos env info r1 r2
 castpos env info r1             (TUni _ tv)
   | tv `elem` ufree r1                      = conflictingRow tv                     -- use rowTail?
-  | otherwise                               = do r2 <- rowShape r1
+  | otherwise                               = do r2 <- rowShape env r1
                                                  --traceM (" ## castpos R " ++ prstr r2 ++ " ~ " ++ prstr tv)
                                                  usubstitute tv r2
                                                  castpos env info r1 r2
@@ -838,13 +838,13 @@ castkwd env info r1 (TUni _ tv)             = do unif r1
         unif (TRow _ _ n t r)
           | tv `elem` ufree r               = conflictingRow tv                     -- use rowTail?
           | otherwise                       = do --traceM (" ## castkwd Row - Var: " ++ prstr (tRow KRow n t r) ++ " = " ++ prstr tv)
-                                                 t2 <- newUnivar
-                                                 r2 <- tRow KRow n t2 <$> newUnivarOfKind KRow
+                                                 t2 <- newUnivar env
+                                                 r2 <- tRow KRow n t2 <$> newUnivarOfKind KRow env
                                                  unify info (tUni tv) r2
         unif (TStar _ _ r)
           | tv `elem` ufree r               = conflictingRow tv                     -- use rowTail?
           | otherwise                       = do --traceM (" ## castkwd Star - Var: " ++ prstr (tStar KRow r) ++ " = " ++ prstr tv)
-                                                 r2 <- tStar KRow <$> newUnivarOfKind KRow
+                                                 r2 <- tStar KRow <$> newUnivarOfKind KRow env
                                                  unify info (tUni tv) r2
         unif TNil{}                         = do --traceM (" ## castkwd Nil - Var: " ++ prstr (tNil KRow) ++ " = " ++ prstr tv)
                                                  r2 <- pure $ tNil KRow
@@ -857,7 +857,7 @@ castkwd env info r1 (TRow _ _ n2 t2 r2)     = do (t1,r1') <- pick r1
   where pick (TUni _ tv)
           | tv `elem` ufree r2              = conflictingRow tv                     -- use rowTail?
           | otherwise                       = do --traceM (" ## castkwd Var - Row: " ++ prstr (tUni tv) ++ " = " ++ prstr (tRow KRow n2 t2 r2))
-                                                 r1 <- tRow KRow n2 t2 <$> newUnivarOfKind KRow
+                                                 r1 <- tRow KRow n2 t2 <$> newUnivarOfKind KRow env
                                                  unify info (tUni tv) r1
                                                  pick r1
         pick (TRow _ _ n t r)
@@ -874,7 +874,7 @@ castkwd env info r1 (TStar _ _ r2)          = match r1
   where match (TUni _ tv)
           | tv `elem` ufree r2              = conflictingRow tv                     -- use rowTail?
           | otherwise                       = do --traceM (" ## castkwd Var - Star: " ++ prstr (tUni tv) ++ " = " ++ prstr (tStar KRow r2))
-                                                 r1 <- tStar KRow <$> newUnivarOfKind KRow
+                                                 r1 <- tStar KRow <$> newUnivarOfKind KRow env
                                                  unify info (tUni tv) r1
                                                  match r1
         match (TRow _ _ n t r)              = do --traceM (" ## castkwd Row - Star: " ++ prstr (tRow KRow n t r) ++ " ≠ " ++ prstr (tStar KRow r2))
@@ -1001,24 +1001,24 @@ rowTail r                                   = r
 
 varTails                                    = all (isUnivar . rowTail)
 
-rowShape (TRow _ k n t r)                   = do t' <- newUnivar
-                                                 r' <- rowShape r
+rowShape env (TRow _ k n t r)               = do t' <- newUnivar env
+                                                 r' <- rowShape env r
                                                  return (tRow k n t' r')
-rowShape (TStar _ k r)                      = do r' <- rowShape r
+rowShape env (TStar _ k r)                  = do r' <- rowShape env r
                                                  return (tStar k r')
-rowShape r                                  = return r
+rowShape env r                              = return r
 
 subpos                                      :: Env -> ErrInfo -> (Int -> Expr) -> Int -> PosRow -> PosRow -> TypeM (Constraints, PosArg, [(Expr,Type)])
 subpos env info f i TUni{}         TUni{}   = error "INTERNAL ERROR: subpos"
 subpos env info f i (TUni _ tv)     r2
   | tv `elem` ufree r2                      = conflictingRow tv                     -- use rowTail?
-  | otherwise                               = do r1 <- rowShape r2
+  | otherwise                               = do r1 <- rowShape env r2
                                                  --traceM (" ## subpos L " ++ prstr tv ++ " ~ " ++ prstr r1)
                                                  usubstitute tv r1
                                                  subpos env info f i r1 r2
 subpos env info f i r1             (TUni _ tv)
   | tv `elem` ufree r1                      = conflictingRow tv                     -- use rowTail?
-  | otherwise                               = do r2 <- rowShape r1
+  | otherwise                               = do r2 <- rowShape env r1
                                                  --traceM (" ## subpos R " ++ prstr r2 ++ " ~ " ++ prstr tv)
                                                  usubstitute tv r2
                                                  subpos env info f i r1 r2
@@ -1076,13 +1076,13 @@ subkwd env info f seen r1 (TUni _ tv)       = do unif f seen r1
                                                  unif f (seen\\[n]) r
           | tv `elem` ufree r               = conflictingRow tv                     -- use rowTail?
           | otherwise                       = do --traceM (" ## subkwd Row - Var: " ++ prstr (tRow KRow n t r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr tv)
-                                                 t2 <- newUnivar
-                                                 r2 <- tRow KRow n t2 <$> newUnivarOfKind KRow
+                                                 t2 <- newUnivar env
+                                                 r2 <- tRow KRow n t2 <$> newUnivarOfKind KRow env
                                                  unify info (tUni tv) r2
         unif f seen (TStar _ _ r)
           | tv `elem` ufree r               = conflictingRow tv                     -- use rowTail?
           | otherwise                       = do --traceM (" ## subkwd Star - Var: " ++ prstr (tStar KRow r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr tv)
-                                                 r2 <- tStar KRow <$> newUnivarOfKind KRow
+                                                 r2 <- tStar KRow <$> newUnivarOfKind KRow env
                                                  unify info (tUni tv) r2
         unif f seen TNil{}                  = do --traceM (" ## subkwd Nil - Var: " ++ prstr (tNil KRow) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr tv)
                                                  r2 <- pure $ tNil KRow
@@ -1097,7 +1097,7 @@ subkwd env info f seen r1 (TRow _ _ n2 t2 r2)
   where pick f seen (TUni _ tv)
           | tv `elem` ufree r2              = conflictingRow tv                     -- use rowTail?
           | otherwise                       = do --traceM (" ## subkwd Var - Row: " ++ prstr (tVar tv) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tRow KRow n2 t2 r2))
-                                                 r1 <- tRow KRow n2 t2 <$> newUnivarOfKind KRow
+                                                 r1 <- tRow KRow n2 t2 <$> newUnivarOfKind KRow env
                                                  unify info (tUni tv) r1
                                                  pick f seen r1
         pick f seen (TRow _ _ n t r)
@@ -1119,7 +1119,7 @@ subkwd env info f seen r1 (TStar _ _ r2)    = do (cs,e) <- match f seen r1
   where match f seen (TUni _ tv)
           | tv `elem` ufree r2              = conflictingRow tv                     -- use rowTail?
           | otherwise                       = do --traceM (" ## subkwd Var - Star: " ++ prstr (tVar tv) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tStar KRow r2))
-                                                 r1 <- tStar KRow <$> newUnivarOfKind KRow
+                                                 r1 <- tStar KRow <$> newUnivarOfKind KRow env
                                                  unify info (tUni tv) r1
                                                  match f seen r1
         match f seen r1@(TRow _ _ n t r)
@@ -1464,7 +1464,7 @@ gsimp vi cl obs ((x,y):xys)
         x_obs                           = x `elem` obs
         y_obs                           = y `elem` obs
 
-instwild env k (TWild _)                = newUnivarOfKind k
+instwild env k (TWild _)                = newUnivarOfKind k env
 instwild env _ (TFun l e p k t)         = TFun l <$> instwild env KFX e <*> instwild env PRow p <*> instwild env KRow k <*> instwild env KType t
 instwild env _ (TTuple l p k)           = TTuple l <$> instwild env PRow p <*> instwild env KRow k
 instwild env _ (TOpt l t)               = TOpt l <$> instwild env KType t

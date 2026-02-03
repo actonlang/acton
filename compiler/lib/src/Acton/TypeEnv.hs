@@ -266,13 +266,13 @@ newWitness                              = Internal Witness "" <$> newUnique
 
 newTmp                                  = Internal Tempvar "" <$> newUnique
 
-newUnivarOfKind k                       = TUni NoLoc <$> univar k 0 <$> newUnique           -- <<<<<<<<<<<<<<<<<
+newUnivarOfKind k env                   = TUni NoLoc <$> univar k (qlevel env) <$> newUnique
 
 newUnivarToken n                        = TUni NoLoc $ unitoken n
 
-newUnivars ks                           = mapM newUnivarOfKind ks
+newUnivars env ks                       = mapM (\k -> newUnivarOfKind k env) ks
 
-newUnivar                               = newUnivarOfKind KType
+newUnivar env                           = newUnivarOfKind KType env
 
 
 -- unification ----------------------------------------------------------------------------------------------------------------------
@@ -614,7 +614,7 @@ instantiate env (TSchema _ q t)
                                  return (cs, tvs, vsubst s t)
 
 instQBinds                  :: Env -> QBinds -> TypeM (Constraints, [Type])
-instQBinds env q            = do ts <- newUnivars [ tvkind v | QBind v _ <- q ]
+instQBinds env q            = do ts <- newUnivars env [ tvkind v | QBind v _ <- q ]
                                  cs <- instQuals env q ts
                                  return (cs, ts)
 
