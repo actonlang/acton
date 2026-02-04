@@ -289,6 +289,20 @@ defineTVars q env           = foldr f env (unalias env q)
           where (c,ps)      = case us of u:us' | not $ isProto env (tcname u) -> (u,us'); _ -> (cValue,us)
                 wits        = [ WInst [] (tVar tv) p (NoQ $ tvarWit tv p0) wchain | p0 <- ps, (wchain,p) <- findAncestry env p0 ]
 
+limitQuant                  :: TUni -> EnvF x -> EnvF x
+limitQuant (UV _ l _) env
+  | n <= 0                  = env
+  | otherwise               = env{ names = dropv n (names env), witnesses = dropw n (witnesses env) }
+  where n                   = qlevel env - l
+        dropv 0 te          = te
+        dropv n ((v,i):te)
+          | NTVar{} <- i    = dropv (n-1) te
+          | otherwise       = (v,i) : dropv n te
+        dropw 0 we          = we
+        dropw n (w:we)
+          | WInst{} <- w    = dropw (n-1) (dropWhile ((==wtype w) . wtype) we)
+          | otherwise       = w : dropw n we
+
 selfSubst n q               = vsubst [(tvSelf, tCon tc)]
   where tc                  = TC n (map tVar $ qbound q)
 
@@ -491,9 +505,6 @@ isDefOrClass env n          = case tryQName n env of
 
 witsByPName                 :: EnvF x -> QName -> [Witness]
 witsByPName env pn          = [ w | w <- witnesses env, tcname (proto w) == pn ]
-
-witsByPNameAndType          :: EnvF x -> QName -> Type -> [Witness]
-witsByPNameAndType env pn t = [ w | w <- witsByPName env pn, wtype w == t ]
 
 witsByTName                 :: EnvF x -> QName -> [Witness]
 witsByTName env tn          = [ w | w <- witnesses env, eqname (wtype w) ]

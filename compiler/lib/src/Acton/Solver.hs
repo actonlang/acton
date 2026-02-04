@@ -135,27 +135,28 @@ newrank pol (Cast _ env t (TUni _ v))
   | neg && not pos                          = R_pos v alts
   | otherwise                               = R_low v alts
   where (pos, neg)                          = (v `elem` fst pol, v `elem` snd pol)
-        alts                                = allAbove env t
+        alts                                = allAbove (limitQuant v env) t
 newrank pol (Cast _ env (TUni _ v) t)
   | neg && pos                              = R_ret
   | neg                                     = R_neg v alts
   | otherwise                               = R_amb v alts
   where (pos, neg)                          = (v `elem` fst pol, v `elem` snd pol)
-        alts                                = allBelow env t
+        alts                                = allBelow (limitQuant v env) t
 newrank pol (Proto _ env _ (TUni _ v) p)                                                   -- Proto behaves as an upper typ bound
   | neg && pos                              = R_ret
   | neg                                     = R_neg v alts
   | otherwise                               = R_amb v alts
   where (pos, neg)                          = (v `elem` fst pol, v `elem` snd pol)
-        alts                                = allBelowProto env p
+        alts                                = allBelowProto (limitQuant v env) p
 newrank pol (Sel _ env _ (TUni _ v) n _)                                                   -- Sel behaves as an upper
   | neg && pos                              = R_ret
   | neg                                     = R_neg v alts
   | otherwise                               = R_amb v alts
   where (pos, neg)                          = (v `elem` fst pol, v `elem` snd pol)
-        alts                                = allClassAttr env n ++ allProtoAttr env n ++ [wildTuple]
+        alts                                = allClassAttr env_ n ++ allProtoAttr env_ n ++ [wildTuple]
+        env_                                = limitQuant v env
 newrank pol (Mut _ env (TUni _ v) n _)      = R_amb v alts
-  where alts                                = allClassAttr env n
+  where alts                                = allClassAttr (limitQuant v env) n
 newrank pol (Seal _ env (TUni _ v))
   | uvkind v == KFX                         = R_amb v [fxAction, fxPure]
 newrank pol c                               = R_red
@@ -377,14 +378,15 @@ rank _ (Cast _ env (TUni _ v) (TOpt _ t2@TUni{}))
                                             = RVar v [t2]
 rank _ (Cast _ env (TUni _ v) (TOpt _ t2))  = RTry v ([tOpt tWild, tNone] ++ allBelow env t2) False
 rank _ (Cast _ env TNone{} (TUni _ v))      = RTry v [tOpt tWild, tNone] True
-rank _ (Cast _ env (TUni _ v) t2)           = RTry v (allBelow env t2) False
-rank _ (Cast _ env t1 (TUni _ v))           = RTry v (allAbove env t1) True
+rank _ (Cast _ env (TUni _ v) t2)           = RTry v (allBelow (limitQuant v env) t2) False
+rank _ (Cast _ env t1 (TUni _ v))           = RTry v (allAbove (limitQuant v env) t1) True
 
 rank _ (Proto _ env _ (TUni _ v) p)         = RTry v ts False
-  where ts                                  = allBelowProto env p
+  where ts                                  = allBelowProto (limitQuant v env) p
 
-rank _ (Sel _ env _ (TUni _ v) n _)         = RTry v (allClassAttr env n ++ allProtoAttr env n ++ [wildTuple]) False
-rank _ (Mut _ env (TUni _ v) n _)           = RTry v (allClassAttr env n) False
+rank _ (Sel _ env _ (TUni _ v) n _)         = RTry v (allClassAttr env_ n ++ allProtoAttr env_ n ++ [wildTuple]) False
+  where env_                                = limitQuant v env
+rank _ (Mut _ env (TUni _ v) n _)           = RTry v (allClassAttr (limitQuant v env) n) False
 
 rank _ (Seal _ env (TUni _ v))
   | uvkind v == KFX                         = RSealed v

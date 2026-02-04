@@ -80,10 +80,9 @@ extcons ke env                      = define ke env
 extvars vs env
   | not $ null clash                = err1 (head clash) "Type variable already in scope:"    -- No type variable shadowing
   | not $ null dups                 = err1 (head dups) "Duplicate type variable in binding:"
-  | otherwise                       = return $ define (map mkTVar vs) env
+  | otherwise                       = return $ defineTVars [ QBind tv [] | tv <- vs ] env
   where clash                       = vs `intersect` tvars env
         dups                        = duplicates vs
-        mkTVar tv                   = (tvname tv, NTVar (tvkind tv) cValue [])
 
 tcKind qn env                       = tconKind qn env
 
