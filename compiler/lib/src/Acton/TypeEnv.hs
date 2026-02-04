@@ -318,16 +318,18 @@ unify' info (TRow _ k1 n1 t1 r1) (TRow _ k2 n2 t2 r2)
 unify' info (TStar _ k1 r1) (TStar _ k2 r2)
   | k1 == k2                                = unify info r1 r2
 
-unify' info (TVar _ tv1) (TVar _ tv2)
-  | tv1 == tv2                              = return ()
+unify' info (TVar _ v1) (TVar _ v2)
+  | v1 == v2                                = return ()
 
-unify' info (TUni _ tv1) (TUni _ tv2)
-  | tv1 == tv2                              = return ()
+unify' info t1@(TUni _ v1) t2@(TUni _ v2)
+  | v1 == v2                                = return ()
+  | uvlevel v1 < uvlevel v2                 = usubstitute v2 t1
+  | otherwise                               = usubstitute v1 t2     -- Retain the var with the smallest ulevel (largest scope)
 
-unify' info (TUni _ uv) t2                  = do when (uv `elem` ufree t2) (infiniteType uv t2)
-                                                 usubstitute uv t2
-unify' info t1 (TUni _ uv)                  = do when (uv `elem` ufree t1) (infiniteType uv t1)
-                                                 usubstitute uv t1
+unify' info (TUni _  v) t2                  = do when (v `elem` ufree t2) (infiniteType v t2)
+                                                 usubstitute v t2
+unify' info t1 (TUni _  v)                  = do when (v `elem` ufree t1) (infiniteType v t1)
+                                                 usubstitute v t1
 
 unify' info t1 t2                           = noUnify info t1 t2
 
