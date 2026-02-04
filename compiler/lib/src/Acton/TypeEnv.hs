@@ -94,9 +94,9 @@ instance HasLoc Constraint where
 
 instance Pretty Constraint where
     pretty (Cast _ env t1 t2)       = prettyQuant env <+> pretty t1 <+> text "<" <+> pretty t2
-    pretty (Sub _ env w t1 t2)      = pretty w <+> colon <+> prettyQuant env <+> pretty t1 <+> text "<" <+> pretty t2
-    pretty (Proto _ env w t u)      = pretty w <+> colon <+> prettyQuant env <+> pretty t <+> parens (pretty u)
-    pretty (Sel _ env w t1 n t2)    = pretty w <+> colon <+> prettyQuant env <+> pretty t1 <> text "." <> pretty n <+> text "<" <+> pretty t2
+    pretty (Sub _ env w t1 t2)      = prettyQuant env <+> pretty w <+> colon <+> pretty t1 <+> text "<" <+> pretty t2
+    pretty (Proto _ env w t u)      = prettyQuant env <+> pretty w <+> colon <+> pretty t <+> parens (pretty u)
+    pretty (Sel _ env w t1 n t2)    = prettyQuant env <+> pretty w <+> colon <+> pretty t1 <> text "." <> pretty n <+> text "<" <+> pretty t2
     pretty (Mut _ env t1 n t2)      = prettyQuant env <+> pretty t1 <+> text "." <> pretty n <+> text ">" <+> pretty t2
     pretty (Seal _ env t)           = prettyQuant env <+> text "$Seal" <+> pretty t
 
@@ -266,13 +266,13 @@ newWitness                              = Internal Witness "" <$> newUnique
 
 newTmp                                  = Internal Tempvar "" <$> newUnique
 
-newUnivarOfKind k                       = TUni NoLoc <$> univar k <$> newUnique
+newUnivarOfKind k env                   = TUni NoLoc <$> univar k (qlevel env) <$> newUnique
 
 newUnivarToken n                        = TUni NoLoc $ unitoken n
 
-newUnivars ks                           = mapM newUnivarOfKind ks
+newUnivars env ks                       = mapM (\k -> newUnivarOfKind k env) ks
 
-newUnivar                               = newUnivarOfKind KType
+newUnivar env                           = newUnivarOfKind KType env
 
 
 -- unification ----------------------------------------------------------------------------------------------------------------------
@@ -614,7 +614,7 @@ instantiate env (TSchema _ q t)
                                  return (cs, tvs, vsubst s t)
 
 instQBinds                  :: Env -> QBinds -> TypeM (Constraints, [Type])
-instQBinds env q            = do ts <- newUnivars [ tvkind v | QBind v _ <- q ]
+instQBinds env q            = do ts <- newUnivars env [ tvkind v | QBind v _ <- q ]
                                  cs <- instQuals env q ts
                                  return (cs, ts)
 

@@ -128,7 +128,7 @@ extLocals e env                 = modX env $ \x -> x{ localsX = vts ++ locals en
   where vts                     = [ (v, conv t) | (v,NVar t) <- envOf e ]
 
 extFree m env                   = modX env $ \x -> x{ freemapX = m ++ freemap env,
-                                                      quantmapX = [ (f, tvarScope env) | f <- dom m ] ++ quantmap env }
+                                                      quantmapX = [ (f, qbound $ quantScope env) | f <- dom m ] ++ quantmap env }
 
 extNames m env                  = modX env $ \x -> x{ namemapX = m ++ namemap env }
 
@@ -260,7 +260,7 @@ freefun env e                           = Nothing
 closureConvert env lambda t0 vts0 es    = do n <- newName (nstr $ noq basename)
                                              --traceM ("## closureConvert " ++ prstr lambda ++ "  as  " ++ prstr n)
                                              liftToTop [Class l0 n q bases body Nothing]
-                                             return $ eCall (tApp (eVar n) (map tVar $ tvarScope env)) es
+                                             return $ eCall (tApp (eVar n) (map tVar $ qbound q)) es
   where q                               = quantScope env
         s                               = selfScopeSubst env
         Lambda _ p _ e fx               = vsubst s lambda

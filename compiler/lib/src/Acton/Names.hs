@@ -429,7 +429,7 @@ instance Vars TVar where
     freeQ (TV k v)                  = []
 
 instance Vars TUni where
-    freeQ (UV k v)                  = []
+    freeQ (UV k l v)                = []
 
 instance Vars TCon where
     freeQ (TC n ts)                 = freeQ n ++ freeQ ts
