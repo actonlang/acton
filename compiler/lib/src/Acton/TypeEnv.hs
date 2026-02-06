@@ -18,8 +18,8 @@ import Control.Monad
 import qualified Control.Exception
 import Control.Monad.State.Strict
 import Control.Monad.Except
-import qualified Data.Map.Strict as Map
-import Data.Map.Strict (Map)
+import qualified Data.IntMap.Strict as Map
+import Data.IntMap.Strict (IntMap)
 import Data.Char
 import Error.Diagnose hiding ((<>), err)
 import Prelude hiding ((<>))
@@ -211,7 +211,7 @@ data TypeState                          = TypeState {
                                                 nextint         :: Int,
                                                 effectstack     :: [(TFX,Type)],
                                                 deferred        :: Constraints,
-                                                unisubst        :: Map TUni Type
+                                                unisubst        :: IntMap Type
                                           }
 
 initTypeState s                         = TypeState { nextint = 1, effectstack = [], deferred = [], unisubst = s }
@@ -254,9 +254,9 @@ collectDeferred                         = lift $ state $ \st -> (deferred st, st
 usubstitute                             :: TUni -> Type -> TypeM ()
 usubstitute uv t                        = lift $
                                           --trace ("  #usubstitute " ++ prstr uv ++ " ~ " ++ prstr t) $
-                                          state $ \st -> ((), st{ unisubst = Map.insert uv t (unisubst st)})
+                                          state $ \st -> ((), st{ unisubst = Map.insert (uvid uv) t (unisubst st)})
 
-usubstitution                           :: TypeM (Map TUni Type)
+usubstitution                           :: TypeM (IntMap Type)
 usubstitution                           = lift $ state $ \st -> (unisubst st, st)
 
 
@@ -385,7 +385,7 @@ instance USubst WTCon where
 
 instance USubst Type where
     usubst (TUni l u)               = do s <- usubstitution
-                                         case Map.lookup u s of
+                                         case Map.lookup (uvid u) s of
                                             Just t  -> usubst t
                                             Nothing -> return (TUni l u)
     usubst (TVar l v)               = return $ TVar l v
