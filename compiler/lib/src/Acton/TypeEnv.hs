@@ -105,6 +105,14 @@ prettyQuant env
   | otherwise                       = empty
   where q                           = [ QBind (TV k tv) (if c == cValue then ps else c:ps) | (tv, NTVar k c ps) <- names env ]
 
+instance VFree Constraint where
+    vfree (Cast info env t1 t2)     = vfree t1 ++ vfree t2
+    vfree (Sub info env w t1 t2)    = vfree t1 ++ vfree t2
+    vfree (Proto info env w t p)    = vfree t ++ vfree p
+    vfree (Sel info env w t1 n t2)  = vfree t1 ++ vfree t2
+    vfree (Mut info env t1 n t2)    = vfree t1 ++ vfree t2
+    vfree (Seal info env t)         = vfree t
+
 instance UFree Constraint where
     ufree (Cast info env t1 t2)     = ufree t1 ++ ufree t2
     ufree (Sub info env w t1 t2)    = ufree t1 ++ ufree t2
@@ -259,6 +267,9 @@ usubstitute uv t                        = lift $
 usubstitution                           :: TypeM (IntMap Type)
 usubstitution                           = lift $ state $ \st -> (unisubst st, st)
 
+uextend                                 :: [(TUni,Type)] -> TypeM ()
+uextend s                               = lift $
+                                          state $ \st -> ((), st{ unisubst = Map.union (unisubst st) (Map.fromList [ (uvid u,t) | (u,t) <- s ])})
 
 -- Name generation ------------------------------------------------------------------------------------------------------------------
 

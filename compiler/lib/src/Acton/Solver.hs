@@ -128,6 +128,9 @@ instance Ord Newrank where
     a <= b                                  = weight a <= weight b
 
 
+info0 = noinfo 0
+
+
 newrank pol (Sub info env _ t1 t2)          = newrank pol (Cast info env t1 t2)
 newrank pol (Cast _ env (TUni _ v) (TUni _ v'))
                                             = R_var v v'
@@ -135,71 +138,99 @@ newrank pol (Cast _ env t (TUni _ v))
   | neg && not pos                          = R_pos v alts
   | otherwise                               = R_low v alts
   where (pos, neg)                          = (v `elem` fst pol, v `elem` snd pol)
-        alts                                = allAbove (limitQuant v env) t
+        alts                                = reverse $ allAbove (limitQuant v env) t
 newrank pol (Cast _ env (TUni _ v) t)
+  | TOpt _ (TUni _ v') <- t                 = R_var v v'
   | neg && pos                              = R_ret
   | neg                                     = R_neg v alts
   | otherwise                               = R_amb v alts
   where (pos, neg)                          = (v `elem` fst pol, v `elem` snd pol)
         alts                                = allBelow (limitQuant v env) t
-newrank pol (Proto _ env _ (TUni _ v) p)                                                   -- Proto behaves as an upper typ bound
+newrank pol (Proto _ env _ (TUni _ v) p)                                                        -- Proto behaves as an upper type bound
   | neg && pos                              = R_ret
-  | neg                                     = R_neg v alts
+--  | neg                                     = R_neg v alts                                    -- Later, when protos have become proper types
+  | neg || pos                              = R_ret
   | otherwise                               = R_amb v alts
   where (pos, neg)                          = (v `elem` fst pol, v `elem` snd pol)
         alts                                = allBelowProto (limitQuant v env) p
-newrank pol (Sel _ env _ (TUni _ v) n _)                                                   -- Sel behaves as an upper
-  | neg && pos                              = R_ret
+newrank pol (Sel _ env _ (TUni _ v) n _)                                                        -- Sel behaves as an upper type/proto bound
+  | neg && pos                              = R_amb v alts
   | neg                                     = R_neg v alts
   | otherwise                               = R_amb v alts
   where (pos, neg)                          = (v `elem` fst pol, v `elem` snd pol)
         alts                                = allClassAttr env_ n ++ allProtoAttr env_ n ++ [wildTuple]
         env_                                = limitQuant v env
-newrank pol (Mut _ env (TUni _ v) n _)      = R_amb v alts
+newrank pol (Mut _ env (TUni _ v) n _)      = R_amb v alts                                      -- Mut behaves as an upper type bound
   where alts                                = allClassAttr (limitQuant v env) n
 newrank pol (Seal _ env (TUni _ v))
   | uvkind v == KFX                         = R_amb v [fxAction, fxPure]
 newrank pol c                               = R_red
 
 
-info0 = noinfo 0
+newsolve                                    :: Env -> TEnv -> Equations -> Constraints -> TypeM (Equations, Constraints)
+newsolve env te eq cs                       = do te <- usubst te
+                                                 cs <- usubst cs
+                                                 newsolve' env te eq cs
 
-newsolve env te eq cs = do
-    te <- usubst te
-    cs <- usubst cs
-    newsolve' env te eq cs
+newsolve' env te eq []                      = return (eq, [])                                   -- done
+newsolve' env te eq cs                      = do let pol = closePolVars (polvars te) cs
+                                                 st <- currentState
+                                                 case head $ sort $ map (newrank pol) cs of
+                                                    R_red -> do                                 -- reducible
+                                                        eq <- reduce eq cs
+                                                        cs <- collectDeferred
+                                                        newsolve env te eq cs
+                                                    R_pos v ts ->                               -- positive lower con
+                                                        newtry env st te eq cs v ts
+                                                    R_low v ts ->                               -- must-solve lower con
+                                                        newtry env st te eq cs v ts
+                                                    R_neg v ts ->                               -- negative upper con
+                                                        newtry env st te eq cs v ts
+                                                    R_amb v ts ->                               -- must-solve upper con
+                                                        newtry env st te eq cs v ts
+                                                    R_var v v' -> do                            -- var-var
+                                                        unify info0 (tUni v) (tUni v')
+                                                        newsolve env te eq cs
+                                                    R_ret -> do                                 -- acceptable upper con 
+                                                        (eq,cs) <- validate env eq cs
+                                                        coalesce env eq cs
 
-newsolve' env te eq [] =                                        -- done
-    return ([], eq)
-newsolve' env te eq cs = do
-    let pol = closePolVars (polvars te) cs
-    st <- currentState
-    case head $ sort $ map (newrank pol) cs of
-        R_red -> do                                             -- reducible
-            eq <- reduce eq cs
-            cs <- collectDeferred
-            newsolve env te eq cs
-        R_pos v ts ->                                           -- positive lower con
-            newtry env st te eq cs v ts
-        R_low v ts ->                                           -- general lower con
-            newtry env st te eq cs v ts
-        R_neg v ts ->                                           -- negative upper con
-            newtry env st te eq cs v ts
-        R_amb v ts ->                                           -- must solve upper con
-            newtry env st te eq cs v ts
-        R_var v v' -> do                                        -- var-var
-            unify info0 (tUni v) (tUni v')
-            newsolve env te eq cs
-        R_ret ->                                                -- general upper con
-            --coalesce env cs
-            return (cs, eq)
+newtry env st te eq cs v []                 = noSolve0 env (Just $ tUni v) [] cs
+newtry env st te eq cs v (t:ts)             = (unify info0 (tUni v) t >> newsolve env te eq cs)
+                                              `catchError`
+                                              const (rollbackState st >> newtry env st te eq cs v ts)
 
-newtry env st te eq cs v [] =
-    noSolve0 env (Just $ tUni v) [] cs
-newtry env st te eq cs v (t:ts) =
-    (unify info0 (tUni v) t >> newsolve env te eq cs)
-    `catchError`
-    const (rollbackState st >> newtry env st te eq cs v ts)
+validate env eq cs                          = do st <- currentState
+                                                 _ <- newsolve env [] eq cs                      -- check that a solution exists
+                                                 cs' <- usubst cs
+                                                 let us = nub $ concat [ ufree c | (c,c') <- cs `zip` cs', not $ null $ vfree c' ]
+                                                 ts <- usubst (map tUni us)                      -- collect scope dependent substitution
+                                                 let s = [ (u,t) | (u,t) <- us `zip` ts, t /= tUni u ]
+                                                 rollbackState st
+                                                 uextend s                                      -- apply to old state
+                                                 eq <- reduce eq cs
+                                                 cs <- collectDeferred
+                                                 return (eq, cs)
+
+coalesce env eq cs                          = red env eq [] cs
+  where red env eq cs []                    = return (eq, cs)
+        red env eq cs (Cast _ _ (TUni _ v) t : cs')
+          | t' : _ <- hits                  = do eq' <- reduce eq [Cast info0 env t' t]
+                                                 red env eq' cs cs'
+          where hits                        = [ t' | Cast _ env' (TUni _ v') t' <- cs++cs', v'==v, headcast env t' t ]
+        red env eq cs (Sub _ _ w (TUni _ v) t : cs')
+          | (w',t') : _ <- hits             = do w2 <- newWitness
+                                                 let eq' = mkEqn env w (wFun (tUni v) t) (compWit (tUni v) w2 w')
+                                                 eq <- reduce (eq':eq) [Sub info0 env w2 t' t]
+                                                 red env eq cs cs'
+          where hits                        = [ (w',t') | Sub _ _ w' (TUni _ v') t' <- cs++cs', v'==v, headcast env t' t ]
+        red env eq cs (Proto _ _ w (TUni _ v) p : cs')
+          | (w',p') : _ <- hits             = do w2 <- newWitness
+                                                 let eq' = mkEqn env w (proto2type (tUni v) p) (compWit (tUni v) w2 w')
+                                                 eq <- reduce (eq':eq) [Sub info0 env w2 (tCon p') (tCon p)]
+                                                 red env eq cs cs'
+          where hits                        = [ (w',p') | Proto _ _ w' (TUni _ v') p' <- cs++cs', v'==v, headcast env (tCon p') (tCon p) ]
+
 
 -- ###################################################################################################################
 
@@ -374,11 +405,9 @@ rank                                        :: Env -> Constraint -> Rank
 rank _ (Sub info env _ t1 t2)               = rank env (Cast info env t1 t2)
 
 rank _ (Cast _ env (TUni _ v) t2@TUni{})    = RVar v [t2]
-rank _ (Cast _ env (TUni _ v) (TOpt _ t2@TUni{}))
-                                            = RVar v [t2]
-rank _ (Cast _ env (TUni _ v) (TOpt _ t2))  = RTry v ([tOpt tWild, tNone] ++ allBelow env t2) False
-rank _ (Cast _ env TNone{} (TUni _ v))      = RTry v [tOpt tWild, tNone] True
-rank _ (Cast _ env (TUni _ v) t2)           = RTry v (allBelow (limitQuant v env) t2) False
+rank _ (Cast _ env (TUni _ v) t2)
+  | TOpt _ t2@TUni{} <- t2                  = RVar v [t2]
+  | otherwise                               = RTry v (allBelow (limitQuant v env) t2) False
 rank _ (Cast _ env t1 (TUni _ v))           = RTry v (allAbove (limitQuant v env) t1) True
 
 rank _ (Proto _ env _ (TUni _ v) p)         = RTry v ts False
@@ -1715,6 +1744,8 @@ multiPBounds cs                         = Map.assocs $ f cs Map.empty
   where
     f []                                = Map.filter ((>1) . length)
     f (Proto _ env w (TUni _ v) p : cs) = f cs . Map.insertWith (++) v [(w, p, qlevel env)]
+    f (Sub _ env w (TUni _ v) (TCon _ c) : cs )
+                                        = f cs . Map.insertWith (++) v [(w, c, qlevel env)]
     f (_ : cs)                          = f cs
 
 ctxtRed                                 :: Env -> [(TUni, [(Name, PCon, Int)])] -> (Equations, [(Type,Type)])
@@ -1726,15 +1757,15 @@ ctxtRed env multiPBnds                  = (concat eqs, concat unis)
                                           imp v (Eqn (min i j) w (proto2type (tUni v) p) e : eq) ((tcargs p `zip` tcargs p') ++ uni) wps wps'
           | otherwise                   = --trace ("   (Not covered: " ++ prstr p ++ " in context " ++ prstrs [ w | (w,_,_) <- wps++wps' ] ++ ")") $
                                           imp v eq uni ((w,p,i):wps) wps'
-          where hits                    = [ (wf $ eVar w', vsubst s p', j) | (w',p0,j) <- wps++wps', w'/=w, Just (wf,p') <- [findAncestor env p0 (tcname p)] ]
+          where hits                    = [ (wf $ eVar w', vsubst s p', j) | (w',p0,j) <- wps++wps', Just (wf,p') <- [findAncestor env p0 (tcname p)] ]
                 s                       = [(tvSelf,tUni v)]
         imp v eq uni wps []             = (reverse eq, uni)
-
 
 remove ws []                            = []
 remove ws (Proto _ _ w t p : cs)
   | w `elem` ws                         = remove ws cs
 remove ws (c : cs)                      = c : remove ws cs
+
 
 filterOut vs cs                         = filter preserve cs
   where preserve (Seal _ _ (TUni _ v))  = v `notElem` vs
@@ -1765,6 +1796,8 @@ idwit env w t1 t2                       = mkEqn env w (wFun t1 t2) (eLambda [(px
 
 rowFun PRow r1 r2                       = tFun fxPure (posRow (tTupleP r1) posNil) kwdNil (tTupleP r2)
 rowFun KRow r1 r2                       = tFun fxPure (posRow (tTupleK r1) posNil) kwdNil (tTupleK r2)
+
+compWit t w1 w2                         = eLambda [(px0,t)] (eCallVar w1 [eCallVar w2 [eVar px0]])
 
 rowWit PRow n t r wt wr                 = eLambda [(px0,tTupleP $ posRow t r)] eTup
   where eTup                            = Paren l0 $ Tuple l0 (PosArg e1 (PosStar e2)) KwdNil
