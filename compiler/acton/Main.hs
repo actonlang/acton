@@ -104,6 +104,7 @@ import Numeric (showHex)
 import qualified Data.ByteString.Lazy as BL
 
 import TestRunner
+import TerminalProgress
 
 main = do
     hSetBuffering stdout LineBuffering
@@ -1191,13 +1192,52 @@ initCliCompileHooks :: ProgressUI
                     -> CompilePlan
                     -> IO CliCompileHooks
 initCliCompileHooks progressUI progressState gopts sched gen plan = do
+    let neededTasks = cpNeededTasks plan
+    sizeEntries <- forM neededTasks $ \t -> do
+      let key = gtKey t
+          path = srcFile (gtPaths t) (tkMod key)
+      exists <- doesFileExist path
+      sz <- if exists then getFileSize path else return 0
+      return (key, sz)
+    progressRef <- newIORef (0 :: Double)
+    marksRef <- newIORef (M.empty :: M.Map TaskKey (Bool, Bool))
+    -- sizeMap is used for the progress bar indicator to determine how much a
+    -- modules compilation should contribute to the overall progress. We use
+    -- file size as a heuristic for this, but if all sizes are zero (e.g. due to
+    -- missing files or all files being empty), we fall back to equal weighting
+    -- to avoid division by zero. Since our compilation is split into front and
+    -- back passes, we also compute a share for each task that determines how
+    -- much of the total progress it should contribute to, which is used to give
+    -- a more accurate progress indication during the compile.
+    let sizeMap = M.fromList sizeEntries
+        totalSize = sum (map snd sizeEntries)
+        useEqual = totalSize <= 0
+        totalWeight :: Double
+        totalWeight =
+          if useEqual
+            then fromIntegral (max 1 (length neededTasks))
+            else fromIntegral totalSize
+        weightFor key =
+          if useEqual
+            then 1 / totalWeight
+            else fromIntegral (M.findWithDefault 0 key sizeMap) / totalWeight
+        compilePhaseTotal = 90.0
+        frontRatio = 0.7
+        backRatio = 0.3
+        shareMap =
+          M.fromList
+            [ (gtKey t, (compilePhaseTotal * weightFor (gtKey t) * frontRatio
+                        , compilePhaseTotal * weightFor (gtKey t) * backRatio))
+            | t <- neededTasks
+            ]
     let gate = whenCurrentGen sched gen
         logLine msg = gate (progressLogLine progressUI msg)
         logDiagnostics optsT diags =
           gate (progressWithLog progressUI (printDiagnostics gopts optsT diags))
         rootProj = ccRootProj (cpContext plan)
         optsPlan = ccOpts (cpContext plan)
-        neededTasks = cpNeededTasks plan
+        termProgress = puTermProgress progressUI
+        termEnabled = termProgressEnabled termProgress
         modLabel mn = modNameToString mn
         spinnerPrefixWidth = 3
         frontPrefix = "   Finished type check of"
@@ -1256,6 +1296,31 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
         progressFinalLine =
           padRight progressTimePadWidth (padProgressPrefix phaseFinal)
         finalKey = TaskKey rootProj (A.modName ["__final__"])
+        withTerm action = when termEnabled $ gate (withProgressLock progressUI action)
+        setPercent pct = withTerm (termProgressPercent termProgress pct)
+        setIndeterminate = withTerm (termProgressIndeterminate termProgress)
+        addProgress delta =
+          when (termEnabled && delta > 0) $ do
+            new <- atomicModifyIORef' progressRef (\x -> let x' = min compilePhaseTotal (x + delta) in (x', x'))
+            setPercent (floor new)
+        shareFor key = M.findWithDefault (0, 0) key shareMap
+        creditFront key = gate $ do
+          let (frontShare, _) = shareFor key
+          delta <- atomicModifyIORef' marksRef $ \m ->
+            let (frontDone, backDone) = M.findWithDefault (False, False) key m
+            in if frontDone
+                 then (m, 0)
+                 else (M.insert key (True, backDone) m, frontShare)
+          addProgress delta
+        creditBack key = gate $ do
+          let (_, backShare) = shareFor key
+          delta <- atomicModifyIORef' marksRef $ \m ->
+            let (frontDone, backDone) = M.findWithDefault (False, False) key m
+            in if backDone
+                 then (m, 0)
+                 else (M.insert key (frontDone, True) m, backShare)
+          addProgress delta
+    setPercent 0
     let backJobKey job =
           TaskKey (projPath (bjPaths job)) (A.modname (biTypedMod (bjInput job)))
         onBackStart job =
@@ -1265,6 +1330,7 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
             gate (progressStartTask progressUI progressState (backJobKey job) (progressLine phaseBack proj mn))
         onBackDone job result = do
           gate (progressDoneTask progressUI progressState (backJobKey job))
+          creditBack (backJobKey job)
           when (not (quiet gopts optsPlan)) $
             case result of
               BackJobOk mtime ->
@@ -1280,21 +1346,29 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
           , chOnFrontResult = \t fr -> do
               forM_ (frFrontTime fr) (\tFront ->
                 logLine (frontDoneLine (tkProj (gtKey t)) (tkMod (gtKey t)) tFront))
+              case frBackJob fr of
+                Nothing -> creditBack (gtKey t)
+                Just _ -> return ()
           , chOnFrontStart = \t ->
               let key = gtKey t
                   proj = tkProj key
                   mn = tkMod key
               in gate (progressStartTask progressUI progressState key (progressLine phaseFront proj mn))
-          , chOnFrontDone = \t -> gate (progressDoneTask progressUI progressState (gtKey t))
+          , chOnFrontDone = \t -> do
+              gate (progressDoneTask progressUI progressState (gtKey t))
+              creditFront (gtKey t)
           , chOnBackQueued = \_ _ -> return ()
           , chOnBackStart = onBackStart
           , chOnBackDone = onBackDone
           , chOnInfo = logLine
           }
-        onFinalStart =
+        onFinalStart = do
           gate (progressStartTask progressUI progressState finalKey progressFinalLine)
+          setPercent 90
+          setIndeterminate
         onFinalDone mtime = do
           gate (progressDoneTask progressUI progressState finalKey)
+          setPercent 100
           forM_ mtime $ \tFinal ->
             when (not (quiet gopts optsPlan)) $
               logLine (finalDoneLine tFinal)
@@ -2026,6 +2100,7 @@ data ProgressUI = ProgressUI
   , puSpinnerRef :: IORef Int
   , puCursorHiddenRef :: IORef Bool
   , puTickerRef :: IORef (Maybe ThreadId)
+  , puTermProgress :: TermProgress
   , puLock :: MVar ()
   }
 
@@ -2049,6 +2124,7 @@ initProgressUI gopts maxLines = do
     spinnerRef <- newIORef 0
     cursorHiddenRef <- newIORef False
     tickerRef <- newIORef Nothing
+    termProgress <- initTermProgress gopts
     lock <- newMVar ()
     return ProgressUI
       { puEnabled = enabled
@@ -2058,6 +2134,7 @@ initProgressUI gopts maxLines = do
       , puSpinnerRef = spinnerRef
       , puCursorHiddenRef = cursorHiddenRef
       , puTickerRef = tickerRef
+      , puTermProgress = termProgress
       , puLock = lock
       }
 
@@ -2194,6 +2271,7 @@ progressReset ui st = withProgressLock ui $ do
     writeIORef (psActive st) M.empty
     writeIORef (psOrder st) []
     writeIORef (puLinesRef ui) []
+    termProgressClear (puTermProgress ui)
     when (puEnabled ui) $ do
       stopSpinnerTicker ui
       progressRenderUnlocked ui
@@ -2226,6 +2304,7 @@ progressRefreshUnlocked ui st = do
       writeIORef (puLinesRef ui) (take (puMaxLines ui) lines)
       if null lines then stopSpinnerTicker ui else startSpinnerTicker ui st
       progressRenderUnlocked ui
+      termProgressHeartbeat (puTermProgress ui)
 
 -- | Format project labels relative to the root for logs.
 projectLabel :: FilePath -> FilePath -> String

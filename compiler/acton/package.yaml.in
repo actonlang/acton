@@ -65,6 +65,7 @@ executables:
     other-modules:
       - PkgCommands
       - Paths_acton
+      - TerminalProgress
       - TestFormat
       - TestRunner
       - TestUI

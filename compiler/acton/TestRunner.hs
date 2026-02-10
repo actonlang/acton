@@ -198,6 +198,16 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
         when (not emitJson && showCached && not (null cachedResults)) $
           putStrLn ("Using cached results for " ++ show (length cachedResults) ++ " tests")
         ui <- initTestProgressUI gopts nameWidth (C.testShowLog topts) useColorOut
+        let totalTests = length specs
+        progressDoneRef <- newIORef 0
+        let progressStep = do
+              done <- atomicModifyIORef' progressDoneRef (\x -> let x' = x + 1 in (x', x'))
+              let pct =
+                    if totalTests <= 0
+                      then 100
+                      else min 100 ((done * 100) `div` totalTests)
+              testUiProgressPercent ui pct
+        testUiProgressPercent ui 0
         eventChan <- newChan
         let cachedMap = M.fromList [ (TestKey (trModule res) (trName res), res) | res <- cachedResults ]
             shouldShowCached res =
@@ -220,8 +230,11 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
                         else do
                           inserted <- testUiInsertDetails ui key details
                           unless inserted $ queuePendingDetails ui key details
+                          progressStep
                           return (Just (running, cachedRes : results))
-                    else return (Just (running, cachedRes : results))
+                    else do
+                      progressStep
+                      return (Just (running, cachedRes : results))
                 Nothing -> do
                   if running >= maxParallel
                     then return Nothing
@@ -273,7 +286,9 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
                 else do
                   evt <- readChan eventChan
                   case evt of
-                    TestEventDone res -> loop pending' (running' - 1) (res : results')
+                    TestEventDone res -> do
+                      progressStep
+                      loop pending' (running' - 1) (res : results')
                     TestEventRoom -> loop pending' running' results'
         results <- loop specs 0 []
         timeEnd <- getTime Monotonic
@@ -294,11 +309,13 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
         if emitJson
           then do
             outputJsonReport (timeEnd - timeStart) results
+            testUiProgressClear ui
             return (testExitCode results)
           else do
             when (not (tpuEnabled ui)) $
               printTestResultsOrdered (tpuUseColor ui) (tpuShowLog ui) showCached nameWidth specs results
             _ <- printTestSummary (tpuUseColor ui) (timeEnd - timeStart) showCached results
+            testUiProgressClear ui
             return (testExitCode results)
   where
     mkRunContext opts' topts' mode' = TestRunContext
