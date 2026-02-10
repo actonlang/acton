@@ -92,7 +92,8 @@ import System.IO.Temp
 import System.IO.Unsafe (unsafePerformIO)
 import System.Info
 import System.Posix.Files
-import System.Process
+import System.Posix.IO (createPipe, setFdOption, closeFd, FdOption(..))
+import System.Process hiding (createPipe)
 import qualified System.FSNotify as FS
 import qualified System.Environment
 import qualified System.Exit
@@ -105,6 +106,7 @@ import qualified Data.ByteString.Lazy as BL
 
 import TestRunner
 import TerminalProgress
+import ZigProgress
 
 main = do
     hSetBuffering stdout LineBuffering
@@ -1181,6 +1183,7 @@ data CliCompileHooks = CliCompileHooks
   , cchClearProgress :: IO ()
   , cchFinalStart :: IO ()
   , cchFinalDone :: Maybe TimeSpec -> IO ()
+  , cchProgressUI :: ProgressUI
   }
 
 -- | Build compile hooks and state for CLI progress and completion logs.
@@ -1221,7 +1224,7 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
           if useEqual
             then 1 / totalWeight
             else fromIntegral (M.findWithDefault 0 key sizeMap) / totalWeight
-        compilePhaseTotal = 90.0
+        compilePhaseTotal = 85.0
         frontRatio = 0.7
         backRatio = 0.3
         shareMap =
@@ -1298,7 +1301,6 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
         finalKey = TaskKey rootProj (A.modName ["__final__"])
         withTerm action = when termEnabled $ gate (withProgressLock progressUI action)
         setPercent pct = withTerm (termProgressPercent termProgress pct)
-        setIndeterminate = withTerm (termProgressIndeterminate termProgress)
         addProgress delta =
           when (termEnabled && delta > 0) $ do
             new <- atomicModifyIORef' progressRef (\x -> let x' = min compilePhaseTotal (x + delta) in (x', x'))
@@ -1364,8 +1366,7 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
           }
         onFinalStart = do
           gate (progressStartTask progressUI progressState finalKey progressFinalLine)
-          setPercent 90
-          setIndeterminate
+          setPercent 85
         onFinalDone mtime = do
           gate (progressDoneTask progressUI progressState finalKey)
           setPercent 100
@@ -1378,6 +1379,7 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
       , cchClearProgress = progressReset progressUI progressState
       , cchFinalStart = onFinalStart
       , cchFinalDone = onFinalDone
+      , cchProgressUI = progressUI
       }
 
 -- | Run CLI-only post-compile steps (zig build or test bins).
@@ -1432,13 +1434,13 @@ runCliPostCompile cliHooks gopts plan env = do
           then do
             testBinTasks <- catMaybes <$> mapM (filterMainActor env pathsRoot) preTestBinTasks
             unless (altOutput opts') $
-              runFinal (compileBins gopts opts' pathsRoot env rootTasks testBinTasks allowPrune')
+              runFinal (compileBins gopts opts' pathsRoot env rootTasks testBinTasks allowPrune' (Just (cchProgressUI cliHooks)))
             when (C.print_test_bins opts') $ do
               logLine "Test executables:"
               mapM_ (\t -> logLine (binName t)) testBinTasks
           else do
             unless (altOutput opts') $
-              runFinal (compileBins gopts opts' pathsRoot env rootTasks preBinTasks allowPrune')
+              runFinal (compileBins gopts opts' pathsRoot env rootTasks preBinTasks allowPrune' (Just (cchProgressUI cliHooks)))
 -- Generate documentation index for a project build by reading module docstrings
 -- from the current tasks. Uses TyTask header docs when available to avoid
 -- parsing/decoding; falls back to extracting from ActonTask ASTs.
@@ -1585,9 +1587,9 @@ High-level Steps
 ================================================================================
 -}
 
-compileBins:: C.GlobalOptions -> C.CompileOptions -> Paths -> Acton.Env.Env0 -> [CompileTask] -> [BinTask] -> Bool -> IO TimeSpec
-compileBins gopts opts paths env tasks binTasks allowPrune =
-    zigBuild env gopts opts paths tasks binTasks allowPrune
+compileBins:: C.GlobalOptions -> C.CompileOptions -> Paths -> Acton.Env.Env0 -> [CompileTask] -> [BinTask] -> Bool -> Maybe ProgressUI -> IO TimeSpec
+compileBins gopts opts paths env tasks binTasks allowPrune mProgressUI =
+    zigBuild env gopts opts paths tasks binTasks allowPrune mProgressUI
 
 printDiag :: C.GlobalOptions -> C.CompileOptions -> Diagnostic String -> IO ()
 printDiag gopts opts d = do
@@ -1642,10 +1644,11 @@ isWindowsOS targetTriple = case splitOn "-" targetTriple of
     _        -> False
 
 -- | Run a process and capture output, canceling on exceptions.
-readProcessWithExitCodeCancelable :: CreateProcess -> IO (ExitCode, String, String)
-readProcessWithExitCodeCancelable cp = do
+readProcessWithExitCodeCancelable :: CreateProcess -> (ProcessHandle -> IO ()) -> IO (ExitCode, String, String)
+readProcessWithExitCodeCancelable cp onStart = do
     let cp' = cp { std_in = NoStream, std_out = CreatePipe, std_err = CreatePipe }
     withCreateProcess cp' $ \_ mOut mErr ph -> do
+      onStart ph
       outVar <- newEmptyMVar
       errVar <- newEmptyMVar
       let readHandle mH var =
@@ -1665,10 +1668,51 @@ readProcessWithExitCodeCancelable cp = do
       err <- takeMVar errVar
       return (code, out, err)
 
-runZig gopts opts zigExe zigArgs paths wd = do
+runZig gopts opts zigExe zigArgs paths wd mProgressUI = do
     let display = showCommandForUser zigExe zigArgs
     iff (C.ccmd opts || C.verbose gopts) $ putStrLn ("zigCmd: " ++ display)
-    (returnCode, zigStdout, zigStderr) <- readProcessWithExitCodeCancelable (proc zigExe zigArgs){ cwd = wd }
+    env0 <- System.Environment.getEnvironment
+    let ignoreIO :: IOException -> IO ()
+        ignoreIO _ = return ()
+        withLock = case mProgressUI of
+          Just ui -> withProgressLock ui
+          Nothing -> \action -> action
+        mTermProgress = do
+          ui <- mProgressUI
+          let tp = puTermProgress ui
+          if termProgressEnabled tp then Just tp else Nothing
+    (envOverride, onStart, onStop, closeFds) <- case mTermProgress of
+      Nothing -> return (Nothing, \_ -> return (), return (), True)
+      Just tp -> do
+        (readFd, writeFd) <- createPipe
+        setFdOption writeFd CloseOnExec False
+        setFdOption readFd CloseOnExec True
+        doneVar <- newEmptyMVar
+        pctRef <- newIORef (85 :: Int)
+        let updatePercent ratio = do
+              let clamped = max 0 (min 0.999 ratio)
+                  pctRaw = 85 + floor (clamped * 15)
+              pct <- atomicModifyIORef' pctRef (\prev -> let next = max prev pctRaw in (next, next))
+              withLock (termProgressPercent tp pct)
+            reader = do
+              readZigProgressStream readFd $ \msg ->
+                case zigProgressRatio msg of
+                  Nothing -> return ()
+                  Just ratio -> updatePercent ratio
+        _ <- forkIO (reader `finally` putMVar doneVar ())
+        let envVal = show (fromIntegral writeFd :: Int)
+            onStart' _ = closeFd writeFd `catch` ignoreIO
+            onStop' = do
+              closeFd writeFd `catch` ignoreIO
+              closeFd readFd `catch` ignoreIO
+              takeMVar doneVar
+        return (Just ("ZIG_PROGRESS", envVal), onStart', onStop', False)
+    let env1 = case envOverride of
+          Nothing -> Nothing
+          Just (k, v) -> Just ((k, v) : filter ((/= k) . fst) env0)
+        cpBase = (proc zigExe zigArgs){ cwd = wd, env = env1 }
+        cp = if closeFds then cpBase else cpBase { close_fds = False }
+    (returnCode, zigStdout, zigStderr) <- readProcessWithExitCodeCancelable cp onStart `finally` onStop
     case returnCode of
         ExitSuccess -> do
           iff (C.verboseZig gopts) $ putStrLn zigStderr
@@ -1842,8 +1886,8 @@ defCpuFlag = ["-Dcpu=x86_64_v2+aes"]
 #endif
 
 -- | Run zig build for generated artifacts and prune stale outputs.
-zigBuild :: Acton.Env.Env0 -> C.GlobalOptions -> C.CompileOptions -> Paths -> [CompileTask] -> [BinTask] -> Bool -> IO TimeSpec
-zigBuild env gopts opts paths tasks binTasks allowPrune = do
+zigBuild :: Acton.Env.Env0 -> C.GlobalOptions -> C.CompileOptions -> Paths -> [CompileTask] -> [BinTask] -> Bool -> Maybe ProgressUI -> IO TimeSpec
+zigBuild env gopts opts paths tasks binTasks allowPrune mProgressUI = do
     allBinTasks <- mapM (writeRootC env gopts opts paths tasks) binTasks
     let realBinTasks = catMaybes allBinTasks
 
@@ -1901,7 +1945,7 @@ zigBuild env gopts opts paths tasks binTasks allowPrune = do
                              ]
         zigArgs = baseArgs ++ prefixArgs ++ targetArgs ++ cpuArgs ++ optArgs ++ featureArgs
 
-    runZig gopts opts zigExe zigArgs paths (Just (projPath paths))
+    runZig gopts opts zigExe zigArgs paths (Just (projPath paths)) mProgressUI
     -- if we are in a temp acton project, copy the outputted binary next to the source file
     if (isTmp paths && not (null realBinTasks))
       then do
