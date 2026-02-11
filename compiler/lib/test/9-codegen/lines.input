@@ -1,4 +1,6 @@
 
+W_1191: __builtin__.Iterable[__builtin__.list[__builtin__.int], __builtin__.int] = __builtin__.SequenceD_list@[__builtin__.int]().W_Collection
+
 # recursive group:
 proc def L_1C_1cont (self : Apa, C_cont : $Cont[None], C_2res : None) -> $R:
     self.z = (BOX __builtin__.int (UNBOX __builtin__.int 1))
@@ -178,7 +180,7 @@ class L_20proc ($proc[(), __builtin__.int], __builtin__.value):
     proc def __exec__ (L_self : L_20proc, C_cont : $Cont[__builtin__.int]) -> $R:
         return L_self.__call__(C_cont)
     # (recursive group)
-proc def U_1L_17C_9cont (self : main, W_1191 : __builtin__.Iterable[__builtin__.list[__builtin__.int], __builtin__.int], W_1319 : __builtin__.Number[__builtin__.float], C_cont : $Cont[None], U_7C_10res : __builtin__.int) -> $R:
+proc def U_1L_17C_9cont (self : main, C_cont : $Cont[None], U_7C_10res : __builtin__.int) -> $R:
     self.r = (BOX __builtin__.int U_7C_10res)
     print@[(__builtin__.str, __builtin__.int)](("\"r =\"", self.r), None, None, None, None)
     (async self.a.compute)(L_19action(self))
@@ -252,80 +254,56 @@ proc def U_1L_17C_9cont (self : main, W_1191 : __builtin__.Iterable[__builtin__.
             $RAISE(N_7xx)
     $AFTER@[__builtin__.int]((BOX __builtin__.float (UNBOX __builtin__.float 1)), L_20proc(self))
     return self.nopG_local(C_cont)
-proc def L_17C_9cont (self : main, W_1191 : __builtin__.Iterable[__builtin__.list[__builtin__.int], __builtin__.int], W_1319 : __builtin__.Number[__builtin__.float], C_cont : $Cont[None], C_10res : __builtin__.int) -> $R:
-    return U_1L_17C_9cont(self, W_1191, W_1319, C_cont, (UNBOX __builtin__.int C_10res))
+proc def L_17C_9cont (self : main, C_cont : $Cont[None], C_10res : __builtin__.int) -> $R:
+    return U_1L_17C_9cont(self, C_cont, (UNBOX __builtin__.int C_10res))
 class L_21Cont ($Cont[__builtin__.int], __builtin__.value):
     @property
     self : main
     @property
-    W_1191 : __builtin__.Iterable[__builtin__.list[__builtin__.int], __builtin__.int]
-    @property
-    W_1319 : __builtin__.Number[__builtin__.float]
-    @property
     C_cont : $Cont[None]
-    pure def __init__ (L_self : L_21Cont, self : main, W_1191 : __builtin__.Iterable[__builtin__.list[__builtin__.int], __builtin__.int], W_1319 : __builtin__.Number[__builtin__.float], C_cont : $Cont[None]) -> None:
+    pure def __init__ (L_self : L_21Cont, self : main, C_cont : $Cont[None]) -> None:
         L_self.self = self
-        L_self.W_1191 = W_1191
-        L_self.W_1319 = W_1319
         L_self.C_cont = C_cont
         return None
     proc def __call__ (L_self : L_21Cont, G_1 : __builtin__.int) -> $R:
         self: main = L_self.self
-        W_1191: __builtin__.Iterable[__builtin__.list[__builtin__.int], __builtin__.int] = L_self.W_1191
-        W_1319: __builtin__.Number[__builtin__.float] = L_self.W_1319
         C_cont: $Cont[None] = L_self.C_cont
-        return L_17C_9cont(self, W_1191, W_1319, C_cont, G_1)
-proc def L_12C_7cont (self : main, W_1191 : __builtin__.Iterable[__builtin__.list[__builtin__.int], __builtin__.int], W_1319 : __builtin__.Number[__builtin__.float], C_cont : $Cont[None], C_8res : Bepa) -> $R:
+        return L_17C_9cont(self, C_cont, G_1)
+proc def L_12C_7cont (self : main, C_cont : $Cont[None], C_8res : Bepa) -> $R:
     self.b = C_8res
     print@[(__builtin__.str,)](("\"-----\"",), None, None, None, None)
     (async self.a.setup)(L_14action(self.a))
     self.x = (async self.a.compute)(L_16action(self.b))
-    return $AWAIT@[__builtin__.int](L_21Cont(self, W_1191, W_1319, C_cont), self.x)
+    return $AWAIT@[__builtin__.int](L_21Cont(self, C_cont), self.x)
 class L_22Cont ($Cont[Bepa], __builtin__.value):
     @property
     self : main
     @property
-    W_1191 : __builtin__.Iterable[__builtin__.list[__builtin__.int], __builtin__.int]
-    @property
-    W_1319 : __builtin__.Number[__builtin__.float]
-    @property
     C_cont : $Cont[None]
-    pure def __init__ (L_self : L_22Cont, self : main, W_1191 : __builtin__.Iterable[__builtin__.list[__builtin__.int], __builtin__.int], W_1319 : __builtin__.Number[__builtin__.float], C_cont : $Cont[None]) -> None:
+    pure def __init__ (L_self : L_22Cont, self : main, C_cont : $Cont[None]) -> None:
         L_self.self = self
-        L_self.W_1191 = W_1191
-        L_self.W_1319 = W_1319
         L_self.C_cont = C_cont
         return None
     proc def __call__ (L_self : L_22Cont, G_1 : Bepa) -> $R:
         self: main = L_self.self
-        W_1191: __builtin__.Iterable[__builtin__.list[__builtin__.int], __builtin__.int] = L_self.W_1191
-        W_1319: __builtin__.Number[__builtin__.float] = L_self.W_1319
         C_cont: $Cont[None] = L_self.C_cont
-        return L_12C_7cont(self, W_1191, W_1319, C_cont, G_1)
-proc def L_11C_5cont (self : main, W_1191 : __builtin__.Iterable[__builtin__.list[__builtin__.int], __builtin__.int], W_1319 : __builtin__.Number[__builtin__.float], C_cont : $Cont[None], C_6res : Apa) -> $R:
+        return L_12C_7cont(self, C_cont, G_1)
+proc def L_11C_5cont (self : main, C_cont : $Cont[None], C_6res : Apa) -> $R:
     self.a = C_6res
-    return BepaG_newact(L_22Cont(self, W_1191, W_1319, C_cont))
+    return BepaG_newact(L_22Cont(self, C_cont))
 class L_23Cont ($Cont[Apa], __builtin__.value):
     @property
     self : main
     @property
-    W_1191 : __builtin__.Iterable[__builtin__.list[__builtin__.int], __builtin__.int]
-    @property
-    W_1319 : __builtin__.Number[__builtin__.float]
-    @property
     C_cont : $Cont[None]
-    pure def __init__ (L_self : L_23Cont, self : main, W_1191 : __builtin__.Iterable[__builtin__.list[__builtin__.int], __builtin__.int], W_1319 : __builtin__.Number[__builtin__.float], C_cont : $Cont[None]) -> None:
+    pure def __init__ (L_self : L_23Cont, self : main, C_cont : $Cont[None]) -> None:
         L_self.self = self
-        L_self.W_1191 = W_1191
-        L_self.W_1319 = W_1319
         L_self.C_cont = C_cont
         return None
     proc def __call__ (L_self : L_23Cont, G_1 : Apa) -> $R:
         self: main = L_self.self
-        W_1191: __builtin__.Iterable[__builtin__.list[__builtin__.int], __builtin__.int] = L_self.W_1191
-        W_1319: __builtin__.Number[__builtin__.float] = L_self.W_1319
         C_cont: $Cont[None] = L_self.C_cont
-        return L_11C_5cont(self, W_1191, W_1319, C_cont, G_1)
+        return L_11C_5cont(self, C_cont, G_1)
 class L_24proc ($proc[(), __builtin__.int], __builtin__.value):
     @property
     self : main
@@ -502,9 +480,7 @@ class main ($Actor, __builtin__.value):
     i : __builtin__.int
     proc def __init__ (self : main, C_cont : $Cont[None], env : __builtin__.Env) -> $R:
         self.env = env
-        W_1191: __builtin__.Iterable[__builtin__.list[__builtin__.int], __builtin__.int] = __builtin__.SequenceD_list@[__builtin__.int]().W_Collection
-        W_1319: __builtin__.Number[__builtin__.float] = __builtin__.RealFloatD_float()
-        return ApaG_newact(L_23Cont(self, W_1191, W_1319, C_cont))
+        return ApaG_newact(L_23Cont(self, C_cont))
     proc def myprocG_local (self : main, C_cont : $Cont[__builtin__.int], i : __builtin__.int) -> $R:
         print@[(__builtin__.str, __builtin__.int)](("\"myproc\"", i), None, None, None, None)
         if (BOX __builtin__.bool ((UNBOX __builtin__.int i) == (UNBOX __builtin__.int 2))):

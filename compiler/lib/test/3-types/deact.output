@@ -1,7 +1,7 @@
 
-W_475: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+W_63: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
 
-W_361: __builtin__.Plus[__builtin__.int] = __builtin__.IntegralD_int()
+W_208: __builtin__.Plus[__builtin__.int] = __builtin__.IntegralD_int()
 
 W_157: __builtin__.Times[__builtin__.int, __builtin__.int] = __builtin__.IntegralD_int()
 
@@ -11,27 +11,27 @@ W_455: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
 actor Apa ():
     proc def setup (cb : action(__builtin__.int) -> __builtin__.int) -> None:
         print@[(__builtin__.str,)](*("setup",), sep = None, end = None, err = None, flush = None)
-        cb(W_475.__fromatom__(0))
+        cb(W_63.__fromatom__(0))
     proc def compute (cb : action(__builtin__.int) -> __builtin__.int) -> __builtin__.int:
         print@[(__builtin__.str,)](*("compute",), sep = None, end = None, err = None, flush = None)
-        v: __builtin__.int = cb(W_475.__fromatom__(1))
-        m: __builtin__.Msg[__builtin__.int] = (async cb)(W_475.__fromatom__(2))
-        return W_157.__mul__(v, W_475.__fromatom__(10))
+        v: __builtin__.int = cb(W_63.__fromatom__(1))
+        m: __builtin__.Msg[__builtin__.int] = (async cb)(W_63.__fromatom__(2))
+        return W_157.__mul__(v, W_63.__fromatom__(10))
     proc def notice (i : __builtin__.int) -> __builtin__.int:
         print@[(__builtin__.str,)](*("notice",), sep = None, end = None, err = None, flush = None)
-        return W_361.__add__(i, W_475.__fromatom__(1))
+        return W_208.__add__(i, W_63.__fromatom__(1))
     setup(cb = action lambda (G_1y : __builtin__.int): $WRAP@[(), (i: __builtin__.int), __builtin__.int](self, notice)(i = G_1y))
     print@[(__builtin__.str,)](*("Apa",), sep = None, end = None, err = None, flush = None)
 actor Bepa ():
     proc def callback (i : __builtin__.int) -> __builtin__.int:
         print@[(__builtin__.str, __builtin__.int)](*("callback", i), sep = None, end = None, err = None, flush = None)
-        return W_361.__add__(i, W_475.__fromatom__(1))
+        return W_208.__add__(i, W_63.__fromatom__(1))
     print@[(__builtin__.str,)](*("Bepa",), sep = None, end = None, err = None, flush = None)
 actor main (env : __builtin__.Env):
     proc def myproc (i : __builtin__.int) -> __builtin__.int:
         print@[(__builtin__.str, __builtin__.int)](*("myproc", i), sep = None, end = None, err = None, flush = None)
-        if W_455.__eq__(i, W_475.__fromatom__(2)):
-            env.exit(n = W_475.__fromatom__(0))
+        if W_455.__eq__(i, W_63.__fromatom__(2)):
+            env.exit(n = W_63.__fromatom__(0))
         return i
     a: Apa = Apa()
     b: Bepa = Bepa()
