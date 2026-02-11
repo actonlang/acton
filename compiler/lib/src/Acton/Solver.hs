@@ -34,6 +34,13 @@ import Acton.Subst
 import Acton.TypeEnv
 
 
+run_new_solver = False
+
+newSimplify env te cs
+--  | run_new_solver                          = simplifyNew env cs
+  | otherwise                               = simplifyNew env cs -- simplify env te cs
+
+
 -- Reduce conservatively and remove entailed constraints
 simplifyNew                                 :: Env -> Constraints -> TypeM (Constraints,Equations)
 simplifyNew env cs                          = do css <- groupCs env cs
@@ -230,6 +237,7 @@ coalesce env eq cs                          = red env eq [] cs
                                                  eq <- reduce (eq':eq) [Sub info0 env w2 (tCon p') (tCon p)]
                                                  red env eq cs cs'
           where hits                        = [ (w',p') | Proto _ _ w' (TUni _ v') p' <- cs++cs', v'==v, headcast env (tCon p') (tCon p) ]
+        red env eq cs (c : cs')             = red env eq (c:cs) cs'
 
 
 -- ###################################################################################################################
@@ -1744,8 +1752,6 @@ multiPBounds cs                         = Map.assocs $ f cs Map.empty
   where
     f []                                = Map.filter ((>1) . length)
     f (Proto _ env w (TUni _ v) p : cs) = f cs . Map.insertWith (++) v [(w, p, qlevel env)]
-    f (Sub _ env w (TUni _ v) (TCon _ c) : cs )
-                                        = f cs . Map.insertWith (++) v [(w, c, qlevel env)]
     f (_ : cs)                          = f cs
 
 ctxtRed                                 :: Env -> [(TUni, [(Name, PCon, Int)])] -> (Equations, [(Type,Type)])
@@ -1757,7 +1763,7 @@ ctxtRed env multiPBnds                  = (concat eqs, concat unis)
                                           imp v (Eqn (min i j) w (proto2type (tUni v) p) e : eq) ((tcargs p `zip` tcargs p') ++ uni) wps wps'
           | otherwise                   = --trace ("   (Not covered: " ++ prstr p ++ " in context " ++ prstrs [ w | (w,_,_) <- wps++wps' ] ++ ")") $
                                           imp v eq uni ((w,p,i):wps) wps'
-          where hits                    = [ (wf $ eVar w', vsubst s p', j) | (w',p0,j) <- wps++wps', Just (wf,p') <- [findAncestor env p0 (tcname p)] ]
+          where hits                    = [ (wf $ eVar w', vsubst s p', j) | (w',p0,j) <- wps++wps', j <= i, Just (wf,p') <- [findAncestor env p0 (tcname p)] ]
                 s                       = [(tvSelf,tUni v)]
         imp v eq uni wps []             = (reverse eq, uni)
 

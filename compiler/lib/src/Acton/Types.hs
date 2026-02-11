@@ -246,7 +246,7 @@ genEnv env cs te (Decl l ds)
   | otherwise                           = do te <- usubst te
                                              --traceM ("## genEnv defs 1\n" ++ render (nest 6 $ pretty te))
                                              --traceM ("   where\n" ++ render (nest 6 $ vcat $ map pretty cs))
-                                             (cs,eq) <- simplify env te cs
+                                             (cs,eq) <- newSimplify env te cs
                                              te <- usubst te
                                              (gen_us, gen_cs, te, eq) <- refine env cs te eq
                                              let gen_vs = take (length gen_us) tvarSupply
@@ -291,7 +291,13 @@ genEnv env cs te (Decl l ds)
       where (eq1,eq2)                   = partition (any (`elem` ws) . free) eq
             (eq1',eq2')                 = splitEqs (bound eq1 ++ ws) eq2
 
+    newRefine env cs te eq              = do (eq,cs) <- newsolve env te eq cs
+                                             te <- usubst te
+                                             eq <- usubst eq
+                                             return (ufree te, cs, te, eq)
+
     refine env cs te eq
+      | run_new_solver                  = newRefine env cs te eq
       | not $ null solve_cs             = do --traceM ("  #solving: " ++ prstrs solve_cs)
                                              (cs',eq') <- solve env noQual te eq cs
                                              refineAgain cs' eq'
@@ -311,7 +317,7 @@ genEnv env cs te (Decl l ds)
 
             isAmbig c                   = any (`elem` ambig_vs) (ufree c)
 
-            refineAgain cs eq           = do (cs1,eq1) <- simplify env te cs
+            refineAgain cs eq           = do (cs1,eq1) <- newSimplify env te cs
                                              te <- usubst te
                                              refine env cs1 te (eq1++eq)
 
@@ -330,7 +336,7 @@ genEnv env cs te s                      = do eq <- solveAll env te cs
 markScoped env n q te []                = return ([], [])
 -- Should remove this simplify call too, but doing so destroys performance of our current inferior constraint-solver (see module yang.schema in acton-yang).
 --markScoped env n [] te cs               = return (cs, [])
-markScoped env n [] te cs               = simplify env te cs
+markScoped env n [] te cs               = newSimplify env te cs
 -- Return the marks in terms of NotImplemented equations for now, so that we can coexist with the need to also run simplify (see above)
 markScoped env n q te cs                = return (cs, eq)
   where eq                              = [ mkEqn env w tWild eNotImpl | w <- ws ]
@@ -338,9 +344,15 @@ markScoped env n q te cs                = return (cs, eq)
 
 tempGoal t                              = [(nWild, NVar t)]
 
+newSolveAll env te cs                   = do (eq,cs) <- newsolve env te [] cs
+                                             (eq,_) <- newsolve env [] eq cs
+                                             return eq
+
 solveAll env te []                      = return []
-solveAll env te cs                      = do --traceM ("\n\n### solveAll " ++ prstrs cs)
-                                             (cs,eq) <- simplify env te cs
+solveAll env te cs
+  | run_new_solver                      = newSolveAll env te cs
+  | otherwise                           = do --traceM ("\n\n### solveAll " ++ prstrs cs)
+                                             (cs,eq) <- newSimplify env te cs
                                              (cs,eq) <- solve env (const True) te eq cs
                                              return eq
 
@@ -742,7 +754,7 @@ instance InfEnv Decl where
                                              NReserved -> do
                                                  --traceM ("\n## infEnv class " ++ prstr n)
                                                  pushFX fxPure tNone
-                                                 te0 <- infProperties env as' b
+                                                 te0 <- infProperties env1 as' b
                                                  (cs,te,b1) <- infEnv env1 b0
                                                  popFX
                                                  when (not $ null cs) $ err (loc n) "Deprecated class syntax"
