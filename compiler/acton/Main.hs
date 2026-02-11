@@ -92,7 +92,8 @@ import System.IO.Temp
 import System.IO.Unsafe (unsafePerformIO)
 import System.Info
 import System.Posix.Files
-import System.Process
+import System.Posix.IO (createPipe, setFdOption, closeFd, FdOption(..))
+import System.Process hiding (createPipe)
 import qualified System.FSNotify as FS
 import qualified System.Environment
 import qualified System.Exit
@@ -104,6 +105,8 @@ import Numeric (showHex)
 import qualified Data.ByteString.Lazy as BL
 
 import TestRunner
+import TerminalProgress
+import ZigProgress
 
 main = do
     hSetBuffering stdout LineBuffering
@@ -1180,6 +1183,7 @@ data CliCompileHooks = CliCompileHooks
   , cchClearProgress :: IO ()
   , cchFinalStart :: IO ()
   , cchFinalDone :: Maybe TimeSpec -> IO ()
+  , cchProgressUI :: ProgressUI
   }
 
 -- | Build compile hooks and state for CLI progress and completion logs.
@@ -1191,13 +1195,52 @@ initCliCompileHooks :: ProgressUI
                     -> CompilePlan
                     -> IO CliCompileHooks
 initCliCompileHooks progressUI progressState gopts sched gen plan = do
+    let neededTasks = cpNeededTasks plan
+    sizeEntries <- forM neededTasks $ \t -> do
+      let key = gtKey t
+          path = srcFile (gtPaths t) (tkMod key)
+      exists <- doesFileExist path
+      sz <- if exists then getFileSize path else return 0
+      return (key, sz)
+    progressRef <- newIORef (0 :: Double)
+    marksRef <- newIORef (M.empty :: M.Map TaskKey (Bool, Bool))
+    -- sizeMap is used for the progress bar indicator to determine how much a
+    -- modules compilation should contribute to the overall progress. We use
+    -- file size as a heuristic for this, but if all sizes are zero (e.g. due to
+    -- missing files or all files being empty), we fall back to equal weighting
+    -- to avoid division by zero. Since our compilation is split into front and
+    -- back passes, we also compute a share for each task that determines how
+    -- much of the total progress it should contribute to, which is used to give
+    -- a more accurate progress indication during the compile.
+    let sizeMap = M.fromList sizeEntries
+        totalSize = sum (map snd sizeEntries)
+        useEqual = totalSize <= 0
+        totalWeight :: Double
+        totalWeight =
+          if useEqual
+            then fromIntegral (max 1 (length neededTasks))
+            else fromIntegral totalSize
+        weightFor key =
+          if useEqual
+            then 1 / totalWeight
+            else fromIntegral (M.findWithDefault 0 key sizeMap) / totalWeight
+        compilePhaseTotal = 85.0
+        frontRatio = 0.7
+        backRatio = 0.3
+        shareMap =
+          M.fromList
+            [ (gtKey t, (compilePhaseTotal * weightFor (gtKey t) * frontRatio
+                        , compilePhaseTotal * weightFor (gtKey t) * backRatio))
+            | t <- neededTasks
+            ]
     let gate = whenCurrentGen sched gen
         logLine msg = gate (progressLogLine progressUI msg)
         logDiagnostics optsT diags =
           gate (progressWithLog progressUI (printDiagnostics gopts optsT diags))
         rootProj = ccRootProj (cpContext plan)
         optsPlan = ccOpts (cpContext plan)
-        neededTasks = cpNeededTasks plan
+        termProgress = puTermProgress progressUI
+        termEnabled = termProgressEnabled termProgress
         modLabel mn = modNameToString mn
         spinnerPrefixWidth = 3
         frontPrefix = "   Finished type check of"
@@ -1256,6 +1299,30 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
         progressFinalLine =
           padRight progressTimePadWidth (padProgressPrefix phaseFinal)
         finalKey = TaskKey rootProj (A.modName ["__final__"])
+        withTerm action = when termEnabled $ gate (withProgressLock progressUI action)
+        setPercent pct = withTerm (termProgressPercent termProgress pct)
+        addProgress delta =
+          when (termEnabled && delta > 0) $ do
+            new <- atomicModifyIORef' progressRef (\x -> let x' = min compilePhaseTotal (x + delta) in (x', x'))
+            setPercent (floor new)
+        shareFor key = M.findWithDefault (0, 0) key shareMap
+        creditFront key = gate $ do
+          let (frontShare, _) = shareFor key
+          delta <- atomicModifyIORef' marksRef $ \m ->
+            let (frontDone, backDone) = M.findWithDefault (False, False) key m
+            in if frontDone
+                 then (m, 0)
+                 else (M.insert key (True, backDone) m, frontShare)
+          addProgress delta
+        creditBack key = gate $ do
+          let (_, backShare) = shareFor key
+          delta <- atomicModifyIORef' marksRef $ \m ->
+            let (frontDone, backDone) = M.findWithDefault (False, False) key m
+            in if backDone
+                 then (m, 0)
+                 else (M.insert key (frontDone, True) m, backShare)
+          addProgress delta
+    setPercent 0
     let backJobKey job =
           TaskKey (projPath (bjPaths job)) (A.modname (biTypedMod (bjInput job)))
         onBackStart job =
@@ -1265,6 +1332,7 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
             gate (progressStartTask progressUI progressState (backJobKey job) (progressLine phaseBack proj mn))
         onBackDone job result = do
           gate (progressDoneTask progressUI progressState (backJobKey job))
+          creditBack (backJobKey job)
           when (not (quiet gopts optsPlan)) $
             case result of
               BackJobOk mtime ->
@@ -1280,21 +1348,28 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
           , chOnFrontResult = \t fr -> do
               forM_ (frFrontTime fr) (\tFront ->
                 logLine (frontDoneLine (tkProj (gtKey t)) (tkMod (gtKey t)) tFront))
+              case frBackJob fr of
+                Nothing -> creditBack (gtKey t)
+                Just _ -> return ()
           , chOnFrontStart = \t ->
               let key = gtKey t
                   proj = tkProj key
                   mn = tkMod key
               in gate (progressStartTask progressUI progressState key (progressLine phaseFront proj mn))
-          , chOnFrontDone = \t -> gate (progressDoneTask progressUI progressState (gtKey t))
+          , chOnFrontDone = \t -> do
+              gate (progressDoneTask progressUI progressState (gtKey t))
+              creditFront (gtKey t)
           , chOnBackQueued = \_ _ -> return ()
           , chOnBackStart = onBackStart
           , chOnBackDone = onBackDone
           , chOnInfo = logLine
           }
-        onFinalStart =
+        onFinalStart = do
           gate (progressStartTask progressUI progressState finalKey progressFinalLine)
+          setPercent 85
         onFinalDone mtime = do
           gate (progressDoneTask progressUI progressState finalKey)
+          setPercent 100
           forM_ mtime $ \tFinal ->
             when (not (quiet gopts optsPlan)) $
               logLine (finalDoneLine tFinal)
@@ -1304,6 +1379,7 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
       , cchClearProgress = progressReset progressUI progressState
       , cchFinalStart = onFinalStart
       , cchFinalDone = onFinalDone
+      , cchProgressUI = progressUI
       }
 
 -- | Run CLI-only post-compile steps (zig build or test bins).
@@ -1358,13 +1434,13 @@ runCliPostCompile cliHooks gopts plan env = do
           then do
             testBinTasks <- catMaybes <$> mapM (filterMainActor env pathsRoot) preTestBinTasks
             unless (altOutput opts') $
-              runFinal (compileBins gopts opts' pathsRoot env rootTasks testBinTasks allowPrune')
+              runFinal (compileBins gopts opts' pathsRoot env rootTasks testBinTasks allowPrune' (Just (cchProgressUI cliHooks)))
             when (C.print_test_bins opts') $ do
               logLine "Test executables:"
               mapM_ (\t -> logLine (binName t)) testBinTasks
           else do
             unless (altOutput opts') $
-              runFinal (compileBins gopts opts' pathsRoot env rootTasks preBinTasks allowPrune')
+              runFinal (compileBins gopts opts' pathsRoot env rootTasks preBinTasks allowPrune' (Just (cchProgressUI cliHooks)))
 -- Generate documentation index for a project build by reading module docstrings
 -- from the current tasks. Uses TyTask header docs when available to avoid
 -- parsing/decoding; falls back to extracting from ActonTask ASTs.
@@ -1511,9 +1587,9 @@ High-level Steps
 ================================================================================
 -}
 
-compileBins:: C.GlobalOptions -> C.CompileOptions -> Paths -> Acton.Env.Env0 -> [CompileTask] -> [BinTask] -> Bool -> IO TimeSpec
-compileBins gopts opts paths env tasks binTasks allowPrune =
-    zigBuild env gopts opts paths tasks binTasks allowPrune
+compileBins:: C.GlobalOptions -> C.CompileOptions -> Paths -> Acton.Env.Env0 -> [CompileTask] -> [BinTask] -> Bool -> Maybe ProgressUI -> IO TimeSpec
+compileBins gopts opts paths env tasks binTasks allowPrune mProgressUI =
+    zigBuild env gopts opts paths tasks binTasks allowPrune mProgressUI
 
 printDiag :: C.GlobalOptions -> C.CompileOptions -> Diagnostic String -> IO ()
 printDiag gopts opts d = do
@@ -1568,10 +1644,11 @@ isWindowsOS targetTriple = case splitOn "-" targetTriple of
     _        -> False
 
 -- | Run a process and capture output, canceling on exceptions.
-readProcessWithExitCodeCancelable :: CreateProcess -> IO (ExitCode, String, String)
-readProcessWithExitCodeCancelable cp = do
+readProcessWithExitCodeCancelable :: CreateProcess -> (ProcessHandle -> IO ()) -> IO (ExitCode, String, String)
+readProcessWithExitCodeCancelable cp onStart = do
     let cp' = cp { std_in = NoStream, std_out = CreatePipe, std_err = CreatePipe }
     withCreateProcess cp' $ \_ mOut mErr ph -> do
+      onStart ph
       outVar <- newEmptyMVar
       errVar <- newEmptyMVar
       let readHandle mH var =
@@ -1591,10 +1668,51 @@ readProcessWithExitCodeCancelable cp = do
       err <- takeMVar errVar
       return (code, out, err)
 
-runZig gopts opts zigExe zigArgs paths wd = do
+runZig gopts opts zigExe zigArgs paths wd mProgressUI = do
     let display = showCommandForUser zigExe zigArgs
     iff (C.ccmd opts || C.verbose gopts) $ putStrLn ("zigCmd: " ++ display)
-    (returnCode, zigStdout, zigStderr) <- readProcessWithExitCodeCancelable (proc zigExe zigArgs){ cwd = wd }
+    env0 <- System.Environment.getEnvironment
+    let ignoreIO :: IOException -> IO ()
+        ignoreIO _ = return ()
+        withLock = case mProgressUI of
+          Just ui -> withProgressLock ui
+          Nothing -> \action -> action
+        mTermProgress = do
+          ui <- mProgressUI
+          let tp = puTermProgress ui
+          if termProgressEnabled tp then Just tp else Nothing
+    (envOverride, onStart, onStop, closeFds) <- case mTermProgress of
+      Nothing -> return (Nothing, \_ -> return (), return (), True)
+      Just tp -> do
+        (readFd, writeFd) <- createPipe
+        setFdOption writeFd CloseOnExec False
+        setFdOption readFd CloseOnExec True
+        doneVar <- newEmptyMVar
+        pctRef <- newIORef (85 :: Int)
+        let updatePercent ratio = do
+              let clamped = max 0 (min 0.999 ratio)
+                  pctRaw = 85 + floor (clamped * 15)
+              pct <- atomicModifyIORef' pctRef (\prev -> let next = max prev pctRaw in (next, next))
+              withLock (termProgressPercent tp pct)
+            reader = do
+              readZigProgressStream readFd $ \msg ->
+                case zigProgressRatio msg of
+                  Nothing -> return ()
+                  Just ratio -> updatePercent ratio
+        _ <- forkIO (reader `finally` putMVar doneVar ())
+        let envVal = show (fromIntegral writeFd :: Int)
+            onStart' _ = closeFd writeFd `catch` ignoreIO
+            onStop' = do
+              closeFd writeFd `catch` ignoreIO
+              closeFd readFd `catch` ignoreIO
+              takeMVar doneVar
+        return (Just ("ZIG_PROGRESS", envVal), onStart', onStop', False)
+    let env1 = case envOverride of
+          Nothing -> Nothing
+          Just (k, v) -> Just ((k, v) : filter ((/= k) . fst) env0)
+        cpBase = (proc zigExe zigArgs){ cwd = wd, env = env1 }
+        cp = if closeFds then cpBase else cpBase { close_fds = False }
+    (returnCode, zigStdout, zigStderr) <- readProcessWithExitCodeCancelable cp onStart `finally` onStop
     case returnCode of
         ExitSuccess -> do
           iff (C.verboseZig gopts) $ putStrLn zigStderr
@@ -1768,8 +1886,8 @@ defCpuFlag = ["-Dcpu=x86_64_v2+aes"]
 #endif
 
 -- | Run zig build for generated artifacts and prune stale outputs.
-zigBuild :: Acton.Env.Env0 -> C.GlobalOptions -> C.CompileOptions -> Paths -> [CompileTask] -> [BinTask] -> Bool -> IO TimeSpec
-zigBuild env gopts opts paths tasks binTasks allowPrune = do
+zigBuild :: Acton.Env.Env0 -> C.GlobalOptions -> C.CompileOptions -> Paths -> [CompileTask] -> [BinTask] -> Bool -> Maybe ProgressUI -> IO TimeSpec
+zigBuild env gopts opts paths tasks binTasks allowPrune mProgressUI = do
     allBinTasks <- mapM (writeRootC env gopts opts paths tasks) binTasks
     let realBinTasks = catMaybes allBinTasks
 
@@ -1827,7 +1945,7 @@ zigBuild env gopts opts paths tasks binTasks allowPrune = do
                              ]
         zigArgs = baseArgs ++ prefixArgs ++ targetArgs ++ cpuArgs ++ optArgs ++ featureArgs
 
-    runZig gopts opts zigExe zigArgs paths (Just (projPath paths))
+    runZig gopts opts zigExe zigArgs paths (Just (projPath paths)) mProgressUI
     -- if we are in a temp acton project, copy the outputted binary next to the source file
     if (isTmp paths && not (null realBinTasks))
       then do
@@ -2026,6 +2144,7 @@ data ProgressUI = ProgressUI
   , puSpinnerRef :: IORef Int
   , puCursorHiddenRef :: IORef Bool
   , puTickerRef :: IORef (Maybe ThreadId)
+  , puTermProgress :: TermProgress
   , puLock :: MVar ()
   }
 
@@ -2049,6 +2168,7 @@ initProgressUI gopts maxLines = do
     spinnerRef <- newIORef 0
     cursorHiddenRef <- newIORef False
     tickerRef <- newIORef Nothing
+    termProgress <- initTermProgress gopts
     lock <- newMVar ()
     return ProgressUI
       { puEnabled = enabled
@@ -2058,6 +2178,7 @@ initProgressUI gopts maxLines = do
       , puSpinnerRef = spinnerRef
       , puCursorHiddenRef = cursorHiddenRef
       , puTickerRef = tickerRef
+      , puTermProgress = termProgress
       , puLock = lock
       }
 
@@ -2194,6 +2315,7 @@ progressReset ui st = withProgressLock ui $ do
     writeIORef (psActive st) M.empty
     writeIORef (psOrder st) []
     writeIORef (puLinesRef ui) []
+    termProgressClear (puTermProgress ui)
     when (puEnabled ui) $ do
       stopSpinnerTicker ui
       progressRenderUnlocked ui
@@ -2226,6 +2348,7 @@ progressRefreshUnlocked ui st = do
       writeIORef (puLinesRef ui) (take (puMaxLines ui) lines)
       if null lines then stopSpinnerTicker ui else startSpinnerTicker ui st
       progressRenderUnlocked ui
+      termProgressHeartbeat (puTermProgress ui)
 
 -- | Format project labels relative to the root for logs.
 projectLabel :: FilePath -> FilePath -> String

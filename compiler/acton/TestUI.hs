@@ -8,11 +8,14 @@ module TestUI
   , testUiFinalize
   , testUiUpdateFinal
   , testUiInsertDetails
+  , testUiProgressPercent
+  , testUiProgressClear
   , queuePendingDetails
   , flushPendingDetails
   ) where
 
 import qualified Acton.CommandLineParser as C
+import TerminalProgress
 import Control.Concurrent (ThreadId, forkIO, killThread, myThreadId, threadDelay)
 import Control.Concurrent.MVar
 import Control.Monad
@@ -42,6 +45,7 @@ data TestProgressUI = TestProgressUI
   , tpuPendingDetailsRef :: IORef (M.Map TestKey [String])
   , tpuSpinnerRef :: IORef Int
   , tpuSpinnerThreadRef :: IORef (Maybe ThreadId)
+  , tpuTermProgress :: TermProgress
   , tpuLock :: MVar ()
   , tpuNameWidth :: Int
   , tpuUseColor :: Bool
@@ -76,6 +80,7 @@ initTestProgressUI gopts nameWidth showLog useColorOut = do
     pendingDetailsRef <- newIORef M.empty
     spinnerRef <- newIORef 0
     spinnerThreadRef <- newIORef Nothing
+    termProgress <- initTermProgress gopts
     lock <- newMVar ()
     return TestProgressUI
       { tpuEnabled = enabled
@@ -90,6 +95,7 @@ initTestProgressUI gopts nameWidth showLog useColorOut = do
       , tpuPendingDetailsRef = pendingDetailsRef
       , tpuSpinnerRef = spinnerRef
       , tpuSpinnerThreadRef = spinnerThreadRef
+      , tpuTermProgress = termProgress
       , tpuLock = lock
       , tpuNameWidth = nameWidth
       , tpuUseColor = useColorOut
@@ -101,6 +107,14 @@ withTestProgressLock ui action =
     if not (tpuEnabled ui)
       then action
       else withMVar (tpuLock ui) (\_ -> action)
+
+testUiProgressPercent :: TestProgressUI -> Int -> IO ()
+testUiProgressPercent ui pct =
+    withTestProgressLock ui (termProgressPercent (tpuTermProgress ui) pct)
+
+testUiProgressClear :: TestProgressUI -> IO ()
+testUiProgressClear ui =
+    withTestProgressLock ui (termProgressClear (tpuTermProgress ui))
 
 testSpinnerTickMicros :: Int
 testSpinnerTickMicros = 80000
@@ -137,6 +151,7 @@ refreshTestSpinnersUnlocked ui = do
       case M.lookup key idxMap of
         Just idx -> updateLineAtUnlocked ui idx (renderLiveLine spinner baseLine)
         Nothing -> return ()
+    termProgressHeartbeat (tpuTermProgress ui)
 
 testSpinnerLoop :: TestProgressUI -> IO ()
 testSpinnerLoop ui = do
