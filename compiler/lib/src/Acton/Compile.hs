@@ -2343,8 +2343,8 @@ discoverProjects sysAbs rootProj depOverrides = do
                                                then (dep, Nothing)
                                                else (pinDep, Just dep)
                                    when (isJust conflict) $
-                                     putStrLn ("Warning: dependency '" ++ depName ++ "' in " ++ dirAbs
-                                               ++ " overridden by root pin")
+                                     hPutStrLn stderr ("Warning: dependency '" ++ depName ++ "' in " ++ dirAbs
+                                                       ++ " overridden by root pin")
                                    depBase <- resolveDepBase dirAbs depName chosenDep
                                    depAbs  <- normalizePathSafe depBase
                                    return (depName, depAbs)
@@ -2695,14 +2695,16 @@ fetchDependencies gopts paths depOverrides = do
           present <- doesDirectoryExist (cacheDir h)
           if present
             then do
-              putStrLn ("Using cached " ++ kind ++ " dependency " ++ name ++ " (" ++ h ++ ")")
+              unless (C.quiet gopts) $
+                putStrLn ("Using cached " ++ kind ++ " dependency " ++ name ++ " (" ++ h ++ ")")
               return (Right h)
             else runFetch kind name url mh cacheDir zigExe globalCache
         Nothing ->
           runFetch kind name url mh cacheDir zigExe globalCache
 
     runFetch kind name url mh cacheDir zigExe globalCache = do
-      putStrLn ("Fetching " ++ kind ++ " dependency " ++ name ++ " from " ++ url)
+      unless (C.quiet gopts) $
+        putStrLn ("Fetching " ++ kind ++ " dependency " ++ name ++ " from " ++ url)
       let cmd = proc zigExe ["fetch", "--global-cache-dir", globalCache, url]
       res <- try (readCreateProcessWithExitCode cmd "") :: IO (Either SomeException (ExitCode, String, String))
       case res of

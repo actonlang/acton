@@ -89,7 +89,7 @@ readFile f = do
     if vs == A.version
       then return (map fst imps, nmod, tmod, moduleSrcBytesHash, modulePubHash, moduleImplHash, imps, nameHashes, roots, mdoc)
       else do
-        putStrLn ("Interface file has version " ++ show vs ++ "; current version is " ++ show A.version)
+        hPutStrLn stderr ("Interface file has version " ++ show vs ++ "; current version is " ++ show A.version)
         System.Exit.exitFailure
 
 -- Read only small header fields from .ty: (moduleSrcBytesHash, modulePubHash,
