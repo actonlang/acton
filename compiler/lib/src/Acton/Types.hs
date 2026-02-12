@@ -754,7 +754,7 @@ instance InfEnv Decl where
                                              NReserved -> do
                                                  --traceM ("\n## infEnv class " ++ prstr n)
                                                  pushFX fxPure tNone
-                                                 te0 <- infProperties env1 as' b
+                                                 te0 <- infProperties env as' b
                                                  (cs,te,b1) <- infEnv env1 b0
                                                  popFX
                                                  when (not $ null cs) $ err (loc n) "Deprecated class syntax"
