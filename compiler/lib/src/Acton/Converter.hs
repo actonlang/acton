@@ -227,6 +227,15 @@ convStmts t0 eq stmts                   = map conv stmts
           where b'                      = bindWits eq ++ b
         convD d                         = d
 
+fixupSelf (Decl l ds)                   = Decl l (map fixup ds)
+  where fixup c@Class{}                 = c{ dbody = map fixupSelf (dbody c) }
+        fixup d@Def{pos = PosPar n t e p} | n == selfKW'
+                                        = d{ pos = PosPar n t e (fix p), kwd = fix (kwd d), ann = fix (ann d), dbody = fix (dbody d) }
+        fixup d                         = d
+        fix x                           = convSelf tSelf' x
+fixupSelf s                             = s
+
+
 -- Convert a TEnv -------------------------------------------------------------------------------------------
 
 convEnvProtos env                       = mapModules conv env
