@@ -1523,6 +1523,38 @@ p33_comprehensive_hashes = testCase "33-comprehensive hash propagation" $ do
   out3Run <- runBinaryIn proj "c"
   out3Run @?= "35\n"
 
+p34_removed_import_module :: TestTree
+p34_removed_import_module = testCase "34-removed imported module fails before Zig" $ do
+  let proj = casesProjDir
+      src = casesSrcDir
+      outA = proj </> "out" </> "types" </> "a"
+  ensureCasesProject
+  writeFileUtf8 (src </> "a.act") "aaa = 1\n"
+  writeFileUtf8 (src </> "b.act") $ T.unlines
+    [ "import a"
+    , ""
+    , "def bar() -> int:"
+    , "    return a.aaa"
+    ]
+  writeFileUtf8 (src </> "c.act") $ T.unlines
+    [ "import b"
+    , ""
+    , "actor main(env: Env):"
+    , "    print(b.bar())"
+    , "    env.exit(0)"
+    ]
+  _ <- buildOutIn proj
+  removeFile (src </> "a.act")
+  res@(ec, out) <- runActonIn proj ["build", "--color", "never", "--verbose"]
+  assertExitFailure "build after deleting imported module" 1 res
+  mapM_ (\ext -> do
+    exists <- doesFileExist (outA ++ ext)
+    assertBool ("did not expect stale generated " ++ outA ++ ext) (not exists))
+    [".ty", ".c", ".h"]
+  assertBool "expected missing import diagnostic"
+    (T.isInfixOf "Type interface file not found or unreadable for a" out)
+  assertBool "did not expect Zig build to run" (not (T.isInfixOf "zigCmd:" out))
+
 -- Main -----------------------------------------------------------------------
 
 -- | Tasty entry point for incremental tests.
@@ -1576,5 +1608,6 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
       , p31_always_build
       , p32_project_alt_output
       , p33_comprehensive_hashes
+      , p34_removed_import_module
       ]
   ]
