@@ -8,7 +8,7 @@ import qualified Data.ByteString as B
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import qualified Data.Text.Encoding as TE
-import           Data.Char (isDigit)
+import           Data.Char (isDigit, isHexDigit, isSpace)
 import           Data.List (find, partition, sort)
 import           System.Directory
 import           System.Exit
@@ -69,6 +69,7 @@ sanitize = LBS.fromStrict
         . TE.encodeUtf8
         . T.unlines
         . reorderBackLines
+        . map censorHashes
         . map redact
         . dropPaths
         . filter (not . isVolatile)
@@ -99,6 +100,74 @@ sanitize = LBS.fromStrict
                          padding = T.replicate (max 0 (T.length field - T.length base)) " "
                      in pre' <> padding <> base <> " s"
                _ -> t
+
+    -- Rewrite volatile hash literals in log lines to stable placeholders.
+    -- We keep semantic position in deltas:
+    --   old hash values  -> HASH1
+    --   new hash values  -> HASH2
+    -- Values like "missing" are intentionally left unchanged.
+    censorHashes :: T.Text -> T.Text
+    censorHashes txt = go 0
+      where
+        n = T.length txt
+
+        go :: Int -> T.Text
+        go i
+          | i >= n = T.empty
+          | isHexStart i =
+              let j = spanHex i
+                  run = T.take (j - i) (T.drop i txt)
+              in if isHashRun run
+                   then hashTag i j <> go j
+                   else run <> go j
+          | otherwise = T.singleton (T.index txt i) <> go (i + 1)
+
+        isHexStart :: Int -> Bool
+        isHexStart i = isHexDigit (T.index txt i)
+
+        spanHex :: Int -> Int
+        spanHex i
+          | i < n && isHexDigit (T.index txt i) = spanHex (i + 1)
+          | otherwise = i
+
+        isHashRun :: T.Text -> Bool
+        isHashRun h = let len = T.length h in len == 8 || len == 64
+
+        hashTag :: Int -> Int -> T.Text
+        hashTag i j
+          | isRightValue i = "HASH2"
+          | isLeftValue j = "HASH1"
+          | otherwise = "HASH"
+
+        isRightValue :: Int -> Bool
+        isRightValue i =
+          case skipSpacesLeft (i - 1) of
+            Nothing -> False
+            Just k
+              | T.index txt k == '→' -> True
+              | k >= 1 && T.index txt (k - 1) == '-' && T.index txt k == '>' -> True
+              | otherwise -> False
+
+        isLeftValue :: Int -> Bool
+        isLeftValue j =
+          case skipSpacesRight j of
+            Nothing -> False
+            Just k
+              | T.index txt k == '→' -> True
+              | k + 1 < n && T.index txt k == '-' && T.index txt (k + 1) == '>' -> True
+              | otherwise -> False
+
+        skipSpacesLeft :: Int -> Maybe Int
+        skipSpacesLeft k
+          | k < 0 = Nothing
+          | isSpace (T.index txt k) = skipSpacesLeft (k - 1)
+          | otherwise = Just k
+
+        skipSpacesRight :: Int -> Maybe Int
+        skipSpacesRight k
+          | k >= n = Nothing
+          | isSpace (T.index txt k) = skipSpacesRight (k + 1)
+          | otherwise = Just k
 
     -- Remove the verbose Paths: block (and its per-field lines) to avoid
     -- machine-specific absolute paths in goldens.

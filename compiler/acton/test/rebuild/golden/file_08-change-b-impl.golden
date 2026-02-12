@@ -2,9 +2,9 @@ Building file src/c.act in project .
 Resolving dependencies (fetching if missing)...
   Fresh a: using cached .ty
   Stale b: source changed
-  Hash deltas b: +DocInfo, ~baa{src a5c65622 -> 1bb00ba9, impl e0e86dc8 -> 3efc177c}
+  Hash deltas b: +DocInfo, ~baa{src HASH1 -> HASH2, impl HASH1 -> HASH2}
    Finished type check of     b     0.000 s
-  Stale c: impl changes in b.baa e0e86dc8 → 3efc177c (used by main)
+  Stale c: impl changes in b.baa HASH1 → HASH2 (used by main)
    Finished compilation of    b     0.000 s
    Finished compilation of    c     0.000 s
    Finished final compilation       0.000 s
