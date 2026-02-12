@@ -1061,9 +1061,9 @@ selectAffectedTasks globalTasks changedFiles = do
                                 M.empty
                                 (M.toList depMap)
                 affected = reverseClosure revMap (Data.Set.fromList changedKeys)
-                keepProviders t =
-                  t { gtImportProviders = M.filter (`Data.Set.member` affected) (gtImportProviders t) }
-            return [ keepProviders t | t <- globalTasks, Data.Set.member (gtKey t) affected ]
+            -- Keep original provider mappings so unchanged imports can still
+            -- resolve via cached interfaces during incremental checks.
+            return [ t | t <- globalTasks, Data.Set.member (gtKey t) affected ]
   where
     reverseClosure revMap start = go start (Data.Set.toList start)
       where
@@ -1891,14 +1891,20 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
               Just depKey ->
                 case M.lookup depKey pubMap of
                   Just h  -> return (Just h)
-                  Nothing -> error ("Internal error: missing pub hash for dep " ++ modNameToString m)
+                  Nothing ->
+                    if M.member depKey taskMap
+                      then error ("Internal error: missing pub hash for dep " ++ modNameToString m)
+                      else getPubHashCached paths m
               Nothing -> getPubHashCached paths m
           resolveNameHashMap' m =
             case M.lookup m providers of
               Just depKey ->
                 case M.lookup depKey nameMap of
                   Just hm -> return (Just hm)
-                  Nothing -> error ("Internal error: missing name hashes for dep " ++ modNameToString m)
+                  Nothing ->
+                    if M.member depKey taskMap
+                      then error ("Internal error: missing name hashes for dep " ++ modNameToString m)
+                      else getNameHashMapCached paths m
               Nothing -> getNameHashMapCached paths m
 
           missingNameHashDiagnostics qn =

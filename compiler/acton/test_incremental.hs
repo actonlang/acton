@@ -10,6 +10,7 @@ import qualified Data.Text.IO as T
 import qualified Data.Text.Encoding as TE
 import           Data.Char (isDigit, isHexDigit, isSpace)
 import           Data.List (find, partition, sort)
+import qualified Data.Map.Strict as M
 import           System.Directory
 import           System.Exit
 import           System.FilePath
@@ -1555,6 +1556,62 @@ p34_removed_import_module = testCase "34-removed imported module fails before Zi
     (T.isInfixOf "Type interface file not found or unreadable for a" out)
   assertBool "did not expect Zig build to run" (not (T.isInfixOf "zigCmd:" out))
 
+p35_changed_path_keeps_unaffected_provider :: TestTree
+p35_changed_path_keeps_unaffected_provider =
+  testCase "35-changed-path incremental keeps unchanged providers" $ do
+    let proj = casesProjDir
+        src = casesSrcDir
+        actA = src </> "a.act"
+        actB = src </> "b.act"
+        actC = src </> "c.act"
+        actMain = src </> "main.act"
+        gopts = C.GlobalOptions
+          { C.color = C.Never
+          , C.quiet = True
+          , C.timing = False
+          , C.tty = False
+          , C.verbose = False
+          , C.verboseZig = False
+          , C.jobs = 1
+          }
+        opts = Compile.defaultCompileOptions { C.only_build = True }
+    ensureCasesProject
+    writeFileUtf8 actA "aaa = 1\n"
+    writeFileUtf8 actC "ccc = 10\n"
+    writeFileUtf8 actB $ T.unlines
+      [ "import a"
+      , "import c"
+      , ""
+      , "def bar() -> int:"
+      , "    return a.aaa + c.ccc"
+      ]
+    writeFileUtf8 actMain $ T.unlines
+      [ "import b"
+      , ""
+      , "actor main(env: Env):"
+      , "    print(b.bar())"
+      , "    env.exit(0)"
+      ]
+    _ <- buildOutIn proj
+    writeFileUtf8 actA "aaa = 2\n"
+    actAAbs <- canonicalizePath actA
+    actMainAbs <- canonicalizePath actMain
+    sched <- Compile.newCompileScheduler gopts 1
+    plan <- Compile.prepareCompilePlan
+      Source.diskSourceProvider
+      gopts
+      sched
+      opts
+      [actMainAbs]
+      False
+      (Just [actAAbs])
+    bTask <- case find (\t -> Compile.name (Compile.gtTask t) == A.modName ["b"]) (Compile.cpNeededTasks plan) of
+      Just t -> pure t
+      Nothing -> assertFailure "expected b in changed-path compile plan" >> fail "missing b task"
+    let bProviders = Compile.gtImportProviders bTask
+    assertBool "expected provider for changed import a" (M.member (A.modName ["a"]) bProviders)
+    assertBool "expected provider for unchanged import c" (M.member (A.modName ["c"]) bProviders)
+
 -- Main -----------------------------------------------------------------------
 
 -- | Tasty entry point for incremental tests.
@@ -1609,5 +1666,6 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
       , p32_project_alt_output
       , p33_comprehensive_hashes
       , p34_removed_import_module
+      , p35_changed_path_keeps_unaffected_provider
       ]
   ]
