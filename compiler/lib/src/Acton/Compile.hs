@@ -556,6 +556,12 @@ prepareCompilePlanFromContext sp gopts ctx srcFiles allowPrune mChangedPaths = d
             }
       return (M.singleton rootProj ctx')
     else discoverProjects sysAbs rootProj depOverrides
+  -- Keep generated module artifacts in sync with source removals.
+  -- For full builds, scan and prune all orphan outputs.
+  -- For incremental builds, prune only modules whose changed .act paths are now missing.
+  if incremental
+    then maybe (return ()) (pruneMissingChangedModuleOutputs (M.elems projMap)) mChangedPaths
+    else mapM_ pruneMissingModuleOutputs (M.elems projMap)
   (globalTasks, _) <- buildGlobalTasks sp gopts opts' projMap
     (if incremental || allowPrune then Nothing else Just srcFiles)
   neededTasks <- case mChangedPaths of
@@ -716,13 +722,26 @@ nameHashCache = unsafePerformIO (newMVar M.empty)
 -- Avoids repeated filesystem walks when many modules share dependencies.
 getTyFileCached :: [FilePath] -> A.ModName -> IO (Maybe FilePath)
 getTyFileCached spaths mn = modifyMVar tyPathCache $ \m -> do
+  normSearch <- mapM normalizePathSafe spaths
+  let inSearchPath p =
+        let pNorm = normalise p
+        in any (\dir ->
+                  let dirNorm = addTrailingPathSeparator (normalise dir)
+                  in Data.List.isPrefixOf dirNorm pNorm)
+               normSearch
+      refresh cache = do
+        mty <- Acton.Env.findTyFile spaths mn
+        case mty of
+          Just p  -> return (M.insert mn p cache, Just p)
+          Nothing -> return (M.delete mn cache, Nothing)
   case M.lookup mn m of
-    Just p  -> return (m, Just p)
-    Nothing -> do
-      mty <- Acton.Env.findTyFile spaths mn
-      case mty of
-        Just p  -> return (M.insert mn p m, Just p)
-        Nothing -> return (m, Nothing)
+    Just p -> do
+      pNorm <- normalizePathSafe p
+      exists <- doesFileExist pNorm
+      if exists && inSearchPath pNorm
+        then return (m, Just pNorm)
+        else refresh m
+    Nothing -> refresh m
 
 -- | Read a module's public hash using the cache and .ty header.
 -- This drives dependency invalidation when an imported interface changes.
@@ -1042,9 +1061,9 @@ selectAffectedTasks globalTasks changedFiles = do
                                 M.empty
                                 (M.toList depMap)
                 affected = reverseClosure revMap (Data.Set.fromList changedKeys)
-                keepProviders t =
-                  t { gtImportProviders = M.filter (`Data.Set.member` affected) (gtImportProviders t) }
-            return [ keepProviders t | t <- globalTasks, Data.Set.member (gtKey t) affected ]
+            -- Keep original provider mappings so unchanged imports can still
+            -- resolve via cached interfaces during incremental checks.
+            return [ t | t <- globalTasks, Data.Set.member (gtKey t) affected ]
   where
     reverseClosure revMap start = go start (Data.Set.toList start)
       where
@@ -1872,14 +1891,20 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
               Just depKey ->
                 case M.lookup depKey pubMap of
                   Just h  -> return (Just h)
-                  Nothing -> error ("Internal error: missing pub hash for dep " ++ modNameToString m)
+                  Nothing ->
+                    if M.member depKey taskMap
+                      then error ("Internal error: missing pub hash for dep " ++ modNameToString m)
+                      else getPubHashCached paths m
               Nothing -> getPubHashCached paths m
           resolveNameHashMap' m =
             case M.lookup m providers of
               Just depKey ->
                 case M.lookup depKey nameMap of
                   Just hm -> return (Just hm)
-                  Nothing -> error ("Internal error: missing name hashes for dep " ++ modNameToString m)
+                  Nothing ->
+                    if M.member depKey taskMap
+                      then error ("Internal error: missing name hashes for dep " ++ modNameToString m)
+                      else getNameHashMapCached paths m
               Nothing -> getNameHashMapCached paths m
 
           missingNameHashDiagnostics qn =
@@ -1889,6 +1914,46 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
           missingDepHashDiagnostics label qn users =
             errsToDiagnostics "Compilation error" (modNameToFilename mn) ""
               [(NoLoc, label ++ " hash missing for " ++ prstr qn ++ users)]
+
+          checkMissingImports imps = do
+            userSearchAbs <- mapM normalizePathSafe (C.searchpath optsT)
+            sysTypesAbs <- normalizePathSafe (sysTypes paths)
+            searchAbs <- mapM normalizePathSafe (searchPath paths)
+            let userSearchSet = Data.Set.fromList (map normalise userSearchAbs)
+                managedTypeDirs =
+                  [ p
+                  | p <- searchAbs
+                  , let pNorm = normalise p
+                  , pNorm /= normalise sysTypesAbs
+                  , Data.Set.notMember pNorm userSearchSet
+                  ]
+                isUnder dir path =
+                  let dir' = addTrailingPathSeparator (normalise dir)
+                      path' = normalise path
+                  in Data.List.isPrefixOf dir' path'
+                isManagedTyPath path = any (\dir -> isUnder dir path) managedTypeDirs
+            missing <- foldM
+              (\acc (depMn, _depHash) ->
+                 if M.member depMn providers
+                   then return acc
+                   else do
+                     mTy <- getTyFileCached (searchPath paths) depMn
+                     case mTy of
+                       Nothing -> return (Data.Set.insert depMn acc)
+                       Just tyPath -> do
+                         tyAbs <- normalizePathSafe tyPath
+                         if isManagedTyPath tyAbs
+                           then return (Data.Set.insert depMn acc)
+                           else return acc
+              )
+              Data.Set.empty
+              imps
+            if Data.Set.null missing
+              then return (Right ())
+              else do
+                let missingSorted = Data.List.sortOn modNameToString (Data.Set.toList missing)
+                    diags = concatMap (\depMn -> missingIfaceDiagnostics mn "" depMn) missingSorted
+                return (Left diags)
 
           collectDiags results =
             let (errs, vals) = partitionEithers results
@@ -2011,20 +2076,24 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
           -- any pubDeps have changed we need to rerun front passes (and back
           -- passes)
           needByDepsRes <- case gtTask t of
-            TyTask{ tyNameHashes = nameHashes } -> do
+            TyTask{ tyImports = imps, tyNameHashes = nameHashes } -> do
+              missingImportsRes <- checkMissingImports imps
+              case missingImportsRes of
+                Left diags -> return (Left diags)
+                Right () -> do
               -- Build dep maps and reverse "used by" index for logging.
-              let pubDeps = depMap InterfaceFiles.nhPubDeps nameHashes
-                  implDeps = depMap InterfaceFiles.nhImplDeps nameHashes
-                  pubUsers = depUsers InterfaceFiles.nhPubDeps nameHashes
-                  implUsers = depUsers InterfaceFiles.nhImplDeps nameHashes
-              -- Resolve current hashes for each dep and report any deltas.
-              pubRes <- checkDeps "pub" InterfaceFiles.nhPubHash pubUsers pubDeps
-              implRes <- checkDeps "impl" InterfaceFiles.nhImplHash implUsers implDeps
-              case (pubRes, implRes) of
-                (Left diags, _) -> return (Left diags)
-                (_, Left diags) -> return (Left diags)
-                (Right pubDeltas, Right implDeltas) ->
-                  return (Right (pubDeltas, implDeltas, pubUsers, implUsers))
+                  let pubDeps = depMap InterfaceFiles.nhPubDeps nameHashes
+                      implDeps = depMap InterfaceFiles.nhImplDeps nameHashes
+                      pubUsers = depUsers InterfaceFiles.nhPubDeps nameHashes
+                      implUsers = depUsers InterfaceFiles.nhImplDeps nameHashes
+                  -- Resolve current hashes for each dep and report any deltas.
+                  pubRes <- checkDeps "pub" InterfaceFiles.nhPubHash pubUsers pubDeps
+                  implRes <- checkDeps "impl" InterfaceFiles.nhImplHash implUsers implDeps
+                  case (pubRes, implRes) of
+                    (Left diags, _) -> return (Left diags)
+                    (_, Left diags) -> return (Left diags)
+                    (Right pubDeltas, Right implDeltas) ->
+                      return (Right (pubDeltas, implDeltas, pubUsers, implUsers))
             -- Source tasks always run front passes, so deps are irrelevant.
             _ -> return (Right ([], [], M.empty, M.empty))
 
@@ -2499,6 +2568,68 @@ enumerateProjectModules ctx = do
         forM actFiles $ \f -> do
           mn <- moduleNameFromFile (projSrcDir ctx) f
           return (f, mn)
+
+-- | Remove stale generated module artifacts when source modules disappear.
+-- Prunes orphan .ty/.c/.h outputs under out/types before task planning so
+-- cached headers cannot mask deleted .act modules.
+pruneMissingModuleOutputs :: ProjCtx -> IO ()
+pruneMissingModuleOutputs ctx = do
+    let srcRoot = projSrcDir ctx
+        typesRoot = projTypesDir ctx
+    typesExists <- doesDirectoryExist typesRoot
+    when typesExists $ do
+      srcExists <- doesDirectoryExist srcRoot
+      srcMods <- if srcExists
+                   then do
+                     srcFiles <- getFilesRecursive srcRoot
+                     let actFiles = filter (\f -> takeExtension f == ".act") srcFiles
+                         modBases = map (normalise . dropExtension . makeRelative srcRoot) actFiles
+                     return (Data.Set.fromList modBases)
+                   else return Data.Set.empty
+      outFiles <- getFilesRecursive typesRoot
+      mapM_ (pruneFile srcMods typesRoot) outFiles
+  where
+    isRootStub rel ext =
+      ext == ".c" &&
+      (".root" `Data.List.isSuffixOf` dropExtension rel ||
+       ".test_root" `Data.List.isSuffixOf` dropExtension rel)
+
+    moduleBase rel ext
+      | isRootStub rel ext = dropExtension (dropExtension rel)
+      | otherwise = dropExtension rel
+
+    pruneFile srcMods typesRoot absFile = do
+      let ext = takeExtension absFile
+      when (ext == ".ty" || ext == ".c" || ext == ".h") $ do
+        let rel = normalise (makeRelative typesRoot absFile)
+            base = normalise (moduleBase rel ext)
+        unless (Data.Set.member base srcMods) $
+          removeFile absFile `catch` ignoreNotExists
+
+    ignoreNotExists :: IOException -> IO ()
+    ignoreNotExists _ = return ()
+
+-- | Incremental variant: prune only modules whose changed .act file no longer exists.
+pruneMissingChangedModuleOutputs :: [ProjCtx] -> [FilePath] -> IO ()
+pruneMissingChangedModuleOutputs ctxs changedPaths = do
+    absChanged <- mapM normalizePathSafe changedPaths
+    let actPaths = filter (\p -> takeExtension p == ".act") absChanged
+    forM_ actPaths $ \actPath -> do
+      exists <- doesFileExist actPath
+      unless exists $
+        mapM_ (pruneForCtx actPath) ctxs
+  where
+    pruneForCtx actPath ctx = do
+      srcRoot <- normalizePathSafe (projSrcDir ctx)
+      let srcRoot' = addTrailingPathSeparator (normalise srcRoot)
+          actPath' = normalise actPath
+      when (Data.List.isPrefixOf srcRoot' actPath') $ do
+        let modBase = normalise (dropExtension (makeRelative srcRoot actPath'))
+            outBase = projTypesDir ctx </> modBase
+        mapM_ (\ext -> removeFile (outBase ++ ext) `catch` ignoreNotExists) [".ty", ".c", ".h"]
+
+    ignoreNotExists :: IOException -> IO ()
+    ignoreNotExists _ = return ()
 
 -- | Build a search path for module interfaces for a project.
 -- Includes the project's types dir, dependency types, user searchpath, and
