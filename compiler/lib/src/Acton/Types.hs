@@ -189,7 +189,7 @@ infTopStmt env s                        = do (cs,te,s) <- infEnv env s
                                              s <- termred eq1 <$> usubst (pushEqns env eq0 s)
                                              defaultVars (ufree s)
                                              s <- usubst s
-                                             tieWitKnots te [s]
+                                             tieWitKnots te [fixupSelf s]
 
   where defaultTE env te                = do defaultVars (ufree te)
                                              usubst te
