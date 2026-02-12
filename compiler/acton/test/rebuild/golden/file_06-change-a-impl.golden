@@ -1,10 +1,10 @@
 Building file src/c.act in project .
 Resolving dependencies (fetching if missing)...
   Stale a: source changed
-  Hash deltas a: ~aaa{src b5d455b9 -> 8df17e22, impl 5aa091f6 -> 864e3b8b}
+  Hash deltas a: ~aaa{src HASH1 -> HASH2, impl HASH1 -> HASH2}
    Finished type check of     a     0.000 s
-  Stale b: impl changes in a.aaa 5aa091f6 → 864e3b8b (used by baa)
-  Stale c: impl changes in b.baa cf2d0b67 → e0e86dc8 (used by main)
+  Stale b: impl changes in a.aaa HASH1 → HASH2 (used by baa)
+  Stale c: impl changes in b.baa HASH1 → HASH2 (used by main)
    Finished compilation of    a     0.000 s
    Finished compilation of    b     0.000 s
    Finished compilation of    c     0.000 s
