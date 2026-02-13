@@ -145,6 +145,22 @@ instance UWild Constraint where
     uwild (Mut info env t1 n t2)    = Mut info env (uwild t1) n (uwild t2)
     uwild (Seal info env t)         = Seal info env (uwild t)
 
+instance VSubst Constraint where
+    vsubst s (Cast i env t1 t2)     = Cast i env (vsubst s t1) (vsubst s t2)
+    vsubst s (Sub i env w t1 t2)    = Sub i env w (vsubst s t1) (vsubst s t2)
+    vsubst s (Proto i env w t p)    = Proto i env w (vsubst s t) (vsubst s p)
+    vsubst s (Sel i env w t1 n t2)  = Sel i env w (vsubst s t1) n (vsubst s t2)
+    vsubst s (Mut i env t1 n t2)    = Mut i env (vsubst s t1) n (vsubst s t2)
+    vsubst s (Seal i env t)         = Seal i env (vsubst s t)
+
+requantize env cs                   = map requant cs
+  where requant (Cast i _ t1 t2)    = Cast i env t1 t2
+        requant (Sub i _ w t1 t2)   = Sub i env w t1 t2
+        requant (Proto i _ w t p)   = Proto i env w t p
+        requant (Sel i _ w t1 n t2) = Sel i env w t1 n t2
+        requant (Mut i _ t1 n t2)   = Mut i env t1 n t2
+        requant (Seal i _ t)        = Seal i env t
+
 
 closeDepVars vs cs
   | null vs'                        = nub vs

@@ -668,29 +668,37 @@ matchingDec n sc dec dec'
   | dec == dec'                         = True
   | otherwise                           = decorationMismatch n sc dec
 
-matchDefAssumption env cs0 def
-  | q0 == q1                            = match env cs0 [] def
-  | otherwise                           = do (cs, uvs) <- instQBinds env q1
-                                             let eq0 = witSubst env q1 cs
+matchDefAssumption env cs1 def@Def{dname=n, qbinds=q1}
+  | q0 == q1                            = match cs1 [] def
+  | null q1                             = do let uvs = nub (ufree def ++ ufree cs1) \\ ufree env
+                                             --traceM ("### matching " ++ prstr def)
+                                             --traceM ("### with\n" ++ render (nest 4 $ vcat $ map pretty cs1))
+                                             --traceM ("### against " ++ prstr (n, findName n env) ++ "\n")
+                                             sequence [ usubstitute uv =<< newUnivarOfKind (uvkind uv) env0 | uv <- uvs ]
+                                             def <- usubst def
+                                             cs1 <- usubst (requantize env0 cs1)
+                                             match cs1 [] def
+  | otherwise                           = do (cs, uvs) <- instQBinds env0 q1
+                                             let eq1 = witSubst env0 q1 cs
                                                  s = qbound q1 `zip` uvs
-                                                 def' = vsubst s def{ qbinds = [] }
-                                             match env (cs++cs0) eq0 def'
-  where NDef (TSchema _ q0 t0) dec _    = findName n env
-        n                               = dname def
-        t2 | inClass env                = addSelf t0 (Just dec)
-           | otherwise                  = t0
-        q1                              = qbinds def
+                                                 cs1' = vsubst s (requantize env0 cs1)
+                                                 def' = vsubst s def
+                                             match (cs ++ cs1') eq1 def'
+  where NDef (TSchema _ q0 t) dec _     = findName n env
+        t0 | inClass env                = addSelf t (Just dec)
+           | otherwise                  = t
+        env0                            = defineTVars q0 env
         fx | inAct env                  = dfx def
-           | otherwise                  = effect t2
-        (pos0,kwd0)                     = qualDef env dec (pos def) (kwd def) (qualWPar env q0)
+           | otherwise                  = effect t0
 
-        match env cs eq0 def            = do --traceM ("## matchDefAssumption " ++ prstr n ++ ": [" ++ prstrs q0 ++ "] => ")
-                                             --traceM (render (nest 4 $ vcat $ map pretty $ Cast info env t1 t2 : cs))
-                                             (cs2,eq1) <- markScoped env n q0 (tempGoal t1) (Cast info env t1 t2 : cs)
-                                             cs2 <- usubst cs2
-                                             return (cs2, def{ qbinds = noqual env q0, pos = pos0, kwd = kwd0,
-                                                               dbody = bindWits (eq0++eq1) ++ dbody def, dfx = fx })
+        match cs eq def                 = do --traceM ("## matchDefAssumption " ++ prstr n ++ ": [" ++ prstrs q0 ++ "] => ")
+                                             --traceM (render (nest 4 $ vcat $ map pretty $ Cast info env0 t1 t0 : cs))
+                                             (cs',eq') <- markScoped env n q0 (tempGoal t1) (Cast info env0 t1 t0 : cs)
+                                             cs' <- usubst cs'
+                                             return (cs', def{ qbinds = noqual env0 q0, pos = pos0, kwd = kwd0,
+                                                               dbody = bindWits (eq++eq') ++ dbody def, dfx = fx })
            where t1                     = tFun (dfx def) (prowOf $ pos def) (krowOf $ kwd def) (fromJust $ ann def)
+                 (pos0,kwd0)            = qualDef env dec (pos def) (kwd def) (qualWPar env q0)
                  sc1                    = TSchema NoLoc q1 t1
                  mbl                    = findSigLoc n env
                  msg                    = "Type incompatibility between signature for and definition of "++Pretty.print n
@@ -754,7 +762,7 @@ instance InfEnv Decl where
                                              NReserved -> do
                                                  --traceM ("\n## infEnv class " ++ prstr n)
                                                  pushFX fxPure tNone
-                                                 te0 <- infProperties env as' b
+                                                 te0 <- infProperties env1 as' b
                                                  (cs,te,b1) <- infEnv env1 b0
                                                  popFX
                                                  when (not $ null cs) $ err (loc n) "Deprecated class syntax"
