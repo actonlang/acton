@@ -104,8 +104,26 @@ def _test_http_parser(st: testing.SyncT):
 actor _test_HttpClientServer(t: testing.EnvT):
     """HTTP client/server roundtrip over TCP"""
     log = logging.Logger(t.log_handler)
+    var done = False
+    var attempts = 0
+    var listen_attempts = 0
+    var port = random.randint(20000, 45000)
+    var server = None
 
     serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
+    conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
+
+    def _finish_success():
+        if done:
+            return
+        done = True
+        t.success()
+
+    def _finish_failure(msg: str):
+        if done:
+            return
+        done = True
+        t.failure(AssertionError(msg))
 
     def _on_http_accept(server):
         server.cb_install(_on_http_server_request, _on_http_server_error)
@@ -114,22 +132,47 @@ actor _test_HttpClientServer(t: testing.EnvT):
         respond(200, {}, "Hello, world!")
 
     def _on_http_server_error(server, error):
-        pass
+        _finish_failure("HTTP server error: " + error)
 
-    server = http.Listener(serv_cap, "0.0.0.0", 8473, _on_http_accept)
+    def _on_http_listen_error(listener, error):
+        if listen_attempts < 10:
+            listen_attempts += 1
+            port = random.randint(20000, 45000)
+            _start_listener()
+        else:
+            _finish_failure("HTTP listen failed: " + error)
 
     def _on_http_connect(c):
         c.get("/", _on_http_receive)
 
     def _on_http_receive(c, data):
-        log.debug(str(data))
-        t.success()
+        if data.status != 200:
+            _finish_failure("Unexpected status: " + str(data.status))
+            return
+        if data.body != b"Hello, world!":
+            _finish_failure("Unexpected body: " + str(data.body))
+            return
+        _finish_success()
 
     def _on_http_error(c, errmsg):
-        print(errmsg)
+        if attempts < 5:
+            attempts += 1
+            after 0.1: _start_client()
+        else:
+            _finish_failure("HTTP client error: " + errmsg)
 
-    conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
-    client = http.Client(conn_cap, "127.0.0.1", _on_http_connect, _on_http_error, scheme="http", port=8473)
+    def _start_client():
+        http.Client(conn_cap, "127.0.0.1", _on_http_connect, _on_http_error, scheme="http", port=port)
+
+    def _start_listener():
+        server = http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
+
+    def _timeout():
+        _finish_failure("timeout")
+
+    _start_listener()
+    after 0.05: _start_client()
+    after 10: _timeout()
 
 
 actor _test_HttpsClientServer(t: testing.EnvT):
@@ -137,7 +180,7 @@ actor _test_HttpsClientServer(t: testing.EnvT):
     log = logging.Logger(t.log_handler)
     var done = False
     var attempts = 0
-    var port = 0
+    var port = random.randint(20000, 45000)
     var server = None
     listen_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
     conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
@@ -194,7 +237,6 @@ actor _test_HttpsClientServer(t: testing.EnvT):
     def _timeout():
         _finish_error("timeout")
 
-    port = random.randint(20000, 45000)
     server = http.TLSListener(
         listen_cap,
         "127.0.0.1",
