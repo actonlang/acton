@@ -600,5 +600,5 @@ extern struct linesQ_BepaG_class linesQ_BepaG_methods;
 $R linesQ_BepaG_new($Cont);
 extern struct linesQ_mainG_class linesQ_mainG_methods;
 $R linesQ_mainG_new($Cont, B_Env);
-extern B_Iterable linesQ_W_1191;
+extern B_Iterable linesQ_W_779;
 void linesQ___init__ ();

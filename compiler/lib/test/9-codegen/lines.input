@@ -1,5 +1,5 @@
 
-W_1191: __builtin__.Iterable[__builtin__.list[__builtin__.int], __builtin__.int] = __builtin__.SequenceD_list@[__builtin__.int]().W_Collection
+W_779: __builtin__.Iterable[__builtin__.list[__builtin__.int], __builtin__.int] = __builtin__.SequenceD_list@[__builtin__.int]().W_Collection
 
 # recursive group:
 proc def L_1C_1cont (self : Apa, C_cont : $Cont[None], C_2res : None) -> $R:
@@ -213,7 +213,7 @@ proc def U_1L_17C_9cont (self : main, C_cont : $Cont[None], U_7C_10res : __built
             print@[(__builtin__.str,)](("\"break path\"",), None, None, None, None)
             break
         print@[(__builtin__.str, __builtin__.int)](("\"loop body\"", self.i), None, None, None, None)
-    N_3iter: __builtin__.Iterator[__builtin__.int] = W_1191.__iter__([(BOX __builtin__.int (UNBOX __builtin__.int 1)), (BOX __builtin__.int (UNBOX __builtin__.int 2)), (BOX __builtin__.int (UNBOX __builtin__.int 3))])
+    N_3iter: __builtin__.Iterator[__builtin__.int] = W_779.__iter__([(BOX __builtin__.int (UNBOX __builtin__.int 1)), (BOX __builtin__.int (UNBOX __builtin__.int 2)), (BOX __builtin__.int (UNBOX __builtin__.int 3))])
     if $PUSH():
         while True:
             if True:

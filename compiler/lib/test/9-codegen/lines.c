@@ -1,7 +1,7 @@
 /* Acton impl hash: test-hash */
 #include "rts/common.h"
 #include "out/types/lines.h"
-B_Iterable linesQ_W_1191;
+B_Iterable linesQ_W_779;
 $R linesQ_L_1C_1cont (linesQ_Apa self, $Cont C_cont, B_NoneType C_2res) {
     #line 18 "test/src/lines.act"
     self->z = toB_int(1LL);
@@ -480,7 +480,7 @@ $R linesQ_U_1L_17C_9cont (linesQ_main self, $Cont C_cont, int64_t U_7C_10res) {
         #line 68 "test/src/lines.act"
         ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(2, to$str("loop body"), self->i), B_None, B_None, B_None, B_None);
     }
-    B_Iterator N_3iter = ((B_Iterator (*) (B_Iterable, B_list))linesQ_W_1191->$class->__iter__)(linesQ_W_1191, B_mk_list(3, toB_int(1LL) , toB_int(2LL) , toB_int(3LL)));
+    B_Iterator N_3iter = ((B_Iterator (*) (B_Iterable, B_list))linesQ_W_779->$class->__iter__)(linesQ_W_779, B_mk_list(3, toB_int(1LL) , toB_int(2LL) , toB_int(3LL)));
     if ($PUSH()) {
         #line 73 "test/src/lines.act"
         while (true) {
@@ -1477,6 +1477,6 @@ void linesQ___init__ () {
         linesQ_mainG_methods.__deserialize__ = linesQ_mainD___deserialize__;
         $register(&linesQ_mainG_methods);
     }
-    B_Iterable W_1191 = (B_Iterable)B_SequenceD_listG_witness->W_Collection;
-    linesQ_W_1191 = W_1191;
+    B_Iterable W_779 = (B_Iterable)B_SequenceD_listG_witness->W_Collection;
+    linesQ_W_779 = W_779;
 }

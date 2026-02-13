@@ -1,6 +1,6 @@
 from deact import Apa
 
-W_163: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+W_124: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
 
 # recursive group:
 actor Manager ():
@@ -17,5 +17,5 @@ actor main (env : __builtin__.Env):
     mgr: Manager = Manager()
     decoder: __builtin__.StringDecoder = mgr.create_decoder()
     apa: deact.Apa = mgr.create_apa()
-    env.exit(W_163.__fromatom__(0))
+    env.exit(W_124.__fromatom__(0))
 # (recursive group)

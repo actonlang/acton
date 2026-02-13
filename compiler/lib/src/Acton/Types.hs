@@ -444,10 +444,10 @@ wrapped l kw env cs ts args             = do tvx <- newUnivarOfKind KFX env
                                              let t1 = vsubst [(fxSelf,fx)] t0
                                                  t2 = tFun fxPure (foldr posRow posNil ts) kwdNil t'
                                              w <- newWitness
-                                             (cs0,_) <- simplify env (tempGoal t') [Cast (locinfo l 30) env t1 t2]
+                                             unify (locinfo l 30) t1 t2
                                              t' <- usubst t'
-                                             cs1 <- usubst (Proto (locinfo l 29) env w fx p : cs)
-                                             return (cs0++cs1, t', eCall (tApp (Dot l0 (eVar w) kw) tvs) args)
+                                             cs' <- usubst (Proto (locinfo l 29) env w fx p : cs)
+                                             return (cs', t', eCall (tApp (Dot l0 (eVar w) kw) tvs) args)
 
 --------------------------------------------------------------------------------------------------------------------------
 
