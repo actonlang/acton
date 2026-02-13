@@ -1958,10 +1958,11 @@ zigBuild env gopts opts paths tasks binTasks allowPrune mProgressUI = do
 
     -- Generate build.zig and build.zig.zon directly from Build.act/build.act.json.
     iff (not isSysProj) $ do
+      depOverrides <- normalizeDepOverrides (projPath paths) (C.dep_overrides opts)
       pinsSpec0 <- loadBuildSpec (projPath paths)
-      pinsSpec  <- traverse (applyDepOverrides (projPath paths) (C.dep_overrides opts)) pinsSpec0
+      pinsSpec  <- traverse (applyDepOverrides (projPath paths) depOverrides) pinsSpec0
       let pins = maybe M.empty BuildSpec.dependencies pinsSpec
-      genBuildZigFiles pins (C.dep_overrides opts) paths
+      genBuildZigFiles pins depOverrides paths
 
     let zigExe = zig paths
         baseArgs = ["build","--cache-dir", local_cache_dir,
