@@ -1612,6 +1612,38 @@ p35_changed_path_keeps_unaffected_provider =
     assertBool "expected provider for changed import a" (M.member (A.modName ["a"]) bProviders)
     assertBool "expected provider for unchanged import c" (M.member (A.modName ["c"]) bProviders)
 
+p36_removed_dep_name_triggers_front_refresh :: TestTree
+p36_removed_dep_name_triggers_front_refresh =
+  testCase "36-removed dep name forces front refresh" $ do
+    let proj = casesProjDir
+        src = casesSrcDir
+    ensureCasesProjectWithDeps [("libfoo", "deps/libfoo")]
+    depDir <- ensureDepProject proj "libfoo"
+    let depSrc = depDir </> "src" </> "libfoo.act"
+    writeFileUtf8 depSrc $ T.unlines
+      [ "def foo() -> int:"
+      , "    return 1"
+      ]
+    writeFileUtf8 (src </> "main.act") $ T.unlines
+      [ "import libfoo"
+      , ""
+      , "actor main(env: Env):"
+      , "    print(libfoo.foo())"
+      , "    env.exit(0)"
+      ]
+    res1 <- runActonIn proj ["build", "--color", "never", "--skip-build"]
+    assertExitSuccess "initial build" res1
+    writeFileUtf8 depSrc $ T.unlines
+      [ "def bar() -> int:"
+      , "    return 2"
+      ]
+    res2@(_ec2, out2) <- runActonIn proj ["build", "--color", "never", "--verbose", "--skip-build"]
+    assertExitFailure "rebuild after removing imported dep name" 1 res2
+    assertBool "expected stale-cache log for missing dep hash"
+      (T.isInfixOf "missing dep hashes in" out2 && T.isInfixOf "libfoo.foo" out2)
+    assertBool "did not expect internal hash-missing diagnostic"
+      (not (T.isInfixOf "Hash info missing for libfoo.foo" out2))
+
 -- Main -----------------------------------------------------------------------
 
 -- | Tasty entry point for incremental tests.
@@ -1667,5 +1699,6 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
       , p33_comprehensive_hashes
       , p34_removed_import_module
       , p35_changed_path_keeps_unaffected_provider
+      , p36_removed_dep_name_triggers_front_refresh
       ]
   ]

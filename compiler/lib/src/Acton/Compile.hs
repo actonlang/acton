@@ -2051,12 +2051,41 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
               return (fmap (\vals -> (n, vals)) resolvedQns)) (M.toList deps)
             return (fmap M.fromList resolved)
 
-          checkDeps label getHash users deps = do
+          -- For stale checks on cached .ty tasks we treat missing names/hashes
+          -- as "stale cache" signals and force front passes, instead of failing
+          -- early with internal hash diagnostics.
+          resolveQNameHashForStaleCheck getHash qn =
+            case qn of
+              A.GName m n -> resolveNameHashMap' m >>= \hm ->
+                return $ case hm of
+                  Nothing -> Left (missingIfaceDiagnostics mn "" m)
+                  Just hmap ->
+                    case M.lookup n hmap of
+                      Nothing -> Right Nothing
+                      Just info ->
+                        let h = getHash info
+                        in if B.null h then Right Nothing else Right (Just h)
+              A.QName m n -> resolveNameHashMap' m >>= \hm ->
+                return $ case hm of
+                  Nothing -> Left (missingIfaceDiagnostics mn "" m)
+                  Just hmap ->
+                    case M.lookup n hmap of
+                      Nothing -> Right Nothing
+                      Just info ->
+                        let h = getHash info
+                        in if B.null h then Right Nothing else Right (Just h)
+              A.NoQ _ -> return (Right Nothing)
+
+          checkDeps _label getHash _users deps = do
             resolved <- traverseDiags (\(qn, recorded) -> do
-              let userNote = fmtUsers users qn
-              currE <- resolveQNameHash label getHash userNote qn
+              currE <- resolveQNameHashForStaleCheck getHash qn
               return (fmap (\curr -> (qn, recorded, curr)) currE)) (M.toList deps)
-            return (fmap (\triples -> [ (qn, old, new) | (qn, old, new) <- triples, old /= new ]) resolved)
+            return (fmap
+              (\triples ->
+                let deltas = [ (qn, old, new) | (qn, old, Just new) <- triples, old /= new ]
+                    missing = [ qn | (qn, _old, Nothing) <- triples ]
+                in (deltas, missing))
+              resolved)
 
       case gtTask t of
         ParseErrorTask{ parseDiagnostics = diags } -> return (key, Left diags)
@@ -2096,22 +2125,23 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
                   case (pubRes, implRes) of
                     (Left diags, _) -> return (Left diags)
                     (_, Left diags) -> return (Left diags)
-                    (Right pubDeltas, Right implDeltas) ->
-                      return (Right (pubDeltas, implDeltas, pubUsers, implUsers))
+                    (Right (pubDeltas, pubMissing), Right (implDeltas, implMissing)) ->
+                      return (Right (pubDeltas, implDeltas, pubMissing, implMissing, pubUsers, implUsers))
             -- Source tasks always run front passes, so deps are irrelevant.
-            _ -> return (Right ([], [], M.empty, M.empty))
+            _ -> return (Right ([], [], [], [], M.empty, M.empty))
 
           case needByDepsRes of
             Left diags -> return (key, Left diags)
-            Right (pubDeltas, implDeltas, pubUsers, implUsers) -> do
+            Right (pubDeltas, implDeltas, pubMissing, implMissing, pubUsers, implUsers) -> do
               let needBySource = case gtTask t of { ActonTask{} -> True; _ -> False }
                   -- Public deltas require front passes; impl deltas only need back jobs.
                   needByPub = not (null pubDeltas)
+                  needByMissing = not (null pubMissing) || not (null implMissing)
                   needByImpl = not (null implDeltas)
                   forceAlt    = altOutput optsT && mn == rootAlt
                   forceAlways = C.alwaysbuild optsT
                   -- Front passes run on source or API changes, or when forced.
-                  needFront = needBySource || needByPub || forceAlt || forceAlways
+                  needFront = needBySource || needByPub || needByMissing || forceAlt || forceAlways
                   mModuleImplHash = case gtTask t of
                     TyTask{ tyImplHash = implHash } -> Just implHash
                     _ -> Nothing
@@ -2129,9 +2159,21 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
                     when (C.verbose gopts) $ do
                       if needBySource
                         then ccOnInfo callbacks ("  Stale " ++ modNameToString mn ++ ": source changed")
-                        else when needByPub $ do
-                          let fmtDelta (qn, old, new) = prstr qn ++ " " ++ short8 old ++ " → " ++ short8 new ++ fmtUsers pubUsers qn
-                          ccOnInfo callbacks ("  Stale " ++ modNameToString mn ++ ": pub changes in " ++ Data.List.intercalate ", " (map fmtDelta pubDeltas))
+                        else do
+                          when needByPub $ do
+                            let fmtDelta (qn, old, new) = prstr qn ++ " " ++ short8 old ++ " → " ++ short8 new ++ fmtUsers pubUsers qn
+                            ccOnInfo callbacks ("  Stale " ++ modNameToString mn ++ ": pub changes in " ++ Data.List.intercalate ", " (map fmtDelta pubDeltas))
+                          when needByMissing $ do
+                            let fmtMissing users qn = prstr qn ++ fmtUsers users qn
+                                pubMissingItems =
+                                  [ "pub " ++ fmtMissing pubUsers qn
+                                  | qn <- Data.List.sortOn Hashing.qnameKey pubMissing
+                                  ]
+                                implMissingItems =
+                                  [ "impl " ++ fmtMissing implUsers qn
+                                  | qn <- Data.List.sortOn Hashing.qnameKey implMissing
+                                  ]
+                            ccOnInfo callbacks ("  Stale " ++ modNameToString mn ++ ": missing dep hashes in " ++ Data.List.intercalate ", " (pubMissingItems ++ implMissingItems))
                     t' <- case gtTask t of
                             ActonTask{} -> return (gtTask t)
                             TyTask{}    -> do
