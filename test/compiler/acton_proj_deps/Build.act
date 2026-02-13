@@ -1,4 +1,5 @@
 name = "acton_proj_deps"
+fingerprint = 0xdaf39f735e4b3c9d
 
 dependencies = {
   "dep_a": (path="deps/dep_a")

@@ -1,4 +1,5 @@
 name = "unused_dep_proj"
+fingerprint = 0x4a234a795914933e
 
 dependencies = {
   "dep_unused": (path="deps/dep_unused")
