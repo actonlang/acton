@@ -1,5 +1,5 @@
 .{
-    .name = .actonproject,
+    .name = .{{name}},
     .version = "0.0.0",
     .fingerprint = {{fingerprint}},
     .minimum_zig_version = "0.15.2",

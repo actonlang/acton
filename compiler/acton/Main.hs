@@ -39,6 +39,7 @@ import qualified Acton.BuildSpec as BuildSpec
 import qualified Acton.Builtin
 import qualified Acton.DocPrinter as DocP
 import qualified Acton.Diagnostics as Diag
+import qualified Acton.Fingerprint as Fingerprint
 import qualified Acton.SourceProvider as Source
 import Acton.Compile
 import Utils
@@ -58,13 +59,11 @@ import Data.List.Split
 import Data.IORef
 import Data.Maybe (catMaybes, isJust)
 import Data.Monoid ((<>))
-import Data.Word (Word32, Word64)
+import Data.Word (Word32)
 import Data.Graph
 import Data.String.Utils (replace)
 import Data.Version (showVersion)
-import Data.Char (toLower)
-import qualified Data.ByteString as BS
-import qualified Data.ByteString.Char8 as B
+import Data.Char (isAlpha, isDigit, toLower)
 import qualified Data.List
 import Data.Either (partitionEithers)
 import qualified Data.Map as M
@@ -100,7 +99,6 @@ import qualified System.Exit
 import qualified Paths_acton
 import System.Random (randomRIO)
 import Text.Printf
-import Numeric (showHex)
 
 import qualified Data.ByteString.Lazy as BL
 
@@ -282,12 +280,14 @@ createProject name = do
     projDirExists <- doesDirectoryExist name
     iff (projDirExists) $
         printErrorAndExit ("Unable to create project " ++ name ++ ", directory already exists.")
+    fp <- generateFingerprint name
     let projDir = joinPath [curDir, name]
         srcRoot = joinPath [projDir, "src"]
         buildActPath = joinPath [projDir, "Build.act"]
         buildSpec = BuildSpec.BuildSpec
           { BuildSpec.specName = Just name
           , BuildSpec.specDescription = Nothing
+          , BuildSpec.fingerprint = Just fp
           , BuildSpec.dependencies = M.empty
           , BuildSpec.zig_dependencies = M.empty
           }
@@ -1724,29 +1724,12 @@ runZig gopts opts zigExe zigArgs paths wd mProgressUI = do
           cleanup gopts opts paths
           unless (C.watch opts) System.Exit.exitFailure
 
-crc32IsoHdlc :: BS.ByteString -> Word32
-crc32IsoHdlc bs = complement (BS.foldl' update 0xffffffff bs)
-  where
-    update crc byte = go 0 (crc `xor` fromIntegral byte)
-    go 8 crc = crc
-    go n crc =
-        let crc' = if (crc .&. 1) /= 0
-                     then (crc `shiftR` 1) `xor` 0xEDB88320
-                     else crc `shiftR` 1
-        in go (n + 1) crc'
-
-formatFingerprint :: Word64 -> String
-formatFingerprint fp =
-    let hex = showHex fp ""
-        padded = replicate (16 - length hex) '0' ++ hex
-    in "0x" ++ padded
-
 generateFingerprint :: String -> IO String
 generateFingerprint name = do
     ident <- randomRIO (1, 0xfffffffe :: Word32)
-    let checksum = crc32IsoHdlc (B.pack name)
-        fp = (fromIntegral checksum `shiftL` 32) .|. fromIntegral ident
-    return (formatFingerprint fp)
+    let prefix = Fingerprint.fingerprintPrefixForName name
+        fp = (fromIntegral prefix `shiftL` 32) .|. fromIntegral ident
+    return (Fingerprint.formatFingerprint fp)
 
 -- Render build.zig and build.zig.zon from templates and BuildSpec
 -- rootPins: dependency pins from the main project (applied to all deps, including transitive)
@@ -1761,9 +1744,15 @@ genBuildZigFiles rootPins depOverrides paths = do
         distBuildZonPath = joinPath [sys, "builder", "build.zig.zon"]
     buildZigTemplate <- readFile distBuildZigPath
     buildZonTemplate <- readFile distBuildZonPath
-    fp <- generateFingerprint "actonproject"
     spec0 <- loadBuildSpec proj
     spec  <- traverse (applyDepOverrides proj depOverrides) spec0
+    -- TODO: Once name/fingerprint are mandatory, remove fallback name/fingerprint
+    -- generation and fail early when Build.act is missing them.
+    let fallbackName =
+          let base = takeFileName projAbs
+          in if null base then "actonproject" else base
+    zonName <- resolveZonName fallbackName spec
+    fp <- resolveFingerprint zonName projAbs spec
     (transPkgs, transZigs) <- collectDepsRecursive proj rootPins depOverrides
     absSys <- canonicalizePath sys
     let relSys = relativeViaRoot projAbs absSys
@@ -1773,14 +1762,64 @@ genBuildZigFiles rootPins depOverrides paths = do
     let applyPins deps = M.mapWithKey (\n d -> M.findWithDefault d n rootPins) deps
         mergedSpec = fmap (\s -> s { BuildSpec.dependencies     = applyPins (BuildSpec.dependencies s) `M.union` transPkgs
                                    , BuildSpec.zig_dependencies = BuildSpec.zig_dependencies s `M.union` transZigs }) normalizedSpec
-        zonWithFp = replace "{{fingerprint}}" fp
+        zonWithFp = replace "{{fingerprint}}" fp . replace "{{name}}" zonName
     case mergedSpec of
       Nothing -> do
         writeFile buildZigPath buildZigTemplate
         writeFileAtomic buildZonPath (zonWithFp (replace "{{syspath}}" relSys buildZonTemplate))
       Just s -> do
         writeFile buildZigPath (genBuildZig buildZigTemplate s)
-        writeFileAtomic buildZonPath (genBuildZigZon buildZonTemplate relSys depsRootAbs projAbs fp s)
+        writeFileAtomic buildZonPath (genBuildZigZon buildZonTemplate relSys depsRootAbs projAbs fp zonName s)
+
+  where
+    resolveFingerprint name projAbs spec =
+      case spec >>= BuildSpec.fingerprint of
+        Just fp -> return fp
+        Nothing -> return (fallbackFingerprint name projAbs)
+
+    fallbackFingerprint name projAbs =
+      let prefix = Fingerprint.fingerprintPrefixForName name
+          suffix = Fingerprint.fingerprintPrefixForName projAbs
+          fp = (fromIntegral prefix `shiftL` 32) .|. fromIntegral suffix
+      in Fingerprint.formatFingerprint fp
+
+    resolveZonName fallbackName spec =
+      case spec >>= BuildSpec.specName of
+        Just n | not (null n) ->
+          if not (isProjectIdent n)
+            then throwProjectError ("Invalid project name '" ++ n ++ "' in Build.act.\n"
+                                    ++ "The name must be a valid Acton project name (letters, digits, underscore; cannot start with a digit).")
+            else if length n > projectNameMax
+              then throwProjectError ("Invalid project name '" ++ n ++ "' in Build.act.\n"
+                                      ++ "The name must be at most " ++ show projectNameMax ++ " characters.")
+              else return n
+        _ -> return (sanitizeProjectName fallbackName)
+
+    isProjectIdent [] = False
+    isProjectIdent (c:cs) =
+      (isAlpha c || c == '_') && all isIdentChar cs
+      where
+        isIdentChar x = isAlpha x || isDigit x || x == '_'
+
+    sanitizeProjectName [] = "actonproject"
+    sanitizeProjectName s =
+      let cleaned = map (\c -> if isAlpha c || isDigit c || c == '_' then c else '_') s
+          base = case cleaned of
+                   [] -> "actonproject"
+                   (c:cs) | isAlpha c || c == '_' -> c:cs
+                          | otherwise -> '_' : c:cs
+      in clampProjectName base
+
+    clampProjectName name
+      | length name <= projectNameMax = name
+      | otherwise =
+          let suffix = drop 2 (Fingerprint.formatFingerprintPrefix (Fingerprint.fingerprintPrefixForName name))
+              prefixLen = max 1 (projectNameMax - 1 - length suffix)
+              prefix = take prefixLen name
+          in prefix ++ "_" ++ suffix
+
+    projectNameMax :: Int
+    projectNameMax = 32
 
 genBuildZig :: String -> BuildSpec.BuildSpec -> String
 genBuildZig template spec =
@@ -1825,12 +1864,14 @@ genBuildZig template spec =
     zigExeLink (name, dep) = concat [ "            executable.linkLibrary(dep_" ++ name ++ ".artifact(\"" ++ art ++ "\"));\n"
                                     | art <- BuildSpec.artifacts dep ]
 
-genBuildZigZon :: String -> String -> FilePath -> FilePath -> String -> BuildSpec.BuildSpec -> String
-genBuildZigZon template relSys depsRootAbs projAbs fingerprint spec =
+genBuildZigZon :: String -> String -> FilePath -> FilePath -> String -> String -> BuildSpec.BuildSpec -> String
+genBuildZigZon template relSys depsRootAbs projAbs fingerprint zonName spec =
     let pkgDeps = concatMap (pkgToZon projAbs depsRootAbs) (M.toList (BuildSpec.dependencies spec))
         zigDeps = concatMap zigToZon (M.toList (BuildSpec.zig_dependencies spec))
         deps = pkgDeps ++ zigDeps
-        replaced = map (replace "{{fingerprint}}" fingerprint . replace "{{syspath}}" relSys) (lines template)
+        replaced = map (replace "{{fingerprint}}" fingerprint
+                     . replace "{{syspath}}" relSys
+                     . replace "{{name}}" zonName) (lines template)
         header = [ "// AUTOMATICALLY GENERATED BY ACTON BUILD SYSTEM"
                  , "// DO NOT EDIT, CHANGES WILL BE OVERWRITTEN!!!!!"
                  , ""

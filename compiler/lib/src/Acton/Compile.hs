@@ -196,6 +196,7 @@ import qualified Acton.CodeGen
 import Acton.Prim (mPrim)
 import qualified Acton.BuildSpec as BuildSpec
 import qualified Acton.DocPrinter as DocP
+import qualified Acton.Fingerprint as Fingerprint
 import qualified Acton.Diagnostics as Diag
 import qualified Acton.SourceProvider as Source
 import Utils
@@ -209,7 +210,8 @@ import Control.Concurrent.STM (TChan, TVar, atomically, check, modifyTVar', newT
 import Control.DeepSeq (rnf)
 import Control.Exception (Exception, IOException, SomeException, catch, displayException, evaluate, finally, mask_, throwIO, try)
 import Control.Monad
-import Data.Char (isAlpha, isHexDigit, isSpace)
+import Data.Bits (shiftR)
+import Data.Char (isAlpha, isDigit, isHexDigit, isSpace)
 import Data.Either (partitionEithers)
 import Data.Graph
 import Data.List (find, foldl', intercalate, intersperse, nub)
@@ -2381,6 +2383,31 @@ data ProjCtx = ProjCtx {
                      projDeps     :: [(String, FilePath)]          -- resolved dependency roots (abs paths)
                    } deriving (Show)
 
+type FingerprintMap = M.Map String FilePath
+
+normalizeFingerprintKey :: String -> Maybe String
+normalizeFingerprintKey raw =
+    case Fingerprint.parseFingerprint raw of
+      Just fp ->
+        let formatted = Fingerprint.formatFingerprint fp
+        in if formatted == Fingerprint.fingerprintPlaceholder
+             then Nothing
+             else Just formatted
+      Nothing -> Nothing
+
+fingerprintKeyFromSpec :: BuildSpec.BuildSpec -> Maybe String
+fingerprintKeyFromSpec spec =
+    BuildSpec.fingerprint spec >>= normalizeFingerprintKey
+
+applyFingerprint :: FilePath -> Maybe BuildSpec.BuildSpec -> FingerprintMap -> (FilePath, FingerprintMap, Maybe String)
+applyFingerprint path mspec fpMap =
+    case mspec >>= fingerprintKeyFromSpec of
+      Just fp ->
+        case M.lookup fp fpMap of
+          Just canonical -> (canonical, fpMap, Just fp)
+          Nothing -> (path, M.insert fp path fpMap, Just fp)
+      Nothing -> (path, fpMap, Nothing)
+
 -- | Discover all projects reachable from a root project.
 -- Follows Build.act/build.act.json dependencies, applies overrides/pins, and
 -- returns a map from project root to ProjCtx while skipping duplicates.
@@ -2390,33 +2417,27 @@ discoverProjects sysAbs rootProj depOverrides = do
     rootSpec0 <- loadBuildSpec rootAbs
     rootSpec  <- traverse (applyDepOverrides rootAbs depOverrides) rootSpec0
     let rootPins = maybe M.empty BuildSpec.dependencies rootSpec
-    go rootAbs Data.Set.empty M.empty rootPins rootAbs rootSpec
+        (_, fpMap0, _) = applyFingerprint rootAbs rootSpec M.empty
+    fst <$> go rootAbs Data.Set.empty M.empty fpMap0 rootPins rootAbs rootSpec
   where
-    go root seen acc pins dir mSpec = do
+    go root seen acc fpMap pins dir mSpec = do
       dirAbs <- normalizePathSafe dir
       if Data.Set.member dirAbs seen
-        then return acc
+        then return (acc, fpMap)
         else do
           rawSpec <- case mSpec of
                        Just s | dirAbs == root -> return (Just s)
-                       _ -> loadBuildSpec dirAbs
-          mspec <- traverse (applyDepOverrides dirAbs depOverrides) rawSpec
-          deps <- case mspec of
-                    Nothing -> return []
-                    Just spec -> forM (M.toList (BuildSpec.dependencies spec)) $ \(depName, dep) -> do
-                                   let (chosenDep, conflict) =
-                                         case M.lookup depName pins of
-                                           Nothing -> (dep, Nothing)
-                                           Just pinDep ->
-                                             if pinDep == dep
-                                               then (dep, Nothing)
-                                               else (pinDep, Just dep)
-                                   when (isJust conflict) $
-                                     hPutStrLn stderr ("Warning: dependency '" ++ depName ++ "' in " ++ dirAbs
-                                                       ++ " overridden by root pin")
-                                   depBase <- resolveDepBase dirAbs depName chosenDep
-                                   depAbs  <- normalizePathSafe depBase
-                                   return (depName, depAbs)
+                       Just s -> return (Just s)
+                       Nothing -> loadBuildSpec dirAbs
+          mspec <- case mSpec of
+                     Just s -> return (Just s)
+                     Nothing -> traverse (applyDepOverrides dirAbs depOverrides) rawSpec
+          let (_, fpMap1, _) = applyFingerprint dirAbs mspec fpMap
+          (deps, fpMap2) <- case mspec of
+                              Nothing -> return ([], fpMap1)
+                              Just spec -> do
+                                let depsList = M.toList (BuildSpec.dependencies spec)
+                                foldM (collectDep pins dirAbs) ([], fpMap1) depsList
           let outDir   = joinPath [dirAbs, "out"]
               typesDir = joinPath [outDir, "types"]
               srcDir'  = joinPath [dirAbs, "src"]
@@ -2429,14 +2450,43 @@ discoverProjects sysAbs rootProj depOverrides = do
                             , projSysTypes = joinPath [sysAbs, "base", "out", "types"]
                             , projBuildSpec = mspec
                             , projLocks = lockPath
-                            , projDeps = deps
+                            , projDeps = [ (n, p) | (n, p, _) <- reverse deps ]
                             }
               acc' = M.insert dirAbs ctx acc
               seen' = Data.Set.insert dirAbs seen
-          foldM (step root seen' pins) acc' deps
+          foldM (step root seen' pins) (acc', fpMap2) (reverse deps)
 
-    step root seen pins acc (_, depBase) =
-      go root seen acc pins depBase Nothing
+    collectDep pins base (accDeps, fpMap) (depName, dep) = do
+      let (chosenDep, conflict) =
+            case M.lookup depName pins of
+              Nothing -> (dep, Nothing)
+              Just pinDep ->
+                if pinDep == dep
+                  then (dep, Nothing)
+                  else (pinDep, Just dep)
+      when (isJust conflict) $
+        putStrLn ("Warning: dependency '" ++ depName ++ "' in " ++ base
+                  ++ " overridden by root pin")
+      depBase <- resolveDepBase base depName chosenDep
+      depAbs  <- normalizePathSafe depBase
+      (depPath, fpMap', depSpec) <- canonicalizeDep depAbs fpMap
+      return ((depName, depPath, depSpec) : accDeps, fpMap')
+
+    canonicalizeDep depAbs fpMap = do
+      rawSpec <- loadBuildSpec depAbs
+      mspec <- traverse (applyDepOverrides depAbs depOverrides) rawSpec
+      let (canonPath, fpMap', mfp) = applyFingerprint depAbs mspec fpMap
+      when (canonPath /= depAbs) $
+        case mfp of
+          Just fp ->
+            putStrLn ("Warning: dependency fingerprint " ++ fp
+                      ++ " at " ++ depAbs ++ " deduplicated to " ++ canonPath)
+          Nothing -> return ()
+      let depSpec = if canonPath == depAbs then mspec else Nothing
+      return (canonPath, fpMap', depSpec)
+
+    step root seen pins (acc, fpMap) (_, depBase, mSpec) =
+      go root seen acc fpMap pins depBase mSpec
 
 -- Given a FILE and optionally --syspath PATH:
 -- 'sysPath' is the path to the system directory as given by PATH, defaulting to the acton executable directory.
@@ -2666,7 +2716,7 @@ loadBuildSpec dir = do
         content <- readFile actPath
         case BuildSpec.parseBuildAct content of
           Left err -> throwProjectError ("Failed to parse Build.act in " ++ dir ++ ":\n" ++ err)
-          Right (spec, _, _) -> return (Just spec)
+          Right (spec, _, _) -> Just <$> validateFingerprint actPath spec
       else do
         jsonExists <- doesFileExist jsonPath
         if jsonExists
@@ -2674,8 +2724,37 @@ loadBuildSpec dir = do
             json <- BL.readFile jsonPath
             case BuildSpec.parseBuildSpecJSON json of
               Left err   -> throwProjectError ("Failed to parse build.act.json in " ++ dir ++ ":\n" ++ err)
-              Right spec -> return (Just spec)
+              Right spec -> Just <$> validateFingerprint jsonPath spec
           else return Nothing
+
+-- TODO: Make name and fingerprint mandatory in Build.act/build.act.json and
+-- validate at parse/load time so errors surface before build file generation.
+validateFingerprint :: FilePath -> BuildSpec.BuildSpec -> IO BuildSpec.BuildSpec
+validateFingerprint sourcePath spec =
+    case (BuildSpec.specName spec, BuildSpec.fingerprint spec) of
+      (Just name, Just fpRaw) ->
+        case Fingerprint.parseFingerprint fpRaw of
+          Nothing ->
+            throwProjectError ("Invalid fingerprint '" ++ fpRaw ++ "' in " ++ sourcePath
+                               ++ " (project name: " ++ show name ++ ").\n"
+                               ++ "Expected a 64-bit numeric fingerprint like 0x1234abcd5678ef00.")
+          Just fp ->
+            let expectedPrefix = Fingerprint.fingerprintPrefixForName name
+                actualPrefix = fromIntegral (fp `shiftR` 32)
+            in if expectedPrefix == actualPrefix
+                 then return spec
+                 else
+                   let expectedPrefixHex = Fingerprint.formatFingerprintPrefix expectedPrefix
+                       actualFpHex = Fingerprint.formatFingerprint fp
+                   in throwProjectError ("Fingerprint mismatch in " ++ sourcePath
+                                         ++ " for project name " ++ show name ++ ".\n"
+                                         ++ "Expected prefix: " ++ expectedPrefixHex
+                                         ++ " (CRC32 of name).\n"
+                                         ++ "Current fingerprint: " ++ actualFpHex ++ "\n"
+                                         ++ "Renames and forks require a new fingerprint for this name.\n"
+                                         ++ "Generate a new fingerprint with prefix: "
+                                         ++ expectedPrefixHex)
+      _ -> return spec
 
 -- | Treat drive-letter paths as absolute in addition to POSIX roots.
 -- This keeps path normalization consistent on Windows hosts.
@@ -2910,26 +2989,38 @@ resolveDepBase base name dep =
 collectDepTypePaths :: FilePath -> [(String, FilePath)] -> IO [FilePath]
 collectDepTypePaths projDir overrides = do
   root <- normalizePathSafe projDir
-  snd <$> go Data.Set.empty root Nothing
+  (_, _, paths) <- go Data.Set.empty M.empty root Nothing
+  return paths
   where
-    go seen dir mSpec = do
+    go seen fpMap dir mSpec = do
       mspec <- case mSpec of
                  Just s -> return (Just s)
                  Nothing -> loadBuildSpec dir
-      mspec' <- traverse (applyDepOverrides dir overrides) mspec
+      mspec' <- case mSpec of
+                  Just s -> return (Just s)
+                  Nothing -> traverse (applyDepOverrides dir overrides) mspec
+      let (_, fpMap1, _) = applyFingerprint dir mspec' fpMap
       case mspec' of
-        Nothing   -> return (seen, [])
-        Just spec -> foldM (step dir) (seen, []) (M.toList (BuildSpec.dependencies spec))
+        Nothing   -> return (seen, fpMap1, [])
+        Just spec -> foldM (step dir) (seen, fpMap1, []) (M.toList (BuildSpec.dependencies spec))
 
-    step base (seen, acc) (depName, dep) = do
+    step base (seen, fpMap, acc) (depName, dep) = do
       depBase <- resolveDepBase base depName dep
-      let seen' = Data.Set.insert depBase seen
-          typesDir = joinPath [depBase, "out", "types"]
-      if Data.Set.member depBase seen
-        then return (seen', acc)
+      depAbs  <- normalizePathSafe depBase
+      (depPath, fpMap') <- canonicalizeDep depAbs fpMap
+      let typesDir = joinPath [depPath, "out", "types"]
+      if Data.Set.member depPath seen
+        then return (seen, fpMap', acc)
         else do
-          (seenNext, sub) <- go seen' depBase Nothing
-          return (seenNext, acc ++ [typesDir] ++ sub)
+          let seen' = Data.Set.insert depPath seen
+          (seenNext, fpMapNext, sub) <- go seen' fpMap' depPath Nothing
+          return (seenNext, fpMapNext, acc ++ [typesDir] ++ sub)
+
+    canonicalizeDep depAbs fpMap = do
+      rawSpec <- loadBuildSpec depAbs
+      mspec <- traverse (applyDepOverrides depAbs overrides) rawSpec
+      let (canonPath, fpMap', _) = applyFingerprint depAbs mspec fpMap
+      return (canonPath, fpMap')
 
 
 -- | Convert a module name to its source filename (path + .act).
