@@ -47,6 +47,7 @@ import Utils (SrcLoc(..), loc, prstr)
 import qualified Acton.BuildSpec as BuildSpec
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Char8 as B8
+import qualified Data.Aeson as Ae
 import qualified System.IO.Unsafe
 
 
@@ -546,7 +547,7 @@ main = do
           Right (spec,_,_) -> do
             BuildSpec.fingerprint spec `shouldBe` "0x1234abcd5678ef00"
             let json = BuildSpec.encodeBuildSpecJSON spec
-            case BuildSpec.parseBuildSpecJSON json of
+            case Ae.eitherDecode' json of
               Left err2 -> expectationFailure err2
               Right spec2 -> spec2 `shouldBe` spec
 
@@ -646,15 +647,30 @@ main = do
               , "    pass"
               , ""
               ]
-        let newJson = "{\n  \"dependencies\": {\n    \"a\": {\"path\": \"deps/aa\"},\n    \"b\": {\"url\": \"u\", \"hash\": \"h\"}\n  },\n  \"zig_dependencies\": {\n    \"z\": {\"url\": \"zu\", \"hash\": \"zh\", \"artifacts\": [\"z\"]}\n  }\n}\n"
+        let prefix = Fingerprint.fingerprintPrefixForName "demo2"
+            newFp = Fingerprint.formatFingerprint ((fromIntegral prefix `shiftL` 32) .|. 0x1)
+            newJson = unlines
+              [ "{"
+              , "  \"name\": \"demo2\","
+              , "  \"description\": \"Demo project v2\","
+              , "  \"fingerprint\": \"" ++ newFp ++ "\","
+              , "  \"dependencies\": {"
+              , "    \"a\": {\"path\": \"deps/aa\"},"
+              , "    \"b\": {\"url\": \"u\", \"hash\": \"h\"}"
+              , "  },"
+              , "  \"zig_dependencies\": {"
+              , "    \"z\": {\"url\": \"zu\", \"hash\": \"zh\", \"artifacts\": [\"z\"]}"
+              , "  }"
+              , "}"
+              ]
         case BuildSpec.updateBuildActFromJSON buildAct0 (BL.fromStrict (B8.pack newJson)) of
           Left err -> expectationFailure err
           Right buildAct1 -> do
             let expected = unlines
                   [ "# Canonical Build.act file"
-                  , "name = \"demo\""
-                  , "description = \"Demo project\""
-                  , "fingerprint = 0x1234abcd5678ef00"
+                  , "name = \"demo2\""
+                  , "description = \"Demo project v2\""
+                  , "fingerprint = " ++ newFp
                   , ""
                   , "# Dependencies section (keep my comments)"
                   , "dependencies = {"

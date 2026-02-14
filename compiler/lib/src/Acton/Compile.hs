@@ -247,7 +247,6 @@ import Text.Printf
 
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as B
-import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Base16 as Base16
 import qualified Crypto.Hash.SHA256 as SHA256
 
@@ -331,20 +330,14 @@ data BackQueue = BackQueue
   }
 
 data BuildSpecStamp = BuildSpecStamp
-  { bssActonToml :: Maybe UTCTime
-  , bssBuildAct :: Maybe UTCTime
-  , bssBuildJson :: Maybe UTCTime
+  { bssBuildAct :: Maybe UTCTime
   } deriving (Eq, Show)
 
 readBuildSpecStamp :: FilePath -> IO BuildSpecStamp
 readBuildSpecStamp projDir = do
-  actonToml <- stampFor "Acton.toml"
   buildAct <- stampFor "Build.act"
-  buildJson <- stampFor "build.act.json"
   return BuildSpecStamp
-    { bssActonToml = actonToml
-    , bssBuildAct = buildAct
-    , bssBuildJson = buildJson
+    { bssBuildAct = buildAct
     }
   where
     stampFor name = do
@@ -2468,7 +2461,7 @@ applyFingerprint path spec fpMap =
          Nothing -> (path, M.insert fp path fpMap, fp)
 
 -- | Discover all projects reachable from a root project.
--- Follows Build.act/build.act.json dependencies, applies overrides/pins, and
+-- Follows Build.act dependencies, applies overrides/pins, and
 -- returns a map from project root to ProjCtx while skipping duplicates.
 discoverProjects :: FilePath -> FilePath -> [(String, FilePath)] -> IO (M.Map FilePath ProjCtx)
 discoverProjects sysAbs rootProj depOverrides = do
@@ -2567,18 +2560,16 @@ srcBase paths mn        = joinPath (srcDir paths : A.modPath mn)
 
 
 -- | Walk upward from a path to find a project root.
--- A project root is identified by Build.act/build.act.json/Acton.toml plus a
+-- A project root is identified by Build.act plus a
 -- src/ directory; returns Nothing if we reach filesystem root.
-projectMarkerFiles :: [FilePath]
-projectMarkerFiles = ["Build.act", "build.act.json", "Acton.toml"]
 
 -- | Check whether a directory is an Acton project root.
--- Requires a project marker file and a src/ directory.
+-- Requires Build.act and a src/ directory.
 isActonProjectRoot :: FilePath -> IO Bool
 isActonProjectRoot path = do
-    hasProjectFile <- or <$> mapM (\file -> doesFileExist (path </> file)) projectMarkerFiles
+    hasBuildAct <- doesFileExist (path </> "Build.act")
     hasSrcDir <- doesDirectoryExist (path </> "src")
-    return (hasProjectFile && hasSrcDir)
+    return (hasBuildAct && hasSrcDir)
 
 findProjectDir :: FilePath -> IO (Maybe FilePath)
 findProjectDir path = do
@@ -2763,12 +2754,11 @@ pathsForModule opts projMap ctx mn = do
     return p
 
 
--- | Load a BuildSpec from Build.act (preferred) or build.act.json.
+-- | Load a BuildSpec from Build.act.
 -- Throws ProjectError on parse or validation failure.
 loadBuildSpec :: FilePath -> IO BuildSpec.BuildSpec
 loadBuildSpec dir = do
-    let actPath  = joinPath [dir, "Build.act"]
-        jsonPath = joinPath [dir, "build.act.json"]
+    let actPath = joinPath [dir, "Build.act"]
     actExists <- doesFileExist actPath
     if actExists
       then do
@@ -2776,17 +2766,9 @@ loadBuildSpec dir = do
         case BuildSpec.parseBuildAct content of
           Left err -> throwProjectError ("Failed to parse Build.act in " ++ dir ++ ":\n" ++ err)
           Right (spec, _, _) -> validateBuildSpec actPath spec
-      else do
-        jsonExists <- doesFileExist jsonPath
-        if jsonExists
-          then do
-            json <- BL.readFile jsonPath
-            case BuildSpec.parseBuildSpecJSON json of
-              Left err   -> throwProjectError ("Failed to parse build.act.json in " ++ dir ++ ":\n" ++ err)
-              Right spec -> validateBuildSpec jsonPath spec
-          else
-            throwProjectError ("Missing Build.act or build.act.json in " ++ dir ++ ".\n"
-                               ++ "Create Build.act with required name and fingerprint fields.")
+      else
+        throwProjectError ("Missing Build.act in " ++ dir ++ ".\n"
+                           ++ "Create Build.act with required name and fingerprint fields.")
 
 validateBuildSpec :: FilePath -> BuildSpec.BuildSpec -> IO BuildSpec.BuildSpec
 validateBuildSpec sourcePath spec = do
@@ -2925,12 +2907,12 @@ validateDepOverridePath depName depPath = do
     unless exists $
       throwProjectError ("Dependency " ++ depName ++ " path does not exist: " ++ depPath ++ "\n"
                          ++ "Hint: Local dependency paths must point to an Acton project root\n"
-                         ++ "(directory with src/ and one of Build.act, build.act.json, or Acton.toml).")
+                         ++ "(directory with src/ and Build.act).")
     isProjectRoot <- isActonProjectRoot depPath
     unless isProjectRoot $
       throwProjectError ("Dependency " ++ depName ++ " path is not an Acton project root: " ++ depPath ++ "\n"
                          ++ "Hint: Local dependency paths must point to an Acton project root\n"
-                         ++ "(directory with src/ and one of Build.act, build.act.json, or Acton.toml).")
+                         ++ "(directory with src/ and Build.act).")
 
 fetchDependencies :: C.GlobalOptions -> Paths -> [(String, FilePath)] -> IO ()
 fetchDependencies gopts paths depOverrides = do
@@ -3263,7 +3245,7 @@ resolveDepBase base name dep =
              Nothing -> throwProjectError ("Dependency " ++ name ++ " has no path or hash")
 
 -- | Recursively collect out/types paths for all declared dependencies.
--- Reads Build.act/build.act.json and follows dependency edges.
+-- Reads Build.act and follows dependency edges.
 collectDepTypePaths :: FilePath -> [(String, FilePath)] -> IO [FilePath]
 collectDepTypePaths projDir overrides = do
   root <- normalizePathSafe projDir

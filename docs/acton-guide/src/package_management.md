@@ -10,7 +10,7 @@ Acton is statically compiled, all dependencies are fetched and included at compi
 
 ## Project lineage fingerprint
 
-Each project must declare a **fingerprint** in `Build.act` (or `build.act.json`) to represent its lineage — the stable identity of the project across versions. This is separate from dependency content hashes:
+Each project must declare a **fingerprint** in `Build.act` to represent its lineage — the stable identity of the project across versions. This is separate from dependency content hashes:
 
 - Content hashes identify a specific version of a dependency.
 - Fingerprints identify the project itself and help Acton deduplicate dependencies and generate consistent build metadata.

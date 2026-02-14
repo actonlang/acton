@@ -1,6 +1,6 @@
 # Fingerprint and lineage
 
-Each Acton project must declare a **fingerprint** in `Build.act` (or `build.act.json`). The fingerprint represents the project’s **lineage** — a stable identity that stays the same across releases of the same project.
+Each Acton project must declare a **fingerprint** in `Build.act`. The fingerprint represents the project’s **lineage** — a stable identity that stays the same across releases of the same project.
 
 ```python
 name = "myproject"

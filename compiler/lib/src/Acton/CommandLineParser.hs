@@ -413,7 +413,7 @@ buildSpecCommand :: Parser BuildSpecCommand
 buildSpecCommand = hsubparser
     (  command "dump"
           (info (pure BuildSpecDump)
-                (progDesc "Dump build spec as JSON to stdout (prefer Build.act; fallback to build.act.json)"))
+                (progDesc "Dump build spec as JSON to stdout (from Build.act)"))
     <> command "update"
           (info (BuildSpecUpdate <$> argument str (metavar "FILE"))
                 (progDesc "Update Build.act using JSON file; override entries present in JSON only"))

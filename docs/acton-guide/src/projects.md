@@ -26,7 +26,7 @@ Add a `main` actor to any source file directly under `src/` to produce an execut
 
 ## Build configuration and lineage
 
-Projects can define a `Build.act` file. Two common fields are `name` and `fingerprint`, where the fingerprint captures the project’s **lineage**:
+Projects must include a `Build.act` file. Two common fields are `name` and `fingerprint`, where the fingerprint captures the project’s **lineage**:
 
 ```python
 name = "hello"

@@ -423,28 +423,10 @@ requireProjectLayout paths = do
 loadProjectPathsAt :: FilePath -> C.CompileOptions -> IO Paths
 loadProjectPathsAt curDir opts = do
     actPath <- requireProjectConfigPath curDir
-    paths <- findPaths actPath opts
-    requireProjectLayout paths
-    return paths
-
--- | Lenient path resolution for builds: allow no project config (temp project).
-loadProjectPathsForBuildAt :: FilePath -> C.CompileOptions -> IO Paths
-loadProjectPathsForBuildAt curDir opts = do
-    let buildAct = joinPath [curDir, "Build.act"]
-        buildJson = joinPath [curDir, "build.act.json"]
-        actonToml = joinPath [curDir, "Acton.toml"]
-    buildActExists <- doesFileExist buildAct
-    buildJsonExists <- doesFileExist buildJson
-    actonTomlExists <- doesFileExist actonToml
-    when (buildActExists || buildJsonExists || actonTomlExists) $ do
-      srcExists <- doesDirectoryExist (joinPath [curDir, "src"])
-      unless srcExists $
-        printErrorAndExit "Missing src/ directory"
-    let actPath
-          | buildActExists = buildAct
-          | buildJsonExists = buildJson
-          | actonTomlExists = actonToml
-          | otherwise = buildAct
+    let projDir = takeDirectory actPath
+    srcExists <- doesDirectoryExist (joinPath [projDir, "src"])
+    unless srcExists $
+      printErrorAndExit "Missing src/ directory"
     paths <- findPaths actPath opts
     requireProjectLayout paths
     return paths
@@ -454,21 +436,15 @@ loadProjectPaths opts = do
     curDir <- getCurrentDirectory
     loadProjectPathsAt curDir opts
 
-loadProjectPathsForBuild :: C.CompileOptions -> IO Paths
-loadProjectPathsForBuild opts = do
-    curDir <- getCurrentDirectory
-    loadProjectPathsForBuildAt curDir opts
 requireProjectConfigPath :: FilePath -> IO FilePath
 requireProjectConfigPath curDir = do
     let candidates =
           [ joinPath [curDir, "Build.act"]
-          , joinPath [curDir, "build.act.json"]
-          , joinPath [curDir, "Acton.toml"]
           ]
     mpath <- firstExisting candidates
     case mpath of
       Just path -> return path
-      Nothing -> printErrorAndExit "Project config not found in current directory (expected Build.act/build.act.json/Acton.toml)"
+      Nothing -> printErrorAndExit "Project config not found in current directory (expected Build.act)"
   where
     firstExisting [] = return Nothing
     firstExisting (p:ps) = do
@@ -514,7 +490,7 @@ logProjectBuild gopts progressUI progressState projDir =
 buildProjectOnce :: C.GlobalOptions -> C.CompileOptions -> IO ()
 buildProjectOnce gopts opts = do
                 let sp = Source.diskSourceProvider
-                paths <- loadProjectPathsForBuild opts
+                paths <- loadProjectPaths opts
                 iff (not(C.quiet gopts)) $ do
                   putStrLn("Building project in " ++ projPath paths)
                 let projDir = projPath paths
@@ -652,7 +628,7 @@ dependentTestModulesFromHeaders paths srcFiles changedModules = do
 watchProjectAt :: C.GlobalOptions -> C.CompileOptions -> FilePath -> IO ()
 watchProjectAt gopts opts projDir = do
                 let sp = Source.diskSourceProvider
-                paths <- loadProjectPathsForBuildAt projDir opts
+                paths <- loadProjectPathsAt projDir opts
                 withOwnerLockOrExit (projPath paths) "Another compiler is running; cannot start watch." $ do
                   (sched, progressUI, progressState) <- initCompileWatchContext gopts
                   let runOnce gen mChanged =
@@ -815,7 +791,7 @@ runWatchProject gopts projDir srcRoot sched runOnce = do
         isActEvent ev = isJust (actWatchTrigger ev)
         isRootEvent ev =
           let name = takeFileName (FS.eventPath ev)
-          in name `elem` ["Build.act", "build.act.json", "Acton.toml"]
+          in name == "Build.act"
     FS.withManager $ \mgr -> do
       _ <- FS.watchTree mgr srcRoot isActEvent onAct
       _ <- FS.watchDir mgr projDir isRootEvent onRoot
@@ -1422,9 +1398,6 @@ runCliPostCompile cliHooks gopts plan env = do
             testBinTasks <- catMaybes <$> mapM (filterMainActor env pathsRoot) preTestBinTasks
             unless (altOutput opts') $
               runFinal (compileBins gopts opts' pathsRoot env rootSpec rootTasks testBinTasks allowPrune' (Just (cchProgressUI cliHooks)))
-            when (C.print_test_bins opts') $ do
-              logLine "Test executables:"
-              mapM_ (\t -> logLine (binName t)) testBinTasks
           else do
             unless (altOutput opts') $
               runFinal (compileBins gopts opts' pathsRoot env rootSpec rootTasks preBinTasks allowPrune' (Just (cchProgressUI cliHooks)))
@@ -1762,9 +1735,9 @@ genBuildZig template spec =
         inject line =
           let sline = dropWhile (== ' ') line
           in [line]
-             ++ (if sline == "// Dependencies from build.act.json" then [depsAll] else [])
-             ++ (if sline == "// lib: link with dependencies / get headers from build.act.json" then [libLinks] else [])
-             ++ (if sline == "// exe: link with dependencies / get headers from build.act.json" then [exeLinks] else [])
+             ++ (if sline == "// Dependencies from Build.act" then [depsAll] else [])
+             ++ (if sline == "// lib: link with dependencies / get headers from Build.act" then [libLinks] else [])
+             ++ (if sline == "// exe: link with dependencies / get headers from Build.act" then [exeLinks] else [])
     in unlines $ header ++ concatMap inject (lines template)
   where
     pkgDepDef (name, _) = unlines [ "    const actdep_" ++ name ++ " = b.dependency(\"" ++ name ++ "\", .{"
@@ -1803,7 +1776,7 @@ genBuildZigZon template relSys depsRootAbs projAbs fingerprint zonName spec =
                  ]
         inject line =
           let sline = dropWhile (== ' ') line
-          in [line] ++ (if sline == "// Dependencies from build.act.json" then [deps] else [])
+          in [line] ++ (if sline == "// Dependencies from Build.act" then [deps] else [])
     in unlines $ header ++ concatMap inject replaced
   where
     pkgToZon projRoot depsRoot (name, dep) =
@@ -1882,7 +1855,7 @@ zigBuild env gopts opts paths rootSpec tasks binTasks allowPrune mProgressUI = d
     let sysRoot   = addTrailingPathSeparator sysAbs
         isSysProj = projAbs == sysAbs || sysRoot `isPrefixOf` projAbs
 
-    -- Generate build.zig and build.zig.zon directly from Build.act/build.act.json.
+    -- Generate build.zig and build.zig.zon directly from Build.act.
     iff (not isSysProj) $ do
       let pins = BuildSpec.dependencies rootSpec
       genBuildZigFiles rootSpec pins depOverrides paths

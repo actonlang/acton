@@ -50,19 +50,16 @@ pub fn build(b: *std.Build) void {
 
 It is the `.name` argument to `addStaticLibrary` that tells us the name of the artifact. Zig packages might expose multiple such artifacts, as is the case for [mbedtls](https://github.com/actonlang/mbedtls/blob/zig-build/build.zig).
 
-`acton zig-pkg add` will fetch the package from the provided URL and save the hash sum to `build.act.json`, resulting in:
-```json
-{
-    "dependencies": {},
-    "zig_dependencies": {
-        "zlib": {
-            "url": "https://github.com/allyourcodebase/zlib/archive/refs/tags/1.3.1.tar.gz",
-            "hash": "122034ab2a12adf8016ffa76e48b4be3245ffd305193edba4d83058adbcfa749c107",
-            "artifacts": [
-                "z"
-            ]
-        }
-    }
+`acton zig-pkg add` will fetch the package from the provided URL and save the hash sum to `Build.act`, resulting in:
+```python
+dependencies = {}
+
+zig_dependencies = {
+  "zlib": (
+        url="https://github.com/allyourcodebase/zlib/archive/refs/tags/1.3.1.tar.gz",
+        hash="122034ab2a12adf8016ffa76e48b4be3245ffd305193edba4d83058adbcfa749c107",
+        artifacts=["z"]
+    ),
 }
 ```
 

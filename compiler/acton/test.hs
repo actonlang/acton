@@ -25,6 +25,7 @@ import Test.Tasty.Golden (goldenVsString)
 import Test.Tasty.HUnit
 
 import qualified PkgCommands
+import qualified Acton.Fingerprint as Fingerprint
 
 -- The default is to build and run each test program with the expectation that
 -- both compilation and running the program is successful as determined by exit
@@ -103,18 +104,26 @@ compilerTests =
         (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../../test/compiler/test_deps/deps/a/build.zig*") ""
         (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../../test/compiler/test_deps/deps/a/out") ""
         runActon "build" ExitSuccess False "../../test/compiler/test_deps/"
-  , testCase "build.zig.zon name capped for long project dir" $ do
+  , testCase "build.zig.zon name matches Build.act" $ do
         let prefix = "acton-long-project-name-12345678901234567890-"
         withSystemTempDirectory prefix $ \proj -> do
-            let actFile = proj </> "acton-test.act"
+            let name = "long_project_name_1234567890"
+                fp = Fingerprint.formatFingerprint
+                       (Fingerprint.updateFingerprintPrefix
+                         (Fingerprint.fingerprintPrefixForName name) 1)
+                srcDir = proj </> "src"
+                actFile = srcDir </> "main.act"
+            createDirectoryIfMissing True srcDir
+            writeFile (proj </> "Build.act") $ unlines
+              [ "name = \"" ++ name ++ "\""
+              , "fingerprint = " ++ fp
+              , ""
+              ]
             writeFile actFile $ unlines
-              [ "#!/usr/bin/env runacton"
-              , "actor main(env):"
+              [ "actor main(env):"
               , "    print(\"Hello, world\")"
               , "    env.exit(0)"
               ]
-            perms <- getPermissions actFile
-            setPermissions actFile perms{ executable = True }
             runActon "build" ExitSuccess False proj
             zon <- readFile (proj </> "build.zig.zon")
             let nameVal =
@@ -125,7 +134,7 @@ compilerTests =
                            Just rest -> takeWhile (\c -> isAlphaNum c || c == '_') rest
                            Nothing -> ""
                        Nothing -> ""
-            assertBool "build.zig.zon name should be non-empty" (not (null nameVal))
+            assertEqual "build.zig.zon name should match Build.act" name nameVal
             assertBool "build.zig.zon name should be <= 32 chars" (length nameVal <= 32)
 
   , testCase "build without Build.act" $ do
@@ -139,13 +148,10 @@ compilerTests =
               ]
             perms <- getPermissions actFile
             setPermissions actFile perms{ executable = True }
-            runActon "build" ExitSuccess False proj
-            let bin = proj </> "out" </> "bin" </> "acton-test"
-            exists <- doesFileExist bin
-            assertBool "binary should exist" exists
-            (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc bin []){ cwd = Just proj } ""
-            assertEqual "binary should run" ExitSuccess returnCode
-            assertEqual "binary output" "Hello, world\n" cmdOut
+            actonExe <- canonicalizePath "../../dist/bin/acton"
+            (returnCode, _cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc actonExe ["build"]) { cwd = Just proj } ""
+            assertEqual "acton should fail without Build.act" (ExitFailure 1) returnCode
+            assertBool "error should mention Build.act" ("Build.act" `isInfixOf` cmdErr)
   ]
 
 parseFlagTests =
@@ -253,6 +259,7 @@ actonProjTests =
           createDirectoryIfMissing True (proj </> "deps")
           writeFile buildAct $ unlines
             [ "name = \"invalid_dep_override\""
+            , "fingerprint = 0xb33bef4512345678"
             , ""
             , "dependencies = {"
             , "  \"dep_a\": (path=\"deps/dep_a_missing\")"
@@ -267,7 +274,7 @@ actonProjTests =
           (returnCode, _cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc actonExe ["build", "--dep", "dep_a=deps"]){ cwd = Just proj } ""
           assertEqual "acton should fail for invalid --dep path" (ExitFailure 1) returnCode
           assertBool "error should mention bad dependency path" ("Dependency dep_a path is not an Acton project root" `isInfixOf` cmdErr)
-          assertBool "error should mention required project files" ("Build.act" `isInfixOf` cmdErr && "build.act.json" `isInfixOf` cmdErr && "Acton.toml" `isInfixOf` cmdErr)
+          assertBool "error should mention required project files" ("Build.act" `isInfixOf` cmdErr)
           assertBool "error should mention src requirement" ("src/" `isInfixOf` cmdErr)
 
   -- Verify pruning keeps binaries for modules that still have roots across build / test runs.
@@ -502,7 +509,7 @@ isActProj dir = do
     isDir <- doesDirectoryExist dir
     if isDir
       then do
-          let projectFiles = ["Build.act", "build.act.json", "Acton.toml"]
+          let projectFiles = ["Build.act"]
           hasProjectFile <- or <$> mapM (\file -> doesFileExist $ dir ++ "/" ++ file) projectFiles
           hasSrcDir <- doesDirectoryExist $ dir ++ "/src"
           if hasProjectFile && hasSrcDir

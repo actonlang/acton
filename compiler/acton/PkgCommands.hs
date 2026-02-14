@@ -134,9 +134,9 @@ pkgUpgradeCommand _ opts = do
             let (spec', updated) = applyUpgrades spec newUrls newHashes
             if updated
               then do
-                putStrLn "Wrote changes to build.act.json"
+                putStrLn "Wrote changes to Build.act"
                 writeBuildSpec spec'
-              else putStrLn "No changes to build.act.json"
+              else putStrLn "No changes to Build.act"
   where
     resolveDep manager token (depName, dep) =
       case BuildSpec.repo_url dep of
@@ -324,14 +324,14 @@ upsertZigDep spec depName depUrl depHash depArtifacts =
 writeBuildSpec :: BuildSpec.BuildSpec -> IO ()
 writeBuildSpec spec = do
     buildActExists <- doesFileExist "Build.act"
-    if buildActExists
-      then do
+    if not buildActExists
+      then throwProjectError "Build.act not found in current directory"
+      else do
         content <- readFile "Build.act"
         let jsonDoc = BuildSpec.encodeBuildSpecJSON spec
         case BuildSpec.updateBuildActFromJSON content jsonDoc of
           Left err -> throwProjectError ("Failed to update Build.act: \n" ++ err)
           Right updated -> writeFile "Build.act" updated
-      else BL.writeFile "build.act.json" (BuildSpec.encodeBuildSpecJSONPretty spec <> "\n")
 
 lookupRepoUrlFromIndex :: String -> String -> IO String
 lookupRepoUrlFromIndex depName pkgNameArg = do
