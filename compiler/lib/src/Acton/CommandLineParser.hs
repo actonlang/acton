@@ -90,7 +90,6 @@ data CompileOptions   = CompileOptions {
                          target      :: String,
                          cpu         :: String,
                          test        :: Bool,
-                         print_test_bins :: Bool,
                          searchpath  :: [String],
                          dep_overrides :: [(String,String)]
                      } deriving Show
@@ -268,7 +267,6 @@ compileOptions = CompileOptions
         <*> strOption (long "target"    <> metavar "TARGET" <> value defTarget <> help "Target, e.g. x86_64-linux-gnu.2.28")
         <*> strOption (long "cpu"       <> metavar "CPU" <> value "" <> help "CPU, e.g. skylake")
         <*> switch (long "test"         <> help "Build tests")
-        <*> pure True
         <*> many (strOption (long "searchpath" <> metavar "DIR" <> help "Add search path"))
         <*> many (option depOverrideReader
                (long "dep"
