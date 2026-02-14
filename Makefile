@@ -388,14 +388,14 @@ clean-base:
 # == DIST ==
 #
 
-BACKEND_FILES = backend/build.zig backend/build.zig.zon $(wildcard backend/*.c backend/*.h backend/failure_detector/*.c backend/failure_detector/*.h)
+BACKEND_FILES = backend/Build.act backend/build.zig backend/build.zig.zon $(wildcard backend/*.c backend/*.h backend/failure_detector/*.c backend/failure_detector/*.h)
 DIST_BACKEND_FILES = $(addprefix dist/,$(BACKEND_FILES)) dist/backend/deps dist/bin/actondb
 dist/backend%: backend/%
 	mkdir -p "$(dir $@)"
 	cp -a "$<" "$@"
 
 .PHONY: dist/base
-dist/base: base base/.build base/__root.zig base/acton.zig base/build.zig base/build.zig.zon base/acton.zig dist/bin/actonc $(DEPS)
+dist/base: base base/.build base/__root.zig base/acton.zig base/build.zig base/build.zig.zon base/acton.zig dist/bin/actonc $(DEPS) dist/backend/Build.act
 	mkdir -p "$@" "$@/.build" "$@/out"
 	cp -a base/__root.zig base/Build.act base/acton.zig base/build.zig base/build.zig.zon base/builtin base/rts base/src dist/base/
 	cd dist/base && ../bin/actonc build --skip-build && rm -rf .build

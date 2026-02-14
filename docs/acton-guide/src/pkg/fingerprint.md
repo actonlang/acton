@@ -1,6 +1,6 @@
 # Fingerprint and lineage
 
-Each Acton project can declare a **fingerprint** in `Build.act` (or `build.act.json`). The fingerprint represents the project’s **lineage** — a stable identity that stays the same across releases of the same project.
+Each Acton project must declare a **fingerprint** in `Build.act` (or `build.act.json`). The fingerprint represents the project’s **lineage** — a stable identity that stays the same across releases of the same project.
 
 ```python
 name = "myproject"
@@ -23,6 +23,6 @@ If Acton detects a mismatch, it will fail the build and tell you to generate a n
 
 ## Current behavior
 
-- Fingerprint is optional for now.
-- If both `name` and `fingerprint` are set, Acton validates the lineage prefix.
-- If they don’t match, the build fails with guidance.
+- `name` and `fingerprint` are required in every project.
+- Acton validates the lineage prefix derived from the name.
+- Missing or mismatched values fail the build with guidance.

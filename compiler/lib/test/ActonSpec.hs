@@ -544,7 +544,7 @@ main = do
         case BuildSpec.parseBuildAct buildAct of
           Left err -> expectationFailure err
           Right (spec,_,_) -> do
-            BuildSpec.fingerprint spec `shouldBe` Just "0x1234abcd5678ef00"
+            BuildSpec.fingerprint spec `shouldBe` "0x1234abcd5678ef00"
             let json = BuildSpec.encodeBuildSpecJSON spec
             case BuildSpec.parseBuildSpecJSON json of
               Left err2 -> expectationFailure err2
@@ -558,7 +558,7 @@ main = do
                 , ""
                 ]
           writeFile (dir </> "Build.act") buildAct
-          res <- (E.try (Compile.loadBuildSpec dir) :: IO (Either Compile.ProjectError (Maybe BuildSpec.BuildSpec)))
+          res <- (E.try (Compile.loadBuildSpec dir) :: IO (Either Compile.ProjectError BuildSpec.BuildSpec))
           case res of
             Left (Compile.ProjectError msg) ->
               msg `shouldSatisfy` (isInfixOf "Fingerprint mismatch")
@@ -575,14 +575,12 @@ main = do
                 , ""
                 ]
           writeFile (dir </> "Build.act") buildAct
-          res <- (E.try (Compile.loadBuildSpec dir) :: IO (Either Compile.ProjectError (Maybe BuildSpec.BuildSpec)))
+          res <- (E.try (Compile.loadBuildSpec dir) :: IO (Either Compile.ProjectError BuildSpec.BuildSpec))
           case res of
             Left (Compile.ProjectError msg) ->
               expectationFailure ("Unexpected fingerprint error: " ++ msg)
-            Right mspec ->
-              case mspec of
-                Nothing -> expectationFailure "Expected BuildSpec, got Nothing"
-                Just spec -> BuildSpec.fingerprint spec `shouldBe` Just fp
+            Right spec ->
+              BuildSpec.fingerprint spec `shouldBe` fp
 
       it "errors when fingerprint is malformed" $ do
         withSystemTempDirectory "acton-fp" $ \dir -> do
@@ -592,18 +590,47 @@ main = do
                 , ""
                 ]
           writeFile (dir </> "Build.act") buildAct
-          res <- (E.try (Compile.loadBuildSpec dir) :: IO (Either Compile.ProjectError (Maybe BuildSpec.BuildSpec)))
+          res <- (E.try (Compile.loadBuildSpec dir) :: IO (Either Compile.ProjectError BuildSpec.BuildSpec))
           case res of
             Left (Compile.ProjectError msg) ->
               msg `shouldSatisfy` (isInfixOf "Invalid fingerprint")
             Right _ ->
               expectationFailure "Expected invalid fingerprint error"
 
+      it "errors when name is missing" $ do
+        withSystemTempDirectory "acton-fp" $ \dir -> do
+          let buildAct = unlines
+                [ "fingerprint = 0x1234abcd5678ef00"
+                , ""
+                ]
+          writeFile (dir </> "Build.act") buildAct
+          res <- (E.try (Compile.loadBuildSpec dir) :: IO (Either Compile.ProjectError BuildSpec.BuildSpec))
+          case res of
+            Left (Compile.ProjectError msg) ->
+              msg `shouldSatisfy` (isInfixOf "Missing project name")
+            Right _ ->
+              expectationFailure "Expected missing project name error"
+
+      it "errors when fingerprint is missing" $ do
+        withSystemTempDirectory "acton-fp" $ \dir -> do
+          let buildAct = unlines
+                [ "name = \"demo\""
+                , ""
+                ]
+          writeFile (dir </> "Build.act") buildAct
+          res <- (E.try (Compile.loadBuildSpec dir) :: IO (Either Compile.ProjectError BuildSpec.BuildSpec))
+          case res of
+            Left (Compile.ProjectError msg) ->
+              msg `shouldSatisfy` (isInfixOf "Missing fingerprint")
+            Right _ ->
+              expectationFailure "Expected missing fingerprint error"
+
       it "updates Build.act in-place, preserving comments and main actor" $ do
         let buildAct0 = unlines
               [ "# Canonical Build.act file"
               , "name = \"demo\""
               , "description = \"Demo project\""
+              , "fingerprint = 0x1234abcd5678ef00"
               , ""
               , "# Dependencies section (keep my comments)"
               , "dependencies = {"
@@ -627,6 +654,7 @@ main = do
                   [ "# Canonical Build.act file"
                   , "name = \"demo\""
                   , "description = \"Demo project\""
+                  , "fingerprint = 0x1234abcd5678ef00"
                   , ""
                   , "# Dependencies section (keep my comments)"
                   , "dependencies = {"
@@ -658,6 +686,8 @@ main = do
       it "parses Build.act with only dependencies (zig deps missing)" $ do
         let buildAct = unlines
               [ "# Only dependencies"
+              , "name = \"demo\""
+              , "fingerprint = 0x1234abcd5678ef00"
               , "dependencies = {"
               , "    \"a\": (path=\"deps/a\")"
               , "}"
@@ -676,6 +706,8 @@ main = do
       it "parses Build.act with only zig_dependencies (deps missing)" $ do
         let buildAct = unlines
               [ "# Only zig deps"
+              , "name = \"demo\""
+              , "fingerprint = 0x1234abcd5678ef00"
               , "zig_dependencies = {"
               , "    \"z\": ("
               , "        url=\"zu\","
@@ -695,10 +727,11 @@ main = do
             BuildSpec.zig_dependencies spec `shouldSatisfy` (not . null)
             BuildSpec.dependencies spec `shouldSatisfy` null
 
-      it "parses Build.act with no spec blocks (both optional)" $ do
+      it "parses Build.act with no dependency blocks" $ do
         let buildAct = unlines
               [ "# No deps here"
               , "name = \"demo\""
+              , "fingerprint = 0x1234abcd5678ef00"
               , ""
               , "actor main(env: Env):"
               , "    pass"
@@ -713,6 +746,8 @@ main = do
       it "appends missing zig_dependencies block when absent" $ do
         let buildAct0 = unlines
               [ "# Build with only dependencies"
+              , "name = \"demo\""
+              , "fingerprint = 0x1234abcd5678ef00"
               , "dependencies = {"
               , "    \"a\": (path=\"deps/a\")"
               , "}"
@@ -745,6 +780,8 @@ main = do
       it "appends missing dependencies block when absent" $ do
         let buildAct0 = unlines
               [ "# Build with only zig deps"
+              , "name = \"demo\""
+              , "fingerprint = 0x1234abcd5678ef00"
               , "zig_dependencies = {"
               , "    \"z\": (url=\"zu\", hash=\"zh\", artifacts=[\"z\"])"
               , "}"
@@ -777,6 +814,8 @@ main = do
       it "updates dependencies block with non-canonical whitespace, preserving outer line" $ do
         let buildAct0 = unlines
               [ "# Whitespace variant Build.act"
+              , "name = \"demo\""
+              , "fingerprint = 0x1234abcd5678ef00"
               , "dependencies  =   {"
               , ""
               , "  \"a\"  :  ( path = \"deps/a\" )"
@@ -802,6 +841,8 @@ main = do
       it "updates only the overlaid dependency entry, preserving others" $ do
         let buildAct0 = unlines
               [ "# Multiple dependencies"
+              , "name = \"demo\""
+              , "fingerprint = 0x1234abcd5678ef00"
               , "dependencies = {"
               , "    \"a\": (path=\"deps/a\"),"
               , "    \"b\": (path=\"deps/b\")"
@@ -827,6 +868,7 @@ main = do
         let buildAct0 = unlines
               [ "# Canonical Build.act file"
               , "name = \"demo\""
+              , "fingerprint = 0x1234abcd5678ef00"
               , ""
               , "# Dependencies section (keep my comments)"
               , "dependencies = {"
@@ -854,6 +896,7 @@ main = do
             let expected = unlines
                   [ "# Canonical Build.act file"
                   , "name = \"demo\""
+                  , "fingerprint = 0x1234abcd5678ef00"
                   , ""
                   , "# Dependencies section (keep my comments)"
                   , "dependencies = {"

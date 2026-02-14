@@ -149,7 +149,6 @@ module Acton.Compile
   , depTypePathsFromMap
   , resolveDepBase
   , loadBuildSpec
-  , loadBuildSpecRequired
   , filterActFile
   , srcFile
   , outBase
@@ -560,7 +559,7 @@ prepareCompilePlanFromContext sp gopts ctx srcFiles allowPrune mChangedPaths = d
             , projSrcDir = srcDir pathsRoot
             , projSysPath = sysAbs
             , projSysTypes = joinPath [sysAbs, "base", "out", "types"]
-            , projBuildSpec = Nothing
+            , projBuildSpec = scratchBuildSpec rootProj
             , projLocks = joinPath [projPath pathsRoot, ".actonc.lock"]
             , projDeps = []
             }
@@ -578,7 +577,7 @@ prepareCompilePlanFromContext sp gopts ctx srcFiles allowPrune mChangedPaths = d
     Nothing -> selectNeededTasks pathsRoot rootProj globalTasks srcFiles
     Just changed -> selectAffectedTasks globalTasks changed
   let rootTasks = [ gtTask t | t <- neededTasks, tkProj (gtKey t) == rootProj ]
-      rootPins = maybe M.empty BuildSpec.dependencies (projBuildSpec =<< M.lookup rootProj projMap)
+      rootPins = maybe M.empty (BuildSpec.dependencies . projBuildSpec) (M.lookup rootProj projMap)
   return CompilePlan
     { cpContext = ctx
     , cpProjMap = projMap
@@ -2429,35 +2428,44 @@ data ProjCtx = ProjCtx {
                      projSrcDir  :: FilePath,
                      projSysPath :: FilePath,
                      projSysTypes:: FilePath,
-                     projBuildSpec :: Maybe BuildSpec.BuildSpec,
+                     projBuildSpec :: BuildSpec.BuildSpec,
                      projLocks    :: FilePath,
                      projDeps     :: [(String, FilePath)]          -- resolved dependency roots (abs paths)
                    } deriving (Show)
 
 type FingerprintMap = M.Map String FilePath
 
+scratchBuildSpec :: FilePath -> BuildSpec.BuildSpec
+scratchBuildSpec projRoot =
+    let name = "acton_scratch"
+        prefix = Fingerprint.fingerprintPrefixForName name
+        suffix = Fingerprint.fingerprintPrefixForName projRoot
+        fp = Fingerprint.formatFingerprint (Fingerprint.updateFingerprintPrefix prefix (fromIntegral suffix))
+    in BuildSpec.BuildSpec
+         { BuildSpec.specName = name
+         , BuildSpec.specDescription = Nothing
+         , BuildSpec.fingerprint = fp
+         , BuildSpec.dependencies = M.empty
+         , BuildSpec.zig_dependencies = M.empty
+         }
+
+
 normalizeFingerprintKey :: String -> Maybe String
 normalizeFingerprintKey raw =
-    case Fingerprint.parseFingerprint raw of
-      Just fp ->
-        let formatted = Fingerprint.formatFingerprint fp
-        in if formatted == Fingerprint.fingerprintPlaceholder
-             then Nothing
-             else Just formatted
-      Nothing -> Nothing
+    Fingerprint.formatFingerprint <$> Fingerprint.parseFingerprint raw
 
-fingerprintKeyFromSpec :: BuildSpec.BuildSpec -> Maybe String
+fingerprintKeyFromSpec :: BuildSpec.BuildSpec -> String
 fingerprintKeyFromSpec spec =
-    BuildSpec.fingerprint spec >>= normalizeFingerprintKey
+    case normalizeFingerprintKey (BuildSpec.fingerprint spec) of
+      Just fp -> fp
+      Nothing -> BuildSpec.fingerprint spec
 
-applyFingerprint :: FilePath -> Maybe BuildSpec.BuildSpec -> FingerprintMap -> (FilePath, FingerprintMap, Maybe String)
-applyFingerprint path mspec fpMap =
-    case mspec >>= fingerprintKeyFromSpec of
-      Just fp ->
-        case M.lookup fp fpMap of
-          Just canonical -> (canonical, fpMap, Just fp)
-          Nothing -> (path, M.insert fp path fpMap, Just fp)
-      Nothing -> (path, fpMap, Nothing)
+applyFingerprint :: FilePath -> BuildSpec.BuildSpec -> FingerprintMap -> (FilePath, FingerprintMap, String)
+applyFingerprint path spec fpMap =
+    let fp = fingerprintKeyFromSpec spec
+    in case M.lookup fp fpMap of
+         Just canonical -> (canonical, fpMap, fp)
+         Nothing -> (path, M.insert fp path fpMap, fp)
 
 -- | Discover all projects reachable from a root project.
 -- Follows Build.act/build.act.json dependencies, applies overrides/pins, and
@@ -2465,30 +2473,25 @@ applyFingerprint path mspec fpMap =
 discoverProjects :: FilePath -> FilePath -> [(String, FilePath)] -> IO (M.Map FilePath ProjCtx)
 discoverProjects sysAbs rootProj depOverrides = do
     rootAbs <- normalizePathSafe rootProj
-    rootSpec0 <- loadBuildSpecRequired rootAbs
-    rootSpec  <- traverse (applyDepOverrides rootAbs depOverrides) rootSpec0
-    let rootPins = maybe M.empty BuildSpec.dependencies rootSpec
+    rootSpec0 <- loadBuildSpec rootAbs
+    rootSpec  <- applyDepOverrides rootAbs depOverrides rootSpec0
+    let rootPins = BuildSpec.dependencies rootSpec
         (_, fpMap0, _) = applyFingerprint rootAbs rootSpec M.empty
-    fst <$> go rootAbs Data.Set.empty M.empty fpMap0 rootPins rootAbs rootSpec
+    fst <$> go rootAbs Data.Set.empty M.empty fpMap0 rootPins rootAbs (Just rootSpec)
   where
     go root seen acc fpMap pins dir mSpec = do
       dirAbs <- normalizePathSafe dir
       if Data.Set.member dirAbs seen
         then return (acc, fpMap)
         else do
-          rawSpec <- case mSpec of
-                       Just s | dirAbs == root -> return (Just s)
-                       Just s -> return (Just s)
-                       Nothing -> loadBuildSpec dirAbs
-          mspec <- case mSpec of
-                     Just s -> return (Just s)
-                     Nothing -> traverse (applyDepOverrides dirAbs depOverrides) rawSpec
-          let (_, fpMap1, _) = applyFingerprint dirAbs mspec fpMap
-          (deps, fpMap2) <- case mspec of
-                              Nothing -> return ([], fpMap1)
-                              Just spec -> do
-                                let depsList = M.toList (BuildSpec.dependencies spec)
-                                foldM (collectDep pins dirAbs) ([], fpMap1) depsList
+          spec0 <- case mSpec of
+                     Just s -> return s
+                     Nothing -> loadBuildSpec dirAbs
+          spec <- applyDepOverrides dirAbs depOverrides spec0
+          let (_, fpMap1, _) = applyFingerprint dirAbs spec fpMap
+          (deps, fpMap2) <- do
+            let depsList = M.toList (BuildSpec.dependencies spec)
+            foldM (collectDep pins dirAbs) ([], fpMap1) depsList
           let outDir   = joinPath [dirAbs, "out"]
               typesDir = joinPath [outDir, "types"]
               srcDir'  = joinPath [dirAbs, "src"]
@@ -2499,7 +2502,7 @@ discoverProjects sysAbs rootProj depOverrides = do
                             , projSrcDir = srcDir'
                             , projSysPath = sysAbs
                             , projSysTypes = joinPath [sysAbs, "base", "out", "types"]
-                            , projBuildSpec = mspec
+                            , projBuildSpec = spec
                             , projLocks = lockPath
                             , projDeps = [ (n, p) | (n, p, _) <- reverse deps ]
                             }
@@ -2524,16 +2527,13 @@ discoverProjects sysAbs rootProj depOverrides = do
       return ((depName, depPath, depSpec) : accDeps, fpMap')
 
     canonicalizeDep depAbs fpMap = do
-      rawSpec <- loadBuildSpec depAbs
-      mspec <- traverse (applyDepOverrides depAbs depOverrides) rawSpec
-      let (canonPath, fpMap', mfp) = applyFingerprint depAbs mspec fpMap
+      spec0 <- loadBuildSpec depAbs
+      spec <- applyDepOverrides depAbs depOverrides spec0
+      let (canonPath, fpMap', fp) = applyFingerprint depAbs spec fpMap
       when (canonPath /= depAbs) $
-        case mfp of
-          Just fp ->
-            putStrLn ("Warning: dependency fingerprint " ++ fp
-                      ++ " at " ++ depAbs ++ " deduplicated to " ++ canonPath)
-          Nothing -> return ()
-      let depSpec = if canonPath == depAbs then mspec else Nothing
+        putStrLn ("Warning: dependency fingerprint " ++ fp
+                  ++ " at " ++ depAbs ++ " deduplicated to " ++ canonPath)
+      let depSpec = if canonPath == depAbs then Just spec else Nothing
       return (canonPath, fpMap', depSpec)
 
     step root seen pins (acc, fpMap) (_, depBase, mSpec) =
@@ -2632,7 +2632,7 @@ findPaths actFile opts  = do execDir <- takeDirectory <$> getExecutablePath
                                  binDir  = if isTmp then srcDir else joinPath [projOut, "bin"]
                                  modName = A.modName $ dirInSrc ++ [fileBody]
                              -- join the search paths from command line options with the ones found in the deps directory
-                             depOverrides <- if isTmp then return [] else normalizeDepOverrides projPath (C.dep_overrides opts)
+                             depOverrides <- normalizeDepOverrides projPath (C.dep_overrides opts)
                              depTypePaths <- if isTmp then return [] else collectDepTypePaths projPath depOverrides
                              let sPaths = [projTypes] ++ depTypePaths ++ (C.searchpath opts) ++ [sysTypes]
                              createDirectoryIfMissing True binDir
@@ -2764,15 +2764,9 @@ pathsForModule opts projMap ctx mn = do
 
 
 -- | Load a BuildSpec from Build.act (preferred) or build.act.json.
--- Throws ProjectError on parse failure to keep callers in a single error path.
-loadBuildSpec :: FilePath -> IO (Maybe BuildSpec.BuildSpec)
-loadBuildSpec = loadBuildSpecWith AllowMissing
-
-loadBuildSpecRequired :: FilePath -> IO (Maybe BuildSpec.BuildSpec)
-loadBuildSpecRequired = loadBuildSpecWith RequireIds
-
-loadBuildSpecWith :: FingerprintRequirement -> FilePath -> IO (Maybe BuildSpec.BuildSpec)
-loadBuildSpecWith req dir = do
+-- Throws ProjectError on parse or validation failure.
+loadBuildSpec :: FilePath -> IO BuildSpec.BuildSpec
+loadBuildSpec dir = do
     let actPath  = joinPath [dir, "Build.act"]
         jsonPath = joinPath [dir, "build.act.json"]
     actExists <- doesFileExist actPath
@@ -2781,7 +2775,7 @@ loadBuildSpecWith req dir = do
         content <- readFile actPath
         case BuildSpec.parseBuildAct content of
           Left err -> throwProjectError ("Failed to parse Build.act in " ++ dir ++ ":\n" ++ err)
-          Right (spec, _, _) -> Just <$> validateFingerprint req actPath spec
+          Right (spec, _, _) -> validateBuildSpec actPath spec
       else do
         jsonExists <- doesFileExist jsonPath
         if jsonExists
@@ -2789,56 +2783,62 @@ loadBuildSpecWith req dir = do
             json <- BL.readFile jsonPath
             case BuildSpec.parseBuildSpecJSON json of
               Left err   -> throwProjectError ("Failed to parse build.act.json in " ++ dir ++ ":\n" ++ err)
-              Right spec -> Just <$> validateFingerprint req jsonPath spec
-          else return Nothing
+              Right spec -> validateBuildSpec jsonPath spec
+          else
+            throwProjectError ("Missing Build.act or build.act.json in " ++ dir ++ ".\n"
+                               ++ "Create Build.act with required name and fingerprint fields.")
 
-data FingerprintRequirement = RequireIds | AllowMissing
+validateBuildSpec :: FilePath -> BuildSpec.BuildSpec -> IO BuildSpec.BuildSpec
+validateBuildSpec sourcePath spec = do
+    validateProjectName sourcePath (BuildSpec.specName spec)
+    validateFingerprint sourcePath (BuildSpec.specName spec) (BuildSpec.fingerprint spec)
+    return spec
 
-validateFingerprint :: FingerprintRequirement -> FilePath -> BuildSpec.BuildSpec -> IO BuildSpec.BuildSpec
-validateFingerprint req sourcePath spec =
-    case req of
-      AllowMissing -> validateOptional
-      RequireIds -> validateRequired
+validateProjectName :: FilePath -> String -> IO ()
+validateProjectName sourcePath name =
+    if not (isProjectIdent name)
+      then throwProjectError ("Invalid project name '" ++ name ++ "' in " ++ sourcePath ++ ".\n"
+                              ++ "The name must be a valid Acton project name (letters, digits, underscore; cannot start with a digit).")
+      else if length name > projectNameMax
+        then throwProjectError ("Invalid project name '" ++ name ++ "' in " ++ sourcePath ++ ".\n"
+                                ++ "The name must be at most " ++ show projectNameMax ++ " characters.")
+        else return ()
   where
-    validateOptional =
-      case (BuildSpec.specName spec, BuildSpec.fingerprint spec) of
-        (Just name, Just fpRaw) -> validatePair name fpRaw
-        _ -> return spec
+    isProjectIdent [] = False
+    isProjectIdent (c:cs) =
+      (isAlpha c || c == '_') && all isIdentChar cs
+      where
+        isIdentChar x = isAlpha x || isDigit x || x == '_'
 
-    validateRequired =
-      case (BuildSpec.specName spec, BuildSpec.fingerprint spec) of
-        (Nothing, _) ->
-          throwProjectError ("Missing project name in " ++ sourcePath ++ ".\n"
-                             ++ "Add a name field, for example:\n"
-                             ++ "name = \"my_project\"")
-        (_, Nothing) ->
-          throwProjectError ("Missing fingerprint in " ++ sourcePath ++ ".\n"
-                             ++ "Add a fingerprint field, for example:\n"
-                             ++ "fingerprint = 0x1234abcd5678ef00")
-        (Just name, Just fpRaw) -> validatePair name fpRaw
-
-    validatePair name fpRaw =
-      case Fingerprint.parseFingerprint fpRaw of
-        Nothing ->
-          throwProjectError ("Invalid fingerprint '" ++ fpRaw ++ "' in " ++ sourcePath
-                             ++ " (project name: " ++ show name ++ ").\n"
-                             ++ "Expected a 64-bit numeric fingerprint like 0x1234abcd5678ef00.")
-        Just fp ->
-          let expectedPrefix = Fingerprint.fingerprintPrefixForName name
-              actualPrefix = fromIntegral (fp `shiftR` 32)
-          in if expectedPrefix == actualPrefix
-               then return spec
+validateFingerprint :: FilePath -> String -> String -> IO ()
+validateFingerprint sourcePath name fpRaw =
+    case Fingerprint.parseFingerprint fpRaw of
+      Nothing ->
+        throwProjectError ("Invalid fingerprint '" ++ fpRaw ++ "' in " ++ sourcePath
+                           ++ " (project name: " ++ show name ++ ").\n"
+                           ++ "Expected a 64-bit numeric fingerprint like 0x1234abcd5678ef00.")
+      Just fp ->
+        let formatted = Fingerprint.formatFingerprint fp
+            expectedPrefix = Fingerprint.fingerprintPrefixForName name
+            expectedPrefixHex = Fingerprint.formatFingerprintPrefix expectedPrefix
+            actualPrefix = fromIntegral (fp `shiftR` 32)
+        in if formatted == Fingerprint.fingerprintPlaceholder
+             then throwProjectError ("Fingerprint placeholder " ++ formatted ++ " in " ++ sourcePath
+                                     ++ " is not valid.\n"
+                                     ++ "Generate a new fingerprint with prefix: " ++ expectedPrefixHex)
+             else if expectedPrefix == actualPrefix
+               then return ()
                else
-                 let expectedPrefixHex = Fingerprint.formatFingerprintPrefix expectedPrefix
-                     actualFpHex = Fingerprint.formatFingerprint fp
-                 in throwProjectError ("Fingerprint mismatch in " ++ sourcePath
-                                       ++ " for project name " ++ show name ++ ".\n"
-                                       ++ "Expected prefix: " ++ expectedPrefixHex
-                                       ++ " (CRC32 of name).\n"
-                                       ++ "Current fingerprint: " ++ actualFpHex ++ "\n"
-                                       ++ "Renames and forks require a new fingerprint for this name.\n"
-                                       ++ "Generate a new fingerprint with prefix: "
-                                       ++ expectedPrefixHex)
+                 throwProjectError ("Fingerprint mismatch in " ++ sourcePath
+                                    ++ " for project name " ++ show name ++ ".\n"
+                                    ++ "Expected prefix: " ++ expectedPrefixHex
+                                    ++ " (CRC32 of name).\n"
+                                    ++ "Current fingerprint: " ++ formatted ++ "\n"
+                                    ++ "Renames and forks require a new fingerprint for this name.\n"
+                                    ++ "Generate a new fingerprint with prefix: " ++ expectedPrefixHex)
+
+projectNameMax :: Int
+projectNameMax = 32
 
 -- | Treat drive-letter paths as absolute in addition to POSIX roots.
 -- This keeps path normalization consistent on Windows hosts.
@@ -2934,11 +2934,10 @@ validateDepOverridePath depName depPath = do
 
 fetchDependencies :: C.GlobalOptions -> Paths -> [(String, FilePath)] -> IO ()
 fetchDependencies gopts paths depOverrides = do
-    when (isTmp paths) $ return ()
-    mspec <- loadBuildSpec (projPath paths)
-    case mspec of
-      Nothing -> return ()
-      Just spec0 -> do
+    if isTmp paths
+      then return ()
+      else do
+        spec0 <- loadBuildSpec (projPath paths)
         spec <- applyDepOverrides (projPath paths) depOverrides spec0
         unless (C.quiet gopts) $
           putStrLn "Resolving dependencies (fetching if missing)..."
@@ -3272,33 +3271,38 @@ collectDepTypePaths projDir overrides = do
   return paths
   where
     go seen fpMap dir mSpec = do
-      mspec <- case mSpec of
-                 Just s -> return (Just s)
+      spec0 <- case mSpec of
+                 Just s -> return s
                  Nothing -> loadBuildSpec dir
-      mspec' <- case mSpec of
-                  Just s -> return (Just s)
-                  Nothing -> traverse (applyDepOverrides dir overrides) mspec
-      let (_, fpMap1, _) = applyFingerprint dir mspec' fpMap
-      case mspec' of
-        Nothing   -> return (seen, fpMap1, [])
-        Just spec -> foldM (step dir) (seen, fpMap1, []) (M.toList (BuildSpec.dependencies spec))
+      spec <- applyDepOverrides dir overrides spec0
+      let (_, fpMap1, _) = applyFingerprint dir spec fpMap
+      foldM (step dir) (seen, fpMap1, []) (M.toList (BuildSpec.dependencies spec))
 
     step base (seen, fpMap, acc) (depName, dep) = do
       depBase <- resolveDepBase base depName dep
       depAbs  <- normalizePathSafe depBase
-      (depPath, fpMap') <- canonicalizeDep depAbs fpMap
-      let typesDir = joinPath [depPath, "out", "types"]
-      if Data.Set.member depPath seen
-        then return (seen, fpMap', acc)
+      depExists <- doesDirectoryExist depAbs
+      if not depExists
+        then case BuildSpec.path dep of
+               Just p | not (null p) ->
+                 throwProjectError ("Dependency " ++ depName ++ " path does not exist: " ++ depAbs ++ "\n"
+                                    ++ "Hint: Local dependency paths must point to an Acton project root\n"
+                                    ++ "(directory with src/ and Build.act).")
+               _ -> return (seen, fpMap, acc)
         else do
-          let seen' = Data.Set.insert depPath seen
-          (seenNext, fpMapNext, sub) <- go seen' fpMap' depPath Nothing
-          return (seenNext, fpMapNext, acc ++ [typesDir] ++ sub)
+          (depPath, fpMap') <- canonicalizeDep depAbs fpMap
+          let typesDir = joinPath [depPath, "out", "types"]
+          if Data.Set.member depPath seen
+            then return (seen, fpMap', acc)
+            else do
+              let seen' = Data.Set.insert depPath seen
+              (seenNext, fpMapNext, sub) <- go seen' fpMap' depPath Nothing
+              return (seenNext, fpMapNext, acc ++ [typesDir] ++ sub)
 
     canonicalizeDep depAbs fpMap = do
-      rawSpec <- loadBuildSpec depAbs
-      mspec <- traverse (applyDepOverrides depAbs overrides) rawSpec
-      let (canonPath, fpMap', _) = applyFingerprint depAbs mspec fpMap
+      spec0 <- loadBuildSpec depAbs
+      spec <- applyDepOverrides depAbs overrides spec0
+      let (canonPath, fpMap', _) = applyFingerprint depAbs spec fpMap
       return (canonPath, fpMap')
 
 

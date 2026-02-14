@@ -33,4 +33,4 @@ name = "hello"
 fingerprint = 0x1234abcd5678ef00
 ```
 
-Fingerprint is optional for now, but `acton new` will add one for you. If both `name` and `fingerprint` are set, Acton validates that they match. A mismatch indicates a rename or a fork and the build will fail, telling you to generate a new fingerprint for the new name.
+`name` and `fingerprint` are required for Acton projects. Acton validates that the fingerprint matches the name’s lineage prefix. A mismatch indicates a rename or a fork, so the build fails and tells you to generate a new fingerprint for the new name. If either field is missing, the build fails with guidance to add it.

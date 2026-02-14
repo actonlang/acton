@@ -63,7 +63,7 @@ import Data.Word (Word32)
 import Data.Graph
 import Data.String.Utils (replace)
 import Data.Version (showVersion)
-import Data.Char (isAlpha, isDigit, toLower)
+import Data.Char (toLower)
 import qualified Data.List
 import Data.Either (partitionEithers)
 import qualified Data.Map as M
@@ -285,9 +285,9 @@ createProject name = do
         srcRoot = joinPath [projDir, "src"]
         buildActPath = joinPath [projDir, "Build.act"]
         buildSpec = BuildSpec.BuildSpec
-          { BuildSpec.specName = Just name
+          { BuildSpec.specName = name
           , BuildSpec.specDescription = Nothing
-          , BuildSpec.fingerprint = Just fp
+          , BuildSpec.fingerprint = fp
           , BuildSpec.dependencies = M.empty
           , BuildSpec.zig_dependencies = M.empty
           }
@@ -332,19 +332,9 @@ buildSpecCommand cmd =
         Left err      -> printErrorAndExit ("Failed to update Build.act: \n" ++ err)
         Right updated -> writeFile actPath updated >> putStrLn "Updated Build.act"
     C.BuildSpecDump -> do
-      -- Dump JSON: prefer Build.act, fallback to build.act.json
-      existsBuild <- doesFileExist "Build.act"
-      if existsBuild
-        then do
-          content <- readFile "Build.act"
-          case BuildSpec.parseBuildAct content of
-            Left err        -> printErrorAndExit ("Failed to parse Build.act:\n" ++ err)
-            Right (spec,_,_) -> BL.putStr (BuildSpec.encodeBuildSpecJSON spec)
-        else do
-          jsonExists <- doesFileExist "build.act.json"
-          if jsonExists
-            then BL.readFile "build.act.json" >>= BL.putStr
-            else printErrorAndExit "No Build.act or build.act.json found"
+      spec <- loadBuildSpec "."
+      BL.putStr (BuildSpec.encodeBuildSpecJSON spec)
+
 
 -- Build a project -----------------------------------------------------------------------------------------------
 
@@ -877,14 +867,11 @@ pkgShow :: C.GlobalOptions -> IO ()
 pkgShow gopts = do
     curDir <- getCurrentDirectory
     _ <- requireProjectConfigPath curDir
-    mspec <- loadBuildSpec curDir
-    case mspec of
-      Nothing -> printErrorAndExit "No Build.act/build.act.json found"
-      Just spec -> do
-        let rootPins = BuildSpec.dependencies spec
-        unless (C.quiet gopts) $
-          putStrLn "Dependency tree (hash overrides shown):"
-        showTree rootPins curDir spec 0
+    spec <- loadBuildSpec curDir
+    let rootPins = BuildSpec.dependencies spec
+    unless (C.quiet gopts) $
+      putStrLn "Dependency tree (hash overrides shown):"
+    showTree rootPins curDir spec 0
   where
     describeDep dep =
       case BuildSpec.hash dep of
@@ -905,10 +892,8 @@ pkgShow gopts = do
                    (if conflict then " overridden -> " ++ describeDep chosen else "") ++ ")"
         putStrLn line
         depBase <- resolveDepBase dir depName chosen
-        mspec <- loadBuildSpec depBase
-        case mspec of
-          Nothing -> return ()
-          Just spec' -> showTree pins depBase spec' (depth + 1)
+        spec' <- loadBuildSpec depBase
+        showTree pins depBase spec' (depth + 1)
 
 -- Print documentation -------------------------------------------------------------------------------------------
 
@@ -1400,7 +1385,10 @@ runCliPostCompile cliHooks gopts plan env = do
         globalTasks = cpGlobalTasks plan
         projMap = cpProjMap plan
         sysRoot = addTrailingPathSeparator sysAbs
-        rootParts = splitOn "." (C.root opts')
+    rootSpec <- case M.lookup rootProj projMap of
+                  Just ctx -> return (projBuildSpec ctx)
+                  Nothing -> throwProjectError ("Missing root project context for " ++ rootProj)
+    let rootParts = splitOn "." (C.root opts')
         rootMod   = init rootParts
         guessMod  = if length rootParts == 1 then modName pathsRoot else A.modName rootMod
         binTask   = BinTask False (prstr guessMod) (A.GName guessMod (A.name $ last rootParts)) False
@@ -1419,7 +1407,7 @@ runCliPostCompile cliHooks gopts plan env = do
             when (C.verbose gopts) $
               logLine ("Generating build.zig for dependency project " ++ p)
             dummyPaths <- pathsForModule opts' projMap pctx (A.modName ["__gen_build__"])
-            genBuildZigFiles False rootPins (ccDepOverrides cctx) dummyPaths
+            genBuildZigFiles (projBuildSpec pctx) rootPins (ccDepOverrides cctx) dummyPaths
           Nothing -> return ()
     let runFinal action = do
           cchFinalStart cliHooks
@@ -1433,10 +1421,13 @@ runCliPostCompile cliHooks gopts plan env = do
           then do
             testBinTasks <- catMaybes <$> mapM (filterMainActor env pathsRoot) preTestBinTasks
             unless (altOutput opts') $
-              runFinal (compileBins gopts opts' pathsRoot env rootTasks testBinTasks allowPrune' (Just (cchProgressUI cliHooks)))
+              runFinal (compileBins gopts opts' pathsRoot env rootSpec rootTasks testBinTasks allowPrune' (Just (cchProgressUI cliHooks)))
+            when (C.print_test_bins opts') $ do
+              logLine "Test executables:"
+              mapM_ (\t -> logLine (binName t)) testBinTasks
           else do
             unless (altOutput opts') $
-              runFinal (compileBins gopts opts' pathsRoot env rootTasks preBinTasks allowPrune' (Just (cchProgressUI cliHooks)))
+              runFinal (compileBins gopts opts' pathsRoot env rootSpec rootTasks preBinTasks allowPrune' (Just (cchProgressUI cliHooks)))
 -- Generate documentation index for a project build by reading module docstrings
 -- from the current tasks. Uses TyTask header docs when available to avoid
 -- parsing/decoding; falls back to extracting from ActonTask ASTs.
@@ -1583,9 +1574,9 @@ High-level Steps
 ================================================================================
 -}
 
-compileBins:: C.GlobalOptions -> C.CompileOptions -> Paths -> Acton.Env.Env0 -> [CompileTask] -> [BinTask] -> Bool -> Maybe ProgressUI -> IO TimeSpec
-compileBins gopts opts paths env tasks binTasks allowPrune mProgressUI =
-    zigBuild env gopts opts paths tasks binTasks allowPrune mProgressUI
+compileBins:: C.GlobalOptions -> C.CompileOptions -> Paths -> Acton.Env.Env0 -> BuildSpec.BuildSpec -> [CompileTask] -> [BinTask] -> Bool -> Maybe ProgressUI -> IO TimeSpec
+compileBins gopts opts paths env rootSpec tasks binTasks allowPrune mProgressUI =
+    zigBuild env gopts opts paths rootSpec tasks binTasks allowPrune mProgressUI
 
 printDiag :: C.GlobalOptions -> C.CompileOptions -> Diagnostic String -> IO ()
 printDiag gopts opts d = do
@@ -1729,8 +1720,8 @@ generateFingerprint name = do
 
 -- Render build.zig and build.zig.zon from templates and BuildSpec
 -- rootPins: dependency pins from the main project (applied to all deps, including transitive)
-genBuildZigFiles :: Bool -> M.Map String BuildSpec.PkgDep -> [(String, FilePath)] -> Paths -> IO ()
-genBuildZigFiles requireIds rootPins depOverrides paths = do
+genBuildZigFiles :: BuildSpec.BuildSpec -> M.Map String BuildSpec.PkgDep -> [(String, FilePath)] -> Paths -> IO ()
+genBuildZigFiles spec rootPins depOverrides paths = do
     let proj = projPath paths
     projAbs <- canonicalizePath proj
     let sys              = sysPath paths
@@ -1740,82 +1731,20 @@ genBuildZigFiles requireIds rootPins depOverrides paths = do
         distBuildZonPath = joinPath [sys, "builder", "build.zig.zon"]
     buildZigTemplate <- readFile distBuildZigPath
     buildZonTemplate <- readFile distBuildZonPath
-    spec0 <- if requireIds then loadBuildSpecRequired proj else loadBuildSpec proj
-    spec  <- traverse (applyDepOverrides proj depOverrides) spec0
-    -- TODO: Once name/fingerprint are mandatory, remove fallback name/fingerprint
-    -- generation and fail early when Build.act is missing them.
-    let fallbackName =
-          let base = takeFileName projAbs
-          in if null base then "actonproject" else base
-    zonName <- resolveZonName fallbackName spec
-    fp <- resolveFingerprint zonName projAbs spec
-    (transPkgs, transZigs) <- collectDepsRecursive proj rootPins depOverrides
+    let zonName = BuildSpec.specName spec
+        fp = BuildSpec.fingerprint spec
+    (transPkgs, transZigs) <- collectDepsRecursive spec proj rootPins depOverrides
     absSys <- canonicalizePath sys
     let relSys = relativeViaRoot projAbs absSys
     homeDir <- getHomeDirectory
     depsRootAbs <- normalizePathSafe (joinPath [homeDir, ".cache", "acton", "deps"])
-    normalizedSpec <- traverse (normalizeSpecPaths proj) spec
+    normalizedSpec <- normalizeSpecPaths proj spec
     let applyPins deps = M.mapWithKey (\n d -> M.findWithDefault d n rootPins) deps
-        mergedSpec = fmap (\s -> s { BuildSpec.dependencies     = applyPins (BuildSpec.dependencies s) `M.union` transPkgs
-                                   , BuildSpec.zig_dependencies = BuildSpec.zig_dependencies s `M.union` transZigs }) normalizedSpec
+        mergedSpec = normalizedSpec { BuildSpec.dependencies     = applyPins (BuildSpec.dependencies normalizedSpec) `M.union` transPkgs
+                                    , BuildSpec.zig_dependencies = BuildSpec.zig_dependencies normalizedSpec `M.union` transZigs }
         zonWithFp = replace "{{fingerprint}}" fp . replace "{{name}}" zonName
-    case mergedSpec of
-      Nothing -> do
-        writeFile buildZigPath buildZigTemplate
-        writeFileAtomic buildZonPath (zonWithFp (replace "{{syspath}}" relSys buildZonTemplate))
-      Just s -> do
-        writeFile buildZigPath (genBuildZig buildZigTemplate s)
-        writeFileAtomic buildZonPath (genBuildZigZon buildZonTemplate relSys depsRootAbs projAbs fp zonName s)
-
-  where
-    resolveFingerprint name projAbs spec =
-      case spec >>= BuildSpec.fingerprint of
-        Just fp -> return fp
-        Nothing -> return (fallbackFingerprint name projAbs)
-
-    fallbackFingerprint name projAbs =
-      let prefix = Fingerprint.fingerprintPrefixForName name
-          suffix = Fingerprint.fingerprintPrefixForName projAbs
-          fp = (fromIntegral prefix `shiftL` 32) .|. fromIntegral suffix
-      in Fingerprint.formatFingerprint fp
-
-    resolveZonName fallbackName spec =
-      case spec >>= BuildSpec.specName of
-        Just n | not (null n) ->
-          if not (isProjectIdent n)
-            then throwProjectError ("Invalid project name '" ++ n ++ "' in Build.act.\n"
-                                    ++ "The name must be a valid Acton project name (letters, digits, underscore; cannot start with a digit).")
-            else if length n > projectNameMax
-              then throwProjectError ("Invalid project name '" ++ n ++ "' in Build.act.\n"
-                                      ++ "The name must be at most " ++ show projectNameMax ++ " characters.")
-              else return n
-        _ -> return (sanitizeProjectName fallbackName)
-
-    isProjectIdent [] = False
-    isProjectIdent (c:cs) =
-      (isAlpha c || c == '_') && all isIdentChar cs
-      where
-        isIdentChar x = isAlpha x || isDigit x || x == '_'
-
-    sanitizeProjectName [] = "actonproject"
-    sanitizeProjectName s =
-      let cleaned = map (\c -> if isAlpha c || isDigit c || c == '_' then c else '_') s
-          base = case cleaned of
-                   [] -> "actonproject"
-                   (c:cs) | isAlpha c || c == '_' -> c:cs
-                          | otherwise -> '_' : c:cs
-      in clampProjectName base
-
-    clampProjectName name
-      | length name <= projectNameMax = name
-      | otherwise =
-          let suffix = drop 2 (Fingerprint.formatFingerprintPrefix (Fingerprint.fingerprintPrefixForName name))
-              prefixLen = max 1 (projectNameMax - 1 - length suffix)
-              prefix = take prefixLen name
-          in prefix ++ "_" ++ suffix
-
-    projectNameMax :: Int
-    projectNameMax = 32
+    writeFile buildZigPath (genBuildZig buildZigTemplate mergedSpec)
+    writeFileAtomic buildZonPath (genBuildZigZon buildZonTemplate relSys depsRootAbs projAbs fp zonName mergedSpec)
 
 genBuildZig :: String -> BuildSpec.BuildSpec -> String
 genBuildZig template spec =
@@ -1923,8 +1852,8 @@ defCpuFlag = ["-Dcpu=x86_64_v2+aes"]
 #endif
 
 -- | Run zig build for generated artifacts and prune stale outputs.
-zigBuild :: Acton.Env.Env0 -> C.GlobalOptions -> C.CompileOptions -> Paths -> [CompileTask] -> [BinTask] -> Bool -> Maybe ProgressUI -> IO TimeSpec
-zigBuild env gopts opts paths tasks binTasks allowPrune mProgressUI = do
+zigBuild :: Acton.Env.Env0 -> C.GlobalOptions -> C.CompileOptions -> Paths -> BuildSpec.BuildSpec -> [CompileTask] -> [BinTask] -> Bool -> Maybe ProgressUI -> IO TimeSpec
+zigBuild env gopts opts paths rootSpec tasks binTasks allowPrune mProgressUI = do
     allBinTasks <- mapM (writeRootC env gopts opts paths tasks) binTasks
     let realBinTasks = catMaybes allBinTasks
 
@@ -1949,16 +1878,14 @@ zigBuild env gopts opts paths tasks binTasks allowPrune mProgressUI = do
         no_threads = if isWindowsOS (C.target opts) then True else C.no_threads opts
     projAbs <- normalizePathSafe (projPath paths)
     sysAbs  <- normalizePathSafe (sysPath paths)
+    depOverrides <- normalizeDepOverrides (projPath paths) (C.dep_overrides opts)
     let sysRoot   = addTrailingPathSeparator sysAbs
         isSysProj = projAbs == sysAbs || sysRoot `isPrefixOf` projAbs
 
     -- Generate build.zig and build.zig.zon directly from Build.act/build.act.json.
     iff (not isSysProj) $ do
-      depOverrides <- normalizeDepOverrides (projPath paths) (C.dep_overrides opts)
-      pinsSpec0 <- loadBuildSpec (projPath paths)
-      pinsSpec  <- traverse (applyDepOverrides (projPath paths) depOverrides) pinsSpec0
-      let pins = maybe M.empty BuildSpec.dependencies pinsSpec
-      genBuildZigFiles True pins depOverrides paths
+      let pins = BuildSpec.dependencies rootSpec
+      genBuildZigFiles rootSpec pins depOverrides paths
 
     let zigExe = zig paths
         baseArgs = ["build","--cache-dir", local_cache_dir,
@@ -2059,22 +1986,19 @@ relativeViaRoot baseAbs targetAbs
     cleanParts = filter (\c -> not (null c) && c /= "/") . splitDirectories
 
 -- | Walk BuildSpec dependencies to collect transitive packages and zig deps.
-collectDepsRecursive :: FilePath -> M.Map String BuildSpec.PkgDep -> [(String, FilePath)] -> IO (M.Map String BuildSpec.PkgDep, M.Map String BuildSpec.ZigDep)
-collectDepsRecursive projDir pins overrides = do
+collectDepsRecursive :: BuildSpec.BuildSpec -> FilePath -> M.Map String BuildSpec.PkgDep -> [(String, FilePath)] -> IO (M.Map String BuildSpec.PkgDep, M.Map String BuildSpec.ZigDep)
+collectDepsRecursive rootSpec projDir pins overrides = do
   root <- normalizePathSafe projDir
-  (\(_, pkgs, zigs) -> (pkgs, zigs)) <$> go root Data.Set.empty root Nothing
+  (\(_, pkgs, zigs) -> (pkgs, zigs)) <$> go root Data.Set.empty root (Just rootSpec)
   where
     go root seen dir mSpec = do
-      mspec <- case mSpec of
-                 Just s -> return (Just s)
+      spec0 <- case mSpec of
+                 Just s -> return s
                  Nothing -> loadBuildSpec dir
-      mspec' <- traverse (applyDepOverrides dir overrides) mspec
-      case mspec' of
-        Nothing   -> return (seen, M.empty, M.empty)
-        Just spec -> do
-          let depsHere = BuildSpec.dependencies spec
-              zigsHere = M.map (rebaseZig root dir) (BuildSpec.zig_dependencies spec)
-          foldM (step root dir) (seen, M.empty, zigsHere) (M.toList depsHere)
+      spec <- applyDepOverrides dir overrides spec0
+      let depsHere = BuildSpec.dependencies spec
+          zigsHere = M.map (rebaseZig root dir) (BuildSpec.zig_dependencies spec)
+      foldM (step root dir) (seen, M.empty, zigsHere) (M.toList depsHere)
 
     step root base (seen, pkgAcc, zigAcc) (depName, dep) = do
       let depChosen = case M.lookup depName pins of
