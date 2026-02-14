@@ -9,6 +9,9 @@ actor MathTester():
 def _test_foo() -> None:
     pass
 
+def _test_unit_snapshot() -> str:
+    return "unit snapshot"
+
 # Synchronous actor test
 actor _test_SimpleSyncTester():
     m = MathTester()
@@ -33,6 +36,16 @@ def _test_simple_sync():
 def _test_sync(t: testing.SyncT):
     m = MathTester()
     return str(m.add(1, 2))  # Should return "3"
+
+def _test_simple_sync_snapshot():
+    m = MathTester()
+    return "simple sync snapshot: " + str(m.add(2, 3))
+
+def _test_async_snapshot(t: testing.AsyncT):
+    t.success("async snapshot")
+
+def _test_env_snapshot(t: testing.EnvT):
+    t.success("env snapshot")
 
 actor AsyncTester(t: testing.AsyncT):
     log = logging.Logger(t.log_handler)
