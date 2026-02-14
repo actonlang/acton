@@ -574,6 +574,36 @@ jobs:
     with:
       repo_url: "orchestron-orchestrator/actmf"
 
+  test-app-ncurl:
+    needs: build-debs
+    uses: "./.github/workflows/test-app.yml"
+    with:
+      repo_url: "orchestron-orchestrator/ncurl"
+
+  test-app-gnmi:
+    needs: build-debs
+    uses: "./.github/workflows/test-app.yml"
+    with:
+      repo_url: "orchestron-orchestrator/acton-gnmi"
+
+  test-app-actxcrypt:
+    needs: build-debs
+    uses: "./.github/workflows/test-app.yml"
+    with:
+      repo_url: "orchestron-orchestrator/actxcrypt"
+
+  test-app-orchino:
+    needs: build-debs
+    uses: "./.github/workflows/test-app.yml"
+    with:
+      repo_url: "orchestron-orchestrator/orchino"
+
+  test-app-lmdb:
+    needs: build-debs
+    uses: "./.github/workflows/test-app.yml"
+    with:
+      repo_url: "orchestron-orchestrator/acton-lmdb"
+
   test-app-zlib:
     needs: build-debs
     uses: "./.github/workflows/test-app.yml"
