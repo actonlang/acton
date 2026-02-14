@@ -680,7 +680,6 @@ defaultCompileOptions =
     , C.target = C.defTarget
     , C.cpu = ""
     , C.test = False
-    , C.print_test_bins = True
     , C.searchpath = []
     , C.dep_overrides = []
     }

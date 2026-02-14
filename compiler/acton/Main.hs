@@ -550,7 +550,6 @@ runTests gopts cmd = do
         opts0 = C.testCompile topts
     let opts = opts0
           { C.test = True
-          , C.print_test_bins = False
           , C.skip_build = mode == TestModeList
           , C.only_build = False
           }
@@ -1382,7 +1381,7 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
       , cchProgressUI = progressUI
       }
 
--- | Run CLI-only post-compile steps (zig build or test bins).
+-- | Run CLI-only post-compile steps.
 runCliPostCompile :: CliCompileHooks
                   -> C.GlobalOptions
                   -> CompilePlan
@@ -1435,9 +1434,6 @@ runCliPostCompile cliHooks gopts plan env = do
             testBinTasks <- catMaybes <$> mapM (filterMainActor env pathsRoot) preTestBinTasks
             unless (altOutput opts') $
               runFinal (compileBins gopts opts' pathsRoot env rootTasks testBinTasks allowPrune' (Just (cchProgressUI cliHooks)))
-            when (C.print_test_bins opts') $ do
-              logLine "Test executables:"
-              mapM_ (\t -> logLine (binName t)) testBinTasks
           else do
             unless (altOutput opts') $
               runFinal (compileBins gopts opts' pathsRoot env rootTasks preBinTasks allowPrune' (Just (cchProgressUI cliHooks)))
