@@ -244,6 +244,31 @@ actonProjTests =
         expect ".dep_c = .{" depAZon "dep_a build.zig.zon should declare dep_c"
         expectAny ["dep_override/deps/dep_c", "dep_override\\deps\\dep_c", "../dep_c", "..\\dep_c"] depAZon "dep_a build.zig.zon should keep dep_c path"
         assertBool "dep_a build.zig.zon should not include undeclared ghost override" (not ("ghost" `isInfixOf` depAZon))
+  , testCase "dep override path must be an Acton project root" $ do
+        withSystemTempDirectory "acton-invalid-dep-override" $ \proj -> do
+          let srcDir = proj </> "src"
+              buildAct = proj </> "Build.act"
+              mainAct = srcDir </> "main.act"
+          createDirectoryIfMissing True srcDir
+          createDirectoryIfMissing True (proj </> "deps")
+          writeFile buildAct $ unlines
+            [ "name = \"invalid_dep_override\""
+            , ""
+            , "dependencies = {"
+            , "  \"dep_a\": (path=\"deps/dep_a_missing\")"
+            , "}"
+            ]
+          writeFile mainAct $ unlines
+            [ "actor main(env):"
+            , "    print(\"hello\")"
+            , "    env.exit(0)"
+            ]
+          actonExe <- canonicalizePath "../../dist/bin/acton"
+          (returnCode, _cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc actonExe ["build", "--dep", "dep_a=deps"]){ cwd = Just proj } ""
+          assertEqual "acton should fail for invalid --dep path" (ExitFailure 1) returnCode
+          assertBool "error should mention bad dependency path" ("Dependency dep_a path is not an Acton project root" `isInfixOf` cmdErr)
+          assertBool "error should mention required project files" ("Build.act" `isInfixOf` cmdErr && "build.act.json" `isInfixOf` cmdErr && "Acton.toml" `isInfixOf` cmdErr)
+          assertBool "error should mention src requirement" ("src/" `isInfixOf` cmdErr)
 
   -- Verify pruning keeps binaries for modules that still have roots across build / test runs.
   , testCase "executable pruning" $ do

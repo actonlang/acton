@@ -2562,12 +2562,21 @@ srcBase paths mn        = joinPath (srcDir paths : A.modPath mn)
 -- | Walk upward from a path to find a project root.
 -- A project root is identified by Build.act/build.act.json/Acton.toml plus a
 -- src/ directory; returns Nothing if we reach filesystem root.
+projectMarkerFiles :: [FilePath]
+projectMarkerFiles = ["Build.act", "build.act.json", "Acton.toml"]
+
+-- | Check whether a directory is an Acton project root.
+-- Requires a project marker file and a src/ directory.
+isActonProjectRoot :: FilePath -> IO Bool
+isActonProjectRoot path = do
+    hasProjectFile <- or <$> mapM (\file -> doesFileExist (path </> file)) projectMarkerFiles
+    hasSrcDir <- doesDirectoryExist (path </> "src")
+    return (hasProjectFile && hasSrcDir)
+
 findProjectDir :: FilePath -> IO (Maybe FilePath)
 findProjectDir path = do
-    let projectFiles = ["Build.act", "build.act.json", "Acton.toml"]
-    hasProjectFile <- or <$> mapM (\file -> doesFileExist (path </> file)) projectFiles
-    hasSrcDir <- doesDirectoryExist (path </> "src")
-    if hasProjectFile && hasSrcDir
+    isProjectRoot <- isActonProjectRoot path
+    if isProjectRoot
         then return (Just path)
         else if path == takeDirectory path  -- Check if we're at root
             then return Nothing
@@ -2616,7 +2625,8 @@ findPaths actFile opts  = do execDir <- takeDirectory <$> getExecutablePath
                                  binDir  = if isTmp then srcDir else joinPath [projOut, "bin"]
                                  modName = A.modName $ dirInSrc ++ [fileBody]
                              -- join the search paths from command line options with the ones found in the deps directory
-                             depTypePaths <- if isTmp then return [] else collectDepTypePaths projPath (C.dep_overrides opts)
+                             depOverrides <- if isTmp then return [] else normalizeDepOverrides projPath (C.dep_overrides opts)
+                             depTypePaths <- if isTmp then return [] else collectDepTypePaths projPath depOverrides
                              let sPaths = [projTypes] ++ depTypePaths ++ (C.searchpath opts) ++ [sysTypes]
                              createDirectoryIfMissing True binDir
                              createDirectoryIfMissing True projOut
@@ -2627,10 +2637,8 @@ findPaths actFile opts  = do execDir <- takeDirectory <$> getExecutablePath
 
         analyze "/" ds  = do tmp <- canonicalizePath (C.tempdir opts)
                              return (True, tmp, [])
-        analyze pre ds  = do let projectFiles = ["Build.act", "build.act.json", "Acton.toml"]
-                             hasProjectFile <- or <$> mapM (\file -> doesFileExist (joinPath [pre, file])) projectFiles
-                             hasSrcDir <- doesDirectoryExist (joinPath [pre, "src"])
-                             if hasProjectFile && hasSrcDir
+        analyze pre ds  = do isProjectRoot <- isActonProjectRoot pre
+                             if isProjectRoot
                                 then case ds of
                                     [] -> return $ (False, pre, [])
                                     "src":dirs -> return $ (False, pre, dirs)
@@ -2875,8 +2883,22 @@ applyDepOverrides base overrides spec = do
         Just dep -> do
           let absP0 = if isAbsolutePath depPath then depPath else joinPath [base, depPath]
           absP <- normalizePathSafe absP0
+          validateDepOverridePath depName absP
           let dep' = dep { BuildSpec.path = Just absP }
           return (M.insert depName dep' depsMap)
+
+validateDepOverridePath :: String -> FilePath -> IO ()
+validateDepOverridePath depName depPath = do
+    exists <- doesDirectoryExist depPath
+    unless exists $
+      throwProjectError ("Dependency " ++ depName ++ " path does not exist: " ++ depPath ++ "\n"
+                         ++ "Hint: Local dependency paths must point to an Acton project root\n"
+                         ++ "(directory with src/ and one of Build.act, build.act.json, or Acton.toml).")
+    isProjectRoot <- isActonProjectRoot depPath
+    unless isProjectRoot $
+      throwProjectError ("Dependency " ++ depName ++ " path is not an Acton project root: " ++ depPath ++ "\n"
+                         ++ "Hint: Local dependency paths must point to an Acton project root\n"
+                         ++ "(directory with src/ and one of Build.act, build.act.json, or Acton.toml).")
 
 fetchDependencies :: C.GlobalOptions -> Paths -> [(String, FilePath)] -> IO ()
 fetchDependencies gopts paths depOverrides = do
