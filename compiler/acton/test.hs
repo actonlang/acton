@@ -9,6 +9,10 @@ import Data.Ord
 import Data.Time.Clock.POSIX
 import qualified Data.ByteString.Lazy.Char8 as LBS
 
+import qualified Acton.Parser as ActonParser
+import qualified Acton.Syntax as S
+import qualified Pretty
+
 import Control.Exception (catch, IOException)
 import System.Directory
 import System.Directory.Recursive
@@ -54,6 +58,7 @@ main = do
       , coreLangTests
       , dbAutoTests
       , compilerTests
+      , optChainTests
       , actonProjTests
       , actonRootArgTests
       , exampleTests
@@ -146,6 +151,30 @@ compilerTests =
             (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc bin []){ cwd = Just proj } ""
             assertEqual "binary should run" ExitSuccess returnCode
             assertEqual "binary output" "Hello, world\n" cmdOut
+  ]
+
+optChainTests =
+  testGroup "optional chaining"
+  [
+    testCase "parses optional dot into desugared form" $ do
+        let src = unlines
+              [ "def f(a):"
+              , "    return a?.b"
+              ]
+        modl <- ActonParser.parseModule (S.modName ["test"]) "<test>" src
+        let exprs = [ e
+                    | S.Module _ _ suite <- [modl]
+                    , S.Decl _ decls <- suite
+                    , S.Def _ _ _ _ _ _ body _ _ _ <- decls
+                    , S.Return _ (Just e) <- body
+                    ]
+            normalize = unwords . words
+        case exprs of
+          (e:_) ->
+            assertEqual "desugared expression"
+              (normalize "(lambda V_opt: V_opt.b if V_opt is not None else None)(a)")
+              (normalize (Pretty.print e))
+          _ -> assertFailure "expected a return expression"
   ]
 
 parseFlagTests =

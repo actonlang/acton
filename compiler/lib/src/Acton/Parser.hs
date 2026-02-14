@@ -39,6 +39,7 @@ import qualified Data.List.NonEmpty
 import qualified Acton.Syntax as S
 import qualified Acton.Builtin as Builtin
 import qualified Acton.Names as Names
+import qualified Acton.Desugar as Desugar
 import Utils
 import Debug.Trace
 import System.IO.Unsafe
@@ -1781,6 +1782,11 @@ atom_expr = do
                       (do
                          (ps,ks) <- parens funargs
                          return (\a -> S.Call NoLoc a ps ks))
+                     <|>
+                      (do
+                         _ <- symbol "?."
+                         nm <- name
+                         return (\a -> Desugar.desugarOptDot (loc a `upto` loc nm) a nm))
                      <|>
                       (do
                          dot
