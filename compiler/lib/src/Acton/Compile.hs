@@ -203,6 +203,7 @@ import Utils
 import qualified Pretty
 import qualified InterfaceFiles
 
+import Control.Applicative ((<|>))
 import Control.Concurrent.Async
 import Control.Concurrent.MVar
 import Control.Concurrent (forkIO, myThreadId, threadCapability, threadDelay)
@@ -211,10 +212,10 @@ import Control.DeepSeq (rnf)
 import Control.Exception (Exception, IOException, SomeException, catch, displayException, evaluate, finally, mask_, throwIO, try)
 import Control.Monad
 import Data.Bits (shiftR)
-import Data.Char (isAlpha, isDigit, isHexDigit, isSpace)
+import Data.Char (isAlpha, isDigit, isHexDigit, isSpace, toLower)
 import Data.Either (partitionEithers)
 import Data.Graph
-import Data.List (find, foldl', intercalate, intersperse, nub)
+import Data.List (find, foldl', intercalate, intersperse, isPrefixOf, isSuffixOf, nub)
 import qualified Data.List
 import Data.IORef
 import Data.Maybe (catMaybes, isJust, listToMaybe, mapMaybe)
@@ -222,8 +223,13 @@ import qualified Data.Map as M
 import Data.Ord (Down(..))
 import qualified Data.Set
 import Data.Time.Clock (UTCTime)
+import Data.Word (Word8)
 import Error.Diagnose (Diagnostic)
 import GHC.Conc (getNumCapabilities)
+import qualified Network.HTTP.Client as HTTP
+import Network.HTTP.Client.TLS (tlsManagerSettings)
+import Network.HTTP.Types.Header (hContentDisposition, hContentType)
+import Network.HTTP.Types.Status (statusCode)
 import System.Clock
 import System.Directory
 import System.Directory.Recursive
@@ -239,6 +245,7 @@ import Text.PrettyPrint (renderStyle, style, Style(..), Mode(PageMode))
 import Text.Show.Pretty (ppDoc)
 import Text.Printf
 
+import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Base16 as Base16
@@ -2981,24 +2988,205 @@ fetchDependencies gopts paths depOverrides = do
     runFetch kind name url mh cacheDir zigExe globalCache = do
       unless (C.quiet gopts) $
         putStrLn ("Fetching " ++ kind ++ " dependency " ++ name ++ " from " ++ url)
-      let cmd = proc zigExe ["fetch", "--global-cache-dir", globalCache, url]
-      res <- try (readCreateProcessWithExitCode cmd "") :: IO (Either SomeException (ExitCode, String, String))
-      case res of
-        Left ex -> return (Left ("Failed to fetch dependency " ++ name ++ ": " ++ displayException ex))
-        Right (code, out, err) ->
-          case code of
-            ExitSuccess -> do
-              let hashVal = trim out
-              case mh of
-                Just h | h /= hashVal ->
-                  return (Left ("Hash mismatch for dependency " ++ name ++ " (expected " ++ h ++ ", got " ++ hashVal ++ ")"))
-                _ -> do
-                  exists <- doesDirectoryExist (cacheDir hashVal)
-                  if exists
-                    then return (Right hashVal)
-                    else return (Left ("Dependency " ++ name ++ " not present in Zig cache after fetch: " ++ cacheDir hashVal))
-            ExitFailure _ ->
+      if isHttpUrl url
+        then fetchViaDownloadedArchive kind name url mh cacheDir zigExe globalCache
+        else do -- other URLs, like file:// - not very common, maybe we want to constrain this somehow?
+          res <- runZigFetch zigExe globalCache url
+          case res of
+            Left ex -> return (Left ("Failed to fetch dependency " ++ name ++ ": " ++ displayException ex))
+            Right (ExitSuccess, out, _) ->
+              validateFetchOutput name mh cacheDir out
+            Right (ExitFailure _, _, err) ->
               return (Left ("Failed to fetch dependency " ++ name ++ ":\n" ++ err))
+
+    runZigFetch :: FilePath -> FilePath -> FilePath -> IO (Either SomeException (ExitCode, String, String))
+    runZigFetch zigExe globalCache target = do
+      let cmd = proc zigExe ["fetch", "--global-cache-dir", globalCache, target]
+      try (readCreateProcessWithExitCode cmd "") :: IO (Either SomeException (ExitCode, String, String))
+
+    validateFetchOutput :: String -> Maybe String -> (String -> FilePath) -> String -> IO (Either String String)
+    validateFetchOutput name mh cacheDir out = do
+      let hashVal = trim out
+      case mh of
+        Just h | h /= hashVal ->
+          return (Left ("Hash mismatch for dependency " ++ name ++ " (expected " ++ h ++ ", got " ++ hashVal ++ ")"))
+        _ -> do
+          exists <- doesDirectoryExist (cacheDir hashVal)
+          if exists
+            then return (Right hashVal)
+            else return (Left ("Dependency " ++ name ++ " not present in Zig cache after fetch: " ++ cacheDir hashVal))
+
+    fetchViaDownloadedArchive kind name depUrl mh cacheDir zigExe globalCache = do
+      dl <- downloadToLocalArchive kind name depUrl
+      case dl of
+        Left dlErr -> do
+          direct <- runZigFetch zigExe globalCache depUrl
+          case direct of
+            Left ex ->
+              return (Left ("Failed to fetch dependency " ++ name ++ ":\nDownload step failed: " ++ dlErr
+                            ++ "\nDirect zig fetch failed: " ++ displayException ex))
+            Right (ExitSuccess, out, _) ->
+              validateFetchOutput name mh cacheDir out
+            Right (ExitFailure _, _, err) ->
+              return (Left ("Failed to fetch dependency " ++ name ++ ":\nDownload step failed: " ++ dlErr
+                            ++ "\nDirect zig fetch failed:\n" ++ err))
+        Right localArchive -> do
+          fetched <- runZigFetch zigExe globalCache localArchive
+          _ <- try (removeFile localArchive) :: IO (Either IOException ())
+          case fetched of
+            Left ex ->
+              return (Left ("Failed to fetch dependency " ++ name ++ ": " ++ displayException ex))
+            Right (ExitSuccess, out, _) ->
+              validateFetchOutput name mh cacheDir out
+            Right (ExitFailure _, _, err) ->
+              return (Left ("Failed to fetch dependency " ++ name ++ ":\n" ++ err))
+
+    isHttpUrl :: String -> Bool
+    isHttpUrl depUrl =
+      let u = map toLower depUrl
+      in "http://" `isPrefixOf` u || "https://" `isPrefixOf` u
+
+    downloadToLocalArchive :: String -> String -> String -> IO (Either String FilePath)
+    downloadToLocalArchive _kind _name depUrl = do
+      parsedReq <- try (HTTP.parseRequest depUrl) :: IO (Either SomeException HTTP.Request)
+      case parsedReq of
+        Left ex -> return (Left ("Invalid dependency URL: " ++ displayException ex))
+        Right req -> do
+          let settings = HTTP.managerSetProxy (HTTP.proxyEnvironment Nothing) tlsManagerSettings
+          manager <- HTTP.newManager settings
+          opened <- try (HTTP.responseOpen req manager) :: IO (Either SomeException (HTTP.Response HTTP.BodyReader))
+          case opened of
+            Left ex -> return (Left (displayException ex))
+            Right response -> do
+              let code = statusCode (HTTP.responseStatus response)
+              if code < 200 || code >= 300
+                then do
+                  _ <- try (HTTP.responseClose response) :: IO (Either SomeException ())
+                  return (Left ("HTTP error " ++ show code))
+                else do
+                  tmpDir <- getTemporaryDirectory
+                  (tmpPath, tmpHandle) <- openBinaryTempFile tmpDir "acton-fetch"
+                  let initialSuffix = archiveSuffixForRequestResponse req response
+                  streamRes <- try (streamDownloadToFile (HTTP.responseBody response) tmpHandle) :: IO (Either SomeException BS.ByteString)
+                  _ <- try (hClose tmpHandle) :: IO (Either IOException ())
+                  _ <- try (HTTP.responseClose response) :: IO (Either SomeException ())
+                  case streamRes of
+                    Left ex -> do
+                      _ <- try (removeFile tmpPath) :: IO (Either IOException ())
+                      return (Left ("Unable to save downloaded archive: " ++ displayException ex))
+                    Right sniffBytes ->
+                      case initialSuffix <|> detectArchiveSuffixFromBytes sniffBytes of
+                        Nothing -> do
+                          _ <- try (removeFile tmpPath) :: IO (Either IOException ())
+                          return (Left "Could not determine archive type from URL path, response headers, or file bytes")
+                        Just suffix -> do
+                          let finalPath = tmpPath ++ suffix
+                          moveRes <- try (renameFile tmpPath finalPath) :: IO (Either IOException ())
+                          case moveRes of
+                            Left ex -> do
+                              _ <- try (removeFile tmpPath) :: IO (Either IOException ())
+                              return (Left ("Unable to finalize downloaded archive path: " ++ displayException ex))
+                            Right _ ->
+                              return (Right finalPath)
+
+    streamDownloadToFile :: HTTP.BodyReader -> Handle -> IO BS.ByteString
+    streamDownloadToFile bodyReader outHandle =
+      loop BS.empty
+      where
+        sniffLimit = 600
+        loop sniff = do
+          chunk <- HTTP.brRead bodyReader
+          if BS.null chunk
+            then return sniff
+            else do
+              BS.hPut outHandle chunk
+              let sniff' =
+                    if BS.length sniff >= sniffLimit
+                      then sniff
+                      else BS.take sniffLimit (sniff <> chunk)
+              loop sniff'
+
+    archiveSuffixForRequestResponse :: HTTP.Request -> HTTP.Response HTTP.BodyReader -> Maybe String
+    archiveSuffixForRequestResponse req response =
+      case archiveSuffixFromPath (B.unpack (HTTP.path req)) of
+        Just suffix -> Just suffix
+        Nothing ->
+          case archiveSuffixFromContentDisposition (lookup hContentDisposition (HTTP.responseHeaders response)) of
+            Just suffix -> Just suffix
+            Nothing -> archiveSuffixFromContentType (lookup hContentType (HTTP.responseHeaders response))
+
+    archiveSuffixFromPath :: String -> Maybe String
+    archiveSuffixFromPath rawPath =
+      let p = map toLower rawPath
+      in if ".tar.gz" `isSuffixOf` p then Just ".tar.gz"
+         else if ".tgz" `isSuffixOf` p then Just ".tgz"
+         else if ".tar.xz" `isSuffixOf` p then Just ".tar.xz"
+         else if ".txz" `isSuffixOf` p then Just ".txz"
+         else if ".tar.zst" `isSuffixOf` p then Just ".tar.zst"
+         else if ".tzst" `isSuffixOf` p then Just ".tzst"
+         else if ".tar" `isSuffixOf` p then Just ".tar"
+         else if ".zip" `isSuffixOf` p then Just ".zip"
+         else if ".jar" `isSuffixOf` p then Just ".jar"
+         else Nothing
+
+    archiveSuffixFromContentType :: Maybe B.ByteString -> Maybe String
+    archiveSuffixFromContentType mType =
+      case map toLower . trim . takeWhile (/= ';') . B.unpack <$> mType of
+        Just "application/x-tar" -> Just ".tar"
+        Just "application/gzip" -> Just ".tar.gz"
+        Just "application/x-gzip" -> Just ".tar.gz"
+        Just "application/tar+gzip" -> Just ".tar.gz"
+        Just "application/x-tar-gz" -> Just ".tar.gz"
+        Just "application/x-gtar-compressed" -> Just ".tar.gz"
+        Just "application/x-xz" -> Just ".tar.xz"
+        Just "application/zstd" -> Just ".tar.zst"
+        Just "application/zip" -> Just ".zip"
+        Just "application/x-zip-compressed" -> Just ".zip"
+        Just "application/java-archive" -> Just ".zip"
+        _ -> Nothing
+
+    archiveSuffixFromContentDisposition :: Maybe B.ByteString -> Maybe String
+    archiveSuffixFromContentDisposition mVal = do
+      headerVal <- mVal
+      filenameVal <- extractField (B.pack "filename*=") headerVal <|> extractField (B.pack "filename=") headerVal
+      archiveSuffixFromPath (B.unpack filenameVal)
+      where
+        extractField key raw =
+          let lowerRaw = B.map toLower raw
+              (prefix, rest) = B.breakSubstring key lowerRaw
+          in if B.null rest
+               then Nothing
+               else
+                 let origRest = B.drop (B.length prefix) raw
+                     val0 = B.drop (B.length key) origRest
+                     val1 = B.takeWhile (/= ';') val0
+                     val2 = stripQuotes (B.dropWhile isSpace (trimBS val1))
+                     val3 =
+                       case B.breakSubstring (B.pack "''") val2 of
+                         (_, t) | B.null t -> val2
+                         (_, t) -> B.drop 2 t
+                 in if B.null val3 then Nothing else Just val3
+        trimBS = B.dropWhileEnd isSpace . B.dropWhile isSpace
+        stripQuotes s
+          | B.length s >= 2 && B.head s == '"' && B.last s == '"' = B.tail (B.init s)
+          | otherwise = s
+
+    detectArchiveSuffixFromBytes :: BS.ByteString -> Maybe String
+    detectArchiveSuffixFromBytes bytes
+      | startsWith [0x50, 0x4b, 0x03, 0x04] bytes = Just ".zip"
+      | startsWith [0x50, 0x4b, 0x05, 0x06] bytes = Just ".zip"
+      | startsWith [0x50, 0x4b, 0x07, 0x08] bytes = Just ".zip"
+      | startsWith [0x1f, 0x8b] bytes = Just ".tar.gz"
+      | startsWith [0xfd, 0x37, 0x7a, 0x58, 0x5a, 0x00] bytes = Just ".tar.xz"
+      | startsWith [0x28, 0xb5, 0x2f, 0xfd] bytes = Just ".tar.zst"
+      | hasUstar bytes = Just ".tar"
+      | otherwise = Nothing
+      where
+        startsWith :: [Word8] -> BS.ByteString -> Bool
+        startsWith sig bs =
+          BS.length bs >= length sig && BS.take (length sig) bs == BS.pack sig
+        hasUstar bs =
+          BS.length bs >= 262 && BS.take 5 (BS.drop 257 bs) == BS.pack [0x75, 0x73, 0x74, 0x61, 0x72]
 
     copyTree :: FilePath -> FilePath -> IO ()
     copyTree src dst = do

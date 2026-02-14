@@ -34,6 +34,9 @@ dependencies:
   - filelock
   - filepath
   - hashable
+  - http-client
+  - http-client-tls
+  - http-types
   - megaparsec
   - mtl
   - optparse-applicative
