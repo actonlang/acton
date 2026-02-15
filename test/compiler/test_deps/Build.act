@@ -1,3 +1,6 @@
+name = "test_deps"
+fingerprint = 0x3856c53c8417f6d8
+
 dependencies = {
     "a_b": (
         path="deps/a-b"

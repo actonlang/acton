@@ -1,4 +1,5 @@
 name = "test_doc_printing"
+fingerprint = 0x7dbd90981f02f1f2
 
 dependencies = {}
 zig_dependencies = {}

@@ -1419,7 +1419,7 @@ runCliPostCompile cliHooks gopts plan env = do
             when (C.verbose gopts) $
               logLine ("Generating build.zig for dependency project " ++ p)
             dummyPaths <- pathsForModule opts' projMap pctx (A.modName ["__gen_build__"])
-            genBuildZigFiles rootPins (ccDepOverrides cctx) dummyPaths
+            genBuildZigFiles False rootPins (ccDepOverrides cctx) dummyPaths
           Nothing -> return ()
     let runFinal action = do
           cchFinalStart cliHooks
@@ -1729,8 +1729,8 @@ generateFingerprint name = do
 
 -- Render build.zig and build.zig.zon from templates and BuildSpec
 -- rootPins: dependency pins from the main project (applied to all deps, including transitive)
-genBuildZigFiles :: M.Map String BuildSpec.PkgDep -> [(String, FilePath)] -> Paths -> IO ()
-genBuildZigFiles rootPins depOverrides paths = do
+genBuildZigFiles :: Bool -> M.Map String BuildSpec.PkgDep -> [(String, FilePath)] -> Paths -> IO ()
+genBuildZigFiles requireIds rootPins depOverrides paths = do
     let proj = projPath paths
     projAbs <- canonicalizePath proj
     let sys              = sysPath paths
@@ -1740,7 +1740,7 @@ genBuildZigFiles rootPins depOverrides paths = do
         distBuildZonPath = joinPath [sys, "builder", "build.zig.zon"]
     buildZigTemplate <- readFile distBuildZigPath
     buildZonTemplate <- readFile distBuildZonPath
-    spec0 <- loadBuildSpec proj
+    spec0 <- if requireIds then loadBuildSpecRequired proj else loadBuildSpec proj
     spec  <- traverse (applyDepOverrides proj depOverrides) spec0
     -- TODO: Once name/fingerprint are mandatory, remove fallback name/fingerprint
     -- generation and fail early when Build.act is missing them.
@@ -1958,7 +1958,7 @@ zigBuild env gopts opts paths tasks binTasks allowPrune mProgressUI = do
       pinsSpec0 <- loadBuildSpec (projPath paths)
       pinsSpec  <- traverse (applyDepOverrides (projPath paths) depOverrides) pinsSpec0
       let pins = maybe M.empty BuildSpec.dependencies pinsSpec
-      genBuildZigFiles pins depOverrides paths
+      genBuildZigFiles True pins depOverrides paths
 
     let zigExe = zig paths
         baseArgs = ["build","--cache-dir", local_cache_dir,

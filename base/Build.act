@@ -1,3 +1,6 @@
+name = "base"
+fingerprint = 0xc0b4fe61c0b4fe61
+
 dependencies = {
     "actondb": (
         path="../backend/"

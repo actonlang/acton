@@ -1,3 +1,6 @@
+name = "conf_2bin"
+fingerprint = 0x3a0f2be8959f1099
+
 bins = {
     "a": "a.main",
     "b": "b.main",

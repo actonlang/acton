@@ -1,4 +1,5 @@
 name = "dep_a"
+fingerprint = 0xf50f59a402fa4e49
 
 dependencies = {
   "dep_b": (path="../dep_b_missing")

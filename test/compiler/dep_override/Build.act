@@ -1,4 +1,5 @@
 name = "dep_override"
+fingerprint = 0xcd8179d196da1527
 
 dependencies = {
   "dep_a": (path="deps/dep_a_missing")

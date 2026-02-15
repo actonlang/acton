@@ -149,6 +149,7 @@ module Acton.Compile
   , depTypePathsFromMap
   , resolveDepBase
   , loadBuildSpec
+  , loadBuildSpecRequired
   , filterActFile
   , srcFile
   , outBase
@@ -2464,7 +2465,7 @@ applyFingerprint path mspec fpMap =
 discoverProjects :: FilePath -> FilePath -> [(String, FilePath)] -> IO (M.Map FilePath ProjCtx)
 discoverProjects sysAbs rootProj depOverrides = do
     rootAbs <- normalizePathSafe rootProj
-    rootSpec0 <- loadBuildSpec rootAbs
+    rootSpec0 <- loadBuildSpecRequired rootAbs
     rootSpec  <- traverse (applyDepOverrides rootAbs depOverrides) rootSpec0
     let rootPins = maybe M.empty BuildSpec.dependencies rootSpec
         (_, fpMap0, _) = applyFingerprint rootAbs rootSpec M.empty
@@ -2765,7 +2766,13 @@ pathsForModule opts projMap ctx mn = do
 -- | Load a BuildSpec from Build.act (preferred) or build.act.json.
 -- Throws ProjectError on parse failure to keep callers in a single error path.
 loadBuildSpec :: FilePath -> IO (Maybe BuildSpec.BuildSpec)
-loadBuildSpec dir = do
+loadBuildSpec = loadBuildSpecWith AllowMissing
+
+loadBuildSpecRequired :: FilePath -> IO (Maybe BuildSpec.BuildSpec)
+loadBuildSpecRequired = loadBuildSpecWith RequireIds
+
+loadBuildSpecWith :: FingerprintRequirement -> FilePath -> IO (Maybe BuildSpec.BuildSpec)
+loadBuildSpecWith req dir = do
     let actPath  = joinPath [dir, "Build.act"]
         jsonPath = joinPath [dir, "build.act.json"]
     actExists <- doesFileExist actPath
@@ -2774,7 +2781,7 @@ loadBuildSpec dir = do
         content <- readFile actPath
         case BuildSpec.parseBuildAct content of
           Left err -> throwProjectError ("Failed to parse Build.act in " ++ dir ++ ":\n" ++ err)
-          Right (spec, _, _) -> Just <$> validateFingerprint actPath spec
+          Right (spec, _, _) -> Just <$> validateFingerprint req actPath spec
       else do
         jsonExists <- doesFileExist jsonPath
         if jsonExists
@@ -2782,37 +2789,56 @@ loadBuildSpec dir = do
             json <- BL.readFile jsonPath
             case BuildSpec.parseBuildSpecJSON json of
               Left err   -> throwProjectError ("Failed to parse build.act.json in " ++ dir ++ ":\n" ++ err)
-              Right spec -> Just <$> validateFingerprint jsonPath spec
+              Right spec -> Just <$> validateFingerprint req jsonPath spec
           else return Nothing
 
--- TODO: Make name and fingerprint mandatory in Build.act/build.act.json and
--- validate at parse/load time so errors surface before build file generation.
-validateFingerprint :: FilePath -> BuildSpec.BuildSpec -> IO BuildSpec.BuildSpec
-validateFingerprint sourcePath spec =
-    case (BuildSpec.specName spec, BuildSpec.fingerprint spec) of
-      (Just name, Just fpRaw) ->
-        case Fingerprint.parseFingerprint fpRaw of
-          Nothing ->
-            throwProjectError ("Invalid fingerprint '" ++ fpRaw ++ "' in " ++ sourcePath
-                               ++ " (project name: " ++ show name ++ ").\n"
-                               ++ "Expected a 64-bit numeric fingerprint like 0x1234abcd5678ef00.")
-          Just fp ->
-            let expectedPrefix = Fingerprint.fingerprintPrefixForName name
-                actualPrefix = fromIntegral (fp `shiftR` 32)
-            in if expectedPrefix == actualPrefix
-                 then return spec
-                 else
-                   let expectedPrefixHex = Fingerprint.formatFingerprintPrefix expectedPrefix
-                       actualFpHex = Fingerprint.formatFingerprint fp
-                   in throwProjectError ("Fingerprint mismatch in " ++ sourcePath
-                                         ++ " for project name " ++ show name ++ ".\n"
-                                         ++ "Expected prefix: " ++ expectedPrefixHex
-                                         ++ " (CRC32 of name).\n"
-                                         ++ "Current fingerprint: " ++ actualFpHex ++ "\n"
-                                         ++ "Renames and forks require a new fingerprint for this name.\n"
-                                         ++ "Generate a new fingerprint with prefix: "
-                                         ++ expectedPrefixHex)
-      _ -> return spec
+data FingerprintRequirement = RequireIds | AllowMissing
+
+validateFingerprint :: FingerprintRequirement -> FilePath -> BuildSpec.BuildSpec -> IO BuildSpec.BuildSpec
+validateFingerprint req sourcePath spec =
+    case req of
+      AllowMissing -> validateOptional
+      RequireIds -> validateRequired
+  where
+    validateOptional =
+      case (BuildSpec.specName spec, BuildSpec.fingerprint spec) of
+        (Just name, Just fpRaw) -> validatePair name fpRaw
+        _ -> return spec
+
+    validateRequired =
+      case (BuildSpec.specName spec, BuildSpec.fingerprint spec) of
+        (Nothing, _) ->
+          throwProjectError ("Missing project name in " ++ sourcePath ++ ".\n"
+                             ++ "Add a name field, for example:\n"
+                             ++ "name = \"my_project\"")
+        (_, Nothing) ->
+          throwProjectError ("Missing fingerprint in " ++ sourcePath ++ ".\n"
+                             ++ "Add a fingerprint field, for example:\n"
+                             ++ "fingerprint = 0x1234abcd5678ef00")
+        (Just name, Just fpRaw) -> validatePair name fpRaw
+
+    validatePair name fpRaw =
+      case Fingerprint.parseFingerprint fpRaw of
+        Nothing ->
+          throwProjectError ("Invalid fingerprint '" ++ fpRaw ++ "' in " ++ sourcePath
+                             ++ " (project name: " ++ show name ++ ").\n"
+                             ++ "Expected a 64-bit numeric fingerprint like 0x1234abcd5678ef00.")
+        Just fp ->
+          let expectedPrefix = Fingerprint.fingerprintPrefixForName name
+              actualPrefix = fromIntegral (fp `shiftR` 32)
+          in if expectedPrefix == actualPrefix
+               then return spec
+               else
+                 let expectedPrefixHex = Fingerprint.formatFingerprintPrefix expectedPrefix
+                     actualFpHex = Fingerprint.formatFingerprint fp
+                 in throwProjectError ("Fingerprint mismatch in " ++ sourcePath
+                                       ++ " for project name " ++ show name ++ ".\n"
+                                       ++ "Expected prefix: " ++ expectedPrefixHex
+                                       ++ " (CRC32 of name).\n"
+                                       ++ "Current fingerprint: " ++ actualFpHex ++ "\n"
+                                       ++ "Renames and forks require a new fingerprint for this name.\n"
+                                       ++ "Generate a new fingerprint with prefix: "
+                                       ++ expectedPrefixHex)
 
 -- | Treat drive-letter paths as absolute in addition to POSIX roots.
 -- This keeps path normalization consistent on Windows hosts.

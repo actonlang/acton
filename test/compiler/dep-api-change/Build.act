@@ -1,3 +1,6 @@
+name = "dep_api_change"
+fingerprint = 0xbd306978666b735b
+
 dependencies = {
     "libfoo": (
         path="deps/libfoo"

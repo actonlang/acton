@@ -1,4 +1,5 @@
 name = "dep_unused"
+fingerprint = 0x7151e903e0ce7b19
 
 dependencies = {
 }

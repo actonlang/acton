@@ -1,4 +1,5 @@
 name = "dep_c"
+fingerprint = 0x1b013888ecf42f65
 
 dependencies = {
 }

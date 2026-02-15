@@ -9,6 +9,9 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import qualified Data.Text.Encoding as TE
 import           Data.Char (isDigit, isHexDigit, isSpace)
+import           Data.Bits (shiftL, (.|.))
+import           Data.Word (Word64)
+import qualified Acton.Fingerprint as Fingerprint
 import           Data.List (find, partition, sort)
 import qualified Data.Map.Strict as M
 import           System.Directory
@@ -215,6 +218,12 @@ writeFileUtf8 p t = do
         renameFile tmp p
   E.catch (renameFile tmp p) handler
 
+fingerprintForName :: String -> String
+fingerprintForName name =
+  let prefix = Fingerprint.fingerprintPrefixForName name
+      fp = (fromIntegral prefix `shiftL` 32) .|. (1 :: Word64)
+  in Fingerprint.formatFingerprint fp
+
 -- | Update a file's modification time to now.
 touch :: FilePath -> IO ()
 touch p = do
@@ -237,7 +246,7 @@ ensureCleanAt proj = do
   createDirectoryIfMissing True src
   let buildAct = proj </> "Build.act"
   exists <- doesFileExist buildAct
-  unless exists $ writeFileUtf8 buildAct ""
+  unless exists $ writeBuildAct proj (takeFileName proj) []
   -- Remove previous build output if present
   let outDir = proj </> "out"
   outExists <- doesDirectoryExist outDir
@@ -324,7 +333,9 @@ ensureCleanProjectAt proj = do
 -- | Write a Build.act file with optional path deps.
 writeBuildAct :: FilePath -> String -> [(String, FilePath)] -> IO ()
 writeBuildAct proj name deps = do
-  let header = [T.pack ("name = \"" ++ name ++ "\"")]
+  let header = [ T.pack ("name = \"" ++ name ++ "\"")
+               , T.pack ("fingerprint = " ++ fingerprintForName name)
+               ]
       depLines
         | null deps = []
         | otherwise =
