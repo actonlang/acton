@@ -1,9 +1,12 @@
 Building file test/typeerrors/ex18.act using temporary scratch directory
-[error]: Cannot satisfy the following simultaneous constraints for the unknown type t0
-     +--> ex18.act@2:12-2:27
+[error]: Cannot satisfy the following simultaneous constraints for the unknown types
+     +--> ex18.act@2:22-2:27
      |
    2 |     return len(ls) + "hej"
-     :            ^--------------
+     :            ^---------^----
+     :            |         `- The type of the indicated expression (inferred to be __builtin__.str) must be a subclass of t0
+     :            |            
+     :            |- The type of the indicated expression (inferred to be __builtin__.int) must be a subclass of t1
+     :            |- The type of the indicated expression (which we call t1) must be a subtype of t0
      :            `- The type of the indicated expression (which we call t0) must implement __builtin__.Plus
-     :               __builtin__.atom must be a subclass of t0
 -----+

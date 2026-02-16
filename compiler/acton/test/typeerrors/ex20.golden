@@ -1,13 +1,21 @@
 Building file test/typeerrors/ex20.act using temporary scratch directory
-[error]: Constraint violation
+[error]: Cannot satisfy the following simultaneous constraints for the unknown types
      +--> ex20.act@1:1-1:2
      |
    1 |    f : (str,str) -> str
      :    ^ 
-     :    `- Type incompatibility between signature for and definition of f (__builtin__.str must be a subclass of __builtin__.int)
+     :    |- 
+     :    `- 
      :
    3 | +> def f(s : str, a):
    4 | |>     return s * a
+     : |             ^---^
+     : |             |   `- The type of the indicated expression (which we call t0) must be a subtype of t1
+     : |             |      
+     : |             |- The type of the indicated expression (inferred to be __builtin__.str) must be a subclass of t2
+     : |             |- The type of the indicated expression (which we call t2) must implement __builtin__.Times[t1]
+     : |             `- The type of the indicated expression (which we call t2) must be a subtype of t3
      : | 
-     : `- f is defined here
+     : |- Type incompatibility between signature for and definition of f (t3 must be a subclass of __builtin__.str)
+     : `- Type incompatibility between signature for and definition of f (__builtin__.str must be a subclass of t0)
 -----+

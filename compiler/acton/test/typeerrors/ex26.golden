@@ -1,8 +1,25 @@
 Building file test/typeerrors/ex26.act using temporary scratch directory
-[error]: Constraint violation
-     +--> ex26.act@15:5-15:33
+[error]: Cannot satisfy the following simultaneous constraints for the unknown types
+     +--> ex26.act@7:9-7:21
      |
+   7 | mut def remove_thing(foos):
+     :         ^----------- 
+     :         |- 
+     :            
+     :         `- 
+     :
+  12 |     p = []
+     :         ^-
+     :         `- The type of the indicated expression (inferred to be __builtin__.list[_]) must be a subclass of t2
+  13 |     foos = [Foo(True)]
+     :             ^-------- 
+     :             `- The type of the indicated expression (inferred to be pure) must be a subclass of t0
+     :
   15 |     p.extend(remove_thing(foos))
-     :     ^---------------------------
-     :     `- None must be a subclass of __builtin__.list[_]
+     :     ^--------^------------------
+     :     |        |- Type incompatibility between definition of and call of remove_thing (mut must be a subclass of t0)
+     :     |        `- Type incompatibility between definition of and call of remove_thing (None must be a subclass of t1)
+     :     |- The type of the indicated expression (which we call t2) must have an attribute extend with type t3(t4) -> _; no such type is known.
+     :     |- The type of the indicated expression (which we call t3) must be a subclass of t0
+     :     `- The type of the indicated expression (which we call t1) must be a subtype of t4
 -----+

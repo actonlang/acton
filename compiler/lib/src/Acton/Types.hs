@@ -1447,7 +1447,7 @@ instance Check Decl where
                                              popFX
                                              let cst = if fallsthru b then [Cast (locinfo l 65) env1 tNone t] else []
                                                  t1 = tFun fx' (prowOf p') (krowOf k') t
-                                             (cs0,eq1) <- simplify env1 (tempGoal t1) (csp++csk++csb++cst)
+                                             (cs0,eq1) <- newSimplify env1 (tempGoal t1) (csp++csk++csb++cst)
                                              -- At this point, n has the type given by its def annotations.
                                              -- Now check that this type is no less general than its recursion assumption in env.
                                              let body = bindWits eq1 ++ defaultsP p' ++ defaultsK k' ++ b'

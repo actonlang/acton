@@ -1,8 +1,28 @@
 Building file test/typeerrors/ex25.act using temporary scratch directory
-[error]: Incompatible types
-     +--> ex25.act@8:9-8:16
+[error]: Cannot satisfy the following simultaneous constraints for the unknown types
+     +--> ex25.act@2:9-2:12
      |
+   2 | +>     def foo(cb):
+     : |          ^-- 
+     : |          |- t6 must be a subclass of _
+     : |          `- t7 must be a subclass of _
+   3 | |          pass
+   4 | |> 
+     : | 
+     : `- None must be a subclass of t6
+     :
+   6 |     def bar():
+     :         ^-- 
+     :         `- t0 must be a subclass of _
+     :            t0 must implement $Wrapped[t1, _]t7 must implement $Wrapped[_, _]
+   7 |         b = Bob()
+     :             ^----
+     :             |- The type of the indicated expression (inferred to be proc) must be a subclass of t1
+     :             |- The type of the indicated expression (inferred to be Bob) must be a subclass of t5
+     :             `- The type of the indicated expression (which we call t5) must be a subtype of t2
    8 |         b.foo()
      :         ^------
-     :         `- keyword component(s) 'cb' is missing in tuple
+     :         |- The type of the indicated expression (which we call t2) must have an attribute foo with type t3() -> _; no such type is known.
+     :         |- t3 must implement $Wrapped[_, t4]
+     :         `- The type of the indicated expression (which we call t4) must be a subclass of t1
 -----+

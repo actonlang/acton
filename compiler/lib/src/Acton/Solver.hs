@@ -142,7 +142,7 @@ newrank pol (Sub info env _ t1 t2)          = newrank pol (Cast info env t1 t2)
 newrank pol (Cast _ env (TUni _ v) (TUni _ v'))
                                             = R_var v v'
 newrank pol (Cast _ env t (TUni _ v))
-  | neg && not pos                          = R_pos v alts
+  | pos && not neg                          = R_pos v alts
   | otherwise                               = R_low v alts
   where (pos, neg)                          = (v `elem` fst pol, v `elem` snd pol)
         alts                                = reverse $ allAbove (limitQuant v env) t
@@ -343,7 +343,7 @@ solve' env select hist te eq cs
                                                  unify (noinfo 5) (tUni v) t
                                                  proceed (t:hist) eq cs
           where selsOf cs                   = sortBy (\a b -> compare (nstr a) (nstr b)) $ nub [ n | Sel _ _ _ (TUni _ v') n _ <- cs, v' == v ]
-                attrs                       = nub $ selsOf solve_cs
+                attrs                       = nub $ selsOf solve_cs \\ valueKWs
         tryAlt v t
           | uvkind v == KFX                 = do t <- instwild env (uvkind v) t
                                                  --traceM ("  # TRYING " ++ prstr v ++ " = " ++ prstr t)
@@ -366,8 +366,8 @@ solve' env select hist te eq cs
                 cond (RTry v as r : rs)     = RTry v (if rev' then subrev ts' else ts') rev'
                   where ts                  = foldr intersect as $ map alts rs
                         ts'                 = if v `elem` optvs then ts \\ [tOpt tWild] else ts
---                        rev'                = (or $ r : map rev rs) || v `elem` posvs
-                        rev'                = (and $ r : map rev rs) || v `elem` posvs
+                        rev'                = (or $ r : map rev rs) || v `elem` posvs
+--                        rev'                = (and $ r : map rev rs) || v `elem` posvs
                 cond (RVar v as : rs)       = RVar v (foldr union as $ map alts rs)
                 cond [RImp q rs]            = RImp q (condense env1 rs)
                   where env1                = defineTVars q env
