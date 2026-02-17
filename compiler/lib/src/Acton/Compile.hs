@@ -211,7 +211,7 @@ import Control.Concurrent.STM (TChan, TVar, atomically, check, modifyTVar', newT
 import Control.DeepSeq (rnf)
 import Control.Exception (Exception, IOException, SomeException, catch, displayException, evaluate, finally, mask_, throwIO, try)
 import Control.Monad
-import Data.Bits (shiftR)
+import Data.Bits (shiftL, shiftR, (.|.))
 import Data.Char (isAlpha, isDigit, isHexDigit, isSpace, toLower)
 import Data.Either (partitionEithers)
 import Data.Graph
@@ -223,7 +223,7 @@ import qualified Data.Map as M
 import Data.Ord (Down(..))
 import qualified Data.Set
 import Data.Time.Clock (UTCTime)
-import Data.Word (Word8)
+import Data.Word (Word8, Word32, Word64)
 import Error.Diagnose (Diagnostic)
 import GHC.Conc (getNumCapabilities)
 import qualified Network.HTTP.Client as HTTP
@@ -241,6 +241,7 @@ import System.Exit (ExitCode(..))
 import System.IO hiding (readFile, writeFile)
 import System.IO.Unsafe (unsafePerformIO)
 import System.Process (readCreateProcessWithExitCode, proc)
+import System.Random (randomRIO)
 import Text.PrettyPrint (renderStyle, style, Style(..), Mode(PageMode))
 import Text.Show.Pretty (ppDoc)
 import Text.Printf
@@ -2767,8 +2768,20 @@ loadBuildSpec dir = do
     if actExists
       then do
         content <- readFile actPath
-        case BuildSpec.parseBuildAct content of
-          Left err -> throwProjectError ("Failed to parse Build.act in " ++ dir ++ ":\n" ++ err)
+        case BuildSpec.parseBuildActDetailed content of
+          Left err ->
+            case err of
+              BuildSpec.MissingFingerprint name -> do
+                suggestion <- suggestFingerprint name
+                throwProjectError ("Missing fingerprint in " ++ actPath ++ ".\n"
+                                   ++ "ERROR: Build.act requires `fingerprint`. For example: fingerprint = " ++ suggestion ++ "\n"
+                                   ++ "HINT: Fingerprint = CRC32(name) in the high 32 bits + random low 32 bits. You may choose a different value.")
+              BuildSpec.MissingProjectName -> do
+                suggestion <- suggestProjectName dir
+                throwProjectError ("Missing project name in " ++ actPath ++ ".\n"
+                                   ++ "Add: name = " ++ show suggestion)
+              BuildSpec.ParseError msg ->
+                throwProjectError ("Failed to parse Build.act in " ++ dir ++ ":\n" ++ msg)
           Right (spec, _, _) -> validateBuildSpec actPath spec
       else
         throwProjectError ("Missing Build.act in " ++ dir ++ ".\n"
@@ -2796,32 +2809,53 @@ validateProjectName sourcePath name =
       where
         isIdentChar x = isAlpha x || isDigit x || x == '_'
 
+suggestProjectName :: FilePath -> IO String
+suggestProjectName dir = do
+    resolved <- normalizePathSafe dir
+    let base = takeBaseName resolved
+    if null base || base == "."
+      then return "my_project"
+      else return base
+
+suggestFingerprint :: String -> IO String
+suggestFingerprint name = do
+    let prefix = Fingerprint.fingerprintPrefixForName name
+    low <- randomRIO (1, maxBound :: Word32)
+    let fp = (fromIntegral prefix `shiftL` 32) .|. (fromIntegral low :: Word64)
+    return (Fingerprint.formatFingerprint fp)
+
 validateFingerprint :: FilePath -> String -> String -> IO ()
 validateFingerprint sourcePath name fpRaw =
     case Fingerprint.parseFingerprint fpRaw of
-      Nothing ->
+      Nothing -> do
+        suggestion <- suggestFingerprint name
         throwProjectError ("Invalid fingerprint '" ++ fpRaw ++ "' in " ++ sourcePath
                            ++ " (project name: " ++ show name ++ ").\n"
-                           ++ "Expected a 64-bit numeric fingerprint like 0x1234abcd5678ef00.")
-      Just fp ->
+                           ++ "Expected a 64-bit numeric fingerprint like 0x1234abcd5678ef00.\n"
+                           ++ "Suggested fingerprint: " ++ suggestion)
+      Just fp -> do
         let formatted = Fingerprint.formatFingerprint fp
             expectedPrefix = Fingerprint.fingerprintPrefixForName name
             expectedPrefixHex = Fingerprint.formatFingerprintPrefix expectedPrefix
             actualPrefix = fromIntegral (fp `shiftR` 32)
-        in if formatted == Fingerprint.fingerprintPlaceholder
-             then throwProjectError ("Fingerprint placeholder " ++ formatted ++ " in " ++ sourcePath
-                                     ++ " is not valid.\n"
-                                     ++ "Generate a new fingerprint with prefix: " ++ expectedPrefixHex)
-             else if expectedPrefix == actualPrefix
-               then return ()
-               else
-                 throwProjectError ("Fingerprint mismatch in " ++ sourcePath
-                                    ++ " for project name " ++ show name ++ ".\n"
-                                    ++ "Expected prefix: " ++ expectedPrefixHex
-                                    ++ " (CRC32 of name).\n"
-                                    ++ "Current fingerprint: " ++ formatted ++ "\n"
-                                    ++ "Renames and forks require a new fingerprint for this name.\n"
-                                    ++ "Generate a new fingerprint with prefix: " ++ expectedPrefixHex)
+        if formatted == Fingerprint.fingerprintPlaceholder
+          then do
+            suggestion <- suggestFingerprint name
+            throwProjectError ("Fingerprint placeholder " ++ formatted ++ " in " ++ sourcePath
+                               ++ " is not valid.\n"
+                               ++ "Suggested fingerprint: " ++ suggestion)
+          else if expectedPrefix == actualPrefix
+            then return ()
+            else do
+              suggestion <- suggestFingerprint name
+              throwProjectError ("Fingerprint mismatch in " ++ sourcePath
+                                 ++ " for project name " ++ show name ++ ".\n"
+                                 ++ "Expected prefix: " ++ expectedPrefixHex
+                                 ++ " (CRC32 of name).\n"
+                                 ++ "Current fingerprint: " ++ formatted ++ "\n"
+                                 ++ "Renames and forks require a new fingerprint for this name.\n"
+                                 ++ "Suggested fingerprint: " ++ suggestion)
+
 
 projectNameMax :: Int
 projectNameMax = 32

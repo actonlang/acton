@@ -7,6 +7,8 @@ module Acton.BuildSpec
   , encodeBuildSpecJSON
   , renderBuildAct
   , parseBuildAct
+  , parseBuildActDetailed
+  , BuildSpecParseError(..)
   , updateBuildActFromJSON
   ) where
 
@@ -106,6 +108,19 @@ data BuildSpec = BuildSpec
   , zig_dependencies :: Map String ZigDep
   } deriving (Eq, Show, Generic)
 
+data BuildSpecParseError
+  = ParseError String
+  | MissingProjectName
+  | MissingFingerprint String
+  deriving (Eq, Show)
+
+renderBuildSpecParseError :: BuildSpecParseError -> String
+renderBuildSpecParseError err =
+  case err of
+    ParseError msg -> msg
+    MissingProjectName -> "Missing project name (add: name = \"my_project\")"
+    MissingFingerprint _ -> "Missing fingerprint (add: fingerprint = 0x1234abcd5678ef00)"
+
 instance FromJSON BuildSpec where
   parseJSON = Ae.withObject "BuildSpec" $ \o -> do
     nm   <- o .: "name"
@@ -152,7 +167,9 @@ renderBuildAct (BuildSpec nm mdesc fp deps zdeps) = unlines $
 updateBuildActFromJSON :: String -> BL.ByteString -> Either String String
 updateBuildActFromJSON content json = do
   modAST <- parseModuleForSpec content
-  currSpec <- extractSpecFromModule modAST
+  currSpec <- case extractSpecFromModule modAST of
+                Left err -> Left (renderBuildSpecParseError err)
+                Right spec -> Right spec
   val <- Ae.eitherDecode' json
   case val of
     Ae.Object obj -> do
@@ -243,9 +260,17 @@ encodeBuildSpecJSON :: BuildSpec -> BL.ByteString
 encodeBuildSpecJSON = Ae.encode
 
 parseBuildAct :: String -> Either String (BuildSpec, Maybe (Int,Int), Maybe (Int,Int))
-parseBuildAct content = do
+parseBuildAct content =
+  case parseBuildActDetailed content of
+    Left err -> Left (renderBuildSpecParseError err)
+    Right res -> Right res
+
+parseBuildActDetailed :: String -> Either BuildSpecParseError (BuildSpec, Maybe (Int,Int), Maybe (Int,Int))
+parseBuildActDetailed content = do
   -- Parse with Acton parser and extract BuildSpec from AST
-  modAST <- parseModuleForSpec content
+  modAST <- case parseModuleForSpec content of
+              Left err -> Left (ParseError err)
+              Right m -> Right m
   specFromAST <- extractSpecFromModule modAST
   -- Compute body offsets using AST locations
   let mDepsOff = findBodyOffsetsFromAST content "dependencies" modAST
@@ -316,12 +341,12 @@ parseModuleForSpec content =
        Right m -> Right m
 
 -- Extract name, description, dependencies and zig_dependencies from the AST
-extractSpecFromModule :: S.Module -> Either String BuildSpec
+extractSpecFromModule :: S.Module -> Either BuildSpecParseError BuildSpec
 extractSpecFromModule (S.Module _ _ stmts) =
   let (mname, mdesc, mfp, deps, zigs) = foldl step (Nothing, Nothing, Nothing, Map.empty, Map.empty) stmts
   in case (mname, mfp) of
-       (Nothing, _) -> Left "Missing project name (add: name = \"my_project\")"
-       (_, Nothing) -> Left "Missing fingerprint (add: fingerprint = 0x1234abcd5678ef00)"
+       (Nothing, _) -> Left MissingProjectName
+       (Just name, Nothing) -> Left (MissingFingerprint name)
        (Just name, Just fp) ->
          Right BuildSpec { specName = name
                          , specDescription = mdesc
