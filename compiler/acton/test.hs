@@ -12,6 +12,7 @@ import qualified Data.ByteString.Lazy.Char8 as LBS
 import Control.Exception (catch, IOException)
 import System.Directory
 import System.Directory.Recursive
+import System.Environment (getEnvironment)
 import System.Exit
 import System.FilePath
 import System.FilePath.Posix
@@ -152,6 +153,56 @@ compilerTests =
             (returnCode, _cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc actonExe ["build"]) { cwd = Just proj } ""
             assertEqual "acton should fail without Build.act" (ExitFailure 1) returnCode
             assertBool "error should mention Build.act" ("Build.act" `isInfixOf` cmdErr)
+#if !defined(mingw32_HOST_OS)
+  , testCase "runacton shebang runs standalone script" $ do
+        withSystemTempDirectory "acton-runacton" $ \proj -> do
+            let script = proj </> "hello.act"
+            writeFile script $ unlines
+              [ "#!/usr/bin/env runacton"
+              , "actor main(env):"
+              , "    print(\"Hello from runacton\")"
+              , "    env.exit(0)"
+              ]
+            perms <- getPermissions script
+            setPermissions script perms{ executable = True }
+            (returnCode, cmdOut, cmdErr) <- runRunacton script [] proj
+            assertEqual "runacton should succeed" ExitSuccess returnCode
+            assertEqual "runacton output" "Hello from runacton\n" cmdOut
+            assertEqual "runacton stderr" "" cmdErr
+
+  , testCase "runacton ignores project Build.act" $ do
+        withSystemTempDirectory "acton-runacton-proj" $ \proj -> do
+            let name = "demo"
+                fp = Fingerprint.formatFingerprint
+                       (Fingerprint.updateFingerprintPrefix
+                         (Fingerprint.fingerprintPrefixForName name) 1)
+                srcDir = proj </> "src"
+                mainFile = srcDir </> "main.act"
+                script = proj </> "script.act"
+            createDirectoryIfMissing True srcDir
+            writeFile (proj </> "Build.act") $ unlines
+              [ "name = \"" ++ name ++ "\""
+              , "fingerprint = " ++ fp
+              , ""
+              ]
+            writeFile mainFile $ unlines
+              [ "actor main(env):"
+              , "    print(\"Project main\")"
+              , "    env.exit(0)"
+              ]
+            writeFile script $ unlines
+              [ "#!/usr/bin/env runacton"
+              , "actor main(env):"
+              , "    print(\"Script main\")"
+              , "    env.exit(0)"
+              ]
+            perms <- getPermissions script
+            setPermissions script perms{ executable = True }
+            (returnCode, cmdOut, cmdErr) <- runRunacton script [] proj
+            assertEqual "runacton should succeed" ExitSuccess returnCode
+            assertEqual "runacton output" "Script main\n" cmdOut
+            assertEqual "runacton stderr" "" cmdErr
+#endif
   ]
 
 parseFlagTests =
@@ -598,6 +649,16 @@ buildThing opts thing = do
     (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc actonExe args){ cwd = Just wd } ""
     return (returnCode, cmdOut, cmdErr)
 
+
+runRunacton :: FilePath -> [String] -> FilePath -> IO (ExitCode, String, String)
+runRunacton script args cwd = do
+    actonBin <- canonicalizePath "../../dist/bin"
+    env0 <- getEnvironment
+    let pathVal = case lookup "PATH" env0 of
+          Just p -> p
+          Nothing -> ""
+        env1 = ("PATH", actonBin ++ ":" ++ pathVal) : filter ((/= "PATH") . fst) env0
+    readCreateProcessWithExitCode (proc script args){ cwd = Just cwd, env = Just env1 } ""
 
 runActon opts expRet expFail proj = do
     actonExe <- canonicalizePath "../../dist/bin/acton"

@@ -233,7 +233,7 @@ import Network.HTTP.Types.Status (statusCode)
 import System.Clock
 import System.Directory
 import System.Directory.Recursive
-import System.Environment (getExecutablePath)
+import System.Environment (getExecutablePath, lookupEnv)
 import System.FileLock (FileLock, SharedExclusive(Exclusive), tryLockFile, unlockFile)
 import System.FilePath ((</>))
 import System.FilePath.Posix
@@ -2567,9 +2567,13 @@ srcBase paths mn        = joinPath (srcDir paths : A.modPath mn)
 -- Requires Build.act and a src/ directory.
 isActonProjectRoot :: FilePath -> IO Bool
 isActonProjectRoot path = do
-    hasBuildAct <- doesFileExist (path </> "Build.act")
-    hasSrcDir <- doesDirectoryExist (path </> "src")
-    return (hasBuildAct && hasSrcDir)
+    runacton <- lookupEnv "ACTON_RUNACTON"
+    if isJust runacton
+      then return False
+      else do
+        hasBuildAct <- doesFileExist (path </> "Build.act")
+        hasSrcDir <- doesDirectoryExist (path </> "src")
+        return (hasBuildAct && hasSrcDir)
 
 findProjectDir :: FilePath -> IO (Maybe FilePath)
 findProjectDir path = do
