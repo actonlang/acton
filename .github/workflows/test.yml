@@ -261,7 +261,7 @@ jobs:
         arch: [amd64, arm64]
     runs-on: ${{ matrix.arch == 'amd64' && 'ubuntu-24.04' || 'ubuntu-24.04-arm' }}
     container:
-      image: debian:12
+      image: ubuntu:22.04
     env:
       LANG: en_US.UTF-8
       LC_ALL: en_US.UTF-8
@@ -270,6 +270,7 @@ jobs:
       - name: "Show platform and environment"
         run: |
           env
+          ldd --version | head -n1
           cat /proc/cpuinfo
           uname -a
       - name: "Set BUILD_RELEASE when we are building for a version tag"

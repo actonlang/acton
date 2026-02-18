@@ -28,6 +28,11 @@ override_dh_strip:
 override_dh_dwz:
 	@echo "Skipping dwz"
 
+# Force a legacy-compatible .deb compression format.
+# Newer dpkg defaults may emit control.tar.zst, which Debian 11 cannot unpack.
+override_dh_builddeb:
+	dh_builddeb -- -Zxz --uniform-compression
+
 # dh_make generated override targets
 # This is example for Cmake (See https://bugs.debian.org/641051 )
 #override_dh_auto_configure:
