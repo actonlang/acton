@@ -847,7 +847,9 @@ pkgShow gopts = do
     let rootPins = BuildSpec.dependencies spec
     unless (C.quiet gopts) $
       putStrLn "Dependency tree (hash overrides shown):"
-    showTree rootPins curDir spec 0
+    partial <- showTree rootPins curDir spec 0
+    when (partial && not (C.quiet gopts)) $
+      putStrLn "Note: dependency tree is partial; some dependencies are not fetched yet. Run 'acton fetch'."
   where
     describeDep dep =
       case BuildSpec.hash dep of
@@ -856,20 +858,41 @@ pkgShow gopts = do
                      Just p | not (null p) -> "path=" ++ p
                      _ -> "unversioned"
 
+    isHashDep dep =
+      case BuildSpec.path dep of
+        Just p | not (null p) -> False
+        _ -> case BuildSpec.hash dep of
+               Just _ -> True
+               Nothing -> False
+
     showTree pins dir spec depth = do
       let deps = M.toList (BuildSpec.dependencies spec)
-      forM_ deps $ \(depName, dep) -> do
-        let (chosen, conflict) =
-              case M.lookup depName pins of
-                Nothing -> (dep, False)
-                Just pinDep -> if pinDep == dep then (dep, False) else (pinDep, True)
-            prefix = replicate (2*depth) ' ' ++ "- "
-            line = prefix ++ depName ++ " (" ++ describeDep dep ++
-                   (if conflict then " overridden -> " ++ describeDep chosen else "") ++ ")"
-        putStrLn line
-        depBase <- resolveDepBase dir depName chosen
-        spec' <- loadBuildSpec depBase
-        showTree pins depBase spec' (depth + 1)
+      foldM (step pins dir depth) False deps
+
+    step pins dir depth partial (depName, dep) = do
+      let (chosen, conflict) =
+            case M.lookup depName pins of
+              Nothing -> (dep, False)
+              Just pinDep -> if pinDep == dep then (dep, False) else (pinDep, True)
+      depBase <- resolveDepBase dir depName chosen
+      depExists <- doesDirectoryExist depBase
+      let notFetched = isHashDep chosen && not depExists
+          prefix = replicate (2*depth) ' ' ++ "- "
+          suffix = if notFetched then " (not fetched)" else ""
+          line = prefix ++ depName ++ " (" ++ describeDep dep ++
+                 (if conflict then " overridden -> " ++ describeDep chosen else "") ++ ")" ++ suffix
+      putStrLn line
+      if not depExists
+        then if notFetched
+          then return (partial || True)
+          else do
+            throwProjectError ("Dependency " ++ depName ++ " path does not exist: " ++ depBase ++ "\n"
+                               ++ "Hint: Local dependency paths must point to an Acton project root\n"
+                               ++ "(directory with src/ and Build.act).")
+        else do
+          spec' <- loadBuildSpec depBase
+          childPartial <- showTree pins depBase spec' (depth + 1)
+          return (partial || childPartial)
 
 -- Print documentation -------------------------------------------------------------------------------------------
 
