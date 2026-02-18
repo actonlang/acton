@@ -27,7 +27,7 @@ import Data.Char (isSpace)
 import Data.Foldable (toList)
 import Data.List (dropWhileEnd, isPrefixOf, isSuffixOf, sortOn)
 import Data.List.Split (splitOn)
-import Data.Maybe (fromMaybe, isJust)
+import Data.Maybe (isJust)
 import qualified Data.Map as M
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy as BL
@@ -70,7 +70,7 @@ pkgAddCommand _ opts = do
     let depName = C.pkgAddName opts
     validateDepName depName
     cwd <- getCurrentDirectory
-    spec0 <- loadSpecOrEmpty cwd
+    spec0 <- loadBuildSpec cwd
     manager <- newTlsManager
     token <- resolveGithubToken (normalizeMaybe (C.pkgAddGithubToken opts))
     let urlArg = C.pkgAddUrl opts
@@ -104,45 +104,39 @@ pkgRemoveCommand _ opts = do
     let depName = C.pkgRemoveName opts
     validateDepName depName
     cwd <- getCurrentDirectory
-    mspec <- loadBuildSpec cwd
-    case mspec of
-      Nothing -> putStrLn "No Build.act or build.act.json file found, nothing to do."
-      Just spec -> do
-        let deps = BuildSpec.dependencies spec
-        if M.member depName deps
-          then do
-            putStrLn ("Removed package dependency " ++ depName)
-            let spec' = spec { BuildSpec.dependencies = M.delete depName deps }
-            writeBuildSpec spec'
-          else putStrLn ("Dependency " ++ depName ++ " not found in build configuration. Nothing to do.")
+    spec <- loadBuildSpec cwd
+    let deps = BuildSpec.dependencies spec
+    if M.member depName deps
+      then do
+        putStrLn ("Removed package dependency " ++ depName)
+        let spec' = spec { BuildSpec.dependencies = M.delete depName deps }
+        writeBuildSpec spec'
+      else putStrLn ("Dependency " ++ depName ++ " not found in build configuration. Nothing to do.")
 
 pkgUpgradeCommand :: C.GlobalOptions -> C.PkgUpgradeOptions -> IO ()
 pkgUpgradeCommand _ opts = do
     cwd <- getCurrentDirectory
-    mspec <- loadBuildSpec cwd
-    case mspec of
-      Nothing -> putStrLn "No Build.act or build.act.json file found, nothing to upgrade."
-      Just spec -> do
-        let deps = BuildSpec.dependencies spec
-        manager <- newTlsManager
-        token <- resolveGithubToken (normalizeMaybe (C.pkgUpgradeGithubToken opts))
-        resolved <- mapM (resolveDep manager token) (M.toList deps)
-        let newUrls = M.fromList [ (n,u) | Just (n,u) <- resolved ]
-        if M.null newUrls
+    spec <- loadBuildSpec cwd
+    let deps = BuildSpec.dependencies spec
+    manager <- newTlsManager
+    token <- resolveGithubToken (normalizeMaybe (C.pkgUpgradeGithubToken opts))
+    resolved <- mapM (resolveDep manager token) (M.toList deps)
+    let newUrls = M.fromList [ (n,u) | Just (n,u) <- resolved ]
+    if M.null newUrls
+      then putStrLn "No dependencies to upgrade"
+      else do
+        zigExe <- getZigExe
+        hashes <- mapM (fetchHash zigExe deps) (M.toList newUrls)
+        let newHashes = M.fromList [ (n,h) | Just (n,h) <- hashes ]
+        if M.null newHashes
           then putStrLn "No dependencies to upgrade"
           else do
-            zigExe <- getZigExe
-            hashes <- mapM (fetchHash zigExe deps) (M.toList newUrls)
-            let newHashes = M.fromList [ (n,h) | Just (n,h) <- hashes ]
-            if M.null newHashes
-              then putStrLn "No dependencies to upgrade"
-              else do
-                let (spec', updated) = applyUpgrades spec newUrls newHashes
-                if updated
-                  then do
-                    putStrLn "Wrote changes to build.act.json"
-                    writeBuildSpec spec'
-                  else putStrLn "No changes to build.act.json"
+            let (spec', updated) = applyUpgrades spec newUrls newHashes
+            if updated
+              then do
+                putStrLn "Wrote changes to Build.act"
+                writeBuildSpec spec'
+              else putStrLn "No changes to Build.act"
   where
     resolveDep manager token (depName, dep) =
       case BuildSpec.repo_url dep of
@@ -231,7 +225,7 @@ zigPkgAddCommand _ opts = do
         depArtifacts = C.zigPkgAddArtifacts opts
     validateDepName depName
     cwd <- getCurrentDirectory
-    spec0 <- loadSpecOrEmpty cwd
+    spec0 <- loadBuildSpec cwd
     zigExe <- getZigExe
     hash <- requireRight =<< zigFetchHash zigExe depUrl
     let (spec1, msgs) = upsertZigDep spec0 depName depUrl hash depArtifacts
@@ -243,17 +237,14 @@ zigPkgRemoveCommand _ opts = do
     let depName = C.zigPkgRemoveName opts
     validateDepName depName
     cwd <- getCurrentDirectory
-    mspec <- loadBuildSpec cwd
-    case mspec of
-      Nothing -> putStrLn "No Build.act or build.act.json file found, nothing to do."
-      Just spec -> do
-        let deps = BuildSpec.zig_dependencies spec
-        if M.member depName deps
-          then do
-            putStrLn ("Removed Zig package dependency " ++ depName)
-            let spec' = spec { BuildSpec.zig_dependencies = M.delete depName deps }
-            writeBuildSpec spec'
-          else putStrLn ("Zig dependency " ++ depName ++ " not found in build configuration. Nothing to do.")
+    spec <- loadBuildSpec cwd
+    let deps = BuildSpec.zig_dependencies spec
+    if M.member depName deps
+      then do
+        putStrLn ("Removed Zig package dependency " ++ depName)
+        let spec' = spec { BuildSpec.zig_dependencies = M.delete depName deps }
+        writeBuildSpec spec'
+      else putStrLn ("Zig dependency " ++ depName ++ " not found in build configuration. Nothing to do.")
 
 upsertPkgDep :: BuildSpec.BuildSpec -> String -> String -> String -> Maybe String -> Maybe String -> (BuildSpec.BuildSpec, [String])
 upsertPkgDep spec depName depUrl depHash depRepoUrl depRepoRef =
@@ -330,25 +321,17 @@ upsertZigDep spec depName depUrl depHash depArtifacts =
         Nothing ->
           (["Updated existing dependency " ++ depName ++ " with new hash " ++ depHash ++ " (old " ++ showMaybe Nothing ++ ")"], dep { BuildSpec.zhash = Just depHash })
 
-loadSpecOrEmpty :: FilePath -> IO BuildSpec.BuildSpec
-loadSpecOrEmpty dir = do
-    mspec <- loadBuildSpec dir
-    return (fromMaybe emptySpec mspec)
-
-emptySpec :: BuildSpec.BuildSpec
-emptySpec = BuildSpec.BuildSpec Nothing Nothing Nothing M.empty M.empty
-
 writeBuildSpec :: BuildSpec.BuildSpec -> IO ()
 writeBuildSpec spec = do
     buildActExists <- doesFileExist "Build.act"
-    if buildActExists
-      then do
+    if not buildActExists
+      then throwProjectError "Build.act not found in current directory"
+      else do
         content <- readFile "Build.act"
         let jsonDoc = BuildSpec.encodeBuildSpecJSON spec
         case BuildSpec.updateBuildActFromJSON content jsonDoc of
           Left err -> throwProjectError ("Failed to update Build.act: \n" ++ err)
           Right updated -> writeFile "Build.act" updated
-      else BL.writeFile "build.act.json" (BuildSpec.encodeBuildSpecJSONPretty spec <> "\n")
 
 lookupRepoUrlFromIndex :: String -> String -> IO String
 lookupRepoUrlFromIndex depName pkgNameArg = do

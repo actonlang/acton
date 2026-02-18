@@ -50,7 +50,7 @@ pub fn build(b: *std.Build) void {
         .db = db,
     });
 
-    // Dependencies from build.act.json
+    // Dependencies from Build.act
 
     var iter_dir = b.build_root.handle.openDir(
         "out/types/", .{ .iterate = true },
@@ -213,7 +213,7 @@ pub fn build(b: *std.Build) void {
 
     libActonProject.addIncludePath(b.path("."));
 
-    // lib: link with dependencies / get headers from build.act.json
+    // lib: link with dependencies / get headers from Build.act
 
     libActonProject.linkLibrary(actonbase_dep.artifact("Acton"));
     libActonProject.linkLibC();
@@ -306,7 +306,7 @@ pub fn build(b: *std.Build) void {
                 executable.linkLibrary(libactondb_dep.artifact("ActonDB"));
             }
 
-            // exe: link with dependencies / get headers from build.act.json
+            // exe: link with dependencies / get headers from Build.act
 
             executable.linkLibC();
             executable.linkLibCpp();

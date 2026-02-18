@@ -19,53 +19,57 @@ def zig_safe_name(name: str) -> str:
 
 
 class BuildSpec(object):
-    """Build configuration, the content of build.act.json
+    """Build configuration, the content of Build.act
 
-    - name is the project name (optional)
+    - name is the project name
     - description is a human-readable project description (optional)
     - dependencies are dependencies on other Acton projects
     - zig_dependencies are dependencies on Zig projects, which could in turn be
       Zig, C or C++ libraries that get linked in with the project
+    - fingerprint identifies the project lineage
     """
-    name: ?str
+    name: str
     description: ?str
     dependencies: dict[str, PkgDependency]
     zig_dependencies: dict[str, ZigDependency]
     # Acton-managed package fingerprint (string, e.g. "0x1234abcd...")
-    fingerprint: ?str
+    fingerprint: str
 
-    def __init__(self, name: ?str=None, description: ?str=None, dependencies: dict[str, PkgDependency]={}, zig_dependencies: dict[str, ZigDependency]={}, fingerprint: ?str=None):
+    def __init__(self, name: str, fingerprint: str, description: ?str=None, dependencies: dict[str, PkgDependency]={}, zig_dependencies: dict[str, ZigDependency]={}):
         self.name = name
+        self.fingerprint = fingerprint
         self.description = description
         self.dependencies = dependencies
         self.zig_dependencies = zig_dependencies
-        self.fingerprint = fingerprint
 
     @staticmethod
     def from_json(data: str):
         jd = json.decode(data)
-        name = None
+        name = ""
+        has_name = False
         description = None
         new_dependencies = {}
         new_zig_dependencies = {}
-        new_fingerprint: ?str = None
+        fingerprint = ""
+        has_fingerprint = False
         if isinstance(jd, dict):
             for key, value in jd.items():
                 if isinstance(key, str):
                     if key == "name":
                         if value is None:
-                            name = None
+                            has_name = False
                         elif isinstance(value, str):
                             name = value
+                            has_name = True
                         else:
-                            raise ValueError("Invalid build.act.json, name should be a string")
+                            raise ValueError("Invalid build spec JSON, name should be a string")
                     elif key == "description":
                         if value is None:
                             description = None
                         elif isinstance(value, str):
                             description = value
                         else:
-                            raise ValueError("Invalid build.act.json, description should be a string")
+                            raise ValueError("Invalid build spec JSON, description should be a string")
                     elif key == "dependencies":
                         if value is None:
                             new_dependencies = {}
@@ -75,9 +79,9 @@ class BuildSpec(object):
                                     dep = PkgDependency.from_json(dep_name, dep_attrs)
                                     new_dependencies[dep_name] = dep
                                 else:
-                                    raise ValueError("Invalid build.act.json, dependencies should be a dict")
+                                    raise ValueError("Invalid build spec JSON, dependencies should be a dict")
                         else:
-                            raise ValueError("Invalid build.act.json, dependencies should be a dict")
+                            raise ValueError("Invalid build spec JSON, dependencies should be a dict")
                     elif key == "zig_dependencies":
                         if value is None:
                             new_zig_dependencies = {}
@@ -87,23 +91,28 @@ class BuildSpec(object):
                                     dep = ZigDependency.from_json(dep_name, dep_attrs)
                                     new_zig_dependencies[dep_name] = dep
                                 else:
-                                    raise ValueError("Invalid build.act.json, zig_dependencies should be a dict")
+                                    raise ValueError("Invalid build spec JSON, zig_dependencies should be a dict")
                         else:
-                            raise ValueError("Invalid build.act.json, zig_dependencies should be a dict")
+                            raise ValueError("Invalid build spec JSON, zig_dependencies should be a dict")
                     elif key == "fingerprint":
                         if value is None:
-                            new_fingerprint = None
+                            has_fingerprint = False
                         elif isinstance(value, str):
-                            new_fingerprint = value
+                            fingerprint = value
+                            has_fingerprint = True
                         else:
-                            raise ValueError("Invalid build.act.json, fingerprint should be a string like 0xdeadbeef...")
+                            raise ValueError("Invalid build spec JSON, fingerprint should be a string like 0xdeadbeef...")
                     else:
-                        raise ValueError(f"Invalid build.act.json, unknown key '{key}'")
+                        raise ValueError(f"Invalid build spec JSON, unknown key '{key}'")
                 else:
-                    raise ValueError("Invalid build.act.json, non-string key found in top level dict")
+                    raise ValueError("Invalid build spec JSON, non-string key found in top level dict")
 
-            return BuildSpec(name, description, new_dependencies, new_zig_dependencies, new_fingerprint)
-        raise ValueError("Invalid build.act.json, top level should be a dict")
+            if not has_name:
+                raise ValueError("Invalid build spec JSON, name is required")
+            if not has_fingerprint:
+                raise ValueError("Invalid build spec JSON, fingerprint is required")
+            return BuildSpec(name, fingerprint, description, new_dependencies, new_zig_dependencies)
+        raise ValueError("Invalid build spec JSON, top level should be a dict")
 
     def to_json(self) -> str:
         res_deps = {}
@@ -113,17 +122,14 @@ class BuildSpec(object):
         for dep_name, dep in self.zig_dependencies.items():
             res_zigdeps[dep_name] = dep.to_json()
         res = {
+            "name": self.name,
+            "fingerprint": self.fingerprint,
             "dependencies": res_deps,
             "zig_dependencies": res_zigdeps,
         }
-        name = self.name
-        if name is not None:
-            res["name"] = name
         description = self.description
         if description is not None:
             res["description"] = description
-        if self.fingerprint is not None:
-            res["fingerprint"] = self.fingerprint
         return json.encode(res, pretty=True)
 
 def extract_fingerprint(zon_text: str) -> ?str:
@@ -186,7 +192,7 @@ class PkgDependency(Dependency):
                 if isinstance(data_repo_ref, str):
                     dep_repo_ref = data_repo_ref
             else:
-                raise ValueError(f"Invalid build.act.json, unknown key '{key}' in dependency '{dep_name}'")
+                raise ValueError(f"Invalid build spec JSON, unknown key '{key}' in dependency '{dep_name}'")
         return PkgDependency(dep_name, dep_url, dep_hash, dep_path, dep_repo_url, dep_repo_ref)
 
     def to_json(self) -> dict[str, str]:
@@ -218,7 +224,7 @@ class PkgDependency(Dependency):
             if dep_hash is not None:
                 path = file.join_path([deps_path, f"{self.name}-{dep_hash}"])
             else:
-                raise ValueError(f"Invalid build.act.json, dependency '{self.name}' has no path or hash")
+                raise ValueError(f"Invalid build spec JSON, dependency '{self.name}' has no path or hash")
         return """        .%s = .{{
             .path = "%s"
         }},
@@ -272,7 +278,7 @@ class ZigDependency(Dependency):
                 if isinstance(data_artifacts, list):
                     dep_artifacts = data_artifacts
             else:
-                raise ValueError(f"Invalid build.act.json, unknown key '{key}' in dependency '{dep_name}'")
+                raise ValueError(f"Invalid build spec JSON, unknown key '{key}' in dependency '{dep_name}'")
         return ZigDependency(dep_name, dep_url, dep_hash, dep_path, dep_options, dep_artifacts)
 
     def to_json(self) -> dict[str, value]:
@@ -353,11 +359,11 @@ def gen_buildzig(template: str, build_config: BuildSpec) -> str:
     for line in template.split("\n"):
         res.append(line)
         sline = line.strip()
-        if sline == "// Dependencies from build.act.json":
+        if sline == "// Dependencies from Build.act":
             res.append(deps_defs)
-        if sline == "// lib: link with dependencies / get headers from build.act.json":
+        if sline == "// lib: link with dependencies / get headers from Build.act":
             res.append(liblink_lines)
-        if sline == "// exe: link with dependencies / get headers from build.act.json":
+        if sline == "// exe: link with dependencies / get headers from Build.act":
             res.append(exelink_lines)
 
     return "\n".join(res)
@@ -377,12 +383,10 @@ def gen_buildzigzon(template: str, build_config: BuildSpec, relative_syspath: st
     for line in template.split("\n"):
         line = line.replace(r"{{syspath}}", relative_syspath)
         if "{{fingerprint}}" in line:
-            if build_config.fingerprint is None:
-                continue
             line = line.replace(r"{{fingerprint}}", str(build_config.fingerprint))
         res.append(line)
         sline = line.strip()
-        if sline == "// Dependencies from build.act.json":
+        if sline == "// Dependencies from Build.act":
             res.append(deps)
 
     return "\n".join(res)

@@ -1,5 +1,4 @@
 import Control.Exception (finally)
-import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.Map as M
 import System.Directory (canonicalizePath)
 import System.Environment (lookupEnv, setEnv, unsetEnv)
@@ -11,10 +10,40 @@ import System.Process
 import Test.Tasty
 import Test.Tasty.HUnit
 
+import Data.Bits (shiftL, (.|.))
+import Data.Word (Word64)
 import qualified Acton.BuildSpec as BuildSpec
+import qualified Acton.Fingerprint as Fingerprint
 
 main :: IO ()
 main = defaultMain $ testGroup "Online tests" [pkgCliIntegrationTests]
+
+fingerprintForName :: String -> String
+fingerprintForName name =
+  let prefix = Fingerprint.fingerprintPrefixForName name
+      fp = (fromIntegral prefix `shiftL` 32) .|. (1 :: Word64)
+  in Fingerprint.formatFingerprint fp
+
+writeBuildAct :: FilePath -> String -> IO ()
+writeBuildAct dir name = do
+  let fp = fingerprintForName name
+      content = unlines
+        [ "name = \"" ++ name ++ "\""
+        , "fingerprint = " ++ fp
+        , ""
+        , "dependencies = {}"
+        , ""
+        , "zig_dependencies = {}"
+        , ""
+        ]
+  writeFile (dir </> "Build.act") content
+
+readBuildSpecAct :: FilePath -> IO BuildSpec.BuildSpec
+readBuildSpecAct path = do
+  content <- readFile path
+  case BuildSpec.parseBuildAct content of
+    Left err -> assertFailure err >> error "unreachable"
+    Right (spec, _, _) -> return spec
 
 pkgCliIntegrationTests :: TestTree
 pkgCliIntegrationTests =
@@ -24,9 +53,11 @@ pkgCliIntegrationTests =
           withSystemTempDirectory "acton-pkg" $ \proj -> do
             let depName = "foo"
                 repoUrl = "https://github.com/actonlang/foo"
+                projName = "acton_pkg_test"
+            writeBuildAct proj projName
             (codeAdd, outAdd, errAdd) <- runActonIn proj ["pkg", "add", depName, "--repo-url", repoUrl]
             assertExit "pkg add" ExitSuccess codeAdd outAdd errAdd
-            spec1 <- readBuildSpecJSON (proj </> "build.act.json")
+            spec1 <- readBuildSpecAct (proj </> "Build.act")
             dep1 <- requirePkgDep spec1 depName
             assertEqual "repo_url" (Just repoUrl) (BuildSpec.repo_url dep1)
             assertBool "url set" (hasText (BuildSpec.url dep1))
@@ -34,13 +65,13 @@ pkgCliIntegrationTests =
 
             (codeUp, outUp, errUp) <- runActonIn proj ["pkg", "upgrade"]
             assertExit "pkg upgrade" ExitSuccess codeUp outUp errUp
-            spec2 <- readBuildSpecJSON (proj </> "build.act.json")
+            spec2 <- readBuildSpecAct (proj </> "Build.act")
             dep2 <- requirePkgDep spec2 depName
             assertEqual "repo_url after upgrade" (Just repoUrl) (BuildSpec.repo_url dep2)
 
             (codeRm, outRm, errRm) <- runActonIn proj ["pkg", "remove", depName]
             assertExit "pkg remove" ExitSuccess codeRm outRm errRm
-            spec3 <- readBuildSpecJSON (proj </> "build.act.json")
+            spec3 <- readBuildSpecAct (proj </> "Build.act")
             assertBool "dep removed" (M.notMember depName (BuildSpec.dependencies spec3))
   ]
 
@@ -72,13 +103,6 @@ assertExit label expected actual out err =
         , "stderr:"
         , err
         ]
-
-readBuildSpecJSON :: FilePath -> IO BuildSpec.BuildSpec
-readBuildSpecJSON path = do
-    content <- LBS.readFile path
-    case BuildSpec.parseBuildSpecJSON content of
-      Left err -> assertFailure err >> error "unreachable"
-      Right spec -> return spec
 
 requirePkgDep :: BuildSpec.BuildSpec -> String -> IO BuildSpec.PkgDep
 requirePkgDep spec depName =

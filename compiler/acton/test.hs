@@ -12,6 +12,7 @@ import qualified Data.ByteString.Lazy.Char8 as LBS
 import Control.Exception (catch, IOException)
 import System.Directory
 import System.Directory.Recursive
+import System.Environment (getEnvironment)
 import System.Exit
 import System.FilePath
 import System.FilePath.Posix
@@ -25,6 +26,7 @@ import Test.Tasty.Golden (goldenVsString)
 import Test.Tasty.HUnit
 
 import qualified PkgCommands
+import qualified Acton.Fingerprint as Fingerprint
 
 -- The default is to build and run each test program with the expectation that
 -- both compilation and running the program is successful as determined by exit
@@ -103,18 +105,26 @@ compilerTests =
         (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../../test/compiler/test_deps/deps/a/build.zig*") ""
         (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../../test/compiler/test_deps/deps/a/out") ""
         runActon "build" ExitSuccess False "../../test/compiler/test_deps/"
-  , testCase "build.zig.zon name capped for long project dir" $ do
+  , testCase "build.zig.zon name matches Build.act" $ do
         let prefix = "acton-long-project-name-12345678901234567890-"
         withSystemTempDirectory prefix $ \proj -> do
-            let actFile = proj </> "acton-test.act"
+            let name = "long_project_name_1234567890"
+                fp = Fingerprint.formatFingerprint
+                       (Fingerprint.updateFingerprintPrefix
+                         (Fingerprint.fingerprintPrefixForName name) 1)
+                srcDir = proj </> "src"
+                actFile = srcDir </> "main.act"
+            createDirectoryIfMissing True srcDir
+            writeFile (proj </> "Build.act") $ unlines
+              [ "name = \"" ++ name ++ "\""
+              , "fingerprint = " ++ fp
+              , ""
+              ]
             writeFile actFile $ unlines
-              [ "#!/usr/bin/env runacton"
-              , "actor main(env):"
+              [ "actor main(env):"
               , "    print(\"Hello, world\")"
               , "    env.exit(0)"
               ]
-            perms <- getPermissions actFile
-            setPermissions actFile perms{ executable = True }
             runActon "build" ExitSuccess False proj
             zon <- readFile (proj </> "build.zig.zon")
             let nameVal =
@@ -125,7 +135,7 @@ compilerTests =
                            Just rest -> takeWhile (\c -> isAlphaNum c || c == '_') rest
                            Nothing -> ""
                        Nothing -> ""
-            assertBool "build.zig.zon name should be non-empty" (not (null nameVal))
+            assertEqual "build.zig.zon name should match Build.act" name nameVal
             assertBool "build.zig.zon name should be <= 32 chars" (length nameVal <= 32)
 
   , testCase "build without Build.act" $ do
@@ -139,13 +149,60 @@ compilerTests =
               ]
             perms <- getPermissions actFile
             setPermissions actFile perms{ executable = True }
-            runActon "build" ExitSuccess False proj
-            let bin = proj </> "out" </> "bin" </> "acton-test"
-            exists <- doesFileExist bin
-            assertBool "binary should exist" exists
-            (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc bin []){ cwd = Just proj } ""
-            assertEqual "binary should run" ExitSuccess returnCode
-            assertEqual "binary output" "Hello, world\n" cmdOut
+            actonExe <- canonicalizePath "../../dist/bin/acton"
+            (returnCode, _cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc actonExe ["build"]) { cwd = Just proj } ""
+            assertEqual "acton should fail without Build.act" (ExitFailure 1) returnCode
+            assertBool "error should mention Build.act" ("Build.act" `isInfixOf` cmdErr)
+#if !defined(mingw32_HOST_OS)
+  , testCase "runacton shebang runs standalone script" $ do
+        withSystemTempDirectory "acton-runacton" $ \proj -> do
+            let script = proj </> "hello.act"
+            writeFile script $ unlines
+              [ "#!/usr/bin/env runacton"
+              , "actor main(env):"
+              , "    print(\"Hello from runacton\")"
+              , "    env.exit(0)"
+              ]
+            perms <- getPermissions script
+            setPermissions script perms{ executable = True }
+            (returnCode, cmdOut, cmdErr) <- runRunacton script [] proj
+            assertEqual "runacton should succeed" ExitSuccess returnCode
+            assertEqual "runacton output" "Hello from runacton\n" cmdOut
+            assertEqual "runacton stderr" "" cmdErr
+
+  , testCase "runacton ignores project Build.act" $ do
+        withSystemTempDirectory "acton-runacton-proj" $ \proj -> do
+            let name = "demo"
+                fp = Fingerprint.formatFingerprint
+                       (Fingerprint.updateFingerprintPrefix
+                         (Fingerprint.fingerprintPrefixForName name) 1)
+                srcDir = proj </> "src"
+                mainFile = srcDir </> "main.act"
+                script = proj </> "script.act"
+            createDirectoryIfMissing True srcDir
+            writeFile (proj </> "Build.act") $ unlines
+              [ "name = \"" ++ name ++ "\""
+              , "fingerprint = " ++ fp
+              , ""
+              ]
+            writeFile mainFile $ unlines
+              [ "actor main(env):"
+              , "    print(\"Project main\")"
+              , "    env.exit(0)"
+              ]
+            writeFile script $ unlines
+              [ "#!/usr/bin/env runacton"
+              , "actor main(env):"
+              , "    print(\"Script main\")"
+              , "    env.exit(0)"
+              ]
+            perms <- getPermissions script
+            setPermissions script perms{ executable = True }
+            (returnCode, cmdOut, cmdErr) <- runRunacton script [] proj
+            assertEqual "runacton should succeed" ExitSuccess returnCode
+            assertEqual "runacton output" "Script main\n" cmdOut
+            assertEqual "runacton stderr" "" cmdErr
+#endif
   ]
 
 parseFlagTests =
@@ -253,6 +310,7 @@ actonProjTests =
           createDirectoryIfMissing True (proj </> "deps")
           writeFile buildAct $ unlines
             [ "name = \"invalid_dep_override\""
+            , "fingerprint = 0xb33bef4512345678"
             , ""
             , "dependencies = {"
             , "  \"dep_a\": (path=\"deps/dep_a_missing\")"
@@ -267,7 +325,7 @@ actonProjTests =
           (returnCode, _cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc actonExe ["build", "--dep", "dep_a=deps"]){ cwd = Just proj } ""
           assertEqual "acton should fail for invalid --dep path" (ExitFailure 1) returnCode
           assertBool "error should mention bad dependency path" ("Dependency dep_a path is not an Acton project root" `isInfixOf` cmdErr)
-          assertBool "error should mention required project files" ("Build.act" `isInfixOf` cmdErr && "build.act.json" `isInfixOf` cmdErr && "Acton.toml" `isInfixOf` cmdErr)
+          assertBool "error should mention required project files" ("Build.act" `isInfixOf` cmdErr)
           assertBool "error should mention src requirement" ("src/" `isInfixOf` cmdErr)
 
   -- Verify pruning keeps binaries for modules that still have roots across build / test runs.
@@ -502,7 +560,7 @@ isActProj dir = do
     isDir <- doesDirectoryExist dir
     if isDir
       then do
-          let projectFiles = ["Build.act", "build.act.json", "Acton.toml"]
+          let projectFiles = ["Build.act"]
           hasProjectFile <- or <$> mapM (\file -> doesFileExist $ dir ++ "/" ++ file) projectFiles
           hasSrcDir <- doesDirectoryExist $ dir ++ "/src"
           if hasProjectFile && hasSrcDir
@@ -591,6 +649,16 @@ buildThing opts thing = do
     (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc actonExe args){ cwd = Just wd } ""
     return (returnCode, cmdOut, cmdErr)
 
+
+runRunacton :: FilePath -> [String] -> FilePath -> IO (ExitCode, String, String)
+runRunacton script args cwd = do
+    actonBin <- canonicalizePath "../../dist/bin"
+    env0 <- getEnvironment
+    let pathVal = case lookup "PATH" env0 of
+          Just p -> p
+          Nothing -> ""
+        env1 = ("PATH", actonBin ++ ":" ++ pathVal) : filter ((/= "PATH") . fst) env0
+    readCreateProcessWithExitCode (proc script args){ cwd = Just cwd, env = Just env1 } ""
 
 runActon opts expRet expFail proj = do
     actonExe <- canonicalizePath "../../dist/bin/acton"

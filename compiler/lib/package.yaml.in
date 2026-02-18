@@ -45,6 +45,7 @@ dependencies:
   - pretty-show
   - prettyprinter
   - process
+  - random
   - scientific
   - sydtest
   - sydtest-discover

@@ -10,7 +10,7 @@ Acton is statically compiled, all dependencies are fetched and included at compi
 
 ## Project lineage fingerprint
 
-Each project can declare a **fingerprint** in `Build.act` (or `build.act.json`) to represent its lineage — the stable identity of the project across versions. This is separate from dependency content hashes:
+Each project must declare a **fingerprint** in `Build.act` to represent its lineage — the stable identity of the project across versions. This is separate from dependency content hashes:
 
 - Content hashes identify a specific version of a dependency.
 - Fingerprints identify the project itself and help Acton deduplicate dependencies and generate consistent build metadata.
@@ -22,8 +22,8 @@ fingerprint = 0x1234abcd5678ef00
 ```
 
 **How it behaves today**
-- Fingerprint is optional for now.
-- If both `name` and `fingerprint` are set, Acton validates that the fingerprint matches the name’s lineage prefix.
-- If they don’t match, the build fails with a message explaining whether this looks like a rename or a fork and how to fix it.
+- `name` and `fingerprint` are required in every project.
+- Acton validates that the fingerprint matches the name’s lineage prefix.
+- If they don’t match or either is missing, the build fails with guidance on how to fix it.
 
 Renaming a project breaks lineage, so generate a new fingerprint for the new name. When you fork a project, also generate a new fingerprint so the fork has its own lineage.

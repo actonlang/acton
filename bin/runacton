@@ -10,7 +10,13 @@
 
 set -e
 
-acton --quiet $1
-EXEC=$(echo $1 | sed -e 's/\.act$//')
+if [ $# -lt 1 ]; then
+  echo "runacton: missing .act file path (runacton is meant to be invoked via shebang)" >&2
+  exit 2
+fi
+
+script="$1"
+ACTON_RUNACTON=1 acton --quiet "$script"
+EXEC="${script%.act}"
 shift
-exec ${EXEC} "$@"
+exec "$EXEC" "$@"

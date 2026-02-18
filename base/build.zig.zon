@@ -4,7 +4,7 @@
     .fingerprint = 0xd50287f7af37f221,
     .minimum_zig_version = "0.15.2",
     .dependencies = .{
-        // Dependencies from build.act.json
+        // Dependencies from Build.act
         // base dependencies
         .actondb = .{
             .path = "../backend/",

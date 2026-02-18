@@ -355,13 +355,16 @@ jobs:
         run: |
           export PATH=$(pwd)/acton/bin:$PATH
           acton version
-          echo '#!/usr/bin/env runacton'   > test-runtime.act
-          echo 'actor main(env):'          >> test-runtime.act
-          echo '    print("Hello, world")' >> test-runtime.act
-          echo '    env.exit(0)'           >> test-runtime.act
-          chmod a+x test-runtime.act
-          ./test-runtime.act
-          ./test-runtime.act | grep "Hello, world"
+          echo '#!/usr/bin/env runacton'   > acton-test.act
+          echo 'actor main(env):'          >> acton-test.act
+          echo '    print("Hello, world")' >> acton-test.act
+          echo '    env.exit(0)'           >> acton-test.act
+          chmod a+x acton-test.act
+          ./acton-test.act
+          ./acton-test.act | grep "Hello, world"
+          acton build acton-test.act
+          ./acton-test
+          ./acton-test | grep "Hello, world"
 
 
   run-linux:
@@ -434,9 +437,11 @@ jobs:
           echo '    print("Hello, world")' >> acton-test.act
           echo '    env.exit(0)'           >> acton-test.act
           chmod a+x acton-test.act
-          acton build ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
-          ./out/bin/acton-test
-          ./out/bin/acton-test | grep "Hello, world"
+          ./acton-test.act
+          ./acton-test.act | grep "Hello, world"
+          acton build ${{ matrix.target && format('--target {0}', matrix.target) || '' }} acton-test.act
+          ./acton-test
+          ./acton-test | grep "Hello, world"
       - name: "ls core"
         if: failure()
         run: |
