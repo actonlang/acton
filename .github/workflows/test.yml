@@ -365,6 +365,22 @@ jobs:
           acton build acton-test.act
           ./acton-test
           ./acton-test | grep "Hello, world"
+      - name: "Build project with internet dependency"
+        run: |
+          export PATH=$(pwd)/acton/bin:$PATH
+          mkdir -p testproj/src
+          cd testproj
+          echo 'name = "testproj"' > Build.act
+          echo 'fingerprint = 0x661af9ad515420ea' >> Build.act
+          acton pkg add foo --url https://github.com/actonlang/foo/archive/refs/heads/main.zip
+          echo 'import foo' > src/app.act
+          echo '' >> src/app.act
+          echo 'actor main(env):' >> src/app.act
+          echo '    print(foo.foo())' >> src/app.act
+          echo '    env.exit(0)' >> src/app.act
+          acton build
+          ./out/bin/app
+          ./out/bin/app | grep '^foo$'
 
 
   run-linux:
@@ -442,6 +458,21 @@ jobs:
           acton build ${{ matrix.target && format('--target {0}', matrix.target) || '' }} acton-test.act
           ./acton-test
           ./acton-test | grep "Hello, world"
+      - name: "Build project with internet dependency"
+        run: |
+          mkdir -p testproj/src
+          cd testproj
+          echo 'name = "testproj"' > Build.act
+          echo 'fingerprint = 0x661af9ad515420ea' >> Build.act
+          acton pkg add foo --url https://github.com/actonlang/foo/archive/refs/heads/main.zip
+          echo 'import foo' > src/app.act
+          echo '' >> src/app.act
+          echo 'actor main(env):' >> src/app.act
+          echo '    print(foo.foo())' >> src/app.act
+          echo '    env.exit(0)' >> src/app.act
+          acton build
+          ./out/bin/app
+          ./out/bin/app | grep '^foo$'
       - name: "ls core"
         if: failure()
         run: |
