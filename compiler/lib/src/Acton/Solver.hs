@@ -395,13 +395,18 @@ solve' env select hist te eq cs
         isVar RVar{}                        = True
         isVar _                             = False
 
+
         deco (RRed cs)                      = (0, 0, 0, 0)
         deco (RSealed v)                    = (2, 0, 0, 0)
-        deco (RTry v as r)                  = (w, length $ filter (==v) embvs, length as, length $ filter (==v) univs)
-          where w | uvkind v /= KFX         =  3    -- types and rows, normal search
-                  | otherwise               =  4    -- effects, never qualified, last to be searched
-        deco (RVar v as)                    = (5, 0, length as, 0)
-        deco (RSkip)                        = (6, 0, 0, 0)
+--        deco (RTry v as r)                  = (w, length $ filter (==v) embvs, length as, length $ filter (==v) univs)
+--          where w | uvkind v /= KFX         =  3    -- types and rows, normal search
+--                  | otherwise               =  4    -- effects, never qualified, last to be searched
+        deco (RTry v as r)                  = (w, length as, length $ filter (==v) embvs, length $ filter (==v) univs)
+          where w | uvkind v == KFX         =  5    -- effect search, last to be explored
+                  | [TTuple{}] <- as        =  4    -- default selection solution, deferred search
+                  | otherwise               =  3    -- types and rows, normal search
+        deco (RVar v as)                    = (6, length as, 0, 0)
+        deco (RSkip)                        = (7, 0, 0, 0)
 
 
 -- subrev [int,Pt,float,CPt,C3Pt]           = [] ++ int : subrev [Pt,float,CPt,C3Pt]
@@ -512,6 +517,8 @@ allBelow env (TFX _ FXMut)          = [fxMut, fxPure]
 allBelow env (TFX _ FXPure)         = [fxPure]
 allBelow env (TFX _ FXAction)       = [fxAction]
 
+allBelowProto env (TC n [t@TFX{},_])
+  | n == primWrappedP               = reverse [ schematic (wtype w) | w <- witsByPName env n, t == (head $ tcargs $ proto w) ]
 allBelowProto env p
   | p == pIdentity                  = ts ++ [ schematic $ tCon tc | tc <- allCons env, isActor env (tcname tc) ]
   | otherwise                       = ts
@@ -723,7 +730,6 @@ cast env info t1 t2                         = do t1' <- usubst t1
                                                  cast' env info' t1' t2'
 
 castM env info ts1 ts2                      = mapM_ (uncurry $ cast env info) (ts1 `zip` ts2)
-
 
 cast' env _ (TWild _) t2                    = return ()
 cast' env _ t1 (TWild _)                    = return ()
@@ -1027,9 +1033,10 @@ sub' env info eq w t1@(TVar _ tv1) t2@(TVar _ tv2)
 
 sub' env info eq w t1@(TUni _ tv1) t2@(TUni _ tv2)
   | tv1 == tv2                              = return (idwit env w t1 t2 : eq)
+  | otherwise                               = do defer [Sub info env w t1 t2]; return eq
 
-sub' env info eq w t1@(TUni _ tv1) t2@(TUni _ tv2)
-                                            = do defer [Sub info env w t1 t2]; return eq
+sub' env info eq w t1@TUni{} t2@TCon{}      = do defer [Sub info env w t1 t2]; return eq
+sub' env info eq w t1@TCon{} t2@TUni{}      = do defer [Sub info env w t1 t2]; return eq
 
 sub' env info eq w t1 t2                    = do cast env info t1 t2
                                                  return (idwit env w t1 t2 : eq)

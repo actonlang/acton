@@ -16,5 +16,5 @@ Building file test/typeerrors/ex19.act using temporary scratch directory
      :     |- f has had its polymorphic type [A(Plus, Ord)] => (x: A, y: A) -> A instantiated to (x: t1, y: t1) -> t1, so t1 must implement __builtin__.Plus
      :     |- Type incompatibility between definition of and call of f (t1 must be a subtype of _)
      :     |- Type incompatibility between definition of and call of f (t0 must be a subtype of t1)
-     :     `- Type incompatibility between definition of and call of f (__builtin__.str must be a subclass of t1)
+     :     `- Type incompatibility between definition of and call of f (__builtin__.str must be a subtype of t1)
 -----+

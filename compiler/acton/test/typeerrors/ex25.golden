@@ -18,7 +18,7 @@ Building file test/typeerrors/ex25.act using temporary scratch directory
    7 |         b = Bob()
      :             ^----
      :             |- The type of the indicated expression (inferred to be proc) must be a subclass of t1
-     :             |- The type of the indicated expression (inferred to be Bob) must be a subclass of t5
+     :             |- The type of the indicated expression (inferred to be Bob) must be a subtype of t5
      :             `- The type of the indicated expression (which we call t5) must be a subtype of t2
    8 |         b.foo()
      :         ^------

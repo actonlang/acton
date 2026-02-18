@@ -10,7 +10,7 @@ Building file test/typeerrors/ex26.act using temporary scratch directory
      :
   12 |     p = []
      :         ^-
-     :         `- The type of the indicated expression (inferred to be __builtin__.list[_]) must be a subclass of t2
+     :         `- The type of the indicated expression (inferred to be __builtin__.list[_]) must be a subtype of t2
   13 |     foos = [Foo(True)]
      :             ^-------- 
      :             `- The type of the indicated expression (inferred to be pure) must be a subclass of t0

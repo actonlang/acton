@@ -4,9 +4,9 @@ Building file test/typeerrors/ex18.act using temporary scratch directory
      |
    2 |     return len(ls) + "hej"
      :            ^---------^----
-     :            |         `- The type of the indicated expression (inferred to be __builtin__.str) must be a subclass of t0
+     :            |         `- The type of the indicated expression (inferred to be __builtin__.str) must be a subtype of t0
      :            |            
-     :            |- The type of the indicated expression (inferred to be __builtin__.int) must be a subclass of t1
+     :            |- The type of the indicated expression (inferred to be __builtin__.int) must be a subtype of t1
      :            |- The type of the indicated expression (which we call t1) must be a subtype of t0
      :            `- The type of the indicated expression (which we call t0) must implement __builtin__.Plus
 -----+
