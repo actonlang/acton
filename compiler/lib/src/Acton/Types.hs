@@ -1881,7 +1881,7 @@ instance Infer Expr where
                                                           eNone
                                                    )
                                                    
-    infer env (OptDot l e n)           = do let x = head xNames
+    infer env (OptDot l e n)           = do x <- newTmp
                                             t <- newUnivar env
                                             infer env (eCall (eLambda [(x,t)] (OptDot l (eVar x) n)) [e])
  
