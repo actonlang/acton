@@ -16,14 +16,14 @@ copyright:           "2018 Author name here"
 description:         Please see the README on Github at <https://github.com/githubuser/simple#readme>
 
 dependencies:
+  - aeson
+  - aeson-pretty
   - array
   - async
   - base
-  - aeson
-  - aeson-pretty
+  - base16-bytestring
   - binary
   - bytestring
-  - base16-bytestring
   - clock
   - containers
   - cryptohash-sha256
@@ -47,15 +47,16 @@ dependencies:
   - process
   - random
   - scientific
+  - stm
   - sydtest
   - sydtest-discover
-  - stm
+  - temporary
   - text
   - time
   - transformers
   - unix
-  - utf8-string
   - unordered-containers
+  - utf8-string
 
 library:
   source-dirs: src
@@ -97,7 +98,6 @@ tests:
     source-dirs: test
     dependencies:
       - libacton
-      - temporary
     ghc-options:
       - -threaded
       - -rtsopts
