@@ -127,6 +127,7 @@ data TestOptions = TestOptions
     { testCompile      :: CompileOptions
     , testShowLog      :: Bool
     , testShowCached   :: Bool
+    , testNoCache      :: Bool
     , testJson         :: Bool
     , testRecord       :: Bool
     , testSnapshotUpdate :: Bool
@@ -382,6 +383,7 @@ testOptions = TestOptions
     <$> compileOptions
     <*> switch (long "show-log"      <> help "Show test log output")
     <*> switch (long "show-cached"   <> help "Show cached test results")
+    <*> switch (long "no-cache"      <> help "Always run tests instead of reusing cached results")
     <*> switch (long "json"          <> help "Output final test results as JSON")
     <*> switch (long "record"        <> help "Record test performance results")
     <*> switch (long "snapshot-update" <> long "golden-update" <> long "accept" <> help "Accept current test output as expected snapshot values")

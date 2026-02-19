@@ -48,7 +48,7 @@ When possible, strive to use unit tests rather than actor based tests and strive
 
 ## Cached test results
 
-The Acton test runner caches test results which means that repeated invokations of `acton test` might not actually (re)run tests. Cached failures and errors are still shown by default, so you never miss a failing test. Cached successes are hidden unless you pass `--show-cached`.
+The Acton test runner caches test results which means that repeated invokations of `acton test` might not actually (re)run tests. Cached failures and errors are still shown by default, so you never miss a failing test. Cached successes are hidden unless you pass `--show-cached`. Pass `--no-cache` to force all selected tests to run, even if cached results exist.
 
 This means that the developer experience for test driven development is great even for project with a very large amount of tests as the content hash driven test runner only recompiles and reruns tests that are actually affected by a change.
 
@@ -63,4 +63,3 @@ acton test --module foo --module bar
 ```
 
 This will only run tests from the `foo` and `bar` modules, skipping all other test modules.
-

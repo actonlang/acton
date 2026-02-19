@@ -62,6 +62,7 @@ failures/errors, iterations, and duration).
 
 - If the cached run hash matches the newly computed run hash, the test is
   skipped and its cached result is used.
+- With `--no-cache`, cached results are ignored and all selected tests are run.
 - Cached failures and errors still contribute to the overall test exit code.
 - By default, cached successes are hidden from output; cached failures/errors
   are still shown. Use `--show-cached` to include cached successes.
