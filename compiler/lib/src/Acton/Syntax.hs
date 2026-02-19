@@ -92,6 +92,7 @@ data Expr       = Var           { eloc::SrcLoc, var::QName }
                 | Rest          { eloc::SrcLoc, exp1::Expr, attr::Name }
                 | DotI          { eloc::SrcLoc, exp1::Expr, ival::Integer }
                 | RestI         { eloc::SrcLoc, exp1::Expr, ival::Integer }
+                | OptDot        { eloc::SrcLoc, exp1::Expr, attr::Name }
                 | Lambda        { eloc::SrcLoc, ppar::PosPar, kpar::KwdPar, exp1::Expr, efx::TFX }
                 | Yield         { eloc::SrcLoc, yexp1::Maybe Expr }
                 | YieldFrom     { eloc::SrcLoc, yfrom::Expr }
@@ -654,6 +655,7 @@ instance Eq Expr where
     x@Rest{}            ==  y@Rest{}            = exp1 x == exp1 y && attr x == attr y
     x@DotI{}            ==  y@DotI{}            = exp1 x == exp1 y && ival x == ival y
     x@RestI{}           ==  y@RestI{}           = exp1 x == exp1 y && ival x == ival y
+    x@OptDot{}          ==  y@OptDot{}             = exp1 x == exp1 y && attr x == attr y
     x@Lambda{}          ==  y@Lambda{}          = ppar x == ppar y && kpar x == kpar y && exp1 x == exp1 y && efx x == efx y
     x@Yield{}           ==  y@Yield{}           = yexp1 x == yexp1 y
     x@YieldFrom{}       ==  y@YieldFrom{}       = yfrom x == yfrom y

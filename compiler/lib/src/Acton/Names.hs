@@ -275,6 +275,7 @@ instance Vars Expr where
     freeQ (Rest _ e n)              = freeQ e
     freeQ (DotI _ e i)              = freeQ e
     freeQ (RestI _ e i)             = freeQ e
+    freeQ (OptDot _ e n)            = freeQ e
     freeQ (Lambda _ ps ks e fx)     = freeQ ps ++ freeQ ks ++ (freeQ e `diffQ` (bound ps ++ bound ks))
     freeQ (Yield _ e)               = freeQ e
     freeQ (YieldFrom _ e)           = freeQ e

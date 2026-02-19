@@ -1781,7 +1781,12 @@ atom_expr = do
                       (do
                          (ps,ks) <- parens funargs
                          return (\a -> S.Call NoLoc a ps ks))
-                     <|>
+                    <|>
+                      (do
+                         _ <- symbol "?."
+                         nm <- name
+                         return (\a -> S.OptDot (loc a `upto` loc nm) a nm))
+                    <|>
                       (do
                          dot
                          try intdot <|> iddot <|> strdot))

@@ -371,6 +371,7 @@ instance KCheck Expr where
     kchk env (Rest l e n)           = Rest l <$> kchk env e <*> return n
     kchk env (DotI l e i)           = DotI l <$> kchk env e <*> return i
     kchk env (RestI l e i)          = RestI l <$> kchk env e <*> return i
+    kchk env (OptDot l e n)         = OptDot l <$> kchk env e <*> return n
     kchk env (Lambda l p k e x)     = Lambda l <$> (kchk env =<< convTWild env p) <*> (kchk env =<< convTWild env k) <*>
                                                    kchk env e <*> (kfx env =<< convTWild env x)
     kchk env (Yield l e)            = Yield l <$> kchk env e
@@ -686,7 +687,8 @@ instance KSubst Expr where
     ksubst g (Dot l e n)            = Dot l <$> ksubst g e <*> return n
     ksubst g (Rest l e n)           = Rest l <$> ksubst g e <*> return n
     ksubst g (DotI l e i)           = DotI l <$> ksubst g e <*> return i
-    ksubst g (RestI l e i)           = RestI l <$> ksubst g e <*> return i
+    ksubst g (RestI l e i)          = RestI l <$> ksubst g e <*> return i
+    ksubst g (OptDot l e n)         = OptDot l <$> ksubst g e <*> return n
     ksubst g (Lambda l ps ks e fx)  = Lambda l <$> ksubst g ps <*> ksubst g ks <*> ksubst g e <*> ksubst g fx
     ksubst g (Yield l e)            = Yield l <$> ksubst g e
     ksubst g (YieldFrom l e)        = YieldFrom l <$> ksubst g e
