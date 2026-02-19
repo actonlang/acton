@@ -1,0 +1,28 @@
+class Residence():
+    def __init__(self, numberOfRooms = 1,name: ?str = None):
+        self.numberOfRooms = numberOfRooms
+        self.name = name
+
+class Person():
+    def __init__(self, residence: ?Residence):
+        self.residence = residence
+
+actor main(env):
+    print(Person(Residence(3))?.residence?.numberOfRooms)
+    print(Person(Residence(3))?.residence?.name)
+    print(Person(Residence(3,"Valhalla"))?.residence?.name)
+    print(None?.residence)
+    john = None
+    print(john?.residence?.numberOfRooms)
+    print(john?.residence?.name)
+    john = Person(None)
+    print(john?.residence?.numberOfRooms)
+    print(john?.residence?.name)
+    mary = Person(Residence(3))
+    print(mary?.residence)
+    print(mary?.residence?.numberOfRooms)
+    print(mary?.residence?.name)
+    mary = Person(Residence("Eden"))
+    print(mary?.residence?.numberOfRooms)
+    print(mary?.residence?.name)
+    env.exit(0)
