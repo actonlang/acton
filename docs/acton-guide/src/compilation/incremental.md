@@ -62,6 +62,6 @@ Generated C/H files embed the module impl hash. If the embedded hash differs fro
 
 ## Tests and hashes
 
-Test results are cached by the per-name implHash (plus impl deps). Cached failures are still shown by default. Use `--show-cached` to include cached successes.
+Test results are cached by the per-name implHash (plus impl deps). Cached failures are still shown by default. Use `--show-cached` to include cached successes, or `--no-cache` to force reruns.
 
 For more on tests, see the [Testing](testing.md) section.

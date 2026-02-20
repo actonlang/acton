@@ -174,19 +174,27 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
             nameWidth = max 20 (maxNameLen + 5)
             runContext = mkRunContext opts topts mode
             ctxHash = contextHashBytes runContext
+            useCache = not (C.testNoCache topts)
         cache <- readTestCache (testCachePath paths) runContext
         testHashInfos <- buildTestHashInfos paths ctxHash testsByModule
         let cacheEntries = tcTests cache
         when (C.verbose gopts) $
           putStrLn (formatTestCacheContext ctxHash (testCachePath paths))
         let logCache = if C.verbose gopts then putStrLn else \_ -> return ()
-        (cachedResults0, _testsToRun) <-
-          classifyCachedTests logCache cacheEntries testHashInfos allTests
+        cachedResults0 <-
+          if useCache
+            then do
+              (cachedResults, _testsToRun) <-
+                classifyCachedTests logCache cacheEntries testHashInfos allTests
+              return cachedResults
+            else return []
         cachedResults <-
           if C.testSnapshotUpdate topts
             then mapM (applySnapshotUpdate paths) cachedResults0
             else return cachedResults0
         let showCached = C.testShowCached topts
+        when (not emitJson && not useCache) $
+          putStrLn "Skipping test result cache (--no-cache); running all selected tests"
         when (not emitJson && showCached && not (null cachedResults)) $
           putStrLn ("Using cached results for " ++ show (length cachedResults) ++ " tests")
         ui <- initTestProgressUI gopts nameWidth (C.testShowLog topts) useColorOut
@@ -748,7 +756,7 @@ printTestSummary useColor elapsed showCached results = do
         when hasCached $
           putStrLn (if useColor then testColorYellow ++ "*" ++ testColorReset ++ " = cached test result" else "* = cached test result")
         when hiddenCachedSuccess $
-          putStrLn "Cached succeesful tests are hidden. Cached failures/errors are shown. Use --show-cached to include cached successes."
+          putStrLn "Cached successful tests are hidden. Cached failures/errors are shown. Use --show-cached to include cached successes, or --no-cache to force rerunning selected tests."
         if errors > 0
           then return 2
           else if failures > 0

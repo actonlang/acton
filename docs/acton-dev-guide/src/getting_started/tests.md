@@ -64,7 +64,8 @@ All 2 tests passed ( 0.528 s)
 
 By default, `acton test` shows only tests that ran in the current invocation;
 cached successes are hidden (cached failures/errors are still shown). Use
-`--show-cached` to include cached successes in the output.
+`--show-cached` to include cached successes in the output. Use `--no-cache` to
+force all selected tests to execute instead of reusing cached results.
 
 ## Tips
 
