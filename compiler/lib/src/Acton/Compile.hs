@@ -558,7 +558,7 @@ prepareCompilePlanFromContext sp gopts ctx srcFiles allowPrune mChangedPaths = d
             , projDeps = []
             }
       return (M.singleton rootProj ctx')
-    else discoverProjects sysAbs rootProj depOverrides
+    else discoverProjects gopts sysAbs rootProj depOverrides
   -- Keep generated module artifacts in sync with source removals.
   -- For full builds, scan and prune all orphan outputs.
   -- For incremental builds, prune only modules whose changed .act paths are now missing.
@@ -2464,8 +2464,8 @@ applyFingerprint path spec fpMap =
 -- | Discover all projects reachable from a root project.
 -- Follows Build.act dependencies, applies overrides/pins, and
 -- returns a map from project root to ProjCtx while skipping duplicates.
-discoverProjects :: FilePath -> FilePath -> [(String, FilePath)] -> IO (M.Map FilePath ProjCtx)
-discoverProjects sysAbs rootProj depOverrides = do
+discoverProjects :: C.GlobalOptions -> FilePath -> FilePath -> [(String, FilePath)] -> IO (M.Map FilePath ProjCtx)
+discoverProjects gopts sysAbs rootProj depOverrides = do
     rootAbs <- normalizePathSafe rootProj
     rootSpec0 <- loadBuildSpec rootAbs
     rootSpec  <- applyDepOverrides rootAbs depOverrides rootSpec0
@@ -2513,8 +2513,9 @@ discoverProjects sysAbs rootProj depOverrides = do
                   then (dep, Nothing)
                   else (pinDep, Just dep)
       when (isJust conflict) $
-        putStrLn ("Warning: dependency '" ++ depName ++ "' in " ++ base
-                  ++ " overridden by root pin")
+        unless (C.quiet gopts) $
+          putStrLn ("Warning: dependency '" ++ depName ++ "' in " ++ base
+                    ++ " overridden by root pin")
       depBase <- resolveDepBase base depName chosenDep
       depAbs  <- normalizePathSafe depBase
       (depPath, fpMap', depSpec) <- canonicalizeDep depAbs fpMap
@@ -2525,8 +2526,9 @@ discoverProjects sysAbs rootProj depOverrides = do
       spec <- applyDepOverrides depAbs depOverrides spec0
       let (canonPath, fpMap', fp) = applyFingerprint depAbs spec fpMap
       when (canonPath /= depAbs) $
-        putStrLn ("Warning: dependency fingerprint " ++ fp
-                  ++ " at " ++ depAbs ++ " deduplicated to " ++ canonPath)
+        unless (C.quiet gopts) $
+          putStrLn ("Warning: dependency fingerprint " ++ fp
+                    ++ " at " ++ depAbs ++ " deduplicated to " ++ canonPath)
       let depSpec = if canonPath == depAbs then Just spec else Nothing
       return (canonPath, fpMap', depSpec)
 
