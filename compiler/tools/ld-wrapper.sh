@@ -6,7 +6,7 @@ state="static"
 arch="$(uname -m 2>/dev/null || true)"
 allow_dynamic_glibc=false
 case "$arch" in
-  aarch64|arm64)
+  aarch64|arm64|x86_64|amd64)
     allow_dynamic_glibc=true
     ;;
 esac
