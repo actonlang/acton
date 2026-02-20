@@ -1,0 +1,34 @@
+class Residence():
+    def __init__(self, numberOfRooms = 1, name: ?str = None):
+        self.numberOfRooms = numberOfRooms
+        self.name = name
+
+class Person():
+    def __init__(self, residence: ?Residence):
+        self.residence = residence
+
+actor main(env):
+    def check_equal(a,b):
+#    def check_equal[A(Eq)](a: ?A,b: ?A)->None:
+        if a != b:
+            print(a,"is not equal to",b)
+            env.exit(1)
+
+    check_equal(Person(Residence(3))?.residence?.numberOfRooms, 3)
+    check_equal(Person(Residence(3))?.residence?.name, None)
+#     check_equal(Person(Residence(3,"Valhalla"))?.residence?.name, "Valhalla")
+#     check_equal(None?.residence, None)
+#     john = None
+#     check_equal(john?.residence?.numberOfRooms, None)
+#     check_equal(john?.residence?.name, None)
+#     john = Person(None)
+#     check_equal(john?.residence?.numberOfRooms, None)
+#     check_equal(john?.residence?.name, None)
+#     mary = Person(Residence(3))
+#     print(mary?.residence)
+#     check_equal(mary?.residence?.numberOfRooms, 3)
+#     check_equal(mary?.residence?.name, None)
+#     mary = Person(Residence("Eden"))
+#     check_equal(mary?.residence?.numberOfRooms, 1)
+#     check_equal(mary?.residence?.name, "Eden")
+    env.exit(0)
