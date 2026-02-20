@@ -266,6 +266,8 @@ jobs:
       LANG: en_US.UTF-8
       LC_ALL: en_US.UTF-8
       BUILD_TIME: ${{ needs.build-version.outputs.build_time }}
+      HOME: /tmp/acton-gh-home
+      STACK_ROOT: /tmp/acton-gh-home/.stack
     steps:
       - name: "Show platform and environment"
         run: |
@@ -282,6 +284,9 @@ jobs:
           apt-get update
           apt-get install -qy bzip2 curl g++ haskell-stack libtinfo-dev make procps zlib1g-dev
           apt-get install -qy bash-completion build-essential debhelper devscripts
+      - name: "Prepare stack directories"
+        run: |
+          mkdir -p "${HOME}/.local/bin" "${STACK_ROOT}"
       - name: "Check out repository code"
         uses: actions/checkout@v6
       - name: "Cache stuff"
@@ -289,7 +294,7 @@ jobs:
         with:
           path: |
             ./debian/.debhelper/
-            ~/.stack
+            ${{ env.STACK_ROOT }}
           key: build-debs-${{ matrix.arch }}
       - name: "locale en_US.UTF-8"
         run: |
@@ -299,14 +304,27 @@ jobs:
           echo "locales locales/locales_to_be_generated multiselect en_US.UTF-8 UTF-8" | debconf-set-selections
           rm "/etc/locale.gen"
           dpkg-reconfigure --frontend noninteractive locales
-      - name: "Upgrade stack on old distributions"
-        if: ${{ (matrix.os == 'ubuntu' && (matrix.version == '20.04' || matrix.version == '22.04')) || (matrix.os == 'debian' && matrix.version == '11') }}
+      - name: "Install newer stack"
         run: |
-          stack upgrade
-          echo "PATH=~/.local/bin:$PATH" >> $GITHUB_ENV
+          STACK_VERSION=3.9.3
+          ARCH="$(uname -m)"
+          case "${ARCH}" in
+            x86_64) STACK_ARCH="x86_64" ;;
+            aarch64|arm64) STACK_ARCH="aarch64" ;;
+            *) echo "Unsupported arch: ${ARCH}" >&2; exit 1 ;;
+          esac
+          STACK_TAR="stack-${STACK_VERSION}-linux-${STACK_ARCH}.tar.gz"
+          STACK_URL="https://github.com/commercialhaskell/stack/releases/download/v${STACK_VERSION}/${STACK_TAR}"
+          curl -fsSL "${STACK_URL}" -o /tmp/stack.tgz
+          tar -xzf /tmp/stack.tgz -C /tmp
+          install -m 0755 "/tmp/stack-${STACK_VERSION}-linux-${STACK_ARCH}/stack" "${HOME}/.local/bin/stack"
+          echo "${HOME}/.local/bin" >> "$GITHUB_PATH"
+          "${HOME}/.local/bin/stack" --version
       - name: "Build Debian packages"
+        shell: bash
         run: |
-          make -C ${GITHUB_WORKSPACE} debs BUILD_RELEASE=${{ env.BUILD_RELEASE }} BUILD_TIME=${BUILD_TIME}
+          set -euo pipefail
+          make -C "${GITHUB_WORKSPACE}" debs BUILD_RELEASE=${{ env.BUILD_RELEASE }} BUILD_TIME=${BUILD_TIME}
       - name: "Compute variables"
         id: vars
         run: |

@@ -494,7 +494,7 @@ debian/changelog: debian/changelog.in CHANGELOG.md
 
 .PHONY: debs
 debs: debian/changelog
-	debuild --preserve-envvar VERSION_INFO -i -us -uc -nc -b
+	debuild --preserve-envvar VERSION_INFO --preserve-envvar PATH --preserve-envvar STACK_ROOT -i -us -uc -nc -b
 
 .PHONY: container-image image image-deb push-image
 container-image: all
