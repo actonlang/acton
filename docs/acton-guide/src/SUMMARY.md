@@ -63,6 +63,7 @@
   - [Sync actor tests](testing/sync_actor_test.md)
   - [Async actor tests](testing/async_actor_test.md)
   - [Env tests](testing/env_test.md)
+  - [Snapshot testing](testing/snapshot.md)
   - [Failures vs errors](testing/failures_errors.md)
   - [Flaky tests](testing/flaky.md)
   - [Performance testing](testing/performance.md)

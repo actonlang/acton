@@ -21,9 +21,10 @@ import Text.Printf (printf)
 -- | Compute the status label (OK/FAIL/ERR/FLAKY) for a test.
 formatTestStatus :: TestResult -> String
 formatTestStatus res =
-    let ok = trSuccess res == Just True && trException res == Nothing
+    let ok = trSuccess res == Just True && trException res == Nothing && not (trSkipped res)
         base
           | trSnapshotUpdated res = "UPDATED"
+          | trSkipped res = "SKIP"
           | ok = "OK"
           | trNumErrors res > 0 && trNumFailures res > 0 = "ERR/FAIL"
           | trNumErrors res > 0 = "ERR"
@@ -37,6 +38,7 @@ formatTestStatus res =
 formatTestStatusLive :: TestResult -> String
 formatTestStatusLive res
   | trSnapshotUpdated res = "UPDATED"
+  | trSkipped res = "SKIP"
   | isJust (trException res) = "ERR"
   | trFlaky res = "FLAKY"
   | trNumErrors res > 0 && trNumFailures res > 0 = "ERR/FAIL"
@@ -71,6 +73,7 @@ testStatusWidth :: Int
 testStatusWidth = (maximum (map length
   [ "RUN"
   , "OK"
+  , "SKIP"
   , "UPDATED"
   , "FAIL"
   , "ERR"
@@ -89,6 +92,7 @@ colorizeStatusPart useColor cached statusRaw runs =
         core = strip "FLAKY " statusRaw
         statusColored = case core of
           "RUN" -> testColorApply useColor [testColorYellow] statusRaw
+          "SKIP" -> testColorApply useColor [testColorYellow] statusRaw
           "OK" -> testColorApply useColor [testColorGreen] statusRaw
           "UPDATED" -> testColorApply useColor [testColorYellow] statusRaw
           _ -> testColorApply useColor [testColorBold, testColorRed] statusRaw
@@ -110,10 +114,16 @@ formatTestLineWith useColor statusFn nameWidth display res =
 
 formatTestDetailLines :: Bool -> Bool -> TestResult -> [String]
 formatTestDetailLines useColor showLog res =
-    let ok = trSuccess res == Just True && trException res == Nothing
-        wantDetails = showLog || not ok
+    let skipped = trSkipped res
+        ok = trSuccess res == Just True && trException res == Nothing && not skipped
+        wantDetails = showLog || skipped || not ok
+        skipLines = case trSkipReason res of
+          Just reason ->
+            [ testColorApply useColor [testColorYellow] ("    skipped: " ++ reason)
+            ]
+          Nothing -> []
         excLines = case trException res of
-          Just exc ->
+          Just exc | not skipped ->
             [ testColorApply useColor [testColorRed] ("    " ++ line)
             | line <- lines exc
             ]
@@ -123,7 +133,7 @@ formatTestDetailLines useColor showLog res =
             then formatCombinedLogLines (trStdOut res) (trStdErr res)
             else []
     in if wantDetails
-         then excLines ++ outputLines
+         then skipLines ++ excLines ++ outputLines
          else []
   where
     formatCombinedLogLines mOut mErr =

@@ -46,6 +46,8 @@ There are 4 kinds of tests
   
 When possible, strive to use unit tests rather than actor based tests and strive to avoid env tests.
 
+For snapshot-based assertions, see [Snapshot testing](testing/snapshot.md).
+
 ## Cached test results
 
 The Acton test runner caches test results which means that repeated invokations of `acton test` might not actually (re)run tests. Cached failures and errors are still shown by default, so you never miss a failing test. Cached successes are hidden unless you pass `--show-cached`. Pass `--no-cache` to force all selected tests to run, even if cached results exist.
@@ -63,3 +65,31 @@ acton test --module foo --module bar
 ```
 
 This will only run tests from the `foo` and `bar` modules, skipping all other test modules.
+
+## Capability-gated tests
+
+Some tests depend on external capabilities (for example network services, hardware, or system setup). In tests that receive a test context argument (`t`), use `t.require(...)` and pass available capabilities with `--tag`:
+
+```python
+import testing
+
+def _test_external_service(t):
+    t.require("external-service")
+    # test logic that depends on external-service being available
+```
+
+Run with capabilities:
+
+```sh
+acton test --tag external-service
+```
+
+If the required capability is not enabled, the test is marked as skipped.
+Capabilities are runtime environment signals used by `t.require(...)`; they are not a pre-test selection/filter mechanism. This applies to test context objects like `SyncT`, `AsyncT`, and `EnvT`.
+
+You can also skip explicitly:
+
+```python
+def _test_todo(t):
+    t.skip("not implemented yet")
+```

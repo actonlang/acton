@@ -59,6 +59,10 @@ All 4 tests passed (0.655s)
 
 Since the Acton RTS is multi-threaded and actors are scheduled concurrently on worker threads, using actors imply a degree of non-determinism and so unlike unit tests, which are completely deterministic, actors tests are fundamentally non-deterministic. You can still write deterministic tests as long as you pay attention to how you construct your test results.
 
+`testing.SyncT` also provides:
+- `t.require(tag)` to skip a test when a required capability is not enabled via `acton test --tag TAG`
+- `t.skip(reason)` to explicitly skip the current test
+
 For example, actor A might be scheduled before or after actor B so if the test relies on ordering of the output, it could fail or succeed intermittently. Interacting with the surrounding environment by reading files or communicating over the network introduces even more sources of non-determinism. Avoid it if you can. 
 
 The test discovery system finds synchronous tests through:

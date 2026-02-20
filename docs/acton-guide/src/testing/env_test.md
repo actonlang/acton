@@ -42,4 +42,8 @@ All 1 tests passed (0.689s)
 
 The test discovery system finds environment tests by looking for *actors* that take a `testing.EnvT` parameter.
 
+`testing.EnvT` also provides:
+- `t.require(tag)` to skip a test when a required capability is not enabled via `acton test --tag TAG`
+- `t.skip(reason)` to explicitly skip the current test
+
 *Snapshot testing* can be enabled by providing an output of type *str* to the `.success(output: ?str)` function. The Acton test framework will take care about recognizing the test as a snapshot test and comparing its output to the expected *snapshot value*.

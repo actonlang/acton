@@ -320,14 +320,29 @@ def eq_opt[T(Eq)](a: ?T, b: ?T) -> bool:
 class TestLogger(logging.Logger):
     pass
 
+class SkipTest(AssertionError):
+    pass
+
+class AbortTest(Exception):
+    pass
+
 class SyncT(value):
-    def __init__(self, log_handler: logging.Handler):
+    def __init__(self, log_handler: logging.Handler, tags: set[str]):
         self.log_handler = log_handler
+        self.tags = tags
+
+    def skip(self, reason: ?str="Skipped"):
+        raise SkipTest(reason)
+
+    def require(self, tag: str):
+        if tag not in self.tags:
+            self.skip(f"Missing required capability '{tag}' (enable with --tag {tag})")
 
 class AsyncT(value):
-    def __init__(self, report_result: action(?bool, ?Exception, ?str) -> None, log_handler: logging.Handler):
+    def __init__(self, report_result: action(?bool, ?Exception, ?str) -> None, log_handler: logging.Handler, tags: set[str]):
         self.report_result = report_result
         self.log_handler = log_handler
+        self.tags = tags
 
     def success(self, output: ?str=None):
         self.report_result(True, None, output)
@@ -338,11 +353,20 @@ class AsyncT(value):
     def error(self, exception: Exception):
         self.report_result(None, exception, None)
 
+    def skip(self, reason: ?str="Skipped"):
+        self.report_result(True, SkipTest(reason), None)
+        raise AbortTest(reason)
+
+    def require(self, tag: str):
+        if tag not in self.tags:
+            self.skip(f"Missing required capability '{tag}' (enable with --tag {tag})")
+
 class EnvT(value):
-    def __init__(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler):
+    def __init__(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler, tags: set[str]):
         self.report_result = report_result
         self.env = env
         self.log_handler = log_handler
+        self.tags = tags
 
     def success(self, output: ?str=None):
         self.report_result(True, None, output)
@@ -352,6 +376,14 @@ class EnvT(value):
 
     def error(self, exception: Exception):
         self.report_result(None, exception, None)
+
+    def skip(self, reason: ?str="Skipped"):
+        self.report_result(True, SkipTest(reason), None)
+        raise AbortTest(reason)
+
+    def require(self, tag: str):
+        if tag not in self.tags:
+            self.skip(f"Missing required capability '{tag}' (enable with --tag {tag})")
 
 
 class Test(object):
@@ -375,17 +407,17 @@ class Test(object):
             n = n[:-8]
         return n
 
-    def run(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler):
+    def run(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler, tags: set[str]):
         if isinstance(self, UnitTest):
-            self.run_test(report_result, env, log_handler)
+            self.run_test(report_result, env, log_handler, tags)
         elif isinstance(self, SimpleSyncTest):
-            self.run_test(report_result, env, log_handler)
+            self.run_test(report_result, env, log_handler, tags)
         elif isinstance(self, SyncTest):
-            self.run_test(report_result, env, log_handler)
+            self.run_test(report_result, env, log_handler, tags)
         elif isinstance(self, AsyncTest):
-            self.run_test(report_result, env, log_handler)
+            self.run_test(report_result, env, log_handler, tags)
         elif isinstance(self, EnvTest):
-            self.run_test(report_result, env, log_handler)
+            self.run_test(report_result, env, log_handler, tags)
         else:
             raise ValueError("Test: Invalid test type")
 
@@ -441,7 +473,7 @@ class UnitTest(Test):
         self.desc = desc
         self.module = module
 
-    def run_test(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler):
+    def run_test(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler, tags: set[str]):
         output = None
         success = None
         exception = None
@@ -449,6 +481,9 @@ class UnitTest(Test):
             output = self.fn()
             success = True
             exception = None
+        except SkipTest as e:
+            success = True
+            exception = e
         except AssertionError as e:
             success = False
             exception = e
@@ -464,7 +499,7 @@ class SimpleSyncTest(Test):
         self.desc = desc
         self.module = module
 
-    def run_test(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler):
+    def run_test(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler, tags: set[str]):
         output = None
         success = None
         exception = None
@@ -472,6 +507,9 @@ class SimpleSyncTest(Test):
             output = self.fn()
             success = True
             exception = None
+        except SkipTest as e:
+            success = True
+            exception = e
         except AssertionError as e:
             success = False
             exception = e
@@ -487,14 +525,17 @@ class SyncTest(Test):
         self.desc = desc
         self.module = module
 
-    def run_test(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler):
+    def run_test(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler, tags: set[str]):
         output = None
         success = None
         exception = None
         try:
-            output = self.fn(SyncT(log_handler))
+            output = self.fn(SyncT(log_handler, tags))
             success = True
             exception = None
+        except SkipTest as e:
+            success = True
+            exception = e
         except AssertionError as e:
             success = False
             exception = e
@@ -510,8 +551,11 @@ class AsyncTest(Test):
         self.desc = desc
         self.module = module
 
-    def run_test(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler):
-        self.fn(AsyncT(report_result, log_handler))
+    def run_test(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler, tags: set[str]):
+        try:
+            self.fn(AsyncT(report_result, log_handler, tags))
+        except AbortTest:
+            pass
 
 class EnvTest(Test):
     def __init__(self, fn: proc(EnvT) -> None, name: str, desc: str, module: str):
@@ -520,8 +564,11 @@ class EnvTest(Test):
         self.desc = desc
         self.module = module
 
-    def run_test(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler):
-        self.fn(EnvT(report_result, env, log_handler))
+    def run_test(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler, tags: set[str]):
+        try:
+            self.fn(EnvT(report_result, env, log_handler, tags))
+        except AbortTest:
+            pass
 
 
 class TestResult(object):
@@ -538,14 +585,26 @@ class TestResult(object):
       - for asynchronous actor & env tests, the report_result callback was called with TestResult(success=None, exception=AssertionError)
     """
     success: ?bool
+    skipped: bool
+    skip_reason: ?str
     exception: ?str
     output: ?str
     duration: float
     mem_usage_delta: int
     non_gc_mem_usage_delta: int
 
-    def __init__(self, success: ?bool, exception: ?str, output: ?str, duration: float, mem_usage_delta: int, non_gc_mem_usage_delta: int):
+    def __init__(self,
+                 success: ?bool,
+                 exception: ?str,
+                 output: ?str,
+                 duration: float,
+                 mem_usage_delta: int,
+                 non_gc_mem_usage_delta: int,
+                 skipped: bool=False,
+                 skip_reason: ?str=None):
         self.success = success
+        self.skipped = skipped
+        self.skip_reason = skip_reason
         self.exception = exception
         self.output = output
         self.duration = duration
@@ -555,6 +614,8 @@ class TestResult(object):
     def to_json(self):
         return {
             "success": self.success,
+            "skipped": self.skipped,
+            "skip_reason": self.skip_reason,
             "exception": self.exception,
             "output": self.output,
             "duration": self.duration,
@@ -565,19 +626,27 @@ class TestResult(object):
     @staticmethod
     def from_json(data: dict[str, str]) -> TestResult:
         success = data["success"]
+        skipped = False
+        if "skipped" in data:
+            skipped = data["skipped"]
+        skip_reason = None
+        if "skip_reason" in data:
+            skip_reason = data["skip_reason"]
         exception = data["exception"]
         output = data["output"]
         duration = data["duration"]
         mem_usage_delta = data["mem_usage_delta"]
         non_gc_mem_usage_delta = data["non_gc_mem_usage_delta"]
         if (isinstance(success, bool)
-            and isinstance(exception, str)
-            and isinstance(output, str)
+            and isinstance(skipped, bool)
+            and (skip_reason is None or isinstance(skip_reason, str))
+            and (exception is None or isinstance(exception, str))
+            and (output is None or isinstance(output, str))
             and isinstance(duration, float)
             and isinstance(mem_usage_delta, int)
             and isinstance(non_gc_mem_usage_delta, int)
             ):
-            return TestResult(success, exception, output, duration, mem_usage_delta, non_gc_mem_usage_delta)
+            return TestResult(success, exception, output, duration, mem_usage_delta, non_gc_mem_usage_delta, skipped, skip_reason)
         raise ValueError("Invalid TestResult JSON")
 
 
@@ -585,6 +654,8 @@ class TestInfo(object):
     definition: Test
     complete: bool
     success: ?bool
+    skipped: bool
+    skip_reason: ?str
     exception: ?str
     output: ?str
     std_out: ?str
@@ -598,6 +669,7 @@ class TestInfo(object):
     total_duration: float
     test_duration: float
     num_iterations: int
+    num_skipped: int
     num_failures: int
     num_errors: int
     mem_usage_delta_avg: int
@@ -609,6 +681,8 @@ class TestInfo(object):
                  definition: Test,
                  complete: bool=False,
                  success: ?bool=None,
+                 skipped: bool=False,
+                 skip_reason: ?str=None,
                  exception: ?str=None,
                  output: ?str=None,
                  std_out: ?str=None,
@@ -620,6 +694,7 @@ class TestInfo(object):
                  total_duration: float=0.0,
                  test_duration: float=0.0,
                  num_iterations: int=0,
+                 num_skipped: int=0,
                  num_failures: int=0,
                  num_errors: int=0,
                  mem_usage_delta_avg: int=0,
@@ -629,6 +704,8 @@ class TestInfo(object):
         self.definition = definition
         self.complete = complete
         self.success = success
+        self.skipped = skipped
+        self.skip_reason = skip_reason
         self.exception = exception
         self.output = output
         self.std_out = std_out
@@ -642,6 +719,7 @@ class TestInfo(object):
         self.total_duration = total_duration
         self.test_duration = test_duration
         self.num_iterations = num_iterations
+        self.num_skipped = num_skipped
         self.num_failures = num_failures
         self.num_errors = num_errors
         self.mem_usage_delta_avg = mem_usage_delta_avg
@@ -656,6 +734,7 @@ class TestInfo(object):
             # First result
             self.output = result.output
             self.exception = result.exception
+            self.skip_reason = result.skip_reason
 
         self.results.append(result)
 
@@ -672,16 +751,20 @@ class TestInfo(object):
         self.avg_duration = -1.0
         self.total_duration = 0.0
         self.num_iterations = int(len(self.results))
+        self.num_skipped = 0
         self.num_failures = 0
         self.num_errors = 0
         self.mem_usage_delta_avg = 0
         self.non_gc_mem_usage_delta_avg = 0
         self.non_gc_mem_inc_count = 0
         for result in self.results:
-            res_success = result.success
-            if res_success == False:
+            if result.skipped:
+                self.num_skipped += 1
+                if self.skip_reason is None:
+                    self.skip_reason = result.skip_reason
+            elif result.success == False:
                 self.num_failures += 1
-            elif res_success is None:
+            elif result.success is None:
                 self.num_errors += 1
 
         for result in self.results[1:]:
@@ -710,6 +793,7 @@ class TestInfo(object):
             self.success = None
         else:
             self.success = True
+        self.skipped = self.num_skipped > 0 and self.num_failures == 0 and self.num_errors == 0
 
         if (self.num_failures == 0 and self.num_errors == 0) or self.num_failures == self.num_iterations or self.num_errors == self.num_iterations:
             self.flaky = False
@@ -753,6 +837,8 @@ class TestInfo(object):
             "definition": self.definition.to_json(),
             "complete": self.complete,
             "success": self.success,
+            "skipped": self.skipped,
+            "skip_reason": self.skip_reason,
             "exception": self.exception,
             "output": self.output,
             "std_out": self.std_out,
@@ -764,6 +850,7 @@ class TestInfo(object):
             "total_duration": self.total_duration,
             "test_duration": self.test_duration,
             "num_iterations": self.num_iterations,
+            "num_skipped": self.num_skipped,
             "num_failures": self.num_failures,
             "num_errors": self.num_errors,
             "mem_usage_delta_avg": self.mem_usage_delta_avg,
@@ -786,6 +873,18 @@ class TestInfo(object):
         success: ?bool = None
         if suc is not None and isinstance(suc, bool):
             success = suc
+        sk = False
+        if "skipped" in json_data:
+            sk = json_data["skipped"]
+        skipped = False
+        if isinstance(sk, bool):
+            skipped = sk
+        skip_reason_d = None
+        if "skip_reason" in json_data:
+            skip_reason_d = json_data["skip_reason"]
+        skip_reason: ?str = None
+        if skip_reason_d is not None and isinstance(skip_reason_d, str):
+            skip_reason = skip_reason_d
         exc = json_data["exception"]
         exception: ?str = None
         if exc is not None and isinstance(exc, str):
@@ -809,6 +908,9 @@ class TestInfo(object):
         total_duration = json_data["total_duration"]
         test_duration = json_data["test_duration"]
         num_iterations = json_data["num_iterations"]
+        num_skipped = 0
+        if "num_skipped" in json_data:
+            num_skipped = json_data["num_skipped"]
         num_failures = json_data["num_failures"]
         num_errors = json_data["num_errors"]
         mem_usage_delta_avg = json_data["mem_usage_delta_avg"]
@@ -826,6 +928,7 @@ class TestInfo(object):
             and isinstance(total_duration, float)
             and isinstance(test_duration, float)
             and isinstance(num_iterations, int)
+            and isinstance(num_skipped, int)
             and isinstance(num_failures, int)
             and isinstance(num_errors, int)
             and isinstance(mem_usage_delta_avg, int)
@@ -835,6 +938,8 @@ class TestInfo(object):
             return TestInfo(definition,
                             complete,
                             success,
+                            skipped,
+                            skip_reason,
                             exception,
                             output,
                             std_out,
@@ -846,6 +951,7 @@ class TestInfo(object):
                             total_duration,
                             test_duration,
                             num_iterations,
+                            num_skipped,
                             num_failures,
                             num_errors,
                             mem_usage_delta_avg,
@@ -862,14 +968,25 @@ class TestRunnerConfig(object):
     max_time: float
     min_time: float
     output_enabled: bool
+    tags: set[str]
 
     def __init__(self, perf_mode: bool, args):
+        def split_tags(tag_args: list[str]) -> set[str]:
+            tags = set()
+            for raw_tags in tag_args:
+                for t in raw_tags.split(","):
+                    tag = t.strip()
+                    if tag != "":
+                        tags.add(tag)
+            return tags
+
         self.perf_mode = perf_mode
         self.output_enabled = False if args.get_bool("no_output") else True
         self.min_iter = args.get_int("min-iter")
         self.max_iter = max([args.get_int("max-iter"), self.min_iter])
         self.min_time = float(args.get_int("min-time")) / 1000.0
         self.max_time = max([float(args.get_int("max-time")) / 1000.0, self.min_time])
+        self.tags = split_tags(args.get_strlist("tag"))
 
 class TimeoutError(Exception):
     pass
@@ -923,7 +1040,18 @@ actor TestExecutor(syscap, config, t: Test, report_complete, env):
         non_gc_mem_usage_delta = non_gc_mem_usage_after - non_gc_mem_usage_before
         #print(f"non-GC memory before: {non_gc_mem_usage_before}  after: {non_gc_mem_usage_after}  delta: {non_gc_mem_usage_delta}")
 
+        skipped = isinstance(exception, SkipTest)
+        skip_reason = None
+        if skipped:
+            skip_exc = exception
+            if skip_exc is not None:
+                skip_reason = str(skip_exc)
+            success = True
+            exception = None
+
         complete = False
+        if skipped:
+            complete = True
         if test_dur > config.min_time and iteration > config.min_iter:
             complete = True
         if config.max_time > 0 and test_dur > config.max_time:
@@ -933,7 +1061,7 @@ actor TestExecutor(syscap, config, t: Test, report_complete, env):
 
         if test_info is not None:
             exc = str(exception) if exception is not None else None
-            test_info.update(complete, TestResult(success, exc, val, testiter_dur, mem_usage_delta, non_gc_mem_usage_delta), test_dur*1000.0)
+            test_info.update(complete, TestResult(success, exc, val, testiter_dur, mem_usage_delta, non_gc_mem_usage_delta, skipped=skipped, skip_reason=skip_reason), test_dur*1000.0)
         if last_report.elapsed().to_float() > 0.05 or complete:
             if test_info is not None and config.output_enabled:
                 print("\n" + json.encode({"test_info": test_info.to_json()}), err=True)
@@ -966,7 +1094,9 @@ actor TestExecutor(syscap, config, t: Test, report_complete, env):
             _report_result(t, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, s, e, val)
 
         try:
-            t.run(repres, env, log_handler)
+            t.run(repres, env, log_handler, config.tags)
+        except SkipTest as e:
+            _report_result(t, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, True, e, None)
         except AssertionError as e:
             _report_result(t, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, False, e, None)
         except Exception as e:
@@ -1105,6 +1235,7 @@ class ProjectTestResults(object):
 
         errors = 0
         failures = 0
+        skipped = 0
         complete = True
         if set(self.results.keys()) != self.expected_modules:
             complete = False
@@ -1144,7 +1275,10 @@ class ProjectTestResults(object):
                 msg = ""
                 run_info = ""
                 if tinfo.complete:
-                    if exc is not None:
+                    if tinfo.skipped:
+                        skipped += 1
+                        msg += term.yellow + "SKIP" + term.normal
+                    elif exc is not None:
                         msg += term.bold + term.red
                         if tinfo.flaky:
                             msg += "FLAKY "
@@ -1183,6 +1317,9 @@ class ProjectTestResults(object):
                                                                         tinfo.num_iterations))
                     self.printed_lines += 3
                 if tinfo.complete:
+                    if tinfo.skipped and tinfo.skip_reason is not None:
+                        print(f"{term.yellow}    skipped: {tinfo.skip_reason}{term.normal}")
+                        self.printed_lines += 1
                     if exc is not None:
                         for line in str(exc).splitlines(None):
                             print(f"{term.red}    {line}{term.normal}")
@@ -1276,7 +1413,10 @@ class ProjectTestResults(object):
                 print()
                 return 1
             else:
-                print(f"{term.green}All {self.num_tests()} tests passed ({self.sw.elapsed().str_ms()}s){term.normal}")
+                if skipped > 0:
+                    print(f"{term.green}All {self.num_tests()} tests passed, {skipped} skipped ({self.sw.elapsed().str_ms()}s){term.normal}")
+                else:
+                    print(f"{term.green}All {self.num_tests()} tests passed ({self.sw.elapsed().str_ms()}s){term.normal}")
                 print()
                 return 0
         else:
@@ -1377,6 +1517,7 @@ actor test_runner(env: Env,
         tp.add_option("min-iter", "int", default=3, help="Minumum number of iterations to run")
         tp.add_option("max-time", "int", default=1000, help="Maximum time to run a test in milliseconds")
         tp.add_option("min-time", "int", default=50, help="Minimum time to run a test in milliseconds")
+        tp.add_option("tag", "strlist", default=[], help="Enable test capability tag")
         pp = tp.add_cmd("perf", "Performance benchmark tests", _run_perf_tests)
 
         args = p.parse(env.argv)

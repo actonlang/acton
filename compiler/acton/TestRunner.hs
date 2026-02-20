@@ -211,7 +211,7 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
         eventChan <- newChan
         let cachedMap = M.fromList [ (TestKey (trModule res) (trName res), res) | res <- cachedResults ]
             shouldShowCached res =
-              let ok = trSuccess res == Just True && trException res == Nothing
+              let ok = trSuccess res == Just True && trException res == Nothing && not (trSkipped res)
               in showCached || not ok || trSnapshotUpdated res
             startSpec spec running results = do
               let key = TestKey (tsModule spec) (tsName spec)
@@ -244,6 +244,8 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
                             , trName = tsName spec
                             , trComplete = False
                             , trSuccess = Nothing
+                            , trSkipped = False
+                            , trSkipReason = Nothing
                             , trException = Nothing
                             , trOutput = Nothing
                             , trStdOut = Nothing
@@ -337,12 +339,13 @@ outputJsonReport elapsed results = do
     let total = length results
         failures = length [ r | r <- results, trSuccess r == Just False ]
         errors = length [ r | r <- results, trSuccess r == Nothing ]
+        skipped = length [ r | r <- results, trSkipped r ]
         elapsedMs :: Double
         elapsedMs =
           let secs :: Double
               secs = (fromIntegral (sec elapsed)) + (fromIntegral (nsec elapsed) / 1000000000)
           in secs * 1000
-        isOk res = trSuccess res == Just True && trException res == Nothing
+        isOk res = trSuccess res == Just True && trException res == Nothing && not (trSkipped res)
         formatCombinedOutput mOut mErr =
           let out = maybe "" id mOut
               err = maybe "" id mErr
@@ -369,6 +372,8 @@ outputJsonReport elapsed results = do
                , AesonKey.fromString "flaky" Aeson..= trFlaky res
                , AesonKey.fromString "iterations" Aeson..= trNumIterations res
                , AesonKey.fromString "duration_ms" Aeson..= trTestDuration res
+               , AesonKey.fromString "skipped" Aeson..= trSkipped res
+               , AesonKey.fromString "skip_reason" Aeson..= trSkipReason res
                , AesonKey.fromString "exception" Aeson..= trException res
                , AesonKey.fromString "output" Aeson..= combinedOutput
                ]
@@ -377,6 +382,7 @@ outputJsonReport elapsed results = do
               [ AesonKey.fromString "total" Aeson..= total
               , AesonKey.fromString "failures" Aeson..= failures
               , AesonKey.fromString "errors" Aeson..= errors
+              , AesonKey.fromString "skipped" Aeson..= skipped
               , AesonKey.fromString "elapsed_ms" Aeson..= elapsedMs
               ]
           , AesonKey.fromString "tests" Aeson..= map testObj results
@@ -576,6 +582,8 @@ runModuleTestStreaming opts paths topts mode modName testName allowLive callback
           , trName = testName
           , trComplete = False
           , trSuccess = Nothing
+          , trSkipped = False
+          , trSkipReason = Nothing
           , trException = Just "No test result received"
           , trOutput = Nothing
           , trStdOut = Nothing
@@ -643,13 +651,16 @@ testProgressCallbacks ui eventChan key display =
 testCmdArgs :: C.TestOptions -> [String]
 testCmdArgs topts =
     let iter = C.testIter topts
-    in if iter > 0
-         then ["--max-iter", show iter, "--min-iter", show iter, "--max-time", show (10^6), "--min-time", "1"]
-         else [ "--max-iter", show (C.testMaxIter topts)
-              , "--min-iter", show (C.testMinIter topts)
-              , "--max-time", show (C.testMaxTime topts)
-              , "--min-time", show (C.testMinTime topts)
-              ]
+        baseArgs =
+          if iter > 0
+            then ["--max-iter", show iter, "--min-iter", show iter, "--max-time", show (10^6), "--min-time", "1"]
+            else [ "--max-iter", show (C.testMaxIter topts)
+                 , "--min-iter", show (C.testMinIter topts)
+                 , "--max-time", show (C.testMaxTime topts)
+                 , "--min-time", show (C.testMinTime topts)
+                 ]
+        tagArgs = concatMap (\tag -> ["--tag", tag]) (C.testTags topts)
+    in baseArgs ++ tagArgs
 
 -- | Normalize test names by stripping prefixes and wrappers.
 displayTestName :: String -> String
@@ -693,6 +704,8 @@ parseTestInfoValue = Aeson.withObject "TestInfo" $ \o -> do
     name <- def Aeson..: AesonKey.fromString "name"
     complete <- o Aeson..: AesonKey.fromString "complete"
     success <- o Aeson..:? AesonKey.fromString "success"
+    skipped <- o Aeson..:? AesonKey.fromString "skipped" Aeson..!= False
+    skipReason <- o Aeson..:? AesonKey.fromString "skip_reason"
     exception <- o Aeson..:? AesonKey.fromString "exception"
     output <- o Aeson..:? AesonKey.fromString "output"
     stdOut <- o Aeson..:? AesonKey.fromString "std_out"
@@ -707,6 +720,8 @@ parseTestInfoValue = Aeson.withObject "TestInfo" $ \o -> do
       , trName = name
       , trComplete = complete
       , trSuccess = success
+      , trSkipped = skipped
+      , trSkipReason = skipReason
       , trException = exception
       , trOutput = output
       , trStdOut = stdOut
@@ -737,7 +752,8 @@ printTestSummary useColor elapsed showCached results = do
     let total = length results
         failures = length [ r | r <- results, trSuccess r == Just False ]
         errors = length [ r | r <- results, trSuccess r == Nothing ]
-        hiddenCachedSuccess = not showCached && any (\r -> trCached r && trSuccess r == Just True) results
+        skipped = length [ r | r <- results, trSkipped r ]
+        hiddenCachedSuccess = not showCached && any (\r -> trCached r && trSuccess r == Just True && not (trSkipped r)) results
         hasCached = any trCached results
     case total of
       0 -> do
@@ -751,7 +767,9 @@ printTestSummary useColor elapsed showCached results = do
             then putStrLn (testColorApply useColor [testColorBold, testColorRed] (show errors ++ " out of " ++ show total ++ " tests errored (" ++ fmtTime elapsed ++ ")"))
             else if failures > 0
               then putStrLn (testColorApply useColor [testColorBold, testColorRed] (show failures ++ " out of " ++ show total ++ " tests failed (" ++ fmtTime elapsed ++ ")"))
-              else putStrLn (testColorApply useColor [testColorGreen] ("All " ++ show total ++ " tests passed (" ++ fmtTime elapsed ++ ")"))
+              else if skipped > 0
+                then putStrLn (testColorApply useColor [testColorGreen] ("All " ++ show total ++ " tests passed, " ++ show skipped ++ " skipped (" ++ fmtTime elapsed ++ ")"))
+                else putStrLn (testColorApply useColor [testColorGreen] ("All " ++ show total ++ " tests passed (" ++ fmtTime elapsed ++ ")"))
         putStrLn ""
         when hasCached $
           putStrLn (if useColor then testColorYellow ++ "*" ++ testColorReset ++ " = cached test result" else "* = cached test result")
@@ -766,7 +784,7 @@ printTestSummary useColor elapsed showCached results = do
 printTestResultsOrdered :: Bool -> Bool -> Bool -> Int -> [TestSpec] -> [TestResult] -> IO ()
 printTestResultsOrdered useColor showLog showCached nameWidth specs results = do
     let resMap = M.fromList [ (TestKey (trModule res) (trName res), res) | res <- results ]
-        isOk res = trSuccess res == Just True && trException res == Nothing
+        isOk res = trSuccess res == Just True && trException res == Nothing && not (trSkipped res)
         shouldShow res = not (trCached res) || showCached || not (isOk res) || trSnapshotUpdated res
         formatLine spec res =
           formatTestLineWith useColor formatTestStatus nameWidth (tsDisplay spec) res
@@ -829,6 +847,8 @@ markSnapshotUpdated :: TestResult -> TestResult
 markSnapshotUpdated res = res
   { trSnapshotUpdated = True
   , trSuccess = Just True
+  , trSkipped = False
+  , trSkipReason = Nothing
   , trException = Nothing
   , trNumFailures = 0
   , trNumErrors = 0
