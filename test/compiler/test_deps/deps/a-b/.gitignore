@@ -1,2 +1,3 @@
 .actonc.lock
 out
+build.zig*
