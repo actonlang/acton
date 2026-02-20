@@ -222,12 +222,13 @@ parseFlagTests =
   , flagGolden "cgen flag prints c" "test/parse/simple.cgen.golden" ["--quiet", "--dbg-no-lines", "--cgen"]
   , flagGolden "all flags combined" "test/parse/simple.all.golden"
         ["--quiet", "--parse", "--kinds", "--types", "--sigs", "--norm", "--deact", "--cps", "--llift", "--box", "--dbg-no-lines", "--hgen"]
-  , testCase "acton test --help includes --no-cache" $ do
+  , testCase "acton test --help includes --no-cache and --tag" $ do
       acton <- canonicalizePath "../../dist/bin/acton"
       (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc acton ["test", "--help"]) ""
       assertEqual "acton test --help should succeed" ExitSuccess returnCode
       assertEqual "acton test --help stderr" "" cmdErr
       assertBool "acton test --help should include --no-cache" ("--no-cache" `isInfixOf` cmdOut)
+      assertBool "acton test --help should include --tag" ("--tag" `isInfixOf` cmdOut)
   ]
   where
     flagGolden label golden flags =

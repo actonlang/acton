@@ -61,6 +61,8 @@ data TestResult = TestResult
   , trName         :: String
   , trComplete     :: Bool
   , trSuccess      :: Maybe Bool
+  , trSkipped      :: Bool
+  , trSkipReason   :: Maybe String
   , trException    :: Maybe String
   , trOutput       :: Maybe String
   , trStdOut       :: Maybe String
@@ -76,7 +78,7 @@ data TestResult = TestResult
   } deriving (Show)
 
 testCacheVersion :: Int
-testCacheVersion = 1
+testCacheVersion = 2
 
 data TestRunContext = TestRunContext
   { trcCompilerVersion :: String
@@ -107,6 +109,8 @@ instance Aeson.FromJSON TestRunContext where
 data TestCachedResult = TestCachedResult
   { tcrComplete     :: Bool
   , tcrSuccess      :: Maybe Bool
+  , tcrSkipped      :: Bool
+  , tcrSkipReason   :: Maybe String
   , tcrException    :: Maybe String
   , tcrOutput       :: Maybe String
   , tcrStdOut       :: Maybe String
@@ -122,6 +126,8 @@ instance Aeson.ToJSON TestCachedResult where
   toJSON res = Aeson.object
     [ AesonKey.fromString "complete" Aeson..= tcrComplete res
     , AesonKey.fromString "success" Aeson..= tcrSuccess res
+    , AesonKey.fromString "skipped" Aeson..= tcrSkipped res
+    , AesonKey.fromString "skip_reason" Aeson..= tcrSkipReason res
     , AesonKey.fromString "exception" Aeson..= tcrException res
     , AesonKey.fromString "output" Aeson..= tcrOutput res
     , AesonKey.fromString "std_out" Aeson..= tcrStdOut res
@@ -138,6 +144,8 @@ instance Aeson.FromJSON TestCachedResult where
     TestCachedResult
       <$> o Aeson..: AesonKey.fromString "complete"
       <*> o Aeson..:? AesonKey.fromString "success"
+      <*> o Aeson..:? AesonKey.fromString "skipped" Aeson..!= False
+      <*> o Aeson..:? AesonKey.fromString "skip_reason"
       <*> o Aeson..:? AesonKey.fromString "exception"
       <*> o Aeson..:? AesonKey.fromString "output"
       <*> o Aeson..:? AesonKey.fromString "std_out"
@@ -193,6 +201,8 @@ cachedResultFromTest :: TestResult -> TestCachedResult
 cachedResultFromTest res = TestCachedResult
   { tcrComplete = trComplete res
   , tcrSuccess = trSuccess res
+  , tcrSkipped = trSkipped res
+  , tcrSkipReason = trSkipReason res
   , tcrException = trException res
   , tcrOutput = trOutput res
   , tcrStdOut = trStdOut res
@@ -211,6 +221,8 @@ testResultFromCache modName testName res = TestResult
   , trName = testName
   , trComplete = tcrComplete res
   , trSuccess = tcrSuccess res
+  , trSkipped = tcrSkipped res
+  , trSkipReason = tcrSkipReason res
   , trException = tcrException res
   , trOutput = tcrOutput res
   , trStdOut = tcrStdOut res

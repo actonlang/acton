@@ -136,6 +136,7 @@ data TestOptions = TestOptions
     , testMinIter      :: Int
     , testMaxTime      :: Int
     , testMinTime      :: Int
+    , testTags         :: [String]
     , testModules      :: [String]
     , testNames        :: [String]
     } deriving Show
@@ -392,6 +393,7 @@ testOptions = TestOptions
     <*> option auto (long "min-iter" <> metavar "N" <> value 3 <> help "Minimum number of iterations to run a test")
     <*> option auto (long "max-time" <> metavar "MS" <> value 1000 <> help "Maximum time to run a test in milliseconds")
     <*> option auto (long "min-time" <> metavar "MS" <> value 50 <> help "Minimum time to run a test in milliseconds")
+    <*> many (strOption (long "tag" <> metavar "TAG" <> help "Enable test capability TAG for testing.require()"))
     <*> many (strOption (long "module" <> metavar "MODULE" <> help "Filter on test module name"))
     <*> many (strOption (long "name" <> metavar "NAME" <> help "Filter on test name (regex, anchored; use .* for substrings)"))
 
