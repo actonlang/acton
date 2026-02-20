@@ -194,6 +194,10 @@ closePolVars pvs cs
     (pvs',cs')                      = boundvs pvs cs
 
     boundvs pn []                   = (pn, [])
+    boundvs (p,n) (Cast _ _ (TUni _ v) (TUni _ u) : cs)
+                                    = boundvs (if u `elem` p then v:p else p, if v `elem` n then u:n else n) cs
+    boundvs (p,n) (Sub _ _ _ (TUni _ v) (TUni _ u) : cs)
+                                    = boundvs (if u `elem` p then v:p else p, if v `elem` n then u:n else n) cs
     boundvs pn (Cast _ _ t (TUni _ v) : cs)
       | v `elem` fst pn             = boundvs (polvars t `polcat` pn) cs
     boundvs pn (Sub _ _ _ t (TUni _ v) : cs)
@@ -206,9 +210,9 @@ closePolVars pvs cs
       | v `elem` snd pn             = boundvs (polneg (polvars p) `polcat` pn) cs
     boundvs pn (Sel _ _ _ (TUni _ v) _ t : cs)
       | v `elem` snd pn             = boundvs (polneg (polvars t) `polcat` pn) cs
-    boundvsboundvs pn (Mut _ _ (TUni _ v) _ t : cs)
+    boundvs pn (Mut _ _ (TUni _ v) _ t : cs)
       | v `elem` (fst pn ++ snd pn) = boundvs (invvars t `polcat` pn) cs
-    bnds pn (c : cs)                = let (pn',cs') = boundvs pn cs in (pn', c:cs')
+    boundvs pn (c : cs)             = let (pn',cs') = boundvs pn cs in (pn', c:cs')
 
 
 headvar (Proto _ w _ (TUni _ u) p)    = u

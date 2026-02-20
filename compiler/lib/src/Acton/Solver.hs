@@ -366,8 +366,8 @@ solve' env select hist te eq cs
                 cond (RTry v as r : rs)     = RTry v (if rev' then subrev ts' else ts') rev'
                   where ts                  = foldr intersect as $ map alts rs
                         ts'                 = if v `elem` optvs then ts \\ [tOpt tWild] else ts
-                        rev'                = (or $ r : map rev rs) || v `elem` posvs
---                        rev'                = (and $ r : map rev rs) || v `elem` posvs
+--                        rev'                = (or $ r : map rev rs) || v `elem` posvs       -- (new, matches new solver but picks bad order for lower None)
+                        rev'                = (and $ r : map rev rs) || v `elem` posvs        -- (old, incorrect in general, but avoids the None problem)
                 cond (RVar v as : rs)       = RVar v (foldr union as $ map alts rs)
                 cond [RImp q rs]            = RImp q (condense env1 rs)
                   where env1                = defineTVars q env
@@ -390,7 +390,7 @@ solve' env select hist te eq cs
         optvs                               = optvars cs ++ optvars hist
         embvs                               = embvars cs
         univs                               = univars cs
-        (posvs, negvs)                      = polvars te
+        (posvs, negvs)                      = closePolVars (polvars te) cs
 
         isVar RVar{}                        = True
         isVar _                             = False
@@ -398,10 +398,8 @@ solve' env select hist te eq cs
 
         deco (RRed cs)                      = (0, 0, 0, 0)
         deco (RSealed v)                    = (2, 0, 0, 0)
---        deco (RTry v as r)                  = (w, length $ filter (==v) embvs, length as, length $ filter (==v) univs)
---          where w | uvkind v /= KFX         =  3    -- types and rows, normal search
---                  | otherwise               =  4    -- effects, never qualified, last to be searched
-        deco (RTry v as r)                  = (w, length as, length $ filter (==v) embvs, length $ filter (==v) univs)
+        deco (RTry v as r)                  = (w, length $ filter (==v) embvs, length as, length $ filter (==v) univs)    -- DIFF old
+--        deco (RTry v as r)                  = (w, length as, length $ filter (==v) embvs, length $ filter (==v) univs)  -- DIFF new, causes error
           where w | uvkind v == KFX         =  5    -- effect search, last to be explored
                   | [TTuple{}] <- as        =  4    -- default selection solution, deferred search
                   | otherwise               =  3    -- types and rows, normal search

@@ -11,9 +11,9 @@ actor MathTester ():
 pure def _test_foo () -> None:
     pass
 
-W_285: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
-
 W_251: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
+
+W_285: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
 
 # recursive group:
 actor _test_SimpleSyncTester ():
@@ -35,30 +35,29 @@ actor _SyncTesterCore ():
 proc def _test_simple_sync () -> None:
     s: _SyncTesterCore = _SyncTesterCore()
 
-W_336: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
-
 proc def _test_sync (t : testing.SyncT) -> __builtin__.str:
+    W_339: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
     m: MathTester = MathTester()
-    return str(val = m.add(a = W_336.__fromatom__(1), b = W_336.__fromatom__(2)))
+    return str(val = m.add(a = W_339.__fromatom__(1), b = W_339.__fromatom__(2)))
 
-W_484: __builtin__.Hashable[__builtin__.str] = __builtin__.HashableD_str()
+W_543: __builtin__.Number[__builtin__.float] = __builtin__.RealFloatD_float()
 
-W_540: __builtin__.Number[__builtin__.float] = __builtin__.RealFloatD_float()
+W_485: __builtin__.Hashable[__builtin__.str] = __builtin__.HashableD_str()
 
 # recursive group:
 actor AsyncTester (t : testing.AsyncT):
     log: logging.Logger = logging.Logger(handler = t.log_handler)
     proc def test () -> None:
-        log.info(msg = "AsyncTester.test()", data = $mkDict@[__builtin__.str, __builtin__.str](W_484, {"data": "test"}))
+        log.info(msg = "AsyncTester.test()", data = $mkDict@[__builtin__.str, __builtin__.str](W_485, {"data": "test"}))
         t.success(output = None)
-    after W_540.__fromatom__(0): test()
+    after W_543.__fromatom__(0): test()
 actor EnvTester (t : testing.EnvT):
     log: logging.Logger = logging.Logger(handler = t.log_handler)
     proc def test () -> None:
-        log.info(msg = "EnvTester.test() wthreads:", data = $mkDict@[__builtin__.str, __builtin__.int](W_484, {"nr_wthreads": t.env.nr_wthreads}))
+        log.info(msg = "EnvTester.test() wthreads:", data = $mkDict@[__builtin__.str, __builtin__.int](W_485, {"nr_wthreads": t.env.nr_wthreads}))
         print@[(__builtin__.str, __builtin__.int)](*("EnvTester.test() wthreads:", t.env.nr_wthreads), sep = None, end = None, err = None, flush = None)
         t.success(output = None)
-    after W_540.__fromatom__(0): test()
+    after W_543.__fromatom__(0): test()
 # (recursive group)
 
 proc def _test_SimpleSyncTester_wrapper () -> None:

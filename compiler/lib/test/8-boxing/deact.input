@@ -3,9 +3,9 @@ W_39: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
 
 W_140: __builtin__.Plus[__builtin__.int] = __builtin__.IntegralD_int()
 
-W_308: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
-
 W_105: __builtin__.Times[__builtin__.int, __builtin__.int] = __builtin__.IntegralD_int()
+
+W_308: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
 
 # recursive group:
 proc def L_1C_1cont (C_cont : $Cont[None], C_2res : None) -> $R:
