@@ -213,7 +213,7 @@ jobs:
         run: |
           export DEBIAN_FRONTEND=noninteractive
           apt-get update
-          apt-get install -qy bzip2 curl g++ haskell-stack libtinfo-dev make procps zlib1g-dev
+          apt-get install -qy bzip2 curl g++ haskell-stack libncurses-dev make procps zlib1g-dev
           apt-get install -qy gdb
       - name: "locale en_US.UTF-8"
         run: |
@@ -231,6 +231,8 @@ jobs:
       - name: "Build Acton"
         run: |
           make -j2 -C ${GITHUB_WORKSPACE} BUILD_RELEASE=${{ env.BUILD_RELEASE }} BUILD_TIME=${BUILD_TIME}
+      - name: "Show Acton linkage (ldd)"
+        run: make -C ${GITHUB_WORKSPACE} ldd
       - name: "Build a release"
         run: make -C ${GITHUB_WORKSPACE} release BUILD_TIME=${BUILD_TIME}
       - name: "Upload artifact"
@@ -282,7 +284,7 @@ jobs:
       - name: "Install build prerequisites"
         run: |
           apt-get update
-          apt-get install -qy bzip2 curl g++ haskell-stack libtinfo-dev make procps zlib1g-dev
+          apt-get install -qy bzip2 curl g++ haskell-stack libncurses-dev make procps zlib1g-dev
           apt-get install -qy bash-completion build-essential debhelper devscripts
       - name: "Prepare stack directories"
         run: |
