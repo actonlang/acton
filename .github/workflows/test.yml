@@ -231,6 +231,8 @@ jobs:
       - name: "Build Acton"
         run: |
           make -j2 -C ${GITHUB_WORKSPACE} BUILD_RELEASE=${{ env.BUILD_RELEASE }} BUILD_TIME=${BUILD_TIME}
+      - name: "Show Acton linkage (ldd)"
+        run: make -C ${GITHUB_WORKSPACE} ldd
       - name: "Build a release"
         run: make -C ${GITHUB_WORKSPACE} release BUILD_TIME=${BUILD_TIME}
       - name: "Upload artifact"
