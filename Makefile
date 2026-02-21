@@ -84,6 +84,7 @@ help:
 	@echo "Available make targets:"
 	@echo "  all     - build everything"
 	@echo "  test    - run the test suite"
+	@echo "  ldd     - show dynamic linkage for dist/bin/acton (Linux)"
 	@echo ""
 	@echo "  clean   - /normal/ clean repo"
 	@echo "  clean-all - thorough cleaning"
@@ -311,6 +312,15 @@ test: dist/bin/acton
 	$(MAKE) test-stdlib
 	$(MAKE) -C backend test
 	$(MAKE) test-rts-db
+
+.PHONY: ldd
+ldd: dist/bin/acton
+ifeq ($(OS),linux)
+	@echo "Inspecting dynamic linkage for $(ACTON)"
+	@ldd "$(ACTON)" || true
+else
+	@echo "ldd target is Linux-only; current OS is $(shell uname -s)"
+endif
 
 test-builtins:
 	cd compiler && stack test acton --ta '-p "Builtins"'
