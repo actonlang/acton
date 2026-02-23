@@ -387,7 +387,7 @@ solve' env select hist te eq cs
                 group (r:rs)                = (r : rs1) : group rs2
                   where (rs1,rs2)           = partition (==r) rs
 
-        optvs                               = optvars cs ++ optvars hist
+        optvs                               = optvars hist
         embvs                               = embvars cs
         univs                               = univars cs
         (posvs, negvs)                      = closePolVars (polvars te) cs

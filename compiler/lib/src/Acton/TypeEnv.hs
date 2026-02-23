@@ -463,7 +463,10 @@ instance USubst Type where
     usubst (TCon l c)               = TCon l <$> usubst c
     usubst (TFun l fx p k t)        = TFun l <$> usubst fx <*> usubst p <*> usubst k <*> usubst t
     usubst (TTuple l p k)           = TTuple l <$> usubst p <*> usubst k
-    usubst (TOpt l t)               = TOpt l <$> usubst t
+    usubst (TOpt l t)               = do t <- usubst t
+                                         case t of
+                                             TOpt{} -> return t
+                                             _ -> return (TOpt l t)
     usubst (TNone l)                = return $ TNone l
     usubst (TWild l)                = return $ TWild l
     usubst (TNil l s)               = return $ TNil l s
