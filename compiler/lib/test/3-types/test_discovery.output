@@ -11,9 +11,9 @@ actor MathTester ():
 pure def _test_foo () -> None:
     pass
 
-W_251: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
-
 W_285: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+W_251: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
 
 # recursive group:
 actor _test_SimpleSyncTester ():
