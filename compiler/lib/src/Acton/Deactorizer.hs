@@ -251,6 +251,7 @@ instance Deact Expr where
     deact env (BStrings l s)        = return $ BStrings l s
     deact env (Call l e as KwdNil)  = deactCall env True l e as
     deact env (TApp l e ts)         = TApp l <$> deact env e <*> pure ts
+    deact env (Let l ss e)          = Let l <$> deact env ss <*> deact env e
     deact env (Cond l e1 e e2)      = Cond l <$> deact env e1 <*> deact env e <*> deact env e2
     deact env (IsInstance l e c)    = IsInstance l <$> deact env e <*> return c
     deact env (BinOp l e1 Or e2)    = BinOp l <$> deact env e1 <*> pure Or <*> deact env e2

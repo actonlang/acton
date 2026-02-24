@@ -410,6 +410,7 @@ instance PreCPS Expr where
       where t                           = typeOf env e0
     pre env (Async l e)                 = Async l <$> pre env e
     pre env (TApp l e ts)               = TApp l <$> pre env e <*> pure ts
+    pre env (Let l ss e)                = Let l <$> pre env ss <*> pre env e
     pre env (Cond l e1 e e2)            = do (pre1,e1') <- withPrefixes $ pre env e1
                                              (pre2,e2') <- withPrefixes $ pre env e2
                                              (pre0,e0') <- withPrefixes $ pre env e
@@ -547,6 +548,7 @@ instance Conv Expr where
     conv env (Call l e ps KwdNil)       = Call l (conv env e) (conv env ps) KwdNil
     conv env (Async l e)                = Async l (conv env e)
     conv env (TApp l e ts)              = TApp l (conv env e) (conv env ts)
+    conv env (Let l ss e)               = Let l (conv env ss) (conv env e)
     conv env (Cond l e1 e e2)           = Cond l (conv env e1) (conv env e) (conv env e2)
     conv env (IsInstance l e c)         = IsInstance l (conv env e) c
     conv env (BinOp l e1 Or e2)         = BinOp l (conv env e1) Or (conv env e2)

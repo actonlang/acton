@@ -380,6 +380,7 @@ instance Lift Expr where
     ll env (TApp _ (Dot l e n) ts)      = llDot env l e n ts
     ll env (Dot l e n)                  = llDot env l e n []
     ll env (TApp l e ts)                = TApp l <$> ll env e <*> pure (conv ts)
+    ll env (Let l ss e)                 = Let l <$> ll env ss <*> ll env e
     ll env (DotI l e i)                 = DotI l <$> llSub env e <*> pure i
     ll env (RestI l e i)                = RestI l <$> llSub env e <*> pure i
     ll env (Yield l e)                  = Yield l <$> ll env e
