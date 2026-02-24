@@ -78,6 +78,7 @@ data Expr       = Var           { eloc::SrcLoc, var::QName }
                 | Strings       { eloc::SrcLoc, sval::[String] }
                 | BStrings      { eloc::SrcLoc, sval::[String] }
                 | Call          { eloc::SrcLoc, fun::Expr, pargs::PosArg, kargs::KwdArg }
+                | Let           { eloc::SrcLoc, suit::Suite, exp1::Expr }
                 | TApp          { eloc::SrcLoc, fun::Expr, targs::[Type] }
                 | Async         { eloc::SrcLoc, exp1::Expr }
                 | Await         { eloc::SrcLoc, exp1::Expr }
@@ -298,6 +299,7 @@ eBool b         = Bool NoLoc b
 eBinOp e o e'   = BinOp NoLoc e o e'
 eLambda nts e   = Lambda NoLoc (pospar nts) KwdNIL e fxPure
 eLambda' nts e  = Lambda NoLoc (pospar nts) KwdNIL e fxProc
+eLet ss e       = Let NoLoc ss e
 eAsync e        = Async NoLoc e
 eAwait e        = Await NoLoc e
 eNotImpl        = NotImplemented NoLoc
@@ -641,6 +643,7 @@ instance Eq Expr where
     x@BStrings{}        ==  y@BStrings{}        = sval x == sval y
     x@Call{}            ==  y@Call{}            = fun x == fun y && pargs x == pargs y && kargs x == kargs y
     x@TApp{}            ==  y@TApp{}            = fun x == fun y && targs x == targs y
+    x@Let{}             ==  y@Let{}             = suit x == suit y && exp1 x == exp1 y
     x@Async{}           ==  y@Async{}           = exp1 x == exp1 y
     x@Await{}           ==  y@Await{}           = exp1 x == exp1 y
     x@Index{}           ==  y@Index{}           = exp1 x == exp1 y && index x == index y

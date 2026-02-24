@@ -356,6 +356,7 @@ instance KCheck Expr where
     kchk env (BStrings l ss)        = return $ BStrings l ss
     kchk env (Call l e ps ks)       = Call l <$> kchk env e <*> kchk env ps <*> kchk env ks
     kchk env (TApp l e ts)          = internal l "Unexpected TApp in kchk"
+    kchk env (Let l ss e)           = Let l <$> kchk env ss <*> kchk env e
     kchk env (Async l e)            = Async l <$> kchk env e
     kchk env (Await l e)            = Await l <$> kchk env e
     kchk env (Index l e is)         = Index l <$> kchk env e <*> kchk env is
@@ -674,6 +675,7 @@ instance KSubst Expr where
     ksubst g (BStrings l ss)        = return $ BStrings l ss
     ksubst g (Call l e ps ks)       = Call l <$> ksubst g e <*> ksubst g ps <*> ksubst g ks
     ksubst g (TApp l e ts)          = TApp l <$> ksubst g e <*> ksubst g ts
+    ksubst g (Let l ss e)           = Let l <$> ksubst g ss <*> ksubst g e
     ksubst g (Async l e)            = Async l <$> ksubst g e
     ksubst g (Await l e)            = Await l <$> ksubst g e
     ksubst g (Index l e is)         = Index l <$> ksubst g e <*> ksubst g is

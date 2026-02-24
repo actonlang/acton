@@ -1666,6 +1666,9 @@ instance Infer Expr where
     infer env e@(BStrings _ ss)         = return ([], tBytes, e)
     infer env (Call l e ps ks)          = inferCall env True l e ps ks
     infer env (TApp l e ts)             = internal l "Unexpected TApp in infer"
+    infer env (Let l ss e)              = do (cs1, te, ss') <- infEnv env ss
+                                             (cs2, t, e') <- infer (define te env) e
+                                             return (cs1++cs2, t, Let l ss' e')
     infer env (Async l e)               = do (cs,t,e) <- infer env e                        -- expect an action returning t'
                                              prow <- newUnivarOfKind PRow env
                                              krow <- newUnivarOfKind KRow env

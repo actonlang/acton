@@ -167,6 +167,7 @@ instance Pretty Expr where
         | atomic e                  = pretty e <> parens (pretty (ps,ks))
         | otherwise                 = parens (pretty e) <> parens (pretty (ps,ks))
     pretty (TApp _ e ts)            = pretty e <> text "@" <> brackets (commaSep pretty ts)
+    pretty (Let _ ss e)             = text "let:" $+$ prettySuite ss $+$  text "in" <+> pretty e
     pretty (Async _ e)              = parens (text "async" <+> pretty e)
     pretty (Await _ e)              = text "await" <+> pretty e
     pretty (Index _ e ix)           = pretty e <> brackets (pretty ix)
