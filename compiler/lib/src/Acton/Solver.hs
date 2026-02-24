@@ -343,6 +343,7 @@ solve' env select hist te eq cs
                                                  unify (noinfo 5) (tUni v) t
                                                  (cs,eq) <- quicksimp env eq cs
                                                  hist <- usubst hist
+                                                 te <- usubst te
                                                  solve' env select hist te eq cs
         tryAlt v t                          = do t <- instwild env (uvkind v) t
                                                  --traceM ("  # trying " ++ prstr v ++ " = " ++ prstr t)
@@ -350,6 +351,7 @@ solve' env select hist te eq cs
                                                  proceed (t:hist) eq cs
         proceed hist eq cs                  = do te <- usubst te
                                                  (cs,eq) <- simplify' env te eq cs
+                                                 te <- usubst te
                                                  hist <- usubst hist
                                                  solve' env select hist te eq cs
 
