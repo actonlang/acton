@@ -246,7 +246,6 @@ data Rank                                   = RRed { cstr :: Constraint }
                                             | RSealed { tgt :: TUni }
                                             | RTry { tgt :: TUni, alts :: [Type], rev :: Bool }
                                             | RVar { tgt :: TUni, alts :: [Type] }
-                                            | RImp QBinds [Rank]
                                             | RSkip
                                             deriving (Show)
 
@@ -256,7 +255,6 @@ instance Eq Rank where
     RTry v1 _ _ == RTry v2 _ _              = v1 == v2
     RVar v1 _   == RVar v2 _                = v1 == v2
     RSkip       == RSkip                    = True
-    RImp _ _    == RImp _ _                 = False
     _           == _                        = False
 
 instance Pretty Rank where
@@ -264,7 +262,6 @@ instance Pretty Rank where
     pretty (RSealed v)                      = pretty v <+> text "sealed"
     pretty (RTry v ts rev)                  = pretty v <+> braces (commaSep pretty ts) Pretty.<> (if rev then char '\'' else empty)
     pretty (RVar v ts)                      = pretty v <+> char '~' <+> commaSep pretty ts
-    pretty (RImp q rs)                      = prettyQual q <+> braces (commaSep pretty rs)
     pretty RSkip                            = text "<skip>"
 
 solve                                       :: Env -> (Constraint -> Bool) ->
@@ -313,11 +310,7 @@ solve' env select hist te eq cs
   where (solve_cs, keep_cs)                 = partition select cs
         keep_evidence                       = [ hasWitness env t p | Proto _ env _ t p <- keep_cs ]
 
-        (vargoals, goals)                   = span isVar $ sortOn deco $ flatten $ condense env rnks
-
-        flatten []                          = []
-        flatten (RImp _ rs' : rs)           = flatten (rs' ++ rs)
-        flatten (r : rs)                    = r : flatten rs
+        (vargoals, goals)                   = span isVar $ sortOn deco $ condense env rnks
 
         rnks                                = map (rank env) solve_cs
 
@@ -369,8 +362,6 @@ solve' env select hist te eq cs
 --                        rev'                = (or $ r : map rev rs) || v `elem` posvs       -- (new, matches new solver but picks bad order for lower None)
                         rev'                = (and $ r : map rev rs) || v `elem` posvs        -- (old, incorrect in general, but avoids the None problem)
                 cond (RVar v as : rs)       = RVar v (foldr union as $ map alts rs)
-                cond [RImp q rs]            = RImp q (condense env1 rs)
-                  where env1                = defineTVars q env
                 cond (RSkip : rs)           = RSkip
                 cond rs                     = error ("### condense " ++ show rs)
 
