@@ -174,6 +174,7 @@ instance Pretty Expr where
     pretty (Slice _ e sl)           = pretty e <> brackets (pretty sl)
     pretty (IsInstance _ e c)       = text "isinstance" <> parens (pretty e <> comma <+> pretty c)
     pretty (Dot _ e n)              = pretty e <> dot <> pretty n
+    pretty (OptDot _ e n)           = pretty e <> text "?." <> pretty n
     pretty (Rest _ e n)             = pretty e <> dot <> text "~" <> pretty n
     pretty (DotI _ e i)             = pretty e <> dot <> pretty i
     pretty (RestI _ e i)            = pretty e <> dot <> text "~" <> pretty i

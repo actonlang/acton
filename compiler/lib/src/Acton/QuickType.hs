@@ -58,6 +58,7 @@ closedType env (Dot _ e n)          = case typeOf env e of
                                         TCon _ c -> closedAttr env c n
                                         TVar _ v  -> closedAttr env (findTVBound env v) n
                                         TTuple _ p k -> n `notElem` valueKWs
+                                        t -> error ("t = "++prstr t)
 closedType env (TApp _ e _)         = closedType env e
 closedType env (Async _ e)          = closedType env e
 closedType env _                    = True
@@ -139,6 +140,9 @@ instance QType Expr where
             (p, fxp, ps')           = qType env f ps
             (k, fxk, ks')           = qType env f ks
             fx'                     = upbound env [fx,fxp,fxk,effect t]
+    qType env f (Let l ss e)        = (t, fx, Let l ss e')
+       where te                     = envOf ss
+             (t,fx,e')              = qType (define te env) f e
     qType env f (Async l e)         = case t of
                                         TFun _ (TFX _ FXAction) p k t' -> (tFun fxProc p k (tMsg t'), fx, Async l e')
       where (t, fx, e')             = qType env f e

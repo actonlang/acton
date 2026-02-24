@@ -1889,6 +1889,28 @@ instance Infer Expr where
                                                                   "\nHint: you may need to test if " ++ Pretty.print e ++ " is not None")
                                              return  (con : cs, t0, eCall (eVar w) [e'])
 
+--    infer env (OptDot l None{} n)      = do t1 <- newUnivar env
+--                                            t2 <- newUnivar env
+--                                            w <- newWitness
+--                                            return ([Sel (Simple l (prstr n ++ " is not a known attribute of any type")) env w t1 n t2], tOpt t2, eNone)
+
+    infer env (OptDot l e n)           = do t1 <- newUnivar env
+                                            (cs,e') <- inferSub env (tOpt t1) e
+                                            w <- newWitness
+                                            t2 <- newUnivar env
+                                            x <- newTmp
+                                            return (Sel (locinfo2 865 e) env w t1 n (tOpt t2) : cs,
+                                                    tOpt t2,
+                                                    eLet [sAssign (pVar x (tOpt t1)) e']
+                                                    (eCond (eCall (eVar w) [eCall (tApp (eQVar primCAST) [tOpt t1, t1]) [eVar x]])
+                                                          (eCall (tApp (eQVar primISNOTNONE) [t1]) [eVar x])
+                                                          eNone)
+                                                   )
+
+--    infer env (OptDot l e n)           = do x <- newTmp
+--                                            t <- newUnivar env
+--                                            infer env (eCall (eLambda [(x,t)] (OptDot l (eVar x) n)) [e])
+
     infer env e@(Rest _ _ _)            = notYetExpr e
 --    infer env (Rest l e n)              = do p <- newUnivarOfKind PRow env
 --                                             k <- newUnivarOfKind KRow env

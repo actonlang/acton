@@ -90,6 +90,7 @@ data Expr       = Var           { eloc::SrcLoc, var::QName }
                 | CompOp        { eloc::SrcLoc, exp1::Expr, ops::[OpArg] }
                 | UnOp          { eloc::SrcLoc, uop::Unary, exp1::Expr }
                 | Dot           { eloc::SrcLoc, exp1::Expr, attr::Name }
+                | OptDot        { eloc::SrcLoc, exp1::Expr, attr::Name }
                 | Rest          { eloc::SrcLoc, exp1::Expr, attr::Name }
                 | DotI          { eloc::SrcLoc, exp1::Expr, ival::Integer }
                 | RestI         { eloc::SrcLoc, exp1::Expr, ival::Integer }
@@ -654,6 +655,7 @@ instance Eq Expr where
     x@CompOp{}          ==  y@CompOp{}          = exp1 x == exp1 y && ops x == ops y
     x@UnOp{}            ==  y@UnOp{}            = uop x == uop y && exp1 x == exp1 y
     x@Dot{}             ==  y@Dot{}             = exp1 x == exp1 y && attr x == attr y
+    x@OptDot{}          ==  y@OptDot{}             = exp1 x == exp1 y && attr x == attr y
     x@Rest{}            ==  y@Rest{}            = exp1 x == exp1 y && attr x == attr y
     x@DotI{}            ==  y@DotI{}            = exp1 x == exp1 y && ival x == ival y
     x@RestI{}           ==  y@RestI{}           = exp1 x == exp1 y && ival x == ival y

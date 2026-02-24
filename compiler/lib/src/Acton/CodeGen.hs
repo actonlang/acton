@@ -929,7 +929,7 @@ instance Gen Expr where
     gen env c@(Call _ e p _)        = genCall env [] e p
     gen env (Async _ e)             = gen env e
     gen env (TApp _ e ts)           = genInst env ts e
-    gen env (Let _ ss e)            = char '{' <+> fst(genSuite env ss) $+$ gen env e <> char '}'
+    gen env (Let _ ss e)            = text "({" <+> fst(genSuite env ss) $+$ gen (ldefine (envOf ss) env) e <> text ";})"
     gen env (IsInstance _ e c)      = gen env primISINSTANCE <> parens (gen env e <> comma <+> genQName env c)
     gen env (Dot _ e n)             = genDot env [] e n
     gen env e0@(DotI _ e i)         = parens $ parens (gen env t) <> gen env e <> text "->" <> gen env componentsKW <> brackets (pretty i)
