@@ -11,53 +11,53 @@ actor MathTester ():
 pure def _test_foo () -> None:
     pass
 
-W_387: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
+W_285: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
 
-W_447: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+W_251: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
 
 # recursive group:
 actor _test_SimpleSyncTester ():
     m: MathTester = MathTester()
     print@[(__builtin__.str,)](*("SimpleSyncTester.test()",), sep = None, end = None, err = None, flush = None)
-    testing.assertEqual@[__builtin__.int](W_387, a = m.add(a = W_447.__fromatom__(1), b = W_447.__fromatom__(2)), b = W_447.__fromatom__(3), msg = "1 + 2 = 3", print_vals = None, print_diff = None)
+    testing.assertEqual@[__builtin__.int](W_251, a = m.add(a = W_285.__fromatom__(1), b = W_285.__fromatom__(2)), b = W_285.__fromatom__(3), msg = "1 + 2 = 3", print_vals = None, print_diff = None)
 actor _SyncTester (t : testing.SyncT):
     log: logging.Logger = logging.Logger(handler = t.log_handler)
     m: MathTester = MathTester()
     log.info(msg = "SyncTester.test()", data = None)
     print@[(__builtin__.str,)](*("SyncTester.test()",), sep = None, end = None, err = None, flush = None)
-    testing.assertEqual@[__builtin__.int](W_387, a = m.add(a = W_447.__fromatom__(1), b = W_447.__fromatom__(2)), b = W_447.__fromatom__(3), msg = "1 + 2 = 3", print_vals = None, print_diff = None)
+    testing.assertEqual@[__builtin__.int](W_251, a = m.add(a = W_285.__fromatom__(1), b = W_285.__fromatom__(2)), b = W_285.__fromatom__(3), msg = "1 + 2 = 3", print_vals = None, print_diff = None)
 actor _SyncTesterCore ():
     m: MathTester = MathTester()
     print@[(__builtin__.str,)](*("SimpleSyncTester.test()",), sep = None, end = None, err = None, flush = None)
-    testing.assertEqual@[__builtin__.int](W_387, a = m.add(a = W_447.__fromatom__(1), b = W_447.__fromatom__(2)), b = W_447.__fromatom__(3), msg = "1 + 2 = 3", print_vals = None, print_diff = None)
+    testing.assertEqual@[__builtin__.int](W_251, a = m.add(a = W_285.__fromatom__(1), b = W_285.__fromatom__(2)), b = W_285.__fromatom__(3), msg = "1 + 2 = 3", print_vals = None, print_diff = None)
 # (recursive group)
 
 proc def _test_simple_sync () -> None:
     s: _SyncTesterCore = _SyncTesterCore()
 
 proc def _test_sync (t : testing.SyncT) -> __builtin__.str:
-    W_486: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+    W_339: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
     m: MathTester = MathTester()
-    return str(val = m.add(a = W_486.__fromatom__(1), b = W_486.__fromatom__(2)))
+    return str(val = m.add(a = W_339.__fromatom__(1), b = W_339.__fromatom__(2)))
+
+W_543: __builtin__.Number[__builtin__.float] = __builtin__.RealFloatD_float()
+
+W_485: __builtin__.Hashable[__builtin__.str] = __builtin__.HashableD_str()
 
 # recursive group:
 actor AsyncTester (t : testing.AsyncT):
-    W_554: __builtin__.Hashable[__builtin__.str] = __builtin__.HashableD_str()
-    W_588: __builtin__.Number[__builtin__.float] = __builtin__.RealFloatD_float()
     log: logging.Logger = logging.Logger(handler = t.log_handler)
     proc def test () -> None:
-        log.info(msg = "AsyncTester.test()", data = $mkDict@[__builtin__.str, __builtin__.str](W_554, {"data": "test"}))
+        log.info(msg = "AsyncTester.test()", data = $mkDict@[__builtin__.str, __builtin__.str](W_485, {"data": "test"}))
         t.success(output = None)
-    after W_588.__fromatom__(0): test()
+    after W_543.__fromatom__(0): test()
 actor EnvTester (t : testing.EnvT):
-    W_678: __builtin__.Hashable[__builtin__.str] = __builtin__.HashableD_str()
-    W_760: __builtin__.Number[__builtin__.float] = __builtin__.RealFloatD_float()
     log: logging.Logger = logging.Logger(handler = t.log_handler)
     proc def test () -> None:
-        log.info(msg = "EnvTester.test() wthreads:", data = $mkDict@[__builtin__.str, __builtin__.int](W_678, {"nr_wthreads": t.env.nr_wthreads}))
+        log.info(msg = "EnvTester.test() wthreads:", data = $mkDict@[__builtin__.str, __builtin__.int](W_485, {"nr_wthreads": t.env.nr_wthreads}))
         print@[(__builtin__.str, __builtin__.int)](*("EnvTester.test() wthreads:", t.env.nr_wthreads), sep = None, end = None, err = None, flush = None)
         t.success(output = None)
-    after W_760.__fromatom__(0): test()
+    after W_543.__fromatom__(0): test()
 # (recursive group)
 
 proc def _test_SimpleSyncTester_wrapper () -> None:

@@ -18,8 +18,8 @@ import Control.Monad
 import qualified Control.Exception
 import Control.Monad.State.Strict
 import Control.Monad.Except
-import qualified Data.Map.Strict as Map
-import Data.Map.Strict (Map)
+import qualified Data.IntMap.Strict as Map
+import Data.IntMap.Strict (IntMap)
 import Data.Char
 import Error.Diagnose hiding ((<>), err)
 import Prelude hiding ((<>))
@@ -105,6 +105,14 @@ prettyQuant env
   | otherwise                       = empty
   where q                           = [ QBind (TV k tv) (if c == cValue then ps else c:ps) | (tv, NTVar k c ps) <- names env ]
 
+instance VFree Constraint where
+    vfree (Cast info env t1 t2)     = vfree t1 ++ vfree t2
+    vfree (Sub info env w t1 t2)    = vfree t1 ++ vfree t2
+    vfree (Proto info env w t p)    = vfree t ++ vfree p
+    vfree (Sel info env w t1 n t2)  = vfree t1 ++ vfree t2
+    vfree (Mut info env t1 n t2)    = vfree t1 ++ vfree t2
+    vfree (Seal info env t)         = vfree t
+
 instance UFree Constraint where
     ufree (Cast info env t1 t2)     = ufree t1 ++ ufree t2
     ufree (Sub info env w t1 t2)    = ufree t1 ++ ufree t2
@@ -136,6 +144,22 @@ instance UWild Constraint where
     uwild (Sel info env w t1 n t2)  = Sel info env w (uwild t1) n (uwild t2)
     uwild (Mut info env t1 n t2)    = Mut info env (uwild t1) n (uwild t2)
     uwild (Seal info env t)         = Seal info env (uwild t)
+
+instance VSubst Constraint where
+    vsubst s (Cast i env t1 t2)     = Cast i env (vsubst s t1) (vsubst s t2)
+    vsubst s (Sub i env w t1 t2)    = Sub i env w (vsubst s t1) (vsubst s t2)
+    vsubst s (Proto i env w t p)    = Proto i env w (vsubst s t) (vsubst s p)
+    vsubst s (Sel i env w t1 n t2)  = Sel i env w (vsubst s t1) n (vsubst s t2)
+    vsubst s (Mut i env t1 n t2)    = Mut i env (vsubst s t1) n (vsubst s t2)
+    vsubst s (Seal i env t)         = Seal i env (vsubst s t)
+
+requantize env cs                   = map requant cs
+  where requant (Cast i _ t1 t2)    = Cast i env t1 t2
+        requant (Sub i _ w t1 t2)   = Sub i env w t1 t2
+        requant (Proto i _ w t p)   = Proto i env w t p
+        requant (Sel i _ w t1 n t2) = Sel i env w t1 n t2
+        requant (Mut i _ t1 n t2)   = Mut i env t1 n t2
+        requant (Seal i _ t)        = Seal i env t
 
 
 closeDepVars vs cs
@@ -170,6 +194,10 @@ closePolVars pvs cs
     (pvs',cs')                      = boundvs pvs cs
 
     boundvs pn []                   = (pn, [])
+    boundvs (p,n) (Cast _ _ (TUni _ v) (TUni _ u) : cs)
+                                    = boundvs (if u `elem` p then v:p else p, if v `elem` n then u:n else n) cs
+    boundvs (p,n) (Sub _ _ _ (TUni _ v) (TUni _ u) : cs)
+                                    = boundvs (if u `elem` p then v:p else p, if v `elem` n then u:n else n) cs
     boundvs pn (Cast _ _ t (TUni _ v) : cs)
       | v `elem` fst pn             = boundvs (polvars t `polcat` pn) cs
     boundvs pn (Sub _ _ _ t (TUni _ v) : cs)
@@ -182,9 +210,9 @@ closePolVars pvs cs
       | v `elem` snd pn             = boundvs (polneg (polvars p) `polcat` pn) cs
     boundvs pn (Sel _ _ _ (TUni _ v) _ t : cs)
       | v `elem` snd pn             = boundvs (polneg (polvars t) `polcat` pn) cs
-    boundvsboundvs pn (Mut _ _ (TUni _ v) _ t : cs)
+    boundvs pn (Mut _ _ (TUni _ v) _ t : cs)
       | v `elem` (fst pn ++ snd pn) = boundvs (invvars t `polcat` pn) cs
-    bnds pn (c : cs)                = let (pn',cs') = boundvs pn cs in (pn', c:cs')
+    boundvs pn (c : cs)             = let (pn',cs') = boundvs pn cs in (pn', c:cs')
 
 
 headvar (Proto _ w _ (TUni _ u) p)    = u
@@ -211,7 +239,7 @@ data TypeState                          = TypeState {
                                                 nextint         :: Int,
                                                 effectstack     :: [(TFX,Type)],
                                                 deferred        :: Constraints,
-                                                unisubst        :: Map TUni Type
+                                                unisubst        :: IntMap Type
                                           }
 
 initTypeState s                         = TypeState { nextint = 1, effectstack = [], deferred = [], unisubst = s }
@@ -254,11 +282,14 @@ collectDeferred                         = lift $ state $ \st -> (deferred st, st
 usubstitute                             :: TUni -> Type -> TypeM ()
 usubstitute uv t                        = lift $
                                           --trace ("  #usubstitute " ++ prstr uv ++ " ~ " ++ prstr t) $
-                                          state $ \st -> ((), st{ unisubst = Map.insert uv t (unisubst st)})
+                                          state $ \st -> ((), st{ unisubst = Map.insert (uvid uv) t (unisubst st)})
 
-usubstitution                           :: TypeM (Map TUni Type)
+usubstitution                           :: TypeM (IntMap Type)
 usubstitution                           = lift $ state $ \st -> (unisubst st, st)
 
+uextend                                 :: [(TUni,Type)] -> TypeM ()
+uextend s                               = lift $
+                                          state $ \st -> ((), st{ unisubst = Map.union (unisubst st) (Map.fromList [ (uvid u,t) | (u,t) <- s ])})
 
 -- Name generation ------------------------------------------------------------------------------------------------------------------
 
@@ -318,18 +349,60 @@ unify' info (TRow _ k1 n1 t1 r1) (TRow _ k2 n2 t2 r2)
 unify' info (TStar _ k1 r1) (TStar _ k2 r2)
   | k1 == k2                                = unify info r1 r2
 
-unify' info (TVar _ tv1) (TVar _ tv2)
-  | tv1 == tv2                              = return ()
+unify' info (TVar _ v1) (TVar _ v2)
+  | v1 == v2                                = return ()
 
-unify' info (TUni _ tv1) (TUni _ tv2)
-  | tv1 == tv2                              = return ()
+unify' info t1@(TUni _ v1) t2@(TUni _ v2)
+  | v1 == v2                                = return ()
+  | uvlevel v1 < uvlevel v2                 = usubstitute v2 t1
+  | otherwise                               = usubstitute v1 t2     -- Retain the var with the smallest ulevel (largest scope)
 
-unify' info (TUni _ uv) t2                  = do when (uv `elem` ufree t2) (infiniteType uv t2)
-                                                 usubstitute uv t2
-unify' info t1 (TUni _ uv)                  = do when (uv `elem` ufree t1) (infiniteType uv t1)
-                                                 usubstitute uv t1
+unify' info (TUni _  v) t2                  = do when (v `elem` ufree t2) (infiniteType v t2)
+                                                 usubstitute v t2
+unify' info t1 (TUni _  v)                  = do when (v `elem` ufree t1) (infiniteType v t1)
+                                                 usubstitute v t1
 
 unify' info t1 t2                           = noUnify info t1 t2
+
+
+-- Asymmetric matching --------------------------------------------------------------------------------
+
+match vs (TWild _) t                        = Just []
+match vs t (TWild _)                        = Just []
+match vs (TUni _ _) t                       = Just []
+match vs t (TUni _ _)                       = Just []
+match vs (TCon _ c1) (TCon _ c2)
+  | tcname c1 == tcname c2                  = matches vs (tcargs c1) (tcargs c2)
+match vs (TFun _ fx1 p1 k1 t1) (TFun _ fx2 p2 k2 t2)
+                                            = matches vs [fx1,p1,k1,t1] [fx2,p2,k2,t2]
+match vs (TTuple _ p1 k1) (TTuple _ p2 k2)
+                                            = matches vs [p1,k1] [p2,k2]
+match vs (TOpt _ t1) (TOpt _ t2)            = match vs t1 t2
+match vs (TNone _) (TNone _)                = Just []
+match vs (TFX _ fx1) (TFX _ fx2)
+  | fx1 == fx2                              = Just []
+
+match vs (TNil _ k1) (TNil _ k2)
+  | k1 == k2                                = Just []
+match vs (TRow _ k1 n1 t1 r1) (TRow _ k2 n2 t2 r2)
+  | k1 == k2 && n1 == n2                    = matches vs [t1,r1] [t2,r2]
+match vs (TStar _ k1 r1) (TStar _ k2 r2)
+  | k1 == k2                                = match vs r1 r2
+match vs (TVar _ tv1) (TVar _ tv2)
+  | tv1 == tv2                              = Just []
+match vs t1 (TVar _ tv)
+  | tv `elem` vs && tv `notElem` vfree t1   = Just [(tv, t1)]
+match vs t1 t2                              = Nothing
+
+matches vs [] []                            = Just []
+matches vs (t:ts) (t':ts')                  = do s1 <- match vs t t'
+                                                 s2 <- matches vs ts ts'
+                                                 merge s1 s2
+  where merge s1 s2
+          | agree                           = Just $ s1 ++ s2
+          | otherwise                       = Nothing
+          where agree                       = and [ vsubst s1 (tVar v) `wildeq` vsubst s2 (tVar v) | v <- dom s1 `intersect` dom s2 ]
+                t `wildeq` t'               = match [] t t' == Just []
 
 
 -- USubst ---------------------------------------------------------------------------------------------
@@ -383,14 +456,17 @@ instance USubst WTCon where
 
 instance USubst Type where
     usubst (TUni l u)               = do s <- usubstitution
-                                         case Map.lookup u s of
+                                         case Map.lookup (uvid u) s of
                                             Just t  -> usubst t
                                             Nothing -> return (TUni l u)
     usubst (TVar l v)               = return $ TVar l v
     usubst (TCon l c)               = TCon l <$> usubst c
     usubst (TFun l fx p k t)        = TFun l <$> usubst fx <*> usubst p <*> usubst k <*> usubst t
     usubst (TTuple l p k)           = TTuple l <$> usubst p <*> usubst k
-    usubst (TOpt l t)               = TOpt l <$> usubst t
+    usubst (TOpt l t)               = do t <- usubst t
+                                         case t of
+                                             TOpt{} -> return t
+                                             _ -> return (TOpt l t)
     usubst (TNone l)                = return $ TNone l
     usubst (TWild l)                = return $ TWild l
     usubst (TNil l s)               = return $ TNil l s

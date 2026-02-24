@@ -1,12 +1,13 @@
 Building file test/typeerrors/ex17.act using temporary scratch directory
 [error]: Cannot satisfy the following simultaneous constraints for the unknown types
-     +--> ex17.act@2:5-2:17
+     +--> ex17.act@2:9-2:10
      |
    2 | a = pow(3,"hej")
-     :     ^-----------
-     :     |----- The type of the indicated expression (inferred to be __builtin__.str) must be a subclass of t0
-     :         |  
-     :     |----- The type of the indicated expression (which we call t1) must be a subtype of t0
-     :     `----- pow has had its polymorphic type [A(Number)] => (a: A, b: A) -> A instantiated to (a: t0, b: t0) -> t0, so t0 must implement __builtin__.Number
-     :         `- The type of the indicated expression (which we call t1) must implement __builtin__.Number
+     :     ^---^-------
+     :     |   `- The type of the indicated expression (which we call t0) must implement __builtin__.Number
+     :     |      
+     :     |- pow has had its polymorphic type [A(Number)] => (a: A, b: A) -> A instantiated to (a: t1, b: t1) -> t1, so t1 must implement __builtin__.Number
+     :     |- The type of the indicated expression (which we call t1) must be a subtype of _
+     :     |- The type of the indicated expression (which we call t0) must be a subtype of t1
+     :     `- The type of the indicated expression (inferred to be __builtin__.str) must be a subtype of t1
 -----+

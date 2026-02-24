@@ -7,6 +7,6 @@ Building file test/typeerrors/ex23.act using temporary scratch directory
      :        |  |- The type of the indicated expression (which we call t0) must implement __builtin__.Number
      :        |     
      :        |  `- The type of the indicated expression (which we call t0) must be a subtype of t1
-     :        |- The type of the indicated expression (inferred to be __builtin__.str) must be a subclass of t1
+     :        |- The type of the indicated expression (inferred to be __builtin__.str) must be a subtype of t1
      :        `- The type of the indicated expression (which we call t1) must implement __builtin__.Eq
 -----+

@@ -292,7 +292,7 @@ defineTVars q env           = foldr f env (unalias env q)
 limitQuant                  :: TUni -> EnvF x -> EnvF x
 limitQuant (UV _ l _) env
   | n <= 0                  = env
-  | otherwise               = env{ names = dropv n (names env), witnesses = dropw n (witnesses env) }
+  | otherwise               = env{ names = dropv n (names env), witnesses = dropw n (witnesses env), qlevel = qlevel env - n }
   where n                   = qlevel env - l
         dropv 0 te          = te
         dropv n ((v,i):te)
@@ -783,6 +783,10 @@ castable env t1 t2@(TVar _ tv)              = False
 castable env t1 (TOpt _ t2)                 = castable env t1 t2
 
 castable env t1 t2                          = False
+
+
+headcast env t1 t2                          = castable env (schematic t1) (schematic t2)
+
 
 ----------------------------------------------------------------------------------------------------------------------
 -- GLB

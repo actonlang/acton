@@ -246,7 +246,7 @@ genEnv env cs te (Decl l ds)
   | otherwise                           = do te <- usubst te
                                              --traceM ("## genEnv defs 1\n" ++ render (nest 6 $ pretty te))
                                              --traceM ("   where\n" ++ render (nest 6 $ vcat $ map pretty cs))
-                                             (cs,eq) <- simplify env te cs
+                                             (cs,eq) <- newSimplify env te cs
                                              te <- usubst te
                                              (gen_us, gen_cs, te, eq) <- refine env cs te eq
                                              let gen_vs = take (length gen_us) tvarSupply
@@ -291,7 +291,13 @@ genEnv env cs te (Decl l ds)
       where (eq1,eq2)                   = partition (any (`elem` ws) . free) eq
             (eq1',eq2')                 = splitEqs (bound eq1 ++ ws) eq2
 
+    newRefine env cs te eq              = do (eq,cs) <- newsolve env te eq cs
+                                             te <- usubst te
+                                             eq <- usubst eq
+                                             return (ufree te, cs, te, eq)
+
     refine env cs te eq
+      | run_new_solver                  = newRefine env cs te eq
       | not $ null solve_cs             = do --traceM ("  #solving: " ++ prstrs solve_cs)
                                              (cs',eq') <- solve env noQual te eq cs
                                              refineAgain cs' eq'
@@ -311,7 +317,7 @@ genEnv env cs te (Decl l ds)
 
             isAmbig c                   = any (`elem` ambig_vs) (ufree c)
 
-            refineAgain cs eq           = do (cs1,eq1) <- simplify env te cs
+            refineAgain cs eq           = do (cs1,eq1) <- newSimplify env te cs
                                              te <- usubst te
                                              refine env cs1 te (eq1++eq)
 
@@ -330,7 +336,7 @@ genEnv env cs te s                      = do eq <- solveAll env te cs
 markScoped env n q te []                = return ([], [])
 -- Should remove this simplify call too, but doing so destroys performance of our current inferior constraint-solver (see module yang.schema in acton-yang).
 --markScoped env n [] te cs               = return (cs, [])
-markScoped env n [] te cs               = simplify env te cs
+markScoped env n [] te cs               = newSimplify env te cs
 -- Return the marks in terms of NotImplemented equations for now, so that we can coexist with the need to also run simplify (see above)
 markScoped env n q te cs                = return (cs, eq)
   where eq                              = [ mkEqn env w tWild eNotImpl | w <- ws ]
@@ -338,9 +344,15 @@ markScoped env n q te cs                = return (cs, eq)
 
 tempGoal t                              = [(nWild, NVar t)]
 
+newSolveAll env te cs                   = do (eq,cs) <- newsolve env te [] cs
+                                             (eq,_) <- newsolve env [] eq cs
+                                             return eq
+
 solveAll env te []                      = return []
-solveAll env te cs                      = do --traceM ("\n\n### solveAll " ++ prstrs cs)
-                                             (cs,eq) <- simplify env te cs
+solveAll env te cs
+  | run_new_solver                      = newSolveAll env te cs
+  | otherwise                           = do --traceM ("\n\n### solveAll " ++ prstrs cs)
+                                             (cs,eq) <- newSimplify env te cs
                                              (cs,eq) <- solve env (const True) te eq cs
                                              return eq
 
@@ -432,10 +444,10 @@ wrapped l kw env cs ts args             = do tvx <- newUnivarOfKind KFX env
                                              let t1 = vsubst [(fxSelf,fx)] t0
                                                  t2 = tFun fxPure (foldr posRow posNil ts) kwdNil t'
                                              w <- newWitness
-                                             (cs0,_) <- simplify env (tempGoal t') [Cast (locinfo l 30) env t1 t2]
+                                             unify (locinfo l 30) t1 t2
                                              t' <- usubst t'
-                                             cs1 <- usubst (Proto (locinfo l 29) env w fx p : cs)
-                                             return (cs0++cs1, t', eCall (tApp (Dot l0 (eVar w) kw) tvs) args)
+                                             cs' <- usubst (Proto (locinfo l 29) env w fx p : cs)
+                                             return (cs', t', eCall (tApp (Dot l0 (eVar w) kw) tvs) args)
 
 --------------------------------------------------------------------------------------------------------------------------
 
@@ -656,29 +668,37 @@ matchingDec n sc dec dec'
   | dec == dec'                         = True
   | otherwise                           = decorationMismatch n sc dec
 
-matchDefAssumption env cs0 def
-  | q0 == q1                            = match env cs0 [] def
-  | otherwise                           = do (cs, uvs) <- instQBinds env q1
-                                             let eq0 = witSubst env q1 cs
+matchDefAssumption env cs1 def@Def{dname=n, qbinds=q1}
+  | q0 == q1                            = match cs1 [] def
+  | null q1                             = do let uvs = nub (ufree def ++ ufree cs1) \\ ufree env
+                                             --traceM ("### matching " ++ prstr def)
+                                             --traceM ("### with\n" ++ render (nest 4 $ vcat $ map pretty cs1))
+                                             --traceM ("### against " ++ prstr (n, findName n env) ++ "\n")
+                                             sequence [ usubstitute uv =<< newUnivarOfKind (uvkind uv) env0 | uv <- uvs ]
+                                             def <- usubst def
+                                             cs1 <- usubst (requantize env0 cs1)
+                                             match cs1 [] def
+  | otherwise                           = do (cs, uvs) <- instQBinds env0 q1
+                                             let eq1 = witSubst env0 q1 cs
                                                  s = qbound q1 `zip` uvs
-                                                 def' = vsubst s def{ qbinds = [] }
-                                             match env (cs++cs0) eq0 def'
-  where NDef (TSchema _ q0 t0) dec _    = findName n env
-        n                               = dname def
-        t2 | inClass env                = addSelf t0 (Just dec)
-           | otherwise                  = t0
-        q1                              = qbinds def
+                                                 cs1' = vsubst s (requantize env0 cs1)
+                                                 def' = vsubst s def
+                                             match (cs ++ cs1') eq1 def'
+  where NDef (TSchema _ q0 t) dec _     = findName n env
+        t0 | inClass env                = addSelf t (Just dec)
+           | otherwise                  = t
+        env0                            = defineTVars q0 env
         fx | inAct env                  = dfx def
-           | otherwise                  = effect t2
-        (pos0,kwd0)                     = qualDef env dec (pos def) (kwd def) (qualWPar env q0)
+           | otherwise                  = effect t0
 
-        match env cs eq0 def            = do --traceM ("## matchDefAssumption " ++ prstr n ++ ": [" ++ prstrs q0 ++ "] => ")
-                                             --traceM (render (nest 4 $ vcat $ map pretty $ Cast info env t1 t2 : cs))
-                                             (cs2,eq1) <- markScoped env n q0 (tempGoal t1) (Cast info env t1 t2 : cs)
-                                             cs2 <- usubst cs2
-                                             return (cs2, def{ qbinds = noqual env q0, pos = pos0, kwd = kwd0,
-                                                               dbody = bindWits (eq0++eq1) ++ dbody def, dfx = fx })
+        match cs eq def                 = do --traceM ("## matchDefAssumption " ++ prstr n ++ ": [" ++ prstrs q0 ++ "] => ")
+                                             --traceM (render (nest 4 $ vcat $ map pretty $ Cast info env0 t1 t0 : cs))
+                                             (cs',eq') <- markScoped env n q0 (tempGoal t1) (Cast info env0 t1 t0 : cs)
+                                             cs' <- usubst cs'
+                                             return (cs', def{ qbinds = noqual env0 q0, pos = pos0, kwd = kwd0,
+                                                               dbody = bindWits (eq++eq') ++ dbody def, dfx = fx })
            where t1                     = tFun (dfx def) (prowOf $ pos def) (krowOf $ kwd def) (fromJust $ ann def)
+                 (pos0,kwd0)            = qualDef env dec (pos def) (kwd def) (qualWPar env q0)
                  sc1                    = TSchema NoLoc q1 t1
                  mbl                    = findSigLoc n env
                  msg                    = "Type incompatibility between signature for and definition of "++Pretty.print n
@@ -742,7 +762,7 @@ instance InfEnv Decl where
                                              NReserved -> do
                                                  --traceM ("\n## infEnv class " ++ prstr n)
                                                  pushFX fxPure tNone
-                                                 te0 <- infProperties env as' b
+                                                 te0 <- infProperties env1 as' b
                                                  (cs,te,b1) <- infEnv env1 b0
                                                  popFX
                                                  when (not $ null cs) $ err (loc n) "Deprecated class syntax"
@@ -1427,7 +1447,8 @@ instance Check Decl where
                                              popFX
                                              let cst = if fallsthru b then [Cast (locinfo l 65) env1 tNone t] else []
                                                  t1 = tFun fx' (prowOf p') (krowOf k') t
-                                             (cs0,eq1) <- simplify env1 (tempGoal t1) (csp++csk++csb++cst)
+                                             (cs0,eq1) <- simplify env1 (tempGoal t1) (csp++csk++csb++cst)            -- DIFF old
+--                                             (cs0,eq1) <- newSimplify env1 (tempGoal t1) (csp++csk++csb++cst)       -- DIFF new
                                              -- At this point, n has the type given by its def annotations.
                                              -- Now check that this type is no less general than its recursion assumption in env.
                                              let body = bindWits eq1 ++ defaultsP p' ++ defaultsK k' ++ b'
