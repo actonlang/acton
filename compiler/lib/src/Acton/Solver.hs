@@ -244,23 +244,23 @@ coalesce env eq cs                          = red env eq [] cs
 
 data Rank                                   = RRed { cstr :: Constraint }
                                             | RSealed { tgt :: TUni }
-                                            | RTry { tgt :: TUni, alts :: [Type], rev :: Bool }
+                                            | RTry { tgt :: TUni, alts :: [Type], rev :: Bool, fvs :: [TUni] }
                                             | RVar { tgt :: TUni, alts :: [Type] }
                                             | RSkip
                                             deriving (Show)
 
 instance Eq Rank where
-    RRed _      == RRed _                   = True
-    RSealed v1  == RSealed v2               = v1 == v2
-    RTry v1 _ _ == RTry v2 _ _              = v1 == v2
-    RVar v1 _   == RVar v2 _                = v1 == v2
-    RSkip       == RSkip                    = True
-    _           == _                        = False
+    RRed _        == RRed _                 = True
+    RSealed v1    == RSealed v2             = v1 == v2
+    RTry v1 _ _ _ == RTry v2 _ _ _          = v1 == v2
+    RVar v1 _     == RVar v2 _              = v1 == v2
+    RSkip         == RSkip                  = True
+    _             == _                      = False
 
 instance Pretty Rank where
     pretty (RRed c)                         = text "<reduce>" <+> pretty c
     pretty (RSealed v)                      = pretty v <+> text "sealed"
-    pretty (RTry v ts rev)                  = pretty v <+> braces (commaSep pretty ts) Pretty.<> (if rev then char '\'' else empty)
+    pretty (RTry v ts rev _)                = pretty v <+> braces (commaSep pretty ts) Pretty.<> (if rev then char '\'' else empty)
     pretty (RVar v ts)                      = pretty v <+> char '~' <+> commaSep pretty ts
     pretty RSkip                            = text "<skip>"
 
@@ -273,15 +273,15 @@ solve env select te eq cs                   = do css <- groupCs env cs
 solveGroups env select te eq []             = return ([], eq)
 solveGroups env select te eq (cs:css)       = do --traceM ("\n\n######### solveGroup\n" ++ render (nest 4 $ vcat $ map pretty cs))
                                                  --traceM ("  ### te:\n" ++ render (nest 4 $ vcat $ map pretty te))
-                                                 (cs1,eq1) <- solve' env select [] te eq cs `catchError` \err -> Control.Exception.throw err
+                                                 (cs1,eq1) <- solve' env select [] [] te eq cs `catchError` \err -> Control.Exception.throw err
                                                  (cs2,eq2) <- solveGroups env select te eq1 css
                                                  return (cs1++cs2, eq2)
 
-solve' env select hist te eq cs
+solve' env select hist trajectory te eq cs
   | not $ null vargoals                     = do --traceM (unlines [ "### var goal " ++ prstr t ++ " ~ " ++ prstrs alts | RVar t alts <- vargoals ])
                                                  --traceM ("### var goals: " ++ show (sum [ length alts | RVar t alts <- vargoals ]))
                                                  sequence [ unify (noinfo 2) (tUni v) t | RVar v alts <- vargoals, t <- alts ]
-                                                 proceed hist eq cs
+                                                 proceed hist trajectory eq cs
   | any not keep_evidence                   = noSolve0 env Nothing [] keep_cs
   | null solve_cs || null goals             = return (keep_cs, eq)
   | otherwise                               = do st <- currentState
@@ -294,16 +294,18 @@ solve' env select hist te eq cs
                                                  case head goals of
                                                     RRed c -> do
                                                         --traceM ("### reduce " ++ prstr c)
-                                                        proceed hist eq cs
+                                                        proceed hist trajectory eq cs
                                                     RSealed v -> do
+                                                        let tvs = if v `elem` trajectory then trajectory else [v]
                                                         --traceM ("### try goal " ++ prstr v ++ ", candidates: " ++ prstrs [fxAction, fxPure])
-                                                        tryAlts st v [fxAction, fxPure]
-                                                    RTry v alts r -> do
+                                                        tryAlts st trajectory v [fxAction, fxPure]
+                                                    RTry v alts r fvs -> do
+                                                        let tvs = if v `elem` trajectory then fvs `union` trajectory else fvs
                                                         --traceM ("### try goal " ++ prstr v ++ ", candidates: " ++ prstrs alts ++ if r then " (rev)" else "")
-                                                        tryAlts st v alts
+                                                        tryAlts st tvs v alts
                                                     RVar v alts -> do
                                                         --traceM ("### var goal " ++ prstr v ++ ", unifying with " ++ prstrs alts)
-                                                        unifyM (noinfo 3) alts (repeat $ tUni v) >> proceed hist eq cs
+                                                        unifyM (noinfo 3) alts (repeat $ tUni v) >> proceed hist trajectory eq cs
                                                     RSkip ->
                                                         return (keep_cs, eq)
 
@@ -314,7 +316,7 @@ solve' env select hist te eq cs
 
         rnks                                = map (rank env) solve_cs
 
-        tryAlts st tv []                    = do --traceM ("### FAIL " ++ prstr tv ++ ":\n" ++ render (nest 4 $ vcat $ map pretty cs))
+        tryAlts st tvs tv []                = do --traceM ("### FAIL " ++ prstr tv ++ ":\n" ++ render (nest 4 $ vcat $ map pretty cs))
                                                  let ts = map (\n -> tCon (TC (noQ ('t':show n)) [])) [0..]
                                                      vs = filter (\v -> length (filter (\c -> v `elem` ufree c) cs) > 1) (nub (ufree cs))
                                                      cs' = if length cs == 1 then cs else filter (not . useless vs) cs
@@ -322,43 +324,46 @@ solve' env select hist te eq cs
                                                  sequence [ usubstitute uv t | (uv,t) <- vs' `zip` ts ]
                                                  cs' <- usubst cs'
                                                  noSolve0 env (Just $ tUni tv) (take (length vs') ts) cs'
-        tryAlts st tv (t:ts)                = tryAlt tv t `catchError` const (
+        tryAlts st tvs tv (t:ts)            = tryAlt tvs tv t `catchError` const (
                                                     do --traceM ("=== ROLLBACK " ++ prstr tv)
-                                                       rollbackState st >> tryAlts st tv ts)
-        tryAlt v (TCon _ c)
+                                                       rollbackState st >> tryAlts st tvs tv ts)
+        tryAlt :: [TUni] -> TUni -> Type -> TypeM (Constraints,Equations)
+        tryAlt tvs v (TCon _ c)
           | isProto env (tcname c)          = do p <- instwildcon env c
                                                  w <- newWitness
                                                  --traceM ("  # trying " ++ prstr v ++ " (" ++ prstr p ++ ")")
-                                                 proceed hist eq (Proto (noinfo 4) env w (tUni v) p : cs)
-        tryAlt v (TTuple _ _ _)
+                                                 proceed hist tvs eq (Proto (noinfo 4) env w (tUni v) p : cs)
+        tryAlt tvs v (TTuple _ _ _)
           | not $ null attrs                = do t <- instwild env KType (tTupleK $ foldr (\n -> kwdRow n tWild) tWild attrs)
                                                  --traceM ("  # trying tuple " ++ prstr v ++ " = " ++ prstr t)
                                                  unify (noinfo 5) (tUni v) t
-                                                 proceed (t:hist) eq cs
+                                                 proceed (t:hist) tvs eq cs
           where selsOf cs                   = sortBy (\a b -> compare (nstr a) (nstr b)) $ nub [ n | Sel _ _ _ (TUni _ v') n _ <- cs, v' == v ]
                 attrs                       = nub $ selsOf solve_cs \\ valueKWs
-        tryAlt v t
+        tryAlt tvs v t
           | uvkind v == KFX                 = do t <- instwild env (uvkind v) t
                                                  --traceM ("  # TRYING " ++ prstr v ++ " = " ++ prstr t)
                                                  unify (noinfo 5) (tUni v) t
                                                  (cs,eq) <- quicksimp env eq cs
                                                  hist <- usubst hist
                                                  te <- usubst te
-                                                 solve' env select hist te eq cs
-        tryAlt v t                          = do t <- instwild env (uvkind v) t
+                                                 tvs <- usubstv tvs
+                                                 solve' env select hist tvs te eq cs
+        tryAlt tvs v t                      = do t <- instwild env (uvkind v) t
                                                  --traceM ("  # trying " ++ prstr v ++ " = " ++ prstr t)
                                                  unify (noinfo 5) (tUni v) t
-                                                 proceed (t:hist) eq cs
-        proceed hist eq cs                  = do te <- usubst te
+                                                 proceed (t:hist) tvs eq cs
+        proceed hist tvs eq cs              = do te <- usubst te
                                                  (cs,eq) <- simplify' env te eq cs
                                                  te <- usubst te
                                                  hist <- usubst hist
-                                                 solve' env select hist te eq cs
+                                                 tvs <- usubstv tvs
+                                                 solve' env select hist tvs te eq cs
 
         condense env rs                     = map cond (group rs)
           where cond (RRed c : rs)          = RRed c
                 cond (RSealed v : rs)       = RSealed v
-                cond (RTry v as r : rs)     = RTry v (if rev' then subrev ts' else ts') rev'
+                cond (RTry v as r vs : rs)  = RTry v (if rev' then subrev ts' else ts') rev' (foldr union vs $ map fvs rs)
                   where ts                  = foldr intersect as $ map alts rs
                         ts'                 = if v `elem` optvs then ts \\ [tOpt tWild] else ts
 --                        rev'                = (or $ r : map rev rs) || v `elem` posvs       -- (new, matches new solver but picks bad order for lower None)
@@ -391,7 +396,7 @@ solve' env select hist te eq cs
 
         deco (RRed cs)                      = (0, 0, 0, 0)
         deco (RSealed v)                    = (2, 0, 0, 0)
-        deco (RTry v as r)                  = (w, length as, length $ filter (==v) embvs, length $ filter (==v) univs)
+        deco (RTry v as r _)                = (w, length as, length $ filter (==v) embvs, length $ filter (==v) univs)
           where w | uvkind v == KFX         =  5    -- effect search, last to be explored
                   | [TTuple{}] <- as        =  4    -- default selection solution, deferred search
                   | otherwise               =  3    -- types and rows, normal search
@@ -410,15 +415,15 @@ rank _ (Sub info env _ t1 t2)               = rank env (Cast info env t1 t2)
 rank _ (Cast _ env (TUni _ v) t2@TUni{})    = RVar v [t2]
 rank _ (Cast _ env (TUni _ v) t2)
   | TOpt _ t2@TUni{} <- t2                  = RVar v [t2]
-  | otherwise                               = RTry v (allBelow (limitQuant v env) t2) False
-rank _ (Cast _ env t1 (TUni _ v))           = RTry v (allAbove (limitQuant v env) t1) True
+  | otherwise                               = RTry v (allBelow (limitQuant v env) t2) False (v:ufree t2)
+rank _ (Cast _ env t1 (TUni _ v))           = RTry v (allAbove (limitQuant v env) t1) True (v:ufree t1)
 
-rank _ (Proto _ env _ (TUni _ v) p)         = RTry v ts False
+rank _ (Proto _ env _ (TUni _ v) p)         = RTry v ts False (v:ufree p)
   where ts                                  = allBelowProto (limitQuant v env) p
 
-rank _ (Sel _ env _ (TUni _ v) n _)         = RTry v (allClassAttr env_ n ++ allProtoAttr env_ n ++ [wildTuple]) False
+rank _ (Sel _ env _ (TUni _ v) n t)         = RTry v (allClassAttr env_ n ++ allProtoAttr env_ n ++ [wildTuple]) False (v:ufree t)
   where env_                                = limitQuant v env
-rank _ (Mut _ env (TUni _ v) n _)           = RTry v (allClassAttr (limitQuant v env) n) False
+rank _ (Mut _ env (TUni _ v) n t)           = RTry v (allClassAttr (limitQuant v env) n) False (v:ufree t)
 
 rank _ (Seal _ env (TUni _ v))
   | uvkind v == KFX                         = RSealed v

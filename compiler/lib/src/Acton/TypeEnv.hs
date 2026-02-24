@@ -445,6 +445,9 @@ instance USubst TVar where
                                             TVar _ v' -> return v'
                                             _         -> return v
 
+usubstv vs                          = do ts <- usubst (map tUni vs)
+                                         return (ufree ts)
+
 instance USubst TCon where
     usubst (TC n ts)                = TC n <$> usubst ts
 
