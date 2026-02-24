@@ -312,7 +312,7 @@ solve' env select hist trajectory te eq cs
   where (solve_cs, keep_cs)                 = partition select cs
         keep_evidence                       = [ hasWitness env t p | Proto _ env _ t p <- keep_cs ]
 
-        (vargoals, goals)                   = span isVar $ sortOn deco $ condense env rnks
+        (vargoals, goals)                   = span isVar $ sortOn (deco trajectory) $ condense env rnks
 
         rnks                                = map (rank env) solve_cs
 
@@ -366,8 +366,7 @@ solve' env select hist trajectory te eq cs
                 cond (RTry v as r vs : rs)  = RTry v (if rev' then subrev ts' else ts') rev' (foldr union vs $ map fvs rs)
                   where ts                  = foldr intersect as $ map alts rs
                         ts'                 = if v `elem` optvs then ts \\ [tOpt tWild] else ts
---                        rev'                = (or $ r : map rev rs) || v `elem` posvs       -- (new, matches new solver but picks bad order for lower None)
-                        rev'                = (and $ r : map rev rs) || v `elem` posvs        -- (old, incorrect in general, but avoids the None problem)
+                        rev'                = (or $ r : map rev rs) || v `elem` posvs
                 cond (RVar v as : rs)       = RVar v (foldr union as $ map alts rs)
                 cond (RSkip : rs)           = RSkip
                 cond rs                     = error ("### condense " ++ show rs)
@@ -394,14 +393,18 @@ solve' env select hist trajectory te eq cs
         isVar _                             = False
 
 
-        deco (RRed cs)                      = (0, 0, 0, 0)
-        deco (RSealed v)                    = (2, 0, 0, 0)
-        deco (RTry v as r _)                = (w, length as, length $ filter (==v) embvs, length $ filter (==v) univs)
+        deco trajectory (RRed cs)           = (0, 0, 0, 0, 0)
+        deco trajectory (RSealed v)         = (2, f, 0, 0, 0)
+          where f | v `elem` trajectory     =  0
+                  | otherwise               =  1
+        deco trajectory (RTry v as r _)     = (w, f, length as, length $ filter (==v) embvs, length $ filter (==v) univs)
           where w | uvkind v == KFX         =  5    -- effect search, last to be explored
                   | [TTuple{}] <- as        =  4    -- default selection solution, deferred search
                   | otherwise               =  3    -- types and rows, normal search
-        deco (RVar v as)                    = (6, length as, 0, 0)
-        deco (RSkip)                        = (7, 0, 0, 0)
+                f | v `elem` trajectory     =  0
+                  | otherwise               =  1
+        deco trajectory (RVar v as)         = (6, 0, length as, 0, 0)
+        deco trajectory (RSkip)             = (7, 0, 0, 0, 0)
 
 
 -- subrev [int,Pt,float,CPt,C3Pt]           = [] ++ int : subrev [Pt,float,CPt,C3Pt]
