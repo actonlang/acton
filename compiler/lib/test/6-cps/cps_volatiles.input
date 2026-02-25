@@ -2,13 +2,15 @@
 proc def force_cps (arg : __builtin__.int) -> __builtin__.int:
     return arg
 
+W_6: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+W_14: __builtin__.Plus[__builtin__.int] = __builtin__.IntegralD_int()
+
 proc def compute (aa : __builtin__.int) -> __builtin__.int:
-    W_21: __builtin__.Plus[__builtin__.int] = __builtin__.IntegralD_int()
-    W_6: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
     xx: __builtin__.int = W_6.__fromatom__(1)
     if $PUSH():
-        xx = W_21.__iadd__(xx, force_cps(W_6.__fromatom__(1)))
-        aa = W_21.__iadd__(aa, force_cps(W_6.__fromatom__(1)))
+        xx = W_14.__iadd__(xx, force_cps(W_6.__fromatom__(1)))
+        aa = W_14.__iadd__(aa, force_cps(W_6.__fromatom__(1)))
         $DROP()
     else:
         N_x: __builtin__.BaseException = $POP()
@@ -16,7 +18,7 @@ proc def compute (aa : __builtin__.int) -> __builtin__.int:
             pass
         else:
             $RAISE(N_x)
-    N_1tmp: __builtin__.int = W_21.__add__(xx, aa)
+    N_1tmp: __builtin__.int = W_14.__add__(xx, aa)
     return N_1tmp
 
 W_104: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
