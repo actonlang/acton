@@ -1779,12 +1779,22 @@ atom_expr = do
                          nm <- name
                          return (\a -> S.OptDot (loc a `upto` loc nm) a nm))
                      <|>
+                     (do
+                        symbol"?("
+                        (ps,ks) <- funargs
+                        symbol ")"
+                        return (\a -> S.OptCall (loc a `upto` loc ks) a ps ks))
+                     <|>
+                      (do
+                         symbol "?["
+                         optSliceOrIndex <* symbol "]")
+                     <|>    
                       (do
                         f <- brackets sliceOrIndex
                         return f)
                     <|>
                       (do
-                         (ps,ks) <- parens funargs
+                         (ps,ks) <- parens funargs 
                          return (\a -> S.Call NoLoc a ps ks))
                      <|>
                       (do
@@ -1805,20 +1815,21 @@ atom_expr = do
                         return (\a -> S.Dot (loc a `upto` l) a (S.Name l (head ss)))
 
                  -- Parse slice or index: try slice first since it can start with expr
-                 sliceOrIndex = try sliceParser <|> indexParser
+                 sliceOrIndex = try (sliceParser S.Slice) <|> indexParser S.Index
 
+                 optSliceOrIndex = try (sliceParser S.OptSlice) <|> indexParser S.OptIndex
                  -- Parse slice notation: [start]:[stop][:[step]]
-                 sliceParser = do
+                 sliceParser sl = do
                      start <- optional expr
                      colon
                      stop <- optional expr
                      step <- optional (colon *> optional expr)
-                     return (\a -> S.Slice NoLoc a (S.Sliz NoLoc start stop (join step)))
+                     return (\a -> sl NoLoc a (S.Sliz NoLoc start stop (join step)))
 
                  -- Parse index: single expr or comma-separated exprs (tuple)
-                 indexParser = do
+                 indexParser ix = do
                      es <- expr `sepBy1` comma
-                     return (\a -> S.Index NoLoc a (if length es == 1 then head es else S.eTuple es))
+                     return (\a -> ix NoLoc a (if length es == 1 then head es else S.eTuple es))
 
 
 comp_iter, comp_for, comp_if :: Parser S.Comp
