@@ -36,15 +36,17 @@ import Acton.TypeEnv
 
 run_new_solver = False
 
-newSimplify env te cs
---  | run_new_solver                          = simplifyNew env cs
-  | otherwise                               = simplifyNew env cs -- simplify env te cs
+newSimplify env te cs                       = simplifyNew env cs
+
+oldSimplify env te cs                       = simplify env te cs
+
+noSimplify env te cs                        = return (cs, [])
 
 
 -- Reduce conservatively and remove entailed constraints
 simplifyNew                                 :: Env -> Constraints -> TypeM (Constraints,Equations)
 simplifyNew env cs                          = do css <- groupCs env cs
-                                                 --traceM ("#### SIMPLIFY NEW" ++ prstrs (map length css))
+                                                 --traceM ("#### SIMPLIFY NEW " ++ prstr (length cs))
                                                  --sequence [ traceM ("## long:\n" ++ render (nest 4 $ vcat $ map pretty cs)) | cs <- css, length cs > 500 ]
                                                  simplifyGroupsNew env css
 
@@ -59,7 +61,7 @@ simplifyGroupsNew env (cs:css)              = do --traceM ("\n\n######### simpli
 simplify                                    :: Env -> TEnv -> Constraints -> TypeM (Constraints,Equations)
 simplify env te cs                          = do css <- groupCs env cs
                                                  te <- usubst te
-                                                 --traceM ("#### SIMPLIFY " ++ prstrs (map length css))
+                                                 --traceM ("#### SIMPLIFY " ++ prstr (length cs))
                                                  --sequence [ traceM ("## long:\n" ++ render (nest 4 $ vcat $ map pretty cs)) | cs <- css, length cs > 500 ]
                                                  simplifyGroups env te css
 
@@ -73,8 +75,9 @@ simplify'                                   :: Env -> TEnv -> Equations -> Const
 simplify' env te eq []                      = return ([], eq)
 simplify' env te eq cs                      = do eq <- reduce eq cs
                                                  cs <- usubst =<< collectDeferred
-                                                 --traceM ("## Improving " ++ show (length cs))
-                                                 --traceM ("## Improving:\n" ++ render (nest 8 $ vcat $ map pretty cs))
+                                                 let len = length cs
+                                                 --when (len > 0) $ traceM ("## Improving " ++ show len)
+                                                 --when (len > 0) $ traceM ("## Improving:\n" ++ render (nest 8 $ vcat $ map pretty cs))
                                                  env <- usubst env      -- Remove....
                                                  te <- usubst te
                                                  improve env te eq cs
@@ -1654,9 +1657,9 @@ multiUBounds cs                         = Map.assocs $ Map.map deOpt $ Map.filte
     bnds []                             = Map.empty
     bnds (Cast _ _ TUni{} TUni{} : cs)  = bnds cs
     bnds (Cast _ _ TUni{} (TOpt _ TUni{}) : cs) = bnds cs
-    bnds (Cast _ _ (TUni _ v) t : cs)   = Map.insertWith (++) v [t] $ bnds cs
+    bnds (Cast _ env (TUni _ v) t : cs) = Map.insertWith (++) v [t] $ bnds cs
     bnds (Sub _ _ _ TUni{} TUni{} : cs) = bnds cs
-    bnds (Sub _ _ _ TUni{} (TOpt _ TUni{}) : cs) = bnds cs
+    bnds (Sub _ _ env TUni{} (TOpt _ TUni{}) : cs) = bnds cs
     bnds (Sub _ _ _ (TUni _ v) t : cs)  = Map.insertWith (++) v [t] $ bnds cs
     bnds (_ : cs)                       = bnds cs
 
@@ -1667,14 +1670,21 @@ multiUBounds cs                         = Map.assocs $ Map.map deOpt $ Map.filte
             unOpt t                     = t
 
 
-multiLBounds cs                         = Map.assocs $ Map.filter ((>1) . length) $ bnds cs
+multiLBounds cs                         = Map.assocs $ Map.map deEnv $ Map.filter ((>1) . length) $ bnds cs
   where
     bnds []                             = Map.empty
     bnds (Cast _ _ TUni{} TUni{} : cs)  = bnds cs
-    bnds (Cast _ _ t (TUni _ v) : cs)   = Map.insertWith (++) v [t] $ bnds cs
+    bnds (Cast _ env t (TUni _ v) : cs) = Map.insertWith (++) v [(env,t)] $ bnds cs
     bnds (Sub _ _ _ TUni{} TUni{} : cs) = bnds cs
-    bnds (Sub _ _ _ t (TUni _ v) : cs)  = Map.insertWith (++) v [t] $ bnds cs
+    bnds (Sub _ env _ t (TUni _ v) : cs)= Map.insertWith (++) v [(env,t)] $ bnds cs
     bnds (_ : cs)                       = bnds cs
+
+    deEnv envts
+      | length ts == 1                  = ts
+      | otherwise                       = map deVar envts
+      where ts                          = nub [ t | (env,t) <- envts ]
+            deVar (env,TVar _ v)        = tCon (findTVBound env v)
+            deVar (env,t)               = t
 
 
 dnClosed env (TCon _ c)                 = isActor env (tcname c)
