@@ -335,7 +335,7 @@ genEnv env cs te s                      = do eq <- solveAll env te cs
 
 markScoped env n q te []                = return ([], [])
 -- Should remove this simplify call too, but doing so destroys performance of our current inferior constraint-solver (see module yang.schema in acton-yang).
-markScoped env n [] te cs               = newSimplify env te cs
+markScoped env n [] te cs               = noSimplify env te cs
 -- Return the marks in terms of NotImplemented equations for now, so that we can coexist with the need to also run simplify (see above)
 markScoped env n q te cs                = return (cs, eq)
   where eq                              = [ mkEqn env w tWild eNotImpl | w <- ws ]
@@ -1446,7 +1446,7 @@ instance Check Decl where
                                              popFX
                                              let cst = if fallsthru b then [Cast (locinfo l 65) env1 tNone t] else []
                                                  t1 = tFun fx' (prowOf p') (krowOf k') t
-                                             (cs0,eq1) <- newSimplify env1 (tempGoal t1) (csp++csk++csb++cst)
+                                             (cs0,eq1) <- noSimplify env1 (tempGoal t1) (csp++csk++csb++cst)
                                              -- At this point, n has the type given by its def annotations.
                                              -- Now check that this type is no less general than its recursion assumption in env.
                                              let body = bindWits eq1 ++ defaultsP p' ++ defaultsK k' ++ b'
