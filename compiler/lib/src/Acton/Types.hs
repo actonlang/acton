@@ -175,7 +175,7 @@ infTopStmts env (s : ss)                = do (te1, s1) <- infTopStmt env s
                                              return (te1++te2, s1++ss2)
 
 infTopStmt env s                        = do (cs,te,s) <- infEnv env s
-                                             --traceM ("* infer " ++ prstrs (bound s))
+                                             --traceM ("****************************************** infer (" ++ show (length cs) ++ ") " ++ prstrs (bound s))
                                              --traceM ("\n\n\n############\n" ++ render (nest 4 $ vcat $ map pretty te))
                                              --traceM ("------------\n" ++ render (nest 4 $ pretty s))
                                              --traceM ("\\\\\\\\\\\\\n" ++ render (nest 4 $ vcat $ map pretty cs))
@@ -189,7 +189,7 @@ infTopStmt env s                        = do (cs,te,s) <- infEnv env s
 
                                              te <- defaultTE env te
                                              --traceM ("===========\n" ++ render (nest 4 $ vcat $ map pretty te))
-                                             --traceM ("............\n")
+                                             --traceM (".........................................."  ++ prstrs (bound s) ++ "\n")
 
                                              s <- termred eq1 <$> usubst (pushEqns env eq0 s)
                                              defaultVars (ufree s)
@@ -335,7 +335,6 @@ genEnv env cs te s                      = do eq <- solveAll env te cs
 
 markScoped env n q te []                = return ([], [])
 -- Should remove this simplify call too, but doing so destroys performance of our current inferior constraint-solver (see module yang.schema in acton-yang).
---markScoped env n [] te cs               = return (cs, [])
 markScoped env n [] te cs               = newSimplify env te cs
 -- Return the marks in terms of NotImplemented equations for now, so that we can coexist with the need to also run simplify (see above)
 markScoped env n q te cs                = return (cs, eq)
@@ -977,7 +976,7 @@ matchActorAssumption env n0 p k te      = do --traceM ("## matchActorAssumption 
                                              (css,eqs) <- unzip <$> mapM check1 te0
                                              let cs = [Cast (locinfo p 60) env (tTuple p0 k0) (tTuple (prowOf p) (krowOf k)),
                                                        Seal (locinfo p 112) env p0, Seal (locinfo k 113) env k0]
-                                             (cs,eq) <- simplify env obs (cs ++ concat css)
+                                             (cs,eq) <- oldSimplify env obs (cs ++ concat css)
                                              return (cs, eq ++ concat eqs)
   where NAct q p0 k0 te0 _              = findName n0 env
         ns                              = dom te0
@@ -1447,7 +1446,7 @@ instance Check Decl where
                                              popFX
                                              let cst = if fallsthru b then [Cast (locinfo l 65) env1 tNone t] else []
                                                  t1 = tFun fx' (prowOf p') (krowOf k') t
-                                             (cs0,eq1) <- newSimplify env1 (tempGoal t1) (csp++csk++csb++cst)
+                                             (cs0,eq1) <- oldSimplify env1 (tempGoal t1) (csp++csk++csb++cst)
                                              -- At this point, n has the type given by its def annotations.
                                              -- Now check that this type is no less general than its recursion assumption in env.
                                              let body = bindWits eq1 ++ defaultsP p' ++ defaultsK k' ++ b'
