@@ -986,7 +986,7 @@ printDocs gopts opts = do
             env0 <- Acton.Env.initEnv (sysTypes paths) False
             env <- Acton.Env.mkEnv (searchPath paths) env0 parsed
             kchecked <- Acton.Kinds.check env parsed
-            (nmod, _, env', _, _) <- Acton.Types.reconstruct env kchecked
+            (nmod, _, env', _, _) <- Acton.Types.reconstruct Nothing env kchecked
             let I.NModule tenv mdoc = nmod
 
             -- 1. If format is explicitly set (via -t, --html, --markdown), use it
@@ -1186,7 +1186,7 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
       sz <- if exists then getFileSize path else return 0
       return (key, sz)
     progressRef <- newIORef (0 :: Double)
-    marksRef <- newIORef (M.empty :: M.Map TaskKey (Bool, Bool))
+    marksRef <- newIORef (M.empty :: M.Map TaskKey (Double, Bool))
     -- sizeMap is used for the progress bar indicator to determine how much a
     -- modules compilation should contribute to the overall progress. We use
     -- file size as a heuristic for this, but if all sizes are zero (e.g. due to
@@ -1279,6 +1279,35 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
         progressLine phase proj mn =
           let base = padProgressPrefix phase ++ padRight labelWidth (projectModuleLabel proj mn)
           in padRight progressTimePadWidth base
+        frontPassLabel FrontPassKinds = "kinds"
+        frontPassLabel FrontPassTypes = "types"
+        clamp01 x = max 0 (min 1 x)
+        progressRatio p =
+          let total = fppTotal p
+          in if total <= 0
+               then 1
+               else clamp01 (fromIntegral (fppCompleted p) / fromIntegral total)
+        frontPassFraction p =
+          case fppPass p of
+            FrontPassKinds -> 0.10 * progressRatio p
+            FrontPassTypes -> 0.10 + 0.90 * progressRatio p
+        abbreviate limit txt
+          | length txt <= limit = txt
+          | limit <= 3 = take limit txt
+          | otherwise = take (limit - 3) txt ++ "..."
+        frontProgressDetail p =
+          let total = max 0 (fppTotal p)
+              completed = min total (max 0 (fppCompleted p))
+              countPart =
+                if total > 0
+                  then " " ++ show completed ++ "/" ++ show total
+                  else ""
+              itemPart = case fppCurrent p of
+                Just nm -> ": " ++ abbreviate 48 nm
+                Nothing -> ""
+          in "[" ++ frontPassLabel (fppPass p) ++ countPart ++ itemPart ++ "]"
+        frontProgressLine proj mn p =
+          progressLine phaseFront proj mn ++ frontProgressDetail p
         progressFinalLine =
           padRight progressTimePadWidth (padProgressPrefix phaseFinal)
         finalKey = TaskKey rootProj (A.modName ["__final__"])
@@ -1289,21 +1318,23 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
             new <- atomicModifyIORef' progressRef (\x -> let x' = min compilePhaseTotal (x + delta) in (x', x'))
             setPercent (floor new)
         shareFor key = M.findWithDefault (0, 0) key shareMap
-        creditFront key = gate $ do
+        creditFrontTo key frontFrac = gate $ do
           let (frontShare, _) = shareFor key
           delta <- atomicModifyIORef' marksRef $ \m ->
-            let (frontDone, backDone) = M.findWithDefault (False, False) key m
-            in if frontDone
-                 then (m, 0)
-                 else (M.insert key (True, backDone) m, frontShare)
+            let (frontDoneFrac, backDone) = M.findWithDefault (0, False) key m
+                frontDoneFrac' = max frontDoneFrac (clamp01 frontFrac)
+                deltaFrac = max 0 (frontDoneFrac' - frontDoneFrac)
+            in (M.insert key (frontDoneFrac', backDone) m, frontShare * deltaFrac)
           addProgress delta
+        creditFront key = creditFrontTo key 1
+        creditFrontProgress key p = creditFrontTo key (frontPassFraction p)
         creditBack key = gate $ do
           let (_, backShare) = shareFor key
           delta <- atomicModifyIORef' marksRef $ \m ->
-            let (frontDone, backDone) = M.findWithDefault (False, False) key m
+            let (frontDoneFrac, backDone) = M.findWithDefault (0, False) key m
             in if backDone
                  then (m, 0)
-                 else (M.insert key (frontDone, True) m, backShare)
+                 else (M.insert key (frontDoneFrac, True) m, backShare)
           addProgress delta
     setPercent 0
     let backJobKey job =
@@ -1339,6 +1370,13 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
                   proj = tkProj key
                   mn = tkMod key
               in gate (progressStartTask progressUI progressState key (progressLine phaseFront proj mn))
+          , chOnFrontProgress = \t p ->
+              let key = gtKey t
+                  proj = tkProj key
+                  mn = tkMod key
+              in do
+                gate (progressUpdateTask progressUI progressState key (frontProgressLine proj mn p))
+                creditFrontProgress key p
           , chOnFrontDone = \t -> do
               gate (progressDoneTask progressUI progressState (gtKey t))
               creditFront (gtKey t)
@@ -2284,6 +2322,12 @@ progressStartTask ui st key line = withProgressLock ui $ do
     now <- getTime Monotonic
     modifyIORef' (psActive st) (M.insert key (ProgressTask line now))
     modifyIORef' (psOrder st) (\xs -> if key `elem` xs then xs else xs ++ [key])
+    progressRefreshUnlocked ui st
+
+-- | Update the rendered line for an active progress task.
+progressUpdateTask :: ProgressUI -> ProgressState -> TaskKey -> String -> IO ()
+progressUpdateTask ui st key line = withProgressLock ui $ do
+    modifyIORef' (psActive st) (M.adjust (\task -> task { ptLine = line }) key)
     progressRefreshUnlocked ui st
 
 -- | Remove a task from the progress UI.
