@@ -73,6 +73,7 @@ lspGlobalOpts =
   C.GlobalOptions
     { color = C.Never
     , quiet = True
+    , noProgress = True
     , timing = False
     , tty = False
     , verbose = False

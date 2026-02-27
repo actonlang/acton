@@ -1226,14 +1226,13 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
         termEnabled = termProgressEnabled termProgress
         modLabel mn = modNameToString mn
         spinnerPrefixWidth = 3
-        frontPrefix = "   Finished type check of"
-        backPrefix = "   Finished compilation of "
-        backFailPrefix = "   Failed compilation of "
-        finalPrefix = "   Finished final compilation"
-        phaseFront = "Running front passes:"
-        phaseBack = "Running back passes:"
-        phaseFinal = "Running final compilation:"
-        phaseWidth = maximum [length phaseFront, length phaseBack, length phaseFinal]
+        frontInitialStatus = "Kinds check"
+        backActiveStatus = "Back passes"
+        finalActiveStatus = "Final compilation"
+        frontDoneStatus = "Type check done"
+        backDoneStatus = "Compilation done"
+        backFailStatus msg = "Compilation failed: " ++ msg
+        finalDoneStatus = "Final compilation done"
         projMap = cpProjMap plan
         depNameMap =
           let rootDeps = maybe [] projDeps (M.lookup rootProj projMap)
@@ -1250,37 +1249,32 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
             "" -> modLabel mn
             label -> label ++ "." ++ modLabel mn
         labelWidth = maximum (0 : [ length (projectModuleLabel (tkProj (gtKey t)) (tkMod (gtKey t))) | t <- neededTasks ])
-        prefixWidth = maximum [ length frontPrefix
-                              , length backPrefix
-                              , length backFailPrefix
-                              , length finalPrefix
-                              , spinnerPrefixWidth + phaseWidth + 1
-                              ]
-        progressPrefixWidth = max 0 (prefixWidth - spinnerPrefixWidth)
-        padProgressPrefix phase = padRight progressPrefixWidth (padRight phaseWidth phase ++ " ")
-        completionPrefix prefix = padRight prefixWidth prefix
         timeSep = "    "
-        nameWidth = prefixWidth + labelWidth
+        statusWidth = 68
+        nameWidth = labelWidth + 2 + statusWidth
         timePadWidth = nameWidth + length timeSep
         progressTimePadWidth = max 0 (timePadWidth - spinnerPrefixWidth)
+        doneIndent = replicate spinnerPrefixWidth ' '
+        statusColumns modLbl status =
+          padRight labelWidth modLbl
+          ++ "  "
+          ++ padRight statusWidth status
+        doneTimedLine modLbl status t =
+          padRight timePadWidth (doneIndent ++ statusColumns modLbl status) ++ fmtTime t
+        doneLine modLbl status =
+          doneIndent ++ statusColumns modLbl status
         frontDoneLine proj mn t =
-          let base = completionPrefix frontPrefix ++ padRight labelWidth (projectModuleLabel proj mn)
-          in padRight timePadWidth base ++ fmtTime t
+          doneTimedLine (projectModuleLabel proj mn) frontDoneStatus t
         backDoneLine proj mn mt =
-          let base = completionPrefix backPrefix ++ padRight labelWidth (projectModuleLabel proj mn)
-          in case mt of
-               Just t -> padRight timePadWidth base ++ fmtTime t
-               Nothing -> base
+          case mt of
+            Just t -> doneTimedLine (projectModuleLabel proj mn) backDoneStatus t
+            Nothing -> doneLine (projectModuleLabel proj mn) backDoneStatus
         backFailLine proj mn msg =
-          let base = completionPrefix backFailPrefix ++ projectModuleLabel proj mn
-          in base ++ "    " ++ msg
+          doneLine (projectModuleLabel proj mn) (backFailStatus msg)
         finalDoneLine t =
-          padRight timePadWidth finalPrefix ++ fmtTime t
-        progressLine phase proj mn =
-          let base = padProgressPrefix phase ++ padRight labelWidth (projectModuleLabel proj mn)
-          in padRight progressTimePadWidth base
-        frontPassLabel FrontPassKinds = "kinds"
-        frontPassLabel FrontPassTypes = "types"
+          doneTimedLine "" finalDoneStatus t
+        progressLine proj mn status =
+          padRight progressTimePadWidth (statusColumns (projectModuleLabel proj mn) status)
         clamp01 x = max 0 (min 1 x)
         progressRatio p =
           let total = fppTotal p
@@ -1295,21 +1289,22 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
           | length txt <= limit = txt
           | limit <= 3 = take limit txt
           | otherwise = take (limit - 3) txt ++ "..."
-        frontProgressDetail p =
+        frontStatus p =
           let total = max 0 (fppTotal p)
               completed = min total (max 0 (fppCompleted p))
-              countPart =
-                if total > 0
-                  then " " ++ show completed ++ "/" ++ show total
-                  else ""
-              itemPart = case fppCurrent p of
-                Just nm -> ": " ++ abbreviate 48 nm
-                Nothing -> ""
-          in "[" ++ frontPassLabel (fppPass p) ++ countPart ++ itemPart ++ "]"
+              countPart
+                | total > 0 = " " ++ show completed ++ "/" ++ show total
+                | otherwise = ""
+          in case fppPass p of
+               FrontPassKinds -> "Kinds check"
+               FrontPassTypes ->
+                 case fppCurrent p of
+                   Just nm -> "Type checking " ++ abbreviate 48 nm ++ countPart
+                   Nothing -> "Type checking" ++ countPart
         frontProgressLine proj mn p =
-          progressLine phaseFront proj mn ++ frontProgressDetail p
+          progressLine proj mn (frontStatus p)
         progressFinalLine =
-          padRight progressTimePadWidth (padProgressPrefix phaseFinal)
+          padRight progressTimePadWidth (statusColumns "" finalActiveStatus)
         finalKey = TaskKey rootProj (A.modName ["__final__"])
         withTerm action = when termEnabled $ gate (withProgressLock progressUI action)
         setPercent pct = withTerm (termProgressPercent termProgress pct)
@@ -1343,7 +1338,7 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
           let proj = projPath (bjPaths job)
               mn = A.modname (biTypedMod (bjInput job))
           in do
-            gate (progressStartTask progressUI progressState (backJobKey job) (progressLine phaseBack proj mn))
+            gate (progressStartTask progressUI progressState (backJobKey job) (progressLine proj mn backActiveStatus) (Just 0))
         onBackDone job result = do
           gate (progressDoneTask progressUI progressState (backJobKey job))
           creditBack (backJobKey job)
@@ -1369,13 +1364,13 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
               let key = gtKey t
                   proj = tkProj key
                   mn = tkMod key
-              in gate (progressStartTask progressUI progressState key (progressLine phaseFront proj mn))
+              in gate (progressStartTask progressUI progressState key (progressLine proj mn frontInitialStatus) (Just 0))
           , chOnFrontProgress = \t p ->
               let key = gtKey t
                   proj = tkProj key
                   mn = tkMod key
               in do
-                gate (progressUpdateTask progressUI progressState key (frontProgressLine proj mn p))
+                gate (progressUpdateTask progressUI progressState key (frontProgressLine proj mn p) (Just (frontPassFraction p)))
                 creditFrontProgress key p
           , chOnFrontDone = \t -> do
               gate (progressDoneTask progressUI progressState (gtKey t))
@@ -1386,7 +1381,7 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
           , chOnInfo = logLine
           }
         onFinalStart = do
-          gate (progressStartTask progressUI progressState finalKey progressFinalLine)
+          gate (progressStartTask progressUI progressState finalKey progressFinalLine Nothing)
           setPercent 85
         onFinalDone mtime = do
           gate (progressDoneTask progressUI progressState finalKey)
@@ -2138,6 +2133,7 @@ data ProgressUI = ProgressUI
   , puLinesRef :: IORef [String]
   , puVisibleRef :: IORef Int
   , puSpinnerRef :: IORef Int
+  , puUseColor :: Bool
   , puCursorHiddenRef :: IORef Bool
   , puTickerRef :: IORef (Maybe ThreadId)
   , puTermProgress :: TermProgress
@@ -2152,13 +2148,15 @@ data ProgressState = ProgressState
 data ProgressTask = ProgressTask
   { ptLine :: String
   , ptStart :: TimeSpec
+  , ptProgress :: Maybe Double
   }
 
 -- | Initialize terminal progress UI state and enablement.
 initProgressUI :: C.GlobalOptions -> Int -> IO ProgressUI
 initProgressUI gopts maxLines = do
     tty <- hIsTerminalDevice stdout
-    let enabled = (tty || C.tty gopts) && not (C.quiet gopts)
+    let enabled = (tty || C.tty gopts) && not (C.quiet gopts) && not (C.noProgress gopts)
+    useColorOut <- useColor gopts
     linesRef <- newIORef []
     visibleRef <- newIORef 0
     spinnerRef <- newIORef 0
@@ -2172,6 +2170,7 @@ initProgressUI gopts maxLines = do
       , puLinesRef = linesRef
       , puVisibleRef = visibleRef
       , puSpinnerRef = spinnerRef
+      , puUseColor = useColorOut
       , puCursorHiddenRef = cursorHiddenRef
       , puTickerRef = tickerRef
       , puTermProgress = termProgress
@@ -2317,17 +2316,20 @@ progressReset ui st = withProgressLock ui $ do
       progressRenderUnlocked ui
 
 -- | Mark a task as active in the progress UI.
-progressStartTask :: ProgressUI -> ProgressState -> TaskKey -> String -> IO ()
-progressStartTask ui st key line = withProgressLock ui $ do
+progressStartTask :: ProgressUI -> ProgressState -> TaskKey -> String -> Maybe Double -> IO ()
+progressStartTask ui st key line mprog = withProgressLock ui $ do
     now <- getTime Monotonic
-    modifyIORef' (psActive st) (M.insert key (ProgressTask line now))
+    modifyIORef' (psActive st) (M.insert key (ProgressTask line now (fmap (\x -> max 0 (min 1 x)) mprog)))
     modifyIORef' (psOrder st) (\xs -> if key `elem` xs then xs else xs ++ [key])
     progressRefreshUnlocked ui st
 
 -- | Update the rendered line for an active progress task.
-progressUpdateTask :: ProgressUI -> ProgressState -> TaskKey -> String -> IO ()
-progressUpdateTask ui st key line = withProgressLock ui $ do
-    modifyIORef' (psActive st) (M.adjust (\task -> task { ptLine = line }) key)
+progressUpdateTask :: ProgressUI -> ProgressState -> TaskKey -> String -> Maybe Double -> IO ()
+progressUpdateTask ui st key line mprog = withProgressLock ui $ do
+    modifyIORef' (psActive st) (M.adjust (\task ->
+      task { ptLine = line
+           , ptProgress = fmap (\x -> max 0 (min 1 x)) mprog
+           }) key)
     progressRefreshUnlocked ui st
 
 -- | Remove a task from the progress UI.
@@ -2343,8 +2345,21 @@ progressRefreshUnlocked ui st = do
     active <- readIORef (psActive st)
     order <- readIORef (psOrder st)
     now <- getTime Monotonic
-    let formatLine task =
-          ptLine task ++ fmtTime (diffTimeSpec now (ptStart task))
+    let progressDone = "\ESC[48;5;24m"
+        progressReset = "\ESC[0m"
+        paintProgressLine mprog line =
+          case mprog of
+            Just frac0 | puUseColor ui ->
+              let n = length line
+                  frac = max 0 (min 1 frac0)
+                  doneChars = max 0 (min n (floor (frac * fromIntegral n)))
+                  (done, todo) = splitAt doneChars line
+              in if null done
+                   then todo
+                   else progressDone ++ done ++ progressReset ++ todo
+            _ -> line
+        formatLine task =
+          paintProgressLine (ptProgress task) (ptLine task ++ fmtTime (diffTimeSpec now (ptStart task)))
         lines = [ formatLine task | key <- order, Just task <- [M.lookup key active] ]
     when (puEnabled ui) $ do
       writeIORef (puLinesRef ui) (take (puMaxLines ui) lines)
