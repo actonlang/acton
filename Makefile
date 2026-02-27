@@ -50,6 +50,13 @@ ifdef CPEDANTIC
 CPEDANTIC=--cpedantic
 endif
 
+PROFILE ?= 0
+ACTON_STACK_BUILD_OPTS := $(STACK_OPTS)
+ifeq ($(PROFILE),1)
+ACTON_STACK_BUILD_OPTS += --profile --library-profiling --executable-profiling
+ACTC_GHC_OPTS += -fprof-auto -fprof-cafs
+endif
+
 # rewrite arm64 to aarch64
 ifeq ($(shell uname -m),arm64)
 ARCH:=aarch64
@@ -84,6 +91,7 @@ help:
 	@echo "Available make targets:"
 	@echo "  all     - build everything"
 	@echo "  test    - run the test suite"
+	@echo "  make PROFILE=1 dist/bin/acton - build profiled acton binary"
 	@echo ""
 	@echo "  clean   - /normal/ clean repo"
 	@echo "  clean-all - thorough cleaning"
@@ -124,11 +132,11 @@ dist/bin/acton: compiler/lib/package.yaml.in compiler/acton/package.yaml.in comp
 	mkdir -p dist/bin
 	rm -f dist/bin/actonc
 	cd compiler && sed 's,^version: BUILD_VERSION,version: "$(VERSION)",' < lib/package.yaml.in > lib/package.yaml
-	cd compiler && unset CC && unset CXX && unset CFLAGS && stack build acton lsp-server-acton --dry-run 2>&1 | grep "Nothing to build" || \
+	cd compiler && unset CC && unset CXX && unset CFLAGS && stack build acton lsp-server-acton $(ACTON_STACK_BUILD_OPTS) --ghc-options='-j4 $(ACTC_GHC_OPTS)' --dry-run 2>&1 | grep "Nothing to build" || \
 		(sed 's,^version: BUILD_VERSION,version: "$(VERSION_INFO)",' < acton/package.yaml.in > acton/package.yaml \
 		&& sed 's,^version: BUILD_VERSION,version: "$(VERSION_INFO)",' < lsp-server/package.yaml.in > lsp-server/package.yaml \
-		&& stack build acton lsp-server-acton $(STACK_OPTS) --ghc-options='-j4 $(ACTC_GHC_OPTS)')
-	cd compiler && unset CC && unset CXX && unset CFLAGS && stack --local-bin-path=../dist/bin install acton lsp-server-acton
+		&& stack build acton lsp-server-acton $(ACTON_STACK_BUILD_OPTS) --ghc-options='-j4 $(ACTC_GHC_OPTS)')
+	cd compiler && unset CC && unset CXX && unset CFLAGS && stack --local-bin-path=../dist/bin install acton lsp-server-acton $(ACTON_STACK_BUILD_OPTS) --ghc-options='-j4 $(ACTC_GHC_OPTS)'
 	# Keep actonc as a symlink for compatibility
 	ln -sf acton dist/bin/actonc
 
