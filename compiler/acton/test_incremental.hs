@@ -195,14 +195,17 @@ sanitize = LBS.fromStrict
 
     reorderBackLines :: [T.Text] -> [T.Text]
     reorderBackLines ls =
-      let (backLines, otherLines) = partition (T.isPrefixOf backPrefix) ls
+      let (backLines, otherLines) = partition isBackLine ls
           (pre, post) = break isFinalLine otherLines
       in pre ++ sort backLines ++ post
       where
-        backPrefix = "   Finished compilation of"
+        isBackLine t =
+          T.isPrefixOf "   Finished compilation of" t ||
+          (T.isInfixOf "Compilation done" t && not (isFinalLine t))
         isFinalLine t =
           T.isPrefixOf "   Finished final compilation" t ||
           T.isPrefixOf "   Finished final compilation step" t ||
+          T.isInfixOf "Final compilation done" t ||
           T.isPrefixOf "  Skipping final build step" t
 
 -- | Atomically write UTF-8 text to a file.
@@ -293,12 +296,20 @@ buildOutFile = do
 -- | Check whether build output reports typechecking for a module.
 typechecked :: T.Text -> T.Text -> Bool
 typechecked out modName =
-  any (\line -> "Finished type check of" `T.isInfixOf` line && matchesModule line modName) (T.lines out)
+  any (\line -> isTypecheckLine line && matchesModule line modName) (T.lines out)
+  where
+    isTypecheckLine line =
+      "Finished type check of" `T.isInfixOf` line ||
+      "Type check done" `T.isInfixOf` line
 
 -- | Check whether build output reports compilation for a module.
 compiled :: T.Text -> T.Text -> Bool
 compiled out modName =
-  any (\line -> "Finished compilation of" `T.isInfixOf` line && matchesModule line modName) (T.lines out)
+  any (\line -> isCompiledLine line && matchesModule line modName) (T.lines out)
+  where
+    isCompiledLine line =
+      "Finished compilation of" `T.isInfixOf` line ||
+      "Compilation done" `T.isInfixOf` line
 
 -- | Match module labels across legacy "proj/mod" and new "proj.mod" formats.
 matchesModule :: T.Text -> T.Text -> Bool
@@ -1138,6 +1149,7 @@ p27_overlay_source_provider = testCase "27-overlay snapshots drive readModuleTas
       gopts = C.GlobalOptions
         { C.color = C.Never
         , C.quiet = True
+        , C.noProgress = False
         , C.timing = False
         , C.tty = False
         , C.verbose = False
@@ -1579,6 +1591,7 @@ p35_changed_path_keeps_unaffected_provider =
         gopts = C.GlobalOptions
           { C.color = C.Never
           , C.quiet = True
+          , C.noProgress = False
           , C.timing = False
           , C.tty = False
           , C.verbose = False

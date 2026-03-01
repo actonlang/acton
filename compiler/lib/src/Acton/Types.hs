@@ -36,9 +36,16 @@ import Acton.WitKnots
 import qualified InterfaceFiles
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Base16 as Base16
-import qualified Data.Map
 import Data.List (intersperse, isPrefixOf, partition)
 import Data.Maybe (mapMaybe)
+import System.IO.Unsafe (unsafePerformIO)
+
+type TypeProgressCallback = Int -> Int -> Maybe String -> IO ()
+
+emitTypeProgress :: Maybe TypeProgressCallback -> Int -> Int -> Maybe String -> TypeM ()
+emitTypeProgress Nothing _ _ _ = return ()
+emitTypeProgress (Just cb) total completed current =
+  unsafePerformIO (cb total completed current) `seq` return ()
 
 -- | Extract docstring from the first statement of a Suite if it's a string expression
 extractDocstring :: Suite -> Maybe String
@@ -63,8 +70,8 @@ unescapeString ('\\':'\'':xs) = '\'' : unescapeString xs
 unescapeString (x:xs) = x : unescapeString xs
 
 -- | Type-check a module and return its NameInfo, typed module, env, and discovered tests.
-reconstruct                             :: Env0 -> Module -> IO (NameInfo, Module, Env0, [Acton.Syntax.ModName], [String])
-reconstruct env0 (Module m i ss)         = do --traceM ("#################### original env0 for " ++ prstr m ++ ":")
+reconstruct                             :: Maybe TypeProgressCallback -> Env0 -> Module -> IO (NameInfo, Module, Env0, [Acton.Syntax.ModName], [String])
+reconstruct progressCb env0 (Module m i ss)         = do --traceM ("#################### original env0 for " ++ prstr m ++ ":")
                                              --traceM (render (pretty env0))
                                              let nmod = NModule iface moduleDocstring
                                              --traceM ("#################### converted env0:")
@@ -73,7 +80,7 @@ reconstruct env0 (Module m i ss)         = do --traceM ("#################### or
 
   where moduleDocstring                 = extractDocstring ss
         env1                            = reserve (assigned ss) (typeX env0)
-        (te,ss1)                        = runTypeM $ infTop env1 ss
+        (te,ss1)                        = runTypeM $ infTop progressCb env1 ss
         env2                            = define te (setMod m env0)
 
         (teT,ssT,tests)                 =
@@ -97,7 +104,6 @@ reconstruct env0 (Module m i ss)         = do --traceM ("#################### or
 
         -- Convert the module name (ModName) to a string, e.g. "foo.bar"
         modNameStr (ModName ns) = concat (intersperse "." (map nstr ns))
-
         -- Inject __name__ variable
         __name__assign = Assign NoLoc [PVar NoLoc (name "__name__") Nothing] (Strings NoLoc [modNameStr m])
         ssT' = __name__assign : ssT
@@ -162,17 +168,49 @@ addTyping env n s t c                   = c {info = addT n (simp env s) t (info 
 
 ------------------------------
 
-infTop                                  :: Env -> Suite -> TypeM (TEnv,Suite)
-infTop env ss                           = do --traceM ("\n## infEnv top")
+infTop                                  :: Maybe TypeProgressCallback -> Env -> Suite -> TypeM (TEnv,Suite)
+infTop progressCb env ss                = do --traceM ("\n## infEnv top")
                                              pushFX fxPure tNone
-                                             (te,ss) <- infTopStmts env ss
+                                             let total = sum (map stmtProgressWeight ss)
+                                             (te,ss) <- infTopStmts progressCb env total 0 ss
+                                             when (total > 0) $
+                                               emitTypeProgress progressCb total total Nothing
                                              checkSigs env te
                                              return (te, ss)
 
-infTopStmts env []                      = return ([], [])
-infTopStmts env (s : ss)                = do (te1, s1) <- infTopStmt env s
-                                             (te2, ss2) <- infTopStmts (define te1 env) ss
-                                             return (te1++te2, s1++ss2)
+infTopStmts _ env _ _ []                = return ([], [])
+infTopStmts progressCb env total done (s : ss)
+                                         = do done' <- case stmtProgressLabel s of
+                                                        Just label -> do
+                                                          emitTypeProgress progressCb total done (Just label)
+                                                          return (done + stmtProgressWeight s)
+                                                        Nothing -> return done
+                                              (te1, s1) <- infTopStmt env s
+                                              (te2, ss2) <- infTopStmts progressCb (define te1 env) total done' ss
+                                              return (te1++te2, s1++ss2)
+
+-- | Display label for progress UI.
+-- For recursive groups, abbreviate to a short "a, b, ... (+N)" form.
+stmtProgressLabel :: Stmt -> Maybe String
+stmtProgressLabel s
+  | null names = Nothing
+  | otherwise = Just (formatNames names)
+  where
+    names = stmtProgressNames s
+    formatNames [n] = n
+    formatNames [n1, n2] = n1 ++ ", " ++ n2
+    formatNames (n1 : n2 : rest) =
+      n1 ++ ", " ++ n2 ++ ", ... (+" ++ show (length rest) ++ ")"
+    formatNames [] = ""
+
+-- | Progress weight for one top-level statement, based on bound names.
+-- This makes large recursive groups count proportionally.
+stmtProgressWeight :: Stmt -> Int
+stmtProgressWeight s = length (stmtProgressNames s)
+
+-- | Top-level bound names used for progress reporting and weighting.
+stmtProgressNames :: Stmt -> [String]
+stmtProgressNames s = nub (map nstr (bound s))
 
 infTopStmt env s                        = do (cs,te,s) <- infEnv env s
                                              --traceM ("* infer " ++ prstrs (bound s))

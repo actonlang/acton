@@ -1,14 +1,14 @@
 Resolving dependencies (fetching if missing)...
   Stale a: source changed
   Hash deltas a: -W_3, ~aaa{src HASH1 -> HASH2, pub HASH1 -> HASH2, impl HASH1 -> HASH2}
-   Finished type check of     a     0.000 s
+   a  Type check done                                                       0.000 s
   Stale b: pub changes in a.aaa HASH1 → HASH2 (used by baa)
   Hash deltas b: ~baa{pub HASH1 -> HASH2, impl HASH1 -> HASH2}
-   Finished type check of     b     0.000 s
+   b  Type check done                                                       0.000 s
   Stale c: pub changes in b.baa HASH1 → HASH2 (used by main)
   Hash deltas c: ~main{impl HASH1 -> HASH2}
-   Finished type check of     c     0.000 s
-   Finished compilation of    a     0.000 s
-   Finished compilation of    b     0.000 s
-   Finished compilation of    c     0.000 s
-   Finished final compilation       0.000 s
+   c  Type check done                                                       0.000 s
+   a  Compilation done                                                      0.000 s
+   b  Compilation done                                                      0.000 s
+   c  Compilation done                                                      0.000 s
+      Final compilation done                                                0.000 s

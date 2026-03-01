@@ -89,6 +89,8 @@ module Acton.Compile
   , BackInput(..)
   , BackJob(..)
   , FrontResult(..)
+  , FrontPass(..)
+  , FrontPassProgress(..)
   , CompileCallbacks(..)
   , defaultCompileCallbacks
   , BackJobCallbacks(..)
@@ -290,12 +292,25 @@ data BackJobResult
   | BackJobFailed BackPassFailure
   deriving (Eq, Show)
 
+data FrontPass
+  = FrontPassKinds
+  | FrontPassTypes
+  deriving (Eq, Show)
+
+data FrontPassProgress = FrontPassProgress
+  { fppPass :: FrontPass
+  , fppCompleted :: Int
+  , fppTotal :: Int
+  , fppCurrent :: Maybe String
+  } deriving (Eq, Show)
+
 
 data CompileCallbacks = CompileCallbacks
   { ccOnDiagnostics :: GlobalTask -> C.CompileOptions -> [Diagnostic String] -> IO ()
   , ccOnFrontResult :: GlobalTask -> C.CompileOptions -> FrontResult -> IO ()
   , ccOnFrontStart :: GlobalTask -> C.CompileOptions -> IO ()
   , ccOnFrontDone :: GlobalTask -> C.CompileOptions -> IO ()
+  , ccOnFrontProgress :: GlobalTask -> C.CompileOptions -> FrontPassProgress -> IO ()
   , ccOnBackJob :: BackJob -> IO ()
   , ccOnInfo :: String -> IO ()
   }
@@ -308,6 +323,7 @@ defaultCompileCallbacks = CompileCallbacks
   , ccOnFrontResult = \_ _ _ -> return ()
   , ccOnFrontStart = \_ _ -> return ()
   , ccOnFrontDone = \_ _ -> return ()
+  , ccOnFrontProgress = \_ _ _ -> return ()
   , ccOnBackJob = \_ -> return ()
   , ccOnInfo = \_ -> return ()
   }
@@ -589,6 +605,7 @@ data CompileHooks = CompileHooks
   { chOnDiagnostics :: GlobalTask -> C.CompileOptions -> [Diagnostic String] -> IO ()
   , chOnFrontStart :: GlobalTask -> IO ()
   , chOnFrontDone :: GlobalTask -> IO ()
+  , chOnFrontProgress :: GlobalTask -> FrontPassProgress -> IO ()
   , chOnFrontResult :: GlobalTask -> FrontResult -> IO ()
   , chOnBackQueued :: TaskKey -> Bool -> IO ()
   , chOnBackStart :: BackJob -> IO ()
@@ -602,6 +619,7 @@ defaultCompileHooks =
     { chOnDiagnostics = \_ _ _ -> return ()
     , chOnFrontStart = \_ -> return ()
     , chOnFrontDone = \_ -> return ()
+    , chOnFrontProgress = \_ _ -> return ()
     , chOnFrontResult = \_ _ -> return ()
     , chOnBackQueued = \_ _ -> return ()
     , chOnBackStart = \_ -> return ()
@@ -631,6 +649,7 @@ runCompilePlan sp gopts plan sched gen hooks = do
         , ccOnFrontResult = \t _ fr -> chOnFrontResult hooks t fr
         , ccOnFrontStart = \t _ -> chOnFrontStart hooks t
         , ccOnFrontDone = \t _ -> chOnFrontDone hooks t
+        , ccOnFrontProgress = \t _ p -> chOnFrontProgress hooks t p
         , ccOnBackJob = \job -> do
             let key = TaskKey (projPath (bjPaths job)) (A.modname (biTypedMod (bjInput job)))
             enqueued <- backQueueEnqueue backQueue gen job backCallbacks
@@ -1320,8 +1339,9 @@ runFrontPasses :: C.GlobalOptions
                -> B.ByteString
                -> (A.ModName -> IO (Maybe B.ByteString))
                -> (A.ModName -> IO (Maybe (M.Map A.Name InterfaceFiles.NameHashInfo)))
+               -> (FrontPassProgress -> IO ())
                -> IO (Either [Diagnostic String] FrontResult)
-runFrontPasses gopts opts paths env0 parsed srcContent srcBytes resolveImportHash resolveNameHashMap = do
+runFrontPasses gopts opts paths env0 parsed srcContent srcBytes resolveImportHash resolveNameHashMap onFrontProgress = do
   createDirectoryIfMissing True (getModPath (projTypes paths) mn)
   core
     `catch` handleGeneral
@@ -1412,6 +1432,17 @@ runFrontPasses gopts opts paths env0 parsed srcContent srcBytes resolveImportHas
           (errs, vals) = partitionEithers (map resolveForName (M.toList deps))
       in if null errs then Right (M.fromList vals) else Left (concat errs)
 
+    emitFrontProgress pass completed total current =
+      onFrontProgress FrontPassProgress
+        { fppPass = pass
+        , fppCompleted = completed
+        , fppTotal = total
+        , fppCurrent = current
+        }
+
+    onTypeProgress total completed current =
+      emitFrontProgress FrontPassTypes completed total current
+
     core = do
       timeStart <- getTime Monotonic
       let isRoot = mn == modName paths
@@ -1424,13 +1455,15 @@ runFrontPasses gopts opts paths env0 parsed srcContent srcBytes resolveImportHas
       timeEnv <- getTime Monotonic
       iff (C.timing gopts) $ putStrLn("    Pass: Make environment: " ++ fmtTime (timeEnv - timeStart))
 
+      emitFrontProgress FrontPassKinds 0 1 Nothing
       kchecked <- Acton.Kinds.check env parsed
+      emitFrontProgress FrontPassKinds 1 1 Nothing
       iff (C.kinds opts && isRoot) $ dump mn "kinds" (Pretty.print kchecked)
       timeKindsCheck <- getTime Monotonic
       iff (C.timing gopts) $ putStrLn("    Pass: Kinds check     : " ++ fmtTime (timeKindsCheck - timeEnv))
 
       -- Type-check and return both the typed AST and the interface NameInfo.
-      (nmod,tchecked,typeEnv,mrefs,tests) <- Acton.Types.reconstruct env kchecked
+      (nmod,tchecked,typeEnv,mrefs,tests) <- Acton.Types.reconstruct (Just onTypeProgress) env kchecked
       -- Module-level src hash uses raw bytes so any source edit forces re-parse.
       let moduleSrcBytesHash = SHA256.hash srcBytes
       -- Store roots so later builds can discover entry points without reparse.
@@ -1820,7 +1853,17 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
             ActonTask{ src = srcContent, srcBytes = srcBytes, atree = m } -> do
               ccOnFrontStart callbacks t optsBuiltin
               builtinEnv0 <- Acton.Env.initEnv (projTypes bPaths) True
-              res <- runFrontPasses gopts optsBuiltin bPaths builtinEnv0 m srcContent srcBytes (getPubHashCached bPaths) (getNameHashMapCached bPaths)
+              res <- runFrontPasses
+                gopts
+                optsBuiltin
+                bPaths
+                builtinEnv0
+                m
+                srcContent
+                srcBytes
+                (getPubHashCached bPaths)
+                (getNameHashMapCached bPaths)
+                (\p -> ccOnFrontProgress callbacks t optsBuiltin p)
               case res of
                 Left diags -> do
                   ccOnFrontDone callbacks t optsBuiltin
@@ -2184,7 +2227,17 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
                     case t' of
                       ParseErrorTask{ parseDiagnostics = diags } -> return (key, Left diags)
                       ActonTask{ src = srcContent, srcBytes = srcBytes, atree = m } -> do
-                        res <- runFrontPasses gopts optsT paths envSnap m srcContent srcBytes resolveImportHash resolveNameHashMap'
+                        res <- runFrontPasses
+                          gopts
+                          optsT
+                          paths
+                          envSnap
+                          m
+                          srcContent
+                          srcBytes
+                          resolveImportHash
+                          resolveNameHashMap'
+                          (\p -> ccOnFrontProgress callbacks t optsT p)
                         case res of
                           Left diags -> return (key, Left diags)
                           Right fr -> do

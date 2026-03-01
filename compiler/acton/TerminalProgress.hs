@@ -30,12 +30,14 @@ initTermProgress gopts = do
     tty <- hIsTerminalDevice stdout
     env <- lookupEnv "ACTON_OSC_PROGRESS"
     let envSetting = env >>= parseBool
-        enabledByTty = (tty || C.tty gopts) && not (C.quiet gopts)
+        enabledByTty = (tty || C.tty gopts) && not (C.quiet gopts) && not (C.noProgress gopts)
         enabled =
-          case envSetting of
-            Just True -> not (C.quiet gopts)
-            Just False -> False
-            Nothing -> enabledByTty
+          if C.noProgress gopts
+            then False
+            else case envSetting of
+                   Just True -> not (C.quiet gopts)
+                   Just False -> False
+                   Nothing -> enabledByTty
     lastRef <- newIORef Nothing
     lastSentRef <- newIORef Nothing
     return TermProgress

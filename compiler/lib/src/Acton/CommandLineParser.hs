@@ -29,6 +29,7 @@ data OptimizeMode = Debug | ReleaseSafe | ReleaseSmall | ReleaseFast deriving (S
 data GlobalOptions = GlobalOptions {
                         color        :: ColorWhen,
                         quiet        :: Bool,
+                        noProgress   :: Bool,
                         timing       :: Bool,
                         tty          :: Bool,
                         verbose      :: Bool,
@@ -200,6 +201,7 @@ globalOptions = GlobalOptions
          <> help "Use colored output (WHEN: auto, always, never)"
         )
     <*> switch (long "quiet"       <> help "Don't print stuff")
+    <*> switch (long "no-progress" <> help "Disable live progress UI")
     <*> switch (long "timing"      <> help "Print timing information")
     <*> switch (long "tty"         <> help "Act as if run from interactive TTY")
     <*> switch (long "verbose"     <> help "Verbose output")
