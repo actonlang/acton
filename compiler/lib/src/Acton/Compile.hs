@@ -3012,8 +3012,8 @@ fetchDependencies gopts paths depOverrides = do
     if isTmp paths
       then return ()
       else do
-        spec0 <- loadBuildSpec (projPath paths)
-        spec <- applyDepOverrides (projPath paths) depOverrides spec0
+        rootSpec0 <- loadBuildSpec (projPath paths)
+        rootSpec <- applyDepOverrides (projPath paths) depOverrides rootSpec0
         unless (C.quiet gopts) $
           putStrLn "Resolving dependencies (fetching if missing)..."
         home <- getHomeDirectory
@@ -3023,54 +3023,99 @@ fetchDependencies gopts paths depOverrides = do
             cacheDir h  = joinPath [globalCache, "p", h]
         createDirectoryIfMissing True globalCache
         createDirectoryIfMissing True depsCache
-
-        let pkgFetches = catMaybes
-              [ mkPkgFetch name dep | (name, dep) <- M.toList (BuildSpec.dependencies spec) ]
-            zigFetches = catMaybes
-              [ mkZigFetch name dep | (name, dep) <- M.toList (BuildSpec.zig_dependencies spec) ]
-
-            mkPkgFetch name dep =
-              case BuildSpec.path dep of
-                Just p | not (null p) -> Nothing
-                _ -> case (BuildSpec.url dep, BuildSpec.hash dep) of
-                       (Just u, Just h) ->
-                         Just (fetchOne "pkg" name u (Just h) cacheDir zigExe globalCache)
-                       (Just _, Nothing) ->
-                         Just (return (Left ("Dependency " ++ name ++ " is missing hash")))
-                       _ -> Nothing
-
-            mkZigFetch name dep =
-              case BuildSpec.zpath dep of
-                Just p | not (null p) -> Nothing
-                _ -> case (BuildSpec.zurl dep, BuildSpec.zhash dep) of
-                       (Just u, Just h) ->
-                         Just (fetchOne "zig" name u (Just h) cacheDir zigExe globalCache)
-                       (Just _, Nothing) ->
-                         Just (return (Left ("Zig dependency " ++ name ++ " is missing hash")))
-                       _ -> Nothing
-
-        results <- mapConcurrently id (pkgFetches ++ zigFetches)
-        let errs = [ e | Left e <- results ]
-        unless (null errs) $ throwProjectError (unlines errs)
-
-        forM_ (M.toList (BuildSpec.dependencies spec)) $ \(name, dep) -> do
-          case BuildSpec.path dep of
-            Just p | not (null p) -> return ()
-            _ -> case BuildSpec.hash dep of
-                   Nothing -> return ()
-                   Just h -> do
-                     let src = cacheDir h
-                         dst = joinPath [depsCache, name ++ "-" ++ h]
-                     exists <- doesDirectoryExist dst
-                     unless exists $ do
-                       srcOk <- doesDirectoryExist src
-                       unless srcOk $
-                         throwProjectError ("Dependency " ++ name ++ " not present in Zig cache after fetch: " ++ src)
-                       when (C.verbose gopts) $
-                         putStrLn ("Copying dependency " ++ name ++ " (" ++ h ++ ") from Zig cache")
-                       copyTree src dst
-          return ()
+        let rootPins = BuildSpec.dependencies rootSpec
+        _ <- walkProject rootPins cacheDir zigExe globalCache depsCache
+                         Data.Set.empty (projPath paths) rootSpec
+        return ()
   where
+    walkProject rootPins cacheDir zigExe globalCache depsCache seen projDir spec = do
+      projAbs <- normalizePathSafe projDir
+      if Data.Set.member projAbs seen
+        then return seen
+        else do
+          selectedDeps <- forM (M.toList (BuildSpec.dependencies spec)) $
+            selectDependency rootPins projAbs
+          let pkgFetches = catMaybes
+                [ mkPkgFetch cacheDir zigExe globalCache name dep | (name, dep) <- selectedDeps ]
+              zigFetches = catMaybes
+                [ mkZigFetch cacheDir zigExe globalCache name dep
+                | (name, dep) <- M.toList (BuildSpec.zig_dependencies spec)
+                ]
+          results <- mapConcurrently id (pkgFetches ++ zigFetches)
+          let errs = [ e | Left e <- results ]
+          unless (null errs) $ throwProjectError (unlines errs)
+          forM_ selectedDeps $ \(name, dep) -> copyPkgDep cacheDir depsCache name dep
+          let seen' = Data.Set.insert projAbs seen
+          foldM (walkDependency rootPins cacheDir zigExe globalCache depsCache projAbs)
+                seen' selectedDeps
+
+    selectDependency rootPins base (depName, dep) = do
+      let (chosenDep, conflict) =
+            case M.lookup depName rootPins of
+              Nothing -> (dep, Nothing)
+              Just pinDep ->
+                if pinDep == dep
+                  then (dep, Nothing)
+                  else (pinDep, Just dep)
+      when (isJust conflict) $
+        unless (C.quiet gopts) $
+          putStrLn ("Warning: dependency '" ++ depName ++ "' in " ++ base
+                    ++ " overridden by root pin")
+      return (depName, chosenDep)
+
+    walkDependency rootPins cacheDir zigExe globalCache depsCache base seen (depName, dep) = do
+      depBase <- resolveDepBase base depName dep
+      depAbs <- normalizePathSafe depBase
+      depExists <- doesDirectoryExist depAbs
+      if not depExists
+        then case BuildSpec.path dep of
+               Just p | not (null p) ->
+                 throwProjectError ("Dependency " ++ depName ++ " path does not exist: " ++ depAbs ++ "\n"
+                                    ++ "Hint: Local dependency paths must point to an Acton project root\n"
+                                    ++ "(directory with src/ and Build.act).")
+               _ -> return seen
+        else do
+          depSpec0 <- loadBuildSpec depAbs
+          depSpec <- applyDepOverrides depAbs depOverrides depSpec0
+          walkProject rootPins cacheDir zigExe globalCache depsCache seen depAbs depSpec
+
+    mkPkgFetch cacheDir zigExe globalCache name dep =
+      case BuildSpec.path dep of
+        Just p | not (null p) -> Nothing
+        _ -> case (BuildSpec.url dep, BuildSpec.hash dep) of
+               (Just u, Just h) ->
+                 Just (fetchOne "pkg" name u (Just h) cacheDir zigExe globalCache)
+               (Just _, Nothing) ->
+                 Just (return (Left ("Dependency " ++ name ++ " is missing hash")))
+               _ -> Nothing
+
+    mkZigFetch cacheDir zigExe globalCache name dep =
+      case BuildSpec.zpath dep of
+        Just p | not (null p) -> Nothing
+        _ -> case (BuildSpec.zurl dep, BuildSpec.zhash dep) of
+               (Just u, Just h) ->
+                 Just (fetchOne "zig" name u (Just h) cacheDir zigExe globalCache)
+               (Just _, Nothing) ->
+                 Just (return (Left ("Zig dependency " ++ name ++ " is missing hash")))
+               _ -> Nothing
+
+    copyPkgDep cacheDir depsCache name dep =
+      case BuildSpec.path dep of
+        Just p | not (null p) -> return ()
+        _ -> case BuildSpec.hash dep of
+               Nothing -> return ()
+               Just h -> do
+                 let src = cacheDir h
+                     dst = joinPath [depsCache, name ++ "-" ++ h]
+                 exists <- doesDirectoryExist dst
+                 unless exists $ do
+                   srcOk <- doesDirectoryExist src
+                   unless srcOk $
+                     throwProjectError ("Dependency " ++ name ++ " not present in Zig cache after fetch: " ++ src)
+                   when (C.verbose gopts) $
+                     putStrLn ("Copying dependency " ++ name ++ " (" ++ h ++ ") from Zig cache")
+                   copyTree src dst
+
     fetchOne kind name url mh cacheDir zigExe globalCache = do
       case mh of
         Just h -> do
