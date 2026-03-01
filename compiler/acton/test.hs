@@ -105,6 +105,49 @@ compilerTests =
         (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../../test/compiler/test_deps/deps/a/build.zig*") ""
         (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../../test/compiler/test_deps/deps/a/out") ""
         runActon "build" ExitSuccess False "../../test/compiler/test_deps/"
+  , testCase "path dependency fetches transitive cached deps before discovery" $ do
+        withSystemTempDirectory "acton-transitive-path-fetch" $ \tmp -> do
+          actonExe <- canonicalizePath "../../dist/bin/acton"
+          env0 <- getEnvironment
+          let homeDir = tmp </> "home"
+              rootProj = tmp </> "root"
+              specProj = rootProj </> "spec"
+              fakeHash = "transitive-hash-does-not-exist"
+              envWithHome = ("HOME", homeDir) : filter ((/= "HOME") . fst) env0
+              mkFp name = Fingerprint.formatFingerprint
+                (Fingerprint.updateFingerprintPrefix
+                  (Fingerprint.fingerprintPrefixForName name) 1)
+          createDirectoryIfMissing True homeDir
+          createDirectoryIfMissing True (rootProj </> "src")
+          createDirectoryIfMissing True (specProj </> "src")
+          writeFile (rootProj </> "Build.act") $ unlines
+            [ "name = \"root_proj\""
+            , "fingerprint = " ++ mkFp "root_proj"
+            , "dependencies = {"
+            , "    \"spec\": (path=\"spec\")"
+            , "}"
+            , "zig_dependencies = {}"
+            ]
+          writeFile (rootProj </> "src" </> "main.act") $ unlines
+            [ "actor main(env):"
+            , "    env.exit(0)"
+            ]
+          writeFile (specProj </> "Build.act") $ unlines
+            [ "name = \"spec_proj\""
+            , "fingerprint = " ++ mkFp "spec_proj"
+            , "dependencies = {"
+            , "    \"ghost\": (hash=\"" ++ fakeHash ++ "\")"
+            , "}"
+            , "zig_dependencies = {}"
+            ]
+          writeFile (specProj </> "src" </> "specproj.act") "def marker() -> int:\n    return 1\n"
+          (returnCode, _cmdOut, cmdErr) <- readCreateProcessWithExitCode
+            (proc actonExe ["build"]) { cwd = Just rootProj, env = Just envWithHome } ""
+          assertEqual "acton should fail for unfetchable transitive dependency" (ExitFailure 1) returnCode
+          assertBool "should fail during dependency fetch/copy, not later Build.act load"
+            ("not present in Zig cache after fetch" `isInfixOf` cmdErr)
+          assertBool "should not fail with missing Build.act in unresolved deps cache path"
+            (not ("Missing Build.act in " `isInfixOf` cmdErr))
   , testCase "path dep build ignores stale dep out/types modules" $ do
         withSystemTempDirectory "acton-stale-path-dep" $ \tmp ->
           do
