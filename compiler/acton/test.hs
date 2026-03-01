@@ -105,6 +105,92 @@ compilerTests =
         (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../../test/compiler/test_deps/deps/a/build.zig*") ""
         (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../../test/compiler/test_deps/deps/a/out") ""
         runActon "build" ExitSuccess False "../../test/compiler/test_deps/"
+  , testCase "path dep build ignores stale dep out/types modules" $ do
+        withSystemTempDirectory "acton-stale-path-dep" $ \tmp ->
+          do
+            actonExe <- canonicalizePath "../../dist/bin/acton"
+            createDirectoryIfMissing True (tmp </> "home")
+            env0 <- getEnvironment
+            let depV1 = tmp </> "dep_v1"
+                depV2 = tmp </> "dep_v2"
+                midProj = tmp </> "mid"
+                appProj = tmp </> "app"
+                envWithHome = ("HOME", tmp </> "home") : filter ((/= "HOME") . fst) env0
+                mkFp name = Fingerprint.formatFingerprint
+                  (Fingerprint.updateFingerprintPrefix
+                    (Fingerprint.fingerprintPrefixForName name) 1)
+                writeBuildActAt dir name deps = do
+                  createDirectoryIfMissing True (dir </> "src")
+                  let depsBody = intercalate ",\n"
+                        [ "    \"" ++ depName ++ "\": (\n"
+                          ++ "        path=\"" ++ depPath ++ "\"\n"
+                          ++ "    )"
+                        | (depName, depPath) <- deps
+                        ]
+                      depsSection =
+                        if null deps
+                          then "dependencies = {}"
+                          else "dependencies = {\n" ++ depsBody ++ "\n}"
+                  writeFile (dir </> "Build.act") $ unlines
+                    [ "name = \"" ++ name ++ "\""
+                    , "fingerprint = " ++ mkFp name
+                    , ""
+                    , depsSection
+                    , ""
+                    , "zig_dependencies = {}"
+                    , ""
+                    ]
+                runBuild dir = readCreateProcessWithExitCode
+                  (proc actonExe ["build", "--always-build"]) { cwd = Just dir, env = Just envWithHome } ""
+                assertBuildOk label (code, out, err) =
+                  when (code /= ExitSuccess) $
+                    assertFailure (label ++ " failed:\nstdout:\n" ++ out ++ "\nstderr:\n" ++ err)
+
+            writeBuildActAt depV1 "dep" []
+            createDirectoryIfMissing True (depV1 </> "src" </> "dep")
+            writeFile (depV1 </> "src" </> "dep.act") $ unlines
+              [ "def base() -> int:"
+              , "    return 1"
+              ]
+            writeFile (depV1 </> "src" </> "dep" </> "legacy.act") $ unlines
+              [ "def legacy() -> int:"
+              , "    return 7"
+              ]
+
+            writeBuildActAt depV2 "dep" []
+            writeFile (depV2 </> "src" </> "dep.act") $ unlines
+              [ "def base() -> int:"
+              , "    return 1"
+              ]
+
+            writeBuildActAt midProj "mid" [("dep", depV1)]
+            createDirectoryIfMissing True (midProj </> "src" </> "mid")
+            writeFile (midProj </> "src" </> "mid" </> "used.act") $ unlines
+              [ "import dep"
+              , ""
+              , "def value() -> int:"
+              , "    return dep.base()"
+              ]
+            writeFile (midProj </> "src" </> "mid" </> "stale.act") $ unlines
+              [ "import dep.legacy"
+              , ""
+              , "def stale() -> int:"
+              , "    return dep.legacy.legacy()"
+              ]
+
+            writeBuildActAt appProj "app" [("mid", midProj), ("dep", depV2)]
+            writeFile (appProj </> "src" </> "main.act") $ unlines
+              [ "import mid.used"
+              , ""
+              , "actor main(env: Env):"
+              , "    print(mid.used.value())"
+              , "    env.exit(0)"
+              ]
+
+            assertBuildOk "initial build of mid dependency" =<< runBuild midProj
+            staleCExists <- doesFileExist (midProj </> "out" </> "types" </> "mid" </> "stale.c")
+            assertBool "expected stale dependency C output to exist" staleCExists
+            assertBuildOk "build of app with transitive dep override" =<< runBuild appProj
   , testCase "build.zig.zon name matches Build.act" $ do
         let prefix = "acton-long-project-name-12345678901234567890-"
         withSystemTempDirectory prefix $ \proj -> do

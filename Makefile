@@ -128,7 +128,7 @@ ACTONC_HS=$(wildcard compiler/lib/src/*.hs compiler/lib/src/*/*.hs compiler/acto
 ACTONLSP_HS=$(wildcard compiler/lsp-server/*.hs)
 # NOTE: we're unsetting CC & CXX to avoid using zig cc & zig c++ for stack /
 # ghc, which doesn't seem to work properly
-dist/bin/acton: compiler/lib/package.yaml.in compiler/acton/package.yaml.in compiler/lsp-server/package.yaml.in compiler/stack.yaml $(ACTONC_HS) $(ACTONLSP_HS) version.mk
+dist/bin/acton: compiler/lib/package.yaml.in compiler/acton/package.yaml.in compiler/lsp-server/package.yaml.in compiler/stack.yaml $(ACTONC_HS) $(ACTONLSP_HS) version.mk dist/builder
 	mkdir -p dist/bin
 	rm -f dist/bin/actonc
 	cd compiler && sed 's,^version: BUILD_VERSION,version: "$(VERSION)",' < lib/package.yaml.in > lib/package.yaml
