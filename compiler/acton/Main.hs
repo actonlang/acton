@@ -1255,10 +1255,14 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
         timePadWidth = nameWidth + length timeSep
         progressTimePadWidth = max 0 (timePadWidth - spinnerPrefixWidth)
         doneIndent = replicate spinnerPrefixWidth ' '
+        abbreviate limit txt
+          | length txt <= limit = txt
+          | limit <= 3 = take limit txt
+          | otherwise = take (limit - 3) txt ++ "..."
         statusColumns modLbl status =
           padRight labelWidth modLbl
           ++ "  "
-          ++ padRight statusWidth status
+          ++ padRight statusWidth (abbreviate statusWidth status)
         doneTimedLine modLbl status t =
           padRight timePadWidth (doneIndent ++ statusColumns modLbl status) ++ fmtTime t
         doneLine modLbl status =
@@ -1285,22 +1289,23 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
           case fppPass p of
             FrontPassKinds -> 0.10 * progressRatio p
             FrontPassTypes -> 0.10 + 0.90 * progressRatio p
-        abbreviate limit txt
-          | length txt <= limit = txt
-          | limit <= 3 = take limit txt
-          | otherwise = take (limit - 3) txt ++ "..."
         frontStatus p =
           let total = max 0 (fppTotal p)
               completed = min total (max 0 (fppCompleted p))
               countPart
                 | total > 0 = " " ++ show completed ++ "/" ++ show total
                 | otherwise = ""
+              fitTypeStatus mCurrent =
+                let prefix = "Type checking "
+                    staticLen = length prefix + length countPart
+                in if staticLen <= statusWidth
+                     then case mCurrent of
+                            Just nm -> prefix ++ abbreviate (statusWidth - staticLen) nm ++ countPart
+                            Nothing -> "Type checking" ++ countPart
+                     else abbreviate (max 0 (statusWidth - length countPart)) prefix ++ countPart
           in case fppPass p of
                FrontPassKinds -> "Kinds check"
-               FrontPassTypes ->
-                 case fppCurrent p of
-                   Just nm -> "Type checking " ++ abbreviate 48 nm ++ countPart
-                   Nothing -> "Type checking" ++ countPart
+               FrontPassTypes -> fitTypeStatus (fppCurrent p)
         frontProgressLine proj mn p =
           progressLine proj mn (frontStatus p)
         progressFinalLine =
