@@ -119,7 +119,7 @@ jobs:
       - name: "Build a release"
         run: make -C ${{ github.workspace }} release BUILD_TIME=${BUILD_TIME}
       - name: "Upload artifact"
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: acton-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}
           path: ${{ github.workspace }}/acton-*
@@ -134,7 +134,7 @@ jobs:
           make -C ${{ github.workspace }} online-tests
       - name: "Upload whole test dir as artifact on test failure"
         if: failure()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: test-debug-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}-${{ github.run_id }}.zip
           path: |
@@ -234,7 +234,7 @@ jobs:
       - name: "Build a release"
         run: make -C ${GITHUB_WORKSPACE} release BUILD_TIME=${BUILD_TIME}
       - name: "Upload artifact"
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: acton-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}
           path: ${{ github.workspace }}/acton-*
@@ -246,7 +246,7 @@ jobs:
           make -C ${GITHUB_WORKSPACE} online-tests
       - name: "Upload whole test dir as artifact on test failure"
         if: failure()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: test-debug-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}-${{ github.run_id }}.zip
           path: |
@@ -336,7 +336,7 @@ jobs:
           ls ${{ steps.vars.outputs.debdir }}/../
           mv ${{ steps.vars.outputs.debdir }}/../acton_* ${{ steps.vars.outputs.debdir }}/
       - name: "Upload artifact"
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: acton-debs-${{ matrix.arch }}
           # Using a wildcard and then deb here to force the entire directory to
@@ -470,7 +470,7 @@ jobs:
           mv /tmp/core* .
       - name: "Upload core file & binaries as artifacts on test failure"
         if: failure()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: coredumps-${{ matrix.os }}-${{ matrix.version }}-${{ github.run_id }}.zip
           path: |
