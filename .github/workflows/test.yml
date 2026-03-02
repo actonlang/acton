@@ -359,12 +359,12 @@ jobs:
           system_profiler SPHardwareDataType
       - name: "Download artifacts for Macos arm64, built on macos-15"
         if: ${{ matrix.os == 'macos-15' || matrix.os == 'macos-26' }}
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: acton-macos-15-aarch64
       - name: "Download artifacts for Macos x86_64, built on macos-15"
         if: ${{ matrix.os == 'macos-15-intel' }}
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: acton-macos-15-x86_64
       - name: "Extract acton"
@@ -434,7 +434,7 @@ jobs:
           env
           cat /proc/cpuinfo
       - name: "Download .deb files"
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: acton-debs-${{ matrix.arch }}
       - name: "Install acton from .deb"
@@ -501,7 +501,7 @@ jobs:
           cd ../perf
           acton test perf --record
       - name: "Download .deb files"
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: acton-debs-amd64
       - name: "Install acton from .deb"
@@ -527,7 +527,7 @@ jobs:
       image: debian:experimental
     steps:
       - name: "Download .deb files"
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: acton-debs-amd64
       - name: "Install acton from .deb"
@@ -650,7 +650,7 @@ jobs:
       - name: "Check out repository code"
         uses: actions/checkout@v6
       - name: "Download deb artifacts"
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           pattern: acton-debs-*
           merge-multiple: true
@@ -750,23 +750,23 @@ jobs:
       - name: "Check out repository code"
         uses: actions/checkout@v6
       - name: "Download artifacts for Macos aarch64, built on macos-15"
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: acton-macos-15-aarch64
       - name: "Download artifacts for Macos x86_64, built on macos-15"
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: acton-macos-15-x86_64
       - name: "Download artifacts for Linux x86_64, built on Debian:12"
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: acton-debian-12-x86_64
       - name: "Download artifacts for Linux arm64, built on Ubuntu:24.04"
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: acton-ubuntu-24.04-arm64v8
       - name: "Download artifacts for Debian Linux on amd64 (x86_64) & arm64 (aarch64)"
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           pattern: acton-debs-*
           merge-multiple: true
@@ -830,23 +830,23 @@ jobs:
       - name: "Check out repository code"
         uses: actions/checkout@v6
       - name: "Download artifacts for Macos aarch64, built on macos-15"
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: acton-macos-15-aarch64
       - name: "Download artifacts for Macos x86_64, built on macos-15"
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: acton-macos-15-x86_64
       - name: "Download artifacts for Linux x86_64, built on Debian:12"
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: acton-debian-12-x86_64
       - name: "Download artifacts for Linux arm64, built on Ubuntu:24.04"
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: acton-ubuntu-24.04-arm64v8
       - name: "Download artifacts for Debian Linux"
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           pattern: acton-debs-*
           merge-multiple: true
@@ -891,7 +891,7 @@ jobs:
           path: apt
           ssh-key: ${{ secrets.APT_DEPLOY_KEY }}
       - name: "Download artifacts for Debian Linux"
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           path: .
           pattern: acton-debs-*
@@ -940,7 +940,7 @@ jobs:
           path: apt
           ssh-key: ${{ secrets.APT_TIP_DEPLOY_KEY }}
       - name: "Download artifacts for Debian Linux"
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           path: .
           pattern: acton-debs-*
