@@ -89,6 +89,9 @@ module Acton.Compile
   , BackInput(..)
   , BackJob(..)
   , FrontResult(..)
+  , FrontTiming(..)
+  , TypeStmtTiming(..)
+  , BackTiming(..)
   , FrontPass(..)
   , FrontPassProgress(..)
   , CompileCallbacks(..)
@@ -288,7 +291,7 @@ backPassFailureMessage (BackPassFailure key msg) =
   "Back pass failed for " ++ tkProj key ++ "/" ++ modNameToString (tkMod key) ++ ": " ++ msg
 
 data BackJobResult
-  = BackJobOk (Maybe TimeSpec)
+  = BackJobOk (Maybe TimeSpec) (Maybe BackTiming)
   | BackJobFailed BackPassFailure
   deriving (Eq, Show)
 
@@ -302,6 +305,31 @@ data FrontPassProgress = FrontPassProgress
   , fppCompleted :: Int
   , fppTotal :: Int
   , fppCurrent :: Maybe String
+  } deriving (Eq, Show)
+
+data TypeStmtTiming = TypeStmtTiming
+  { tstCompleted :: Int
+  , tstTotal :: Int
+  , tstLabel :: String
+  , tstNames :: [String]
+  , tstTime :: TimeSpec
+  } deriving (Eq, Show)
+
+data FrontTiming = FrontTiming
+  { ftEnv :: TimeSpec
+  , ftKinds :: TimeSpec
+  , ftTypes :: TimeSpec
+  , ftTypeStmtTimings :: [TypeStmtTiming]
+  } deriving (Eq, Show)
+
+data BackTiming = BackTiming
+  { btNormalize :: TimeSpec
+  , btDeactorize :: TimeSpec
+  , btCPS :: TimeSpec
+  , btLLift :: TimeSpec
+  , btBoxing :: TimeSpec
+  , btCodeGen :: TimeSpec
+  , btWriteCode :: Maybe TimeSpec
   } deriving (Eq, Show)
 
 
@@ -425,7 +453,7 @@ newBackQueue genRef gopts maxPar = do
                       return (currentWrite == gen)
                 bjcOnStart callbacks job
                 res <- (try $ runBackPasses gopts (bjOpts job) (bjPaths job) (bjInput job) shouldWrite)
-                        :: IO (Either SomeException (Maybe TimeSpec))
+                        :: IO (Either SomeException (Maybe TimeSpec, Maybe BackTiming))
                 currentDone <- readIORef genRef
                 when (currentDone == gen) $
                   case res of
@@ -434,7 +462,7 @@ newBackQueue genRef gopts maxPar = do
                           failure = BackPassFailure key (displayException err)
                       atomically $ modifyTVar' failures (recordFailure gen failure)
                       bjcOnDone callbacks job (BackJobFailed failure)
-                    Right t -> bjcOnDone callbacks job (BackJobOk t)
+                    Right (t, bt) -> bjcOnDone callbacks job (BackJobOk t bt)
                 atomically $ modifyTVar' counts (decPending gen)
   let workers = max 1 maxPar
   replicateM_ workers (forkIO worker)
@@ -900,6 +928,7 @@ data FrontResult = FrontResult
   , frPubHash :: B.ByteString
   , frNameHashes :: [InterfaceFiles.NameHashInfo]
   , frFrontTime :: Maybe TimeSpec
+  , frFrontTiming :: Maybe FrontTiming
   , frBackJob  :: Maybe BackJob
   }
 
@@ -1440,9 +1469,6 @@ runFrontPasses gopts opts paths env0 parsed srcContent srcBytes resolveImportHas
         , fppCurrent = current
         }
 
-    onTypeProgress total completed current =
-      emitFrontProgress FrontPassTypes completed total current
-
     core = do
       timeStart <- getTime Monotonic
       let isRoot = mn == modName paths
@@ -1451,16 +1477,34 @@ runFrontPasses gopts opts paths env0 parsed srcContent srcBytes resolveImportHas
       when (C.parse_ast opts && isRoot) $
         dump mn "parse-ast" (renderStyle prettyAstStyle (ppDoc parsed))
 
+      typeStmtTimingsRef <- newIORef ([] :: [TypeStmtTiming])
+      typeActiveRef <- newIORef Nothing
+      let onTypeProgress total completed current names _weight = do
+            now <- getTime Monotonic
+            mActive <- readIORef typeActiveRef
+            forM_ mActive $ \(label, bindNames, activeTotal, t0) ->
+              modifyIORef' typeStmtTimingsRef
+                ( TypeStmtTiming
+                    { tstCompleted = completed
+                    , tstTotal = activeTotal
+                    , tstLabel = label
+                    , tstNames = bindNames
+                    , tstTime = now - t0
+                    }
+                : )
+            case current of
+              Just label -> writeIORef typeActiveRef (Just (label, names, total, now))
+              Nothing -> writeIORef typeActiveRef Nothing
+            emitFrontProgress FrontPassTypes completed total current
+
       env <- Acton.Env.mkEnv (searchPath paths) env0 parsed
       timeEnv <- getTime Monotonic
-      iff (C.timing gopts) $ putStrLn("    Pass: Make environment: " ++ fmtTime (timeEnv - timeStart))
 
       emitFrontProgress FrontPassKinds 0 1 Nothing
       kchecked <- Acton.Kinds.check env parsed
       emitFrontProgress FrontPassKinds 1 1 Nothing
       iff (C.kinds opts && isRoot) $ dump mn "kinds" (Pretty.print kchecked)
       timeKindsCheck <- getTime Monotonic
-      iff (C.timing gopts) $ putStrLn("    Pass: Kinds check     : " ++ fmtTime (timeKindsCheck - timeEnv))
 
       -- Type-check and return both the typed AST and the interface NameInfo.
       (nmod,tchecked,typeEnv,mrefs,tests) <- Acton.Types.reconstruct (Just onTypeProgress) env kchecked
@@ -1575,13 +1619,22 @@ runFrontPasses gopts opts paths env0 parsed srcContent srcBytes resolveImportHas
                     writeFile docFile htmlDoc
 
                   timeTypeCheck <- getTime Monotonic
-                  iff (C.timing gopts) $ putStrLn("    Pass: Type check      : " ++ fmtTime (timeTypeCheck - timeKindsCheck))
+                  typeStmtTimings <- reverse <$> readIORef typeStmtTimingsRef
 
                   timeFrontEnd <- getTime Monotonic
                   let frontTime = timeFrontEnd - timeStart
                       frontTimeMaybe = if not (quiet gopts opts)
                                          then Just frontTime
                                          else Nothing
+                      frontTimingMaybe =
+                        if C.timing gopts
+                          then Just FrontTiming
+                                 { ftEnv = timeEnv - timeStart
+                                 , ftKinds = timeKindsCheck - timeEnv
+                                 , ftTypes = timeTypeCheck - timeKindsCheck
+                                 , ftTypeStmtTimings = typeStmtTimings
+                                 }
+                          else Nothing
                       backJob = Just BackJob { bjPaths = paths
                                              , bjOpts = opts
                                              , bjInput = BackInput { biTypeEnv = typeEnv
@@ -1595,6 +1648,7 @@ runFrontPasses gopts opts paths env0 parsed srcContent srcBytes resolveImportHas
                                              , frPubHash = modulePubHash
                                              , frNameHashes = nameHashes
                                              , frFrontTime = frontTimeMaybe
+                                             , frFrontTiming = frontTimingMaybe
                                              , frBackJob = backJob
                                              }
 
@@ -1602,49 +1656,57 @@ runFrontPasses gopts opts paths env0 parsed srcContent srcBytes resolveImportHas
 -- | Run the back passes for a single module.
 -- Executes normalization through codegen, writes .c/.h output as needed, and
 -- returns the back-pass elapsed time for logging.
-runBackPasses :: C.GlobalOptions -> C.CompileOptions -> Paths -> BackInput -> IO Bool -> IO (Maybe TimeSpec)
+runBackPasses :: C.GlobalOptions -> C.CompileOptions -> Paths -> BackInput -> IO Bool -> IO (Maybe TimeSpec, Maybe BackTiming)
 runBackPasses gopts opts paths backInput shouldWrite = do
       let mn = A.modname (biTypedMod backInput)
           outbase = outBase paths mn
           relSrcBase = makeRelative (projPath paths) (srcBase paths mn)
       timeStart <- getTime Monotonic
+      writeTimingRef <- newIORef Nothing
 
       (normalized, normEnv) <- Acton.Normalizer.normalize (biTypeEnv backInput) (biTypedMod backInput)
       iff (C.norm opts && mn == (modName paths)) $ dump mn "norm" (Pretty.print normalized)
       timeNormalized <- getTime Monotonic
-      iff (C.timing gopts) $ putStrLn("    Pass: Normalizer      : " ++ fmtTime (timeNormalized - timeStart))
 
       (deacted,deactEnv) <- Acton.Deactorizer.deactorize normEnv normalized
       iff (C.deact opts && mn == (modName paths)) $ dump mn "deact" (Pretty.print deacted)
       timeDeactorizer <- getTime Monotonic
-      iff (C.timing gopts) $ putStrLn("    Pass: Deactorizer     : " ++ fmtTime (timeDeactorizer - timeNormalized))
 
       (cpstyled,cpsEnv) <- Acton.CPS.convert deactEnv deacted
       iff (C.cps opts && mn == (modName paths)) $ dump mn "cps" (Pretty.print cpstyled)
       timeCPS <- getTime Monotonic
-      iff (C.timing gopts) $ putStrLn("    Pass: CPS             : " ++ fmtTime (timeCPS - timeDeactorizer))
 
       (lifted,liftEnv) <- Acton.LambdaLifter.liftModule cpsEnv cpstyled
       iff (C.llift opts && mn == (modName paths)) $ dump mn "llift" (Pretty.print lifted)
       timeLLift <- getTime Monotonic
-      iff (C.timing gopts) $ putStrLn("    Pass: Lambda Lifting  : " ++ fmtTime (timeLLift - timeCPS))
 
       boxed <- Acton.Boxing.doBoxing liftEnv lifted
       iff (C.box opts && mn == (modName paths)) $ dump mn "box" (Pretty.print boxed)
       timeBoxing <- getTime Monotonic
-      iff (C.timing gopts) $ putStrLn("    Pass: Boxing :          " ++ fmtTime (timeBoxing - timeLLift))
 
       let hexHash = B.unpack $ Base16.encode (biImplHash backInput)
           emitLines = not (C.dbg_no_lines opts)
       (n,h,c) <- Acton.CodeGen.generate liftEnv relSrcBase (biSrc backInput) emitLines boxed hexHash
       timeCodeGen <- getTime Monotonic
-      iff (C.timing gopts) $ putStrLn("    Pass: Generating code : " ++ fmtTime (timeCodeGen - timeBoxing))
       let finish = do
             timeEnd <- getTime Monotonic
             let backTime = timeEnd - timeStart
+            mWriteTime <- readIORef writeTimingRef
+            let backTimingMaybe =
+                  if C.timing gopts
+                    then Just BackTiming
+                           { btNormalize = timeNormalized - timeStart
+                           , btDeactorize = timeDeactorizer - timeNormalized
+                           , btCPS = timeCPS - timeDeactorizer
+                           , btLLift = timeLLift - timeCPS
+                           , btBoxing = timeBoxing - timeLLift
+                           , btCodeGen = timeCodeGen - timeBoxing
+                           , btWriteCode = mWriteTime
+                           }
+                    else Nothing
             if not (quiet gopts opts)
-              then return (Just backTime)
-              else return Nothing
+              then return (Just backTime, backTimingMaybe)
+              else return (Nothing, backTimingMaybe)
           forceOut s = evaluate (rnf s)
 
       if C.hgen opts
@@ -1673,7 +1735,7 @@ runBackPasses gopts opts paths backInput shouldWrite = do
                        copyFileWithMetadata (joinPath [projTypes paths, tyFileName]) (joinPath [srcDir paths, tyFileName])
 
                   timeCodeWrite <- getTime Monotonic
-                  iff (C.timing gopts) $ putStrLn("    Pass: Writing code    : " ++ fmtTime (timeCodeWrite - timeCodeGen))
+                  writeIORef writeTimingRef (Just (timeCodeWrite - timeCodeGen))
                                      )
             finish
 
@@ -1901,6 +1963,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
               , frPubHash = pubHash
               , frNameHashes = nameHashes
               , frFrontTime = Nothing
+              , frFrontTiming = Nothing
               , frBackJob = backJob
               }
           emptyFrontResult =
@@ -1910,6 +1973,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
               , frPubHash = B.empty
               , frNameHashes = []
               , frFrontTime = Nothing
+              , frFrontTiming = Nothing
               , frBackJob = Nothing
               }
           cacheFrontResult fr = do
@@ -2424,7 +2488,7 @@ runBackJobs gopts maxPar onStart onDone jobs = do
         new <- forM toStart $ \(ix, job) ->
                  async $ do
                    onStart job
-                   res <- runBackPasses gopts (bjOpts job) (bjPaths job) (bjInput job) (return True)
+                   (res, _timing) <- runBackPasses gopts (bjOpts job) (bjPaths job) (bjInput job) (return True)
                    return (ix, job, res)
         let running' = running ++ new
         writeIORef runningRef running'

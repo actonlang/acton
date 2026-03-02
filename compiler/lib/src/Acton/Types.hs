@@ -40,12 +40,12 @@ import Data.List (intersperse, isPrefixOf, partition)
 import Data.Maybe (mapMaybe)
 import System.IO.Unsafe (unsafePerformIO)
 
-type TypeProgressCallback = Int -> Int -> Maybe String -> IO ()
+type TypeProgressCallback = Int -> Int -> Maybe String -> [String] -> Int -> IO ()
 
-emitTypeProgress :: Maybe TypeProgressCallback -> Int -> Int -> Maybe String -> TypeM ()
-emitTypeProgress Nothing _ _ _ = return ()
-emitTypeProgress (Just cb) total completed current =
-  unsafePerformIO (cb total completed current) `seq` return ()
+emitTypeProgress :: Maybe TypeProgressCallback -> Int -> Int -> Maybe String -> [String] -> Int -> TypeM ()
+emitTypeProgress Nothing _ _ _ _ _ = return ()
+emitTypeProgress (Just cb) total completed current names weight =
+  unsafePerformIO (cb total completed current names weight) `seq` return ()
 
 -- | Extract docstring from the first statement of a Suite if it's a string expression
 extractDocstring :: Suite -> Maybe String
@@ -174,7 +174,7 @@ infTop progressCb env ss                = do --traceM ("\n## infEnv top")
                                              let total = sum (map stmtProgressWeight ss)
                                              (te,ss) <- infTopStmts progressCb env total 0 ss
                                              when (total > 0) $
-                                               emitTypeProgress progressCb total total Nothing
+                                               emitTypeProgress progressCb total total Nothing [] 0
                                              checkSigs env te
                                              return (te, ss)
 
@@ -182,8 +182,10 @@ infTopStmts _ env _ _ []                = return ([], [])
 infTopStmts progressCb env total done (s : ss)
                                          = do done' <- case stmtProgressLabel s of
                                                         Just label -> do
-                                                          emitTypeProgress progressCb total done (Just label)
-                                                          return (done + stmtProgressWeight s)
+                                                          let names = stmtProgressNames s
+                                                              weight = stmtProgressWeight s
+                                                          emitTypeProgress progressCb total done (Just label) names weight
+                                                          return (done + weight)
                                                         Nothing -> return done
                                               (te1, s1) <- infTopStmt env s
                                               (te2, ss2) <- infTopStmts progressCb (define te1 env) total done' ss

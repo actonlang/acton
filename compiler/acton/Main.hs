@@ -1255,14 +1255,40 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
         timePadWidth = nameWidth + length timeSep
         progressTimePadWidth = max 0 (timePadWidth - spinnerPrefixWidth)
         doneIndent = replicate spinnerPrefixWidth ' '
+        abbreviate limit txt
+          | length txt <= limit = txt
+          | limit <= 3 = take limit txt
+          | otherwise = take (limit - 3) txt ++ "..."
         statusColumns modLbl status =
           padRight labelWidth modLbl
           ++ "  "
-          ++ padRight statusWidth status
+          ++ padRight statusWidth (abbreviate statusWidth status)
         doneTimedLine modLbl status t =
           padRight timePadWidth (doneIndent ++ statusColumns modLbl status) ++ fmtTime t
         doneLine modLbl status =
           doneIndent ++ statusColumns modLbl status
+        detailStmtIndent = replicate (spinnerPrefixWidth + 2) ' '
+        detailBindsIndent = replicate (spinnerPrefixWidth + 4) ' '
+        detailLine indent msg =
+          indent ++ msg
+        detailTimedLine indent msg t =
+          padRight timePadWidth (detailLine indent msg) ++ fmtTime t
+        frontTimingLine ft =
+          "Front timing: env " ++ fmtTime (ftEnv ft)
+          ++ ", kinds " ++ fmtTime (ftKinds ft)
+          ++ ", types " ++ fmtTime (ftTypes ft)
+        typeStmtTimingLine st =
+          "Type stmt " ++ show (tstCompleted st) ++ "/" ++ show (tstTotal st)
+        typeStmtBindsLine st =
+          "binds: " ++ intercalate ", " (tstNames st)
+        backTimingLine bt =
+          "Back timing: normalize " ++ fmtTime (btNormalize bt)
+          ++ ", deactorize " ++ fmtTime (btDeactorize bt)
+          ++ ", cps " ++ fmtTime (btCPS bt)
+          ++ ", llift " ++ fmtTime (btLLift bt)
+          ++ ", boxing " ++ fmtTime (btBoxing bt)
+          ++ ", codegen " ++ fmtTime (btCodeGen bt)
+          ++ maybe "" (\t -> ", write " ++ fmtTime t) (btWriteCode bt)
         frontDoneLine proj mn t =
           doneTimedLine (projectModuleLabel proj mn) frontDoneStatus t
         backDoneLine proj mn mt =
@@ -1285,22 +1311,23 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
           case fppPass p of
             FrontPassKinds -> 0.10 * progressRatio p
             FrontPassTypes -> 0.10 + 0.90 * progressRatio p
-        abbreviate limit txt
-          | length txt <= limit = txt
-          | limit <= 3 = take limit txt
-          | otherwise = take (limit - 3) txt ++ "..."
         frontStatus p =
           let total = max 0 (fppTotal p)
               completed = min total (max 0 (fppCompleted p))
               countPart
                 | total > 0 = " " ++ show completed ++ "/" ++ show total
                 | otherwise = ""
+              fitTypeStatus mCurrent =
+                let prefix = "Type checking "
+                    staticLen = length prefix + length countPart
+                in if staticLen <= statusWidth
+                     then case mCurrent of
+                            Just nm -> prefix ++ abbreviate (statusWidth - staticLen) nm ++ countPart
+                            Nothing -> "Type checking" ++ countPart
+                     else abbreviate (max 0 (statusWidth - length countPart)) prefix ++ countPart
           in case fppPass p of
                FrontPassKinds -> "Kinds check"
-               FrontPassTypes ->
-                 case fppCurrent p of
-                   Just nm -> "Type checking " ++ abbreviate 48 nm ++ countPart
-                   Nothing -> "Type checking" ++ countPart
+               FrontPassTypes -> fitTypeStatus (fppCurrent p)
         frontProgressLine proj mn p =
           progressLine proj mn (frontStatus p)
         progressFinalLine =
@@ -1344,8 +1371,11 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
           creditBack (backJobKey job)
           when (not (quiet gopts optsPlan)) $
             case result of
-              BackJobOk mtime ->
+              BackJobOk mtime mtiming -> do
                 logLine (backDoneLine (projPath (bjPaths job)) (A.modname (biTypedMod (bjInput job))) mtime)
+                when (C.timing gopts) $
+                  forM_ mtiming $ \bt ->
+                    logLine (detailLine detailStmtIndent (backTimingLine bt))
               BackJobFailed failure ->
                 logLine (backFailLine (projPath (bjPaths job))
                                       (A.modname (biTypedMod (bjInput job)))
@@ -1355,8 +1385,16 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
               gate (progressDoneTask progressUI progressState (gtKey t))
               logDiagnostics optsT diags
           , chOnFrontResult = \t fr -> do
-              forM_ (frFrontTime fr) (\tFront ->
-                logLine (frontDoneLine (tkProj (gtKey t)) (tkMod (gtKey t)) tFront))
+              forM_ (frFrontTime fr) $ \tFront -> do
+                let proj = tkProj (gtKey t)
+                    mn = tkMod (gtKey t)
+                logLine (frontDoneLine proj mn tFront)
+                when (C.timing gopts) $
+                  forM_ (frFrontTiming fr) $ \ft -> do
+                    logLine (detailLine detailStmtIndent (frontTimingLine ft))
+                    forM_ (ftTypeStmtTimings ft) $ \st -> do
+                      logLine (detailTimedLine detailStmtIndent (typeStmtTimingLine st) (tstTime st))
+                      logLine (detailLine detailBindsIndent (typeStmtBindsLine st))
               case frBackJob fr of
                 Nothing -> creditBack (gtKey t)
                 Just _ -> return ()
