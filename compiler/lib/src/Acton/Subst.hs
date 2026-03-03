@@ -219,7 +219,9 @@ instance VSubst Type where
     vsubst s (TCon l c)             = TCon l (vsubst s c)
     vsubst s (TFun l fx p k t)      = TFun l (vsubst s fx) (vsubst s p) (vsubst s k) (vsubst s t)
     vsubst s (TTuple l p k)         = TTuple l (vsubst s p) (vsubst s k)
-    vsubst s (TOpt l t)             = TOpt l (vsubst s t)
+    vsubst s (TOpt l t)             = case vsubst s t of
+                                         t'@TOpt{} -> t'
+                                         t' -> TOpt l t'
     vsubst s (TRow l k n t r)       = TRow l k n (vsubst s t) (vsubst s r)
     vsubst s (TStar l k r)          = TStar l k (vsubst s r)
     vsubst s (TNone l)              = TNone l
