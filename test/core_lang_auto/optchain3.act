@@ -1,0 +1,26 @@
+class Dddd(value):
+    def __init__(self, ddd: ?dict[str,list[int]] = None):
+        self.ddd = ddd
+
+actor main(env):
+    lst: ?list[int] = [1,3,5,8]
+    a = lst?[2]
+    if a != 5:
+        print("a is wrong")
+        env.exit(1)
+    d = {"a":[1,2,3], "b":list(range(30))}
+    if d.get("a") ?[0] != 1:
+        print("Wrong value 1")
+        env.exit(1)
+    if d.get("c") ?[5] is not None:
+        print("Wrong value 2")
+        env.exit(1)
+    
+    d2 = Dddd(d)
+    e = d2 ?. ddd ?. get("b") ?[1::3] ?[5]
+    if e != 16:
+        print("e is wrong")
+        env.exit(1)
+  
+    env.exit(0)
+ 

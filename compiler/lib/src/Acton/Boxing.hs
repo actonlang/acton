@@ -232,6 +232,9 @@ instance Boxing Expr where
                                          return (ws1++ws2, eCallP f1 p1)
     boxing env (TApp l f ts)        = do (ws1,f1) <- boxing env f
                                          return (ws1, TApp l f1 ts)
+    boxing env (Let l ss e)         = do (ws1, ss') <- boxing env ss
+                                         (ws2, e') <- boxing env e
+                                         return (ws1++ws2, Let l ss' e')
     boxing env (Async l e)          = do (ws1,e1) <- boxing env e
                                          return (ws1, Async l e1)
     boxing env (Await l e)          = do (ws1,e1) <- boxing env e

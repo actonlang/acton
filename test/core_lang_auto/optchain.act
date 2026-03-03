@@ -1,0 +1,30 @@
+class Gamma():
+    def __init__(self, s: ?str):
+        self.s = s
+
+class Beta():
+    def __init__(self, c: ?Gamma): 
+        self.c = c
+
+class Alpha():
+    def __init__(self, b: ?Beta):
+        self.b = b
+
+def check_equal(env,a,b):
+    if a != b:
+        print(a,"is not equal to ",b)
+        env.exit(1)
+
+actor main(env):
+
+    a1 = None
+    check_equal(env,a1?.b?.c?.s, None)
+
+    a2 = Alpha(Beta(None))
+    check_equal(env,a2?.b?.c?.s, None)
+
+    a3 = Alpha(Beta(Gamma("hello")))
+    check_equal(env,a3?.b?.c?.s, "hello")
+
+    env. exit(0)
+    

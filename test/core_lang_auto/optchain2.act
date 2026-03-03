@@ -1,0 +1,18 @@
+class Point(value):
+    def __init__(self, x: int, y: int):
+        self.x = x
+        self.y = y
+
+class Alpha(value):
+    def __init__(self, lst: ?list[Point] = None):
+        self.lst = lst
+
+actor main(env):
+     a = Alpha([Point(n,5) for n in range(10)])
+     b = a ?. lst ?[1::2] ?[4] ?. x
+#     p: ?Point = Point(3,5)
+     if b != 9:
+         print("Wrong value")
+         env.exit(0)
+     env.exit(0)
+     
