@@ -1889,55 +1889,59 @@ instance Infer Expr where
                                                                   "\nHint: you may need to test if " ++ Pretty.print e ++ " is not None")
                                              return  (con : cs, t0, eCall (eVar w) [e'])
 
---    infer env (OptDot l None{} n)      = do t1 <- newUnivar env
---                                            t2 <- newUnivar env
---                                            w <- newWitness
---                                            return ([Sel (Simple l (prstr n ++ " is not a known attribute of any type")) env w t1 n t2], tOpt t2, eNone)
-
-    infer env (OptDot l e n)           = do t1 <- newUnivar env
-                                            (cs,e') <- inferSub env (tOpt t1) e
+    infer env (OptDot l e n mba)       = do te <- newUnivar env  -- type of e is subtype of tOpt te
+                                            (cs1,e') <- inferSub env (tOpt te) e
                                             w <- newWitness
                                             t2 <- newUnivar env
                                             x <- newTmp
-                                            return (Sel (locinfo2 865 e) env w t1 n (tOpt t2) : cs,
-                                                    tOpt t2,
-                                                    eLet [sAssign (pVar x (tOpt t1)) e']
-                                                         (eCond (eCall (eVar w) [eCall (tApp (eQVar primCAST) [tOpt t1, t1]) [eVar x]])
-                                                                (eCall (tApp (eQVar primISNOTNONE) [t1]) [eVar x])
-                                                                eNone)
-                                                   )
-
---    infer env (OptDot l e n)           = do x <- newTmp
---                                            t <- newUnivar env
---                                            infer env (eCall (eLambda [(x,t)] (OptDot l (eVar x) n)) [e])
-
+                                            case mba of
+                                                 Nothing -> do
+                                                    return (Sel (locinfo2 865 e) env w te n (tOpt t2) : cs1,
+                                                            tOpt t2,
+                                                            eLet [sAssign (pVar x (tOpt te)) e']
+                                                                 (eCond (eCall (eVar w) [eCAST (tOpt te) te (eVar x)])
+                                                                        (eCall (tApp (eQVar primISNOTNONE) [te]) [eVar x])
+                                                                        eNone)
+                                                          )
+                                                 Just (ps,ks) -> do
+                                                    y <- newTmp
+                                                    let env1 = define [(x,NVar (tOpt te)),(y,NVar t2)] env
+                                                    (cs2,t,e'') <- inferCall env1 True NoLoc (eVar y) ps ks
+                                                    return (Sel (locinfo2 865 e) env w te n t2 : cs1++cs2,
+                                                            t,
+                                                            eLet [sAssign (pVar x (tOpt te)) e',  -- inferCall does not handle TApp nodes so we need also y.
+                                                                  sAssign (pVar y t2) (eCall (eVar w) [eCAST (tOpt te) te (eVar x)])] -- y = e.n
+                                                                  (eCond e''
+                                                                        (eCall (tApp (eQVar primISNOTNONE) [te]) [eVar x])
+                                                                        eNone))
+  
     infer env e@(OptCall l f ps ks)     = notYetExpr e
     
     infer env (OptIndex l e ix)         = do ti <- newUnivar env  --type of index
                                              (cs1,ix') <- inferSub env ti ix
                                              t0 <- newUnivar env -- type of indexed element
                                              w <- newWitness
-                                             te <- newUnivar env -- type of indexed object 
+                                             te <- newUnivar env -- type of object indexed from
                                              (cs2,e') <- inferSub env (tOpt te) e
                                              x <- newTmp
                                              return (Proto (locinfo2 765 e) env w te (pIndexed ti t0) : cs1++cs2,
                                                      tOpt t0,
                                                      eLet [sAssign (pVar x (tOpt te)) e']
-                                                     (eCond ( eCall (eDot (eVar w) getitemKW) [eCall (tApp (eQVar primCAST) [tOpt te, te]) [eVar x], ix'])
+                                                     (eCond (eCall (eDot (eVar w) getitemKW) [eCAST (tOpt te) te (eVar x), ix'])
                                                             (eCall (tApp (eQVar primISNOTNONE) [te]) [eVar x])
                                                             eNone)
                                                    )
 
     infer env (OptSlice l e sl)         = do (cs1,sl') <- inferSlice env sl
                                              te <- newUnivar env
-                                             (cs2,e') <- inferSub env(tOpt te) e
+                                             (cs2,e') <- inferSub env (tOpt te) e
                                              t0 <- newUnivar env
                                              w <- newWitness
                                              x <- newTmp 
-                                             return (Proto (locinfo2 775 e) env w te (pSliceable t0) :  cs1++cs2,
+                                             return (Proto (locinfo2 775 e) env w te (pSliceable t0) : cs1++cs2,
                                                      tOpt te,
                                                      eLet [sAssign (pVar x (tOpt te)) e']
-                                                     (eCond (eCall (eDot (eVar w) getsliceKW) [eCall (tApp (eQVar primCAST) [tOpt te, te]) [eVar x],  sliz2exp sl'])
+                                                     (eCond (eCall (eDot (eVar w) getsliceKW) [eCAST (tOpt te) te (eVar x),  sliz2exp sl'])
                                                             (eCall (tApp (eQVar primISNOTNONE) [te]) [eVar x])
                                                             eNone)
                                                    )

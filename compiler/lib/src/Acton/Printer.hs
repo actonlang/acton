@@ -177,7 +177,9 @@ instance Pretty Expr where
     pretty (Rest _ e n)             = pretty e <> dot <> text "~" <> pretty n
     pretty (DotI _ e i)             = pretty e <> dot <> pretty i
     pretty (RestI _ e i)            = pretty e <> dot <> text "~" <> pretty i
-    pretty (OptDot _ e n)           = pretty e <> text "?." <> pretty n
+    pretty (OptDot _ e n Nothing)   = pretty e <> text "?." <> pretty n
+    pretty (OptDot _ e n (Just (ps,ks)))
+                                    = pretty e <> text "?." <> pretty n <> parens (pretty (ps,ks))
     pretty (OptCall _ e ps ks)
         | atomic e                  = pretty e <> text "?" <> parens (pretty (ps,ks))
         | otherwise                 = parens (pretty e) <> text "?" <> parens (pretty (ps,ks))

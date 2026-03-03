@@ -1777,14 +1777,15 @@ atom_expr = do
                       (do
                          symbol "?."
                          nm <- name
-                         return (\a -> S.OptDot (loc a `upto` loc nm) a nm))
+                         mba <- optional (parens funargs)
+                         return (\a -> S.OptDot (loc a `upto` loc mba) a nm mba))
                      <|>
-                     (do
-                        symbol"?("
-                        (ps,ks) <- funargs
-                        symbol ")"
-                        return (\a -> S.OptCall (loc a `upto` loc ks) a ps ks))
-                     <|>
+                     -- (do
+                     --    symbol"?("
+                     --    (ps,ks) <- funargs
+                     --    symbol ")"
+                     --    return (\a -> S.OptCall (loc a `upto` loc ks) a ps ks))
+                     -- <|>
                       (do
                          symbol "?["
                          optSliceOrIndex <* symbol "]")

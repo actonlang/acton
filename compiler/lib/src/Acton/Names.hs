@@ -273,7 +273,9 @@ instance Vars Expr where
     freeQ (CompOp _ e ops)          = freeQ e ++ freeQ ops
     freeQ (UnOp _ o e)              = freeQ e
     freeQ (Dot _ e n)               = freeQ e
-    freeQ (OptDot _ e n)            = freeQ e
+    freeQ (OptDot _ e n Nothing)    = freeQ e
+    freeQ (OptDot _ e n (Just (ps,ks)))
+                                    = freeQ e ++ freeQ ps ++ freeQ ks
     freeQ (Rest _ e n)              = freeQ e
     freeQ (DotI _ e i)              = freeQ e
     freeQ (RestI _ e i)             = freeQ e
