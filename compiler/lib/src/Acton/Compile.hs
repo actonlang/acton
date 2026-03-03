@@ -214,7 +214,7 @@ import Control.Concurrent.MVar
 import Control.Concurrent (forkIO, myThreadId, threadCapability, threadDelay)
 import Control.Concurrent.STM (TChan, TVar, atomically, check, modifyTVar', newTChanIO, newTVarIO, readTChan, readTVar, writeTChan)
 import Control.DeepSeq (rnf)
-import Control.Exception (Exception, IOException, SomeException, catch, displayException, evaluate, finally, mask_, throwIO, try)
+import Control.Exception (Exception, IOException, SomeAsyncException, SomeException, catch, displayException, evaluate, finally, fromException, mask_, throwIO, try)
 import Control.Monad
 import Data.Bits (shiftL, shiftR, (.|.))
 import Data.Char (isAlpha, isDigit, isHexDigit, isSpace, toLower)
@@ -2312,45 +2312,70 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
                             cacheFrontResult fr
                       _ -> error ("Internal error: unexpected task " ++ show t')
                   runImplRefresh = do
-                    when (C.verbose gopts) $ do
-                      let fmtDelta (qn, old, new) = prstr qn ++ " " ++ short8 old ++ " → " ++ short8 new ++ fmtUsers implUsers qn
-                      ccOnInfo callbacks ("  Stale " ++ modNameToString mn ++ ": impl changes in " ++ Data.List.intercalate ", " (map fmtDelta implDeltas))
-                    tyRes <- readTyFile
-                    case tyRes of
-                      Left diags -> return (key, Left diags)
-                      Right (_ms, nmod, tmod, moduleSrcBytesHash, modulePubHash, _moduleImplHash, imps, nameHashes, roots, tests, mdoc) -> do
-                        parsedRes <- parseActFile sp mn actFile
-                        case parsedRes of
-                          Left diags -> return (key, Left diags)
-                          Right (snap, parsedMod) -> do
-                            env1 <- Acton.Env.mkEnv (searchPath paths) envSnap parsedMod
-                            let nameSrcHashes =
-                                  M.fromList [ (InterfaceFiles.nhName nh, InterfaceFiles.nhSrcHash nh)
-                                             | nh <- nameHashes
-                                             ]
-                                nameKeys = M.keysSet nameSrcHashes
-                                nameImplHashes0 = Hashing.nameHashesFromItems (Hashing.topLevelItems tmod)
-                                nameImplHashes = M.filterWithKey (\k _ -> Data.Set.member k nameKeys) nameImplHashes0
-                                localNames = nameKeys
-                                implDepsRaw0 = Hashing.implDepsFromItems (Hashing.topLevelItems tmod)
-                                implDepsRaw = M.fromList
-                                  [ (n, M.findWithDefault [] n implDepsRaw0)
-                                  | n <- M.keys nameSrcHashes
-                                  ]
-                                hashEnv = setMod mn env1
-                                (implLocalDeps, implExtDeps) = Hashing.splitDeps mn hashEnv localNames implDepsRaw
-                            implExtRes <- resolveDepHashes "impl" InterfaceFiles.nhImplHash implExtDeps
-                            case implExtRes of
-                              Left diags -> return (key, Left diags)
-                              Right implExtHashes -> do
-                                let updatedNameHashes =
-                                      Hashing.refreshImplHashes nameHashes nameImplHashes implLocalDeps implExtHashes
-                                    moduleImplHash = Hashing.moduleImplHashFromNameHashes updatedNameHashes
-                                InterfaceFiles.writeFile tyFile moduleSrcBytesHash modulePubHash moduleImplHash imps updatedNameHashes roots tests mdoc nmod tmod
-                                let I.NModule ifaceTE _mdoc = nmod
-                                    backJob = Just (mkBackJob env1 tmod (Source.ssText snap) moduleImplHash)
-                                    fr = mkFrontResult ifaceTE mdoc modulePubHash updatedNameHashes backJob
-                                cacheFrontResult fr
+                    let rerunFront = do
+                          when (C.verbose gopts) $
+                            ccOnInfo callbacks ("  Stale " ++ modNameToString mn ++ ": impl refresh encountered unresolved dep hashes; rerunning front passes")
+                          runFront
+                        handleSyncFailure :: SomeException -> IO (TaskKey, Either [Diagnostic String] FrontResult)
+                        handleSyncFailure err =
+                          if isJust (fromException err :: Maybe SomeAsyncException)
+                            then throwIO err
+                            else rerunFront
+                        handleImplRefreshException :: SomeException -> IO (TaskKey, Either [Diagnostic String] FrontResult)
+                        handleImplRefreshException = handleSyncFailure
+                    (do
+                      when (C.verbose gopts) $ do
+                        let fmtDelta (qn, old, new) = prstr qn ++ " " ++ short8 old ++ " → " ++ short8 new ++ fmtUsers implUsers qn
+                        ccOnInfo callbacks ("  Stale " ++ modNameToString mn ++ ": impl changes in " ++ Data.List.intercalate ", " (map fmtDelta implDeltas))
+                      tyRes <- readTyFile
+                      case tyRes of
+                        Left diags -> return (key, Left diags)
+                        Right (_ms, nmod, tmod, moduleSrcBytesHash, modulePubHash, _moduleImplHash, imps, nameHashes, roots, tests, mdoc) -> do
+                          parsedRes <- parseActFile sp mn actFile
+                          case parsedRes of
+                            Left diags -> return (key, Left diags)
+                            Right (snap, parsedMod) -> do
+                              let nameSrcHashes =
+                                    M.fromList [ (InterfaceFiles.nhName nh, InterfaceFiles.nhSrcHash nh)
+                                               | nh <- nameHashes
+                                               ]
+                                  nameKeys = M.keysSet nameSrcHashes
+                                  nameImplHashes0 = Hashing.nameHashesFromItems (Hashing.topLevelItems tmod)
+                                  nameImplHashes = M.filterWithKey (\k _ -> Data.Set.member k nameKeys) nameImplHashes0
+                                  localNames = nameKeys
+                                  implDepsRaw0 = Hashing.implDepsFromItems (Hashing.topLevelItems tmod)
+                                  implDepsRaw = M.fromList
+                                    [ (n, M.findWithDefault [] n implDepsRaw0)
+                                    | n <- M.keys nameSrcHashes
+                                    ]
+                              envRes <- (try :: IO Acton.Env.Env0 -> IO (Either SomeException Acton.Env.Env0)) $
+                                Acton.Env.mkEnv (searchPath paths) envSnap parsedMod
+                              case envRes of
+                                Left err -> handleSyncFailure err
+                                Right env1 -> do
+                                  depRes <- (try :: IO a -> IO (Either SomeException a)) $ do
+                                    let hashEnv = setMod mn env1
+                                        (implLocalDeps, implExtDeps) = Hashing.splitDeps mn hashEnv localNames implDepsRaw
+                                        depCount = sum (map length (M.elems implLocalDeps))
+                                                 + sum (map length (M.elems implExtDeps))
+                                    -- Force dep maps now so stale aliases/missing names
+                                    -- are handled via the front-pass fallback path.
+                                    _ <- evaluate depCount
+                                    implExtRes <- resolveDepHashes "impl" InterfaceFiles.nhImplHash implExtDeps
+                                    return (implLocalDeps, implExtRes)
+                                  case depRes of
+                                    Left err -> handleSyncFailure err
+                                    Right (_, Left _) -> rerunFront
+                                    Right (implLocalDeps, Right implExtHashes) -> do
+                                      let updatedNameHashes =
+                                            Hashing.refreshImplHashes nameHashes nameImplHashes implLocalDeps implExtHashes
+                                          moduleImplHash = Hashing.moduleImplHashFromNameHashes updatedNameHashes
+                                      InterfaceFiles.writeFile tyFile moduleSrcBytesHash modulePubHash moduleImplHash imps updatedNameHashes roots tests mdoc nmod tmod
+                                      let I.NModule ifaceTE _mdoc = nmod
+                                          backJob = Just (mkBackJob env1 tmod (Source.ssText snap) moduleImplHash)
+                                          fr = mkFrontResult ifaceTE mdoc modulePubHash updatedNameHashes backJob
+                                      cacheFrontResult fr
+                      ) `catch` handleImplRefreshException
                   runCodegenRefresh = do
                     when (C.verbose gopts) $ do
                       let suffix = maybe "" formatCodegenDelta mCodegenStatus
