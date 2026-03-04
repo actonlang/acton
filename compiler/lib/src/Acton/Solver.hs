@@ -36,15 +36,17 @@ import Acton.TypeEnv
 
 run_new_solver = False
 
-newSimplify env te cs
---  | run_new_solver                          = simplifyNew env cs
-  | otherwise                               = simplifyNew env cs -- simplify env te cs
+newSimplify env te cs                       = simplifyNew env cs
+
+oldSimplify env te cs                       = simplify env te cs
+
+noSimplify env te cs                        = return (cs, [])
 
 
 -- Reduce conservatively and remove entailed constraints
 simplifyNew                                 :: Env -> Constraints -> TypeM (Constraints,Equations)
 simplifyNew env cs                          = do css <- groupCs env cs
-                                                 --traceM ("#### SIMPLIFY NEW" ++ prstrs (map length css))
+                                                 --traceM ("#### SIMPLIFY NEW " ++ prstr (length cs))
                                                  --sequence [ traceM ("## long:\n" ++ render (nest 4 $ vcat $ map pretty cs)) | cs <- css, length cs > 500 ]
                                                  simplifyGroupsNew env css
 
@@ -59,7 +61,7 @@ simplifyGroupsNew env (cs:css)              = do --traceM ("\n\n######### simpli
 simplify                                    :: Env -> TEnv -> Constraints -> TypeM (Constraints,Equations)
 simplify env te cs                          = do css <- groupCs env cs
                                                  te <- usubst te
-                                                 --traceM ("#### SIMPLIFY " ++ prstrs (map length css))
+                                                 --traceM ("#### SIMPLIFY " ++ prstr (length cs))
                                                  --sequence [ traceM ("## long:\n" ++ render (nest 4 $ vcat $ map pretty cs)) | cs <- css, length cs > 500 ]
                                                  simplifyGroups env te css
 
@@ -73,8 +75,9 @@ simplify'                                   :: Env -> TEnv -> Equations -> Const
 simplify' env te eq []                      = return ([], eq)
 simplify' env te eq cs                      = do eq <- reduce eq cs
                                                  cs <- usubst =<< collectDeferred
-                                                 --traceM ("## Improving " ++ show (length cs))
-                                                 --traceM ("## Improving:\n" ++ render (nest 8 $ vcat $ map pretty cs))
+                                                 let len = length cs
+                                                 --when (len > 0) $ traceM ("## Improving " ++ show len)
+                                                 --when (len > 0) $ traceM ("## Improving:\n" ++ render (nest 8 $ vcat $ map pretty cs))
                                                  env <- usubst env      -- Remove....
                                                  te <- usubst te
                                                  improve env te eq cs
@@ -246,7 +249,6 @@ data Rank                                   = RRed { cstr :: Constraint }
                                             | RSealed { tgt :: TUni }
                                             | RTry { tgt :: TUni, alts :: [Type], rev :: Bool }
                                             | RVar { tgt :: TUni, alts :: [Type] }
-                                            | RImp QBinds [Rank]
                                             | RSkip
                                             deriving (Show)
 
@@ -256,7 +258,6 @@ instance Eq Rank where
     RTry v1 _ _ == RTry v2 _ _              = v1 == v2
     RVar v1 _   == RVar v2 _                = v1 == v2
     RSkip       == RSkip                    = True
-    RImp _ _    == RImp _ _                 = False
     _           == _                        = False
 
 instance Pretty Rank where
@@ -264,7 +265,6 @@ instance Pretty Rank where
     pretty (RSealed v)                      = pretty v <+> text "sealed"
     pretty (RTry v ts rev)                  = pretty v <+> braces (commaSep pretty ts) Pretty.<> (if rev then char '\'' else empty)
     pretty (RVar v ts)                      = pretty v <+> char '~' <+> commaSep pretty ts
-    pretty (RImp q rs)                      = prettyQual q <+> braces (commaSep pretty rs)
     pretty RSkip                            = text "<skip>"
 
 solve                                       :: Env -> (Constraint -> Bool) ->
@@ -313,11 +313,7 @@ solve' env select hist te eq cs
   where (solve_cs, keep_cs)                 = partition select cs
         keep_evidence                       = [ hasWitness env t p | Proto _ env _ t p <- keep_cs ]
 
-        (vargoals, goals)                   = span isVar $ sortOn deco $ flatten $ condense env rnks
-
-        flatten []                          = []
-        flatten (RImp _ rs' : rs)           = flatten (rs' ++ rs)
-        flatten (r : rs)                    = r : flatten rs
+        (vargoals, goals)                   = span isVar $ sortOn deco $ condense env rnks
 
         rnks                                = map (rank env) solve_cs
 
@@ -350,6 +346,7 @@ solve' env select hist te eq cs
                                                  unify (noinfo 5) (tUni v) t
                                                  (cs,eq) <- quicksimp env eq cs
                                                  hist <- usubst hist
+                                                 te <- usubst te
                                                  solve' env select hist te eq cs
         tryAlt v t                          = do t <- instwild env (uvkind v) t
                                                  --traceM ("  # trying " ++ prstr v ++ " = " ++ prstr t)
@@ -357,6 +354,7 @@ solve' env select hist te eq cs
                                                  proceed (t:hist) eq cs
         proceed hist eq cs                  = do te <- usubst te
                                                  (cs,eq) <- simplify' env te eq cs
+                                                 te <- usubst te
                                                  hist <- usubst hist
                                                  solve' env select hist te eq cs
 
@@ -369,8 +367,6 @@ solve' env select hist te eq cs
 --                        rev'                = (or $ r : map rev rs) || v `elem` posvs       -- (new, matches new solver but picks bad order for lower None)
                         rev'                = (and $ r : map rev rs) || v `elem` posvs        -- (old, incorrect in general, but avoids the None problem)
                 cond (RVar v as : rs)       = RVar v (foldr union as $ map alts rs)
-                cond [RImp q rs]            = RImp q (condense env1 rs)
-                  where env1                = defineTVars q env
                 cond (RSkip : rs)           = RSkip
                 cond rs                     = error ("### condense " ++ show rs)
 
@@ -1648,43 +1644,39 @@ improve env te eq cs
                 optCon TOpt{}                   = True
                 optCon _                        = False
 
-multiUBounds cs                         = Map.assocs $ Map.filter ((>1) . length) $ foldr (Map.unionWith app1) Map.empty maps
+multiUBounds cs                         = Map.assocs $ Map.map deOpt $ Map.filter ((>1) . length) $ bnds cs
   where
-    maps                                = bnds cs : imps cs
-
     bnds []                             = Map.empty
     bnds (Cast _ _ TUni{} TUni{} : cs)  = bnds cs
-    bnds (Cast _ _ (TUni _ v) t : cs)   = unOpt v t cs
+    bnds (Cast _ _ TUni{} (TOpt _ TUni{}) : cs) = bnds cs
+    bnds (Cast _ env (TUni _ v) t : cs) = Map.insertWith (++) v [t] $ bnds cs
     bnds (Sub _ _ _ TUni{} TUni{} : cs) = bnds cs
-    bnds (Sub _ _ _ (TUni _ v) t : cs)  = unOpt v t cs
+    bnds (Sub _ _ env TUni{} (TOpt _ TUni{}) : cs) = bnds cs
+    bnds (Sub _ _ _ (TUni _ v) t : cs)  = Map.insertWith (++) v [t] $ bnds cs
     bnds (_ : cs)                       = bnds cs
 
-    imps []                             = []
-    imps (_ : cs)                       = imps cs
+    deOpt ts                            = if all isOpt ts then ts else map unOpt ts
+      where isOpt TOpt{}                = True
+            isOpt _                     = False
+            unOpt (TOpt _ t)            = t
+            unOpt t                     = t
 
-    app1 [x] [y] | x == y               = [x]
-    app1 xs ys                          = xs ++ ys
 
-    unOpt v (TOpt _ TUni{}) cs          = bnds cs
-    unOpt v (TOpt _ t) cs               = Map.insertWith (++) v [t] $ bnds cs
-    unOpt v t cs                        = Map.insertWith (++) v [t] $ bnds cs
-
-multiLBounds cs                         = Map.assocs $ Map.filter ((>1) . length) $ foldr (Map.unionWith app1) Map.empty maps
+multiLBounds cs                         = Map.assocs $ Map.map deEnv $ Map.filter ((>1) . length) $ bnds cs
   where
-    maps                                = bnds cs : imps cs
-
     bnds []                             = Map.empty
     bnds (Cast _ _ TUni{} TUni{} : cs)  = bnds cs
-    bnds (Cast _ _ t (TUni _ v) : cs)   = Map.insertWith (++) v [t] $ bnds cs
+    bnds (Cast _ env t (TUni _ v) : cs) = Map.insertWith (++) v [(env,t)] $ bnds cs
     bnds (Sub _ _ _ TUni{} TUni{} : cs) = bnds cs
-    bnds (Sub _ _ _ t (TUni _ v) : cs)  = Map.insertWith (++) v [t] $ bnds cs
+    bnds (Sub _ env _ t (TUni _ v) : cs)= Map.insertWith (++) v [(env,t)] $ bnds cs
     bnds (_ : cs)                       = bnds cs
 
-    imps []                             = []
-    imps (_ : cs)                       = imps cs
-
-    app1 [x] [y] | x == y               = [x]
-    app1 xs ys                          = xs ++ ys
+    deEnv envts
+      | length ts == 1                  = ts
+      | otherwise                       = map deVar envts
+      where ts                          = nub [ t | (env,t) <- envts ]
+            deVar (env,TVar _ v)        = tCon (findTVBound env v)
+            deVar (env,t)               = t
 
 
 dnClosed env (TCon _ c)                 = isActor env (tcname c)

@@ -496,6 +496,10 @@ normInst env ts e                   = norm env e
 normBool env e
   | t == tBool                      = norm env e
   | TOpt _ t' <- t, Var{} <- e      = return $ eBinOp (eCall (tApp (eQVar primISNOTNONE) [t']) [e]) And (eCall (eDot (eCAST t t' e) boolKW) [])
+  | BinOp l e1 op e2 <- e,
+    op `elem` [And,Or]              = do e1 <- normBool env e1
+                                         e2 <- normBool env e2
+                                         return $ BinOp l e1 op e2
   | otherwise                       = do e' <- norm env e
                                          return $ eCall (eDot e' boolKW) []
   where t                           = typeOf env e
