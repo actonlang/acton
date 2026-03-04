@@ -152,6 +152,10 @@ atomic Yield{}                      = False
 atomic YieldFrom{}                  = False
 atomic _                            = True
 
+prettyAtom e
+  | atomic e                        = pretty e
+  | otherwise                       = parens (pretty e)
+
 instance Pretty Expr where
     pretty (Var _ n)                = pretty n
     pretty (Int _ _ str)            = text str
@@ -163,19 +167,17 @@ instance Pretty Expr where
     pretty (Ellipsis _)             = text "..."
     pretty (Strings _ ss)           = hsep (map (pretty . show) ss)
     pretty (BStrings _ ss)          = hsep (map (\s -> text " b" <> pretty s) ss)
-    pretty (Call _ e ps ks)
-        | atomic e                  = pretty e <> parens (pretty (ps,ks))
-        | otherwise                 = parens (pretty e) <> parens (pretty (ps,ks))
+    pretty (Call _ e ps ks)         = prettyAtom e <> parens (pretty (ps,ks))
     pretty (TApp _ e ts)            = pretty e <> text "@" <> brackets (commaSep pretty ts)
     pretty (Async _ e)              = parens (text "async" <+> pretty e)
     pretty (Await _ e)              = text "await" <+> pretty e
-    pretty (Index _ e ix)           = pretty e <> brackets (pretty ix)
-    pretty (Slice _ e sl)           = pretty e <> brackets (pretty sl)
+    pretty (Index _ e ix)           = prettyAtom e <> brackets (pretty ix)
+    pretty (Slice _ e sl)           = prettyAtom e <> brackets (pretty sl)
     pretty (IsInstance _ e c)       = text "isinstance" <> parens (pretty e <> comma <+> pretty c)
-    pretty (Dot _ e n)              = pretty e <> dot <> pretty n
-    pretty (Rest _ e n)             = pretty e <> dot <> text "~" <> pretty n
-    pretty (DotI _ e i)             = pretty e <> dot <> pretty i
-    pretty (RestI _ e i)            = pretty e <> dot <> text "~" <> pretty i
+    pretty (Dot _ e n)              = prettyAtom e <> dot <> pretty n
+    pretty (Rest _ e n)             = prettyAtom e <> dot <> text "~" <> pretty n
+    pretty (DotI _ e i)             = prettyAtom e <> dot <> pretty i
+    pretty (RestI _ e i)            = prettyAtom e <> dot <> text "~" <> pretty i
     pretty (Lambda _ ps ks e fx)    = prettyFXnoWild fx <+> text "lambda" <+> prettyLambdaPar ps ks <> colon <+> pretty e
     pretty (Yield _ e)              = text "yield" <+> pretty e
     pretty (YieldFrom _ e)          = text "yield" <+> text "from" <+> pretty e
