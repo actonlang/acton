@@ -12,6 +12,7 @@ import           Data.Char (isDigit, isHexDigit, isSpace)
 import           Data.Bits (shiftL, (.|.))
 import           Data.Word (Word64)
 import qualified Acton.Fingerprint as Fingerprint
+import qualified Crypto.Hash.SHA256 as SHA256
 import           Data.List (find, partition, sort)
 import qualified Data.Map.Strict as M
 import           System.Directory
@@ -459,6 +460,23 @@ readTyDeps tyPath nameLabel = do
       let pubDeps = sort (map (prstr . fst) (InterfaceFiles.nhPubDeps nh))
           implDeps = sort (map (prstr . fst) (InterfaceFiles.nhImplDeps nh))
       pure (pubDeps, implDeps)
+
+-- | Rewrite source hash and name-hash section of a .ty file.
+rewriteTySrcHashAndNameHashes :: FilePath -> B.ByteString -> ([InterfaceFiles.NameHashInfo] -> [InterfaceFiles.NameHashInfo]) -> IO ()
+rewriteTySrcHashAndNameHashes tyPath srcHash' f = do
+  (_mods, nmod, tmod, _srcHash, pubHash, implHash, imps, nameHashes, roots, tests, mdoc) <- InterfaceFiles.readFile tyPath
+  InterfaceFiles.writeFile tyPath srcHash' pubHash implHash imps (f nameHashes) roots tests mdoc nmod tmod
+
+-- | Drop a qualified dependency label from all stored pub/impl dep lists.
+dropTyDepByLabel :: String -> [InterfaceFiles.NameHashInfo] -> [InterfaceFiles.NameHashInfo]
+dropTyDepByLabel depLabel =
+  map dropFromInfo
+  where
+    keepDep (qn, _h) = prstr qn /= depLabel
+    dropFromInfo nh =
+      nh { InterfaceFiles.nhPubDeps  = filter keepDep (InterfaceFiles.nhPubDeps nh)
+         , InterfaceFiles.nhImplDeps = filter keepDep (InterfaceFiles.nhImplDeps nh)
+         }
 
 -- | Assert that a dependency list includes all expected names.
 assertDepsContain :: String -> [String] -> [String] -> IO ()
@@ -1668,6 +1686,61 @@ p36_removed_dep_name_triggers_front_refresh =
     assertBool "did not expect internal hash-missing diagnostic"
       (not (T.isInfixOf "Hash info missing for libfoo.foo" out2))
 
+p37_impl_refresh_missing_dep_hashes_reruns_front :: TestTree
+p37_impl_refresh_missing_dep_hashes_reruns_front =
+  testCase "37-impl refresh missing dep hashes reruns front passes" $ do
+    let proj = casesProjDir
+        src = casesSrcDir
+        modMain = modLabel proj "main"
+    ensureCasesProjectWithDeps [("libfoo", "deps/libfoo")]
+    depDir <- ensureDepProject proj "libfoo"
+    let depSrc = depDir </> "src" </> "libfoo.act"
+        tyMain = proj </> "out" </> "types" </> "main.ty"
+    writeFileUtf8 depSrc $ T.unlines
+      [ "def foo() -> int:"
+      , "    return 1"
+      , ""
+      , "def bar() -> int:"
+      , "    return 2"
+      ]
+    writeFileUtf8 (src </> "main.act") $ T.unlines
+      [ "import libfoo"
+      , ""
+      , "def value() -> int:"
+      , "    return libfoo.foo() + libfoo.bar()"
+      , ""
+      , "actor main(env: Env):"
+      , "    print(value())"
+      , "    env.exit(0)"
+      ]
+    res1 <- runActonIn proj ["build", "--color", "never", "--skip-build"]
+    assertExitSuccess "initial build" res1
+    let mainV2 = T.unlines
+          [ "import libfoo"
+          , ""
+          , "def value() -> int:"
+          , "    return libfoo.foo()"
+          , ""
+          , "actor main(env: Env):"
+          , "    print(value())"
+          , "    env.exit(0)"
+          ]
+    writeFileUtf8 (src </> "main.act") mainV2
+    rewriteTySrcHashAndNameHashes tyMain (SHA256.hash (TE.encodeUtf8 mainV2)) (dropTyDepByLabel "libfoo.bar")
+    writeFileUtf8 depSrc $ T.unlines
+      [ "def foo() -> int:"
+      , "    return 10"
+      ]
+    res2@(_ec2, out2) <- runActonIn proj ["build", "--color", "never", "--verbose", "--skip-build"]
+    assertExitSuccess "rebuild after impl refresh dep hash miss" res2
+    assertBool ("expected impl-refresh fallback log\n" ++ T.unpack out2)
+      (T.isInfixOf "impl refresh encountered unresolved dep hashes; rerunning front passes" out2)
+    assertBool ("did not expect internal hash-missing diagnostic\n" ++ T.unpack out2)
+      (not (T.isInfixOf "Hash info missing for libfoo.bar" out2))
+    assertBool ("did not expect internal NoItem failure\n" ++ T.unpack out2)
+      (not (T.isInfixOf "NoItem" out2))
+    assertBool ("expected main.act to type check after fallback\n" ++ T.unpack out2) (typechecked out2 modMain)
+
 -- Main -----------------------------------------------------------------------
 
 -- | Tasty entry point for incremental tests.
@@ -1724,5 +1797,6 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
       , p34_removed_import_module
       , p35_changed_path_keeps_unaffected_provider
       , p36_removed_dep_name_triggers_front_refresh
+      , p37_impl_refresh_missing_dep_hashes_reruns_front
       ]
   ]
