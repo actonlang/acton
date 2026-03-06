@@ -181,11 +181,11 @@ static int byte_length(unsigned int cp) {
 
 // #bytes in UTF-8 for char starting with byte c
 static int byte_length2(unsigned char c) {
-    if (c < 0x7f)
+    if (c < 0x80)
         return 1;
-    else if (c < 0xdf)
+    else if (c < 0xe0)
         return 2;
-    else if (c < 0xef)
+    else if (c < 0xf0)
         return 3;
     else
         return 4;
@@ -255,8 +255,11 @@ static unsigned char *skip_chars(unsigned char* start, int n, int isascii) {
 static int byte_no(B_str text, int i) {
     int res = 0;
     unsigned char *t = text->str;
-    for (int k=0; k<i; k++)
-        res += byte_length2(t[k]);
+    for (int k=0; k<i; k++) {
+        int n = byte_length2(*t);
+        res += n;
+        t += n;
+    }
     return res;
 }
 
@@ -997,7 +1000,8 @@ B_tuple B_strD_partition(B_str s, B_str sep) {
     if (n<0) {
         return $NEWTUPLE(3,s,null_str,null_str);
     } else {
-        int nb = bmh(s->str,sep->str,s->nbytes,sep->nbytes);
+        int isascii = s->nchars == s->nbytes;
+        int nb = (int)(skip_chars(s->str,n,isascii)-s->str);
         B_str ls;
         NEW_UNFILLED_STR(ls,n,nb);
         memcpy(ls->str,s->str,nb);
@@ -1092,7 +1096,8 @@ B_tuple B_strD_rpartition(B_str s, B_str sep) {
     if (n<0) {
         return $NEWTUPLE(3,null_str,null_str,s);
     } else {
-        int nb = rbmh(s->str,sep->str,s->nbytes,sep->nbytes);
+        int isascii = s->nchars == s->nbytes;
+        int nb = (int)(skip_chars(s->str,n,isascii)-s->str);
         B_str ls;
         NEW_UNFILLED_STR(ls,n,nb);
         memcpy(ls->str,s->str,nb);
