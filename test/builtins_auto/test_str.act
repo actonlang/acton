@@ -124,6 +124,14 @@ def test_empty_str_partition():
     print("empty str.partition('a'): ({sp.0}, {sp.1}, {sp.2})")
     return sp.0 == "" and sp.1 == "" and sp.2 == ""
 
+def test_str_partition_utf8_boundary_leads():
+    # U+07FF starts with 0xDF and U+FFFF starts with 0xEF.
+    # These byte boundaries previously broke char/byte position mapping.
+    s = "\u07ffA\uffffZ"
+    sp = s.partition("Z")
+    print("utf8 boundary str.partition('Z'): ({sp.0}, {sp.1}, {sp.2})")
+    return sp.0 == "\u07ffA\uffff" and sp.1 == "Z" and sp.2 == ""
+
 def test_empty_str_replace():
     result = "".replace("a", "b")
     print("empty str.replace('a', 'b'): '{result}'")
@@ -151,6 +159,12 @@ def test_empty_str_rpartition():
     sp = "".rpartition("a")
     print("empty str.rpartition('a'): ({sp.0}, {sp.1}, {sp.2})")
     return sp.0 == "" and sp.1 == "" and sp.2 == ""
+
+def test_str_rpartition_utf8_boundary_leads():
+    s = "\u07ffA\uffffZ"
+    sp = s.rpartition("\uffff")
+    print("utf8 boundary str.rpartition('\\uffff'): ({sp.0}, {sp.1}, {sp.2})")
+    return sp.0 == "\u07ffA" and sp.1 == "\uffff" and sp.2 == "Z"
 
 def test_empty_str_rstrip():
     result = "".rstrip()
@@ -316,11 +330,13 @@ tests = {
     "test_empty_str_lower": test_empty_str_lower,
     "test_empty_str_lstrip": test_empty_str_lstrip,
     "test_empty_str_partition": test_empty_str_partition,
+    "test_str_partition_utf8_boundary_leads": test_str_partition_utf8_boundary_leads,
     "test_empty_str_replace": test_empty_str_replace,
     "test_empty_str_rfind": test_empty_str_rfind,
     "test_empty_str_rindex": test_empty_str_rindex,
     "test_empty_str_rjust": test_empty_str_rjust,
     "test_empty_str_rpartition": test_empty_str_rpartition,
+    "test_str_rpartition_utf8_boundary_leads": test_str_rpartition_utf8_boundary_leads,
     "test_empty_str_rstrip": test_empty_str_rstrip,
     "test_empty_str_split": test_empty_str_split,
     "test_empty_str_splitlines": test_empty_str_splitlines,
