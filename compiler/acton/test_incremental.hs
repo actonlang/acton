@@ -761,6 +761,31 @@ p15_rebuild_import = testCase "15-rebuild with stdlib import" $ do
   res2 <- runActonIn casesProjDir ["build", "--color", "never"]
   assertExitSuccess "second build" res2
 
+p15b_transitive_stdlib_import :: TestTree
+p15b_transitive_stdlib_import = testCase "15b-transitive stdlib import via cached module" $ do
+  let proj = casesProjDir
+      src = casesSrcDir
+  ensureCasesProject
+  writeFileUtf8 (src </> "b.act") $ T.unlines
+    [ "import logging"
+    , ""
+    , "class Box(logging.Logger):"
+    , "    pass"
+    ]
+  writeFileUtf8 (src </> "main.act") $ T.unlines
+    [ "import b"
+    , ""
+    , "class Consumer(b.Box):"
+    , "    pass"
+    , ""
+    , "actor main(env):"
+    , "    env.exit(0)"
+    ]
+  res1 <- runActonIn proj ["build", "--color", "never"]
+  assertExitSuccess "initial build" res1
+  res2 <- runActonIn proj ["build", "--color", "never"]
+  assertExitSuccess "second build" res2
+
 p16_dep_api_change :: TestTree
 p16_dep_api_change = testCase "16-dependency API change triggers rebuild" $ do
   let originalContent = T.unlines
@@ -1776,6 +1801,7 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
   , sequentialTestGroup "incremental-project-cases" AllSucceed
       [ p14_partial_rebuild
       , p15_rebuild_import
+      , p15b_transitive_stdlib_import
       , p16_dep_api_change
       , p17_dep_impl_change
       , p18_type_only_deps

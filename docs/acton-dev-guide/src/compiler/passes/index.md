@@ -25,6 +25,9 @@ read and understand what each transformation does.
 
 The final C source is compiled and linked by the Zig build system.
 
+For how imports are loaded before these passes run, see
+[Imports and environments](../imports_and_envs.md).
+
 ## Front vs back passes
 
 The pipeline is split into a front end and a back end. The scheduler runs all

@@ -1,5 +1,9 @@
 # Incremental Compilation
 
+See also [Imports and environments](imports_and_envs.md) for the distinction
+between scheduler dependency discovery and the actual import closure loaded into
+the type-checker environment.
+
 Acton compiles a whole program by walking a dependency graph that spans the
 root project and all of its dependencies. The scheduler in `Acton.Compile`
 builds this total graph, runs the front passes (parse, kinds, types) in
