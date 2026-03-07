@@ -1045,7 +1045,9 @@ findTyFile spaths mn = go spaths
 
 -- | Import a module, loading its .ty and extending the environment.
 doImp                        :: [FilePath] -> EnvF x -> ModName -> IO (EnvF x, TEnv)
-doImp spath env m            = doImpSeen S.empty env m
+doImp spath env m            = do
+                                  (env', te, _) <- doImpSeen S.empty env m
+                                  return (env', te)
   where
     -- A cached module still needs its recorded import closure available in the
     -- environment. Otherwise later imports of that cached module can miss
@@ -1053,7 +1055,7 @@ doImp spath env m            = doImpSeen S.empty env m
     doImpSeen seen env m
       | S.member m seen      =
           case lookupMod m env of
-            Just te -> return (env, te)
+            Just te -> return (env, te, seen)
             Nothing -> fileNotFound m
       | otherwise            =
           let seen' = S.insert m seen in
@@ -1061,25 +1063,25 @@ doImp spath env m            = doImpSeen S.empty env m
             Just te -> do
               tyFile <- findTyFile spath m
               case tyFile of
-                Nothing -> return (env, te)
+                Nothing -> return (env, te, seen')
                 Just tyF -> do
                   (_, _, _, imps, _, _, _, _) <- InterfaceFiles.readHeader tyF
-                  env' <- subImpSeen seen' env (map fst imps)
-                  return (env', te)
+                  (env', seen'') <- subImpSeen seen' env (map fst imps)
+                  return (env', te, seen'')
             Nothing -> do
               tyFile <- findTyFile spath m
               case tyFile of
                 Nothing -> fileNotFound m
                 Just tyF -> do
                   (ms,nmod,_,_,_,_,_,_,_,_,_) <- InterfaceFiles.readFile tyF
-                  env' <- subImpSeen seen' env ms
+                  (env', seen'') <- subImpSeen seen' env ms
                   let NModule te mdoc = nmod
-                  return (addMod m te mdoc env', te)
+                  return (addMod m te mdoc env', te, seen'')
 
-    subImpSeen _ env []      = return env
+    subImpSeen seen env []   = return (env, seen)
     subImpSeen seen env (m:ms) = do
-      (env', _) <- doImpSeen seen env m
-      subImpSeen seen env' ms
+      (env', _, seen') <- doImpSeen seen env m
+      subImpSeen seen' env' ms
 
 importSome                  :: [ImportItem] -> ModName -> TEnv -> EnvF x -> EnvF x
 importSome items m te env   = define (map pick items) env
