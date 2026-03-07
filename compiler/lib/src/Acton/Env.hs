@@ -25,6 +25,7 @@ import System.Environment (getExecutablePath)
 import Control.Monad
 import Control.Monad.Except
 import qualified Data.HashMap.Strict as M
+import qualified Data.Set as S
 
 import Acton.Syntax
 import Acton.Builtin
@@ -1044,17 +1045,43 @@ findTyFile spaths mn = go spaths
 
 -- | Import a module, loading its .ty and extending the environment.
 doImp                        :: [FilePath] -> EnvF x -> ModName -> IO (EnvF x, TEnv)
-doImp spath env m            = case lookupMod m env of
-                                    Just te -> return (env, te)
-                                    Nothing -> do
-                                        tyFile <- findTyFile spath m
-                                        case tyFile of
-                                          Nothing -> fileNotFound m
-                                          Just tyF -> do
-                                            (ms,nmod,_,_,_,_,_,_,_,_,_) <- InterfaceFiles.readFile tyF
-                                            env' <- subImp spath env ms
-                                            let NModule te mdoc = nmod
-                                            return (addMod m te mdoc env', te)
+doImp spath env m            = do
+                                  (env', te, _) <- doImpSeen S.empty env m
+                                  return (env', te)
+  where
+    -- A cached module still needs its recorded import closure available in the
+    -- environment. Otherwise later imports of that cached module can miss
+    -- transitive dependencies that were never added to the shared module cache.
+    doImpSeen seen env m
+      | S.member m seen      =
+          case lookupMod m env of
+            Just te -> return (env, te, seen)
+            Nothing -> fileNotFound m
+      | otherwise            =
+          let seen' = S.insert m seen in
+          case lookupMod m env of
+            Just te -> do
+              tyFile <- findTyFile spath m
+              case tyFile of
+                Nothing -> return (env, te, seen')
+                Just tyF -> do
+                  (_, _, _, imps, _, _, _, _) <- InterfaceFiles.readHeader tyF
+                  (env', seen'') <- subImpSeen seen' env (map fst imps)
+                  return (env', te, seen'')
+            Nothing -> do
+              tyFile <- findTyFile spath m
+              case tyFile of
+                Nothing -> fileNotFound m
+                Just tyF -> do
+                  (ms,nmod,_,_,_,_,_,_,_,_,_) <- InterfaceFiles.readFile tyF
+                  (env', seen'') <- subImpSeen seen' env ms
+                  let NModule te mdoc = nmod
+                  return (addMod m te mdoc env', te, seen'')
+
+    subImpSeen seen env []   = return (env, seen)
+    subImpSeen seen env (m:ms) = do
+      (env', _, seen') <- doImpSeen seen env m
+      subImpSeen seen' env' ms
 
 importSome                  :: [ImportItem] -> ModName -> TEnv -> EnvF x -> EnvF x
 importSome items m te env   = define (map pick items) env

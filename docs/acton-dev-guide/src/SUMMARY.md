@@ -8,6 +8,7 @@
   - [Debugging](getting_started/debugging.md)
 - [Compiler](compiler/index.md)
   - [Incremental compilation](compiler/incremental_compilation.md)
+  - [Imports and environments](compiler/imports_and_envs.md)
   - [Test result cache](compiler/test_cache.md)
   - [Passes](compiler/passes/index.md)
     - [Parse](compiler/passes/parse.md)
