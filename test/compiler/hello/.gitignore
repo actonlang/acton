@@ -1,4 +1,4 @@
-.actonc.lock
+.acton.lock
 build-cache
 out
 build.zig*

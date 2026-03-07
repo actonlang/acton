@@ -1,5 +1,5 @@
 .acton.lock
-.actonc.lock
+.acton.lock
 build.zig*
 out
 deps/libfoo/src/libfoo.act

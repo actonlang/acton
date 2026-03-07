@@ -14,7 +14,7 @@
 **/core
 **/build-cache
 **/zig-cache
-**/.actonc.lock
+**/.acton.compile.lock
 **/.acton.lock
 **/.build/
 **/*.swp

@@ -27,7 +27,6 @@ executables:
       - containers
       - directory
       - filepath
-      - filelock
       - mtl
       - megaparsec
       - aeson

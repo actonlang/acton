@@ -139,9 +139,13 @@ module Acton.Compile
   , runBackPasses
   , runBackJobs
   , findProjectDir
-  , compileOwnerLockPath
-  , tryCompileOwnerLock
-  , releaseCompileOwnerLock
+  , BackgroundCompilerLock
+  , backgroundCompilerLockPath
+  , tryBackgroundCompilerLock
+  , releaseBackgroundCompilerLock
+  , projectLockPath
+  , withProjectLockOnWait
+  , withProjectLock
   , findPaths
   , discoverProjects
   , pathsForModule
@@ -239,7 +243,7 @@ import System.Clock
 import System.Directory
 import System.Directory.Recursive
 import System.Environment (getExecutablePath, lookupEnv)
-import System.FileLock (FileLock, SharedExclusive(Exclusive), tryLockFile, unlockFile)
+import System.FileLock (FileLock, SharedExclusive(Exclusive), tryLockFile, unlockFile, withFileLock)
 import System.FilePath ((</>))
 import System.FilePath.Posix
 import System.Exit (ExitCode(..))
@@ -598,7 +602,6 @@ prepareCompilePlanFromContext sp gopts ctx srcFiles allowPrune mChangedPaths = d
             , projSysPath = sysAbs
             , projSysTypes = joinPath [sysAbs, "base", "out", "types"]
             , projBuildSpec = scratchBuildSpec rootProj
-            , projLocks = joinPath [projPath pathsRoot, ".actonc.lock"]
             , projDeps = []
             }
       return (M.singleton rootProj ctx')
@@ -2565,7 +2568,6 @@ data ProjCtx = ProjCtx {
                      projSysPath :: FilePath,
                      projSysTypes:: FilePath,
                      projBuildSpec :: BuildSpec.BuildSpec,
-                     projLocks    :: FilePath,
                      projDeps     :: [(String, FilePath)]          -- resolved dependency roots (abs paths)
                    } deriving (Show)
 
@@ -2631,7 +2633,6 @@ discoverProjects gopts sysAbs rootProj depOverrides = do
           let outDir   = joinPath [dirAbs, "out"]
               typesDir = joinPath [outDir, "types"]
               srcDir'  = joinPath [dirAbs, "src"]
-              lockPath = joinPath [dirAbs, ".actonc.lock"]
               ctx = ProjCtx { projRoot = dirAbs
                             , projOutDir = outDir
                             , projTypesDir = typesDir
@@ -2639,7 +2640,6 @@ discoverProjects gopts sysAbs rootProj depOverrides = do
                             , projSysPath = sysAbs
                             , projSysTypes = joinPath [sysAbs, "base", "out", "types"]
                             , projBuildSpec = spec
-                            , projLocks = lockPath
                             , projDeps = [ (n, p) | (n, p, _) <- reverse deps ]
                             }
               acc' = M.insert dirAbs ctx acc
@@ -2730,21 +2730,28 @@ findProjectDir path = do
             else findProjectDir (takeDirectory path)
 
 
--- | Path to the compile-owner lock for a project root.
-compileOwnerLockPath :: FilePath -> FilePath
-compileOwnerLockPath projDir =
+-- | Opaque handle for the lifetime lock of a long-running project compiler.
+data BackgroundCompilerLock = BackgroundCompilerLock FileLock FilePath
+
+-- | Path to the lock held for the lifetime of a long-running project compiler.
+--
+-- This lock only establishes unique ownership of a background compiler
+-- process such as LSP or watch mode. It does not imply that project state
+-- is current, so all compile/build work must still take 'withProjectLock'.
+backgroundCompilerLockPath :: FilePath -> FilePath
+backgroundCompilerLockPath projDir =
     joinPath [projDir, ".acton.compile.lock"]
 
--- | Acquire the compile-owner lock for a project root, if available.
-tryCompileOwnerLock :: FilePath -> IO (Maybe (FileLock, FilePath))
-tryCompileOwnerLock projDir = do
-    let lockPath = compileOwnerLockPath projDir
+-- | Acquire the long-running compiler lock for a project root, if available.
+tryBackgroundCompilerLock :: FilePath -> IO (Maybe BackgroundCompilerLock)
+tryBackgroundCompilerLock projDir = do
+    let lockPath = backgroundCompilerLockPath projDir
     mlock <- tryLockFile lockPath Exclusive
-    return ((\lock -> (lock, lockPath)) <$> mlock)
+    return ((\lock -> BackgroundCompilerLock lock lockPath) <$> mlock)
 
--- | Release a compile-owner lock and remove the lock file if possible.
-releaseCompileOwnerLock :: (FileLock, FilePath) -> IO ()
-releaseCompileOwnerLock (lock, lockPath) = do
+-- | Release the long-running compiler lock and remove its lock file if possible.
+releaseBackgroundCompilerLock :: BackgroundCompilerLock -> IO ()
+releaseBackgroundCompilerLock (BackgroundCompilerLock lock lockPath) = do
     unlockFile lock
     mlock <- tryLockFile lockPath Exclusive
     case mlock of
@@ -2755,6 +2762,30 @@ releaseCompileOwnerLock (lock, lockPath) = do
   where
     handleNotExists :: IOException -> IO ()
     handleNotExists _ = return ()
+
+-- | Path to the single per-project compiler work lock.
+projectLockPath :: FilePath -> FilePath
+projectLockPath projDir =
+    joinPath [projDir, ".acton.lock"]
+
+-- | Run an action while holding the single per-project compiler work lock.
+--
+-- If the lock is not immediately available, run the callback once before
+-- blocking until the lock can be acquired.
+withProjectLockOnWait :: FilePath -> IO () -> IO a -> IO a
+withProjectLockOnWait projDir onWait action = do
+    let lockPath = projectLockPath projDir
+    mlock <- tryLockFile lockPath Exclusive
+    case mlock of
+      Just lock -> action `finally` unlockFile lock
+      Nothing -> do
+        onWait
+        withFileLock lockPath Exclusive (\_ -> action)
+
+-- | Run an action while holding the single per-project compiler work lock.
+withProjectLock :: FilePath -> IO a -> IO a
+withProjectLock projDir action =
+    withProjectLockOnWait projDir (return ()) action
 
 
 -- | Compute Paths for a given source file and compile options.
