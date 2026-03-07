@@ -39,6 +39,7 @@ import qualified Data.ByteString.Lazy as BL
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import Control.Exception (SomeException, displayException, evaluate, onException, try)
+import Data.Time.Clock (UTCTime)
 import qualified Text.Regex.TDFA as TDFA
 import Data.Version (showVersion)
 import qualified Paths_acton
@@ -188,10 +189,14 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
                 classifyCachedTests logCache cacheEntries testHashInfos allTests
               return cachedResults
             else return []
+        cachedResults1 <-
+          if useCache
+            then filterReusableCachedSnapshotResults logCache paths cachedResults0
+            else return []
         cachedResults <-
           if C.testSnapshotUpdate topts
-            then mapM (applySnapshotUpdate paths) cachedResults0
-            else return cachedResults0
+            then mapM (applySnapshotUpdate paths) cachedResults1
+            else return cachedResults1
         let showCached = C.testShowCached topts
         when (not emitJson && not useCache) $
           putStrLn "Skipping test result cache (--no-cache); running all selected tests"
@@ -836,6 +841,69 @@ applySnapshotUpdate paths res =
             writeFile (snapshotDir </> fileName) out
             return (markSnapshotUpdated res)
       _ -> return res
+
+-- | Reuse cached snapshot results only when the on-disk snapshot metadata still
+-- | shows that the expected file predates the last produced output. Any
+-- | uncertainty forces a rerun.
+filterReusableCachedSnapshotResults :: (String -> IO ()) -> Paths -> [TestResult] -> IO [TestResult]
+filterReusableCachedSnapshotResults logCache paths =
+    fmap catMaybes . mapM keepIfReusable
+  where
+    keepIfReusable res =
+      case trOutput res of
+        Nothing -> return (Just res)
+        Just _ -> do
+          reusable <- snapshotMetadataAllowsCacheHit logCache paths res
+          if reusable
+            then return (Just res)
+            else return Nothing
+
+snapshotCacheLabel :: TestResult -> String
+snapshotCacheLabel res = trModule res ++ "." ++ trName res
+
+snapshotMetadataAllowsCacheHit :: (String -> IO ()) -> Paths -> TestResult -> IO Bool
+snapshotMetadataAllowsCacheHit logCache paths res = do
+    mExpected <- readFirstExistingSnapshotMeta expectedPaths
+    case mExpected of
+      Nothing -> miss "missing expected snapshot"
+      Just (expectedSize, expectedMTime) -> do
+        mOutput <- readSnapshotMeta outputPath
+        case mOutput of
+          Nothing -> miss "missing snapshot output"
+          Just (outputSize, outputMTime)
+            | expectedSize /= outputSize -> miss "snapshot size changed"
+            | expectedMTime >= outputMTime -> miss "snapshot expected is newer than output"
+            | otherwise -> return True
+  where
+    fileName = displayTestName (trName res)
+    expectedPaths =
+      [ joinPath [projPath paths, "snapshots", "expected", trModule res, fileName]
+      , joinPath [projPath paths, "test", "golden", trModule res, fileName]
+      ]
+    outputPath = joinPath [projPath paths, "snapshots", "output", trModule res, fileName]
+    miss reason = do
+      logCache ("[test-cache] " ++ snapshotCacheLabel res ++ " cache=miss (" ++ reason ++ ")")
+      return False
+
+readFirstExistingSnapshotMeta :: [FilePath] -> IO (Maybe (Integer, UTCTime))
+readFirstExistingSnapshotMeta [] = return Nothing
+readFirstExistingSnapshotMeta (path:rest) = do
+    mMeta <- readSnapshotMeta path
+    case mMeta of
+      Just meta -> return (Just meta)
+      Nothing -> readFirstExistingSnapshotMeta rest
+
+readSnapshotMeta :: FilePath -> IO (Maybe (Integer, UTCTime))
+readSnapshotMeta path = do
+    exists <- doesFileExist path
+    if not exists
+      then return Nothing
+      else do
+        sizeE <- (try :: IO a -> IO (Either SomeException a)) $ getFileSize path
+        timeE <- (try :: IO a -> IO (Either SomeException a)) $ getModificationTime path
+        case (sizeE, timeE) of
+          (Right size, Right mtime) -> return (Just (size, mtime))
+          _ -> return Nothing
 
 snapshotMismatchPrefix :: String
 snapshotMismatchPrefix = "testing.NotEqualError: Test output does not match expected snapshot value"
