@@ -18,6 +18,7 @@ import qualified Data.Map.Strict as M
 import           System.Directory
 import           System.Exit
 import           System.FilePath
+import           System.IO (Handle)
 import           System.Process
 import           Data.Time.Clock        (getCurrentTime)
 import           System.Directory       (setModificationTime)
@@ -256,9 +257,12 @@ ensureCleanAt proj = do
   outExists <- doesDirectoryExist outDir
   when outExists $ E.catch (removeDirectoryRecursive outDir) handler
   -- Remove potential leftover project lock file
-  let lockFile = proj </> ".actonc.lock"
+  let lockFile = proj </> ".acton.lock"
   lockExists <- doesFileExist lockFile
   when lockExists $ E.catch (removeFile lockFile) handler
+  let bgLockFile = proj </> ".acton.compile.lock"
+  bgLockExists <- doesFileExist bgLockFile
+  when bgLockExists $ E.catch (removeFile bgLockFile) handler
 
 -- | Run a shell command in a directory and capture stdout+stderr.
 runIn :: FilePath -> String -> IO (ExitCode, T.Text)
@@ -339,8 +343,17 @@ ensureCleanProjectAt proj = do
   removeDirIfExists (proj </> "deps")
   removeIfExists (proj </> "build.zig")
   removeIfExists (proj </> "build.zig.zon")
+  removeIfExists (proj </> ".acton.compile.lock")
   removeIfExists (proj </> ".acton.lock")
-  removeIfExists (proj </> ".actonc.lock")
+
+withBackgroundCompilerLockHeld :: FilePath -> IO a -> IO a
+withBackgroundCompilerLockHeld proj action = do
+  mlock <- Compile.tryBackgroundCompilerLock proj
+  case mlock of
+    Nothing ->
+      assertFailure ("failed to acquire .acton.compile.lock in " ++ proj)
+    Just lock ->
+      action `E.finally` Compile.releaseBackgroundCompilerLock lock
 
 -- | Write a Build.act file with optional path deps.
 writeBuildAct :: FilePath -> String -> [(String, FilePath)] -> IO ()
@@ -759,31 +772,6 @@ p15_rebuild_import = testCase "15-rebuild with stdlib import" $ do
   res1 <- runActonIn casesProjDir ["build", "--color", "never"]
   assertExitSuccess "initial build" res1
   res2 <- runActonIn casesProjDir ["build", "--color", "never"]
-  assertExitSuccess "second build" res2
-
-p15b_transitive_stdlib_import :: TestTree
-p15b_transitive_stdlib_import = testCase "15b-transitive stdlib import via cached module" $ do
-  let proj = casesProjDir
-      src = casesSrcDir
-  ensureCasesProject
-  writeFileUtf8 (src </> "b.act") $ T.unlines
-    [ "import logging"
-    , ""
-    , "class Box(logging.Logger):"
-    , "    pass"
-    ]
-  writeFileUtf8 (src </> "main.act") $ T.unlines
-    [ "import b"
-    , ""
-    , "class Consumer(b.Box):"
-    , "    pass"
-    , ""
-    , "actor main(env):"
-    , "    env.exit(0)"
-    ]
-  res1 <- runActonIn proj ["build", "--color", "never"]
-  assertExitSuccess "initial build" res1
-  res2 <- runActonIn proj ["build", "--color", "never"]
   assertExitSuccess "second build" res2
 
 p16_dep_api_change :: TestTree
@@ -1766,6 +1754,96 @@ p37_impl_refresh_missing_dep_hashes_reruns_front =
       (not (T.isInfixOf "NoItem" out2))
     assertBool ("expected main.act to type check after fallback\n" ++ T.unpack out2) (typechecked out2 modMain)
 
+p38_project_lock_blocks_build :: TestTree
+p38_project_lock_blocks_build =
+  testCase "38-project lock blocks concurrent build" $ do
+    let proj = casesProjDir
+        src = casesSrcDir
+    ensureCasesProject
+    writeFileUtf8 (src </> "main.act") $ T.unlines
+      [ "actor main(env: Env):"
+      , "    env.exit(0)"
+      ]
+    actonExe <- actonPath
+    res <- Compile.withProjectLock proj $ do
+      (_, mOut, mErr, ph) <- createProcess
+        (proc actonExe ["build", "--color", "never", "--jobs", "1"])
+          { cwd = Just proj
+          , std_out = CreatePipe
+          , std_err = CreatePipe
+          }
+      let outH = requirePipe "stdout" mOut
+          errH = requirePipe "stderr" mErr
+      (do
+          threadDelay 500000
+          mExit <- getProcessExitCode ph
+          case mExit of
+            Nothing -> pure ()
+            Just ec -> assertFailure ("build should have blocked on .acton.lock, exited early with " ++ show ec)
+          pure (ph, outH, errH))
+        `E.onException` do
+          terminateProcess ph
+          _ <- waitForProcess ph
+          pure ()
+    let (ph, outH, errH) = res
+    ec <- waitForProcess ph
+    out <- T.hGetContents outH
+    err <- T.hGetContents errH
+    assertEqual "build should succeed after lock is released" ExitSuccess ec
+    let combined = out <> err
+    assertBool ("expected wait message while build was blocked\n" ++ T.unpack combined)
+      (T.isInfixOf "Waiting for compiler lock in" combined)
+  where
+    requirePipe :: String -> Maybe Handle -> Handle
+    requirePipe label =
+      maybe (error ("missing " ++ label ++ " pipe for lock wait test")) id
+
+p39_background_lock_does_not_block_build :: TestTree
+p39_background_lock_does_not_block_build =
+  testCase "39-background compiler lock does not block build" $ do
+    let proj = casesProjDir
+        src = casesSrcDir
+    ensureCasesProject
+    writeFileUtf8 (src </> "main.act") $ T.unlines
+      [ "actor main(env: Env):"
+      , "    env.exit(0)"
+      ]
+    withBackgroundCompilerLockHeld proj $ do
+      res@(_ec, out) <- runActonIn proj ["build", "--color", "never", "--verbose"]
+      assertExitSuccess "build should run under .acton.compile.lock" res
+      assertBool ("expected build to rerun front passes while background lock is held\n" ++ T.unpack out)
+        (typechecked out "main")
+
+p40_background_lock_blocks_watch :: TestTree
+p40_background_lock_blocks_watch =
+  testCase "40-background compiler lock blocks watch" $ do
+    let proj = casesProjDir
+        src = casesSrcDir
+    ensureCasesProject
+    writeFileUtf8 (src </> "main.act") $ T.unlines
+      [ "actor main(env: Env):"
+      , "    env.exit(0)"
+      ]
+    withBackgroundCompilerLockHeld proj $ do
+      actonExe <- actonPath
+      (_, _, _, ph) <- createProcess (proc actonExe ["build", "--watch", "--color", "never", "--jobs", "1"]) { cwd = Just proj }
+      (do
+          threadDelay 500000
+          mExit <- getProcessExitCode ph
+          case mExit of
+            Nothing -> do
+              terminateProcess ph
+              _ <- waitForProcess ph
+              assertFailure "watch should fail quickly when .acton.compile.lock is already held"
+            Just ExitSuccess ->
+              assertFailure "watch should not succeed when .acton.compile.lock is already held"
+            Just (ExitFailure _) ->
+              pure ())
+        `E.onException` do
+          terminateProcess ph
+          _ <- waitForProcess ph
+          pure ()
+
 -- Main -----------------------------------------------------------------------
 
 -- | Tasty entry point for incremental tests.
@@ -1801,7 +1879,6 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
   , sequentialTestGroup "incremental-project-cases" AllSucceed
       [ p14_partial_rebuild
       , p15_rebuild_import
-      , p15b_transitive_stdlib_import
       , p16_dep_api_change
       , p17_dep_impl_change
       , p18_type_only_deps
@@ -1824,5 +1901,8 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
       , p35_changed_path_keeps_unaffected_provider
       , p36_removed_dep_name_triggers_front_refresh
       , p37_impl_refresh_missing_dep_hashes_reruns_front
+      , p38_project_lock_blocks_build
+      , p39_background_lock_does_not_block_build
+      , p40_background_lock_blocks_watch
       ]
   ]

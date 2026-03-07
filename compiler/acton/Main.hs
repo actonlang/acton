@@ -196,20 +196,6 @@ printErrorAndExit msg = do
                   errorWithoutStackTrace msg
                   System.Exit.exitFailure
 
-printErrorAndCleanAndExit msg gopts opts paths = do
-                  errorWithoutStackTrace msg
-                  cleanup gopts opts paths
-                  System.Exit.exitFailure
-
-
-cleanup gopts opts paths = do
-    -- Need platform free path separators
-    removeFile (joinPath [projPath paths, ".actonc.lock"])
-      `catch` handleNotExists
-  where
-    handleNotExists :: IOException -> IO ()
-    handleNotExists _ = return ()
-
 -- our own readFile & writeFile with hard-coded utf-8 encoding (atomic writes)
 readFile f = do
     h <- openFile f ReadMode
@@ -295,7 +281,8 @@ createProject name = do
     writeFile buildActPath (BuildSpec.renderBuildAct buildSpec)
     paths <- findPaths buildActPath defaultCompileOptions
     writeFile (joinPath [ projDir, ".gitignore" ]) (
-      ".actonc.lock\n" ++
+      ".acton.compile.lock\n" ++
+      ".acton.lock\n" ++
       "build.zig\n" ++
       "build.zig.zon\n" ++
       "out\n"
@@ -366,22 +353,10 @@ buildFiles gopts opts files =
           [proj] | onlyAct && all (== Just proj) projDirs -> do
             let sp = Source.diskSourceProvider
                 runBuild opts' =
-                  withProjectCompileLock proj $
+                  withProjectLockNotice gopts proj $
                     compileFiles sp gopts opts' absFiles False
-            withOwnerLockOrOnlyBuild gopts proj
-              (runBuild opts)
-              (runBuild opts { C.only_build = True })
+            runBuild opts
           _ -> mapM_ (runFile gopts opts) files
-
--- | Compute the path to the per-project compile lock.
-projectCompileLockPath :: FilePath -> FilePath
-projectCompileLockPath projDir =
-    joinPath [projDir, ".actonc.lock"]
-
--- | Run an action while holding the per-project compile lock.
-withProjectCompileLock :: FilePath -> IO a -> IO a
-withProjectCompileLock projDir action =
-    withFileLock (projectCompileLockPath projDir) Exclusive (\_ -> action)
 
 -- | Collect all source files in a project's src/ directory.
 projectSourceFiles :: Paths -> IO [FilePath]
@@ -389,29 +364,25 @@ projectSourceFiles paths = do
     allFiles <- getFilesRecursive (srcDir paths)
     return (catMaybes (map filterActFile allFiles))
 
--- | Prefer the compile-owner lock, fallback to only-build when unavailable.
-withOwnerLockOrOnlyBuild :: C.GlobalOptions -> FilePath -> IO a -> IO a -> IO a
-withOwnerLockOrOnlyBuild gopts projDir runFull runFallback = do
-    ownerLock <- tryCompileOwnerLock projDir
-    case ownerLock of
-      Just lock -> runFull `finally` releaseCompileOwnerLock lock
-      Nothing -> do
-        unless (C.quiet gopts) $
-          putStrLn "Compiler already running; running final build only."
-        runFallback
-
--- | Require the compile-owner lock or abort with a message.
-withOwnerLockOrExit :: FilePath -> String -> IO a -> IO a
-withOwnerLockOrExit projDir msg action = do
-    ownerLock <- tryCompileOwnerLock projDir
-    case ownerLock of
+withBackgroundCompilerLockOrExit :: FilePath -> String -> IO a -> IO a
+withBackgroundCompilerLockOrExit projDir msg action = do
+    mlock <- tryBackgroundCompilerLock projDir
+    case mlock of
       Nothing -> printErrorAndExit msg
-      Just lock -> action `finally` releaseCompileOwnerLock lock
+      Just lock -> action `finally` releaseBackgroundCompilerLock lock
 
-withProjectLockForGen :: CompileScheduler -> Int -> FilePath -> IO () -> IO ()
-withProjectLockForGen sched gen projDir action =
+withProjectLockNotice :: C.GlobalOptions -> FilePath -> IO a -> IO a
+withProjectLockNotice gopts projDir action =
+    withProjectLockOnWait projDir onWait action
+  where
+    onWait =
+      unless (C.quiet gopts) $
+        putStrLn ("Waiting for compiler lock in " ++ projDir)
+
+withProjectLockForGen :: C.GlobalOptions -> CompileScheduler -> Int -> FilePath -> IO () -> IO ()
+withProjectLockForGen gopts sched gen projDir action =
     whenCurrentGen sched gen $
-      withProjectCompileLock projDir $
+      withProjectLockNotice gopts projDir $
         whenCurrentGen sched gen action
 
 requireProjectLayout :: Paths -> IO ()
@@ -494,13 +465,11 @@ buildProjectOnce gopts opts = do
                 iff (not(C.quiet gopts)) $ do
                   putStrLn("Building project in " ++ projPath paths)
                 let projDir = projPath paths
-                    runBuild opts' = withProjectCompileLock projDir $ do
+                    runBuild opts' = withProjectLockNotice gopts projDir $ do
                       srcFiles <- projectSourceFiles paths
                       compileFiles sp gopts opts' srcFiles True
                       generateProjectDocIndex sp gopts opts' paths srcFiles
-                withOwnerLockOrOnlyBuild gopts projDir
-                  (runBuild opts)
-                  (runBuild opts { C.only_build = True })
+                runBuild opts
 
 -- Test runner -------------------------------------------------------------------------------------------------
 
@@ -545,22 +514,23 @@ runTestsWatch gopts opts topts mode paths = do
     let sp = Source.diskSourceProvider
         projDir = projPath paths
         srcRoot = srcDir paths
-    (sched, progressUI, progressState) <- initCompileWatchContext gopts
-    testParallel <- testMaxParallel gopts
-    let runOnce gen mChanged = do
-          withProjectLockForGen sched gen projDir $ do
-            logProjectBuild gopts progressUI progressState projDir
-            srcFiles <- projectSourceFiles paths
-            hadErrors <- compileFilesChanged sp gopts opts srcFiles True mChanged (Just (sched, gen)) (Just (progressUI, progressState))
-            unless hadErrors $ do
-              testModules <- listTestModules opts paths
-              modulesToTest <- selectTestModules paths srcFiles mChanged testModules
-              unless (null modulesToTest) $
-                do
-                  useColorOut <- useColor gopts
-                  void $ runProjectTests useColorOut gopts opts paths topts mode modulesToTest testParallel
-    withOwnerLockOrExit projDir "Another compiler is running; cannot start test watch." $
-      runWatchProject gopts projDir srcRoot sched runOnce
+    withBackgroundCompilerLockOrExit projDir
+      "Another long-running Acton compiler is already running; cannot start test watch." $ do
+        (sched, progressUI, progressState) <- initCompileWatchContext gopts
+        testParallel <- testMaxParallel gopts
+        let runOnce gen mChanged = do
+              withProjectLockForGen gopts sched gen projDir $ do
+                logProjectBuild gopts progressUI progressState projDir
+                srcFiles <- projectSourceFiles paths
+                hadErrors <- compileFilesChanged sp gopts opts srcFiles True mChanged (Just (sched, gen)) (Just (progressUI, progressState))
+                unless hadErrors $ do
+                  testModules <- listTestModules opts paths
+                  modulesToTest <- selectTestModules paths srcFiles mChanged testModules
+                  unless (null modulesToTest) $
+                    do
+                      useColorOut <- useColor gopts
+                      void $ runProjectTests useColorOut gopts opts paths topts mode modulesToTest testParallel
+        runWatchProject gopts projDir srcRoot sched runOnce
 
 selectTestModules :: Paths -> [FilePath] -> Maybe [FilePath] -> [String] -> IO [String]
 selectTestModules paths srcFiles mChanged testModules =
@@ -629,16 +599,17 @@ watchProjectAt :: C.GlobalOptions -> C.CompileOptions -> FilePath -> IO ()
 watchProjectAt gopts opts projDir = do
                 let sp = Source.diskSourceProvider
                 paths <- loadProjectPathsAt projDir opts
-                withOwnerLockOrExit (projPath paths) "Another compiler is running; cannot start watch." $ do
-                  (sched, progressUI, progressState) <- initCompileWatchContext gopts
-                  let runOnce gen mChanged =
-                        withProjectLockForGen sched gen (projPath paths) $ do
-                          logProjectBuild gopts progressUI progressState (projPath paths)
-                          srcFiles <- projectSourceFiles paths
-                          void $ compileFilesChanged sp gopts opts srcFiles True mChanged (Just (sched, gen)) (Just (progressUI, progressState))
-                          when (isNothing mChanged) $
-                            generateProjectDocIndex sp gopts opts paths srcFiles
-                  runWatchProject gopts (projPath paths) (srcDir paths) sched runOnce
+                withBackgroundCompilerLockOrExit (projPath paths)
+                  "Another long-running Acton compiler is already running; cannot start watch." $ do
+                    (sched, progressUI, progressState) <- initCompileWatchContext gopts
+                    let runOnce gen mChanged =
+                          withProjectLockForGen gopts sched gen (projPath paths) $ do
+                            logProjectBuild gopts progressUI progressState (projPath paths)
+                            srcFiles <- projectSourceFiles paths
+                            void $ compileFilesChanged sp gopts opts srcFiles True mChanged (Just (sched, gen)) (Just (progressUI, progressState))
+                            when (isNothing mChanged) $
+                              generateProjectDocIndex sp gopts opts paths srcFiles
+                    runWatchProject gopts (projPath paths) (srcDir paths) sched runOnce
 
 -- | Build a single file, optionally running in watch mode.
 buildFile :: C.GlobalOptions -> C.CompileOptions -> FilePath -> IO ()
@@ -661,11 +632,9 @@ buildFileOnce gopts opts file = do
         iff (not(C.quiet gopts)) $ do
           putStrLn("Building file " ++ file ++ " in project " ++ relProj)
         let runBuild opts' =
-              withProjectCompileLock proj $
+              withProjectLockNotice gopts proj $
                 compileFiles sp gopts opts' [file] False
-        withOwnerLockOrOnlyBuild gopts proj
-          (runBuild opts)
-          (runBuild opts { C.only_build = True })
+        runBuild opts
       Nothing -> do
         -- Not in a project, use scratch directory for compilation unless
         -- --tempdir is provided - then use that
@@ -1099,13 +1068,11 @@ compileFilesChanged sp gopts opts srcFiles allowPrune mChangedPaths mSched mProg
               runPlan plan = do
                 let cctx = cpContext plan
                     opts' = ccOpts cctx
-                    pathsRoot = ccPathsRoot cctx
                     watchMode = C.watch opts'
                 cliHooks <- initCliCompileHooks progressUI progressState gopts sched gen plan
                 let clearProgress = whenCurrentGen sched gen (cchClearProgress cliHooks)
                     finalizeCompile onError = do
                       clearProgress
-                      cleanup gopts opts' pathsRoot
                       onError
                       return True
                     reportCompileError msg =
@@ -1834,7 +1801,6 @@ runZig gopts opts zigExe zigArgs paths wd mProgressUI = do
           printIce ("compilation of generated Zig code failed, returned error code" ++ show ret)
           putStrLn $ "zig stdout:\n" ++ zigStdout
           putStrLn $ "zig stderr:\n" ++ zigStderr
-          cleanup gopts opts paths
           unless (C.watch opts) System.Exit.exitFailure
 
 generateFingerprint :: String -> IO String
@@ -2055,7 +2021,6 @@ zigBuild env gopts opts paths rootSpec tasks binTasks allowPrune rootModules dep
             dstBinFile = joinPath [ binDir paths, exeName ]
         copyFile srcBinFile dstBinFile
       else return ()
-    cleanup gopts opts paths
     timeEnd <- getTime Monotonic
     return (timeEnd - timeStart)
 
