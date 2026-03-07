@@ -27,6 +27,7 @@ import Test.Tasty.HUnit
 
 import qualified PkgCommands
 import qualified Acton.Fingerprint as Fingerprint
+import qualified Paths_acton
 
 -- The default is to build and run each test program with the expectation that
 -- both compilation and running the program is successful as determined by exit
@@ -358,6 +359,63 @@ parseFlagTests =
       assertEqual "acton test --help stderr" "" cmdErr
       assertBool "acton test --help should include --no-cache" ("--no-cache" `isInfixOf` cmdOut)
       assertBool "acton test --help should include --tag" ("--tag" `isInfixOf` cmdOut)
+  , testCase "acton test reruns cached snapshot when expected file changes" $ do
+      withSystemTempDirectory "acton-test-snapshot-cache" $ \proj -> do
+        actonBinDir <- Paths_acton.getBinDir
+        let distActon = "../../dist/bin/acton"
+            actonCandidate = actonBinDir </> "acton"
+        hasDistActon <- doesFileExist distActon
+        acton <- canonicalizePath $
+          if hasDistActon
+            then distActon
+            else actonCandidate
+        let name = "snapshot_cache"
+            fp = Fingerprint.formatFingerprint
+              (Fingerprint.updateFingerprintPrefix
+                (Fingerprint.fingerprintPrefixForName name) 1)
+            srcDir = proj </> "src"
+            modName = "snap"
+            srcFile = srcDir </> modName <.> "act"
+            expectedDir = proj </> "snapshots" </> "expected" </> modName
+            expectedFile = expectedDir </> "stable"
+            runTest args = readCreateProcessWithExitCode (proc acton ("test" : args)) { cwd = Just proj } ""
+
+        createDirectoryIfMissing True srcDir
+        createDirectoryIfMissing True expectedDir
+        writeFile (proj </> "Build.act") $ unlines
+          [ "name = \"" ++ name ++ "\""
+          , "fingerprint = " ++ fp
+          , ""
+          ]
+        writeFile srcFile $ unlines
+          [ "import testing"
+          , ""
+          , "def _test_stable() -> str:"
+          , "    return \"snapshot v1\""
+          ]
+        writeFile expectedFile "snapshot v1"
+
+        (code1, out1, err1) <- runTest ["--iter", "1"]
+        when (code1 /= ExitSuccess) $
+          assertFailure ("initial acton test failed:\nstdout:\n" ++ out1 ++ "\nstderr:\n" ++ err1)
+
+        (code2, out2, err2) <- runTest ["--iter", "1", "--show-cached"]
+        when (code2 /= ExitSuccess) $
+          assertFailure ("cached acton test failed:\nstdout:\n" ++ out2 ++ "\nstderr:\n" ++ err2)
+        assertBool "second run should reuse cached snapshot result"
+          ("Using cached results for 1 tests" `isInfixOf` out2)
+        assertBool "cached run should mark the result as cached"
+          ("* = cached test result" `isInfixOf` out2)
+
+        writeFile expectedFile "snapshot v2"
+
+        (code3, out3, err3) <- runTest ["--iter", "1", "--show-cached"]
+        assertEqual "changed expected snapshot should invalidate cached success" (ExitFailure 1) code3
+        assertBool "rerun should report snapshot mismatch"
+          ("Test output does not match expected snapshot value" `isInfixOf` out3
+            || "Test output does not match expected snapshot value" `isInfixOf` err3)
+        assertBool "stale cached snapshot result should not be reused after expected change"
+          (not ("Using cached results for 1 tests" `isInfixOf` out3))
   ]
   where
     flagGolden label golden flags =

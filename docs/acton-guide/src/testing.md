@@ -56,6 +56,8 @@ This means that the developer experience for test driven development is great ev
 
 Note that test input need to be contained within .act source code files in order for the compiler to consider them part of the content hash. You cannot use external .txt files or similar as input to test functions, since the compiler won't consider those parts of the implementation. Also see [incremental compilation](compilation/incremental.md) for more details on content hashing and how it applies to testing.
 
+Snapshot tests are the main exception: even when the test code hash matches the cache, `acton test` still checks the expected snapshot file on disk against the cached `snapshots/output/...` metadata. If the output snapshot is missing, the expected file changed, or Acton cannot cheaply prove the expected file is older than the last produced output, the test is rerun instead of trusting the cached result.
+
 ## Module Filtering
 
 You can run tests from specific modules using the `--module` flag:

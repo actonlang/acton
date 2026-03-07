@@ -61,7 +61,13 @@ failures/errors, iterations, and duration).
 ## Behavior
 
 - If the cached run hash matches the newly computed run hash, the test is
-  skipped and its cached result is used.
+  normally skipped and its cached result is used.
+- Snapshot tests add one more guard: a cached result is only reused when the
+  `snapshots/output/...` file exists, the current expected snapshot file has
+  the same size as that output file, and the expected snapshot has an older
+  modification time. If the output file is missing, the expected file changed
+  or disappeared, or the metadata does not prove it is older than the last
+  produced output, the test is rerun.
 - With `--no-cache`, cached results are ignored and all selected tests are run.
 - Cached failures and errors still contribute to the overall test exit code.
 - By default, cached successes are hidden from output; cached failures/errors
