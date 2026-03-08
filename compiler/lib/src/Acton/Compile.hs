@@ -2951,6 +2951,12 @@ loadBuildSpec dir = do
                 throwProjectError ("Missing fingerprint in " ++ actPath ++ ".\n"
                                    ++ "ERROR: Build.act requires `fingerprint`. For example: fingerprint = " ++ suggestion ++ "\n"
                                    ++ "HINT: Fingerprint = CRC32(name) in the high 32 bits + random low 32 bits. You may choose a different value.")
+              BuildSpec.InvalidFingerprint name raw -> do
+                suggestion <- suggestFingerprint name
+                throwProjectError ("Invalid fingerprint " ++ raw ++ " in " ++ actPath
+                                   ++ " (project name: " ++ show name ++ ").\n"
+                                   ++ "Expected an unquoted 64-bit hex fingerprint like 0x1234abcd5678ef00.\n"
+                                   ++ "Suggested fingerprint: " ++ suggestion)
               BuildSpec.MissingProjectName -> do
                 suggestion <- suggestProjectName dir
                 throwProjectError ("Missing project name in " ++ actPath ++ ".\n"
@@ -3006,7 +3012,7 @@ validateFingerprint sourcePath name fpRaw =
         suggestion <- suggestFingerprint name
         throwProjectError ("Invalid fingerprint '" ++ fpRaw ++ "' in " ++ sourcePath
                            ++ " (project name: " ++ show name ++ ").\n"
-                           ++ "Expected a 64-bit numeric fingerprint like 0x1234abcd5678ef00.\n"
+                           ++ "Expected an unquoted 64-bit hex fingerprint like 0x1234abcd5678ef00.\n"
                            ++ "Suggested fingerprint: " ++ suggestion)
       Just fp -> do
         let formatted = Fingerprint.formatFingerprint fp

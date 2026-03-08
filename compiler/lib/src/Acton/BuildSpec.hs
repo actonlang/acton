@@ -18,13 +18,14 @@ import qualified Data.Aeson as Ae
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.Map as Map
 import Data.Map (Map)
-import Data.Char (isDigit, isHexDigit)
-import Data.Maybe (catMaybes, fromMaybe, mapMaybe)
+import Data.Char (isSpace)
+import Data.Maybe (catMaybes, fromMaybe, isNothing, mapMaybe)
 import qualified Data.List as L
 import qualified Control.Exception as E
 import System.IO.Unsafe (unsafePerformIO)
 
 import Control.Applicative ((<|>))
+import qualified Acton.Fingerprint as Fingerprint
 import qualified Acton.Parser as AP
 import qualified Acton.Syntax as S
 import qualified Acton.Printer as Pr
@@ -112,6 +113,7 @@ data BuildSpecParseError
   = ParseError String
   | MissingProjectName
   | MissingFingerprint String
+  | InvalidFingerprint String String
   deriving (Eq, Show)
 
 renderBuildSpecParseError :: BuildSpecParseError -> String
@@ -120,6 +122,10 @@ renderBuildSpecParseError err =
     ParseError msg -> msg
     MissingProjectName -> "Missing project name (add: name = \"my_project\")"
     MissingFingerprint _ -> "Missing fingerprint (add: fingerprint = 0x1234abcd5678ef00)"
+    InvalidFingerprint name raw ->
+      "Invalid fingerprint " ++ raw ++ " (project name: " ++ show name ++ "). "
+      ++ "Expected an unquoted 64-bit hex fingerprint like "
+      ++ "0x1234abcd5678ef00"
 
 instance FromJSON BuildSpec where
   parseJSON = Ae.withObject "BuildSpec" $ \o -> do
@@ -182,7 +188,11 @@ updateBuildActFromJSON content json = do
           descPresent = KM.member "description" obj
           fpPresent   = KM.member "fingerprint" obj
       name' <- if namePresent then requireField "name" (patchName patch) else Right (specName currSpec)
-      fp' <- if fpPresent then requireField "fingerprint" (patchFingerprint patch) else Right (fingerprint currSpec)
+      fp' <- if fpPresent
+               then do
+                 fpVal <- requireField "fingerprint" (patchFingerprint patch)
+                 validatePatchFingerprint fpVal
+               else Right (fingerprint currSpec)
       desc' <- if descPresent then requireField "description" (patchDescription patch) else Right (specDescription currSpec)
       let deps' = if depsPresent then patchDependencies patch else dependencies currSpec
           zigs' = if zigPresent  then patchZigDependencies patch else zig_dependencies currSpec
@@ -205,6 +215,12 @@ updateBuildActFromJSON content json = do
       case mval of
         Just v  -> Right v
         Nothing -> Left ("Expected '" ++ label ++ "' to be present and non-null in JSON")
+
+    validatePatchFingerprint fp =
+      case Fingerprint.parseFingerprint fp of
+        Just _  -> Right fp
+        Nothing -> Left ("Expected 'fingerprint' to be a 64-bit hex literal "
+                         ++ "like 0x1234abcd5678ef00")
 
 applyTopLevelPatches :: String -> S.Module -> BuildSpec -> Bool -> Bool -> Bool -> Either String String
 applyTopLevelPatches content modAST spec namePresent descPresent fpPresent = do
@@ -343,11 +359,13 @@ parseModuleForSpec content =
 -- Extract name, description, dependencies and zig_dependencies from the AST
 extractSpecFromModule :: S.Module -> Either BuildSpecParseError BuildSpec
 extractSpecFromModule (S.Module _ _ stmts) =
-  let (mname, mdesc, mfp, deps, zigs) = foldl step (Nothing, Nothing, Nothing, Map.empty, Map.empty) stmts
-  in case (mname, mfp) of
-       (Nothing, _) -> Left MissingProjectName
-       (Just name, Nothing) -> Left (MissingFingerprint name)
-       (Just name, Just fp) ->
+  let (mname, mdesc, mfp, mfpErr, deps, zigs) =
+        foldl step (Nothing, Nothing, Nothing, Nothing, Map.empty, Map.empty) stmts
+  in case (mname, mfp, mfpErr) of
+       (Nothing, _, _) -> Left MissingProjectName
+       (Just name, Nothing, Just raw) -> Left (InvalidFingerprint name raw)
+       (Just name, Nothing, Nothing) -> Left (MissingFingerprint name)
+       (Just name, Just fp, _) ->
          Right BuildSpec { specName = name
                          , specDescription = mdesc
                          , fingerprint = fp
@@ -355,7 +373,7 @@ extractSpecFromModule (S.Module _ _ stmts) =
                          , zig_dependencies = zigs
                          }
   where
-    step (mname, mdesc, mfp, deps, zigs) stmt = case stmt of
+    step (mname, mdesc, mfp, mfpErr, deps, zigs) stmt = case stmt of
       S.Assign _ pats expr ->
         let names = mapMaybe patternVarName pats
             mname' = if "name" `elem` names
@@ -364,17 +382,22 @@ extractSpecFromModule (S.Module _ _ stmts) =
             mdesc' = if "description" `elem` names
                        then exprToSimpleString expr <|> mdesc
                        else mdesc
-            mfp'   = if "fingerprint" `elem` names
-                       then exprToFingerprint expr <|> mfp
-                       else mfp
+            (mfp', mfpErr') =
+              if "fingerprint" `elem` names
+                then case exprToFingerprint expr of
+                       Just fp -> (Just fp, Nothing)
+                       Nothing -> (mfp, if isNothing mfp
+                                          then mfpErr <|> Just (renderExpr expr)
+                                          else mfpErr)
+                else (mfp, mfpErr)
             deps'  = if "dependencies" `elem` names
                        then fromMaybe deps (exprToPkgDeps expr)
                        else deps
             zigs'  = if "zig_dependencies" `elem` names
                        then fromMaybe zigs (exprToZigDeps expr)
                        else zigs
-        in (mname', mdesc', mfp', deps', zigs')
-      _ -> (mname, mdesc, mfp, deps, zigs)
+        in (mname', mdesc', mfp', mfpErr', deps', zigs')
+      _ -> (mname, mdesc, mfp, mfpErr, deps, zigs)
 
 
 data BuildSpecPatch = BuildSpecPatch
@@ -550,18 +573,18 @@ exprToSimpleString _ = Nothing
 exprToFingerprint :: S.Expr -> Maybe String
 exprToFingerprint (S.Int _ _ lexeme) = Just lexeme
 exprToFingerprint (S.Paren _ e) = exprToFingerprint e
-exprToFingerprint e = exprToSimpleString e
+exprToFingerprint _ = Nothing
 
 renderFingerprint :: String -> String
 renderFingerprint fp
-  | isNumericFingerprint fp = fp
+  | Just formatted <- normalizeHexFingerprint fp = formatted
   | otherwise               = show fp
   where
-    isNumericFingerprint s =
-      case s of
-        '0':'x':rest -> not (null rest) && all isHexDigit rest
-        '0':'X':rest -> not (null rest) && all isHexDigit rest
-        _           -> not (null s) && all isDigit s
+    normalizeHexFingerprint raw =
+      case dropWhile isSpace raw of
+        '0':'x':_ -> Fingerprint.formatFingerprint <$> Fingerprint.parseFingerprint raw
+        '0':'X':_ -> Fingerprint.formatFingerprint <$> Fingerprint.parseFingerprint raw
+        _         -> Nothing
 
 exprToPkgDeps :: S.Expr -> Maybe (Map.Map String PkgDep)
 exprToPkgDeps (S.Dict _ assocs) = Just $ Map.fromList (mapMaybe assocToPkg assocs)

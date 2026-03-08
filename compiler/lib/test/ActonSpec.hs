@@ -598,6 +598,36 @@ main = do
             Right _ ->
               expectationFailure "Expected invalid fingerprint error"
 
+      it "errors when fingerprint is quoted hex" $ do
+        withSystemTempDirectory "acton-fp" $ \dir -> do
+          let buildAct = unlines
+                [ "name = \"demo\""
+                , "fingerprint = \"0x1234abcd5678ef00\""
+                , ""
+                ]
+          writeFile (dir </> "Build.act") buildAct
+          res <- (E.try (Compile.loadBuildSpec dir) :: IO (Either Compile.ProjectError BuildSpec.BuildSpec))
+          case res of
+            Left (Compile.ProjectError msg) ->
+              msg `shouldSatisfy` (isInfixOf "Invalid fingerprint")
+            Right _ ->
+              expectationFailure "Expected invalid fingerprint error"
+
+      it "errors when fingerprint is decimal" $ do
+        withSystemTempDirectory "acton-fp" $ \dir -> do
+          let buildAct = unlines
+                [ "name = \"demo\""
+                , "fingerprint = 1234"
+                , ""
+                ]
+          writeFile (dir </> "Build.act") buildAct
+          res <- (E.try (Compile.loadBuildSpec dir) :: IO (Either Compile.ProjectError BuildSpec.BuildSpec))
+          case res of
+            Left (Compile.ProjectError msg) ->
+              msg `shouldSatisfy` (isInfixOf "Invalid fingerprint")
+            Right _ ->
+              expectationFailure "Expected invalid fingerprint error"
+
       it "errors when name is missing" $ do
         withSystemTempDirectory "acton-fp" $ \dir -> do
           let buildAct = unlines
@@ -698,6 +728,42 @@ main = do
                   , ""
                   ]
             buildAct1 `shouldBe` expected
+
+      it "keeps hex fingerprints zero-padded when rewriting Build.act" $ do
+        let buildAct0 = unlines
+              [ "name = \"demo\""
+              , "fingerprint = 0x056275683c869ace"
+              , ""
+              , "dependencies = {}"
+              , ""
+              , "zig_dependencies = {}"
+              , ""
+              ]
+        case BuildSpec.parseBuildAct buildAct0 of
+          Left err -> expectationFailure err
+          Right (spec, _, _) ->
+            case BuildSpec.updateBuildActFromJSON buildAct0 (BuildSpec.encodeBuildSpecJSON spec) of
+              Left err -> expectationFailure err
+              Right buildAct1 -> do
+                buildAct1 `shouldSatisfy` (isInfixOf "fingerprint = 0x056275683c869ace")
+                buildAct1 `shouldSatisfy` (not . isInfixOf "fingerprint = 0x56275683c869ace")
+
+      it "rejects non-hex fingerprints in Build.act updates" $ do
+        let buildAct0 = unlines
+              [ "name = \"demo\""
+              , "fingerprint = 0x1234abcd5678ef00"
+              , ""
+              , "dependencies = {}"
+              , ""
+              , "zig_dependencies = {}"
+              , ""
+              ]
+            newJson = "{\"fingerprint\": \"1234\"}"
+        case BuildSpec.updateBuildActFromJSON buildAct0 (BL.fromStrict (B8.pack newJson)) of
+          Left err ->
+            err `shouldSatisfy` (isInfixOf "64-bit hex literal")
+          Right _ ->
+            expectationFailure "Expected Build.act update to reject decimal fingerprint"
 
       it "parses Build.act with only dependencies (zig deps missing)" $ do
         let buildAct = unlines
