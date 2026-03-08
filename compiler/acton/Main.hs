@@ -104,6 +104,7 @@ import qualified Data.ByteString.Lazy as BL
 
 import TestRunner
 import TerminalProgress
+import TerminalSize
 import ZigProgress
 
 main = do
@@ -229,11 +230,24 @@ writeFileAtomic f c = do
         renameFile tmpPath f
 
 -- | Format a TimeSpec as seconds with millisecond precision.
-fmtTime t =
+fmtTimePrecise :: TimeSpec -> String
+fmtTimePrecise t =
     printf "%6.3f s" secs
   where
     secs :: Float
-    secs = (fromIntegral(sec t)) + (fromIntegral (nsec t) / 1000000000)
+    secs = (fromIntegral (sec t)) + (fromIntegral (nsec t) / 1000000000)
+
+-- | Format a TimeSpec with second granularity for compact narrow logs.
+fmtTimeCompact :: TimeSpec -> String
+fmtTimeCompact t =
+    if wholeSecs <= 0 && remNanos > 0
+      then "<1s"
+      else show roundedSecs ++ "s"
+  where
+    wholeSecs = fromIntegral (sec t) :: Integer
+    remNanos = nsec t
+    roundedSecs =
+      wholeSecs + if remNanos >= 500000000 then 1 else 0
 
 -- | Pad a string with trailing spaces for aligned output.
 padRight :: Int -> String -> String
@@ -243,6 +257,120 @@ padRight width s
   where
     width' = max 0 width
     len = length s
+
+-- | Pad a string with leading spaces for aligned output.
+padLeft :: Int -> String -> String
+padLeft width s
+    | len >= width' = s
+    | otherwise = replicate (width' - len) ' ' ++ s
+  where
+    width' = max 0 width
+    len = length s
+
+appendTimerField :: String -> Int -> String -> String
+appendTimerField base timerWidth timer
+    | null timer = base
+    | otherwise = base ++ padLeft timerWidth timer
+
+progressSpinnerThreshold :: Int
+progressSpinnerThreshold = 25
+
+progressPrefixWidth :: Int -> Int
+progressPrefixWidth cols
+    | cols >= progressSpinnerThreshold = 3
+    | otherwise = 0
+
+-- | Truncate a string on the right with an ellipsis when it does not fit.
+abbreviateRight :: Int -> String -> String
+abbreviateRight width s
+    | width <= 0 = ""
+    | length s <= width = s
+    | width <= 3 = take width s
+    | otherwise = take (width - 3) s ++ "..."
+
+-- | Compress a module label to preserve the root and as much of the tail as fits.
+fitBuildModuleLabel :: Int -> String -> String
+fitBuildModuleLabel width label
+    | width <= 0 = ""
+    | length label <= width = label
+    | width < 10 = termFitPlainLeft width label
+    | otherwise =
+        case break (== '.') label of
+          (root, '.':rest) ->
+            let rootBudget = min (length root) (max 1 (width - 4))
+                tailBudget = max 0 (width - rootBudget - 3)
+            in if tailBudget <= 0
+                 then termFitPlainLeft width label
+                 else take rootBudget root ++ "..." ++ termFitPlainLeft tailBudget rest
+          _ -> abbreviateRight width label
+
+type StatusRenderer = Int -> Maybe String
+
+staticStatusRenderer :: String -> String -> StatusRenderer
+staticStatusRenderer full short budget
+    | budget < 10 = Nothing
+    | length full <= budget = Just full
+    | length short <= budget = Just short
+    | otherwise = Just (abbreviateRight budget full)
+
+data BuildLineLayout = BuildLineLayout
+  { bllText :: String
+  , bllAligned :: Bool
+  , bllLabelCols :: Int
+  , bllHasStatus :: Bool
+  }
+
+emptyBuildLineLayout :: BuildLineLayout
+emptyBuildLineLayout = BuildLineLayout "" False 0 False
+
+-- | Fit a build line body to width while preserving module/status columns when possible.
+fitBuildLineLayout :: Int -> Int -> Int -> Bool -> String -> StatusRenderer -> BuildLineLayout
+fitBuildLineLayout width labelWidth statusWidth preserveBlankLabel modLbl renderStatus
+    | width <= 0 = emptyBuildLineLayout
+    | hasLabelColumn =
+        case renderAligned of
+          Just line -> line
+          Nothing ->
+            if null modLbl
+              then fitStatusOnly
+              else BuildLineLayout (fitBuildModuleLabel width modLbl) False (min width labelWidth) False
+    | otherwise = fitStatusOnly
+  where
+    minStatusWidth = 10
+    minLabelWidth = 10
+    hasLabelColumn = preserveBlankLabel || not (null modLbl)
+    renderAligned
+      | width < 2 + minStatusWidth = Nothing
+      | labelCols <= 0 && not (null modLbl) = Nothing
+      | not (null modLbl) && labelCols < min minLabelWidth (length modLbl) = Nothing
+      | statusCols < minStatusWidth = Nothing
+      | otherwise =
+          case renderStatus statusCols of
+            Just status ->
+              let labelText = if null modLbl then "" else fitBuildModuleLabel labelCols modLbl
+                  core =
+                    padRight labelCols labelText
+                    ++ "  "
+                    ++ padRight statusCols status
+              in Just (BuildLineLayout core True labelCols True)
+            Nothing -> Nothing
+    labelCols = min labelWidth (max 0 (width - 2 - minStatusWidth))
+    statusCols = min statusWidth (max 0 (width - labelCols - 2))
+    fitStatusOnly =
+      case renderStatus (min statusWidth width) of
+        Just status -> BuildLineLayout (termFitPlainRight width status) False 0 True
+        Nothing -> emptyBuildLineLayout
+
+-- | Fit an active build line to the current terminal width.
+fitBuildActiveLineAligned :: Int -> Int -> Int -> String -> StatusRenderer -> String
+fitBuildActiveLineAligned width labelWidth statusWidth modLbl renderStatus =
+    bllText (fitBuildLineLayout width labelWidth statusWidth False modLbl renderStatus)
+
+safeLiveWidth :: Int -> Int
+safeLiveWidth width
+    | width <= 0 = 0
+    | width == 1 = 1
+    | otherwise = width - 1
 
 -- Version handling ------------------------------------------------------------------------------------------
 
@@ -1184,7 +1312,14 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
             | t <- neededTasks
             ]
     let gate = whenCurrentGen sched gen
-        logLine msg = gate (progressLogLine progressUI msg)
+        logLine msg = gate $ do
+          progressLogLine progressUI msg
+        logRendered render = gate $ do
+          if puWidthAware progressUI
+            then do
+              (_, cols) <- termSizeRead (puTermSize progressUI)
+              progressLogLine progressUI (render (safeLiveWidth cols))
+            else progressLogLine progressUI (render plainLogWidth)
         logDiagnostics optsT diags =
           gate (progressWithLog progressUI (printDiagnostics gopts optsT diags))
         rootProj = ccRootProj (cpContext plan)
@@ -1192,10 +1327,7 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
         termProgress = puTermProgress progressUI
         termEnabled = termProgressEnabled termProgress
         modLabel mn = modNameToString mn
-        spinnerPrefixWidth = 3
-        frontInitialStatus = "Kinds check"
-        backActiveStatus = "Back passes"
-        finalActiveStatus = "Final compilation"
+        timeSep = "    "
         frontDoneStatus = "Type check done"
         backDoneStatus = "Compilation done"
         backFailStatus msg = "Compilation failed: " ++ msg
@@ -1216,58 +1348,139 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
             "" -> modLabel mn
             label -> label ++ "." ++ modLabel mn
         labelWidth = maximum (0 : [ length (projectModuleLabel (tkProj (gtKey t)) (tkMod (gtKey t))) | t <- neededTasks ])
-        timeSep = "    "
         statusWidth = 68
         nameWidth = labelWidth + 2 + statusWidth
         timePadWidth = nameWidth + length timeSep
-        progressTimePadWidth = max 0 (timePadWidth - spinnerPrefixWidth)
-        doneIndent = replicate spinnerPrefixWidth ' '
-        abbreviate limit txt
-          | length txt <= limit = txt
-          | limit <= 3 = take limit txt
-          | otherwise = take (limit - 3) txt ++ "..."
-        statusColumns modLbl status =
+        plainLogWidth = timePadWidth + 8
+        detailStmtIndentWide = replicate 5 ' '
+        detailBindsIndentWide = replicate 7 ' '
+        detailStmtIndentNarrow = "  "
+        detailBindsIndentNarrow = "    "
+        plainDoneIndent = replicate 3 ' '
+        appendTimerField base timerWidth timer
+          | null timer = base
+          | otherwise = base ++ padLeft timerWidth timer
+        plainStatusColumns modLbl status =
           padRight labelWidth modLbl
           ++ "  "
-          ++ padRight statusWidth (abbreviate statusWidth status)
-        doneTimedLine modLbl status t =
-          padRight timePadWidth (doneIndent ++ statusColumns modLbl status) ++ fmtTime t
-        doneLine modLbl status =
-          doneIndent ++ statusColumns modLbl status
-        detailStmtIndent = replicate (spinnerPrefixWidth + 2) ' '
-        detailBindsIndent = replicate (spinnerPrefixWidth + 4) ' '
-        detailLine indent msg =
-          indent ++ msg
-        detailTimedLine indent msg t =
-          padRight timePadWidth (detailLine indent msg) ++ fmtTime t
+          ++ padRight statusWidth (abbreviateRight statusWidth status)
+        plainDoneTimedLine modLbl status t =
+          padRight timePadWidth (plainDoneIndent ++ plainStatusColumns modLbl status)
+          ++ fmtTimePrecise t
+        plainDoneLine modLbl status =
+          plainDoneIndent ++ plainStatusColumns modLbl status
+        pickBestLine candidates =
+          case foldl' betterCandidate Nothing candidates of
+            Just (_, line) -> line
+            Nothing -> ""
+        betterCandidate best Nothing = best
+        betterCandidate Nothing cand = cand
+        betterCandidate best@(Just (bestScore, _)) cand@(Just (candScore, _))
+          | candScore > bestScore = cand
+          | otherwise = best
+        buildLineCandidate width preserveBlankLabel modLbl statusRender timerRank timerWidth timer =
+          let doneIndent = replicate (progressPrefixWidth width) ' '
+              timerCols = if null timer then 0 else timerWidth
+              bodyWidth = max 0 (width - length doneIndent - timerCols)
+              layout = fitBuildLineLayout bodyWidth labelWidth statusWidth preserveBlankLabel modLbl statusRender
+              body = bllText layout
+              line = doneIndent ++ appendTimerField body timerWidth timer
+              score =
+                ( if bllAligned layout then 1 :: Int else 0
+                , if bllHasStatus layout then 1 :: Int else 0
+                , bllLabelCols layout
+                , timerRank
+                )
+          in if null body || length line > width
+               then Nothing
+               else Just (score, line)
+        doneStatusLine width modLbl statusRender shortStatus mt =
+          let preciseTimer = maybe "" fmtTimePrecise mt
+              compactTimer = maybe "" fmtTimeCompact mt
+              timerWidth = length preciseTimer
+              fullRenderer budget =
+                case statusRender budget of
+                  Just status
+                    | length status <= budget -> Just status
+                  _ -> Nothing
+              shortRenderer =
+                staticStatusRenderer shortStatus shortStatus
+              preserveBlankLabel = null modLbl
+          in pickBestLine
+               [ buildLineCandidate width preserveBlankLabel modLbl fullRenderer 2 timerWidth preciseTimer
+               , buildLineCandidate width preserveBlankLabel modLbl fullRenderer 1 timerWidth compactTimer
+               , buildLineCandidate width preserveBlankLabel modLbl fullRenderer 0 0 ""
+               , buildLineCandidate width preserveBlankLabel modLbl shortRenderer 1 timerWidth compactTimer
+               , buildLineCandidate width preserveBlankLabel modLbl shortRenderer 0 0 ""
+               ]
+        detailLine width indentWide indentNarrow msg =
+          let wide = indentWide ++ msg
+          in if width >= length wide then wide else indentNarrow ++ msg
+        detailTimedLine width indentWide indentNarrow msg t =
+          let precise = fmtTimePrecise t
+              wideBase = indentWide ++ msg
+              wideLine = padRight timePadWidth wideBase ++ precise
+          in if width >= length wideLine
+               then wideLine
+               else indentNarrow ++ msg ++ " " ++ fmtTimeCompact t
         frontTimingLine ft =
-          "Front timing: env " ++ fmtTime (ftEnv ft)
-          ++ ", kinds " ++ fmtTime (ftKinds ft)
-          ++ ", types " ++ fmtTime (ftTypes ft)
+          "Front timing: env " ++ fmtTimePrecise (ftEnv ft)
+          ++ ", kinds " ++ fmtTimePrecise (ftKinds ft)
+          ++ ", types " ++ fmtTimePrecise (ftTypes ft)
         typeStmtTimingLine st =
           "Type stmt " ++ show (tstCompleted st) ++ "/" ++ show (tstTotal st)
         typeStmtBindsLine st =
           "binds: " ++ intercalate ", " (tstNames st)
         backTimingLine bt =
-          "Back timing: normalize " ++ fmtTime (btNormalize bt)
-          ++ ", deactorize " ++ fmtTime (btDeactorize bt)
-          ++ ", cps " ++ fmtTime (btCPS bt)
-          ++ ", llift " ++ fmtTime (btLLift bt)
-          ++ ", boxing " ++ fmtTime (btBoxing bt)
-          ++ ", codegen " ++ fmtTime (btCodeGen bt)
-          ++ maybe "" (\t -> ", write " ++ fmtTime t) (btWriteCode bt)
-        frontDoneLine proj mn t =
-          doneTimedLine (projectModuleLabel proj mn) frontDoneStatus t
-        backDoneLine proj mn mt =
-          case mt of
-            Just t -> doneTimedLine (projectModuleLabel proj mn) backDoneStatus t
-            Nothing -> doneLine (projectModuleLabel proj mn) backDoneStatus
-        backFailLine proj mn msg =
-          doneLine (projectModuleLabel proj mn) (backFailStatus msg)
-        finalDoneLine t =
-          doneTimedLine "" finalDoneStatus t
-        progressLine proj mn status =
-          padRight progressTimePadWidth (statusColumns (projectModuleLabel proj mn) status)
+          "Back timing: normalize " ++ fmtTimePrecise (btNormalize bt)
+          ++ ", deactorize " ++ fmtTimePrecise (btDeactorize bt)
+          ++ ", cps " ++ fmtTimePrecise (btCPS bt)
+          ++ ", llift " ++ fmtTimePrecise (btLLift bt)
+          ++ ", boxing " ++ fmtTimePrecise (btBoxing bt)
+          ++ ", codegen " ++ fmtTimePrecise (btCodeGen bt)
+          ++ maybe "" (\t -> ", write " ++ fmtTimePrecise t) (btWriteCode bt)
+        frontDoneRenderer =
+          staticStatusRenderer frontDoneStatus "Typed"
+        backDoneRenderer =
+          staticStatusRenderer backDoneStatus "Built"
+        backFailRenderer msg =
+          \budget ->
+            if budget < 10
+              then Nothing
+              else Just (abbreviateRight budget (backFailStatus msg))
+        finalDoneRenderer =
+          staticStatusRenderer finalDoneStatus "Final"
+        frontDoneLine width proj mn t =
+          if puWidthAware progressUI
+            then doneStatusLine width (projectModuleLabel proj mn) frontDoneRenderer "Typed" (Just t)
+            else plainDoneTimedLine (projectModuleLabel proj mn) frontDoneStatus t
+        backDoneLine width proj mn mt =
+          if puWidthAware progressUI
+            then
+              case mt of
+                Just t -> doneStatusLine width (projectModuleLabel proj mn) backDoneRenderer "Built" (Just t)
+                Nothing -> doneStatusLine width (projectModuleLabel proj mn) backDoneRenderer "Built" Nothing
+            else
+              case mt of
+                Just t -> plainDoneTimedLine (projectModuleLabel proj mn) backDoneStatus t
+                Nothing -> plainDoneLine (projectModuleLabel proj mn) backDoneStatus
+        backFailLine width proj mn msg =
+          if puWidthAware progressUI
+            then doneStatusLine width (projectModuleLabel proj mn) (backFailRenderer msg) "Failed" Nothing
+            else plainDoneLine (projectModuleLabel proj mn) (backFailStatus msg)
+        finalDoneLine width t =
+          if puWidthAware progressUI
+            then doneStatusLine width "" finalDoneRenderer "Final" (Just t)
+            else plainDoneTimedLine "" finalDoneStatus t
+        renderProjectLine proj mn statusRender width =
+          let modLbl = projectModuleLabel proj mn
+          in fitBuildLineLayout width labelWidth statusWidth False modLbl statusRender
+        frontInitialLine proj mn =
+          renderProjectLine proj mn (staticStatusRenderer "Kinds check" "Kinds")
+        backActiveLine proj mn =
+          renderProjectLine proj mn (staticStatusRenderer "Back passes" "Back")
+        finalActiveLine width =
+          fitBuildLineLayout width labelWidth statusWidth True "" (staticStatusRenderer "Final compilation" "Final")
         clamp01 x = max 0 (min 1 x)
         progressRatio p =
           let total = fppTotal p
@@ -1278,27 +1491,30 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
           case fppPass p of
             FrontPassKinds -> 0.10 * progressRatio p
             FrontPassTypes -> 0.10 + 0.90 * progressRatio p
-        frontStatus p =
-          let total = max 0 (fppTotal p)
-              completed = min total (max 0 (fppCompleted p))
-              countPart
-                | total > 0 = " " ++ show completed ++ "/" ++ show total
-                | otherwise = ""
-              fitTypeStatus mCurrent =
-                let prefix = "Type checking "
-                    staticLen = length prefix + length countPart
-                in if staticLen <= statusWidth
-                     then case mCurrent of
-                            Just nm -> prefix ++ abbreviate (statusWidth - staticLen) nm ++ countPart
-                            Nothing -> "Type checking" ++ countPart
-                     else abbreviate (max 0 (statusWidth - length countPart)) prefix ++ countPart
-          in case fppPass p of
-               FrontPassKinds -> "Kinds check"
-               FrontPassTypes -> fitTypeStatus (fppCurrent p)
+        frontStatusRenderer p budget
+          | budget < 10 = Nothing
+          | otherwise =
+              let total = max 0 (fppTotal p)
+                  completed = min total (max 0 (fppCompleted p))
+                  countPart
+                    | total > 0 = " " ++ show completed ++ "/" ++ show total
+                    | otherwise = ""
+                  compact =
+                    let base = if total > 0 then "Types" ++ countPart else "Types"
+                    in if length base <= budget then base else "Types"
+                  fullTypeStatus mCurrent =
+                    let prefix = "Type checking "
+                        staticLen = length prefix + length countPart
+                    in if staticLen < budget
+                         then case mCurrent of
+                                Just nm -> prefix ++ abbreviateRight (budget - staticLen) nm ++ countPart
+                                Nothing -> "Type checking" ++ countPart
+                         else compact
+              in case fppPass p of
+                   FrontPassKinds -> staticStatusRenderer "Kinds check" "Kinds" budget
+                   FrontPassTypes -> Just (fullTypeStatus (fppCurrent p))
         frontProgressLine proj mn p =
-          progressLine proj mn (frontStatus p)
-        progressFinalLine =
-          padRight progressTimePadWidth (statusColumns "" finalActiveStatus)
+          renderProjectLine proj mn (frontStatusRenderer p)
         finalKey = TaskKey rootProj (A.modName ["__final__"])
         withTerm action = when termEnabled $ gate (withProgressLock progressUI action)
         setPercent pct = withTerm (termProgressPercent termProgress pct)
@@ -1332,21 +1548,21 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
           let proj = projPath (bjPaths job)
               mn = A.modname (biTypedMod (bjInput job))
           in do
-            gate (progressStartTask progressUI progressState (backJobKey job) (progressLine proj mn backActiveStatus) (Just 0))
+            gate (progressStartTask progressUI progressState (backJobKey job) (backActiveLine proj mn) (Just 0))
         onBackDone job result = do
           gate (progressDoneTask progressUI progressState (backJobKey job))
           creditBack (backJobKey job)
           when (not (quiet gopts optsPlan)) $
             case result of
               BackJobOk mtime mtiming -> do
-                logLine (backDoneLine (projPath (bjPaths job)) (A.modname (biTypedMod (bjInput job))) mtime)
+                logRendered (\cols -> backDoneLine cols (projPath (bjPaths job)) (A.modname (biTypedMod (bjInput job))) mtime)
                 when (C.timing gopts) $
                   forM_ mtiming $ \bt ->
-                    logLine (detailLine detailStmtIndent (backTimingLine bt))
+                    logRendered (\cols -> detailLine cols detailStmtIndentWide detailStmtIndentNarrow (backTimingLine bt))
               BackJobFailed failure ->
-                logLine (backFailLine (projPath (bjPaths job))
-                                      (A.modname (biTypedMod (bjInput job)))
-                                      (bpfMessage failure))
+                logRendered (\cols -> backFailLine cols (projPath (bjPaths job))
+                                                    (A.modname (biTypedMod (bjInput job)))
+                                                    (bpfMessage failure))
         hooks = defaultCompileHooks
           { chOnDiagnostics = \t optsT diags -> do
               gate (progressDoneTask progressUI progressState (gtKey t))
@@ -1355,13 +1571,13 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
               forM_ (frFrontTime fr) $ \tFront -> do
                 let proj = tkProj (gtKey t)
                     mn = tkMod (gtKey t)
-                logLine (frontDoneLine proj mn tFront)
+                logRendered (\cols -> frontDoneLine cols proj mn tFront)
                 when (C.timing gopts) $
                   forM_ (frFrontTiming fr) $ \ft -> do
-                    logLine (detailLine detailStmtIndent (frontTimingLine ft))
+                    logRendered (\cols -> detailLine cols detailStmtIndentWide detailStmtIndentNarrow (frontTimingLine ft))
                     forM_ (ftTypeStmtTimings ft) $ \st -> do
-                      logLine (detailTimedLine detailStmtIndent (typeStmtTimingLine st) (tstTime st))
-                      logLine (detailLine detailBindsIndent (typeStmtBindsLine st))
+                      logRendered (\cols -> detailTimedLine cols detailStmtIndentWide detailStmtIndentNarrow (typeStmtTimingLine st) (tstTime st))
+                      logRendered (\cols -> detailLine cols detailBindsIndentWide detailBindsIndentNarrow (typeStmtBindsLine st))
               case frBackJob fr of
                 Nothing -> creditBack (gtKey t)
                 Just _ -> return ()
@@ -1369,7 +1585,7 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
               let key = gtKey t
                   proj = tkProj key
                   mn = tkMod key
-              in gate (progressStartTask progressUI progressState key (progressLine proj mn frontInitialStatus) (Just 0))
+              in gate (progressStartTask progressUI progressState key (frontInitialLine proj mn) (Just 0))
           , chOnFrontProgress = \t p ->
               let key = gtKey t
                   proj = tkProj key
@@ -1386,14 +1602,14 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
           , chOnInfo = logLine
           }
         onFinalStart = do
-          gate (progressStartTask progressUI progressState finalKey progressFinalLine Nothing)
+          gate (progressStartTask progressUI progressState finalKey finalActiveLine Nothing)
           setPercent 85
         onFinalDone mtime = do
           gate (progressDoneTask progressUI progressState finalKey)
           setPercent 100
           forM_ mtime $ \tFinal ->
             when (not (quiet gopts optsPlan)) $
-              logLine (finalDoneLine tFinal)
+              logRendered (\cols -> finalDoneLine cols tFinal)
     return CliCompileHooks
       { cchHooks = hooks
       , cchLogLine = logLine
@@ -2200,6 +2416,7 @@ useColor gopts = do
 
 data ProgressUI = ProgressUI
   { puEnabled :: Bool
+  , puWidthAware :: Bool
   , puMaxLines :: Int
   , puLinesRef :: IORef [String]
   , puVisibleRef :: IORef Int
@@ -2208,6 +2425,7 @@ data ProgressUI = ProgressUI
   , puCursorHiddenRef :: IORef Bool
   , puTickerRef :: IORef (Maybe ThreadId)
   , puTermProgress :: TermProgress
+  , puTermSize :: TermSize
   , puLock :: MVar ()
   }
 
@@ -2217,7 +2435,7 @@ data ProgressState = ProgressState
   }
 
 data ProgressTask = ProgressTask
-  { ptLine :: String
+  { ptRenderLine :: Int -> BuildLineLayout
   , ptStart :: TimeSpec
   , ptProgress :: Maybe Double
   }
@@ -2226,7 +2444,8 @@ data ProgressTask = ProgressTask
 initProgressUI :: C.GlobalOptions -> Int -> IO ProgressUI
 initProgressUI gopts maxLines = do
     tty <- hIsTerminalDevice stdout
-    let enabled = (tty || C.tty gopts) && not (C.quiet gopts) && not (C.noProgress gopts)
+    let widthAware = (tty || C.tty gopts) && not (C.quiet gopts)
+        enabled = widthAware && not (C.noProgress gopts)
     useColorOut <- useColor gopts
     linesRef <- newIORef []
     visibleRef <- newIORef 0
@@ -2234,9 +2453,11 @@ initProgressUI gopts maxLines = do
     cursorHiddenRef <- newIORef False
     tickerRef <- newIORef Nothing
     termProgress <- initTermProgress gopts
+    termSize <- initTermSize widthAware
     lock <- newMVar ()
     return ProgressUI
       { puEnabled = enabled
+      , puWidthAware = widthAware
       , puMaxLines = max 1 maxLines
       , puLinesRef = linesRef
       , puVisibleRef = visibleRef
@@ -2245,6 +2466,7 @@ initProgressUI gopts maxLines = do
       , puCursorHiddenRef = cursorHiddenRef
       , puTickerRef = tickerRef
       , puTermProgress = termProgress
+      , puTermSize = termSize
       , puLock = lock
       }
 
@@ -2287,13 +2509,13 @@ progressClearUnlocked ui = do
       hFlush stdout
     writeIORef (puVisibleRef ui) 0
 
+-- | Progress heartbeat interval in microseconds.
+progressTickMicros :: Int
+progressTickMicros = 80000
+
 -- | Spinner frames used by the progress UI.
 spinnerChars :: [Char]
 spinnerChars = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
-
--- | Spinner update interval in microseconds.
-spinnerTickMicros :: Int
-spinnerTickMicros = 80000
 
 -- | Hide or show the cursor during progress rendering.
 setCursorHidden :: ProgressUI -> Bool -> IO ()
@@ -2304,13 +2526,16 @@ setCursorHidden ui hidden =
         putStr (if hidden then "\ESC[?25l" else "\ESC[?25h")
         writeIORef (puCursorHiddenRef ui) hidden
 
--- | Render the current progress lines with the spinner.
+-- | Render the current progress lines with one terminal row per live line.
 progressRenderUnlocked :: ProgressUI -> IO ()
 progressRenderUnlocked ui = do
-    lines <- take (puMaxLines ui) <$> readIORef (puLinesRef ui)
+    (_, rows, cols) <- termSizeSync (puTermSize ui)
+    allLines <- readIORef (puLinesRef ui)
     prevVisible <- readIORef (puVisibleRef ui)
-    let newVisible = length lines
-        total = max prevVisible newVisible
+    let renderWidth = safeLiveWidth cols
+        visibleCap = min (puMaxLines ui) (max 0 (rows - 1))
+        lines = take visibleCap allLines
+        newVisible = length lines
     if newVisible == 0
       then do
         setCursorHidden ui False
@@ -2318,42 +2543,45 @@ progressRenderUnlocked ui = do
       else do
         when (prevVisible > 0) $
           replicateM_ prevVisible (putStr "\ESC[1A")
-        ix <- readIORef (puSpinnerRef ui)
-        let spinner = spinnerChars !! (ix `mod` length spinnerChars)
-            prefix line = ' ' : spinner : ' ' : line
-            renderLine i = do
+        spinnerIx <- readIORef (puSpinnerRef ui)
+        let spinner = spinnerChars !! (spinnerIx `mod` length spinnerChars)
+            useSpinner = progressPrefixWidth cols > 0
+            prefix line
+              | useSpinner = termFitAnsiRight renderWidth (' ' : spinner : ' ' : line)
+              | otherwise = termFitAnsiRight renderWidth line
+        let renderLine i = do
               putStr "\r\ESC[2K"
               when (i < newVisible) $
                 putStr (prefix (lines !! i))
               putStr "\n"
         setCursorHidden ui True
-        mapM_ renderLine [0 .. total - 1]
+        mapM_ renderLine [0 .. max prevVisible newVisible - 1]
         hFlush stdout
-        writeIORef (puVisibleRef ui) total
+        writeIORef (puVisibleRef ui) (max prevVisible newVisible)
 
--- | Start the spinner update thread when needed.
-startSpinnerTicker :: ProgressUI -> ProgressState -> IO ()
-startSpinnerTicker ui st =
+-- | Start the progress heartbeat thread when needed.
+startProgressTicker :: ProgressUI -> ProgressState -> IO ()
+startProgressTicker ui st =
     when (puEnabled ui) $ do
       m <- readIORef (puTickerRef ui)
       case m of
         Just _ -> return ()
         Nothing -> do
-          tid <- forkIO (spinnerLoop ui st)
+          tid <- forkIO (progressTickerLoop ui st)
           writeIORef (puTickerRef ui) (Just tid)
 
--- | Stop the spinner update thread.
-stopSpinnerTicker :: ProgressUI -> IO ()
-stopSpinnerTicker ui = do
+-- | Stop the progress heartbeat thread.
+stopProgressTicker :: ProgressUI -> IO ()
+stopProgressTicker ui = do
     m <- atomicModifyIORef' (puTickerRef ui) (\cur -> (Nothing, cur))
     forM_ m killThread
 
--- | Spinner loop that ticks and redraws at a fixed cadence.
-spinnerLoop :: ProgressUI -> ProgressState -> IO ()
-spinnerLoop ui st = do
+-- | Heartbeat loop that redraws when the terminal is resized.
+progressTickerLoop :: ProgressUI -> ProgressState -> IO ()
+progressTickerLoop ui st = do
     tid <- myThreadId
     let loop = do
-          threadDelay spinnerTickMicros
+          threadDelay progressTickMicros
           keep <- withProgressLock ui $ do
             active <- readIORef (psActive st)
             if M.null active || not (puEnabled ui)
@@ -2371,8 +2599,8 @@ spinnerLoop ui st = do
 progressSetLines :: ProgressUI -> ProgressState -> [String] -> IO ()
 progressSetLines ui st lines = withProgressLock ui $ do
     when (puEnabled ui) $ do
-      writeIORef (puLinesRef ui) (take (puMaxLines ui) lines)
-      if null lines then stopSpinnerTicker ui else startSpinnerTicker ui st
+      writeIORef (puLinesRef ui) lines
+      if null lines then stopProgressTicker ui else startProgressTicker ui st
       progressRenderUnlocked ui
 
 -- | Clear active task state and remove any rendered progress lines.
@@ -2383,22 +2611,22 @@ progressReset ui st = withProgressLock ui $ do
     writeIORef (puLinesRef ui) []
     termProgressClear (puTermProgress ui)
     when (puEnabled ui) $ do
-      stopSpinnerTicker ui
+      stopProgressTicker ui
       progressRenderUnlocked ui
 
 -- | Mark a task as active in the progress UI.
-progressStartTask :: ProgressUI -> ProgressState -> TaskKey -> String -> Maybe Double -> IO ()
-progressStartTask ui st key line mprog = withProgressLock ui $ do
+progressStartTask :: ProgressUI -> ProgressState -> TaskKey -> (Int -> BuildLineLayout) -> Maybe Double -> IO ()
+progressStartTask ui st key renderLine mprog = withProgressLock ui $ do
     now <- getTime Monotonic
-    modifyIORef' (psActive st) (M.insert key (ProgressTask line now (fmap (\x -> max 0 (min 1 x)) mprog)))
+    modifyIORef' (psActive st) (M.insert key (ProgressTask renderLine now (fmap (\x -> max 0 (min 1 x)) mprog)))
     modifyIORef' (psOrder st) (\xs -> if key `elem` xs then xs else xs ++ [key])
     progressRefreshUnlocked ui st
 
 -- | Update the rendered line for an active progress task.
-progressUpdateTask :: ProgressUI -> ProgressState -> TaskKey -> String -> Maybe Double -> IO ()
-progressUpdateTask ui st key line mprog = withProgressLock ui $ do
+progressUpdateTask :: ProgressUI -> ProgressState -> TaskKey -> (Int -> BuildLineLayout) -> Maybe Double -> IO ()
+progressUpdateTask ui st key renderLine mprog = withProgressLock ui $ do
     modifyIORef' (psActive st) (M.adjust (\task ->
-      task { ptLine = line
+      task { ptRenderLine = renderLine
            , ptProgress = fmap (\x -> max 0 (min 1 x)) mprog
            }) key)
     progressRefreshUnlocked ui st
@@ -2416,6 +2644,9 @@ progressRefreshUnlocked ui st = do
     active <- readIORef (psActive st)
     order <- readIORef (psOrder st)
     now <- getTime Monotonic
+    (_, _, cols) <- termSizeSync (puTermSize ui)
+    let renderCols = safeLiveWidth cols
+        spinnerPrefixWidth = progressPrefixWidth cols
     let progressDone = "\ESC[48;5;24m"
         progressReset = "\ESC[0m"
         paintProgressLine mprog line =
@@ -2429,12 +2660,44 @@ progressRefreshUnlocked ui st = do
                    then todo
                    else progressDone ++ done ++ progressReset ++ todo
             _ -> line
+        betterLine best Nothing = best
+        betterLine Nothing cand = cand
+        betterLine best@(Just (bestScore, _)) cand@(Just (candScore, _))
+          | candScore > bestScore = cand
+          | otherwise = best
         formatLine task =
-          paintProgressLine (ptProgress task) (ptLine task ++ fmtTime (diffTimeSpec now (ptStart task)))
+          let elapsedPrecise = fmtTimePrecise (diffTimeSpec now (ptStart task))
+              elapsedCompact = fmtTimeCompact (diffTimeSpec now (ptStart task))
+              timerWidth = length elapsedPrecise
+              liveCandidate timerRank timer =
+                let timerCols = if null timer then 0 else timerWidth
+                    bodyWidth = max 0 (renderCols - spinnerPrefixWidth - timerCols)
+                    layout = ptRenderLine task bodyWidth
+                    body = bllText layout
+                    line = appendTimerField body timerWidth timer
+                    score =
+                      ( if bllAligned layout then 1 :: Int else 0
+                      , if bllHasStatus layout then 1 :: Int else 0
+                      , bllLabelCols layout
+                      , timerRank
+                      )
+                in if null body || renderCols < spinnerPrefixWidth + length line
+                     then Nothing
+                     else Just (score, line)
+              line =
+                case foldl' betterLine Nothing
+                       [ liveCandidate 2 elapsedPrecise
+                       , liveCandidate 1 elapsedCompact
+                       , liveCandidate 0 ""
+                       ]
+                of
+                  Just (_, bestLine) -> bestLine
+                  Nothing -> bllText (ptRenderLine task (max 0 (renderCols - spinnerPrefixWidth)))
+          in paintProgressLine (ptProgress task) line
         lines = [ formatLine task | key <- order, Just task <- [M.lookup key active] ]
     when (puEnabled ui) $ do
-      writeIORef (puLinesRef ui) (take (puMaxLines ui) lines)
-      if null lines then stopSpinnerTicker ui else startSpinnerTicker ui st
+      writeIORef (puLinesRef ui) lines
+      if null lines then stopProgressTicker ui else startProgressTicker ui st
       progressRenderUnlocked ui
       termProgressHeartbeat (puTermProgress ui)
 
