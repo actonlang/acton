@@ -8,9 +8,9 @@ module Acton.Fingerprint
   ) where
 
 import Data.Bits (shiftL, xor, shiftR, complement, (.|.), (.&.))
-import Data.Char (isDigit, isHexDigit, isSpace, toLower)
+import Data.Char (isSpace, toLower)
 import Data.Word (Word32, Word64)
-import Numeric (readHex, readDec, showHex)
+import Numeric (readHex, showHex)
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString as BS
 
@@ -50,18 +50,12 @@ parseFingerprint raw =
     in case trimmed of
          '0':'x':rest -> parseHex rest
          '0':'X':rest -> parseHex rest
-         _ | all isDigit trimmed -> parseDec trimmed
          _ -> Nothing
   where
     trim = dropWhile isSpace . reverse . dropWhile isSpace . reverse
 
     parseHex s =
       case readHex (map toLower s) of
-        [(n, "")] | n <= toInteger (maxBound :: Word64) -> Just (fromInteger n)
-        _ -> Nothing
-
-    parseDec s =
-      case readDec s of
         [(n, "")] | n <= toInteger (maxBound :: Word64) -> Just (fromInteger n)
         _ -> Nothing
 
