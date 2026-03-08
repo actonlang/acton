@@ -220,7 +220,7 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
                   showLog = tpuShowLog ui
               case M.lookup key cachedMap of
                 Just cachedRes -> do
-                  let line = formatTestLineWith useColorLine formatTestStatus nameWidth display cachedRes
+                  let line = formatTestFinalLineRenderer useColorLine nameWidth display cachedRes
                       details = formatTestDetailLines useColorLine showLog cachedRes
                   if shouldShowCached cachedRes
                     then do
@@ -259,7 +259,7 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
                             , trSnapshotUpdated = False
                             , trCached = False
                             }
-                          initLine = formatTestLineWith useColorLine formatTestStatusLive nameWidth display initRes
+                          initLine = formatTestLiveLineRenderer useColorLine nameWidth display initRes
                       started <- testUiStart ui key (tsModule spec) initLine
                       if not started
                         then return Nothing
@@ -630,8 +630,8 @@ testProgressCallbacks ui eventChan key display =
     let nameWidth = tpuNameWidth ui
         useColorOut = tpuUseColor ui
         showLog = tpuShowLog ui
-        liveLine res = formatTestLineWith useColorOut formatTestStatusLive nameWidth display res
-        finalLine res = formatTestLineWith useColorOut formatTestStatus nameWidth display res
+        liveLine res = formatTestLiveLineRenderer useColorOut nameWidth display res
+        finalLine res = formatTestFinalLineRenderer useColorOut nameWidth display res
         detailLines res = formatTestDetailLines useColorOut showLog res
     in TestProgressCallbacks
       { tpcOnLive = \res -> testUiUpdateLive ui key (liveLine res)

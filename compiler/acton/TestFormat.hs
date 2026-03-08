@@ -2,6 +2,9 @@ module TestFormat
   ( formatTestStatus
   , formatTestStatusLive
   , formatTestLineWith
+  , formatTestLineFitted
+  , formatTestFinalLineRenderer
+  , formatTestLiveLineRenderer
   , formatTestDetailLines
   , testColorApply
   , testColorBold
@@ -14,8 +17,9 @@ module TestFormat
 import Acton.Testing (TestResult(..))
 import Data.Char (isSpace)
 import Data.List (foldl', isPrefixOf, isInfixOf, intercalate)
-import Data.Maybe (isJust, catMaybes)
+import Data.Maybe (catMaybes, fromMaybe, isJust, listToMaybe, mapMaybe)
 import qualified Data.Map as M
+import TerminalSize (termFitPlainRight, termVisibleLength)
 import Text.Printf (printf)
 
 -- | Compute the status label (OK/FAIL/ERR/FLAKY) for a test.
@@ -102,6 +106,44 @@ colorizeStatusPart useColor cached statusRaw runs =
             else ""
     in statusColored ++ star ++ pad ++ ": " ++ runs
 
+renderStatusField :: Bool -> Bool -> String -> (String, String)
+renderStatusField useColor cached statusRaw =
+    let (statusPlain, statusRendered) = renderStatusToken useColor cached statusRaw
+        pad = replicate (max 0 (testStatusWidth - length statusPlain)) ' '
+    in (statusPlain ++ pad ++ ":", statusRendered ++ pad ++ ":")
+
+renderStatusToken :: Bool -> Bool -> String -> (String, String)
+renderStatusToken useColor cached statusRaw =
+    let suffix = if cached then "*" else ""
+        strip pref s = if pref `isPrefixOf` s then drop (length pref) s else s
+        core = strip "FLAKY " statusRaw
+        statusColored = case core of
+          "RUN" -> testColorApply useColor [testColorYellow] statusRaw
+          "SKIP" -> testColorApply useColor [testColorYellow] statusRaw
+          "OK" -> testColorApply useColor [testColorGreen] statusRaw
+          "UPDATED" -> testColorApply useColor [testColorYellow] statusRaw
+          _ -> testColorApply useColor [testColorBold, testColorRed] statusRaw
+        star =
+          if cached
+            then if useColor then testColorYellow ++ "*" ++ testColorReset else "*"
+            else ""
+    in (statusRaw ++ suffix, statusColored ++ star)
+
+formatSecondsCompact :: Double -> String
+formatSecondsCompact ms
+  | ms <= 0 = "0s"
+  | ms < 1000 = "<1s"
+  | otherwise =
+      let secs = ms / 1000
+      in show (max 1 (round secs :: Int)) ++ "s"
+
+fitTestDisplay :: Int -> String -> String
+fitTestDisplay width display
+  | width <= 0 = ""
+  | length display <= width = display
+  | width <= 3 = take width display
+  | otherwise = termFitPlainRight (width - 3) display ++ "..."
+
 -- | Format a single test result line with alignment and timing.
 formatTestLineWith :: Bool -> (TestResult -> String) -> Int -> String -> TestResult -> String
 formatTestLineWith useColor statusFn nameWidth display res =
@@ -111,6 +153,59 @@ formatTestLineWith useColor statusFn nameWidth display res =
         runs = printf "%4d runs in %3.3fms" (trNumIterations res) (trTestDuration res)
         statusPart = colorizeStatusPart useColor (trCached res) statusRaw runs
     in prefix0 ++ padding ++ statusPart
+
+-- | Format a live test line to the current terminal width.
+formatTestLineFitted :: Bool -> (TestResult -> String) -> Int -> Int -> String -> TestResult -> String
+formatTestLineFitted useColor statusFn nameWidth width display res
+  | width <= 0 = ""
+  | otherwise =
+      fromMaybe fallback (firstFit (legacyLine : map alignedLine summaries ++ map compactLine summaries))
+  where
+    indent = if width >= 4 then "   " else ""
+    statusRaw = statusFn res
+    (statusPlain, statusRendered) = renderStatusToken useColor (trCached res) statusRaw
+    (statusFieldPlain, statusFieldRendered) = renderStatusField useColor (trCached res) statusRaw
+    duration = formatSecondsCompact (trTestDuration res)
+    summaryFull = show (trNumIterations res) ++ " runs " ++ duration
+    summaryCompact = show (trNumIterations res) ++ "r " ++ duration
+    summaries = [Just summaryFull, Just summaryCompact, Nothing]
+    legacyRendered = formatTestLineWith useColor statusFn nameWidth display res
+    legacyLine
+      | termVisibleLength legacyRendered <= width = Just legacyRendered
+      | otherwise = Nothing
+    prefix0 = indent ++ display ++ ": "
+    alignedPrefix = prefix0 ++ replicate (max 0 (nameWidth - length prefix0)) ' '
+    alignedLine mSummary =
+      let summaryPad = maybe 0 (\s -> 1 + length s) mSummary
+          fixed = length alignedPrefix + length statusFieldPlain + summaryPad
+      in if fixed <= width
+           then Just (alignedPrefix
+                      ++ statusFieldRendered
+                      ++ maybe "" (\s -> " " ++ s) mSummary)
+           else Nothing
+    compactLine mSummary =
+      let summaryPad = maybe 0 (\s -> 1 + length s) mSummary
+          fixed = length indent + 2 + length statusPlain + summaryPad
+          nameBudget = width - fixed
+      in if nameBudget >= 1
+           then Just (indent
+                      ++ fitTestDisplay nameBudget display
+                      ++ ": "
+                      ++ statusRendered
+                      ++ maybe "" (\s -> " " ++ s) mSummary)
+           else Nothing
+    firstFit = listToMaybe . mapMaybe id
+    fallback
+      | width >= length statusPlain = statusRendered
+      | otherwise = fitTestDisplay width display
+
+formatTestFinalLineRenderer :: Bool -> Int -> String -> TestResult -> Int -> String
+formatTestFinalLineRenderer useColor nameWidth display res cols =
+    formatTestLineFitted useColor formatTestStatus nameWidth cols display res
+
+formatTestLiveLineRenderer :: Bool -> Int -> String -> TestResult -> Int -> String
+formatTestLiveLineRenderer useColor nameWidth display res cols =
+    formatTestLineFitted useColor formatTestStatusLive nameWidth cols display res
 
 formatTestDetailLines :: Bool -> Bool -> TestResult -> [String]
 formatTestDetailLines useColor showLog res =

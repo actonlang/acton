@@ -66,6 +66,7 @@ executables:
       - PkgCommands
       - Paths_acton
       - TerminalProgress
+      - TerminalSize
       - ZigProgress
       - TestFormat
       - TestRunner
