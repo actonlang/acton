@@ -1,0 +1,4 @@
+# Intentionally implemented in C via segv_ffi.ext.c
+
+def maybe_crash_if_parallel(n: int) -> int:
+    NotImplemented

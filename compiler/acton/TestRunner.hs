@@ -38,13 +38,14 @@ import qualified Data.Aeson.KeyMap as AesonKM
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
-import Control.Exception (SomeException, displayException, evaluate, onException, try)
 import Data.Time.Clock (UTCTime)
+import Control.Exception (SomeException, AsyncException(..), displayException, evaluate, onException, try, fromException, throwIO)
+import TerminalSize (termFitPlainRight)
 import qualified Text.Regex.TDFA as TDFA
 import Data.Version (showVersion)
 import qualified Paths_acton
 
-data TestMode = TestModeRun | TestModeList | TestModePerf deriving (Eq, Show)
+data TestMode = TestModeRun | TestModeList | TestModePerf | TestModeStress deriving (Eq, Show)
 
 data TestSpec = TestSpec
   { tsModule :: String
@@ -175,20 +176,30 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
             nameWidth = max 20 (maxNameLen + 5)
             runContext = mkRunContext opts topts mode
             ctxHash = contextHashBytes runContext
-            useCache = not (C.testNoCache topts)
-        cache <- readTestCache (testCachePath paths) runContext
-        testHashInfos <- buildTestHashInfos paths ctxHash testsByModule
-        let cacheEntries = tcTests cache
-        when (C.verbose gopts) $
+            useCache = not (C.testNoCache topts) && mode /= TestModeStress
+        cache <-
+          if useCache
+            then readTestCache (testCachePath paths) runContext
+            else return TestCache
+              { tcVersion = testCacheVersion
+              , tcContext = runContext
+              , tcTests = M.empty
+              }
+        testHashInfos <-
+          if useCache
+            then buildTestHashInfos paths ctxHash testsByModule
+            else return M.empty
+        let cacheEntries =
+              if useCache
+                then tcTests cache
+                else M.empty
+        when (C.verbose gopts && useCache) $
           putStrLn (formatTestCacheContext ctxHash (testCachePath paths))
         let logCache = if C.verbose gopts then putStrLn else \_ -> return ()
-        cachedResults0 <-
+        (cachedResults0, _testsToRun) <-
           if useCache
-            then do
-              (cachedResults, _testsToRun) <-
-                classifyCachedTests logCache cacheEntries testHashInfos allTests
-              return cachedResults
-            else return []
+            then classifyCachedTests logCache cacheEntries testHashInfos allTests
+            else return ([], allTests)
         cachedResults1 <-
           if useCache
             then filterReusableCachedSnapshotResults logCache paths cachedResults0
@@ -199,7 +210,9 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
             else return cachedResults1
         let showCached = C.testShowCached topts
         when (not emitJson && not useCache) $
-          putStrLn "Skipping test result cache (--no-cache); running all selected tests"
+          if mode == TestModeStress
+            then putStrLn "Skipping test result cache in stress mode; running all selected tests"
+            else putStrLn "Skipping test result cache (--no-cache); running all selected tests"
         when (not emitJson && showCached && not (null cachedResults)) $
           putStrLn ("Using cached results for " ++ show (length cachedResults) ++ " tests")
         ui <- initTestProgressUI gopts nameWidth (C.testShowLog topts) useColorOut
@@ -269,7 +282,7 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
                       if not started
                         then return Nothing
                         else do
-                          let callbacks = testProgressCallbacks ui eventChan key display
+                          callbacks <- testProgressCallbacks ui eventChan key display
                           void $ async $ do
                             res <- runModuleTestStreaming opts paths topts mode (tsModule spec) (tsName spec)
                                     (tpuEnabled ui) callbacks
@@ -295,7 +308,11 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
                   case evt of
                     TestEventDone res -> do
                       progressStep
-                      loop pending' (running' - 1) (res : results')
+                      let pending'' =
+                            if testResultInterrupted res
+                              then []
+                              else pending'
+                      loop pending'' (running' - 1) (res : results')
                     TestEventRoom -> loop pending' running' results'
         results <- loop specs 0 []
         timeEnd <- getTime Monotonic
@@ -312,7 +329,8 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
               , tcContext = runContext
               , tcTests = cacheEntries'
               }
-        writeTestCache (testCachePath paths) newCache
+        when useCache $
+          writeTestCache (testCachePath paths) newCache
         if emitJson
           then do
             outputJsonReport (timeEnd - timeStart) results
@@ -330,7 +348,7 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
       , trcTarget = C.target opts'
       , trcOptimize = show (C.optimize opts')
       , trcMode = show mode'
-      , trcArgs = testCmdArgs topts'
+      , trcArgs = testCmdArgs mode' topts'
       }
 
 testExitCode :: [TestResult] -> Int
@@ -557,7 +575,12 @@ runModuleTestStreaming :: C.CompileOptions
                        -> IO TestResult
 runModuleTestStreaming opts paths topts mode modName testName allowLive callbacks = do
     let binPath = testBinaryPath opts paths modName
-        cmd = ["test", testName] ++ (if mode == TestModePerf then ["perf"] else []) ++ testCmdArgs topts
+        modeArgs =
+          case mode of
+            TestModePerf -> ["perf"]
+            TestModeStress -> ["stress"]
+            _ -> []
+        cmd = ["test", testName] ++ modeArgs ++ testCmdArgs mode topts
     updatesRef <- newIORef []
     lineDoneRef <- newIORef False
     stdErrRef <- newIORef []
@@ -577,7 +600,17 @@ runModuleTestStreaming opts paths topts mode modName testName allowLive callback
             Just val -> case parseTestInfo val of
                           Just res -> onUpdate res
                           Nothing -> addStdErr line
-    (exitCode, out, _err) <- readProcessWithExitCodeStreaming (proc binPath cmd){ cwd = Just (projPath paths) } onErrLine
+    let procSpec = (proc binPath cmd){ cwd = Just (projPath paths), delegate_ctlc = True }
+    procRes <- try (readProcessWithExitCodeStreaming procSpec onErrLine) :: IO (Either SomeException (ExitCode, String, String))
+    (exitCode, out, _err, interruptedByUser) <-
+      case procRes of
+        Right (code, outTxt, errTxt) ->
+          return (code, outTxt, errTxt, False)
+        Left ex ->
+          case fromException ex of
+            Just UserInterrupt ->
+              return (ExitFailure (-2), "", "", True)
+            _ -> throwIO ex
     infos <- readIORef updatesRef
     stdErrLines <- reverse <$> readIORef stdErrRef
     let stdErrText = unlines stdErrLines
@@ -614,7 +647,12 @@ runModuleTestStreaming opts paths topts mode modName testName allowLive callback
           { trStdOut = mergedStd (trStdOut res0) out
           , trStdErr = mergedStd (trStdErr res0) stdErrText
           }
-        res = case exitCode of
+        interrupted = interruptedByUser || isInterruptExitCode exitCode
+        incompleteSuccessExit = mode == TestModeStress && exitCode == ExitSuccess && not (trComplete res1)
+        res
+          | mode == TestModeStress && (interrupted || incompleteSuccessExit) = finalizeInterruptedStressResult res1
+          | otherwise =
+              case exitCode of
                 ExitSuccess -> res1
                 ExitFailure code ->
                   res1 { trException = Just ("Test process exited with code " ++ show code) }
@@ -629,18 +667,90 @@ runModuleTestStreaming opts paths topts mode modName testName allowLive callback
         tpcOnDone callbacks res'
         tpcOnFinal callbacks res'
     return res'
+  where
+    isInterruptExitCode ExitSuccess = False
+    isInterruptExitCode (ExitFailure code) = code == (-2) || code == 130
 
-testProgressCallbacks :: TestProgressUI -> Chan TestEvent -> TestKey -> String -> TestProgressCallbacks
-testProgressCallbacks ui eventChan key display =
+    finalizeInterruptedStressResult res =
+      let success' =
+            case trSuccess res of
+              Just _ -> trSuccess res
+              Nothing ->
+                if trNumFailures res == 0 && trNumErrors res == 0
+                  then Just True
+                  else Nothing
+          exception' =
+            if trNumFailures res == 0 && trNumErrors res == 0
+              then Nothing
+              else trException res
+      in res
+         { trComplete = True
+         , trSuccess = success'
+         , trException = exception'
+         , trRaw = markInterruptedRaw (trRaw res)
+         }
+
+    markInterruptedRaw raw =
+      case raw of
+        Aeson.Object o ->
+          Aeson.Object (AesonKM.insert (AesonKey.fromString "interrupted") (Aeson.Bool True) o)
+        _ ->
+          Aeson.object [AesonKey.fromString "interrupted" Aeson..= True]
+
+testProgressCallbacks :: TestProgressUI -> Chan TestEvent -> TestKey -> String -> IO TestProgressCallbacks
+testProgressCallbacks ui eventChan key display = do
+    workerKeysRef <- newIORef M.empty
     let nameWidth = tpuNameWidth ui
         useColorOut = tpuUseColor ui
         showLog = tpuShowLog ui
         liveLine res = formatTestLiveLineRenderer useColorOut nameWidth display res
         finalLine res = formatTestFinalLineRenderer useColorOut nameWidth display res
         detailLines res = formatTestDetailLines useColorOut showLog res
-    in TestProgressCallbacks
+        workerLine done durationMs (wid, syncW, iterations, driftUs, driftTotalUs, calibrating) cols =
+          let role = if syncW then "sync" else "drift"
+              phase =
+                if done
+                  then "DONE"
+                  else if calibrating
+                    then "CAL "
+                    else "RUN "
+              rate = testsPerSecond iterations durationMs
+              line = printf "      w%-3d %-5s %s : %7d iters @ %7.1f/s cur=%6dus tot=%8dus"
+                            wid role phase iterations rate driftUs driftTotalUs
+          in termFitPlainRight cols line
+        workerKey wid = TestKey (tkModule key) (tkName key ++ "#worker" ++ show wid)
+        updateStressWorkers done res = do
+          let rows = stressWorkerRows res
+          unless (null rows) $ do
+            existing <- readIORef workerKeysRef
+            existing' <- foldM (\acc row@(wid, _, _, _, _, _) -> do
+              let line = workerLine done (trTestDuration res) row
+              case M.lookup wid acc of
+                Just wk -> do
+                  if done
+                    then do
+                      removed <- testUiFinalize ui wk line
+                      when removed $
+                        writeChan eventChan TestEventRoom
+                    else
+                      testUiUpdateLive ui wk line
+                  return acc
+                Nothing ->
+                  if done
+                    then return acc
+                    else do
+                      let wk = workerKey wid
+                      started <- testUiStart ui wk (tkModule key) line
+                      if started
+                        then return (M.insert wid wk acc)
+                        else return acc
+              ) existing rows
+            writeIORef workerKeysRef existing'
+    return TestProgressCallbacks
       { tpcOnLive = \res -> testUiUpdateLive ui key (liveLine res)
+          >> updateStressWorkers False res
       , tpcOnDone = \res -> do
+          updateStressWorkers True res
           removed <- testUiFinalize ui key (finalLine res)
           when removed $
             writeChan eventChan TestEventRoom
@@ -652,17 +762,88 @@ testProgressCallbacks ui eventChan key display =
             queuePendingDetails ui key details
       }
 
+stressWorkerRows :: TestResult -> [(Int, Bool, Int, Int, Int, Bool)]
+stressWorkerRows res =
+    case trRaw res of
+      Aeson.Object obj ->
+        case AesonKM.lookup (AesonKey.fromString "stress_workers") obj of
+          Just (Aeson.Array workers) ->
+            catMaybes (map parseWorker (foldr (:) [] workers))
+          _ -> []
+      _ -> []
+  where
+    parseWorker val =
+      case val of
+        Aeson.Object o -> do
+          wid <- lookupInt o "id"
+          iterations <- lookupInt o "iterations"
+          driftUs <- lookupIntDefault o "drift_us" 0
+          driftTotalUs <- lookupIntDefault o "drift_total_us" 0
+          syncW <- lookupBool o "sync"
+          calibrating <- lookupBoolDefault o "calibrating" False
+          return (wid, syncW, iterations, driftUs, driftTotalUs, calibrating)
+        _ -> Nothing
+    lookupInt o keyName =
+      case AesonKM.lookup (AesonKey.fromString keyName) o of
+        Just v -> AesonTypes.parseMaybe Aeson.parseJSON v
+        _ -> Nothing
+    lookupIntDefault o keyName defVal =
+      case lookupInt o keyName of
+        Just n -> Just n
+        Nothing -> Just defVal
+    lookupBool o keyName =
+      case AesonKM.lookup (AesonKey.fromString keyName) o of
+        Just v -> AesonTypes.parseMaybe Aeson.parseJSON v
+        _ -> Nothing
+    lookupBoolDefault o keyName defVal =
+      case lookupBool o keyName of
+        Just b -> Just b
+        Nothing -> Just defVal
+
+testsPerSecond :: Int -> Double -> Double
+testsPerSecond iterations durationMs
+  | iterations <= 0 = 0
+  | durationMs <= 0 = 0
+  | otherwise = (fromIntegral iterations * 1000.0) / durationMs
+
 -- | Build test runner arguments from TestOptions limits.
-testCmdArgs :: C.TestOptions -> [String]
-testCmdArgs topts =
+testCmdArgs :: TestMode -> C.TestOptions -> [String]
+testCmdArgs mode topts =
     let iter = C.testIter topts
+        rawMaxIter = C.testMaxIter topts
+        rawMinTime = C.testMinTime topts
+        minTime =
+          case mode of
+            TestModePerf ->
+              if not (C.testMinTimeSet topts)
+                then 1000
+                else rawMinTime
+            TestModeStress ->
+              if not (C.testMinTimeSet topts)
+                then 1000
+                else rawMinTime
+            _ -> rawMinTime
+        rawMaxTime = C.testMaxTime topts
+        modeDefaultMaxTime =
+          case mode of
+            TestModeRun -> minTime
+            TestModePerf -> 1000
+            TestModeStress -> 5000
+            _ -> 1000
+        maxTime
+          | C.testMaxTimeSet topts && rawMaxTime == 0 = 0
+          | C.testMaxTimeSet topts = max rawMaxTime minTime
+          | otherwise = modeDefaultMaxTime
+        maxIter
+          | mode == TestModeStress && maxTime == 0 && not (C.testMaxIterSet topts) = 0
+          | otherwise = rawMaxIter
         baseArgs =
           if iter > 0
             then ["--max-iter", show iter, "--min-iter", show iter, "--max-time", show (10^6), "--min-time", "1"]
-            else [ "--max-iter", show (C.testMaxIter topts)
+            else [ "--max-iter", show maxIter
                  , "--min-iter", show (C.testMinIter topts)
-                 , "--max-time", show (C.testMaxTime topts)
-                 , "--min-time", show (C.testMinTime topts)
+                 , "--max-time", show maxTime
+                 , "--min-time", show minTime
                  ]
         tagArgs = concatMap (\tag -> ["--tag", tag]) (C.testTags topts)
     in baseArgs ++ tagArgs
@@ -751,6 +932,18 @@ pickFinalTestInfo infos =
           Just i -> Just i
           Nothing -> Just (head xs)
 
+testResultInterrupted :: TestResult -> Bool
+testResultInterrupted res =
+  case trRaw res of
+    Aeson.Object obj ->
+      case AesonKM.lookup (AesonKey.fromString "interrupted") obj of
+        Just v ->
+          case AesonTypes.parseMaybe Aeson.parseJSON v of
+            Just True -> True
+            _ -> False
+        _ -> False
+    _ -> False
+
 -- | Print a summary line and return the failure/error exit code.
 printTestSummary :: Bool -> TimeSpec -> Bool -> [TestResult] -> IO Int
 printTestSummary useColor elapsed showCached results = do
@@ -759,6 +952,7 @@ printTestSummary useColor elapsed showCached results = do
         errors = length [ r | r <- results, trSuccess r == Nothing ]
         skipped = length [ r | r <- results, trSkipped r ]
         hiddenCachedSuccess = not showCached && any (\r -> trCached r && trSuccess r == Just True && not (trSkipped r)) results
+        interrupted = any testResultInterrupted results
         hasCached = any trCached results
     case total of
       0 -> do
@@ -778,6 +972,8 @@ printTestSummary useColor elapsed showCached results = do
         putStrLn ""
         when hasCached $
           putStrLn (if useColor then testColorYellow ++ "*" ++ testColorReset ++ " = cached test result" else "* = cached test result")
+        when interrupted $
+          putStrLn "Stress run interrupted by user; showing partial results collected so far."
         when hiddenCachedSuccess $
           putStrLn "Cached successful tests are hidden. Cached failures/errors are shown. Use --show-cached to include cached successes, or --no-cache to force rerunning selected tests."
         if errors > 0
@@ -811,8 +1007,20 @@ printTestResultsOrdered useColor showLog showCached nameWidth specs results = do
                         return (Set.insert modName printedMods)
                   putStrLn (formatLine spec res)
                   mapM_ putStrLn (formatTestDetailLines useColor showLog res)
+                  mapM_ putStrLn (formatStressWorkerFinalLines res)
                   go printedMods' True rest
     go Set.empty False specs
+
+formatStressWorkerFinalLines :: TestResult -> [String]
+formatStressWorkerFinalLines res =
+    map renderRow (stressWorkerRows res)
+  where
+    durationMs = trTestDuration res
+    renderRow (wid, syncW, iterations, driftUs, driftTotalUs, _calibrating) =
+      let role = if syncW then "sync" else "drift"
+          rate = testsPerSecond iterations durationMs
+      in printf "      w%-3d %-5s DONE : %7d iters @ %7.1f/s cur=%6dus tot=%8dus"
+                wid role iterations rate driftUs driftTotalUs
 
 -- | Write snapshot outputs for all tests that produced output.
 writeSnapshotOutputs :: Paths -> [TestResult] -> IO ()

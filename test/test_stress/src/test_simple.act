@@ -1,0 +1,11 @@
+import testing
+
+def _test_foo():
+    a = 0
+    for i in range(99999):
+        a += 1
+
+def _test_bar():
+    a = 0
+    for i in range(99999):
+        a += 1

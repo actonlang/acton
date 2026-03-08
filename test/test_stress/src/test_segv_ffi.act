@@ -1,0 +1,7 @@
+import testing
+import segv_ffi
+
+def _test_parallel_only_segv():
+    for i in range(120):
+        n = i % 127
+        testing.assertEqual(segv_ffi.maybe_crash_if_parallel(n), n + 1)

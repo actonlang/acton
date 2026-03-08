@@ -2,6 +2,7 @@
 module Acton.CommandLineParser where
 
 import Options.Applicative
+import Data.Maybe (fromMaybe, isJust)
 
 #if defined(darwin_HOST_OS) && defined(aarch64_HOST_ARCH)
 defTarget = "aarch64-macos-none"
@@ -122,6 +123,7 @@ data TestCommand
     = TestRun TestOptions
     | TestList TestOptions
     | TestPerf TestOptions
+    | TestStress TestOptions
     deriving Show
 
 data TestOptions = TestOptions
@@ -138,6 +140,9 @@ data TestOptions = TestOptions
     , testMaxTime      :: Int
     , testMinTime      :: Int
     , testTags         :: [String]
+    , testMaxIterSet   :: Bool
+    , testMaxTimeSet   :: Bool
+    , testMinTimeSet   :: Bool
     , testModules      :: [String]
     , testNames        :: [String]
     } deriving Show
@@ -360,18 +365,19 @@ optimizeOption = option optimizeReader
      <> help "Optimization mode (Debug, ReleaseSafe, ReleaseSmall, ReleaseFast)"
     )
 
-data TestModeTag = ModeList | ModePerf deriving Show
+data TestModeTag = ModeList | ModePerf | ModeStress deriving Show
 
 testCommand :: Parser TestCommand
 testCommand =
     toCmd
-      <$> optional (argument testModeReader (metavar "MODE" <> help "list | perf"))
+      <$> optional (argument testModeReader (metavar "MODE" <> help "list | perf | stress"))
       <*> testOptions
   where
     toCmd mMode opts =
       case mMode of
         Just ModeList -> TestList opts
         Just ModePerf -> TestPerf opts
+        Just ModeStress -> TestStress opts
         Nothing -> TestRun opts
 
 testModeReader :: ReadM TestModeTag
@@ -379,10 +385,11 @@ testModeReader = eitherReader $ \s ->
     case s of
       "list" -> Right ModeList
       "perf" -> Right ModePerf
-      _      -> Left "Expected 'list' or 'perf'"
+      "stress" -> Right ModeStress
+      _      -> Left "Expected 'list', 'perf' or 'stress'"
 
 testOptions :: Parser TestOptions
-testOptions = TestOptions
+testOptions = mkTestOptions
     <$> compileOptions
     <*> switch (long "show-log"      <> help "Show test log output")
     <*> switch (long "show-cached"   <> help "Show cached test results")
@@ -391,13 +398,35 @@ testOptions = TestOptions
     <*> switch (long "record"        <> help "Record test performance results")
     <*> switch (long "snapshot-update" <> long "golden-update" <> long "accept" <> help "Accept current test output as expected snapshot values")
     <*> option auto (long "iter"     <> metavar "N" <> value (-1) <> help "Number of iterations to run a test")
-    <*> option auto (long "max-iter" <> metavar "N" <> value (10^6) <> help "Maximum number of iterations to run a test")
+    <*> optional (option auto (long "max-iter" <> metavar "N" <> help "Maximum number of iterations to run a test (mode defaults when omitted)"))
     <*> option auto (long "min-iter" <> metavar "N" <> value 3 <> help "Minimum number of iterations to run a test")
-    <*> option auto (long "max-time" <> metavar "MS" <> value 1000 <> help "Maximum time to run a test in milliseconds")
-    <*> option auto (long "min-time" <> metavar "MS" <> value 50 <> help "Minimum time to run a test in milliseconds")
+    <*> optional (option auto (long "max-time" <> metavar "MS" <> help "Maximum time to run a test in milliseconds (0 = no time limit, mode defaults when omitted)"))
+    <*> optional (option auto (long "min-time" <> metavar "MS" <> help "Minimum time to run a test in milliseconds"))
     <*> many (strOption (long "tag" <> metavar "TAG" <> help "Enable test capability TAG for testing.require()"))
     <*> many (strOption (long "module" <> metavar "MODULE" <> help "Filter on test module name"))
     <*> many (strOption (long "name" <> metavar "NAME" <> help "Filter on test name (regex, anchored; use .* for substrings)"))
+  where
+    mkTestOptions testCompile testShowLog testShowCached testNoCache testJson testRecord testSnapshotUpdate testIter testMaxIterOpt testMinIter testMaxTimeOpt testMinTimeOpt testTags testModules testNames =
+      TestOptions
+        { testCompile = testCompile
+        , testShowLog = testShowLog
+        , testShowCached = testShowCached
+        , testNoCache = testNoCache
+        , testJson = testJson
+        , testRecord = testRecord
+        , testSnapshotUpdate = testSnapshotUpdate
+        , testIter = testIter
+        , testMaxIter = fromMaybe (10^6) testMaxIterOpt
+        , testMinIter = testMinIter
+        , testMaxTime = fromMaybe 1000 testMaxTimeOpt
+        , testMinTime = fromMaybe 50 testMinTimeOpt
+        , testTags = testTags
+        , testMaxIterSet = isJust testMaxIterOpt
+        , testMaxTimeSet = isJust testMaxTimeOpt
+        , testMinTimeSet = isJust testMinTimeOpt
+        , testModules = testModules
+        , testNames = testNames
+        }
 
 depOverrideReader :: ReadM (String,String)
 depOverrideReader = eitherReader $ \s ->

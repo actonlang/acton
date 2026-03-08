@@ -609,6 +609,7 @@ runTests gopts cmd = do
             C.TestRun opts  -> (TestModeRun, opts)
             C.TestList opts -> (TestModeList, opts)
             C.TestPerf opts -> (TestModePerf, opts)
+            C.TestStress opts -> (TestModeStress, opts)
         gopts' = if C.testJson topts then gopts { C.quiet = True } else gopts
         opts0 = C.testCompile topts
     let opts = opts0
@@ -631,7 +632,8 @@ runTestsOnce gopts opts topts mode paths = do
     case mode of
       TestModeList -> listProjectTests opts paths topts modules
       _ -> do
-        maxParallel <- testMaxParallel gopts
+        maxParallel0 <- testMaxParallel gopts
+        let maxParallel = if mode == TestModeStress then 1 else maxParallel0
         useColorOut <- useColor gopts
         exitCode <- runProjectTests useColorOut gopts opts paths topts mode modules maxParallel
         exitWithTestCode exitCode
@@ -645,7 +647,8 @@ runTestsWatch gopts opts topts mode paths = do
     withBackgroundCompilerLockOrExit projDir
       "Another long-running Acton compiler is already running; cannot start test watch." $ do
         (sched, progressUI, progressState) <- initCompileWatchContext gopts
-        testParallel <- testMaxParallel gopts
+        testParallel0 <- testMaxParallel gopts
+        let testParallel = if mode == TestModeStress then 1 else testParallel0
         let runOnce gen mChanged = do
               withProjectLockForGen gopts sched gen projDir $ do
                 logProjectBuild gopts progressUI progressState projDir

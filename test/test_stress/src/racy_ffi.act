@@ -1,0 +1,13 @@
+# Intentionally implemented in C via racy_ffi.ext.c
+
+def racy_sum(n: int) -> int:
+    NotImplemented
+
+def racy_format(n: int) -> str:
+    NotImplemented
+
+def subtle_lazy_magic() -> int:
+    NotImplemented
+
+def subtle_cache_mix(n: int) -> int:
+    NotImplemented
