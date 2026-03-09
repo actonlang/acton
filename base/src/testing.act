@@ -963,6 +963,7 @@ class TestInfo(object):
 
 class TestRunnerConfig(object):
     perf_mode: bool
+    stress_mode: bool
     max_iter: int
     min_iter: int
     max_time: float
@@ -970,7 +971,7 @@ class TestRunnerConfig(object):
     output_enabled: bool
     tags: set[str]
 
-    def __init__(self, perf_mode: bool, args):
+    def __init__(self, perf_mode: bool, stress_mode: bool, args):
         def split_tags(tag_args: list[str]) -> set[str]:
             tags = set()
             for raw_tags in tag_args:
@@ -979,19 +980,27 @@ class TestRunnerConfig(object):
                     if tag != "":
                         tags.add(tag)
             return tags
-
         self.perf_mode = perf_mode
-        self.output_enabled = False if args.get_bool("no_output") else True
+        self.stress_mode = stress_mode
+        self.output_enabled = False if stress_mode or args.get_bool("no_output") else True
         self.min_iter = args.get_int("min-iter")
-        self.max_iter = max([args.get_int("max-iter"), self.min_iter])
+        raw_max_iter = args.get_int("max-iter")
+        if raw_max_iter <= 0:
+            self.max_iter = 0
+        else:
+            self.max_iter = max([raw_max_iter, self.min_iter])
         self.min_time = float(args.get_int("min-time")) / 1000.0
-        self.max_time = max([float(args.get_int("max-time")) / 1000.0, self.min_time])
+        raw_max_time = args.get_int("max-time")
+        if raw_max_time <= 0:
+            self.max_time = 0.0
+        else:
+            self.max_time = max([float(raw_max_time) / 1000.0, self.min_time])
         self.tags = split_tags(args.get_strlist("tag"))
 
 class TimeoutError(Exception):
     pass
 
-actor TestExecutor(syscap, config, t: Test, report_complete, env):
+actor TestExecutor(syscap, config, t: Test, report_complete, report_progress, env, executor_id: int, stress_workers: int, stress_nodrift_workers: int):
     """The actual executor of tests
     """
     log_handler = logging.Handler()
@@ -1001,8 +1010,102 @@ actor TestExecutor(syscap, config, t: Test, report_complete, env):
     fs = file.FS(fcap)
     var test_sw = time.Stopwatch()
     var last_report = time.Stopwatch()
+    var progress_report_sw = time.Stopwatch()
     var test_info = None
     var iteration = 0
+    var stress_drift_rank = max([0, executor_id - stress_nodrift_workers])
+    var stress_drift_workers = max([1, stress_workers - stress_nodrift_workers])
+    var stress_last_drift_us = 0
+    var stress_total_drift_us = 0
+    var stress_est_iter_ms = 0.0
+    var stress_base_drift_us = 0
+    var stress_worker_drift_us = 0
+    var stress_startup_offset_us = 0
+    var stress_startup_done = False
+    var stress_phase_resolution_us = 0
+    var stress_target_sweep_iters = 16
+    var stress_calib_samples = 0
+    var stress_calib_target_samples = 4
+    var stress_calibrating = config.stress_mode and not config.perf_mode and executor_id >= stress_nodrift_workers
+    var stress_refine_continuous = config.stress_mode and not config.perf_mode and config.max_time <= 0.0 and executor_id >= stress_nodrift_workers
+    var stress_refine_next_iter = 0
+    var stress_refine_max_sweep_iters = 0
+
+    def _update_stress_timing_estimate(iter_ms: float):
+        if iter_ms <= 0.0:
+            return
+        if stress_est_iter_ms <= 0.0:
+            stress_est_iter_ms = iter_ms
+        else:
+            stress_est_iter_ms = (stress_est_iter_ms * 0.8) + (iter_ms * 0.2)
+
+    def _set_stress_sweep_iters(target_sweep_iters: int):
+        if stress_est_iter_ms <= 0.0:
+            return
+        stress_target_sweep_iters = max([1, target_sweep_iters])
+        stress_base_drift_us = max([1, int((stress_est_iter_ms * 1000.0) / float(stress_target_sweep_iters))])
+        stress_phase_resolution_us = stress_base_drift_us
+        stress_worker_drift_us = stress_base_drift_us * (stress_drift_rank + 1)
+
+    def _maybe_refine_stress_phase(completed_iterations: int):
+        if not stress_refine_continuous or stress_calibrating:
+            return
+        if stress_base_drift_us <= 1:
+            return
+        if completed_iterations <= 0:
+            return
+        if stress_refine_next_iter <= 0:
+            stress_refine_next_iter = max([1, stress_target_sweep_iters])
+        while completed_iterations >= stress_refine_next_iter and stress_base_drift_us > 1:
+            next_sweep = stress_target_sweep_iters * 2
+            if stress_refine_max_sweep_iters > 0 and next_sweep > stress_refine_max_sweep_iters:
+                next_sweep = stress_refine_max_sweep_iters
+            if next_sweep <= stress_target_sweep_iters:
+                break
+            _set_stress_sweep_iters(next_sweep)
+            stress_refine_next_iter += stress_target_sweep_iters
+
+    def _finalize_stress_calibration():
+        if not stress_calibrating:
+            return
+        if stress_est_iter_ms <= 0.0:
+            return
+        est_total_iters = max([16, int((config.min_time * 1000.0) / max([0.1, stress_est_iter_ms]))])
+        if est_total_iters >= 512:
+            stress_target_sweep_iters = 256
+        elif est_total_iters >= 128:
+            stress_target_sweep_iters = 64
+        else:
+            stress_target_sweep_iters = 16
+
+        _set_stress_sweep_iters(stress_target_sweep_iters)
+        stress_startup_offset_us = max([0, int((stress_est_iter_ms * 1000.0) * float(stress_drift_rank + 1) / float(stress_drift_workers + 1))])
+        if stress_refine_continuous:
+            stress_refine_next_iter = max([1, stress_target_sweep_iters])
+            stress_refine_max_sweep_iters = max([stress_target_sweep_iters, int(stress_est_iter_ms * 1000.0)])
+        stress_calibrating = False
+
+    def _stress_drift_delay() -> int:
+        if not config.stress_mode or config.perf_mode:
+            return 0
+        if executor_id < stress_nodrift_workers:
+            stress_last_drift_us = 0
+            return 0
+        if stress_calibrating:
+            stress_last_drift_us = 0
+            return 0
+        if not stress_startup_done:
+            if stress_startup_offset_us > 0:
+                acton.rts.sleep(syscap, float(stress_startup_offset_us) / 1000000.0)
+                stress_total_drift_us += stress_startup_offset_us
+            stress_startup_done = True
+        drift_us = stress_worker_drift_us
+        if drift_us <= 0:
+            drift_us = max([1, stress_drift_rank + 1])
+        stress_last_drift_us = drift_us
+        stress_total_drift_us += drift_us
+        acton.rts.sleep(syscap, float(drift_us) / 1000000.0)
+        return drift_us
 
     def _read_expected(path: str) -> ?str:
         try:
@@ -1033,6 +1136,12 @@ actor TestExecutor(syscap, config, t: Test, report_complete, env):
         gc_total_bytes_end = int(acton.rts.get_gc_total_bytes(syscap))
         mem_usage_delta = gc_total_bytes_end - gc_total_bytes_start
         test_dur = test_sw.elapsed().to_float()
+        if config.stress_mode and not config.perf_mode:
+            _update_stress_timing_estimate(testiter_dur)
+            if stress_calibrating:
+                stress_calib_samples += 1
+                if stress_calib_samples >= stress_calib_target_samples:
+                    _finalize_stress_calibration()
         if config.perf_mode:
             acton.rts.gc(syscap)
             acton.rts.gc(syscap)
@@ -1052,16 +1161,24 @@ actor TestExecutor(syscap, config, t: Test, report_complete, env):
         complete = False
         if skipped:
             complete = True
-        if test_dur > config.min_time and iteration > config.min_iter:
-            complete = True
-        if config.max_time > 0 and test_dur > config.max_time:
-            complete = True
-        if config.max_iter > 0 and iteration >= config.max_iter:
-            complete = True
+        if config.stress_mode:
+            if config.max_time > 0.0 and test_dur > config.max_time:
+                complete = True
+            if config.max_iter > 0 and iteration >= config.max_iter:
+                complete = True
+        else:
+            if test_dur > config.min_time and iteration > config.min_iter:
+                complete = True
+            if config.max_time > 0 and test_dur > config.max_time:
+                complete = True
+            if config.max_iter > 0 and iteration >= config.max_iter:
+                complete = True
 
         if test_info is not None:
             exc = str(exception) if exception is not None else None
             test_info.update(complete, TestResult(success, exc, val, testiter_dur, mem_usage_delta, non_gc_mem_usage_delta, skipped=skipped, skip_reason=skip_reason), test_dur*1000.0)
+            if config.stress_mode and not config.perf_mode and executor_id >= stress_nodrift_workers:
+                _maybe_refine_stress_phase(test_info.num_iterations)
         if last_report.elapsed().to_float() > 0.05 or complete:
             if test_info is not None and config.output_enabled:
                 print("\n" + json.encode({"test_info": test_info.to_json()}), err=True)
@@ -1069,9 +1186,19 @@ actor TestExecutor(syscap, config, t: Test, report_complete, env):
         if not complete:
             _run_fn(test)
         else:
-            report_complete(t)
+            if test_info is not None and config.stress_mode:
+                report_progress(executor_id,
+                                test_info.num_iterations,
+                                stress_last_drift_us,
+                                stress_total_drift_us,
+                                stress_est_iter_ms,
+                                stress_phase_resolution_us,
+                                stress_target_sweep_iters,
+                                stress_calibrating)
+            report_complete(executor_id, t, test_info)
 
     def _run_fn(t: Test):
+        _stress_drift_delay()
         print("\n== Running test, iteration:", iteration)
         print("\n== Running test, iteration:", iteration, err=True)
         # Run GC to get accurate memory usage
@@ -1102,6 +1229,16 @@ actor TestExecutor(syscap, config, t: Test, report_complete, env):
         except Exception as e:
             _report_result(t, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, None, e, None)
         iteration += 1
+        if config.stress_mode and (iteration == 1 or iteration % 32 == 0 or progress_report_sw.elapsed().to_float() > 0.08):
+            report_progress(executor_id,
+                            iteration,
+                            stress_last_drift_us,
+                            stress_total_drift_us,
+                            stress_est_iter_ms,
+                            stress_phase_resolution_us,
+                            stress_target_sweep_iters,
+                            stress_calibrating)
+            progress_report_sw.reset()
 
     def _run_test():
         """Get the next available test and run it"""
@@ -1455,27 +1592,247 @@ actor test_runner(env: Env,
 
 
 
-    proc def _run_tests(args, perf_mode: bool=False):
-        config = TestRunnerConfig(perf_mode, args)
+    proc def _run_tests(args, perf_mode: bool=False, stress_mode: bool=False):
+        config = TestRunnerConfig(perf_mode, stress_mode, args)
         if config.perf_mode:
             acton.rts.start_gc_performance_measurement(env.syscap)
 
-        test_concurrency = 1 if config.perf_mode else env.nr_wthreads
-        test_timeout = max([config.max_time, 2.0]) + 1.0
+        test_concurrency = 1
+        stress_nodrift_workers = 0
+        if config.stress_mode and not config.perf_mode:
+            test_concurrency = max([1, env.nr_wthreads // 2])
+            stress_nodrift_workers = min([test_concurrency, max([2, (test_concurrency + 3) // 4])])
+        test_timeout = 0.0
+        if config.max_time > 0:
+            test_timeout = max([config.max_time, 2.0]) + 1.0
 
         test_name = args.get_str("name")
         if test_name not in all_tests:
             print(f"Test not found: {test_name}")
             env.exit(1)
         the_test = all_tests[test_name]
-        tests_complete = set()
+        workers_complete = set()
+        combined_info = TestInfo(the_test)
+        combined_sw = time.Stopwatch()
+        worker_iterations = {}
+        worker_drift_us = {}
+        worker_drift_total_us = {}
+        worker_est_iter_ms = {}
+        worker_phase_resolution_us = {}
+        worker_target_sweep_iters = {}
+        worker_calibrating = {}
+        stress_phase_cov = {
+            "bins_total": 0,
+            "res_us": 0,
+            "seen_count": 0,
+            "epoch": 1
+        }
+        stress_phase_bins_epoch = {}
+        for idx in range(test_concurrency):
+            worker_iterations[idx] = 0
+            worker_drift_us[idx] = 0
+            worker_drift_total_us[idx] = 0
+            worker_est_iter_ms[idx] = 0.0
+            worker_phase_resolution_us[idx] = 0
+            if idx < stress_nodrift_workers:
+                worker_target_sweep_iters[idx] = 0
+                worker_calibrating[idx] = False
+            else:
+                worker_target_sweep_iters[idx] = 16
+                worker_calibrating[idx] = config.stress_mode
 
-        def _check_timeout(test_def):
-            if test_def in tests_complete:
+        def _total_worker_iterations() -> int:
+            total = 0
+            for idx in range(test_concurrency):
+                total += worker_iterations[idx]
+            return total
+
+        def _stress_workers_json():
+            workers = []
+            for idx in range(test_concurrency):
+                workers.append({
+                    "id": idx,
+                    "iterations": worker_iterations[idx],
+                    "drift_us": worker_drift_us[idx],
+                    "drift_total_us": worker_drift_total_us[idx],
+                    "est_iter_ms": worker_est_iter_ms[idx],
+                    "phase_resolution_us": worker_phase_resolution_us[idx],
+                    "target_sweep_iters": worker_target_sweep_iters[idx],
+                    "calibrating": worker_calibrating[idx],
+                    "sync": idx < stress_nodrift_workers
+                })
+            return workers
+
+        def _stress_est_iteration_ms() -> float:
+            total = 0.0
+            count = 0
+            for idx in range(test_concurrency):
+                est = worker_est_iter_ms[idx]
+                if est > 0.0:
+                    total += est
+                    count += 1
+            if count > 0:
+                return total / float(count)
+            return 0.0
+
+        def _stress_phase_resolution_ms() -> float:
+            worst_us = 0
+            for idx in range(stress_nodrift_workers, test_concurrency):
+                res_us = worker_phase_resolution_us[idx]
+                if res_us > worst_us:
+                    worst_us = res_us
+            if worst_us > 0:
+                return float(worst_us) / 1000.0
+            est_ms = _stress_est_iteration_ms()
+            if est_ms > 0.0:
+                return est_ms / 16.0
+            return 0.0
+
+        def _stress_target_sweep_iters() -> int:
+            target = 0
+            for idx in range(stress_nodrift_workers, test_concurrency):
+                if worker_target_sweep_iters[idx] > target:
+                    target = worker_target_sweep_iters[idx]
+            return target
+
+        def _stress_calibrating_workers() -> int:
+            count = 0
+            for idx in range(stress_nodrift_workers, test_concurrency):
+                if worker_calibrating[idx]:
+                    count += 1
+            return count
+
+        def _update_stress_phase_coverage():
+            if not config.stress_mode or config.perf_mode:
+                return
+            if test_concurrency <= stress_nodrift_workers:
+                return
+            phase_res_ms = _stress_phase_resolution_ms()
+            est_ms = _stress_est_iteration_ms()
+            if phase_res_ms <= 0.0 or est_ms <= 0.0:
+                return
+            phase_res_us = max([1, int(phase_res_ms * 1000.0)])
+            bins_total = _stress_target_sweep_iters()
+            if bins_total <= 0:
+                est_us = max([phase_res_us, int(est_ms * 1000.0)])
+                bins_total = max([1, est_us // phase_res_us])
+            if bins_total != stress_phase_cov["bins_total"] or phase_res_us != stress_phase_cov["res_us"]:
+                stress_phase_cov["bins_total"] = bins_total
+                stress_phase_cov["res_us"] = phase_res_us
+                stress_phase_cov["seen_count"] = 0
+                stress_phase_cov["epoch"] = stress_phase_cov["epoch"] + 1
+            for idx in range(stress_nodrift_workers, test_concurrency):
+                if worker_calibrating[idx]:
+                    continue
+                drift_total = worker_drift_total_us[idx]
+                if drift_total <= 0:
+                    continue
+                bin_idx = (drift_total // phase_res_us) % bins_total
+                current_epoch = stress_phase_cov["epoch"]
+                if bin_idx in stress_phase_bins_epoch and stress_phase_bins_epoch[bin_idx] == current_epoch:
+                    continue
+                stress_phase_bins_epoch[bin_idx] = current_epoch
+                stress_phase_cov["seen_count"] = stress_phase_cov["seen_count"] + 1
+
+        def _stress_payload(info: TestInfo):
+            payload = info.to_json()
+            payload["stress_worker_count"] = test_concurrency
+            payload["stress_no_drift_workers"] = stress_nodrift_workers
+            payload["stress_est_iteration_ms"] = _stress_est_iteration_ms()
+            payload["stress_phase_resolution_ms"] = _stress_phase_resolution_ms()
+            payload["stress_target_sweep_iters"] = _stress_target_sweep_iters()
+            payload["stress_calibrating_workers"] = _stress_calibrating_workers()
+            payload["stress_phase_bins_seen"] = stress_phase_cov["seen_count"]
+            payload["stress_phase_bins_total"] = stress_phase_cov["bins_total"]
+            payload["stress_workers"] = _stress_workers_json()
+            return payload
+
+        def _emit_stress_live():
+            if not config.stress_mode or len(workers_complete) >= test_concurrency:
+                return
+            payload = _stress_payload(combined_info)
+            total_iterations = _total_worker_iterations()
+            payload["complete"] = False
+            payload["success"] = None
+            payload["exception"] = None
+            payload["num_failures"] = 0
+            payload["num_errors"] = 0
+            payload["num_iterations"] = total_iterations
+            payload["test_duration"] = combined_sw.elapsed().to_float() * 1000.0
+            if total_iterations > 0:
+                print("\n" + json.encode({"test_info": payload}), err=True)
+            after 0.08: _emit_stress_live()
+
+        def _merge_worker_info(worker_info: ?TestInfo):
+            if worker_info is not None:
+                for result in worker_info.results:
+                    combined_info.update(False, result)
+
+        def report_progress(executor_id: int,
+                            iterations: int,
+                            drift_us: int,
+                            drift_total_us: int,
+                            est_iter_ms: float,
+                            phase_resolution_us: int,
+                            target_sweep_iters: int,
+                            calibrating: bool):
+            if executor_id in worker_iterations:
+                if iterations > worker_iterations[executor_id]:
+                    worker_iterations[executor_id] = iterations
+                worker_drift_us[executor_id] = drift_us
+                worker_drift_total_us[executor_id] = max([worker_drift_total_us[executor_id], drift_total_us])
+                worker_est_iter_ms[executor_id] = est_iter_ms
+                worker_phase_resolution_us[executor_id] = phase_resolution_us
+                if target_sweep_iters > 0:
+                    worker_target_sweep_iters[executor_id] = target_sweep_iters
+                worker_calibrating[executor_id] = calibrating
+                _update_stress_phase_coverage()
+
+        def _check_timeout():
+            if test_timeout <= 0.0:
+                return
+            if len(workers_complete) >= test_concurrency:
+                # Report after we hit timeout
                 return
             time_s = test_timeout * 1000.0
+            if config.stress_mode:
+                if len(combined_info.results) > 0:
+                    combined_info.update(
+                        True,
+                        TestResult(
+                            None,
+                            "Test timeout",
+                            None,
+                            time_s,
+                            0,
+                            0),
+                        time_s)
+                    payload = _stress_payload(combined_info)
+                    payload["complete"] = True
+                    payload["test_duration"] = time_s
+                    payload["num_iterations"] = max([combined_info.num_iterations, _total_worker_iterations()])
+                    print("\n" + json.encode({"test_info": payload}), err=True)
+                    env.exit(0)
+                timeout_info = TestInfo(
+                    the_test,
+                    complete=True,
+                    success=None,
+                    exception="Test timeout",
+                    min_duration=time_s,
+                    max_duration=time_s,
+                    avg_duration=time_s,
+                    total_duration=time_s,
+                    test_duration=time_s,
+                    num_iterations=max([1, _total_worker_iterations()]),
+                    num_failures=0,
+                    num_errors=1
+                    )
+                payload = _stress_payload(timeout_info)
+                payload["num_iterations"] = max([timeout_info.num_iterations, _total_worker_iterations()])
+                print("\n" + json.encode({"test_info": payload}), err=True)
+                env.exit(0)
             test_info = TestInfo(
-                test_def,
+                the_test,
                 complete=True,
                 success=None,
                 exception="Test timeout",
@@ -1488,23 +1845,39 @@ actor test_runner(env: Env,
                 num_failures=0,
                 num_errors=1
                 )
-            tests_complete.add(test_def)
             print("\n" + json.encode({"test_info": test_info.to_json()}), err=True)
             env.exit(0)
 
-        def report_complete(t):
-            if t in tests_complete:
-                # Report after we hit timeout
+        def report_complete(executor_id: int, t, worker_info: ?TestInfo):
+            if executor_id in workers_complete:
                 return
-            tests_complete.add(t)
-            env.exit(0)
+            workers_complete.add(executor_id)
+            if not config.stress_mode:
+                env.exit(0)
+                return
+            _merge_worker_info(worker_info)
+            if len(workers_complete) >= test_concurrency:
+                combined_info.complete = True
+                combined_info.test_duration = combined_sw.elapsed().to_float() * 1000.0
+                payload = _stress_payload(combined_info)
+                payload["num_iterations"] = max([combined_info.num_iterations, _total_worker_iterations()])
+                print("\n" + json.encode({"test_info": payload}), err=True)
+                env.exit(0)
 
         test_executors = []
-        te = TestExecutor(env.syscap, config, the_test, report_complete, env)
-        after test_timeout: _check_timeout(the_test)
+        for idx in range(test_concurrency):
+            te = TestExecutor(env.syscap, config, the_test, report_complete, report_progress, env, idx, test_concurrency, stress_nodrift_workers)
+            test_executors.append(te)
+        if config.stress_mode:
+            after 0.08: _emit_stress_live()
+        if test_timeout > 0.0:
+            after test_timeout: _check_timeout()
 
     proc def _run_perf_tests(args):
         _run_tests(args, perf_mode=True)
+
+    proc def _run_stress_tests(args):
+        _run_tests(args, stress_mode=True)
 
     def _parse_args():
         p = argparse.Parser()
@@ -1515,10 +1888,11 @@ actor test_runner(env: Env,
         tp.add_arg("name", "Name of the test to run")
         tp.add_option("max-iter", "int", default=10**6, help="Maximum number of iterations to run")
         tp.add_option("min-iter", "int", default=3, help="Minumum number of iterations to run")
-        tp.add_option("max-time", "int", default=1000, help="Maximum time to run a test in milliseconds")
+        tp.add_option("max-time", "int", default=1000, help="Maximum time to run a test in milliseconds (0 = no time limit)")
         tp.add_option("min-time", "int", default=50, help="Minimum time to run a test in milliseconds")
         tp.add_option("tag", "strlist", default=[], help="Enable test capability tag")
         pp = tp.add_cmd("perf", "Performance benchmark tests", _run_perf_tests)
+        sp = tp.add_cmd("stress", "Stress tests by running concurrent workers of the same test", _run_stress_tests)
 
         args = p.parse(env.argv)
         _cmd = args.cmd

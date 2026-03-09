@@ -67,6 +67,7 @@
   - [Failures vs errors](testing/failures_errors.md)
   - [Flaky tests](testing/flaky.md)
   - [Performance testing](testing/performance.md)
+  - [Stress testing](testing/stress.md)
   - [Perf comparison](testing/perf_record.md)
 - [Build System](compilation.md)
   - [Incremental compilation](compilation/incremental.md)

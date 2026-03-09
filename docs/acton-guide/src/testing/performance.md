@@ -34,3 +34,5 @@ All 1 tests passed (1.571s)
 
 ```
 (note that the output is rather wide, scroll horizontally to see the full output)
+
+See [Stress testing](stress.md) for concurrency-focused stress runs.

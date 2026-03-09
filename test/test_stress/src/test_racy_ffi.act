@@ -1,0 +1,25 @@
+import testing
+import racy_ffi
+
+def _tri(n: int) -> int:
+    return (n * (n + 1)) // 2
+
+def _mix(n: int) -> int:
+    return ((n * 1103515245 + 12345) & 0x7fffffff)
+
+def _test_racy_sum():
+    for n in range(300, 340):
+        testing.assertEqual(racy_ffi.racy_sum(n), _tri(n))
+
+def _test_racy_format():
+    for n in range(200, 260):
+        testing.assertEqual(racy_ffi.racy_format(n), "value:" + str(n) + ":" + str(n * n))
+
+def _test_subtle_lazy_magic():
+    for i in range(2000):
+        testing.assertEqual(racy_ffi.subtle_lazy_magic(), 23130)
+
+def _test_subtle_cache_mix():
+    for i in range(6000):
+        n = 200 + (i % 23)
+        testing.assertEqual(racy_ffi.subtle_cache_mix(n), _mix(n))

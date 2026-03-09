@@ -20,6 +20,10 @@ import Data.List (foldl', isPrefixOf, isInfixOf, intercalate)
 import Data.Maybe (catMaybes, fromMaybe, isJust, listToMaybe, mapMaybe)
 import qualified Data.Map as M
 import TerminalSize (termFitPlainRight, termVisibleLength)
+import qualified Data.Aeson as Aeson
+import qualified Data.Aeson.Types as AesonTypes
+import qualified Data.Aeson.Key as AesonKey
+import qualified Data.Aeson.KeyMap as AesonKM
 import Text.Printf (printf)
 
 -- | Compute the status label (OK/FAIL/ERR/FLAKY) for a test.
@@ -150,9 +154,67 @@ formatTestLineWith useColor statusFn nameWidth display res =
     let prefix0 = "   " ++ display ++ ": "
         padding = replicate (max 0 (nameWidth - length prefix0)) ' '
         statusRaw = statusFn res
-        runs = printf "%4d runs in %3.3fms" (trNumIterations res) (trTestDuration res)
+        runs = printf "%4d runs in %3.3fms @ %6.1f/s" (trNumIterations res) (trTestDuration res) (testsPerSecond (trNumIterations res) (trTestDuration res))
         statusPart = colorizeStatusPart useColor (trCached res) statusRaw runs
-    in prefix0 ++ padding ++ statusPart
+        stressPart =
+          case stressWorkerOverview res of
+            Just txt -> " | " ++ txt
+            Nothing -> ""
+    in prefix0 ++ padding ++ statusPart ++ stressPart
+
+stressWorkerOverview :: TestResult -> Maybe String
+stressWorkerOverview res =
+    case trRaw res of
+      Aeson.Object obj ->
+        let mEstMs = lookupDouble obj "stress_est_iteration_ms"
+            mPhaseResMs = lookupDouble obj "stress_phase_resolution_ms"
+            mSweep = lookupInt obj "stress_target_sweep_iters"
+            mCalib = lookupInt obj "stress_calibrating_workers"
+            mCovSeen = lookupInt obj "stress_phase_bins_seen"
+            mCovTotal = lookupInt obj "stress_phase_bins_total"
+            extraParts =
+              catMaybes
+                [ case mEstMs of
+                    Just est | est > 0 -> Just (printf "iter~%0.3fms" est)
+                    _ -> Nothing
+                , case mPhaseResMs of
+                    Just resMs | resMs > 0 -> Just (printf "coarse~%0.3fms" resMs)
+                    _ -> Nothing
+                , case mSweep of
+                    Just sweep | sweep > 0 -> Just ("sweep=" ++ show sweep)
+                    _ -> Nothing
+                , case mCalib of
+                    Just calib | calib > 0 -> Just ("calib=" ++ show calib)
+                    _ -> Nothing
+                , case (mCovSeen, mCovTotal) of
+                    (Just seen, Just total) | total > 0 ->
+                      let pct :: Double
+                          pct = (fromIntegral seen * 100.0) / fromIntegral total
+                      in Just (printf "cov=%d/%d(%0.1f%%)" seen total pct)
+                    _ -> Nothing
+                ]
+        in if null extraParts
+             then Nothing
+             else Just (unwords extraParts)
+      _ -> Nothing
+  where
+    lookupInt :: Aeson.Object -> String -> Maybe Int
+    lookupInt o key =
+      case AesonKM.lookup (AesonKey.fromString key) o of
+        Just v -> AesonTypes.parseMaybe Aeson.parseJSON v
+        _ -> Nothing
+
+    lookupDouble :: Aeson.Object -> String -> Maybe Double
+    lookupDouble o key =
+      case AesonKM.lookup (AesonKey.fromString key) o of
+        Just v -> AesonTypes.parseMaybe Aeson.parseJSON v
+        _ -> Nothing
+
+testsPerSecond :: Int -> Double -> Double
+testsPerSecond iterations durationMs
+  | iterations <= 0 = 0
+  | durationMs <= 0 = 0
+  | otherwise = (fromIntegral iterations * 1000.0) / durationMs
 
 -- | Format a live test line to the current terminal width.
 formatTestLineFitted :: Bool -> (TestResult -> String) -> Int -> Int -> String -> TestResult -> String
