@@ -1657,6 +1657,7 @@ runCliPostCompile cliHooks gopts plan env = do
         depModuleOptsByProj = depModuleOptionsByProj selectedTasksByProj projMap
         rootModuleEntries = selectedCSourceEntriesForProj rootProj (M.findWithDefault [] rootProj selectedTasksByProj)
         rootDepModuleOpts = M.findWithDefault M.empty rootProj depModuleOptsByProj
+        rootDepPathOverrides = projectDepPathOverrides projMap rootProj
     -- Generate build.zig(.zon) for dependencies too, to satisfy Zig builder links.
     let projKeys = Data.Set.fromList (map (tkProj . gtKey) globalTasks)
     forM_ (Data.Set.toList projKeys) $ \p -> do
@@ -1669,7 +1670,8 @@ runCliPostCompile cliHooks gopts plan env = do
               logLine ("Generating build.zig for dependency project " ++ p)
             dummyPaths <- pathsForModule opts' projMap pctx (A.modName ["__gen_build__"])
             let depOpts = M.findWithDefault M.empty p depModuleOptsByProj
-            genBuildZigFiles (projBuildSpec pctx) rootPins (ccDepOverrides cctx) dummyPaths depOpts
+                depPathOverrides = projectDepPathOverrides projMap p
+            genBuildZigFiles (projBuildSpec pctx) rootPins (ccDepOverrides cctx) dummyPaths depOpts depPathOverrides
           Nothing -> return ()
     let runFinal action = do
           cchFinalStart cliHooks
@@ -1683,10 +1685,10 @@ runCliPostCompile cliHooks gopts plan env = do
           then do
             testBinTasks <- catMaybes <$> mapM (filterMainActor env pathsRoot) preTestBinTasks
             unless (altOutput opts') $
-              runFinal (compileBins gopts opts' pathsRoot env rootSpec rootTasks testBinTasks allowPrune' rootModuleEntries rootDepModuleOpts (Just (cchProgressUI cliHooks)))
+              runFinal (compileBins gopts opts' pathsRoot env rootSpec rootTasks testBinTasks allowPrune' rootModuleEntries rootDepModuleOpts rootDepPathOverrides (Just (cchProgressUI cliHooks)))
           else do
             unless (altOutput opts') $
-              runFinal (compileBins gopts opts' pathsRoot env rootSpec rootTasks preBinTasks allowPrune' rootModuleEntries rootDepModuleOpts (Just (cchProgressUI cliHooks)))
+              runFinal (compileBins gopts opts' pathsRoot env rootSpec rootTasks preBinTasks allowPrune' rootModuleEntries rootDepModuleOpts rootDepPathOverrides (Just (cchProgressUI cliHooks)))
 -- Generate documentation index for a project build by reading module docstrings
 -- from the current tasks. Uses TyTask header docs when available to avoid
 -- parsing/decoding; falls back to extracting from ActonTask ASTs.
@@ -1754,6 +1756,27 @@ depModuleOptionsByProj tasksByProj projMap =
         ]
     mkCsv depProj =
       intercalate "," (selectedCSourceEntriesForProj depProj (M.findWithDefault [] depProj tasksByProj))
+
+-- | Canonical package dependency roots reachable from one project.
+--
+-- These paths come from project discovery, so they already reflect root pin
+-- overrides and fingerprint deduplication. Reusing them for build.zig.zon keeps
+-- Zig pointed at the same dependency roots where we generated build.zig files.
+projectDepPathOverrides :: M.Map FilePath ProjCtx -> FilePath -> M.Map String FilePath
+projectDepPathOverrides projMap rootProj = snd (go Data.Set.empty rootProj M.empty)
+  where
+    go seen proj acc
+      | Data.Set.member proj seen = (seen, acc)
+      | otherwise =
+          case M.lookup proj projMap of
+            Nothing -> (Data.Set.insert proj seen, acc)
+            Just ctx ->
+              let seen' = Data.Set.insert proj seen
+              in foldl' step (seen', acc) (projDeps ctx)
+
+    step (seen, acc) (depName, depProj) =
+      let acc' = M.insertWith (\_ old -> old) depName depProj acc
+      in go seen depProj acc'
 
 -- | Remove orphaned files in out/types.
 -- Non-root files are removed if their module isn’t part of this build (i.e.
@@ -1886,9 +1909,9 @@ High-level Steps
 ================================================================================
 -}
 
-compileBins:: C.GlobalOptions -> C.CompileOptions -> Paths -> Acton.Env.Env0 -> BuildSpec.BuildSpec -> [CompileTask] -> [BinTask] -> Bool -> [FilePath] -> M.Map String String -> Maybe ProgressUI -> IO TimeSpec
-compileBins gopts opts paths env rootSpec tasks binTasks allowPrune rootModules depModuleOpts mProgressUI =
-    zigBuild env gopts opts paths rootSpec tasks binTasks allowPrune rootModules depModuleOpts mProgressUI
+compileBins:: C.GlobalOptions -> C.CompileOptions -> Paths -> Acton.Env.Env0 -> BuildSpec.BuildSpec -> [CompileTask] -> [BinTask] -> Bool -> [FilePath] -> M.Map String String -> M.Map String FilePath -> Maybe ProgressUI -> IO TimeSpec
+compileBins gopts opts paths env rootSpec tasks binTasks allowPrune rootModules depModuleOpts depPathOverrides mProgressUI =
+    zigBuild env gopts opts paths rootSpec tasks binTasks allowPrune rootModules depModuleOpts depPathOverrides mProgressUI
 
 printDiag :: C.GlobalOptions -> C.CompileOptions -> Diagnostic String -> IO ()
 printDiag gopts opts d = do
@@ -2029,10 +2052,10 @@ generateFingerprint name = do
         fp = (fromIntegral prefix `shiftL` 32) .|. fromIntegral ident
     return (Fingerprint.formatFingerprint fp)
 
--- Render build.zig and build.zig.zon from templates and BuildSpec
+-- Render build.zig and build.zig.zon from templates and BuildSpec.
 -- rootPins: dependency pins from the main project (applied to all deps, including transitive)
-genBuildZigFiles :: BuildSpec.BuildSpec -> M.Map String BuildSpec.PkgDep -> [(String, FilePath)] -> Paths -> M.Map String String -> IO ()
-genBuildZigFiles spec rootPins depOverrides paths depModuleOpts = do
+genBuildZigFiles :: BuildSpec.BuildSpec -> M.Map String BuildSpec.PkgDep -> [(String, FilePath)] -> Paths -> M.Map String String -> M.Map String FilePath -> IO ()
+genBuildZigFiles spec rootPins depOverrides paths depModuleOpts depPathOverrides = do
     let proj = projPath paths
     projAbs <- canonicalizePath proj
     let sys              = sysPath paths
@@ -2051,11 +2074,22 @@ genBuildZigFiles spec rootPins depOverrides paths depModuleOpts = do
     depsRootAbs <- normalizePathSafe (joinPath [homeDir, ".cache", "acton", "deps"])
     normalizedSpec <- normalizeSpecPaths proj spec
     let applyPins deps = M.mapWithKey (\n d -> M.findWithDefault d n rootPins) deps
-        mergedSpec = normalizedSpec { BuildSpec.dependencies     = applyPins (BuildSpec.dependencies normalizedSpec) `M.union` transPkgs
-                                    , BuildSpec.zig_dependencies = BuildSpec.zig_dependencies normalizedSpec `M.union` transZigs }
+        mergedSpec0 = normalizedSpec { BuildSpec.dependencies     = applyPins (BuildSpec.dependencies normalizedSpec) `M.union` transPkgs
+                                     , BuildSpec.zig_dependencies = BuildSpec.zig_dependencies normalizedSpec `M.union` transZigs }
+        mergedSpec = applyPkgDepPathOverrides projAbs depPathOverrides mergedSpec0
         zonWithFp = replace "{{fingerprint}}" fp . replace "{{name}}" zonName
     writeFile buildZigPath (genBuildZig buildZigTemplate mergedSpec depModuleOpts)
     writeFileAtomic buildZonPath (genBuildZigZon buildZonTemplate relSys depsRootAbs projAbs fp zonName mergedSpec)
+
+applyPkgDepPathOverrides :: FilePath -> M.Map String FilePath -> BuildSpec.BuildSpec -> BuildSpec.BuildSpec
+applyPkgDepPathOverrides projRoot depPathOverrides spec =
+    spec { BuildSpec.dependencies = M.mapWithKey rewriteDep (BuildSpec.dependencies spec) }
+  where
+    rewriteDep depName dep =
+      case M.lookup depName depPathOverrides of
+        Nothing -> dep
+        Just depPath ->
+          dep { BuildSpec.path = Just (collapseDots (makeRelativeOrAbsolute projRoot depPath)) }
 
 genBuildZig :: String -> BuildSpec.BuildSpec -> M.Map String String -> String
 genBuildZig template spec depModuleOpts =
@@ -2167,8 +2201,8 @@ defCpuFlag = ["-Dcpu=x86_64_v2+aes"]
 #endif
 
 -- | Run zig build for generated artifacts and prune stale outputs.
-zigBuild :: Acton.Env.Env0 -> C.GlobalOptions -> C.CompileOptions -> Paths -> BuildSpec.BuildSpec -> [CompileTask] -> [BinTask] -> Bool -> [FilePath] -> M.Map String String -> Maybe ProgressUI -> IO TimeSpec
-zigBuild env gopts opts paths rootSpec tasks binTasks allowPrune rootModules depModuleOpts mProgressUI = do
+zigBuild :: Acton.Env.Env0 -> C.GlobalOptions -> C.CompileOptions -> Paths -> BuildSpec.BuildSpec -> [CompileTask] -> [BinTask] -> Bool -> [FilePath] -> M.Map String String -> M.Map String FilePath -> Maybe ProgressUI -> IO TimeSpec
+zigBuild env gopts opts paths rootSpec tasks binTasks allowPrune rootModules depModuleOpts depPathOverrides mProgressUI = do
     allBinTasks <- mapM (writeRootC env gopts opts paths tasks) binTasks
     let realBinTasks = catMaybes allBinTasks
 
@@ -2200,7 +2234,7 @@ zigBuild env gopts opts paths rootSpec tasks binTasks allowPrune rootModules dep
     -- Generate build.zig and build.zig.zon directly from Build.act.
     iff (not isSysProj) $ do
       let pins = BuildSpec.dependencies rootSpec
-      genBuildZigFiles rootSpec pins depOverrides paths depModuleOpts
+      genBuildZigFiles rootSpec pins depOverrides paths depModuleOpts depPathOverrides
 
     let zigExe = zig paths
         baseArgs = ["build","--cache-dir", local_cache_dir,
