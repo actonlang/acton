@@ -1664,18 +1664,20 @@ void wt_work_cb(uv_check_t *ev) {
                     if(ret == VAL_STATUS_COMMIT)
                         success = 1;
                 }
-                FLUSH_outgoing_local(current);
             } else {
 #endif
                 reverse_outgoing_queue(current);
-                FLUSH_outgoing_local(current);
 #ifdef ACTON_DB
             }
 #endif
             m->$cont = r.cont;
             B_Msg x = (B_Msg)r.value;
             assert(x != NULL);
-            if (ADD_waiting(current, x)) {      // x->cont is a proper $Cont: x is still being processed so current was added to x->waiting
+
+            bool added_waiting = ADD_waiting(current, x);
+            FLUSH_outgoing_local(current);
+
+            if (added_waiting) {      // x->cont is a proper $Cont: x is still being processed so current was added to x->waiting
                 rtsd_printf("## AWAIT actor %ld : %s", current->$globkey, current->$class->$GCINFO);
             } else if (EXCEPTIONAL(x)) {        // x->cont == MARK_EXCEPTION: x->value holds the raised exception, current is not in x->waiting
                 rtsd_printf("## AWAIT/fail actor %ld : %s", current->$globkey, current->$class->$GCINFO);
