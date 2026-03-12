@@ -109,7 +109,7 @@ testUiProgressClear ui =
     withTestProgressLock ui (termProgressClear (tpuTermProgress ui))
 
 testTickMicros :: Int
-testTickMicros = 250000
+testTickMicros = 80000
 
 testSpinnerThreshold :: Int
 testSpinnerThreshold = 25
