@@ -149,6 +149,80 @@ compilerTests =
             ("not present in Zig cache after fetch" `isInfixOf` cmdErr)
           assertBool "should not fail with missing Build.act in unresolved deps cache path"
             (not ("Missing Build.act in " `isInfixOf` cmdErr))
+  , testCase "build.zig.zon uses canonical dep roots" $ do
+        withSystemTempDirectory "acton-buildzig-zon-dedup" $ \tmp -> do
+          actonExe <- canonicalizePath "../../dist/bin/acton"
+          env0 <- getEnvironment
+          let homeDir = tmp </> "home"
+              rootProj = tmp </> "root"
+              depKeep = rootProj </> "dep_keep"
+              midProj = rootProj </> "mid"
+              depDrop = tmp </> "dep_drop"
+              envWithHome = ("HOME", homeDir) : filter ((/= "HOME") . fst) env0
+              mkFp name = Fingerprint.formatFingerprint
+                (Fingerprint.updateFingerprintPrefix
+                  (Fingerprint.fingerprintPrefixForName name) 1)
+              writeBuildActAt :: FilePath -> String -> [(String, FilePath)] -> IO ()
+              writeBuildActAt dir name deps = do
+                createDirectoryIfMissing True (dir </> "src")
+                let depsBody = intercalate ",\n"
+                      [ "    \"" ++ depName ++ "\": (\n"
+                        ++ "        path=" ++ show depPath ++ "\n"
+                        ++ "    )"
+                      | (depName, depPath) <- deps
+                      ]
+                    depsSection =
+                      if null deps
+                        then "dependencies = {}"
+                        else "dependencies = {\n" ++ depsBody ++ "\n}"
+                writeFile (dir </> "Build.act") $ unlines
+                  [ "name = " ++ show name
+                  , "fingerprint = " ++ mkFp name
+                  , ""
+                  , depsSection
+                  , ""
+                  , "zig_dependencies = {}"
+                  ]
+              runBuild dir = readCreateProcessWithExitCode
+                (proc actonExe ["build", "--always-build"]) { cwd = Just dir, env = Just envWithHome } ""
+
+          createDirectoryIfMissing True homeDir
+
+          writeBuildActAt depKeep "dep" []
+          writeFile (depKeep </> "src" </> "dep.act") $ unlines
+            [ "def keep() -> int:"
+            , "    return 1"
+            ]
+
+          writeBuildActAt depDrop "dep" []
+          writeFile (depDrop </> "src" </> "dep.act") $ unlines
+            [ "def drop() -> int:"
+            , "    return 2"
+            ]
+
+          writeBuildActAt midProj "mid" [("dep", depDrop)]
+          writeFile (midProj </> "src" </> "mid.act") $ unlines
+            [ "def marker() -> int:"
+            , "    return 41"
+            ]
+
+          writeBuildActAt rootProj "root_proj" [("dep", depKeep), ("mid", midProj)]
+          writeFile (rootProj </> "src" </> "main.act") $ unlines
+            [ "import mid"
+            , ""
+            , "actor main(env):"
+            , "    env.exit(mid.marker())"
+            ]
+
+          (returnCode, cmdOut, cmdErr) <- runBuild rootProj
+          when (returnCode /= ExitSuccess) $
+            assertFailure ("root build failed:\nstdout:\n" ++ cmdOut ++ "\nstderr:\n" ++ cmdErr)
+
+          midBuildZon <- readFile (midProj </> "build.zig.zon")
+          assertBool "mid build.zig.zon should point at the canonical dep root"
+            ("dep_keep" `isInfixOf` midBuildZon)
+          assertBool "mid build.zig.zon should not keep the overridden raw dep path"
+            (not ("dep_drop" `isInfixOf` midBuildZon))
   , testCase "path dep build ignores stale dep out/types modules" $ do
         withSystemTempDirectory "acton-stale-path-dep" $ \tmp ->
           do
