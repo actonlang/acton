@@ -287,6 +287,9 @@ formatTestDetailLines useColor showLog res =
     let skipped = trSkipped res
         ok = trSuccess res == Just True && trException res == Nothing && not skipped
         wantDetails = showLog || skipped || not ok
+        outcomeLines = case formatOutcomeSummaryLine useColor res of
+          Just line -> [line]
+          Nothing -> []
         skipLines = case trSkipReason res of
           Just reason ->
             [ testColorApply useColor [testColorYellow] ("    skipped: " ++ reason)
@@ -303,9 +306,32 @@ formatTestDetailLines useColor showLog res =
             then formatCombinedLogLines (trStdOut res) (trStdErr res)
             else []
     in if wantDetails
-         then skipLines ++ excLines ++ outputLines
+         then outcomeLines ++ skipLines ++ excLines ++ outputLines
          else []
   where
+    formatOutcomeSummaryLine useColor' result
+      | trNumIterations result <= 1 = Nothing
+      | trNumFailures result <= 0 && trNumErrors result <= 0 && trNumSkipped result <= 0 = Nothing
+      | otherwise =
+          let (numSuccesses, numFailures, numErrors, numSkipped) = outcomeCounts result
+              parts = catMaybes
+                [ formatOutcomePart useColor' [testColorGreen] numSuccesses "ok"
+                , formatOutcomePart useColor' [testColorRed] numFailures "fail"
+                , formatOutcomePart useColor' [testColorBold, testColorRed] numErrors "err"
+                , formatOutcomePart useColor' [testColorYellow] numSkipped "skip"
+                ]
+          in if null parts
+               then Nothing
+               else Just ("    outcomes: " ++ intercalate ", " parts)
+    outcomeCounts result =
+      let numSkipped = max 0 (trNumSkipped result)
+          numFailures = max 0 (trNumFailures result)
+          numErrors = max 0 (trNumErrors result)
+          numSuccesses = max 0 (trNumIterations result - numSkipped - numFailures - numErrors)
+      in (numSuccesses, numFailures, numErrors, numSkipped)
+    formatOutcomePart useColor' styles count label
+      | count <= 0 = Nothing
+      | otherwise = Just (testColorApply useColor' styles (show count ++ " " ++ label))
     formatCombinedLogLines mOut mErr =
       let out = maybe "" id mOut
           err = maybe "" id mErr

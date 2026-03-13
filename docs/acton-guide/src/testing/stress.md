@@ -12,7 +12,8 @@ acton test stress
 
 - Runs one test function/actor at a time.
 - For that test, starts multiple concurrent workers of the same test in one process.
-- Worker count defaults to roughly `nr_wthreads / 2`.
+- Worker count defaults to roughly `1.5 * nr_wthreads` so workers must share RTS worker threads.
+- Override it with `--stress-workers N` when you want a specific level of oversubscription.
 - Stress runs are always fresh (no test-result cache reuse).
 - By default, stress runs for up to 5 seconds per test (`--max-time 5000`).
 - Continuous mode is available with `--max-time 0`.
@@ -55,6 +56,12 @@ Use normal test flags to tune duration/iterations, for example:
 
 ```sh
 acton test stress --max-time 30000 --min-iter 100
+```
+
+Pin a higher worker count explicitly:
+
+```sh
+acton test stress --stress-workers 24 --max-time 30000
 ```
 
 Run continuously until interrupted:
