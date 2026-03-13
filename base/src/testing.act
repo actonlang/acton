@@ -1824,6 +1824,7 @@ actor test_runner(env: Env,
                 if target_sweep_iters > 0:
                     worker_target_sweep_iters[executor_id] = target_sweep_iters
                 worker_calibrating[executor_id] = calibrating
+                _update_stress_phase_coverage()
 
         def _check_timeout():
             if test_timeout <= 0.0:
