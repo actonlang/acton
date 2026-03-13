@@ -1,5 +1,3 @@
-import random
-
 class FileCap():
     def __init__(self, cap: WorldCap):
         pass
@@ -244,17 +242,9 @@ actor FS(cap: FileCap):
         """Make a directory"""
         NotImplemented
 
-    action def mktmpdir(prefix: str=""):
+    action def mktmpdir(prefix: str="") -> str:
         """Make a temporary directory"""
-        # TODO: is this better implemented with mkdtemp or similar libc
-        # function? Maybe we can have this function but then we should at least
-        # do the same thing, like create the tmp dir with exclusive flags etc to
-        # make sure its our own dir.
-        base_tmp_dir = tmpdir()
-        # TODO: use a path join function
-        new_tmp_dir = base_tmp_dir + "/" + prefix + random.randstr(16)
-        mkdir(new_tmp_dir)
-        return new_tmp_dir
+        NotImplemented
 
     action def listdir(path: str) -> list[str]:
         """List directory contents"""

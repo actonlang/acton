@@ -1,6 +1,8 @@
 #define GC_THREADS 1
 #include "gc.h"
 
+#include <stdio.h>
+#include <string.h>
 #include <sys/file.h>
 
 #include <uv.h>
@@ -136,6 +138,50 @@ $R fileQ_FSD_mkdirG_local (fileQ_FS self, $Cont C_cont, B_str filename) {
     return $R_CONT(C_cont, B_None);
 }
 
+// action def mktmpdir(prefix: str=""):
+$R fileQ_FSD_mktmpdirG_local (fileQ_FS self, $Cont C_cont, B_str prefix) {
+    uv_fs_t *req = (uv_fs_t *)acton_malloc(sizeof(uv_fs_t));
+    size_t size = 128;
+    char *tmpdir;
+    int r;
+
+    while (1) {
+        tmpdir = (char *)acton_malloc(size);
+        size_t requested = size;
+        r = uv_os_tmpdir(tmpdir, &requested);
+        if (r == UV_ENOBUFS) {
+            size = requested;
+            continue;
+        }
+        if (r < 0) {
+            char errmsg[1024] = "Error getting temporary directory: ";
+            uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+            log_warn(errmsg);
+            $RAISE(((B_BaseException)B_OSErrorG_new(to$str(errmsg))));
+        }
+        break;
+    }
+
+    const char *cprefix = prefix == B_None ? "" : (const char *)fromB_str(prefix);
+    size_t template_size = strlen(tmpdir) + 1 + strlen(cprefix) + 6 + 1;
+    char *tpl = (char *)acton_malloc(template_size);
+    snprintf(tpl, template_size, "%s/%sXXXXXX", tmpdir, cprefix);
+
+    r = uv_fs_mkdtemp(get_uv_loop(), req, tpl, NULL);
+    if (r < 0) {
+        char errmsg[1024] = "Error creating temporary directory: ";
+        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        uv_fs_req_cleanup(req);
+        log_warn(errmsg);
+        $RAISE(((B_BaseException)B_OSErrorG_new(to$str(errmsg))));
+    }
+
+    // libuv stores the resolved path in req->path, not in the template buffer.
+    B_str path = to$str(req->path);
+    uv_fs_req_cleanup(req);
+    return $R_CONT(C_cont, path);
+}
+
 // action def listdir(path: str) -> list[str]:
 $R fileQ_FSD_listdirG_local (fileQ_FS self, $Cont C_cont, B_str path) {
     B_SequenceD_list wit = B_SequenceD_listG_witness;
@@ -249,16 +295,25 @@ $R fileQ_FSD_statG_local (fileQ_FS self, $Cont C_cont, B_str filename) {
 }
 
 $R fileQ_FSD_tmpdirG_local (fileQ_FS self, $Cont C_cont) {
-    size_t size = 1024; // Initial buffer size for the tmp directory path
-    char *buffer = (char*)acton_malloc(size);
-    int r = uv_os_tmpdir(buffer, &size);
-    if (r < 0) {
-        char errmsg[1024] = "Error getting temporary directory: ";
-        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
-        log_warn(errmsg);
-        $RAISE(((B_BaseException)B_OSErrorG_new(to$str(errmsg))));
+    size_t size = 128;
+    int r;
+
+    while (1) {
+        char *buffer = (char *)acton_malloc(size);
+        size_t requested = size;
+        r = uv_os_tmpdir(buffer, &requested);
+        if (r == UV_ENOBUFS) {
+            size = requested;
+            continue;
+        }
+        if (r < 0) {
+            char errmsg[1024] = "Error getting temporary directory: ";
+            uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+            log_warn(errmsg);
+            $RAISE(((B_BaseException)B_OSErrorG_new(to$str(errmsg))));
+        }
+        return $R_CONT(C_cont, to$str(buffer));
     }
-    return $R_CONT(C_cont, to$str(buffer));
 }
 
 $R fileQ_ReadFileD__open_fileG_local (fileQ_ReadFile self, $Cont c$cont) {
