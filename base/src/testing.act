@@ -1471,6 +1471,20 @@ class ProjectTestResults(object):
                 l = prefix + msg
                 print(l)
                 self.printed_lines += 1
+                success_runs = max([0, tinfo.num_iterations - tinfo.num_skipped - tinfo.num_failures - tinfo.num_errors])
+                if tinfo.num_iterations > 1 and (tinfo.num_failures > 0 or tinfo.num_errors > 0 or tinfo.num_skipped > 0):
+                    outcome_parts = []
+                    if success_runs > 0:
+                        outcome_parts.append(f"{success_runs} ok")
+                    if tinfo.num_failures > 0:
+                        outcome_parts.append(f"{tinfo.num_failures} fail")
+                    if tinfo.num_errors > 0:
+                        outcome_parts.append(f"{tinfo.num_errors} err")
+                    if tinfo.num_skipped > 0:
+                        outcome_parts.append(f"{tinfo.num_skipped} skip")
+                    if len(outcome_parts) > 0:
+                        print("    outcomes: " + ", ".join(outcome_parts))
+                        self.printed_lines += 1
                 if self.perf_mode and perf_mem:
                     indent = " " * 10
                     diffs = tinfo.diff(last_tinfo)

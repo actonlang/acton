@@ -291,6 +291,7 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
                             , trStdOut = Nothing
                             , trStdErr = Nothing
                             , trFlaky = False
+                            , trNumSkipped = 0
                             , trNumFailures = 0
                             , trNumErrors = 0
                             , trNumIterations = 0
@@ -649,6 +650,7 @@ runModuleTestStreaming opts paths topts mode modName testName allowLive callback
           , trStdOut = Nothing
           , trStdErr = Nothing
           , trFlaky = False
+          , trNumSkipped = 0
           , trNumFailures = 0
           , trNumErrors = 1
           , trNumIterations = 0
@@ -1062,6 +1064,7 @@ parseTestInfoValue = Aeson.withObject "TestInfo" $ \o -> do
     stdOut <- o Aeson..:? AesonKey.fromString "std_out"
     stdErr <- o Aeson..:? AesonKey.fromString "std_err"
     flaky <- o Aeson..:? AesonKey.fromString "flaky" Aeson..!= False
+    numSkipped <- o Aeson..:? AesonKey.fromString "num_skipped" Aeson..!= 0
     numFailures <- o Aeson..:? AesonKey.fromString "num_failures" Aeson..!= 0
     numErrors <- o Aeson..:? AesonKey.fromString "num_errors" Aeson..!= 0
     numIterations <- o Aeson..:? AesonKey.fromString "num_iterations" Aeson..!= 0
@@ -1078,6 +1081,7 @@ parseTestInfoValue = Aeson.withObject "TestInfo" $ \o -> do
       , trStdOut = stdOut
       , trStdErr = stdErr
       , trFlaky = flaky
+      , trNumSkipped = numSkipped
       , trNumFailures = numFailures
       , trNumErrors = numErrors
       , trNumIterations = numIterations
@@ -1294,6 +1298,7 @@ markSnapshotUpdated res = res
   , trSkipped = False
   , trSkipReason = Nothing
   , trException = Nothing
+  , trNumSkipped = 0
   , trNumFailures = 0
   , trNumErrors = 0
   }

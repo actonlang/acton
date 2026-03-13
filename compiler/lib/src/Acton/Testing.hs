@@ -68,6 +68,7 @@ data TestResult = TestResult
   , trStdOut       :: Maybe String
   , trStdErr       :: Maybe String
   , trFlaky        :: Bool
+  , trNumSkipped   :: Int
   , trNumFailures  :: Int
   , trNumErrors    :: Int
   , trNumIterations :: Int
@@ -116,6 +117,7 @@ data TestCachedResult = TestCachedResult
   , tcrStdOut       :: Maybe String
   , tcrStdErr       :: Maybe String
   , tcrFlaky        :: Bool
+  , tcrNumSkipped   :: Int
   , tcrNumFailures  :: Int
   , tcrNumErrors    :: Int
   , tcrNumIterations :: Int
@@ -133,6 +135,7 @@ instance Aeson.ToJSON TestCachedResult where
     , AesonKey.fromString "std_out" Aeson..= tcrStdOut res
     , AesonKey.fromString "std_err" Aeson..= tcrStdErr res
     , AesonKey.fromString "flaky" Aeson..= tcrFlaky res
+    , AesonKey.fromString "num_skipped" Aeson..= tcrNumSkipped res
     , AesonKey.fromString "num_failures" Aeson..= tcrNumFailures res
     , AesonKey.fromString "num_errors" Aeson..= tcrNumErrors res
     , AesonKey.fromString "num_iterations" Aeson..= tcrNumIterations res
@@ -151,6 +154,7 @@ instance Aeson.FromJSON TestCachedResult where
       <*> o Aeson..:? AesonKey.fromString "std_out"
       <*> o Aeson..:? AesonKey.fromString "std_err"
       <*> o Aeson..:? AesonKey.fromString "flaky" Aeson..!= False
+      <*> o Aeson..:? AesonKey.fromString "num_skipped" Aeson..!= 0
       <*> o Aeson..:? AesonKey.fromString "num_failures" Aeson..!= 0
       <*> o Aeson..:? AesonKey.fromString "num_errors" Aeson..!= 0
       <*> o Aeson..:? AesonKey.fromString "num_iterations" Aeson..!= 0
@@ -208,6 +212,7 @@ cachedResultFromTest res = TestCachedResult
   , tcrStdOut = trStdOut res
   , tcrStdErr = trStdErr res
   , tcrFlaky = trFlaky res
+  , tcrNumSkipped = trNumSkipped res
   , tcrNumFailures = trNumFailures res
   , tcrNumErrors = trNumErrors res
   , tcrNumIterations = trNumIterations res
@@ -228,6 +233,7 @@ testResultFromCache modName testName res = TestResult
   , trStdOut = tcrStdOut res
   , trStdErr = tcrStdErr res
   , trFlaky = tcrFlaky res
+  , trNumSkipped = tcrNumSkipped res
   , trNumFailures = tcrNumFailures res
   , trNumErrors = tcrNumErrors res
   , trNumIterations = tcrNumIterations res
