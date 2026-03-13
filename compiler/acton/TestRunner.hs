@@ -995,6 +995,10 @@ testCmdArgs mode topts =
     let iter = C.testIter topts
         rawMaxIter = C.testMaxIter topts
         (minTime, maxTime) = effectiveTestTiming mode topts
+        stressWorkerArgs
+          | mode == TestModeStress && C.testStressWorkers topts > 0 =
+              ["--stress-workers", show (C.testStressWorkers topts)]
+          | otherwise = []
         maxIter
           | mode == TestModeStress && maxTime == 0 && not (C.testMaxIterSet topts) = 0
           | otherwise = rawMaxIter
@@ -1007,7 +1011,7 @@ testCmdArgs mode topts =
                  , "--min-time", show minTime
                  ]
         tagArgs = concatMap (\tag -> ["--tag", tag]) (C.testTags topts)
-    in baseArgs ++ tagArgs
+    in baseArgs ++ stressWorkerArgs ++ tagArgs
 
 -- | Normalize test names by stripping prefixes and wrappers.
 displayTestName :: String -> String

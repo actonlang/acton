@@ -139,6 +139,7 @@ data TestOptions = TestOptions
     , testMinIter      :: Int
     , testMaxTime      :: Int
     , testMinTime      :: Int
+    , testStressWorkers :: Int
     , testTags         :: [String]
     , testMaxIterSet   :: Bool
     , testMaxTimeSet   :: Bool
@@ -402,11 +403,12 @@ testOptions = mkTestOptions
     <*> option auto (long "min-iter" <> metavar "N" <> value 3 <> help "Minimum number of iterations to run a test")
     <*> optional (option auto (long "max-time" <> metavar "MS" <> help "Maximum time to run a test in milliseconds (0 = no time limit, mode defaults when omitted)"))
     <*> optional (option auto (long "min-time" <> metavar "MS" <> help "Minimum time to run a test in milliseconds"))
+    <*> option auto (long "stress-workers" <> metavar "N" <> value 0 <> help "Concurrent stress workers to run in stress mode (0 = auto)")
     <*> many (strOption (long "tag" <> metavar "TAG" <> help "Enable test capability TAG for testing.require()"))
     <*> many (strOption (long "module" <> metavar "MODULE" <> help "Filter on test module name"))
     <*> many (strOption (long "name" <> metavar "NAME" <> help "Filter on test name (regex, anchored; use .* for substrings)"))
   where
-    mkTestOptions testCompile testShowLog testShowCached testNoCache testJson testRecord testSnapshotUpdate testIter testMaxIterOpt testMinIter testMaxTimeOpt testMinTimeOpt testTags testModules testNames =
+    mkTestOptions testCompile testShowLog testShowCached testNoCache testJson testRecord testSnapshotUpdate testIter testMaxIterOpt testMinIter testMaxTimeOpt testMinTimeOpt testStressWorkers testTags testModules testNames =
       TestOptions
         { testCompile = testCompile
         , testShowLog = testShowLog
@@ -420,6 +422,7 @@ testOptions = mkTestOptions
         , testMinIter = testMinIter
         , testMaxTime = fromMaybe 1000 testMaxTimeOpt
         , testMinTime = fromMaybe 50 testMinTimeOpt
+        , testStressWorkers = testStressWorkers
         , testTags = testTags
         , testMaxIterSet = isJust testMaxIterOpt
         , testMaxTimeSet = isJust testMaxTimeOpt

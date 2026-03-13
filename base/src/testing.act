@@ -963,6 +963,7 @@ class TestRunnerConfig(object):
     min_iter: int
     max_time: float
     min_time: float
+    stress_workers: int
     output_enabled: bool
     tags: set[str]
 
@@ -990,6 +991,7 @@ class TestRunnerConfig(object):
             self.max_time = 0.0
         else:
             self.max_time = max([float(raw_max_time) / 1000.0, self.min_time])
+        self.stress_workers = max([0, args.get_int("stress-workers")])
         self.tags = split_tags(args.get_strlist("tag"))
 
 class TimeoutError(Exception):
@@ -1622,10 +1624,20 @@ actor test_runner(env: Env,
         if config.perf_mode:
             acton.rts.start_gc_performance_measurement(env.syscap)
 
+        def _default_stress_workers() -> int:
+            # Stress runs benefit from oversubscription so worker actors must
+            # share RTS worker threads instead of mapping one-to-one.
+            base_workers = max([1, env.nr_wthreads])
+            extra_workers = max([1, base_workers // 2])
+            return base_workers + extra_workers
+
         test_concurrency = 1
         stress_nodrift_workers = 0
         if config.stress_mode and not config.perf_mode:
-            test_concurrency = max([1, env.nr_wthreads // 2])
+            if config.stress_workers > 0:
+                test_concurrency = config.stress_workers
+            else:
+                test_concurrency = _default_stress_workers()
             stress_nodrift_workers = min([test_concurrency, max([2, (test_concurrency + 3) // 4])])
         test_timeout = 0.0
         if config.max_time > 0:
@@ -1918,6 +1930,7 @@ actor test_runner(env: Env,
         tp.add_option("min-iter", "int", default=3, help="Minumum number of iterations to run")
         tp.add_option("max-time", "int", default=1000, help="Maximum time to run a test in milliseconds (0 = no time limit)")
         tp.add_option("min-time", "int", default=50, help="Minimum time to run a test in milliseconds")
+        tp.add_option("stress-workers", "int", default=0, help="Concurrent stress workers to run (0 = auto)")
         tp.add_option("tag", "strlist", default=[], help="Enable test capability tag")
         pp = tp.add_cmd("perf", "Performance benchmark tests", _run_perf_tests)
         sp = tp.add_cmd("stress", "Stress tests by running concurrent workers of the same test", _run_stress_tests)
