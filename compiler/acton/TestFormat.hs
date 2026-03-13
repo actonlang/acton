@@ -141,6 +141,19 @@ formatSecondsCompact ms
       let secs = ms / 1000
       in show (max 1 (round secs :: Int)) ++ "s"
 
+formatSecondsCompactPadded :: Double -> Double -> String
+formatSecondsCompactPadded expectedMs actualMs =
+    let expected = formatSecondsCompact expectedMs
+        actual = formatSecondsCompact actualMs
+        width = max (length expected) (length actual)
+    in replicate (max 0 (width - length actual)) ' ' ++ actual
+
+formatMillisPadded :: Double -> Double -> String
+formatMillisPadded expectedMs actualMs =
+    let digits ms = max 1 (length (show (max 0 (floor ms :: Int))))
+        width = max (digits expectedMs) (digits actualMs) + 4
+    in printf ("%*.*fms" :: String) width (3 :: Int) actualMs
+
 fitTestDisplay :: Int -> String -> String
 fitTestDisplay width display
   | width <= 0 = ""
@@ -149,12 +162,12 @@ fitTestDisplay width display
   | otherwise = termFitPlainRight (width - 3) display ++ "..."
 
 -- | Format a single test result line with alignment and timing.
-formatTestLineWith :: Bool -> (TestResult -> String) -> Int -> String -> TestResult -> String
-formatTestLineWith useColor statusFn nameWidth display res =
+formatTestLineWith :: Bool -> (TestResult -> String) -> Double -> Int -> String -> TestResult -> String
+formatTestLineWith useColor statusFn expectedDurationMs nameWidth display res =
     let prefix0 = "   " ++ display ++ ": "
         padding = replicate (max 0 (nameWidth - length prefix0)) ' '
         statusRaw = statusFn res
-        runs = printf "%4d runs in %3.3fms @ %6.1f/s" (trNumIterations res) (trTestDuration res) (testsPerSecond (trNumIterations res) (trTestDuration res))
+        runs = printf "%4d runs in %s @ %6.1f/s" (trNumIterations res) (formatMillisPadded expectedDurationMs (trTestDuration res)) (testsPerSecond (trNumIterations res) (trTestDuration res))
         statusPart = colorizeStatusPart useColor (trCached res) statusRaw runs
         stressPart =
           case stressWorkerOverview res of
@@ -217,8 +230,8 @@ testsPerSecond iterations durationMs
   | otherwise = (fromIntegral iterations * 1000.0) / durationMs
 
 -- | Format a live test line to the current terminal width.
-formatTestLineFitted :: Bool -> (TestResult -> String) -> Int -> Int -> String -> TestResult -> String
-formatTestLineFitted useColor statusFn nameWidth width display res
+formatTestLineFitted :: Bool -> (TestResult -> String) -> Double -> Int -> Int -> String -> TestResult -> String
+formatTestLineFitted useColor statusFn expectedDurationMs nameWidth width display res
   | width <= 0 = ""
   | otherwise =
       fromMaybe fallback (firstFit (legacyLine : map alignedLine summaries ++ map compactLine summaries))
@@ -227,11 +240,11 @@ formatTestLineFitted useColor statusFn nameWidth width display res
     statusRaw = statusFn res
     (statusPlain, statusRendered) = renderStatusToken useColor (trCached res) statusRaw
     (statusFieldPlain, statusFieldRendered) = renderStatusField useColor (trCached res) statusRaw
-    duration = formatSecondsCompact (trTestDuration res)
+    duration = formatSecondsCompactPadded expectedDurationMs (trTestDuration res)
     summaryFull = show (trNumIterations res) ++ " runs " ++ duration
     summaryCompact = show (trNumIterations res) ++ "r " ++ duration
     summaries = [Just summaryFull, Just summaryCompact, Nothing]
-    legacyRendered = formatTestLineWith useColor statusFn nameWidth display res
+    legacyRendered = formatTestLineWith useColor statusFn expectedDurationMs nameWidth display res
     legacyLine
       | termVisibleLength legacyRendered <= width = Just legacyRendered
       | otherwise = Nothing
@@ -261,13 +274,13 @@ formatTestLineFitted useColor statusFn nameWidth width display res
       | width >= length statusPlain = statusRendered
       | otherwise = fitTestDisplay width display
 
-formatTestFinalLineRenderer :: Bool -> Int -> String -> TestResult -> Int -> String
-formatTestFinalLineRenderer useColor nameWidth display res cols =
-    formatTestLineFitted useColor formatTestStatus nameWidth cols display res
+formatTestFinalLineRenderer :: Bool -> Double -> Int -> String -> TestResult -> Int -> String
+formatTestFinalLineRenderer useColor expectedDurationMs nameWidth display res cols =
+    formatTestLineFitted useColor formatTestStatus expectedDurationMs nameWidth cols display res
 
-formatTestLiveLineRenderer :: Bool -> Int -> String -> TestResult -> Int -> String
-formatTestLiveLineRenderer useColor nameWidth display res cols =
-    formatTestLineFitted useColor formatTestStatusLive nameWidth cols display res
+formatTestLiveLineRenderer :: Bool -> Double -> Int -> String -> TestResult -> Int -> String
+formatTestLiveLineRenderer useColor expectedDurationMs nameWidth display res cols =
+    formatTestLineFitted useColor formatTestStatusLive expectedDurationMs nameWidth cols display res
 
 formatTestDetailLines :: Bool -> Bool -> TestResult -> [String]
 formatTestDetailLines useColor showLog res =

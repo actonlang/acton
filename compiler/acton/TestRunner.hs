@@ -40,7 +40,7 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import Data.Time.Clock (UTCTime)
 import Control.Exception (SomeException, AsyncException(..), displayException, evaluate, onException, try, fromException, throwIO)
-import TerminalSize (termFitPlainRight)
+import TerminalSize (termFitAnsiRight)
 import qualified Text.Regex.TDFA as TDFA
 import Data.Version (showVersion)
 import qualified Paths_acton
@@ -61,6 +61,22 @@ data TestProgressCallbacks = TestProgressCallbacks
   { tpcOnLive :: TestResult -> IO ()
   , tpcOnDone :: TestResult -> IO ()
   , tpcOnFinal :: TestResult -> IO ()
+  }
+
+data StressWorkerRow = StressWorkerRow
+  { swrId :: Int
+  , swrSync :: Bool
+  , swrIterations :: Int
+  , swrDriftUs :: Int
+  , swrDriftTotalUs :: Int
+  , swrCalibrating :: Bool
+  , swrPhaseResolutionUs :: Int
+  , swrTargetSweepIters :: Int
+  }
+
+data StressPhaseLane = StressPhaseLane
+  { splPhaseResolutionUs :: Int
+  , splTargetSweepIters :: Int
   }
 
 getVer :: String
@@ -218,6 +234,12 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
         ui <- initTestProgressUI gopts nameWidth (C.testShowLog topts) useColorOut
         let totalTests = length specs
         progressDoneRef <- newIORef 0
+        let (effectiveMinTime, effectiveMaxTime) = effectiveTestTiming mode topts
+            expectedDurationMs =
+              fromIntegral
+                (if effectiveMaxTime > 0
+                   then effectiveMaxTime
+                   else effectiveMinTime)
         let progressStep = do
               done <- atomicModifyIORef' progressDoneRef (\x -> let x' = x + 1 in (x', x'))
               let pct =
@@ -238,7 +260,7 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
                   showLog = tpuShowLog ui
               case M.lookup key cachedMap of
                 Just cachedRes -> do
-                  let line = formatTestFinalLineRenderer useColorLine nameWidth display cachedRes
+                  let line = formatTestFinalLineRenderer useColorLine expectedDurationMs nameWidth display cachedRes
                       details = formatTestDetailLines useColorLine showLog cachedRes
                   if shouldShowCached cachedRes
                     then do
@@ -277,12 +299,12 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
                             , trSnapshotUpdated = False
                             , trCached = False
                             }
-                          initLine = formatTestLiveLineRenderer useColorLine nameWidth display initRes
+                          initLine = formatTestLiveLineRenderer useColorLine expectedDurationMs nameWidth display initRes
                       started <- testUiStart ui key (tsModule spec) initLine
                       if not started
                         then return Nothing
                         else do
-                          callbacks <- testProgressCallbacks ui eventChan key display
+                          callbacks <- testProgressCallbacks ui eventChan key display expectedDurationMs
                           void $ async $ do
                             res <- runModuleTestStreaming opts paths topts mode (tsModule spec) (tsName spec)
                                     (tpuEnabled ui) callbacks
@@ -697,34 +719,38 @@ runModuleTestStreaming opts paths topts mode modName testName allowLive callback
         _ ->
           Aeson.object [AesonKey.fromString "interrupted" Aeson..= True]
 
-testProgressCallbacks :: TestProgressUI -> Chan TestEvent -> TestKey -> String -> IO TestProgressCallbacks
-testProgressCallbacks ui eventChan key display = do
+testProgressCallbacks :: TestProgressUI -> Chan TestEvent -> TestKey -> String -> Double -> IO TestProgressCallbacks
+testProgressCallbacks ui eventChan key display expectedDurationMs = do
     workerKeysRef <- newIORef M.empty
     let nameWidth = tpuNameWidth ui
         useColorOut = tpuUseColor ui
         showLog = tpuShowLog ui
-        liveLine res = formatTestLiveLineRenderer useColorOut nameWidth display res
-        finalLine res = formatTestFinalLineRenderer useColorOut nameWidth display res
+        liveLine res = formatTestLiveLineRenderer useColorOut expectedDurationMs nameWidth display res
+        finalLine res = formatTestFinalLineRenderer useColorOut expectedDurationMs nameWidth display res
         detailLines res = formatTestDetailLines useColorOut showLog res
-        workerLine done durationMs (wid, syncW, iterations, driftUs, driftTotalUs, calibrating) cols =
-          let role = if syncW then "sync" else "drift"
+        workerLine done durationMs laneSpec row cols =
+          let role = if swrSync row then "sync" else "drift"
               phase =
                 if done
                   then "DONE"
-                  else if calibrating
+                  else if swrCalibrating row
                     then "CAL "
                     else "RUN "
+              iterations = swrIterations row
               rate = testsPerSecond iterations durationMs
-              line = printf "      w%-3d %-5s %s : %7d iters @ %7.1f/s cur=%6dus tot=%8dus"
-                            wid role phase iterations rate driftUs driftTotalUs
-          in termFitPlainRight cols line
+              baseLine = printf "      w%-3d %-5s %s : %7d iters @ %7.1f/s cur=%6dus tot=%8dus"
+                              (swrId row) role phase iterations rate (swrDriftUs row) (swrDriftTotalUs row)
+              line = baseLine ++ renderStressPhaseLane useColorOut cols baseLine laneSpec row
+          in termFitAnsiRight cols line
         workerKey wid = TestKey (tkModule key) (tkName key ++ "#worker" ++ show wid)
         updateStressWorkers done res = do
           let rows = stressWorkerRows res
+              laneSpec = stressPhaseLaneSpec res
           unless (null rows) $ do
             existing <- readIORef workerKeysRef
-            existing' <- foldM (\acc row@(wid, _, _, _, _, _) -> do
-              let line = workerLine done (trTestDuration res) row
+            existing' <- foldM (\acc row -> do
+              let wid = swrId row
+                  line = workerLine done (trTestDuration res) laneSpec row
               case M.lookup wid acc of
                 Just wk -> do
                   if done
@@ -762,7 +788,7 @@ testProgressCallbacks ui eventChan key display = do
             queuePendingDetails ui key details
       }
 
-stressWorkerRows :: TestResult -> [(Int, Bool, Int, Int, Int, Bool)]
+stressWorkerRows :: TestResult -> [StressWorkerRow]
 stressWorkerRows res =
     case trRaw res of
       Aeson.Object obj ->
@@ -781,7 +807,18 @@ stressWorkerRows res =
           driftTotalUs <- lookupIntDefault o "drift_total_us" 0
           syncW <- lookupBool o "sync"
           calibrating <- lookupBoolDefault o "calibrating" False
-          return (wid, syncW, iterations, driftUs, driftTotalUs, calibrating)
+          phaseResolutionUs <- lookupIntDefault o "phase_resolution_us" 0
+          targetSweepIters <- lookupIntDefault o "target_sweep_iters" 0
+          return StressWorkerRow
+            { swrId = wid
+            , swrSync = syncW
+            , swrIterations = iterations
+            , swrDriftUs = driftUs
+            , swrDriftTotalUs = driftTotalUs
+            , swrCalibrating = calibrating
+            , swrPhaseResolutionUs = phaseResolutionUs
+            , swrTargetSweepIters = targetSweepIters
+            }
         _ -> Nothing
     lookupInt o keyName =
       case AesonKM.lookup (AesonKey.fromString keyName) o of
@@ -800,18 +837,134 @@ stressWorkerRows res =
         Just b -> Just b
         Nothing -> Just defVal
 
+stressPhaseLaneSpec :: TestResult -> Maybe StressPhaseLane
+stressPhaseLaneSpec res =
+    case trRaw res of
+      Aeson.Object obj -> do
+        phaseResolutionMs <- lookupDouble obj "stress_phase_resolution_ms"
+        targetSweepIters <- lookupInt obj "stress_target_sweep_iters"
+        let phaseResolutionUs = max 0 (round (phaseResolutionMs * 1000.0))
+        guard (phaseResolutionUs > 0 && targetSweepIters > 0)
+        return StressPhaseLane
+          { splPhaseResolutionUs = phaseResolutionUs
+          , splTargetSweepIters = targetSweepIters
+          }
+      _ -> Nothing
+  where
+    lookupInt o keyName =
+      case AesonKM.lookup (AesonKey.fromString keyName) o of
+        Just v -> AesonTypes.parseMaybe Aeson.parseJSON v
+        _ -> Nothing
+    lookupDouble o keyName =
+      case AesonKM.lookup (AesonKey.fromString keyName) o of
+        Just v -> (AesonTypes.parseMaybe Aeson.parseJSON v :: Maybe Double)
+        _ -> Nothing
+
+resolveStressPhaseLane :: Maybe StressPhaseLane -> StressWorkerRow -> Maybe StressPhaseLane
+resolveStressPhaseLane baseSpec row
+  | swrPhaseResolutionUs row > 0 && swrTargetSweepIters row > 0 =
+      Just StressPhaseLane
+        { splPhaseResolutionUs = swrPhaseResolutionUs row
+        , splTargetSweepIters = swrTargetSweepIters row
+        }
+  | otherwise = baseSpec
+
+renderStressPhaseLane :: Bool -> Int -> String -> Maybe StressPhaseLane -> StressWorkerRow -> String
+renderStressPhaseLane useColorOut cols baseLine baseSpec row
+  | not useColorOut = ""
+  | swrCalibrating row = ""
+  | otherwise =
+      case resolveStressPhaseLane baseSpec row of
+        Just spec ->
+          let avail = cols - length baseLine
+          in case stressPhaseLaneWidth avail of
+               Just laneWidth -> " " ++ stressPhaseLaneText laneWidth spec row
+               Nothing -> ""
+        Nothing -> ""
+
+stressPhaseLaneWidth :: Int -> Maybe Int
+stressPhaseLaneWidth avail
+  | avail < 11 = Nothing
+  | otherwise =
+      let width = min 32 (avail - 3)
+      in if width < 8 then Nothing else Just width
+
+stressPhaseLaneText :: Int -> StressPhaseLane -> StressWorkerRow -> String
+stressPhaseLaneText laneWidth spec row =
+    "|" ++ concatMap renderCell [0 .. laneWidth - 1] ++ testColorReset ++ "|"
+  where
+    totalPhaseUs = fromIntegral (max 1 (splPhaseResolutionUs spec * splTargetSweepIters spec)) :: Double
+    windowUs = fromIntegral (max 1 (splPhaseResolutionUs spec)) :: Double
+    phaseStartUs
+      | swrSync row = 0.0
+      | otherwise = fromIntegral (swrDriftTotalUs row `mod` max 1 (splPhaseResolutionUs spec * splTargetSweepIters spec))
+    centerUs = wrapPhase (phaseStartUs + (windowUs / 2.0))
+    windowCells = fromIntegral laneWidth / fromIntegral (max 1 (splTargetSweepIters spec)) :: Double
+    baselineBg = ansiBgReset
+    edgeBg = ansiBg 17
+    haloBg = ansiBg 18
+    coreBg
+      | windowCells < 0.35 = ansiBg 24
+      | windowCells < 0.70 = ansiBg 24
+      | otherwise = ansiBg 24
+
+    renderCell idx =
+      let cellStartUs = totalPhaseUs * fromIntegral idx / fromIntegral laneWidth
+          cellEndUs = totalPhaseUs * fromIntegral (idx + 1) / fromIntegral laneWidth
+          overlapFrac = circularOverlap phaseStartUs (phaseStartUs + windowUs) cellStartUs cellEndUs totalPhaseUs
+          isCore = circularContains centerUs cellStartUs cellEndUs totalPhaseUs
+          bg
+            | isCore = coreBg
+            | overlapFrac >= 0.66 = haloBg
+            | overlapFrac > 0.0 = edgeBg
+            | otherwise = baselineBg
+      in bg ++ " "
+
+    wrapPhase x
+      | totalPhaseUs <= 0.0 = 0.0
+      | otherwise =
+          let wrapped = x - (fromIntegral (floor (x / totalPhaseUs)) * totalPhaseUs)
+          in if wrapped < 0.0 then wrapped + totalPhaseUs else wrapped
+
+    circularContains point start end total =
+      overlapLinear start end point (point + 0.0001) total > 0.0
+
+    circularOverlap start end cellStart cellEnd total =
+      let segments = circularSegments start end total
+          cellSegments = circularSegments cellStart cellEnd total
+          overlapSum = sum [ overlapLinear' s1 e1 s2 e2 | (s1, e1) <- segments, (s2, e2) <- cellSegments ]
+          cellWidth = max 0.000001 (cellEnd - cellStart)
+      in overlapSum / cellWidth
+
+    circularSegments start end total
+      | total <= 0.0 = [(0.0, 1.0)]
+      | otherwise =
+          let start' = wrapPhase start
+              end' = start' + (end - start)
+          in if end' <= total
+               then [(start', end')]
+               else [(start', total), (0.0, end' - total)]
+
+    overlapLinear start end point pointEnd total =
+      let segments = circularSegments start end total
+          pointSegments = circularSegments point pointEnd total
+      in sum [ overlapLinear' s1 e1 s2 e2 | (s1, e1) <- segments, (s2, e2) <- pointSegments ]
+
+    overlapLinear' start1 end1 start2 end2 =
+      max 0.0 (min end1 end2 - max start1 start2)
+
+    ansiBg code = "\ESC[48;5;" ++ show code ++ "m"
+    ansiBgReset = "\ESC[49m"
+
 testsPerSecond :: Int -> Double -> Double
 testsPerSecond iterations durationMs
   | iterations <= 0 = 0
   | durationMs <= 0 = 0
   | otherwise = (fromIntegral iterations * 1000.0) / durationMs
 
--- | Build test runner arguments from TestOptions limits.
-testCmdArgs :: TestMode -> C.TestOptions -> [String]
-testCmdArgs mode topts =
-    let iter = C.testIter topts
-        rawMaxIter = C.testMaxIter topts
-        rawMinTime = C.testMinTime topts
+effectiveTestTiming :: TestMode -> C.TestOptions -> (Int, Int)
+effectiveTestTiming mode topts =
+    let rawMinTime = C.testMinTime topts
         minTime =
           case mode of
             TestModePerf ->
@@ -834,6 +987,14 @@ testCmdArgs mode topts =
           | C.testMaxTimeSet topts && rawMaxTime == 0 = 0
           | C.testMaxTimeSet topts = max rawMaxTime minTime
           | otherwise = modeDefaultMaxTime
+    in (minTime, maxTime)
+
+-- | Build test runner arguments from TestOptions limits.
+testCmdArgs :: TestMode -> C.TestOptions -> [String]
+testCmdArgs mode topts =
+    let iter = C.testIter topts
+        rawMaxIter = C.testMaxIter topts
+        (minTime, maxTime) = effectiveTestTiming mode topts
         maxIter
           | mode == TestModeStress && maxTime == 0 && not (C.testMaxIterSet topts) = 0
           | otherwise = rawMaxIter
@@ -988,7 +1149,7 @@ printTestResultsOrdered useColor showLog showCached nameWidth specs results = do
         isOk res = trSuccess res == Just True && trException res == Nothing && not (trSkipped res)
         shouldShow res = not (trCached res) || showCached || not (isOk res) || trSnapshotUpdated res
         formatLine spec res =
-          formatTestLineWith useColor formatTestStatus nameWidth (tsDisplay spec) res
+          formatTestLineWith useColor formatTestStatus (trTestDuration res) nameWidth (tsDisplay spec) res
     let go _ _ [] = return ()
         go printedMods printedAny (spec:rest) =
           case M.lookup (TestKey (tsModule spec) (tsName spec)) resMap of
@@ -1007,20 +1168,23 @@ printTestResultsOrdered useColor showLog showCached nameWidth specs results = do
                         return (Set.insert modName printedMods)
                   putStrLn (formatLine spec res)
                   mapM_ putStrLn (formatTestDetailLines useColor showLog res)
-                  mapM_ putStrLn (formatStressWorkerFinalLines res)
+                  mapM_ putStrLn (formatStressWorkerFinalLines useColor res)
                   go printedMods' True rest
     go Set.empty False specs
 
-formatStressWorkerFinalLines :: TestResult -> [String]
-formatStressWorkerFinalLines res =
+formatStressWorkerFinalLines :: Bool -> TestResult -> [String]
+formatStressWorkerFinalLines useColorOut res =
     map renderRow (stressWorkerRows res)
   where
     durationMs = trTestDuration res
-    renderRow (wid, syncW, iterations, driftUs, driftTotalUs, _calibrating) =
-      let role = if syncW then "sync" else "drift"
+    laneSpec = stressPhaseLaneSpec res
+    renderRow row =
+      let role = if swrSync row then "sync" else "drift"
+          iterations = swrIterations row
           rate = testsPerSecond iterations durationMs
-      in printf "      w%-3d %-5s DONE : %7d iters @ %7.1f/s cur=%6dus tot=%8dus"
-                wid role iterations rate driftUs driftTotalUs
+          baseLine = printf "      w%-3d %-5s DONE : %7d iters @ %7.1f/s cur=%6dus tot=%8dus"
+                            (swrId row) role iterations rate (swrDriftUs row) (swrDriftTotalUs row)
+      in baseLine ++ renderStressPhaseLane useColorOut (maxBound :: Int) baseLine laneSpec row
 
 -- | Write snapshot outputs for all tests that produced output.
 writeSnapshotOutputs :: Paths -> [TestResult] -> IO ()
