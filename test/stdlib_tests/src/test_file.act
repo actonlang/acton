@@ -11,6 +11,17 @@ actor _test_mkdir_idempotent(t: testing.EnvT):
     fs.mkdir(tmpdir + "/foo")
     t.success()
 
+actor _test_mktmpdir_creates_unique_directories(t: testing.EnvT):
+    fc = file.FileCap(t.env.cap)
+    fs = file.FS(fc)
+    paths = [fs.mktmpdir("acton-mktmpdir-") for _ in range(16)]
+    testing.assertEqual(len(paths), len(set(paths)))
+    for path in paths:
+        testing.assertTrue(fs.stat(path).is_dir())
+        testing.assertTrue(path.split("/")[-1].startswith("acton-mktmpdir-"))
+        await async fs.rmdir(path)
+    t.success()
+
 actor _test_rmdir_idempotent(t: testing.EnvT):
     fc = file.FileCap(t.env.cap)
     fs = file.FS(fc)
