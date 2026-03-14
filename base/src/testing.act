@@ -1645,6 +1645,13 @@ actor test_runner(env: Env,
             extra_workers = max([1, base_workers // 2])
             return base_workers + extra_workers
 
+        def _stress_timeout_slack_s() -> float:
+            if not config.stress_mode or config.perf_mode:
+                return 1.0
+            # Oversubscribed stress runs can take several extra seconds to
+            # drain workers and emit the final aggregate result.
+            return max([5.0, min([10.0, config.min_time * 0.9])])
+
         test_concurrency = 1
         stress_nodrift_workers = 0
         if config.stress_mode and not config.perf_mode:
@@ -1655,7 +1662,7 @@ actor test_runner(env: Env,
             stress_nodrift_workers = min([test_concurrency, max([2, (test_concurrency + 3) // 4])])
         test_timeout = 0.0
         if config.max_time > 0:
-            test_timeout = max([config.max_time, 2.0]) + 1.0
+            test_timeout = max([config.max_time, 2.0]) + _stress_timeout_slack_s()
 
         test_name = args.get_str("name")
         if test_name not in all_tests:
