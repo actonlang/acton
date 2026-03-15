@@ -161,6 +161,61 @@ compilerTests =
               ("#include \"out/types/foo/a.h\"" `isInfixOf` hOut)
             assertBool "main.c should not call alias-prefixed init symbol"
               (not ("barQ_aQ___init__();" `isInfixOf` cOut))
+  , testCase "dep lib module acts as package root" $ do
+        withSystemTempDirectory "acton-dep-lib-root" $ \tmp -> do
+            let depName = "foo"
+                appName = "app"
+                fpFor n seed =
+                  Fingerprint.formatFingerprint
+                    (Fingerprint.updateFingerprintPrefix
+                      (Fingerprint.fingerprintPrefixForName n) seed)
+                depDir = tmp </> "dep"
+                appDir = tmp </> "app"
+                depSrc = depDir </> "src"
+                appSrc = appDir </> "src"
+            createDirectoryIfMissing True depSrc
+            createDirectoryIfMissing True appSrc
+            writeFile (depDir </> "Build.act") $ unlines
+              [ "name = \"" ++ depName ++ "\""
+              , "fingerprint = " ++ fpFor depName 3
+              , ""
+              ]
+            writeFile (depSrc </> "lib.act") $ unlines
+              [ "root_val = 7"
+              ]
+            writeFile (depSrc </> "a.act") $ unlines
+              [ "sub_val = 5"
+              ]
+            writeFile (appDir </> "Build.act") $ unlines
+              [ "name = \"" ++ appName ++ "\""
+              , "fingerprint = " ++ fpFor appName 4
+              , ""
+              , "dependencies = {"
+              , "    \"" ++ depName ++ "\": ("
+              , "        path = \"../dep\""
+              , "    )"
+              , "}"
+              ]
+            writeFile (appSrc </> "main.act") $ unlines
+              [ "import foo"
+              , "import foo.a"
+              , "import a"
+              , ""
+              , "actor main(env):"
+              , "    print(foo.root_val + foo.a.sub_val + a.sub_val)"
+              , "    env.exit(0)"
+              ]
+            runActon "build" ExitSuccess False appDir
+            cOut <- readFile (appDir </> "out" </> "types" </> "main.c")
+            hOut <- readFile (appDir </> "out" </> "types" </> "main.h")
+            assertBool "main.h should include package root header from lib.act"
+              ("#include \"out/types/foo.h\"" `isInfixOf` hOut)
+            assertBool "main.h should include canonical submodule header"
+              ("#include \"out/types/foo/a.h\"" `isInfixOf` hOut)
+            assertBool "main.c should initialize the package root module"
+              ("fooQ___init__();" `isInfixOf` cOut)
+            assertBool "main.h should not treat lib.act as foo.lib"
+              (not ("out/types/foo/lib.h" `isInfixOf` hOut))
   , testCase "path dependency fetches transitive cached deps before discovery" $ do
         withSystemTempDirectory "acton-transitive-path-fetch" $ \tmp -> do
           actonExe <- canonicalizePath "../../dist/bin/acton"

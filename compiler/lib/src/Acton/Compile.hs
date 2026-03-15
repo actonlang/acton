@@ -610,8 +610,8 @@ prepareCompilePlanFromContext sp gopts ctx srcFiles allowPrune mChangedPaths = d
   -- For full builds, scan and prune all orphan outputs.
   -- For incremental builds, prune only modules whose changed .act paths are now missing.
   if incremental
-    then maybe (return ()) (pruneMissingChangedModuleOutputs (M.elems projMap)) mChangedPaths
-    else mapM_ pruneMissingModuleOutputs (M.elems projMap)
+    then maybe (return ()) (pruneMissingChangedModuleOutputs rootProj (M.elems projMap)) mChangedPaths
+    else mapM_ (pruneMissingModuleOutputs rootProj) (M.elems projMap)
   (globalTasks, _) <- buildGlobalTasks sp gopts opts' rootProj projMap
     (if incremental || allowPrune then Nothing else Just srcFiles)
   neededTasks <- case mChangedPaths of
@@ -1018,6 +1018,7 @@ projectModulePrefix rootProj ctx
 qualifyModuleName :: [String] -> A.ModName -> (A.ModName, [String])
 qualifyModuleName [] mn = (mn, [])
 qualifyModuleName pfx mn
+  | A.modPath mn == ["lib"] = (A.modName pfx, pfx)
   | pfx `isPrefixOf` A.modPath mn = (mn, [])
   | otherwise = (A.modName (pfx ++ A.modPath mn), pfx)
 
@@ -1034,18 +1035,12 @@ buildGlobalTasks :: Source.SourceProvider
                  -> IO ([GlobalTask], M.Map FilePath (Data.Set.Set A.ModName))
 buildGlobalTasks sp gopts opts rootProj projMap mSeeds = do
     perProj <- forM (M.elems projMap) $ \ctx -> do
-                  mods <- enumerateProjectModules ctx
-                  let pfx = projectModulePrefix rootProj ctx
-                      qmods =
-                        [ let (mn', sourcePfx) = qualifyModuleName pfx mn
-                          in (actFile, mn', sourcePfx)
-                        | (actFile, mn) <- mods
-                        ]
-                  return (ctx, qmods)
-    let modMaps = M.fromList [ (projRoot ctx, M.fromList [ (mn, actFile) | (actFile, mn, _) <- mods ]) | (ctx, mods) <- perProj ]
+                  mods <- enumerateProjectModules rootProj ctx
+                  return (ctx, mods)
+    let modMaps = M.fromList [ (projRoot ctx, M.fromList [ (mn, actFile) | (actFile, _, mn, _) <- mods ]) | (ctx, mods) <- perProj ]
         modSets = M.map Data.Set.fromList (M.map M.keys modMaps)
         sourcePfxMaps = M.fromList
-          [ (projRoot ctx, M.fromList [ (mn, sourcePfx) | (_, mn, sourcePfx) <- mods ])
+          [ (projRoot ctx, M.fromList [ (mn, sourcePfx) | (_, _, mn, sourcePfx) <- mods ])
           | (ctx, mods) <- perProj
           ]
         modIndex = M.fromList
@@ -1053,23 +1048,22 @@ buildGlobalTasks sp gopts opts rootProj projMap mSeeds = do
           | (ctx, mods) <- perProj
           ]
         orderCache = M.fromList [ (projRoot ctx, projRoot ctx : projDepClosure projMap (projRoot ctx)) | (ctx, _) <- perProj ]
-        allKeys = [ TaskKey (projRoot ctx) mn | (ctx, mods) <- perProj, (_, mn, _) <- mods ]
+        allKeys = [ TaskKey (projRoot ctx) mn | (ctx, mods) <- perProj, (_, _, mn, _) <- mods ]
     seedKeys <- case mSeeds of
                   Nothing -> return allKeys
                   Just files -> do
                     absFiles <- mapM canonicalizePath files
-                    let pathIndex = M.fromList [ (actFile, TaskKey (projRoot ctx) mn) | (ctx, mods) <- perProj, (actFile, mn, _) <- mods ]
+                    let pathIndex = M.fromList [ (actFile, TaskKey (projRoot ctx) mn) | (ctx, mods) <- perProj, (actFile, _, mn, _) <- mods ]
                         found = mapMaybe (`M.lookup` pathIndex) absFiles
                     return (if null found then allKeys else found)
     tasks <- go modMaps sourcePfxMaps modIndex orderCache Data.Set.empty seedKeys []
     return (reverse tasks, modSets)
   where
-    providerNames (_, mn, sourcePfx) =
+    providerNames (_, rawMn, mn, _) =
       let canonical = (mn, mn)
-          legacy = case (sourcePfx, dropFirstModName mn) of
-                     ([], _) -> []
-                     (_, Just raw) -> [(raw, mn)]
-                     (_, Nothing) -> []
+          legacy
+            | rawMn == mn = []
+            | otherwise = [(rawMn, mn)]
       in canonical : legacy
 
     go modMaps sourcePfxMaps modIndex orderCache seen [] acc = return acc
@@ -2750,7 +2744,10 @@ discoverProjects gopts sysAbs rootProj depOverrides = do
 sourcePathForModule :: Paths -> A.ModName -> [String]
 sourcePathForModule paths mn =
     let path = A.modPath mn
-    in maybe path id (Data.List.stripPrefix (sourcePrefix paths) path)
+        relPath = maybe path id (Data.List.stripPrefix (sourcePrefix paths) path)
+    in case relPath of
+         [] | not (null (sourcePrefix paths)) -> ["lib"]
+         _ -> relPath
 
 -- | Compute the source file path for a module under its project src dir.
 srcFile                 :: Paths -> A.ModName -> FilePath
@@ -2889,7 +2886,7 @@ findPaths actFile opts  = do execDir <- takeDirectory <$> getExecutablePath
 
 -- Module helpers for multi-project builds ---------------------------------------------------------
 
--- | Derive a module name from a file path under a project's src root.
+-- | Derive a raw module name from a file path under a project's src root.
 -- The result uses path segments and strips the .act extension.
 moduleNameFromFile :: FilePath -> FilePath -> IO A.ModName
 moduleNameFromFile srcBase actFile = do
@@ -2898,10 +2895,17 @@ moduleNameFromFile srcBase actFile = do
     let rel = dropExtension (makeRelative base file)
     return $ A.modName (splitDirectories rel)
 
+-- | Pair a project source file with its raw and canonical module names.
+moduleInfoFromFile :: FilePath -> ProjCtx -> FilePath -> IO (A.ModName, A.ModName, [String])
+moduleInfoFromFile rootProj ctx actFile = do
+    rawMn <- moduleNameFromFile (projSrcDir ctx) actFile
+    let (canonMn, sourcePfx) = qualifyModuleName (projectModulePrefix rootProj ctx) rawMn
+    return (rawMn, canonMn, sourcePfx)
+
 -- | Enumerate all .act files in a project and pair them with module names.
 -- Used to seed the project module index for graph construction.
-enumerateProjectModules :: ProjCtx -> IO [(FilePath, A.ModName)]
-enumerateProjectModules ctx = do
+enumerateProjectModules :: FilePath -> ProjCtx -> IO [(FilePath, A.ModName, A.ModName, [String])]
+enumerateProjectModules rootProj ctx = do
     exists <- doesDirectoryExist (projSrcDir ctx)
     if not exists
       then return []
@@ -2909,14 +2913,14 @@ enumerateProjectModules ctx = do
         files <- getFilesRecursive (projSrcDir ctx)
         let actFiles = filter (\f -> takeExtension f == ".act") files
         forM actFiles $ \f -> do
-          mn <- moduleNameFromFile (projSrcDir ctx) f
-          return (f, mn)
+          (rawMn, canonMn, sourcePfx) <- moduleInfoFromFile rootProj ctx f
+          return (f, rawMn, canonMn, sourcePfx)
 
 -- | Remove stale generated module artifacts when source modules disappear.
 -- Prunes orphan .ty/.c/.h outputs under out/types before task planning so
 -- cached headers cannot mask deleted .act modules.
-pruneMissingModuleOutputs :: ProjCtx -> IO ()
-pruneMissingModuleOutputs ctx = do
+pruneMissingModuleOutputs :: FilePath -> ProjCtx -> IO ()
+pruneMissingModuleOutputs rootProj ctx = do
     let srcRoot = projSrcDir ctx
         typesRoot = projTypesDir ctx
     typesExists <- doesDirectoryExist typesRoot
@@ -2924,9 +2928,11 @@ pruneMissingModuleOutputs ctx = do
       srcExists <- doesDirectoryExist srcRoot
       srcMods <- if srcExists
                    then do
-                     srcFiles <- getFilesRecursive srcRoot
-                     let actFiles = filter (\f -> takeExtension f == ".act") srcFiles
-                         modBases = map (normalise . dropExtension . makeRelative srcRoot) actFiles
+                     mods <- enumerateProjectModules rootProj ctx
+                     let modBases =
+                           [ normalise (joinPath (A.modPath canonMn))
+                           | (_, _, canonMn, _) <- mods
+                           ]
                      return (Data.Set.fromList modBases)
                    else return Data.Set.empty
       outFiles <- getFilesRecursive typesRoot
@@ -2953,8 +2959,8 @@ pruneMissingModuleOutputs ctx = do
     ignoreNotExists _ = return ()
 
 -- | Incremental variant: prune only modules whose changed .act file no longer exists.
-pruneMissingChangedModuleOutputs :: [ProjCtx] -> [FilePath] -> IO ()
-pruneMissingChangedModuleOutputs ctxs changedPaths = do
+pruneMissingChangedModuleOutputs :: FilePath -> [ProjCtx] -> [FilePath] -> IO ()
+pruneMissingChangedModuleOutputs rootProj ctxs changedPaths = do
     absChanged <- mapM normalizePathSafe changedPaths
     let actPaths = filter (\p -> takeExtension p == ".act") absChanged
     forM_ actPaths $ \actPath -> do
@@ -2967,7 +2973,9 @@ pruneMissingChangedModuleOutputs ctxs changedPaths = do
       let srcRoot' = addTrailingPathSeparator (normalise srcRoot)
           actPath' = normalise actPath
       when (Data.List.isPrefixOf srcRoot' actPath') $ do
-        let modBase = normalise (dropExtension (makeRelative srcRoot actPath'))
+        rawMn <- moduleNameFromFile srcRoot actPath'
+        let (canonMn, _) = qualifyModuleName (projectModulePrefix rootProj ctx) rawMn
+            modBase = normalise (joinPath (A.modPath canonMn))
             outBase = projTypesDir ctx </> modBase
         mapM_ (\ext -> removeFile (outBase ++ ext) `catch` ignoreNotExists) [".ty", ".c", ".h"]
 
