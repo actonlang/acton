@@ -9,6 +9,7 @@
 - [Compiler](compiler/index.md)
   - [Incremental compilation](compiler/incremental_compilation.md)
   - [Imports and environments](compiler/imports_and_envs.md)
+  - [Project dependencies](compiler/project_dependencies.md)
   - [Test result cache](compiler/test_cache.md)
   - [Passes](compiler/passes/index.md)
     - [Parse](compiler/passes/parse.md)
