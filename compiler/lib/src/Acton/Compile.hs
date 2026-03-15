@@ -227,7 +227,7 @@ import Data.Graph
 import Data.List (find, foldl', intercalate, intersperse, isPrefixOf, isSuffixOf, nub)
 import qualified Data.List
 import Data.IORef
-import Data.Maybe (catMaybes, isJust, listToMaybe, mapMaybe)
+import Data.Maybe (catMaybes, isJust, listToMaybe, mapMaybe, maybeToList)
 import qualified Data.Map as M
 import Data.Ord (Down(..))
 import qualified Data.Set
@@ -612,7 +612,7 @@ prepareCompilePlanFromContext sp gopts ctx srcFiles allowPrune mChangedPaths = d
   if incremental
     then maybe (return ()) (pruneMissingChangedModuleOutputs (M.elems projMap)) mChangedPaths
     else mapM_ pruneMissingModuleOutputs (M.elems projMap)
-  (globalTasks, _) <- buildGlobalTasks sp gopts opts' projMap
+  (globalTasks, _) <- buildGlobalTasks sp gopts opts' rootProj projMap
     (if incremental || allowPrune then Nothing else Just srcFiles)
   neededTasks <- case mChangedPaths of
     Nothing -> selectNeededTasks pathsRoot rootProj globalTasks srcFiles
@@ -984,11 +984,42 @@ importsOf (ParseErrorTask _ _) = []
 -- | Resolve imports to in-graph providers using project search order.
 -- This chooses the first project in the search order that declares the module,
 -- producing TaskKeys for dependency edges.
-resolveProviders :: [FilePath] -> M.Map FilePath (Data.Set.Set A.ModName) -> [A.ModName] -> M.Map A.ModName TaskKey
-resolveProviders order modSets imps =
-    M.fromList $ catMaybes $ map (\mn -> fmap (\p -> (mn, TaskKey p mn)) (findProvider mn)) imps
+resolveProviders :: [FilePath] -> M.Map FilePath (M.Map A.ModName A.ModName) -> [A.ModName] -> M.Map A.ModName TaskKey
+resolveProviders order modIndex imps =
+    M.fromList $ catMaybes $ map resolveOne imps
   where
-    findProvider mn = listToMaybe [ p | p <- order, maybe False (Data.Set.member mn) (M.lookup p modSets) ]
+    resolveOne mn = fmap (\(p, providerMn) -> (mn, TaskKey p providerMn)) (findProvider mn)
+
+    findProvider mn = listToMaybe
+      [ (p, providerMn)
+      | key <- candidateKeys mn
+      , p <- order
+      , providerMn <- maybeToList (M.lookup p modIndex >>= M.lookup key)
+      ]
+
+    candidateKeys mn = mn : maybe [] (:[]) (dropFirstModName mn)
+
+dropFirstModName :: A.ModName -> Maybe A.ModName
+dropFirstModName (A.ModName (_:ns)) = Just (A.ModName ns)
+dropFirstModName _ = Nothing
+
+isSystemProjectRoot :: ProjCtx -> Bool
+isSystemProjectRoot ctx =
+    let sysRoot = addTrailingPathSeparator (normalise (projSysPath ctx))
+        proj = addTrailingPathSeparator (normalise (projRoot ctx))
+    in sysRoot `isPrefixOf` proj
+
+projectModulePrefix :: FilePath -> ProjCtx -> [String]
+projectModulePrefix rootProj ctx
+  | projRoot ctx == rootProj = []
+  | isSystemProjectRoot ctx = []
+  | otherwise = [BuildSpec.specName (projBuildSpec ctx)]
+
+qualifyModuleName :: [String] -> A.ModName -> (A.ModName, [String])
+qualifyModuleName [] mn = (mn, [])
+qualifyModuleName pfx mn
+  | pfx `isPrefixOf` A.modPath mn = (mn, [])
+  | otherwise = (A.modName (pfx ++ A.modPath mn), pfx)
 
 
 -- | Build GlobalTasks for all discovered projects.
@@ -997,46 +1028,72 @@ resolveProviders order modSets imps =
 buildGlobalTasks :: Source.SourceProvider
                  -> C.GlobalOptions
                  -> C.CompileOptions
+                 -> FilePath
                  -> M.Map FilePath ProjCtx
                  -> Maybe [String]                  -- optional seed source files; Nothing = all modules
                  -> IO ([GlobalTask], M.Map FilePath (Data.Set.Set A.ModName))
-buildGlobalTasks sp gopts opts projMap mSeeds = do
+buildGlobalTasks sp gopts opts rootProj projMap mSeeds = do
     perProj <- forM (M.elems projMap) $ \ctx -> do
                   mods <- enumerateProjectModules ctx
-                  return (ctx, mods)
-    let modMaps = M.fromList [ (projRoot ctx, M.fromList [ (mn, actFile) | (actFile, mn) <- mods ]) | (ctx, mods) <- perProj ]
+                  let pfx = projectModulePrefix rootProj ctx
+                      qmods =
+                        [ let (mn', sourcePfx) = qualifyModuleName pfx mn
+                          in (actFile, mn', sourcePfx)
+                        | (actFile, mn) <- mods
+                        ]
+                  return (ctx, qmods)
+    let modMaps = M.fromList [ (projRoot ctx, M.fromList [ (mn, actFile) | (actFile, mn, _) <- mods ]) | (ctx, mods) <- perProj ]
         modSets = M.map Data.Set.fromList (M.map M.keys modMaps)
+        sourcePfxMaps = M.fromList
+          [ (projRoot ctx, M.fromList [ (mn, sourcePfx) | (_, mn, sourcePfx) <- mods ])
+          | (ctx, mods) <- perProj
+          ]
+        modIndex = M.fromList
+          [ (projRoot ctx, M.fromListWith (\old _ -> old) (concatMap providerNames mods))
+          | (ctx, mods) <- perProj
+          ]
         orderCache = M.fromList [ (projRoot ctx, projRoot ctx : projDepClosure projMap (projRoot ctx)) | (ctx, _) <- perProj ]
-        allKeys = [ TaskKey (projRoot ctx) mn | (ctx, mods) <- perProj, (_, mn) <- mods ]
+        allKeys = [ TaskKey (projRoot ctx) mn | (ctx, mods) <- perProj, (_, mn, _) <- mods ]
     seedKeys <- case mSeeds of
                   Nothing -> return allKeys
                   Just files -> do
                     absFiles <- mapM canonicalizePath files
-                    let pathIndex = M.fromList [ (actFile, TaskKey (projRoot ctx) mn) | (ctx, mods) <- perProj, (actFile, mn) <- mods ]
+                    let pathIndex = M.fromList [ (actFile, TaskKey (projRoot ctx) mn) | (ctx, mods) <- perProj, (actFile, mn, _) <- mods ]
                         found = mapMaybe (`M.lookup` pathIndex) absFiles
                     return (if null found then allKeys else found)
-    tasks <- go modMaps modSets orderCache Data.Set.empty seedKeys []
+    tasks <- go modMaps sourcePfxMaps modIndex orderCache Data.Set.empty seedKeys []
     return (reverse tasks, modSets)
   where
-    go modMaps modSets orderCache seen [] acc = return acc
-    go modMaps modSets orderCache seen (k:qs) acc
-      | Data.Set.member k seen = go modMaps modSets orderCache seen qs acc
+    providerNames (_, mn, sourcePfx) =
+      let canonical = (mn, mn)
+          legacy = case (sourcePfx, dropFirstModName mn) of
+                     ([], _) -> []
+                     (_, Just raw) -> [(raw, mn)]
+                     (_, Nothing) -> []
+      in canonical : legacy
+
+    go modMaps sourcePfxMaps modIndex orderCache seen [] acc = return acc
+    go modMaps sourcePfxMaps modIndex orderCache seen (k:qs) acc
+      | Data.Set.member k seen = go modMaps sourcePfxMaps modIndex orderCache seen qs acc
       | otherwise =
           case M.lookup (tkProj k) modMaps >>= M.lookup (tkMod k) of
-            Nothing -> go modMaps modSets orderCache (Data.Set.insert k seen) qs acc
+            Nothing -> go modMaps sourcePfxMaps modIndex orderCache (Data.Set.insert k seen) qs acc
             Just actFile -> do
               let ctx = projMap M.! tkProj k
-              paths <- pathsForModule opts projMap ctx (tkMod k)
+                  sourcePfx =
+                    M.findWithDefault [] (tkMod k)
+                      (M.findWithDefault M.empty (tkProj k) sourcePfxMaps)
+              paths <- pathsForModule opts projMap ctx sourcePfx (tkMod k)
               task  <- readModuleTask sp gopts opts paths actFile
               let order = M.findWithDefault [tkProj k] (tkProj k) orderCache
-                  providers = resolveProviders order modSets (importsOf task)
+                  providers = resolveProviders order modIndex (importsOf task)
                   newKeys = M.elems providers
                   acc' = GlobalTask { gtKey = k
                                     , gtPaths = paths
                                     , gtTask = task
                                     , gtImportProviders = providers
                                     } : acc
-              go modMaps modSets orderCache (Data.Set.insert k seen) (qs ++ newKeys) acc'
+              go modMaps sourcePfxMaps modIndex orderCache (Data.Set.insert k seen) (qs ++ newKeys) acc'
 
 
 -- | Select the subgraph needed for a given build request.
@@ -2553,6 +2610,7 @@ data Paths      = Paths {
                     projTypes   :: FilePath,
                     binDir      :: FilePath,
                     srcDir      :: FilePath,
+                    sourcePrefix :: [String],
                     isTmp       :: Bool,
                     fileExt     :: String,
                     modName     :: A.ModName
@@ -2689,9 +2747,14 @@ discoverProjects gopts sysAbs rootProj depOverrides = do
 -- 'fileExt' is file suffix of FILE.
 -- 'modName' is the module name of FILE (its path after 'src' except 'fileExt', split at every '/')
 
+sourcePathForModule :: Paths -> A.ModName -> [String]
+sourcePathForModule paths mn =
+    let path = A.modPath mn
+    in maybe path id (Data.List.stripPrefix (sourcePrefix paths) path)
+
 -- | Compute the source file path for a module under its project src dir.
 srcFile                 :: Paths -> A.ModName -> FilePath
-srcFile paths mn        = joinPath (srcDir paths : A.modPath mn) ++ ".act"
+srcFile paths mn        = joinPath (srcDir paths : sourcePathForModule paths mn) ++ ".act"
 
 -- | Compute the output base path (without extension) for a module.
 -- Used to locate .ty/.c/.h output under the project's types directory.
@@ -2701,7 +2764,7 @@ outBase paths mn        = joinPath (projTypes paths : A.modPath mn)
 -- | Compute the module path without extension under the project's src dir.
 -- Used to derive the .act path or related per-module files.
 srcBase                 :: Paths -> A.ModName -> FilePath
-srcBase paths mn        = joinPath (srcDir paths : A.modPath mn)
+srcBase paths mn        = joinPath (srcDir paths : sourcePathForModule paths mn)
 
 
 -- | Walk upward from a path to find a project root.
@@ -2810,7 +2873,7 @@ findPaths actFile opts  = do execDir <- takeDirectory <$> getExecutablePath
                              createDirectoryIfMissing True projOut
                              createDirectoryIfMissing True projTypes
                              createDirectoryIfMissing True (getModPath projTypes modName)
-                             return $ Paths sPaths sysPath sysTypes projPath projOut projTypes binDir srcDir isTmp fileExt modName
+                             return $ Paths sPaths sysPath sysTypes projPath projOut projTypes binDir srcDir [] isTmp fileExt modName
   where (fileBody,fileExt) = splitExtension $ takeFileName actFile
 
         analyze "/" ds  = do tmp <- canonicalizePath (C.tempdir opts)
@@ -2921,12 +2984,12 @@ searchPathForProject opts projMap ctx =
 
 -- | Construct a Paths record for a module within a project context.
 -- Creates output directories and ensures the types directory exists.
-pathsForModule :: C.CompileOptions -> M.Map FilePath ProjCtx -> ProjCtx -> A.ModName -> IO Paths
-pathsForModule opts projMap ctx mn = do
+pathsForModule :: C.CompileOptions -> M.Map FilePath ProjCtx -> ProjCtx -> [String] -> A.ModName -> IO Paths
+pathsForModule opts projMap ctx sourcePfx mn = do
     let sPaths = searchPathForProject opts projMap ctx
         bin = joinPath [projOutDir ctx, "bin"]
         src = projSrcDir ctx
-        p = Paths sPaths (projSysPath ctx) (projSysTypes ctx) (projRoot ctx) (projOutDir ctx) (projTypesDir ctx) bin src False ".act" mn
+        p = Paths sPaths (projSysPath ctx) (projSysTypes ctx) (projRoot ctx) (projOutDir ctx) (projTypesDir ctx) bin src sourcePfx False ".act" mn
     createDirectoryIfMissing True bin
     createDirectoryIfMissing True (projOutDir ctx)
     createDirectoryIfMissing True (projTypesDir ctx)
