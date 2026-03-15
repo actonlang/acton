@@ -12,5 +12,9 @@ read and understand what each transformation does.
 See [Imports and environments](imports_and_envs.md) for how the scheduler,
 `.ty` headers, and the active type-checker environment fit together.
 
+See [Project dependencies](project_dependencies.md) for how Acton package
+dependencies and zig dependencies are discovered, fetched, and emitted into the
+generated Zig build files.
+
 See [Passes](passes/index.md) for the stage-by-stage pipeline and how front and
 back passes split the work.

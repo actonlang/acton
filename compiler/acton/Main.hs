@@ -2073,13 +2073,16 @@ genBuildZigFiles spec rootPins depOverrides paths depModuleOpts depPathOverrides
     homeDir <- getHomeDirectory
     depsRootAbs <- normalizePathSafe (joinPath [homeDir, ".cache", "acton", "deps"])
     normalizedSpec <- normalizeSpecPaths proj spec
-    let applyPins deps = M.mapWithKey (\n d -> M.findWithDefault d n rootPins) deps
-        mergedSpec0 = normalizedSpec { BuildSpec.dependencies     = applyPins (BuildSpec.dependencies normalizedSpec) `M.union` transPkgs
-                                     , BuildSpec.zig_dependencies = BuildSpec.zig_dependencies normalizedSpec `M.union` transZigs }
+    let directZigs = [ ZigDepRef depName (rebaseZigDep projAbs proj dep)
+                     | (depName, dep) <- M.toList (BuildSpec.zig_dependencies normalizedSpec)
+                     ]
+        applyPins deps = M.mapWithKey (\n d -> M.findWithDefault d n rootPins) deps
+        mergedSpec0 = normalizedSpec { BuildSpec.dependencies = applyPins (BuildSpec.dependencies normalizedSpec) `M.union` transPkgs }
         mergedSpec = applyPkgDepPathOverrides projAbs depPathOverrides mergedSpec0
+        resolvedZigs = resolveZigDepRefs (M.keys (BuildSpec.dependencies mergedSpec)) (directZigs ++ transZigs)
         zonWithFp = replace "{{fingerprint}}" fp . replace "{{name}}" zonName
-    writeFile buildZigPath (genBuildZig buildZigTemplate mergedSpec depModuleOpts)
-    writeFileAtomic buildZonPath (genBuildZigZon buildZonTemplate relSys depsRootAbs projAbs fp zonName mergedSpec)
+    writeFile buildZigPath (genBuildZig buildZigTemplate mergedSpec resolvedZigs depModuleOpts)
+    writeFileAtomic buildZonPath (genBuildZigZon buildZonTemplate relSys depsRootAbs projAbs fp zonName mergedSpec resolvedZigs)
 
 applyPkgDepPathOverrides :: FilePath -> M.Map String FilePath -> BuildSpec.BuildSpec -> BuildSpec.BuildSpec
 applyPkgDepPathOverrides projRoot depPathOverrides spec =
@@ -2091,15 +2094,104 @@ applyPkgDepPathOverrides projRoot depPathOverrides spec =
         Just depPath ->
           dep { BuildSpec.path = Just (collapseDots (makeRelativeOrAbsolute projRoot depPath)) }
 
-genBuildZig :: String -> BuildSpec.BuildSpec -> M.Map String String -> String
-genBuildZig template spec depModuleOpts =
-    let depsDefs = concatMap pkgDepDef (M.toList (BuildSpec.dependencies spec))
-        zigDefs  = concatMap zigDepDef (M.toList (BuildSpec.zig_dependencies spec))
+data ZigDepRef = ZigDepRef
+  { zigDepRefName :: String
+  , zigDepRefDep :: BuildSpec.ZigDep
+  }
+
+data ZigDepResolved = ZigDepResolved
+  { zigDepResolvedVarName :: String
+  , zigDepResolvedPkgName :: String
+  , zigDepResolvedDep :: BuildSpec.ZigDep
+  }
+
+data ZigDepIdentity
+  = ZigDepPathIdentity FilePath (M.Map String String)
+  | ZigDepHashIdentity String (M.Map String String)
+  | ZigDepUrlIdentity (Maybe String) (M.Map String String)
+  deriving (Eq, Ord, Show)
+
+zigDepIdentity :: BuildSpec.ZigDep -> ZigDepIdentity
+zigDepIdentity dep =
+  case BuildSpec.zpath dep of
+    Just p | not (null p) -> ZigDepPathIdentity p (BuildSpec.options dep)
+    _ -> case BuildSpec.zhash dep of
+           Just h | not (null h) -> ZigDepHashIdentity h (BuildSpec.options dep)
+           _ -> ZigDepUrlIdentity (BuildSpec.zurl dep) (BuildSpec.options dep)
+
+mergeUniqueStrings :: [String] -> [String] -> [String]
+mergeUniqueStrings xs ys =
+    xs ++ [ y | y <- ys, y `notElem` xs ]
+
+mergeZigDeps :: BuildSpec.ZigDep -> BuildSpec.ZigDep -> BuildSpec.ZigDep
+mergeZigDeps dep0 dep1 =
+    dep0 { BuildSpec.artifacts = mergeUniqueStrings (BuildSpec.artifacts dep0) (BuildSpec.artifacts dep1) }
+
+dedupZigDepRefs :: [ZigDepRef] -> [(String, BuildSpec.ZigDep)]
+dedupZigDepRefs refs =
+    let (orderRev, byIdentity) = foldl' step ([], M.empty) refs
+    in [ let ref = byIdentity M.! ident
+         in (zigDepRefName ref, zigDepRefDep ref)
+       | ident <- reverse orderRev
+       ]
+  where
+    step (orderRev, byIdentity) ref =
+      let ident = zigDepIdentity (zigDepRefDep ref)
+      in case M.lookup ident byIdentity of
+           Nothing ->
+             (ident : orderRev, M.insert ident ref byIdentity)
+           Just prevRef ->
+             let mergedRef = prevRef { zigDepRefDep = mergeZigDeps (zigDepRefDep prevRef) (zigDepRefDep ref) }
+             in (orderRev, M.insert ident mergedRef byIdentity)
+
+nextAvailableName :: Data.Set.Set String -> String -> String
+nextAvailableName usedNames baseName = go 0
+  where
+    go 0
+      | Data.Set.member baseName usedNames = go 2
+      | otherwise = baseName
+    go n =
+      let candidate = baseName ++ "_" ++ show n
+      in if Data.Set.member candidate usedNames
+           then go (n + 1)
+           else candidate
+
+-- | Zig and Acton package dependencies share one Zig package namespace at
+-- generation time. Keep generated zig package keys disjoint from package deps
+-- and reserved builder deps so a wrapper package and its underlying zig pkg can
+-- reuse the same logical dependency name.
+resolveZigDepRefs :: [String] -> [ZigDepRef] -> [ZigDepResolved]
+resolveZigDepRefs pkgDepNames refs =
+    reverse resolvedRev
+  where
+    reservedNames =
+      Data.Set.fromList (["actondb", "base"] ++ pkgDepNames)
+    uniqueRefs = dedupZigDepRefs refs
+    (_, _, resolvedRev) = foldl' assign (reservedNames, Data.Set.empty, []) uniqueRefs
+
+    assign (usedPkgNames, usedVarNames, acc) (depName, dep) =
+      let pkgName = nextAvailableName usedPkgNames ("acton_zig_" ++ depName)
+          varName = nextAvailableName usedVarNames depName
+          resolved = ZigDepResolved
+            { zigDepResolvedVarName = varName
+            , zigDepResolvedPkgName = pkgName
+            , zigDepResolvedDep = dep
+            }
+      in ( Data.Set.insert pkgName usedPkgNames
+         , Data.Set.insert varName usedVarNames
+         , resolved : acc
+         )
+
+genBuildZig :: String -> BuildSpec.BuildSpec -> [ZigDepResolved] -> M.Map String String -> String
+genBuildZig template spec zigDeps depModuleOpts =
+    let
+        depsDefs = concatMap pkgDepDef (M.toList (BuildSpec.dependencies spec))
+        zigDefs  = concatMap zigDepDef zigDeps
         depsAll  = depsDefs ++ zigDefs
         libLinks = concatMap pkgLibLink (M.toList (BuildSpec.dependencies spec))
-                ++ concatMap zigLibLink (M.toList (BuildSpec.zig_dependencies spec))
+                ++ concatMap zigLibLink zigDeps
         exeLinks = concatMap pkgExeLink (M.toList (BuildSpec.dependencies spec))
-                ++ concatMap zigExeLink (M.toList (BuildSpec.zig_dependencies spec))
+                ++ concatMap zigExeLink zigDeps
         header = [ "// AUTOMATICALLY GENERATED BY ACTON BUILD SYSTEM"
                  , "// DO NOT EDIT, CHANGES WILL BE OVERWRITTEN!!!!!"
                  , ""
@@ -2124,24 +2216,26 @@ genBuildZig template spec depModuleOpts =
     pkgLibLink (name, _) = "    libActonProject.linkLibrary(actdep_" ++ name ++ ".artifact(\"ActonProject\"));\n"
     pkgExeLink (name, _) = "            executable.linkLibrary(actdep_" ++ name ++ ".artifact(\"ActonProject\"));\n"
 
-    zigDepDef (name, dep)
+    zigDepDef resolved
       | null (BuildSpec.artifacts dep) = ""
       | otherwise =
           let opts = concat [ "        ." ++ k ++ " = " ++ v ++ ",\n" | (k, v) <- M.toList (BuildSpec.options dep) ]
-          in unlines [ "    const dep_" ++ name ++ " = b.dependency(\"" ++ name ++ "\", .{"
+          in unlines [ "    const dep_" ++ zigDepResolvedVarName resolved ++ " = b.dependency(\"" ++ zigDepResolvedPkgName resolved ++ "\", .{"
                      , "        .target = target,"
                      , "        .optimize = optimize,"
                      , opts ++ "    });"
                      ]
-    zigLibLink (name, dep) = concat [ "    libActonProject.linkLibrary(dep_" ++ name ++ ".artifact(\"" ++ art ++ "\"));\n"
-                                    | art <- BuildSpec.artifacts dep ]
-    zigExeLink (name, dep) = concat [ "            executable.linkLibrary(dep_" ++ name ++ ".artifact(\"" ++ art ++ "\"));\n"
-                                    | art <- BuildSpec.artifacts dep ]
+      where dep = zigDepResolvedDep resolved
+    zigLibLink resolved = concat [ "    libActonProject.linkLibrary(dep_" ++ zigDepResolvedVarName resolved ++ ".artifact(\"" ++ art ++ "\"));\n"
+                                 | art <- BuildSpec.artifacts (zigDepResolvedDep resolved) ]
+    zigExeLink resolved = concat [ "            executable.linkLibrary(dep_" ++ zigDepResolvedVarName resolved ++ ".artifact(\"" ++ art ++ "\"));\n"
+                                 | art <- BuildSpec.artifacts (zigDepResolvedDep resolved) ]
 
-genBuildZigZon :: String -> String -> FilePath -> FilePath -> String -> String -> BuildSpec.BuildSpec -> String
-genBuildZigZon template relSys depsRootAbs projAbs fingerprint zonName spec =
-    let pkgDeps = concatMap (pkgToZon projAbs depsRootAbs) (M.toList (BuildSpec.dependencies spec))
-        zigDeps = concatMap zigToZon (M.toList (BuildSpec.zig_dependencies spec))
+genBuildZigZon :: String -> String -> FilePath -> FilePath -> String -> String -> BuildSpec.BuildSpec -> [ZigDepResolved] -> String
+genBuildZigZon template relSys depsRootAbs projAbs fingerprint zonName spec zigDepsResolved =
+    let
+        pkgDeps = concatMap (pkgToZon projAbs depsRootAbs) (M.toList (BuildSpec.dependencies spec))
+        zigDeps = concatMap zigToZon zigDepsResolved
         deps = pkgDeps ++ zigDeps
         replaced = map (replace "{{fingerprint}}" fingerprint
                      . replace "{{syspath}}" relSys
@@ -2170,7 +2264,7 @@ genBuildZigZon template relSys depsRootAbs projAbs fingerprint zonName spec =
                  , "            .path = \"" ++ path ++ "\","
                  , "        },"
                  ]
-    zigToZon (name, dep) =
+    zigToZon resolved =
       case BuildSpec.zpath dep of
         Just p ->
           let absPath = collapseDots $
@@ -2178,15 +2272,17 @@ genBuildZigZon template relSys depsRootAbs projAbs fingerprint zonName spec =
                             then normalise p
                             else normalise (rebasePath projAbs p)
               relPath = relativeViaRoot projAbs absPath
-          in unlines [ "        ." ++ name ++ " = .{"
+          in unlines [ "        ." ++ zigDepResolvedPkgName resolved ++ " = .{"
                      , "            .path = \"" ++ relPath ++ "\","
                      , "        },"
                      ]
-        Nothing -> unlines [ "        ." ++ name ++ " = .{"
+        Nothing -> unlines [ "        ." ++ zigDepResolvedPkgName resolved ++ " = .{"
                            , "            .url = \"" ++ maybeEmpty (BuildSpec.zurl dep) ++ "\","
                            , "            .hash = \"" ++ maybeEmpty (BuildSpec.zhash dep) ++ "\","
                            , "        },"
                            ]
+      where
+        dep = zigDepResolvedDep resolved
     maybeEmpty (Just s) = s
     maybeEmpty Nothing  = ""
 
@@ -2339,10 +2435,11 @@ relativeViaRoot baseAbs targetAbs
     cleanParts = filter (\c -> not (null c) && c /= "/") . splitDirectories
 
 -- | Walk BuildSpec dependencies to collect transitive packages and zig deps.
-collectDepsRecursive :: BuildSpec.BuildSpec -> FilePath -> M.Map String BuildSpec.PkgDep -> [(String, FilePath)] -> IO (M.Map String BuildSpec.PkgDep, M.Map String BuildSpec.ZigDep)
+collectDepsRecursive :: BuildSpec.BuildSpec -> FilePath -> M.Map String BuildSpec.PkgDep -> [(String, FilePath)] -> IO (M.Map String BuildSpec.PkgDep, [ZigDepRef])
 collectDepsRecursive rootSpec projDir pins overrides = do
   root <- normalizePathSafe projDir
-  (\(_, pkgs, zigs) -> (pkgs, zigs)) <$> go root Data.Set.empty root (Just rootSpec)
+  spec <- applyDepOverrides root overrides rootSpec
+  (\(_, pkgs, zigs) -> (pkgs, zigs)) <$> foldM (step root root) (Data.Set.empty, M.empty, []) (M.toList (BuildSpec.dependencies spec))
   where
     go root seen dir mSpec = do
       spec0 <- case mSpec of
@@ -2350,7 +2447,9 @@ collectDepsRecursive rootSpec projDir pins overrides = do
                  Nothing -> loadBuildSpec dir
       spec <- applyDepOverrides dir overrides spec0
       let depsHere = BuildSpec.dependencies spec
-          zigsHere = M.map (rebaseZig root dir) (BuildSpec.zig_dependencies spec)
+          zigsHere = [ ZigDepRef depName (rebaseZigDep root dir dep)
+                     | (depName, dep) <- M.toList (BuildSpec.zig_dependencies spec)
+                     ]
       foldM (step root dir) (seen, M.empty, zigsHere) (M.toList depsHere)
 
     step root base (seen, pkgAcc, zigAcc) (depName, dep) = do
@@ -2372,15 +2471,16 @@ collectDepsRecursive rootSpec projDir pins overrides = do
         else do
           (seenNext, subPkgs, subZigs) <- go root seen' depBase Nothing
           let pkgAcc' = M.insertWith (\_ old -> old) depName dep' pkgAcc
-          return (seenNext, pkgAcc' `M.union` subPkgs, zigAcc `M.union` subZigs)
+          return (seenNext, pkgAcc' `M.union` subPkgs, zigAcc ++ subZigs)
 
-    rebaseZig root base dep =
-      case BuildSpec.zpath dep of
-        Just p | not (null p) ->
-          let absP = rebasePath base p
-              relP = makeRelativeOrAbsolute root absP
-          in dep { BuildSpec.zpath = Just (collapseDots relP) }
-        _ -> dep
+rebaseZigDep :: FilePath -> FilePath -> BuildSpec.ZigDep -> BuildSpec.ZigDep
+rebaseZigDep root base dep =
+  case BuildSpec.zpath dep of
+    Just p | not (null p) ->
+      let absP = rebasePath base p
+          relP = makeRelativeOrAbsolute root absP
+      in dep { BuildSpec.zpath = Just (collapseDots relP) }
+    _ -> dep
 
 -- | Normalize dependency paths in a BuildSpec.
 normalizeSpecPaths :: FilePath -> BuildSpec.BuildSpec -> IO BuildSpec.BuildSpec

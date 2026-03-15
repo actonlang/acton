@@ -569,6 +569,193 @@ actonProjTests =
         expect ".dep_c = .{" depAZon "dep_a build.zig.zon should declare dep_c"
         expectAny ["dep_override/deps/dep_c", "dep_override\\deps\\dep_c", "../dep_c", "..\\dep_c"] depAZon "dep_a build.zig.zon should keep dep_c path"
         assertBool "dep_a build.zig.zon should not include undeclared ghost override" (not ("ghost" `isInfixOf` depAZon))
+  , testCase "zig deps do not collide with package deps in build.zig.zon" $ do
+        withSystemTempDirectory "acton-zig-dep-name-collision" $ \tmp -> do
+          actonExe <- canonicalizePath "../../dist/bin/acton"
+          let rootProj = tmp </> "root"
+              wrapperProj = rootProj </> "deps" </> "acton_lmdb"
+              zigProj = rootProj </> "deps" </> "lmdb_zig"
+              mkFp name = Fingerprint.formatFingerprint
+                (Fingerprint.updateFingerprintPrefix
+                  (Fingerprint.fingerprintPrefixForName name) 1)
+          createDirectoryIfMissing True (rootProj </> "src")
+          createDirectoryIfMissing True (wrapperProj </> "src")
+          createDirectoryIfMissing True (zigProj </> "src")
+          writeFile (rootProj </> "Build.act") $ unlines
+            [ "name = \"root_proj\""
+            , "fingerprint = " ++ mkFp "root_proj"
+            , "dependencies = {"
+            , "    \"lmdb\": (path=\"deps/acton_lmdb\")"
+            , "}"
+            , "zig_dependencies = {}"
+            ]
+          writeFile (rootProj </> "src" </> "main.act") $ unlines
+            [ "from lmdb import ready"
+            , ""
+            , "actor main(env):"
+            , "    if ready():"
+            , "        env.exit(0)"
+            , "    else:"
+            , "        env.exit(1)"
+            ]
+          writeFile (wrapperProj </> "Build.act") $ unlines
+            [ "name = \"acton_lmdb\""
+            , "fingerprint = " ++ mkFp "acton_lmdb"
+            , "dependencies = {}"
+            , "zig_dependencies = {"
+            , "    \"lmdb\": (path=\"../lmdb_zig\", artifacts=[\"lmdb\"])"
+            , "}"
+            ]
+          writeFile (wrapperProj </> "src" </> "lmdb.act") $ unlines
+            [ "def ready() -> bool:"
+            , "    return True"
+            ]
+          writeFile (zigProj </> "build.zig") $ unlines
+            [ "const std = @import(\"std\");"
+            , ""
+            , "pub fn build(b: *std.Build) void {"
+            , "    const target = b.standardTargetOptions(.{});"
+            , "    const optimize = b.standardOptimizeOption(.{});"
+            , "    const lib = b.addLibrary(.{"
+            , "        .name = \"lmdb\","
+            , "        .linkage = .static,"
+            , "        .root_module = b.createModule(.{"
+            , "            .root_source_file = b.path(\"src/root.zig\"),"
+            , "            .target = target,"
+            , "            .optimize = optimize,"
+            , "        }),"
+            , "    });"
+            , "    b.installArtifact(lib);"
+            , "}"
+            ]
+          writeFile (zigProj </> "build.zig.zon") $ unlines
+            [ ".{"
+            , "    .name = .lmdb_zig,"
+            , "    .version = \"0.0.0\","
+            , "    .fingerprint = 0xd571f8beb86c413e,"
+            , "    .minimum_zig_version = \"0.15.2\","
+            , "    .dependencies = .{},"
+            , "    .paths = .{\"\"},"
+            , "}"
+            ]
+          writeFile (zigProj </> "src" </> "root.zig") $ unlines
+            [ "pub export fn lmdb_test() void {}"
+            ]
+          (returnCode, _cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc actonExe ["build"]){ cwd = Just rootProj } ""
+          assertEqual "acton should build when package and zig deps share a name" ExitSuccess returnCode
+          assertBool "acton should not report the old dependency option collision" (not ("invalid option: -Dacton_modules" `isInfixOf` cmdErr))
+          rootZon <- readFile (rootProj </> "build.zig.zon")
+          rootBuildZig <- readFile (rootProj </> "build.zig")
+          assertBool "root build.zig.zon should keep the package dep key" ("        .lmdb = .{" `isInfixOf` rootZon)
+          assertBool "root build.zig.zon should namespace the zig dep key" ("        .acton_zig_lmdb = .{" `isInfixOf` rootZon)
+          assertEqual "root build.zig.zon should emit the package dep key only once"
+            1
+            (length (filter (== "        .lmdb = .{") (lines rootZon)))
+          assertBool "root build.zig should keep the package dep lookup"
+            ("const actdep_lmdb = b.dependency(\"lmdb\"" `isInfixOf` rootBuildZig)
+          assertBool "root build.zig should namespace the zig dep lookup"
+            ("const dep_lmdb = b.dependency(\"acton_zig_lmdb\"" `isInfixOf` rootBuildZig)
+  , testCase "transitive zig deps deduplicate by identity and split on collision" $ do
+        withSystemTempDirectory "acton-zig-transitive-dedup" $ \tmp -> do
+          actonExe <- canonicalizePath "../../dist/bin/acton"
+          let rootProj = tmp </> "root"
+              depAProj = rootProj </> "deps" </> "dep_a"
+              depBProj = rootProj </> "deps" </> "dep_b"
+              depCProj = rootProj </> "deps" </> "dep_c"
+              zigCommonProj = rootProj </> "deps" </> "zig_common"
+              zigOtherProj = rootProj </> "deps" </> "zig_other"
+              mkFp name = Fingerprint.formatFingerprint
+                (Fingerprint.updateFingerprintPrefix
+                  (Fingerprint.fingerprintPrefixForName name) 1)
+              writeWrapper proj name zigPath moduleName = do
+                createDirectoryIfMissing True (proj </> "src")
+                writeFile (proj </> "Build.act") $ unlines
+                  [ "name = " ++ show name
+                  , "fingerprint = " ++ mkFp name
+                  , "dependencies = {}"
+                  , "zig_dependencies = {"
+                  , "    \"shared\": (path=" ++ show zigPath ++ ", artifacts=[\"shared\"])"
+                  , "}"
+                  ]
+                writeFile (proj </> "src" </> (moduleName ++ ".act")) $ unlines
+                  [ "def ready() -> bool:"
+                  , "    return True"
+                  ]
+              writeZigPkg proj = do
+                createDirectoryIfMissing True (proj </> "src")
+                writeFile (proj </> "build.zig") $ unlines
+                  [ "const std = @import(\"std\");"
+                  , ""
+                  , "pub fn build(b: *std.Build) void {"
+                  , "    const target = b.standardTargetOptions(.{});"
+                  , "    const optimize = b.standardOptimizeOption(.{});"
+                  , "    const lib = b.addLibrary(.{"
+                  , "        .name = \"shared\","
+                  , "        .linkage = .static,"
+                  , "        .root_module = b.createModule(.{"
+                  , "            .root_source_file = b.path(\"src/root.zig\"),"
+                  , "            .target = target,"
+                  , "            .optimize = optimize,"
+                  , "        }),"
+                  , "    });"
+                  , "    b.installArtifact(lib);"
+                  , "}"
+                  ]
+                writeFile (proj </> "build.zig.zon") $ unlines
+                  [ ".{"
+                  , "    .name = .lmdb_zig,"
+                  , "    .version = \"0.0.0\","
+                  , "    .fingerprint = 0xd571f8beb86c413e,"
+                  , "    .minimum_zig_version = \"0.15.2\","
+                  , "    .dependencies = .{},"
+                  , "    .paths = .{\"\"},"
+                  , "}"
+                  ]
+                writeFile (proj </> "src" </> "root.zig") $ unlines
+                  [ "pub export fn shared_test() void {}"
+                  ]
+          createDirectoryIfMissing True (rootProj </> "src")
+          writeFile (rootProj </> "Build.act") $ unlines
+            [ "name = \"root_proj\""
+            , "fingerprint = " ++ mkFp "root_proj"
+            , "dependencies = {"
+            , "    \"dep_a\": (path=\"deps/dep_a\"),"
+            , "    \"dep_b\": (path=\"deps/dep_b\"),"
+            , "    \"dep_c\": (path=\"deps/dep_c\")"
+            , "}"
+            , "zig_dependencies = {}"
+            ]
+          writeFile (rootProj </> "src" </> "main.act") $ unlines
+            [ "import dep_a"
+            , "import dep_b"
+            , "import dep_c"
+            , ""
+            , "actor main(env):"
+            , "    if dep_a.ready() and dep_b.ready() and dep_c.ready():"
+            , "        env.exit(0)"
+            , "    else:"
+            , "        env.exit(1)"
+            ]
+          writeWrapper depAProj "dep_a" "../zig_common" "dep_a"
+          writeWrapper depBProj "dep_b" "../zig_common" "dep_b"
+          writeWrapper depCProj "dep_c" "../zig_other" "dep_c"
+          writeZigPkg zigCommonProj
+          writeZigPkg zigOtherProj
+          (returnCode, _cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc actonExe ["build"]){ cwd = Just rootProj } ""
+          assertEqual "acton should build with colliding transitive zig dep names" ExitSuccess returnCode
+          assertBool "acton should not report the old dependency option collision" (not ("invalid option: -Dacton_modules" `isInfixOf` cmdErr))
+          rootZon <- readFile (rootProj </> "build.zig.zon")
+          rootBuildZig <- readFile (rootProj </> "build.zig")
+          assertBool "root build.zig.zon should include the first local zig dep name"
+            ("        .acton_zig_shared = .{" `isInfixOf` rootZon)
+          assertBool "root build.zig.zon should include the second colliding zig dep name"
+            ("        .acton_zig_shared_2 = .{" `isInfixOf` rootZon)
+          assertBool "root build.zig.zon should not emit a third deduped copy"
+            (not ("        .acton_zig_shared_3 = .{" `isInfixOf` rootZon))
+          assertBool "root build.zig should bind the deduped zig dep once"
+            ("const dep_shared = b.dependency(\"acton_zig_shared\"" `isInfixOf` rootBuildZig)
+          assertBool "root build.zig should bind the colliding zig dep separately"
+            ("const dep_shared_2 = b.dependency(\"acton_zig_shared_2\"" `isInfixOf` rootBuildZig)
   , testCase "dep override path must be an Acton project root" $ do
         withSystemTempDirectory "acton-invalid-dep-override" $ \proj -> do
           let srcDir = proj </> "src"
