@@ -177,14 +177,8 @@ instance Pretty Expr where
     pretty (Rest _ e n)             = pretty e <> dot <> text "~" <> pretty n
     pretty (DotI _ e i)             = pretty e <> dot <> pretty i
     pretty (RestI _ e i)            = pretty e <> dot <> text "~" <> pretty i
-    pretty (OptDot _ e n Nothing)   = pretty e <> text "?." <> pretty n
-    pretty (OptDot _ e n (Just (ps,ks)))
-                                    = pretty e <> text "?." <> pretty n <> parens (pretty (ps,ks))
-    pretty (OptCall _ e ps ks)
-        | atomic e                  = pretty e <> text "?" <> parens (pretty (ps,ks))
-        | otherwise                 = parens (pretty e) <> text "?" <> parens (pretty (ps,ks))
-    pretty (OptIndex _ e ix)        = pretty e <> text "?" <> brackets (pretty ix)
-    pretty (OptSlice _ e sl)        = pretty e <> text "?" <> brackets (pretty sl)
+    pretty (Opt _ e)                = pretty e <> text "?"
+    pretty (OptChains _ e)          = pretty e
     pretty (Lambda _ ps ks e fx)    = prettyFXnoWild fx <+> text "lambda" <+> prettyLambdaPar ps ks <> colon <+> pretty e
     pretty (Yield _ e)              = text "yield" <+> pretty e
     pretty (YieldFrom _ e)          = text "yield" <+> text "from" <+> pretty e

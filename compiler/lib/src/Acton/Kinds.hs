@@ -30,7 +30,8 @@ import Acton.Env
 
 
 check                               :: Env0 -> Module -> IO Module
-check env0 (Module m imps ss)       = return (Module m imps ss1)
+check env0 (Module m imps ss)       = do traceM(show ss)
+                                         return (Module m imps ss1)
   where env                         = kindEnv env0
         ss1                         = runKindM (kchkTop env ss)
 
@@ -375,10 +376,8 @@ instance KCheck Expr where
     kchk env (Rest l e n)           = Rest l <$> kchk env e <*> return n
     kchk env (DotI l e i)           = DotI l <$> kchk env e <*> return i
     kchk env (RestI l e i)          = RestI l <$> kchk env e <*> return i
-    kchk env (OptDot l e n mba)     = OptDot l <$> kchk env e <*> return n <*> kchk env mba
-    kchk env (OptCall l e ps ks)    = OptCall l <$> kchk env e <*> kchk env ps <*> kchk env ks
-    kchk env (OptIndex l e is)      = OptIndex l <$> kchk env e <*> kchk env is
-    kchk env (OptSlice l e sl)      = OptSlice l <$> kchk env e <*> kchk env sl
+    kchk env (Opt l e)              = Opt l <$> kchk env e
+    kchk env (OptChains l e)        = OptChains l <$> kchk env e
     kchk env (Lambda l p k e x)     = Lambda l <$> (kchk env =<< convTWild env p) <*> (kchk env =<< convTWild env k) <*>
                                                    kchk env e <*> (kfx env =<< convTWild env x)
     kchk env (Yield l e)            = Yield l <$> kchk env e
@@ -697,13 +696,11 @@ instance KSubst Expr where
     ksubst g (CompOp l e ops)       = CompOp l <$> ksubst g e <*> ksubst g ops
     ksubst g (UnOp l op e)          = UnOp l op <$> ksubst g e
     ksubst g (Dot l e n)            = Dot l <$> ksubst g e <*> return n
-    ksubst g (OptDot l e n mba)     = OptDot l <$> ksubst g e <*> return n <*> ksubst g mba
     ksubst g (Rest l e n)           = Rest l <$> ksubst g e <*> return n
     ksubst g (DotI l e i)           = DotI l <$> ksubst g e <*> return i
     ksubst g (RestI l e i)          = RestI l <$> ksubst g e <*> return i
-    ksubst g (OptCall l e ps ks)    = OptCall l <$> ksubst g e <*> ksubst g ps <*> ksubst g ks
-    ksubst g (OptIndex l e is)      = OptIndex l <$> ksubst g e <*> ksubst g is
-    ksubst g (OptSlice l e sl)      = OptSlice l <$> ksubst g e <*> ksubst g sl
+    ksubst g (Opt l e)              = Opt l <$> ksubst g e
+    ksubst g (OptChains l e)        = OptChains l <$> ksubst g e
     ksubst g (Lambda l ps ks e fx)  = Lambda l <$> ksubst g ps <*> ksubst g ks <*> ksubst g e <*> ksubst g fx
     ksubst g (Yield l e)            = Yield l <$> ksubst g e
     ksubst g (YieldFrom l e)        = YieldFrom l <$> ksubst g e

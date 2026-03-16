@@ -272,10 +272,9 @@ instance Vars Expr where
     freeQ (BinOp _ e1 o e2)         = freeQ [e1,e2]
     freeQ (CompOp _ e ops)          = freeQ e ++ freeQ ops
     freeQ (UnOp _ o e)              = freeQ e
-    freeQ (Dot _ e n)               = freeQ e
-    freeQ (OptDot _ e n Nothing)    = freeQ e
-    freeQ (OptDot _ e n (Just (ps,ks)))
-                                    = freeQ e ++ freeQ ps ++ freeQ ks
+    freeQ (Dot _ e n)               = freeQ e  
+    freeQ (Opt _ e)                 = freeQ e
+    freeQ (OptChains _ e)           = freeQ e
     freeQ (Rest _ e n)              = freeQ e
     freeQ (DotI _ e i)              = freeQ e
     freeQ (RestI _ e i)             = freeQ e

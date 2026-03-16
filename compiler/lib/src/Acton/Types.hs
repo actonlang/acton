@@ -1889,65 +1889,26 @@ instance Infer Expr where
                                                                   "\nHint: you may need to test if " ++ Pretty.print e ++ " is not None")
                                              return  (con : cs, t0, eCall (eVar w) [e'])
 
-    infer env (OptDot l e n mba)       = do te <- newUnivar env  -- type of e is subtype of tOpt te
-                                            (cs1,e') <- inferSub env (tOpt te) e
-                                            w <- newWitness
-                                            t2 <- newUnivar env
-                                            x <- newTmp
-                                            case mba of
-                                                 Nothing -> do
-                                                    return (Sel (locinfo2 865 e) env w te n (tOpt t2) : cs1,
-                                                            tOpt t2,
-                                                            eLet [sAssign (pVar x (tOpt te)) e']
-                                                                 (eCond (eCall (eVar w) [eCAST (tOpt te) te (eVar x)])
-                                                                        (eCall (tApp (eQVar primISNOTNONE) [te]) [eVar x])
-                                                                        eNone)
-                                                          )
-                                                 Just (ps,ks) -> do
-                                                    y <- newTmp
-                                                    let env1 = define [(x,NVar (tOpt te)),(y,NVar t2)] env
-                                                    (cs2,t,e'') <- inferCall env1 True NoLoc (eVar y) ps ks
-                                                    return (Sel (locinfo2 865 e) env w te n t2 : cs1++cs2,
-                                                            t,
-                                                            eLet [sAssign (pVar x (tOpt te)) e',  -- inferCall does not handle TApp nodes so we need also y.
-                                                                  sAssign (pVar y t2) (eCall (eVar w) [eCAST (tOpt te) te (eVar x)])] -- y = e.n
-                                                                  (eCond e''
-                                                                        (eCall (tApp (eQVar primISNOTNONE) [te]) [eVar x])
-                                                                        eNone))
-  
-    infer env e@(OptCall l f ps ks)     = notYetExpr e
-    
-    infer env (OptIndex l e ix)         = do ti <- newUnivar env  --type of index
-                                             (cs1,ix') <- inferSub env ti ix
-                                             t0 <- newUnivar env -- type of indexed element
-                                             w <- newWitness
-                                             te <- newUnivar env -- type of object indexed from
-                                             (cs2,e') <- inferSub env (tOpt te) e
-                                             x <- newTmp
-                                             return (Proto (locinfo2 765 e) env w te (pIndexed ti t0) : cs1++cs2,
-                                                     tOpt t0,
-                                                     eLet [sAssign (pVar x (tOpt te)) e']
-                                                     (eCond (eCall (eDot (eVar w) getitemKW) [eCAST (tOpt te) te (eVar x), ix'])
-                                                            (eCall (tApp (eQVar primISNOTNONE) [te]) [eVar x])
-                                                            eNone)
-                                                   )
 
-    infer env (OptSlice l e sl)         = do (cs1,sl') <- inferSlice env sl
-                                             te <- newUnivar env
-                                             (cs2,e') <- inferSub env (tOpt te) e
-                                             t0 <- newUnivar env
-                                             w <- newWitness
-                                             x <- newTmp 
-                                             return (Proto (locinfo2 775 e) env w te (pSliceable t0) : cs1++cs2,
-                                                     tOpt te,
-                                                     eLet [sAssign (pVar x (tOpt te)) e']
-                                                     (eCond (eCall (eDot (eVar w) getsliceKW) [eCAST (tOpt te) te (eVar x),  sliz2exp sl'])
-                                                            (eCall (tApp (eQVar primISNOTNONE) [te]) [eVar x])
-                                                            eNone)
-                                                   )
+    infer env (Opt l e)                = do (cs, t, e') <- infer env e
+                                            return (cs, t, Opt l e')
+                                            
+    -- infer env (OptChain l e)           = do te <- newUnivar env
+    --                                         x <- newTmp
+    --                                         let (e',s) = split x e
+    --                                             lam = eLambda [(x,te)] s
+    --                                         (cs1,e'') <- inferSub env (tOpt te) e'
+    --                                         (cs2,t,lam') <- infer env lam
+    --                                         return (cs1++cs2, tOpt (restype t), eLet [sAssign (pVar x (tOpt te)) e'']
+    --                                                                             (eCond (eCall lam' [eCAST (tOpt te) te (eVar x)])
+    --                                                                                    (eCall (tApp (eQVar primISNOTNONE) [te]) [eVar x])
+    --                                                                                    eNone))
+    --   where split x (Opt l e) = (e, eVar x)
+    --         split x (Dot l e n) = (e',Dot l s n) where (e',s) = split x e
+    --         split x (Call l f ps ks) = (e',Call l s ps ks) where (e',s) = split x f
+    --         split x (Index l e ix) = (e',Index l s ix) where (e',s) = split x e
+    --         split x (Slice l e sz) = (e',Slice l s sz) where (e',s) = split x e
 
-
-    
     infer env e@(Rest _ _ _)            = notYetExpr e
 --    infer env (Rest l e n)              = do p <- newUnivarOfKind PRow env
 --                                             k <- newUnivarOfKind KRow env
