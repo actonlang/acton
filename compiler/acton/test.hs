@@ -103,9 +103,119 @@ compilerTests =
   , testCase "deps" $ do
         (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../../test/compiler/test_deps/build.zig*") ""
         (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../../test/compiler/test_deps/out") ""
-        (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../../test/compiler/test_deps/deps/a/build.zig*") ""
-        (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../../test/compiler/test_deps/deps/a/out") ""
+        (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../../test/compiler/test_deps/.acton") ""
+        (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../../test/compiler/test_deps/deps/a-b/build.zig*") ""
+        (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../../test/compiler/test_deps/deps/a-b/out") ""
         runActon "build" ExitSuccess False "../../test/compiler/test_deps/"
+  , testCase "deps hybrid import uses package-prefixed symbols" $ do
+        withSystemTempDirectory "acton-dep-hybrid" $ \tmp -> do
+            let depName = "foo"
+                appName = "app"
+                fpFor n seed =
+                  Fingerprint.formatFingerprint
+                    (Fingerprint.updateFingerprintPrefix
+                      (Fingerprint.fingerprintPrefixForName n) seed)
+                depDir = tmp </> "dep"
+                appDir = tmp </> "app"
+                depSrc = depDir </> "src"
+                appSrc = appDir </> "src"
+                depBuild = depDir </> "Build.act"
+                appBuild = appDir </> "Build.act"
+                appMain = appSrc </> "main.act"
+            createDirectoryIfMissing True depSrc
+            createDirectoryIfMissing True appSrc
+            writeFile depBuild $ unlines
+              [ "name = \"" ++ depName ++ "\""
+              , "fingerprint = " ++ fpFor depName 1
+              , ""
+              ]
+            writeFile (depSrc </> "a.act") $ unlines
+              [ "foo_val = 7"
+              ]
+            writeFile appBuild $ unlines
+              [ "name = \"" ++ appName ++ "\""
+              , "fingerprint = " ++ fpFor appName 2
+              , ""
+              , "dependencies = {"
+              , "    \"bar\": ("
+              , "        path = \"../dep\""
+              , "    )"
+              , "}"
+              ]
+            writeFile appMain $ unlines
+              [ "import a"
+              , "import bar.a"
+              , ""
+              , "actor main(env):"
+              , "    print(a.foo_val + bar.a.foo_val)"
+              , "    env.exit(0)"
+              ]
+            runActon "build" ExitSuccess False appDir
+            cOut <- readFile (appDir </> "out" </> "types" </> "main.c")
+            hOut <- readFile (appDir </> "out" </> "types" </> "main.h")
+            assertBool "main.c should reference package-prefixed dep symbols"
+              ("fooQ_aQ_foo_val" `isInfixOf` cOut)
+            assertBool "main.c should initialize canonical dep module"
+              ("fooQ_aQ___init__();" `isInfixOf` cOut)
+            assertBool "main.h should include canonical dep header"
+              ("#include \"out/types/foo/a.h\"" `isInfixOf` hOut)
+            assertBool "main.c should not call alias-prefixed init symbol"
+              (not ("barQ_aQ___init__();" `isInfixOf` cOut))
+  , testCase "dep lib module acts as package root" $ do
+        withSystemTempDirectory "acton-dep-lib-root" $ \tmp -> do
+            let depName = "foo"
+                appName = "app"
+                fpFor n seed =
+                  Fingerprint.formatFingerprint
+                    (Fingerprint.updateFingerprintPrefix
+                      (Fingerprint.fingerprintPrefixForName n) seed)
+                depDir = tmp </> "dep"
+                appDir = tmp </> "app"
+                depSrc = depDir </> "src"
+                appSrc = appDir </> "src"
+            createDirectoryIfMissing True depSrc
+            createDirectoryIfMissing True appSrc
+            writeFile (depDir </> "Build.act") $ unlines
+              [ "name = \"" ++ depName ++ "\""
+              , "fingerprint = " ++ fpFor depName 3
+              , ""
+              ]
+            writeFile (depSrc </> "lib.act") $ unlines
+              [ "root_val = 7"
+              ]
+            writeFile (depSrc </> "a.act") $ unlines
+              [ "sub_val = 5"
+              ]
+            writeFile (appDir </> "Build.act") $ unlines
+              [ "name = \"" ++ appName ++ "\""
+              , "fingerprint = " ++ fpFor appName 4
+              , ""
+              , "dependencies = {"
+              , "    \"" ++ depName ++ "\": ("
+              , "        path = \"../dep\""
+              , "    )"
+              , "}"
+              ]
+            writeFile (appSrc </> "main.act") $ unlines
+              [ "import foo"
+              , "import foo.a"
+              , "import a"
+              , ""
+              , "actor main(env):"
+              , "    print(foo.root_val + foo.a.sub_val + a.sub_val)"
+              , "    env.exit(0)"
+              ]
+            runActon "build" ExitSuccess False appDir
+            cOut <- readFile (appDir </> "out" </> "types" </> "main.c")
+            hOut <- readFile (appDir </> "out" </> "types" </> "main.h")
+            assertBool "main.h should include package root header from lib.act"
+              ("#include \"out/types/foo.h\"" `isInfixOf` hOut)
+            assertBool "main.h should include canonical submodule header"
+              ("#include \"out/types/foo/a.h\"" `isInfixOf` hOut)
+            assertBool "main.c should initialize the package root module"
+              ("fooQ___init__();" `isInfixOf` cOut)
+            assertBool "main.h should not treat lib.act as foo.lib"
+              (not ("out/types/foo/lib.h" `isInfixOf` hOut))
   , testCase "path dependency fetches transitive cached deps before discovery" $ do
         withSystemTempDirectory "acton-transitive-path-fetch" $ \tmp -> do
           actonExe <- canonicalizePath "../../dist/bin/acton"

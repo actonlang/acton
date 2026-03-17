@@ -147,11 +147,12 @@ hModule env (Module m imps stmts)   = text "#pragma" <+> text "once" $+$
                                        then empty
                                        else text "#include \"builtin/builtin.h\"" $+$ -- TODO: can we include out/types/__builtin__.h instead?
                                             include env "rts" (modName ["rts"])) $+$
-                                      vcat (map (include env "out/types") $ modNames imps) $+$
+                                      vcat (map (include env "out/types") canonImps) $+$
                                       hSuite 1 env1 stmts $+$
                                       hSuite 2 env1 stmts $+$
                                       text "void" <+> genTopName env initKW <+> parens empty <> semi
   where env1                        = classdefine stmts env
+        canonImps                   = Data.List.nub $ unalias env (modNames imps)
 
 
 hSuite phase env []                 = empty
@@ -328,7 +329,7 @@ cModule env srcbase srcText emitLines (Module m imps stmts)
                                               initTables env1 stmts $+$
                                               initGlobals env1 stmts) $+$
                                       char '}'
-  where initImports                 = vcat [ gen env (GName m initKW) <> parens empty <> semi | m <- modNames imps ]
+  where initImports                 = vcat [ gen env (GName m initKW) <> parens empty <> semi | m <- canonImps ]
         external                    = notImpl && not (inBuiltin env)
         ext_include                 = if notImpl then text "#include" <+> doubleQuotes (text srcbase <> text ".ext.c") else empty
         ext_init                    = if notImpl then genTopName env (name "__ext_init__") <+> parens empty <> semi else empty
@@ -351,6 +352,7 @@ cModule env srcbase srcText emitLines (Module m imps stmts)
         emitLine (Loc startOffset _) =
             text "#line" <+> pretty (offsetToLine startOffset) <+> doubleQuotes (text actFile)
         envWithLine                 = if emitLines then setLineEmit emitLine env1 else env1
+        canonImps                   = Data.List.nub $ unalias env (modNames imps)
 
 
 declModule env []                   = empty

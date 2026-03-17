@@ -1668,7 +1668,7 @@ runCliPostCompile cliHooks gopts plan env = do
           Just pctx -> do
             when (C.verbose gopts) $
               logLine ("Generating build.zig for dependency project " ++ p)
-            dummyPaths <- pathsForModule opts' projMap pctx (A.modName ["__gen_build__"])
+            dummyPaths <- pathsForModule opts' projMap pctx [] (A.modName ["__gen_build__"])
             let depOpts = M.findWithDefault M.empty p depModuleOptsByProj
                 depPathOverrides = projectDepPathOverrides projMap p
             genBuildZigFiles (projBuildSpec pctx) rootPins (ccDepOverrides cctx) dummyPaths depOpts depPathOverrides
