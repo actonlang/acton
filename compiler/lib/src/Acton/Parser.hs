@@ -117,7 +117,7 @@ parseModule qn fileName fileContent =
 
 -- parseTest file = snd (unsafePerformIO (do cont <- readFile file; parseModule (S.modName ["test"]) file cont))
 
-parseTestStr b p str = case runParser (St.evalStateT p (b,[])) "" str of
+parseTestStr p str = case runParser (St.evalStateT p initState) "" str of
                          Left err -> putStrLn (errorBundlePretty err)
                          Right t  -> print t
 
