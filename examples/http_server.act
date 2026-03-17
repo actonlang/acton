@@ -56,7 +56,9 @@ TB6l9VGoxJL4fyHnZb8L5gGvnB1bbD8cL6YPaDiOhcRseC9vBiEuVg==
 
 
 actor main(env):
-    log = logging.Logger(None)
+    logh = logging.Handler()
+    logh.add_sink(logging.ConsoleSink())
+    logh.set_output_level(logging.TRACE)
     listen_cap = net.TCPListenCap(net.TCPCap(net.NetCap(env.cap)))
 
     def on_accept(server):
@@ -75,7 +77,7 @@ actor main(env):
         CERT_PEM.encode(),
         KEY_PEM.encode(),
         on_accept,
-        log_handler=None
+        log_handler=logh
     )
     print("HTTPS server listening on https://127.0.0.1:8443")
 
