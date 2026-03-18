@@ -1,5 +1,7 @@
 import foo
+import foo as bar
 
 actor main(env):
     f = foo.Foo.new()
+    g = bar.Foo.new()
     env.exit(0)
