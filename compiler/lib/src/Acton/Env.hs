@@ -401,7 +401,7 @@ findHMod                    :: ModName -> EnvF x -> Maybe HTEnv  -- m is modname
 findHMod m env | inBuiltin env, m==mBuiltin
                             = Just (convTEnv2HTEnv (names env))
 findHMod m@(ModName ns) env = case lookup (head ns) (names env) of
-                                Just (NMAlias m') -> lookupHMod m' env
+                                Just (NMAlias (ModName m')) -> lookupHMod (ModName $ m'++tail ns) env
                                 Nothing | m `elem` imports env  -> lookupHMod m env
                                 _ -> Nothing
 
