@@ -66,7 +66,7 @@ instance Pretty (Name,Expr) where
     pretty (n,e)                        = pretty n <+> text "~" <+> pretty e
 
 wtrans env ss
-  | final env                           = ss
+  | final env                           = map (trans env) ss
 wtrans env (Signature _ ws (TSchema _ [] (TWild _)) NoDec : ss)
                                         = wtrans env (bindWits eq ++ ss)
   where eq                              = findeqns ws (eqns env)
