@@ -30,7 +30,7 @@ termred eq s                            = --trace ("### equations:\n" ++ render 
 
 termsubst                               :: (Transform a) => [(Name,Expr)] -> a -> a
 termsubst [] x                          = x
-termsubst s x                           = trans (extsubst s env0) x
+termsubst s x                           = trans (finalize $ extsubst s env0) x
 
 class Transform a where
     trans                               :: TransEnv -> a -> a
@@ -38,10 +38,11 @@ class Transform a where
 data TransEnv                           = TransEnv {
                                             eqns     :: Equations,                  -- Top-level constraint solutions
                                             trsubst  :: [(Name,Maybe Expr)],        -- Inlineable assignments in scope
-                                            witscope :: [(Name,Type,Expr)]          -- Preserved witness bindings in scope, for the purpose of duplicate removals
+                                            witscope :: [(Name,Type,Expr)],         -- Preserved witness bindings in scope, for the purpose of duplicate removals
+                                            final    :: Bool
                                           }
 
-env0                                    = TransEnv{ eqns = [], trsubst = [], witscope = [] }
+env0                                    = TransEnv{ eqns = [], trsubst = [], witscope = [], final = False }
 
 blockscope ns env                       = env{ trsubst = (ns `zip` repeat Nothing) ++ trsubst env }
 
@@ -58,10 +59,14 @@ extscope n t e env                      = env{ witscope = (n,t,e) : witscope env
 
 equalwit env e t                        = listToMaybe [ eVar w | (w,t',e') <- witscope env, e' == e, t' == t ]
 
+finalize env                            = env{ final = True }
+
 
 instance Pretty (Name,Expr) where
     pretty (n,e)                        = pretty n <+> text "~" <+> pretty e
 
+wtrans env ss
+  | final env                           = map (trans env) ss
 wtrans env (Signature _ ws (TSchema _ [] (TWild _)) NoDec : ss)
                                         = wtrans env (bindWits eq ++ ss)
   where eq                              = findeqns ws (eqns env)
@@ -129,7 +134,7 @@ transCall _ _ _                         = Nothing
 
 instance Transform Expr where
     trans env (Var l (NoQ n))
-      | Just e <- trfind n env          = trans (blockscope [n] env) e
+      | Just e <- trfind n env          = if final env then e else trans (blockscope [n] env) e
 
     trans env ee@(Call l e p k)
       | Lambda{} <- e',
