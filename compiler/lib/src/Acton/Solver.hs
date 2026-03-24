@@ -1701,6 +1701,11 @@ upClosed env _                          = False
 
 findBoundAttrs env attrs bounds         = [ ((v,n),wsc) | (v,ns) <- Map.assocs attrs, n <- ns, wsc <- bounds' v n ]
   where bounds' v n                     = [ wsc | TCon _ c <- lookup' v bounds, Just wsc <- [findAttr env c n] ]
+--  where bounds' v n                     = [ wsc | t <- lookup' v bounds, wsc <- boundAttrs t n ]
+--        boundAttrs (TCon _ c) n         = [ wsc | Just wsc <- [findAttr env c n] ]
+--        boundAttrs (TVar _ tv) n        = [ wsc | Just wsc <- [findTVAttr env tv n] ]
+--        boundAttrs (TOpt _ t) n         = boundAttrs t n
+--        boundAttrs _ _                  = []
 
 findWitAttrs env attrs bounds           = [ ((v,n), (p, wexpr ws $ eVar w)) | (v,ns) <- Map.assocs attrs, n <- ns, (w,p,ws) <- bounds' v n ]
   where bounds' v n                     = [ (w,p,ws) | (w,p0) <- lookup' v bounds, (ws,p) <- findAncestry env p0, n `elem` conAttrs env (tcname p) ]

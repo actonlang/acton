@@ -1701,23 +1701,47 @@ isinstance = addLoc $ do
 -- recurring pattern below
 commaList p = many (try (comma *> p)) <* optional comma
 
+data ChainKind = COpt | CCall | COther deriving Eq
+
 atom_expr = do
               await <- optional $ withLoc $ rword "await" *> return (S.Await NoLoc)
               async <- optional $ withLoc $ rword "async" *> return (S.Async NoLoc)
               a <- atom
               ts <- many trailer
-              let (hasOpt,e) = foldapp async a False ts
+              let (outerOpt,e) = foldapp async a ts
                   e' = maybe e (app e) await
-              return $ if hasOpt then S.OptChains (loc e') e' else e' 
+              return $ if outerOpt then S.OptChains NoLoc e' else e'
               <?> "atomic expression"
-  where app a (l,f) = (f a){S.eloc = S.eloc a `upto` l}
+  where app a (l,f) = (f a){S.eloc = exprLoc a `upto` l}
+        appChain a (l,_,f) = app a (l,f)
+        exprLoc S.OptChains{S.exp1=e} = exprLoc e
+        exprLoc e = S.eloc e
+        wrapOptChains e = S.OptChains NoLoc e
 
-        foldapp async e hasOpt [] = (hasOpt,maybe e (app e) async)
-        foldapp async e hasOpt ((l,f):ts)
-                                  = case f e of
-                                        S.Call{} -> foldapp async (maybe e (app e) async) hasOpt ((l,f):ts)
-                                        e'@S.Opt{} -> foldapp async e' True ts
-                                        e' -> foldapp async e' hasOpt ts
+        foldapp async e = finish . go async False False e
+          where closeChain True e = wrapOptChains e
+                closeChain False e = e
+
+                go async preAsyncOpt outerOpt e [] = (async,preAsyncOpt,outerOpt,e)
+                go (Just a) preAsyncOpt outerOpt e (t@(_,kind,_):ts)
+                  | kind == CCall =
+                      let e' = appChain (app (closeChain preAsyncOpt e) a) t
+                      in go Nothing False outerOpt e' ts
+                go async preAsyncOpt outerOpt e (t@(_,kind,_):ts)
+                  | kind == COpt =
+                      case async of
+                        Just _ ->
+                          let e' = appChain (closeChain preAsyncOpt e) t
+                          in go async True outerOpt e' ts
+                        Nothing ->
+                          let e' = appChain (closeChain outerOpt e) t
+                          in go async preAsyncOpt True e' ts
+                go async preAsyncOpt outerOpt e (t:ts) =
+                      go async preAsyncOpt outerOpt (appChain e t) ts
+
+                finish (Just a,preAsyncOpt,outerOpt,e) =
+                  (outerOpt, app (closeChain preAsyncOpt e) a)
+                finish (Nothing,_,outerOpt,e) = (outerOpt,e)
         
         atom :: Parser S.Expr
         atom =  addLoc (try strings
@@ -1774,24 +1798,27 @@ atom_expr = do
         var = do nm <- name
                  return (S.Var (S.nloc nm) (S.NoQ nm))
 
-        trailer :: Parser (SrcLoc,S.Expr -> S.Expr)
-        trailer = withLoc (
-                      (do
-                         (l,q) <- withLoc(symbol "?")
-                         return (\a -> S.Opt (loc a `upto` l) a))
-                     <|>
-                      (do
-                        f <- brackets sliceOrIndex
-                        return f)
-                    <|>
-                      (do
-                         (ps,ks) <- parens funargs 
-                         return (\a -> S.Call (loc a `upto` loc ks) a ps ks))
-                     <|>
-                      (do
-                         dot
-                         try intdot <|> iddot <|> strdot))
-                     <?> "call arguments, slice/index expression"
+        trailer :: Parser (SrcLoc,ChainKind,S.Expr -> S.Expr)
+        trailer = do
+                     (l,(kind,f)) <- withLoc (
+                         (do
+                            (l,_) <- withLoc(symbol "?")
+                            return (COpt,\a -> S.Opt (loc a `upto` l) a))
+                        <|>
+                         (do
+                           f <- brackets sliceOrIndex
+                           return (COther,f))
+                       <|>
+                         (do
+                            (ps,ks) <- parens funargs 
+                            return (CCall,\a -> S.Call (loc a `upto` loc ks) a ps ks))
+                        <|>
+                         (do
+                            dot
+                            f <- try intdot <|> iddot <|> strdot
+                            return (COther,f))
+                        <?> "call arguments, slice/index expression")
+                     return (l,kind,f)
 
            where iddot  = do
                         mb <- optional (opPref "~")
