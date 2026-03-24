@@ -1911,56 +1911,27 @@ instance Infer Expr where
     infer env (Opt l e)                = do (cs, t, e') <- infer env e
                                             return (cs, t, Opt l e')
                                             
-    -- infer env (OptChains l e)          = do x <- newTmp                                                                                    -- e = a s1 s2 ? t1 t2
-    --                                         y <- newTmp                                                                                    -- Could use just one variable
-    --                                         let (e1,e2) = split x e                                                                        -- e1 = a s1 s2, e2 = x t1 t2
-    --                                         (cs1,te,e1opt') <- inferOpt env e1                                                             -- e1opt' : ?A
-    --                                         (cs2,tr,e2opt') <- inferOpt (define [(x, NVar te)] env) e2                                   -- e2opt' : ?B
-    --                                         let y' = eCAST (tOpt te) te (eVar y)
-    --                                         return (cs1++cs2, tOpt tr, eLet [sAssign (pVar y (tOpt te)) e1opt']                          -- let y : ?A = e''
-    --                                                                          (eCond (termsubst [(x,y')] e2opt')                           --  in (x t1 t2) [x := CAST[?A,A]y]
-    --                                                                                 (eCall (tApp (eQVar primISNOTNONE) [te]) [eVar y])    --     if (y is not None)
-    --                                                                                 eNone))                                               --     else None
-    --   where inferOpt env e
-    --           | Just te <- exactOptType env e
-    --                                         = do (cs,e') <- inferSub env (tOpt te) e
-    --                                              return (cs,te,e')
-    --           | otherwise                   = do (cs,t,e') <- infer env e
-    --                                              case t of
-    --                                                TOpt _ te -> return (cs,te,e')
-    --                                                _ -> return (cs,t,eCAST t (tOpt t) e')
-
-    --         exactOptType env (Dot _ e n)
-    --           | Just tc <- exactReceiver env e
-    --           , Just (_, TSchema _ [] t, dec) <- findAttr env tc n
-    --                                         = Just (dropOpt (vsubst [(tvSelf,tCon tc)] $ addSelf t dec))
-    --           where dropOpt (TOpt _ t)    = t
-    --                 dropOpt t              = t
-    --         exactOptType _ _              = Nothing
-
-    --         exactReceiver env (Paren _ e) = exactReceiver env e
-    --         exactReceiver env (Var _ qn)  = case findQName qn env of
-    --                                           NVar t       -> asTCon t
-    --                                           NSVar t      -> asTCon t
-    --                                           NSig sc _ _  -> asTCon (sctype sc)
-    --                                           _            -> Nothing
-    --         exactReceiver _ _             = Nothing
-
-    --         asTCon (TCon _ tc)            = Just tc
-    --         asTCon _                      = Nothing
-
+                                         -- e is an atomic expression (atom_expr in the parser) which contains exactly one ? in its sequence of trailers
     infer env (OptChains l e)          = do x <- newTmp                                                                                      -- Example: a s1 s2 ? t1 t2
                                             let (e1,e2) = split x e                                                                          -- e1 = a s1 s2, e2 = x t1 t2
                                             te <- newUnivar env                                                                              -- te = A
-                                            (cs1,e1') <- inferSub env (tOpt te) e1                                                        -- e1' : ?A
-                                            let lam = eLambda [(x,te)] e2                                                                    -- lam = lambda x: A: x t1 t2
-                                                env1 = define [(x, NVar te)] env
-                                            (cs2,t,lam') <- infer env1 lam                                                                   -- t = TFun _ fx (PosArg A PNil) KwdNil B
+                                            (cs1,e1') <- inferSub env (tOpt te) e1                                                           -- e1' : ?A
+                                            -- let lam = eLambda [(x,te)] e2                                                                 -- lam = lambda x: A: x t1 t2
+                                            -- (cs2,t,lam') <- infer env lam                                                                 -- t = TFun _ fx (PosArg A PNil) KwdNil B
+                                            -- traceM(prstrs cs2)
+                                            -- y <- newTmp
+                                            -- traceM("y = "++show y)
+                                            -- return (cs1++cs2, tOpt (restype t), eLet [sAssign (pVar y (tOpt te)) e1']
+                                            --                                     (eCond (eCall lam' [eCAST (tOpt te) te (eVar y)])
+                                            --                                            (eCall (tApp (eQVar primISNOTNONE) [te]) [eVar y])
+                                            --                                            eNone))
+                                            let env1 = define [(x,NVar te)] env                                                                  -- lam = lambda x: A: x t1 t2
+                                            (cs2,t,e2') <- infer env1 e2                                                                        -- t = TFun _ fx (PosArg A PNil) KwdNil B
                                             y <- newTmp
-                                            return (cs1++cs2, tOpt (restype t), eLet [sAssign (pVar y (tOpt te)) e1']
-                                                                                (eCond (eCAST te (tOpt te) (eCall lam' [eCAST (tOpt te) te (eVar y)]))
-                                                                                       (eCall (tApp (eQVar primISNOTNONE) [te]) [eVar y])
-                                                                                       eNone))
+                                            return (cs1++cs2, tOpt t, eLet [sAssign (pVar y (tOpt te)) e1']
+                                                                           (eCond (termsubst [(x,eCAST (tOpt te) te (eVar y))] e2')
+                                                                                  (eCall (tApp (eQVar primISNOTNONE) [te]) [eVar y])
+                                                                                  eNone))
       where
             split x (Opt l e)           = (e, eVar x)
             split x (Dot l e n)         = (e1,Dot l e2 n) where (e1,e2) = split x e
@@ -1968,54 +1939,7 @@ instance Infer Expr where
             split x (Index l e ix)      = (e1,Index l e2 ix) where (e1,e2) = split x e
             split x (Slice l e sz)      = (e1,Slice l e2 sz) where (e1,e2) = split x e
 
-            -- inferRootOpt env e
-            --   | Just te <- exactOptType env e
-            --                               = do (cs,e') <- inferSub env (tOpt te) e
-            --                                    return (cs,te,e')
-            --   | otherwise                 = do mte <- exactRootType env e
-            --                                    case mte of
-            --                                      Just te -> do (cs,e') <- inferSub env (tOpt te) e
-            --                                                    return (cs,te,e')
-            --                                      Nothing -> do (cs,t,e') <- infer env e
-            --                                                    case t of
-            --                                                      TOpt _ te -> return (cs,te,e')
-            --                                                      TCon{}    -> return (cs,t,eCAST t (tOpt t) e')
-            --                                                      _         -> do te <- newUnivar env
-            --                                                                      (cs1,e1') <- inferSub env (tOpt te) e
-            --                                                                      return (cs1,te,e1')
-
-            -- exactOptType env (Dot _ e n)
-            --   | Just tc <- exactReceiver env e
-            --   , Just (_, TSchema _ [] t, dec) <- findAttr env tc n
-            --                               = Just (dropOpt (vsubst [(tvSelf,tCon tc)] $ addSelf t dec))
-            --   where dropOpt (TOpt _ t)   = t
-            --         dropOpt t             = t
-            -- exactOptType _ _             = Nothing
-
-            -- exactReceiver env (Paren _ e)= exactReceiver env e
-            -- exactReceiver env (Var _ qn) = case findQName qn env of
-            --                                  NVar t       -> asTCon t
-            --                                  NSVar t      -> asTCon t
-            --                                  NSig sc _ _  -> asTCon (sctype sc)
-            --                                  _            -> Nothing
-            -- exactReceiver _ _            = Nothing
-
-            -- exactRootType env (Paren _ e)= exactRootType env e
-            -- exactRootType env (Call _ f _ _) = exactCallType env f
-            -- exactRootType _ _            = return Nothing
-
-            -- exactCallType env (Var _ qn)
-            --   | NClass q _ _ _ <- findQName qn env
-            --                               = do ts <- newUnivars env [ tvkind v | v <- qbound q ]
-            --                                    return $ Just $ tCon (TC qn ts)
-            -- exactCallType env (TApp _ f ts)
-            --   | Just tc <- exactReceiver env f
-            --                               = return $ Just $ tCon (TC (tcname tc) ts)
-            -- exactCallType _ _            = return Nothing
-
-            -- asTCon (TCon _ tc)           = Just tc
-            -- asTCon _                     = Nothing
-
+ 
     infer env e@(Rest _ _ _)            = notYetExpr e
 --    infer env (Rest l e n)              = do p <- newUnivarOfKind PRow env
 --                                             k <- newUnivarOfKind KRow env
