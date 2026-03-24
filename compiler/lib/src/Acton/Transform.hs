@@ -158,6 +158,8 @@ instance Transform Expr where
       | Tuple{} <- e'                   = kwditem n $ kargs e'                              -- TODO: outrule side-effects in e
       | otherwise                       = Dot l e' n
       where e'                          = trans env e
+    trans env (Opt l e)                 = Opt l (trans env e)
+    trans env (OptChains l e)           = OptChains l (trans env e)
     trans env (Rest l e n)
       | Tuple{} <- e'                   = Tuple NoLoc PosNil (kwdrest n $ kargs e')         -- TODO: outrule side-effects in e
       | otherwise                       = Rest l e' n
