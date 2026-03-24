@@ -30,8 +30,7 @@ import Acton.Env
 
 
 check                               :: Env0 -> Module -> IO Module
-check env0 (Module m imps ss)       = do traceM(show ss)
-                                         return (Module m imps ss1)
+check env0 (Module m imps ss)       = do return (Module m imps ss1)
   where env                         = kindEnv env0
         ss1                         = runKindM (kchkTop env ss)
 
