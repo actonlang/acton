@@ -885,7 +885,7 @@ instance UWild ErrInfo where
 
 intro t mbe                            = case mbe of
                                              Nothing ->  pretty t
-                                             Just e ->   text "The type of the indicated expression" <+> text "(" Pretty.<>
+                                             Just e ->   text "The type of" <+> pretty e <+> text "(" Pretty.<>
                                                            (if isGen t then text "which we call" else text "inferred to be") <+> pretty t Pretty.<> text ")"
    where isGen (TCon _ (TC (NoQ (Name _ ('t' : ds))) [])) = all isDigit ds
          isGen _ = False

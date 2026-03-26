@@ -1888,57 +1888,27 @@ instance Infer Expr where
                                                  info = Simple l (Pretty.print t ++ " does not have an attribute "++ Pretty.print n ++
                                                                   "\nHint: you may need to test if " ++ Pretty.print e ++ " is not None")
                                              return  (con : cs, t0, eCall (eVar w) [e'])
-                                             -- case t of
-                                             --   TCon _ tc
-                                             --     | Just (wf,sc,dec) <- findAttr env tc n
-                                             --     , dec /= Just Static
-                                             --     -> do
-                                             --         (cs1,tvs,t1) <- instantiate env sc
-                                             --         when (negself t1) $ err1 n "A contravariant Self attribute cannot be selected by instance"
-                                             --         let t' = vsubst [(tvSelf,tCon tc)] $ addSelf t1 dec
-                                             --         return (cs++cs1, t', app t' (tApp (Dot l (wf e') n) tvs) $ protoWitsOf cs1)
-                                             --   _ -> do
-                                             --         w <- newWitness
-                                             --         t0 <- newUnivar env
-                                             --         let con = case t of
-                                             --                      TOpt _ _ -> Sel info env w t n t0
-                                             --                      _ -> Sel (locinfo' l 86 e) env w t n t0
-                                             --             info = Simple l (Pretty.print t ++ " does not have an attribute "++ Pretty.print n ++
-                                             --                              "\nHint: you may need to test if " ++ Pretty.print e ++ " is not None")
-                                             --         return  (con : cs, t0, eCall (eVar w) [e'])
-
 
     infer env (Opt l e)                = do (cs, t, e') <- infer env e
-                                            return (cs, t, Opt l e')
+                                            return (cs, tOpt t, Opt l e')
                                             
                                          -- e is an atomic expression (atom_expr in the parser) which contains exactly one ? in its sequence of trailers
     infer env (OptChains l e)          = do x <- newTmp                                                                                      -- Example: a s1 s2 ? t1 t2
                                             let (e1,e2) = split x e                                                                          -- e1 = a s1 s2, e2 = x t1 t2
-                                            te <- newUnivar env                                                                              -- te = A
-                                            (cs1,e1') <- inferSub env (tOpt te) e1                                                           -- e1' : ?A
-                                            -- let lam = eLambda [(x,te)] e2                                                                 -- lam = lambda x: A: x t1 t2
-                                            -- (cs2,t,lam') <- infer env lam                                                                 -- t = TFun _ fx (PosArg A PNil) KwdNil B
-                                            -- traceM(prstrs cs2)
-                                            -- y <- newTmp
-                                            -- traceM("y = "++show y)
-                                            -- return (cs1++cs2, tOpt (restype t), eLet [sAssign (pVar y (tOpt te)) e1']
-                                            --                                     (eCond (eCall lam' [eCAST (tOpt te) te (eVar y)])
-                                            --                                            (eCall (tApp (eQVar primISNOTNONE) [te]) [eVar y])
-                                            --                                            eNone))
-                                            let env1 = define [(x,NVar te)] env                                                                  -- lam = lambda x: A: x t1 t2
-                                            (cs2,t,e2') <- infer env1 e2                                                                        -- t = TFun _ fx (PosArg A PNil) KwdNil B
+                                            te <- newUnivar env
+                                            (cs1,e1') <- inferSub env (tOpt te) e1
+                                            let env1 = define [(x,NVar te)] env
+                                            (cs2,t,e2') <- infer env1 e2
                                             y <- newTmp
                                             return (cs1++cs2, tOpt t, eLet [sAssign (pVar y (tOpt te)) e1']
                                                                            (eCond (termsubst [(x,eCAST (tOpt te) te (eVar y))] e2')
                                                                                   (eCall (tApp (eQVar primISNOTNONE) [te]) [eVar y])
                                                                                   eNone))
-      where
-            split x (Opt l e)           = (e, eVar x)
+      where split x (Opt l e)           = (e, eVar x)
             split x (Dot l e n)         = (e1,Dot l e2 n) where (e1,e2) = split x e
             split x (Call l f ps ks)    = (e1,Call l e2 ps ks) where (e1,e2) = split x f
             split x (Index l e ix)      = (e1,Index l e2 ix) where (e1,e2) = split x e
             split x (Slice l e sz)      = (e1,Slice l e2 sz) where (e1,e2) = split x e
-
  
     infer env e@(Rest _ _ _)            = notYetExpr e
 --    infer env (Rest l e n)              = do p <- newUnivarOfKind PRow env
