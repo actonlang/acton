@@ -33,9 +33,267 @@ static struct B_str null_struct = {&B_strG_methods,0,0,&nul};
 
 static B_str null_str = &null_struct;
 
-static struct B_str space_struct = {&B_strG_methods,1,1,(unsigned char *)" "};
-
-static B_str space_str = &space_struct;
+// Prebuilt immutable one-byte ASCII strings used by indexing and iteration.
+#define ASCII_CHAR_TABLE_SIZE 128
+static unsigned char ascii_char_data[ASCII_CHAR_TABLE_SIZE][2] = {
+    [1] = {1, 0},
+    [2] = {2, 0},
+    [3] = {3, 0},
+    [4] = {4, 0},
+    [5] = {5, 0},
+    [6] = {6, 0},
+    [7] = {7, 0},
+    [8] = {8, 0},
+    [9] = {9, 0},
+    [10] = {10, 0},
+    [11] = {11, 0},
+    [12] = {12, 0},
+    [13] = {13, 0},
+    [14] = {14, 0},
+    [15] = {15, 0},
+    [16] = {16, 0},
+    [17] = {17, 0},
+    [18] = {18, 0},
+    [19] = {19, 0},
+    [20] = {20, 0},
+    [21] = {21, 0},
+    [22] = {22, 0},
+    [23] = {23, 0},
+    [24] = {24, 0},
+    [25] = {25, 0},
+    [26] = {26, 0},
+    [27] = {27, 0},
+    [28] = {28, 0},
+    [29] = {29, 0},
+    [30] = {30, 0},
+    [31] = {31, 0},
+    [32] = {32, 0},
+    [33] = {33, 0},
+    [34] = {34, 0},
+    [35] = {35, 0},
+    [36] = {36, 0},
+    [37] = {37, 0},
+    [38] = {38, 0},
+    [39] = {39, 0},
+    [40] = {40, 0},
+    [41] = {41, 0},
+    [42] = {42, 0},
+    [43] = {43, 0},
+    [44] = {44, 0},
+    [45] = {45, 0},
+    [46] = {46, 0},
+    [47] = {47, 0},
+    [48] = {48, 0},
+    [49] = {49, 0},
+    [50] = {50, 0},
+    [51] = {51, 0},
+    [52] = {52, 0},
+    [53] = {53, 0},
+    [54] = {54, 0},
+    [55] = {55, 0},
+    [56] = {56, 0},
+    [57] = {57, 0},
+    [58] = {58, 0},
+    [59] = {59, 0},
+    [60] = {60, 0},
+    [61] = {61, 0},
+    [62] = {62, 0},
+    [63] = {63, 0},
+    [64] = {64, 0},
+    [65] = {65, 0},
+    [66] = {66, 0},
+    [67] = {67, 0},
+    [68] = {68, 0},
+    [69] = {69, 0},
+    [70] = {70, 0},
+    [71] = {71, 0},
+    [72] = {72, 0},
+    [73] = {73, 0},
+    [74] = {74, 0},
+    [75] = {75, 0},
+    [76] = {76, 0},
+    [77] = {77, 0},
+    [78] = {78, 0},
+    [79] = {79, 0},
+    [80] = {80, 0},
+    [81] = {81, 0},
+    [82] = {82, 0},
+    [83] = {83, 0},
+    [84] = {84, 0},
+    [85] = {85, 0},
+    [86] = {86, 0},
+    [87] = {87, 0},
+    [88] = {88, 0},
+    [89] = {89, 0},
+    [90] = {90, 0},
+    [91] = {91, 0},
+    [92] = {92, 0},
+    [93] = {93, 0},
+    [94] = {94, 0},
+    [95] = {95, 0},
+    [96] = {96, 0},
+    [97] = {97, 0},
+    [98] = {98, 0},
+    [99] = {99, 0},
+    [100] = {100, 0},
+    [101] = {101, 0},
+    [102] = {102, 0},
+    [103] = {103, 0},
+    [104] = {104, 0},
+    [105] = {105, 0},
+    [106] = {106, 0},
+    [107] = {107, 0},
+    [108] = {108, 0},
+    [109] = {109, 0},
+    [110] = {110, 0},
+    [111] = {111, 0},
+    [112] = {112, 0},
+    [113] = {113, 0},
+    [114] = {114, 0},
+    [115] = {115, 0},
+    [116] = {116, 0},
+    [117] = {117, 0},
+    [118] = {118, 0},
+    [119] = {119, 0},
+    [120] = {120, 0},
+    [121] = {121, 0},
+    [122] = {122, 0},
+    [123] = {123, 0},
+    [124] = {124, 0},
+    [125] = {125, 0},
+    [126] = {126, 0},
+    [127] = {127, 0}
+};
+static struct B_str ascii_char_strs[ASCII_CHAR_TABLE_SIZE] = {
+    [1] = {&B_strG_methods, 1, 1, ascii_char_data[1]},
+    [2] = {&B_strG_methods, 1, 1, ascii_char_data[2]},
+    [3] = {&B_strG_methods, 1, 1, ascii_char_data[3]},
+    [4] = {&B_strG_methods, 1, 1, ascii_char_data[4]},
+    [5] = {&B_strG_methods, 1, 1, ascii_char_data[5]},
+    [6] = {&B_strG_methods, 1, 1, ascii_char_data[6]},
+    [7] = {&B_strG_methods, 1, 1, ascii_char_data[7]},
+    [8] = {&B_strG_methods, 1, 1, ascii_char_data[8]},
+    [9] = {&B_strG_methods, 1, 1, ascii_char_data[9]},
+    [10] = {&B_strG_methods, 1, 1, ascii_char_data[10]},
+    [11] = {&B_strG_methods, 1, 1, ascii_char_data[11]},
+    [12] = {&B_strG_methods, 1, 1, ascii_char_data[12]},
+    [13] = {&B_strG_methods, 1, 1, ascii_char_data[13]},
+    [14] = {&B_strG_methods, 1, 1, ascii_char_data[14]},
+    [15] = {&B_strG_methods, 1, 1, ascii_char_data[15]},
+    [16] = {&B_strG_methods, 1, 1, ascii_char_data[16]},
+    [17] = {&B_strG_methods, 1, 1, ascii_char_data[17]},
+    [18] = {&B_strG_methods, 1, 1, ascii_char_data[18]},
+    [19] = {&B_strG_methods, 1, 1, ascii_char_data[19]},
+    [20] = {&B_strG_methods, 1, 1, ascii_char_data[20]},
+    [21] = {&B_strG_methods, 1, 1, ascii_char_data[21]},
+    [22] = {&B_strG_methods, 1, 1, ascii_char_data[22]},
+    [23] = {&B_strG_methods, 1, 1, ascii_char_data[23]},
+    [24] = {&B_strG_methods, 1, 1, ascii_char_data[24]},
+    [25] = {&B_strG_methods, 1, 1, ascii_char_data[25]},
+    [26] = {&B_strG_methods, 1, 1, ascii_char_data[26]},
+    [27] = {&B_strG_methods, 1, 1, ascii_char_data[27]},
+    [28] = {&B_strG_methods, 1, 1, ascii_char_data[28]},
+    [29] = {&B_strG_methods, 1, 1, ascii_char_data[29]},
+    [30] = {&B_strG_methods, 1, 1, ascii_char_data[30]},
+    [31] = {&B_strG_methods, 1, 1, ascii_char_data[31]},
+    [32] = {&B_strG_methods, 1, 1, ascii_char_data[32]},
+    [33] = {&B_strG_methods, 1, 1, ascii_char_data[33]},
+    [34] = {&B_strG_methods, 1, 1, ascii_char_data[34]},
+    [35] = {&B_strG_methods, 1, 1, ascii_char_data[35]},
+    [36] = {&B_strG_methods, 1, 1, ascii_char_data[36]},
+    [37] = {&B_strG_methods, 1, 1, ascii_char_data[37]},
+    [38] = {&B_strG_methods, 1, 1, ascii_char_data[38]},
+    [39] = {&B_strG_methods, 1, 1, ascii_char_data[39]},
+    [40] = {&B_strG_methods, 1, 1, ascii_char_data[40]},
+    [41] = {&B_strG_methods, 1, 1, ascii_char_data[41]},
+    [42] = {&B_strG_methods, 1, 1, ascii_char_data[42]},
+    [43] = {&B_strG_methods, 1, 1, ascii_char_data[43]},
+    [44] = {&B_strG_methods, 1, 1, ascii_char_data[44]},
+    [45] = {&B_strG_methods, 1, 1, ascii_char_data[45]},
+    [46] = {&B_strG_methods, 1, 1, ascii_char_data[46]},
+    [47] = {&B_strG_methods, 1, 1, ascii_char_data[47]},
+    [48] = {&B_strG_methods, 1, 1, ascii_char_data[48]},
+    [49] = {&B_strG_methods, 1, 1, ascii_char_data[49]},
+    [50] = {&B_strG_methods, 1, 1, ascii_char_data[50]},
+    [51] = {&B_strG_methods, 1, 1, ascii_char_data[51]},
+    [52] = {&B_strG_methods, 1, 1, ascii_char_data[52]},
+    [53] = {&B_strG_methods, 1, 1, ascii_char_data[53]},
+    [54] = {&B_strG_methods, 1, 1, ascii_char_data[54]},
+    [55] = {&B_strG_methods, 1, 1, ascii_char_data[55]},
+    [56] = {&B_strG_methods, 1, 1, ascii_char_data[56]},
+    [57] = {&B_strG_methods, 1, 1, ascii_char_data[57]},
+    [58] = {&B_strG_methods, 1, 1, ascii_char_data[58]},
+    [59] = {&B_strG_methods, 1, 1, ascii_char_data[59]},
+    [60] = {&B_strG_methods, 1, 1, ascii_char_data[60]},
+    [61] = {&B_strG_methods, 1, 1, ascii_char_data[61]},
+    [62] = {&B_strG_methods, 1, 1, ascii_char_data[62]},
+    [63] = {&B_strG_methods, 1, 1, ascii_char_data[63]},
+    [64] = {&B_strG_methods, 1, 1, ascii_char_data[64]},
+    [65] = {&B_strG_methods, 1, 1, ascii_char_data[65]},
+    [66] = {&B_strG_methods, 1, 1, ascii_char_data[66]},
+    [67] = {&B_strG_methods, 1, 1, ascii_char_data[67]},
+    [68] = {&B_strG_methods, 1, 1, ascii_char_data[68]},
+    [69] = {&B_strG_methods, 1, 1, ascii_char_data[69]},
+    [70] = {&B_strG_methods, 1, 1, ascii_char_data[70]},
+    [71] = {&B_strG_methods, 1, 1, ascii_char_data[71]},
+    [72] = {&B_strG_methods, 1, 1, ascii_char_data[72]},
+    [73] = {&B_strG_methods, 1, 1, ascii_char_data[73]},
+    [74] = {&B_strG_methods, 1, 1, ascii_char_data[74]},
+    [75] = {&B_strG_methods, 1, 1, ascii_char_data[75]},
+    [76] = {&B_strG_methods, 1, 1, ascii_char_data[76]},
+    [77] = {&B_strG_methods, 1, 1, ascii_char_data[77]},
+    [78] = {&B_strG_methods, 1, 1, ascii_char_data[78]},
+    [79] = {&B_strG_methods, 1, 1, ascii_char_data[79]},
+    [80] = {&B_strG_methods, 1, 1, ascii_char_data[80]},
+    [81] = {&B_strG_methods, 1, 1, ascii_char_data[81]},
+    [82] = {&B_strG_methods, 1, 1, ascii_char_data[82]},
+    [83] = {&B_strG_methods, 1, 1, ascii_char_data[83]},
+    [84] = {&B_strG_methods, 1, 1, ascii_char_data[84]},
+    [85] = {&B_strG_methods, 1, 1, ascii_char_data[85]},
+    [86] = {&B_strG_methods, 1, 1, ascii_char_data[86]},
+    [87] = {&B_strG_methods, 1, 1, ascii_char_data[87]},
+    [88] = {&B_strG_methods, 1, 1, ascii_char_data[88]},
+    [89] = {&B_strG_methods, 1, 1, ascii_char_data[89]},
+    [90] = {&B_strG_methods, 1, 1, ascii_char_data[90]},
+    [91] = {&B_strG_methods, 1, 1, ascii_char_data[91]},
+    [92] = {&B_strG_methods, 1, 1, ascii_char_data[92]},
+    [93] = {&B_strG_methods, 1, 1, ascii_char_data[93]},
+    [94] = {&B_strG_methods, 1, 1, ascii_char_data[94]},
+    [95] = {&B_strG_methods, 1, 1, ascii_char_data[95]},
+    [96] = {&B_strG_methods, 1, 1, ascii_char_data[96]},
+    [97] = {&B_strG_methods, 1, 1, ascii_char_data[97]},
+    [98] = {&B_strG_methods, 1, 1, ascii_char_data[98]},
+    [99] = {&B_strG_methods, 1, 1, ascii_char_data[99]},
+    [100] = {&B_strG_methods, 1, 1, ascii_char_data[100]},
+    [101] = {&B_strG_methods, 1, 1, ascii_char_data[101]},
+    [102] = {&B_strG_methods, 1, 1, ascii_char_data[102]},
+    [103] = {&B_strG_methods, 1, 1, ascii_char_data[103]},
+    [104] = {&B_strG_methods, 1, 1, ascii_char_data[104]},
+    [105] = {&B_strG_methods, 1, 1, ascii_char_data[105]},
+    [106] = {&B_strG_methods, 1, 1, ascii_char_data[106]},
+    [107] = {&B_strG_methods, 1, 1, ascii_char_data[107]},
+    [108] = {&B_strG_methods, 1, 1, ascii_char_data[108]},
+    [109] = {&B_strG_methods, 1, 1, ascii_char_data[109]},
+    [110] = {&B_strG_methods, 1, 1, ascii_char_data[110]},
+    [111] = {&B_strG_methods, 1, 1, ascii_char_data[111]},
+    [112] = {&B_strG_methods, 1, 1, ascii_char_data[112]},
+    [113] = {&B_strG_methods, 1, 1, ascii_char_data[113]},
+    [114] = {&B_strG_methods, 1, 1, ascii_char_data[114]},
+    [115] = {&B_strG_methods, 1, 1, ascii_char_data[115]},
+    [116] = {&B_strG_methods, 1, 1, ascii_char_data[116]},
+    [117] = {&B_strG_methods, 1, 1, ascii_char_data[117]},
+    [118] = {&B_strG_methods, 1, 1, ascii_char_data[118]},
+    [119] = {&B_strG_methods, 1, 1, ascii_char_data[119]},
+    [120] = {&B_strG_methods, 1, 1, ascii_char_data[120]},
+    [121] = {&B_strG_methods, 1, 1, ascii_char_data[121]},
+    [122] = {&B_strG_methods, 1, 1, ascii_char_data[122]},
+    [123] = {&B_strG_methods, 1, 1, ascii_char_data[123]},
+    [124] = {&B_strG_methods, 1, 1, ascii_char_data[124]},
+    [125] = {&B_strG_methods, 1, 1, ascii_char_data[125]},
+    [126] = {&B_strG_methods, 1, 1, ascii_char_data[126]},
+    [127] = {&B_strG_methods, 1, 1, ascii_char_data[127]}
+};
+static B_str space_str = &ascii_char_strs[(unsigned char)' '];
 
 static struct B_str whitespace_struct = {&B_strG_methods,6,6,(unsigned char *)" \t\n\r\x0b\x0c"};
 
@@ -104,6 +362,10 @@ B_str to$str(char *str) {
     }
     if (isascii) {
         nbytes = p - (unsigned char*)str;
+        if (nbytes == 0)
+            return null_str;
+        if (nbytes == 1 && str[0] > 0 && (unsigned char)str[0] < ASCII_CHAR_TABLE_SIZE)
+            return &ascii_char_strs[(unsigned char)str[0]];
         NEW_UNFILLED_STR(res, nbytes, nbytes);
         memcpy(res->str, str, nbytes);
         return res;
@@ -312,6 +574,10 @@ static int fix_start_end(int nchars, B_int *start, B_int *end) {
 
 // Builds a new one-char string starting at p.
 static B_str mk_char(unsigned char *p) {
+    unsigned char c = *p;
+    if (c > 0 && c < ASCII_CHAR_TABLE_SIZE)
+        return &ascii_char_strs[c];
+
     B_str res;
     NEW_UNFILLED_STR(res,1,byte_length2(*p));
     for (int i=0; i<res->nbytes; i++)
@@ -1488,13 +1754,16 @@ B_str B_SliceableD_strD___getslice__ (B_SliceableD_str wit, B_str s, B_slice slc
     if (slen == 0) {
         return null_str;
     }
+    if (slen == 1) {
+        return mk_char(skip_chars(s->str, start, isascii));
+    }
     //slice notation have been eliminated and default values applied.
     unsigned char buffer[4*slen]; // very conservative buffer size.
     unsigned char *p = buffer;
-    unsigned char *t = skip_chars(s->str,start,isascii);
+    unsigned char *t = skip_chars(s->str, start, isascii);
     for (int i=0; i<slen; i++) {
         int bytes = byte_length2(*t);
-        for (int k=0; k<bytes;k++) {
+        for (int k=0; k<bytes; k++) {
             p[nbytes] = *t;
             t++; nbytes++;
         }
@@ -3724,6 +3993,8 @@ B_str B_chr(B_Integral wit, $WORD n) {
     long v = fromB_int(wit->$class->__int__(wit,n));
     if (v >=  0x110000)
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("chr: argument is not a valid Unicode code point")));
+    if (v > 0 && v < ASCII_CHAR_TABLE_SIZE)
+        return &ascii_char_strs[v];
     unsigned char code[4];
     int nbytes = utf8proc_encode_char((int)v,(unsigned char*)&code);
     if (nbytes==0)
