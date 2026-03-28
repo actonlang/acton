@@ -538,77 +538,6 @@ static int get_index(int i, int nchars) {
     return 0;
 }
 
-
-// Eliminates slice notation in find, index, count and other methods
-// with optional start and end and adds defaults for omitted parameters.
-
-static int fix_start_end(int nchars, B_int *start, B_int *end) {
-    if (*start==NULL) {
-        *start = acton_malloc(sizeof(struct B_int));
-        *start = toB_int(0);
-    } else {
-        int st = fromB_int(*start);
-        if (st > nchars) {
-            return -1;
-        }
-        if (st < 0) 
-            st += nchars+1;
-        st = st < 0 ? 0 : st;
-        *start = toB_int(st);
-    }
-    if (*end==NULL) {
-        *end = acton_malloc(sizeof(struct B_int));
-        *end = toB_int(nchars);
-    } else {
-        int en = fromB_int(*end);
-        if (en > nchars)   
-            en = nchars;      
-        else if (en < 0) 
-            en += nchars+1;     
-        en = en < 0 ? 0 : en;    
-        
-        *end = toB_int(en);
-    }
-    return 0;
-}
-
-// Builds a new one-char string starting at p.
-static B_str mk_char(unsigned char *p) {
-    unsigned char c = *p;
-    if (c > 0 && c < ASCII_CHAR_TABLE_SIZE)
-        return &ascii_char_strs[c];
-
-    B_str res;
-    NEW_UNFILLED_STR(res,1,byte_length2(*p));
-    for (int i=0; i<res->nbytes; i++)
-        res->str[i] = p[i];
-    return res;
-}
-
-int equal_bytes(unsigned char *p, unsigned char *q, int len) {
-    int i;
-    for (i=0; i<len; i++) {
-        if (p[i] != q[i]) break;
-    }
-    return i==len;
-}
-
-static int isspace_codepoint(int codepoint) {
-    int cat = utf8proc_get_property(codepoint)->category;
-    int bidi = utf8proc_get_property(codepoint)->bidi_class;
-    return (cat == UTF8PROC_CATEGORY_ZS || (bidi >= UTF8PROC_BIDI_CLASS_B && bidi <= UTF8PROC_BIDI_CLASS_WS));
-}
-
-static int islinebreak_codepoint(int codepoint) {
-    // category not useful; all the seven codepoints we handle are in category Other, control.
-    return (codepoint <= 0x0a && codepoint <= 0x0d) ||
-        (codepoint >= 0x1c && codepoint <= 0x1e);
-    // For now we ignore the three codepoints below which are counted as linebreaks by
-    // Python's splitlines for strings.
-    //  || codepoint == 0x85 || codepoint == 0x2028 ||codepoint == 0x2029;
-
-}
-
 // The Boyer-Moore-Horspool algorithm for searching for pattern in text.
 // For very short patterns, this should be replaced by brute force.
 // Returns byte position in text where first occurrence of pattern starts,
@@ -653,6 +582,144 @@ static int rbmh( unsigned char *text, unsigned char *pattern, int tbytes, int pb
         k -= skip[(int)text[k]];
     }
     return -1;
+}
+
+static int normalize_start_end(int len, B_int start, B_int end, int *start_out, int *end_out) {
+    int st;
+    int en;
+
+    if (start == NULL) {
+        st = 0;
+    } else {
+        st = fromB_int(start);
+        if (st > len)
+            return -1;
+        if (st < 0)
+            st += len + 1;
+        st = st < 0 ? 0 : st;
+    }
+
+    if (end == NULL) {
+        en = len;
+    } else {
+        en = fromB_int(end);
+        if (en > len)
+            en = len;
+        else if (en < 0)
+            en += len + 1;
+        en = en < 0 ? 0 : en;
+    }
+
+    *start_out = st;
+    *end_out = en;
+    return 0;
+}
+
+static int count_matches(unsigned char *p, unsigned char *q, unsigned char *sub, int subbytes) {
+    int count = 0;
+    int n = bmh(p, sub, q - p, subbytes);
+
+    while (n >= 0) {
+        count++;
+        p += n + (subbytes > 0 ? subbytes : 1);
+        n = bmh(p, sub, q - p, subbytes);
+    }
+
+    return count;
+}
+
+static int normalize_maxsplit(B_int maxsplit) {
+    if (maxsplit == NULL || fromB_int(maxsplit) < 0)
+        return INT_MAX;
+    return fromB_int(maxsplit);
+}
+
+static int str_count_range(B_str s, B_str sub, int start, int end) {
+    int isascii = s->nchars == s->nbytes;
+    unsigned char *p = skip_chars(s->str, start, isascii);
+    unsigned char *q = skip_chars(p, end - start, isascii);
+    return count_matches(p, q, sub->str, sub->nbytes);
+}
+
+static int str_find_range(B_str s, B_str sub, int start, int end) {
+    int isascii = s->nchars == s->nbytes;
+    unsigned char *p = skip_chars(s->str, start, isascii);
+    unsigned char *q = skip_chars(p, end - start, isascii);
+    int n = bmh(p, sub->str, q - p, sub->nbytes);
+
+    if (n < 0)
+        return -1;
+    return char_no(s, n + p - s->str);
+}
+
+static int str_rfind_range(B_str s, B_str sub, int start, int end) {
+    int isascii = s->nchars == s->nbytes;
+    unsigned char *p = skip_chars(s->str, start, isascii);
+    unsigned char *q = skip_chars(p, end - start, isascii);
+    int n = rbmh(p, sub->str, q - p, sub->nbytes);
+
+    if (n < 0)
+        return -1;
+    return char_no(s, n + p - s->str);
+}
+
+static int buffer_count_range(unsigned char *buf, int start, int end, unsigned char *sub, int subbytes) {
+    unsigned char *p = buf + start;
+    unsigned char *q = buf + end;
+    return count_matches(p, q, sub, subbytes);
+}
+
+static int buffer_find_range(unsigned char *buf, int start, int end, unsigned char *sub, int subbytes) {
+    int n = bmh(buf + start, sub, end - start, subbytes);
+
+    if (n < 0)
+        return -1;
+    return start + n;
+}
+
+static int buffer_rfind_range(unsigned char *buf, int start, int end, unsigned char *sub, int subbytes) {
+    int n = rbmh(buf + start, sub, end - start, subbytes);
+
+    if (n < 0)
+        return -1;
+    return start + n;
+}
+
+// Builds a new one-char string starting at p.
+static B_str mk_char(unsigned char *p) {
+    unsigned char c = *p;
+    if (c > 0 && c < ASCII_CHAR_TABLE_SIZE)
+        return &ascii_char_strs[c];
+
+    B_str res;
+    NEW_UNFILLED_STR(res,1,byte_length2(*p));
+    for (int i=0; i<res->nbytes; i++)
+        res->str[i] = p[i];
+    return res;
+}
+
+int equal_bytes(unsigned char *p, unsigned char *q, int len) {
+    int i;
+    for (i=0; i<len; i++) {
+        if (p[i] != q[i]) break;
+    }
+    return i==len;
+}
+
+static int isspace_codepoint(int codepoint) {
+    int cat = utf8proc_get_property(codepoint)->category;
+    int bidi = utf8proc_get_property(codepoint)->bidi_class;
+    return (cat == UTF8PROC_CATEGORY_ZS || (bidi >= UTF8PROC_BIDI_CLASS_B && bidi <= UTF8PROC_BIDI_CLASS_WS));
+}
+
+static int islinebreak_codepoint(int codepoint) {
+    // category not useful; all the seven codepoints we handle are in category Other, control.
+    return (codepoint <= 0x0a && codepoint <= 0x0d) ||
+        (codepoint >= 0x1c && codepoint <= 0x1e);
+    // For now we ignore the three codepoints below which are counted as linebreaks by
+    // Python's splitlines for strings.
+    //  || codepoint == 0x85 || codepoint == 0x2028 ||codepoint == 0x2029;
+
 }
 
 struct byte_counts {
@@ -929,20 +996,12 @@ B_str B_strD_center(B_str s, B_int width, B_str fill) {
 
 
 B_int B_strD_count(B_str s, B_str sub, B_int start, B_int end) {
-    int isascii = s->nchars == s->nbytes;
-    B_int st = start;
-    B_int en = end;
-    if (fix_start_end(s->nchars,&st,&en) < 0) return toB_int(0);
-    unsigned char *p = skip_chars(s->str,fromB_int(st),isascii);
-    unsigned char *q = skip_chars(p,fromB_int(en)-fromB_int(st),isascii);
-    int res = 0;
-    int n = bmh(p,sub->str,q-p,sub->nbytes);
-    while (n>=0) {
-        res++;
-        p += n + (sub->nbytes>0 ? sub->nbytes : 1);
-        n = bmh(p,sub->str,q-p,sub->nbytes);
-    }
-    return toB_int(res);
+    int st;
+    int en;
+
+    if (normalize_start_end(s->nchars, start, end, &st, &en) < 0)
+        return toB_int(0);
+    return toB_int(str_count_range(s, sub, st, en));
 }
 
 B_bytes B_strD_encode(B_str s) {
@@ -953,12 +1012,15 @@ B_bytes B_strD_encode(B_str s) {
 }
 
 B_bool B_strD_endswith(B_str s, B_str sub, B_int start, B_int end) {
-    B_int st = start;
-    B_int en = end;
-    if (fix_start_end(s->nchars,&st,&en) < 0) return B_False;
-    if (en->val-st->val < sub->nbytes) return B_False;
+    int st;
+    int en;
+
+    if (normalize_start_end(s->nchars, start, end, &st, &en) < 0)
+        return B_False;
+    if (en - st < sub->nbytes)
+        return B_False;
     int isascii = s->nchars==s->nbytes;
-    unsigned char *p = skip_chars(s->str + s->nbytes,fromB_int(en) - s->nchars,isascii) - sub->nbytes;
+    unsigned char *p = skip_chars(s->str + s->nbytes, en - s->nchars, isascii) - sub->nbytes;
     unsigned char *q = sub->str;
     for (int i=0; i<sub->nbytes; i++) {
         if (*p == 0 || *p++ != *q++) {
@@ -1005,23 +1067,25 @@ B_str B_strD_expandtabs(B_str s, B_int tabsize){
 }
 
 B_int B_strD_find(B_str s, B_str sub, B_int start, B_int end) {
-    int isascii = s->nchars == s->nbytes;
-    B_int st = start;
-    B_int en = end;
-    if (fix_start_end(s->nchars,&st,&en) < 0) return toB_int(-1);
-    unsigned char *p = skip_chars(s->str,fromB_int(st),isascii);
-    unsigned char *q = skip_chars(p,fromB_int(en)-fromB_int(st),isascii);
-    int n = bmh(p,sub->str,q-p,sub->nbytes);
-    if (n<0) return toB_int(-1);
-    return toB_int(char_no(s,n+p-s->str));
+    int st;
+    int en;
+
+    if (normalize_start_end(s->nchars, start, end, &st, &en) < 0)
+        return toB_int(-1);
+    return toB_int(str_find_range(s, sub, st, en));
 }
 
 B_int B_strD_index(B_str s, B_str sub, B_int start, B_int end) {
-    B_int n = B_strD_find(s,sub,start,end);
-    if (fromB_int(n)<0) {
+    int st;
+    int en;
+    int n = -1;
+
+    if (normalize_start_end(s->nchars, start, end, &st, &en) >= 0)
+        n = str_find_range(s, sub, st, en);
+    if (n < 0) {
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("index: substring not found")));
     }
-    return n;
+    return toB_int(n);
 }
 
 B_bool B_strD_isalnum(B_str s) {
@@ -1262,7 +1326,7 @@ B_str B_strD_lstrip(B_str s, B_str cs) {
 }
 
 B_tuple B_strD_partition(B_str s, B_str sep) {
-    int n = fromB_int(B_strD_find(s,sep,NULL,NULL));
+    int n = str_find_range(s, sep, 0, s->nchars);
     if (n<0) {
         return $NEWTUPLE(3,s,null_str,null_str);
     } else {
@@ -1280,10 +1344,9 @@ B_tuple B_strD_partition(B_str s, B_str sep) {
 }
 
 B_str B_strD_replace(B_str s, B_str old, B_str new, B_int count) {
-    if (count==NULL)
-        count = toB_int(INT_MAX);
-    int c = fromB_int(B_strD_count(s,old,NULL,NULL));
-    int c0 = fromB_int(count) < c ? fromB_int(count) : c;
+    int countval = count == NULL ? INT_MAX : fromB_int(count);
+    int c = str_count_range(s, old, 0, s->nchars);
+    int c0 = countval < c ? countval : c;
     if (c0==0){
         return s;
     }
@@ -1315,24 +1378,26 @@ B_str B_strD_replace(B_str s, B_str old, B_str new, B_int count) {
 
 
 B_int B_strD_rfind(B_str s, B_str sub, B_int start, B_int end) {
-    int isascii = s->nchars == s->nbytes;
-    B_int st = start;
-    B_int en = end;
-    if (fix_start_end(s->nchars,&st,&en) < 0) return toB_int(-1);
-    unsigned char *p = skip_chars(s->str,fromB_int(st),isascii);
-    unsigned char *q = skip_chars(p,fromB_int(en)-fromB_int(st),isascii);
-    int n = rbmh(p,sub->str,q-p,sub->nbytes);
-    if (n<0) return toB_int(-1);
-    return toB_int(char_no(s,n+p-s->str));
+    int st;
+    int en;
+
+    if (normalize_start_end(s->nchars, start, end, &st, &en) < 0)
+        return toB_int(-1);
+    return toB_int(str_rfind_range(s, sub, st, en));
 }
 
 
 B_int B_strD_rindex(B_str s, B_str sub, B_int start, B_int end) {
-    B_int n = B_strD_rfind(s,sub,start,end);
-    if (fromB_int(n)<0) {
+    int st;
+    int en;
+    int n = -1;
+
+    if (normalize_start_end(s->nchars, start, end, &st, &en) >= 0)
+        n = str_rfind_range(s, sub, st, en);
+    if (n < 0) {
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("rindex: substring not found")));
     };
-    return n;
+    return toB_int(n);
 }
 
 B_str B_strD_rjust(B_str s, B_int width, B_str fill) {
@@ -1358,7 +1423,7 @@ B_str B_strD_rjust(B_str s, B_int width, B_str fill) {
 }
 
 B_tuple B_strD_rpartition(B_str s, B_str sep) {
-    int n = fromB_int(B_strD_rfind(s,sep,NULL,NULL));
+    int n = str_rfind_range(s, sep, 0, s->nchars);
     if (n<0) {
         return $NEWTUPLE(3,null_str,null_str,s);
     } else {
@@ -1379,7 +1444,7 @@ B_tuple B_strD_rpartition(B_str s, B_str sep) {
 B_list B_strD_split(B_str s, B_str sep, B_int maxsplit) {
     B_list res = $NEW(B_list,NULL,NULL);
     B_SequenceD_list wit = B_SequenceD_listG_witness;
-    if (maxsplit == NULL || fromB_int(maxsplit) < 0) maxsplit = toB_int(INT_MAX); 
+    int maxspl = normalize_maxsplit(maxsplit);
     int remaining = s->nchars;
     if (sep == NULL) {
         unsigned char *p = s->str;
@@ -1397,7 +1462,7 @@ B_list B_strD_split(B_str s, B_str sep, B_int maxsplit) {
                     inword = 1;
                     q = p;
                     wordlength = 1;
-                    if (res->length == fromB_int(maxsplit))
+                    if (res->length == maxspl)
                         break; // we have now removed leading whitespace in remainder
                 } else
                     wordlength++;
@@ -1439,16 +1504,16 @@ B_list B_strD_split(B_str s, B_str sep, B_int maxsplit) {
             wit->$class->append(wit,res,null_str);
             return res;
         }
-        B_str ls, rs, ssep;
+        B_str ls, rs, ssep = NULL;
         rs = s;
         // Note: This builds many intermediate rs strings...
-        while (rs->nchars>0 && res->length < fromB_int(maxsplit)) {
+        while (rs->nchars>0 && res->length < maxspl) {
             B_tuple t = B_strD_partition(rs,sep);
             ssep = (B_str)t->components[1];
             rs =  (B_str)t->components[2];
             wit->$class->append(wit,res,(B_str)t->components[0]);
         }
-        if (ssep->nchars>0)
+        if (ssep && ssep->nchars>0)
             wit->$class->append(wit,res,rs);
         return res;
     }
@@ -1518,11 +1583,13 @@ B_str B_strD_rstrip(B_str s, B_str cs) {
 }
 
 B_bool B_strD_startswith(B_str s, B_str sub, B_int start, B_int end) {
-    B_int st = start;
-    B_int en = end;
-    if (fix_start_end(s->nchars,&st,&en) < 0) return B_False;
+    int st;
+    int en;
+
+    if (normalize_start_end(s->nchars, start, end, &st, &en) < 0)
+        return B_False;
     int isascii = s->nchars==s->nbytes;
-    unsigned char *p = skip_chars(s->str,fromB_int(st),isascii);
+    unsigned char *p = skip_chars(s->str, st, isascii);
     unsigned char *q = sub->str;
     for (int i=0; i<sub->nbytes; i++) {
         if (*p == 0 || *p++ != *q++) {
@@ -1979,21 +2046,12 @@ B_bytearray B_bytearrayD_center(B_bytearray s, B_int width, B_bytearray fill) {
 }
 
 B_int B_bytearrayD_count(B_bytearray s, B_bytearray sub, B_int start, B_int end) {
-    B_int st = start;
-    B_int en = end;
-    if (fix_start_end(s->nbytes,&st,&en) < 0) return toB_int(0);
-    int stval = fromB_int(st);
-    int enval = fromB_int(en);
-    unsigned char *p = &s->str[stval];
-    unsigned char *q = &p[enval-stval];
-    int res = 0;
-    int n = bmh(p,sub->str,q-p,sub->nbytes);
-    while (n>=0) {
-        res++;
-        p += n + (sub->nbytes>0 ? sub->nbytes : 1);
-        n = bmh(p,sub->str,q-p,sub->nbytes);
-    }
-    return toB_int(res);
+    int st;
+    int en;
+
+    if (normalize_start_end(s->nbytes, start, end, &st, &en) < 0)
+        return toB_int(0);
+    return toB_int(buffer_count_range(s->str, st, en, sub->str, sub->nbytes));
 }
 
 B_str B_bytearrayD_decode(B_bytearray s) {
@@ -2001,11 +2059,14 @@ B_str B_bytearrayD_decode(B_bytearray s) {
 }
 
 B_bool B_bytearrayD_endswith(B_bytearray s, B_bytearray sub, B_int start, B_int end) {
-    B_int st = start;
-    B_int en = end;
-    if (fix_start_end(s->nbytes,&st,&en) < 0) return B_False;
-    int enval = fromB_int(en);
-    unsigned char *p = &s->str[enval-sub->nbytes];
+    int st;
+    int en;
+
+    if (normalize_start_end(s->nbytes, start, end, &st, &en) < 0)
+        return B_False;
+    if (en - st < sub->nbytes)
+        return B_False;
+    unsigned char *p = &s->str[en-sub->nbytes];
     unsigned char *q = sub->str;
     for (int i=0; i<sub->nbytes; i++) {
         if (*p == 0 || *p++ != *q++) {
@@ -2052,14 +2113,12 @@ B_bytearray B_bytearrayD_expandtabs(B_bytearray s, B_int tabsz){
 }
 
 B_int B_bytearrayD_find(B_bytearray s, B_bytearray sub, B_int start, B_int end) {
-    B_int st = start;
-    B_int en = end;
-    if (fix_start_end(s->nbytes,&st,&en) < 0) return toB_int(-1);
-    unsigned char *p = &s->str[fromB_int(st)];
-    unsigned char *q = &s->str[fromB_int(en)];
-    int n = bmh(p,sub->str,q-p,sub->nbytes);
-    if (n<0) return toB_int(-1);
-    return toB_int(n+p-s->str);
+    int st;
+    int en;
+
+    if (normalize_start_end(s->nbytes, start, end, &st, &en) < 0)
+        return toB_int(-1);
+    return toB_int(buffer_find_range(s->str, st, en, sub->str, sub->nbytes));
 }
 
 B_bytearray B_bytearrayD_from_hex(B_str s) {
@@ -2129,11 +2188,16 @@ B_str B_bytearrayD_hex(B_bytearray s) {
 
 
 B_int B_bytearrayD_index(B_bytearray s, B_bytearray sub, B_int start, B_int end) {
-    B_int n = B_bytearrayD_find(s,sub,start,end);
-    if (fromB_int(n)<0) {
+    int st;
+    int en;
+    int n = -1;
+
+    if (normalize_start_end(s->nbytes, start, end, &st, &en) >= 0)
+        n = buffer_find_range(s->str, st, en, sub->str, sub->nbytes);
+    if (n < 0) {
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("index: substring not found")));
     }
-    return n;
+    return toB_int(n);
 }
 
 B_bool B_bytearrayD_isalnum(B_bytearray s) {
@@ -2316,28 +2380,26 @@ B_bytearray B_bytearrayD_lstrip(B_bytearray s, B_bytearray cs) {
 
 
 B_tuple B_bytearrayD_partition(B_bytearray s, B_bytearray sep) {
-    int n = fromB_int(B_bytearrayD_find(s,sep,NULL,NULL));
+    int n = buffer_find_range(s->str, 0, s->nbytes, sep->str, sep->nbytes);
     if (n<0) {
         return $NEWTUPLE(3,s,toB_bytearray(""),toB_bytearray(""));
     } else {
-        int nb = bmh(s->str,sep->str,s->nbytes,sep->nbytes);
         B_bytearray ls;
-        NEW_UNFILLED_BYTEARRAY(ls,nb);
-        memcpy(ls->str,s->str,nb);
+        NEW_UNFILLED_BYTEARRAY(ls,n);
+        memcpy(ls->str,s->str,n);
         B_bytearray rs;
-        int nbr = s->nbytes - sep->nbytes - nb;
+        int nbr = s->nbytes - sep->nbytes - n;
         NEW_UNFILLED_BYTEARRAY(rs,nbr);
-        memcpy(rs->str,s->str+nb+sep->nbytes,nbr);
+        memcpy(rs->str,s->str+n+sep->nbytes,nbr);
         return $NEWTUPLE(3,ls,sep,rs);
     }
 }
 
 
 B_bytearray B_bytearrayD_replace(B_bytearray s, B_bytearray old, B_bytearray new, B_int count) {
-    if (count==NULL)
-        count = toB_int(INT_MAX);
-    int c = fromB_int(B_bytearrayD_count(s,old,NULL,NULL));
-    int c0 = fromB_int(count) < c ? fromB_int(count) : c;
+    int countval = count == NULL ? INT_MAX : fromB_int(count);
+    int c = buffer_count_range(s->str, 0, s->nbytes, old->str, old->nbytes);
+    int c0 = countval < c ? countval : c;
     if (c0==0){
         return B_bytearrayD_copy(s);
     }
@@ -2368,23 +2430,26 @@ B_bytearray B_bytearrayD_replace(B_bytearray s, B_bytearray old, B_bytearray new
 
 
 B_int B_bytearrayD_rfind(B_bytearray s, B_bytearray sub, B_int start, B_int end) {
-    B_int st = start;
-    B_int en = end;
-    if (fix_start_end(s->nbytes,&st,&en) < 0) return toB_int(-1);
-    unsigned char *p = &s->str[fromB_int(st)];
-    unsigned char *q = &s->str[fromB_int(en)];
-    int n = rbmh(p,sub->str,q-p,sub->nbytes);
-    if (n<0) return toB_int(-1);
-    return toB_int(n+p-s->str);
+    int st;
+    int en;
+
+    if (normalize_start_end(s->nbytes, start, end, &st, &en) < 0)
+        return toB_int(-1);
+    return toB_int(buffer_rfind_range(s->str, st, en, sub->str, sub->nbytes));
 }
 
 
 B_int B_bytearrayD_rindex(B_bytearray s, B_bytearray sub, B_int start, B_int end) {
-    B_int n = B_bytearrayD_rfind(s,sub,start,end);
-    if (fromB_int(n)<0) {
+    int st;
+    int en;
+    int n = -1;
+
+    if (normalize_start_end(s->nbytes, start, end, &st, &en) >= 0)
+        n = buffer_rfind_range(s->str, st, en, sub->str, sub->nbytes);
+    if (n < 0) {
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("rindex for bytearray: substring not found")));
     };
-    return n;
+    return toB_int(n);
 }
 
 B_bytearray B_bytearrayD_rjust(B_bytearray s, B_int width, B_bytearray fill) {
@@ -2409,18 +2474,17 @@ B_bytearray B_bytearrayD_rjust(B_bytearray s, B_int width, B_bytearray fill) {
 }
 
 B_tuple B_bytearrayD_rpartition(B_bytearray s, B_bytearray sep) {
-    int n = fromB_int(B_bytearrayD_rfind(s,sep,NULL,NULL));
+    int n = buffer_rfind_range(s->str, 0, s->nbytes, sep->str, sep->nbytes);
     if (n<0) {
         return $NEWTUPLE(3,toB_bytearray(""),toB_bytearray(""),s);
     } else {
-        int nb = rbmh(s->str,sep->str,s->nbytes,sep->nbytes);
         B_bytearray ls;
-        NEW_UNFILLED_BYTEARRAY(ls,nb);
-        memcpy(ls->str,s->str,nb);
-        int nbr = s->nbytes - sep->nbytes - nb;
+        NEW_UNFILLED_BYTEARRAY(ls,n);
+        memcpy(ls->str,s->str,n);
+        int nbr = s->nbytes - sep->nbytes - n;
         B_bytearray rs;
         NEW_UNFILLED_BYTEARRAY(rs,nbr);
-        memcpy(rs->str,s->str+nb+sep->nbytes,nbr);
+        memcpy(rs->str,s->str+n+sep->nbytes,nbr);
         return  $NEWTUPLE(3,ls,sep,rs);
     }
 }
@@ -2450,7 +2514,7 @@ B_bytearray B_bytearrayD_rstrip(B_bytearray s, B_bytearray cs) {
 B_list B_bytearrayD_split(B_bytearray s, B_bytearray sep, B_int maxsplit) {
     B_list res = $NEW(B_list,NULL,NULL);
     B_SequenceD_list wit = B_SequenceD_listG_witness;
-    if (maxsplit == NULL || fromB_int(maxsplit) < 0) maxsplit = toB_int(INT_MAX); 
+    int maxspl = normalize_maxsplit(maxsplit);
     if (sep == NULL) {
         unsigned char *p = s->str;
         if (s->nbytes==0) {
@@ -2463,7 +2527,7 @@ B_list B_bytearrayD_split(B_bytearray s, B_bytearray sep, B_int maxsplit) {
                 if (!inword) {
                     inword = 1;
                     q = p;
-                    if (res->length == fromB_int(maxsplit))
+                    if (res->length == maxspl)
                         break; // we have now removed leading whitespace in remainder
                 }
             } else {
@@ -2501,16 +2565,16 @@ B_list B_bytearrayD_split(B_bytearray s, B_bytearray sep, B_int maxsplit) {
             wit->$class->append(wit,res,toB_bytearray(""));
             return res;
         }
-        B_bytearray ls, rs, ssep;
+        B_bytearray ls, rs, ssep = NULL;
         rs = s;
         // Note: This builds many intermediate rs strings...
-        while (rs->nbytes>0 && res->length < fromB_int(maxsplit)) {
+        while (rs->nbytes>0 && res->length < maxspl) {
             B_tuple t = B_bytearrayD_partition(rs,sep);
             ssep = (B_bytearray)t->components[1];
             rs =  (B_bytearray)t->components[2];
              wit->$class->append(wit,res,(B_bytearray)t->components[0]);
         }
-        if (ssep->nbytes>0)
+        if (ssep && ssep->nbytes>0)
             wit->$class->append(wit,res,rs);
         return res;
     }
@@ -2551,14 +2615,16 @@ B_list B_bytearrayD_splitlines(B_bytearray s, B_bool keepends) {
 }
 
 B_bool B_bytearrayD_startswith(B_bytearray s, B_bytearray sub, B_int start, B_int end) {
-    B_int st = start;
-    B_int en = end;
-    if (fix_start_end(s->nbytes,&st,&en) < 0) return B_False;
-    unsigned char *p = s->str + fromB_int(st);
+    int st;
+    int en;
+
+    if (normalize_start_end(s->nbytes, start, end, &st, &en) < 0)
+        return B_False;
+    unsigned char *p = s->str + st;
     if (sub->nbytes > 0 && p+sub->nbytes > s->str+s->nbytes) return B_False;
     unsigned char *q = sub->str;
     for (int i=0; i<sub->nbytes; i++) {
-        if (p >= s->str + fromB_int(en) || *p++ != *q++) {
+        if (p >= s->str + en || *p++ != *q++) {
             return B_False;
         }
     }
@@ -3074,20 +3140,12 @@ B_bytes B_bytesD_center(B_bytes s, B_int width, B_bytes fill) {
 }
 
 B_int B_bytesD_count(B_bytes s, B_bytes sub, B_int start, B_int end) {
-    B_int st = start;
-    B_int en = end;
-    if (fix_start_end(s->nbytes,&st,&en) < 0) return toB_int(0);
-    int stval = fromB_int(st);
-    unsigned char *p = &s->str[stval];
-    unsigned char *q = &p[fromB_int(en)-stval];
-    int res = 0;
-    int n = bmh(p,sub->str,q-p,sub->nbytes);
-    while (n>=0) {
-        res++;
-        p += n + (sub->nbytes>0 ? sub->nbytes : 1);
-        n = bmh(p,sub->str,q-p,sub->nbytes);
-    }
-    return toB_int(res);
+    int st;
+    int en;
+
+    if (normalize_start_end(s->nbytes, start, end, &st, &en) < 0)
+        return toB_int(0);
+    return toB_int(buffer_count_range(s->str, st, en, sub->str, sub->nbytes));
 }
 
 B_str B_bytesD_decode(B_bytes s) {
@@ -3095,10 +3153,14 @@ B_str B_bytesD_decode(B_bytes s) {
 }
 
 B_bool B_bytesD_endswith(B_bytes s, B_bytes sub, B_int start, B_int end) {
-    B_int st = start;
-    B_int en = end;
-    if (fix_start_end(s->nbytes,&st,&en) < 0) return B_False;
-    unsigned char *p = &s->str[fromB_int(en)-sub->nbytes];
+    int st;
+    int en;
+
+    if (normalize_start_end(s->nbytes, start, end, &st, &en) < 0)
+        return B_False;
+    if (en - st < sub->nbytes)
+        return B_False;
+    unsigned char *p = &s->str[en-sub->nbytes];
     unsigned char *q = sub->str;
     for (int i=0; i<sub->nbytes; i++) {
         if (*p == 0 || *p++ != *q++) {
@@ -3145,14 +3207,12 @@ B_bytes B_bytesD_expandtabs(B_bytes s, B_int tabsz){
 }
 
 B_int B_bytesD_find(B_bytes s, B_bytes sub, B_int start, B_int end) {
-    B_int st = start;
-    B_int en = end;
-    if (fix_start_end(s->nbytes,&st,&en) < 0) return toB_int(-1);
-    unsigned char *p = &s->str[fromB_int(st)];
-    unsigned char *q = &s->str[fromB_int(en)];
-    int n = bmh(p,sub->str,q-p,sub->nbytes);
-    if (n<0) return toB_int(-1);
-    return toB_int(n+p-s->str);
+    int st;
+    int en;
+
+    if (normalize_start_end(s->nbytes, start, end, &st, &en) < 0)
+        return toB_int(-1);
+    return toB_int(buffer_find_range(s->str, st, en, sub->str, sub->nbytes));
 }
 
 B_bytes B_bytesD_from_hex(B_str s) {
@@ -3225,11 +3285,16 @@ B_str B_bytesD_hex(B_bytes s) {
 }
 
 B_int B_bytesD_index(B_bytes s, B_bytes sub, B_int start, B_int end) {
-    B_int n = B_bytesD_find(s,sub,start,end);
-    if (fromB_int(n)<0) {
+    int st;
+    int en;
+    int n = -1;
+
+    if (normalize_start_end(s->nbytes, start, end, &st, &en) >= 0)
+        n = buffer_find_range(s->str, st, en, sub->str, sub->nbytes);
+    if (n < 0) {
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("index: substring not found")));
     }
-    return n;
+    return toB_int(n);
 }
 
 B_bool B_bytesD_isalnum(B_bytes s) {
@@ -3412,18 +3477,17 @@ B_bytes B_bytesD_lstrip(B_bytes s, B_bytes cs) {
 
 
 B_tuple B_bytesD_partition(B_bytes s, B_bytes sep) {
-    int n = fromB_int(B_bytesD_find(s,sep,NULL,NULL));
+    int n = buffer_find_range(s->str, 0, s->nbytes, sep->str, sep->nbytes);
     if (n<0) {
         return $NEWTUPLE(3,s,to$bytes(""),to$bytes(""));
     } else {
-        int nb = bmh(s->str,sep->str,s->nbytes,sep->nbytes);
         B_bytes ls;
-        NEW_UNFILLED_BYTES(ls,nb);
-        memcpy(ls->str,s->str,nb);
+        NEW_UNFILLED_BYTES(ls,n);
+        memcpy(ls->str,s->str,n);
         B_bytes rs;
-        int nbr = s->nbytes - sep->nbytes - nb;
+        int nbr = s->nbytes - sep->nbytes - n;
         NEW_UNFILLED_BYTES(rs,nbr);
-        memcpy(rs->str,s->str+nb+sep->nbytes,nbr);
+        memcpy(rs->str,s->str+n+sep->nbytes,nbr);
         return $NEWTUPLE(3,ls,sep,rs);
     }
 }
@@ -3455,10 +3519,9 @@ B_bytes B_bytesD_removesuffix(B_bytes s, B_bytes suffix) {
     return res;
 }
 B_bytes B_bytesD_replace(B_bytes s, B_bytes old, B_bytes new, B_int count) {
-    if (count==NULL)
-        count = toB_int(INT_MAX);
-    int c = fromB_int(B_bytesD_count(s,old,NULL,NULL));
-    int c0 = fromB_int(count) < c ? fromB_int(count) : c;
+    int countval = count == NULL ? INT_MAX : fromB_int(count);
+    int c = buffer_count_range(s->str, 0, s->nbytes, old->str, old->nbytes);
+    int c0 = countval < c ? countval : c;
     if (c0==0){
         return B_bytesD_copy(s);
     }
@@ -3489,23 +3552,26 @@ B_bytes B_bytesD_replace(B_bytes s, B_bytes old, B_bytes new, B_int count) {
 
 
 B_int B_bytesD_rfind(B_bytes s, B_bytes sub, B_int start, B_int end) {
-    B_int st = start;
-    B_int en = end;
-    if (fix_start_end(s->nbytes,&st,&en) < 0) return toB_int(-1);
-    unsigned char *p = &s->str[fromB_int(st)];
-    unsigned char *q = &s->str[fromB_int(en)];
-    int n = rbmh(p,sub->str,q-p,sub->nbytes);
-    if (n<0) return toB_int(-1);
-    return toB_int(n+p-s->str);
+    int st;
+    int en;
+
+    if (normalize_start_end(s->nbytes, start, end, &st, &en) < 0)
+        return toB_int(-1);
+    return toB_int(buffer_rfind_range(s->str, st, en, sub->str, sub->nbytes));
 }
 
 
 B_int B_bytesD_rindex(B_bytes s, B_bytes sub, B_int start, B_int end) {
-    B_int n = B_bytesD_rfind(s,sub,start,end);
-    if (fromB_int(n)<0) {
+    int st;
+    int en;
+    int n = -1;
+
+    if (normalize_start_end(s->nbytes, start, end, &st, &en) >= 0)
+        n = buffer_rfind_range(s->str, st, en, sub->str, sub->nbytes);
+    if (n < 0) {
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("rindex for bytes: substring not found")));
     };
-    return n;
+    return toB_int(n);
 }
 
 B_bytes B_bytesD_rjust(B_bytes s, B_int width, B_bytes fill) {
@@ -3530,18 +3596,17 @@ B_bytes B_bytesD_rjust(B_bytes s, B_int width, B_bytes fill) {
 }
 
 B_tuple B_bytesD_rpartition(B_bytes s, B_bytes sep) {
-    int n = fromB_int(B_bytesD_rfind(s,sep,NULL,NULL));
+    int n = buffer_rfind_range(s->str, 0, s->nbytes, sep->str, sep->nbytes);
     if (n<0) {
         return $NEWTUPLE(3,to$bytes(""),to$bytes(""),s);
     } else {
-        int nb = rbmh(s->str,sep->str,s->nbytes,sep->nbytes);
         B_bytes ls;
-        NEW_UNFILLED_BYTES(ls,nb);
-        memcpy(ls->str,s->str,nb);
-        int nbr = s->nbytes - sep->nbytes - nb;
+        NEW_UNFILLED_BYTES(ls,n);
+        memcpy(ls->str,s->str,n);
+        int nbr = s->nbytes - sep->nbytes - n;
         B_bytes rs;
         NEW_UNFILLED_BYTES(rs,nbr);
-        memcpy(rs->str,s->str+nb+sep->nbytes,nbr);
+        memcpy(rs->str,s->str+n+sep->nbytes,nbr);
         return  $NEWTUPLE(3,ls,sep,rs);
     }
 }
@@ -3571,7 +3636,7 @@ B_bytes B_bytesD_rstrip(B_bytes s, B_bytes cs) {
 B_list B_bytesD_split(B_bytes s, B_bytes sep, B_int maxsplit) {
     B_list res = $NEW(B_list,NULL,NULL);
     B_SequenceD_list wit = B_SequenceD_listG_witness;
-    if (maxsplit == NULL || fromB_int(maxsplit) < 0) maxsplit = toB_int(INT_MAX); 
+    int maxspl = normalize_maxsplit(maxsplit);
     if (sep == NULL) {
         unsigned char *p = s->str;
         if (s->nbytes==0) {
@@ -3584,7 +3649,7 @@ B_list B_bytesD_split(B_bytes s, B_bytes sep, B_int maxsplit) {
                 if (!inword) {
                     inword = 1;
                     q = p;
-                    if (res->length == fromB_int(maxsplit))
+                    if (res->length == maxspl)
                         break; // we have now removed leading whitespace in remainder
                 }
             } else {
@@ -3622,16 +3687,16 @@ B_list B_bytesD_split(B_bytes s, B_bytes sep, B_int maxsplit) {
             wit->$class->append(wit,res,null_bytes);
             return res;
         }
-        B_bytes ls, rs, ssep;
+        B_bytes ls, rs, ssep = NULL;
         rs = s;
         // Note: This builds many intermediate rs strings...
-        while (rs->nbytes>0 && res->length < fromB_int(maxsplit)) {
+        while (rs->nbytes>0 && res->length < maxspl) {
             B_tuple t = B_bytesD_partition(rs,sep);
             ssep = (B_bytes)t->components[1];
             rs =  (B_bytes)t->components[2];
             wit->$class->append(wit,res,(B_bytes)t->components[0]);
         }
-        if (ssep->nbytes>0)
+        if (ssep && ssep->nbytes>0)
             wit->$class->append(wit,res,rs);
         return res;
     }
@@ -3672,14 +3737,16 @@ B_list B_bytesD_splitlines(B_bytes s, B_bool keepends) {
 }
 
 B_bool B_bytesD_startswith(B_bytes s, B_bytes sub, B_int start, B_int end) {
-    B_int st = start;
-    B_int en = end;
-    if (fix_start_end(s->nbytes,&st,&en) < 0) return B_False;
-    unsigned char *p = s->str + fromB_int(st);
+    int st;
+    int en;
+
+    if (normalize_start_end(s->nbytes, start, end, &st, &en) < 0)
+        return B_False;
+    unsigned char *p = s->str + st;
     if (sub->nbytes > 0 && p+sub->nbytes > s->str+s->nbytes) return B_False;
     unsigned char *q = sub->str;
     for (int i=0; i<sub->nbytes; i++) {
-        if (p >= s->str + fromB_int(en) || *p++ != *q++) {
+        if (p >= s->str + en || *p++ != *q++) {
             return B_False;
         }
     }
