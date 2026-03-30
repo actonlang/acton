@@ -6,6 +6,19 @@ While compiled languages are often associated with long compilation times that s
 
 It is possible to influence the compilation process and the output in various ways.
 
+## Optimization modes
+
+Acton defaults to `Debug` builds. Debug builds compile fast and include
+debug symbols, which makes them the right default during development.
+
+For release builds, use `acton build --release` to better optimize the
+final executable. For standalone files, use `acton --release foo.act`.
+
+`--release` and `--release=safe` select the normal release mode.
+`--release=small` optimizes for a smaller binary size. `--release=fast`
+can result in a faster program, but it is generally discouraged because
+it disables safety checks and alters language semantics.
+
 ## Optimized for native CPU features
 
 The default target is somewhat conservative to ensure a reasonable amount of compatibility. On Linux, the default target is GNU Libc version 2.27 which makes it possible to run Acton programs on Ubuntu 18.04 and similar old operating systems. Similarly, a generic x86_64 CPU is assumed which means that newer extra CPU instruction sets are not used.
