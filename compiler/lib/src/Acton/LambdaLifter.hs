@@ -332,14 +332,14 @@ instance Lift Expr where
         closedType env e'               = do e' <- ll env e'
                                              p' <- ll env p
                                              return $ Call l (eDot e' attr_asyn_) p' KwdNil
-      | closedType env e                = do e' <- llSub env e
-                                             p' <- ll env p
-                                             let t@TFun{effect = fx}   = typeOf env e'
+      | closedType env e                = do let t@TFun{effect = fx}    = typeOf env e
                                                  attr | isCont t        = attr_call_
                                                       | fx == fxProc    = attr_call_
                                                       | fx == fxMut     = attr_eval_
                                                       | fx == fxPure    = attr_eval_
                                                       | fx == fxAction  = attr_asyn_
+                                             e' <- llSub env e
+                                             p' <- ll env p
                                              return $ Call l (eDot e' attr) p' KwdNil
       | otherwise                       = do e' <- llSub env e
                                              p' <- ll env p
