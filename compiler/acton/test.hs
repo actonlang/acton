@@ -26,7 +26,9 @@ import Test.Tasty.Golden (goldenVsString)
 import Test.Tasty.HUnit
 
 import qualified PkgCommands
+import qualified Acton.CommandLineParser as C
 import qualified Acton.Fingerprint as Fingerprint
+import qualified Options.Applicative as OA
 import qualified Paths_acton
 
 -- The default is to build and run each test program with the expectation that
@@ -426,6 +428,25 @@ parseFlagTests =
   , flagGolden "cgen flag prints c" "test/parse/simple.cgen.golden" ["--quiet", "--dbg-no-lines", "--cgen"]
   , flagGolden "all flags combined" "test/parse/simple.all.golden"
         ["--quiet", "--parse", "--kinds", "--types", "--sigs", "--norm", "--deact", "--cps", "--llift", "--box", "--dbg-no-lines", "--hgen"]
+  , testCase "optimize parser accepts release aliases" $ do
+      assertParsedBuildOptimize ["build", "--release"] C.ReleaseSafe
+      assertParsedBuildOptimize ["build", "--release=safe"] C.ReleaseSafe
+      assertParsedBuildOptimize ["build", "--release=SmAlL"] C.ReleaseSmall
+      assertParsedBuildOptimize ["build", "--release=FAST"] C.ReleaseFast
+      assertParsedBuildOptimize ["build", "--optimize=release"] C.ReleaseSafe
+      assertParsedBuildOptimize ["build", "--optimize=ReLeAsE"] C.ReleaseSafe
+      assertParsedBuildOptimize ["build", "--optimize=dEbUg"] C.Debug
+      assertParsedBuildOptimize ["build", "--optimize=reLeAsEsMaLl"] C.ReleaseSmall
+      assertParsedBuildOptimize ["build", "--optimize=RELEASEFAST"] C.ReleaseFast
+  , testCase "explicit --optimize overrides --release alias" $ do
+      assertParsedBuildOptimize ["build", "--release", "--optimize=releasesmall"] C.ReleaseSmall
+      assertParsedBuildOptimize ["build", "--release=fast", "--optimize=debug"] C.Debug
+      assertParsedBuildOptimize ["build", "--optimize=debug", "--release"] C.Debug
+  , testCase "build parser help includes --release alias" $ do
+      helpText <- renderParserHelp ["build", "--help"]
+      assertBool "help text should include --release" ("--release" `isInfixOf` helpText)
+      assertBool "help text should mention release variants" ("=small or =fast" `isInfixOf` helpText)
+      assertBool "help text should mention default release mode" ("same as --release=safe" `isInfixOf` helpText)
   , testCase "acton test --help includes --no-cache and --tag" $ do
       acton <- canonicalizePath "../../dist/bin/acton"
       (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc acton ["test", "--help"]) ""
@@ -492,6 +513,34 @@ parseFlagTests =
           (not ("Using cached results for 1 tests" `isInfixOf` out3))
   ]
   where
+    parserInfo = OA.info (C.cmdLineParser OA.<**> OA.helper) C.descr
+
+    parseArgs args =
+      case OA.execParserPure OA.defaultPrefs parserInfo args of
+        OA.Success result -> return result
+        OA.Failure failure -> do
+          let (msg, _) = OA.renderFailure failure "acton"
+          assertFailure ("parser failed for " ++ unwords args ++ ":\n" ++ msg)
+        OA.CompletionInvoked _ ->
+          assertFailure ("parser requested shell completion for " ++ unwords args)
+
+    assertParsedBuildOptimize args expected = do
+      parsed <- parseArgs args
+      case parsed of
+        C.CmdOpt _ (C.Build buildOpts) ->
+          assertEqual ("unexpected optimize mode for " ++ unwords args)
+            expected
+            (C.optimize (C.buildCompile buildOpts))
+        _ ->
+          assertFailure ("expected build command for " ++ unwords args)
+
+    renderParserHelp args =
+      case OA.execParserPure OA.defaultPrefs parserInfo args of
+        OA.Failure failure -> pure (fst (OA.renderFailure failure "acton"))
+        OA.Success _ -> assertFailure ("expected parser help for " ++ unwords args)
+        OA.CompletionInvoked _ ->
+          assertFailure ("parser requested shell completion for " ++ unwords args)
+
     flagGolden label golden flags =
       goldenVsString label golden $ do
         acton <- canonicalizePath "../../dist/bin/acton"

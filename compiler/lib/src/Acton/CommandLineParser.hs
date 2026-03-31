@@ -2,6 +2,7 @@
 module Acton.CommandLineParser where
 
 import Options.Applicative
+import Data.Char (toLower)
 import Data.Maybe (fromMaybe, isJust)
 
 #if defined(darwin_HOST_OS) && defined(aarch64_HOST_ARCH)
@@ -224,12 +225,21 @@ globalOptions = GlobalOptions
 
 optimizeReader :: ReadM OptimizeMode
 optimizeReader = eitherReader $ \s ->
-    case s of
-        "Debug"        -> Right Debug
-        "ReleaseSafe"  -> Right ReleaseSafe
-        "ReleaseSmall" -> Right ReleaseSmall
-        "ReleaseFast"  -> Right ReleaseFast
-        _              -> Left $ "Invalid optimize option: " ++ s ++ " (expected: Debug, ReleaseSafe, ReleaseSmall, ReleaseFast)"
+    case map toLower s of
+        "debug"        -> Right Debug
+        "release"      -> Right ReleaseSafe
+        "releasesafe"  -> Right ReleaseSafe
+        "releasesmall" -> Right ReleaseSmall
+        "releasefast"  -> Right ReleaseFast
+        _              -> Left $ "Invalid optimize option: " ++ s ++ " (expected: Debug, Release, ReleaseSafe, ReleaseSmall, ReleaseFast)"
+
+releaseModeReader :: ReadM OptimizeMode
+releaseModeReader = eitherReader $ \s ->
+    case map toLower s of
+        "safe"  -> Right ReleaseSafe
+        "small" -> Right ReleaseSmall
+        "fast"  -> Right ReleaseFast
+        _       -> Left $ "Invalid release option: " ++ s ++ " (expected: safe, small, fast)"
 
 
 {-
@@ -359,12 +369,28 @@ docOptions = DocOptions
         )
 
 optimizeOption :: Parser OptimizeMode
-optimizeOption = option optimizeReader
-    (long "optimize"
-     <> metavar "MODE"
-     <> value Debug
-     <> help "Optimization mode (Debug, ReleaseSafe, ReleaseSmall, ReleaseFast)"
-    )
+optimizeOption = resolveOptimizeOption
+    <$> optional releaseOption
+    <*> optional
+        (option optimizeReader
+            (long "optimize"
+             <> metavar "MODE"
+             <> help "Optimization mode (case-insensitive: Debug, Release/ReleaseSafe, ReleaseSmall, ReleaseFast)"
+            ))
+  where
+    releaseOption =
+        flag' ReleaseSafe
+            (long "release"
+             <> help "Release build mode; same as --release=safe and also accepts =small or =fast"
+            )
+        <|> option releaseModeReader
+            (long "release"
+             <> internal
+            )
+
+    resolveOptimizeOption _ (Just mode) = mode
+    resolveOptimizeOption (Just mode) _ = mode
+    resolveOptimizeOption Nothing Nothing = Debug
 
 data TestModeTag = ModeList | ModePerf | ModeStress deriving Show
 
