@@ -1927,8 +1927,8 @@ instance Infer Expr where
                                                                   "\nHint: you may need to test if " ++ Pretty.print e ++ " is not None")
                                              return  (con : cs, t0, eCall (eVar w) [e'])
 
-    infer env (Opt l e)                = do (cs, t, e') <- infer env e
-                                            return (cs, tOpt t, Opt l e')
+--    infer env (Opt l e)                = do (cs, t, e') <- infer env e
+--                                            return (cs, tOpt t, Opt l e')
                                             
                                          -- e is an atomic expression (atom_expr in the parser) which contains exactly one ? in its sequence of trailers
     infer env (OptChains l e)          = do x <- newTmp                                                                                      -- Example: a s1 s2 ? t1 t2
@@ -1938,7 +1938,9 @@ instance Infer Expr where
                                             let env1 = define [(x,NVar te)] env
                                             (cs2,t,e2') <- infer env1 e2
                                             y <- newTmp
-                                            return (cs1++cs2, tOpt t, eLet [sAssign (pVar y (tOpt te)) e1']
+                                            w <- newWitness
+                                            t1 <- newUnivar env
+                                            return (Sub (noinfo 333) env w t1 (tOpt t) : cs1++cs2, t1, eLet [sAssign (pVar y (tOpt te)) e1']
                                                                            (eCond (termsubst [(x,eCAST (tOpt te) te (eVar y))] e2')
                                                                                   (eCall (tApp (eQVar primISNOTNONE) [te]) [eVar y])
                                                                                   eNone))

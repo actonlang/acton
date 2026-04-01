@@ -8,8 +8,8 @@ class Alpha(value):
         self.lst = lst
 
 actor main(env):
-     a = Alpha([Point(n,5) for n in range(10)])
-     b = a ?. lst ?[1::2] ?[4] ?. x
+     a: ?Alpha = Alpha([Point(n,5) for n in range(10)])
+     b = a ?. lst ?[1::2] [4] . x
 #     p: ?Point = Point(3,5)
      if b != 9:
          print("Wrong value")

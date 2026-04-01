@@ -10,10 +10,10 @@ class Alpha():
     def __init__(self, b: ?Beta):
         self.b = b
 
-def check_equal(env,a,b):
+def check_equal[A(Eq)](env: Env, a: ?A,b: ?A)->None:
     if a != b:
-        print(a,"is not equal to ",b)
-        env.exit(1)
+       print(a,"is not equal to",b)
+       env.exit(1)
 
 actor main(env):
 
