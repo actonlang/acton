@@ -1706,17 +1706,19 @@ atom_expr = do
               async <- optional $ withLoc $ rword "async" *> return (S.Async NoLoc)
               a <- atom
               ts <- many trailer
-              let e = foldl app a ts
-                  e' = foldapp async a ts
-              return $ maybe e' (app e') await
+              let (hasOpt,e) = foldapp async a False ts
+                  e' = maybe e (app e) await
+              return $ if hasOpt then S.OptChains (loc e') e' else e' 
               <?> "atomic expression"
   where app a (l,f) = (f a){S.eloc = S.eloc a `upto` l}
 
-        foldapp async e [] = maybe e (app e) async
-        foldapp async e ((l,f):ts) = case f e of
-                                        S.Call{} -> foldl app (maybe e (app e) async) ((l,f):ts)
-                                        e' -> foldapp async e' ts
-
+        foldapp async e hasOpt [] = (hasOpt,maybe e (app e) async)
+        foldapp async e hasOpt ((l,f):ts)
+                                  = case f e of
+                                        S.Call{} -> foldapp async (maybe e (app e) async) hasOpt ((l,f):ts)
+                                        e'@S.Opt{} -> foldapp async e' True ts
+                                        e' -> foldapp async e' hasOpt ts
+        
         atom :: Parser S.Expr
         atom =  addLoc (try strings
                <|>
@@ -1775,28 +1777,16 @@ atom_expr = do
         trailer :: Parser (SrcLoc,S.Expr -> S.Expr)
         trailer = withLoc (
                       (do
-                         symbol "?."
-                         nm <- name
-                         mba <- optional (parens funargs)
-                         return (\a -> S.OptDot (loc a `upto` loc mba) a nm mba))
+                         (l,q) <- withLoc(symbol "?")
+                         return (\a -> S.Opt (loc a `upto` l) a))
                      <|>
-                     -- (do
-                     --    symbol"?("
-                     --    (ps,ks) <- funargs
-                     --    symbol ")"
-                     --    return (\a -> S.OptCall (loc a `upto` loc ks) a ps ks))
-                     -- <|>
-                      (do
-                         symbol "?["
-                         optSliceOrIndex <* symbol "]")
-                     <|>    
                       (do
                         f <- brackets sliceOrIndex
                         return f)
                     <|>
                       (do
                          (ps,ks) <- parens funargs 
-                         return (\a -> S.Call NoLoc a ps ks))
+                         return (\a -> S.Call (loc a `upto` loc ks) a ps ks))
                      <|>
                       (do
                          dot
@@ -1816,21 +1806,20 @@ atom_expr = do
                         return (\a -> S.Dot (loc a `upto` l) a (S.Name l (head ss)))
 
                  -- Parse slice or index: try slice first since it can start with expr
-                 sliceOrIndex = try (sliceParser S.Slice) <|> indexParser S.Index
+                 sliceOrIndex = try sliceParser <|> indexParser
 
-                 optSliceOrIndex = try (sliceParser S.OptSlice) <|> indexParser S.OptIndex
                  -- Parse slice notation: [start]:[stop][:[step]]
-                 sliceParser sl = do
+                 sliceParser  = do
                      start <- optional expr
                      colon
                      stop <- optional expr
                      step <- optional (colon *> optional expr)
-                     return (\a -> sl NoLoc a (S.Sliz NoLoc start stop (join step)))
+                     return (\a -> S.Slice NoLoc a (S.Sliz NoLoc start stop (join step)))
 
                  -- Parse index: single expr or comma-separated exprs (tuple)
-                 indexParser ix = do
+                 indexParser  = do
                      es <- expr `sepBy1` comma
-                     return (\a -> ix NoLoc a (if length es == 1 then head es else S.eTuple es))
+                     return (\a -> S.Index NoLoc a (if length es == 1 then head es else S.eTuple es))
 
 
 comp_iter, comp_for, comp_if :: Parser S.Comp
