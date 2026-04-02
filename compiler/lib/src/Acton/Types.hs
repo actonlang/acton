@@ -1922,11 +1922,13 @@ instance Infer Expr where
                                              t0 <- newUnivar env
                                              let con = case t of
                                                           TOpt _ _ -> Sel info env w t n t0
-                                                          _ -> Sel (locinfo' l 86 e) env w t n t0
+                                                          _ ->  Sel (locinfo' l 86 e) env w t n t0
                                                  info = Simple l (Pretty.print t ++ " does not have an attribute "++ Pretty.print n ++
                                                                   "\nHint: you may need to test if " ++ Pretty.print e ++ " is not None")
                                              return  (con : cs, t0, eCall (eVar w) [e'])
 
+                                         -- The parser inserts Opt nodes only within an OptChains node (which each contains only one Opt node).
+                                         -- The Opt nodes are handled and eliminated by infer on an OptChains node.
 --    infer env (Opt l e)                = do (cs, t, e') <- infer env e
 --                                            return (cs, tOpt t, Opt l e')
                                             
@@ -1938,9 +1940,14 @@ instance Infer Expr where
                                             let env1 = define [(x,NVar te)] env
                                             (cs2,t,e2') <- infer env1 e2
                                             y <- newTmp
+                                            -- Use a fresh result type below `?t` instead of fixing the
+                                            -- result to `?t` immediately. This avoids forcing
+                                            -- optional chain results through `??u ~ ?u` too early.
                                             w <- newWitness
+                                            w1 <- newWitness
                                             t1 <- newUnivar env
-                                            return (Sub (noinfo 333) env w t1 (tOpt t) : cs1++cs2, t1, eLet [sAssign (pVar y (tOpt te)) e1']
+                                            return (Sub (noinfo 444) env w tNone t1 : Sub (noinfo 555) env w1 t t1 : cs1++cs2,
+                                                     t1, eLet [sAssign (pVar y (tOpt te)) e1']
                                                                            (eCond (termsubst [(x,eCAST (tOpt te) te (eVar y))] e2')
                                                                                   (eCall (tApp (eQVar primISNOTNONE) [te]) [eVar y])
                                                                                   eNone))
