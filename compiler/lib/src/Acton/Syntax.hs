@@ -93,7 +93,7 @@ data Expr       = Var           { eloc::SrcLoc, var::QName }
                 | Rest          { eloc::SrcLoc, exp1::Expr, attr::Name }
                 | DotI          { eloc::SrcLoc, exp1::Expr, ival::Integer }
                 | RestI         { eloc::SrcLoc, exp1::Expr, ival::Integer }
-                | OptDot        { eloc::SrcLoc, exp1::Expr, attr::Name }
+                | OptDot        { eloc::SrcLoc, exp1::Expr, attr::Name, args::Maybe (PosArg, KwdArg)}
                 | OptCall       { eloc::SrcLoc, fun::Expr, pargs::PosArg, kargs::KwdArg }
                 | OptIndex      { eloc::SrcLoc, exp1::Expr, index::Expr }
                 | OptSlice      { eloc::SrcLoc, exp1::Expr, slice::Sliz }
@@ -264,7 +264,6 @@ leftpath tcs    = [ (map Left ns, tc) | (ns,tc) <- nss `zip` tcs ]
 
 mkBody []       = [Pass NoLoc]
 mkBody b        = b
-
 
 sDef n p t b fx = sDecl [Def NoLoc n [] p KwdNIL (Just t) b NoDec fx Nothing]
 sReturn e       = Return NoLoc (Just e)

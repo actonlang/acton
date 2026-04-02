@@ -1,16 +1,12 @@
-class Point(value):
-    def __init__(self, x: int, y: int):
-        self.x = x
-        self.y = y
-
-class Alpha(value):
-    def __init__(self, lst: ?list[Point] = None):
-        self.lst = lst
-
 actor main(env):
-     a = Alpha([Point(n,5) for n in range(10)])
-     b = a ?. lst ?[1::2] ?[4] ?. x
-#     p: ?Point = Point(3,5)
-     print(b)
-     env.exit(0)
-     
+   d = {"a":[1,3,5,8], "b":list(range(30))}
+   a = d ?. get("b") ?. __reversed__() ?. __next__()
+   if a != 29:
+       print("a is wrong")
+       env.exit(1)
+   b =  d ?. get("b") ?[1::3] ?[2]
+   if b != 7:
+       print("b is wrong")
+       env.exit(1)
+       
+   env.exit(0)

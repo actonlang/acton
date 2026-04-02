@@ -1,28 +1,18 @@
-class Residence():
-    def __init__(self, numberOfRooms = 1,name: ?str = None):
-        self.numberOfRooms = numberOfRooms
-        self.name = name
+class Point(value):
+    def __init__(self, x: int, y: int):
+        self.x = x
+        self.y = y
 
-class Person():
-    def __init__(self, residence: ?Residence):
-        self.residence = residence
+class Alpha(value):
+    def __init__(self, lst: ?list[Point] = None):
+        self.lst = lst
 
 actor main(env):
-    print(Person(Residence(3))?.residence?.numberOfRooms)
-    print(Person(Residence(3))?.residence?.name)
-    print(Person(Residence(3,"Valhalla"))?.residence?.name)
-    print(None?.residence)
-    john = None
-    print(john?.residence?.numberOfRooms)
-    print(john?.residence?.name)
-    john = Person(None)
-    print(john?.residence?.numberOfRooms)
-    print(john?.residence?.name)
-    mary = Person(Residence(3))
-    print(mary?.residence)
-    print(mary?.residence?.numberOfRooms)
-    print(mary?.residence?.name)
-    mary = Person(Residence(5,"Eden"))
-    print(mary?.residence?.numberOfRooms)
-    print(mary?.residence?.name)
-    env.exit(0)
+     a = Alpha([Point(n,5) for n in range(10)])
+     b = a ?. lst ?[1::2] ?[4] ?. x
+#     p: ?Point = Point(3,5)
+     if b != 9:
+         print("Wrong value")
+         env.exit(0)
+     env.exit(0)
+     

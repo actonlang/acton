@@ -260,6 +260,9 @@ instance KCheck a => KCheck [a] where
 instance KCheck a => KCheck (Maybe a) where
     kchk env                        = traverse (kchk env)
 
+instance (KCheck a, KCheck b) => KCheck (a,b) where
+    kchk env (a, b)                 = (,) <$> kchk env a <*> kchk env b
+
 kchkSuite env []                    = return []
 kchkSuite env (Decl l ds : ss)      = do ds <- instKWild (map (autoQuantD env) ds)
                                          let env1 = extcons (concatMap kinds ds) env
@@ -372,7 +375,7 @@ instance KCheck Expr where
     kchk env (Rest l e n)           = Rest l <$> kchk env e <*> return n
     kchk env (DotI l e i)           = DotI l <$> kchk env e <*> return i
     kchk env (RestI l e i)          = RestI l <$> kchk env e <*> return i
-    kchk env (OptDot l e n)         = OptDot l <$> kchk env e <*> return n
+    kchk env (OptDot l e n mba)     = OptDot l <$> kchk env e <*> return n <*> kchk env mba
     kchk env (OptCall l e ps ks)    = OptCall l <$> kchk env e <*> kchk env ps <*> kchk env ks
     kchk env (OptIndex l e is)      = OptIndex l <$> kchk env e <*> kchk env is
     kchk env (OptSlice l e sl)      = OptSlice l <$> kchk env e <*> kchk env sl
@@ -595,6 +598,10 @@ instance KSubst a => KSubst [a] where
 instance KSubst a => KSubst (Maybe a) where
     ksubst g                        = maybe (return Nothing) (\x -> Just <$> ksubst g x)
 
+
+instance (KSubst a, KSubst b) => KSubst (a,b) where
+    ksubst g (a, b)                = (,) <$> ksubst g a <*> ksubst g b
+    
 instance KSubst Kind where
     ksubst g KWild                  = return KWild
     ksubst g (KUni i)               = do s <- usubstitution
@@ -690,7 +697,7 @@ instance KSubst Expr where
     ksubst g (CompOp l e ops)       = CompOp l <$> ksubst g e <*> ksubst g ops
     ksubst g (UnOp l op e)          = UnOp l op <$> ksubst g e
     ksubst g (Dot l e n)            = Dot l <$> ksubst g e <*> return n
-    ksubst g (OptDot l e n)         = OptDot l <$> ksubst g e <*> return n
+    ksubst g (OptDot l e n mba)     = OptDot l <$> ksubst g e <*> return n <*> ksubst g mba
     ksubst g (Rest l e n)           = Rest l <$> ksubst g e <*> return n
     ksubst g (DotI l e i)           = DotI l <$> ksubst g e <*> return i
     ksubst g (RestI l e i)          = RestI l <$> ksubst g e <*> return i
