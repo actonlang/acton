@@ -1775,6 +1775,11 @@ atom_expr = do
         trailer :: Parser (SrcLoc,S.Expr -> S.Expr)
         trailer = withLoc (
                       (do
+                         symbol "?."
+                         nm <- name
+                         return (\a -> S.OptDot (loc a `upto` loc nm) a nm))
+                     <|>
+                      (do
                         f <- brackets sliceOrIndex
                         return f)
                     <|>

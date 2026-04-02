@@ -369,6 +369,7 @@ instance KCheck Expr where
     kchk env (Dot l e n)
       | Just m <- isModule env e    = return $ Var l (QName m n)
       | otherwise                   = Dot l <$> kchk env e <*> return n
+    kchk env (OptDot l e n)         = OptDot l <$> kchk env e <*> return n
     kchk env (Rest l e n)           = Rest l <$> kchk env e <*> return n
     kchk env (DotI l e i)           = DotI l <$> kchk env e <*> return i
     kchk env (RestI l e i)          = RestI l <$> kchk env e <*> return i
@@ -686,6 +687,7 @@ instance KSubst Expr where
     ksubst g (CompOp l e ops)       = CompOp l <$> ksubst g e <*> ksubst g ops
     ksubst g (UnOp l op e)          = UnOp l op <$> ksubst g e
     ksubst g (Dot l e n)            = Dot l <$> ksubst g e <*> return n
+    ksubst g (OptDot l e n)         = OptDot l <$> ksubst g e <*> return n
     ksubst g (Rest l e n)           = Rest l <$> ksubst g e <*> return n
     ksubst g (DotI l e i)           = DotI l <$> ksubst g e <*> return i
     ksubst g (RestI l e i)           = RestI l <$> ksubst g e <*> return i
