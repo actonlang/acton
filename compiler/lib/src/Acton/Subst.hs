@@ -123,6 +123,7 @@ instance VFree WithItem where
 instance VFree Expr where
     vfree (Call l e p k)            = vfree e ++ vfree p ++ vfree k
     vfree (TApp l e ts)             = vfree e ++ vfree ts
+    vfree (Let l ss e)              = vfree ss ++ vfree e
     vfree (Async l e)               = vfree e
     vfree (Await l e)               = vfree e
     vfree (Index l e ix)            = vfree e ++ vfree ix
@@ -218,7 +219,9 @@ instance VSubst Type where
     vsubst s (TCon l c)             = TCon l (vsubst s c)
     vsubst s (TFun l fx p k t)      = TFun l (vsubst s fx) (vsubst s p) (vsubst s k) (vsubst s t)
     vsubst s (TTuple l p k)         = TTuple l (vsubst s p) (vsubst s k)
-    vsubst s (TOpt l t)             = TOpt l (vsubst s t)
+    vsubst s (TOpt l t)             = case vsubst s t of
+                                         t'@TOpt{} -> t'
+                                         t' -> TOpt l t'
     vsubst s (TRow l k n t r)       = TRow l k n (vsubst s t) (vsubst s r)
     vsubst s (TStar l k r)          = TStar l k (vsubst s r)
     vsubst s (TNone l)              = TNone l
@@ -294,6 +297,7 @@ instance VSubst Stmt where
 instance VSubst Expr where
     vsubst s (Call l e p k)         = Call l (vsubst s e) (vsubst s p) (vsubst s k)
     vsubst s (TApp l e ts)          = TApp l (vsubst s e) (vsubst s ts)
+    vsubst s (Let l ss e)           = Let l (vsubst s ss) (vsubst s e)
     vsubst s (Async l e)            = Async l (vsubst s e)
     vsubst s (Await l e)            = Await l (vsubst s e)
     vsubst s (Index l e ix)         = Index l (vsubst s e) (vsubst s ix)
@@ -459,6 +463,7 @@ instance UFree Stmt where
 instance UFree Expr where
     ufree (Call l e p k)            = ufree e ++ ufree p ++ ufree k
     ufree (TApp l e ts)             = ufree e ++ ufree ts
+    ufree (Let l ss e)              = ufree ss ++ ufree e
     ufree (Async l e)               = ufree e
     ufree (Await l e)               = ufree e
     ufree (Index l e ix)            = ufree e ++ ufree ix

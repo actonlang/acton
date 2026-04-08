@@ -62,6 +62,9 @@ instance HasLoc a => HasLoc [a] where
 instance HasLoc a => HasLoc (Maybe a) where
     loc                         = maybe NoLoc loc
 
+instance (HasLoc a, HasLoc b) => HasLoc (a,b) where
+    loc (a,b)                   = loc a `upto` loc b
+
 xs \\ ys                        = [ x | x <- xs, x `notElem` ys ]       -- remove *all* occurrences of xs elements from ys
 
 duplicates []                   = []

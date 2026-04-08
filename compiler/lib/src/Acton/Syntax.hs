@@ -78,6 +78,7 @@ data Expr       = Var           { eloc::SrcLoc, var::QName }
                 | Strings       { eloc::SrcLoc, sval::[String] }
                 | BStrings      { eloc::SrcLoc, sval::[String] }
                 | Call          { eloc::SrcLoc, fun::Expr, pargs::PosArg, kargs::KwdArg }
+                | Let           { eloc::SrcLoc, suit::Suite, exp1::Expr }
                 | TApp          { eloc::SrcLoc, fun::Expr, targs::[Type] }
                 | Async         { eloc::SrcLoc, exp1::Expr }
                 | Await         { eloc::SrcLoc, exp1::Expr }
@@ -92,6 +93,8 @@ data Expr       = Var           { eloc::SrcLoc, var::QName }
                 | Rest          { eloc::SrcLoc, exp1::Expr, attr::Name }
                 | DotI          { eloc::SrcLoc, exp1::Expr, ival::Integer }
                 | RestI         { eloc::SrcLoc, exp1::Expr, ival::Integer }
+                | Opt           { eloc::SrcLoc, exp1::Expr }
+                | OptChain      { eloc::SrcLoc, exp1::Expr }
                 | Lambda        { eloc::SrcLoc, ppar::PosPar, kpar::KwdPar, exp1::Expr, efx::TFX }
                 | Yield         { eloc::SrcLoc, yexp1::Maybe Expr }
                 | YieldFrom     { eloc::SrcLoc, yfrom::Expr }
@@ -260,7 +263,6 @@ leftpath tcs    = [ (map Left ns, tc) | (ns,tc) <- nss `zip` tcs ]
 mkBody []       = [Pass NoLoc]
 mkBody b        = b
 
-
 sDef n p t b fx = sDecl [Def NoLoc n [] p KwdNIL (Just t) b NoDec fx Nothing]
 sReturn e       = Return NoLoc (Just e)
 sAssign p e     = Assign NoLoc [p] e
@@ -298,6 +300,7 @@ eBool b         = Bool NoLoc b
 eBinOp e o e'   = BinOp NoLoc e o e'
 eLambda nts e   = Lambda NoLoc (pospar nts) KwdNIL e fxPure
 eLambda' nts e  = Lambda NoLoc (pospar nts) KwdNIL e fxProc
+eLet ss e       = Let NoLoc ss e
 eAsync e        = Async NoLoc e
 eAwait e        = Await NoLoc e
 eNotImpl        = NotImplemented NoLoc
@@ -641,6 +644,7 @@ instance Eq Expr where
     x@BStrings{}        ==  y@BStrings{}        = sval x == sval y
     x@Call{}            ==  y@Call{}            = fun x == fun y && pargs x == pargs y && kargs x == kargs y
     x@TApp{}            ==  y@TApp{}            = fun x == fun y && targs x == targs y
+    x@Let{}             ==  y@Let{}             = suit x == suit y && exp1 x == exp1 y
     x@Async{}           ==  y@Async{}           = exp1 x == exp1 y
     x@Await{}           ==  y@Await{}           = exp1 x == exp1 y
     x@Index{}           ==  y@Index{}           = exp1 x == exp1 y && index x == index y
@@ -654,6 +658,8 @@ instance Eq Expr where
     x@Rest{}            ==  y@Rest{}            = exp1 x == exp1 y && attr x == attr y
     x@DotI{}            ==  y@DotI{}            = exp1 x == exp1 y && ival x == ival y
     x@RestI{}           ==  y@RestI{}           = exp1 x == exp1 y && ival x == ival y
+    x@Opt{}             ==  y@Opt{}             = exp1 x == exp1 y
+    x@OptChain{}        ==  y@OptChain{}        = exp1 x == exp1 y
     x@Lambda{}          ==  y@Lambda{}          = ppar x == ppar y && kpar x == kpar y && exp1 x == exp1 y && efx x == efx y
     x@Yield{}           ==  y@Yield{}           = yexp1 x == yexp1 y
     x@YieldFrom{}       ==  y@YieldFrom{}       = yfrom x == yfrom y

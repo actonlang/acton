@@ -30,7 +30,7 @@ import Acton.Env
 
 
 check                               :: Env0 -> Module -> IO Module
-check env0 (Module m imps ss)       = return (Module m imps ss1)
+check env0 (Module m imps ss)       = do return (Module m imps ss1)
   where env                         = kindEnv env0
         ss1                         = runKindM (kchkTop env ss)
 
@@ -260,6 +260,9 @@ instance KCheck a => KCheck [a] where
 instance KCheck a => KCheck (Maybe a) where
     kchk env                        = traverse (kchk env)
 
+instance (KCheck a, KCheck b) => KCheck (a,b) where
+    kchk env (a, b)                 = (,) <$> kchk env a <*> kchk env b
+
 kchkSuite env []                    = return []
 kchkSuite env (Decl l ds : ss)      = do ds <- instKWild (map (autoQuantD env) ds)
                                          let env1 = extcons (concatMap kinds ds) env
@@ -356,6 +359,7 @@ instance KCheck Expr where
     kchk env (BStrings l ss)        = return $ BStrings l ss
     kchk env (Call l e ps ks)       = Call l <$> kchk env e <*> kchk env ps <*> kchk env ks
     kchk env (TApp l e ts)          = internal l "Unexpected TApp in kchk"
+    kchk env (Let l ss e)           = Let l <$> kchk env ss <*> kchk env e
     kchk env (Async l e)            = Async l <$> kchk env e
     kchk env (Await l e)            = Await l <$> kchk env e
     kchk env (Index l e is)         = Index l <$> kchk env e <*> kchk env is
@@ -371,6 +375,8 @@ instance KCheck Expr where
     kchk env (Rest l e n)           = Rest l <$> kchk env e <*> return n
     kchk env (DotI l e i)           = DotI l <$> kchk env e <*> return i
     kchk env (RestI l e i)          = RestI l <$> kchk env e <*> return i
+    kchk env (Opt l e)              = Opt l <$> kchk env e
+    kchk env (OptChain l e)         = OptChain l <$> kchk env e
     kchk env (Lambda l p k e x)     = Lambda l <$> (kchk env =<< convTWild env p) <*> (kchk env =<< convTWild env k) <*>
                                                    kchk env e <*> (kfx env =<< convTWild env x)
     kchk env (Yield l e)            = Yield l <$> kchk env e
@@ -590,6 +596,10 @@ instance KSubst a => KSubst [a] where
 instance KSubst a => KSubst (Maybe a) where
     ksubst g                        = maybe (return Nothing) (\x -> Just <$> ksubst g x)
 
+
+instance (KSubst a, KSubst b) => KSubst (a,b) where
+    ksubst g (a, b)                = (,) <$> ksubst g a <*> ksubst g b
+    
 instance KSubst Kind where
     ksubst g KWild                  = return KWild
     ksubst g (KUni i)               = do s <- usubstitution
@@ -674,6 +684,7 @@ instance KSubst Expr where
     ksubst g (BStrings l ss)        = return $ BStrings l ss
     ksubst g (Call l e ps ks)       = Call l <$> ksubst g e <*> ksubst g ps <*> ksubst g ks
     ksubst g (TApp l e ts)          = TApp l <$> ksubst g e <*> ksubst g ts
+    ksubst g (Let l ss e)           = Let l <$> ksubst g ss <*> ksubst g e
     ksubst g (Async l e)            = Async l <$> ksubst g e
     ksubst g (Await l e)            = Await l <$> ksubst g e
     ksubst g (Index l e is)         = Index l <$> ksubst g e <*> ksubst g is
@@ -686,7 +697,9 @@ instance KSubst Expr where
     ksubst g (Dot l e n)            = Dot l <$> ksubst g e <*> return n
     ksubst g (Rest l e n)           = Rest l <$> ksubst g e <*> return n
     ksubst g (DotI l e i)           = DotI l <$> ksubst g e <*> return i
-    ksubst g (RestI l e i)           = RestI l <$> ksubst g e <*> return i
+    ksubst g (RestI l e i)          = RestI l <$> ksubst g e <*> return i
+    ksubst g (Opt l e)              = Opt l <$> ksubst g e
+    ksubst g (OptChain l e)         = OptChain l <$> ksubst g e
     ksubst g (Lambda l ps ks e fx)  = Lambda l <$> ksubst g ps <*> ksubst g ks <*> ksubst g e <*> ksubst g fx
     ksubst g (Yield l e)            = Yield l <$> ksubst g e
     ksubst g (YieldFrom l e)        = YieldFrom l <$> ksubst g e

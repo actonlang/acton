@@ -36,16 +36,9 @@ import Acton.WitKnots
 import qualified InterfaceFiles
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Base16 as Base16
+import qualified Data.Map
 import Data.List (intersperse, isPrefixOf, partition)
 import Data.Maybe (mapMaybe)
-import System.IO.Unsafe (unsafePerformIO)
-
-type TypeProgressCallback = Int -> Int -> Maybe String -> [String] -> Int -> IO ()
-
-emitTypeProgress :: Maybe TypeProgressCallback -> Int -> Int -> Maybe String -> [String] -> Int -> TypeM ()
-emitTypeProgress Nothing _ _ _ _ _ = return ()
-emitTypeProgress (Just cb) total completed current names weight =
-  unsafePerformIO (cb total completed current names weight) `seq` return ()
 
 -- | Extract docstring from the first statement of a Suite if it's a string expression
 extractDocstring :: Suite -> Maybe String
@@ -70,8 +63,8 @@ unescapeString ('\\':'\'':xs) = '\'' : unescapeString xs
 unescapeString (x:xs) = x : unescapeString xs
 
 -- | Type-check a module and return its NameInfo, typed module, env, and discovered tests.
-reconstruct                             :: Maybe TypeProgressCallback -> Env0 -> Module -> IO (NameInfo, Module, Env0, [Acton.Syntax.ModName], [String])
-reconstruct progressCb env0 (Module m i ss)         = do --traceM ("#################### original env0 for " ++ prstr m ++ ":")
+reconstruct                             :: Env0 -> Module -> IO (NameInfo, Module, Env0, [Acton.Syntax.ModName], [String])
+reconstruct env0 (Module m i ss)         = do --traceM ("#################### original env0 for " ++ prstr m ++ ":")
                                              --traceM (render (pretty env0))
                                              let nmod = NModule iface moduleDocstring
                                              --traceM ("#################### converted env0:")
@@ -80,7 +73,7 @@ reconstruct progressCb env0 (Module m i ss)         = do --traceM ("############
 
   where moduleDocstring                 = extractDocstring ss
         env1                            = reserve (assigned ss) (typeX env0)
-        (te,ss1)                        = runTypeM $ infTop progressCb env1 ss
+        (te,ss1)                        = runTypeM $ infTop env1 ss
         env2                            = define te (setMod m env0)
 
         (teT,ssT,tests)                 =
@@ -104,6 +97,7 @@ reconstruct progressCb env0 (Module m i ss)         = do --traceM ("############
 
         -- Convert the module name (ModName) to a string, e.g. "foo.bar"
         modNameStr (ModName ns) = concat (intersperse "." (map nstr ns))
+
         -- Inject __name__ variable
         __name__assign = Assign NoLoc [PVar NoLoc (name "__name__") Nothing] (Strings NoLoc [modNameStr m])
         ssT' = __name__assign : ssT
@@ -168,54 +162,20 @@ addTyping env n s t c                   = c {info = addT n (simp env s) t (info 
 
 ------------------------------
 
-infTop                                  :: Maybe TypeProgressCallback -> Env -> Suite -> TypeM (TEnv,Suite)
-infTop progressCb env ss                = do --traceM ("\n## infEnv top")
+infTop                                  :: Env -> Suite -> TypeM (TEnv,Suite)
+infTop env ss                           = do --traceM ("\n## infEnv top")
                                              pushFX fxPure tNone
-                                             let total = sum (map stmtProgressWeight ss)
-                                             (te,ss) <- infTopStmts progressCb env total 0 ss
-                                             when (total > 0) $
-                                               emitTypeProgress progressCb total total Nothing [] 0
+                                             (te,ss) <- infTopStmts env ss
                                              checkSigs env te
                                              return (te, ss)
 
-infTopStmts _ env _ _ []                = return ([], [])
-infTopStmts progressCb env total done (s : ss)
-                                         = do done' <- case stmtProgressLabel s of
-                                                        Just label -> do
-                                                          let names = stmtProgressNames s
-                                                              weight = stmtProgressWeight s
-                                                          emitTypeProgress progressCb total done (Just label) names weight
-                                                          return (done + weight)
-                                                        Nothing -> return done
-                                              (te1, s1) <- infTopStmt env s
-                                              (te2, ss2) <- infTopStmts progressCb (define te1 env) total done' ss
-                                              return (te1++te2, s1++ss2)
-
--- | Display label for progress UI.
--- For recursive groups, abbreviate to a short "a, b, ... (+N)" form.
-stmtProgressLabel :: Stmt -> Maybe String
-stmtProgressLabel s
-  | null names = Nothing
-  | otherwise = Just (formatNames names)
-  where
-    names = stmtProgressNames s
-    formatNames [n] = n
-    formatNames [n1, n2] = n1 ++ ", " ++ n2
-    formatNames (n1 : n2 : rest) =
-      n1 ++ ", " ++ n2 ++ ", ... (+" ++ show (length rest) ++ ")"
-    formatNames [] = ""
-
--- | Progress weight for one top-level statement, based on bound names.
--- This makes large recursive groups count proportionally.
-stmtProgressWeight :: Stmt -> Int
-stmtProgressWeight s = length (stmtProgressNames s)
-
--- | Top-level bound names used for progress reporting and weighting.
-stmtProgressNames :: Stmt -> [String]
-stmtProgressNames s = nub (map nstr (bound s))
+infTopStmts env []                      = return ([], [])
+infTopStmts env (s : ss)                = do (te1, s1) <- infTopStmt env s
+                                             (te2, ss2) <- infTopStmts (define te1 env) ss
+                                             return (te1++te2, s1++ss2)
 
 infTopStmt env s                        = do (cs,te,s) <- infEnv env s
-                                             --traceM ("****************************************** infer (" ++ show (length cs) ++ ") " ++ prstrs (bound s))
+                                             --traceM ("* infer " ++ prstrs (bound s))
                                              --traceM ("\n\n\n############\n" ++ render (nest 4 $ vcat $ map pretty te))
                                              --traceM ("------------\n" ++ render (nest 4 $ pretty s))
                                              --traceM ("\\\\\\\\\\\\\n" ++ render (nest 4 $ vcat $ map pretty cs))
@@ -229,7 +189,7 @@ infTopStmt env s                        = do (cs,te,s) <- infEnv env s
 
                                              te <- defaultTE env te
                                              --traceM ("===========\n" ++ render (nest 4 $ vcat $ map pretty te))
-                                             --traceM (".........................................."  ++ prstrs (bound s) ++ "\n")
+                                             --traceM ("............\n")
 
                                              s <- termred eq1 <$> usubst (pushEqns env eq0 s)
                                              defaultVars (ufree s)
@@ -375,6 +335,7 @@ genEnv env cs te s                      = do eq <- solveAll env te cs
 
 markScoped env n q te []                = return ([], [])
 -- Should remove this simplify call too, but doing so destroys performance of our current inferior constraint-solver (see module yang.schema in acton-yang).
+--markScoped env n [] te cs               = return (cs, [])
 markScoped env n [] te cs               = newSimplify env te cs
 -- Return the marks in terms of NotImplemented equations for now, so that we can coexist with the need to also run simplify (see above)
 markScoped env n q te cs                = return (cs, eq)
@@ -1016,7 +977,7 @@ matchActorAssumption env n0 p k te      = do --traceM ("## matchActorAssumption 
                                              (css,eqs) <- unzip <$> mapM check1 te0
                                              let cs = [Cast (locinfo p 60) env (tTuple p0 k0) (tTuple (prowOf p) (krowOf k)),
                                                        Seal (locinfo p 112) env p0, Seal (locinfo k 113) env k0]
-                                             (cs,eq) <- oldSimplify env obs (cs ++ concat css)
+                                             (cs,eq) <- simplify env obs (cs ++ concat css)
                                              return (cs, eq ++ concat eqs)
   where NAct q p0 k0 te0 _              = findName n0 env
         ns                              = dom te0
@@ -1486,7 +1447,8 @@ instance Check Decl where
                                              popFX
                                              let cst = if fallsthru b then [Cast (locinfo l 65) env1 tNone t] else []
                                                  t1 = tFun fx' (prowOf p') (krowOf k') t
-                                             (cs0,eq1) <- oldSimplify env1 (tempGoal t1) (csp++csk++csb++cst)
+                                             (cs0,eq1) <- simplify env1 (tempGoal t1) (csp++csk++csb++cst)            -- DIFF old
+--                                             (cs0,eq1) <- newSimplify env1 (tempGoal t1) (csp++csk++csb++cst)       -- DIFF new
                                              -- At this point, n has the type given by its def annotations.
                                              -- Now check that this type is no less general than its recursion assumption in env.
                                              let body = bindWits eq1 ++ defaultsP p' ++ defaultsK k' ++ b'
@@ -1922,38 +1884,79 @@ instance Infer Expr where
                                              t0 <- newUnivar env
                                              let con = case t of
                                                           TOpt _ _ -> Sel info env w t n t0
-                                                          _ ->  Sel (locinfo' l 86 e) env w t n t0
+                                                          _ -> Sel (locinfo' l 86 e) env w t n t0
                                                  info = Simple l (Pretty.print t ++ " does not have an attribute "++ Pretty.print n ++
                                                                   "\nHint: you may need to test if " ++ Pretty.print e ++ " is not None")
                                              return  (con : cs, t0, eCall (eVar w) [e'])
 
-                                         -- The parser inserts Opt nodes only within OptChain nodes (which each contains exactly one Opt node).
-                                         -- The Opt nodes are handled and eliminated by infer on an OptChain node.
---    infer env (Opt l e)                = do (cs, t, e') <- infer env e
---                                            return (cs, tOpt t, Opt l e')
+
+    infer env (Opt l e)                = do (cs, t, e') <- infer env e
+                                            return (cs, t, Opt l e')
                                             
-                                         -- e is an atomic expression (atom_expr in the parser) which contains exactly one ? in its sequence of trailers
-    infer env (OptChain l e)           = do x <- newTmp                                                                                      -- Example: a s1 s2 ? t1 t2
-                                            let (e1,e2) = split x e                                                                          -- e1 = a s1 s2, e2 = x t1 t2
+    -- infer env (OptChains l e)          = do x <- newTmp                                                                                    -- e = a s1 s2 ? t1 t2
+    --                                         y <- newTmp                                                                                    -- Could use just one variable
+    --                                         let (e1,e2) = split x e                                                                        -- e1 = a s1 s2, e2 = x t1 t2
+    --                                         (cs1,te,e1opt') <- inferOpt env e1                                                             -- e1opt' : ?A
+    --                                         (cs2,tr,e2opt') <- inferOpt (define [(x, NVar te)] env) e2                                   -- e2opt' : ?B
+    --                                         let y' = eCAST (tOpt te) te (eVar y)
+    --                                         return (cs1++cs2, tOpt tr, eLet [sAssign (pVar y (tOpt te)) e1opt']                          -- let y : ?A = e''
+    --                                                                          (eCond (termsubst [(x,y')] e2opt')                           --  in (x t1 t2) [x := CAST[?A,A]y]
+    --                                                                                 (eCall (tApp (eQVar primISNOTNONE) [te]) [eVar y])    --     if (y is not None)
+    --                                                                                 eNone))                                               --     else None
+    --   where inferOpt env e
+    --           | Just te <- exactOptType env e
+    --                                         = do (cs,e') <- inferSub env (tOpt te) e
+    --                                              return (cs,te,e')
+    --           | otherwise                   = do (cs,t,e') <- infer env e
+    --                                              case t of
+    --                                                TOpt _ te -> return (cs,te,e')
+    --                                                _ -> return (cs,t,eCAST t (tOpt t) e')
+
+    --         exactOptType env (Dot _ e n)
+    --           | Just tc <- exactReceiver env e
+    --           , Just (_, TSchema _ [] t, dec) <- findAttr env tc n
+    --                                         = Just (dropOpt (vsubst [(tvSelf,tCon tc)] $ addSelf t dec))
+    --           where dropOpt (TOpt _ t)    = t
+    --                 dropOpt t              = t
+    --         exactOptType _ _              = Nothing
+
+    --         exactReceiver env (Paren _ e) = exactReceiver env e
+    --         exactReceiver env (Var _ qn)  = case findQName qn env of
+    --                                           NVar t       -> asTCon t
+    --                                           NSVar t      -> asTCon t
+    --                                           NSig sc _ _  -> asTCon (sctype sc)
+    --                                           _            -> Nothing
+    --         exactReceiver _ _             = Nothing
+
+    --         asTCon (TCon _ tc)            = Just tc
+    --         asTCon _                      = Nothing
+
+    infer env (OptChains l e)          = do x <- newTmp
+                                            let (e1,e2) = split x e
+                                            traceM ("e1 = "++show e1++", e2 = "++show e2)
                                             te <- newUnivar env
                                             (cs1,e1') <- inferSub env (tOpt te) e1
-                                            let env1 = define [(x,NVar te)] env
-                                            (cs2,t,e2') <- infer env1 e2
+                                       --     (cs1,te,e1') <- inferOpt env e1
+                                            let lam = eLambda [(x,te)] e2
+                                                env1 = define [(x, NVar te)] env
+                                            (cs2,t,lam') <- infer env1 lam
                                             y <- newTmp
-                                            w <- newWitness
-                                            w1 <- newWitness
-                                            t1 <- newUnivar env
-                                            return (Sub (noinfo 444) env w tNone t1 : Sub (noinfo 555) env w1 t t1 : cs1++cs2,
-                                                     t1, eLet [sAssign (pVar y (tOpt te)) e1']
-                                                                           (eCond (termsubst [(x,eCAST (tOpt te) te (eVar y))] e2')
-                                                                                  (eCall (tApp (eQVar primISNOTNONE) [te]) [eVar y])
-                                                                                  eNone))
-      where split x (Opt l e)           = (e, eVar x)
+                                            return (cs1++cs2, tOpt (restype t), eLet [sAssign (pVar y (tOpt te)) e1']
+                                                                                (eCond (eCall lam' [eCAST (tOpt te) te (eVar y)])
+                                                                                       (eCall (tApp (eQVar primISNOTNONE) [te]) [eVar y])
+                                                                                       eNone))
+      where
+            split x (Opt l e)           = (e, eVar x)
             split x (Dot l e n)         = (e1,Dot l e2 n) where (e1,e2) = split x e
             split x (Call l f ps ks)    = (e1,Call l e2 ps ks) where (e1,e2) = split x f
             split x (Index l e ix)      = (e1,Index l e2 ix) where (e1,e2) = split x e
             split x (Slice l e sz)      = (e1,Slice l e2 sz) where (e1,e2) = split x e
- 
+
+            inferOpt env e              = do (cs,t,e') <- infer env e
+                                             case t of
+                                                 TOpt _ te -> return (cs,t,e')
+                                                 _ -> return (cs,t,eCAST t (tOpt t) e')
+
     infer env e@(Rest _ _ _)            = notYetExpr e
 --    infer env (Rest l e n)              = do p <- newUnivarOfKind PRow env
 --                                             k <- newUnivarOfKind KRow env

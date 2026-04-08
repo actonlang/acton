@@ -463,10 +463,10 @@ instance USubst Type where
     usubst (TCon l c)               = TCon l <$> usubst c
     usubst (TFun l fx p k t)        = TFun l <$> usubst fx <*> usubst p <*> usubst k <*> usubst t
     usubst (TTuple l p k)           = TTuple l <$> usubst p <*> usubst k
-    usubst (TOpt l t)               = do t <- usubst t
-                                         case t of
-                                             TOpt{} -> return t
-                                             _ -> return (TOpt l t)
+    usubst (TOpt l t)               = do t' <- usubst t
+                                         case t' of
+                                            TOpt{} -> return t'
+                                            _ -> return $ TOpt l t'
     usubst (TNone l)                = return $ TNone l
     usubst (TWild l)                = return $ TWild l
     usubst (TNil l s)               = return $ TNil l s
@@ -514,6 +514,7 @@ instance USubst Stmt where
 instance USubst Expr where
     usubst (Call l e p k)           = Call l <$> usubst e <*> usubst p <*> usubst k
     usubst (TApp l e ts)            = TApp l <$> usubst e <*> usubst ts
+    usubst (Let l ss e)             = Let l <$> usubst ss <*> usubst e
     usubst (Async l e)              = Async l <$> usubst e
     usubst (Await l e)              = Await l <$> usubst e
     usubst (Index l e ix)           = Index l <$> usubst e <*> usubst ix

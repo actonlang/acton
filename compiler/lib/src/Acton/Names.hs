@@ -262,6 +262,7 @@ instance Vars Expr where
     freeQ (BStrings _ ss)           = []
     freeQ (Call _ e ps ks)          = freeQ e ++ freeQ ps ++ freeQ ks
     freeQ (TApp _ e ts)             = freeQ e ++ freeQ ts
+    freeQ (Let _ ss e)              = freeQ ss ++ (freeQ e `diffQ` bound ss)
     freeQ (Async _ e)               = freeQ e
     freeQ (Await _ e)               = freeQ e
     freeQ (Index _ e ix)            = freeQ e ++ freeQ ix
@@ -271,7 +272,9 @@ instance Vars Expr where
     freeQ (BinOp _ e1 o e2)         = freeQ [e1,e2]
     freeQ (CompOp _ e ops)          = freeQ e ++ freeQ ops
     freeQ (UnOp _ o e)              = freeQ e
-    freeQ (Dot _ e n)               = freeQ e
+    freeQ (Dot _ e n)               = freeQ e  
+    freeQ (Opt _ e)                 = freeQ e
+    freeQ (OptChain _ e)            = freeQ e
     freeQ (Rest _ e n)              = freeQ e
     freeQ (DotI _ e i)              = freeQ e
     freeQ (RestI _ e i)             = freeQ e
