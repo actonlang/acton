@@ -1927,22 +1927,19 @@ instance Infer Expr where
                                                                   "\nHint: you may need to test if " ++ Pretty.print e ++ " is not None")
                                              return  (con : cs, t0, eCall (eVar w) [e'])
 
-                                         -- The parser inserts Opt nodes only within an OptChains node (which each contains only one Opt node).
-                                         -- The Opt nodes are handled and eliminated by infer on an OptChains node.
+                                         -- The parser inserts Opt nodes only within OptChain nodes (which each contains exactly one Opt node).
+                                         -- The Opt nodes are handled and eliminated by infer on an OptChain node.
 --    infer env (Opt l e)                = do (cs, t, e') <- infer env e
 --                                            return (cs, tOpt t, Opt l e')
                                             
                                          -- e is an atomic expression (atom_expr in the parser) which contains exactly one ? in its sequence of trailers
-    infer env (OptChains l e)          = do x <- newTmp                                                                                      -- Example: a s1 s2 ? t1 t2
+    infer env (OptChain l e)           = do x <- newTmp                                                                                      -- Example: a s1 s2 ? t1 t2
                                             let (e1,e2) = split x e                                                                          -- e1 = a s1 s2, e2 = x t1 t2
                                             te <- newUnivar env
                                             (cs1,e1') <- inferSub env (tOpt te) e1
                                             let env1 = define [(x,NVar te)] env
                                             (cs2,t,e2') <- infer env1 e2
                                             y <- newTmp
-                                            -- Use a fresh result type below `?t` instead of fixing the
-                                            -- result to `?t` immediately. This avoids forcing
-                                            -- optional chain results through `??u ~ ?u` too early.
                                             w <- newWitness
                                             w1 <- newWitness
                                             t1 <- newUnivar env

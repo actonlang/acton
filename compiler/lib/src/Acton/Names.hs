@@ -274,7 +274,7 @@ instance Vars Expr where
     freeQ (UnOp _ o e)              = freeQ e
     freeQ (Dot _ e n)               = freeQ e  
     freeQ (Opt _ e)                 = freeQ e
-    freeQ (OptChains _ e)           = freeQ e
+    freeQ (OptChain _ e)            = freeQ e
     freeQ (Rest _ e n)              = freeQ e
     freeQ (DotI _ e i)              = freeQ e
     freeQ (RestI _ e i)             = freeQ e
