@@ -2029,10 +2029,13 @@ runZig gopts opts zigExe zigArgs paths wd mProgressUI = do
               closeFd readFd `catch` ignoreIO
               takeMVar doneVar
         return (Just ("ZIG_PROGRESS", envVal), onStart', onStop', False)
-    let env1 = case envOverride of
-          Nothing -> Nothing
-          Just (k, v) -> Just ((k, v) : filter ((/= k) . fst) env0)
-        cpBase = (proc zigExe zigArgs){ cwd = wd, env = env1 }
+    let env1 = if System.Info.os == "darwin" && not (any ((== "DEVELOPER_DIR") . fst) env0)
+               then ("DEVELOPER_DIR", "/dev/null") : env0
+               else env0
+        env2 = case envOverride of
+          Nothing -> Just env1
+          Just (k, v) -> Just ((k, v) : filter ((/= k) . fst) env1)
+        cpBase = (proc zigExe zigArgs){ cwd = wd, env = env2 }
         cp = if closeFds then cpBase else cpBase { close_fds = False }
     (returnCode, zigStdout, zigStderr) <- readProcessWithExitCodeCancelable cp onStart `finally` onStop
     case returnCode of
