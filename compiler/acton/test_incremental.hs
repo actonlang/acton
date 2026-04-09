@@ -15,12 +15,15 @@ import qualified Acton.Fingerprint as Fingerprint
 import qualified Crypto.Hash.SHA256 as SHA256
 import           Data.List (find, partition, sort)
 import qualified Data.Map.Strict as M
+import           Data.Maybe (isJust)
 import           System.Directory
 import           System.Exit
 import           System.FilePath
 import           System.IO (Handle)
+import           System.Posix.Files (deviceID, fileID, fileSize, getFileStatus, modificationTimeHiRes, statusChangeTimeHiRes)
 import           System.Process
-import           Data.Time.Clock        (getCurrentTime)
+import           Data.Time.Clock        (addUTCTime, getCurrentTime)
+import           Data.Time.Clock.POSIX  (posixSecondsToUTCTime)
 import           System.Directory       (setModificationTime)
 import qualified Control.Exception as E
 import           Control.Concurrent     (threadDelay)
@@ -457,7 +460,7 @@ buildProject = do
 -- | Read name hashes from a .ty file.
 readTyNameHashes :: FilePath -> IO [InterfaceFiles.NameHashInfo]
 readTyNameHashes tyPath = do
-  (_, _, _, _, _, _, _, nameHashes, _, _, _) <- InterfaceFiles.readFile tyPath
+  (_, _, _, _, _, _, _, _, nameHashes, _, _, _) <- InterfaceFiles.readFile tyPath
   pure nameHashes
 
 -- | Read pub/impl dependency names for a binding in a .ty file.
@@ -477,8 +480,35 @@ readTyDeps tyPath nameLabel = do
 -- | Rewrite source hash and name-hash section of a .ty file.
 rewriteTySrcHashAndNameHashes :: FilePath -> B.ByteString -> ([InterfaceFiles.NameHashInfo] -> [InterfaceFiles.NameHashInfo]) -> IO ()
 rewriteTySrcHashAndNameHashes tyPath srcHash' f = do
-  (_mods, nmod, tmod, _srcHash, pubHash, implHash, imps, nameHashes, roots, tests, mdoc) <- InterfaceFiles.readFile tyPath
-  InterfaceFiles.writeFile tyPath srcHash' pubHash implHash imps (f nameHashes) roots tests mdoc nmod tmod
+  (_mods, nmod, tmod, sourceMeta, _srcHash, pubHash, implHash, imps, nameHashes, roots, tests, mdoc) <- InterfaceFiles.readFile tyPath
+  InterfaceFiles.writeFile tyPath srcHash' pubHash implHash sourceMeta imps (f nameHashes) roots tests mdoc nmod tmod
+
+rewriteTySourceMeta :: FilePath -> Maybe InterfaceFiles.SourceFileMeta -> IO ()
+rewriteTySourceMeta tyPath sourceMeta' = do
+  (_mods, nmod, tmod, _sourceMeta, srcHash, pubHash, implHash, imps, nameHashes, roots, tests, mdoc) <- InterfaceFiles.readFile tyPath
+  InterfaceFiles.writeFile tyPath srcHash pubHash implHash sourceMeta' imps nameHashes roots tests mdoc nmod tmod
+
+readTySourceMeta :: FilePath -> IO (Maybe InterfaceFiles.SourceFileMeta)
+readTySourceMeta tyPath = do
+  (sourceMeta, _srcHash, _pubHash, _implHash, _imps, _nameHashes, _roots, _tests, _doc) <- InterfaceFiles.readHeader tyPath
+  pure sourceMeta
+
+sourceFileMetaForPath :: FilePath -> IO InterfaceFiles.SourceFileMeta
+sourceFileMetaForPath path = do
+  st <- getFileStatus path
+  let mtimeNs = floor (toRational (modificationTimeHiRes st) * 1000000000)
+      ctimeNs = floor (toRational (statusChangeTimeHiRes st) * 1000000000)
+  pure InterfaceFiles.SourceFileMeta
+    { InterfaceFiles.sfmMTimeNs = mtimeNs
+    , InterfaceFiles.sfmCTimeNs = ctimeNs
+    , InterfaceFiles.sfmSize = fromIntegral (fileSize st)
+    , InterfaceFiles.sfmDevice = Just (fromIntegral (deviceID st))
+    , InterfaceFiles.sfmInode = Just (fromIntegral (fileID st))
+    }
+
+setFileMTimeNs :: FilePath -> Integer -> IO ()
+setFileMTimeNs path mtimeNs =
+  setModificationTime path (posixSecondsToUTCTime (fromRational (toRational mtimeNs / 1000000000)))
 
 -- | Drop a qualified dependency label from all stored pub/impl dep lists.
 dropTyDepByLabel :: String -> [InterfaceFiles.NameHashInfo] -> [InterfaceFiles.NameHashInfo]
@@ -1260,7 +1290,7 @@ p28_protocol_extension_deps = testCase "28-protocol/extension deps are recorded 
   let namesA = sort (map (prstr . InterfaceFiles.nhName) nameHashesA)
   assertBool "expected generated protocol sibling name" ("BazProtoD_BarProto" `elem` namesA)
   assertBool "expected generated extension name" ("BarProtoD_Widget" `elem` namesA)
-  (_, nmod, _, _, _, _, _, _, _, _, _) <- InterfaceFiles.readFile tyA
+  (_, nmod, _, _, _, _, _, _, _, _, _, _) <- InterfaceFiles.readFile tyA
   let I.NModule iface _ = nmod
       extMatch (n, _) = prstr n == "BarProtoD_Widget"
   case find extMatch iface of
@@ -1844,6 +1874,133 @@ p40_background_lock_blocks_watch =
           _ <- waitForProcess ph
           pure ()
 
+p41_stale_header_missing_import_reparses_source :: TestTree
+p41_stale_header_missing_import_reparses_source =
+  testCase "41-stale header missing import reparses source" $ do
+    let proj = casesProjDir
+        src = casesSrcDir
+        actA = src </> "a.act"
+        actB = src </> "b.act"
+        tyB = proj </> "out" </> "types" </> "b.ty"
+        outA = proj </> "out" </> "types" </> "a"
+        modB = modLabel proj "b"
+    ensureCasesProject
+    writeFileUtf8 actA "aaa = 1\n"
+    writeFileUtf8 actB $ T.unlines
+      [ "import a"
+      , ""
+      , "def bar() -> int:"
+      , "    return a.aaa"
+      ]
+    writeFileUtf8 (src </> "main.act") $ T.unlines
+      [ "import b"
+      , ""
+      , "actor main(env: Env):"
+      , "    print(b.bar())"
+      , "    env.exit(0)"
+      ]
+    _ <- buildOutIn proj
+    writeFileUtf8 actB $ T.unlines
+      [ "def bar() -> int:"
+      , "    return 7"
+      ]
+    tyTime <- getModificationTime tyB
+    setModificationTime actB (addUTCTime (-10) tyTime)
+    removeFile actA
+    res@(_ec, out) <- runActonIn proj ["build", "--color", "never", "--verbose"]
+    assertExitSuccess "build after stale header import removal" res
+    mapM_ (\ext -> do
+      exists <- doesFileExist (outA ++ ext)
+      assertBool ("did not expect stale generated " ++ outA ++ ext) (not exists))
+      [".ty", ".c", ".h"]
+    assertBool "expected b.act to type check after stale header reparse"
+      (typechecked out modB)
+    assertBool ("did not expect stale import diagnostic\n" ++ T.unpack out)
+      (not (T.isInfixOf "Type interface file not found or unreadable for a" out))
+
+p42_metadata_drift_refreshes_header :: TestTree
+p42_metadata_drift_refreshes_header =
+  testCase "42-metadata drift refreshes header" $ do
+    let proj = casesProjDir
+        src = casesSrcDir
+        actA = src </> "a.act"
+        tyA = proj </> "out" </> "types" </> "a.ty"
+        modA = modLabel proj "a"
+    ensureCasesProject
+    writeFileUtf8 actA "aaa = 1\n"
+    writeFileUtf8 (src </> "main.act") $ T.unlines
+      [ "import a"
+      , ""
+      , "actor main(env: Env):"
+      , "    print(a.aaa)"
+      , "    env.exit(0)"
+      ]
+    _ <- buildOutIn proj
+    metaBefore <- readTySourceMeta tyA
+    threadDelay 1000000
+    touch actA
+    out <- buildOutIn proj
+    metaAfter <- readTySourceMeta tyA
+    currentMeta <- sourceFileMetaForPath actA
+    assertBool "did not expect a.act to type check after metadata-only drift"
+      (not (typechecked out modA))
+    assertBool "expected .ty header to carry source metadata"
+      (isJust metaAfter)
+    assertBool "expected metadata drift to update cached source metadata"
+      (metaBefore /= metaAfter)
+    metaAfter @?= Just currentMeta
+
+p43_equal_act_ty_mtime_hashes_source :: TestTree
+p43_equal_act_ty_mtime_hashes_source =
+  testCase "43-equal act/ty mtimes still hash source" $ do
+    let proj = casesProjDir
+        src = casesSrcDir
+        actA = src </> "a.act"
+        actB = src </> "b.act"
+        tyB = proj </> "out" </> "types" </> "b.ty"
+        outA = proj </> "out" </> "types" </> "a"
+        modB = modLabel proj "b"
+    ensureCasesProject
+    writeFileUtf8 actA "aaa = 1\n"
+    writeFileUtf8 actB $ T.unlines
+      [ "import a"
+      , ""
+      , "def bar() -> int:"
+      , "    return a.aaa"
+      ]
+    writeFileUtf8 (src </> "main.act") $ T.unlines
+      [ "import b"
+      , ""
+      , "actor main(env: Env):"
+      , "    print(b.bar())"
+      , "    env.exit(0)"
+      ]
+    _ <- buildOutIn proj
+    writeFileUtf8 actB $ T.unlines
+      [ "def bar() -> int:"
+      , "    return 7"
+      ]
+    rewriteTySourceMeta tyB Nothing
+    tyStatus <- getFileStatus tyB
+    let tyMTimeNs = floor (toRational (modificationTimeHiRes tyStatus) * 1000000000)
+    setFileMTimeNs actB tyMTimeNs
+    currentMeta <- sourceFileMetaForPath actB
+    rewriteTySourceMeta tyB (Just currentMeta)
+    setFileMTimeNs tyB tyMTimeNs
+    metaAfter <- readTySourceMeta tyB
+    metaAfter @?= Just currentMeta
+    removeFile actA
+    res@(_ec, out) <- runActonIn proj ["build", "--color", "never", "--verbose"]
+    assertExitSuccess "build after equal act/ty mtime stale header" res
+    mapM_ (\ext -> do
+      exists <- doesFileExist (outA ++ ext)
+      assertBool ("did not expect stale generated " ++ outA ++ ext) (not exists))
+      [".ty", ".c", ".h"]
+    assertBool "expected b.act to type check after equal-mtime hash check"
+      (typechecked out modB)
+    assertBool ("did not expect stale import diagnostic\n" ++ T.unpack out)
+      (not (T.isInfixOf "Type interface file not found or unreadable for a" out))
+
 -- Main -----------------------------------------------------------------------
 
 -- | Tasty entry point for incremental tests.
@@ -1904,5 +2061,10 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
       , p38_project_lock_blocks_build
       , p39_background_lock_does_not_block_build
       , p40_background_lock_blocks_watch
+      ]
+  , sequentialTestGroup "incremental-cache-cases" AllSucceed
+      [ p41_stale_header_missing_import_reparses_source
+      , p42_metadata_drift_refreshes_header
+      , p43_equal_act_ty_mtime_hashes_source
       ]
   ]

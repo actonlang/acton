@@ -30,6 +30,9 @@ Output goes into `out/`, most importantly, executable binaries are placed in
 specified root actor.  In the example above, the root actor is `foo.main`, i.e.
 actor `main` in the module `foo` and consequently, the executable name is `foo`.
 
-`out/types` contain generated code, which is to be considered internal. Don't
-touch it.  All other output files, like object files and archives, are placed
-out-of-tree in the cache directory (`~/.cache/acton/`).
+`out/types` contains internal compiler output. In particular, `.ty` files are
+cached typed-module interfaces and `.c` / `.h` files are generated code derived
+from them. Acton validates and regenerates these files as needed, so they
+should be treated as internal build artifacts. Don't touch them. All other
+output files, like object files and archives, are placed out-of-tree in the
+cache directory (`~/.cache/acton/`).

@@ -111,7 +111,7 @@ reconstruct progressCb env0 (Module m i ss)         = do --traceM ("############
 
 -- | Print a .ty file header and interface; include name hashes when verbose.
 showTyFile env0 m fname verbose = do
-                                     (ms,nmod,_,srcH,pubH,implH,imps,nameHashes,roots,tests,mdocH) <- InterfaceFiles.readFile fname
+                                     (ms,nmod,_,sourceMeta,srcH,pubH,implH,imps,nameHashes,roots,tests,mdocH) <- InterfaceFiles.readFile fname
                                      putStrLn ("\n############### Header ###############")
                                      putStrLn ("Imports: " ++ (show [ (prstr mn, take 16 (B.unpack $ Base16.encode h)) | (mn,h) <- imps ]))
                                      putStrLn ("Roots  : " ++ (show (map prstr roots)))
@@ -124,6 +124,15 @@ showTyFile env0 m fname verbose = do
                                      putStrLn ("ModuleImplHash    : 0x" ++ (B.unpack $ Base16.encode implH))
 
                                      when verbose $ do
+                                       putStrLn ("\n############### Source Meta ############")
+                                       case sourceMeta of
+                                         Nothing -> putStrLn "None"
+                                         Just meta -> do
+                                           putStrLn ("mtimeNs: " ++ show (InterfaceFiles.sfmMTimeNs meta))
+                                           putStrLn ("ctimeNs: " ++ show (InterfaceFiles.sfmCTimeNs meta))
+                                           putStrLn ("size   : " ++ show (InterfaceFiles.sfmSize meta))
+                                           putStrLn ("device : " ++ maybe "-" show (InterfaceFiles.sfmDevice meta))
+                                           putStrLn ("inode  : " ++ maybe "-" show (InterfaceFiles.sfmInode meta))
                                        putStrLn ("\n############### Name Hashes ############")
                                        forM_ nameHashes $ \nh -> do
                                          let formatHash h =
