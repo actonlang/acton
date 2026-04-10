@@ -1,0 +1,44 @@
+import result
+import testing
+
+def _test_result_ok():
+    ok = result.Ok(7)
+
+    testing.assertTrue(ok.is_ok())
+    testing.assertFalse(ok.is_err())
+    testing.assertTrue(bool(ok))
+    testing.assertEqual(ok.ok(), 7)
+    testing.assertEqual(ok.err(), None)
+    testing.assertEqual(ok.unwrap(), 7)
+    testing.assertEqual(str(ok), "Ok(7)")
+    testing.assertEqual(repr(ok), "Ok(7)")
+
+
+def _test_result_err():
+    err = result.Err("boom")
+
+    testing.assertFalse(err.is_ok())
+    testing.assertTrue(err.is_err())
+    testing.assertFalse(bool(err))
+    testing.assertEqual(err.ok(), None)
+    testing.assertEqual(err.err(), "boom")
+    testing.assertEqual(err.unwrap_err(), "boom")
+    testing.assertEqual(str(err), "Err(boom)")
+    testing.assertEqual(repr(err), "Err('boom')")
+
+
+def _test_result_unwrap_errors():
+    ok = result.Ok(7)
+    err = result.Err("boom")
+
+    try:
+        ok.unwrap_err()
+        raise testing.NotRaisesError("Ok.unwrap_err() should raise ValueError")
+    except ValueError:
+        pass
+
+    try:
+        err.unwrap()
+        raise testing.NotRaisesError("Err.unwrap() should raise ValueError")
+    except ValueError:
+        pass

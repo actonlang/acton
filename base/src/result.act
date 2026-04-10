@@ -1,0 +1,71 @@
+
+
+class Result[T,E] (value):
+    def is_ok(self) -> bool:
+        raise NotImplementedError("Result.is_ok")
+    def is_err(self) -> bool:
+        return not self.is_ok()
+    def ok(self) -> ?T:
+        raise NotImplementedError("Result.ok")
+    def err(self) -> ?E:
+        raise NotImplementedError("Result.err")
+    def unwrap(self) -> T:
+        raise NotImplementedError("Result.unwrap")
+    def unwrap_err(self) -> E:
+        raise NotImplementedError("Result.unwrap_err")
+    def __bool__(self) -> bool:
+        return self.is_ok()
+
+class Ok[T,E] (Result[T,E]):
+    value: T
+
+    def __init__(self, value: T) -> None:
+        self.value = value
+
+    def is_ok(self) -> bool:
+        return True
+
+    def ok(self) -> ?T:
+        return self.value
+
+    def err(self) -> ?E:
+        return None
+
+    def unwrap(self) -> T:
+        return self.value
+
+    def unwrap_err(self) -> E:
+        raise ValueError("Called unwrap_err on {repr(self)}")
+
+    def __str__(self) -> str:
+        return "Ok({self.value})"
+
+    def __repr__(self) -> str:
+        return "Ok({repr(self.value)})"
+
+class Err[T,E] (Result[T,E]):
+    error: E
+
+    def __init__(self, error: E) -> None:
+        self.error = error
+
+    def is_ok(self) -> bool:
+        return False
+
+    def ok(self) -> ?T:
+        return None
+
+    def err(self) -> ?E:
+        return self.error
+
+    def unwrap(self) -> T:
+        raise ValueError("Called unwrap on {repr(self)}")
+
+    def unwrap_err(self) -> E:
+        return self.error
+
+    def __str__(self) -> str:
+        return "Err({self.error})"
+
+    def __repr__(self) -> str:
+        return "Err({repr(self.error)})"
