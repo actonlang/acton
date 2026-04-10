@@ -48,7 +48,6 @@ import Data.Binary
 import qualified Data.Binary.Get as BinaryGet
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
-import qualified System.Exit
 import qualified Acton.Syntax as A
 import qualified Acton.NameInfo as I
 import GHC.Generics (Generic)
@@ -89,9 +88,8 @@ readTyBytes f = do
     return (BL.fromStrict bs)
 
 versionMismatch :: [Int] -> IO a
-versionMismatch vs = do
-    hPutStrLn stderr ("Interface file has version " ++ show vs ++ "; current version is " ++ show A.version)
-    System.Exit.exitFailure
+versionMismatch vs =
+    ioError (userError (".ty version mismatch: file has " ++ show vs ++ ", expected " ++ show A.version))
 
 readTyVersion :: BL.ByteString -> IO BL.ByteString
 readTyVersion bsLazy =
