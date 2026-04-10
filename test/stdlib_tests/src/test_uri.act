@@ -1,6 +1,6 @@
 import testing
 
-from uri import URI
+from uri import URI, quote, unquote
 
 def _test_basic_uri():
     """Test basic URI parsing"""
@@ -123,5 +123,48 @@ def _test_scheme_validation():
         try:
             URI(uri_str)
             testing.error("Expected ValueError for invalid scheme: " + uri_str)
+        except ValueError:
+            pass
+
+def _test_quote_preserves_unreserved_and_safe():
+    testing.assertEqual(
+        quote("alpha-._~/beta gamma?delta=1&epsilon=2"),
+        "alpha-._~/beta%20gamma%3Fdelta%3D1%26epsilon%3D2"
+    )
+
+def _test_quote_custom_safe():
+    testing.assertEqual(quote("a/b+c", safe=""), "a%2Fb%2Bc")
+    testing.assertEqual(quote("a/b+c", safe="+"), "a%2Fb+c")
+
+def _test_quote_unicode_utf8():
+    testing.assertEqual(
+        quote("räksmörgås"),
+        "r%C3%A4ksm%C3%B6rg%C3%A5s"
+    )
+
+def _test_unquote_decodes_percent_escapes():
+    testing.assertEqual(
+        unquote("alpha-._~/beta%20gamma%3Fdelta%3D1%26epsilon%3D2"),
+        "alpha-._~/beta gamma?delta=1&epsilon=2"
+    )
+    testing.assertEqual(unquote("a+b%20c"), "a+b c")
+    testing.assertEqual(unquote("r%C3%A4ksm%C3%B6rg%C3%A5s"), "räksmörgås")
+
+def _test_quote_unquote_roundtrip():
+    raw = "Hello Acton 🫡 / räksmörgås?"
+    testing.assertEqual(unquote(quote(raw)), raw)
+
+def _test_unquote_invalid_escapes():
+    invalid_inputs = [
+        "%",
+        "%2",
+        "%GG",
+        "%C3%28"
+    ]
+
+    for raw in invalid_inputs:
+        try:
+            unquote(raw)
+            testing.error("Expected ValueError for invalid escape: " + raw)
         except ValueError:
             pass
