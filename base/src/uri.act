@@ -1,4 +1,70 @@
 
+_UNRESERVED = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~"
+_HEX_DIGITS = "0123456789ABCDEF"
+
+
+def quote(text: str, safe: str="/") -> str:
+    """Percent-encode a string for use in a URI.
+
+    Unreserved characters defined by RFC 3986 are preserved. Characters in
+    the safe set are also preserved when they are ASCII bytes.
+    """
+    allowed = set(_UNRESERVED + safe)
+    encoded = text.encode()
+    parts: list[str] = []
+
+    for i in range(len(encoded)):
+        byte = encoded[i]
+        if byte < 128 and chr(byte) in allowed:
+            parts.append(chr(byte))
+        else:
+            parts.append(_quote_byte(byte))
+
+    return "".join(parts)
+
+
+def unquote(text: str) -> str:
+    """Decode percent-escaped bytes in a URI string as UTF-8."""
+    result = bytearray(b"")
+    i = 0
+
+    while i < len(text):
+        if text[i] != "%":
+            _append_bytes(result, text[i].encode())
+            i += 1
+            continue
+
+        if i + 2 >= len(text):
+            raise ValueError("Incomplete percent escape: {text[i:]}")
+
+        escape = text[i:i+3]
+        hi = _hex_value(text[i+1])
+        lo = _hex_value(text[i+2])
+        result.append(hi * 16 + lo)
+        i += 3
+
+    try:
+        return result.decode()
+    except ValueError:
+        raise ValueError("Invalid UTF-8 in percent-escaped text")
+
+
+def _append_bytes(result: bytearray, data: bytes) -> None:
+    for i in range(len(data)):
+        result.append(data[i])
+
+
+def _quote_byte(byte: int) -> str:
+    return "%" + _HEX_DIGITS[byte // 16] + _HEX_DIGITS[byte % 16]
+
+
+def _hex_value(char: str) -> int:
+    idx = _HEX_DIGITS.find(char.upper())
+    if idx == -1:
+        raise ValueError("Invalid percent escape: %%{char}")
+    return idx
+
+
 class URI(object):
     """A class representing a Uniform Resource Identifier (URI).
 
