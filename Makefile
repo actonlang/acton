@@ -375,7 +375,7 @@ test-rts:
 test-rts-db:
 	$(MAKE) -C test
 
-test-stdlib: dist/bin/acton
+test-stdlib: distribution
 	cd compiler && stack test acton --ta '-p "stdlib"'
 	$(MAKE) -C test tls-test-server
 	cd test/stdlib_tests && "$(ACTON)" test
