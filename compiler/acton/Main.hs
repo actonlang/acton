@@ -701,7 +701,7 @@ readModuleImports paths mn = do
         hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader tyFile
         case hdrE of
           Left _ -> return []
-          Right (_hash, _ih, _implH, imps, _nameHashes, _roots, _tests, _doc) -> return (map fst imps)
+          Right (_sourceMeta, _hash, _ih, _implH, imps, _nameHashes, _roots, _tests, _doc) -> return (map fst imps)
 
 dependentTestModulesFromHeaders :: Paths -> [FilePath] -> [String] -> IO [String]
 dependentTestModulesFromHeaders paths srcFiles changedModules = do
@@ -1699,7 +1699,7 @@ generateProjectDocIndex sp gopts opts paths srcFiles = do
         createDirectoryIfMissing True docDir
         tasks <- mapM (\f -> findPaths f opts >>= \p -> readModuleTask sp gopts opts p f) srcFiles
         entries <- catMaybes <$> forM tasks (\t -> case t of
-                          ActonTask mn _src _bytes m -> return (Just (mn, DocP.extractDocstring (A.mbody m)))
+                          ActonTask mn _src _bytes _sourceMeta m -> return (Just (mn, DocP.extractDocstring (A.mbody m)))
                           TyTask { name = mn, tyDoc = mdoc } -> return (Just (mn, mdoc))
                           ParseErrorTask{} -> return Nothing)
         DocP.generateDocIndex docDir entries
@@ -1818,7 +1818,7 @@ expectedRootStubs paths tasks = do
             tyPath = outbase ++ ".ty"
         hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader tyPath
         case hdrE of
-          Right (_, _, _implH, _imps, _nameHashes, rs, _tests, _) -> return (map (mkStub outbase) rs)
+          Right (_sourceMeta, _, _, _implH, _imps, _nameHashes, rs, _tests, _) -> return (map (mkStub outbase) rs)
           _ -> return []
     return (concat roots)
   where
@@ -1869,12 +1869,20 @@ High-level Steps
 1) Discover and read tasks using header-first strategy (readModuleTask)
    - For each module, try to use its .ty header to avoid parsing:
      - If .ty is missing/unreadable → parse .act to obtain imports (ActonTask).
-     - If .ty exists and both .act and the acton executable mtime <= .ty mtime
+     - If the compiler compatibility guard says the cache is stale
+       → parse .act now to get accurate imports (ActonTask).
+     - If source metadata in the .ty header still matches the current .act and
+       the source mtime is strictly older than the .ty mtime
        → trust .ty header imports and create a TyTask stub (no heavy decode)
-       for graph building. Use --ignore-compiler-version to skip the acton part.
-     - If .act appears newer than .ty → verify by content hash:
-       – If stored moduleSrcBytesHash == current bytes hash → header is still valid (TyTask)
+       for graph building.
+     - If metadata differs, or source/.ty mtimes are equal, verify by content
+       hash:
+       – If stored moduleSrcBytesHash == current bytes hash → header is still
+         valid (TyTask) and refresh cached source metadata.
        – Else → parse .act now to get accurate imports (ActonTask)
+     - Equal source/.ty mtimes are treated as ambiguous because coarse-mtime
+       filesystems can assign the same visible timestamp to a changed source
+       and the cached .ty written from an earlier version of that source.
    - This ensures that .ty is up to date with the .act source and lets us
      read module imports/roots/docstring from the header, which is much faster
      than parsing the .act file.
@@ -1942,7 +1950,7 @@ writeRootC env gopts opts paths tasks binTask = do
         -- was rebuilt during this run.
         tyPath <- Acton.Env.findTyFile (searchPath paths) m
         rootsHeader <- case tyPath of
-                         Just ty -> do (_, _, _implH, _imps, _nameHashes, roots, _tests, _) <- InterfaceFiles.readHeader ty; return roots
+                         Just ty -> do (_sourceMeta, _, _, _implH, _imps, _nameHashes, roots, _tests, _) <- InterfaceFiles.readHeader ty; return roots
                          Nothing -> return []
         let rootsEnv = case Acton.Env.lookupMod m env of
                          Nothing -> []
@@ -2530,7 +2538,7 @@ filterMainActor env paths binTask = do
       Just ty -> do
         hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader ty
         case hdrE of
-          Right (_, _, _implH, _imps, _nameHashes, roots, _tests, _) | n `elem` roots -> return (Just binTask)
+          Right (_sourceMeta, _, _, _implH, _imps, _nameHashes, roots, _tests, _) | n `elem` roots -> return (Just binTask)
           _ -> checkEnv
       Nothing -> checkEnv
 

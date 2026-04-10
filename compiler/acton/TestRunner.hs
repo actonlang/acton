@@ -560,7 +560,7 @@ readModuleTests paths mn = do
         hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader tyFile
         case hdrE of
           Left _ -> return []
-          Right (_srcH, _ih, _implH, _imps, _nameHashes, _roots, tests, _doc) ->
+          Right (_sourceMeta, _srcH, _ih, _implH, _imps, _nameHashes, _roots, tests, _doc) ->
             return tests
 
 modNameFromString :: String -> A.ModName

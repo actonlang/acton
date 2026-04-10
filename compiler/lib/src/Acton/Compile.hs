@@ -249,6 +249,7 @@ import System.FilePath.Posix
 import System.Exit (ExitCode(..))
 import System.IO hiding (readFile, writeFile)
 import System.IO.Unsafe (unsafePerformIO)
+import System.Posix.Files (FileStatus, deviceID, fileID, fileSize, getFileStatus, modificationTimeHiRes, statusChangeTimeHiRes)
 import System.Process (readCreateProcessWithExitCode, proc)
 import System.Random (randomRIO)
 import Text.PrettyPrint (renderStyle, style, Style(..), Mode(PageMode))
@@ -807,7 +808,7 @@ getPubHashCached paths mn = modifyMVar pubHashCache $ \m -> do
         Just ty -> do
           hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader ty
           case hdrE of
-            Right (_srcH, ih, _implH, _impsH, _nameHashesH, _rootsH, _testsH, _docH) -> return (M.insert mn ih m, Just ih)
+            Right (_sourceMetaH, _srcH, ih, _implH, _impsH, _nameHashesH, _rootsH, _testsH, _docH) -> return (M.insert mn ih m, Just ih)
             _ -> return (m, Nothing)
         Nothing -> return (m, Nothing)
 
@@ -831,7 +832,7 @@ getNameHashMapCached paths mn = modifyMVar nameHashCache $ \m -> do
         Just ty -> do
           hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader ty
           case hdrE of
-            Right (_srcH, _ih, _implH, _impsH, nameHashes, _rootsH, _testsH, _docH) -> do
+            Right (_sourceMetaH, _srcH, _ih, _implH, _impsH, nameHashes, _rootsH, _testsH, _docH) -> do
               let hm = nameHashMapFromList nameHashes
               return (M.insert mn hm m, Just hm)
             _ -> return (m, Nothing)
@@ -909,6 +910,25 @@ parseActFile sp mn actFile = do
   emod <- parseActSnapshot mn actFile snap
   return $ fmap (\m -> (snap, m)) emod
 
+-- | Read stable source metadata used for quick .ty reuse checks.
+-- Device/inode act as file identity on POSIX so metadata drift from copies or
+-- restores falls back to content hashing instead of blindly trusting mtimes.
+readSourceFileMeta :: FilePath -> IO InterfaceFiles.SourceFileMeta
+readSourceFileMeta path = do
+  st <- getFileStatus path
+  let mtimeNs = fileStatusMTimeNs st
+      ctimeNs = fileStatusCTimeNs st
+  return InterfaceFiles.SourceFileMeta
+    { InterfaceFiles.sfmMTimeNs = mtimeNs
+    , InterfaceFiles.sfmCTimeNs = ctimeNs
+    , InterfaceFiles.sfmSize = fromIntegral (fileSize st)
+    , InterfaceFiles.sfmDevice = Just (fromIntegral (deviceID st))
+    , InterfaceFiles.sfmInode = Just (fromIntegral (fileID st))
+    }
+  where
+    fileStatusMTimeNs st = floor (toRational (modificationTimeHiRes st) * 1000000000)
+    fileStatusCTimeNs st = floor (toRational (statusChangeTimeHiRes st) * 1000000000)
+
 
 -- Compilation tasks, chasing imported modules, compilation and building executables -----------------
 
@@ -935,7 +955,7 @@ data FrontResult = FrontResult
   , frBackJob  :: Maybe BackJob
   }
 
-data CompileTask        = ActonTask { name :: A.ModName, src :: String, srcBytes :: B.ByteString, atree:: A.Module }
+data CompileTask        = ActonTask { name :: A.ModName, src :: String, srcBytes :: B.ByteString, sourceMeta :: Maybe InterfaceFiles.SourceFileMeta, atree:: A.Module }
                         | TyTask    { name :: A.ModName
                                     , tyHash :: B.ByteString               -- raw source bytes hash
                                     , tyPubHash :: B.ByteString          -- module public hash
@@ -976,7 +996,7 @@ data GlobalTask = GlobalTask
 -- TyTask uses header imports, ActonTask uses the parsed AST, and parse errors
 -- yield no imports.
 importsOf :: CompileTask -> [A.ModName]
-importsOf (ActonTask _ _ _ m) = A.importsOf m
+importsOf (ActonTask _ _ _ _ m) = A.importsOf m
 importsOf (TyTask { tyImports = ms }) = map fst ms
 importsOf (ParseErrorTask _ _) = []
 
@@ -1133,18 +1153,22 @@ selectAffectedTasks globalTasks changedFiles = do
 -- Prefer reading imports from .ty header; if no .ty, parse the source.
 -- Decide how to represent a module for the graph:
 -- 1) If .ty is missing/unreadable -> parse .act to obtain imports (ActonTask).
--- 2) If .ty exists and .act mtime < .ty mtime (and the acton binary isn't newer
---    than the .ty unless --ignore-compiler-version is set) -> trust header imports (TyTask).
--- 2b) If an in-memory overlay exists, skip source mtime and compare its hash to header
---     (unless the compiler is newer and --ignore-compiler-version is not set).
--- 3) If .act appears newer than .ty -> verify by content hash:
---      - If stored moduleSrcBytesHash == current hash -> header is still valid (TyTask)
+-- 2) If .ty exists but the compiler compatibility guard says it is stale ->
+--    parse .act to obtain fresh imports.
+-- 3) If an in-memory overlay exists, skip filesystem metadata and compare the
+--    overlay bytes hash to the stored moduleSrcBytesHash.
+-- 4) Otherwise compare current source metadata against the cached sourceMeta:
+--      - If metadata matches and the source mtime is strictly older than the
+--        .ty mtime -> reuse the cached header (TyTask)
+--      - If metadata differs, or source/.ty mtimes are equal, and stored
+--        moduleSrcBytesHash == current bytes hash
+--        -> header is still valid (TyTask) and refresh source metadata in .ty
 --      - Else -> parse .act to obtain accurate imports (ActonTask)
 -- Returns either a header-only TyTask stub or an ActonTask; no heavy decoding.
 --
 -- This is the core of incremental graph construction: it avoids parsing when
--- cached interfaces are reliable, while still falling back to parsing when
--- source changes are detected.
+-- cached interfaces are reliable, while treating source content hash as the
+-- correctness authority when metadata alone is inconclusive.
 readModuleTask :: Source.SourceProvider -> C.GlobalOptions -> C.CompileOptions -> Paths -> String -> IO CompileTask
 readModuleTask sp gopts opts paths actFile = do
     let mn      = modName paths
@@ -1153,31 +1177,34 @@ readModuleTask sp gopts opts paths actFile = do
     if not tyExists
       then parseForImports mn
       else do
-        -- .ty exists: read header for hashes/imports and compare timestamps
+        -- .ty exists: read the cached header and validate it against compiler
+        -- compatibility plus source metadata/content as needed.
         hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader tyFile
         case hdrE of
           Left _ -> parseForImports mn
-          Right (moduleSrcBytesHash, modulePubHash, moduleImplHash, imps, nameHashes, roots, tests, mdoc) -> do
-            tyTime <- getModificationTime tyFile
-            newCompiler <- compilerNewerThan tyTime
+          Right (cachedSourceMeta, moduleSrcBytesHash, modulePubHash, moduleImplHash, imps, nameHashes, roots, tests, mdoc) -> do
+            tyStatus <- getFileStatus tyFile
+            let tyMTimeNs = fileStatusMTimeNs tyStatus
+            newCompiler <- compilerNewerThan tyMTimeNs
             mOverlay <- Source.spReadOverlay sp actFile
             case mOverlay of
               Just snap ->
                 if newCompiler
                   then parseFromSnapshot mn snap
-                  else verifyOrParse mn snap moduleSrcBytesHash modulePubHash moduleImplHash imps nameHashes roots tests mdoc
+                  else verifyOrParse mn snap moduleSrcBytesHash modulePubHash moduleImplHash cachedSourceMeta Nothing imps nameHashes roots tests mdoc
               Nothing -> do
-                actTime <- Source.spGetModTime sp actFile
-                -- Equal mtimes are ambiguous with coarse timestamp resolution,
-                -- so treat them as stale and re-hash the source.
                 if newCompiler
                   then parseForImports mn
-                  else if actTime < tyTime
-                    then return (mkTyTask mn moduleSrcBytesHash modulePubHash moduleImplHash imps nameHashes roots tests mdoc)
-                    else do
-                      snap <- Source.spReadFile sp actFile
-                      verifyOrParse mn snap moduleSrcBytesHash modulePubHash moduleImplHash imps nameHashes roots tests mdoc
+                  else do
+                    currentSourceMeta <- readSourceFileMeta actFile
+                    if canReuseHeader cachedSourceMeta currentSourceMeta tyMTimeNs
+                      then return (mkTyTask mn moduleSrcBytesHash modulePubHash moduleImplHash imps nameHashes roots tests mdoc)
+                      else do
+                        snap <- Source.spReadFile sp actFile
+                        verifyOrParse mn snap moduleSrcBytesHash modulePubHash moduleImplHash cachedSourceMeta (Just currentSourceMeta) imps nameHashes roots tests mdoc
   where
+    fileStatusMTimeNs st = floor (toRational (modificationTimeHiRes st) * 1000000000)
+
     mkTyTask mn moduleSrcBytesHash modulePubHash moduleImplHash imps nameHashes roots tests mdoc =
       let nmodStub = I.NModule [] mdoc
           tmodStub = A.Module mn [] []
@@ -1193,31 +1220,56 @@ readModuleTask sp gopts opts paths actFile = do
                 , iface     = nmodStub
                 , typed     = tmodStub }
 
+    metadataMatches cached current =
+      case cached of
+        Nothing -> False
+        Just meta -> meta == current
+
+    canReuseHeader cached current tyMTimeNs =
+      metadataMatches cached current
+      && InterfaceFiles.sfmMTimeNs current < tyMTimeNs
+
     parseForImports mn = do
       parsedRes <- parseActFile sp mn actFile
       case parsedRes of
         Left diags -> return $ ParseErrorTask mn diags
-        Right (snap, m) -> return $ ActonTask mn (Source.ssText snap) (Source.ssBytes snap) m
+        Right (snap, m) -> do
+          mSourceMeta <- snapshotSourceMeta snap
+          return $ ActonTask mn (Source.ssText snap) (Source.ssBytes snap) mSourceMeta m
 
     parseFromSnapshot mn snap = do
       emod <- parseActSnapshot mn actFile snap
       case emod of
         Left diags -> return $ ParseErrorTask mn diags
-        Right m -> return $ ActonTask mn (Source.ssText snap) (Source.ssBytes snap) m
+        Right m -> do
+          mSourceMeta <- snapshotSourceMeta snap
+          return $ ActonTask mn (Source.ssText snap) (Source.ssBytes snap) mSourceMeta m
 
-    compilerNewerThan tyTime
+    snapshotSourceMeta snap
+      | Source.ssIsOverlay snap = return Nothing
+      | otherwise = Just <$> readSourceFileMeta actFile
+
+    compilerNewerThan tyMTimeNs
       | C.ignore_compiler_version opts = return False
       | otherwise = do
           exePathE <- (try getExecutablePath :: IO (Either SomeException FilePath))
           case exePathE of
             Left _ -> return False
             Right exePath -> do
-              exeTimeE <- (try (getModificationTime exePath) :: IO (Either SomeException UTCTime))
-              case exeTimeE of
+              exeStatusE <- (try (getFileStatus exePath) :: IO (Either SomeException FileStatus))
+              case exeStatusE of
                 Left _ -> return False
-                Right exeTime -> return (exeTime > tyTime)
+                Right exeStatus -> return (fileStatusMTimeNs exeStatus > tyMTimeNs)
 
-    verifyOrParse mn snap moduleSrcBytesHash modulePubHash moduleImplHash imps nameHashes roots tests mdoc = do
+    refreshCachedSourceMeta currentSourceMeta = do
+      let tyFilePath = outBase paths (modName paths) ++ ".ty"
+      tyRes <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readFile tyFilePath
+      case tyRes of
+        Left _ -> return ()
+        Right (_ms, nmod, tmod, _oldSourceMeta, srcHash, pubHash, implHash, imps, nameHashes, roots, tests, mdoc) ->
+          InterfaceFiles.writeFile tyFilePath srcHash pubHash implHash currentSourceMeta imps nameHashes roots tests mdoc nmod tmod
+
+    verifyOrParse mn snap moduleSrcBytesHash modulePubHash moduleImplHash cachedSourceMeta currentSourceMeta imps nameHashes roots tests mdoc = do
       let curHash = SHA256.hash (Source.ssBytes snap)
           short8 bs = take 8 (B.unpack $ Base16.encode bs)
           same = curHash == moduleSrcBytesHash
@@ -1233,7 +1285,10 @@ readModuleTask sp gopts opts paths actFile = do
                   ++ " len=" ++ show len
                   ++ if same then " (match)" else " (diff)")
       if same
-        then return (mkTyTask mn moduleSrcBytesHash modulePubHash moduleImplHash imps nameHashes roots tests mdoc)
+        then do
+          when (currentSourceMeta /= Nothing && currentSourceMeta /= cachedSourceMeta) $
+            refreshCachedSourceMeta currentSourceMeta
+          return (mkTyTask mn moduleSrcBytesHash modulePubHash moduleImplHash imps nameHashes roots tests mdoc)
         else parseFromSnapshot mn snap
 
 
@@ -1288,14 +1343,14 @@ readIfaceFromTy paths mn src mHash = do
         fileRes <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readFile tyF
         case fileRes of
           Left _ -> return $ Left (missingIfaceDiagnostics mn src mn)
-          Right (_ms, nmod, _tmod, _si, _ti, _implH, _ni, _nameHashes, _te, _tests, _tm) -> do
+          Right (_ms, nmod, _tmod, _sourceMeta, _srcH, _pubH, _implH, _imps, _nameHashes, _roots, _tests, _tm) -> do
             let I.NModule te mdoc = nmod
             ih <- case mHash of
                     Just h -> return h
                     Nothing -> do
                       hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader tyF
                       case hdrE of
-                        Right (_srcH, ihash, _implH, _impsH, _nameHashesH, _rootsH, _testsH, _docH) -> return ihash
+                        Right (_sourceMetaH, _srcH, ihash, _implH, _impsH, _nameHashesH, _rootsH, _testsH, _docH) -> return ihash
                         _ -> return B.empty
             return $ Right (te, mdoc, ih)
 
@@ -1369,11 +1424,12 @@ runFrontPasses :: C.GlobalOptions
                -> A.Module
                -> String
                -> B.ByteString
+               -> Maybe InterfaceFiles.SourceFileMeta
                -> (A.ModName -> IO (Maybe B.ByteString))
                -> (A.ModName -> IO (Maybe (M.Map A.Name InterfaceFiles.NameHashInfo)))
                -> (FrontPassProgress -> IO ())
                -> IO (Either [Diagnostic String] FrontResult)
-runFrontPasses gopts opts paths env0 parsed srcContent srcBytes resolveImportHash resolveNameHashMap onFrontProgress = do
+runFrontPasses gopts opts paths env0 parsed srcContent srcBytes sourceMeta resolveImportHash resolveNameHashMap onFrontProgress = do
   createDirectoryIfMissing True (getModPath (projTypes paths) mn)
   core
     `catch` handleGeneral
@@ -1596,7 +1652,7 @@ runFrontPasses gopts opts paths env0 parsed srcContent srcBytes resolveImportHas
                   let modulePubHash = Hashing.modulePubHashFromIface nmod nameHashes
                       moduleImplHash = Hashing.moduleImplHashFromNameHashes nameHashes
                   -- Write .ty now so later builds can reuse this front-pass work.
-                  InterfaceFiles.writeFile (outbase ++ ".ty") moduleSrcBytesHash modulePubHash moduleImplHash impsWithHash nameHashes roots tests mdoc nmod tchecked
+                  InterfaceFiles.writeFile (outbase ++ ".ty") moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta impsWithHash nameHashes roots tests mdoc nmod tchecked
 
                   iff (C.types opts && isRoot) $ dump mn "types" (Pretty.print tchecked)
                   iff (C.sigs opts && isRoot) $ dump mn "sigs" (Acton.Types.prettySigs env mn iface)
@@ -1908,14 +1964,16 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
               parsedRes <- parseActFile sp mn actFile
               case parsedRes of
                 Left diags -> return (ParseErrorTask mn diags)
-                Right (snap, m) -> return $ ActonTask mn (Source.ssText snap) (Source.ssBytes snap) m
+                Right (snap, m) -> do
+                  mSourceMeta <- if Source.ssIsOverlay snap then return Nothing else Just <$> readSourceFileMeta actFile
+                  return $ ActonTask mn (Source.ssText snap) (Source.ssBytes snap) mSourceMeta m
             _ -> return (gtTask t)
           case t' of
             ParseErrorTask{ parseDiagnostics = diags } -> do
               ccOnDiagnostics callbacks t optsBuiltin diags
               return (Left CompileBuiltinFailure)
             TyTask{} -> return (Right ())
-            ActonTask{ src = srcContent, srcBytes = srcBytes, atree = m } -> do
+            ActonTask{ src = srcContent, srcBytes = srcBytes, sourceMeta = mSourceMeta, atree = m } -> do
               ccOnFrontStart callbacks t optsBuiltin
               builtinEnv0 <- Acton.Env.initEnv (projTypes bPaths) True
               res <- runFrontPasses
@@ -1926,6 +1984,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
                 m
                 srcContent
                 srcBytes
+                mSourceMeta
                 (getPubHashCached bPaths)
                 (getNameHashMapCached bPaths)
                 (\p -> ccOnFrontProgress callbacks t optsBuiltin p)
@@ -2290,10 +2349,12 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
                               parsedRes <- parseActFile sp mn actFile
                               case parsedRes of
                                 Left diags -> return (ParseErrorTask mn diags)
-                                Right (snap, m) -> return $ ActonTask mn (Source.ssText snap) (Source.ssBytes snap) m
+                                Right (snap, m) -> do
+                                  mSourceMeta <- if Source.ssIsOverlay snap then return Nothing else Just <$> readSourceFileMeta actFile
+                                  return $ ActonTask mn (Source.ssText snap) (Source.ssBytes snap) mSourceMeta m
                     case t' of
                       ParseErrorTask{ parseDiagnostics = diags } -> return (key, Left diags)
-                      ActonTask{ src = srcContent, srcBytes = srcBytes, atree = m } -> do
+                      ActonTask{ src = srcContent, srcBytes = srcBytes, sourceMeta = mSourceMeta, atree = m } -> do
                         res <- runFrontPasses
                           gopts
                           optsT
@@ -2302,6 +2363,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
                           m
                           srcContent
                           srcBytes
+                          mSourceMeta
                           resolveImportHash
                           resolveNameHashMap'
                           (\p -> ccOnFrontProgress callbacks t optsT p)
@@ -2333,7 +2395,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
                       tyRes <- readTyFile
                       case tyRes of
                         Left diags -> return (key, Left diags)
-                        Right (_ms, nmod, tmod, moduleSrcBytesHash, modulePubHash, _moduleImplHash, imps, nameHashes, roots, tests, mdoc) -> do
+                        Right (_ms, nmod, tmod, sourceMeta, moduleSrcBytesHash, modulePubHash, _moduleImplHash, imps, nameHashes, roots, tests, mdoc) -> do
                           parsedRes <- parseActFile sp mn actFile
                           case parsedRes of
                             Left diags -> return (key, Left diags)
@@ -2373,7 +2435,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
                                       let updatedNameHashes =
                                             Hashing.refreshImplHashes nameHashes nameImplHashes implLocalDeps implExtHashes
                                           moduleImplHash = Hashing.moduleImplHashFromNameHashes updatedNameHashes
-                                      InterfaceFiles.writeFile tyFile moduleSrcBytesHash modulePubHash moduleImplHash imps updatedNameHashes roots tests mdoc nmod tmod
+                                      InterfaceFiles.writeFile tyFile moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps updatedNameHashes roots tests mdoc nmod tmod
                                       let I.NModule ifaceTE _mdoc = nmod
                                           backJob = Just (mkBackJob env1 tmod (Source.ssText snap) moduleImplHash)
                                           fr = mkFrontResult ifaceTE mdoc modulePubHash updatedNameHashes backJob
@@ -2386,7 +2448,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
                     tyRes <- readTyFile
                     case tyRes of
                       Left diags -> return (key, Left diags)
-                      Right (_ms, nmod, tmod, _moduleSrcBytesHash, modulePubHash, moduleImplHashStored, _imps, nameHashes, _roots, _tests, mdoc) -> do
+                      Right (_ms, nmod, tmod, _sourceMeta, _moduleSrcBytesHash, modulePubHash, moduleImplHashStored, _imps, nameHashes, _roots, _tests, mdoc) -> do
                         snap <- Source.readSource sp actFile
                         env1 <- Acton.Env.mkEnv (searchPath paths) envSnap tmod
                         let I.NModule ifaceTE _mdoc = nmod

@@ -243,7 +243,7 @@ initEnv path True          = return $ EnvF{ names = [(nPrim,NMAlias mPrim)],
                                             context = [],
                                             qlevel = 0,
                                             envX = () }
-initEnv path False         = do (_,nmod,_,_,_,_,_,_,_,_,_) <- InterfaceFiles.readFile (joinPath [path,"__builtin__.ty"])
+initEnv path False         = do (_,nmod,_,_,_,_,_,_,_,_,_,_) <- InterfaceFiles.readFile (joinPath [path,"__builtin__.ty"])
                                 let NModule envBuiltin builtinDocstring = nmod
                                     env0 = EnvF{ names = [(nPrim,NMAlias mPrim), (nBuiltin,NMAlias mBuiltin)],
                                                  imports = [mPrim,mBuiltin],
@@ -1065,7 +1065,7 @@ doImp spath env m            = do
               case tyFile of
                 Nothing -> return (env, te, seen')
                 Just tyF -> do
-                  (_, _, _, imps, _, _, _, _) <- InterfaceFiles.readHeader tyF
+                  (_sourceMeta, _, _, _, imps, _, _, _, _) <- InterfaceFiles.readHeader tyF
                   (env', seen'') <- subImpSeen seen' env (map fst imps)
                   return (env', te, seen'')
             Nothing -> do
@@ -1073,7 +1073,7 @@ doImp spath env m            = do
               case tyFile of
                 Nothing -> fileNotFound m
                 Just tyF -> do
-                  (ms,nmod,_,_,_,_,_,_,_,_,_) <- InterfaceFiles.readFile tyF
+                  (ms,nmod,_,_,_,_,_,_,_,_,_,_) <- InterfaceFiles.readFile tyF
                   (env', seen'') <- subImpSeen seen' env ms
                   let NModule te mdoc = nmod
                   return (addMod m te mdoc env', te, seen'')
