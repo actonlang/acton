@@ -1,6 +1,6 @@
 # Explicit types
 
-It is possible to explicitly specify the types of variables or arguments in a function. The syntax is similar to type hints in Python.
+It is possible to explicitly specify the types of variables or arguments in a function.
 
 Source:
 ```python

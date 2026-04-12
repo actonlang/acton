@@ -24,6 +24,7 @@
     - [Higher order functions](functions/higher_order.md)
   - [Types](types/intro.md)
     - [Explicit types](types/explicit.md)
+    - [Optionals](types/optionals.md)
     - [Generics](types/generics.md)
   - [Classes](classes/intro.md)
     - [Initialization](classes/initialization.md)
