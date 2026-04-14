@@ -179,7 +179,8 @@ instance Pretty Expr where
     pretty (Rest _ e n)             = prettyAtom e <> dot <> text "~" <> pretty n
     pretty (DotI _ e i)             = prettyAtom e <> dot <> pretty i
     pretty (RestI _ e i)            = prettyAtom e <> dot <> text "~" <> pretty i
-    pretty (Opt _ e)                = pretty e <> text "?"
+    pretty (Opt _ e True)           = pretty e <> text "?"
+    pretty (Opt _ e False)          = pretty e <> text "!"
     pretty (OptChain _ e)           = pretty e
     pretty (Lambda _ ps ks e fx)    = prettyFXnoWild fx <+> text "lambda" <+> prettyLambdaPar ps ks <> colon <+> pretty e
     pretty (Yield _ e)              = text "yield" <+> pretty e

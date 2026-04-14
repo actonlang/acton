@@ -1,0 +1,21 @@
+actor main(env):
+   d: ?dict[str,list[int]] = { "a": list(range(20)), "c": list(range(30)) }
+
+   a1 = d ?.get("a") ? [1::2] [5] # a1 has type ?int; last !/? operation decides type.
+   a2 = d !.get("a") ! [1::2] [5] # a2 has type int
+   a3 = d ?.get("a") ! [1::2] [5] # a3 has type int
+   a4 = d !.get("a") ? [1::2] [5] # a4 has type ?int
+  
+   print(a1,a2,a3,a4)
+   
+   print(d ?.get("b") ? [1::2])  # prints None; failure in ? operation
+   print(d !.get("b") ? [1::2])  # prints None; failure in ? operation
+   try:
+        print(d ?.get("b") ! [1::2])  # raises ValueError; failure in ! operation
+        print(d !.get("b") ! [1::2])  # Never executed; would raise ValueError
+   except ValueError:
+        print("ValueError")
+   env.exit(0)
+
+
+   

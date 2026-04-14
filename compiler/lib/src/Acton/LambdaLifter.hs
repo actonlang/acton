@@ -246,15 +246,15 @@ instance Lift Branch where
     ll env (Branch e ss)                = Branch <$> ll env e <*> llSuite env ss
 
 freefun env e@(Var l qn@(NoQ n))
-  | Just vts <- findFree n env          = Just (tApp (Var l (NoQ $ liftedName env n)) (map tVar tvs), vts)
+  | Just vts <- findFree n env          = Just (Var l (NoQ $ liftedName env n), map tVar tvs, vts)
   where Just tvs                        = lookup n (quantmap env)
 freefun env (Var l n)
-  | isDefOrClass env n                  = Just (Var l (primSubst n), [])
+  | isDefOrClass env n                  = Just (Var l (primSubst n), [], [])
 freefun env (TApp l e@(Var l' qn@(NoQ n)) ts)
-  | Just vts <- findFree n env          = Just (TApp l (Var l' (NoQ $ liftedName env n)) (map tVar tvs ++ conv ts), vts)
+  | Just vts <- findFree n env          = Just (Var l' (NoQ $ liftedName env n), map tVar tvs ++ conv ts, vts)
   where Just tvs                        = lookup n (quantmap env)
 freefun env (TApp l (Var l' n) ts)
-  | isDefOrClass env n                  = Just (TApp l (Var l' (primSubst n)) (conv ts), [])
+  | isDefOrClass env n                  = Just (Var l' (primSubst n), conv ts, [])
 freefun env e                           = Nothing
 
 closureConvert env lambda t0 vts0 es    = do n <- newName (nstr $ noq basename)
@@ -320,14 +320,16 @@ instance Lift Expr where
     ll env e@(Var l (NoQ n))
       | n `elem` dom (locals env)       = pure e
     ll env e
-      | Just (e',vts) <- freefun env e  = closureConvert env (Lambda l0 par KwdNIL (call e' vts) fx) t vts (map (eVar . fst) vts )
+      | Just (e',tvs,vts) <- freefun env e    -- e' is a Var, tvs is a (possibly empty) list of TVar, vts a list of (Name,Type) pairs (free vars in function body)
+                                        = closureConvert env (Lambda l0 par KwdNIL (call (tApp e' tvs) vts) fx) t vts (map (eVar . fst) vts )
       where par                         = pPar paramNames p
             call e' vts                 = Call l0 e' (addArgs vts $ pArg par) KwdNil
             TFun _ fx p _ t             = typeOf env e
 
     ll env (Call l e p KwdNil)
-      | Just (e',vts) <- freefun env e  = do p' <- ll env p
-                                             return $ Call l e' (addArgs vts p') KwdNil
+      | Just (e',tvs,vts) <- freefun env e
+                                        = do p' <- ll env p
+                                             return $ Call l (tApp e' tvs) (addArgs vts p') KwdNil
       | Async _ e' <- e,
         closedType env e'               = do e' <- ll env e'
                                              p' <- ll env p
