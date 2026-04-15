@@ -246,11 +246,17 @@ initTypeState s                         = TypeState { nextint = 1, effectstack =
 
 type TypeM a                            = ExceptT TypeError (State TypeState) a
 
-runTypeM                                :: TypeM a -> a
-runTypeM m                              = case evalState (runExceptT m) (initTypeState Map.empty) of
-                                            Right x  -> x
-                                            Left err -> error ("Unhandled TypeM exception: " ++ prstr loc ++ ": " ++ prstr str)
+initialTypeState                        :: TypeState
+initialTypeState                        = initTypeState Map.empty
+
+runTypeMState                           :: TypeState -> TypeM a -> (a, TypeState)
+runTypeMState st m                      = case runState (runExceptT m) st of
+                                            (Right x, st') -> (x, st')
+                                            (Left err, _)  -> error ("Unhandled TypeM exception: " ++ prstr loc ++ ": " ++ prstr str)
                                               where (loc,str) : _ = typeError err
+
+runTypeM                                :: TypeM a -> a
+runTypeM m                              = fst $ runTypeMState initialTypeState m
 
 currentState                            :: TypeM TypeState
 currentState                            = lift $ state $ \st -> (st, st)

@@ -179,7 +179,6 @@ addTyping env n s t c                   = c {info = addT n (simp env s) t (info 
 
 infTop                                  :: Maybe TypeProgressCallback -> Env -> Suite -> TypeM (TEnv,Suite)
 infTop progressCb env ss                = do --traceM ("\n## infEnv top")
-                                             pushFX fxPure tNone
                                              let total = sum (map stmtProgressWeight ss)
                                              (te,ss) <- infTopStmts progressCb env total 0 ss
                                              when (total > 0) $
@@ -196,9 +195,13 @@ infTopStmts progressCb env total done (s : ss)
                                                           emitTypeProgress progressCb total done (Just label) names weight
                                                           return (done + weight)
                                                         Nothing -> return done
-                                              (te1, s1) <- infTopStmt env s
+                                              let (te1, s1) = typeTopStmt env s
                                               (te2, ss2) <- infTopStmts progressCb (define te1 env) total done' ss
                                               return (te1++te2, s1++ss2)
+
+typeTopStmt env s                       = fst $ runTypeMState initialTypeState $ do
+                                          pushFX fxPure tNone
+                                          infTopStmt env s
 
 -- | Display label for progress UI.
 -- For recursive groups, abbreviate to a short "a, b, ... (+N)" form.
