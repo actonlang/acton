@@ -1,14 +1,14 @@
-import bar
-
 """Foo module - demonstrates cross-module type usage
 
 This module extensively uses types from the bar module
 to demonstrate documentation of cross-module references.
 """
 
+import bar
+
 # Module constants
 DEFAULT_PREFIX: str = "AUTO_"
-"""Default prefix for auto-generated labels"""
+# Default prefix for auto-generated labels
 
 # Functions using bar.Data
 def create_data(value: str) -> bar.Data:

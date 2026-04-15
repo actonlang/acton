@@ -1,6 +1,3 @@
-import file
-import time
-
 r"""Advanced actor based logging
 
 There are three main components to the logging system:
@@ -82,6 +79,9 @@ vvvvvvvvvv vvvvvvvvvvvvvvvvvv vv vvvvv
                        log message --------------------------------------------------------'                |
                    structured data -------------------------------------------------------------------------'
 """
+
+import file
+import time
 
 # Log levels
 UNSET, OFF, EMERGENCY, ALERT, CRITICAL, ERR, WARNING, INFO, NOTICE, DEBUG, VERBOSE, TRACE, ALL : int

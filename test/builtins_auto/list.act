@@ -1,7 +1,7 @@
-import testing
-
 """Test lists
 """
+
+import testing
 
 def test_list_index():
     l = [1, 2, 3, 1, 2, 5, 1]
