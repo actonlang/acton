@@ -48,6 +48,14 @@ customParseErrorToDiagnostic (TooManyQuotesError quote)        = ("Too many quot
                                                                    Hint "Use escape sequences for quotes inside strings, e.g. \"\"\"text \\\"with quotes\\\"\"\" -> text \"with quotes\""])
 customParseErrorToDiagnostic (MissingClosingQuote quote)       = ("Missing closing " ++ quote,
                                                                   [Hint $ "Add a closing quote (" ++ quote ++ ") to match the opening one"])
+customParseErrorToDiagnostic InvalidModuleStatement            = ("Only declarations and assignments are allowed at the module top level",
+                                                                  [Hint "Assign the value to a name or move runtime work into an actor or function"])
+customParseErrorToDiagnostic InvalidTopLevelAssignmentPattern  = ("Module top-level assignments must bind at least one name",
+                                                                  [Note "Module top-level assignments define constants by name",
+                                                                   Hint "Bind the value to a name or move the computation into an actor or function"])
+customParseErrorToDiagnostic (DuplicateTopLevelAssignment name) = ("Module top-level name '" ++ name ++ "' cannot be assigned more than once",
+                                                                   [Note "Module top-level assignments define constants",
+                                                                    Hint "Use a fresh name or move mutable state into an actor"])
 -- String interpolation errors
 customParseErrorToDiagnostic EmptyInterpolationExpression       = ("Empty expression in string interpolation",
                                                                   [Hint "Add an expression between the braces, e.g. {name}"])

@@ -26,7 +26,7 @@ import Data.Maybe (fromMaybe)
 import Data.Void
 import Data.Char
 import qualified Data.List.NonEmpty as N
-import qualified Data.Set as S
+import qualified Data.Set as Set
 import Numeric
 import Text.Megaparsec
 import Text.Megaparsec.Char
@@ -48,6 +48,9 @@ data CustomParseError = TypeVariableNameError String  -- Name that looks like ty
                       | InvalidFormatSpecifier String
                       | MissingClosingQuote String  -- String is the quote type (e.g., "\"\"\"" or "'")
                       | TooManyQuotesError String
+                      | InvalidModuleStatement
+                      | InvalidTopLevelAssignmentPattern
+                      | DuplicateTopLevelAssignment String
                       -- String interpolation errors
                       | EmptyInterpolationExpression
                       | MissingExpressionBeforeFormat
@@ -72,6 +75,12 @@ instance ShowErrorComponent CustomParseError where
   showErrorComponent (InvalidFormatSpecifier spec) = "Invalid format specifier" ++ if null spec then "" else ": " ++ spec
   showErrorComponent (MissingClosingQuote quote) = "missing closing " ++ quote
   showErrorComponent (TooManyQuotesError quote) = "too many quote characters"
+  showErrorComponent InvalidModuleStatement =
+    "Only declarations and assignments are allowed at the module top level"
+  showErrorComponent InvalidTopLevelAssignmentPattern =
+    "Module top-level assignments must bind at least one name"
+  showErrorComponent (DuplicateTopLevelAssignment name) =
+    "Module top-level name '" ++ name ++ "' cannot be assigned more than once"
   -- String interpolation errors
   showErrorComponent EmptyInterpolationExpression = "Empty expression in string interpolation"
   showErrorComponent MissingExpressionBeforeFormat = "Missing expression before format specifier"
@@ -1011,14 +1020,14 @@ identifier = (lexeme . try) $ do
     cs <- hidden (takeWhileP Nothing (\c -> isAlphaNum c || c=='_'))
     let x = c:cs
     if S.isKeyword x
-      then parseError (TrivialError off (Just (Tokens (N.fromList x))) (S.fromList [Label (N.fromList "identifier")]))
+      then parseError (TrivialError off (Just (Tokens (N.fromList x))) (Set.fromList [Label (N.fromList "identifier")]))
       else return x
 
 name, escname, tvarname :: Parser S.Name
 name = do off <- getOffset
           x <- identifier
           if isUpper (head x) && all isDigit (tail x)
-            then parseError (FancyError off (S.fromList [ErrorCustom (TypeVariableNameError x)]))
+            then parseError (FancyError off (Set.fromList [ErrorCustom (TypeVariableNameError x)]))
             else return $ S.Name (Loc off (off+length x)) x
 
 escname = name <|> addLoc (S.Name NoLoc . head <$> plainstrLiteral)  -- Assumes an escname cannot contain hex escape sequences
@@ -1027,7 +1036,7 @@ tvarname = do off <- getOffset
               x <- identifier
               if isUpper (head x) && all isDigit (tail x)
                then return $ S.Name (Loc off (off+length x)) x
-               else parseError (TrivialError off (Just (Tokens (N.fromList x))) (S.fromList [Label (N.fromList ("type variable (upper case letter optionally followed by digits)"))]))
+               else parseError (TrivialError off (Just (Tokens (N.fromList x))) (Set.fromList [Label (N.fromList ("type variable (upper case letter optionally followed by digits)"))]))
 
 module_name :: Parser S.ModName
 module_name = do
@@ -1069,6 +1078,7 @@ file_input = sc2 *>  do
     mbDocstring <- optional (try (L.nonIndented sc2 docstring_stmt <* eol <* sc2))
     is <- imports
     s <-  withCtx TOP top_suite
+    validateModuleSuite s
     eof
     -- Prepend docstring to suite if present
     let suite = case mbDocstring of
@@ -1083,6 +1093,25 @@ imports = many (L.nonIndented sc2 import_stmt <* eol <* sc2)
 
 top_suite :: Parser S.Suite
 top_suite = concat <$> (many (L.nonIndented sc2 stmt <|> newline1))
+
+validateModuleSuite :: S.Suite -> Parser ()
+validateModuleSuite stmts = do
+  assigned <- concat <$> mapM validateModuleStmt stmts
+  case duplicates assigned of
+    n:_ -> parseException (loc n) (DuplicateTopLevelAssignment (S.rawstr n))
+    []  -> return ()
+
+validateModuleStmt :: S.Stmt -> Parser [S.Name]
+validateModuleStmt stmt =
+  case stmt of
+    S.Assign _ pats _ ->
+      let names = Names.bound pats
+      in if null names
+         then parseException (loc pats) InvalidTopLevelAssignmentPattern
+         else return names
+    S.Signature{} -> return []
+    S.Decl{}      -> return []
+    _             -> parseException (S.sloc stmt) InvalidModuleStatement
 
 -- Row parsers ----------------------------------------------------------------------
 

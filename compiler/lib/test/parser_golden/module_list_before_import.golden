@@ -1,11 +1,9 @@
-ERROR: [error Parse error]: unexpected 'i'
-                     expecting end of input, end of line, or statement
-
-     ╭──▶ test.act@2:1-2:2
+ERROR: [error Syntax error]: Only declarations and assignments are allowed at the module top level
+     ╭──▶ test.act@1:1-1:10
      │
-   2 │ import math
-     • ┬ 
-     • ╰╸ unexpected 'i'
-     •    expecting end of input, end of line, or statement
-     •    
+   1 │ [1, 2, 3]
+     • ┬────────
+     • ╰╸ Only declarations and assignments are allowed at the module top level
+     •
+     │ Hint: Assign the value to a name or move runtime work into an actor or function
 ─────╯

@@ -6,10 +6,10 @@ that are used across the application.
 
 # Module constants
 VERSION: str = "1.0.0"
-"""Current version of the bar module"""
+# Current version of the bar module
 
 MAX_ITEMS: int = 1000
-"""Maximum number of items allowed in a container"""
+# Maximum number of items allowed in a container
 
 # Basic data class
 class Data(object):
@@ -312,5 +312,3 @@ def process_items[T](items: list[Processable[T]]) -> list[T]:
 def gt(a, b, c, d):
     """Function that takes generic types"""
     return (a + b, a - b, c + d)
-
-gt(1, 2, "a", "b")

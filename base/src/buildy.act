@@ -1,12 +1,12 @@
-import file
-import json
-import re
-
 """Buildy stuff
 
 Our projects have a built.act and it collides with this module if it would be
 called just 'build', so it's buildy for buildy stuff.
 """
+
+import file
+import json
+import re
 
 class BuildSpecError(ValueError):
     pass

@@ -112,7 +112,7 @@ endif
 BUILTIN_HFILES=$(wildcard base/builtin/*.h)
 
 DIST_BINS=$(ACTONC) dist/bin/actondb dist/bin/runacton dist/bin/lsp-server-acton
-DIST_ZIG=dist/zig
+DIST_ZIG=$(ZIG)
 
 .PHONY: test-backend
 test-backend: $(BACKEND_TESTS)
@@ -434,11 +434,14 @@ dist/completion/acton.bash-completion: completion/acton.bash-completion
 	mkdir -p "$(dir $@)"
 	cp "$<" "$@"
 
-dist/zig: deps-download/zig-$(ARCH)-$(OS)-$(ZIG_VERSION).tar.xz
-	mkdir -p "$@"
-	cd "$@" && tar Jx --strip-components=1 -f "../../$^"
-	rm -rf "$@/doc"
-	cp -a deps/zig-extras/* "$@"
+$(ZIG): deps-download/zig-$(ARCH)-$(OS)-$(ZIG_VERSION).tar.xz
+	mkdir -p "$(dir $@)"
+	cd "$(dir $@)" && tar Jx --strip-components=1 -f "../../$<"
+	rm -rf "$(dir $@)/doc"
+	cp -a deps/zig-extras/* "$(dir $@)"
+
+.PHONY: dist/zig
+dist/zig: $(ZIG)
 
 
 # Check if ZIG_VERSION contains -dev, in which case we pull down a nightly,

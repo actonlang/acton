@@ -94,6 +94,56 @@ main = do
           testModuleParseError "module_func_before_import" "def foo():\n    pass\nimport math\n"
           testModuleParseError "module_actor_before_import" "actor Foo():\n    pass\nimport math\n"
 
+        describe "Module-level constants" $ do
+          it "allows top-level declarations, signatures, and assignments" $ do
+            expectModuleParseSuccess $ unlines
+              [ "value : int"
+              , "def helper() -> int:"
+              , "    return 41"
+              , "value = helper()"
+              ]
+
+          it "rejects top-level expression statements" $ do
+            err <- expectModuleParseFailure $ unlines
+              [ "value = 1"
+              , "1 + 2"
+              ]
+            err `shouldContain` "Only declarations and assignments are allowed at the module top level"
+
+          it "rejects top-level control flow" $ do
+            err <- expectModuleParseFailure $ unlines
+              [ "import math"
+              , "if True:"
+              , "    value = 1"
+              ]
+            err `shouldContain` "Only declarations and assignments are allowed at the module top level"
+
+          it "rejects top-level reassignment" $ do
+            err <- expectModuleParseFailure $ unlines
+              [ "value = 1"
+              , "value = 2"
+              ]
+            err `shouldContain` "Module top-level name 'value' cannot be assigned more than once"
+
+          it "allows top-level destructuring with at least one bound name" $ do
+            expectModuleParseSuccess "left, _ = (1, 2)\n"
+
+          it "rejects duplicate names within one top-level assignment" $ do
+            err <- expectModuleParseFailure "left, left = (1, 2)\n"
+            err `shouldContain` "Module top-level name 'left' cannot be assigned more than once"
+
+          it "rejects top-level wildcard-only assignment" $ do
+            _ <- expectModuleParseFailure "_ = 1\n"
+            return ()
+
+          it "rejects top-level assignments with no bound names" $ do
+            err <- expectModuleParseFailure "[] = []\n"
+            err `shouldContain` "Module top-level assignments must bind at least one name"
+
+          it "rejects top-level wildcard-only destructuring assignment" $ do
+            err <- expectModuleParseFailure "[_, _] = [1, 2]\n"
+            err `shouldContain` "Module top-level assignments must bind at least one name"
+
       describe "Numeric literals" $ do
         it "parses INT64_MIN as a single literal" $ do
           case parseStmtAst "a = -9223372036854775808" of
@@ -1048,6 +1098,18 @@ parseModuleTest input =
     handleCustomParseException :: P.CustomParseException -> IO (Either String String)
     handleCustomParseException (P.CustomParseException loc err) =
       return $ Left $ formatCustomParseError "test.act" inputWithNewline loc err
+
+expectModuleParseSuccess :: String -> IO ()
+expectModuleParseSuccess input =
+  case parseModuleTest input of
+    Left err -> expectationFailure $ "Parse failed: " ++ err
+    Right _ -> return ()
+
+expectModuleParseFailure :: String -> IO String
+expectModuleParseFailure input =
+  case parseModuleTest input of
+    Left err -> return err
+    Right result -> expectationFailure $ "Expected parse failure, got: " ++ result
 
 parseStmtAst :: String -> Either String [S.Stmt]
 parseStmtAst input =
