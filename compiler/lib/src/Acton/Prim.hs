@@ -148,6 +148,7 @@ primMkSet           = gPrim "mkSet"
 primMkDict          = gPrim "mkDict"
 primAnnot           = gPrim "annot"
 
+primRaiseValueError = gPrim "raiseValueError"
 primUGetItem        = gPrim "listD_U__getitem__"
 primUNext           = gPrim "rangeD_U__next__"
 
@@ -236,6 +237,7 @@ primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec Nothing)
                             (noq primMkSet,         NDef scMkSet NoDec Nothing),
                             (noq primMkDict,        NDef scMkDict NoDec Nothing),
                             (noq primAnnot,         NDef scAnnot NoDec Nothing),
+                            (noq primRaiseValueError,NDef scRaiseValueError NoDec Nothing), 
                             (noq primUGetItem,      NDef scUGetItem NoDec Nothing),
                             (noq primUNext,         NDef scUNext NoDec Nothing)
                       ]
@@ -561,6 +563,10 @@ scUGetItem          = tSchema [qbind a] tUGetItem
   where tUGetItem   = tFun fxPure (posRow (tList (tVar a)) (posRow tInt posNil)) kwdNil (tVar a)
         a           = TV KType $ name "A"
 
+scRaiseValueError   = tSchema [qbind a] tRaiseValErr
+  where tRaiseValErr= tFun fxPure (posRow tStr posNil) kwdNil (tVar a)
+        a           = TV KType (name "A")
+        
 -- $rangeD_U__next__ : [A] => (Iterator[A]) -> A   will only be used to replace B_IteratorD_range.__next__
 scUNext             = tSchema [] tUNext
   where tUNext      = tFun fxMut (posRow (tIterator (tInt)) posNil) kwdNil tInt

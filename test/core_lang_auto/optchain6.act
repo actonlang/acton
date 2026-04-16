@@ -1,0 +1,40 @@
+class Alpha:
+    def __init__(self, b: ?Beta):
+        self.b = b
+
+class Beta(object):
+    def __init__(self, c: ?Gamma):
+        self.c = c
+
+class Gamma:
+    def __init__(self, s: str):
+        self.s = s
+
+def new_opt(a: ?Alpha):
+    # Using ? will shortcut and return None if any accessed field is None
+    part: ?str = a?.b?.c?.s
+    if part is not None:
+        print("Got a part:", part)
+    else:
+        print("Got None")
+
+def new_nonopt(a: ?Alpha):
+    # Using ! will check each field and if it is None we will get an exception. If all fields are not-None then we can proceed and thus the return value is a non-optional str
+    part: str = a!.b!.c!.s
+    print("Got a part:", part)
+
+actor main(env):
+    c = Gamma("hello")
+    b = Beta(c)
+    a = Alpha(b)
+    new_opt(a)
+    new_nonopt(a)
+    b.c = None
+    new_opt(a)
+    try:
+        new_nonopt(a)
+    except ValueError:
+        print("ValueError")
+    env.exit(0)
+    
+        

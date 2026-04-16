@@ -1938,30 +1938,30 @@ instance Infer Expr where
 
                                          -- The parser inserts Opt nodes only within OptChain nodes (which each contains exactly one Opt node).
                                          -- The Opt nodes are handled and eliminated by infer on an OptChain node.
---    infer env (Opt l e)                = do (cs, t, e') <- infer env e
---                                            return (cs, tOpt t, Opt l e')
-                                            
                                          -- e is an atomic expression (atom_expr in the parser) which contains exactly one ? in its sequence of trailers
     infer env (OptChain l e)           = do x <- newTmp                                                                                      -- Example: a s1 s2 ? t1 t2
-                                            let (e1,e2) = split x e                                                                          -- e1 = a s1 s2, e2 = x t1 t2
+                                            let (b,e1,e2) = split x e                                                                          -- e1 = a s1 s2, e2 = x t1 t2
                                             te <- newUnivar env
                                             (cs1,e1') <- inferSub env (tOpt te) e1
                                             let env1 = define [(x,NVar te)] env
                                             (cs2,t,e2') <- infer env1 e2
                                             y <- newTmp
-                                            w <- newWitness
-                                            w1 <- newWitness
-                                            t1 <- newUnivar env
-                                            return (Sub (noinfo 444) env w tNone t1 : Sub (noinfo 555) env w1 t t1 : cs1++cs2,
-                                                     t1, eLet [sAssign (pVar y (tOpt te)) e1']
+                                            (cs3,t',e3) <- alt t te b
+                                            return (cs1++cs2++cs3,
+                                                     t', eLet [sAssign (pVar y (tOpt te)) e1']
                                                                            (eCond (termsubst [(x,eCAST (tOpt te) te (eVar y))] e2')
                                                                                   (eCall (tApp (eQVar primISNOTNONE) [te]) [eVar y])
-                                                                                  eNone))
-      where split x (Opt l e)           = (e, eVar x)
-            split x (Dot l e n)         = (e1,Dot l e2 n) where (e1,e2) = split x e
-            split x (Call l f ps ks)    = (e1,Call l e2 ps ks) where (e1,e2) = split x f
-            split x (Index l e ix)      = (e1,Index l e2 ix) where (e1,e2) = split x e
-            split x (Slice l e sz)      = (e1,Slice l e2 sz) where (e1,e2) = split x e
+                                                                                  e3))
+      where split x (Opt l e b)         = (b, e, eVar x)
+            split x (Dot l e n)         = (b, e1,Dot l e2 n) where (b,e1,e2) = split x e
+            split x (Call l f ps ks)    = (b, e1,Call l e2 ps ks) where (b,e1,e2) = split x f
+            split x (Index l e ix)      = (b, e1,Index l e2 ix) where (b,e1,e2) = split x e
+            split x (Slice l e sz)      = (b, e1,Slice l e2 sz) where (b,e1,e2) = split x e
+            alt t te True               = do w <- newWitness
+                                             w1 <- newWitness
+                                             t1 <- newUnivar env
+                                             return ([Sub (noinfo 444) env w tNone t1, Sub (noinfo 555) env w1 t t1],t1,eNone)
+            alt t te False              = return ([],t,eCall (tApp (eQVar primRaiseValueError) [te]) [Strings NoLoc ["Forced unwrapping applied to None"]] )
  
     infer env e@(Rest _ _ _)            = notYetExpr e
 --    infer env (Rest l e n)              = do p <- newUnivarOfKind PRow env

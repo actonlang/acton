@@ -1803,7 +1803,11 @@ atom_expr = do
                      (l,(kind,f)) <- withLoc (
                          (do
                             (l,_) <- withLoc(symbol "?")
-                            return (COpt,\a -> S.Opt (loc a `upto` l) a))
+                            return (COpt,\a -> S.Opt (loc a `upto` l) a True))
+                        <|>
+                          (do
+                            (l,_) <- withLoc(opPref "!")
+                            return (COpt,\a -> S.Opt (loc a `upto` l) a False))
                         <|>
                          (do
                            f <- brackets sliceOrIndex

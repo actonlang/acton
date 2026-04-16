@@ -410,7 +410,9 @@ instance PreCPS Expr where
       where t                           = typeOf env e0
     pre env (Async l e)                 = Async l <$> pre env e
     pre env (TApp l e ts)               = TApp l <$> pre env e <*> pure ts
-    pre env (Let l ss e)                = Let l <$> pre env1 ss <*> pre env1 e
+    pre env (Let l ss e)                = do ss' <- preSuite env ss
+                                             (prefixes,e') <- withPrefixes $ pre env1 e
+                                             return $ Let l (ss' ++ prefixes) e'
        where env1                       = define (envOf ss) env
     pre env (Cond l e1 e e2)            = do (pre1,e1') <- withPrefixes $ pre env e1
                                              (pre2,e2') <- withPrefixes $ pre env e2
