@@ -2001,6 +2001,67 @@ p43_equal_act_ty_mtime_hashes_source =
     assertBool ("did not expect stale import diagnostic\n" ++ T.unpack out)
       (not (T.isInfixOf "Type interface file not found or unreadable for a" out))
 
+p44_provider_import_rename_reruns_dependent_front :: TestTree
+p44_provider_import_rename_reruns_dependent_front =
+  testCase "44-provider import rename reruns dependent front passes" $ do
+    let proj = casesProjDir
+        src = casesSrcDir
+        actMain = src </> "main.act"
+        actBase = src </> "base.act"
+        oldPkgDir = src </> "oldpkg"
+        newPkgDir = src </> "newpkg"
+        modMain = modLabel proj "main"
+        modBase = modLabel proj "base"
+    ensureCasesProject
+    createDirectoryIfMissing True oldPkgDir
+    writeFileUtf8 actMain $ T.unlines
+      [ "import base"
+      , ""
+      , "class Derived(base.Base):"
+      , "    pass"
+      , ""
+      , "actor main(env: Env):"
+      , "    env.exit(0)"
+      ]
+    writeFileUtf8 actBase $ T.unlines
+      [ "import oldpkg.ttt as ttt"
+      , ""
+      , "class Base(ttt.TransformFunction):"
+      , "    pass"
+      ]
+    writeFileUtf8 (src </> "oldpkg.act") ""
+    writeFileUtf8 (oldPkgDir </> "ttt.act") $ T.unlines
+      [ "class TransformFunction(object):"
+      , "    pass"
+      ]
+    res1 <- runActonIn proj ["build", "--color", "never", "--skip-build"]
+    assertExitSuccess "initial build before provider import rename" res1
+    createDirectoryIfMissing True newPkgDir
+    writeFileUtf8 actBase $ T.unlines
+      [ "import newpkg.ttt as ttt"
+      , ""
+      , "class Base(ttt.TransformFunction):"
+      , "    pass"
+      ]
+    writeFileUtf8 (src </> "newpkg.act") ""
+    writeFileUtf8 (newPkgDir </> "ttt.act") $ T.unlines
+      [ "class TransformFunction(object):"
+      , "    pass"
+      ]
+    removeFile (src </> "oldpkg.act")
+    removeFile (oldPkgDir </> "ttt.act")
+    removeDirIfExists oldPkgDir
+    res2@(_ec2, out2) <- runActonIn proj ["build", "--color", "never", "--verbose", "--skip-build"]
+    assertExitSuccess "rebuild after provider import rename" res2
+    assertBool ("expected base.act to type check after provider import rename\n" ++ T.unpack out2)
+      (typechecked out2 modBase)
+    assertBool ("expected main.act to type check after provider import rename\n" ++ T.unpack out2)
+      (typechecked out2 modMain)
+    assertBool ("did not expect stale transitive import diagnostic\n" ++ T.unpack out2)
+      (not (T.isInfixOf "Type interface file not found or unreadable for oldpkg.ttt" out2))
+    assertBool ("expected stale-cache log for missing transitive dep hash\n" ++ T.unpack out2)
+      (T.isInfixOf "missing dep hashes in" out2 && T.isInfixOf "oldpkg.ttt.TransformFunction" out2)
+
 -- Main -----------------------------------------------------------------------
 
 -- | Tasty entry point for incremental tests.
@@ -2066,5 +2127,6 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
       [ p41_stale_header_missing_import_reparses_source
       , p42_metadata_drift_refreshes_header
       , p43_equal_act_ty_mtime_hashes_source
+      , p44_provider_import_rename_reruns_dependent_front
       ]
   ]

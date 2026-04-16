@@ -2227,7 +2227,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
             case qn of
               A.GName m n -> resolveNameHashMap' m >>= \hm ->
                 return $ case hm of
-                  Nothing -> Left (missingIfaceDiagnostics mn "" m)
+                  Nothing -> Right Nothing
                   Just hmap ->
                     case M.lookup n hmap of
                       Nothing -> Right Nothing
@@ -2236,7 +2236,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
                         in if B.null h then Right Nothing else Right (Just h)
               A.QName m n -> resolveNameHashMap' m >>= \hm ->
                 return $ case hm of
-                  Nothing -> Left (missingIfaceDiagnostics mn "" m)
+                  Nothing -> Right Nothing
                   Just hmap ->
                     case M.lookup n hmap of
                       Nothing -> Right Nothing
