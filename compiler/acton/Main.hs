@@ -267,11 +267,6 @@ padLeft width s
     width' = max 0 width
     len = length s
 
-appendTimerField :: String -> Int -> String -> String
-appendTimerField base timerWidth timer
-    | null timer = base
-    | otherwise = base ++ padLeft timerWidth timer
-
 progressSpinnerThreshold :: Int
 progressSpinnerThreshold = 25
 
@@ -1354,15 +1349,13 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
         statusWidth = 68
         nameWidth = labelWidth + 2 + statusWidth
         timePadWidth = nameWidth + length timeSep
-        plainLogWidth = timePadWidth + 8
+        timerMinWidth = length "999.999 s"
+        plainLogWidth = timePadWidth + timerMinWidth
         detailStmtIndentWide = replicate 5 ' '
         detailBindsIndentWide = replicate 7 ' '
         detailStmtIndentNarrow = "  "
         detailBindsIndentNarrow = "    "
         plainDoneIndent = replicate 3 ' '
-        appendTimerField base timerWidth timer
-          | null timer = base
-          | otherwise = base ++ padLeft timerWidth timer
         plainStatusColumns modLbl status =
           padRight labelWidth modLbl
           ++ "  "
@@ -1383,11 +1376,11 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
           | otherwise = best
         buildLineCandidate width preserveBlankLabel modLbl statusRender timerRank timerWidth timer =
           let doneIndent = replicate (progressPrefixWidth width) ' '
-              timerCols = if null timer then 0 else timerWidth
+              timerCols = if null timer then 0 else 1 + timerWidth
               bodyWidth = max 0 (width - length doneIndent - timerCols)
               layout = fitBuildLineLayout bodyWidth labelWidth statusWidth preserveBlankLabel modLbl statusRender
               body = bllText layout
-              line = doneIndent ++ appendTimerField body timerWidth timer
+              line = doneIndent ++ body ++ if null timer then "" else " " ++ padLeft timerWidth timer
               score =
                 ( if bllAligned layout then 1 :: Int else 0
                 , if bllHasStatus layout then 1 :: Int else 0
@@ -1400,7 +1393,7 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
         doneStatusLine width modLbl statusRender shortStatus mt =
           let preciseTimer = maybe "" fmtTimePrecise mt
               compactTimer = maybe "" fmtTimeCompact mt
-              timerWidth = length preciseTimer
+              timerWidth = max timerMinWidth (length preciseTimer)
               fullRenderer budget =
                 case statusRender budget of
                   Just status
@@ -2795,6 +2788,7 @@ progressRefreshUnlocked ui st = do
     (_, _, cols) <- termSizeSync (puTermSize ui)
     let renderCols = safeLiveWidth cols
         spinnerPrefixWidth = progressPrefixWidth cols
+        timerMinWidth = length "999.999 s"
     let progressDone = "\ESC[48;5;24m"
         progressReset = "\ESC[0m"
         paintProgressLine mprog line =
@@ -2816,13 +2810,13 @@ progressRefreshUnlocked ui st = do
         formatLine task =
           let elapsedPrecise = fmtTimePrecise (diffTimeSpec now (ptStart task))
               elapsedCompact = fmtTimeCompact (diffTimeSpec now (ptStart task))
-              timerWidth = length elapsedPrecise
+              timerWidth = max timerMinWidth (length elapsedPrecise)
               liveCandidate timerRank timer =
-                let timerCols = if null timer then 0 else timerWidth
+                let timerCols = if null timer then 0 else 1 + timerWidth
                     bodyWidth = max 0 (renderCols - spinnerPrefixWidth - timerCols)
                     layout = ptRenderLine task bodyWidth
                     body = bllText layout
-                    line = appendTimerField body timerWidth timer
+                    line = body ++ if null timer then "" else " " ++ padLeft timerWidth timer
                     score =
                       ( if bllAligned layout then 1 :: Int else 0
                       , if bllHasStatus layout then 1 :: Int else 0
