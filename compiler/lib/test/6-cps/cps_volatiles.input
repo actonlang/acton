@@ -3,12 +3,12 @@ proc def force_cps (arg : __builtin__.int) -> __builtin__.int:
     return arg
 
 proc def compute (aa : __builtin__.int) -> __builtin__.int:
-    W_21: __builtin__.Plus[__builtin__.int] = __builtin__.IntegralD_int()
-    W_6: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
-    xx: __builtin__.int = W_6.__fromatom__(1)
+    W_compute_19: __builtin__.Plus[__builtin__.int] = __builtin__.IntegralD_int()
+    W_compute_4: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+    xx: __builtin__.int = W_compute_4.__fromatom__(1)
     if $PUSH():
-        xx = W_21.__iadd__(xx, force_cps(W_6.__fromatom__(1)))
-        aa = W_21.__iadd__(aa, force_cps(W_6.__fromatom__(1)))
+        xx = W_compute_19.__iadd__(xx, force_cps(W_compute_4.__fromatom__(1)))
+        aa = W_compute_19.__iadd__(aa, force_cps(W_compute_4.__fromatom__(1)))
         $DROP()
     else:
         N_x: __builtin__.BaseException = $POP()
@@ -16,26 +16,26 @@ proc def compute (aa : __builtin__.int) -> __builtin__.int:
             pass
         else:
             $RAISE(N_x)
-    N_1tmp: __builtin__.int = W_21.__add__(xx, aa)
+    N_1tmp: __builtin__.int = W_compute_19.__add__(xx, aa)
     return N_1tmp
 
-W_104: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+W_main_74: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
 
-W_121: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
+W_main_91: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
 
-W_59: __builtin__.Eq[?__builtin__.int] = $EqOpt@[__builtin__.int](W_121)
+W_main_29: __builtin__.Eq[?__builtin__.int] = $EqOpt@[__builtin__.int](W_main_91)
 
 # recursive group:
 class main ($Actor, __builtin__.value):
     @property
     v : __builtin__.int
     proc def __init__ (self : Self, env : __builtin__.Env) -> None:
-        self.v = compute(W_104.__fromatom__(10))
-        if W_59.__eq__(self.v, W_104.__fromatom__(13)):
-            (async env.exit)(W_104.__fromatom__(0))
+        self.v = compute(W_main_74.__fromatom__(10))
+        if W_main_29.__eq__(self.v, W_main_74.__fromatom__(13)):
+            (async env.exit)(W_main_74.__fromatom__(0))
         else:
             print@[(__builtin__.str, __builtin__.int)](("\"Excpected 13, got\"", self.v), None, None, None, None)
-            (async env.exit)(W_104.__fromatom__(1))
+            (async env.exit)(W_main_74.__fromatom__(1))
 proc def mainG_newact (env : __builtin__.Env) -> main:
     G_act: main = $NEWACTOR@[main]()
     $InstallFinalizer@[main](G_act)

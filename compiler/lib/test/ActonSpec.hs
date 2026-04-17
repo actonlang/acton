@@ -2,7 +2,7 @@
 
 module Main (main) where
 
-import Data.Char (toLower)
+import Data.Char (toLower, isAlphaNum)
 
 
 import qualified Acton.Parser as P
@@ -31,7 +31,7 @@ import Test.Syd.Def.Golden (goldenTextFile)
 import qualified Control.Monad.Trans.State.Strict as St
 import Text.Megaparsec (runParser, errorBundlePretty, ShowErrorComponent(..))
 import qualified Data.Text as T
-import Data.List (isInfixOf, isPrefixOf)
+import Data.List (isInfixOf, isPrefixOf, nub, sort)
 import Data.Bits (shiftL, (.|.))
 import Error.Diagnose (printDiagnostic, prettyDiagnostic, WithUnicode(..), TabSize(..), defaultStyle, addReport, addFile)
 import Error.Diagnose.Report (Report(..))
@@ -504,6 +504,39 @@ main = do
       testTypes env0 ["test_discovery"]
 
       testAttributesInitialization env0
+
+      it "keeps generated names stable within unchanged defs" $ do
+        let fooSource = unlines
+              [ "def foo(xs: list[int], y: int):"
+              , "    [xs][0][0] += y"
+              ]
+            warmSource = unlines
+              [ "def warm(a):"
+              , "    return (a + 1) * 2"
+              , ""
+              ]
+        namesA <- typedDefGeneratedNames env0 "stable_names_a" fooSource "foo"
+        namesB <- typedDefGeneratedNames env0 "stable_names_b" (warmSource ++ fooSource) "foo"
+        namesA `shouldSatisfy` any ("W_foo_" `isPrefixOf`)
+        namesA `shouldSatisfy` any ("V_foo_" `isPrefixOf`)
+        namesA `shouldBe` namesB
+
+      it "accepts docstrings and extension decls at top level" $ do
+        let src = unlines
+              [ "\"\"\"Module docstring\"\"\""
+              , ""
+              , "protocol Proto:"
+              , "    f: () -> int"
+              , ""
+              , "class Cls:"
+              , "    pass"
+              , ""
+              , "extension Cls(Proto):"
+              , "    def f(self) -> int:"
+              , "        return 0"
+              ]
+        tchecked <- typecheckSource env0 "tlname_doc_ext" src
+        tchecked `shouldSatisfy` const True
 
     describe "Import Semantics" $ do
       it "omits private names from the public interface" $ do
@@ -1246,6 +1279,38 @@ parseAct env0 modulePath = do
   parsed <- liftIO $ P.parseModule moduleName act_file src
   env <- liftIO $ Acton.Env.mkEnv [sysTypesPath] env0 parsed
   return (env, parsed)
+
+typecheckSource env0 modName src = do
+  let moduleName = S.modName [modName]
+      actFile = "<" ++ modName ++ ">"
+      sysTypesPath = ".." </> ".." </> "dist" </> "base" </> "out" </> "types"
+  parsed <- liftIO $ P.parseModule moduleName actFile src
+  env <- liftIO $ Acton.Env.mkEnv [sysTypesPath] env0 parsed
+  kchecked <- liftIO $ Acton.Kinds.check env parsed
+  (_, tchecked, _, _, _) <- liftIO $ Acton.Types.reconstruct Nothing env kchecked
+  return tchecked
+
+typedDefGeneratedNames env0 modName src defName = do
+  tchecked <- typecheckSource env0 modName src
+  case findTypedDef defName tchecked of
+    Just d ->
+      pure $ generatedInternalNames (Pretty.print d)
+    Nothing ->
+      expectationFailure ("Definition not found: " ++ defName) >> pure []
+
+findTypedDef defName (S.Module _ _ ss) = findInSuite ss
+  where findInSuite [] = Nothing
+        findInSuite (S.Decl _ ds : ss) =
+          case [ d | d@(S.Def _ n _ _ _ _ _ _ _ _) <- ds, prstr n == defName ] of
+            d : _ -> Just d
+            [] -> findInSuite ss
+        findInSuite (_ : ss) = findInSuite ss
+
+generatedInternalNames s = sort . nub . filter isGenerated $ words $ map keep s
+  where keep c
+          | isAlphaNum c || c == '_' = c
+          | otherwise                = ' '
+        isGenerated n                = "W_" `isPrefixOf` n || "V_" `isPrefixOf` n
 
 
 genTests pass_name dir testname input_data output_data = do

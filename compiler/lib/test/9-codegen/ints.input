@@ -23,13 +23,13 @@ U_5int16_max: __builtin__.i16 = (UNBOX __builtin__.i16 32767)
 
 int16_max: __builtin__.i16 = (BOX __builtin__.i16 U_5int16_max)
 
-W_20: __builtin__.Number[__builtin__.i8] = __builtin__.IntegralD_i8()
+W_int8_min_2: __builtin__.Number[__builtin__.i8] = __builtin__.IntegralD_i8()
 
-int8_min: __builtin__.i8 = W_20.__fromatom__(-128)
+int8_min: __builtin__.i8 = W_int8_min_2.__fromatom__(-128)
 
-W_23: __builtin__.Number[__builtin__.i8] = __builtin__.IntegralD_i8()
+W_int8_max_2: __builtin__.Number[__builtin__.i8] = __builtin__.IntegralD_i8()
 
-int8_max: __builtin__.i8 = W_23.__fromatom__(127)
+int8_max: __builtin__.i8 = W_int8_max_2.__fromatom__(127)
 
 U_6uint64_min: __builtin__.u64 = (UNBOX __builtin__.u64 0)
 
@@ -55,13 +55,13 @@ U_11uint16_max: __builtin__.u16 = (UNBOX __builtin__.u16 65535)
 
 uint16_max: __builtin__.u16 = (BOX __builtin__.u16 U_11uint16_max)
 
-W_42: __builtin__.Number[__builtin__.u8] = __builtin__.IntegralD_u8()
+W_uint8_min_2: __builtin__.Number[__builtin__.u8] = __builtin__.IntegralD_u8()
 
-uint8_min: __builtin__.u8 = W_42.__fromatom__(0)
+uint8_min: __builtin__.u8 = W_uint8_min_2.__fromatom__(0)
 
-W_45: __builtin__.Number[__builtin__.u8] = __builtin__.IntegralD_u8()
+W_uint8_max_2: __builtin__.Number[__builtin__.u8] = __builtin__.IntegralD_u8()
 
-uint8_max: __builtin__.u8 = W_45.__fromatom__(255)
+uint8_max: __builtin__.u8 = W_uint8_max_2.__fromatom__(255)
 
 bigint_small: __builtin__.bigint = 42
 
