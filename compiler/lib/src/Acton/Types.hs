@@ -179,7 +179,6 @@ addTyping env n s t c                   = c {info = addT n (simp env s) t (info 
 
 infTop                                  :: Maybe TypeProgressCallback -> Env -> Suite -> TypeM (TEnv,Suite)
 infTop progressCb env ss                = do --traceM ("\n## infEnv top")
-                                             pushFX fxPure tNone
                                              let total = sum (map stmtProgressWeight ss)
                                              (te,ss) <- infTopStmts progressCb env total 0 ss
                                              when (total > 0) $
@@ -196,9 +195,13 @@ infTopStmts progressCb env total done (s : ss)
                                                           emitTypeProgress progressCb total done (Just label) names weight
                                                           return (done + weight)
                                                         Nothing -> return done
-                                              (te1, s1) <- infTopStmt env s
+                                              let (te1, s1) = typeTopStmt env s
                                               (te2, ss2) <- infTopStmts progressCb (define te1 env) total done' ss
                                               return (te1++te2, s1++ss2)
+
+typeTopStmt env s                       = fst $ runTypeMState (nstr $ uniqPrefix s) $ do
+                                          pushFX fxPure tNone
+                                          infTopStmt env s
 
 -- | Display label for progress UI.
 -- For recursive groups, abbreviate to a short "a, b, ... (+N)" form.
@@ -221,7 +224,21 @@ stmtProgressWeight s = length (stmtProgressNames s)
 
 -- | Top-level bound names used for progress reporting and weighting.
 stmtProgressNames :: Stmt -> [String]
-stmtProgressNames s = nub (map nstr (bound s))
+stmtProgressNames (Decl _ ds)          = [ nstr (dname' d) | d <- ds ]
+stmtProgressNames s@Assign{}           = map nstr (bound s)
+stmtProgressNames s@Signature{}        = map nstr (bound s)
+stmtProgressNames (Expr _ (Strings _ _))
+                                        = []
+stmtProgressNames s                    = error ("Unexpected top-level stmt: " ++ prstr s)
+
+uniqPrefix :: Stmt -> Name
+uniqPrefix (Decl _ (d : _))            = dname' d
+uniqPrefix s@Assign{}                  = head (bound s)
+uniqPrefix s@Signature{}               = head (bound s)
+-- TODO: Extract module docstrings before typechecking so top-level
+-- docstrings never reach this fallback.
+uniqPrefix (Expr l (Strings _ _))      = Name l "__doc__"
+uniqPrefix s                           = error ("Unexpected top-level stmt: " ++ prstr s)
 
 infTopStmt env s                        = do (cs,te,s) <- infEnv env s
                                              --traceM ("****************************************** infer (" ++ show (length cs) ++ ") " ++ prstrs (bound s))

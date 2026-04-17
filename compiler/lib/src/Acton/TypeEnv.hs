@@ -237,20 +237,24 @@ headvar (Seal _ _ (TUni _ u))         = u
 
 data TypeState                          = TypeState {
                                                 nextint         :: Int,
+                                                uniqprefix      :: String, -- Prefix for generated names
                                                 effectstack     :: [(TFX,Type)],
                                                 deferred        :: Constraints,
                                                 unisubst        :: IntMap Type
                                           }
 
-initTypeState s                         = TypeState { nextint = 1, effectstack = [], deferred = [], unisubst = s }
+initTypeState p                         = TypeState { nextint = 1, uniqprefix = p, effectstack = [], deferred = [], unisubst = Map.empty }
 
 type TypeM a                            = ExceptT TypeError (State TypeState) a
 
-runTypeM                                :: TypeM a -> a
-runTypeM m                              = case evalState (runExceptT m) (initTypeState Map.empty) of
-                                            Right x  -> x
-                                            Left err -> error ("Unhandled TypeM exception: " ++ prstr loc ++ ": " ++ prstr str)
+runTypeMState                           :: String -> TypeM a -> (a, TypeState)
+runTypeMState p m                       = case runState (runExceptT m) (initTypeState p) of
+                                            (Right x, st') -> (x, st')
+                                            (Left err, _)  -> error ("Unhandled TypeM exception: " ++ prstr loc ++ ": " ++ prstr str)
                                               where (loc,str) : _ = typeError err
+
+runTypeM                                :: TypeM a -> a
+runTypeM m                              = fst $ runTypeMState "" m
 
 currentState                            :: TypeM TypeState
 currentState                            = lift $ state $ \st -> (st, st)
@@ -293,9 +297,15 @@ uextend s                               = lift $
 
 -- Name generation ------------------------------------------------------------------------------------------------------------------
 
-newWitness                              = Internal Witness "" <$> newUnique
+newGenerated p                          = do i <- newUnique
+                                             st <- currentState
+                                             return $ Internal p (tag (uniqprefix st) i) 0
+  where tag "" i                        = show i
+        tag s i                         = s ++ "_" ++ show i
 
-newTmp                                  = Internal Tempvar "" <$> newUnique
+newWitness                              = newGenerated Witness
+
+newTmp                                  = newGenerated Tempvar
 
 newUnivarOfKind k env                   = TUni NoLoc <$> univar k (qlevel env) <$> newUnique
 
