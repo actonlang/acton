@@ -85,8 +85,19 @@ expression evaluates to `None`. Otherwise the nested access proceeds
 normally.
 
 Use `?.` for attribute access and method calls, and `?[...]` for
-indexing and slicing. For example, `d.get("numbers")?[0]` returns
-`None` if the key is missing and otherwise indexes the returned list.
+indexing and slicing. The `?.` applies to the lookup, while the `()`
+after a method name are the ordinary call syntax.
+
+```python
+def loud_residence_name(person: ?Person) -> ?str:
+    return person?.residence?.name?.upper()
+```
+
+This returns `None` if `person`, `residence`, or `name` is `None`.
+Otherwise it calls `upper()` on the string and returns the result.
+
+For indexing, `d.get("numbers")?[0]` returns `None` if the key is
+missing and otherwise indexes the returned list.
 
 The result of an optional chain is still optional. For example,
 `person?.residence?.rooms` has type `?int`, not `int`.
@@ -95,11 +106,63 @@ Optional chaining only short-circuits the current expression. It does
 not narrow the value for later statements. Use `is None` or
 `is not None` when you need to branch on whether a value is present.
 
-If you need to use the result as a non-optional value, you still need a
-check:
+Dot-based calls can stay inside the chain. For example,
+`person?.residence?.name?.upper()` is valid and still has type `?str`.
+
+But the result of the whole chain is still optional. If you need to
+pass it to a separate function that expects a non-optional value, you
+still need a check:
 
 ```python
+def describe(name: str) -> str:
+    return "Residence: " + name
+
+def describe_residence(person: ?Person) -> ?str:
     name = person?.residence?.name
     if name is not None:
-        return name.upper()
+        return describe(name)
+    return None
 ```
+
+## Forced Unwrapping
+
+Sometimes `None` is not a normal outcome but a broken assumption. In
+that case, use forced unwrapping to require a value to be present.
+
+`!.` and `![...]` follow the same chain shapes as `?.` and `?[...]`, but
+they raise `ValueError` if the value to the left is `None` instead of
+returning `None`.
+
+```python
+def required_residence_name(person: ?Person) -> str:
+    return person!.residence!.name!.upper()
+```
+
+This returns `str`, not `?str`. If `person`, `residence`, or `name` is
+`None`, evaluation stops and raises a `ValueError`.
+
+You can mix `?` and `!` in the same chain. Later steps still see the
+result of earlier ones, so a later `!` will raise if an earlier `?`
+already produced `None`.
+
+```python
+def first_port(config: ?dict[str, list[int]]) -> int:
+    return config?.get("ports")![0]
+
+def first_port_or_none(config: ?dict[str, list[int]]) -> ?int:
+    return config!.get("ports")?[0]
+```
+
+In the first function, a missing `config` or missing `"ports"` key
+reaches `![0]` and raises `ValueError`. In the second, `config` must be
+present, but a missing `"ports"` key still yields `None`.
+
+Use forced unwrapping when absence indicates a bug or broken invariant
+and execution should stop immediately.
+
+Use optional chaining when a missing value is part of normal control
+flow and you want the current expression to stay optional without
+repeating intermediate `None` checks. The chain does not handle the
+`None` case by itself; it is just a shorter way to write nested access
+before later conditions, matching, or other handling of the optional
+result.
