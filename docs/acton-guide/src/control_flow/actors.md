@@ -1,7 +1,37 @@
 # Control flow in an async actor world
 
-The basic control flow of most programming languages involve a starting point, like a main function, which is run from top to bottom, after which the program implicitly terminates. The basic objective is to feed instructions to the CPU and this goal remains through increasing levels of abstractions. Acton is different. Once created, an actor will simply remain indefinitely, waiting for incoming messages in the form of actor method calls. See [Actor Lifetime](/actors/lifetime.md).
+Acton programs do not have only one simple top-to-bottom control flow.
 
-## A mental model of actors
+Once an actor exists, it keeps living and reacting to incoming method
+calls until it stops. That means control flow is closer to "react to
+messages over time" than to "run one main function and finish
+immediately".
 
-Actors in an Acton program form a vast web of interconnected actors. Some actors are on the edge of the Acton realm, bordering to the external world where they may be doing I/O with external entities, through files, sockets or other means. All I/O is callback based and thus event driven and reactive. When there is an event, an actors reacts, perhaps initiating calls to other actors. A ripple runs across the web of actors, each reacting to incoming messages and acting accordingly.
+<div class="beginner-content">
+<p>If you are new to this style, start with one actor and a few
+methods. Then add async calls and delayed work once the basic message
+flow makes sense. Inside one actor, each message still runs
+sequentially; the new part is thinking about what messages may arrive
+next.</p>
+</div>
+
+<div class="advanced-content">
+<p>This reactive model means message order belongs to each actor's own
+mailbox and handling, not one global timeline for the whole program.
+That same boundary is why callbacks, async calls, and actor lifetime
+fit together in Acton.</p>
+</div>
+
+## A mental model
+
+It helps to think in terms of actors reacting:
+
+- an actor receives a method call
+- it handles that work sequentially
+- it may call other actors
+- it may schedule more work with `after`
+- then it becomes idle again until the next message arrives
+
+This is why actor code often looks different from ordinary function
+code. The interesting question is usually not just "what happens
+next?", but also "what happens later, and in response to what message?"

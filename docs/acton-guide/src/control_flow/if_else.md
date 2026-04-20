@@ -1,56 +1,41 @@
 # if / elif / else
 
-Acton supports the `if` / `elif` / `else` construct - the corner stone of programming control flow.
+Use `if` to run code only when a condition is true.
 
-The conditionals evaluated by `if` / `elif` / `else` are expressions.
+Use `elif` for more cases and `else` for the fallback case.
 
-Source:
 ```python
-
-def whatnum(n):
-
+def describe(n):
     if n < 0:
-        print(n, "is negative")
+        return "negative"
     elif n > 0:
-        print(n, "is positive")
+        return "positive"
     else:
-        print(n, "is zero")
-
-
-def inrange(n):
-    if n < 10 and n > 5:
-        print(n, "is between 5 and 10")
-    else:
-        print(n, "is outside of the range 5-10")
+        return "zero"
 
 actor main(env):
-
-    whatnum(5)
-    whatnum(1337)
-    whatnum(-7)
-    whatnum(0)
-    
-    inrange(3)
-    inrange(-7)
-    inrange(7)
-
+    print(describe(-7))
+    print(describe(0))
+    print(describe(5))
     env.exit(0)
 ```
 
-Compile and run:
-```sh
-acton if_else.act
+The conditions in `if`, `elif`, and `while` are expressions that
+evaluate to `True` or `False`.
+
+```python
+n = 7
+
+if n % 2 == 0:
+    print("even")
+else:
+    print("odd")
 ```
 
-Note that the output is random and you could get a different result.
-
-Output:
-```sh
-5 is positive
-1337 is positive
--7 is negative
-0 is zero
-3 is outside of the range 5-10
--7 is outside of the range 5-10
-7 is between 5 and 10
-```
+<div class="advanced-content">
+<p>Conditionals compose with Acton's expression model, so guards often
+mix comparisons, membership tests, and short-circuiting in one place.
+Once the branching logic starts encoding type or protocol decisions,
+helper functions or explicit narrowing usually read better than a long
+ladder.</p>
+</div>

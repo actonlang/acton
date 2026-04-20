@@ -1,50 +1,77 @@
 # Protocols
 
-Protocols defines functionality in an abstract way that can be implemented by many classes.
+Protocols describe behavior that different types can share.
 
-Class and class inheritance is a good tool for structuring data and behavior. However, sometimes there is no clear parent / child relationship between classes, in which case using a protocol might be a more suitable choice.
-
-Perhaps the simplest example is the `Eq` protocol, that defines equality between two objects, from the Acton builtins. Classes do not need to have any common inheritance in order to support equality.
-
-```python
-protocol Eq:
-    @staticmethod
-    __eq__       : (Self,Self) -> bool
-```
-
-The `__eq__` method takes two arguments, itself and the other object to compare with and returns `True` or `False`. Both arguments are of the same type `Self`, which means we can only compare two objects that are of the same type. It can be any type, as long as its the same type.
+Use a protocol when your main question is "what operations does this
+value support?" rather than "what class does it inherit from?"
 
 ```python
-extension Circle (Eq):
-    def __eq__(self, other):
-        return self.radius == other.radius
+protocol Processable[T]:
+    process : () -> T
+
+class Message(object):
+    def __init__(self, text):
+        self.text = text
+
+extension Message(Processable[str]):
+    def process(self):
+        return self.text.upper()
 ```
 
-Protocols allows us to express the requirement for a (generic) type to implement some particular functionality.
+In this example:
 
-Let's say we have a function that compares two objects.
+- `Processable[T]` defines a capability
+- `Message` is an ordinary class
+- the `extension` says that `Message` implements that protocol
+
+<div class="beginner-content">
+<p>Inheritance says one class is a kind of another class. A protocol
+says a type supports a certain behavior, whether or not there is any
+inheritance relationship. Read
+<code>extension Message(Processable[str])</code> as "Message implements
+the Processable[str] protocol".</p>
+</div>
+
+Protocols are useful at API boundaries because they let you depend on a
+capability instead of a concrete class. Several unrelated types can
+offer the same behavior, and one type can offer several unrelated
+behaviors.
+
+<div class="advanced-content">
+<p>Protocols matter both for programming style and for type inference.
+They let you describe the shape of an API without committing to a
+concrete hierarchy. In Acton, protocols can also be implemented by
+extensions after a class is defined, which makes them useful for
+retrofitting shared behavior onto existing types.</p>
+</div>
+
+## Protocols in practice
 
 ```python
-def comparator(a, b):
-    print("Things:", a, b)
-    print("Are they equal?", a == b)
+protocol Printable:
+    print : () -> None
+
+def render(item: Printable):
+    item.print()
 ```
 
-We know that `a` and `b` must implement the `Eq` protocol and they must be of the same type. Let's see what the compiler constraint solver says:
-```console
-acton --sigs generic.act
+Here, `render` only cares that the value can be printed. It does not
+care which class the value comes from.
 
+## Protocols and generic constraints
 
-== sigs: generic ================================
-
-comparator : [A(Eq)] => (a: A, b: A) -> None
-=================================================
-```
-
-The type has been inferred to a generic type `A` that must implement the `Eq` protocol, which is written as `A(Eq)`. We can write this explicitly:
+Protocols also show up in generic type signatures.
 
 ```python
-def comparator[A(Eq)](a: A, b: A):
-    print("Things:", a, b)
-    print("Are they equal?", a == b)
+def bigger[A(Ord)](a: A, b: A) -> A:
+    if a > b:
+        return a
+    return b
 ```
+
+Here, `A(Ord)` means the type `A` must implement the `Ord` protocol so
+that `>` is available.
+
+Built-in protocols such as `Ord`, `Hashable`, `Iterable`, and `Mapping`
+are documented in the reference section under [Built-in
+protocols](../stdlib/builtin_protocols.md).

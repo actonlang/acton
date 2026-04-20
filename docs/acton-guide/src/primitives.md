@@ -1,101 +1,69 @@
-# Data Types
+# Built-in types and literals
 
-Every value in Acton is of a certain *type*. The *type* specifies what kind of data is being specified and how to work with that data. Acton has a number of built-in data types.
+Every value in Acton has a type.
 
-- [integers](primitives/integers.md), like `1`, `2`, `123512`, `-6542` or `1267650600228229401496703205376`
-  - `int` is arbitrary precision and can grow beyond machine word sizes
-  - `i16`, `i32`, `i64`, `u16`, `u32`, `u64` are fixed size integers
-- [float](primitives/float.md) 64 bit float, like `1.3` or `-382.31`
-- [complex](primitives/complex.md) complex numbers like `1+2j`
-- `bool` boolean, like `True` or `False`
-- `str` strings, like `foo`
-  - strings support Unicode characters
-- [tuples](primitives/tuples.md) for structuring multiple values, like `(1, "foo")` or `(a="bar", b=1337)`
+Many values can be written directly in source code. These are called
+*literals*.
 
-In Acton, mutable state can only be held by actors. Global definitions in modules are constant. Assigning to the same name in an actor will shadow the global variable.
+<div class="beginner-content">
+<p><code>42</code>, <code>True</code>, and <code>"hello"</code> are all
+literals: the value is written directly in the program instead of being
+computed somewhere else.</p>
+</div>
 
-<table class="side-by-side-code">
-<tr>
-<td>
-module level constant
-</td>
-<td>
+## Common built-in types
 
-```python
-foo = 3
-```
-</td>
-</tr>
-<tr>
-<td>
-this will print the global foo
-</td>
-<td>
+| Type | Example | Notes |
+| --- | --- | --- |
+| `int` | `42` | 64-bit signed integer |
+| `bigint` | `123456789012345678901234567890` | arbitrary-precision integer |
+| `i8`, `i16`, `i32`, `u1`, `u8`, `u16`, `u32`, `u64` | `u16(42)` | explicitly sized integers |
+| `float` | `3.14` | 64-bit floating-point number |
+| `complex` | `complex.from_real_imag(1.0, 2.0)` | complex number |
+| `bool` | `True` | `True` or `False` |
+| `str` | `"hello"` | Unicode text |
+| tuple | `(1, "two")` | fixed-size group of values |
 
 ```python
-def printfoo():
-    print("global foo:", foo)
-```
-
-</td>
-</tr>
-<tr>
-<td>
-set a local variable with the name foo, shadowing the global constant foo
-</td>
-<td>
-
-```json
 actor main(env):
-    foo = 4
-```
+    whole = 42
+    huge = bigint(123456789012345678901234567890)
+    ratio = 3.5
+    truth = True
+    name = "Acton"
+    point = (x=3, y=4)
+    z = complex.from_real_imag(2.0, 3.0)
 
-</td>
-</tr>
-<tr>
-<td>
-print local foo, then call printfoo()
-</td>
-<td>
-
-```python
-    print("local foo:", foo)
-    printfoo()
-
-    a = u16(1234)
-    print("u16:", a)
-
+    print(whole, huge, ratio, truth, name, point, z)
     env.exit(0)
 ```
 
-</td>
-</tr>
-</table>
+<div class="advanced-content">
+<p>Integer literals are not all the same internally. Small whole-number
+literals usually fit in <code>int</code>, while very large literals may
+need <code>u64</code> or <code>bigint</code>. If the exact type matters,
+write it explicitly.</p>
+</div>
 
-Output:
-```sh
-local foo, shadowing the global foo: 4
-global foo: 3
-u16: 1234
-```
+## Choosing a type
 
-<!--
-Source:
-```python
-foo = 3    # this is a global constant and cannot be changed
+Use:
 
-def printfoo():
-    print("global foo:", foo)  # this will print the global foo
+- `int` for ordinary whole numbers
+- `bigint` when whole numbers may grow beyond the normal `int` range
+- `float` for fractional values
+- `bool` for yes/no conditions
+- `str` for text
+- tuples for small fixed-size groups of values
 
-actor main(env):
-    # this sets a local variable with the name foo, shadowing the global constant foo
-    foo = 4
-    print("local foo, shadowing the global foo:", foo)
-    printfoo()
+Reach for fixed-size integers when width or sign matters, and for
+`complex` when you need real and imaginary parts together.
 
-    a = u16(1234)
-    print("u16:", a)
+Lists, dictionaries, and sets are covered in [Collections](collections.md).
 
-    env.exit(0)
-```
--->
+## More detail
+
+- [Integers](primitives/integers.md)
+- [Floating-point numbers](primitives/float.md)
+- [Complex numbers](primitives/complex.md)
+- [Tuples](primitives/tuples.md)

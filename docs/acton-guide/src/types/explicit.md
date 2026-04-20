@@ -1,50 +1,61 @@
 # Explicit types
 
-It is possible to explicitly specify the types of variables or arguments in a function.
+Acton can infer many types, but explicit annotations are still useful.
+They are the way to say "this value must stay this shape" when the code
+would otherwise leave room for interpretation.
 
-Source:
 ```python
-# 'a: int' means the first argument `a` should be of type int
-# 'b: str means the second argument `b` should be of type str
-# The function returns nothing
-def foo(a: int, b: str) -> None:
-    print(a, b)
-    
-# A functions type signature can also be written on a separate line
-bar : (int, str) -> None
-def bar(a, b):
-    print(a, b)
+def repeat(text: str, count: int) -> str:
+    return text * count
+
+describe_port : (int) -> str
+def describe_port(port):
+    return "port " + str(port)
 
 actor main(env):
-    # i1 is explicitly specified as an integer while s1 is a str
-    i1 : int = 1234
-    s1 : str = "hello"
-    foo(i1, s1)
-    bar(i1, s1)
-
-    # The literal value 1234 is an integer, so when we assign it to i2, the
-    # compiler can easily infer that the type of i2 is int. Similarly for s2
-    # since the literal value "hello" is clearly a string
-    i2 = 1234
-    s2 = "hello"
-    foo(i2, s2)
-    bar(i2, s2)
-    
+    port: int = 9000
+    print(repeat("ha", 3))
+    print(describe_port(port))
     env.exit(0)
 ```
 
-Compile and run:
-```sh
-acton types.act
-./types
-```
+<div class="beginner-content">
+<p>Read <code>name: Type</code> as "name has type Type" and
+<code>-&gt; Type</code> as "returns Type". A separate signature line can
+be easier to scan when the implementation is long or the signature is
+part of the public surface of a module.</p>
+</div>
 
-Output:
-```sh
-1234 hello
-1234 hello
-1234 hello
-1234 hello
-```
+You can annotate:
 
-Try changing the type of `i1` or `s1` and you will find that the compiler complains that it cannot solve the type constraints of the program.
+- function parameters
+- return values
+- local names
+- class and actor attributes
+- separate signature lines for named APIs
+- effect markers on callables
+
+## When explicit types help
+
+Write annotations when:
+
+- you want an API to be clear to readers
+- inference becomes hard to understand
+- you want the compiler to reject the wrong shape earlier
+- a value could otherwise be inferred more loosely than you want
+- you are defining a reusable helper and want its contract visible
+
+<div class="beginner-content">
+<p>A useful default is to annotate the things other people will read
+first: public functions, methods, actor fields, and data structures.
+Leave short local expressions inferred unless the type is surprising or
+important to the code around it.</p>
+</div>
+
+<div class="advanced-content">
+<p>Explicit annotations also control generalization. If inference would
+make a helper more polymorphic than you want, a written signature can
+pin the API down and keep later changes from widening it by accident.
+That is especially useful for callback types, actor-facing entrypoints,
+and shared utility code where the signature is the real contract.</p>
+</div>

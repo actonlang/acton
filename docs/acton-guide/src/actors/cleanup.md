@@ -1,8 +1,21 @@
 # Cleanup / Finalization
 
-It is possible to run special code when an actor is about to be garbage collected. This should not be performed by normal actors, this is really only for I/O actors that interact with the environment and might need to also clean up in the environment when the actor is being garbage collected.
+It is possible to run special code when an actor is about to be garbage
+collected. This is mainly for actors that manage outside resources and
+need a best-effort final step when they become unreachable.
 
-Define an actor action called `__cleanup__` and the run time system will automatically install it to be run at garbage collection time. There is no hard guarantee when the `__cleanup__` function will be called and it typically takes a couple of collection rounds to run all finalizers.
+Define an actor action called `__cleanup__` and the runtime will
+schedule it when garbage collection notices that the actor is no longer
+reachable. There is no hard guarantee when `__cleanup__` will run, and
+it can take more than one collection round before all finalizers are
+handled.
+
+<div class="advanced-content">
+<p>Cleanup hooks are intentionally weakly timed. They are useful for
+best-effort resource cleanup at the boundary to the outside world, but
+they are not a substitute for explicit shutdown protocols when a system
+needs deterministic release or ordering.</p>
+</div>
 
 Source:
 ```python
@@ -11,19 +24,13 @@ actor Foo():
         print("Cleaning up after myself...")
 
 actor main(env):
-    # create a bunch of actors and do not assign reference, so they should be collected
     for i in range(20):
         Foo()
 
-    # perform some busy work to eventually trigger the GC and thus finalization
-    # & schedule __cleanup__
     a = 1
     for i in range(99999):
         a += i
 
-    # Delay exit a little bit to let RTS workers pick up the asynchronously
-    # scheduled __cleanup__ actions to run for the unreachable instances of the
-    # Foo actor
     def _stop():
         env.exit(0)
     after 0.1: _stop()
@@ -52,4 +59,3 @@ Cleaning up after myself...
 Cleaning up after myself...
 Cleaning up after myself...
 ```
-

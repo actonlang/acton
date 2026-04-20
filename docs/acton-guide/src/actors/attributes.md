@@ -1,6 +1,14 @@
 # Actor Attributes & Constants
 
-Actors typically contain some private state. We define variable attributes at the top level in the actor using the `var` keyword and can then access them from any method within the local actor. Note how `self.` is not needed. Private variables are not visible from other actors.
+Actors usually keep their state in top-level attributes. Use `var` for
+mutable actor-local state and a plain binding for a constant.
+
+<div class="advanced-content">
+<p>The split between <code>var</code> and plain top-level bindings is
+one of the key boundaries around state. Mutable actor data stays
+private to the actor, while constant attributes can be read through an
+actor reference without shared mutable memory.</p>
+</div>
 
 Source:
 ```python
@@ -9,8 +17,7 @@ actor Act():
     fixed = 1234        # public constant
     
     def hello():
-        # We can access local actor variable attributes directly, no need for 
-        # self.something or similar
+        # Local state is accessed directly inside the actor.
         something += 2
         print("Hello, I'm Act & value of 'something' is: " + str(something))
 
@@ -35,4 +42,5 @@ Hello, I'm Act & value of 'something' is: 42
 Externally visible constant:  1234
 ```
 
-Without the `var` keyword, an actor attribute is a constant. As constants are not mutable, it is safe to make it visible to other actors and it can be accessed like an attribute on an object.
+Without `var`, an actor attribute is a constant. Constants are safe to
+share with other actors because they do not expose mutable state.

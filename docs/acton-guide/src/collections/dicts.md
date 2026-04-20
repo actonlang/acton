@@ -1,129 +1,120 @@
 # Dictionaries
 
-Dictionaries in Acton are ordered collections that map keys to values. They maintain insertion order, so when iterating over keys, values, or items, they will be returned in the order they were first inserted. All keys must be of the same type, and all values must be of the same type.
+Dictionaries map keys to values. They keep insertion order, so when you
+iterate over a dictionary you get keys back in the order they were first
+added.
 
-Source:
+<div class="beginner-content">
+<p>Use a dictionary when you want to look something up by name, id, or
+some other key. If you keep searching through a list for a matching
+value, a dictionary is often the better shape.</p>
+</div>
+
+## Creating dictionaries
+
 ```python
-actor main(env):
-    d = {"foo": 1, "bar": 2, "x": 42}
-    d["cookie"] = 3
-
-    print("Dict:", d)
-    print("len :", len(d))
-    print("item foo:", d["foo"])
-    print("item foo:", d.get("foo"))
-    print("get value when key nonexistent:", d.get("foobar"))
-    print("get_def value when key nonexistent:", d.get_def("foobar", "DEF_val"))
-    
-    d["bar"] = 42
-    del d["foo"]
-    print("Dict:", d)
-    
-    print("Dict keys: " + str(list(d.keys())))
-    print("Dict values: " + str(list(d.values())))
-
-    print("Dict items:")
-    for k, v in d.items():
-        print("  dict key " + k + "=" + str(v))
-
-    print("Pop item with key 'bar':", d.pop("bar"))
-    print("Pop item:", d.popitem())
-    print("Dict after .popitem():", d)
-    
-    # Update dict items from items in other dict
-    d.update({"x": 1337}.items())
-    print("Dict after .update():", d)
-
-    # Use setdefault to set a value if it does not already exist in the dict
-    print("setdefault for existing key 'x' returns:", d.setdefault("x", "DEF_val"))
-    print("setdefault for new key 'new' returns:", d.setdefault("new", "DEF_val"))
-
-    # Get a shallow copy of a dict. Note the use of .items() to get keys and values
-    new_d = dict(d.items())
-
-    env.exit(0)
+counts = {"apples": 2, "bananas": 4}
+empty_counts: dict[str, int] = {}
 ```
 
-Compile and run:
-```sh
-acton dicts.act
-./dicts
-```
+The key type and value type are fixed for a given dictionary. When a
+dictionary is empty, give it a type if the surrounding code does not
+make that obvious.
 
-Output:
-```sh
-Building project in /home/user/foo
-  Compiling example.act for release
-   Finished compilation in   0.122 s
-  Final compilation step
-   Finished final compilation step in  13.381 s
-Dict: {'foo':1, 'bar':2, 'x':42, 'cookie':3}
-len : 4
-item foo: 1
-item foo: 1
-get value when key nonexistent: None
-get_def value when key nonexistent: DEF_val
-Dict: {'bar':42, 'x':42, 'cookie':3}
-Dict keys: ['bar', 'x', 'cookie']
-Dict values: [42, 42, 3]
-Dict items:
-  dict key bar=42
-  dict key x=42
-  dict key cookie=3
-Pop item with key 'bar': 42
-Pop item: ('cookie', 3)
-Dict after .popitem(): {'x':42}
-Dict after .update(): {'x':1337}
-setdefault for existing key 'x' returns: 1337
-setdefault for new key 'new' returns: DEF_val
-```
+## Looking up values
 
-## Dictionary Comprehensions
-
-Dictionary comprehensions provide a concise way to create dictionaries from sequences or other iterables.
-
-Source:
 ```python
-actor main(env):
-    # Basic dict comprehension
-    squares = {x: x * x for x in range(5)}
-    print("Squares dict:", squares)
-    
-    # With condition
-    even_squares = {x: x * x for x in range(10) if x % 2 == 0}
-    print("Even squares:", even_squares)
-    
-    # Creating from a list of tuples
-    pairs = [(1, "one"), (2, "two"), (3, "three")]
-    num_to_word = {k: v for (k, v) in pairs}
-    print("Number to word:", num_to_word)
-    
-    # Swapping keys and values
-    word_to_num = {v: k for (k, v) in pairs}
-    print("Word to number:", word_to_num)
-    
-    # String manipulation
-    words = ["hello", "world", "acton"]
-    word_lengths = {w: len(w) for w in words}
-    print("Word lengths:", word_lengths)
-    
-    # Filtering and transforming
-    long_words = {w.upper(): w for w in words if len(w) > 4}
-    print("Long words map:", long_words)
-    
-    # Using enumerate
-    indexed = {i: v for (i, v) in enumerate(words)}
-    print("Indexed words:", indexed)
+counts = {"apples": 2, "bananas": 4}
 
-    env.exit(0)
+print(counts["apples"])
+print(counts.get("pears"))
+print(counts.get_def("pears", 0))
+print("apples" in counts)
+print(len(counts))
 ```
 
-Output:
+Direct indexing says the key must already exist. `get()` returns `None`
+when a key is missing. `get_def()` lets you provide a default value
+instead of handling `None` later.
+
+<div class="advanced-content">
+<p>`None` is a real value, so `get()` is best when missing keys are
+normal and uninteresting. If `None` means something in your data,
+`get_def()` or an explicit membership test is clearer.</p>
+</div>
+
+## Updating entries
+
+```python
+counts = {"apples": 2, "bananas": 4}
+
+counts["bananas"] = 5
+counts["pears"] = 1
+del counts["apples"]
+
+print(counts)
 ```
-Squares dict: {0: 0, 1: 1, 2: 4, 3: 9, 4: 16}
-Even squares: {0: 0, 2: 4, 4: 16, 6: 36, 8: 64}
-Number to word: {1: 'one', 2: 'two', 3: 'three'}
-Word to number: {'one': 1, 'two': 2, 'three': 3}
-Word lengths: {'hello': 5, 'world': 5, 'acton': 5}
-Long words map: {'HELLO': 'hello', 'WORLD': 'world', 'ACTON': 'acton'}
-Indexed words: {0: 'hello', 1: 'world', 2: 'acton'}
+
+Assigning to a key adds it if it is new or replaces the old value if it
+already exists.
+
+## Removing entries
+
+```python
+counts = {"apples": 2, "bananas": 4, "pears": 1}
+
+print(counts.pop("bananas"))
+print(counts.pop_def("missing", 0))
+print(counts.popitem())
+```
+
+`pop()` removes a key and returns its value. `pop_def()` does the same
+thing with a fallback when the key is absent. `popitem()` removes and
+returns one key/value pair.
+
+## Iterating over dictionaries
+
+```python
+counts = {"apples": 2, "bananas": 4, "pears": 1}
+
+for key in counts:
+    print(key)
+
+for key, value in counts.items():
+    print(key, value)
+
+print(list(counts.keys()))
+print(list(counts.values()))
+print(list(counts.items()))
+```
+
+Iterating over a dictionary yields keys. Use `items()` when you need
+both the key and the value.
+
+## Updating from other data
+
+```python
+counts = {"apples": 2}
+more_counts = {"bananas": 4, "pears": 1}
+
+counts.update(more_counts.items())
+counts.setdefault("apples", 0)
+counts.setdefault("grapes", 3)
+```
+
+`update()` merges entries from another iterable of key/value pairs.
+`setdefault()` is useful when you want to add a missing key only once
+and keep the existing value otherwise.
+
+## Dictionary comprehensions
+
+```python
+words = ["hello", "world", "acton"]
+lengths = {word: len(word) for word in words}
+filtered = {word: len(word) for word in words if len(word) > 4}
+indexed = {i: word for (i, word) in enumerate(words)}
+```
+
+Dictionary comprehensions are the concise way to build a dictionary
+from an iterable. They are useful when the new keys and values come
+from the old data directly.

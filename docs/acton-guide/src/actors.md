@@ -1,43 +1,61 @@
 # Actors
 
-**Actors** is a key concept in Acton. Each actor is a small sequential process with its own private state. Actors communicate with each other through messages, in practice by calling methods on other actors or reading their attributes.
+Actors are Acton's primary unit for state and concurrency.
 
-Source:
+If you are looking for the Acton answer to Rust-style lifetime
+concerns, this is it: actors own mutable state, capabilities are passed
+explicitly, and the runtime handles ordinary object lifetime.
+
+<div class="beginner-content">
+<p>If classes feel like objects that own data, actors are a useful way
+to think about objects that own state and participate in concurrent
+work. The actor body runs once when the actor starts; its methods run
+later in response to calls.</p>
+</div>
+
+An actor combines:
+
+- private state owned by one actor
+- sequential execution inside that actor
+- method-based communication with other actors
+- a place to put mutable program state
+
 ```python
-# An actor definition
-actor Act(name):
+actor Greeter(name):
+    print("starting", name)
 
-    # Top level code in an actor runs when initializing an actor instance, like
-    # __init__() in Python.
-    print("Starting up actor " + name)
-    
     def hello():
-        # We can directly access actor arguments, like `name`
-        print("Hello world from " + name)
+        print("hello from", name)
 
 actor main(env):
-    # Create an actor instance a of Act
-    a = Act("FOO")
-    # Call the actor method hello
-    await async a.hello()
+    greeter = Greeter("Acton")
+    await async greeter.hello()
 
     env.exit(0)
 ```
 
-Compile and run:
-```sh
-acton actors.act
-./actors
-```
+Code in the actor body runs once when the actor is created. That body is
+where initialization happens, and it may define methods that operate on
+the actor's private state.
 
-Output:
-```sh
-No dependencies found, building project
-Building project in /tmp/tmp_nwgl0ik/example
-  Compiling example.act for release
-   Finished compilation in   0.015 s
-  Final compilation step
-   Finished final compilation step in   0.437 s
-Starting up actor FOO
-Hello world from FOO
-```
+<div class="advanced-content">
+<p>Actors are also where several Acton-specific language pieces meet:
+<code>var</code>, <code>await</code>, <code>async</code>,
+<code>after</code>, capability passing, and effectful APIs. The main
+guarantee is actor-local sequentiality: state changes happen one
+handled message at a time inside that actor.</p>
+</div>
+
+## What to read next
+
+- [Root Actor](actors/root.md) for the entrypoint pattern
+- [Lifetime](actors/lifetime.md) for how actors stay alive
+- [Attributes](actors/attributes.md) and [`self`](actors/self.md) for
+  actor state
+- [Actor methods](functions/actor_methods.md), [Sync Method
+  calls](actors/sync_method_call.md), and [Async Method
+  calls](actors/async_method_call.md) for communication
+- [Concurrency](actors/concurrency.md), [Control flow in an async actor
+  world](control_flow/actors.md), and [after / sleep](control_flow/after_sleep.md)
+  for concurrent behavior
+- [Cleanup](actors/cleanup.md) for best-effort finalization

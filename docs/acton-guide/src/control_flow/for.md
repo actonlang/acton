@@ -1,133 +1,56 @@
 # for
 
-Iteration is a core concept in programming and for loops are perhaps the most well known.
+Use `for ... in ...` to go through each value in something like a
+string, tuple, or `range(...)`.
 
-Acton supports the `for in` construct to iterate through an `Iterator`.
-
-Source:
 ```python
-
 actor main(env):
+    names = ("Ada", "Grace", "Linus")
 
-    for n in range(1, 100, 1):
-        if n % 15 == 0:
-            print("fizzbuzz")
-        elif n % 3 == 0:
-            print("fizz")
-        elif n % 5 == 0:
-            print("buzz")
-        else:
-            print(n)
+    for name in names:
+        print("Hello", name)
+
+    for n in range(3):
+        print("n =", n)
 
     env.exit(0)
 ```
 
-Compile and run:
-```sh
-acton while.act
+<div class="beginner-content">
+<p>A <code>for</code> loop is the usual choice when you want to go
+through each item in a collection or repeat something a known number of
+times. The loop variable is a new local name that takes on each value in
+turn.</p>
+</div>
+
+`range(stop)` counts from `0` up to, but not including, `stop`.
+
+```python
+for n in range(5):
+    print(n)
 ```
 
-Note that the output is random and you could get a different result.
+You can also use `range(start, stop, step)`.
 
-Output:
-```sh
-1
-2
-fizz
-4
-buzz
-fizz
-7
-8
-fizz
-buzz
-11
-fizz
-13
-14
-fizzbuzz
-16
-17
-fizz
-19
-buzz
-fizz
-22
-23
-fizz
-buzz
-26
-fizz
-28
-29
-fizzbuzz
-31
-32
-fizz
-34
-buzz
-fizz
-37
-38
-fizz
-buzz
-41
-fizz
-43
-44
-fizzbuzz
-46
-47
-fizz
-49
-buzz
-fizz
-52
-53
-fizz
-buzz
-56
-fizz
-58
-59
-fizzbuzz
-61
-62
-fizz
-64
-buzz
-fizz
-67
-68
-fizz
-buzz
-71
-fizz
-73
-74
-fizzbuzz
-76
-77
-fizz
-79
-buzz
-fizz
-82
-83
-fizz
-buzz
-86
-fizz
-88
-89
-fizzbuzz
-91
-92
-fizz
-94
-buzz
-fizz
-97
-98
-fizz
+```python
+for n in range(2, 10, 2):
+    print(n)
 ```
+
+The loop variable is local to the loop body. A common pattern is to use
+`for` with a collection when the values matter, and `range(...)` when the
+count matters.
+
+<div class="advanced-content">
+<p>In Acton, <code>for</code> is usually the clearest way to consume an
+iterable because it avoids manual index state and keeps the element type
+front and center. When you need both the index and the value, prefer
+<code>enumerate(...)</code> over <code>range(...)</code>. Use
+<code>range(...)</code> when the numbers themselves matter, not as a
+default substitute for iterating a collection.</p>
+
+```python
+for i, name in enumerate(names):
+    print(i, name)
+```
+</div>
