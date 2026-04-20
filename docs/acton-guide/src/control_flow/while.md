@@ -1,39 +1,53 @@
 # while
 
-The `while` construct can be used to run a loop **while** a condition is true.
+Use `while` when you want to keep looping for as long as a condition
+stays true.
 
-Source:
 ```python
-import random
-
-def throw_dice():
-    number = random.randint(1,6)
-    print("Dice:", number)
-    return number
-
 actor main(env):
-    var luck = True
+    var remaining = 3
 
-    while luck:
-        if throw_dice() == 4:
-            # ran out of luck, nobody likes a 4
-            luck = False
+    while remaining > 0:
+        print("remaining:", remaining)
+        remaining -= 1
+
+    print("done")
+    env.exit(0)
+```
+
+<div class="beginner-content">
+<p>With <code>while</code>, make sure something in the loop body can
+eventually make the condition false. If that condition depends on a
+changing value in actor code, that value usually needs
+<code>var</code>.</p>
+</div>
+
+`while` is useful when the number of iterations is not the main point.
+What matters is the condition.
+
+```python
+actor main(env):
+    var retries = 5
+
+    while retries > 0:
+        print("trying...")
+        retries -= 1
 
     env.exit(0)
 ```
 
-Compile and run:
-```sh
-acton while.act
-```
+If you already have a collection or a simple numeric range, a
+`for` loop is usually clearer than a `while` loop. Reach for `while`
+when the condition really is the center of the logic.
 
-Note that the output is random and you could get a different result.
+<div class="advanced-content">
+<p>A <code>while</code> loop makes state transitions explicit, which is
+useful for retries and actor-local state machines. The tradeoff is that
+you now own the loop invariant and termination condition, so it is more
+error-prone than <code>for</code> when the iteration boundary is already
+known.</p>
+</div>
 
-Output:
-```sh
-Dice: 3
-Dice: 1
-Dice: 5
-Dice: 2
-Dice: 4
-```
+Typical uses include retry loops, waiting for a condition to change, and
+small state machines where each pass updates the state before checking
+again.

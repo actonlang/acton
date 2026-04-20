@@ -1,45 +1,40 @@
 # Sync Method calls
 
-While async is good for performance it makes it somewhat convoluted, forcing use of callbacks, to just return a value. Acton makes it possible to call other actors in a synchronous fashion for ease of use.
+Acton lets one actor call another actor synchronously when it needs a
+result back immediately.
 
-A method is called **synchronously** when the return value is used.
+A method call is synchronous when the caller uses the return value.
 
-Source:
+<div class="beginner-content">
+<p>A synchronous actor call feels like an ordinary function call: ask
+for a result, wait, then continue.</p>
+</div>
+
 ```python
-import acton.rts
-
-actor DeepT():
-    def compute():
-        # some heavy computation going on
-        acton.rts.sleep(1)
-        return 42
+actor Calculator():
+    def square(n):
+        return n * n
 
 actor main(env):
-    d1 = DeepT()
+    calc = Calculator()
 
-    answer = d1.compute()
+    answer = calc.square(7)
     print("The answer is", answer)
 
     env.exit(0)
 ```
 
-Compile and run:
-```sh
-acton sync.act
-```
+Here, `main` waits for `calc.square(7)` to finish and then continues
+with the returned value.
 
-Output:
-```sh
-The answer is 42
-```
+<div class="advanced-content">
+<p>Sync calls suspend the current actor until the other actor replies.
+As systems grow, it is usually better to keep sync chains short and
+push longer work into asynchronous flows.</p>
+</div>
 
-The call flow can be illustrated like this. We can see how the execution of `main` is suspended while it is waiting for the return value from actor `d1`.
-```bob
-   main    *-------*            *-------*
-                    \          ^
-                     v        /
-   d1                 *------'
-```
+## When to use sync calls
 
-
-While synchronous is *bad* because we block waiting for someone else, we are only ever going to wait for another actor to run its method. There is never any wait for I/O or other indefinite waiting, only blocking wait for computation within the Acton system. This is achieved by the lack of blocking calls for I/O, thus even if there is a chain of actors waiting for each other
+- use them when a result is needed right away
+- prefer them for small, direct requests
+- be careful with long chains of sync actor-to-actor calls

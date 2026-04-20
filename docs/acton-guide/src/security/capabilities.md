@@ -1,16 +1,27 @@
 # Capabilities to access outside world
 
-Any interesting program will need to interact with the outside world, like accessing the network or reading files. In C and many other languages, it is possible for any function at any time to simply make calls and access the external world, like read a file (maybe your private SSH key and send it over the network). Acton makes all such access to the outside world explicit through *capability references*.
+Any useful program eventually needs to interact with the outside world.
+That can mean reading files, opening sockets, or sending data to a
+remote host. In many languages those operations are always available to
+any code. In Acton they are explicit.
 
-In an Acton program, having a reference to an actor gives you the ability to do something with that actor. Without a reference, it is impossible to access an actor and it is not possible to forge a reference. This provides a simple and effective security model that also extends to accessing things outside of the Acton system, like files or remote hosts over the network.
+Things outside the actor world are represented by actors and accessed
+through capability references. A capability is a reference that grants
+permission for a specific kind of operation. Without the reference, the
+operation is not available.
 
-Things outside of the actor world are represented by actors and to access such actors, a *capability reference* is required. For example, we can use `TCPConnection` to connect to a remote host over the network using TCP. The first argument is of the type `TCPConnectCap`, which is the *capability* of using a TCP socket to connect to a remote host. This is enforced by the Acton type system. Not having the correct capability reference will lead to a compilation error.
+For example, `TCPConnection` needs a `TCPConnectCap` to connect to a
+remote host over TCP. The type system enforces that requirement. If the
+right capability is not available, the code does not compile.
 
-`TCPConnectCap` is part of a capability hierarchy, starting with the generic `WorldCap` and becoming further and further restricted:
+`TCPConnectCap` sits inside a capability hierarchy that starts at
+`WorldCap` and narrows from there:
 
 > WorldCap >> NetCap >> TCPCap >> TCPConnectCap
 
-The root actor (typically `main()`) takes as its first argument a reference to `Env`, the environment actor. `env.cap` is `WorldCap`, the root capability for accessing the outside world.
+The root actor, typically `main()`, takes an `Env` reference as its
+first argument. `env.cap` is the root `WorldCap` capability for
+accessing the outside world.
 
 ```python
 import net
@@ -27,18 +38,41 @@ actor main(env):
         print("Client ERR", msg)
 
     connect_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(env.cap)))
-    client = net.TCPConnection(connect_cap, env.argv[1], int(env.argv[2]), on_connect, on_receive, on_error)
+    client = net.TCPConnection(connect_cap, env.argv[1], int(env.argv[2]),
+        on_connect, on_receive, on_error)
 ```
 
-Capability based privilege restriction prevent some deeply nested part of a program, perhaps in a dependency to a dependency, to perform operations unknown to the application author. Access to capabilities must be explicitly handed out and a program can only perform operations based on the capabilities it has access to.
+That structure matters because it lets the program choose how much
+authority to hand out. A deeply nested helper, or a dependency of a
+dependency, can only do what its received capability allows.
 
 ## Restrict and delegate
 
-Functions and methods taking a Cap argument normally takes the most restricted or refined capability. In the example with setting up a TCP connection, it is the `TCPConnectCap` capability we need, which is the most restricted.
+When a function takes a capability argument, it should normally take
+the narrowest capability it actually needs. If the code only needs to
+open a TCP connection, pass `TCPConnectCap`. Do not pass `WorldCap`
+just because it is available.
 
-Rather than handing over `WorldCap` to a function, consider what capabilities that function actually needs and only provide those. If a library asks for wider capabilities than it needs, do not use it.
+When you write a helper, ask what the helper really does. Give it only
+the capability needed for that work. If a library asks for a wider
+capability than the work requires, that is a design problem in the
+library.
 
+<div class="advanced-content">
+<p>The deeper design point is capability attenuation: code should pass
+along narrower powers than it originally received whenever possible.
+That keeps authority local, makes APIs easier to audit, and prevents a
+convenient helper from quietly becoming a wide ambient escape hatch
+into the outside world.</p>
+</div>
 
-## Capability friendly interfaces
+## Capability-friendly interfaces
 
-As a library author, you should only require precisely the capabilities that the library requires. Do not be lazy and require `WorldCap`. If the library offers multiple functionalities, for example logging to files or to a remote host, strive to make parts optional such that it the application developer and choose to only use a subset and only provide the capability required for that subset.
+Capability-friendly APIs are explicit about their authority boundaries.
+If one part of a library logs to files and another part talks to a
+remote host, split those responsibilities or make the narrower paths
+easy to select.
+
+The goal is not ceremony. The goal is to keep authority local and
+visible. A capability that is not passed in cannot be used, and a
+capability that is not passed on cannot escape further into the program.

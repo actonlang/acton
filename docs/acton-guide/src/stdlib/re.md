@@ -1,4 +1,6 @@
-# Regular expressions
+# re
+
+The `re` module provides regular expression matching.
 
 Source:
 ```python
@@ -11,6 +13,11 @@ actor main(env):
 
     env.exit(0)
 ```
+
+<div class="beginner-content">
+<p>Import the module with <code>import re</code>, then call functions
+such as <code>re.match(...)</code>.</p>
+</div>
 
 `re.match` also accepts an optional `start_pos` to begin scanning at a
 specific index (defaults to 0).

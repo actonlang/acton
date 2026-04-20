@@ -1,6 +1,8 @@
 # Root Actor
 
-Every Acton program has a root actor. To compile a binary executable, there must be a root actor. Per default, if a source (`.act`) file contains an actor named `main`, it will be used as the root actor. You can specify which actor should be the root using the `--root` argument. While the convention is to call the root actor `main`, you are free to name it anything.
+Every Acton program has a root actor. A binary executable must have
+one, and by default Acton uses an actor named `main` if it finds one in
+the source file. You can choose a different root with `--root`.
 
 Given this Acton program:
 ```python
@@ -16,9 +18,23 @@ acton hello.act --root main
 acton hello.act --root hello.main
 ```
 
-The first invocation relies on the default rule of using an actor called `main`. The second invocation explicitly specifies that we want to use `main` as the root actor while the third uses a qualified name which includes both the actor name (`main`) as well as the module name (`hello`). Using qualified names can be particularly useful when building executable binaries in projects.
+The first invocation relies on the default rule of using an actor named
+`main`. The second explicitly selects `main` as the root actor. The
+third uses a qualified name that includes both the module name and the
+actor name. Qualified names are useful when a project contains several
+actors that could otherwise be mistaken for the entrypoint.
 
-A normal Acton program consists of many actors that are structured in a hierarchical tree. The root actor is at the root of the tree and is responsible for starting all other actors directly or indirectly. The Acton Run Time System (RTS) will bootstrap the root actor.
+A normal Acton program consists of many actors arranged in a tree. The
+root actor is at the top of that tree and starts the rest of the program
+directly or indirectly. The Acton runtime bootstraps the root actor and
+passes it the process-level capability object.
+
+<div class="advanced-content">
+<p>The root actor is the boundary where process-level capabilities
+enter the actor world. That is why <code>main(env)</code> keeps showing
+up throughout the guide: it is both the conventional entrypoint and the
+place where outside-world access begins.</p>
+</div>
 
 ```bob
               .────.
@@ -39,4 +55,5 @@ A normal Acton program consists of many actors that are structured in a hierarch
                      `─'    `─'    `─'
 ```
 
-Any executable Acton program must have a root actor defined. Acton libraries (that are included in an another Acton program), do not need a root actor.
+Any executable Acton program must have a root actor. Acton libraries
+that are imported into another program do not.

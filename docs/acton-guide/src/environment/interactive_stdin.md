@@ -1,27 +1,46 @@
 # Interactive stdin
 
-For interactive programs, like a text editor, input is not fed into the program
-line by line, rather the program can react on individual key strokes.
+Interactive programs do not usually want line-buffered input. A text
+editor, a terminal UI, or a game often needs individual key presses as
+they happen.
 
-The default stdin mode is the *canonical* mode, which implies line buffering and
-that there are typically line editing capabilities offered that are implemented
-external to the Acton program. By setting stdin in non-canonical mode we can
-instead get the raw key strokes directly fed to us.
+By default, stdin is in canonical mode. That means the terminal buffers
+input and usually handles line editing before your program sees
+anything. If you want raw key presses, switch stdin to non-canonical
+mode.
 
 ```python
 actor main(env):
     def interact(input):
         print("Got some input:", input)
 
-    # Set non-canonical mode, so we get each key stroke directly
+    # Set non-canonical mode so we get each key press directly.
     env.set_stdin(canonical=False)
-    # Turn off terminal echo
+    # Turn off terminal echo.
     env.set_stdin(echo=False)
     env.stdin_install(interact)
 ```
 
-We can also disable the echo mode with the echo option.
+Canonical mode is the right default for ordinary command line tools.
+Non-canonical mode is for programs that need to manage the terminal
+themselves.
 
-The Acton run time system will copy the stdin terminal settings on startup and
-restore them on exit, so you do not need to manually restore terminal echo for
-example.
+The runtime copies the terminal settings on startup and restores them
+on exit, so you do not need to restore echo manually in the common
+case.
+
+<div class="advanced-content">
+<p>Interactive stdin changes the terminal contract for the whole
+process, not just one helper function. That is why the runtime restores
+settings on exit for you, and why these programs should be careful and
+intentional about when they enter non-canonical mode.</p>
+</div>
+
+## Common patterns
+
+Switch to non-canonical mode only when you need it, and keep that code
+close to the part that depends on raw input. That makes the terminal
+state easier to reason about.
+
+Disable echo when raw input should not be shown back to the user, such
+as when reading passwords or handling single-key commands.

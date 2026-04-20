@@ -1,55 +1,76 @@
-# Class Initialization
+# Class initialization
 
-All class attributes must be initialized in the `__init__` method to ensure objects are always in a valid state after construction.
+Use `__init__` to leave the object valid. Before `self` escapes, every
+required attribute must already be set.
 
-We can think of `__init__` as having two parts:
-1. **Constructor part**: Must fully initialize the object. Ends when `self` escapes (is passed externally)
-2. **Post-constructor part**: Can perform other logic once the object is fully initialized
+Read the rule as two steps:
 
-## The Constructor Part
+1. Build the object locally.
+2. Let `self` out only after construction is complete.
 
-The constructor part continues until `self` escapes - that is, until we pass a reference to `self` externally. At that point, the object must be fully initialized. Examples of `self` escaping:
-- Passing `self` to a function: `register(self)`
-- Calling a method on `self`: `self.validate()`
-- Passing a method reference: `callback(self.on_event)`
-- Returning `self` or raising with `self`
+<div class="beginner-content">
+<p>Think of <code>__init__</code> as the boundary between "not ready"
+and "ready". If another function needs the object, wait until every
+required field is assigned.</p>
+</div>
 
-During the constructor part, you can access already-initialized attributes:
+`self` escapes when you:
+
+- pass `self` to another function
+- call a method on `self`
+- capture a bound method such as `self.on_event`
+- return `self`
+- store `self` somewhere that outlives the constructor
+
+<div class="advanced-content">
+<p>The important invariant is not "all assignments happen early" but
+"<code>self</code> must not escape before the object is fully
+initialized". Once you read the rules that way, the branch, loop,
+callback, and base-class cases all follow the same rule.</p>
+</div>
+
+## Build the object first
+
+During construction, use local variables for intermediate values and
+assign to attributes once the values are ready. If you read from an
+attribute before assigning it, the initialization order is wrong.
 
 ```python
 class Config(object):
     def __init__(self, base_value: int):
         self.base = base_value
-        self.doubled = self.base * 2        # OK: self.base is initialized
-        self.quadrupled = self.doubled * 2  # OK: self.doubled is initialized
+        self.doubled = self.base * 2
+        self.quadrupled = self.doubled * 2
 ```
 
-Note that accessing `self.attribute` where the attribute is uninitialized will stop the constructor part, as it indicates an error in initialization order.
+## Let `self` out last
 
-## The Post-Constructor Part
-
-Once `self` escapes, we enter the post-constructor part where all attributes must already be initialized:
+Once the object is complete, you can call helper methods or register the
+instance with the rest of the system.
 
 ```python
 class BankAccount(object):
     def __init__(self, owner: str, initial_deposit: float):
-        # Constructor part: Initialize all attributes
         self.owner = owner
         self.balance = initial_deposit
         self.transaction_log = []
 
-        # Post-constructor: self escapes here, all attributes must be initialized
-        self.log_transaction("Account opened")  # Calls method on self
-        register_account(self)                  # Passes self to function
+        self.log_transaction("Account opened")
+        register_account(self)
         if initial_deposit > 10000:
             flag_for_review(self)
 ```
 
-## Control Flow in the Constructor Part
+## Control flow
 
-### Conditional branches
+Branches and loops are fine as long as every normal path leaves the
+object complete.
 
-Conditional branches (if/elif/else) work as long as all branches that complete normally initialize all attributes. Branches that `raise` exceptions don't need to initialize since they abort object creation:
+### Branches
+
+Conditional branches work when every branch that completes normally
+initializes the same required attributes. Branches that `raise`
+exceptions do not need to finish construction.
 
 ```python
 class Rational(object):
@@ -59,43 +80,42 @@ class Rational(object):
     def __init__(self, num: int, denom: int):
         if denom == 0:
             raise ValueError("Denominator cannot be zero")
+        if denom > 0:
+            self.num = num
+            self.denom = denom
         else:
-            if denom > 0:
-                self.num = num
-                self.denom = denom
-            else:
-                self.num = -num
-                self.denom = -denom
+            self.num = -num
+            self.denom = -denom
 ```
 
-### Try/except blocks
+### Try/except
 
-Try/except blocks work as long as all paths that complete normally initialize all attributes. The `else` clause executes only when no exception occurs and is part of the normal path. Exception handlers that raise new exceptions don't need to initialize attributes.
+`try`/`except` works the same way. The `else` branch is part of the
+normal path, so it must also leave the object initialized.
 
 ### Loops
 
-Loops can be used in the constructor part as long as they don't leak `self`:
+Loops are fine as long as they do not leak `self` before the object is
+ready.
 
 ```python
 class Example(object):
     def __init__(self, data: list[int]):
-        # OK: Loop doesn't reference self
         total = 0
         for item in data:
             total += item
 
-        # Initialize attributes after the loop
         self.values = data
         self.computed = total
 
-        # Now can use self in loops (post-constructor)
         for item in data:
-            self.process(item)  # This escapes self!
+            self.process(item)
 ```
 
-## Common Pitfall: Method References
+## Common mistake
 
-Passing a method reference like `self.method` also causes `self` to escape, even without calling the method:
+Passing a method reference like `self.method` also makes `self` escape,
+even if the method is not called immediately.
 
 ```python
 class Handler(object):
@@ -103,22 +123,18 @@ class Handler(object):
     data: int
 
     def __init__(self):
-        # This escapes self! The method reference captures self
         self.callback = Callback(self.on_event)
-
-        # ERROR: This won't be seen as initialized
-        # because self already escaped on the line above
         self.data = 42
 
     def on_event(self):
         pass
 ```
 
-## Special Cases
+## Parent classes
 
-Methods with `NotImplemented` bodies are implemented in C and can be called during initialization since they are trusted to not access uninitialized attributes.
-
-To initialize parent class attributes, call the parent's `__init__`:
+If a base class owns state, initialize that state before exposing the
+derived object. Call the parent `__init__` as part of your own
+construction.
 
 ```python
 class Account(object):
@@ -134,7 +150,7 @@ class BankAccount(Account):
     balance: float
 
     def __init__(self, account_id: str, owner: str, initial_deposit: float):
-        Account.__init__(self, account_id)  # Initialize parent attributes
+        Account.__init__(self, account_id)
         self.owner = owner
         self.balance = initial_deposit
 ```

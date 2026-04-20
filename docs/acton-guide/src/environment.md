@@ -1,4 +1,45 @@
 # Environment
 
-The environment of an Acton application is the outside world. Any useful application typically needs to interact with the environment in some way, like reading arguments or taking input from stdin and printing output.
+The environment is your program's practical link to the outside world.
+Most programs meet it first as the `env` argument passed to the root
+actor.
 
+```python
+actor main(env):
+    print("args:", env.argv)
+    env.exit(0)
+```
+
+<div class="beginner-content">
+<p>You can think of <code>env</code> as the handle your program receives
+for talking to the world around it. It is passed into <code>main</code>;
+it is not a hidden global that every function can reach automatically.
+If a helper only needs one small piece of that power, pass the smaller
+piece instead of the whole environment.</p>
+</div>
+
+From there, this chapter covers the most common environment tasks:
+
+- [Environment variables](environment/variables.md)
+- [Reading stdin input](environment/stdin.md)
+- [Interactive stdin input](environment/interactive_stdin.md)
+
+Use `env` when code needs process arguments, environment variables,
+standard input, or terminal configuration. Pass it only to the code
+that actually needs that access.
+
+<div class="advanced-content">
+<p><code>env</code> is best understood as a bundle of process-level
+capabilities, not as one ordinary argument. It carries authority over
+things such as arguments, environment variables, standard input, and
+terminal configuration. If that whole bundle gets threaded through many
+layers, those layers quietly become coupled to process concerns even
+when they only need one small part of it.</p>
+
+<p>In larger programs, treat the root actor as the place where broad
+authority is received, then pass inward only the narrower capability or
+value a helper actually needs. That keeps APIs honest about what they
+depend on, makes tests easier to fake, and prevents a small utility
+from accidentally gaining much wider access to the outside world than
+its job requires.</p>
+</div>

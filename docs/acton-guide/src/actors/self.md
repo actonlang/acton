@@ -1,6 +1,15 @@
 # `self`
 
-`self` is implicitly bound inside an actor. Use `self` to pass a reference to the current actor to another actor. `self` is never needed to reference to the current actor within the current actor.
+`self` is implicitly bound inside an actor. Use it when you need to pass
+a reference to the current actor to another actor. Inside the actor,
+`self` is usually unnecessary.
+
+<div class="advanced-content">
+<p><code>self</code> inside an actor is about identity and
+communication, not ordinary attribute access. Passing
+<code>self</code> hands out a callback path to the current actor, which
+makes it central to request/reply and subscription-style protocols.</p>
+</div>
 
 Source:
 ```python

@@ -1,6 +1,15 @@
 # Actor concurrency
 
-Multiple actors run concurrently. In this example we can see how the two actors Foo and Bar run concurrently. The main actor is also running concurrently, although it doesn't do anything beyond creating the Foo and Bar actors and exiting after some time.
+Multiple actors can make progress concurrently. In this example, Foo
+and Bar both keep ticking while the root actor schedules shutdown.
+
+<div class="advanced-content">
+<p>Concurrency here means the actors can make progress independently,
+not that their outputs follow a fixed interleaving. The runtime may run
+them in parallel on multiple workers, but the semantic guarantee is
+still per-actor sequential execution rather than any global ordering
+between actors.</p>
+</div>
 
 Source:
 ```python
@@ -11,23 +20,18 @@ actor Counter(name):
         print("I am " + name + " and I have counted to " + str(counter))
         counter += 1
 
-        # 'after 1' tells the run time system to schedule the specified
-        # function, in this case periodic(), i.e. ourselves, after 1 second
         after 1: periodic()
 
-    # First invocation of periodic()
     periodic()
 
 
 actor main(env):
-    # Create two instances of the Counter actor, each with a unique name
     foo = Counter("Foo")
     bar = Counter("Bar")
-    
+
     def exit():
         env.exit(0)
 
-    # exit the whole program after 10 seconds
     after 10: exit()
 ```
 

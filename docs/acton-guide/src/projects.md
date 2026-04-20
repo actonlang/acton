@@ -20,9 +20,18 @@ Run:
 
 ## Description
 
-Use `acton build` to build a project. The current working directory must be the project directory or a sub-directory to the project directory. `acton` will discover all source files and compile them according to dependency order.
+Use `acton build` to build a project. The current working directory
+must be the project directory or a sub-directory to the project
+directory. `acton` will discover all source files and compile them
+according to dependency order.
 
 Add a `main` actor to any source file directly under `src/` to produce an executable binary. For example, if `src/hello.act` contains a `main` actor, it will produce `out/bin/hello` using `main` as the root actor.
+
+Projects and modules work together: `src/` defines the local module
+tree, while `Build.act` defines the project identity and its external
+dependencies. See [Modules](modules.md) for local source layout and
+[Package Management](package_management.md) for remote dependencies and
+override behavior.
 
 ## Build configuration and lineage
 
