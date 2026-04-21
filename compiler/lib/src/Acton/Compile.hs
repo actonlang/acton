@@ -1207,7 +1207,7 @@ readModuleTask sp gopts opts paths actFile = do
 
     mkTyTask mn moduleSrcBytesHash modulePubHash moduleImplHash imps nameHashes roots tests mdoc =
       let nmodStub = I.NModule [] mdoc
-          tmodStub = A.Module mn [] []
+          tmodStub = A.Module mn [] mdoc []
       in TyTask { name      = mn
                 , tyHash     = moduleSrcBytesHash
                 , tyPubHash  = modulePubHash

@@ -1,4 +1,3 @@
-
 proc def force_cps (arg : __builtin__.int) -> __builtin__.int:
     return arg
 

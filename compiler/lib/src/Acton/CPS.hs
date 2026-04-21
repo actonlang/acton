@@ -31,9 +31,9 @@ import Acton.QuickType
 convert                                 :: Env0 -> Module -> IO (Module, Env0)
 convert env0 m                          = return (runCpsM (convMod m), mapModules1 (conv env) env0)
   where env                             = cpsEnv env0
-        convMod (Module m imps ss)      = do ss' <- preSuite env ss
+        convMod (Module m imps mdoc ss) = do ss' <- preSuite env ss
                                              --traceM ("######## preCPS:\n" ++ render (vcat $ map pretty ss') ++ "\n########")
-                                             Module m imps <$> cps env ss'
+                                             Module m imps mdoc <$> cps env ss'
 
 type CpsM a                             = State CpsState a
 
@@ -350,7 +350,7 @@ class PreCPS a where
     preTop env                          = pre env
 
 instance PreCPS Module where
-    pre env (Module m imps ss)          = Module m imps <$> preSuite env ss
+    pre env (Module m imps mdoc ss)     = Module m imps mdoc <$> preSuite env ss
 
 preSuite env []                         = return []
 preSuite env (s : ss)                   = do (prefixes,s') <- withPrefixes $ pre env s

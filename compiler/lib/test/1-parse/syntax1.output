@@ -1,7 +1,7 @@
+"""Module docstring for syntax1 test.
+This tests docstring support across all language constructs.
+"""
 import net
-
-"Module docstring for syntax1 test.\\nThis tests docstring support across all language constructs.\\n"
-
 def add (x : int, y : int) -> int:
     """Add two numbers together.
 

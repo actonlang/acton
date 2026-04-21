@@ -1126,7 +1126,7 @@ parseModuleTest input =
     E.catch
       (E.evaluate $ case runParser (St.evalStateT P.file_input P.initState) "test.act" inputWithNewline of
         Left err -> Left $ renderDiagnostic err
-        Right (imports, suite) -> Right $ "Module parsed successfully")
+        Right (_imports, _mdoc, _suite) -> Right $ "Module parsed successfully")
       handleCustomParseException
   where
     inputWithNewline = withTrailingNewline input
@@ -1305,7 +1305,7 @@ typedDefGeneratedNames env0 modName src defName = do
     Nothing ->
       expectationFailure ("Definition not found: " ++ defName) >> pure []
 
-findTypedDef defName (S.Module _ _ ss) = findInSuite ss
+findTypedDef defName (S.Module _ _ _ ss) = findInSuite ss
   where findInSuite [] = Nothing
         findInSuite (S.Decl _ ds : ss) =
           case [ d | d@(S.Def _ n _ _ _ _ _ _ _ _) <- ds, prstr n == defName ] of
@@ -1532,7 +1532,7 @@ testDocstrings env0 testname = do
   let I.NModule tenv mdoc = nmod
 
   -- Extract docstrings from the parsed AST
-  let S.Module _ _ stmts = parsed
+  let S.Module _ _ _ stmts = parsed
       extractDeclDocstrings (S.Decl _ decls) = concatMap extractDocFromDecl decls
       extractDeclDocstrings _ = []
 

@@ -18,8 +18,6 @@ module Acton.DocPrinter
     , printMdDoc
     , printHtmlDoc
     , generateDocIndex
-      -- * Utility functions
-    , extractDocstring
     ) where
 
 import Utils
@@ -41,7 +39,7 @@ import System.FilePath ((</>), (<.>), joinPath)
 
 -- | Generate documentation from a module in Markdown format with types
 docModuleWithTypes :: NameInfo -> Module -> Doc
-docModuleWithTypes (NModule tenv mdocstring) (Module qn _ stmts) =
+docModuleWithTypes (NModule tenv mdocstring) (Module qn _ _ stmts) =
     -- Use module docstring from NModule
     let moduleDocstring = mdocstring
         (title, restDoc) = case moduleDocstring of
@@ -86,13 +84,6 @@ extractTopLevelWithTypes tenv (Decl _ decls) = map (docDeclWithTypes tenv) decls
 extractTopLevelWithTypes tenv (With _ _ body) = concatMap (extractTopLevelWithTypes tenv) body
 extractTopLevelWithTypes _ _ = []
 
--- | Extract docstring from a suite (if it's the first statement and is a string)
-extractDocstring :: Suite -> Maybe String
-extractDocstring [] = Nothing
-extractDocstring (Expr _ (Strings _ ss) : _) = Just (unescapeString $ concat ss)
-extractDocstring _ = Nothing
-
-
 -- | Extract docstring from NameInfo
 extractNameDocstring :: NameInfo -> Maybe String
 extractNameDocstring (NDef _ _ mdoc) = mdoc
@@ -103,18 +94,6 @@ extractNameDocstring (NProto _ _ _ mdoc) = mdoc
 extractNameDocstring (NExt _ _ _ _ _ mdoc) = mdoc
 extractNameDocstring (NModule _ mdoc) = mdoc
 extractNameDocstring _ = Nothing
-
--- | Unescape string literals (convert \n to actual newlines, etc.)
-unescapeString :: String -> String
-unescapeString [] = []
-unescapeString ('\\':'n':rest) = '\n' : unescapeString rest
-unescapeString ('\\':'t':rest) = '\t' : unescapeString rest
-unescapeString ('\\':'r':rest) = '\r' : unescapeString rest
-unescapeString ('\\':'\\':rest) = '\\' : unescapeString rest
-unescapeString ('\\':'"':rest) = '"' : unescapeString rest
-unescapeString ('\\':'\'':rest) = '\'' : unescapeString rest
-unescapeString (c:rest) = c : unescapeString rest
-
 
 -- | Document a declaration in Markdown format with types
 docDeclWithTypes :: TEnv -> Decl -> Doc
@@ -502,7 +481,7 @@ dim False = ""
 
 -- | Generate ASCII documentation from a module with unified style and type handling
 docModuleAsciiUnified :: Bool -> NameInfo -> Module -> Doc
-docModuleAsciiUnified useStyle (NModule tenv mdocstring) (Module qn _ stmts) =
+docModuleAsciiUnified useStyle (NModule tenv mdocstring) (Module qn _ _ stmts) =
     -- Use module docstring from NModule
     let moduleDocstring = mdocstring
         (title, restDoc) = case moduleDocstring of
@@ -1210,7 +1189,7 @@ printHtmlDoc nmod m = unlines
 
 -- | Get module title for HTML
 moduleTitle :: Module -> String
-moduleTitle (Module qn _ _) = render (pretty qn)
+moduleTitle (Module qn _ _ _) = render (pretty qn)
 
 -- | CSS styles for HTML documentation
 htmlStyles :: String
@@ -1581,7 +1560,7 @@ htmlScript = unlines
 
 -- | Generate HTML documentation from a module with type information
 docModuleHtmlWithTypes :: NameInfo -> Module -> Doc
-docModuleHtmlWithTypes (NModule tenv mdocstring) (Module modName _ stmts) =
+docModuleHtmlWithTypes (NModule tenv mdocstring) (Module modName _ _ stmts) =
     -- Use module docstring from NModule
     let moduleDocstring = mdocstring
         (title, restDoc) = case moduleDocstring of

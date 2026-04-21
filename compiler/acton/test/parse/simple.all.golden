@@ -1,7 +1,6 @@
 
 
 == parse: simple ================================
-
 def main ():
     print("Hello parse!")
 =================================================
@@ -9,7 +8,6 @@ def main ():
 
 
 == kinds: simple ================================
-
 T_9w def main () -> T_5w:
     print("Hello parse!")
 =================================================
@@ -17,7 +15,6 @@ T_9w def main () -> T_5w:
 
 
 == types: simple ================================
-
 pure def main () -> None:
     print@[(__builtin__.str,)](*("Hello parse!",), sep = None, end = None, err = None, flush = None)
 =================================================
@@ -32,7 +29,6 @@ main : () -> None
 
 
 == norm: simple ================================
-
 pure def main () -> None:
     print@[(__builtin__.str,)](("\"Hello parse!\"",), None, None, None, None)
     return None
@@ -41,7 +37,6 @@ pure def main () -> None:
 
 
 == deact: simple ================================
-
 pure def main () -> None:
     print@[(__builtin__.str,)](("\"Hello parse!\"",), None, None, None, None)
     return None
@@ -50,7 +45,6 @@ pure def main () -> None:
 
 
 == cps: simple ================================
-
 pure def main () -> None:
     print@[(__builtin__.str,)](("\"Hello parse!\"",), None, None, None, None)
     return None
@@ -59,7 +53,6 @@ pure def main () -> None:
 
 
 == llift: simple ================================
-
 pure def main () -> None:
     print@[(__builtin__.str,)](("\"Hello parse!\"",), None, None, None, None)
     return None
@@ -68,7 +61,6 @@ pure def main () -> None:
 
 
 == box: simple ================================
-
 pure def main () -> None:
     print@[(__builtin__.str,)](("\"Hello parse!\"",), None, None, None, None)
     return None

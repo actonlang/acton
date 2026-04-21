@@ -1,4 +1,3 @@
-
 W_Apa_1097: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
 
 W_Apa_759: __builtin__.Eq[?__builtin__.int] = $EqOpt@[__builtin__.int](W_Apa_1097)

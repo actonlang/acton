@@ -200,7 +200,7 @@ instance Norm a => Norm (Maybe a) where
     norm env (Just a)               = Just <$> norm env a
 
 instance Norm Module where
-    norm env (Module m imps ss)     = Module m imps <$> normSuite env ss
+    norm env (Module m imps mdoc ss) = Module m imps mdoc <$> normSuite env ss
 
 handle env x hs                     = do bs <- sequence [ branch e b | Handler e b <- hs ]
                                          return $ [sIf bs [sExpr $ eCall (eQVar primRAISE) [eVar x]]]

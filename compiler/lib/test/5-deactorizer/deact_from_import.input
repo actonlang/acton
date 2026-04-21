@@ -1,5 +1,4 @@
 from deact import Apa
-
 W_Manager_124: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
 
 # recursive group:
