@@ -1739,13 +1739,13 @@ atom_expr = do
               ts <- many trailer
               let (outerOpt,e) = foldapp async a ts
                   e' = maybe e (app e) await
-              return $ if outerOpt then S.OptChain NoLoc e' else e'
+              return $ if outerOpt then wrapOptChain e' else e'
               <?> "atomic expression"
   where app a (l,f) = (f a){S.eloc = exprLoc a `upto` l}
         appChain a (l,_,f) = app a (l,f)
         exprLoc S.OptChain{S.exp1=e} = exprLoc e
         exprLoc e = S.eloc e
-        wrapOptChain e = S.OptChain NoLoc e
+        wrapOptChain e = S.OptChain (loc e) e
 
         foldapp async e = finish . go async False False e
           where closeChain True e = wrapOptChain e

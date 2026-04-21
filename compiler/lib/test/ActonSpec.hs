@@ -191,6 +191,13 @@ main = do
                 other -> expectationFailure $ "Expected right int literal, got " ++ show other
             Right other -> expectationFailure $ "Expected power expression, got " ++ show other
 
+      describe "Optional chaining" $ do
+        it "parses optional chaining expression statements without crashing" $ do
+          case parseStmtAst "l?.append(1)" of
+            Left err -> expectationFailure $ "Parse failed: " ++ err
+            Right [S.Expr _ expr@S.OptChain{}] -> loc expr `shouldNotBe` NoLoc
+            Right other -> expectationFailure $ "Unexpected AST: " ++ show other
+
       describe "String Interpolation" $ do
         -- Note: In these tests, we use Haskell string literals which require escaping.
         -- The test format is: testParseOutput <Haskell literal> <expected parser output>
