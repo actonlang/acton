@@ -412,7 +412,11 @@ instance PreCPS Expr where
     pre env (TApp l e ts)               = TApp l <$> pre env e <*> pure ts
     pre env (Let l ss e)                = do ss' <- preSuite env ss
                                              (prefixes,e') <- withPrefixes $ pre env1 e
-                                             return $ Let l (ss' ++ prefixes) e'
+                                             -- Let suites are emitted directly by CodeGen and never
+                                             -- pass through the statement-level CPS conversion, so we
+                                             -- must lift their rewritten statements into outer prefixes.
+                                             prefix (ss' ++ prefixes)
+                                             return e'
        where env1                       = define (envOf ss) env
     pre env (Cond l e1 e e2)            = do (pre1,e1') <- withPrefixes $ pre env e1
                                              (pre2,e2') <- withPrefixes $ pre env e2
@@ -429,8 +433,36 @@ instance PreCPS Expr where
                                                      return $ eVar v
       where t                           = upbound env $ map (typeOf env) [e1,e2]
     pre env (IsInstance l e c)          = IsInstance l <$> pre env e <*> return c
-    pre env (BinOp l e1 Or e2)          = BinOp l <$> pre env e1 <*> pure Or <*> pre env e2
-    pre env (BinOp l e1 And e2)         = BinOp l <$> pre env e1 <*> pure And <*> pre env e2
+    pre env (BinOp l e1 Or e2)          = do (pre1,e1') <- withPrefixes $ pre env e1
+                                             (pre2,e2') <- withPrefixes $ pre env e2
+                                             case pre2 of
+                                                 [] -> do
+                                                     prefix pre1
+                                                     return $ BinOp l e1' Or e2'
+                                                 _ -> do
+                                                     x <- newName "pre"
+                                                     v <- newName "pre"
+                                                     let s1 = [sAssign (pVar v t) (eVar x)]
+                                                         s2 = pre2 ++ [sAssign (pVar v t) e2']
+                                                     prefix $ pre1 ++ [sAssign (pVar x t1) e1', sIf1 (eVar x) s1 s2]
+                                                     return $ eVar v
+      where t                           = upbound env $ map (typeOf env) [e1,e2]
+            t1                          = typeOf env e1
+    pre env (BinOp l e1 And e2)         = do (pre1,e1') <- withPrefixes $ pre env e1
+                                             (pre2,e2') <- withPrefixes $ pre env e2
+                                             case pre2 of
+                                                 [] -> do
+                                                     prefix pre1
+                                                     return $ BinOp l e1' And e2'
+                                                 _ -> do
+                                                     x <- newName "pre"
+                                                     v <- newName "pre"
+                                                     let s1 = pre2 ++ [sAssign (pVar v t) e2']
+                                                         s2 = [sAssign (pVar v t) (eVar x)]
+                                                     prefix $ pre1 ++ [sAssign (pVar x t1) e1', sIf1 (eVar x) s1 s2]
+                                                     return $ eVar v
+      where t                           = upbound env $ map (typeOf env) [e1,e2]
+            t1                          = typeOf env e1
     pre env (UnOp l Not e)              = UnOp l Not <$> pre env e
     pre env (Dot l e n)                 = Dot l <$> pre env e <*> return n
     pre env (DotI l e i)                = DotI l <$> pre env e <*> return i
