@@ -30,7 +30,7 @@ import Acton.Env
 
 
 check                               :: Env0 -> Module -> IO Module
-check env0 (Module m imps ss)       = do return (Module m imps ss1)
+check env0 (Module m imps mdoc ss)  = do return (Module m imps mdoc ss1)
   where env                         = kindEnv env0
         ss1                         = runKindM (kchkTop env ss)
 
@@ -776,5 +776,4 @@ instance KSubst Assoc where
 
 instance KSubst Sliz where
     ksubst g (Sliz l e1 e2 e3)      = Sliz l <$> ksubst g e1 <*> ksubst g e2 <*> ksubst g e3
-
 

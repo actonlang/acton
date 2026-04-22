@@ -1,4 +1,3 @@
-
 proc def force_cps (C_cont : proc(__builtin__.int) -> $R, arg : __builtin__.int) -> $R:
     return $R_CONTc@[__builtin__.int](C_cont, arg)
 

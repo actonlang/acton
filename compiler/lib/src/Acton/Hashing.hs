@@ -53,7 +53,7 @@ modNameToString m = intercalate "." (A.modPath m)
 
 -- | Extract hashable top-level items from a module.
 topLevelItems :: A.Module -> [TopLevelItem]
-topLevelItems (A.Module _ _ suite) = concatMap items suite
+topLevelItems (A.Module _ _ _ suite) = concatMap items suite
   where
     items stmt = case stmt of
       A.Decl _ ds ->

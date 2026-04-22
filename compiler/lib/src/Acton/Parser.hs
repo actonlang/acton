@@ -122,7 +122,7 @@ parseModule qn fileName fileContent =
                              else fileContent ++ "\n"
     in case runParser (St.evalStateT file_input initState) fileName contentWithNewline of
         Left err -> Control.Exception.throw err
-        Right (i,s) -> return $ S.Module qn i s
+        Right (i,mdoc,s) -> return $ S.Module qn i mdoc s
 
 -- parseTest file = snd (unsafePerformIO (do cont <- readFile file; parseModule (S.modName ["test"]) file cont))
 
@@ -1066,25 +1066,20 @@ braces p = withCtx PAR (L.symbol sc2 "{" *> p <* (char '}' <?> "closing '}'")) <
 
 --- Top-level parsers ------------------------------------------------------------
 
--- Parse a docstring statement (just a string literal as an expression statement)
-docstring_stmt :: Parser S.Stmt
-docstring_stmt = addLoc $ do
-    e <- docstringLiteral
-    return (S.Expr NoLoc e)
+module_docstring :: Parser String
+module_docstring = do
+    S.Strings _ ss <- addLoc docstringLiteral
+    return (unescapeString (concat ss))
 
-file_input :: Parser ([S.Import], S.Suite)
+file_input :: Parser ([S.Import], Maybe String, S.Suite)
 file_input = sc2 *>  do
     -- Allow optional module docstring before imports
-    mbDocstring <- optional (try (L.nonIndented sc2 docstring_stmt <* eol <* sc2))
+    mbDocstring <- optional (try (L.nonIndented sc2 module_docstring <* eol <* sc2))
     is <- imports
     s <-  withCtx TOP top_suite
     validateModuleSuite s
     eof
-    -- Prepend docstring to suite if present
-    let suite = case mbDocstring of
-                  Nothing -> s
-                  Just ds -> ds : s
-    return (is,suite)
+    return (is, mbDocstring, s)
 
 -- (((,) <$> imports <*> withCtx TOP top_suite) <* eof)
 

@@ -1,7 +1,6 @@
 import logging
 
 import testing
-
 W_MathTester_6: __builtin__.Plus[__builtin__.int] = __builtin__.IntegralD_int()
 
 actor MathTester ():

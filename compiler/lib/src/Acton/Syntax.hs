@@ -25,9 +25,9 @@ import Control.DeepSeq
 import Prelude hiding((<>))
 
 version :: [Int]
-version = [0,13]
+version = [0,14]
 
-data Module     = Module        { modname::ModName, imps::[Import], mbody::Suite } deriving (Eq,Show,Generic,NFData)
+data Module     = Module        { modname::ModName, imps::[Import], mdoc::Maybe String, mbody::Suite } deriving (Eq,Show,Generic,NFData)
 
 data Import     = Import        { iloc::SrcLoc, moduls::[ModuleItem] }
                 | FromImport    { iloc::SrcLoc, modul::ModRef, items::[ImportItem] }
@@ -755,7 +755,7 @@ instance Read Name where
 
 -- Helpers ------------------
 
-importsOf (Module _ imps _)         = impsOf imps
+importsOf (Module _ imps _ _)       = impsOf imps
   where
     impsOf []                       = []
     impsOf (Import _ mis : i)       = map mName mis ++ impsOf i

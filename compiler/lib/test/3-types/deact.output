@@ -1,4 +1,3 @@
-
 W_Apa_39: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
 
 W_Apa_140: __builtin__.Plus[__builtin__.int] = __builtin__.IntegralD_int()

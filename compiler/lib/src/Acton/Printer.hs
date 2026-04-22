@@ -22,7 +22,8 @@ import Prelude hiding ((<>))
 
 
 instance Pretty Module where
-    pretty (Module qn imps stmts)   = prHead qn $+$ vpretty imps $+$ blank $+$ vpretty stmts
+    pretty (Module qn imps doc stmts)
+                                    = joinSections [prHead qn, prettyModDoc doc, vpretty imps, vpretty stmts]
 
 prHead qn                           = empty
 --prHead qn                           = text "module" <+> pretty qn <> colon $+$ blank
@@ -33,6 +34,13 @@ instance Pretty Import where
     pretty (FromImportAll _ n)      = text "from" <+> pretty n <+> text "import" <+> text "*"
 
 prettySuite ss                      = nest 4 $ vcat $ map pretty ss
+
+joinSections :: [Doc] -> Doc
+joinSections = vcat . punctuate blank . filter (not . isEmpty)
+
+prettyModDoc :: Maybe String -> Doc
+prettyModDoc Nothing                = empty
+prettyModDoc (Just doc)             = text "\"\"\"" <> text (escapeDocstring doc) <> text "\"\"\""
 
 -- Pretty print a suite with optional docstring at the beginning
 prettyDocSuite :: Maybe String -> Suite -> Doc
@@ -518,4 +526,3 @@ instance Pretty Kind where
     pretty (KFun ks k)              = brackets (commaSep pretty ks) <+> text "=>" <+> pretty k
     pretty (KUni i)                 = text "K_" <> pretty i
     pretty KWild                    = text "_"
-

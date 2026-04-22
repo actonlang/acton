@@ -47,39 +47,16 @@ emitTypeProgress Nothing _ _ _ _ _ = return ()
 emitTypeProgress (Just cb) total completed current names weight =
   unsafePerformIO (cb total completed current names weight) `seq` return ()
 
--- | Extract docstring from the first statement of a Suite if it's a string expression
-extractDocstring :: Suite -> Maybe String
-extractDocstring (Expr _ (Strings _ ss) : _) = Just (unescapeString $ stripQuotes (concat ss))
-  where
-    stripQuotes ('"':'"':'"':xs) | take 3 (reverse xs) == "\"\"\"" = take (length xs - 3) xs
-    stripQuotes ('\'':'\'':'\'':xs) | take 3 (reverse xs) == "'''" = take (length xs - 3) xs
-    stripQuotes ('\'':xs) | last xs == '\'' = init xs
-    stripQuotes ('"':xs) | last xs == '"' = init xs
-    stripQuotes s = s
-extractDocstring _ = Nothing
-
--- | Unescape a parsed string literal payload.
-unescapeString :: String -> String
-unescapeString [] = []
-unescapeString ('\\':'n':xs) = '\n' : unescapeString xs
-unescapeString ('\\':'t':xs) = '\t' : unescapeString xs
-unescapeString ('\\':'r':xs) = '\r' : unescapeString xs
-unescapeString ('\\':'\\':xs) = '\\' : unescapeString xs
-unescapeString ('\\':'"':xs) = '"' : unescapeString xs
-unescapeString ('\\':'\'':xs) = '\'' : unescapeString xs
-unescapeString (x:xs) = x : unescapeString xs
-
 -- | Type-check a module and return its NameInfo, typed module, env, and discovered tests.
 reconstruct                             :: Maybe TypeProgressCallback -> Env0 -> Module -> IO (NameInfo, Module, Env0, [Acton.Syntax.ModName], [String])
-reconstruct progressCb env0 (Module m i ss)         = do --traceM ("#################### original env0 for " ++ prstr m ++ ":")
+reconstruct progressCb env0 (Module m i mdoc ss)    = do --traceM ("#################### original env0 for " ++ prstr m ++ ":")
                                              --traceM (render (pretty env0))
-                                             let nmod = NModule iface moduleDocstring
+                                             let nmod = NModule iface mdoc
                                              --traceM ("#################### converted env0:")
                                              --traceM (render (pretty env0'))
-                                             return (nmod, Module m i ssT, env0', mrefs, tests)
+                                             return (nmod, Module m i mdoc ssT, env0', mrefs, tests)
 
-  where moduleDocstring                 = extractDocstring ss
-        env1                            = reserve (assigned ss) (typeX env0)
+  where env1                            = reserve (assigned ss) (typeX env0)
         (te,ss1)                        = runTypeM $ infTop progressCb env1 ss
         env2                            = define te (setMod m env0)
 
@@ -227,17 +204,12 @@ stmtProgressNames :: Stmt -> [String]
 stmtProgressNames (Decl _ ds)          = [ nstr (dname' d) | d <- ds ]
 stmtProgressNames s@Assign{}           = map nstr (bound s)
 stmtProgressNames s@Signature{}        = map nstr (bound s)
-stmtProgressNames (Expr _ (Strings _ _))
-                                        = []
 stmtProgressNames s                    = error ("Unexpected top-level stmt: " ++ prstr s)
 
 uniqPrefix :: Stmt -> Name
 uniqPrefix (Decl _ (d : _))            = dname' d
 uniqPrefix s@Assign{}                  = head (bound s)
 uniqPrefix s@Signature{}               = head (bound s)
--- TODO: Extract module docstrings before typechecking so top-level
--- docstrings never reach this fallback.
-uniqPrefix (Expr l (Strings _ _))      = Name l "__doc__"
 uniqPrefix s                           = error ("Unexpected top-level stmt: " ++ prstr s)
 
 infTopStmt env s                        = do (cs,te,s) <- infEnv env s
@@ -797,14 +769,12 @@ instance InfEnv Decl where
       | nodup (p,k)                     = case findName n env of
                                              NSig sc dec _ | t@TFun{} <- sctype sc, matchingDec n sc dec (deco d) -> do
                                                  --traceM ("\n## infEnv (sig) def " ++ prstr (n, NDef sc dec Nothing))
-                                                 let docstring = extractDocstring (dbody d)
-                                                 return ([], [(n, NDef (fxUnwrapSc env sc) dec docstring)], d{deco = dec})
+                                                 return ([], [(n, NDef (fxUnwrapSc env sc) dec ddoc)], d{deco = dec})
                                              NReserved -> do
                                                  t <- tFun (fxUnwrap env fx) (prowOf p) (krowOf k) <$> maybe (newUnivar env) return a
                                                  let sc = tSchema q (if inClass env then dropSelf t (deco d) else t)
-                                                     docstring = extractDocstring (dbody d)
                                                  --traceM ("\n## infEnv def " ++ prstr (n, NDef sc (deco d) Nothing))
-                                                 return ([], [(n, NDef sc (deco d) docstring)], d)
+                                                 return ([], [(n, NDef sc (deco d) ddoc)], d)
                                              _ ->
                                                  illegalRedef n
 
@@ -815,9 +785,8 @@ instance InfEnv Decl where
                                                  te <- infActorEnv env b
                                                  let prow = prowOf p
                                                      krow = krowOf k
-                                                     docstring = extractDocstring b
                                                  --traceM ("\n## infEnv actor " ++ prstr (n, NAct q prow krow te ddoc))
-                                                 return ([], [(n, NAct q prow krow te docstring)], d)
+                                                 return ([], [(n, NAct q prow krow te ddoc)], d)
                                              _ ->
                                                  illegalRedef n
 
@@ -836,8 +805,7 @@ instance InfEnv Decl where
                                                  let (te2,b2) = if notImplBody b then let te1 = unSig asigs in (te++te1, addImpl te1 b1)
                                                                 else if null asigs && initKW `notElem` dom te then relayInit te b1
                                                                 else (te,b1)
-                                                     docstring = extractDocstring b
-                                                 return ([], [(n, NClass q as' (te0++te2) docstring)], Class l n q us (props te0 ++ b2) ddoc)
+                                                 return ([], [(n, NClass q as' (te0++te2) ddoc)], Class l n q us (props te0 ++ b2) ddoc)
                                              _ -> illegalRedef n
       where env1                        = define (exclude (toSigs te') [initKW]) $ reserve (assigned b0) $ defineTVars (stripQual q') $ setInClass env
             (as,ps)                     = mro2 env us
@@ -871,8 +839,7 @@ instance InfEnv Decl where
                                                  when (not $ null nterms) $ err2 (dom nterms) "Method/attribute lacks signature:"
                                                  when (initKW `elem` sigs) $ err2 (filter (==initKW) sigs) "A protocol cannot define __init__"
                                                  when (not $ null noself) $ err2 noself "A static protocol signature must mention Self"
-                                                 let docstring = extractDocstring b
-                                                 return ([], [(n, NProto q ps te docstring)], Protocol l n q us b' ddoc)
+                                                 return ([], [(n, NProto q ps te ddoc)], Protocol l n q us b' ddoc)
                                              _ -> illegalRedef n
       where env1                        = define (toSigs te') $ reserve (assigned b) $ defineTVars (stripQual q') $ setInClass env
             ps                          = mro1 env us
@@ -895,8 +862,7 @@ instance InfEnv Decl where
                                              let te1 = unSig $ selfSubst n q asigs
                                                  te2 = te ++ te1
                                                  b2 = addImpl te1 b1
-                                             let docstring = extractDocstring b
-                                             return ([], [(extensionName us c, NExt q c ps te2 [] docstring)], Extension l q c us b2 ddoc)
+                                             return ([], [(extensionName us c, NExt q c ps te2 [] ddoc)], Extension l q c us b2 ddoc)
       where TC n ts                     = c
             env1                        = define (toSigs te') $ reserve (assigned b) $ defineTVars (stripQual q') $ setInClass env
             witsearch                   = findWitness env (tCon c) u

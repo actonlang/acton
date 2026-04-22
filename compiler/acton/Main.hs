@@ -1692,7 +1692,7 @@ generateProjectDocIndex sp gopts opts paths srcFiles = do
         createDirectoryIfMissing True docDir
         tasks <- mapM (\f -> findPaths f opts >>= \p -> readModuleTask sp gopts opts p f) srcFiles
         entries <- catMaybes <$> forM tasks (\t -> case t of
-                          ActonTask mn _src _bytes _sourceMeta m -> return (Just (mn, DocP.extractDocstring (A.mbody m)))
+                          ActonTask mn _src _bytes _sourceMeta m -> return (Just (mn, A.mdoc m))
                           TyTask { name = mn, tyDoc = mdoc } -> return (Just (mn, mdoc))
                           ParseErrorTask{} -> return Nothing)
         DocP.generateDocIndex docDir entries

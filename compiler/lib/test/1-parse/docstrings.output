@@ -1,7 +1,5 @@
+"""Test module for docstring functionality with {braces}."""
 import math
-
-"Test module for docstring functionality with {braces}."
-
 def test_function (x : int) -> int:
     """Test function with docstring."""
     return x * 2

@@ -142,7 +142,7 @@ modNames []                         = []
 
 -- Header -------------------------------------------------------------------------------------------
 
-hModule env (Module m imps stmts)   = text "#pragma" <+> text "once" $+$
+hModule env (Module m imps _ stmts) = text "#pragma" <+> text "once" $+$
                                       (if inBuiltin env
                                        then empty
                                        else text "#include \"builtin/builtin.h\"" $+$ -- TODO: can we include out/types/__builtin__.h instead?
@@ -313,7 +313,7 @@ primNEWTUPLE0                       = gPrim "NEWTUPLE0"
 
 -- Implementation -----------------------------------------------------------------------------------
 
-cModule env srcbase srcText emitLines (Module m imps stmts)
+cModule env srcbase srcText emitLines (Module m imps _ stmts)
                                     = (if inBuiltin env then text "#include \"builtin/builtin.c\"" else empty) $+$
                                       text "#include \"rts/common.h\"" $+$
                                       include env (if inBuiltin env then "" else "out/types") m $+$

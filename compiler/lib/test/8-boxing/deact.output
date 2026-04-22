@@ -1,4 +1,3 @@
-
 # recursive group:
 proc def L_1C_1cont (C_cont : $Cont[None], C_2res : None) -> $R:
     print@[(__builtin__.str,)](("\"Apa\"",), None, None, None, None)

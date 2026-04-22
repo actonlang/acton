@@ -303,7 +303,7 @@ patternVarName (S.PParen _ p)            = patternVarName p
 patternVarName _                         = Nothing
 
 findAssignStmtOffsetsFromAST :: String -> S.Module -> Maybe (Int,Int)
-findAssignStmtOffsetsFromAST varName (S.Module _ _ stmts) =
+findAssignStmtOffsetsFromAST varName (S.Module _ _ _ stmts) =
   case firstAssign stmts of
     Just loc -> srcLocToPair loc
     Nothing  -> Nothing
@@ -315,7 +315,7 @@ findAssignStmtOffsetsFromAST varName (S.Module _ _ stmts) =
     firstAssign (_:rest) = firstAssign rest
 
 findAssignExprOffsetsFromAST :: String -> S.Module -> Maybe (Int,Int)
-findAssignExprOffsetsFromAST varName (S.Module _ _ stmts) =
+findAssignExprOffsetsFromAST varName (S.Module _ _ _ stmts) =
   case firstAssign stmts of
     Just expr -> srcLocToPair (S.eloc expr)
     Nothing   -> Nothing
@@ -330,7 +330,7 @@ findAssignExprOffsetsFromAST varName (S.Module _ _ stmts) =
 -- to a given top-level variable, using AST locations only. The returned range
 -- is the content between '{' and '}', excluding the braces themselves.
 findBodyOffsetsFromAST :: String -> String -> S.Module -> Maybe (Int,Int)
-findBodyOffsetsFromAST content varName (S.Module _ _ stmts) =
+findBodyOffsetsFromAST content varName (S.Module _ _ _ stmts) =
   case firstDictLoc stmts of
     Just (s,e) -> braceBody content s e
     Nothing    -> Nothing
@@ -358,7 +358,7 @@ parseModuleForSpec content =
 
 -- Extract name, description, dependencies and zig_dependencies from the AST
 extractSpecFromModule :: S.Module -> Either BuildSpecParseError BuildSpec
-extractSpecFromModule (S.Module _ _ stmts) =
+extractSpecFromModule (S.Module _ _ _ stmts) =
   let (mname, mdesc, mfp, mfpErr, deps, zigs) =
         foldl step (Nothing, Nothing, Nothing, Nothing, Map.empty, Map.empty) stmts
   in case (mname, mfp, mfpErr) of
