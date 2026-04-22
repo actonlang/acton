@@ -1,0 +1,8 @@
+proc def p() -> bool:
+    return True
+
+def f(b: bool) -> bool:
+    return b and p()
+
+def g(b: bool) -> bool:
+    return b or p()

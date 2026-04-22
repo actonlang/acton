@@ -1,0 +1,33 @@
+
+proc def p (C_cont : proc(__builtin__.bool) -> $R) -> $R:
+    return $R_CONTc@[__builtin__.bool](C_cont, True)
+
+proc def f (C_cont : proc(__builtin__.bool) -> $R, b : __builtin__.bool) -> $R:
+    C_2pre: __builtin__.bool = b
+    proc def C_7cont (C_8res : None, C_3pre : __builtin__.bool) -> $R:
+        N_tmp: __builtin__.bool = C_3pre
+        return $R_CONTc@[__builtin__.bool](C_cont, N_tmp)
+    if C_2pre:
+        proc def C_9cont (C_10res : __builtin__.bool) -> $R:
+            C_1pre: __builtin__.bool = C_10res
+            C_3pre: __builtin__.bool = C_1pre
+            return $R_CONTc@[None](proc lambda (G_skip : None): C_7cont(G_skip, C_3pre), None)
+        return p(C_9cont)
+    else:
+        C_3pre: __builtin__.bool = C_2pre
+        return $R_CONTc@[None](proc lambda (G_skip : None): C_7cont(G_skip, C_3pre), None)
+
+proc def g (C_cont : proc(__builtin__.bool) -> $R, b : __builtin__.bool) -> $R:
+    C_5pre: __builtin__.bool = b
+    proc def C_11cont (C_12res : None, C_6pre : __builtin__.bool) -> $R:
+        N_1tmp: __builtin__.bool = C_6pre
+        return $R_CONTc@[__builtin__.bool](C_cont, N_1tmp)
+    if C_5pre:
+        C_6pre: __builtin__.bool = C_5pre
+        return $R_CONTc@[None](proc lambda (G_skip : None): C_11cont(G_skip, C_6pre), None)
+    else:
+        proc def C_13cont (C_14res : __builtin__.bool) -> $R:
+            C_4pre: __builtin__.bool = C_14res
+            C_6pre: __builtin__.bool = C_4pre
+            return $R_CONTc@[None](proc lambda (G_skip : None): C_11cont(G_skip, C_6pre), None)
+        return p(C_13cont)

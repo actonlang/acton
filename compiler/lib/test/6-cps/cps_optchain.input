@@ -1,0 +1,14 @@
+
+class Cls (__builtin__.value):
+    pure def G_init (self : Self) -> None:
+        pass
+        return None
+    proc def f (self : Self, msg : __builtin__.str) -> None:
+        pass
+        return None
+
+proc def maybe_log (c : ?Cls) -> None:
+    let:
+        V_maybe_log_9: ?Cls = c
+    in $CAST@[?Cls, Cls](V_maybe_log_9).f("\"boom\"") if $ISNOTNONE@[Cls](V_maybe_log_9) else None
+    return None

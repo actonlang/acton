@@ -1,0 +1,23 @@
+
+class Cls (__builtin__.value):
+    pure def G_init (self : Self) -> None:
+        pass
+        return None
+    proc def f (self : Self, C_cont : proc(None) -> $R, msg : __builtin__.str) -> $R:
+        pass
+        return $R_CONTc@[None](C_cont, None)
+
+proc def maybe_log (C_cont : proc(None) -> $R, c : ?Cls) -> $R:
+    V_maybe_log_9: ?Cls = c
+    proc def C_3cont (C_4res : None, C_2pre : None) -> $R:
+        C_2pre
+        return $R_CONTc@[None](C_cont, None)
+    if $ISNOTNONE@[Cls](V_maybe_log_9):
+        proc def C_5cont (C_6res : None) -> $R:
+            C_1pre: None = C_6res
+            C_2pre: None = C_1pre
+            return $R_CONTc@[None](proc lambda (G_skip : None): C_3cont(G_skip, C_2pre), None)
+        return $CAST@[?Cls, Cls](V_maybe_log_9).f(C_5cont, "\"boom\"")
+    else:
+        C_2pre: None = None
+        return $R_CONTc@[None](proc lambda (G_skip : None): C_3cont(G_skip, C_2pre), None)
