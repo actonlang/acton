@@ -1,4 +1,3 @@
-
 proc def p (C_cont : proc(__builtin__.bool) -> $R) -> $R:
     return $R_CONTc@[__builtin__.bool](C_cont, True)
 

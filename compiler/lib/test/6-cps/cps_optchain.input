@@ -1,4 +1,3 @@
-
 class Cls (__builtin__.value):
     pure def G_init (self : Self) -> None:
         pass

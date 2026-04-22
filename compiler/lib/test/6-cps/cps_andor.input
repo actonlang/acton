@@ -1,4 +1,3 @@
-
 proc def p () -> __builtin__.bool:
     return True
 
