@@ -591,7 +591,9 @@ main = do
       testDeact env0 ["deact", "deact_from_import"]
 
     describe "Pass 6: CPS" $ do
+      testCps env0 ["cps_andor"]
       testCps env0 ["cps_volatiles"]
+      testCps env0 ["cps_optchain"]
 
     describe "Pass 7: Lambda Lifting" $ do
       testLL env0 ["deact"]

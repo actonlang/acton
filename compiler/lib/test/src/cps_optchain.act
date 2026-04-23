@@ -1,0 +1,6 @@
+class Cls:
+    proc def f(self, msg: str):
+        pass
+
+def maybe_log(c: ?Cls):
+    c?.f("boom")

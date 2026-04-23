@@ -1,0 +1,10 @@
+proc def p () -> __builtin__.bool:
+    return True
+
+proc def f (b : __builtin__.bool) -> __builtin__.bool:
+    N_tmp: __builtin__.bool = b and p()
+    return N_tmp
+
+proc def g (b : __builtin__.bool) -> __builtin__.bool:
+    N_1tmp: __builtin__.bool = b or p()
+    return N_1tmp
