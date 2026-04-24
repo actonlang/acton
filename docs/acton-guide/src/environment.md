@@ -4,6 +4,10 @@ The environment is your program's practical link to the outside world.
 Most programs meet it first as the `env` argument passed to the root
 actor.
 
+The root actor receives the builtin environment actor `Env` as its
+`env` parameter. `Env` is the runtime-provided handle for outside-world
+access.
+
 ```python
 actor main(env):
     print("args:", env.argv)
@@ -18,7 +22,15 @@ If a helper only needs one small piece of that power, pass the smaller
 piece instead of the whole environment.</p>
 </div>
 
-From there, this chapter covers the most common environment tasks:
+`Env` provides, among other things:
+
+- `env.argv` for command-line arguments
+- `env.cap` for the root `WorldCap` capability
+- `env.getenv`, `env.setenv`, and `env.unsetenv` for environment
+  variables
+- `env.stdin_install`, `env.set_stdin`, `env.stdout_write`, and
+  `env.is_tty` for terminal and stdin handling
+- `env.exit(n)` to terminate the program
 
 - [Environment variables](environment/variables.md)
 - [Reading stdin input](environment/stdin.md)
