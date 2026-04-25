@@ -612,10 +612,12 @@ instance USubst NameInfo where
     usubst (NSVar t)            = NSVar <$> usubst t
     usubst (NDef t d doc)       = NDef <$> usubst t <*> return d <*> return doc
     usubst (NSig t d doc)       = NSig <$> usubst t <*> return d <*> return doc
-    usubst (NAct q p k te doc)  = NAct <$> usubst q <*> usubst p <*> usubst k <*> usubst te <*> return doc
-    usubst (NClass q us te doc) = NClass <$> usubst q <*> usubst us <*> usubst te <*> return doc
-    usubst (NProto q us te doc) = NProto <$> usubst q <*> usubst us <*> usubst te <*> return doc
-    usubst (NExt q c ps te opts doc) = NExt <$> usubst q <*> usubst c <*> usubst ps <*> usubst te <*> return opts <*> return doc
+    usubst (NAct q p k sigs defs doc)
+                                = NAct <$> usubst q <*> usubst p <*> usubst k <*>
+                                  usubst sigs <*> usubst defs <*> return doc
+    usubst (NClass q us sigs defs doc) = NClass <$> usubst q <*> usubst us <*> usubst sigs <*> usubst defs <*> return doc
+    usubst (NProto q us sigs defs doc) = NProto <$> usubst q <*> usubst us <*> usubst sigs <*> usubst defs <*> return doc
+    usubst (NExt q c ps sigs defs opts doc) = NExt <$> usubst q <*> usubst c <*> usubst ps <*> usubst sigs <*> usubst defs <*> return opts <*> return doc
     usubst (NTVar k c ps)       = NTVar k <$> usubst c <*> usubst ps
     usubst (NAlias qn)          = NAlias <$> return qn
     usubst (NMAlias m)          = NMAlias <$> return m
@@ -653,9 +655,9 @@ instance (WellFormed a) => WellFormed [a] where
 instance WellFormed TCon where
     wf env (TC n ts)        = wf env ts ++ [ constr (vsubst s u) (vsubst s $ tVar v) | QBind v us <- q, u <- us ]
       where q               = case findQName n env of
-                                NAct q p k te _ -> q
-                                NClass q us te _ -> q
-                                NProto q us te _ -> q
+                                NAct q p k sigs defs _ -> q
+                                NClass q us sigs defs _ -> q
+                                NProto q us sigs defs _ -> q
                                 NReserved -> nameReserved n
                                 i -> err1 n ("wf: Class or protocol name expected, got " ++ show i)
             s               = qbound q `zip` ts
@@ -667,7 +669,7 @@ wfProto                     :: Env -> TCon -> TypeM (Constraints, Constraints)
 wfProto env (TC n ts)       = do cs <- instQuals env q ts
                                  return (wf env ts, cs)
   where q                   = case findQName n env of
-                                NProto q us te _ -> q
+                                NProto q us sigs defs _ -> q
                                 NReserved -> nameReserved n
                                 i -> err1 n ("wfProto: Protocol name expected, got " ++ show i)
 

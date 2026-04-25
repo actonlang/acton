@@ -88,10 +88,10 @@ extractTopLevelWithTypes _ _ = []
 extractNameDocstring :: NameInfo -> Maybe String
 extractNameDocstring (NDef _ _ mdoc) = mdoc
 extractNameDocstring (NSig _ _ mdoc) = mdoc
-extractNameDocstring (NAct _ _ _ _ mdoc) = mdoc
-extractNameDocstring (NClass _ _ _ mdoc) = mdoc
-extractNameDocstring (NProto _ _ _ mdoc) = mdoc
-extractNameDocstring (NExt _ _ _ _ _ mdoc) = mdoc
+extractNameDocstring (NAct _ _ _ _ _ mdoc) = mdoc
+extractNameDocstring (NClass _ _ _ _ mdoc) = mdoc
+extractNameDocstring (NProto _ _ _ _ mdoc) = mdoc
+extractNameDocstring (NExt _ _ _ _ _ _ mdoc) = mdoc
 extractNameDocstring (NModule _ mdoc) = mdoc
 extractNameDocstring _ = Nothing
 
@@ -718,7 +718,7 @@ docDeclUnified useStyle tenv decl@(Def _ n q p k a b d x ddoc) =
 
 docDeclUnified useStyle tenv (Actor _ n q p k b ddoc) =
     let (paramsWithTypes, docstringFromTEnv) = case lookup n tenv of
-            Just info@(NAct _ posRow kwdRow _ mdoc) ->
+            Just info@(NAct _ posRow kwdRow _ _ mdoc) ->
                 (enrichParamsStyledAsciiActr useStyle posRow kwdRow p k, mdoc)
             _ -> (docParamsStyledAscii useStyle useStyle p k, Nothing)
         -- Use docstring from AST declaration
@@ -809,8 +809,9 @@ docDeclUnified useStyle tenv (Class _ n q a b ddoc) =
         let (paramsWithTypes, inferredRetType) =
                 -- Try to get type info from TEnv
                 case lookup className tenv of
-                    Just (NClass _ _ methods _) ->
-                        case lookup methodName methods of
+                    Just (NClass _ _ sigs defs _) ->
+                        let methods = attrTEnv sigs defs
+                        in case lookup methodName methods of
                             Just info ->
                                 case extractTypeFromNameInfo info of
                                     Just (TFun _ _ posRow kwdRow resType) ->
@@ -1584,7 +1585,7 @@ collectClassInfos currentModule tenv stmts =
         importedClasses = Set.fromList $ concatMap extractClassFromTEnv tenv
     in Set.union localClasses importedClasses
   where
-    extractClassFromTEnv (n, NClass _ _ _ _) = [ClassInfo n currentModule False]  -- Mark as imported
+    extractClassFromTEnv (n, NClass _ _ _ _ _) = [ClassInfo n currentModule False]  -- Mark as imported
     extractClassFromTEnv _ = []
 
 -- | Collect all class names defined in the module
@@ -2505,7 +2506,7 @@ docDeclHtmlWithTypesAndClassesAndModule tenv currentModule classNames decl =
         let explicitGenerics = extractGenerics q
             -- Look up inferred type information for actors
             (paramsWithTypes, allGenerics, constraints) = case lookup n tenv of
-                Just (NAct qConstraints posRow kwdRow _ _) ->
+                Just (NAct qConstraints posRow kwdRow _ _ _) ->
                     let inferredGenerics = extractGenerics qConstraints
                         combinedGenerics = Set.union explicitGenerics inferredGenerics
                     in (enrichParamsWithTypesHtmlAndClassesModule curMod combinedGenerics qConstraints classNames posRow kwdRow p k, combinedGenerics, qConstraints)
@@ -2642,7 +2643,7 @@ docDeclHtmlWithTypesAndClasses tenv classNames (Actor _ n q p k b ddoc) =
     let explicitGenerics = extractGenerics q
         -- Look up inferred type information for actors
         (paramsWithTypes, allGenerics, constraints) = case lookup n tenv of
-            Just (NAct qConstraints posRow kwdRow _ _) ->
+            Just (NAct qConstraints posRow kwdRow _ _ _) ->
                 let inferredGenerics = extractGenerics qConstraints
                     combinedGenerics = Set.union explicitGenerics inferredGenerics
                 in (enrichParamsWithTypesHtmlAndClasses combinedGenerics qConstraints classNames posRow kwdRow p k, combinedGenerics, qConstraints)

@@ -517,7 +517,7 @@ instance (Conv a) => Conv (Name, a) where
     conv env (n, x)                     = (n, conv env x)
 
 instance Conv NameInfo where
-    conv env (NClass q ps te doc)       = NClass q (conv env ps) (conv env te) doc
+    conv env (NClass q ps sigs defs doc)= NClass q (conv env ps) (conv env sigs) (conv env defs) doc
     conv env (NSig sc dec doc)          = NSig (conv env sc) dec doc
     conv env (NDef sc dec doc)          = NDef (conv env sc) dec doc
     conv env (NVar t)                   = NVar (conv env t)

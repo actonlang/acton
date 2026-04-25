@@ -33,7 +33,8 @@ import Acton.Printer
 {-  TEnv principles:
     -   A TEnv is an association of NameInfo details to a list of names.
     -   NSig holds the schema of an explicit Signature, while NDef and NVar give schemas and types to names created by Defs and assignments.
-    -   NClass, NProto, NExt and NAct represent class, protocol, extension and actor declarations. They each contain a TEnv of visible local attributes.
+    -   NClass, NProto, NExt and NAct represent class, protocol, extension and actor declarations.
+        These declarations keep signature and definition attributes separate.
     -   Signatures must appear before the defs/assignments they describe, and every TEnv respects the order of the syntactic constructs binding each name.
     -   The attribute TEnvs of NClass, NProto, NExt and NAct are searched left-to-right, thus favoring (explicit) NSigs over (inferred) NDefs/NVars.
     -   The global inference TEnv (names env) is searched right-to-left, thereby prioritizing NDefs/NVars over NSigs, as well as any inner bindings in scope.
@@ -51,10 +52,10 @@ data NameInfo           = NVar      Type
                         | NSVar     Type
                         | NDef      TSchema Deco (Maybe String)
                         | NSig      TSchema Deco (Maybe String)
-                        | NAct      QBinds PosRow KwdRow TEnv (Maybe String)
-                        | NClass    QBinds [WTCon] TEnv (Maybe String)
-                        | NProto    QBinds [WTCon] TEnv (Maybe String)
-                        | NExt      QBinds TCon [WTCon] TEnv [Name] (Maybe String)
+                        | NAct      QBinds PosRow KwdRow TEnv TEnv (Maybe String)
+                        | NClass    QBinds [WTCon] TEnv TEnv (Maybe String)
+                        | NProto    QBinds [WTCon] TEnv TEnv (Maybe String)
+                        | NExt      QBinds TCon [WTCon] TEnv TEnv [Name] (Maybe String)
                         | NTVar     Kind CCon [PCon]
                         | NAlias    QName
                         | NMAlias   ModName
@@ -71,10 +72,10 @@ data HNameInfo          = HNVar      Type
                         | HNSVar     Type
                         | HNDef      TSchema Deco (Maybe String)
                         | HNSig      TSchema Deco (Maybe String)
-                        | HNAct      QBinds PosRow KwdRow TEnv (Maybe String)
-                        | HNClass    QBinds [WTCon] TEnv (Maybe String)
-                        | HNProto    QBinds [WTCon] TEnv (Maybe String)
-                        | HNExt      QBinds TCon [WTCon] TEnv [Name] (Maybe String)
+                        | HNAct      QBinds PosRow KwdRow TEnv TEnv (Maybe String)
+                        | HNClass    QBinds [WTCon] TEnv TEnv (Maybe String)
+                        | HNProto    QBinds [WTCon] TEnv TEnv (Maybe String)
+                        | HNExt      QBinds TCon [WTCon] TEnv TEnv [Name] (Maybe String)
                         | HNTVar     Kind CCon [PCon]
                         | HNAlias    QName
                         | HNMAlias   ModName
@@ -90,10 +91,14 @@ convNameInfo2HNameInfo (NVar t)               = HNVar t
 convNameInfo2HNameInfo (NSVar t)              = HNSVar t
 convNameInfo2HNameInfo (NDef sc dec mdoc)     = HNDef sc dec mdoc
 convNameInfo2HNameInfo (NSig sc dec mdoc)     = HNSig sc dec mdoc
-convNameInfo2HNameInfo (NAct q p k te mdoc)   = HNAct q p k te mdoc
-convNameInfo2HNameInfo (NClass q ws te mdoc)  = HNClass q ws te mdoc
-convNameInfo2HNameInfo (NProto q ws te mdoc)  = HNProto q ws te mdoc
-convNameInfo2HNameInfo (NExt q tc ws te ns mdoc) = HNExt q tc ws te ns mdoc
+convNameInfo2HNameInfo (NAct q p k sigs defs mdoc)
+                                               = HNAct q p k sigs defs mdoc
+convNameInfo2HNameInfo (NClass q ws sigs defs mdoc)
+                                               = HNClass q ws sigs defs mdoc
+convNameInfo2HNameInfo (NProto q ws sigs defs mdoc)
+                                               = HNProto q ws sigs defs mdoc
+convNameInfo2HNameInfo (NExt q tc ws sigs defs ns mdoc)
+                                               = HNExt q tc ws sigs defs ns mdoc
 convNameInfo2HNameInfo (NTVar k c ps)         = HNTVar k c ps
 convNameInfo2HNameInfo (NAlias qn)            = HNAlias qn
 convNameInfo2HNameInfo (NMAlias mn)           = HNMAlias mn
@@ -105,10 +110,14 @@ convHNameInfo2NameInfo (HNVar t)               = NVar t
 convHNameInfo2NameInfo (HNSVar t)              = NSVar t
 convHNameInfo2NameInfo (HNDef sc dec mdoc)     = NDef sc dec mdoc
 convHNameInfo2NameInfo (HNSig sc dec mdoc)     = NSig sc dec mdoc
-convHNameInfo2NameInfo (HNAct q p k te mdoc)   = NAct q p k te mdoc
-convHNameInfo2NameInfo (HNClass q ws te mdoc)  = NClass q ws te mdoc
-convHNameInfo2NameInfo (HNProto q ws te mdoc)  = NProto q ws te mdoc
-convHNameInfo2NameInfo (HNExt q tc ws te ns mdoc) = NExt q tc ws te ns mdoc
+convHNameInfo2NameInfo (HNAct q p k sigs defs mdoc)
+                                               = NAct q p k sigs defs mdoc
+convHNameInfo2NameInfo (HNClass q ws sigs defs mdoc)
+                                               = NClass q ws sigs defs mdoc
+convHNameInfo2NameInfo (HNProto q ws sigs defs mdoc)
+                                               = NProto q ws sigs defs mdoc
+convHNameInfo2NameInfo (HNExt q tc ws sigs defs ns mdoc)
+                                               = NExt q tc ws sigs defs ns mdoc
 convHNameInfo2NameInfo (HNTVar k c ps)         = NTVar k c ps
 convHNameInfo2NameInfo (HNAlias qn)            = NAlias qn
 convHNameInfo2NameInfo (HNMAlias mn)           = NMAlias mn
@@ -130,10 +139,14 @@ convHTEnv2TEnv te                     = map convPair (M.toList te)
 stripDocsNI :: NameInfo -> NameInfo
 stripDocsNI ni = case ni of
   NModule te _        -> NModule (map stripBind te) Nothing
-  NAct q p k te _     -> NAct q p k (map stripBind te) Nothing
-  NClass q cs te _    -> NClass q cs (map stripBind te) Nothing
-  NProto q ps te _    -> NProto q ps (map stripBind te) Nothing
-  NExt q c ps te o _  -> NExt q c ps (map stripBind te) o Nothing
+  NAct q p k sigs defs _
+                       -> NAct q p k (map stripBind sigs) (map stripBind defs) Nothing
+  NClass q cs sigs defs _
+                       -> NClass q cs (map stripBind sigs) (map stripBind defs) Nothing
+  NProto q ps sigs defs _
+                       -> NProto q ps (map stripBind sigs) (map stripBind defs) Nothing
+  NExt q c ps sigs defs o _
+                       -> NExt q c ps (map stripBind sigs) (map stripBind defs) o Nothing
   NDef sc dec _       -> NDef sc dec Nothing
   NSig sc dec _       -> NSig sc dec Nothing
   other               -> other
@@ -141,10 +154,14 @@ stripDocsNI ni = case ni of
     stripBind (n, info) = (n, stripDocsNI info)
 
 instance Leaves NameInfo where
-    leaves (NClass q cs te _) = leaves q ++ leaves cs ++ leaves te
-    leaves (NProto q ps te _) = leaves q ++ leaves ps ++ leaves te
-    leaves (NAct q p k te _)  = leaves q ++ leaves [p,k] ++ leaves te
-    leaves (NExt q c ps te _ _) = leaves q ++ leaves c ++ leaves ps ++ leaves te
+    leaves (NClass q cs sigs defs _)
+                                = leaves q ++ leaves cs ++ leaves sigs ++ leaves defs
+    leaves (NProto q ps sigs defs _)
+                                = leaves q ++ leaves ps ++ leaves sigs ++ leaves defs
+    leaves (NAct q p k sigs defs _)
+                                = leaves q ++ leaves [p,k] ++ leaves sigs ++ leaves defs
+    leaves (NExt q c ps sigs defs _ _)
+                                = leaves q ++ leaves c ++ leaves ps ++ leaves sigs ++ leaves defs
     leaves (NDef sc dec _)    = leaves sc
     leaves _                  = []
 
@@ -163,23 +180,28 @@ instance Pretty (Name,NameInfo) where
     pretty (n, NSVar t)         = text "var" <+> pretty n <+> colon <+> pretty t
     pretty (n, NDef t d doc)    = prettyDec d $ pretty n <+> colon <+> pretty t $+$ nest 4 (prettyDocstring doc)
     pretty (n, NSig t d doc)    = prettyDec d $ pretty n <+> colon <+> pretty t $+$ nest 4 (prettyDocstring doc)
-    pretty (n, NAct q p k te doc)
+    pretty (n, NAct q p k sigs defs doc)
                                 = text "actor" <+> pretty n <> nonEmpty brackets commaList q <+>
-                                  parens (prettyFunRow p k) <> colon $+$ nest 4 (prettyDocstring doc) $+$ (nest 4 $ prettyOrPass te)
-    pretty (n, NClass q us te doc)
+                                  parens (prettyFunRow p k) <> colon $+$ nest 4 (prettyDocstring doc) $+$
+                                  nest 4 (prettyOrPass $ attrTEnv sigs defs)
+    pretty (n, NClass q us sigs defs doc)
                                 = text "class" <+> pretty n <> nonEmpty brackets commaList q <+>
-                                  nonEmpty parens commaList us <> colon $+$ nest 4 (prettyDocstring doc) $+$ (nest 4 $ prettyOrPass te)
-    pretty (n, NProto q us te doc)
+                                  nonEmpty parens commaList us <> colon $+$ nest 4 (prettyDocstring doc) $+$
+                                  nest 4 (prettyOrPass $ attrTEnv sigs defs)
+    pretty (n, NProto q us sigs defs doc)
                                 = text "protocol" <+> pretty n <> nonEmpty brackets commaList q <+>
-                                  nonEmpty parens commaList us <> colon $+$ nest 4 (prettyDocstring doc) $+$ (nest 4 $ prettyOrPass te)
-    pretty (w, NExt [] c ps te opts doc)
+                                  nonEmpty parens commaList us <> colon $+$ nest 4 (prettyDocstring doc) $+$
+                                  nest 4 (prettyOrPass $ attrTEnv sigs defs)
+    pretty (w, NExt [] c ps sigs defs opts doc)
                                 = {-pretty w  <+> colon <+> -}
                                   text "extension" <+> pretty c <+> parens (commaList ps) <>
-                                  colon $+$ nest 4 (prettyDocstring doc) $+$ (nest 4 $ prettyOrPass te)
-    pretty (w, NExt q c ps te opts doc)
+                                  colon $+$ nest 4 (prettyDocstring doc) $+$
+                                  nest 4 (prettyOrPass $ attrTEnv sigs defs)
+    pretty (w, NExt q c ps sigs defs opts doc)
                                 = {-pretty w  <+> colon <+> -}
                                   text "extension" <+> pretty q <+> text "=>" <+> pretty c <+> parens (commaList ps) <>
-                                  colon $+$ nest 4 (prettyDocstring doc) $+$ (nest 4 $ prettyOrPass te)
+                                  colon $+$ nest 4 (prettyDocstring doc) $+$
+                                  nest 4 (prettyOrPass $ attrTEnv sigs defs)
     pretty (n, NTVar k c ps)    = pretty n <> parens (commaList (c:ps))
     pretty (n, NAlias qn)       = text "alias" <+> pretty n <+> equals <+> pretty qn
     pretty (n, NMAlias m)       = text "module" <+> pretty n <+> equals <+> pretty m
@@ -200,10 +222,14 @@ instance VFree NameInfo where
     vfree (NSVar t)             = vfree t
     vfree (NDef t d _)          = vfree t
     vfree (NSig t d _)          = vfree t
-    vfree (NAct q p k te _)     = (vfree q ++ vfree p ++ vfree k ++ vfree te) \\ (tvSelf : qbound q)
-    vfree (NClass q us te _)    = (vfree q ++ vfree us ++ vfree te) \\ (tvSelf : qbound q)
-    vfree (NProto q us te _)    = (vfree q ++ vfree us ++ vfree te) \\ (tvSelf : qbound q)
-    vfree (NExt q c ps te _ _)  = (vfree q ++ vfree c ++ vfree ps ++ vfree te) \\ (tvSelf : qbound q)
+    vfree (NAct q p k sigs defs _)
+                                = (vfree q ++ vfree p ++ vfree k ++ vfree sigs ++ vfree defs) \\ (tvSelf : qbound q)
+    vfree (NClass q us sigs defs _)
+                                = (vfree q ++ vfree us ++ vfree sigs ++ vfree defs) \\ (tvSelf : qbound q)
+    vfree (NProto q us sigs defs _)
+                                = (vfree q ++ vfree us ++ vfree sigs ++ vfree defs) \\ (tvSelf : qbound q)
+    vfree (NExt q c ps sigs defs _ _)
+                                = (vfree q ++ vfree c ++ vfree ps ++ vfree sigs ++ vfree defs) \\ (tvSelf : qbound q)
     vfree (NTVar k c ps)        = vfree c ++ vfree ps
     vfree (NAlias qn)           = []
     vfree (NMAlias qn)          = []
@@ -215,10 +241,14 @@ instance VSubst NameInfo where
     vsubst s (NSVar t)          = NSVar (vsubst s t)
     vsubst s (NDef t d x)       = NDef (vsubst s t) d x
     vsubst s (NSig t d x)       = NSig (vsubst s t) d x
-    vsubst s (NAct q p k te x)  = NAct (vsubst s q) (vsubst s p) (vsubst s k) (vsubst s te) x
-    vsubst s (NClass q us te x) = NClass (vsubst s q) (vsubst s us) (vsubst s te) x
-    vsubst s (NProto q us te x) = NProto (vsubst s q) (vsubst s us) (vsubst s te) x
-    vsubst s (NExt q c ps te opts x) = NExt (vsubst s q) (vsubst s c) (vsubst s ps) (vsubst s te) opts x
+    vsubst s (NAct q p k sigs defs x)
+                                = NAct (vsubst s q) (vsubst s p) (vsubst s k) (vsubst s sigs) (vsubst s defs) x
+    vsubst s (NClass q us sigs defs x)
+                                = NClass (vsubst s q) (vsubst s us) (vsubst s sigs) (vsubst s defs) x
+    vsubst s (NProto q us sigs defs x)
+                                = NProto (vsubst s q) (vsubst s us) (vsubst s sigs) (vsubst s defs) x
+    vsubst s (NExt q c ps sigs defs opts x)
+                                = NExt (vsubst s q) (vsubst s c) (vsubst s ps) (vsubst s sigs) (vsubst s defs) opts x
     vsubst s (NTVar k c ps)        = NTVar k (vsubst s c) (vsubst s ps)
     vsubst s (NAlias qn)        = NAlias qn
     vsubst s (NMAlias m)        = NMAlias m
@@ -230,10 +260,14 @@ instance UFree NameInfo where
     ufree (NSVar t)             = ufree t
     ufree (NDef t d _)          = ufree t
     ufree (NSig t d _)          = ufree t
-    ufree (NAct q p k te _)     = ufree q ++ ufree p ++ ufree k ++ ufree te
-    ufree (NClass q us te _)    = ufree q ++ ufree us ++ ufree te
-    ufree (NProto q us te _)    = ufree q ++ ufree us ++ ufree te
-    ufree (NExt q c ps te _ _)  = ufree q ++ ufree c ++ ufree ps ++ ufree te
+    ufree (NAct q p k sigs defs _)
+                                = ufree q ++ ufree p ++ ufree k ++ ufree sigs ++ ufree defs
+    ufree (NClass q us sigs defs _)
+                                = ufree q ++ ufree us ++ ufree sigs ++ ufree defs
+    ufree (NProto q us sigs defs _)
+                                = ufree q ++ ufree us ++ ufree sigs ++ ufree defs
+    ufree (NExt q c ps sigs defs _ _)
+                                = ufree q ++ ufree c ++ ufree ps ++ ufree sigs ++ ufree defs
     ufree (NTVar k c ps)        = ufree c ++ ufree ps
     ufree (NAlias qn)           = []
     ufree (NMAlias qn)          = []
@@ -248,10 +282,15 @@ instance Polarity NameInfo where
     polvars (NSVar t)           = invvars t
     polvars (NDef t d _)        = polvars t
     polvars (NSig t d _)        = polvars t
-    polvars (NAct q p k te _)   = polvars q `polcat` polneg (polvars p `polcat` polvars k) `polcat` polvars te
-    polvars (NClass q us te _)  = polvars q `polcat` polvars us `polcat` polvars te
-    polvars (NProto q us te _)  = polvars q `polcat` polvars us `polcat` polvars te
-    polvars (NExt q c ps te _ _) = polvars q `polcat` polvars c `polcat` polvars ps `polcat` polvars te
+    polvars (NAct q p k sigs defs _)
+                                = polvars q `polcat` polneg (polvars p `polcat` polvars k) `polcat`
+                                  polvars sigs `polcat` polvars defs
+    polvars (NClass q us sigs defs _)
+                                = polvars q `polcat` polvars us `polcat` polvars sigs `polcat` polvars defs
+    polvars (NProto q us sigs defs _)
+                                = polvars q `polcat` polvars us `polcat` polvars sigs `polcat` polvars defs
+    polvars (NExt q c ps sigs defs _ _)
+                                = polvars q `polcat` polvars c `polcat` polvars ps `polcat` polvars sigs `polcat` polvars defs
     polvars (NTVar k c ps)      = polvars c `polcat` polvars ps
     polvars _                   = ([],[])
 
@@ -263,12 +302,25 @@ instance Tailvars (Name, NameInfo) where
 
 wildargs i                      = [ tWild | _ <- nbinds i ]
   where
-    nbinds (NAct q _ _ _ _)     = q
-    nbinds (NClass q _ _ _)     = q
-    nbinds (NProto q _ _ _)     = q
-    nbinds (NExt q _ _ _ _ _)   = q
+    nbinds (NAct q _ _ _ _ _)   = q
+    nbinds (NClass q _ _ _ _)   = q
+    nbinds (NProto q _ _ _ _)   = q
+    nbinds (NExt q _ _ _ _ _ _) = q
 
 -- TEnv filters --------------------------------------------------------------------------------------------------------
+
+attrTEnv                    :: TEnv -> TEnv -> TEnv
+attrTEnv sigs defs          = sigs ++ defs
+
+attrSigs                    :: TEnv -> TEnv
+attrSigs te                 = [ (n,i) | (n, i@NSig{}) <- te ]
+
+attrDefs                    :: TEnv -> TEnv
+attrDefs te                 = [ (n,i) | (n, i) <- te, not $ isNSig i ]
+
+isNSig                      :: NameInfo -> Bool
+isNSig NSig{}               = True
+isNSig _                    = False
 
 nSigs                       :: TEnv -> TEnv
 nSigs te                    = [ (n,i) | (n, i@(NSig sc dec _)) <- te, not $ isProp dec sc ]
@@ -359,10 +411,10 @@ instance Vars NameInfo where
       NSVar t -> freeQ t
       NDef sc _ _ -> freeQ sc
       NSig sc _ _ -> freeQ sc
-      NAct q p k te _ -> freeQ q ++ freeQ p ++ freeQ k ++ freeQTEnv te
-      NClass q ws te _ -> freeQ q ++ freeQWTCons ws ++ freeQTEnv te
-      NProto q ws te _ -> freeQ q ++ freeQWTCons ws ++ freeQTEnv te
-      NExt q c ws te _ _ -> freeQ q ++ freeQ c ++ freeQWTCons ws ++ freeQTEnv te
+      NAct q p k sigs defs _ -> freeQ q ++ freeQ p ++ freeQ k ++ freeQTEnv sigs ++ freeQTEnv defs
+      NClass q ws sigs defs _ -> freeQ q ++ freeQWTCons ws ++ freeQTEnv sigs ++ freeQTEnv defs
+      NProto q ws sigs defs _ -> freeQ q ++ freeQWTCons ws ++ freeQTEnv sigs ++ freeQTEnv defs
+      NExt q c ws sigs defs _ _ -> freeQ q ++ freeQ c ++ freeQWTCons ws ++ freeQTEnv sigs ++ freeQTEnv defs
       NTVar _ c ps -> freeQ c ++ freeQ ps
       NAlias qn -> freeQ qn
       NMAlias _ -> []

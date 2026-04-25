@@ -785,8 +785,10 @@ instance InfEnv Decl where
                                                  te <- infActorEnv env b
                                                  let prow = prowOf p
                                                      krow = krowOf k
-                                                 --traceM ("\n## infEnv actor " ++ prstr (n, NAct q prow krow te ddoc))
-                                                 return ([], [(n, NAct q prow krow te ddoc)], d)
+                                                     sigs = attrSigs te
+                                                     defs = attrDefs te
+                                                 --traceM ("\n## infEnv actor " ++ prstr (n, NAct q prow krow sigs defs ddoc))
+                                                 return ([], [(n, NAct q prow krow sigs defs ddoc)], d)
                                              _ ->
                                                  illegalRedef n
 
@@ -805,7 +807,8 @@ instance InfEnv Decl where
                                                  let (te2,b2) = if notImplBody b then let te1 = unSig asigs in (te++te1, addImpl te1 b1)
                                                                 else if null asigs && initKW `notElem` dom te then relayInit te b1
                                                                 else (te,b1)
-                                                 return ([], [(n, NClass q as' (te0++te2) ddoc)], Class l n q us (props te0 ++ b2) ddoc)
+                                                 let te3 = te0++te2
+                                                 return ([], [(n, NClass q as' (attrSigs te3) (attrDefs te3) ddoc)], Class l n q us (props te0 ++ b2) ddoc)
                                              _ -> illegalRedef n
       where env1                        = define (exclude (toSigs te') [initKW]) $ reserve (assigned b0) $ defineTVars (stripQual q') $ setInClass env
             (as,ps)                     = mro2 env us
@@ -839,7 +842,7 @@ instance InfEnv Decl where
                                                  when (not $ null nterms) $ err2 (dom nterms) "Method/attribute lacks signature:"
                                                  when (initKW `elem` sigs) $ err2 (filter (==initKW) sigs) "A protocol cannot define __init__"
                                                  when (not $ null noself) $ err2 noself "A static protocol signature must mention Self"
-                                                 return ([], [(n, NProto q ps te ddoc)], Protocol l n q us b' ddoc)
+                                                 return ([], [(n, NProto q ps (attrSigs te) (attrDefs te) ddoc)], Protocol l n q us b' ddoc)
                                              _ -> illegalRedef n
       where env1                        = define (toSigs te') $ reserve (assigned b) $ defineTVars (stripQual q') $ setInClass env
             ps                          = mro1 env us
@@ -862,7 +865,7 @@ instance InfEnv Decl where
                                              let te1 = unSig $ selfSubst n q asigs
                                                  te2 = te ++ te1
                                                  b2 = addImpl te1 b1
-                                             return ([], [(extensionName us c, NExt q c ps te2 [] ddoc)], Extension l q c us b2 ddoc)
+                                             return ([], [(extensionName us c, NExt q c ps extsigs (attrDefs te2) [] ddoc)], Extension l q c us b2 ddoc)
       where TC n ts                     = c
             env1                        = define (toSigs te') $ reserve (assigned b) $ defineTVars (stripQual q') $ setInClass env
             witsearch                   = findWitness env (tCon c) u
@@ -870,6 +873,7 @@ instance InfEnv Decl where
             ps                          = selfSubst n q $ mro1 env us -- TODO: check that ps doesn't contradict any previous extension mro for c
             final                       = concat [ conAttrs env (tcname p) | (_,p) <- tail ps, hasWitness env (tCon c) p ]
             te'                         = parentTEnv env ps
+            extsigs                     = attrSigs $ selfSubst n q te'
             q'                          = selfQuant n q
 
 --------------------------------------------------------------------------------------------------------------------------
@@ -936,8 +940,8 @@ checkClassAttributesInitialized className classLoc env ancestors inferredProps b
                                                              let parentInfo = findAttributeParent prop
                                                                  isInferred = prop `elem` inferred && prop `notElem` explicit && prop `notElem` inherited
                                                              in Control.Exception.throw $ UninitializedAttribute (loc prop) prop isInferred initLoc classLoc className parentInfo
-  where getPropertiesFromClass env qn   = let (_,_,te) = findConName qn env
-                                          in [ n | (n, NSig _ Property _) <- te ]
+  where getPropertiesFromClass env qn   = let (_,_,sigs,_) = findConName qn env
+                                          in [ n | (n, NSig _ Property _) <- sigs ]
 
         -- Helper to look up class location in environment
         getClassLoc env qname           = case [ className | (className, NClass{}) <- names env, className == noq qname ] of
@@ -989,14 +993,16 @@ instance (Check a) => Check [a] where
 
 infActorEnv env ss                      = do dsigs <- mapM mkNDef dvars                                 -- exposed defs without sigs
                                              bsigs <- mapM mkNVar pvars                                 -- exposed assigns without sigs
-                                             return (abssigs ++ unSig concsigs ++ dsigs ++ bsigs)       -- abstract sigs ++ exposed sigs + the above
+                                             return (abssigs ++ unSig concsigs ++ dsigs ++ bsigs)       -- abstract sigs ++ exposed sigs + inferred defs/fields
   where sigs                            = [ (n, NSig sc dec Nothing) | Signature _ ns sc dec <- ss, n <- ns, not $ isHidden n ]
-        (concsigs, abssigs)             = partition ((`elem`(dvars++pvars)) . fst) sigs
-        dvars                           = notHidden $ methods ss \\ dom sigs
+        (concsigs, abssigs)             = partition ((`elem`(mvars++pvarTerms)) . fst) sigs
+        mvars                           = notHidden $ methods ss
+        dvars                           = mvars \\ dom sigs
         mkNDef n                        = do t <- newUnivar env
                                              return (n, NDef (monotype $ t) NoDec Nothing)
         svars                           = statevars ss
-        pvars                           = pvarsF ss \\ dom (sigs) \\ dvars
+        pvarTerms                       = pvarsF ss
+        pvars                           = pvarTerms \\ dom (sigs) \\ dvars
         pvarsF ss                       = nub $ concat $ map pvs ss
           where pvs (Assign _ pats _)   = notHidden $ bound pats \\ svars   -- svars only excluded until we move stateful actor cmds to __init__
                 pvs (If _ bs els)       = foldr intersect (pvarsF els) [ pvarsF ss | Branch _ ss <- bs ]
@@ -1010,7 +1016,8 @@ matchActorAssumption env n0 p k te      = do --traceM ("## matchActorAssumption 
                                                        Seal (locinfo p 112) env p0, Seal (locinfo k 113) env k0]
                                              (cs,eq) <- oldSimplify env obs (cs ++ concat css)
                                              return (cs, eq ++ concat eqs)
-  where NAct q p0 k0 te0 _              = findName n0 env
+  where NAct q p0 k0 sigs0 defs0 _      = findName n0 env
+        te0                             = attrTEnv sigs0 defs0
         ns                              = dom te0
         obs                             = te0 ++ te
         te1                             = nTerms $ te `restrict` ns
@@ -1401,12 +1408,12 @@ getInitializedByParent :: Env -> QName -> [Name]
 getInitializedByParent env qn           = -- When calling ParentClass.__init__(self), we assume it initializes:
                                           -- 1. All attributes declared in ParentClass
                                           -- 2. All attributes ParentClass inherited (since it should call its parent's __init__)
-                                          let (_,ancestors,te) = findConName qn env
+                                          let (_,ancestors,sigs,_) = findConName qn env
                                               inherited = concatMap (getPropertiesFromClass env . tcname . snd) ancestors
-                                              declared = [ n | (n, NSig _ Property _) <- te ]
+                                              declared = [ n | (n, NSig _ Property _) <- sigs ]
                                           in nub $ inherited ++ declared
-  where getPropertiesFromClass env qn   = let (_,_,te) = findConName qn env
-                                          in [ n | (n, NSig _ Property _) <- te ]
+  where getPropertiesFromClass env qn   = let (_,_,sigs,_) = findConName qn env
+                                          in [ n | (n, NSig _ Property _) <- sigs ]
 
 
 
@@ -1518,7 +1525,8 @@ instance Check Decl where
                                              (cs1,eq1) <- markScoped env n q' te csb
                                              return (cs1, [Class l n (noqual env q) (map snd as) (bindWits eq1 ++ abstractDefs env q b') ddoc])
       where env1                        = defineTVars q' $ setInClass env
-            NClass _ as te _            = findName n env
+            NClass _ as sigs defs _     = findName n env
+            te                          = attrTEnv sigs defs
             te'                         = selfSubst n' q te
             q'                          = selfQuant n' q
             n'                          = NoQ n
@@ -1534,7 +1542,8 @@ instance Check Decl where
                                              b' <- usubst b'
                                              return (cs1, convProtocol env n q ps eq1 wmap b')
       where env1                        = defineTVars q' $ setInClass env
-            NProto _ ps te _            = findName n env
+            NProto _ ps sigs defs _     = findName n env
+            te                          = attrTEnv sigs defs
             te'                         = selfSubst n' q te
             q'                          = selfQuant n' q
             n'                          = NoQ n
@@ -1554,7 +1563,8 @@ instance Check Decl where
       where env1                        = defineInst c ps thisKW' $ defineTVars q' $ setInClass env
             n                           = tcname c
             n'                          = extensionName us c
-            NExt _ _ ps te _ _          = findName n' env
+            NExt _ _ ps sigs defs _ _   = findName n' env
+            te                          = attrTEnv sigs defs
             te'                         = selfSubst n q te
             q'                          = selfQuant n q
             tc                          = TC n (map tVar $ qbound q)
@@ -1658,7 +1668,7 @@ instance Infer Expr where
                                                 if actorSelf env
                                                     then wrapped l attrWrap env cs1 [tActor,t] [eVar selfKW,e]
                                                     else return (cs1, t, e)
-                                            NClass q _ _ _ -> do
+                                            NClass q _ _ _ _ -> do
                                                 (cs0,ts) <- instQBinds env q
                                                 --traceM ("## Instantiating " ++ prstr n)
                                                 let ns = abstractAttrs env n
@@ -1669,7 +1679,7 @@ instance Infer Expr where
                                                         let t0 = tCon $ TC (unalias env n) ts
                                                             t' = vsubst [(tvSelf,t0)] t{ restype = tSelf }
                                                         return (cs0++cs1, t', app t' (tApp x (ts++tvs)) $ protoWitsOf (cs0++cs1))
-                                            NAct q p k _ _ -> do
+                                            NAct q p k _ _ _ -> do
 --                                                when (abstractActor env n) (err1 n "Abstract actor cannot be instantiated:")
                                                 (cs,tvs,t) <- instantiate env (tSchema q (tFun fxProc p k (tCon0 (unalias env n) q)))
                                                 return (cs, t, app t (tApp x tvs) $ protoWitsOf cs)
@@ -1730,7 +1740,7 @@ instance Infer Expr where
                                              (cs2,e2') <- inferSub env t0 e2
                                              return (cs0++cs1++cs2, t0, Cond l (termsubst s e1') e' e2')
     infer env (IsInstance l e c)        = case findQName c env of
-                                             NClass q _ _ _ -> do
+                                             NClass q _ _ _ _ -> do
                                                 (cs,t,e') <- infer env e
                                                 ts <- newUnivars env [ tvkind v | v <- qbound q ]
                                                 return (cs, tBool, IsInstance l e' c)
@@ -1872,7 +1882,8 @@ instance Infer Expr where
     infer env (CompOp l e1 ops)         = notYet l "Comparison chaining"
 
     infer env (Dot l x@(Var _ c) n)
-      | NClass q us te _ <- cinfo       = do (cs0,ts) <- instQBinds env q
+      | NClass q us sigs defs _ <- cinfo
+                                        = do (cs0,ts) <- instQBinds env q
                                              let tc = TC c' ts
                                              case findAttr env tc n of
                                                 Just (_,sc,dec)
@@ -1893,7 +1904,8 @@ instance Infer Expr where
                                                             let t' = vsubst [(tvSelf,tCon tc)] $ addSelf t dec
                                                             return (cs2, t', app t' (tApp (eDot (wf we) n) tvs) $ protoWitsOf cs2)
                                                         Nothing -> err1 l "Attribute not found"
-      | NProto q us te _ <- cinfo       = do (_,ts) <- instQBinds env q
+      | NProto q us sigs defs _ <- cinfo
+                                        = do (_,ts) <- instQBinds env q
                                              let tc = TC c' ts
                                              case findAttr env tc n of
                                                 Just (wf,sc,dec) -> do
@@ -2103,7 +2115,7 @@ inferTest env (CompOp l e [OpArg Is None{}])
                                              return (cs1, env, [], tBool, eCall (tApp (eQVar primISNONE) [t]) [e'])
 inferTest env (IsInstance l e@(Var _ (NoQ n)) c)
                                         = case findQName c env of
-                                             NClass q _ _ _ -> do
+                                             NClass q _ _ _ _ -> do
                                                 (cs,t,e') <- infer env e
                                                 ts <- newUnivars env [ tvkind v | v <- qbound q ]
                                                 let tc = tCon (TC c ts)
@@ -2311,7 +2323,7 @@ testStmts env m ss                      = (stmts, tests)
         assocName _                     = Nothing
 
 testEnv                                 = [ (name n, NVar (tDict tStr (testing cl))) | (n,cl) <- testDicts ] ++
-                                          [ (name "test_main", NAct [] posNil (kwdRow (name "env") tEnv kwdNil) [] Nothing) ]
+                                          [ (name "test_main", NAct [] posNil (kwdRow (name "env") tEnv kwdNil) [] [] Nothing) ]
 
 gname ns n                              = GName (ModName ns) n
 dername a b                             = Derived (name a) (name b)

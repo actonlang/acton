@@ -857,7 +857,7 @@ acton_malloc env n                  = text "acton_malloc" <> parens (text "sizeo
 comma' x                            = if isEmpty x then empty else comma <+> x
 
 genDotCall env ts dec e@(Var _ x) n p
-  | NClass q _ _ _ <- info,
+  | NClass q _ _ _ _ <- info,
     Just _ <- dec                   = classCast env ts x q n (methodtable' env x <> text "." <> gen env n) <> parens (gen env p)
   where info                        = findQName x env
 genDotCall env ts dec e n p
@@ -866,7 +866,7 @@ genDotCall env ts dec e n p
 
 
 genDot env ts e@(Var _ x) n
-  | NClass q _ _ _ <- findQName x env = classCast env ts x q n $ methodtable' env x <> text "." <> gen env n
+  | NClass q _ _ _ _ <- findQName x env = classCast env ts x q n $ methodtable' env x <> text "." <> gen env n
 genDot env ts e n                   = dotCast env False ts e n $ gen env e <> text "->" <> gen env n
 -- NOTE: all method references are eta-expanded by the lambda-lifter at this point, so n cannot be a method (i.e., require methodtable lookup) here
 

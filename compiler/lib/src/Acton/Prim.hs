@@ -244,14 +244,14 @@ primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec Nothing)
 
 --  class $Cont[T] (value): pass
 --      __call__    : proc(T) -> $R
-clCont              = NClass [qbind t] (leftpath [cValue]) te Nothing
+clCont              = NClass [qbind t] (leftpath [cValue]) (attrSigs te) (attrDefs te) Nothing
   where te          = [ (attr_call_, NSig (monotype $ tFun fxProc (posRow (tVar t) posNil) kwdNil tR) NoDec Nothing) ]
         t           = TV KType (name "T")
 
 --  class $proc[R,T] (value):
 --      __call__    : proc($Cont[T], *R) -> $R
 --      __exec__    : proc($Cont[value], *R) -> $R
-clProc              = NClass [qbind r, qbind t] (leftpath [cValue]) te Nothing
+clProc              = NClass [qbind r, qbind t] (leftpath [cValue]) (attrSigs te) (attrDefs te) Nothing
   where te          = [ (attr_call_, NSig (monotype $ tFun fxProc (posRow (tVar t) (tVar r)) kwdNil tR) NoDec Nothing),
                         (attr_exec_, NSig (monotype $ tFun fxProc (posRow tValue (tVar r)) kwdNil tR) NoDec Nothing) ]
         r           = TV PRow (name "R")
@@ -259,7 +259,7 @@ clProc              = NClass [qbind r, qbind t] (leftpath [cValue]) te Nothing
 
 --  class $action[R,T] ($proc[R,T], value):
 --      __asyn__    : action(*R) -> T
-clAction            = NClass [qbind r, qbind t] (leftpath [ cProc (tVar r) (tVar t), cValue]) te Nothing
+clAction            = NClass [qbind r, qbind t] (leftpath [ cProc (tVar r) (tVar t), cValue]) (attrSigs te) (attrDefs te) Nothing
   where te          = [ (attr_asyn_, NSig (monotype $ tFun fxAction (tVar r) kwdNil (tVar t)) NoDec Nothing) ]
         r           = TV PRow (name "R")
         t           = TV KType (name "T")
@@ -267,14 +267,14 @@ clAction            = NClass [qbind r, qbind t] (leftpath [ cProc (tVar r) (tVar
 
 --  class $mut[R,T] ($proc[R,T], value):
 --      __eval__    : mut(*R) -> T
-clMut               = NClass [qbind r, qbind t] (leftpath [ cProc (tVar r) (tVar t), cValue]) te Nothing
+clMut               = NClass [qbind r, qbind t] (leftpath [ cProc (tVar r) (tVar t), cValue]) (attrSigs te) (attrDefs te) Nothing
   where te          = [ (attr_eval_, NSig (monotype $ tFun fxMut (tVar r) kwdNil (tVar t)) NoDec Nothing) ]
         r           = TV PRow (name "R")
         t           = TV KType (name "T")
 
 --  class $pure[R,T] ($mut[R,T], $proc[R,T], value):
 --      __eval__    : pure(*R) -> T
-clPure              = NClass [qbind r, qbind t] (leftpath [ cMut (tVar r) (tVar t), cProc (tVar r) (tVar t), cValue]) te Nothing
+clPure              = NClass [qbind r, qbind t] (leftpath [ cMut (tVar r) (tVar t), cProc (tVar r) (tVar t), cValue]) (attrSigs te) (attrDefs te) Nothing
   where te          = [ (attr_eval_, NSig (monotype $ tFun fxPure (tVar r) kwdNil (tVar t)) NoDec Nothing) ]
         r           = TV PRow (name "R")
         t           = TV KType (name "T")
@@ -282,14 +282,14 @@ clPure              = NClass [qbind r, qbind t] (leftpath [ cMut (tVar r) (tVar 
 --  class $Box[A] (object, value):
 --      ref         : A
 --      __init__    : (A) -> None
-clBox               = NClass [qbind a] (leftpath [cObject, cValue]) te Nothing
+clBox               = NClass [qbind a] (leftpath [cObject, cValue]) (attrSigs te) (attrDefs te) Nothing
   where te          = [ (valKW,  NSig (monotype $ tVar a) Property Nothing),
                         (initKW, NDef (monotype $ tFun fxPure (posRow (tVar a) posNil) kwdNil tNone) NoDec Nothing) ]
         a           = TV KType (name "A")
 
 
 --  class $Actor (): pass
-clActor             = NClass [] (leftpath [cValue]) te Nothing
+clActor             = NClass [] (leftpath [cValue]) (attrSigs te) (attrDefs te) Nothing
   where te          = [ (primKW "next",       NSig (monotype tActor) Property Nothing),
                         (primKW "msg",        NSig (monotype (tMsg tWild)) Property Nothing),
                         (primKW "msg_tail",   NSig (monotype (tMsg tWild)) Property Nothing),
@@ -309,30 +309,30 @@ clActor             = NClass [] (leftpath [cValue]) te Nothing
 
 --  class $SEQ (BaseException, value):
 --      __init__ : () -> None
-clSEQ               = NClass [] (leftpath [cBaseException, cValue]) te Nothing
+clSEQ               = NClass [] (leftpath [cBaseException, cValue]) (attrSigs te) (attrDefs te) Nothing
   where te          = [ (initKW, NSig (monotype $ tFun fxPure posNil kwdNil tNone) NoDec Nothing) ]
 
 --  class $BRK (BaseException, value):
 --      __init__ : () -> None
-clBRK               = NClass [] (leftpath [cBaseException, cValue]) te Nothing
+clBRK               = NClass [] (leftpath [cBaseException, cValue]) (attrSigs te) (attrDefs te) Nothing
   where te          = [ (initKW, NSig (monotype $ tFun fxPure posNil kwdNil tNone) NoDec Nothing) ]
 
 --  class $CNT (BaseException, value):
 --      __init__ : () -> None
-clCNT               = NClass [] (leftpath [cBaseException, cValue]) te Nothing
+clCNT               = NClass [] (leftpath [cBaseException, cValue]) (attrSigs te) (attrDefs te) Nothing
   where te          = [ (initKW, NSig (monotype $ tFun fxPure posNil kwdNil tNone) NoDec Nothing) ]
 
 --  class $RET (BaseException, value):
 --      @property
 --      val      : value
 --      __init__ : (value) -> None
-clRET               = NClass [] (leftpath [cBaseException, cValue]) te Nothing
+clRET               = NClass [] (leftpath [cBaseException, cValue]) (attrSigs te) (attrDefs te) Nothing
   where te          = [ (attrVal, NSig (monotype tValue) Property Nothing),
                         (initKW,  NSig (monotype $ tFun fxPure (posRow tValue posNil) kwdNil tNone) NoDec Nothing) ]
 
 
 --  class $R (): pass
-clR                 = NClass [] [] [] Nothing
+clR                 = NClass [] [] [] [] Nothing
 
 --  $ASYNCf         : [A] => action($Actor, proc()->A) -> A
 scASYNCf            = tSchema [qbind a] tASYNC
@@ -496,13 +496,13 @@ scRFail             = tSchema [] tRFail
 
 
 --  class $EqOpt[A] (Eq[?A]): pass
-clEqOpt             = NClass [qbind a] (leftpath [TC qnEq [tOpt $ tVar a]]) clTEnv Nothing
+clEqOpt             = NClass [qbind a] (leftpath [TC qnEq [tOpt $ tVar a]]) (attrSigs clTEnv) (attrDefs clTEnv) Nothing
   where clTEnv      = [ (initKW, NDef scInit NoDec Nothing) ]
         scInit      = tSchema [] $ tFun fxPure (posRow (tCon $ TC qnEq [tVar a]) posNil) kwdNil tNone
         a           = TV KType (name "A")
 
 --  class $IdentityActor (Identity[$Actor]): pass
-clIdentityActor     = NClass [] (leftpath [TC qnIdentity [tActor]]) [] Nothing                 -- methods not modelled
+clIdentityActor     = NClass [] (leftpath [TC qnIdentity [tActor]]) [] [] Nothing              -- methods not modelled
 
 --  w$EqNone        : Eq[None]
 tEqNone             = tCon $ TC qnEq [tNone]
@@ -584,7 +584,7 @@ scWRAP              = tSchema [qbind a, qbind b, qbind c] tWRAP
 --      wrap        : [A,B,C] => ($Actor, X(*A,**B)->C) -> Self(*A,**B)->C
 --      @static
 --      unwrap      : [A,B,C] => (Self(*A,**B)->C) -> Y(*A,**B)->C
-proWrapped          = NProto [qbind x, qbind y] [] te Nothing
+proWrapped          = NProto [qbind x, qbind y] [] te [] Nothing
   where te          = [(attrWrap,scWrap), (attrUnwrap,scUnwrap)]
         scWrap      = NSig (tSchema q (tFun0 [tActor, fxFun tX] (fxFun tSelf)))  Static Nothing
         scUnwrap    = NSig (tSchema q (tFun0 [fxFun tSelf] (fxFun tY))) Static Nothing
@@ -602,7 +602,7 @@ proWrapped          = NProto [qbind x, qbind y] [] te Nothing
 --  class $WrappedC[S,X,Y]: pass
 --      wrap        : [A,B,C] => ($Actor, X(*A,**B)->C) -> S(*A,**B)->C
 --      unwrap      : [A,B,C] => (S(*A,**B)->C) -> X(*A,**B)->C
-clWrapped           = NClass [qbind s, qbind x, qbind y] [] te Nothing
+clWrapped           = NClass [qbind s, qbind x, qbind y] [] (attrSigs te) (attrDefs te) Nothing
   where te          = [(attrWrap,scWrap), (attrUnwrap,scUnwrap)]
         scWrap      = NDef (tSchema q (tFun0 [tActor, fxFun tX] (fxFun tS))) NoDec Nothing
         scUnwrap    = NDef (tSchema q (tFun0 [fxFun tS] (fxFun tY))) NoDec Nothing
@@ -636,5 +636,4 @@ isPUSHF _                       = False
 
 isRAISE (Call _ (Var _ x) _ _)  = x == primRAISE
 isRAISE _                       = False
-
 

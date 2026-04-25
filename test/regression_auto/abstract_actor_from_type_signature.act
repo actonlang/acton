@@ -1,7 +1,6 @@
 
 actor Foo():
-    # acton will interpret this type signature to mean the actor is abstract - clearly wrong
-    # If we remove the type signature, this program works
+    # A signature paired with a definition must not make the actor abstract.
     hello : action() -> None
     def hello():
         print("Hello World!")

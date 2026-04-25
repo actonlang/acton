@@ -1294,7 +1294,7 @@ p28_protocol_extension_deps = testCase "28-protocol/extension deps are recorded 
   let I.NModule iface _ = nmod
       extMatch (n, _) = prstr n == "BarProtoD_Widget"
   case find extMatch iface of
-    Just (_, I.NExt _ _ ps _ _ _) -> do
+    Just (_, I.NExt _ _ ps _ _ _ _) -> do
       let protoNames = sort [ prstr (A.tcname p) | (_, p) <- ps ]
       assertEqual "extension protocol mro" (sort ["a.BarProto", "a.BazProto", "a.FooProto"]) protoNames
     _ -> assertFailure "missing extension NameInfo for BarProtoD_Widget"

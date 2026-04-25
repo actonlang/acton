@@ -53,7 +53,7 @@ schemaOf env e                      = (sc, dec)
 closedType                          :: EnvF x -> Expr -> Bool
 closedType env (Var _ n)            = isClosed $ findQName n env
 closedType env (Dot _ (Var _ x) n)
-  | NClass q _ _ _ <- findQName x env = closedAttr env (TC x (map tVar $ qbound q)) n
+  | NClass q _ _ _ _ <- findQName x env = closedAttr env (TC x (map tVar $ qbound q)) n
 closedType env (Dot _ e n)          = case typeOf env e of
                                         TCon _ c -> closedAttr env c n
                                         TVar _ v  -> closedAttr env (findTVBound env v) n
@@ -80,16 +80,16 @@ qSchema env f e@(Var _ n)           = case findQName n env of
                                             (sc, fxPure, Just dec, e)
                                         NSig sc dec _ ->
                                             (sc, fxPure, Just dec, e)
-                                        NClass q _ _ _ ->
+                                        NClass q _ _ _ _ ->
                                             let tc = TC (unalias env n) (map tVar $ qbound q)
                                                 (TSchema _ q' t, _) = findAttr' env tc initKW
                                                 t' = if restype t == tR then t else t{ restype = tSelf }
                                             in (tSchema (q++q') $ vsubst [(tvSelf,tCon tc)] t', fxPure, Just NoDec, e)
-                                        NAct q p k _ _ ->
+                                        NAct q p k _ _ _ ->
                                             (tSchema q (tFun fxProc p k (tCon0 n q)), fxPure, Just NoDec, e)
                                         i -> error ("### qSchema Var unexpected " ++ prstr (noq n,i))
 qSchema env f e@(Dot _ (Var _ x) n)
-  | NClass q _ _ _ <- info          = let tc = TC x (map tVar $ qbound q)
+  | NClass q _ _ _ _ <- info        = let tc = TC x (map tVar $ qbound q)
                                           (TSchema _ q' t, mbdec) = findAttr' env tc n
                                       in (tSchema (q++q') $ vsubst [(tvSelf,tCon tc)] (addSelf t mbdec), fxPure, mbdec, e)
   where info                        = findQName x env
@@ -368,10 +368,12 @@ commonEnvOf suites
 instance EnvOf Decl where
     envOf (Def _ n q p k (Just t) b dec fx doc)
                                     = [(n, NDef (TSchema NoLoc q $ TFun NoLoc fx (prowOf p) (krowOf k) t) dec doc)]
-    envOf (Class _ n q as ss doc)   = [(n, NClass q (leftpath as) (map dropDefSelf $ envOf ss) doc)]
+    envOf (Class _ n q as ss doc)   = [(n, NClass q (leftpath as) (attrSigs te) (attrDefs te) doc)]
+      where te                      = map dropDefSelf $ envOf ss
 
-    envOf (Actor _ n q p k ss doc)  = [(n, NAct q (prowOf p) (krowOf k) (map wrap te) doc)]
+    envOf (Actor _ n q p k ss doc)  = [(n, NAct q (prowOf p) (krowOf k) (attrSigs te') (attrDefs te') doc)]
       where te                      = filter (not . isHidden . fst) $ envOf ss `exclude` statevars ss
+            te'                     = map wrap te
             wrap (n, NDef sc dec doc) = (n, NDef (wrapFX sc) dec doc)
             wrap (n, i)             = (n, i)
             wrapFX (TSchema l q t)  = TSchema l q (if effect t == fxProc then t{ effect = fxAction } else t)

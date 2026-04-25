@@ -208,10 +208,12 @@ instance Unalias NameInfo where
     unalias env (NSVar t)           = NSVar (unalias env t)
     unalias env (NDef t d doc)      = NDef (unalias env t) d doc
     unalias env (NSig t d doc)      = NSig (unalias env t) d doc
-    unalias env (NAct q p k te doc) = NAct (unalias env q) (unalias env p) (unalias env k) (unalias env te) doc
-    unalias env (NClass q us te doc)= NClass (unalias env q) (unalias env us) (unalias env te) doc
-    unalias env (NProto q us te doc)= NProto (unalias env q) (unalias env us) (unalias env te) doc
-    unalias env (NExt q c ps te opts doc)= NExt (unalias env q) (unalias env c) (unalias env ps) (unalias env te) opts doc
+    unalias env (NAct q p k sigs defs doc)
+                                    = NAct (unalias env q) (unalias env p) (unalias env k)
+                                      (unalias env sigs) (unalias env defs) doc
+    unalias env (NClass q us sigs defs doc)= NClass (unalias env q) (unalias env us) (unalias env sigs) (unalias env defs) doc
+    unalias env (NProto q us sigs defs doc)= NProto (unalias env q) (unalias env us) (unalias env sigs) (unalias env defs) doc
+    unalias env (NExt q c ps sigs defs opts doc)= NExt (unalias env q) (unalias env c) (unalias env ps) (unalias env sigs) (unalias env defs) opts doc
     unalias env (NTVar k c ps)      = NTVar k (unalias env c) (unalias env ps)
     unalias env (NAlias qn)         = NAlias (unalias env qn)
     unalias env (NMAlias m)         = NMAlias (unalias env m)
@@ -277,7 +279,7 @@ define te env
   | not $ null badSelf      = selfParamError (loc $ head badSelf)
   | otherwise               = foldl addWit env1 ws
   where env1                = env{ names = reverse te ++ names env }
-        ws                  = [ WClass q (tCon c) p (NoQ w) ws (length opts) | (w, NExt q c ps te' opts _) <- te, (ws,p) <- ps ]
+        ws                  = [ WClass q (tCon c) p (NoQ w) ws (length opts) | (w, NExt q c ps _ _ opts _) <- te, (ws,p) <- ps ]
         badSelf             = if inAct env then dom te `intersect` [selfKW] else []
 
 
@@ -458,9 +460,9 @@ kindOf env TFX{}            = KFX
 
 tconKind                    :: QName -> EnvF x -> Kind
 tconKind n env              = case findQName n env of
-                                NAct q _ _ _ _ -> kind KType q
-                                NClass q _ _ _ -> kind KType q
-                                NProto q _ _ _ -> kind KProto q
+                                NAct q _ _ _ _ _ -> kind KType q
+                                NClass q _ _ _ _ -> kind KType q
+                                NProto q _ _ _ _ -> kind KProto q
                                 NReserved    -> nameReserved n
                                 _            -> notClassOrProto n
   where kind k []           = k
@@ -523,17 +525,18 @@ findAttr' env tc n          = case findAttr env tc n of
 
 splitTC                     :: EnvF x -> TCon -> (Substitution, TCon)
 splitTC env (TC n ts)       = (qbound q `zip` ts, TC n $ map tVar $ qbound q)
-  where (q,_,_)             = findConName n env
+  where (q,_,_,_)           = findConName n env
 
 findAncestry                :: EnvF x -> TCon -> [WTCon]
-findAncestry env tc         = ([],tc) : fst (findCon env tc)
+findAncestry env tc         = ([],tc) : us
+  where (us,_,_)            = findCon env tc
 
 findAncestor                :: EnvF x -> TCon -> QName -> Maybe (Expr->Expr,TCon)
 findAncestor env p qn       = listToMaybe [ (wexpr ws, p') | (ws,p') <- findAncestry env p, tcname p' == qn ]
 
 hasAncestor'                :: EnvF x -> QName -> QName -> Bool
 hasAncestor' env qn qn'     = qn' `elem` [ tcname c' | (w,c') <- us ]
-  where (_,us,_)            = findConName qn env
+  where (_,us,_,_)          = findConName qn env
 
 hasAncestor                 :: EnvF x -> TCon -> TCon -> Bool
 hasAncestor env c c'        = hasAncestor' env (tcname c) (tcname c')
@@ -544,46 +547,50 @@ commonAncestors env c1 c2   = filter ((`elem` ns) . tcname) $ map snd (findAnces
 
 directAncestors             :: EnvF x -> QName -> [QName]
 directAncestors env qn      = [ tcname p | (ws,p) <- us, null $ catRight ws ]
-  where (q,us,te)           = findConName qn env
+  where (q,us,_,_)          = findConName qn env
 
 allAncestors                :: EnvF x -> TCon -> [TCon]
 allAncestors env tc         = reverse [ schematic' c | (_, c) <- us ]
-  where (us,te)             = findCon env tc
+  where (us,_,_)            = findCon env tc
 
 allDescendants              :: EnvF x -> TCon -> [TCon]
 allDescendants env tc       = [ schematic' c | c <- allCons env, hasAncestor' env (tcname c) (tcname tc) ]
 
-findCon                     :: EnvF x -> TCon -> ([WTCon],TEnv)
+findCon                     :: EnvF x -> TCon -> ([WTCon],TEnv,TEnv)
 findCon env (TC n ts)
-  | map tVar tvs == ts      = (us, te)
-  | otherwise               = (vsubst s us, vsubst s te)
-  where (q,us,te)           = findConName n env
+  | map tVar tvs == ts      = (us, sigs, defs)
+  | otherwise               = (vsubst s us, vsubst s sigs, vsubst s defs)
+  where (q,us,sigs,defs)    = findConName n env
         tvs                 = qbound q
         s                   = tvs `zip` ts
 
 findConName n env           = case findQName n env of
-                                NAct q p k te _  -> (q,[],te)
-                                NClass q us te _ -> (q,us,te)
-                                NProto q us te _ -> (q,us,te)
-                                NExt q c us te _ _ -> (q,us,te)
+                                NAct q p k sigs defs _ -> (q,[],sigs,defs)
+                                NClass q us sigs defs _ -> (q,us,sigs,defs)
+                                NProto q us sigs defs _ -> (q,us,sigs,defs)
+                                NExt q c us sigs defs _ _ -> (q,us,sigs,defs)
                                 NReserved -> nameReserved n
                                 i -> err1 n ("findConName: Class or protocol name expected, got " ++ show i ++ " --- ")
 
 conAttrs                    :: EnvF x -> QName -> [Name]
-conAttrs env qn             = dom te
-  where (_,_,te)            = findConName qn env
+conAttrs env qn             = dom (attrTEnv sigs defs)
+  where (_,_,sigs,defs)     = findConName qn env
 
 attributes                  :: (WPath -> NameInfo -> Name -> Maybe a) -> EnvF x -> TCon -> [a]
 attributes f env tc         = catMaybes [ f wp i n | n <- ns, let Just (wp,i) = lookup n aenv ]
   where ns                  = nub $ reverse $ dom aenv                                                                                  -- in offset order
-        aenv                = [ (n,(wp,i)) | (wp,c) <- findAncestry env tc, let (_,te) = findCon env c, (n,i) <- reverse te ]           -- in override order
+        aenv                = [ (n,(wp,i)) | (wp,c) <- findAncestry env tc, (n,i) <- reverse $ conTEnv c ]                              -- in override order
+        conTEnv c           = attrTEnv sigs defs
+          where (_,sigs,defs) = findCon env c
 
 fullAttrEnv                 :: EnvF x -> TCon -> TEnv
 fullAttrEnv                 = attributes f
   where f wp i n            = Just (n,i)
 
 parentTEnv                  :: EnvF x -> [WTCon] -> TEnv
-parentTEnv env us           = [ (n,i) | (_,c) <- us, let (_,te) = findCon env c, (n,i) <- reverse te ]                                  -- in override order
+parentTEnv env us           = [ (n,i) | (_,c) <- us, (n,i) <- reverse $ conTEnv c ]                                                     -- in override order
+  where conTEnv c           = attrTEnv sigs defs
+          where (_,sigs,defs) = findCon env c
 
 findAttr                    :: EnvF x -> TCon -> Name -> Maybe (Expr->Expr, TSchema, Maybe Deco)
 findAttr env tc n           = listToMaybe $ attributes f env tc
@@ -596,9 +603,11 @@ findAttr env tc n           = listToMaybe $ attributes f env tc
 attributes'                 :: (WPath -> NameInfo -> Name -> Maybe a) -> EnvF x -> QName -> [a]
 attributes' f env qn        = catMaybes [ f wp i n | n <- ns, let Just (wp,i) = lookup n aenv ]
   where ns                  = nub $ reverse $ dom aenv                                                                                  -- in offset order
-        aenv                = [ (n,(wp,i)) | (wp,c) <- ([],tc) : us, let (_,_,te) = findConName (tcname c) env, (n,i) <- reverse te ]   -- in override order
-        (q,us,_)            = findConName qn env
+        aenv                = [ (n,(wp,i)) | (wp,c) <- ([],tc) : us, (n,i) <- reverse $ conTEnv c ]                                     -- in override order
+        (q,us,_,_)          = findConName qn env
         tc                  = TC qn [ tVar v | QBind v _ <- q ]
+        conTEnv c           = attrTEnv sigs defs
+          where (_,_,sigs,defs) = findConName (tcname c) env
 
 inheritedAttrs              :: EnvF x -> QName -> [(QName,Name)]
 inheritedAttrs              = attributes' f
@@ -712,7 +721,7 @@ mro env us                              = merge [] $ map lin us' ++ [us']
 
     lin                                 :: WTCon -> [WTCon]
     lin (w,u)                           = (w,u) : [ (w++w',u') | (w',u') <- us' ]
-      where (us',_)                     = findCon env u
+      where (us',_,_)                   = findCon env u
 
     merge                               :: [WTCon] -> [[WTCon]] -> [WTCon]
     merge out lists
@@ -1097,10 +1106,10 @@ importAll m te env          = define (impNames m te) env
 impNames                    :: ModName -> TEnv -> TEnv
 impNames m te               = mapMaybe imp te
   where
-    imp (n, NAct _ _ _ _ _)   = Just (n, NAlias (GName m n))
-    imp (n, NClass _ _ _ _)   = Just (n, NAlias (GName m n))
-    imp (n, NProto _ _ _ _)   = Just (n, NAlias (GName m n))
-    imp (n, NExt _ _ _ _ _ _) = Nothing
+    imp (n, NAct _ _ _ _ _ _) = Just (n, NAlias (GName m n))
+    imp (n, NClass _ _ _ _ _) = Just (n, NAlias (GName m n))
+    imp (n, NProto _ _ _ _ _) = Just (n, NAlias (GName m n))
+    imp (n, NExt _ _ _ _ _ _ _) = Nothing
     imp (n, NAlias _)       = Just (n, NAlias (GName m n))
     imp (n, NVar t)         = Just (n, NAlias (GName m n))
     imp (n, NDef t d _)       = Just (n, NAlias (GName m n))
@@ -1108,7 +1117,7 @@ impNames m te               = mapMaybe imp te
 
 importWits                  :: ModName -> TEnv -> EnvF x -> EnvF x
 importWits m te env         = foldl addWit env ws
-  where ws                  = [ WClass q (tCon c) p (GName m n) ws (length opts) | (n, NExt q c ps te' opts _) <- te, (ws,p) <- ps ]
+  where ws                  = [ WClass q (tCon c) p (GName m n) ws (length opts) | (n, NExt q c ps _ _ opts _) <- te, (ws,p) <- ps ]
 
 
 
@@ -1254,15 +1263,17 @@ instance Simp (Name, NameInfo) where
     simp env (n, NDef sc dec doc)   = (n, NDef (simp env sc) dec doc)
     simp env (n, NVar t)            = (n, NVar (simp env t))
     simp env (n, NSVar t)           = (n, NSVar (simp env t))
-    simp env (n, NClass q us te doc)= (n, NClass (simp env' q) (simp env' us) (simp env' te) doc)
+    simp env (n, NClass q us sigs defs doc)= (n, NClass (simp env' q) (simp env' us) (simp env' sigs) (simp env' defs) doc)
       where env'                    = defineTVars (stripQual q) env
-    simp env (n, NProto q us te doc)= (n, NProto (simp env' q) (simp env' us) (simp env' te) doc)
+    simp env (n, NProto q us sigs defs doc)= (n, NProto (simp env' q) (simp env' us) (simp env' sigs) (simp env' defs) doc)
       where env'                    = defineTVars (stripQual q) env
-    simp env (n, NExt q c us te opts doc)
-                                    = (n, NExt q' (vsubst s $ simp env' c) (vsubst s $ simp env' us) (vsubst s $ simp env' te) opts doc)
-      where (q', s)                 = simpQuant env (simp env' q) (vfree c ++ vfree us ++ vfree te)
+    simp env (n, NExt q c us sigs defs opts doc)
+                                    = (n, NExt q' (vsubst s $ simp env' c) (vsubst s $ simp env' us) (vsubst s $ simp env' sigs) (vsubst s $ simp env' defs) opts doc)
+      where (q', s)                 = simpQuant env (simp env' q) (vfree c ++ vfree us ++ vfree sigs ++ vfree defs)
             env'                    = defineTVars (stripQual q) env
-    simp env (n, NAct q p k te doc) = (n, NAct (simp env' q) (simp env' p) (simp env' k) (simp env' te) doc)
+    simp env (n, NAct q p k sigs defs doc)
+                                    = (n, NAct (simp env' q) (simp env' p) (simp env' k)
+                                      (simp env' sigs) (simp env' defs) doc)
       where env'                    = defineTVars (stripQual q) env
     simp env (n, i)                 = (n, i)
 

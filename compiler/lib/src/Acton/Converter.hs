@@ -242,18 +242,25 @@ convEnvProtos env                       = mapModules conv env
   where
     conv env1 m (n, NDef sc d doc)      = [(n, NDef (convS sc) d doc)]
     conv env1 m (n, NSig sc d doc)      = [(n, NSig (convS sc) d doc)]
-    conv env1 m (n, NAct q p k te doc)  = [(n, NAct (noqual env q) (qualWRow env q p) k (concat $ map (conv env m) te) doc)]
-    conv env1 m ni@(n, NProto q us te doc)
+    conv env1 m (n, NAct q p k sigs defs doc)
+                                        = [(n, NAct (noqual env q) (qualWRow env q p) k
+                                                (concat $ map (conv env m) sigs)
+                                                (concat $ map (conv env m) defs) doc)]
+    conv env1 m ni@(n, NProto q us sigs defs doc)
                                         = map (fromClass env) $ convProtocol (define [ni] env) n q us [] [] (fromTEnv te)
-    conv env1 m ni@(n, NExt q c us te opts doc)
+      where te                          = attrTEnv sigs defs
+    conv env1 m ni@(n, NExt q c us sigs defs opts doc)
                                         = map (fromClass env) $ convExtension (define [ni] env) n c q us [] [] (fromTEnv te) opts
-    conv env1 m (n, NClass q us te doc) = [(n, NClass (noqual env q) us (convClassTEnv env q te) doc)]
+      where te                          = attrTEnv sigs defs
+    conv env1 m (n, NClass q us sigs defs doc)
+                                        = [(n, NClass (noqual env q) us (convClassTEnv env q sigs) (convClassTEnv env q defs) doc)]
     conv env1 m ni                      = [ni]
     convS (TSchema l q t)               = TSchema l (noqual env q) (convT q t)
     convT q (TFun l x p k t)            = TFun l x (qualWRow env q p) k t
     convT q t                           = t
 
-fromClass env (Class _ n q us b ddoc)   = (n, NClass q (leftpath us) (fromStmts env b) ddoc)
+fromClass env (Class _ n q us b ddoc)   = (n, NClass q (leftpath us) (attrSigs te) (attrDefs te) ddoc)
+  where te                              = fromStmts env b
 
 fromStmts env (Signature _ ns sc d : ss)= [ (n, NSig (convS sc) d Nothing) | n <- ns ] ++ fromStmts env ss
   where convS (TSchema l q t)           = TSchema l (noqual env q) (convT q t)

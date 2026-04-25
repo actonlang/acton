@@ -153,9 +153,9 @@ depsof w cycledeps              = case lookup w cycledeps of
                                     _ -> []
 
 
-addopts cycledeps (n, NExt q c us te _ doc)
+addopts cycledeps (n, NExt q c us sigs defs _ doc)
                                 = --trace ("#### Extending " ++ prstr n ++ " with opts " ++ prstrs opts) $
-                                  (n, NExt q c us te opts doc)
+                                  (n, NExt q c us sigs defs opts doc)
   where opts                    = depsof n cycledeps
 addopts cycledeps ni            = ni
 

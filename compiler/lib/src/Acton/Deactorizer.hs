@@ -361,10 +361,12 @@ instance LambdaFree Elem where
 
 -- Convert types and environments -----------------------------------------------------------------------
 
-conv env m (n, NAct q p k te' doc)  = (n, NClass q (leftpath [TC primActor [], cValue]) (convActorEnv q p k te') doc) :
+conv env m (n, NAct q p k sigs defs doc)
+                                    = (n, NClass q (leftpath [TC primActor [], cValue]) (attrSigs te) (attrDefs te) doc) :
                                       (newactName n, NDef (tSchema q (tFun fxProc p k t)) NoDec Nothing) :
                                       []
-  where convActorEnv q0 p k te'     = (initKW, NDef t0 NoDec Nothing) : te'
+  where te                          = convActorEnv q p k (attrTEnv sigs defs)
+        convActorEnv q0 p k te'     = (initKW, NDef t0 NoDec Nothing) : te'
           where t0                  = tSchema q0 (tFun fxProc p k tNone)
         t                           = tCon $ TC (GName m n) (map tVar $ qbound q)
 conv env m ni                       = [ni]

@@ -3633,7 +3633,7 @@ nameToString (A.Name _ s) = s
 -- | Check whether a NameInfo represents a root-eligible actor.
 -- Used to decide which roots to include in .ty headers and root generation.
 rootEligible :: I.NameInfo -> Bool
-rootEligible (I.NAct [] p k _ _) = case (p,k) of
+rootEligible (I.NAct [] p k _ _ _) = case (p,k) of
                                       (A.TNil{}, A.TRow _ _ _ t A.TNil{}) ->
                                         prstr t == "Env" || prstr t == "None" ||
                                         prstr t == "__builtin__.Env" || prstr t == "__builtin__.None"
