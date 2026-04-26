@@ -1,46 +1,67 @@
 # Actor Attributes & Constants
 
-Actors usually keep their state in top-level attributes. Use `var` for
-mutable actor-local state and a plain binding for a constant.
+Actor attributes are used to store the state of an actor.
+The important distinctions are whether an attribute is mutable state or
+a constant, and whether it is private or public.
+
+An actor can define three kinds of top-level attributes:
+
+- `var foo = ...` defines private mutable actor state
+- `_foo = ...` defines a private constant
+- `foo = ...` defines a public constant
 
 <div class="advanced-content">
-<p>The split between <code>var</code> and plain top-level bindings is
-one of the key boundaries around state. Mutable actor data stays
-private to the actor, while constant attributes can be read through an
-actor reference without shared mutable memory.</p>
+<p>The important boundary is not just "mutable or constant", but also
+"private or public". <code>var</code> stays private because mutable
+actor state must not be exposed directly across actor boundaries. Plain
+constant attributes can be read from other actors because they do not
+create shared mutable memory, and a leading <code>_</code> keeps such a
+constant private to the actor.</p>
+
+<p>Actor constants are observed as constants. The top-level code in the
+actor body runs during actor creation, and a constant name may be
+assigned more than once while that final value is being established.
+Once initialization is complete, the final binding is the constant
+value seen by methods and, for public constants, by other actors.</p>
 </div>
 
-Source:
+For example:
 ```python
 actor Act():
-    var something = 40  # private actor variable attribute
-    fixed = 1234        # public constant
+    var something = 40
+    _step = 2
+    fixed = 0
+    fixed = 1234
     
     def hello():
-        # Local state is accessed directly inside the actor.
-        something += 2
+        something += _step
         print("Hello, I'm Act & value of 'something' is: " + str(something))
 
 actor main(env):
     actor1 = Act()
     await async actor1.hello()
     print("Externally visible constant: ", actor1.fixed)
-    # This would give an error, try uncommenting it
     # print(actor1.something)
+    # print(actor1._step)
 
     env.exit(0)
 ```
 
-Compile and run:
-```sh
-acton attrs.act
-```
+Here, `something` is private mutable state, `_step` is a private
+constant, and `fixed` is a public constant.
 
-Output:
-```sh
-Hello, I'm Act & value of 'something' is: 42
-Externally visible constant:  1234
-```
+The repeated assignment to `fixed` happens during actor creation. The
+final binding, `1234`, is the constant value methods and other actors
+observe after initialization has completed.
 
-Without `var`, an actor attribute is a constant. Constants are safe to
-share with other actors because they do not expose mutable state.
+Inside the actor, all three kinds of attributes can be used directly
+from methods without writing `self.`.
+
+Without `var`, an actor attribute is a constant. If the name starts
+with `_`, that constant stays private to the actor. Without the leading
+underscore, other actors can read the constant through an actor
+reference.
+
+In this example, `main` can read `actor1.fixed`, but it cannot read
+`actor1.something` or `actor1._step`. The first is private mutable
+state, and the second is a private constant.

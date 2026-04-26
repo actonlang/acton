@@ -1,0 +1,71 @@
+/* Cross-site navigation for the Acton Guide */
+
+.acton-site-links {
+    display: inline-flex;
+    align-items: stretch;
+    align-self: stretch;
+    gap: 2px;
+}
+
+.acton-site-link {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--menu-bar-height);
+    padding: 0 10px;
+    color: var(--acton-yellow, var(--sidebar-active));
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-decoration: none;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.acton-site-link:hover {
+    color: var(--acton-chrome-fg, var(--icons-hover));
+    text-decoration: none;
+}
+
+.acton-site-link::after {
+    position: absolute;
+    right: 10px;
+    bottom: 0;
+    left: 10px;
+    height: 3px;
+    border-radius: 999px 999px 0 0;
+    background: transparent;
+    content: "";
+}
+
+.acton-site-link.is-active {
+    color: var(--acton-chrome-fg, var(--fg));
+}
+
+.acton-site-link.is-active::after {
+    background: var(--acton-yellow, var(--sidebar-active));
+}
+
+@media (max-width: 780px) {
+    .acton-site-links {
+        margin-left: 4px;
+        margin-right: 8px;
+    }
+
+    .acton-site-link {
+        padding: 0 7px;
+        font-size: 11px;
+        letter-spacing: 0.05em;
+    }
+
+    .acton-site-link::after {
+        right: 7px;
+        left: 7px;
+    }
+}
+
+@media (max-width: 600px) {
+    .acton-site-links {
+        display: none;
+    }
+}

@@ -1,26 +1,13 @@
 # Optionals
 
-An optional value is either a value of some type or `None`. The type is
-written `?T`.
-
-<div class="beginner-content">
-<p>For example, `?str` means "a string or <code>None</code>". A value
-of type <code>?str</code> might hold <code>"Ada"</code>, or it might
-hold <code>None</code>.</p>
-</div>
-
-```python
-name: ?str = None
-```
-
-A value of type `?T` cannot be used everywhere a plain `T` is expected.
-Acton must be able to see that the value is present first.
+Before you can use an optional `?T` value as a plain `T` value, Acton
+must be able to see that the value is present.
 
 ## Narrowing
 
-`if x is not None` narrows `x` from `?T` to `T` inside that branch.
-`if isinstance(x, SomeClass)` does the same while also refining the
-type.
+`if x is not None` narrows `x` from `?T` to `T` inside that branch. Use
+this form when the following code needs the value itself, not a value
+that may still be `None`.
 
 ```python
 def upper_or_none(text: ?str) -> ?str:
@@ -30,10 +17,12 @@ def upper_or_none(text: ?str) -> ?str:
 ```
 
 Inside the `if` branch, `text` is treated as `str`, so ordinary string
-methods are available.
+methods are available. `if isinstance(x, SomeClass)` can also narrow an
+optional value while refining the concrete class.
 
-When you need several guarded accesses, it is often clearer to bind an
-intermediate name and narrow that name explicitly.
+Acton currently narrows variable names, not arbitrary attributes or
+expressions. When you need several guarded accesses, bind the
+intermediate value to a name and narrow that name explicitly.
 
 ```python
 class Residence():
@@ -65,6 +54,18 @@ single expression.
 ```python
 def residence_name(person: ?Person) -> ?str:
     return person?.residence?.name
+```
+
+The chain above is the compact form of the explicit checks from the
+previous section:
+
+```python
+def residence_name(person: ?Person) -> ?str:
+    if person is not None:
+        residence = person.residence
+        if residence is not None:
+            return residence.name
+    return None
 ```
 
 If the value to the left of `?.` is `None`, the whole expression
@@ -107,10 +108,33 @@ best for compact extraction, not for complex control flow.</p>
 
 ## Forced unwrapping
 
-Sometimes `None` is not an acceptable outcome. In that case, use forced
-unwrapping to require a value to be present.
+Use forced unwrapping when surrounding logic has already established
+that an optional value is present. If that assumption is wrong, Acton
+raises `ValueError` instead of continuing with `None`.
 
-`!.` and `![...]` follow the same shapes as `?.` and `?[...]`, but they
+Use `!` on an optional value to get the non-optional value inside it. If
+`b` has type `?str`, then `b!` has type `str`.
+
+```python
+def required_name(name: ?str) -> str:
+    return name!
+```
+
+You can think of forced unwrapping as this check:
+
+```python
+def unwrap[T](value: ?T) -> T:
+    if value is not None:
+        return value
+    raise ValueError("unexpected None value")
+```
+
+You do not normally write that helper yourself. The `!` syntax is the
+short form of "give me the value if it is present, otherwise raise
+`ValueError`".
+
+`!.` and `![...]` apply the same idea inside attribute access and
+indexing chains. They follow the same shapes as `?.` and `?[...]`, but
 raise `ValueError` if the value to the left is `None` instead of
 returning `None`.
 

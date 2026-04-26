@@ -162,14 +162,14 @@
             return;
         }
 
-        const rightButtons = menuBar.querySelector(".right-buttons");
-        if (!rightButtons) {
+        const leftButtons = menuBar.querySelector(".left-buttons");
+        if (!leftButtons) {
             return;
         }
 
         if (!document.querySelector(".skill-control-menu")) {
             const widget = createDetailControls();
-            rightButtons.insertBefore(widget, rightButtons.firstChild);
+            leftButtons.appendChild(widget);
         }
 
         syncControls(preferences);
