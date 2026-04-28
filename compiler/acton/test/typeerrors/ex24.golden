@@ -1,4 +1,5 @@
 Building file test/typeerrors/ex24.act using temporary scratch directory
+   ex24  Parse done                                                            0.000 s
 [error]: Type unification error
      +--> ex24.act@5:13-5:16
      |

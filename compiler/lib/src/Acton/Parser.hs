@@ -124,6 +124,18 @@ parseModule qn fileName fileContent =
         Left err -> Control.Exception.throw err
         Right (i,mdoc,s) -> return $ S.Module qn i mdoc s
 
+parseModuleImports :: String -> String -> IO [S.Import]
+parseModuleImports fileName fileContent = fst <$> parseModuleHeader fileName fileContent
+
+parseModuleHeader :: String -> String -> IO ([S.Import], Maybe String)
+parseModuleHeader fileName fileContent =
+    let contentWithNewline = if null fileContent || last fileContent == '\n'
+                             then fileContent
+                             else fileContent ++ "\n"
+    in case runParser (St.evalStateT import_input initState) fileName contentWithNewline of
+        Left err -> Control.Exception.throw err
+        Right res -> return res
+
 -- parseTest file = snd (unsafePerformIO (do cont <- readFile file; parseModule (S.modName ["test"]) file cont))
 
 parseTestStr p str = case runParser (St.evalStateT p initState) "" str of
@@ -1082,6 +1094,12 @@ file_input = sc2 *>  do
     return (is, mbDocstring, s)
 
 -- (((,) <$> imports <*> withCtx TOP top_suite) <* eof)
+
+import_input :: Parser ([S.Import], Maybe String)
+import_input = sc2 *> do
+    mbDocstring <- optional (try (L.nonIndented sc2 module_docstring <* eol <* sc2))
+    is <- imports
+    return (is, mbDocstring)
 
 imports :: Parser [S.Import]
 imports = many (L.nonIndented sc2 import_stmt <* eol <* sc2)

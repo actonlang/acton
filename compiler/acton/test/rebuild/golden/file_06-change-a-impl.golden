@@ -1,5 +1,6 @@
 Building file src/c.act in project .
 Resolving dependencies (fetching if missing)...
+   a  Parse done                                                            0.000 s
   Stale a: source changed
   Hash deltas a: ~aaa{src HASH1 -> HASH2, impl HASH1 -> HASH2}
    a  Type check done                                                       0.000 s

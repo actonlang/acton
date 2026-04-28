@@ -130,6 +130,7 @@ module Acton.Compile
   , parseActSnapshot
   , parseActFile
   , readModuleTask
+  , readModuleDoc
   , readImports
   , buildGlobalTasks
   , selectNeededTasks
@@ -224,7 +225,7 @@ import Data.Bits (shiftL, shiftR, (.|.))
 import Data.Char (isAlpha, isDigit, isHexDigit, isSpace, toLower)
 import Data.Either (partitionEithers)
 import Data.Graph
-import Data.List (find, foldl', intercalate, intersperse, isPrefixOf, isSuffixOf, nub)
+import Data.List (find, foldl', intercalate, intersperse, isPrefixOf, isSuffixOf, nub, partition)
 import qualified Data.List
 import Data.IORef
 import Data.Maybe (catMaybes, isJust, listToMaybe, mapMaybe)
@@ -340,6 +341,8 @@ data BackTiming = BackTiming
 
 data CompileCallbacks = CompileCallbacks
   { ccOnDiagnostics :: GlobalTask -> C.CompileOptions -> [Diagnostic String] -> IO ()
+  , ccOnParseStart :: GlobalTask -> C.CompileOptions -> IO ()
+  , ccOnParseDone :: GlobalTask -> C.CompileOptions -> Maybe TimeSpec -> IO ()
   , ccOnFrontResult :: GlobalTask -> C.CompileOptions -> FrontResult -> IO ()
   , ccOnFrontStart :: GlobalTask -> C.CompileOptions -> IO ()
   , ccOnFrontDone :: GlobalTask -> C.CompileOptions -> IO ()
@@ -353,6 +356,8 @@ data CompileCallbacks = CompileCallbacks
 defaultCompileCallbacks :: CompileCallbacks
 defaultCompileCallbacks = CompileCallbacks
   { ccOnDiagnostics = \_ _ _ -> return ()
+  , ccOnParseStart = \_ _ -> return ()
+  , ccOnParseDone = \_ _ _ -> return ()
   , ccOnFrontResult = \_ _ _ -> return ()
   , ccOnFrontStart = \_ _ -> return ()
   , ccOnFrontDone = \_ _ -> return ()
@@ -635,6 +640,8 @@ prepareCompilePlanFromContext sp gopts ctx srcFiles allowPrune mChangedPaths = d
 
 data CompileHooks = CompileHooks
   { chOnDiagnostics :: GlobalTask -> C.CompileOptions -> [Diagnostic String] -> IO ()
+  , chOnParseStart :: GlobalTask -> IO ()
+  , chOnParseDone :: GlobalTask -> Maybe TimeSpec -> IO ()
   , chOnFrontStart :: GlobalTask -> IO ()
   , chOnFrontDone :: GlobalTask -> IO ()
   , chOnFrontProgress :: GlobalTask -> FrontPassProgress -> IO ()
@@ -649,6 +656,8 @@ defaultCompileHooks :: CompileHooks
 defaultCompileHooks =
   CompileHooks
     { chOnDiagnostics = \_ _ _ -> return ()
+    , chOnParseStart = \_ -> return ()
+    , chOnParseDone = \_ _ -> return ()
     , chOnFrontStart = \_ -> return ()
     , chOnFrontDone = \_ -> return ()
     , chOnFrontProgress = \_ _ -> return ()
@@ -678,6 +687,8 @@ runCompilePlan sp gopts plan sched gen hooks = do
         }
       callbacks = defaultCompileCallbacks
         { ccOnDiagnostics = \t optsT diags -> chOnDiagnostics hooks t optsT diags
+        , ccOnParseStart = \t _ -> chOnParseStart hooks t
+        , ccOnParseDone = \t _ mtime -> chOnParseDone hooks t mtime
         , ccOnFrontResult = \t _ fr -> chOnFrontResult hooks t fr
         , ccOnFrontStart = \t _ -> chOnFrontStart hooks t
         , ccOnFrontDone = \t _ -> chOnFrontDone hooks t
@@ -894,6 +905,35 @@ parseActSource mn actFile srcContent = do
     handleIndentationError err =
       return $ Left (errsToDiagnostics "Indentation error" (modNameToFilename mn) srcContent (Acton.Parser.indentationError err))
 
+-- | Parse only the module header from a SourceSnapshot.
+parseActHeaderSnapshot :: A.ModName
+                       -> FilePath
+                       -> Source.SourceSnapshot
+                       -> IO (Either [Diagnostic String] ([A.ModName], Maybe String))
+parseActHeaderSnapshot mn actFile snap = do
+  cwd <- getCurrentDirectory
+  let displayFile = makeRelative cwd actFile
+      srcContent = Source.ssText snap
+  (Right <$> do
+      (imps, mdoc) <- Acton.Parser.parseModuleHeader displayFile srcContent
+      return (A.importsOf (A.Module mn imps Nothing []), mdoc))
+    `catch` handleParseBundle displayFile srcContent
+    `catch` handleCustomParse displayFile srcContent
+    `catch` handleContextError srcContent
+    `catch` handleIndentationError srcContent
+  where
+    handleParseBundle file srcContent bundle =
+      return $ Left [Diag.parseDiagnosticFromBundle file srcContent bundle]
+
+    handleCustomParse file srcContent err =
+      return $ Left [Diag.customParseExceptionToDiagnostic file srcContent err]
+
+    handleContextError srcContent err =
+      return $ Left (errsToDiagnostics "Context error" (modNameToFilename mn) srcContent (Acton.Parser.contextError err))
+
+    handleIndentationError srcContent err =
+      return $ Left (errsToDiagnostics "Indentation error" (modNameToFilename mn) srcContent (Acton.Parser.indentationError err))
+
 -- | Parse a SourceSnapshot with a display path relative to cwd.
 -- Keeps diagnostics stable regardless of absolute paths or overlays.
 parseActSnapshot :: A.ModName -> FilePath -> Source.SourceSnapshot -> IO (Either [Diagnostic String] A.Module)
@@ -955,7 +995,8 @@ data FrontResult = FrontResult
   , frBackJob  :: Maybe BackJob
   }
 
-data CompileTask        = ActonTask { name :: A.ModName, src :: String, srcBytes :: B.ByteString, sourceMeta :: Maybe InterfaceFiles.SourceFileMeta, atree:: A.Module }
+data CompileTask        = ParseTask { name :: A.ModName, src :: String, srcBytes :: B.ByteString, sourceMeta :: Maybe InterfaceFiles.SourceFileMeta, parseImports :: [A.ModName] }
+                        | ActonTask { name :: A.ModName, src :: String, srcBytes :: B.ByteString, sourceMeta :: Maybe InterfaceFiles.SourceFileMeta, atree:: A.Module }
                         | TyTask    { name :: A.ModName
                                     , tyHash :: B.ByteString               -- raw source bytes hash
                                     , tyPubHash :: B.ByteString          -- module public hash
@@ -971,6 +1012,7 @@ data CompileTask        = ActonTask { name :: A.ModName, src :: String, srcBytes
                         | ParseErrorTask { name :: A.ModName, parseDiagnostics :: [Diagnostic String] }
 
 instance Show CompileTask where
+  show ParseTask{ name = mn } = "ParseTask " ++ modNameToString mn
   show ActonTask{ name = mn } = "ActonTask " ++ modNameToString mn
   show TyTask{ name = mn } = "TyTask " ++ modNameToString mn
   show ParseErrorTask{ name = mn, parseDiagnostics = ds } =
@@ -985,6 +1027,10 @@ instance Show CompileTask where
 
 data TaskKey = TaskKey { tkProj :: FilePath, tkMod :: A.ModName } deriving (Eq, Ord, Show)
 
+data StageKey = ParseStage TaskKey | FrontStage TaskKey deriving (Eq, Ord, Show)
+
+data StageSuccess = StageParsed CompileTask (Maybe TimeSpec) | StageFronted FrontResult
+
 data GlobalTask = GlobalTask
   { gtKey             :: TaskKey
   , gtPaths           :: Paths
@@ -996,6 +1042,7 @@ data GlobalTask = GlobalTask
 -- TyTask uses header imports, ActonTask uses the parsed AST, and parse errors
 -- yield no imports.
 importsOf :: CompileTask -> [A.ModName]
+importsOf (ParseTask _ _ _ _ imps) = imps
 importsOf (ActonTask _ _ _ _ m) = A.importsOf m
 importsOf (TyTask { tyImports = ms }) = map fst ms
 importsOf (ParseErrorTask _ _) = []
@@ -1149,39 +1196,52 @@ selectAffectedTasks globalTasks changedFiles = do
           in go seen' (ks ++ new)
 
 
--- | Prepare a task for dependency graph construction.
--- Prefer reading imports from .ty header; if no .ty, parse the source.
--- Decide how to represent a module for the graph:
--- 1) If .ty is missing/unreadable -> parse .act to obtain imports (ActonTask).
--- 2) If .ty exists but the compiler compatibility guard says it is stale ->
---    parse .act to obtain fresh imports.
--- 3) If an in-memory overlay exists, skip filesystem metadata and compare the
---    overlay bytes hash to the stored moduleSrcBytesHash.
--- 4) Otherwise compare current source metadata against the cached sourceMeta:
---      - If metadata matches and the source mtime is strictly older than the
---        .ty mtime -> reuse the cached header (TyTask)
---      - If metadata differs, or source/.ty mtimes are equal, and stored
---        moduleSrcBytesHash == current bytes hash
---        -> header is still valid (TyTask) and refresh source metadata in .ty
---      - Else -> parse .act to obtain accurate imports (ActonTask)
--- Returns either a header-only TyTask stub or an ActonTask; no heavy decoding.
---
--- This is the core of incremental graph construction: it avoids parsing when
--- cached interfaces are reliable, while treating source content hash as the
--- correctness authority when metadata alone is inconclusive.
-readModuleTask :: Source.SourceProvider -> C.GlobalOptions -> C.CompileOptions -> Paths -> String -> IO CompileTask
-readModuleTask sp gopts opts paths actFile = do
+data ModuleHead
+  = TyHead
+      { mhName       :: A.ModName
+      , mhSrcHash    :: B.ByteString
+      , mhPubHash    :: B.ByteString
+      , mhImplHash   :: B.ByteString
+      , mhTyImports  :: [(A.ModName, B.ByteString)]
+      , mhNameHashes :: [InterfaceFiles.NameHashInfo]
+      , mhRoots      :: [A.Name]
+      , mhTests      :: [String]
+      , mhDoc        :: Maybe String
+      }
+  | SrcHead
+      { mhName       :: A.ModName
+      , mhSrc        :: String
+      , mhBytes      :: B.ByteString
+      , mhSourceMeta :: Maybe InterfaceFiles.SourceFileMeta
+      , mhSrcImports :: [A.ModName]
+      , mhDoc        :: Maybe String
+      }
+  | HeadError
+      { mhName        :: A.ModName
+      , mhDiagnostics :: [Diagnostic String]
+      }
+
+-- | Read the cheap module header used by discovery and doc indexing.
+-- Reuse a valid .ty header when possible; otherwise read the source snapshot
+-- and parse only the module docstring plus imports.
+readModuleHeader :: Source.SourceProvider
+                 -> C.GlobalOptions
+                 -> C.CompileOptions
+                 -> Paths
+                 -> String
+                 -> IO ModuleHead
+readModuleHeader sp gopts opts paths actFile = do
     let mn      = modName paths
         tyFile  = outBase paths mn ++ ".ty"
     tyExists <- doesFileExist tyFile
     if not tyExists
-      then parseForImports mn
+      then readSourceHead mn
       else do
         -- .ty exists: read the cached header and validate it against compiler
         -- compatibility plus source metadata/content as needed.
         hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader tyFile
         case hdrE of
-          Left _ -> parseForImports mn
+          Left _ -> readSourceHead mn
           Right (cachedSourceMeta, moduleSrcBytesHash, modulePubHash, moduleImplHash, imps, nameHashes, roots, tests, mdoc) -> do
             tyStatus <- getFileStatus tyFile
             let tyMTimeNs = fileStatusMTimeNs tyStatus
@@ -1190,35 +1250,33 @@ readModuleTask sp gopts opts paths actFile = do
             case mOverlay of
               Just snap ->
                 if newCompiler
-                  then parseFromSnapshot mn snap
+                  then sourceHeadFromSnapshot mn snap
                   else verifyOrParse mn snap moduleSrcBytesHash modulePubHash moduleImplHash cachedSourceMeta Nothing imps nameHashes roots tests mdoc
               Nothing -> do
                 if newCompiler
-                  then parseForImports mn
+                  then readSourceHead mn
                   else do
                     currentSourceMeta <- readSourceFileMeta actFile
                     if canReuseHeader cachedSourceMeta currentSourceMeta tyMTimeNs
-                      then return (mkTyTask mn moduleSrcBytesHash modulePubHash moduleImplHash imps nameHashes roots tests mdoc)
+                      then return (mkTyHead mn moduleSrcBytesHash modulePubHash moduleImplHash imps nameHashes roots tests mdoc)
                       else do
                         snap <- Source.spReadFile sp actFile
                         verifyOrParse mn snap moduleSrcBytesHash modulePubHash moduleImplHash cachedSourceMeta (Just currentSourceMeta) imps nameHashes roots tests mdoc
   where
     fileStatusMTimeNs st = floor (toRational (modificationTimeHiRes st) * 1000000000)
 
-    mkTyTask mn moduleSrcBytesHash modulePubHash moduleImplHash imps nameHashes roots tests mdoc =
-      let nmodStub = I.NModule [] mdoc
-          tmodStub = A.Module mn [] mdoc []
-      in TyTask { name      = mn
-                , tyHash     = moduleSrcBytesHash
-                , tyPubHash  = modulePubHash
-                , tyImplHash = moduleImplHash
-                , tyImports  = imps
-                , tyNameHashes = nameHashes
-                , tyRoots   = roots
-                , tyTests   = tests
-                , tyDoc     = mdoc
-                , iface     = nmodStub
-                , typed     = tmodStub }
+    mkTyHead mn moduleSrcBytesHash modulePubHash moduleImplHash imps nameHashes roots tests mdoc =
+      TyHead
+        { mhName       = mn
+        , mhSrcHash    = moduleSrcBytesHash
+        , mhPubHash    = modulePubHash
+        , mhImplHash   = moduleImplHash
+        , mhTyImports  = imps
+        , mhNameHashes = nameHashes
+        , mhRoots      = roots
+        , mhTests      = tests
+        , mhDoc        = mdoc
+        }
 
     metadataMatches cached current =
       case cached of
@@ -1229,21 +1287,17 @@ readModuleTask sp gopts opts paths actFile = do
       metadataMatches cached current
       && InterfaceFiles.sfmMTimeNs current < tyMTimeNs
 
-    parseForImports mn = do
-      parsedRes <- parseActFile sp mn actFile
-      case parsedRes of
-        Left diags -> return $ ParseErrorTask mn diags
-        Right (snap, m) -> do
-          mSourceMeta <- snapshotSourceMeta snap
-          return $ ActonTask mn (Source.ssText snap) (Source.ssBytes snap) mSourceMeta m
+    readSourceHead mn = do
+      snap <- Source.readSource sp actFile
+      sourceHeadFromSnapshot mn snap
 
-    parseFromSnapshot mn snap = do
-      emod <- parseActSnapshot mn actFile snap
-      case emod of
-        Left diags -> return $ ParseErrorTask mn diags
-        Right m -> do
+    sourceHeadFromSnapshot mn snap = do
+      headerRes <- parseActHeaderSnapshot mn actFile snap
+      case headerRes of
+        Left diags -> return $ HeadError mn diags
+        Right (imps, mdoc) -> do
           mSourceMeta <- snapshotSourceMeta snap
-          return $ ActonTask mn (Source.ssText snap) (Source.ssBytes snap) mSourceMeta m
+          return $ SrcHead mn (Source.ssText snap) (Source.ssBytes snap) mSourceMeta imps mdoc
 
     snapshotSourceMeta snap
       | Source.ssIsOverlay snap = return Nothing
@@ -1277,7 +1331,7 @@ readModuleTask sp gopts opts paths actFile = do
         actTime <- Source.spGetModTime sp actFile
         tyTime <- getModificationTime (outBase paths mn ++ ".ty")
         let len = B.length (Source.ssBytes snap)
-        putStrLn ("[debug] readModuleTask " ++ modNameToString mn
+        putStrLn ("[debug] readModuleHeader " ++ modNameToString mn
                   ++ " act=" ++ show actTime
                   ++ " ty=" ++ show tyTime
                   ++ " hash=" ++ short8 curHash
@@ -1288,8 +1342,87 @@ readModuleTask sp gopts opts paths actFile = do
         then do
           when (currentSourceMeta /= Nothing && currentSourceMeta /= cachedSourceMeta) $
             refreshCachedSourceMeta currentSourceMeta
-          return (mkTyTask mn moduleSrcBytesHash modulePubHash moduleImplHash imps nameHashes roots tests mdoc)
-        else parseFromSnapshot mn snap
+          return (mkTyHead mn moduleSrcBytesHash modulePubHash moduleImplHash imps nameHashes roots tests mdoc)
+        else sourceHeadFromSnapshot mn snap
+
+-- | Prepare a task for dependency graph construction.
+-- The full source parse is deferred for modules whose .ty header cannot be
+-- reused, but discovery still gets accurate imports from the source header.
+readModuleTask :: Source.SourceProvider -> C.GlobalOptions -> C.CompileOptions -> Paths -> String -> IO CompileTask
+readModuleTask sp gopts opts paths actFile = do
+  h <- readModuleHeader sp gopts opts paths actFile
+  return $ case h of
+    TyHead{ mhName = mn
+          , mhSrcHash = srcHash
+          , mhPubHash = pubHash
+          , mhImplHash = implHash
+          , mhTyImports = imps
+          , mhNameHashes = nameHashes
+          , mhRoots = roots
+          , mhTests = tests
+          , mhDoc = mdoc
+          } ->
+      let nmodStub = I.NModule [] mdoc
+          tmodStub = A.Module mn [] mdoc []
+      in TyTask { name      = mn
+                , tyHash     = srcHash
+                , tyPubHash  = pubHash
+                , tyImplHash = implHash
+                , tyImports  = imps
+                , tyNameHashes = nameHashes
+                , tyRoots   = roots
+                , tyTests   = tests
+                , tyDoc     = mdoc
+                , iface     = nmodStub
+                , typed     = tmodStub }
+    SrcHead{ mhName = mn
+           , mhSrc = srcContent
+           , mhBytes = bytes
+           , mhSourceMeta = mSourceMeta
+           , mhSrcImports = imps
+           } ->
+      ParseTask mn srcContent bytes mSourceMeta imps
+    HeadError{ mhName = mn, mhDiagnostics = diags } ->
+      ParseErrorTask mn diags
+
+readModuleDoc :: Source.SourceProvider
+              -> C.GlobalOptions
+              -> C.CompileOptions
+              -> Paths
+              -> String
+              -> IO (Maybe (A.ModName, Maybe String))
+readModuleDoc sp gopts opts paths actFile = do
+  h <- readModuleHeader sp gopts opts paths actFile
+  return $ case h of
+    TyHead{ mhName = mn, mhDoc = mdoc } -> Just (mn, mdoc)
+    SrcHead{ mhName = mn, mhDoc = mdoc } -> Just (mn, mdoc)
+    HeadError{} -> Nothing
+
+-- | Materialize a source-backed task into a fully parsed ActonTask.
+-- ParseTask reuses the snapshot captured during graph discovery; TyTask reparses
+-- from the current source file because the cached header was deemed stale.
+materializeTask :: Source.SourceProvider -> A.ModName -> FilePath -> CompileTask -> IO CompileTask
+materializeTask sp mn actFile task =
+  case task of
+    ActonTask{} -> return task
+    ParseErrorTask{} -> return task
+    ParseTask{ src = srcContent, srcBytes = bytes, sourceMeta = mSourceMeta } -> do
+      emod <- parseStoredSource mn actFile srcContent
+      case emod of
+        Left diags -> return (ParseErrorTask mn diags)
+        Right m -> return (ActonTask mn srcContent bytes mSourceMeta m)
+    TyTask{} -> do
+      parsedRes <- parseActFile sp mn actFile
+      case parsedRes of
+        Left diags -> return (ParseErrorTask mn diags)
+        Right (snap, m) -> do
+          mSourceMeta <- if Source.ssIsOverlay snap then return Nothing else Just <$> readSourceFileMeta actFile
+          return $ ActonTask mn (Source.ssText snap) (Source.ssBytes snap) mSourceMeta m
+  where
+    parseStoredSource mn' file srcContent = do
+      cwd <- getCurrentDirectory
+      let displayFile = makeRelative cwd file
+      parseActSource mn' displayFile srcContent
 
 
 -- | Recursively read imports for a set of tasks within the same project.
@@ -1832,6 +1965,8 @@ runBackPasses gopts opts paths backInput shouldWrite = do
 --   - TyTask is lightweight, read from the .ty header: moduleSrcBytesHash, modulePubHash,
 --     moduleImplHash, imports annotated with the pub hash used, per-name hashes (src/pub/impl
 --     + deps), roots, tests, and docstring. It avoids decoding heavy sections.
+--   - ParseTask carries source text plus discovered imports; full parsing is
+--     deferred until front passes are needed.
 --   - ActonTask carries parsed source and must be compiled.
 --   - pubMap :: Map TaskKey ByteString and nameMap :: Map TaskKey (Map Name NameHashInfo) are
 --     maintained during the run. TyTask compares recorded dependency hashes against current
@@ -1887,7 +2022,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
       nCaps <- getNumCapabilities
       let maxParallel = max 1 (if C.jobs gopts > 0 then C.jobs gopts else nCaps)
 
-      (envFinal, hadErrors) <- loop runningRef initialReady [] M.empty M.empty indeg pending0 baseEnv False maxParallel cwMap
+      (envFinal, hadErrors) <- loop runningRef stageInitialReady [] M.empty M.empty M.empty stageIndeg stagePending0 baseEnv False maxParallel cwMap
       return (Right (envFinal, hadErrors))
 
     -- Basic maps/sets ----------------------------------------------------
@@ -1911,11 +2046,48 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
     depMap :: M.Map TaskKey [TaskKey]
     depMap = M.fromList [ (gtKey t, depsOf t) | t <- order ]
     indeg  = M.map length depMap
-    initialReady = [ k | (k,d) <- M.toList indeg, d == 0 ]
-    pending0 = Data.Set.fromList (M.keys indeg)
 
     depOpts = opts { C.skip_build = True, C.test = False }
     optsFor k = if tkProj k == rootProj then opts else depOpts
+
+    needsParseStage t =
+      case gtTask t of
+        ParseTask{} -> not (C.only_build (optsFor (gtKey t)))
+        _ -> False
+
+    stageDepsOf t =
+      let k = gtKey t
+          parseDeps = [ParseStage k | needsParseStage t]
+          frontDeps = map FrontStage (depsOf t)
+      in (parseDeps ++ frontDeps)
+
+    stageDepMap :: M.Map StageKey [StageKey]
+    stageDepMap =
+      M.fromList $
+        [ (ParseStage (gtKey t), [])
+        | t <- order
+        , needsParseStage t
+        ] ++
+        [ (FrontStage (gtKey t), stageDepsOf t)
+        | t <- order
+        ]
+
+    stageRevMap :: M.Map StageKey [StageKey]
+    stageRevMap =
+      foldl'
+        (\acc (k, ds) -> foldl' (\a d -> M.insertWith (++) d [k] a) acc ds)
+        M.empty
+        (M.toList stageDepMap)
+
+    stageIndeg :: M.Map StageKey Int
+    stageIndeg = M.map length stageDepMap
+
+    stageInitialReady :: [StageKey]
+    stageInitialReady = [ k | (k, d) <- M.toList stageIndeg, d == 0 ]
+
+    stagePending0 :: Data.Set.Set StageKey
+    stagePending0 = Data.Set.fromList (M.keys stageIndeg)
+
     rootAlt = modName rootPaths
 
     builtinPath =
@@ -1960,19 +2132,15 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
         then return (Right ())
         else do
           t' <- case gtTask t of
-            TyTask{} | forceAlt -> do
-              parsedRes <- parseActFile sp mn actFile
-              case parsedRes of
-                Left diags -> return (ParseErrorTask mn diags)
-                Right (snap, m) -> do
-                  mSourceMeta <- if Source.ssIsOverlay snap then return Nothing else Just <$> readSourceFileMeta actFile
-                  return $ ActonTask mn (Source.ssText snap) (Source.ssBytes snap) mSourceMeta m
+            TyTask{} | forceAlt -> materializeTask sp mn actFile (gtTask t)
+            ParseTask{} -> materializeTask sp mn actFile (gtTask t)
             _ -> return (gtTask t)
           case t' of
             ParseErrorTask{ parseDiagnostics = diags } -> do
               ccOnDiagnostics callbacks t optsBuiltin diags
               return (Left CompileBuiltinFailure)
             TyTask{} -> return (Right ())
+            ParseTask{} -> error ("Internal error: unmaterialized ParseTask " ++ modNameToString mn)
             ActonTask{ src = srcContent, srcBytes = srcBytes, sourceMeta = mSourceMeta, atree = m } -> do
               ccOnFrontStart callbacks t optsBuiltin
               builtinEnv0 <- Acton.Env.initEnv (projTypes bPaths) True
@@ -2005,13 +2173,15 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
     doOne :: Acton.Env.Env0
           -> M.Map TaskKey B.ByteString
           -> M.Map TaskKey (M.Map A.Name InterfaceFiles.NameHashInfo)
+          -> M.Map TaskKey CompileTask
           -> TaskKey
           -> IO (TaskKey, Either [Diagnostic String] FrontResult)
-    doOne envSnap pubMap nameMap key = do
+    doOne envSnap pubMap nameMap parsedTasks key = do
       t <- case M.lookup key taskMap of
              Just x -> return x
              Nothing -> error ("Internal error: missing task for key " ++ show key)
-      let paths = gtPaths t
+      let taskCurrent = M.findWithDefault (gtTask t) key parsedTasks
+          paths = gtPaths t
           mn    = name (gtTask t)
           optsT = optsFor key
           providers = gtImportProviders t
@@ -2256,15 +2426,16 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
                 in (deltas, missing))
               resolved)
 
-      case gtTask t of
+      case taskCurrent of
         ParseErrorTask{ parseDiagnostics = diags } -> return (key, Left diags)
         _ | C.only_build optsT -> do
-              ifaceRes <- case gtTask t of
+              ifaceRes <- case taskCurrent of
                             TyTask{ tyPubHash = h } -> readIfaceFromTy paths mn "" (Just h)
+                            ParseTask{ src = srcContent } -> readIfaceFromTy paths mn srcContent Nothing
                             ActonTask{ src = srcContent } -> readIfaceFromTy paths mn srcContent Nothing
               case ifaceRes of
                 Right (ifaceTE, mdoc, ih) -> do
-                  let cachedNameHashes = case gtTask t of
+                  let cachedNameHashes = case taskCurrent of
                         TyTask{ tyNameHashes = nhs } -> nhs
                         _ -> []
                       fr = mkFrontResult ifaceTE mdoc ih cachedNameHashes Nothing
@@ -2277,7 +2448,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
           -- any implDeps have changed we need to rerun out back passes and if
           -- any pubDeps have changed we need to rerun front passes (and back
           -- passes)
-          needByDepsRes <- case gtTask t of
+          needByDepsRes <- case taskCurrent of
             TyTask{ tyImports = imps, tyNameHashes = nameHashes } -> do
               missingImportsRes <- checkMissingImports imps
               case missingImportsRes of
@@ -2302,7 +2473,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
           case needByDepsRes of
             Left diags -> return (key, Left diags)
             Right (pubDeltas, implDeltas, pubMissing, implMissing, pubUsers, implUsers) -> do
-              let needBySource = case gtTask t of { ActonTask{} -> True; _ -> False }
+              let needBySource = case taskCurrent of { ParseTask{} -> True; ActonTask{} -> True; _ -> False }
                   -- Public deltas require front passes; impl deltas only need back jobs.
                   needByPub = not (null pubDeltas)
                   needByMissing = not (null pubMissing) || not (null implMissing)
@@ -2311,7 +2482,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
                   forceAlways = C.alwaysbuild optsT
                   -- Front passes run on source or API changes, or when forced.
                   needFront = needBySource || needByPub || needByMissing || forceAlt || forceAlways
-                  mModuleImplHash = case gtTask t of
+                  mModuleImplHash = case taskCurrent of
                     TyTask{ tyImplHash = implHash } -> Just implHash
                     _ -> Nothing
               let canCheckCodegen = not needFront && not needByImpl && not (altOutput optsT)
@@ -2321,7 +2492,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
               let needByCodegen = maybe False (not . codegenUpToDate) mCodegenStatus
               let runFront = do
                     prevNameHashes <- if C.verbose gopts
-                      then case gtTask t of
+                      then case taskCurrent of
                         TyTask{ tyNameHashes = nhs } -> return (Just (nameHashMapFromList nhs))
                         _ -> getNameHashMapCached paths mn
                       else return Nothing
@@ -2343,15 +2514,9 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
                                   | qn <- Data.List.sortOn Hashing.qnameKey implMissing
                                   ]
                             ccOnInfo callbacks ("  Stale " ++ modNameToString mn ++ ": missing dep hashes in " ++ Data.List.intercalate ", " (pubMissingItems ++ implMissingItems))
-                    t' <- case gtTask t of
-                            ActonTask{} -> return (gtTask t)
-                            TyTask{}    -> do
-                              parsedRes <- parseActFile sp mn actFile
-                              case parsedRes of
-                                Left diags -> return (ParseErrorTask mn diags)
-                                Right (snap, m) -> do
-                                  mSourceMeta <- if Source.ssIsOverlay snap then return Nothing else Just <$> readSourceFileMeta actFile
-                                  return $ ActonTask mn (Source.ssText snap) (Source.ssBytes snap) mSourceMeta m
+                    t' <- case taskCurrent of
+                            ActonTask{} -> return taskCurrent
+                            _ -> materializeTask sp mn actFile taskCurrent
                     case t' of
                       ParseErrorTask{ parseDiagnostics = diags } -> return (key, Left diags)
                       ActonTask{ src = srcContent, srcBytes = srcBytes, sourceMeta = mSourceMeta, atree = m } -> do
@@ -2375,6 +2540,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
                                 forM_ (nameHashSummary prevMap (frNameHashes fr)) $ \summary ->
                                   ccOnInfo callbacks ("  Hash deltas " ++ modNameToString mn ++ ": " ++ summary)
                             cacheFrontResult fr
+                      ParseTask{} -> error ("Internal error: unmaterialized ParseTask " ++ modNameToString mn)
                       _ -> error ("Internal error: unexpected task " ++ show t')
                   runImplRefresh = do
                     let rerunFront = do
@@ -2458,13 +2624,13 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
                   runReuse = do
                     when (C.verbose gopts) $
                       ccOnInfo callbacks ("  Fresh " ++ modNameToString mn ++ ": using cached .ty")
-                    ifaceRes <- case gtTask t of
+                    ifaceRes <- case taskCurrent of
                                   TyTask{ tyPubHash = h } -> readIfaceFromTy paths mn "" (Just h)
                                   _ -> readIfaceFromTy paths mn "" Nothing
                     case ifaceRes of
                       Left diags -> return (key, Left diags)
                       Right (ifaceTE, mdoc, ih) -> do
-                        let cachedNameHashes = case gtTask t of
+                        let cachedNameHashes = case taskCurrent of
                               TyTask{ tyNameHashes = nhs } -> nhs
                               _ -> []
                             fr = mkFrontResult ifaceTE mdoc ih cachedNameHashes Nothing
@@ -2475,41 +2641,98 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
                 _ | needByCodegen -> runCodegenRefresh
                 _ -> runReuse
 
-    scheduleMore :: Int -> [TaskKey]
-                 -> [(Async (TaskKey, Either [Diagnostic String] FrontResult), TaskKey)]
+    stageTaskKey :: StageKey -> TaskKey
+    stageTaskKey sk =
+      case sk of
+        ParseStage k -> k
+        FrontStage k -> k
+
+    stagePriority :: M.Map TaskKey Integer -> StageKey -> (Int, Integer)
+    stagePriority cw sk =
+      let phase = case sk of
+                    FrontStage _ -> 1
+                    ParseStage _ -> 0
+      in (phase, M.findWithDefault 0 (stageTaskKey sk) cw)
+
+    runParseStage :: TaskKey -> IO (StageKey, Either [Diagnostic String] StageSuccess)
+    runParseStage key = do
+      t <- case M.lookup key taskMap of
+             Just x -> return x
+             Nothing -> error ("Internal error: missing task for key " ++ show key)
+      let optsT = optsFor key
+          mn = name (gtTask t)
+          actFile = srcFile (gtPaths t) mn
+      timeStart <- getTime Monotonic
+      parsed <- if C.only_build optsT
+                  then return (gtTask t)
+                  else case gtTask t of
+                         ParseTask{} -> materializeTask sp mn actFile (gtTask t)
+                         _ -> return (gtTask t)
+      case parsed of
+        ParseTask{} -> return (ParseStage key, Right (StageParsed parsed Nothing))
+        ActonTask{ atree = m } -> do
+          _ <- evaluate (rnf m)
+          timeEnd <- getTime Monotonic
+          let parseTime = if not (quiet gopts optsT) then Just (timeEnd - timeStart) else Nothing
+          return (ParseStage key, Right (StageParsed parsed parseTime))
+        ParseErrorTask{} -> return (ParseStage key, Right (StageParsed parsed Nothing))
+        _ -> error ("Internal error: parse stage did not materialize " ++ modNameToString mn)
+
+    runFrontStage :: Acton.Env.Env0
+                  -> M.Map TaskKey B.ByteString
+                  -> M.Map TaskKey (M.Map A.Name InterfaceFiles.NameHashInfo)
+                  -> M.Map TaskKey CompileTask
+                  -> TaskKey
+                  -> IO (StageKey, Either [Diagnostic String] StageSuccess)
+    runFrontStage envSnap res nameRes parsedTasks key = do
+      (doneKey, outcome) <- doOne envSnap res nameRes parsedTasks key
+      return (FrontStage doneKey, fmap StageFronted outcome)
+
+    scheduleMore :: Int -> [StageKey]
+                 -> [(Async (StageKey, Either [Diagnostic String] StageSuccess), StageKey)]
                  -> M.Map TaskKey B.ByteString
                  -> M.Map TaskKey (M.Map A.Name InterfaceFiles.NameHashInfo)
+                 -> M.Map TaskKey CompileTask
                  -> Acton.Env.Env0
                  -> M.Map TaskKey Integer
-                 -> IO ([TaskKey]
-                       , [(Async (TaskKey, Either [Diagnostic String] FrontResult), TaskKey)])
-    scheduleMore k rdy running res nameRes envSnap cw = do
-      let prio m = M.findWithDefault 0 m cw
-          rdySorted = Data.List.sortOn (Down . prio) rdy
+                 -> IO ([StageKey]
+                       , [(Async (StageKey, Either [Diagnostic String] StageSuccess), StageKey)])
+    scheduleMore k rdy running res nameRes parsedTasks envSnap cw = do
+      let rdySorted = Data.List.sortOn (Down . stagePriority cw) rdy
           (toStart, rdy') = splitAt k rdySorted
-      new <- forM toStart $ \mn -> do
-                case M.lookup mn taskMap of
-                  Just t -> ccOnFrontStart callbacks t (optsFor mn)
-                  Nothing -> return ()
-                a <- async (doOne envSnap res nameRes mn)
-                return (a, mn)
+      new <- forM toStart $ \sk -> do
+                case sk of
+                  FrontStage key ->
+                    case M.lookup key taskMap of
+                      Just t -> ccOnFrontStart callbacks t (optsFor key)
+                      Nothing -> return ()
+                  ParseStage key ->
+                    case M.lookup key taskMap of
+                      Just t -> ccOnParseStart callbacks t (optsFor key)
+                      Nothing -> return ()
+                a <- async $
+                  case sk of
+                    ParseStage key -> runParseStage key
+                    FrontStage key -> runFrontStage envSnap res nameRes parsedTasks key
+                return (a, sk)
       return (rdy', new ++ running)
 
-    loop :: IORef [Async (TaskKey, Either [Diagnostic String] FrontResult)]
-         -> [TaskKey]
-         -> [(Async (TaskKey, Either [Diagnostic String] FrontResult), TaskKey)]
+    loop :: IORef [Async (StageKey, Either [Diagnostic String] StageSuccess)]
+         -> [StageKey]
+         -> [(Async (StageKey, Either [Diagnostic String] StageSuccess), StageKey)]
          -> M.Map TaskKey B.ByteString
          -> M.Map TaskKey (M.Map A.Name InterfaceFiles.NameHashInfo)
-         -> M.Map TaskKey Int
-         -> Data.Set.Set TaskKey
+         -> M.Map TaskKey CompileTask
+         -> M.Map StageKey Int
+         -> Data.Set.Set StageKey
          -> Acton.Env.Env0
          -> Bool
          -> Int
          -> M.Map TaskKey Integer
          -> IO (Acton.Env.Env0, Bool)
-    loop runningRef rdy running res nameRes ind pend envAcc hadErrors maxPar cw = do
+    loop runningRef rdy running res nameRes parsedTasks ind pend envAcc hadErrors maxPar cw = do
       (rdy1, running1) <- mask_ $ do
-        res@(rdy1', running1') <- scheduleMore (maxPar - length running) rdy running res nameRes envAcc cw
+        res@(rdy1', running1') <- scheduleMore (maxPar - length running) rdy running res nameRes parsedTasks envAcc cw
         writeIORef runningRef (map fst running1')
         return res
       if null running1 && null rdy1
@@ -2519,36 +2742,57 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
                  return (envAcc, hadErrors)
                else return (envAcc, True)
         else do
-          (doneA, (mnDone, outcome)) <- waitAny $ map fst running1
+          (doneA, (stageDone, outcome)) <- waitAny $ map fst running1
           let running2 = filter ((/= doneA) . fst) running1
           writeIORef runningRef (map fst running2)
-          let tDone = taskMap M.! mnDone
-              optsDone = optsFor mnDone
-          ccOnFrontDone callbacks tDone optsDone
+          let keyDone = stageTaskKey stageDone
+              tDone = taskMap M.! keyDone
+              optsDone = optsFor keyDone
           case outcome of
             Left diags -> do
+              case stageDone of
+                FrontStage _ -> ccOnFrontDone callbacks tDone optsDone
+                ParseStage _ -> ccOnParseDone callbacks tDone optsDone Nothing
               ccOnDiagnostics callbacks tDone optsDone diags
-              let blocked = dependentClosure mnDone
-                  pend2 = Data.Set.delete mnDone (pend `Data.Set.difference` blocked)
-                  rdy2 = filter (`Data.Set.notMember` blocked) rdy1
-              loop runningRef rdy2 running2 res nameRes ind pend2 envAcc True maxPar cw
-            Right fr -> do
-              ccOnFrontResult callbacks tDone optsDone fr
-              forM_ (frBackJob fr) $ ccOnBackJob callbacks
-              let res2  = M.insert mnDone (frPubHash fr) res
-                  nameRes2 = M.insert mnDone (nameHashMapFromList (frNameHashes fr)) nameRes
-                  pend2 = Data.Set.delete mnDone pend
-                  ind2  = case M.lookup mnDone revMap of
+              let blockedMods = dependentClosure keyDone
+                  blockedStages =
+                    Data.Set.fromList $
+                      concatMap (\m -> [ParseStage m, FrontStage m]) (Data.Set.toList blockedMods)
+                  (blockedRunning, running3) =
+                    partition (\(_, sk) -> Data.Set.member sk blockedStages) running2
+              mapM_ (cancel . fst) blockedRunning
+              writeIORef runningRef (map fst running3)
+              let pend2 = Data.Set.delete stageDone (pend `Data.Set.difference` blockedStages)
+                  rdy2 = filter (`Data.Set.notMember` blockedStages) rdy1
+                  dropKeys = keyDone : Data.Set.toList blockedMods
+                  parsedTasks2 = foldl' (flip M.delete) parsedTasks dropKeys
+              loop runningRef rdy2 running3 res nameRes parsedTasks2 ind pend2 envAcc True maxPar cw
+            Right success -> do
+              let pend2 = Data.Set.delete stageDone pend
+                  ind2  = case M.lookup stageDone stageRevMap of
                             Nothing -> ind
                             Just ds -> foldl' (\m d -> M.adjust (\x -> x-1) d m) ind ds
-                  newlyReady = [ m | m <- Data.Set.toList pend2
-                                   , M.findWithDefault 0 m ind2 == 0
-                                   , not (m `elem` rdy1)
-                                   , not (m `elem` map snd running2)
-                                   ]
+                  runningKeys = map snd running2
+                  newlyReady = [ sk | sk <- Data.Set.toList pend2
+                                    , M.findWithDefault 0 sk ind2 == 0
+                                    , not (sk `elem` rdy1)
+                                    , not (sk `elem` runningKeys)
+                                    ]
                   rdy2 = rdy1 ++ newlyReady
-                  envAcc' = Acton.Env.addMod (tkMod mnDone) (frIfaceTE fr) (frDoc fr) envAcc
-              loop runningRef rdy2 running2 res2 nameRes2 ind2 pend2 envAcc' hadErrors maxPar cw
+              case success of
+                StageParsed parsed mParseTime -> do
+                  ccOnParseDone callbacks tDone optsDone mParseTime
+                  let parsedTasks2 = M.insert keyDone parsed parsedTasks
+                  loop runningRef rdy2 running2 res nameRes parsedTasks2 ind2 pend2 envAcc hadErrors maxPar cw
+                StageFronted fr -> do
+                  ccOnFrontDone callbacks tDone optsDone
+                  ccOnFrontResult callbacks tDone optsDone fr
+                  forM_ (frBackJob fr) $ ccOnBackJob callbacks
+                  let res2  = M.insert keyDone (frPubHash fr) res
+                      nameRes2 = M.insert keyDone (nameHashMapFromList (frNameHashes fr)) nameRes
+                      parsedTasks2 = M.delete keyDone parsedTasks
+                      envAcc' = Acton.Env.addMod (tkMod keyDone) (frIfaceTE fr) (frDoc fr) envAcc
+                  loop runningRef rdy2 running2 res2 nameRes2 parsedTasks2 ind2 pend2 envAcc' hadErrors maxPar cw
 
 
 -- | Execute back-pass jobs in parallel while keeping output order stable.
