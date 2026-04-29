@@ -54,6 +54,32 @@ Use `--sigs` when you want the compiler to show the types it inferred.
 acton types.act --sigs
 ```
 
+In a project, use `acton sig` when you want signatures by import path
+instead of by source file path:
+
+```sh
+acton sig foo.bar
+```
+
+The target is resolved like an import path. Acton first looks for a
+module named `foo.bar`. If that module does not exist, it treats the
+target as the public name `bar` inside module `foo` and prints only that
+signature.
+
+This is useful when a type error mentions an imported module or name,
+especially one that comes from a dependency. `acton sig` uses the
+project's normal build resolution, so it reads `Build.act`, honors
+dependency overrides such as `--dep name=path`, fetches missing
+dependencies, and compiles the module interfaces it needs before
+printing the signatures. It does not perform the final executable build.
+
+For example:
+
+```sh
+acton sig collections.list
+acton sig mylib.parser.parse
+```
+
 <div class="advanced-content">
 <p>Acton's inferred signatures include more than argument and return
 types. You will see generic binders, protocol constraints, optional
@@ -79,5 +105,7 @@ This is especially useful when:
   concrete types without losing safety
 - [Effects (`pure`, `mut`, `proc`, `action`)](effects.md) when you want
   to treat side effects as part of the type information
+- [Troubleshooting type errors](troubleshooting.md) when you want to
+  inspect imported signatures and compare them with an error
 - [Optionals](optionals.md) when you want the deeper type-system view of
   values that may be absent

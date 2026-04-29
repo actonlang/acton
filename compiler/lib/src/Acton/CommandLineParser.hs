@@ -41,6 +41,7 @@ data GlobalOptions = GlobalOptions {
 
 data Command        = New NewOptions
                     | Build BuildOptions
+                    | Sig SigOptions
                     | Test TestCommand
                     | Fetch
                     | PkgShow
@@ -100,6 +101,11 @@ data CompileOptions   = CompileOptions {
 data BuildOptions = BuildOptions
     { buildCompile :: CompileOptions
     , buildFiles   :: [String]
+    } deriving Show
+
+data SigOptions = SigOptions
+    { sigCompile :: CompileOptions
+    , sigTarget  :: String
     } deriving Show
 
 
@@ -188,6 +194,7 @@ cmdLineParser       :: Parser CmdLineOptions
 cmdLineParser       = hsubparser
                         (  command "new"     (info (CmdOpt <$> globalOptions <*> (New <$> newOptions)) (progDesc "Create a new Acton project"))
                         <> command "build"   (info (CmdOpt <$> globalOptions <*> (Build <$> buildOptions)) (progDesc "Build an Acton project"))
+                        <> command "sig"     (info (CmdOpt <$> globalOptions <*> (Sig <$> sigOptions)) (progDesc "Show inferred type signatures"))
                         <> command "test"    (info (CmdOpt <$> globalOptions <*> (Test <$> testCommand)) (progDesc "Build and run project tests"))
                         <> command "fetch"   (info (CmdOpt <$> globalOptions <*> pure Fetch) (progDesc "Fetch project dependencies (offline prep)"))
                         <> command "pkg"     (info (CmdOpt <$> globalOptions <*> pkgSubcommands) (progDesc "Package/dependency commands"))
@@ -255,6 +262,58 @@ buildOptions :: Parser BuildOptions
 buildOptions = BuildOptions
         <$> compileOptions
         <*> many (argument str (metavar "ACTONFILE" <> help "Specific .act file(s) to build"))
+
+sigOptions :: Parser SigOptions
+sigOptions = SigOptions
+        <$> sigCompileOptions
+        <*> argument str (metavar "TARGET" <> help "Module or module.name to show, e.g. foo.bar")
+
+sigCompileOptions :: Parser CompileOptions
+sigCompileOptions = mkSigCompileOptions
+        <$> switch (long "always-build" <> help "Recompute signatures instead of reusing fresh cached interfaces")
+        <*> switch (long "ignore-compiler-version" <> help "Ignore acton version when checking .ty freshness")
+        <*> strOption (long "syspath"   <> metavar "TARGETDIR" <> value "" <> help "Set syspath")
+        <*> many (strOption (long "searchpath" <> metavar "DIR" <> help "Add search path"))
+        <*> many (option depOverrideReader
+               (long "dep"
+                <> metavar "NAME=PATH"
+                <> help "Override dependency NAME with local PATH"))
+  where
+    mkSigCompileOptions always ignore syspath' search depOverrides =
+      CompileOptions
+        { alwaysbuild = always
+        , ignore_compiler_version = ignore
+        , db = False
+        , parse = False
+        , parse_ast = False
+        , kinds = False
+        , types = False
+        , sigs = False
+        , norm = False
+        , deact = False
+        , cps = False
+        , llift = False
+        , box = False
+        , hgen = False
+        , cgen = False
+        , ccmd = False
+        , ty = False
+        , cpedantic = False
+        , dbg_no_lines = False
+        , optimize = Debug
+        , only_build = False
+        , skip_build = True
+        , watch = False
+        , no_threads = False
+        , root = ""
+        , tempdir = ""
+        , syspath = syspath'
+        , target = defTarget
+        , cpu = ""
+        , test = False
+        , searchpath = search
+        , dep_overrides = depOverrides
+        }
 
 compileOptions = CompileOptions
         <$> switch (long "always-build" <> help "Show the result of parsing")

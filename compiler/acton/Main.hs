@@ -122,6 +122,7 @@ main = do
               in if null files
                  then buildProject gopts opts
                  else buildFiles gopts opts files
+          C.CmdOpt gopts (C.Sig opts)          -> sigCommand gopts opts
           C.CmdOpt gopts (C.Test tcmd)        -> runTests gopts tcmd
           C.CmdOpt gopts C.Fetch             -> fetchCommand gopts
           C.CmdOpt gopts C.PkgShow           -> pkgShow gopts
@@ -932,6 +933,182 @@ fetchCommand gopts = do
       Right () ->
         unless (C.quiet gopts) $
           putStrLn "Dependencies fetched"
+
+data SigTarget
+    = SigSourceTarget ProjCtx A.ModName (Maybe A.Name) FilePath
+    | SigTyTarget A.ModName (Maybe A.Name) FilePath
+
+sigCommand :: C.GlobalOptions -> C.SigOptions -> IO ()
+sigCommand gopts sigOpts = do
+    let opts0 = (C.sigCompile sigOpts)
+          { C.skip_build = True
+          , C.only_build = False
+          , C.sigs = False
+          }
+        queryGopts = if C.verbose gopts then gopts else gopts { C.quiet = True }
+    paths0 <- loadProjectPaths opts0
+    depOverrides <- normalizeDepOverrides (projPath paths0) (C.dep_overrides opts0)
+    let opts = opts0 { C.dep_overrides = depOverrides }
+    paths <- loadProjectPaths opts
+    rootProj <- normalizePathSafe (projPath paths)
+    sysAbs <- normalizePathSafe (sysPath paths)
+    withProjectLockNotice queryGopts rootProj $ do
+      fetchDependencies queryGopts paths depOverrides
+      projMap <- discoverProjects queryGopts sysAbs rootProj depOverrides
+      target <- resolveSigTarget opts paths rootProj projMap (C.sigTarget sigOpts)
+      tyFile <- case target of
+        SigSourceTarget ctx mn _ srcPath ->
+          compileSigTarget gopts queryGopts opts paths rootProj sysAbs depOverrides ctx mn srcPath
+        SigTyTarget _ _ tyPath ->
+          return tyPath
+      case target of
+        SigSourceTarget _ mn mName _ -> printSigInterface paths mn mName tyFile
+        SigTyTarget mn mName _       -> printSigInterface paths mn mName tyFile
+
+compileSigTarget :: C.GlobalOptions
+                 -> C.GlobalOptions
+                 -> C.CompileOptions
+                 -> Paths
+                 -> FilePath
+                 -> FilePath
+                 -> [(String, FilePath)]
+                 -> ProjCtx
+                 -> A.ModName
+                 -> FilePath
+                 -> IO FilePath
+compileSigTarget gopts queryGopts opts paths rootProj sysAbs depOverrides targetCtx mn srcPath = do
+    buildStamp <- readBuildSpecStamp (projPath paths)
+    let sp = Source.diskSourceProvider
+        cctx = CompileContext
+          { ccOpts = opts
+          , ccDepOverrides = depOverrides
+          , ccPathsRoot = paths
+          , ccRootProj = rootProj
+          , ccSysAbs = sysAbs
+          , ccBuildStamp = buildStamp
+          }
+    plan <- prepareCompilePlanFromContext sp queryGopts cctx [srcPath] False Nothing
+    let cctx' = cpContext plan
+        opts' = ccOpts cctx'
+        callbacks = defaultCompileCallbacks
+          { ccOnDiagnostics = \_ optsT diags -> printDiagnostics gopts optsT diags
+          , ccOnInfo = \msg -> when (C.verbose gopts) $ putStrLn msg
+          , ccOnBackJob = \_ -> return ()
+          }
+    compileRes <- compileTasks sp queryGopts opts' (ccPathsRoot cctx') (ccRootProj cctx') (cpNeededTasks plan) callbacks
+    case compileRes of
+      Left err -> printErrorAndExit (compileFailureMessage err)
+      Right (_, hadErrors) -> when hadErrors System.Exit.exitFailure
+    let targetCtx' = case M.lookup (projRoot targetCtx) (cpProjMap plan) of
+                       Just ctx -> ctx
+                       Nothing  -> targetCtx
+    targetPaths <- pathsForModule opts' (cpProjMap plan) targetCtx' mn
+    return (outBase targetPaths mn ++ ".ty")
+
+resolveSigTarget :: C.CompileOptions -> Paths -> FilePath -> M.Map FilePath ProjCtx -> String -> IO SigTarget
+resolveSigTarget opts paths rootProj projMap rawTarget = do
+    parts <- parseSigTarget rawTarget
+    moduleIndex <- sigModuleIndex projMap rootProj
+    let fullMod = A.modName parts
+    case lookup fullMod moduleIndex of
+      Just (ctx, srcPath) ->
+        return (SigSourceTarget ctx fullMod Nothing srcPath)
+      Nothing -> do
+        mFullTy <- findSigTyFile tySearchPath fullMod
+        case mFullTy of
+          Just tyPath ->
+            return (SigTyTarget fullMod Nothing tyPath)
+          Nothing ->
+            resolveNameTarget parts moduleIndex
+  where
+    tySearchPath = sigTySearchPath opts paths rootProj projMap
+
+    resolveNameTarget parts moduleIndex
+      | length parts < 2 =
+          printErrorAndExit ("Module not found: " ++ rawTarget)
+      | otherwise = do
+          let modParts = init parts
+              namePart = last parts
+              mn = A.modName modParts
+              n = A.name namePart
+          case lookup mn moduleIndex of
+            Just (ctx, srcPath) ->
+              return (SigSourceTarget ctx mn (Just n) srcPath)
+            Nothing -> do
+              mTy <- findSigTyFile tySearchPath mn
+              case mTy of
+                Just tyPath ->
+                  return (SigTyTarget mn (Just n) tyPath)
+                Nothing ->
+                  printErrorAndExit ("Module not found: " ++ intercalate "." modParts
+                                     ++ " (while resolving " ++ rawTarget ++ ")")
+
+parseSigTarget :: String -> IO [String]
+parseSigTarget rawTarget = do
+    let parts = splitOn "." rawTarget
+    if null rawTarget || any null parts
+      then printErrorAndExit ("Invalid signature target: " ++ rawTarget)
+      else return parts
+
+sigModuleIndex :: M.Map FilePath ProjCtx -> FilePath -> IO [(A.ModName, (ProjCtx, FilePath))]
+sigModuleIndex projMap rootProj = do
+    let roots = sigProjectSearchOrder projMap rootProj
+    fmap concat $ forM roots $ \root ->
+      case M.lookup root projMap of
+        Nothing -> return []
+        Just ctx -> do
+          mods <- enumerateProjectModules ctx
+          return [ (mn, (ctx, srcPath)) | (srcPath, mn) <- mods ]
+
+sigProjectSearchOrder :: M.Map FilePath ProjCtx -> FilePath -> [FilePath]
+sigProjectSearchOrder projMap rootProj =
+    rootProj : snd (go (Data.Set.singleton rootProj) rootProj)
+  where
+    go seen root =
+      case M.lookup root projMap of
+        Nothing -> (seen, [])
+        Just ctx -> foldl' step (seen, []) (projDeps ctx)
+
+    step (seen, acc) (_, depRoot)
+      | Data.Set.member depRoot seen = (seen, acc)
+      | otherwise =
+          let seen' = Data.Set.insert depRoot seen
+              (seenNext, sub) = go seen' depRoot
+          in (seenNext, acc ++ [depRoot] ++ sub)
+
+sigTySearchPath :: C.CompileOptions -> Paths -> FilePath -> M.Map FilePath ProjCtx -> [FilePath]
+sigTySearchPath opts paths rootProj projMap =
+    case M.lookup rootProj projMap of
+      Just rootCtx -> searchPathForProject opts projMap rootCtx
+      Nothing      -> searchPath paths
+
+findSigTyFile :: [FilePath] -> A.ModName -> IO (Maybe FilePath)
+findSigTyFile = Acton.Env.findTyFile
+
+printSigInterface :: Paths -> A.ModName -> Maybe A.Name -> FilePath -> IO ()
+printSigInterface paths mn mName tyFile = do
+    exists <- doesFileExist tyFile
+    unless exists $
+      printErrorAndExit ("Type interface not found for " ++ modNameToString mn)
+    tyRes <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readFile tyFile
+    case tyRes of
+      Left err ->
+        printErrorAndExit ("Could not read type interface for " ++ modNameToString mn ++ ": " ++ show err)
+      Right (ms, nmod, _, _, _, _, _, _, _, _, _, _) -> do
+        env0 <- Acton.Env.initEnv (sysTypes paths) False
+        let I.NModule te _ = nmod
+            envImports = foldr Acton.Env.addImport env0 ms
+            selected = case mName of
+              Nothing -> te
+              Just n  -> filter ((== n) . fst) te
+            envForPrint = case mName of
+              Nothing -> envImports
+              Just _  -> define te (setMod mn envImports)
+        case mName of
+          Just n | null selected ->
+            printErrorAndExit ("Public name not found: " ++ modNameToString mn ++ "." ++ nameToString n)
+          _ ->
+            putStrLn (Acton.Types.prettySigs envForPrint mn selected)
 
 -- Show dependency tree with overrides applied from root pins
 pkgShow :: C.GlobalOptions -> IO ()
