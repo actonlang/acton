@@ -448,6 +448,83 @@ parseFlagTests =
       assertBool "help text should include --release" ("--release" `isInfixOf` helpText)
       assertBool "help text should mention release variants" ("=small or =fast" `isInfixOf` helpText)
       assertBool "help text should mention default release mode" ("same as --release=safe" `isInfixOf` helpText)
+  , testCase "sig parser accepts target and project options" $ do
+      parsed <- parseArgs ["sig", "--always-build", "--dep", "dep=../dep", "--searchpath", "out/types", "foo.bar"]
+      case parsed of
+        C.CmdOpt _ (C.Sig sigOpts) -> do
+          let opts = C.sigCompile sigOpts
+          assertEqual "sig target" "foo.bar" (C.sigTarget sigOpts)
+          assertBool "sig should force rebuild when requested" (C.alwaysbuild opts)
+          assertEqual "sig searchpath" ["out/types"] (C.searchpath opts)
+          assertEqual "sig dep overrides" [("dep", "../dep")] (C.dep_overrides opts)
+          assertBool "sig should skip final build" (C.skip_build opts)
+        _ ->
+          assertFailure "expected sig command"
+  , testCase "sig finds prebuilt dependency interfaces" $ do
+      withSystemTempDirectory "acton-sig-prebuilt-dep" $ \tmp -> do
+        actonBinDir <- Paths_acton.getBinDir
+        let actonCandidate = actonBinDir </> "acton"
+            distActon = "../../dist/bin/acton"
+        hasActonCandidate <- doesFileExist actonCandidate
+        actonExe <- canonicalizePath $
+          if hasActonCandidate then actonCandidate else distActon
+        sysPath <- canonicalizePath "../../dist"
+        env0 <- getEnvironment
+        let homeDir = tmp </> "home"
+            rootProj = tmp </> "root"
+            depProj = tmp </> "dep"
+            envWithHome = ("HOME", homeDir) : filter ((/= "HOME") . fst) env0
+            mkFp name = Fingerprint.formatFingerprint
+              (Fingerprint.updateFingerprintPrefix
+                (Fingerprint.fingerprintPrefixForName name) 1)
+            writeBuildActAt :: FilePath -> String -> [(String, FilePath)] -> IO ()
+            writeBuildActAt dir name deps = do
+              createDirectoryIfMissing True (dir </> "src")
+              let depsBody = intercalate ",\n"
+                    [ "    \"" ++ depName ++ "\": (\n"
+                      ++ "        path=" ++ show depPath ++ "\n"
+                      ++ "    )"
+                    | (depName, depPath) <- deps
+                    ]
+                  depsSection =
+                    if null deps
+                      then "dependencies = {}"
+                      else "dependencies = {\n" ++ depsBody ++ "\n}"
+              writeFile (dir </> "Build.act") $ unlines
+                [ "name = " ++ show name
+                , "fingerprint = " ++ mkFp name
+                , ""
+                , depsSection
+                , ""
+                , "zig_dependencies = {}"
+                ]
+        createDirectoryIfMissing True homeDir
+
+        writeBuildActAt depProj "sig_dep" []
+        writeFile (depProj </> "src" </> "prebuilt.act") $ unlines
+          [ "def count() -> int:"
+          , "    return 1"
+          ]
+        (buildCode, buildOut, buildErr) <- readCreateProcessWithExitCode
+          (proc actonExe ["build", "--syspath", sysPath, "--skip-build", "src/prebuilt.act"])
+            { cwd = Just depProj, env = Just envWithHome } ""
+        when (buildCode /= ExitSuccess) $
+          assertFailure ("dependency build failed:\nstdout:\n" ++ buildOut ++ "\nstderr:\n" ++ buildErr)
+
+        removeFile (depProj </> "src" </> "prebuilt.act")
+        writeBuildActAt rootProj "sig_root" [("sig_dep", depProj)]
+        writeFile (rootProj </> "src" </> "main.act") $ unlines
+          [ "actor main(env):"
+          , "    env.exit(0)"
+          ]
+
+        (sigCode, sigOut, sigErr) <- readCreateProcessWithExitCode
+          (proc actonExe ["sig", "--syspath", sysPath, "prebuilt"])
+            { cwd = Just rootProj, env = Just envWithHome } ""
+        when (sigCode /= ExitSuccess) $
+          assertFailure ("acton sig failed:\nstdout:\n" ++ sigOut ++ "\nstderr:\n" ++ sigErr)
+        assertBool "sig output should include the dependency function"
+          ("count : () -> int" `isInfixOf` sigOut)
   , testCase "acton test --help includes --no-cache and --tag" $ do
       acton <- canonicalizePath "../../dist/bin/acton"
       (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc acton ["test", "--help"]) ""

@@ -46,6 +46,7 @@
     - [Explicit types](types/explicit.md)
     - [Generics](types/generics.md)
     - [Effects (`pure`, `mut`, `proc`, `action`)](types/effects.md)
+    - [Troubleshooting type errors](types/troubleshooting.md)
   - [Actors & concurrency](language/state_concurrency.md)
     - [Actors](actors.md)
     - [Root Actor](actors/root.md)
