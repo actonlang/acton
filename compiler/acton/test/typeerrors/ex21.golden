@@ -1,4 +1,5 @@
 Building file test/typeerrors/ex21.act using temporary scratch directory
+   ex21  Parse done                                                            0.000 s
 [error]: Constraint violation
      +--> ex21.act@4:10-4:25
      |

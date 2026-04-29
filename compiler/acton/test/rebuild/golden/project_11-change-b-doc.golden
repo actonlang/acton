@@ -1,5 +1,6 @@
 Resolving dependencies (fetching if missing)...
   Fresh a: using cached .ty
+   b  Parse done                                                            0.000 s
   Stale b: source changed
   Hash deltas b: ~DocInfo{src HASH1 -> HASH2, impl HASH1 -> HASH2}
    b  Type check done                                                       0.000 s

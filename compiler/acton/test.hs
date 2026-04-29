@@ -30,6 +30,7 @@ import qualified Acton.CommandLineParser as C
 import qualified Acton.Fingerprint as Fingerprint
 import qualified Options.Applicative as OA
 import qualified Paths_acton
+import qualified TestGolden
 
 -- The default is to build and run each test program with the expectation that
 -- both compilation and running the program is successful as determined by exit
@@ -1046,7 +1047,7 @@ createGoldenErrorAutoTest dir file = do
 getCompileError file = do
     (returnCode, cmdOut, cmdErr) <- buildThing "" file
     assertEqual "compile error retCode" (ExitFailure 1) returnCode
-    return (LBS.pack cmdOut)
+    return (LBS.pack (TestGolden.normalizeProgressTimings cmdOut))
 
 findThings dir = do
     items <- listDirectory dir

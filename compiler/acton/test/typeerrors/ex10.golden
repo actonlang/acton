@@ -1,4 +1,5 @@
 Building file test/typeerrors/ex10.act using temporary scratch directory
+   ex10  Parse done                                                            0.000 s
 [error]: Constraint violation
      +--> ex10.act@4:5-4:15
      |

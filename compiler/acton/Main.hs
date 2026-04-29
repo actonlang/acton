@@ -1326,6 +1326,7 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
         termEnabled = termProgressEnabled termProgress
         modLabel mn = modNameToString mn
         timeSep = "    "
+        parseDoneStatus = "Parse done"
         frontDoneStatus = "Type check done"
         backDoneStatus = "Compilation done"
         backFailStatus msg = "Compilation failed: " ++ msg
@@ -1435,6 +1436,8 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
           ++ ", boxing " ++ fmtTimePrecise (btBoxing bt)
           ++ ", codegen " ++ fmtTimePrecise (btCodeGen bt)
           ++ maybe "" (\t -> ", write " ++ fmtTimePrecise t) (btWriteCode bt)
+        parseDoneRenderer =
+          staticStatusRenderer parseDoneStatus "Parsed"
         frontDoneRenderer =
           staticStatusRenderer frontDoneStatus "Typed"
         backDoneRenderer =
@@ -1446,6 +1449,10 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
               else Just (abbreviateRight budget (backFailStatus msg))
         finalDoneRenderer =
           staticStatusRenderer finalDoneStatus "Final"
+        parseDoneLine width proj mn t =
+          if puWidthAware progressUI
+            then doneStatusLine width (projectModuleLabel proj mn) parseDoneRenderer "Parsed" (Just t)
+            else plainDoneTimedLine (projectModuleLabel proj mn) parseDoneStatus t
         frontDoneLine width proj mn t =
           if puWidthAware progressUI
             then doneStatusLine width (projectModuleLabel proj mn) frontDoneRenderer "Typed" (Just t)
@@ -1471,6 +1478,8 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
         renderProjectLine proj mn statusRender width =
           let modLbl = projectModuleLabel proj mn
           in fitBuildLineLayout width labelWidth statusWidth False modLbl statusRender
+        parseActiveLine proj mn =
+          renderProjectLine proj mn (staticStatusRenderer "Parsing" "Parse")
         frontInitialLine proj mn =
           renderProjectLine proj mn (staticStatusRenderer "Kinds check" "Kinds")
         backActiveLine proj mn =
@@ -1563,6 +1572,18 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
           { chOnDiagnostics = \t optsT diags -> do
               gate (progressDoneTask progressUI progressState (gtKey t))
               logDiagnostics optsT diags
+          , chOnParseStart = \t ->
+              let key = gtKey t
+                  proj = tkProj key
+                  mn = tkMod key
+              in gate (progressStartTask progressUI progressState key (parseActiveLine proj mn) Nothing)
+          , chOnParseDone = \t mtime -> do
+              gate (progressDoneTask progressUI progressState (gtKey t))
+              when (not (quiet gopts optsPlan)) $
+                forM_ mtime $ \tParse -> do
+                  let proj = tkProj (gtKey t)
+                      mn = tkMod (gtKey t)
+                  logRendered (\cols -> parseDoneLine cols proj mn tParse)
           , chOnFrontResult = \t fr -> do
               forM_ (frFrontTime fr) $ \tFront -> do
                 let proj = tkProj (gtKey t)
@@ -1682,19 +1703,16 @@ runCliPostCompile cliHooks gopts plan env = do
           else do
             unless (altOutput opts') $
               runFinal (compileBins gopts opts' pathsRoot env rootSpec rootTasks preBinTasks allowPrune' rootModuleEntries rootDepModuleOpts rootDepPathOverrides (Just (cchProgressUI cliHooks)))
--- Generate documentation index for a project build by reading module docstrings
--- from the current tasks. Uses TyTask header docs when available to avoid
--- parsing/decoding; falls back to extracting from ActonTask ASTs.
+-- Generate documentation index for a project build by reading module names and
+-- docstrings from cached .ty headers or source headers.
 generateProjectDocIndex :: Source.SourceProvider -> C.GlobalOptions -> C.CompileOptions -> Paths -> [String] -> IO ()
 generateProjectDocIndex sp gopts opts paths srcFiles = do
     unless (C.skip_build opts || C.only_build opts || isTmp paths) $ do
         let docDir = joinPath [projPath paths, "out", "doc"]
         createDirectoryIfMissing True docDir
-        tasks <- mapM (\f -> findPaths f opts >>= \p -> readModuleTask sp gopts opts p f) srcFiles
-        entries <- catMaybes <$> forM tasks (\t -> case t of
-                          ActonTask mn _src _bytes _sourceMeta m -> return (Just (mn, A.mdoc m))
-                          TyTask { name = mn, tyDoc = mdoc } -> return (Just (mn, mdoc))
-                          ParseErrorTask{} -> return Nothing)
+        entries <- catMaybes <$> forM srcFiles (\f -> do
+                     p <- findPaths f opts
+                     readModuleDoc sp gopts opts p f)
         DocP.generateDocIndex docDir entries
 
 -- | Relative C source paths for selected tasks in one project.
@@ -1853,7 +1871,9 @@ files so we can skip back passes when codegen is already up to date, and we use
 it (with impl deps) to drive the test cache.
 
 Terminology
-- ActonTask: a module parsed from source (.act) and that needs to be compiled
+- ParseTask: a source-backed module whose imports are known but whose full AST
+  has not been materialized yet
+- ActonTask: a fully parsed source module ready for front passes
 - TyTask: a module loaded from the cached .ty file on disk. Note how there are
   two variants, a stubbed TyTask where only header fields are loaded and the
   full TyTask where all module content is available.
@@ -1861,9 +1881,10 @@ Terminology
 High-level Steps
 1) Discover and read tasks using header-first strategy (readModuleTask)
    - For each module, try to use its .ty header to avoid parsing:
-     - If .ty is missing/unreadable → parse .act to obtain imports (ActonTask).
+     - If .ty is missing/unreadable → read source and parse only the import
+       header (ParseTask).
      - If the compiler compatibility guard says the cache is stale
-       → parse .act now to get accurate imports (ActonTask).
+       → read source and parse the import header now (ParseTask).
      - If source metadata in the .ty header still matches the current .act and
        the source mtime is strictly older than the .ty mtime
        → trust .ty header imports and create a TyTask stub (no heavy decode)
@@ -1872,13 +1893,13 @@ High-level Steps
        hash:
        – If stored moduleSrcBytesHash == current bytes hash → header is still
          valid (TyTask) and refresh cached source metadata.
-       – Else → parse .act now to get accurate imports (ActonTask)
+       – Else → read source and parse the import header now (ParseTask)
      - Equal source/.ty mtimes are treated as ambiguous because coarse-mtime
        filesystems can assign the same visible timestamp to a changed source
        and the cached .ty written from an earlier version of that source.
    - This ensures that .ty is up to date with the .act source and lets us
      read module imports/roots/docstring from the header, which is much faster
-     than parsing the .act file.
+     than parsing the full .act file.
 
 2) Expand to include transitive project imports (readImports)
    - For project builds, we enumerate all modules under src/ upfront, so chasing
@@ -1888,9 +1909,12 @@ High-level Steps
      headers to avoid parsing; we parse only when a .ty is missing/unreadable.
 
 3) Compile and build
-   - compileTasks orders modules in dependency (topological) order and decides
-     rebuilds as it goes:
-     - Source changed (ActonTask) → run front passes
+   - compileTasks builds a stage graph and prefers front work over parse work:
+     - ParseTask stages have no dependencies and can run opportunistically.
+     - Front stages depend on the module's parse stage (if any) plus provider
+       front stages.
+   - Front-stage rebuild decisions are then made per module:
+     - Source changed (ParseTask/ActonTask) → run front passes
      - Otherwise, compare each used pub dependency hash from the dependent’s
        .ty header with the provider’s current pub hash. If any differ → front.
      - Otherwise, compare each used impl dependency hash from the dependent’s

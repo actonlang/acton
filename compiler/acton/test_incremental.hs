@@ -8,7 +8,7 @@ import qualified Data.ByteString as B
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import qualified Data.Text.Encoding as TE
-import           Data.Char (isDigit, isHexDigit, isSpace)
+import           Data.Char (isHexDigit, isSpace)
 import           Data.Bits (shiftL, (.|.))
 import           Data.Word (Word64)
 import qualified Acton.Fingerprint as Fingerprint
@@ -33,6 +33,7 @@ import           Test.Tasty.Runners (NumThreads(..))
 import           Test.Tasty (DependencyType(..), after, TestName)
 import           Test.Tasty.Golden (goldenVsString)
 import           Test.Tasty.HUnit
+import           TestGolden (normalizeProgressTimingLine)
 import qualified Acton.Compile as Compile
 import qualified Acton.CommandLineParser as C
 import qualified Acton.SourceProvider as Source
@@ -79,7 +80,7 @@ sanitize = LBS.fromStrict
         . T.unlines
         . reorderBackLines
         . map censorHashes
-        . map redact
+        . map normalizeProgressTimingLine
         . dropPaths
         . filter (not . isVolatile)
         . T.lines
@@ -89,26 +90,6 @@ sanitize = LBS.fromStrict
       T.isInfixOf "zigCmd" t ||
       T.isInfixOf "Building project in" t ||
       T.isInfixOf "Building [cap" t
-
-    -- Replace trailing durations like "12.345 s" with a stable token "0.000 s",
-    -- preserving the original field width for alignment.
-    redact :: T.Text -> T.Text
-    redact t =
-      case T.stripSuffix " s" t of
-        Nothing -> t
-        Just pre ->
-          let field = T.takeWhileEnd (\c -> isDigit c || c == '.') pre
-              pre' = T.dropEnd (T.length field) pre
-          in case T.splitOn "." field of
-               [intPart, frac]
-                 | not (T.null intPart)
-                   && T.length frac == 3
-                   && T.all isDigit intPart
-                   && T.all isDigit frac ->
-                     let base = "0.000"
-                         padding = T.replicate (max 0 (T.length field - T.length base)) " "
-                     in pre' <> padding <> base <> " s"
-               _ -> t
 
     -- Rewrite volatile hash literals in log lines to stable placeholders.
     -- We keep semantic position in deltas:
@@ -1222,19 +1203,26 @@ p27_overlay_source_provider = testCase "27-overlay snapshots drive readModuleTas
   case taskSame of
     Compile.TyTask{} -> pure ()
     _ -> assertFailure "expected TyTask when overlay matches header"
-  let bytesDiff = TE.encodeUtf8 (T.pack "aaa = 2\n")
+  let textDiff = "\"\"\"Overlay doc\"\"\"\naaa = 2\n"
+      bytesDiff = TE.encodeUtf8 (T.pack textDiff)
       snapDiff = Source.SourceSnapshot
-        { Source.ssText = "aaa = 2\n"
+        { Source.ssText = textDiff
         , Source.ssBytes = bytesDiff
         , Source.ssIsOverlay = True
         }
       spDiff = disk { Source.spReadOverlay = \path -> return (if path == actAAbs then Just snapDiff else Nothing) }
   taskDiff <- Compile.readModuleTask spDiff gopts Compile.defaultCompileOptions paths actAAbs
   case taskDiff of
-    Compile.ActonTask{ Compile.src = srcText, Compile.srcBytes = srcBytes } -> do
-      srcText @?= "aaa = 2\n"
+    Compile.ParseTask{ Compile.src = srcText, Compile.srcBytes = srcBytes } -> do
+      srcText @?= textDiff
       srcBytes @?= bytesDiff
-    _ -> assertFailure "expected ActonTask when overlay differs from header"
+    _ -> assertFailure "expected ParseTask when overlay differs from header"
+  docDiff <- Compile.readModuleDoc spDiff gopts Compile.defaultCompileOptions paths actAAbs
+  case docDiff of
+    Just (mn, Just doc) -> do
+      mn @?= A.modName ["a"]
+      doc @?= "Overlay doc"
+    _ -> assertFailure "expected module doc from overlay header"
 
 p28_protocol_extension_deps :: TestTree
 p28_protocol_extension_deps = testCase "28-protocol/extension deps are recorded by name" $ do
@@ -1418,6 +1406,19 @@ p30_only_build = testCase "30-only-build skips front passes" $ do
   assertBool "did not expect c.act to type check" (not (typechecked out2 modC))
   assertBool "did not expect b.act to compile codegen" (not (compiled out2 modB))
   assertBool "did not expect c.act to compile codegen" (not (compiled out2 modC))
+
+  writeFileUtf8 (src </> "b.act") $ T.unlines
+    [ "import a"
+    , ""
+    , "def bar() -> int:"
+    , "    return a.aaa"
+    , ")"
+    ]
+  res3@(ec3, out3) <- runActonIn proj ["build", "--color", "never", "--verbose", "--only-build"]
+  assertExitSuccess "only-build with invalid body" res3
+  assertBool "did not expect invalid b.act to type check in only-build" (not (typechecked out3 modB))
+  assertBool "did not expect c.act to type check after invalid b.act in only-build" (not (typechecked out3 modC))
+  assertBool "did not expect parse diagnostics in only-build" (not ("Syntax error" `T.isInfixOf` out3))
 
 p31_always_build :: TestTree
 p31_always_build = testCase "31-always-build forces front passes" $ do
