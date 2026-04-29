@@ -1,0 +1,51 @@
+name: Update Ask Acton vector store
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'docs/acton-guide/**'
+  workflow_dispatch:
+
+concurrency:
+  group: ask-acton-vector-store
+  cancel-in-progress: true
+
+jobs:
+  update_vector_store:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out Acton
+        uses: actions/checkout@v4
+
+      - name: Check out Ask Acton indexer
+        uses: actions/checkout@v4
+        with:
+          repository: actonlang/ask-acton
+          path: ask-acton
+          token: ${{ secrets.ACTBOT_PAT }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: ask-acton/package-lock.json
+
+      - name: Install Ask Acton dependencies
+        working-directory: ask-acton
+        run: npm ci
+
+      - name: Update vector store
+        working-directory: ask-acton
+        env:
+          OPENAI_API_KEY: ${{ secrets.ASK_ACTON_OPENAI_API_KEY || secrets.OPENAI_API_KEY }}
+          OPENAI_VECTOR_STORE_ID: ${{ secrets.ASK_ACTON_VECTOR_STORE_ID || secrets.OPENAI_VECTOR_STORE_ID }}
+          DOCS_DIR: ${{ github.workspace }}/docs/acton-guide/src
+          DOCS_REVISION: ${{ github.sha }}
+          INDEX_REPLACE_SOURCE: 'true'
+        run: npm run index:docs
