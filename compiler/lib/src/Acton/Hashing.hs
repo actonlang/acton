@@ -182,7 +182,7 @@ buildNameHashes :: Data.Set.Set A.Name
                 -> M.Map A.Name [(A.QName, B.ByteString)]
                 -> [InterfaceFiles.NameHashInfo]
 buildNameHashes nameKeys nameSrcHashes nameImplHashes nameInfoMap pubSigLocalDeps pubSigExtHashes implLocalDeps implExtHashes pubExtHashes =
-  let hashNameInfo info = SHA256.hash (BL.toStrict $ encode (I.stripDocsNI info))
+  let hashNameInfo info = SHA256.hash (BL.toStrict $ encode (I.stripLocsNI (I.stripDocsNI info)))
       selfPubHashes = M.map hashNameInfo nameInfoMap
       selfImplHashes = nameImplHashes
       pubHashes = computeHashes selfPubHashes pubSigLocalDeps pubSigExtHashes
@@ -227,14 +227,14 @@ modulePubHashFromIface nmod nameHashes =
         | nh <- nameHashes
         ]
       pubNamesSorted = Data.List.sortOn nameKey (map fst iface)
-      pubEntries = [ (n, M.findWithDefault B.empty n pubHashMap) | n <- pubNamesSorted ]
+      pubEntries = [ (nameKey n, M.findWithDefault B.empty n pubHashMap) | n <- pubNamesSorted ]
   in SHA256.hash (BL.toStrict $ encode pubEntries)
 
 -- | Hash the module impl entries from per-name impl hashes.
 moduleImplHashFromNameHashes :: [InterfaceFiles.NameHashInfo] -> B.ByteString
 moduleImplHashFromNameHashes infos =
   let items =
-        [ (InterfaceFiles.nhName nh, InterfaceFiles.nhImplHash nh)
+        [ (nameKey (InterfaceFiles.nhName nh), InterfaceFiles.nhImplHash nh)
         | nh <- Data.List.sortOn (nameKey . InterfaceFiles.nhName) infos
         ]
   in SHA256.hash (BL.toStrict (encode items))
