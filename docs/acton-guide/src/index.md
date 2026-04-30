@@ -19,6 +19,20 @@
 
 ```
 
-Acton is a **advanced** general purpose programming language offering **functional** and **object-oriented** style of programming based on the **actor**-model and async I/O. **Type safe** and with **capabilities based** security, Acton is **statically compiled** for **high performance** and **portability**. In other words, pretty much *perfect* ;) We hope you enjoy it as much as we do. It's readily available to build anything from advanced "shell scripts" to low level databases.
+Acton is a general-purpose programming language with a sharp focus on building
+robust reactive systems from many cooperating actors. It is especially well
+suited to distributed scale-out logic, where safety comes from combining
+actor-local state, explicit communication, and a static type system that checks
+the shape of the program before it runs.
 
-Unique among programming languages, Acton offers **orthogonal persistence**, which means you don't have to think about how to persist data, or rather the state of your program, for durability. Acton will do it for you, using its fault-tolerant distribute database. Pretty damn cool!
+Actors are Acton's unit of state, concurrency, and communication: each actor
+runs sequentially, owns its state, and interacts with other actors through
+method calls, timers, callbacks, and async I/O. The actor model keeps mutation
+local and control flow direct while allowing many independent pieces of work to
+run concurrently.
+
+The language keeps familiar syntax while adding functional and object-oriented
+programming, type inference, capability-based security, and native compilation.
+It is practical for everyday scripts and services, but its center of gravity is
+actor-heavy systems where correctness, explicit authority, and efficient
+compiled code matter.
