@@ -86,8 +86,8 @@ types. You will see generic binders, protocol constraints, optional
 types, tuple rows, and effect markers. Reading a signature means
 reading both the data shape and the callable behavior. The compiler's
 output is often the clearest summary of what an API actually promises,
-so <code>--sigs</code> is a useful first step before deciding whether to
-make that promise explicit.</p>
+so <code>acton sig</code> and <code>--sigs</code> are useful first
+steps before deciding whether to make that promise explicit.</p>
 </div>
 
 This is especially useful when:
