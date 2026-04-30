@@ -140,6 +140,81 @@ stripDocsNI ni = case ni of
   where
     stripBind (n, info) = (n, stripDocsNI info)
 
+-- | Strip source locations from NameInfo (and nested syntax fragments).
+-- This keeps public interface hashes independent from whitespace-only source
+-- edits while preserving locations in the cached .ty payload itself.
+stripLocsNI :: NameInfo -> NameInfo
+stripLocsNI ni = case ni of
+  NVar t             -> NVar (stripLocsType t)
+  NSVar t            -> NSVar (stripLocsType t)
+  NDef sc dec doc    -> NDef (stripLocsTSchema sc) dec doc
+  NSig sc dec doc    -> NSig (stripLocsTSchema sc) dec doc
+  NAct q p k te doc  -> NAct (stripLocsQBinds q) (stripLocsType p) (stripLocsType k) (stripLocsTEnv te) doc
+  NClass q cs te doc -> NClass (stripLocsQBinds q) (map stripLocsWTCon cs) (stripLocsTEnv te) doc
+  NProto q ps te doc -> NProto (stripLocsQBinds q) (map stripLocsWTCon ps) (stripLocsTEnv te) doc
+  NExt q c ps te o doc ->
+    NExt (stripLocsQBinds q) (stripLocsTCon c) (map stripLocsWTCon ps) (stripLocsTEnv te) (map stripLocsName o) doc
+  NTVar k c ps       -> NTVar k (stripLocsTCon c) (map stripLocsTCon ps)
+  NAlias qn          -> NAlias (stripLocsQName qn)
+  NMAlias mn         -> NMAlias (stripLocsModName mn)
+  NModule te doc     -> NModule (stripLocsTEnv te) doc
+  NReserved          -> NReserved
+  where
+    stripLocsTEnv :: TEnv -> TEnv
+    stripLocsTEnv = map $ \(n, info) -> (stripLocsName n, stripLocsNI info)
+
+    stripLocsTSchema :: TSchema -> TSchema
+    stripLocsTSchema (TSchema _ q t) = TSchema NoLoc (stripLocsQBinds q) (stripLocsType t)
+
+    stripLocsQBinds :: QBinds -> QBinds
+    stripLocsQBinds = map stripLocsQBind
+
+    stripLocsQBind :: QBind -> QBind
+    stripLocsQBind (QBind tv cs) = QBind (stripLocsTVar tv) (map stripLocsTCon cs)
+
+    stripLocsTVar :: TVar -> TVar
+    stripLocsTVar (TV k n) = TV k (stripLocsName n)
+
+    stripLocsTCon :: TCon -> TCon
+    stripLocsTCon (TC qn ts) = TC (stripLocsQName qn) (map stripLocsType ts)
+
+    stripLocsWTCon :: WTCon -> WTCon
+    stripLocsWTCon (wpath, pcon) = (map stripLocsWStep wpath, stripLocsTCon pcon)
+
+    stripLocsWStep :: Either QName QName -> Either QName QName
+    stripLocsWStep (Left qn) = Left (stripLocsQName qn)
+    stripLocsWStep (Right qn) = Right (stripLocsQName qn)
+
+    stripLocsType :: Type -> Type
+    stripLocsType t = case t of
+      TUni _ u          -> TUni NoLoc u
+      TVar _ tv         -> TVar NoLoc (stripLocsTVar tv)
+      TCon _ tc         -> TCon NoLoc (stripLocsTCon tc)
+      TFun _ fx p k r   -> TFun NoLoc (stripLocsType fx) (stripLocsType p) (stripLocsType k) (stripLocsType r)
+      TTuple _ p k      -> TTuple NoLoc (stripLocsType p) (stripLocsType k)
+      TOpt _ opt        -> TOpt NoLoc (stripLocsType opt)
+      TNone _           -> TNone NoLoc
+      TWild _           -> TWild NoLoc
+      TNil _ k          -> TNil NoLoc k
+      TRow _ k n ty row -> TRow NoLoc k (stripLocsName n) (stripLocsType ty) (stripLocsType row)
+      TStar _ k row     -> TStar NoLoc k (stripLocsType row)
+      TFX _ fx          -> TFX NoLoc fx
+
+    stripLocsQName :: QName -> QName
+    stripLocsQName qn = case qn of
+      QName mn n -> QName (stripLocsModName mn) (stripLocsName n)
+      NoQ n      -> NoQ (stripLocsName n)
+      GName mn n -> GName (stripLocsModName mn) (stripLocsName n)
+
+    stripLocsModName :: ModName -> ModName
+    stripLocsModName (ModName ns) = ModName (map stripLocsName ns)
+
+    stripLocsName :: Name -> Name
+    stripLocsName n = case n of
+      Name _ s       -> Name NoLoc s
+      Derived n1 n2  -> Derived (stripLocsName n1) (stripLocsName n2)
+      Internal{}     -> n
+
 instance Leaves NameInfo where
     leaves (NClass q cs te _) = leaves q ++ leaves cs ++ leaves te
     leaves (NProto q ps te _) = leaves q ++ leaves ps ++ leaves te

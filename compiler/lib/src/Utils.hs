@@ -33,8 +33,13 @@ import System.IO.Error (catchIOError)
 data SrcLoc                     = Loc Int Int | NoLoc deriving (Eq,Ord,Show,Read,Generic,NFData)
 
 instance Data.Binary.Binary SrcLoc where
-    put _ = return ()
-    get   = return NoLoc
+    put NoLoc                    = Data.Binary.put False
+    put (Loc l r)                = Data.Binary.put True >> Data.Binary.put l >> Data.Binary.put r
+    get                          = do
+        hasLoc <- Data.Binary.get
+        if hasLoc
+            then Loc <$> Data.Binary.get <*> Data.Binary.get
+            else return NoLoc
 
 instance Pretty SrcLoc where
     pretty (Loc l r)            = pretty l <> text "-" <> pretty r
