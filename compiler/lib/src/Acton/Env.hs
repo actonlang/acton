@@ -233,6 +233,9 @@ instance Unalias (Either QName QName) where
 
 -- | Initialize the base environment; the builtin mode skips interface loading.
 -- first variant is special case for compiling __builtin__.act
+publicTEnv                 :: TEnv -> TEnv
+publicTEnv                 = filter (isPublicName . fst)
+
 initEnv                    :: FilePath -> Bool -> IO Env0
 initEnv path True          = return $ EnvF{ names = [(nPrim,NMAlias mPrim)],
                                             imports = [mPrim],
@@ -245,16 +248,17 @@ initEnv path True          = return $ EnvF{ names = [(nPrim,NMAlias mPrim)],
                                             envX = () }
 initEnv path False         = do (_,nmod,_,_,_,_,_,_,_,_,_,_) <- InterfaceFiles.readFile (joinPath [path,"__builtin__.ty"])
                                 let NModule envBuiltin builtinDocstring = nmod
+                                    envBuiltinPublic = publicTEnv envBuiltin
                                     env0 = EnvF{ names = [(nPrim,NMAlias mPrim), (nBuiltin,NMAlias mBuiltin)],
                                                  imports = [mPrim,mBuiltin],
-                                                 modules = [(nPrim,NModule primEnv Nothing), (nBuiltin,NModule envBuiltin builtinDocstring)],
+                                                 modules = [(nPrim,NModule primEnv Nothing), (nBuiltin,NModule envBuiltinPublic builtinDocstring)],
                                                  hmodules = M.empty,
                                                  witnesses = primWits,
                                                  thismod = Nothing,
                                                  context = [],
                                                  qlevel = 0,
                                                  envX = () }
-                                    env = importAll mBuiltin envBuiltin $ importWits mBuiltin envBuiltin $ env0
+                                    env = importAll mBuiltin envBuiltinPublic $ importWits mBuiltin envBuiltinPublic $ env0
                                 return env
 
 withModulesFrom             :: EnvF x -> EnvF x -> EnvF x
@@ -1075,7 +1079,8 @@ doImp spath env m            = do
                 Just tyF -> do
                   (ms,nmod,_,_,_,_,_,_,_,_,_,_) <- InterfaceFiles.readFile tyF
                   (env', seen'') <- subImpSeen seen' env ms
-                  let NModule te mdoc = nmod
+                  let NModule teFull mdoc = nmod
+                      te = publicTEnv teFull
                   return (addMod m te mdoc env', te, seen'')
 
     subImpSeen seen env []   = return (env, seen)
@@ -1095,7 +1100,7 @@ importAll                   :: ModName -> TEnv -> EnvF x -> EnvF x
 importAll m te env          = define (impNames m te) env
 
 impNames                    :: ModName -> TEnv -> TEnv
-impNames m te               = mapMaybe imp te
+impNames m te               = mapMaybe imp (publicTEnv te)
   where
     imp (n, NAct _ _ _ _ _)   = Just (n, NAlias (GName m n))
     imp (n, NClass _ _ _ _)   = Just (n, NAlias (GName m n))

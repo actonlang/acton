@@ -1106,7 +1106,7 @@ printSigInterface paths mn mName tyFile = do
               Just _  -> define te (setMod mn envImports)
         case mName of
           Just n | null selected ->
-            printErrorAndExit ("Public name not found: " ++ modNameToString mn ++ "." ++ nameToString n)
+            printErrorAndExit ("Name not found: " ++ modNameToString mn ++ "." ++ nameToString n)
           _ ->
             putStrLn (Acton.Types.prettySigs envForPrint mn selected)
 

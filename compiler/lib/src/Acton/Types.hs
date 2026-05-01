@@ -65,12 +65,11 @@ reconstruct progressCb env0 (Module m i mdoc ss)    = do --traceM ("############
             then let (testSs, discovered) = testStmts env2 (modNameStr m) ss1
                  in (te ++ testEnv, ss1 ++ testSs, discovered)
             else (te, ss1, [])
-        iface                           = filterIface (unalias env2 teT)
+        iface                           = unalias env2 teT
 
         mrefs                           = moduleRefs1 env0
         env0'                           = convEnvProtos env0
         hasTesting i                    = Import NoLoc [ModuleItem (ModName [name "testing"]) Nothing] `elem` i
-        filterIface                     = filter (isPublicName . fst)
         rmTests (Assign _ [PVar _ n _] _ : ss)
           | nstr n `elem` ["__unit_tests","__simple_sync_tests","__sync_tests","__async_tests","__env_tests"]
                                         = rmTests ss
