@@ -7,7 +7,10 @@ module Acton.Completion
   , HoverInfo(..)
   , SignatureParameter(..)
   , CallRequest(..)
+  , ArgumentRequest(..)
   , MemberRequest(..)
+  , argumentCompletions
+  , argumentCompletionsWithEnv
   , callContextAt
   , callSignatures
   , callSignaturesWithEnv
@@ -40,6 +43,7 @@ data CompletionKind
   | CompletionMethod
   | CompletionProperty
   | CompletionValue
+  | CompletionKeyword
   deriving (Eq, Show)
 
 data Completion = Completion
@@ -56,6 +60,13 @@ data MemberRequest = MemberRequest
 data CallRequest = CallRequest
   { callTarget :: [String]
   , callActiveParameter :: Int
+  , callArgumentText :: String
+  } deriving (Eq, Show)
+
+data ArgumentRequest = ArgumentRequest
+  { argumentTarget :: [String]
+  , argumentPrefix :: String
+  , argumentSuppliedKeywords :: [String]
   } deriving (Eq, Show)
 
 data SignatureParameter = SignatureParameter
@@ -117,6 +128,11 @@ data HoverTarget = HoverTarget
   , hoverResolvedDoc :: Maybe String
   } deriving (Eq, Show)
 
+data KeywordParameter = KeywordParameter
+  { keywordParameterName :: String
+  , keywordParameterType :: S.Type
+  } deriving (Eq, Show)
+
 data Scope = ScopeClass ClassContext | ScopeDef DefContext deriving (Eq, Show)
 
 data ScanState = ScanState
@@ -145,6 +161,28 @@ memberCompletionsWithEnv env src cursor =
     Just req ->
       let ctx = scanSourceContext src cursor
       in completeMember env ctx req
+
+argumentCompletions :: Env.Env0 -> [FilePath] -> S.ModName -> FilePath -> String -> Int -> IO [Completion]
+argumentCompletions baseEnv searchPath modName fileName src cursor = do
+  res <- E.try $ do
+    case argumentContextAt src cursor of
+      Nothing -> return []
+      Just req -> do
+        env <- prepareCompletionEnv baseEnv searchPath modName fileName src
+        let ctx = scanSourceContext src cursor
+            comps = completeArguments env ctx req
+        E.evaluate (forceCompletions comps)
+  case res of
+    Left (_ :: E.SomeException) -> return []
+    Right comps -> return comps
+
+argumentCompletionsWithEnv :: Env.Env0 -> String -> Int -> [Completion]
+argumentCompletionsWithEnv env src cursor =
+  case argumentContextAt src cursor of
+    Nothing -> []
+    Just req ->
+      let ctx = scanSourceContext src cursor
+      in completeArguments env ctx req
 
 callSignatures :: Env.Env0 -> [FilePath] -> S.ModName -> FilePath -> String -> Int -> IO [CallSignature]
 callSignatures baseEnv searchPath modName fileName src cursor = do
@@ -260,10 +298,101 @@ callContextAt src cursor = do
     else Just CallRequest
       { callTarget = target
       , callActiveParameter = activeArgIndex args
+      , callArgumentText = args
       }
   where
     before = take (max 0 (min cursor (length src))) src
     callPathChar c = identChar c || c == '.' || c == '?'
+
+argumentContextAt :: String -> Int -> Maybe ArgumentRequest
+argumentContextAt src cursor = do
+  req <- callContextAt src cursor
+  prefix <- activeKeywordPrefix (callArgumentText req)
+  return ArgumentRequest
+    { argumentTarget = callTarget req
+    , argumentPrefix = prefix
+    , argumentSuppliedKeywords = suppliedKeywordNames (callArgumentText req)
+    }
+
+activeKeywordPrefix :: String -> Maybe String
+activeKeywordPrefix args = do
+  current <- lastMaybe (splitArgSegments args)
+  if topLevelContains '=' current
+    then Nothing
+    else
+      let prefix = reverse (takeWhile identChar (reverse current))
+          beforePrefix = take (length current - length prefix) current
+      in if all isSpace beforePrefix
+           then Just prefix
+           else Nothing
+
+suppliedKeywordNames :: String -> [String]
+suppliedKeywordNames args =
+  mapMaybe keywordName (splitArgSegments args)
+  where
+    keywordName segment =
+      let (lhs, eqPart) = breakArgTopLevel '=' segment
+          nm = trim lhs
+      in case eqPart of
+           '=':_ | validIdent nm -> Just nm
+           _ -> Nothing
+
+splitArgSegments :: String -> [String]
+splitArgSegments = reverse . map reverse . go 0 0 0 Nothing [[]]
+  where
+    go _ _ _ _ acc [] = acc
+    go p b c str (x:xs) (ch:chs)
+      | Just q <- str =
+          let str' = if ch == q then Nothing else str
+          in go p b c str' ((ch:x):xs) chs
+      | ch == '"' || ch == '\'' = go p b c (Just ch) ((ch:x):xs) chs
+      | ch == ',' && p == 0 && b == 0 && c == 0 = go p b c str ([]:x:xs) chs
+      | ch == '(' = go (p + 1) b c str ((ch:x):xs) chs
+      | ch == ')' = go (max 0 (p - 1)) b c str ((ch:x):xs) chs
+      | ch == '[' = go p (b + 1) c str ((ch:x):xs) chs
+      | ch == ']' = go p (max 0 (b - 1)) c str ((ch:x):xs) chs
+      | ch == '{' = go p b (c + 1) str ((ch:x):xs) chs
+      | ch == '}' = go p b (max 0 (c - 1)) str ((ch:x):xs) chs
+      | otherwise = go p b c str ((ch:x):xs) chs
+    go _ _ _ _ [] _ = []
+
+topLevelContains :: Char -> String -> Bool
+topLevelContains needle = go 0 0 0 Nothing
+  where
+    go _ _ _ _ [] = False
+    go p b c str (ch:chs)
+      | Just q <- str =
+          go p b c (if ch == q then Nothing else str) chs
+      | ch == '"' || ch == '\'' = go p b c (Just ch) chs
+      | ch == needle && p == 0 && b == 0 && c == 0 = True
+      | ch == '(' = go (p + 1) b c str chs
+      | ch == ')' = go (max 0 (p - 1)) b c str chs
+      | ch == '[' = go p (b + 1) c str chs
+      | ch == ']' = go p (max 0 (b - 1)) c str chs
+      | ch == '{' = go p b (c + 1) str chs
+      | ch == '}' = go p b (max 0 (c - 1)) str chs
+      | otherwise = go p b c str chs
+
+breakArgTopLevel :: Char -> String -> (String, String)
+breakArgTopLevel needle = go 0 0 0 Nothing []
+  where
+    go _ _ _ _ acc [] = (reverse acc, [])
+    go p b c str acc s@(ch:chs)
+      | Just q <- str =
+          go p b c (if ch == q then Nothing else str) (ch:acc) chs
+      | ch == '"' || ch == '\'' = go p b c (Just ch) (ch:acc) chs
+      | ch == needle && p == 0 && b == 0 && c == 0 = (reverse acc, s)
+      | ch == '(' = go (p + 1) b c str (ch:acc) chs
+      | ch == ')' = go (max 0 (p - 1)) b c str (ch:acc) chs
+      | ch == '[' = go p (b + 1) c str (ch:acc) chs
+      | ch == ']' = go p (max 0 (b - 1)) c str (ch:acc) chs
+      | ch == '{' = go p b (c + 1) str (ch:acc) chs
+      | ch == '}' = go p b (max 0 (c - 1)) str (ch:acc) chs
+      | otherwise = go p b c str (ch:acc) chs
+
+lastMaybe :: [a] -> Maybe a
+lastMaybe [] = Nothing
+lastMaybe xs = Just (last xs)
 
 activeOpenParen :: String -> Maybe Int
 activeOpenParen before = go (length before - 1) 0 (reverse before)
@@ -299,6 +428,23 @@ completeMember env ctx req =
   case resolveReceiverType env ctx (receiverParts (memberReceiver req)) of
     Nothing -> []
     Just typ -> attrsForType env typ (memberPrefix req)
+
+completeArguments :: Env.Env0 -> SourceContext -> ArgumentRequest -> [Completion]
+completeArguments env ctx req =
+  case resolveCallableInfo env ctx (argumentTarget req) >>= typeOfInfo of
+    Just typ ->
+      case Env.unalias env typ of
+        S.TFun _ _ _ kw _ ->
+          [ Completion
+              (keywordParameterName param ++ "=")
+              CompletionKeyword
+              (Just (displayType (keywordParameterType param)))
+          | param <- keywordParameterRows kw
+          , argumentPrefix req `isPrefixOf` keywordParameterName param
+          , keywordParameterName param `notElem` argumentSuppliedKeywords req
+          ]
+        _ -> []
+    _ -> []
 
 callSignature :: Env.Env0 -> SourceContext -> CallRequest -> Maybe CallSignature
 callSignature env ctx req = do
@@ -403,6 +549,13 @@ keywordParameters row =
       SignatureParameter (S.rawstr name ++ ": " ++ displayType typ) : keywordParameters rest
     S.TStar _ S.KRow rest ->
       [SignatureParameter ("**kwargs: " ++ displayType (S.tTupleK rest))]
+    _ -> []
+
+keywordParameterRows :: S.Type -> [KeywordParameter]
+keywordParameterRows row =
+  case row of
+    S.TRow _ S.KRow name typ rest ->
+      KeywordParameter (S.rawstr name) typ : keywordParameterRows rest
     _ -> []
 
 completionEnv :: [FilePath] -> Env.Env0 -> S.ModName -> [S.Import] -> IO Env.Env0
@@ -993,6 +1146,7 @@ forceCompletions xs =
     kindCode CompletionMethod = 2
     kindCode CompletionProperty = 3
     kindCode CompletionValue = 4
+    kindCode CompletionKeyword = 5
 
 forceSignatures :: [CallSignature] -> [CallSignature]
 forceSignatures xs =

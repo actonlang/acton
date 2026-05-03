@@ -752,6 +752,7 @@ completionKindToLsp kind =
     Completion.CompletionMethod -> CompletionItemKind_Method
     Completion.CompletionProperty -> CompletionItemKind_Property
     Completion.CompletionValue -> CompletionItemKind_Value
+    Completion.CompletionKeyword -> CompletionItemKind_Keyword
 
 lspCompletionItem :: Completion.Completion -> CompletionItem
 lspCompletionItem item =
@@ -782,12 +783,15 @@ completionInsertText item =
   case Completion.completionKind item of
     Completion.CompletionMethod ->
       Just (T.pack (Completion.completionLabel item ++ "($0)"))
+    Completion.CompletionKeyword ->
+      Just (T.pack (Completion.completionLabel item ++ "$0"))
     _ -> Nothing
 
 completionInsertTextFormat :: Completion.Completion -> Maybe InsertTextFormat
 completionInsertTextFormat item =
   case Completion.completionKind item of
     Completion.CompletionMethod -> Just InsertTextFormat_Snippet
+    Completion.CompletionKeyword -> Just InsertTextFormat_Snippet
     _ -> Nothing
 
 completionCommand :: Completion.Completion -> Maybe Command
@@ -940,7 +944,9 @@ completionItemsFor path pos = do
           let src = Source.ssText snap
               cursor = positionToOffset src pos
           env <- liftIO $ completionEnvFor state path src
-          let items = Completion.memberCompletionsWithEnv env src cursor
+          let items =
+                Completion.memberCompletionsWithEnv env src cursor ++
+                Completion.argumentCompletionsWithEnv env src cursor
           return (map lspCompletionItem items)
 
 -- | Resolve and normalize a document URI to a file path.
@@ -1022,7 +1028,7 @@ main =
         , interpretHandler = \env -> Iso (runLspT env) liftIO
         , options = defaultOptions
             { optTextDocumentSync = Just syncOptions
-            , optCompletionTriggerCharacters = Just ['.']
+            , optCompletionTriggerCharacters = Just ['.', '(', ',']
             , optSignatureHelpTriggerCharacters = Just ['(', ',']
             , optSignatureHelpRetriggerCharacters = Just [',']
             }

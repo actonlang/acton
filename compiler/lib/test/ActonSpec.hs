@@ -383,6 +383,60 @@ main = do
             other ->
               expectationFailure $ "Unexpected signatures: " ++ show other
 
+        it "completes keyword arguments for nested member calls" $ do
+          let env = completionFixtureEnv env0
+              (src, cursor) = cursorSource $ unlines
+                [ "import mini.layers.base_1 as base"
+                , ""
+                , "class L3vpnEndpoint(base.L3vpnEndpoint):"
+                , "    def transform(self, i, di):"
+                , "        o = base.o_root()"
+                , "        o.netinfra.router.create(\"r1\", <CURSOR>)"
+                ]
+          items <- Completion.argumentCompletions env [] (S.modName ["rfs"]) "rfs.act" src cursor
+          map Completion.completionLabel items `shouldBe` ["id=", "role=", "mock="]
+          map Completion.completionKind items `shouldBe` replicate 3 Completion.CompletionKeyword
+          map Completion.completionDetail items `shouldBe` map Just ["int", "str", "bool"]
+
+        it "filters supplied keyword argument completions" $ do
+          let env = completionFixtureEnv env0
+              (src, cursor) = cursorSource $ unlines
+                [ "import mini.layers.base_1 as base"
+                , ""
+                , "class L3vpnEndpoint(base.L3vpnEndpoint):"
+                , "    def transform(self, i, di):"
+                , "        o = base.o_root()"
+                , "        o.netinfra.router.create(\"r1\", id=1, <CURSOR>)"
+                ]
+          items <- Completion.argumentCompletions env [] (S.modName ["rfs"]) "rfs.act" src cursor
+          map Completion.completionLabel items `shouldBe` ["role=", "mock="]
+
+        it "prefixes keyword argument completions" $ do
+          let env = completionFixtureEnv env0
+              (src, cursor) = cursorSource $ unlines
+                [ "import mini.layers.base_1 as base"
+                , ""
+                , "class L3vpnEndpoint(base.L3vpnEndpoint):"
+                , "    def transform(self, i, di):"
+                , "        o = base.o_root()"
+                , "        o.netinfra.router.create(\"r1\", id=1, r<CURSOR>)"
+                ]
+          items <- Completion.argumentCompletions env [] (S.modName ["rfs"]) "rfs.act" src cursor
+          map Completion.completionLabel items `shouldBe` ["role="]
+
+        it "does not complete keyword names inside argument values" $ do
+          let env = completionFixtureEnv env0
+              (src, cursor) = cursorSource $ unlines
+                [ "import mini.layers.base_1 as base"
+                , ""
+                , "class L3vpnEndpoint(base.L3vpnEndpoint):"
+                , "    def transform(self, i, di):"
+                , "        o = base.o_root()"
+                , "        o.netinfra.router.create(\"r1\", id=<CURSOR>)"
+                ]
+          items <- Completion.argumentCompletions env [] (S.modName ["rfs"]) "rfs.act" src cursor
+          items `shouldBe` []
+
         it "hovers local values assigned from member paths" $ do
           let env = completionFixtureEnv env0
               (src, cursor) = cursorSource $ unlines
@@ -1433,7 +1487,9 @@ completionFixtureEnv env0 =
       createType =
         S.tFun S.fxMut
           (S.posRow Builtin.tStr S.posNil)
-          (S.kwdRow (S.name "id") Builtin.tInt S.kwdNil)
+          (S.kwdRow (S.name "id") Builtin.tInt
+            (S.kwdRow (S.name "role") Builtin.tStr
+              (S.kwdRow (S.name "mock") Builtin.tBool S.kwdNil)))
           routerEntryType
       createInfo = I.NDef (S.tSchema [] createType) S.NoDec (Just "Create a router entry.")
       baseClass = I.NClass [] [] [(S.name "transform", transformInfo)] (Just "Base transform class.")
