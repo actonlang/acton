@@ -66,6 +66,7 @@ library:
     - Acton.Builtin
     - Acton.CPS
     - Acton.CodeGen
+    - Acton.Completion
     - Acton.Compile
     - Acton.CommandLineParser
     - Acton.Deactorizer
