@@ -9,8 +9,12 @@ module Acton.Completion
   , MemberRequest(..)
   , callContextAt
   , callSignatures
+  , callSignaturesWithEnv
+  , completionImportKey
   , memberContextAt
   , memberCompletions
+  , memberCompletionsWithEnv
+  , prepareCompletionEnv
   ) where
 
 import qualified Control.Exception as E
@@ -112,8 +116,7 @@ memberCompletions baseEnv searchPath modName fileName src cursor = do
     case memberContextAt src cursor of
       Nothing -> return []
       Just req -> do
-        imps <- parseImports fileName src
-        env <- completionEnv searchPath baseEnv modName imps
+        env <- prepareCompletionEnv baseEnv searchPath modName fileName src
         let ctx = scanSourceContext src cursor
             comps = completeMember env ctx req
         E.evaluate (forceCompletions comps)
@@ -121,20 +124,45 @@ memberCompletions baseEnv searchPath modName fileName src cursor = do
     Left (_ :: E.SomeException) -> return []
     Right comps -> return comps
 
+memberCompletionsWithEnv :: Env.Env0 -> String -> Int -> [Completion]
+memberCompletionsWithEnv env src cursor =
+  case memberContextAt src cursor of
+    Nothing -> []
+    Just req ->
+      let ctx = scanSourceContext src cursor
+      in completeMember env ctx req
+
 callSignatures :: Env.Env0 -> [FilePath] -> S.ModName -> FilePath -> String -> Int -> IO [CallSignature]
 callSignatures baseEnv searchPath modName fileName src cursor = do
   res <- E.try $ do
     case callContextAt src cursor of
       Nothing -> return []
       Just req -> do
-        imps <- parseImports fileName src
-        env <- completionEnv searchPath baseEnv modName imps
+        env <- prepareCompletionEnv baseEnv searchPath modName fileName src
         let ctx = scanSourceContext src cursor
             sigs = maybe [] (:[]) (callSignature env ctx req)
         E.evaluate (forceSignatures sigs)
   case res of
     Left (_ :: E.SomeException) -> return []
     Right sigs -> return sigs
+
+callSignaturesWithEnv :: Env.Env0 -> String -> Int -> [CallSignature]
+callSignaturesWithEnv env src cursor =
+  case callContextAt src cursor of
+    Nothing -> []
+    Just req ->
+      let ctx = scanSourceContext src cursor
+      in maybe [] (:[]) (callSignature env ctx req)
+
+prepareCompletionEnv :: Env.Env0 -> [FilePath] -> S.ModName -> FilePath -> String -> IO Env.Env0
+prepareCompletionEnv baseEnv searchPath modName fileName src = do
+  imps <- parseImports fileName src
+  completionEnv searchPath baseEnv modName imps
+
+completionImportKey :: FilePath -> String -> IO String
+completionImportKey fileName src = do
+  imps <- parseImports fileName src
+  return (show imps)
 
 memberContextAt :: String -> Int -> Maybe MemberRequest
 memberContextAt src cursor =

@@ -3,22 +3,26 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeOperators #-}
 
-import Control.Exception (SomeException, finally, try)
+import Control.Exception (SomeException, displayException, finally, fromException, try)
 import Control.Concurrent (ThreadId, forkIO, killThread, threadDelay)
 import Control.Concurrent.MVar (MVar, newEmptyMVar, takeMVar, tryPutMVar)
 import Control.Monad (forM, forM_, forever, void, when)
 import Control.Monad.IO.Class
 import Data.Aeson (toJSON)
 import Data.Char (ord)
+import Data.List (find)
 import Data.IORef
 import qualified Data.HashMap.Strict as HM
+import qualified Data.Map.Strict as M
 import Data.Maybe (fromMaybe, listToMaybe)
 import Data.Sequence (Seq, ViewL(..), (|>))
 import qualified Data.Sequence as Seq
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import GHC.Conc (getNumCapabilities)
-import System.FilePath (takeFileName)
+import System.Directory (doesDirectoryExist)
+import System.FilePath ((</>), takeExtension, takeFileName)
+import qualified System.FSNotify as FS
 import System.IO.Unsafe (unsafePerformIO)
 
 import Language.LSP.Protocol.Message
@@ -26,6 +30,7 @@ import Language.LSP.Protocol.Types hiding (Diagnostic, Position)
 import qualified Language.LSP.Protocol.Types as LSP
 import Language.LSP.Server
 
+import qualified Acton.BuildSpec as BuildSpec
 import qualified Acton.Compile as Compile
 import qualified Acton.CommandLineParser as C
 import qualified Acton.Completion as Completion
@@ -44,12 +49,32 @@ type UriMap = HM.HashMap FilePath Uri
 type BackgroundCompilerLockMap = HM.HashMap FilePath Compile.BackgroundCompilerLock
 type BackgroundCompilerWarned = HM.HashMap FilePath ()
 type CompletionStateMap = HM.HashMap FilePath CompletionState
+type CompletionEnvCacheMap = HM.HashMap FilePath CompletionEnvCache
+type ProjectBuildCacheMap = HM.HashMap FilePath ProjectBuildCache
+type ProjectWatcherMap = HM.HashMap (FilePath, FilePath) ThreadId
 
 data CompletionState = CompletionState
   { completionEnv :: Env.Env0
   , completionSearchPath :: [FilePath]
   , completionModuleName :: S.ModName
+  , completionStateGen :: Int
   }
+
+data CompletionEnvCache = CompletionEnvCache
+  { cachedCompletionStateGen :: Int
+  , cachedCompletionImportKey :: String
+  , cachedCompletionEnv :: Env.Env0
+  }
+
+data ProjectBuildCache = ProjectBuildCache
+  { cachedCompileContext :: Compile.CompileContext
+  , cachedProjectMap :: M.Map FilePath Compile.ProjCtx
+  , cachedGlobalTasks :: [Compile.GlobalTask]
+  , cachedRootPins :: M.Map String BuildSpec.PkgDep
+  , cachedImportKeys :: HM.HashMap FilePath String
+  }
+
+data PlanOrigin = PlanFromCache | PlanFromDiscovery deriving (Eq, Show)
 
 data LspProgress = LspProgress
   { lspProgressToken :: ProgressToken
@@ -92,6 +117,18 @@ backgroundCompilerWarnedRef = unsafePerformIO (newIORef HM.empty)
 -- | Latest successful front-end environment for member completion.
 completionStatesRef :: IORef CompletionStateMap
 completionStatesRef = unsafePerformIO (newIORef HM.empty)
+
+{-# NOINLINE completionEnvCacheRef #-}
+completionEnvCacheRef :: IORef CompletionEnvCacheMap
+completionEnvCacheRef = unsafePerformIO (newIORef HM.empty)
+
+{-# NOINLINE projectBuildCachesRef #-}
+projectBuildCachesRef :: IORef ProjectBuildCacheMap
+projectBuildCachesRef = unsafePerformIO (newIORef HM.empty)
+
+{-# NOINLINE projectWatchersRef #-}
+projectWatchersRef :: IORef ProjectWatcherMap
+projectWatchersRef = unsafePerformIO (newIORef HM.empty)
 
 {-# NOINLINE compileScheduler #-}
 -- | Shared compile scheduler for LSP events and back jobs.
@@ -188,14 +225,14 @@ releaseBackgroundCompilerLocks = do
   forM_ (HM.elems locks) Compile.releaseBackgroundCompilerLock
   writeIORef backgroundCompilerLocksRef HM.empty
 
-rememberCompletionStates :: Compile.CompilePlan -> Env.Env0 -> IO ()
-rememberCompletionStates plan env = do
+rememberCompletionStates :: Int -> Compile.CompilePlan -> Env.Env0 -> IO ()
+rememberCompletionStates gen plan env = do
   entries <- forM (Compile.cpGlobalTasks plan) $ \t -> do
     let key = Compile.gtKey t
         paths = Compile.gtPaths t
         mn = Compile.tkMod key
     path <- Compile.normalizePathSafe (Compile.srcFile paths mn)
-    return (path, CompletionState env (Compile.searchPath paths) mn)
+    return (path, CompletionState env (Compile.searchPath paths) mn gen)
   atomicModifyIORef' completionStatesRef $ \m ->
     (foldr (uncurry HM.insert) m entries, ())
 
@@ -214,6 +251,7 @@ loadDiskCompletionState path = do
     { completionEnv = env
     , completionSearchPath = Compile.searchPath paths
     , completionModuleName = Compile.modName paths
+    , completionStateGen = 0
     }
 
 loadCompletionStateFor :: FilePath -> IO (Maybe CompletionState)
@@ -229,6 +267,163 @@ loadCompletionStateFor path = do
           return (Just state)
         Left _ ->
           return Nothing
+
+cacheCompilePlan :: Compile.CompilePlan -> IO ()
+cacheCompilePlan plan = do
+  importKeys <- globalTaskImportKeys (Compile.cpGlobalTasks plan)
+  let ctx = Compile.cpContext plan
+      rootProj = Compile.ccRootProj ctx
+      cache = ProjectBuildCache
+        { cachedCompileContext = ctx
+        , cachedProjectMap = Compile.cpProjMap plan
+        , cachedGlobalTasks = Compile.cpGlobalTasks plan
+        , cachedRootPins = Compile.cpRootPins plan
+        , cachedImportKeys = importKeys
+        }
+  atomicModifyIORef' projectBuildCachesRef $ \m ->
+    (HM.insert rootProj cache m, ())
+  ensureProjectWatchers rootProj (M.keys (Compile.cpProjMap plan))
+
+globalTaskImportKeys :: [Compile.GlobalTask] -> IO (HM.HashMap FilePath String)
+globalTaskImportKeys tasks =
+  HM.fromList <$> mapM taskImportKeyEntry tasks
+
+taskImportKeyEntry :: Compile.GlobalTask -> IO (FilePath, String)
+taskImportKeyEntry task = do
+  path <- Compile.normalizePathSafe $
+    Compile.srcFile (Compile.gtPaths task) (Compile.tkMod (Compile.gtKey task))
+  return (path, taskImportKey task)
+
+taskImportKey :: Compile.GlobalTask -> String
+taskImportKey task =
+  show (Compile.importsOf (Compile.gtTask task))
+
+invalidateProjectCache :: FilePath -> IO ()
+invalidateProjectCache rootProj = do
+  atomicModifyIORef' projectBuildCachesRef $ \m ->
+    (HM.delete rootProj m, ())
+  invalidateCompletionEnvCache
+
+ensureProjectWatchers :: FilePath -> [FilePath] -> IO ()
+ensureProjectWatchers rootProj roots =
+  forM_ roots $ \watchedRoot -> do
+    let key = (rootProj, watchedRoot)
+    existing <- HM.lookup key <$> readIORef projectWatchersRef
+    case existing of
+      Just _ -> return ()
+      Nothing -> do
+        tid <- forkIO (watchProjectShape rootProj watchedRoot)
+        atomicModifyIORef' projectWatchersRef $ \m ->
+          (HM.insert key tid m, ())
+
+watchProjectShape :: FilePath -> FilePath -> IO ()
+watchProjectShape rootProj watchedRoot =
+  FS.withManager $ \mgr -> do
+    let srcRoot = watchedRoot </> "src"
+        invalidate _ = invalidateProjectCache rootProj
+        isActEvent ev = takeExtension (FS.eventPath ev) == ".act"
+        isBuildActEvent ev = takeFileName (FS.eventPath ev) == "Build.act"
+    srcExists <- doesDirectoryExist srcRoot
+    when srcExists $
+      void $ FS.watchTree mgr srcRoot isActEvent invalidate
+    void $ FS.watchDir mgr watchedRoot isBuildActEvent invalidate
+    forever $ threadDelay maxBound
+
+prepareLspCompilePlan
+  :: Source.SourceProvider
+  -> C.GlobalOptions
+  -> C.CompileOptions
+  -> FilePath
+  -> LspM () (Either String (PlanOrigin, Compile.CompilePlan))
+prepareLspCompilePlan sp gopts opts path = do
+  planE <- liftIO ((try $ do
+    ctx <- Compile.prepareCompileContext opts [path]
+    path' <- Compile.normalizePathSafe path
+    mcache <- HM.lookup (Compile.ccRootProj ctx) <$> readIORef projectBuildCachesRef
+    case mcache of
+      Just cache
+        | Compile.ccBuildStamp (cachedCompileContext cache) == Compile.ccBuildStamp ctx -> do
+            mplan <- compilePlanFromCache ctx path' cache
+            case mplan of
+              Just plan -> return (PlanFromCache, plan)
+              Nothing -> freshPlan
+      _ -> freshPlan
+    ) :: IO (Either SomeException (PlanOrigin, Compile.CompilePlan)))
+  case planE of
+    Left err ->
+      case fromException err of
+        Just (Compile.ProjectError msg) -> return (Left msg)
+        Nothing -> return (Left (displayException err))
+    Right plan -> return (Right plan)
+  where
+    freshPlan = do
+      plan <- Compile.prepareCompilePlan sp gopts compileScheduler opts [path] False (Just [path])
+      cacheCompilePlan plan
+      return (PlanFromDiscovery, plan)
+
+compilePlanFromCache :: Compile.CompileContext -> FilePath -> ProjectBuildCache -> IO (Maybe Compile.CompilePlan)
+compilePlanFromCache ctx changedPath cache = do
+  refreshed <- refreshChangedGlobalTask changedPath (Compile.ccOpts ctx) cache
+  case refreshed of
+    Nothing -> return Nothing
+    Just (globalTasks, importKeys) -> do
+      neededTasks <- Compile.selectAffectedTasks globalTasks [changedPath]
+      let rootProj = Compile.ccRootProj ctx
+          rootTasks =
+            [ Compile.gtTask t
+            | t <- neededTasks
+            , Compile.tkProj (Compile.gtKey t) == rootProj
+            ]
+          cache' = cache
+            { cachedCompileContext = ctx
+            , cachedGlobalTasks = globalTasks
+            , cachedImportKeys = importKeys
+            }
+      atomicModifyIORef' projectBuildCachesRef $ \m ->
+        (HM.insert rootProj cache' m, ())
+      return $ Just Compile.CompilePlan
+        { Compile.cpContext = ctx
+        , Compile.cpProjMap = cachedProjectMap cache
+        , Compile.cpGlobalTasks = globalTasks
+        , Compile.cpNeededTasks = neededTasks
+        , Compile.cpRootTasks = rootTasks
+        , Compile.cpRootPins = cachedRootPins cache
+        , Compile.cpIncremental = True
+        , Compile.cpAllowPrune = False
+        , Compile.cpChangedPaths = Just [changedPath]
+        , Compile.cpSrcFiles = [changedPath]
+        }
+
+refreshChangedGlobalTask
+  :: FilePath
+  -> C.CompileOptions
+  -> ProjectBuildCache
+  -> IO (Maybe ([Compile.GlobalTask], HM.HashMap FilePath String))
+refreshChangedGlobalTask changedPath opts cache =
+  case find isChanged (cachedGlobalTasks cache) of
+    Nothing -> return Nothing
+    Just old -> do
+      newTask <- Compile.readModuleTask
+        (overlaySourceProvider overlaysRef)
+        lspGlobalOpts
+        opts
+        (Compile.gtPaths old)
+        changedPath
+      let new = old { Compile.gtTask = newTask }
+          newKey = taskImportKey new
+      case HM.lookup changedPath (cachedImportKeys cache) of
+        Just oldKey | oldKey /= newKey ->
+          return Nothing
+        _ -> do
+          let tasks' =
+                [ if Compile.gtKey t == Compile.gtKey old then new else t
+                | t <- cachedGlobalTasks cache
+                ]
+              importKeys' = HM.insert changedPath newKey (cachedImportKeys cache)
+          return (Just (tasks', importKeys'))
+  where
+    isChanged t =
+      Compile.srcFile (Compile.gtPaths t) (Compile.tkMod (Compile.gtKey t)) == changedPath
 
 progressToken :: Int -> FilePath -> ProgressToken
 progressToken gen path =
@@ -486,24 +681,26 @@ runCompilePlanWithHooks gen rootProj path sp gopts opts progress = do
             progressForQueued (backProgressMessage job result)
         , Compile.chOnInfo = \_ -> return ()
         }
-  progressReportImmediate progress "Discovering Acton project" Nothing
+  progressReportImmediate progress "Preparing Acton project" Nothing
   compileRes <- liftIO $
     Compile.withProjectLock rootProj $
       do
-        planE <- (try $ do
-          Compile.prepareCompilePlan sp gopts compileScheduler opts [path] False (Just [path])
-          ) :: IO (Either Compile.ProjectError Compile.CompilePlan)
+        planE <- runLspT env $
+          prepareLspCompilePlan sp gopts opts path
         case planE of
-          Left (Compile.ProjectError msg) ->
+          Left msg ->
             return (Left msg)
-          Right plan -> do
-            progressFor "Acton compile plan ready"
+          Right (origin, plan) -> do
+            progressFor $
+              case origin of
+                PlanFromCache -> "Acton cached project ready"
+                PlanFromDiscovery -> "Acton compile plan ready"
             runRes <- Compile.runCompilePlan sp gopts plan compileScheduler gen hooks
             case runRes of
               Left err ->
                 return (Left (Compile.compileFailureMessage err))
               Right (envAcc, _) -> do
-                rememberCompletionStates plan envAcc
+                rememberCompletionStates gen plan envAcc
                 progressFor "Completion ready"
                 let opts' = Compile.ccOpts (Compile.cpContext plan)
                 backFailure <-
@@ -617,14 +814,8 @@ signatureHelpFor path pos = do
         Right snap -> do
           let src = Source.ssText snap
               cursor = positionToOffset src pos
-          sigs <- liftIO $
-            Completion.callSignatures
-              (completionEnv state)
-              (completionSearchPath state)
-              (completionModuleName state)
-              path
-              src
-              cursor
+          env <- liftIO $ completionEnvFor state path src
+          let sigs = Completion.callSignaturesWithEnv env src cursor
           return $
             case sigs of
               [] -> InR Null
@@ -666,6 +857,35 @@ lspParameterInformation param =
     , _documentation = Nothing
     }
 
+completionEnvFor :: CompletionState -> FilePath -> String -> IO Env.Env0
+completionEnvFor state path src = do
+  importKey <- Completion.completionImportKey path src
+  mcache <- HM.lookup path <$> readIORef completionEnvCacheRef
+  case mcache of
+    Just cache
+      | cachedCompletionStateGen cache == completionStateGen state
+      , cachedCompletionImportKey cache == importKey ->
+          return (cachedCompletionEnv cache)
+    _ -> do
+      env <- Completion.prepareCompletionEnv
+        (completionEnv state)
+        (completionSearchPath state)
+        (completionModuleName state)
+        path
+        src
+      let cache = CompletionEnvCache
+            { cachedCompletionStateGen = completionStateGen state
+            , cachedCompletionImportKey = importKey
+            , cachedCompletionEnv = env
+            }
+      atomicModifyIORef' completionEnvCacheRef $ \m ->
+        (HM.insert path cache m, ())
+      return env
+
+invalidateCompletionEnvCache :: IO ()
+invalidateCompletionEnvCache =
+  writeIORef completionEnvCacheRef HM.empty
+
 completionItemsFor :: FilePath -> LSP.Position -> LspM () [CompletionItem]
 completionItemsFor path pos = do
   mstate <- liftIO $ loadCompletionStateFor path
@@ -679,14 +899,8 @@ completionItemsFor path pos = do
         Right snap -> do
           let src = Source.ssText snap
               cursor = positionToOffset src pos
-          items <- liftIO $
-            Completion.memberCompletions
-              (completionEnv state)
-              (completionSearchPath state)
-              (completionModuleName state)
-              path
-              src
-              cursor
+          env <- liftIO $ completionEnvFor state path src
+          let items = Completion.memberCompletionsWithEnv env src cursor
           return (map lspCompletionItem items)
 
 -- | Resolve and normalize a document URI to a file path.

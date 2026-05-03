@@ -27,6 +27,7 @@ executables:
       - containers
       - directory
       - filepath
+      - fsnotify
       - mtl
       - megaparsec
       - aeson
