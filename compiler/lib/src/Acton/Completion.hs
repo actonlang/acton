@@ -4,6 +4,7 @@ module Acton.Completion
   ( Completion(..)
   , CompletionKind(..)
   , CallSignature(..)
+  , HoverInfo(..)
   , SignatureParameter(..)
   , CallRequest(..)
   , MemberRequest(..)
@@ -11,6 +12,8 @@ module Acton.Completion
   , callSignatures
   , callSignaturesWithEnv
   , completionImportKey
+  , hoverInfo
+  , hoverInfoWithEnv
   , memberContextAt
   , memberCompletions
   , memberCompletionsWithEnv
@@ -65,6 +68,12 @@ data CallSignature = CallSignature
   , callSignatureActiveParameter :: Int
   } deriving (Eq, Show)
 
+data HoverInfo = HoverInfo
+  { hoverLabel :: String
+  , hoverDetail :: String
+  , hoverDocumentation :: Maybe String
+  } deriving (Eq, Show)
+
 data SourceContext = SourceContext
   { sourceClass :: Maybe ClassContext
   , sourceDef :: Maybe DefContext
@@ -102,6 +111,11 @@ data LocalKind
   | LocalCallResult [String]
   | LocalMemberPath [String]
   deriving (Eq, Show)
+
+data HoverTarget = HoverTarget
+  { hoverResolvedType :: S.Type
+  , hoverResolvedDoc :: Maybe String
+  } deriving (Eq, Show)
 
 data Scope = ScopeClass ClassContext | ScopeDef DefContext deriving (Eq, Show)
 
@@ -154,6 +168,26 @@ callSignaturesWithEnv env src cursor =
       let ctx = scanSourceContext src cursor
       in maybe [] (:[]) (callSignature env ctx req)
 
+hoverInfo :: Env.Env0 -> [FilePath] -> S.ModName -> FilePath -> String -> Int -> IO (Maybe HoverInfo)
+hoverInfo baseEnv searchPath modName fileName src cursor = do
+  res <- E.try $ do
+    case hoverTargetAt src cursor of
+      Nothing -> return Nothing
+      Just parts -> do
+        env <- prepareCompletionEnv baseEnv searchPath modName fileName src
+        let ctx = scanSourceContext src cursor
+            info = hoverInfoForParts env ctx parts
+        E.evaluate (forceMaybeHover info)
+  case res of
+    Left (_ :: E.SomeException) -> return Nothing
+    Right info -> return info
+
+hoverInfoWithEnv :: Env.Env0 -> String -> Int -> Maybe HoverInfo
+hoverInfoWithEnv env src cursor = do
+  parts <- hoverTargetAt src cursor
+  let ctx = scanSourceContext src cursor
+  hoverInfoForParts env ctx parts
+
 prepareCompletionEnv :: Env.Env0 -> [FilePath] -> S.ModName -> FilePath -> String -> IO Env.Env0
 prepareCompletionEnv baseEnv searchPath modName fileName src = do
   imps <- parseImports fileName src
@@ -184,6 +218,32 @@ memberContextAt src cursor =
     identChar c = isAlphaNum c || c == '_'
     receiverChar c = identChar c || c == '.' || c == '?'
     trimDots = reverse . dropWhile (== '.') . reverse . dropWhile (== '.')
+
+hoverTargetAt :: String -> Int -> Maybe [String]
+hoverTargetAt src cursor = do
+  let cursor' = max 0 (min cursor (length src))
+      before = take cursor' src
+      after = drop cursor' src
+      identPrefix = reverse (takeWhile identChar (reverse before))
+      identSuffix = takeWhile identChar after
+      ident = identPrefix ++ identSuffix
+      identStart = cursor' - length identPrefix
+  if not (validIdent ident)
+    then Nothing
+    else do
+      let beforeIdent = take identStart src
+          target =
+            case reverse beforeIdent of
+              '.':rest ->
+                let receiver = reverse (takeWhile receiverChar rest)
+                in receiver ++ "." ++ ident
+              _ -> ident
+          parts = receiverParts target
+      if all validIdent parts && not (null parts)
+        then Just parts
+        else Nothing
+  where
+    receiverChar c = identChar c || c == '.' || c == '?'
 
 callContextAt :: String -> Int -> Maybe CallRequest
 callContextAt src cursor = do
@@ -254,13 +314,58 @@ callSignature env ctx req = do
             ++ "("
             ++ intercalate ", " (map signatureParameterLabel params)
             ++ ") -> "
-            ++ prstr ret
+            ++ displayType ret
       in Just CallSignature
         { callSignatureLabel = label
         , callSignatureParameters = params
         , callSignatureActiveParameter = active
         }
     _ -> Nothing
+
+hoverInfoForParts :: Env.Env0 -> SourceContext -> [String] -> Maybe HoverInfo
+hoverInfoForParts env ctx parts = do
+  target <- hoverTarget env ctx parts
+  let label = intercalate "." parts
+  return HoverInfo
+    { hoverLabel = label
+    , hoverDetail = label ++ ": " ++ displayType (hoverResolvedType target)
+    , hoverDocumentation = hoverResolvedDoc target
+    }
+
+hoverTarget :: Env.Env0 -> SourceContext -> [String] -> Maybe HoverTarget
+hoverTarget env ctx parts =
+  memberHoverTarget env ctx parts
+  <|> baseHoverTarget env ctx parts
+  <|> globalHoverTarget env parts
+
+memberHoverTarget :: Env.Env0 -> SourceContext -> [String] -> Maybe HoverTarget
+memberHoverTarget env ctx parts = do
+  (receiver, attr) <- unsnoc parts
+  typ <- resolveReceiverType env ctx receiver
+  tc <- typeTCon env typ
+  info <- attrInfo env tc (S.name attr)
+  attrTyp <- Env.unalias env <$> typeOfInfo info
+  return HoverTarget
+    { hoverResolvedType = attrTyp
+    , hoverResolvedDoc = docOfInfo info <|> typeDoc env attrTyp
+    }
+
+baseHoverTarget :: Env.Env0 -> SourceContext -> [String] -> Maybe HoverTarget
+baseHoverTarget env ctx parts = do
+  typ <- resolveReceiverType env ctx parts
+  return HoverTarget
+    { hoverResolvedType = typ
+    , hoverResolvedDoc = typeDoc env typ
+    }
+
+globalHoverTarget :: Env.Env0 -> [String] -> Maybe HoverTarget
+globalHoverTarget env parts = do
+  info <- lookupPathInfo env parts
+  typ <- Env.unalias env <$> typeOfInfo info
+  return HoverTarget
+    { hoverResolvedType = typ
+    , hoverResolvedDoc = docOfInfo info <|> typeDoc env typ
+    }
 
 resolveCallableInfo :: Env.Env0 -> SourceContext -> [String] -> Maybe I.NameInfo
 resolveCallableInfo env ctx parts =
@@ -282,7 +387,7 @@ signatureParameters pos kw =
   zipWith positional [1..] (positionalTypes pos) ++ keywordParameters kw
   where
     positional ix typ =
-      SignatureParameter ("arg" ++ show (ix :: Int) ++ ": " ++ prstr typ)
+      SignatureParameter ("arg" ++ show (ix :: Int) ++ ": " ++ displayType typ)
 
 positionalTypes :: S.Type -> [S.Type]
 positionalTypes row =
@@ -295,9 +400,9 @@ keywordParameters :: S.Type -> [SignatureParameter]
 keywordParameters row =
   case row of
     S.TRow _ S.KRow name typ rest ->
-      SignatureParameter (S.rawstr name ++ ": " ++ prstr typ) : keywordParameters rest
+      SignatureParameter (S.rawstr name ++ ": " ++ displayType typ) : keywordParameters rest
     S.TStar _ S.KRow rest ->
-      [SignatureParameter ("**kwargs: " ++ prstr (S.tTupleK rest))]
+      [SignatureParameter ("**kwargs: " ++ displayType (S.tTupleK rest))]
     _ -> []
 
 completionEnv :: [FilePath] -> Env.Env0 -> S.ModName -> [S.Import] -> IO Env.Env0
@@ -542,7 +647,49 @@ kindOf info =
 
 detailOf :: I.NameInfo -> Maybe String
 detailOf info =
-  fmap prstr (typeOfInfo info)
+  fmap displayType (typeOfInfo info)
+
+docOfInfo :: I.NameInfo -> Maybe String
+docOfInfo info =
+  cleanDoc $
+    case info of
+      I.NDef _ _ doc -> doc
+      I.NSig _ _ doc -> doc
+      I.NAct _ _ _ _ doc -> doc
+      I.NClass _ _ _ doc -> doc
+      I.NProto _ _ _ doc -> doc
+      I.NExt _ _ _ _ _ doc -> doc
+      I.NModule _ doc -> doc
+      _ -> Nothing
+
+typeDoc :: Env.Env0 -> S.Type -> Maybe String
+typeDoc env typ = do
+  tc <- typeTCon env typ
+  info <- lookupTConInfo env tc
+  docOfInfo info
+
+lookupTConInfo :: Env.Env0 -> S.TCon -> Maybe I.NameInfo
+lookupTConInfo env tc =
+  fmap I.convHNameInfo2NameInfo (Env.tryQName (S.tcname tc) env)
+
+cleanDoc :: Maybe String -> Maybe String
+cleanDoc Nothing = Nothing
+cleanDoc (Just doc) =
+  let doc' = trim doc
+  in if null doc' then Nothing else Just doc'
+
+displayType :: S.Type -> String
+displayType = stripBuiltinPrefix . prstr
+
+stripBuiltinPrefix :: String -> String
+stripBuiltinPrefix [] = []
+stripBuiltinPrefix s
+  | builtinPrefix `isPrefixOf` s =
+      stripBuiltinPrefix (drop (length builtinPrefix) s)
+  | otherwise =
+      head s : stripBuiltinPrefix (tail s)
+  where
+    builtinPrefix = "__builtin__."
 
 typeTCon :: Env.Env0 -> S.Type -> Maybe S.TCon
 typeTCon env typ =
@@ -854,6 +1001,15 @@ forceSignatures xs =
       + sum (map (length . signatureParameterLabel) (callSignatureParameters sig))
       | sig <- xs
       ] `seq` xs
+
+forceMaybeHover :: Maybe HoverInfo -> Maybe HoverInfo
+forceMaybeHover info =
+  case info of
+    Nothing -> Nothing
+    Just hover ->
+      length (hoverLabel hover)
+      + length (hoverDetail hover)
+      + maybe 0 length (hoverDocumentation hover) `seq` info
 
 (<|>) :: Maybe a -> Maybe a -> Maybe a
 Nothing <|> b = b

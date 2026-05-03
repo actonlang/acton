@@ -821,6 +821,46 @@ signatureHelpFor path pos = do
               [] -> InR Null
               sig:_ -> InL (lspSignatureHelp sig)
 
+hoverFor :: FilePath -> LSP.Position -> LspM () (Hover |? Null)
+hoverFor path pos = do
+  mstate <- liftIO $ loadCompletionStateFor path
+  case mstate of
+    Nothing -> return (InR Null)
+    Just state -> do
+      snapRes <- liftIO $
+        (try (Source.readSource (overlaySourceProvider overlaysRef) path) :: IO (Either IOError Source.SourceSnapshot))
+      case snapRes of
+        Left _ -> return (InR Null)
+        Right snap -> do
+          let src = Source.ssText snap
+              cursor = positionToOffset src pos
+          env <- liftIO $ completionEnvFor state path src
+          return $
+            case Completion.hoverInfoWithEnv env src cursor of
+              Nothing -> InR Null
+              Just info -> InL (lspHover info)
+
+lspHover :: Completion.HoverInfo -> Hover
+lspHover info =
+  Hover
+    { _contents = InL MarkupContent
+        { _kind = MarkupKind_Markdown
+        , _value = T.pack (hoverMarkdown info)
+        }
+    , _range = Nothing
+    }
+  where
+    hoverMarkdown hover =
+      "```acton\n"
+      ++ Completion.hoverDetail hover
+      ++ "\n```"
+      ++ hoverDoc hover
+
+    hoverDoc hover =
+      case Completion.hoverDocumentation hover of
+        Nothing -> ""
+        Just doc -> "\n\n" ++ doc
+
 lspSignatureHelp :: Completion.CallSignature -> SignatureHelp
 lspSignatureHelp sig =
   SignatureHelp
@@ -928,6 +968,12 @@ handlers =
           Nothing -> return (InR Null)
           Just path -> signatureHelpFor path pos
         respond (Right help)
+    , requestHandler SMethod_TextDocumentHover $ \(TRequestMessage _ _ _ params) respond -> do
+        let HoverParams (TextDocumentIdentifier uri) pos _ = params
+        hover <- resolvePath uri >>= \case
+          Nothing -> return (InR Null)
+          Just path -> hoverFor path pos
+        respond (Right hover)
     , notificationHandler SMethod_TextDocumentDidOpen $ \(TNotificationMessage _ _ (DidOpenTextDocumentParams doc)) -> do
         let TextDocumentItem{_uri=uri,_text=txt} = doc
         resolvePath uri >>= \case

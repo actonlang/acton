@@ -284,6 +284,10 @@ main = do
                 ]
           items <- Completion.memberCompletions env [] (S.modName ["rfs"]) "rfs.act" src cursor
           map Completion.completionLabel items `shouldSatisfy` elem "asn"
+          [ Completion.completionDetail item
+            | item <- items
+            , Completion.completionLabel item == "asn"
+            ] `shouldBe` [Just "int"]
 
         it "uses inherited parameter types inside generic classes" $ do
           let env = completionFixtureEnv env0
@@ -370,12 +374,74 @@ main = do
           case sigs of
             [sig] -> do
               Completion.callSignatureLabel sig `shouldSatisfy` isPrefixOf "o.netinfra.router.create("
+              Completion.callSignatureLabel sig `shouldSatisfy` not . isInfixOf "__builtin__."
               Completion.callSignatureActiveParameter sig `shouldBe` 1
               let params = map Completion.signatureParameterLabel (Completion.callSignatureParameters sig)
               params `shouldSatisfy` any (isPrefixOf "arg1:")
               params `shouldSatisfy` any (isPrefixOf "id:")
+              params `shouldSatisfy` all (not . isInfixOf "__builtin__.")
             other ->
               expectationFailure $ "Unexpected signatures: " ++ show other
+
+        it "hovers local values assigned from member paths" $ do
+          let env = completionFixtureEnv env0
+              (src, cursor) = cursorSource $ unlines
+                [ "import mini.layers.base_1 as base"
+                , ""
+                , "class L3vpnEndpoint(base.L3vpnEndpoint):"
+                , "    def transform(self, i, di):"
+                , "        o = base.o_root()"
+                , "        o_router = o.netinfra.router.create(i.name, id=i.id)"
+                , "        bc = o_router.base_config"
+                , "        bc<CURSOR>.asn = 1"
+                ]
+          info <- Completion.hoverInfo env [] (S.modName ["rfs"]) "rfs.act" src cursor
+          case info of
+            Just hover -> do
+              Completion.hoverDetail hover `shouldSatisfy` isInfixOf "BaseConfig"
+              Completion.hoverDocumentation hover `shouldBe` Just "Base router configuration."
+            Nothing ->
+              expectationFailure "Expected hover info for bc"
+
+        it "hovers nested member fields" $ do
+          let env = completionFixtureEnv env0
+              (src, cursor) = cursorSource $ unlines
+                [ "import mini.layers.base_1 as base"
+                , ""
+                , "class L3vpnEndpoint(base.L3vpnEndpoint):"
+                , "    def transform(self, i, di):"
+                , "        o = base.o_root()"
+                , "        o_router = o.netinfra.router.create(i.name, id=i.id)"
+                , "        bc = o_router.base_config"
+                , "        bc.<CURSOR>asn = 1"
+                ]
+          info <- Completion.hoverInfo env [] (S.modName ["rfs"]) "rfs.act" src cursor
+          case info of
+            Just hover -> do
+              Completion.hoverDetail hover `shouldBe` "bc.asn: int"
+              Completion.hoverDocumentation hover `shouldBe` Just "Autonomous system number."
+            Nothing ->
+              expectationFailure "Expected hover info for bc.asn"
+
+        it "hovers methods resolved through local call results" $ do
+          let env = completionFixtureEnv env0
+              (src, cursor) = cursorSource $ unlines
+                [ "import mini.layers.base_1 as base"
+                , ""
+                , "class L3vpnEndpoint(base.L3vpnEndpoint):"
+                , "    def transform(self, i, di):"
+                , "        o = base.o_root()"
+                , "        o.netinfra.router.<CURSOR>create(\"r1\", id=1)"
+                ]
+          info <- Completion.hoverInfo env [] (S.modName ["rfs"]) "rfs.act" src cursor
+          case info of
+            Just hover -> do
+              Completion.hoverDetail hover `shouldSatisfy` isPrefixOf "o.netinfra.router.create:"
+              Completion.hoverDetail hover `shouldSatisfy` isInfixOf "RouterEntry"
+              Completion.hoverDetail hover `shouldSatisfy` not . isInfixOf "__builtin__."
+              Completion.hoverDocumentation hover `shouldBe` Just "Create a router entry."
+            Nothing ->
+              expectationFailure "Expected hover info for create"
 
       describe "String Interpolation" $ do
         -- Note: In these tests, we use Haskell string literals which require escaping.
@@ -1369,8 +1435,8 @@ completionFixtureEnv env0 =
           (S.posRow Builtin.tStr S.posNil)
           (S.kwdRow (S.name "id") Builtin.tInt S.kwdNil)
           routerEntryType
-      createInfo = I.NDef (S.tSchema [] createType) S.NoDec Nothing
-      baseClass = I.NClass [] [] [(S.name "transform", transformInfo)] Nothing
+      createInfo = I.NDef (S.tSchema [] createType) S.NoDec (Just "Create a router entry.")
+      baseClass = I.NClass [] [] [(S.name "transform", transformInfo)] (Just "Base transform class.")
       localBaseClass = I.NClass [] [] [(S.name "transform", localTransformInfo)] Nothing
       outputRootClass = I.NClass [] []
         [ fieldOf "netinfra" netinfraType
@@ -1388,9 +1454,9 @@ completionFixtureEnv env0 =
         , fieldOf "base_config" baseConfigType
         ] Nothing
       baseConfigClass = I.NClass [] []
-        [ field "asn"
-        , field "ipv4_address"
-        ] Nothing
+        [ docFieldOf "asn" Builtin.tInt "Autonomous system number."
+        , fieldOf "ipv4_address" Builtin.tStr
+        ] (Just "Base router configuration.")
       localInputClass = I.NClass [] []
         [ field "local_field"
         ] Nothing
@@ -1399,9 +1465,10 @@ completionFixtureEnv env0 =
         , field "vpn_name"
         , field "customer_name"
         , field "ipv4_address"
-        ] Nothing
+        ] (Just "L3VPN endpoint input.")
       field n = fieldOf n S.tWild
       fieldOf n typ = (S.name n, I.NVar typ)
+      docFieldOf n typ doc = (S.name n, I.NSig (S.tSchema [] typ) S.NoDec (Just doc))
   in Acton.Env.addMod baseMod
        [ (S.name "L3vpnEndpoint", baseClass)
        , (S.name "LocalEndpoint", localBaseClass)
