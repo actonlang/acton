@@ -383,6 +383,24 @@ main = do
             other ->
               expectationFailure $ "Unexpected signatures: " ++ show other
 
+        it "ignores string parentheses when finding call signatures" $ do
+          let env = completionFixtureEnv env0
+          forM_ ["\"(\"", "\"x)\""] $ \arg -> do
+            let (src, cursor) = cursorSource $ unlines
+                  [ "import mini.layers.base_1 as base"
+                  , ""
+                  , "class L3vpnEndpoint(base.L3vpnEndpoint):"
+                  , "    def transform(self, i, di):"
+                  , "        o = base.o_root()"
+                  , "        o.netinfra.router.create(" ++ arg ++ ", <CURSOR>)"
+                  ]
+            sigs <- Completion.callSignatures env [] (S.modName ["rfs"]) "rfs.act" src cursor
+            case sigs of
+              [sig] ->
+                Completion.callSignatureActiveParameter sig `shouldBe` 1
+              other ->
+                expectationFailure $ "Unexpected signatures: " ++ show other
+
         it "completes keyword arguments for nested member calls" $ do
           let env = completionFixtureEnv env0
               (src, cursor) = cursorSource $ unlines
@@ -423,6 +441,19 @@ main = do
                 ]
           items <- Completion.argumentCompletions env [] (S.modName ["rfs"]) "rfs.act" src cursor
           map Completion.completionLabel items `shouldBe` ["role="]
+
+        it "keeps escaped commas inside string arguments" $ do
+          let env = completionFixtureEnv env0
+              (src, cursor) = cursorSource $ unlines
+                [ "import mini.layers.base_1 as base"
+                , ""
+                , "class L3vpnEndpoint(base.L3vpnEndpoint):"
+                , "    def transform(self, i, di):"
+                , "        o = base.o_root()"
+                , "        o.netinfra.router.create(\"r1\", id=1, role=\"a\\\",b\", m<CURSOR>)"
+                ]
+          items <- Completion.argumentCompletions env [] (S.modName ["rfs"]) "rfs.act" src cursor
+          map Completion.completionLabel items `shouldBe` ["mock="]
 
         it "does not complete keyword names inside argument values" $ do
           let env = completionFixtureEnv env0

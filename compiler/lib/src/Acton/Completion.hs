@@ -86,6 +86,8 @@ data HoverInfo = HoverInfo
   , hoverDocumentation :: Maybe String
   } deriving (Eq, Show)
 
+data StringState = StringState Char Bool deriving (Eq, Show)
+
 data SourceContext = SourceContext
   { sourceClass :: Maybe ClassContext
   , sourceDef :: Maybe DefContext
@@ -343,10 +345,9 @@ splitArgSegments = reverse . map reverse . go 0 0 0 Nothing [[]]
   where
     go _ _ _ _ acc [] = acc
     go p b c str (x:xs) (ch:chs)
-      | Just q <- str =
-          let str' = if ch == q then Nothing else str
-          in go p b c str' ((ch:x):xs) chs
-      | ch == '"' || ch == '\'' = go p b c (Just ch) ((ch:x):xs) chs
+      | Just st <- str =
+          go p b c (advanceString st ch) ((ch:x):xs) chs
+      | isStringQuote ch = go p b c (Just (StringState ch False)) ((ch:x):xs) chs
       | ch == ',' && p == 0 && b == 0 && c == 0 = go p b c str ([]:x:xs) chs
       | ch == '(' = go (p + 1) b c str ((ch:x):xs) chs
       | ch == ')' = go (max 0 (p - 1)) b c str ((ch:x):xs) chs
@@ -362,9 +363,9 @@ topLevelContains needle = go 0 0 0 Nothing
   where
     go _ _ _ _ [] = False
     go p b c str (ch:chs)
-      | Just q <- str =
-          go p b c (if ch == q then Nothing else str) chs
-      | ch == '"' || ch == '\'' = go p b c (Just ch) chs
+      | Just st <- str =
+          go p b c (advanceString st ch) chs
+      | isStringQuote ch = go p b c (Just (StringState ch False)) chs
       | ch == needle && p == 0 && b == 0 && c == 0 = True
       | ch == '(' = go (p + 1) b c str chs
       | ch == ')' = go (max 0 (p - 1)) b c str chs
@@ -379,9 +380,9 @@ breakArgTopLevel needle = go 0 0 0 Nothing []
   where
     go _ _ _ _ acc [] = (reverse acc, [])
     go p b c str acc s@(ch:chs)
-      | Just q <- str =
-          go p b c (if ch == q then Nothing else str) (ch:acc) chs
-      | ch == '"' || ch == '\'' = go p b c (Just ch) (ch:acc) chs
+      | Just st <- str =
+          go p b c (advanceString st ch) (ch:acc) chs
+      | isStringQuote ch = go p b c (Just (StringState ch False)) (ch:acc) chs
       | ch == needle && p == 0 && b == 0 && c == 0 = (reverse acc, s)
       | ch == '(' = go (p + 1) b c str (ch:acc) chs
       | ch == ')' = go (max 0 (p - 1)) b c str (ch:acc) chs
@@ -396,25 +397,29 @@ lastMaybe [] = Nothing
 lastMaybe xs = Just (last xs)
 
 activeOpenParen :: String -> Maybe Int
-activeOpenParen before = go (length before - 1) 0 (reverse before)
+activeOpenParen = listToMaybe . go 0 Nothing []
   where
-    go _ _ [] = Nothing
-    go ix depth (c:cs)
-      | c == ')' = go (ix - 1) (depth + 1) cs
-      | c == '(' && depth == 0 = Just ix
-      | c == '(' = go (ix - 1) (depth - 1) cs
-      | otherwise = go (ix - 1) depth cs
+    go _ _ stack [] = stack
+    go ix str stack (ch:chs)
+      | Just st <- str =
+          go (ix + 1) (advanceString st ch) stack chs
+      | isStringQuote ch =
+          go (ix + 1) (Just (StringState ch False)) stack chs
+      | ch == '(' =
+          go (ix + 1) str (ix:stack) chs
+      | ch == ')' =
+          go (ix + 1) str (drop 1 stack) chs
+      | otherwise =
+          go (ix + 1) str stack chs
 
 activeArgIndex :: String -> Int
 activeArgIndex = go 0 0 0 0 Nothing
   where
     go arg _ _ _ _ [] = arg
     go arg p b c str (x:xs)
-      | Just q <- str =
-          if x == q
-            then go arg p b c Nothing xs
-            else go arg p b c str xs
-      | x == '"' || x == '\'' = go arg p b c (Just x) xs
+      | Just st <- str =
+          go arg p b c (advanceString st x) xs
+      | isStringQuote x = go arg p b c (Just (StringState x False)) xs
       | x == '(' = go arg (p + 1) b c str xs
       | x == ')' = go arg (max 0 (p - 1)) b c str xs
       | x == '[' = go arg p (b + 1) c str xs
@@ -423,6 +428,16 @@ activeArgIndex = go 0 0 0 0 Nothing
       | x == '}' = go arg p b (max 0 (c - 1)) str xs
       | x == ',' && p == 0 && b == 0 && c == 0 = go (arg + 1) p b c str xs
       | otherwise = go arg p b c str xs
+
+isStringQuote :: Char -> Bool
+isStringQuote ch = ch == '"' || ch == '\''
+
+advanceString :: StringState -> Char -> Maybe StringState
+advanceString (StringState quote escaped) ch
+  | escaped = Just (StringState quote False)
+  | ch == '\\' = Just (StringState quote True)
+  | ch == quote = Nothing
+  | otherwise = Just (StringState quote False)
 
 completeMember :: Env.Env0 -> SourceContext -> MemberRequest -> [Completion]
 completeMember env ctx req =
