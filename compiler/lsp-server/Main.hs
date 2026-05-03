@@ -1,9 +1,10 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeOperators #-}
 
-import Control.Exception (SomeException, displayException, finally, fromException, try)
+import Control.Exception (AsyncException, SomeException, displayException, evaluate, finally, fromException, throwIO, try)
 import Control.Concurrent (ThreadId, forkIO, killThread, threadDelay)
 import Control.Concurrent.MVar (MVar, newEmptyMVar, takeMVar, tryPutMVar)
 import Control.Monad (forM, forM_, forever, void, when)
@@ -805,6 +806,51 @@ completionCommand item =
         }
     _ -> Nothing
 
+forceLspCompletions :: [Completion.Completion] -> [Completion.Completion]
+forceLspCompletions items =
+  sum [ length (Completion.completionLabel item)
+      + maybe 0 length (Completion.completionDetail item)
+      + completionKindCode (Completion.completionKind item)
+      | item <- items
+      ] `seq` items
+
+forceLspSignatures :: [Completion.CallSignature] -> [Completion.CallSignature]
+forceLspSignatures sigs =
+  sum [ length (Completion.callSignatureLabel sig)
+      + Completion.callSignatureActiveParameter sig
+      + sum (map (length . Completion.signatureParameterLabel) (Completion.callSignatureParameters sig))
+      | sig <- sigs
+      ] `seq` sigs
+
+forceLspHover :: Maybe Completion.HoverInfo -> Maybe Completion.HoverInfo
+forceLspHover info =
+  case info of
+    Nothing -> Nothing
+    Just hover ->
+      length (Completion.hoverLabel hover)
+      + length (Completion.hoverDetail hover)
+      + maybe 0 length (Completion.hoverDocumentation hover) `seq` info
+
+completionKindCode :: Completion.CompletionKind -> Int
+completionKindCode kind =
+  case kind of
+    Completion.CompletionField -> 1
+    Completion.CompletionMethod -> 2
+    Completion.CompletionProperty -> 3
+    Completion.CompletionValue -> 4
+    Completion.CompletionKeyword -> 5
+
+tryLspIO :: IO a -> IO (Maybe a)
+tryLspIO action = do
+  res <- try action
+  case res of
+    Left err
+      | Just (_ :: AsyncException) <- fromException err ->
+          throwIO err
+      | otherwise ->
+          return Nothing
+    Right value -> return (Just value)
+
 signatureHelpFor :: FilePath -> LSP.Position -> LspM () (SignatureHelp |? Null)
 signatureHelpFor path pos = do
   mstate <- liftIO $ loadCompletionStateFor path
@@ -818,12 +864,14 @@ signatureHelpFor path pos = do
         Right snap -> do
           let src = Source.ssText snap
               cursor = positionToOffset src pos
-          env <- liftIO $ completionEnvFor state path src
-          let sigs = Completion.callSignaturesWithEnv env src cursor
+          msigs <- liftIO $
+            tryLspIO $ do
+              env <- completionEnvFor state path src
+              evaluate (forceLspSignatures (Completion.callSignaturesWithEnv env src cursor))
           return $
-            case sigs of
-              [] -> InR Null
-              sig:_ -> InL (lspSignatureHelp sig)
+            case msigs of
+              Just (sig:_) -> InL (lspSignatureHelp sig)
+              _ -> InR Null
 
 hoverFor :: FilePath -> LSP.Position -> LspM () (Hover |? Null)
 hoverFor path pos = do
@@ -838,11 +886,14 @@ hoverFor path pos = do
         Right snap -> do
           let src = Source.ssText snap
               cursor = positionToOffset src pos
-          env <- liftIO $ completionEnvFor state path src
+          minfo <- liftIO $
+            tryLspIO $ do
+              env <- completionEnvFor state path src
+              evaluate (forceLspHover (Completion.hoverInfoWithEnv env src cursor))
           return $
-            case Completion.hoverInfoWithEnv env src cursor of
-              Nothing -> InR Null
-              Just info -> InL (lspHover info)
+            case minfo of
+              Just (Just info) -> InL (lspHover info)
+              _ -> InR Null
 
 lspHover :: Completion.HoverInfo -> Hover
 lspHover info =
@@ -943,18 +994,22 @@ completionItemsFor path pos = do
         Right snap -> do
           let src = Source.ssText snap
               cursor = positionToOffset src pos
-          env <- liftIO $ completionEnvFor state path src
-          let items =
-                Completion.memberCompletionsWithEnv env src cursor ++
-                Completion.argumentCompletionsWithEnv env src cursor
-          return (map lspCompletionItem items)
+          mitems <- liftIO $
+            tryLspIO $ do
+              env <- completionEnvFor state path src
+              let items =
+                    Completion.memberCompletionsWithEnv env src cursor ++
+                    Completion.argumentCompletionsWithEnv env src cursor
+              evaluate (forceLspCompletions items)
+          return (maybe [] (map lspCompletionItem) mitems)
 
 -- | Resolve and normalize a document URI to a file path.
 resolvePath :: Uri -> LspM () (Maybe FilePath)
 resolvePath uri =
   case uriToFilePath uri of
     Nothing -> return Nothing
-    Just path -> liftIO $ Just <$> Compile.normalizePathSafe path
+    Just path -> liftIO $ do
+      tryLspIO (Compile.normalizePathSafe path)
 
 -- | LSP notification handlers for open/change/close events.
 handlers :: Handlers (LspM ())

@@ -497,6 +497,16 @@ main = do
             Nothing ->
               expectationFailure "Expected hover info for create"
 
+        it "ignores imported module path hovers" $ do
+          let env = completionFixtureEnv env0
+              (src, cursor) = cursorSource "import mini.layers.y_1<CURSOR>\n"
+          result <- E.try (E.evaluate (Completion.hoverInfoWithEnv env src cursor))
+          case result of
+            Left (err :: E.SomeException) ->
+              expectationFailure $ "Unexpected hover exception: " ++ E.displayException err
+            Right info ->
+              info `shouldBe` Nothing
+
       describe "String Interpolation" $ do
         -- Note: In these tests, we use Haskell string literals which require escaping.
         -- The test format is: testParseOutput <Haskell literal> <expected parser output>

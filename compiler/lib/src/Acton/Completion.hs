@@ -29,6 +29,7 @@ import qualified Control.Monad.Trans.State.Strict as St
 import Data.Char (isAlpha, isAlphaNum, isSpace)
 import Data.List (find, findIndex, intercalate, isPrefixOf, nubBy)
 import Data.Maybe (listToMaybe, mapMaybe)
+import qualified Data.HashMap.Strict as HM
 import qualified InterfaceFiles as IF
 import Text.Megaparsec (eof, runParser)
 
@@ -766,12 +767,36 @@ callResultType env ctx parts = do
 lookupPathInfo :: Env.Env0 -> [String] -> Maybe I.NameInfo
 lookupPathInfo _ [] = Nothing
 lookupPathInfo env [n] =
-  fmap I.convHNameInfo2NameInfo (Env.tryQName (S.NoQ (S.name n)) env)
+  lookupQNameInfo env (S.NoQ (S.name n))
 lookupPathInfo env parts =
   let modPart = init parts
       n = last parts
       qn = S.QName (S.ModName (map S.name modPart)) (S.name n)
-  in fmap I.convHNameInfo2NameInfo (Env.tryQName qn env)
+  in lookupQNameInfo env qn
+
+lookupQNameInfo :: Env.Env0 -> S.QName -> Maybe I.NameInfo
+lookupQNameInfo env qn =
+  case qn of
+    S.NoQ n ->
+      case lookup n (Env.names env) of
+        Just (I.NAlias qn') -> lookupQNameInfo env qn'
+        Just info -> Just info
+        Nothing -> Nothing
+    S.QName m n ->
+      lookupModuleItem env (Env.findHMod m env) n
+    S.GName m n
+      | Just m == Env.thismod env ->
+          lookupQNameInfo env (S.NoQ n)
+      | otherwise ->
+          lookupModuleItem env (Env.lookupHMod m env) n
+
+lookupModuleItem :: Env.Env0 -> Maybe I.HTEnv -> S.Name -> Maybe I.NameInfo
+lookupModuleItem env mtenv n = do
+  tenv <- mtenv
+  info <- HM.lookup n tenv
+  case info of
+    I.HNAlias qn -> lookupQNameInfo env qn
+    _ -> Just (I.convHNameInfo2NameInfo info)
 
 functionReturnType :: Env.Env0 -> I.NameInfo -> Maybe S.Type
 functionReturnType env info = do
@@ -823,7 +848,7 @@ typeDoc env typ = do
 
 lookupTConInfo :: Env.Env0 -> S.TCon -> Maybe I.NameInfo
 lookupTConInfo env tc =
-  fmap I.convHNameInfo2NameInfo (Env.tryQName (S.tcname tc) env)
+  lookupQNameInfo env (S.tcname tc)
 
 cleanDoc :: Maybe String -> Maybe String
 cleanDoc Nothing = Nothing
