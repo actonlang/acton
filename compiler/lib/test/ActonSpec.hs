@@ -7,6 +7,7 @@ import Data.Char (toLower, isAlphaNum)
 
 import qualified Acton.Parser as P
 import qualified Acton.Syntax as S
+import qualified Acton.Builtin as Builtin
 import qualified Acton.NameInfo as I
 import qualified Acton.Printer as AP
 import qualified Acton.DocPrinter as DocP
@@ -24,6 +25,8 @@ import qualified Acton.CodeGen
 import qualified Acton.Diagnostics as Diag
 import qualified Acton.Compile as Compile
 import qualified Acton.Fingerprint as Fingerprint
+import qualified Acton.Completion as Completion
+import qualified InterfaceFiles
 import Pretty (print, prettyText)
 import qualified Pretty
 import Test.Syd
@@ -38,7 +41,7 @@ import Error.Diagnose.Report (Report(..))
 import Prettyprinter (unAnnotate, layoutPretty, defaultLayoutOptions)
 import Prettyprinter.Render.Text (renderStrict)
 import System.FilePath ((</>), joinPath, takeFileName, takeBaseName, takeDirectory, splitDirectories)
-import System.Directory (getCurrentDirectory, setCurrentDirectory)
+import System.Directory (createDirectoryIfMissing, getCurrentDirectory, setCurrentDirectory)
 import System.IO.Temp (withSystemTempDirectory)
 import Control.Monad (forM_, when, foldM)
 import qualified Control.Exception as E
@@ -197,6 +200,343 @@ main = do
             Left err -> expectationFailure $ "Parse failed: " ++ err
             Right [S.Expr _ expr@S.OptChain{}] -> loc expr `shouldNotBe` NoLoc
             Right other -> expectationFailure $ "Unexpected AST: " ++ show other
+
+      describe "Completion" $ do
+        it "completes inherited transform input attributes" $ do
+          let env = completionFixtureEnv env0
+              (src, cursor) = cursorSource $ unlines
+                [ "import mini.layers.base_1 as base"
+                , "import mini.layers.y_1 as y1"
+                , ""
+                , "class L3vpnEndpoint(base.L3vpnEndpoint):"
+                , "    def transform(self, i, di):"
+                , "        i.<CURSOR>"
+                ]
+          items <- Completion.memberCompletions env [] (S.modName ["rfs"]) "rfs.act" src cursor
+          let labels = map Completion.completionLabel items
+          forM_ ["interface_name", "vpn_name", "ipv4_address"] $ \label ->
+            labels `shouldSatisfy` elem label
+
+        it "completes explicitly typed transform input attributes" $ do
+          let env = completionFixtureEnv env0
+              inputTypeName = "y1.stratoweave_rfs__rfs__l3vpn_endpoint_entry"
+              (src, cursor) = cursorSource $ unlines
+                [ "import mini.layers.base_1 as base"
+                , "import mini.layers.y_1 as y1"
+                , ""
+                , "class L3vpnEndpoint(base.L3vpnEndpoint):"
+                , "    def transform(self, i: " ++ inputTypeName ++ ", di):"
+                , "        i.v<CURSOR>"
+                ]
+          items <- Completion.memberCompletions env [] (S.modName ["rfs"]) "rfs.act" src cursor
+          map Completion.completionLabel items `shouldBe` ["vpn_name"]
+
+        it "completes annotated parameters inside generic functions" $ do
+          let env = completionFixtureEnv env0
+              inputTypeName = "y1.stratoweave_rfs__rfs__l3vpn_endpoint_entry"
+              (src, cursor) = cursorSource $ unlines
+                [ "import mini.layers.y_1 as y1"
+                , ""
+                , "def helper [T](i: " ++ inputTypeName ++ "):"
+                , "    i.v<CURSOR>"
+                ]
+          items <- Completion.memberCompletions env [] (S.modName ["rfs"]) "rfs.act" src cursor
+          map Completion.completionLabel items `shouldBe` ["vpn_name"]
+
+        it "completes local values assigned from typed calls" $ do
+          let env = completionFixtureEnv env0
+              (src, cursor) = cursorSource $ unlines
+                [ "import mini.layers.base_1 as base"
+                , ""
+                , "class L3vpnEndpoint(base.L3vpnEndpoint):"
+                , "    def transform(self, i, di):"
+                , "        o = base.o_root()"
+                , "        o.<CURSOR>"
+                ]
+          items <- Completion.memberCompletions env [] (S.modName ["rfs"]) "rfs.act" src cursor
+          map Completion.completionLabel items `shouldSatisfy` elem "netinfra"
+
+        it "completes local values assigned from nested member calls" $ do
+          let env = completionFixtureEnv env0
+              (src, cursor) = cursorSource $ unlines
+                [ "import mini.layers.base_1 as base"
+                , ""
+                , "class L3vpnEndpoint(base.L3vpnEndpoint):"
+                , "    def transform(self, i, di):"
+                , "        o = base.o_root()"
+                , "        o_router = o.netinfra.router.create(i.name, id=i.id)"
+                , "        o_router.<CURSOR>"
+                ]
+          items <- Completion.memberCompletions env [] (S.modName ["rfs"]) "rfs.act" src cursor
+          map Completion.completionLabel items `shouldSatisfy` elem "router_id"
+
+        it "completes local values assigned from member paths" $ do
+          let env = completionFixtureEnv env0
+              (src, cursor) = cursorSource $ unlines
+                [ "import mini.layers.base_1 as base"
+                , ""
+                , "class L3vpnEndpoint(base.L3vpnEndpoint):"
+                , "    def transform(self, i, di):"
+                , "        o = base.o_root()"
+                , "        o_router = o.netinfra.router.create(i.name, id=i.id)"
+                , "        bc = o_router.base_config"
+                , "        bc.<CURSOR>"
+                ]
+          items <- Completion.memberCompletions env [] (S.modName ["rfs"]) "rfs.act" src cursor
+          map Completion.completionLabel items `shouldSatisfy` elem "asn"
+          [ Completion.completionDetail item
+            | item <- items
+            , Completion.completionLabel item == "asn"
+            ] `shouldBe` [Just "int"]
+
+        it "uses inherited parameter types inside generic classes" $ do
+          let env = completionFixtureEnv env0
+              (src, cursor) = cursorSource $ unlines
+                [ "import mini.layers.base_1 as base"
+                , ""
+                , "class L3vpnEndpoint[T](base.L3vpnEndpoint):"
+                , "    def transform(self, i, di):"
+                , "        i.<CURSOR>"
+                ]
+          items <- Completion.memberCompletions env [] (S.modName ["rfs"]) "rfs.act" src cursor
+          map Completion.completionLabel items `shouldSatisfy` elem "interface_name"
+
+        it "resolves inherited parameter types in the parent module" $ do
+          let env = completionFixtureEnv env0
+              (src, cursor) = cursorSource $ unlines
+                [ "import mini.layers.base_1 as base"
+                , ""
+                , "class LocalEndpoint(base.LocalEndpoint):"
+                , "    def transform(self, i):"
+                , "        a = i.<CURSOR>"
+                ]
+          items <- Completion.memberCompletions env [] (S.modName ["rfs"]) "rfs.act" src cursor
+          map Completion.completionLabel items `shouldSatisfy` elem "local_field"
+
+        it "uses direct imports when transitive interfaces are stale" $ do
+          withSystemTempDirectory "acton-completion" $ \dir -> do
+            let directMod = S.modName ["direct"]
+                staleMod = S.modName ["stale"]
+                directTy = dir </> "direct.ty"
+                staleTy = dir </> "stale.ty"
+                inputName = S.name "LocalInput"
+                routerName = S.name "Router"
+                inputType = S.tCon (S.TC (S.NoQ inputName) [])
+                transformType =
+                  S.tFun S.fxMut
+                    (S.posRow inputType S.posNil)
+                    S.kwdNil
+                    S.tWild
+                transformInfo = I.NSig (S.tSchema [] transformType) S.NoDec Nothing
+                inputClass = I.NClass [] [] [(S.name "local_field", I.NVar S.tWild)] Nothing
+                routerClass = I.NClass [] [] [(S.name "transform", transformInfo)] Nothing
+                directIface = I.NModule
+                  [ (routerName, routerClass)
+                  , (inputName, inputClass)
+                  ] Nothing
+                directModule = S.Module directMod [] Nothing []
+                (src, cursor) = cursorSource $ unlines
+                  [ "import direct as base"
+                  , ""
+                  , "class Router(base.Router):"
+                  , "    def transform(self, i):"
+                  , "        i.<CURSOR>"
+                  ]
+            createDirectoryIfMissing True dir
+            B8.writeFile staleTy "not a current ty file"
+            InterfaceFiles.writeFile
+              directTy
+              B8.empty
+              B8.empty
+              B8.empty
+              Nothing
+              [(staleMod, B8.empty)]
+              []
+              []
+              []
+              Nothing
+              directIface
+              directModule
+            items <- Completion.memberCompletions env0 [dir] (S.modName ["rfs"]) "rfs.act" src cursor
+            map Completion.completionLabel items `shouldSatisfy` elem "local_field"
+
+        it "shows signatures for nested member calls" $ do
+          let env = completionFixtureEnv env0
+              (src, cursor) = cursorSource $ unlines
+                [ "import mini.layers.base_1 as base"
+                , ""
+                , "class L3vpnEndpoint(base.L3vpnEndpoint):"
+                , "    def transform(self, i, di):"
+                , "        o = base.o_root()"
+                , "        o.netinfra.router.create(\"r1\", <CURSOR>)"
+                ]
+          sigs <- Completion.callSignatures env [] (S.modName ["rfs"]) "rfs.act" src cursor
+          case sigs of
+            [sig] -> do
+              Completion.callSignatureLabel sig `shouldSatisfy` isPrefixOf "o.netinfra.router.create("
+              Completion.callSignatureLabel sig `shouldSatisfy` not . isInfixOf "__builtin__."
+              Completion.callSignatureActiveParameter sig `shouldBe` 1
+              let params = map Completion.signatureParameterLabel (Completion.callSignatureParameters sig)
+              params `shouldSatisfy` any (isPrefixOf "arg1:")
+              params `shouldSatisfy` any (isPrefixOf "id:")
+              params `shouldSatisfy` all (not . isInfixOf "__builtin__.")
+            other ->
+              expectationFailure $ "Unexpected signatures: " ++ show other
+
+        it "ignores string parentheses when finding call signatures" $ do
+          let env = completionFixtureEnv env0
+          forM_ ["\"(\"", "\"x)\""] $ \arg -> do
+            let (src, cursor) = cursorSource $ unlines
+                  [ "import mini.layers.base_1 as base"
+                  , ""
+                  , "class L3vpnEndpoint(base.L3vpnEndpoint):"
+                  , "    def transform(self, i, di):"
+                  , "        o = base.o_root()"
+                  , "        o.netinfra.router.create(" ++ arg ++ ", <CURSOR>)"
+                  ]
+            sigs <- Completion.callSignatures env [] (S.modName ["rfs"]) "rfs.act" src cursor
+            case sigs of
+              [sig] ->
+                Completion.callSignatureActiveParameter sig `shouldBe` 1
+              other ->
+                expectationFailure $ "Unexpected signatures: " ++ show other
+
+        it "completes keyword arguments for nested member calls" $ do
+          let env = completionFixtureEnv env0
+              (src, cursor) = cursorSource $ unlines
+                [ "import mini.layers.base_1 as base"
+                , ""
+                , "class L3vpnEndpoint(base.L3vpnEndpoint):"
+                , "    def transform(self, i, di):"
+                , "        o = base.o_root()"
+                , "        o.netinfra.router.create(\"r1\", <CURSOR>)"
+                ]
+          items <- Completion.argumentCompletions env [] (S.modName ["rfs"]) "rfs.act" src cursor
+          map Completion.completionLabel items `shouldBe` ["id=", "role=", "mock="]
+          map Completion.completionKind items `shouldBe` replicate 3 Completion.CompletionKeyword
+          map Completion.completionDetail items `shouldBe` map Just ["int", "str", "bool"]
+
+        it "filters supplied keyword argument completions" $ do
+          let env = completionFixtureEnv env0
+              (src, cursor) = cursorSource $ unlines
+                [ "import mini.layers.base_1 as base"
+                , ""
+                , "class L3vpnEndpoint(base.L3vpnEndpoint):"
+                , "    def transform(self, i, di):"
+                , "        o = base.o_root()"
+                , "        o.netinfra.router.create(\"r1\", id=1, <CURSOR>)"
+                ]
+          items <- Completion.argumentCompletions env [] (S.modName ["rfs"]) "rfs.act" src cursor
+          map Completion.completionLabel items `shouldBe` ["role=", "mock="]
+
+        it "prefixes keyword argument completions" $ do
+          let env = completionFixtureEnv env0
+              (src, cursor) = cursorSource $ unlines
+                [ "import mini.layers.base_1 as base"
+                , ""
+                , "class L3vpnEndpoint(base.L3vpnEndpoint):"
+                , "    def transform(self, i, di):"
+                , "        o = base.o_root()"
+                , "        o.netinfra.router.create(\"r1\", id=1, r<CURSOR>)"
+                ]
+          items <- Completion.argumentCompletions env [] (S.modName ["rfs"]) "rfs.act" src cursor
+          map Completion.completionLabel items `shouldBe` ["role="]
+
+        it "keeps escaped commas inside string arguments" $ do
+          let env = completionFixtureEnv env0
+              (src, cursor) = cursorSource $ unlines
+                [ "import mini.layers.base_1 as base"
+                , ""
+                , "class L3vpnEndpoint(base.L3vpnEndpoint):"
+                , "    def transform(self, i, di):"
+                , "        o = base.o_root()"
+                , "        o.netinfra.router.create(\"r1\", id=1, role=\"a\\\",b\", m<CURSOR>)"
+                ]
+          items <- Completion.argumentCompletions env [] (S.modName ["rfs"]) "rfs.act" src cursor
+          map Completion.completionLabel items `shouldBe` ["mock="]
+
+        it "does not complete keyword names inside argument values" $ do
+          let env = completionFixtureEnv env0
+              (src, cursor) = cursorSource $ unlines
+                [ "import mini.layers.base_1 as base"
+                , ""
+                , "class L3vpnEndpoint(base.L3vpnEndpoint):"
+                , "    def transform(self, i, di):"
+                , "        o = base.o_root()"
+                , "        o.netinfra.router.create(\"r1\", id=<CURSOR>)"
+                ]
+          items <- Completion.argumentCompletions env [] (S.modName ["rfs"]) "rfs.act" src cursor
+          items `shouldBe` []
+
+        it "hovers local values assigned from member paths" $ do
+          let env = completionFixtureEnv env0
+              (src, cursor) = cursorSource $ unlines
+                [ "import mini.layers.base_1 as base"
+                , ""
+                , "class L3vpnEndpoint(base.L3vpnEndpoint):"
+                , "    def transform(self, i, di):"
+                , "        o = base.o_root()"
+                , "        o_router = o.netinfra.router.create(i.name, id=i.id)"
+                , "        bc = o_router.base_config"
+                , "        bc<CURSOR>.asn = 1"
+                ]
+          info <- Completion.hoverInfo env [] (S.modName ["rfs"]) "rfs.act" src cursor
+          case info of
+            Just hover -> do
+              Completion.hoverDetail hover `shouldSatisfy` isInfixOf "BaseConfig"
+              Completion.hoverDocumentation hover `shouldBe` Just "Base router configuration."
+            Nothing ->
+              expectationFailure "Expected hover info for bc"
+
+        it "hovers nested member fields" $ do
+          let env = completionFixtureEnv env0
+              (src, cursor) = cursorSource $ unlines
+                [ "import mini.layers.base_1 as base"
+                , ""
+                , "class L3vpnEndpoint(base.L3vpnEndpoint):"
+                , "    def transform(self, i, di):"
+                , "        o = base.o_root()"
+                , "        o_router = o.netinfra.router.create(i.name, id=i.id)"
+                , "        bc = o_router.base_config"
+                , "        bc.<CURSOR>asn = 1"
+                ]
+          info <- Completion.hoverInfo env [] (S.modName ["rfs"]) "rfs.act" src cursor
+          case info of
+            Just hover -> do
+              Completion.hoverDetail hover `shouldBe` "bc.asn: int"
+              Completion.hoverDocumentation hover `shouldBe` Just "Autonomous system number."
+            Nothing ->
+              expectationFailure "Expected hover info for bc.asn"
+
+        it "hovers methods resolved through local call results" $ do
+          let env = completionFixtureEnv env0
+              (src, cursor) = cursorSource $ unlines
+                [ "import mini.layers.base_1 as base"
+                , ""
+                , "class L3vpnEndpoint(base.L3vpnEndpoint):"
+                , "    def transform(self, i, di):"
+                , "        o = base.o_root()"
+                , "        o.netinfra.router.<CURSOR>create(\"r1\", id=1)"
+                ]
+          info <- Completion.hoverInfo env [] (S.modName ["rfs"]) "rfs.act" src cursor
+          case info of
+            Just hover -> do
+              Completion.hoverDetail hover `shouldSatisfy` isPrefixOf "o.netinfra.router.create:"
+              Completion.hoverDetail hover `shouldSatisfy` isInfixOf "RouterEntry"
+              Completion.hoverDetail hover `shouldSatisfy` not . isInfixOf "__builtin__."
+              Completion.hoverDocumentation hover `shouldBe` Just "Create a router entry."
+            Nothing ->
+              expectationFailure "Expected hover info for create"
+
+        it "ignores imported module path hovers" $ do
+          let env = completionFixtureEnv env0
+              (src, cursor) = cursorSource "import mini.layers.y_1<CURSOR>\n"
+          result <- E.try (E.evaluate (Completion.hoverInfoWithEnv env src cursor))
+          case result of
+            Left (err :: E.SomeException) ->
+              expectationFailure $ "Unexpected hover exception: " ++ E.displayException err
+            Right info ->
+              info `shouldBe` Nothing
 
       describe "String Interpolation" $ do
         -- Note: In these tests, we use Haskell string literals which require escaping.
@@ -1152,6 +1492,100 @@ expectModuleParseFailure input =
   case parseModuleTest input of
     Left err -> return err
     Right result -> expectationFailure $ "Expected parse failure, got: " ++ result
+
+completionFixtureEnv :: Acton.Env.Env0 -> Acton.Env.Env0
+completionFixtureEnv env0 =
+  let y1Mod = S.modName ["mini", "layers", "y_1"]
+      baseMod = S.modName ["mini", "layers", "base_1"]
+      inputName = S.name "stratoweave_rfs__rfs__l3vpn_endpoint_entry"
+      inputType = S.tCon (S.TC (S.GName y1Mod inputName) [])
+      localInputName = S.name "LocalInput"
+      localInputType = S.tCon (S.TC (S.NoQ localInputName) [])
+      transformType =
+        S.tFun S.fxMut
+          (S.posRow inputType (S.posRow S.tWild S.posNil))
+          S.kwdNil
+          S.tWild
+      transformInfo = I.NSig (S.tSchema [] transformType) S.NoDec Nothing
+      localTransformType =
+        S.tFun S.fxMut
+          (S.posRow localInputType S.posNil)
+          S.kwdNil
+          S.tWild
+      localTransformInfo = I.NSig (S.tSchema [] localTransformType) S.NoDec Nothing
+      outputRootName = S.name "OutputRoot"
+      outputRootType = S.tCon (S.TC (S.GName baseMod outputRootName) [])
+      netinfraName = S.name "Netinfra"
+      netinfraType = S.tCon (S.TC (S.GName baseMod netinfraName) [])
+      routerCollectionName = S.name "RouterCollection"
+      routerCollectionType = S.tCon (S.TC (S.GName baseMod routerCollectionName) [])
+      routerEntryName = S.name "RouterEntry"
+      routerEntryType = S.tCon (S.TC (S.GName baseMod routerEntryName) [])
+      baseConfigName = S.name "BaseConfig"
+      baseConfigType = S.tCon (S.TC (S.GName baseMod baseConfigName) [])
+      oRootType = S.tFun S.fxPure S.posNil S.kwdNil outputRootType
+      oRootInfo = I.NDef (S.tSchema [] oRootType) S.NoDec Nothing
+      createType =
+        S.tFun S.fxMut
+          (S.posRow Builtin.tStr S.posNil)
+          (S.kwdRow (S.name "id") Builtin.tInt
+            (S.kwdRow (S.name "role") Builtin.tStr
+              (S.kwdRow (S.name "mock") Builtin.tBool S.kwdNil)))
+          routerEntryType
+      createInfo = I.NDef (S.tSchema [] createType) S.NoDec (Just "Create a router entry.")
+      baseClass = I.NClass [] [] [(S.name "transform", transformInfo)] (Just "Base transform class.")
+      localBaseClass = I.NClass [] [] [(S.name "transform", localTransformInfo)] Nothing
+      outputRootClass = I.NClass [] []
+        [ fieldOf "netinfra" netinfraType
+        , field "l3vpns"
+        ] Nothing
+      netinfraClass = I.NClass [] []
+        [ fieldOf "router" routerCollectionType
+        ] Nothing
+      routerCollectionClass = I.NClass [] []
+        [ (S.name "create", createInfo)
+        ] Nothing
+      routerEntryClass = I.NClass [] []
+        [ field "router_id"
+        , field "hostname"
+        , fieldOf "base_config" baseConfigType
+        ] Nothing
+      baseConfigClass = I.NClass [] []
+        [ docFieldOf "asn" Builtin.tInt "Autonomous system number."
+        , fieldOf "ipv4_address" Builtin.tStr
+        ] (Just "Base router configuration.")
+      localInputClass = I.NClass [] []
+        [ field "local_field"
+        ] Nothing
+      inputClass = I.NClass [] []
+        [ field "interface_name"
+        , field "vpn_name"
+        , field "customer_name"
+        , field "ipv4_address"
+        ] (Just "L3VPN endpoint input.")
+      field n = fieldOf n S.tWild
+      fieldOf n typ = (S.name n, I.NVar typ)
+      docFieldOf n typ doc = (S.name n, I.NSig (S.tSchema [] typ) S.NoDec (Just doc))
+  in Acton.Env.addMod baseMod
+       [ (S.name "L3vpnEndpoint", baseClass)
+       , (S.name "LocalEndpoint", localBaseClass)
+       , (localInputName, localInputClass)
+       , (outputRootName, outputRootClass)
+       , (netinfraName, netinfraClass)
+       , (routerCollectionName, routerCollectionClass)
+       , (routerEntryName, routerEntryClass)
+       , (baseConfigName, baseConfigClass)
+       , (S.name "o_root", oRootInfo)
+       ] Nothing $
+     Acton.Env.addMod y1Mod [(inputName, inputClass)] Nothing env0
+
+cursorSource :: String -> (String, Int)
+cursorSource src =
+  let marker = T.pack "<CURSOR>"
+      (before, after) = T.breakOn marker (T.pack src)
+  in if T.null after
+       then (src, length src)
+       else (T.unpack before ++ T.unpack (T.drop (T.length marker) after), T.length before)
 
 parseStmtAst :: String -> Either String [S.Stmt]
 parseStmtAst input =
