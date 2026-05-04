@@ -909,7 +909,8 @@ main = do
         kcheckedA <- liftIO $ Acton.Kinds.check envA parsedA
         (nmodA, _, _, _, _) <- liftIO $ Acton.Types.reconstruct Nothing envA kcheckedA
         let I.NModule tenvA mdocA = nmodA
-            env1 = Acton.Env.addMod (S.modname parsedA) tenvA mdocA env0
+            publicTEnvA = Acton.Env.publicTEnv tenvA
+            env1 = Acton.Env.addMod (S.modname parsedA) publicTEnvA mdocA env0
 
         (envB, parsedB) <- parseAct env1 "import_private_qualified"
         kcheckedB <- liftIO $ Acton.Kinds.check envB parsedB

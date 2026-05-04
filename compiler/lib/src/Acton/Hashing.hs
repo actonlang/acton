@@ -226,7 +226,8 @@ modulePubHashFromIface nmod nameHashes =
         [ (InterfaceFiles.nhName nh, InterfaceFiles.nhPubHash nh)
         | nh <- nameHashes
         ]
-      pubNamesSorted = Data.List.sortOn nameKey (map fst iface)
+      pubNamesSorted = Data.List.sortOn nameKey
+        [ n | (n, _) <- iface, Names.isPublicName n ]
       pubEntries = [ (nameKey n, M.findWithDefault B.empty n pubHashMap) | n <- pubNamesSorted ]
   in SHA256.hash (BL.toStrict $ encode pubEntries)
 

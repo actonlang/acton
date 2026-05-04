@@ -525,6 +525,97 @@ parseFlagTests =
           assertFailure ("acton sig failed:\nstdout:\n" ++ sigOut ++ "\nstderr:\n" ++ sigErr)
         assertBool "sig output should include the dependency function"
           ("count : () -> int" `isInfixOf` sigOut)
+  , testCase "sig prints private names without importing them" $ do
+      withSystemTempDirectory "acton-sig-private-names" $ \tmp -> do
+        actonExe <- canonicalizePath "../../dist/bin/acton"
+        sysPath <- canonicalizePath "../../dist"
+        env0 <- getEnvironment
+        let homeDir = tmp </> "home"
+            proj = tmp </> "proj"
+            srcDir = proj </> "src"
+            rootProj = tmp </> "root"
+            rootSrcDir = rootProj </> "src"
+            envWithHome = ("HOME", homeDir) : filter ((/= "HOME") . fst) env0
+            mkFp name = Fingerprint.formatFingerprint
+              (Fingerprint.updateFingerprintPrefix
+                (Fingerprint.fingerprintPrefixForName name) 1)
+            writeBuildActAt :: FilePath -> String -> [(String, FilePath)] -> IO ()
+            writeBuildActAt dir pkgName deps = do
+              createDirectoryIfMissing True (dir </> "src")
+              let depsBody = intercalate ",\n"
+                    [ "    \"" ++ depName ++ "\": (\n"
+                      ++ "        path=" ++ show depPath ++ "\n"
+                      ++ "    )"
+                    | (depName, depPath) <- deps
+                    ]
+                  depsSection =
+                    if null deps
+                      then "dependencies = {}"
+                      else "dependencies = {\n" ++ depsBody ++ "\n}"
+              writeFile (dir </> "Build.act") $ unlines
+                [ "name = " ++ show pkgName
+                , "fingerprint = " ++ mkFp pkgName
+                , depsSection
+                , "zig_dependencies = {}"
+                ]
+        createDirectoryIfMissing True homeDir
+        writeBuildActAt proj "sig_private" []
+        writeFile (srcDir </> "lib.act") $ unlines
+          [ "def _private() -> int:"
+          , "    return 1"
+          , ""
+          , "def public() -> int:"
+          , "    return _private()"
+          ]
+        (buildCode, buildOut, buildErr) <- readCreateProcessWithExitCode
+          (proc actonExe ["build", "--syspath", sysPath, "--skip-build", "src/lib.act"])
+            { cwd = Just proj, env = Just envWithHome } ""
+        when (buildCode /= ExitSuccess) $
+          assertFailure ("library build failed:\nstdout:\n" ++ buildOut ++ "\nstderr:\n" ++ buildErr)
+
+        (sigCode, sigOut, sigErr) <- readCreateProcessWithExitCode
+          (proc actonExe ["sig", "--syspath", sysPath, "lib"])
+            { cwd = Just proj, env = Just envWithHome } ""
+        when (sigCode /= ExitSuccess) $
+          assertFailure ("acton sig failed:\nstdout:\n" ++ sigOut ++ "\nstderr:\n" ++ sigErr)
+        assertBool "sig output should include private function"
+          ("_private : () -> int" `isInfixOf` sigOut)
+        assertBool "sig output should include public function"
+          ("public : () -> int" `isInfixOf` sigOut)
+
+        writeFile (srcDir </> "main.act") $ unlines
+          [ "from lib import _private"
+          , ""
+          , "actor main(env):"
+          , "    env.exit(0)"
+          ]
+        (importCode, _importOut, importErr) <- readCreateProcessWithExitCode
+          (proc actonExe ["build", "--syspath", sysPath, "--skip-build", "src/main.act"])
+            { cwd = Just proj, env = Just envWithHome } ""
+        assertBool ("private import should fail, stderr:\n" ++ importErr)
+          (importCode /= ExitSuccess)
+
+        removeFile (srcDir </> "lib.act")
+        (cachedSigCode, cachedSigOut, cachedSigErr) <- readCreateProcessWithExitCode
+          (proc actonExe ["sig", "--syspath", sysPath, "lib._private"])
+            { cwd = Just proj, env = Just envWithHome } ""
+        when (cachedSigCode /= ExitSuccess) $
+          assertFailure ("cached acton sig failed:\nstdout:\n" ++ cachedSigOut ++ "\nstderr:\n" ++ cachedSigErr)
+        assertBool "cached sig output should include private function"
+          ("_private : () -> int" `isInfixOf` cachedSigOut)
+
+        writeBuildActAt rootProj "sig_private_root" [("sig_private", proj)]
+        writeFile (rootSrcDir </> "main.act") $ unlines
+          [ "from lib import _private"
+          , ""
+          , "actor main(env):"
+          , "    env.exit(0)"
+          ]
+        (cachedImportCode, _cachedImportOut, cachedImportErr) <- readCreateProcessWithExitCode
+          (proc actonExe ["build", "--syspath", sysPath, "--skip-build", "src/main.act"])
+            { cwd = Just rootProj, env = Just envWithHome } ""
+        assertBool ("cached private import should fail, stderr:\n" ++ cachedImportErr)
+          (cachedImportCode /= ExitSuccess)
   , testCase "acton test --help includes --no-cache and --tag" $ do
       acton <- canonicalizePath "../../dist/bin/acton"
       (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc acton ["test", "--help"]) ""
