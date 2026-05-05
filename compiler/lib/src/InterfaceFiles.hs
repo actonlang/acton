@@ -44,7 +44,9 @@
 
 module InterfaceFiles where
 
+import Prelude hiding (readFile, writeFile)
 import Data.Binary
+import qualified Control.Exception as E
 import qualified Data.Binary.Get as BinaryGet
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
@@ -52,7 +54,7 @@ import qualified Acton.Syntax as A
 import qualified Acton.NameInfo as I
 import GHC.Generics (Generic)
 import System.Directory (renameFile)
-import System.IO
+import System.IO (IOMode(ReadMode), hClose, hFileSize, openBinaryFile)
 import System.Posix.Process (getProcessID)
 
 data NameHashInfo = NameHashInfo
@@ -75,6 +77,33 @@ data SourceFileMeta = SourceFileMeta
   } deriving (Show, Eq, Generic)
 
 instance Binary SourceFileMeta
+
+type TyFile =
+  ( [A.ModName]
+  , I.NameInfo
+  , A.Module
+  , Maybe SourceFileMeta
+  , BS.ByteString
+  , BS.ByteString
+  , BS.ByteString
+  , [(A.ModName, BS.ByteString)]
+  , [NameHashInfo]
+  , [A.Name]
+  , [String]
+  , Maybe String
+  )
+
+type TyHeader =
+  ( Maybe SourceFileMeta
+  , BS.ByteString
+  , BS.ByteString
+  , BS.ByteString
+  , [(A.ModName, BS.ByteString)]
+  , [NameHashInfo]
+  , [A.Name]
+  , [String]
+  , Maybe String
+  )
 
 -- Note: tests are stored in the header to support listing without compiling
 --       or executing test binaries.
@@ -120,7 +149,7 @@ writeFile f moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps name
     BL.writeFile tmpFile (encode ((A.version, sourceMeta, moduleSrcBytesHash, modulePubHash, moduleImplHash), imps, nameHashes, roots, tests, mdoc, nmod, tchecked))
     renameFile tmpFile f
 
-readFile :: FilePath -> IO ([A.ModName], I.NameInfo, A.Module, Maybe SourceFileMeta, BS.ByteString, BS.ByteString, BS.ByteString, [(A.ModName, BS.ByteString)], [NameHashInfo], [A.Name], [String], Maybe String)
+readFile :: FilePath -> IO TyFile
 readFile f = do
     bsLazy <- readTyBytes f
     body0 <- readTyVersion bsLazy
@@ -143,7 +172,7 @@ readFile f = do
 -- imports, name hashes, roots, tests, and docstring.
 -- This avoids decoding the large NameInfo and typed Module sections and is
 -- much faster than readFile for freshness checks and dependency discovery.
-readHeader :: FilePath -> IO (Maybe SourceFileMeta, BS.ByteString, BS.ByteString, BS.ByteString, [(A.ModName, BS.ByteString)], [NameHashInfo], [A.Name], [String], Maybe String)
+readHeader :: FilePath -> IO TyHeader
 readHeader f = do
     bsLazy <- readTyBytes f
     body0 <- readTyVersion bsLazy
@@ -159,3 +188,18 @@ readHeader f = do
       Left _ -> ioError (userError "Failed to decode .ty header")
       Right (_, _, (imps, nameHashes, roots, tests, doc)) ->
         return (sourceMeta, moduleSrcBytesHash, modulePubHash, moduleImplHash, imps, nameHashes, roots, tests, doc)
+
+-- Interface files are caches for most callers. If a file is missing,
+-- unreadable, corrupt, or from a different compiler interface version, the
+-- cache entry is not usable.
+readFileMaybe :: FilePath -> IO (Maybe TyFile)
+readFileMaybe = readTyMaybe readFile
+
+readHeaderMaybe :: FilePath -> IO (Maybe TyHeader)
+readHeaderMaybe = readTyMaybe readHeader
+
+readTyMaybe :: (FilePath -> IO a) -> FilePath -> IO (Maybe a)
+readTyMaybe readTy f = (Just <$> readTy f) `E.catch` tyCacheMiss
+
+tyCacheMiss :: E.IOException -> IO (Maybe a)
+tyCacheMiss _ = return Nothing

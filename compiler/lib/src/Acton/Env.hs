@@ -1065,23 +1065,27 @@ doImp spath env m            = do
           let seen' = S.insert m seen in
           case lookupMod m env of
             Just te -> do
-              tyFile <- findTyFile spath m
-              case tyFile of
+              hdr <- readFoundTy InterfaceFiles.readHeaderMaybe m
+              case hdr of
                 Nothing -> return (env, te, seen')
-                Just tyF -> do
-                  (_sourceMeta, _, _, _, imps, _, _, _, _) <- InterfaceFiles.readHeader tyF
+                Just (_sourceMeta, _, _, _, imps, _, _, _, _) -> do
                   (env', seen'') <- subImpSeen seen' env (map fst imps)
                   return (env', te, seen'')
             Nothing -> do
-              tyFile <- findTyFile spath m
-              case tyFile of
+              ty <- readFoundTy InterfaceFiles.readFileMaybe m
+              case ty of
                 Nothing -> fileNotFound m
-                Just tyF -> do
-                  (ms,nmod,_,_,_,_,_,_,_,_,_,_) <- InterfaceFiles.readFile tyF
+                Just (ms,nmod,_,_,_,_,_,_,_,_,_,_) -> do
                   (env', seen'') <- subImpSeen seen' env ms
                   let NModule teFull mdoc = nmod
                       te = publicTEnv teFull
                   return (addMod m te mdoc env', te, seen'')
+
+    readFoundTy readTy m = do
+      tyFile <- findTyFile spath m
+      case tyFile of
+        Nothing -> return Nothing
+        Just tyF -> readTy tyF
 
     subImpSeen seen env []   = return (env, seen)
     subImpSeen seen env (m:ms) = do

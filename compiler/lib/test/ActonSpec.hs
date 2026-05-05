@@ -48,6 +48,7 @@ import qualified Control.Exception as E
 import Control.DeepSeq (rnf)
 import Utils (SrcLoc(..), loc, prstr)
 import qualified Acton.BuildSpec as BuildSpec
+import qualified Data.Binary as Binary
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Char8 as B8
 import qualified Data.Aeson as Ae
@@ -62,6 +63,39 @@ main = do
   env0 <- Acton.Env.initEnv sysTypesPath False
 
   sydTest $ do
+    describe "Environment" $ do
+      it "treats mismatched .ty headers for loaded modules as stale" $ do
+        withSystemTempDirectory "acton-env" $ \dir -> do
+          let directMod = S.modName ["direct"]
+              directTy = dir </> "direct.ty"
+              valueName = S.name "value"
+              iface = [(valueName, I.NVar S.tWild)]
+              directIface = I.NModule iface Nothing
+              directModule = S.Module directMod [] Nothing []
+              env1 = Acton.Env.addMod directMod iface Nothing env0
+          InterfaceFiles.writeFile
+            directTy
+            B8.empty
+            B8.empty
+            B8.empty
+            Nothing
+            []
+            []
+            []
+            []
+            Nothing
+            directIface
+            directModule
+          (_mods, nmod, tmod, sourceMeta, srcHash, pubHash, implHash, imps, nameHashes, roots, tests, mdoc) <-
+            InterfaceFiles.readFile directTy
+          BL.writeFile directTy $
+            Binary.encode
+              ( (map (+ 1) S.version, sourceMeta, srcHash, pubHash, implHash)
+              , imps, nameHashes, roots, tests, mdoc, nmod, tmod
+              )
+          (_env2, te) <- Acton.Env.doImp [dir] env1 directMod
+          map fst te `shouldBe` [valueName]
+
     describe "Pass 1: Parser" $ do
 
       describe "Basic Syntax" $ do
