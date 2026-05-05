@@ -12,8 +12,8 @@ dependencies. These are the only packages used by `acton pkg add` and
 shown by `acton pkg search`.
 
 Use `acton-app` for projects that produce executable tools. App packages
-are intended for commands that install binaries, for example into
-`~/.acton/bin`.
+are installed with `acton install`, which builds the selected repository
+and copies its binaries into `~/.acton/bin`.
 
 Add both topics when a repository provides useful importable modules and
 also builds executable tools. `acton pkg` still uses only the library
@@ -44,4 +44,16 @@ and added as dependencies with:
 
 ```console
 acton pkg add PACKAGE
+```
+
+Apps can be installed with:
+
+```console
+acton install PACKAGE
+```
+
+and removed with:
+
+```console
+acton uninstall PACKAGE
 ```

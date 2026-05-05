@@ -41,6 +41,8 @@ data GlobalOptions = GlobalOptions {
 
 data Command        = New NewOptions
                     | Build BuildOptions
+                    | Install InstallOptions
+                    | Uninstall UninstallOptions
                     | Sig SigOptions
                     | Test TestCommand
                     | Fetch
@@ -101,6 +103,18 @@ data CompileOptions   = CompileOptions {
 data BuildOptions = BuildOptions
     { buildCompile :: CompileOptions
     , buildFiles   :: [String]
+    } deriving Show
+
+data InstallOptions = InstallOptions
+    { installName        :: String
+    , installRepoUrl     :: String
+    , installRepoRef     :: String
+    , installPkgName     :: String
+    , installGithubToken :: String
+    } deriving Show
+
+data UninstallOptions = UninstallOptions
+    { uninstallName :: String
     } deriving Show
 
 data SigOptions = SigOptions
@@ -194,6 +208,8 @@ cmdLineParser       :: Parser CmdLineOptions
 cmdLineParser       = hsubparser
                         (  command "new"     (info (CmdOpt <$> globalOptions <*> (New <$> newOptions)) (progDesc "Create a new Acton project"))
                         <> command "build"   (info (CmdOpt <$> globalOptions <*> (Build <$> buildOptions)) (progDesc "Build an Acton project"))
+                        <> command "install" (info (CmdOpt <$> globalOptions <*> (Install <$> installOptions)) (progDesc "Install an Acton application package"))
+                        <> command "uninstall" (info (CmdOpt <$> globalOptions <*> (Uninstall <$> uninstallOptions)) (progDesc "Uninstall an Acton application package"))
                         <> command "sig"     (info (CmdOpt <$> globalOptions <*> (Sig <$> sigOptions)) (progDesc "Show inferred type signatures"))
                         <> command "test"    (info (CmdOpt <$> globalOptions <*> (Test <$> testCommand)) (progDesc "Build and run project tests"))
                         <> command "fetch"   (info (CmdOpt <$> globalOptions <*> pure Fetch) (progDesc "Fetch project dependencies (offline prep)"))
@@ -262,6 +278,18 @@ buildOptions :: Parser BuildOptions
 buildOptions = BuildOptions
         <$> compileOptions
         <*> many (argument str (metavar "ACTONFILE" <> help "Specific .act file(s) to build"))
+
+installOptions :: Parser InstallOptions
+installOptions = InstallOptions
+    <$> argument str (metavar "NAME" <> help "Name of application package")
+    <*> strOption (long "repo-url" <> metavar "URL" <> value "" <> help "Git repository URL of application package")
+    <*> strOption (long "repo-ref" <> metavar "REF" <> value "" <> help "Git ref (branch, tag or SHA) to use")
+    <*> strOption (long "pkg-name" <> metavar "NAME" <> value "" <> help "Package name in index (defaults to NAME)")
+    <*> githubTokenOption
+
+uninstallOptions :: Parser UninstallOptions
+uninstallOptions =
+    UninstallOptions <$> argument str (metavar "NAME" <> help "Name of application package")
 
 sigOptions :: Parser SigOptions
 sigOptions = SigOptions

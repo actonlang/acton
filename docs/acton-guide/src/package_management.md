@@ -1,7 +1,9 @@
 # Package Management
 
 `acton` offers integrated package management for adding library dependencies to
-a project. At build time, dependencies are automatically fetched and validated.
+a project and installing application packages as local tools. Dependencies are
+automatically fetched and validated at build time; applications are built from
+source before their binaries are installed.
 
 Acton pins dependencies by content, via a content hash, rather than by mutable
 package version labels. Therefore, builds are entirely deterministic so that the
@@ -27,8 +29,11 @@ tagged with an `acton-library` or `acton-app` topic and records their
 metadata for search and resolution. `acton pkg` commands work with
 library packages only: `acton pkg search` shows libraries and
 `acton pkg add` resolves libraries as dependencies. App packages are
-installable applications and are kept separate from dependency
-resolution.
+installed with `acton install`, which builds the selected repository in
+release mode and copies its binaries into `~/.acton/bin`. Install
+manifests are kept under `~/.acton` so Acton can track which package owns
+each installed binary and remove those binaries again with
+`acton uninstall`.
 
 All dependencies are fetched and included, linked statically, at compile time,
 so there are no runtime dependencies.
