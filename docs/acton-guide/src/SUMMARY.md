@@ -92,6 +92,7 @@
 - [Build System](compilation.md)
   - [Incremental compilation](compilation/incremental.md)
 - [Package Management](package_management.md)
+  - [Package Index](pkg/package_index.md)
   - [Fingerprint and Lineage](pkg/fingerprint.md)
   - [Add Dependency](pkg/add_dependency.md)
   - [Local Dependencies](pkg/local_dependencies.md)

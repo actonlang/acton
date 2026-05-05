@@ -1,34 +1,37 @@
 # Package Management
 
-`acton` offers integrated package management to declare dependencies on
-other Acton packages and automatically download them from their sources
-on the Internet.
+`acton` offers integrated package management for adding library dependencies to
+a project. At build time, dependencies are automatically fetched and validated.
 
-This sits next to the project tree, not instead of it. See
-[Projects](projects.md) for how local source discovery works and
-[Modules](modules.md) for how files under `src/` become module names.
+Acton pins dependencies by content, via a content hash, rather than by mutable
+package version labels. Therefore, builds are entirely deterministic so that the
+same compilation result can be reproduced on another machine.
 
-The guiding principle behind Acton's package management is to strive
-for determinism, robustness, and safety. This is primarily achieved by
-only resolving dependencies at design time. That is, the developer of a
-particular Acton package determines its exact dependencies, not
-whomever might be downloading and building it. The identity of a
-package at a particular point in time, which you can think of as the
-version of a package, is the hash of its content. That is the
-foundation of Acton's package management. Each dependency has a hash of
-its content. A URL is just one place from which this particular version
-of a package can be downloaded. The hash of packages is determined and
-recorded at design time. Anyone pulling down and building dependencies
-will have the hash verified to ensure a deterministic build.
+The guiding principle behind Acton's package management is to strive for
+determinism, robustness, and safety. Dependencies are resolved at design time by
+the package developer and written into `Build.act` as archive URLs plus content
+hashes. Later builds fetch those recorded archives and verify the hashes; they
+do not pick newer compatible versions or rely on a name to mean the same thing
+forever.
 
-There is no central package repository. Instead, dependencies are
-defined as URLs from which the dependency package can be downloaded.
-This is typically a tar.gz file from GitHub, GitLab, or a similar
-source hosting site. Again, the identity of a version of a package is
-the content hash. The URL is only where to get it.
+Acton's public package index is a discovery index. Packages are hosted
+by their owners, and dependencies are recorded as URLs from which a
+specific package archive can be downloaded. This is typically a tar.gz
+or zip archive from GitHub, GitLab, or a similar source hosting site.
+The index helps find packages; `Build.act` records the exact archive and
+hash used by a project.
 
-Acton is statically compiled. All dependencies are fetched and
-included at compile time, so there are no runtime dependencies.
+The public index is decentralized in the sense that package authors opt
+in from their own GitHub repositories. The index collects repositories
+tagged with an `acton-library` or `acton-app` topic and records their
+metadata for search and resolution. `acton pkg` commands work with
+library packages only: `acton pkg search` shows libraries and
+`acton pkg add` resolves libraries as dependencies. App packages are
+installable applications and are kept separate from dependency
+resolution.
+
+All dependencies are fetched and included, linked statically, at compile time,
+so there are no runtime dependencies.
 
 ## Project lineage fingerprint
 
