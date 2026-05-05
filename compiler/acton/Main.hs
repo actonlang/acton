@@ -122,6 +122,8 @@ main = do
               in if null files
                  then buildProject gopts opts
                  else buildFiles gopts opts files
+          C.CmdOpt gopts (C.Install opts)      -> PkgCommands.installCommand gopts opts
+          C.CmdOpt gopts (C.Uninstall opts)    -> PkgCommands.uninstallCommand gopts opts
           C.CmdOpt gopts (C.Sig opts)          -> sigCommand gopts opts
           C.CmdOpt gopts (C.Test tcmd)        -> runTests gopts tcmd
           C.CmdOpt gopts C.Fetch             -> fetchCommand gopts

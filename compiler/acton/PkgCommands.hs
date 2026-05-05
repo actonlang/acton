@@ -1,6 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 module PkgCommands
-  ( pkgAddCommand
+  ( installCommand
+  , uninstallCommand
+  , pkgAddCommand
   , pkgRemoveCommand
   , pkgUpgradeCommand
   , pkgUpdateCommand
@@ -9,8 +11,11 @@ module PkgCommands
   , zigPkgRemoveCommand
   , PackageEntry(..)
   , RepoInfo(..)
+  , githubCloneUrl
+  , isGithubCommitSha
   , parseGithubRepoUrl
   , decodePackageIndex
+  , decodeAppPackageIndex
   , matchesAllTerms
   ) where
 
@@ -22,8 +27,8 @@ import Acton.Compile (loadBuildSpec, throwProjectError)
 
 import Control.Exception (IOException, SomeException, try, displayException, evaluate)
 import Control.Concurrent (threadDelay)
-import Control.Monad (forM_, unless)
-import Data.Char (isSpace)
+import Control.Monad (filterM, forM, forM_, unless, when)
+import Data.Char (isHexDigit, isSpace)
 import Data.Foldable (toList)
 import Data.List (dropWhileEnd, isPrefixOf, isSuffixOf, sortOn)
 import Data.List.Split (splitOn)
@@ -39,12 +44,12 @@ import Network.HTTP.Client (Manager, Response, httpLbs, parseRequest, requestHea
 import Network.HTTP.Client.TLS (newTlsManager)
 import Network.HTTP.Types.Header (Header)
 import Network.HTTP.Types.Status (statusCode)
-import System.Directory (canonicalizePath, createDirectoryIfMissing, doesFileExist, getCurrentDirectory, getHomeDirectory)
+import System.Directory (Permissions, canonicalizePath, copyFile, createDirectoryIfMissing, doesDirectoryExist, doesFileExist, doesPathExist, getCurrentDirectory, getHomeDirectory, getPermissions, listDirectory, removeFile, setPermissions)
 import System.Environment (getExecutablePath, lookupEnv)
 import System.Exit (ExitCode(..))
 import System.FilePath ((</>), takeDirectory)
 import System.IO (IOMode(ReadMode, WriteMode), hClose, hGetContents, hPutStr, hPutStrLn, hSetEncoding, openFile, stderr, utf8)
-import System.Process (proc, readCreateProcessWithExitCode)
+import System.Process (CreateProcess(cwd), proc, readCreateProcessWithExitCode)
 import qualified Text.Regex.TDFA as TDFA
 
 data PackageEntry = PackageEntry
@@ -60,11 +65,90 @@ data PackageIndexEntry = PackageIndexEntry
     , indexRepoUrl     :: String
     } deriving (Eq, Show)
 
+data InstallManifest = InstallManifest
+    { manifestName      :: String
+    , manifestRepoUrl   :: String
+    , manifestRepoRef   :: Maybe String
+    , manifestCommit    :: String
+    , manifestHash      :: String
+    , manifestSourceDir :: FilePath
+    , manifestBinaries  :: [String]
+    } deriving (Eq, Show)
+
 data RepoInfo = RepoInfo
     { repoOwner :: String
     , repoName  :: String
     , repoRef   :: Maybe String
     } deriving (Eq, Show)
+
+installCommand :: C.GlobalOptions -> C.InstallOptions -> IO ()
+installCommand gopts opts = do
+    let appName = C.installName opts
+        repoUrlArg = C.installRepoUrl opts
+        repoRefArg = normalizeMaybe (C.installRepoRef opts)
+        pkgNameArg = C.installPkgName opts
+    validateInstallName appName
+    manager <- newTlsManager
+    token <- resolveGithubToken (normalizeMaybe (C.installGithubToken opts))
+    repoUrl <-
+      if null repoUrlArg
+        then lookupRepoUrlFromIndexByKind "app" appName pkgNameArg
+        else do
+          ensureGithubUrl "install" repoUrlArg
+          return repoUrlArg
+    archiveUrl <- requireRight =<< resolveGithubArchiveUrl manager token repoUrl repoRefArg
+    commitSha <- requireRight (commitShaFromArchiveUrl archiveUrl)
+    zigExe <- getZigExe
+    archiveHash <- requireRight =<< zigFetchHash zigExe archiveUrl
+    sourceDir <- prepareInstallSource appName repoUrl commitSha
+    unless (C.quiet gopts) $
+      putStrLn ("Building " ++ appName ++ " with acton build --release")
+    actonExe <- getExecutablePath
+    runProcessChecked (Just sourceDir) actonExe ["build", "--release"]
+    binaries <- discoverBuiltBinaries sourceDir
+    installBuiltBinaries appName repoUrl repoRefArg commitSha archiveHash sourceDir binaries
+    unless (C.quiet gopts) $ do
+      home <- getHomeDirectory
+      let binDir = home </> ".acton" </> "bin"
+      putStrLn ("Installed " ++ appName ++ " to " ++ binDir)
+
+uninstallCommand :: C.GlobalOptions -> C.UninstallOptions -> IO ()
+uninstallCommand gopts opts = do
+    let appName = C.uninstallName opts
+    validateInstallName appName
+    home <- getHomeDirectory
+    let binDir = home </> ".acton" </> "bin"
+        installedDir = home </> ".acton" </> "installed"
+        manifestPath = installedDir </> appName ++ ".json"
+    exists <- doesFileExist manifestPath
+    if not exists
+      then unless (C.quiet gopts) $
+        putStrLn ("Application package " ++ appName ++ " is not installed. Nothing to do.")
+      else do
+        manifest <- readInstallManifest manifestPath
+        when (manifestName manifest /= appName) $
+          throwProjectError ("ERROR: Install manifest " ++ manifestPath ++ " belongs to " ++ manifestName manifest)
+        manifests <- readInstallManifests installedDir
+        let otherOwners = M.fromList
+              [ (bin, manifestName other)
+              | other <- manifests
+              , manifestName other /= appName
+              , bin <- manifestBinaries other
+              ]
+        forM_ (manifestBinaries manifest) $ \binName ->
+          case M.lookup binName otherOwners of
+            Just owner ->
+              throwProjectError ("ERROR: Cannot uninstall " ++ appName ++ ": " ++ binName ++ " is also owned by " ++ owner)
+            Nothing -> do
+              let dest = binDir </> binName
+              pathExists <- doesPathExist dest
+              fileExists <- doesFileExist dest
+              when (pathExists && not fileExists) $
+                throwProjectError ("ERROR: Cannot uninstall " ++ appName ++ ": " ++ dest ++ " is not a regular file")
+              when fileExists (removeFile dest)
+        removeFile manifestPath
+        unless (C.quiet gopts) $
+          putStrLn ("Uninstalled " ++ appName)
 
 pkgAddCommand :: C.GlobalOptions -> C.PkgAddOptions -> IO ()
 pkgAddCommand _ opts = do
@@ -247,6 +331,150 @@ zigPkgRemoveCommand _ opts = do
         writeBuildSpec spec'
       else putStrLn ("Zig dependency " ++ depName ++ " not found in build configuration. Nothing to do.")
 
+prepareInstallSource :: String -> String -> String -> IO FilePath
+prepareInstallSource appName repoUrl commitSha = do
+    home <- getHomeDirectory
+    let appsDir = home </> ".cache" </> "acton" </> "apps"
+        sourceDir = appsDir </> appName ++ "-" ++ take 12 commitSha
+        cloneUrl = githubCloneUrl repoUrl
+    createDirectoryIfMissing True appsDir
+    exists <- doesDirectoryExist sourceDir
+    unless exists $
+      runProcessChecked Nothing "git" ["clone", "--quiet", "--no-checkout", cloneUrl, sourceDir]
+    runProcessChecked (Just sourceDir) "git" ["fetch", "--quiet", "origin", commitSha]
+    runProcessChecked (Just sourceDir) "git" ["checkout", "--quiet", "--force", "--detach", commitSha]
+    runProcessChecked (Just sourceDir) "git" ["clean", "-fdx", "--quiet"]
+    return sourceDir
+
+githubCloneUrl :: String -> String
+githubCloneUrl = takeWhile (/= '#')
+
+discoverBuiltBinaries :: FilePath -> IO [(FilePath, String, Permissions)]
+discoverBuiltBinaries sourceDir = do
+    let binDir = sourceDir </> "out" </> "bin"
+    exists <- doesDirectoryExist binDir
+    unless exists $
+      throwProjectError ("ERROR: Build produced no out/bin directory in " ++ sourceDir)
+    names <- listDirectory binDir
+    files <- filterM (\name -> doesFileExist (binDir </> name)) names
+    when (null files) $
+      throwProjectError ("ERROR: Build produced no binaries in " ++ binDir)
+    forM (sortOn id files) $ \name -> do
+      let src = binDir </> name
+      perms <- getPermissions src
+      return (src, name, perms)
+
+installBuiltBinaries :: String -> String -> Maybe String -> String -> String -> FilePath -> [(FilePath, String, Permissions)] -> IO ()
+installBuiltBinaries appName repoUrl repoRefArg commitSha archiveHash sourceDir binaries = do
+    home <- getHomeDirectory
+    let actonDir = home </> ".acton"
+        binDir = actonDir </> "bin"
+        installedDir = actonDir </> "installed"
+        manifestPath = installedDir </> appName ++ ".json"
+    createDirectoryIfMissing True binDir
+    createDirectoryIfMissing True installedDir
+    manifests <- readInstallManifests installedDir
+    let ownerByBin = M.fromList
+          [ (bin, manifestName manifest)
+          | manifest <- manifests
+          , bin <- manifestBinaries manifest
+          ]
+        oldManifest = findManifest appName manifests
+    forM_ binaries $ \(_, binName, _) -> do
+      let dest = binDir </> binName
+      case M.lookup binName ownerByBin of
+        Just owner | owner /= appName ->
+          throwProjectError ("ERROR: Cannot install " ++ appName ++ ": " ++ dest ++ " is owned by " ++ owner)
+        _ -> return ()
+      exists <- doesPathExist dest
+      when (exists && M.lookup binName ownerByBin == Nothing) $
+        throwProjectError ("ERROR: Cannot install " ++ appName ++ ": " ++ dest ++ " already exists and is not managed by Acton")
+    forM_ binaries $ \(src, binName, perms) -> do
+      let dest = binDir </> binName
+      copyFile src dest
+      setPermissions dest perms
+    case oldManifest of
+      Nothing -> return ()
+      Just manifest -> do
+        let newBins = map (\(_, binName, _) -> binName) binaries
+            staleBins = filter (`notElem` newBins) (manifestBinaries manifest)
+        forM_ staleBins $ \binName -> do
+          let dest = binDir </> binName
+          exists <- doesFileExist dest
+          when exists (removeFile dest)
+    writeInstallManifest manifestPath InstallManifest
+      { manifestName = appName
+      , manifestRepoUrl = repoUrl
+      , manifestRepoRef = repoRefArg
+      , manifestCommit = commitSha
+      , manifestHash = archiveHash
+      , manifestSourceDir = sourceDir
+      , manifestBinaries = map (\(_, binName, _) -> binName) binaries
+      }
+
+findManifest :: String -> [InstallManifest] -> Maybe InstallManifest
+findManifest appName = go
+  where
+    go [] = Nothing
+    go (manifest:rest)
+      | manifestName manifest == appName = Just manifest
+      | otherwise = go rest
+
+readInstallManifests :: FilePath -> IO [InstallManifest]
+readInstallManifests installedDir = do
+    exists <- doesDirectoryExist installedDir
+    if not exists
+      then return []
+      else do
+        names <- listDirectory installedDir
+        let jsonFiles = filter (".json" `isSuffixOf`) names
+        mapM (readInstallManifest . (installedDir </>)) jsonFiles
+
+readInstallManifest :: FilePath -> IO InstallManifest
+readInstallManifest path = do
+    content <- readIndexFile path
+    case Aeson.eitherDecode content of
+      Left err -> throwProjectError ("ERROR: Failed to parse install manifest " ++ path ++ ": " ++ err)
+      Right (Aeson.Object obj) ->
+        case ( lookupString "name" obj
+             , lookupString "repo_url" obj
+             , lookupString "commit" obj
+             , lookupString "hash" obj
+             , lookupString "source_dir" obj
+             , lookupStringList "binaries" obj
+             ) of
+          (Just n, Just ru, Just c, Just h, Just src, Just bins) ->
+            return InstallManifest
+              { manifestName = n
+              , manifestRepoUrl = ru
+              , manifestRepoRef = lookupString "repo_ref" obj
+              , manifestCommit = c
+              , manifestHash = h
+              , manifestSourceDir = src
+              , manifestBinaries = bins
+              }
+          _ ->
+            throwProjectError ("ERROR: Invalid install manifest " ++ path)
+      Right _ ->
+        throwProjectError ("ERROR: Invalid install manifest " ++ path)
+
+writeInstallManifest :: FilePath -> InstallManifest -> IO ()
+writeInstallManifest path manifest =
+    BL.writeFile path (Aeson.encode (Aeson.object (manifestFields manifest)))
+  where
+    manifestFields manifest =
+      [ "name" Aeson..= manifestName manifest
+      , "repo_url" Aeson..= manifestRepoUrl manifest
+      , "commit" Aeson..= manifestCommit manifest
+      , "hash" Aeson..= manifestHash manifest
+      , "source_dir" Aeson..= manifestSourceDir manifest
+      , "binaries" Aeson..= manifestBinaries manifest
+      ] ++ repoRefField manifest
+    repoRefField manifest =
+      case manifestRepoRef manifest of
+        Nothing -> []
+        Just repoRef -> ["repo_ref" Aeson..= repoRef]
+
 upsertPkgDep :: BuildSpec.BuildSpec -> String -> String -> String -> Maybe String -> Maybe String -> (BuildSpec.BuildSpec, [String])
 upsertPkgDep spec depName depUrl depHash depRepoUrl depRepoRef =
     case M.lookup depName (BuildSpec.dependencies spec) of
@@ -335,7 +563,10 @@ writeBuildSpec spec = do
           Right updated -> writeFile "Build.act" updated
 
 lookupRepoUrlFromIndex :: String -> String -> IO String
-lookupRepoUrlFromIndex depName pkgNameArg = do
+lookupRepoUrlFromIndex = lookupRepoUrlFromIndexByKind "library"
+
+lookupRepoUrlFromIndexByKind :: String -> String -> String -> IO String
+lookupRepoUrlFromIndexByKind wantedKind depName pkgNameArg = do
     home <- getHomeDirectory
     let indexPath = home </> ".cache" </> "acton" </> "package-index.json"
     exists <- doesFileExist indexPath
@@ -348,16 +579,22 @@ lookupRepoUrlFromIndex depName pkgNameArg = do
     case filter matchEntry entries of
       [] -> throwProjectError ("ERROR: Package " ++ pkgName ++ " not found in package index")
       entriesForName ->
-        case filter (elem "library" . indexKinds) entriesForName of
+        case filter (elem wantedKind . indexKinds) entriesForName of
           (entry:_) -> return (indexRepoUrl entry)
-          [] -> throwProjectError ("ERROR: Package " ++ pkgName ++ " is not an acton-library package")
+          [] -> throwProjectError ("ERROR: Package " ++ pkgName ++ " is not an acton-" ++ wantedKind ++ " package")
 
 decodePackageIndex :: BL.ByteString -> Either String [PackageEntry]
-decodePackageIndex content = do
+decodePackageIndex = decodePackageIndexByKind "library"
+
+decodeAppPackageIndex :: BL.ByteString -> Either String [PackageEntry]
+decodeAppPackageIndex = decodePackageIndexByKind "app"
+
+decodePackageIndexByKind :: String -> BL.ByteString -> Either String [PackageEntry]
+decodePackageIndexByKind wantedKind content = do
     entries <- decodePackageIndexEntries content
     let pkgs = [ PackageEntry n d r
                | PackageIndexEntry n ks d r <- entries
-               , "library" `elem` ks
+               , wantedKind `elem` ks
                ]
     return pkgs
 
@@ -437,6 +674,18 @@ parseGithubRepoUrl url =
     dropGitSuffix s =
       if ".git" `isSuffixOf` s then take (length s - 4) s else s
 
+commitShaFromArchiveUrl :: String -> Either String String
+commitShaFromArchiveUrl url =
+    case splitOn "/archive/" url of
+      [_, archiveName]
+        | ".zip" `isSuffixOf` archiveName ->
+            let zipSuffix = ".zip" :: String
+                sha = take (length archiveName - length zipSuffix) archiveName
+            in if null sha
+                 then Left ("Unable to determine commit SHA from " ++ url)
+                 else Right sha
+      _ -> Left ("Unable to determine commit SHA from " ++ url)
+
 resolveGithubArchiveUrl :: Manager -> Maybe String -> String -> Maybe String -> IO (Either String String)
 resolveGithubArchiveUrl manager token repoUrl repoRefArg = do
     case parseGithubRepoUrl repoUrl of
@@ -479,20 +728,87 @@ fetchDefaultBranch manager token info = do
 
 fetchRefSha :: Manager -> Maybe String -> RepoInfo -> String -> IO (Either String String)
 fetchRefSha manager token info refName = do
-    let url = "https://api.github.com/repos/" ++ repoOwner info ++ "/" ++ repoName info ++ "/git/refs/heads/" ++ refName
+    if isGithubCommitSha refName
+      then return (Right refName)
+      else do
+        branch <- fetchGitRefSha manager token info ("heads/" ++ refName)
+        case branch of
+          Right shaVal -> return (Right shaVal)
+          Left branchErr -> do
+            tag <- fetchGitRefSha manager token info ("tags/" ++ refName)
+            case tag of
+              Right shaVal -> return (Right shaVal)
+              Left tagErr -> do
+                commit <- fetchCommitSha manager token info refName
+                case commit of
+                  Right shaVal -> return (Right shaVal)
+                  Left commitErr ->
+                    return (Left ("Unable to resolve ref '" ++ refName ++ "' as branch, tag, or commit SHA: "
+                               ++ branchErr ++ "; " ++ tagErr ++ "; " ++ commitErr))
+
+isGithubCommitSha :: String -> Bool
+isGithubCommitSha refName =
+    length refName == 40 && all isHexDigit refName
+
+fetchGitRefSha :: Manager -> Maybe String -> RepoInfo -> String -> IO (Either String String)
+fetchGitRefSha manager token info refName = do
+    let url = "https://api.github.com/repos/" ++ repoOwner info ++ "/" ++ repoName info ++ "/git/refs/" ++ refName
     obj <- fetchGithubObject manager token url
     case obj of
       Left err -> return (Left err)
       Right o ->
         case lookupMessage o of
-          Just msg -> return (Left ("Unable to retrieve branch information: " ++ msg))
+          Just msg -> return (Left ("Unable to retrieve ref information: " ++ msg))
           Nothing ->
             case AesonKM.lookup (AesonKey.fromString "object") o of
               Just (Aeson.Object obj) ->
-                case lookupString "sha" obj of
-                  Just shaVal -> return (Right shaVal)
-                  Nothing -> return (Left "No SHA")
+                case (lookupString "type" obj, lookupString "sha" obj) of
+                  (Just objType, Just shaVal) -> resolveGitObjectSha manager token info objType shaVal
+                  (_, Nothing) -> return (Left "No SHA")
+                  (Nothing, _) -> return (Left "No object type")
               _ -> return (Left "No object")
+
+resolveGitObjectSha :: Manager -> Maybe String -> RepoInfo -> String -> String -> IO (Either String String)
+resolveGitObjectSha manager token info objType shaVal
+  | objType == "commit" = return (Right shaVal)
+  | objType == "tag" = fetchTagTargetSha manager token info shaVal 5
+  | otherwise = return (Left ("Unsupported Git object type " ++ objType))
+
+fetchTagTargetSha :: Manager -> Maybe String -> RepoInfo -> String -> Int -> IO (Either String String)
+fetchTagTargetSha _ _ _ _ 0 =
+    return (Left "Annotated tag nesting too deep")
+fetchTagTargetSha manager token info tagSha depth = do
+    let url = "https://api.github.com/repos/" ++ repoOwner info ++ "/" ++ repoName info ++ "/git/tags/" ++ tagSha
+    obj <- fetchGithubObject manager token url
+    case obj of
+      Left err -> return (Left err)
+      Right o ->
+        case lookupMessage o of
+          Just msg -> return (Left ("Unable to retrieve tag information: " ++ msg))
+          Nothing ->
+            case AesonKM.lookup (AesonKey.fromString "object") o of
+              Just (Aeson.Object target) ->
+                case (lookupString "type" target, lookupString "sha" target) of
+                  (Just objType, Just shaVal)
+                    | objType == "tag" -> fetchTagTargetSha manager token info shaVal (depth - 1)
+                    | otherwise -> resolveGitObjectSha manager token info objType shaVal
+                  (_, Nothing) -> return (Left "No tag target SHA")
+                  (Nothing, _) -> return (Left "No tag target object type")
+              _ -> return (Left "No tag target object")
+
+fetchCommitSha :: Manager -> Maybe String -> RepoInfo -> String -> IO (Either String String)
+fetchCommitSha manager token info refName = do
+    let url = "https://api.github.com/repos/" ++ repoOwner info ++ "/" ++ repoName info ++ "/commits/" ++ refName
+    obj <- fetchGithubObject manager token url
+    case obj of
+      Left err -> return (Left err)
+      Right o ->
+        case lookupMessage o of
+          Just msg -> return (Left ("Unable to retrieve commit information: " ++ msg))
+          Nothing ->
+            case lookupString "sha" o of
+              Just shaVal -> return (Right shaVal)
+              Nothing -> return (Left "No commit SHA")
 
 fetchGithubObject :: Manager -> Maybe String -> String -> IO (Either String Aeson.Object)
 fetchGithubObject manager token url = do
@@ -632,6 +948,25 @@ zigFetchHash zigExe depUrl = do
               go (attempt + 1) (min maxDelay (delay * 2))
     go 1 baseDelay
 
+runProcessChecked :: Maybe FilePath -> FilePath -> [String] -> IO ()
+runProcessChecked cwdOpt exe args = do
+    res <- try (readCreateProcessWithExitCode command "") :: IO (Either SomeException (ExitCode, String, String))
+    case res of
+      Left err ->
+        throwProjectError ("ERROR: Failed to run " ++ unwords (exe:args) ++ ": " ++ displayException err)
+      Right (ExitSuccess, _, _) ->
+        return ()
+      Right (ExitFailure code, out, err) ->
+        throwProjectError $
+          "ERROR: Command failed (" ++ show code ++ "): " ++ unwords (exe:args)
+          ++ renderOutput "stdout" out
+          ++ renderOutput "stderr" err
+  where
+    command = (proc exe args) { cwd = cwdOpt }
+    renderOutput label output =
+      let body = trim output
+      in if null body then "" else "\n" ++ label ++ ":\n" ++ body
+
 getZigExe :: IO FilePath
 getZigExe = do
     execDir <- takeDirectory <$> getExecutablePath
@@ -642,6 +977,22 @@ validateDepName :: String -> IO ()
 validateDepName name =
     unless (isValidDepName name) $
       throwProjectError ("Invalid dependency name '" ++ name ++ "', must start with a letter and only contain letters, numbers and underscores")
+
+validateInstallName :: String -> IO ()
+validateInstallName name =
+    unless (isValidInstallName name) $
+      throwProjectError ("Invalid application package name '" ++ name ++ "', must only contain letters, numbers, '.', '_' and '-'")
+
+isValidInstallName :: String -> Bool
+isValidInstallName name =
+    not (null name)
+    && name /= "."
+    && name /= ".."
+    && all isValidInstallNameChar name
+
+isValidInstallNameChar :: Char -> Bool
+isValidInstallNameChar c =
+    isAsciiAlphaNumUnderscore c || c == '-' || c == '.'
 
 isValidDepName :: String -> Bool
 isValidDepName [] = False

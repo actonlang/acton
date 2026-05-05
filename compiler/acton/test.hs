@@ -460,6 +460,24 @@ parseFlagTests =
           assertBool "sig should skip final build" (C.skip_build opts)
         _ ->
           assertFailure "expected sig command"
+  , testCase "install parser accepts package options" $ do
+      parsed <- parseArgs ["install", "ncurl", "--repo-url", "https://github.com/stratoweave/ncurl", "--repo-ref", "main", "--pkg-name", "ncurl-index", "--github-token", "tok"]
+      case parsed of
+        C.CmdOpt _ (C.Install installOpts) -> do
+          assertEqual "install name" "ncurl" (C.installName installOpts)
+          assertEqual "repo url" "https://github.com/stratoweave/ncurl" (C.installRepoUrl installOpts)
+          assertEqual "repo ref" "main" (C.installRepoRef installOpts)
+          assertEqual "pkg name" "ncurl-index" (C.installPkgName installOpts)
+          assertEqual "github token" "tok" (C.installGithubToken installOpts)
+        _ ->
+          assertFailure "expected install command"
+  , testCase "uninstall parser accepts app name" $ do
+      parsed <- parseArgs ["uninstall", "ncurl"]
+      case parsed of
+        C.CmdOpt _ (C.Uninstall uninstallOpts) ->
+          assertEqual "uninstall name" "ncurl" (C.uninstallName uninstallOpts)
+        _ ->
+          assertFailure "expected uninstall command"
   , testCase "sig finds prebuilt dependency interfaces" $ do
       withSystemTempDirectory "acton-sig-prebuilt-dep" $ \tmp -> do
         actonBinDir <- Paths_acton.getBinDir
@@ -1147,6 +1165,15 @@ pkgCliTests =
             assertEqual "owner" "actonlang" (PkgCommands.repoOwner info)
             assertEqual "repo" "foo" (PkgCommands.repoName info)
             assertEqual "ref" (Just "main") (PkgCommands.repoRef info)
+  , testCase "github clone url strips ref fragment" $ do
+        assertEqual "clone url"
+          "https://github.com/actonlang/foo.git"
+          (PkgCommands.githubCloneUrl "https://github.com/actonlang/foo.git#main")
+  , testCase "github commit sha recognizer requires full sha" $ do
+        assertBool "full sha"
+          (PkgCommands.isGithubCommitSha "0123456789abcdef0123456789abcdef01234567")
+        assertBool "short sha is resolved through GitHub"
+          (not (PkgCommands.isGithubCommitSha "0123456"))
   , testCase "pkg search matches prefix" $ do
         let pkg = PkgCommands.PackageEntry "foo" "desc" "https://github.com/actonlang/foo"
         ok <- PkgCommands.matchesAllTerms ["foo"] pkg
@@ -1165,6 +1192,18 @@ pkgCliTests =
           Right pkgs -> do
             assertEqual "one package" 1 (length pkgs)
             assertEqual "name" "foo" (PkgCommands.pkgName (head pkgs))
+  , testCase "decode package index returns apps" $ do
+        let body = concat
+              [ "{\"packages\":["
+              , "{\"name\":\"foo\",\"kinds\":[\"library\",\"app\"],\"description\":\"desc\",\"repo_url\":\"https://github.com/actonlang/foo\"}"
+              , ",{\"name\":\"bar\",\"kinds\":[\"app\"],\"description\":\"app\",\"repo_url\":\"https://github.com/actonlang/bar\"}"
+              , ",{\"name\":\"baz\",\"kinds\":[\"library\"],\"description\":\"lib\",\"repo_url\":\"https://github.com/actonlang/baz\"}"
+              , "]}"
+              ]
+        case PkgCommands.decodeAppPackageIndex (LBS.pack body) of
+          Left err -> assertFailure err
+          Right pkgs -> do
+            assertEqual "two apps" ["bar", "foo"] (sort (map PkgCommands.pkgName pkgs))
   , testCase "decode package index requires kinds" $ do
         let body = concat
               [ "{\"packages\":["
