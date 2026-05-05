@@ -3,6 +3,7 @@
 module Main (main) where
 
 import           Control.Monad (unless, when)
+import qualified Data.Binary as Binary
 import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.ByteString as B
 import qualified Data.Text as T
@@ -468,6 +469,12 @@ rewriteTySourceMeta :: FilePath -> Maybe InterfaceFiles.SourceFileMeta -> IO ()
 rewriteTySourceMeta tyPath sourceMeta' = do
   (_mods, nmod, tmod, _sourceMeta, srcHash, pubHash, implHash, imps, nameHashes, roots, tests, mdoc) <- InterfaceFiles.readFile tyPath
   InterfaceFiles.writeFile tyPath srcHash pubHash implHash sourceMeta' imps nameHashes roots tests mdoc nmod tmod
+
+rewriteTyVersion :: FilePath -> [Int] -> IO ()
+rewriteTyVersion tyPath version' = do
+  (_mods, nmod, tmod, sourceMeta, srcHash, pubHash, implHash, imps, nameHashes, roots, tests, mdoc) <- InterfaceFiles.readFile tyPath
+  LBS.writeFile tyPath $
+    Binary.encode ((version', sourceMeta, srcHash, pubHash, implHash), imps, nameHashes, roots, tests, mdoc, nmod, tmod)
 
 readTySourceMeta :: FilePath -> IO (Maybe InterfaceFiles.SourceFileMeta)
 readTySourceMeta tyPath = do
@@ -1162,6 +1169,28 @@ p26_corrupt_ty_header = testCase "26-corrupt .ty header forces re-parse" $ do
   writeFileUtf8 tyA "garbage\n"
   out <- buildOutIn proj
   assertBool "expected a.act to type check after corrupt .ty" (typechecked out modA)
+
+p26_ty_version_mismatch :: TestTree
+p26_ty_version_mismatch = testCase "26b-.ty version mismatch forces re-parse" $ do
+  let proj = casesProjDir
+      src = casesSrcDir
+      modA = modLabel proj "a"
+      tyA = proj </> "out" </> "types" </> "a.ty"
+  ensureCasesProject
+  writeFileUtf8 (src </> "a.act") "aaa = 1\n"
+  writeFileUtf8 (src </> "c.act") $ T.unlines
+    [ "import a"
+    , ""
+    , "actor main(env: Env):"
+    , "    print(a.aaa)"
+    , "    env.exit(0)"
+    ]
+  _ <- buildOutIn proj
+  rewriteTyVersion tyA (map (+ 1) A.version)
+  out <- buildOutIn proj
+  assertBool "expected a.act to type check after .ty version mismatch" (typechecked out modA)
+  assertBool "did not expect raw .ty version mismatch" $
+    not (".ty version mismatch" `T.isInfixOf` out)
 
 p27_overlay_source_provider :: TestTree
 p27_overlay_source_provider = testCase "27-overlay snapshots drive readModuleTask" $ do
@@ -2109,6 +2138,7 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
       , p24_codegen_equal_hash
       , p25_whitespace_change
       , p26_corrupt_ty_header
+      , p26_ty_version_mismatch
       , p27_overlay_source_provider
       , p28_protocol_extension_deps
       , p29_protocol_impl_rebuild
