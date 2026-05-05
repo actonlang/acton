@@ -53,10 +53,11 @@ data PackageEntry = PackageEntry
     , pkgRepoUrl     :: String
     } deriving (Eq, Show)
 
-data PackageEntryRaw = PackageEntryRaw
-    { rawName        :: Maybe String
-    , rawDescription :: Maybe String
-    , rawRepoUrl     :: Maybe String
+data PackageIndexEntry = PackageIndexEntry
+    { indexName        :: String
+    , indexKinds       :: [String]
+    , indexDescription :: String
+    , indexRepoUrl     :: String
     } deriving (Eq, Show)
 
 data RepoInfo = RepoInfo
@@ -341,42 +342,54 @@ lookupRepoUrlFromIndex depName pkgNameArg = do
     unless exists $
       throwProjectError ("ERROR: Package index not found at " ++ indexPath ++ "\nHINT: Run: acton pkg update")
     content <- readIndexFile indexPath
-    entries <- requireRight (decodePackageIndexRaw content)
+    entries <- requireRight (decodePackageIndexEntries content)
     let pkgName = if null pkgNameArg then depName else pkgNameArg
-        matchEntry e = rawName e == Just pkgName
+        matchEntry e = indexName e == pkgName
     case filter matchEntry entries of
       [] -> throwProjectError ("ERROR: Package " ++ pkgName ++ " not found in package index")
-      (entry:_) ->
-        case rawRepoUrl entry of
-          Just url | not (null url) -> return url
-          _ -> throwProjectError ("ERROR: Package " ++ pkgName ++ " in index is missing 'repo_url'")
+      entriesForName ->
+        case filter (elem "library" . indexKinds) entriesForName of
+          (entry:_) -> return (indexRepoUrl entry)
+          [] -> throwProjectError ("ERROR: Package " ++ pkgName ++ " is not an acton-library package")
 
 decodePackageIndex :: BL.ByteString -> Either String [PackageEntry]
 decodePackageIndex content = do
-    raws <- decodePackageIndexRaw content
+    entries <- decodePackageIndexEntries content
     let pkgs = [ PackageEntry n d r
-               | PackageEntryRaw (Just n) (Just d) (Just r) <- raws
+               | PackageIndexEntry n ks d r <- entries
+               , "library" `elem` ks
                ]
     return pkgs
 
-decodePackageIndexRaw :: BL.ByteString -> Either String [PackageEntryRaw]
-decodePackageIndexRaw content =
+decodePackageIndexEntries :: BL.ByteString -> Either String [PackageIndexEntry]
+decodePackageIndexEntries content =
     case Aeson.eitherDecode content of
       Left err -> Left ("ERROR: Failed to parse package index JSON: " ++ err)
       Right (Aeson.Object obj) ->
         case AesonKM.lookup (AesonKey.fromString "packages") obj of
-          Just (Aeson.Array arr) -> Right (map parseEntry (toList arr))
+          Just (Aeson.Array arr) -> mapM parseEntry (zip [0 :: Int ..] (toList arr))
           _ -> Left "ERROR: Invalid package index: top-level 'packages' list missing or wrong type"
       Right _ ->
         Left "ERROR: Invalid package index: top-level 'packages' list missing or wrong type"
   where
-    parseEntry (Aeson.Object o) =
-      PackageEntryRaw
-        { rawName = lookupString "name" o
-        , rawDescription = lookupString "description" o
-        , rawRepoUrl = lookupString "repo_url" o
-        }
-    parseEntry _ = PackageEntryRaw Nothing Nothing Nothing
+    parseEntry (idx, Aeson.Object o) =
+      case ( lookupString "name" o
+           , lookupStringList "kinds" o
+           , lookupString "description" o
+           , lookupString "repo_url" o
+           ) of
+        (Just n, Just ks, Just d, Just r)
+          | null ks ->
+              Left ("ERROR: Invalid package index entry " ++ show idx ++ ": expected at least one kind")
+          | all validPackageKind ks -> Right (PackageIndexEntry n ks d r)
+          | otherwise ->
+              Left ("ERROR: Invalid package index entry " ++ show idx ++ ": unsupported kind in 'kinds'")
+        _ ->
+          Left ("ERROR: Invalid package index entry " ++ show idx ++ ": expected name, kinds, description, and repo_url")
+    parseEntry (idx, _) =
+      Left ("ERROR: Invalid package index entry " ++ show idx ++ ": expected object")
+
+    validPackageKind k = k == "library" || k == "app"
 
 matchesAllTerms :: [String] -> PackageEntry -> IO Bool
 matchesAllTerms terms pkg = do
@@ -539,6 +552,15 @@ lookupString key obj =
     case AesonKM.lookup (AesonKey.fromString key) obj of
       Just (Aeson.String s) -> Just (T.unpack s)
       _ -> Nothing
+
+lookupStringList :: String -> Aeson.Object -> Maybe [String]
+lookupStringList key obj =
+    case AesonKM.lookup (AesonKey.fromString key) obj of
+      Just (Aeson.Array arr) -> mapM valueString (toList arr)
+      _ -> Nothing
+  where
+    valueString (Aeson.String s) = Just (T.unpack s)
+    valueString _ = Nothing
 
 lookupMessage :: Aeson.Object -> Maybe String
 lookupMessage = lookupString "message"

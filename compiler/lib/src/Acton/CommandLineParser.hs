@@ -197,7 +197,7 @@ cmdLineParser       = hsubparser
                         <> command "sig"     (info (CmdOpt <$> globalOptions <*> (Sig <$> sigOptions)) (progDesc "Show inferred type signatures"))
                         <> command "test"    (info (CmdOpt <$> globalOptions <*> (Test <$> testCommand)) (progDesc "Build and run project tests"))
                         <> command "fetch"   (info (CmdOpt <$> globalOptions <*> pure Fetch) (progDesc "Fetch project dependencies (offline prep)"))
-                        <> command "pkg"     (info (CmdOpt <$> globalOptions <*> pkgSubcommands) (progDesc "Package/dependency commands"))
+                        <> command "pkg"     (info (CmdOpt <$> globalOptions <*> pkgSubcommands) (progDesc "Library package/dependency commands"))
                         <> command "zig-pkg" (info (CmdOpt <$> globalOptions <*> zigPkgSubcommands) (progDesc "Zig package dependency commands"))
                         <> command "spec"    (info (CmdOpt <$> globalOptions <*> (BuildSpecCmd <$> buildSpecCommand)) (progDesc "Inspect or update build specification"))
                         <> command "cloud"   (info (CmdOpt <$> globalOptions <*> (Cloud <$> cloudOptions)) (progDesc "Run an Acton project in the cloud"))
@@ -355,11 +355,11 @@ compileOptions = CompileOptions
 pkgSubcommands :: Parser Command
 pkgSubcommands = hsubparser
   (  command "show"    (info (pure PkgShow) (progDesc "Show dependency tree with overrides"))
-  <> command "add"     (info (PkgAdd <$> pkgAddOptions) (progDesc "Add package dependency"))
-  <> command "remove"  (info (PkgRemove <$> pkgRemoveOptions) (progDesc "Remove package dependency"))
-  <> command "upgrade" (info (PkgUpgrade <$> pkgUpgradeOptions) (progDesc "Upgrade (or downgrade) package dependency"))
+  <> command "add"     (info (PkgAdd <$> pkgAddOptions) (progDesc "Add library package dependency"))
+  <> command "remove"  (info (PkgRemove <$> pkgRemoveOptions) (progDesc "Remove library package dependency"))
+  <> command "upgrade" (info (PkgUpgrade <$> pkgUpgradeOptions) (progDesc "Upgrade (or downgrade) library package dependency"))
   <> command "update"  (info (pure PkgUpdate) (progDesc "Update package index"))
-  <> command "search"  (info (PkgSearch <$> pkgSearchOptions) (progDesc "Search package index"))
+  <> command "search"  (info (PkgSearch <$> pkgSearchOptions) (progDesc "Search library package index"))
   )
 
 githubTokenOption :: Parser String

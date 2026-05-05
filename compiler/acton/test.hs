@@ -1153,13 +1153,27 @@ pkgCliTests =
         assertBool "prefix matches" ok
         ok2 <- PkgCommands.matchesAllTerms ["bar"] pkg
         assertBool "non-prefix does not match" (not ok2)
-  , testCase "decode package index filters invalid entries" $ do
-        let body = "{\"packages\":[{\"name\":\"foo\",\"description\":\"desc\",\"repo_url\":\"https://github.com/actonlang/foo\"},{\"name\":\"bad\"}]}"
+  , testCase "decode package index returns only libraries" $ do
+        let body = concat
+              [ "{\"packages\":["
+              , "{\"name\":\"foo\",\"kinds\":[\"library\",\"app\"],\"description\":\"desc\",\"repo_url\":\"https://github.com/actonlang/foo\"}"
+              , ",{\"name\":\"bar\",\"kinds\":[\"app\"],\"description\":\"app\",\"repo_url\":\"https://github.com/actonlang/bar\"}"
+              , "]}"
+              ]
         case PkgCommands.decodePackageIndex (LBS.pack body) of
           Left err -> assertFailure err
           Right pkgs -> do
             assertEqual "one package" 1 (length pkgs)
             assertEqual "name" "foo" (PkgCommands.pkgName (head pkgs))
+  , testCase "decode package index requires kinds" $ do
+        let body = concat
+              [ "{\"packages\":["
+              , "{\"name\":\"foo\",\"description\":\"desc\",\"repo_url\":\"https://github.com/actonlang/foo\"}"
+              , "]}"
+              ]
+        case PkgCommands.decodePackageIndex (LBS.pack body) of
+          Left _ -> return ()
+          Right _ -> assertFailure "package index entry without kinds should fail"
   ]
 
 -- Creates testgroup from .act files found in specified directory
