@@ -11,6 +11,8 @@ module PkgCommands
   , zigPkgRemoveCommand
   , PackageEntry(..)
   , RepoInfo(..)
+  , githubCloneUrl
+  , isGithubCommitSha
   , parseGithubRepoUrl
   , decodePackageIndex
   , decodeAppPackageIndex
@@ -26,7 +28,7 @@ import Acton.Compile (loadBuildSpec, throwProjectError)
 import Control.Exception (IOException, SomeException, try, displayException, evaluate)
 import Control.Concurrent (threadDelay)
 import Control.Monad (filterM, forM, forM_, unless, when)
-import Data.Char (isSpace)
+import Data.Char (isHexDigit, isSpace)
 import Data.Foldable (toList)
 import Data.List (dropWhileEnd, isPrefixOf, isSuffixOf, sortOn)
 import Data.List.Split (splitOn)
@@ -334,14 +336,18 @@ prepareInstallSource appName repoUrl commitSha = do
     home <- getHomeDirectory
     let appsDir = home </> ".cache" </> "acton" </> "apps"
         sourceDir = appsDir </> appName ++ "-" ++ take 12 commitSha
+        cloneUrl = githubCloneUrl repoUrl
     createDirectoryIfMissing True appsDir
     exists <- doesDirectoryExist sourceDir
     unless exists $
-      runProcessChecked Nothing "git" ["clone", "--quiet", "--no-checkout", repoUrl, sourceDir]
-    runProcessChecked (Just sourceDir) "git" ["fetch", "--quiet", "origin"]
+      runProcessChecked Nothing "git" ["clone", "--quiet", "--no-checkout", cloneUrl, sourceDir]
+    runProcessChecked (Just sourceDir) "git" ["fetch", "--quiet", "origin", commitSha]
     runProcessChecked (Just sourceDir) "git" ["checkout", "--quiet", "--force", "--detach", commitSha]
     runProcessChecked (Just sourceDir) "git" ["clean", "-fdx", "--quiet"]
     return sourceDir
+
+githubCloneUrl :: String -> String
+githubCloneUrl = takeWhile (/= '#')
 
 discoverBuiltBinaries :: FilePath -> IO [(FilePath, String, Permissions)]
 discoverBuiltBinaries sourceDir = do
@@ -722,20 +728,87 @@ fetchDefaultBranch manager token info = do
 
 fetchRefSha :: Manager -> Maybe String -> RepoInfo -> String -> IO (Either String String)
 fetchRefSha manager token info refName = do
-    let url = "https://api.github.com/repos/" ++ repoOwner info ++ "/" ++ repoName info ++ "/git/refs/heads/" ++ refName
+    if isGithubCommitSha refName
+      then return (Right refName)
+      else do
+        branch <- fetchGitRefSha manager token info ("heads/" ++ refName)
+        case branch of
+          Right shaVal -> return (Right shaVal)
+          Left branchErr -> do
+            tag <- fetchGitRefSha manager token info ("tags/" ++ refName)
+            case tag of
+              Right shaVal -> return (Right shaVal)
+              Left tagErr -> do
+                commit <- fetchCommitSha manager token info refName
+                case commit of
+                  Right shaVal -> return (Right shaVal)
+                  Left commitErr ->
+                    return (Left ("Unable to resolve ref '" ++ refName ++ "' as branch, tag, or commit SHA: "
+                               ++ branchErr ++ "; " ++ tagErr ++ "; " ++ commitErr))
+
+isGithubCommitSha :: String -> Bool
+isGithubCommitSha refName =
+    length refName == 40 && all isHexDigit refName
+
+fetchGitRefSha :: Manager -> Maybe String -> RepoInfo -> String -> IO (Either String String)
+fetchGitRefSha manager token info refName = do
+    let url = "https://api.github.com/repos/" ++ repoOwner info ++ "/" ++ repoName info ++ "/git/refs/" ++ refName
     obj <- fetchGithubObject manager token url
     case obj of
       Left err -> return (Left err)
       Right o ->
         case lookupMessage o of
-          Just msg -> return (Left ("Unable to retrieve branch information: " ++ msg))
+          Just msg -> return (Left ("Unable to retrieve ref information: " ++ msg))
           Nothing ->
             case AesonKM.lookup (AesonKey.fromString "object") o of
               Just (Aeson.Object obj) ->
-                case lookupString "sha" obj of
-                  Just shaVal -> return (Right shaVal)
-                  Nothing -> return (Left "No SHA")
+                case (lookupString "type" obj, lookupString "sha" obj) of
+                  (Just objType, Just shaVal) -> resolveGitObjectSha manager token info objType shaVal
+                  (_, Nothing) -> return (Left "No SHA")
+                  (Nothing, _) -> return (Left "No object type")
               _ -> return (Left "No object")
+
+resolveGitObjectSha :: Manager -> Maybe String -> RepoInfo -> String -> String -> IO (Either String String)
+resolveGitObjectSha manager token info objType shaVal
+  | objType == "commit" = return (Right shaVal)
+  | objType == "tag" = fetchTagTargetSha manager token info shaVal 5
+  | otherwise = return (Left ("Unsupported Git object type " ++ objType))
+
+fetchTagTargetSha :: Manager -> Maybe String -> RepoInfo -> String -> Int -> IO (Either String String)
+fetchTagTargetSha _ _ _ _ 0 =
+    return (Left "Annotated tag nesting too deep")
+fetchTagTargetSha manager token info tagSha depth = do
+    let url = "https://api.github.com/repos/" ++ repoOwner info ++ "/" ++ repoName info ++ "/git/tags/" ++ tagSha
+    obj <- fetchGithubObject manager token url
+    case obj of
+      Left err -> return (Left err)
+      Right o ->
+        case lookupMessage o of
+          Just msg -> return (Left ("Unable to retrieve tag information: " ++ msg))
+          Nothing ->
+            case AesonKM.lookup (AesonKey.fromString "object") o of
+              Just (Aeson.Object target) ->
+                case (lookupString "type" target, lookupString "sha" target) of
+                  (Just objType, Just shaVal)
+                    | objType == "tag" -> fetchTagTargetSha manager token info shaVal (depth - 1)
+                    | otherwise -> resolveGitObjectSha manager token info objType shaVal
+                  (_, Nothing) -> return (Left "No tag target SHA")
+                  (Nothing, _) -> return (Left "No tag target object type")
+              _ -> return (Left "No tag target object")
+
+fetchCommitSha :: Manager -> Maybe String -> RepoInfo -> String -> IO (Either String String)
+fetchCommitSha manager token info refName = do
+    let url = "https://api.github.com/repos/" ++ repoOwner info ++ "/" ++ repoName info ++ "/commits/" ++ refName
+    obj <- fetchGithubObject manager token url
+    case obj of
+      Left err -> return (Left err)
+      Right o ->
+        case lookupMessage o of
+          Just msg -> return (Left ("Unable to retrieve commit information: " ++ msg))
+          Nothing ->
+            case lookupString "sha" o of
+              Just shaVal -> return (Right shaVal)
+              Nothing -> return (Left "No commit SHA")
 
 fetchGithubObject :: Manager -> Maybe String -> String -> IO (Either String Aeson.Object)
 fetchGithubObject manager token url = do

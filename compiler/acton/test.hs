@@ -1165,6 +1165,15 @@ pkgCliTests =
             assertEqual "owner" "actonlang" (PkgCommands.repoOwner info)
             assertEqual "repo" "foo" (PkgCommands.repoName info)
             assertEqual "ref" (Just "main") (PkgCommands.repoRef info)
+  , testCase "github clone url strips ref fragment" $ do
+        assertEqual "clone url"
+          "https://github.com/actonlang/foo.git"
+          (PkgCommands.githubCloneUrl "https://github.com/actonlang/foo.git#main")
+  , testCase "github commit sha recognizer requires full sha" $ do
+        assertBool "full sha"
+          (PkgCommands.isGithubCommitSha "0123456789abcdef0123456789abcdef01234567")
+        assertBool "short sha is resolved through GitHub"
+          (not (PkgCommands.isGithubCommitSha "0123456"))
   , testCase "pkg search matches prefix" $ do
         let pkg = PkgCommands.PackageEntry "foo" "desc" "https://github.com/actonlang/foo"
         ok <- PkgCommands.matchesAllTerms ["foo"] pkg
