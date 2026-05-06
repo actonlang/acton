@@ -3,8 +3,41 @@
 ## Unreleased
 
 ### Added
-- `re.match()` now accepts an optional `start_pos` to begin scanning at an offset.
-- Add `acton doc` command for generating documentation [#2292]
+- Add precise content-hash based build output reuse throughout the compiler
+  pipeline for optimal compilation [#2447, #2497, #2581, #2674]
+  - Acton now decides whether previous typechecking results, generated build
+    outputs, and downstream work are still valid from source and dependency
+    content instead of relying on file modification times
+  - Cached module interfaces record source hashes, module-level public and
+    implementation hashes, and per-name source / public / implementation hashes
+  - Per-name dependency hashes let the compiler track exactly which names a
+    declaration depends on, so unrelated edits do not force whole modules or
+    downstream dependents to be rebuilt
+  - Public type-signature changes rerun front passes for affected downstream
+    modules; implementation-only changes can refresh implementation hashes and
+    rerun back passes / code generation without forcing unrelated typechecking
+  - When hashes match, cached build output is reused directly instead of
+    reparsing, re-typechecking, or regenerating work that is already fresh
+- Add concurrent module compilation across the build graph. [#2524, #2527]
+  - The compiler schedules modules as soon as their dependencies are ready,
+    allowing independent parts of a project to typecheck in parallel
+  - Front passes and back passes are separated, so dependent modules can start
+    once an interface is available while normalization, C generation, and other
+    back-end work continue in parallel
+  - Ready modules are prioritized by critical path so large dependency branches
+    do not leave available workers idle
+  - This keeps project builds, watch mode, and LSP feedback responsive while
+    still producing the same deterministic build outputs
+- Add VS Code editor support through the Acton language server. [#2487, #2753]
+  - The VS Code extension can now show Acton syntax and type errors inline,
+    using the same parser and typechecker as `acton build`
+  - Completion suggests attribute names, function and method argument names,
+    and other relevant source-level names
+  - Hover shows Acton information for names under the cursor
+  - Editor state is kept in memory for fast lookups, so completion and
+    diagnostics stay responsive while typechecking continues
+- Add `acton doc` command for generating documentation [#2274, #2284, #2292,
+  #2293, #2295]
   - Supports multiple output formats (text, markdown, HTML)
   - Default is to open browser into HTML docs when window environment is
     available, in terminal we fall back to colored text output. Use `acton doc
@@ -17,8 +50,19 @@
     - colorized output of types etc
     - inter-module links to type definitions
     - explanatory tooltips for generic types
+- Add optional chaining and forced unwrapping for optional values [#2672, #2726]
+  - `person?.residence?.name` returns `None` when any step is `None`
+  - `person!.residence!.name` raises `ValueError` when a required step is
+    unexpectedly `None`
+  - Both forms support attribute access and method calls via `?.` / `!.`, plus
+    indexing and slicing via `?[...]` / `![...]`
+- Add `acton sig` to inspect inferred type signatures using the same
+  project-aware module and dependency resolution as `acton build`. [#2746]
+  - Useful when an error says `foo.bar` does not have attribute `X`, since
+    `acton sig foo.bar` resolves names like the compiler does: first as `bar`
+    in module `foo`, then as module `foo.bar`
 - Add docstring support throughout compiler and AST [#2282]
-  - Parse docstrings in AST declarations [#2269, #2270, #2271]
+  - Parse docstrings in AST declarations [#2269, #2270, #2271, #2565, #2736]
   - Unescape docstrings in NameInfo
   - Allow module docstrings before imports
 - Add short options support for argparse module [#2289]
@@ -30,7 +74,7 @@
   - Use the `hash()` function to get hash values: `h = hash(my_object)`
   - All built-in types implement Hashable protocol
   - Uses fast wyhash algorithm via Zig implementation
-- Parser / Syntax errors are now prettier [#2309]
+- Parser / Syntax errors are now prettier [#2306, #2307, #2309]
   - Replace basic error rendering with elegant unicode style using Diagnose library
   - Better structured error reporting using Megaparsec's ADT typed error system
 - Improve error messages for type variable name violations
@@ -49,7 +93,7 @@
      | Hint: Single upper case character (optionally followed by digits) are reserved for type variables. Use a longer name.
 -----+
 ```
-- Improve string interpolation parsing
+- Improve string interpolation parsing [#2321]
   - String parsing has been rewritten from scratch
   - String interpolation now works by default in all string literals (no f-prefix required)
     - Both `"hello {name}"` and `f"hello {name}"` support interpolation
@@ -87,17 +131,96 @@ ERROR: [error Syntax error]: Empty format specifier after ':'
 - Allow logging of optional values [#2382]
   - Change logging data parameter type from `dict[str, value]` to `dict[str, ?value]`
   - Enables structured logging with None values like `{"user": None, "count": 42}`
+- Add `acton build FILE` for file-oriented builds through the main CLI. [#2471,
+  #2592]
+- Add `acton build --watch` for fast edit/build feedback loops. [#2571]
+  - Watch mode performs an initial project build and then keeps running,
+    rebuilding automatically when source files change
+  - Ordinary `.act` file edits use the incremental compiler scheduler, so
+    unchanged modules, dependencies, and back-end work can be reused instead of
+    rebuilding the whole project
+  - Adding or removing source files, or changing `Build.act`, triggers project
+    rediscovery so the build graph stays aligned with the project layout and
+    dependency configuration
+  - New edits supersede older in-flight work, which keeps the compiler
+    responsive while a user is actively typing
+  - Single-file watch is also supported with `acton build FILE --watch` or
+    `acton FILE --watch`
+  - `acton test --watch` uses the same machinery and reruns affected test
+    modules after successful rebuilds
+- Add `acton spec` commands for inspecting and updating `Build.act` as JSON.
+  [#2534]
+- Expand `acton pkg` package management [#2534, #2554, #2586, #2596]
+  - `acton pkg update` downloads the package index
+  - `acton pkg search` searches the local package index
+  - `acton pkg add` can add packages by package name, archive URL, or GitHub
+    repository URL
+  - `acton pkg upgrade` updates dependencies with stored repository metadata
+  - `acton zig-pkg add/remove` manages Zig package dependencies in `Build.act`
+- Add project fingerprints to `Build.act` [#2634, #2681]
+  - Fingerprints identify project lineage and are validated against the project
+    name
+  - This makes accidental project renames and dependency identity conflicts
+    easier to detect
+- Add local dependency overrides with `--dep NAME=PATH`. [#2555]
+- Add release mode aliases [#2708]
+  - `--release` is `ReleaseSafe`
+  - `--release=small` and `--release=fast` select `ReleaseSmall` and
+    `ReleaseFast`
+- Add `--jobs`, `--tty`, `--no-progress`, and `--timing` controls to the main
+  `acton` CLI. [#2478, #2526, #2628]
+- Add `--parse-ast` for compiler debugging. [#2541]
+- Add JSON output for `acton test` and `acton test list`. [#2598]
+- Add a content-hash based result cache for `acton test`. [#2651]
+  - Test results can be reused when the tested module, its dependencies, and
+    expected snapshot data have not changed
+  - This makes repeated test runs much faster while still invalidating cached
+    results when relevant source or dependency content changes
+  - Use `acton test --no-cache` to bypass the cache and force selected tests to
+    rerun
+- Add `acton test --show-log` to always print captured test logs. [#2408]
+- Add `acton test --accept` as an alias for accepting snapshot / golden
+  output. [#2584]
+- Add `acton test stress` mode for repeated concurrent test execution.
+  [#2683, #2691, #2692, #2694]
+  - `--stress-workers` controls the worker count
+  - Stress output shows mixed outcomes and phase coverage while running
+- Add test capability tags with `testing.require()` and `acton test --tag`.
+  [#2655]
+- Add `--min-time`, `--max-time`, `--min-iter`, and `--max-iter` controls for
+  test runs. [#2467, #2408]
+- Add `u1`, `u8`, `i8`, and builtin `i64` support. [#2532, #2519]
+- Add `list.count()` method. [#2521]
+- Add JSON encoding / decoding for list values at the document root. [#2508]
+- Add `xml.Node.encode(pretty=True)` for pretty XML output. [#2512]
+- Add URI `quote()` and `unquote()` helpers. [#2719]
+- Add HTTPS server and TLS listener support. [#2576]
+- Add an Acton LLDB plugin for debugging Acton programs. [#2520]
+  - Adds `acton bt`, `acton locals`, `acton demangle`, and `acton break`
+    commands inside LLDB
+  - Shows filtered, Acton-demangled backtraces with argument values instead of
+    forcing users to read raw generated C symbol names
+  - Prints locals with Acton names and value summaries, including strings,
+    boxed values, objects, actors, classes, and generic value slots
+  - Supports Acton source breakpoints like `acton break src/main.act:42`
+- Add container image builds for Acton Debian packages. [#1404]
+- Add `PROFILE` build option to the Makefile. [#2664]
+- `re.match()` now accepts an optional `start_pos` to begin scanning at an
+  offset. [#2569]
 
 ### Changed
+- Move total build graph construction, dependency builds, and generated
+  build.zig / build.zig.zon dependency wiring into the compiler. [#2550,
+  #2551]
 - Use f-strings throughout standard library [#2297, #2290]
 - Improve process environment handling [#2298]
   - Inherit PATH when custom environment is provided
-- Enhance ecosystem lift process with additional documentation [#2288]
+- Enhance ecosystem lift process with additional documentation [#2272, #2288]
 - Extend QuickType with effect output for better comprehension translation [#2267]
 - Improve acton.rts.sleep platform coverage [#2303]
 - Switch to use new hash() function instead of __hash__ [#2255]
 - Remove __hash__ special method in favor of hash() builtin [#2304]
-- Rename `docs/acton-by-example` to `docs/acton-guide`
+- Rename `docs/acton-by-example` to `docs/acton-guide` [#2313]
 - Adopt Zig optimization levels in Acton [#2362]
   - Replace `--dev` flag with `--optimize` accepting: Debug, ReleaseSafe, ReleaseSmall, ReleaseFast
   - Change default from ReleaseFast to Debug (matching Zig's default)
@@ -106,10 +229,62 @@ ERROR: [error Syntax error]: Empty format specifier after ':'
 - Remove deprecated `--dev` option [#2366]
 - Revamp `actonc` debug / verbose mode [#2354]
 - Avoid writing `.ty` files in Types.reconstruct [#2357]
-- Remove unused sysLib & projLib fields from compiler Paths
+- Remove unused sysLib & projLib fields from compiler Paths [#2385]
   - Cleanup remnants from pre-Zig build system migration
-- Simplify Webex PR merge notification & handle escapes [#2384]
+- Simplify Webex PR merge notification & handle escapes [#2376, #2384, #2507]
   - Improve message formatting and environment variable handling
+- Retire the Acton-written CLI and make the Haskell compiler package provide
+  the `acton` executable directly. [#2607]
+  - `acton`, package management, testing, LSP, and compiler scheduling now use
+    shared compiler code
+  - The old `actonc` implementation has been renamed to the `acton` compiler
+    package
+- Require `Build.act` for projects and require `name` and `fingerprint` in
+  root project build files. [#2643, #2644]
+- Stabilize public interface hashes, include qualified free names in name
+  hashing, and preserve full source locations in cached interfaces. [#2578,
+  #2747, #2752]
+- Validate cached `.ty` files with source metadata and treat version, compiler,
+  and dependency mismatches as recoverable stale cache entries. [#2440, #2717,
+  #2718]
+- Defer full parsing until after project discovery. [#2742]
+- Pass explicit module selections into generated Zig builds so dependency builds
+  only build the modules selected by the compiler. [#2666]
+- Use canonical dependency roots in generated `build.zig.zon` files and isolate
+  transitive Zig dependency names. [#2690, #2696]
+- Upgrade the bundled Zig toolchain to 0.15.2. [#2590, #2594]
+- Use architecture-based default CPU settings for Zig targets. [#2574]
+- Rename `--ignore-compiler` to `--ignore-compiler-version` and make compiler
+  version / mtime mismatches explicit stale-cache checks. [#2568, #2573,
+  #2608, #2609]
+- Move generated C line directives behind `--dbg-no-lines`. [#2518]
+- Enable larger parallel GHC nurseries for compiler builds. [#2522]
+- Use HashMaps for imported type environments. [#2517]
+- Update the `acton new` project template. [#2589]
+- Track build cache growth with periodic checks. [#2475]
+- Make snapshot testing use `snapshots/expected` and `snapshots/output`
+  directories instead of the older golden layout. [#2620]
+- Make `acton test --name` regex based. [#2616]
+- Store discovered test metadata in `.ty` headers so test discovery can reuse
+  cached interfaces. [#2636]
+- Show cached test failures by default while keeping cached successes hidden.
+  [#2557]
+- Align test progress with build progress, use project-qualified module names
+  in progress output, and adapt progress width/timer fields to terminal width.
+  [#2618, #2619, #2628, #2665, #2667, #2682, #2731]
+- Use the provided `logging.Handler` in HTTP server actors. [#2698]
+- Set empty XML node `text` and `tail` values to `None`. [#2509]
+- Make `file.mkdir()` and `file.rmdir()` idempotent. [#2477]
+- Use `mkdtemp` semantics for temporary directory creation. [#2693]
+- Prebuild one-byte ASCII strings to reduce allocation churn. [#2705]
+- Use common dependency builds to avoid redundant rebuilds and guard root-pin
+  warnings behind `--quiet`. [#2649, #2653]
+
+### Removed
+- Remove numpy support from the compiler, parser, stdlib, and tests. [#2413]
+- Remove the old explicit stub compilation mode. [#2414]
+- Remove the old Acton-written `acton.act` CLI implementation after moving CLI
+  functionality into the compiler package. [#2607]
 
 ### Fixed
 - Fix string 'in' operator for substrings found at position 0 [#2280]
@@ -132,28 +307,164 @@ ERROR: [error Syntax error]: Empty format specifier after ':'
 - Fix Hashable protocol implementation [#2255]
   - Correct zig bytes definition
   - Fix issues with bytes containing NUL character
+- Fix solver handling of generic tuples, top-level constraint solving,
+  skolemized type variables, scoped constraints, optional bounds, and coerced
+  index targets. [#2319, #2332, #2339, #2438, #2564, #2570, #2587, #2603,
+  #2624, #2661, #2675]
+- Accept four or five quotes at the end of triple-quoted strings. [#2388]
+- Improve `str.__repr__()` to escape braces correctly and handle quoted
+  strings. [#2386]
+- Fix unclosed string parser diagnostics. [#2486]
+- Escape generated C identifiers that became keywords in C23. [#2480]
+- Fix Unicode handling in regular expressions. [#2540, #2553]
+- Fix parsing, inference, and code generation for negative integer literals,
+  including the most negative `i64` value. [#2492, #2543]
+- Infer `bigint` for integer literals outside the `i64` range. [#2519]
+- Fix `argparse` defaults for list arguments and preserve rest arguments after
+  `--`. [#2473, #2580]
+- Fix boolean singleton use and `None` checks in arbitrary boolean contexts.
+  [#2485, #2491]
+- Fix `bytes.startswith()` end-bound checks. [#2410]
+- Fix `bytes.split()` and `bytearray.split()` for empty separator edge cases.
+  [#2453]
+- Fix tuple printing when tuple values contain `None`. [#2430]
+- Implement `__repr__()` for exceptions. [#2421]
+- Fix printing lists that contain optional elements. [#2613]
+- Fix violations of the UTF-8 invariant when creating strings. [#2455]
+- Fix UTF-8 character / byte offset handling in string partitioning. [#2676]
+- Fix `process.pid()` after the process has exited. [#2405]
+- Fix process and build output handling for paths containing spaces. [#2516]
+- Fix UTF-8 handling in accepted golden test output. [#2593]
+- Fix JSON encoding of fixed-size integer values. [#2530]
+- Fix XML parse errors to use `XmlParseError` instead of generic runtime
+  errors. [#2420]
+- Fix XML special character escaping, CDATA decoding, UTF-8 handling, and
+  prefixed attribute decoding. [#2422, #2433]
+- Fix HTTP response callbacks to pass headers and treat header defaults
+  case-insensitively. [#2448]
+- Validate malformed HTTP requests and responses instead of accepting invalid
+  input or crashing during decode. [#2454, #2457]
+- Fix `is not None` lowering and optional narrowing through comprehension head
+  expressions. [#2412, #2402, #2720]
+- Fix sequential flow analysis around `$RAISE`. [#2401]
+- Fix `while ... else` handling and reevaluate effectful loop conditions each
+  iteration. [#2464, #2466]
+- Fix `and` / `or` expressions when unboxing is involved. [#2465]
+- Fix type casts to unboxable values during code generation. [#2479]
+- Fix conversion of dot selections with partially aliased import chains. [#2700]
+- Fix term substitution when the substitution range and domain overlap. [#2701]
+- Fix lambda lifting and CPS edge cases around converted closure types and
+  nested control flow. [#2709, #2735, #2737]
+- Fix class attribute initialization checks and improve diagnostics for
+  uninitialized attributes. [#2391]
+- Fix class-level and cyclic protocol witness handling. [#2484, #2488, #2556]
+- Fix class instance handling of type-parameter witnesses and prevent static
+  methods from being invoked on instances. [#2623]
+- Fix conversion of `Self` in protocol methods after moving protocol conversion
+  before constraint solving. [#2632]
+- Fix optional equality and optional-chain type inference edge cases. [#2716,
+  #2672, #2726]
+- Fix private imported names leaking through interfaces. [#2567, #2752]
+- Fix actor `self` checks and discovered actor test wrappers. [#2514, #2535]
+- Fix malformed module top-level statements by restricting modules to
+  declarations, imports, and assignments. [#2728]
+- Fix generated name collisions by prefixing generated names with the top-level
+  name. [#2729]
+- Fix stale transitive dependencies after import renames. [#2727]
+- Fix transitive imports for cached modules. [#2677]
+- Fix missing dependency name hashes by treating them as stale cache entries.
+  [#2637]
+- Fix dependency cache invalidation when a path from `--syspath` changes.
+  [#2510]
+- Fix dependency override handling for declared dependencies. [#2555]
+- Validate local `--dep` paths as Acton project roots. [#2638]
+- Rework dependency downloads and honor `http_proxy`. [#2640]
+- Fetch transitive remote dependencies reachable through path dependencies
+  before project discovery. [#2668]
+- Fix stale implementation refreshes when an interface hash is missing. [#2674]
+- Fix orphaned module artifacts after modules are removed. [#2633]
+- Preserve normal and test root stubs and prune orphaned binary executables.
+  [#2265, #2505, #2538]
+- Fix relative / absolute path handling for build files and build.zig.zon
+  syspath entries. [#2493, #2495]
+- Skip Zig builds for dependency projects when only Acton interface artifacts
+  are needed. [#2496]
+- Fix `Build.act` null handling and unused dependency builds. [#2539, #2557]
+- Force recompilation when an alternate output directory is selected. [#2513]
+- Fix `acton --parse` output. [#2536]
+- Fix `acton build` handling after Zig toolchain upgrades. [#2595]
+- Improve error handling for compiler back passes. [#2597]
+- Fix LSP stdout framing corruption. [#2629]
+- Fix RTS message waiting so actors are not missed between waiting states and
+  message delivery. [#2689]
+- Clean up libuv file requests to avoid stale request state. [#2695]
+- Work around macOS 26.4 command-line tools breaking Zig and set
+  `DEVELOPER_DIR=/dev/null` for actondb on macOS. [#2715, #2756]
+- Restore the Zig dist target. [#2745]
+- Delete an accidental root-level copy of `Types.hs`. [#2739]
 
 ### Documentation
 - Add ecosystem lift process documentation
-- Add Hashable protocol documentation to Acton Guide
+- Add Hashable protocol documentation to Acton Guide. [#2310]
+- Add actor `self`, collection comprehension, and guide organization updates.
+  [#2314, #2315, #2316, #2318]
+- Add Acton developer guide covering repository layout, build flow, compiler
+  passes, runtime, and testing internals. [#2566]
+- Reshape the Acton Guide around task-oriented language, project, testing, and
+  stdlib documentation. [#2734, #2740, #2750]
+- Document optional chaining and forced unwrapping. [#2722, #2732]
+- Document class initialization rules and improved uninitialized attribute
+  diagnostics. [#2391]
+- Document project fingerprints and the `Build.act` project format. [#2634,
+  #2644]
+- Document incremental compilation and content hashing. [#2610]
+- Document RTS backtrace debugging arguments. [#2615]
+- Explain constraint errors with rendered signatures. [#2751]
+- Clarify Acton lock ownership responsibilities. [#2678]
+- Update Ask Acton vector store data when the guide changes. [#2748]
 
 ### Testing / CI
 - Support test discovery of actors [#2337]
   - Recognize test actors without needing wrapper functions
   - Compiler generates wrappers automatically for discovered test actors
   - Remove old test types (sync/async/env test functions)
-- Update macOS CI to include macos-26 arm64 and drop macos-14, keeping the PR matrix small to avoid cache pressure.
+- Update macOS CI to include macos-15 x86_64/aarch64 and macos-26 arm64, and
+  drop macos-14 to keep the PR matrix small. [#2511, #2583]
 - Test run MUSL executables on Linux [#2355]
 - Test http2, netclics, zlib, netcli applications [#2338, #2331, #2324]
 - Add self name check for actors [#2317]
 - Add more parser / syntax error test cases [#2308]
 - Stop testing Debian 10 [#2352]
-- Drop Debian 11 from test-linux CI matrix
+- Drop Debian 11 from test-linux CI matrix [#2588]
   - this means we do not test / support Debian 11 as a OS dist for developing Acton itself
   - Debian 11 is still a valid run time target for Acton programs
     - run-linux still covers compiling & running Acton programs on Debian 11
 - Support multiple files for compiler testing framework [#2363]
   - Accumulate environment from modules to support imports
+- Add compiler pass golden tests for parse, kind, type, normalize, deactorize,
+  CPS, lambda lift, boxing, header generation, C generation, and signatures.
+  [#2548]
+- Add incremental rebuild regression tests with stable sanitized hash output.
+  [#2503, #2506, #2581, #2631]
+- Add snapshot testing coverage and cache validation for expected snapshot
+  metadata. [#2639, #2679]
+- Add stress testing fixtures with racy and crashing FFI examples. [#2683]
+- Add TLS stdlib tests and an HTTPS server test fixture. [#2572, #2576]
+- Add ecosystem and ACTMF application tests. [#2641, #2548]
+- Add more ecosystem applications to CI coverage. [#2641]
+- Add Linux container image builds from Debian packages. [#1404]
+- Build Debian packages on Ubuntu 22.04 and fix stack usage in build-debs.
+  [#2647, #2652]
+- Allow Telemetrify failures while macOS 26 support settles. [#2585]
+- Drop the shared Acton cache from CI. [#2605]
+- Drop Telemetrify from CI. [#2749]
+- Add build.zig generated-file gitignores. [#2656]
+- Close golden files after reading them during tests. [#2617]
+- Update GitHub Actions dependencies including checkout, cache,
+  upload/download-artifact, create-pull-request, Docker build actions, and
+  release-note extraction actions. [#2415, #2429, #2498, #2499, #2537,
+  #2544, #2558, #2559, #2560, #2561, #2669, #2670, #2684, #2685, #2686,
+  #2687, #2591, #2754, #2755]
 
 
 ## [0.26.0] - 2025-06-02

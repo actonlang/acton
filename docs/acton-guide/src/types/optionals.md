@@ -133,10 +133,10 @@ You do not normally write that helper yourself. The `!` syntax is the
 short form of "give me the value if it is present, otherwise raise
 `ValueError`".
 
-`!.` and `![...]` apply the same idea inside attribute access and
-indexing chains. They follow the same shapes as `?.` and `?[...]`, but
-raise `ValueError` if the value to the left is `None` instead of
-returning `None`.
+`!.` applies the same idea inside attribute access and method calls, and
+`![...]` applies it inside indexing and slicing chains. They follow the
+same shapes as `?.` and `?[...]`, but raise `ValueError` if the value to
+the left is `None` instead of returning `None`.
 
 ```python
 def required_residence_name(person: ?Person) -> str:
@@ -144,7 +144,9 @@ def required_residence_name(person: ?Person) -> str:
 ```
 
 This returns `str`, not `?str`. If `person`, `residence`, or `name` is
-`None`, evaluation stops and raises `ValueError`.
+`None`, evaluation stops and raises `ValueError`. The final `!.upper()`
+is a guarded method call: it only calls `upper()` after `name` has been
+unwrapped.
 
 You can mix `?` and `!` in the same chain. Later steps still see the
 result of earlier ones, so a later `!` will raise if an earlier step
