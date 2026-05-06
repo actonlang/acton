@@ -211,31 +211,38 @@ uniqPrefix s@Assign{}                  = head (bound s)
 uniqPrefix s@Signature{}               = head (bound s)
 uniqPrefix s                           = error ("Unexpected top-level stmt: " ++ prstr s)
 
-infTopStmt env s                        = do (cs,te,s) <- infEnv env s
+infTopStmt                              :: Env -> Stmt -> TypeM (TEnv, [Stmt])
+infTopStmt env (Decl l ds)              = do (_,te,ds) <- infEnv (setInDecl env) ds
+                                             (cs,ds) <- checkEnv (define te env) ds
+
                                              --traceM ("****************************************** infer (" ++ show (length cs) ++ ") " ++ prstrs (bound s))
                                              --traceM ("\n\n\n############\n" ++ render (nest 4 $ vcat $ map pretty te))
                                              --traceM ("------------\n" ++ render (nest 4 $ pretty s))
                                              --traceM ("\\\\\\\\\\\\\n" ++ render (nest 4 $ vcat $ map pretty cs))
 
-                                             (te,eq,s) <- genEnv env cs te s
-                                             let (eq0, eq1) = spliteqns eq
+                                             (te,eq,ds) <- genEnv env cs te ds
                                              --traceM ("============ push\n" ++ render (nest 4 $ vcat $ map pretty eq))
                                              --traceM ("~~~~~~~~~~~~ i.e. top:\n" ++ render (nest 4 $ vcat $ map pretty eq0))
                                              --traceM ("============ and scoped:\n" ++ render (nest 4 $ vcat $ map pretty eq1))
                                              --traceM ("------------ onto\n" ++ render (nest 4 $ pretty s))
+                                             finishToStmt env te eq (Decl l ds)
+infTopStmt env (Signature l ns sc d)    = return ([ (n, NSig sc d Nothing) | n <- ns ], [Signature l ns sc d])
+infTopStmt env (Assign l pats e)        = do (cs1,te,t,pats) <- infEnvT env pats
+                                             (cs2,e) <- inferSub env t e
+                                             eq <- solveAll env te (cs1++cs2)
+                                             finishToStmt env te eq (Assign l pats e)
 
-                                             te <- defaultTE env te
+finishToStmt env te eq s                = do te <- defaultX env te
                                              --traceM ("===========\n" ++ render (nest 4 $ vcat $ map pretty te))
                                              --traceM (".........................................."  ++ prstrs (bound s) ++ "\n")
-
-                                             s <- termred eq1 <$> usubst (pushEqns env eq0 s)
-                                             defaultVars (ufree s)
-                                             s <- usubst s
+                                             let (eq0, eq1) = spliteqns eq
+                                             s <- defaultX env =<< termred eq1 <$> usubst (pushEqns env eq0 s)
                                              tieWitKnots te [fixupSelf s]
 
-  where defaultTE env te                = do defaultVars (ufree te)
-                                             usubst te
-        defaultVars tvs                 = do tvs' <- ufree <$> usubst (map tUni tvs)
+defaultX                                :: (UFree a, USubst a) => Env -> a -> TypeM a
+defaultX env x                          = do defaultVars (ufree x)
+                                             usubst x
+  where defaultVars tvs                 = do tvs' <- ufree <$> usubst (map tUni tvs)
                                              sequence [ usubstitute tv (dflt (uvkind tv)) | tv <- tvs' ]
         dflt KType                      = tNone
         dflt KFX                        = fxPure
@@ -270,8 +277,8 @@ inject env eqs (With l [] ss)           = With l [] (injlast eqs ss)
 inject env eqs s                        = error ("# Internal error: cyclic witnesses " ++ prstrs eqs ++ "\n# and statement\n" ++ prstr s)
 
 
-genEnv                                  :: Env -> Constraints -> TEnv -> Stmt -> TypeM (TEnv,Equations,Stmt)
-genEnv env cs te (Decl l ds)
+genEnv                                  :: Env -> Constraints -> TEnv -> [Decl] -> TypeM (TEnv,Equations,[Decl])
+genEnv env cs te ds
   | any typeDecl te                     = do te <- usubst te
                                              --traceM ("## genEnv types 1\n" ++ render (nest 6 $ pretty te))
                                              --traceM ("   where\n" ++ render (nest 6 $ vcat $ map pretty cs))
@@ -279,7 +286,7 @@ genEnv env cs te (Decl l ds)
                                              te <- usubst te
                                              --traceM ("## genEnv types 2\n" ++ render (nest 6 $ pretty te))
                                              --traceM ("   where\n" ++ render (nest 6 $ vcat $ map pretty cs))
-                                             return (te, eq, Decl l ds)
+                                             return (te, eq, ds)
   | otherwise                           = do te <- usubst te
                                              --traceM ("## genEnv defs 1\n" ++ render (nest 6 $ pretty te))
                                              --traceM ("   where\n" ++ render (nest 6 $ vcat $ map pretty cs))
@@ -297,7 +304,7 @@ genEnv env cs te (Decl l ds)
                                                  (eq1,eq2) = splitEqs (dom ws) eq
                                                  ds1 = map (abstract q ds ws eq1) ds
                                              --traceM ("## genEnv defs 3 [" ++ prstrs q ++ "]\n" ++ render (nest 6 $ pretty te1))
-                                             return (te1, eq2, Decl l ds1)
+                                             return (te1, eq2, ds1)
   where
     qualify vs cs                       = (q, concat wss)
       where (q,wss)                     = unzip $ map qbind vs
@@ -365,9 +372,6 @@ genEnv env cs te (Decl l ds)
             noQual c                    = True
 
             canGen tv                   = uvkind tv /= KFX
-
-genEnv env cs te s                      = do eq <- solveAll env te cs
-                                             return (te, eq, s)
 
 
 markScoped env n q te []                = return ([], [])
