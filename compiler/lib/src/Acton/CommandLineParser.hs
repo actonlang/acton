@@ -250,7 +250,7 @@ optimizeReader :: ReadM OptimizeMode
 optimizeReader = eitherReader $ \s ->
     case map toLower s of
         "debug"        -> Right Debug
-        "release"      -> Right ReleaseSafe
+        "release"      -> Right ReleaseFast
         "releasesafe"  -> Right ReleaseSafe
         "releasesmall" -> Right ReleaseSmall
         "releasefast"  -> Right ReleaseFast
@@ -462,13 +462,13 @@ optimizeOption = resolveOptimizeOption
         (option optimizeReader
             (long "optimize"
              <> metavar "MODE"
-             <> help "Optimization mode (case-insensitive: Debug, Release/ReleaseSafe, ReleaseSmall, ReleaseFast)"
+             <> help "Optimization mode (case-insensitive: Debug, Release/ReleaseFast, ReleaseSafe, ReleaseSmall)"
             ))
   where
     releaseOption =
-        flag' ReleaseSafe
+        flag' ReleaseFast
             (long "release"
-             <> help "Release build mode; same as --release=safe and also accepts =small or =fast"
+             <> help "Release build mode; same as --release=fast and also accepts =safe or =small"
             )
         <|> option releaseModeReader
             (long "release"
