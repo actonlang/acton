@@ -48,6 +48,7 @@ import System.Directory (Permissions, canonicalizePath, copyFile, createDirector
 import System.Environment (getExecutablePath, lookupEnv)
 import System.Exit (ExitCode(..))
 import System.FilePath ((</>), takeDirectory)
+import qualified System.Info
 import System.IO (IOMode(ReadMode, WriteMode), hClose, hGetContents, hPutStr, hPutStrLn, hSetEncoding, openFile, stderr, utf8)
 import System.Process (CreateProcess(cwd), proc, readCreateProcessWithExitCode)
 import qualified Text.Regex.TDFA as TDFA
@@ -101,10 +102,12 @@ installCommand gopts opts = do
     zigExe <- getZigExe
     archiveHash <- requireRight =<< zigFetchHash zigExe archiveUrl
     sourceDir <- prepareInstallSource appName repoUrl commitSha
+    -- ReleaseSafe trips UB checks at runtime on Linux (any arch); see issue #2707
+    let releaseFlag = if System.Info.os == "linux" then "--release=fast" else "--release"
     unless (C.quiet gopts) $
-      putStrLn ("Building " ++ appName ++ " with acton build --release")
+      putStrLn ("Building " ++ appName ++ " with acton build " ++ releaseFlag)
     actonExe <- getExecutablePath
-    runProcessChecked (Just sourceDir) actonExe ["build", "--release"]
+    runProcessChecked (Just sourceDir) actonExe ["build", releaseFlag]
     binaries <- discoverBuiltBinaries sourceDir
     installBuiltBinaries appName repoUrl repoRefArg commitSha archiveHash sourceDir binaries
     unless (C.quiet gopts) $ do
