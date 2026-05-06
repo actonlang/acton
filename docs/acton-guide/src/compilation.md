@@ -14,10 +14,9 @@ debug symbols, which makes them the right default during development.
 For release builds, use `acton build --release` to better optimize the
 final executable. For standalone files, use `acton --release foo.act`.
 
-`--release` and `--release=safe` select the normal release mode.
-`--release=small` optimizes for a smaller binary size. `--release=fast`
-can result in a faster program, but it is generally discouraged because
-it disables safety checks and alters language semantics.
+`--release` and `--release=fast` select the fastest release mode.
+`--release=safe` enables release optimizations with safety checks.
+`--release=small` optimizes for a smaller binary size.
 
 ## Optimized for native CPU features
 

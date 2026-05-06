@@ -430,12 +430,12 @@ parseFlagTests =
   , flagGolden "all flags combined" "test/parse/simple.all.golden"
         ["--quiet", "--parse", "--kinds", "--types", "--sigs", "--norm", "--deact", "--cps", "--llift", "--box", "--dbg-no-lines", "--hgen"]
   , testCase "optimize parser accepts release aliases" $ do
-      assertParsedBuildOptimize ["build", "--release"] C.ReleaseSafe
+      assertParsedBuildOptimize ["build", "--release"] C.ReleaseFast
       assertParsedBuildOptimize ["build", "--release=safe"] C.ReleaseSafe
       assertParsedBuildOptimize ["build", "--release=SmAlL"] C.ReleaseSmall
       assertParsedBuildOptimize ["build", "--release=FAST"] C.ReleaseFast
-      assertParsedBuildOptimize ["build", "--optimize=release"] C.ReleaseSafe
-      assertParsedBuildOptimize ["build", "--optimize=ReLeAsE"] C.ReleaseSafe
+      assertParsedBuildOptimize ["build", "--optimize=release"] C.ReleaseFast
+      assertParsedBuildOptimize ["build", "--optimize=ReLeAsE"] C.ReleaseFast
       assertParsedBuildOptimize ["build", "--optimize=dEbUg"] C.Debug
       assertParsedBuildOptimize ["build", "--optimize=reLeAsEsMaLl"] C.ReleaseSmall
       assertParsedBuildOptimize ["build", "--optimize=RELEASEFAST"] C.ReleaseFast
@@ -446,8 +446,8 @@ parseFlagTests =
   , testCase "build parser help includes --release alias" $ do
       helpText <- renderParserHelp ["build", "--help"]
       assertBool "help text should include --release" ("--release" `isInfixOf` helpText)
-      assertBool "help text should mention release variants" ("=small or =fast" `isInfixOf` helpText)
-      assertBool "help text should mention default release mode" ("same as --release=safe" `isInfixOf` helpText)
+      assertBool "help text should mention release variants" ("=safe or =small" `isInfixOf` helpText)
+      assertBool "help text should mention default release mode" ("same as --release=fast" `isInfixOf` helpText)
   , testCase "sig parser accepts target and project options" $ do
       parsed <- parseArgs ["sig", "--always-build", "--dep", "dep=../dep", "--searchpath", "out/types", "foo.bar"]
       case parsed of
