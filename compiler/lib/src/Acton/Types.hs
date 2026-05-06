@@ -764,20 +764,23 @@ initComplement env n as body
         baseHasAltInit                  = isJust $ findAttr env base altInit
         mkInit stmt                     = sDef altInit (pospar [(selfKW,tSelf)]) tNone [stmt] fxPure
 
+lockSelf l p k dec                      = tryUnify (Simple l "Type of first parameter of class method does not unify with Self") tSelf $ selfType p k dec
 
 --------------------------------------------------------------------------------------------------------------------------
 
 instance InfEnv Decl where
-    infEnv env d@(Def _ n q p k a _ _ fx ddoc)
+    infEnv env d@(Def l n q p k a _ dec' fx ddoc)
       | nodup (p,k)                     = case findName n env of
-                                             NSig sc dec _ | t@TFun{} <- sctype sc, matchingDec n sc dec (deco d) -> do
+                                             NSig sc dec _ | t@TFun{} <- sctype sc, matchingDec n sc dec dec' -> do
                                                  --traceM ("\n## infEnv (sig) def " ++ prstr (n, NDef sc dec Nothing))
+                                                 when (inClass env) $ lockSelf l p k dec
                                                  return ([], [(n, NDef (fxUnwrapSc env sc) dec ddoc)], d{deco = dec})
                                              NReserved -> do
+                                                 when (inClass env) $ lockSelf l p k dec'
                                                  t <- tFun (fxUnwrap env fx) (prowOf p) (krowOf k) <$> maybe (newUnivar env) return a
-                                                 let sc = tSchema q (if inClass env then dropSelf t (deco d) else t)
-                                                 --traceM ("\n## infEnv def " ++ prstr (n, NDef sc (deco d) Nothing))
-                                                 return ([], [(n, NDef sc (deco d) ddoc)], d)
+                                                 let sc = tSchema q (if inClass env then dropSelf t dec' else t)
+                                                 --traceM ("\n## infEnv def " ++ prstr (n, NDef sc dec' Nothing))
+                                                 return ([], [(n, NDef sc dec' ddoc)], d)
                                              _ ->
                                                  illegalRedef n
 
