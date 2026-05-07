@@ -27,7 +27,9 @@ import Test.Tasty.HUnit
 
 import qualified PkgCommands
 import qualified Acton.CommandLineParser as C
+import qualified Acton.Env as Env
 import qualified Acton.Fingerprint as Fingerprint
+import qualified Acton.Syntax as A
 import qualified Options.Applicative as OA
 import qualified Paths_acton
 import qualified TestGolden
@@ -106,9 +108,642 @@ compilerTests =
   , testCase "deps" $ do
         (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../../test/compiler/test_deps/build.zig*") ""
         (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../../test/compiler/test_deps/out") ""
-        (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../../test/compiler/test_deps/deps/a/build.zig*") ""
-        (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../../test/compiler/test_deps/deps/a/out") ""
+        (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../../test/compiler/test_deps/.acton") ""
+        (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../../test/compiler/test_deps/deps/a-b/build.zig*") ""
+        (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../../test/compiler/test_deps/deps/a-b/out") ""
         runActon "build" ExitSuccess False "../../test/compiler/test_deps/"
+  , testCase "deps hybrid import uses package-prefixed symbols" $ do
+        withSystemTempDirectory "acton-dep-hybrid" $ \tmp -> do
+            let depName = "foo"
+                appName = "app"
+                fpFor n seed =
+                  Fingerprint.formatFingerprint
+                    (Fingerprint.updateFingerprintPrefix
+                      (Fingerprint.fingerprintPrefixForName n) seed)
+                depDir = tmp </> "dep"
+                appDir = tmp </> "app"
+                depSrc = depDir </> "src"
+                appSrc = appDir </> "src"
+                depBuild = depDir </> "Build.act"
+                appBuild = appDir </> "Build.act"
+                appMain = appSrc </> "main.act"
+            createDirectoryIfMissing True depSrc
+            createDirectoryIfMissing True appSrc
+            writeFile depBuild $ unlines
+              [ "name = \"" ++ depName ++ "\""
+              , "fingerprint = " ++ fpFor depName 1
+              , ""
+              ]
+            writeFile (depSrc </> "a.act") $ unlines
+              [ "foo_val = 7"
+              ]
+            writeFile (appSrc </> "a.act") $ unlines
+              [ "foo_val = 5"
+              ]
+            writeFile appBuild $ unlines
+              [ "name = \"" ++ appName ++ "\""
+              , "fingerprint = " ++ fpFor appName 2
+              , ""
+              , "dependencies = {"
+              , "    \"bar\": ("
+              , "        path = \"../dep\""
+              , "    )"
+              , "}"
+              ]
+            writeFile appMain $ unlines
+              [ "import a"
+              , "import bar.a"
+              , ""
+              , "actor main(env):"
+              , "    print(a.foo_val + bar.a.foo_val)"
+              , "    env.exit(0)"
+              ]
+            runActon "build" ExitSuccess False appDir
+            cOut <- readFile (appDir </> "out" </> "types" </> "main.c")
+            hOut <- readFile (appDir </> "out" </> "types" </> "main.h")
+            assertBool "main.c should reference package-prefixed dep symbols"
+              ("fooQ_aQ_foo_val" `isInfixOf` cOut)
+            assertBool "main.c should reference the local a module separately"
+              ("aQ_foo_val" `isInfixOf` cOut)
+            assertBool "main.c should initialize canonical dep module"
+              ("fooQ_aQ___init__();" `isInfixOf` cOut)
+            assertBool "main.h should include canonical dep header"
+              ("#include \"out/types/foo/a.h\"" `isInfixOf` hOut)
+            assertBool "main.c should not call alias-prefixed init symbol"
+              (not ("barQ_aQ___init__();" `isInfixOf` cOut))
+  , testCase "findTyFile prefers package-root local module over stale raw type" $ do
+        withSystemTempDirectory "acton-findty-package-root-stale" $ \tmp -> do
+            let rootDir = tmp </> "pkg"
+                srcDir = rootDir </> "src"
+                typesDir = rootDir </> "out" </> "types"
+                fpFor n seed =
+                  Fingerprint.formatFingerprint
+                    (Fingerprint.updateFingerprintPrefix
+                      (Fingerprint.fingerprintPrefixForName n) seed)
+                freshTy = typesDir </> "foo" </> "transport.ty"
+                wrongTy = typesDir </> "bar" </> "transport.ty"
+                staleTy = typesDir </> "transport.ty"
+            createDirectoryIfMissing True srcDir
+            createDirectoryIfMissing True (takeDirectory freshTy)
+            createDirectoryIfMissing True (takeDirectory wrongTy)
+            writeFile (rootDir </> "Build.act") $ unlines
+              [ "name = \"foo\""
+              , "fingerprint = " ++ fpFor "foo" 23
+              , ""
+              ]
+            writeFile (srcDir </> "lib.act") ""
+            writeFile wrongTy "wrong package transport interface"
+            writeFile staleTy "stale raw transport interface"
+            writeFile freshTy "fresh package transport interface"
+            found <- Env.findTyFile [typesDir] (A.modName ["transport"])
+            assertEqual "package-root local module should outrank stale raw type"
+              (Just freshTy) found
+  , testCase "dep lib module acts as package root" $ do
+        withSystemTempDirectory "acton-dep-lib-root" $ \tmp -> do
+            let depName = "foo"
+                appName = "app"
+                fpFor n seed =
+                  Fingerprint.formatFingerprint
+                    (Fingerprint.updateFingerprintPrefix
+                      (Fingerprint.fingerprintPrefixForName n) seed)
+                depDir = tmp </> "dep"
+                appDir = tmp </> "app"
+                depSrc = depDir </> "src"
+                appSrc = appDir </> "src"
+            createDirectoryIfMissing True depSrc
+            createDirectoryIfMissing True appSrc
+            writeFile (depDir </> "Build.act") $ unlines
+              [ "name = \"" ++ depName ++ "\""
+              , "fingerprint = " ++ fpFor depName 3
+              , ""
+              ]
+            writeFile (depSrc </> "lib.act") $ unlines
+              [ "root_val = 7"
+              ]
+            writeFile (depSrc </> "a.act") $ unlines
+              [ "sub_val = 5"
+              ]
+            writeFile (appDir </> "Build.act") $ unlines
+              [ "name = \"" ++ appName ++ "\""
+              , "fingerprint = " ++ fpFor appName 4
+              , ""
+              , "dependencies = {"
+              , "    \"" ++ depName ++ "\": ("
+              , "        path = \"../dep\""
+              , "    )"
+              , "}"
+              ]
+            writeFile (appSrc </> "main.act") $ unlines
+              [ "import foo"
+              , "import foo.a"
+              , ""
+              , "actor main(env):"
+              , "    print(foo.root_val + foo.a.sub_val)"
+              , "    env.exit(0)"
+              ]
+            runActon "build" ExitSuccess False appDir
+            cOut <- readFile (appDir </> "out" </> "types" </> "main.c")
+            hOut <- readFile (appDir </> "out" </> "types" </> "main.h")
+            assertBool "main.h should include package root header from lib.act"
+              ("#include \"out/types/foo.h\"" `isInfixOf` hOut)
+            assertBool "main.h should include canonical submodule header"
+              ("#include \"out/types/foo/a.h\"" `isInfixOf` hOut)
+            assertBool "main.c should initialize the package root module"
+              ("fooQ___init__();" `isInfixOf` cOut)
+            assertBool "main.h should not treat lib.act as foo.lib"
+              (not ("out/types/foo/lib.h" `isInfixOf` hOut))
+  , testCase "root lib package keeps relative source imports" $ do
+        withSystemTempDirectory "acton-root-lib-relative-imports" $ \tmp -> do
+            let pkgName = "foo"
+                depName = "dep"
+                appName = "app"
+                fpFor n seed =
+                  Fingerprint.formatFingerprint
+                    (Fingerprint.updateFingerprintPrefix
+                      (Fingerprint.fingerprintPrefixForName n) seed)
+                depDir = tmp </> "dep"
+                pkgDir = tmp </> "pkg"
+                appDir = tmp </> "app"
+                depSrc = depDir </> "src"
+                pkgSrc = pkgDir </> "src"
+                appSrc = appDir </> "src"
+            createDirectoryIfMissing True depSrc
+            createDirectoryIfMissing True (pkgSrc </> "fixups")
+            createDirectoryIfMissing True appSrc
+            writeFile (depDir </> "Build.act") $ unlines
+              [ "name = \"" ++ depName ++ "\""
+              , "fingerprint = " ++ fpFor depName 22
+              , ""
+              ]
+            writeFile (depSrc </> "transport.act") $ unlines
+              [ "sub_val = \"dep\""
+              ]
+            writeFile (pkgDir </> "Build.act") $ unlines
+              [ "name = \"" ++ pkgName ++ "\""
+              , "fingerprint = " ++ fpFor pkgName 20
+              , ""
+              , "dependencies = {"
+              , "    \"" ++ depName ++ "\": ("
+              , "        path = \"../dep\""
+              , "    )"
+              , "}"
+              ]
+            writeFile (pkgSrc </> "lib.act") $ unlines
+              [ "import transport"
+              , "from fixups.base import Fixup"
+              , ""
+              , "root_val: int = transport.sub_val"
+              ]
+            writeFile (pkgSrc </> "transport.act") $ unlines
+              [ "from fixups.base import Fixup"
+              , ""
+              , "sub_val = 5"
+              ]
+            writeFile (pkgSrc </> "fixups" </> "base.act") $ unlines
+              [ "class Fixup(object):"
+              , "    pass"
+              ]
+            runActon "build --skip-build" ExitSuccess False pkgDir
+            rootTy <- doesFileExist (pkgDir </> "out" </> "types" </> "foo.ty")
+            transportTy <- doesFileExist (pkgDir </> "out" </> "types" </> "foo" </> "transport.ty")
+            rawTransportTy <- doesFileExist (pkgDir </> "out" </> "types" </> "transport.ty")
+            assertBool "lib.act should compile as the package root module" rootTy
+            assertBool "transport.act should compile as foo.transport" transportTy
+            assertBool "transport.act should not compile as a raw root module" (not rawTransportTy)
+            writeFile (pkgSrc </> "client.act") $ unlines
+              [ "import lib"
+              , ""
+              , "client_val = 1"
+              ]
+            runActon "build --skip-build src/client.act" (ExitFailure 1) True pkgDir
+            writeFile (appDir </> "Build.act") $ unlines
+              [ "name = \"" ++ appName ++ "\""
+              , "fingerprint = " ++ fpFor appName 21
+              , ""
+              , "dependencies = {"
+              , "    \"" ++ pkgName ++ "\": ("
+              , "        path = \"../pkg\""
+              , "    )"
+              , "}"
+              ]
+            writeFile (appSrc </> "main.act") $ unlines
+              [ "import foo"
+              , "import foo.transport"
+              , ""
+              , "actor main(env):"
+              , "    print(foo.root_val + foo.transport.sub_val)"
+              , "    env.exit(0)"
+              ]
+            runActon "build --skip-build" ExitSuccess False appDir
+  , testCase "dep lib module disables legacy dependency fallback" $ do
+        withSystemTempDirectory "acton-dep-lib-no-legacy-fallback" $ \tmp -> do
+            let depName = "ssh"
+                appName = "app"
+                fpFor n seed =
+                  Fingerprint.formatFingerprint
+                    (Fingerprint.updateFingerprintPrefix
+                      (Fingerprint.fingerprintPrefixForName n) seed)
+                depDir = tmp </> "dep"
+                appDir = tmp </> "app"
+                depSrc = depDir </> "src"
+                appSrc = appDir </> "src"
+                appMain = appSrc </> "main.act"
+            createDirectoryIfMissing True depSrc
+            createDirectoryIfMissing True appSrc
+            writeFile (depDir </> "Build.act") $ unlines
+              [ "name = \"" ++ depName ++ "\""
+              , "fingerprint = " ++ fpFor depName 18
+              , ""
+              ]
+            writeFile (depSrc </> "lib.act") $ unlines
+              [ "root_val = 1"
+              ]
+            writeFile (depSrc </> "client.act") $ unlines
+              [ "label = \"dep-client\""
+              ]
+            writeFile (appDir </> "Build.act") $ unlines
+              [ "name = \"" ++ appName ++ "\""
+              , "fingerprint = " ++ fpFor appName 19
+              , ""
+              , "dependencies = {"
+              , "    \"" ++ depName ++ "\": ("
+              , "        path = \"../dep\""
+              , "    )"
+              , "}"
+              ]
+            writeFile appMain $ unlines
+              [ "import ssh.client"
+              , "import client"
+              , ""
+              , "actor main(env):"
+              , "    print(ssh.client.label)"
+              , "    print(client.label)"
+              , "    env.exit(0)"
+              ]
+            actonExe <- canonicalizePath "../../dist/bin/acton"
+            (badCode, _badOut, badErr) <- readCreateProcessWithExitCode
+              (proc actonExe ["build", "--skip-build"]){ cwd = Just appDir } ""
+            assertBool ("legacy dependency fallback should reject import client, stderr:\n" ++ badErr)
+              (badCode /= ExitSuccess)
+            writeFile appMain $ unlines
+              [ "import ssh.client"
+              , ""
+              , "actor main(env):"
+              , "    print(ssh.client.label)"
+              , "    env.exit(0)"
+              ]
+            runActon "build --skip-build" ExitSuccess False appDir
+            (sigCode, sigOut, sigErr) <- readCreateProcessWithExitCode
+              (proc actonExe ["sig", "ssh.client"]){ cwd = Just appDir } ""
+            when (sigCode /= ExitSuccess) $
+              assertFailure ("qualified dependency sig failed:\nstdout:\n" ++ sigOut ++ "\nstderr:\n" ++ sigErr)
+            assertBool "qualified dependency sig should include the client value"
+              ("label : str" `isInfixOf` sigOut)
+            (badSigCode, _badSigOut, badSigErr) <- readCreateProcessWithExitCode
+              (proc actonExe ["sig", "client"]){ cwd = Just appDir } ""
+            assertBool ("legacy dependency sig fallback should reject client, stderr:\n" ++ badSigErr)
+              (badSigCode /= ExitSuccess)
+  , testCase "from dependency import does not bind module alias" $ do
+        withSystemTempDirectory "acton-from-dep-import-alias" $ \tmp -> do
+            let depName = "pipe"
+                appName = "app"
+                fpFor n seed =
+                  Fingerprint.formatFingerprint
+                    (Fingerprint.updateFingerprintPrefix
+                      (Fingerprint.fingerprintPrefixForName n) seed)
+                depDir = tmp </> "dep"
+                appDir = tmp </> "app"
+                depSrc = depDir </> "src"
+                appSrc = appDir </> "src"
+            createDirectoryIfMissing True depSrc
+            createDirectoryIfMissing True appSrc
+            writeFile (depDir </> "Build.act") $ unlines
+              [ "name = \"" ++ depName ++ "\""
+              , "fingerprint = " ++ fpFor depName 6
+              , ""
+              ]
+            writeFile (depSrc </> "pipe.act") $ unlines
+              [ "class Pipe(object):"
+              , "    close: proc() -> None"
+              ]
+            writeFile (appDir </> "Build.act") $ unlines
+              [ "name = \"" ++ appName ++ "\""
+              , "fingerprint = " ++ fpFor appName 7
+              , ""
+              , "dependencies = {"
+              , "    \"" ++ depName ++ "\": ("
+              , "        path = \"../dep\""
+              , "    )"
+              , "}"
+              ]
+            writeFile (appSrc </> "main.act") $ unlines
+              [ "from pipe import Pipe"
+              , ""
+              , "actor Client(pipe: ?Pipe):"
+              , "    def close():"
+              , "        if pipe is not None:"
+              , "            pipe.close()"
+              ]
+            runActon "build --skip-build" ExitSuccess False appDir
+  , testCase "from dependency import emits canonical headers" $ do
+        withSystemTempDirectory "acton-from-dep-canonical-headers" $ \tmp -> do
+            let depName = "acton_yang"
+                appName = "app"
+                fpFor n seed =
+                  Fingerprint.formatFingerprint
+                    (Fingerprint.updateFingerprintPrefix
+                      (Fingerprint.fingerprintPrefixForName n) seed)
+                depDir = tmp </> "dep"
+                appDir = tmp </> "app"
+                depSrc = depDir </> "src"
+                appSrc = appDir </> "src"
+            createDirectoryIfMissing True (depSrc </> "yang")
+            createDirectoryIfMissing True appSrc
+            writeFile (depDir </> "Build.act") $ unlines
+              [ "name = \"" ++ depName ++ "\""
+              , "fingerprint = " ++ fpFor depName 10
+              , ""
+              ]
+            writeFile (depSrc </> "yang" </> "type.act") $ unlines
+              [ "class Ranges(object):"
+              , "    def __init__(self):"
+              , "        pass"
+              ]
+            writeFile (depSrc </> "yang" </> "schema.act") $ unlines
+              [ "from yang.type import Ranges"
+              , ""
+              , "class DType(object):"
+              , "    length: ?Ranges"
+              , ""
+              , "    def __init__(self, length):"
+              , "        self.length = length"
+              ]
+            writeFile (appDir </> "Build.act") $ unlines
+              [ "name = \"" ++ appName ++ "\""
+              , "fingerprint = " ++ fpFor appName 11
+              , ""
+              , "dependencies = {"
+              , "    \"yang\": ("
+              , "        path = \"../dep\""
+              , "    )"
+              , "}"
+              ]
+            writeFile (appSrc </> "main.act") $ unlines
+              [ "import yang.schema"
+              , ""
+              , "actor main(env):"
+              , "    env.exit(0)"
+              ]
+            runActon "build --skip-build" ExitSuccess False appDir
+            hOut <- readFile (depDir </> "out" </> "types" </> "acton_yang" </> "yang" </> "schema.h")
+            assertBool "dependency header should include the canonical module path"
+              ("#include \"out/types/acton_yang/yang/type.h\"" `isInfixOf` hOut)
+            assertBool "dependency header should not include the legacy module path"
+              (not ("#include \"out/types/yang/type.h\"" `isInfixOf` hOut))
+  , testCase "dependency submodule aliases do not hide dependency root module" $ do
+        withSystemTempDirectory "acton-dep-root-after-submodule" $ \tmp -> do
+            let depName = "acton_yang"
+                appName = "app"
+                fpFor n seed =
+                  Fingerprint.formatFingerprint
+                    (Fingerprint.updateFingerprintPrefix
+                      (Fingerprint.fingerprintPrefixForName n) seed)
+                depDir = tmp </> "dep"
+                appDir = tmp </> "app"
+                depSrc = depDir </> "src"
+                appSrc = appDir </> "src"
+            createDirectoryIfMissing True (depSrc </> "yang")
+            createDirectoryIfMissing True appSrc
+            writeFile (depDir </> "Build.act") $ unlines
+              [ "name = \"" ++ depName ++ "\""
+              , "fingerprint = " ++ fpFor depName 12
+              , ""
+              ]
+            writeFile (depSrc </> "yang.act") $ unlines
+              [ "def compile() -> str:"
+              , "    return \"ok\""
+              ]
+            writeFile (depSrc </> "yang" </> "gdata.act") $ unlines
+              [ "item = \"sub\""
+              ]
+            writeFile (appDir </> "Build.act") $ unlines
+              [ "name = \"" ++ appName ++ "\""
+              , "fingerprint = " ++ fpFor appName 13
+              , ""
+              , "dependencies = {"
+              , "    \"yang\": ("
+              , "        path = \"../dep\""
+              , "    )"
+              , "}"
+              ]
+            writeFile (appSrc </> "main.act") $ unlines
+              [ "import yang.gdata"
+              , "import yang"
+              , ""
+              , "actor main(env):"
+              , "    print(yang.compile())"
+              , "    print(yang.gdata.item)"
+              , "    env.exit(0)"
+              ]
+            runActon "build --skip-build" ExitSuccess False appDir
+            hOut <- readFile (appDir </> "out" </> "types" </> "main.h")
+            assertBool "qualified root use should include the dependency root header"
+              ("#include \"out/types/acton_yang/yang.h\"" `isInfixOf` hOut)
+  , testCase "dependency root import wins over local package suffix fallback" $ do
+        withSystemTempDirectory "acton-dep-root-over-local-suffix" $ \tmp -> do
+            let depName = "acton_yang"
+                appName = "stratoweave"
+                fpFor n seed =
+                  Fingerprint.formatFingerprint
+                    (Fingerprint.updateFingerprintPrefix
+                      (Fingerprint.fingerprintPrefixForName n) seed)
+                depDir = tmp </> "dep"
+                appDir = tmp </> "app"
+                depSrc = depDir </> "src"
+                appSrc = appDir </> "src"
+            createDirectoryIfMissing True depSrc
+            createDirectoryIfMissing True (appSrc </> "stratoweave")
+            writeFile (depDir </> "Build.act") $ unlines
+              [ "name = \"" ++ depName ++ "\""
+              , "fingerprint = " ++ fpFor depName 16
+              , ""
+              ]
+            writeFile (depSrc </> "yang.act") $ unlines
+              [ "def compile() -> str:"
+              , "    return \"dep\""
+              ]
+            writeFile (appSrc </> "stratoweave" </> "yang.act") $ unlines
+              [ "label = \"local\""
+              ]
+            writeFile (appDir </> "Build.act") $ unlines
+              [ "name = \"" ++ appName ++ "\""
+              , "fingerprint = " ++ fpFor appName 17
+              , ""
+              , "dependencies = {"
+              , "    \"yang\": ("
+              , "        path = \"../dep\""
+              , "    )"
+              , "}"
+              ]
+            writeFile (appSrc </> "main.act") $ unlines
+              [ "import yang"
+              , "import stratoweave.yang as swyang"
+              , ""
+              , "actor main(env):"
+              , "    print(yang.compile())"
+              , "    print(swyang.label)"
+              , "    env.exit(0)"
+              ]
+            runActon "build --skip-build" ExitSuccess False appDir
+  , testCase "from dependency import resolves through module aliases" $ do
+        withSystemTempDirectory "acton-from-dep-module-alias" $ \tmp -> do
+            let depName = "netconf"
+                appName = "app"
+                fpFor n seed =
+                  Fingerprint.formatFingerprint
+                    (Fingerprint.updateFingerprintPrefix
+                      (Fingerprint.fingerprintPrefixForName n) seed)
+                depDir = tmp </> "dep"
+                appDir = tmp </> "app"
+                depSrc = depDir </> "src"
+                appSrc = appDir </> "src"
+            createDirectoryIfMissing True (depSrc </> "fixups")
+            createDirectoryIfMissing True appSrc
+            writeFile (depDir </> "Build.act") $ unlines
+              [ "name = \"" ++ depName ++ "\""
+              , "fingerprint = " ++ fpFor depName 14
+              , ""
+              ]
+            writeFile (depSrc </> "fixups" </> "base.act") $ unlines
+              [ "class Fixup(object):"
+              , "    name: str"
+              , ""
+              , "    def __init__(self, name: str):"
+              , "        self.name = name"
+              ]
+            writeFile (depSrc </> "fixups.act") $ unlines
+              [ "from fixups.base import Fixup"
+              , ""
+              , "def make_fixup() -> Fixup:"
+              , "    return Fixup(\"specific\")"
+              , ""
+              , "FIXUPS: list[proc() -> Fixup] = ["
+              , "    make_fixup,"
+              , "]"
+              ]
+            writeFile (depSrc </> "netconf.act") $ unlines
+              [ "from fixups import FIXUPS"
+              , "from fixups.base import Fixup"
+              , ""
+              , "actor Client(fixups: ?list[proc() -> Fixup]=FIXUPS):"
+              , "    pass"
+              ]
+            writeFile (appDir </> "Build.act") $ unlines
+              [ "name = \"" ++ appName ++ "\""
+              , "fingerprint = " ++ fpFor appName 15
+              , ""
+              , "dependencies = {"
+              , "    \"" ++ depName ++ "\": ("
+              , "        path = \"../dep\""
+              , "    )"
+              , "}"
+              ]
+            writeFile (appSrc </> "main.act") $ unlines
+              [ "import netconf"
+              , ""
+              , "actor main(env):"
+              , "    env.exit(0)"
+              ]
+            runActon "build --skip-build" ExitSuccess False appDir
+  , testCase "dependency ext.c can use legacy source module symbols" $ do
+        withSystemTempDirectory "acton-dep-ext-c-legacy" $ \tmp -> do
+            let depName = "extdep"
+                appName = "app"
+                fpFor n seed =
+                  Fingerprint.formatFingerprint
+                    (Fingerprint.updateFingerprintPrefix
+                      (Fingerprint.fingerprintPrefixForName n) seed)
+                depDir = tmp </> "dep"
+                appDir = tmp </> "app"
+                depSrc = depDir </> "src"
+                appSrc = appDir </> "src"
+            createDirectoryIfMissing True depSrc
+            createDirectoryIfMissing True appSrc
+            writeFile (depDir </> "Build.act") $ unlines
+              [ "name = \"" ++ depName ++ "\""
+              , "fingerprint = " ++ fpFor depName 8
+              , ""
+              ]
+            writeFile (depSrc </> "m.act") $ unlines
+              [ "class Box(object):"
+              , "    def __init__(self):"
+              , "        pass"
+              , ""
+              , "    def value(self) -> str:"
+              , "        NotImplemented"
+              , ""
+              , "def make() -> Box:"
+              , "    return Box()"
+              ]
+            writeFile (depSrc </> "m.ext.c") $ unlines
+              [ "void mQ___ext_init__() {"
+              , "}"
+              , ""
+              , "B_str mQ_BoxD_value(mQ_Box self) {"
+              , "    return to$str(\"ok\");"
+              , "}"
+              ]
+            writeFile (appDir </> "Build.act") $ unlines
+              [ "name = \"" ++ appName ++ "\""
+              , "fingerprint = " ++ fpFor appName 9
+              , ""
+              , "dependencies = {"
+              , "    \"" ++ depName ++ "\": ("
+              , "        path = \"../dep\""
+              , "    )"
+              , "}"
+              ]
+            writeFile (appSrc </> "main.act") $ unlines
+              [ "import extdep.m"
+              , ""
+              , "actor main(env):"
+              , "    print(extdep.m.make().value())"
+              , "    env.exit(0)"
+              ]
+            runActon "build" ExitSuccess False appDir
+            depC <- readFile (depDir </> "out" </> "types" </> "extdep" </> "m.c")
+            assertBool "dependency C output should alias legacy ext.c class symbols"
+              ("#define mQ_Box extdepQ_mQ_Box" `isInfixOf` depC)
+  , testCase "stdlib direct import wins over package-prefixed fallback" $ do
+        withSystemTempDirectory "acton-stdlib-direct-import" $ \tmp -> do
+            let appName = "app"
+                fp =
+                  Fingerprint.formatFingerprint
+                    (Fingerprint.updateFingerprintPrefix
+                      (Fingerprint.fingerprintPrefixForName appName) 5)
+                appDir = tmp </> "app"
+                appSrc = appDir </> "src"
+            createDirectoryIfMissing True (appSrc </> "yang")
+            writeFile (appDir </> "Build.act") $ unlines
+              [ "name = \"" ++ appName ++ "\""
+              , "fingerprint = " ++ fp
+              , ""
+              ]
+            writeFile (appSrc </> "yang" </> "xml.act") $ unlines
+              [ "import xml"
+              , ""
+              , "helper = 1"
+              ]
+            writeFile (appSrc </> "main.act") $ unlines
+              [ "import xml"
+              , "import yang.xml"
+              , ""
+              , "actor main(env):"
+              , "    n = xml.decode(\"<root/>\")"
+              , "    print(yang.xml.helper)"
+              , "    env.exit(0)"
+              ]
+            runActon "build --skip-build" ExitSuccess False appDir
   , testCase "path dependency fetches transitive cached deps before discovery" $ do
         withSystemTempDirectory "acton-transitive-path-fetch" $ \tmp -> do
           actonExe <- canonicalizePath "../../dist/bin/acton"

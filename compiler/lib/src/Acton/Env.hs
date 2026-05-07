@@ -19,15 +19,18 @@ import qualified Data.Binary
 import GHC.Generics (Generic)
 import Data.Typeable
 import Data.Char
-import System.FilePath.Posix (joinPath,takeDirectory)
-import System.Directory (doesFileExist)
+import System.FilePath.Posix (joinPath,takeDirectory,takeFileName)
+import System.Directory (doesDirectoryExist, doesFileExist, listDirectory)
 import System.Environment (getExecutablePath)
+import qualified System.IO as IO
 import Control.Monad
 import Control.Monad.Except
 import qualified Data.HashMap.Strict as M
+import qualified Data.List as List
 import qualified Data.Set as S
 
 import Acton.Syntax
+import qualified Acton.BuildSpec as BuildSpec
 import Acton.Builtin
 import Acton.Prim
 import Acton.Printer
@@ -154,10 +157,12 @@ instance (Unalias a) => Unalias (Maybe a) where
 instance Unalias ModName where
     unalias env m@(ModName ns)
       | inBuiltin env               = m
-      | otherwise                   = case lookup (head ns) (names env) of
-                                        Just (NMAlias m') -> m'
-                                        Nothing | m `elem` imports env  -> m
-                                        _ -> noModule m
+      | otherwise                   = case ns of
+                                        [] -> m
+                                        n:ns' -> case lookup n (names env) of
+                                                   Just (NMAlias (ModName ms)) -> ModName (ms ++ ns')
+                                                   _ | m `elem` imports env -> m
+                                                   _ -> noModule m
 instance Unalias QName where
     unalias env n0@(QName m n)      = case findHMod m env of
                                         Just te -> case M.lookup n te of
@@ -333,6 +338,30 @@ addMod m newte mdoc env     = env{ modules = addM ns (modules env) }
     update n ns (ni:te)     = ni : update n ns te
     update n ns []          = (n, NModule (addM ns []) mdoc) : []
 
+addModAlias                :: ModName -> ModName -> EnvF x -> EnvF x
+addModAlias m target env    = env{ modules = addA ns (modules env) }
+  where
+    ModName ns              = m
+    addA [] te              = te
+    addA [n] te             = updateLeaf n te
+    addA (n:ns) te          = updateNode n ns te
+
+    updateLeaf n ((x,i):te)
+      | n == x              = case i of
+                                NModule{} -> (x,i) : te
+                                NMAlias{} -> (x,NMAlias target) : te
+                                _         -> (x,i) : te
+    updateLeaf n (ni:te)    = ni : updateLeaf n te
+    updateLeaf n []         = [(n, NMAlias target)]
+
+    updateNode n ns ((x,i):te)
+      | n == x              = case i of
+                                NModule te1 doc -> (n, NModule (addA ns te1) doc) : te
+                                NMAlias{}       -> (x,i) : te
+                                _               -> (x,i) : te
+    updateNode n ns (ni:te) = ni : updateNode n ns te
+    updateNode n ns []      = (n, NModule (addA ns []) Nothing) : []
+
 
 -- General Env queries -----------------------------------------------------------------------------------------------------------
 
@@ -404,38 +433,42 @@ lookupVar n env             = case lookup n (names env) of
 findHMod                    :: ModName -> EnvF x -> Maybe HTEnv  -- m is modname part of a QName, so we must check for aliasing
 findHMod m env | inBuiltin env, m==mBuiltin
                             = Just (convTEnv2HTEnv (names env))
-findHMod m@(ModName ns) env = case lookup (head ns) (names env) of
-                                Just (NMAlias (ModName m')) -> lookupHMod (ModName $ m'++tail ns) env
-                                Nothing | m `elem` imports env  -> lookupHMod m env
-                                _ -> Nothing
+findHMod m@(ModName ns) env = case ns of
+                                [] -> Nothing
+                                n:ns' -> case lookup n (names env) of
+                                           Just (NMAlias (ModName ms)) -> lookupHMod (ModName (ms ++ ns')) env
+                                           _ | m `elem` imports env -> lookupHMod m env
+                                           _ -> Nothing
 
 lookupHMod                  :: ModName -> EnvF x -> Maybe HTEnv -- m is modname part of a GName, so search directly for module
 lookupHMod m env | inBuiltin env, m==mBuiltin
                             = Just (convTEnv2HTEnv (names env))
 lookupHMod (ModName ns) env = f ns (hmodules env)
   where f [] te
-          | not (all isHNModule (M.toList te)) = Just te
+          | not (all isHModChild (M.toList te)) = Just te
           | otherwise              = Nothing
         f (n:ns) te         = case M.lookup n te of
                                 Just (HNModule te' _) -> f ns te'
                                 Just (HNMAlias (ModName m)) -> lookupHMod (ModName $ m++ns) env
                                 _ -> Nothing
-        isHNModule (_, HNModule{}) = True
-        isHNModule _               = False
+        isHModChild (_, HNModule{}) = True
+        isHModChild (_, HNMAlias{}) = True
+        isHModChild _               = False
 
 lookupMod                  :: ModName -> EnvF x -> Maybe TEnv 
 lookupMod m env | inBuiltin env, m==mBuiltin
                             = Just (names env)
 lookupMod (ModName ns) env  = f ns (modules env)
   where f [] te
-          | not (all isNModule te) = Just te
+          | not (all isModChild te) = Just te
           | otherwise              = Nothing
         f (n:ns) te         = case lookup n te of
                                 Just (NModule te' _) -> f ns te'
                                 Just (NMAlias (ModName m)) -> lookupMod (ModName $ m++ns) env
                                 _ -> Nothing
-        isNModule (_, NModule{})  = True
-        isNModule _               = False
+        isModChild (_, NModule{}) = True
+        isModChild (_, NMAlias{}) = True
+        isModChild _              = False
 
 
 isMod                       :: EnvF x -> [Name] -> Bool
@@ -1016,70 +1049,230 @@ impModule spath env (Import _ ms)
                                 = imp env ms
   where imp env []              = return env
         imp env (ModuleItem m as : is)
-                                = do (env1,te) <- doImp spath env m
-                                     let env2 = maybe (addImport m) (\n->define [(n, NMAlias m)]) as env1
-                                     imp (importWits m te env2) is
+                                = do (env1,m',te) <- doImp spath env m
+                                     let env2 = addImport m' env1
+                                         env3 = case as of
+                                                  Just n -> define [(n, NMAlias m')] env2
+                                                  Nothing | m == m' -> env2
+                                                  Nothing ->
+                                                    case aliasBindingForImport m m' of
+                                                      Just (n, target) -> define [(n, NMAlias target)] env2
+                                                      Nothing -> env2
+                                     imp (importWits m' te env3) is
 impModule spath env (FromImport _ (ModRef (0,Just m)) items)
-                                = do (env1,te) <- doImp spath env m
-                                     return $ importSome items m te $ importWits m te $ env1
+                                = do (env1,m',te) <- doImp spath env m
+                                     return $ importSome items m' te $ importWits m' te $ env1
 impModule spath env (FromImportAll _ (ModRef (0,Just m)))
-                                = do (env1,te) <- doImp spath env m
-                                     return $ importAll m te $ importWits m te $ env1
+                                = do (env1,m',te) <- doImp spath env m
+                                     return $ importAll m' te $ importWits m' te $ env1
 impModule _ _ i                 = illegalImport (loc i)
 
 
-moduleRefs env                  = nub $ imports env ++ [ m | (_,NMAlias m) <- names env ] ++ [ m | (_,NAlias (GName m _)) <- names env ]
+moduleRefs env                  = nub $ map canonicalRef refs
+  where
+    realMods                    = realModuleRefs (modules env)
+    refs                        = imports env ++
+                                  [ m | (_,NAlias (GName m _)) <- names env ] ++
+                                  [ m | (_,NMAlias m) <- names env, m `elem` realMods ]
+    canonicalRef m
+      | m `elem` realMods       = m
+      | otherwise               = case [ m' | m' <- realMods
+                                            , length (modPath m') > length (modPath m)
+                                            , modPath m `List.isSuffixOf` modPath m' ] of
+                                    [m'] -> m'
+                                    _    -> m
+
+realModuleRefs                :: TEnv -> [ModName]
+realModuleRefs te              = go [] te
+  where
+    go prefix                  = concatMap (one prefix)
+    one prefix (n, NModule te' _)
+      | all isModChild te'     = children
+      | otherwise              = ModName path : children
+      where
+        path                   = prefix ++ [n]
+        children               = go path te'
+    one _ _                    = []
+
+    isModChild (_, NModule{})  = True
+    isModChild (_, NMAlias{})  = True
+    isModChild _               = False
 
 moduleRefs1 env                 = moduleRefs env \\ [mPrim, mBuiltin]
 
 subImp spath env []          = return env
-subImp spath env (m:ms)      = do (env',_) <- doImp spath env m
+subImp spath env (m:ms)      = do (env',_,_) <- doImp spath env m
                                   subImp spath env' ms
 
 findTyFile spaths mn = go spaths
   where
-    go []     = return Nothing
-    go (p:ps) = do
-      let fullPath = joinPath (p : modPath mn) ++ ".ty"
-      exists <- doesFileExist fullPath
-      --traceM ("findTyFile: " ++ fullPath ++ " " ++ show exists)
-      if exists
-        then return (Just fullPath)
-        else go ps
+    segs = modPath mn
+    tails = case segs of
+              (_:rest) | not (null rest) -> [rest]
+              _ -> []
+
+    firstExisting [] = return Nothing
+    firstExisting (f:fs) = do
+      exists <- doesFileExist f
+      if exists then return (Just f) else firstExisting fs
+
+    projectRootForTypes p =
+      let outDir = takeDirectory p
+          root = takeDirectory outDir
+      in if takeFileName p == "types" && takeFileName outDir == "out"
+           then Just root
+           else Nothing
+
+    hasPackageRootSource p =
+      case projectRootForTypes p of
+        Just root -> doesFileExist (joinPath [root, "src", "lib.act"])
+        Nothing -> return False
+
+    packageRootName p =
+      case projectRootForTypes p of
+        Just root -> do
+          hasRoot <- doesFileExist (joinPath [root, "src", "lib.act"])
+          if not hasRoot
+            then return Nothing
+            else do
+              let buildAct = joinPath [root, "Build.act"]
+              hasBuild <- doesFileExist buildAct
+              if not hasBuild
+                then return Nothing
+                else do
+                  content <- IO.readFile buildAct
+                  return $ case BuildSpec.parseBuildActDetailed content of
+                    Right (spec, _, _) -> Just (BuildSpec.specName spec)
+                    Left _ -> Nothing
+        Nothing -> return Nothing
+
+    prefixedSearch _ _ [] = return Nothing
+    prefixedSearch skipPackageRoots p rels = do
+      exists <- doesDirectoryExist p
+      if not exists
+        then return Nothing
+        else do
+          blocked <- if skipPackageRoots then hasPackageRootSource p else return False
+          if blocked
+            then return Nothing
+            else do
+              entries <- List.sort <$> listDirectory p
+              dirs <- filterM (\d -> doesDirectoryExist (joinPath [p,d])) entries
+              let candidates = [ joinPath ([p,d] ++ rel) ++ ".ty" | d <- dirs, rel <- rels ]
+              firstExisting candidates
+
+    prefixedSearchPaths _ [] = return Nothing
+    prefixedSearchPaths skipPackageRoots (p:ps) = do
+      found <- prefixedSearch skipPackageRoots p (segs : tails)
+      case found of
+        Just f -> return (Just f)
+        Nothing -> prefixedSearchPaths skipPackageRoots ps
+
+    go [] = return Nothing
+    go paths@(p:ps) = do
+      currentHasPackageRoot <- hasPackageRootSource p
+      currentPackageName <- packageRootName p
+      currentPackage <- case currentPackageName of
+                          Just pkg -> firstExisting [joinPath ([p, pkg] ++ segs) ++ ".ty"]
+                          Nothing -> return Nothing
+      case currentPackage of
+        Just f -> return (Just f)
+        Nothing -> do
+          directCurrent <- firstExisting [joinPath (p : segs) ++ ".ty"]
+          case directCurrent of
+            Just f -> return (Just f)
+            Nothing -> do
+              directRest <- firstExisting [ joinPath (p' : segs) ++ ".ty" | p' <- ps ]
+              case directRest of
+                Just f -> return (Just f)
+                Nothing -> do
+                  depFallback <- prefixedSearchPaths True ps
+                  case depFallback of
+                    Just f -> return (Just f)
+                    Nothing ->
+                      if currentHasPackageRoot
+                        then return Nothing
+                        else prefixedSearchPaths False [p]
+
+aliasBindingForImport :: ModName -> ModName -> Maybe (Name, ModName)
+aliasBindingForImport (ModName (n:ns)) realM =
+    let suffix = map nstr ns
+        target0 = modPath realM
+        target = case stripSuffix suffix target0 of
+                   Just pfx | not (null pfx) -> pfx
+                   _ -> target0
+    in Just (n, modName target)
+  where
+    stripSuffix suffix xs = reverse <$> List.stripPrefix (reverse suffix) (reverse xs)
+aliasBindingForImport _ _ = Nothing
+
+resolveHeadAlias :: EnvF x -> ModName -> Maybe ModName
+resolveHeadAlias env (ModName (n:ns)) =
+  case lookup n (names env) of
+    Just (NMAlias (ModName ms)) -> Just (ModName (ms ++ ns))
+    _ -> Nothing
+resolveHeadAlias _ _ = Nothing
+
+resolveModuleAlias :: EnvF x -> ModName -> ModName
+resolveModuleAlias env m =
+  case resolveModuleAlias1 env m of
+    Just m' | m' /= m -> resolveModuleAlias env m'
+    _                 -> m
+
+resolveModuleAlias1 :: EnvF x -> ModName -> Maybe ModName
+resolveModuleAlias1 env (ModName ns) = go ns (modules env)
+  where
+    go [] _             = Nothing
+    go (n:ns) te        = case lookup n te of
+                            Just (NMAlias (ModName ms)) -> Just (ModName (ms ++ ns))
+                            Just (NModule te' _)        -> go ns te'
+                            _                           -> Nothing
 
 -- | Import a module, loading its .ty and extending the environment.
-doImp                        :: [FilePath] -> EnvF x -> ModName -> IO (EnvF x, TEnv)
+doImp                        :: [FilePath] -> EnvF x -> ModName -> IO (EnvF x, ModName, TEnv)
 doImp spath env m            = do
-                                  (env', te, _) <- doImpSeen S.empty env m
-                                  return (env', te)
+                                  (env', m', te, _) <- doImpSeen S.empty env m
+                                  return (env', m', te)
   where
+    lookupLoaded req canon env =
+      case lookupMod canon env of
+        Just te -> Just te
+        Nothing | canon /= req -> lookupMod req env
+        Nothing -> Nothing
+
     -- A cached module still needs its recorded import closure available in the
     -- environment. Otherwise later imports of that cached module can miss
     -- transitive dependencies that were never added to the shared module cache.
     doImpSeen seen env m
-      | S.member m seen      =
-          case lookupMod m env of
-            Just te -> return (env, te, seen)
+      | S.member canon seen  =
+          case lookupLoaded m canon env of
+            Just te -> return (env, canon, te, seen)
             Nothing -> fileNotFound m
       | otherwise            =
-          let seen' = S.insert m seen in
-          case lookupMod m env of
+          let seen' = S.insert canon seen in
+          case lookupLoaded m canon env of
             Just te -> do
-              hdr <- readFoundTy InterfaceFiles.readHeaderMaybe m
+              hdr <- readFoundTy InterfaceFiles.readHeaderMaybe canon
               case hdr of
-                Nothing -> return (env, te, seen')
+                Nothing -> return (env, canon, te, seen')
                 Just (_sourceMeta, _, _, _, imps, _, _, _, _) -> do
                   (env', seen'') <- subImpSeen seen' env (map fst imps)
-                  return (env', te, seen'')
+                  return (env', canon, te, seen'')
             Nothing -> do
               ty <- readFoundTy InterfaceFiles.readFileMaybe m
               case ty of
                 Nothing -> fileNotFound m
-                Just (ms,nmod,_,_,_,_,_,_,_,_,_,_) -> do
-                  (env', seen'') <- subImpSeen seen' env ms
+                Just (ms,nmod,tmod,_,_,_,_,_,_,_,_,_) -> do
+                  let m' = modname tmod
+                      seen'' = S.insert m' seen'
+                  (env', seen''') <- subImpSeen seen'' env ms
                   let NModule teFull mdoc = nmod
                       te = publicTEnv teFull
-                  return (addMod m te mdoc env', te, seen'')
+                      env1 = addMod m' te mdoc env'
+                      env2 = if m == m' then env1 else addModAlias m m' env1
+                  return (env2, m', te, seen''')
+      where
+        canon = resolveModuleAlias env (maybe m id (resolveHeadAlias env m))
 
     readFoundTy readTy m = do
       tyFile <- findTyFile spath m
@@ -1089,7 +1282,7 @@ doImp spath env m            = do
 
     subImpSeen seen env []   = return (env, seen)
     subImpSeen seen env (m:ms) = do
-      (env', _, seen') <- doImpSeen seen env m
+      (env', _, _, seen') <- doImpSeen seen env m
       subImpSeen seen' env' ms
 
 importSome                  :: [ImportItem] -> ModName -> TEnv -> EnvF x -> EnvF x

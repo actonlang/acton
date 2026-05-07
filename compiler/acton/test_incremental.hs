@@ -2089,8 +2089,8 @@ p44_provider_import_rename_reruns_dependent_front =
       (typechecked out2 modMain)
     assertBool ("did not expect stale transitive import diagnostic\n" ++ T.unpack out2)
       (not (T.isInfixOf "Type interface file not found or unreadable for oldpkg.ttt" out2))
-    assertBool ("expected stale-cache log for missing transitive dep hash\n" ++ T.unpack out2)
-      (T.isInfixOf "missing dep hashes in" out2 && T.isInfixOf "oldpkg.ttt.TransformFunction" out2)
+    assertBool ("expected main to rerun after base public hash changed\n" ++ T.unpack out2)
+      (T.isInfixOf "Stale main: pub changes in base.Base" out2)
 
 -- Main -----------------------------------------------------------------------
 

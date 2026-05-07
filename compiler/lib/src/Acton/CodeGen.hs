@@ -42,8 +42,9 @@ generate env srcbase srcText emitLines m hash = do return (n, h, c)
   where n                           = concat (Data.List.intersperse "." (modPath (modname m))) --render $ quotes $ gen env0 (modname m)
         hashComment                 = text "/* Acton impl hash:" <+> text hash <+> text "*/"
         h                           = render $ hashComment $+$ hModule env0 m
-        c                           = render $ hashComment $+$ cModule env0 srcbase srcText emitLines m
+        c                           = render $ hashComment $+$ cModule env0 legacyMod srcbase srcText emitLines m
         env0                        = genEnv $ setMod (modname m) env
+        legacyMod                   = legacyModName srcbase
 
 genRoot                            :: Acton.Env.Env0 -> QName -> IO String
 genRoot env0 qn@(GName m n)         = do return $ render (cInclude $+$ cIncludeMods $+$ cInit $+$ cRoot)
@@ -139,6 +140,13 @@ modNames (FromImportAll _ (ModRef (0,Just m)) : is)
                                     = m : modNames is
 modNames []                         = []
 
+legacyModName                       :: FilePath -> ModName
+legacyModName srcbase               = modName rel
+  where parts                       = splitDirectories (dropExtension srcbase)
+        rel                         = case parts of
+                                        "src":xs -> xs
+                                        xs       -> xs
+
 
 -- Header -------------------------------------------------------------------------------------------
 
@@ -147,11 +155,12 @@ hModule env (Module m imps _ stmts) = text "#pragma" <+> text "once" $+$
                                        then empty
                                        else text "#include \"builtin/builtin.h\"" $+$ -- TODO: can we include out/types/__builtin__.h instead?
                                             include env "rts" (modName ["rts"])) $+$
-                                      vcat (map (include env "out/types") $ modNames imps) $+$
+                                      vcat (map (include env "out/types") canonImps) $+$
                                       hSuite 1 env1 stmts $+$
                                       hSuite 2 env1 stmts $+$
                                       text "void" <+> genTopName env initKW <+> parens empty <> semi
   where env1                        = classdefine stmts env
+        canonImps                   = moduleRefs1 env
 
 
 hSuite phase env []                 = empty
@@ -313,11 +322,13 @@ primNEWTUPLE0                       = gPrim "NEWTUPLE0"
 
 -- Implementation -----------------------------------------------------------------------------------
 
-cModule env srcbase srcText emitLines (Module m imps _ stmts)
+cModule env legacyM srcbase srcText emitLines (Module m imps _ stmts)
                                     = (if inBuiltin env then text "#include \"builtin/builtin.c\"" else empty) $+$
                                       text "#include \"rts/common.h\"" $+$
                                       include env (if inBuiltin env then "" else "out/types") m $+$
+                                      ext_compat_open $+$
                                       ext_include $+$
+                                      ext_compat_close $+$
                                       declModule envWithLine stmts $+$
                                       text "int" <+> genTopName env initFlag <+> equals <+> text "0" <> semi $+$
                                       (text "void" <+> genTopName env initKW <+> parens empty <+> char '{') $+$
@@ -328,9 +339,11 @@ cModule env srcbase srcText emitLines (Module m imps _ stmts)
                                               initTables env1 stmts $+$
                                               initGlobals env1 stmts) $+$
                                       char '}'
-  where initImports                 = vcat [ gen env (GName m initKW) <> parens empty <> semi | m <- modNames imps ]
+  where initImports                 = vcat [ gen env (GName m initKW) <> parens empty <> semi | m <- canonImps ]
         external                    = notImpl && not (inBuiltin env)
         ext_include                 = if notImpl then text "#include" <+> doubleQuotes (text srcbase <> text ".ext.c") else empty
+        (ext_compat_open, ext_compat_close)
+                                    = legacyExtCompat env legacyM m stmts external
         ext_init                    = if notImpl then genTopName env (name "__ext_init__") <+> parens empty <> semi else empty
         notImpl                     = hasNotImpl stmts
         env1                        = classdefine stmts env
@@ -351,6 +364,43 @@ cModule env srcbase srcText emitLines (Module m imps _ stmts)
         emitLine (Loc startOffset _) =
             text "#line" <+> pretty (offsetToLine startOffset) <+> doubleQuotes (text actFile)
         envWithLine                 = if emitLines then setLineEmit emitLine env1 else env1
+        canonImps                   = moduleRefs1 env
+
+
+legacyExtCompat                    :: GenEnv -> ModName -> ModName -> Suite -> Bool -> (Doc, Doc)
+legacyExtCompat env legacyM canonM stmts external
+  | not external || legacyM == canonM = (empty, empty)
+  | otherwise                         = (defines, undefs)
+  where names                         = legacyExtNames stmts
+        legacy n                      = gen env (GName legacyM n)
+        canon n                       = gen env (GName canonM n)
+        defines                       = vcat [ text "#define" <+> legacy n <+> canon n | n <- names ]
+        undefs                        = vcat [ text "#undef" <+> legacy n | n <- names ]
+
+legacyExtNames                      :: Suite -> [Name]
+legacyExtNames stmts                = Data.List.nub $
+                                      [name "__ext_init__", initKW] ++
+                                      concatMap derivedNames (dom (envOf stmts)) ++
+                                      concatMap stmtMethodNames stmts
+
+derivedNames                        :: Name -> [Name]
+derivedNames n                      = [ n
+                                      , Derived n suffixClass
+                                      , Derived n suffixMethods
+                                      , Derived n suffixNew
+                                      , Derived n suffixWitness
+                                      ]
+
+stmtMethodNames                     :: Stmt -> [Name]
+stmtMethodNames (Decl _ ds)         = concatMap declMethodNames ds
+stmtMethodNames _                   = []
+
+declMethodNames                     :: Decl -> [Name]
+declMethodNames (Class _ n _ _ ss _)
+                                    = concatMap (derivedNames . methodname n) (dom (envOf ss))
+declMethodNames (Actor _ n _ _ _ ss _)
+                                    = concatMap (derivedNames . methodname n) (dom (envOf ss))
+declMethodNames _                   = []
 
 
 declModule env []                   = empty

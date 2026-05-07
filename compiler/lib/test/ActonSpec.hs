@@ -93,7 +93,7 @@ main = do
               ( (map (+ 1) S.version, sourceMeta, srcHash, pubHash, implHash)
               , imps, nameHashes, roots, tests, mdoc, nmod, tmod
               )
-          (_env2, te) <- Acton.Env.doImp [dir] env1 directMod
+          (_env2, _directMod, te) <- Acton.Env.doImp [dir] env1 directMod
           map fst te `shouldBe` [valueName]
 
     describe "Pass 1: Parser" $ do

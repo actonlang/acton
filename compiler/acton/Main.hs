@@ -1004,14 +1004,21 @@ compileSigTarget gopts queryGopts opts paths rootProj sysAbs depOverrides target
     let targetCtx' = case M.lookup (projRoot targetCtx) (cpProjMap plan) of
                        Just ctx -> ctx
                        Nothing  -> targetCtx
-    targetPaths <- pathsForModule opts' (cpProjMap plan) targetCtx' mn
+    targetMods <- enumerateProjectModules (ccRootProj cctx') targetCtx'
+    let sourcePfx = case [ pfx | (path, _, canonMn, pfx) <- targetMods
+                               , path == srcPath || canonMn == mn
+                         ] of
+                      pfx:_ -> pfx
+                      [] -> []
+    targetPaths <- pathsForModule opts' (cpProjMap plan) targetCtx' sourcePfx mn
     return (outBase targetPaths mn ++ ".ty")
 
 resolveSigTarget :: C.CompileOptions -> Paths -> FilePath -> M.Map FilePath ProjCtx -> String -> IO SigTarget
 resolveSigTarget opts paths rootProj projMap rawTarget = do
     parts <- parseSigTarget rawTarget
     moduleIndex <- sigModuleIndex projMap rootProj
-    let fullMod = A.modName parts
+    fullParts <- sigRootLibAlias tySearchPath projMap rootProj parts
+    let fullMod = A.modName fullParts
     case lookup fullMod moduleIndex of
       Just (ctx, srcPath) ->
         return (SigSourceTarget ctx fullMod Nothing srcPath)
@@ -1029,8 +1036,8 @@ resolveSigTarget opts paths rootProj projMap rawTarget = do
       | length parts < 2 =
           printErrorAndExit ("Module not found: " ++ rawTarget)
       | otherwise = do
-          let modParts = init parts
-              namePart = last parts
+          modParts <- sigRootLibAlias tySearchPath projMap rootProj (init parts)
+          let namePart = last parts
               mn = A.modName modParts
               n = A.name namePart
           case lookup mn moduleIndex of
@@ -1052,6 +1059,22 @@ parseSigTarget rawTarget = do
       then printErrorAndExit ("Invalid signature target: " ++ rawTarget)
       else return parts
 
+sigRootLibAlias :: [FilePath] -> M.Map FilePath ProjCtx -> FilePath -> [String] -> IO [String]
+sigRootLibAlias tySearchPath projMap rootProj parts =
+    case (parts, M.lookup rootProj projMap) of
+      -- src/lib.act canonicalizes to the package name, but keep `acton sig lib`
+      -- as a source-file convenience without making `lib` importable.
+      (["lib"], Just ctx) | projHasPackageRoot ctx ->
+        return [BuildSpec.specName (projBuildSpec ctx)]
+      (["lib"], Just ctx) -> do
+        let pkgParts = [BuildSpec.specName (projBuildSpec ctx)]
+        mTy <- findSigTyFile tySearchPath (A.modName pkgParts)
+        return $ case mTy of
+          Just _  -> pkgParts
+          Nothing -> parts
+      _ ->
+        return parts
+
 sigModuleIndex :: M.Map FilePath ProjCtx -> FilePath -> IO [(A.ModName, (ProjCtx, FilePath))]
 sigModuleIndex projMap rootProj = do
     let roots = sigProjectSearchOrder projMap rootProj
@@ -1059,8 +1082,17 @@ sigModuleIndex projMap rootProj = do
       case M.lookup root projMap of
         Nothing -> return []
         Just ctx -> do
-          mods <- enumerateProjectModules ctx
-          return [ (mn, (ctx, srcPath)) | (srcPath, mn) <- mods ]
+          mods <- enumerateProjectModules rootProj ctx
+          let suppressLegacy =
+                any (\(_, rawMn, _, pfx) -> not (null pfx) && A.modPath rawMn == ["lib"]) mods
+          return $ concatMap (moduleEntries ctx suppressLegacy) mods
+  where
+    moduleEntries ctx suppressLegacy (srcPath, rawMn, canonMn, _) =
+      let canonical = [(canonMn, (ctx, srcPath))]
+          legacy
+            | rawMn == canonMn || suppressLegacy = []
+            | otherwise = [(rawMn, (ctx, srcPath))]
+      in canonical ++ legacy
 
 sigProjectSearchOrder :: M.Map FilePath ProjCtx -> FilePath -> [FilePath]
 sigProjectSearchOrder projMap rootProj =
@@ -1861,7 +1893,7 @@ runCliPostCompile cliHooks gopts plan env = do
           Just pctx -> do
             when (C.verbose gopts) $
               logLine ("Generating build.zig for dependency project " ++ p)
-            dummyPaths <- pathsForModule opts' projMap pctx (A.modName ["__gen_build__"])
+            dummyPaths <- pathsForModule opts' projMap pctx [] (A.modName ["__gen_build__"])
             let depOpts = M.findWithDefault M.empty p depModuleOptsByProj
                 depPathOverrides = projectDepPathOverrides projMap p
             genBuildZigFiles (projBuildSpec pctx) rootPins (ccDepOverrides cctx) dummyPaths depOpts depPathOverrides
