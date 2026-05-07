@@ -548,7 +548,7 @@ commonAncestors env c1 c2   = filter ((`elem` ns) . tcname) $ map snd (findAnces
 
 directAncestors             :: EnvF x -> QName -> [QName]
 directAncestors env qn      = [ tcname p | (ws,p) <- us, null $ catRight ws ]
-  where (q,us,te)           = findConName qn env
+  where (q,us,_)            = findConName qn env
 
 allAncestors                :: EnvF x -> TCon -> [TCon]
 allAncestors env tc         = reverse [ schematic' c | (_, c) <- us ]
