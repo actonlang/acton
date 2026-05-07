@@ -1,0 +1,5 @@
+# The env parameter has no type, and the root actor only calls a method that
+# EnvVar has as well. The parameter must still be an Env, or the build makes
+# no program.
+actor main(env):
+    home = env.getenv("HOME")

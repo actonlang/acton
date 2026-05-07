@@ -1524,13 +1524,77 @@ class SysCap():
     """
     pass
 
-actor Env (wc: WorldCap, sc: SysCap, args: list[str], wthreads: int):
+class _EnvCap():
+    """_EnvCap authorizes construction of Env and its service actors.
+
+    Only the RTS creates one, when it bootstraps Env, with the constructor
+    the compiler generates from this __init__. The name is private to
+    __builtin__, so user code can neither construct nor subclass it.
+    """
+    def __init__(self):
+        pass
+
+# Env is declared before EnvVar and Stdio, which have methods with the same
+# names as Env's. For a value without a type, the type checker tries the
+# classes that have the attribute one at a time, those of __builtin__ in the
+# order they are declared here, and keeps the first one that fits every use.
+# So an env parameter without an annotation that calls Env's methods is an
+# Env. A def without annotations that is given env.vars or env.stdio then
+# needs an annotation on its parameter, such as vars: EnvVar.
+actor Env (wc: WorldCap, sc: SysCap, args: list[str], wthreads: int, envcap: _EnvCap):
     cap = wc
     auth = wc
     syscap = sc
     argv = args
     nr_wthreads = wthreads
+    vars = EnvVar(envcap)
+    stdio = Stdio(envcap, vars)
 
+    # The methods below forward to vars and stdio and wait for the reply, so
+    # they stay ordered with the other Env methods, e.g. an exit() sent after
+    # stdout_write() runs only once the Stdio actor has written the output.
+
+    action def getenv(name: str) -> ?str:
+        """Get the value of an environment variable"""
+        return vars.getenv(name)
+
+    action def getenvb(name: bytes) -> ?bytes:
+        """Get the value of an environment variable"""
+        return vars.getenvb(name)
+
+    action def setenv(n: str, v: str) -> None:
+        """Set the value of an environment variable"""
+        return vars.setenv(n, v)
+
+    action def setenvb(n: bytes, v: bytes) -> None:
+        """Set the value of an environment variable"""
+        return vars.setenvb(n, v)
+
+    action def unsetenv(n: str) -> None:
+        """Unset an environment variable"""
+        return vars.unsetenv(n)
+
+    action def unsetenvb(n: bytes) -> None:
+        """Unset an environment variable"""
+        return vars.unsetenvb(n)
+
+    action def stdout_write(s: str) -> None:
+        return stdio.out(s)
+
+    action def stdin_install(on_stdin: ?action(str) -> None=None, encoding: ?str=None, on_error: ?action(str, bytes) -> None=None, on_stdin_bytes: ?action(bytes) -> None=None) -> None:
+        return stdio.stdin_install(on_stdin, encoding, on_error, on_stdin_bytes)
+
+    action def set_stdin(canonical: ?bool=None, echo: ?bool=None) -> None:
+        return stdio.set_stdin(canonical, echo)
+
+    action def is_tty() -> bool:
+        return stdio.is_tty()
+
+    action def exit(n: int):
+        NotImplemented
+
+actor EnvVar(envcap: _EnvCap):
+    """Environment variables of the process, reached as env.vars"""
     action def getenv(name: str) -> ?str:
         """Get the value of an environment variable"""
         res = getenvb(name.encode())
@@ -1558,7 +1622,14 @@ actor Env (wc: WorldCap, sc: SysCap, args: list[str], wthreads: int):
         """Unset an environment variable"""
         NotImplemented
 
-    action def stdout_write(s: str) -> None:
+actor Stdio(envcap: _EnvCap, vars: EnvVar):
+    """Standard input, output and error of the process, reached as env.stdio"""
+    action def out(s: str) -> None:
+        """Write s to stdout"""
+        NotImplemented
+
+    action def err(s: str) -> None:
+        """Write s to stderr"""
         NotImplemented
 
     action def stdin_install(on_stdin: ?action(str) -> None=None, encoding: ?str=None, on_error: ?action(str, bytes) -> None=None, on_stdin_bytes: ?action(bytes) -> None=None) -> None:
@@ -1576,7 +1647,7 @@ actor Env (wc: WorldCap, sc: SysCap, args: list[str], wthreads: int):
                 # Default to utf-8 if we're unable to discover the encoding
                 encoding = "utf-8"
                 # Read encoding from the LANG environment variable
-                lang_env = getenv("LANG")
+                lang_env = vars.getenv("LANG")
                 if lang_env is not None:
                     try:
                         encoding = lang_env.split(".")[1].lower()
@@ -1595,7 +1666,4 @@ actor Env (wc: WorldCap, sc: SysCap, args: list[str], wthreads: int):
         NotImplemented
 
     action def _on_stdin_bytes(cb: action(bytes) -> None) -> None:
-        NotImplemented
-
-    action def exit(n: int):
         NotImplemented

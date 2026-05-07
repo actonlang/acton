@@ -1,6 +1,18 @@
 actor main(env):
     # main only runs if the Env bootstrap continuation starts root init.
-    if env.nr_wthreads != 7:
+    def fail(msg: str):
+        print("env_init:", msg)
         env.exit(1)
+
+    env.vars.setenv("ACTON_ENV_INIT_TEST", "ok")
+    if env.nr_wthreads != 7:
+        fail("nr_wthreads is " + str(env.nr_wthreads))
+    elif env.vars.getenv("ACTON_ENV_INIT_TEST") != "ok":
+        fail("env.vars does not see its own setenv")
+    elif env.getenv("ACTON_ENV_INIT_TEST") != "ok":
+        fail("env.getenv does not see env.vars.setenv")
     else:
+        env.vars.unsetenv("ACTON_ENV_INIT_TEST")
+        await async env.stdio.out("")
+        await async env.stdio.err("")
         env.exit(0)

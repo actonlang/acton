@@ -41,14 +41,19 @@ extern bool stdin_attr_changed;
 #endif
 
 
-// Env /////////////////////////////////////////////////////////////////////////
+// Stdio ///////////////////////////////////////////////////////////////////////
 
-$R B_EnvD_stdout_writeG_local (B_Env self, $Cont c$cont, B_str s) {
+$R B_StdioD_outG_local (B_Stdio self, $Cont c$cont, B_str s) {
     fwrite(s->str, 1, s->nbytes, stdout);
     return $R_CONT(c$cont, B_None);
 }
 
-$R B_EnvD_set_stdinG_local (B_Env self, $Cont c$cont, B_bool canonical, B_bool echo) {
+$R B_StdioD_errG_local (B_Stdio self, $Cont c$cont, B_str s) {
+    fwrite(s->str, 1, s->nbytes, stderr);
+    return $R_CONT(c$cont, B_None);
+}
+
+$R B_StdioD_set_stdinG_local (B_Stdio self, $Cont c$cont, B_bool canonical, B_bool echo) {
 #if defined(_WIN32) || defined(_WIN64)
 #else
     struct termios attr;
@@ -89,9 +94,9 @@ void read_stdin(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
     }
 }
 
-$R B_EnvD__on_stdin_bytesG_local (B_Env self, $Cont c$cont, $action cb) {
-    // This should be the only call in env that does IO stuff, so it is safe to
-    // pin affinity here (and not earlier)..
+$R B_StdioD__on_stdin_bytesG_local (B_Stdio self, $Cont c$cont, $action cb) {
+    // This should be the only call in Stdio that uses the libuv loop, so it is
+    // safe to pin affinity here (and not earlier).
     pin_actor_affinity();
     uv_tty_t *tty = acton_malloc(sizeof(uv_tty_t));
     uv_tty_init(get_uv_loop(), tty, STDIN_FILENO, 1);
@@ -99,6 +104,9 @@ $R B_EnvD__on_stdin_bytesG_local (B_Env self, $Cont c$cont, $action cb) {
     uv_read_start((uv_stream_t*)tty, alloc_buffer, read_stdin);
     return $R_CONT(c$cont, B_None);
 }
+
+
+// Env /////////////////////////////////////////////////////////////////////////
 
 $R B_EnvD_exitG_local (B_Env self, $Cont c$cont, int64_t n) {
     return_val = n;

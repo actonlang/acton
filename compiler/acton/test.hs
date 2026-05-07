@@ -3396,8 +3396,22 @@ rtsTests =
               assertEqual ("worker " ++ k ++ ": the wait buckets add up to wait_count") count (sum buckets)
           assertBool "the workers took actors from ready queues"
                      (sum (M.mapMaybe (M.lookup "wait_count") workers) > 0)
-  ,   testCase "Env init starts root actor with initialized Env" $ do
+  ,   testCase "Env init starts root actor with initialized Env and service actors" $ do
           testBuildAndRun "" "--rts-wthreads=7" ExitSuccess False "../../test/rts/env_init.act"
+  ,   testCase "Env stdout_write is done before a later exit" $ do
+          testBuildThing "" ExitSuccess False "../../test/rts/env_stdout_exit.act"
+          (returnCode, cmdOut, cmdErr) <- runThing "" "../../test/rts/env_stdout_exit.act"
+          assertEqual "Env stdout_write retCode" ExitSuccess returnCode
+          assertEqual "Env stdout_write output" "written before exit\n" cmdOut
+  ,   testCase "untyped env of a root actor is an Env" $ do
+          forM_ ["env_untyped_getenv", "env_untyped_stdin"] $ \name -> do
+              let bin = "../../test/rts/" ++ name
+              removePathForcibly bin
+              testBuildThing "" ExitSuccess False (bin ++ ".act")
+              built <- doesFileExist bin
+              assertBool (name ++ ".act should build a program") built
+  ,   testCase "Env stdin methods take the defaults of Stdio's" $ do
+          testBuildThing "" ExitSuccess False "../../test/rts/env_stdin_defaults.act"
   ]
 
 stdlibTests =

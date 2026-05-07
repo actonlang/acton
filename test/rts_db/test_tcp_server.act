@@ -199,12 +199,19 @@ actor Tester(env, verbose, port_chunk, app_wthreads=4):
                 # The resumed server re-verifies every persisted bytes vector for
                 # both runtime type and exact content, and replies OK or FAIL...
                 if data == b"OK":
-                    log("YAY, all bytes vectors survived restart intact, test success!!!!")
+                    log("All bytes vectors survived restart intact; checking the Env services")
+                    state = 12
+                    c.write(b"ENV")
+                else:
+                    error("Bytes serialization regression after resume: %s" % data.decode())
+            elif state == 12:
+                if data == b"OK":
+                    log("YAY, Env and its services answer after resume, test success!!!!")
                     state = 9
                     if p is not None:
                         p.terminate()
                 else:
-                    error("Bytes serialization regression after resume: %s" % data.decode())
+                    error("Env services after resume: %s" % data.decode())
 
 
         def tcpc_on_error(c, msg):

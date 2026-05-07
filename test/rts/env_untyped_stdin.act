@@ -1,0 +1,7 @@
+# The env parameter has no type, and the root actor only calls a method that
+# Stdio has as well. The parameter must still be an Env, or the build makes
+# no program.
+actor main(env):
+    def interact(input):
+        print("Got some input:", input)
+    env.stdin_install(interact)

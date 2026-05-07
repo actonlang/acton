@@ -1,0 +1,10 @@
+# Env-owned service actors take an _EnvCap, which is private to __builtin__,
+# so user code cannot forge one by subclassing it.
+
+class Forged(_EnvCap):
+    def __init__(self):
+        pass
+
+actor main(env: Env):
+    stdio = Stdio(Forged(), env.vars)
+    env.exit(0)

@@ -1076,7 +1076,7 @@ struct $Cont $StartRoot$cont = {
 };
 
 $R $InitEnvD___call__ ($Cont $this, $WORD args) {
-    return env_actor->$class->__init__(env_actor, &$StartRoot$cont, B_WorldCapG_new(), B_SysCapG_new(), (B_list)args, num_wthreads);
+    return env_actor->$class->__init__(env_actor, &$StartRoot$cont, B_WorldCapG_new(), B_SysCapG_new(), (B_list)args, num_wthreads, B__EnvCapG_new());
 }
 
 extern struct $ContG_class $InitEnvG_methods;
@@ -3977,6 +3977,16 @@ int main(int argc, char **argv) {
         const char *stats_json = stats_to_json();
         printf("%s\n", stats_json);
     }
+#endif
+
+#if defined(_WIN32) || defined(_WIN64)
+#else
+    // rts_shutdown() restored the terminal settings if set_stdin() had changed
+    // them, but a Stdio.set_stdin() that was running on another worker may
+    // have changed them after that. No worker runs actors any more, so
+    // restore them once more.
+    if (stdin_attr_changed)
+        tcsetattr(STDIN_FILENO, TCSANOW, &old_stdin_attr);
 #endif
 
     if (logf) {
