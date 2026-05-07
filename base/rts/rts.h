@@ -266,7 +266,6 @@ $R $AWAIT($Cont, B_Msg);
 
 void init_db_queue(int64_t key);
 void register_actor(int64_t key);
-void serialize_state_shortcut($Actor);
 
 #ifdef ACTON_DB
 #define INIT_DB_QUEUE(key) init_db_queue(key)

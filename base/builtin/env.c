@@ -107,19 +107,6 @@ $R B_EnvD_exitG_local (B_Env self, $Cont c$cont, int64_t n) {
 }
 
 
-B_Env B_EnvG_newactor(B_WorldCap wc, B_SysCap sc, B_list args) {
-    B_Env $tmp = $NEWACTOR(B_Env);
-    $tmp->cap = wc;
-    $tmp->args = args;
-    $tmp->syscap = sc;
-    $tmp->auth = $tmp->cap;
-    $tmp->argv = $tmp->args;
-    $tmp->$affinity = 0; // hard-coded to special worker on the main thread
-    serialize_state_shortcut(($Actor)$tmp);
-    return $tmp;
-}
-
-
 B_SysCap B_SysCapG_new() {
     B_SysCap $tmp = acton_malloc(sizeof(struct B_SysCap));
     $tmp->$class = &B_SysCapG_methods;

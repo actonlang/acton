@@ -3396,6 +3396,8 @@ rtsTests =
               assertEqual ("worker " ++ k ++ ": the wait buckets add up to wait_count") count (sum buckets)
           assertBool "the workers took actors from ready queues"
                      (sum (M.mapMaybe (M.lookup "wait_count") workers) > 0)
+  ,   testCase "Env init starts root actor with initialized Env" $ do
+          testBuildAndRun "" "--rts-wthreads=7" ExitSuccess False "../../test/rts/env_init.act"
   ]
 
 stdlibTests =
