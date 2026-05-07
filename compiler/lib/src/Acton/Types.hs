@@ -211,29 +211,40 @@ uniqPrefix s@Assign{}                  = head (bound s)
 uniqPrefix s@Signature{}               = head (bound s)
 uniqPrefix s                           = error ("Unexpected top-level stmt: " ++ prstr s)
 
+
+infTopStmt                              :: Env -> Stmt -> TypeM (TEnv, [Stmt])
+infTopStmt env s                        = do (total,te1,s) <- scanTopStmt env s
+                                             -- NOTE: when total is True, te2 below is guaranteed to be identical to te1
+                                             --when total $ traceM ("## Scanned total env for " ++ prstrs (dom te1))
+                                             (te2,s) <- checkTopStmt env te1 s
+                                             return (te2, s)
+
+
+scanTopStmt                             :: Env -> Stmt -> TypeM (Bool, TEnv, Stmt)
 scanTopStmt env (Decl l ds)             = do (_,te,ds) <- infEnv (setInDecl env) ds
                                              return (null $ ufree te, te, Decl l ds)
 scanTopStmt env (Signature l ns sc d)   = return (True, [ (n, NSig sc d Nothing) | n <- ns ], Signature l ns sc d)
-scanTopStmt env (Assign l pats e)       = do (te,t,pats) <- infEnvT env pats
+scanTopStmt env (Assign l pats e)       = do (te,_,pats) <- infEnvT env pats
                                              return (null $ ufree te, te, Assign l pats e)
 
-infTopStmt                              :: Env -> Stmt -> TypeM (TEnv, [Stmt])
-infTopStmt env (Decl l ds)              = do (_,te,ds) <- infEnv (setInDecl env) ds
-                                             (cs,ds) <- checkEnv (define te env) ds
 
-                                             --traceM ("****************************************** infer (" ++ show (length cs) ++ ") " ++ prstrs (bound s))
+checkTopStmt                            :: Env -> TEnv -> Stmt -> TypeM (TEnv, [Stmt])
+checkTopStmt env te (Decl l ds)         = do (cs,ds) <- checkEnv (define te env) ds
+
+                                             --traceM ("****************************************** infer (" ++ show (length cs) ++ ") " ++ prstrs (bound ds))
                                              --traceM ("\n\n\n############\n" ++ render (nest 4 $ vcat $ map pretty te))
-                                             --traceM ("------------\n" ++ render (nest 4 $ pretty s))
+                                             --traceM ("------------\n" ++ render (nest 4 $ vcat $ map pretty ds))
                                              --traceM ("\\\\\\\\\\\\\n" ++ render (nest 4 $ vcat $ map pretty cs))
 
                                              (te,eq,ds) <- genEnv env cs te ds
                                              --traceM ("============ push\n" ++ render (nest 4 $ vcat $ map pretty eq))
                                              --traceM ("~~~~~~~~~~~~ i.e. top:\n" ++ render (nest 4 $ vcat $ map pretty eq0))
                                              --traceM ("============ and scoped:\n" ++ render (nest 4 $ vcat $ map pretty eq1))
-                                             --traceM ("------------ onto\n" ++ render (nest 4 $ pretty s))
+                                             --traceM ("------------ onto\n" ++ render (nest 4 $ vcat $ map pretty ds))
                                              finishToStmt env te eq (Decl l ds)
-infTopStmt env (Signature l ns sc d)    = return ([ (n, NSig sc d Nothing) | n <- ns ], [Signature l ns sc d])
-infTopStmt env (Assign l pats e)        = do (te,t,pats) <- infEnvT env pats
+checkTopStmt env te (Signature l ns sc d)
+                                        = return ([ (n, NSig sc d Nothing) | n <- ns ], [Signature l ns sc d])
+checkTopStmt env te (Assign l pats e)   = do (_,t,pats) <- infEnvT env pats
                                              (cs,e) <- inferSub env t e
                                              eq <- solveAll env te cs
                                              finishToStmt env te eq (Assign l pats e)
@@ -2248,10 +2259,10 @@ instance InfEnvT Pattern where
                                                  NSig (TSchema _ [] t') _ _
                                                    | TFun{} <- t' -> notYet l "Pattern variable with previous function signature"
                                                    | otherwise -> do
-                                                     --traceM ("## infEnvT (sig) " ++ prstr n ++ " : " ++ prstr t ++ " < " ++ prstr t')
+                                                     --traceM ("## infEnvT (sig) " ++ prstr n ++ " : " ++ prstr t' ++ " < " ++ prstr t)
                                                      let te = [(n, NVar t')]
-                                                     solveAll env te [Cast (locinfo l 104) env t t']
-                                                     return (te, t, PVar l n (Just t))
+                                                     solveAll env te [Cast (locinfo l 104) env t' t]
+                                                     return (te, t', PVar l n (Just t'))
                                                  NVar t'
                                                    | isJust a -> do
                                                      return ([], t, PVar l n (Just t))
