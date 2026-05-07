@@ -102,15 +102,9 @@ $R B_EnvD_exitG_local (B_Env self, $Cont c$cont, B_int n) {
 }
 
 
-B_Env B_EnvG_newactor(B_WorldCap wc, B_SysCap sc, B_list args) {
+B_Env B_EnvG_newactor() {
     B_Env $tmp = $NEWACTOR(B_Env);
-    $tmp->cap = wc;
-    $tmp->args = args;
-    $tmp->syscap = sc;
-    $tmp->auth = $tmp->cap;
-    $tmp->argv = $tmp->args;
     $tmp->$affinity = 0; // hard-coded to special worker on the main thread
-    serialize_state_shortcut(($Actor)$tmp);
     return $tmp;
 }
 
@@ -137,4 +131,3 @@ B_WorldCap B_WorldCapG_new() {
 B_NoneType B_WorldCapD___init__ (B_WorldCap self) {
     return B_None;
 }
-

@@ -719,6 +719,7 @@ struct $Cont $Fail$instance = {
     &$FailG_methods
 };
 ////////////////////////////////////////////////////////////////////////////////////////
+
 $R $InitRootD___call__ ($Cont $this, $WORD val) {
     typedef $R(*ROOT__init__t)($Actor, $Cont, B_Env);    // Assumed type of the ROOT actor's __init__ method
     return ((ROOT__init__t)root_actor->$class->__init__)(root_actor, ($Cont)val, env_actor);
@@ -738,6 +739,55 @@ struct $ContG_class $InitRootG_methods = {
 };
 struct $Cont $InitRoot$cont = {
     &$InitRootG_methods
+};
+
+$R $StartRootD___call__ ($Cont $this, $WORD val) {
+    // Env.__init__ has completed here; now preserve Env and start root init.
+    serialize_state_shortcut(($Actor)env_actor);
+    $ASYNC(root_actor, &$InitRoot$cont);
+    return $R_DONE(val);
+}
+
+struct $ContG_class $StartRootG_methods = {
+    "$StartRoot",
+    UNASSIGNED,
+    NULL,
+    $ContD___init__,
+    $ContD___serialize__,
+    $ContD___deserialize__,
+    $ContD___bool__,
+    $ContD___str__,
+    $ContD___str__,
+    $StartRootD___call__
+};
+struct $Cont $StartRoot$cont = {
+    &$StartRootG_methods
+};
+
+$R $InitEnvD___call__ ($Cont $this, $WORD val) {
+    typedef $R(*ENV__init__t)(B_Env, $Cont, B_WorldCap, B_SysCap, B_list, B_int);
+    B_tuple init = (B_tuple)val;
+    B_WorldCap wc = (B_WorldCap)init->components[0];
+    B_SysCap sc = (B_SysCap)init->components[1];
+    B_list args = (B_list)init->components[2];
+    B_int nr_wthreads = (B_int)init->components[3];
+    return ((ENV__init__t)env_actor->$class->__init__)(env_actor, &$StartRoot$cont, wc, sc, args, nr_wthreads);
+}
+
+struct $ContG_class $InitEnvG_methods = {
+    "$InitEnv",
+    UNASSIGNED,
+    NULL,
+    $ContD___init__,
+    $ContD___serialize__,
+    $ContD___deserialize__,
+    $ContD___bool__,
+    $ContD___str__,
+    $ContD___str__,
+    $InitEnvD___call__
+};
+struct $Cont $InitEnv$cont = {
+    &$InitEnvG_methods
 };
 ////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1402,25 +1452,31 @@ void BOOTSTRAP(int argc, char *argv[]) {
     for (int i=0; i< argc; i++)
         wit->$class->append(wit,args,to$str(argv[i]));
 
-    env_actor = B_EnvG_newactor(B_WorldCapG_new(), B_SysCapG_new(), args);
-    env_actor->nr_wthreads = toB_int(num_wthreads);
-
+    env_actor = B_EnvG_newactor();
     root_actor = $ROOT();                           // Assumed to return $NEWACTOR(X) for the selected root actor X
+
+    // Bootstrap targets Env first. $InitEnv runs Env.__init__ with
+    // $StartRoot$cont, which schedules root init after Env is initialized.
+    B_tuple env_init = $NEWTUPLE(4,
+                                 B_WorldCapG_new(),
+                                 B_SysCapG_new(),
+                                 args,
+                                 toB_int(num_wthreads));
     time_t now = current_time();
-    B_Msg m = B_MsgG_newXX(root_actor, &$InitRoot$cont, now, &$Done$instance);
+    B_Msg m = B_MsgG_newXX(($Actor)env_actor, &$InitEnv$cont, now, env_init);
 #ifdef ACTON_DB
     if (db) {
             int ret = 0, minority_status = 0;
             while(!rts_exit) {
-                ret = remote_enqueue_in_txn(($WORD*)&m->$globkey, 1, NULL, 0, MSG_QUEUE, (WORD)root_actor->$globkey, &minority_status, NULL, db);
-                rtsd_printf("   # enqueue bootstrap msg %ld to root actor queue %ld returns %d, minority_status %d", m->$globkey, root_actor->$globkey, ret, minority_status);
-                if(!handle_status_and_schema_mismatch(ret, minority_status, root_actor->$globkey))
+                ret = remote_enqueue_in_txn(($WORD*)&m->$globkey, 1, NULL, 0, MSG_QUEUE, (WORD)env_actor->$globkey, &minority_status, NULL, db);
+                rtsd_printf("   # enqueue bootstrap msg %ld to env actor queue %ld returns %d, minority_status %d", m->$globkey, env_actor->$globkey, ret, minority_status);
+                if(!handle_status_and_schema_mismatch(ret, minority_status, env_actor->$globkey))
                     break;
             }
     }
 #endif
-    if (ENQ_msg(m, root_actor)) {
-        ENQ_ready(root_actor);
+    if (ENQ_msg(m, ($Actor)env_actor)) {
+        ENQ_ready(($Actor)env_actor);
     }
 
 }
@@ -1774,6 +1830,8 @@ void $register_rts () {
   $register(&$DoneG_methods);
   $register(&$InitRootG_methods);
   $register(&B_EnvG_methods);
+  $register(&$StartRootG_methods);
+  $register(&$InitEnvG_methods);
 }
  
 ////////////////////////////////////////////////////////////////////////////////////////

@@ -1,0 +1,6 @@
+actor main(env):
+    # main only runs if the Env bootstrap continuation starts root init.
+    if env.nr_wthreads != 7:
+        env.exit(1)
+    else:
+        env.exit(0)

@@ -1129,6 +1129,9 @@ rtsTests =
           (returnCode, cmdOut, cmdErr) <- runThing "--rts-wthreads" "../../test/rts/argv7.act"
           assertEqual "RTS wthreads error retCode" (ExitFailure 1) returnCode
           assertEqual "RTS wthreads error cmdErr" "ERROR: --rts-wthreads requires an argument.\n" cmdErr
+
+  ,   testCase "Env init starts root actor with initialized Env" $ do
+          testBuildAndRun "" "--rts-wthreads=7" ExitSuccess False "../../test/rts/env_init.act"
   ]
 
 stdlibTests =

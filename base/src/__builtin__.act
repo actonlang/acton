@@ -1122,12 +1122,12 @@ class SysCap():
     """
     pass
 
-actor Env (wc: WorldCap, sc: SysCap, args: list[str]):
+actor Env (wc: WorldCap, sc: SysCap, args: list[str], wthreads: int):
     cap = wc
     auth = wc
     syscap = sc
     argv = args
-    nr_wthreads: int = 0
+    nr_wthreads = wthreads
 
     action def getenv(name: str) -> ?str:
         """Get the value of an environment variable"""
