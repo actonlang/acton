@@ -211,6 +211,12 @@ uniqPrefix s@Assign{}                  = head (bound s)
 uniqPrefix s@Signature{}               = head (bound s)
 uniqPrefix s                           = error ("Unexpected top-level stmt: " ++ prstr s)
 
+scanTopStmt env (Decl l ds)             = do (_,te,ds) <- infEnv (setInDecl env) ds
+                                             return (null $ ufree te, te, Decl l ds)
+scanTopStmt env (Signature l ns sc d)   = return (True, [ (n, NSig sc d Nothing) | n <- ns ], Signature l ns sc d)
+scanTopStmt env (Assign l pats e)       = do (te,t,pats) <- infEnvT env pats
+                                             return (null $ ufree te, te, Assign l pats e)
+
 infTopStmt                              :: Env -> Stmt -> TypeM (TEnv, [Stmt])
 infTopStmt env (Decl l ds)              = do (_,te,ds) <- infEnv (setInDecl env) ds
                                              (cs,ds) <- checkEnv (define te env) ds
@@ -227,9 +233,9 @@ infTopStmt env (Decl l ds)              = do (_,te,ds) <- infEnv (setInDecl env)
                                              --traceM ("------------ onto\n" ++ render (nest 4 $ pretty s))
                                              finishToStmt env te eq (Decl l ds)
 infTopStmt env (Signature l ns sc d)    = return ([ (n, NSig sc d Nothing) | n <- ns ], [Signature l ns sc d])
-infTopStmt env (Assign l pats e)        = do (cs1,te,t,pats) <- infEnvT env pats
-                                             (cs2,e) <- inferSub env t e
-                                             eq <- solveAll env te (cs1++cs2)
+infTopStmt env (Assign l pats e)        = do (te,t,pats) <- infEnvT env pats
+                                             (cs,e) <- inferSub env t e
+                                             eq <- solveAll env te cs
                                              finishToStmt env te eq (Assign l pats e)
 
 finishToStmt env te eq s                = do te <- defaultX env te
@@ -406,7 +412,7 @@ class InfEnv a where
     infEnv                              :: Env -> a -> TypeM (Constraints,TEnv,a)
 
 class InfEnvT a where
-    infEnvT                             :: Env -> a -> TypeM (Constraints,TEnv,Type,a)
+    infEnvT                             :: Env -> a -> TypeM (TEnv,Type,a)
 
 
 --------------------------------------------------------------------------------------------------------------------------
@@ -506,11 +512,11 @@ instance InfEnv Stmt where
                                              return (cs, [], Expr l e')
 
     infEnv env (Assign l pats e)
-      | nodup pats, e == eNotImpl       = do (cs1,te,t,pats') <- infEnvT env pats
-                                             return (cs1, te, Assign l pats' e)
-      | otherwise                       = do (cs1,te,t,pats') <- infEnvT env pats
-                                             (cs2,e') <- inferSub env t e
-                                             return (cs1++cs2, te, Assign l pats' e')
+      | nodup pats, e == eNotImpl       = do (te,t,pats') <- infEnvT env pats
+                                             return ([], te, Assign l pats' e)
+      | otherwise                       = do (te,t,pats') <- infEnvT env pats
+                                             (cs,e') <- inferSub env t e
+                                             return (cs, te, Assign l pats' e')
 
     infEnv env (Assert l e1 e2)         = do (cs1,_,_,_,e1') <- inferTest env e1
                                              (cs2,e2') <- inferSub env tStr e2
@@ -535,14 +541,14 @@ instance InfEnv Stmt where
                                              (cs3,te2,els') <- infSuiteEnv env els
                                              return (cs1++cs2++cs3, [], While l e' (termsubst s b') els')
     infEnv env (For l p e b els)
-      | nodup p                         = do (cs1,te,t1,p') <- infEnvT env p
+      | nodup p                         = do (te,t1,p') <- infEnvT env p
                                              t2 <- newUnivar env
                                              (cs2,e') <- inferSub env t2 e
                                              (cs3,te1,b') <- infSuiteEnv (define te env) b
                                              (cs4,te2,els') <- infSuiteEnv env els
                                              w <- newWitness
                                              return (Proto (locinfo2 33 e) env w t2 (pIterable t1) :
-                                                     cs1++cs2++cs3++cs4, [], For l p' (eCall (eDot (eVar w) iterKW) [e']) b' els')
+                                                     cs2++cs3++cs4, [], For l p' (eCall (eDot (eVar w) iterKW) [e']) b' els')
     infEnv env (Try l b hs els fin)     = do (cs1,te,b') <- infLiveEnv env b
                                              (cs2,te',els') <- infLiveEnv (maybe id define te $ env) els
                                              (css,tes,hs') <- fmap unzip3 $ mapM (infLiveEnv env) hs
@@ -557,9 +563,9 @@ instance InfEnv Stmt where
                                              return $ (cs1++cs2, exclude te1 (dom te), With l items' b')
 
     infEnv env (VarAssign l pats e)
-      | nodup pats                      = do (cs1,te,t,pats') <- infEnvT env pats
-                                             (cs2,e') <- inferSub env t e
-                                             return (cs1++cs2, [ (n,NSVar t) | (n,NVar t) <- te], VarAssign l pats' e')
+      | nodup pats                      = do (te,t,pats') <- infEnvT env pats
+                                             (cs,e') <- inferSub env t e
+                                             return (cs, [ (n,NSVar t) | (n,NVar t) <- te], VarAssign l pats' e')
 
     infEnv env (After l e1 e2)          = do (cs1,e1') <- inferSub env tFloat e1
                                              (cs2,t,e2') <- infer env e2
@@ -806,7 +812,7 @@ instance InfEnv Decl where
                                                  (cs,te,b1) <- infEnv env1 b0
                                                  popFX
                                                  when (not $ null cs) $ err (loc n) "Deprecated class syntax"
-                                                 checkClassAttributesInitialized n l env as' te0 b
+                                                 checkClassAttributesInitialized n l env as' b
                                                  (nterms,asigs,_) <- checkAttributes [] te' te
                                                  let (te2,b2) = if notImplBody b then let te1 = unSig asigs in (te++te1, addImpl te1 b1)
                                                                 else if null asigs && initKW `notElem` dom te then relayInit te b1
@@ -907,17 +913,8 @@ toSigs te                               = map makeSig te
 
 --------------------------------------------------------------------------------------------------------------------------
 
--- To be replaced by the quantifier escape check of the new implication constraint solver
---checkNoEscape l env vs                  = do fvs <- ufree <$> usubst env
---                                             let escaped = vs `intersect` fvs
---                                             when (not $ null escaped) $ do
---                                                 env1 <- usubst env
---                                                 traceM ("####### env:\n" ++ prstr env1)
---                                                 traceM ("#### ufree env: " ++ prstrs fvs)
---                                                 err l ("Escaping type variables: " ++ prstrs escaped)
-
-checkClassAttributesInitialized         :: Name -> SrcLoc -> Env -> [WTCon] -> TEnv -> Suite -> TypeM ()
-checkClassAttributesInitialized className classLoc env ancestors inferredProps b
+checkClassAttributesInitialized         :: Name -> SrcLoc -> Env -> [WTCon] -> Suite -> TypeM ()
+checkClassAttributesInitialized className classLoc env ancestors b
                                         = do -- Only check if the class defines its own __init__. If it doesn't, it uses the parent's
                                              -- __init__ which already initialized everything (and we check the parent separately)
                                              case findInitMethod b of
@@ -929,7 +926,7 @@ checkClassAttributesInitialized className classLoc env ancestors inferredProps b
                                                        else do
                                                          let inherited = concatMap (getPropertiesFromClass env . tcname . snd) ancestors
                                                              explicit  = concat [ ns | Signature _ ns sc dec <- b, isProp dec sc ]
-                                                             inferred  = inferClassAttributes env self initBody
+                                                             inferred  = inferClassAttributes self initBody
                                                              expected  = nub $ inherited ++ explicit ++ inferred
                                                              initialized = scanSelfAssigns env self b initBody
                                                              -- Track which parent __init__ methods are called
@@ -1362,8 +1359,8 @@ checkDeclNoSelfReference self seen decl = case decl of
 -- Infer all class attributes by scanning the entire __init__ method for any
 -- self.x assignments, regardless of control flow. This is used for attribute
 -- discovery/inference, not for initialization checking.
-inferClassAttributes :: Env -> Name -> Suite -> [Name]
-inferClassAttributes env self stmts = nub $ scanAll stmts
+inferClassAttributes :: Name -> Suite -> [Name]
+inferClassAttributes self stmts = nub $ scanAll stmts
   where
     scanAll []                          = []
     -- Direct assignment to self.attribute
@@ -1426,7 +1423,7 @@ infProperties env as b
         inits                           = case findInitMethod b of
                                               Just (self, body, _) -> Just (self, body)
                                               Nothing -> Nothing
-        assigned                        = maybe [] (\(self,ss) -> inferClassAttributes env self ss) inits
+        assigned                        = maybe [] (\(self,ss) -> inferClassAttributes self ss) inits
         newProps                        = assigned \\ (inherited ++ explicit)
 
 
@@ -1631,11 +1628,11 @@ instance InfEnv WithItem where
                                              return (Proto (locinfo2  66 e) env w t pContextManager :
                                                      cs, [], WithItem e' Nothing)           -- TODO: translate using w
     infEnv env (WithItem e (Just p))    = do (cs1,t1,e') <- infer env e
-                                             (cs2,te,t2,p') <- infEnvT env p
+                                             (te,t2,p') <- infEnvT env p
                                              w <- newWitness
                                              return (Cast (locinfo2 67 e) env t1 t2 :
                                                      Proto (locinfo2 68 e) env w t1 pContextManager :
-                                                     cs1++cs2, te, WithItem e' (Just p'))         -- TODO: translate using w
+                                                     cs1, te, WithItem e' (Just p'))         -- TODO: translate using w
 
 instance InfEnv Handler where
     infEnv env (Handler ex b)           = do (cs1,te,ex') <- infEnv env ex
@@ -2207,90 +2204,90 @@ infComp env NoComp                      = return ([], env, [], NoComp)
 infComp env (CompIf l e c)              = do (cs1,env1,s,_,e') <- inferTest env e
                                              (cs2,env2,s',c') <- infComp env1 c
                                              return (cs1++cs2, env2, s++s', CompIf l e' (termsubst s c'))
-infComp env (CompFor l p e c)           = do (cs1,te1,t1,p') <- infEnvT (reserve (bound p) env) p
+infComp env (CompFor l p e c)           = do (te1,t1,p') <- infEnvT (reserve (bound p) env) p
                                              t2 <- newUnivar env
                                              (cs2,e') <- inferSub env t2 e
                                              (cs3,env',s,c') <- infComp (define te1 env) c
                                              w <- newWitness
                                              return (Proto (locinfo2 101 e) env w t2 (pIterable t1) :
-                                                     cs1++cs2++cs3, env', s, CompFor l p' (eCall (eDot (eVar w) iterKW) [e']) c')
+                                                     cs2++cs3, env', s, CompFor l p' (eCall (eDot (eVar w) iterKW) [e']) c')
 
 instance InfEnvT PosPat where
-    infEnvT env (PosPat p ps)           = do (cs1,te1,t,p') <- infEnvT env p
-                                             (cs2,te2,r,ps') <- infEnvT env ps
-                                             return (cs1++cs2, te1++te2, posRow t r, PosPat p' ps')
-    infEnvT env (PosPatStar p)          = do (cs,te,t,p') <- infEnvT env p
+    infEnvT env (PosPat p ps)           = do (te1,t,p') <- infEnvT env p
+                                             (te2,r,ps') <- infEnvT env ps
+                                             return (te1++te2, posRow t r, PosPat p' ps')
+    infEnvT env (PosPatStar p)          = do (te,t,p') <- infEnvT env p
                                              r <- newUnivarOfKind PRow env
-                                             return (Cast (locinfo p 102) env t (tTupleP r) :
-                                                     cs, te, posStar r, PosPatStar p')
-    infEnvT env PosPatNil               = return ([], [], posNil, PosPatNil)
+                                             tryUnify (locinfo p 102) t (tTupleP r)
+                                             return (te, posStar r, PosPatStar p')
+    infEnvT env PosPatNil               = return ([], posNil, PosPatNil)
 
 
 instance InfEnvT KwdPat where
-    infEnvT env (KwdPat n p ps)         = do (cs1,te1,t,p') <- infEnvT env p
-                                             (cs2,te2,r,ps') <- infEnvT env ps
-                                             return (cs1++cs2, te1++te2, kwdRow n t r, KwdPat n p' ps')
-    infEnvT env (KwdPatStar p)          = do (cs,te,t,p') <- infEnvT env p
+    infEnvT env (KwdPat n p ps)         = do (te1,t,p') <- infEnvT env p
+                                             (te2,r,ps') <- infEnvT env ps
+                                             return (te1++te2, kwdRow n t r, KwdPat n p' ps')
+    infEnvT env (KwdPatStar p)          = do (te,t,p') <- infEnvT env p
                                              r <- newUnivarOfKind KRow env
-                                             return (Cast (locinfo p 103) env t (tTupleK r) :
-                                                     cs, te, kwdStar r, KwdPatStar p')
-    infEnvT env KwdPatNil               = return ([], [], kwdNil, KwdPatNil)
+                                             tryUnify (locinfo p 103) t (tTupleK r)
+                                             return (te, kwdStar r, KwdPatStar p')
+    infEnvT env KwdPatNil               = return ([], kwdNil, KwdPatNil)
 
 
 
 instance InfEnvT Pattern where
     infEnvT env (PWild l a)             = do t <- maybe (newUnivar env) return a
                                              wellformed env t
-                                             return ([], [], t, PWild l (Just t))
+                                             return ([], t, PWild l (Just t))
     infEnvT env (PVar l n a)            = do t <- maybe (newUnivar env) return a
                                              wellformed env t
                                              case findName n env of
                                                  NReserved -> do
                                                      --traceM ("## infEnvT " ++ prstr n ++ " : " ++ prstr t)
-                                                     return ([], [(n, NVar t)], t, PVar l n (Just t))
+                                                     return ([(n, NVar t)], t, PVar l n (Just t))
                                                  NSig (TSchema _ [] t') _ _
                                                    | TFun{} <- t' -> notYet l "Pattern variable with previous function signature"
                                                    | otherwise -> do
                                                      --traceM ("## infEnvT (sig) " ++ prstr n ++ " : " ++ prstr t ++ " < " ++ prstr t')
-                                                     return ([Cast (locinfo l 104) env t t'], [(n, NVar t')], t, PVar l n (Just t))
+                                                     let te = [(n, NVar t')]
+                                                     solveAll env te [Cast (locinfo l 104) env t t']
+                                                     return (te, t, PVar l n (Just t))
                                                  NVar t'
                                                    | isJust a -> do
-                                                     return ([], [], t, PVar l n (Just t))
+                                                     return ([], t, PVar l n (Just t))
                                                    | otherwise ->
-                                                     return ([], [], t', PVar l n Nothing)
+                                                     return ([], t', PVar l n Nothing)
                                                  NSVar t' -> do
                                                      fx <- currFX
-                                                     return (Cast (locinfo l 106) env fxProc fx :
-                                                             Cast (locinfo l 107) env t t' :
-                                                             [], [], t, PVar l n Nothing)
+                                                     solveAll env [(n,NVar t)] [Cast (locinfo l 106) env fxProc fx, Cast (locinfo l 107) env t t']
+                                                     return ([], t', PVar l n Nothing)
                                                  _ ->
                                                      err1 n "Variable not assignable:"
-    infEnvT env (PTuple l ps ks)        = do (cs1,te1,prow,ps') <- infEnvT env ps
-                                             (cs2,te2,krow,ks') <- infEnvT env ks
-                                             return (cs1++cs2, te1++te2, TTuple NoLoc prow krow, PTuple l ps' ks')
-    infEnvT env (PList l ps p)          = do (cs1,te1,t1,ps') <- infEnvT env ps
-                                             (cs2,te2,t2,p') <- infEnvT (define te1 env) p
-                                             w <- newWitness
-                                             return (Proto (locinfo l 108) env w t2 (pSequence t1) :
-                                                     cs1++cs2, te1++te2, t2, PList l ps' p')
-    infEnvT env (PParen l p)            = do (cs,te,t,p') <- infEnvT env p
-                                             return (cs, te, t, PParen l p')
+    infEnvT env (PTuple l ps ks)        = do (te1,prow,ps') <- infEnvT env ps
+                                             (te2,krow,ks') <- infEnvT env ks
+                                             return (te1++te2, TTuple NoLoc prow krow, PTuple l ps' ks')
+    infEnvT env (PList l ps p)          = do (te1,t1,ps') <- infEnvT env ps
+                                             (te2,t2,p') <- infEnvT (define te1 env) p
+                                             tryUnify (locinfo l 108) t2 (tList t1)
+                                             return (te1++te2, t2, PList l ps' p')
+    infEnvT env (PParen l p)            = do (te,t,p') <- infEnvT env p
+                                             return (te, t, PParen l p')
     infEnvT env (PData l n es)          = notYet l "data syntax"
 
 
 instance InfEnvT (Maybe Pattern) where
     infEnvT env Nothing                 = do t <- newUnivar env
-                                             return ([], [], t, Nothing)
-    infEnvT env (Just p)                = do (cs,te,t,p') <- infEnvT env p
-                                             return (cs, te, t, Just p')
+                                             return ([], t, Nothing)
+    infEnvT env (Just p)                = do (te,t,p') <- infEnvT env p
+                                             return (te, t, Just p')
 
 instance InfEnvT [Pattern] where
-    infEnvT env [p]                     = do (cs1,te1,t1,p') <- infEnvT env p
-                                             return (cs1,te1,t1,[p'])
-    infEnvT env (p:ps)                  = do (cs1,te1,t1,p') <- infEnvT env p
-                                             (cs2,te2,t2,ps') <- infEnvT env ps
+    infEnvT env [p]                     = do (te1,t1,p') <- infEnvT env p
+                                             return (te1,t1,[p'])
+    infEnvT env (p:ps)                  = do (te1,t1,p') <- infEnvT env p
+                                             (te2,t2,ps') <- infEnvT env ps
                                              tryUnify (locinfo p 109) t1 t2
-                                             return (cs1++cs2, te1++te2, t1, p':ps')
+                                             return (te1++te2, t1, p':ps')
 
 
 
