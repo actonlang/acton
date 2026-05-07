@@ -163,10 +163,10 @@ ERROR: [error Syntax error]: Empty format specifier after ':'
   - This makes accidental project renames and dependency identity conflicts
     easier to detect
 - Add local dependency overrides with `--dep NAME=PATH`. [#2555]
-- Add release mode aliases [#2708]
-  - `--release` is `ReleaseSafe`
-  - `--release=small` and `--release=fast` select `ReleaseSmall` and
-    `ReleaseFast`
+- Add release mode aliases [#2708, #2761]
+  - `--release` and `--optimize=release` select `ReleaseFast`
+  - `--release=safe`, `--release=small`, and `--release=fast` select
+    `ReleaseSafe`, `ReleaseSmall`, and `ReleaseFast`
 - Add `--jobs`, `--tty`, `--no-progress`, and `--timing` controls to the main
   `acton` CLI. [#2478, #2526, #2628]
 - Add `--parse-ast` for compiler debugging. [#2541]
@@ -3761,6 +3761,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#1715]: https://github.com/actonlang/acton/pull/1715
 [#1723]: https://github.com/actonlang/acton/pull/1723
 [#1805]: https://github.com/actonlang/acton/pull/1805
+[#2761]: https://github.com/actonlang/acton/pull/2761
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
