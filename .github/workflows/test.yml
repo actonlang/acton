@@ -27,6 +27,9 @@ on:
     # Schedule to run daily
     - cron: '4 0 * * *'
 
+env:
+  ZIG_DOWNLOAD_BASE_URL: https://github.com/actonlang/zigballs/raw/main
+
 # NOTE: Jobs for version tagged releases just pattern match on any tag starting
 # with 'v'. That's probably a version tag, but could be something else. Is there
 # a better way to match?

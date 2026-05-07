@@ -441,23 +441,31 @@ dist/completion/acton.bash-completion: completion/acton.bash-completion
 	mkdir -p "$(dir $@)"
 	cp "$<" "$@"
 
-dist/zig: deps-download/zig-$(ARCH)-$(OS)-$(ZIG_VERSION).tar.xz
+ZIG_TARBALL=zig-$(ARCH)-$(OS)-$(ZIG_VERSION).tar.xz
+ZIG_DOWNLOAD_BASE_URL ?=
+ifeq ($(strip $(ZIG_DOWNLOAD_BASE_URL)),)
+ifeq ($(findstring -dev,$(ZIG_VERSION)),-dev)
+ZIG_DOWNLOAD_URL ?= https://ziglang.org/builds/$(ZIG_TARBALL)
+else
+ZIG_DOWNLOAD_URL ?= https://ziglang.org/download/$(ZIG_VERSION)/$(ZIG_TARBALL)
+endif
+else
+ZIG_DOWNLOAD_URL ?= $(patsubst %/,%,$(ZIG_DOWNLOAD_BASE_URL))/$(ZIG_TARBALL)
+endif
+
+dist/zig: deps-download/$(ZIG_TARBALL)
 	mkdir -p "$@"
 	cd "$@" && tar Jx --strip-components=1 -f "../../$^"
 	rm -rf "$@/doc"
 	cp -a deps/zig-extras/* "$@"
 
 
-# Check if ZIG_VERSION contains -dev, in which case we pull down a nightly,
-# otherwise its a release
-deps-download/zig-$(ARCH)-$(OS)-$(ZIG_VERSION).tar.xz:
+# By default Zig downloads come from ziglang.org. CI can set
+# ZIG_DOWNLOAD_BASE_URL=https://github.com/actonlang/zigballs/raw/main
+# to fetch the same tarball filename from our mirror.
+deps-download/$(ZIG_TARBALL):
 	mkdir -p deps-download
-ifeq ($(findstring -dev,$(ZIG_VERSION)),-dev)
-	$(CURL) -o $@ https://github.com/actonlang/zigballs/raw/main/zig-$(ARCH)-$(OS)-$(ZIG_VERSION).tar.xz
-#	$(CURL) -o $@ https://ziglang.org/builds/zig-$(ARCH)-$(OS)-$(ZIG_VERSION).tar.xz
-else
-	$(CURL) -o $@ https://ziglang.org/download/$(ZIG_VERSION)/zig-$(ARCH)-$(OS)-$(ZIG_VERSION).tar.xz
-endif
+	$(CURL) -o $@ "$(ZIG_DOWNLOAD_URL)"
 
 .PHONY: distribution1 distribution clean-distribution
 distribution1: dist/base $(DIST_BACKEND_FILES) dist/builder $(DIST_BINS) $(DIST_ZIG)
@@ -509,7 +517,7 @@ debian/changelog: debian/changelog.in CHANGELOG.md
 
 .PHONY: debs
 debs: debian/changelog
-	debuild --preserve-envvar VERSION_INFO --preserve-envvar PATH --preserve-envvar STACK_ROOT -i -us -uc -nc -b
+	debuild --preserve-envvar VERSION_INFO --preserve-envvar PATH --preserve-envvar STACK_ROOT --preserve-envvar ZIG_DOWNLOAD_BASE_URL -i -us -uc -nc -b
 
 .PHONY: container-image image image-deb push-image
 container-image: all
