@@ -1,6 +1,14 @@
 actor main(env):
     # main only runs if the Env bootstrap continuation starts root init.
+    env.vars.setenv("ACTON_ENV_INIT_TEST", "ok")
+    env.stdio.out("")
+    env.stdio.err("")
     if env.nr_wthreads != 7:
         env.exit(1)
+    elif env.vars.getenv("ACTON_ENV_INIT_TEST") != "ok":
+        env.exit(1)
+    elif env.getenv("ACTON_ENV_INIT_TEST") != "ok":
+        env.exit(1)
     else:
+        env.vars.unsetenv("ACTON_ENV_INIT_TEST")
         env.exit(0)

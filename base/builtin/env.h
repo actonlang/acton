@@ -7,3 +7,6 @@ B_NoneType B_SysCapD___init__ (B_SysCap self);
 
 B_WorldCap B_WorldCapG_new();
 B_NoneType B_WorldCapD___init__ (B_WorldCap self);
+
+B_EnvCap B_EnvCapG_new();
+B_NoneType B_EnvCapD___init__ (B_EnvCap self);

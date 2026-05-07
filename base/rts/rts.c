@@ -765,13 +765,14 @@ struct $Cont $StartRoot$cont = {
 };
 
 $R $InitEnvD___call__ ($Cont $this, $WORD val) {
-    typedef $R(*ENV__init__t)(B_Env, $Cont, B_WorldCap, B_SysCap, B_list, B_int);
+    typedef $R(*ENV__init__t)(B_Env, $Cont, B_WorldCap, B_SysCap, B_list, B_int, B_EnvCap);
     B_tuple init = (B_tuple)val;
     B_WorldCap wc = (B_WorldCap)init->components[0];
     B_SysCap sc = (B_SysCap)init->components[1];
     B_list args = (B_list)init->components[2];
     B_int nr_wthreads = (B_int)init->components[3];
-    return ((ENV__init__t)env_actor->$class->__init__)(env_actor, &$StartRoot$cont, wc, sc, args, nr_wthreads);
+    B_EnvCap envcap = (B_EnvCap)init->components[4];
+    return ((ENV__init__t)env_actor->$class->__init__)(env_actor, &$StartRoot$cont, wc, sc, args, nr_wthreads, envcap);
 }
 
 struct $ContG_class $InitEnvG_methods = {
@@ -1457,11 +1458,12 @@ void BOOTSTRAP(int argc, char *argv[]) {
 
     // Bootstrap targets Env first. $InitEnv runs Env.__init__ with
     // $StartRoot$cont, which schedules root init after Env is initialized.
-    B_tuple env_init = $NEWTUPLE(4,
+    B_tuple env_init = $NEWTUPLE(5,
                                  B_WorldCapG_new(),
                                  B_SysCapG_new(),
                                  args,
-                                 toB_int(num_wthreads));
+                                 toB_int(num_wthreads),
+                                 B_EnvCapG_new());
     time_t now = current_time();
     B_Msg m = B_MsgG_newXX(($Actor)env_actor, &$InitEnv$cont, now, env_init);
 #ifdef ACTON_DB
