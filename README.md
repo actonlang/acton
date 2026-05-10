@@ -49,6 +49,19 @@ sudo apt-get install -qy acton
 brew install actonlang/acton/acton
 ```
 
+### Container image
+
+Use the container image to try Acton without installing it locally, or to run
+Acton builds in CI:
+
+```sh
+docker run --rm ghcr.io/actonlang/acton:latest version
+docker run --rm -v "$PWD":/work -w /work ghcr.io/actonlang/acton:latest build
+```
+
+For day-to-day development, the native APT and Homebrew packages are usually
+more convenient. For CI, pin a version tag instead of using `latest`.
+
 ## Writing and compiling your first Acton program
 
 Edit the program source file, let's call it `helloworld.act`, and enter the
