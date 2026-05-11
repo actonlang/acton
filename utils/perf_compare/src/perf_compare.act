@@ -5,7 +5,6 @@ import crypto.hash.md5
 import file
 import json
 import math
-import process
 import random
 import re
 import time
@@ -182,7 +181,6 @@ actor main(env: Env):
     fcap = file.FileCap(env.cap)
     rcap = file.ReadFileCap(fcap)
     wcap = file.WriteFileCap(fcap)
-    pcap = process.ProcessCap(env.cap)
     fs = file.FS(fcap)
     var args = argparse.Args()
     var root = ""
@@ -193,7 +191,7 @@ actor main(env: Env):
     var temporary = ""
     var lock: ?file.WriteFile = None
     var finished = False
-    var child: ?process.RunProcess = None
+    var child: ?RunProcess = None
     var pending: ?proc(bytes) -> None = None
     var command_name = ""
     var log_path = ""
@@ -279,7 +277,7 @@ actor main(env: Env):
         print("perf-compare: " + str(error), err=True)
         finish(1)
 
-    def command_done(p: process.Process, code: int, sig: int, stdout: bytes, stderr: bytes):
+    def command_done(p: Process, code: int, sig: int, stdout: bytes, stderr: bytes):
         try:
             # RunProcess calls us after exit and both output streams reach EOF.
             write(log_path, stdout + stderr)
@@ -294,7 +292,7 @@ actor main(env: Env):
         except Exception as error:
             fail(error)
 
-    def command_error(p: process.Process, message: str):
+    def command_error(p: Process, message: str):
         try:
             write(log_path, (message + "\n").encode())
         except Exception as error:
@@ -306,7 +304,7 @@ actor main(env: Env):
         pending = done
         command_name = command[0]
         log_path = log
-        child = process.RunProcess(pcap, command, command_done, command_error, workdir=directory)
+        child = env.process.run(command, command_done, command_error, workdir=directory)
 
     proc def git(checkout: str, command: list[str], done: proc(bytes) -> None) -> None:
         run(["git", "-C", checkout] + command, checkout, output + "/git.log", done)

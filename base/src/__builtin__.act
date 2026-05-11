@@ -1549,6 +1549,7 @@ actor Env (wc: WorldCap, sc: SysCap, args: list[str], wthreads: int, envcap: _En
     nr_wthreads = wthreads
     vars = EnvVar(envcap)
     stdio = Stdio(envcap, vars)
+    process = EnvProcess(envcap, vars)
 
     # The methods below forward to vars and stdio and wait for the reply, so
     # they stay ordered with the other Env methods, e.g. an exit() sent after
@@ -1667,3 +1668,205 @@ actor Stdio(envcap: _EnvCap, vars: EnvVar):
 
     action def _on_stdin_bytes(cb: action(bytes) -> None) -> None:
         NotImplemented
+
+actor Process(envcap: _EnvCap,
+              vars: EnvVar,
+              cmd: list[str],
+              on_stdout: action(Process, ?bytes) -> None,
+              on_stderr: action(Process, ?bytes) -> None,
+              on_exit: action(Process, int, int) -> None,
+              on_error: action(Process, str) -> None,
+              workdir: ?str=None,
+              env: ?dict[str, str]=None,
+              timeout: ?float=None):
+    """A child process, started through env.process"""
+    var _p: int = 0
+    var new_env = env
+
+    action def aid() -> int:
+        """Actor ID of process actor
+
+        Workaround for lack of working repr on actors.
+        """
+        NotImplemented
+
+    proc def _create_process():
+        """Do the C magic to actually create a process and talk to it
+        """
+        NotImplemented
+
+    action def done_writing() -> None:
+        """Close stdin of process
+
+        Closing stdin allows cat to terminate
+        """
+        NotImplemented
+
+    action def pid() -> ?int:
+        """Get PID of process or None if the process is not running
+        """
+        NotImplemented
+
+    action def signal(signal: int) -> None:
+        """Send signal to process
+
+        Sends the provided signal to the process.
+        """
+        NotImplemented
+
+    action def write(data: bytes) -> None:
+        """Write data to stdin of process
+        """
+        NotImplemented
+
+    action def kill():
+        """Abruptly kill process by sending SIGKILL
+        """
+        signal(9)
+
+    action def terminate():
+        """Stop process by sending SIGTERM
+        """
+        signal(15)
+
+    def stop():
+        """Stop process
+
+        Attempts to stop process using normal means, which means SIGTERM on a
+        Unix system. After 1 second, SIGKILL is sent to ensure the process is
+        stopped.
+        """
+        terminate()
+        after 1.0: kill()
+
+    # Handle PATH inheritance for custom environments
+    # When PATH is not explicitly set in the provided environment, inherit it
+    # from the current environment (if set in the current environment).
+    if env is not None and "PATH" not in env:
+        parent_path = vars.getenv("PATH")
+        if parent_path is not None:
+            new = dict(env.items())
+            new["PATH"] = parent_path
+            new_env = new
+
+    _create_process()
+
+    if timeout is not None:
+        after timeout: stop()
+
+actor RunProcess(envcap: _EnvCap,
+                 vars: EnvVar,
+                 cmd: list[str],
+                 on_exit: action(Process, int, int, bytes, bytes) -> None,
+                 on_error: action(Process, str) -> None,
+                 workdir: ?str=None,
+                 env: ?dict[str, str]=None,
+                 timeout: ?float=None):
+    """Run a process and wait for it to finish
+    """
+    var out_buf = b""
+    var err_buf = b""
+    var _out_done = False
+    var _err_done = False
+    var _exited = False
+    var _exit_code = 0
+    var _signal = 0
+    var _process: ?Process = None
+
+
+    def _on_stdout(p: Process, data: ?bytes):
+        if data is not None:
+            out_buf += data
+        else:
+            _out_done = True
+            _check_done()
+
+    def _on_stderr(p: Process, data: ?bytes):
+        if data is not None:
+            err_buf += data
+        else:
+            _err_done = True
+            _check_done()
+
+    def _on_exit(p: Process, exit_code: int, signal: int):
+        _exited = True
+        _exit_code = exit_code
+        _signal = signal
+        _check_done()
+
+    def _check_done():
+        if _process is not None:
+            if _out_done and _err_done and _exited:
+                on_exit(_process, _exit_code, _signal, out_buf, err_buf)
+
+    _p = Process(envcap, vars, cmd, _on_stdout, _on_stderr, _on_exit, on_error, workdir, env, timeout)
+    _process = _p
+
+    def signal(sig: int):
+        """Send signal to process"""
+        _p.signal(sig)
+
+    def kill():
+        """Abruptly kill process by sending SIGKILL
+        """
+        _p.kill()
+
+    def terminate():
+        """Stop process by sending SIGTERM
+        """
+        _p.terminate()
+
+    def stop():
+        """Stop process
+
+        Attempts to stop process using normal means, which means SIGTERM on a
+        Unix system. After 1 second, SIGKILL is sent to ensure the process is
+        stopped.
+        """
+        _p.stop()
+
+actor EnvProcess(envcap: _EnvCap, vars: EnvVar):
+    """Spawning of child processes, reached as env.process"""
+
+    def spawn(cmd: list[str],
+              on_stdout: action(Process, ?bytes) -> None,
+              on_stderr: action(Process, ?bytes) -> None,
+              on_exit: action(Process, int, int) -> None,
+              on_error: action(Process, str) -> None,
+              workdir: ?str=None,
+              env: ?dict[str, str]=None,
+              timeout: ?float=None) -> Process:
+        """Start a child process
+
+        - cmd: the command to run
+        - on_stdout: stdout callback actor method
+        - on_stderr: stderr callback actor method
+        - on_exit: exit callback
+          - process
+          - exit code
+          - signal that caused program to exit
+        - on_error: error callback
+        - workdir: working directory, use None for current directory
+        - env: environment for process, use None to inherit current environment
+          When a new env is provided and it does not have PATH set, PATH is
+          inherited from the current env. The PATH variable in the new env,
+          regardless if the new env is inherited or provided, is used to find the
+          executable specified by cmd (unless cmd is a path).
+        - timeout: time in seconds before process is stopped
+        """
+        return Process(envcap, vars, cmd, on_stdout, on_stderr, on_exit, on_error, workdir, env, timeout)
+
+    def run(cmd: list[str],
+            on_exit: action(Process, int, int, bytes, bytes) -> None,
+            on_error: action(Process, str) -> None,
+            workdir: ?str=None,
+            env: ?dict[str, str]=None,
+            timeout: ?float=None) -> RunProcess:
+        """Start a child process and report when it has finished
+
+        The arguments are as for spawn, except that there are no on_stdout and
+        on_stderr callbacks. Instead on_exit gets everything the process wrote
+        to stdout and stderr, once the process has exited and both streams are
+        closed.
+        """
+        return RunProcess(envcap, vars, cmd, on_exit, on_error, workdir, env, timeout)

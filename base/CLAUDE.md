@@ -35,6 +35,9 @@ cd base && zig build
 - Fundamental types and functions
 - Imported implicitly in all modules
 - Interfaces to C builtins
+- Env and its service actors: env.vars (EnvVar), env.stdio (Stdio) and
+  env.process (EnvProcess, which starts Process and RunProcess), with their
+  C in `__builtin__.ext.c` and `builtin/env.c`
 
 #### `file.act` / `file.ext.c`
 - File I/O operations
@@ -47,9 +50,9 @@ cd base && zig build
 - Socket operations
 
 #### `process.act` / `process.ext.c`
-- Process spawning
-- Environment variables
-- Signal handling
+- Process spawning through a ProcessCap, kept for programs that still import
+  the module. It is a copy of the builtin Process and RunProcess that
+  env.process starts, so patch both copies until the module is removed.
 
 #### `time.act` / `time.ext.c`
 - Time operations

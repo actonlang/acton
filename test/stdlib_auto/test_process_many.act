@@ -1,5 +1,4 @@
 import acton.rts
-import process
 
 
 actor GC(env):
@@ -32,8 +31,7 @@ actor main(env: Env):
 
     def test():
         print("Starting process..")
-        pc = process.ProcessCap(env.cap)
-        p = process.RunProcess(pc, ["echo", "HELLO"], on_exit, on_error)
+        p = env.process.run(["echo", "HELLO"], on_exit, on_error)
 
     gc = GC(env)
 

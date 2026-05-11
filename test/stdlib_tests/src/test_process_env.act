@@ -1,5 +1,4 @@
 import logging
-import process
 import testing
 
 
@@ -29,9 +28,8 @@ actor ProcessEnvInheritAllTester(t: testing.EnvT):
         t.error(Exception("Process error: " + error))
 
     log.debug("Starting test: No custom env (inherit all)")
-    pc = process.ProcessCap(t.env.cap)
-    p2 = process.Process(pc, ["sh", "-c", "env | grep PATH | head -n1"],
-                       on_stdout, on_stderr, on_exit, on_error)
+    p2 = t.env.process.spawn(["sh", "-c", "env | grep PATH | head -n1"],
+                             on_stdout, on_stderr, on_exit, on_error)
 
 
 actor ProcessEnvInheritPathTester(t: testing.EnvT):
@@ -62,9 +60,8 @@ actor ProcessEnvInheritPathTester(t: testing.EnvT):
         t.error(Exception("Process error: " + error))
 
     log.debug("Starting test: Custom env without PATH")
-    pc = process.ProcessCap(t.env.cap)
-    p3 = process.Process(pc, ["env"], on_stdout, on_stderr, on_exit, on_error,
-                       env={"MY_VAR": "test123"})
+    p3 = t.env.process.spawn(["env"], on_stdout, on_stderr, on_exit, on_error,
+                             env={"MY_VAR": "test123"})
 
 
 actor ProcessEnvCustomPathTester(t: testing.EnvT):
@@ -93,9 +90,8 @@ actor ProcessEnvCustomPathTester(t: testing.EnvT):
         t.error(Exception("Process error: " + error))
 
     log.debug("Starting test: Custom env with custom PATH")
-    pc = process.ProcessCap(t.env.cap)
-    p4 = process.Process(pc, ["env"], on_stdout, on_stderr, on_exit, on_error,
-                       env={"PATH": "/custom/path:/usr/bin"})
+    p4 = t.env.process.spawn(["env"], on_stdout, on_stderr, on_exit, on_error,
+                             env={"PATH": "/custom/path:/usr/bin"})
 
 
 def _test_process_env_inherit_all(t: testing.EnvT):

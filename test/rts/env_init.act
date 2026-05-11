@@ -4,6 +4,15 @@ actor main(env):
         print("env_init:", msg)
         env.exit(1)
 
+    def on_exit(p, code: int, sig: int, out: bytes, err: bytes):
+        if code == 0 and out == b"ok\n":
+            env.exit(0)
+        else:
+            fail("echo exited with " + str(code) + " and wrote " + str(out))
+
+    def on_error(p, msg: str):
+        fail("env.process.run: " + msg)
+
     env.vars.setenv("ACTON_ENV_INIT_TEST", "ok")
     if env.nr_wthreads != 7:
         fail("nr_wthreads is " + str(env.nr_wthreads))
@@ -15,4 +24,4 @@ actor main(env):
         env.vars.unsetenv("ACTON_ENV_INIT_TEST")
         await async env.stdio.out("")
         await async env.stdio.err("")
-        env.exit(0)
+        env.process.run(["echo", "ok"], on_exit, on_error)
