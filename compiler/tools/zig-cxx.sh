@@ -3,6 +3,31 @@ set -euo pipefail
 
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)"
 ZIG="${ROOT}/dist/zig/zig"
+_ACTON_ZIG_LOCAL_CACHE_TO_CLEAN=""
+
+use_private_zig_local_cache() {
+  if [[ -n "${ACTON_ZIG_SHARED_LOCAL_CACHE:-}" ]]; then
+    return 0
+  fi
+
+  local tmp_root="${TMPDIR:-/tmp}"
+  local local_cache
+  local_cache="$(mktemp -d "${tmp_root%/}/acton-zig-local-cache.XXXXXXXXXX")"
+  _ACTON_ZIG_LOCAL_CACHE_TO_CLEAN="$local_cache"
+  export ZIG_LOCAL_CACHE_DIR="$local_cache"
+  trap 'rm -rf "$_ACTON_ZIG_LOCAL_CACHE_TO_CLEAN"' EXIT
+}
+
+run_zig_with_lock() {
+  if ! command -v flock >/dev/null 2>&1; then
+    echo "flock is required for Linux Zig compiler wrapper serialization" >&2
+    return 1
+  fi
+
+  local lock_root="${ZIG_GLOBAL_CACHE_DIR:-${TMPDIR:-/tmp}/acton-zig-global-cache}"
+  mkdir -p "$lock_root"
+  flock "$lock_root/acton-zig-cc.lock" "${ZIG}" "$@"
+}
 
 gcc_lib_path() {
   local lib="$1"
@@ -102,7 +127,8 @@ case "$(uname -s)" in
     for arg in "$@"; do
       process_arg "$arg"
     done
-    exec "${ZIG}" c++ -target "${ZIG_ARCH}-linux-gnu.${GLIBC_VERSION}" "${args[@]}"
+    use_private_zig_local_cache
+    run_zig_with_lock c++ -target "${ZIG_ARCH}-linux-gnu.${GLIBC_VERSION}" "${args[@]}"
     ;;
   *)
     exec "${ZIG}" c++ "$@"
