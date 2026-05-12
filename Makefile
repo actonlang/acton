@@ -79,14 +79,14 @@ endif
 # -- Linux ---------------------------------------------------------------------
 ifeq ($(shell uname -s),Linux)
 OS:=linux
-ACTON_ZIG_GLIBC_VERSION ?= 2.27
+ACTON_ZIG_GLIBC_VERSION ?= 2.33
 export ACTON_ZIG_GLIBC_VERSION
 ACTON_STACK_NEEDS_ZIG=1
 STACK=CC="$(ACTON_STACK_CC)" CXX="$(ACTON_STACK_CXX)" CFLAGS= ACTON_REAL_LD="$(ACTON_STACK_CC)" stack --with-gcc="$(ACTON_STACK_CC)"
 ifeq ($(shell uname -m),x86_64)
-ACTONC_TARGET := --target x86_64-linux-gnu.2.27
+ACTONC_TARGET := --target x86_64-linux-gnu.$(ACTON_ZIG_GLIBC_VERSION)
 else ifeq ($(shell uname -m),aarch64)
-ACTONC_TARGET := --target aarch64-linux-gnu.2.27
+ACTONC_TARGET := --target aarch64-linux-gnu.$(ACTON_ZIG_GLIBC_VERSION)
 else
 $(error "Unsupported architecture for Linux?" $(shell uname -m))
 endif
