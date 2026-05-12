@@ -61,7 +61,6 @@ import Data.Maybe (catMaybes, isJust)
 import Data.Monoid ((<>))
 import Data.Word (Word32)
 import Data.Graph
-import Data.String.Utils (replace)
 import Data.Version (showVersion)
 import Data.Char (toLower)
 import qualified Data.List
@@ -106,6 +105,15 @@ import TestRunner
 import TerminalProgress
 import TerminalSize
 import ZigProgress
+
+replace :: String -> String -> String -> String
+replace [] _ xs = xs
+replace old new xs0 = go xs0
+  where
+    go [] = []
+    go xs
+      | old `isPrefixOf` xs = new ++ go (drop (length old) xs)
+      | otherwise = head xs : go (tail xs)
 
 main = do
     hSetBuffering stdout LineBuffering

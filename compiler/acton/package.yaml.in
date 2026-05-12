@@ -16,7 +16,6 @@ copyright:           "Data Ductus, Deutsche Telekom"
 description:         Please see the README on Github at <https://github.com/githubuser/simple#readme>
 
 dependencies:
-  - MissingH
   - libacton
   - aeson
   - async
