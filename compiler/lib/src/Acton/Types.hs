@@ -12,8 +12,12 @@
 --
 
 {-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, FlexibleContexts #-}
-module Acton.Types(reconstruct, showTyFile, prettySigs, TypeError(..)) where
+module Acton.Types(reconstruct, showTyFile, prettySigs, TypeError(..), TypeErrors(..), TypeProgressCallback, TypeInferredCallback) where
 
+import Control.Concurrent.Async
+import Control.Concurrent.Chan
+import Control.Concurrent.QSem
+import Control.DeepSeq
 import Control.Monad
 import Data.Maybe (isJust)
 import Data.List (nub, intersect, sort)
@@ -36,37 +40,44 @@ import Acton.WitKnots
 import qualified InterfaceFiles
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Base16 as Base16
-import Data.List (intersperse, isPrefixOf, partition)
+import Data.List (foldl', intersperse, isPrefixOf, partition)
 import Data.Maybe (mapMaybe)
-import System.IO.Unsafe (unsafePerformIO)
+import GHC.Conc (getNumCapabilities)
 
 type TypeProgressCallback = Int -> Int -> Maybe String -> [String] -> Int -> IO ()
+type TypeInferredCallback = [String] -> String -> IO ()
 
-emitTypeProgress :: Maybe TypeProgressCallback -> Int -> Int -> Maybe String -> [String] -> Int -> TypeM ()
-emitTypeProgress Nothing _ _ _ _ _ = return ()
-emitTypeProgress (Just cb) total completed current names weight =
-  unsafePerformIO (cb total completed current names weight) `seq` return ()
+emitTypeProgressIO :: Maybe TypeProgressCallback -> Int -> Int -> Maybe String -> [String] -> Int -> IO ()
+emitTypeProgressIO Nothing _ _ _ _ _ = return ()
+emitTypeProgressIO (Just cb) total completed current names weight = cb total completed current names weight
+
+emitTypeInferredIO :: Maybe TypeInferredCallback -> Env -> TEnv -> IO ()
+emitTypeInferredIO Nothing _ _        = return ()
+emitTypeInferredIO (Just cb) env te   = cb (map nstr (dom te)) (render $ pretty (simp env [(n, stripDocsNI i) | (n,i) <- te]))
+
+data TypeErrors = TypeErrors [TypeError]
+                  deriving (Show)
+
+instance Control.Exception.Exception TypeErrors
 
 -- | Type-check a module and return its NameInfo, typed module, env, and discovered tests.
-reconstruct                             :: Maybe TypeProgressCallback -> Env0 -> Module -> IO (NameInfo, Module, Env0, [Acton.Syntax.ModName], [String])
-reconstruct progressCb env0 (Module m i mdoc ss)    = do --traceM ("#################### original env0 for " ++ prstr m ++ ":")
+reconstruct                             :: Maybe TypeProgressCallback -> Maybe TypeInferredCallback -> Env0 -> Module -> IO (NameInfo, Module, Env0, [Acton.Syntax.ModName], [String])
+reconstruct progressCb inferredCb env0 (Module m i mdoc ss)    = do --traceM ("#################### original env0 for " ++ prstr m ++ ":")
                                              --traceM (render (pretty env0))
-                                             let nmod = NModule iface mdoc
+                                             (te,ss1) <- infTop progressCb inferredCb env1 ss
+                                             let env2 = define te (setMod m env0)
+                                                 (teT,ssT,tests) =
+                                                   if hasTesting i
+                                                     then let (testSs, discovered) = testStmts env2 (modNameStr m) ss1
+                                                          in (te ++ testEnv, ss1 ++ testSs, discovered)
+                                                     else (te, ss1, [])
+                                                 iface = unalias env2 teT
+                                                 nmod = NModule iface mdoc
                                              --traceM ("#################### converted env0:")
                                              --traceM (render (pretty env0'))
                                              return (nmod, Module m i mdoc ssT, env0', mrefs, tests)
 
   where env1                            = reserve (assigned ss) (typeX env0)
-        (te,ss1)                        = runTypeM $ infTop progressCb env1 ss
-        env2                            = define te (setMod m env0)
-
-        (teT,ssT,tests)                 =
-          if hasTesting i
-            then let (testSs, discovered) = testStmts env2 (modNameStr m) ss1
-                 in (te ++ testEnv, ss1 ++ testSs, discovered)
-            else (te, ss1, [])
-        iface                           = unalias env2 teT
-
         mrefs                           = moduleRefs1 env0
         env0'                           = convEnvProtos env0
         hasTesting i                    = Import NoLoc [ModuleItem (ModName [name "testing"]) Nothing] `elem` i
@@ -80,9 +91,6 @@ reconstruct progressCb env0 (Module m i mdoc ss)    = do --traceM ("############
 
         -- Convert the module name (ModName) to a string, e.g. "foo.bar"
         modNameStr (ModName ns) = concat (intersperse "." (map nstr ns))
-        -- Inject __name__ variable
-        __name__assign = Assign NoLoc [PVar NoLoc (name "__name__") Nothing] (Strings NoLoc [modNameStr m])
-        ssT' = __name__assign : ssT
 
 
 -- | Print a .ty file header and interface; include name hashes when verbose.
@@ -153,45 +161,141 @@ addTyping env n s t c                   = c {info = addT n (simp env s) t (info 
 
 ------------------------------
 
-infTop                                  :: Maybe TypeProgressCallback -> Env -> Suite -> TypeM (TEnv,Suite)
-infTop progressCb env ss                = do --traceM ("\n## infEnv top")
-                                             let total = sum (map stmtProgressWeight ss)
-                                             (te,ss) <- infTopStmts progressCb env total 0 ss
-                                             when (total > 0) $
-                                               emitTypeProgress progressCb total total Nothing [] 0
-                                             checkSigs env te
-                                             return (te, ss)
+type TopProgressItem                    = ([String], Int)
 
-infTopStmts _ env _ _ []                = return ([], [])
-infTopStmts progressCb env total done (s : ss)
-                                         = do done' <- case stmtProgressLabel s of
-                                                        Just label -> do
-                                                          let names = stmtProgressNames s
-                                                              weight = stmtProgressWeight s
-                                                          emitTypeProgress progressCb total done (Just label) names weight
-                                                          return (done + weight)
-                                                        Nothing -> return done
-                                              let (te1, s1) = typeTopStmt env s
-                                              (te2, ss2) <- infTopStmts progressCb (define te1 env) total done' ss
-                                              return (te1++te2, s1++ss2)
+data TopProgressEvent                   = TopProgressStarted TopProgressItem
+                                        | TopProgressFinished TopProgressItem
+                                        | TopProgressStop
 
-typeTopStmt env s                       = fst $ runTypeMState (nstr $ uniqPrefix s) $ do
-                                          pushFX fxPure tNone
-                                          infTopStmt env s
+infTop                                  :: Maybe TypeProgressCallback -> Maybe TypeInferredCallback -> Env -> Suite -> IO (TEnv,Suite)
+infTop _ _ _ []                         = return ([], [])
+infTop progressCb inferredCb env ss     = do ncap <- getNumCapabilities
+                                             sem <- newQSem (max 1 (min ncap (length ss)))
+                                             progressQ <- newChan
+                                             progressA <- async $ topProgress progressCb total progressQ
+                                             let stopProgress = writeChan progressQ TopProgressStop >> wait progressA
+                                                 run = do
+                                                   (te,ss,errs) <- go sem progressQ env [] [] ss
+                                                   stopProgress
+                                                   if null errs
+                                                     then do runType "" (checkSigs env te)
+                                                             return (te, ss)
+                                                     else throwTopErrors errs
+                                             run `Control.Exception.finally` cancel progressA
+  where total                           = sum (map stmtProgressWeight ss)
 
--- | Display label for progress UI.
--- For recursive groups, abbreviate to a short "a, b, ... (+N)" form.
-stmtProgressLabel :: Stmt -> Maybe String
-stmtProgressLabel s
-  | null names = Nothing
-  | otherwise = Just (formatNames names)
-  where
-    names = stmtProgressNames s
-    formatNames [n] = n
-    formatNames [n1, n2] = n1 ++ ", " ++ n2
-    formatNames (n1 : n2 : rest) =
-      n1 ++ ", " ++ n2 ++ ", ... (+" ++ show (length rest) ++ ")"
-    formatNames [] = ""
+        go sem q env tes rs []          = collect tes rs
+        go sem q env tes rs (s:ss)      = do let item = topProgressItem s
+                                             writeChan q (TopProgressStarted item)
+                                             r <- scanOrCheck env s
+                                             case r of
+                                               Left err -> do
+                                                 writeChan q (TopProgressFinished item)
+                                                 collect tes (return (Left err) : rs)
+                                               Right (True,te1,s1,_) ->
+                                                 withAsync (Control.Exception.finally
+                                                   (Control.Exception.bracket_ (waitQSem sem) (signalQSem sem) (checkTotal env te1 s1))
+                                                   (writeChan q (TopProgressFinished item))) $ \a ->
+                                                     go sem q (define te1 env) (te1:tes) (wait a:rs) ss
+                                               Right (_,te1,_,ss1) -> do
+                                                 writeChan q (TopProgressFinished item)
+                                                 go sem q (define te1 env) (te1:tes) (return (Right ss1):rs) ss
+        collect tes rs                  = do xs <- sequence (reverse rs)
+                                             return (concat (reverse tes), [ s | Right ss1 <- xs, s <- ss1 ], [ e | Left e <- xs ])
+        scanOrCheck env s               = tryTop $ do
+                                             r <- runType (nstr $ uniqPrefix s) $ do
+                                               pushFX fxPure tNone
+                                               (total,te1,s1) <- scanTopStmt env s
+                                               if total
+                                                 then return (True,te1,s1,[])
+                                                 else do (te2,ss1) <- checkTopStmt env te1 s1
+                                                         return (False,te2,s1,ss1)
+                                             r <- forceTopResult r
+                                             case r of
+                                               (False,te,_,_) -> emitTypeInferredIO inferredCb env te
+                                               _ -> return ()
+                                             return r
+        checkTotal env te s             = tryTop $ do
+                                             (te1,ss1) <- runType (nstr $ uniqPrefix s) $ do
+                                               pushFX fxPure tNone
+                                               checkTopStmt env te s
+                                             forceSuite te1 ss1
+        runType p m                     = do r <- Control.Exception.evaluate (runTypeMState p m)
+                                             case r of
+                                               Left err -> Control.Exception.throwIO err
+                                               Right (x,_) -> return x
+        forceTopResult (True,te,s,ss)   = do te <- Control.Exception.evaluate (force te)
+                                             return (True,te,s,ss)
+        forceTopResult (_,te,s,ss)      = do (te,ss) <- forceChecked te ss
+                                             return (False,te,s,ss)
+        forceSuite te ss                = snd <$> forceChecked te ss
+        forceChecked te ss              = do te <- Control.Exception.evaluate (force te)
+                                             ss <- Control.Exception.evaluate (force ss)
+                                             return (te,ss)
+
+topProgress                             :: Maybe TypeProgressCallback -> Int -> Chan TopProgressEvent -> IO ()
+topProgress progressCb total q          = do when (total > 0) $
+                                               emit [] 0
+                                             loop [] 0
+  where loop active done                = do event <- readChan q
+                                             case event of
+                                               TopProgressStarted item -> do
+                                                 let active' = active ++ [item]
+                                                 emit active' done
+                                                 loop active' done
+                                               TopProgressFinished item -> do
+                                                 let active' = removeProgressItem item active
+                                                     done' = done + snd item
+                                                 emit active' done'
+                                                 loop active' done'
+                                               TopProgressStop ->
+                                                 emit [] done
+        emit active done                = emitTypeProgressIO progressCb total done (activeProgressLabel active) (concatMap fst active) 0
+
+topProgressItem                         :: Stmt -> TopProgressItem
+topProgressItem s                       = (stmtProgressNames s, stmtProgressWeight s)
+
+removeProgressItem                      :: TopProgressItem -> [TopProgressItem] -> [TopProgressItem]
+removeProgressItem item []              = []
+removeProgressItem item (x:xs)
+  | item == x                           = xs
+  | otherwise                           = x : removeProgressItem item xs
+
+activeProgressLabel                     :: [TopProgressItem] -> Maybe String
+activeProgressLabel []                  = Nothing
+activeProgressLabel active              = Just (formatNames (concatMap fst active))
+  where formatNames [n]                 = n
+        formatNames [n1,n2]             = n1 ++ ", " ++ n2
+        formatNames (n1:n2:rest)        = n1 ++ ", " ++ n2 ++ " (+" ++ show (length rest) ++ " others)"
+        formatNames []                  = ""
+
+tryTop                                  :: IO a -> IO (Either Control.Exception.SomeException a)
+tryTop m                                = do r <- Control.Exception.try m
+                                             case r of
+                                               Left err | isAsyncException err -> Control.Exception.throwIO err
+                                               _ -> return r
+
+isAsyncException                        :: Control.Exception.SomeException -> Bool
+isAsyncException err                    = isJust (Control.Exception.fromException err :: Maybe Control.Exception.SomeAsyncException)
+
+throwTopErrors                          :: [Control.Exception.SomeException] -> IO a
+throwTopErrors errs                     = case others of
+                                           err:_ -> Control.Exception.throwIO err
+                                           [] -> case typeErrs of
+                                                   [] -> error "Internal error: empty type error list"
+                                                   [err] -> Control.Exception.throwIO err
+                                                   _ -> Control.Exception.throwIO (TypeErrors typeErrs)
+  where (typeErrs, others)              = foldl' collect ([], []) errs
+        collect (ts, os) err            = case topTypeErrors err of
+                                            Just ts' -> (ts ++ ts', os)
+                                            Nothing -> (ts, os ++ [err])
+
+topTypeErrors                           :: Control.Exception.SomeException -> Maybe [TypeError]
+topTypeErrors err                       = case Control.Exception.fromException err of
+                                            Just (TypeErrors errs) -> Just errs
+                                            Nothing -> case Control.Exception.fromException err of
+                                                         Just typeErr -> Just [typeErr]
+                                                         Nothing -> Nothing
 
 -- | Progress weight for one top-level statement, based on bound names.
 -- This makes large recursive groups count proportionally.

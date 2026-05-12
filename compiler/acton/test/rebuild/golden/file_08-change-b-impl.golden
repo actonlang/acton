@@ -5,6 +5,12 @@ Resolving dependencies (fetching if missing)...
   Stale b: source changed
   Hash deltas b: +DocInfo, ~baa{src HASH1 -> HASH2, impl HASH1 -> HASH2}
    b  Type check done                                                       0.000 s
+     Non-total inferred signature: baa
+       baa : () -> int
+     Non-total inferred signature: DocInfo
+       class DocInfo (value):
+           G_init : () -> None
+           get : () -> int
   Stale c: impl changes in b.baa HASH1 → HASH2 (used by main)
    b  Compilation done                                                      0.000 s
    c  Compilation done                                                      0.000 s

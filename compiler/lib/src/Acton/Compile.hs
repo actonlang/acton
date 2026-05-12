@@ -91,6 +91,7 @@ module Acton.Compile
   , FrontResult(..)
   , FrontTiming(..)
   , TypeStmtTiming(..)
+  , InferredSignature(..)
   , BackTiming(..)
   , FrontPass(..)
   , FrontPassProgress(..)
@@ -319,6 +320,11 @@ data TypeStmtTiming = TypeStmtTiming
   , tstLabel :: String
   , tstNames :: [String]
   , tstTime :: TimeSpec
+  } deriving (Eq, Show)
+
+data InferredSignature = InferredSignature
+  { isigNames :: [String]
+  , isigSignature :: String
   } deriving (Eq, Show)
 
 data FrontTiming = FrontTiming
@@ -998,6 +1004,7 @@ data FrontResult = FrontResult
   , frNameHashes :: [InterfaceFiles.NameHashInfo]
   , frFrontTime :: Maybe TimeSpec
   , frFrontTiming :: Maybe FrontTiming
+  , frInferredSigs :: [InferredSignature]
   , frBackJob  :: Maybe BackJob
   }
 
@@ -1574,6 +1581,7 @@ runFrontPasses gopts opts paths env0 parsed srcContent srcBytes sourceMeta resol
   core
     `catch` handleGeneral
     `catch` handleCompilation
+    `catch` handleTypeErrors
     `catch` handleTypeError
   where
     mn = A.modname parsed
@@ -1594,6 +1602,12 @@ runFrontPasses gopts opts paths env0 parsed srcContent srcBytes sourceMeta resol
     handleTypeError :: Acton.TypeEnv.TypeError -> IO (Either [Diagnostic String] FrontResult)
     handleTypeError err =
       return $ Left [Acton.TypeEnv.mkErrorDiagnostic filename srcContent (Acton.TypeEnv.typeReport err filename srcContent)]
+
+    handleTypeErrors :: Acton.Types.TypeErrors -> IO (Either [Diagnostic String] FrontResult)
+    handleTypeErrors (Acton.Types.TypeErrors errs) =
+      return $ Left [ Acton.TypeEnv.mkErrorDiagnostic filename srcContent (Acton.TypeEnv.typeReport err filename srcContent)
+                    | err <- errs
+                    ]
 
     resolveImportHashes :: [A.ModName] -> IO (Either [Diagnostic String] [(A.ModName, B.ByteString)])
     resolveImportHashes mrefs = do
@@ -1677,6 +1691,7 @@ runFrontPasses gopts opts paths env0 parsed srcContent srcBytes sourceMeta resol
         dump mn "parse-ast" (renderStyle prettyAstStyle (ppDoc parsed))
 
       typeStmtTimingsRef <- newIORef ([] :: [TypeStmtTiming])
+      inferredSigsRef <- newIORef ([] :: [InferredSignature])
       typeActiveRef <- newIORef Nothing
       let onTypeProgress total completed current names _weight = do
             now <- getTime Monotonic
@@ -1695,6 +1710,12 @@ runFrontPasses gopts opts paths env0 parsed srcContent srcBytes sourceMeta resol
               Just label -> writeIORef typeActiveRef (Just (label, names, total, now))
               Nothing -> writeIORef typeActiveRef Nothing
             emitFrontProgress FrontPassTypes completed total current
+          onInferredSignature names sig =
+            modifyIORef' inferredSigsRef (InferredSignature names sig :)
+          inferredSignatureCb =
+            if C.timing gopts || C.verbose gopts
+              then Just onInferredSignature
+              else Nothing
 
       env <- Acton.Env.mkEnv (searchPath paths) env0 parsed
       timeEnv <- getTime Monotonic
@@ -1706,7 +1727,7 @@ runFrontPasses gopts opts paths env0 parsed srcContent srcBytes sourceMeta resol
       timeKindsCheck <- getTime Monotonic
 
       -- Type-check and return both the typed AST and the interface NameInfo.
-      (nmod,tchecked,typeEnv,mrefs,tests) <- Acton.Types.reconstruct (Just onTypeProgress) env kchecked
+      (nmod,tchecked,typeEnv,mrefs,tests) <- Acton.Types.reconstruct (Just onTypeProgress) inferredSignatureCb env kchecked
       -- Module-level src hash uses raw bytes so any source edit forces re-parse.
       let moduleSrcBytesHash = SHA256.hash srcBytes
       -- Store roots so later builds can discover entry points without reparse.
@@ -1822,6 +1843,7 @@ runFrontPasses gopts opts paths env0 parsed srcContent srcBytes sourceMeta resol
                   typeStmtTimings <- reverse <$> readIORef typeStmtTimingsRef
 
                   timeFrontEnd <- getTime Monotonic
+                  inferredSigs <- reverse <$> readIORef inferredSigsRef
                   let frontTime = timeFrontEnd - timeStart
                       frontTimeMaybe = if not (quiet gopts opts)
                                          then Just frontTime
@@ -1849,6 +1871,7 @@ runFrontPasses gopts opts paths env0 parsed srcContent srcBytes sourceMeta resol
                                              , frNameHashes = publicNameHashes nameHashes
                                              , frFrontTime = frontTimeMaybe
                                              , frFrontTiming = frontTimingMaybe
+                                             , frInferredSigs = inferredSigs
                                              , frBackJob = backJob
                                              }
 
@@ -2204,6 +2227,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
               , frNameHashes = nameHashes
               , frFrontTime = Nothing
               , frFrontTiming = Nothing
+              , frInferredSigs = []
               , frBackJob = backJob
               }
           emptyFrontResult =
@@ -2214,6 +2238,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
               , frNameHashes = []
               , frFrontTime = Nothing
               , frFrontTiming = Nothing
+              , frInferredSigs = []
               , frBackJob = Nothing
               }
           cacheFrontResult fr = do

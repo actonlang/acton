@@ -3,6 +3,8 @@ Resolving dependencies (fetching if missing)...
   Stale a: source changed
   Hash deltas a: ~aaa{src HASH1 -> HASH2, impl HASH1 -> HASH2}
    a  Type check done                                                       0.000 s
+     Non-total inferred signature: aaa
+       aaa : int
   Stale b: impl changes in a.aaa HASH1 → HASH2 (used by baa)
   Stale c: impl changes in b.baa HASH1 → HASH2 (used by main)
    a  Compilation done                                                      0.000 s

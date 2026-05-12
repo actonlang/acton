@@ -75,8 +75,7 @@ executables:
     ghc-options:
       - -threaded
       - -rtsopts
-      - -with-rtsopts=-N
-      - -with-rtsopts=-A64M
+      - '"-with-rtsopts=-N -A64M"'
     when:
     - condition: os(linux) && arch(aarch64)
       ghc-options:

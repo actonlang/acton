@@ -1260,7 +1260,7 @@ printDocs gopts opts = do
             env0 <- Acton.Env.initEnv (sysTypes paths) False
             env <- Acton.Env.mkEnv (searchPath paths) env0 parsed
             kchecked <- Acton.Kinds.check env parsed
-            (nmod, _, env', _, _) <- Acton.Types.reconstruct Nothing env kchecked
+            (nmod, _, env', _, _) <- Acton.Types.reconstruct Nothing Nothing env kchecked
             let I.NModule tenv mdoc = nmod
 
             -- 1. If format is explicitly set (via -t, --html, --markdown), use it
@@ -1607,6 +1607,8 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
           "Type stmt " ++ show (tstCompleted st) ++ "/" ++ show (tstTotal st)
         typeStmtBindsLine st =
           "binds: " ++ intercalate ", " (tstNames st)
+        inferredSignatureLine sig =
+          "Non-total inferred signature: " ++ intercalate ", " (isigNames sig)
         backTimingLine bt =
           "Back timing: normalize " ++ fmtTimePrecise (btNormalize bt)
           ++ ", deactorize " ++ fmtTimePrecise (btDeactorize bt)
@@ -1774,6 +1776,11 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
                     forM_ (ftTypeStmtTimings ft) $ \st -> do
                       logRendered (\cols -> detailTimedLine cols detailStmtIndentWide detailStmtIndentNarrow (typeStmtTimingLine st) (tstTime st))
                       logRendered (\cols -> detailLine cols detailBindsIndentWide detailBindsIndentNarrow (typeStmtBindsLine st))
+                when (C.timing gopts || C.verbose gopts) $
+                  forM_ (frInferredSigs fr) $ \sig -> do
+                    logRendered (\cols -> detailLine cols detailStmtIndentWide detailStmtIndentNarrow (inferredSignatureLine sig))
+                    forM_ (lines (isigSignature sig)) $ \line ->
+                      logRendered (\cols -> detailLine cols detailBindsIndentWide detailBindsIndentNarrow line)
               case frBackJob fr of
                 Nothing -> creditBack (gtKey t)
                 Just _ -> return ()

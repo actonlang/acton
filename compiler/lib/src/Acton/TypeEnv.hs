@@ -247,14 +247,15 @@ initTypeState p                         = TypeState { nextint = 1, uniqprefix = 
 
 type TypeM a                            = ExceptT TypeError (State TypeState) a
 
-runTypeMState                           :: String -> TypeM a -> (a, TypeState)
+runTypeMState                           :: String -> TypeM a -> Either TypeError (a, TypeState)
 runTypeMState p m                       = case runState (runExceptT m) (initTypeState p) of
-                                            (Right x, st') -> (x, st')
-                                            (Left err, _)  -> error ("Unhandled TypeM exception: " ++ prstr loc ++ ": " ++ prstr str)
-                                              where (loc,str) : _ = typeError err
+                                            (Right x, st') -> Right (x, st')
+                                            (Left err, _)  -> Left err
 
 runTypeM                                :: TypeM a -> a
-runTypeM m                              = fst $ runTypeMState "" m
+runTypeM m                              = case runTypeMState "" m of
+                                            Right (x,_) -> x
+                                            Left err    -> Control.Exception.throw err
 
 currentState                            :: TypeM TypeState
 currentState                            = lift $ state $ \st -> (st, st)
