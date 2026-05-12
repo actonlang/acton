@@ -27,7 +27,7 @@ export CXX
 ACTON_STACK_CC=$(TD)/compiler/tools/zig-cc.sh
 ACTON_STACK_CXX=$(TD)/compiler/tools/zig-cxx.sh
 ACTON_STACK_NEEDS_ZIG=
-STACK=unset CC && unset CXX && unset CFLAGS && unset ACTON_REAL_LD && stack
+STACK=unset CC && unset CXX && unset CFLAGS && unset CPPFLAGS && unset LDFLAGS && unset ACTON_REAL_LD && stack
 
 # Determine which xargs we have. BSD xargs does not have --no-run-if-empty,
 # rather, it is the default behavior so the argument is superfluous. We check if
@@ -82,7 +82,7 @@ OS:=linux
 ACTON_ZIG_GLIBC_VERSION ?= 2.31
 export ACTON_ZIG_GLIBC_VERSION
 ACTON_STACK_NEEDS_ZIG=1
-STACK=CC="$(ACTON_STACK_CC)" CXX="$(ACTON_STACK_CXX)" CFLAGS= ACTON_REAL_LD="$(ACTON_STACK_CC)" stack --with-gcc="$(ACTON_STACK_CC)"
+STACK=CC="$(ACTON_STACK_CC)" CXX="$(ACTON_STACK_CXX)" CFLAGS= CPPFLAGS= LDFLAGS= ACTON_REAL_LD="$(ACTON_STACK_CC)" stack --with-gcc="$(ACTON_STACK_CC)"
 ifeq ($(shell uname -m),x86_64)
 ACTONC_TARGET := --target x86_64-linux-gnu.$(ACTON_ZIG_GLIBC_VERSION)
 else ifeq ($(shell uname -m),aarch64)
@@ -148,7 +148,7 @@ dist/bin/acton: compiler/lib/package.yaml.in compiler/acton/package.yaml.in comp
 	cd compiler && sed 's,^version: BUILD_VERSION,version: "$(VERSION)",' < lib/package.yaml.in > lib/package.yaml
 	cd compiler && sed 's,^version: BUILD_VERSION,version: "$(VERSION_INFO)",' < acton/package.yaml.in > acton/package.yaml
 	cd compiler && sed 's,^version: BUILD_VERSION,version: "$(VERSION_INFO)",' < lsp-server/package.yaml.in > lsp-server/package.yaml
-	cd compiler && unset CC && unset CXX && unset CFLAGS && unset ACTON_REAL_LD && stack setup
+	cd compiler && unset CC && unset CXX && unset CFLAGS && unset CPPFLAGS && unset LDFLAGS && unset ACTON_REAL_LD && stack setup
 	cd compiler && $(STACK) build acton lsp-server-acton $(ACTON_STACK_BUILD_OPTS) --ghc-options='-j4 $(ACTC_GHC_OPTS)' --dry-run 2>&1 | grep "Nothing to build" || \
 		$(STACK) build acton lsp-server-acton $(ACTON_STACK_BUILD_OPTS) --ghc-options='-j4 $(ACTC_GHC_OPTS)'
 	cd compiler && $(STACK) --local-bin-path=../dist/bin install acton lsp-server-acton $(ACTON_STACK_BUILD_OPTS) --ghc-options='-j4 $(ACTC_GHC_OPTS)'
