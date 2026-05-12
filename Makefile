@@ -171,6 +171,35 @@ clean-compiler:
 		compiler/acton/package.yaml compiler/acton/acton.cabal \
 		compiler/lib/*.cabal compiler/acton/*.cabal compiler/lsp-server/*.cabal
 
+ACTON_LINKAGE_BINS ?= dist/bin/acton dist/bin/lsp-server-acton dist/bin/actondb
+ACTON_ALLOWED_NEEDED_RE ?= ^(libc\.so\.6|libm\.so\.6|libdl\.so\.2|libpthread\.so\.0|librt\.so\.1|libutil\.so\.1|ld-linux-x86-64\.so\.2|ld-linux-aarch64\.so\.1)$$
+.PHONY: ldd
+ldd: $(ACTON_LINKAGE_BINS)
+ifeq ($(OS),linux)
+	@for bin in $(ACTON_LINKAGE_BINS); do \
+		echo "== $$bin =="; \
+		ldd "$$bin"; \
+		if command -v readelf >/dev/null 2>&1; then \
+			unexpected_needed=$$(readelf -d "$$bin" | sed -n 's/.*Shared library: \[\(.*\)\].*/\1/p' | grep -Ev '$(ACTON_ALLOWED_NEEDED_RE)' || true); \
+			if [ -n "$$unexpected_needed" ]; then \
+				echo "unexpected dynamic libraries:" >&2; \
+				echo "$$unexpected_needed" >&2; \
+				exit 1; \
+			fi; \
+			max_glibc=$$(readelf --version-info "$$bin" | grep -o 'GLIBC_[0-9][.0-9]*' | sed 's/GLIBC_//' | sort -Vu | tail -n 1); \
+			if [ -n "$$max_glibc" ]; then \
+				echo "max GLIBC version required: $$max_glibc"; \
+				if [ "$$(printf '%s\n%s\n' "$$max_glibc" "$(ACTON_ZIG_GLIBC_VERSION)" | sort -V | tail -n 1)" != "$(ACTON_ZIG_GLIBC_VERSION)" ]; then \
+					echo "ERROR: $$bin requires GLIBC $$max_glibc, newer than target $(ACTON_ZIG_GLIBC_VERSION)" >&2; \
+					exit 1; \
+				fi; \
+			fi; \
+		fi; \
+	done
+else
+	@echo "ldd target is only meaningful on Linux"
+endif
+
 # /deps --------------------------------------------------
 DEPS += dist/deps/mbedtls
 DEPS += dist/deps/libargp
