@@ -172,7 +172,7 @@ clean-compiler:
 		compiler/lib/*.cabal compiler/acton/*.cabal compiler/lsp-server/*.cabal
 
 ACTON_LINKAGE_BINS ?= dist/bin/acton dist/bin/lsp-server-acton dist/bin/actondb
-ACTON_ALLOWED_NEEDED_RE ?= ^(libc\.so\.6|libm\.so\.6|libdl\.so\.2|libpthread\.so\.0|librt\.so\.1|libutil\.so\.1)$$
+ACTON_ALLOWED_NEEDED_RE ?= ^(libc\.so\.6|libm\.so\.6|libdl\.so\.2|libpthread\.so\.0|librt\.so\.1|libutil\.so\.1|ld-linux-x86-64\.so\.2|ld-linux-aarch64\.so\.1)$$
 .PHONY: ldd
 ldd: $(ACTON_LINKAGE_BINS)
 ifeq ($(OS),linux)
