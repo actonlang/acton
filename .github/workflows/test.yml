@@ -377,6 +377,7 @@ jobs:
         run: |
           export PATH=$(pwd)/acton/bin:$PATH
           acton version
+          acton pkg update
           echo '#!/usr/bin/env runacton'   > acton-test.act
           echo 'actor main(env):'          >> acton-test.act
           echo '    print("Hello, world")' >> acton-test.act
@@ -401,6 +402,12 @@ jobs:
           - os: "debian"
             version: "12"
             arch: "amd64"
+          - os: "debian"
+            version: "13"
+            arch: "amd64"
+          - os: "debian"
+            version: "13"
+            arch: "arm64"
           - os: "ubuntu"
             version: "20.04"
             arch: "amd64"
@@ -443,8 +450,9 @@ jobs:
       - name: "Install acton from .deb"
         run: |
           apt update
-          apt install -y ./deb/acton_*.deb
+          apt install -y ca-certificates ./deb/acton_*.deb
           acton version
+          acton pkg update
       - name: "Enable dumping core files to /tmp/core..."
         run: |
           apt install -qy procps
