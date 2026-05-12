@@ -27,6 +27,7 @@ export CXX
 ACTON_STACK_CC=$(TD)/compiler/tools/zig-cc.sh
 ACTON_STACK_CXX=$(TD)/compiler/tools/zig-cxx.sh
 ACTON_STACK_NEEDS_ZIG=
+ACTON_ZIG_TARGET=
 STACK=unset CC && unset CXX && unset CFLAGS && unset CPPFLAGS && unset LDFLAGS && unset ACTON_REAL_LD && stack
 
 # Determine which xargs we have. BSD xargs does not have --no-run-if-empty,
@@ -84,12 +85,13 @@ export ACTON_ZIG_GLIBC_VERSION
 ACTON_STACK_NEEDS_ZIG=1
 STACK=CC="$(ACTON_STACK_CC)" CXX="$(ACTON_STACK_CXX)" CFLAGS= CPPFLAGS= LDFLAGS= ACTON_REAL_LD="$(ACTON_STACK_CC)" stack --with-gcc="$(ACTON_STACK_CC)"
 ifeq ($(shell uname -m),x86_64)
-ACTONC_TARGET := --target x86_64-linux-gnu.$(ACTON_ZIG_GLIBC_VERSION)
+ACTON_ZIG_TARGET := x86_64-linux-gnu.$(ACTON_ZIG_GLIBC_VERSION)
 else ifeq ($(shell uname -m),aarch64)
-ACTONC_TARGET := --target aarch64-linux-gnu.$(ACTON_ZIG_GLIBC_VERSION)
+ACTON_ZIG_TARGET := aarch64-linux-gnu.$(ACTON_ZIG_GLIBC_VERSION)
 else
 $(error "Unsupported architecture for Linux?" $(shell uname -m))
 endif
+ACTONC_TARGET := --target $(ACTON_ZIG_TARGET)
 endif # -- END: Linux ----------------------------------------------------------
 
 .PHONY: all
@@ -169,7 +171,7 @@ clean-compiler:
 		compiler/acton/package.yaml compiler/acton/acton.cabal \
 		compiler/lib/*.cabal compiler/acton/*.cabal compiler/lsp-server/*.cabal
 
-ACTON_LINKAGE_BINS ?= dist/bin/acton dist/bin/lsp-server-acton
+ACTON_LINKAGE_BINS ?= dist/bin/acton dist/bin/lsp-server-acton dist/bin/actondb
 ACTON_ALLOWED_NEEDED_RE ?= ^(libc\.so\.6|libm\.so\.6|libdl\.so\.2|libpthread\.so\.0|librt\.so\.1|libutil\.so\.1)$$
 .PHONY: ldd
 ldd: $(ACTON_LINKAGE_BINS)
@@ -466,7 +468,7 @@ dist/bin/actondb: export DEVELOPER_DIR := $(or $(DEVELOPER_DIR),/dev/null)
 endif
 dist/bin/actondb: $(DIST_ZIG) $(DEPS)
 	@mkdir -p $(dir $@)
-	cd dist/backend && "$(ZIG)" build -Donly_actondb --prefix "$(TD)/dist"
+	cd dist/backend && "$(ZIG)" build -Donly_actondb $(if $(ACTON_ZIG_TARGET),-Dtarget=$(ACTON_ZIG_TARGET)) --prefix "$(TD)/dist"
 
 dist/bin/runacton: bin/runacton
 	@mkdir -p $(dir $@)

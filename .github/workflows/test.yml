@@ -350,7 +350,10 @@ jobs:
           dpkg-deb -I "$deb"
           tmp="$(mktemp -d)"
           dpkg-deb -x "$deb" "$tmp"
-          make -C "${GITHUB_WORKSPACE}" ldd ACTON_LINKAGE_BINS="$tmp/usr/lib/acton/bin/acton $tmp/usr/lib/acton/bin/lsp-server-acton"
+          bins="$tmp/usr/lib/acton/bin/acton"
+          bins="$bins $tmp/usr/lib/acton/bin/lsp-server-acton"
+          bins="$bins $tmp/usr/lib/acton/bin/actondb"
+          make -C "${GITHUB_WORKSPACE}" ldd ACTON_LINKAGE_BINS="$bins"
       - name: "Compute variables"
         id: vars
         run: |
