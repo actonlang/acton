@@ -39,6 +39,7 @@ builder/zig-cache
 compiler/package.yaml
 compiler/acton/acton.cabal
 compiler/acton/package.yaml
+compiler/lib/libacton.cabal
 compiler/lib/package.yaml
 compiler/lsp-server/package.yaml
 compiler/lsp-server/lsp-server-acton.cabal

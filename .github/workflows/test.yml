@@ -216,7 +216,7 @@ jobs:
         run: |
           export DEBIAN_FRONTEND=noninteractive
           apt-get update
-          apt-get install -qy bzip2 curl g++ haskell-stack libtinfo-dev make procps zlib1g-dev
+          apt-get install -qy bzip2 curl g++ haskell-stack libncurses-dev make procps zlib1g-dev
           apt-get install -qy gdb
       - name: "locale en_US.UTF-8"
         run: |
@@ -226,14 +226,28 @@ jobs:
           echo "locales locales/locales_to_be_generated multiselect en_US.UTF-8 UTF-8" | debconf-set-selections
           rm "/etc/locale.gen"
           dpkg-reconfigure --frontend noninteractive locales
-      - name: "Upgrade stack on old distributions"
-        if: ${{ matrix.os == 'ubuntu' && matrix.version == '22.04' }}
+      - name: "Install newer stack"
         run: |
-          stack upgrade
-          echo "PATH=~/.local/bin:$PATH" >> $GITHUB_ENV
+          STACK_VERSION=3.9.3
+          ARCH="$(uname -m)"
+          case "${ARCH}" in
+            x86_64) STACK_ARCH="x86_64" ;;
+            aarch64|arm64) STACK_ARCH="aarch64" ;;
+            *) echo "Unsupported arch: ${ARCH}" >&2; exit 1 ;;
+          esac
+          STACK_TAR="stack-${STACK_VERSION}-linux-${STACK_ARCH}.tar.gz"
+          STACK_URL="https://github.com/commercialhaskell/stack/releases/download/v${STACK_VERSION}/${STACK_TAR}"
+          mkdir -p "${HOME}/.local/bin"
+          curl -fsSL "${STACK_URL}" -o /tmp/stack.tgz
+          tar -xzf /tmp/stack.tgz -C /tmp
+          install -m 0755 "/tmp/stack-${STACK_VERSION}-linux-${STACK_ARCH}/stack" "${HOME}/.local/bin/stack"
+          echo "${HOME}/.local/bin" >> "$GITHUB_PATH"
+          "${HOME}/.local/bin/stack" --version
       - name: "Build Acton"
         run: |
           make -j2 -C ${GITHUB_WORKSPACE} BUILD_RELEASE=${{ env.BUILD_RELEASE }} BUILD_TIME=${BUILD_TIME}
+      - name: "Show Acton linkage"
+        run: make -C ${GITHUB_WORKSPACE} ldd
       - name: "Build a release"
         run: make -C ${GITHUB_WORKSPACE} release BUILD_TIME=${BUILD_TIME}
       - name: "Upload artifact"
@@ -285,7 +299,7 @@ jobs:
       - name: "Install build prerequisites"
         run: |
           apt-get update
-          apt-get install -qy bzip2 curl g++ haskell-stack libtinfo-dev make procps zlib1g-dev
+          apt-get install -qy bzip2 curl g++ haskell-stack libncurses-dev make procps zlib1g-dev
           apt-get install -qy bash-completion build-essential debhelper devscripts
       - name: "Prepare stack directories"
         run: |
@@ -328,6 +342,16 @@ jobs:
         run: |
           set -euo pipefail
           make -C "${GITHUB_WORKSPACE}" debs BUILD_RELEASE=${{ env.BUILD_RELEASE }} BUILD_TIME=${BUILD_TIME}
+      - name: "Show packaged Acton linkage"
+        shell: bash
+        run: |
+          set -euo pipefail
+          make -C "${GITHUB_WORKSPACE}" ldd
+          deb="$(ls "${GITHUB_WORKSPACE}"/../acton_*.deb | head -n1)"
+          dpkg-deb -I "$deb"
+          tmp="$(mktemp -d)"
+          dpkg-deb -x "$deb" "$tmp"
+          make -C "${GITHUB_WORKSPACE}" ldd ACTON_LINKAGE_BINS="$tmp/usr/lib/acton/bin/acton $tmp/usr/lib/acton/bin/lsp-server-acton"
       - name: "Compute variables"
         id: vars
         run: |

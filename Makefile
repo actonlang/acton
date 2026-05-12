@@ -21,6 +21,10 @@ CC=$(ZIG) cc
 CXX=$(ZIG) c++
 export CC
 export CXX
+ACTON_STACK_CC=$(TD)/compiler/tools/zig-cc.sh
+ACTON_STACK_CXX=$(TD)/compiler/tools/zig-cxx.sh
+ACTON_STACK_NEEDS_ZIG=
+STACK=unset CC && unset CXX && unset CFLAGS && unset ACTON_REAL_LD && stack
 
 # Determine which xargs we have. BSD xargs does not have --no-run-if-empty,
 # rather, it is the default behavior so the argument is superfluous. We check if
@@ -72,6 +76,10 @@ endif
 # -- Linux ---------------------------------------------------------------------
 ifeq ($(shell uname -s),Linux)
 OS:=linux
+ACTON_ZIG_GLIBC_VERSION ?= 2.27
+export ACTON_ZIG_GLIBC_VERSION
+ACTON_STACK_NEEDS_ZIG=1
+STACK=CC="$(ACTON_STACK_CC)" CXX="$(ACTON_STACK_CXX)" CFLAGS= ACTON_REAL_LD="$(ACTON_STACK_CC)" stack --with-gcc="$(ACTON_STACK_CC)"
 ifeq ($(shell uname -m),x86_64)
 ACTONC_TARGET := --target x86_64-linux-gnu.2.27
 else ifeq ($(shell uname -m),aarch64)
@@ -113,6 +121,11 @@ BUILTIN_HFILES=$(wildcard base/builtin/*.h)
 
 DIST_BINS=$(ACTONC) dist/bin/actondb dist/bin/runacton dist/bin/lsp-server-acton
 DIST_ZIG=dist/zig
+ifeq ($(ACTON_STACK_NEEDS_ZIG),1)
+ACTON_STACK_PREREQS=$(DIST_ZIG)
+else
+ACTON_STACK_PREREQS=
+endif
 
 .PHONY: test-backend
 test-backend: $(BACKEND_TESTS)
@@ -126,17 +139,16 @@ test-backend: $(BACKEND_TESTS)
 # /compiler ----------------------------------------------
 ACTONC_HS=$(wildcard compiler/lib/src/*.hs compiler/lib/src/*/*.hs compiler/acton/*.hs compiler/acton/*/*.hs)
 ACTONLSP_HS=$(wildcard compiler/lsp-server/*.hs)
-# NOTE: we're unsetting CC & CXX to avoid using zig cc & zig c++ for stack /
-# ghc, which doesn't seem to work properly
-dist/bin/acton: compiler/lib/package.yaml.in compiler/acton/package.yaml.in compiler/lsp-server/package.yaml.in compiler/stack.yaml $(ACTONC_HS) $(ACTONLSP_HS) version.mk dist/builder
+dist/bin/acton: compiler/lib/package.yaml.in compiler/acton/package.yaml.in compiler/lsp-server/package.yaml.in compiler/stack.yaml $(ACTONC_HS) $(ACTONLSP_HS) version.mk dist/builder $(ACTON_STACK_PREREQS)
 	mkdir -p dist/bin
 	rm -f dist/bin/actonc
 	cd compiler && sed 's,^version: BUILD_VERSION,version: "$(VERSION)",' < lib/package.yaml.in > lib/package.yaml
-	cd compiler && unset CC && unset CXX && unset CFLAGS && stack build acton lsp-server-acton $(ACTON_STACK_BUILD_OPTS) --ghc-options='-j4 $(ACTC_GHC_OPTS)' --dry-run 2>&1 | grep "Nothing to build" || \
-		(sed 's,^version: BUILD_VERSION,version: "$(VERSION_INFO)",' < acton/package.yaml.in > acton/package.yaml \
-		&& sed 's,^version: BUILD_VERSION,version: "$(VERSION_INFO)",' < lsp-server/package.yaml.in > lsp-server/package.yaml \
-		&& stack build acton lsp-server-acton $(ACTON_STACK_BUILD_OPTS) --ghc-options='-j4 $(ACTC_GHC_OPTS)')
-	cd compiler && unset CC && unset CXX && unset CFLAGS && stack --local-bin-path=../dist/bin install acton lsp-server-acton $(ACTON_STACK_BUILD_OPTS) --ghc-options='-j4 $(ACTC_GHC_OPTS)'
+	cd compiler && sed 's,^version: BUILD_VERSION,version: "$(VERSION_INFO)",' < acton/package.yaml.in > acton/package.yaml
+	cd compiler && sed 's,^version: BUILD_VERSION,version: "$(VERSION_INFO)",' < lsp-server/package.yaml.in > lsp-server/package.yaml
+	cd compiler && unset CC && unset CXX && unset CFLAGS && unset ACTON_REAL_LD && stack setup
+	cd compiler && $(STACK) build acton lsp-server-acton $(ACTON_STACK_BUILD_OPTS) --ghc-options='-j4 $(ACTC_GHC_OPTS)' --dry-run 2>&1 | grep "Nothing to build" || \
+		$(STACK) build acton lsp-server-acton $(ACTON_STACK_BUILD_OPTS) --ghc-options='-j4 $(ACTC_GHC_OPTS)'
+	cd compiler && $(STACK) --local-bin-path=../dist/bin install acton lsp-server-acton $(ACTON_STACK_BUILD_OPTS) --ghc-options='-j4 $(ACTC_GHC_OPTS)'
 	# Keep actonc as a symlink for compatibility
 	ln -sf acton dist/bin/actonc
 
@@ -153,6 +165,35 @@ clean-compiler:
 	rm -f dist/bin/acton dist/bin/actonc compiler/package.yaml compiler/acton.cabal \
 		compiler/acton/package.yaml compiler/acton/acton.cabal \
 		compiler/lib/*.cabal compiler/acton/*.cabal compiler/lsp-server/*.cabal
+
+ACTON_LINKAGE_BINS ?= dist/bin/acton dist/bin/lsp-server-acton
+ACTON_ALLOWED_NEEDED_RE ?= ^(libc\.so\.6|libm\.so\.6|libdl\.so\.2|libpthread\.so\.0|librt\.so\.1|libutil\.so\.1)$$
+.PHONY: ldd
+ldd: $(ACTON_LINKAGE_BINS)
+ifeq ($(OS),linux)
+	@for bin in $(ACTON_LINKAGE_BINS); do \
+		echo "== $$bin =="; \
+		ldd "$$bin"; \
+		if command -v readelf >/dev/null 2>&1; then \
+			unexpected_needed=$$(readelf -d "$$bin" | sed -n 's/.*Shared library: \[\(.*\)\].*/\1/p' | grep -Ev '$(ACTON_ALLOWED_NEEDED_RE)' || true); \
+			if [ -n "$$unexpected_needed" ]; then \
+				echo "unexpected dynamic libraries:" >&2; \
+				echo "$$unexpected_needed" >&2; \
+				exit 1; \
+			fi; \
+			max_glibc=$$(readelf --version-info "$$bin" | grep -o 'GLIBC_[0-9][.0-9]*' | sed 's/GLIBC_//' | sort -Vu | tail -n 1); \
+			if [ -n "$$max_glibc" ]; then \
+				echo "max GLIBC version required: $$max_glibc"; \
+				if [ "$$(printf '%s\n%s\n' "$$max_glibc" "$(ACTON_ZIG_GLIBC_VERSION)" | sort -V | tail -n 1)" != "$(ACTON_ZIG_GLIBC_VERSION)" ]; then \
+					echo "ERROR: $$bin requires GLIBC $$max_glibc, newer than target $(ACTON_ZIG_GLIBC_VERSION)" >&2; \
+					exit 1; \
+				fi; \
+			fi; \
+		fi; \
+	done
+else
+	@echo "ldd target is only meaningful on Linux"
+endif
 
 # /deps --------------------------------------------------
 DEPS += dist/deps/mbedtls
@@ -517,7 +558,7 @@ debian/changelog: debian/changelog.in CHANGELOG.md
 
 .PHONY: debs
 debs: debian/changelog
-	debuild --preserve-envvar VERSION_INFO --preserve-envvar PATH --preserve-envvar STACK_ROOT --preserve-envvar ZIG_DOWNLOAD_BASE_URL -i -us -uc -nc -b
+	debuild --preserve-envvar VERSION_INFO --preserve-envvar PATH --preserve-envvar STACK_ROOT --preserve-envvar ZIG_DOWNLOAD_BASE_URL --preserve-envvar ACTON_ZIG_GLIBC_VERSION -i -us -uc -nc -b
 
 .PHONY: container-image image image-deb push-image
 container-image: all

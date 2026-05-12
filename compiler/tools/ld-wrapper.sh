@@ -6,17 +6,35 @@ state="static"
 arch="$(uname -m 2>/dev/null || true)"
 allow_dynamic_glibc=false
 case "$arch" in
-  aarch64|arm64)
+  aarch64|arm64|x86_64|amd64)
     allow_dynamic_glibc=true
     ;;
 esac
 
 args=()
 args+=("-Wl,-Bstatic")
-gcc_lib="$(gcc -print-file-name=libgcc_s.so 2>/dev/null || true)"
-if [[ -n "$gcc_lib" && "$gcc_lib" != "libgcc_s.so" ]]; then
-  args+=("-L$(dirname "$gcc_lib")")
-fi
+
+gcc_lib_path() {
+  local lib="$1"
+  local lib_path
+  lib_path="$(gcc -print-file-name="$lib" 2>/dev/null || true)"
+  if [[ -n "$lib_path" && "$lib_path" != "$lib" ]]; then
+    echo "$lib_path"
+    return 0
+  fi
+  return 1
+}
+
+add_static_gcc_lib() {
+  local archive="$1"
+  local fallback="$2"
+  local archive_path
+  if archive_path="$(gcc_lib_path "$archive")"; then
+    args+=("$archive_path")
+  else
+    args+=("-l:$fallback")
+  fi
+}
 
 normalize_lib() {
   local lib="$1"
@@ -43,7 +61,7 @@ handle_lib() {
       args+=("-Wl,-Bstatic")
       state="static"
     fi
-    args+=("-l:libz.a")
+    add_static_gcc_lib libz.a libz.a
     return
   fi
   if [[ "$lib_key" == "gmp" ]]; then
@@ -51,7 +69,7 @@ handle_lib() {
       args+=("-Wl,-Bstatic")
       state="static"
     fi
-    args+=("-l:libgmp.a")
+    add_static_gcc_lib libgmp.a libgmp.a
     return
   fi
   if [[ "$lib_key" == "stdc++" ]]; then
@@ -59,12 +77,20 @@ handle_lib() {
       args+=("-Wl,-Bstatic")
       state="static"
     fi
-    args+=("-l:libstdc++.a")
+    add_static_gcc_lib libstdc++.a libstdc++.a
+    return
+  fi
+  if [[ "$lib_key" == "tinfo" ]]; then
+    if [[ "$state" != "static" ]]; then
+      args+=("-Wl,-Bstatic")
+      state="static"
+    fi
+    add_static_gcc_lib libtinfo.a libtinfo.a
     return
   fi
   if [[ "$allow_dynamic_glibc" == true ]]; then
     case "$lib_key" in
-      c|m|dl|pthread|rt|util|gcc_s)
+      c|m|dl|pthread|rt|util)
         if [[ "$state" != "dynamic" ]]; then
           args+=("-Wl,-Bdynamic")
           state="dynamic"
@@ -73,6 +99,14 @@ handle_lib() {
         return
         ;;
     esac
+  fi
+  if [[ "$lib_key" == "gcc_s" ]]; then
+    if [[ "$state" != "static" ]]; then
+      args+=("-Wl,-Bstatic")
+      state="static"
+    fi
+    add_static_gcc_lib libgcc_eh.a libgcc_eh.a
+    return
   fi
   if [[ "$state" != "static" ]]; then
     args+=("-Wl,-Bstatic")
