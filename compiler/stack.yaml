@@ -6,6 +6,10 @@
 # GHC that corresponds to the stack LTS release, like lts-18.28 -> ghc@8.10
 snapshot: lts-22.34
 
+allow-newer: true
+allow-newer-deps:
+  - diagnose
+
 # User packages to be built.
 # Various formats can be used as shown in the example below.
 #
@@ -43,13 +47,10 @@ extra-deps:
   - parsec-3.1.17.0@sha256:8407cbd428d7f640a0fff8891bd2f7aca13cebe70a5e654856f8abec9a648b56
   - process-1.6.19.0
   - tasty-1.5.3
-  - text-2.0@sha256:f2207a6a51a8320c44dbd8b462723a8e39e2bfceda67e15f52fc12922259cbb0
   - unix-2.8.2.1
 
 # Override default flag values for local packages and extra-deps
-flags:
-  text:
-    simdutf: false
+# flags: {}
 
 # Extra package databases containing global packages
 # extra-package-dbs: []

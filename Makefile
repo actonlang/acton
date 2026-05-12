@@ -5,11 +5,14 @@ GIT_VERSION_TAG=$(shell git tag --points-at HEAD 2>/dev/null | grep "v[0-9]" | s
 
 ifdef HOME
 ZIG_LOCAL_CACHE_DIR ?= $(HOME)/.cache/acton/zig-local-cache
+ZIG_GLOBAL_CACHE_DIR ?= $(HOME)/.cache/acton/zig-global-cache
 else
 # TODO: Windows?
 ZIG_LOCAL_CACHE_DIR ?= $(TD)/zig-cache
+ZIG_GLOBAL_CACHE_DIR ?= $(TD)/zig-global-cache
 endif
 export ZIG_LOCAL_CACHE_DIR
+export ZIG_GLOBAL_CACHE_DIR
 
 ACTON=$(TD)/dist/bin/acton
 ACTONC=dist/bin/actonc

@@ -7,6 +7,7 @@ Build-Depends:
  debhelper-compat (= 13),
  g++,
  haskell-stack,
+ libgmp-dev,
  libncurses-dev,
  make,
  zlib1g-dev

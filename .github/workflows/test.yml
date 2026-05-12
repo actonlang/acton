@@ -106,7 +106,7 @@ jobs:
         with:
           path: |
             ~/.stack
-          key: test-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}
+          key: test-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}-${{ hashFiles('compiler/stack.yaml', 'compiler/stack.yaml.lock', 'Makefile', 'compiler/tools/*.sh') }}
       - name: "Cache Acton"
         if: matrix.cache == true
         uses: actions/cache@v5
@@ -209,14 +209,14 @@ jobs:
         with:
           path: |
             ~/.stack
-          key: test-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}
+          key: test-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}-${{ hashFiles('compiler/stack.yaml', 'compiler/stack.yaml.lock', 'Makefile', 'compiler/tools/*.sh') }}
       - name: "chown our home dir to avoid stack complaining"
         run: chown -R root:root /github/home
       - name: "Install build prerequisites"
         run: |
           export DEBIAN_FRONTEND=noninteractive
           apt-get update
-          apt-get install -qy bzip2 curl g++ haskell-stack libncurses-dev make procps zlib1g-dev
+          apt-get install -qy bzip2 curl g++ haskell-stack libgmp-dev libncurses-dev make procps zlib1g-dev
           apt-get install -qy gdb
       - name: "locale en_US.UTF-8"
         run: |
@@ -299,7 +299,7 @@ jobs:
       - name: "Install build prerequisites"
         run: |
           apt-get update
-          apt-get install -qy bzip2 curl g++ haskell-stack libncurses-dev make procps zlib1g-dev
+          apt-get install -qy bzip2 curl g++ haskell-stack libgmp-dev libncurses-dev make procps zlib1g-dev
           apt-get install -qy bash-completion build-essential debhelper devscripts
       - name: "Prepare stack directories"
         run: |
@@ -310,9 +310,8 @@ jobs:
         uses: actions/cache@v5
         with:
           path: |
-            ./debian/.debhelper/
             ${{ env.STACK_ROOT }}
-          key: build-debs-${{ matrix.arch }}
+          key: build-debs-${{ matrix.arch }}-${{ hashFiles('compiler/stack.yaml', 'compiler/stack.yaml.lock', 'Makefile', 'compiler/tools/*.sh', 'debian/control') }}
       - name: "locale en_US.UTF-8"
         run: |
           apt-get install -qy locales
