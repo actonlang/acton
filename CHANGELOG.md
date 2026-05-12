@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Documentation
+- Document when and how to use the Acton container image, including
+  copy-pastable Docker commands for checking the compiler version and building
+  the current project. [#2767]
+
 ## [0.27.0] - 2026-05-08
 
 ### Added
@@ -3901,6 +3908,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#2749]: https://github.com/actonlang/acton/pull/2749
 [#2751]: https://github.com/actonlang/acton/pull/2751
 [#2761]: https://github.com/actonlang/acton/pull/2761
+[#2767]: https://github.com/actonlang/acton/pull/2767
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
