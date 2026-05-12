@@ -12,8 +12,12 @@
 --
 
 {-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, FlexibleContexts #-}
-module Acton.Types(reconstruct, showTyFile, prettySigs, TypeError(..)) where
+module Acton.Types(reconstruct, showTyFile, prettySigs, TypeError(..), TypeErrors(..), TypeProgressCallback, TypeInferredCallback) where
 
+import Control.Concurrent.Async
+import Control.Concurrent.Chan
+import Control.Concurrent.QSem
+import Control.DeepSeq
 import Control.Monad
 import Data.Maybe (isJust)
 import Data.List (nub, intersect, sort)
@@ -36,37 +40,44 @@ import Acton.WitKnots
 import qualified InterfaceFiles
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Base16 as Base16
-import Data.List (intersperse, isPrefixOf, partition)
+import Data.List (foldl', intersperse, isPrefixOf, partition)
 import Data.Maybe (mapMaybe)
-import System.IO.Unsafe (unsafePerformIO)
+import GHC.Conc (getNumCapabilities)
 
 type TypeProgressCallback = Int -> Int -> Maybe String -> [String] -> Int -> IO ()
+type TypeInferredCallback = [String] -> String -> IO ()
 
-emitTypeProgress :: Maybe TypeProgressCallback -> Int -> Int -> Maybe String -> [String] -> Int -> TypeM ()
-emitTypeProgress Nothing _ _ _ _ _ = return ()
-emitTypeProgress (Just cb) total completed current names weight =
-  unsafePerformIO (cb total completed current names weight) `seq` return ()
+emitTypeProgressIO :: Maybe TypeProgressCallback -> Int -> Int -> Maybe String -> [String] -> Int -> IO ()
+emitTypeProgressIO Nothing _ _ _ _ _ = return ()
+emitTypeProgressIO (Just cb) total completed current names weight = cb total completed current names weight
+
+emitTypeInferredIO :: Maybe TypeInferredCallback -> Env -> TEnv -> IO ()
+emitTypeInferredIO Nothing _ _        = return ()
+emitTypeInferredIO (Just cb) env te   = cb (map nstr (dom te)) (render $ pretty (simp env [(n, stripDocsNI i) | (n,i) <- te]))
+
+data TypeErrors = TypeErrors [TypeError]
+                  deriving (Show)
+
+instance Control.Exception.Exception TypeErrors
 
 -- | Type-check a module and return its NameInfo, typed module, env, and discovered tests.
-reconstruct                             :: Maybe TypeProgressCallback -> Env0 -> Module -> IO (NameInfo, Module, Env0, [Acton.Syntax.ModName], [String])
-reconstruct progressCb env0 (Module m i mdoc ss)    = do --traceM ("#################### original env0 for " ++ prstr m ++ ":")
+reconstruct                             :: Maybe TypeProgressCallback -> Maybe TypeInferredCallback -> Env0 -> Module -> IO (NameInfo, Module, Env0, [Acton.Syntax.ModName], [String])
+reconstruct progressCb inferredCb env0 (Module m i mdoc ss)    = do --traceM ("#################### original env0 for " ++ prstr m ++ ":")
                                              --traceM (render (pretty env0))
-                                             let nmod = NModule iface mdoc
+                                             (te,ss1) <- infTop progressCb inferredCb env1 ss
+                                             let env2 = define te (setMod m env0)
+                                                 (teT,ssT,tests) =
+                                                   if hasTesting i
+                                                     then let (testSs, discovered) = testStmts env2 (modNameStr m) ss1
+                                                          in (te ++ testEnv, ss1 ++ testSs, discovered)
+                                                     else (te, ss1, [])
+                                                 iface = unalias env2 teT
+                                                 nmod = NModule iface mdoc
                                              --traceM ("#################### converted env0:")
                                              --traceM (render (pretty env0'))
                                              return (nmod, Module m i mdoc ssT, env0', mrefs, tests)
 
   where env1                            = reserve (assigned ss) (typeX env0)
-        (te,ss1)                        = runTypeM $ infTop progressCb env1 ss
-        env2                            = define te (setMod m env0)
-
-        (teT,ssT,tests)                 =
-          if hasTesting i
-            then let (testSs, discovered) = testStmts env2 (modNameStr m) ss1
-                 in (te ++ testEnv, ss1 ++ testSs, discovered)
-            else (te, ss1, [])
-        iface                           = unalias env2 teT
-
         mrefs                           = moduleRefs1 env0
         env0'                           = convEnvProtos env0
         hasTesting i                    = Import NoLoc [ModuleItem (ModName [name "testing"]) Nothing] `elem` i
@@ -80,9 +91,6 @@ reconstruct progressCb env0 (Module m i mdoc ss)    = do --traceM ("############
 
         -- Convert the module name (ModName) to a string, e.g. "foo.bar"
         modNameStr (ModName ns) = concat (intersperse "." (map nstr ns))
-        -- Inject __name__ variable
-        __name__assign = Assign NoLoc [PVar NoLoc (name "__name__") Nothing] (Strings NoLoc [modNameStr m])
-        ssT' = __name__assign : ssT
 
 
 -- | Print a .ty file header and interface; include name hashes when verbose.
@@ -153,45 +161,217 @@ addTyping env n s t c                   = c {info = addT n (simp env s) t (info 
 
 ------------------------------
 
-infTop                                  :: Maybe TypeProgressCallback -> Env -> Suite -> TypeM (TEnv,Suite)
-infTop progressCb env ss                = do --traceM ("\n## infEnv top")
-                                             let total = sum (map stmtProgressWeight ss)
-                                             (te,ss) <- infTopStmts progressCb env total 0 ss
-                                             when (total > 0) $
-                                               emitTypeProgress progressCb total total Nothing [] 0
-                                             checkSigs env te
-                                             return (te, ss)
+-- | One source-level progress unit: the names in the top-level statement and
+-- its weight.  A recursive group can bind several names, so the weight is kept
+-- separate from the label.
+type TopProgressItem                    = ([String], Int)
 
-infTopStmts _ env _ _ []                = return ([], [])
-infTopStmts progressCb env total done (s : ss)
-                                         = do done' <- case stmtProgressLabel s of
-                                                        Just label -> do
-                                                          let names = stmtProgressNames s
-                                                              weight = stmtProgressWeight s
-                                                          emitTypeProgress progressCb total done (Just label) names weight
-                                                          return (done + weight)
-                                                        Nothing -> return done
-                                              let (te1, s1) = typeTopStmt env s
-                                              (te2, ss2) <- infTopStmts progressCb (define te1 env) total done' ss
-                                              return (te1++te2, s1++ss2)
+-- | Progress events are sent from the scanner thread and from background
+-- checker workers to the single progress reporter thread.
+data TopProgressEvent                   = TopProgressStarted TopProgressItem
+                                        | TopProgressFinished TopProgressItem
+                                        | TopProgressStop
 
-typeTopStmt env s                       = fst $ runTypeMState (nstr $ uniqPrefix s) $ do
-                                          pushFX fxPure tNone
-                                          infTopStmt env s
+-- Concurrent type checker
+infTop                                  :: Maybe TypeProgressCallback -> Maybe TypeInferredCallback -> Env -> Suite -> IO (TEnv,Suite)
+infTop _ _ _ []                         = return ([], [])
+infTop progressCb inferredCb env ss     = do -- The scanner itself is sequential, but total statements, i.e.
+                                             -- with a complete type signature can be independently type checked
+                                             -- in the background. Use RTS capabilities as this module's local
+                                             -- worker limit.
+                                             ncap <- getNumCapabilities
+                                             -- Counting semaphore to limit number of background workers
+                                             sem <- newQSem (max 1 (min ncap (length ss)))
+                                             -- Progress is serialized through one channel so concurrent workers
+                                             -- do not call the UI callback directly.
+                                             progressQ <- newChan
+                                             -- The progress reporter is independent from scanning/checking; it
+                                             -- consumes start/finish events until it receives TopProgressStop.
+                                             progressA <- async $ topProgress progressCb total progressQ
+                                             -- Stop the reporter after all work has been collected, and wait so
+                                             -- the final progress update is emitted before infTop returns.
+                                             let stopProgress = writeChan progressQ TopProgressStop >> wait progressA
+                                                 -- run is the real top-level flow: scan left-to-right, collect
+                                                 -- all completed worker results, then validate signatures once
+                                                 -- the whole top-level environment is known.
+                                                 run = do
+                                                   (te,ss,errs) <- go sem progressQ env [] [] ss
+                                                   stopProgress
+                                                   if null errs
+                                                     then do runType "" (checkSigs env te)
+                                                             return (te, ss)
+                                                     else throwTopErrors errs
+                                             -- If scan/check throws before stopProgress runs, make sure the
+                                             -- progress reporter does not stay blocked on readChan.
+                                             run `Control.Exception.finally` cancel progressA
+  where -- Total source progress is known syntactically before any type checking.
+        total                           = sum (map stmtProgressWeight ss)
 
--- | Display label for progress UI.
--- For recursive groups, abbreviate to a short "a, b, ... (+N)" form.
-stmtProgressLabel :: Stmt -> Maybe String
-stmtProgressLabel s
-  | null names = Nothing
-  | otherwise = Just (formatNames names)
-  where
-    names = stmtProgressNames s
-    formatNames [n] = n
-    formatNames [n1, n2] = n1 ++ ", " ++ n2
-    formatNames (n1 : n2 : rest) =
-      n1 ++ ", " ++ n2 ++ ", ... (+" ++ show (length rest) ++ ")"
-    formatNames [] = ""
+        -- End of input: every statement has either produced an immediate
+        -- result or a worker wait action, so now wait for them and assemble the
+        -- final top-level environment and typed suite in source order.
+        go sem q env tes rs []          = collect tes rs
+        -- Main scanner loop. This is deliberately sequential: every new scan
+        -- sees a type environment containing all previous top-level declarations.
+        go sem q env tes rs (s:ss)      = do let item = topProgressItem s
+                                             -- Mark this statement active before scanning or checking it.
+                                             writeChan q (TopProgressStarted item)
+                                             -- scanOrCheck always scans in this thread.  If the statement is not
+                                             -- total, scanOrCheck also runs checkTopStmt here and blocks progress.
+                                             r <- scanOrCheck env s
+                                             case r of
+                                               -- A scan error stops the source-order scan.
+                                               -- Existing worker results are still collected so their errors can
+                                               -- be reported together with this one.
+                                               Left err -> do
+                                                 writeChan q (TopProgressFinished item)
+                                                 collect tes (return (Left err) : rs)
+                                               -- A total statement has a complete boundary after scanning.  Its
+                                               -- declarations can be put in env immediately, while full checking
+                                               -- continues in the background.
+                                               Right (True,te1,s1,_) ->
+                                                 -- withAsync scopes the worker over the recursive go call.  Since
+                                                 -- go eventually calls collect before returning, wait a is consumed
+                                                 -- while the Async is still alive.
+                                                 withAsync (Control.Exception.finally
+                                                   -- The semaphore limits only the actual checkTopStmt work, not
+                                                   -- the sequential scan of later statements.
+                                                   (Control.Exception.bracket_ (waitQSem sem) (signalQSem sem) (checkTotal env te1 s1))
+                                                   -- Progress for a total statement finishes when its background
+                                                   -- checker finishes, not when scanning schedules it.
+                                                   (writeChan q (TopProgressFinished item))) $ \a ->
+                                                     -- Continue scanning with the scanned declarations visible.
+                                                     -- Store te1 and wait a on reversed accumulators to preserve
+                                                     -- source order cheaply when collect reverses them.
+                                                     go sem q (define te1 env) (te1:tes) (wait a:rs) ss
+                                               -- A non-total statement was already fully checked by scanOrCheck,
+                                               -- so becomes complete / total before we get here and the scanner may
+                                               -- continue.
+                                               Right (_,te2,_,ss1) -> do
+                                                 writeChan q (TopProgressFinished item)
+                                                 go sem q (define te2 env) (te2:tes) (return (Right ss1):rs) ss
+        -- Wait for all statement results in source order, concatenate the
+        -- accumulated environments, keep typed statements whose checks
+        -- succeeded, and keep every error for aggregate reporting.
+        collect tes rs                  = do xs <- sequence (reverse rs)
+                                             return (concat (reverse tes), [ s | Right ss1 <- xs, s <- ss1 ], [ e | Left e <- xs ])
+        -- Scanner/checker front door for one statement.  Ordinary exceptions
+        -- become Left values so infTop can collect multiple errors; async
+        -- exceptions still escape through tryTop.
+        scanOrCheck env s               = tryTop $ do
+                                             r <- runType (nstr $ uniqPrefix s) $ do
+                                               pushFX fxPure tNone
+                                               -- The scanner returns the syntactic totality bit, the scanned
+                                               -- top-level env, and the rewritten statement.
+                                               (total,te1,s1) <- scanTopStmt env s
+                                               if total
+                                                 -- Total means the signature boundary is complete, so the
+                                                 -- expensive check can be deferred to a worker.
+                                                 then return (True,te1,s1,[])
+                                                 -- Non-total means inference/checking is needed now.  This blocks
+                                                 -- the scanner because later statements need this completed env.
+                                                 else do (te2,ss1) <- checkTopStmt env te1 s1
+                                                         return (False,te2,s1,ss1)
+                                             -- Force enough of the result here that delayed type errors are caught
+                                             -- inside tryTop instead of escaping later from collect.
+                                             r <- forceTopResult r
+                                             case r of
+                                               -- Only non-total statements produce inferred signatures useful for
+                                               -- the "make this total" callback/output.
+                                               (False,te,_,_) -> emitTypeInferredIO inferredCb env te
+                                               _ -> return ()
+                                             return r
+        -- Background worker body for a total statement.  It receives exactly
+        -- the scanned env and scanned statement returned by scanTopStmt.
+        checkTotal env te s             = tryTop $ do
+                                             (te1,ss1) <- runType (nstr $ uniqPrefix s) $ do
+                                               pushFX fxPure tNone
+                                               checkTopStmt env te s
+                                             forceSuite te1 ss1
+        -- Run a TypeM action and convert TypeM's Either error into the IO
+        -- exception path used by tryTop.
+        runType p m                     = do r <- Control.Exception.evaluate (runTypeMState p m)
+                                             case r of
+                                               Left err -> Control.Exception.throwIO err
+                                               Right (x,_) -> return x
+        -- For total statements, force the scanned type environment now; the
+        -- typed suite is produced later by checkTotal.
+        forceTopResult (True,te,s,ss)   = do te <- Control.Exception.evaluate (force te)
+                                             return (True,te,s,ss)
+        -- For non-total statements, both env and typed suite already exist and
+        -- must be forced before scanOrCheck reports success.
+        forceTopResult (_,te,s,ss)      = do (te,ss) <- forceChecked te ss
+                                             return (False,te,s,ss)
+        -- checkTotal returns only the typed statements, but still forces the
+        -- worker's type environment so any delayed failures surface in worker.
+        forceSuite te ss                = snd <$> forceChecked te ss
+        forceChecked te ss              = do te <- Control.Exception.evaluate (force te)
+                                             ss <- Control.Exception.evaluate (force ss)
+                                             return (te,ss)
+
+topProgress                             :: Maybe TypeProgressCallback -> Int -> Chan TopProgressEvent -> IO ()
+topProgress progressCb total q          = do when (total > 0) $
+                                               emit [] 0
+                                             loop [] 0
+  where loop active done                = do event <- readChan q
+                                             case event of
+                                               TopProgressStarted item -> do
+                                                 let active' = active ++ [item]
+                                                 emit active' done
+                                                 loop active' done
+                                               TopProgressFinished item -> do
+                                                 let active' = removeProgressItem item active
+                                                     done' = done + snd item
+                                                 emit active' done'
+                                                 loop active' done'
+                                               TopProgressStop ->
+                                                 emit [] done
+        emit active done                = emitTypeProgressIO progressCb total done (activeProgressLabel active) (concatMap fst active) 0
+
+topProgressItem                         :: Stmt -> TopProgressItem
+topProgressItem s                       = (stmtProgressNames s, stmtProgressWeight s)
+
+removeProgressItem                      :: TopProgressItem -> [TopProgressItem] -> [TopProgressItem]
+removeProgressItem item []              = []
+removeProgressItem item (x:xs)
+  | item == x                           = xs
+  | otherwise                           = x : removeProgressItem item xs
+
+activeProgressLabel                     :: [TopProgressItem] -> Maybe String
+activeProgressLabel []                  = Nothing
+activeProgressLabel active              = Just (formatNames (concatMap fst active))
+  where formatNames [n]                 = n
+        formatNames [n1,n2]             = n1 ++ ", " ++ n2
+        formatNames (n1:n2:rest)        = n1 ++ ", " ++ n2 ++ " (+" ++ show (length rest) ++ " others)"
+        formatNames []                  = ""
+
+tryTop                                  :: IO a -> IO (Either Control.Exception.SomeException a)
+tryTop m                                = do r <- Control.Exception.try m
+                                             case r of
+                                               Left err | isAsyncException err -> Control.Exception.throwIO err
+                                               _ -> return r
+
+isAsyncException                        :: Control.Exception.SomeException -> Bool
+isAsyncException err                    = isJust (Control.Exception.fromException err :: Maybe Control.Exception.SomeAsyncException)
+
+throwTopErrors                          :: [Control.Exception.SomeException] -> IO a
+throwTopErrors errs                     = case others of
+                                           err:_ -> Control.Exception.throwIO err
+                                           [] -> case typeErrs of
+                                                   [] -> error "Internal error: empty type error list"
+                                                   [err] -> Control.Exception.throwIO err
+                                                   _ -> Control.Exception.throwIO (TypeErrors typeErrs)
+  where (typeErrs, others)              = foldl' collect ([], []) errs
+        collect (ts, os) err            = case topTypeErrors err of
+                                            Just ts' -> (ts ++ ts', os)
+                                            Nothing -> (ts, os ++ [err])
+
+topTypeErrors                           :: Control.Exception.SomeException -> Maybe [TypeError]
+topTypeErrors err                       = case Control.Exception.fromException err of
+                                            Just (TypeErrors errs) -> Just errs
+                                            Nothing -> case Control.Exception.fromException err of
+                                                         Just typeErr -> Just [typeErr]
+                                                         Nothing -> Nothing
 
 -- | Progress weight for one top-level statement, based on bound names.
 -- This makes large recursive groups count proportionally.

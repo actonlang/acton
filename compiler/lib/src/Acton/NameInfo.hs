@@ -11,9 +11,10 @@
 -- THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 --
 
-{-# LANGUAGE FlexibleInstances, FlexibleContexts, DeriveGeneric #-}
+{-# LANGUAGE FlexibleInstances, FlexibleContexts, DeriveGeneric, DeriveAnyClass #-}
 module Acton.NameInfo where
 
+import Control.DeepSeq
 import qualified Data.Binary
 import GHC.Generics (Generic)
 import Data.Typeable
@@ -60,7 +61,7 @@ data NameInfo           = NVar      Type
                         | NMAlias   ModName
                         | NModule   TEnv (Maybe String)
                         | NReserved
-                        deriving (Eq,Show,Read,Generic)
+                        deriving (Eq,Show,Read,Generic,NFData)
 
 typeDecl (_,NDef{})     = False
 typeDecl _              = True

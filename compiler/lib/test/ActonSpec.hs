@@ -35,6 +35,7 @@ import qualified Control.Monad.Trans.State.Strict as St
 import Text.Megaparsec (runParser, errorBundlePretty, ShowErrorComponent(..))
 import qualified Data.Text as T
 import Data.List (isInfixOf, isPrefixOf, nub, sort)
+import Data.IORef
 import Data.Bits (shiftL, (.|.))
 import Error.Diagnose (printDiagnostic, prettyDiagnostic, WithUnicode(..), TabSize(..), defaultStyle, addReport, addFile)
 import Error.Diagnose.Report (Report(..))
@@ -919,11 +920,53 @@ main = do
         tchecked <- typecheckSource env0 "tlname_doc_ext" src
         tchecked `shouldSatisfy` const True
 
+      it "continues after a non-total top-level statement has been checked" $ do
+        let src = unlines
+              [ "value = 41"
+              , ""
+              , "def later() -> int:"
+              , "    return value + 1"
+              ]
+        tchecked <- typecheckSource env0 "top_non_total_then_total" src
+        tchecked `shouldSatisfy` const True
+
+      it "reports inferred signatures for non-total top-level statements" $ do
+        sigsRef <- liftIO $ newIORef []
+        let src = "value = 41\n"
+            moduleName = S.modName ["top_non_total_sig"]
+            actFile = "<top_non_total_sig>"
+            sysTypesPath = ".." </> ".." </> "dist" </> "base" </> "out" </> "types"
+            onInferred names sig = modifyIORef' sigsRef ((names, sig) :)
+        parsed <- liftIO $ P.parseModule moduleName actFile src
+        env <- liftIO $ Acton.Env.mkEnv [sysTypesPath] env0 parsed
+        kchecked <- liftIO $ Acton.Kinds.check env parsed
+        _ <- liftIO $ Acton.Types.reconstruct Nothing (Just onInferred) env kchecked
+        sigs <- liftIO $ reverse <$> readIORef sigsRef
+        sigs `shouldSatisfy` any (\(names, sig) -> names == ["value"] && "value : int" `isInfixOf` sig)
+
+      it "collects errors from independent total top-level statements" $ do
+        let src = unlines
+              [ "proc def first() -> int:"
+              , "    return \"one\""
+              , ""
+              , "value = 1"
+              , ""
+              , "proc def second() -> int:"
+              , "    return \"two\""
+              ]
+        result <- E.try (do
+          tchecked <- typecheckSource env0 "top_total_errors" src
+          E.evaluate (length (show tchecked))
+          return ()) :: IO (Either Acton.Types.TypeErrors ())
+        case result of
+          Left (Acton.Types.TypeErrors errs) -> length errs `shouldBe` 2
+          Right _ -> expectationFailure "Expected multiple type errors but type checking succeeded"
+
     describe "Import Semantics" $ do
       it "omits private names from the public interface" $ do
         (envA, parsedA) <- parseAct env0 "import_private_a"
         kcheckedA <- liftIO $ Acton.Kinds.check envA parsedA
-        (nmodA, _, _, _, _) <- liftIO $ Acton.Types.reconstruct Nothing envA kcheckedA
+        (nmodA, _, _, _, _) <- liftIO $ Acton.Types.reconstruct Nothing Nothing envA kcheckedA
         let I.NModule tenvA mdocA = nmodA
             env1 = Acton.Env.addMod (S.modname parsedA) tenvA mdocA env0
 
@@ -941,7 +984,7 @@ main = do
       it "blocks qualified access to private names" $ do
         (envA, parsedA) <- parseAct env0 "import_private_a"
         kcheckedA <- liftIO $ Acton.Kinds.check envA parsedA
-        (nmodA, _, _, _, _) <- liftIO $ Acton.Types.reconstruct Nothing envA kcheckedA
+        (nmodA, _, _, _, _) <- liftIO $ Acton.Types.reconstruct Nothing Nothing envA kcheckedA
         let I.NModule tenvA mdocA = nmodA
             publicTEnvA = Acton.Env.publicTEnv tenvA
             env1 = Acton.Env.addMod (S.modname parsedA) publicTEnvA mdocA env0
@@ -949,7 +992,7 @@ main = do
         (envB, parsedB) <- parseAct env1 "import_private_qualified"
         kcheckedB <- liftIO $ Acton.Kinds.check envB parsedB
         result <- liftIO $ (E.try (do
-          (_, tcheckedB, _, _, _) <- Acton.Types.reconstruct Nothing envB kcheckedB
+          (_, tcheckedB, _, _, _) <- Acton.Types.reconstruct Nothing Nothing envB kcheckedB
           _ <- E.evaluate (rnf tcheckedB)
           pure ()
           ) :: IO (Either CompilationError ()))
@@ -1717,7 +1760,7 @@ testDocGen env0 modulePaths = do
     let processModule (accEnv, accModules) modulePath = do
           (env, parsed) <- parseAct accEnv modulePath
           kchecked <- Acton.Kinds.check env parsed
-          (nmod, _, _, _, _) <- Acton.Types.reconstruct Nothing env kchecked
+          (nmod, _, _, _, _) <- Acton.Types.reconstruct Nothing Nothing env kchecked
           let I.NModule moduleTypeEnv moduleDoc = nmod
           let newAccEnv = Acton.Env.addMod (S.modname parsed) moduleTypeEnv moduleDoc accEnv
           return (newAccEnv, accModules ++ [((takeFileName modulePath), parsed, nmod)])
@@ -1765,7 +1808,7 @@ typecheckSource env0 modName src = do
   parsed <- liftIO $ P.parseModule moduleName actFile src
   env <- liftIO $ Acton.Env.mkEnv [sysTypesPath] env0 parsed
   kchecked <- liftIO $ Acton.Kinds.check env parsed
-  (_, tchecked, _, _, _) <- liftIO $ Acton.Types.reconstruct Nothing env kchecked
+  (_, tchecked, _, _, _) <- liftIO $ Acton.Types.reconstruct Nothing Nothing env kchecked
   return tchecked
 
 typedDefGeneratedNames env0 modName src defName = do
@@ -1827,7 +1870,7 @@ testTypes env0 modulePaths = do
     let processModule (accEnv, accModules) modulePath = do
           (env, parsed) <- parseAct accEnv modulePath
           kchecked <- Acton.Kinds.check env parsed
-          (nmod, tchecked, _, _, _) <- Acton.Types.reconstruct Nothing env kchecked
+          (nmod, tchecked, _, _, _) <- Acton.Types.reconstruct Nothing Nothing env kchecked
           let I.NModule tenv mdoc = nmod
           let newAccEnv = Acton.Env.addMod (S.modname parsed) tenv mdoc accEnv
           return (newAccEnv, accModules ++ [(takeFileName modulePath, kchecked, tchecked)])
@@ -1847,7 +1890,7 @@ testNorm env0 modulePaths = do
     let processModule (accEnv, accModules) modulePath = do
           (env, parsed) <- parseAct accEnv modulePath
           kchecked <- Acton.Kinds.check env parsed
-          (nmod, tchecked, env0Typed, _, _) <- Acton.Types.reconstruct Nothing env kchecked
+          (nmod, tchecked, env0Typed, _, _) <- Acton.Types.reconstruct Nothing Nothing env kchecked
           let I.NModule tenv mdoc = nmod
           (normalized, normEnv) <- Acton.Normalizer.normalize env0Typed tchecked
           let newAccEnv = Acton.Env.addMod (S.modname parsed) tenv mdoc accEnv
@@ -1868,7 +1911,7 @@ testDeact env0 modulePaths = do
     let processModule (accEnv, accModules) modulePath = do
           (env, parsed) <- parseAct accEnv modulePath
           kchecked <- Acton.Kinds.check env parsed
-          (nmod, tchecked, env0Typed, _, _) <- Acton.Types.reconstruct Nothing env kchecked
+          (nmod, tchecked, env0Typed, _, _) <- Acton.Types.reconstruct Nothing Nothing env kchecked
           let I.NModule tenv mdoc = nmod
           (normalized, normEnv) <- Acton.Normalizer.normalize env0Typed tchecked
           (deacted, deactEnv) <- Acton.Deactorizer.deactorize normEnv normalized
@@ -1890,7 +1933,7 @@ testCps env0 modulePaths = do
     let processModule (accEnv, accModules) modulePath = do
           (env, parsed) <- parseAct accEnv modulePath
           kchecked <- Acton.Kinds.check env parsed
-          (nmod, tchecked, env0Typed, _, _) <- Acton.Types.reconstruct Nothing env kchecked
+          (nmod, tchecked, env0Typed, _, _) <- Acton.Types.reconstruct Nothing Nothing env kchecked
           let I.NModule tenv mdoc = nmod
           (normalized, normEnv) <- Acton.Normalizer.normalize env0Typed tchecked
           (deacted, deactEnv) <- Acton.Deactorizer.deactorize normEnv normalized
@@ -1913,7 +1956,7 @@ testLL env0 modulePaths = do
     let processModule (accEnv, accModules) modulePath = do
           (env, parsed) <- parseAct accEnv modulePath
           kchecked <- Acton.Kinds.check env parsed
-          (nmod, tchecked, env0Typed, _, _) <- Acton.Types.reconstruct Nothing env kchecked
+          (nmod, tchecked, env0Typed, _, _) <- Acton.Types.reconstruct Nothing Nothing env kchecked
           let I.NModule tenv mdoc = nmod
           (normalized, normEnv) <- Acton.Normalizer.normalize env0Typed tchecked
           (deacted, deactEnv) <- Acton.Deactorizer.deactorize normEnv normalized
@@ -1937,7 +1980,7 @@ testBoxing env0 modulePaths = do
     let processModule (accEnv, accModules) modulePath = do
           (env, parsed) <- parseAct accEnv modulePath
           kchecked <- Acton.Kinds.check env parsed
-          (nmod, tchecked, env0Typed, _, _) <- Acton.Types.reconstruct Nothing env kchecked
+          (nmod, tchecked, env0Typed, _, _) <- Acton.Types.reconstruct Nothing Nothing env kchecked
           let I.NModule tenv mdoc = nmod
           (normalized, normEnv) <- Acton.Normalizer.normalize env0Typed tchecked
           (deacted, deactEnv) <- Acton.Deactorizer.deactorize normEnv normalized
@@ -1962,7 +2005,7 @@ testCodeGen env0 modulePaths = do
     let processModule (accEnv, accModules) modulePath = do
           (env, parsed) <- parseAct accEnv modulePath
           kchecked <- Acton.Kinds.check env parsed
-          (nmod, tchecked, env0Typed, _, _) <- Acton.Types.reconstruct Nothing env kchecked
+          (nmod, tchecked, env0Typed, _, _) <- Acton.Types.reconstruct Nothing Nothing env kchecked
           let I.NModule tenv mdoc = nmod
           (normalized, normEnv) <- Acton.Normalizer.normalize env0Typed tchecked
           (deacted, deactEnv) <- Acton.Deactorizer.deactorize normEnv normalized
@@ -1999,7 +2042,7 @@ testDocstrings env0 testname = do
   (env, parsed) <- parseAct env0 testname
 
   kchecked <- liftIO $ Acton.Kinds.check env parsed
-  (nmod, _, _, _, _) <- liftIO $ Acton.Types.reconstruct Nothing env kchecked
+  (nmod, _, _, _, _) <- liftIO $ Acton.Types.reconstruct Nothing Nothing env kchecked
   let I.NModule tenv mdoc = nmod
 
   -- Extract docstrings from the parsed AST
@@ -2230,7 +2273,7 @@ testTypeError env0 path = do
       result <- E.try $ do
         (env, parsed) <- parseAct env0 path
         kchecked <- Acton.Kinds.check env parsed
-        (nmod, tchecked, _, _, _) <- Acton.Types.reconstruct Nothing env kchecked
+        (nmod, tchecked, _, _, _) <- Acton.Types.reconstruct Nothing Nothing env kchecked
         -- Force evaluation to trigger any lazy exceptions
         E.evaluate $ length (show tchecked)
         return ()
@@ -2274,7 +2317,7 @@ testTypeSuccess env0 path = do
     result <- E.try $ do
       (env, parsed) <- parseAct env0 path
       kchecked <- Acton.Kinds.check env parsed
-      (nmod, tchecked, _, _, _) <- Acton.Types.reconstruct Nothing env kchecked
+      (nmod, tchecked, _, _, _) <- Acton.Types.reconstruct Nothing Nothing env kchecked
       -- Force evaluation to trigger any lazy exceptions
       E.evaluate $ length (show tchecked)
       return ()
