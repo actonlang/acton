@@ -652,20 +652,22 @@ abstractAttr env tc n       = n `elem` abstractAttrs env (tcname tc)
 
 
 allCons                     :: EnvF x -> [CCon]
-allCons env                 = reverse locals ++ concat [ cons m (lookupMod m env) | m <- moduleRefs env, m /= mPrim ]
-  where locals
-          | inBuiltin env   = cons mBuiltin (Just $ names env)
-          | otherwise       = [ TC (NoQ n) (wildargs i) | (n,i) <- names env, con i ]
+allCons env                 = concat [ cons m (lookupMod m env) | m <- moduleRefs env revnames, m /= mPrim ] ++ locals
+  where revnames            = reverse (names env)
+        locals
+          | inBuiltin env   = cons mBuiltin (Just revnames)
+          | otherwise       = [ TC (NoQ n) (wildargs i) | (n,i) <- revnames, con i ]
         con NClass{}        = True
         con NAct{}          = True
         con _               = False
         cons m (Just te)    = [ TC (GName m n) (wildargs i) | (n,i) <- te, con i ] ++ concat [ cons (modCat m n) (Just te') | (n,NModule te' _) <- te ]
 
 allProtos                   :: EnvF x -> [PCon]
-allProtos env               = reverse locals ++ concat [ protos m (lookupMod m env) | m <- moduleRefs env, m /= mPrim ]
-  where locals
-          | inBuiltin env   = protos mBuiltin (Just $ names env)
-          | otherwise       = [ TC (NoQ n) (wildargs i) | (n,i) <- names env, proto i ]
+allProtos env               = concat [ protos m (lookupMod m env) | m <- moduleRefs env revnames, m /= mPrim ] ++ locals
+  where revnames            = reverse (names env)
+        locals
+          | inBuiltin env   = protos mBuiltin (Just revnames)
+          | otherwise       = [ TC (NoQ n) (wildargs i) | (n,i) <- revnames, proto i ]
         proto NProto{}      = True
         proto _             = False
         protos m (Just te)  = [ TC (GName m n) (wildargs i) | (n,i) <- te, proto i ] ++ concat [ protos (modCat m n) (Just te') | (n,NModule te' _) <- te ]
@@ -1028,9 +1030,9 @@ impModule spath env (FromImportAll _ (ModRef (0,Just m)))
 impModule _ _ i                 = illegalImport (loc i)
 
 
-moduleRefs env                  = nub $ imports env ++ [ m | (_,NMAlias m) <- names env ] ++ [ m | (_,NAlias (GName m _)) <- names env ]
+moduleRefs env names            = nub $ (reverse $ imports env) ++ [ m | (_,NMAlias m) <- names ] ++ [ m | (_,NAlias (GName m _)) <- names ]
 
-moduleRefs1 env                 = moduleRefs env \\ [mPrim, mBuiltin]
+moduleRefs1 env                 = moduleRefs env (reverse $ names env) \\ [mPrim, mBuiltin]
 
 subImp spath env []          = return env
 subImp spath env (m:ms)      = do (env',_) <- doImp spath env m
