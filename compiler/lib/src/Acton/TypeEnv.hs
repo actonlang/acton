@@ -46,7 +46,7 @@ data TypeX                      = TypeX {
                                     indecl      :: Bool,
                                     forced      :: Bool,
                                     tyids       :: Map QName Int,
-                                    tyinfo      :: IntMap TyInfo,
+                                    tyinfos     :: IntMap TyInfo,
                                     typrotos    :: IntSet,
                                     tyactors    :: IntSet
                                   }
@@ -67,7 +67,7 @@ typeX env0                      = setX env0 $ foldl' importWits x0 imps
                                     indecl      = False,
                                     forced      = False,
                                     tyids       = Map.empty,
-                                    tyinfo      = tyinfo0,
+                                    tyinfos     = tyinfos0,
                                     typrotos    = IntSet.empty,
                                     tyactors    = IntSet.empty
                                   }
@@ -78,7 +78,7 @@ typeX env0                      = setX env0 $ foldl' importWits x0 imps
              | otherwise        = mBuiltin : getImports env0
 
 
-tyinfo0                         = IntMap.fromDistinctAscList pairs
+tyinfos0                        = IntMap.fromDistinctAscList pairs
   where pairs                   = [ (tyid t, TyInfo t (iset above) (iset below) []) | (t,above,below) <- graph ]
         tyid t                  = fromJust $ elemIndex t wtypes
         iset ts                 = IntSet.fromDistinctAscList $ map tyid ts
@@ -113,31 +113,28 @@ instance UFree TypeX where
     ufree x                     = ufree (witnesses x)
 
 
-
-nextid x                        = 1 + fst (IntMap.findMax $ tyinfo x)
+nextid x                        = 1 + fst (IntMap.findMax $ tyinfos x)
 
 addconinfo                      :: TypeX -> (Name,NameInfo) -> TypeX
 addconinfo x (n,i)
-  | NClass q us te _ <- i       = addcon n q us te tid x
-  | NProto q us te _ <- i       = addproto $ addcon n q us te tid x
-  | NAct q _ _ te _ <- i        = addactor $ addcon n q [] te tid x
+  | NClass q us te _ <- i       = addcon n q us te x
+  | NProto q us te _ <- i       = addproto $ addcon n q us te x
+  | NAct q _ _ te _ <- i        = addactor $ addcon n q [] te x
   | otherwise                   = x
   where tid                     = nextid x
         addproto x              = x{ typrotos = IntSet.insert tid (typrotos x) }
         addactor x              = x{ tyactors = IntSet.insert tid (tyactors x) }
 
-        addcon n q us te tid x  = x{ tyids = Map.insert (NoQ n) tid (tyids x), tyinfo = IntMap.insert tid info tyinfo' }
+        addcon n q us te x      = x{ tyids = Map.insert (NoQ n) tid (tyids x), tyinfos = IntMap.insert tid info tyinfos' }
           where ui              = [ tyids x Map.! tcname c | (_,c) <- us ]
                 info            = TyInfo {
                                     tywild = tCon $ TC (NoQ n) [ tWild | _ <- q ],
                                     tyabove = IntSet.fromList ui,
                                     tybelow = IntSet.singleton tid,
-                                    tyattrs = nub $ concat $ dom te : [ tyattrs $ fromJust $ IntMap.lookup u $ tyinfo x | u <- ui ]
+                                    tyattrs = nub $ concat $ dom te : [ tyattrs $ fromJust $ IntMap.lookup u $ tyinfos x | u <- ui ]
                                   }
-                tyinfo'         = IntMap.mapWithKey addbelow (tyinfo x)
-                addbelow u info
-                  | u `elem` ui = info{ tybelow = IntSet.insert tid (tybelow info) }
-                  | otherwise   = info
+                tyinfos'        = foldr (IntMap.adjust addbelow) (tyinfos x) ui
+                addbelow info   = info{ tybelow = IntSet.insert tid (tybelow info) }
 
 
 
@@ -147,11 +144,24 @@ tydefine te env                 = modX env1 (\x -> foldl' addconinfo x te)
         env0                    = define te env
         wits                    = [ WClass q (tCon c) p (NoQ w) ws (length opts) | (w, NExt q c ps te' opts _) <- te, (ws,p) <- ps ]
 
+addvarinfo x (tv, c, _)         = x{ tyids = Map.insert (NoQ $ tvname tv) tid (tyids x), tyinfos = IntMap.insert tid info tyinfos' }
+  where tid                     = nextid x
+        ci                      = tyinfos x IntMap.! (tyids x Map.! tcname c)
+        info                    = TyInfo {
+                                    tywild = tVar tv,
+                                    tyabove = IntSet.insert tid $ tyabove ci,
+                                    tybelow = IntSet.singleton tid,
+                                    tyattrs = tyattrs ci
+                                  }
+        tyinfos'                = IntSet.foldr' (IntMap.adjust addbelow) (tyinfos x) (tyabove ci)
+        addbelow info           = info{ tybelow = IntSet.insert tid (tybelow info) }
+
 tydefineVars                    :: QBinds -> Env -> Env
-tydefineVars q env              = modX env1 (\x -> foldl' addWit x wits)
-  where env1                    = defineTVars q env
-        tvs                     = [ (TV k v, ps) | (v, NTVar k c ps) <- take (length q) (names env1), let tv = TV k v ]
-        wits                    = [ WInst [] (tVar tv) p (NoQ $ tvarWit tv p0) wchain | (tv, ps) <- tvs, p0 <- ps, (wchain,p) <- findAncestry env p0 ]
+tydefineVars q env              = modX env1 (\x -> foldl' addvarinfo x tvs)
+  where env1                    = modX env0 (\x -> foldl' addWit x wits)
+        env0                    = defineTVars q env
+        tvs                     = [ (TV k v, c, us) | (v, NTVar k c us) <- take (length q) (names env0), let tv = TV k v ]
+        wits                    = [ WInst [] (tVar tv) p (NoQ $ tvarWit tv u) wchain | (tv, _, us) <- tvs, u <- us, (wchain,p) <- findAncestry env u ]
 
 defineInst                      :: TCon -> [WTCon] -> Name -> Env -> Env
 defineInst c ps w env           = modX env (\x -> foldl' addWit x wits)
