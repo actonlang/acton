@@ -1308,7 +1308,7 @@ p28_protocol_extension_deps = testCase "28-protocol/extension deps are recorded 
   assertBool "expected generated protocol sibling name" ("BazProtoD_BarProto" `elem` namesA)
   assertBool "expected generated extension name" ("BarProtoD_Widget" `elem` namesA)
   (_, nmod, _, _, _, _, _, _, _, _, _, _) <- InterfaceFiles.readFile tyA
-  let I.NModule iface _ = nmod
+  let I.NModule _ iface _ = nmod
       extMatch (n, _) = prstr n == "BarProtoD_Widget"
   case find extMatch iface of
     Just (_, I.NExt _ _ ps _ _ _) -> do

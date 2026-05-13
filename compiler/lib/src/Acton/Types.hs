@@ -64,7 +64,7 @@ data TypeErrors = TypeErrors [TypeError]
 instance Control.Exception.Exception TypeErrors
 
 -- | Type-check a module and return its NameInfo, typed module, env, and discovered tests.
-reconstruct                             :: Maybe TypeProgressCallback -> Maybe TypeInferredCallback -> Env0 -> Module -> IO (NameInfo, Module, Env0, [Acton.Syntax.ModName], [String])
+reconstruct                             :: Maybe TypeProgressCallback -> Maybe TypeInferredCallback -> Env0 -> Module -> IO (NameInfo, Module, Env0, [String])
 reconstruct progressCb inferredCb env0 (Module m i mdoc ss)    = do --traceM ("#################### original env0 for " ++ prstr m ++ ":")
                                              --traceM (render (pretty env0))
                                              (te,ss1) <- infTop progressCb inferredCb env1 ss
@@ -75,13 +75,12 @@ reconstruct progressCb inferredCb env0 (Module m i mdoc ss)    = do --traceM ("#
                                                           in (te ++ testEnv, ss1 ++ testSs, discovered)
                                                      else (te, ss1, [])
                                                  iface = unalias env2 teT
-                                                 nmod = NModule iface mdoc
+                                                 nmod = NModule (getImports env2) iface mdoc
                                              --traceM ("#################### converted env0:")
                                              --traceM (render (pretty env0'))
-                                             return (nmod, Module m i mdoc ssT, env0', mrefs, tests)
+                                             return (nmod, Module m i mdoc ssT, env0', tests)
 
   where env1                            = reserve (assigned ss) (typeX env0)
-        mrefs                           = moduleRefs1 env0
         env0'                           = convEnvProtos env0
         hasTesting i                    = Import NoLoc [ModuleItem (ModName [name "testing"]) Nothing] `elem` i
         rmTests (Assign _ [PVar _ n _] _ : ss)
@@ -98,7 +97,7 @@ reconstruct progressCb inferredCb env0 (Module m i mdoc ss)    = do --traceM ("#
 
 -- | Print a .ty file header and interface; include name hashes when verbose.
 showTyFile env0 m fname verbose = do
-                                     (ms,nmod,_,sourceMeta,srcH,pubH,implH,imps,nameHashes,roots,tests,mdocH) <- InterfaceFiles.readFile fname
+                                     (_,nmod,_,sourceMeta,srcH,pubH,implH,imps,nameHashes,roots,tests,mdocH) <- InterfaceFiles.readFile fname
                                      putStrLn ("\n############### Header ###############")
                                      putStrLn ("Imports: " ++ (show [ (prstr mn, take 16 (B.unpack $ Base16.encode h)) | (mn,h) <- imps ]))
                                      putStrLn ("Roots  : " ++ (show (map prstr roots)))
@@ -140,14 +139,13 @@ showTyFile env0 m fname verbose = do
                                            putStrLn ("  implDeps: " ++ show (map showDep (InterfaceFiles.nhImplDeps nh)))
 
                                      putStrLn ("\n############### Interface ############")
-                                     let NModule te mdoc = nmod
+                                     let NModule imps te mdoc = nmod
                                      forM_ mdoc $ \docstring ->
                                        putStrLn $ "\"\"\"" ++ docstring ++ "\"\"\""
 
-                                     let env1 = foldr addImport env0 ms
-                                     putStrLn $ prettySigs env1 m te
+                                     putStrLn $ prettySigs env0 m imps te
 
-prettySigs env m te             = render $ vcat [ text "import" <+> pretty m | m <- moduleRefs1 env ] $++$
+prettySigs env m imps te        = render $ vcat [ text "import" <+> pretty m | m <- imps ] $++$
                                            vpretty (simp env1 te)
   where env1                    = define te $ setMod m env
 

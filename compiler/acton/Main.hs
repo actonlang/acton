@@ -1098,7 +1098,7 @@ printSigInterface paths mn mName tyFile = do
         printErrorAndExit ("Could not read type interface for " ++ modNameToString mn ++ ": " ++ show err)
       Right (ms, nmod, _, _, _, _, _, _, _, _, _, _) -> do
         env0 <- Acton.Env.initEnv (sysTypes paths) False
-        let I.NModule te _ = nmod
+        let I.NModule imps te _ = nmod
             envImports = foldr Acton.Env.addImport env0 ms
             selected = case mName of
               Nothing -> te
@@ -1110,7 +1110,7 @@ printSigInterface paths mn mName tyFile = do
           Just n | null selected ->
             printErrorAndExit ("Name not found: " ++ modNameToString mn ++ "." ++ nameToString n)
           _ ->
-            putStrLn (Acton.Types.prettySigs envForPrint mn selected)
+            putStrLn (Acton.Types.prettySigs envForPrint mn imps selected)
 
 -- Show dependency tree with overrides applied from root pins
 pkgShow :: C.GlobalOptions -> IO ()
@@ -1260,8 +1260,8 @@ printDocs gopts opts = do
             env0 <- Acton.Env.initEnv (sysTypes paths) False
             env <- Acton.Env.mkEnv (searchPath paths) env0 parsed
             kchecked <- Acton.Kinds.check env parsed
-            (nmod, _, env', _, _) <- Acton.Types.reconstruct Nothing Nothing env kchecked
-            let I.NModule tenv mdoc = nmod
+            (nmod, _, env', _) <- Acton.Types.reconstruct Nothing Nothing env kchecked
+            let I.NModule _ tenv mdoc = nmod
 
             -- 1. If format is explicitly set (via -t, --html, --markdown), use it
             -- 2. Otherwise, check if we're in a GUI environment

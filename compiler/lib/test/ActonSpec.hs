@@ -71,9 +71,9 @@ main = do
               directTy = dir </> "direct.ty"
               valueName = S.name "value"
               iface = [(valueName, I.NVar S.tWild)]
-              directIface = I.NModule iface Nothing
+              directIface = I.NModule [] iface Nothing
               directModule = S.Module directMod [] Nothing []
-              env1 = Acton.Env.addMod directMod iface Nothing env0
+              env1 = Acton.Env.addMod directMod [] iface Nothing env0
           InterfaceFiles.writeFile
             directTy
             B8.empty
@@ -376,7 +376,7 @@ main = do
                 transformInfo = I.NSig (S.tSchema [] transformType) S.NoDec Nothing
                 inputClass = I.NClass [] [] [(S.name "local_field", I.NVar S.tWild)] Nothing
                 routerClass = I.NClass [] [] [(S.name "transform", transformInfo)] Nothing
-                directIface = I.NModule
+                directIface = I.NModule []
                   [ (routerName, routerClass)
                   , (inputName, inputClass)
                   ] Nothing
@@ -977,9 +977,9 @@ main = do
       it "omits private names from the public interface" $ do
         (envA, parsedA) <- parseAct env0 "import_private_a"
         kcheckedA <- liftIO $ Acton.Kinds.check envA parsedA
-        (nmodA, _, _, _, _) <- liftIO $ Acton.Types.reconstruct Nothing Nothing envA kcheckedA
-        let I.NModule tenvA mdocA = nmodA
-            env1 = Acton.Env.addMod (S.modname parsedA) tenvA mdocA env0
+        (nmodA, _, _, _) <- liftIO $ Acton.Types.reconstruct Nothing Nothing envA kcheckedA
+        let I.NModule impsA tenvA mdocA = nmodA
+            env1 = Acton.Env.addMod (S.modname parsedA) impsA tenvA mdocA env0
 
         (envB, _) <- parseAct env1 "import_private"
         let namesB = Acton.Env.names envB
@@ -995,15 +995,15 @@ main = do
       it "blocks qualified access to private names" $ do
         (envA, parsedA) <- parseAct env0 "import_private_a"
         kcheckedA <- liftIO $ Acton.Kinds.check envA parsedA
-        (nmodA, _, _, _, _) <- liftIO $ Acton.Types.reconstruct Nothing Nothing envA kcheckedA
-        let I.NModule tenvA mdocA = nmodA
+        (nmodA, _, _, _) <- liftIO $ Acton.Types.reconstruct Nothing Nothing envA kcheckedA
+        let I.NModule impsA tenvA mdocA = nmodA
             publicTEnvA = Acton.Env.publicTEnv tenvA
-            env1 = Acton.Env.addMod (S.modname parsedA) publicTEnvA mdocA env0
+            env1 = Acton.Env.addMod (S.modname parsedA) impsA publicTEnvA mdocA env0
 
         (envB, parsedB) <- parseAct env1 "import_private_qualified"
         kcheckedB <- liftIO $ Acton.Kinds.check envB parsedB
         result <- liftIO $ (E.try (do
-          (_, tcheckedB, _, _, _) <- Acton.Types.reconstruct Nothing Nothing envB kcheckedB
+          (_, tcheckedB, _, _) <- Acton.Types.reconstruct Nothing Nothing envB kcheckedB
           _ <- E.evaluate (rnf tcheckedB)
           pure ()
           ) :: IO (Either CompilationError ()))
@@ -1655,7 +1655,7 @@ completionFixtureEnv env0 =
       field n = fieldOf n S.tWild
       fieldOf n typ = (S.name n, I.NVar typ)
       docFieldOf n typ doc = (S.name n, I.NSig (S.tSchema [] typ) S.NoDec (Just doc))
-  in Acton.Env.addMod baseMod
+  in Acton.Env.addMod baseMod []
        [ (S.name "L3vpnEndpoint", baseClass)
        , (S.name "LocalEndpoint", localBaseClass)
        , (localInputName, localInputClass)
@@ -1666,7 +1666,7 @@ completionFixtureEnv env0 =
        , (baseConfigName, baseConfigClass)
        , (S.name "o_root", oRootInfo)
        ] Nothing $
-     Acton.Env.addMod y1Mod [(inputName, inputClass)] Nothing env0
+     Acton.Env.addMod y1Mod [] [(inputName, inputClass)] Nothing env0
 
 cursorSource :: String -> (String, Int)
 cursorSource src =
@@ -1771,9 +1771,9 @@ testDocGen env0 modulePaths = do
     let processModule (accEnv, accModules) modulePath = do
           (env, parsed) <- parseAct accEnv modulePath
           kchecked <- Acton.Kinds.check env parsed
-          (nmod, _, _, _, _) <- Acton.Types.reconstruct Nothing Nothing env kchecked
-          let I.NModule moduleTypeEnv moduleDoc = nmod
-          let newAccEnv = Acton.Env.addMod (S.modname parsed) moduleTypeEnv moduleDoc accEnv
+          (nmod, _, _, _) <- Acton.Types.reconstruct Nothing Nothing env kchecked
+          let I.NModule imps moduleTypeEnv moduleDoc = nmod
+          let newAccEnv = Acton.Env.addMod (S.modname parsed) imps moduleTypeEnv moduleDoc accEnv
           return (newAccEnv, accModules ++ [((takeFileName modulePath), parsed, nmod)])
 
     (finalEnv, modules) <- foldM processModule (env0, []) modulePaths
@@ -1819,7 +1819,7 @@ typecheckSource env0 modName src = do
   parsed <- liftIO $ P.parseModule moduleName actFile src Nothing
   env <- liftIO $ Acton.Env.mkEnv [sysTypesPath] env0 parsed
   kchecked <- liftIO $ Acton.Kinds.check env parsed
-  (_, tchecked, _, _, _) <- liftIO $ Acton.Types.reconstruct Nothing Nothing env kchecked
+  (_, tchecked, _, _) <- liftIO $ Acton.Types.reconstruct Nothing Nothing env kchecked
   return tchecked
 
 typedDefGeneratedNames env0 modName src defName = do
@@ -1881,9 +1881,9 @@ testTypes env0 modulePaths = do
     let processModule (accEnv, accModules) modulePath = do
           (env, parsed) <- parseAct accEnv modulePath
           kchecked <- Acton.Kinds.check env parsed
-          (nmod, tchecked, _, _, _) <- Acton.Types.reconstruct Nothing Nothing env kchecked
-          let I.NModule tenv mdoc = nmod
-          let newAccEnv = Acton.Env.addMod (S.modname parsed) tenv mdoc accEnv
+          (nmod, tchecked, _, _) <- Acton.Types.reconstruct Nothing Nothing env kchecked
+          let I.NModule imps tenv mdoc = nmod
+          let newAccEnv = Acton.Env.addMod (S.modname parsed) imps tenv mdoc accEnv
           return (newAccEnv, accModules ++ [(takeFileName modulePath, kchecked, tchecked)])
 
     (_, modules) <- foldM processModule (env0, []) modulePaths
@@ -1901,10 +1901,10 @@ testNorm env0 modulePaths = do
     let processModule (accEnv, accModules) modulePath = do
           (env, parsed) <- parseAct accEnv modulePath
           kchecked <- Acton.Kinds.check env parsed
-          (nmod, tchecked, env0Typed, _, _) <- Acton.Types.reconstruct Nothing Nothing env kchecked
-          let I.NModule tenv mdoc = nmod
+          (nmod, tchecked, env0Typed, _) <- Acton.Types.reconstruct Nothing Nothing env kchecked
+          let I.NModule imps tenv mdoc = nmod
           (normalized, normEnv) <- Acton.Normalizer.normalize env0Typed tchecked
-          let newAccEnv = Acton.Env.addMod (S.modname parsed) tenv mdoc accEnv
+          let newAccEnv = Acton.Env.addMod (S.modname parsed) imps tenv mdoc accEnv
           return (newAccEnv, accModules ++ [(takeFileName modulePath, tchecked, normalized)])
 
     (_, modules) <- foldM processModule (env0, []) modulePaths
@@ -1922,11 +1922,11 @@ testDeact env0 modulePaths = do
     let processModule (accEnv, accModules) modulePath = do
           (env, parsed) <- parseAct accEnv modulePath
           kchecked <- Acton.Kinds.check env parsed
-          (nmod, tchecked, env0Typed, _, _) <- Acton.Types.reconstruct Nothing Nothing env kchecked
-          let I.NModule tenv mdoc = nmod
+          (nmod, tchecked, env0Typed, _) <- Acton.Types.reconstruct Nothing Nothing env kchecked
+          let I.NModule imps tenv mdoc = nmod
           (normalized, normEnv) <- Acton.Normalizer.normalize env0Typed tchecked
           (deacted, deactEnv) <- Acton.Deactorizer.deactorize normEnv normalized
-          let newAccEnv = Acton.Env.addMod (S.modname parsed) tenv mdoc accEnv
+          let newAccEnv = Acton.Env.addMod (S.modname parsed) imps tenv mdoc accEnv
           return (newAccEnv, accModules ++ [(takeFileName modulePath, normalized, deacted)])
 
     (_, modules) <- foldM processModule (env0, []) modulePaths
@@ -1944,12 +1944,12 @@ testCps env0 modulePaths = do
     let processModule (accEnv, accModules) modulePath = do
           (env, parsed) <- parseAct accEnv modulePath
           kchecked <- Acton.Kinds.check env parsed
-          (nmod, tchecked, env0Typed, _, _) <- Acton.Types.reconstruct Nothing Nothing env kchecked
-          let I.NModule tenv mdoc = nmod
+          (nmod, tchecked, env0Typed, _) <- Acton.Types.reconstruct Nothing Nothing env kchecked
+          let I.NModule imps tenv mdoc = nmod
           (normalized, normEnv) <- Acton.Normalizer.normalize env0Typed tchecked
           (deacted, deactEnv) <- Acton.Deactorizer.deactorize normEnv normalized
           (cpstyled, _) <- Acton.CPS.convert deactEnv deacted
-          let newAccEnv = Acton.Env.addMod (S.modname parsed) tenv mdoc accEnv
+          let newAccEnv = Acton.Env.addMod (S.modname parsed) imps tenv mdoc accEnv
           return (newAccEnv, accModules ++ [(takeFileName modulePath, deacted, cpstyled)])
 
     (_, modules) <- foldM processModule (env0, []) modulePaths
@@ -1967,13 +1967,13 @@ testLL env0 modulePaths = do
     let processModule (accEnv, accModules) modulePath = do
           (env, parsed) <- parseAct accEnv modulePath
           kchecked <- Acton.Kinds.check env parsed
-          (nmod, tchecked, env0Typed, _, _) <- Acton.Types.reconstruct Nothing Nothing env kchecked
-          let I.NModule tenv mdoc = nmod
+          (nmod, tchecked, env0Typed, _) <- Acton.Types.reconstruct Nothing Nothing env kchecked
+          let I.NModule imps tenv mdoc = nmod
           (normalized, normEnv) <- Acton.Normalizer.normalize env0Typed tchecked
           (deacted, deactEnv) <- Acton.Deactorizer.deactorize normEnv normalized
           (cpstyled, cpsEnv) <- Acton.CPS.convert deactEnv deacted
           (lifted,liftEnv) <- Acton.LambdaLifter.liftModule cpsEnv cpstyled
-          let newAccEnv = Acton.Env.addMod (S.modname parsed) tenv mdoc accEnv
+          let newAccEnv = Acton.Env.addMod (S.modname parsed) imps tenv mdoc accEnv
           return (newAccEnv, accModules ++ [(takeFileName modulePath, cpstyled, lifted)])
 
     (_, modules) <- foldM processModule (env0, []) modulePaths
@@ -1991,14 +1991,14 @@ testBoxing env0 modulePaths = do
     let processModule (accEnv, accModules) modulePath = do
           (env, parsed) <- parseAct accEnv modulePath
           kchecked <- Acton.Kinds.check env parsed
-          (nmod, tchecked, env0Typed, _, _) <- Acton.Types.reconstruct Nothing Nothing env kchecked
-          let I.NModule tenv mdoc = nmod
+          (nmod, tchecked, env0Typed, _) <- Acton.Types.reconstruct Nothing Nothing env kchecked
+          let I.NModule imps tenv mdoc = nmod
           (normalized, normEnv) <- Acton.Normalizer.normalize env0Typed tchecked
           (deacted, deactEnv) <- Acton.Deactorizer.deactorize normEnv normalized
           (cpstyled, cpsEnv) <- Acton.CPS.convert deactEnv deacted
           (lifted,liftEnv) <- Acton.LambdaLifter.liftModule cpsEnv cpstyled
           boxed <- Acton.Boxing.doBoxing liftEnv lifted
-          let newAccEnv = Acton.Env.addMod (S.modname parsed) tenv mdoc accEnv
+          let newAccEnv = Acton.Env.addMod (S.modname parsed) imps tenv mdoc accEnv
           return (newAccEnv, accModules ++ [(takeFileName modulePath, lifted, boxed)])
 
     (_, modules) <- foldM processModule (env0, []) modulePaths
@@ -2016,8 +2016,8 @@ testCodeGen env0 modulePaths = do
     let processModule (accEnv, accModules) modulePath = do
           (env, parsed) <- parseAct accEnv modulePath
           kchecked <- Acton.Kinds.check env parsed
-          (nmod, tchecked, env0Typed, _, _) <- Acton.Types.reconstruct Nothing Nothing env kchecked
-          let I.NModule tenv mdoc = nmod
+          (nmod, tchecked, env0Typed, _) <- Acton.Types.reconstruct Nothing Nothing env kchecked
+          let I.NModule imps tenv mdoc = nmod
           (normalized, normEnv) <- Acton.Normalizer.normalize env0Typed tchecked
           (deacted, deactEnv) <- Acton.Deactorizer.deactorize normEnv normalized
           (cpstyled, cpsEnv) <- Acton.CPS.convert deactEnv deacted
@@ -2027,7 +2027,7 @@ testCodeGen env0 modulePaths = do
           srcText <- readFile act_file
           let srcbase = "test" </> "src" </> modulePath
           (n,h,c) <- Acton.CodeGen.generate liftEnv srcbase srcText True boxed "test-hash"
-          let newAccEnv = Acton.Env.addMod (S.modname parsed) tenv mdoc accEnv
+          llet newAccEnv = Acton.Env.addMod (S.modname parsed) imps tenv mdoc accEnv
           return (newAccEnv, accModules ++ [(takeFileName modulePath, boxed, n, h, c)])
 
     (_, modules) <- foldM processModule (env0, []) modulePaths
@@ -2053,8 +2053,8 @@ testDocstrings env0 testname = do
   (env, parsed) <- parseAct env0 testname
 
   kchecked <- liftIO $ Acton.Kinds.check env parsed
-  (nmod, _, _, _, _) <- liftIO $ Acton.Types.reconstruct Nothing Nothing env kchecked
-  let I.NModule tenv mdoc = nmod
+  (nmod, _, _, _) <- liftIO $ Acton.Types.reconstruct Nothing Nothing env kchecked
+  let I.NModule _ tenv mdoc = nmod
 
   -- Extract docstrings from the parsed AST
   let S.Module _ _ _ stmts = parsed
@@ -2284,7 +2284,7 @@ testTypeError env0 path = do
       result <- E.try $ do
         (env, parsed) <- parseAct env0 path
         kchecked <- Acton.Kinds.check env parsed
-        (nmod, tchecked, _, _, _) <- Acton.Types.reconstruct Nothing Nothing env kchecked
+        (nmod, tchecked, _, _) <- Acton.Types.reconstruct Nothing Nothing env kchecked
         -- Force evaluation to trigger any lazy exceptions
         E.evaluate $ length (show tchecked)
         return ()
@@ -2328,7 +2328,7 @@ testTypeSuccess env0 path = do
     result <- E.try $ do
       (env, parsed) <- parseAct env0 path
       kchecked <- Acton.Kinds.check env parsed
-      (nmod, tchecked, _, _, _) <- Acton.Types.reconstruct Nothing Nothing env kchecked
+      (nmod, tchecked, _, _) <- Acton.Types.reconstruct Nothing Nothing env kchecked
       -- Force evaluation to trigger any lazy exceptions
       E.evaluate $ length (show tchecked)
       return ()

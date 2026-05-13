@@ -620,7 +620,7 @@ instance USubst NameInfo where
     usubst (NTVar k c ps)       = NTVar k <$> usubst c <*> usubst ps
     usubst (NAlias qn)          = NAlias <$> return qn
     usubst (NMAlias m)          = NMAlias <$> return m
-    usubst (NModule te doc)     = NModule <$> return te <*> return doc     -- actually usubst te, but te has no free variables (top-level)
+    usubst (NModule ms te doc)  = NModule ms <$> return te <*> return doc     -- actually usubst te, but te has no free variables (top-level)
     usubst NReserved            = return NReserved
 
 instance USubst Witness where

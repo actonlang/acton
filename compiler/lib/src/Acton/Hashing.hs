@@ -221,7 +221,7 @@ refreshImplHashes nameHashes nameImplHashes implLocalDeps implExtHashes =
 -- | Hash the module public interface entries.
 modulePubHashFromIface :: I.NameInfo -> [InterfaceFiles.NameHashInfo] -> B.ByteString
 modulePubHashFromIface nmod nameHashes =
-  let I.NModule iface _ = nmod
+  let I.NModule _ iface _ = nmod
       pubHashMap = M.fromList
         [ (InterfaceFiles.nhName nh, InterfaceFiles.nhPubHash nh)
         | nh <- nameHashes

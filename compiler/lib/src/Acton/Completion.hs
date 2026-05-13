@@ -625,10 +625,10 @@ shallowModule searchPath env m applyImport = do
   loaded <- readModuleInterface searchPath m
   case loaded of
     Nothing -> return env
-    Just (te, mdoc) ->
-      return $ applyImport te (Env.addMod m te mdoc env)
+    Just (ms, te, mdoc) ->
+      return $ applyImport te (Env.addMod m ms te mdoc env)
 
-readModuleInterface :: [FilePath] -> S.ModName -> IO (Maybe (I.TEnv, Maybe String))
+readModuleInterface :: [FilePath] -> S.ModName -> IO (Maybe ([S.ModName], I.TEnv, Maybe String))
 readModuleInterface searchPath m = do
   mty <- Env.findTyFile searchPath m
   case mty of
@@ -637,8 +637,8 @@ readModuleInterface searchPath m = do
       res <- (Just <$> IF.readFile ty) `E.catch` \(_ :: E.SomeException) ->
         return Nothing
       case res of
-        Just (_, I.NModule te mdoc, _, _, _, _, _, _, _, _, _, _) ->
-          return (Just (te, mdoc))
+        Just (_, I.NModule imps te mdoc, _, _, _, _, _, _, _, _, _, _) ->
+          return (Just (imps, te, mdoc))
         _ ->
           return Nothing
 
@@ -852,7 +852,7 @@ docOfInfo info =
       I.NClass _ _ _ doc -> doc
       I.NProto _ _ _ doc -> doc
       I.NExt _ _ _ _ _ doc -> doc
-      I.NModule _ doc -> doc
+      I.NModule _ _ doc -> doc
       _ -> Nothing
 
 typeDoc :: Env.Env0 -> S.Type -> Maybe String

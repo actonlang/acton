@@ -107,15 +107,15 @@ mapModules f env            = env1 { hmodules = convTEnv2HTEnv (modules env1) }
         prim : mods         = modules env
 
         walk env ns []      = env
-        walk env ns ((n,NModule te1 _):te)
+        walk env ns ((n,NModule ms te1 _):te)
                             = walk env2 ns te
-          where env1        = env{ modules = app ns (modules env) [(n, NModule [] Nothing)] }
+          where env1        = env{ modules = app ns (modules env) [(n, NModule ms [] Nothing)] }
                 env2        = walk env1 (ns++[n]) te1
         walk env ns (ni:te) = walk env1 ns te
           where env1        = env{ modules = app ns (modules env) (f env (ModName ns) ni) }
 
-        app (n:ns) ((m,NModule te1 doc):te) te'
-          | n == m          = (m, NModule (app ns te1 te') doc) : te
+        app (n:ns) ((m,NModule ms te1 doc):te) te'
+          | n == m          = (m, NModule ms (app ns te1 te') doc) : te
         app ns (ni:te) te'  = ni : app ns te te'
         app ns [] te'       = te'
 
@@ -156,7 +156,7 @@ instance Unalias ModName where
       | inBuiltin env               = m
       | otherwise                   = case lookup (head ns) (names env) of
                                         Just (NMAlias m') -> m'
-                                        Nothing | m `elem` imports env  -> m
+                                        Nothing | m `elem` (mPrim:mBuiltin:imports env)  -> m
                                         _ -> noModule m
 instance Unalias QName where
     unalias env n0@(QName m n)      = case findHMod m env of
@@ -215,7 +215,7 @@ instance Unalias NameInfo where
     unalias env (NTVar k c ps)      = NTVar k (unalias env c) (unalias env ps)
     unalias env (NAlias qn)         = NAlias (unalias env qn)
     unalias env (NMAlias m)         = NMAlias (unalias env m)
-    unalias env (NModule te doc)    = NModule (unalias env te) doc
+    unalias env (NModule ms te doc) = NModule (unalias env ms) (unalias env te) doc
     unalias env NReserved           = NReserved
 
 instance Unalias (Name,NameInfo) where
@@ -238,8 +238,8 @@ publicTEnv                 = filter (isPublicName . fst)
 
 initEnv                    :: FilePath -> Bool -> IO Env0
 initEnv path True          = return $ EnvF{ names = [(nPrim,NMAlias mPrim)],
-                                            imports = [mPrim],
-                                            modules = [(nPrim,NModule primEnv Nothing)],
+                                            imports = [],
+                                            modules = [(nPrim,NModule [] primEnv Nothing)],
                                             hmodules = M.empty, 
                                             witnesses = primWits,
                                             thismod = Nothing,
@@ -247,11 +247,11 @@ initEnv path True          = return $ EnvF{ names = [(nPrim,NMAlias mPrim)],
                                             qlevel = 0,
                                             envX = () }
 initEnv path False         = do (_,nmod,_,_,_,_,_,_,_,_,_,_) <- InterfaceFiles.readFile (joinPath [path,"__builtin__.ty"])
-                                let NModule envBuiltin builtinDocstring = nmod
+                                let NModule _ envBuiltin builtinDocstring = nmod
                                     envBuiltinPublic = publicTEnv envBuiltin
                                     env0 = EnvF{ names = [(nPrim,NMAlias mPrim), (nBuiltin,NMAlias mBuiltin)],
-                                                 imports = [mPrim,mBuiltin],
-                                                 modules = [(nPrim,NModule primEnv Nothing), (nBuiltin,NModule envBuiltinPublic builtinDocstring)],
+                                                 imports = [],
+                                                 modules = [(nPrim,NModule [] primEnv Nothing), (nBuiltin,NModule [] envBuiltin builtinDocstring)],
                                                  hmodules = M.empty,
                                                  witnesses = primWits,
                                                  thismod = Nothing,
@@ -286,7 +286,10 @@ define te env
 
 
 addImport                   :: ModName -> EnvF x -> EnvF x
-addImport m env             = env{ imports = m : imports env }
+addImport m env
+  | m `elem` imports env    = env
+  | otherwise               = env{ imports = m : imports env }
+
 
 defineTVars                 :: QBinds -> EnvF x -> EnvF x
 defineTVars q env           = foldr f env (unalias env q)
@@ -321,17 +324,17 @@ defineInst c ps w env       = foldl addWit env wits
 setMod                      :: ModName -> EnvF x -> EnvF x
 setMod m env                = env{ thismod = Just m }
 
-addMod                     :: ModName -> TEnv -> Maybe String -> EnvF x -> EnvF x
-addMod m newte mdoc env     = env{ modules = addM ns (modules env) }
+addMod                      :: ModName -> [ModName] -> TEnv -> Maybe String -> EnvF x -> EnvF x
+addMod m ms newte mdoc env  = env{ modules = addM ns (modules env) }
   where
     ModName ns              = m
     addM [] te              = newte ++ te
     addM (n:ns) te          = update n ns te
     update n ns ((x,i):te)
-      | n == x,
-        NModule te1 doc <- i    = (n, NModule (addM ns te1) doc) : te
+      | n == x, NModule ms1 te1 doc <- i
+                            = (n, NModule ms1 (addM ns te1) doc) : te
     update n ns (ni:te)     = ni : update n ns te
-    update n ns []          = (n, NModule (addM ns []) mdoc) : []
+    update n ns []          = (n, NModule ms (addM ns []) mdoc) : []
 
 
 -- General Env queries -----------------------------------------------------------------------------------------------------------
@@ -406,7 +409,7 @@ findHMod m env | inBuiltin env, m==mBuiltin
                             = Just (convTEnv2HTEnv (names env))
 findHMod m@(ModName ns) env = case lookup (head ns) (names env) of
                                 Just (NMAlias (ModName m')) -> lookupHMod (ModName $ m'++tail ns) env
-                                Nothing | m `elem` imports env  -> lookupHMod m env
+                                Nothing | m `elem` (mPrim:mBuiltin:imports env) -> lookupHMod m env
                                 _ -> Nothing
 
 lookupHMod                  :: ModName -> EnvF x -> Maybe HTEnv -- m is modname part of a GName, so search directly for module
@@ -417,7 +420,7 @@ lookupHMod (ModName ns) env = f ns (hmodules env)
           | not (all isHNModule (M.toList te)) = Just te
           | otherwise              = Nothing
         f (n:ns) te         = case M.lookup n te of
-                                Just (HNModule te' _) -> f ns te'
+                                Just (HNModule _ te' _) -> f ns te'
                                 Just (HNMAlias (ModName m)) -> lookupHMod (ModName $ m++ns) env
                                 _ -> Nothing
         isHNModule (_, HNModule{}) = True
@@ -431,7 +434,7 @@ lookupMod (ModName ns) env  = f ns (modules env)
           | not (all isNModule te) = Just te
           | otherwise              = Nothing
         f (n:ns) te         = case lookup n te of
-                                Just (NModule te' _) -> f ns te'
+                                Just (NModule _ te' _) -> f ns te'
                                 Just (NMAlias (ModName m)) -> lookupMod (ModName $ m++ns) env
                                 _ -> Nothing
         isNModule (_, NModule{})  = True
@@ -650,6 +653,10 @@ abstractActor env n         = not $ null (abstractAttrs env n)
 abstractAttr                :: EnvF x -> TCon -> Name -> Bool
 abstractAttr env tc n       = n `elem` abstractAttrs env (tcname tc)
 
+getImports env              = reverse (imports env)
+
+moduleRefs env names        = nub $ (mPrim:mBuiltin:getImports env) ++ [ m | (_,NMAlias m) <- names ] ++ [ m | (_,NAlias (GName m _)) <- names ]
+
 
 allCons                     :: EnvF x -> [CCon]
 allCons env                 = concat [ cons m (lookupMod m env) | m <- moduleRefs env revnames, m /= mPrim ] ++ locals
@@ -660,7 +667,7 @@ allCons env                 = concat [ cons m (lookupMod m env) | m <- moduleRef
         con NClass{}        = True
         con NAct{}          = True
         con _               = False
-        cons m (Just te)    = [ TC (GName m n) (wildargs i) | (n,i) <- te, con i ] ++ concat [ cons (modCat m n) (Just te') | (n,NModule te' _) <- te ]
+        cons m (Just te)    = [ TC (GName m n) (wildargs i) | (n,i) <- te, con i ] ++ concat [ cons (modCat m n) (Just te') | (n,NModule _ te' _) <- te ]
 
 allProtos                   :: EnvF x -> [PCon]
 allProtos env               = concat [ protos m (lookupMod m env) | m <- moduleRefs env revnames, m /= mPrim ] ++ locals
@@ -670,7 +677,7 @@ allProtos env               = concat [ protos m (lookupMod m env) | m <- moduleR
           | otherwise       = [ TC (NoQ n) (wildargs i) | (n,i) <- revnames, proto i ]
         proto NProto{}      = True
         proto _             = False
-        protos m (Just te)  = [ TC (GName m n) (wildargs i) | (n,i) <- te, proto i ] ++ concat [ protos (modCat m n) (Just te') | (n,NModule te' _) <- te ]
+        protos m (Just te)  = [ TC (GName m n) (wildargs i) | (n,i) <- te, proto i ] ++ concat [ protos (modCat m n) (Just te') | (n,NModule _ te' _) <- te ]
 
 allConAttr                  :: EnvF x -> Name -> [TCon]
 allConAttr env n            = [ tc | tc <- allCons env, n `elem` allAttrs' env tc ]
@@ -1019,7 +1026,7 @@ impModule spath env (Import _ ms)
   where imp env []              = return env
         imp env (ModuleItem m as : is)
                                 = do (env1,te) <- doImp spath env m
-                                     let env2 = maybe (addImport m) (\n->define [(n, NMAlias m)]) as env1
+                                     let env2 = maybe id (\n->define [(n, NMAlias m)]) as env1
                                      imp (importWits m te env2) is
 impModule spath env (FromImport _ (ModRef (0,Just m)) items)
                                 = do (env1,te) <- doImp spath env m
@@ -1029,10 +1036,6 @@ impModule spath env (FromImportAll _ (ModRef (0,Just m)))
                                      return $ importAll m te $ importWits m te $ env1
 impModule _ _ i                 = illegalImport (loc i)
 
-
-moduleRefs env names            = nub $ (reverse $ imports env) ++ [ m | (_,NMAlias m) <- names ] ++ [ m | (_,NAlias (GName m _)) <- names ]
-
-moduleRefs1 env                 = moduleRefs env (reverse $ names env) \\ [mPrim, mBuiltin]
 
 subImp spath env []          = return env
 subImp spath env (m:ms)      = do (env',_) <- doImp spath env m
@@ -1051,9 +1054,8 @@ findTyFile spaths mn = go spaths
 
 -- | Import a module, loading its .ty and extending the environment.
 doImp                        :: [FilePath] -> EnvF x -> ModName -> IO (EnvF x, TEnv)
-doImp spath env m            = do
-                                  (env', te, _) <- doImpSeen S.empty env m
-                                  return (env', te)
+doImp spath env m            = do (env', te, _) <- doImpSeen S.empty env m
+                                  return (addImport m env', te)
   where
     -- A cached module still needs its recorded import closure available in the
     -- environment. Otherwise later imports of that cached module can miss
@@ -1079,9 +1081,9 @@ doImp spath env m            = do
                 Nothing -> fileNotFound m
                 Just (ms,nmod,_,_,_,_,_,_,_,_,_,_) -> do
                   (env', seen'') <- subImpSeen seen' env ms
-                  let NModule teFull mdoc = nmod
+                  let NModule ms' teFull mdoc = nmod
                       te = publicTEnv teFull
-                  return (addMod m te mdoc env', te, seen'')
+                  return (addMod m ms' te mdoc env', te, seen'')
 
     readFoundTy readTy m = do
       tyFile <- findTyFile spath m

@@ -1019,6 +1019,7 @@ data BackJob = BackJob
 
 data FrontResult = FrontResult
   { frIfaceTE  :: [(A.Name, I.NameInfo)]
+  , frImps     :: [A.ModName]
   , frDoc      :: Maybe String
   , frPubHash :: B.ByteString
   , frNameHashes :: [InterfaceFiles.NameHashInfo]
@@ -1395,7 +1396,7 @@ readModuleTask sp gopts opts paths actFile = do
           , mhTests = tests
           , mhDoc = mdoc
           } ->
-      let nmodStub = I.NModule [] mdoc
+      let nmodStub = I.NModule [] [] mdoc
           tmodStub = A.Module mn [] mdoc []
       in TyTask { name      = mn
                 , tyHash     = srcHash
@@ -1505,7 +1506,7 @@ quiet gopts opts = C.quiet gopts || altOutput opts
 
 -- | Read an interface from a .ty file and return its NameInfo and public hash.
 -- This is used when a module is deemed fresh and we want to avoid reparsing.
-readIfaceFromTy :: Paths -> A.ModName -> String -> Maybe B.ByteString -> IO (Either [Diagnostic String] ([(A.Name, I.NameInfo)], Maybe String, B.ByteString))
+readIfaceFromTy :: Paths -> A.ModName -> String -> Maybe B.ByteString -> IO (Either [Diagnostic String] ([A.ModName], [(A.Name, I.NameInfo)], Maybe String, B.ByteString))
 readIfaceFromTy paths mn src mHash = do
     mty <- Acton.Env.findTyFile (searchPath paths) mn
     case mty of
@@ -1515,7 +1516,7 @@ readIfaceFromTy paths mn src mHash = do
         case fileRes of
           Left _ -> return $ Left (missingIfaceDiagnostics mn src mn)
           Right (_ms, nmod, _tmod, _sourceMeta, _srcH, _pubH, _implH, _imps, _nameHashes, _roots, _tests, _tm) -> do
-            let I.NModule teFull mdoc = nmod
+            let I.NModule ms teFull mdoc = nmod
                 te = publicIfaceTE teFull
             ih <- case mHash of
                     Just h -> return h
@@ -1524,7 +1525,7 @@ readIfaceFromTy paths mn src mHash = do
                       case hdrE of
                         Right (_sourceMetaH, _srcH, ihash, _implH, _impsH, _nameHashesH, _rootsH, _testsH, _docH) -> return ihash
                         _ -> return B.empty
-            return $ Right (te, mdoc, ih)
+            return $ Right (ms, te, mdoc, ih)
 
 
 -- | Snapshot of expected/recorded impl hashes for generated code.
@@ -1752,15 +1753,15 @@ runFrontPasses gopts opts paths env0 parsed srcContent srcBytes sourceMeta resol
       timeKindsCheck <- getTime Monotonic
 
       -- Type-check and return both the typed AST and the interface NameInfo.
-      (nmod,tchecked,typeEnv,mrefs,tests) <- Acton.Types.reconstruct (Just onTypeProgress) inferredSignatureCb env kchecked
+      (nmod,tchecked,typeEnv,tests) <- Acton.Types.reconstruct (Just onTypeProgress) inferredSignatureCb env kchecked
       -- Module-level src hash uses raw bytes so any source edit forces re-parse.
       let moduleSrcBytesHash = SHA256.hash srcBytes
       -- Store roots so later builds can discover entry points without reparse.
-      let I.NModule fullIface mdoc = nmod
+      let I.NModule imps fullIface mdoc = nmod
           publicIface = publicIfaceTE fullIface
       let roots = [ n | (n,i) <- fullIface, rootEligible i ]
       -- Import hashes are recorded in the .ty header so dep changes can be detected.
-      impsRes <- resolveImportHashes mrefs
+      impsRes <- resolveImportHashes imps
       case impsRes of
         Left diags -> return (Left diags)
         Right impsWithHash -> do
@@ -1842,7 +1843,7 @@ runFrontPasses gopts opts paths env0 parsed srcContent srcBytes sourceMeta resol
                   InterfaceFiles.writeFile (outbase ++ ".ty") moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta impsWithHash nameHashes roots tests mdoc nmod tchecked
 
                   iff (C.types opts && isRoot) $ dump mn "types" (Pretty.print tchecked)
-                  iff (C.sigs opts && isRoot) $ dump mn "sigs" (Acton.Types.prettySigs env mn fullIface)
+                  iff (C.sigs opts && isRoot) $ dump mn "sigs" (Acton.Types.prettySigs env mn imps fullIface)
 
                   -- Generate documentation, if building for a project
                   when (not (C.skip_build opts) && not (isTmp paths)) $ do
@@ -1861,7 +1862,7 @@ runFrontPasses gopts opts paths env0 parsed srcContent srcBytes sourceMeta resol
                         simplifiedTypeEnv = simp env1 modTypeEnv
                     createDirectoryIfMissing True docFileDir
                     -- Use parsed (original AST) to preserve docstrings
-                    let htmlDoc = DocP.printHtmlDoc (I.NModule simplifiedTypeEnv mdoc) parsed
+                    let htmlDoc = DocP.printHtmlDoc (I.NModule imps simplifiedTypeEnv mdoc) parsed
                     writeFile docFile htmlDoc
 
                   timeTypeCheck <- getTime Monotonic
@@ -1891,6 +1892,7 @@ runFrontPasses gopts opts paths env0 parsed srcContent srcBytes sourceMeta resol
                                                                   }
                                              }
                   return $ Right FrontResult { frIfaceTE = publicIface
+                                             , frImps = imps
                                              , frDoc = mdoc
                                              , frPubHash = modulePubHash
                                              , frNameHashes = publicNameHashes nameHashes
@@ -2244,9 +2246,10 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
           actFile = srcFile paths mn
           tyFile = outBase paths mn ++ ".ty"
           short8 bs   = take 8 (B.unpack $ Base16.encode bs)
-          mkFrontResult ifaceTE mdoc pubHash nameHashes backJob =
+          mkFrontResult imps ifaceTE mdoc pubHash nameHashes backJob =
             FrontResult
               { frIfaceTE = ifaceTE
+              , frImps = imps
               , frDoc = mdoc
               , frPubHash = pubHash
               , frNameHashes = nameHashes
@@ -2258,6 +2261,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
           emptyFrontResult =
             FrontResult
               { frIfaceTE = []
+              , frImps = []
               , frDoc = Nothing
               , frPubHash = B.empty
               , frNameHashes = []
@@ -2492,11 +2496,11 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
                             ParseTask{ src = srcContent } -> readIfaceFromTy paths mn srcContent Nothing
                             ActonTask{ src = srcContent } -> readIfaceFromTy paths mn srcContent Nothing
               case ifaceRes of
-                Right (ifaceTE, mdoc, ih) -> do
+                Right (imps, ifaceTE, mdoc, ih) -> do
                   let cachedNameHashes = case taskCurrent of
                         TyTask{ tyNameHashes = nhs } -> publicNameHashes nhs
                         _ -> []
-                      fr = mkFrontResult ifaceTE mdoc ih cachedNameHashes Nothing
+                      fr = mkFrontResult imps ifaceTE mdoc ih cachedNameHashes Nothing
                   cacheFrontResult fr
                 Left _ ->
                   return (key, Right emptyFrontResult)
@@ -2660,10 +2664,10 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
                                             Hashing.refreshImplHashes nameHashes nameImplHashes implLocalDeps implExtHashes
                                           moduleImplHash = Hashing.moduleImplHashFromNameHashes updatedNameHashes
                                       InterfaceFiles.writeFile tyFile moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps updatedNameHashes roots tests mdoc nmod tmod
-                                      let I.NModule ifaceFull _mdoc = nmod
+                                      let I.NModule imps ifaceFull _mdoc = nmod
                                           ifaceTE = publicIfaceTE ifaceFull
                                           backJob = Just (mkBackJob env1 tmod (Source.ssText snap) moduleImplHash)
-                                          fr = mkFrontResult ifaceTE mdoc modulePubHash (publicNameHashes updatedNameHashes) backJob
+                                          fr = mkFrontResult imps ifaceTE mdoc modulePubHash (publicNameHashes updatedNameHashes) backJob
                                       cacheFrontResult fr
                       ) `catch` handleImplRefreshException
                   runCodegenRefresh = do
@@ -2676,10 +2680,10 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
                       Right (_ms, nmod, tmod, _sourceMeta, _moduleSrcBytesHash, modulePubHash, moduleImplHashStored, _imps, nameHashes, _roots, _tests, mdoc) -> do
                         snap <- Source.readSource sp actFile
                         env1 <- Acton.Env.mkEnv (searchPath paths) envSnap tmod
-                        let I.NModule ifaceFull _mdoc = nmod
+                        let I.NModule imps ifaceFull _mdoc = nmod
                             ifaceTE = publicIfaceTE ifaceFull
                             backJob = Just (mkBackJob env1 tmod (Source.ssText snap) moduleImplHashStored)
-                            fr = mkFrontResult ifaceTE mdoc modulePubHash (publicNameHashes nameHashes) backJob
+                            fr = mkFrontResult imps ifaceTE mdoc modulePubHash (publicNameHashes nameHashes) backJob
                         cacheFrontResult fr
                   runReuse = do
                     when (C.verbose gopts) $
@@ -2689,11 +2693,11 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
                                   _ -> readIfaceFromTy paths mn "" Nothing
                     case ifaceRes of
                       Left diags -> return (key, Left diags)
-                      Right (ifaceTE, mdoc, ih) -> do
+                      Right (imps, ifaceTE, mdoc, ih) -> do
                         let cachedNameHashes = case taskCurrent of
                               TyTask{ tyNameHashes = nhs } -> publicNameHashes nhs
                               _ -> []
-                            fr = mkFrontResult ifaceTE mdoc ih cachedNameHashes Nothing
+                            fr = mkFrontResult imps ifaceTE mdoc ih cachedNameHashes Nothing
                         cacheFrontResult fr
               case () of
                 _ | needFront -> runFront
@@ -2852,7 +2856,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
                   let res2  = M.insert keyDone (frPubHash fr) res
                       nameRes2 = M.insert keyDone (nameHashMapFromList (frNameHashes fr)) nameRes
                       parsedTasks2 = M.delete keyDone parsedTasks
-                      envAcc' = Acton.Env.addMod (tkMod keyDone) (frIfaceTE fr) (frDoc fr) envAcc
+                      envAcc' = Acton.Env.addMod (tkMod keyDone) (frImps fr) (frIfaceTE fr) (frDoc fr) envAcc
                   loop runningRef rdy2 running2 res2 nameRes2 parsedTasks2 ind2 pend2 envAcc' hadErrors maxPar cw
 
 
