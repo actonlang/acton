@@ -23,8 +23,7 @@ override_dh_auto_test:
 override_dh_strip:
 	@echo "Skipping strip"
 
-# dwz (on Debian 12, which we use for the build-debs CI job) does not support
-# DWARF v5 emitted by Zig 0.15
+# dwz in our CI package builder does not support DWARF v5 emitted by Zig 0.15.
 override_dh_dwz:
 	@echo "Skipping dwz"
 

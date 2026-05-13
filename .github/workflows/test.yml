@@ -106,7 +106,7 @@ jobs:
         with:
           path: |
             ~/.stack
-          key: test-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}
+          key: test-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}-${{ hashFiles('compiler/stack.yaml', 'compiler/stack.yaml.lock', 'Makefile', 'compiler/tools/*.sh') }}
       - name: "Cache Acton"
         if: matrix.cache == true
         uses: actions/cache@v5
@@ -209,14 +209,14 @@ jobs:
         with:
           path: |
             ~/.stack
-          key: test-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}
+          key: test-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}-${{ hashFiles('compiler/stack.yaml', 'compiler/stack.yaml.lock', 'Makefile', 'compiler/tools/*.sh') }}
       - name: "chown our home dir to avoid stack complaining"
         run: chown -R root:root /github/home
       - name: "Install build prerequisites"
         run: |
           export DEBIAN_FRONTEND=noninteractive
           apt-get update
-          apt-get install -qy bzip2 curl g++ haskell-stack libtinfo-dev make procps zlib1g-dev
+          apt-get install -qy bzip2 curl g++ haskell-stack libgmp-dev libncurses-dev make procps zlib1g-dev
           apt-get install -qy gdb
       - name: "locale en_US.UTF-8"
         run: |
@@ -226,11 +226,28 @@ jobs:
           echo "locales locales/locales_to_be_generated multiselect en_US.UTF-8 UTF-8" | debconf-set-selections
           rm "/etc/locale.gen"
           dpkg-reconfigure --frontend noninteractive locales
-      - name: "Upgrade stack on old distributions"
-        if: ${{ matrix.os == 'ubuntu' && matrix.version == '22.04' }}
+      - name: "Install newer stack"
         run: |
-          stack upgrade
-          echo "PATH=~/.local/bin:$PATH" >> $GITHUB_ENV
+          STACK_VERSION=3.9.3
+          ARCH="$(uname -m)"
+          case "${ARCH}" in
+            x86_64) STACK_ARCH="x86_64" ;;
+            aarch64|arm64) STACK_ARCH="aarch64" ;;
+            *) echo "Unsupported arch: ${ARCH}" >&2; exit 1 ;;
+          esac
+          STACK_TAR="stack-${STACK_VERSION}-linux-${STACK_ARCH}.tar.gz"
+          STACK_URL="https://github.com/commercialhaskell/stack/releases/download/v${STACK_VERSION}/${STACK_TAR}"
+          mkdir -p "${HOME}/.local/bin"
+          curl -fsSL "${STACK_URL}" -o /tmp/stack.tgz
+          tar -xzf /tmp/stack.tgz -C /tmp
+          install -m 0755 "/tmp/stack-${STACK_VERSION}-linux-${STACK_ARCH}/stack" "${HOME}/.local/bin/stack"
+          echo "${HOME}/.local/bin" >> "$GITHUB_PATH"
+          "${HOME}/.local/bin/stack" --version
+      - name: "Use container glibc target for source build"
+        run: |
+          GLIBC_VERSION="$(getconf GNU_LIBC_VERSION | awk '{print $2}')"
+          echo "ACTON_ZIG_GLIBC_VERSION=${GLIBC_VERSION}" >> "$GITHUB_ENV"
+          echo "Using Zig glibc target ${GLIBC_VERSION}"
       - name: "Build Acton"
         run: |
           make -j2 -C ${GITHUB_WORKSPACE} BUILD_RELEASE=${{ env.BUILD_RELEASE }} BUILD_TIME=${BUILD_TIME}
@@ -264,7 +281,7 @@ jobs:
         arch: [amd64, arm64]
     runs-on: ${{ matrix.arch == 'amd64' && 'ubuntu-24.04' || 'ubuntu-24.04-arm' }}
     container:
-      image: ubuntu:22.04
+      image: debian:11
     env:
       LANG: en_US.UTF-8
       LC_ALL: en_US.UTF-8
@@ -285,7 +302,7 @@ jobs:
       - name: "Install build prerequisites"
         run: |
           apt-get update
-          apt-get install -qy bzip2 curl g++ haskell-stack libtinfo-dev make procps zlib1g-dev
+          apt-get install -qy bzip2 curl g++ haskell-stack libgmp-dev libncurses-dev make procps zlib1g-dev
           apt-get install -qy bash-completion build-essential debhelper devscripts
       - name: "Prepare stack directories"
         run: |
@@ -296,9 +313,8 @@ jobs:
         uses: actions/cache@v5
         with:
           path: |
-            ./debian/.debhelper/
             ${{ env.STACK_ROOT }}
-          key: build-debs-${{ matrix.arch }}
+          key: build-debs-${{ matrix.arch }}-${{ hashFiles('compiler/stack.yaml', 'compiler/stack.yaml.lock', 'Makefile', 'compiler/tools/*.sh', 'debian/control') }}
       - name: "locale en_US.UTF-8"
         run: |
           apt-get install -qy locales
@@ -328,6 +344,19 @@ jobs:
         run: |
           set -euo pipefail
           make -C "${GITHUB_WORKSPACE}" debs BUILD_RELEASE=${{ env.BUILD_RELEASE }} BUILD_TIME=${BUILD_TIME}
+      - name: "Show packaged Acton linkage"
+        shell: bash
+        run: |
+          set -euo pipefail
+          make -C "${GITHUB_WORKSPACE}" ldd
+          deb="$(ls "${GITHUB_WORKSPACE}"/../acton_*.deb | head -n1)"
+          dpkg-deb -I "$deb"
+          tmp="$(mktemp -d)"
+          dpkg-deb -x "$deb" "$tmp"
+          bins="$tmp/usr/lib/acton/bin/acton"
+          bins="$bins $tmp/usr/lib/acton/bin/lsp-server-acton"
+          bins="$bins $tmp/usr/lib/acton/bin/actondb"
+          make -C "${GITHUB_WORKSPACE}" ldd ACTON_LINKAGE_BINS="$bins"
       - name: "Compute variables"
         id: vars
         run: |
