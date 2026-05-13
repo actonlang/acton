@@ -290,6 +290,7 @@ addImport m env
   | m `elem` imports env    = env
   | otherwise               = env{ imports = m : imports env }
 
+getImports env              = reverse (imports env)
 
 defineTVars                 :: QBinds -> EnvF x -> EnvF x
 defineTVars q env           = foldr f env (unalias env q)
@@ -412,33 +413,34 @@ findHMod m@(ModName ns) env = case lookup (head ns) (names env) of
                                 Nothing | m `elem` (mPrim:mBuiltin:imports env) -> lookupHMod m env
                                 _ -> Nothing
 
-lookupHMod                  :: ModName -> EnvF x -> Maybe HTEnv -- m is modname part of a GName, so search directly for module
-lookupHMod m env | inBuiltin env, m==mBuiltin
-                            = Just (convTEnv2HTEnv (names env))
-lookupHMod (ModName ns) env = f ns (hmodules env)
-  where f [] te
-          | not (all isHNModule (M.toList te)) = Just te
-          | otherwise              = Nothing
-        f (n:ns) te         = case M.lookup n te of
-                                Just (HNModule _ te' _) -> f ns te'
-                                Just (HNMAlias (ModName m)) -> lookupHMod (ModName $ m++ns) env
-                                _ -> Nothing
-        isHNModule (_, HNModule{}) = True
-        isHNModule _               = False
+lookupHMod                      :: ModName -> EnvF x -> Maybe HTEnv -- m is modname part of a GName, so search directly for module
+lookupHMod m env                = case lookupHModule m env of Just (imps, te, doc) -> Just te; _ -> Nothing
 
-lookupMod                  :: ModName -> EnvF x -> Maybe TEnv 
-lookupMod m env | inBuiltin env, m==mBuiltin
-                            = Just (names env)
-lookupMod (ModName ns) env  = f ns (modules env)
-  where f [] te
-          | not (all isNModule te) = Just te
-          | otherwise              = Nothing
-        f (n:ns) te         = case lookup n te of
-                                Just (NModule _ te' _) -> f ns te'
-                                Just (NMAlias (ModName m)) -> lookupMod (ModName $ m++ns) env
-                                _ -> Nothing
-        isNModule (_, NModule{})  = True
-        isNModule _               = False
+
+lookupHModule m env
+ | inBuiltin env, m==mBuiltin   = Just ([], convTEnv2HTEnv (names env), Nothing)
+lookupHModule (ModName ns) env  = f ns (hmodules env)
+  where f (n:ns) te             = case M.lookup n te of
+                                    Just (HNModule imps te' doc) -> g ns imps te' doc
+                                    Just (HNMAlias (ModName m)) -> lookupHModule (ModName $ m++ns) env
+                                    _ -> Nothing
+        g ns imps te doc
+          | null ns             = Just (imps, te, doc)
+          | otherwise           = f ns te
+
+lookupMod                       :: ModName -> EnvF x -> Maybe TEnv
+lookupMod m env                 = case lookupModule m env of Just (imps, te, doc) -> Just te; _ -> Nothing
+
+lookupModule m env
+  | inBuiltin env, m==mBuiltin  = Just ([], names env, Nothing)
+lookupModule (ModName ns) env   = f ns (modules env)
+  where f (n:ns) te             = case lookup n te of
+                                    Just (NModule imps te' doc) -> g ns imps te' doc
+                                    Just (NMAlias (ModName m)) -> lookupModule (ModName $ m++ns) env
+                                    _ -> Nothing
+        g ns imps te doc
+          | null ns             = Just (imps, te, doc)
+          | otherwise           = f ns te
 
 
 isMod                       :: EnvF x -> [Name] -> Bool
@@ -653,31 +655,31 @@ abstractActor env n         = not $ null (abstractAttrs env n)
 abstractAttr                :: EnvF x -> TCon -> Name -> Bool
 abstractAttr env tc n       = n `elem` abstractAttrs env (tcname tc)
 
-getImports env              = reverse (imports env)
+transitiveImports env       = mBuiltin : reverse (foldl trav [] (getImports env))
+  where trav seen m
+          | m `elem` seen   = seen
+          | otherwise       = m : foldl trav seen ms
+          where ms          = case lookupModule m env of Just (imps,_,_) -> imps
 
-moduleRefs env names        = nub $ (mPrim:mBuiltin:getImports env) ++ [ m | (_,NMAlias m) <- names ] ++ [ m | (_,NAlias (GName m _)) <- names ]
+allTypes                    :: (NameInfo -> Bool) -> EnvF x -> [TCon]
+allTypes select env         = concatMap impcons mods ++ localcons
+  where mods                = transitiveImports env
+        localnames          = reverse (names env)
+        localcons
+          | inBuiltin env   = [ TC (GName mBuiltin n) (wildargs i) | (n,i) <- localnames, select i ]
+          | otherwise       = [ TC (NoQ n) (wildargs i) | (n,i) <- localnames, select i ]
+        impcons m           = [ TC (GName m n) (wildargs i) | (n,i) <- te, select i ]
+          where Just te     = lookupMod m env
 
+allCons                     :: EnvF x -> [TCon]
+allCons env                 = allTypes isCon env
+  where isCon NClass{}      = True
+        isCon NAct{}        = True
+        isCon _             = False
 
-allCons                     :: EnvF x -> [CCon]
-allCons env                 = concat [ cons m (lookupMod m env) | m <- moduleRefs env revnames, m /= mPrim ] ++ locals
-  where revnames            = reverse (names env)
-        locals
-          | inBuiltin env   = cons mBuiltin (Just revnames)
-          | otherwise       = [ TC (NoQ n) (wildargs i) | (n,i) <- revnames, con i ]
-        con NClass{}        = True
-        con NAct{}          = True
-        con _               = False
-        cons m (Just te)    = [ TC (GName m n) (wildargs i) | (n,i) <- te, con i ] ++ concat [ cons (modCat m n) (Just te') | (n,NModule _ te' _) <- te ]
-
-allProtos                   :: EnvF x -> [PCon]
-allProtos env               = concat [ protos m (lookupMod m env) | m <- moduleRefs env revnames, m /= mPrim ] ++ locals
-  where revnames            = reverse (names env)
-        locals
-          | inBuiltin env   = protos mBuiltin (Just revnames)
-          | otherwise       = [ TC (NoQ n) (wildargs i) | (n,i) <- revnames, proto i ]
-        proto NProto{}      = True
-        proto _             = False
-        protos m (Just te)  = [ TC (GName m n) (wildargs i) | (n,i) <- te, proto i ] ++ concat [ protos (modCat m n) (Just te') | (n,NModule _ te' _) <- te ]
+allProtos env               = allTypes isProto env
+  where isProto NProto{}    = True
+        isProto _           = False
 
 allConAttr                  :: EnvF x -> Name -> [TCon]
 allConAttr env n            = [ tc | tc <- allCons env, n `elem` allAttrs' env tc ]
