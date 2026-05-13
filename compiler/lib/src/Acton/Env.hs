@@ -53,7 +53,6 @@ data EnvF x                 = EnvF {
                                 imports    :: [ModName],
                                 modules    :: TEnv,
                                 hmodules   :: HTEnv,
-                                witnesses  :: [Witness],
                                 thismod    :: Maybe ModName,
                                 context    :: [EnvCtx],
                                 qlevel     :: Int,
@@ -65,7 +64,7 @@ type Env0                   = EnvF ()
 
 setX                        :: EnvF y -> x -> EnvF x
 setX env x                  = EnvF { names = names env, imports = imports env, modules = modules env,
-                                     hmodules = hmodules env, witnesses = witnesses env, thismod = thismod env,
+                                     hmodules = hmodules env, thismod = thismod env,
                                      context = context env, qlevel = qlevel env, envX = x }
 
 modX                        :: EnvF x -> (x -> x) -> EnvF x
@@ -127,9 +126,6 @@ instance (Pretty x) => Pretty (EnvF x) where
                                   vcat (map pretty (names env)) $+$
                                   text "--- imports" <+> pretty (thismod env) <> colon $+$
                                   vcat (map pretty (imports env)) $+$
-                                  text "--- witnesses:"  $+$
-                                  vcat (map pretty (witnesses env)) $+$
-                                  text "--- extra:"  $+$
                                   pretty (envX env) $+$
                                   text "."
 
@@ -241,7 +237,6 @@ initEnv path True          = return $ EnvF{ names = [(nPrim,NMAlias mPrim)],
                                             imports = [],
                                             modules = [(nPrim,NModule [] primEnv Nothing)],
                                             hmodules = M.empty, 
-                                            witnesses = primWits,
                                             thismod = Nothing,
                                             context = [],
                                             qlevel = 0,
@@ -253,22 +248,15 @@ initEnv path False         = do (_,nmod,_,_,_,_,_,_,_,_,_,_) <- InterfaceFiles.r
                                                  imports = [],
                                                  modules = [(nPrim,NModule [] primEnv Nothing), (nBuiltin,NModule [] envBuiltin builtinDocstring)],
                                                  hmodules = M.empty,
-                                                 witnesses = primWits,
                                                  thismod = Nothing,
                                                  context = [],
                                                  qlevel = 0,
                                                  envX = () }
-                                    env = importAll mBuiltin envBuiltinPublic $ importWits mBuiltin envBuiltinPublic $ env0
+                                    env = importAll mBuiltin envBuiltinPublic env0
                                 return env
 
 withModulesFrom             :: EnvF x -> EnvF x -> EnvF x
 env `withModulesFrom` env'  = env{modules = modules env'}
-
-addWit                      :: EnvF x -> Witness -> EnvF x
-addWit env wit
-  | null same               = env{ witnesses = wit : witnesses env }
-  | otherwise               = env
-  where same                = [ w | w <- witsByPName env (tcname $ proto wit), wtype w == wtype wit ]
 
 reserve                     :: [Name] -> EnvF x -> EnvF x
 reserve xs env
@@ -279,10 +267,8 @@ reserve xs env
 define                      :: TEnv -> EnvF x -> EnvF x
 define te env
   | not $ null badSelf      = selfParamError (loc $ head badSelf)
-  | otherwise               = foldl addWit env1 ws
-  where env1                = env{ names = reverse te ++ names env }
-        ws                  = [ WClass q (tCon c) p (NoQ w) ws (length opts) | (w, NExt q c ps te' opts _) <- te, (ws,p) <- ps ]
-        badSelf             = if inAct env then dom te `intersect` [selfKW] else []
+  | otherwise               = env{ names = reverse te ++ names env }
+  where badSelf             = if inAct env then dom te `intersect` [selfKW] else []
 
 
 addImport                   :: ModName -> EnvF x -> EnvF x
@@ -294,33 +280,14 @@ getImports env              = reverse (imports env)
 
 defineTVars                 :: QBinds -> EnvF x -> EnvF x
 defineTVars q env           = foldr f env (unalias env q)
-  where f (QBind tv us) env = foldl addWit env{ names = (tvname tv, NTVar (tvkind tv) c ps) : names env, qlevel = qlevel env + 1 } wits
+  where f (QBind tv us) env = env{ names = (tvname tv, NTVar (tvkind tv) c ps) : names env, qlevel = qlevel env + 1 }
           where (c,ps)      = case us of u:us' | not $ isProto env (tcname u) -> (u,us'); _ -> (cValue,us)
-                wits        = [ WInst [] (tVar tv) p (NoQ $ tvarWit tv p0) wchain | p0 <- ps, (wchain,p) <- findAncestry env p0 ]
-
-limitQuant                  :: TUni -> EnvF x -> EnvF x
-limitQuant (UV _ l _) env
-  | n <= 0                  = env
-  | otherwise               = env{ names = dropv n (names env), witnesses = dropw n (witnesses env), qlevel = qlevel env - n }
-  where n                   = qlevel env - l
-        dropv 0 te          = te
-        dropv n ((v,i):te)
-          | NTVar{} <- i    = dropv (n-1) te
-          | otherwise       = (v,i) : dropv n te
-        dropw 0 we          = we
-        dropw n (w:we)
-          | WInst{} <- w    = dropw (n-1) (dropWhile ((==wtype w) . wtype) we)
-          | otherwise       = w : dropw n we
 
 selfSubst n q               = vsubst [(tvSelf, tCon tc)]
   where tc                  = TC n (map tVar $ qbound q)
 
 selfQuant n q               = QBind tvSelf [tc] : q
   where tc                  = TC n (map tVar $ qbound q)
-
-defineInst                  :: TCon -> [WTCon] -> Name -> EnvF x -> EnvF x
-defineInst c ps w env       = foldl addWit env wits
-  where wits                = [ WInst [] (tCon c) p (NoQ w) ws | (ws,p) <- ps ]
 
 setMod                      :: ModName -> EnvF x -> EnvF x
 setMod m env                = env{ thismod = Just m }
@@ -512,15 +479,6 @@ isDefOrClass env n          = case tryQName n env of
                                 Just HNDef{} -> True
                                 Just HNClass{} -> True
                                 _ -> False
-
-witsByPName                 :: EnvF x -> QName -> [Witness]
-witsByPName env pn          = [ w | w <- witnesses env, tcname (proto w) == pn ]
-
-witsByTName                 :: EnvF x -> QName -> [Witness]
-witsByTName env tn          = [ w | w <- witnesses env, eqname (wtype w) ]
-  where eqname (TCon _ c)   = tcname c == tn
-        eqname (TVar _ v)   = NoQ (tvname v) == tn
-        eqname _            = False
 
 
 -- TCon queries ------------------------------------------------------------------------------------------------------------------
@@ -1034,13 +992,13 @@ impModule spath env (Import _ ms)
         imp env (ModuleItem m as : is)
                                 = do (env1,te) <- doImp spath env m
                                      let env2 = maybe id (\n->define [(n, NMAlias m)]) as env1
-                                     imp (importWits m te env2) is
+                                     imp env2 is
 impModule spath env (FromImport _ (ModRef (0,Just m)) items)
                                 = do (env1,te) <- doImp spath env m
-                                     return $ importSome items m te $ importWits m te $ env1
+                                     return $ importSome items m te env1
 impModule spath env (FromImportAll _ (ModRef (0,Just m)))
                                 = do (env1,te) <- doImp spath env m
-                                     return $ importAll m te $ importWits m te $ env1
+                                     return $ importAll m te env1
 impModule _ _ i                 = illegalImport (loc i)
 
 
@@ -1125,10 +1083,6 @@ impNames m te               = mapMaybe imp (publicTEnv te)
     imp (n, NVar t)         = Just (n, NAlias (GName m n))
     imp (n, NDef t d _)       = Just (n, NAlias (GName m n))
     imp _                   = Nothing                               -- cannot happen
-
-importWits                  :: ModName -> TEnv -> EnvF x -> EnvF x
-importWits m te env         = foldl addWit env ws
-  where ws                  = [ WClass q (tCon c) p (GName m n) ws (length opts) | (n, NExt q c ps te' opts _) <- te, (ws,p) <- ps ]
 
 
 

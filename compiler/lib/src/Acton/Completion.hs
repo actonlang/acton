@@ -599,21 +599,19 @@ shallowImport searchPath env imp =
       foldM (shallowModuleItem searchPath) env items
     S.FromImport _ (S.ModRef (0, Just m)) items ->
       shallowModule searchPath env m $ \te env' ->
-        Env.importSome items m te (Env.importWits m te env')
+        Env.importSome items m te env'
     S.FromImportAll _ (S.ModRef (0, Just m)) ->
       shallowModule searchPath env m $ \te env' ->
-        Env.importAll m te (Env.importWits m te env')
+        Env.importAll m te env'
     _ ->
       return env
 
 shallowModuleItem :: [FilePath] -> Env.Env0 -> S.ModuleItem -> IO Env.Env0
 shallowModuleItem searchPath env (S.ModuleItem m as) =
   shallowModule searchPath env m $ \te env' ->
-    let env'' =
-          case as of
-            Nothing -> Env.addImport m env'
-            Just n -> Env.define [(n, I.NMAlias m)] env'
-    in Env.importWits m te env''
+    case as of
+        Nothing -> Env.addImport m env'
+        Just n -> Env.define [(n, I.NMAlias m)] env'
 
 shallowModule
   :: [FilePath]

@@ -32,6 +32,7 @@ import Pretty
 import Utils
 import Acton.Syntax
 import Acton.Builtin
+import Acton.Prim
 import Acton.Printer
 import Acton.Names
 import Acton.NameInfo
@@ -40,6 +41,7 @@ import Acton.Env
 
 
 data TypeX                      = TypeX {
+                                    witnesses   :: [Witness],
                                     posnames    :: [Name],
                                     indecl      :: Bool,
                                     forced      :: Bool,
@@ -58,7 +60,9 @@ data TyInfo                     = TyInfo {
 
 type Env                        = EnvF TypeX
 
-typeX env0                      = setX env0 TypeX {
+typeX env0                      = foldl' importWits env1 imps
+  where env1                    = setX env0 TypeX {
+                                    witnesses   = primWits,
                                     posnames    = [],
                                     indecl      = False,
                                     forced      = False,
@@ -67,6 +71,12 @@ typeX env0                      = setX env0 TypeX {
                                     typrotos    = IntSet.empty,
                                     tyactors    = IntSet.empty
                                   }
+        importWits env m        = foldl addWit env ws
+          where Just te         = lookupMod m env
+                ws              = [ WClass q (tCon c) p (GName m n) ws (length opts) | (n, NExt q c ps te' opts _) <- te, (ws,p) <- ps ]
+        imps | inBuiltin env0   = []
+             | otherwise        = mBuiltin : getImports env0
+
 
 tyinfo0                         = IntMap.fromDistinctAscList pairs
   where pairs                   = [ (tyid t, TyInfo t (iset above) (iset below) []) | (t,above,below) <- graph ]
@@ -92,13 +102,16 @@ instance Show TypeX where
 
 
 instance Pretty TypeX where
-    pretty _                    = empty
+    pretty x                    = text "--- witnesses:"  $+$
+                                  vcat (map pretty (witnesses x))
 
 instance USubst TypeX where
-    usubst x                    = return x
+    usubst x                    = do we <- usubst (witnesses x)
+                                     return x{ witnesses = we }
 
 instance UFree TypeX where
-    ufree x                     = []
+    ufree x                     = ufree (witnesses x)
+
 
 
 nextid x                        = 1 + fst (IntMap.findMax $ tyinfo x)
@@ -128,15 +141,55 @@ addconinfo x (n,i)
 
 
 
-tdefine                         :: TEnv -> Env -> Env
-tdefine te env                  = modX env1 (\x -> foldl' addconinfo x te)
-  where env1                    = define te env
+tydefine                        :: TEnv -> Env -> Env
+tydefine te env                 = modX env1 (\x -> foldl' addconinfo x te)
+  where env1                    = foldl' addWit (define te env) ws
+        ws                      = [ WClass q (tCon c) p (NoQ w) ws (length opts) | (w, NExt q c ps te' opts _) <- te, (ws,p) <- ps ]
 
-tdefineVars                     :: QBinds -> Env -> Env
-tdefineVars q env               = env1
+tydefineVars                    :: QBinds -> Env -> Env
+tydefineVars q env              = foldr f env1 te
   where env1                    = defineTVars q env
+        te                      = take (length q) (names env1)
+        f (v,NTVar k c ps) env  = foldl addWit env wits
+          where wits            = [ WInst [] (tVar tv) p (NoQ $ tvarWit tv p0) wchain | p0 <- ps, (wchain,p) <- findAncestry env p0 ]
+                tv              = TV k v
 
-posdefine te env                = modX (tdefine te env) $ \x -> x{ posnames = dom te ++ posnames x }
+defineInst                      :: TCon -> [WTCon] -> Name -> Env -> Env
+defineInst c ps w env           = foldl addWit env wits
+  where wits                    = [ WInst [] (tCon c) p (NoQ w) ws | (ws,p) <- ps ]
+
+addWit                          :: Env -> Witness -> Env
+addWit env wit
+  | null same                   = modX env $ \x -> x{ witnesses = wit : witnesses x }
+  | otherwise                   = env
+  where same                    = [ w | w <- witsByPName env (tcname $ proto wit), wtype w == wtype wit ]
+
+witsByPName                     :: Env -> QName -> [Witness]
+witsByPName env pn              = [ w | w <- witnesses (envX env), tcname (proto w) == pn ]
+
+witsByTName                     :: Env -> QName -> [Witness]
+witsByTName env tn              = [ w | w <- witnesses (envX env), eqname (wtype w) ]
+  where eqname (TCon _ c)       = tcname c == tn
+        eqname (TVar _ v)       = NoQ (tvname v) == tn
+        eqname _                = False
+
+limitQuant                      :: TUni -> Env -> Env
+limitQuant (UV _ l _) env
+  | n <= 0                      = env
+  | otherwise                   = modX env1 $ \x -> x{ witnesses = dropw n (witnesses x) }
+  where env1                    = env{ names = dropv n (names env), qlevel = qlevel env - n }
+        n                       = qlevel env - l
+        dropv 0 te              = te
+        dropv n ((v,i):te)
+          | NTVar{} <- i        = dropv (n-1) te
+          | otherwise           = (v,i) : dropv n te
+        dropw 0 we              = we
+        dropw n (w:we)
+          | WInst{} <- w        = dropw (n-1) (dropWhile ((==wtype w) . wtype) we)
+          | otherwise           = w : dropw n we
+
+
+posdefine te env                = modX (tydefine te env) $ \x -> x{ posnames = dom te ++ posnames x }
 
 setInDecl env                   = modX env $ \x -> x{ indecl = True }
 
@@ -713,12 +766,11 @@ instance USubst Witness where
 
 instance USubst Env where
     usubst env                  = do ne <- usubst (names env)
-                                     we <- usubst (witnesses env)
                                      ex <- usubst (envX env)
-                                     return env{ names = ne, witnesses = we, envX = ex }
+                                     return env{ names = ne, envX = ex }
 
 instance UFree Env where
-    ufree env                   = ufree (names env) ++ ufree (witnesses env) ++ ufree (envX env)
+    ufree env                   = ufree (names env) ++ ufree (envX env)
 
 
 -- Well-formed tycon applications -------------------------------------------------------------------------------------------------
