@@ -60,8 +60,8 @@ data TyInfo                     = TyInfo {
 
 type Env                        = EnvF TypeX
 
-typeX env0                      = foldl' importWits env1 imps
-  where env1                    = setX env0 TypeX {
+typeX env0                      = setX env0 $ foldl' importWits x0 imps
+  where x0                      = TypeX {
                                     witnesses   = primWits,
                                     posnames    = [],
                                     indecl      = False,
@@ -71,8 +71,8 @@ typeX env0                      = foldl' importWits env1 imps
                                     typrotos    = IntSet.empty,
                                     tyactors    = IntSet.empty
                                   }
-        importWits env m        = foldl addWit env ws
-          where Just te         = lookupMod m env
+        importWits x m          = foldl' addWit x ws
+          where Just te         = lookupMod m env0
                 ws              = [ WClass q (tCon c) p (GName m n) ws (length opts) | (n, NExt q c ps te' opts _) <- te, (ws,p) <- ps ]
         imps | inBuiltin env0   = []
              | otherwise        = mBuiltin : getImports env0
@@ -143,29 +143,30 @@ addconinfo x (n,i)
 
 tydefine                        :: TEnv -> Env -> Env
 tydefine te env                 = modX env1 (\x -> foldl' addconinfo x te)
-  where env1                    = foldl' addWit (define te env) ws
-        ws                      = [ WClass q (tCon c) p (NoQ w) ws (length opts) | (w, NExt q c ps te' opts _) <- te, (ws,p) <- ps ]
+  where env1                    = modX env0 (\x -> foldl' addWit x wits)
+        env0                    = define te env
+        wits                    = [ WClass q (tCon c) p (NoQ w) ws (length opts) | (w, NExt q c ps te' opts _) <- te, (ws,p) <- ps ]
 
 tydefineVars                    :: QBinds -> Env -> Env
-tydefineVars q env              = foldr f env1 te
+tydefineVars q env              = modX env1 (\x -> foldl' addWit x wits)
   where env1                    = defineTVars q env
-        te                      = take (length q) (names env1)
-        f (v,NTVar k c ps) env  = foldl addWit env wits
-          where wits            = [ WInst [] (tVar tv) p (NoQ $ tvarWit tv p0) wchain | p0 <- ps, (wchain,p) <- findAncestry env p0 ]
-                tv              = TV k v
+        tvs                     = [ (TV k v, ps) | (v, NTVar k c ps) <- take (length q) (names env1), let tv = TV k v ]
+        wits                    = [ WInst [] (tVar tv) p (NoQ $ tvarWit tv p0) wchain | (tv, ps) <- tvs, p0 <- ps, (wchain,p) <- findAncestry env p0 ]
 
 defineInst                      :: TCon -> [WTCon] -> Name -> Env -> Env
-defineInst c ps w env           = foldl addWit env wits
+defineInst c ps w env           = modX env (\x -> foldl' addWit x wits)
   where wits                    = [ WInst [] (tCon c) p (NoQ w) ws | (ws,p) <- ps ]
 
-addWit                          :: Env -> Witness -> Env
-addWit env wit
-  | null same                   = modX env $ \x -> x{ witnesses = wit : witnesses x }
-  | otherwise                   = env
-  where same                    = [ w | w <- witsByPName env (tcname $ proto wit), wtype w == wtype wit ]
+addWit                          :: TypeX -> Witness -> TypeX
+addWit x wit
+  | null same                   = x{ witnesses = wit : witnesses x }
+  | otherwise                   = x
+  where same                    = [ w | w <- witsByPNameX x (tcname $ proto wit), wtype w == wtype wit ]
+
+witsByPNameX x pn               = [ w | w <- witnesses x, tcname (proto w) == pn ]
 
 witsByPName                     :: Env -> QName -> [Witness]
-witsByPName env pn              = [ w | w <- witnesses (envX env), tcname (proto w) == pn ]
+witsByPName env pn              = witsByPNameX (envX env) pn
 
 witsByTName                     :: Env -> QName -> [Witness]
 witsByTName env tn              = [ w | w <- witnesses (envX env), eqname (wtype w) ]
