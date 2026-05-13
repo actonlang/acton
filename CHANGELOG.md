@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Added
+- Add concurrent top-level type checking for total statements, allowing the
+  compiler to check independent top-level definitions in parallel while keeping
+  source-order semantics for non-total statements. [#2773]
+  - Verbose and timing builds now report inferred signatures for non-total
+    statements, making it easier to add explicit signatures and unlock more
+    concurrent checking.
+  - Type errors from independent total statements are collected into multiple
+    diagnostics instead of stopping at the first failing statement.
+
 ### Documentation
 - Document when and how to use the Acton container image, including
   copy-pastable Docker commands for checking the compiler version and building
@@ -3909,6 +3919,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#2751]: https://github.com/actonlang/acton/pull/2751
 [#2761]: https://github.com/actonlang/acton/pull/2761
 [#2767]: https://github.com/actonlang/acton/pull/2767
+[#2773]: https://github.com/actonlang/acton/pull/2773
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
