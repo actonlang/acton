@@ -80,7 +80,7 @@ reconstruct progressCb inferredCb env0 (Module m i mdoc ss)    = do --traceM ("#
                                              --traceM (render (pretty env0'))
                                              return (nmod, Module m i mdoc ssT, env0', tests)
 
-  where env1                            = reserve (assigned ss) (typeX env0)
+  where env1                            = reserve (assigned ss) (initTypeEnv env0)
         env0'                           = convEnvProtos env0
         hasTesting i                    = Import NoLoc [ModuleItem (ModName [name "testing"]) Nothing] `elem` i
         rmTests (Assign _ [PVar _ n _] _ : ss)
@@ -1773,7 +1773,7 @@ instance Check Decl where
                                              (cs1,eq1) <- markScoped env n' q' te (csu++csb)
                                              b' <- usubst b'
                                              return (cs1, convExtension env n' c q ps eq1 wmap b' [])
-      where env1                        = defineInst c ps thisKW' $ tydefineVars q' $ setInClass env
+      where env1                        = tydefineInst c ps thisKW' $ tydefineVars q' $ setInClass env
             n                           = tcname c
             n'                          = extensionName us c
             NExt _ _ ps te _ _          = findName n' env
