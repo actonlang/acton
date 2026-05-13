@@ -2027,7 +2027,7 @@ testCodeGen env0 modulePaths = do
           srcText <- readFile act_file
           let srcbase = "test" </> "src" </> modulePath
           (n,h,c) <- Acton.CodeGen.generate liftEnv srcbase srcText True boxed "test-hash"
-          llet newAccEnv = Acton.Env.addMod (S.modname parsed) imps tenv mdoc accEnv
+          let newAccEnv = Acton.Env.addMod (S.modname parsed) imps tenv mdoc accEnv
           return (newAccEnv, accModules ++ [(takeFileName modulePath, boxed, n, h, c)])
 
     (_, modules) <- foldM processModule (env0, []) modulePaths

@@ -261,7 +261,7 @@ infTop progressCb inferredCb env ss     = do -- The scanner itself is sequential
                                                  -- Continue scanning with the scanned declarations visible.
                                                  -- Store te1 and result wait on reversed accumulators to preserve
                                                  -- source order cheaply when collect reverses them.
-                                                 go slots workQ q (define te1 env) (te1:tes) (readMVar result:rs) ss
+                                                 go slots workQ q (tdefine te1 env) (te1:tes) (readMVar result:rs) ss
                                                -- A non-total statement was already fully checked by scanOrCheck,
                                                -- so becomes complete / total before we get here and the scanner may
                                                -- continue.
@@ -437,7 +437,7 @@ scanTopStmt env (Assign l pats e)       = do (te,_,pats) <- infEnvT env pats
 
 
 checkTopStmt                            :: Env -> TEnv -> Stmt -> TypeM (TEnv, [Stmt])
-checkTopStmt env te (Decl l ds)         = do (cs,ds) <- checkEnv (define te env) ds
+checkTopStmt env te (Decl l ds)         = do (cs,ds) <- checkEnv (tdefine te env) ds
 
                                              --traceM ("****************************************** infer (" ++ show (length cs) ++ ") " ++ prstrs (bound ds))
                                              --traceM ("\n\n\n############\n" ++ render (nest 4 $ vcat $ map pretty te))
@@ -952,7 +952,7 @@ matchDefAssumption env cs1 def@Def{dname=n, qbinds=q1}
   where NDef (TSchema _ q0 t) dec _     = findName n env
         t0 | inClass env                = addSelf t (Just dec)
            | otherwise                  = t
-        env0                            = defineTVars q0 env
+        env0                            = tdefineVars q0 env
         fx | inAct env                  = dfx def
            | otherwise                  = effect t0
 
@@ -1038,7 +1038,7 @@ instance InfEnv Decl where
                                                                 else (te,b1)
                                                  return ([], [(n, NClass q as' (te0++te2) ddoc)], Class l n q us (props te0 ++ b2) ddoc)
                                              _ -> illegalRedef n
-      where env1                        = define (exclude (toSigs te') [initKW]) $ reserve (assigned b0) $ defineTVars (stripQual q') $ setInClass env
+      where env1                        = define (exclude (toSigs te') [initKW]) $ reserve (assigned b0) $ tdefineVars (stripQual q') $ setInClass env
             (as,ps)                     = mro2 env us
             as'                         = if null as && not (inBuiltin env && n == nValue) then leftpath [cValue] else as
             te'                         = parentTEnv env as'
@@ -1072,7 +1072,7 @@ instance InfEnv Decl where
                                                  when (not $ null noself) $ err2 noself "A static protocol signature must mention Self"
                                                  return ([], [(n, NProto q ps te ddoc)], Protocol l n q us b' ddoc)
                                              _ -> illegalRedef n
-      where env1                        = define (toSigs te') $ reserve (assigned b) $ defineTVars (stripQual q') $ setInClass env
+      where env1                        = define (toSigs te') $ reserve (assigned b) $ tdefineVars (stripQual q') $ setInClass env
             ps                          = mro1 env us
             te'                         = parentTEnv env ps
             q'                          = selfQuant (NoQ n) q
@@ -1095,7 +1095,7 @@ instance InfEnv Decl where
                                                  b2 = addImpl te1 b1
                                              return ([], [(extensionName us c, NExt q c ps te2 [] ddoc)], Extension l q c us b2 ddoc)
       where TC n ts                     = c
-            env1                        = define (toSigs te') $ reserve (assigned b) $ defineTVars (stripQual q') $ setInClass env
+            env1                        = define (toSigs te') $ reserve (assigned b) $ tdefineVars (stripQual q') $ setInClass env
             witsearch                   = findWitness env (tCon c) u
             u                           = head us
             ps                          = selfSubst n q $ mro1 env us -- TODO: check that ps doesn't contradict any previous extension mro for c
@@ -1706,7 +1706,7 @@ instance Check Decl where
                                              let body = bindWits eq1 ++ defaultsP p' ++ defaultsK k' ++ b'
                                              (cs1,def) <- matchDefAssumption env cs0 (Def l n q p' k' (Just t) body dec fx' ddoc)
                                              return (cs1, def{ pos = noDefaultsP (pos def), kwd = noDefaultsK (kwd def) })
-      where env1                        = reserve (bound (p,k) ++ assigned b \\ stateScope env) $ defineTVars q env
+      where env1                        = reserve (bound (p,k) ++ assigned b \\ stateScope env) $ tdefineVars q env
             fx'                         = fxUnwrap env fx
 
     checkEnv env (Actor l n q p k b ddoc)
@@ -1727,7 +1727,7 @@ instance Check Decl where
                                                  act = Actor l n (noqual env q) (qualWPar env q p') k' body ddoc
                                              return (cs1, act{ pos = noDefaultsP (pos act), kwd = noDefaultsK (kwd act) })
       where env1                        = reserve (bound (p,k) ++ assigned b) $ setInAct $
-                                          define [(selfKW, NVar (tCon tc))] $ defineTVars q env
+                                          define [(selfKW, NVar (tCon tc))] $ tdefineVars q env
             tc                          = TC (NoQ n) (map tVar $ qbound q)
 
     checkEnv' env (Class l n q us b ddoc)
@@ -1739,7 +1739,7 @@ instance Check Decl where
                                              popFX
                                              (cs1,eq1) <- markScoped env n q' te csb
                                              return (cs1, [Class l n (noqual env q) (map snd as) (bindWits eq1 ++ abstractDefs env q b') ddoc])
-      where env1                        = defineTVars q' $ setInClass env
+      where env1                        = tdefineVars q' $ setInClass env
             NClass _ as te _            = findName n env
             te'                         = selfSubst n' q te
             q'                          = selfQuant n' q
@@ -1755,7 +1755,7 @@ instance Check Decl where
                                              (cs1,eq1) <- markScoped env n q' te (csu++csb)
                                              b' <- usubst b'
                                              return (cs1, convProtocol env n q ps eq1 wmap b')
-      where env1                        = defineTVars q' $ setInClass env
+      where env1                        = tdefineVars q' $ setInClass env
             NProto _ ps te _            = findName n env
             te'                         = selfSubst n' q te
             q'                          = selfQuant n' q
@@ -1773,7 +1773,7 @@ instance Check Decl where
                                              (cs1,eq1) <- markScoped env n' q' te (csu++csb)
                                              b' <- usubst b'
                                              return (cs1, convExtension env n' c q ps eq1 wmap b' [])
-      where env1                        = defineInst c ps thisKW' $ defineTVars q' $ setInClass env
+      where env1                        = defineInst c ps thisKW' $ tdefineVars q' $ setInClass env
             n                           = tcname c
             n'                          = extensionName us c
             NExt _ _ ps te _ _          = findName n' env
@@ -1798,7 +1798,7 @@ instance Check Stmt where
             sc' | null q                = sc
                 | otherwise             = let TFun l' x p k t' = t in TSchema l (noqual env q) (TFun l' x (qualWRow env q p) k t')
             dec'                        = if inClass env && isProp dec sc then Property else dec
-            env1                        = defineTVars q env
+            env1                        = tdefineVars q env
     checkEnv env s                      = return ([], s)
 
 instance Check Branch where

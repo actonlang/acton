@@ -18,8 +18,12 @@ import Control.Monad
 import qualified Control.Exception
 import Control.Monad.State.Strict
 import Control.Monad.Except
-import qualified Data.IntMap.Strict as Map
+import qualified Data.Map.Strict as Map
+import Data.Map.Strict (Map)
+import qualified Data.IntMap.Strict as IntMap
 import Data.IntMap.Strict (IntMap)
+import qualified Data.IntSet as IntSet
+import Data.IntSet (IntSet)
 import Data.Char
 import Error.Diagnose hiding ((<>), err)
 import Prelude hiding ((<>))
@@ -36,14 +40,56 @@ import Acton.Env
 
 
 data TypeX                      = TypeX {
-                                    posnames   :: [Name],
-                                    indecl     :: Bool,
-                                    forced     :: Bool
-                                  } deriving (Show)
+                                    posnames    :: [Name],
+                                    indecl      :: Bool,
+                                    forced      :: Bool,
+                                    tyids       :: Map QName Int,
+                                    tyinfo      :: IntMap TyInfo,
+                                    typrotos    :: IntSet,
+                                    tyactors    :: IntSet
+                                  }
+
+data TyInfo                     = TyInfo {
+                                    tywild      :: Type,
+                                    tyabove     :: IntSet,
+                                    tybelow     :: IntSet,
+                                    tyattrs     :: [Name]
+                                  }
 
 type Env                        = EnvF TypeX
 
-typeX env0                      = setX env0 TypeX{ posnames = [], indecl = False, forced = False }
+typeX env0                      = setX env0 TypeX {
+                                    posnames    = [],
+                                    indecl      = False,
+                                    forced      = False,
+                                    tyids       = Map.empty,
+                                    tyinfo      = tyinfo0,
+                                    typrotos    = IntSet.empty,
+                                    tyactors    = IntSet.empty
+                                  }
+
+tyinfo0                         = IntMap.fromDistinctAscList pairs
+  where pairs                   = [ (tyid t, TyInfo t (iset above) (iset below) []) | (t,above,below) <- graph ]
+        tyid t                  = fromJust $ elemIndex t wtypes
+        iset ts                 = IntSet.fromDistinctAscList $ map tyid ts
+        wtypes                  = [ t | (t,_,_) <- graph ]
+        graph                   = [
+                                    (wOpt,      [wOpt],                 [wOpt,tNone]),      -- Watch out for tNone here!
+                                    (tNone,     [wOpt,tNone],           [tNone]),
+                                    (wFun,      [wOpt, wFun],           [wFun]),
+                                    (wTuple,    [wOpt, wTuple],         [wTuple]),
+                                    (fxProc,    [fxProc],               [fxProc,fxMut,fxPure,fxAction]),
+                                    (fxMut,     [fxProc,fxMut],         [fxMut,fxPure]),
+                                    (fxPure,    [fxProc,fxMut,fxPure],  [fxPure]),
+                                    (fxAction,  [fxProc,fxAction],      [fxAction])
+                                  ]
+        wFun                    = tFun tWild tWild tWild tWild
+        wTuple                  = tTuple tWild tWild
+        wOpt                    = tOpt tWild
+
+instance Show TypeX where
+    show _                      = ""
+
 
 instance Pretty TypeX where
     pretty _                    = empty
@@ -55,7 +101,42 @@ instance UFree TypeX where
     ufree x                     = []
 
 
-posdefine te env                = modX (define te env) $ \x -> x{ posnames = dom te ++ posnames x }
+nextid x                        = 1 + fst (IntMap.findMax $ tyinfo x)
+
+addconinfo                      :: TypeX -> (Name,NameInfo) -> TypeX
+addconinfo x (n,i)
+  | NClass q us te _ <- i       = addcon n q us te tid x
+  | NProto q us te _ <- i       = addproto $ addcon n q us te tid x
+  | NAct q _ _ te _ <- i        = addactor $ addcon n q [] te tid x
+  | otherwise                   = x
+  where tid                     = nextid x
+        addproto x              = x{ typrotos = IntSet.insert tid (typrotos x) }
+        addactor x              = x{ tyactors = IntSet.insert tid (tyactors x) }
+
+        addcon n q us te tid x  = x{ tyids = Map.insert (NoQ n) tid (tyids x), tyinfo = IntMap.insert tid info tyinfo' }
+          where ui              = [ tyids x Map.! tcname c | (_,c) <- us ]
+                info            = TyInfo {
+                                    tywild = tCon $ TC (NoQ n) [ tWild | _ <- q ],
+                                    tyabove = IntSet.fromList ui,
+                                    tybelow = IntSet.singleton tid,
+                                    tyattrs = nub $ concat $ dom te : [ tyattrs $ fromJust $ IntMap.lookup u $ tyinfo x | u <- ui ]
+                                  }
+                tyinfo'         = IntMap.mapWithKey addbelow (tyinfo x)
+                addbelow u info
+                  | u `elem` ui = info{ tybelow = IntSet.insert tid (tybelow info) }
+                  | otherwise   = info
+
+
+
+tdefine                         :: TEnv -> Env -> Env
+tdefine te env                  = modX env1 (\x -> foldl' addconinfo x te)
+  where env1                    = define te env
+
+tdefineVars                     :: QBinds -> Env -> Env
+tdefineVars q env               = env1
+  where env1                    = defineTVars q env
+
+posdefine te env                = modX (tdefine te env) $ \x -> x{ posnames = dom te ++ posnames x }
 
 setInDecl env                   = modX env $ \x -> x{ indecl = True }
 
@@ -243,7 +324,7 @@ data TypeState                          = TypeState {
                                                 unisubst        :: IntMap Type
                                           }
 
-initTypeState p                         = TypeState { nextint = 1, uniqprefix = p, effectstack = [], deferred = [], unisubst = Map.empty }
+initTypeState p                         = TypeState { nextint = 1, uniqprefix = p, effectstack = [], deferred = [], unisubst = IntMap.empty }
 
 type TypeM a                            = ExceptT TypeError (State TypeState) a
 
@@ -287,14 +368,14 @@ collectDeferred                         = lift $ state $ \st -> (deferred st, st
 usubstitute                             :: TUni -> Type -> TypeM ()
 usubstitute uv t                        = lift $
                                           --trace ("  #usubstitute " ++ prstr uv ++ " ~ " ++ prstr t) $
-                                          state $ \st -> ((), st{ unisubst = Map.insert (uvid uv) t (unisubst st)})
+                                          state $ \st -> ((), st{ unisubst = IntMap.insert (uvid uv) t (unisubst st)})
 
 usubstitution                           :: TypeM (IntMap Type)
 usubstitution                           = lift $ state $ \st -> (unisubst st, st)
 
 uextend                                 :: [(TUni,Type)] -> TypeM ()
 uextend s                               = lift $
-                                          state $ \st -> ((), st{ unisubst = Map.union (unisubst st) (Map.fromList [ (uvid u,t) | (u,t) <- s ])})
+                                          state $ \st -> ((), st{ unisubst = IntMap.union (unisubst st) (IntMap.fromList [ (uvid u,t) | (u,t) <- s ])})
 
 -- Name generation ------------------------------------------------------------------------------------------------------------------
 
@@ -467,7 +548,7 @@ instance USubst WTCon where
 
 instance USubst Type where
     usubst (TUni l u)               = do s <- usubstitution
-                                         case Map.lookup (uvid u) s of
+                                         case IntMap.lookup (uvid u) s of
                                             Just t  -> usubst t
                                             Nothing -> return (TUni l u)
     usubst (TVar l v)               = return $ TVar l v

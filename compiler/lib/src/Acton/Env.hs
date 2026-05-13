@@ -677,6 +677,11 @@ allCons env                 = allTypes isCon env
         isCon NAct{}        = True
         isCon _             = False
 
+allActors                   :: EnvF x -> [TCon]
+allActors env               = allTypes isActor env
+  where isActor NAct{}      = True
+        isActor _           = False
+
 allProtos env               = allTypes isProto env
   where isProto NProto{}    = True
         isProto _           = False
@@ -685,7 +690,7 @@ allConAttr                  :: EnvF x -> Name -> [TCon]
 allConAttr env n            = [ tc | tc <- allCons env, n `elem` allAttrs' env tc ]
 
 allConAttrUFree             :: EnvF x -> Name -> [TUni]
-allConAttrUFree env n       = concat [ ufree $ fst $ findAttr' env tc n | tc <- allCons env, n `elem` allAttrs' env tc ]
+allConAttrUFree env n       = concat [ ufree $ fst $ findAttr' env tc n | tc <- allConAttr env n ]
 
 allPConAttr                 :: EnvF x -> Name -> [PCon]
 allPConAttr env n           = [ p | p <- allProtos env, n `elem` allAttrs' env p ]

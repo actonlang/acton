@@ -513,7 +513,7 @@ allBelow env (TFX _ FXAction)       = [fxAction]
 allBelowProto env (TC n [t@TFX{},_])
   | n == primWrappedP               = reverse [ schematic (wtype w) | w <- witsByPName env n, t == (head $ tcargs $ proto w) ]
 allBelowProto env p
-  | p == pIdentity                  = ts ++ [ schematic $ tCon tc | tc <- allCons env, isActor env (tcname tc) ]
+  | p == pIdentity                  = ts ++ [ schematic $ tCon tc | tc <- allActors env ]
   | p == pEq                        = ts ++ [tOpt tWild]
   | otherwise                       = ts
   where ts                          = reverse [ schematic (wtype w) | w <- witsByPName env (tcname p) ] -- includes tvars
