@@ -21,6 +21,7 @@ module Acton.Parser
 import qualified Control.Monad.Trans.State.Strict as St
 import qualified Control.Exception
 import Control.Monad (void, when, join)
+import Data.IORef
 import Data.List (isPrefixOf)
 import Data.Maybe (fromMaybe)
 import Data.Void
@@ -114,13 +115,15 @@ makeReport ps src = errReport (map setSpan ps) src
 
 --- Main parsing and error message functions ------------------------------------------------------
 
-parseModule :: S.ModName -> String -> String -> IO S.Module
-parseModule qn fileName fileContent =
-    -- Add a newline at the end if there isn't one already to allow files ending without newline
-    let contentWithNewline = if null fileContent || last fileContent == '\n'
-                             then fileContent
-                             else fileContent ++ "\n"
-    in case runParser (St.evalStateT file_input initState) fileName contentWithNewline of
+parseModule :: S.ModName -> String -> String -> Maybe (Int -> Int -> IO ()) -> IO S.Module
+parseModule qn fileName fileContent mReportProgress = do
+    let contentWithNewline = addFinalNewline fileContent
+    st <- case mReportProgress of
+            Nothing -> return initState
+            Just reportProgress -> do
+              lastPercent <- newIORef 0
+              return initState { psProgress = Just (ParseProgressReporter (length contentWithNewline) lastPercent reportProgress) }
+    case runParser (St.evalStateT file_input st) fileName contentWithNewline of
         Left err -> Control.Exception.throw err
         Right (i,mdoc,s) -> return $ S.Module qn i mdoc s
 
@@ -129,12 +132,15 @@ parseModuleImports fileName fileContent = fst <$> parseModuleHeader fileName fil
 
 parseModuleHeader :: String -> String -> IO ([S.Import], Maybe String)
 parseModuleHeader fileName fileContent =
-    let contentWithNewline = if null fileContent || last fileContent == '\n'
-                             then fileContent
-                             else fileContent ++ "\n"
+    let contentWithNewline = addFinalNewline fileContent
     in case runParser (St.evalStateT import_input initState) fileName contentWithNewline of
         Left err -> Control.Exception.throw err
         Right res -> return res
+
+addFinalNewline :: String -> String
+addFinalNewline s
+    | null s || last s == '\n' = s
+    | otherwise = s ++ "\n"
 
 -- parseTest file = snd (unsafePerformIO (do cont <- readFile file; parseModule (S.modName ["test"]) file cont))
 
@@ -161,15 +167,52 @@ extractSrcSpan (Loc l r) src = sp
 
 -- Parser state -----------------------------------------------------------
 
-type ParserState = [CTX]  -- Parser contexts
+data ParserState = ParserState
+  { psContexts :: [CTX]
+  , psProgress :: Maybe ParseProgressReporter
+  }
+
+data ParseProgressReporter = ParseProgressReporter
+  { pprTotal :: Int
+  , pprLastPercent :: IORef Int
+  , pprReport :: Int -> Int -> IO ()
+  }
 
 type Parser = St.StateT ParserState (Parsec CustomParseError String)
 
-pushCtx ctx ctxs = ctx:ctxs
-popCtx ctxs      = tail ctxs
-getCtxs          = id
+pushCtx ctx st = st { psContexts = ctx : psContexts st }
+popCtx st      = st { psContexts = tail (psContexts st) }
+getCtxs        = psContexts
 
-initState        = []
+initState        = ParserState [] Nothing
+
+reportParseProgress :: Parser ()
+reportParseProgress = do
+    st <- St.get
+    case psProgress st of
+      Nothing -> return ()
+      Just p -> do
+        off <- getOffset
+        emitParseProgressUnsafe p off `seq` return ()
+
+-- The reporter is installed only when parseModule receives one and emits
+-- monotonic percent updates at successful statement/import boundaries.
+emitParseProgressUnsafe :: ParseProgressReporter -> Int -> ()
+emitParseProgressUnsafe p off = unsafePerformIO (emitParseProgress p off)
+{-# NOINLINE emitParseProgressUnsafe #-}
+
+emitParseProgress :: ParseProgressReporter -> Int -> IO ()
+emitParseProgress p off = do
+    let total = pprTotal p
+        completed = max 0 (min total off)
+        percent
+          | total <= 0 = 100
+          | otherwise = max 0 (min 100 ((completed * 100) `div` total))
+    prev <- readIORef (pprLastPercent p)
+    let shouldReport = percent > prev
+    when shouldReport $
+      writeIORef (pprLastPercent p) percent
+    when shouldReport (pprReport p completed total)
 
 -- Parser contexts ---------------------------------------------------------
 
@@ -1102,10 +1145,10 @@ import_input = sc2 *> do
     return (is, mbDocstring)
 
 imports :: Parser [S.Import]
-imports = many (L.nonIndented sc2 import_stmt <* eol <* sc2)
+imports = many (L.nonIndented sc2 import_stmt <* eol <* sc2 <* reportParseProgress)
 
 top_suite :: Parser S.Suite
-top_suite = concat <$> (many (L.nonIndented sc2 stmt <|> newline1))
+top_suite = concat <$> (many (L.nonIndented sc2 (stmt <* reportParseProgress) <|> (newline1 <* reportParseProgress)))
 
 validateModuleSuite :: S.Suite -> Parser ()
 validateModuleSuite stmts = do
@@ -1543,13 +1586,13 @@ data_stmt = addLoc $
 suiteWithDocstring :: CTX -> Pos -> Parser (S.Suite, Maybe String)
 suiteWithDocstring c p = do
     withCtx c colon
-    withCtx c (indentSuiteWithDocstring p <|> simple_stmt_with_docstring)
+    withCtx c (indentSuiteWithDocstring p <|> (simple_stmt_with_docstring <* reportParseProgress))
 
 suite :: CTX -> Pos -> Parser S.Suite
 suite c p = do
     o <- getOffset
     withCtx c colon
-    stmts <- withCtx c (indentSuite p <|> simple_stmt)
+    stmts <- withCtx c (indentSuite p <|> (simple_stmt <* reportParseProgress))
     return stmts
   where indentSuite p = do
           newline1
@@ -1570,7 +1613,7 @@ stmtAtIndentWithDocstring p1 = do
     case compare p1 p2 of
         LT -> do o <- getOffset
                  Control.Exception.throw $ IndentationError (Loc o o)
-        EQ -> stmtWithDocstring
+        EQ -> stmtWithDocstring <* reportParseProgress
         GT -> L.incorrectIndent GT p2 p1
 
 stmtAtIndent :: Pos -> Parser S.Suite
@@ -1579,7 +1622,7 @@ stmtAtIndent p1 = do
     case compare p1 p2 of
         LT -> do o <- getOffset
                  Control.Exception.throw $ IndentationError (Loc o o)
-        EQ -> stmt
+        EQ -> stmt <* reportParseProgress
         GT -> L.incorrectIndent GT p2 p1
 
 stmtWithDocstring :: Parser (S.Suite, Maybe String)

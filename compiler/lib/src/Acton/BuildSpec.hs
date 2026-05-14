@@ -352,7 +352,7 @@ findBodyOffsetsFromAST content varName (S.Module _ _ _ stmts) =
 parseModuleForSpec :: String -> Either String S.Module
 parseModuleForSpec content =
   let qn = S.ModName []  -- anonymous module
-  in case unsafePerformIO (E.try (AP.parseModule qn "Build.act" content) :: IO (Either E.SomeException S.Module)) of
+  in case unsafePerformIO (E.try (AP.parseModule qn "Build.act" content Nothing) :: IO (Either E.SomeException S.Module)) of
        Left e  -> Left (show e)
        Right m -> Right m
 

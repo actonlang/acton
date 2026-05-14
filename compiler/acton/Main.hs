@@ -1249,7 +1249,7 @@ printDocs gopts opts = do
           ".act" -> do
             let modname = A.modName $ map (replace ".act" "") $ splitOn "/" $ fileBody
             paths <- findPaths filename defaultCompileOptions
-            parsedRes <- parseActFile Source.diskSourceProvider modname filename
+            parsedRes <- parseActFile Source.diskSourceProvider modname filename Nothing
             (_snap, parsed) <- case parsedRes of
               Left diags -> do
                 printDiagnostics gopts defaultCompileOptions diags
@@ -1451,6 +1451,13 @@ initCliCompileHooks :: ProgressUI
                     -> IO CliCompileHooks
 initCliCompileHooks progressUI progressState gopts sched gen plan = do
     let neededTasks = cpNeededTasks plan
+        rootProj = ccRootProj (cpContext plan)
+        optsPlan = ccOpts (cpContext plan)
+        isBuiltinTask t = tkMod (gtKey t) == A.modName ["__builtin__"]
+        parseNeeded t =
+          case gtTask t of
+            ParseTask{} -> not (isBuiltinTask t) && not (C.only_build optsPlan)
+            _ -> False
     sizeEntries <- forM neededTasks $ \t -> do
       let key = gtKey t
           path = srcFile (gtPaths t) (tkMod key)
@@ -1458,7 +1465,7 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
       sz <- if exists then getFileSize path else return 0
       return (key, sz)
     progressRef <- newIORef (0 :: Double)
-    marksRef <- newIORef (M.empty :: M.Map TaskKey (Double, Bool))
+    marksRef <- newIORef (M.empty :: M.Map TaskKey (Double, Double, Bool))
     -- sizeMap is used for the progress bar indicator to determine how much a
     -- modules compilation should contribute to the overall progress. We use
     -- file size as a heuristic for this, but if all sizes are zero (e.g. due to
@@ -1480,12 +1487,23 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
             then 1 / totalWeight
             else fromIntegral (M.findWithDefault 0 key sizeMap) / totalWeight
         compilePhaseTotal = 85.0
-        frontRatio = 0.7
+        parseRatio = 0.1
+        frontRatio = 0.6
         backRatio = 0.3
+        totalPhaseWeight =
+          sum
+            [ weightFor (gtKey t) * (frontRatio + backRatio + if parseNeeded t then parseRatio else 0)
+            | t <- neededTasks
+            ]
+        shareForPhase t ratio =
+          if totalPhaseWeight <= 0
+            then 0
+            else compilePhaseTotal * weightFor (gtKey t) * ratio / totalPhaseWeight
         shareMap =
           M.fromList
-            [ (gtKey t, (compilePhaseTotal * weightFor (gtKey t) * frontRatio
-                        , compilePhaseTotal * weightFor (gtKey t) * backRatio))
+            [ (gtKey t, (shareForPhase t (if parseNeeded t then parseRatio else 0)
+                        , shareForPhase t frontRatio
+                        , shareForPhase t backRatio))
             | t <- neededTasks
             ]
     let gate = whenCurrentGen sched gen
@@ -1499,8 +1517,6 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
             else progressLogLine progressUI (render plainLogWidth)
         logDiagnostics optsT diags =
           gate (progressWithLog progressUI (printDiagnostics gopts optsT diags))
-        rootProj = ccRootProj (cpContext plan)
-        optsPlan = ccOpts (cpContext plan)
         termProgress = puTermProgress progressUI
         termEnabled = termProgressEnabled termProgress
         modLabel mn = modNameToString mn
@@ -1661,6 +1677,8 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
           in fitBuildLineLayout width labelWidth statusWidth False modLbl statusRender
         parseActiveLine proj mn =
           renderProjectLine proj mn (staticStatusRenderer "Parsing" "Parse")
+        parseProgressLine proj mn p =
+          renderProjectLine proj mn (parseStatusRenderer p)
         frontInitialLine proj mn =
           renderProjectLine proj mn (staticStatusRenderer "Kinds check" "Kinds")
         backActiveLine proj mn =
@@ -1668,6 +1686,11 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
         finalActiveLine width =
           fitBuildLineLayout width labelWidth statusWidth True "" (staticStatusRenderer "Final compilation" "Final")
         clamp01 x = max 0 (min 1 x)
+        parseProgressRatio p =
+          let total = ppTotal p
+          in if total <= 0
+               then 1
+               else clamp01 (fromIntegral (ppCompleted p) / fromIntegral total)
         progressRatio p =
           let total = fppTotal p
           in if total <= 0
@@ -1699,6 +1722,17 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
               in case fppPass p of
                    FrontPassKinds -> staticStatusRenderer "Kinds check" "Kinds" budget
                    FrontPassTypes -> Just (fullTypeStatus (fppCurrent p))
+        parseStatusRenderer p budget
+          | budget < 10 = Nothing
+          | otherwise =
+              let pct = floor (100 * parseProgressRatio p :: Double)
+                  full = "Parsing " ++ show pct ++ "%"
+                  short = "Parse " ++ show pct ++ "%"
+              in if length full <= budget
+                   then Just full
+                   else if length short <= budget
+                          then Just short
+                          else Just (show pct ++ "%")
         frontProgressLine proj mn p =
           renderProjectLine proj mn (frontStatusRenderer p)
         finalKey = TaskKey rootProj (A.modName ["__final__"])
@@ -1708,24 +1742,34 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
           when (termEnabled && delta > 0) $ do
             new <- atomicModifyIORef' progressRef (\x -> let x' = min compilePhaseTotal (x + delta) in (x', x'))
             setPercent (floor new)
-        shareFor key = M.findWithDefault (0, 0) key shareMap
-        creditFrontTo key frontFrac = gate $ do
-          let (frontShare, _) = shareFor key
+        shareFor key = M.findWithDefault (0, 0, 0) key shareMap
+        creditParseTo key parseFrac = gate $ do
+          let (parseShare, _, _) = shareFor key
           delta <- atomicModifyIORef' marksRef $ \m ->
-            let (frontDoneFrac, backDone) = M.findWithDefault (0, False) key m
+            let (parseDoneFrac, frontDoneFrac, backDone) = M.findWithDefault (0, 0, False) key m
+                parseDoneFrac' = max parseDoneFrac (clamp01 parseFrac)
+                deltaFrac = max 0 (parseDoneFrac' - parseDoneFrac)
+            in (M.insert key (parseDoneFrac', frontDoneFrac, backDone) m, parseShare * deltaFrac)
+          addProgress delta
+        creditFrontTo key frontFrac = gate $ do
+          let (_, frontShare, _) = shareFor key
+          delta <- atomicModifyIORef' marksRef $ \m ->
+            let (parseDoneFrac, frontDoneFrac, backDone) = M.findWithDefault (0, 0, False) key m
                 frontDoneFrac' = max frontDoneFrac (clamp01 frontFrac)
                 deltaFrac = max 0 (frontDoneFrac' - frontDoneFrac)
-            in (M.insert key (frontDoneFrac', backDone) m, frontShare * deltaFrac)
+            in (M.insert key (parseDoneFrac, frontDoneFrac', backDone) m, frontShare * deltaFrac)
           addProgress delta
+        creditParse key = creditParseTo key 1
+        creditParseProgress key p = creditParseTo key (parseProgressRatio p)
         creditFront key = creditFrontTo key 1
         creditFrontProgress key p = creditFrontTo key (frontPassFraction p)
         creditBack key = gate $ do
-          let (_, backShare) = shareFor key
+          let (_, _, backShare) = shareFor key
           delta <- atomicModifyIORef' marksRef $ \m ->
-            let (frontDoneFrac, backDone) = M.findWithDefault (0, False) key m
+            let (parseDoneFrac, frontDoneFrac, backDone) = M.findWithDefault (0, 0, False) key m
             in if backDone
                  then (m, 0)
-                 else (M.insert key (frontDoneFrac, True) m, backShare)
+                 else (M.insert key (parseDoneFrac, frontDoneFrac, True) m, backShare)
           addProgress delta
     setPercent 0
     let backJobKey job =
@@ -1757,9 +1801,17 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
               let key = gtKey t
                   proj = tkProj key
                   mn = tkMod key
-              in gate (progressStartTask progressUI progressState key (parseActiveLine proj mn) Nothing)
+              in gate (progressStartTask progressUI progressState key (parseActiveLine proj mn) (Just 0))
+          , chOnParseProgress = \t p ->
+              let key = gtKey t
+                  proj = tkProj key
+                  mn = tkMod key
+              in do
+                gate (progressUpdateTask progressUI progressState key (parseProgressLine proj mn p) (Just (parseProgressRatio p)))
+                creditParseProgress key p
           , chOnParseDone = \t mtime -> do
               gate (progressDoneTask progressUI progressState (gtKey t))
+              creditParse (gtKey t)
               when (not (quiet gopts optsPlan)) $
                 forM_ mtime $ \tParse -> do
                   let proj = tkProj (gtKey t)

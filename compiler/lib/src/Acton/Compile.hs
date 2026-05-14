@@ -95,6 +95,7 @@ module Acton.Compile
   , BackTiming(..)
   , FrontPass(..)
   , FrontPassProgress(..)
+  , ParseProgress(..)
   , CompileCallbacks(..)
   , defaultCompileCallbacks
   , BackJobCallbacks(..)
@@ -314,6 +315,11 @@ data FrontPassProgress = FrontPassProgress
   , fppCurrent :: Maybe String
   } deriving (Eq, Show)
 
+data ParseProgress = ParseProgress
+  { ppCompleted :: Int
+  , ppTotal :: Int
+  } deriving (Eq, Show)
+
 data TypeStmtTiming = TypeStmtTiming
   { tstCompleted :: Int
   , tstTotal :: Int
@@ -348,6 +354,7 @@ data BackTiming = BackTiming
 data CompileCallbacks = CompileCallbacks
   { ccOnDiagnostics :: GlobalTask -> C.CompileOptions -> [Diagnostic String] -> IO ()
   , ccOnParseStart :: GlobalTask -> C.CompileOptions -> IO ()
+  , ccOnParseProgress :: GlobalTask -> C.CompileOptions -> ParseProgress -> IO ()
   , ccOnParseDone :: GlobalTask -> C.CompileOptions -> Maybe TimeSpec -> IO ()
   , ccOnFrontResult :: GlobalTask -> C.CompileOptions -> FrontResult -> IO ()
   , ccOnFrontStart :: GlobalTask -> C.CompileOptions -> IO ()
@@ -363,6 +370,7 @@ defaultCompileCallbacks :: CompileCallbacks
 defaultCompileCallbacks = CompileCallbacks
   { ccOnDiagnostics = \_ _ _ -> return ()
   , ccOnParseStart = \_ _ -> return ()
+  , ccOnParseProgress = \_ _ _ -> return ()
   , ccOnParseDone = \_ _ _ -> return ()
   , ccOnFrontResult = \_ _ _ -> return ()
   , ccOnFrontStart = \_ _ -> return ()
@@ -647,6 +655,7 @@ prepareCompilePlanFromContext sp gopts ctx srcFiles allowPrune mChangedPaths = d
 data CompileHooks = CompileHooks
   { chOnDiagnostics :: GlobalTask -> C.CompileOptions -> [Diagnostic String] -> IO ()
   , chOnParseStart :: GlobalTask -> IO ()
+  , chOnParseProgress :: GlobalTask -> ParseProgress -> IO ()
   , chOnParseDone :: GlobalTask -> Maybe TimeSpec -> IO ()
   , chOnFrontStart :: GlobalTask -> IO ()
   , chOnFrontDone :: GlobalTask -> IO ()
@@ -663,6 +672,7 @@ defaultCompileHooks =
   CompileHooks
     { chOnDiagnostics = \_ _ _ -> return ()
     , chOnParseStart = \_ -> return ()
+    , chOnParseProgress = \_ _ -> return ()
     , chOnParseDone = \_ _ -> return ()
     , chOnFrontStart = \_ -> return ()
     , chOnFrontDone = \_ -> return ()
@@ -694,6 +704,7 @@ runCompilePlan sp gopts plan sched gen hooks = do
       callbacks = defaultCompileCallbacks
         { ccOnDiagnostics = \t optsT diags -> chOnDiagnostics hooks t optsT diags
         , ccOnParseStart = \t _ -> chOnParseStart hooks t
+        , ccOnParseProgress = \t _ p -> chOnParseProgress hooks t p
         , ccOnParseDone = \t _ mtime -> chOnParseDone hooks t mtime
         , ccOnFrontResult = \t _ fr -> chOnFrontResult hooks t fr
         , ccOnFrontStart = \t _ -> chOnFrontStart hooks t
@@ -893,14 +904,17 @@ missingIfaceDiagnostics ownerMn src missingMn =
 
 -- | Parse a module from source text, returning diagnostics on failure.
 -- Wraps parser, context, and indentation errors into a uniform format.
-parseActSource :: A.ModName -> FilePath -> String -> IO (Either [Diagnostic String] A.Module)
-parseActSource mn actFile srcContent = do
-  (Right <$> Acton.Parser.parseModule mn actFile srcContent)
+parseActSource :: A.ModName -> FilePath -> String -> Maybe (ParseProgress -> IO ()) -> IO (Either [Diagnostic String] A.Module)
+parseActSource mn actFile srcContent mOnProgress = do
+  (Right <$> Acton.Parser.parseModule mn actFile srcContent (fmap wrapProgress mOnProgress))
     `catch` handleParseBundle
     `catch` handleCustomParse
     `catch` handleContextError
     `catch` handleIndentationError
   where
+    wrapProgress onProgress completed total =
+      onProgress (ParseProgress completed total)
+
     handleParseBundle :: ParseErrorBundle String CustomParseError -> IO (Either [Diagnostic String] A.Module)
     handleParseBundle bundle =
       return $ Left [Diag.parseDiagnosticFromBundle actFile srcContent bundle]
@@ -952,14 +966,20 @@ parseActSnapshot :: A.ModName -> FilePath -> Source.SourceSnapshot -> IO (Either
 parseActSnapshot mn actFile snap = do
   cwd <- getCurrentDirectory
   let displayFile = makeRelative cwd actFile
-  parseActSource mn displayFile (Source.ssText snap)
+  parseActSource mn displayFile (Source.ssText snap) Nothing
 
 -- | Read and parse a source file via SourceProvider (overlay-aware).
 -- Returns both the snapshot and the parsed AST for reuse by callers.
-parseActFile :: Source.SourceProvider -> A.ModName -> FilePath -> IO (Either [Diagnostic String] (Source.SourceSnapshot, A.Module))
-parseActFile sp mn actFile = do
+parseActFile :: Source.SourceProvider
+             -> A.ModName
+             -> FilePath
+             -> Maybe (ParseProgress -> IO ())
+             -> IO (Either [Diagnostic String] (Source.SourceSnapshot, A.Module))
+parseActFile sp mn actFile mOnProgress = do
   snap <- Source.readSource sp actFile
-  emod <- parseActSnapshot mn actFile snap
+  cwd <- getCurrentDirectory
+  let displayFile = makeRelative cwd actFile
+  emod <- parseActSource mn displayFile (Source.ssText snap) mOnProgress
   return $ fmap (\m -> (snap, m)) emod
 
 -- | Read stable source metadata used for quick .ty reuse checks.
@@ -1414,8 +1434,13 @@ readModuleDoc sp gopts opts paths actFile = do
 -- | Materialize a source-backed task into a fully parsed ActonTask.
 -- ParseTask reuses the snapshot captured during graph discovery; TyTask reparses
 -- from the current source file because the cached header was deemed stale.
-materializeTask :: Source.SourceProvider -> A.ModName -> FilePath -> CompileTask -> IO CompileTask
-materializeTask sp mn actFile task =
+materializeTask :: Source.SourceProvider
+                -> A.ModName
+                -> FilePath
+                -> Maybe (ParseProgress -> IO ())
+                -> CompileTask
+                -> IO CompileTask
+materializeTask sp mn actFile mOnProgress task =
   case task of
     ActonTask{} -> return task
     ParseErrorTask{} -> return task
@@ -1425,7 +1450,7 @@ materializeTask sp mn actFile task =
         Left diags -> return (ParseErrorTask mn diags)
         Right m -> return (ActonTask mn srcContent bytes mSourceMeta m)
     TyTask{} -> do
-      parsedRes <- parseActFile sp mn actFile
+      parsedRes <- parseActFile sp mn actFile mOnProgress
       case parsedRes of
         Left diags -> return (ParseErrorTask mn diags)
         Right (snap, m) -> do
@@ -1435,7 +1460,7 @@ materializeTask sp mn actFile task =
     parseStoredSource mn' file srcContent = do
       cwd <- getCurrentDirectory
       let displayFile = makeRelative cwd file
-      parseActSource mn' displayFile srcContent
+      parseActSource mn' displayFile srcContent mOnProgress
 
 
 -- | Recursively read imports for a set of tasks within the same project.
@@ -2163,8 +2188,8 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
         then return (Right ())
         else do
           t' <- case gtTask t of
-            TyTask{} | forceAlt -> materializeTask sp mn actFile (gtTask t)
-            ParseTask{} -> materializeTask sp mn actFile (gtTask t)
+            TyTask{} | forceAlt -> materializeTask sp mn actFile Nothing (gtTask t)
+            ParseTask{} -> materializeTask sp mn actFile Nothing (gtTask t)
             _ -> return (gtTask t)
           case t' of
             ParseErrorTask{ parseDiagnostics = diags } -> do
@@ -2549,7 +2574,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
                             ccOnInfo callbacks ("  Stale " ++ modNameToString mn ++ ": missing dep hashes in " ++ Data.List.intercalate ", " (pubMissingItems ++ implMissingItems))
                     t' <- case taskCurrent of
                             ActonTask{} -> return taskCurrent
-                            _ -> materializeTask sp mn actFile taskCurrent
+                            _ -> materializeTask sp mn actFile Nothing taskCurrent
                     case t' of
                       ParseErrorTask{ parseDiagnostics = diags } -> return (key, Left diags)
                       ActonTask{ src = srcContent, srcBytes = srcBytes, sourceMeta = mSourceMeta, atree = m } -> do
@@ -2595,7 +2620,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
                       case tyRes of
                         Left diags -> return (key, Left diags)
                         Right (_ms, nmod, tmod, sourceMeta, moduleSrcBytesHash, modulePubHash, _moduleImplHash, imps, nameHashes, roots, tests, mdoc) -> do
-                          parsedRes <- parseActFile sp mn actFile
+                          parsedRes <- parseActFile sp mn actFile Nothing
                           case parsedRes of
                             Left diags -> return (key, Left diags)
                             Right (snap, parsedMod) -> do
@@ -2697,11 +2722,12 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
       let optsT = optsFor key
           mn = name (gtTask t)
           actFile = srcFile (gtPaths t) mn
+          onProgress p = ccOnParseProgress callbacks t optsT p
       timeStart <- getTime Monotonic
       parsed <- if C.only_build optsT
                   then return (gtTask t)
                   else case gtTask t of
-                         ParseTask{} -> materializeTask sp mn actFile (gtTask t)
+                         ParseTask{} -> materializeTask sp mn actFile (Just onProgress) (gtTask t)
                          _ -> return (gtTask t)
       case parsed of
         ParseTask{} -> return (ParseStage key, Right (StageParsed parsed Nothing))
