@@ -12,6 +12,13 @@
   - Type errors from independent total statements are collected into multiple
     diagnostics instead of stopping at the first failing statement.
 
+### Packages & Distribution
+- Change x86_64 Linux builds from statically linked GNU libc to dynamically
+  linked GNU libc while keeping other libraries statically linked. [#2774]
+  - Debian package builds now run on Debian 11 to provide a glibc 2.31 floor.
+  - CI now validates the dynamic library set and maximum required GLIBC version
+    for `acton`, `lsp-server-acton`, and `actondb`.
+
 ### Documentation
 - Document when and how to use the Acton container image, including
   copy-pastable Docker commands for checking the compiler version and building
@@ -3920,6 +3927,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#2761]: https://github.com/actonlang/acton/pull/2761
 [#2767]: https://github.com/actonlang/acton/pull/2767
 [#2773]: https://github.com/actonlang/acton/pull/2773
+[#2774]: https://github.com/actonlang/acton/pull/2774
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
