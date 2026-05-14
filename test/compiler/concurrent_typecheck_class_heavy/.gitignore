@@ -1,0 +1,4 @@
+.acton.lock
+build.zig*
+out
+src/concurrent_typecheck_class_heavy.act
