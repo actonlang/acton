@@ -16,9 +16,12 @@ module Acton.Types(reconstruct, showTyFile, prettySigs, TypeError(..), TypeError
 
 import Control.Concurrent.Async
 import Control.Concurrent.Chan
+import Control.Concurrent.MVar
 import Control.Concurrent.QSem
 import Control.DeepSeq
 import Control.Monad
+import Control.Monad.Except (runExceptT)
+import Control.Monad.State.Strict (runState)
 import Data.Maybe (isJust)
 import Data.List (nub, intersect, sort)
 import Pretty
@@ -177,110 +180,125 @@ infTop                                  :: Maybe TypeProgressCallback -> Maybe T
 infTop _ _ _ []                         = return ([], [])
 infTop progressCb inferredCb env ss     = do -- The scanner itself is sequential, but total statements, i.e.
                                              -- with a complete type signature can be independently type checked
-                                             -- in the background. Use RTS capabilities as this module's local
-                                             -- worker limit.
+                                             -- by a fixed worker queue in the background.
                                              ncap <- getNumCapabilities
-                                             -- Counting semaphore to limit number of background workers
-                                             sem <- newQSem (max 1 (min ncap (length ss)))
-                                             -- Progress is serialized through one channel so concurrent workers
-                                             -- do not call the UI callback directly.
+                                             -- nworkers is the active checkTopStmt parallelism. window is bounded
+                                             -- scanner lookahead, so generated modules cannot allocate one queued
+                                             -- result and closure per total top-level statement.
+                                             let nworkers = max 1 (min ncap (length ss))
+                                                 window = max 1 (min (10 * nworkers) (length ss))
+                                             -- slots is acquired before enqueueing and released by the worker
+                                             -- after that queued total statement has finished checking.
+                                             slots <- newQSem window
+                                             workQ <- newChan
+                                             -- Progress reporting is serialized through one channel so concurrent
+                                             -- workers do not call the UI callback directly.
                                              progressQ <- newChan
+                                             workers <- replicateM nworkers (async $ worker slots workQ progressQ)
                                              -- The progress reporter is independent from scanning/checking; it
                                              -- consumes start/finish events until it receives TopProgressStop.
                                              progressA <- async $ topProgress progressCb total progressQ
                                              -- Stop the reporter after all work has been collected, and wait so
                                              -- the final progress update is emitted before infTop returns.
                                              let stopProgress = writeChan progressQ TopProgressStop >> wait progressA
+                                                 -- Workers exit on Nothing, written only after collect has consumed
+                                                 -- all real jobs.
+                                                 stopWorkers = replicateM_ nworkers (writeChan workQ Nothing) >> mapM_ wait workers
                                                  -- run is the real top-level flow: scan left-to-right, collect
                                                  -- all completed worker results, then validate signatures once
                                                  -- the whole top-level environment is known.
                                                  run = do
-                                                   (te,ss,errs) <- go sem progressQ env [] [] ss
+                                                   (te,ss,errs) <- go slots workQ progressQ env [] [] ss
+                                                   stopWorkers
                                                    stopProgress
                                                    if null errs
                                                      then do runType "" (checkSigs env te)
                                                              return (te, ss)
                                                      else throwTopErrors errs
                                              -- If scan/check throws before stopProgress runs, make sure the
-                                             -- progress reporter does not stay blocked on readChan.
-                                             run `Control.Exception.finally` cancel progressA
+                                             -- background threads do not stay blocked on readChan.
+                                             run `Control.Exception.finally` (mapM_ cancel workers >> cancel progressA)
   where -- Total source progress is known syntactically before any type checking.
         total                           = sum (map stmtProgressWeight ss)
+
+        -- Each worker runs total statements from workQ. Nothing is the stop
+        -- marker; Just jobs must always publish their result MVar and release
+        -- their scanner slot before the worker moves on.
+        worker slots workQ progressQ    = do job <- readChan workQ
+                                             case job of
+                                               Nothing -> return ()
+                                               Just (env,te,s,item,result) -> do
+                                                 writeChan progressQ (TopProgressStarted item)
+                                                 Control.Exception.finally
+                                                   (runWorker env te s result)
+                                                   (writeChan progressQ (TopProgressFinished item) >> signalQSem slots)
+                                                 worker slots workQ progressQ
 
         -- End of input: every statement has either produced an immediate
         -- result or a worker wait action, so now wait for them and assemble the
         -- final top-level environment and typed suite in source order.
-        go sem q env tes rs []          = collect tes rs
+        go slots workQ q env tes rs []  = collect tes rs
         -- Main scanner loop. This is deliberately sequential: every new scan
         -- sees a type environment containing all previous top-level declarations.
-        go sem q env tes rs (s:ss)      = do let item = topProgressItem s
-                                             -- Mark this statement active before scanning or checking it.
-                                             writeChan q (TopProgressStarted item)
+        go slots workQ q env tes rs (s:ss)
+                                        = do let item = topProgressItem s
                                              -- scanOrCheck always scans in this thread.  If the statement is not
                                              -- total, scanOrCheck also runs checkTopStmt here and blocks progress.
-                                             r <- scanOrCheck env s
+                                             r <- scanOrCheck env s item q
                                              case r of
                                                -- A scan error stops the source-order scan.
                                                -- Existing worker results are still collected so their errors can
                                                -- be reported together with this one.
-                                               Left err -> do
-                                                 writeChan q (TopProgressFinished item)
+                                               Left err ->
                                                  collect tes (return (Left err) : rs)
                                                -- A total statement has a complete boundary after scanning.  Its
                                                -- declarations can be put in env immediately, while full checking
                                                -- continues in the background.
-                                               Right (True,te1,s1,_) ->
-                                                 -- withAsync scopes the worker over the recursive go call.  Since
-                                                 -- go eventually calls collect before returning, wait a is consumed
-                                                 -- while the Async is still alive.
-                                                 withAsync (Control.Exception.finally
-                                                   -- The semaphore limits only the actual checkTopStmt work, not
-                                                   -- the sequential scan of later statements.
-                                                   (Control.Exception.bracket_ (waitQSem sem) (signalQSem sem) (checkTotal env te1 s1))
-                                                   -- Progress for a total statement finishes when its background
-                                                   -- checker finishes, not when scanning schedules it.
-                                                   (writeChan q (TopProgressFinished item))) $ \a ->
-                                                     -- Continue scanning with the scanned declarations visible.
-                                                     -- Store te1 and wait a on reversed accumulators to preserve
-                                                     -- source order cheaply when collect reverses them.
-                                                     go sem q (define te1 env) (te1:tes) (wait a:rs) ss
+                                               Right (True,te1,s1,_) -> do
+                                                 -- Acquire a queue slot before enqueueing so scanner lookahead
+                                                 -- is bounded, then let a fixed worker run checkTopStmt.
+                                                 waitQSem slots
+                                                 result <- newEmptyMVar
+                                                 writeChan workQ (Just (env,te1,s1,item,result))
+                                                 -- Continue scanning with the scanned declarations visible.
+                                                 -- Store te1 and result wait on reversed accumulators to preserve
+                                                 -- source order cheaply when collect reverses them.
+                                                 go slots workQ q (define te1 env) (te1:tes) (readMVar result:rs) ss
                                                -- A non-total statement was already fully checked by scanOrCheck,
                                                -- so becomes complete / total before we get here and the scanner may
                                                -- continue.
-                                               Right (_,te2,_,ss1) -> do
-                                                 writeChan q (TopProgressFinished item)
-                                                 go sem q (define te2 env) (te2:tes) (return (Right ss1):rs) ss
+                                               Right (_,te2,_,ss1) ->
+                                                 go slots workQ q (define te2 env) (te2:tes) (return (Right ss1):rs) ss
         -- Wait for all statement results in source order, concatenate the
         -- accumulated environments, keep typed statements whose checks
         -- succeeded, and keep every error for aggregate reporting.
         collect tes rs                  = do xs <- sequence (reverse rs)
                                              return (concat (reverse tes), [ s | Right ss1 <- xs, s <- ss1 ], [ e | Left e <- xs ])
-        -- Scanner/checker front door for one statement.  Ordinary exceptions
+        -- Scanner/checker front door for one statement. Ordinary exceptions
         -- become Left values so infTop can collect multiple errors; async
         -- exceptions still escape through tryTop.
-        scanOrCheck env s               = tryTop $ do
-                                             r <- runType (nstr $ uniqPrefix s) $ do
+        scanOrCheck env s item q        = tryTop $ do
+                                             let p = nstr $ uniqPrefix s
+                                             ((total,te1,s1),st) <- runTypeFromState p (initTypeState p) $ do
                                                pushFX fxPure tNone
                                                -- The scanner returns the syntactic totality bit, the scanned
                                                -- top-level env, and the rewritten statement.
-                                               (total,te1,s1) <- scanTopStmt env s
-                                               if total
-                                                 -- Total means the signature boundary is complete, so the
-                                                 -- expensive check can be deferred to a worker.
-                                                 then return (True,te1,s1,[])
-                                                 -- Non-total means inference/checking is needed now.  This blocks
-                                                 -- the scanner because later statements need this completed env.
-                                                 else do (te2,ss1) <- checkTopStmt env te1 s1
-                                                         return (False,te2,s1,ss1)
-                                             -- Force enough of the result here that delayed type errors are caught
-                                             -- inside tryTop instead of escaping later from collect.
-                                             r <- forceTopResult r
-                                             case r of
-                                               -- Only non-total statements produce inferred signatures useful for
-                                               -- the "make this total" callback/output.
-                                               (False,te,_,_) -> emitTypeInferredIO inferredCb env te
-                                               _ -> return ()
-                                             return r
+                                               scanTopStmt env s
+                                             if total
+                                               -- Total means the signature boundary is complete, so the
+                                               -- expensive check can be deferred to a worker.
+                                               then do te1 <- Control.Exception.evaluate (force te1)
+                                                       return (True,te1,s1,[])
+                                               -- Non-total means inference/checking is needed now. This blocks
+                                               -- the scanner because later statements need this completed env.
+                                               else do
+                                                 writeChan q (TopProgressStarted item)
+                                                 Control.Exception.finally
+                                                   (do ((te2,ss1),_) <- runTypeFromState p st (checkTopStmt env te1 s1)
+                                                       (te2,ss1) <- forceChecked te2 ss1
+                                                       emitTypeInferredIO inferredCb env te2
+                                                       return (False,te2,s1,ss1))
+                                                   (writeChan q (TopProgressFinished item))
         -- Background worker body for a total statement.  It receives exactly
         -- the scanned env and scanned statement returned by scanTopStmt.
         checkTotal env te s             = tryTop $ do
@@ -288,20 +306,25 @@ infTop progressCb inferredCb env ss     = do -- The scanner itself is sequential
                                                pushFX fxPure tNone
                                                checkTopStmt env te s
                                              forceSuite te1 ss1
+        -- Once a worker has taken a job, collect may wait on result. Mask the
+        -- publish step so every claimed job fills the MVar; async exceptions are
+        -- rethrown afterwards so cancellation still propagates normally.
+        runWorker env te s result       = Control.Exception.mask $ \restore -> do
+                                             r <- Control.Exception.try (restore (checkTotal env te s))
+                                             case r of
+                                               Left err -> do putMVar result (Left err)
+                                                              when (isAsyncException err) (Control.Exception.throwIO err)
+                                               Right x -> putMVar result x
         -- Run a TypeM action and convert TypeM's Either error into the IO
         -- exception path used by tryTop.
         runType p m                     = do r <- Control.Exception.evaluate (runTypeMState p m)
                                              case r of
                                                Left err -> Control.Exception.throwIO err
                                                Right (x,_) -> return x
-        -- For total statements, force the scanned type environment now; the
-        -- typed suite is produced later by checkTotal.
-        forceTopResult (True,te,s,ss)   = do te <- Control.Exception.evaluate (force te)
-                                             return (True,te,s,ss)
-        -- For non-total statements, both env and typed suite already exist and
-        -- must be forced before scanOrCheck reports success.
-        forceTopResult (_,te,s,ss)      = do (te,ss) <- forceChecked te ss
-                                             return (False,te,s,ss)
+        runTypeFromState p st m         = do r <- Control.Exception.evaluate (runState (runExceptT m) st)
+                                             case r of
+                                               (Left err, _) -> Control.Exception.throwIO err
+                                               (Right x, st') -> return (x, st')
         -- checkTotal returns only the typed statements, but still forces the
         -- worker's type environment so any delayed failures surface in worker.
         forceSuite te ss                = snd <$> forceChecked te ss
@@ -339,8 +362,15 @@ removeProgressItem item (x:xs)
 
 activeProgressLabel                     :: [TopProgressItem] -> Maybe String
 activeProgressLabel []                  = Nothing
-activeProgressLabel active              = Just (formatNames (concatMap fst active))
-  where formatNames [n]                 = n
+activeProgressLabel active              = Just (formatActive active)
+  where formatActive active             = show nstmt ++ " " ++ plural "stmt" nstmt ++ ", "
+                                       ++ show nnames ++ " " ++ plural "name" nnames ++ ": "
+                                       ++ formatNames names
+          where nstmt                   = length active
+                names                   = concatMap fst active
+                nnames                  = length names
+        plural s n                      = s ++ if n == 1 then "" else "s"
+        formatNames [n]                 = n
         formatNames [n1,n2]             = n1 ++ ", " ++ n2
         formatNames (n1:n2:rest)        = n1 ++ ", " ++ n2 ++ " (+" ++ show (length rest) ++ " others)"
         formatNames []                  = ""
