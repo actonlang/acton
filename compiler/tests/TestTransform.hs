@@ -22,9 +22,9 @@ import Tests.CPretty
 import InterfaceFiles
 
 
-main                  = do (_,m) <- P.parseModule (ModName [name "__builtin__"]) "__builtin__.act"
+main                  = do src <- readFile "__builtin__.act"
+                           m <- P.parseModule (ModName [name "__builtin__"]) "__builtin__.act" src Nothing
                            let m1  = transform m
                            putStrLn (render(cprint m1))
-
 
 

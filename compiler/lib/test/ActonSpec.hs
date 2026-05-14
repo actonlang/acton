@@ -99,6 +99,17 @@ main = do
 
     describe "Pass 1: Parser" $ do
 
+      it "reports rough parse progress by source offset" $ do
+        progressRef <- newIORef []
+        _ <- P.parseModule (S.modName ["progress"]) "progress.act" "x = 1\n" (Just $ \completed total ->
+          modifyIORef' progressRef (++ [(completed, total)]))
+        progress <- readIORef progressRef
+        let completed = map fst progress
+            monotonic xs = and (zipWith (<=) xs (drop 1 xs))
+        progress `shouldSatisfy` (not . null)
+        completed `shouldSatisfy` monotonic
+        last progress `shouldBe` (6, 6)
+
       describe "Basic Syntax" $ do
         testParse env0 ["syntax1"]
 
@@ -937,7 +948,7 @@ main = do
             actFile = "<top_non_total_sig>"
             sysTypesPath = ".." </> ".." </> "dist" </> "base" </> "out" </> "types"
             onInferred names sig = modifyIORef' sigsRef ((names, sig) :)
-        parsed <- liftIO $ P.parseModule moduleName actFile src
+        parsed <- liftIO $ P.parseModule moduleName actFile src Nothing
         env <- liftIO $ Acton.Env.mkEnv [sysTypesPath] env0 parsed
         kchecked <- liftIO $ Acton.Kinds.check env parsed
         _ <- liftIO $ Acton.Types.reconstruct Nothing (Just onInferred) env kchecked
@@ -1797,7 +1808,7 @@ parseAct env0 modulePath = do
       sysTypesPath = ".." </> ".." </> "dist" </> "base" </> "out" </> "types"
 
   src <- liftIO $ readFile act_file
-  parsed <- liftIO $ P.parseModule moduleName act_file src
+  parsed <- liftIO $ P.parseModule moduleName act_file src Nothing
   env <- liftIO $ Acton.Env.mkEnv [sysTypesPath] env0 parsed
   return (env, parsed)
 
@@ -1805,7 +1816,7 @@ typecheckSource env0 modName src = do
   let moduleName = S.modName [modName]
       actFile = "<" ++ modName ++ ">"
       sysTypesPath = ".." </> ".." </> "dist" </> "base" </> "out" </> "types"
-  parsed <- liftIO $ P.parseModule moduleName actFile src
+  parsed <- liftIO $ P.parseModule moduleName actFile src Nothing
   env <- liftIO $ Acton.Env.mkEnv [sysTypesPath] env0 parsed
   kchecked <- liftIO $ Acton.Kinds.check env parsed
   (_, tchecked, _, _, _) <- liftIO $ Acton.Types.reconstruct Nothing Nothing env kchecked
