@@ -39,7 +39,7 @@ import System.FilePath ((</>), (<.>), joinPath)
 
 -- | Generate documentation from a module in Markdown format with types
 docModuleWithTypes :: NameInfo -> Module -> Doc
-docModuleWithTypes (NModule tenv mdocstring) (Module qn _ _ stmts) =
+docModuleWithTypes (NModule _ tenv mdocstring) (Module qn _ _ stmts) =
     -- Use module docstring from NModule
     let moduleDocstring = mdocstring
         (title, restDoc) = case moduleDocstring of
@@ -92,7 +92,7 @@ extractNameDocstring (NAct _ _ _ _ mdoc) = mdoc
 extractNameDocstring (NClass _ _ _ mdoc) = mdoc
 extractNameDocstring (NProto _ _ _ mdoc) = mdoc
 extractNameDocstring (NExt _ _ _ _ _ mdoc) = mdoc
-extractNameDocstring (NModule _ mdoc) = mdoc
+extractNameDocstring (NModule _ _ mdoc) = mdoc
 extractNameDocstring _ = Nothing
 
 -- | Document a declaration in Markdown format with types
@@ -481,7 +481,7 @@ dim False = ""
 
 -- | Generate ASCII documentation from a module with unified style and type handling
 docModuleAsciiUnified :: Bool -> NameInfo -> Module -> Doc
-docModuleAsciiUnified useStyle (NModule tenv mdocstring) (Module qn _ _ stmts) =
+docModuleAsciiUnified useStyle (NModule _ tenv mdocstring) (Module qn _ _ stmts) =
     -- Use module docstring from NModule
     let moduleDocstring = mdocstring
         (title, restDoc) = case moduleDocstring of
@@ -1560,7 +1560,7 @@ htmlScript = unlines
 
 -- | Generate HTML documentation from a module with type information
 docModuleHtmlWithTypes :: NameInfo -> Module -> Doc
-docModuleHtmlWithTypes (NModule tenv mdocstring) (Module modName _ _ stmts) =
+docModuleHtmlWithTypes (NModule _ tenv mdocstring) (Module modName _ _ stmts) =
     -- Use module docstring from NModule
     let moduleDocstring = mdocstring
         (title, restDoc) = case moduleDocstring of

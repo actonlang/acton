@@ -18,16 +18,26 @@ import Control.Monad
 import qualified Control.Exception
 import Control.Monad.State.Strict
 import Control.Monad.Except
-import qualified Data.IntMap.Strict as Map
-import Data.IntMap.Strict (IntMap)
 import Data.Char
 import Error.Diagnose hiding ((<>), err)
 import Prelude hiding ((<>))
+
+import qualified Data.Map.Strict as Map
+import Data.Map.Strict (Map)
+
+import qualified Data.Set as Set
+import Data.Set (Set)
+
+import qualified Data.IntMap.Strict as IntMap
+import Data.IntMap.Strict (IntMap)
+import qualified Data.IntSet as IntSet
+import Data.IntSet (IntSet)
 
 import Pretty
 import Utils
 import Acton.Syntax
 import Acton.Builtin
+import Acton.Prim
 import Acton.Printer
 import Acton.Names
 import Acton.NameInfo
@@ -36,26 +46,180 @@ import Acton.Env
 
 
 data TypeX                      = TypeX {
-                                    posnames   :: [Name],
-                                    indecl     :: Bool,
-                                    forced     :: Bool
-                                  } deriving (Show)
+                                    witnesses   :: [Witness],
+                                    posnames    :: [Name],
+                                    indecl      :: Bool,
+                                    forced      :: Bool,
+                                    tyids       :: Map QName Int,
+                                    tyinfos     :: IntMap TyInfo,
+                                    typrotos    :: IntSet,
+                                    tyactors    :: IntSet
+                                  }
+
+data TyInfo                     = TyInfo {
+                                    tywild      :: Type,
+                                    tyabove     :: IntSet,
+                                    tybelow     :: IntSet,
+                                    tyattrs     :: Set Name
+                                  }
 
 type Env                        = EnvF TypeX
 
-typeX env0                      = setX env0 TypeX{ posnames = [], indecl = False, forced = False }
+initTypeEnv                     :: Env0 -> Env
+initTypeEnv env0                = setX env0 $ foldl' importInfo x0 imps
+  where x0                      = TypeX {
+                                    witnesses   = primWits,
+                                    posnames    = [],
+                                    indecl      = False,
+                                    forced      = False,
+                                    tyids       = Map.empty,
+                                    tyinfos     = tyinfos0,
+                                    typrotos    = IntSet.empty,
+                                    tyactors    = IntSet.empty
+                                  }
+        importInfo x (m,te)     = setupCons f te $ setupWits f te x
+          where f               = GName m
+        imps | inBuiltin env0   = []
+             | otherwise        = [ (m, fromJust $ lookupMod m env0) | m <- mBuiltin : transitiveImports env0 ]
+
+
+tyinfos0                        = IntMap.fromDistinctAscList pairs
+  where pairs                   = [ (tyid t, TyInfo t (iset above) (iset below) Set.empty) | (t,above,below) <- graph ]
+        tyid t                  = fromJust $ elemIndex t wtypes
+        iset ts                 = IntSet.fromDistinctAscList $ map tyid ts
+        wtypes                  = [ t | (t,_,_) <- graph ]
+        graph                   = [
+                                    (wOpt,      [wOpt],                 [wOpt,tNone]),      -- Watch out for tNone here!
+                                    (tNone,     [wOpt,tNone],           [tNone]),
+                                    (wFun,      [wOpt, wFun],           [wFun]),
+                                    (wTuple,    [wOpt, wTuple],         [wTuple]),
+                                    (fxProc,    [fxProc],               [fxProc,fxMut,fxPure,fxAction]),
+                                    (fxMut,     [fxProc,fxMut],         [fxMut,fxPure]),
+                                    (fxPure,    [fxProc,fxMut,fxPure],  [fxPure]),
+                                    (fxAction,  [fxProc,fxAction],      [fxAction])
+                                  ]
+        wFun                    = tFun tWild tWild tWild tWild
+        wTuple                  = tTuple tWild tWild
+        wOpt                    = tOpt tWild
+
+instance Show TypeX where
+    show _                      = ""
+
+printX env                      = render (nest 4 $ vcat $ map (prinfo x) $ Map.assocs $ tyids x)
+  where x                       = envX env
+
 
 instance Pretty TypeX where
-    pretty _                    = empty
+    pretty x                    = text "--- witnesses:"  $+$
+                                  vcat (map pretty (witnesses x))
+
+prinfo x (n, tid)               = pretty (noq n) <+> text "=" <+> pretty tid <> colon $+$
+                                  nest 4 (text "above" <> colon <+> commaSep pretty (IntSet.toAscList $ tyabove info) $+$
+                                          text "below" <> colon <+> commaSep pretty (IntSet.toAscList $ tybelow info) $+$
+                                          text "attrs" <> colon <+> commaSep pretty (Set.elems $ tyattrs info))
+  where info                    = tyinfos x IntMap.! tid
 
 instance USubst TypeX where
-    usubst x                    = return x
+    usubst x                    = do we <- usubst (witnesses x)
+                                     return x{ witnesses = we }
 
 instance UFree TypeX where
-    ufree x                     = []
+    ufree x                     = ufree (witnesses x)
 
 
-posdefine te env                = modX (define te env) $ \x -> x{ posnames = dom te ++ posnames x }
+nextid x                        = 1 + fst (IntMap.findMax $ tyinfos x)
+
+addconinfo                      :: (Name -> QName) -> TypeX -> (Name,NameInfo) -> TypeX
+addconinfo f x (n,i)
+  | NClass q us te _ <- i       = addcon n q us te x
+  | NProto q us te _ <- i       = addproto $ addcon n q us te x
+  | NAct q _ _ te _ <- i        = addactor $ addcon n q [] te x
+  | otherwise                   = x
+  where tid                     = nextid x
+        addproto x              = x{ typrotos = IntSet.insert tid (typrotos x) }
+        addactor x              = x{ tyactors = IntSet.insert tid (tyactors x) }
+
+        addcon n q us te x      = x{ tyids = Map.insert (f n) tid (tyids x), tyinfos = IntMap.insert tid info tyinfos' }
+          where ui              = [ tyids x Map.! tcname c | (_,c) <- us ]
+                info            = TyInfo {
+                                    tywild = tCon $ TC (NoQ n) [ tWild | _ <- q ],
+                                    tyabove = IntSet.fromList ui,
+                                    tybelow = IntSet.singleton tid,
+                                    tyattrs = foldr Set.union (Set.fromList $ dom te) [ tyattrs $ fromJust $ IntMap.lookup u $ tyinfos x | u <- ui ]
+                                  }
+                tyinfos'        = foldr (IntMap.adjust addbelow) (tyinfos x) ui
+                addbelow info   = info{ tybelow = IntSet.insert tid (tybelow info) }
+
+
+
+tydefine                        :: TEnv -> Env -> Env
+tydefine te env                 = modX (define te env) (setupCons f te . setupWits NoQ te)
+  where f                       = if inBuiltin env then GName mBuiltin else NoQ
+
+setupCons                       :: (Name -> QName) -> TEnv -> TypeX -> TypeX
+setupCons f te x                = foldl' (addconinfo f) x te
+ 
+setupWits                       :: (Name -> QName) -> TEnv -> TypeX -> TypeX
+setupWits f te x                = foldl' addWit x wits
+  where wits                    = [ WClass q (tCon c) p (f n) ws (length opts) | (n, NExt q c ps te' opts _) <- te, (ws,p) <- ps ]
+
+addvarinfo x (tv, c, _)         = x{ tyids = Map.insert (NoQ $ tvname tv) tid (tyids x), tyinfos = IntMap.insert tid info tyinfos' }
+  where tid                     = nextid x
+        ci                      = tyinfos x IntMap.! (tyids x Map.! tcname c)
+        info                    = TyInfo {
+                                    tywild = tVar tv,
+                                    tyabove = IntSet.insert tid $ tyabove ci,
+                                    tybelow = IntSet.singleton tid,
+                                    tyattrs = tyattrs ci
+                                  }
+        tyinfos'                = IntSet.foldr' (IntMap.adjust addbelow) (tyinfos x) (tyabove ci)
+        addbelow info           = info{ tybelow = IntSet.insert tid (tybelow info) }
+
+tydefineVars                    :: QBinds -> Env -> Env
+tydefineVars q env              = modX env1 (\x -> foldl' addvarinfo x tvs)
+  where env1                    = modX env0 (\x -> foldl' addWit x wits)
+        env0                    = defineTVars q env
+        tvs                     = [ (TV k v, c, us) | (v, NTVar k c us) <- take (length q) (names env0), let tv = TV k v ]
+        wits                    = [ WInst [] (tVar tv) p (NoQ $ tvarWit tv u) wchain | (tv, _, us) <- tvs, u <- us, (wchain,p) <- findAncestry env u ]
+
+tydefineInst                    :: TCon -> [WTCon] -> Name -> Env -> Env
+tydefineInst c ps w env         = modX env (\x -> foldl' addWit x wits)
+  where wits                    = [ WInst [] (tCon c) p (NoQ w) ws | (ws,p) <- ps ]
+
+addWit                          :: TypeX -> Witness -> TypeX
+addWit x wit
+  | null same                   = x{ witnesses = wit : witnesses x }
+  | otherwise                   = x
+  where same                    = [ w | w <- witsByPNameX x (tcname $ proto wit), wtype w == wtype wit ]
+
+witsByPNameX x pn               = [ w | w <- witnesses x, tcname (proto w) == pn ]
+
+witsByPName                     :: Env -> QName -> [Witness]
+witsByPName env pn              = witsByPNameX (envX env) pn
+
+witsByTName                     :: Env -> QName -> [Witness]
+witsByTName env tn              = [ w | w <- witnesses (envX env), eqname (wtype w) ]
+  where eqname (TCon _ c)       = tcname c == tn
+        eqname (TVar _ v)       = NoQ (tvname v) == tn
+        eqname _                = False
+
+limitQuant                      :: TUni -> Env -> Env
+limitQuant (UV _ l _) env
+  | n <= 0                      = env
+  | otherwise                   = modX env1 $ \x -> x{ witnesses = dropw n (witnesses x) }
+  where env1                    = env{ names = dropv n (names env), qlevel = qlevel env - n }
+        n                       = qlevel env - l
+        dropv 0 te              = te
+        dropv n ((v,i):te)
+          | NTVar{} <- i        = dropv (n-1) te
+          | otherwise           = (v,i) : dropv n te
+        dropw 0 we              = we
+        dropw n (w:we)
+          | WInst{} <- w        = dropw (n-1) (dropWhile ((==wtype w) . wtype) we)
+          | otherwise           = w : dropw n we
+
+
+posdefine te env                = modX (tydefine te env) $ \x -> x{ posnames = dom te ++ posnames x }
 
 setInDecl env                   = modX env $ \x -> x{ indecl = True }
 
@@ -243,7 +407,7 @@ data TypeState                          = TypeState {
                                                 unisubst        :: IntMap Type
                                           }
 
-initTypeState p                         = TypeState { nextint = 1, uniqprefix = p, effectstack = [], deferred = [], unisubst = Map.empty }
+initTypeState p                         = TypeState { nextint = 1, uniqprefix = p, effectstack = [], deferred = [], unisubst = IntMap.empty }
 
 type TypeM a                            = ExceptT TypeError (State TypeState) a
 
@@ -287,14 +451,14 @@ collectDeferred                         = lift $ state $ \st -> (deferred st, st
 usubstitute                             :: TUni -> Type -> TypeM ()
 usubstitute uv t                        = lift $
                                           --trace ("  #usubstitute " ++ prstr uv ++ " ~ " ++ prstr t) $
-                                          state $ \st -> ((), st{ unisubst = Map.insert (uvid uv) t (unisubst st)})
+                                          state $ \st -> ((), st{ unisubst = IntMap.insert (uvid uv) t (unisubst st)})
 
 usubstitution                           :: TypeM (IntMap Type)
 usubstitution                           = lift $ state $ \st -> (unisubst st, st)
 
 uextend                                 :: [(TUni,Type)] -> TypeM ()
 uextend s                               = lift $
-                                          state $ \st -> ((), st{ unisubst = Map.union (unisubst st) (Map.fromList [ (uvid u,t) | (u,t) <- s ])})
+                                          state $ \st -> ((), st{ unisubst = IntMap.union (unisubst st) (IntMap.fromList [ (uvid u,t) | (u,t) <- s ])})
 
 -- Name generation ------------------------------------------------------------------------------------------------------------------
 
@@ -467,7 +631,7 @@ instance USubst WTCon where
 
 instance USubst Type where
     usubst (TUni l u)               = do s <- usubstitution
-                                         case Map.lookup (uvid u) s of
+                                         case IntMap.lookup (uvid u) s of
                                             Just t  -> usubst t
                                             Nothing -> return (TUni l u)
     usubst (TVar l v)               = return $ TVar l v
@@ -620,7 +784,7 @@ instance USubst NameInfo where
     usubst (NTVar k c ps)       = NTVar k <$> usubst c <*> usubst ps
     usubst (NAlias qn)          = NAlias <$> return qn
     usubst (NMAlias m)          = NMAlias <$> return m
-    usubst (NModule te doc)     = NModule <$> return te <*> return doc     -- actually usubst te, but te has no free variables (top-level)
+    usubst (NModule ms te doc)  = NModule ms <$> return te <*> return doc     -- actually usubst te, but te has no free variables (top-level)
     usubst NReserved            = return NReserved
 
 instance USubst Witness where
@@ -632,12 +796,11 @@ instance USubst Witness where
 
 instance USubst Env where
     usubst env                  = do ne <- usubst (names env)
-                                     we <- usubst (witnesses env)
                                      ex <- usubst (envX env)
-                                     return env{ names = ne, witnesses = we, envX = ex }
+                                     return env{ names = ne, envX = ex }
 
 instance UFree Env where
-    ufree env                   = ufree (names env) ++ ufree (witnesses env) ++ ufree (envX env)
+    ufree env                   = ufree (names env) ++ ufree (envX env)
 
 
 -- Well-formed tycon applications -------------------------------------------------------------------------------------------------
