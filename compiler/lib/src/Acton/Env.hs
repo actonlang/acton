@@ -51,6 +51,7 @@ mkEnv spath env m           = getImps spath env (imps m)
 data EnvF x                 = EnvF {
                                 names      :: TEnv,
                                 imports    :: [ModName],
+                                improots   :: [Name],
                                 modules    :: TEnv,
                                 hmodules   :: HTEnv,
                                 thismod    :: Maybe ModName,
@@ -63,8 +64,8 @@ type Env0                   = EnvF ()
 
 
 setX                        :: EnvF y -> x -> EnvF x
-setX env x                  = EnvF { names = names env, imports = imports env, modules = modules env,
-                                     hmodules = hmodules env, thismod = thismod env,
+setX env x                  = EnvF { names = names env, imports = imports env, improots = improots env,
+                                     modules = modules env, hmodules = hmodules env, thismod = thismod env,
                                      context = context env, qlevel = qlevel env, envX = x }
 
 modX                        :: EnvF x -> (x -> x) -> EnvF x
@@ -235,6 +236,7 @@ publicTEnv                 = filter (isPublicName . fst)
 initEnv                    :: FilePath -> Bool -> IO Env0
 initEnv path True          = return $ EnvF{ names = [(nPrim,NMAlias mPrim)],
                                             imports = [],
+                                            improots = [],
                                             modules = [(nPrim,NModule [] primEnv Nothing)],
                                             hmodules = M.empty, 
                                             thismod = Nothing,
@@ -246,6 +248,7 @@ initEnv path False         = do (_,nmod,_,_,_,_,_,_,_,_,_,_) <- InterfaceFiles.r
                                     envBuiltinPublic = publicTEnv envBuiltin
                                     env0 = EnvF{ names = [(nPrim,NMAlias mPrim), (nBuiltin,NMAlias mBuiltin)],
                                                  imports = [],
+                                                 improots = [],
                                                  modules = [(nPrim,NModule [] primEnv Nothing), (nBuiltin,NModule [] envBuiltin builtinDocstring)],
                                                  hmodules = M.empty,
                                                  thismod = Nothing,
@@ -275,6 +278,9 @@ addImport                   :: ModName -> EnvF x -> EnvF x
 addImport m env
   | m `elem` imports env    = env
   | otherwise               = env{ imports = m : imports env }
+
+addImpRoot m env            = env{ improots = n : improots env }
+  where ModName (n:_)       = m
 
 getImports env              = reverse (imports env)
 
@@ -411,7 +417,13 @@ lookupModule (ModName ns) env   = f ns (modules env)
 
 
 isMod                       :: EnvF x -> [Name] -> Bool
-isMod env ns                = maybe False (const True) (findHMod (ModName ns) env)
+isMod env ns@(n:_)          = maybe False (const True) (findHMod (ModName ns) env) && rooted
+  where rooted              = n `elem` improots env || isMAlias n env
+
+isMAlias                    :: Name -> EnvF x -> Bool
+isMAlias n env              = case lookup n (names env) of
+                                Just NMAlias{} -> True
+                                _ -> False
 
 isAlias                     :: Name -> EnvF x -> Bool
 isAlias n env               = case lookup n (names env) of
@@ -991,7 +1003,7 @@ impModule spath env (Import _ ms)
   where imp env []              = return env
         imp env (ModuleItem m as : is)
                                 = do (env1,te) <- doImp spath env m
-                                     let env2 = maybe id (\n->define [(n, NMAlias m)]) as env1
+                                     let env2 = maybe (addImpRoot m) (\n->define [(n, NMAlias m)]) as env1
                                      imp env2 is
 impModule spath env (FromImport _ (ModRef (0,Just m)) items)
                                 = do (env1,te) <- doImp spath env m
