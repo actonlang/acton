@@ -20,7 +20,12 @@ module Acton.Parser
 
 import qualified Control.Monad.Trans.State.Strict as St
 import qualified Control.Exception
-import Control.Monad (void, when, join)
+import Control.Concurrent.Async (Async, async, cancel, wait)
+import Control.Concurrent.Chan
+import Control.Concurrent.MVar
+import Control.Concurrent.QSem
+import Control.Monad (replicateM, replicateM_, void, when, join)
+import Control.DeepSeq (rnf)
 import Data.IORef
 import Data.List (isPrefixOf)
 import Data.Maybe (fromMaybe)
@@ -28,10 +33,12 @@ import Data.Void
 import Data.Char
 import qualified Data.List.NonEmpty as N
 import qualified Data.Set as Set
+import GHC.Conc (getNumCapabilities)
 import Numeric
 import Text.Megaparsec
 import Text.Megaparsec.Char
 import Text.Megaparsec.Error
+import Text.Megaparsec.Pos (mkPos)
 --import Control.Monad.Combinators.Expr
 import Text_Megaparsec_Expr
 import qualified Text.Megaparsec.Char.Lexer as L
@@ -118,11 +125,22 @@ makeReport ps src = errReport (map setSpan ps) src
 parseModule :: S.ModName -> String -> String -> Maybe (Int -> Int -> IO ()) -> IO S.Module
 parseModule qn fileName fileContent mReportProgress = do
     let contentWithNewline = addFinalNewline fileContent
-    st <- case mReportProgress of
-            Nothing -> return initState
-            Just reportProgress -> do
-              lastPercent <- newIORef 0
-              return initState { psProgress = Just (ParseProgressReporter (length contentWithNewline) lastPercent reportProgress) }
+    (is, mdoc, bodyStart) <-
+      case runParser (St.evalStateT module_header_with_offset initState) fileName contentWithNewline of
+        Left err -> Control.Exception.throwIO err
+        Right h  -> return h
+    parsed <- parseTopLevelChunks fileName contentWithNewline bodyStart mReportProgress
+    let suite = regroupTopDecls (concat parsed)
+    case runParser (St.evalStateT (validateModuleSuite suite) initState) fileName contentWithNewline of
+      Left err -> Control.Exception.throwIO err
+      Right () -> do
+        reportFinalParseProgress contentWithNewline mReportProgress
+        return $ S.Module qn is mdoc suite
+
+parseModuleSerial :: S.ModName -> String -> String -> Maybe (Int -> Int -> IO ()) -> IO S.Module
+parseModuleSerial qn fileName fileContent mReportProgress = do
+    let contentWithNewline = addFinalNewline fileContent
+    st <- parserStateWithProgress contentWithNewline mReportProgress
     case runParser (St.evalStateT file_input st) fileName contentWithNewline of
         Left err -> Control.Exception.throw err
         Right (i,mdoc,s) -> return $ S.Module qn i mdoc s
@@ -185,6 +203,22 @@ popCtx st      = st { psContexts = tail (psContexts st) }
 getCtxs        = psContexts
 
 initState        = ParserState [] Nothing
+
+parserStateWithProgress :: String -> Maybe (Int -> Int -> IO ()) -> IO ParserState
+parserStateWithProgress contentWithNewline mReportProgress =
+    case mReportProgress of
+      Nothing -> return initState
+      Just reportProgress -> do
+        lastPercent <- newIORef 0
+        return initState { psProgress = Just (ParseProgressReporter (length contentWithNewline) lastPercent reportProgress) }
+
+reportFinalParseProgress :: String -> Maybe (Int -> Int -> IO ()) -> IO ()
+reportFinalParseProgress contentWithNewline mReportProgress =
+    case mReportProgress of
+      Nothing -> return ()
+      Just reportProgress ->
+        let total = length contentWithNewline
+        in reportProgress total total
 
 reportParseProgress :: Parser ()
 reportParseProgress = do
@@ -306,6 +340,10 @@ instance Control.Exception.Exception CustomParseException
 
 parseException :: SrcLoc -> CustomParseError -> a
 parseException loc customErr = Control.Exception.throw $ CustomParseException loc customErr
+
+data ChunkScanError = ChunkScanError SrcLoc String deriving (Show, Eq)
+
+instance Control.Exception.Exception ChunkScanError
 
 --- Whitespace consumers ----------------------------------------------------
 
@@ -1127,7 +1165,7 @@ module_docstring = do
     return (unescapeString (concat ss))
 
 file_input :: Parser ([S.Import], Maybe String, S.Suite)
-file_input = sc2 *>  do
+file_input = sc2 *> do
     -- Allow optional module docstring before imports
     mbDocstring <- optional (try (L.nonIndented sc2 module_docstring <* eol <* sc2))
     is <- imports
@@ -1139,10 +1177,16 @@ file_input = sc2 *>  do
 -- (((,) <$> imports <*> withCtx TOP top_suite) <* eof)
 
 import_input :: Parser ([S.Import], Maybe String)
-import_input = sc2 *> do
+import_input = do
+    (is, mbDocstring, _) <- module_header_with_offset
+    return (is, mbDocstring)
+
+module_header_with_offset :: Parser ([S.Import], Maybe String, Int)
+module_header_with_offset = sc2 *> do
     mbDocstring <- optional (try (L.nonIndented sc2 module_docstring <* eol <* sc2))
     is <- imports
-    return (is, mbDocstring)
+    off <- getOffset
+    return (is, mbDocstring, off)
 
 imports :: Parser [S.Import]
 imports = many (L.nonIndented sc2 import_stmt <* eol <* sc2 <* reportParseProgress)
@@ -1151,23 +1195,430 @@ top_suite :: Parser S.Suite
 top_suite = concat <$> (many (L.nonIndented sc2 (stmt <* reportParseProgress) <|> (newline1 <* reportParseProgress)))
 
 validateModuleSuite :: S.Suite -> Parser ()
-validateModuleSuite stmts = do
-  assigned <- concat <$> mapM validateModuleStmt stmts
-  case duplicates assigned of
-    n:_ -> parseException (loc n) (DuplicateTopLevelAssignment (S.rawstr n))
-    []  -> return ()
+validateModuleSuite = go Set.empty
+  where
+    go seen [] = return ()
+    go seen (stmt:stmts) =
+      case stmt of
+        S.Assign _ pats _ -> do
+          let names = Names.bound pats
+          if null names
+            then parseException (loc pats) InvalidTopLevelAssignmentPattern
+            else do
+              seen' <- addNames seen names
+              go seen' stmts
+        S.Signature{} -> go seen stmts
+        S.Decl{}      -> go seen stmts
+        _             -> parseException (S.sloc stmt) InvalidModuleStatement
 
-validateModuleStmt :: S.Stmt -> Parser [S.Name]
-validateModuleStmt stmt =
-  case stmt of
-    S.Assign _ pats _ ->
-      let names = Names.bound pats
-      in if null names
-         then parseException (loc pats) InvalidTopLevelAssignmentPattern
-         else return names
-    S.Signature{} -> return []
-    S.Decl{}      -> return []
-    _             -> parseException (S.sloc stmt) InvalidModuleStatement
+    addNames seen [] = return seen
+    addNames seen (n:ns)
+      | n `Set.member` seen = parseException (loc n) (DuplicateTopLevelAssignment (S.rawstr n))
+      | otherwise           = addNames (Set.insert n seen) ns
+
+data SourceSpan = SourceSpan !Int !Int deriving (Eq, Show)
+
+data TopLevelChunk = TopLevelChunk
+  { chunkSpan  :: !SourceSpan
+  , chunkInput :: String
+  , chunkLine  :: !Int
+  } deriving (Eq, Show)
+
+data ScanMode = ScanString
+  { scanQuote       :: Char
+  , scanTriple      :: Bool
+  , scanInterpolate :: Bool
+  , scanInterpDepth :: Int
+  } deriving (Eq, Show)
+
+data ChunkScanState = ChunkScanState
+  { scanActiveStart :: Maybe Int
+  , scanActiveInput :: Maybe String
+  , scanActiveLine  :: Maybe Int
+  , scanDepth       :: Int
+  , scanModes       :: [ScanMode]
+  , scanAtLineStart :: Bool
+  , scanLine        :: Int
+  , scanContinued   :: Bool
+  , scanBackslash   :: Bool
+  , scanPrev1       :: Maybe Char
+  , scanPrev2       :: Maybe Char
+  } deriving (Eq, Show)
+
+scanTopLevelChunks :: String -> Int -> (TopLevelChunk -> IO ()) -> IO (Either ChunkScanError ())
+scanTopLevelChunks src start emit
+  | start < 0 || start > length src = return (Left (ChunkScanError NoLoc "invalid module body offset"))
+  | otherwise = go start (drop start src) initScan
+  where
+    initScan = ChunkScanState
+      { scanActiveStart = Nothing
+      , scanActiveInput = Nothing
+      , scanActiveLine = Nothing
+      , scanDepth = 0
+      , scanModes = []
+      , scanAtLineStart = start == 0 || charBefore start == Just '\n'
+      , scanLine = startLine
+      , scanContinued = False
+      , scanBackslash = False
+      , scanPrev1 = charBefore start
+      , scanPrev2 = if start >= 2 then Just (src !! (start - 2)) else Nothing
+      }
+
+    charBefore 0 = Nothing
+    charBefore n = Just (src !! (n - 1))
+
+    startLine = 1 + length (filter (== '\n') (take start src))
+
+    go i [] st = do
+      emitOpenChunk i st
+      return (Right ())
+    go i xs@(c:_) st
+      | startsBoundary c st =
+          openChunk i xs st >>= scanCode i xs
+      | scanActiveStart st == Nothing
+        && null (scanModes st)
+        && scanDepth st == 0
+        && not (isTriviaStart c) =
+          return (Left (ChunkScanError (Loc i (i + 1)) "non-top-level text before first chunk"))
+      | otherwise =
+          scanStep i xs st
+
+    startsBoundary c st =
+      scanAtLineStart st &&
+      not (scanContinued st) &&
+      scanDepth st == 0 &&
+      null (scanModes st) &&
+      not (isTriviaStart c)
+
+    isTriviaStart c = c == '\n' || c == '\r' || c == ' ' || c == '\t' || c == '#'
+
+    openChunk i xs st = do
+      emitOpenChunk i st
+      return st
+        { scanActiveStart = Just i
+        , scanActiveInput = Just xs
+        , scanActiveLine = Just (scanLine st)
+        }
+
+    emitOpenChunk i st =
+      case scanActiveStart st of
+        Just s
+          | s < i ->
+              emit (TopLevelChunk (SourceSpan s i)
+                                    (fromMaybe [] (scanActiveInput st))
+                                    (fromMaybe (scanLine st) (scanActiveLine st)))
+        _ -> return ()
+
+    scanStep i xs st =
+      case scanModes st of
+        [] -> scanCode i xs st
+        _  -> scanString i xs st
+
+    scanCode i xs@(c:_) st
+      | c == '#' =
+          skipComment i xs st { scanBackslash = False }
+      | Just (mode, qlen) <- stringStartMode xs st =
+          let (_, rest, st') = consumeMany False qlen i xs st
+          in go (i + qlen) rest st' { scanModes = mode : scanModes st', scanBackslash = False }
+      | c `elem` "([{" =
+          let (_, rest, st') = consumeMany True 1 i xs st { scanDepth = scanDepth st + 1 }
+          in go (i + 1) rest st'
+      | c `elem` ")]}" =
+          let depth' = max 0 (scanDepth st - 1)
+              (_, rest, st') = consumeMany True 1 i xs st { scanDepth = depth' }
+          in go (i + 1) rest st'
+      | otherwise =
+          let (_, rest, st') = consumeMany True 1 i xs st
+          in go (i + 1) rest st'
+
+    scanString i [] st = go i [] st
+    scanString i xs@(c:_) st =
+      case scanModes st of
+        [] -> scanCode i xs st
+        mode:rest
+          | scanInterpDepth mode == 0 -> scanStringText i xs mode rest st
+          | otherwise                 -> scanInterpolation i xs mode rest st
+
+    scanStringText i xs@(c:_) mode rest st
+      | c == '\\' =
+          let n = case xs of
+                _:_:_ -> 2
+                _     -> 1
+              (_, xs', st') = consumeMany False n i xs st
+          in go (i + n) xs' st'
+      | scanInterpolate mode && startsWith "{{" xs =
+          let (_, xs', st') = consumeMany False 2 i xs st
+          in go (i + 2) xs' st'
+      | scanInterpolate mode && startsWith "}}" xs =
+          let (_, xs', st') = consumeMany False 2 i xs st
+          in go (i + 2) xs' st'
+      | scanInterpolate mode && c == '{' =
+          let mode' = mode { scanInterpDepth = 1 }
+              (_, xs', st') = consumeMany False 1 i xs st { scanModes = mode' : rest }
+          in go (i + 1) xs' st'
+      | Just n <- tripleInterpolatedQuoteText xs mode =
+          let (_, xs', st') = consumeMany False n i xs st
+          in go (i + n) xs' st'
+      | closesString xs mode =
+          let n = if scanTriple mode then 3 else 1
+              (_, xs', st') = consumeMany False n i xs st { scanModes = rest }
+          in go (i + n) xs' st'
+      | otherwise =
+          let (_, xs', st') = consumeMany False 1 i xs st
+          in go (i + 1) xs' st'
+
+    scanInterpolation i xs@(c:_) mode rest st
+      | c == '#' =
+          skipComment i xs st
+      | Just (nested, qlen) <- stringStartMode xs st =
+          let (_, xs', st') = consumeMany False qlen i xs st
+          in go (i + qlen) xs' st' { scanModes = nested : scanModes st' }
+      | c == '{' =
+          let mode' = mode { scanInterpDepth = scanInterpDepth mode + 1 }
+              (_, xs', st') = consumeMany False 1 i xs st { scanModes = mode' : rest }
+          in go (i + 1) xs' st'
+      | c == '}' =
+          let depth' = scanInterpDepth mode - 1
+              modes' = if depth' == 0 then mode { scanInterpDepth = 0 } : rest
+                                      else mode { scanInterpDepth = depth' } : rest
+              (_, xs', st') = consumeMany False 1 i xs st { scanModes = modes' }
+          in go (i + 1) xs' st'
+      | otherwise =
+          let (_, xs', st') = consumeMany False 1 i xs st
+          in go (i + 1) xs' st'
+
+    stringStartMode xs@(q:_) st
+      | q == '"' || q == '\'' =
+          let triple = startsWith [q, q, q] xs
+              raw = scanPrev1 st == Just 'r' ||
+                    (scanPrev2 st == Just 'r' && scanPrev1 st == Just 'b')
+              bytes = scanPrev1 st == Just 'b' ||
+                      (scanPrev2 st == Just 'r' && scanPrev1 st == Just 'b')
+              interpolate = not raw && not bytes
+              qlen = if triple then 3 else 1
+          in Just (ScanString q triple interpolate 0, qlen)
+      | otherwise = Nothing
+    stringStartMode [] _ = Nothing
+
+    closesString xs mode
+      | scanTriple mode = startsWith (replicate 3 (scanQuote mode)) xs
+      | otherwise = case xs of
+          c:_ -> c == scanQuote mode
+          []  -> False
+
+    tripleInterpolatedQuoteText xs mode
+      | scanTriple mode && scanInterpolate mode =
+          case quoteRunLength (scanQuote mode) xs of
+            4 -> Just 1
+            5 -> Just 2
+            _ -> Nothing
+      | otherwise = Nothing
+
+    quoteRunLength q = length . takeWhile (== q)
+
+    startsWith prefix xs = prefix `isPrefixOf` xs
+
+    skipComment i [] st = go i [] st
+    skipComment i xs@(c:_) st
+      | c == '\n' =
+          let (_, xs', st') = consumeMany False 1 i xs st
+          in go (i + 1) xs' st'
+      | otherwise =
+          let (_, xs', st') = consumeMany False 1 i xs st
+          in skipComment (i + 1) xs' st'
+
+    consumeMany _ 0 i xs st = (i, xs, st)
+    consumeMany track n i (c:cs) st =
+      let st' = advance track c st
+      in consumeMany track (n - 1) (i + 1) cs st'
+    consumeMany _ _ i [] st = (i, [], st)
+
+    advance track c st =
+      let stPrev = st { scanPrev2 = scanPrev1 st, scanPrev1 = Just c }
+      in if c == '\n'
+           then stPrev
+             { scanAtLineStart = True
+             , scanLine = scanLine st + 1
+             , scanContinued = scanBackslash st
+             , scanBackslash = False
+             }
+           else stPrev
+             { scanAtLineStart = False
+             , scanContinued = False
+             , scanBackslash =
+                 if track && c /= ' ' && c /= '\t' && c /= '\r'
+                   then c == '\\'
+                   else scanBackslash st
+             }
+
+parseTopLevelChunk :: String -> String -> TopLevelChunk -> IO (Either Control.Exception.SomeException [S.Stmt])
+parseTopLevelChunk fileName fileContent chunk = do
+  parsed <- tryNonAsync $
+    Control.Exception.evaluate $
+      runParser (St.evalStateT (top_chunk_input fileName chunk) initState) fileName fileContent
+  case parsed of
+    Left err -> return (Left err)
+    Right (Left bundle) -> return (Left (Control.Exception.toException bundle))
+    Right (Right stmts) -> do
+      forced <- tryNonAsync (Control.Exception.evaluate (rnf stmts))
+      case forced of
+        Left err -> return (Left err)
+        Right () -> return (Right stmts)
+  where
+    tryNonAsync action = do
+      result <- Control.Exception.try action
+      case result of
+        Left err ->
+          case Control.Exception.fromException err :: Maybe Control.Exception.SomeAsyncException of
+            Just _  -> Control.Exception.throwIO err
+            Nothing -> return (Left err)
+        Right ok -> return (Right ok)
+
+data ChunkProgressEvent = ChunkProgressDone Int | ChunkProgressStop
+
+data ChunkProgress = ChunkProgress (Chan ChunkProgressEvent) (Async ())
+
+parseTopLevelChunks :: String -> String -> Int -> Maybe (Int -> Int -> IO ()) -> IO [[S.Stmt]]
+parseTopLevelChunks fileName fileContent bodyStart mReportProgress = do
+  ncap <- getNumCapabilities
+  let nworkers = max 1 ncap
+  withChunkProgress mReportProgress (length fileContent) bodyStart $ \progress -> do
+    let window = max 1 (10 * nworkers)
+    slots <- newQSem window
+    workQ <- newChan
+    resultsRef <- newIORef []
+    workers <- replicateM nworkers (async (worker slots workQ progress))
+    let stopWorkers = replicateM_ nworkers (writeChan workQ Nothing) >> mapM_ wait workers
+        run = do
+          scanResult <- scanTopLevelChunks fileContent bodyStart $ \chunk -> do
+            waitQSem slots
+            result <- newEmptyMVar
+            modifyIORef' resultsRef (result :)
+            writeChan workQ (Just (chunk, result))
+          case scanResult of
+            Left err -> Control.Exception.throwIO err
+            Right () -> do
+              stopWorkers
+              finishChunkProgress progress
+              results <- mapM readMVar . reverse =<< readIORef resultsRef
+              collectParsedChunks results
+    run `Control.Exception.finally` mapM_ cancel workers
+  where
+    worker slots workQ progress = do
+      job <- readChan workQ
+      case job of
+        Nothing -> return ()
+        Just (chunk, result) -> do
+          Control.Exception.finally
+            (runWorker chunk result progress)
+            (signalQSem slots)
+          worker slots workQ progress
+
+    runWorker chunk result progress = Control.Exception.mask $ \restore -> do
+      parsed <- Control.Exception.try (restore (parseTopLevelChunk fileName fileContent chunk))
+      case parsed of
+        Left err -> do
+          putMVar result (Left err)
+          case Control.Exception.fromException err :: Maybe Control.Exception.SomeAsyncException of
+            Just _  -> Control.Exception.throwIO err
+            Nothing -> return ()
+        Right chunkResult -> do
+          putMVar result chunkResult
+          reportChunkDone progress chunk
+
+collectParsedChunks :: [Either Control.Exception.SomeException [S.Stmt]] -> IO [[S.Stmt]]
+collectParsedChunks results =
+  case [ err | Left err <- results ] of
+    err:_ -> Control.Exception.throwIO err
+    []    -> return [ stmts | Right stmts <- results ]
+
+withChunkProgress :: Maybe (Int -> Int -> IO ()) -> Int -> Int -> (Maybe ChunkProgress -> IO a) -> IO a
+withChunkProgress mReportProgress total done0 action = do
+  progress <- startChunkProgress mReportProgress total done0
+  action progress `Control.Exception.finally` cancelChunkProgress progress
+
+startChunkProgress :: Maybe (Int -> Int -> IO ()) -> Int -> Int -> IO (Maybe ChunkProgress)
+startChunkProgress Nothing _ _ = return Nothing
+startChunkProgress (Just reportProgress) total done0 = do
+  progressQ <- newChan
+  progressA <- async $ do
+    lastPercent <- emit done0 0
+    loop done0 lastPercent progressQ
+  return (Just (ChunkProgress progressQ progressA))
+  where
+    loop done lastPercent progressQ = do
+      event <- readChan progressQ
+      case event of
+        ChunkProgressDone n -> do
+          let done' = min total (done + n)
+          lastPercent' <- emit done' lastPercent
+          loop done' lastPercent' progressQ
+        ChunkProgressStop -> return ()
+
+    emit done lastPercent = do
+      let completed
+            | total <= 1 = 0
+            | otherwise  = max 0 (min (total - 1) done)
+          percent
+            | total <= 0 = 100
+            | otherwise  = max 0 (min 99 ((completed * 100) `div` total))
+      if percent > lastPercent
+        then reportProgress completed total >> return percent
+        else return lastPercent
+
+finishChunkProgress :: Maybe ChunkProgress -> IO ()
+finishChunkProgress Nothing = return ()
+finishChunkProgress (Just (ChunkProgress progressQ progressA)) =
+  writeChan progressQ ChunkProgressStop >> wait progressA
+
+cancelChunkProgress :: Maybe ChunkProgress -> IO ()
+cancelChunkProgress Nothing = return ()
+cancelChunkProgress (Just (ChunkProgress _ progressA)) = cancel progressA
+
+reportChunkDone :: Maybe ChunkProgress -> TopLevelChunk -> IO ()
+reportChunkDone Nothing _ = return ()
+reportChunkDone (Just (ChunkProgress progressQ _)) chunk =
+  writeChan progressQ (ChunkProgressDone (topLevelChunkLength chunk))
+
+topLevelChunkLength :: TopLevelChunk -> Int
+topLevelChunkLength chunk =
+  let SourceSpan start end = chunkSpan chunk
+  in end - start
+
+top_chunk_input :: String -> TopLevelChunk -> Parser [S.Stmt]
+top_chunk_input fileName chunk = do
+  state <- getParserState
+  let SourceSpan start end = chunkSpan chunk
+      input = chunkInput chunk
+      startPosState = (statePosState state)
+        { pstateSourcePos = SourcePos fileName (mkPos (chunkLine chunk)) (mkPos 1)
+        , pstateInput = input
+        , pstateOffset = start
+        , pstateLinePrefix = ""
+        }
+  let chunkState = state
+        { stateInput = input
+        , stateOffset = start
+        , statePosState = startPosState
+        }
+  setParserState chunkState
+  ss <- withCtx TOP (L.nonIndented sc2 top_chunk_stmt)
+  sc2
+  off <- getOffset
+  if off == end
+    then return ss
+    else fail ("chunk parser stopped at offset " ++ show off ++ ", expected " ++ show end)
+
+regroupTopDecls :: S.Suite -> S.Suite
+regroupTopDecls = go []
+  where
+    go [] [] = []
+    go ds [] = flush ds
+    go ds (S.Decl _ ds' : rest) = go (ds ++ ds') rest
+    go ds (stmt : rest) = flush ds ++ stmt : go [] rest
+
+    flush [] = []
+    flush ds = [ S.Decl (loc group) group | group <- Names.splitDeclGroup ds ]
 
 -- Row parsers ----------------------------------------------------------------------
 
@@ -1291,6 +1742,14 @@ target = try $ do
 
 stmt, simple_stmt :: Parser [S.Stmt]
 stmt = ((:[]) <$> compound_stmt)  <|> try ((:[]) <$> (signature <* newline1)) <|> decl_group <|> simple_stmt <?> "statement"
+
+top_chunk_stmt :: Parser [S.Stmt]
+top_chunk_stmt =
+       ((:[]) <$> compound_stmt)
+  <|> try ((:[]) <$> (signature <* newline1))
+  <|> ((\d -> [S.Decl (loc d) [d]]) <$> decl)
+  <|> simple_stmt
+  <?> "statement"
 
 simple_stmt = (small_stmt `sepEndBy1` semicolon) <* newline1 <?> "simple statement"
 

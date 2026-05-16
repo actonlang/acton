@@ -8,8 +8,7 @@ module TestGolden
 import           Data.Char (isDigit)
 import qualified Data.Text as T
 
--- | Replace trailing durations like "12.345 s" with a stable token
--- "0.000 s", preserving the original field width for alignment.
+-- | Replace trailing durations like "12.345 s" with a stable token.
 normalizeProgressTimingLine :: T.Text -> T.Text
 normalizeProgressTimingLine t =
   case T.stripSuffix " s" t of
@@ -24,7 +23,7 @@ normalizeProgressTimingLine t =
                && T.all isDigit intPart
                && T.all isDigit frac ->
                  let base = "0.000"
-                     padding = T.replicate (max 0 (T.length field - T.length base)) " "
+                     padding = if T.length field > T.length base then " " else ""
                  in pre' <> padding <> base <> " s"
            _ -> t
 

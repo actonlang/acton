@@ -443,6 +443,13 @@ parseFlagTests =
       assertParsedBuildOptimize ["build", "--release", "--optimize=releasesmall"] C.ReleaseSmall
       assertParsedBuildOptimize ["build", "--release=fast", "--optimize=debug"] C.Debug
       assertParsedBuildOptimize ["build", "--optimize=debug", "--release"] C.Debug
+  , testCase "build parser accepts --parse-serial" $ do
+      parsed <- parseArgs ["build", "--parse-serial"]
+      case parsed of
+        C.CmdOpt _ (C.Build buildOpts) ->
+          assertBool "serial parser flag should be set" (C.parse_serial (C.buildCompile buildOpts))
+        _ ->
+          assertFailure "expected build command"
   , testCase "build parser help includes --release alias" $ do
       helpText <- renderParserHelp ["build", "--help"]
       assertBool "help text should include --release" ("--release" `isInfixOf` helpText)
