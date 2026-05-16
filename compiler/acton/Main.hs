@@ -1249,7 +1249,7 @@ printDocs gopts opts = do
           ".act" -> do
             let modname = A.modName $ map (replace ".act" "") $ splitOn "/" $ fileBody
             paths <- findPaths filename defaultCompileOptions
-            parsedRes <- parseActFile Source.diskSourceProvider modname filename Nothing
+            parsedRes <- parseActFile defaultCompileOptions Source.diskSourceProvider modname filename Nothing
             (_snap, parsed) <- case parsedRes of
               Left diags -> do
                 printDiagnostics gopts defaultCompileOptions diags

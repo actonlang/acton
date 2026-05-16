@@ -185,7 +185,7 @@ module Acton.Compile
 import Prelude hiding (readFile, writeFile)
 
 import qualified Acton.Parser
-import Acton.Parser (CustomParseError, CustomParseException, ContextError, IndentationError)
+import Acton.Parser (CustomParseError, CustomParseException, ChunkScanError(..), ContextError, IndentationError)
 import qualified Acton.Syntax as A
 import qualified Acton.NameInfo as I
 import Text.Megaparsec.Error (ParseErrorBundle)
@@ -747,6 +747,7 @@ defaultCompileOptions =
     , C.skip_build = False
     , C.watch = False
     , C.no_threads = False
+    , C.parse_serial = False
     , C.root = ""
     , C.tempdir = ""
     , C.syspath = ""
@@ -904,11 +905,15 @@ missingIfaceDiagnostics ownerMn src missingMn =
 
 -- | Parse a module from source text, returning diagnostics on failure.
 -- Wraps parser, context, and indentation errors into a uniform format.
-parseActSource :: A.ModName -> FilePath -> String -> Maybe (ParseProgress -> IO ()) -> IO (Either [Diagnostic String] A.Module)
-parseActSource mn actFile srcContent mOnProgress = do
-  (Right <$> Acton.Parser.parseModule mn actFile srcContent (fmap wrapProgress mOnProgress))
+parseActSource :: C.CompileOptions -> A.ModName -> FilePath -> String -> Maybe (ParseProgress -> IO ()) -> IO (Either [Diagnostic String] A.Module)
+parseActSource opts mn actFile srcContent mOnProgress = do
+  let parseModule
+        | C.parse_serial opts = Acton.Parser.parseModuleSerial
+        | otherwise             = Acton.Parser.parseModule
+  (Right <$> parseModule mn actFile srcContent (fmap wrapProgress mOnProgress))
     `catch` handleParseBundle
     `catch` handleCustomParse
+    `catch` handleChunkScanError
     `catch` handleContextError
     `catch` handleIndentationError
   where
@@ -922,6 +927,10 @@ parseActSource mn actFile srcContent mOnProgress = do
     handleCustomParse :: CustomParseException -> IO (Either [Diagnostic String] A.Module)
     handleCustomParse err =
       return $ Left [Diag.customParseExceptionToDiagnostic actFile srcContent err]
+
+    handleChunkScanError :: ChunkScanError -> IO (Either [Diagnostic String] A.Module)
+    handleChunkScanError (ChunkScanError loc msg) =
+      return $ Left (errsToDiagnostics "Parse error" actFile srcContent [(loc, msg)])
 
     handleContextError :: ContextError -> IO (Either [Diagnostic String] A.Module)
     handleContextError err =
@@ -962,24 +971,25 @@ parseActHeaderSnapshot mn actFile snap = do
 
 -- | Parse a SourceSnapshot with a display path relative to cwd.
 -- Keeps diagnostics stable regardless of absolute paths or overlays.
-parseActSnapshot :: A.ModName -> FilePath -> Source.SourceSnapshot -> IO (Either [Diagnostic String] A.Module)
-parseActSnapshot mn actFile snap = do
+parseActSnapshot :: C.CompileOptions -> A.ModName -> FilePath -> Source.SourceSnapshot -> IO (Either [Diagnostic String] A.Module)
+parseActSnapshot opts mn actFile snap = do
   cwd <- getCurrentDirectory
   let displayFile = makeRelative cwd actFile
-  parseActSource mn displayFile (Source.ssText snap) Nothing
+  parseActSource opts mn displayFile (Source.ssText snap) Nothing
 
 -- | Read and parse a source file via SourceProvider (overlay-aware).
 -- Returns both the snapshot and the parsed AST for reuse by callers.
-parseActFile :: Source.SourceProvider
+parseActFile :: C.CompileOptions
+             -> Source.SourceProvider
              -> A.ModName
              -> FilePath
              -> Maybe (ParseProgress -> IO ())
              -> IO (Either [Diagnostic String] (Source.SourceSnapshot, A.Module))
-parseActFile sp mn actFile mOnProgress = do
+parseActFile opts sp mn actFile mOnProgress = do
   snap <- Source.readSource sp actFile
   cwd <- getCurrentDirectory
   let displayFile = makeRelative cwd actFile
-  emod <- parseActSource mn displayFile (Source.ssText snap) mOnProgress
+  emod <- parseActSource opts mn displayFile (Source.ssText snap) mOnProgress
   return $ fmap (\m -> (snap, m)) emod
 
 -- | Read stable source metadata used for quick .ty reuse checks.
@@ -1435,13 +1445,14 @@ readModuleDoc sp gopts opts paths actFile = do
 -- | Materialize a source-backed task into a fully parsed ActonTask.
 -- ParseTask reuses the snapshot captured during graph discovery; TyTask reparses
 -- from the current source file because the cached header was deemed stale.
-materializeTask :: Source.SourceProvider
+materializeTask :: C.CompileOptions
+                -> Source.SourceProvider
                 -> A.ModName
                 -> FilePath
                 -> Maybe (ParseProgress -> IO ())
                 -> CompileTask
                 -> IO CompileTask
-materializeTask sp mn actFile mOnProgress task =
+materializeTask opts sp mn actFile mOnProgress task =
   case task of
     ActonTask{} -> return task
     ParseErrorTask{} -> return task
@@ -1451,7 +1462,7 @@ materializeTask sp mn actFile mOnProgress task =
         Left diags -> return (ParseErrorTask mn diags)
         Right m -> return (ActonTask mn srcContent bytes mSourceMeta m)
     TyTask{} -> do
-      parsedRes <- parseActFile sp mn actFile mOnProgress
+      parsedRes <- parseActFile opts sp mn actFile mOnProgress
       case parsedRes of
         Left diags -> return (ParseErrorTask mn diags)
         Right (snap, m) -> do
@@ -1461,7 +1472,7 @@ materializeTask sp mn actFile mOnProgress task =
     parseStoredSource mn' file srcContent = do
       cwd <- getCurrentDirectory
       let displayFile = makeRelative cwd file
-      parseActSource mn' displayFile srcContent mOnProgress
+      parseActSource opts mn' displayFile srcContent mOnProgress
 
 
 -- | Recursively read imports for a set of tasks within the same project.
@@ -2190,8 +2201,8 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
         then return (Right ())
         else do
           t' <- case gtTask t of
-            TyTask{} | forceAlt -> materializeTask sp mn actFile Nothing (gtTask t)
-            ParseTask{} -> materializeTask sp mn actFile Nothing (gtTask t)
+            TyTask{} | forceAlt -> materializeTask optsBuiltin sp mn actFile Nothing (gtTask t)
+            ParseTask{} -> materializeTask optsBuiltin sp mn actFile Nothing (gtTask t)
             _ -> return (gtTask t)
           case t' of
             ParseErrorTask{ parseDiagnostics = diags } -> do
@@ -2578,7 +2589,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
                             ccOnInfo callbacks ("  Stale " ++ modNameToString mn ++ ": missing dep hashes in " ++ Data.List.intercalate ", " (pubMissingItems ++ implMissingItems))
                     t' <- case taskCurrent of
                             ActonTask{} -> return taskCurrent
-                            _ -> materializeTask sp mn actFile Nothing taskCurrent
+                            _ -> materializeTask optsT sp mn actFile Nothing taskCurrent
                     case t' of
                       ParseErrorTask{ parseDiagnostics = diags } -> return (key, Left diags)
                       ActonTask{ src = srcContent, srcBytes = srcBytes, sourceMeta = mSourceMeta, atree = m } -> do
@@ -2624,7 +2635,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
                       case tyRes of
                         Left diags -> return (key, Left diags)
                         Right (_ms, nmod, tmod, sourceMeta, moduleSrcBytesHash, modulePubHash, _moduleImplHash, imps, nameHashes, roots, tests, mdoc) -> do
-                          parsedRes <- parseActFile sp mn actFile Nothing
+                          parsedRes <- parseActFile optsT sp mn actFile Nothing
                           case parsedRes of
                             Left diags -> return (key, Left diags)
                             Right (snap, parsedMod) -> do
@@ -2731,7 +2742,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
       parsed <- if C.only_build optsT
                   then return (gtTask t)
                   else case gtTask t of
-                         ParseTask{} -> materializeTask sp mn actFile (Just onProgress) (gtTask t)
+                         ParseTask{} -> materializeTask optsT sp mn actFile (Just onProgress) (gtTask t)
                          _ -> return (gtTask t)
       case parsed of
         ParseTask{} -> return (ParseStage key, Right (StageParsed parsed Nothing))

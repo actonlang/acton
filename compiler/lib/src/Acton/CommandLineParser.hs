@@ -90,6 +90,7 @@ data CompileOptions   = CompileOptions {
                          skip_build  :: Bool,
                          watch       :: Bool,
                          no_threads  :: Bool,
+                         parse_serial :: Bool,
                          root        :: String,
                          tempdir     :: String,
                          syspath     :: String,
@@ -333,6 +334,7 @@ sigCompileOptions = mkSigCompileOptions
         , skip_build = True
         , watch = False
         , no_threads = False
+        , parse_serial = False
         , root = ""
         , tempdir = ""
         , syspath = syspath'
@@ -368,6 +370,7 @@ compileOptions = CompileOptions
         <*> switch (long "skip-build"   <> help "Skip final bulid of .c files")
         <*> switch (long "watch"        <> help "Rebuild on file changes")
         <*> switch (long "no-threads"   <> help "Don't use threads")
+        <*> switch (long "parse-serial" <> help "Use the serial whole-file parser")
         <*> strOption (long "root"      <> metavar "ROOTACTOR" <> value "" <> help "Set root actor")
         <*> strOption (long "tempdir"   <> metavar "TEMPDIR" <> value "" <> help "Set directory for build files")
         <*> strOption (long "syspath"   <> metavar "TARGETDIR" <> value "" <> help "Set syspath")

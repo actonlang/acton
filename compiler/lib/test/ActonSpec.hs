@@ -32,17 +32,19 @@ import qualified Pretty
 import Test.Syd
 import Test.Syd.Def.Golden (goldenTextFile)
 import qualified Control.Monad.Trans.State.Strict as St
-import Text.Megaparsec (runParser, errorBundlePretty, ShowErrorComponent(..))
+import Text.Megaparsec (ParseErrorBundle, PosState(..), bundleErrors, bundlePosState, errorOffset, reachOffset, runParser, errorBundlePretty, ShowErrorComponent(..))
+import Text.Megaparsec.Pos (sourceLine, unPos)
 import qualified Data.Text as T
 import Data.List (isInfixOf, isPrefixOf, nub, sort)
+import qualified Data.List.NonEmpty as NE
 import Data.IORef
 import Data.Bits (shiftL, (.|.))
 import Error.Diagnose (printDiagnostic, prettyDiagnostic, WithUnicode(..), TabSize(..), defaultStyle, addReport, addFile)
 import Error.Diagnose.Report (Report(..))
 import Prettyprinter (unAnnotate, layoutPretty, defaultLayoutOptions)
 import Prettyprinter.Render.Text (renderStrict)
-import System.FilePath ((</>), joinPath, takeFileName, takeBaseName, takeDirectory, splitDirectories)
-import System.Directory (createDirectoryIfMissing, getCurrentDirectory, setCurrentDirectory)
+import System.FilePath ((</>), joinPath, takeFileName, takeBaseName, takeDirectory, splitDirectories, takeExtension)
+import System.Directory (createDirectoryIfMissing, getCurrentDirectory, setCurrentDirectory, listDirectory, doesDirectoryExist)
 import System.IO.Temp (withSystemTempDirectory)
 import Control.Monad (forM_, when, foldM)
 import qualified Control.Exception as E
@@ -192,6 +194,90 @@ main = do
           it "rejects top-level wildcard-only destructuring assignment" $ do
             err <- expectModuleParseFailure "[_, _] = [1, 2]\n"
             err `shouldContain` "Module top-level assignments must bind at least one name"
+
+        describe "Chunked module parser" $ do
+          it "matches the serial parser for mixed top-level forms" $ do
+            expectChunkedParseMatchesSerial $ unlines
+              [ "\"\"\"module docs\"\"\""
+              , "import math"
+              , "answer: int"
+              , "answer = ("
+              , "    40 +"
+              , "    2"
+              , ")"
+              , "class Box:"
+              , "    def get(self):"
+              , "        return answer"
+              , "actor Worker(env):"
+              , "    def run(self):"
+              , "        env.exit(0)"
+              ]
+
+          it "does not split on column-zero text inside strings" $ do
+            expectChunkedParseMatchesSerial $ unlines
+              [ "text = \"\"\""
+              , "def not_a_chunk():"
+              , "    pass"
+              , "\"\"\""
+              , "formatted = \"value {str('class also_not_a_chunk:')}\""
+              , "def real():"
+              , "    return text"
+              ]
+
+          it "matches triple-string quote run handling" $ do
+            expectChunkedParseMatchesSerial $ unlines
+              [ "quote_tail = \"\"\"foo\"\"\"\""
+              , "two_quote_tail = \"\"\"foo\"\"\"\"\""
+              , "formatted = \"\"\"value {str(\"class not_a_chunk:\")}\"\"\"\""
+              , "def real():"
+              , "    return formatted"
+              ]
+
+          it "preserves adjacent declaration grouping" $ do
+            expectChunkedParseMatchesSerial $ unlines
+              [ "def even(n):"
+              , "    if n == 0:"
+              , "        return True"
+              , "    return odd(n - 1)"
+              , "def odd(n):"
+              , "    if n == 0:"
+              , "        return False"
+              , "    return even(n - 1)"
+              , "value = even(2)"
+              ]
+
+          it "reports later chunk parse errors at original source lines" $ do
+            let input = unlines
+                  [ "ok = 1"
+                  , "def broken():"
+                  , "    if True"
+                  , "        pass"
+                  ]
+                moduleName = S.modName ["chunked"]
+            result <- E.try (P.parseModule moduleName "chunked.act" input Nothing)
+            case result of
+              Left (bundle :: ParseErrorBundle String P.CustomParseError) ->
+                parseBundleErrorLine bundle `shouldBe` 3
+              Right _ ->
+                expectationFailure "Expected chunked parser to reject malformed input"
+
+          it "returns diagnostics for chunk scanner failures" $ do
+            let input = "    pass\n"
+                moduleName = S.modName ["chunked"]
+            result <- Compile.parseActSource Compile.defaultCompileOptions moduleName "chunked.act" input Nothing
+            case result of
+              Left [diagnostic] ->
+                renderDiagnosticText diagnostic `shouldContain` "non-top-level text before first chunk"
+              Left diagnostics ->
+                expectationFailure ("Expected one diagnostic, got " ++ show (length diagnostics))
+              Right _ ->
+                expectationFailure "Expected scanner failure diagnostic"
+
+          it "matches the serial parser for existing fixtures" $ do
+            actFiles <- actFilesUnder ("test" </> "src")
+            forM_ actFiles $ \actFile -> do
+              input <- readFile actFile
+              expectChunkedParseMatchesSerialFile actFile input
 
       describe "Numeric literals" $ do
         it "parses INT64_MIN as a single literal" $ do
@@ -1569,6 +1655,41 @@ parseModuleTest input =
     handleCustomParseException :: P.CustomParseException -> IO (Either String String)
     handleCustomParseException (P.CustomParseException loc err) =
       return $ Left $ formatCustomParseError "test.act" inputWithNewline loc err
+
+expectChunkedParseMatchesSerial :: String -> Expectation
+expectChunkedParseMatchesSerial input = do
+  let actFile = "chunked.act"
+  expectChunkedParseMatchesSerialFile actFile input
+
+expectChunkedParseMatchesSerialFile :: FilePath -> String -> Expectation
+expectChunkedParseMatchesSerialFile actFile input = do
+  let moduleName = S.modName ["chunked"]
+  serial <- P.parseModuleSerial moduleName actFile input Nothing
+  chunked <- P.parseModule moduleName actFile input Nothing
+  when (chunked /= serial) $
+    expectationFailure ("Chunked parser AST differs from serial parser for " ++ actFile)
+
+parseBundleErrorLine :: ParseErrorBundle String P.CustomParseError -> Int
+parseBundleErrorLine bundle =
+  let firstError = NE.head (bundleErrors bundle)
+      (_, posState) = reachOffset (errorOffset firstError) (bundlePosState bundle)
+  in unPos (sourceLine (pstateSourcePos posState))
+
+renderDiagnosticText diagnostic =
+  let doc = prettyDiagnostic WithUnicode (TabSize 4) diagnostic
+      layout = layoutPretty defaultLayoutOptions (unAnnotate doc)
+  in T.unpack $ renderStrict layout
+
+actFilesUnder :: FilePath -> IO [FilePath]
+actFilesUnder root = do
+  entries <- sort <$> listDirectory root
+  fmap concat $ mapM (\entry -> do
+    let path = root </> entry
+    isDir <- doesDirectoryExist path
+    if isDir
+      then actFilesUnder path
+      else return [path | takeExtension path == ".act"]
+    ) entries
 
 expectModuleParseSuccess :: String -> IO ()
 expectModuleParseSuccess input =
