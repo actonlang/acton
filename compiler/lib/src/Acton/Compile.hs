@@ -935,7 +935,7 @@ prepareCompilePlan :: Source.SourceProvider -> C.GlobalOptions -> CompileSchedul
 prepareCompilePlan sp gopts sched ctx request = do
     specChanged <- (/= stamp) <$> readIORef (schedulerBuildSpec sched)
     when specChanged $ do
-      fetchDependencies gopts (ccPathsRoot ctx) (C.dep_overrides (ccOpts ctx))
+      fetchDependencies gopts (ccPathsRoot ctx) (C.dep_overrides (ccOpts ctx)) (C.artifact_repos (ccOpts ctx))
       writeIORef (schedulerBuildSpec sched) stamp
     planFetched sp gopts ctx (if specChanged then request { requestChanged = Nothing } else request)
   where
@@ -983,7 +983,7 @@ buildProjects gopts ctx = withoutTestLibraries <$> projects
     projects
       | isTmp paths = return (M.singleton root scratch)
       | otherwise   = discoverProjects gopts sys root (C.dep_overrides opts)
-    scratch = ProjCtx { projRoot = root, projSrcDir = srcDir paths, projSysPath = sys, projBuildSpec = scratchBuildSpec root, projDeps = [] }
+    scratch = ProjCtx { projRoot = root, projSrcDir = srcDir paths, projSysPath = sys, projBuildSpec = scratchBuildSpec root, projDeps = [], projPrebuilt = False }
     withoutTestLibraries
       | C.test opts = M.adjust (\p -> p { projBuildSpec = (projBuildSpec p) { BuildSpec.libraries = M.empty } }) root
       | otherwise   = id
@@ -1266,19 +1266,22 @@ buildGlobalTasks sp gopts opts projects pathsByProject seedFiles = do
 
     discover index key = do
         createModuleDirectories paths (tkMod key)
-        discovered <- readModuleTask sp gopts opts paths (tkMod key) file
+        discovered <- if prebuilt
+                        then TyTask <$> InterfaceFiles.readHeaderSummary file
+                        else readModuleTask sp gopts opts paths (tkMod key) file
         -- A cached header stores canonical imports, which spell a bare
         -- dependency import as dep.lib.  When such a namespace has become
         -- local, the source is parsed again, so that its spelling resolves to
         -- the local module and its interface is rebuilt.
         task       <- case discovered of
-                        TyTask _ | any (overlapsLocal index paths) (importsOf discovered)
+                        TyTask _ | not prebuilt && any (overlapsLocal index paths) (importsOf discovered)
                           -> either ParseErrorTask (uncurry ActonTask) <$> materialize sp opts (tkMod key) file Nothing discovered
                         _ -> return discovered
         let imports = restoredImportsOf paths task
         either throwProjectError return (checkImportPrefixes index paths imports >> checkImportDependencies index paths (tkMod key) imports)
         return GlobalTask { gtKey = key, gtPaths = paths, gtTask = task, gtImportProviders = resolveProviders index paths imports }
-      where file  = indexSources index M.! key
+      where prebuilt = projPrebuilt (projects M.! tkProj key)
+            file  = indexSources index M.! key
             paths = pathsByProject M.! tkProj key
 
 -- | A module in the cheapest form discovery can use.  Its .tydb header is

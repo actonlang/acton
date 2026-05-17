@@ -15,6 +15,7 @@ module Acton.Project
   , zigExecutable
   , moduleTypesDir
   , findProjectDir
+  , isActonArtifactOnlyRoot
   , isSpecialProject
   , scratchBuildSpec
   , Paths(..)
@@ -76,6 +77,7 @@ module Acton.Project
   , rebasePath
   ) where
 
+import qualified Acton.Artifact as Artifact
 import qualified Acton.BuildSpec as BuildSpec
 import qualified Acton.CommandLineParser as C
 import qualified Acton.Fingerprint as Fingerprint
@@ -175,6 +177,19 @@ isActonProjectRoot path = do
         hasSrcDir <- doesDirectoryExist (projectSrcDir path)
         return (hasBuildAct && hasSrcDir)
 
+isActonArtifactRoot :: FilePath -> IO Bool
+isActonArtifactRoot path = do
+    hasManifest <- doesFileExist (path </> Artifact.artifactManifestFile)
+    hasBuildAct <- doesFileExist (path </> "Build.act")
+    hasTypesDir <- doesDirectoryExist (path </> "out" </> "types")
+    return (hasManifest && hasBuildAct && hasTypesDir)
+
+isActonArtifactOnlyRoot :: FilePath -> IO Bool
+isActonArtifactOnlyRoot path = do
+    isArtifact <- isActonArtifactRoot path
+    hasSrcDir <- doesDirectoryExist (path </> "src")
+    return (isArtifact && not hasSrcDir)
+
 -- | The nearest directory at or above 'path' that is an Acton project root,
 -- Nothing when there is none up to the filesystem root.
 findProjectDir :: FilePath -> IO (Maybe FilePath)
@@ -237,6 +252,7 @@ data ProjCtx = ProjCtx
   , projSysPath   :: FilePath               -- the system directory
   , projBuildSpec :: BuildSpec.BuildSpec
   , projDeps      :: [(String, FilePath)]   -- each dependency's name and absolute root
+  , projPrebuilt  :: Bool                  -- an output artifact without source
   } deriving (Show)
 
 -- | The paths of the project of a source file, and the file's module: its
@@ -437,7 +453,9 @@ moduleNameFromFile srcRoot proj actFile = do
 -- | Enumerate all .act files in a project and pair them with module names.
 -- Used to seed the project module index for graph construction.
 enumerateProjectModules :: ProjCtx -> IO [(FilePath, A.ModName)]
-enumerateProjectModules ctx = do
+enumerateProjectModules ctx
+  | projPrebuilt ctx = enumeratePrebuiltModules ctx
+  | otherwise = do
     exists <- doesDirectoryExist (projSrcDir ctx)
     if not exists
       then return []
@@ -457,13 +475,31 @@ enumerateProjectModules ctx = do
           mn <- moduleNameFromFile (projSrcDir ctx) proj f
           return (f, mn)
 
+enumeratePrebuiltModules :: ProjCtx -> IO [(FilePath, A.ModName)]
+enumeratePrebuiltModules ctx = do
+    exists <- doesDirectoryExist (projectTypesDir (projRoot ctx))
+    if not exists
+      then return []
+      else do
+        tyFiles <- InterfaceFiles.listInterfaceDirsRecursive (projectTypesDir (projRoot ctx))
+        base <- normalizePathSafe (projectTypesDir (projRoot ctx))
+        forM tyFiles $ \f -> do
+          file <- normalizePathSafe f
+          -- Interface paths under out/types already encode the full, project-
+          -- prefixed module name (see interfacePath), so derive it directly
+          -- rather than via moduleNameFromFile, which would prepend the project
+          -- name a second time.
+          let rel = dropExtension (makeRelative base file)
+              mn = A.modName (splitDirectories rel)
+          return (f, mn)
+
 -- | Remove the generated outputs under a project's types directory that
 -- belong to no module the project declares, so that a cached header cannot
 -- resurrect a deleted module.  The candidates are the .tydb files and the
 -- files with the extension of a generated file, which a root stub (.c) has
 -- too.
 pruneMissingModuleOutputs :: ProjCtx -> Paths -> IO ()
-pruneMissingModuleOutputs ctx paths = do
+pruneMissingModuleOutputs ctx paths = unless (projPrebuilt ctx) $ do
     let typesRoot = projTypes paths
     typesExists <- doesDirectoryExist typesRoot
     when typesExists $ do
@@ -482,7 +518,7 @@ pruneMissingChangedModuleOutputs projects changedPaths = do
     absChanged <- mapM normalizePathSafe changedPaths
     forM_ (filter isActFile absChanged) $ \actPath -> do
       exists <- doesFileExist actPath
-      unless exists $ forM_ projects $ \(ctx, paths) -> do
+      unless exists $ forM_ projects $ \(ctx, paths) -> unless (projPrebuilt ctx) $ do
         srcRoot <- normalizePathSafe (projSrcDir ctx)
         when (actPath `isUnder` srcRoot) $ do
           mn <- moduleNameFromFile srcRoot (BuildSpec.specName (projBuildSpec ctx)) actPath
@@ -647,6 +683,13 @@ validateDepOverridePath depName depPath = do
       dependencyPathError depName "is not an Acton project root" depPath
 
 
+rejectArtifactDepPath :: String -> FilePath -> IO ()
+rejectArtifactDepPath depName depPath = do
+    isArtifactRoot <- isActonArtifactOnlyRoot depPath
+    when isArtifactRoot $
+      throwProjectError ("Dependency " ++ depName ++ " path points to an Acton output artifact: " ++ depPath ++ "\n"
+                         ++ "Hint: Use --artifact-repo to search output artifacts; local dependency paths are not artifact roots.")
+
 -- Dependencies -------------------------------------------------------------------------------------
 
 type FingerprintMap = M.Map String FilePath
@@ -735,7 +778,10 @@ dependencyPathError name problem path =
 resolveDepBase :: FilePath -> String -> BuildSpec.PkgDep -> IO FilePath
 resolveDepBase base name dep =
     case localPath dep of
-      Just p  -> normalizePathSafe (rebasePath base p)
+      Just p  -> do
+        dir <- normalizePathSafe (rebasePath base p)
+        rejectArtifactDepPath name dir
+        return dir
       Nothing -> case BuildSpec.hash dep of
              Just h -> do
                home <- getHomeDirectory
@@ -814,11 +860,13 @@ discoverProjects gopts sysAbs rootProj depOverrides = do
           spec <- maybe (loadOverriddenSpec depOverrides dir) return mSpec
           let fpMap1 = registerFingerprint dir spec fpMap
           (deps, fpMap2) <- foldM (collectDep pins dir) ([], fpMap1) (M.toList (BuildSpec.concreteDependencies spec))
+          prebuilt <- isActonArtifactOnlyRoot dir
           let ctx = ProjCtx { projRoot      = dir
                             , projSrcDir    = projectSrcDir dir
                             , projSysPath   = sysAbs
                             , projBuildSpec = spec
                             , projDeps      = [ (n, p) | (n, p, _) <- reverse deps ]
+                            , projPrebuilt  = prebuilt
                             }
               seen' = Data.Set.insert dir seen
           foldM (\state (_, depDir, depSpec) -> go pins seen' state depDir depSpec) (M.insert dir ctx acc, fpMap2) (reverse deps)
