@@ -11,17 +11,16 @@ same compilation result can be reproduced on another machine.
 
 The guiding principle behind Acton's package management is to strive for
 determinism, robustness, and safety. Dependencies are resolved at design time by
-the package developer and written into `Build.act` as archive URLs plus content
-hashes. Later builds fetch those recorded archives and verify the hashes; they
-do not pick newer compatible versions or rely on a name to mean the same thing
-forever.
+the package developer and written into `Build.act` as source URLs plus content
+hashes. Later builds fetch those recorded source packages and verify the hashes;
+they do not pick newer compatible versions or rely on a name to mean the same
+thing forever.
 
 Acton's public package index is a discovery index. Packages are hosted
-by their owners, and dependencies are recorded as URLs from which a
-specific package archive can be downloaded. This is typically a tar.gz
-or zip archive from GitHub, GitLab, or a similar source hosting site.
-The index helps find packages; `Build.act` records the exact archive and
-hash used by a project.
+by their owners, and dependencies are recorded as URLs from which specific
+package source can be downloaded. This is often provided by GitHub, GitLab, or a
+similar source hosting site. The index helps find packages; `Build.act` records
+the exact source URL and hash used by a project.
 
 The public index is decentralized in the sense that package authors opt
 in from their own GitHub repositories. The index collects repositories
@@ -37,6 +36,11 @@ each installed binary and remove those binaries again with
 
 All dependencies are fetched and included, linked statically, at compile time,
 so there are no runtime dependencies.
+
+Large packages can optionally provide prebuilt Acton output artifacts for faster
+dependency builds. Source remains canonical; artifacts are a cache and
+distribution mechanism for compiler outputs. See
+[Output Artifacts](output_artifacts.md) for details.
 
 ## Project lineage fingerprint
 

@@ -61,6 +61,7 @@ dependencies:
 library:
   source-dirs: src
   exposed-modules:
+    - Acton.Artifact
     - Acton.Boxing
     - Acton.BuildSpec
     - Acton.Builtin
