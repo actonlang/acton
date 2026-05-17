@@ -2,27 +2,52 @@
 
 ## Unreleased
 
-### Added
+### Compiler & Build
 - Add concurrent top-level type checking for total statements, allowing the
   compiler to check independent top-level definitions in parallel while keeping
-  source-order semantics for non-total statements. [#2773]
+  source-order semantics for non-total statements. [#2773, #2782]
   - Verbose and timing builds now report inferred signatures for non-total
     statements, making it easier to add explicit signatures and unlock more
     concurrent checking.
   - Type errors from independent total statements are collected into multiple
     diagnostics instead of stopping at the first failing statement.
+  - Use a fixed worker pool with bounded lookahead, improving memory behavior
+    and performance for modules with many independent top-level definitions.
+- Parse modules in parallel by splitting top-level statement chunks across
+  parser workers, reducing parser latency for large source files while
+  preserving source-order results. [#2787]
+  - `--parse-serial` keeps the whole-file parser available for debugging and
+    fallback comparisons.
+  - Module-suite validation now uses a set-based duplicate check, avoiding
+    quadratic validation time in large projects.
+- Report parser progress percentages during builds, giving useful feedback for
+  very large files before type checking starts. [#2784]
+- Preserve each module's import context in cached module interfaces, so builds,
+  `acton sig`, documentation, and completion can reuse cached interfaces without
+  losing imported class and protocol information. [#2779]
 
 ### Packages & Distribution
 - Change x86_64 Linux builds from statically linked GNU libc to dynamically
-  linked GNU libc while keeping other libraries statically linked. [#2774]
-  - Debian package builds now run on Debian 11 to provide a glibc 2.31 floor.
+  linked GNU libc while keeping other libraries statically linked. [#2774,
+  #2781]
+  - The x86_64 Linux release job and Debian package builds run on Debian 11 to
+    provide a glibc 2.31 floor.
+  - Nightly CI still covers Debian 11, 12, and 13 on x86_64.
   - CI now validates the dynamic library set and maximum required GLIBC version
     for `acton`, `lsp-server-acton`, and `actondb`.
+- Vendor the `diagnose` compiler diagnostic library from upstream after
+  `diagnose` removed its stale `text <=2.0` dependency, so compiler builds can
+  use the resolver's `text` package instead of pinning `text-2.0` just for
+  diagnostics. [#2783]
 
 ### Documentation
 - Document when and how to use the Acton container image, including
   copy-pastable Docker commands for checking the compiler version and building
   the current project. [#2767]
+
+### Testing & CI
+- Add a generated class-heavy type-checking fixture to exercise concurrent
+  type-checking scheduler performance on large recursive class structures. [#2777]
 
 ## [0.27.0] - 2026-05-08
 
@@ -3928,6 +3953,13 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#2767]: https://github.com/actonlang/acton/pull/2767
 [#2773]: https://github.com/actonlang/acton/pull/2773
 [#2774]: https://github.com/actonlang/acton/pull/2774
+[#2777]: https://github.com/actonlang/acton/pull/2777
+[#2779]: https://github.com/actonlang/acton/pull/2779
+[#2781]: https://github.com/actonlang/acton/pull/2781
+[#2782]: https://github.com/actonlang/acton/pull/2782
+[#2783]: https://github.com/actonlang/acton/pull/2783
+[#2784]: https://github.com/actonlang/acton/pull/2784
+[#2787]: https://github.com/actonlang/acton/pull/2787
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
