@@ -3,6 +3,7 @@ import qualified Acton.Kinds as Kinds
 import qualified Acton.NameInfo as NameInfo
 import qualified Acton.Parser as Parser
 import qualified Acton.Syntax as Syntax
+import qualified Acton.Types as Types
 
 import Control.DeepSeq (rnf)
 import qualified Control.Exception as E
@@ -14,8 +15,8 @@ import System.FilePath (takeBaseName)
 import System.IO (BufferMode(LineBuffering), hSetBuffering, stdout)
 
 -- Usage:
---   stack build libacton:exe:kinds-bench
---   stack exec kinds-bench -- ../dist/base/out/types path/to/file.act +RTS -T -RTS
+--   stack build libacton:exe:types-bench
+--   stack exec types-bench -- ../dist/base/out/types path/to/file.act +RTS -T -RTS
 --
 -- This uses Parser.parseModule, the normal parallel parser entrypoint. The RTS
 -- flag is optional. With -T, the driver also prints per-phase allocation and
@@ -72,5 +73,16 @@ main = do
         s3 <- getStats statsEnabled
         elapsed "kinds" t2 t3
         printStatsMaybe "kinds_stats" s2 s3
+
+        (nmod, tchecked, typeEnv, tests) <- Types.reconstruct Nothing Nothing env kchecked
+        E.evaluate (rnf nmod)
+        E.evaluate (rnf tchecked)
+        E.evaluate (forceHTEnv (Env.hnames typeEnv))
+        E.evaluate (forceHTEnv (Env.hmodules typeEnv))
+        E.evaluate (length tests)
+        t4 <- getCurrentTime
+        s4 <- getStats statsEnabled
+        elapsed "types" t3 t4
+        printStatsMaybe "types_stats" s3 s4
       _ ->
-        error "usage: kinds-bench TYPES_PATH SOURCE.act"
+        error "usage: types-bench TYPES_PATH SOURCE.act"
