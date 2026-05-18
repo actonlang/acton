@@ -57,6 +57,7 @@ main = do
         printStatsMaybe "parse_stats" s0 s1
 
         env <- Env.mkEnv [typesPath] env0 parsed
+        E.evaluate (forceHTEnv (Env.hnames env))
         E.evaluate (forceHTEnv (Env.hmodules env))
         t2 <- getCurrentTime
         s2 <- getStats statsEnabled
