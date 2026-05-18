@@ -231,8 +231,11 @@ isForced env                    = forced $ envX env
 
 
 instance Polarity Env where
-    polvars env                 = polvars pte `polcat` invvars ite
-      where (pte, ite)          = span ((`elem` pvs) . fst) (names env)
+    polvars env
+      | substPLen env == 0      = polnil
+      | otherwise               = polvars pte `polcat` invvars ite
+      where (pre,_)             = splitAt (substPLen env) (names env)
+            (pte, ite)          = span ((`elem` pvs) . fst) pre
             pvs                 = posnames $ envX env
 
 
@@ -795,9 +798,13 @@ instance USubst Witness where
 
 
 instance USubst Env where
-    usubst env                  = do ne <- usubst (names env)
+    usubst env                  = do pre' <- usubst pre
                                      ex <- usubst (envX env)
-                                     return $ setNames ne env{ envX = ex }
+                                     return env{ names = pre' ++ suf,
+                                                 hnames = extendHNames pre' (hnames env),
+                                                 substPLen = substPLenOf pre',
+                                                 envX = ex }
+      where (pre,suf)           = splitAt (substPLen env) (names env)
 
 instance UFree Env where
     ufree env                   = ufree (names env) ++ ufree (envX env)

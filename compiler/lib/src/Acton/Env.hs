@@ -51,6 +51,7 @@ mkEnv spath env m           = getImps spath env (imps m)
 data EnvF x                 = EnvF {
                                 names      :: TEnv,
                                 hnames     :: HTEnv,
+                                substPLen  :: Int,
                                 imports    :: [ModName],
                                 improots   :: [Name],
                                 modules    :: TEnv,
@@ -65,7 +66,7 @@ type Env0                   = EnvF ()
 
 
 setX                        :: EnvF y -> x -> EnvF x
-setX env x                  = EnvF { names = names env, hnames = hnames env, imports = imports env, improots = improots env,
+setX env x                  = EnvF { names = names env, hnames = hnames env, substPLen = substPLen env, imports = imports env, improots = improots env,
                                      modules = modules env, hmodules = hmodules env, thismod = thismod env,
                                      context = context env, qlevel = qlevel env, envX = x }
 
@@ -237,6 +238,7 @@ publicTEnv                 = filter (isPublicName . fst)
 initEnv                    :: FilePath -> Bool -> IO Env0
 initEnv path True          = return $ EnvF{ names = [(nPrim,NMAlias mPrim)],
                                             hnames = hnamesFrom [(nPrim,NMAlias mPrim)],
+                                            substPLen = 0,
                                             imports = [],
                                             improots = [],
                                             modules = [(nPrim,NModule [] primEnv Nothing)],
@@ -250,6 +252,7 @@ initEnv path False         = do (_,nmod,_,_,_,_,_,_,_,_,_,_) <- InterfaceFiles.r
                                     envBuiltinPublic = publicTEnv envBuiltin
                                     env0 = EnvF{ names = [(nPrim,NMAlias mPrim), (nBuiltin,NMAlias mBuiltin)],
                                                  hnames = hnamesFrom [(nPrim,NMAlias mPrim), (nBuiltin,NMAlias mBuiltin)],
+                                                 substPLen = 0,
                                                  imports = [],
                                                  improots = [],
                                                  modules = [(nPrim,NModule [] primEnv Nothing), (nBuiltin,NModule [] envBuiltin builtinDocstring)],
@@ -271,8 +274,19 @@ extendHNames                :: TEnv -> HTEnv -> HTEnv
 extendHNames te hte         = foldr add hte te
   where add (n,i) hte       = M.insert n (convNameInfo2HNameInfo i) hte
 
+substPLenOf                 :: TEnv -> Int
+substPLenOf te
+  | null (ufree te)          = 0
+  | otherwise                = length te
+
+extendSubstPLen             :: TEnv -> EnvF x -> Int
+extendSubstPLen te env
+  | substPLen env == 0,
+    null (ufree te)          = 0
+  | otherwise                = length te + substPLen env
+
 setNames                    :: TEnv -> EnvF x -> EnvF x
-setNames te env             = env{ names = te, hnames = hnamesFrom te }
+setNames te env             = env{ names = te, hnames = hnamesFrom te, substPLen = substPLenOf te }
 
 lookupName                  :: Name -> EnvF x -> Maybe HNameInfo
 lookupName n env            = M.lookup n (hnames env)
@@ -280,14 +294,14 @@ lookupName n env            = M.lookup n (hnames env)
 reserve                     :: [Name] -> EnvF x -> EnvF x
 reserve xs env
   | not $ null badSelf      = selfParamError (loc $ head badSelf)
-  | otherwise               = env{ names = te ++ names env, hnames = extendHNames te (hnames env) }
+  | otherwise               = env{ names = te ++ names env, hnames = extendHNames te (hnames env), substPLen = extendSubstPLen te env }
   where badSelf             = if inAct env then xs `intersect` [selfKW] else []
         te                  = [ (x, NReserved) | x <- nub xs ]
 
 define                      :: TEnv -> EnvF x -> EnvF x
 define te env
   | not $ null badSelf      = selfParamError (loc $ head badSelf)
-  | otherwise               = env{ names = te' ++ names env, hnames = extendHNames te' (hnames env) }
+  | otherwise               = env{ names = te' ++ names env, hnames = extendHNames te' (hnames env), substPLen = extendSubstPLen te' env }
   where badSelf             = if inAct env then dom te `intersect` [selfKW] else []
         te'                 = reverse te
 
@@ -304,7 +318,7 @@ getImports env              = reverse (imports env)
 
 defineTVars                 :: QBinds -> EnvF x -> EnvF x
 defineTVars q env           = foldr f env (unalias env q)
-  where f (QBind tv us) env = env{ names = ni : names env, hnames = extendHNames [ni] (hnames env), qlevel = qlevel env + 1 }
+  where f (QBind tv us) env = env{ names = ni : names env, hnames = extendHNames [ni] (hnames env), substPLen = extendSubstPLen [ni] env, qlevel = qlevel env + 1 }
           where (c,ps)      = case us of u:us' | not $ isProto env (tcname u) -> (u,us'); _ -> (cValue,us)
                 ni          = (tvname tv, NTVar (tvkind tv) c ps)
 
