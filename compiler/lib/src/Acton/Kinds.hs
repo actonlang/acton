@@ -15,6 +15,7 @@
 module Acton.Kinds(check) where
 
 import qualified Control.Exception
+import Control.DeepSeq (force)
 import qualified Data.Map.Strict as Map
 import Data.Map.Strict (Map)
 import Control.Monad.State.Strict
@@ -30,9 +31,10 @@ import Acton.Env
 
 
 check                               :: Env0 -> Module -> IO Module
-check env0 (Module m imps mdoc ss)  = do return (Module m imps mdoc ss1)
+check env0 (Module m imps mdoc ss)  = do Control.Exception.evaluate $ force checked
   where env                         = kindEnv env0
         ss1                         = runKindM (kchkTop env ss)
+        checked                     = Module m imps mdoc ss1
 
 
 data KindState                      = KindState {
