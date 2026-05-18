@@ -103,3 +103,14 @@ tests:
       - -threaded
       - -rtsopts
       - -with-rtsopts=-N
+
+executables:
+  kinds-bench:
+    main: KindsBench.hs
+    source-dirs: bench
+    dependencies:
+      - libacton
+    ghc-options:
+      - -threaded
+      - -rtsopts
+      - '"-with-rtsopts=-N -A64M"'
