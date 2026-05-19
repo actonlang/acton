@@ -50,6 +50,7 @@ mkEnv spath env m           = getImps spath env (imps m)
 
 data EnvF x                 = EnvF {
                                 names      :: TEnv,
+                                hnames     :: HTEnv,
                                 imports    :: [ModName],
                                 improots   :: [Name],
                                 modules    :: TEnv,
@@ -64,7 +65,7 @@ type Env0                   = EnvF ()
 
 
 setX                        :: EnvF y -> x -> EnvF x
-setX env x                  = EnvF { names = names env, imports = imports env, improots = improots env,
+setX env x                  = EnvF { names = names env, hnames = hnames env, imports = imports env, improots = improots env,
                                      modules = modules env, hmodules = hmodules env, thismod = thismod env,
                                      context = context env, qlevel = qlevel env, envX = x }
 
@@ -151,8 +152,8 @@ instance (Unalias a) => Unalias (Maybe a) where
 instance Unalias ModName where
     unalias env m@(ModName ns)
       | inBuiltin env               = m
-      | otherwise                   = case lookup (head ns) (names env) of
-                                        Just (NMAlias m') -> m'
+      | otherwise                   = case lookupName (head ns) env of
+                                        Just (HNMAlias m') -> m'
                                         Nothing | m `elem` (mPrim:mBuiltin:imports env)  -> m
                                         _ -> noModule m
 instance Unalias QName where
@@ -165,8 +166,8 @@ instance Unalias QName where
       where m'                      = unalias env m
     unalias env (NoQ n)
       | inBuiltin env               = GName mBuiltin n
-      | otherwise                   = case lookup n (names env) of
-                                        Just (NAlias qn) -> setLoc (loc n) qn
+      | otherwise                   = case lookupName n env of
+                                        Just (HNAlias qn) -> setLoc (loc n) qn
                                         _ -> case thismod env of Just m -> GName m n; _ -> NoQ n
     unalias env (GName m n)
 --      | inBuiltin env, m==mBuiltin  = NoQ n
@@ -235,6 +236,7 @@ publicTEnv                 = filter (isPublicName . fst)
 
 initEnv                    :: FilePath -> Bool -> IO Env0
 initEnv path True          = return $ EnvF{ names = [(nPrim,NMAlias mPrim)],
+                                            hnames = hnamesFrom [(nPrim,NMAlias mPrim)],
                                             imports = [],
                                             improots = [],
                                             modules = [(nPrim,NModule [] primEnv Nothing)],
@@ -247,6 +249,7 @@ initEnv path False         = do (_,nmod,_,_,_,_,_,_,_,_,_,_) <- InterfaceFiles.r
                                 let NModule _ envBuiltin builtinDocstring = nmod
                                     envBuiltinPublic = publicTEnv envBuiltin
                                     env0 = EnvF{ names = [(nPrim,NMAlias mPrim), (nBuiltin,NMAlias mBuiltin)],
+                                                 hnames = hnamesFrom [(nPrim,NMAlias mPrim), (nBuiltin,NMAlias mBuiltin)],
                                                  imports = [],
                                                  improots = [],
                                                  modules = [(nPrim,NModule [] primEnv Nothing), (nBuiltin,NModule [] envBuiltin builtinDocstring)],
@@ -261,17 +264,32 @@ initEnv path False         = do (_,nmod,_,_,_,_,_,_,_,_,_,_) <- InterfaceFiles.r
 withModulesFrom             :: EnvF x -> EnvF x -> EnvF x
 env `withModulesFrom` env'  = env{modules = modules env'}
 
+hnamesFrom                  :: TEnv -> HTEnv
+hnamesFrom te               = extendHNames te M.empty
+
+extendHNames                :: TEnv -> HTEnv -> HTEnv
+extendHNames te hte         = foldr add hte te
+  where add (n,i) hte       = M.insert n (convNameInfo2HNameInfo i) hte
+
+setNames                    :: TEnv -> EnvF x -> EnvF x
+setNames te env             = env{ names = te, hnames = hnamesFrom te }
+
+lookupName                  :: Name -> EnvF x -> Maybe HNameInfo
+lookupName n env            = M.lookup n (hnames env)
+
 reserve                     :: [Name] -> EnvF x -> EnvF x
 reserve xs env
   | not $ null badSelf      = selfParamError (loc $ head badSelf)
-  | otherwise               = env{ names = [ (x, NReserved) | x <- nub xs ] ++ names env }
+  | otherwise               = env{ names = te ++ names env, hnames = extendHNames te (hnames env) }
   where badSelf             = if inAct env then xs `intersect` [selfKW] else []
+        te                  = [ (x, NReserved) | x <- nub xs ]
 
 define                      :: TEnv -> EnvF x -> EnvF x
 define te env
   | not $ null badSelf      = selfParamError (loc $ head badSelf)
-  | otherwise               = env{ names = reverse te ++ names env }
+  | otherwise               = env{ names = te' ++ names env, hnames = extendHNames te' (hnames env) }
   where badSelf             = if inAct env then dom te `intersect` [selfKW] else []
+        te'                 = reverse te
 
 
 addImport                   :: ModName -> EnvF x -> EnvF x
@@ -286,8 +304,9 @@ getImports env              = reverse (imports env)
 
 defineTVars                 :: QBinds -> EnvF x -> EnvF x
 defineTVars q env           = foldr f env (unalias env q)
-  where f (QBind tv us) env = env{ names = (tvname tv, NTVar (tvkind tv) c ps) : names env, qlevel = qlevel env + 1 }
+  where f (QBind tv us) env = env{ names = ni : names env, hnames = extendHNames [ni] (hnames env), qlevel = qlevel env + 1 }
           where (c,ps)      = case us of u:us' | not $ isProto env (tcname u) -> (u,us'); _ -> (cValue,us)
+                ni          = (tvname tv, NTVar (tvkind tv) c ps)
 
 selfSubst n q               = vsubst [(tvSelf, tCon tc)]
   where tc                  = TC n (map tVar $ qbound q)
@@ -346,9 +365,9 @@ tryQName (QName m n) env    = case findHMod m env of
                                     Just i -> Just i
                                     _ -> noItem m n
                                 _ -> noModule m
-tryQName (NoQ n) env        = case lookup n (names env) of
-                                Just (NAlias qn) -> tryQName qn env
-                                Just ni -> Just (convNameInfo2HNameInfo ni)
+tryQName (NoQ n) env        = case lookupName n env of
+                                Just (HNAlias qn) -> tryQName qn env
+                                Just ni -> Just ni
                                 Nothing -> Nothing
 tryQName (GName m n) env
   | Just m == thismod env   = tryQName (NoQ n) env
@@ -374,15 +393,15 @@ findDefLoc n env            = findSL (names env)
 
 findName n env              = findQName (NoQ n) env
 
-lookupVar n env             = case lookup n (names env) of
-                                Just (NVar t) -> Just t
+lookupVar n env             = case lookupName n env of
+                                Just (HNVar t) -> Just t
                                 _ -> Nothing
 
 findHMod                    :: ModName -> EnvF x -> Maybe HTEnv  -- m is modname part of a QName, so we must check for aliasing
 findHMod m env | inBuiltin env, m==mBuiltin
-                            = Just (convTEnv2HTEnv (names env))
-findHMod m@(ModName ns) env = case lookup (head ns) (names env) of
-                                Just (NMAlias (ModName m')) -> lookupHMod (ModName $ m'++tail ns) env
+                            = Just (hnames env)
+findHMod m@(ModName ns) env = case lookupName (head ns) env of
+                                Just (HNMAlias (ModName m')) -> lookupHMod (ModName $ m'++tail ns) env
                                 Nothing | m `elem` (mPrim:mBuiltin:imports env) -> lookupHMod m env
                                 _ -> Nothing
 
@@ -391,7 +410,7 @@ lookupHMod m env                = case lookupHModule m env of Just (imps, te, do
 
 
 lookupHModule m env
- | inBuiltin env, m==mBuiltin   = Just ([], convTEnv2HTEnv (names env), Nothing)
+ | inBuiltin env, m==mBuiltin   = Just ([], hnames env, Nothing)
 lookupHModule (ModName ns) env  = f ns (hmodules env)
   where f (n:ns) te             = case M.lookup n te of
                                     Just (HNModule imps te' doc) -> g ns imps te' doc
@@ -421,13 +440,13 @@ isMod env ns@(n:_)          = maybe False (const True) (findHMod (ModName ns) en
   where rooted              = n `elem` improots env || isMAlias n env
 
 isMAlias                    :: Name -> EnvF x -> Bool
-isMAlias n env              = case lookup n (names env) of
-                                Just NMAlias{} -> True
+isMAlias n env              = case lookupName n env of
+                                Just HNMAlias{} -> True
                                 _ -> False
 
 isAlias                     :: Name -> EnvF x -> Bool
-isAlias n env               = case lookup n (names env) of
-                                Just NAlias{} -> True
+isAlias n env               = case lookupName n env of
+                                Just HNAlias{} -> True
                                 _ -> False
 
 kindOf env (TVar _ tv)      = tvkind tv
@@ -454,8 +473,8 @@ tconKind n env              = case findQName n env of
   where kind k []           = k
         kind k q            = KFun [ tvkind v | QBind v _ <- q ] k
 
-actorSelf env               = case lookup selfKW (names env) of
-                                Just (NVar (TCon _ tc)) | isActor env (tcname tc) -> True
+actorSelf env               = case lookupName selfKW env of
+                                Just (HNVar (TCon _ tc)) | isActor env (tcname tc) -> True
                                 _ -> False
 
 actorMethod env n0          = walk [] (names env)

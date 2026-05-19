@@ -207,7 +207,7 @@ limitQuant                      :: TUni -> Env -> Env
 limitQuant (UV _ l _) env
   | n <= 0                      = env
   | otherwise                   = modX env1 $ \x -> x{ witnesses = dropw n (witnesses x) }
-  where env1                    = env{ names = dropv n (names env), qlevel = qlevel env - n }
+  where env1                    = setNames (dropv n (names env)) env{ qlevel = qlevel env - n }
         n                       = qlevel env - l
         dropv 0 te              = te
         dropv n ((v,i):te)
@@ -797,7 +797,7 @@ instance USubst Witness where
 instance USubst Env where
     usubst env                  = do ne <- usubst (names env)
                                      ex <- usubst (envX env)
-                                     return env{ names = ne, envX = ex }
+                                     return $ setNames ne env{ envX = ex }
 
 instance UFree Env where
     ufree env                   = ufree (names env) ++ ufree (envX env)
