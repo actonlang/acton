@@ -303,14 +303,20 @@ reserve xs env
   | not $ null badSelf      = selfParamError (loc $ head badSelf)
   | otherwise               = addActiveNames te env
   where badSelf             = if inAct env then xs `intersect` [selfKW] else []
-        te                  = [ (x, NReserved) | x <- nub xs ]
+        te                  = [ (x, NReserved) | x <- uniqueNames xs ]
 
 reserveClosed               :: [Name] -> EnvF x -> EnvF x
 reserveClosed xs env
   | not $ null badSelf      = selfParamError (loc $ head badSelf)
   | otherwise               = addClosedNames te env
   where badSelf             = if inAct env then xs `intersect` [selfKW] else []
-        te                  = [ (x, NReserved) | x <- nub xs ]
+        te                  = [ (x, NReserved) | x <- uniqueNames xs ]
+
+uniqueNames                 :: [Name] -> [Name]
+uniqueNames ns              = reverse $ snd $ foldl' add (M.empty, []) ns
+  where add (seen, out) n
+          | M.member n seen = (seen, out)
+          | otherwise       = (M.insert n () seen, n:out)
 
 define                      :: TEnv -> EnvF x -> EnvF x
 define te env
