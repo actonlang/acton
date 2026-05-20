@@ -27,7 +27,7 @@ import Control.DeepSeq
 import Prelude hiding((<>))
 
 version :: [Int]
-version = [0,17]
+version = [0,18]
 
 data Module     = Module        { modname::ModName, imps::[Import], mdoc::Maybe Text, mbody::Suite } deriving (Eq,Show,Generic,NFData)
 
@@ -125,33 +125,33 @@ type Target     = Expr
 data Prefix     = Globvar | Xistvar | Tempvar | Witness | NormPass | CPSPass | LLiftPass | BoxPass
                 deriving (Eq,Ord,Show,Read,Generic,NFData)
 
-data Name       = Name SrcLoc Text | Derived Name Name | Internal Prefix String Int deriving (Generic,Show,NFData)
+data Name       = Name SrcLoc Text | Derived Name Name | Internal Prefix Text Int deriving (Generic,Show,NFData)
 
 nloc (Name l _) = l
 nloc _          = NoLoc
 
-nstr (Name _ s)             = esc (T.unpack s)
-  where esc (c:'_':s)
-          | isUpper c       = c : {- 'X' : -} '_' : esc s
-        esc (c:s)           = c : esc s
-        esc ""              = ""
-nstr (Derived n s)
-  | Internal{} <- s         = nstr n ++ nstr s
-  | otherwise               = nstr n ++ "D_" ++ nstr s
-nstr (Internal p s i)       = prefix p ++ "_" ++ unique i ++ s
-  where prefix Globvar      = "G"
-        prefix Xistvar      = "E"
-        prefix Tempvar      = "V"
-        prefix Witness      = "W"
-        prefix NormPass     = "N"
-        prefix CPSPass      = "C"
-        prefix LLiftPass    = "L"
-        prefix BoxPass      = "U"
-        unique 0            = ""
-        unique i            = show i
+nstr                         = T.unpack . ntext
 
-rawstr (Name _ s)           = T.unpack s
-rawstr n                    = nstr n
+ntext (Name _ s)             = s
+ntext (Derived n s)
+  | Internal{} <- s          = T.concat [ntext n, ntext s]
+  | otherwise                = T.concat [ntext n, T.pack "D_", ntext s]
+ntext (Internal p s i)       = T.concat [prefix p, T.singleton '_', unique i, s]
+  where prefix Globvar       = T.singleton 'G'
+        prefix Xistvar       = T.singleton 'E'
+        prefix Tempvar       = T.singleton 'V'
+        prefix Witness       = T.singleton 'W'
+        prefix NormPass      = T.singleton 'N'
+        prefix CPSPass       = T.singleton 'C'
+        prefix LLiftPass     = T.singleton 'L'
+        prefix BoxPass       = T.singleton 'U'
+        unique 0             = T.empty
+        unique i             = T.pack (show i)
+
+rawstr                       = T.unpack . rawText
+
+rawText (Name _ s)           = s
+rawText n                    = ntext n
 
 name            = Name NoLoc . T.pack
 

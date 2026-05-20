@@ -14,6 +14,7 @@ import Utils
 import Debug.Trace
 import Control.Monad.State.Strict
 import Control.Monad.Except
+import Data.Text (Text)
 
 doBoxing                           :: Acton.Env.Env0 -> Module -> IO Module
 doBoxing env m                     = do return m{mbody = ss}
@@ -23,12 +24,12 @@ doBoxing env m                     = do return m{mbody = ss}
 
 type BoxM a                        = State Int a
 
-newName                            :: String -> BoxM Name
+newName                            :: Text -> BoxM Name
 newName s                          = do n <- get
                                         put (n+1)
                                         return $ Internal BoxPass s n
 
-newNames (n : ns)                  = do un <- newName (nstr n)
+newNames (n : ns)                  = do un <- newName (ntext n)
                                         ps <- newNames ns
                                         return ((n,un) : ps)
 newNames []                        = return []
@@ -108,7 +109,7 @@ instance {-# OVERLAPS #-} Boxing ([Stmt]) where
     boxing env (x@(Assign l [p@(PVar _ n (Just t))] e) : xs)
        | isUnboxable t               = do case lookup n (unboxedVars env) of
                                               Nothing -> do (ws1, e') <- boxing env e
-                                                            un <- newName  (nstr n)
+                                                            un <- newName  (ntext n)
                                                             let env1 = define (envOf x) (addUnboxedVars [(n,un)] env)
                                                             (ws2,p') <- boxing env1 p
                                                             (ws3,xs') <- boxing env1 xs

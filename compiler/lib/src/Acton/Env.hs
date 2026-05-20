@@ -758,7 +758,7 @@ findTVAttr env tv n         = findAttr env c n
   where c                   = findTVBound env tv
 
 tvarWit                     :: TVar -> PCon -> Name
-tvarWit tv p                = Internal Witness (nstr $ Derived (deriveQ $ tcname p) (tvname tv)) 0
+tvarWit tv p                = Internal Witness (ntext $ Derived (deriveQ $ tcname p) (tvname tv)) 0
 
 -- Method resolution order ------------------------------------------------------------------------------------------------------
 

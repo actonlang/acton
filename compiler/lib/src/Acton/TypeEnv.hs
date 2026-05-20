@@ -32,6 +32,7 @@ import qualified Data.IntMap.Strict as IntMap
 import Data.IntMap.Strict (IntMap)
 import qualified Data.IntSet as IntSet
 import Data.IntSet (IntSet)
+import qualified Data.Text as T
 
 import Pretty
 import Utils
@@ -469,8 +470,8 @@ uextend s                               = lift $
 newGenerated p                          = do i <- newUnique
                                              st <- currentState
                                              return $ Internal p (tag (uniqprefix st) i) 0
-  where tag "" i                        = show i
-        tag s i                         = s ++ "_" ++ show i
+  where tag "" i                        = T.pack (show i)
+        tag s i                         = T.concat [T.pack s, T.singleton '_', T.pack (show i)]
 
 newWitness                              = newGenerated Witness
 

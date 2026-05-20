@@ -18,6 +18,7 @@ import qualified Control.Exception
 import Control.DeepSeq (force)
 import qualified Data.Map.Strict as Map
 import Data.Map.Strict (Map)
+import qualified Data.Text as T
 import Control.Monad.State.Strict
 import Control.Monad
 import Pretty
@@ -69,7 +70,7 @@ newWildvar l                        = do k <- newKUni
 
 newKUni                             = KUni <$> newUnique
 
-newXVar                             = TV KType <$> (Internal Xistvar "" <$> newUnique)
+newXVar                             = TV KType <$> (Internal Xistvar T.empty <$> newUnique)
 
 type KindEnv                        = EnvF ()
 

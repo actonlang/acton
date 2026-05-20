@@ -66,8 +66,8 @@ myPretty (GName m n)
       | otherwise                   = pretty m <> dot <> pretty n
 myPretty (NoQ w@(Internal _ _ _))   = pretty w
 
-instName (GName m n)                = GName m (Derived n (globalName "instance"))
-methName (GName m n)                = GName m (Derived n (globalName "methods"))
+instName (GName m n)                = GName m (Derived n (globalName (T.pack "instance")))
+methName (GName m n)                = GName m (Derived n (globalName (T.pack "methods")))
 
 derivedHead (Derived d@(Derived{}) _) = derivedHead d
 derivedHead (Derived n _)           = n
