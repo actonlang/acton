@@ -36,7 +36,6 @@ import Data.Text (Text)
 import qualified Data.List.NonEmpty as N
 import qualified Data.Set as Set
 import GHC.Conc (getNumCapabilities)
-import Numeric
 import Text.Megaparsec
 import Text.Megaparsec.Char
 import Text.Megaparsec.Error
@@ -473,11 +472,23 @@ locate (Loc l _) = setOffset l
 lexeme:: Parser a -> Parser a
 lexeme p = p <* currSC
 
+lexemeWithText :: Parser a -> Parser (a, Text)
+lexemeWithText p = lexeme $ do
+    input <- getInput
+    off1 <- getOffset
+    a <- p
+    off2 <- getOffset
+    return (a, T.take (off2 - off1) input)
+
 stringS :: String -> Parser Text
 stringS = string . T.pack
 
-symbol :: String -> Parser Text
-symbol str = lexeme (stringS str)
+stringS_ :: String -> Parser ()
+stringS_ = void . stringS
+
+symbol :: String -> Parser ()
+symbol [c] = lexeme (void (char c))
+symbol str = lexeme (stringS_ str)
 
 newline1 :: Parser [S.Stmt]
 newline1 = const [] <$> (eol *> sc2)
@@ -518,14 +529,27 @@ Prefix sequences are also as in subsection 2.4.1 with the following exceptions
 -}
 
 strings :: Parser S.Expr
-strings = addLoc $
-       bytesLiteral
+strings = addLoc $ do
+    start <- stringStart
+    case start of
+      BytesString -> bytesLiteral
+      RawString   -> rawStringLiteral
+      FString     -> fstringLiteral
+      PlainString -> stringLiteral
+
+data StringStart = BytesString | RawString | FString | PlainString
+
+stringStart :: Parser StringStart
+stringStart = lookAhead $
+       try (char 'r' *> char 'b' *> oneOf ("'\"" :: String) *> return BytesString)
        <|>
-       rawStringLiteral
+       (char 'b' *> oneOf ("'\"" :: String) *> return BytesString)
        <|>
-       fstringLiteral  -- Explicit f"..." syntax, with interpolation
+       (char 'r' *> oneOf ("'\"" :: String) *> return RawString)
        <|>
-       stringLiteral -- "" strings - all strings support interpolation
+       (char 'f' *> oneOf ("'\"" :: String) *> return FString)
+       <|>
+       (oneOf ("'\"" :: String) *> return PlainString)
 
 -- We use this `some` construct because Acton allows multiple adjacent strings
 -- to be effectively concatenated together without specifying any explicit
@@ -536,21 +560,21 @@ strings = addLoc $
 -- This will be parsed as a single string literal, not two separate ones.
 
 bytesLiteral :: Parser S.Expr
-bytesLiteral = S.BStrings NoLoc . map T.pack . concat <$> some bytesLiteralCombo
+bytesLiteral = S.BStrings NoLoc . concat <$> some bytesLiteralCombo
 
 -- | b"" and rb""
-bytesLiteralCombo :: Parser [String]
+bytesLiteralCombo :: Parser [Text]
 bytesLiteralCombo = plainbytesLiteral <|> rawbytesLiteral <?> "bytes literal"
 
 -- | Raw string literals (r"...") that don't support interpolation
 rawStringLiteral :: Parser S.Expr
-rawStringLiteral = S.Strings NoLoc . map T.pack . concat <$> some rawstrLiteral <?> "string literal"
+rawStringLiteral = S.Strings NoLoc . concat <$> some rawstrLiteral <?> "string literal"
 
 -- Docstring parser - parses strings with normal escape handling but no interpolation
 docstringLiteral :: Parser S.Expr
 docstringLiteral = (do
     parts <- some docstringPlainLiteral
-    return $ S.Strings NoLoc [T.pack (concat (concat parts))]
+    return $ S.Strings NoLoc [T.concat (concat parts)]
   ) <?> "docstring"
   where
     docstringPlainLiteral =
@@ -595,26 +619,26 @@ concatStringLiterals singleStringParser = do
             -- Multiple strings need to be concatenated
             -- We need to combine all the format strings and collect all expressions
             let (formatParts, exprLists) = unzip $ map extractParts multiple
-                combinedFormat = concat formatParts
+                combinedFormat = T.concat formatParts
                 combinedExprs = concat exprLists
 
             if null combinedExprs
-                then return $ S.Strings NoLoc [T.pack combinedFormat]
+                then return $ S.Strings NoLoc [combinedFormat]
                 else return $ S.BinOp NoLoc
-                               (S.Strings NoLoc [T.pack combinedFormat])
+                               (S.Strings NoLoc [combinedFormat])
                                S.Mod
                                (if length combinedExprs == 1
                                  then head combinedExprs
                                  else S.Tuple NoLoc (foldr S.PosArg S.PosNil combinedExprs) S.KwdNil)
   where
     -- Extract format string and expressions from each part
-    extractParts :: S.Expr -> (String, [S.Expr])
-    extractParts (S.Strings _ ss) = (concatMap T.unpack ss, [])
+    extractParts :: S.Expr -> (Text, [S.Expr])
+    extractParts (S.Strings _ ss) = (T.concat ss, [])
     extractParts (S.BinOp _ (S.Strings _ [fmt]) S.Mod expr) =
         case expr of
-            S.Tuple _ args _ -> (T.unpack fmt, tupleToList args)
-            e -> (T.unpack fmt, [e])
-    extractParts _ = ("", [])  -- Should not happen
+            S.Tuple _ args _ -> (fmt, tupleToList args)
+            e -> (fmt, [e])
+    extractParts _ = (T.empty, [])  -- Should not happen
 
     -- Convert tuple arguments to list
     tupleToList :: S.PosArg -> [S.Expr]
@@ -624,15 +648,15 @@ concatStringLiterals singleStringParser = do
 
 -- | Parts of an interpolated string
 data StringPart
-  = TextPart String      -- ^ Regular text content
-  | ExprPart S.Expr String  -- ^ Expression with format specifier
+  = TextPart Text        -- ^ Regular text content
+  | ExprPart S.Expr Text -- ^ Expression with format specifier
   deriving Show
 
 -- | Convert f-string parts to a format string with specifiers
-buildFormatString :: [StringPart] -> String
-buildFormatString [] = ""
-buildFormatString (TextPart s : rest) = s ++ buildFormatString rest
-buildFormatString (ExprPart _ fmt : rest) = "%" ++ fmt ++ buildFormatString rest
+buildFormatString :: [StringPart] -> Text
+buildFormatString [] = T.empty
+buildFormatString (TextPart s : rest) = s <> buildFormatString rest
+buildFormatString (ExprPart _ fmt : rest) = T.cons '%' fmt <> buildFormatString rest
 
 -- | Parse a string with optional interpolation expressions
 -- Both regular strings and f-strings support interpolation in Acton
@@ -644,8 +668,8 @@ parseInterpolatedString startQuote endQuote textPartParser = lexeme $ do
   let startQuoteCharOffset = startLoc + (length startQuote - length endQuote)
   let stringPart = choice [
           -- Escaped braces - handle these BEFORE expression parsing
-          try (stringS "{{" >> return (TextPart "{")),
-          try (stringS "}}" >> return (TextPart "}")),
+          try (stringS "{{" >> return (TextPart (T.singleton '{'))),
+          try (stringS "}}" >> return (TextPart (T.singleton '}'))),
           -- Expression parts (now without the notFollowedBy check)
           try exprPart,
           -- Regular text
@@ -670,14 +694,14 @@ parseInterpolatedString startQuote endQuote textPartParser = lexeme $ do
   if null exprs
     then do
       -- No expressions found, create a regular string
-      let textContent = concat [s | TextPart s <- parts]
+      let textContent = T.concat [s | TextPart s <- parts]
       -- Apply hex splitting to handle cases like "\x48ello" -> ["\x48", "ello"]
-      return $ S.Strings NoLoc (map T.pack (hexSplitString textContent))
+      return $ S.Strings NoLoc (hexSplitText textContent)
     else do
       -- Found expressions, create interpolated string format
       let formatStr = buildFormatString parts
           result = S.BinOp NoLoc
-                    (S.Strings NoLoc [T.pack formatStr])
+                    (S.Strings NoLoc [formatStr])
                     S.Mod
                     (if length exprs == 1
                       then head exprs
@@ -691,7 +715,7 @@ parseTextPart quoteStr isTriple handleNewlines startOfString = do
       -- Use existing escape sequence parsers with better error handling
       try (char '\\' >> choice [
           -- Escaped quotes - handle quote-specific escaping
-          try (stringS quoteStr >> return quoteStr),
+          try (stringS quoteStr >> return (T.pack quoteStr)),
 
           -- Use existing escape parsers for consistency and better error messages
           try hexEscape,
@@ -707,26 +731,26 @@ parseTextPart quoteStr isTriple handleNewlines startOfString = do
 
       -- Handle newlines in triple-quoted strings
       if handleNewlines
-        then try (stringS "\n" >> return "\\n")
+        then try (char '\n' >> return (T.pack "\\n"))
         else empty,
 
       -- Handle quotes in triple-quoted strings
       if isTriple
         then try (do
                 -- When we see a quote char, check if it's part of closing sequence
-                c <- char (head quoteStr)
-                quotes <- lookAhead $ many (char (head quoteStr))
-                let totalQuotes = 1 + length quotes
+                c <- char quoteChar
+                quotes <- lookAhead $ takeWhileP (Just "quote") (== quoteChar)
+                let totalQuotes = 1 + T.length quotes
                 case totalQuotes of
                   -- 1-2 quotes: always consume as content
-                  1 -> return [c]
-                  2 -> char (head quoteStr) >> return [c, head quoteStr]
+                  1 -> return (T.singleton c)
+                  2 -> char quoteChar >> return (T.cons c (T.singleton quoteChar))
                   -- 3 quotes exactly: this is the closing sequence, stop
                   3 -> empty
                   -- 4 quotes: consume 1, leave 3 for closing
-                  4 -> return [c]
+                  4 -> return (T.singleton c)
                   -- 5 quotes: consume 2, leave 3 for closing
-                  5 -> char (head quoteStr) >> return [c, head quoteStr]
+                  5 -> char quoteChar >> return (T.cons c (T.singleton quoteChar))
                   -- 6+ quotes: this is an error
                   _ -> do
                     curPos <- getOffset
@@ -745,15 +769,18 @@ parseTextPart quoteStr isTriple handleNewlines startOfString = do
             Just _ -> do
               pos <- getOffset
               parseException (Loc startOfString pos) $ MissingClosingQuote quoteStr
-            Nothing -> do
-              (loc, c) <- withLoc $ noneOf ("{}" ++ quoteStr ++ "\n")
-              return [c]
+            Nothing -> stringTextChunk
         else
-          (:[]) <$> noneOf ("{}" ++ quoteStr)
+          stringTextChunk
     ]
 
   -- Concatenate chunks
-  return (TextPart (concat chunks))
+  return (TextPart (T.concat chunks))
+  where
+    quoteChar = head quoteStr
+    stringTextChunk =
+      takeWhile1P (Just "string text") $ \c ->
+        c /= '{' && c /= '}' && c /= quoteChar && c /= '\\' && c /= '\n'
 
 
 -- | Parse an expression in braces with optional format specifier
@@ -762,7 +789,7 @@ exprPart = do
     openLoc <- getOffset
     char '{'
     -- Allow for spaces around the expression
-    many (char ' ')
+    skipFormatSpaces
 
     -- Check for empty expression or immediate colon
     closeLoc <- getOffset
@@ -776,13 +803,13 @@ exprPart = do
     parsedExpr <- expr <?> "expression"
 
     -- Allow spaces before format specifier or closing brace
-    many (char ' ')
+    skipFormatSpaces
 
     -- Check for optional format specifier
     formatInfo <- (char ':' *> formatSpec) <|> do
         closeBraceLoc <- getOffset
         char '}' <|> parseException (Loc (openLoc + 1) (closeBraceLoc)) UnclosedInterpolationBrace
-        return ("s", False, Nothing, Nothing, False, Nothing)
+        return (T.singleton 's', False, Nothing, Nothing, False, Nothing)
 
     let (fmt, isZeroPad, precisionInfo, typeSpecInfo, isCenterAlign, widthInfo) = formatInfo
 
@@ -792,8 +819,8 @@ exprPart = do
         then do
             -- Handle center alignment by using str.center() method
             let widthExpr = case widthInfo of
-                                Just w -> S.Int NoLoc (read w) (T.pack w)
-                                Nothing -> S.Int NoLoc 0 (T.pack "0")
+                                Just w -> S.Int NoLoc (decimalText w) w
+                                Nothing -> S.Int NoLoc 0 (T.singleton '0')
                 -- First convert the expression to a string
                 strExpr = S.Call NoLoc (S.Var NoLoc (S.NoQ (S.name "str"))) (S.PosArg parsedExpr S.PosNil) S.KwdNil
                 -- Then call the center method on the string
@@ -812,12 +839,18 @@ exprPart = do
 
     return $ ExprPart finalExpr fmt
 
+decimalText :: Text -> Integer
+decimalText = T.foldl' (\n c -> n * 10 + fromIntegral (digitToInt c)) 0
+
+skipFormatSpaces :: Parser ()
+skipFormatSpaces = void $ takeWhileP (Just "space") (== ' ')
+
 -- | Parse format specifier after the colon (colon is already consumed)
-formatSpec :: Parser (String, Bool, Maybe String, Maybe Char, Bool, Maybe String)  -- Returns (format, isZeroPadded, precision, typeSpec, isCenterAlign, width)
+formatSpec :: Parser (Text, Bool, Maybe Text, Maybe Char, Bool, Maybe Text)  -- Returns (format, isZeroPadded, precision, typeSpec, isCenterAlign, width)
 formatSpec = do
     specLoc <- getOffset
     -- Allow spaces at the beginning
-    many (char ' ')
+    skipFormatSpaces
 
     -- Check if there's any content before trying to parse
     beforeParseLoc <- getOffset
@@ -875,13 +908,13 @@ formatSpec = do
     zeroPad <- optional $ char '0'
 
     -- Optional width
-    width <- optional $ some digitChar
+    width <- optional digitsText
 
     -- Optional precision
     precision <- optional $ do
         char '.'
         digitLoc <- getOffset
-        digits <- optional $ some digitChar
+        digits <- optional digitsText
         case digits of
             Nothing -> parseException (Loc digitLoc digitLoc) MissingFormatPrecisionDigits
             Just d -> return d
@@ -891,7 +924,7 @@ formatSpec = do
     typeSpec <- optional (oneOf "fdeEgGnoxX%bos" <?> "type specifier")
 
     -- Allow spaces before closing brace
-    many (char ' ')
+    skipFormatSpaces
 
     -- Check for any remaining invalid characters
     invalidCharLoc <- getOffset
@@ -923,137 +956,257 @@ formatSpec = do
     let fmt = case (precision, typeSpec) of
             -- Float with precision and width (e.g., 10.2f becomes %10.2f for printf)
             (Just p, Just 'f') -> case (zeroPad, width) of
-                (Just '0', Just w) -> "0" ++ w ++ "." ++ p ++ "f"  -- Zero-padded float
-                (_, Just w) -> w ++ "." ++ p ++ "f"               -- Regular float with width
-                (_, Nothing) -> "." ++ p ++ "f"                   -- Just precision, no width
+                (Just '0', Just w) -> T.concat [T.singleton '0', w, T.singleton '.', p, T.singleton 'f']  -- Zero-padded float
+                (_, Just w) -> T.concat [w, T.singleton '.', p, T.singleton 'f']                         -- Regular float with width
+                (_, Nothing) -> T.concat [T.singleton '.', p, T.singleton 'f']                           -- Just precision, no width
             -- Default to float if precision specified but no type
             (Just p, _) -> case (zeroPad, width) of
-                (Just '0', Just w) -> "0" ++ w ++ "." ++ p ++ "f"
-                (_, Just w) -> w ++ "." ++ p ++ "f"
-                (_, Nothing) -> "." ++ p ++ "f"
+                (Just '0', Just w) -> T.concat [T.singleton '0', w, T.singleton '.', p, T.singleton 'f']
+                (_, Just w) -> T.concat [w, T.singleton '.', p, T.singleton 'f']
+                (_, Nothing) -> T.concat [T.singleton '.', p, T.singleton 'f']
             -- Float without precision
-            (Nothing, Just 'f') -> "f"
+            (Nothing, Just 'f') -> T.singleton 'f'
             -- Other formats based on alignment and width
             (Nothing, _) -> case (zeroPad, align, width) of
                 -- Zero padding with width (for numbers) - use integer format
-                (Just '0', _, Just w) -> "0" ++ w ++ "d"
+                (Just '0', _, Just w) -> T.concat [T.singleton '0', w, T.singleton 'd']
                 -- Left-aligned with width
-                (_, Just '<', Just w) -> "-" ++ w ++ "s"
+                (_, Just '<', Just w) -> T.concat [T.singleton '-', w, T.singleton 's']
                 -- Right-aligned with width
-                (_, Just '>', Just w) -> w ++ "s"
+                (_, Just '>', Just w) -> T.snoc w 's'
                 -- Center-aligned with width
-                (_, Just '^', Just w) -> "s"  -- Width handled separately in expr processing
+                (_, Just '^', Just w) -> T.singleton 's'  -- Width handled separately in expr processing
                 -- Just width, no alignment
-                (_, Nothing, Just w) -> w ++ "s"
+                (_, Nothing, Just w) -> T.snoc w 's'
                 -- Default case
-                _ -> "s"
+                _ -> T.singleton 's'
 
     return (fmt, isZeroPadding, precision, typeSpec, isCenterAlign, width)
+  where
+    digitsText = takeWhile1P (Just "digit") isDigit
 
 -- Split string when hex escape is followed by hex digit (to prevent C compiler issues)
 -- Only splits if the string contains actual hex escapes (not literal \x patterns)
-hexSplitString :: String -> [String]
-hexSplitString "" = [""]
-hexSplitString s
-  | hasActualHexEscapes s = filter (not . null) $ reverse $ map reverse $ process s [] []
+hexSplitText :: Text -> [Text]
+hexSplitText s
+  | T.null s = [T.empty]
+  | hasActualHexEscapes s = filter (not . T.null) $ reverse $ process s T.empty []
   | otherwise = [s]  -- No splitting needed for raw strings or strings without hex escapes
   where
     -- Check if string has actual hex escapes (single backslash followed by x and hex digits)
     -- Raw strings produce \\x patterns (double backslashes) which should NOT be split
-    hasActualHexEscapes [] = False
-    hasActualHexEscapes ('\\':'\\':'x':rest) = hasActualHexEscapes rest  -- Skip \\x pattern (raw string)
-    hasActualHexEscapes ('\\':'x':h1:h2:rest)
-      | isHex h1 && isHex h2 = True
-      | otherwise = hasActualHexEscapes rest
-    hasActualHexEscapes (_:rest) = hasActualHexEscapes rest
+    hasActualHexEscapes t =
+      case T.uncons t of
+        Nothing -> False
+        Just ('\\', rest) ->
+          case T.uncons rest of
+            Just ('\\', rest') ->
+              case T.uncons rest' of
+                Just ('x', rest'') -> hasActualHexEscapes rest''  -- Skip \\x pattern (raw string)
+                _                  -> hasActualHexEscapes rest
+            Just ('x', rest') ->
+              case T.uncons rest' of
+                Just (h1, rest'') ->
+                  case T.uncons rest'' of
+                    Just (h2, _) | isHex h1 && isHex h2 -> True
+                    _                                   -> hasActualHexEscapes rest'
+                _ -> hasActualHexEscapes rest'
+            _ -> hasActualHexEscapes rest
+        Just (_, rest) -> hasActualHexEscapes rest
 
-    process [] acc chunks = acc : chunks
-    process ('\\':'x':h1:h2:rest) acc chunks
-      | isHex h1 && isHex h2 && (not (null rest) && isHex (head rest)) =
-          -- Next char is hex, split here - complete current chunk with hex escape
-          let completedChunk = h2:h1:'x':'\\':acc
-          in process rest [] (completedChunk : chunks)
-      | isHex h1 && isHex h2 =
-          -- Valid hex escape, continue accumulating
-          process rest (h2:h1:'x':'\\':acc) chunks
-      | otherwise =
-          -- Invalid hex escape, keep as-is
-          process (h1:h2:rest) ('x':'\\':acc) chunks
-    process (c:cs) acc chunks = process cs (c:acc) chunks
+    process t acc chunks =
+      case T.uncons t of
+        Nothing -> T.reverse acc : chunks
+        Just ('\\', rest) ->
+          case T.uncons rest of
+            Just ('x', rest') ->
+              case T.uncons rest' of
+                Just (h1, rest'') ->
+                  case T.uncons rest'' of
+                    Just (h2, rest''') | isHex h1 && isHex h2 ->
+                      let acc' = h2 `T.cons` h1 `T.cons` 'x' `T.cons` '\\' `T.cons` acc
+                      in case T.uncons rest''' of
+                           Just (c, _) | isHex c -> process rest''' T.empty (T.reverse acc' : chunks)
+                           _                     -> process rest''' acc' chunks
+                    _ -> process rest ('\\' `T.cons` acc) chunks
+                _ -> process rest ('\\' `T.cons` acc) chunks
+            _ -> process rest ('\\' `T.cons` acc) chunks
+        Just (c, rest) -> process rest (c `T.cons` acc) chunks
+
     isHex :: Char -> Bool
     isHex c = c `elem` ("0123456789abcdefABCDEF" :: String)
 
 
-newlineEscape =  "" <$ newline
-singleCharEscape =  (\c -> '\\':c:[]) <$> (oneOf ("\'\"\\abfnrtv"))
+newlineEscape =  T.empty <$ newline
+singleCharEscape =  (\c -> T.cons '\\' (T.singleton c)) <$> (oneOf ("\'\"\\abfnrtv"))
 hexEscape = do
       char 'x'
-      (loc,cs) <- withLoc (count' 0 2 hexDigitChar)
-      if length cs == 2
-       then return ("\\x" ++ cs)
-       else parseException loc $ IncompleteHexEscape cs
+      (loc,cs) <- withLoc (countTextBy 0 2 "hex digit" isHexDigit)
+      if T.length cs == 2
+       then return (T.cons '\\' (T.cons 'x' cs))
+       else parseException loc $ IncompleteHexEscape (T.unpack cs)
 octEscape = do
-       (loc,cs) <- withLoc (count' 1 3 octDigitChar)
-       if length cs == 3 && head cs > '3'
+       (loc,cs) <- withLoc (countTextBy 1 3 "octal digit" isOctDigit)
+       if T.length cs == 3 && T.head cs > '3'
           then  parseException loc OctalEscapeOutOfRange
-          else return ("\\" ++ cs)
+          else return (T.cons '\\' cs)
 univ1Escape = do
       char 'u'
-      (loc,cs) <- withLoc (count' 0 4 hexDigitChar)
-      if length cs < 4
-        then parseException loc $ IncompleteUnicodeEscape 4 (length cs)
-        else return ("\\u" ++ cs)
+      (loc,cs) <- withLoc (countTextBy 0 4 "hex digit" isHexDigit)
+      if T.length cs < 4
+        then parseException loc $ IncompleteUnicodeEscape 4 (T.length cs)
+        else return (T.cons '\\' (T.cons 'u' cs))
 univ2Escape = do
       char 'U'
-      (loc,cs) <- withLoc (count' 0 8 hexDigitChar)
-      if length cs < 8
-        then parseException loc $ IncompleteUnicodeEscape 8 (length cs)
-        else return ("\\U" ++ cs)
+      (loc,cs) <- withLoc (countTextBy 0 8 "hex digit" isHexDigit)
+      if T.length cs < 8
+        then parseException loc $ IncompleteUnicodeEscape 8 (T.length cs)
+        else return (T.cons '\\' (T.cons 'U' cs))
+
+countTextBy :: Int -> Int -> String -> (Char -> Bool) -> Parser Text
+countTextBy minCount maxCount label f = do
+      input <- getInput
+      let cs = T.take maxCount (T.takeWhile f input)
+          n = T.length cs
+      if n < minCount
+        then empty
+        else if n == 0
+          then return T.empty
+          else takeP (Just label) n
 
 asciiC   = do
       (loc,c) <- withLoc anySingle
       if c == '\n'
          then parseException loc (MissingClosingQuote "\"")
          else if isAscii c
-              then return [c]
+              then return (T.singleton c)
               else parseException loc NonAsciiInBytesLiteral
 
 anyC  = do
       (loc,c) <- withLoc anySingle
       if c == '\n'
          then parseException loc (MissingClosingQuote "\"")
-         else return [c]
+         else return (T.singleton c)
 
 unknownEscape charParser = do
          (loc,c) <- withLoc charParser
          parseException loc UnknownEscapeSequence
 
-plainLiteral charParser prefix tailEscapes = stringTempl "\"\"\"" longItem esc prefix
-                                          <|> stringTempl "'''" longItem esc prefix
-                                          <|> stringTempl "\"" charParser esc prefix
-                                          <|> stringTempl "'" charParser esc prefix
-    where longItem = ("\\n" <$ newline) <|> charParser  -- newlines allowed in triple-quoted literals
-          esc =  newlineEscape <|> singleCharEscape <|> hexEscape <|> octEscape <|> tailEscapes
+plainLiteral :: Bool -> String -> Parser Text -> Parser [Text]
+plainLiteral bytes prefix tailEscapes = plainTempl "\"\"\""
+                                    <|> plainTempl "'''"
+                                    <|> plainTempl "\""
+                                    <|> plainTempl "'"
+  where
+    esc = newlineEscape <|> singleCharEscape <|> hexEscape <|> octEscape <|> tailEscapes
 
-plainbytesLiteral = plainLiteral asciiC "b" (unknownEscape asciiC)
+    plainTempl q = do
+      startLoc <- getOffset
+      _ <- stringS (prefix++q)
+      content <- manyTill (plainItem (startLoc + length prefix) q)
+                          (stringS q <?> closingQuoteError startLoc q)
+      currSC
+      return $ hexSplitText (T.concat content)
 
-plainstrLiteral = plainLiteral anyC "" ( univ1Escape <|> univ2Escape <|> unknownEscape anyC)
+    plainItem startQuoteOffset q =
+          (char '\\' *> esc)
+      <|> newlineItem startQuoteOffset q
+      <|> quoteItem q
+      <|> textChunk q
+      <|> nonAsciiByte
 
+    newlineItem startQuoteOffset q
+      | length q == 3 = T.pack "\\n" <$ newline
+      | otherwise = do
+          pos <- getOffset
+          _ <- lookAhead (char '\n')
+          parseException (Loc startQuoteOffset pos) (MissingClosingQuote q)
+
+    quoteItem q
+      | length q == 3 = T.singleton <$> char (head q)
+      | otherwise     = empty
+
+    textChunk q =
+      takeWhile1P (Just "string text") $ \c ->
+        c /= '\\' && c /= head q && c /= '\n' && (not bytes || isAscii c)
+
+    nonAsciiByte
+      | bytes = do
+          off <- getOffset
+          c <- lookAhead anySingle
+          if isAscii c
+            then empty
+            else anySingle *> parseException (Loc off (off + 1)) NonAsciiInBytesLiteral
+      | otherwise = empty
+
+    closingQuoteError startLoc quote
+      | quote `elem` ["\"\"\"", "'''"] = "closing triple quote " ++ quote ++ " for string starting at position " ++ show startLoc
+      | otherwise = "closing quote " ++ quote ++ " for string"
+
+plainbytesLiteral = plainLiteral True "b" (unknownEscape asciiC)
+
+plainstrLiteral = plainLiteral False "" ( univ1Escape <|> univ2Escape <|> unknownEscape anyC)
+
+rawLiteral :: Parser Text -> String -> Parser [Text]
 rawLiteral charParser prefix = stringTempl "\"\"\"" longItem esc prefix
               <|> stringTempl "'''" longItem esc prefix
               <|> stringTempl "\"" charParser esc prefix
               <|> stringTempl "'"  charParser  esc prefix
-   where longItem =  ("\\n" <$ newline) <|> charParser
+   where longItem =  (T.pack "\\n" <$ newline) <|> charParser
          esc = newlineEscapeRaw <|> singleCharEscapeRaw <|> generalEscapeRaw
-         newlineEscapeRaw = "\\\\\\n" <$ newline
-         singleCharEscapeRaw = (\c -> "\\\\\\" ++ [c]) <$> (oneOf ("\'\""))
-         generalEscapeRaw = return "\\\\"
+         newlineEscapeRaw = T.pack "\\\\\\n" <$ newline
+         singleCharEscapeRaw = (\c -> T.pack ['\\', '\\', '\\', c]) <$> (oneOf ("\'\""))
+         generalEscapeRaw = return (T.pack "\\\\")
 
 rawbytesLiteral = rawLiteral asciiC "rb"
 
-rawstrLiteral = rawLiteral ((:[]) <$> anySingle) "r"
+rawstrLiteral = rawstrTempl "\"\"\""
+            <|> rawstrTempl "'''"
+            <|> rawstrTempl "\""
+            <|> rawstrTempl "'"
 
-stringTempl :: String -> Parser String -> Parser String -> String -> Parser [String]
+rawstrTempl :: String -> Parser [Text]
+rawstrTempl q = do
+    startLoc <- getOffset
+    _ <- stringS ("r"++q)
+    content <- manyTill (rawItem startLoc) (stringS q <?> closingQuoteError startLoc q)
+    currSC
+    return $ hexSplitText (T.concat content)
+  where
+    quoteChar = head q
+    isTriple = length q == 3
+
+    rawItem startLoc =
+          rawEscape
+      <|> newlineItem startLoc
+      <|> quoteItem
+      <|> rawTextChunk
+
+    rawEscape = char '\\' *> (
+             T.pack "\\\\\\n" <$ newline
+        <|> ((\c -> T.pack ['\\', '\\', '\\', c]) <$> oneOf ("\'\""))
+        <|> return (T.pack "\\\\"))
+
+    newlineItem startLoc
+      | isTriple  = T.pack "\\n" <$ newline
+      | otherwise = do
+          pos <- getOffset
+          _ <- lookAhead (char '\n')
+          parseException (Loc (startLoc + 1) pos) (MissingClosingQuote q)
+
+    quoteItem
+      | isTriple  = T.singleton <$> char quoteChar
+      | otherwise = empty
+
+    rawTextChunk =
+      takeWhile1P (Just "raw string text") $ \c ->
+        c /= '\\' && c /= quoteChar && c /= '\n'
+
+    closingQuoteError start quote
+      | quote `elem` ["\"\"\"", "'''"] = "closing triple quote " ++ quote ++ " for string starting at position " ++ show start
+      | otherwise = "closing quote " ++ quote
+
+stringTempl :: String -> Parser Text -> Parser Text -> String -> Parser [Text]
 stringTempl q single esc prefix = do
     startLoc <- getOffset
     _ <- stringS (prefix++q)
@@ -1071,13 +1224,13 @@ stringTempl q single esc prefix = do
                         else single
     content <- manyTillEsc guardedSingle esc (stringS q <?> closingQuoteError startLoc q)
     currSC  -- Apply lexeme whitespace consumption
-    return $ hexSplitString . concat $ content
+    return $ hexSplitText (T.concat content)
   where
     closingQuoteError startLoc quote
       | quote `elem` ["\"\"\"", "'''"] = "closing triple quote " ++ quote ++ " for string starting at position " ++ show startLoc
       | otherwise = "closing quote " ++ quote ++ " for string"
 
-manyTillEsc, someTillEsc :: Parser String -> Parser String -> Parser a -> Parser [String]
+manyTillEsc, someTillEsc :: Parser Text -> Parser Text -> Parser a -> Parser [Text]
 manyTillEsc p esc end =  (const [] <$> end) <|> (someTillEsc p esc end)
 
 someTillEsc p esc end = do
@@ -1090,7 +1243,7 @@ someTillEsc p esc end = do
 -- Reserved words, other symbols and names ----------------------------------------------------------
 
 rword :: String -> Parser ()
-rword w = (lexeme . try) (stringS w *> notFollowedBy (alphaNumChar <|> char '_'))
+rword w = (lexeme . try) (stringS_ w *> notFollowedBy (alphaNumChar <|> char '_'))
 
 comma     = symbol "," <?> "comma"
 colon     = symbol ":"
@@ -1107,20 +1260,23 @@ vbar      = symbol "|"
 -- Parser for operator that is a prefix of another operator
 -- Slightly hackish; depends on the (presently true) fact that chars in argument to oneOf are
 -- the only chars that can follow directly after the prefix operator in a longer operator name.
-opPref :: String -> Parser Text
-opPref op = (lexeme . try) (stringS op <* notFollowedBy (oneOf "<>=/*"))
+opPref :: String -> Parser ()
+opPref [c] = (lexeme . try) (void (char c) <* notFollowedBy (oneOf "<>=/*"))
+opPref op  = (lexeme . try) (stringS_ op <* notFollowedBy (oneOf "<>=/*"))
 
 singleStar = (lexeme . try) (char '*' <* notFollowedBy (char '*'))
 
 identifier :: Parser Text
 identifier = (lexeme . try) $ do
     off <- getOffset
-    c <- satisfy (\c -> isAlpha c || c == '_') <?> "identifier"
-    cs <- hidden (takeWhileP Nothing (\c -> isAlphaNum c || c == '_'))
-    let x = T.cons c cs
+    lookAhead (satisfy identifierStart <?> "identifier")
+    x <- hidden (takeWhile1P (Just "identifier") identifierChar)
     if S.isKeywordText x
       then parseError (TrivialError off (Just (Tokens (N.fromList (T.unpack x)))) (Set.fromList [Label (N.fromList "identifier")]))
       else return x
+  where
+    identifierStart c = isAlpha c || c == '_'
+    identifierChar c  = isAlphaNum c || c == '_'
 
 name, escname, tvarname :: Parser S.Name
 name = do off <- getOffset
@@ -1129,7 +1285,7 @@ name = do off <- getOffset
             then parseError (FancyError off (Set.fromList [ErrorCustom (TypeVariableNameError (T.unpack x))]))
             else return $ S.Name (Loc off (off + T.length x)) x
 
-escname = name <|> addLoc (S.name . head <$> plainstrLiteral)  -- Assumes an escname cannot contain hex escape sequences
+escname = name <|> addLoc (S.Name NoLoc . head <$> plainstrLiteral)  -- Assumes an escname cannot contain hex escape sequences
 
 paramName :: Parser S.Name
 paramName = name <|> do
@@ -1166,6 +1322,55 @@ qual_name = do
 
 -- recognizers for numbers are used directly in function atom below.
 
+number :: Parser S.Expr
+number = basedInteger <|> try decimalInteger <|> try imaginary <|> try floating
+  where
+    basedInteger =
+      (\(i,s) -> S.Int NoLoc i s) <$> lexemeWithText basedIntegerValue
+
+    decimalInteger =
+      (\(i,s) -> S.Int NoLoc i s) <$> lexemeWithText decimalIntegerValue
+
+    floating =
+      (\(f,s) -> S.Float NoLoc f s) <$> lexemeWithText L.float
+
+    imaginary =
+      (\(f,s) -> S.Imaginary NoLoc f s) <$> lexemeWithText (L.float <* stringS "j")
+
+    basedIntegerValue = do
+      input <- getInput
+      case T.uncons input of
+        Just ('0', rest) ->
+          case T.uncons rest of
+            Just ('o', _) -> stringS_ "0o" *> (integerText 8 <$> takeWhile1P (Just "octal digit") isOctDigit)
+            Just ('x', _) -> stringS_ "0x" *> (integerText 16 <$> takeWhile1P (Just "hexadecimal digit") isHexDigit)
+            _             -> empty
+        _ -> empty
+
+    decimalIntegerValue = do
+      ds <- takeWhile1P (Just "decimal digit") isDigit
+      rest <- getInput
+      if startsFloatSuffix rest then empty else return (integerText 10 ds)
+
+    startsFloatSuffix rest =
+      case T.uncons rest of
+        Just ('.', rest') ->
+          case T.uncons rest' of
+            Just (c, _) -> isDigit c
+            Nothing     -> False
+        Just (e, rest') | e == 'e' || e == 'E' ->
+          case T.uncons rest' of
+            Just (c, _) | isDigit c -> True
+            Just (s, rest'') | s == '+' || s == '-' ->
+              case T.uncons rest'' of
+                Just (c, _) -> isDigit c
+                Nothing     -> False
+            _ -> False
+        _ -> False
+
+    integerText base =
+      T.foldl' (\n c -> n * base + fromIntegral (digitToInt c)) 0
+
 --- Helper functions for parenthesised forms -----------------------------------
 
 parens, brackets, braces :: Parser a -> Parser a
@@ -1180,7 +1385,7 @@ braces p = withCtx PAR (L.symbol sc2 (T.pack "{") *> p <* (char '}' <?> "closing
 module_docstring :: Parser Text
 module_docstring = do
     S.Strings _ ss <- addLoc docstringLiteral
-    return (T.pack (unescapeString (concatMap T.unpack ss)))
+    return (unescapeText (T.concat ss))
 
 file_input :: Parser ([S.Import], Maybe Text, S.Suite)
 file_input = sc2 *> do
@@ -2139,18 +2344,23 @@ docstringSmallStmt :: Parser (Maybe Text, S.Suite)
 docstringSmallStmt = do
     S.Strings _ ss <- addLoc docstringLiteral
     _ <- lookAhead (void (char ';') <|> void eol <|> eof)
-    return (Just (T.pack (unescapeString (concatMap T.unpack ss))), [])
+    return (Just (unescapeText (T.concat ss)), [])
 
 
-unescapeString :: String -> String
-unescapeString [] = []
-unescapeString ('\\':'n':xs) = '\n' : unescapeString xs
-unescapeString ('\\':'t':xs) = '\t' : unescapeString xs
-unescapeString ('\\':'r':xs) = '\r' : unescapeString xs
-unescapeString ('\\':'\\':xs) = '\\' : unescapeString xs
-unescapeString ('\\':'"':xs) = '"' : unescapeString xs
-unescapeString ('\\':'\'':xs) = '\'' : unescapeString xs
-unescapeString (x:xs) = x : unescapeString xs
+unescapeText :: Text -> Text
+unescapeText s =
+    case T.uncons s of
+      Nothing -> T.empty
+      Just ('\\', xs) ->
+          case T.uncons xs of
+            Just ('n', rest)  -> '\n' `T.cons` unescapeText rest
+            Just ('t', rest)  -> '\t' `T.cons` unescapeText rest
+            Just ('r', rest)  -> '\r' `T.cons` unescapeText rest
+            Just ('\\', rest) -> '\\' `T.cons` unescapeText rest
+            Just ('"', rest)  -> '"' `T.cons` unescapeText rest
+            Just ('\'', rest) -> '\'' `T.cons` unescapeText rest
+            _                 -> '\\' `T.cons` unescapeText xs
+      Just (x, xs) -> x `T.cons` unescapeText xs
 
 ------------------------------------------------------------------------------------------------
 --- Expressions ----------------------------------------------------------------
@@ -2338,11 +2548,7 @@ atom_expr = do
                              return $ maybe (S.Dict NoLoc []) id mbe)
                <|> var
                <|> isinstance
-               <|> (try ((\f -> S.Imaginary NoLoc f (T.pack (show f ++ "j"))) <$> lexeme (L.float <* stringS "j")))
-               <|> (try ((\f -> S.Float NoLoc f (T.pack (show f))) <$> lexeme L.float))
-               <|> (\i -> S.Int NoLoc i (T.pack ("0o"++showOct i ""))) <$> (stringS "0o" *> lexeme L.octal)
-               <|> (\i -> S.Int NoLoc i (T.pack ("0x"++showHex i ""))) <$> (stringS "0x" *> lexeme L.hexadecimal)
-               <|> (\i -> S.Int NoLoc i (T.pack (show i))) <$> (lexeme L.decimal)
+               <|> number
                <|> (S.Ellipsis <$> rwordLoc "...")
                <|> (S.None <$>  rwordLoc "None")
                <|> (S.NotImplemented  <$>  rwordLoc "NotImplemented")
@@ -2411,7 +2617,7 @@ atom_expr = do
                         return (\a -> maybe (S.DotI (loc a `upto` l) a i) (const $ S.RestI (loc a `upto` l) a i) mb)
                  strdot = do
                         (l,ss) <- withLoc plainstrLiteral
-                        return (\a -> S.Dot (loc a `upto` l) a (S.Name l (T.pack (head ss))))
+                        return (\a -> S.Dot (loc a `upto` l) a (S.Name l (head ss)))
 
                  -- Parse slice or index: try slice first since it can start with expr
                  sliceOrIndex = try sliceParser <|> indexParser
