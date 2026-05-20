@@ -402,6 +402,7 @@ createProject name = do
           , BuildSpec.fingerprint = fp
           , BuildSpec.dependencies = M.empty
           , BuildSpec.zig_dependencies = M.empty
+          , BuildSpec.libraries = M.empty
           }
     createDirectoryIfMissing True srcRoot
     writeFile buildActPath (BuildSpec.renderBuildAct buildSpec)
@@ -1945,7 +1946,9 @@ runCliPostCompile cliHooks gopts plan env = do
         preTestBinTasks = map (\t -> BinTask True (modNameToString (name t)) (A.GName (name t) (A.name "test_main")) True) rootTasks
         selectedTasksByProj = selectedTasksWithProvidersByProj globalTasks neededTasks
         depModuleOptsByProj = depModuleOptionsByProj selectedTasksByProj projMap
-        rootModuleEntries = selectedCSourceEntriesForProj rootProj (M.findWithDefault [] rootProj selectedTasksByProj)
+        rootSelectedModuleEntries = selectedCSourceEntriesForProj rootProj (M.findWithDefault [] rootProj selectedTasksByProj)
+        rootBuildLibraries = explicitBuildLibraries rootSelectedModuleEntries rootSpec
+        rootModuleEntries = excludeLibrarySources rootBuildLibraries rootSelectedModuleEntries
         rootDepModuleOpts = M.findWithDefault M.empty rootProj depModuleOptsByProj
         rootDepPathOverrides = projectDepPathOverrides projMap rootProj
     -- Generate build.zig(.zon) for dependencies too, to satisfy Zig builder links.
@@ -1975,10 +1978,10 @@ runCliPostCompile cliHooks gopts plan env = do
           then do
             testBinTasks <- catMaybes <$> mapM (filterMainActor env pathsRoot) preTestBinTasks
             unless (altOutput opts') $
-              runFinal (compileBins gopts opts' pathsRoot env rootSpec rootTasks testBinTasks allowPrune' rootModuleEntries rootDepModuleOpts rootDepPathOverrides (Just (cchProgressUI cliHooks)))
+              runFinal (compileBins gopts opts' pathsRoot env rootSpec rootTasks testBinTasks allowPrune' rootModuleEntries rootBuildLibraries rootDepModuleOpts rootDepPathOverrides (Just (cchProgressUI cliHooks)))
           else do
             unless (altOutput opts') $
-              runFinal (compileBins gopts opts' pathsRoot env rootSpec rootTasks preBinTasks allowPrune' rootModuleEntries rootDepModuleOpts rootDepPathOverrides (Just (cchProgressUI cliHooks)))
+              runFinal (compileBins gopts opts' pathsRoot env rootSpec rootTasks preBinTasks allowPrune' rootModuleEntries rootBuildLibraries rootDepModuleOpts rootDepPathOverrides (Just (cchProgressUI cliHooks)))
 -- Generate documentation index for a project build by reading module names and
 -- docstrings from cached .ty headers or source headers.
 generateProjectDocIndex :: Source.SourceProvider -> C.GlobalOptions -> C.CompileOptions -> Paths -> [String] -> IO ()
@@ -1998,6 +2001,27 @@ selectedCSourceEntriesForProj proj tasks =
       [ collapseDots (makeRelativeOrAbsolute proj (outBase (gtPaths t) (name (gtTask t)) ++ ".c"))
       | t <- tasks
       ]
+
+explicitBuildLibraries :: [FilePath] -> BuildSpec.BuildSpec -> [BuildLibrary]
+explicitBuildLibraries selectedSources spec =
+    filter (not . null . buildLibSources)
+      [ BuildLibrary libName (BuildSpec.libLinkage lib) sources
+      | (libName, lib) <- M.toList (BuildSpec.libraries spec)
+      , let sources = filter (`Data.Set.member` selectedSet) (map moduleCSource (BuildSpec.libModules lib))
+      ]
+  where
+    selectedSet = Data.Set.fromList selectedSources
+    moduleCSource modName =
+      collapseDots ("out/types/" ++ map dotToSlash modName ++ ".c")
+    dotToSlash c
+      | c == '.'  = '/'
+      | otherwise = c
+
+excludeLibrarySources :: [BuildLibrary] -> [FilePath] -> [FilePath]
+excludeLibrarySources libs sources =
+    filter (`Data.Set.notMember` libSourceSet) sources
+  where
+    libSourceSet = Data.Set.fromList (concatMap buildLibSources libs)
 
 -- | For incremental builds, include providers so link inputs stay complete.
 selectedTasksWithProvidersByProj :: [GlobalTask] -> [GlobalTask] -> M.Map FilePath [GlobalTask]
@@ -2116,6 +2140,14 @@ expectedRootStubs paths tasks = do
 
 data BinTask = BinTask { isDefaultRoot :: Bool, binName :: String, rootActor :: A.QName, isTest :: Bool } deriving (Show)
 
+data BuildLibrary = BuildLibrary { buildLibName :: String, buildLibLinkage :: String, buildLibSources :: [FilePath] } deriving (Show)
+
+encodeBuildLibraries :: [BuildLibrary] -> String
+encodeBuildLibraries libs =
+    intercalate "|" [ buildLibName lib ++ ":" ++ buildLibLinkage lib ++ ":" ++ intercalate "," (buildLibSources lib)
+                    | lib <- libs
+                    ]
+
 binTaskRoot :: Paths -> BinTask -> FilePath
 binTaskRoot paths binTask =
     let A.GName m _ = rootActor binTask
@@ -2210,9 +2242,9 @@ High-level Steps
 ================================================================================
 -}
 
-compileBins:: C.GlobalOptions -> C.CompileOptions -> Paths -> Acton.Env.Env0 -> BuildSpec.BuildSpec -> [CompileTask] -> [BinTask] -> Bool -> [FilePath] -> M.Map String String -> M.Map String FilePath -> Maybe ProgressUI -> IO TimeSpec
-compileBins gopts opts paths env rootSpec tasks binTasks allowPrune rootModules depModuleOpts depPathOverrides mProgressUI =
-    zigBuild env gopts opts paths rootSpec tasks binTasks allowPrune rootModules depModuleOpts depPathOverrides mProgressUI
+compileBins:: C.GlobalOptions -> C.CompileOptions -> Paths -> Acton.Env.Env0 -> BuildSpec.BuildSpec -> [CompileTask] -> [BinTask] -> Bool -> [FilePath] -> [BuildLibrary] -> M.Map String String -> M.Map String FilePath -> Maybe ProgressUI -> IO TimeSpec
+compileBins gopts opts paths env rootSpec tasks binTasks allowPrune rootModules buildLibraries depModuleOpts depPathOverrides mProgressUI =
+    zigBuild env gopts opts paths rootSpec tasks binTasks allowPrune rootModules buildLibraries depModuleOpts depPathOverrides mProgressUI
 
 printDiag :: C.GlobalOptions -> C.CompileOptions -> Diagnostic String -> IO ()
 printDiag gopts opts d = do
@@ -2522,7 +2554,11 @@ genBuildZig template spec zigDeps depModuleOpts =
                  , "        .acton_root_stubs = \"\","
                  , "    });"
                  ]
-    pkgLibLink (name, _) = "    libActonProject.root_module.linkLibrary(actdep_" ++ name ++ ".artifact(\"ActonProject\"));\n"
+    pkgLibLink (name, _) =
+      "    libActonProject.root_module.linkLibrary(actdep_" ++ name ++ ".artifact(\"ActonProject\"));\n"
+      ++ "    for (explicit_static_libraries.items) |libActonExplicit| {\n"
+      ++ "        libActonExplicit.root_module.linkLibrary(actdep_" ++ name ++ ".artifact(\"ActonProject\"));\n"
+      ++ "    }\n"
     pkgExeLink (name, _) = "            executable.root_module.linkLibrary(actdep_" ++ name ++ ".artifact(\"ActonProject\"));\n"
 
     zigDepDef resolved
@@ -2536,6 +2572,9 @@ genBuildZig template spec zigDeps depModuleOpts =
                      ]
       where dep = zigDepResolvedDep resolved
     zigLibLink resolved = concat [ "    libActonProject.root_module.linkLibrary(dep_" ++ zigDepResolvedVarName resolved ++ ".artifact(\"" ++ art ++ "\"));\n"
+                                   ++ "    for (explicit_static_libraries.items) |libActonExplicit| {\n"
+                                   ++ "        libActonExplicit.root_module.linkLibrary(dep_" ++ zigDepResolvedVarName resolved ++ ".artifact(\"" ++ art ++ "\"));\n"
+                                   ++ "    }\n"
                                  | art <- BuildSpec.artifacts (zigDepResolvedDep resolved) ]
     zigExeLink resolved = concat [ "            executable.root_module.linkLibrary(dep_" ++ zigDepResolvedVarName resolved ++ ".artifact(\"" ++ art ++ "\"));\n"
                                  | art <- BuildSpec.artifacts (zigDepResolvedDep resolved) ]
@@ -2606,8 +2645,8 @@ defCpuFlag = ["-Dcpu=x86_64_v2+aes"]
 #endif
 
 -- | Run zig build for generated artifacts and prune stale outputs.
-zigBuild :: Acton.Env.Env0 -> C.GlobalOptions -> C.CompileOptions -> Paths -> BuildSpec.BuildSpec -> [CompileTask] -> [BinTask] -> Bool -> [FilePath] -> M.Map String String -> M.Map String FilePath -> Maybe ProgressUI -> IO TimeSpec
-zigBuild env gopts opts paths rootSpec tasks binTasks allowPrune rootModules depModuleOpts depPathOverrides mProgressUI = do
+zigBuild :: Acton.Env.Env0 -> C.GlobalOptions -> C.CompileOptions -> Paths -> BuildSpec.BuildSpec -> [CompileTask] -> [BinTask] -> Bool -> [FilePath] -> [BuildLibrary] -> M.Map String String -> M.Map String FilePath -> Maybe ProgressUI -> IO TimeSpec
+zigBuild env gopts opts paths rootSpec tasks binTasks allowPrune rootModules buildLibraries depModuleOpts depPathOverrides mProgressUI = do
     allBinTasks <- mapM (writeRootC env gopts opts paths tasks) binTasks
     let realBinTasks = catMaybes allBinTasks
 
@@ -2660,8 +2699,10 @@ zigBuild env gopts opts paths rootSpec tasks binTasks allowPrune rootModules dep
         optArgs = ["-Doptimize=" ++ optimizeModeToZig (C.optimize opts)]
         rootModulesCsv = intercalate "," rootModules
         rootStubsCsv = intercalate "," (selectedRootStubEntriesForBins paths realBinTasks)
+        buildLibrariesSpec = encodeBuildLibraries buildLibraries
         moduleArgs = [ "-Dacton_modules=" ++ rootModulesCsv
                      , "-Dacton_root_stubs=" ++ rootStubsCsv
+                     , "-Dacton_libraries=" ++ buildLibrariesSpec
                      ]
         featureArgs = concat [ if C.db opts then ["-Ddb"] else []
                              , if no_threads then ["-Dno_threads"] else []

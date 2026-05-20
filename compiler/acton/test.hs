@@ -103,6 +103,62 @@ compilerTests =
         (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../../test/compiler/subdash/out") ""
         testBuild "" ExitSuccess False "../../test/compiler/subdash/"
         testBuild "" ExitSuccess False "../../test/compiler/subdash/"
+  , testCase "dynamic module library build" $ do
+        withSystemTempDirectory "acton-dynamic-module-build" $ \proj -> do
+          actonExe <- canonicalizePath "../../dist/bin/acton"
+          let srcDir = proj </> "src"
+              binPath = proj </> "out" </> "bin" </> "b"
+              mkFp name = Fingerprint.formatFingerprint
+                (Fingerprint.updateFingerprintPrefix
+                  (Fingerprint.fingerprintPrefixForName name) 1)
+          createDirectoryIfMissing True srcDir
+          writeFile (proj </> "Build.act") $ unlines
+            [ "name = \"dynamic_module_build\""
+            , "fingerprint = " ++ mkFp "dynamic_module_build"
+            , "libraries = {"
+            , "    \"a\": (modules=[\"a\"], linkage=\"dynamic\")"
+            , "}"
+            ]
+          writeFile (srcDir </> "a.act") $ unlines
+            [ "def foo() -> str:"
+            , "    return \"hello\""
+            ]
+          writeFile (srcDir </> "b.act") $ unlines
+            [ "import a"
+            , ""
+            , "actor main(env: Env):"
+            , "    print(a.foo())"
+            , "    env.exit(0)"
+            ]
+          (returnCode, _cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc actonExe ["build", "--color", "never", "src/b.act"]){ cwd = Just proj } ""
+          assertEqual ("acton should build executable with dynamic module library: " ++ cmdErr) ExitSuccess returnCode
+          libs <- listDirectory (proj </> "out" </> "lib")
+          assertBool "expected generated dynamic liba library"
+            (any (\f -> "liba." `isPrefixOf` f && takeExtension f /= ".a") libs)
+          (runCode, runOut, runErr) <- readCreateProcessWithExitCode (proc binPath []) ""
+          assertEqual ("dynamic executable should run: " ++ runErr) ExitSuccess runCode
+          assertEqual "dynamic executable output" "hello\n" runOut
+          writeFile (srcDir </> "a.act") $ unlines
+            [ "def foo() -> str:"
+            , "    return \"updated\""
+            ]
+          (rebuildCode, _rebuildOut, rebuildErr) <- readCreateProcessWithExitCode (proc actonExe ["build", "--color", "never", "src/a.act"]){ cwd = Just proj } ""
+          assertEqual ("acton should rebuild only the dynamic library module: " ++ rebuildErr) ExitSuccess rebuildCode
+          (rerunCode, rerunOut, rerunErr) <- readCreateProcessWithExitCode (proc binPath []) ""
+          assertEqual ("dynamic executable should run after dynamic library rebuild: " ++ rerunErr) ExitSuccess rerunCode
+          assertEqual "dynamic executable output after dynamic library rebuild" "updated\n" rerunOut
+#if defined(darwin_HOST_OS)
+          (rpathCode, rpathOut, rpathErr) <- readCreateProcessWithExitCode (proc "otool" ["-l", binPath]) ""
+          assertEqual ("otool should inspect dynamic executable: " ++ rpathErr) ExitSuccess rpathCode
+          assertBool "dynamic executable should search output lib directory"
+            ("@executable_path/../lib" `isInfixOf` rpathOut)
+          assertBool "dynamic executable should search executable-local lib directory"
+            ("@executable_path/lib" `isInfixOf` rpathOut)
+          assertBool "dynamic executable should search executable directory"
+            ("path @executable_path (offset" `isInfixOf` rpathOut)
+          assertBool "dynamic executable should not search Zig cache directory"
+            (not ("zig-local-cache" `isInfixOf` rpathOut))
+#endif
   , testCase "deps" $ do
         (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../../test/compiler/test_deps/build.zig*") ""
         (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../../test/compiler/test_deps/out") ""

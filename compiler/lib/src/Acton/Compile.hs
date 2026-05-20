@@ -3070,6 +3070,7 @@ scratchBuildSpec projRoot =
          , BuildSpec.fingerprint = fp
          , BuildSpec.dependencies = M.empty
          , BuildSpec.zig_dependencies = M.empty
+         , BuildSpec.libraries = M.empty
          }
 
 

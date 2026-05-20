@@ -38,6 +38,7 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const db = b.option(bool, "db", "") orelse false;
     const no_threads = b.option(bool, "no_threads", "") orelse false;
+    const acton_libraries = b.option([]const u8, "acton_libraries", "") orelse "";
     const acton_modules = b.option([]const u8, "acton_modules", "") orelse {
         std.log.err("Missing required build option -Dacton_modules=...", .{});
         std.process.exit(1);
@@ -218,12 +219,74 @@ pub fn build(b: *std.Build) void {
 
     libActonProject.root_module.addIncludePath(b.path("."));
 
+    var explicit_libraries = ArrayList(*std.Build.Step.Compile).empty;
+    var explicit_static_libraries = ArrayList(*std.Build.Step.Compile).empty;
+    defer explicit_libraries.deinit(b.allocator);
+    defer explicit_static_libraries.deinit(b.allocator);
+
+    var lib_it = std.mem.splitScalar(u8, acton_libraries, '|');
+    while (lib_it.next()) |raw_lib| {
+        const lib_spec = std.mem.trim(u8, raw_lib, " \t\r");
+        if (lib_spec.len == 0) continue;
+
+        var field_it = std.mem.splitScalar(u8, lib_spec, ':');
+        const lib_name = std.mem.trim(u8, field_it.next() orelse "", " \t\r");
+        const lib_linkage = std.mem.trim(u8, field_it.next() orelse "", " \t\r");
+        const lib_sources = std.mem.trim(u8, field_it.next() orelse "", " \t\r");
+        if (lib_name.len == 0 or lib_sources.len == 0) continue;
+
+        const lib_dynamic = std.mem.eql(u8, lib_linkage, "dynamic");
+        const libActonExplicit = b.addLibrary(.{
+            .name = lib_name,
+            .linkage = if (lib_dynamic) .dynamic else .static,
+            .root_module = b.createModule(.{
+                .target = target,
+                .optimize = optimize,
+            }),
+        });
+        if (lib_dynamic) {
+            libActonExplicit.linker_allow_shlib_undefined = true;
+        }
+
+        var source_it = std.mem.splitScalar(u8, lib_sources, ',');
+        while (source_it.next()) |raw_source| {
+            const source = std.mem.trim(u8, raw_source, " \t\r");
+            if (source.len == 0) continue;
+            libActonExplicit.root_module.addCSourceFile(.{ .file = b.path(source), .flags = flags.items });
+        }
+        libActonExplicit.root_module.addIncludePath(b.path("."));
+        libActonExplicit.root_module.include_dirs.append(b.allocator, .{ .other_step = actonbase_dep.artifact("Acton") }) catch |err| {
+            std.log.err("Error appending base include path for explicit library: {}", .{err});
+            std.process.exit(1);
+        };
+        explicit_libraries.append(b.allocator, libActonExplicit) catch |err| {
+            std.log.err("Error appending explicit library: {}", .{err});
+            std.process.exit(1);
+        };
+        if (!lib_dynamic) {
+            explicit_static_libraries.append(b.allocator, libActonExplicit) catch |err| {
+                std.log.err("Error appending explicit static library: {}", .{err});
+                std.process.exit(1);
+            };
+        }
+    }
+
     // lib: link with dependencies / get headers from Build.act
 
     libActonProject.root_module.linkLibrary(actonbase_dep.artifact("Acton"));
     libActonProject.root_module.link_libc = true;
     libActonProject.root_module.link_libcpp = true;
     b.installArtifact(libActonProject);
+
+    for (explicit_static_libraries.items) |libActonExplicit| {
+        libActonExplicit.root_module.linkLibrary(actonbase_dep.artifact("Acton"));
+    }
+
+    for (explicit_libraries.items) |libActonExplicit| {
+        libActonExplicit.root_module.link_libc = true;
+        libActonExplicit.root_module.link_libcpp = true;
+        b.installArtifact(libActonExplicit);
+    }
 
     // Register the produced header files in out/types using
     // libActonProject.installHeader / .installHeaderDirectory
@@ -303,6 +366,28 @@ pub fn build(b: *std.Build) void {
             executable.root_module.addCSourceFile(.{ .file = b.path(exe_rel_path), .flags = flags.items });
             executable.root_module.addIncludePath(b.path("."));
             executable.root_module.linkLibrary(libActonProject);
+            for (explicit_libraries.items) |libActonExplicit| {
+                if (libActonExplicit.linkage == .dynamic) {
+                    executable.root_module.addObjectFile(libActonExplicit.getEmittedBin());
+                } else {
+                    executable.root_module.linkLibrary(libActonExplicit);
+                }
+            }
+            if (explicit_libraries.items.len > 0) {
+                switch (target.result.os.tag) {
+                    .macos => {
+                        executable.root_module.addRPathSpecial("@executable_path/../lib");
+                        executable.root_module.addRPathSpecial("@executable_path/lib");
+                        executable.root_module.addRPathSpecial("@executable_path");
+                    },
+                    .linux => {
+                        executable.root_module.addRPathSpecial("$ORIGIN/../lib");
+                        executable.root_module.addRPathSpecial("$ORIGIN/lib");
+                        executable.root_module.addRPathSpecial("$ORIGIN");
+                    },
+                    else => {},
+                }
+            }
 
             executable.root_module.linkLibrary(actonbase_dep.artifact("Acton"));
             if (maybe_actondb_dep) |actondb_dep| {
