@@ -231,6 +231,7 @@ import Data.List (find, foldl', intercalate, intersperse, isPrefixOf, isSuffixOf
 import qualified Data.List
 import Data.IORef
 import Data.Maybe (catMaybes, isJust, listToMaybe, mapMaybe)
+import qualified Data.HashMap.Strict as HM
 import qualified Data.Map as M
 import Data.Ord (Down(..))
 import qualified Data.Set
@@ -1075,6 +1076,19 @@ data StageKey = ParseStage TaskKey | FrontStage TaskKey deriving (Eq, Ord, Show)
 
 data StageSuccess = StageParsed CompileTask (Maybe TimeSpec) | StageFronted FrontResult
 
+forceHTEnv :: I.HTEnv -> ()
+forceHTEnv hte                  = HM.foldl' forceHNameInfo () hte
+  where forceHNameInfo () (I.HNModule _ te _) = forceHTEnv te
+        forceHNameInfo () hni  = hni `seq` ()
+
+forceTypeResult :: I.NameInfo -> A.Module -> Acton.Env.EnvF x -> [String] -> IO ()
+forceTypeResult nmod tchecked typeEnv tests = do
+  evaluate (rnf nmod)
+  evaluate (rnf tchecked)
+  evaluate (forceHTEnv (Acton.Env.hnames typeEnv))
+  evaluate (forceHTEnv (Acton.Env.hmodules typeEnv))
+  evaluate (rnf tests)
+
 data GlobalTask = GlobalTask
   { gtKey             :: TaskKey
   , gtPaths           :: Paths
@@ -1765,6 +1779,7 @@ runFrontPasses gopts opts paths env0 parsed srcContent srcBytes sourceMeta resol
 
       -- Type-check and return both the typed AST and the interface NameInfo.
       (nmod,tchecked,typeEnv,tests) <- Acton.Types.reconstruct (Just onTypeProgress) inferredSignatureCb env kchecked
+      forceTypeResult nmod tchecked typeEnv tests
       -- Module-level src hash uses raw bytes so any source edit forces re-parse.
       let moduleSrcBytesHash = SHA256.hash srcBytes
       -- Store roots so later builds can discover entry points without reparse.
