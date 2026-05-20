@@ -17,6 +17,7 @@ module Acton.Printer (module Acton.Printer, module Pretty) where
 import Utils
 import Pretty
 import Acton.Syntax
+import qualified Data.Text as T
 import Prelude hiding ((<>))
 
 
@@ -38,14 +39,14 @@ prettySuite ss                      = nest 4 $ vcat $ map pretty ss
 joinSections :: [Doc] -> Doc
 joinSections = vcat . punctuate blank . filter (not . isEmpty)
 
-prettyModDoc :: Maybe String -> Doc
+prettyModDoc :: Maybe T.Text -> Doc
 prettyModDoc Nothing                = empty
-prettyModDoc (Just doc)             = text "\"\"\"" <> text (escapeDocstring doc) <> text "\"\"\""
+prettyModDoc (Just doc)             = text "\"\"\"" <> text (escapeDocstring (T.unpack doc)) <> text "\"\"\""
 
 -- Pretty print a suite with optional docstring at the beginning
-prettyDocSuite :: Maybe String -> Suite -> Doc
+prettyDocSuite :: Maybe T.Text -> Suite -> Doc
 prettyDocSuite Nothing ss           = prettySuite ss
-prettyDocSuite (Just doc) ss        = nest 4 $ vcat $ text "\"\"\"" <> text (escapeDocstring doc) <> text "\"\"\"" : map pretty ss
+prettyDocSuite (Just doc) ss        = nest 4 $ vcat $ text "\"\"\"" <> text (escapeDocstring (T.unpack doc)) <> text "\"\"\"" : map pretty ss
 
 -- Escape special characters in docstrings for pretty printing
 escapeDocstring :: String -> String
@@ -166,15 +167,15 @@ prettyAtom e
 
 instance Pretty Expr where
     pretty (Var _ n)                = pretty n
-    pretty (Int _ _ str)            = text str
-    pretty (Float _ _ str)          = text str
-    pretty (Imaginary _ _ str)      = text str
+    pretty (Int _ _ str)            = text (T.unpack str)
+    pretty (Float _ _ str)          = text (T.unpack str)
+    pretty (Imaginary _ _ str)      = text (T.unpack str)
     pretty (Bool _ v)               = pretty v
     pretty (None _)                 = text "None"
     pretty (NotImplemented _)       = text "NotImplemented"
     pretty (Ellipsis _)             = text "..."
-    pretty (Strings _ ss)           = hsep (map (pretty . show) ss)
-    pretty (BStrings _ ss)          = hsep (map (\s -> text " b" <> pretty s) ss)
+    pretty (Strings _ ss)           = hsep (map (pretty . show . T.unpack) ss)
+    pretty (BStrings _ ss)          = hsep (map (\s -> text " b" <> pretty (T.unpack s)) ss)
     pretty (Call _ e ps ks)         = prettyAtom e <> parens (pretty (ps,ks))
     pretty (TApp _ e ts)            = pretty e <> text "@" <> brackets (commaSep pretty ts)
     pretty (Let _ ss e)             = text "let:" $+$ prettySuite ss $+$  text "in" <+> pretty e
@@ -280,7 +281,7 @@ instance Pretty QName where
 --    pretty (NoQ n)                  = char '~' <> pretty n
     pretty (NoQ n)                  = pretty n
     pretty (GName m n)
-      | ModName [Name _ "$"] <- m   = text ("$" ++ rawstr n)
+      | m == ModName [name "$"]     = text ("$" ++ rawstr n)
       | otherwise                   = pretty m <> dot <> pretty n
 
 instance Pretty ModRef where

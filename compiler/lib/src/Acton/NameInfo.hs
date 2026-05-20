@@ -19,6 +19,8 @@ import qualified Data.Binary
 import GHC.Generics (Generic)
 import Data.Typeable
 import qualified Data.HashMap.Strict as M
+import qualified Data.Text as T
+import Data.Text (Text)
 import Prelude hiding ((<>))
 
 import Utils
@@ -50,16 +52,16 @@ type TEnv               = [(Name, NameInfo)]
 
 data NameInfo           = NVar      Type
                         | NSVar     Type
-                        | NDef      TSchema Deco (Maybe String)
-                        | NSig      TSchema Deco (Maybe String)
-                        | NAct      QBinds PosRow KwdRow TEnv (Maybe String)
-                        | NClass    QBinds [WTCon] TEnv (Maybe String)
-                        | NProto    QBinds [WTCon] TEnv (Maybe String)
-                        | NExt      QBinds TCon [WTCon] TEnv [Name] (Maybe String)
+                        | NDef      TSchema Deco (Maybe Text)
+                        | NSig      TSchema Deco (Maybe Text)
+                        | NAct      QBinds PosRow KwdRow TEnv (Maybe Text)
+                        | NClass    QBinds [WTCon] TEnv (Maybe Text)
+                        | NProto    QBinds [WTCon] TEnv (Maybe Text)
+                        | NExt      QBinds TCon [WTCon] TEnv [Name] (Maybe Text)
                         | NTVar     Kind CCon [PCon]
                         | NAlias    QName
                         | NMAlias   ModName
-                        | NModule   [ModName] TEnv (Maybe String)
+                        | NModule   [ModName] TEnv (Maybe Text)
                         | NReserved
                         deriving (Eq,Show,Read,Generic,NFData)
 
@@ -70,16 +72,16 @@ type HTEnv            =  M.HashMap Name HNameInfo
 
 data HNameInfo          = HNVar      Type
                         | HNSVar     Type
-                        | HNDef      TSchema Deco (Maybe String)
-                        | HNSig      TSchema Deco (Maybe String)
-                        | HNAct      QBinds PosRow KwdRow TEnv (Maybe String)
-                        | HNClass    QBinds [WTCon] TEnv (Maybe String)
-                        | HNProto    QBinds [WTCon] TEnv (Maybe String)
-                        | HNExt      QBinds TCon [WTCon] TEnv [Name] (Maybe String)
+                        | HNDef      TSchema Deco (Maybe Text)
+                        | HNSig      TSchema Deco (Maybe Text)
+                        | HNAct      QBinds PosRow KwdRow TEnv (Maybe Text)
+                        | HNClass    QBinds [WTCon] TEnv (Maybe Text)
+                        | HNProto    QBinds [WTCon] TEnv (Maybe Text)
+                        | HNExt      QBinds TCon [WTCon] TEnv [Name] (Maybe Text)
                         | HNTVar     Kind CCon [PCon]
                         | HNAlias    QName
                         | HNMAlias   ModName
-                        | HNModule   [ModName] HTEnv (Maybe String)
+                        | HNModule   [ModName] HTEnv (Maybe Text)
                         | HNReserved
                         deriving (Eq, Show, Read, Generic)
 
@@ -271,9 +273,9 @@ prettyOrPass te
   | otherwise                   = doc
   where doc                     = pretty te
 
-prettyDocstring :: Maybe String -> Doc
+prettyDocstring :: Maybe Text -> Doc
 prettyDocstring Nothing         = empty
-prettyDocstring (Just docstring) = text "\"\"\"" <> text docstring <> text "\"\"\""
+prettyDocstring (Just docstring) = text "\"\"\"" <> text (T.unpack docstring) <> text "\"\"\""
 
 instance VFree NameInfo where
     vfree (NVar t)              = vfree t

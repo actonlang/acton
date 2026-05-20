@@ -22,6 +22,7 @@ import Acton.QuickType
 import Acton.Prim
 import Acton.Builtin
 import Data.List
+import qualified Data.Text as T
 import Pretty
 import Utils
 import Control.Monad.State.Strict
@@ -175,9 +176,9 @@ normPat env p@(PList _ ps pt)       = do v <- newName "lst"
                                          return (pVar v $ conv t, ss)
   where normList v n (p:ps) pt      = s : normList v (n+1) ps pt
           where s                   = Assign NoLoc [p] (eCall (eDot (eQVar qnIndexed) getitemKW)
-                                        [eVar v, Int NoLoc n (show n)])
+                                        [eVar v, eInt n])
         normList v n [] (Just p)    = [Assign NoLoc [p] (eCall (eDot (eQVar qnSliceable) getsliceKW)
-                                        [eVar v, Int NoLoc n (show n), None NoLoc, None NoLoc])]
+                                        [eVar v, eInt n, None NoLoc, None NoLoc])]
         normList v n [] Nothing     = []
         t                           = typeOf env p
 
@@ -482,7 +483,7 @@ instance Norm Decl where
     norm env d                      = error ("norm unexpected: " ++ prstr d)
 
 
-catStrings ss                       = map (quote . escape '"') ss
+catStrings ss                       = map (T.pack . quote . escape '"' . T.unpack) ss
   where escape c []                 = []
         escape c ('\\':x:xs)        = '\\' : x : escape c xs
         escape c (x:xs)

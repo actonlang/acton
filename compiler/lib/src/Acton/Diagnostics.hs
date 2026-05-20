@@ -18,6 +18,8 @@ import qualified Data.List.NonEmpty as NE
 import Text.Read (readMaybe)
 import Data.Char (isDigit, isSpace)
 import qualified Data.Set as S
+import qualified Data.Text as T
+import Data.Text (Text)
 
 import Text.Megaparsec (PosState(..), reachOffset)
 import Text.Megaparsec.Error (ParseErrorBundle(..), parseErrorPretty, bundleErrors, errorBundlePretty, ShowErrorComponent(..), ParseError(..), errorOffset, parseErrorTextPretty, ErrorFancy(..))
@@ -93,7 +95,7 @@ customParseErrorToDiagnostic (OtherError msg)                  = (msg,
 -- | Convert Megaparsec parse errors to diagnose format
 -- Handles syntax errors from the parsing phase with rich error information
 -- like expected/unexpected tokens and parse positions.
-parseDiagnosticFromBundle :: String -> String -> ParseErrorBundle String CustomParseError -> Diagnostic String
+parseDiagnosticFromBundle :: String -> Text -> ParseErrorBundle Text CustomParseError -> Diagnostic String
 parseDiagnosticFromBundle filename src bundle =
     let -- Extract the first error (most relevant)
         firstError = NE.head (bundleErrors bundle)
@@ -127,20 +129,20 @@ parseDiagnosticFromBundle filename src bundle =
 
         report = Err (Just "Parse error") msg [(position, This prettyMsg)] hints
         diagnostic = addReport mempty report
-    in addFile diagnostic filename src
+    in addFile diagnostic filename (T.unpack src)
 
 
 -- | Convert CustomParseException to diagnostic format directly
 -- CustomParseExceptions are essentially an exception container for
 -- CustomParseError, so extract the error and convert that
-customParseExceptionToDiagnostic :: String -> String -> CustomParseException -> Diagnostic String
+customParseExceptionToDiagnostic :: String -> Text -> CustomParseException -> Diagnostic String
 customParseExceptionToDiagnostic filename src (CustomParseException loc customErr) =
     customParseErrorDiagnostic "Syntax error" filename src loc customErr
 
 
 -- | Convert CustomParseError to Diagnostic
 -- This is used by tests to ensure consistent error formatting
-customParseErrorDiagnostic :: String -> String -> String -> SrcLoc -> CustomParseError -> Diagnostic String
+customParseErrorDiagnostic :: String -> String -> Text -> SrcLoc -> CustomParseError -> Diagnostic String
 customParseErrorDiagnostic errKind filename src srcLoc customErr =
     let (msg, hints) = customParseErrorToDiagnostic customErr
         (line, col, endCol) = case srcLoc of
@@ -162,7 +164,7 @@ customParseErrorDiagnostic errKind filename src srcLoc customErr =
         position = Position (line, col) (line, endCol) filename
         report = Err (Just errKind) msg [(position, This msg)] hints
         diagnostic = addReport mempty report
-    in addFile diagnostic filename src
+    in addFile diagnostic filename (T.unpack src)
 
 -- | Convert Acton compiler errors to diagnose format
 -- Classic Acton errors consist of (loc, msg). Wrap in OtherError and convert to

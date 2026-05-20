@@ -24,6 +24,7 @@ import Control.Monad.Except (runExceptT)
 import Control.Monad.State.Strict (runState)
 import Data.Maybe (isJust)
 import Data.List (nub, intersect, sort)
+import qualified Data.Text as T
 import Pretty
 import qualified Control.Exception
 import Debug.Trace
@@ -103,7 +104,7 @@ showTyFile env0 m fname verbose = do
                                      putStrLn ("Roots  : " ++ (show (map prstr roots)))
                                      putStrLn ("Tests  : " ++ (show tests))
                                      case mdocH of
-                                       Just ds -> putStrLn ("Doc    : \"\"\"" ++ ds ++ "\"\"\"")
+                                       Just ds -> putStrLn ("Doc    : \"\"\"" ++ T.unpack ds ++ "\"\"\"")
                                        Nothing -> return ()
                                      putStrLn ("ModuleSrcBytesHash: 0x" ++ (B.unpack $ Base16.encode srcH))
                                      putStrLn ("ModulePubHash     : 0x" ++ (B.unpack $ Base16.encode pubH))
@@ -141,7 +142,7 @@ showTyFile env0 m fname verbose = do
                                      putStrLn ("\n############### Interface ############")
                                      let NModule imps te mdoc = nmod
                                      forM_ mdoc $ \docstring ->
-                                       putStrLn $ "\"\"\"" ++ docstring ++ "\"\"\""
+                                       putStrLn $ "\"\"\"" ++ T.unpack docstring ++ "\"\"\""
 
                                      putStrLn $ prettySigs env0 m imps te
 
@@ -1968,7 +1969,7 @@ instance Infer Expr where
                                              return (cs, tStr, eCall formatF [s,e'])
       where formatF                     = tApp (eQVar primFORMAT) [prow]
             tup                         = tTuple prow kwdNil
-            prow                        = format $ concat $ sval s
+            prow                        = format $ concatMap T.unpack $ sval s
             format []                   = posNil
             format ('%':s)              = nokey s
             format (c:s)                = format s
@@ -2170,7 +2171,7 @@ instance Infer Expr where
                                              w1 <- newWitness
                                              t1 <- newUnivar env
                                              return ([Sub (noinfo 444) env w tNone t1, Sub (noinfo 555) env w1 t t1],t1,eNone)
-            alt t te False              = return ([],t,eCall (tApp (eQVar primRaiseValueError) [te]) [Strings NoLoc ["Forced unwrapping applied to None"]] )
+            alt t te False              = return ([],t,eCall (tApp (eQVar primRaiseValueError) [te]) [Strings NoLoc [T.pack "Forced unwrapping applied to None"]] )
  
     infer env e@(Rest _ _ _)            = notYetExpr e
 --    infer env (Rest l e n)              = do p <- newUnivarOfKind PRow env
@@ -2533,7 +2534,7 @@ testStmts env m ss                      = (stmts, tests)
                                           [ testActor ]
         tests                           = sort (nub (concatMap assocNames assocs))
         assocNames assocList            = mapMaybe assocName assocList
-        assocName (Assoc (Strings _ ssParts) _) = Just (concat ssParts)
+        assocName (Assoc (Strings _ ssParts) _) = Just (concatMap T.unpack ssParts)
         assocName _                     = Nothing
 
 testEnv                                 = [ (name n, NVar (tDict tStr (testing cl))) | (n,cl) <- testDicts ] ++
@@ -2558,26 +2559,26 @@ row2list (TRow _ _ _ t r)               = t : row2list r
 row2list (TNil _ _)                     = []
 
 mkAssoc d testType modName =
-    Assoc (Strings NoLoc [nstr (dname d)])
+    Assoc (Strings NoLoc [T.pack (nstr (dname d))])
           (eCall (eQVar (gname [name "testing"] testType))
                  [ eVar (dname d)
-                 , Strings NoLoc [nstr (dname d)]
+                 , Strings NoLoc [T.pack (nstr (dname d))]
                  , comment (dbody d)
-                 , Strings NoLoc [modName]
+                 , Strings NoLoc [T.pack modName]
                  ])
   where comment (Expr _ s@(Strings _ ss) : _) = s
-        comment _ = Strings NoLoc [""]
+        comment _ = Strings NoLoc [T.empty]
 
 mkAssocActor (Actor _ n _ _ _ body _) testType modName =
-    Assoc (Strings NoLoc [nstr n])
+    Assoc (Strings NoLoc [T.pack (nstr n)])
           (eCall (eQVar (gname [name "testing"] testType))
                  [ eVar n
-                 , Strings NoLoc [nstr n]
+                 , Strings NoLoc [T.pack (nstr n)]
                  , comment body
-                 , Strings NoLoc [modName]
+                 , Strings NoLoc [T.pack modName]
                  ])
   where comment (Expr _ s@(Strings _ ss) : _) = s
-        comment _ = Strings NoLoc [""]
+        comment _ = Strings NoLoc [T.empty]
 
 
 testFuns :: Env0 -> String -> Suite -> [[Assoc]]

@@ -235,6 +235,8 @@ import qualified Data.HashMap.Strict as HM
 import qualified Data.Map as M
 import Data.Ord (Down(..))
 import qualified Data.Set
+import qualified Data.Text as T
+import Data.Text (Text)
 import Data.Time.Clock (UTCTime)
 import Data.Word (Word8, Word32, Word64)
 import Error.Diagnose (Diagnostic)
@@ -893,20 +895,20 @@ filterActFile file =
 
 -- | Turn a list of (location, message) pairs into diagnostics.
 -- Used to normalize errors from different compiler subsystems.
-errsToDiagnostics :: String -> FilePath -> String -> [(SrcLoc, String)] -> [Diagnostic String]
+errsToDiagnostics :: String -> FilePath -> Text -> [(SrcLoc, String)] -> [Diagnostic String]
 errsToDiagnostics errKind filename src errs =
     [ Diag.actErrToDiagnostic errKind filename src loc msg | (loc, msg) <- errs ]
 
 -- | Emit diagnostics when a dependency .ty file is missing or unreadable.
 -- Anchors the error to the owning module's filename for consistent reporting.
-missingIfaceDiagnostics :: A.ModName -> String -> A.ModName -> [Diagnostic String]
+missingIfaceDiagnostics :: A.ModName -> Text -> A.ModName -> [Diagnostic String]
 missingIfaceDiagnostics ownerMn src missingMn =
     errsToDiagnostics "Compilation error" (modNameToFilename ownerMn) src
       [(NoLoc, "Type interface file not found or unreadable for " ++ modNameToString missingMn)]
 
 -- | Parse a module from source text, returning diagnostics on failure.
 -- Wraps parser, context, and indentation errors into a uniform format.
-parseActSource :: C.CompileOptions -> A.ModName -> FilePath -> String -> Maybe (ParseProgress -> IO ()) -> IO (Either [Diagnostic String] A.Module)
+parseActSource :: C.CompileOptions -> A.ModName -> FilePath -> Text -> Maybe (ParseProgress -> IO ()) -> IO (Either [Diagnostic String] A.Module)
 parseActSource opts mn actFile srcContent mOnProgress = do
   let parseModule
         | C.parse_serial opts = Acton.Parser.parseModuleSerial
@@ -921,7 +923,7 @@ parseActSource opts mn actFile srcContent mOnProgress = do
     wrapProgress onProgress completed total =
       onProgress (ParseProgress completed total)
 
-    handleParseBundle :: ParseErrorBundle String CustomParseError -> IO (Either [Diagnostic String] A.Module)
+    handleParseBundle :: ParseErrorBundle Text CustomParseError -> IO (Either [Diagnostic String] A.Module)
     handleParseBundle bundle =
       return $ Left [Diag.parseDiagnosticFromBundle actFile srcContent bundle]
 
@@ -945,7 +947,7 @@ parseActSource opts mn actFile srcContent mOnProgress = do
 parseActHeaderSnapshot :: A.ModName
                        -> FilePath
                        -> Source.SourceSnapshot
-                       -> IO (Either [Diagnostic String] ([A.ModName], Maybe String))
+                       -> IO (Either [Diagnostic String] ([A.ModName], Maybe Text))
 parseActHeaderSnapshot mn actFile snap = do
   cwd <- getCurrentDirectory
   let displayFile = makeRelative cwd actFile
@@ -1018,7 +1020,7 @@ readSourceFileMeta path = do
 data BackInput = BackInput
   { biTypeEnv   :: Acton.Env.Env0
   , biTypedMod  :: A.Module
-  , biSrc       :: String
+  , biSrc       :: Text
   , biImplHash  :: B.ByteString
   }
 
@@ -1031,7 +1033,7 @@ data BackJob = BackJob
 data FrontResult = FrontResult
   { frIfaceTE  :: [(A.Name, I.NameInfo)]
   , frImps     :: [A.ModName]
-  , frDoc      :: Maybe String
+  , frDoc      :: Maybe Text
   , frPubHash :: B.ByteString
   , frNameHashes :: [InterfaceFiles.NameHashInfo]
   , frFrontTime :: Maybe TimeSpec
@@ -1040,8 +1042,8 @@ data FrontResult = FrontResult
   , frBackJob  :: Maybe BackJob
   }
 
-data CompileTask        = ParseTask { name :: A.ModName, src :: String, srcBytes :: B.ByteString, sourceMeta :: Maybe InterfaceFiles.SourceFileMeta, parseImports :: [A.ModName] }
-                        | ActonTask { name :: A.ModName, src :: String, srcBytes :: B.ByteString, sourceMeta :: Maybe InterfaceFiles.SourceFileMeta, atree:: A.Module }
+data CompileTask        = ParseTask { name :: A.ModName, src :: Text, srcBytes :: B.ByteString, sourceMeta :: Maybe InterfaceFiles.SourceFileMeta, parseImports :: [A.ModName] }
+                        | ActonTask { name :: A.ModName, src :: Text, srcBytes :: B.ByteString, sourceMeta :: Maybe InterfaceFiles.SourceFileMeta, atree:: A.Module }
                         | TyTask    { name :: A.ModName
                                     , tyHash :: B.ByteString               -- raw source bytes hash
                                     , tyPubHash :: B.ByteString          -- module public hash
@@ -1050,7 +1052,7 @@ data CompileTask        = ParseTask { name :: A.ModName, src :: String, srcBytes
                                     , tyNameHashes :: [InterfaceFiles.NameHashInfo]
                                     , tyRoots :: [A.Name]
                                     , tyTests :: [String]
-                                    , tyDoc :: Maybe String
+                                    , tyDoc :: Maybe Text
                                     , iface :: I.NameInfo
                                     , typed :: A.Module
                                     }
@@ -1264,15 +1266,15 @@ data ModuleHead
       , mhNameHashes :: [InterfaceFiles.NameHashInfo]
       , mhRoots      :: [A.Name]
       , mhTests      :: [String]
-      , mhDoc        :: Maybe String
+      , mhDoc        :: Maybe Text
       }
   | SrcHead
       { mhName       :: A.ModName
-      , mhSrc        :: String
+      , mhSrc        :: Text
       , mhBytes      :: B.ByteString
       , mhSourceMeta :: Maybe InterfaceFiles.SourceFileMeta
       , mhSrcImports :: [A.ModName]
-      , mhDoc        :: Maybe String
+      , mhDoc        :: Maybe Text
       }
   | HeadError
       { mhName        :: A.ModName
@@ -1448,7 +1450,7 @@ readModuleDoc :: Source.SourceProvider
               -> C.CompileOptions
               -> Paths
               -> String
-              -> IO (Maybe (A.ModName, Maybe String))
+              -> IO (Maybe (A.ModName, Maybe Text))
 readModuleDoc sp gopts opts paths actFile = do
   h <- readModuleHeader sp gopts opts paths actFile
   return $ case h of
@@ -1531,7 +1533,7 @@ quiet gopts opts = C.quiet gopts || altOutput opts
 
 -- | Read an interface from a .ty file and return its NameInfo and public hash.
 -- This is used when a module is deemed fresh and we want to avoid reparsing.
-readIfaceFromTy :: Paths -> A.ModName -> String -> Maybe B.ByteString -> IO (Either [Diagnostic String] ([A.ModName], [(A.Name, I.NameInfo)], Maybe String, B.ByteString))
+readIfaceFromTy :: Paths -> A.ModName -> Text -> Maybe B.ByteString -> IO (Either [Diagnostic String] ([A.ModName], [(A.Name, I.NameInfo)], Maybe Text, B.ByteString))
 readIfaceFromTy paths mn src mHash = do
     mty <- Acton.Env.findTyFile (searchPath paths) mn
     case mty of
@@ -1620,7 +1622,7 @@ runFrontPasses :: C.GlobalOptions
                -> Paths
                -> Acton.Env.Env0
                -> A.Module
-               -> String
+               -> Text
                -> B.ByteString
                -> Maybe InterfaceFiles.SourceFileMeta
                -> (A.ModName -> IO (Maybe B.ByteString))
@@ -1652,11 +1654,13 @@ runFrontPasses gopts opts paths env0 parsed srcContent srcBytes sourceMeta resol
 
     handleTypeError :: Acton.TypeEnv.TypeError -> IO (Either [Diagnostic String] FrontResult)
     handleTypeError err =
-      return $ Left [Acton.TypeEnv.mkErrorDiagnostic filename srcContent (Acton.TypeEnv.typeReport err filename srcContent)]
+      let srcString = T.unpack srcContent
+      in return $ Left [Acton.TypeEnv.mkErrorDiagnostic filename srcString (Acton.TypeEnv.typeReport err filename srcString)]
 
     handleTypeErrors :: Acton.Types.TypeErrors -> IO (Either [Diagnostic String] FrontResult)
     handleTypeErrors (Acton.Types.TypeErrors errs) =
-      return $ Left [ Acton.TypeEnv.mkErrorDiagnostic filename srcContent (Acton.TypeEnv.typeReport err filename srcContent)
+      let srcString = T.unpack srcContent
+      in return $ Left [ Acton.TypeEnv.mkErrorDiagnostic filename srcString (Acton.TypeEnv.typeReport err filename srcString)
                     | err <- errs
                     ]
 
@@ -1962,7 +1966,7 @@ runBackPasses gopts opts paths backInput shouldWrite = do
 
       let hexHash = B.unpack $ Base16.encode (biImplHash backInput)
           emitLines = not (C.dbg_no_lines opts)
-      (n,h,c) <- Acton.CodeGen.generate liftEnv relSrcBase (biSrc backInput) emitLines boxed hexHash
+      (n,h,c) <- Acton.CodeGen.generate liftEnv relSrcBase (T.unpack (biSrc backInput)) emitLines boxed hexHash
       timeCodeGen <- getTime Monotonic
       let finish = do
             timeEnd <- getTime Monotonic
@@ -2303,7 +2307,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
           readTyFile = do
             tyRes <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readFile tyFile
             case tyRes of
-              Left _ -> return (Left (missingIfaceDiagnostics mn "" mn))
+              Left _ -> return (Left (missingIfaceDiagnostics mn T.empty mn))
               Right ty -> return (Right ty)
           mkBackJob env1 tmod srcText moduleImplHash =
             BackJob
@@ -2339,11 +2343,11 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
               Nothing -> getNameHashMapCached paths m
 
           missingNameHashDiagnostics qn =
-            errsToDiagnostics "Compilation error" (modNameToFilename mn) ""
+            errsToDiagnostics "Compilation error" (modNameToFilename mn) T.empty
               [(NoLoc, "Hash info missing for " ++ prstr qn)]
 
           missingDepHashDiagnostics label qn users =
-            errsToDiagnostics "Compilation error" (modNameToFilename mn) ""
+            errsToDiagnostics "Compilation error" (modNameToFilename mn) T.empty
               [(NoLoc, label ++ " hash missing for " ++ prstr qn ++ users)]
 
           checkMissingImports imps = do
@@ -2383,7 +2387,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
               then return (Right ())
               else do
                 let missingSorted = Data.List.sortOn modNameToString (Data.Set.toList missing)
-                    diags = concatMap (\depMn -> missingIfaceDiagnostics mn "" depMn) missingSorted
+                    diags = concatMap (\depMn -> missingIfaceDiagnostics mn T.empty depMn) missingSorted
                 return (Left diags)
 
           collectDiags results =
@@ -2442,7 +2446,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
           resolveNameHashInfo m n = do
             hm <- resolveNameHashMap' m
             case hm of
-              Nothing -> return (Left (missingIfaceDiagnostics mn "" m))
+              Nothing -> return (Left (missingIfaceDiagnostics mn T.empty m))
               Just hmap ->
                 case M.lookup n hmap of
                   Just info -> return (Right info)
@@ -2518,7 +2522,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
         ParseErrorTask{ parseDiagnostics = diags } -> return (key, Left diags)
         _ | C.only_build optsT -> do
               ifaceRes <- case taskCurrent of
-                            TyTask{ tyPubHash = h } -> readIfaceFromTy paths mn "" (Just h)
+                            TyTask{ tyPubHash = h } -> readIfaceFromTy paths mn T.empty (Just h)
                             ParseTask{ src = srcContent } -> readIfaceFromTy paths mn srcContent Nothing
                             ActonTask{ src = srcContent } -> readIfaceFromTy paths mn srcContent Nothing
               case ifaceRes of
@@ -2715,8 +2719,8 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
                     when (C.verbose gopts) $
                       ccOnInfo callbacks ("  Fresh " ++ modNameToString mn ++ ": using cached .ty")
                     ifaceRes <- case taskCurrent of
-                                  TyTask{ tyPubHash = h } -> readIfaceFromTy paths mn "" (Just h)
-                                  _ -> readIfaceFromTy paths mn "" Nothing
+                                  TyTask{ tyPubHash = h } -> readIfaceFromTy paths mn T.empty (Just h)
+                                  _ -> readIfaceFromTy paths mn T.empty Nothing
                     case ifaceRes of
                       Left diags -> return (key, Left diags)
                       Right (imps, ifaceTE, mdoc, ih) -> do
@@ -3962,7 +3966,7 @@ modNameToString (A.ModName names) = intercalate "." (map nameToString names)
 
 -- | Render a name identifier to a plain string.
 nameToString :: A.Name -> String
-nameToString (A.Name _ s) = s
+nameToString = A.rawstr
 
 
 -- | Check whether a NameInfo represents a root-eligible actor.

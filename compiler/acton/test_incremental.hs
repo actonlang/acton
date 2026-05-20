@@ -1209,7 +1209,7 @@ p27_overlay_source_provider = testCase "27-overlay snapshots drive readModuleTas
   _ <- buildOutIn proj
   actAAbs <- canonicalizePath actA
   bytes <- B.readFile actAAbs
-  let text = T.unpack (TE.decodeUtf8 bytes)
+  let text = TE.decodeUtf8 bytes
       snapSame = Source.SourceSnapshot
         { Source.ssText = text
         , Source.ssBytes = bytes
@@ -1233,7 +1233,7 @@ p27_overlay_source_provider = testCase "27-overlay snapshots drive readModuleTas
     Compile.TyTask{} -> pure ()
     _ -> assertFailure "expected TyTask when overlay matches header"
   let textDiff = "\"\"\"Overlay doc\"\"\"\naaa = 2\n"
-      bytesDiff = TE.encodeUtf8 (T.pack textDiff)
+      bytesDiff = TE.encodeUtf8 textDiff
       snapDiff = Source.SourceSnapshot
         { Source.ssText = textDiff
         , Source.ssBytes = bytesDiff

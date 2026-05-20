@@ -30,7 +30,7 @@ isUnboxed (Internal BoxPass _ _)    = True
 isUnboxed _                         = False
 
 
-self                                = Name NoLoc "self"
+self                                = name "self"
 
 localName n                         = Derived n suffixLocal
 newactName n                        = Derived n suffixNewact
@@ -144,7 +144,7 @@ methods b                           = [ n | Decl _ ds <- b, Def{dname=n} <- ds ]
 statevars b                         = concat [ bound ps | VarAssign _ ps _ <- b ]
 
 
-isHidden n@(Name _ str)             = length (takeWhile (=='_') str) == 1 || n == resumeKW || n == cleanupKW
+isHidden n@Name{}                   = length (takeWhile (=='_') (rawstr n)) == 1 || n == resumeKW || n == cleanupKW
 isHidden _                          = True
 
 notHidden                           = filter (not . isHidden)

@@ -1065,7 +1065,9 @@ intro t mbe                            = case mbe of
                                              Nothing ->  pretty t
                                              Just e ->   text "The type of the indicated expression" <+> text "(" Pretty.<>
                                                            (if isGen t then text "which we call" else text "inferred to be") <+> pretty t Pretty.<> text ")"
-   where isGen (TCon _ (TC (NoQ (Name _ ('t' : ds))) [])) = all isDigit ds
+   where isGen (TCon _ (TC (NoQ n) [])) = case rawstr n of
+                                             't' : ds -> all isDigit ds
+                                             _ -> False
          isGen _ = False
 
 explainRequirement c                = case info c of
@@ -1144,7 +1146,7 @@ typeReport (NoSolve mbt vs cs) filename src         =
                     _ -> "Cannot satisfy the following simultaneous constraints for the unknown " ++
                          (if length vs == 1
                           then "type " ++ case head vs of
-                                          TCon _ tc -> nameStr (noq (tcname tc))
+                                          TCon _ tc -> rawstr (noq (tcname tc))
                                           _ -> show (head vs)
                           else "types")
         -- Each constraint gets its own complete error message with source line
@@ -1160,9 +1162,6 @@ typeReport (NoSolve mbt vs cs) filename src         =
         header
         [(locToPosition l filename src, This m) | (l,m) <- withLocsMsgs]
         []
-  where
-        nameStr (Name _ str) = str
-
 typeReport (NoUnify (Simple l msg) _ _) filename src = Err Nothing "Type unification error" [(locToPosition l filename src, This msg)] []
 typeReport (NoUnify info t1 t2) filename src        =
     case (loc t1, loc t2) of

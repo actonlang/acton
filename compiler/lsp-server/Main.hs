@@ -177,7 +177,7 @@ overlaySourceProvider ref =
 updateOverlay :: FilePath -> T.Text -> IO ()
 updateOverlay path txt =
   let snap = Source.SourceSnapshot
-        { Source.ssText = T.unpack txt
+        { Source.ssText = txt
         , Source.ssBytes = TE.encodeUtf8 txt
         , Source.ssIsOverlay = True
         }
@@ -862,7 +862,7 @@ signatureHelpFor path pos = do
       case snapRes of
         Left _ -> return (InR Null)
         Right snap -> do
-          let src = Source.ssText snap
+          let src = T.unpack (Source.ssText snap)
               cursor = positionToOffset src pos
           msigs <- liftIO $
             tryLspIO $ do
@@ -884,7 +884,7 @@ hoverFor path pos = do
       case snapRes of
         Left _ -> return (InR Null)
         Right snap -> do
-          let src = Source.ssText snap
+          let src = T.unpack (Source.ssText snap)
               cursor = positionToOffset src pos
           minfo <- liftIO $
             tryLspIO $ do
@@ -992,7 +992,7 @@ completionItemsFor path pos = do
       case snapRes of
         Left _ -> return []
         Right snap -> do
-          let src = Source.ssText snap
+          let src = T.unpack (Source.ssText snap)
               cursor = positionToOffset src pos
           mitems <- liftIO $
             tryLspIO $ do
