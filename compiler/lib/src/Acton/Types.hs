@@ -68,7 +68,7 @@ reconstruct                             :: Maybe TypeProgressCallback -> Maybe T
 reconstruct progressCb inferredCb env0 (Module m i mdoc ss)    = do --traceM ("#################### original env0 for " ++ prstr m ++ ":")
                                              --traceM (render (pretty env0))
                                              (te,ss1) <- infTop progressCb inferredCb env1 ss
-                                             let env2 = define te (setMod m env0)
+                                             let env2 = defineClosed te (setMod m env0)
                                                  (teT,ssT,tests) =
                                                    if hasTesting i
                                                      then let (testSs, discovered) = testStmts env2 (modNameStr m) ss1
@@ -80,7 +80,7 @@ reconstruct progressCb inferredCb env0 (Module m i mdoc ss)    = do --traceM ("#
                                              --traceM (render (pretty env0'))
                                              return (nmod, Module m i mdoc ssT, env0', tests)
 
-  where env1                            = reserve (assigned ss) (initTypeEnv env0)
+  where env1                            = reserveClosed (assigned ss) (initTypeEnv env0)
         env0'                           = convEnvProtos env0
         hasTesting i                    = Import NoLoc [ModuleItem (ModName [name "testing"]) Nothing] `elem` i
         rmTests (Assign _ [PVar _ n _] _ : ss)
@@ -147,7 +147,7 @@ showTyFile env0 m fname verbose = do
 
 prettySigs env m imps te        = render $ vcat [ text "import" <+> pretty m | m <- imps ] $++$
                                            vpretty (simp env1 te)
-  where env1                    = define te $ setMod m env
+  where env1                    = defineClosed te $ setMod m env
 
 nodup x
   | not $ null vs               = err2 vs "Duplicate names:"
@@ -261,12 +261,12 @@ infTop progressCb inferredCb env ss     = do -- The scanner itself is sequential
                                                  -- Continue scanning with the scanned declarations visible.
                                                  -- Store te1 and result wait on reversed accumulators to preserve
                                                  -- source order cheaply when collect reverses them.
-                                                 go slots workQ q (tydefine te1 env) (te1:tes) (readMVar result:rs) ss
+                                                 go slots workQ q (tydefineClosed te1 env) (te1:tes) (readMVar result:rs) ss
                                                -- A non-total statement was already fully checked by scanOrCheck,
                                                -- so becomes complete / total before we get here and the scanner may
                                                -- continue.
                                                Right (_,te2,_,ss1) ->
-                                                 go slots workQ q (tydefine te2 env) (te2:tes) (return (Right ss1):rs) ss
+                                                 go slots workQ q (tydefineClosed te2 env) (te2:tes) (return (Right ss1):rs) ss
         -- Wait for all statement results in source order, concatenate the
         -- accumulated environments, keep typed statements whose checks
         -- succeeded, and keep every error for aggregate reporting.
@@ -1162,9 +1162,13 @@ checkClassAttributesInitialized className classLoc env ancestors b
                                           in [ n | (n, NSig _ Property _) <- te ]
 
         -- Helper to look up class location in environment
-        getClassLoc env qname           = case [ className | (className, NClass{}) <- names env, className == noq qname ] of
-                                            (Name classLoc _:_) -> classLoc
-                                            _                   -> NoLoc
+        getClassLoc env qname           = case findClass (activeNames env) of
+                                            Just l  -> l
+                                            Nothing -> maybe NoLoc id (findClass (closedNames env))
+          where findClass ((n, NClass{}):te)
+                  | n == noq qname      = Just (loc n)
+                findClass (_:te)        = findClass te
+                findClass []            = Nothing
 
         -- Find which parent class (if any) defines the given attribute
         findAttributeParent attrName    = case [ n | Signature _ ns _ _ <- b, n <- ns, n == attrName ] of

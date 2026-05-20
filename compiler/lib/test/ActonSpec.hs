@@ -1068,14 +1068,12 @@ main = do
             env1 = Acton.Env.addMod (S.modname parsedA) impsA tenvA mdocA env0
 
         (envB, _) <- parseAct env1 "import_private"
-        let namesB = Acton.Env.names envB
-
-        case lookup (S.name "__foo") namesB of
+        case Acton.Env.lookupName (S.name "__foo") envB of
           Nothing -> pure ()
           Just _ -> expectationFailure "from import * should skip __foo"
 
-        case lookup (S.name "public_value") namesB of
-          Just (I.NAlias _) -> pure ()
+        case Acton.Env.lookupName (S.name "public_value") envB of
+          Just (I.HNAlias _) -> pure ()
           _ -> expectationFailure "from import * should include public_value"
 
       it "blocks qualified access to private names" $ do

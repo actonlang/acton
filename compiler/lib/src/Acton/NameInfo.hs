@@ -37,7 +37,7 @@ import Acton.Printer
     -   NClass, NProto, NExt and NAct represent class, protocol, extension and actor declarations. They each contain a TEnv of visible local attributes.
     -   Signatures must appear before the defs/assignments they describe, and every TEnv respects the order of the syntactic constructs binding each name.
     -   The attribute TEnvs of NClass, NProto, NExt and NAct are searched left-to-right, thus favoring (explicit) NSigs over (inferred) NDefs/NVars.
-    -   The global inference TEnv (names env) is searched right-to-left, thereby prioritizing NDefs/NVars over NSigs, as well as any inner bindings in scope.
+    -   The global inference environment is searched from active names to closed names, thereby prioritizing NDefs/NVars over NSigs, as well as any inner bindings in scope.
     -   The NameInfo assumption on a (recursive) Def is always an NDef, initialized to the corresponding NSig if present, or a fresh unquantified variable.
     -   The inferred schema for each def is checked to be no less general than the corresponding NDef assumption.
     -   Unquantified NDefs are generalized at the close of the outermost recursive declaration in scope.
