@@ -1555,6 +1555,9 @@ scanTopLevelChunks src start emit
               let depth' = max 0 (scanDepth st - 1)
                   (_, rest, st') = consumeMany True 1 i xs st { scanDepth = depth' }
               in go (i + 1) rest st'
+          | Just n <- codeRunLength xs ->
+              let (rest, st') = consumeCodeRun n xs st
+              in go (i + n) rest st'
           | otherwise ->
               let (_, rest, st') = consumeMany True 1 i xs st
               in go (i + 1) rest st'
@@ -1576,10 +1579,10 @@ scanTopLevelChunks src start emit
                     _                     -> 1
                   (_, xs', st') = consumeMany False n i xs st
               in go (i + n) xs' st'
-          | scanInterpolate mode && startsWith "{{" xs ->
+          | scanInterpolate mode && startsWith2 '{' '{' xs ->
               let (_, xs', st') = consumeMany False 2 i xs st
               in go (i + 2) xs' st'
-          | scanInterpolate mode && startsWith "}}" xs ->
+          | scanInterpolate mode && startsWith2 '}' '}' xs ->
               let (_, xs', st') = consumeMany False 2 i xs st
               in go (i + 2) xs' st'
           | scanInterpolate mode && c == '{' ->
@@ -1592,6 +1595,9 @@ scanTopLevelChunks src start emit
           | closesString xs mode ->
               let n = if scanTriple mode then 3 else 1
                   (_, xs', st') = consumeMany False n i xs st { scanModes = rest }
+              in go (i + n) xs' st'
+          | Just n <- stringTextRunLength mode xs ->
+              let (xs', st') = consumeStringTextRun n xs st
               in go (i + n) xs' st'
           | otherwise ->
               let (_, xs', st') = consumeMany False 1 i xs st
@@ -1624,7 +1630,7 @@ scanTopLevelChunks src start emit
       case T.uncons xs of
         Just (q, _)
           | q == '"' || q == '\'' ->
-              let triple = startsWith [q, q, q] xs
+              let triple = startsWith3 q q q xs
                   raw = scanPrev1 st == Just 'r' ||
                         (scanPrev2 st == Just 'r' && scanPrev1 st == Just 'b')
                   bytes = scanPrev1 st == Just 'b' ||
@@ -1635,10 +1641,12 @@ scanTopLevelChunks src start emit
         _ -> Nothing
 
     closesString xs mode
-      | scanTriple mode = startsWith (replicate 3 (scanQuote mode)) xs
+      | scanTriple mode = startsWith3 q q q xs
       | otherwise = case T.uncons xs of
-          Just (c, _) -> c == scanQuote mode
+          Just (c, _) -> c == q
           Nothing     -> False
+      where
+        q = scanQuote mode
 
     tripleInterpolatedQuoteText xs mode
       | scanTriple mode && scanInterpolate mode =
@@ -1650,18 +1658,103 @@ scanTopLevelChunks src start emit
 
     quoteRunLength q = T.length . T.takeWhile (== q)
 
-    startsWith prefix xs = T.pack prefix `T.isPrefixOf` xs
+    startsWith2 a b xs =
+      case T.uncons xs of
+        Just (c1, rest1) | c1 == a ->
+          case T.uncons rest1 of
+            Just (c2, _) -> c2 == b
+            Nothing      -> False
+        _ -> False
+
+    startsWith3 a b c xs =
+      case T.uncons xs of
+        Just (c1, rest1) | c1 == a ->
+          case T.uncons rest1 of
+            Just (c2, rest2) | c2 == b ->
+              case T.uncons rest2 of
+                Just (c3, _) -> c3 == c
+                Nothing      -> False
+            _ -> False
+        _ -> False
+
+    codeRunLength xs =
+      let n = T.length (T.takeWhile isCodeRunChar xs)
+      in if n == 0 then Nothing else Just n
+
+    stringTextRunLength mode xs =
+      let n = T.length (T.takeWhile (isStringTextRunChar mode) xs)
+      in if n == 0 then Nothing else Just n
+
+    isCodeRunChar c =
+      c /= '#' && c /= '"' && c /= '\'' && c /= '\n' && c /= '\\' &&
+      not (c `elem` ("()[]{}" :: String))
+
+    isStringTextRunChar mode c =
+      c /= '\\' && c /= '\n' && c /= scanQuote mode &&
+      (not (scanInterpolate mode) || (c /= '{' && c /= '}'))
+
+    consumeCodeRun n xs st =
+      let (run, rest) = T.splitAt n xs
+      in (rest, advanceCodeRun run st)
+
+    consumeStringTextRun n xs st =
+      let (run, rest) = T.splitAt n xs
+      in (rest, advanceStringTextRun run st)
+
+    advanceCodeRun run st =
+      case T.unsnoc run of
+        Nothing -> st
+        Just (front, lastC) ->
+          let prev2' = case T.unsnoc front of
+                         Just (_, c) -> Just c
+                         Nothing     -> scanPrev1 st
+              significant = T.any (\c -> c /= ' ' && c /= '\t' && c /= '\r') run
+          in st
+            { scanPrev2 = prev2'
+            , scanPrev1 = Just lastC
+            , scanAtLineStart = False
+            , scanContinued = False
+            , scanBackslash = if significant then False else scanBackslash st
+            }
+
+    advanceStringTextRun run st =
+      case T.unsnoc run of
+        Nothing -> st
+        Just (front, lastC) ->
+          let prev2' = case T.unsnoc front of
+                         Just (_, c) -> Just c
+                         Nothing     -> scanPrev1 st
+          in st
+            { scanPrev2 = prev2'
+            , scanPrev1 = Just lastC
+            , scanAtLineStart = False
+            , scanContinued = False
+            }
 
     skipComment i xs st =
-      case T.uncons xs of
-        Nothing -> go i T.empty st
-        Just (c, _)
-          | c == '\n' ->
-              let (_, xs', st') = consumeMany False 1 i xs st
-              in go (i + 1) xs' st'
-          | otherwise ->
-              let (_, xs', st') = consumeMany False 1 i xs st
-              in skipComment (i + 1) xs' st'
+      let (comment, rest) = T.break (== '\n') xs
+          n = T.length comment
+          st' = advanceCommentRun comment st
+          i' = i + n
+      in case T.uncons rest of
+           Just ('\n', _) ->
+             let (_, xs', st'') = consumeMany False 1 i' rest st'
+             in go (i' + 1) xs' st''
+           _ -> go i' rest st'
+
+    advanceCommentRun run st =
+      case T.unsnoc run of
+        Nothing -> st
+        Just (front, lastC) ->
+          let prev2' = case T.unsnoc front of
+                         Just (_, c) -> Just c
+                         Nothing     -> scanPrev1 st
+          in st
+            { scanPrev2 = prev2'
+            , scanPrev1 = Just lastC
+            , scanAtLineStart = False
+            , scanContinued = False
+            }
 
     consumeMany _ 0 i xs st = (i, xs, st)
     consumeMany track n i xs st =
