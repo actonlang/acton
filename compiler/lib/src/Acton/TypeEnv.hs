@@ -48,6 +48,8 @@ import Acton.Env
 data TypeX                      = TypeX {
                                     activeWits  :: [Witness],
                                     closedWits  :: [Witness],
+                                    activeWitMap :: WitMap,
+                                    closedWitMap :: WitMap,
                                     posnames    :: [Name],
                                     indecl      :: Bool,
                                     forced      :: Bool,
@@ -65,12 +67,15 @@ data TyInfo                     = TyInfo {
                                   }
 
 type Env                        = EnvF TypeX
+type WitMap                     = Map QName [Witness]
 
 initTypeEnv                     :: Env0 -> Env
 initTypeEnv env0                = setX env0 $ foldl' importInfo x0 imps
   where x0                      = TypeX {
                                     activeWits  = [],
                                     closedWits  = primWits,
+                                    activeWitMap = Map.empty,
+                                    closedWitMap = witMap primWits,
                                     posnames    = [],
                                     indecl      = False,
                                     forced      = False,
@@ -123,13 +128,16 @@ prinfo x (n, tid)               = pretty (noq n) <+> text "=" <+> pretty tid <> 
 
 instance USubst TypeX where
     usubst x                    = do we <- usubst (activeWits x)
-                                     return x{ activeWits = we }
+                                     return x{ activeWits = we, activeWitMap = witMap we }
 
 instance UFree TypeX where
     ufree x                     = ufree (activeWits x)
 
 witnesses                       :: TypeX -> [Witness]
 witnesses x                     = activeWits x ++ closedWits x
+
+witMap                          :: [Witness] -> WitMap
+witMap                          = foldr addWit Map.empty
 
 
 nextid x                        = 1 + fst (IntMap.findMax $ tyinfos x)
@@ -197,18 +205,23 @@ tydefineInst c ps w env         = modX env (\x -> foldl' addActiveWit x wits)
 
 addActiveWit                    :: TypeX -> Witness -> TypeX
 addActiveWit x wit
-  | null same                   = x{ activeWits = wit : activeWits x }
+  | null same                   = x{ activeWits = wit : activeWits x,
+                                     activeWitMap = addWit wit (activeWitMap x) }
   | otherwise                   = x
   where same                    = [ w | w <- witsByPNameX x (tcname $ proto wit), wtype w == wtype wit ]
 
 addClosedWit                    :: TypeX -> Witness -> TypeX
 addClosedWit x wit
-  | null same                   = x{ closedWits = wit : closedWits x }
+  | null same                   = x{ closedWits = wit : closedWits x,
+                                     closedWitMap = addWit wit (closedWitMap x) }
   | otherwise                   = x
   where same                    = [ w | w <- witsByPNameX x (tcname $ proto wit), wtype w == wtype wit ]
 
-witsByPNameX x pn               = [ w | w <- activeWits x, tcname (proto w) == pn ] ++
-                                  [ w | w <- closedWits x, tcname (proto w) == pn ]
+addWit                          :: Witness -> WitMap -> WitMap
+addWit w                        = Map.insertWith (++) (tcname $ proto w) [w]
+
+witsByPNameX x pn               = Map.findWithDefault [] pn (activeWitMap x) ++
+                                  Map.findWithDefault [] pn (closedWitMap x)
 
 witsByPName                     :: Env -> QName -> [Witness]
 witsByPName env pn              = witsByPNameX (envX env) pn
@@ -224,7 +237,8 @@ witsByTName env tn              = [ w | w <- activeWits x, eqname (wtype w) ] ++
 limitQuant                      :: TUni -> Env -> Env
 limitQuant (UV _ l _) env
   | n <= 0                      = env
-  | otherwise                   = modX env1 $ \x -> x{ activeWits = dropw (activeWits x) }
+  | otherwise                   = modX env1 $ \x -> let we = dropw (activeWits x)
+                                                    in x{ activeWits = we, activeWitMap = witMap we }
   where env1                    = setActiveNames (dropv n (activeNames env)) env{ qlevel = qlevel env - n }
         n                       = qlevel env - l
         vs                      = takev n (activeNames env)
