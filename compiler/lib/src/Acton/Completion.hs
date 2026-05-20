@@ -610,8 +610,8 @@ shallowModuleItem :: [FilePath] -> Env.Env0 -> S.ModuleItem -> IO Env.Env0
 shallowModuleItem searchPath env (S.ModuleItem m as) =
   shallowModule searchPath env m $ \te env' ->
     case as of
-        Nothing -> Env.addImport m env'
-        Just n -> Env.define [(n, I.NMAlias m)] env'
+      Nothing -> Env.addImport m env'
+      Just n -> Env.defineClosed [(n, I.NMAlias m)] env'
 
 shallowModule
   :: [FilePath]
@@ -791,10 +791,7 @@ lookupQNameInfo :: Env.Env0 -> S.QName -> Maybe I.NameInfo
 lookupQNameInfo env qn =
   case qn of
     S.NoQ n ->
-      case lookup n (Env.names env) of
-        Just (I.NAlias qn') -> lookupQNameInfo env qn'
-        Just info -> Just info
-        Nothing -> Nothing
+      lookupNoQ n
     S.QName m n ->
       lookupModuleItem env (Env.findHMod m env) n
     S.GName m n
@@ -802,6 +799,11 @@ lookupQNameInfo env qn =
           lookupQNameInfo env (S.NoQ n)
       | otherwise ->
           lookupModuleItem env (Env.lookupHMod m env) n
+  where
+    lookupNoQ n              = resolve =<< Env.lookupName n env
+
+    resolve (I.HNAlias qn')  = lookupQNameInfo env qn'
+    resolve info             = Just (I.convHNameInfo2NameInfo info)
 
 lookupModuleItem :: Env.Env0 -> Maybe I.HTEnv -> S.Name -> Maybe I.NameInfo
 lookupModuleItem env mtenv n = do

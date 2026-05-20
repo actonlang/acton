@@ -156,6 +156,10 @@ tydefine                        :: TEnv -> Env -> Env
 tydefine te env                 = modX (define te env) (setupCons f te . setupWits NoQ te)
   where f                       = if inBuiltin env then GName mBuiltin else NoQ
 
+tydefineClosed                  :: TEnv -> Env -> Env
+tydefineClosed te env           = modX (defineClosed te env) (setupCons f te . setupWits NoQ te)
+  where f                       = if inBuiltin env then GName mBuiltin else NoQ
+
 setupCons                       :: (Name -> QName) -> TEnv -> TypeX -> TypeX
 setupCons f te x                = foldl' (addconinfo f) x te
  
@@ -179,7 +183,7 @@ tydefineVars                    :: QBinds -> Env -> Env
 tydefineVars q env              = modX env1 (\x -> foldl' addvarinfo x tvs)
   where env1                    = modX env0 (\x -> foldl' addWit x wits)
         env0                    = defineTVars q env
-        tvs                     = [ (TV k v, c, us) | (v, NTVar k c us) <- take (length q) (names env0), let tv = TV k v ]
+        tvs                     = [ (TV k v, c, us) | (v, NTVar k c us) <- take (length q) (activeNames env0), let tv = TV k v ]
         wits                    = [ WInst [] (tVar tv) p (NoQ $ tvarWit tv u) wchain | (tv, _, us) <- tvs, u <- us, (wchain,p) <- findAncestry env u ]
 
 tydefineInst                    :: TCon -> [WTCon] -> Name -> Env -> Env
@@ -207,7 +211,7 @@ limitQuant                      :: TUni -> Env -> Env
 limitQuant (UV _ l _) env
   | n <= 0                      = env
   | otherwise                   = modX env1 $ \x -> x{ witnesses = dropw n (witnesses x) }
-  where env1                    = setNames (dropv n (names env)) env{ qlevel = qlevel env - n }
+  where env1                    = setActiveNames (dropv n (activeNames env)) env{ qlevel = qlevel env - n }
         n                       = qlevel env - l
         dropv 0 te              = te
         dropv n ((v,i):te)
@@ -232,7 +236,7 @@ isForced env                    = forced $ envX env
 
 instance Polarity Env where
     polvars env                 = polvars pte `polcat` invvars ite
-      where (pte, ite)          = span ((`elem` pvs) . fst) (names env)
+      where (pte, ite)          = span ((`elem` pvs) . fst) (activeNames env)
             pvs                 = posnames $ envX env
 
 
@@ -267,7 +271,7 @@ instance Pretty Constraint where
 prettyQuant env
   | qlevel env > 0                  = brackets (commaSep pretty q) <+> text "=>"
   | otherwise                       = empty
-  where q                           = [ QBind (TV k tv) (if c == cValue then ps else c:ps) | (tv, NTVar k c ps) <- names env ]
+  where q                           = [ QBind (TV k tv) (if c == cValue then ps else c:ps) | (tv, NTVar k c ps) <- activeNames env ]
 
 instance VFree Constraint where
     vfree (Cast info env t1 t2)     = vfree t1 ++ vfree t2
@@ -795,12 +799,12 @@ instance USubst Witness where
 
 
 instance USubst Env where
-    usubst env                  = do ne <- usubst (names env)
+    usubst env                  = do ne <- usubst (activeNames env)
                                      ex <- usubst (envX env)
-                                     return $ setNames ne env{ envX = ex }
+                                     return $ setActiveNames ne env{ envX = ex }
 
 instance UFree Env where
-    ufree env                   = ufree (names env) ++ ufree (envX env)
+    ufree env                   = ufree (activeNames env) ++ ufree (envX env)
 
 
 -- Well-formed tycon applications -------------------------------------------------------------------------------------------------

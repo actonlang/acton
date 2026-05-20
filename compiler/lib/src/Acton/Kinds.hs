@@ -75,7 +75,8 @@ type KindEnv                        = EnvF ()
 
 kindEnv env0                        = env0
 
-tvars env                           = [ TV k n | (n, NTVar k _ _) <- names env ]
+tvars env                           = tvs (activeNames env) ++ tvs (closedNames env)
+  where tvs te                      = [ TV k n | (n, NTVar k _ _) <- te ]
 
 extcons ke env                      = define ke env
 
@@ -778,4 +779,3 @@ instance KSubst Assoc where
 
 instance KSubst Sliz where
     ksubst g (Sliz l e1 e2 e3)      = Sliz l <$> ksubst g e1 <*> ksubst g e2 <*> ksubst g e3
-
