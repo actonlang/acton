@@ -70,10 +70,10 @@ data Decl       = Def           { dloc::SrcLoc, dname:: Name, qbinds::QBinds, po
                 deriving (Show,Read,NFData,Generic)
 
 data Expr       = Var           { eloc::SrcLoc, var::QName }
-                | Int           { eloc::SrcLoc, ival::Integer, lexeme::Text }
-                | Float         { eloc::SrcLoc, dval::Double, lexeme::Text }
-                | Imaginary     { eloc::SrcLoc, dval::Double, lexeme::Text }
-                | Bool          { eloc::SrcLoc, bval::Bool }
+                | Int           { eloc::SrcLoc, ival:: !Integer, lexeme::Text }
+                | Float         { eloc::SrcLoc, dval:: {-# UNPACK #-} !Double, lexeme::Text }
+                | Imaginary     { eloc::SrcLoc, dval:: {-# UNPACK #-} !Double, lexeme::Text }
+                | Bool          { eloc::SrcLoc, bval:: {-# UNPACK #-} !Bool }
                 | None          { eloc::SrcLoc }
                 | NotImplemented{ eloc::SrcLoc }
                 | Ellipsis      { eloc::SrcLoc }
@@ -93,9 +93,9 @@ data Expr       = Var           { eloc::SrcLoc, var::QName }
                 | UnOp          { eloc::SrcLoc, uop::Unary, exp1::Expr }
                 | Dot           { eloc::SrcLoc, exp1::Expr, attr::Name }
                 | Rest          { eloc::SrcLoc, exp1::Expr, attr::Name }
-                | DotI          { eloc::SrcLoc, exp1::Expr, ival::Integer }
-                | RestI         { eloc::SrcLoc, exp1::Expr, ival::Integer }
-                | Opt           { eloc::SrcLoc, exp1::Expr, optVal::Bool }
+                | DotI          { eloc::SrcLoc, exp1::Expr, ival:: !Integer }
+                | RestI         { eloc::SrcLoc, exp1::Expr, ival:: !Integer }
+                | Opt           { eloc::SrcLoc, exp1::Expr, optVal:: {-# UNPACK #-} !Bool }
                 | OptChain      { eloc::SrcLoc, exp1::Expr }
                 | Lambda        { eloc::SrcLoc, ppar::PosPar, kpar::KwdPar, exp1::Expr, efx::TFX }
                 | Yield         { eloc::SrcLoc, yexp1::Maybe Expr }
@@ -125,7 +125,7 @@ type Target     = Expr
 data Prefix     = Globvar | Xistvar | Tempvar | Witness | NormPass | CPSPass | LLiftPass | BoxPass
                 deriving (Eq,Ord,Show,Read,Generic,NFData)
 
-data Name       = Name SrcLoc Text | Derived Name Name | Internal Prefix Text Int deriving (Generic,Show,NFData)
+data Name       = Name SrcLoc Text | Derived Name Name | Internal Prefix Text {-# UNPACK #-} !Int deriving (Generic,Show,NFData)
 
 nloc (Name l _) = l
 nloc _          = NoLoc
@@ -212,14 +212,14 @@ data Comparison = Eq|NEq|LtGt|Lt|Gt|GE|LE|In|NotIn|Is|IsNot deriving (Show,Eq,Re
 
 data Deco       = NoDec | Property | Static deriving (Eq,Show,Read,Generic,NFData)
 
-data Kind       = KType | KProto | KFX | PRow | KRow | KFun [Kind] Kind | KUni Int | KWild deriving (Eq,Ord,Show,Read,Generic,NFData)
+data Kind       = KType | KProto | KFX | PRow | KRow | KFun [Kind] Kind | KUni {-# UNPACK #-} !Int | KWild deriving (Eq,Ord,Show,Read,Generic,NFData)
 
 data TSchema    = TSchema { scloc::SrcLoc, scbind::QBinds, sctype::Type } deriving (Show,Read,Generic,NFData)
 
 data TVar       = TV { tvkind::Kind, tvname::Name } -- the Name is an uppercase letter, optionally followed by digits.
                 deriving (Show,Read,Generic,NFData)
 
-data TUni       = UV { uvkind::Kind, uvlevel::Int, uvid::Int }
+data TUni       = UV { uvkind::Kind, uvlevel:: {-# UNPACK #-} !Int, uvid:: {-# UNPACK #-} !Int }
                 deriving (Show,Read,Generic,NFData)
 
 univar k l i    = UV k l i

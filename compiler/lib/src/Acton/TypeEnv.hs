@@ -405,7 +405,7 @@ headvar (Seal _ _ (TUni _ u))         = u
 -- Type inference monad ------------------------------------------------------------------
 
 data TypeState                          = TypeState {
-                                                nextint         :: Int,
+                                                nextint         :: {-# UNPACK #-} !Int,
                                                 uniqprefix      :: String, -- Prefix for generated names
                                                 effectstack     :: [(TFX,Type)],
                                                 deferred        :: Constraints,
@@ -903,7 +903,7 @@ wvars cs                    = [ eVar v | Proto _ _ v _ _ <- cs ]
 
 -- Equations -----------------------------------------------------------------------------------------------------------------------
 
-data Equation                           = Eqn Int Name Type Expr
+data Equation                           = Eqn {-# UNPACK #-} !Int Name Type Expr
 
 type Equations                          = [Equation]
 
@@ -1010,7 +1010,7 @@ data TypeError                      = TypeError SrcLoc String
                                     | UninitializedAttribute SrcLoc Name Bool SrcLoc SrcLoc Name (Maybe (Name, SrcLoc)) -- attr loc, attr name, is inferred, init loc, class loc, class name, parent class info
                                     deriving (Show)
 
-data ErrInfo    = DfltInfo {errloc :: SrcLoc, errno :: Int, errexpr :: Maybe Expr, errinsts :: [(QName,TSchema,Type)]}
+data ErrInfo    = DfltInfo {errloc :: SrcLoc, errno :: {-# UNPACK #-} !Int, errexpr :: Maybe Expr, errinsts :: [(QName,TSchema,Type)]}
                 | DeclInfo {errloc :: SrcLoc, errloc2 :: SrcLoc, errname :: Name, errschema :: TSchema, errmsg :: String}
                 | Simple {errloc ::SrcLoc, errmsg :: String}
                 deriving (Show)

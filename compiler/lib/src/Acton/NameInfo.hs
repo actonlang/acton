@@ -390,7 +390,7 @@ unSig te                    = map f te
 
 -- Witnesses -----------------------------------------------------------------------------------------------
 
-data Witness            = WClass    { binds::QBinds, wtype::Type, proto::PCon, wname::QName, wsteps::WPath, wopts::Int }
+data Witness            = WClass    { binds::QBinds, wtype::Type, proto::PCon, wname::QName, wsteps::WPath, wopts:: {-# UNPACK #-} !Int }
                         | WInst     { binds::QBinds, wtype::Type, proto::PCon, wname::QName, wsteps::WPath }
                         deriving (Show)
 
