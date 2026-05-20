@@ -25,6 +25,10 @@
 - Preserve each module's import context in cached module interfaces, so builds,
   `acton sig`, documentation, and completion can reuse cached interfaces without
   losing imported class and protocol information. [#2779]
+- Index active compiler environment names for fast unqualified lookups while
+  preserving the ordered name list for source-order sensitive paths, reducing
+  kind checking and type checking time in large modules with many class and
+  protocol names. [#2789]
 
 ### Packages & Distribution
 - Change x86_64 Linux builds from statically linked GNU libc to dynamically
@@ -3960,6 +3964,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#2783]: https://github.com/actonlang/acton/pull/2783
 [#2784]: https://github.com/actonlang/acton/pull/2784
 [#2787]: https://github.com/actonlang/acton/pull/2787
+[#2789]: https://github.com/actonlang/acton/pull/2789
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
