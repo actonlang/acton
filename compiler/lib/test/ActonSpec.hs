@@ -113,6 +113,12 @@ main = do
         completed `shouldSatisfy` monotonic
         last progress `shouldBe` (6, 6)
 
+      it "allows underscore parameters in lambdas" $ do
+        let input = "def f():\n    rpc(a, lambda c, _, err: cb(c, err))\n"
+        case parseModuleTest input of
+          Left err -> expectationFailure $ "Parse failed: " ++ err
+          Right _ -> return ()
+
       describe "Basic Syntax" $ do
         testParse env0 ["syntax1"]
 

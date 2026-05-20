@@ -1115,8 +1115,9 @@ singleStar = (lexeme . try) (char '*' <* notFollowedBy (char '*'))
 identifier :: Parser Text
 identifier = (lexeme . try) $ do
     off <- getOffset
-    void $ lookAhead (satisfy (\c -> isAlpha c || c == '_') <?> "identifier")
-    x <- takeWhile1P (Just "identifier") (\c -> isAlphaNum c || c=='_')
+    c <- satisfy (\c -> isAlpha c || c == '_') <?> "identifier"
+    cs <- hidden (takeWhileP Nothing (\c -> isAlphaNum c || c == '_'))
+    let x = T.cons c cs
     if S.isKeywordText x
       then parseError (TrivialError off (Just (Tokens (N.fromList (T.unpack x)))) (Set.fromList [Label (N.fromList "identifier")]))
       else return x
@@ -1129,6 +1130,12 @@ name = do off <- getOffset
             else return $ S.Name (Loc off (off + T.length x)) x
 
 escname = name <|> addLoc (S.name . head <$> plainstrLiteral)  -- Assumes an escname cannot contain hex escape sequences
+
+paramName :: Parser S.Name
+paramName = name <|> do
+    off <- getOffset
+    rword "_"
+    return $ S.Name (Loc off (off + 1)) (T.singleton '_')
 
 tvarname = do off <- getOffset
               x <- identifier
@@ -2448,13 +2455,13 @@ yield_expr = addLoc $ do
 --- Params ---------------------------------------------------------------------
 
 parm :: Bool -> Parser (S.Name, Maybe S.Type, Maybe S.Expr)
-parm ann = do n <- name
+parm ann = do n <- paramName
               mbt <- if ann then optional (colon *> ttype) else return Nothing
               mbe <- optional (equals *> expr)
               return (n, mbt, mbe)
 
 pstar :: Bool -> Parser S.Type -> Parser (S.Name, Maybe S.Type)
-pstar ann startype = do n <- name
+pstar ann startype = do n <- paramName
                         mbt <- if ann then optional (colon *> startype) else return Nothing
                         return (n, mbt)
 
