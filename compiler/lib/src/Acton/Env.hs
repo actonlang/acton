@@ -630,12 +630,19 @@ parentTEnv                  :: EnvF x -> [WTCon] -> TEnv
 parentTEnv env us           = [ (n,i) | (_,c) <- us, let (_,te) = findCon env c, (n,i) <- reverse te ]                                  -- in override order
 
 findAttr                    :: EnvF x -> TCon -> Name -> Maybe (Expr->Expr, TSchema, Maybe Deco)
-findAttr env tc n           = listToMaybe $ attributes f env tc
-  where f wp i x | x /= n   = Nothing
-        f wp (NSig sc d _) x  = Just (wexpr wp, sc, Just d)
-        f wp (NDef sc d _) x  = Just (wexpr wp, sc, Just d)
-        f wp (NVar t)    x  = Just (wexpr wp, monotype t, Nothing)
-        f wp (NSVar t)   x  = Just (wexpr wp, monotype t, Nothing)
+findAttr env tc n           = go (findAncestry env tc)
+  where go []               = Nothing
+        go ((wp,c):cs)      = scan (reverse te)
+          where (_,te)      = findCon env c
+                scan []     = go cs
+                scan ((x,i):xs)
+                  | x == n  = attr wp i
+                  | otherwise = scan xs
+        attr wp (NSig sc d _) = Just (wexpr wp, sc, Just d)
+        attr wp (NDef sc d _) = Just (wexpr wp, sc, Just d)
+        attr wp (NVar t)      = Just (wexpr wp, monotype t, Nothing)
+        attr wp (NSVar t)     = Just (wexpr wp, monotype t, Nothing)
+        attr _ i              = error ("#### findAttr: Attribute expected, got " ++ show i)
 
 attributes'                 :: (WPath -> NameInfo -> Name -> Maybe a) -> EnvF x -> QName -> [a]
 attributes' f env qn        = catMaybes [ f wp i n | n <- ns, let Just (wp,i) = lookup n aenv ]
