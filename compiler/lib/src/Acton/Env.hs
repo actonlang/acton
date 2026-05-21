@@ -644,6 +644,18 @@ findAttr env tc n           = go (findAncestry env tc)
         attr wp (NSVar t)     = Just (wexpr wp, monotype t, Nothing)
         attr _ i              = error ("#### findAttr: Attribute expected, got " ++ show i)
 
+findAttrInfo'               :: EnvF x -> QName -> Name -> Maybe NameInfo
+findAttrInfo' env qn n      = go (([],tc) : us)
+  where go []               = Nothing
+        go ((_,c):cs)       = scan (reverse te)
+          where (_,_,te)    = findConName (tcname c) env
+                scan []     = go cs
+                scan ((x,i):xs)
+                  | x == n  = Just i
+                  | otherwise = scan xs
+        (q,us,_)            = findConName qn env
+        tc                  = TC qn [ tVar v | QBind v _ <- q ]
+
 attributes'                 :: (WPath -> NameInfo -> Name -> Maybe a) -> EnvF x -> QName -> [a]
 attributes' f env qn        = catMaybes [ f wp i n | n <- ns, let Just (wp,i) = lookup n aenv ]
   where ns                  = nub $ reverse $ dom aenv                                                                                  -- in offset order
@@ -673,7 +685,7 @@ abstractAttrs env n         = attributes' f env n
         f _ _ _             = Nothing
 
 closedAttr                  :: EnvF x -> TCon -> Name -> Bool
-closedAttr env tc n         = n `elem` closedAttrs env (tcname tc)
+closedAttr env tc n         = maybe False isClosed (findAttrInfo' env (tcname tc) n)
 
 closedAttrs                 :: EnvF x -> QName -> [Name]
 closedAttrs                 = attributes' f
@@ -695,7 +707,9 @@ abstractClass env n         = not $ null (abstractAttrs env n)
 abstractActor env n         = not $ null (abstractAttrs env n)
 
 abstractAttr                :: EnvF x -> TCon -> Name -> Bool
-abstractAttr env tc n       = n `elem` abstractAttrs env (tcname tc)
+abstractAttr env tc n       = maybe False isAbstract (findAttrInfo' env (tcname tc) n)
+  where isAbstract (NSig _ dec _) = dec /= Property
+        isAbstract _              = False
 
 transitiveImports env       = mBuiltin : reverse (foldl trav [] (getImports env))
   where trav seen m
