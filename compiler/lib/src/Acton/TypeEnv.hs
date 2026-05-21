@@ -210,17 +210,21 @@ witsByTName env tn              = [ w | w <- witnesses (envX env), eqname (wtype
 limitQuant                      :: TUni -> Env -> Env
 limitQuant (UV _ l _) env
   | n <= 0                      = env
-  | otherwise                   = modX env1 $ \x -> x{ witnesses = dropw n (witnesses x) }
+  | otherwise                   = modX env1 $ \x -> x{ witnesses = dropw (witnesses x) }
   where env1                    = setActiveNames (dropv n (activeNames env)) env{ qlevel = qlevel env - n }
         n                       = qlevel env - l
+        vs                      = takev n (activeNames env)
+        takev 0 te              = []
+        takev n ((v,i):te)
+          | NTVar{} <- i        = v : takev (n-1) te
+          | otherwise           = takev n te
         dropv 0 te              = te
         dropv n ((v,i):te)
           | NTVar{} <- i        = dropv (n-1) te
           | otherwise           = (v,i) : dropv n te
-        dropw 0 we              = we
-        dropw n (w:we)
-          | WInst{} <- w        = dropw (n-1) (dropWhile ((==wtype w) . wtype) we)
-          | otherwise           = w : dropw n we
+        dropw (WInst{wtype=TVar _ (TV _ v)} : we)
+          | v `elem` vs         = dropw we
+        dropw we                = we
 
 
 posdefine te env                = modX (tydefine te env) $ \x -> x{ posnames = dom te ++ posnames x }
