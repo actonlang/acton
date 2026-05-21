@@ -35,6 +35,9 @@ void acton_free(void* ptr);
 char *acton_strdup(const char *s);
 char *acton_strndup(const char *s, size_t n);
 
+int acton_sync_pause_begin(void);
+void acton_sync_pause_end(void);
+
 void *acton_gc_malloc(size_t size);
 void *acton_gc_malloc_atomic(size_t size);
 void *acton_gc_realloc(void* ptr, size_t size);
