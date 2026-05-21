@@ -19,6 +19,13 @@ def test_list_index():
     except KeyError:
         pass
 
+def test_list_index_empty():
+    l = []
+    try:
+        l.index(1)
+    except KeyError as e:
+        pass
+
 def test_list_index_errs():
     l = [1, 2, 3]
     try:
@@ -43,6 +50,7 @@ def test_list_index_errs():
 actor main(env):
     try:
         test_list_index()
+        test_list_index_empty()
         test_list_index_errs()
     except Exception as e:
         print("Unexpected exception", e)

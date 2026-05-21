@@ -207,10 +207,11 @@ B_int B_listD_index(B_list self, B_Eq W_EqD_B, $WORD val, B_int start, B_int sto
     if (strt > self->length)
         $RAISE((B_BaseException)$NEW(B_ValueError, to$str("start position must not exceed list length")));
     int stp = self->length;
-    if (stop)
+    if (stop) {
         stp = fromB_int(stop);
-    if (stp <= strt)
-        $RAISE((B_BaseException)$NEW(B_ValueError, to$str("stop position must be higher than start position")));
+        if (stp <= strt)
+            $RAISE((B_BaseException)$NEW(B_ValueError, to$str("stop position must be higher than start position")));
+    }
     if (stp > self->length)
         stp = self->length;
     for (int i=strt; i < stp; i++) {
