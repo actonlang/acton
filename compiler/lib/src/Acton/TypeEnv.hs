@@ -46,7 +46,10 @@ import Acton.Env
 
 
 data TypeX                      = TypeX {
-                                    witnesses   :: [Witness],
+                                    activeWits  :: [Witness],
+                                    closedWits  :: [Witness],
+                                    activeWitMap :: WitMap,
+                                    closedWitMap :: WitMap,
                                     posnames    :: [Name],
                                     indecl      :: Bool,
                                     forced      :: Bool,
@@ -64,11 +67,15 @@ data TyInfo                     = TyInfo {
                                   }
 
 type Env                        = EnvF TypeX
+type WitMap                     = Map QName [Witness]
 
 initTypeEnv                     :: Env0 -> Env
 initTypeEnv env0                = setX env0 $ foldl' importInfo x0 imps
   where x0                      = TypeX {
-                                    witnesses   = primWits,
+                                    activeWits  = [],
+                                    closedWits  = primWits,
+                                    activeWitMap = Map.empty,
+                                    closedWitMap = witMap primWits,
                                     posnames    = [],
                                     indecl      = False,
                                     forced      = False,
@@ -77,7 +84,7 @@ initTypeEnv env0                = setX env0 $ foldl' importInfo x0 imps
                                     typrotos    = IntSet.empty,
                                     tyactors    = IntSet.empty
                                   }
-        importInfo x (m,te)     = setupCons f te $ setupWits f te x
+        importInfo x (m,te)     = setupCons f te $ setupWits addClosedWit f te x
           where f               = GName m
         imps | inBuiltin env0   = []
              | otherwise        = [ (m, fromJust $ lookupMod m env0) | m <- mBuiltin : transitiveImports env0 ]
@@ -120,11 +127,17 @@ prinfo x (n, tid)               = pretty (noq n) <+> text "=" <+> pretty tid <> 
   where info                    = tyinfos x IntMap.! tid
 
 instance USubst TypeX where
-    usubst x                    = do we <- usubst (witnesses x)
-                                     return x{ witnesses = we }
+    usubst x                    = do we <- usubst (activeWits x)
+                                     return x{ activeWits = we, activeWitMap = witMap we }
 
 instance UFree TypeX where
-    ufree x                     = ufree (witnesses x)
+    ufree x                     = ufree (activeWits x)
+
+witnesses                       :: TypeX -> [Witness]
+witnesses x                     = activeWits x ++ closedWits x
+
+witMap                          :: [Witness] -> WitMap
+witMap                          = foldr addWit Map.empty
 
 
 nextid x                        = 1 + fst (IntMap.findMax $ tyinfos x)
@@ -153,18 +166,18 @@ addconinfo f x (n,i)
 
 
 tydefine                        :: TEnv -> Env -> Env
-tydefine te env                 = modX (define te env) (setupCons f te . setupWits NoQ te)
+tydefine te env                 = modX (define te env) (setupCons f te . setupWits addActiveWit NoQ te)
   where f                       = if inBuiltin env then GName mBuiltin else NoQ
 
 tydefineClosed                  :: TEnv -> Env -> Env
-tydefineClosed te env           = modX (defineClosed te env) (setupCons f te . setupWits NoQ te)
+tydefineClosed te env           = modX (defineClosed te env) (setupCons f te . setupWits addClosedWit NoQ te)
   where f                       = if inBuiltin env then GName mBuiltin else NoQ
 
 setupCons                       :: (Name -> QName) -> TEnv -> TypeX -> TypeX
 setupCons f te x                = foldl' (addconinfo f) x te
  
-setupWits                       :: (Name -> QName) -> TEnv -> TypeX -> TypeX
-setupWits f te x                = foldl' addWit x wits
+setupWits                       :: (TypeX -> Witness -> TypeX) -> (Name -> QName) -> TEnv -> TypeX -> TypeX
+setupWits add f te x            = foldl' add x wits
   where wits                    = [ WClass q (tCon c) p (f n) ws (length opts) | (n, NExt q c ps te' opts _) <- te, (ws,p) <- ps ]
 
 addvarinfo x (tv, c, _)         = x{ tyids = Map.insert (NoQ $ tvname tv) tid (tyids x), tyinfos = IntMap.insert tid info tyinfos' }
@@ -181,36 +194,51 @@ addvarinfo x (tv, c, _)         = x{ tyids = Map.insert (NoQ $ tvname tv) tid (t
 
 tydefineVars                    :: QBinds -> Env -> Env
 tydefineVars q env              = modX env1 (\x -> foldl' addvarinfo x tvs)
-  where env1                    = modX env0 (\x -> foldl' addWit x wits)
+  where env1                    = modX env0 (\x -> foldl' addActiveWit x wits)
         env0                    = defineTVars q env
         tvs                     = [ (TV k v, c, us) | (v, NTVar k c us) <- take (length q) (activeNames env0), let tv = TV k v ]
         wits                    = [ WInst [] (tVar tv) p (NoQ $ tvarWit tv u) wchain | (tv, _, us) <- tvs, u <- us, (wchain,p) <- findAncestry env u ]
 
 tydefineInst                    :: TCon -> [WTCon] -> Name -> Env -> Env
-tydefineInst c ps w env         = modX env (\x -> foldl' addWit x wits)
+tydefineInst c ps w env         = modX env (\x -> foldl' addActiveWit x wits)
   where wits                    = [ WInst [] (tCon c) p (NoQ w) ws | (ws,p) <- ps ]
 
-addWit                          :: TypeX -> Witness -> TypeX
-addWit x wit
-  | null same                   = x{ witnesses = wit : witnesses x }
+addActiveWit                    :: TypeX -> Witness -> TypeX
+addActiveWit x wit
+  | null same                   = x{ activeWits = wit : activeWits x,
+                                     activeWitMap = addWit wit (activeWitMap x) }
   | otherwise                   = x
   where same                    = [ w | w <- witsByPNameX x (tcname $ proto wit), wtype w == wtype wit ]
 
-witsByPNameX x pn               = [ w | w <- witnesses x, tcname (proto w) == pn ]
+addClosedWit                    :: TypeX -> Witness -> TypeX
+addClosedWit x wit
+  | null same                   = x{ closedWits = wit : closedWits x,
+                                     closedWitMap = addWit wit (closedWitMap x) }
+  | otherwise                   = x
+  where same                    = [ w | w <- witsByPNameX x (tcname $ proto wit), wtype w == wtype wit ]
+
+addWit                          :: Witness -> WitMap -> WitMap
+addWit w                        = Map.insertWith (++) (tcname $ proto w) [w]
+
+witsByPNameX x pn               = Map.findWithDefault [] pn (activeWitMap x) ++
+                                  Map.findWithDefault [] pn (closedWitMap x)
 
 witsByPName                     :: Env -> QName -> [Witness]
 witsByPName env pn              = witsByPNameX (envX env) pn
 
 witsByTName                     :: Env -> QName -> [Witness]
-witsByTName env tn              = [ w | w <- witnesses (envX env), eqname (wtype w) ]
+witsByTName env tn              = [ w | w <- activeWits x, eqname (wtype w) ] ++
+                                  [ w | w <- closedWits x, eqname (wtype w) ]
   where eqname (TCon _ c)       = tcname c == tn
         eqname (TVar _ v)       = NoQ (tvname v) == tn
         eqname _                = False
+        x                       = envX env
 
 limitQuant                      :: TUni -> Env -> Env
 limitQuant (UV _ l _) env
   | n <= 0                      = env
-  | otherwise                   = modX env1 $ \x -> x{ witnesses = dropw (witnesses x) }
+  | otherwise                   = modX env1 $ \x -> let we = dropw (activeWits x)
+                                                    in x{ activeWits = we, activeWitMap = witMap we }
   where env1                    = setActiveNames (dropv n (activeNames env)) env{ qlevel = qlevel env - n }
         n                       = qlevel env - l
         vs                      = takev n (activeNames env)
