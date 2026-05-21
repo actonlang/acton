@@ -14,6 +14,8 @@
 {-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, FlexibleContexts #-}
 module Acton.Transform where
 
+import qualified Data.HashMap.Strict as M
+
 import Utils
 import Acton.Syntax
 import Acton.Names
@@ -35,24 +37,28 @@ termsubst s x                           = trans (finalize $ extsubst s env0) x
 class Transform a where
     trans                               :: TransEnv -> a -> a
 
+type TSubst                             = M.HashMap Name (Maybe Expr)
+
 data TransEnv                           = TransEnv {
                                             eqns     :: Equations,                  -- Top-level constraint solutions
-                                            trsubst  :: [(Name,Maybe Expr)],        -- Inlineable assignments in scope
+                                            trsubst  :: TSubst,                     -- Inlineable assignments and scope blockers
                                             witscope :: [(Name,Type,Expr)],         -- Preserved witness bindings in scope, for the purpose of duplicate removals
                                             final    :: Bool
                                           }
 
-env0                                    = TransEnv{ eqns = [], trsubst = [], witscope = [], final = False }
+env0                                    = TransEnv{ eqns = [], trsubst = M.empty, witscope = [], final = False }
 
-blockscope ns env                       = env{ trsubst = (ns `zip` repeat Nothing) ++ trsubst env }
+blockscope ns env                       = env{ trsubst = foldr (`M.insert` Nothing) (trsubst env) ns }
 
-extsubst ns env                         = env{ trsubst = [ (n,Just e) | (n,e) <- ns ] ++ trsubst env }
+extsubst ns env                         = env{ trsubst = foldr (\(n,e) -> M.insert n (Just e)) (trsubst env) ns }
 
-limsubst ns env                         = env{ trsubst = trsubst env `exclude` ns }
+limsubst ns env                         = env{ trsubst = foldr M.delete (trsubst env) ns }
 
-trfind n env                            = case lookup n (trsubst env) of
+trfind n env                            = case M.lookup n (trsubst env) of
                                             Just (Just e) -> Just e
                                             _ -> Nothing
+
+trfinds ns env                          = [ e | n <- ns, Just e <- [trfind n env] ]
 
 
 extscope n t e env                      = env{ witscope = (n,t,e) : witscope env }
@@ -182,7 +188,7 @@ instance Transform Expr where
       where fvs                         = free e
             bvs                         = bound p ++ bound k
             env1                        = limsubst bvs env
-            clash                       = bvs `intersect` free (rng $ restrict (trsubst env1) fvs)
+            clash                       = bvs `intersect` free (trfinds fvs env1)
             s                           = clash `zip` (yNames \\ (fvs++bvs))
             e1                          = Lambda l (prename s p) (krename s k) (erename s e) fx
     trans env (Yield l e)               = Yield l (trans env e)
