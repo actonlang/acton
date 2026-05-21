@@ -632,12 +632,8 @@ parentTEnv env us           = [ (n,i) | (_,c) <- us, let (_,te) = findCon env c,
 findAttr                    :: EnvF x -> TCon -> Name -> Maybe (Expr->Expr, TSchema, Maybe Deco)
 findAttr env tc n           = go (findAncestry env tc)
   where go []               = Nothing
-        go ((wp,c):cs)      = scan (reverse te)
+        go ((wp,c):cs)      = maybe (go cs) (attr wp) (findAttrInfoIn n te)
           where (_,te)      = findCon env c
-                scan []     = go cs
-                scan ((x,i):xs)
-                  | x == n  = attr wp i
-                  | otherwise = scan xs
         attr wp (NSig sc d _) = Just (wexpr wp, sc, Just d)
         attr wp (NDef sc d _) = Just (wexpr wp, sc, Just d)
         attr wp (NVar t)      = Just (wexpr wp, monotype t, Nothing)
@@ -647,14 +643,17 @@ findAttr env tc n           = go (findAncestry env tc)
 findAttrInfo'               :: EnvF x -> QName -> Name -> Maybe NameInfo
 findAttrInfo' env qn n      = go (([],tc) : us)
   where go []               = Nothing
-        go ((_,c):cs)       = scan (reverse te)
+        go ((_,c):cs)       = maybe (go cs) Just (findAttrInfoIn n te)
           where (_,_,te)    = findConName (tcname c) env
-                scan []     = go cs
-                scan ((x,i):xs)
-                  | x == n  = Just i
-                  | otherwise = scan xs
         (q,us,_)            = findConName qn env
         tc                  = TC qn [ tVar v | QBind v _ <- q ]
+
+findAttrInfoIn              :: Name -> TEnv -> Maybe NameInfo
+findAttrInfoIn n            = scan Nothing
+  where scan r []           = r
+        scan r ((x,i):xs)
+          | x == n          = scan (Just i) xs
+          | otherwise       = scan r xs
 
 attributes'                 :: (WPath -> NameInfo -> Name -> Maybe a) -> EnvF x -> QName -> [a]
 attributes' f env qn        = catMaybes [ f wp i n | n <- ns, let Just (wp,i) = lookup n aenv ]
