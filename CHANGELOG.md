@@ -25,10 +25,10 @@
 - Preserve each module's import context in cached module interfaces, so builds,
   `acton sig`, documentation, and completion can reuse cached interfaces without
   losing imported class and protocol information. [#2779]
-- Index active compiler environment names for fast unqualified lookups while
-  preserving the ordered name list for source-order sensitive paths, reducing
-  kind checking and type checking time in large modules with many class and
-  protocol names. [#2789]
+- Speed up compiler environment lookups and scans in large modules by indexing
+  active names, separating closed imports and finalized top-level names from
+  live local bindings, and deduplicating reserved names with a hash index while
+  preserving source-order semantics. [#2789, #2796, #2797]
 
 ### Packages & Distribution
 - Change x86_64 Linux builds from statically linked GNU libc to dynamically
@@ -50,6 +50,9 @@
   the current project. [#2767]
 
 ### Testing & CI
+- Add a dedicated type-checking benchmark driver that reports parse,
+  environment, kind-checking, and type-checking timings, with optional RTS
+  allocation and GC statistics for compiler performance work. [#2794]
 - Add a generated class-heavy type-checking fixture to exercise concurrent
   type-checking scheduler performance on large recursive class structures. [#2777]
 
@@ -3965,6 +3968,9 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#2784]: https://github.com/actonlang/acton/pull/2784
 [#2787]: https://github.com/actonlang/acton/pull/2787
 [#2789]: https://github.com/actonlang/acton/pull/2789
+[#2794]: https://github.com/actonlang/acton/pull/2794
+[#2796]: https://github.com/actonlang/acton/pull/2796
+[#2797]: https://github.com/actonlang/acton/pull/2797
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
