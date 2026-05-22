@@ -25,10 +25,18 @@
 - Preserve each module's import context in cached module interfaces, so builds,
   `acton sig`, documentation, and completion can reuse cached interfaces without
   losing imported class and protocol information. [#2779]
-- Speed up compiler environment lookups and scans in large modules by indexing
-  active names, separating closed imports and finalized top-level names from
-  live local bindings, and deduplicating reserved names with a hash index while
-  preserving source-order semantics. [#2789, #2796, #2797]
+- Speed up compiler environment lookups, scans, substitutions, and witness
+  resolution in large modules by indexing active names, term substitutions, and
+  type witnesses; separating closed imports and finalized top-level names from
+  live local bindings; and deduplicating reserved names with a hash index while
+  preserving source-order semantics. [#2789, #2796, #2797, #2799, #2800]
+- Fix quantified type-variable scope cleanup so leaving an inner quantifier only
+  drops witnesses associated with the removed variables, preserving unrelated
+  witnesses for later type checking. [#2802]
+
+### Runtime & Standard Library
+- Fix `list.index` on empty lists so it raises `KeyError` for a missing element
+  instead of rejecting the default stop position. [#2801]
 
 ### Packages & Distribution
 - Change x86_64 Linux builds from statically linked GNU libc to dynamically
@@ -43,6 +51,10 @@
   `diagnose` removed its stale `text <=2.0` dependency, so compiler builds can
   use the resolver's `text` package instead of pinning `text-2.0` just for
   diagnostics. [#2783]
+- Keep Acton-owned Zig build files for bundled dependencies in this repository
+  and overlay them during dependency extraction, making Zig build glue easier to
+  update while allowing dependencies without source changes to use upstream
+  source archives. [#2805]
 
 ### Documentation
 - Document when and how to use the Acton container image, including
@@ -3971,6 +3983,11 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#2794]: https://github.com/actonlang/acton/pull/2794
 [#2796]: https://github.com/actonlang/acton/pull/2796
 [#2797]: https://github.com/actonlang/acton/pull/2797
+[#2799]: https://github.com/actonlang/acton/pull/2799
+[#2800]: https://github.com/actonlang/acton/pull/2800
+[#2801]: https://github.com/actonlang/acton/pull/2801
+[#2802]: https://github.com/actonlang/acton/pull/2802
+[#2805]: https://github.com/actonlang/acton/pull/2805
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
