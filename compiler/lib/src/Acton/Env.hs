@@ -743,13 +743,13 @@ allProtos env               = allTypes isProto env
         isProto _           = False
 
 allConAttr                  :: EnvF x -> Name -> [TCon]
-allConAttr env n            = [ tc | tc <- allCons env, n `elem` allAttrs' env tc ]
+allConAttr env n            = [ tc | tc <- allCons env, hasAttr env tc n ]
 
 allConAttrUFree             :: EnvF x -> Name -> [TUni]
 allConAttrUFree env n       = concat [ ufree $ fst $ findAttr' env tc n | tc <- activeConAttr env n ]
 
 activeConAttr               :: EnvF x -> Name -> [TCon]
-activeConAttr env n         = [ tc | (x,i) <- activeNames env, isCon i, let tc = TC (localQName x) (wildargs i), n `elem` allAttrs' env tc ]
+activeConAttr env n         = [ tc | (x,i) <- activeNames env, isCon i, let tc = TC (localQName x) (wildargs i), hasAttr env tc n ]
   where isCon NClass{}      = True
         isCon NAct{}        = True
         isCon _             = False
@@ -758,7 +758,10 @@ activeConAttr env n         = [ tc | (x,i) <- activeNames env, isCon i, let tc =
           | otherwise       = NoQ x
 
 allPConAttr                 :: EnvF x -> Name -> [PCon]
-allPConAttr env n           = [ p | p <- allProtos env, n `elem` allAttrs' env p ]
+allPConAttr env n           = [ p | p <- allProtos env, hasAttr env p n ]
+
+hasAttr                     :: EnvF x -> TCon -> Name -> Bool
+hasAttr env tc n            = maybe False (const True) (findAttrInfo' env (tcname tc) n)
 
 
 -- TVar queries ------------------------------------------------------------------------------------------------------------------
