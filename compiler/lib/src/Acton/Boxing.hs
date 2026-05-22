@@ -14,6 +14,7 @@ import Utils
 import Debug.Trace
 import Control.Monad.State.Strict
 import Control.Monad.Except
+import qualified Data.HashMap.Strict as M
 
 doBoxing                           :: Acton.Env.Env0 -> Module -> IO Module
 doBoxing env m                     = do return m{mbody = ss}
@@ -35,17 +36,17 @@ newNames []                        = return []
 
 runBoxM ss                         = evalState ss 0
 
-data BoxX                          = BoxX { unboxedVarsX :: [(Name,Name)], isTopLevelX :: Bool, delayedUnboxX :: Bool, inClassX :: Bool }
+data BoxX                          = BoxX { unboxedVarsX :: M.HashMap Name Name, isTopLevelX :: Bool, delayedUnboxX :: Bool, inClassX :: Bool }
 
 type BoxEnv                        = EnvF BoxX
 
 boxEnv                             :: Env0 -> BoxEnv
-boxEnv env0                        = setX env0 (BoxX [] True False False)
+boxEnv env0                        = setX env0 (BoxX M.empty True False False)
 
 addUnboxedVars                     :: [(Name,Name)] -> BoxEnv -> BoxEnv
-addUnboxedVars ps env               = modX env $ \x -> x{unboxedVarsX = ps ++ unboxedVarsX x}
+addUnboxedVars ps env               = modX env $ \x -> x{unboxedVarsX = foldr (uncurry M.insert) (unboxedVarsX x) ps}
 
-unboxedVars                        :: BoxEnv -> [(Name,Name)]
+unboxedVars                        :: BoxEnv -> M.HashMap Name Name
 unboxedVars env                    = unboxedVarsX $ envX env
 
 setTopLevel b env                  = modX env $ \x -> x{isTopLevelX = b}
@@ -106,7 +107,7 @@ instance {-# OVERLAPS #-} Boxing ([Stmt]) where
       where te                        = envOf x
             env1                      = define te env
     boxing env (x@(Assign l [p@(PVar _ n (Just t))] e) : xs)
-       | isUnboxable t               = do case lookup n (unboxedVars env) of
+       | isUnboxable t               = do case M.lookup n (unboxedVars env) of
                                               Nothing -> do (ws1, e') <- boxing env e
                                                             un <- newName  (nstr n)
                                                             let env1 = define (envOf x) (addUnboxedVars [(n,un)] env)
@@ -152,7 +153,7 @@ instance Boxing a => Boxing (Maybe a) where
 instance Boxing Expr where
     boxing env e@(Var l (NoQ n))
        | isWitness n                = return ([n], e)
-       | otherwise                  = case lookup n ps of
+       | otherwise                  = case M.lookup n ps of
                                           Just un -> return ([], Box (typeOf env e) (eVar un))
                                           Nothing -> return ([], e)
        where ps                     = unboxedVars env
@@ -206,7 +207,7 @@ instance Boxing Expr where
        where e'                     = tApp (eQVar (unboxedPrim f)) ts
     boxing env c@(Call l e@(Var _ (NoQ n)) p KwdNil)
       | isUnboxable t               = do (ws1,p1) <- boxing env p
-                                         case lookup n (unboxedVars env) of
+                                         case M.lookup n (unboxedVars env) of
                                             Just un -> return (ws1, Box t (eCallP (eVar un) (ub env p1)))
                                             Nothing -> return (ws1, eCallP e p1)
        where t                      = typeOf env c
@@ -409,8 +410,8 @@ instance {-# OVERLAPS #-} Boxing [Decl] where
     boxing env (d@Def{} : ds)
    --   | hasNotImpl (dbody d)        = do (ws,ds1) <- boxing env ds
    --                                      return (ws, d : ds1)
-   --   | otherwise                   = case lookup (dname d) (unboxedVars env) of
-                                      = case lookup (dname d) (unboxedVars env) of
+   --   | otherwise                   = case M.lookup (dname d) (unboxedVars env) of
+                                      = case M.lookup (dname d) (unboxedVars env) of
                                         Just un -> do
                                            (ws1,d1) <- boxing (setDelayedUnbox True env) d{dname = un}
                                            let ds1 =  [mkWrapper d un]
@@ -458,7 +459,7 @@ instance Boxing Handler where
 instance Boxing PosPar where
     boxing env (PosPar n t e p)    = do (ws1, e1) <- boxing env e
                                         (ws2, p2) <- boxing env p
-                                        case lookup n (unboxedVars env) of
+                                        case M.lookup n (unboxedVars env) of
                                            Just un -> return (ws1++ws2, PosPar un t e1 p2)
                                            _ -> return (ws1++ws2, PosPar n t e1 p2)
     boxing env (PosSTAR n t)       = return ([],PosSTAR n t)
@@ -490,7 +491,7 @@ instance Boxing WithItem where
                                         return (ws1, WithItem e1 mbp)
 
 instance Boxing Pattern where
-    boxing env v@(PVar l n mbt)    = case lookup n ps of
+    boxing env v@(PVar l n mbt)    = case M.lookup n ps of
                                             Just un -> return ([], PVar l un mbt)
                                             Nothing -> return ([], v)
         where ps                   = unboxedVars env
