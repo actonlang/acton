@@ -810,6 +810,7 @@ targetType env e                    = typeOf env e                  -- Must be a
 dotCast env ent ts (Var _ x) n
   | GName m _ <- x, m == mPrim      = id
 dotCast env ent ts e n
+  | t == t1                         = id
   | gen_t == gen env t1             = id
   | otherwise                       = parens . (parens gen_t <>)
   where t0                          = typeOf env e
