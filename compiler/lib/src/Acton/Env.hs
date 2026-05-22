@@ -746,10 +746,13 @@ allConAttr                  :: EnvF x -> Name -> [TCon]
 allConAttr env n            = [ tc | tc <- allCons env, hasAttr env tc n ]
 
 allConAttrUFree             :: EnvF x -> Name -> [TUni]
-allConAttrUFree env n       = concat [ ufree $ fst $ findAttr' env tc n | tc <- activeConAttr env n ]
+allConAttrUFree env n       = concat [ ufree sc | tc <- activeCons env, Just (_,sc,_) <- [findAttr env tc n] ]
 
 activeConAttr               :: EnvF x -> Name -> [TCon]
-activeConAttr env n         = [ tc | (x,i) <- activeNames env, isCon i, let tc = TC (localQName x) (wildargs i), hasAttr env tc n ]
+activeConAttr env n         = [ tc | tc <- activeCons env, hasAttr env tc n ]
+
+activeCons                  :: EnvF x -> [TCon]
+activeCons env              = [ TC (localQName x) (wildargs i) | (x,i) <- activeNames env, isCon i ]
   where isCon NClass{}      = True
         isCon NAct{}        = True
         isCon _             = False
