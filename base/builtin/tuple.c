@@ -175,7 +175,7 @@ $WORD B_SliceableD_tupleD___getitem__ (B_SliceableD_tuple wit, B_tuple self, B_i
     int ix = fromB_int(n);
     int ix0 = ix < 0 ? size + ix : ix;
     if (ix0 < 0 || ix0 >= size) {
-        $RAISE((B_BaseException)$NEW(B_IndexError, toB_int(ix0), to$str("tuple.getitem: index outside tuple")));
+        $RAISE((B_BaseException)$NEW(B_IndexError, ix0, to$str("tuple.getitem: index outside tuple")));
     }
     return self->components[ix0];
 }

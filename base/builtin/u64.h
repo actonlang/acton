@@ -6,7 +6,7 @@ struct B_u64 {
 B_u64 toB_u64(uint64_t n);
 uint64_t fromB_u64(B_u64 n);
 
-B_u64 B_u64G_new(B_atom a, B_int base);
+uint64_t B_u64G_new(B_atom a, B_int base);
 
 #define u64_DIV(a,b)       ( {if (b==0) $RAISE((B_BaseException)$NEW(B_ZeroDivisionError,to$str("u64 truediv: division by zero"))); (double)a/(double)b;} )
 #define u64_FLOORDIV(a,b)  ( {if (b==0) $RAISE((B_BaseException)$NEW(B_ZeroDivisionError,to$str("u64 floordiv: division by zero")));  a/b;} )

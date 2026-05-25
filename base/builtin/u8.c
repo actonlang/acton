@@ -18,36 +18,36 @@
 uint8_t u8_pow(uint8_t a, uint8_t e) {
     if (e == 0) return 1;
     if (e == 1) return a;
-    if (e%2 == 0) return u8_pow(a*a,e/2);
-    return a * u8_pow(a*a,e/2);
+    if (e%2 == 0) return int_pow(a*a,e/2);
+    return a * int_pow(a*a,e/2);
 }
 
-// General methods ///////////////////////////////////////////////////////////////////////
+// General methods
+///////////////////////////////////////////////////////////////////////
 
-B_u8 B_u8G_new(B_atom a, B_int base) {
+uint8_t B_u8G_new(B_atom a, B_int base) {  // base is optional
     B_bigint b = B_bigintG_new(a, base);
-    long sz = b->val.size;
-    if (sz == 0) return toB_u8(0);
     unsigned long n = b->val.n[0];
-    if (sz != 1 || n > UCHAR_MAX) {
+    int sz = b->val.size;
+    if (labs(sz) > 1 || (sz==1 && n > 0x7ffffffffffffffful) || sz == -1 && n > 0x8000000000000000ul) {
         char errmsg[1024];
-        snprintf(errmsg, sizeof(errmsg), "u8(): value %s out of range for type u8",get_str(&b->val));
+        snprintf(errmsg, sizeof(errmsg), "int(): value %s out of range for type int",get_str(&b->val));
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
     }
-    return toB_u8(n);
+    return n*sz;
 }
-
+ 
 B_NoneType B_u8D___init__(B_u8 self, B_atom a, B_int base){
-    self->val = B_u8G_new(a,base)->val;
+    self->val = B_u8G_new(a,base);
     return B_None;
 }
 
 void B_u8D___serialize__(B_u8 n, $Serial$state state) {
-    $val_serialize(U8_ID,&n->val,state);
+    $val_serialize(INT_ID,&n->val,state);
 }
 
 B_u8 B_u8D___deserialize__(B_u8 n, $Serial$state state) {
-    return toB_u8((uint8_t)$val_deserialize(state));
+    return toB_u8((long)$val_deserialize(state));
 }
 
 B_bool B_u8D___bool__(B_u8 n) {
@@ -55,11 +55,11 @@ B_bool B_u8D___bool__(B_u8 n) {
 }
 
 B_str B_u8D___str__(B_u8 n) {
-    return $FORMAT("%u", n->val);
+    return $FORMAT("%lld", n->val);
 }
 
 B_str B_u8D___repr__(B_u8 n) {
-    return $FORMAT("%u", n->val);
+    return $FORMAT("%lld", n->val);
 }
 
 B_u8 toB_u8(uint8_t i) {
@@ -73,25 +73,25 @@ uint8_t fromB_u8(B_u8 w) {
     return w->val;
 }
 
-                  
+
 
 // B_IntegralD_u8 /////////////////////////////////////////////////////////////////////////
 
- 
+
 B_u8 B_IntegralD_u8D___add__(B_IntegralD_u8 wit,  B_u8 a, B_u8 b) {
-    return toB_u8(a->val + b->val);
-}  
+    return toB_u8(a->val + b->val); 
+}
 
 B_u8 B_IntegralD_u8D___zero__(B_IntegralD_u8 wit) {
     return toB_u8(0);
 }
 
 B_complex B_IntegralD_u8D___complex__(B_IntegralD_u8 wit, B_u8 a) {
-    return toB_complex((double)a->val);
+    return toB_complex((double)(a->val));
 }
 
 B_u8 B_IntegralD_u8D___fromatom__(B_IntegralD_u8 wit, B_atom a) {
-    return B_u8G_new(a,NULL);
+    return toB_u8(B_u8G_new(a,NULL));
 }
 
 B_u8 B_IntegralD_u8D___mul__(B_IntegralD_u8 wit,  B_u8 a, B_u8 b) {
@@ -99,13 +99,13 @@ B_u8 B_IntegralD_u8D___mul__(B_IntegralD_u8 wit,  B_u8 a, B_u8 b) {
 }  
   
 B_u8 B_IntegralD_u8D___pow__(B_IntegralD_u8 wit,  B_u8 a, B_u8 b) {
-    return toB_u8(u8_pow(a->val,b->val));
+    uint8_t aval = a->val;
+    uint8_t bval = b->val;
+    return toB_u8(int_pow(aval,bval));
 }
 
 B_u8 B_IntegralD_u8D___neg__(B_IntegralD_u8 wit,  B_u8 a) {
-    if (a->val > 0L)
-        $RAISE((B_BaseException)$NEW(B_ValueError,to$str("u8.neg: cannot negate non-zero value in u8")));
-    return a;
+    return toB_u8(-a->val);
 }
 
 B_u8 B_IntegralD_u8D___pos__(B_IntegralD_u8 wit,  B_u8 a) {
@@ -113,23 +113,23 @@ B_u8 B_IntegralD_u8D___pos__(B_IntegralD_u8 wit,  B_u8 a) {
 }
 
 $WORD B_IntegralD_u8D_real(B_IntegralD_u8 wit, B_u8 a, B_Real wit2) {
-    return wit2->$class->__fromatom__(wit2,(B_atom)a);
+    return wit2->$class->__fromatom__(wit2,(B_atom)(a));
 }
 
 $WORD B_IntegralD_u8D_imag(B_IntegralD_u8 wit, B_u8 a, B_Real wit2) {
-    return wit2->$class->__fromatom__(wit2,(B_atom)toB_u8(0L));
+    return wit2->$class->__fromatom__(wit2,(B_atom)toB_u8(0LL));
 }
 
 $WORD B_IntegralD_u8D___abs__(B_IntegralD_u8 wit, B_u8 a, B_Real wit2) {
-    return wit2->$class->__fromatom__(wit2,(B_atom)a);
+    return wit2->$class->__fromatom__(wit2,(B_atom)toB_u8(a->val));
 }
 
 B_u8 B_IntegralD_u8D_conjugate(B_IntegralD_u8 wit,  B_u8 a) {
     return a;
 }
 
-B_float B_IntegralD_u8D___float__ (B_IntegralD_u8 wit, B_u8 n) {
-    return to$float((double)n->val);
+double B_IntegralD_u8D___float__ (B_IntegralD_u8 wit, B_u8 n) {
+    return (double)n->val;
 }
 
 $WORD B_IntegralD_u8D___trunc__ (B_IntegralD_u8 wit, B_u8 n, B_Integral wit2) {
@@ -146,14 +146,14 @@ $WORD B_IntegralD_u8D___ceil__ (B_IntegralD_u8 wit, B_u8 n, B_Integral wit2) {
   
 B_u8 B_IntegralD_u8D___round__ (B_IntegralD_u8 wit, B_u8 n, B_int p) {
     uint8_t nval = n->val;
-    long pval = p==NULL ? 0 : fromB_int(p);
+    int8_t pval = p==NULL ? 0 : fromB_int(p);
     if (pval>=0)
         return n;
-    uint8_t p10 = u8_pow(10,-pval);
+    uint8_t p10 = int_pow(10,-pval);
     uint8_t res = nval/p10;
     if (nval%p10 * 2 > p10)
         res++; 
-    return toB_u8 (res * p10);
+    return toB_u8(res * p10);
 }
   
 $WORD B_IntegralD_u8D_numerator (B_IntegralD_u8 wit, B_u8 n, B_Integral wit2) {
@@ -161,20 +161,20 @@ $WORD B_IntegralD_u8D_numerator (B_IntegralD_u8 wit, B_u8 n, B_Integral wit2) {
 }
   
 $WORD B_IntegralD_u8D_denominator (B_IntegralD_u8 wit, B_u8 n, B_Integral wit2) {
-    return wit2->$class->__fromatom__(wit2,(B_atom)toB_u8(1L));
+    return wit2->$class->__fromatom__(wit2,(B_atom)toB_u8(1LL));
 }
   
-B_int B_IntegralD_u8D___int__ (B_IntegralD_u8 wit, B_u8 n) {
-    return B_intG_new((B_atom)n,NULL);
+int64_t B_IntegralD_u8D___int__ (B_IntegralD_u8 wit, B_u8 n) {
+    return n->val;
 }
 
-B_int B_IntegralD_u8D___index__(B_IntegralD_u8 wit, B_u8 n) {
-    return B_intG_new((B_atom)n,NULL);
+int64_t B_IntegralD_u8D___index__(B_IntegralD_u8 wit, B_u8 n) {
+    return n->val;
 }
 
 B_tuple B_IntegralD_u8D___divmod__(B_IntegralD_u8 wit, B_u8 a, B_u8 b) {
-    int n = a->val;
-    int d = b->val;
+    uint8_t n = a->val;
+    uint8_t d = b->val;
     return $NEWTUPLE(2, toB_u8(n/d), toB_u8(n%d));
 }
 
@@ -188,12 +188,12 @@ B_u8 B_IntegralD_u8D___mod__(B_IntegralD_u8 wit, B_u8 a, B_u8 b) {
     return toB_u8(a->val % b->val);
 }
 
-B_u8 B_IntegralD_u8D___lshift__(B_IntegralD_u8 wit,  B_u8 a, B_int b) {
-    return toB_u8(a->val << fromB_int(b));
+B_u8 B_IntegralD_u8D___lshift__(B_IntegralD_u8 wit,  B_u8 a, int64_t b) {
+    return toB_u8(a->val << b);
 }
 
-B_u8 B_IntegralD_u8D___rshift__(B_IntegralD_u8 wit,  B_u8 a, B_int b) {
-    return toB_u8(a->val >> fromB_int(b));
+B_u8 B_IntegralD_u8D___rshift__(B_IntegralD_u8 wit,  B_u8 a, int64_t b) {
+    return toB_u8(a->val >> b);
 }
  
 B_u8 B_IntegralD_u8D___invert__(B_IntegralD_u8 wit,  B_u8 a) {
@@ -228,7 +228,7 @@ B_u8 B_MinusD_IntegralD_u8D___sub__(B_MinusD_IntegralD_u8 wit,  B_u8 a, B_u8 b) 
 B_float B_DivD_u8D___truediv__ (B_DivD_u8 wit, B_u8 a, B_u8 b) {
     if (b->val == 0)
         $RAISE((B_BaseException)$NEW(B_ZeroDivisionError, to$str("division by zero")));
-    return to$float((double)a->val/(double)b->val);
+    return toB_float((double)a->val/(double)b->val);
 }
 
 // B_OrdD_u8  ////////////////////////////////////////////////////////////////////////////////////////
@@ -268,6 +268,6 @@ B_bool B_HashableD_u8D___ne__(B_HashableD_u8 wit, B_u8 a, B_u8 b) {
 }
 
 B_NoneType B_HashableD_u8D_hash(B_HashableD_u8 wit, B_u8 a, B_hasher h) {
-    zig_hash_wyhash_update(h->_hasher, to$bytesD_len((char *)&(a->val),1));
+    zig_hash_wyhash_update(h->_hasher,to$bytesD_len((char *)&(a->val),8));
     return B_None;
 }

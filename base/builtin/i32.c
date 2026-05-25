@@ -24,7 +24,7 @@ int i32_pow(int a, int e) {
 
 // General methods ///////////////////////////////////////////////////////////////////////
 
-B_i32 B_i32G_new(B_atom a, B_int base) {
+int32_t B_i32G_new(B_atom a, B_int base) {
     B_bigint b = B_bigintG_new(a, base);
     unsigned long n = b->val.n[0];
     long sz = b->val.size;
@@ -33,12 +33,12 @@ B_i32 B_i32G_new(B_atom a, B_int base) {
         snprintf(errmsg, sizeof(errmsg), "i32(): value %s out of range for type i32",get_str(&b->val));
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
     }
-    return toB_i32((int)(n*sz));
+    return (int32_t)(n*sz);
 }
 
 
 B_NoneType B_i32D___init__(B_i32 self, B_atom a, B_int base){
-    self->val = B_i32G_new(a,base)->val;
+    self->val = B_i32G_new(a,base);
     return B_None;
 }
 
@@ -47,7 +47,7 @@ void B_i32D___serialize__(B_i32 n, $Serial$state state) {
 }
 
 B_i32 B_i32D___deserialize__(B_i32 n, $Serial$state state) {
-    return toB_i32((int)(uintptr_t)$val_deserialize(state));
+    return toB_i32((int32_t)(uintptr_t)$val_deserialize(state));
 }
 
 B_bool B_i32D___bool__(B_i32 n) {
@@ -62,14 +62,14 @@ B_str B_i32D___repr__(B_i32 n) {
     return $FORMAT("%d", n->val);
 }
 
-B_i32 toB_i32(int i) {
+B_i32 toB_i32(int32_t i) {
     B_i32 res = acton_malloc(sizeof(struct B_i32));
     res->$class = &B_i32G_methods;
     res->val = i;
     return res;
 }
 
-int fromB_i32(B_i32 w) {
+int32_t fromB_i32(B_i32 w) {
     return w->val;
 }
 
@@ -79,7 +79,7 @@ int fromB_i32(B_i32 w) {
 
  
 B_i32 B_IntegralD_i32D___add__(B_IntegralD_i32 wit,  B_i32 a, B_i32 b) {
-    return toB_i32(a->val + b->val);
+    return toB_i32(a->val+b->val);
 }  
 
 B_i32 B_IntegralD_i32D___zero__(B_IntegralD_i32 wit) {
@@ -87,11 +87,11 @@ B_i32 B_IntegralD_i32D___zero__(B_IntegralD_i32 wit) {
 }
 
 B_complex B_IntegralD_i32D___complex__(B_IntegralD_i32 wit, B_i32 a) {
-    return toB_complex((double)a->val);
+    return toB_complex((double)(a->val));
 }
 
 B_i32 B_IntegralD_i32D___fromatom__(B_IntegralD_i32 wit, B_atom a) {
-    return B_i32G_new(a,NULL);
+    return toB_i32(B_i32G_new(a,NULL));
 }
 
 B_i32 B_IntegralD_i32D___mul__(B_IntegralD_i32 wit,  B_i32 a, B_i32 b) {
@@ -99,11 +99,14 @@ B_i32 B_IntegralD_i32D___mul__(B_IntegralD_i32 wit,  B_i32 a, B_i32 b) {
 }  
   
 B_i32 B_IntegralD_i32D___pow__(B_IntegralD_i32 wit,  B_i32 a, B_i32 b) {
-    if ( b->val < 0) {
-        // raise VALUEERROR;
-        return NULL;
+    int32_t aval = a->val;
+    int32_t bval = b->val;
+    if ( bval < 0) {
+        char errmsg[1024];
+        snprintf(errmsg, sizeof(errmsg), "int.__pow__: negative exponent %d ",bval);
+        $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
     }
-    return toB_i32(i32_pow(a->val,b->val));
+    return toB_i32(i32_pow(aval,bval));
 }
 
 B_i32 B_IntegralD_i32D___neg__(B_IntegralD_i32 wit,  B_i32 a) {
@@ -115,23 +118,23 @@ B_i32 B_IntegralD_i32D___pos__(B_IntegralD_i32 wit,  B_i32 a) {
 }
 
 $WORD B_IntegralD_i32D_real(B_IntegralD_i32 wit, B_i32 a, B_Real wit2) {
-    return wit2->$class->__fromatom__(wit2,(B_atom)a);
+    return wit2->$class->__fromatom__(wit2,(B_atom)(a));
 }
 
 $WORD B_IntegralD_i32D_imag(B_IntegralD_i32 wit, B_i32 a, B_Real wit2) {
-    return wit2->$class->__fromatom__(wit2,(B_atom)toB_i32(0L));
+    return wit2->$class->__fromatom__(wit2,(B_atom)toB_i32(0));
 }
 
 $WORD B_IntegralD_i32D___abs__(B_IntegralD_i32 wit, B_i32 a, B_Real wit2) {
-    return wit2->$class->__fromatom__(wit2,(B_atom)toB_i32(labs(a->val)));
+    return wit2->$class->__fromatom__(wit2,(B_atom)toB_i32(abs(a->val)));
 }
 
 B_i32 B_IntegralD_i32D_conjugate(B_IntegralD_i32 wit,  B_i32 a) {
     return a;
 }
 
-B_float B_IntegralD_i32D___float__ (B_IntegralD_i32 wit, B_i32 n) {
-    return to$float((double)n->val);
+double B_IntegralD_i32D___float__ (B_IntegralD_i32 wit, B_i32 n) {
+    return (double)n->val;
 }
 
 $WORD B_IntegralD_i32D___trunc__ (B_IntegralD_i32 wit, B_i32 n, B_Integral wit2) {
@@ -147,7 +150,7 @@ $WORD B_IntegralD_i32D___ceil__ (B_IntegralD_i32 wit, B_i32 n, B_Integral wit2) 
 }
   
 B_i32 B_IntegralD_i32D___round__ (B_IntegralD_i32 wit, B_i32 n, B_int p) {
-    int nval = n->val;
+    int32_t nval = n->val;
     if (nval<0)
         return toB_i32(-B_IntegralD_i32D___round__(wit,toB_i32(-nval),p)->val);
     int pval = p==NULL ? 0 : fromB_int(p);
@@ -157,7 +160,7 @@ B_i32 B_IntegralD_i32D___round__ (B_IntegralD_i32 wit, B_i32 n, B_int p) {
     int res = nval/p10;
     if (nval%p10 * 2 > p10)
         res++; 
-    return toB_i32 (res * p10);
+    return toB_i32(res * p10);
 }
   
 $WORD B_IntegralD_i32D_numerator (B_IntegralD_i32 wit, B_i32 n, B_Integral wit2) {
@@ -165,20 +168,20 @@ $WORD B_IntegralD_i32D_numerator (B_IntegralD_i32 wit, B_i32 n, B_Integral wit2)
 }
   
 $WORD B_IntegralD_i32D_denominator (B_IntegralD_i32 wit, B_i32 n, B_Integral wit2) {
-    return wit2->$class->__fromatom__(wit2,(B_atom)toB_i32(1L));
+    return wit2->$class->__fromatom__(wit2,(B_atom)toB_i32(1));
 }
   
-B_int B_IntegralD_i32D___int__ (B_IntegralD_i32 wit, B_i32 n) {
-    return B_intG_new((B_atom)n,NULL);
+int64_t B_IntegralD_i32D___int__ (B_IntegralD_i32 wit, B_i32 n) {
+    return (int64_t)n->val;
 }
 
-B_int B_IntegralD_i32D___index__(B_IntegralD_i32 wit, B_i32 n) {
-    return B_intG_new((B_atom)n,NULL);
+int64_t B_IntegralD_i32D___index__(B_IntegralD_i32 wit, B_i32 n) {
+    return  (int64_t)n->val;
 }
 
 B_tuple B_IntegralD_i32D___divmod__(B_IntegralD_i32 wit, B_i32 a, B_i32 b) {
-    int n = a->val;
-    int d = b->val;
+    int32_t n = a->val;
+    int32_t d = b->val;
     return $NEWTUPLE(2, toB_i32(n/d), toB_i32(n%d));
 }
 
@@ -192,16 +195,16 @@ B_i32 B_IntegralD_i32D___mod__(B_IntegralD_i32 wit, B_i32 a, B_i32 b) {
     return toB_i32(a->val % b->val);
 }
 
-B_i32 B_IntegralD_i32D___lshift__(B_IntegralD_i32 wit,  B_i32 a, B_int b) {
-    return toB_i32(a->val << fromB_int(b));
+B_i32 B_IntegralD_i32D___lshift__(B_IntegralD_i32 wit,  B_i32 a, int64_t b) {
+    return toB_i32(a->val << b);
 }
 
-B_i32 B_IntegralD_i32D___rshift__(B_IntegralD_i32 wit,  B_i32 a, B_int b) {
-    return toB_i32(a->val >> fromB_int(b));
+B_i32 B_IntegralD_i32D___rshift__(B_IntegralD_i32 wit,  B_i32 a, int64_t b) {
+    return toB_i32(a->val >> b);
 }
  
 B_i32 B_IntegralD_i32D___invert__(B_IntegralD_i32 wit,  B_i32 a) {
-    return toB_i32(~a->val);
+    return toB_i32( ~a->val);
 }
 
 
@@ -232,7 +235,7 @@ B_i32 B_MinusD_IntegralD_i32D___sub__(B_MinusD_IntegralD_i32 wit,  B_i32 a, B_i3
 B_float B_DivD_i32D___truediv__ (B_DivD_i32 wit, B_i32 a, B_i32 b) {
     if (b->val == 0)
         $RAISE((B_BaseException)$NEW(B_ZeroDivisionError, to$str("division by zero")));
-    return to$float((double)a->val/(double)b->val);
+    return toB_float((double)a->val/(double)b->val);
 }
 
 // B_OrdD_i32  ////////////////////////////////////////////////////////////////////////////////////////
@@ -272,6 +275,6 @@ B_bool B_HashableD_i32D___ne__(B_HashableD_i32 wit, B_i32 a, B_i32 b) {
 }
 
 B_NoneType B_HashableD_i32D_hash(B_HashableD_i32 wit, B_i32 a, B_hasher h) {
-    zig_hash_wyhash_update(h->_hasher, to$bytesD_len((char *)&(a->val), 4));
+    zig_hash_wyhash_update(h->_hasher, to$bytesD_len((char *)&(a), 4));
     return B_None;
 }

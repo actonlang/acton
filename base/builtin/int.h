@@ -8,7 +8,7 @@ B_int toB_int(int64_t n);
 B_int to$int(int64_t n);
 int64_t fromB_int(B_int n);
 
-B_int B_intG_new(B_atom a, B_int base);
+int64_t B_intG_new(B_atom a, B_int base);
 
 // only called with e>=0.
 long int_pow(long a, long e); // used also for ndarrays
