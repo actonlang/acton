@@ -201,8 +201,8 @@ else
 endif
 
 # /deps --------------------------------------------------
-# Downloaded dependencies use Acton fork source tarballs. Acton-owned Zig build
-# glue lives under deps/<name> and is overlaid into dist/deps.
+# Downloaded dependencies use source tarballs. Acton-owned Zig build glue lives
+# under deps/<name> and is overlaid into dist/deps.
 DEPS += dist/deps/mbedtls
 DEPS += dist/deps/libargp
 DEPS += dist/deps/libbsdnt
@@ -253,11 +253,11 @@ dist/deps/libbsdnt: deps-download/$(LIBBSDNT_REF).tar.gz $(LIBBSDNT_BUILD_ZIG)
 	touch "$(TD)/$@"
 
 # /deps/libgc --------------------------------------------
-LIBGC_REF=5ef334ab8f9ef9e23d6b9c99fbd2b621bd52789b
+LIBGC_REF=0a23b211b558137de7ee654c5527a54113142517
 LIBGC_BUILD_ZIG=deps/libgc/build.zig
 deps-download/$(LIBGC_REF).tar.gz:
 	mkdir -p deps-download
-	$(CURL) -o $@ https://github.com/actonlang/bdwgc/archive/$(LIBGC_REF).tar.gz
+	$(CURL) -o $@ https://github.com/bdwgc/bdwgc/archive/$(LIBGC_REF).tar.gz
 
 dist/deps/libgc: deps-download/$(LIBGC_REF).tar.gz $(LIBGC_BUILD_ZIG)
 	rm -rf "$@"
@@ -282,11 +282,11 @@ dist/deps/mbedtls: deps-download/$(LIBMBEDTLS_REF).tar.gz $(LIBMBEDTLS_BUILD_ZIG
 	touch "$(TD)/$@"
 
 # /deps/libprotobuf_c --------------------------------------------
-LIBPROTOBUF_C_REF=faa19a6f6ca393fea01077fb37011a949bc6a3ee
+LIBPROTOBUF_C_REF=abc67a11c6db271bedbb9f58be85d6f4e2ea8389
 LIBPROTOBUF_C_BUILD_ZIG=deps/libprotobuf_c/build.zig
 deps-download/$(LIBPROTOBUF_C_REF).tar.gz:
 	mkdir -p deps-download
-	$(CURL) -o $@ https://github.com/actonlang/protobuf-c/archive/$(LIBPROTOBUF_C_REF).tar.gz
+	$(CURL) -o $@ https://github.com/protobuf-c/protobuf-c/archive/$(LIBPROTOBUF_C_REF).tar.gz
 
 dist/deps/libprotobuf_c: deps-download/$(LIBPROTOBUF_C_REF).tar.gz $(LIBPROTOBUF_C_BUILD_ZIG)
 	rm -rf "$@"
@@ -312,11 +312,11 @@ dist/deps/tlsuv: deps-download/$(TLSUV_REF).tar.gz dist/deps/libuv dist/deps/mbe
 	touch "$(TD)/$@"
 
 # /deps/libutf8proc --------------------------------------
-LIBUTF8PROC_REF=a78677e855f0a282e79da6164db4ce1cf0789237
+LIBUTF8PROC_REF=1cb28a66ca79a0845e99433fd1056257456cef8b
 LIBUTF8PROC_BUILD_ZIG=deps/libutf8proc/build.zig
 deps-download/$(LIBUTF8PROC_REF).tar.gz:
 	mkdir -p deps-download
-	$(CURL) -o $@ https://github.com/actonlang/utf8proc/archive/$(LIBUTF8PROC_REF).tar.gz
+	$(CURL) -o $@ https://github.com/JuliaStrings/utf8proc/archive/$(LIBUTF8PROC_REF).tar.gz
 
 dist/deps/libutf8proc: deps-download/$(LIBUTF8PROC_REF).tar.gz $(LIBUTF8PROC_BUILD_ZIG)
 	rm -rf "$@"
@@ -360,11 +360,11 @@ dist/deps/libxml2: deps-download/$(LIBXML2_REF).tar.gz $(LIBXML2_BUILD_ZIG)
 	touch "$(TD)/$@"
 
 # /deps/pcre2 --------------------------------------------
-LIBPCRE2_REF=b82656c5b28658ce1d75489a1b67ba0de5f531ec
+LIBPCRE2_REF=e4ccef3034c870342f2d37c928e98bc8c69cd340
 LIBPCRE2_BUILD_ZIG=deps/pcre2/build.zig
 deps-download/$(LIBPCRE2_REF).tar.gz:
 	mkdir -p deps-download
-	$(CURL) -o $@ https://github.com/actonlang/pcre2/archive/$(LIBPCRE2_REF).tar.gz
+	$(CURL) -o $@ https://github.com/PCRE2Project/pcre2/archive/$(LIBPCRE2_REF).tar.gz
 
 dist/deps/pcre2: deps-download/$(LIBPCRE2_REF).tar.gz $(LIBPCRE2_BUILD_ZIG)
 	rm -rf "$@"
@@ -374,11 +374,11 @@ dist/deps/pcre2: deps-download/$(LIBPCRE2_REF).tar.gz $(LIBPCRE2_BUILD_ZIG)
 	touch "$(TD)/$@"
 
 # /deps/libsnappy_c --------------------------------------------
-LIBSNAPPY_C_REF=9d77a3136e271b709eeac4b1db2d27c281b330b2
+LIBSNAPPY_C_REF=dc05e026488865bc69313a68bcc03ef2e4ea8e83
 LIBSNAPPY_C_BUILD_ZIG=deps/libsnappy_c/build.zig
 deps-download/$(LIBSNAPPY_C_REF).tar.gz:
 	mkdir -p deps-download
-	$(CURL) -o $@ https://github.com/actonlang/snappy/archive/$(LIBSNAPPY_C_REF).tar.gz
+	$(CURL) -o $@ https://github.com/google/snappy/archive/$(LIBSNAPPY_C_REF).tar.gz
 
 dist/deps/libsnappy_c: deps-download/$(LIBSNAPPY_C_REF).tar.gz $(LIBSNAPPY_C_BUILD_ZIG)
 	rm -rf "$@"
