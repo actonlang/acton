@@ -57,7 +57,7 @@ pub fn build(b: *std.Build) void {
 
     // Dependencies from Build.act
 
-    var c_files = ArrayList([]const u8).empty;
+    var c_files = ArrayList(std.Build.LazyPath).empty;
     var root_c_files = ArrayList(*FilePath).empty;
     defer c_files.deinit(b.allocator);
     defer root_c_files.deinit(b.allocator);
@@ -79,11 +79,7 @@ pub fn build(b: *std.Build) void {
                 std.posix.exit(1);
             },
         };
-        const rel = b.allocator.dupe(u8, item) catch |err| {
-            std.log.err("Error allocating selected C source path: {}", .{err});
-            std.posix.exit(1);
-        };
-        c_files.append(b.allocator, rel) catch |err| {
+        c_files.append(b.allocator, b.path(item)) catch |err| {
             std.log.err("Error appending selected C source path: {}", .{err});
             std.posix.exit(1);
         };
@@ -133,26 +129,17 @@ pub fn build(b: *std.Build) void {
     }
 
     if (c_files.items.len == 0) {
-        const dummy_rel = "out/types/acton_empty.c";
-        const dummy_abs = joinPath(b.allocator, buildroot_path, dummy_rel);
         b.build_root.handle.makePath("out/types") catch |err| {
             std.log.err("Error creating out/types directory: {}", .{err});
             std.posix.exit(1);
         };
-        const dummy_file = b.build_root.handle.createFile(dummy_rel, .{}) catch |err| {
-            std.log.err("Error creating dummy C file: {}", .{err});
-            std.posix.exit(1);
-        };
-        dummy_file.writeAll("int acton_empty(void) { return 0; }\n") catch |err| {
-            std.log.err("Error writing dummy C file: {}", .{err});
-            std.posix.exit(1);
-        };
-        dummy_file.close();
-        c_files.append(b.allocator, dummy_rel) catch |err| {
+        const write_files = b.addWriteFiles();
+        const dummy_file = write_files.add("acton_empty.c", "int acton_empty(void) { return 0; }\n");
+        c_files.append(b.allocator, dummy_file) catch |err| {
             std.log.err("Error appending dummy C file path: {}", .{err});
             std.posix.exit(1);
         };
-        std.log.info("No generated C sources; added dummy {s}", .{dummy_abs});
+        std.log.info("No generated C sources; using generated dummy C source for {s}", .{buildroot_path});
     }
 
     const libActonProject = b.addLibrary(.{
@@ -205,7 +192,7 @@ pub fn build(b: *std.Build) void {
     }) catch unreachable;
 
     for (c_files.items) |entry| {
-        libActonProject.addCSourceFile(.{ .file = b.path(entry), .flags = flags.items });
+        libActonProject.addCSourceFile(.{ .file = entry, .flags = flags.items });
     }
 
     libActonProject.addIncludePath(b.path("."));

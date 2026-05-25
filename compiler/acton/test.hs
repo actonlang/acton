@@ -784,8 +784,11 @@ actonProjTests =
         mapM_ wipe [proj, depU]
         testBuild "" ExitSuccess False proj
         let depObj = depU </> "out/types/acton_empty.c"
-        exists <- doesFileExist depObj
-        assertBool "dependency output should be generated even if unused (dummy allowed)" exists
+            rootBin = proj </> "out/bin/main"
+        binExists <- doesFileExist rootBin
+        dummyExists <- doesFileExist depObj
+        assertBool "project binary should be produced even with an unused dependency" binExists
+        assertBool "unused dependency dummy source should not be materialized in out/types" (not dummyExists)
   , testCase "dep overrides propagate to build.zig.zon" $ do
         let proj = "../../test/compiler/dep_override"
             depA = proj </> "deps/dep_a"
