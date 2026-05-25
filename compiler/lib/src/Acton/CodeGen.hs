@@ -15,6 +15,7 @@
 module Acton.CodeGen where
 
 import qualified Data.Set
+import qualified Data.HashSet as HashSet
 import qualified Data.List
 import qualified Acton.Env
 import Utils
@@ -87,30 +88,38 @@ staticWitnessName _                 = (Nothing, [])
 
 -- Environment --------------------------------------------------------------------------------------
 
-genEnv env0                         = setX env0 GenX{ globalX = [], localX = [], retX = tNone, volVarsX = [], lineEmitX = Nothing }
+genEnv env0                         = setX env0 GenX{ globalX = HashSet.empty,
+                                                      localX = HashSet.empty,
+                                                      retX = tNone, volVarsX = [], lineEmitX = Nothing }
 
 type GenEnv                         = EnvF GenX
 
-data GenX                           = GenX { globalX :: [Name]
-                                           , localX :: [Name]
+data GenX                           = GenX { globalX :: HashSet.HashSet Name
+                                           , localX :: HashSet.HashSet Name
                                            , retX :: Type
                                            , volVarsX :: [Name]
                                            , lineEmitX :: Maybe (SrcLoc -> Doc)
                                            }
 
-gdefine te env                      = modX env1 $ \x -> x{ globalX = dom te ++ globalX x }
+gdefine te env                      = modX env1 $ \x -> x{ globalX = foldr HashSet.insert (globalX x) (dom te) }
   where env1                        = define te env
 
-ldefine te env                      = modX env1 $ \x -> x{ localX = dom te ++ localX x }
+ldefine te env                      = modX env1 $ \x -> x{ localX = foldr HashSet.insert (localX x) (dom te) }
   where env1                        = define te env
 
 classdefine stmts env               = gdefine [ (n,i) | (n,i@NClass{}) <- envOf stmts ] env
 
 setRet t env                        = modX env $ \x -> x{ retX = t }
 
-global env                          = globalX (envX env) \\ localX (envX env)
+isGlobal env n                      = n `HashSet.member` globalX x && not (n `HashSet.member` localX x)
+  where x                           = envX env
 
-defined env                         = globalX (envX env) ++ localX (envX env)
+isDefined env n                     = n `HashSet.member` globalX x || n `HashSet.member` localX x
+  where x                           = envX env
+
+excludeDefined env te               = filter (not . isDefined env . fst) te
+
+filterDefined env ns                = filter (isDefined env) ns
 
 ret env                             = retX $ envX env
 
@@ -357,11 +366,10 @@ declModule env []                   = empty
 declModule env (Decl _ ds : ss)     = vcat [ declDecl env1 d | d <- ds ] $+$
                                       declModule env1 ss
   where env1                        = gdefine (envOf ds) env
-        te                          = envOf ds
 declModule env (Signature{} : ss)   = declModule env ss
 declModule env (s : ss)             = vcat [ genTypeDecl env n t <+> genTopName env n <> semi | (n,NVar t) <- te ] $+$
                                       declModule env1 ss
-  where te                          = envOf s `exclude` defined env
+  where te                          = excludeDefined env (envOf s)
         env1                        = gdefine te env
 
 
@@ -459,7 +467,7 @@ initGlobals env (Signature{} : ss)  = initGlobals env ss
 initGlobals env (s : ss)            = genStmt1 env s $+$
                                       vcat [ genTopName env n <+> equals <+> gen env n <> semi | (n,_) <- te ] $+$
                                       initGlobals env1 ss
-  where te                          = envOf s `exclude` defined env
+  where te                          = excludeDefined env (envOf s)
         env1                        = gdefine te env
 
 initClassBase env c q as hasCDef    = methodtable env c <> dot <> gen env gcinfoKW <+> equals <+> doubleQuotes (genTopName env c) <> semi $+$
@@ -486,7 +494,7 @@ initClass env c (s : ss) b
   | otherwise                       = genStmt1 env s $+$
                                       vcat [ genTopName env c <> dot <> gen env n <+> equals <+> gen env n <> semi | (n,_) <- te ] $+$
                                       initClass env1 c ss b
-  where te                          = envOf s `exclude` defined env
+  where te                          = excludeDefined env (envOf s)
         env1                        = ldefine te env
 
 
@@ -524,7 +532,7 @@ instance Gen Name where
 genTopName env n                    = gen env (gname env n)
 
 genQName env (NoQ n)
-  | n `elem` global env             = genTopName env n
+  | isGlobal env n                  = genTopName env n
   | isAlias n env                   = genTopName env n
 genQName env n                      = gen env n
 
@@ -618,7 +626,7 @@ word                                = text "$WORD"
 
 genSuite :: GenEnv -> Suite -> (Doc,[Name])
 genSuite env []                     = (empty,[])
-genSuite env (s:ss)                 = ((emit (sloc s) $+$ c) $+$ cs, vs' ++ (vs `intersect` defined env))
+genSuite env (s:ss)                 = ((emit (sloc s) $+$ c) $+$ cs, vs' ++ filterDefined env vs)
     where (cs,vs)                   = genSuite (ldefine (envOf s) env) ss
           (c,vs')                   = genStmt (setVolVars vs env) s
           emit                      = getLineEmit env
@@ -629,7 +637,7 @@ genTypeDecl env n t                 =  (if isVolVar n env then text "volatile" e
 
 genStmt env (Decl _ ds)             = (empty, [])
 genStmt env (Assign _ [PVar _ n (Just t)] e)
-  | n `notElem` defined env         = (genTypeDecl env n t <+> gen env n <+> equals <+> rhs <> semi, [])
+  | not (isDefined env n)           = (genTypeDecl env n t <+> gen env n <+> equals <+> rhs <> semi, [])
   where rhs                         = if isWitness n
                                       then case staticWitnessName e of
                                            (Just nm,as) ->
@@ -637,7 +645,7 @@ genStmt env (Assign _ [PVar _ n (Just t)] e)
                                            _  -> genExp env t e
                                       else genExp env t e
 genStmt env s                       = (vcat [ genTypeDecl env n t <+> gen env n <> semi | (n,NVar t) <- te ] $+$ s', vs)
-  where te                          = envOf s `exclude` defined env
+  where te                          = excludeDefined env (envOf s)
         env1                        = ldefine te env
         (s', vs)                    = genV env1 s
 
@@ -667,7 +675,7 @@ instance Gen Stmt where
       | isPUSH e                    = (b' $+$ fin', v1 ++ v2 ++ volatiles)
       where (b',v1)                 = genBranch env "if" b
             (fin',v2)               = genElse env fin
-            volatiles               = bound ss `intersect` defined env
+            volatiles               = filterDefined env (bound ss)
     genV env (If _ (b:bs) b2)       = (b' $+$ vcat bs' $+$ b2', v1 ++ concat v2 ++ v3)
        where (b',v1)                = genBranch env "if" b
              (bs',v2)               = unzip (map (genBranch env "else if") bs)
