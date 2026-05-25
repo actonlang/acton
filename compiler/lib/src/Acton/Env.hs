@@ -60,6 +60,7 @@ data EnvF x                 = EnvF {
                                 thismod    :: Maybe ModName,
                                 context    :: [EnvCtx],
                                 qlevel     :: Int,
+                                gtypes     :: TEnv,      -- when traversing definition of a class c, gtypes contains result of findAttrSchemas c env 
                                 envX       :: x
                               } deriving (Show)
 
@@ -74,7 +75,7 @@ setX env x                  = EnvF { activeNames = activeNames env, closedNames 
                                      hnames = hnames env, closedHNames = closedHNames env,
                                      imports = imports env, improots = improots env,
                                      modules = modules env, hmodules = hmodules env, thismod = thismod env,
-                                     context = context env, qlevel = qlevel env, envX = x }
+                                     context = context env, qlevel = qlevel env, gtypes = gtypes env, envX = x }
 
 modX                        :: EnvF x -> (x -> x) -> EnvF x
 modX env f                  = env{ envX = f (envX env) }
@@ -104,6 +105,7 @@ inClass env                 = contextIs env CtxClass
 
 inLoop env                  = contextIs env CtxLoop
 
+setGtypes env te             = env{ gtypes = te }
 
 mapModules1                 :: ((Name,NameInfo) -> (Name,NameInfo)) -> Env0 -> Env0
 mapModules1 f env           = mapModules (\_ _ ni -> [f ni]) env
@@ -255,6 +257,7 @@ initEnv path True          = return $ EnvF{ activeNames = [],
                                             thismod = Nothing,
                                             context = [],
                                             qlevel = 0,
+                                            gtypes = [],
                                             envX = () }
 initEnv path False         = do (_,nmod,_,_,_,_,_,_,_,_,_,_) <- InterfaceFiles.readFile (joinPath [path,"__builtin__.ty"])
                                 let NModule _ envBuiltin builtinDocstring = nmod
@@ -271,6 +274,7 @@ initEnv path False         = do (_,nmod,_,_,_,_,_,_,_,_,_,_) <- InterfaceFiles.r
                                                  thismod = Nothing,
                                                  context = [],
                                                  qlevel = 0,
+                                                 gtypes = [],
                                                  envX = () }
                                     env = importAll mBuiltin envBuiltinPublic env0
                                 return env
