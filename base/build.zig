@@ -26,7 +26,8 @@ fn joinPath(allocator: std.mem.Allocator, base: []const u8, relative: []const u8
 }
 
 pub fn build(b: *std.Build) void {
-    const buildroot_path = b.build_root.handle.realpathAlloc(b.allocator, ".") catch unreachable;
+    const io = b.graph.io;
+    const buildroot_path = b.build_root.join(b.allocator, &.{}) catch unreachable;
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
     const cpedantic = b.option(bool, "cpedantic", "") orelse false;
@@ -105,13 +106,14 @@ pub fn build(b: *std.Build) void {
     });
 
     var iter_dir = b.build_root.handle.openDir(
+        io,
         "out/types/",
         .{
             .iterate = true
         },
     ) catch |err| {
         std.log.err("Error opening iterable dir: {}", .{err});
-        std.posix.exit(1);
+        std.process.exit(1);
     };
 
     var c_files = ArrayList([]const u8).empty;
@@ -120,42 +122,38 @@ pub fn build(b: *std.Build) void {
     defer root_c_files.deinit(b.allocator);
     var walker = iter_dir.walk(b.allocator) catch |err| {
         std.log.err("Error walking dir: {}", .{err});
-        std.posix.exit(1);
+        std.process.exit(1);
     };
     defer walker.deinit();
 
     // Find all .c files
     while (true) {
-        const next_result = walker.next() catch |err| {
+        const next_result = walker.next(io) catch |err| {
             std.log.err("Error getting next: {}", .{err});
-            std.posix.exit(1);
+            std.process.exit(1);
         };
         if (next_result) |entry| {
             if (entry.kind == .file) {
                 if (std.mem.endsWith(u8, entry.basename, ".c")) {
                     const fPath = b.allocator.create(FilePath) catch |err| {
                         std.log.err("Error allocating FilePath entry: {}", .{err});
-                        std.posix.exit(1);
+                        std.process.exit(1);
                     };
-                    const full_path = entry.dir.realpathAlloc(b.allocator, entry.basename) catch |err| {
-                        std.log.err("Error getting dir name: {}", .{err});
-                        std.posix.exit(1);
-                    };
-                    const dir = entry.dir.realpathAlloc(b.allocator, ".") catch |err| {
-                        std.log.err("Error getting dir name: {}", .{err});
-                        std.posix.exit(1);
-                    };
+                    const full_path = joinPath(b.allocator, projpath_outtypes, entry.path);
+                    const entry_dir_rel = std.fs.path.dirname(entry.path) orelse ".";
+                    const dir = joinPath(b.allocator, projpath_outtypes, entry_dir_rel);
                     fPath.full_path = full_path;
                     fPath.dir = dir;
                     fPath.filename = b.allocator.dupe(u8, entry.basename) catch |err| {
                         std.log.err("Error allocating filename entry: {}", .{err});
-                        std.posix.exit(1);
+                        std.process.exit(1);
                     };
-                    const file_path = b.allocator.alloc(u8, full_path.len - projpath_outtypes.len) catch |err| {
+                    const file_path = b.allocator.alloc(u8, entry.path.len + 1) catch |err| {
                         std.log.err("Error allocating file_path entry: {}", .{err});
-                        std.posix.exit(1);
+                        std.process.exit(1);
                     };
-                    @memcpy(file_path, full_path[projpath_outtypes.len..]);
+                    file_path[0] = '/';
+                    @memcpy(file_path[1..], entry.path);
                     fPath.file_path = file_path;
 
                     print("-- filename : {s}\n", .{fPath.filename});
@@ -166,19 +164,19 @@ pub fn build(b: *std.Build) void {
                     if (std.mem.endsWith(u8, entry.basename, ".root.c")) {
                         root_c_files.append(b.allocator, fPath) catch |err| {
                             std.log.err("Error appending to root .c files: {}", .{err});
-                            std.posix.exit(1);
+                            std.process.exit(1);
                         };
                     } else {
                         // Store relative path from build root, not absolute path
                         const rel_path = b.allocator.alloc(u8, 9 + fPath.file_path.len) catch |err| {
                             std.log.err("Error allocating relative path: {}", .{err});
-                            std.posix.exit(1);
+                            std.process.exit(1);
                         };
                         @memcpy(rel_path[0..9], "out/types");
                         @memcpy(rel_path[9..], fPath.file_path);
                         c_files.append(b.allocator, rel_path) catch |err| {
                             std.log.err("Error appending to .c files: {}", .{err});
-                            std.posix.exit(1);
+                            std.process.exit(1);
                         };
                     }
                 }
@@ -194,8 +192,7 @@ pub fn build(b: *std.Build) void {
 
     var file_prefix_map = std.ArrayList(u8).empty;
     defer file_prefix_map.deinit(b.allocator);
-    const file_prefix_path = b.build_root.handle.openDir("..", .{}) catch unreachable;
-    const file_prefix_path_path = file_prefix_path.realpathAlloc(b.allocator, ".") catch unreachable;
+    const file_prefix_path_path = std.fs.path.dirname(buildroot_path) orelse buildroot_path;
     file_prefix_map.appendSlice(b.allocator, "-ffile-prefix-map=") catch unreachable;
     file_prefix_map.appendSlice(b.allocator, file_prefix_path_path) catch unreachable;
     file_prefix_map.appendSlice(b.allocator, "/=") catch unreachable;
@@ -212,7 +209,7 @@ pub fn build(b: *std.Build) void {
             "-DDEV",
         }) catch |err| {
             std.log.err("Error appending flags: {}", .{err});
-            std.posix.exit(1);
+            std.process.exit(1);
         };
     }
 
@@ -229,7 +226,7 @@ pub fn build(b: *std.Build) void {
             "-DACTON_THREADS",
         }) catch |err| {
             std.log.err("Error appending flags: {}", .{err});
-            std.posix.exit(1);
+            std.process.exit(1);
         };
     }
 
@@ -247,7 +244,7 @@ pub fn build(b: *std.Build) void {
         }),
     });
     for (c_files.items) |entry| {
-        libActon.addCSourceFile(.{ .file = b.path(entry), .flags = flags.items });
+        libActon.root_module.addCSourceFile(.{ .file = b.path(entry), .flags = flags.items });
     }
     libActon.installHeadersDirectory(b.path("builtin"), "builtin", .{});
 
@@ -261,19 +258,17 @@ pub fn build(b: *std.Build) void {
     // investigate further, find the root cause and address it.
     libActon.installHeadersDirectory(b.path("out/types"), "out/types", .{});
 
-    var hiter_dir = b.build_root.handle.openDir("out/types/", .{ .iterate = true }) catch unreachable;
+    var hiter_dir = b.build_root.handle.openDir(io, "out/types/", .{ .iterate = true }) catch unreachable;
     var hwalker = hiter_dir.walk(b.allocator) catch unreachable;
     defer hwalker.deinit();
 
     // Find all .h files
     while (true) {
-        const next_result = hwalker.next() catch unreachable;
+        const next_result = hwalker.next(io) catch unreachable;
         if (next_result) |entry| {
             if (entry.kind == .file) {
                 if (std.mem.endsWith(u8, entry.basename, ".h")) {
-                    const full_path = entry.dir.realpathAlloc(b.allocator, entry.basename) catch unreachable;
-                    const file_path = b.allocator.alloc(u8, full_path.len - buildroot_path.len - 1) catch unreachable;
-                    @memcpy(file_path, full_path[buildroot_path.len+1..]);
+                    const file_path = std.fs.path.join(b.allocator, &.{ "out/types", entry.path }) catch unreachable;
                     libActon.installHeader(b.path(file_path), file_path);
                 }
             }
@@ -288,39 +283,38 @@ pub fn build(b: *std.Build) void {
     libActon.installHeader(b.path("rts/rts.h"), "rts/rts.h");
     libActon.installHeader(b.path("rts/log.h"), "rts/log.h");
 
-    libActon.addIncludePath(.{ .cwd_relative = buildroot_path });
-    libActon.addIncludePath(dep_libtlsuv.path("include"));
+    libActon.root_module.addIncludePath(.{ .cwd_relative = buildroot_path });
+    libActon.root_module.addIncludePath(dep_libtlsuv.path("include"));
 
     if (use_db) {
         const libactondb_dep = b.dependency("actondb", .{
             .target = target,
             .optimize = optimize,
         });
-        libActon.linkLibrary(libactondb_dep.artifact("ActonDB"));
+        libActon.root_module.linkLibrary(libactondb_dep.artifact("ActonDB"));
     }
 
-    libActon.linkLibrary(dep_libbsdnt.artifact("bsdnt"));
-    libActon.linkLibrary(dep_libgc.artifact("gc"));
-    libActon.linkLibrary(dep_libmbedtls.artifact("mbedcrypto"));
-    libActon.linkLibrary(dep_libmbedtls.artifact("mbedtls"));
-    libActon.linkLibrary(dep_libmbedtls.artifact("mbedx509"));
-    libActon.linkLibrary(dep_libnetstring.artifact("netstring"));
-    libActon.linkLibrary(dep_libpcre2.artifact("pcre2-8"));
-    libActon.linkLibrary(dep_libprotobuf_c.artifact("protobuf-c")); // TODO: remove, once telemetrify/prw is fixed
-    libActon.linkLibrary(dep_libsnappy_c.artifact("snappy-c"));
-    libActon.linkLibrary(dep_libtlsuv.artifact("tlsuv"));
-    libActon.linkLibrary(dep_libutf8proc.artifact("utf8proc"));
-    libActon.linkLibrary(dep_libuv.artifact("uv"));
-    libActon.linkLibrary(dep_libxml2.artifact("xml2"));
-    libActon.linkLibrary(dep_libyyjson.artifact("yyjson"));
+    libActon.root_module.linkLibrary(dep_libbsdnt.artifact("bsdnt"));
+    libActon.root_module.linkLibrary(dep_libgc.artifact("gc"));
+    libActon.root_module.linkLibrary(dep_libmbedtls.artifact("mbedcrypto"));
+    libActon.root_module.linkLibrary(dep_libmbedtls.artifact("mbedtls"));
+    libActon.root_module.linkLibrary(dep_libmbedtls.artifact("mbedx509"));
+    libActon.root_module.linkLibrary(dep_libnetstring.artifact("netstring"));
+    libActon.root_module.linkLibrary(dep_libpcre2.artifact("pcre2-8"));
+    libActon.root_module.linkLibrary(dep_libprotobuf_c.artifact("protobuf-c")); // TODO: remove, once telemetrify/prw is fixed
+    libActon.root_module.linkLibrary(dep_libsnappy_c.artifact("snappy-c"));
+    libActon.root_module.linkLibrary(dep_libtlsuv.artifact("tlsuv"));
+    libActon.root_module.linkLibrary(dep_libutf8proc.artifact("utf8proc"));
+    libActon.root_module.linkLibrary(dep_libuv.artifact("uv"));
+    libActon.root_module.linkLibrary(dep_libxml2.artifact("xml2"));
+    libActon.root_module.linkLibrary(dep_libyyjson.artifact("yyjson"));
 
     libActon.installLibraryHeaders(dep_libbsdnt.artifact("bsdnt"));
     libActon.installLibraryHeaders(dep_libgc.artifact("gc"));
     libActon.installLibraryHeaders(dep_libprotobuf_c.artifact("protobuf-c")); // TODO: remove, once telemetrify/prw is fixed
     libActon.installLibraryHeaders(dep_libuv.artifact("uv"));
 
-    libActon.linkLibC();
-    libActon.linkLibCpp();
+    libActon.root_module.link_libc = true;
     b.installArtifact(libActon);
 
     const base_tests = b.addTest(.{
@@ -330,10 +324,10 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         }),
     });
-    base_tests.addIncludePath(.{ .cwd_relative = buildroot_path });
-    base_tests.linkLibrary(dep_libbsdnt.artifact("bsdnt"));
-    base_tests.linkLibrary(dep_libgc.artifact("gc"));
-    base_tests.linkLibC();
+    base_tests.root_module.addIncludePath(.{ .cwd_relative = buildroot_path });
+    base_tests.root_module.linkLibrary(dep_libbsdnt.artifact("bsdnt"));
+    base_tests.root_module.linkLibrary(dep_libgc.artifact("gc"));
+    base_tests.root_module.link_libc = true;
     const run_base_tests = b.addRunArtifact(base_tests);
     const test_step = b.step("test", "Run tests");
     test_step.dependOn(&run_base_tests.step);

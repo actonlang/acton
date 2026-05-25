@@ -32,8 +32,7 @@ pub fn build(b: *std.Build) void {
         "src/randutils.c",
     };
 
-    lib.addCSourceFiles(.{
-        .root = b.path("."),
+    lib.root_module.addCSourceFiles(.{
         .files = &source_files,
         .flags = &[_][]const u8{
             "-DHAVE_NANOSLEEP",
@@ -41,8 +40,8 @@ pub fn build(b: *std.Build) void {
             "-DUSLEEP",
         }
     });
-    lib.addIncludePath(b.path("include"));
-    lib.linkLibC();
+    lib.root_module.addIncludePath(b.path("include"));
+    lib.root_module.link_libc = true;
     lib.installHeader(b.path("src/uuid.h"), "uuid/uuid.h");
     b.installArtifact(lib);
 }

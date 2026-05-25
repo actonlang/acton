@@ -18,12 +18,11 @@ pub fn build(b: *std.Build) void {
         "yyjson.c",
     };
 
-    lib.addCSourceFiles(.{
-        .root = b.path("."),
+    lib.root_module.addCSourceFiles(.{
         .files = &source_files,
         .flags = &[_][]const u8{}
     });
-    lib.linkLibC();
+    lib.root_module.link_libc = true;
     lib.installHeader(b.path("yyjson.h"), "yyjson.h");
     b.installArtifact(lib);
 }

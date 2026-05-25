@@ -20,12 +20,9 @@ pub fn build(b: *std.Build) void {
     var flags = std.ArrayList([]const u8).empty;
     defer flags.deinit(b.allocator);
 
-    flags.appendSlice(b.allocator, &.{
-        "-DHAVE_UNISTD_H",
-        "-DUNUSED="
-    }) catch |err| {
+    flags.appendSlice(b.allocator, &.{ "-DHAVE_UNISTD_H", "-DUNUSED=" }) catch |err| {
         std.log.err("Error appending iterable dir: {}", .{err});
-        std.posix.exit(1);
+        std.process.exit(1);
     };
 
     if (targetIsDarwin(t) or t.os.tag == .windows) {
@@ -36,7 +33,7 @@ pub fn build(b: *std.Build) void {
             "-DHAVE_DECL_PROGRAM_INVOCATION_NAME=0",
         }) catch |err| {
             std.log.err("Error appending iterable dir: {}", .{err});
-            std.posix.exit(1);
+            std.process.exit(1);
         };
     }
 
@@ -49,30 +46,24 @@ pub fn build(b: *std.Build) void {
         }),
     });
 
-    lib.addCSourceFiles(.{
-        .files = &.{
-            "argp-ba.c",
-            "argp-eexst.c",
-            "argp-fmtstream.c",
-            "argp-help.c",
-            "argp-parse.c",
-            "argp-pv.c",
-            "argp-pvh.c",
-        },
-        .flags = flags.items
-    });
+    lib.root_module.addCSourceFiles(.{ .files = &.{
+        "argp-ba.c",
+        "argp-eexst.c",
+        "argp-fmtstream.c",
+        "argp-help.c",
+        "argp-parse.c",
+        "argp-pv.c",
+        "argp-pvh.c",
+    }, .flags = flags.items });
 
     if (targetIsDarwin(t)) {
-        lib.addCSourceFiles(.{
-            .files = &.{
-                "strchrnul.c",
-            },
-            .flags = flags.items
-        });
+        lib.root_module.addCSourceFiles(.{ .files = &.{
+            "strchrnul.c",
+        }, .flags = flags.items });
     }
 
-    lib.addIncludePath(b.path("."));
-    lib.linkLibC();
+    lib.root_module.addIncludePath(b.path("."));
+    lib.root_module.link_libc = true;
 
     lib.installHeader(b.path("argp.h"), "argp.h");
     b.installArtifact(lib);

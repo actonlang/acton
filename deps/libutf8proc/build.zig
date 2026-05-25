@@ -25,11 +25,11 @@ pub fn build(b: *std.Build) void {
         flags.append(b.allocator, "-DUTF8PROC_STATIC") catch unreachable;
     }
 
-    lib.addCSourceFile(.{
+    lib.root_module.addCSourceFile(.{
         .file = b.path("utf8proc.c"),
         .flags = flags.items
     });
-    lib.linkLibC();
+    lib.root_module.link_libc = true;
     lib.installHeader(b.path("utf8proc.h"), "utf8proc.h");
     b.installArtifact(lib);
 }

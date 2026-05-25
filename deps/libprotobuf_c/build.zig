@@ -14,7 +14,7 @@ pub fn build(b: *std.Build) void {
         }),
     });
 
-    lib.addCSourceFiles(.{
+    lib.root_module.addCSourceFiles(.{
         .files = &.{
             "protobuf-c/protobuf-c.c",
         },
@@ -22,7 +22,7 @@ pub fn build(b: *std.Build) void {
             "-fno-sanitize=undefined",
         }
     });
-    lib.linkLibC();
+    lib.root_module.link_libc = true;
     lib.installHeader(b.path("protobuf-c/protobuf-c.h"), "protobuf-c/protobuf-c.h");
     b.installArtifact(lib);
 }

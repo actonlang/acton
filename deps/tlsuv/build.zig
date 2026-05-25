@@ -65,26 +65,26 @@ pub fn build(b: *std.Build) void {
         "src/url.c",
     };
 
-    lib.addCSourceFiles(.{
+    lib.root_module.addCSourceFiles(.{
         .files = &base_sources,
         .flags = cflags.items,
     });
 
     if (enable_keychain) {
         if (targetIsDarwin(t)) {
-            lib.addCSourceFile(.{
+            lib.root_module.addCSourceFile(.{
                 .file = b.path("src/apple/keychain.c"),
                 .flags = cflags.items,
             });
-            lib.linkFramework("CoreFoundation");
-            lib.linkFramework("Security");
+            lib.root_module.linkFramework("CoreFoundation", .{});
+            lib.root_module.linkFramework("Security", .{});
         } else if (t.os.tag == .windows) {
-            lib.addCSourceFile(.{
+            lib.root_module.addCSourceFile(.{
                 .file = b.path("src/win32/win32_keychain.c"),
                 .flags = cflags.items,
             });
-            lib.linkSystemLibrary("crypt32");
-            lib.linkSystemLibrary("ncrypt");
+            lib.root_module.linkSystemLibrary("crypt32", .{});
+            lib.root_module.linkSystemLibrary("ncrypt", .{});
         }
     }
 
@@ -97,7 +97,7 @@ pub fn build(b: *std.Build) void {
             "src/tls_link.c",
             "src/compression.c",
         };
-        lib.addCSourceFiles(.{
+        lib.root_module.addCSourceFiles(.{
             .files = &http_sources,
             .flags = cflags.items,
         });
@@ -108,15 +108,15 @@ pub fn build(b: *std.Build) void {
             "deps/uv_link_t/src/uv_link_source_t.c",
             "deps/uv_link_t/src/uv_link_observer_t.c",
         };
-        lib.addCSourceFiles(.{
+        lib.root_module.addCSourceFiles(.{
             .files = &uv_link_sources,
             .flags = cflags.items,
         });
 
-        lib.addIncludePath(b.path("deps/uv_link_t/include"));
-        lib.addIncludePath(b.path("deps/uv_link_t"));
-        lib.linkSystemLibrary("z");
-        lib.linkSystemLibrary("llhttp");
+        lib.root_module.addIncludePath(b.path("deps/uv_link_t/include"));
+        lib.root_module.addIncludePath(b.path("deps/uv_link_t"));
+        lib.root_module.linkSystemLibrary("z", .{});
+        lib.root_module.linkSystemLibrary("llhttp", .{});
         lib.root_module.addCMacro("TLSUV_HTTP", "1");
     }
 
@@ -125,12 +125,12 @@ pub fn build(b: *std.Build) void {
             "src/openssl/engine.c",
             "src/openssl/keys.c",
         };
-        lib.addCSourceFiles(.{
+        lib.root_module.addCSourceFiles(.{
             .files = &ssl_sources,
             .flags = cflags.items,
         });
-        lib.linkSystemLibrary("ssl");
-        lib.linkSystemLibrary("crypto");
+        lib.root_module.linkSystemLibrary("ssl", .{});
+        lib.root_module.linkSystemLibrary("crypto", .{});
         lib.root_module.addCMacro("USE_OPENSSL", "1");
         lib.root_module.addCMacro("TLS_IMPL", "openssl");
     } else if (use_mbedtls) {
@@ -141,24 +141,24 @@ pub fn build(b: *std.Build) void {
             "src/mbedtls/p11_ecdsa.c",
             "src/mbedtls/p11_rsa.c",
         };
-        lib.addCSourceFiles(.{
+        lib.root_module.addCSourceFiles(.{
             .files = &ssl_sources,
             .flags = cflags.items,
         });
         if (dep_libmbedtls) |mbedtls| {
-            lib.linkLibrary(mbedtls.artifact("mbedcrypto"));
-            lib.linkLibrary(mbedtls.artifact("mbedtls"));
-            lib.linkLibrary(mbedtls.artifact("mbedx509"));
+            lib.root_module.linkLibrary(mbedtls.artifact("mbedcrypto"));
+            lib.root_module.linkLibrary(mbedtls.artifact("mbedtls"));
+            lib.root_module.linkLibrary(mbedtls.artifact("mbedx509"));
         }
         lib.root_module.addCMacro("USE_MBEDTLS", "1");
         lib.root_module.addCMacro("TLS_IMPL", "mbedtls");
     }
 
-    lib.addIncludePath(b.path("include"));
-    lib.addIncludePath(b.path("src"));
+    lib.root_module.addIncludePath(b.path("include"));
+    lib.root_module.addIncludePath(b.path("src"));
 
-    lib.linkLibrary(dep_libuv.artifact("uv"));
-    lib.linkLibC();
+    lib.root_module.linkLibrary(dep_libuv.artifact("uv"));
+    lib.root_module.link_libc = true;
 
     if (t.os.tag == .windows) {
         lib.root_module.addCMacro("WIN32_LEAN_AND_MEAN", "1");
