@@ -249,6 +249,7 @@ data Type       = TUni      { tloc::SrcLoc, uvar::TUni }
                 | TRow      { tloc::SrcLoc, rkind::Kind, label::Name, rtype::Type, rtail::TRow }
                 | TStar     { tloc::SrcLoc, rkind::Kind, rtail::TRow }
                 | TFX       { tloc::SrcLoc, tfx::FX }
+                | TUnboxed  { tloc::SrcLoc, utp::Type }
                 deriving (Show,Read,Generic,NFData)
 
 type TFX        = Type
@@ -742,6 +743,7 @@ instance Eq Type where
     TRow _ k1 n1 t1 r1  == TRow _ k2 n2 t2 r2   = k1 == k2 && n1 == n2 && t1 == t2 && r1 == r2
     TStar _ k1 r1       == TStar _ k2 r2        = k1 == k2 && r1 == r2
     TFX _ fx1           == TFX _ fx2            = fx1 == fx2
+    TUnboxed _ t1       == TUnboxed _ t2        = t1 == t2
     _                   == _                    = False
 
 -- Show & Read ----------------
