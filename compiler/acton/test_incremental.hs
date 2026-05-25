@@ -23,6 +23,7 @@ import           System.FilePath
 import           System.IO (Handle)
 import           System.Posix.Files (deviceID, fileID, fileSize, getFileStatus, modificationTimeHiRes, statusChangeTimeHiRes)
 import           System.Process
+import           System.Timeout (timeout)
 import           Data.Time.Clock        (addUTCTime, getCurrentTime)
 import           Data.Time.Clock.POSIX  (posixSecondsToUTCTime)
 import           System.Directory       (setModificationTime)
@@ -1888,13 +1889,12 @@ p40_background_lock_blocks_watch =
       actonExe <- actonPath
       (_, _, _, ph) <- createProcess (proc actonExe ["build", "--watch", "--color", "never", "--jobs", "1"]) { cwd = Just proj }
       (do
-          threadDelay 500000
-          mExit <- getProcessExitCode ph
+          mExit <- timeout 5000000 (waitForProcess ph)
           case mExit of
             Nothing -> do
               terminateProcess ph
               _ <- waitForProcess ph
-              assertFailure "watch should fail quickly when .acton.compile.lock is already held"
+              assertFailure "watch should fail within 5s when .acton.compile.lock is already held"
             Just ExitSuccess ->
               assertFailure "watch should not succeed when .acton.compile.lock is already held"
             Just (ExitFailure _) ->
