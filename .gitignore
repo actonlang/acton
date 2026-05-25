@@ -40,6 +40,7 @@ compiler/package.yaml
 compiler/acton/acton.cabal
 compiler/acton/package.yaml
 compiler/lib/package.yaml
+compiler/lib/libacton.cabal
 compiler/lsp-server/package.yaml
 compiler/lsp-server/lsp-server-acton.cabal
 test/package.yaml
@@ -52,6 +53,9 @@ debian/changelog
 debian/files
 
 deps/*
+!deps/*/
+!deps/*/build.zig
+!deps/*/build.zig.zon
 deps-download
 
 dist/*
