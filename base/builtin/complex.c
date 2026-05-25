@@ -24,8 +24,8 @@ B_complex B_complexG_new(B_Number wit, $WORD c) {
 }
 
 B_complex B_complexD_from_real_imag (B_Real wit1, B_Real wit2, $WORD real, $WORD imag) {
-    double re = wit1->$class->__float__(wit1, real)->val;
-    double im = wit2->$class->__float__(wit2, imag)->val;
+    double re = wit1->$class->__float__(wit1, real);
+    double im = wit2->$class->__float__(wit2, imag);
     return toB_complex(re + im * _Complex_I);
 }
 

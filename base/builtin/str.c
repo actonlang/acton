@@ -32,7 +32,6 @@ static unsigned char nul = 0;
 static struct B_str null_struct = {&B_strG_methods,0,0,&nul};
 
 static B_str null_str = &null_struct;
-
 // Prebuilt immutable one-byte ASCII strings used by indexing and iteration.
 #define ASCII_CHAR_TABLE_SIZE 128
 static unsigned char ascii_char_data[ASCII_CHAR_TABLE_SIZE][2] = {
@@ -293,6 +292,7 @@ static struct B_str ascii_char_strs[ASCII_CHAR_TABLE_SIZE] = {
     [126] = {&B_strG_methods, 1, 1, ascii_char_data[126]},
     [127] = {&B_strG_methods, 1, 1, ascii_char_data[127]}
 };
+
 static B_str space_str = &ascii_char_strs[(unsigned char)' '];
 
 static struct B_str whitespace_struct = {&B_strG_methods,6,6,(unsigned char *)" \t\n\r\x0b\x0c"};
@@ -443,11 +443,11 @@ static int byte_length(unsigned int cp) {
 
 // #bytes in UTF-8 for char starting with byte c
 static int byte_length2(unsigned char c) {
-    if (c < 0x80)
+    if (c < 0x7f)
         return 1;
-    else if (c < 0xe0)
+    else if (c < 0xdf)
         return 2;
-    else if (c < 0xf0)
+    else if (c < 0xef)
         return 3;
     else
         return 4;
@@ -517,11 +517,8 @@ static unsigned char *skip_chars(unsigned char* start, int n, int isascii) {
 static int byte_no(B_str text, int i) {
     int res = 0;
     unsigned char *t = text->str;
-    for (int k=0; k<i; k++) {
-        int n = byte_length2(*t);
-        res += n;
-        t += n;
-    }
+    for (int k=0; k<i; k++)
+        res += byte_length2(t[k]);
     return res;
 }
 
@@ -534,7 +531,7 @@ static int get_index(int i, int nchars) {
         if (i >= -nchars)
             return nchars+i;
     }
-    $RAISE((B_BaseException)$NEW(B_IndexError, toB_int(i), to$str("index outside str")));
+    $RAISE((B_BaseException)$NEW(B_IndexError, i, to$str("index outside str")));
     return 0;
 }
 
@@ -895,8 +892,8 @@ B_str B_strD_capitalize(B_str s) {
     return res;
 }
 
-B_str B_strD_center(B_str s, B_int width, B_str fill) {
-    int wval = fromB_int(width);
+B_str B_strD_center(B_str s, int64_t width, B_str fill) {
+    int wval = width;
     if (!fill)
         fill = space_str;
     if (fill->nchars != 1) {
@@ -928,21 +925,21 @@ B_str B_strD_center(B_str s, B_int width, B_str fill) {
 }
 
 
-B_int B_strD_count(B_str s, B_str sub, B_int start, B_int end) {
+int64_t B_strD_count(B_str s, B_str sub, B_int start, B_int end) {
     int isascii = s->nchars == s->nbytes;
     B_int st = start;
     B_int en = end;
-    if (fix_start_end(s->nchars,&st,&en) < 0) return toB_int(0);
+    if (fix_start_end(s->nchars,&st,&en) < 0) return 0;
     unsigned char *p = skip_chars(s->str,fromB_int(st),isascii);
     unsigned char *q = skip_chars(p,fromB_int(en)-fromB_int(st),isascii);
-    int res = 0;
+    int64_t res = 0;
     int n = bmh(p,sub->str,q-p,sub->nbytes);
     while (n>=0) {
         res++;
         p += n + (sub->nbytes>0 ? sub->nbytes : 1);
         n = bmh(p,sub->str,q-p,sub->nbytes);
     }
-    return toB_int(res);
+    return res;
 }
 
 B_bytes B_strD_encode(B_str s) {
@@ -1004,21 +1001,21 @@ B_str B_strD_expandtabs(B_str s, B_int tabsize){
     return res;
 }
 
-B_int B_strD_find(B_str s, B_str sub, B_int start, B_int end) {
+int64_t B_strD_find(B_str s, B_str sub, B_int start, B_int end) {
     int isascii = s->nchars == s->nbytes;
     B_int st = start;
     B_int en = end;
-    if (fix_start_end(s->nchars,&st,&en) < 0) return toB_int(-1);
+    if (fix_start_end(s->nchars,&st,&en) < 0) return -1;
     unsigned char *p = skip_chars(s->str,fromB_int(st),isascii);
     unsigned char *q = skip_chars(p,fromB_int(en)-fromB_int(st),isascii);
     int n = bmh(p,sub->str,q-p,sub->nbytes);
-    if (n<0) return toB_int(-1);
-    return toB_int(char_no(s,n+p-s->str));
+    if (n<0) return -1;
+    return char_no(s,n+p-s->str);
 }
 
-B_int B_strD_index(B_str s, B_str sub, B_int start, B_int end) {
-    B_int n = B_strD_find(s,sub,start,end);
-    if (fromB_int(n)<0) {
+int64_t B_strD_index(B_str s, B_str sub, B_int start, B_int end) {
+   int64_t n = B_strD_find(s,sub,start,end);
+    if (n<0) {
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("index: substring not found")));
     }
     return n;
@@ -1212,12 +1209,12 @@ B_str B_strD_join(B_str s, B_Iterable wit, $WORD iter) {
     return res;
 }
 
-B_str B_strD_ljust(B_str s, B_int width, B_str fill) {
+B_str B_strD_ljust(B_str s, int64_t width, B_str fill) {
     if (!fill) fill = space_str;
     if (fill->nchars != 1) {
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("ljust: fill str not single char")));
     }
-    int wval = fromB_int(width);
+    int wval = width;
     if (wval <= s->nchars) {
         return s;
     }
@@ -1262,12 +1259,11 @@ B_str B_strD_lstrip(B_str s, B_str cs) {
 }
 
 B_tuple B_strD_partition(B_str s, B_str sep) {
-    int n = fromB_int(B_strD_find(s,sep,NULL,NULL));
+    int64_t n = B_strD_find(s,sep,NULL,NULL);
     if (n<0) {
         return $NEWTUPLE(3,s,null_str,null_str);
     } else {
-        int isascii = s->nchars == s->nbytes;
-        int nb = (int)(skip_chars(s->str,n,isascii)-s->str);
+        int nb = bmh(s->str,sep->str,s->nbytes,sep->nbytes);
         B_str ls;
         NEW_UNFILLED_STR(ls,n,nb);
         memcpy(ls->str,s->str,nb);
@@ -1282,7 +1278,7 @@ B_tuple B_strD_partition(B_str s, B_str sep) {
 B_str B_strD_replace(B_str s, B_str old, B_str new, B_int count) {
     if (count==NULL)
         count = toB_int(INT_MAX);
-    int c = fromB_int(B_strD_count(s,old,NULL,NULL));
+    int c = B_strD_count(s,old,NULL,NULL);
     int c0 = fromB_int(count) < c ? fromB_int(count) : c;
     if (c0==0){
         return s;
@@ -1314,33 +1310,33 @@ B_str B_strD_replace(B_str s, B_str old, B_str new, B_int count) {
 }
 
 
-B_int B_strD_rfind(B_str s, B_str sub, B_int start, B_int end) {
+int64_t B_strD_rfind(B_str s, B_str sub, B_int start, B_int end) {
     int isascii = s->nchars == s->nbytes;
     B_int st = start;
     B_int en = end;
-    if (fix_start_end(s->nchars,&st,&en) < 0) return toB_int(-1);
+    if (fix_start_end(s->nchars,&st,&en) < 0) return -1;
     unsigned char *p = skip_chars(s->str,fromB_int(st),isascii);
     unsigned char *q = skip_chars(p,fromB_int(en)-fromB_int(st),isascii);
     int n = rbmh(p,sub->str,q-p,sub->nbytes);
-    if (n<0) return toB_int(-1);
-    return toB_int(char_no(s,n+p-s->str));
+    if (n<0) return -1;
+    return char_no(s,n+p-s->str);
 }
 
 
-B_int B_strD_rindex(B_str s, B_str sub, B_int start, B_int end) {
-    B_int n = B_strD_rfind(s,sub,start,end);
-    if (fromB_int(n)<0) {
+int64_t B_strD_rindex(B_str s, B_str sub, B_int start, B_int end) {
+    int64_t n = B_strD_rfind(s,sub,start,end);
+    if (n<0) {
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("rindex: substring not found")));
     };
     return n;
 }
 
-B_str B_strD_rjust(B_str s, B_int width, B_str fill) {
+B_str B_strD_rjust(B_str s, int64_t width, B_str fill) {
     if (!fill) fill = space_str;
     if (fill->nchars != 1) {
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("rjust: fill string not single char")));
     }
-    int wval = fromB_int(width);
+    int wval = width;
     if (wval <= s->nchars) {
         return s;
     }
@@ -1358,12 +1354,11 @@ B_str B_strD_rjust(B_str s, B_int width, B_str fill) {
 }
 
 B_tuple B_strD_rpartition(B_str s, B_str sep) {
-    int n = fromB_int(B_strD_rfind(s,sep,NULL,NULL));
+    int64_t n = B_strD_rfind(s,sep,NULL,NULL);
     if (n<0) {
         return $NEWTUPLE(3,null_str,null_str,s);
     } else {
-        int isascii = s->nchars == s->nbytes;
-        int nb = (int)(skip_chars(s->str,n,isascii)-s->str);
+        int nb = rbmh(s->str,sep->str,s->nbytes,sep->nbytes);
         B_str ls;
         NEW_UNFILLED_STR(ls,n,nb);
         memcpy(ls->str,s->str,nb);
@@ -1541,8 +1536,8 @@ B_str B_strD_upper(B_str s) {
     return str_transform(s,utf8proc_toupper);
 }
 
-B_str B_strD_zfill(B_str s, B_int width) {
-    int wval = fromB_int(width);
+B_str B_strD_zfill(B_str s, int64_t width) {
+    int wval = width;
     int fill = wval - s->nchars;
     if (fill < 0)
         return s;
@@ -1631,7 +1626,7 @@ B_str B_TimesD_strD___zero__ (B_TimesD_str wit) {
 }
 
 B_str B_TimesD_strD___mul__ (B_TimesD_str wit, B_str a, B_int n) {
-    int nval = fromB_int(n);
+    int64_t nval = n->val;
     if (nval <= 0)
         return null_str;
     else {
@@ -1650,8 +1645,8 @@ B_str B_ContainerD_strD___fromiter__ (B_ContainerD_str wit, B_Iterable wit2, $WO
     return B_strD_join(null_str,wit2,iter);
 }
 
-B_int B_ContainerD_strD___len__ (B_ContainerD_str wit, B_str s){
-    return  toB_int(s->nchars);
+int64_t B_ContainerD_strD___len__ (B_ContainerD_str wit, B_str s){
+    return (int64_t)s->nchars;
 }
 
 // B_Container ///////////////////////////////////////////////////////////////////////////
@@ -1728,7 +1723,7 @@ B_Iterator B_ContainerD_strD___iter__ (B_ContainerD_str wit, B_str s) {
 
 B_str B_SliceableD_strD___getitem__ (B_SliceableD_str wit, B_str s, B_int i) {
     unsigned char *p = s->str;
-    int ix = get_index(fromB_int(i),s->nchars);
+    int ix = get_index(i->val,s->nchars);
     p = skip_chars(p,ix,s->nchars == s->nbytes);
     return mk_char(p);
 }
@@ -1754,16 +1749,13 @@ B_str B_SliceableD_strD___getslice__ (B_SliceableD_str wit, B_str s, B_slice slc
     if (slen == 0) {
         return null_str;
     }
-    if (slen == 1) {
-        return mk_char(skip_chars(s->str, start, isascii));
-    }
     //slice notation have been eliminated and default values applied.
     unsigned char buffer[4*slen]; // very conservative buffer size.
     unsigned char *p = buffer;
-    unsigned char *t = skip_chars(s->str, start, isascii);
+    unsigned char *t = skip_chars(s->str,start,isascii);
     for (int i=0; i<slen; i++) {
         int bytes = byte_length2(*t);
-        for (int k=0; k<bytes; k++) {
+        for (int k=0; k<bytes;k++) {
             p[nbytes] = *t;
             t++; nbytes++;
         }
@@ -1951,12 +1943,12 @@ B_bytearray B_bytearrayD_capitalize(B_bytearray s) {
     return res;
 }
 
-B_bytearray B_bytearrayD_center(B_bytearray s, B_int width, B_bytearray fill) {
+B_bytearray B_bytearrayD_center(B_bytearray s, int64_t width, B_bytearray fill) {
     if (!fill) fill = space_bytearray;
     if (fill->nbytes != 1) {
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("center: fill bytearray not single char")));
     }
-    int wval = fromB_int(width);
+    int wval = width;
     if (wval <= s->nbytes) {
         return B_bytearrayD_copy(s);
     }
@@ -1978,22 +1970,22 @@ B_bytearray B_bytearrayD_center(B_bytearray s, B_int width, B_bytearray fill) {
     return res;
 }
 
-B_int B_bytearrayD_count(B_bytearray s, B_bytearray sub, B_int start, B_int end) {
+int64_t B_bytearrayD_count(B_bytearray s, B_bytearray sub, B_int start, B_int end) {
     B_int st = start;
     B_int en = end;
-    if (fix_start_end(s->nbytes,&st,&en) < 0) return toB_int(0);
+    if (fix_start_end(s->nbytes,&st,&en) < 0) return 0;
     int stval = fromB_int(st);
     int enval = fromB_int(en);
     unsigned char *p = &s->str[stval];
     unsigned char *q = &p[enval-stval];
-    int res = 0;
+    int64_t res = 0;
     int n = bmh(p,sub->str,q-p,sub->nbytes);
     while (n>=0) {
         res++;
         p += n + (sub->nbytes>0 ? sub->nbytes : 1);
         n = bmh(p,sub->str,q-p,sub->nbytes);
     }
-    return toB_int(res);
+    return res;
 }
 
 B_str B_bytearrayD_decode(B_bytearray s) {
@@ -2051,15 +2043,15 @@ B_bytearray B_bytearrayD_expandtabs(B_bytearray s, B_int tabsz){
     return res;
 }
 
-B_int B_bytearrayD_find(B_bytearray s, B_bytearray sub, B_int start, B_int end) {
+int64_t B_bytearrayD_find(B_bytearray s, B_bytearray sub, B_int start, B_int end) {
     B_int st = start;
     B_int en = end;
-    if (fix_start_end(s->nbytes,&st,&en) < 0) return toB_int(-1);
+    if (fix_start_end(s->nbytes,&st,&en) < 0) return -1;
     unsigned char *p = &s->str[fromB_int(st)];
     unsigned char *q = &s->str[fromB_int(en)];
     int n = bmh(p,sub->str,q-p,sub->nbytes);
-    if (n<0) return toB_int(-1);
-    return toB_int(n+p-s->str);
+    if (n<0) return -1;
+    return n+p-s->str;
 }
 
 B_bytearray B_bytearrayD_from_hex(B_str s) {
@@ -2128,9 +2120,9 @@ B_str B_bytearrayD_hex(B_bytearray s) {
 }
 
 
-B_int B_bytearrayD_index(B_bytearray s, B_bytearray sub, B_int start, B_int end) {
-    B_int n = B_bytearrayD_find(s,sub,start,end);
-    if (fromB_int(n)<0) {
+int64_t B_bytearrayD_index(B_bytearray s, B_bytearray sub, B_int start, B_int end) {
+    int64_t n = B_bytearrayD_find(s,sub,start,end);
+    if (n<0) {
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("index: substring not found")));
     }
     return n;
@@ -2264,10 +2256,10 @@ B_bytearray B_bytearrayD_join(B_bytearray s, B_Iterable wit, $WORD iter) {
     return res;
 }
 
-B_bytearray B_bytearrayD_ljust(B_bytearray s, B_int width, B_bytearray fill) {
+B_bytearray B_bytearrayD_ljust(B_bytearray s, int64_t width, B_bytearray fill) {
     if (!fill)
         fill = space_bytearray;
-    int wval = fromB_int(width);
+    int wval = width;
     if (fill->nbytes != 1) {
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("bytearray ljust: fill array not single char")));
     }
@@ -2316,7 +2308,7 @@ B_bytearray B_bytearrayD_lstrip(B_bytearray s, B_bytearray cs) {
 
 
 B_tuple B_bytearrayD_partition(B_bytearray s, B_bytearray sep) {
-    int n = fromB_int(B_bytearrayD_find(s,sep,NULL,NULL));
+    int64_t n = B_bytearrayD_find(s,sep,NULL,NULL);
     if (n<0) {
         return $NEWTUPLE(3,s,toB_bytearray(""),toB_bytearray(""));
     } else {
@@ -2336,7 +2328,7 @@ B_tuple B_bytearrayD_partition(B_bytearray s, B_bytearray sep) {
 B_bytearray B_bytearrayD_replace(B_bytearray s, B_bytearray old, B_bytearray new, B_int count) {
     if (count==NULL)
         count = toB_int(INT_MAX);
-    int c = fromB_int(B_bytearrayD_count(s,old,NULL,NULL));
+    int64_t c = B_bytearrayD_count(s,old,NULL,NULL);
     int c0 = fromB_int(count) < c ? fromB_int(count) : c;
     if (c0==0){
         return B_bytearrayD_copy(s);
@@ -2367,30 +2359,30 @@ B_bytearray B_bytearrayD_replace(B_bytearray s, B_bytearray old, B_bytearray new
 }
 
 
-B_int B_bytearrayD_rfind(B_bytearray s, B_bytearray sub, B_int start, B_int end) {
+int64_t B_bytearrayD_rfind(B_bytearray s, B_bytearray sub, B_int start, B_int end) {
     B_int st = start;
     B_int en = end;
-    if (fix_start_end(s->nbytes,&st,&en) < 0) return toB_int(-1);
+    if (fix_start_end(s->nbytes,&st,&en) < 0) return -1;
     unsigned char *p = &s->str[fromB_int(st)];
     unsigned char *q = &s->str[fromB_int(en)];
     int n = rbmh(p,sub->str,q-p,sub->nbytes);
-    if (n<0) return toB_int(-1);
-    return toB_int(n+p-s->str);
+    if (n<0) return -1;
+    return n+p-s->str;
 }
 
 
-B_int B_bytearrayD_rindex(B_bytearray s, B_bytearray sub, B_int start, B_int end) {
-    B_int n = B_bytearrayD_rfind(s,sub,start,end);
-    if (fromB_int(n)<0) {
+int64_t B_bytearrayD_rindex(B_bytearray s, B_bytearray sub, B_int start, B_int end) {
+    int64_t n = B_bytearrayD_rfind(s,sub,start,end);
+    if (n<0) {
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("rindex for bytearray: substring not found")));
     };
     return n;
 }
 
-B_bytearray B_bytearrayD_rjust(B_bytearray s, B_int width, B_bytearray fill) {
+B_bytearray B_bytearrayD_rjust(B_bytearray s, int64_t width, B_bytearray fill) {
     if (!fill)
         fill = space_bytearray;
-    int wval = fromB_int(width);
+    int wval = width;
     if (fill->nbytes != 1) {
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("rjust: fill string not single char")));
     }
@@ -2409,7 +2401,7 @@ B_bytearray B_bytearrayD_rjust(B_bytearray s, B_int width, B_bytearray fill) {
 }
 
 B_tuple B_bytearrayD_rpartition(B_bytearray s, B_bytearray sep) {
-    int n = fromB_int(B_bytearrayD_rfind(s,sep,NULL,NULL));
+    int64_t n = B_bytearrayD_rfind(s,sep,NULL,NULL);
     if (n<0) {
         return $NEWTUPLE(3,toB_bytearray(""),toB_bytearray(""),s);
     } else {
@@ -2578,8 +2570,8 @@ B_bytearray B_bytearrayD_upper(B_bytearray s) {
     return res;
 }
 
-B_bytearray B_bytearrayD_zfill(B_bytearray s, B_int width) {
-    int wval = fromB_int(width);
+B_bytearray B_bytearrayD_zfill(B_bytearray s, int64_t width) {
+    int wval = width;
     int fill = wval - s->nbytes;
     if (fill < 0)
         return B_bytearrayD_copy(s);
@@ -2684,14 +2676,14 @@ B_bytearray B_ContainerD_bytearrayD___fromiter__ (B_ContainerD_bytearray wit, B_
     return B_bytearrayD_join(toB_bytearray(""),wit2,iter);
 }
 
-B_int B_ContainerD_bytearrayD___len__ (B_ContainerD_bytearray wit, B_bytearray str) {
-    return  toB_int(str->nbytes);
+int64_t B_ContainerD_bytearrayD___len__ (B_ContainerD_bytearray wit, B_bytearray str) {
+    return (int64_t)str->nbytes;
 }
 
 B_bool B_ContainerD_bytearrayD___contains__(B_ContainerD_bytearray wit, B_bytearray self, B_int n) {
     long res = 0;
     for (int i=0; i < self->nbytes; i++) {
-        if (self->str[i] == (unsigned char)fromB_int(n)) {
+        if (self->str[i] == (unsigned char)n->val) {
             res = 1;
             break;
         }
@@ -2706,19 +2698,19 @@ B_bool B_ContainerD_bytearrayD___containsnot__(B_ContainerD_bytearray wit, B_byt
 // Sequence
 
 B_int B_SequenceD_bytearrayD___getitem__ (B_SequenceD_bytearray wit, B_bytearray self, B_int n) {
-    int64_t ix = fromB_int(n);
+    int64_t ix = n->val;
     int64_t ix0 = ix < 0 ? self->nbytes + ix : ix;
     if (ix0<0 || ix0 >= self->nbytes)
-        $RAISE((B_BaseException)$NEW(B_IndexError, toB_int(ix0), to$str("getitem: index outside bytearray")));
-    return toB_int((long)self->str[ix0]);
+        $RAISE((B_BaseException)$NEW(B_IndexError, ix0, to$str("getitem: index outside bytearray")));
+    return toB_int((int64_t)self->str[ix0]);
 }
 
 B_NoneType B_SequenceD_bytearrayD___setitem__ (B_SequenceD_bytearray wit, B_bytearray self, B_int n, B_int v) {
-    int64_t ix = fromB_int(n);
+    int64_t ix = n->val;
     int64_t ix0 = ix < 0 ? self->nbytes + ix : ix;
-   long val = fromB_int(v);
+   long val = v->val;
     if (ix0<0 || ix0 >= self->nbytes)
-        $RAISE((B_BaseException)$NEW(B_IndexError, toB_int(ix0), to$str("setitem: index outside bytearray")));
+        $RAISE((B_BaseException)$NEW(B_IndexError, ix0, to$str("setitem: index outside bytearray")));
     if (val<0 || val>255)
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("setitem for bytearray: value outside [0..255]")));
     self->str[ix0] = (unsigned char)val;
@@ -2726,32 +2718,32 @@ B_NoneType B_SequenceD_bytearrayD___setitem__ (B_SequenceD_bytearray wit, B_byte
 }
 
 B_NoneType B_SequenceD_bytearrayD___delitem__ (B_SequenceD_bytearray wit, B_bytearray self, B_int n) {
-    int64_t ix = fromB_int(n);
+    int64_t ix = n->val;
     int64_t ix0 = ix < 0 ? self->nbytes + ix : ix;
     int len = self->nbytes;
     if (ix0 < 0 || ix0 >= len)
-        $RAISE((B_BaseException)$NEW(B_IndexError, toB_int(ix0), to$str("delitem: index outside bytearray")));
+        $RAISE((B_BaseException)$NEW(B_IndexError, ix0, to$str("delitem: index outside bytearray")));
     memmove(self->str + ix0,self->str + (ix0 + 1),len-(ix0+1));
     self->nbytes--;
     return B_None;
 }
 
-B_NoneType B_SequenceD_bytearrayD_insert(B_SequenceD_bytearray wit, B_bytearray self, B_int n, B_int elem) {
-    long ix = fromB_int(n);
+B_NoneType B_SequenceD_bytearrayD_insert(B_SequenceD_bytearray wit, B_bytearray self, int64_t n, B_int elem) {
+    long ix = n;
     int len = self->nbytes;
     expand_bytearray(self,1);
     int ix0 = ix < 0 ? (len+ix < 0 ? 0 : len+ix) : (ix < len ? ix : len);
     memmove(self->str + (ix0 + 1),
             self->str + ix0 ,
             len - ix0 + 1); // +1 to move also terminating '\0'
-    self->str[ix0] = (unsigned char)fromB_int(elem) & 0xff;
+    self->str[ix0] = (unsigned char)(elem->val & 0xff);
     self->nbytes++;
     return B_None;
 }
 
 B_NoneType B_SequenceD_bytearrayD_append(B_SequenceD_bytearray wit, B_bytearray self, B_int elem) {
     expand_bytearray(self,1);
-    self->str[self->nbytes++] = (unsigned char)fromB_int(elem) & 0xff;
+    self->str[self->nbytes++] = (unsigned char)(elem->val & 0xff);
     self->str[self->nbytes] = '\0';
     return B_None;
 }
@@ -2794,7 +2786,7 @@ B_NoneType B_SequenceD_bytearrayD___setslice__ (B_SequenceD_bytearray wit,  B_by
     NEW_UNFILLED_BYTEARRAY(other,0);
     $WORD w;
     while ((w=it->$class->__next__(it)))
-        B_SequenceD_bytearrayD_append(wit, other,(B_int)w);
+        B_SequenceD_bytearrayD_append(wit, other,w);
     int olen = other->nbytes; 
     int64_t start, stop, step, slen;
     normalize_slice(slc, len, &slen, &start, &stop, &step);
@@ -2857,8 +2849,8 @@ B_bytearray B_CollectionD_SequenceD_bytearrayD___fromiter__ (B_CollectionD_Seque
     return B_bytearrayD_join(toB_bytearray(""),wit2,iter);
 }
 
-B_int B_CollectionD_SequenceD_bytearrayD___len__ (B_CollectionD_SequenceD_bytearray wit, B_bytearray str) {
-    return  toB_int(str->nbytes);
+int64_t B_CollectionD_SequenceD_bytearrayD___len__ (B_CollectionD_SequenceD_bytearray wit, B_bytearray str) {
+    return  (int64_t)str->nbytes;
 }
 
 // Times
@@ -2876,7 +2868,7 @@ B_bytearray B_TimesD_SequenceD_bytearrayD___zero__ (B_TimesD_SequenceD_bytearray
 }
 
 B_bytearray B_TimesD_SequenceD_bytearrayD___mul__ (B_TimesD_SequenceD_bytearray wit, B_bytearray a, B_int n) {
-    int nval = fromB_int(n);
+    int nval = n->val;
     if (nval <= 0)
         return toB_bytearray("");
     else {
@@ -2943,8 +2935,8 @@ B_bytes actBytesFromCStringLengthNoCopy(char *str, int length) {
     return res;
 }
 
-unsigned char *fromB_bytes(B_bytes b) {
-    return b->str;
+char *fromB_bytes(B_bytes b) {
+    return (char *)b->str;
 }
 
 // Auxiliaries
@@ -3046,8 +3038,8 @@ B_bytes B_bytesD_capitalize(B_bytes s) {
     return res;
 }
 
-B_bytes B_bytesD_center(B_bytes s, B_int width, B_bytes fill) {
-    int wval = fromB_int(width);
+B_bytes B_bytesD_center(B_bytes s, int64_t width, B_bytes fill) {
+    int wval = width;
     if (!fill) fill = to$bytes(" ");
     if (fill->nbytes != 1) {
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("center: fill bytes not single char")));
@@ -3073,21 +3065,21 @@ B_bytes B_bytesD_center(B_bytes s, B_int width, B_bytes fill) {
     return res;
 }
 
-B_int B_bytesD_count(B_bytes s, B_bytes sub, B_int start, B_int end) {
+int64_t B_bytesD_count(B_bytes s, B_bytes sub, B_int start, B_int end) {
     B_int st = start;
     B_int en = end;
-    if (fix_start_end(s->nbytes,&st,&en) < 0) return toB_int(0);
+    if (fix_start_end(s->nbytes,&st,&en) < 0) return 0;
     int stval = fromB_int(st);
     unsigned char *p = &s->str[stval];
     unsigned char *q = &p[fromB_int(en)-stval];
-    int res = 0;
+    int64_t res = 0;
     int n = bmh(p,sub->str,q-p,sub->nbytes);
     while (n>=0) {
         res++;
         p += n + (sub->nbytes>0 ? sub->nbytes : 1);
         n = bmh(p,sub->str,q-p,sub->nbytes);
     }
-    return toB_int(res);
+    return res;
 }
 
 B_str B_bytesD_decode(B_bytes s) {
@@ -3144,15 +3136,15 @@ B_bytes B_bytesD_expandtabs(B_bytes s, B_int tabsz){
     return res;
 }
 
-B_int B_bytesD_find(B_bytes s, B_bytes sub, B_int start, B_int end) {
+int64_t B_bytesD_find(B_bytes s, B_bytes sub, B_int start, B_int end) {
     B_int st = start;
     B_int en = end;
-    if (fix_start_end(s->nbytes,&st,&en) < 0) return toB_int(-1);
+    if (fix_start_end(s->nbytes,&st,&en) < 0) return -1;
     unsigned char *p = &s->str[fromB_int(st)];
     unsigned char *q = &s->str[fromB_int(en)];
     int n = bmh(p,sub->str,q-p,sub->nbytes);
-    if (n<0) return toB_int(-1);
-    return toB_int(n+p-s->str);
+    if (n<0) return -1;
+    return n+p-s->str;
 }
 
 B_bytes B_bytesD_from_hex(B_str s) {
@@ -3160,7 +3152,7 @@ B_bytes B_bytesD_from_hex(B_str s) {
         return null_bytes;
     // Each byte is represented by 2 hex chars
     int strlen = s->nbytes;  // Changed from len to nbytes
-    if (strlen % 2 != 0) {
+    if (strlen % 2 != 0) { 
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("from_hex: hex string must have even length")));
     }
 
@@ -3224,9 +3216,9 @@ B_str B_bytesD_hex(B_bytes s) {
     return to_str_noc(result);
 }
 
-B_int B_bytesD_index(B_bytes s, B_bytes sub, B_int start, B_int end) {
-    B_int n = B_bytesD_find(s,sub,start,end);
-    if (fromB_int(n)<0) {
+int64_t B_bytesD_index(B_bytes s, B_bytes sub, B_int start, B_int end) {
+    int64_t n = B_bytesD_find(s,sub,start,end);
+    if (n<0) {
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("index: substring not found")));
     }
     return n;
@@ -3360,10 +3352,10 @@ B_bytes B_bytesD_join(B_bytes s, B_Iterable wit, $WORD iter) {
     return res;
 }
 
-B_bytes B_bytesD_ljust(B_bytes s, B_int width, B_bytes fill) {
+B_bytes B_bytesD_ljust(B_bytes s, int64_t width, B_bytes fill) {
     if (!fill)
         fill = space_bytes;
-    int wval = fromB_int(width);
+    int wval = width;
     if (fill->nbytes != 1) {
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("bytes ljust: fill array not single char")));
     }
@@ -3412,7 +3404,7 @@ B_bytes B_bytesD_lstrip(B_bytes s, B_bytes cs) {
 
 
 B_tuple B_bytesD_partition(B_bytes s, B_bytes sep) {
-    int n = fromB_int(B_bytesD_find(s,sep,NULL,NULL));
+    int64_t n = B_bytesD_find(s,sep,NULL,NULL);
     if (n<0) {
         return $NEWTUPLE(3,s,to$bytes(""),to$bytes(""));
     } else {
@@ -3457,7 +3449,7 @@ B_bytes B_bytesD_removesuffix(B_bytes s, B_bytes suffix) {
 B_bytes B_bytesD_replace(B_bytes s, B_bytes old, B_bytes new, B_int count) {
     if (count==NULL)
         count = toB_int(INT_MAX);
-    int c = fromB_int(B_bytesD_count(s,old,NULL,NULL));
+    int64_t c = B_bytesD_count(s,old,NULL,NULL);
     int c0 = fromB_int(count) < c ? fromB_int(count) : c;
     if (c0==0){
         return B_bytesD_copy(s);
@@ -3488,33 +3480,33 @@ B_bytes B_bytesD_replace(B_bytes s, B_bytes old, B_bytes new, B_int count) {
 }
 
 
-B_int B_bytesD_rfind(B_bytes s, B_bytes sub, B_int start, B_int end) {
+int64_t B_bytesD_rfind(B_bytes s, B_bytes sub, B_int start, B_int end) {
     B_int st = start;
     B_int en = end;
-    if (fix_start_end(s->nbytes,&st,&en) < 0) return toB_int(-1);
+    if (fix_start_end(s->nbytes,&st,&en) < 0) return -1;
     unsigned char *p = &s->str[fromB_int(st)];
     unsigned char *q = &s->str[fromB_int(en)];
     int n = rbmh(p,sub->str,q-p,sub->nbytes);
-    if (n<0) return toB_int(-1);
-    return toB_int(n+p-s->str);
+    if (n<0) return -1;
+    return n+p-s->str;
 }
 
 
-B_int B_bytesD_rindex(B_bytes s, B_bytes sub, B_int start, B_int end) {
-    B_int n = B_bytesD_rfind(s,sub,start,end);
-    if (fromB_int(n)<0) {
+int64_t B_bytesD_rindex(B_bytes s, B_bytes sub, B_int start, B_int end) {
+    int64_t n = B_bytesD_rfind(s,sub,start,end);
+    if (n<0) {
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("rindex for bytes: substring not found")));
     };
     return n;
 }
 
-B_bytes B_bytesD_rjust(B_bytes s, B_int width, B_bytes fill) {
+B_bytes B_bytesD_rjust(B_bytes s, int64_t width, B_bytes fill) {
     if (!fill)
         fill = space_bytes;
     if (fill->nbytes != 1) {
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("rjust: fill string not single char")));
     }
-    int wval = fromB_int(width); 
+    int wval = width; 
     if (wval <= s->nbytes) {
         return B_bytesD_copy(s);
     }
@@ -3530,7 +3522,7 @@ B_bytes B_bytesD_rjust(B_bytes s, B_int width, B_bytes fill) {
 }
 
 B_tuple B_bytesD_rpartition(B_bytes s, B_bytes sep) {
-    int n = fromB_int(B_bytesD_rfind(s,sep,NULL,NULL));
+    int64_t n = B_bytesD_rfind(s,sep,NULL,NULL);
     if (n<0) {
         return $NEWTUPLE(3,to$bytes(""),to$bytes(""),s);
     } else {
@@ -3700,8 +3692,8 @@ B_bytes B_bytesD_upper(B_bytes s) {
     return res;
 }
 
-B_bytes B_bytesD_zfill(B_bytes s, B_int width) {
-    int wval = fromB_int(width);
+B_bytes B_bytesD_zfill(B_bytes s, int64_t width) {
+    int wval = width;
     int fill = wval - s->nbytes;
     if (fill < 0)
         return B_bytesD_copy(s);
@@ -3816,14 +3808,14 @@ B_bytes B_ContainerD_bytesD___fromiter__ (B_ContainerD_bytes wit, B_Iterable wit
     return B_bytesD_join(to$bytes(""),wit2,iter);
 }
 
-B_int B_ContainerD_bytesD___len__ (B_ContainerD_bytes wit, B_bytes str) {
-    return toB_int(str->nbytes);
+int64_t B_ContainerD_bytesD___len__ (B_ContainerD_bytes wit, B_bytes str) {
+    return (int64_t)str->nbytes;
 }
 
 B_bool B_ContainerD_bytesD___contains__ (B_ContainerD_bytes wit, B_bytes str, B_int n) {
     long res = 0;
     for (int i=0; i < str->nbytes; i++) {
-        if (str->str[i] == (unsigned char)fromB_int(n)) {
+        if (str->str[i] == (unsigned char)n->val) {
             res = 1;
             break;
         }
@@ -3838,10 +3830,10 @@ B_bool B_ContainerD_bytesD___containsnot__ (B_ContainerD_bytes wit, B_bytes str,
 // Sliceable
 
 B_int B_SliceableD_bytesD___getitem__ (B_SliceableD_bytes wit, B_bytes str, B_int n) {
-    long ix = fromB_int(n);
+    long ix = n->val;
     long ix0 = ix < 0 ? str->nbytes + ix : ix;
     if (ix0<0 || ix0 >= str->nbytes)
-        $RAISE((B_BaseException)$NEW(B_IndexError, toB_int(ix0), to$str("getitem: index outside bytesarray")));
+        $RAISE((B_BaseException)$NEW(B_IndexError, ix0, to$str("getitem: index outside bytesarray")));
     return toB_int((long)str->str[ix0]);
 }
 
@@ -3895,7 +3887,7 @@ B_bytes B_TimesD_bytesD___zero__ (B_TimesD_bytes wit) {
 }
 
 B_bytes B_TimesD_bytesD___mul__ (B_TimesD_bytes wit, B_bytes a, B_int n) {
-    int nval = fromB_int(n);
+    int64_t nval = n->val;
     if (nval <= 0)
         return to$bytes("");
     else {
@@ -3951,7 +3943,7 @@ B_str B_ascii(B_value v) {
 }
 
 B_str B_bin(B_Integral wit, $WORD n) {
-    long v = fromB_int(wit->$class->__int__(wit,n));
+    long v = wit->$class->__int__(wit,n);
     int sign = v<0;
     int nbits = 1;
     unsigned long u = labs(v);
@@ -3990,7 +3982,7 @@ B_str B_bin(B_Integral wit, $WORD n) {
 }
 
 B_str B_chr(B_Integral wit, $WORD n) {
-    long v = fromB_int(wit->$class->__int__(wit,n));
+    int64_t v = wit->$class->__int__(wit,n);
     if (v >=  0x110000)
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("chr: argument is not a valid Unicode code point")));
     if (v > 0 && v < ASCII_CHAR_TABLE_SIZE)
@@ -4008,7 +4000,7 @@ B_str B_chr(B_Integral wit, $WORD n) {
 
 B_str B_hex(B_Integral wit, $WORD n) {
     unsigned char *hexdigits = (unsigned char *)"0123456789abcdef";
-    long v =  fromB_int(wit->$class->__int__(wit,n));
+    long v =  wit->$class->__int__(wit,n);
     int sign = v<0;
     int nhexs = 1;
     unsigned long u = labs(v);

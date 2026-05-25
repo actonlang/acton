@@ -175,6 +175,3 @@ $SEQ $SEQG_new();
 $BRK $BRKG_new();
 $CNT $CNTG_new();
 $RET $RETG_new(B_value);
-
-$WORD $raiseValueError(B_str str);
-    

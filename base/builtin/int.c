@@ -24,20 +24,20 @@ long int_pow(long a, long e) {
 
 // General methods ///////////////////////////////////////////////////////////////////////
 
-B_int B_intG_new(B_atom a, B_int base) {
+int64_t B_intG_new(B_atom a, B_int base) {  // base is optional
     B_bigint b = B_bigintG_new(a, base);
     unsigned long n = b->val.n[0];
-    long sz = b->val.size;
+    int sz = b->val.size;
     if (labs(sz) > 1 || (sz==1 && n > 0x7ffffffffffffffful) || sz == -1 && n > 0x8000000000000000ul) {
         char errmsg[1024];
         snprintf(errmsg, sizeof(errmsg), "int(): value %s out of range for type int",get_str(&b->val));
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
     }
-    return toB_int(n*sz);
+    return n*sz;
 }
  
 B_NoneType B_intD___init__(B_int self, B_atom a, B_int base){
-    self->val = B_intG_new(a,base)->val;
+    self->val = B_intG_new(a,base);
     return B_None;
 }
 
@@ -76,13 +76,13 @@ int64_t fromB_int(B_int w) {
     return w->val;
 }
 
-                  
+
 
 // B_IntegralD_int /////////////////////////////////////////////////////////////////////////
 
- 
+
 B_int B_IntegralD_intD___add__(B_IntegralD_int wit,  B_int a, B_int b) {
-    return toB_int(a->val + b->val);
+    return toB_int(a->val + b->val); 
 }
 
 B_int B_IntegralD_intD___zero__(B_IntegralD_int wit) {
@@ -90,11 +90,11 @@ B_int B_IntegralD_intD___zero__(B_IntegralD_int wit) {
 }
 
 B_complex B_IntegralD_intD___complex__(B_IntegralD_int wit, B_int a) {
-    return toB_complex((double)a->val);
+    return toB_complex((double)(a->val));
 }
 
 B_int B_IntegralD_intD___fromatom__(B_IntegralD_int wit, B_atom a) {
-    return B_intG_new(a,NULL);
+    return toB_int(B_intG_new(a,NULL));
 }
 
 B_int B_IntegralD_intD___mul__(B_IntegralD_int wit,  B_int a, B_int b) {
@@ -102,11 +102,14 @@ B_int B_IntegralD_intD___mul__(B_IntegralD_int wit,  B_int a, B_int b) {
 }  
   
 B_int B_IntegralD_intD___pow__(B_IntegralD_int wit,  B_int a, B_int b) {
-    if ( b->val < 0) {
-        // raise VALUEERROR;
-        return NULL;
+    int64_t aval = a->val;
+    int64_t bval = b->val;
+    if ( bval < 0) {
+        char errmsg[1024];
+        snprintf(errmsg, sizeof(errmsg), "int.__pow__: negative exponent %ld ",(long)bval);
+        $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
     }
-    return toB_int(int_pow(a->val,b->val));
+    return toB_int(int_pow(aval,bval));
 }
 
 B_int B_IntegralD_intD___neg__(B_IntegralD_int wit,  B_int a) {
@@ -118,11 +121,11 @@ B_int B_IntegralD_intD___pos__(B_IntegralD_int wit,  B_int a) {
 }
 
 $WORD B_IntegralD_intD_real(B_IntegralD_int wit, B_int a, B_Real wit2) {
-    return wit2->$class->__fromatom__(wit2,(B_atom)a);
+    return wit2->$class->__fromatom__(wit2,(B_atom)(a));
 }
 
 $WORD B_IntegralD_intD_imag(B_IntegralD_int wit, B_int a, B_Real wit2) {
-    return wit2->$class->__fromatom__(wit2,(B_atom)toB_int(0L));
+    return wit2->$class->__fromatom__(wit2,(B_atom)toB_int(0LL));
 }
 
 $WORD B_IntegralD_intD___abs__(B_IntegralD_int wit, B_int a, B_Real wit2) {
@@ -133,8 +136,8 @@ B_int B_IntegralD_intD_conjugate(B_IntegralD_int wit,  B_int a) {
     return a;
 }
 
-B_float B_IntegralD_intD___float__ (B_IntegralD_int wit, B_int n) {
-    return to$float((double)n->val);
+double B_IntegralD_intD___float__ (B_IntegralD_int wit, B_int n) {
+    return (double)n->val;
 }
 
 $WORD B_IntegralD_intD___trunc__ (B_IntegralD_int wit, B_int n, B_Integral wit2) {
@@ -150,17 +153,17 @@ $WORD B_IntegralD_intD___ceil__ (B_IntegralD_int wit, B_int n, B_Integral wit2) 
 }
   
 B_int B_IntegralD_intD___round__ (B_IntegralD_int wit, B_int n, B_int p) {
-    long nval = n->val;
+    int64_t nval = n->val;
     if (nval<0)
-        return toB_int(-B_IntegralD_intD___round__(wit,toB_int(-nval),p)->val);
-    long pval = p==NULL ? 0 : fromB_int(p);
+        return  toB_int(-B_IntegralD_intD___round__(wit,toB_int(-nval),p)->val);
+    int64_t pval = p==NULL ? 0 : fromB_int(p);
     if (pval>=0)
         return n;
-    long p10 = int_pow(10,-pval);
-    long res = nval/p10;
+    int64_t p10 = int_pow(10,-pval);
+    int64_t res = nval/p10;
     if (nval%p10 * 2 > p10)
         res++; 
-    return toB_int (res * p10);
+    return toB_int(res * p10);
 }
   
 $WORD B_IntegralD_intD_numerator (B_IntegralD_int wit, B_int n, B_Integral wit2) {
@@ -168,20 +171,20 @@ $WORD B_IntegralD_intD_numerator (B_IntegralD_int wit, B_int n, B_Integral wit2)
 }
   
 $WORD B_IntegralD_intD_denominator (B_IntegralD_int wit, B_int n, B_Integral wit2) {
-    return wit2->$class->__fromatom__(wit2,(B_atom)toB_int(1L));
+    return wit2->$class->__fromatom__(wit2,(B_atom)toB_int(1LL));
 }
   
-B_int B_IntegralD_intD___int__ (B_IntegralD_int wit, B_int n) {
-    return B_intG_new((B_atom)n,NULL);
+int64_t B_IntegralD_intD___int__ (B_IntegralD_int wit, B_int n) {
+    return n->val;
 }
 
-B_int B_IntegralD_intD___index__(B_IntegralD_int wit, B_int n) {
-    return B_intG_new((B_atom)n,NULL);
+int64_t B_IntegralD_intD___index__(B_IntegralD_int wit, B_int n) {
+    return n->val;
 }
 
 B_tuple B_IntegralD_intD___divmod__(B_IntegralD_int wit, B_int a, B_int b) {
-    long n = a->val;
-    long d = b->val;
+    int64_t n = a->val;
+    int64_t d = b->val;
     return $NEWTUPLE(2, toB_int(n/d), toB_int(n%d));
 }
 
@@ -195,12 +198,12 @@ B_int B_IntegralD_intD___mod__(B_IntegralD_int wit, B_int a, B_int b) {
     return toB_int(a->val % b->val);
 }
 
-B_int B_IntegralD_intD___lshift__(B_IntegralD_int wit,  B_int a, B_int b) {
-    return toB_int(a->val << fromB_int(b));
+B_int B_IntegralD_intD___lshift__(B_IntegralD_int wit,  B_int a, int64_t b) {
+    return toB_int(a->val << b);
 }
 
-B_int B_IntegralD_intD___rshift__(B_IntegralD_int wit,  B_int a, B_int b) {
-    return toB_int(a->val >> fromB_int(b));
+B_int B_IntegralD_intD___rshift__(B_IntegralD_int wit,  B_int a, int64_t b) {
+    return toB_int(a->val >> b);
 }
  
 B_int B_IntegralD_intD___invert__(B_IntegralD_int wit,  B_int a) {
@@ -235,7 +238,7 @@ B_int B_MinusD_IntegralD_intD___sub__(B_MinusD_IntegralD_int wit,  B_int a, B_in
 B_float B_DivD_intD___truediv__ (B_DivD_int wit, B_int a, B_int b) {
     if (b->val == 0)
         $RAISE((B_BaseException)$NEW(B_ZeroDivisionError, to$str("division by zero")));
-    return to$float((double)a->val/(double)b->val);
+    return toB_float((double)a->val/(double)b->val);
 }
 
 // B_OrdD_int  ////////////////////////////////////////////////////////////////////////////////////////

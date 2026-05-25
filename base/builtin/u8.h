@@ -6,7 +6,7 @@ struct B_u8 {
 B_u8 toB_u8(uint8_t n);
 uint8_t fromB_u8(B_u8 n);
 
-B_u8 B_u8G_new(B_atom a, B_int base);
+uint8_t B_u8G_new(B_atom a, B_int base);
 
 #define u8_DIV(a,b)       ( {if (b==0) $RAISE((B_BaseException)$NEW(B_ZeroDivisionError,to$str("u8 truediv: division by zero"))); (double)a/(double)b;} )
 #define u8_FLOORDIV(a,b)  ( {if (b==0) $RAISE((B_BaseException)$NEW(B_ZeroDivisionError,to$str("u8 floordiv: division by zero")));  a/b;} )
