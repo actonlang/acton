@@ -647,12 +647,28 @@ findAttrInfoIn n            = scan Nothing
           | x == n          = scan (Just i) xs
           | otherwise       = scan r xs
 
+-- attributes'                 :: (WPath -> NameInfo -> Name -> Maybe a) -> EnvF x -> QName -> [a]
+-- attributes' f env qn        = catMaybes [ f wp i n | n <- ns, let Just (wp,i) = lookup n aenv ]
+--   where ns                  = nub $ reverse $ dom aenv                                                                                  -- in offset order
+--         aenv                = [ (n,(wp,i)) | (wp,c) <- ([],tc) : us, let (_,_,te) = findConName (tcname c) env, (n,i) <- reverse te ]   -- in override order
+--         (q,us,_)            = findConName qn env
+--         tc                  = TC qn [ tVar v | QBind v _ <- q ]
+-- The above function is replaced by the following version, as suggested in mail from Johan 260429.
+
 attributes'                 :: (WPath -> NameInfo -> Name -> Maybe a) -> EnvF x -> QName -> [a]
 attributes' f env qn        = catMaybes [ f wp i n | n <- ns, let Just (wp,i) = lookup n aenv ]
   where ns                  = nub $ reverse $ dom aenv                                                                                  -- in offset order
-        aenv                = [ (n,(wp,i)) | (wp,c) <- ([],tc) : us, let (_,_,te) = findConName (tcname c) env, (n,i) <- reverse te ]   -- in override order
-        (q,us,_)            = findConName qn env
+        aenv                = attrEnv env qn
+
+attrEnv                     :: EnvF x -> QName -> [(Name,(WPath,NameInfo))]
+attrEnv env qn              = [ (n,(wp,i)) | (wp,c) <- ([],tc) : us, let (_,_,te) = findConName (tcname c) env, (n,i) <- reverse te ]   -- in override order
+  where (q,us,_)            = findConName qn env
         tc                  = TC qn [ tVar v | QBind v _ <- q ]
+
+findAttrSchemas             :: EnvF x -> QName -> TEnv
+findAttrSchemas env qn      = [ (n,i) | n <- ns, let Just (_,i) = lookup n aenv ]
+  where ns                  = nub $ dom aenv
+        aenv                = reverse $ attrEnv env qn
 
 inheritedAttrs              :: EnvF x -> QName -> [(QName,Name)]
 inheritedAttrs              = attributes' f
