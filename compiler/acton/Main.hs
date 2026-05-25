@@ -16,7 +16,6 @@ module Main where
 
 import Prelude hiding (readFile, writeFile)
 
-import qualified Acton.Parser
 import qualified Acton.Syntax as A
 import qualified Acton.NameInfo as I
 import Text.Megaparsec.Error (ParseErrorBundle)
@@ -46,10 +45,11 @@ import Utils
 import qualified Pretty
 import qualified InterfaceFiles
 import qualified PkgCommands
+import qualified Repl
+import FileUtil (readFile, writeFile, writeFileAtomic)
 
 import Control.Concurrent.MVar
-import Control.Exception (throw,catch,finally,IOException,try,SomeException,bracket,bracket_,onException,evaluate)
-import Control.Exception (bracketOnError)
+import Control.Exception (throw,catch,finally,IOException,try,SomeException,onException,evaluate)
 import Control.Concurrent (ThreadId, forkIO, killThread, threadDelay)
 import Control.Concurrent.Chan (Chan, newChan, writeChan, readChan)
 import Control.Monad
@@ -57,7 +57,7 @@ import Data.Bits
 import Data.Default.Class (def)
 import Data.List.Split
 import Data.IORef
-import Data.Maybe (catMaybes, isJust)
+import Data.Maybe (catMaybes, isJust, isNothing)
 import Data.Monoid ((<>))
 import Data.Word (Word32)
 import Data.Graph
@@ -85,9 +85,9 @@ import System.FileLock
 import System.FilePath ((</>), addTrailingPathSeparator)
 import System.FilePath.Posix
 import System.IO hiding (readFile, writeFile)
+import System.IO.Temp (writeSystemTempFile)
 import Text.PrettyPrint (renderStyle, style, Style(..), Mode(PageMode))
 import Text.Show.Pretty (ppDoc)
-import System.IO.Temp
 import System.IO.Unsafe (unsafePerformIO)
 import System.Info
 import System.Posix.Files
@@ -114,6 +114,11 @@ main = do
           C.CmdOpt g _ -> g
           C.CompileOpt _ g _ -> g
     ensureCapabilities gopts
+    let replHooks = Repl.Hooks
+          { Repl.hooksCacheDir = actonCacheDir
+          , Repl.hooksWithPersistentScratchDirLock = withPersistentScratchDirLock
+          , Repl.hooksCompileFiles = compileReplHook
+          }
     let run = case arg of
           C.CmdOpt gopts (C.New opts)         -> createProject (C.file opts)
           C.CmdOpt gopts (C.Build bopts)      ->
@@ -126,6 +131,7 @@ main = do
           C.CmdOpt gopts (C.Uninstall opts)    -> PkgCommands.uninstallCommand gopts opts
           C.CmdOpt gopts (C.Sig opts)          -> sigCommand gopts opts
           C.CmdOpt gopts (C.Test tcmd)        -> runTests gopts tcmd
+          C.CmdOpt gopts (C.Repl opts)        -> Repl.runRepl replHooks gopts opts
           C.CmdOpt gopts C.Fetch             -> fetchCommand gopts
           C.CmdOpt gopts C.PkgShow           -> pkgShow gopts
           C.CmdOpt gopts (C.PkgAdd opts)     -> PkgCommands.pkgAddCommand gopts opts
@@ -199,38 +205,6 @@ findAvailableScratch basePath = go [0..31]  -- 32 possible scratch directories
 printErrorAndExit msg = do
                   errorWithoutStackTrace msg
                   System.Exit.exitFailure
-
--- our own readFile & writeFile with hard-coded utf-8 encoding (atomic writes)
-readFile f = do
-    h <- openFile f ReadMode
-    hSetEncoding h utf8
-    c <- hGetContents h
-    return c
-
-writeFile :: FilePath -> String -> IO ()
-writeFile = writeFileUtf8Atomic
-
-ignoreIOException :: IOException -> IO ()
-ignoreIOException _ = return ()
-
-writeFileAtomic :: FilePath -> String -> IO ()
-writeFileAtomic f c = do
-    let dir = takeDirectory f
-    bracketOnError
-      (openTempFile dir ".acton-tmp")
-      (\(tmpPath, tmpHandle) -> do
-          hClose tmpHandle `catch` ignoreIOException
-          removeFile tmpPath `catch` ignoreIOException)
-      (\(tmpPath, tmpHandle) -> do
-          hSetEncoding tmpHandle utf8
-          hPutStr tmpHandle c
-          hClose tmpHandle
-          renameFile tmpPath f `catch` handleRenameError tmpPath)
-  where
-    handleRenameError :: FilePath -> IOException -> IO ()
-    handleRenameError tmpPath _ = do
-        removeFile f `catch` ignoreIOException
-        renameFile tmpPath f
 
 -- | Format a TimeSpec as seconds with millisecond precision.
 fmtTimePrecise :: TimeSpec -> String
@@ -552,10 +526,17 @@ requireProjectConfigPath curDir = do
 ignoreNotExists :: IOException -> IO ()
 ignoreNotExists _ = return ()
 
+actonCacheDir :: IO FilePath
+actonCacheDir = do
+    home <- getHomeDirectory
+    let basePath = joinPath [home, ".cache", "acton"]
+    createDirectoryIfMissing True basePath
+    return basePath
+
 withScratchDirLock :: (FilePath -> IO a) -> IO a
 withScratchDirLock action = do
-    home <- getHomeDirectory
-    let basePath = joinPath [home, ".cache", "acton", "scratch"]
+    cacheDir <- actonCacheDir
+    let basePath = cacheDir </> "scratch"
     createDirectoryIfMissing True basePath
     maybeLockInfo <- findAvailableScratch basePath
     case maybeLockInfo of
@@ -563,6 +544,17 @@ withScratchDirLock action = do
       Just (lock, lockPath) -> do
         let scratchDir = dropExtension lockPath
         removeDirectoryRecursive scratchDir `catch` ignoreNotExists
+        action scratchDir `finally` unlockFile lock
+
+withPersistentScratchDirLock :: FilePath -> (FilePath -> IO a) -> IO a
+withPersistentScratchDirLock basePath action = do
+    createDirectoryIfMissing True basePath
+    maybeLockInfo <- findAvailableScratch basePath
+    case maybeLockInfo of
+      Nothing -> error "Could not acquire any scratch directory lock"
+      Just (lock, lockPath) -> do
+        let scratchDir = dropExtension lockPath
+        createDirectoryIfMissing True scratchDir
         action scratchDir `finally` unlockFile lock
 
 withTempDirOpts :: C.CompileOptions -> (C.CompileOptions -> Bool -> IO a) -> IO a
@@ -1322,6 +1314,11 @@ printDocs gopts opts = do
 
           _ -> printErrorAndExit ("Unknown filetype: " ++ filename)
 
+
+compileReplHook :: C.GlobalOptions -> C.CompileOptions -> FilePath -> [FilePath] -> IO Bool
+compileReplHook gopts opts projDir srcFiles =
+    withProjectLockNotice gopts projDir $
+      compileFilesChanged Source.diskSourceProvider gopts opts srcFiles False Nothing Nothing Nothing
 
 -- Compile Acton files ---------------------------------------------------------------------------------------------
 

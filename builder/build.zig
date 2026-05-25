@@ -221,8 +221,13 @@ pub fn build(b: *std.Build) void {
 
     var explicit_libraries = ArrayList(*std.Build.Step.Compile).empty;
     var explicit_static_libraries = ArrayList(*std.Build.Step.Compile).empty;
+    var explicit_dynamic_library_names = ArrayList([]const u8).empty;
+    var explicit_dynamic_library_installs = ArrayList(*std.Build.Step).empty;
+    var has_dynamic_libraries = false;
     defer explicit_libraries.deinit(b.allocator);
     defer explicit_static_libraries.deinit(b.allocator);
+    defer explicit_dynamic_library_names.deinit(b.allocator);
+    defer explicit_dynamic_library_installs.deinit(b.allocator);
 
     var lib_it = std.mem.splitScalar(u8, acton_libraries, '|');
     while (lib_it.next()) |raw_lib| {
@@ -236,6 +241,7 @@ pub fn build(b: *std.Build) void {
         if (lib_name.len == 0 or lib_sources.len == 0) continue;
 
         const lib_dynamic = std.mem.eql(u8, lib_linkage, "dynamic");
+        has_dynamic_libraries = has_dynamic_libraries or lib_dynamic;
         const libActonExplicit = b.addLibrary(.{
             .name = lib_name,
             .linkage = if (lib_dynamic) .dynamic else .static,
@@ -285,7 +291,18 @@ pub fn build(b: *std.Build) void {
     for (explicit_libraries.items) |libActonExplicit| {
         libActonExplicit.root_module.link_libc = true;
         libActonExplicit.root_module.link_libcpp = true;
-        b.installArtifact(libActonExplicit);
+        const install_lib = b.addInstallArtifact(libActonExplicit, .{});
+        b.getInstallStep().dependOn(&install_lib.step);
+        if (libActonExplicit.linkage == .dynamic) {
+            explicit_dynamic_library_names.append(b.allocator, libActonExplicit.name) catch |err| {
+                std.log.err("Error appending explicit dynamic library name: {}", .{err});
+                std.process.exit(1);
+            };
+            explicit_dynamic_library_installs.append(b.allocator, &install_lib.step) catch |err| {
+                std.log.err("Error appending explicit dynamic library install step: {}", .{err});
+                std.process.exit(1);
+            };
+        }
     }
 
     // Register the produced header files in out/types using
@@ -368,12 +385,14 @@ pub fn build(b: *std.Build) void {
             executable.root_module.linkLibrary(libActonProject);
             for (explicit_libraries.items) |libActonExplicit| {
                 if (libActonExplicit.linkage == .dynamic) {
-                    executable.root_module.addObjectFile(libActonExplicit.getEmittedBin());
+                    if (target.result.os.tag != .linux) {
+                        executable.root_module.addObjectFile(libActonExplicit.getEmittedBin());
+                    }
                 } else {
                     executable.root_module.linkLibrary(libActonExplicit);
                 }
             }
-            if (explicit_libraries.items.len > 0) {
+            if (has_dynamic_libraries) {
                 switch (target.result.os.tag) {
                     .macos => {
                         executable.root_module.addRPathSpecial("@executable_path/../lib");
@@ -381,6 +400,18 @@ pub fn build(b: *std.Build) void {
                         executable.root_module.addRPathSpecial("@executable_path");
                     },
                     .linux => {
+                        executable.rdynamic = true;
+                        executable.root_module.addLibraryPath(b.path("out/lib"));
+                        for (explicit_dynamic_library_installs.items) |install_step| {
+                            executable.step.dependOn(install_step);
+                        }
+                        for (explicit_dynamic_library_names.items) |lib_name| {
+                            executable.root_module.linkSystemLibrary(lib_name, .{
+                                .needed = true,
+                                .use_pkg_config = .no,
+                                .preferred_link_mode = .dynamic,
+                            });
+                        }
                         executable.root_module.addRPathSpecial("$ORIGIN/../lib");
                         executable.root_module.addRPathSpecial("$ORIGIN/lib");
                         executable.root_module.addRPathSpecial("$ORIGIN");
