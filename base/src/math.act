@@ -13,68 +13,34 @@
 
 pi = 3.141592653589793
 
-protocol RealFuns:
-    @staticmethod
-    sqrt       : (Self) -> Self
-    @staticmethod
-    exp        : (Self) -> Self
-    @staticmethod
-    log        : (Self) -> Self
-    @staticmethod
-    sin        : (Self) -> Self
-    @staticmethod
-    cos        : (Self) -> Self
-    @staticmethod
-    tan        : (Self) -> Self
-    @staticmethod
-    asin       : (Self) -> Self
-    @staticmethod
-    acos       : (Self) -> Self
-    @staticmethod
-    atan       : (Self) -> Self
-    @staticmethod
-    sinh       : (Self) -> Self
-    @staticmethod
-    cosh       : (Self) -> Self
-    @staticmethod
-    tanh       : (Self) -> Self
-    @staticmethod
-    asinh       : (Self) -> Self
-    @staticmethod
-    acosh       : (Self) -> Self
-    @staticmethod
-    atanh       : (Self) -> Self
-
-extension float (RealFuns):
-    NotImplemented
 
 def sqrt(x: float):
-   return RealFuns.sqrt(x)
+   NotImplemented
 def exp(x: float):
-   return RealFuns.exp(x)
+   NotImplemented
 def log(x: float):
-   return RealFuns.log(x)
+   NotImplemented
 def sin(x: float):
-   return RealFuns.sin(x)
+   NotImplemented
 def cos(x: float):
-   return RealFuns.cos(x)
+   NotImplemented
 def tan(x: float):
-   return RealFuns.tan(x)
+   NotImplemented
 def asin(x: float):
-   return RealFuns.asin(x)
+   NotImplemented
 def acos(x: float):
-   return RealFuns.acos(x)
+   NotImplemented
 def atan(x: float):
-   return RealFuns.atan(x)
+   NotImplemented
 def sinh(x: float):
-   return RealFuns.sinh(x)
+   NotImplemented
 def cosh(x: float):
-   return RealFuns.cosh(x)
+   NotImplemented
 def tanh(x: float):
-   return RealFuns.tanh(x)
+   NotImplemented
 def asinh(x: float):
-   return RealFuns.asinh(x)
+   NotImplemented
 def acosh(x: float):
-   return RealFuns.acosh(x)
+   NotImplemented
 def atanh(x: float):
-   return RealFuns.atanh(x)
+   NotImplemented
