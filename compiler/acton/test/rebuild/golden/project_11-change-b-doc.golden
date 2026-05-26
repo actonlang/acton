@@ -11,5 +11,13 @@ Resolving dependencies (fetching if missing)...
            G_init : () -> None
            get : () -> int
   Fresh c: using cached .ty
+     Back normalize done: b                                                 0.000 s
+     Back deactorize done: b                                                0.000 s
+     Back cps done: b                                                       0.000 s
+     Back llift done: b                                                     0.000 s
+     Back boxing done: b                                                    0.000 s
+     Back codegen done: b                                                   0.000 s
+     Back render done: b                                                    0.000 s
+     Back write done: b                                                     0.000 s
    b  Compilation done                                                      0.000 s
       Final compilation done                                                0.000 s
