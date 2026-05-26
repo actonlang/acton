@@ -152,6 +152,64 @@ compilerTests =
             ("not present in Zig cache after fetch" `isInfixOf` cmdErr)
           assertBool "should not fail with missing Build.act in unresolved deps cache path"
             (not ("Missing Build.act in " `isInfixOf` cmdErr))
+  , testCase "url dependency archive fetches without project build.zig" $ do
+        withSystemTempDirectory "acton-url-dep-fetch" $ \tmp -> do
+          actonExe <- canonicalizePath "../../dist/bin/acton"
+          zigExe <- canonicalizePath "../../dist/zig/zig"
+          env0 <- getEnvironment
+          let homeDir = tmp </> "home"
+              rootProj = tmp </> "root"
+              depProj = tmp </> "dep"
+              depArchive = tmp </> "dep.tar.gz"
+              hashCwd = tmp </> "hash-cwd"
+              hashCache = tmp </> "hash-cache"
+              envWithHome = ("HOME", homeDir) : filter ((/= "HOME") . fst) env0
+              mkFp name = Fingerprint.formatFingerprint
+                (Fingerprint.updateFingerprintPrefix
+                  (Fingerprint.fingerprintPrefixForName name) 1)
+          createDirectoryIfMissing True homeDir
+          createDirectoryIfMissing True (rootProj </> "src")
+          createDirectoryIfMissing True (depProj </> "src")
+          createDirectoryIfMissing True hashCwd
+          createDirectoryIfMissing True hashCache
+          writeFile (depProj </> "Build.act") $ unlines
+            [ "name = \"dep\""
+            , "fingerprint = " ++ mkFp "dep"
+            , "dependencies = {}"
+            , "zig_dependencies = {}"
+            ]
+          writeFile (depProj </> "src" </> "dep.act") "def marker() -> int:\n    return 1\n"
+          (tarCode, tarOut, tarErr) <- readCreateProcessWithExitCode
+            (proc "tar" ["-C", depProj, "-czf", depArchive, "."]) ""
+          assertEqual ("tar should create dependency archive\nstdout:\n" ++ tarOut ++ "\nstderr:\n" ++ tarErr)
+            ExitSuccess tarCode
+          writeFile (hashCwd </> "build.zig") $ unlines
+            [ "const std = @import(\"std\");"
+            , "pub fn build(b: *std.Build) void { _ = b; }"
+            ]
+          (hashCode, hashOut, hashErr) <- readCreateProcessWithExitCode
+            (proc zigExe ["fetch", "--global-cache-dir", hashCache, depArchive]) { cwd = Just hashCwd } ""
+          assertEqual ("zig fetch should calculate dependency hash\nstdout:\n" ++ hashOut ++ "\nstderr:\n" ++ hashErr)
+            ExitSuccess hashCode
+          let depHash = dropWhileEnd isSpace (dropWhile isSpace hashOut)
+          writeFile (rootProj </> "Build.act") $ unlines
+            [ "name = \"root\""
+            , "fingerprint = " ++ mkFp "root"
+            , "dependencies = {"
+            , "    \"dep\": (url=\"" ++ depArchive ++ "\", hash=\"" ++ depHash ++ "\")"
+            , "}"
+            , "zig_dependencies = {}"
+            ]
+          writeFile (rootProj </> "src" </> "main.act") $ unlines
+            [ "actor main(env):"
+            , "    env.exit(0)"
+            ]
+          (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode
+            (proc actonExe ["fetch"]) { cwd = Just rootProj, env = Just envWithHome } ""
+          assertEqual ("acton fetch should succeed\nstdout:\n" ++ cmdOut ++ "\nstderr:\n" ++ cmdErr)
+            ExitSuccess returnCode
+          depBuild <- doesFileExist (homeDir </> ".cache" </> "acton" </> "deps" </> ("dep-" ++ depHash) </> "Build.act")
+          assertBool "fetched dependency should be extracted into Acton deps cache" depBuild
   , testCase "build.zig.zon uses canonical dep roots" $ do
         withSystemTempDirectory "acton-buildzig-zon-dedup" $ \tmp -> do
           actonExe <- canonicalizePath "../../dist/bin/acton"
