@@ -2295,9 +2295,14 @@ runZig gopts opts zigExe zigArgs paths wd mProgressUI = do
     let env1 = if System.Info.os == "darwin" && not (any ((== "DEVELOPER_DIR") . fst) env0)
                then ("DEVELOPER_DIR", "/dev/null") : env0
                else env0
+    homeDir <- getHomeDirectory
+    let zigEnv = [ ("ZIG_LOCAL_CACHE_DIR", joinPath [homeDir, ".cache", "acton", "zig-local-cache"])
+                 , ("ZIG_GLOBAL_CACHE_DIR", joinPath [homeDir, ".cache", "acton", "zig-global-cache"])
+                 ]
+        envWithZigCache = foldr (\(k, v) acc -> (k, v) : filter ((/= k) . fst) acc) env1 zigEnv
         env2 = case envOverride of
-          Nothing -> Just env1
-          Just (k, v) -> Just ((k, v) : filter ((/= k) . fst) env1)
+          Nothing -> Just envWithZigCache
+          Just (k, v) -> Just ((k, v) : filter ((/= k) . fst) envWithZigCache)
         cpBase = (proc zigExe zigArgs){ cwd = wd, env = env2 }
         cp = if closeFds then cpBase else cpBase { close_fds = False }
     (returnCode, zigStdout, zigStderr) <- readProcessWithExitCodeCancelable cp onStart `finally` onStop
@@ -2479,8 +2484,8 @@ genBuildZig template spec zigDeps depModuleOpts =
                  , "        .acton_root_stubs = \"\","
                  , "    });"
                  ]
-    pkgLibLink (name, _) = "    libActonProject.linkLibrary(actdep_" ++ name ++ ".artifact(\"ActonProject\"));\n"
-    pkgExeLink (name, _) = "            executable.linkLibrary(actdep_" ++ name ++ ".artifact(\"ActonProject\"));\n"
+    pkgLibLink (name, _) = "    libActonProject.root_module.linkLibrary(actdep_" ++ name ++ ".artifact(\"ActonProject\"));\n"
+    pkgExeLink (name, _) = "            executable.root_module.linkLibrary(actdep_" ++ name ++ ".artifact(\"ActonProject\"));\n"
 
     zigDepDef resolved
       | null (BuildSpec.artifacts dep) = ""
@@ -2492,9 +2497,9 @@ genBuildZig template spec zigDeps depModuleOpts =
                      , opts ++ "    });"
                      ]
       where dep = zigDepResolvedDep resolved
-    zigLibLink resolved = concat [ "    libActonProject.linkLibrary(dep_" ++ zigDepResolvedVarName resolved ++ ".artifact(\"" ++ art ++ "\"));\n"
+    zigLibLink resolved = concat [ "    libActonProject.root_module.linkLibrary(dep_" ++ zigDepResolvedVarName resolved ++ ".artifact(\"" ++ art ++ "\"));\n"
                                  | art <- BuildSpec.artifacts (zigDepResolvedDep resolved) ]
-    zigExeLink resolved = concat [ "            executable.linkLibrary(dep_" ++ zigDepResolvedVarName resolved ++ ".artifact(\"" ++ art ++ "\"));\n"
+    zigExeLink resolved = concat [ "            executable.root_module.linkLibrary(dep_" ++ zigDepResolvedVarName resolved ++ ".artifact(\"" ++ art ++ "\"));\n"
                                  | art <- BuildSpec.artifacts (zigDepResolvedDep resolved) ]
 
 genBuildZigZon :: String -> String -> FilePath -> FilePath -> String -> String -> BuildSpec.BuildSpec -> [ZigDepResolved] -> String
