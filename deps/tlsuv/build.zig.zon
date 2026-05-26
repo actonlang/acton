@@ -1,0 +1,15 @@
+.{
+    .name = .tlsuv,
+    .version = "0.0.0",
+    .fingerprint = 0x619761a032fee8d,
+    .minimum_zig_version = "0.14.1",
+    .dependencies = .{
+        .libmbedtls = .{
+            .path = "../mbedtls/",
+        },
+        .libuv = .{
+            .path = "../libuv/",
+        },
+    },
+    .paths = .{""},
+}

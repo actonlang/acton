@@ -201,6 +201,8 @@ else
 endif
 
 # /deps --------------------------------------------------
+# Downloaded dependencies use source tarballs. Acton-owned Zig build glue lives
+# under deps/<name> and is overlaid into dist/deps.
 DEPS += dist/deps/mbedtls
 DEPS += dist/deps/libargp
 DEPS += dist/deps/libbsdnt
@@ -223,81 +225,104 @@ clean-downloads:
 
 # /deps/libargp --------------------------------------------
 LIBARGP_REF=137154fb257055beb11f3283021d8eccc3c4f470
+LIBARGP_BUILD_ZIG=deps/libargp/build.zig
 deps-download/$(LIBARGP_REF).tar.gz:
 	mkdir -p deps-download
 	$(CURL) -o $@ https://github.com/actonlang/argp-standalone/archive/$(LIBARGP_REF).tar.gz
 
-dist/deps/libargp: deps-download/$(LIBARGP_REF).tar.gz
+dist/deps/libargp: deps-download/$(LIBARGP_REF).tar.gz $(LIBARGP_BUILD_ZIG)
+	rm -rf "$@"
 	mkdir -p "$@"
 	cd "$@" && tar zx --strip-components=1 -f "$(TD)/$<"
+	cp "$(TD)/$(LIBARGP_BUILD_ZIG)" "$@/build.zig"
 	rm -rf "$@/testsuite"
 	touch "$(TD)/$@"
 
 # /deps/libbsdnt --------------------------------------------
 LIBBSDNT_REF=cf7db3414867b8b4a5561bc9aa94a8050d0225c4
+LIBBSDNT_BUILD_ZIG=deps/libbsdnt/build.zig
 deps-download/$(LIBBSDNT_REF).tar.gz:
 	mkdir -p deps-download
 	$(CURL) -o $@ https://github.com/actonlang/bsdnt/archive/$(LIBBSDNT_REF).tar.gz
 
-dist/deps/libbsdnt: deps-download/$(LIBBSDNT_REF).tar.gz
+dist/deps/libbsdnt: deps-download/$(LIBBSDNT_REF).tar.gz $(LIBBSDNT_BUILD_ZIG)
+	rm -rf "$@"
 	mkdir -p "$@"
 	cd "$@" && tar zx --strip-components=1 -f "$(TD)/$<"
+	cp "$(TD)/$(LIBBSDNT_BUILD_ZIG)" "$@/build.zig"
 	touch "$(TD)/$@"
 
 # /deps/libgc --------------------------------------------
-LIBGC_REF=5ef334ab8f9ef9e23d6b9c99fbd2b621bd52789b
+LIBGC_REF=0a23b211b558137de7ee654c5527a54113142517
+LIBGC_BUILD_ZIG=deps/libgc/build.zig
 deps-download/$(LIBGC_REF).tar.gz:
 	mkdir -p deps-download
-	$(CURL) -o $@ https://github.com/actonlang/bdwgc/archive/$(LIBGC_REF).tar.gz
+	$(CURL) -o $@ https://github.com/bdwgc/bdwgc/archive/$(LIBGC_REF).tar.gz
 
-dist/deps/libgc: deps-download/$(LIBGC_REF).tar.gz
+dist/deps/libgc: deps-download/$(LIBGC_REF).tar.gz $(LIBGC_BUILD_ZIG)
+	rm -rf "$@"
 	mkdir -p "$@"
 	cd "$@" && tar zx --strip-components=1 -f "$(TD)/$<"
+	cp "$(TD)/$(LIBGC_BUILD_ZIG)" "$@/build.zig"
 	rm -rf "$@/tests" "$@/tools"
 	touch "$(TD)/$@"
 
 # /deps/libmbedtls --------------------------------------------
 LIBMBEDTLS_REF=c7d83538d3d359b05a9331bb2c9217977b5856ac
+LIBMBEDTLS_BUILD_ZIG=deps/mbedtls/build.zig
 deps-download/$(LIBMBEDTLS_REF).tar.gz:
 	mkdir -p deps-download
 	$(CURL) -o $@ https://github.com/actonlang/mbedtls/archive/$(LIBMBEDTLS_REF).tar.gz
 
-dist/deps/mbedtls: deps-download/$(LIBMBEDTLS_REF).tar.gz
+dist/deps/mbedtls: deps-download/$(LIBMBEDTLS_REF).tar.gz $(LIBMBEDTLS_BUILD_ZIG)
+	rm -rf "$@"
 	mkdir -p "$@"
 	cd "$@" && tar zx --strip-components=1 -f "$(TD)/$<"
+	cp "$(TD)/$(LIBMBEDTLS_BUILD_ZIG)" "$@/build.zig"
 	touch "$(TD)/$@"
 
 # /deps/libprotobuf_c --------------------------------------------
-LIBPROTOBUF_C_REF=faa19a6f6ca393fea01077fb37011a949bc6a3ee
+LIBPROTOBUF_C_REF=abc67a11c6db271bedbb9f58be85d6f4e2ea8389
+LIBPROTOBUF_C_BUILD_ZIG=deps/libprotobuf_c/build.zig
 deps-download/$(LIBPROTOBUF_C_REF).tar.gz:
 	mkdir -p deps-download
-	$(CURL) -o $@ https://github.com/actonlang/protobuf-c/archive/$(LIBPROTOBUF_C_REF).tar.gz
+	$(CURL) -o $@ https://github.com/protobuf-c/protobuf-c/archive/$(LIBPROTOBUF_C_REF).tar.gz
 
-dist/deps/libprotobuf_c: deps-download/$(LIBPROTOBUF_C_REF).tar.gz
+dist/deps/libprotobuf_c: deps-download/$(LIBPROTOBUF_C_REF).tar.gz $(LIBPROTOBUF_C_BUILD_ZIG)
+	rm -rf "$@"
 	mkdir -p "$@"
 	cd "$@" && tar zx --strip-components=1 -f "$(TD)/$<"
+	cp "$(TD)/$(LIBPROTOBUF_C_BUILD_ZIG)" "$@/build.zig"
 	touch "$(TD)/$@"
 
 # /deps/tlsuv ---------------------------------------------
 TLSUV_REF=5af699b033776ec6a21b32c90e7aa7bf08c9929f
+TLSUV_BUILD_ZIG=deps/tlsuv/build.zig
+TLSUV_BUILD_ZON=deps/tlsuv/build.zig.zon
 deps-download/$(TLSUV_REF).tar.gz:
 	mkdir -p deps-download
 	$(CURL) -o $@ https://github.com/actonlang/tlsuv/archive/$(TLSUV_REF).tar.gz
 
-dist/deps/tlsuv: deps-download/$(TLSUV_REF).tar.gz dist/deps/libuv dist/deps/mbedtls
+dist/deps/tlsuv: deps-download/$(TLSUV_REF).tar.gz dist/deps/libuv dist/deps/mbedtls $(TLSUV_BUILD_ZIG) $(TLSUV_BUILD_ZON)
+	rm -rf "$@"
 	mkdir -p "$@"
 	cd "$@" && tar zx --strip-components=1 -f "$(TD)/$<"
+	cp "$(TD)/$(TLSUV_BUILD_ZIG)" "$@/build.zig"
+	cp "$(TD)/$(TLSUV_BUILD_ZON)" "$@/build.zig.zon"
 	touch "$(TD)/$@"
 
 # /deps/libutf8proc --------------------------------------
-LIBUTF8PROC_REF=a78677e855f0a282e79da6164db4ce1cf0789237
+LIBUTF8PROC_REF=1cb28a66ca79a0845e99433fd1056257456cef8b
+LIBUTF8PROC_BUILD_ZIG=deps/libutf8proc/build.zig
 deps-download/$(LIBUTF8PROC_REF).tar.gz:
 	mkdir -p deps-download
-	$(CURL) -o $@ https://github.com/actonlang/utf8proc/archive/$(LIBUTF8PROC_REF).tar.gz
+	$(CURL) -o $@ https://github.com/JuliaStrings/utf8proc/archive/$(LIBUTF8PROC_REF).tar.gz
 
-dist/deps/libutf8proc: deps-download/$(LIBUTF8PROC_REF).tar.gz
+dist/deps/libutf8proc: deps-download/$(LIBUTF8PROC_REF).tar.gz $(LIBUTF8PROC_BUILD_ZIG)
+	rm -rf "$@"
 	mkdir -p "$@"
 	cd "$@" && tar zx --strip-components=1 -f "$(TD)/$<"
+	cp "$(TD)/$(LIBUTF8PROC_BUILD_ZIG)" "$@/build.zig"
 	touch "$(TD)/$@"
 
 # /deps/libuuid ------------------------------------------
@@ -307,47 +332,59 @@ dist/deps/libuuid: deps/libuuid
 
 # /deps/libuv --------------------------------------------
 LIBUV_REF=d760a3f23511ebe7b1935fe1429147d4fca27bb4
+LIBUV_BUILD_ZIG=deps/libuv/build.zig
 deps-download/$(LIBUV_REF).tar.gz:
 	mkdir -p deps-download
 	$(CURL) -o $@ https://github.com/actonlang/libuv/archive/$(LIBUV_REF).tar.gz
 
-dist/deps/libuv: deps-download/$(LIBUV_REF).tar.gz
+dist/deps/libuv: deps-download/$(LIBUV_REF).tar.gz $(LIBUV_BUILD_ZIG)
+	rm -rf "$@"
 	mkdir -p "$@"
-	cd "$@" && tar zx --strip-components=1 -f "$(TD)/$<" "libuv-$(LIBUV_REF)/build.zig" "libuv-$(LIBUV_REF)/include" "libuv-$(LIBUV_REF)/src"
+	cd "$@" && tar zx --strip-components=1 -f "$(TD)/$<" "libuv-$(LIBUV_REF)/include" "libuv-$(LIBUV_REF)/src"
+	cp "$(TD)/$(LIBUV_BUILD_ZIG)" "$@/build.zig"
 	touch "$(TD)/$@"
 
 # /deps/libxml2 ------------------------------------------
 LIBXML2_REF=358ca4e6e34dd2b386aab1fdeb74a641c54940a0
+LIBXML2_BUILD_ZIG=deps/libxml2/build.zig
 deps-download/$(LIBXML2_REF).tar.gz:
 	mkdir -p deps-download
 	$(CURL) -o $@ https://github.com/actonlang/libxml2/archive/$(LIBXML2_REF).tar.gz
 
-dist/deps/libxml2: deps-download/$(LIBXML2_REF).tar.gz
+dist/deps/libxml2: deps-download/$(LIBXML2_REF).tar.gz $(LIBXML2_BUILD_ZIG)
+	rm -rf "$@"
 	mkdir -p "$@"
 	cd "$@" && tar zx --strip-components=1 -f "$(TD)/$<"
+	cp "$(TD)/$(LIBXML2_BUILD_ZIG)" "$@/build.zig"
 	rm -rf "$@/doc" "$@/example" "$@/fuzz" "$@/os400" "$@/python" $@/test*
 	touch "$(TD)/$@"
 
 # /deps/pcre2 --------------------------------------------
-LIBPCRE2_REF=b82656c5b28658ce1d75489a1b67ba0de5f531ec
+LIBPCRE2_REF=e4ccef3034c870342f2d37c928e98bc8c69cd340
+LIBPCRE2_BUILD_ZIG=deps/pcre2/build.zig
 deps-download/$(LIBPCRE2_REF).tar.gz:
 	mkdir -p deps-download
-	$(CURL) -o $@ https://github.com/actonlang/pcre2/archive/$(LIBPCRE2_REF).tar.gz
+	$(CURL) -o $@ https://github.com/PCRE2Project/pcre2/archive/$(LIBPCRE2_REF).tar.gz
 
-dist/deps/pcre2: deps-download/$(LIBPCRE2_REF).tar.gz
+dist/deps/pcre2: deps-download/$(LIBPCRE2_REF).tar.gz $(LIBPCRE2_BUILD_ZIG)
+	rm -rf "$@"
 	mkdir -p "$@"
 	cd "$@" && tar zx --strip-components=1 -f "$(TD)/$<"
+	cp "$(TD)/$(LIBPCRE2_BUILD_ZIG)" "$@/build.zig"
 	touch "$(TD)/$@"
 
 # /deps/libsnappy_c --------------------------------------------
-LIBSNAPPY_C_REF=9d77a3136e271b709eeac4b1db2d27c281b330b2
+LIBSNAPPY_C_REF=dc05e026488865bc69313a68bcc03ef2e4ea8e83
+LIBSNAPPY_C_BUILD_ZIG=deps/libsnappy_c/build.zig
 deps-download/$(LIBSNAPPY_C_REF).tar.gz:
 	mkdir -p deps-download
-	$(CURL) -o $@ https://github.com/actonlang/snappy/archive/$(LIBSNAPPY_C_REF).tar.gz
+	$(CURL) -o $@ https://github.com/google/snappy/archive/$(LIBSNAPPY_C_REF).tar.gz
 
-dist/deps/libsnappy_c: deps-download/$(LIBSNAPPY_C_REF).tar.gz
+dist/deps/libsnappy_c: deps-download/$(LIBSNAPPY_C_REF).tar.gz $(LIBSNAPPY_C_BUILD_ZIG)
+	rm -rf "$@"
 	mkdir -p "$@"
 	cd "$@" && tar zx --strip-components=1 -f "$(TD)/$<"
+	cp "$(TD)/$(LIBSNAPPY_C_BUILD_ZIG)" "$@/build.zig"
 	touch "$(TD)/$@"
 
 dist/deps/libnetstring: deps/libnetstring $(DIST_ZIG)
