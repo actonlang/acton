@@ -1632,7 +1632,8 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
           ++ ", llift " ++ fmtTimePrecise (btLLift bt)
           ++ ", boxing " ++ fmtTimePrecise (btBoxing bt)
           ++ ", codegen " ++ fmtTimePrecise (btCodeGen bt)
-          ++ maybe "" (\t -> ", write " ++ fmtTimePrecise t) (btWriteCode bt)
+          ++ ", render " ++ fmtTimePrecise (btRender bt)
+          ++ maybe "" (\t -> ", write " ++ fmtTimePrecise t) (btWrite bt)
         parseDoneRenderer =
           staticStatusRenderer parseDoneStatus "Parsed"
         frontDoneRenderer =
@@ -1683,6 +1684,8 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
           renderProjectLine proj mn (staticStatusRenderer "Kinds check" "Kinds")
         backActiveLine proj mn =
           renderProjectLine proj mn (staticStatusRenderer "Back passes" "Back")
+        backProgressLine proj mn p =
+          renderProjectLine proj mn (backPassStatusRenderer p)
         finalActiveLine width =
           fitBuildLineLayout width labelWidth statusWidth True "" (staticStatusRenderer "Final compilation" "Final")
         clamp01 x = max 0 (min 1 x)
@@ -1722,6 +1725,12 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
               in case fppPass p of
                    FrontPassKinds -> staticStatusRenderer "Kinds check" "Kinds" budget
                    FrontPassTypes -> Just (fullTypeStatus (fppCurrent p))
+        backPassStatusRenderer (BackPassSkipped pass _ _) =
+          let passName = backPassName pass
+          in staticStatusRenderer ("Back " ++ passName ++ " skipped") (passName ++ " skipped")
+        backPassStatusRenderer p =
+          let passName = backPassName (backProgressPass p)
+          in staticStatusRenderer ("Back " ++ passName) passName
         parseStatusRenderer p budget
           | budget < 10 = Nothing
           | otherwise =
@@ -1735,6 +1744,22 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
                           else Just (show pct ++ "%")
         frontProgressLine proj mn p =
           renderProjectLine proj mn (frontStatusRenderer p)
+        backProgressPass (BackPassStarted pass _ _) = pass
+        backProgressPass (BackPassFinished pass _ _ _) = pass
+        backProgressPass (BackPassSkipped pass _ _) = pass
+        backProgressCompleted (BackPassStarted _ completed _) = completed
+        backProgressCompleted (BackPassFinished _ completed _ _) = completed
+        backProgressCompleted (BackPassSkipped _ completed _) = completed
+        backProgressTotal (BackPassStarted _ _ total) = total
+        backProgressTotal (BackPassFinished _ _ total _) = total
+        backProgressTotal (BackPassSkipped _ _ total) = total
+        backProgressRatio p =
+          let total = backProgressTotal p
+          in if total <= 0
+               then 1
+               else clamp01 (fromIntegral (backProgressCompleted p) / fromIntegral total)
+        backPassDoneLine proj mn pass =
+          "Back " ++ backPassName pass ++ " done: " ++ projectModuleLabel proj mn
         finalKey = TaskKey rootProj (A.modName ["__final__"])
         withTerm action = when termEnabled $ gate (withProgressLock progressUI action)
         setPercent pct = withTerm (termProgressPercent termProgress pct)
@@ -1779,6 +1804,18 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
               mn = A.modname (biTypedMod (bjInput job))
           in do
             gate (progressStartTask progressUI progressState (backJobKey job) (backActiveLine proj mn) (Just 0))
+        onBackProgress job p = do
+          let proj = projPath (bjPaths job)
+              mn = A.modname (biTypedMod (bjInput job))
+          gate (progressUpdateTask progressUI progressState (backJobKey job)
+                  (backProgressLine proj mn p) (Just (backProgressRatio p)))
+          when (not (quiet gopts optsPlan) && (C.timing gopts || C.verbose gopts)) $
+            case p of
+              BackPassFinished pass _ _ elapsed ->
+                logRendered (\cols ->
+                  detailTimedLine cols detailStmtIndentWide detailStmtIndentNarrow
+                    (backPassDoneLine proj mn pass) elapsed)
+              _ -> return ()
         onBackDone job result = do
           gate (progressDoneTask progressUI progressState (backJobKey job))
           creditBack (backJobKey job)
@@ -1853,6 +1890,7 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
               creditFront (gtKey t)
           , chOnBackQueued = \_ _ -> return ()
           , chOnBackStart = onBackStart
+          , chOnBackProgress = onBackProgress
           , chOnBackDone = onBackDone
           , chOnInfo = logLine
           }

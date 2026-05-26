@@ -536,6 +536,12 @@ backProgressMessage job result =
       Compile.BackJobOk{} -> "Generated " ++ backJobLabel job
       Compile.BackJobFailed{} -> "Codegen failed for " ++ backJobLabel job
 
+backPassProgressMessage :: Compile.BackJob -> Compile.BackPassProgress -> Maybe T.Text
+backPassProgressMessage job (Compile.BackPassStarted pass _ _) =
+  Just $
+    T.pack ("Generating " ++ backJobLabel job ++ " (" ++ Compile.backPassName pass ++ ")")
+backPassProgressMessage _ _ = Nothing
+
 warnBackgroundCompilerLocked :: FilePath -> LspM () ()
 warnBackgroundCompilerLocked projRoot = do
   first <- liftIO $ atomicModifyIORef' backgroundCompilerWarnedRef $ \m ->
@@ -678,6 +684,8 @@ runCompilePlanWithHooks gen rootProj path sp gopts opts progress = do
             progressForQueued (T.pack ("Checked " ++ moduleLabel t))
         , Compile.chOnBackStart = \job ->
             progressForQueued (T.pack ("Generating " ++ backJobLabel job))
+        , Compile.chOnBackProgress = \job p ->
+            forM_ (backPassProgressMessage job p) progressForQueued
         , Compile.chOnBackDone = \job result ->
             progressForQueued (backProgressMessage job result)
         , Compile.chOnInfo = \_ -> return ()

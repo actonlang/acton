@@ -93,6 +93,9 @@ module Acton.Compile
   , TypeStmtTiming(..)
   , InferredSignature(..)
   , BackTiming(..)
+  , BackPass(..)
+  , BackPassProgress(..)
+  , backPassName
   , FrontPass(..)
   , FrontPassProgress(..)
   , ParseProgress(..)
@@ -304,6 +307,33 @@ data BackJobResult
   | BackJobFailed BackPassFailure
   deriving (Eq, Show)
 
+data BackPass
+  = BackPassNormalize
+  | BackPassDeactorize
+  | BackPassCPS
+  | BackPassLLift
+  | BackPassBoxing
+  | BackPassCodeGen
+  | BackPassRender
+  | BackPassWrite
+  deriving (Eq, Show)
+
+backPassName :: BackPass -> String
+backPassName BackPassNormalize  = "normalize"
+backPassName BackPassDeactorize = "deactorize"
+backPassName BackPassCPS        = "cps"
+backPassName BackPassLLift      = "llift"
+backPassName BackPassBoxing     = "boxing"
+backPassName BackPassCodeGen    = "codegen"
+backPassName BackPassRender     = "render"
+backPassName BackPassWrite      = "write"
+
+data BackPassProgress
+  = BackPassStarted BackPass Int Int
+  | BackPassFinished BackPass Int Int TimeSpec
+  | BackPassSkipped BackPass Int Int
+  deriving (Eq, Show)
+
 data FrontPass
   = FrontPassKinds
   | FrontPassTypes
@@ -348,7 +378,8 @@ data BackTiming = BackTiming
   , btLLift :: TimeSpec
   , btBoxing :: TimeSpec
   , btCodeGen :: TimeSpec
-  , btWriteCode :: Maybe TimeSpec
+  , btRender :: TimeSpec
+  , btWrite :: Maybe TimeSpec
   } deriving (Eq, Show)
 
 
@@ -383,6 +414,7 @@ defaultCompileCallbacks = CompileCallbacks
 
 data BackJobCallbacks = BackJobCallbacks
   { bjcOnStart :: BackJob -> IO ()
+  , bjcOnProgress :: BackJob -> BackPassProgress -> IO ()
   , bjcOnDone :: BackJob -> BackJobResult -> IO ()
   }
 
@@ -391,6 +423,7 @@ defaultBackJobCallbacks :: BackJobCallbacks
 defaultBackJobCallbacks =
   BackJobCallbacks
     { bjcOnStart = \_ -> return ()
+    , bjcOnProgress = \_ _ -> return ()
     , bjcOnDone = \_ _ -> return ()
     }
 
@@ -477,7 +510,10 @@ newBackQueue genRef gopts maxPar = do
                       currentWrite <- readIORef genRef
                       return (currentWrite == gen)
                 bjcOnStart callbacks job
-                res <- (try $ runBackPasses gopts (bjOpts job) (bjPaths job) (bjInput job) shouldWrite)
+                res <- (try $
+                          runBackPassesWithProgress
+                            gopts (bjOpts job) (bjPaths job) (bjInput job)
+                            shouldWrite (bjcOnProgress callbacks job))
                         :: IO (Either SomeException (Maybe TimeSpec, Maybe BackTiming))
                 currentDone <- readIORef genRef
                 when (currentDone == gen) $
@@ -664,6 +700,7 @@ data CompileHooks = CompileHooks
   , chOnFrontResult :: GlobalTask -> FrontResult -> IO ()
   , chOnBackQueued :: TaskKey -> Bool -> IO ()
   , chOnBackStart :: BackJob -> IO ()
+  , chOnBackProgress :: BackJob -> BackPassProgress -> IO ()
   , chOnBackDone :: BackJob -> BackJobResult -> IO ()
   , chOnInfo :: String -> IO ()
   }
@@ -681,6 +718,7 @@ defaultCompileHooks =
     , chOnFrontResult = \_ _ -> return ()
     , chOnBackQueued = \_ _ -> return ()
     , chOnBackStart = \_ -> return ()
+    , chOnBackProgress = \_ _ -> return ()
     , chOnBackDone = \_ _ -> return ()
     , chOnInfo = \_ -> return ()
     }
@@ -700,6 +738,7 @@ runCompilePlan sp gopts plan sched gen hooks = do
       backQueue = csBackQueue sched
       backCallbacks = BackJobCallbacks
         { bjcOnStart = chOnBackStart hooks
+        , bjcOnProgress = chOnBackProgress hooks
         , bjcOnDone = chOnBackDone hooks
         }
       callbacks = defaultCompileCallbacks
@@ -1933,51 +1972,63 @@ runFrontPasses gopts opts paths env0 parsed srcContent srcBytes sourceMeta resol
 -- Executes normalization through codegen, writes .c/.h output as needed, and
 -- returns the back-pass elapsed time for logging.
 runBackPasses :: C.GlobalOptions -> C.CompileOptions -> Paths -> BackInput -> IO Bool -> IO (Maybe TimeSpec, Maybe BackTiming)
-runBackPasses gopts opts paths backInput shouldWrite = do
+runBackPasses gopts opts paths backInput shouldWrite =
+      runBackPassesWithProgress gopts opts paths backInput shouldWrite (\_ -> return ())
+
+runBackPassesWithProgress :: C.GlobalOptions
+                          -> C.CompileOptions
+                          -> Paths
+                          -> BackInput
+                          -> IO Bool
+                          -> (BackPassProgress -> IO ())
+                          -> IO (Maybe TimeSpec, Maybe BackTiming)
+runBackPassesWithProgress gopts opts paths backInput shouldWrite onProgress = do
       let mn = A.modname (biTypedMod backInput)
           outbase = outBase paths mn
           relSrcBase = makeRelative (projPath paths) (srcBase paths mn)
+          writesOutput = not (altOutput opts)
+          backPasses =
+            [ BackPassNormalize
+            , BackPassDeactorize
+            , BackPassCPS
+            , BackPassLLift
+            , BackPassBoxing
+            , BackPassCodeGen
+            , BackPassRender
+            ] ++ [BackPassWrite | writesOutput]
+          backPassTotal = length backPasses
+          backPassIndex pass =
+            case Data.List.elemIndex pass backPasses of
+              Just ix -> ix
+              Nothing -> backPassTotal
+          emitStarted pass =
+            onProgress (BackPassStarted pass (backPassIndex pass) backPassTotal)
+          emitFinished pass t0 t1 =
+            onProgress (BackPassFinished pass (backPassIndex pass + 1) backPassTotal (t1 - t0))
+          emitSkipped pass =
+            onProgress (BackPassSkipped pass (backPassIndex pass + 1) backPassTotal)
       timeStart <- getTime Monotonic
-      writeTimingRef <- newIORef Nothing
-
-      (normalized, normEnv) <- Acton.Normalizer.normalize (biTypeEnv backInput) (biTypedMod backInput)
-      iff (C.norm opts && mn == (modName paths)) $ dump mn "norm" (Pretty.print normalized)
-      timeNormalized <- getTime Monotonic
-
-      (deacted,deactEnv) <- Acton.Deactorizer.deactorize normEnv normalized
-      iff (C.deact opts && mn == (modName paths)) $ dump mn "deact" (Pretty.print deacted)
-      timeDeactorizer <- getTime Monotonic
-
-      (cpstyled,cpsEnv) <- Acton.CPS.convert deactEnv deacted
-      iff (C.cps opts && mn == (modName paths)) $ dump mn "cps" (Pretty.print cpstyled)
-      timeCPS <- getTime Monotonic
-
-      (lifted,liftEnv) <- Acton.LambdaLifter.liftModule cpsEnv cpstyled
-      iff (C.llift opts && mn == (modName paths)) $ dump mn "llift" (Pretty.print lifted)
-      timeLLift <- getTime Monotonic
-
-      boxed <- Acton.Boxing.doBoxing liftEnv lifted
-      iff (C.box opts && mn == (modName paths)) $ dump mn "box" (Pretty.print boxed)
-      timeBoxing <- getTime Monotonic
-
-      let hexHash = B.unpack $ Base16.encode (biImplHash backInput)
-          emitLines = not (C.dbg_no_lines opts)
-      (n,h,c) <- Acton.CodeGen.generate liftEnv relSrcBase (biSrc backInput) emitLines boxed hexHash
-      timeCodeGen <- getTime Monotonic
-      let finish = do
+      let timedBackPass pass action = do
+            emitStarted pass
+            passStart <- getTime Monotonic
+            result <- action
+            passEnd <- getTime Monotonic
+            emitFinished pass passStart passEnd
+            return (result, passEnd - passStart)
+          finish tNormalize tDeactorize tCPS tLLift tBoxing tCodeGen tRender mWriteTime = do
             timeEnd <- getTime Monotonic
             let backTime = timeEnd - timeStart
-            mWriteTime <- readIORef writeTimingRef
             let backTimingMaybe =
                   if C.timing gopts
                     then Just BackTiming
-                           { btNormalize = timeNormalized - timeStart
-                           , btDeactorize = timeDeactorizer - timeNormalized
-                           , btCPS = timeCPS - timeDeactorizer
-                           , btLLift = timeLLift - timeCPS
-                           , btBoxing = timeBoxing - timeLLift
-                           , btCodeGen = timeCodeGen - timeBoxing
-                           , btWriteCode = mWriteTime
+                           { btNormalize = tNormalize
+                           , btDeactorize = tDeactorize
+                           , btCPS = tCPS
+                           , btLLift = tLLift
+                           , btBoxing = tBoxing
+                           , btCodeGen = tCodeGen
+                           , btRender = tRender
+                           , btWrite = mWriteTime
                            }
                     else Nothing
             if not (quiet gopts opts)
@@ -1985,35 +2036,71 @@ runBackPasses gopts opts paths backInput shouldWrite = do
               else return (Nothing, backTimingMaybe)
           forceOut s = evaluate (rnf s)
 
+      ((normalized, normEnv), tNormalize) <- timedBackPass BackPassNormalize $ do
+        res@(normalized', _) <- Acton.Normalizer.normalize (biTypeEnv backInput) (biTypedMod backInput)
+        iff (C.norm opts && mn == (modName paths)) $ dump mn "norm" (Pretty.print normalized')
+        return res
+
+      ((deacted,deactEnv), tDeactorize) <- timedBackPass BackPassDeactorize $ do
+        res@(deacted', _) <- Acton.Deactorizer.deactorize normEnv normalized
+        iff (C.deact opts && mn == (modName paths)) $ dump mn "deact" (Pretty.print deacted')
+        return res
+
+      ((cpstyled,cpsEnv), tCPS) <- timedBackPass BackPassCPS $ do
+        res@(cpstyled', _) <- Acton.CPS.convert deactEnv deacted
+        iff (C.cps opts && mn == (modName paths)) $ dump mn "cps" (Pretty.print cpstyled')
+        return res
+
+      ((lifted,liftEnv), tLLift) <- timedBackPass BackPassLLift $ do
+        res@(lifted', _) <- Acton.LambdaLifter.liftModule cpsEnv cpstyled
+        iff (C.llift opts && mn == (modName paths)) $ dump mn "llift" (Pretty.print lifted')
+        return res
+
+      (boxed, tBoxing) <- timedBackPass BackPassBoxing $ do
+        res <- Acton.Boxing.doBoxing liftEnv lifted
+        iff (C.box opts && mn == (modName paths)) $ dump mn "box" (Pretty.print res)
+        return res
+
+      ((_,h,c), tCodeGen) <- timedBackPass BackPassCodeGen $ do
+        let hexHash = B.unpack $ Base16.encode (biImplHash backInput)
+            emitLines = not (C.dbg_no_lines opts)
+        Acton.CodeGen.generate liftEnv relSrcBase (biSrc backInput) emitLines boxed hexHash
+
+      let finishBack = finish tNormalize tDeactorize tCPS tLLift tBoxing tCodeGen
       if C.hgen opts
         then do
-          forceOut h
+          (_, tRender) <- timedBackPass BackPassRender (forceOut h)
           putStrLn h
-          finish
+          finishBack tRender Nothing
         else if C.cgen opts
           then do
-            forceOut c
+            (_, tRender) <- timedBackPass BackPassRender (forceOut c)
             putStrLn c
-            finish
+            finishBack tRender Nothing
           else do
-            forceOut h
-            forceOut c
-            iff (not (altOutput opts)) (do
-                ok <- shouldWrite
-                when ok $ do
-                  let cFile = outbase ++ ".c"
-                      hFile = outbase ++ ".h"
-
-                  writeFile hFile h
-                  writeFile cFile c
-                  let tyFileName = modNameToString(modName paths) ++ ".ty"
-                  iff (C.ty opts) $
-                       copyFileWithMetadata (joinPath [projTypes paths, tyFileName]) (joinPath [srcDir paths, tyFileName])
-
-                  timeCodeWrite <- getTime Monotonic
-                  writeIORef writeTimingRef (Just (timeCodeWrite - timeCodeGen))
-                                     )
-            finish
+            (_, tRender) <- timedBackPass BackPassRender (forceOut h >> forceOut c)
+            mWriteTime <-
+              if not writesOutput
+                then return Nothing
+                else do
+                  ok <- shouldWrite
+                  if not ok
+                    then do
+                      emitSkipped BackPassWrite
+                      return Nothing
+                    else do
+                      (_, tWrite) <- timedBackPass BackPassWrite $ do
+                        let cFile = outbase ++ ".c"
+                            hFile = outbase ++ ".h"
+                        writeFile hFile h
+                        writeFile cFile c
+                        let tyFileName = modNameToString(modName paths) ++ ".ty"
+                        iff (C.ty opts) $
+                             copyFileWithMetadata
+                               (joinPath [projTypes paths, tyFileName])
+                               (joinPath [srcDir paths, tyFileName])
+                      return (Just tWrite)
+            finishBack tRender mWriteTime
 
 
 -- | Compile a set of GlobalTasks using a parallel, dependency-aware scheduler.

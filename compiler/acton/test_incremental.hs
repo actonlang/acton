@@ -14,9 +14,9 @@ import           Data.Bits (shiftL, (.|.))
 import           Data.Word (Word64)
 import qualified Acton.Fingerprint as Fingerprint
 import qualified Crypto.Hash.SHA256 as SHA256
-import           Data.List (find, partition, sort)
+import           Data.List (elemIndex, find, partition, sort, sortOn)
 import qualified Data.Map.Strict as M
-import           Data.Maybe (isJust)
+import           Data.Maybe (fromMaybe, isJust)
 import           System.Directory
 import           System.Exit
 import           System.FilePath
@@ -185,16 +185,28 @@ sanitize = LBS.fromStrict
     reorderBackLines ls =
       let (backLines, otherLines) = partition isBackLine ls
           (pre, post) = break isFinalLine otherLines
-      in pre ++ sort backLines ++ post
+      in pre ++ sortOn backLineKey backLines ++ post
       where
         isBackLine t =
           T.isPrefixOf "   Finished compilation of" t ||
-          (T.isInfixOf "Compilation done" t && not (isFinalLine t))
+          (T.isInfixOf "Compilation done" t && not (isFinalLine t)) ||
+          isBackPassLine t
         isFinalLine t =
           T.isPrefixOf "   Finished final compilation" t ||
           T.isPrefixOf "   Finished final compilation step" t ||
           T.isInfixOf "Final compilation done" t ||
           T.isPrefixOf "  Skipping final build step" t
+        isBackPassLine t =
+          case T.words t of
+            ("Back":_:"done:":_:_) -> True
+            _ -> False
+        backLineKey t =
+          case T.words t of
+            ("Back":pass:"done:":mn:_) -> (mn, passIndex pass, t)
+            (mn:"Compilation":"done":_) -> (mn, 100 :: Int, t)
+            _ -> (t, 101, t)
+        passIndex pass = fromMaybe 99 (pass `elemIndex` backPassOrder)
+        backPassOrder = ["normalize", "deactorize", "cps", "llift", "boxing", "codegen", "render", "write"]
 
 -- | Atomically write UTF-8 text to a file.
 writeFileUtf8 :: FilePath -> T.Text -> IO ()
