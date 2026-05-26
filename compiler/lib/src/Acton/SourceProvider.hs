@@ -10,14 +10,15 @@ module Acton.SourceProvider
   ) where
 
 import qualified Data.ByteString as B
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as TE
 import Data.Time.Clock (UTCTime)
 import System.Directory (getModificationTime)
-import System.IO (IOMode(ReadMode), hGetContents, hSetEncoding, openFile, utf8)
 
 -- | Snapshot of a file's contents.
 -- The same contents are available as decoded text and raw bytes.
 data SourceSnapshot = SourceSnapshot
-  { ssText :: String        -- ^ UTF-8 decoded text view.
+  { ssText :: T.Text        -- ^ UTF-8 decoded text view.
   , ssBytes :: B.ByteString -- ^ Raw bytes for hashing or byte-precise work.
   , ssIsOverlay :: Bool     -- ^ True when the snapshot comes from an overlay.
   }
@@ -43,8 +44,8 @@ diskSourceProvider =
   SourceProvider
     { spReadOverlay = \_ -> return Nothing
     , spReadFile = \path -> do
-        txt <- readFileUtf8 path
         bytes <- B.readFile path
+        let txt = TE.decodeUtf8 bytes
         return SourceSnapshot
           { ssText = txt
           , ssBytes = bytes
@@ -52,10 +53,3 @@ diskSourceProvider =
           }
     , spGetModTime = getModificationTime
     }
-
--- | Read a UTF-8 text file without altering newlines or encoding.
-readFileUtf8 :: FilePath -> IO String
-readFileUtf8 path = do
-  h <- openFile path ReadMode
-  hSetEncoding h utf8
-  hGetContents h

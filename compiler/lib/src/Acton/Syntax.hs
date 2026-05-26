@@ -19,15 +19,17 @@ import qualified Data.Binary
 import qualified Data.Set
 import qualified Data.HashMap.Strict as M
 import qualified Data.Hashable
+import qualified Data.Text as T
+import Data.Text (Text)
 import Data.Char
 import GHC.Generics (Generic)
 import Control.DeepSeq
 import Prelude hiding((<>))
 
 version :: [Int]
-version = [0,17]
+version = [0,18]
 
-data Module     = Module        { modname::ModName, imps::[Import], mdoc::Maybe String, mbody::Suite } deriving (Eq,Show,Generic,NFData)
+data Module     = Module        { modname::ModName, imps::[Import], mdoc::Maybe Text, mbody::Suite } deriving (Eq,Show,Generic,NFData)
 
 data Import     = Import        { iloc::SrcLoc, moduls::[ModuleItem] }
                 | FromImport    { iloc::SrcLoc, modul::ModRef, items::[ImportItem] }
@@ -59,24 +61,24 @@ data Stmt       = Expr          { sloc::SrcLoc, expr::Expr }
                 | Decl          { sloc::SrcLoc, decls::[Decl] }
                 deriving (Show,Read,NFData,Generic)
 
-data Decl       = Def           { dloc::SrcLoc, dname:: Name, qbinds::QBinds, pos::PosPar, kwd::KwdPar, ann::Maybe Type, dbody::Suite, deco::Deco, dfx::TFX, ddoc::Maybe String }
-                | Actor         { dloc::SrcLoc, dname:: Name, qbinds::QBinds, pos::PosPar, kwd::KwdPar, dbody::Suite, ddoc::Maybe String }
-                | Class         { dloc::SrcLoc, dname:: Name, qbinds::QBinds, bounds::[TCon], dbody::Suite, ddoc::Maybe String }
-                | Protocol      { dloc::SrcLoc, dname:: Name, qbinds::QBinds, bounds::[PCon], dbody::Suite, ddoc::Maybe String }
+data Decl       = Def           { dloc::SrcLoc, dname:: Name, qbinds::QBinds, pos::PosPar, kwd::KwdPar, ann::Maybe Type, dbody::Suite, deco::Deco, dfx::TFX, ddoc::Maybe Text }
+                | Actor         { dloc::SrcLoc, dname:: Name, qbinds::QBinds, pos::PosPar, kwd::KwdPar, dbody::Suite, ddoc::Maybe Text }
+                | Class         { dloc::SrcLoc, dname:: Name, qbinds::QBinds, bounds::[TCon], dbody::Suite, ddoc::Maybe Text }
+                | Protocol      { dloc::SrcLoc, dname:: Name, qbinds::QBinds, bounds::[PCon], dbody::Suite, ddoc::Maybe Text }
 --                | Extension     { dloc::SrcLoc, dqname::QName, qbinds::QBinds, bounds::[PCon], dbody::Suite }
-                | Extension     { dloc::SrcLoc, qbinds::QBinds, tycon::TCon, bounds::[PCon], dbody::Suite, ddoc::Maybe String }
+                | Extension     { dloc::SrcLoc, qbinds::QBinds, tycon::TCon, bounds::[PCon], dbody::Suite, ddoc::Maybe Text }
                 deriving (Show,Read,NFData,Generic)
 
 data Expr       = Var           { eloc::SrcLoc, var::QName }
-                | Int           { eloc::SrcLoc, ival::Integer, lexeme::String }
-                | Float         { eloc::SrcLoc, dval::Double, lexeme::String }
-                | Imaginary     { eloc::SrcLoc, dval::Double, lexeme::String }
-                | Bool          { eloc::SrcLoc, bval::Bool }
+                | Int           { eloc::SrcLoc, ival:: !Integer, lexeme::Text }
+                | Float         { eloc::SrcLoc, dval:: {-# UNPACK #-} !Double, lexeme::Text }
+                | Imaginary     { eloc::SrcLoc, dval:: {-# UNPACK #-} !Double, lexeme::Text }
+                | Bool          { eloc::SrcLoc, bval:: {-# UNPACK #-} !Bool }
                 | None          { eloc::SrcLoc }
                 | NotImplemented{ eloc::SrcLoc }
                 | Ellipsis      { eloc::SrcLoc }
-                | Strings       { eloc::SrcLoc, sval::[String] }
-                | BStrings      { eloc::SrcLoc, sval::[String] }
+                | Strings       { eloc::SrcLoc, sval::[Text] }
+                | BStrings      { eloc::SrcLoc, sval::[Text] }
                 | Call          { eloc::SrcLoc, fun::Expr, pargs::PosArg, kargs::KwdArg }
                 | Let           { eloc::SrcLoc, suit::Suite, exp1::Expr }
                 | TApp          { eloc::SrcLoc, fun::Expr, targs::[Type] }
@@ -91,9 +93,9 @@ data Expr       = Var           { eloc::SrcLoc, var::QName }
                 | UnOp          { eloc::SrcLoc, uop::Unary, exp1::Expr }
                 | Dot           { eloc::SrcLoc, exp1::Expr, attr::Name }
                 | Rest          { eloc::SrcLoc, exp1::Expr, attr::Name }
-                | DotI          { eloc::SrcLoc, exp1::Expr, ival::Integer }
-                | RestI         { eloc::SrcLoc, exp1::Expr, ival::Integer }
-                | Opt           { eloc::SrcLoc, exp1::Expr, optVal::Bool }
+                | DotI          { eloc::SrcLoc, exp1::Expr, ival:: !Integer }
+                | RestI         { eloc::SrcLoc, exp1::Expr, ival:: !Integer }
+                | Opt           { eloc::SrcLoc, exp1::Expr, optVal:: {-# UNPACK #-} !Bool }
                 | OptChain      { eloc::SrcLoc, exp1::Expr }
                 | Lambda        { eloc::SrcLoc, ppar::PosPar, kpar::KwdPar, exp1::Expr, efx::TFX }
                 | Yield         { eloc::SrcLoc, yexp1::Maybe Expr }
@@ -123,35 +125,35 @@ type Target     = Expr
 data Prefix     = Globvar | Xistvar | Tempvar | Witness | NormPass | CPSPass | LLiftPass | BoxPass
                 deriving (Eq,Ord,Show,Read,Generic,NFData)
 
-data Name       = Name SrcLoc String | Derived Name Name | Internal Prefix String Int deriving (Generic,Show,NFData)
+data Name       = Name SrcLoc Text | Derived Name Name | Internal Prefix Text {-# UNPACK #-} !Int deriving (Generic,Show,NFData)
 
 nloc (Name l _) = l
 nloc _          = NoLoc
 
-nstr (Name _ s)             = esc s
-  where esc (c:'_':s)
-          | isUpper c       = c : {- 'X' : -} '_' : esc s
-        esc (c:s)           = c : esc s
-        esc ""              = ""
-nstr (Derived n s)
-  | Internal{} <- s         = nstr n ++ nstr s
-  | otherwise               = nstr n ++ "D_" ++ nstr s
-nstr (Internal p s i)       = prefix p ++ "_" ++ unique i ++ s
-  where prefix Globvar      = "G"
-        prefix Xistvar      = "E"
-        prefix Tempvar      = "V"
-        prefix Witness      = "W"
-        prefix NormPass     = "N"
-        prefix CPSPass      = "C"
-        prefix LLiftPass    = "L"
-        prefix BoxPass      = "U"
-        unique 0            = ""
-        unique i            = show i
+nstr                         = T.unpack . ntext
 
-rawstr (Name _ s)           = s
-rawstr n                    = nstr n
+ntext (Name _ s)             = s
+ntext (Derived n s)
+  | Internal{} <- s          = T.concat [ntext n, ntext s]
+  | otherwise                = T.concat [ntext n, T.pack "D_", ntext s]
+ntext (Internal p s i)       = T.concat [prefix p, T.singleton '_', unique i, s]
+  where prefix Globvar       = T.singleton 'G'
+        prefix Xistvar       = T.singleton 'E'
+        prefix Tempvar       = T.singleton 'V'
+        prefix Witness       = T.singleton 'W'
+        prefix NormPass      = T.singleton 'N'
+        prefix CPSPass       = T.singleton 'C'
+        prefix LLiftPass     = T.singleton 'L'
+        prefix BoxPass       = T.singleton 'U'
+        unique 0             = T.empty
+        unique i             = T.pack (show i)
 
-name            = Name NoLoc
+rawstr                       = T.unpack . rawText
+
+rawText (Name _ s)           = s
+rawText n                    = ntext n
+
+name            = Name NoLoc . T.pack
 
 nWild           = name "_"
 
@@ -210,14 +212,14 @@ data Comparison = Eq|NEq|LtGt|Lt|Gt|GE|LE|In|NotIn|Is|IsNot deriving (Show,Eq,Re
 
 data Deco       = NoDec | Property | Static deriving (Eq,Show,Read,Generic,NFData)
 
-data Kind       = KType | KProto | KFX | PRow | KRow | KFun [Kind] Kind | KUni Int | KWild deriving (Eq,Ord,Show,Read,Generic,NFData)
+data Kind       = KType | KProto | KFX | PRow | KRow | KFun [Kind] Kind | KUni {-# UNPACK #-} !Int | KWild deriving (Eq,Ord,Show,Read,Generic,NFData)
 
 data TSchema    = TSchema { scloc::SrcLoc, scbind::QBinds, sctype::Type } deriving (Show,Read,Generic,NFData)
 
 data TVar       = TV { tvkind::Kind, tvname::Name } -- the Name is an uppercase letter, optionally followed by digits.
                 deriving (Show,Read,Generic,NFData)
 
-data TUni       = UV { uvkind::Kind, uvlevel::Int, uvid::Int }
+data TUni       = UV { uvkind::Kind, uvlevel:: {-# UNPACK #-} !Int, uvid:: {-# UNPACK #-} !Int }
                 deriving (Show,Read,Generic,NFData)
 
 univar k l i    = UV k l i
@@ -295,7 +297,7 @@ eDot e n        = Dot NoLoc e n
 eDotI e i       = DotI NoLoc e i
 eNone           = None NoLoc
 eCond e b e'    = Cond NoLoc e b e'
-eInt n          = Int NoLoc n (show n)
+eInt n          = Int NoLoc n (T.pack (show n))
 eBool b         = Bool NoLoc b
 eBinOp e o e'   = BinOp NoLoc e o e'
 eLambda nts e   = Lambda NoLoc (pospar nts) KwdNIL e fxPure
@@ -357,7 +359,7 @@ tFun0 ps t      = tFun fxPure (foldr posRow posNil ps) kwdNil t
 
 tSelf           = TVar NoLoc tvSelf
 tvSelf          = TV KType nSelf
-nSelf           = Name NoLoc "Self"
+nSelf           = name "Self"
 
 fxSelf          = TV KFX nSelf
 
@@ -750,7 +752,7 @@ instance Eq Type where
 --    show n              = show (nstr n)
 
 instance Read Name where
-    readsPrec p str     = [ (Name NoLoc s, str') | (s,str') <- readsPrec p str ]
+    readsPrec p str     = [ (Name NoLoc (T.pack s), str') | (s,str') <- readsPrec p str ]
 
 
 -- Helpers ------------------
@@ -771,14 +773,24 @@ unop op e                           = UnOp l0 op e
 binop e1 op e2                      = BinOp l0 e1 op e2
 cmp e1 op e2                        = CompOp l0 e1 [OpArg op e2]
 
-mkStringLit s                       = Strings l0 ['\'' : s ++ "\'"]
+mkStringLit s                       = Strings l0 [T.pack ('\'' : s ++ "\'")]
 
 isIdent s@(c:cs)                    = isAlpha c && all isAlphaNum cs && not (isKeyword s)
   where isAlpha c                   = c `elem` ['a'..'z'] || c `elem` ['A'..'Z'] || c == '_'
         isAlphaNum c                = isAlpha c || c `elem` ['0'..'9']
 
-isKeyword x                         = x `Data.Set.member` rws
-  where rws                         = Data.Set.fromDistinctAscList [
+isKeyword x                         = x `Data.Set.member` keywordSet
+
+isKeywordText x                     = x `Data.Set.member` keywordTextSet
+
+keywordSet :: Data.Set.Set String
+keywordSet                          = Data.Set.fromList keywordStrings
+
+keywordTextSet :: Data.Set.Set Text
+keywordTextSet                      = Data.Set.fromList (map T.pack keywordStrings)
+
+keywordStrings :: [String]
+keywordStrings                      = [
                                         "False","None","NotImplemented","Self","True","action","actor","after","and","as",
                                         "assert","async","await","break","class","continue","def","del","elif","else",
                                         "except","extension","finally","for","from","if","import","in","is","isinstance",
@@ -803,7 +815,7 @@ hasNotImpl ss                       = any isNotImpl ss
 -- Check for __cleanup__ method on actor
 hasCleanup ss                       = any isCleanup ss
 
-isCleanup (Def _ n _ _ _ _ _ _ _ _) = n == Name NoLoc "__cleanup__"
+isCleanup (Def _ n _ _ _ _ _ _ _ _) = n == name "__cleanup__"
 
 isNotImpl (Expr _ e)                = e == eNotImpl
 isNotImpl (Assign _ _ e)            = e == eNotImpl

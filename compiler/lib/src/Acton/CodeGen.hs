@@ -16,6 +16,7 @@ module Acton.CodeGen where
 
 import qualified Data.Set
 import qualified Data.List
+import qualified Data.Text as T
 import qualified Acton.Env
 import Utils
 import Pretty
@@ -65,8 +66,8 @@ myPretty (GName m n)
       | otherwise                   = pretty m <> dot <> pretty n
 myPretty (NoQ w@(Internal _ _ _))   = pretty w
 
-instName (GName m n)                = GName m (Derived n (globalName "instance"))
-methName (GName m n)                = GName m (Derived n (globalName "methods"))
+instName (GName m n)                = GName m (Derived n (globalName (T.pack "instance")))
+methName (GName m n)                = GName m (Derived n (globalName (T.pack "methods")))
 
 derivedHead (Derived d@(Derived{}) _) = derivedHead d
 derivedHead (Derived n _)           = n
@@ -695,7 +696,7 @@ instance Gen PosArg where
     gen env PosNil                  = empty
 
 
-formatLit (Strings l ss)            = Strings l [format $ concat ss]
+formatLit (Strings l ss)            = Strings l [T.pack (format (concatMap T.unpack ss))]
   where format []                   = []
         format ('%':s)              = '%' : flags s
         format (c:s)                = c : format s
@@ -720,7 +721,7 @@ formatLit (Strings l ss)            = Strings l [format $ concat ss]
         conv0 s                     = conv s
         conv (t:s)                  = t : format s
 
-castLit env (Strings l ss) p        = format (concat ss) p
+castLit env (Strings l ss) p        = format (concatMap T.unpack ss) p
   where format [] p                 = empty
         format ('%':s) p            = flags s p
         format (c:s) p              = format s p
@@ -911,16 +912,17 @@ instance Gen Expr where
       | NClass{} <- findQName n env = newcon' env n
       | otherwise                   = genQName env n
     gen env (Int _ i str)
-        | i < 0                     = gen env primToBigInt2 <> parens (doubleQuotes $ text str)       -- negative → string
-        | i <= 9223372036854775807  = gen env primToBigInt  <> parens (text (str++"UL"))             -- fits i64 → toB_bigint
-        | i <= 18446744073709551615 = gen env primToU64     <> parens (text (str++"UL"))             -- fits u64  → toB_u64
-        | otherwise                 = gen env primToBigInt2 <> parens (doubleQuotes $ text str)       -- large → string
-    gen env (Float _ _ str)         = gen env primToFloat <> parens (text str)
+        | i < 0                     = gen env primToBigInt2 <> parens (doubleQuotes $ text str')       -- negative → string
+        | i <= 9223372036854775807  = gen env primToBigInt  <> parens (text (str'++"UL"))             -- fits i64 → toB_bigint
+        | i <= 18446744073709551615 = gen env primToU64     <> parens (text (str'++"UL"))             -- fits u64  → toB_u64
+        | otherwise                 = gen env primToBigInt2 <> parens (doubleQuotes $ text str')       -- large → string
+      where str'                    = T.unpack str
+    gen env (Float _ _ str)         = gen env primToFloat <> parens (text (T.unpack str))
     gen env (Bool _ True)           = gen env qnTrue
     gen env (Bool _ False)          = gen env qnFalse
     gen env (None _)                = gen env qnNone
-    gen env e@Strings{}             = gen env primToStr <> parens(hsep (map pretty (sval e)))
-    gen env e@BStrings{}            = gen env primToBytes <> parens( hsep (map pretty es) <> comma <+>text(show(length(read(concat es) :: String))))
+    gen env e@Strings{}             = gen env primToStr <> parens(hsep (map (pretty . T.unpack) (sval e)))
+    gen env e@BStrings{}            = gen env primToBytes <> parens( hsep (map (pretty . T.unpack) es) <> comma <+>text(show(length(read(concatMap T.unpack es) :: String))))
       where es                      = sval e
     gen env (Call l  (TApp _ e@(Var _ mk) _) p@(PosArg w (PosArg (Set _ es) PosNil)) KwdNil)
       | mk == primMkSet             = text "B_mk_set" <> parens (pretty (length es) <> comma <+> gen env w <> hsep [comma <+> gen env e | e <- es])
@@ -979,13 +981,13 @@ instance Gen Expr where
 
     gen env (UnBox _ (IsInstance _ e c))
                                     = gen env primISINSTANCE0 <> parens(gen env e <> comma <+> genQName env c)
-    gen env (UnBox t (Int _ n s))   = text (s++ suffix t)
+    gen env (UnBox t (Int _ n s))   = text (T.unpack s ++ suffix t)
        where suffix t
                | t == tInt          = "LL"
                | t == tU64          = "UL"
                | otherwise          = ""
              
-    gen env (UnBox _ (Float _ x s)) = text s
+    gen env (UnBox _ (Float _ x s)) = text (T.unpack s)
     gen env (UnBox _ (Bool _ b))    = if b then text "true" else text "false"
     gen env (UnBox _ v@(Var _ (NoQ n)))
        | isUnboxed n                = gen env v
@@ -997,7 +999,7 @@ gencFunCall env nm []               = text nm <> parens empty
 gencFunCall env nm (x : xs)         = text nm <> parens (gen env x <> hsep [ comma <+> gen env x | x <- xs ])
 
 genUnboxedInt env [Int _ n s, None _] _
-                                    = text s
+                                    = text (T.unpack s)
 genUnboxedInt env _ c               = parens (gen env c) <> text "->val"
 
 instance Gen OpArg where
@@ -1015,7 +1017,7 @@ binPretty op                        = pretty op
 augPretty EuDivA                    = text "/="
 augPretty op                        = pretty op
 
-genStr env s                        = text $ head $ sval s
+genStr env s                        = text $ T.unpack $ head $ sval s
 
 genBool env e                       = genExp env tBool e
   where t                           = typeOf env e

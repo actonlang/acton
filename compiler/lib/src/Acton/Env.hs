@@ -26,6 +26,7 @@ import Control.Monad
 import Control.Monad.Except
 import qualified Data.HashMap.Strict as M
 import qualified Data.Set as S
+import Data.Text (Text)
 
 import Acton.Syntax
 import Acton.Builtin
@@ -358,7 +359,7 @@ selfQuant n q               = QBind tvSelf [tc] : q
 setMod                      :: ModName -> EnvF x -> EnvF x
 setMod m env                = env{ thismod = Just m }
 
-addMod                      :: ModName -> [ModName] -> TEnv -> Maybe String -> EnvF x -> EnvF x
+addMod                      :: ModName -> [ModName] -> TEnv -> Maybe Text -> EnvF x -> EnvF x
 addMod m ms newte mdoc env  = env{ modules = addM ns (modules env) }
   where
     ModName ns              = m
@@ -757,7 +758,7 @@ findTVAttr env tv n         = findAttr env c n
   where c                   = findTVBound env tv
 
 tvarWit                     :: TVar -> PCon -> Name
-tvarWit tv p                = Internal Witness (nstr $ Derived (deriveQ $ tcname p) (tvname tv)) 0
+tvarWit tv p                = Internal Witness (ntext $ Derived (deriveQ $ tcname p) (tvname tv)) 0
 
 -- Method resolution order ------------------------------------------------------------------------------------------------------
 

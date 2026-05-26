@@ -11,7 +11,7 @@
 -- THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 --
 
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleInstances, OverloadedStrings #-}
 module Acton.DocPrinter
     ( -- * Main documentation functions
       printAsciiDoc
@@ -34,6 +34,8 @@ import Data.Ord (comparing)
 import Data.Char (isDigit)
 import Data.Set (Set)
 import qualified Data.Set as Set
+import qualified Data.Text as T
+import Data.Text (Text)
 import System.FilePath ((</>), (<.>), joinPath)
 
 
@@ -54,9 +56,9 @@ docModuleWithTypes (NModule _ tenv mdocstring) (Module qn _ _ stmts) =
     in header $+$ bodyDoc $+$ blank $+$ docTopLevelWithTypes tenv stmts
 
 -- | Split docstring into first line (title) and rest
-splitDocstring :: String -> (String, Maybe String)
+splitDocstring :: Text -> (String, Maybe String)
 splitDocstring s =
-    let ls = lines s
+    let ls = lines (T.unpack s)
     in case ls of
         [] -> ("", Nothing)
         [l] -> (l, Nothing)
@@ -85,7 +87,7 @@ extractTopLevelWithTypes tenv (With _ _ body) = concatMap (extractTopLevelWithTy
 extractTopLevelWithTypes _ _ = []
 
 -- | Extract docstring from NameInfo
-extractNameDocstring :: NameInfo -> Maybe String
+extractNameDocstring :: NameInfo -> Maybe Text
 extractNameDocstring (NDef _ _ mdoc) = mdoc
 extractNameDocstring (NSig _ _ mdoc) = mdoc
 extractNameDocstring (NAct _ _ _ _ mdoc) = mdoc
@@ -135,7 +137,7 @@ docDeclWithTypes tenv (Def _ n q p k a b d x ddoc) =
         header = text "##" <+> text "`" <> pretty n <> text "`" <> genericsDoc <> paramsWithTypes <>
                  docRetTypeFormatted retType
         docstrDoc = case docstr of
-            Just ds -> blank $+$ text ds
+            Just ds -> blank $+$ text (T.unpack ds)
             Nothing -> empty
     in header $+$ docstrDoc
   where
@@ -206,7 +208,7 @@ docDeclWithTypes tenv (Actor _ n q p k b ddoc) =
             Nothing -> ddoc
         header = text "##" <+> text "*actor*" <+> text "`" <> pretty n <> text "`" <> docGenerics q <> docParamsWithTypes p k
         docstrDoc = case docstr of
-            Just ds -> blank $+$ text ds
+            Just ds -> blank $+$ text (T.unpack ds)
             Nothing -> empty
     in header $+$ docstrDoc
 
@@ -220,7 +222,7 @@ docDeclWithTypes tenv (Class _ n q a b ddoc) =
             Nothing -> ddoc
         header = text "##" <+> text "*class*" <+> text "`" <> pretty n <> text "`" <> docGenerics q <> docAncestors a
         docstrDoc = case docstr of
-            Just ds -> blank $+$ text ds
+            Just ds -> blank $+$ text (T.unpack ds)
             Nothing -> empty
         methods = docClassBodyWithTypes tenv b
     in header $+$ docstrDoc $+$
@@ -236,7 +238,7 @@ docDeclWithTypes tenv (Protocol _ n q a b ddoc) =
             Nothing -> ddoc
         header = text "##" <+> text "*protocol*" <+> text "`" <> pretty n <> text "`" <> docGenerics q <> docAncestors a
         docstrDoc = case docstr of
-            Just ds -> blank $+$ text ds
+            Just ds -> blank $+$ text (T.unpack ds)
             Nothing -> empty
         methods = docProtocolBodyWithTypes tenv b
     in header $+$ docstrDoc $+$
@@ -248,7 +250,7 @@ docDeclWithTypes tenv (Extension _ q c a b ddoc) =
         docstr = ddoc
         header = text "##" <+> text "*extension*" <+> text "`" <> pretty c <> text "`" <> docGenerics q <> docAncestors a
         docstrDoc = case docstr of
-            Just ds -> blank $+$ text ds
+            Just ds -> blank $+$ text (T.unpack ds)
             Nothing -> empty
     in header $+$ docstrDoc
 
@@ -382,7 +384,7 @@ docMethodWithTypes tenv (Def _ n q p k a b _ _ ddoc) =
         signature = text "-" <+> text "`" <> pretty n <> text "`" <> docGenerics q <> paramsWithTypes <>
                     docRetTypeFormatted (if isJust retType then retType else a)
         docstr = case ddoc of
-            Just ds -> nest 2 (text ds)
+            Just ds -> nest 2 (text (T.unpack ds))
             Nothing -> empty
     in signature $+$
        (if isEmpty docstr then empty else blank $+$ docstr)
@@ -548,7 +550,7 @@ collectUglyTypeVarsFromType _ = []
 createTypeVarMapping :: [Name] -> [(Name, Name)]
 createTypeVarMapping uglyNames = zip uglyNames niceNames
   where
-    niceNames = [Name NoLoc [c] | c <- ['A'..'Z']]
+    niceNames = [name [c] | c <- ['A'..'Z']]
 
 -- | Replace ugly type vars with nice names in a type
 cleanupTypeVars :: [(Name, Name)] -> Type -> Type
@@ -623,7 +625,7 @@ docDeclUnified useStyle tenv decl@(Def _ n q p k a b d x ddoc) =
         header = text (bold useStyle) <> pretty n <> text (reset useStyle) <>
                  genericsDoc <> paramsWithTypes <> docRetTypeStyled useStyle useStyle retType
         docstrDoc = case docstr of
-            Just ds -> nest 2 (text ds)
+            Just ds -> nest 2 (text (T.unpack ds))
             Nothing -> empty
     in header $+$ (if isEmpty docstrDoc then empty else docstrDoc)
   where
@@ -729,7 +731,7 @@ docDeclUnified useStyle tenv (Actor _ n q p k b ddoc) =
                  text (bold useStyle) <> pretty n <> text (reset useStyle) <>
                  docGenerics q <> paramsWithTypes
         docstrDoc = case docstr of
-            Just ds -> nest 2 (text ds)
+            Just ds -> nest 2 (text (T.unpack ds))
             Nothing -> empty
     in header $+$ (if isEmpty docstrDoc then empty else docstrDoc)
   where
@@ -783,7 +785,7 @@ docDeclUnified useStyle tenv (Class _ n q a b ddoc) =
                  text (bold useStyle) <> pretty n <> text (reset useStyle) <>
                  docGenerics q <> docAncestors a
         docstrDoc = case docstr of
-            Just ds -> nest 2 (text ds)
+            Just ds -> nest 2 (text (T.unpack ds))
             Nothing -> empty
         -- Document methods and attributes
         (attrs, methods) = extractClassMembers b
@@ -804,7 +806,7 @@ docDeclUnified useStyle tenv (Class _ n q a b ddoc) =
             Nothing -> empty
 
     -- Document a method signature
-    docMethodUnified :: Bool -> TEnv -> Name -> (Name, QBinds, PosPar, KwdPar, Maybe Type, Maybe String) -> Doc
+    docMethodUnified :: Bool -> TEnv -> Name -> (Name, QBinds, PosPar, KwdPar, Maybe Type, Maybe Text) -> Doc
     docMethodUnified useStyle tenv className (methodName, q, p, k, retType, docstr) =
         let (paramsWithTypes, inferredRetType) =
                 -- Try to get type info from TEnv
@@ -828,7 +830,7 @@ docDeclUnified useStyle tenv (Class _ n q a b ddoc) =
             header = text (bold useStyle) <> pretty methodName <> text (reset useStyle) <>
                      docGenerics q <> paramsWithTypes <> showRetType
             docstrDoc = case docstr of
-                Just ds -> text ds
+                Just ds -> text (T.unpack ds)
                 Nothing -> empty
         in header $+$ (if isEmpty docstrDoc then empty else nest 2 docstrDoc)
       where
@@ -890,7 +892,7 @@ docDeclUnified useStyle tenv (Protocol _ n q a b ddoc) =
                  text (bold useStyle) <> pretty n <> text (reset useStyle) <>
                  docGenerics q <> docAncestors a
         docstrDoc = case docstr of
-            Just ds -> nest 2 (text ds)
+            Just ds -> nest 2 (text (T.unpack ds))
             Nothing -> empty
         -- Document protocol methods
         methods = extractProtocolMethods b
@@ -900,7 +902,7 @@ docDeclUnified useStyle tenv (Protocol _ n q a b ddoc) =
     in header $+$ (if isEmpty docstrDoc then empty else docstrDoc) $+$ methodsDoc
   where
     -- Document a protocol method
-    docProtocolMethod :: (Name, QBinds, PosPar, KwdPar, Maybe Type, Maybe String) -> Doc
+    docProtocolMethod :: (Name, QBinds, PosPar, KwdPar, Maybe Type, Maybe Text) -> Doc
     docProtocolMethod (methodName, q, p, k, retType, docstr) =
         -- Protocol methods are just signatures
         let header = pretty methodName <> text ":" <+>
@@ -908,7 +910,7 @@ docDeclUnified useStyle tenv (Protocol _ n q a b ddoc) =
                          Just t -> pretty (SimplifiedType t)
                          Nothing -> text "()"
             docstrDoc = case docstr of
-                Just ds -> nest 2 (text ds)
+                Just ds -> nest 2 (text (T.unpack ds))
                 Nothing -> empty
         in header $+$ (if isEmpty docstrDoc then empty else docstrDoc)
 
@@ -919,7 +921,7 @@ docDeclUnified useStyle tenv (Extension _ q c a b ddoc) =
         header = text (cyan useStyle ++ "extension" ++ reset useStyle) <+>
                  pretty c <> docAncestors a
         docstrDoc = case docstr of
-            Just ds -> nest 2 (text ds)
+            Just ds -> nest 2 (text (T.unpack ds))
             Nothing -> empty
     in header $+$ (if isEmpty docstrDoc then empty else docstrDoc)
 
@@ -1040,7 +1042,7 @@ docMethodStyled useBold useColor (Def _ n q p k a b _ _ ddoc) =
     let signature = nest 2 $ text "- " <> text (bold useBold) <> pretty n <> text (reset useBold) <>
                     docGenerics q <> docParamsStyledAscii useBold useColor p k <> docRetTypeStyled useBold useColor a
         docstr = case ddoc of
-            Just ds -> nest 4 (text ds)
+            Just ds -> nest 4 (text (T.unpack ds))
             Nothing -> empty
     in signature $+$
        (if isEmpty docstr then empty else docstr)
@@ -1066,7 +1068,7 @@ docMethodStyledWithTypes useBold useColor tenv (Def _ n q p k a b _ _ ddoc) =
                     docGenerics q <> paramsWithTypes <>
                     docRetTypeStyled useBold useColor (if isJust retType then retType else a)
         docstr = case ddoc of
-            Just ds -> nest 4 (text ds)
+            Just ds -> nest 4 (text (T.unpack ds))
             Nothing -> empty
     in signature $+$
        (if isEmpty docstr then empty else docstr)
@@ -2497,7 +2499,7 @@ docDeclHtmlWithTypesAndClassesAndModule tenv currentModule classNames decl =
             header = text "<h2 class=\"type-context\"><code>" <> pretty n <> text "</code>" <>
                      constraintsDoc <> genericsDoc <> paramsWithTypes <> actualRetType <> text "</h2>"
             docstr = case ddoc of
-                Just ds -> text "<div class=\"docstring\">" <> text (nl2br $ htmlEscape ds) <> text "</div>"
+                Just ds -> text "<div class=\"docstring\">" <> text (nl2br $ htmlEscape (T.unpack ds)) <> text "</div>"
                 Nothing -> empty
         in header $+$ docstr
 
@@ -2520,7 +2522,7 @@ docDeclHtmlWithTypesAndClassesAndModule tenv currentModule classNames decl =
             header = text "<h2 class=\"type-context\"><span class=\"keyword\">actor</span> <code>" <> pretty n <> text "</code>" <>
                      genericsDoc <> paramsWithTypes <> text "</h2>"
             docstr = case ddoc of
-                Just ds -> text "<div class=\"docstring\">" <> text (nl2br $ htmlEscape ds) <> text "</div>"
+                Just ds -> text "<div class=\"docstring\">" <> text (nl2br $ htmlEscape (T.unpack ds)) <> text "</div>"
                 Nothing -> empty
             -- Process actor body to extract public constants, internal attributes and methods
             body = docActorBodyHtmlWithGenericsTypesAndClassesModule tenv curMod allGenerics classNames b
@@ -2539,7 +2541,7 @@ docDeclHtmlWithTypesAndClassesAndModule tenv currentModule classNames decl =
             header = text "<h2 id=\"class-" <> text (nstr n) <> text "\" class=\"type-context\"><span class=\"keyword\">class</span> <code>" <> pretty n <> text "</code>" <>
                      genericsDoc <> docAncestorsHtmlWithGenericsAndClassesModule curMod generics classNames a <> text "</h2>"
             docstr = case ddoc of
-                Just ds -> text "<div class=\"docstring\">" <> text (nl2br $ htmlEscape ds) <> text "</div>"
+                Just ds -> text "<div class=\"docstring\">" <> text (nl2br $ htmlEscape (T.unpack ds)) <> text "</div>"
                 Nothing -> empty
             methods = docClassBodyHtmlWithGenericsTypesAndClassesModule tenv curMod generics classNames b
         in text "<div class=\"declaration-block\">" $+$
@@ -2557,7 +2559,7 @@ docDeclHtmlWithTypesAndClassesAndModule tenv currentModule classNames decl =
             header = text "<h2 class=\"type-context\"><span class=\"keyword\">protocol</span> <code>" <> pretty n <> text "</code>" <>
                      genericsDoc <> docAncestorsHtmlWithGenericsAndClassesModule curMod generics classNames a <> text "</h2>"
             docstr = case ddoc of
-                Just ds -> text "<div class=\"docstring\">" <> text (nl2br $ htmlEscape ds) <> text "</div>"
+                Just ds -> text "<div class=\"docstring\">" <> text (nl2br $ htmlEscape (T.unpack ds)) <> text "</div>"
                 Nothing -> empty
             methods = docProtocolBodyHtmlWithGenericsTypesAndClassesModule tenv curMod generics classNames b
         in text "<div class=\"declaration-block\">" $+$
@@ -2574,7 +2576,7 @@ docDeclHtmlWithTypesAndClassesAndModule tenv currentModule classNames decl =
             header = text "<h2 class=\"type-context\"><span class=\"keyword\">extension</span> <code>" <> pretty c <> text "</code>" <>
                      genericsDoc <> docAncestorsHtmlWithGenericsAndClassesModule curMod generics classNames a <> text "</h2>"
             docstr = case ddoc of
-                Just ds -> text "<div class=\"docstring\">" <> text (nl2br $ htmlEscape ds) <> text "</div>"
+                Just ds -> text "<div class=\"docstring\">" <> text (nl2br $ htmlEscape (T.unpack ds)) <> text "</div>"
                 Nothing -> empty
             methods = docClassBodyHtmlWithGenericsTypesAndClassesModule tenv curMod generics classNames b
         in text "<div class=\"declaration-block\">" $+$
@@ -2632,7 +2634,7 @@ docDeclHtmlWithTypesAndClasses tenv classNames (Def _ n q p k a b d x ddoc) =
             Just info -> extractNameDocstring info
             _ -> Nothing
         docstr = case mdocstring of
-            Just ds -> text "<div class=\"docstring\">" <> text (nl2br $ htmlEscape ds) <> text "</div>"
+            Just ds -> text "<div class=\"docstring\">" <> text (nl2br $ htmlEscape (T.unpack ds)) <> text "</div>"
             Nothing -> empty
     in header $+$ docstr
   where
@@ -2654,7 +2656,7 @@ docDeclHtmlWithTypesAndClasses tenv classNames (Actor _ n q p k b ddoc) =
             Just info -> extractNameDocstring info
             _ -> Nothing
         docstr = case mdocstring of
-            Just ds -> text "<div class=\"docstring\">" <> text (nl2br $ htmlEscape ds) <> text "</div>"
+            Just ds -> text "<div class=\"docstring\">" <> text (nl2br $ htmlEscape (T.unpack ds)) <> text "</div>"
             Nothing -> empty
         -- Process actor body to extract attributes and methods
         body = docActorBodyHtmlWithGenericsTypesAndClasses tenv allGenerics classNames b
@@ -2671,7 +2673,7 @@ docDeclHtmlWithTypesAndClasses tenv classNames (Class _ n q a b ddoc) =
             Just info -> extractNameDocstring info
             _ -> Nothing
         docstr = case mdocstring of
-            Just ds -> text "<div class=\"docstring\">" <> text (nl2br $ htmlEscape ds) <> text "</div>"
+            Just ds -> text "<div class=\"docstring\">" <> text (nl2br $ htmlEscape (T.unpack ds)) <> text "</div>"
             Nothing -> empty
         methods = docClassBodyHtmlWithGenericsTypesAndClasses tenv generics classNames b
     in header $+$ docstr $+$
@@ -2688,7 +2690,7 @@ docDeclHtmlWithTypesAndClasses tenv classNames (Protocol _ n q a b ddoc) =
             Just info -> extractNameDocstring info
             _ -> Nothing
         docstr = case mdocstring of
-            Just ds -> text "<div class=\"docstring\">" <> text (nl2br $ htmlEscape ds) <> text "</div>"
+            Just ds -> text "<div class=\"docstring\">" <> text (nl2br $ htmlEscape (T.unpack ds)) <> text "</div>"
             Nothing -> empty
         methods = docProtocolBodyHtmlWithGenericsTypesAndClasses tenv generics classNames b
     in header $+$ docstr $+$
@@ -2702,7 +2704,7 @@ docDeclHtmlWithTypesAndClasses tenv classNames (Extension _ q c a b ddoc) =
                  docGenericsHtmlWithHighlight generics q <> docAncestorsHtmlWithGenericsAndClasses generics classNames a <> text "</h2>"
         mdocstring = Nothing  -- Extensions don't have their own docstrings in TEnv
         docstr = case mdocstring of
-            Just ds -> text "<div class=\"docstring\">" <> text (nl2br $ htmlEscape ds) <> text "</div>"
+            Just ds -> text "<div class=\"docstring\">" <> text (nl2br $ htmlEscape (T.unpack ds)) <> text "</div>"
             Nothing -> empty
     in header $+$ docstr
   where
@@ -2913,7 +2915,7 @@ docAncestorsHtmlWithGenericsAndClassesModule curMod generics classNames (a:_) =
     in text "(<span class=\"type\">" <> text (renderTypeWithGenericsConstraintsAndClassesAndModule curMod generics [] classNames (TCon NoLoc tc)) <> text "</span>)"
 
 -- | Extract class members (attributes and methods) from a class body
-extractClassMembers :: Suite -> ([(Name, Maybe Type)], [(Name, QBinds, PosPar, KwdPar, Maybe Type, Maybe String)])
+extractClassMembers :: Suite -> ([(Name, Maybe Type)], [(Name, QBinds, PosPar, KwdPar, Maybe Type, Maybe Text)])
 extractClassMembers stmts = foldr extractMember ([], []) stmts
   where
     extractMember (Assign _ [PVar _ n _] _) (attrs, methods) = ((n, Nothing) : attrs, methods)
@@ -2931,7 +2933,7 @@ extractClassMembers stmts = foldr extractMember ([], []) stmts
     extractDeclMember _ acc = acc
 
 -- | Extract actor members (public constants, internal attributes, and methods) from an actor body
-extractActorMembers :: Suite -> ([(Name, Maybe Type)], [(Name, Maybe Type)], [(Name, QBinds, PosPar, KwdPar, Maybe Type, Maybe String)])
+extractActorMembers :: Suite -> ([(Name, Maybe Type)], [(Name, Maybe Type)], [(Name, QBinds, PosPar, KwdPar, Maybe Type, Maybe Text)])
 extractActorMembers stmts = foldr extractMember ([], [], []) stmts
   where
     extractMember (Assign _ [PVar _ n ann] _) (publics, internals, methods) = ((n, ann) : publics, internals, methods)
@@ -2949,7 +2951,7 @@ extractActorMembers stmts = foldr extractMember ([], [], []) stmts
     extractDeclMember _ acc = acc
 
 -- | Extract protocol methods from a protocol body
-extractProtocolMethods :: Suite -> [(Name, QBinds, PosPar, KwdPar, Maybe Type, Maybe String)]
+extractProtocolMethods :: Suite -> [(Name, QBinds, PosPar, KwdPar, Maybe Type, Maybe Text)]
 extractProtocolMethods stmts = foldr extractMethod [] stmts
   where
     extractMethod (Decl _ decls) methods = foldr extractDeclMethod methods decls
@@ -3029,7 +3031,7 @@ docActorBodyHtmlWithGenericsTypesAndClassesModule tenv curMod generics className
                      text "</div>"
     in publicDocs $+$ internalDocs $+$ methodDocs
 
-docMethodHtmlWithGenericsTypesAndClassesModule :: TEnv -> ModName -> Set Name -> Set Name -> (Name, QBinds, PosPar, KwdPar, Maybe Type, Maybe String) -> Doc
+docMethodHtmlWithGenericsTypesAndClassesModule :: TEnv -> ModName -> Set Name -> Set Name -> (Name, QBinds, PosPar, KwdPar, Maybe Type, Maybe Text) -> Doc
 docMethodHtmlWithGenericsTypesAndClassesModule tenv curMod generics classNames (n, q, p, k, ret, docstr) =
     let nl2br = intercalate "<br>" . lines
         inferredParams = case lookup n tenv of
@@ -3049,7 +3051,7 @@ docMethodHtmlWithGenericsTypesAndClassesModule tenv curMod generics classNames (
                     text "<div class=\"method-signature\"><code>" <> pretty n <> text "</code>" <>
                     genericsDoc <> params <> docRetTypeHtmlWithGenericsConstraintsAndClassesModule curMod allGenerics [] classNames retType <> text "</div>"
         methodDoc = case docstr of
-            Just ds -> text "<div class=\"method-doc\">" <> text (nl2br $ htmlEscape ds) <> text "</div>"
+            Just ds -> text "<div class=\"method-doc\">" <> text (nl2br $ htmlEscape (T.unpack ds)) <> text "</div>"
             Nothing -> empty
     in methodSig $+$ methodDoc $+$ text "</div>"
 
@@ -3341,12 +3343,12 @@ docActorBodyHtmlWithGenericsTypesAndClasses tenv generics classNames stmts =
                         text "<div class=\"method-signature\"><code>" <> pretty n <> text "</code>" <>
                         genericsDoc <> params <> docRetTypeHtmlWithGenericsConstraintsAndClasses allGenerics [] classNames retType <> text "</div>"
             methodDoc = case docstr of
-                Just ds -> text "<div class=\"method-doc\">" <> text (nl2br $ htmlEscape ds) <> text "</div>"
+                Just ds -> text "<div class=\"method-doc\">" <> text (nl2br $ htmlEscape (T.unpack ds)) <> text "</div>"
                 Nothing -> empty
         in methodSig $+$ methodDoc $+$ text "</div>"
 
 -- | Partition actor members into public constants, internal attributes, and methods
-partitionActorMembersHtmlWithGenericsTypesAndClasses :: TEnv -> Set Name -> Set Name -> Suite -> ([Doc], [Doc], [(Name, QBinds, PosPar, KwdPar, Maybe Type, Maybe String)])
+partitionActorMembersHtmlWithGenericsTypesAndClasses :: TEnv -> Set Name -> Set Name -> Suite -> ([Doc], [Doc], [(Name, QBinds, PosPar, KwdPar, Maybe Type, Maybe Text)])
 partitionActorMembersHtmlWithGenericsTypesAndClasses tenv generics classNames stmts = foldl partition ([], [], []) stmts
   where
     partition (publics, internals, methods) (Assign _ [PVar _ n ann] _) =
@@ -3480,7 +3482,7 @@ docMethodHtmlWithGenericsTypesAndClasses tenv generics classNames (Def _ n q p k
         signature = text "<div class=\"method-signature type-context\"><code>" <> pretty n <> text "</code>" <>
                     docGenericsHtmlWithHighlight methodGenerics q <> paramsWithTypes <> actualRetType <> text "</div>"
         docstr = case ddoc of
-            Just ds -> text "<div class=\"method-doc\">" <> text (nl2br $ htmlEscape ds) <> text "</div>"
+            Just ds -> text "<div class=\"method-doc\">" <> text (nl2br $ htmlEscape (T.unpack ds)) <> text "</div>"
             Nothing -> empty
     in text "<li class=\"method-item\">" <> signature <> docstr <> text "</li>"
   where
@@ -3502,7 +3504,7 @@ modNameToString :: ModName -> String
 modNameToString (ModName names) = intercalate "." (map nstr names)
 
 -- | Generate HTML documentation index for a list of modules
-generateDocIndex :: FilePath -> [(ModName, Maybe String)] -> IO ()
+generateDocIndex :: FilePath -> [(ModName, Maybe Text)] -> IO ()
 generateDocIndex docDir tasks = do
     let indexFile = docDir </> "index.html"
         sortedTasks = sortBy (comparing (\(mn,_) -> modNameToString mn)) tasks
@@ -3531,14 +3533,14 @@ generateDocIndex docDir tasks = do
             ]
     writeFileUtf8Atomic indexFile indexHtml
   where
-    generateModuleEntry :: (ModName, Maybe String) -> [String]
+    generateModuleEntry :: (ModName, Maybe Text) -> [String]
     generateModuleEntry (mn, mDoc) =
         let modPaths = modPath mn  -- Use different name to avoid shadowing
             modName = modNameToString mn
             htmlFile = if null modPaths
                        then "unnamed.html"
                        else joinPath (init modPaths) </> last modPaths <.> "html"
-            docString = maybe "" (takeWhile (/= '\n')) mDoc
+            docString = maybe "" (takeWhile (/= '\n') . T.unpack) mDoc
         in [ "      <li class=\"module-item\">"
            , "        <a href=\"" ++ htmlFile ++ "\" class=\"module-link\">"
            , "          <span class=\"module-path\">" ++ modName ++ "</span>"

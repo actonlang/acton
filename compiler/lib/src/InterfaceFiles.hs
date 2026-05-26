@@ -31,7 +31,7 @@
 --   7) nameHashes         :: [NameHashInfo]                -- per-name src/pub/impl hashes + deps
 --   8) roots              :: [A.Name]                      -- root actors (e.g., main or test_main)
 --   9) tests              :: [String]                      -- discovered test names
---  10) docstring          :: Maybe String                  -- module docstring
+--  10) docstring          :: Maybe Text                    -- module docstring
 --  11) nameInfo           :: I.NameInfo                    -- type/name environment
 --  12) typedModule        :: A.Module                      -- typed module
 --
@@ -50,6 +50,7 @@ import qualified Control.Exception as E
 import qualified Data.Binary.Get as BinaryGet
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
+import Data.Text (Text)
 import qualified Acton.Syntax as A
 import qualified Acton.NameInfo as I
 import GHC.Generics (Generic)
@@ -90,7 +91,7 @@ type TyFile =
   , [NameHashInfo]
   , [A.Name]
   , [String]
-  , Maybe String
+  , Maybe Text
   )
 
 type TyHeader =
@@ -102,7 +103,7 @@ type TyHeader =
   , [NameHashInfo]
   , [A.Name]
   , [String]
-  , Maybe String
+  , Maybe Text
   )
 
 -- Note: tests are stored in the header to support listing without compiling
@@ -142,7 +143,7 @@ decodeTyPrefix bsLazy =
       moduleImplHash <- get :: BinaryGet.Get BS.ByteString
       return (sourceMeta, moduleSrcBytesHash, modulePubHash, moduleImplHash)
 
-writeFile :: FilePath -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [NameHashInfo] -> [A.Name] -> [String] -> Maybe String -> I.NameInfo -> A.Module -> IO ()
+writeFile :: FilePath -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [NameHashInfo] -> [A.Name] -> [String] -> Maybe Text -> I.NameInfo -> A.Module -> IO ()
 writeFile f moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps nameHashes roots tests mdoc nmod tchecked = do
     pid <- getProcessID
     let tmpFile = f ++ "." ++ show pid
@@ -159,7 +160,7 @@ readFile f = do
           nameHashes <- get :: BinaryGet.Get [NameHashInfo]
           roots <- get :: BinaryGet.Get [A.Name]
           tests <- get :: BinaryGet.Get [String]
-          mdoc <- get :: BinaryGet.Get (Maybe String)
+          mdoc <- get :: BinaryGet.Get (Maybe Text)
           nmod <- get :: BinaryGet.Get I.NameInfo
           tmod <- get :: BinaryGet.Get A.Module
           return (imps, nameHashes, roots, tests, mdoc, nmod, tmod)
@@ -182,7 +183,7 @@ readHeader f = do
           nameHashes <- get :: BinaryGet.Get [NameHashInfo]
           roots <- get :: BinaryGet.Get [A.Name]
           tests <- get :: BinaryGet.Get [String]
-          doc   <- get :: BinaryGet.Get (Maybe String)
+          doc   <- get :: BinaryGet.Get (Maybe Text)
           return (imps, nameHashes, roots, tests, doc)
     case BinaryGet.runGetOrFail getHdr body1 of
       Left _ -> ioError (userError "Failed to decode .ty header")

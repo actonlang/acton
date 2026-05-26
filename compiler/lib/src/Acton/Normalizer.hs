@@ -11,7 +11,7 @@
 -- THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 --
 
-{-# LANGUAGE FlexibleInstances, FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances, FlexibleContexts, OverloadedStrings #-}
 module Acton.Normalizer where
 
 import Acton.Syntax
@@ -22,6 +22,7 @@ import Acton.QuickType
 import Acton.Prim
 import Acton.Builtin
 import Data.List
+import qualified Data.Text as T
 import Pretty
 import Utils
 import Control.Monad.State.Strict
@@ -49,7 +50,7 @@ normalize env0 m                    = return (evalState (norm env m) (0,[]), env
 -- Normalizing monad
 type NormM a                        = State (Int,[(Name,PosPar,Expr)]) a
 
-newName                             :: String -> NormM Name
+newName                             :: T.Text -> NormM Name
 newName s                           = do (n,ts) <- get
                                          put (n+1,ts)
                                          return $ Internal NormPass s n
@@ -175,9 +176,9 @@ normPat env p@(PList _ ps pt)       = do v <- newName "lst"
                                          return (pVar v $ conv t, ss)
   where normList v n (p:ps) pt      = s : normList v (n+1) ps pt
           where s                   = Assign NoLoc [p] (eCall (eDot (eQVar qnIndexed) getitemKW)
-                                        [eVar v, Int NoLoc n (show n)])
+                                        [eVar v, eInt n])
         normList v n [] (Just p)    = [Assign NoLoc [p] (eCall (eDot (eQVar qnSliceable) getsliceKW)
-                                        [eVar v, Int NoLoc n (show n), None NoLoc, None NoLoc])]
+                                        [eVar v, eInt n, None NoLoc, None NoLoc])]
         normList v n [] Nothing     = []
         t                           = typeOf env p
 
@@ -482,7 +483,7 @@ instance Norm Decl where
     norm env d                      = error ("norm unexpected: " ++ prstr d)
 
 
-catStrings ss                       = map (quote . escape '"') ss
+catStrings ss                       = map (T.pack . quote . escape '"' . T.unpack) ss
   where escape c []                 = []
         escape c ('\\':x:xs)        = '\\' : x : escape c xs
         escape c (x:xs)

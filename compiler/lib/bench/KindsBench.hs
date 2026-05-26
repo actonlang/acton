@@ -7,6 +7,7 @@ import qualified Acton.Syntax as Syntax
 import Control.DeepSeq (rnf)
 import qualified Control.Exception as E
 import qualified Data.HashMap.Strict as HashMap
+import qualified Data.Text.IO as TIO
 import Data.Time.Clock (diffUTCTime, getCurrentTime)
 import GHC.Stats
 import System.Environment (getArgs)
@@ -45,7 +46,7 @@ main = do
     case args of
       [typesPath, sourcePath] -> do
         statsEnabled <- getRTSStatsEnabled
-        src <- readFile sourcePath
+        src <- TIO.readFile sourcePath
         env0 <- Env.initEnv typesPath False
         let modName = Syntax.modName [takeBaseName sourcePath]
 

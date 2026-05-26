@@ -35,6 +35,7 @@ import qualified Control.Monad.Trans.State.Strict as St
 import Text.Megaparsec (ParseErrorBundle, PosState(..), bundleErrors, bundlePosState, errorOffset, reachOffset, runParser, errorBundlePretty, ShowErrorComponent(..))
 import Text.Megaparsec.Pos (sourceLine, unPos)
 import qualified Data.Text as T
+import qualified Data.Text.IO as TIO
 import Data.List (isInfixOf, isPrefixOf, nub, sort)
 import qualified Data.List.NonEmpty as NE
 import Data.IORef
@@ -103,7 +104,7 @@ main = do
 
       it "reports rough parse progress by source offset" $ do
         progressRef <- newIORef []
-        _ <- P.parseModule (S.modName ["progress"]) "progress.act" "x = 1\n" (Just $ \completed total ->
+        _ <- P.parseModule (S.modName ["progress"]) "progress.act" (T.pack "x = 1\n") (Just $ \completed total ->
           modifyIORef' progressRef (++ [(completed, total)]))
         progress <- readIORef progressRef
         let completed = map fst progress
@@ -111,6 +112,12 @@ main = do
         progress `shouldSatisfy` (not . null)
         completed `shouldSatisfy` monotonic
         last progress `shouldBe` (6, 6)
+
+      it "allows underscore parameters in lambdas" $ do
+        let input = "def f():\n    rpc(a, lambda c, _, err: cb(c, err))\n"
+        case parseModuleTest input of
+          Left err -> expectationFailure $ "Parse failed: " ++ err
+          Right _ -> return ()
 
       describe "Basic Syntax" $ do
         testParse env0 ["syntax1"]
@@ -254,9 +261,9 @@ main = do
                   , "        pass"
                   ]
                 moduleName = S.modName ["chunked"]
-            result <- E.try (P.parseModule moduleName "chunked.act" input Nothing)
+            result <- E.try (P.parseModule moduleName "chunked.act" (T.pack input) Nothing)
             case result of
-              Left (bundle :: ParseErrorBundle String P.CustomParseError) ->
+              Left (bundle :: ParseErrorBundle T.Text P.CustomParseError) ->
                 parseBundleErrorLine bundle `shouldBe` 3
               Right _ ->
                 expectationFailure "Expected chunked parser to reject malformed input"
@@ -1034,7 +1041,7 @@ main = do
             actFile = "<top_non_total_sig>"
             sysTypesPath = ".." </> ".." </> "dist" </> "base" </> "out" </> "types"
             onInferred names sig = modifyIORef' sigsRef ((names, sig) :)
-        parsed <- liftIO $ P.parseModule moduleName actFile src Nothing
+        parsed <- liftIO $ P.parseModule moduleName actFile (T.pack src) Nothing
         env <- liftIO $ Acton.Env.mkEnv [sysTypesPath] env0 parsed
         kchecked <- liftIO $ Acton.Kinds.check env parsed
         _ <- liftIO $ Acton.Types.reconstruct Nothing (Just onInferred) env kchecked
@@ -1604,7 +1611,7 @@ main = do
 -- Helper function to format custom parse errors consistently
 formatCustomParseError :: String -> String -> SrcLoc -> P.CustomParseError -> String
 formatCustomParseError filename input loc err =
-  let diagnostic = Diag.customParseErrorDiagnostic "Syntax error" filename input loc err
+  let diagnostic = Diag.customParseErrorDiagnostic "Syntax error" filename (T.pack input) loc err
       doc = prettyDiagnostic WithUnicode (TabSize 4) diagnostic
       layout = layoutPretty defaultLayoutOptions (unAnnotate doc)
   in T.unpack $ renderStrict layout
@@ -1619,15 +1626,16 @@ parseActon :: String -> Either String String
 parseActon input =
   System.IO.Unsafe.unsafePerformIO $
     E.catch
-      (E.evaluate $ case runParser (St.evalStateT P.stmt P.initState) "" inputWithNewline of
+      (E.evaluate $ case runParser (St.evalStateT P.stmt P.initState) "" inputText of
         Left err -> Left $ renderDiagnostic err
         Right result -> Right $ concatMap (Pretty.print) result)
       handleCustomParseException
   where
     inputWithNewline = withTrailingNewline input
+    inputText = T.pack inputWithNewline
     handleCustomParseException :: P.CustomParseException -> IO (Either String String)
     renderDiagnostic err =
-      let diagnostic = Diag.parseDiagnosticFromBundle "test" inputWithNewline err
+      let diagnostic = Diag.parseDiagnosticFromBundle "test" inputText err
           doc = prettyDiagnostic WithUnicode (TabSize 4) diagnostic
           layout = layoutPretty defaultLayoutOptions (unAnnotate doc)
       in T.unpack $ renderStrict layout
@@ -1639,14 +1647,15 @@ parseModuleTest :: String -> Either String String
 parseModuleTest input =
   System.IO.Unsafe.unsafePerformIO $
     E.catch
-      (E.evaluate $ case runParser (St.evalStateT P.file_input P.initState) "test.act" inputWithNewline of
+      (E.evaluate $ case runParser (St.evalStateT P.file_input P.initState) "test.act" inputText of
         Left err -> Left $ renderDiagnostic err
         Right (_imports, _mdoc, _suite) -> Right $ "Module parsed successfully")
       handleCustomParseException
   where
     inputWithNewline = withTrailingNewline input
+    inputText = T.pack inputWithNewline
     renderDiagnostic err =
-      let diagnostic = Diag.parseDiagnosticFromBundle "test.act" inputWithNewline err
+      let diagnostic = Diag.parseDiagnosticFromBundle "test.act" inputText err
           doc = prettyDiagnostic WithUnicode (TabSize 4) diagnostic
           layout = layoutPretty defaultLayoutOptions (unAnnotate doc)
       in T.unpack $ renderStrict layout
@@ -1662,12 +1671,13 @@ expectChunkedParseMatchesSerial input = do
 expectChunkedParseMatchesSerialFile :: FilePath -> String -> Expectation
 expectChunkedParseMatchesSerialFile actFile input = do
   let moduleName = S.modName ["chunked"]
-  serial <- P.parseModuleSerial moduleName actFile input Nothing
-  chunked <- P.parseModule moduleName actFile input Nothing
+  let inputText = T.pack input
+  serial <- P.parseModuleSerial moduleName actFile inputText Nothing
+  chunked <- P.parseModule moduleName actFile inputText Nothing
   when (chunked /= serial) $
     expectationFailure ("Chunked parser AST differs from serial parser for " ++ actFile)
 
-parseBundleErrorLine :: ParseErrorBundle String P.CustomParseError -> Int
+parseBundleErrorLine :: ParseErrorBundle T.Text P.CustomParseError -> Int
 parseBundleErrorLine bundle =
   let firstError = NE.head (bundleErrors bundle)
       (_, posState) = reachOffset (errorOffset firstError) (bundlePosState bundle)
@@ -1799,14 +1809,15 @@ parseStmtAst :: String -> Either String [S.Stmt]
 parseStmtAst input =
   System.IO.Unsafe.unsafePerformIO $
     E.catch
-      (E.evaluate $ case runParser (St.evalStateT P.stmt P.initState) "" inputWithNewline of
+      (E.evaluate $ case runParser (St.evalStateT P.stmt P.initState) "" inputText of
         Left err -> Left $ renderDiagnostic err
         Right result -> Right result)
       handleCustomParseException
   where
     inputWithNewline = withTrailingNewline input
+    inputText = T.pack inputWithNewline
     renderDiagnostic err =
-      let diagnostic = Diag.parseDiagnosticFromBundle "test" inputWithNewline err
+      let diagnostic = Diag.parseDiagnosticFromBundle "test" inputText err
           doc = prettyDiagnostic WithUnicode (TabSize 4) diagnostic
           layout = layoutPretty defaultLayoutOptions (unAnnotate doc)
       in T.unpack $ renderStrict layout
@@ -1818,14 +1829,15 @@ parseExprAst :: String -> Either String S.Expr
 parseExprAst input =
   System.IO.Unsafe.unsafePerformIO $
     E.catch
-      (E.evaluate $ case runParser (St.evalStateT P.expr P.initState) "" inputWithNewline of
+      (E.evaluate $ case runParser (St.evalStateT P.expr P.initState) "" inputText of
         Left err -> Left $ renderDiagnostic err
         Right result -> Right result)
       handleCustomParseException
   where
     inputWithNewline = withTrailingNewline input
+    inputText = T.pack inputWithNewline
     renderDiagnostic err =
-      let diagnostic = Diag.parseDiagnosticFromBundle "test" inputWithNewline err
+      let diagnostic = Diag.parseDiagnosticFromBundle "test" inputText err
           doc = prettyDiagnostic WithUnicode (TabSize 4) diagnostic
           layout = layoutPretty defaultLayoutOptions (unAnnotate doc)
       in T.unpack $ renderStrict layout
@@ -1926,7 +1938,7 @@ parseAct env0 modulePath = do
       act_file = "test" </> "src" </> modulePath ++ ".act"
       sysTypesPath = ".." </> ".." </> "dist" </> "base" </> "out" </> "types"
 
-  src <- liftIO $ readFile act_file
+  src <- liftIO $ TIO.readFile act_file
   parsed <- liftIO $ P.parseModule moduleName act_file src Nothing
   env <- liftIO $ Acton.Env.mkEnv [sysTypesPath] env0 parsed
   return (env, parsed)
@@ -1935,7 +1947,7 @@ typecheckSource env0 modName src = do
   let moduleName = S.modName [modName]
       actFile = "<" ++ modName ++ ">"
       sysTypesPath = ".." </> ".." </> "dist" </> "base" </> "out" </> "types"
-  parsed <- liftIO $ P.parseModule moduleName actFile src Nothing
+  parsed <- liftIO $ P.parseModule moduleName actFile (T.pack src) Nothing
   env <- liftIO $ Acton.Env.mkEnv [sysTypesPath] env0 parsed
   kchecked <- liftIO $ Acton.Kinds.check env parsed
   (_, tchecked, _, _) <- liftIO $ Acton.Types.reconstruct Nothing Nothing env kchecked
@@ -2193,13 +2205,13 @@ testDocstrings env0 testname = do
     it "extracts module docstrings" $ do
       case mdoc of
         Just doc -> do
-          doc `shouldContain` "Test module"
-          doc `shouldContain` "{braces}"
+          T.unpack doc `shouldContain` "Test module"
+          T.unpack doc `shouldContain` "{braces}"
         Nothing -> expectationFailure "Module docstring not extracted"
 
     it "extracts function docstrings" $ do
       case lookup "test_function" docstrings of
-        Just (Just doc) -> doc `shouldContain` "Test function"
+        Just (Just doc) -> T.unpack doc `shouldContain` "Test function"
         Just Nothing -> expectationFailure "Function should have docstring"
         Nothing -> expectationFailure "Function not found"
 
@@ -2211,25 +2223,25 @@ testDocstrings env0 testname = do
 
     it "extracts class docstrings" $ do
       case lookup "TestClass" docstrings of
-        Just (Just doc) -> doc `shouldContain` "Test class"
+        Just (Just doc) -> T.unpack doc `shouldContain` "Test class"
         Just Nothing -> expectationFailure "Class should have docstring"
         Nothing -> expectationFailure "Class not found"
 
     it "extracts actor docstrings" $ do
       case lookup "TestActor" docstrings of
-        Just (Just doc) -> doc `shouldContain` "Test actor"
+        Just (Just doc) -> T.unpack doc `shouldContain` "Test actor"
         Just Nothing -> expectationFailure "Actor should have docstring"
         Nothing -> expectationFailure "Actor not found"
 
     it "extracts protocol docstrings" $ do
       case lookup "TestProtocol" docstrings of
-        Just (Just doc) -> doc `shouldContain` "Test protocol"
+        Just (Just doc) -> T.unpack doc `shouldContain` "Test protocol"
         Just Nothing -> expectationFailure "Protocol should have docstring"
         Nothing -> expectationFailure "Protocol not found"
 
     it "extracts extension docstrings" $ do
       case lookup "extension" docstrings of
-        Just (Just doc) -> doc `shouldContain` "Extension"
+        Just (Just doc) -> T.unpack doc `shouldContain` "Extension"
         Just Nothing -> expectationFailure "Extension should have docstring"
         Nothing -> expectationFailure "Extension not found"
 
@@ -2243,8 +2255,8 @@ testDocstrings env0 testname = do
     it "extracts only first string as docstring" $ do
       case lookup "function_with_multiple_strings" docstrings of
         Just (Just doc) -> do
-          doc `shouldContain` "First string is docstring"
-          when ("Second string" `isInfixOf` doc) $
+          T.unpack doc `shouldContain` "First string is docstring"
+          when ("Second string" `isInfixOf` T.unpack doc) $
             expectationFailure "Later strings should not be in docstring"
         Just Nothing -> expectationFailure "Function should have docstring"
         Nothing -> expectationFailure "Function not found"
@@ -2257,31 +2269,31 @@ testDocstrings env0 testname = do
 
     it "handles single quote docstrings" $ do
       case lookup "function_with_single_quotes" docstrings of
-        Just (Just doc) -> doc `shouldContain` "Single quote"
+        Just (Just doc) -> T.unpack doc `shouldContain` "Single quote"
         Just Nothing -> expectationFailure "Function should have docstring"
         Nothing -> expectationFailure "Function not found"
 
     it "handles triple single quote docstrings" $ do
       case lookup "function_with_triple_single_quotes" docstrings of
-        Just (Just doc) -> doc `shouldContain` "Triple quote"
+        Just (Just doc) -> T.unpack doc `shouldContain` "Triple quote"
         Just Nothing -> expectationFailure "Function should have docstring"
         Nothing -> expectationFailure "Function not found"
 
     it "handles mixed quotes in docstrings" $ do
       case lookup "function_with_mixed_quotes" docstrings of
-        Just (Just doc) -> doc `shouldContain` "Mixed 'quotes'"
+        Just (Just doc) -> T.unpack doc `shouldContain` "Mixed 'quotes'"
         Just Nothing -> expectationFailure "Function should have docstring"
         Nothing -> expectationFailure "Function not found"
 
     it "does not interpolate docstrings" $ do
       case lookup "function_with_braces_docstring" docstrings of
-        Just (Just doc) -> doc `shouldContain` "{braces}"
+        Just (Just doc) -> T.unpack doc `shouldContain` "{braces}"
         Just Nothing -> expectationFailure "Function should have docstring"
         Nothing -> expectationFailure "Function not found"
 
     it "handles empty docstrings" $ do
       case lookup "function_empty_docstring" docstrings of
-        Just (Just doc) -> doc `shouldBe` ""
+        Just (Just doc) -> T.unpack doc `shouldBe` ""
         Just Nothing -> expectationFailure "Function should have empty docstring"
         Nothing -> expectationFailure "Function not found"
 
@@ -2293,7 +2305,7 @@ testDocstrings env0 testname = do
 
     it "handles functions with just docstrings" $ do
       case lookup "function_just_docstring" docstrings of
-        Just (Just doc) -> doc `shouldContain` "Just a docstring"
+        Just (Just doc) -> T.unpack doc `shouldContain` "Just a docstring"
         Just Nothing -> expectationFailure "Function should have docstring"
         Nothing -> expectationFailure "Function not found"
 
@@ -2419,12 +2431,12 @@ testTypeError env0 path = do
                   in addFile diag display_file srcContent
                 _ -> case E.fromException e :: Maybe CompilationError of
                   Just (IllegalSigOverride n) ->
-                    Diag.actErrToDiagnostic "Compilation error" display_file srcContent (loc n) ("Illegal signature override: " ++ prettyText n)
+                    Diag.actErrToDiagnostic "Compilation error" display_file (T.pack srcContent) (loc n) ("Illegal signature override: " ++ prettyText n)
                   Just (OtherError loc msg) ->
-                    Diag.actErrToDiagnostic "Compilation error" display_file srcContent loc msg
+                    Diag.actErrToDiagnostic "Compilation error" display_file (T.pack srcContent) loc msg
                   Just compErr ->
                     -- For other compilation errors, use the default show instance
-                    Diag.actErrToDiagnostic "Compilation error" display_file srcContent (loc compErr) (show compErr)
+                    Diag.actErrToDiagnostic "Compilation error" display_file (T.pack srcContent) (loc compErr) (show compErr)
                   _ ->
                     -- For now, just use the default formatting for other errors
                     let diagnostic = addReport mempty $ Err (Just "error") (show e) [] []

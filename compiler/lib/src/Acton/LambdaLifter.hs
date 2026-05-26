@@ -11,10 +11,11 @@
 -- THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 --
 
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleInstances, OverloadedStrings #-}
 module Acton.LambdaLifter(liftModule) where
 
 import Control.Monad.State.Strict
+import Data.Text (Text)
 import Utils
 import Acton.Syntax
 import Acton.Names
@@ -79,7 +80,7 @@ type LiftState                  = ([Decl],[Int])        -- lifted defs, name sup
 runL                            :: LiftM a -> a
 runL m                          = evalState m ([],[1..])
 
-newName                         :: String -> LiftM Name
+newName                         :: Text -> LiftM Name
 newName s                       = state (\(totop,uniq:supply) -> (Internal LLiftPass s uniq, (totop,supply)))
 
 liftToTop                       :: [Decl] -> LiftM ()
@@ -179,7 +180,7 @@ instance (Lift a, EnvOf a, Vars a) => Lift [a] where
 
 llSuite env []                          = return []
 llSuite env (Decl l ds : ss)
-  | ctxt env == InDef                   = do ns <- zip fs <$> mapM (newName . nstr) (bound ds)
+  | ctxt env == InDef                   = do ns <- zip fs <$> mapM (newName . ntext) (bound ds)
                                              let env1 = extNames ns env'
                                              ds1 <- ll env1 ds
                                              liftToTop (vsubst (selfScopeSubst env) ds1)
@@ -257,7 +258,7 @@ freefun env (TApp l (Var l' n) ts)
   | isDefOrClass env n                  = Just (TApp l (Var l' (primSubst n)) (conv ts), [])
 freefun env e                           = Nothing
 
-closureConvert env lambda t0 vts0 es    = do n <- newName (nstr $ noq basename)
+closureConvert env lambda t0 vts0 es    = do n <- newName (ntext $ noq basename)
                                              --traceM ("## closureConvert " ++ prstr lambda ++ "  as  " ++ prstr n)
                                              liftToTop [Class l0 n q bases body Nothing]
                                              return $ eCall (tApp (eVar n) (map tVar $ qbound q)) es

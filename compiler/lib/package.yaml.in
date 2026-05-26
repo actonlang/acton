@@ -105,8 +105,18 @@ tests:
       - -with-rtsopts=-N
 
 executables:
-  kinds-bench:
-    main: KindsBench.hs
+  parser-heap-bench:
+    main: ParserHeapBench.hs
+    source-dirs: bench
+    other-modules: []
+    dependencies:
+      - libacton
+    ghc-options:
+      - -threaded
+      - -rtsopts
+      - -with-rtsopts=-T
+  types-bench:
+    main: TypesBench.hs
     source-dirs: bench
     other-modules: []
     dependencies:
@@ -115,8 +125,8 @@ executables:
       - -threaded
       - -rtsopts
       - '"-with-rtsopts=-N -A64M"'
-  types-bench:
-    main: TypesBench.hs
+  kinds-bench:
+    main: KindsBench.hs
     source-dirs: bench
     other-modules: []
     dependencies:

@@ -21,6 +21,7 @@ import Data.Map (Map)
 import Data.Char (isSpace)
 import Data.Maybe (catMaybes, fromMaybe, isNothing, mapMaybe)
 import qualified Data.List as L
+import qualified Data.Text as T
 import qualified Control.Exception as E
 import System.IO.Unsafe (unsafePerformIO)
 
@@ -298,7 +299,7 @@ srcLocToPair NoLoc     = Nothing
 srcLocToPair (Loc s e) = Just (s,e)
 
 patternVarName :: S.Pattern -> Maybe String
-patternVarName (S.PVar _ (S.Name _ v) _) = Just v
+patternVarName (S.PVar _ v _)            = Just (S.rawstr v)
 patternVarName (S.PParen _ p)            = patternVarName p
 patternVarName _                         = Nothing
 
@@ -336,8 +337,8 @@ findBodyOffsetsFromAST content varName (S.Module _ _ _ stmts) =
     Nothing    -> Nothing
   where
     firstDictLoc [] = Nothing
-    firstDictLoc (S.Assign _ [S.PVar _ (S.Name _ v) _] (S.Dict l _) : rest)
-      | v == varName = srcLocToPair l <|> firstDictLoc rest
+    firstDictLoc (S.Assign _ [S.PVar _ v _] (S.Dict l _) : rest)
+      | S.rawstr v == varName = srcLocToPair l <|> firstDictLoc rest
     firstDictLoc (_:rest) = firstDictLoc rest
     -- Given a range [s,e) covering the dict, return the inner body [s+1,e-1].
     -- We assume the Acton parser locates the Dict to start at '{' and end
@@ -352,7 +353,7 @@ findBodyOffsetsFromAST content varName (S.Module _ _ _ stmts) =
 parseModuleForSpec :: String -> Either String S.Module
 parseModuleForSpec content =
   let qn = S.ModName []  -- anonymous module
-  in case unsafePerformIO (E.try (AP.parseModule qn "Build.act" content Nothing) :: IO (Either E.SomeException S.Module)) of
+  in case unsafePerformIO (E.try (AP.parseModule qn "Build.act" (T.pack content) Nothing) :: IO (Either E.SomeException S.Module)) of
        Left e  -> Left (show e)
        Right m -> Right m
 
@@ -559,7 +560,7 @@ renderTuple pairs =
 
 -- Minimal Expr builders used for value rendering
 mkStr :: String -> S.Expr
-mkStr s = S.Strings NoLoc [s]
+mkStr s = S.Strings NoLoc [T.pack s]
 mkOptions :: Map String String -> S.Expr
 mkOptions mp = S.Dict NoLoc [ S.Assoc (mkStr k) (mkStr v) | (k,v) <- Map.toList mp ]
 mkList :: [String] -> S.Expr
@@ -567,11 +568,11 @@ mkList xs = S.List NoLoc [ S.Elem (mkStr x) | x <- xs ]
 
 
 exprToSimpleString :: S.Expr -> Maybe String
-exprToSimpleString (S.Strings _ [s]) = Just s
+exprToSimpleString (S.Strings _ [s]) = Just (T.unpack s)
 exprToSimpleString _ = Nothing
 
 exprToFingerprint :: S.Expr -> Maybe String
-exprToFingerprint (S.Int _ _ lexeme) = Just lexeme
+exprToFingerprint (S.Int _ _ lexeme) = Just (T.unpack lexeme)
 exprToFingerprint (S.Paren _ e) = exprToFingerprint e
 exprToFingerprint _ = Nothing
 
@@ -632,7 +633,7 @@ tupleToZig _ = Nothing
 
 kwdToMap :: S.KwdArg -> Map.Map String S.Expr
 kwdToMap S.KwdNil = Map.empty
-kwdToMap (S.KwdArg (S.Name _ n) e rest) = Map.insert n e (kwdToMap rest)
+kwdToMap (S.KwdArg n e rest) = Map.insert (S.rawstr n) e (kwdToMap rest)
 kwdToMap (S.KwdStar _) = Map.empty
 
 exprToOptions :: S.Expr -> Maybe (Map.Map String String)

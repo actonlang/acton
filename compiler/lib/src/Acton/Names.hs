@@ -11,7 +11,7 @@
 -- THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 --
 
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleInstances, OverloadedStrings #-}
 module Acton.Names where
 
 import Utils
@@ -30,7 +30,7 @@ isUnboxed (Internal BoxPass _ _)    = True
 isUnboxed _                         = False
 
 
-self                                = Name NoLoc "self"
+self                                = name "self"
 
 localName n                         = Derived n suffixLocal
 newactName n                        = Derived n suffixNewact
@@ -73,7 +73,7 @@ deriveMod n0 (n:m)                  = deriveMod (Derived n0 n) m
 deriveT (TVar _ v)                  = tvname v
 deriveT (TCon _ c)                  = deriveQ (tcname c)
 
-witAttr qn                          = Internal Witness (nstr $ deriveQ qn) 0
+witAttr qn                          = Internal Witness (ntext $ deriveQ qn) 0
 
 extensionName [] c                  = Derived (globalName "ext") (deriveQ $ tcname c)
 extensionName (p:_) c
@@ -144,7 +144,7 @@ methods b                           = [ n | Decl _ ds <- b, Def{dname=n} <- ds ]
 statevars b                         = concat [ bound ps | VarAssign _ ps _ <- b ]
 
 
-isHidden n@(Name _ str)             = length (takeWhile (=='_') str) == 1 || n == resumeKW || n == cleanupKW
+isHidden n@Name{}                   = length (takeWhile (=='_') (rawstr n)) == 1 || n == resumeKW || n == cleanupKW
 isHidden _                          = True
 
 notHidden                           = filter (not . isHidden)

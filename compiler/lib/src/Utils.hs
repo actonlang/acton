@@ -30,7 +30,7 @@ import System.FilePath (takeDirectory, takeFileName)
 import System.IO (openTempFile, hSetEncoding, utf8, hPutStr, hClose)
 import System.IO.Error (catchIOError)
 
-data SrcLoc                     = Loc Int Int | NoLoc deriving (Eq,Ord,Show,Read,Generic,NFData)
+data SrcLoc                     = Loc {-# UNPACK #-} !Int {-# UNPACK #-} !Int | NoLoc deriving (Eq,Ord,Show,Read,Generic,NFData)
 
 instance Data.Binary.Binary SrcLoc where
     put NoLoc                    = Data.Binary.put False

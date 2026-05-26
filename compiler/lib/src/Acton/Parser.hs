@@ -31,10 +31,11 @@ import Data.List (isPrefixOf)
 import Data.Maybe (fromMaybe)
 import Data.Void
 import Data.Char
+import qualified Data.Text as T
+import Data.Text (Text)
 import qualified Data.List.NonEmpty as N
 import qualified Data.Set as Set
 import GHC.Conc (getNumCapabilities)
-import Numeric
 import Text.Megaparsec
 import Text.Megaparsec.Char
 import Text.Megaparsec.Error
@@ -117,12 +118,12 @@ tr msg p = do
      Left err -> trace ("failure "++msg ++": "++show err) (parseError err)
      Right ok -> trace ("success "++msg++": "++show ok) (return ok)
 
-makeReport ps src = errReport (map setSpan ps) src
+makeReport ps src = errReport (map setSpan ps) (T.unpack src)
   where setSpan (loc, msg) = (extractSrcSpan loc src, msg)
 
 --- Main parsing and error message functions ------------------------------------------------------
 
-parseModule :: S.ModName -> String -> String -> Maybe (Int -> Int -> IO ()) -> IO S.Module
+parseModule :: S.ModName -> String -> Text -> Maybe (Int -> Int -> IO ()) -> IO S.Module
 parseModule qn fileName fileContent mReportProgress = do
     let contentWithNewline = addFinalNewline fileContent
     (is, mdoc, bodyStart) <-
@@ -137,7 +138,7 @@ parseModule qn fileName fileContent mReportProgress = do
         reportFinalParseProgress contentWithNewline mReportProgress
         return $ S.Module qn is mdoc suite
 
-parseModuleSerial :: S.ModName -> String -> String -> Maybe (Int -> Int -> IO ()) -> IO S.Module
+parseModuleSerial :: S.ModName -> String -> Text -> Maybe (Int -> Int -> IO ()) -> IO S.Module
 parseModuleSerial qn fileName fileContent mReportProgress = do
     let contentWithNewline = addFinalNewline fileContent
     st <- parserStateWithProgress contentWithNewline mReportProgress
@@ -145,28 +146,28 @@ parseModuleSerial qn fileName fileContent mReportProgress = do
         Left err -> Control.Exception.throw err
         Right (i,mdoc,s) -> return $ S.Module qn i mdoc s
 
-parseModuleImports :: String -> String -> IO [S.Import]
+parseModuleImports :: String -> Text -> IO [S.Import]
 parseModuleImports fileName fileContent = fst <$> parseModuleHeader fileName fileContent
 
-parseModuleHeader :: String -> String -> IO ([S.Import], Maybe String)
+parseModuleHeader :: String -> Text -> IO ([S.Import], Maybe Text)
 parseModuleHeader fileName fileContent =
     let contentWithNewline = addFinalNewline fileContent
     in case runParser (St.evalStateT import_input initState) fileName contentWithNewline of
         Left err -> Control.Exception.throw err
         Right res -> return res
 
-addFinalNewline :: String -> String
+addFinalNewline :: Text -> Text
 addFinalNewline s
-    | null s || last s == '\n' = s
-    | otherwise = s ++ "\n"
+    | T.null s || T.last s == '\n' = s
+    | otherwise = T.snoc s '\n'
 
 -- parseTest file = snd (unsafePerformIO (do cont <- readFile file; parseModule (S.modName ["test"]) file cont))
 
-parseTestStr p str = case runParser (St.evalStateT p initState) "" str of
+parseTestStr p str = case runParser (St.evalStateT p initState) "" (T.pack str) of
                          Left err -> putStrLn (errorBundlePretty err)
                          Right t  -> print t
 
-extractSrcSpan :: SrcLoc -> String -> SrcSpan
+extractSrcSpan :: SrcLoc -> Text -> SrcSpan
 extractSrcSpan NoLoc src = SpanEmpty
 extractSrcSpan (Loc l r) src = sp
   where Right sp = runParser (St.evalStateT (extractP l r) initState) "" src
@@ -196,7 +197,7 @@ data ParseProgressReporter = ParseProgressReporter
   , pprReport :: Int -> Int -> IO ()
   }
 
-type Parser = St.StateT ParserState (Parsec CustomParseError String)
+type Parser = St.StateT ParserState (Parsec CustomParseError Text)
 
 pushCtx ctx st = st { psContexts = ctx : psContexts st }
 popCtx st      = st { psContexts = tail (psContexts st) }
@@ -204,20 +205,20 @@ getCtxs        = psContexts
 
 initState        = ParserState [] Nothing
 
-parserStateWithProgress :: String -> Maybe (Int -> Int -> IO ()) -> IO ParserState
+parserStateWithProgress :: Text -> Maybe (Int -> Int -> IO ()) -> IO ParserState
 parserStateWithProgress contentWithNewline mReportProgress =
     case mReportProgress of
       Nothing -> return initState
       Just reportProgress -> do
         lastPercent <- newIORef 0
-        return initState { psProgress = Just (ParseProgressReporter (length contentWithNewline) lastPercent reportProgress) }
+        return initState { psProgress = Just (ParseProgressReporter (T.length contentWithNewline) lastPercent reportProgress) }
 
-reportFinalParseProgress :: String -> Maybe (Int -> Int -> IO ()) -> IO ()
+reportFinalParseProgress :: Text -> Maybe (Int -> Int -> IO ()) -> IO ()
 reportFinalParseProgress contentWithNewline mReportProgress =
     case mReportProgress of
       Nothing -> return ()
       Just reportProgress ->
-        let total = length contentWithNewline
+        let total = T.length contentWithNewline
         in reportProgress total total
 
 reportParseProgress :: Parser ()
@@ -356,12 +357,12 @@ sc1 = void $ do
   optional (char '\\' *> eol *> sc0) <?> ""
   where sc0 = L.space (void $ takeWhile1P Nothing f) lineCmnt empty
         f x = x == ' ' || x == '\t'
-        lineCmnt  = L.skipLineComment "#"
+        lineCmnt  = L.skipLineComment (T.pack "#")
 
 -- Whitespace consumer, which *does* consume also newlines.
 -- Used inside parentheses/brackets/braces
 sc2 :: Parser ()
-sc2 = L.space space1 (L.skipLineComment "#") empty
+sc2 = L.space space1 (L.skipLineComment (T.pack "#")) empty
 
 currSC =  ifPar sc2 sc1
 
@@ -471,8 +472,23 @@ locate (Loc l _) = setOffset l
 lexeme:: Parser a -> Parser a
 lexeme p = p <* currSC
 
-symbol :: String -> Parser String
-symbol str = lexeme (string str)
+lexemeWithText :: Parser a -> Parser (a, Text)
+lexemeWithText p = lexeme $ do
+    input <- getInput
+    off1 <- getOffset
+    a <- p
+    off2 <- getOffset
+    return (a, T.take (off2 - off1) input)
+
+stringS :: String -> Parser Text
+stringS = string . T.pack
+
+stringS_ :: String -> Parser ()
+stringS_ = void . stringS
+
+symbol :: String -> Parser ()
+symbol [c] = lexeme (void (char c))
+symbol str = lexeme (stringS_ str)
 
 newline1 :: Parser [S.Stmt]
 newline1 = const [] <$> (eol *> sc2)
@@ -513,14 +529,27 @@ Prefix sequences are also as in subsection 2.4.1 with the following exceptions
 -}
 
 strings :: Parser S.Expr
-strings = addLoc $
-       bytesLiteral
+strings = addLoc $ do
+    start <- stringStart
+    case start of
+      BytesString -> bytesLiteral
+      RawString   -> rawStringLiteral
+      FString     -> fstringLiteral
+      PlainString -> stringLiteral
+
+data StringStart = BytesString | RawString | FString | PlainString
+
+stringStart :: Parser StringStart
+stringStart = lookAhead $
+       try (char 'r' *> char 'b' *> oneOf ("'\"" :: String) *> return BytesString)
        <|>
-       rawStringLiteral
+       (char 'b' *> oneOf ("'\"" :: String) *> return BytesString)
        <|>
-       fstringLiteral  -- Explicit f"..." syntax, with interpolation
+       (char 'r' *> oneOf ("'\"" :: String) *> return RawString)
        <|>
-       stringLiteral -- "" strings - all strings support interpolation
+       (char 'f' *> oneOf ("'\"" :: String) *> return FString)
+       <|>
+       (oneOf ("'\"" :: String) *> return PlainString)
 
 -- We use this `some` construct because Acton allows multiple adjacent strings
 -- to be effectively concatenated together without specifying any explicit
@@ -534,7 +563,7 @@ bytesLiteral :: Parser S.Expr
 bytesLiteral = S.BStrings NoLoc . concat <$> some bytesLiteralCombo
 
 -- | b"" and rb""
-bytesLiteralCombo :: Parser [String]
+bytesLiteralCombo :: Parser [Text]
 bytesLiteralCombo = plainbytesLiteral <|> rawbytesLiteral <?> "bytes literal"
 
 -- | Raw string literals (r"...") that don't support interpolation
@@ -545,7 +574,7 @@ rawStringLiteral = S.Strings NoLoc . concat <$> some rawstrLiteral <?> "string l
 docstringLiteral :: Parser S.Expr
 docstringLiteral = (do
     parts <- some docstringPlainLiteral
-    return $ S.Strings NoLoc [concat (concat parts)]
+    return $ S.Strings NoLoc [T.concat (concat parts)]
   ) <?> "docstring"
   where
     docstringPlainLiteral =
@@ -590,7 +619,7 @@ concatStringLiterals singleStringParser = do
             -- Multiple strings need to be concatenated
             -- We need to combine all the format strings and collect all expressions
             let (formatParts, exprLists) = unzip $ map extractParts multiple
-                combinedFormat = concat formatParts
+                combinedFormat = T.concat formatParts
                 combinedExprs = concat exprLists
 
             if null combinedExprs
@@ -603,13 +632,13 @@ concatStringLiterals singleStringParser = do
                                  else S.Tuple NoLoc (foldr S.PosArg S.PosNil combinedExprs) S.KwdNil)
   where
     -- Extract format string and expressions from each part
-    extractParts :: S.Expr -> (String, [S.Expr])
-    extractParts (S.Strings _ ss) = (concat ss, [])
+    extractParts :: S.Expr -> (Text, [S.Expr])
+    extractParts (S.Strings _ ss) = (T.concat ss, [])
     extractParts (S.BinOp _ (S.Strings _ [fmt]) S.Mod expr) =
         case expr of
             S.Tuple _ args _ -> (fmt, tupleToList args)
             e -> (fmt, [e])
-    extractParts _ = ("", [])  -- Should not happen
+    extractParts _ = (T.empty, [])  -- Should not happen
 
     -- Convert tuple arguments to list
     tupleToList :: S.PosArg -> [S.Expr]
@@ -619,15 +648,15 @@ concatStringLiterals singleStringParser = do
 
 -- | Parts of an interpolated string
 data StringPart
-  = TextPart String      -- ^ Regular text content
-  | ExprPart S.Expr String  -- ^ Expression with format specifier
+  = TextPart Text        -- ^ Regular text content
+  | ExprPart S.Expr Text -- ^ Expression with format specifier
   deriving Show
 
 -- | Convert f-string parts to a format string with specifiers
-buildFormatString :: [StringPart] -> String
-buildFormatString [] = ""
-buildFormatString (TextPart s : rest) = s ++ buildFormatString rest
-buildFormatString (ExprPart _ fmt : rest) = "%" ++ fmt ++ buildFormatString rest
+buildFormatString :: [StringPart] -> Text
+buildFormatString [] = T.empty
+buildFormatString (TextPart s : rest) = s <> buildFormatString rest
+buildFormatString (ExprPart _ fmt : rest) = T.cons '%' fmt <> buildFormatString rest
 
 -- | Parse a string with optional interpolation expressions
 -- Both regular strings and f-strings support interpolation in Acton
@@ -635,19 +664,19 @@ buildFormatString (ExprPart _ fmt : rest) = "%" ++ fmt ++ buildFormatString rest
 parseInterpolatedString :: String -> String -> (Int -> Parser StringPart) -> Parser S.Expr
 parseInterpolatedString startQuote endQuote textPartParser = lexeme $ do
   startLoc <- getOffset
-  try $ string startQuote
+  try $ stringS startQuote
   let startQuoteCharOffset = startLoc + (length startQuote - length endQuote)
   let stringPart = choice [
           -- Escaped braces - handle these BEFORE expression parsing
-          try (string "{{" >> return (TextPart "{")),
-          try (string "}}" >> return (TextPart "}")),
+          try (stringS "{{" >> return (TextPart (T.singleton '{'))),
+          try (stringS "}}" >> return (TextPart (T.singleton '}'))),
           -- Expression parts (now without the notFollowedBy check)
           try exprPart,
           -- Regular text
           textPartParser startQuoteCharOffset
         ]
   parts <- many stringPart
-  string endQuote <|> do
+  stringS endQuote <|> do
     -- If we couldn't parse the closing quote, check why
     currentPos <- getOffset
     nextChar <- lookAhead (optional anySingle)
@@ -665,9 +694,9 @@ parseInterpolatedString startQuote endQuote textPartParser = lexeme $ do
   if null exprs
     then do
       -- No expressions found, create a regular string
-      let textContent = concat [s | TextPart s <- parts]
+      let textContent = T.concat [s | TextPart s <- parts]
       -- Apply hex splitting to handle cases like "\x48ello" -> ["\x48", "ello"]
-      return $ S.Strings NoLoc (hexSplitString textContent)
+      return $ S.Strings NoLoc (hexSplitText textContent)
     else do
       -- Found expressions, create interpolated string format
       let formatStr = buildFormatString parts
@@ -686,7 +715,7 @@ parseTextPart quoteStr isTriple handleNewlines startOfString = do
       -- Use existing escape sequence parsers with better error handling
       try (char '\\' >> choice [
           -- Escaped quotes - handle quote-specific escaping
-          try (string quoteStr >> return quoteStr),
+          try (stringS quoteStr >> return (T.pack quoteStr)),
 
           -- Use existing escape parsers for consistency and better error messages
           try hexEscape,
@@ -702,26 +731,26 @@ parseTextPart quoteStr isTriple handleNewlines startOfString = do
 
       -- Handle newlines in triple-quoted strings
       if handleNewlines
-        then try (string "\n" >> return "\\n")
+        then try (char '\n' >> return (T.pack "\\n"))
         else empty,
 
       -- Handle quotes in triple-quoted strings
       if isTriple
         then try (do
                 -- When we see a quote char, check if it's part of closing sequence
-                c <- char (head quoteStr)
-                quotes <- lookAhead $ many (char (head quoteStr))
-                let totalQuotes = 1 + length quotes
+                c <- char quoteChar
+                quotes <- lookAhead $ takeWhileP (Just "quote") (== quoteChar)
+                let totalQuotes = 1 + T.length quotes
                 case totalQuotes of
                   -- 1-2 quotes: always consume as content
-                  1 -> return [c]
-                  2 -> char (head quoteStr) >> return [c, head quoteStr]
+                  1 -> return (T.singleton c)
+                  2 -> char quoteChar >> return (T.cons c (T.singleton quoteChar))
                   -- 3 quotes exactly: this is the closing sequence, stop
                   3 -> empty
                   -- 4 quotes: consume 1, leave 3 for closing
-                  4 -> return [c]
+                  4 -> return (T.singleton c)
                   -- 5 quotes: consume 2, leave 3 for closing
-                  5 -> char (head quoteStr) >> return [c, head quoteStr]
+                  5 -> char quoteChar >> return (T.cons c (T.singleton quoteChar))
                   -- 6+ quotes: this is an error
                   _ -> do
                     curPos <- getOffset
@@ -740,15 +769,18 @@ parseTextPart quoteStr isTriple handleNewlines startOfString = do
             Just _ -> do
               pos <- getOffset
               parseException (Loc startOfString pos) $ MissingClosingQuote quoteStr
-            Nothing -> do
-              (loc, c) <- withLoc $ noneOf ("{}" ++ quoteStr ++ "\n")
-              return [c]
+            Nothing -> stringTextChunk
         else
-          (:[]) <$> noneOf ("{}" ++ quoteStr)
+          stringTextChunk
     ]
 
   -- Concatenate chunks
-  return (TextPart (concat chunks))
+  return (TextPart (T.concat chunks))
+  where
+    quoteChar = head quoteStr
+    stringTextChunk =
+      takeWhile1P (Just "string text") $ \c ->
+        c /= '{' && c /= '}' && c /= quoteChar && c /= '\\' && c /= '\n'
 
 
 -- | Parse an expression in braces with optional format specifier
@@ -757,7 +789,7 @@ exprPart = do
     openLoc <- getOffset
     char '{'
     -- Allow for spaces around the expression
-    many (char ' ')
+    skipFormatSpaces
 
     -- Check for empty expression or immediate colon
     closeLoc <- getOffset
@@ -771,13 +803,13 @@ exprPart = do
     parsedExpr <- expr <?> "expression"
 
     -- Allow spaces before format specifier or closing brace
-    many (char ' ')
+    skipFormatSpaces
 
     -- Check for optional format specifier
     formatInfo <- (char ':' *> formatSpec) <|> do
         closeBraceLoc <- getOffset
         char '}' <|> parseException (Loc (openLoc + 1) (closeBraceLoc)) UnclosedInterpolationBrace
-        return ("s", False, Nothing, Nothing, False, Nothing)
+        return (T.singleton 's', False, Nothing, Nothing, False, Nothing)
 
     let (fmt, isZeroPad, precisionInfo, typeSpecInfo, isCenterAlign, widthInfo) = formatInfo
 
@@ -787,12 +819,12 @@ exprPart = do
         then do
             -- Handle center alignment by using str.center() method
             let widthExpr = case widthInfo of
-                                Just w -> S.Int NoLoc (read w) w
-                                Nothing -> S.Int NoLoc 0 "0"
+                                Just w -> S.Int NoLoc (decimalText w) w
+                                Nothing -> S.Int NoLoc 0 (T.singleton '0')
                 -- First convert the expression to a string
-                strExpr = S.Call NoLoc (S.Var NoLoc (S.NoQ (S.Name NoLoc "str"))) (S.PosArg parsedExpr S.PosNil) S.KwdNil
+                strExpr = S.Call NoLoc (S.Var NoLoc (S.NoQ (S.name "str"))) (S.PosArg parsedExpr S.PosNil) S.KwdNil
                 -- Then call the center method on the string
-                centerMethod = S.Dot NoLoc strExpr (S.Name NoLoc "center")
+                centerMethod = S.Dot NoLoc strExpr (S.name "center")
                 -- Call center(width)
                 centeredExpr = S.Call NoLoc centerMethod (S.PosArg widthExpr S.PosNil) S.KwdNil
             return centeredExpr
@@ -803,16 +835,22 @@ exprPart = do
             -- This allows printf to apply the format directly to the value
             return parsedExpr
         -- For normal formatting, convert to str
-        else return $ S.Call NoLoc (S.Var NoLoc (S.NoQ (S.Name NoLoc "str"))) (S.PosArg parsedExpr S.PosNil) S.KwdNil
+        else return $ S.Call NoLoc (S.Var NoLoc (S.NoQ (S.name "str"))) (S.PosArg parsedExpr S.PosNil) S.KwdNil
 
     return $ ExprPart finalExpr fmt
 
+decimalText :: Text -> Integer
+decimalText = T.foldl' (\n c -> n * 10 + fromIntegral (digitToInt c)) 0
+
+skipFormatSpaces :: Parser ()
+skipFormatSpaces = void $ takeWhileP (Just "space") (== ' ')
+
 -- | Parse format specifier after the colon (colon is already consumed)
-formatSpec :: Parser (String, Bool, Maybe String, Maybe Char, Bool, Maybe String)  -- Returns (format, isZeroPadded, precision, typeSpec, isCenterAlign, width)
+formatSpec :: Parser (Text, Bool, Maybe Text, Maybe Char, Bool, Maybe Text)  -- Returns (format, isZeroPadded, precision, typeSpec, isCenterAlign, width)
 formatSpec = do
     specLoc <- getOffset
     -- Allow spaces at the beginning
-    many (char ' ')
+    skipFormatSpaces
 
     -- Check if there's any content before trying to parse
     beforeParseLoc <- getOffset
@@ -870,13 +908,13 @@ formatSpec = do
     zeroPad <- optional $ char '0'
 
     -- Optional width
-    width <- optional $ some digitChar
+    width <- optional digitsText
 
     -- Optional precision
     precision <- optional $ do
         char '.'
         digitLoc <- getOffset
-        digits <- optional $ some digitChar
+        digits <- optional digitsText
         case digits of
             Nothing -> parseException (Loc digitLoc digitLoc) MissingFormatPrecisionDigits
             Just d -> return d
@@ -886,7 +924,7 @@ formatSpec = do
     typeSpec <- optional (oneOf "fdeEgGnoxX%bos" <?> "type specifier")
 
     -- Allow spaces before closing brace
-    many (char ' ')
+    skipFormatSpaces
 
     -- Check for any remaining invalid characters
     invalidCharLoc <- getOffset
@@ -918,139 +956,260 @@ formatSpec = do
     let fmt = case (precision, typeSpec) of
             -- Float with precision and width (e.g., 10.2f becomes %10.2f for printf)
             (Just p, Just 'f') -> case (zeroPad, width) of
-                (Just '0', Just w) -> "0" ++ w ++ "." ++ p ++ "f"  -- Zero-padded float
-                (_, Just w) -> w ++ "." ++ p ++ "f"               -- Regular float with width
-                (_, Nothing) -> "." ++ p ++ "f"                   -- Just precision, no width
+                (Just '0', Just w) -> T.concat [T.singleton '0', w, T.singleton '.', p, T.singleton 'f']  -- Zero-padded float
+                (_, Just w) -> T.concat [w, T.singleton '.', p, T.singleton 'f']                         -- Regular float with width
+                (_, Nothing) -> T.concat [T.singleton '.', p, T.singleton 'f']                           -- Just precision, no width
             -- Default to float if precision specified but no type
             (Just p, _) -> case (zeroPad, width) of
-                (Just '0', Just w) -> "0" ++ w ++ "." ++ p ++ "f"
-                (_, Just w) -> w ++ "." ++ p ++ "f"
-                (_, Nothing) -> "." ++ p ++ "f"
+                (Just '0', Just w) -> T.concat [T.singleton '0', w, T.singleton '.', p, T.singleton 'f']
+                (_, Just w) -> T.concat [w, T.singleton '.', p, T.singleton 'f']
+                (_, Nothing) -> T.concat [T.singleton '.', p, T.singleton 'f']
             -- Float without precision
-            (Nothing, Just 'f') -> "f"
+            (Nothing, Just 'f') -> T.singleton 'f'
             -- Other formats based on alignment and width
             (Nothing, _) -> case (zeroPad, align, width) of
                 -- Zero padding with width (for numbers) - use integer format
-                (Just '0', _, Just w) -> "0" ++ w ++ "d"
+                (Just '0', _, Just w) -> T.concat [T.singleton '0', w, T.singleton 'd']
                 -- Left-aligned with width
-                (_, Just '<', Just w) -> "-" ++ w ++ "s"
+                (_, Just '<', Just w) -> T.concat [T.singleton '-', w, T.singleton 's']
                 -- Right-aligned with width
-                (_, Just '>', Just w) -> w ++ "s"
+                (_, Just '>', Just w) -> T.snoc w 's'
                 -- Center-aligned with width
-                (_, Just '^', Just w) -> "s"  -- Width handled separately in expr processing
+                (_, Just '^', Just w) -> T.singleton 's'  -- Width handled separately in expr processing
                 -- Just width, no alignment
-                (_, Nothing, Just w) -> w ++ "s"
+                (_, Nothing, Just w) -> T.snoc w 's'
                 -- Default case
-                _ -> "s"
+                _ -> T.singleton 's'
 
     return (fmt, isZeroPadding, precision, typeSpec, isCenterAlign, width)
+  where
+    digitsText = takeWhile1P (Just "digit") isDigit
 
 -- Split string when hex escape is followed by hex digit (to prevent C compiler issues)
 -- Only splits if the string contains actual hex escapes (not literal \x patterns)
-hexSplitString :: String -> [String]
-hexSplitString "" = [""]
-hexSplitString s
-  | hasActualHexEscapes s = filter (not . null) $ reverse $ map reverse $ process s [] []
+hexSplitText :: Text -> [Text]
+hexSplitText s
+  | T.null s = [T.empty]
+  | hasActualHexEscapes s = filter (not . T.null) $ reverse $ process s T.empty []
   | otherwise = [s]  -- No splitting needed for raw strings or strings without hex escapes
   where
     -- Check if string has actual hex escapes (single backslash followed by x and hex digits)
     -- Raw strings produce \\x patterns (double backslashes) which should NOT be split
-    hasActualHexEscapes [] = False
-    hasActualHexEscapes ('\\':'\\':'x':rest) = hasActualHexEscapes rest  -- Skip \\x pattern (raw string)
-    hasActualHexEscapes ('\\':'x':h1:h2:rest)
-      | isHex h1 && isHex h2 = True
-      | otherwise = hasActualHexEscapes rest
-    hasActualHexEscapes (_:rest) = hasActualHexEscapes rest
+    hasActualHexEscapes t =
+      case T.uncons t of
+        Nothing -> False
+        Just ('\\', rest) ->
+          case T.uncons rest of
+            Just ('\\', rest') ->
+              case T.uncons rest' of
+                Just ('x', rest'') -> hasActualHexEscapes rest''  -- Skip \\x pattern (raw string)
+                _                  -> hasActualHexEscapes rest
+            Just ('x', rest') ->
+              case T.uncons rest' of
+                Just (h1, rest'') ->
+                  case T.uncons rest'' of
+                    Just (h2, _) | isHex h1 && isHex h2 -> True
+                    _                                   -> hasActualHexEscapes rest'
+                _ -> hasActualHexEscapes rest'
+            _ -> hasActualHexEscapes rest
+        Just (_, rest) -> hasActualHexEscapes rest
 
-    process [] acc chunks = acc : chunks
-    process ('\\':'x':h1:h2:rest) acc chunks
-      | isHex h1 && isHex h2 && (not (null rest) && isHex (head rest)) =
-          -- Next char is hex, split here - complete current chunk with hex escape
-          let completedChunk = h2:h1:'x':'\\':acc
-          in process rest [] (completedChunk : chunks)
-      | isHex h1 && isHex h2 =
-          -- Valid hex escape, continue accumulating
-          process rest (h2:h1:'x':'\\':acc) chunks
-      | otherwise =
-          -- Invalid hex escape, keep as-is
-          process (h1:h2:rest) ('x':'\\':acc) chunks
-    process (c:cs) acc chunks = process cs (c:acc) chunks
-    isHex c = c `elem` "0123456789abcdefABCDEF"
+    process t acc chunks =
+      case T.uncons t of
+        Nothing -> T.reverse acc : chunks
+        Just ('\\', rest) ->
+          case T.uncons rest of
+            Just ('x', rest') ->
+              case T.uncons rest' of
+                Just (h1, rest'') ->
+                  case T.uncons rest'' of
+                    Just (h2, rest''') | isHex h1 && isHex h2 ->
+                      let acc' = h2 `T.cons` h1 `T.cons` 'x' `T.cons` '\\' `T.cons` acc
+                      in case T.uncons rest''' of
+                           Just (c, _) | isHex c -> process rest''' T.empty (T.reverse acc' : chunks)
+                           _                     -> process rest''' acc' chunks
+                    _ -> process rest ('\\' `T.cons` acc) chunks
+                _ -> process rest ('\\' `T.cons` acc) chunks
+            _ -> process rest ('\\' `T.cons` acc) chunks
+        Just (c, rest) -> process rest (c `T.cons` acc) chunks
+
+    isHex :: Char -> Bool
+    isHex c = c `elem` ("0123456789abcdefABCDEF" :: String)
 
 
-newlineEscape =  "" <$ newline
-singleCharEscape =  (\c -> '\\':c:[]) <$> (oneOf ("\'\"\\abfnrtv"))
+newlineEscape =  T.empty <$ newline
+singleCharEscape =  (\c -> T.cons '\\' (T.singleton c)) <$> (oneOf ("\'\"\\abfnrtv"))
 hexEscape = do
       char 'x'
-      (loc,cs) <- withLoc (count' 0 2 hexDigitChar)
-      if length cs == 2
-       then return ("\\x" ++ cs)
-       else parseException loc $ IncompleteHexEscape cs
+      (loc,cs) <- withLoc (countTextBy 0 2 "hex digit" isHexDigit)
+      if T.length cs == 2
+       then return (T.cons '\\' (T.cons 'x' cs))
+       else parseException loc $ IncompleteHexEscape (T.unpack cs)
 octEscape = do
-       (loc,cs) <- withLoc (count' 1 3 octDigitChar)
-       if length cs == 3 && head cs > '3'
+       (loc,cs) <- withLoc (countTextBy 1 3 "octal digit" isOctDigit)
+       if T.length cs == 3 && T.head cs > '3'
           then  parseException loc OctalEscapeOutOfRange
-          else return ("\\" ++ cs)
+          else return (T.cons '\\' cs)
 univ1Escape = do
       char 'u'
-      (loc,cs) <- withLoc (count' 0 4 hexDigitChar)
-      if length cs < 4
-        then parseException loc $ IncompleteUnicodeEscape 4 (length cs)
-        else return ("\\u" ++ cs)
+      (loc,cs) <- withLoc (countTextBy 0 4 "hex digit" isHexDigit)
+      if T.length cs < 4
+        then parseException loc $ IncompleteUnicodeEscape 4 (T.length cs)
+        else return (T.cons '\\' (T.cons 'u' cs))
 univ2Escape = do
       char 'U'
-      (loc,cs) <- withLoc (count' 0 8 hexDigitChar)
-      if length cs < 8
-        then parseException loc $ IncompleteUnicodeEscape 8 (length cs)
-        else return ("\\U" ++ cs)
+      (loc,cs) <- withLoc (countTextBy 0 8 "hex digit" isHexDigit)
+      if T.length cs < 8
+        then parseException loc $ IncompleteUnicodeEscape 8 (T.length cs)
+        else return (T.cons '\\' (T.cons 'U' cs))
+
+countTextBy :: Int -> Int -> String -> (Char -> Bool) -> Parser Text
+countTextBy minCount maxCount label f = do
+      input <- getInput
+      let cs = T.take maxCount (T.takeWhile f input)
+          n = T.length cs
+      if n < minCount
+        then empty
+        else if n == 0
+          then return T.empty
+          else takeP (Just label) n
 
 asciiC   = do
       (loc,c) <- withLoc anySingle
       if c == '\n'
          then parseException loc (MissingClosingQuote "\"")
          else if isAscii c
-              then return [c]
+              then return (T.singleton c)
               else parseException loc NonAsciiInBytesLiteral
 
 anyC  = do
       (loc,c) <- withLoc anySingle
       if c == '\n'
          then parseException loc (MissingClosingQuote "\"")
-         else return [c]
+         else return (T.singleton c)
 
 unknownEscape charParser = do
          (loc,c) <- withLoc charParser
          parseException loc UnknownEscapeSequence
 
-plainLiteral charParser prefix tailEscapes = stringTempl "\"\"\"" longItem esc prefix
-                                          <|> stringTempl "'''" longItem esc prefix
-                                          <|> stringTempl "\"" charParser esc prefix
-                                          <|> stringTempl "'" charParser esc prefix
-    where longItem = ("\\n" <$ newline) <|> charParser  -- newlines allowed in triple-quoted literals
-          esc =  newlineEscape <|> singleCharEscape <|> hexEscape <|> octEscape <|> tailEscapes
+plainLiteral :: Bool -> String -> Parser Text -> Parser [Text]
+plainLiteral bytes prefix tailEscapes = plainTempl "\"\"\""
+                                    <|> plainTempl "'''"
+                                    <|> plainTempl "\""
+                                    <|> plainTempl "'"
+  where
+    esc = newlineEscape <|> singleCharEscape <|> hexEscape <|> octEscape <|> tailEscapes
 
-plainbytesLiteral = plainLiteral asciiC "b" (unknownEscape asciiC)
+    plainTempl q = do
+      startLoc <- getOffset
+      _ <- stringS (prefix++q)
+      content <- manyTill (plainItem (startLoc + length prefix) q)
+                          (stringS q <?> closingQuoteError startLoc q)
+      currSC
+      return $ hexSplitText (T.concat content)
 
-plainstrLiteral = plainLiteral anyC "" ( univ1Escape <|> univ2Escape <|> unknownEscape anyC)
+    plainItem startQuoteOffset q =
+          (char '\\' *> esc)
+      <|> newlineItem startQuoteOffset q
+      <|> quoteItem q
+      <|> textChunk q
+      <|> nonAsciiByte
 
+    newlineItem startQuoteOffset q
+      | length q == 3 = T.pack "\\n" <$ newline
+      | otherwise = do
+          pos <- getOffset
+          _ <- lookAhead (char '\n')
+          parseException (Loc startQuoteOffset pos) (MissingClosingQuote q)
+
+    quoteItem q
+      | length q == 3 = T.singleton <$> char (head q)
+      | otherwise     = empty
+
+    textChunk q =
+      takeWhile1P (Just "string text") $ \c ->
+        c /= '\\' && c /= head q && c /= '\n' && (not bytes || isAscii c)
+
+    nonAsciiByte
+      | bytes = do
+          off <- getOffset
+          c <- lookAhead anySingle
+          if isAscii c
+            then empty
+            else anySingle *> parseException (Loc off (off + 1)) NonAsciiInBytesLiteral
+      | otherwise = empty
+
+    closingQuoteError startLoc quote
+      | quote `elem` ["\"\"\"", "'''"] = "closing triple quote " ++ quote ++ " for string starting at position " ++ show startLoc
+      | otherwise = "closing quote " ++ quote ++ " for string"
+
+plainbytesLiteral = plainLiteral True "b" (unknownEscape asciiC)
+
+plainstrLiteral = plainLiteral False "" ( univ1Escape <|> univ2Escape <|> unknownEscape anyC)
+
+rawLiteral :: Parser Text -> String -> Parser [Text]
 rawLiteral charParser prefix = stringTempl "\"\"\"" longItem esc prefix
               <|> stringTempl "'''" longItem esc prefix
               <|> stringTempl "\"" charParser esc prefix
               <|> stringTempl "'"  charParser  esc prefix
-   where longItem =  ("\\n" <$ newline) <|> charParser
+   where longItem =  (T.pack "\\n" <$ newline) <|> charParser
          esc = newlineEscapeRaw <|> singleCharEscapeRaw <|> generalEscapeRaw
-         newlineEscapeRaw = "\\\\\\n" <$ newline
-         singleCharEscapeRaw = (\c -> "\\\\\\" ++ [c]) <$> (oneOf ("\'\""))
-         generalEscapeRaw = return "\\\\"
+         newlineEscapeRaw = T.pack "\\\\\\n" <$ newline
+         singleCharEscapeRaw = (\c -> T.pack ['\\', '\\', '\\', c]) <$> (oneOf ("\'\""))
+         generalEscapeRaw = return (T.pack "\\\\")
 
 rawbytesLiteral = rawLiteral asciiC "rb"
 
-rawstrLiteral = rawLiteral ((:[]) <$> anySingle) "r"
+rawstrLiteral = rawstrTempl "\"\"\""
+            <|> rawstrTempl "'''"
+            <|> rawstrTempl "\""
+            <|> rawstrTempl "'"
 
-stringTempl :: String -> Parser String -> Parser String -> String -> Parser [String]
+rawstrTempl :: String -> Parser [Text]
+rawstrTempl q = do
+    startLoc <- getOffset
+    _ <- stringS ("r"++q)
+    content <- manyTill (rawItem startLoc) (stringS q <?> closingQuoteError startLoc q)
+    currSC
+    return $ hexSplitText (T.concat content)
+  where
+    quoteChar = head q
+    isTriple = length q == 3
+
+    rawItem startLoc =
+          rawEscape
+      <|> newlineItem startLoc
+      <|> quoteItem
+      <|> rawTextChunk
+
+    rawEscape = char '\\' *> (
+             T.pack "\\\\\\n" <$ newline
+        <|> ((\c -> T.pack ['\\', '\\', '\\', c]) <$> oneOf ("\'\""))
+        <|> return (T.pack "\\\\"))
+
+    newlineItem startLoc
+      | isTriple  = T.pack "\\n" <$ newline
+      | otherwise = do
+          pos <- getOffset
+          _ <- lookAhead (char '\n')
+          parseException (Loc (startLoc + 1) pos) (MissingClosingQuote q)
+
+    quoteItem
+      | isTriple  = T.singleton <$> char quoteChar
+      | otherwise = empty
+
+    rawTextChunk =
+      takeWhile1P (Just "raw string text") $ \c ->
+        c /= '\\' && c /= quoteChar && c /= '\n'
+
+    closingQuoteError start quote
+      | quote `elem` ["\"\"\"", "'''"] = "closing triple quote " ++ quote ++ " for string starting at position " ++ show start
+      | otherwise = "closing quote " ++ quote
+
+stringTempl :: String -> Parser Text -> Parser Text -> String -> Parser [Text]
 stringTempl q single esc prefix = do
     startLoc <- getOffset
-    _ <- string (prefix++q)
+    _ <- stringS (prefix++q)
     -- For single-quoted strings, guard against newline before closing quote
     let startQuoteOffset = startLoc + length prefix
         guardedSingle = if length q == 1
@@ -1063,15 +1222,15 @@ stringTempl q single esc prefix = do
                               parseException (Loc startQuoteOffset pos) (MissingClosingQuote q)
                             _ -> single
                         else single
-    content <- manyTillEsc guardedSingle esc (string q <?> closingQuoteError startLoc q)
+    content <- manyTillEsc guardedSingle esc (stringS q <?> closingQuoteError startLoc q)
     currSC  -- Apply lexeme whitespace consumption
-    return $ hexSplitString . concat $ content
+    return $ hexSplitText (T.concat content)
   where
     closingQuoteError startLoc quote
       | quote `elem` ["\"\"\"", "'''"] = "closing triple quote " ++ quote ++ " for string starting at position " ++ show startLoc
       | otherwise = "closing quote " ++ quote ++ " for string"
 
-manyTillEsc, someTillEsc :: Parser String -> Parser String -> Parser String -> Parser [String]
+manyTillEsc, someTillEsc :: Parser Text -> Parser Text -> Parser a -> Parser [Text]
 manyTillEsc p esc end =  (const [] <$> end) <|> (someTillEsc p esc end)
 
 someTillEsc p esc end = do
@@ -1084,7 +1243,7 @@ someTillEsc p esc end = do
 -- Reserved words, other symbols and names ----------------------------------------------------------
 
 rword :: String -> Parser ()
-rword w = (lexeme . try) (string w *> notFollowedBy (alphaNumChar <|> char '_'))
+rword w = (lexeme . try) (stringS_ w *> notFollowedBy (alphaNumChar <|> char '_'))
 
 comma     = symbol "," <?> "comma"
 colon     = symbol ":"
@@ -1101,35 +1260,50 @@ vbar      = symbol "|"
 -- Parser for operator that is a prefix of another operator
 -- Slightly hackish; depends on the (presently true) fact that chars in argument to oneOf are
 -- the only chars that can follow directly after the prefix operator in a longer operator name.
-opPref :: String -> Parser String
-opPref op = (lexeme . try) (string op <* notFollowedBy (oneOf "<>=/*"))
+opPref :: String -> Parser ()
+opPref [c] = (lexeme . try) (void (char c) <* notFollowedBy (oneOf "<>=/*"))
+opPref op  = (lexeme . try) (stringS_ op <* notFollowedBy (oneOf "<>=/*"))
 
 singleStar = (lexeme . try) (char '*' <* notFollowedBy (char '*'))
 
-identifier :: Parser String
+identifier :: Parser Text
 identifier = (lexeme . try) $ do
     off <- getOffset
-    c <-  satisfy (\c -> isAlpha c || c=='_') <?> "identifier"
-    cs <- hidden (takeWhileP Nothing (\c -> isAlphaNum c || c=='_'))
-    let x = c:cs
-    if S.isKeyword x
-      then parseError (TrivialError off (Just (Tokens (N.fromList x))) (Set.fromList [Label (N.fromList "identifier")]))
+    lookAhead (satisfy identifierStart <?> "identifier")
+    x <- hidden (takeWhile1P (Just "identifier") identifierChar)
+    if S.isKeywordText x
+      then parseError (TrivialError off (Just (Tokens (N.fromList (T.unpack x)))) (Set.fromList [Label (N.fromList "identifier")]))
       else return x
+  where
+    identifierStart c = isAlpha c || c == '_'
+    identifierChar c  = isAlphaNum c || c == '_'
 
 name, escname, tvarname :: Parser S.Name
 name = do off <- getOffset
           x <- identifier
-          if isUpper (head x) && all isDigit (tail x)
-            then parseError (FancyError off (Set.fromList [ErrorCustom (TypeVariableNameError x)]))
-            else return $ S.Name (Loc off (off+length x)) x
+          if isTypeVarName x
+            then parseError (FancyError off (Set.fromList [ErrorCustom (TypeVariableNameError (T.unpack x))]))
+            else return $ S.Name (Loc off (off + T.length x)) x
 
 escname = name <|> addLoc (S.Name NoLoc . head <$> plainstrLiteral)  -- Assumes an escname cannot contain hex escape sequences
 
+paramName :: Parser S.Name
+paramName = name <|> do
+    off <- getOffset
+    rword "_"
+    return $ S.Name (Loc off (off + 1)) (T.singleton '_')
+
 tvarname = do off <- getOffset
               x <- identifier
-              if isUpper (head x) && all isDigit (tail x)
-               then return $ S.Name (Loc off (off+length x)) x
-               else parseError (TrivialError off (Just (Tokens (N.fromList x))) (Set.fromList [Label (N.fromList ("type variable (upper case letter optionally followed by digits)"))]))
+              if isTypeVarName x
+               then return $ S.Name (Loc off (off + T.length x)) x
+               else parseError (TrivialError off (Just (Tokens (N.fromList (T.unpack x)))) (Set.fromList [Label (N.fromList ("type variable (upper case letter optionally followed by digits)"))]))
+
+isTypeVarName :: Text -> Bool
+isTypeVarName x =
+  case T.uncons x of
+    Just (c,cs) -> isUpper c && T.all isDigit cs
+    Nothing -> False
 
 module_name :: Parser S.ModName
 module_name = do
@@ -1148,23 +1322,72 @@ qual_name = do
 
 -- recognizers for numbers are used directly in function atom below.
 
+number :: Parser S.Expr
+number = basedInteger <|> try decimalInteger <|> try imaginary <|> try floating
+  where
+    basedInteger =
+      (\(i,s) -> S.Int NoLoc i s) <$> lexemeWithText basedIntegerValue
+
+    decimalInteger =
+      (\(i,s) -> S.Int NoLoc i s) <$> lexemeWithText decimalIntegerValue
+
+    floating =
+      (\(f,s) -> S.Float NoLoc f s) <$> lexemeWithText L.float
+
+    imaginary =
+      (\(f,s) -> S.Imaginary NoLoc f s) <$> lexemeWithText (L.float <* stringS "j")
+
+    basedIntegerValue = do
+      input <- getInput
+      case T.uncons input of
+        Just ('0', rest) ->
+          case T.uncons rest of
+            Just ('o', _) -> stringS_ "0o" *> (integerText 8 <$> takeWhile1P (Just "octal digit") isOctDigit)
+            Just ('x', _) -> stringS_ "0x" *> (integerText 16 <$> takeWhile1P (Just "hexadecimal digit") isHexDigit)
+            _             -> empty
+        _ -> empty
+
+    decimalIntegerValue = do
+      ds <- takeWhile1P (Just "decimal digit") isDigit
+      rest <- getInput
+      if startsFloatSuffix rest then empty else return (integerText 10 ds)
+
+    startsFloatSuffix rest =
+      case T.uncons rest of
+        Just ('.', rest') ->
+          case T.uncons rest' of
+            Just (c, _) -> isDigit c
+            Nothing     -> False
+        Just (e, rest') | e == 'e' || e == 'E' ->
+          case T.uncons rest' of
+            Just (c, _) | isDigit c -> True
+            Just (s, rest'') | s == '+' || s == '-' ->
+              case T.uncons rest'' of
+                Just (c, _) -> isDigit c
+                Nothing     -> False
+            _ -> False
+        _ -> False
+
+    integerText base =
+      T.foldl' (\n c -> n * base + fromIntegral (digitToInt c)) 0
+
 --- Helper functions for parenthesised forms -----------------------------------
 
 parens, brackets, braces :: Parser a -> Parser a
-parens p = withCtx PAR (L.symbol sc2 "(" *> p <* (char ')' <?> "closing ')'")) <* currSC
+parens p = withCtx PAR (L.symbol sc2 (T.pack "(") *> p <* (char ')' <?> "closing ')'")) <* currSC
 
-brackets p = withCtx PAR (L.symbol sc2 "[" *> p <* (char ']' <?> "closing ']'")) <* currSC
+brackets p = withCtx PAR (L.symbol sc2 (T.pack "[") *> p <* (char ']' <?> "closing ']'")) <* currSC
 
-braces p = withCtx PAR (L.symbol sc2 "{" *> p <* (char '}' <?> "closing '}'")) <* currSC
+braces p = withCtx PAR (L.symbol sc2 (T.pack "{") *> p <* (char '}' <?> "closing '}'")) <* currSC
 
 --- Top-level parsers ------------------------------------------------------------
 
-module_docstring :: Parser String
+module_docstring :: Parser Text
 module_docstring = do
     S.Strings _ ss <- addLoc docstringLiteral
-    return (unescapeString (concat ss))
+    return (unescapeText (T.concat ss))
 
-file_input :: Parser ([S.Import], Maybe String, S.Suite)
+file_input :: Parser ([S.Import], Maybe Text, S.Suite)
 file_input = sc2 *> do
     -- Allow optional module docstring before imports
     mbDocstring <- optional (try (L.nonIndented sc2 module_docstring <* eol <* sc2))
@@ -1176,12 +1399,12 @@ file_input = sc2 *> do
 
 -- (((,) <$> imports <*> withCtx TOP top_suite) <* eof)
 
-import_input :: Parser ([S.Import], Maybe String)
+import_input :: Parser ([S.Import], Maybe Text)
 import_input = do
     (is, mbDocstring, _) <- module_header_with_offset
     return (is, mbDocstring)
 
-module_header_with_offset :: Parser ([S.Import], Maybe String, Int)
+module_header_with_offset :: Parser ([S.Import], Maybe Text, Int)
 module_header_with_offset = sc2 *> do
     mbDocstring <- optional (try (L.nonIndented sc2 module_docstring <* eol <* sc2))
     is <- imports
@@ -1220,7 +1443,7 @@ data SourceSpan = SourceSpan !Int !Int deriving (Eq, Show)
 
 data TopLevelChunk = TopLevelChunk
   { chunkSpan  :: !SourceSpan
-  , chunkInput :: String
+  , chunkInput :: Text
   , chunkLine  :: !Int
   } deriving (Eq, Show)
 
@@ -1233,7 +1456,7 @@ data ScanMode = ScanString
 
 data ChunkScanState = ChunkScanState
   { scanActiveStart :: Maybe Int
-  , scanActiveInput :: Maybe String
+  , scanActiveInput :: Maybe Text
   , scanActiveLine  :: Maybe Int
   , scanDepth       :: Int
   , scanModes       :: [ScanMode]
@@ -1245,10 +1468,10 @@ data ChunkScanState = ChunkScanState
   , scanPrev2       :: Maybe Char
   } deriving (Eq, Show)
 
-scanTopLevelChunks :: String -> Int -> (TopLevelChunk -> IO ()) -> IO (Either ChunkScanError ())
+scanTopLevelChunks :: Text -> Int -> (TopLevelChunk -> IO ()) -> IO (Either ChunkScanError ())
 scanTopLevelChunks src start emit
-  | start < 0 || start > length src = return (Left (ChunkScanError NoLoc "invalid module body offset"))
-  | otherwise = go start (drop start src) initScan
+  | start < 0 || start > T.length src = return (Left (ChunkScanError NoLoc "invalid module body offset"))
+  | otherwise = go start (T.drop start src) initScan
   where
     initScan = ChunkScanState
       { scanActiveStart = Nothing
@@ -1261,27 +1484,29 @@ scanTopLevelChunks src start emit
       , scanContinued = False
       , scanBackslash = False
       , scanPrev1 = charBefore start
-      , scanPrev2 = if start >= 2 then Just (src !! (start - 2)) else Nothing
+      , scanPrev2 = if start >= 2 then Just (T.index src (start - 2)) else Nothing
       }
 
     charBefore 0 = Nothing
-    charBefore n = Just (src !! (n - 1))
+    charBefore n = Just (T.index src (n - 1))
 
-    startLine = 1 + length (filter (== '\n') (take start src))
+    startLine = 1 + T.count (T.singleton '\n') (T.take start src)
 
-    go i [] st = do
-      emitOpenChunk i st
-      return (Right ())
-    go i xs@(c:_) st
-      | startsBoundary c st =
-          openChunk i xs st >>= scanCode i xs
-      | scanActiveStart st == Nothing
-        && null (scanModes st)
-        && scanDepth st == 0
-        && not (isTriviaStart c) =
-          return (Left (ChunkScanError (Loc i (i + 1)) "non-top-level text before first chunk"))
-      | otherwise =
-          scanStep i xs st
+    go i xs st =
+      case T.uncons xs of
+        Nothing -> do
+          emitOpenChunk i st
+          return (Right ())
+        Just (c, _)
+          | startsBoundary c st ->
+              openChunk i xs st >>= scanCode i xs
+          | scanActiveStart st == Nothing
+            && null (scanModes st)
+            && scanDepth st == 0
+            && not (isTriviaStart c) ->
+              return (Left (ChunkScanError (Loc i (i + 1)) "non-top-level text before first chunk"))
+          | otherwise ->
+              scanStep i xs st
 
     startsBoundary c st =
       scanAtLineStart st &&
@@ -1305,7 +1530,7 @@ scanTopLevelChunks src start emit
         Just s
           | s < i ->
               emit (TopLevelChunk (SourceSpan s i)
-                                    (fromMaybe [] (scanActiveInput st))
+                                    (fromMaybe T.empty (scanActiveInput st))
                                     (fromMaybe (scanLine st) (scanActiveLine st)))
         _ -> return ()
 
@@ -1314,97 +1539,114 @@ scanTopLevelChunks src start emit
         [] -> scanCode i xs st
         _  -> scanString i xs st
 
-    scanCode i xs@(c:_) st
-      | c == '#' =
-          skipComment i xs st { scanBackslash = False }
-      | Just (mode, qlen) <- stringStartMode xs st =
-          let (_, rest, st') = consumeMany False qlen i xs st
-          in go (i + qlen) rest st' { scanModes = mode : scanModes st', scanBackslash = False }
-      | c `elem` "([{" =
-          let (_, rest, st') = consumeMany True 1 i xs st { scanDepth = scanDepth st + 1 }
-          in go (i + 1) rest st'
-      | c `elem` ")]}" =
-          let depth' = max 0 (scanDepth st - 1)
-              (_, rest, st') = consumeMany True 1 i xs st { scanDepth = depth' }
-          in go (i + 1) rest st'
-      | otherwise =
-          let (_, rest, st') = consumeMany True 1 i xs st
-          in go (i + 1) rest st'
+    scanCode i xs st =
+      case T.uncons xs of
+        Nothing -> go i T.empty st
+        Just (c, _)
+          | c == '#' ->
+              skipComment i xs st { scanBackslash = False }
+          | Just (mode, qlen) <- stringStartMode xs st ->
+              let (_, rest, st') = consumeMany False qlen i xs st
+              in go (i + qlen) rest st' { scanModes = mode : scanModes st', scanBackslash = False }
+          | c `elem` "([{" ->
+              let (_, rest, st') = consumeMany True 1 i xs st { scanDepth = scanDepth st + 1 }
+              in go (i + 1) rest st'
+          | c `elem` ")]}" ->
+              let depth' = max 0 (scanDepth st - 1)
+                  (_, rest, st') = consumeMany True 1 i xs st { scanDepth = depth' }
+              in go (i + 1) rest st'
+          | Just n <- codeRunLength xs ->
+              let (rest, st') = consumeCodeRun n xs st
+              in go (i + n) rest st'
+          | otherwise ->
+              let (_, rest, st') = consumeMany True 1 i xs st
+              in go (i + 1) rest st'
 
-    scanString i [] st = go i [] st
-    scanString i xs@(c:_) st =
+    scanString i xs st =
       case scanModes st of
         [] -> scanCode i xs st
         mode:rest
           | scanInterpDepth mode == 0 -> scanStringText i xs mode rest st
           | otherwise                 -> scanInterpolation i xs mode rest st
 
-    scanStringText i xs@(c:_) mode rest st
-      | c == '\\' =
-          let n = case xs of
-                _:_:_ -> 2
-                _     -> 1
-              (_, xs', st') = consumeMany False n i xs st
-          in go (i + n) xs' st'
-      | scanInterpolate mode && startsWith "{{" xs =
-          let (_, xs', st') = consumeMany False 2 i xs st
-          in go (i + 2) xs' st'
-      | scanInterpolate mode && startsWith "}}" xs =
-          let (_, xs', st') = consumeMany False 2 i xs st
-          in go (i + 2) xs' st'
-      | scanInterpolate mode && c == '{' =
-          let mode' = mode { scanInterpDepth = 1 }
-              (_, xs', st') = consumeMany False 1 i xs st { scanModes = mode' : rest }
-          in go (i + 1) xs' st'
-      | Just n <- tripleInterpolatedQuoteText xs mode =
-          let (_, xs', st') = consumeMany False n i xs st
-          in go (i + n) xs' st'
-      | closesString xs mode =
-          let n = if scanTriple mode then 3 else 1
-              (_, xs', st') = consumeMany False n i xs st { scanModes = rest }
-          in go (i + n) xs' st'
-      | otherwise =
-          let (_, xs', st') = consumeMany False 1 i xs st
-          in go (i + 1) xs' st'
+    scanStringText i xs mode rest st =
+      case T.uncons xs of
+        Nothing -> go i T.empty st
+        Just (c, _)
+          | c == '\\' ->
+              let n = case xs of
+                    _ | T.length xs >= 2 -> 2
+                    _                     -> 1
+                  (_, xs', st') = consumeMany False n i xs st
+              in go (i + n) xs' st'
+          | scanInterpolate mode && startsWith2 '{' '{' xs ->
+              let (_, xs', st') = consumeMany False 2 i xs st
+              in go (i + 2) xs' st'
+          | scanInterpolate mode && startsWith2 '}' '}' xs ->
+              let (_, xs', st') = consumeMany False 2 i xs st
+              in go (i + 2) xs' st'
+          | scanInterpolate mode && c == '{' ->
+              let mode' = mode { scanInterpDepth = 1 }
+                  (_, xs', st') = consumeMany False 1 i xs st { scanModes = mode' : rest }
+              in go (i + 1) xs' st'
+          | Just n <- tripleInterpolatedQuoteText xs mode ->
+              let (_, xs', st') = consumeMany False n i xs st
+              in go (i + n) xs' st'
+          | closesString xs mode ->
+              let n = if scanTriple mode then 3 else 1
+                  (_, xs', st') = consumeMany False n i xs st { scanModes = rest }
+              in go (i + n) xs' st'
+          | Just n <- stringTextRunLength mode xs ->
+              let (xs', st') = consumeStringTextRun n xs st
+              in go (i + n) xs' st'
+          | otherwise ->
+              let (_, xs', st') = consumeMany False 1 i xs st
+              in go (i + 1) xs' st'
 
-    scanInterpolation i xs@(c:_) mode rest st
-      | c == '#' =
-          skipComment i xs st
-      | Just (nested, qlen) <- stringStartMode xs st =
-          let (_, xs', st') = consumeMany False qlen i xs st
-          in go (i + qlen) xs' st' { scanModes = nested : scanModes st' }
-      | c == '{' =
-          let mode' = mode { scanInterpDepth = scanInterpDepth mode + 1 }
-              (_, xs', st') = consumeMany False 1 i xs st { scanModes = mode' : rest }
-          in go (i + 1) xs' st'
-      | c == '}' =
-          let depth' = scanInterpDepth mode - 1
-              modes' = if depth' == 0 then mode { scanInterpDepth = 0 } : rest
-                                      else mode { scanInterpDepth = depth' } : rest
-              (_, xs', st') = consumeMany False 1 i xs st { scanModes = modes' }
-          in go (i + 1) xs' st'
-      | otherwise =
-          let (_, xs', st') = consumeMany False 1 i xs st
-          in go (i + 1) xs' st'
+    scanInterpolation i xs mode rest st =
+      case T.uncons xs of
+        Nothing -> go i T.empty st
+        Just (c, _)
+          | c == '#' ->
+              skipComment i xs st
+          | Just (nested, qlen) <- stringStartMode xs st ->
+              let (_, xs', st') = consumeMany False qlen i xs st
+              in go (i + qlen) xs' st' { scanModes = nested : scanModes st' }
+          | c == '{' ->
+              let mode' = mode { scanInterpDepth = scanInterpDepth mode + 1 }
+                  (_, xs', st') = consumeMany False 1 i xs st { scanModes = mode' : rest }
+              in go (i + 1) xs' st'
+          | c == '}' ->
+              let depth' = scanInterpDepth mode - 1
+                  modes' = if depth' == 0 then mode { scanInterpDepth = 0 } : rest
+                                          else mode { scanInterpDepth = depth' } : rest
+                  (_, xs', st') = consumeMany False 1 i xs st { scanModes = modes' }
+              in go (i + 1) xs' st'
+          | otherwise ->
+              let (_, xs', st') = consumeMany False 1 i xs st
+              in go (i + 1) xs' st'
 
-    stringStartMode xs@(q:_) st
-      | q == '"' || q == '\'' =
-          let triple = startsWith [q, q, q] xs
-              raw = scanPrev1 st == Just 'r' ||
-                    (scanPrev2 st == Just 'r' && scanPrev1 st == Just 'b')
-              bytes = scanPrev1 st == Just 'b' ||
-                      (scanPrev2 st == Just 'r' && scanPrev1 st == Just 'b')
-              interpolate = not raw && not bytes
-              qlen = if triple then 3 else 1
-          in Just (ScanString q triple interpolate 0, qlen)
-      | otherwise = Nothing
-    stringStartMode [] _ = Nothing
+    stringStartMode xs st =
+      case T.uncons xs of
+        Just (q, _)
+          | q == '"' || q == '\'' ->
+              let triple = startsWith3 q q q xs
+                  raw = scanPrev1 st == Just 'r' ||
+                        (scanPrev2 st == Just 'r' && scanPrev1 st == Just 'b')
+                  bytes = scanPrev1 st == Just 'b' ||
+                          (scanPrev2 st == Just 'r' && scanPrev1 st == Just 'b')
+                  interpolate = not raw && not bytes
+                  qlen = if triple then 3 else 1
+              in Just (ScanString q triple interpolate 0, qlen)
+        _ -> Nothing
 
     closesString xs mode
-      | scanTriple mode = startsWith (replicate 3 (scanQuote mode)) xs
-      | otherwise = case xs of
-          c:_ -> c == scanQuote mode
-          []  -> False
+      | scanTriple mode = startsWith3 q q q xs
+      | otherwise = case T.uncons xs of
+          Just (c, _) -> c == q
+          Nothing     -> False
+      where
+        q = scanQuote mode
 
     tripleInterpolatedQuoteText xs mode
       | scanTriple mode && scanInterpolate mode =
@@ -1414,24 +1656,113 @@ scanTopLevelChunks src start emit
             _ -> Nothing
       | otherwise = Nothing
 
-    quoteRunLength q = length . takeWhile (== q)
+    quoteRunLength q = T.length . T.takeWhile (== q)
 
-    startsWith prefix xs = prefix `isPrefixOf` xs
+    startsWith2 a b xs =
+      case T.uncons xs of
+        Just (c1, rest1) | c1 == a ->
+          case T.uncons rest1 of
+            Just (c2, _) -> c2 == b
+            Nothing      -> False
+        _ -> False
 
-    skipComment i [] st = go i [] st
-    skipComment i xs@(c:_) st
-      | c == '\n' =
-          let (_, xs', st') = consumeMany False 1 i xs st
-          in go (i + 1) xs' st'
-      | otherwise =
-          let (_, xs', st') = consumeMany False 1 i xs st
-          in skipComment (i + 1) xs' st'
+    startsWith3 a b c xs =
+      case T.uncons xs of
+        Just (c1, rest1) | c1 == a ->
+          case T.uncons rest1 of
+            Just (c2, rest2) | c2 == b ->
+              case T.uncons rest2 of
+                Just (c3, _) -> c3 == c
+                Nothing      -> False
+            _ -> False
+        _ -> False
+
+    codeRunLength xs =
+      let n = T.length (T.takeWhile isCodeRunChar xs)
+      in if n == 0 then Nothing else Just n
+
+    stringTextRunLength mode xs =
+      let n = T.length (T.takeWhile (isStringTextRunChar mode) xs)
+      in if n == 0 then Nothing else Just n
+
+    isCodeRunChar c =
+      c /= '#' && c /= '"' && c /= '\'' && c /= '\n' && c /= '\\' &&
+      not (c `elem` ("()[]{}" :: String))
+
+    isStringTextRunChar mode c =
+      c /= '\\' && c /= '\n' && c /= scanQuote mode &&
+      (not (scanInterpolate mode) || (c /= '{' && c /= '}'))
+
+    consumeCodeRun n xs st =
+      let (run, rest) = T.splitAt n xs
+      in (rest, advanceCodeRun run st)
+
+    consumeStringTextRun n xs st =
+      let (run, rest) = T.splitAt n xs
+      in (rest, advanceStringTextRun run st)
+
+    advanceCodeRun run st =
+      case T.unsnoc run of
+        Nothing -> st
+        Just (front, lastC) ->
+          let prev2' = case T.unsnoc front of
+                         Just (_, c) -> Just c
+                         Nothing     -> scanPrev1 st
+              significant = T.any (\c -> c /= ' ' && c /= '\t' && c /= '\r') run
+          in st
+            { scanPrev2 = prev2'
+            , scanPrev1 = Just lastC
+            , scanAtLineStart = False
+            , scanContinued = False
+            , scanBackslash = if significant then False else scanBackslash st
+            }
+
+    advanceStringTextRun run st =
+      case T.unsnoc run of
+        Nothing -> st
+        Just (front, lastC) ->
+          let prev2' = case T.unsnoc front of
+                         Just (_, c) -> Just c
+                         Nothing     -> scanPrev1 st
+          in st
+            { scanPrev2 = prev2'
+            , scanPrev1 = Just lastC
+            , scanAtLineStart = False
+            , scanContinued = False
+            }
+
+    skipComment i xs st =
+      let (comment, rest) = T.break (== '\n') xs
+          n = T.length comment
+          st' = advanceCommentRun comment st
+          i' = i + n
+      in case T.uncons rest of
+           Just ('\n', _) ->
+             let (_, xs', st'') = consumeMany False 1 i' rest st'
+             in go (i' + 1) xs' st''
+           _ -> go i' rest st'
+
+    advanceCommentRun run st =
+      case T.unsnoc run of
+        Nothing -> st
+        Just (front, lastC) ->
+          let prev2' = case T.unsnoc front of
+                         Just (_, c) -> Just c
+                         Nothing     -> scanPrev1 st
+          in st
+            { scanPrev2 = prev2'
+            , scanPrev1 = Just lastC
+            , scanAtLineStart = False
+            , scanContinued = False
+            }
 
     consumeMany _ 0 i xs st = (i, xs, st)
-    consumeMany track n i (c:cs) st =
-      let st' = advance track c st
-      in consumeMany track (n - 1) (i + 1) cs st'
-    consumeMany _ _ i [] st = (i, [], st)
+    consumeMany track n i xs st =
+      case T.uncons xs of
+        Just (c, cs) ->
+          let st' = advance track c st
+          in consumeMany track (n - 1) (i + 1) cs st'
+        Nothing -> (i, T.empty, st)
 
     advance track c st =
       let stPrev = st { scanPrev2 = scanPrev1 st, scanPrev1 = Just c }
@@ -1451,7 +1782,7 @@ scanTopLevelChunks src start emit
                    else scanBackslash st
              }
 
-parseTopLevelChunk :: String -> String -> TopLevelChunk -> IO (Either Control.Exception.SomeException [S.Stmt])
+parseTopLevelChunk :: String -> Text -> TopLevelChunk -> IO (Either Control.Exception.SomeException [S.Stmt])
 parseTopLevelChunk fileName fileContent chunk = do
   parsed <- tryNonAsync $
     Control.Exception.evaluate $
@@ -1478,11 +1809,11 @@ data ChunkProgressEvent = ChunkProgressDone Int | ChunkProgressStop
 
 data ChunkProgress = ChunkProgress (Chan ChunkProgressEvent) (Async ())
 
-parseTopLevelChunks :: String -> String -> Int -> Maybe (Int -> Int -> IO ()) -> IO [[S.Stmt]]
+parseTopLevelChunks :: String -> Text -> Int -> Maybe (Int -> Int -> IO ()) -> IO [[S.Stmt]]
 parseTopLevelChunks fileName fileContent bodyStart mReportProgress = do
   ncap <- getNumCapabilities
   let nworkers = max 1 ncap
-  withChunkProgress mReportProgress (length fileContent) bodyStart $ \progress -> do
+  withChunkProgress mReportProgress (T.length fileContent) bodyStart $ \progress -> do
     let window = max 1 (10 * nworkers)
     slots <- newQSem window
     workQ <- newChan
@@ -2042,7 +2373,7 @@ data_stmt = addLoc $
               assertDef l "data"
               S.Data NoLoc Nothing <$> suite DATA s
 
-suiteWithDocstring :: CTX -> Pos -> Parser (S.Suite, Maybe String)
+suiteWithDocstring :: CTX -> Pos -> Parser (S.Suite, Maybe Text)
 suiteWithDocstring c p = do
     withCtx c colon
     withCtx c (indentSuiteWithDocstring p <|> (simple_stmt_with_docstring <* reportParseProgress))
@@ -2058,7 +2389,7 @@ suite c p = do
           p1 <- L.indentGuard sc1 GT p
           concat <$> some (stmtAtIndent p1)
 
-indentSuiteWithDocstring :: Pos -> Parser (S.Suite, Maybe String)
+indentSuiteWithDocstring :: Pos -> Parser (S.Suite, Maybe Text)
 indentSuiteWithDocstring p = do
     newline1
     p1 <- L.indentGuard sc1 GT p
@@ -2066,7 +2397,7 @@ indentSuiteWithDocstring p = do
     rest <- concat <$> many (stmtAtIndent p1)
     return (firstStmts ++ rest, mbDoc)
 
-stmtAtIndentWithDocstring :: Pos -> Parser (S.Suite, Maybe String)
+stmtAtIndentWithDocstring :: Pos -> Parser (S.Suite, Maybe Text)
 stmtAtIndentWithDocstring p1 = do
     p2 <- L.indentLevel
     case compare p1 p2 of
@@ -2084,7 +2415,7 @@ stmtAtIndent p1 = do
         EQ -> stmt <* reportParseProgress
         GT -> L.incorrectIndent GT p2 p1
 
-stmtWithDocstring :: Parser (S.Suite, Maybe String)
+stmtWithDocstring :: Parser (S.Suite, Maybe Text)
 stmtWithDocstring = (
     ((\s -> ([s], Nothing)) <$> compound_stmt)
     <|> try ((\s -> ([s], Nothing)) <$> (signature <* newline1))
@@ -2092,7 +2423,7 @@ stmtWithDocstring = (
     <|> simple_stmt_with_docstring
   ) <?> "statement"
 
-simple_stmt_with_docstring :: Parser (S.Suite, Maybe String)
+simple_stmt_with_docstring :: Parser (S.Suite, Maybe Text)
 simple_stmt_with_docstring = (
     do
       (mbDoc, firstStmts) <- try docstringSmallStmt <|> ((\s -> (Nothing, [s])) <$> small_stmt)
@@ -2102,22 +2433,27 @@ simple_stmt_with_docstring = (
       return (firstStmts ++ rest, mbDoc)
   ) <?> "simple statement"
 
-docstringSmallStmt :: Parser (Maybe String, S.Suite)
+docstringSmallStmt :: Parser (Maybe Text, S.Suite)
 docstringSmallStmt = do
     S.Strings _ ss <- addLoc docstringLiteral
     _ <- lookAhead (void (char ';') <|> void eol <|> eof)
-    return (Just (unescapeString (concat ss)), [])
+    return (Just (unescapeText (T.concat ss)), [])
 
 
-unescapeString :: String -> String
-unescapeString [] = []
-unescapeString ('\\':'n':xs) = '\n' : unescapeString xs
-unescapeString ('\\':'t':xs) = '\t' : unescapeString xs
-unescapeString ('\\':'r':xs) = '\r' : unescapeString xs
-unescapeString ('\\':'\\':xs) = '\\' : unescapeString xs
-unescapeString ('\\':'"':xs) = '"' : unescapeString xs
-unescapeString ('\\':'\'':xs) = '\'' : unescapeString xs
-unescapeString (x:xs) = x : unescapeString xs
+unescapeText :: Text -> Text
+unescapeText s =
+    case T.uncons s of
+      Nothing -> T.empty
+      Just ('\\', xs) ->
+          case T.uncons xs of
+            Just ('n', rest)  -> '\n' `T.cons` unescapeText rest
+            Just ('t', rest)  -> '\t' `T.cons` unescapeText rest
+            Just ('r', rest)  -> '\r' `T.cons` unescapeText rest
+            Just ('\\', rest) -> '\\' `T.cons` unescapeText rest
+            Just ('"', rest)  -> '"' `T.cons` unescapeText rest
+            Just ('\'', rest) -> '\'' `T.cons` unescapeText rest
+            _                 -> '\\' `T.cons` unescapeText xs
+      Just (x, xs) -> x `T.cons` unescapeText xs
 
 ------------------------------------------------------------------------------------------------
 --- Expressions ----------------------------------------------------------------
@@ -2172,7 +2508,7 @@ unop name op = do
                       let el = lop `upto` S.eloc i
                       in i{ S.eloc = el
                           , S.ival = negate (S.ival i)
-                          , S.lexeme = '-' : S.lexeme i }
+                          , S.lexeme = T.cons '-' (S.lexeme i) }
                     -- TODO: should loc cover operator + operand here??
                     _ -> S.UnOp (S.eloc e) op e
 
@@ -2305,11 +2641,7 @@ atom_expr = do
                              return $ maybe (S.Dict NoLoc []) id mbe)
                <|> var
                <|> isinstance
-               <|> (try ((\f -> S.Imaginary NoLoc f (show f ++ "j")) <$> lexeme (L.float <* string "j")))
-               <|> (try ((\f -> S.Float NoLoc f (show f)) <$> lexeme L.float))
-               <|> (\i -> S.Int NoLoc i ("0o"++showOct i "")) <$> (string "0o" *> lexeme L.octal)
-               <|> (\i -> S.Int NoLoc i ("0x"++showHex i "")) <$> (string "0x" *> lexeme L.hexadecimal)
-               <|> (\i -> S.Int NoLoc i (show i)) <$> (lexeme L.decimal)
+               <|> number
                <|> (S.Ellipsis <$> rwordLoc "...")
                <|> (S.None <$>  rwordLoc "None")
                <|> (S.NotImplemented  <$>  rwordLoc "NotImplemented")
@@ -2422,13 +2754,13 @@ yield_expr = addLoc $ do
 --- Params ---------------------------------------------------------------------
 
 parm :: Bool -> Parser (S.Name, Maybe S.Type, Maybe S.Expr)
-parm ann = do n <- name
+parm ann = do n <- paramName
               mbt <- if ann then optional (colon *> ttype) else return Nothing
               mbe <- optional (equals *> expr)
               return (n, mbt, mbe)
 
 pstar :: Bool -> Parser S.Type -> Parser (S.Name, Maybe S.Type)
-pstar ann startype = do n <- name
+pstar ann startype = do n <- paramName
                         mbt <- if ann then optional (colon *> startype) else return Nothing
                         return (n, mbt)
 
@@ -2532,7 +2864,7 @@ tschema = addLoc $
 ttype :: Parser S.Type
 ttype    =  addLoc (
             rword "None" *> return (S.TNone NoLoc)
-        <|> (S.TVar NoLoc . S.TV S.KType) <$> (S.Name <$> rwordLoc "Self" <*> return "Self")
+        <|> (S.TVar NoLoc . S.TV S.KType) <$> (S.Name <$> rwordLoc "Self" <*> return (T.pack "Self"))
         <|> S.TOpt NoLoc <$> (qmark *> ttype)
         <|> try (do mbfx <- optional effect
                     (p,k) <- parens funrows

@@ -30,6 +30,7 @@ import Data.Char (isAlpha, isAlphaNum, isSpace)
 import Data.List (find, findIndex, intercalate, isPrefixOf, nubBy)
 import Data.Maybe (listToMaybe, mapMaybe)
 import qualified Data.HashMap.Strict as HM
+import qualified Data.Text as T
 import qualified InterfaceFiles as IF
 import Text.Megaparsec (eof, runParser)
 
@@ -626,7 +627,7 @@ shallowModule searchPath env m applyImport = do
     Just (ms, te, mdoc) ->
       return $ applyImport te (Env.addMod m ms te mdoc env)
 
-readModuleInterface :: [FilePath] -> S.ModName -> IO (Maybe ([S.ModName], I.TEnv, Maybe String))
+readModuleInterface :: [FilePath] -> S.ModName -> IO (Maybe ([S.ModName], I.TEnv, Maybe T.Text))
 readModuleInterface searchPath m = do
   mty <- Env.findTyFile searchPath m
   case mty of
@@ -844,7 +845,7 @@ detailOf info =
 
 docOfInfo :: I.NameInfo -> Maybe String
 docOfInfo info =
-  cleanDoc $
+  cleanDoc $ fmap T.unpack $
     case info of
       I.NDef _ _ doc -> doc
       I.NSig _ _ doc -> doc
@@ -894,13 +895,13 @@ typeTCon env typ =
 
 parseTypeText :: Env.Env0 -> String -> Maybe S.Type
 parseTypeText env raw =
-  case runParser (St.evalStateT (P.ttype <* eof) P.initState) "" raw of
+  case runParser (St.evalStateT (P.ttype <* eof) P.initState) "" (T.pack raw) of
     Left _ -> Nothing
     Right typ -> Just (Env.unalias env typ)
 
 parseImports :: FilePath -> String -> IO [S.Import]
 parseImports fileName src = do
-  res <- E.try (P.parseModuleHeader fileName src)
+  res <- E.try (P.parseModuleHeader fileName (T.pack src))
   case res of
     Left (_ :: E.SomeException) -> return []
     Right (imps, _) -> return imps
