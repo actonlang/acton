@@ -35,7 +35,7 @@ pub fn build(b: *std.Build) void {
     var flags = std.ArrayList([]const u8).empty;
     defer flags.deinit(b.allocator);
 
-    libcrypto.addCSourceFiles(.{
+    libcrypto.root_module.addCSourceFiles(.{
         .files = &.{
             "library/aes.c",
             "library/aesni.c",
@@ -118,7 +118,7 @@ pub fn build(b: *std.Build) void {
         .flags = flags.items
     });
 
-    libx509.addCSourceFiles(.{
+    libx509.root_module.addCSourceFiles(.{
         .files = &.{
             "library/pkcs7.c",
             "library/x509.c",
@@ -132,7 +132,7 @@ pub fn build(b: *std.Build) void {
         .flags = flags.items
     });
 
-    libtls.addCSourceFiles(.{
+    libtls.root_module.addCSourceFiles(.{
         .files = &.{
             "library/debug.c",
             "library/mps_reader.c",
@@ -156,12 +156,12 @@ pub fn build(b: *std.Build) void {
         .flags = flags.items
     });
 
-    libcrypto.addIncludePath(b.path("include"));
-    libcrypto.linkLibC();
-    libx509.addIncludePath(b.path("include"));
-    libx509.linkLibC();
-    libtls.addIncludePath(b.path("include"));
-    libtls.linkLibC();
+    libcrypto.root_module.addIncludePath(b.path("include"));
+    libcrypto.root_module.link_libc = true;
+    libx509.root_module.addIncludePath(b.path("include"));
+    libx509.root_module.link_libc = true;
+    libtls.root_module.addIncludePath(b.path("include"));
+    libtls.root_module.link_libc = true;
 
     libtls.installHeadersDirectory(b.path("include/mbedtls"), "mbedtls", .{});
     libtls.installHeadersDirectory(b.path("include/psa"), "psa", .{});

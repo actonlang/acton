@@ -224,7 +224,7 @@ import Control.Concurrent.MVar
 import Control.Concurrent (forkIO, myThreadId, threadCapability, threadDelay)
 import Control.Concurrent.STM (TChan, TVar, atomically, check, modifyTVar', newTChanIO, newTVarIO, readTChan, readTVar, writeTChan)
 import Control.DeepSeq (rnf)
-import Control.Exception (Exception, IOException, SomeAsyncException, SomeException, catch, displayException, evaluate, finally, fromException, mask_, throwIO, try)
+import Control.Exception (Exception, IOException, SomeAsyncException, SomeException, bracketOnError, catch, displayException, evaluate, finally, fromException, mask_, throwIO, try)
 import Control.Monad
 import Data.Bits (shiftL, shiftR, (.|.))
 import Data.Char (isAlpha, isDigit, isHexDigit, isSpace, toLower)
@@ -255,9 +255,10 @@ import System.FilePath ((</>))
 import System.FilePath.Posix
 import System.Exit (ExitCode(..))
 import System.IO hiding (readFile, writeFile)
+import System.IO.Temp (createTempDirectory, withSystemTempDirectory)
 import System.IO.Unsafe (unsafePerformIO)
 import System.Posix.Files (FileStatus, deviceID, fileID, fileSize, getFileStatus, modificationTimeHiRes, statusChangeTimeHiRes)
-import System.Process (readCreateProcessWithExitCode, proc)
+import System.Process (CreateProcess(cwd), readCreateProcessWithExitCode, proc)
 import System.Random (randomRIO)
 import Text.PrettyPrint (renderStyle, style, Style(..), Mode(PageMode))
 import Text.Show.Pretty (ppDoc)
@@ -3716,20 +3717,24 @@ fetchDependencies gopts paths depOverrides = do
                Nothing -> return ()
                Just h -> do
                  let src = cacheDir h
+                     srcArchive = cacheArchivePath cacheDir h
                      dst = joinPath [depsCache, name ++ "-" ++ h]
                  exists <- doesDirectoryExist dst
                  unless exists $ do
                    srcOk <- doesDirectoryExist src
-                   unless srcOk $
+                   archiveOk <- doesFileExist srcArchive
+                   unless (srcOk || archiveOk) $
                      throwProjectError ("Dependency " ++ name ++ " not present in Zig cache after fetch: " ++ src)
                    when (C.verbose gopts) $
                      putStrLn ("Copying dependency " ++ name ++ " (" ++ h ++ ") from Zig cache")
-                   copyTree src dst
+                   if srcOk
+                     then copyTree src dst
+                     else extractCachedArchive srcArchive dst
 
     fetchOne kind name url mh cacheDir zigExe globalCache = do
       case mh of
         Just h -> do
-          present <- doesDirectoryExist (cacheDir h)
+          present <- cacheEntryExists cacheDir h
           if present
             then do
               unless (C.quiet gopts) $
@@ -3755,8 +3760,17 @@ fetchDependencies gopts paths depOverrides = do
 
     runZigFetch :: FilePath -> FilePath -> FilePath -> IO (Either SomeException (ExitCode, String, String))
     runZigFetch zigExe globalCache target = do
-      let cmd = proc zigExe ["fetch", "--global-cache-dir", globalCache, target]
-      try (readCreateProcessWithExitCode cmd "") :: IO (Either SomeException (ExitCode, String, String))
+      createDirectoryIfMissing True (globalCache </> "tmp")
+      withSystemTempDirectory "acton-zig-fetch" $ \tmp -> do
+        writeFile (tmp </> "build.zig") zigFetchBuildZig
+        let cmd = (proc zigExe ["fetch", "--global-cache-dir", globalCache, target]) { cwd = Just tmp }
+        try (readCreateProcessWithExitCode cmd "") :: IO (Either SomeException (ExitCode, String, String))
+
+    zigFetchBuildZig :: String
+    zigFetchBuildZig = unlines
+      [ "const std = @import(\"std\");"
+      , "pub fn build(b: *std.Build) void { _ = b; }"
+      ]
 
     validateFetchOutput :: String -> Maybe String -> (String -> FilePath) -> String -> IO (Either String String)
     validateFetchOutput name mh cacheDir out = do
@@ -3765,10 +3779,30 @@ fetchDependencies gopts paths depOverrides = do
         Just h | h /= hashVal ->
           return (Left ("Hash mismatch for dependency " ++ name ++ " (expected " ++ h ++ ", got " ++ hashVal ++ ")"))
         _ -> do
-          exists <- doesDirectoryExist (cacheDir hashVal)
+          exists <- cacheEntryExists cacheDir hashVal
           if exists
             then return (Right hashVal)
             else return (Left ("Dependency " ++ name ++ " not present in Zig cache after fetch: " ++ cacheDir hashVal))
+
+    cacheEntryExists :: (String -> FilePath) -> String -> IO Bool
+    cacheEntryExists cacheDir hashVal = do
+      dirExists <- doesDirectoryExist (cacheDir hashVal)
+      archiveExists <- doesFileExist (cacheArchivePath cacheDir hashVal)
+      return (dirExists || archiveExists)
+
+    cacheArchivePath :: (String -> FilePath) -> String -> FilePath
+    cacheArchivePath cacheDir hashVal = cacheDir hashVal ++ ".tar.gz"
+
+    extractCachedArchive :: FilePath -> FilePath -> IO ()
+    extractCachedArchive archive dst = do
+      bracketOnError (createTempDirectory (takeDirectory dst) ".acton-dep-extract")
+                     removeDirectoryRecursive $ \tmp -> do
+        let cmd = proc "tar" ["-xzf", archive, "-C", tmp, "--strip-components", "1"]
+        (code, out, err) <- readCreateProcessWithExitCode cmd ""
+        case code of
+          ExitSuccess -> renameDirectory tmp dst
+          ExitFailure _ ->
+            throwProjectError ("Failed to extract cached dependency archive " ++ archive ++ ":\n" ++ out ++ err)
 
     fetchViaDownloadedArchive kind name depUrl mh cacheDir zigExe globalCache = do
       dl <- downloadToLocalArchive kind name depUrl

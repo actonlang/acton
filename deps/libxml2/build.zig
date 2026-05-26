@@ -17,7 +17,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         }),
     });
-    lib.addIncludePath(b.path("include"));
+    lib.root_module.addIncludePath(b.path("include"));
 
     const libxml_version = "2.12.0";
 
@@ -64,7 +64,8 @@ pub fn build(b: *std.Build) void {
             .VERSION = libxml_version,
         },
     );
-    lib.addConfigHeader(config_header);
+    lib.root_module.addConfigHeader(config_header);
+    lib.installConfigHeader(config_header);
 
     flags.appendSlice(b.allocator, &.{
         "-DLIBXML_STATIC",
@@ -120,11 +121,8 @@ pub fn build(b: *std.Build) void {
         "xzlib.c",
     };
 
-    lib.addCSourceFiles(.{
-        .files = &source_files,
-        .flags = flags.items
-    });
-    lib.linkLibC();
+    lib.root_module.addCSourceFiles(.{ .files = &source_files, .flags = flags.items });
+    lib.root_module.link_libc = true;
     lib.installHeadersDirectory(b.path("include/libxml"), "libxml", .{});
 
     b.installArtifact(lib);

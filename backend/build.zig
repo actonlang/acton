@@ -66,8 +66,8 @@ pub fn build(b: *std.Build) void {
 
     var file_prefix_map = std.ArrayList(u8).empty;
     defer file_prefix_map.deinit(b.allocator);
-    const file_prefix_path = b.build_root.handle.openDir("..", .{}) catch unreachable;
-    const file_prefix_path_path = file_prefix_path.realpathAlloc(b.allocator, ".") catch unreachable;
+    const buildroot_path = b.build_root.join(b.allocator, &.{}) catch unreachable;
+    const file_prefix_path_path = std.fs.path.dirname(buildroot_path) orelse buildroot_path;
     file_prefix_map.appendSlice(b.allocator, "-ffile-prefix-map=") catch unreachable;
     file_prefix_map.appendSlice(b.allocator, file_prefix_path_path) catch unreachable;
     file_prefix_map.appendSlice(b.allocator, "/=") catch unreachable;
@@ -81,7 +81,7 @@ pub fn build(b: *std.Build) void {
             "-DACTON_THREADS",
         }) catch |err| {
             std.log.err("Error appending flags: {}", .{err});
-            std.posix.exit(1);
+            std.process.exit(1);
         };
     }
 
@@ -93,17 +93,16 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         }),
     });
-    libactondb.addCSourceFiles(.{
-        .root = b.path("."),
+    libactondb.root_module.addCSourceFiles(.{
         .files = &libactondb_sources,
         .flags = flags.items
     });
     libactondb.root_module.addCMacro("LOG_USER_COLOR", "");
-    libactondb.linkLibrary(dep_libgc.artifact("gc"));
-    libactondb.linkLibrary(dep_libprotobuf_c.artifact("protobuf-c"));
-    libactondb.linkLibrary(dep_libuuid.artifact("uuid"));
-    libactondb.linkLibC();
-    libactondb.linkLibCpp();
+    libactondb.root_module.linkLibrary(dep_libgc.artifact("gc"));
+    libactondb.root_module.linkLibrary(dep_libprotobuf_c.artifact("protobuf-c"));
+    libactondb.root_module.linkLibrary(dep_libuuid.artifact("uuid"));
+    libactondb.root_module.link_libc = true;
+    libactondb.root_module.link_libcpp = true;
     libactondb.installLibraryHeaders(dep_libprotobuf_c.artifact("protobuf-c"));
     libactondb.installLibraryHeaders(dep_libuuid.artifact("uuid"));
     if (!only_actondb) {
@@ -117,17 +116,17 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         }),
     });
-    actondb.addCSourceFile(.{ .file = b.path("actondb.c"), .flags = &[_][]const u8{
+    actondb.root_module.addCSourceFile(.{ .file = b.path("actondb.c"), .flags = &[_][]const u8{
         "-fno-sanitize=undefined",
     }});
-    actondb.addCSourceFile(.{ .file = b.path("log.c"), .flags = flags.items });
-    actondb.linkLibrary(libactondb);
-    actondb.linkLibrary(dep_libargp.artifact("argp"));
-    actondb.linkLibrary(dep_libnetstring.artifact("netstring"));
-    actondb.linkLibrary(dep_libprotobuf_c.artifact("protobuf-c"));
-    actondb.linkLibrary(dep_libyyjson.artifact("yyjson"));
-    actondb.linkLibrary(dep_libuuid.artifact("uuid"));
-    actondb.linkLibC();
-    actondb.linkLibCpp();
+    actondb.root_module.addCSourceFile(.{ .file = b.path("log.c"), .flags = flags.items });
+    actondb.root_module.linkLibrary(libactondb);
+    actondb.root_module.linkLibrary(dep_libargp.artifact("argp"));
+    actondb.root_module.linkLibrary(dep_libnetstring.artifact("netstring"));
+    actondb.root_module.linkLibrary(dep_libprotobuf_c.artifact("protobuf-c"));
+    actondb.root_module.linkLibrary(dep_libyyjson.artifact("yyjson"));
+    actondb.root_module.linkLibrary(dep_libuuid.artifact("uuid"));
+    actondb.root_module.link_libc = true;
+    actondb.root_module.link_libcpp = true;
     b.installArtifact(actondb);
 }

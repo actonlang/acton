@@ -16,7 +16,7 @@ export ZIG_GLOBAL_CACHE_DIR
 
 ACTON=$(TD)/dist/bin/acton
 ACTONC=dist/bin/actonc
-ZIG_VERSION:=0.15.2
+ZIG_VERSION:=0.16.0
 ZIG=$(TD)/dist/zig/zig
 CURL:=curl --fail --location --retry 5 --retry-delay 2 --retry-max-time 120 --retry-all-errors --retry-connrefused
 AR=$(ZIG) ar

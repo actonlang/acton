@@ -25,28 +25,28 @@ pub fn build(b: *std.Build) void {
         },
     );
 
-//    print("want_assert: {}\n", .{want_assert});
-//    print("target: {}\n", .{target});
-//    const t = target.toTarget();
-//    var flag_felf = "-felf64";
-//    if (t.cpu.arch == .x86_64) {
-//        print("x86_64\n", .{});
-//        flag_felf = "-felf64";
-//    } else if (t.cpu.arch == .x86) {
-//        flag_felf = "-felf32";
-//    } else if (t.cpu.arch == .aarch64) {
-//        print("aarch64\n", .{});
-//        flag_felf = "       ";
-//    } else {
-//        print("unknown\n", .{});
-//        flag_felf = "       ";
-//    }
-//    print("flag_felf: {s}\n", .{flag_felf});
+    //    print("want_assert: {}\n", .{want_assert});
+    //    print("target: {}\n", .{target});
+    //    const t = target.toTarget();
+    //    var flag_felf = "-felf64";
+    //    if (t.cpu.arch == .x86_64) {
+    //        print("x86_64\n", .{});
+    //        flag_felf = "-felf64";
+    //    } else if (t.cpu.arch == .x86) {
+    //        flag_felf = "-felf32";
+    //    } else if (t.cpu.arch == .aarch64) {
+    //        print("aarch64\n", .{});
+    //        flag_felf = "       ";
+    //    } else {
+    //        print("unknown\n", .{});
+    //        flag_felf = "       ";
+    //    }
+    //    print("flag_felf: {s}\n", .{flag_felf});
 
-//    const want_assert_str = switch (want_assert) {
-//        true => "1",
-//        false => "0",
-//    };
+    //    const want_assert_str = switch (want_assert) {
+    //        true => "1",
+    //        false => "0",
+    //    };
 
     const common_cflags: []const []const u8 = &.{
         "-fno-sanitize=undefined",
@@ -61,7 +61,7 @@ pub fn build(b: *std.Build) void {
         }),
     });
 
-    lib.addConfigHeader(config_header);
+    lib.root_module.addConfigHeader(config_header);
 
     const lib_sources = [_][]const u8{
         "helper.c",
@@ -75,14 +75,11 @@ pub fn build(b: *std.Build) void {
         "zz.c",
     };
 
-    lib.addCSourceFiles(.{
-        .files = &lib_sources,
-        .flags = common_cflags
-    });
-    lib.addIncludePath(b.path("."));
-    lib.linkLibC();
+    lib.root_module.addCSourceFiles(.{ .files = &lib_sources, .flags = common_cflags });
+    lib.root_module.addIncludePath(b.path("."));
+    lib.root_module.link_libc = true;
 
-    lib.installHeader(config_header.getOutput(), "bsdnt/config.h");
+    lib.installHeader(config_header.getOutputFile(), "bsdnt/config.h");
     lib.installHeader(b.path("helper_arch.h"), "bsdnt/helper_arch.h");
     lib.installHeader(b.path("helper.h"), "bsdnt/helper.h");
     lib.installHeader(b.path("nn_arch.h"), "bsdnt/nn_arch.h");

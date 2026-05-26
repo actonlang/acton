@@ -17,7 +17,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         }),
     });
-    lib.addIncludePath(b.path("."));
+    lib.root_module.addIncludePath(b.path("."));
 
     //const libsnappy_version = "1.1.10";
 
@@ -49,7 +49,7 @@ pub fn build(b: *std.Build) void {
             .SNAPPY_IS_BIG_ENDIAN = false,
         },
     );
-    lib.addConfigHeader(config_header);
+    lib.root_module.addConfigHeader(config_header);
 
     const public_header = b.addConfigHeader(
         .{
@@ -63,7 +63,8 @@ pub fn build(b: *std.Build) void {
             .PROJECT_VERSION_PATCH = 10,
         },
     );
-    lib.addConfigHeader(public_header);
+    lib.root_module.addConfigHeader(public_header);
+    lib.installConfigHeader(public_header);
 
     //flags.appendSlice(&.{
     //    "-std=c++11",
@@ -76,13 +77,10 @@ pub fn build(b: *std.Build) void {
         "snappy-c.cc",
     };
 
-    lib.linkLibC();
-    lib.linkLibCpp();
+    lib.root_module.link_libc = true;
+    lib.root_module.link_libcpp = true;
     lib.installHeader(b.path("snappy-c.h"), "snappy-c.h");
-    lib.addCSourceFiles(.{
-        .files = &source_files,
-        .flags = flags.items
-    });
+    lib.root_module.addCSourceFiles(.{ .files = &source_files, .flags = flags.items });
 
     b.installArtifact(lib);
 }

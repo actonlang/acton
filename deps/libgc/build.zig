@@ -472,12 +472,12 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         }),
     });
-    gc.addCSourceFiles(.{
+    gc.root_module.addCSourceFiles(.{
         .files = source_files.items,
         .flags = flags.items,
     });
-    gc.addIncludePath(b.path("include"));
-    gc.linkLibC();
+    gc.root_module.addIncludePath(b.path("include"));
+    gc.root_module.link_libc = true;
 
     var gccpp: *std.Build.Step.Compile = undefined;
     var gctba: *std.Build.Step.Compile = undefined;
@@ -490,15 +490,15 @@ pub fn build(b: *std.Build) void {
                 .optimize = optimize,
             }),
         });
-        gccpp.addCSourceFiles(.{
+        gccpp.root_module.addCSourceFiles(.{
             .files = &.{
                 "gc_badalc.cc",
                 "gc_cpp.cc",
             },
             .flags = flags.items,
         });
-        gccpp.addIncludePath(b.path("include"));
-        gccpp.linkLibrary(gc);
+        gccpp.root_module.addIncludePath(b.path("include"));
+        gccpp.root_module.linkLibrary(gc);
         linkLibCpp(gccpp);
         if (enable_throw_bad_alloc_library) {
             // The same as gccpp but contains only gc_badalc.
@@ -510,14 +510,14 @@ pub fn build(b: *std.Build) void {
                     .optimize = optimize,
                 }),
             });
-            gctba.addCSourceFiles(.{
+            gctba.root_module.addCSourceFiles(.{
                 .files = &.{
                     "gc_badalc.cc",
                 },
                 .flags = flags.items,
             });
-            gctba.addIncludePath(b.path("include"));
-            gctba.linkLibrary(gc);
+            gctba.root_module.addIncludePath(b.path("include"));
+            gctba.root_module.linkLibrary(gc);
             linkLibCpp(gctba);
         }
     }
@@ -532,7 +532,7 @@ pub fn build(b: *std.Build) void {
                 .optimize = optimize,
             })
         });
-        cord.addCSourceFiles(.{
+        cord.root_module.addCSourceFiles(.{
             .files = &.{
                 "cord/cordbscs.c",
                 "cord/cordprnt.c",
@@ -540,9 +540,9 @@ pub fn build(b: *std.Build) void {
             },
             .flags = flags.items,
         });
-        cord.addIncludePath(b.path("include"));
-        cord.linkLibrary(gc);
-        cord.linkLibC();
+        cord.root_module.addIncludePath(b.path("include"));
+        cord.root_module.linkLibrary(gc);
+        cord.root_module.link_libc = true;
     }
 
     if (install_headers) {
@@ -647,9 +647,9 @@ fn linkLibCpp(lib: *std.Build.Step.Compile) void {
     if (t.abi == .msvc) {
         // TODO: as of zig 0.14, "unable to build libcxxabi" warning is
         // reported if linking C++ code using MS compiler.
-        lib.linkLibC();
+        lib.root_module.link_libc = true;
     } else {
-        lib.linkLibCpp();
+        lib.root_module.link_libcpp = true;
     }
 }
 
@@ -670,16 +670,16 @@ fn addTestExt(b: *std.Build, gc: *std.Build.Step.Compile,
             .target = gc.root_module.resolved_target.?,
         }),
     });
-    test_exe.addCSourceFile(.{
+    test_exe.root_module.addCSourceFile(.{
         .file = b.path(filename),
         .flags = flags.items
     });
-    test_exe.addIncludePath(b.path("include"));
-    test_exe.linkLibrary(gc);
+    test_exe.root_module.addIncludePath(b.path("include"));
+    test_exe.root_module.linkLibrary(gc);
     if (lib2 != null) {
-        test_exe.linkLibrary(lib2.?);
+        test_exe.root_module.linkLibrary(lib2.?);
     }
-    test_exe.linkLibC();
+    test_exe.root_module.link_libc = true;
     const run_test_exe = b.addRunArtifact(test_exe);
     test_step.dependOn(&run_test_exe.step);
 }

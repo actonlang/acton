@@ -32,18 +32,19 @@ fn joinPath(allocator: std.mem.Allocator, base: []const u8, relative: []const u8
 }
 
 pub fn build(b: *std.Build) void {
-    const buildroot_path = b.build_root.handle.realpathAlloc(b.allocator, ".") catch @panic("ASD");
+    const io = b.graph.io;
+    const buildroot_path = b.build_root.join(b.allocator, &.{}) catch @panic("ASD");
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
     const db = b.option(bool, "db", "") orelse false;
     const no_threads = b.option(bool, "no_threads", "") orelse false;
     const acton_modules = b.option([]const u8, "acton_modules", "") orelse {
         std.log.err("Missing required build option -Dacton_modules=...", .{});
-        std.posix.exit(1);
+        std.process.exit(1);
     };
     const acton_root_stubs = b.option([]const u8, "acton_root_stubs", "") orelse {
         std.log.err("Missing required build option -Dacton_root_stubs=...", .{});
-        std.posix.exit(1);
+        std.process.exit(1);
     };
 
     print("Acton Project Builder - building {s}\n", .{buildroot_path});
@@ -69,23 +70,23 @@ pub fn build(b: *std.Build) void {
         if (!std.mem.endsWith(u8, item, ".c")) continue;
         if (std.mem.endsWith(u8, item, ".root.c")) continue;
         if (std.mem.endsWith(u8, item, ".test_root.c")) continue;
-        b.build_root.handle.access(item, .{}) catch |err| switch (err) {
+        b.build_root.handle.access(io, item, .{}) catch |err| switch (err) {
             error.FileNotFound => {
                 std.log.warn("Skipping missing selected C source: {s}", .{item});
                 continue;
             },
             else => {
                 std.log.err("Error checking selected C source ({s}): {}", .{ item, err });
-                std.posix.exit(1);
+                std.process.exit(1);
             },
         };
         const rel = b.allocator.dupe(u8, item) catch |err| {
             std.log.err("Error allocating selected C source path: {}", .{err});
-            std.posix.exit(1);
+            std.process.exit(1);
         };
         c_files.append(b.allocator, rel) catch |err| {
             std.log.err("Error appending selected C source path: {}", .{err});
-            std.posix.exit(1);
+            std.process.exit(1);
         };
     }
 
@@ -98,59 +99,67 @@ pub fn build(b: *std.Build) void {
         if (!is_root and !is_test_root) continue;
         if (!std.mem.startsWith(u8, item, "out/types/")) {
             std.log.err("Invalid root stub path (expected under out/types): {s}", .{item});
-            std.posix.exit(1);
+            std.process.exit(1);
         }
-        b.build_root.handle.access(item, .{}) catch |err| switch (err) {
+        b.build_root.handle.access(io, item, .{}) catch |err| switch (err) {
             error.FileNotFound => {
                 std.log.warn("Skipping missing selected root stub: {s}", .{item});
                 continue;
             },
             else => {
                 std.log.err("Error checking selected root stub ({s}): {}", .{ item, err });
-                std.posix.exit(1);
+                std.process.exit(1);
             },
         };
         const fPath = b.allocator.create(FilePath) catch |err| {
             std.log.err("Error allocating root FilePath entry: {}", .{err});
-            std.posix.exit(1);
+            std.process.exit(1);
         };
         fPath.full_path = joinPath(b.allocator, buildroot_path, item);
         const item_dir = std.fs.path.dirname(item) orelse ".";
         fPath.dir = joinPath(b.allocator, buildroot_path, item_dir);
         fPath.filename = b.allocator.dupe(u8, std.fs.path.basename(item)) catch |err| {
             std.log.err("Error allocating root filename entry: {}", .{err});
-            std.posix.exit(1);
+            std.process.exit(1);
         };
         fPath.file_path = b.allocator.dupe(u8, item["out/types".len..]) catch |err| {
             std.log.err("Error allocating root file_path entry: {}", .{err});
-            std.posix.exit(1);
+            std.process.exit(1);
         };
         fPath.test_root = is_test_root;
         root_c_files.append(b.allocator, fPath) catch |err| {
             std.log.err("Error appending selected root stub: {}", .{err});
-            std.posix.exit(1);
+            std.process.exit(1);
         };
     }
 
     if (c_files.items.len == 0) {
         const dummy_rel = "out/types/acton_empty.c";
         const dummy_abs = joinPath(b.allocator, buildroot_path, dummy_rel);
-        b.build_root.handle.makePath("out/types") catch |err| {
+        b.build_root.handle.createDirPath(io, "out/types") catch |err| {
             std.log.err("Error creating out/types directory: {}", .{err});
-            std.posix.exit(1);
+            std.process.exit(1);
         };
-        const dummy_file = b.build_root.handle.createFile(dummy_rel, .{}) catch |err| {
+        const dummy_file = b.build_root.handle.createFile(io, dummy_rel, .{}) catch |err| {
             std.log.err("Error creating dummy C file: {}", .{err});
-            std.posix.exit(1);
+            std.process.exit(1);
         };
-        dummy_file.writeAll("int acton_empty(void) { return 0; }\n") catch |err| {
-            std.log.err("Error writing dummy C file: {}", .{err});
-            std.posix.exit(1);
+        var write_buffer: [64]u8 = undefined;
+        var dummy_writer = dummy_file.writer(io, &write_buffer);
+        dummy_writer.interface.writeAll("int acton_empty(void) { return 0; }\n") catch |err| switch (err) {
+            error.WriteFailed => {
+                std.log.err("Error writing dummy C file: {}", .{dummy_writer.err.?});
+                std.process.exit(1);
+            },
         };
-        dummy_file.close();
+        dummy_writer.flush() catch |err| {
+            std.log.err("Error flushing dummy C file: {}", .{err});
+            std.process.exit(1);
+        };
+        dummy_file.close(io);
         c_files.append(b.allocator, dummy_rel) catch |err| {
             std.log.err("Error appending dummy C file path: {}", .{err});
-            std.posix.exit(1);
+            std.process.exit(1);
         };
         std.log.info("No generated C sources; added dummy {s}", .{dummy_abs});
     }
@@ -168,8 +177,7 @@ pub fn build(b: *std.Build) void {
 
     var file_prefix_map = std.ArrayList(u8).empty;
     defer file_prefix_map.deinit(b.allocator);
-    const file_prefix_path = b.build_root.handle.openDir("..", .{}) catch unreachable;
-    const file_prefix_path_path = file_prefix_path.realpathAlloc(b.allocator, ".") catch unreachable;
+    const file_prefix_path_path = std.fs.path.dirname(buildroot_path) orelse buildroot_path;
     file_prefix_map.appendSlice(b.allocator, "-ffile-prefix-map=") catch unreachable;
     file_prefix_map.appendSlice(b.allocator, file_prefix_path_path) catch unreachable;
     file_prefix_map.appendSlice(b.allocator, "/=") catch unreachable;
@@ -181,7 +189,7 @@ pub fn build(b: *std.Build) void {
             "-DDEV",
         }) catch |err| {
             std.log.err("Error appending flags: {}", .{err});
-            std.posix.exit(1);
+            std.process.exit(1);
         };
     }
 
@@ -196,7 +204,7 @@ pub fn build(b: *std.Build) void {
             "-DACTON_THREADS",
         }) catch |err| {
             std.log.err("Error appending flags: {}", .{err});
-            std.posix.exit(1);
+            std.process.exit(1);
         };
     }
 
@@ -205,16 +213,16 @@ pub fn build(b: *std.Build) void {
     }) catch unreachable;
 
     for (c_files.items) |entry| {
-        libActonProject.addCSourceFile(.{ .file = b.path(entry), .flags = flags.items });
+        libActonProject.root_module.addCSourceFile(.{ .file = b.path(entry), .flags = flags.items });
     }
 
-    libActonProject.addIncludePath(b.path("."));
+    libActonProject.root_module.addIncludePath(b.path("."));
 
     // lib: link with dependencies / get headers from Build.act
 
-    libActonProject.linkLibrary(actonbase_dep.artifact("Acton"));
-    libActonProject.linkLibC();
-    libActonProject.linkLibCpp();
+    libActonProject.root_module.linkLibrary(actonbase_dep.artifact("Acton"));
+    libActonProject.root_module.link_libc = true;
+    libActonProject.root_module.link_libcpp = true;
     b.installArtifact(libActonProject);
 
     // Register the produced header files in out/types using
@@ -229,19 +237,17 @@ pub fn build(b: *std.Build) void {
     // investigate further, find the root cause and address it.
     libActonProject.installHeadersDirectory(b.path("out/types"), "out/types", .{});
 
-    var hiter_dir = b.build_root.handle.openDir("out/types/", .{ .iterate = true }) catch unreachable;
+    var hiter_dir = b.build_root.handle.openDir(io, "out/types/", .{ .iterate = true }) catch unreachable;
     var hwalker = hiter_dir.walk(b.allocator) catch unreachable;
     defer hwalker.deinit();
 
     // Find all .h files
     while (true) {
-        const next_result = hwalker.next() catch unreachable;
+        const next_result = hwalker.next(io) catch unreachable;
         if (next_result) |entry| {
             if (entry.kind == .file) {
                 if (std.mem.endsWith(u8, entry.basename, ".h")) {
-                    const full_path = entry.dir.realpathAlloc(b.allocator, entry.basename) catch unreachable;
-                    const file_path = b.allocator.alloc(u8, full_path.len - buildroot_path.len - 1) catch unreachable;
-                    @memcpy(file_path, full_path[buildroot_path.len+1..]);
+                    const file_path = std.fs.path.join(b.allocator, &.{ "out/types", entry.path }) catch unreachable;
                     libActonProject.installHeader(b.path(file_path), file_path);
                 }
             }
@@ -264,13 +270,13 @@ pub fn build(b: *std.Build) void {
             nlen += 1; // for the null terminator
             const binname = b.allocator.alloc(u8, entry.file_path.len-nlen) catch |err| {
                 std.log.info("Error allocating binname: {}", .{err});
-                std.posix.exit(1);
+                std.process.exit(1);
             };
             if (entry.test_root) {
                 // Write '.test_' to start of binname
                 const buf = std.fmt.allocPrint(b.allocator, ".test_{s}", .{entry.file_path[1..entry.file_path.len - ".test_root.c".len]}) catch |err| {
                     std.log.err("Error allocating binname: {}", .{err});
-                    std.posix.exit(1);
+                    std.process.exit(1);
                 };
                 @memcpy(binname, buf);
             } else {
@@ -294,19 +300,19 @@ pub fn build(b: *std.Build) void {
             const exe_rel_path = b.allocator.alloc(u8, 9 + entry.file_path.len) catch @panic("OOM");
             @memcpy(exe_rel_path[0..9], "out/types");
             @memcpy(exe_rel_path[9..], entry.file_path);
-            executable.addCSourceFile(.{ .file = b.path(exe_rel_path), .flags = flags.items });
-            executable.addIncludePath(b.path("."));
-            executable.linkLibrary(libActonProject);
+            executable.root_module.addCSourceFile(.{ .file = b.path(exe_rel_path), .flags = flags.items });
+            executable.root_module.addIncludePath(b.path("."));
+            executable.root_module.linkLibrary(libActonProject);
 
-            executable.linkLibrary(actonbase_dep.artifact("Acton"));
+            executable.root_module.linkLibrary(actonbase_dep.artifact("Acton"));
             if (maybe_actondb_dep) |actondb_dep| {
-                executable.linkLibrary(actondb_dep.artifact("ActonDB"));
+                executable.root_module.linkLibrary(actondb_dep.artifact("ActonDB"));
             }
 
             // exe: link with dependencies / get headers from Build.act
 
-            executable.linkLibC();
-            executable.linkLibCpp();
+            executable.root_module.link_libc = true;
+            executable.root_module.link_libcpp = true;
             b.installArtifact(executable);
         }
     }

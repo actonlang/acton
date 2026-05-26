@@ -46,15 +46,15 @@ pub fn build(b: *std.Build) !void {
         .@"32" => try cflags.append(b.allocator, "-DSUPPORT_PCRE2_32"),
     }
 
-    lib.addCSourceFile(.{
+    lib.root_module.addCSourceFile(.{
         .file = copyFiles.addCopyFile(b.path("src/pcre2_chartables.c.dist"), "pcre2_chartables.c"),
         .flags = cflags.items,
     });
 
-    lib.addIncludePath(b.path("src"));
-    lib.addIncludePath(copyFiles.getDirectory());
+    lib.root_module.addIncludePath(b.path("src"));
+    lib.root_module.addIncludePath(copyFiles.getDirectory());
 
-    lib.addCSourceFiles(.{
+    lib.root_module.addCSourceFiles(.{
         .files = &.{
             "src/pcre2_auto_possess.c",
             "src/pcre2_chkdint.c",

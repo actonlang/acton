@@ -49,6 +49,7 @@ import System.Environment (getExecutablePath, lookupEnv)
 import System.Exit (ExitCode(..))
 import System.FilePath ((</>), takeDirectory)
 import System.IO (IOMode(ReadMode, WriteMode), hClose, hGetContents, hPutStr, hPutStrLn, hSetEncoding, openFile, stderr, utf8)
+import System.IO.Temp (withSystemTempDirectory)
 import System.Process (CreateProcess(cwd), proc, readCreateProcessWithExitCode)
 import qualified Text.Regex.TDFA as TDFA
 
@@ -929,24 +930,33 @@ zigFetchHash zigExe depUrl = do
     home <- getHomeDirectory
     let globalCache = home </> ".cache" </> "acton" </> "zig-global-cache"
     createDirectoryIfMissing True globalCache
-    let cmd = proc zigExe ["fetch", "--global-cache-dir", globalCache, depUrl]
-    let maxAttempts = 10
-        baseDelay = 500000
-        maxDelay = 120000000
-    let go attempt delay = do
-          res <- try (readCreateProcessWithExitCode cmd "") :: IO (Either SomeException (ExitCode, String, String))
-          case res of
-            Left err ->
-              retryOrFail attempt delay ("Error fetching " ++ displayException err)
-            Right (ExitSuccess, out, _) -> return (Right (trim out))
-            Right (ExitFailure _, _, err) ->
-              retryOrFail attempt delay ("Error fetching " ++ trim err)
-        retryOrFail attempt delay errMsg
-          | attempt >= maxAttempts = return (Left errMsg)
-          | otherwise = do
-              threadDelay delay
-              go (attempt + 1) (min maxDelay (delay * 2))
-    go 1 baseDelay
+    createDirectoryIfMissing True (globalCache </> "tmp")
+    withSystemTempDirectory "acton-zig-fetch" $ \tmp -> do
+      writeFile (tmp </> "build.zig") zigFetchBuildZig
+      let cmd = (proc zigExe ["fetch", "--global-cache-dir", globalCache, depUrl]) { cwd = Just tmp }
+      let maxAttempts = 10
+          baseDelay = 500000
+          maxDelay = 120000000
+      let go attempt delay = do
+            res <- try (readCreateProcessWithExitCode cmd "") :: IO (Either SomeException (ExitCode, String, String))
+            case res of
+              Left err ->
+                retryOrFail attempt delay ("Error fetching " ++ displayException err)
+              Right (ExitSuccess, out, _) -> return (Right (trim out))
+              Right (ExitFailure _, _, err) ->
+                retryOrFail attempt delay ("Error fetching " ++ trim err)
+          retryOrFail attempt delay errMsg
+            | attempt >= maxAttempts = return (Left errMsg)
+            | otherwise = do
+                threadDelay delay
+                go (attempt + 1) (min maxDelay (delay * 2))
+      go 1 baseDelay
+
+zigFetchBuildZig :: String
+zigFetchBuildZig = unlines
+    [ "const std = @import(\"std\");"
+    , "pub fn build(b: *std.Build) void { _ = b; }"
+    ]
 
 runProcessChecked :: Maybe FilePath -> FilePath -> [String] -> IO ()
 runProcessChecked cwdOpt exe args = do

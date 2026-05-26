@@ -18,12 +18,11 @@ pub fn build(b: *std.Build) void {
         "netstring.c",
     };
 
-    lib.addCSourceFiles(.{
-        .root = b.path("."),
+    lib.root_module.addCSourceFiles(.{
         .files = &source_files,
         .flags = &[_][]const u8{}
     });
-    lib.linkLibC();
+    lib.root_module.link_libc = true;
     lib.installHeader(b.path("netstring.h"), "netstring.h");
     b.installArtifact(lib);
 }
