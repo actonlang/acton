@@ -67,20 +67,21 @@ topLevelItems (A.Module _ _ _ suite) = concatMap items suite
       _ -> []
 
 -- | Collect pretty-printed fragments per top-level name.
-nameFragmentsFromItems :: [TopLevelItem] -> M.Map A.Name [String]
-nameFragmentsFromItems items =
+nameBytesFromItems :: [TopLevelItem] -> M.Map A.Name B.ByteString
+nameBytesFromItems items =
   foldl' addFrag M.empty items
   where
     addFrag acc item =
       let (n, frag) = case item of
             TLDecl name decl -> (name, Pretty.print decl)
             TLStmt name stmt -> (name, Pretty.print stmt)
-      in M.insertWith (flip (++)) n [frag] acc
+      in M.insertWith appendFrag n (B.pack frag) acc
+    appendFrag new old = old `B.append` B.cons '\n' new
 
 -- | Hash each name's pretty-printed fragments.
 nameHashesFromItems :: [TopLevelItem] -> M.Map A.Name B.ByteString
 nameHashesFromItems items =
-  M.map (SHA256.hash . B.pack . intercalate "\n") (nameFragmentsFromItems items)
+  M.map SHA256.hash (nameBytesFromItems items)
 
 -- | Collect qualified-name dependencies for each item body.
 implDepsFromItems :: [TopLevelItem] -> M.Map A.Name [A.QName]
