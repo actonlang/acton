@@ -2004,11 +2004,11 @@ selectedCSourceEntriesForProj proj tasks =
 
 explicitBuildLibraries :: [FilePath] -> BuildSpec.BuildSpec -> [BuildLibrary]
 explicitBuildLibraries selectedSources spec =
-    filter (not . null . buildLibSources)
-      [ BuildLibrary libName (BuildSpec.libLinkage lib) sources
-      | (libName, lib) <- M.toList (BuildSpec.libraries spec)
-      , let sources = filter (`Data.Set.member` selectedSet) (map moduleCSource (BuildSpec.libModules lib))
-      ]
+    [ BuildLibrary libName (BuildSpec.libLinkage lib) sources
+    | (libName, lib) <- M.toList (BuildSpec.libraries spec)
+    , let sources = map moduleCSource (BuildSpec.libModules lib)
+    , any (`Data.Set.member` selectedSet) sources
+    ]
   where
     selectedSet = Data.Set.fromList selectedSources
     moduleCSource modName =

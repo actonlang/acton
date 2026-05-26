@@ -116,18 +116,24 @@ compilerTests =
             [ "name = \"dynamic_module_build\""
             , "fingerprint = " ++ mkFp "dynamic_module_build"
             , "libraries = {"
-            , "    \"a\": (modules=[\"a\"], linkage=\"dynamic\")"
+            , "    \"a\": (modules=[\"a\", \"c\"], linkage=\"dynamic\")"
             , "}"
             ]
           writeFile (srcDir </> "a.act") $ unlines
             [ "def foo() -> str:"
             , "    return \"hello\""
             ]
+          writeFile (srcDir </> "c.act") $ unlines
+            [ "def bar() -> str:"
+            , "    return \"kept\""
+            ]
           writeFile (srcDir </> "b.act") $ unlines
             [ "import a"
+            , "import c"
             , ""
             , "actor main(env: Env):"
             , "    print(a.foo())"
+            , "    print(c.bar())"
             , "    env.exit(0)"
             ]
           (returnCode, _cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc actonExe ["build", "--color", "never", "src/b.act"]){ cwd = Just proj } ""
@@ -137,16 +143,16 @@ compilerTests =
             (any (\f -> "liba." `isPrefixOf` f && takeExtension f /= ".a") libs)
           (runCode, runOut, runErr) <- readCreateProcessWithExitCode (proc binPath []) ""
           assertEqual ("dynamic executable should run: " ++ runErr) ExitSuccess runCode
-          assertEqual "dynamic executable output" "hello\n" runOut
+          assertEqual "dynamic executable output" "hello\nkept\n" runOut
           writeFile (srcDir </> "a.act") $ unlines
             [ "def foo() -> str:"
             , "    return \"updated\""
             ]
           (rebuildCode, _rebuildOut, rebuildErr) <- readCreateProcessWithExitCode (proc actonExe ["build", "--color", "never", "src/a.act"]){ cwd = Just proj } ""
-          assertEqual ("acton should rebuild only the dynamic library module: " ++ rebuildErr) ExitSuccess rebuildCode
+          assertEqual ("acton should rebuild the full dynamic library after one module changes: " ++ rebuildErr) ExitSuccess rebuildCode
           (rerunCode, rerunOut, rerunErr) <- readCreateProcessWithExitCode (proc binPath []) ""
           assertEqual ("dynamic executable should run after dynamic library rebuild: " ++ rerunErr) ExitSuccess rerunCode
-          assertEqual "dynamic executable output after dynamic library rebuild" "updated\n" rerunOut
+          assertEqual "dynamic executable output after dynamic library rebuild" "updated\nkept\n" rerunOut
 #if defined(darwin_HOST_OS)
           (rpathCode, rpathOut, rpathErr) <- readCreateProcessWithExitCode (proc "otool" ["-l", binPath]) ""
           assertEqual ("otool should inspect dynamic executable: " ++ rpathErr) ExitSuccess rpathCode
