@@ -1,5 +1,5 @@
 Resolving dependencies (fetching if missing)...
-  Fresh a: using cached .ty
+  Fresh a: using cached .tydb
    b  Parse done                                                            0.000 s
   Stale b: source changed
   Hash deltas b: ~DocInfo{src HASH1 -> HASH2, impl HASH1 -> HASH2}
@@ -10,7 +10,7 @@ Resolving dependencies (fetching if missing)...
        class DocInfo (value):
            G_init : () -> None
            get : () -> int
-  Fresh c: using cached .ty
+  Fresh c: using cached .tydb
      Back normalize done: b                                                 0.000 s
      Back deactorize done: b                                                0.000 s
      Back cps done: b                                                       0.000 s

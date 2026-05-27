@@ -10,7 +10,10 @@ The same AST data type is used throughout all compiler passes, making it easy to
 read and understand what each transformation does.
 
 See [Imports and environments](imports_and_envs.md) for how the scheduler,
-`.ty` headers, and the active type-checker environment fit together.
+`.tydb` headers, and the active type-checker environment fit together.
+
+See [Interface caches](interface_caches.md) for the LMDB-backed on-disk cache
+format used to store typed module interfaces.
 
 See [Project dependencies](project_dependencies.md) for how Acton package
 dependencies and zig dependencies are discovered, fetched, and emitted into the

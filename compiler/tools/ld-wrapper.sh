@@ -184,6 +184,18 @@ handle_lib() {
     args+=("-lunwind")
     return
   fi
+  # Any other lib we built under bdeps/out (e.g. liblmdb.a) links statically by
+  # full path, mirroring the macOS block above -- so a new compiler lib needs no
+  # per-library case here, just its .a present in bdeps/out/lib.
+  local bdeps_archive
+  if bdeps_archive="$(bdeps_lib_path "lib${lib_key}.a")"; then
+    if [[ "$state" != "static" ]]; then
+      args+=("-Wl,-Bstatic")
+      state="static"
+    fi
+    args+=("$bdeps_archive")
+    return
+  fi
   if [[ "$state" != "static" ]]; then
     args+=("-Wl,-Bstatic")
     state="static"

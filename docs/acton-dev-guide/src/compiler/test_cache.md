@@ -25,10 +25,10 @@ Each test’s run hash is SHA-256 over:
 implHash || depsHash || contextHash
 ```
 
-Where `implHash` is the per-name implementation hash from the module’s `.ty`
+Where `implHash` is the per-name implementation hash from the module's `.tydb`
 header. `depsHash` is a hash of the test’s current implementation dependencies
-(`implDeps`), resolved to their latest impl hashes via the `.ty` headers on the
-search path. Test name resolution uses the `.ty` name hash map, and applies
+(`implDeps`), resolved to their latest impl hashes via the `.tydb` headers on the
+search path. Test name resolution uses the `.tydb` name hash map, and applies
 simple fallbacks for generated actor wrappers:
 
 - try the test name as-is

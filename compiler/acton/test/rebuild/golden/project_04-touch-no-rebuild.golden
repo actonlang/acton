@@ -1,5 +1,5 @@
 Resolving dependencies (fetching if missing)...
-  Fresh a: using cached .ty
-  Fresh b: using cached .ty
-  Fresh c: using cached .ty
+  Fresh a: using cached .tydb
+  Fresh b: using cached .tydb
+  Fresh c: using cached .tydb
       Final compilation done                                                0.000 s

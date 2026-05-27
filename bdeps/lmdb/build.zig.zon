@@ -1,0 +1,16 @@
+.{
+    .name = .lmdb,
+    .version = "0.0.0",
+    .fingerprint = 0xb2966103f9989484,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .source = .{
+            .url = "https://github.com/LMDB/lmdb/archive/LMDB_0.9.31.tar.gz",
+            .hash = "N-V-__8AAHEsCACb_b9D1HnCysDKIhKFOrITbxYh9JRh9ix5",
+        },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+    },
+}

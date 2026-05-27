@@ -1,7 +1,7 @@
 Resolving dependencies (fetching if missing)...
-  Fresh a: using cached .ty
+  Fresh a: using cached .tydb
   Stale b: generated code out of date {impl c missing -> HASH2, h missing -> HASH2}
-  Fresh c: using cached .ty
+  Fresh c: using cached .tydb
      Back normalize done: b                                                 0.000 s
      Back deactorize done: b                                                0.000 s
      Back cps done: b                                                       0.000 s

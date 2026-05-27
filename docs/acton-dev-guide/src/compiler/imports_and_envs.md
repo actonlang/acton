@@ -9,7 +9,7 @@ distinction is that there are two related but different mechanisms:
   available to kinds/type checking
 
 If those two are conflated, it becomes hard to reason about missing imports,
-stale `.ty` reuse, or why a module can be present in the scheduler but still
+stale `.tydb` reuse, or why a module can be present in the scheduler but still
 need more imports loaded into the active environment.
 
 ## Environment layers
@@ -20,7 +20,7 @@ compiler.
 ### Base environment
 
 `Acton.Env.initEnv` constructs the base `Env0`. It always contains `prim`, and
-in normal compilation it also loads `__builtin__` from `__builtin__.ty`.
+in normal compilation it also loads `__builtin__` from `__builtin__.tydb`.
 
 This base environment is not tied to any one module. It is the starting point
 for later compilation work.
@@ -64,7 +64,7 @@ module into the active environment.
 
 Instead it does header-first discovery:
 
-- `readModuleTask` reads the `.ty` header when possible and produces a cheap
+- `readModuleTask` reads the `.tydb` header when possible and produces a cheap
   `TyTask`
 - otherwise it parses the source and produces an `ActonTask`
 - `buildGlobalTasks` uses the task's direct imports to build provider edges
@@ -77,9 +77,9 @@ This matters for standard library modules and any other imports that are not
 represented as in-graph provider tasks. Such modules still have to be made
 available later through `Acton.Env`.
 
-## When `.ty` headers are read
+## When `.tydb` headers are read
 
-The compiler reads `.ty` data in two different modes.
+The compiler reads `.tydb` data in two different modes.
 
 ### Header-only reads
 
@@ -94,7 +94,7 @@ Header reads are used for cheap decisions:
 This is the path used by `readModuleTask` and the various cache lookups in
 `Acton.Compile`.
 
-### Full `.ty` reads
+### Full `.tydb` reads
 
 Full reads are used when the compiler needs actual interface contents or the
 typed module:
@@ -103,7 +103,7 @@ typed module:
 - implementation-hash refresh
 - codegen refresh
 
-Reading a full `.ty` does not by itself reconstruct the import closure in the
+Reading a full `.tydb` does not by itself reconstruct the import closure in the
 active environment. It only gives the caller the stored interface and typed
 module payload.
 
@@ -116,7 +116,7 @@ When a module imports another module:
 
 1. `mkEnv` walks the AST import list
 2. `impModule` delegates to `doImp`
-3. `doImp` finds the imported module's `.ty`
+3. `doImp` finds the imported module's `.tydb`
 4. `doImp` follows the imported module's recorded imports
 5. only then does it return the imported module interface
 
@@ -126,7 +126,7 @@ closure suitable for kinds and type checking.
 An important invariant is that a cached direct module must still restore its own
 recorded imports. The shared scheduler env stores interfaces in `modules`, but
 that cache does not itself contain the imported module's import list. For that
-reason, `doImp` must still consult the cached module's `.ty` header and recurse
+reason, `doImp` must still consult the cached module's `.tydb` header and recurse
 through its recorded imports even when the direct module is already present in
 `modules`.
 
@@ -142,12 +142,12 @@ Without that step, the compiler can end up in a state where:
 When debugging import failures, it helps to ask which layer is failing:
 
 - Is the module missing from graph discovery? Then look at `readModuleTask`,
-  `.ty` headers, and `buildGlobalTasks`.
+  `.tydb` headers, and `buildGlobalTasks`.
 - Is the module outside the project graph but still needed for type checking?
   Then look at `mkEnv` and `doImp`.
 - Is a cached module present but its transitives missing? Then the issue is in
   environment materialization, not scheduler ordering.
-- Is a full `.ty` being read but imports still not appearing? Then check
+- Is a full `.tydb` being read but imports still not appearing? Then check
   whether the caller is only decoding interface payload rather than invoking the
   import loader.
 
@@ -155,4 +155,5 @@ When debugging import failures, it helps to ask which layer is failing:
 
 - [Compiler overview](index.md)
 - [Incremental compilation](incremental_compilation.md)
+- [Interface caches](interface_caches.md)
 - [Type check](passes/type_check.md)

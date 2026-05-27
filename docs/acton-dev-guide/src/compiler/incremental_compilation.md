@@ -16,14 +16,14 @@ old generation, so we can react to new changes without waiting for obsolete
 work to finish.
 
 Interface files and content hashes tell the scheduler what work it can safely
-reuse. `.ty` interface headers store hashes and snapshots of dependencies and
+reuse. `.tydb` interface headers store hashes and snapshots of dependencies and
 their hashes. It is cheap both to compute hashes and to read and compare them.
 If the hashes show no relevant change, the compiler can skip parsing, type
 checking, or back passes for large parts of the graph.
 
 At the module level we store **moduleSrcBytesHash**, **modulePubHash**, and
 **moduleImplHash**. The source-bytes hash (**moduleSrcBytesHash**) is the
-SHA-256 of the raw source bytes and is used to decide whether a cached `.ty`
+SHA-256 of the raw source bytes and is used to decide whether a cached `.tydb`
 header is still valid; if it changes, we must re-parse the `.act` file and rerun
 front passes for that module. Reading the file is done at GB/s on modern NVMe
 hardware and hashing is typically running at roughly the same speed on modern
@@ -32,7 +32,7 @@ CPUs.
 The public hash (**modulePubHash**) is derived from the module's public-name
 `pubHash` values (which already include any external signature dependencies).
 The implementation hash (**moduleImplHash**) is derived from per-name
-`implHash` values; it is stored in the `.ty` header and written into generated
+`implHash` values; it is stored in the `.tydb` header and written into generated
 `.c`/`.h` files as an "Acton impl hash" tag. If the tag is missing or
 mismatched, we rerun back passes even if no other hashes changed.
 
@@ -65,10 +65,10 @@ generated names (for example, protocol lowering emits classes such as
 their `NameInfo` with `QuickType.envOf`. Conversely, `envOf` omits `Protocol`
 and `Extension` entries because type inference translates them away. To cover
 both, hashing uses the union of `teAll` and `QuickType.envOf` as its name-info
-map, ensuring generated names appear in `.ty` and still keeping protocol and
+map, ensuring generated names appear in `.tydb` and still keeping protocol and
 extension hashes intact.
 
-To detect changes without recompiling, each per-name entry in `.ty` stores
+To detect changes without recompiling, each per-name entry in `.tydb` stores
 dependency snapshots. **pubDeps** is a list of `(QName, pubHash)` for external
 declarations referenced from the unit's type signature and from value-level
 uses, which is what triggers re-typechecking when a provider's public interface
@@ -82,19 +82,17 @@ We compute `selfPubHash`/`selfImplHash` for each unit, compute a `groupHash`
 from the sorted self-hashes plus all external dependency hashes of the group,
 and then finalize each unit as `H(selfHash || groupHash || unitKey)`.
 
-The `.ty` header stays ordered for fast reads:
+The `.tydb` header stays ordered for deterministic reads. See
+[Interface caches](interface_caches.md) for the LMDB key layout.
 
 ```
 version
-moduleSrcBytesHash
-modulePubHash
-moduleImplHash
+meta              -- source metadata + module src/pub/impl hashes
 imports
 nameHashInfo      -- per-name src/pub/impl hash + dep snapshots
 roots
+tests
 docstring
-nameInfo
-typedModule
 ```
 
 A source change always re-runs front passes for that module. Downstream modules

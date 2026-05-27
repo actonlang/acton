@@ -20,7 +20,7 @@ import GHC.Generics (Generic)
 import Data.Typeable
 import Data.Char
 import System.FilePath.Posix (joinPath,takeDirectory)
-import System.Directory (doesFileExist)
+import System.Directory (doesDirectoryExist, doesFileExist)
 import System.Environment (getExecutablePath)
 import Control.Monad
 import Control.Monad.Except
@@ -256,7 +256,7 @@ initEnv path True          = return $ EnvF{ activeNames = [],
                                             context = [],
                                             qlevel = 0,
                                             envX = () }
-initEnv path False         = do (_,nmod,_,_,_,_,_,_,_,_,_,_) <- InterfaceFiles.readFile (joinPath [path,"__builtin__.ty"])
+initEnv path False         = do (_,nmod,_,_,_,_,_,_,_,_,_,_) <- InterfaceFiles.readFile (InterfaceFiles.interfacePath path (modName ["__builtin__"]))
                                 let NModule _ envBuiltin builtinDocstring = nmod
                                     envBuiltinPublic = publicTEnv envBuiltin
                                     initialNames = [(nPrim,NMAlias mPrim), (nBuiltin,NMAlias mBuiltin)]
@@ -1123,14 +1123,14 @@ findTyFile spaths mn = go spaths
   where
     go []     = return Nothing
     go (p:ps) = do
-      let fullPath = joinPath (p : modPath mn) ++ ".ty"
-      exists <- doesFileExist fullPath
+      let fullPath = InterfaceFiles.interfacePath p mn
+      exists <- InterfaceFiles.interfaceExists fullPath
       --traceM ("findTyFile: " ++ fullPath ++ " " ++ show exists)
       if exists
         then return (Just fullPath)
         else go ps
 
--- | Import a module, loading its .ty and extending the environment.
+-- | Import a module, loading its .tydb and extending the environment.
 doImp                        :: [FilePath] -> EnvF x -> ModName -> IO (EnvF x, TEnv)
 doImp spath env m            = do (env', te, _) <- doImpSeen S.empty env m
                                   return (addImport m env', te)

@@ -143,7 +143,7 @@ stripDocsNI ni = case ni of
 
 -- | Strip source locations from NameInfo (and nested syntax fragments).
 -- This keeps public interface hashes independent from whitespace-only source
--- edits while preserving locations in the cached .ty payload itself.
+-- edits while preserving locations in the cached .tydb payload itself.
 stripLocsNI :: NameInfo -> NameInfo
 stripLocsNI ni = case ni of
   NVar t             -> NVar (stripLocsType t)
